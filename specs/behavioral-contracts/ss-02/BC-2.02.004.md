@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.02.004
-subsystem: SS-TBD
+subsystem: multipath-forwarding
+architecture_module: internal/replay
 capability: CAP-007
 priority: P0
 criticality: critical

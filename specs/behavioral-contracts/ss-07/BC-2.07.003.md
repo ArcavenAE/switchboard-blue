@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.07.003
-subsystem: SS-TBD
+subsystem: network-management
+architecture_module: cmd/sbctl
 capability: CAP-024
 priority: P0
 criticality: important

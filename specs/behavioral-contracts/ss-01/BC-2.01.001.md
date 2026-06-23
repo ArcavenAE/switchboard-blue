@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.01.001
-subsystem: SS-TBD
+subsystem: session-networking
+architecture_module: internal/halfchannel
 capability: CAP-001
 priority: P0
 criticality: critical
@@ -105,7 +106,8 @@ The periodic timer fires on the configured tick interval boundary.
 
 ## Architecture Anchors
 
-- `architecture/SS-TBD-session-networking.md` — timeslice clock implementation
+- `.factory/specs/architecture/ARCH-02-protocol-stack.md` — timeslice framing and clock
+- `.factory/specs/architecture/ARCH-09-purity-boundary-map.md` — `internal/frame` classified pure-core
 
 ## Story Anchor
 
@@ -113,4 +115,4 @@ The periodic timer fires on the configured tick interval boundary.
 
 ## VP Anchors
 
-- [VP-NNN — filled by formal-verifier]
+- VP-016, VP-018, VP-041, VP-042

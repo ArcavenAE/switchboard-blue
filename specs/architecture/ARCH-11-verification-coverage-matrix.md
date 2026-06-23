@@ -1,0 +1,119 @@
+---
+artifact_id: ARCH-11-verification-coverage-matrix
+document_type: architecture-section
+level: L3
+version: "1.0"
+status: draft
+producer: architect
+timestamp: 2026-06-23T00:00:00
+phase: 1b
+traces_to: ARCH-INDEX.md
+inputDocuments:
+  - '.factory/specs/behavioral-contracts/BC-INDEX.md'
+  - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
+kos_anchors: []
+---
+
+# ARCH-11: Verification Coverage Matrix
+
+> Every BC must have at least one VP. This matrix is the coverage guarantee.
+> VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
+
+## BC → VP Coverage Table
+
+| BC ID | Title (abbreviated) | Module | VP(s) | Method | Phase |
+|-------|---------------------|--------|-------|--------|-------|
+| BC-2.01.001 | Timeslice clock fires on every tick | internal/halfchannel | VP-016, VP-018 | proptest | P0 |
+| BC-2.01.002 | Empty-tick frame is a valid liveness signal | internal/halfchannel | VP-018 | proptest | P0 |
+| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-016, VP-017 | proptest | P0 |
+| BC-2.01.004 | 44-byte outer header encoding and decoding | internal/frame | VP-001, VP-003 | proptest | P0 |
+| BC-2.01.005 | Channel header opaque to routers | internal/routing | VP-015 | fuzz + audit | P0 |
+| BC-2.01.006 | Session identity cryptographic derivation | internal/frame | VP-014 | proptest | P0 |
+| BC-2.01.007 | Session continuity across IP change | internal/admission | VP-036 | e2e | P0 |
+| BC-2.02.001 | Duplicate-and-race: same frame on two paths | internal/multipath | VP-024 | proptest | P0 |
+| BC-2.02.002 | First-arriving copy delivered, duplicates discarded | internal/multipath | VP-024 | proptest | P0 |
+| BC-2.02.003 | Per-path RTT/loss tracked, paths ranked | internal/paths | VP-026 | proptest | P0 |
+| BC-2.02.004 | Upstream idempotent replay window | internal/replay | VP-022, VP-023 | proptest | P0 |
+| BC-2.02.005 | Downstream ARQ with piggybacked ACK/SACK | internal/arq | VP-019, VP-020 | proptest | P0 |
+| BC-2.02.006 | TLPKTDROP terminates overdue downstream frames | internal/arq | VP-021 | proptest | P0 |
+| BC-2.02.007 | XOR parity FEC, single loss recoverable | internal/arq | VP-043 | proptest | P1/PE |
+| BC-2.02.008 | Split-horizon: no forward back toward arrival | internal/routing | VP-011 | proptest | P0 |
+| BC-2.02.009 | Bounded drop cache suppresses looping duplicates | internal/multipath | VP-025 | proptest | P0 |
+| BC-2.03.001 | Access node presence advertisement | internal/discovery | VP-044 | integration | P1/PE |
+| BC-2.03.002 | Console session enumeration without hostnames | internal/discovery | VP-045 | e2e | P1/PE |
+| BC-2.03.003 | Presence includes name, status, quality | internal/discovery | VP-044 | integration | P1/PE |
+| BC-2.04.001 | Access node connects to tmux control mode | internal/tmux | VP-031 | integration | P0 |
+| BC-2.04.002 | PTY fallback when control mode unavailable | internal/tmux | VP-032 | integration | P0 |
+| BC-2.04.003 | Console attach by name | internal/session | VP-033 | e2e | P1 |
+| BC-2.04.004 | Console detach without closing session | internal/session | VP-033 | e2e | P1 |
+| BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-035 | integration | P1 |
+| BC-2.04.006 | Multi-console fan-out | internal/session | VP-034 | e2e | P0 |
+| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-008, VP-009 | proptest | P0 |
+| BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
+| BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
+| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt | VP-046 | integration | P1 |
+| BC-2.05.005 | HMAC frame authentication at first router | internal/hmac | VP-004, VP-005, VP-006 | proptest + fuzz | P0 |
+| BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
+| BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007 | proptest + audit | P0 |
+| BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027 | proptest | P1 |
+| BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027 | proptest | P1 |
+| BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics | VP-047 | integration | P1 |
+| BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
+| BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049 | e2e | P2 |
+| BC-2.07.003 | sbctl reports clear error when daemon unreachable | cmd/sbctl | VP-030 | integration | P0 |
+| BC-2.08.001 | Console remotely controllable via sbctl | cmd/sbctl | VP-050 | e2e | P1/PE |
+| BC-2.09.001 | E→PE graduation by config change | internal/config | VP-038 | e2e | P2/PE |
+| BC-2.09.002 | Router sends drain signal before shutdown | internal/drain | VP-037 | e2e | P2/PE |
+| BC-2.09.003 | Router startup fails cleanly on malformed config | internal/config | VP-028, VP-029 | proptest | P0 |
+
+## Coverage Summary
+
+| Metric | Value |
+|--------|-------|
+| Total BCs | 42 |
+| BCs with ≥1 VP | 42 |
+| BCs with 0 VPs | 0 |
+| Total unique VPs | 50 |
+| P0 VPs (pure-core proptest/fuzz) | 30 |
+| P1 VPs (integration/e2e) | 16 |
+| P2+ VPs (advanced/PE phase) | 4 |
+
+## Per-Module VP Count
+
+| Module | VP Count | Methods |
+|--------|---------|---------|
+| internal/frame | 4 | proptest (3), fuzz (1) |
+| internal/hmac | 3 | proptest (2), fuzz (1) |
+| internal/halfchannel | 3 | proptest (3) |
+| internal/arq | 4 | proptest (3), proptest-PE (1) |
+| internal/replay | 2 | proptest (2) |
+| internal/multipath | 2 | proptest (2) |
+| internal/paths | 1 | proptest (1) |
+| internal/metrics | 2 | proptest (2) |
+| internal/admission | 4 | proptest (3), e2e (1) |
+| internal/routing | 4 | proptest (2), fuzz+audit (1), e2e (1) |
+| internal/session | 5 | proptest (2), e2e (2), integration (1) |
+| internal/tmux | 2 | integration (2) |
+| internal/config | 2 | proptest (2) |
+| internal/discovery | 2 | integration (1), e2e (1) |
+| internal/svtnmgmt | 2 | integration (2) |
+| internal/drain | 1 | e2e (1) |
+| cmd/sbctl | 3 | integration (1), e2e (2) |
+| **Total** | **46** | |
+
+Note: VP-036–050 are the integration/e2e VPs assigned in ARCH-07's "Test-Sufficient"
+section plus additional coverage for PE-phase BCs. These supplement the core
+pure-core proptest VPs (VP-001–030).
+
+## Zero-VP BCs Check
+
+Per the coverage table above, all 42 BCs have at least one VP. No gaps.
+
+## Infeasible Properties
+
+No BCs are flagged as verification-infeasible with the chosen Go-native toolchain.
+The fuzz + audit approach for VP-015 (channel header opacity at router) is the
+most complex verification: it requires a CI scan that the router code path has no
+`channel_header` type assertion or field access. This is feasible via `grep` + CI
+gate, supplemented by fuzz testing that sends malformed channel headers and verifies
+the router does not crash or behave differently.

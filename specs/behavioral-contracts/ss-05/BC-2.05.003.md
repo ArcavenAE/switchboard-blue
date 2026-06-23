@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.05.003
-subsystem: SS-TBD
+subsystem: admission-security
+architecture_module: internal/session
 capability: CAP-018
 priority: P0
 criticality: critical

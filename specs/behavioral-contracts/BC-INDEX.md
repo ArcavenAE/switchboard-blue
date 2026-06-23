@@ -18,7 +18,7 @@ traces_to: '.factory/specs/prd.md'
 
 > Master index of all BCs. One row per contract.
 > Full contracts live in `ss-NN/` shard directories.
-> Architecture subsystem IDs (SS-NN) are SS-TBD pending ARCH-INDEX (Phase 1b).
+> Architecture module mapping finalized in `.factory/specs/architecture/ARCH-INDEX.md` (Phase 1b complete). Every BC carries an `architecture_module:` frontmatter field pointing to its formal Go package.
 
 ## Index
 

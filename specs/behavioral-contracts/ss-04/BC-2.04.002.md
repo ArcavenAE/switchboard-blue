@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.04.002
-subsystem: SS-TBD
+subsystem: session-access
+architecture_module: internal/tmux
 capability: CAP-013
 priority: P0
 criticality: critical

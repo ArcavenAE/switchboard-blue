@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.06.002
-subsystem: SS-TBD
+subsystem: quality-observability
+architecture_module: internal/metrics
 capability: CAP-021
 priority: P1
 criticality: important

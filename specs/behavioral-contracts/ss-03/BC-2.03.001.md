@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.03.001
-subsystem: SS-TBD
+subsystem: session-discovery
+architecture_module: internal/discovery
 capability: CAP-011
 priority: P1
 criticality: important

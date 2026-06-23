@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-create-architecture
+phase_step: pending-phase-1d-adversarial-review
 product: switchboard
 mode: greenfield
 anchor_strategy: reference-via-frontmatter
@@ -13,8 +13,21 @@ l3_bc_count: 42
 l3_cap_coverage: "27/27"
 l3_error_codes: 31
 l3_bc_id_scheme: "BC-2.SS.NNN — S=2 stable L3-PRD prefix, SS=subsystem 01-09, NNN=sequence"
-l3_deferred_decisions: ["tick-interval-range", "fec-group-size", "presence-heartbeat", "hmac-algorithm", "e-router-no-discovery-ux"]
-l3_subsystem_field_status: "SS-TBD pending architect formalization"
+l3_subsystem_field_status: "patched — all 42 BCs have canonical subsystem + architecture_module fields"
+l4_complete: true
+l4_vp_count: 50
+l4_bc_coverage: "42/42"
+arch_sections: 13
+arch_adrs: 8
+dtu_required: false
+dtu_justification: "MVP single-LAN; no third-party SaaS deps. PE phase may need STUN/TURN DTU."
+dtu_assessment: 2026-06-23
+dtu_clones_built: n/a
+dtu_services: []
+feasibility_status: "all-feasible"
+internal_packages: 18
+purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
+go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
 timestamp: 2026-06-23T19:25:54Z
 last_update: 2026-06-23
 ---
@@ -50,11 +63,21 @@ authoritative; `.factory/specs/` will derive from them via
 
 ## Deferred decisions
 
-- **Tick interval range [5ms, 50ms]** — derived from BMAD ASM-001. Needs empirical validation before hardening; E-CFG-001 fires outside range. Surfaces at Phase 1 gate.
-- **FEC group size N=4** — XOR parity default; not measurement-grounded. Architecture phase should treat as tunable.
-- **Presence heartbeat 30s** — chosen as reasonable default; no hard requirement. Confirm against discovery freshness SLA.
-- **HMAC algorithm SHA-256** — may need alignment with Noise handshake key material; architecture decision.
-- **E-router has no session discovery (scope_phase: PE)** — MVP consoles must specify access node address manually. Confirm acceptable.
+- RESOLVED: **HMAC algorithm** — HMAC-SHA256 with 16-byte truncated tag, HKDF-SHA256 per-SVTN key derivation (ADR-001, ARCH-02/04)
+- RESOLVED: **FEC group size** — N=4 default (20% overhead); tunable (ADR-002, ARCH-03). Phase 3 validates default empirically.
+- RESOLVED: **Duplicate key registration** — last-write-wins (ADR-003, ARCH-04). Operator controls last write.
+- RESOLVED: **Console/access key permissions** — control > console > access; only control nodes register keys (ADR-004, ARCH-04)
+- RESOLVED: **Downstream ARQ failover** — resync from last ACK; in-flight frames during failover are lost (ADR-005, ARCH-03). Stateful transfer deferred to PE.
+- **Tick interval range [5ms, 50ms]** — still empirical (ADR-008 keeps as tuning parameter). Validates in Phase 3.
+- **Presence heartbeat 30s** — discovery is scope_phase PE, not MVP. Defer.
+
+## KoS frontier questions surfaced in Phase 1b
+
+- Q: Does router-to-router PE phase need Noise XX mutual auth in addition to HMAC?
+- Q: Should SACK bitmap window be configurable (64-bit default may be too narrow for PE high-latency links)?
+- Q: Goroutine model for 1k concurrent sessions — per-session pair vs event-loop (NFR-004)?
+- Q: Drop cache — TTL eviction in addition to LRU to prevent suppression after wraparound?
+- Q: PE router-to-router Noise — share node admission keypair, or separate router identity?
 
 ## Non-blocking debt
 

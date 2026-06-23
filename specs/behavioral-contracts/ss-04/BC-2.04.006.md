@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.04.006
-subsystem: SS-TBD
+subsystem: session-access
+architecture_module: internal/session
 capability: CAP-016
 priority: P0
 criticality: critical

@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.05.007
-subsystem: SS-TBD
+subsystem: admission-security
+architecture_module: internal/hmac
 capability: CAP-020
 priority: P0
 criticality: critical

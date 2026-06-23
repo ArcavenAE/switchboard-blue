@@ -8,7 +8,8 @@ producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.09.003
-subsystem: SS-TBD
+subsystem: deployment-operations
+architecture_module: internal/config
 capability: CAP-023
 priority: P0
 criticality: important
