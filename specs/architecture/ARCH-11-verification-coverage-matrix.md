@@ -89,12 +89,12 @@ VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 |--------|---------|---------|
 | internal/frame | 4 | proptest (3), fuzz (1) |
 | internal/hmac | 3 | proptest (2), fuzz (1) |
-| internal/halfchannel | 5 | proptest (5) |
+| internal/halfchannel | 6 | proptest (5), benchmark (1) |
 | internal/arq | 4 | proptest (3), proptest-PE (1) |
 | internal/replay | 2 | proptest (2) |
 | internal/multipath | 4 | proptest (3), integration (1) |
 | internal/paths | 2 | proptest (1), e2e (1) |
-| internal/metrics | 3 | proptest (2), integration (1) |
+| internal/metrics | 4 | proptest (2), integration (2) |
 | internal/admission | 5 | proptest (4), e2e (1) |
 | internal/routing | 4 | proptest (2), fuzz+audit (1), e2e (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
@@ -103,17 +103,12 @@ VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 | internal/discovery | 3 | integration (1), e2e (1), proptest (1) |
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
-| internal/quality | 1 | integration (1) |
 | cmd/sbctl | 3 | integration (1), e2e (2) |
-| **Total** | **56** | |
+| **Total** | **57** | |
 
-Note: VP-042 (`internal/halfchannel + integration`, benchmark, P0) and VP-040
-(`internal/multipath`, e2e, P1) account for the remaining 1 VP not listed per-module
-above (cross-module e2e VPs). Total VP-INDEX count is 57; per-module table reflects
-primary module assignment.
-
-VP-040 module is `internal/multipath` (corrected from prior "integration" — see
-VP-INDEX and VP-040.md frontmatter).
+Per-module sum = 57 (no off-table VPs). VP-042 (benchmark, `internal/halfchannel`)
+and VP-052 (integration, `internal/metrics`) are included in the per-module counts
+above. VP-040 module is `internal/multipath` (per VP-INDEX and VP-040.md frontmatter).
 
 ## Zero-VP BCs Check
 

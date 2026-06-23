@@ -50,7 +50,7 @@ The half-channel transmit clock fires on a fixed periodic interval (the "tick") 
 1. Exactly one frame departs on each tick boundary regardless of whether application data is queued.
 2. If application data is queued, it is included in the frame payload.
 3. If no application data is queued, an empty-tick frame (zero-payload) is emitted.
-4. The tick interval is maintained within ±1ms jitter under normal OS scheduling (ASM-002).
+4. The tick interval is maintained within ±2ms p99 jitter (NFR-009 budget).
 5. The frame sequence number increments by exactly 1 on each tick.
 
 ## Invariants
@@ -95,6 +95,7 @@ The periodic timer fires on the configured tick interval boundary.
 |-------|-------|
 | L2 Capability | CAP-001 ("Timeslice-driven frame assembly and transmission") per capabilities.md §CAP-001 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires whether or not there is data) |
+| NFR Cross-reference | NFR-009 (tick jitter budget ≤ 2ms p99) — Postcondition 4 is bounded by this NFR |
 | Architecture Module | internal/halfchannel |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-001 ("Timeslice-driven frame assembly and transmission") per capabilities.md §CAP-001 — this BC specifies the exact clock behavior that CAP-001 defines as the framing primitive |

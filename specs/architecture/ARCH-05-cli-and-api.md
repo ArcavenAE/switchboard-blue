@@ -99,7 +99,7 @@ This table resolves the `architecture_module:` field for all 42 BCs:
 | BC-2.05.004 | `internal/svtnmgmt` | svtn-mgmt |
 | BC-2.05.005 | `internal/hmac` | hmac |
 | BC-2.05.006 | `internal/routing` | routing |
-| BC-2.05.007 | `internal/hmac` | hmac |
+| BC-2.05.007 | `internal/admission` | admission |
 | BC-2.06.001 | `internal/metrics` | metrics |
 | BC-2.06.002 | `internal/metrics` | metrics |
 | BC-2.06.003 | `internal/metrics` | metrics |

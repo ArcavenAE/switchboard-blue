@@ -111,6 +111,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-23 | architect | Round-1 architectural refinement (pass-01 adversarial review): wire format canonicalized to bit-precise 44-byte outer header (F-001, F-002, F-004, F-011); HMAC keying updated to per-node HKDF-SHA256 (F-003); drop cache key extended to (checksum, arrival_interface_id) (F-006); quality thresholds aligned to NFR-001/BC-2.06.001 (F-008); hysteresis canonical value set to 3 measurements (F-021); read-only console ACK resolved via degenerate upstream half-channel (F-023); permission hierarchy (control > console > readonly) and cross-role revocation rules documented in ADR-004 (F-010); SHA-256 adopted for address derivation replacing Blake3 (F-007); VP-051 and VP-052 added; VP total now 52; VP-040 module corrected to internal/multipath (F-014). |
+| 2026-06-23 | architect | Phase 1c-refinement: VP-053 through VP-057 added for BC coverage closure (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004, BC-2.05.007). VP total now 57. |
 
 ## Open Frontier Questions (for KoS process)
 

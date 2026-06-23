@@ -1,7 +1,8 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-adversary-pass-2
+phase_step: pending-adversary-pass-3
+refinement_round_2_complete: true
 product: switchboard
 mode: greenfield
 anchor_strategy: reference-via-frontmatter
@@ -114,3 +115,7 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 - Cycle 1 refinement: 5 critical + 11 high + 7 medium + 1 low addressed = 24 in-cycle; 2 process-gap deferred to upstream (F-025, F-027); 1 low deferred (covered by BA sweep).
 - Convergence target: 3 consecutive zero-findings passes per FACTORY rules.
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-01.md`
+- Pass 2 findings: 18 (3 critical, 8 high, 6 medium, 1 low; 2 process-gap)
+- Cycle 1 round-2 refinement: 17 in-cycle (3 critical + 8 high + 6 medium addressed); F-019 (1 low) by-design at Phase 1d, deferred to Phase 2 backfill rule.
+- Trajectory: 27 → 18 → ? (Pass 3 pending; convergence target = 3 consecutive zero-findings passes)
+- Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-02.md`

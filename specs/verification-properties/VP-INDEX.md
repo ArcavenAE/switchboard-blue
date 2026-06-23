@@ -65,7 +65,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-039 | SVTN isolation: no cross-SVTN frame delivery | BC-2.05.006 | internal/routing | e2e | P0 | draft | VP-039.md |
 | VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | internal/multipath | e2e | P1 | draft | VP-040.md |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms | BC-2.01.001 | internal/halfchannel | benchmark | P0 | draft | VP-041.md |
-| VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | integration | benchmark | P0 | draft | VP-042.md |
+| VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | internal/halfchannel | benchmark | P0 | draft | VP-042.md |
 | VP-043 | XOR FEC: single loss in group recoverable | BC-2.02.007 | internal/arq | proptest | P1 | draft | VP-043.md |
 | VP-044 | Presence advertisement includes required fields | BC-2.03.001, BC-2.03.003 | internal/discovery | integration | P1 | draft | VP-044.md |
 | VP-045 | Console session enumeration without hostnames | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
@@ -75,7 +75,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-049 | sbctl unified CLI with OpenSSH auth | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
 | VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
-| VP-052 | Missing expected tick within deadline → indicator downgrade | BC-2.06.002 | internal/quality | integration | P1 | draft | VP-052.md |
+| VP-052 | Missing expected tick within deadline → indicator downgrade | BC-2.06.002 | internal/metrics | integration | P1 | draft | VP-052.md |
 | VP-053 | Empty-tick frame sequence: K ticks → K frames with contiguous seq nums | BC-2.01.002 | internal/halfchannel | proptest | P0 | draft | VP-053.md |
 | VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | draft | VP-054.md |
 | VP-055 | Presence advertisement payload round-trip: required fields present and stable | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |

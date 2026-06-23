@@ -57,6 +57,7 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-008 | ADM | broken | 1 | "nonce replay: challenge nonce already consumed for <node_addr>" | BC-2.05.001 |
 | E-ADM-009 | ADM | broken | 1 | "insufficient authority for operation <operation>: key <key_fingerprint> has role <role>" | BC-2.05.004, BC-2.07.002 |
 | E-ADM-010 | ADM | broken | 1 | "authentication failed: key <key_fingerprint> not authorized for daemon at <address>" | BC-2.07.002 |
+| E-ADM-011 | ADM | broken | 0 (continues) | "permission denied: <role> key cannot revoke <target_role> key (control > console > readonly)" | BC-2.05.004 |
 
 ### CFG — Configuration
 

@@ -91,12 +91,12 @@ _Affects: CAP-018, CAP-014._
 
 **DEC-007 — Duplicate public key registered for different roles**
 An operator registers the same public key against an SVTN with two different
-role designations in separate operations. Expected behavior: the last write
-wins (most recent registration takes effect) OR the system rejects the
-duplicate and requires explicit revocation before re-registration. This
-behavior must be explicitly defined by architecture; both options are valid
-domain choices.
-_Affects: CAP-019. Requires architecture decision._
+role designations in separate operations. Expected behavior: last-write-wins
+(LWW) per ADR-003 (see `.factory/specs/architecture/ARCH-04-admission-security.md`).
+The most recent authenticated registration supersedes earlier entries for the
+same `(node_pubkey, svtn_id)` pair. No conflict; no manual reconciliation
+required.
+_Affects: CAP-019. Cross-reference: ADR-003._
 
 ---
 

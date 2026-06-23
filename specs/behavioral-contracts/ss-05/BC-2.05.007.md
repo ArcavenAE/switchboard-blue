@@ -9,7 +9,7 @@ timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.05.007
 subsystem: admission-security
-architecture_module: internal/hmac
+architecture_module: internal/admission
 capability: CAP-020a
 priority: P0
 criticality: critical
@@ -92,7 +92,7 @@ Any operation involving the private key: admission challenge signing, HMAC compu
 |-------|-------|
 | L2 Capability | CAP-020a ("Private key non-transit") per capabilities.md §CAP-020a |
 | L2 Domain Invariants | DI-002 (node private keys never transit the network) |
-| Architecture Module | internal/hmac |
+| Architecture Module | internal/admission |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-020a ("Private key non-transit") per capabilities.md §CAP-020a — this BC directly specifies the private key non-transit invariant that CAP-020a defines, ensuring the HMAC trust model is not undermined by key exfiltration |
 

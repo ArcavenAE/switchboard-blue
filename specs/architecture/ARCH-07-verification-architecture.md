@@ -78,16 +78,49 @@ See ARCH-09 for the complete per-package classification.
 |-------|----------|--------|--------|
 | VP-031 | tmux control mode: all `%output` events delivered during sustained 10KB/s session | internal/tmux | integration |
 | VP-032 | tmux PTY fallback activates when control mode fails | internal/tmux | integration |
-| VP-033 | Session attach/detach: console receives downstream frames after attach | integration | e2e |
-| VP-034 | Multi-console fan-out: two consoles both receive all frames | integration | e2e |
+| VP-033 | Session attach/detach: console receives downstream frames after attach | internal/session | e2e |
+| VP-034 | Multi-console fan-out: two consoles both receive all frames | internal/session | e2e |
 | VP-035 | Read-only console: upstream keystrokes rejected by access node | internal/session | integration |
-| VP-036 | Session survives IP address change (wifi handoff simulation) | integration | e2e |
-| VP-037 | Router drain: nodes migrate to alternate router within 2s | integration | e2e |
-| VP-038 | E→PE graduation: config change only, no session drop | integration | e2e |
-| VP-039 | SVTN isolation: no cross-SVTN frame delivery with two SVTNs on same router | integration | e2e |
-| VP-040 | Multipath failover: session recovers within 2s of path failure (NFR-003) | integration | e2e |
+| VP-036 | Session survives IP address change (wifi handoff simulation) | internal/admission | e2e |
+| VP-037 | Router drain: nodes migrate to alternate router within 2s | internal/drain | e2e |
+| VP-038 | E→PE graduation: config change only, no session drop | internal/config | e2e |
+| VP-039 | SVTN isolation: no cross-SVTN frame delivery with two SVTNs on same router | internal/routing | e2e |
+| VP-040 | Multipath failover: session recovers within 2s of path failure (NFR-003) | internal/multipath | e2e |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
-| VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | integration | benchmark |
+| VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
+
+> VP catalog total = 57; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> were added in Phase 1c-refinement to close coverage gaps.
+
+### P0 Properties Added in Phase 1c-refinement
+
+| VP ID | Property | Module | Method |
+|-------|----------|--------|--------|
+| VP-053 | K empty-tick frames → K frames with contiguous sequence numbers | internal/halfchannel | proptest |
+| VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | internal/admission | proptest |
+
+### P1 Properties Added in Phase 1c-refinement (Should Prove)
+
+| VP ID | Property | Module | Method |
+|-------|----------|--------|--------|
+| VP-051 | HalfChannel independence: half-channel B unaffected by A's frame production | internal/halfchannel | proptest |
+| VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | internal/multipath | integration |
+| VP-055 | Presence advertisement payload round-trip: required fields present and stable | internal/discovery | proptest |
+
+### Test-Sufficient Properties Added in Phase 1c-refinement (Integration / E2E)
+
+| VP ID | Property | Module | Method |
+|-------|----------|--------|--------|
+| VP-043 | XOR FEC: single loss in group recoverable | internal/arq | proptest |
+| VP-044 | Presence advertisement includes required fields | internal/discovery | integration |
+| VP-045 | Console session enumeration without hostnames | internal/discovery | e2e |
+| VP-046 | Key lifecycle: register/revoke/expire | internal/svtnmgmt | integration |
+| VP-047 | Per-path metrics queryable via sbctl | internal/metrics | integration |
+| VP-048 | Control node creates/destroys SVTNs | internal/svtnmgmt | integration |
+| VP-049 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | e2e |
+| VP-050 | Console remotely controllable via sbctl | cmd/sbctl | e2e |
+| VP-052 | Missing expected tick within deadline triggers quality indicator downgrade | internal/metrics | integration |
+| VP-056 | Console detach releases session without closing it; observers unaffected | internal/session | integration |
 
 ## Fuzz Targets (P0 Security Boundaries)
 

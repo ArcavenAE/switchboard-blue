@@ -82,6 +82,7 @@ Operator runs `sbctl svtn keys register|revoke|expire` or equivalent API call.
 | `sbctl svtn keys revoke --key=<pubkey>` | Key revoked; active sessions continue until re-auth; propagation initiated | happy-path |
 | `sbctl svtn keys register --key=<same-pubkey-already-registered>` | Response: "updated" with new role (per ADR-003: last-write-wins) | edge-case |
 | Key operation by node without management authority | E-ADM-009 "insufficient authority for key operation" | error |
+| Console or readonly key attempts to revoke a control key | E-ADM-011 "permission denied: console key cannot revoke control key (control > console > readonly)" | error |
 
 ## Verification Properties
 

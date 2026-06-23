@@ -150,9 +150,6 @@ even when carrying no data payload. This means:
   downstream half-channel.
 - No dedicated ACK channel is needed, defined, or implemented.
 
-Note for PO: BC-2.02.005 EC-003 ("Console sends standalone ACK frames on a dedicated
-ACK channel") must be updated in Round 2 to reflect this design.
-
 **BC-2.02.006 (TLPKTDROP):** When a downstream frame is overdue beyond
 `tlpktdrop_timeout` (default: 2 × tick_interval), the frame is dropped with a
 TLPKTDROP signal. This prevents head-of-line blocking at the cost of terminal
@@ -208,10 +205,6 @@ Canonical thresholds (NFR-001: 100ms p99 LAN budget):
 firing. This is the canonical hysteresis value, derived from BC-2.01.002 EC-001
 ("≥3 consecutive missed ticks") and BC-2.06.001 invariant 3 ("3-consecutive-
 measurement hysteresis"). A single spike does not trigger a state change.
-
-Note for BA/PO: NFR-014 currently states "within 2 tick cycles" — this is
-inconsistent with the 3-measurement canonical value. NFR-014 must be updated
-to 3 tick cycles in Round 2.
 
 **Quality indicator update:** The `internal/metrics` package is called from the
 path scoring loop; there is no batching between path measurement and indicator

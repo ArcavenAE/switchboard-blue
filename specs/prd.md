@@ -90,7 +90,7 @@ Key architectural invariants: every router sees only outer-header metadata (no s
 > BCs are grouped by L2 domain subsystem. Numbering: BC-S.SS.NNN where
 > S = section (always 2 here), SS = subsystem (01-09), NNN = sequential.
 > Full contracts live in `behavioral-contracts/ss-NN/`.
-> Architecture subsystem IDs (SS-NN) are placeholders pending ARCH-INDEX (Phase 1b).
+> Architecture subsystem IDs (SS-NN) are canonical in `.factory/specs/architecture/ARCH-INDEX.md` Subsystem Registry.
 
 ### 2.01 Session Networking (CAP-001–CAP-004)
 
@@ -145,7 +145,7 @@ Key architectural invariants: every router sees only outer-header metadata (no s
 
 > Full contracts: `behavioral-contracts/ss-04/BC-2.04.001.md` – `BC-2.04.006.md`
 
-### 2.05 Admission Security (CAP-017–CAP-020)
+### 2.05 Admission Security (CAP-017–CAP-020, CAP-020a, CAP-020b)
 
 | BC ID | Title | Priority | Scope Phase |
 |-------|-------|----------|-------------|
@@ -324,8 +324,8 @@ Summary: Error codes follow `E-<subsystem>-NNN` convention. 12 FM-NNN failure mo
 | BC-2.05.003 | CAP-018 | admission-security | P0 | E | unit/integration |
 | BC-2.05.004 | CAP-019 | admission-security | P1 | E | integration |
 | BC-2.05.005 | CAP-020 | admission-security | P0 | E | unit/property/fuzz |
-| BC-2.05.006 | CAP-020 | admission-security | P0 | E | integration/property |
-| BC-2.05.007 | CAP-020 | admission-security | P0 | E | unit/property |
+| BC-2.05.006 | CAP-020b | admission-security | P0 | E | integration/property |
+| BC-2.05.007 | CAP-020a | admission-security | P0 | E | unit/property |
 | BC-2.06.001 | CAP-021 | quality-observability | P1 | E | unit/integration |
 | BC-2.06.002 | CAP-021 | quality-observability | P1 | E | unit/property |
 | BC-2.06.003 | CAP-022 | quality-observability | P1 | E | integration |

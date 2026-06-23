@@ -270,7 +270,7 @@ log_level: "info"
 
 ## Daemon RPC Surface
 
-Daemons expose a local management API (Unix socket or TCP) that sbctl connects to. The RPC protocol is implementation-defined (architecture decision: gRPC, custom binary, or JSON-over-TCP). The JSON schema above defines the semantic contract; the wire encoding is architecture-scoped.
+Daemons expose a local management API that sbctl connects to. RPC protocol is JSON-over-Unix-socket per ADR-006 (see `.factory/specs/architecture/ARCH-05-cli-and-api.md`). TCP fallback engaged when `--target=host:port` is specified.
 
 All RPC endpoints require authentication: the caller presents its OpenSSH key signature (same mechanism as SVTN admission). Unauthenticated calls are rejected before processing.
 

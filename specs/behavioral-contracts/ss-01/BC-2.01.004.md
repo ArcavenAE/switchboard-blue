@@ -78,7 +78,7 @@ Frame assembly at the sending node before transmission.
 
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
-| EC-001 | Frame with version field indicating major version > current | Router rejects frame with E-PRT-001; does not forward. See DEC-008. |
+| EC-001 | Frame with version byte whose major nibble (bits 7–4) is greater than current major version (e.g., byte `0x20` = major=2, minor=0) | Router rejects frame with E-PRT-001; does not forward. See DEC-008. |
 | EC-002 | Frame with length field set to 0 (empty-tick frame) | Valid. Router forwards normally; receiver identifies as EMPTY_TICK via frame_type field. |
 | EC-003 | Frame with invalid SVTN ID (all-zeros) | Router rejects with E-ADM-003 (SVTN ID not found in admitted set). |
 | EC-004 | Serialization of outer header on a little-endian machine | Fields are written in network byte order (big-endian) regardless of host endianness. |
@@ -90,7 +90,7 @@ Frame assembly at the sending node before transmission.
 | version=0x01 (v0.1), frame_type=DATA (0x01), svtn_id=16 random bytes, src=8B, dst=8B, payload_len=256, hmac_tag=8B | 44-byte serialized header; byte 0 = 0x01 (version); byte 1 = 0x01 (frame_type); bytes 2-3 = 0x01,0x00 (payload_len=256 big-endian) | happy-path |
 | Deserialize 44-byte header | All fields parse to expected values; no out-of-bounds read | happy-path |
 | 43-byte buffer passed to deserializer | Returns E-PRT-002 "header truncated: expected 44 bytes, got 43" | error |
-| version=2 (unknown major) | Router returns E-PRT-001 "unsupported protocol version 2" | error |
+| version=0x20 (major=2, minor=0; unknown major) | Router returns E-PRT-001 "unsupported protocol version 2.0" | error |
 
 ## Verification Properties
 

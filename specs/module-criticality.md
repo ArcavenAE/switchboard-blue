@@ -108,31 +108,31 @@ Note: The high percentage of CRITICAL and HIGH modules reflects the nature of th
 
 ## Dependency Graph — Build Order
 
-```mermaid
-graph LR
-    frame --> hmac
-    frame --> admission
-    frame --> session-auth
-    frame --> routing
-    hmac --> admission
-    hmac --> routing
-    admission --> halfchannel
-    session-auth --> halfchannel
-    halfchannel --> arq
-    halfchannel --> replay
-    halfchannel --> multipath
-    paths --> multipath
-    paths --> metrics
-    arq --> multipath
-    tmux-control --> halfchannel
-    routing --> discovery
-    routing --> svtn-mgmt
-    discovery --> sbctl
-    metrics --> sbctl
-    config --> admission
-    config --> routing
-    drain --> routing
-```
+> **Canonical source:** `.factory/specs/architecture/ARCH-08-dependency-graph.md`
+> The sorted list below reflects the topological build order derived from ARCH-08.
+> Do not maintain a duplicate graph here — consult ARCH-08 for the authoritative
+> directed dependency graph and import-direction conventions.
+
+Topological build order (each module may only import modules listed before it):
+
+1. **frame** — no local dependencies
+2. **hmac** — imports: frame
+3. **config** — no local dependencies
+4. **admission** — imports: frame, hmac, config
+5. **session-auth** — imports: frame, hmac
+6. **routing** — imports: frame, hmac, config
+7. **halfchannel** — imports: admission, session-auth
+8. **tmux-control** — imports: halfchannel
+9. **arq** — imports: halfchannel
+10. **replay** — imports: halfchannel
+11. **paths** — no local dependencies
+12. **multipath** — imports: halfchannel, arq, paths
+13. **metrics** — imports: paths
+14. **discovery** — imports: routing
+15. **svtn-mgmt** — imports: routing
+16. **drain** — imports: routing
+17. **sbctl** — imports: discovery, metrics
+18. **others** — test harness, log formatting, etc.
 
 ## Implementation Priority Order
 
