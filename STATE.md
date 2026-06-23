@@ -25,6 +25,11 @@ dtu_assessment: 2026-06-23
 dtu_clones_built: n/a
 dtu_services: []
 feasibility_status: "all-feasible"
+cicd_setup_complete: true
+cicd_workflow_count: 6
+cicd_p0_gaps: 3
+cicd_p1_gaps: 2
+cicd_p2_gaps: 5
 internal_packages: 18
 purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
 go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
@@ -78,6 +83,14 @@ authoritative; `.factory/specs/` will derive from them via
 - Q: Goroutine model for 1k concurrent sessions — per-session pair vs event-loop (NFR-004)?
 - Q: Drop cache — TTL eviction in addition to LRU to prevent suppression after wraparound?
 - Q: PE router-to-router Noise — share node admission keypair, or separate router identity?
+
+## Phase 3 blockers (must resolve before TDD implementation)
+
+- **P0-001 — Branch protection missing on `develop`.** `ci.yml` runs but is not a required check. PR with failing tests can merge. Undermines TDD. Fix: enable branch protection requiring `ci` check + 1 approving review + dismiss-stale-reviews + restrict-push.
+- **P0-002 — Branch protection missing on `main`.** Stable release branch unprotected; force-push possible. Fix: same as P0-001 plus restrict-push to release tags only.
+- **P0-003 — Commit signature enforcement absent at repo level.** Global gitconfig enforces signing locally, but GitHub does not reject unsigned bot commits. Fix: after enabling branch protection, set `required_signatures: true` on both branches.
+
+Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd-setup.md`.
 
 ## Non-blocking debt
 
