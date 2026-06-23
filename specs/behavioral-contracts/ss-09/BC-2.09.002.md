@@ -12,7 +12,7 @@ subsystem: deployment-operations
 architecture_module: internal/drain
 capability: CAP-027
 priority: P2
-criticality: supportive
+criticality: medium
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -85,9 +85,9 @@ Router receives SIGTERM or operator runs `sbctl router drain`.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Sessions preserved on drain when alternate path available | integration/e2e |
-| VP-TBD | Drain timeout: router disconnects even without full acknowledgement | integration |
-| VP-TBD | New connections rejected during drain | unit |
+| VP-037 | Sessions preserved on drain when alternate path available | integration/e2e |
+| VP-037 | Drain timeout: router disconnects even without full acknowledgement | integration |
+| VP-037 | New connections rejected during drain | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Router receives SIGTERM or operator runs `sbctl router drain`.
 |-------|-------|
 | L2 Capability | CAP-027 ("Graceful router drain and session migration") per capabilities.md §CAP-027 |
 | L2 Domain Invariants | DI-004 (all traffic through routers — migration routes through alternate routers) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/drain |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-027 ("Graceful router drain and session migration") per capabilities.md §CAP-027 — this BC is the direct behavioral specification of the "router signals impending shutdown; nodes migrate to alternate routers" mechanism CAP-027 defines |
 

@@ -30,6 +30,8 @@ kos_anchors:
 traces_to: '.factory/specs/prd.md'
 deployment_topology: single-service
 input-hash: "[md5-pending]"
+modified:
+  - 2026-06-23T00:00:00
 ---
 
 # Architecture Index: Switchboard
@@ -87,10 +89,10 @@ input-hash: "[md5-pending]"
 
 | ADR | Decision | Section | Status |
 |-----|----------|---------|--------|
-| ADR-001 | HMAC algorithm: HMAC-SHA256 with per-SVTN derived key | ARCH-02, ARCH-04 | decided |
+| ADR-001 | HMAC algorithm: HMAC-SHA256 with per-node per-SVTN HKDF-derived key | ARCH-02, ARCH-04 | decided (amended 2026-06-23) |
 | ADR-002 | FEC group size: N=4 default, tunable via config | ARCH-03 | decided |
 | ADR-003 | Duplicate key registration: last-write-wins | ARCH-04 | decided |
-| ADR-004 | Console key registration model: console keys managed by control node only | ARCH-04 | decided |
+| ADR-004 | Console key registration model: permission hierarchy (control > console > readonly); cross-role revocation rules | ARCH-04 | decided (amended 2026-06-23) |
 | ADR-005 | Downstream ARQ continuity under router failover: resync on reconnect | ARCH-03 | decided |
 | ADR-006 | Daemon RPC: JSON-over-Unix-socket with SSH signature auth | ARCH-05 | decided |
 | ADR-007 | P router: separate build target, not included in MVP binary | ARCH-06 | decided |
@@ -103,6 +105,12 @@ mechanism; Phase 3 benchmarks validate the defaults:
 
 - **Tick interval:** 5–50ms range. Default upstream 10ms, downstream 50ms. (ADR-008)
 - **Presence heartbeat interval:** 30s default. To be validated against discovery latency tolerance in Phase 3.
+
+## Changelog
+
+| Date | Author | Change |
+|------|--------|--------|
+| 2026-06-23 | architect | Round-1 architectural refinement (pass-01 adversarial review): wire format canonicalized to bit-precise 44-byte outer header (F-001, F-002, F-004, F-011); HMAC keying updated to per-node HKDF-SHA256 (F-003); drop cache key extended to (checksum, arrival_interface_id) (F-006); quality thresholds aligned to NFR-001/BC-2.06.001 (F-008); hysteresis canonical value set to 3 measurements (F-021); read-only console ACK resolved via degenerate upstream half-channel (F-023); permission hierarchy (control > console > readonly) and cross-role revocation rules documented in ADR-004 (F-010); SHA-256 adopted for address derivation replacing Blake3 (F-007); VP-051 and VP-052 added; VP total now 52; VP-040 module corrected to internal/multipath (F-014). |
 
 ## Open Frontier Questions (for KoS process)
 

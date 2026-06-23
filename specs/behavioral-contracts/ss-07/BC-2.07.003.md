@@ -12,7 +12,7 @@ subsystem: network-management
 architecture_module: cmd/sbctl
 capability: CAP-024
 priority: P0
-criticality: important
+criticality: critical
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -84,9 +84,9 @@ Network connection attempt to daemon fails or times out.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | sbctl always exits non-zero when daemon unreachable | unit |
-| VP-TBD | No stdout output on connection failure | unit |
-| VP-TBD | Error message includes attempted address | unit |
+| VP-030 | sbctl always exits non-zero when daemon unreachable | unit |
+| VP-030 | No stdout output on connection failure | unit |
+| VP-030 | Error message includes attempted address | unit |
 
 ## Traceability
 
@@ -94,7 +94,7 @@ Network connection attempt to daemon fails or times out.
 |-------|-------|
 | L2 Capability | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 |
 | L2 Domain Invariants | DI-002 (private keys never transit — error messages must not include key material) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | cmd/sbctl |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 — this BC specifies the error behavior for CLI unreachability, which is part of CAP-024's requirement that sbctl "exposes router status, SVTN management, key management, session operations" without misleading output |
 

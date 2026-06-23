@@ -83,9 +83,9 @@ Frame arrives at receiver endpoint.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | No application data is delivered twice for the same sequence number within dedup window | proptest |
-| VP-TBD | Deduplication window covers at least 1 second of history | unit |
-| VP-TBD | Discarded duplicates produce no ACK side effects | unit |
+| VP-054 | First-arriving copy delivered; identical duplicate discarded silently with no ACK side-effects | integration |
+| VP-025 | Deduplication window bounded (drop cache never exceeds capacity; ≥1s history covered by bounded cache) | proptest |
+| VP-054 | Discarded duplicates produce no ACK side-effects (verified in VP-054 harness ackRecorder assertion) | integration |
 
 ## Traceability
 
@@ -93,7 +93,7 @@ Frame arrives at receiver endpoint.
 |-------|-------|
 | L2 Capability | CAP-005 ("Dual-path frame forwarding with duplicate-and-race") per capabilities.md §CAP-005 |
 | L2 Domain Invariants | DI-009 (receiver deduplication: first arrival wins) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/multipath |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-005 ("Dual-path frame forwarding with duplicate-and-race") per capabilities.md §CAP-005 — this BC specifies the receiver-side deduplication that is the essential complement to the dual-path dispatch in BC-2.02.001 |
 

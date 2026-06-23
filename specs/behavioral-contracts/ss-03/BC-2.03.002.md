@@ -12,7 +12,7 @@ subsystem: session-discovery
 architecture_module: internal/discovery
 capability: CAP-012
 priority: P1
-criticality: important
+criticality: high
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -85,9 +85,9 @@ Operator runs `sbctl sessions list` or console refreshes its session list view.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Session list contains only sessions from current SVTN | integration |
-| VP-TBD | After access node offline > 1 heartbeat interval, its sessions absent | integration |
-| VP-TBD | Session list matches aggregate of all received advertisements | proptest |
+| VP-045 | Session list contains only sessions from current SVTN | integration |
+| VP-045 | After access node offline > 1 heartbeat interval, its sessions absent | integration |
+| VP-045 | Session list matches aggregate of all received advertisements | proptest |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Operator runs `sbctl sessions list` or console refreshes its session list view.
 |-------|-------|
 | L2 Capability | CAP-012 ("Console session enumeration across SVTN") per capabilities.md §CAP-012 |
 | L2 Domain Invariants | DI-005 (SVTN cryptographic isolation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/discovery |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-012 ("Console session enumeration across SVTN") per capabilities.md §CAP-012 — this BC specifies the console-side discovery that CAP-012 defines as "discovers all available sessions across all access nodes on its SVTN without specifying IP addresses" |
 

@@ -88,9 +88,9 @@ Console operator runs `sbctl sessions attach <session-name>` or equivalent API c
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Tier 2 authorization checked before channel established | integration |
-| VP-TBD | Downstream stream starts immediately on successful attach | e2e |
-| VP-TBD | Explicit error returned (not timeout) when session not found | unit |
+| VP-033 | Tier 2 authorization checked before channel established | integration |
+| VP-033 | Downstream stream starts immediately on successful attach | e2e |
+| VP-033 | Explicit error returned (not timeout) when session not found | unit |
 
 ## Traceability
 
@@ -98,7 +98,7 @@ Console operator runs `sbctl sessions attach <session-name>` or equivalent API c
 |-------|-------|
 | L2 Capability | CAP-014 ("Console session attach and detach") per capabilities.md §CAP-014 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced), DI-011 (role separation between Tier 1 and Tier 2 keys) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/session |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-014 ("Console session attach and detach") per capabilities.md §CAP-014 — this BC specifies the attach half of the CAP-014 operation including the "selects by name" requirement |
 

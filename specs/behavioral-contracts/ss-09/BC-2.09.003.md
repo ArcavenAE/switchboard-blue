@@ -12,7 +12,7 @@ subsystem: deployment-operations
 architecture_module: internal/config
 capability: CAP-023
 priority: P0
-criticality: important
+criticality: critical
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -84,9 +84,9 @@ Daemon startup config parsing failure; config reload with invalid config.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Startup with any config error always exits non-zero | unit |
-| VP-TBD | Error message includes field name and fix suggestion | unit |
-| VP-TBD | Config reload failure leaves daemon on previous config | integration |
+| VP-028, VP-029 | Startup with any config error always exits non-zero | unit |
+| VP-028, VP-029 | Error message includes field name and fix suggestion | unit |
+| VP-028, VP-029 | Config reload failure leaves daemon on previous config | integration |
 
 ## Traceability
 
@@ -94,7 +94,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 |-------|-------|
 | L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023; CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 |
 | L2 Domain Invariants | DI-007 (outer header format stability — config errors at startup prevent mismatched protocol state) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/config |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — router startup is the prerequisite for SVTN creation; also CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 because sbctl-launched daemon operations depend on clean startup behavior |
 

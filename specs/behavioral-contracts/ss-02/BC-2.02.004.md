@@ -85,9 +85,9 @@ Timeslice clock fires on the upstream half-channel with pending keystrokes.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Each keystroke is applied exactly once at access node | proptest |
-| VP-TBD | Single frame loss is recovered from next frame's replay window | proptest |
-| VP-TBD | Replay window contents are monotonically increasing by sequence | unit |
+| VP-022, VP-023 | Each keystroke is applied exactly once at access node | proptest |
+| VP-022, VP-023 | Single frame loss is recovered from next frame's replay window | proptest |
+| VP-022, VP-023 | Replay window contents are monotonically increasing by sequence | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Timeslice clock fires on the upstream half-channel with pending keystrokes.
 |-------|-------|
 | L2 Capability | CAP-007 ("Upstream idempotent replay (U-C sliding window)") per capabilities.md §CAP-007 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — replay content is SSH-encrypted) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/replay |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-007 ("Upstream idempotent replay (U-C sliding window)") per capabilities.md §CAP-007 — this BC is the full behavioral specification of the U-C replay strategy |
 

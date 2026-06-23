@@ -12,7 +12,7 @@ subsystem: quality-observability
 architecture_module: internal/metrics
 capability: CAP-021
 priority: P1
-criticality: important
+criticality: high
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -85,9 +85,9 @@ The timeslice framing model guarantees one frame per tick. When a frame that was
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | N=3 consecutive gaps trigger indicator downgrade | unit |
-| VP-TBD | M=3 consecutive good frames trigger indicator recovery | unit |
-| VP-TBD | Gap events recorded in path metrics | unit |
+| VP-052 | N=3 consecutive gaps trigger indicator downgrade | unit |
+| VP-052 | M=3 consecutive good frames trigger indicator recovery | unit |
+| VP-052 | Gap events recorded in path metrics | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ The timeslice framing model guarantees one frame per tick. When a frame that was
 |-------|-------|
 | L2 Capability | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires whether or not there is data — absence is a signal) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/metrics |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 — this BC specifies the "missing frame is a degradation signal" mechanism that CAP-021 defines as "a missing frame is a degradation signal" |
 

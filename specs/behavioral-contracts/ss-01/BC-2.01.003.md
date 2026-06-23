@@ -85,9 +85,9 @@ Channel establishment; ongoing operation of an active terminal session.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Upstream and downstream sequence spaces never share values | proptest |
-| VP-TBD | Upstream loss does not trigger downstream retransmit | integration |
-| VP-TBD | Each half-channel's tick fires independently | proptest |
+| VP-017, VP-051 | Upstream and downstream sequence spaces never share values | proptest |
+| VP-017, VP-051 | Upstream loss does not trigger downstream retransmit | integration |
+| VP-017, VP-051 | Each half-channel's tick fires independently | proptest |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Channel establishment; ongoing operation of an active terminal session.
 |-------|-------|
 | L2 Capability | CAP-002 ("Asymmetric half-channel operation") per capabilities.md §CAP-002 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation), DI-008 (timeslice clock fires whether or not there is data) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/halfchannel |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-002 ("Asymmetric half-channel operation") per capabilities.md §CAP-002 — this BC specifies the independence invariant between half-channels that CAP-002 defines as "independent sequence spaces, clocks, and recovery strategies" |
 

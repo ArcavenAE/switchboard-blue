@@ -12,7 +12,7 @@ subsystem: multipath-forwarding
 architecture_module: internal/arq
 capability: CAP-009
 priority: P1
-criticality: important
+criticality: high
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -85,9 +85,9 @@ Nth data frame dispatched on downstream half-channel; parity frame computed and 
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Single lost frame in FEC group reconstructed correctly | proptest |
-| VP-TBD | XOR parity: P = D1⊕D2⊕...⊕DN | unit |
-| VP-TBD | Double loss falls back to ARQ with correct SACK reporting | integration |
+| VP-043 | Single lost frame in FEC group reconstructed correctly | proptest |
+| VP-043 | XOR parity: P = D1⊕D2⊕...⊕DN | unit |
+| VP-043 | Double loss falls back to ARQ with correct SACK reporting | integration |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Nth data frame dispatched on downstream half-channel; parity frame computed and 
 |-------|-------|
 | L2 Capability | CAP-009 ("XOR parity FEC for burst-loss recovery") per capabilities.md §CAP-009 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — FEC operates on encrypted payload) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/arq |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-009 ("XOR parity FEC for burst-loss recovery") per capabilities.md §CAP-009 — this BC is the complete behavioral specification of the XOR FEC strategy for single-loss recovery |
 

@@ -12,7 +12,7 @@ subsystem: console-operations
 architecture_module: cmd/sbctl
 capability: CAP-025
 priority: P1
-criticality: important
+criticality: high
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -85,9 +85,9 @@ Operator runs `sbctl console attach|detach|switch|navigate`.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Remote attach/detach has same effect as local attach/detach | integration |
-| VP-TBD | Tier 2 authorization enforced for remote attach | integration |
-| VP-TBD | Remote commands serialized correctly under concurrent invocation | integration/fuzz |
+| VP-050 | Remote attach/detach has same effect as local attach/detach | integration |
+| VP-050 | Tier 2 authorization enforced for remote attach | integration |
+| VP-050 | Remote commands serialized correctly under concurrent invocation | integration/fuzz |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Operator runs `sbctl console attach|detach|switch|navigate`.
 |-------|-------|
 | L2 Capability | CAP-025 ("Remote console control plane") per capabilities.md §CAP-025 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced — still applies via the console daemon's key) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | cmd/sbctl |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-025 ("Remote console control plane") per capabilities.md §CAP-025 — this BC specifies the remote controllability that CAP-025 defines as "remotely controllable via sbctl: attach, detach, switch session, navigate" |
 

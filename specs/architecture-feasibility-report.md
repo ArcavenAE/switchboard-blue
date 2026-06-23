@@ -93,6 +93,23 @@ toolchain (gopter, go test -fuzz, go test -race, golangci-lint, go-mutesting).
 The highest complexity verification is VP-015 (channel header opacity at router),
 which uses fuzz + code audit. This is feasible and documented in ARCH-07.
 
+### Phase 1c-Refinement Re-Affirmation (VP-053 through VP-057)
+
+Five additional VPs were created in Phase 1c to close coverage gaps identified by
+the PO sweep. Each is explicitly feasible:
+
+| BC | VP | Feasibility Rationale |
+|----|----|-----------------------|
+| BC-2.01.002 | VP-053 | proptest over K∈[1,100] empty ticks; pure halfchannel state machine; fake clock; no I/O |
+| BC-2.02.002 | VP-054 | integration test with in-process receiver stack + fake transport; no real network required |
+| BC-2.03.003 | VP-055 | proptest over UTF-8 session names 1–255 bytes; pure Encode/Decode codec; no I/O |
+| BC-2.04.004 | VP-056 | integration test with in-process session manager + fake transport; no tmux process required |
+| BC-2.05.007 | VP-057 | proptest sampling (100 keypairs × 7 frame types) + inline HKDF non-exposure proof sketch; Go stdlib crypto only |
+
+No new infeasibility findings. The HKDF one-way argument for VP-057 (Part ii) is a
+reasoning sketch, not a machine-checked proof; this is explicitly noted in VP-057's
+feasibility assessment as the standard approach for this class of security property.
+
 ## Risks and Mitigations
 
 | Risk | Likelihood | Impact | Mitigation |

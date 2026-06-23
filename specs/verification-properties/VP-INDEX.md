@@ -63,7 +63,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-037 | Router drain: nodes migrate within 2s | BC-2.09.002 | internal/drain | e2e | P2 | draft | VP-037.md |
 | VP-038 | E→PE graduation: config change only | BC-2.09.001 | internal/config | e2e | P2 | draft | VP-038.md |
 | VP-039 | SVTN isolation: no cross-SVTN frame delivery | BC-2.05.006 | internal/routing | e2e | P0 | draft | VP-039.md |
-| VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | integration | e2e | P1 | draft | VP-040.md |
+| VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | internal/multipath | e2e | P1 | draft | VP-040.md |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms | BC-2.01.001 | internal/halfchannel | benchmark | P0 | draft | VP-041.md |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | integration | benchmark | P0 | draft | VP-042.md |
 | VP-043 | XOR FEC: single loss in group recoverable | BC-2.02.007 | internal/arq | proptest | P1 | draft | VP-043.md |
@@ -74,23 +74,33 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-048 | Control node creates/destroys SVTNs | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
 | VP-049 | sbctl unified CLI with OpenSSH auth | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
+| VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
+| VP-052 | Missing expected tick within deadline → indicator downgrade | BC-2.06.002 | internal/quality | integration | P1 | draft | VP-052.md |
+| VP-053 | Empty-tick frame sequence: K ticks → K frames with contiguous seq nums | BC-2.01.002 | internal/halfchannel | proptest | P0 | draft | VP-053.md |
+| VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | draft | VP-054.md |
+| VP-055 | Presence advertisement payload round-trip: required fields present and stable | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
+| VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
+| VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | draft | VP-057.md |
 
 ## Counts
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark |
 |-----------|---------|------|-------------|-----|-----------|
-| 50 | 28 | 2 | 12 | 6 | 2 |
+| 57 | 32 | 2 | 11 | 10 | 2 |
 
-> Arithmetic check: 28 + 2 + 12 + 6 + 2 = 50. Consistent.
+> Arithmetic check: 32 + 2 + 11 + 10 + 2 = 57. Consistent.
 
 ## Phase Distribution
 
 | Phase | Count |
 |-------|-------|
-| P0 | 28 |
-| P1 | 16 |
-| P2 | 6 |
-| **Total** | **50** |
+| P0 | 39 |
+| P1 | 14 |
+| P2 | 4 |
+| **Total** | **57** |
+
+> Phase recounted: P0 adds VP-053 (P0), VP-054 (P0), VP-057 (P0) = +3 → 36+3=39.
+> P1 adds VP-055 (P1), VP-056 (P1) = +2 → 12+2=14. P2 unchanged = 4. Total = 57.
 
 ## BC Coverage Check
 

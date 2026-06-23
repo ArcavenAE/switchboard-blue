@@ -43,7 +43,7 @@ Control nodes and admitted console nodes can manage the public key registry for 
 
 ## Preconditions
 
-1. The requesting node is admitted to the SVTN with a key that has management authority for the operation (control role, or console role per architecture decision on OQ-001/OQ-003).
+1. The requesting node is admitted to the SVTN with a key that has management authority for the operation. Per **ADR-004**: key management is exclusive to the control node. Console nodes have read-only access to the admitted-key set; they cannot register, revoke, or expire keys. Access nodes have no key-management capability. Console-to-control revocation is prohibited. Control-to-control revocation requires `sbctl admin` human authorization (split-brain mitigation).
 2. The key operation is well-formed: a valid OpenSSH public key in authorized_keys format.
 3. The router's distributed key store is reachable.
 
@@ -71,7 +71,7 @@ Operator runs `sbctl svtn keys register|revoke|expire` or equivalent API call.
 |----|-------------|-------------------|
 | EC-001 (DEC-005) | Key revoked; node has active session | Node's session continues until next re-authentication challenge. Revocation propagates asynchronously. |
 | EC-002 (FM-007) | Key revocation propagation is slow (one router not updated) | The un-updated router may still admit the revoked key. Propagation completes within the eventual consistency window. |
-| EC-003 (DEC-007) | Same public key registered twice with different roles | Architecture decision (OQ-001): last write wins OR reject. Must be defined at architecture phase. This BC defers to architecture decision; the operation must return either "updated" or "conflict" — not silent. |
+| EC-003 (DEC-007) | Same public key registered twice with different roles | Per **ADR-003** (last-write-wins for duplicate key registration): the most recent registration supersedes earlier registrations for the same `(node_pubkey, svtn_id)` pair. The operation returns "updated" with the new role; no conflict; no manual reconciliation required. |
 | EC-004 | Key expires while session is active | Same behavior as revocation: session continues until next re-authentication challenge. |
 
 ## Canonical Test Vectors
@@ -80,16 +80,16 @@ Operator runs `sbctl svtn keys register|revoke|expire` or equivalent API call.
 |-------|----------------|----------|
 | `sbctl svtn keys register --key=<pubkey> --role=console` | Key registered; fingerprint returned; propagation initiated | happy-path |
 | `sbctl svtn keys revoke --key=<pubkey>` | Key revoked; active sessions continue until re-auth; propagation initiated | happy-path |
-| `sbctl svtn keys register --key=<same-pubkey-already-registered>` | Response: "key already registered" or "updated" (per architecture decision) | edge-case |
+| `sbctl svtn keys register --key=<same-pubkey-already-registered>` | Response: "updated" with new role (per ADR-003: last-write-wins) | edge-case |
 | Key operation by node without management authority | E-ADM-009 "insufficient authority for key operation" | error |
 
 ## Verification Properties
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Key registration makes key available for admission on all propagated routers | integration |
-| VP-TBD | Revocation propagates to all routers within eventual consistency window | integration |
-| VP-TBD | Private key never appears in key management wire messages | property |
+| VP-046 | Key registration makes key available for admission on all propagated routers | integration |
+| VP-046 | Revocation propagates to all routers within eventual consistency window | integration |
+| VP-046 | Private key never appears in key management wire messages | property |
 
 ## Traceability
 
@@ -97,7 +97,7 @@ Operator runs `sbctl svtn keys register|revoke|expire` or equivalent API call.
 |-------|-------|
 | L2 Capability | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 |
 | L2 Domain Invariants | DI-002 (private keys never transit), DI-011 (role separation between Tier 1 and Tier 2 keys), DI-012 (control node is a participant) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/svtnmgmt |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 — this BC specifies the complete key lifecycle operations that CAP-019 defines as the revocation path |
 

@@ -90,9 +90,9 @@ Node detects IP address change (OS network interface event or failed keep-alive 
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Session channel ID unchanged before and after IP change | integration |
-| VP-TBD | Re-authentication completes within 5s on LAN | e2e benchmark |
-| VP-TBD | Private key not present in re-authentication wire messages | property/audit |
+| VP-036 | Session channel ID unchanged before and after IP change | integration |
+| VP-036 | Re-authentication completes within 5s on LAN | e2e benchmark |
+| VP-036 | Private key not present in re-authentication wire messages | property/audit |
 
 ## Traceability
 
@@ -100,7 +100,7 @@ Node detects IP address change (OS network interface event or failed keep-alive 
 |-------|-------|
 | L2 Capability | CAP-004 ("Session continuity across network transitions") per capabilities.md §CAP-004 |
 | L2 Domain Invariants | DI-004 (no direct node-to-node communication), DI-002 (private keys never transit) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/admission |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-004 ("Session continuity across network transitions") per capabilities.md §CAP-004 — this BC is the direct behavioral realization of "nodes maintain sessions when the underlying IP address changes" |
 

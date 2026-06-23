@@ -12,7 +12,7 @@ subsystem: session-discovery
 architecture_module: internal/discovery
 capability: CAP-011
 priority: P1
-criticality: important
+criticality: high
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -86,9 +86,9 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Advertisement sent within 1 tick of state change | integration |
-| VP-TBD | Advertisement contains no session content — metadata only | code-audit |
-| VP-TBD | Advertisement is SVTN-scoped: received only by admitted nodes | integration |
+| VP-044 | Advertisement sent within 1 tick of state change | integration |
+| VP-044 | Advertisement contains no session content — metadata only | code-audit |
+| VP-044 | Advertisement is SVTN-scoped: received only by admitted nodes | integration |
 
 ## Traceability
 
@@ -96,7 +96,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 |-------|-------|
 | L2 Capability | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 |
 | L2 Domain Invariants | DI-004 (no direct node-to-node), DI-005 (SVTN cryptographic isolation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/discovery |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 — this BC specifies the advertisement trigger conditions and payload that CAP-011 defines as "state change, periodic heartbeat, and on-demand request" |
 

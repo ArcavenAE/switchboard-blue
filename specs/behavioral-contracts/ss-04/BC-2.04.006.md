@@ -85,9 +85,9 @@ Second (or subsequent) console attaches to an already-subscribed session.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | All subscribed consoles receive the same bytes per downstream frame | integration |
-| VP-TBD | Detach of one console does not disrupt other subscribers | integration |
-| VP-TBD | Keystroke serialization: no tmux corruption under concurrent keystrokes | integration/fuzz |
+| VP-034 | All subscribed consoles receive the same bytes per downstream frame | integration |
+| VP-034 | Detach of one console does not disrupt other subscribers | integration |
+| VP-034 | Keystroke serialization: no tmux corruption under concurrent keystrokes | integration/fuzz |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Second (or subsequent) console attaches to an already-subscribed session.
 |-------|-------|
 | L2 Capability | CAP-016 ("Simultaneous multi-console session viewing") per capabilities.md §CAP-016 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — router fans out without re-encrypting) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/session |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-016 ("Simultaneous multi-console session viewing") per capabilities.md §CAP-016 — this BC specifies the fan-out behavior that CAP-016 defines as "the router fans out to all subscribed consoles" |
 

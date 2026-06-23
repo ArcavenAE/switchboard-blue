@@ -42,7 +42,7 @@ The downstream half-channel (terminal output from access node to console) uses r
 ## Preconditions
 
 1. The downstream half-channel is active.
-2. The console's upstream half-channel is active to carry piggybacked ACKs (if upstream is dead, standalone ACK frames are sent).
+2. The console's upstream half-channel is active to carry piggybacked ACKs (if the console is read-only with no payload-bearing upstream, SACK is piggybacked on empty-tick frames per BC-2.01.002 + BC-2.01.005).
 3. The ARQ window size is configured (implementation: based on negotiated RTT).
 
 ## Postconditions
@@ -69,7 +69,7 @@ Console receives an out-of-order downstream frame; ACK timer fires; access node 
 |----|-------------|-------------------|
 | EC-001 | Console receives frames out of order: seq [1,3,2] | Frames 1 and 3 buffered; gap at 2 noted in SACK; access node retransmits 2; console delivers 1,2,3 in order. |
 | EC-002 | ACK piggyback lost (upstream frame lost) | ARQ timer at access node expires; access node resends; console reACKs on next upstream frame. |
-| EC-003 | Upstream half-channel dead (read-only console, no upstream) | Console sends standalone ACK frames on a dedicated ACK channel. |
+| EC-003 (read-only console, no payload-bearing upstream) | Read-only consoles have no payload-bearing upstream half-channel | Read-only consoles piggyback SACK on empty-tick frames produced by the degenerate upstream half-channel (SACK_present=1 in channel header flags, per BC-2.01.002 + BC-2.01.005). Empty-tick frames carry SACK bitmaps when needed; no separate channel is used. |
 | EC-004 | SACK bitmap overflow (too many out-of-order frames simultaneously) | Bitmap covers a fixed range; frames outside the range trigger a NACK or rely on the ARQ timeout to retransmit. |
 
 ## Canonical Test Vectors
@@ -85,9 +85,9 @@ Console receives an out-of-order downstream frame; ACK timer fires; access node 
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Downstream bytes delivered in order regardless of path reordering | proptest |
-| VP-TBD | Every lost frame within ARQ window is retransmitted exactly once | proptest |
-| VP-TBD | SACK bitmap accurately reflects received/missing frames | unit |
+| VP-019, VP-020 | Downstream bytes delivered in order regardless of path reordering | proptest |
+| VP-019, VP-020 | Every lost frame within ARQ window is retransmitted exactly once | proptest |
+| VP-019, VP-020 | SACK bitmap accurately reflects received/missing frames | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Console receives an out-of-order downstream frame; ACK timer fires; access node 
 |-------|-------|
 | L2 Capability | CAP-008 ("Downstream reliable ordered delivery with ARQ") per capabilities.md §CAP-008 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — downstream payload is SSH-encrypted) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/arq |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-008 ("Downstream reliable ordered delivery with ARQ") per capabilities.md §CAP-008 — this BC specifies the ARQ mechanism with piggybacked ACK/SACK that CAP-008 defines as the D-A MVP strategy |
 

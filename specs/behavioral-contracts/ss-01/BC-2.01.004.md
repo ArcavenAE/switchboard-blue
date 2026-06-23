@@ -37,19 +37,30 @@ kos_anchors:
 
 ## Description
 
-Every Switchboard frame carries a 44-byte outer header in a fixed binary layout. This header contains the router-visible metadata: protocol version, frame type, SVTN ID, destination node address, source node address, payload length, and HMAC. Routers parse this header to make forwarding decisions without inspecting the payload. The layout is fixed within a major protocol version; any change requires a major version increment.
+Every Switchboard frame carries a 44-byte outer header in a fixed binary layout. This header contains the router-visible metadata: protocol version, frame type, SVTN ID, source node address, destination node address, payload length, and an 8-byte HMAC tag (first 8 bytes of HMAC-SHA256). Routers parse this header to make forwarding decisions without inspecting the payload. The layout is fixed within a major protocol version; any change requires a major version increment.
 
 ## Preconditions
 
 1. The sending node has initialized an outer header struct with all required fields.
 2. The SVTN ID is a valid 16-byte identifier.
 3. The destination and source node addresses are 8-byte values derived as `hash(SVTN-ID || public-key)`.
-4. The HMAC has been computed over the full frame (outer header fields + payload) using the node's admission key.
+4. The HMAC tag (8 bytes, first 8 bytes of HMAC-SHA256 output) has been computed over the full frame using the node's frame_auth_key (per-node-per-SVTN HKDF derivation).
 
 ## Postconditions
 
 1. The serialized outer header is exactly 44 bytes in big-endian byte order.
-2. Field layout: [version: 2B][frame_type: 2B][svtn_id: 16B][dst_addr: 8B][src_addr: 8B][length: 4B][hmac: 16B] — total 44 bytes (note: HMAC is truncated to 16 bytes).
+2. Outer header layout (44 bytes total):
+
+   | Offset | Size | Field          | Notes                                                       |
+   |--------|------|----------------|-------------------------------------------------------------|
+   | 0      | 1    | version        | bits[7:4]=major, bits[3:0]=minor; v0.1 = 0x01               |
+   | 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05 |
+   | 2      | 2    | payload_len    | u16 big-endian                                              |
+   | 4      | 16   | svtn_id        | 128-bit SVTN identifier                                     |
+   | 20     | 8    | src_node_addr  | 64-bit                                                      |
+   | 28     | 8    | dst_node_addr  | 64-bit                                                      |
+   | 36     | 8    | hmac_tag       | first 8 bytes of HMAC-SHA256(frame_auth_key, full_frame)    |
+
 3. The deserialized outer header matches the serialized values exactly (round-trip identity).
 4. A router receiving the frame can parse the outer header without reading any byte beyond offset 43.
 
@@ -76,7 +87,7 @@ Frame assembly at the sending node before transmission.
 
 | Input | Expected Output | Category |
 |-------|----------------|----------|
-| version=1, frame_type=DATA, svtn_id=16 random bytes, dst=8B, src=8B, length=256, hmac=16B | 44-byte serialized header; bytes 0-1 = 0x00,0x01; bytes 2-3 = 0x00,0x01 (DATA type) | happy-path |
+| version=0x01 (v0.1), frame_type=DATA (0x01), svtn_id=16 random bytes, src=8B, dst=8B, payload_len=256, hmac_tag=8B | 44-byte serialized header; byte 0 = 0x01 (version); byte 1 = 0x01 (frame_type); bytes 2-3 = 0x01,0x00 (payload_len=256 big-endian) | happy-path |
 | Deserialize 44-byte header | All fields parse to expected values; no out-of-bounds read | happy-path |
 | 43-byte buffer passed to deserializer | Returns E-PRT-002 "header truncated: expected 44 bytes, got 43" | error |
 | version=2 (unknown major) | Router returns E-PRT-001 "unsupported protocol version 2" | error |
@@ -85,9 +96,9 @@ Frame assembly at the sending node before transmission.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | serialize(deserialize(x)) == x for all valid headers | proptest/fuzz |
-| VP-TBD | Serialized outer header is always exactly 44 bytes | unit |
-| VP-TBD | No field in outer header overlaps with another field | unit |
+| VP-001, VP-002, VP-003 | serialize(deserialize(x)) == x for all valid headers | proptest/fuzz |
+| VP-001, VP-002, VP-003 | Serialized outer header is always exactly 44 bytes | unit |
+| VP-001, VP-002, VP-003 | No field in outer header overlaps with another field | unit |
 
 ## Traceability
 
@@ -95,7 +106,7 @@ Frame assembly at the sending node before transmission.
 |-------|-------|
 | L2 Capability | CAP-003 ("Frame envelope encoding and decoding") per capabilities.md §CAP-003 |
 | L2 Domain Invariants | DI-007 (outer header format stability within major version), DI-001 (carrier-grade content separation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/frame |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-003 ("Frame envelope encoding and decoding") per capabilities.md §CAP-003 — this BC specifies the exact 44-byte layout that CAP-003 defines as the router-visible/endpoint-only boundary |
 

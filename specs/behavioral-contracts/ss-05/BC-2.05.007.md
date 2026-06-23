@@ -10,7 +10,7 @@ phase: 1a
 bc_id: BC-2.05.007
 subsystem: admission-security
 architecture_module: internal/hmac
-capability: CAP-020
+capability: CAP-020a
 priority: P0
 criticality: critical
 scope_phase: E
@@ -28,7 +28,7 @@ inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
   - '.factory/specs/domain-spec/invariants.md'
   - '_bmad-output/planning-artifacts/prd.md'
-traces_to: [CAP-020]
+traces_to: [CAP-020a]
 kos_anchors:
   - elem-ssh-end-to-end-encryption
 ---
@@ -82,19 +82,19 @@ Any operation involving the private key: admission challenge signing, HMAC compu
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Private key bytes do not appear in any network frame | code-audit/fuzzing |
-| VP-TBD | Private key bytes do not appear in any log output | code-audit |
-| VP-TBD | No API, CLI, or diagnostic mode returns private key material | code-audit |
+| VP-057 | Private key bytes absent from all emitted frame types (proptest sampling + HKDF non-exposure proof sketch) | proptest |
+| VP-007 | Private key not in admission wire structs (type-level structural check; covers log output path via admission type model) | proptest |
+| VP-049 | sbctl CLI with OpenSSH auth — output verification confirms no private key material in CLI response paths | e2e |
 
 ## Traceability
 
 | Field | Value |
 |-------|-------|
-| L2 Capability | CAP-020 ("HMAC frame authentication at router boundary") per capabilities.md §CAP-020 |
+| L2 Capability | CAP-020a ("Private key non-transit") per capabilities.md §CAP-020a |
 | L2 Domain Invariants | DI-002 (node private keys never transit the network) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/hmac |
 | Stories | [filled by story-writer] |
-| Capability Anchor Justification | CAP-020 ("HMAC frame authentication at router boundary") per capabilities.md §CAP-020 — private key non-transit is the key management invariant that underlies the HMAC trust model; also directly enforces DI-002 which is grounded in PRD FR39 and the cryptographic standards domain |
+| Capability Anchor Justification | CAP-020a ("Private key non-transit") per capabilities.md §CAP-020a — this BC directly specifies the private key non-transit invariant that CAP-020a defines, ensuring the HMAC trust model is not undermined by key exfiltration |
 
 ## Related BCs
 

@@ -49,7 +49,20 @@ The channel header immediately follows the 44-byte outer header in every frame. 
 
 1. The router forwards the frame based solely on outer header fields (SVTN ID, destination address, frame type).
 2. The router does not read, log, modify, or cache any bytes at or after offset 44.
-3. The receiving endpoint parses the channel header to extract: channel_id, sequence, timestamp, fec_meta, flags.
+3. The receiving endpoint parses the channel header using the canonical layout (fields extracted: chan_id, chan_seq, flags, sack_bitmap when present):
+
+   Channel header layout (12 bytes fixed + 8 conditional):
+
+   | Offset | Size | Field        | Notes                                                  |
+   |--------|------|--------------|--------------------------------------------------------|
+   | 0      | 4    | chan_id      | u32; identifies the half-channel                       |
+   | 4      | 4    | chan_seq     | u32 big-endian, per-half-channel, +1 per tick          |
+   | 8      | 1    | flags        | bit 0=FEC_present, bit 1=ARQ_req, bit 2=SACK_present   |
+   | 9      | 3    | reserved     | must be zero                                           |
+   | 12     | 8    | sack_bitmap  | conditional: present only when SACK_present=1; 64-slot |
+
+   Fixed 12 bytes; +8 when SACK_present flag is set.
+
 4. The channel header format may evolve via TLV extensions without requiring router upgrades.
 
 ## Invariants
@@ -84,9 +97,9 @@ Frame arrival at a router; frame arrival at an endpoint.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Router code contains no read access to frame bytes at offset ≥ 44 | code-audit / formal |
-| VP-TBD | Channel header parses correctly for all valid field combinations | proptest |
-| VP-TBD | Unknown TLV types in channel header are skipped without error | fuzz |
+| VP-015 | Router code contains no read access to frame bytes at offset ≥ 44 | code-audit / formal |
+| VP-015 | Channel header parses correctly for all valid field combinations | proptest |
+| VP-015 | Unknown TLV types in channel header are skipped without error | fuzz |
 
 ## Traceability
 
@@ -94,7 +107,7 @@ Frame arrival at a router; frame arrival at an endpoint.
 |-------|-------|
 | L2 Capability | CAP-003 ("Frame envelope encoding and decoding") per capabilities.md §CAP-003 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation), DI-007 (outer header format stability) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/frame |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-003 ("Frame envelope encoding and decoding") per capabilities.md §CAP-003 — this BC specifies the router/endpoint parsing boundary that CAP-003 defines as "Router parses outer; endpoints parse channel header" |
 

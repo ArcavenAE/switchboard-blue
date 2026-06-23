@@ -87,9 +87,9 @@ tmux control mode initialization failure detected at access node startup or mid-
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Fallback to PTY mode never produces silent failure | unit |
-| VP-TBD | PTY proxy session is accessible to console attach | integration |
-| VP-TBD | Log entry is written on every fallback event | unit |
+| VP-032 | Fallback to PTY mode never produces silent failure | unit |
+| VP-032 | PTY proxy session is accessible to console attach | integration |
+| VP-032 | Log entry is written on every fallback event | unit |
 
 ## Traceability
 
@@ -97,7 +97,7 @@ tmux control mode initialization failure detected at access node startup or mid-
 |-------|-------|
 | L2 Capability | CAP-013 ("Access node tmux session publishing") per capabilities.md §CAP-013 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — PTY proxy maintains the separation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/tmux |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-013 ("Access node tmux session publishing") per capabilities.md §CAP-013 — this BC specifies the "PTY fallback used when control mode is unavailable" path defined within CAP-013 |
 

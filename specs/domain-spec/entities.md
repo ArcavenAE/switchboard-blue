@@ -7,6 +7,7 @@ version: "1.0"
 status: draft
 producer: business-analyst
 timestamp: 2026-06-23T00:00:00
+modified: ["2026-06-23"]
 phase: 1a
 inputDocuments:
   - '_bmad-output/planning-artifacts/product-brief-switchboard-2026-03-31.md'
@@ -87,7 +88,7 @@ be a distinct build target (PRD FR59). See elem-single-binary-three-modes._
 
 ### SVTN (Switched Virtual Terminal Network)
 A cryptographically isolated virtual network for terminal sessions. Identified
-by an SVTN ID (8-byte hash-derived). Admission is key-based. Multiple SVTNs
+by an SVTN ID (16-byte (128-bit) identifier). Admission is key-based. Multiple SVTNs
 can coexist on the same router infrastructure without cross-SVTN visibility.
 
 Key attributes: SVTN ID, control key set, admitted node keys (with roles),
@@ -122,7 +123,7 @@ timestamp, FEC metadata, flags (degradation signal, priority). Followed by
 SSH-encrypted payload. Opaque to routers.
 
 ### Node Address
-An 8-byte VSN-scoped hash of `hash(SVTN-ID || public-key)`. Self-derived from
+An 8-byte SVTN-scoped hash of `hash(SVTN-ID || public-key)`. Self-derived from
 the node's cryptographic identity. No assignment authority required.
 
 ### Admission Key (Tier 1)

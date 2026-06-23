@@ -67,7 +67,7 @@ Frame arrival at the router from any source.
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
 | EC-001 | Node admitted but key revoked (propagation delay, FM-007) | Router has not received revocation; frame forwarded. This is the acknowledged propagation gap. |
-| EC-002 | Frame with forged source address of an admitted node | HMAC verification fails (BC-2.05.005 — HMAC is keyed to the real node's private key, which the forger does not have). Frame rejected as HMAC failure. |
+| EC-002 | Frame with forged source address of an admitted node | HMAC tag verification fails (BC-2.05.005 — the `frame_auth_key` is derived per-node-per-SVTN via HKDF-SHA256; the forger does not have the real node's admission key and cannot produce a valid tag). Frame rejected as HMAC failure. |
 | EC-003 | Frame arrives during SVTN bootstrap (admitted set empty) | No frames forwarded until at least one node is admitted. First node is the control node bootstrapped locally. |
 | EC-004 | Non-SVTN frame (router management frame) | Management frames use a separate authentication path and are exempt from SVTN admitted-set check. |
 
@@ -84,9 +84,9 @@ Frame arrival at the router from any source.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | No frame from non-admitted source reaches any destination | proptest/integration |
-| VP-TBD | Admitted-set check is performed before forwarding decision | code-audit |
-| VP-TBD | Fail-closed: empty admitted set → no frames forwarded | unit |
+| VP-008 | No frame from non-admitted source reaches any destination | proptest/integration |
+| VP-008 | Admitted-set check is performed before forwarding decision | code-audit |
+| VP-008 | Fail-closed: empty admitted set → no frames forwarded | unit |
 
 ## Traceability
 
@@ -94,8 +94,9 @@ Frame arrival at the router from any source.
 |-------|-------|
 | L2 Capability | CAP-017 ("SVTN admission via signed key challenge (Tier 1)") per capabilities.md §CAP-017 |
 | L2 Domain Invariants | DI-006 (HMAC frame authentication at first router), DI-005 (SVTN cryptographic isolation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/admission |
 | Stories | [filled by story-writer] |
+| Architecture Decision | ADR-001 (amended): frame_auth_key (per-node-per-SVTN HKDF derivation) is the basis for HMAC tag verification enforced at this boundary |
 | Capability Anchor Justification | CAP-017 ("SVTN admission via signed key challenge (Tier 1)") per capabilities.md §CAP-017 — this BC specifies the router-side enforcement ("grants or denies admission") that is the flip side of the node-side challenge in BC-2.05.001 |
 
 ## Related BCs

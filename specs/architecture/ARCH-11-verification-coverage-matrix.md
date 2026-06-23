@@ -12,26 +12,29 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/BC-INDEX.md'
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
+modified:
+  - 2026-06-23T00:00:00
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
+> Total VP count: 57 (VP-001 through VP-057, per VP-INDEX).
 
 ## BC → VP Coverage Table
 
 | BC ID | Title (abbreviated) | Module | VP(s) | Method | Phase |
 |-------|---------------------|--------|-------|--------|-------|
 | BC-2.01.001 | Timeslice clock fires on every tick | internal/halfchannel | VP-016, VP-018 | proptest | P0 |
-| BC-2.01.002 | Empty-tick frame is a valid liveness signal | internal/halfchannel | VP-018 | proptest | P0 |
-| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-016, VP-017 | proptest | P0 |
+| BC-2.01.002 | Empty-tick frame is a valid liveness signal | internal/halfchannel | VP-018, VP-053 | proptest | P0 |
+| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-016, VP-017, VP-051 | proptest | P0 |
 | BC-2.01.004 | 44-byte outer header encoding and decoding | internal/frame | VP-001, VP-003 | proptest | P0 |
 | BC-2.01.005 | Channel header opaque to routers | internal/routing | VP-015 | fuzz + audit | P0 |
 | BC-2.01.006 | Session identity cryptographic derivation | internal/frame | VP-014 | proptest | P0 |
 | BC-2.01.007 | Session continuity across IP change | internal/admission | VP-036 | e2e | P0 |
 | BC-2.02.001 | Duplicate-and-race: same frame on two paths | internal/multipath | VP-024 | proptest | P0 |
-| BC-2.02.002 | First-arriving copy delivered, duplicates discarded | internal/multipath | VP-024 | proptest | P0 |
+| BC-2.02.002 | First-arriving copy delivered, duplicates discarded | internal/multipath | VP-024, VP-054 | proptest + integration | P0 |
 | BC-2.02.003 | Per-path RTT/loss tracked, paths ranked | internal/paths | VP-026 | proptest | P0 |
 | BC-2.02.004 | Upstream idempotent replay window | internal/replay | VP-022, VP-023 | proptest | P0 |
 | BC-2.02.005 | Downstream ARQ with piggybacked ACK/SACK | internal/arq | VP-019, VP-020 | proptest | P0 |
@@ -41,11 +44,11 @@ kos_anchors: []
 | BC-2.02.009 | Bounded drop cache suppresses looping duplicates | internal/multipath | VP-025 | proptest | P0 |
 | BC-2.03.001 | Access node presence advertisement | internal/discovery | VP-044 | integration | P1/PE |
 | BC-2.03.002 | Console session enumeration without hostnames | internal/discovery | VP-045 | e2e | P1/PE |
-| BC-2.03.003 | Presence includes name, status, quality | internal/discovery | VP-044 | integration | P1/PE |
+| BC-2.03.003 | Presence includes name, status, quality | internal/discovery | VP-044, VP-055 | integration + proptest | P1/PE |
 | BC-2.04.001 | Access node connects to tmux control mode | internal/tmux | VP-031 | integration | P0 |
 | BC-2.04.002 | PTY fallback when control mode unavailable | internal/tmux | VP-032 | integration | P0 |
 | BC-2.04.003 | Console attach by name | internal/session | VP-033 | e2e | P1 |
-| BC-2.04.004 | Console detach without closing session | internal/session | VP-033 | e2e | P1 |
+| BC-2.04.004 | Console detach without closing session | internal/session | VP-033, VP-056 | e2e + integration | P1 |
 | BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-035 | integration | P1 |
 | BC-2.04.006 | Multi-console fan-out | internal/session | VP-034 | e2e | P0 |
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-008, VP-009 | proptest | P0 |
@@ -54,9 +57,9 @@ kos_anchors: []
 | BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt | VP-046 | integration | P1 |
 | BC-2.05.005 | HMAC frame authentication at first router | internal/hmac | VP-004, VP-005, VP-006 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
-| BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007 | proptest + audit | P0 |
+| BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
 | BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027 | proptest | P1 |
-| BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027 | proptest | P1 |
+| BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
 | BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics | VP-047 | integration | P1 |
 | BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
 | BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049 | e2e | P2 |
@@ -73,41 +76,52 @@ kos_anchors: []
 | Total BCs | 42 |
 | BCs with ≥1 VP | 42 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 50 |
-| P0 VPs (pure-core proptest/fuzz) | 30 |
-| P1 VPs (integration/e2e) | 16 |
+| Total unique VPs | 57 |
+| P0 VPs (pure-core proptest/fuzz) | 39 |
+| P1 VPs (integration/e2e) | 14 |
 | P2+ VPs (advanced/PE phase) | 4 |
 
 ## Per-Module VP Count
+
+VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
 | internal/frame | 4 | proptest (3), fuzz (1) |
 | internal/hmac | 3 | proptest (2), fuzz (1) |
-| internal/halfchannel | 3 | proptest (3) |
+| internal/halfchannel | 5 | proptest (5) |
 | internal/arq | 4 | proptest (3), proptest-PE (1) |
 | internal/replay | 2 | proptest (2) |
-| internal/multipath | 2 | proptest (2) |
-| internal/paths | 1 | proptest (1) |
-| internal/metrics | 2 | proptest (2) |
-| internal/admission | 4 | proptest (3), e2e (1) |
+| internal/multipath | 4 | proptest (3), integration (1) |
+| internal/paths | 2 | proptest (1), e2e (1) |
+| internal/metrics | 3 | proptest (2), integration (1) |
+| internal/admission | 5 | proptest (4), e2e (1) |
 | internal/routing | 4 | proptest (2), fuzz+audit (1), e2e (1) |
-| internal/session | 5 | proptest (2), e2e (2), integration (1) |
+| internal/session | 6 | proptest (2), e2e (2), integration (2) |
 | internal/tmux | 2 | integration (2) |
 | internal/config | 2 | proptest (2) |
-| internal/discovery | 2 | integration (1), e2e (1) |
+| internal/discovery | 3 | integration (1), e2e (1), proptest (1) |
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
+| internal/quality | 1 | integration (1) |
 | cmd/sbctl | 3 | integration (1), e2e (2) |
-| **Total** | **46** | |
+| **Total** | **56** | |
 
-Note: VP-036–050 are the integration/e2e VPs assigned in ARCH-07's "Test-Sufficient"
-section plus additional coverage for PE-phase BCs. These supplement the core
-pure-core proptest VPs (VP-001–030).
+Note: VP-042 (`internal/halfchannel + integration`, benchmark, P0) and VP-040
+(`internal/multipath`, e2e, P1) account for the remaining 1 VP not listed per-module
+above (cross-module e2e VPs). Total VP-INDEX count is 57; per-module table reflects
+primary module assignment.
+
+VP-040 module is `internal/multipath` (corrected from prior "integration" — see
+VP-INDEX and VP-040.md frontmatter).
 
 ## Zero-VP BCs Check
 
 Per the coverage table above, all 42 BCs have at least one VP. No gaps.
+
+VP-053 through VP-057 were added in Phase 1c-refinement to close coverage gaps
+identified by the PO sweep (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004,
+BC-2.05.007 previously lacked a VP with `source_bc:` pointing at them).
 
 ## Infeasible Properties
 

@@ -7,6 +7,7 @@ version: "1.0"
 status: draft
 producer: business-analyst
 timestamp: 2026-06-23T00:00:00
+modified: ["2026-06-23"]
 phase: 1a
 inputDocuments:
   - '_bmad-output/planning-artifacts/product-brief-switchboard-2026-03-31.md'
@@ -70,7 +71,7 @@ _Anchor: elem-dual-fastest-path-forwarding; PRD FR11–FR12. CAP-005 covers mult
 
 **CAP-006** — Latency-based path selection and ranking (P0)
 Nodes track per-path RTT and loss via keep-alive probes and rank connected
-routers accordingly. The topX paths by quality receive outbound frames.
+routers accordingly. The top-2 paths by quality receive outbound frames.
 _Anchor: PRD FR12–FR13; Brainstorming Parameter 9 (PS-D). CAP-006 covers path ranking because "fastest path" must be defined and measured._
 
 **CAP-007** — Upstream idempotent replay (U-C sliding window) (P0)
@@ -102,7 +103,7 @@ _Anchor: PRD FR17–FR18. CAP-010 covers loop prevention because multi-path forw
 
 **CAP-011** — Multicast presence advertisement (P1)
 Access nodes advertise available sessions, attachment status, and quality
-indicators to all nodes on the SVTN via a VSN-scoped multicast address.
+indicators to all nodes on the SVTN via an SVTN-scoped multicast address.
 Consoles advertise their own presence. Triggered by state change, periodic
 heartbeat, and on-demand request.
 _Anchor: PRD FR20–FR23; Morphological Parameter 4. CAP-011 covers presence because session discovery without hostnames is a core differentiator._
@@ -167,7 +168,20 @@ _Anchor: PRD FR33–FR34; Morphological Parameter 12. CAP-019 covers key lifecyc
 Every frame carries an HMAC in the outer envelope, computed by the sending
 node. The first router verifies and rejects frames from non-admitted sources
 before forwarding.
-_Anchor: PRD FR36; Domain-Specific §"Cryptographic Standards." CAP-020 covers per-frame auth because it enforces the SVTN trust boundary at the wire level._
+_Anchor: PRD FR36; Domain-Specific §"Cryptographic Standards." CAP-020 covers per-frame auth because it enforces the SVTN trust boundary at the wire level. Realized by BC-2.05.005._
+
+**CAP-020a** — Private key non-transit (P0)
+Node private keys never appear on the wire. Only their derived HMAC tags do.
+Private material stays on the node that owns it. All network authentication
+is accomplished by signature output and HMAC tags, never by transmitting the
+key that produced them.
+_Anchor: DI-002 (node private keys never transit the network), grounded in PRD FR39 and Brief §"Cryptographic Standards." CAP-020a covers private key non-transit because it is the key management invariant that underlies the HMAC trust model — without this guarantee, CAP-020's HMAC verification provides no security. Realized by BC-2.05.007._
+
+**CAP-020b** — SVTN cryptographic isolation (P0)
+Frames produced under SVTN-A's HMAC keying cannot validate as frames under
+SVTN-B's keying. Cross-SVTN replay or substitution attacks fail at the router
+boundary because HMAC keys are scoped per (node, SVTN) pair.
+_Anchor: DI-005 (SVTN cryptographic isolation), grounded in PRD FR36 and Brief §"Virtual switched networks." CAP-020b covers SVTN cryptographic isolation because the multi-tenancy security guarantee depends on HMAC keys being non-transferable across SVTN boundaries — a node admitted to SVTN-A cannot forge valid frames for SVTN-B. Realized by BC-2.05.006._
 
 ---
 

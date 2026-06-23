@@ -85,9 +85,9 @@ Timeslice clock fires with empty application data queue.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Empty-tick frame carries zero payload | unit |
-| VP-TBD | Missing N consecutive empty-tick frames → quality indicator degrades | proptest |
-| VP-TBD | Router routes empty-tick frames via same path-selection logic as data frames | unit |
+| VP-053 | K consecutive empty ticks emit K frames with contiguous seq nums, EMPTY_TICK type, zero payload | proptest |
+| VP-052 | Missing expected tick within deadline triggers quality indicator downgrade (Green→Yellow, Yellow→Red) | integration |
+| VP-016 | Router routes empty-tick frames via same half-channel emit path as data frames (one frame per tick) | proptest |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Timeslice clock fires with empty application data queue.
 |-------|-------|
 | L2 Capability | CAP-001 ("Timeslice-driven frame assembly and transmission") per capabilities.md §CAP-001 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires whether or not there is data); DI-003 (router compromise → availability, not confidentiality) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/halfchannel |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-001 ("Timeslice-driven frame assembly and transmission") per capabilities.md §CAP-001 — this BC specifies the semantic meaning of empty-tick frames, which CAP-001 defines as "the frame departs whether full or empty" |
 

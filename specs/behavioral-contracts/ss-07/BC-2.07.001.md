@@ -12,7 +12,7 @@ subsystem: network-management
 architecture_module: internal/svtnmgmt
 capability: CAP-023
 priority: P2
-criticality: important
+criticality: high
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -83,9 +83,9 @@ Operator runs `sbctl svtn create` or `sbctl svtn destroy` or equivalent API call
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | SVTN create is idempotent for the first invocation; error on duplicate | unit |
-| VP-TBD | SVTN destroy removes all admitted keys | integration |
-| VP-TBD | Only control-role keys can create/destroy SVTNs | integration |
+| VP-048 | SVTN create is idempotent for the first invocation; error on duplicate | unit |
+| VP-048 | SVTN destroy removes all admitted keys | integration |
+| VP-048 | Only control-role keys can create/destroy SVTNs | integration |
 
 ## Traceability
 
@@ -93,7 +93,7 @@ Operator runs `sbctl svtn create` or `sbctl svtn destroy` or equivalent API call
 |-------|-------|
 | L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 |
 | L2 Domain Invariants | DI-012 (control node is a network participant, not a router manager), DI-005 (SVTN cryptographic isolation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/svtnmgmt |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — this BC specifies the create/destroy lifecycle that CAP-023 defines as the prerequisite for all other operations |
 

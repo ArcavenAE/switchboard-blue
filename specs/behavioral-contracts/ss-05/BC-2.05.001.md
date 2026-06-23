@@ -71,7 +71,7 @@ Node initiates a connection to the router and begins the admission handshake.
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
 | EC-001 (DEC-005) | Node's key is revoked between admission and re-authentication | Revocation does not instantly disconnect. Node remains admitted until the next re-authentication challenge. After that, E-ADM-005 "key revoked". |
-| EC-002 (DEC-007) | Same public key registered twice with different roles | Architecture decision (OQ-001 / DEC-007): last write wins OR reject duplicate. Must be defined before implementation. This BC defers to the architecture decision. |
+| EC-002 (DEC-007) | Same public key registered twice with different roles | Per **ADR-003** (last-write-wins for duplicate key registration): the most recent registration request authenticated through `sbctl admin` supersedes earlier registrations for the same `(node_pubkey, svtn_id)` pair. No conflict; no manual reconciliation required. |
 | EC-003 | Challenge nonce replay attempt | Nonces are single-use. Router rejects a signature over an already-consumed nonce with E-ADM-008 "nonce replay". |
 | EC-004 | Node is a router joining as a peer (PE-to-PE connection) | Peer router admission uses the same signed-challenge mechanism with a router-role key. |
 
@@ -88,9 +88,9 @@ Node initiates a connection to the router and begins the admission handshake.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Private key never appears in network traffic during admission | property/audit |
-| VP-TBD | Admission fails for any key not in the admitted set | proptest |
-| VP-TBD | Nonce is unique and single-use | unit |
+| VP-007, VP-009 | Private key never appears in network traffic during admission | property/audit |
+| VP-007, VP-009 | Admission fails for any key not in the admitted set | proptest |
+| VP-007, VP-009 | Nonce is unique and single-use | unit |
 
 ## Traceability
 
@@ -98,7 +98,7 @@ Node initiates a connection to the router and begins the admission handshake.
 |-------|-------|
 | L2 Capability | CAP-017 ("SVTN admission via signed key challenge (Tier 1)") per capabilities.md §CAP-017 |
 | L2 Domain Invariants | DI-002 (private keys never transit), DI-006 (HMAC frame auth at first router), DI-012 (control node is a participant, not a router manager) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/admission |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-017 ("SVTN admission via signed key challenge (Tier 1)") per capabilities.md §CAP-017 — this BC is the direct behavioral specification of the "signed challenge" admission mechanism CAP-017 defines as the network entry gate |
 

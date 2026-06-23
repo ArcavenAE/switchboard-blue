@@ -86,9 +86,9 @@ Keep-alive probe frame sent; keep-alive response received; keep-alive timeout.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Path ranking is consistent with measured RTT values | proptest |
-| VP-TBD | Path removed from active set after N=3 consecutive missed keep-alives | unit |
-| VP-TBD | EWMA converges toward true RTT within 10 probe intervals | proptest |
+| VP-026, VP-040 | Path ranking is consistent with measured RTT values | proptest |
+| VP-026, VP-040 | Path removed from active set after N=3 consecutive missed keep-alives | unit |
+| VP-026, VP-040 | EWMA converges toward true RTT within 10 probe intervals | proptest |
 
 ## Traceability
 
@@ -96,7 +96,7 @@ Keep-alive probe frame sent; keep-alive response received; keep-alive timeout.
 |-------|-------|
 | L2 Capability | CAP-006 ("Latency-based path selection and ranking") per capabilities.md §CAP-006 |
 | L2 Domain Invariants | DI-008 (empty-tick frames serve as liveness probes) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/paths |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-006 ("Latency-based path selection and ranking") per capabilities.md §CAP-006 — this BC specifies how RTT and loss are measured and how paths are ranked, which is exactly what CAP-006 defines |
 

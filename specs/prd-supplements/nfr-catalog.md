@@ -39,7 +39,7 @@ traces_to: '.factory/specs/prd.md'
 | NFR-011 | Reliability | Config error detection at startup | 100% of config validation errors reported before first connection accepted | Unit test: systematically inject each config error type; verify error reported and daemon exits before listening | P0 | FM-010 |
 | NFR-012 | Performance | Binary size (static) | ≤ 20MB (uncompressed) for the combined switchboard binary | Build check: measure binary size on each target platform (amd64, arm64); alert if > 20MB | P2 | ASM-004 |
 | NFR-013 | Reliability | SVTN cryptographic isolation | Node admitted only to SVTN-A cannot receive any frame from SVTN-B on the same router | Integration test: two SVTNs on same router; verify no cross-SVTN frame delivery under all conditions | P0 | DI-005 |
-| NFR-014 | Performance | Quality indicator update latency | Quality indicator updates within 2 tick cycles of path quality change | Integration test: degrade path quality; measure time to indicator update; must be ≤ 2 × tick_interval | P1 | CAP-021 |
+| NFR-014 | Performance | Quality indicator update latency | Quality indicator updates within 3 tick cycles of path quality change | Integration test: degrade path quality; measure time to indicator update; must be ≤ 3 × tick_interval | P1 | CAP-021 |
 | NFR-015 | Reliability | E router single-node E2E: five-minute setup | Operator can complete E router setup (install → first session attached) in ≤ 5 minutes with ≤ 3 CLI commands per machine | Timed onboarding walkthrough with target persona; measure clock time and command count | P1 | ASM-004 |
 
 ## NFR Categories

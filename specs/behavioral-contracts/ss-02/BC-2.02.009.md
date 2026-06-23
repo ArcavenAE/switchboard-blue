@@ -86,9 +86,9 @@ Frame received at router after HMAC verification.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Cache hit suppresses frame; miss forwards frame | unit |
-| VP-TBD | Cache never grows beyond configured maximum | proptest |
-| VP-TBD | Retransmit (different content) always produces cache miss | unit |
+| VP-025 | Cache hit suppresses frame; miss forwards frame | unit |
+| VP-025 | Cache never grows beyond configured maximum | proptest |
+| VP-025 | Retransmit (different content) always produces cache miss | unit |
 
 ## Traceability
 
@@ -96,7 +96,7 @@ Frame received at router after HMAC verification.
 |-------|-------|
 | L2 Capability | CAP-010 ("Router split-horizon and duplicate suppression") per capabilities.md §CAP-010 |
 | L2 Domain Invariants | DI-009 (receiver deduplication: first arrival wins; retransmits produce different checksums) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/multipath |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-010 ("Router split-horizon and duplicate suppression") per capabilities.md §CAP-010 — this BC specifies the checksum-based drop cache that CAP-010 defines as the "bounded drop cache of frame checksums" |
 

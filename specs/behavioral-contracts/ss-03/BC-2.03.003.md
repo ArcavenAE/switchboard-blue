@@ -12,7 +12,7 @@ subsystem: session-discovery
 architecture_module: internal/discovery
 capability: CAP-011
 priority: P1
-criticality: important
+criticality: high
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -84,9 +84,9 @@ Advertisement assembly at the access node before multicast dispatch.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Advertisement payload contains no session content or internal addresses | code-audit |
-| VP-TBD | Quality field is always one of: green, yellow, red | unit |
-| VP-TBD | Session name is UTF-8 and ≤ 255 bytes | unit |
+| VP-055 | Presence advertisement payload round-trips through Encode/Decode; all 3 fields present and stable; invalid names rejected | proptest |
+| VP-045 | Console session enumeration without hostnames (verifies no internal addresses in advertisement) | e2e |
+| VP-055 | Quality field is always one of: green, yellow, red (verified in VP-055 proptest over QualityIndicator enum) | proptest |
 
 ## Traceability
 
@@ -94,7 +94,7 @@ Advertisement assembly at the access node before multicast dispatch.
 |-------|-------|
 | L2 Capability | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011; CAP-012 ("Console session enumeration across SVTN") per capabilities.md §CAP-012 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — advertisement contains no session content) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/discovery |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 — this BC specifies the advertisement payload contents that CAP-011 defines as "attachment status and quality indicators"; also CAP-012 which requires "session name, attachment status, and quality indicator" per capabilities.md §CAP-012 |
 

@@ -85,9 +85,9 @@ Frame ready for transmission in the send queue.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | At most 2 paths used per frame dispatch | unit |
-| VP-TBD | Selected paths are the two lowest-RTT ranked paths | proptest |
-| VP-TBD | Frame identical on both paths (same bytes) | unit |
+| VP-024 | At most 2 paths used per frame dispatch | unit |
+| VP-024 | Selected paths are the two lowest-RTT ranked paths | proptest |
+| VP-024 | Frame identical on both paths (same bytes) | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Frame ready for transmission in the send queue.
 |-------|-------|
 | L2 Capability | CAP-005 ("Dual-path frame forwarding with duplicate-and-race") per capabilities.md §CAP-005 |
 | L2 Domain Invariants | DI-009 (receiver deduplication: first arrival wins) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/multipath |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-005 ("Dual-path frame forwarding with duplicate-and-race") per capabilities.md §CAP-005 — this BC is the direct behavioral specification of the duplicate-and-race forwarding strategy |
 

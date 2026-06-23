@@ -6,6 +6,7 @@ version: "1.0"
 status: draft
 producer: business-analyst
 timestamp: 2026-06-23T00:00:00
+modified: ["2026-06-23"]
 phase: 1a
 inputDocuments:
   - '_bmad-output/planning-artifacts/product-brief-switchboard-2026-03-31.md'
@@ -55,7 +56,7 @@ never session content.
 
 | Section | File | Primary Consumer | Purpose |
 |---------|------|-----------------|---------|
-| Domain Capabilities | capabilities.md | product-owner, architect, story-writer | CAP-NNN capability catalog — 9 subsystems |
+| Domain Capabilities | capabilities.md | product-owner, architect, story-writer | CAP-NNN capability catalog — 9 subsystems, 29 capabilities |
 | Domain Entities | entities.md | architect, product-owner | Entity model — nodes, routers, SVTNs, keys, frames, sessions |
 | Domain Invariants | invariants.md | product-owner, architect | DI-NNN business rules — content separation, admission, framing |
 | Bounded Contexts | bounded-contexts.md | architect | Context boundaries — 9 subsystems, scope-phase topology |
@@ -84,7 +85,7 @@ map to an `S` bucket in future BC-S.SS.NNN behavioral contracts.
 
 | ID | Subsystem | Rationale |
 |----|-----------|-----------|
-| `sn` | session-networking | Core session primitives — channels, half-channels, VSN establishment |
+| `sn` | session-networking | Core session primitives — channels, half-channels, SVTN establishment |
 | `mf` | multipath-forwarding | Dual-path, duplicate-and-race, FEC, failover, loop prevention |
 | `sd` | session-discovery | Multicast presence protocol, in-SVTN session advertisement |
 | `sa` | session-access | Access node publishing, console attach/detach, access modes |
@@ -103,7 +104,7 @@ artifact for domain terminology.
 
 | ID Format | Count | Section |
 |-----------|-------|---------|
-| CAP-NNN | 27 | capabilities.md |
+| CAP-NNN | 29 | capabilities.md |
 | DI-NNN | 12 | invariants.md |
 | DEC-NNN | 14 | edge-cases.md |
 | ASM-NNN | 8 | assumptions.md |
@@ -114,6 +115,6 @@ artifact for domain terminology.
 
 | Priority | Count | Items |
 |----------|-------|-------|
-| P0 (must-have) | 14 | CAP-001–CAP-008, CAP-010, CAP-013, CAP-016–CAP-018, CAP-020 |
+| P0 (must-have) | 16 | CAP-001–CAP-008, CAP-010, CAP-013, CAP-016–CAP-018, CAP-020, CAP-020a, CAP-020b |
 | P1 (should-have) | 9 | CAP-009, CAP-011–CAP-012, CAP-014–CAP-015, CAP-019, CAP-021–CAP-022, CAP-025 |
 | P2 (nice-to-have) | 4 | CAP-023–CAP-024, CAP-026–CAP-027 |

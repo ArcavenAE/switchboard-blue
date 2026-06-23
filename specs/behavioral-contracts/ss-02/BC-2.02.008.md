@@ -82,8 +82,8 @@ Router's forwarding engine processes a frame for output.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | For all frames: output interface set excludes arrival interface | proptest |
-| VP-TBD | Split-horizon does not affect frames forwarded to non-arrival interfaces | unit |
+| VP-011 | For all frames: output interface set excludes arrival interface | proptest |
+| VP-011 | Split-horizon does not affect frames forwarded to non-arrival interfaces | unit |
 
 ## Traceability
 
@@ -91,7 +91,7 @@ Router's forwarding engine processes a frame for output.
 |-------|-------|
 | L2 Capability | CAP-010 ("Router split-horizon and duplicate suppression") per capabilities.md §CAP-010 |
 | L2 Domain Invariants | DI-004 (all traffic flows through routers — no direct node-to-node) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/routing |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-010 ("Router split-horizon and duplicate suppression") per capabilities.md §CAP-010 — this BC specifies the split-horizon rule that CAP-010 defines as the primary loop prevention mechanism |
 

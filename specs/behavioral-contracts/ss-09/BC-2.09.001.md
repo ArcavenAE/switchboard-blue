@@ -12,7 +12,7 @@ subsystem: deployment-operations
 architecture_module: internal/config
 capability: CAP-026
 priority: P2
-criticality: supportive
+criticality: medium
 scope_phase: PE
 origin: greenfield
 lifecycle_status: active
@@ -86,9 +86,9 @@ Operator adds upstream router entries to config and reloads: `sbctl router reloa
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Sessions not interrupted during config reload | integration |
-| VP-TBD | PE mode activated when upstream_routers is non-empty | unit |
-| VP-TBD | Same binary runs in both E and PE modes | integration |
+| VP-038 | Sessions not interrupted during config reload | integration |
+| VP-038 | PE mode activated when upstream_routers is non-empty | unit |
+| VP-038 | Same binary runs in both E and PE modes | integration |
 
 ## Traceability
 
@@ -96,7 +96,7 @@ Operator adds upstream router entries to config and reloads: `sbctl router reloa
 |-------|-------|
 | L2 Capability | CAP-026 ("E-to-PE router graduation") per capabilities.md §CAP-026 |
 | L2 Domain Invariants | DI-004 (all traffic through routers — graduation adds more routers to the graph) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/config |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-026 ("E-to-PE router graduation") per capabilities.md §CAP-026 — this BC specifies the "same binary, no reinstall" graduation behavior that CAP-026 defines as the progressive-deployment promise |
 

@@ -86,9 +86,8 @@ Console operator runs `sbctl sessions detach`; console process exits; channel ke
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | tmux session continues running after console detach | integration |
-| VP-TBD | Read-only observers unaffected by full-access console detach | integration |
-| VP-TBD | Channel closure detected by access node within keepalive timeout | integration |
+| VP-056 | Console detach closes C's channel; session remains active; observers continue receiving; re-attach succeeds | integration |
+| VP-033 | Console attach/detach lifecycle including keepalive timeout detection (EC-002: crash → access node detects channel closure) | e2e |
 
 ## Traceability
 
@@ -96,7 +95,7 @@ Console operator runs `sbctl sessions detach`; console process exits; channel ke
 |-------|-------|
 | L2 Capability | CAP-014 ("Console session attach and detach") per capabilities.md §CAP-014 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/session |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-014 ("Console session attach and detach") per capabilities.md §CAP-014 — this BC specifies the detach half: "Detach releases the session without closing it" as stated in CAP-014 |
 

@@ -23,6 +23,8 @@ inputDocuments:
 kos_anchors:
   - elem-dual-fastest-path-forwarding
   - elem-asymmetric-half-channels
+modified:
+  - 2026-06-23T00:00:00
 ---
 
 # ARCH-03: Routing Engine
@@ -49,17 +51,28 @@ Per elem-dual-fastest-path-forwarding, frames are sent simultaneously on the two
 fastest paths. The receiver (internal/multipath on the destination node) implements:
 
 ```
-DropCache: bounded LRU map of (checksum → arrival_time)
+DropCache: bounded LRU map of (checksum, arrival_interface_id) → arrival_time
   capacity: config.DropCacheSize (default 10,000 entries)
 
-OnFrameArrival(frame):
+OnFrameArrival(frame, arrival_interface_id):
   checksum = crc32(frame.outer_header || frame.payload)
-  if DropCache.contains(checksum):
+  key = (checksum, arrival_interface_id)
+  if DropCache.contains(key):
     silently discard (BC-2.02.002, DI-009)
     return
-  DropCache.add(checksum)
+  DropCache.add(key)
   deliver(frame)
 ```
+
+**Drop cache key (F-006):** The drop cache key is `(checksum, arrival_interface_id)`,
+not `(checksum)` alone. This ensures two copies of a frame arriving on different
+interfaces are both kept — multipath delivery requires both copies to survive
+intermediate hops so the fastest arrives first. Deduplication per-destination
+happens in the forwarding stage: if both copies arrive at the same destination
+interface, the second is discarded. If they arrive on different interfaces (as
+expected in dup-and-race), both are forwarded. The destination node receives at
+most two copies and delivers the first, discarding the duplicate via the same
+`(checksum, arrival_interface_id)` keying.
 
 **BC-2.02.009 (bounded drop cache):** LRU eviction ensures the cache never exceeds
 capacity. When the cache is full, the oldest entry is evicted. This means very old
@@ -85,9 +98,9 @@ The default N=4 is consistent with MOSH's FEC defaults and established in practi
 for interactive terminal sessions. Phase 3 benchmarks validate this against measured
 loss rates in PE topologies.
 
-**FEC is not implemented in E router MVP** (P1, PE scope). The outer header
-`fec_flags` field is reserved (0x00) in MVP; the FEC code path is behind a
-`upstream_routers != nil` guard.
+**FEC is not implemented in E router MVP** (P1, PE scope). The `FEC_present` flag
+in the channel header (bit 0 of `flags`) is 0x00 in MVP; the FEC code path is behind
+a `upstream_routers != nil` guard.
 
 ## Upstream Idempotent Replay (internal/replay, BC-2.02.004)
 
@@ -111,14 +124,34 @@ bytes each), overhead is ≤ 12 bytes/frame — acceptable.
 Sender (access node):
   SendBuffer: sliding window of unacknowledged frames
   Each frame: chan_seq in channel header
-  Piggyback ACK: cumulative acknowledgment + SACK bitmap (64-bit, 64 frames max)
+  Piggyback ACK: cumulative acknowledgment + SACK bitmap in channel header (flags bit 2 set)
   On timeout: retransmit unACK'd frames
 
 Receiver (console):
   RecvBuffer: reorder buffer, delivers in sequence
-  Piggybacked ACK sent on every downstream tick
+  SACK bitmap sent in channel header (SACK_present=1) on every downstream tick
   SACK bitmap marks out-of-order received frames
 ```
+
+**SACK location:** The SACK bitmap is embedded in the channel header as a conditional
+8-byte field (see ARCH-02 Channel Header). When SACK_present=1 (flags bit 2), the
+channel header is 20 bytes. This eliminates the need for a standalone ACK channel.
+
+**Read-only console ACK (F-023):** Read-only consoles do NOT use a dedicated standalone
+ACK channel. All consoles — including read-only consoles — have a degenerate upstream
+half-channel that produces empty-tick frames (BC-2.01.002: all half-channels produce
+empty-tick frames; BC-2.01.003: upstream shutdown does not stop downstream). The
+degenerate upstream half-channel carries SACK in its channel header (`SACK_present=1`)
+even when carrying no data payload. This means:
+- The upstream half-channel of a read-only console emits empty-tick frames at its
+  configured tick interval.
+- Each such frame has `SACK_present=1` in the channel header flags.
+- The 8-byte SACK bitmap in the channel header carries the ACK state for the
+  downstream half-channel.
+- No dedicated ACK channel is needed, defined, or implemented.
+
+Note for PO: BC-2.02.005 EC-003 ("Console sends standalone ACK frames on a dedicated
+ACK channel") must be updated in Round 2 to reflect this design.
 
 **BC-2.02.006 (TLPKTDROP):** When a downstream frame is overdue beyond
 `tlpktdrop_timeout` (default: 2 × tick_interval), the frame is dropped with a
@@ -157,19 +190,33 @@ single path; failover only occurs on manual restart.
 QualityState: green | yellow | red
 
 Transitions:
-  green → yellow: any path RTT > yellow_rtt_threshold OR loss > yellow_loss_threshold
-  yellow → red:   all paths RTT > red_rtt_threshold OR a TLPKTDROP event
-  red → yellow:   all paths RTT back under red_rtt_threshold AND no recent TLPKTDROP
-  yellow → green: all paths RTT under yellow_rtt_threshold AND loss under threshold
+  green → yellow: any path RTT > 100ms OR loss > 5%
+  yellow → red:   all paths RTT > 500ms OR loss > 20%  OR a TLPKTDROP event
+  red → yellow:   all paths RTT ≤ 500ms AND loss ≤ 20% AND no recent TLPKTDROP
+  yellow → green: all paths RTT ≤ 100ms AND loss ≤ 5%
 
-Default thresholds:
-  yellow_rtt_ms = 50, red_rtt_ms = 200
-  yellow_loss = 0.02 (2%), red_loss = 0.10 (10%)
+Canonical thresholds (NFR-001: 100ms p99 LAN budget):
+  green_rtt_ms     = 100   (≤ 100ms: green)
+  yellow_rtt_ms    = 500   (100–500ms: yellow)
+  red_rtt_ms       = 500   (> 500ms: red)
+  green_loss_pct   = 5     (≤ 5%: green)
+  yellow_loss_pct  = 20    (5–20%: yellow)
+  red_loss_pct     = 20    (> 20%: red)
 ```
 
-**NFR-014:** Quality indicator must update within 2 tick cycles of path quality change.
-The `internal/metrics` package is called from the path scoring loop; there is no
-batching between path measurement and indicator update.
+**Hysteresis (F-021):** Transitions require 3 consecutive measurements before
+firing. This is the canonical hysteresis value, derived from BC-2.01.002 EC-001
+("≥3 consecutive missed ticks") and BC-2.06.001 invariant 3 ("3-consecutive-
+measurement hysteresis"). A single spike does not trigger a state change.
+
+Note for BA/PO: NFR-014 currently states "within 2 tick cycles" — this is
+inconsistent with the 3-measurement canonical value. NFR-014 must be updated
+to 3 tick cycles in Round 2.
+
+**Quality indicator update:** The `internal/metrics` package is called from the
+path scoring loop; there is no batching between path measurement and indicator
+update. Quality indicator updates within 3 tick cycles of sustained path quality
+change.
 
 ## Session Discovery (internal/discovery, BC-2.03.001–003, Phase PE)
 

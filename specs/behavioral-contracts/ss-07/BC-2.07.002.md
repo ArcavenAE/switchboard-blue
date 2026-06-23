@@ -12,7 +12,7 @@ subsystem: network-management
 architecture_module: cmd/sbctl
 capability: CAP-024
 priority: P2
-criticality: important
+criticality: high
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -85,9 +85,9 @@ Operator runs any `sbctl <subcommand>` command.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | All subcommands require authentication | integration |
-| VP-TBD | `--json` flag produces valid JSON for all subcommands | fuzz |
-| VP-TBD | sbctl exits after command completion (not a daemon) | unit |
+| VP-049 | All subcommands require authentication | integration |
+| VP-049 | `--json` flag produces valid JSON for all subcommands | fuzz |
+| VP-049 | sbctl exits after command completion (not a daemon) | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ Operator runs any `sbctl <subcommand>` command.
 |-------|-------|
 | L2 Capability | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 |
 | L2 Domain Invariants | DI-002 (private keys never transit — sbctl uses key-based auth without transmitting the private key) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | cmd/sbctl |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 — this BC specifies the unified CLI contract that CAP-024 defines as "single operator CLI for all four daemon types" with "OpenSSH key" authentication |
 

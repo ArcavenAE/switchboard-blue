@@ -12,7 +12,7 @@ subsystem: quality-observability
 architecture_module: internal/metrics
 capability: CAP-021
 priority: P1
-criticality: important
+criticality: high
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -87,9 +87,9 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Quality indicator is always one of: green, yellow, red | unit |
-| VP-TBD | Green threshold: RTT p99 < 100ms AND loss < 5% | unit |
-| VP-TBD | Hysteresis prevents rapid toggling | proptest |
+| VP-027 | Quality indicator is always one of: green, yellow, red | unit |
+| VP-027 | Green threshold: RTT p99 < 100ms AND loss < 5% | unit |
+| VP-027 | Hysteresis prevents rapid toggling | proptest |
 
 ## Traceability
 
@@ -97,7 +97,7 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 |-------|-------|
 | L2 Capability | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires — empty ticks are liveness probes) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/metrics |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 — this BC specifies the computation that CAP-021 defines as "derived from measured path latency and loss" |
 

@@ -12,7 +12,7 @@ subsystem: quality-observability
 architecture_module: internal/metrics
 capability: CAP-022
 priority: P1
-criticality: important
+criticality: high
 scope_phase: E
 origin: greenfield
 lifecycle_status: active
@@ -83,9 +83,9 @@ Operator runs `sbctl paths list` or `sbctl router metrics`.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Metrics output contains no session content or keystroke data | code-audit |
-| VP-TBD | JSON output is valid JSON for all input combinations | fuzz |
-| VP-TBD | RTT metrics reflect actual measured values (not configured targets) | integration |
+| VP-047 | Metrics output contains no session content or keystroke data | code-audit |
+| VP-047 | JSON output is valid JSON for all input combinations | fuzz |
+| VP-047 | RTT metrics reflect actual measured values (not configured targets) | integration |
 
 ## Traceability
 
@@ -93,7 +93,7 @@ Operator runs `sbctl paths list` or `sbctl router metrics`.
 |-------|-------|
 | L2 Capability | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — metrics contain no content) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/metrics |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 — this BC specifies the `sbctl` interface for the per-path metrics that CAP-022 defines as available for both node-side and network-operator-side views |
 

@@ -10,7 +10,7 @@ phase: 1a
 bc_id: BC-2.05.006
 subsystem: admission-security
 architecture_module: internal/routing
-capability: CAP-020
+capability: CAP-020b
 priority: P0
 criticality: critical
 scope_phase: E
@@ -28,7 +28,7 @@ inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
   - '.factory/specs/domain-spec/invariants.md'
   - '_bmad-output/planning-artifacts/prd.md'
-traces_to: [CAP-020]
+traces_to: [CAP-020b]
 kos_anchors:
   - elem-ssh-end-to-end-encryption
   - elem-node-router-architecture
@@ -38,7 +38,7 @@ kos_anchors:
 
 ## Description
 
-A node admitted to SVTN-A cannot receive or observe any frames from SVTN-B, even if both SVTNs are served by the same physical router infrastructure. The SVTN ID field in every frame's outer header provides logical separation; the HMAC is keyed per-SVTN so a key registered against SVTN-A cannot produce valid HMACs for SVTN-B frames. A node that holds keys for both SVTNs has two separate admitted identities.
+A node admitted to SVTN-A cannot receive or observe any frames from SVTN-B, even if both SVTNs are served by the same physical router infrastructure. The SVTN ID field in every frame's outer header provides logical separation; the `frame_auth_key` is derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256 (per ADR-001 amended), so a node's key for SVTN-A is cryptographically distinct from its key for SVTN-B — a node admitted to SVTN-A cannot produce valid HMAC tags for SVTN-B frames. A node that holds keys for both SVTNs has two separate admitted identities with separate derived keys.
 
 ## Preconditions
 
@@ -56,7 +56,7 @@ A node admitted to SVTN-A cannot receive or observe any frames from SVTN-B, even
 
 1. **DI-005**: Cross-SVTN visibility requires possession of keys registered against both SVTNs. There is no single-key cross-SVTN access path.
 2. SVTN ID in the frame outer header is router-visible metadata that enforces routing isolation.
-3. HMAC keys are scoped per (node, SVTN) pair: a node's HMAC key for SVTN-A is different from its HMAC key for SVTN-B (if it has one).
+3. `frame_auth_key` (per-node-per-SVTN HKDF derivation) is scoped per `(node_admission_pubkey, svtn_id)` pair: a node's key for SVTN-A is cryptographically distinct from its key for SVTN-B.
 
 ## Trigger
 
@@ -83,19 +83,20 @@ Frame routing decision at the router when multiple SVTNs share the router.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Frames with SVTN-X ID never delivered to nodes admitted only to SVTN-Y | integration/property |
-| VP-TBD | HMAC key is scoped to (node, SVTN) pair | unit |
-| VP-TBD | No cross-SVTN traffic under any router configuration | integration |
+| VP-010, VP-039 | Frames with SVTN-X ID never delivered to nodes admitted only to SVTN-Y | integration/property |
+| VP-010, VP-039 | HMAC key is scoped to (node, SVTN) pair | unit |
+| VP-010, VP-039 | No cross-SVTN traffic under any router configuration | integration |
 
 ## Traceability
 
 | Field | Value |
 |-------|-------|
-| L2 Capability | CAP-020 ("HMAC frame authentication at router boundary") per capabilities.md §CAP-020 |
+| L2 Capability | CAP-020b ("SVTN cryptographic isolation") per capabilities.md §CAP-020b |
 | L2 Domain Invariants | DI-005 (SVTN cryptographic isolation), DI-003 (router compromise → availability/quality, not content) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/routing |
 | Stories | [filled by story-writer] |
-| Capability Anchor Justification | CAP-020 ("HMAC frame authentication at router boundary") per capabilities.md §CAP-020 — this BC specifies the SVTN-scoped isolation property that CAP-020's HMAC enforcement provides as a provable property |
+| Architecture Decision | ADR-001 (amended): per-(node, svtn) HMAC keying via HKDF-SHA256 is the mechanism by which SVTN isolation is enforced — a node's frame_auth_key for SVTN-A is cryptographically distinct from its key for SVTN-B |
+| Capability Anchor Justification | CAP-020b ("SVTN cryptographic isolation") per capabilities.md §CAP-020b — this BC specifies the per-(node, SVTN) HMAC keying as the mechanism that enforces SVTN isolation, which is exactly what CAP-020b defines |
 
 ## Related BCs
 

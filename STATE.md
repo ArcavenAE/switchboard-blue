@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-phase-1d-adversarial-review
+phase_step: pending-adversary-pass-2
 product: switchboard
 mode: greenfield
 anchor_strategy: reference-via-frontmatter
@@ -10,13 +10,15 @@ l2_artifact_count: 11
 l2_subsystems: [session-networking, multipath-forwarding, session-discovery, session-access, admission-security, quality-observability, network-management, console-operations, deployment-operations]
 l3_complete: true
 l3_bc_count: 42
-l3_cap_coverage: "27/27"
+l3_cap_coverage: "29/29"
+l3_cap_count: 29
 l3_error_codes: 31
 l3_bc_id_scheme: "BC-2.SS.NNN — S=2 stable L3-PRD prefix, SS=subsystem 01-09, NNN=sequence"
 l3_subsystem_field_status: "patched — all 42 BCs have canonical subsystem + architecture_module fields"
 l4_complete: true
-l4_vp_count: 50
+l4_vp_count: 57
 l4_bc_coverage: "42/42"
+refinement_round_1_complete: true
 arch_sections: 13
 arch_adrs: 8
 dtu_required: false
@@ -35,6 +37,7 @@ purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
 go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
 timestamp: 2026-06-23T19:25:54Z
 last_update: 2026-06-23
+
 ---
 
 # Switchboard Factory State
@@ -75,6 +78,14 @@ authoritative; `.factory/specs/` will derive from them via
 - RESOLVED: **Downstream ARQ failover** — resync from last ACK; in-flight frames during failover are lost (ADR-005, ARCH-03). Stateful transfer deferred to PE.
 - **Tick interval range [5ms, 50ms]** — still empirical (ADR-008 keeps as tuning parameter). Validates in Phase 3.
 - **Presence heartbeat 30s** — discovery is scope_phase PE, not MVP. Defer.
+- **Marvel integration** — `_kos/nodes/frontier/question-marvel-integration.yaml` is acknowledged in `bounded-contexts.md` as out of scope. Now explicitly deferred — no MVP integration, no PE-phase integration. Re-evaluate post-MVP if marvel project publishes a stable interface. (resolves adversary F-024)
+- ✓ **HMAC keying** → RE-RESOLVED with amended ADR-001: per-(node, svtn) HKDF derivation using node_admission_pubkey as IKM (was per-SVTN). Restores per-node trust boundary the BCs require.
+- ✓ **Outer header layout** → AUTHORITATIVE (ARCH-02): 44 bytes exactly: version(1), frame_type(1), payload_len(2), svtn_id(16), src_addr(8), dst_addr(8), hmac_tag(8). Sequence lives in channel header only.
+- ✓ **HMAC tag size** → 8 bytes (truncated from 32-byte HMAC-SHA256). 64-bit MAC sufficient for the rate-limited threat model; document for next adversary pass to verify.
+- ✓ **Hash function** → SHA-256 stdlib (no Blake3 transitive dep).
+- ✓ **Drop cache** → keyed on (checksum, arrival_interface_id) — fixes dup-and-race conflict.
+- ✓ **Quality thresholds canonical** → 100/500ms RTT, 5%/20% loss, hysteresis 3.
+- ✓ **OQ-003 permission hierarchy** → ADR-004 expanded: console cannot revoke control; control-to-control revocation requires `sbctl admin` human authorization.
 
 ## KoS frontier questions surfaced in Phase 1b
 
@@ -83,6 +94,7 @@ authoritative; `.factory/specs/` will derive from them via
 - Q: Goroutine model for 1k concurrent sessions — per-session pair vs event-loop (NFR-004)?
 - Q: Drop cache — TTL eviction in addition to LRU to prevent suppression after wraparound?
 - Q: PE router-to-router Noise — share node admission keypair, or separate router identity?
+- F-027 [process-gap] — 4 of 6 kos frontier files have empty `content:` blocks (`question-asymmetric-channels`, `question-encryption-model`, `question-marvel-integration`, `question-timeslice-framing`). Lint at kos-edge creation time should disallow empty content. Filed upstream.
 
 ## Phase 3 blockers (must resolve before TDD implementation)
 
@@ -95,3 +107,10 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 ## Non-blocking debt
 
 - `.factory/.gitignore` not bootstrapped (drbothen/vsdd-factory#230 + this-session comment).
+
+## Adversary cycle-1 metrics
+
+- Pass 1 findings: 27 (5 critical, 11 high, 9 medium, 2 low; 3 process-gap tagged)
+- Cycle 1 refinement: 5 critical + 11 high + 7 medium + 1 low addressed = 24 in-cycle; 2 process-gap deferred to upstream (F-025, F-027); 1 low deferred (covered by BA sweep).
+- Convergence target: 3 consecutive zero-findings passes per FACTORY rules.
+- Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-01.md`

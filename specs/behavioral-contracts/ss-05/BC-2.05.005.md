@@ -39,12 +39,12 @@ kos_anchors:
 
 ## Description
 
-Every SVTN-scoped frame carries a 16-byte HMAC in the outer header, computed by the sending node using its admission key. The first router that receives the frame verifies the HMAC before forwarding. Frames with invalid HMACs are rejected before forwarding — fail-closed. This ensures every forwarded frame originated from an admitted node holding the expected private key.
+Every SVTN-scoped frame carries an 8-byte HMAC tag in the outer header, computed by the sending node using its `frame_auth_key` (derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256). The tag is the first 8 bytes of the 32-byte HMAC-SHA256 output. The first router that receives the frame verifies the tag before forwarding. Frames with invalid tags are rejected before forwarding — fail-closed. This ensures every forwarded frame originated from an admitted node holding the expected private key. See ADR-001 (amended) for the HKDF derivation details.
 
 ## Preconditions
 
 1. The sending node is admitted to the SVTN and has a valid admission key.
-2. The HMAC is computed over the full frame (outer header fields + payload) using HMAC-SHA256 (or equivalent) with the node's admission key. Output truncated to 16 bytes.
+2. The `frame_auth_key` is derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256. The HMAC tag is computed over the full frame (outer header fields + payload) using HMAC-SHA256 with `frame_auth_key`; the tag is the first 8 bytes of the 32-byte HMAC-SHA256 output.
 3. The first router has the sending node's public key in its admitted key set.
 
 ## Postconditions
@@ -85,9 +85,9 @@ Frame arrival at the first router after transmission from the source node.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | For all admitted nodes: frames with correct HMAC are forwarded | proptest |
-| VP-TBD | For all non-admitted sources: frames are dropped | proptest |
-| VP-TBD | HMAC covers all outer header fields + payload | unit |
+| VP-004, VP-005, VP-006 | For all admitted nodes: frames with correct HMAC are forwarded | proptest |
+| VP-004, VP-005, VP-006 | For all non-admitted sources: frames are dropped | proptest |
+| VP-004, VP-005, VP-006 | HMAC covers all outer header fields + payload | unit |
 
 ## Traceability
 
@@ -95,8 +95,9 @@ Frame arrival at the first router after transmission from the source node.
 |-------|-------|
 | L2 Capability | CAP-020 ("HMAC frame authentication at router boundary") per capabilities.md §CAP-020 |
 | L2 Domain Invariants | DI-006 (HMAC frame authentication at first router), DI-003 (router compromise → availability/quality, not content) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/hmac |
 | Stories | [filled by story-writer] |
+| Architecture Decision | ADR-001 (amended): frame_auth_key derived per (node_admission_pubkey, svtn_id) via HKDF-SHA256; tag = first 8 bytes of HMAC-SHA256 output |
 | Capability Anchor Justification | CAP-020 ("HMAC frame authentication at router boundary") per capabilities.md §CAP-020 — this BC is the direct behavioral specification of the HMAC verification that CAP-020 defines as "The first router verifies and rejects frames from non-admitted sources before forwarding" |
 
 ## Related BCs

@@ -87,9 +87,9 @@ Access node daemon startup; tmux session lifecycle events (create, close).
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | All tmux sessions visible to control mode are published on startup | integration |
-| VP-TBD | Session create/close events propagate to SVTN within 1 tick | integration |
-| VP-TBD | Control mode disconnect triggers fallback or reconnect path | integration |
+| VP-031 | All tmux sessions visible to control mode are published on startup | integration |
+| VP-031 | Session create/close events propagate to SVTN within 1 tick | integration |
+| VP-031 | Control mode disconnect triggers fallback or reconnect path | integration |
 
 ## Traceability
 
@@ -97,7 +97,7 @@ Access node daemon startup; tmux session lifecycle events (create, close).
 |-------|-------|
 | L2 Capability | CAP-013 ("Access node tmux session publishing") per capabilities.md §CAP-013 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/tmux |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-013 ("Access node tmux session publishing") per capabilities.md §CAP-013 — this BC specifies the primary tmux control mode integration that CAP-013 defines as the source of all session traffic |
 

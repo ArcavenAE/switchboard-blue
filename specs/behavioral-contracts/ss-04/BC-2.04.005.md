@@ -87,9 +87,9 @@ Console attaches with a read-only session authorization key; console sends a key
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Read-only console keystrokes never reach tmux session | integration |
-| VP-TBD | Downstream stream identical for read-only and full-access consoles | integration |
-| VP-TBD | Explicit error returned on upstream reject (not silent drop) | unit |
+| VP-013, VP-035 | Read-only console keystrokes never reach tmux session | integration |
+| VP-013, VP-035 | Downstream stream identical for read-only and full-access consoles | integration |
+| VP-013, VP-035 | Explicit error returned on upstream reject (not silent drop) | unit |
 
 ## Traceability
 
@@ -97,7 +97,7 @@ Console attaches with a read-only session authorization key; console sends a key
 |-------|-------|
 | L2 Capability | CAP-015 ("Read-only session access mode") per capabilities.md §CAP-015 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced), DI-011 (role separation between Tier 1 and Tier 2 keys) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/session |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-015 ("Read-only session access mode") per capabilities.md §CAP-015 — this BC specifies the read-only enforcement behavior that CAP-015 defines as "upstream channel is rejected at the access node" |
 

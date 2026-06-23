@@ -86,9 +86,9 @@ Console attach request arrives at the access node after SVTN frame routing.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Router code has no per-session authorization data structure | code-audit |
-| VP-TBD | Tier 2 check is performed before upstream channel is opened | integration |
-| VP-TBD | Tier 2 authorization is per-session: different sessions require separate authorization | integration |
+| VP-012 | Router code has no per-session authorization data structure | code-audit |
+| VP-012 | Tier 2 check is performed before upstream channel is opened | integration |
+| VP-012 | Tier 2 authorization is per-session: different sessions require separate authorization | integration |
 
 ## Traceability
 
@@ -96,7 +96,7 @@ Console attach request arrives at the access node after SVTN frame routing.
 |-------|-------|
 | L2 Capability | CAP-018 ("Per-session access authorization (Tier 2)") per capabilities.md §CAP-018 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced), DI-011 (role separation between Tier 1 and Tier 2 keys) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/session |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-018 ("Per-session access authorization (Tier 2)") per capabilities.md §CAP-018 — this BC specifies the enforcement mechanism that CAP-018 defines as "authorized console key list per session" checked "before forwarding a console's upstream" |
 

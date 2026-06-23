@@ -85,9 +85,9 @@ ARQ retransmit timeout exceeds TLPKTDROP threshold.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-TBD | Session does not terminate on TLPKTDROP | integration |
-| VP-TBD | Console advances past dropped frame on receiving TLPKTDROP | unit |
-| VP-TBD | TLPKTDROP fires exactly once per overdue frame (not repeated after first fire) | unit |
+| VP-021 | Session does not terminate on TLPKTDROP | integration |
+| VP-021 | Console advances past dropped frame on receiving TLPKTDROP | unit |
+| VP-021 | TLPKTDROP fires exactly once per overdue frame (not repeated after first fire) | unit |
 
 ## Traceability
 
@@ -95,7 +95,7 @@ ARQ retransmit timeout exceeds TLPKTDROP threshold.
 |-------|-------|
 | L2 Capability | CAP-008 ("Downstream reliable ordered delivery with ARQ") per capabilities.md §CAP-008 |
 | L2 Domain Invariants | DI-008 (timeslice clock always fires — absence of frame is a signal) |
-| Architecture Module | [filled by architect] |
+| Architecture Module | internal/arq |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-008 ("Downstream reliable ordered delivery with ARQ") per capabilities.md §CAP-008 — TLPKTDROP is the defined termination mechanism for overdue frames specified within CAP-008's "TLPKTDROP terminates overdue frames with degradation signal" |
 
