@@ -4,7 +4,11 @@
 // and are never parsed here (BC-2.01.005).
 package frame
 
-import "errors"
+import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+)
 
 // OuterHeaderSize is the fixed wire size of the outer header in bytes.
 // Layout: version(1) + frame_type(1) + payload_len(2) + svtn_id(16) +
@@ -62,17 +66,36 @@ type OuterHeader struct {
 
 // EncodeOuterHeader serialises h into exactly OuterHeaderSize (44) bytes
 // using the ARCH-02 big-endian wire layout.
-//
-// S-1.01 stub — implementation is Step 6 of the delivery tasks.
 func EncodeOuterHeader(h OuterHeader) [OuterHeaderSize]byte {
-	panic("not implemented: S-1.01 EncodeOuterHeader")
+	var b [OuterHeaderSize]byte
+	b[0] = h.Version
+	b[1] = h.FrameType
+	binary.BigEndian.PutUint16(b[2:4], h.PayloadLen)
+	copy(b[4:20], h.SVTNID[:])
+	copy(b[20:28], h.SrcAddr[:])
+	copy(b[28:36], h.DstAddr[:])
+	copy(b[36:44], h.HMACTag[:])
+	return b
 }
 
 // ParseOuterHeader deserialises the first 44 bytes of b into an OuterHeader.
 // Returns ErrFrameTooShort if len(b) < 44, ErrVersionMismatch if the version
-// field does not equal VersionByte.
-//
-// S-1.01 stub — implementation is Step 7 of the delivery tasks.
+// major nibble (bits[7:4]) is non-zero. Minor-version differences are tolerated.
 func ParseOuterHeader(b []byte) (OuterHeader, error) {
-	panic("not implemented: S-1.01 ParseOuterHeader")
+	if len(b) < OuterHeaderSize {
+		return OuterHeader{}, fmt.Errorf("parse outer header: %w", ErrFrameTooShort)
+	}
+	// Check major version nibble only — minor differences are forward-compatible.
+	if (b[0]>>4)&0x0F != VersionMajor {
+		return OuterHeader{}, fmt.Errorf("parse outer header: %w", ErrVersionMismatch)
+	}
+	var h OuterHeader
+	h.Version = b[0]
+	h.FrameType = b[1]
+	h.PayloadLen = binary.BigEndian.Uint16(b[2:4])
+	copy(h.SVTNID[:], b[4:20])
+	copy(h.SrcAddr[:], b[20:28])
+	copy(h.DstAddr[:], b[28:36])
+	copy(h.HMACTag[:], b[36:44])
+	return h, nil
 }
