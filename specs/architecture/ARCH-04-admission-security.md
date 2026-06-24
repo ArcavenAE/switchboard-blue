@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -23,6 +23,7 @@ kos_anchors:
   - elem-node-router-architecture
 modified:
   - 2026-06-23T00:00:00
+  - 2026-06-24T00:00:00 # v1.1 — permit inline HKDF for 32-byte single-block case (refs drbothen/vsdd-factory#260 family, S-2.01 rev 2)
 ---
 
 # ARCH-04: Admission & Security
@@ -169,8 +170,18 @@ HKDF-Extract(salt=svtn_id, ikm=node_admission_pubkey) → PRK
 HKDF-Expand(PRK, info="switchboard-frame-auth", length=32) → frame_auth_key
 ```
 
-This uses Go stdlib `crypto/sha256` and `golang.org/x/crypto/hkdf`. No new
-transitive dependencies beyond the Go standard library.
+The key-derivation function is HKDF-SHA256 per RFC 5869. Implementations MAY use
+either:
+
+- `golang.org/x/crypto/hkdf` (canonical Go implementation), OR
+- An inline implementation using `crypto/hmac` + `crypto/sha256` directly, suitable
+  for the 32-byte single-block case (RFC 5869 Extract → single Expand iteration,
+  approximately 6 lines of auditable code). Inline avoids the external dependency
+  for the entire module.
+
+Inline implementations MUST include an RFC 5869 §A.1 Known-Answer Test
+(`TestDeriveKey_RFC5869_KAT`) to pin algorithm correctness. The library path requires
+no KAT — the upstream library is presumed RFC-compliant.
 
 **Why per-node, not per-SVTN?** Per-SVTN keying (`HKDF(router_master_key, svtn_id)`)
 would allow any admitted node to forge frames bearing another admitted node's source
