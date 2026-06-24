@@ -1,7 +1,15 @@
 ---
 pipeline: IN_PROGRESS
-phase: phase-1-spec-crystallization
-phase_step: pending-adversary-pass-8
+phase: phase-2-story-decomposition
+phase_step: pending-phase-2-story-decomposition
+phase_1_gate: APPROVED
+phase_1_gate_date: 2026-06-24
+phase_1_gate_disposition: approve-with-drift
+phase_1_final_trajectory: "27 → 18 → 17 → 21 → 17 → 14 → 7 → 9"
+phase_1_passes: 8
+phase_1_refinement_rounds: 8
+phase_1_commits: 18
+phase_1_open_drift: 9
 refinement_round_7_complete: true
 refinement_round_8_complete: true
 refinement_round_2_complete: true
@@ -44,7 +52,7 @@ internal_packages: 18
 purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
 go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
 timestamp: 2026-06-23T22:30:00Z
-last_update: 2026-06-23
+last_update: 2026-06-24
 
 ---
 
@@ -52,12 +60,12 @@ last_update: 2026-06-23
 
 ## Current phase
 
-**Phase 1 — Spec Crystallization** (entered 2026-06-23 after artifact-detection
-discovery).
+**Phase 2 — Story Decomposition** (entered 2026-06-24 after Phase 1 gate APPROVED).
 
-Next step: `/vsdd-factory:create-domain-spec` (L2 domain spec) →
-`/vsdd-factory:create-prd` (L3 BC-S.SS.NNN) → `/vsdd-factory:create-architecture`
-→ Phase 1d adversarial spec review → human approval gate.
+Phase 1 closed: 8 adversarial passes, 8 refinement rounds, 18 commits.
+Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition: approve-with-drift (9 open drift items carried forward; 0 critical, 3 high, 5 medium, 1 low).
+
+Next step: `/vsdd-factory:phase-2-story-decomposition` — decompose 42 BCs + 30 caps into implementable per-story files with BC traceability.
 
 ## Source-of-truth inputs
 
@@ -104,13 +112,6 @@ authoritative; `.factory/specs/` will derive from them via
 - Q: PE router-to-router Noise — share node admission keypair, or separate router identity?
 - F-027 [process-gap] — 4 of 6 kos frontier files have empty `content:` blocks (`question-asymmetric-channels`, `question-encryption-model`, `question-marvel-integration`, `question-timeslice-framing`). Lint at kos-edge creation time should disallow empty content. Filed upstream.
 
-## Phase 3 blockers (must resolve before TDD implementation)
-
-- **P0-001 — Branch protection missing on `develop`.** `ci.yml` runs but is not a required check. PR with failing tests can merge. Undermines TDD. Fix: enable branch protection requiring `ci` check + 1 approving review + dismiss-stale-reviews + restrict-push.
-- **P0-002 — Branch protection missing on `main`.** Stable release branch unprotected; force-push possible. Fix: same as P0-001 plus restrict-push to release tags only.
-- **P0-003 — Commit signature enforcement absent at repo level.** Global gitconfig enforces signing locally, but GitHub does not reject unsigned bot commits. Fix: after enabling branch protection, set `required_signatures: true` on both branches.
-
-Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd-setup.md`.
 
 ## Non-blocking debt
 
@@ -137,5 +138,31 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 - Cycle 1 round-7 refinement: all 14 pass-6 findings closed across 3 PO bursts + 1 architect burst. Priority drift (4 BCs P1→P0), BC contradiction fixes (BC-2.05.004, BC-2.06.001), error-taxonomy exit codes (E-ADM-011/012/013/014, E-CFG-006), interface-definitions --yes attribution + destructive sbctl svtn ops removal, module-criticality drop-cache placement, BC-2.09.003 DI-007 trace removal, 5 BCs missing VP rows added, BC-2.05.007 phantom sbctl debug removed, ARCH-11 module counts corrected.
 - Pass 7 findings: 7 (0 critical, 2 high, 4 medium, 1 low)
 - Cycle 8 refinement: all 7 pass-7 findings closed.
-- Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → ? (Pass 8 pending; convergence target = 3 consecutive zero-findings passes)
+- Pass 8 findings: 9 (0 critical, 3 high, 5 medium, 1 low)
+- Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9 — GATE APPROVED with drift (approve-with-drift disposition; 9 items carried into Phase 2)
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-03.md`
+
+## Phase 1 Drift (carried into Phase 2)
+
+- **HIGH** F-P8-001 — BC-2.05.004 trigger + test vectors still reference removed `sbctl svtn keys register|revoke|expire` (canonical is `sbctl admin`). Route: product-owner during Phase 2 story-writing for ss-05.
+- **HIGH** F-P8-002 — VP-030 and VP-049 harness code uses non-existent `sbctl status` (canonical: `sbctl router status`). Route: architect or test-writer in Phase 3 when implementing these tests.
+- **HIGH** F-P8-003 — BC-2.08.001 architecture_module pass-5 decision (internal/session) not propagated to ARCH-05:109, ARCH-11:67, VP-050:16. Route: architect Phase 2.
+- **MEDIUM** F-P8-004 — VP-026 cites "transitivity" invariant that doesn't exist in BC-2.02.003. Route: architect during Phase 3 test-writing for BC-2.02.003.
+- **MEDIUM** F-P8-005 — VP-027 title "degradation goes down" but harness tests recovery direction (red→green skip). Route: architect during Phase 3 test-writing.
+- **MEDIUM** F-P8-006 — BC-2.05.007 test vector uses `sbctl keys list` (canonical: `sbctl svtn keys list` or `sbctl admin list-keys`). Route: product-owner Phase 2.
+- **MEDIUM** F-P8-007 — BC-2.02.005 says SACK in upstream "payload" — ARCH-02 places it in channel header. Route: product-owner Phase 2.
+- **MEDIUM** F-P8-008 — BC-2.02.007 references `FRAME_TYPE=PARITY`; canonical enum value is `fec=0x05`. Route: product-owner Phase 2.
+- **LOW** F-P8-009 — architecture-feasibility-report:61 deployment-operations range still "(CAP-026–027)"; should be (CAP-026–028). Route: architect Phase 2.
+
+## Phase 1 Carry-forward gaps (scope decisions deferred)
+
+- **Content-type-aware loss recovery (interactive/streaming/bulk)** — BMAD PRD references but only interactive (BC-2.06.002) covered in BCs. Deferred to PE-phase BC if needed.
+- **Audit log / session recording** — explicit out-of-scope decision: not part of switchboard MVP or PE phase. Re-evaluate post-MVP.
+- **Multi-platform daemon behavior** — BC-2.09.x covers startup; Linux/macOS-specific behavior is implementation concern handled in Phase 3 implementer adaptive logic. No new BC needed.
+
+## Phase 3 prerequisites (must resolve before TDD implementation)
+
+- **P0-001** — Enable branch protection on `develop` (require ci.yml check, 1 approving review, dismiss-stale-reviews, restrict push)
+- **P0-002** — Enable branch protection on `main` (same + restrict push to release tags)
+- **P0-003** — Enable required_signatures on both protected branches (matches user's local gitconfig enforcement)
+- Pass-8 P-codes (F-P8-001 through F-P8-009) should be resolved opportunistically by Phase 2 story-writer
