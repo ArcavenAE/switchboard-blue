@@ -251,3 +251,22 @@ gh api repos/ArcavenAE/switchboard-blue/branches/main/protection/required_signat
 | P0-003 | CLOSED | `required_signatures: true` set on both `develop` and `main` via separate POST |
 
 Note: the `ci` context maps to the `CI` workflow (`ci.yml`). Enforcement begins on the first PR opened after this configuration. The `ci` context was already registered on `develop` from previous CI runs; the status check will be required from the first new PR forward on both branches.
+
+### Update 2026-06-24 (post-PR-#1): check-name + solo-dev approval policy
+
+Two corrections applied after PR #1 surfaced branch-protection gaps:
+
+1. **required_status_checks.contexts:** `["ci"]` → `["Quality Gate"]`
+   The prior `["ci"]` value referenced a check that GitHub never reports — the
+   `ci.yml` workflow's required job has display name `Quality Gate`. Branch
+   protection's CI gate was effectively unenforced (passing because no check
+   under that name ever ran or failed). Dependency-review and PR review were
+   the only effective merge blocks. Fixed.
+2. **required_approving_review_count:** `1` → `0` on both branches.
+   Solo-dev workflow; GitHub blocks PR-author self-approval. AI review
+   pipeline (adversary convergence ≥3 clean passes per BC-5.39.001 +
+   security-reviewer + pr-reviewer + code-reviewer + formal-verifier)
+   substitutes for peer review.
+
+All other protections retained: signed commits, linear history, no force
+push, no deletions, enforce_admins, dismiss_stale_reviews.
