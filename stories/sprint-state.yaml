@@ -25,7 +25,7 @@ stories:
     title: "Implement 44-byte outer header codec in internal/frame"
     epic: E-1
     wave: 1
-    status: pending
+    status: ready
     priority: P0
     scope_phase: E
     points: 5

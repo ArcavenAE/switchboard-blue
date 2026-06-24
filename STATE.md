@@ -7,6 +7,7 @@ phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_active_wave: 1
 phase_3_active_stories: [S-1.01, S-1.02]
+phase_3_active_story_status: "S-1.01: ready (dispatching deliver-story); S-1.02: pending (blocked by S-1.01)"
 phase_1_gate: APPROVED
 phase_1_gate_date: 2026-06-24
 phase_1_gate_disposition: approve-with-drift
