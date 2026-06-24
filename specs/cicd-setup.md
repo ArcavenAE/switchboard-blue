@@ -186,3 +186,68 @@ ARCH-10 specifies the following verification toolchain. This section maps each t
 The existing workflow files are well-structured, correctly pinned, and exercising the right gates (`go test -race`, `golangci-lint`, `gofumpt`, coverage floor). The sole blocker for Phase 3 is that none of these gates are _required_ — they are advisory. Configuring branch protection resolves P0-001 and P0-002; adding `required_signatures` resolves P0-003.
 
 No workflow files were modified during this verification pass. Gaps are documented here for resolution via dedicated PRs.
+
+---
+
+## Branch Protection (2026-06-24)
+
+Applied via `gh api` by devops-engineer at Phase 3 prerequisite gate. All three P0 gaps (P0-001, P0-002, P0-003) are now closed.
+
+### Commands run
+
+```bash
+# develop — full protection
+gh api repos/ArcavenAE/switchboard-blue/branches/develop/protection \
+  -X PUT --input - <<'EOF'
+{
+  "required_status_checks": { "strict": true, "contexts": ["ci"] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 1
+  },
+  "restrictions": null,
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+EOF
+
+# develop — commit signature enforcement (separate endpoint)
+gh api repos/ArcavenAE/switchboard-blue/branches/develop/protection/required_signatures -X POST
+
+# main — full protection (same payload)
+gh api repos/ArcavenAE/switchboard-blue/branches/main/protection \
+  -X PUT --input - <<'EOF'
+{ ... same payload ... }
+EOF
+
+# main — commit signature enforcement
+gh api repos/ArcavenAE/switchboard-blue/branches/main/protection/required_signatures -X POST
+```
+
+### After-state (both branches identical)
+
+| Setting | Value |
+|---------|-------|
+| `required_status_checks.strict` | `true` |
+| `required_status_checks.contexts` | `["ci"]` |
+| `enforce_admins` | `true` |
+| `required_pull_request_reviews.required_approving_review_count` | `1` |
+| `required_pull_request_reviews.dismiss_stale_reviews` | `true` |
+| `required_pull_request_reviews.require_code_owner_reviews` | `false` |
+| `required_signatures` | `true` |
+| `required_linear_history` | `true` |
+| `allow_force_pushes` | `false` |
+| `allow_deletions` | `false` |
+
+### Gap status update
+
+| ID | Status | Resolution |
+|----|--------|------------|
+| P0-001 | CLOSED | Branch protection on `develop` enabled; `ci` required status check enforced |
+| P0-002 | CLOSED | Branch protection on `main` enabled; `ci` required status check enforced |
+| P0-003 | CLOSED | `required_signatures: true` set on both `develop` and `main` via separate POST |
+
+Note: the `ci` context maps to the `CI` workflow (`ci.yml`). Enforcement begins on the first PR opened after this configuration. The `ci` context was already registered on `develop` from previous CI runs; the status check will be required from the first new PR forward on both branches.
