@@ -54,23 +54,24 @@ traces_to: '.factory/specs/prd.md'
 
 | Module | Path (indicative) | Tier | Rationale | Kill Rate Target | VP Count |
 |--------|-------------------|------|-----------|-----------------|----------|
-| frame | internal/frame | CRITICAL | Correct wire format is a security boundary (DI-001, DI-007); incorrect encoding breaks all downstream | >= 95% | TBD |
-| hmac | internal/hmac | CRITICAL | Frame authentication is the SVTN trust boundary (DI-006); any bug enables forged frames | >= 95% | TBD |
-| admission | internal/admission | CRITICAL | SVTN entry gate (DI-006, DI-005); bypass = attacker on network | >= 95% | TBD |
-| session-auth | internal/session | CRITICAL | Tier 2 enforcement (DI-010); bypass = unauthorized session access | >= 95% | TBD |
-| routing | internal/routing | CRITICAL | SVTN isolation (DI-005); loop prevention; security + correctness | >= 95% | TBD |
-| halfchannel | internal/halfchannel | HIGH | Timeslice clock regularity (DI-008); incorrect ticks break liveness detection | >= 90% | TBD |
-| arq | internal/arq | HIGH | Downstream delivery correctness; incorrect ARQ produces corrupt terminal state | >= 90% | TBD |
-| replay | internal/replay | HIGH | Upstream keystroke delivery; incorrect deduplication causes phantom keystrokes | >= 90% | TBD |
-| multipath | internal/multipath | HIGH | Duplicate-and-race correctness; incorrect deduplication causes duplicate data | >= 90% | TBD |
-| paths | internal/paths | HIGH | Path ranking drives all forwarding decisions; incorrect ranking degrades latency | >= 90% | TBD |
-| metrics | internal/metrics | HIGH | Quality indicator accuracy (NFR-014); incorrect threshold logic misleads operators | >= 90% | TBD |
-| tmux-control | internal/tmux | HIGH | Session content flows through this module; PTY fallback correctness | >= 90% | TBD |
-| discovery | internal/discovery | MEDIUM | Eventual consistency acceptable; bugs cause temporary stale session lists | >= 80% | TBD |
-| svtn-mgmt | internal/svtnmgmt | MEDIUM | SVTN lifecycle; important but not a hot path; errors are recoverable | >= 80% | TBD |
-| drain | internal/drain | MEDIUM | Graceful shutdown path; session loss on failure is bounded | >= 80% | TBD |
-| config | internal/config | MEDIUM | Errors detected at startup before any sessions affected | >= 80% | TBD |
-| sbctl | cmd/sbctl | LOW | Operator CLI; bugs affect UX, not security or data integrity | >= 70% | TBD |
+| frame | internal/frame | CRITICAL | Correct wire format is a security boundary (DI-001, DI-007); incorrect encoding breaks all downstream | >= 95% | 4 |
+| hmac | internal/hmac | CRITICAL | Frame authentication is the SVTN trust boundary (DI-006); any bug enables forged frames | >= 95% | 3 |
+| admission | internal/admission | CRITICAL | SVTN entry gate (DI-006, DI-005); bypass = attacker on network | >= 95% | 5 |
+| session-auth | internal/session | CRITICAL | Tier 2 enforcement (DI-010); bypass = unauthorized session access | >= 95% | 6 |
+| routing | internal/routing | CRITICAL | SVTN isolation (DI-005); loop prevention; security + correctness | >= 95% | 4 |
+| halfchannel | internal/halfchannel | HIGH | Timeslice clock regularity (DI-008); incorrect ticks break liveness detection | >= 90% | 7 |
+| arq | internal/arq | HIGH | Downstream delivery correctness; incorrect ARQ produces corrupt terminal state | >= 90% | 4 |
+| replay | internal/replay | HIGH | Upstream keystroke delivery; incorrect deduplication causes phantom keystrokes | >= 90% | 2 |
+| multipath | internal/multipath | HIGH | Duplicate-and-race correctness; incorrect deduplication causes duplicate data | >= 90% | 4 |
+| paths | internal/paths | HIGH | Path ranking drives all forwarding decisions; incorrect ranking degrades latency | >= 90% | 1 |
+| metrics | internal/metrics | HIGH | Quality indicator accuracy (NFR-014); incorrect threshold logic misleads operators | >= 90% | 3 |
+| tmux-control | internal/tmux | HIGH | Session content flows through this module; PTY fallback correctness | >= 90% | 2 |
+| discovery | internal/discovery | MEDIUM | Eventual consistency acceptable; bugs cause temporary stale session lists | >= 80% | 3 |
+| svtn-mgmt | internal/svtnmgmt | MEDIUM | SVTN lifecycle; important but not a hot path; errors are recoverable | >= 80% | 2 |
+| drain | internal/drain | MEDIUM | Graceful shutdown path; session loss on failure is bounded | >= 80% | 1 |
+| config | internal/config | MEDIUM | Errors detected at startup before any sessions affected | >= 80% | 3 |
+| sbctl | cmd/sbctl | LOW | Operator CLI; bugs affect UX, not security or data integrity | >= 70% | 3 |
+| switchboard | cmd/switchboard | LOW | Daemon entry point. Routes to mode-specific code; no business logic. Failures surface as startup errors. | >= 70% | 0 |
 
 ## Per-Module Risk Assessment
 
@@ -98,11 +99,11 @@ traces_to: '.factory/specs/prd.md'
 
 | Tier | Module Count | Percentage |
 |------|-------------|------------|
-| CRITICAL | 5 | 29% |
-| HIGH | 8 | 47% |
-| MEDIUM | 4 | 24% |
-| LOW | 1 | 6% |
-| **Total** | **18** | **~100%** (note: 5+8+4+1=18 modules) |
+| CRITICAL | 5 | 28% |
+| HIGH | 7 | 39% |
+| MEDIUM | 4 | 22% |
+| LOW | 2 | 11% |
+| **Total** | **18** | **~100%** (note: 5+7+4+2=18 modules) |
 
 Note: The high percentage of CRITICAL and HIGH modules reflects the nature of the product — a security-sensitive network infrastructure component where content separation and admission correctness are primary requirements. This distribution is expected.
 

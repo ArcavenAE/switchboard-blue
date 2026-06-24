@@ -335,4 +335,4 @@ Summary: Error codes follow `E-<subsystem>-NNN` convention. 12 FM-NNN failure mo
 | BC-2.08.001 | CAP-025 | console-operations | P1 | PE | integration/e2e |
 | BC-2.09.001 | CAP-026 | deployment-operations | P2 | PE | integration/e2e |
 | BC-2.09.002 | CAP-027 | deployment-operations | P2 | PE | integration/e2e |
-| BC-2.09.003 | CAP-023, CAP-024 | deployment-operations | P0 | E | unit/integration |
+| BC-2.09.003 | CAP-028 | deployment-operations | P0 | E | unit/integration |

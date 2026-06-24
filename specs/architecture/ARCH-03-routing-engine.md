@@ -185,14 +185,28 @@ single path; failover only occurs on manual restart.
 
 ## Quality Indicator (internal/metrics, BC-2.06.001–002)
 
+**Quality indicator semantic (per BC-2.06.001 invariant 4):**
+
+The session-aggregated quality indicator uses the BEST current path's metrics:
+- green: best path RTT p99 ≤ 100ms AND best path loss ≤ 5%
+- yellow: best path RTT p99 in (100ms, 500ms] OR best path loss in (5%, 20%]
+- red: best path RTT p99 > 500ms OR best path loss > 20% OR no paths available
+
+Per-path metric scoring (used for path ranking and forwarding decisions per
+CAP-006) uses each path's own metrics independently — a degraded path is ranked
+lower but doesn't degrade the session indicator if a healthy path exists.
+
+Transitions are hysteretic over 3 consecutive measurements (per BC-2.06.001
+invariant 3, NFR-014).
+
 ```
 QualityState: green | yellow | red
 
-Transitions:
-  green → yellow: any path RTT > 100ms OR loss > 5%
-  yellow → red:   all paths RTT > 500ms OR loss > 20%  OR a TLPKTDROP event
-  red → yellow:   all paths RTT ≤ 500ms AND loss ≤ 20% AND no recent TLPKTDROP
-  yellow → green: all paths RTT ≤ 100ms AND loss ≤ 5%
+Transitions (based on BEST path metrics):
+  green → yellow: best path RTT p99 > 100ms OR best path loss > 5%
+  yellow → red:   best path RTT p99 > 500ms OR best path loss > 20% OR no paths available
+  red → yellow:   best path RTT p99 ≤ 500ms AND best path loss ≤ 20% AND ≥1 path available
+  yellow → green: best path RTT p99 ≤ 100ms AND best path loss ≤ 5%
 
 Canonical thresholds (NFR-001: 100ms p99 LAN budget):
   green_rtt_ms     = 100   (≤ 100ms: green)
