@@ -26,6 +26,7 @@ inputDocuments:
 | PE-phase | 4 |
 | Total points | 102 |
 | Waves | 7 (Wave 0–6) |
+| Backlog | 1 (S-BL.OA) |
 
 ## Master Story Index
 
@@ -73,6 +74,20 @@ inputDocuments:
 
 All 42 BCs covered. See dependency-graph.md BC-to-Stories matrix for full traceability.
 
+## Backlog / Deferred Stories
+
+Stories created as concrete drift-item targets BEFORE they're scheduled into a wave.
+Backlog stubs have minimal frontmatter and no ACs yet. When a wave-N planning cycle
+picks one up, story-writer fleshes it out into a normal wave-N story (move out of this
+section, add full ACs/tasks/files/architecture).
+
+Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
+addresses the "deferred to TBD story" anti-pattern.
+
+| Story ID | Title | Status | Drift items consumed | Earliest wave |
+|----------|-------|--------|----------------------|---------------|
+| S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
+
 ## Files
 
-All story files are in `.factory/stories/S-N.MM-*.md`. Epic files are in `.factory/stories/epics/E-N-*.md`.
+All story files are in `.factory/stories/S-N.MM-*.md`. Backlog stubs use `.factory/stories/S-BL.*-*.md`. Epic files are in `.factory/stories/epics/E-N-*.md`.
