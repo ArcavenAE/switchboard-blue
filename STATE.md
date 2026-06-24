@@ -77,7 +77,8 @@ s_1_02_adversary_pass_04: 5_findings_not_converged
 s_1_02_adversary_pass_05: 4_findings_not_converged
 s_1_02_adversary_pass_06: 3_findings_not_converged
 s_1_02_adversary_pass_07: 0_findings_converged
-s_1_02_adversary_clean_streak: 1
+s_1_02_adversary_pass_08: 0_findings_converged
+s_1_02_adversary_clean_streak: 2
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
 
@@ -125,7 +126,8 @@ Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition:
 - Adversary pass 5 complete: 4 findings (1 high AC↔BC mis-anchor + 3 low test-quality nits); routing.
 - Adversary pass 6 complete: 3 findings (1 high BC↔story drift, 1 med AC trace, 1 low file structure); finding count decaying.
 - Adversary pass 7 complete: 0 findings — CONVERGED. Clean streak 1/3. Need passes 8 and 9 also clean to declare BC-5.39.001 convergence.
-- Finding trajectory: 9 → 11 → 7 → 5 → 4 → 3 → 0
+- Adversary pass 8 complete: 0 findings — CONVERGED. Clean streak 2/3. Pass 9 pending for full convergence.
+- Finding trajectory: 9 → 11 → 7 → 5 → 4 → 3 → 0 → 0
 
 ### Resume instructions
 
