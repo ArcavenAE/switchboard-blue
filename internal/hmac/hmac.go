@@ -42,13 +42,19 @@ func ComputeHMAC(key []byte, frameBytes []byte) [TagSize]byte {
 	return tag
 }
 
-// VerifyHMAC authenticates frameBytes against tag using key.
+// VerifyHMAC checks whether tag is the HMAC-SHA256 of frameBytes under key,
+// truncated to the first TagSize (8) bytes.
 //
-// Per BC-2.05.005 postconditions 2–4: returns true if and only if the tag
-// matches the first TagSize bytes of HMAC-SHA256(key, frameBytes). Returns
-// false for any single-bit flip in frameBytes (AC-003), for a wrong key
-// (AC-004), and for a tag slice shorter than TagSize bytes (EC-003) — without
-// panicking.
+// The comparison is constant-time (uses crypto/hmac.Equal) to prevent timing
+// oracles (BC-2.05.005 postcondition 3). Returns true on exact match; false
+// otherwise — including any single-bit perturbation of frameBytes (AC-003),
+// tag, or key (AC-004), as verified by VP-005's fuzz harness.
+//
+// The [TagSize]byte signature enforces correct tag length at compile time;
+// wrong-length tags are a type error, not a runtime case.
+//
+// VerifyHMAC is a pure function (no I/O, no side effects) suitable for use
+// in router fast-path frame validation.
 func VerifyHMAC(key []byte, frameBytes []byte, tag [TagSize]byte) bool {
 	expected := ComputeHMAC(key, frameBytes)
 	// hmac.Equal is constant-time over the full slice length, preventing
