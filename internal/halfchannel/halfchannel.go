@@ -5,6 +5,7 @@
 package halfchannel
 
 import (
+	"errors"
 	"time"
 
 	// frame is the only internal dependency permitted by ARCH-08 topological
@@ -49,6 +50,10 @@ type ChannelFrame struct {
 	Payload []byte
 }
 
+// ErrNilPayload is returned by Enqueue when a nil payload is passed
+// (BC-2.01.002 precondition).
+var ErrNilPayload = errors.New("halfchannel: payload is nil")
+
 // HalfChannel is a pure-core timeslice clock state machine for one
 // directional half of a Switchboard session channel.
 //
@@ -56,50 +61,70 @@ type ChannelFrame struct {
 // scheduling layer MUST ensure Tick() and Enqueue() are called from a
 // single goroutine or under external synchronisation.
 type HalfChannel struct {
-	chanID       uint32        //nolint:unused // used by implementer in Tick/Seq/Enqueue
-	direction    Direction     //nolint:unused // used by implementer in Tick
-	seq          uint32        //nolint:unused // used by implementer in Tick/Seq
-	pending      [][]byte      //nolint:unused // used by implementer in Enqueue/Tick
-	tickInterval time.Duration //nolint:unused // used by implementer in TickInterval
-	mtu          int           //nolint:unused // used by implementer in Tick for payload truncation
+	chanID       uint32
+	direction    Direction
+	seq          uint32
+	pending      [][]byte
+	tickInterval time.Duration
 }
 
 // New constructs a HalfChannel with the given channel identifier, direction,
 // and nominal tick interval. The tick interval is stored for external
 // reference (e.g. benchmark scheduling); HalfChannel never calls time.Now()
 // or time.Sleep() internally (ARCH-09 purity).
-//
-// mtu is the maximum payload size in bytes for a single emitted frame. Pass
-// 0 to use a caller-defined default (the implementer should define the
-// sentinel).
 func New(chanID uint32, direction Direction, tickInterval time.Duration) *HalfChannel {
-	panic("not implemented: S-1.02 New")
+	return &HalfChannel{
+		chanID:       chanID,
+		direction:    direction,
+		tickInterval: tickInterval,
+	}
 }
 
 // Tick advances the state machine by one timeslice and returns exactly one
 // ChannelFrame (AC-001). When the pending queue is empty the returned frame
-// has zero-length Payload (AC-002, BC-2.01.002 postcondition 1). Each call
+// has nil Payload (AC-002, BC-2.01.002 postcondition 1). Each call
 // increments seq by 1 (AC-004, BC-2.01.001 postcondition 5).
 func (h *HalfChannel) Tick() ChannelFrame {
-	panic("not implemented: S-1.02 HalfChannel.Tick")
+	h.seq++
+
+	var payload []byte
+	if len(h.pending) > 0 {
+		payload = h.pending[0]
+		// Nil the freed slot before reslicing to allow GC of large payloads.
+		h.pending[0] = nil
+		h.pending = h.pending[1:]
+	}
+
+	return ChannelFrame{
+		ChanID:  h.chanID,
+		ChanSeq: h.seq,
+		Flags:   0,
+		Payload: payload,
+	}
 }
 
 // Enqueue appends payload to the pending queue for emission on subsequent
 // ticks. The payload is not copied; the caller must not mutate it after
-// passing it to Enqueue. Returns an error if payload is nil.
+// passing it to Enqueue. Returns ErrNilPayload if payload is nil.
 func (h *HalfChannel) Enqueue(payload []byte) error {
-	panic("not implemented: S-1.02 HalfChannel.Enqueue")
+	if payload == nil {
+		return ErrNilPayload
+	}
+
+	h.pending = append(h.pending, payload)
+
+	return nil
 }
 
 // Seq returns the current sequence counter value. The counter starts at 0
 // and is incremented by each Tick() call (BC-2.01.001 postcondition 5).
 func (h *HalfChannel) Seq() uint32 {
-	panic("not implemented: S-1.02 HalfChannel.Seq")
+	return h.seq
 }
 
 // TickInterval returns the nominal tick period passed to New. Exposed so the
 // effectful scheduling layer can read back the configured interval without
 // accessing unexported fields.
 func (h *HalfChannel) TickInterval() time.Duration {
-	panic("not implemented: S-1.02 HalfChannel.TickInterval")
+	return h.tickInterval
 }
