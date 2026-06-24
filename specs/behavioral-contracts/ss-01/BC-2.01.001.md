@@ -6,6 +6,7 @@ version: "1.1"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
+last_modified: 2026-06-24T00:00:00
 phase: 1a
 bc_id: BC-2.01.001
 subsystem: session-networking
@@ -17,7 +18,8 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - "2026-06-24: EC-002 patched (adversary pass-06 F-001) — MVP semantic clarified as one-payload-per-tick; coalescing-up-to-MTU deferred to future PE-phase optimization story"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -68,7 +70,7 @@ The periodic timer fires on the configured tick interval boundary.
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
 | EC-001 | Tick fires while previous frame is still being transmitted | New frame is queued; previous transmission completes first; clock continues on schedule. No tick is skipped. |
-| EC-002 | Multiple payloads accumulate between ticks | All pending payloads up to MTU are coalesced into a single frame on the next tick. Overflow is queued for subsequent ticks. |
+| EC-002 | Multiple payloads accumulate between ticks | **MVP semantic:** single tick emits one frame (the head of the queue); remaining payloads stay queued for subsequent ticks. Coalescing-up-to-MTU is deferred to a future PE-phase optimization story (track via story-INDEX as "S-?.??: half-channel MTU coalescing"). |
 | EC-003 | OS scheduler delays the tick by > 5ms | Frame departs on OS wakeup. Jitter is recorded in path metrics. Quality indicator may degrade if sustained. Tick is not "caught up" — the next tick fires at the next scheduled boundary. |
 | EC-004 | Tick interval configured at 0ms | Startup fails with E-CFG-001 (tick interval must be in [5ms, 50ms]). |
 
