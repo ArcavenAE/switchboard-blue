@@ -571,6 +571,66 @@ func TestProperty_VP051_Independence(t *testing.T) {
 	}
 }
 
+// -----------------------------------------------------------------------------
+// F-001 / BC-2.01.002 PC5 — MTU validation (Red Gate)
+// -----------------------------------------------------------------------------
+
+// TestMaxPayloadSizeConstant pins the BC-2.01.002 v1.4 PC5 conservative bound:
+// uint16 max (65535) minus the worst-case channel header size (20 bytes when
+// SACK_present=1). Yields 65515 bytes. Using the conservative (SACK=1) bound
+// means the constant is safe for both SACK and non-SACK frames; no caller needs
+// to choose between two constants at enqueue time.
+//
+// Red Gate: references halfchannel.MaxPayloadSize which does not exist until
+// the implementer's commit lands.
+func TestMaxPayloadSizeConstant(t *testing.T) {
+	t.Parallel()
+	// BC-2.01.002 PC5 conservative MaxPayloadSize: uint16 max (65535) minus
+	// the worst-case channel header size (20 bytes when SACK_present=1).
+	const want = 65535 - 20
+	if halfchannel.MaxPayloadSize != want {
+		t.Errorf("MaxPayloadSize = %d, want %d (BC-2.01.002 PC5 conservative: uint16_max - 20-byte SACK channel header)",
+			halfchannel.MaxPayloadSize, want)
+	}
+}
+
+// TestHalfChannelEnqueue_RejectsOversizedPayload asserts that Enqueue
+// rejects payloads larger than MaxPayloadSize with ErrPayloadTooLarge
+// (BC-2.01.002 PC5, F-001).
+//
+// Red Gate: references halfchannel.MaxPayloadSize and halfchannel.ErrPayloadTooLarge
+// which do not exist until the implementer's commit lands.
+func TestHalfChannelEnqueue_RejectsOversizedPayload(t *testing.T) {
+	t.Parallel()
+	hc := halfchannel.New(0x100, halfchannel.Upstream, 10*time.Millisecond)
+	payload := make([]byte, halfchannel.MaxPayloadSize+1)
+	err := hc.Enqueue(payload)
+	if err == nil {
+		t.Fatal("Enqueue with len(payload)=MaxPayloadSize+1 returned nil error, want ErrPayloadTooLarge")
+	}
+	if !errors.Is(err, halfchannel.ErrPayloadTooLarge) {
+		t.Errorf("err = %v, want errors.Is(err, halfchannel.ErrPayloadTooLarge)", err)
+	}
+}
+
+// TestHalfChannelEnqueue_AcceptsMaxSizePayload asserts that Enqueue accepts
+// a payload of exactly MaxPayloadSize bytes (boundary test, BC-2.01.002 PC5).
+//
+// Red Gate: references halfchannel.MaxPayloadSize which does not exist until
+// the implementer's commit lands.
+func TestHalfChannelEnqueue_AcceptsMaxSizePayload(t *testing.T) {
+	t.Parallel()
+	hc := halfchannel.New(0x100, halfchannel.Upstream, 10*time.Millisecond)
+	payload := make([]byte, halfchannel.MaxPayloadSize)
+	if err := hc.Enqueue(payload); err != nil {
+		t.Fatalf("Enqueue with len(payload)=MaxPayloadSize unexpected error: %v", err)
+	}
+	cf := hc.Tick()
+	if len(cf.Payload) != halfchannel.MaxPayloadSize {
+		t.Errorf("cf.Payload length = %d, want %d", len(cf.Payload), halfchannel.MaxPayloadSize)
+	}
+}
+
 // TestProperty_VP018_EmptyFrameEmitsForNoPayload verifies VP-018: when Tick
 // is called with no queued payload, the returned frame's Payload field has
 // zero length and FrameType is FrameTypeEmptyTick. Property-style: table-
