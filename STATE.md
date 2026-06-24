@@ -8,7 +8,7 @@ phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_active_wave: 1
 phase_3_completed_stories: [S-1.01]
 phase_3_active_stories: [S-1.02]
-phase_3_active_story_status: "S-1.01: completed (PR #1 merged 1c76160 2026-06-24); S-1.02: ready (next eligible)"
+phase_3_active_story_status: "S-1.01: completed (PR #1 merged 1c76160); S-1.02: ready (dispatching deliver-story)"
 s_1_01_merge_sha: 1c76160
 s_1_01_pr_number: 1
 phase_1_gate: APPROVED
