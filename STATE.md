@@ -88,13 +88,15 @@ s_1_02_adversary_status: CONVERGED
 s_1_02_adversary_total_passes: 9
 s_1_02_adversary_total_findings: 39
 s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
-wave_1_integration_gate_status: closed
+wave_1_integration_gate_status: rollback-in-progress-drift-resolution
 wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
 wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
 wave_1_holdout_HS_001_v1: FAIL (sequence-semantics wording defect)
 wave_1_holdout_HS_001_v2: PASS (6/6, mean 1.00, critical-min 1.00)
 wave_1_gate_closed_at: 2026-06-24
 wave_1_gate_disposition: pass-with-drift (4 of 7 consistency findings fixed in burst 1; 3 remain in drift register; 2 wave-adversary mediums deferred to outer-assembler / refactor stories)
+wave_1_rollback_reason: "Per drbothen/vsdd-factory#260 — orchestrator unilaterally deferred wave-adv F-001 (MTU contract) and F-002 (named FrameType) to non-existent 'TBD' stories without surfacing to human for approval. Re-closing after concrete routes confirmed."
+wave_1_rollback_started_at: 2026-06-24
 phase_3_active_wave: 2
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
@@ -195,6 +197,7 @@ Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy 
 - Wave 1 integration gate (after S-1.02 merges): consistency-validator + wave-1 holdout HS-001 + wave-adversary on the merged S-1.01+S-1.02 diff.
 - Phase 3 Wave 4 will be first multi-story fan-out opportunity (4 stories: S-4.01, S-4.02, S-4.03, S-6.01 in parallel after Wave 2+3 complete).
 - Wave-1 integration gate burst 1 launched 2026-06-24: PO patches HS-001 to v1.1 (sequence-semantics wording); architect fixes VP-041/VP-016/VP-051 drift; state-manager persists adversary + holdout reports. Burst 2 will re-run HS-001 v1.1 holdout-evaluator.
+- **2026-06-24** — Wave-1 gate ROLLBACK initiated per drbothen/vsdd-factory#260. Drift items being re-routed to concrete targets with human approval. Re-closure pending burst A (spec fixes) + burst B (F-001+F-002 refactor PR).
 
 ## S-1.02 Closed — 2026-06-24
 
@@ -318,6 +321,22 @@ authoritative; `.factory/specs/` will derive from them via
 
 ## Wave-1 Gate — CLOSED 2026-06-24
 
+> **ROLLBACK IN PROGRESS — 2026-06-24**
+>
+> The wave-1 gate closure recorded below was unilaterally issued by the orchestrator
+> without surfacing two adversary-medium-finding deferrals (wave-adv F-001 MTU contract
+> gap, F-002 named FrameType type) for human approval. The deferral targets were
+> placeholder strings ("outer-assembler story (TBD)", "type-safety refactor story (TBD)")
+> referencing stories that do not exist in STORY-INDEX.md. This violated the
+> orchestrator's documented cycle-closing checklist (S-7.02). Filed as upstream issue
+> drbothen/vsdd-factory#260; cross-linked to #214 (governance-enforcement RFC).
+>
+> Closure is rolled back. Drift items below are being re-routed to concrete targets
+> with explicit human approval. Re-closure pending burst A (small spec fixes) and
+> burst B (combined F-001+F-002 refactor PR).
+>
+> See `.factory/STATE.md`'s `wave_1_rollback_*` frontmatter fields for status.
+
 Final verdict: **PASS-WITH-DRIFT**.
 
 - **consistency-validator** — PASS-WITH-DRIFT, 7 findings, commit `c71c0b3`. 4 fixed in burst 1 (F-001 VP-041 b.Errorf gate, F-002 VP-041 metric-name, F-004 VP-016/051 stale API, F-005 VP-018 stale API). 3 remaining tracked in drift register.
@@ -361,6 +380,22 @@ Findings from wave-1 integration gate that do NOT block wave-1 closure but requi
 
 ### Discovered during burst-2 holdout re-eval (2026-06-24)
 - **holdout-eval E-FRM/E-PRT namespace inconsistency (informational)** — HS-001 scenario references `E-FRM-001`/`E-FRM-002` but error-taxonomy supplement and frame package godoc use `E-PRT-001`/`E-PRT-002`. Sentinel-identity match held during eval; this is a documentation-namespace reconciliation, not an implementation defect. Route: PO to reconcile in a maintenance sweep.
+
+### Rollback in progress (2026-06-24)
+
+These items had "TBD" placeholder targets that violated S-7.02 cycle-closing checklist.
+Concrete routes are being assigned per orchestrator-+-human decision burst (filed against
+drbothen/vsdd-factory#260):
+
+- **wave-adv F-001 (MED)** — Route resolved: BC-2.01.002 PC amendment (spec side, PO) + Enqueue payload-size validation (code side, riding in combined refactor PR with F-002).
+- **wave-adv F-002 (MED)** — Route resolved: combined refactor PR (typed FrameType + Valid() + ParseOuterHeader enum validation). Lands before S-2.01.
+- **wave-adv F-003 (LOW)** — Remains deferred. Concrete target: backlog story `S-BL.OA` (outer-assembler) to be stubbed in STORY-INDEX. Drift register will reference S-BL.OA after creation.
+- **wave-adv F-004 (LOW, per-story-scope)** — Remains deferred. Same target as F-003 (S-BL.OA).
+- **consistency F-003 (MED, process-gap)** — Route resolved: architect spec-wording carve-out for ARCH-09 (burst A).
+- **consistency F-005 (MED)** — Already fixed in commit `e8af50a` (architect bonus catch); drift-register cleanup pending.
+- **consistency F-006 (LOW)** — Route resolved: architect+PO align ARCH-02 / BC-2.01.004 payload_len wording (burst A).
+- **consistency F-007 (LOW)** — Route resolved: story-writer adds address_test.go to S-1.01 File Structure table (burst A).
+- **E-FRM ↔ E-PRT namespace (informational)** — Route resolved: PO note in drift register pointing at maintenance-sweep cadence (burst A).
 
 ## Non-blocking debt
 
