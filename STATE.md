@@ -6,9 +6,10 @@ phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_completed_stories: [S-1.01, S-1.02]
+refactor_frametype_mtu_closes: [F-001, F-002, vsdd-factory#260]
 phase_3_active_wave: 2
 phase_3_active_stories: []
-phase_3_pause_point: "Wave 1 closed (2/2 stories merged: S-1.01@1c76160, S-1.02@9e9a98a; gate PASS-WITH-DRIFT). Wave 2 begins — 3 stories, 18 pts (security foundation + session continuity). Read STORY-INDEX wave-2 row for exact story IDs; dispatch story-writer or implementer per per-story-delivery."
+phase_3_pause_point: "Wave 1 CLOSED 2026-06-24 (pass-with-clean-drift). Stories: S-1.01@1c76160, S-1.02@9e9a98a; refactor PR #3 @4be1b53 closed F-001/F-002 code-side. Drift: S-BL.OA backlog stub holds F-003/F-004 (LOW). Wave 2 begins — 3 stories serial (S-2.01 → S-2.02 → S-1.03), 18 pts total. Dispatch story-writer or per-story-delivery for S-2.01 (HMAC codec, 5pts)."
 s_1_02_merge_sha: 9e9a98a
 s_1_02_pr_number: 2
 s_1_02_alpha_tag: alpha-20260624-193019-9e9a98a
@@ -88,15 +89,20 @@ s_1_02_adversary_status: CONVERGED
 s_1_02_adversary_total_passes: 9
 s_1_02_adversary_total_findings: 39
 s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
-wave_1_integration_gate_status: rollback-in-progress-drift-resolution
+wave_1_integration_gate_status: closed
 wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
 wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
 wave_1_holdout_HS_001_v1: FAIL (sequence-semantics wording defect)
 wave_1_holdout_HS_001_v2: PASS (6/6, mean 1.00, critical-min 1.00)
 wave_1_gate_closed_at: 2026-06-24
-wave_1_gate_disposition: pass-with-drift (4 of 7 consistency findings fixed in burst 1; 3 remain in drift register; 2 wave-adversary mediums deferred to outer-assembler / refactor stories)
+wave_1_gate_disposition: "pass-with-clean-drift — all wave-1 mediums resolved; F-003/F-004 routed to backlog S-BL.OA; informational E-FRM/E-PRT noted in error-taxonomy.md"
+refactor_frametype_mtu_pr: 3
+refactor_frametype_mtu_merge_sha: 4be1b53f85655110035de4f0f38422662afa2ed9
+refactor_frametype_mtu_adversary_passes: 3 (all clean, BC-5.39.001 satisfied)
 wave_1_rollback_reason: "Per drbothen/vsdd-factory#260 — orchestrator unilaterally deferred wave-adv F-001 (MTU contract) and F-002 (named FrameType) to non-existent 'TBD' stories without surfacing to human for approval. Re-closing after concrete routes confirmed."
 wave_1_rollback_started_at: 2026-06-24
+wave_1_rollback_resolved_at: 2026-06-24
+wave_1_rollback_resolution: "Burst A landed concrete spec/doc fixes (commits 345d4f4, 6c064d9, 8b45a07); refactor PR #3 (merge 4be1b53) closed F-001/F-002 code-side; backlog story S-BL.OA created for F-003/F-004 (covered in S-BL.OA-outer-assembler.md)."
 phase_3_active_wave: 2
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
@@ -321,6 +327,17 @@ authoritative; `.factory/specs/` will derive from them via
 
 ## Wave-1 Gate — CLOSED 2026-06-24
 
+> **ROLLBACK RESOLVED — 2026-06-24**
+>
+> All wave-1 drift items now have concrete routes. F-001/F-002 closed via refactor
+> PR #3 (squash merge `4be1b53` on develop, 3 adversary passes 0-0-0 converged).
+> F-003/F-004 deferred to backlog story `S-BL.OA` (per `.factory/stories/STORY-INDEX.md`
+> Backlog section, introduced 2026-06-24 per drbothen/vsdd-factory#260). All consistency-
+> validator mediums resolved in burst A. E-FRM/E-PRT namespace reconciled in
+> error-taxonomy.md.
+>
+> Original ROLLBACK IN PROGRESS notice below is retained as audit trail.
+
 > **ROLLBACK IN PROGRESS — 2026-06-24**
 >
 > The wave-1 gate closure recorded below was unilaterally issued by the orchestrator
@@ -381,21 +398,69 @@ Findings from wave-1 integration gate that do NOT block wave-1 closure but requi
 ### Discovered during burst-2 holdout re-eval (2026-06-24)
 - **holdout-eval E-FRM/E-PRT namespace inconsistency (informational)** — HS-001 scenario references `E-FRM-001`/`E-FRM-002` but error-taxonomy supplement and frame package godoc use `E-PRT-001`/`E-PRT-002`. Sentinel-identity match held during eval; this is a documentation-namespace reconciliation, not an implementation defect. Route: PO to reconcile in a maintenance sweep.
 
-### Rollback in progress (2026-06-24)
+### Rollback resolution (2026-06-24)
 
-These items had "TBD" placeholder targets that violated S-7.02 cycle-closing checklist.
-Concrete routes are being assigned per orchestrator-+-human decision burst (filed against
-drbothen/vsdd-factory#260):
+All items resolved or routed to concrete backlog targets:
 
-- **wave-adv F-001 (MED)** — Route resolved: BC-2.01.002 PC amendment (spec side, PO) + Enqueue payload-size validation (code side, riding in combined refactor PR with F-002).
-- **wave-adv F-002 (MED)** — Route resolved: combined refactor PR (typed FrameType + Valid() + ParseOuterHeader enum validation). Lands before S-2.01.
-- **wave-adv F-003 (LOW)** — Remains deferred. Concrete target: backlog story `S-BL.OA` (outer-assembler) to be stubbed in STORY-INDEX. Drift register will reference S-BL.OA after creation.
-- **wave-adv F-004 (LOW, per-story-scope)** — Remains deferred. Same target as F-003 (S-BL.OA).
-- **consistency F-003 (MED, process-gap)** — Route resolved: architect spec-wording carve-out for ARCH-09 (burst A).
-- **consistency F-005 (MED)** — Already fixed in commit `e8af50a` (architect bonus catch); drift-register cleanup pending.
-- **consistency F-006 (LOW)** — Route resolved: architect+PO align ARCH-02 / BC-2.01.004 payload_len wording (burst A).
-- **consistency F-007 (LOW)** — Route resolved: story-writer adds address_test.go to S-1.01 File Structure table (burst A).
-- **E-FRM ↔ E-PRT namespace (informational)** — Route resolved: PO note in drift register pointing at maintenance-sweep cadence (burst A).
+- **wave-adv F-001 (MED) — RESOLVED.** Spec side: BC-2.01.002 v1.4 PC5 (burst A commit `6c064d9`). Code side: PR #3 (merge `4be1b53`) — `MaxPayloadSize = 65515` + `ErrPayloadTooLarge` sentinel + Enqueue MTU validation. Tests pin both boundary directions via `errors.Is`.
+- **wave-adv F-002 (MED) — RESOLVED.** PR #3 (merge `4be1b53`) — `type FrameType byte` named type in `internal/frame`; `Valid()` method; `ErrInvalidFrameType` sentinel; `ParseOuterHeader` enum validation; cross-module type propagation via `halfchannel.ChannelFrame.FrameType frame.FrameType`. 3 adversary passes converged 0-0-0.
+- **wave-adv F-003 (LOW) — DEFERRED to S-BL.OA.** Composed wire-format test belongs to the outer-assembler story. Backlog stub at `.factory/stories/S-BL.OA-outer-assembler.md` (commit `8b45a07`).
+- **wave-adv F-004 (LOW, per-story-scope) — DEFERRED to S-BL.OA.** ARCH-02 channel-header serializer is the outer-assembler's responsibility.
+- **consistency F-003 (MED, process-gap) — RESOLVED.** ARCH-09 Purity Rule 1 carve-out clarified (burst A commit `345d4f4`).
+- **consistency F-005 (MED) — RESOLVED.** VP-018 stale-API harness fixed in burst-1 commit `e8af50a` (caught by architect's cross-VP scan during pass-04 fix; updated v1.0 → v1.1).
+- **consistency F-006 (LOW) — RESOLVED.** BC-2.01.004 invariant 3 aligned with ARCH-02 normative payload_len definition (burst A commit `345d4f4`); code-side godoc updated in PR #3.
+- **consistency F-007 (LOW) — RESOLVED.** S-1.01 File Structure table now enumerates `internal/frame/address_test.go` (burst A commit `345d4f4`; story revision 1.0 → 1.1).
+- **E-FRM ↔ E-PRT namespace (informational) — RESOLVED.** Cross-reference subsection added to `.factory/specs/prd-supplements/error-taxonomy.md` (burst A commit `6c064d9`). PO/architect/holdout authors of future scenarios can use either prefix; canonical is E-PRT-*.
+
+## Wave-1 Closed — Final 2026-06-24
+
+Wave 1 of Phase 3 (TDD implementation) is now fully closed. Re-closure after
+rollback per drbothen/vsdd-factory#260.
+
+### Stories merged
+
+| Story | PR | Merge SHA | Points |
+|-------|-----|----------|--------|
+| S-1.01 frame-codec | #1 | `1c76160` | 8 |
+| S-1.02 halfchannel-clock | #2 | `9e9a98a` | 5 |
+| Wave-1 refactor F-001+F-002 | #3 | `4be1b53` | (no points — drift closure) |
+
+### Gate disposition
+
+`pass-with-clean-drift` — every wave-1 finding has either landed or been routed to a concrete backlog story (S-BL.OA).
+
+### Spec versions at wave-1 closure
+
+- BC-2.01.001 v1.1
+- BC-2.01.002 v1.4
+- BC-2.01.004 (post burst-A invariant-3 alignment with ARCH-02)
+- BC-2.01.005 v1.1
+- VP-016 v1.1, VP-017 v1.1, VP-018 v1.1, VP-041 v1.1, VP-051 v1.1, VP-053 v1.2
+- Story S-1.01 rev 1.1, S-1.02 rev 1.5, S-BL.OA rev 0.1-backlog-stub
+- ARCH-09 v1.1 (post-burst-A time-package carve-out clarification)
+
+### Adversary cycle metrics (wave-1)
+
+- S-1.02 per-story passes: 9 (trajectory 9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0)
+- Wave-1 gate adversary: 1 pass, CONVERGED with 4 findings (2 MED deferrable, 2 LOW)
+- Refactor F-001+F-002 PR #3 adversary: 3 passes, all 0 findings (BC-5.39.001 satisfied)
+
+### Convergence streaks
+
+| Cycle | Streak | Final |
+|-------|--------|-------|
+| S-1.02 | 3/3 | CONVERGED 2026-06-24 |
+| Wave-1 gate | 1/1 (single-pass closure) | CONVERGED with deferrable mediums 2026-06-24 |
+| Refactor PR #3 | 3/3 | CONVERGED 2026-06-24 |
+
+### Next phase
+
+**Wave 2 begins.** 3 stories, 18 pts, serial dependency chain:
+1. S-2.01 (HMAC codec, 5pts, blocks S-2.02)
+2. S-2.02 (Admission + SVTN isolation, 8pts, blocks S-1.03)
+3. S-1.03 (Node identity + session continuity, 5pts)
+
+Wave-2 holdout: `.factory/holdout-scenarios/wave-scenarios/wave-2.md` (HS-002).
 
 ## Non-blocking debt
 

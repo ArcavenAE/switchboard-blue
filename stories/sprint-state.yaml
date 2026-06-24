@@ -13,10 +13,15 @@ waves: 7
 wave_status:
   - wave: 1
     status: closed
-    gate_disposition: pass-with-drift
+    gate_disposition: pass-with-clean-drift
     closed_at: 2026-06-24
+    closed_at_final: 2026-06-24-final-after-rollback
+    rollback_resolved_at: 2026-06-24
     holdout_satisfaction_mean: 1.00
     stories: [S-1.01, S-1.02]
+    refactor_pr: 3
+    refactor_merge_sha: 4be1b53f85655110035de4f0f38422662afa2ed9
+    drift_items_clean: true
   - wave: 2
     status: active
     stories: [S-1.03, S-2.01, S-2.02]

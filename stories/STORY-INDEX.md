@@ -60,7 +60,7 @@ inputDocuments:
 | Wave | Stories | Points | Theme |
 |------|---------|--------|-------|
 | 0 | S-0.01 | 1 | BMAD scaffolding (complete) |
-| 1 | S-1.01, S-1.02 | 13 | Frame codec + half-channel clock — **CLOSED 2026-06-24 (pass-with-drift)** |
+| 1 | S-1.01, S-1.02 + refactor PR #3 | 13 | Frame codec + half-channel clock — **CLOSED 2026-06-24 (pass-with-clean-drift; rollback resolved 2026-06-24)** |
 | 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity |
 | 3 | S-3.01, S-3.02, S-3.03 | 21 | Session access MVP |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
