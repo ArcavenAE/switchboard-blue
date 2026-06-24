@@ -74,6 +74,7 @@ s_1_02_adversary_pass_01: 9_findings_not_converged
 s_1_02_adversary_pass_02: 11_findings_not_converged
 s_1_02_adversary_pass_03: 7_findings_not_converged
 s_1_02_adversary_pass_04: 5_findings_not_converged
+s_1_02_adversary_pass_05: 4_findings_not_converged
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
 
@@ -118,6 +119,7 @@ Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition:
 - Adversary pass 2 complete: 11 findings (0 crit, 4 high, 4 med, 3 low); routing.
 - Adversary pass 3 complete: 7 findings (0 crit, 1 high, 3 med, 2 low, 1 nitpick); convergence not yet reached; routing.
 - Adversary pass 4 complete: 5 findings; convergence not yet reached; routing remaining 5 findings.
+- Adversary pass 5 complete: 4 findings (1 high AC↔BC mis-anchor + 3 low test-quality nits); routing.
 
 ### Resume instructions
 
