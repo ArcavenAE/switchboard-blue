@@ -1,0 +1,74 @@
+{
+  "story_id": "S-1.01",
+  "story_title": "implement 44-byte outer header codec in internal/frame",
+  "branch": "feature/S-1.01-frame-codec",
+  "convergence_policy": "BC-5.39.001 (≥3 clean passes; last = NITPICK_ONLY or CONVERGENCE_REACHED)",
+  "passes": [
+    {
+      "pass": 1,
+      "findings_count": 7,
+      "findings_by_severity": {"critical": 0, "high": 1, "medium": 4, "low": 1, "nitpick": 1},
+      "verdict": "NOT_CONVERGED",
+      "classification": "fix-required"
+    },
+    {
+      "pass": 2,
+      "findings_count": 3,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 2, "nitpick": 1},
+      "verdict": "NOT_CONVERGED",
+      "classification": "fix-required"
+    },
+    {
+      "pass": 3,
+      "findings_count": 3,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 2, "nitpick": 1},
+      "verdict": "NOT_CONVERGED",
+      "classification": "fix-required",
+      "note": "F-PASS3-001 substantive (canonical E-PRT-001/002 vs invented E-FRM-001/002)"
+    },
+    {
+      "pass": 4,
+      "findings_count": 2,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 1, "nitpick": 1},
+      "verdict": "NITPICK_ONLY",
+      "classification": "clean-pass-1",
+      "note": "First clean pass; gap broken by pass-5 finding"
+    },
+    {
+      "pass": 5,
+      "findings_count": 1,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 1, "nitpick": 0},
+      "verdict": "NOT_CONVERGED",
+      "classification": "fix-required",
+      "note": "F-PASS5-001 VP-014 pubkey-direction symmetric test gap"
+    },
+    {
+      "pass": 6,
+      "findings_count": 0,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0, "nitpick": 0},
+      "verdict": "CONVERGENCE_REACHED",
+      "classification": "clean-pass-1"
+    },
+    {
+      "pass": 7,
+      "findings_count": 1,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0, "nitpick": 1},
+      "verdict": "NITPICK_ONLY",
+      "classification": "clean-pass-2"
+    },
+    {
+      "pass": 8,
+      "findings_count": 0,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0, "nitpick": 0},
+      "verdict": "CONVERGENCE_REACHED",
+      "classification": "clean-pass-3"
+    }
+  ],
+  "convergence_status": "CONVERGED",
+  "passes_clean_consecutive": 3,
+  "last_classification": "CONVERGENCE_REACHED",
+  "total_findings_resolved": 14,
+  "trajectory": "7 → 3 → 3 → 2 → 1 → 0 → 1 → 0",
+  "authorization": "Step 5 (demo-recorder) may proceed per BC-5.39.001",
+  "timestamp": "2026-06-24T10:00:00Z"
+}
