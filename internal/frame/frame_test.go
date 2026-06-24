@@ -299,7 +299,7 @@ func TestParseOuterHeader_VersionMismatch(t *testing.T) {
 	makeFrame := func(versionByte byte) []byte {
 		b := make([]byte, frame.OuterHeaderSize)
 		b[0] = versionByte
-		b[1] = frame.FrameTypeData
+		b[1] = byte(frame.FrameTypeData)
 		binary.BigEndian.PutUint16(b[2:4], 0)
 		return b
 	}

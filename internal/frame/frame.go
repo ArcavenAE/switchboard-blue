@@ -23,14 +23,30 @@ const (
 	VersionByte  = 0x01
 )
 
+// FrameType is the wire-format enum byte for the frame_type field in the outer
+// header (ARCH-02 §3.1). Only five values are canonical; all others are
+// reserved. ParseOuterHeader rejects reserved values with ErrInvalidFrameType.
+type FrameType byte
+
 // Frame type constants (ARCH-02 §3.1).
 const (
-	FrameTypeData      = 0x01
-	FrameTypeEmptyTick = 0x02
-	FrameTypeCtl       = 0x03
-	FrameTypeArq       = 0x04
-	FrameTypeFec       = 0x05
+	FrameTypeData      FrameType = 0x01
+	FrameTypeEmptyTick FrameType = 0x02
+	FrameTypeCtl       FrameType = 0x03
+	FrameTypeArq       FrameType = 0x04
+	FrameTypeFec       FrameType = 0x05
 )
+
+// Valid reports whether the FrameType byte is one of the five canonical enum
+// values defined in ARCH-02 §3.1. Returns false for 0x00 and 0x06..0xFF.
+func (f FrameType) Valid() bool {
+	return f >= FrameTypeData && f <= FrameTypeFec
+}
+
+// ErrInvalidFrameType is returned by ParseOuterHeader when the parsed
+// frame_type byte is not one of the five canonical FrameType values
+// (per ARCH-02 §3.1).
+var ErrInvalidFrameType = errors.New("frame: invalid frame_type")
 
 // ErrFrameTooShort is returned by ParseOuterHeader when the input slice
 // is shorter than OuterHeaderSize (44) bytes. Traces to E-PRT-002 /
@@ -50,9 +66,10 @@ type OuterHeader struct {
 	// v0.1 = 0x01.
 	Version byte
 	// FrameType identifies the frame kind (data, ctl, arq, fec, empty-tick).
-	FrameType byte
-	// PayloadLen is the length of the payload that follows the outer header.
-	// Stored big-endian on the wire.
+	FrameType FrameType
+	// PayloadLen is the byte count of everything following the outer header
+	// (channel header + application payload). Stored big-endian on the wire
+	// per ARCH-02.
 	PayloadLen uint16
 	// SVTNID is the 16-byte session virtual transport network identifier.
 	SVTNID [16]byte
@@ -69,7 +86,7 @@ type OuterHeader struct {
 func EncodeOuterHeader(h OuterHeader) [OuterHeaderSize]byte {
 	var b [OuterHeaderSize]byte
 	b[0] = h.Version
-	b[1] = h.FrameType
+	b[1] = byte(h.FrameType)
 	binary.BigEndian.PutUint16(b[2:4], h.PayloadLen)
 	copy(b[4:20], h.SVTNID[:])
 	copy(b[20:28], h.SrcAddr[:])
@@ -91,9 +108,13 @@ func ParseOuterHeader(b []byte) (OuterHeader, error) {
 	if major != VersionMajor {
 		return OuterHeader{}, fmt.Errorf("unsupported protocol version %d.%d: expected major version %d: %w", major, minor, VersionMajor, ErrVersionMismatch)
 	}
+	ft := FrameType(b[1])
+	if !ft.Valid() {
+		return OuterHeader{}, fmt.Errorf("frame_type %#x: %w", b[1], ErrInvalidFrameType)
+	}
 	var h OuterHeader
 	h.Version = b[0]
-	h.FrameType = b[1]
+	h.FrameType = ft
 	h.PayloadLen = binary.BigEndian.Uint16(b[2:4])
 	copy(h.SVTNID[:], b[4:20])
 	copy(h.SrcAddr[:], b[20:28])
