@@ -132,6 +132,9 @@ func TestHalfChannelTick_EmptyFrameIsValid(t *testing.T) {
 				t.Errorf("frame.FrameType = 0x%02x, want FrameTypeEmptyTick (0x%02x)",
 					frame.FrameType, halfchannel.FrameTypeEmptyTick)
 			}
+			if frame.Flags != 0 {
+				t.Errorf("frame.Flags = %#x, want 0 (BC-2.01.002 PC3 — flags=0 for empty-tick frames)", frame.Flags)
+			}
 		})
 	}
 }
@@ -160,6 +163,9 @@ func TestHalfChannelTick_DataFrameType(t *testing.T) {
 	}
 	if !bytes.Equal(frame.Payload, payload) {
 		t.Errorf("frame.Payload = %q, want %q", frame.Payload, payload)
+	}
+	if frame.Flags != 0 {
+		t.Errorf("frame.Flags = %#x, want 0 (BC-2.01.002 PC3 — flags=0 for MVP data frames; FEC/ARQ/SACK bits land in later stories)", frame.Flags)
 	}
 }
 
@@ -395,7 +401,7 @@ func TestHalfChannelEnqueue_EmptySliceRejected(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 // TestHalfChannelSequenceWraparound: EC-002 wraparound is now covered by the
-// internal-package test in wraparound_internal_test.go, which seeds hc.seq
+// internal-package test in wraparound_test.go, which seeds hc.seq
 // directly. A public-API-only test cannot reach MaxUint32 in reasonable time.
 
 // -----------------------------------------------------------------------------
@@ -443,12 +449,12 @@ func TestHalfChannelTick_MultiplePayloadsQueuedOneTick(t *testing.T) {
 // Property tests
 // -----------------------------------------------------------------------------
 
-// TestProperty_VP017_SequenceIncrementsByOne verifies that successive Tick calls
-// increment ChanSeq by exactly 1. VP-017 is NOT structurally enforced — the
-// return type enforces cardinality (VP-016), but the +1 increment is a runtime
-// invariant. This test asserts f.ChanSeq - prev.ChanSeq == 1 using uint32
-// modular subtraction, so it correctly handles the MaxUint32 → 0 wraparound.
-// VP-017: invariant — every Tick increments ChanSeq by exactly 1.
+// TestProperty_VP017_SequenceIncrementsByOne asserts the BC-2.01.001 PC5
+// invariant: each Tick increments ChanSeq by exactly 1. Uses uint32
+// arithmetic — the modular subtraction `f.ChanSeq - prev.ChanSeq` is
+// wraparound-safe by construction, but this test does NOT exercise
+// wraparound (10,000 iterations from seq=0 is far below math.MaxUint32).
+// EC-002 wraparound is covered by wraparound_test.go.
 func TestProperty_VP017_SequenceIncrementsByOne(t *testing.T) {
 	t.Parallel()
 
