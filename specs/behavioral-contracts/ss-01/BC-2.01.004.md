@@ -2,10 +2,10 @@
 artifact_id: BC-2.01.004
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
-producer: product-owner
-timestamp: 2026-06-23T00:00:00
+producer: architect
+timestamp: 2026-06-24T00:00:00
 phase: 1a
 bc_id: BC-2.01.004
 subsystem: session-networking
@@ -17,7 +17,11 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-06-24
+    author: architect
+    change: "Invariant 3 corrected to match ARCH-02 normative payload_len definition (= channel header + application payload after the outer header). Resolves consistency F-006 (refs drbothen/vsdd-factory#260)."
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -68,7 +72,7 @@ Every Switchboard frame carries a 44-byte outer header in a fixed binary layout.
 
 1. **DI-007**: The 44-byte outer header layout is fixed within major protocol version. Field positions and sizes are immutable within v1.x.
 2. **DI-001**: The outer header contains no session content. All bytes beyond offset 43 are opaque to routers.
-3. Length field reflects the number of bytes in the payload (after the channel header), not the total frame size.
+3. Length field reflects the number of bytes after the outer header (channel header + application payload), not counting the 44-byte outer header itself.
 
 ## Trigger
 

@@ -2,10 +2,10 @@
 artifact_id: ARCH-09-purity-boundary-map
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-24T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -55,8 +55,14 @@ pure-core, they do not implement logic.**
 
 ## Purity Enforcement Rules
 
-1. **Pure-core packages MUST NOT import**: `net`, `os`, `syscall`, `time` (except `time.Duration`
-   as a data type), `math/rand`, `crypto/rand`, any `internal/tmux` or `internal/drain`.
+1. **Pure-core packages MUST NOT import**: `net`, `os`, `syscall`, `time` (except as a pure
+   data type: `time.Duration`, `time.Time` literals, and the duration-unit constants
+   `time.Nanosecond`, `time.Microsecond`, `time.Millisecond`, `time.Second`, `time.Minute`,
+   `time.Hour`. The carve-out explicitly excludes any function that observes the wall clock
+   (`time.Now`, `time.Since`, `time.Until`), schedules execution (`time.Sleep`, `time.After`,
+   `time.NewTimer`, `time.NewTicker`, `time.AfterFunc`), or otherwise causes side effects.
+   Test files (`_test.go`) may use the full `time` API as effectful test glue per §4.),
+   `math/rand`, `crypto/rand`, any `internal/tmux` or `internal/drain`.
 
 2. **Boundary packages MAY import**: pure-core packages. They hold mutable state under
    `sync.RWMutex`. They MUST NOT perform network I/O.
@@ -76,3 +82,10 @@ pure-core, they do not implement logic.**
 | boundary | 5 | admission, session, routing, discovery, svtnmgmt |
 | effectful | 4 | tmux, drain, cmd/switchboard, cmd/sbctl |
 | **Total** | **18** | |
+
+## Revisions
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.0 | 2026-06-23 | architect | Initial draft |
+| 1.1 | 2026-06-24 | architect | Purity Rule 1: expanded `time` carve-out to explicitly permit duration-unit constants (`time.Millisecond`, etc.) alongside `time.Duration`; enumerated excluded wall-clock and scheduling functions; clarified that `_test.go` files may use the full `time` API. Resolves consistency F-003 (refs drbothen/vsdd-factory#260). |
