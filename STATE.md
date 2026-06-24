@@ -5,10 +5,9 @@ phase_step: wave-1-in-progress (S-1.02 step-2 stubs complete; pause point for co
 phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
-phase_3_active_wave: 1
 phase_3_completed_stories: [S-1.01, S-1.02]
 phase_3_active_stories: []
-phase_3_pause_point: "S-1.02 fully delivered. Wave 1 has 2/2 stories merged (S-1.01 #1@1c76160, S-1.02 #2@9e9a98a). Awaiting wave-1 integration gate (consistency-validator + HS-001 holdout + wave-adversary on merged develop tip 9e9a98a)."
+phase_3_pause_point: "Wave 1 closed (2/2 stories merged: S-1.01@1c76160, S-1.02@9e9a98a; gate PASS-WITH-DRIFT). Wave 2 begins — 3 stories, 18 pts (security foundation + session continuity). Read STORY-INDEX wave-2 row for exact story IDs; dispatch story-writer or implementer per per-story-delivery."
 s_1_02_merge_sha: 9e9a98a
 s_1_02_pr_number: 2
 s_1_02_alpha_tag: alpha-20260624-193019-9e9a98a
@@ -88,11 +87,14 @@ s_1_02_adversary_status: CONVERGED
 s_1_02_adversary_total_passes: 9
 s_1_02_adversary_total_findings: 39
 s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
-wave_1_integration_gate_status: in-progress
+wave_1_integration_gate_status: closed
 wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
 wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
 wave_1_holdout_HS_001_v1: FAIL (sequence-semantics wording defect)
-wave_1_holdout_HS_001_v2_pending: true
+wave_1_holdout_HS_001_v2: PASS (6/6, mean 1.00, critical-min 1.00)
+wave_1_gate_closed_at: 2026-06-24
+wave_1_gate_disposition: pass-with-drift (4 of 7 consistency findings fixed in burst 1; 3 remain in drift register; 2 wave-adversary mediums deferred to outer-assembler / refactor stories)
+phase_3_active_wave: 2
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
 
@@ -313,6 +315,34 @@ authoritative; `.factory/specs/` will derive from them via
 - F-027 [process-gap] — 4 of 6 kos frontier files have empty `content:` blocks (`question-asymmetric-channels`, `question-encryption-model`, `question-marvel-integration`, `question-timeslice-framing`). Lint at kos-edge creation time should disallow empty content. Filed upstream.
 
 
+## Wave-1 Gate — CLOSED 2026-06-24
+
+Final verdict: **PASS-WITH-DRIFT**.
+
+- **consistency-validator** — PASS-WITH-DRIFT, 7 findings, commit `c71c0b3`. 4 fixed in burst 1 (F-001 VP-041 b.Errorf gate, F-002 VP-041 metric-name, F-004 VP-016/051 stale API, F-005 VP-018 stale API). 3 remaining tracked in drift register.
+- **wave-adversary pass-01** — CONVERGED, 4 findings, commit `1d2993a`. 2 mediums deferred to outer-assembler / refactor stories (drift register), 2 low (per-story-scope / coverage marker).
+- **holdout HS-001** — v1.0 FAILED (sequence-semantics wording defect); patched to v1.1 (commit `44f5bc3`); re-evaluated v1.1 PASS (6/6, mean 1.00).
+
+### Burst-1 fixes (2026-06-24)
+
+| Commit | What |
+|--------|------|
+| `44f5bc3` | HS-001 v1.0 → v1.1 — sequence-semantics wording patch (PO) |
+| `e8af50a` | VP-016/018/041/051 → v1.1 — API drift + Phase-3 gate removal (architect) |
+| `1d2993a` | wave-adversary + holdout v1-FAIL reports persisted (state-manager) |
+| `b05880a` | STATE.md wave-1 keys + Drift Register added (state-manager) |
+| `<this commit>` | Wave-1 gate closure; HS-001 v1.1 PASS report; Wave 2 transition (state-manager) |
+
+### Wave-1 trajectory
+
+- Stories merged: 2/2 (S-1.01 @ 1c76160, S-1.02 @ 9e9a98a)
+- Adversary passes (S-1.02 only): 9 (trajectory 9→11→7→5→4→3→0→0→0)
+- Total findings resolved: 39 from S-1.02 + 4 from wave-1 gate (3 high consistency, 1 high holdout-driven) = ~43
+- Drift items deferred: 5 (3 consistency-validator remainder; 2 wave-adversary mediums)
+- Spec patches landed: BC-2.01.001 v1.0→1.1, BC-2.01.002 v1.1→1.3, VP-016 v1.0→1.1, VP-017 v1.0→1.1, VP-018 v1.0→1.1, VP-041 v1.0→1.1, VP-051 v1.0→1.1, VP-053 v1.0→1.2, story S-1.02 rev 1.0→1.5, HS-001 v1.0→v1.1
+
+Next: Wave 2 — read STORY-INDEX for wave-2 story IDs.
+
 ## Wave-1 Drift Register (2026-06-24)
 
 Findings from wave-1 integration gate that do NOT block wave-1 closure but require follow-up:
@@ -327,6 +357,9 @@ Findings from wave-1 integration gate that do NOT block wave-1 closure but requi
 
 ### Consistency-validator findings beyond F-001/F-002/F-004 (fixed in burst 1)
 - See `.factory/cycles/cycle-1/wave-1/consistency-validation.md` for the remaining 1 MED + 2 LOW (review when address-now decision is made).
+
+### Discovered during burst-2 holdout re-eval (2026-06-24)
+- **holdout-eval E-FRM/E-PRT namespace inconsistency (informational)** — HS-001 scenario references `E-FRM-001`/`E-FRM-002` but error-taxonomy supplement and frame package godoc use `E-PRT-001`/`E-PRT-002`. Sentinel-identity match held during eval; this is a documentation-namespace reconciliation, not an implementation defect. Route: PO to reconcile in a maintenance sweep.
 
 ## Non-blocking debt
 

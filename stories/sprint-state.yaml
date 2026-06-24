@@ -10,6 +10,17 @@ total_stories: 21
 total_points: 102
 waves: 7
 
+wave_status:
+  - wave: 1
+    status: closed
+    gate_disposition: pass-with-drift
+    closed_at: 2026-06-24
+    holdout_satisfaction_mean: 1.00
+    stories: [S-1.01, S-1.02]
+  - wave: 2
+    status: active
+    stories: [S-1.03, S-2.01, S-2.02]
+
 stories:
   - story_id: S-0.01
     title: "Port BMAD scaffolding as wave-0 baseline"
