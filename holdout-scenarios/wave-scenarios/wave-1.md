@@ -1,7 +1,7 @@
 ---
 document_type: holdout-scenario
 level: ops
-version: "1.0"
+version: "1.1"
 status: draft
 producer: story-writer
 timestamp: 2026-06-24T00:00:00
@@ -15,10 +15,12 @@ priority: must-pass
 behavioral_contracts: [BC-2.01.004, BC-2.01.001, BC-2.01.003]
 lifecycle_status: active
 introduced: v1.0.0-greenfield
-last_evaluated: null
+last_evaluated: 2026-06-24
 staleness_check: null
 stale_reason: null
 retired: null
+modified:
+  - "2026-06-24: Patched Step 5/6 wording to match BC-2.01.001 PC5 post-increment canonical vector. Resolves wave-1 holdout FAIL on sequence-semantics ambiguity."
 ---
 
 # Holdout Scenario HS-001: Wire Format Codec Round-Trip Under Adversarial Inputs
@@ -31,8 +33,8 @@ retired: null
 2. Each header is encoded via `EncodeOuterHeader` and immediately decoded via `ParseOuterHeader`.
 3. The decoded header must exactly match the original on all 6 fields.
 4. Additionally: three malformed inputs are presented — (a) 43-byte buffer, (b) 45-byte buffer, (c) 44-byte buffer with version=255. For (a) and (b): ParseOuterHeader must return error (E-FRM-001 for short, silence for oversized-but-parseable). For (c): ParseOuterHeader must return E-FRM-002.
-5. A HalfChannel is driven for 100 ticks with no payload. All 100 frames must have contiguous sequence numbers starting at 0.
-6. Two independent HalfChannels (upstream and downstream) are ticked 50 times each. Their sequence spaces must remain independent — ticking A never advances B.
+5. A HalfChannel (chanID 42, Upstream, 10ms interval) is driven for 100 ticks with no payload. The sequence counter is initialized at 0. The first emitted frame carries `ChanSeq = 1` (post-increment per BC-2.01.001 PC5 canonical vector "sequence 1..10"); subsequent frames must be strictly contiguous with delta 1. All 100 frames must therefore have `ChanSeq ∈ {1, 2, ..., 100}` in order, with payload zero-length and `FrameType == FrameTypeEmptyTick (0x02)`.
+6. Two independent HalfChannels (upstream chanID 42, downstream chanID 43) are ticked 50 times each — all Upstream ticks first, then all Downstream ticks. After the 50 Upstream ticks: `up.Seq() == 50` and the 50 Upstream frames have `ChanSeq` 1..50 in order. After the 50 Downstream ticks: `down.Seq() == 50` and the 50 Downstream frames have `ChanSeq` 1..50 in order (Downstream's counter is initialized at 0 independently, so its first emit is also 1). At no point does ticking one channel advance the other's counter: `up.Seq()` remains 50 throughout the Downstream ticks, and `down.Seq()` was 0 throughout the Upstream ticks.
 
 ## Behavioral Contract Linkage
 
@@ -70,16 +72,17 @@ func TestHoldoutWave1_MalformedInputs(t *testing.T) {
 
 func TestHoldoutWave1_HalfChannelContinuity(t *testing.T) {
     ch := NewHalfChannel()
-    for i := 0; i < 100; i++ {
+    for i := 1; i <= 100; i++ {
         f := ch.Tick(nil)
-        assert(f.Seq == uint32(i), "seq mismatch at tick %d: got %d", i, f.Seq)
+        // Post-increment: counter initialized at 0, first emit is 1 (BC-2.01.001 PC5)
+        assert(f.Seq == uint32(i), "seq mismatch at tick %d: got %d, want %d", i, f.Seq, i)
     }
 }
 ```
 
 ## Evaluation Rubric
 
-- **Functional correctness** (0.5): All 1000 round-trips produce identical outputs; malformed inputs return correct E-codes; 100-tick sequence is contiguous from 0.
+- **Functional correctness** (0.5): All 1000 round-trips produce identical outputs; malformed inputs return correct E-codes; 100-tick sequence is `ChanSeq ∈ {1..100}` (post-increment, counter initialized at 0 per BC-2.01.001 PC5).
 - **Edge case handling** (0.2): Version=255 rejected with E-FRM-002; 43-byte buffer rejected; half-channel sequence independent.
 - **Error quality** (0.2): Error codes match E-FRM-001, E-FRM-002 exactly (not generic errors).
 - **Performance** (0.1): 1000 round-trips complete in < 100ms.
@@ -93,3 +96,7 @@ func TestHoldoutWave1_HalfChannelContinuity(t *testing.T) {
 ## Failure Guidance
 
 "HOLDOUT LOW: HS-001 (satisfaction: 0.XX) — frame codec round-trip or HalfChannel tick sequence failed; check EncodeOuterHeader field order and HalfChannel sequence state initialization"
+
+## Canonical sequence semantic (reference)
+
+Sequence numbering follows BC-2.01.001 PC5: the counter is uint32 starting at 0. `Tick()` performs post-increment (`counter += 1; emit(counter)`), so the canonical 10-tick vector is `sequence 1..10`. VP-017/VP-053 harness skeletons (post pass-01 F-007) and the S-1.02 implementation reflect this. HS-001 v1.0 originally read "contiguous sequence numbers starting at 0" — that wording was ambiguous between "counter initialized at 0" and "first emitted seq is 0"; this revision (v1.1) makes the canonical choice (counter-initialized-at-0, first-emit-is-1) explicit. See wave-1 adversarial trail commit `e4fc8c9` and holdout-evaluator FAIL report `<persist-sha>` for the disagreement that surfaced the wording defect.
