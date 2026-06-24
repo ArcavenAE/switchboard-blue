@@ -79,7 +79,7 @@ func EncodeOuterHeader(h OuterHeader) [OuterHeaderSize]byte {
 }
 
 // ParseOuterHeader deserialises the first 44 bytes of b into an OuterHeader.
-// Returns ErrFrameTooShort if len(b) < 44, ErrVersionMismatch if the version
+// Returns ErrFrameTooShort if len(b) < 44, or ErrVersionMismatch if the version
 // major nibble (bits[7:4]) is non-zero. Minor-version differences are tolerated.
 func ParseOuterHeader(b []byte) (OuterHeader, error) {
 	if len(b) < OuterHeaderSize {
