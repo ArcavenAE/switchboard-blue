@@ -1,6 +1,7 @@
 package halfchannel_test
 
 import (
+	"bytes"
 	"errors"
 	"sort"
 	"testing"
@@ -15,6 +16,11 @@ import (
 // asserts this; the type system does. TestHalfChannelTick_ChanIDPropagation
 // (the test formerly named TestHalfChannelTick_OneFramePerCall) verifies
 // the ChanID propagation aspect of BC-2.01.001 — not the cardinality.
+//
+// VP-017 ("sequence increments by exactly 1 per tick") is NOT structurally
+// enforced — it requires runtime verification.
+// TestProperty_VP017_SingleFramePerTick exercises this invariant by
+// asserting f2.ChanSeq - f1.ChanSeq == 1 across consecutive ticks.
 
 // -----------------------------------------------------------------------------
 // AC-001 / BC-2.01.001 postcondition 1
@@ -152,6 +158,33 @@ func TestHalfChannelTick_DataFrameType(t *testing.T) {
 	if len(frame.Payload) == 0 {
 		t.Error("frame.Payload is empty, want non-empty for data frame")
 	}
+	if !bytes.Equal(frame.Payload, payload) {
+		t.Errorf("frame.Payload = %q, want %q", frame.Payload, payload)
+	}
+}
+
+// TestHalfChannelTick_PayloadZeroCopy pins the documented zero-copy contract.
+// Per halfchannel.go Enqueue godoc: "The payload is not copied; the caller
+// must not mutate it after passing it to Enqueue." This test verifies that
+// frame.Payload shares its backing array with the original slice.
+func TestHalfChannelTick_PayloadZeroCopy(t *testing.T) {
+	t.Parallel()
+	hc := halfchannel.New(0x100, halfchannel.Upstream, 10*time.Millisecond)
+	p := []byte("zero-copy test payload")
+	if err := hc.Enqueue(p); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	frame := hc.Tick()
+	if len(frame.Payload) == 0 {
+		t.Fatal("frame.Payload empty after Enqueue+Tick")
+	}
+	// Zero-copy contract: frame.Payload must share the backing array with p.
+	// Per halfchannel.go Enqueue godoc: "The payload is not copied; the
+	// caller must not mutate it after passing it to Enqueue."
+	if &frame.Payload[0] != &p[0] {
+		t.Errorf("frame.Payload[0] addr=%p, p[0] addr=%p — zero-copy contract violated (defensive copy?)",
+			&frame.Payload[0], &p[0])
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -228,23 +261,27 @@ func TestHalfChannelSequenceIncrement(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 // BenchmarkHalfChannelTickJitter measures the deviation of successive inter-tick
-// intervals from the configured tick interval over a fixed 1000-sample run.
-// It reports p99 jitter in milliseconds. VP-041 gate (≤ 2ms p99) is enforced
-// in the formal-verification phase; this benchmark records the metric only.
+// intervals from the configured tick interval. It reports p99 jitter in
+// milliseconds. VP-041 gate (≤ 2ms p99) is enforced in the formal-verification
+// phase; this benchmark records the metric only.
+//
+// The benchmark uses b.N so -benchtime controls the sample count:
+//
+//	-benchtime=1000x  →  ~1000 ticks (~10s wall-clock at 10ms/tick)
+//	-benchtime=2s     →  ~200 ticks (whatever fits in 2s)
 //
 // The benchmark drives its own cadence via time.Sleep — ARCH-09 is not violated
 // because the BENCHMARK (effectful glue) is what schedules ticks, not HalfChannel
 // itself. HalfChannel.Tick() remains pure-core.
 func BenchmarkHalfChannelTickJitter(b *testing.B) {
 	const interval = 10 * time.Millisecond
-	const samples = 1000
 	hc := halfchannel.New(0, halfchannel.Upstream, interval)
 
-	deviations := make([]time.Duration, samples)
+	deviations := make([]time.Duration, b.N)
 	b.ResetTimer()
 	prev := time.Now().UTC()
 
-	for i := 0; i < samples; i++ {
+	for i := 0; i < b.N; i++ {
 		// Sleep until the next tick boundary relative to prev.
 		target := prev.Add(interval)
 		if d := time.Until(target); d > 0 {
@@ -264,8 +301,11 @@ func BenchmarkHalfChannelTickJitter(b *testing.B) {
 	}
 	b.StopTimer()
 
+	if b.N == 0 {
+		return
+	}
 	sort.Slice(deviations, func(i, j int) bool { return deviations[i] < deviations[j] })
-	p99 := deviations[int(float64(samples)*0.99)]
+	p99 := deviations[int(float64(b.N)*0.99)]
 	b.ReportMetric(float64(p99)/float64(time.Millisecond), "jitter_p99_ms")
 }
 
@@ -401,26 +441,26 @@ func TestHalfChannelTick_MultiplePayloadsQueuedOneTick(t *testing.T) {
 // Property tests
 // -----------------------------------------------------------------------------
 
-// TestProperty_VP017_SingleFramePerTick verifies that every call to Tick
-// returns exactly one frame (no batching). The invariant is structural: the
-// return type is a single ChannelFrame value, and its ChanSeq matches the
-// post-tick Seq().
-// VP-017: invariant — every Tick returns exactly one frame.
+// TestProperty_VP017_SingleFramePerTick verifies that successive Tick calls
+// increment ChanSeq by exactly 1. VP-017 is NOT structurally enforced — the
+// return type enforces cardinality (VP-016), but the +1 increment is a runtime
+// invariant. This test asserts f.ChanSeq - prev.ChanSeq == 1 using uint32
+// modular subtraction, so it correctly handles the MaxUint32 → 0 wraparound.
+// VP-017: invariant — every Tick increments ChanSeq by exactly 1.
 func TestProperty_VP017_SingleFramePerTick(t *testing.T) {
 	t.Parallel()
 
 	const iterations = 10_000
 
-	hc := halfchannel.New(2000, halfchannel.Downstream, 10*time.Millisecond)
-
-	for i := range iterations {
+	hc := halfchannel.New(0xAAAA, halfchannel.Upstream, 10*time.Millisecond)
+	prev := hc.Tick()
+	for i := 1; i < iterations; i++ {
 		f := hc.Tick()
-		// The frame's own ChanSeq must equal the current Seq() (post-increment).
-		wantSeq := hc.Seq()
-		if f.ChanSeq != wantSeq {
-			t.Fatalf("VP-017 violated at iteration %d: frame.ChanSeq=%d but Seq()=%d",
-				i+1, f.ChanSeq, wantSeq)
+		if delta := f.ChanSeq - prev.ChanSeq; delta != 1 {
+			t.Fatalf("iter %d: f.ChanSeq=%d, prev.ChanSeq=%d, delta=%d, want 1",
+				i, f.ChanSeq, prev.ChanSeq, delta)
 		}
+		prev = f
 	}
 }
 
@@ -476,6 +516,7 @@ func TestHalfChannelTickInterval(t *testing.T) {
 // ADR-008 documented values. Any change must come with a matching ADR-008
 // revision.
 func TestTickIntervalConstants(t *testing.T) {
+	t.Parallel()
 	if halfchannel.MinTickInterval != 5*time.Millisecond {
 		t.Errorf("MinTickInterval = %v, want 5ms", halfchannel.MinTickInterval)
 	}
