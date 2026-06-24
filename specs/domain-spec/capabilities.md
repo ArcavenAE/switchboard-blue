@@ -124,13 +124,13 @@ available sessions over the SVTN. PTY fallback used when control mode is
 unavailable.
 _Anchor: PRD FR1; Domain-Specific §"Session Substrate." CAP-013 covers publishing because it is the source of all session traffic._
 
-**CAP-014** — Console session attach and detach (P1)
+**CAP-014** — Console session attach and detach (P0)
 A console attaches to a remote session by selecting it by name, not by
 specifying a host. It receives the downstream output stream and sends
 upstream keystrokes. Detach releases the session without closing it.
 _Anchor: PRD FR24–FR25; User Journey §Devon. CAP-014 covers attach/detach because it is the primary operator interaction._
 
-**CAP-015** — Read-only session access mode (P1)
+**CAP-015** — Read-only session access mode (P0)
 A console holding a read-only key receives the downstream output stream but
 its upstream channel is rejected at the access node. Scope may be per-session,
 per-access-node, or per-SVTN.
@@ -158,7 +158,7 @@ forwarding a console's upstream, it checks the console's public key against
 the session's authorization list.
 _Anchor: PRD FR26; Morphological Parameter 5. CAP-018 covers Tier 2 because session-level control is separate from network-level admission._
 
-**CAP-019** — Key lifecycle management (register, revoke, expire) (P1)
+**CAP-019** — Key lifecycle management (register, revoke, expire) (P0)
 Control nodes and admitted console nodes can register, revoke, and expire
 public keys against an SVTN with role designation (control, console, access).
 Key changes propagate via the router's distributed database.
@@ -208,7 +208,7 @@ A control node creates and destroys SVTNs. The first control key is
 bootstrapped locally on the E router; subsequent keys self-propagate.
 _Anchor: PRD FR32, FR46. CAP-023 covers lifecycle because SVTN creation precedes all other operations._
 
-**CAP-024** — Unified CLI operator interface (sbctl) (P2)
+**CAP-024** — Unified CLI operator interface (sbctl) (P0)
 `sbctl` is the single operator CLI for all four daemon types (router, access,
 console, control). It authenticates via OpenSSH keys and exposes router status,
 SVTN management, key management, session operations, console control, and

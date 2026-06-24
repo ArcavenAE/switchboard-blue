@@ -49,6 +49,7 @@ traces_to: '.factory/specs/prd.md'
 - **sbctl** — CLI command dispatch, output formatting
 - **svtn-mgmt** — SVTN create/destroy, key lifecycle management
 - **drain** — Router drain signal, node migration coordination
+- **switchboard** — Daemon entry point. Routes to mode-specific code; no business logic.
 
 ## Module Classification
 

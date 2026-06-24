@@ -39,12 +39,12 @@ kos_anchors:
 
 ## Description
 
-Every SVTN-scoped frame carries an 8-byte HMAC tag in the outer header, computed by the sending node using its `frame_auth_key` (derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256). The tag is the first 8 bytes of the 32-byte HMAC-SHA256 output. The first router that receives the frame verifies the tag before forwarding. Frames with invalid tags are rejected before forwarding — fail-closed. This ensures every forwarded frame originated from an admitted node holding the expected private key. See ADR-001 (amended) for the HKDF derivation details.
+Every SVTN-scoped frame carries an 8-byte HMAC tag in the outer header, computed by the sending node using its `frame_auth_key` (derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256). The tag is the first 8 bytes of the 32-byte HMAC-SHA256 output, computed over the full frame (outer header bytes 0–35 || channel header || payload), with hmac_tag bytes treated as zeros during computation. See ARCH-02 §HMAC tag. The first router that receives the frame verifies the tag before forwarding. Frames with invalid tags are rejected before forwarding — fail-closed. This ensures every forwarded frame originated from an admitted node holding the expected private key. See ADR-001 (amended) for the HKDF derivation details.
 
 ## Preconditions
 
 1. The sending node is admitted to the SVTN and has a valid admission key.
-2. The `frame_auth_key` is derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256 with info=`switchboard-frame-auth` and length=32 (see ADR-001 in ARCH-04 §HMAC keying). The HMAC tag is computed over the full frame (outer header fields + payload) using HMAC-SHA256 with `frame_auth_key`; the tag is the first 8 bytes of the 32-byte HMAC-SHA256 output.
+2. The `frame_auth_key` is derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256 with info=`switchboard-frame-auth` and length=32 (see ADR-001 in ARCH-04 §HMAC keying). The HMAC tag is computed over the full frame (outer header bytes 0–35 || channel header || payload), with hmac_tag bytes treated as zeros during computation, using HMAC-SHA256 with `frame_auth_key`; the tag is the first 8 bytes of the 32-byte HMAC-SHA256 output.
 3. The first router has the sending node's public key in its admitted key set.
 
 ## Postconditions
@@ -87,7 +87,7 @@ Frame arrival at the first router after transmission from the source node.
 |--------|----------|-------------|
 | VP-004, VP-005, VP-006 | For all admitted nodes: frames with correct HMAC are forwarded | proptest |
 | VP-004, VP-005, VP-006 | For all non-admitted sources: frames are dropped | proptest |
-| VP-004, VP-005, VP-006 | HMAC covers all outer header fields + payload | unit |
+| VP-004, VP-005, VP-006 | HMAC covers outer header bytes 0–35 + channel header + payload | unit |
 
 ## Traceability
 

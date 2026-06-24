@@ -85,9 +85,9 @@ The periodic timer fires on the configured tick interval boundary.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-016, VP-018, VP-041, VP-042 | For all tick intervals in [5ms, 50ms], exactly one frame is emitted per tick | proptest |
-| VP-016, VP-018, VP-041, VP-042 | Sequence number increments monotonically across all ticks | proptest |
-| VP-016, VP-018, VP-041, VP-042 | Empty-tick frames have zero-length payload field | unit |
+| VP-016 | For all tick intervals in [5ms, 50ms], exactly one frame is emitted per tick | proptest |
+| VP-017 | Sequence number increments monotonically across all ticks | proptest |
+| VP-018, VP-053 | Empty-tick frames have zero-length payload field | proptest |
 
 ## Traceability
 
@@ -116,4 +116,4 @@ The periodic timer fires on the configured tick interval boundary.
 
 ## VP Anchors
 
-- VP-016, VP-018, VP-041, VP-042
+- VP-016, VP-017, VP-018, VP-041, VP-042, VP-053

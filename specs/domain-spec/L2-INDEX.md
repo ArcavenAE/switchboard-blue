@@ -115,6 +115,6 @@ artifact for domain terminology.
 
 | Priority | Count | Items |
 |----------|-------|-------|
-| P0 (must-have) | 17 | CAP-001–CAP-008, CAP-010, CAP-013, CAP-016–CAP-018, CAP-020, CAP-020a, CAP-020b, CAP-028 |
-| P1 (should-have) | 9 | CAP-009, CAP-011–CAP-012, CAP-014–CAP-015, CAP-019, CAP-021–CAP-022, CAP-025 |
-| P2 (nice-to-have) | 4 | CAP-023–CAP-024, CAP-026–CAP-027 |
+| P0 (must-have) | 21 | CAP-001–CAP-008, CAP-010, CAP-013–CAP-020, CAP-020a, CAP-020b, CAP-024, CAP-028 |
+| P1 (should-have) | 6 | CAP-009, CAP-011–CAP-012, CAP-021–CAP-022, CAP-025 |
+| P2 (nice-to-have) | 3 | CAP-023, CAP-026–CAP-027 |

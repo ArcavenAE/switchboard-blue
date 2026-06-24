@@ -32,7 +32,9 @@ See ARCH-09 for the complete per-package classification.
 
 ## Provable Properties Catalog
 
-### P0 Properties (Must Prove — Security + Protocol Correctness)
+> Categorization here is by PROOF-METHOD bucket (proptest/integration/e2e/fuzz/benchmark), not by phase. For canonical phase classification (P0/P1/P2), see `VP-INDEX.md` and per-row "Phase" column in `ARCH-11-verification-coverage-matrix.md`. Phase indicates urgency (P0 = MVP-blocking); proof-method indicates verification technique (proptest = pure-core, integration = boundary, etc.).
+
+### Pure-Core Proptest Catalog (Must Prove — Pure Math Properties)
 
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
@@ -52,7 +54,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-014 | `DeriveNodeAddress` is deterministic: same (svtn_id, pubkey) always produces same address | internal/frame | proptest |
 | VP-015 | Outer header payload field is treated as opaque bytes by all router code paths: no attempt to parse channel header | internal/routing | fuzz (harness + manual audit) |
 
-### P1 Properties (Should Prove — Session Correctness)
+### Boundary/Integration Proptest Catalog (Should Prove — State + I/O Properties)
 
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
@@ -92,14 +94,14 @@ See ARCH-09 for the complete per-package classification.
 > VP catalog total = 57; full BC→VP coverage in ARCH-11. VP-043 through VP-057
 > were added in Phase 1c-refinement to close coverage gaps.
 
-### P0 Properties Added in Phase 1c-refinement
+### Phase 1c-refinement: Pure-Core Additions
 
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
 | VP-053 | K empty-tick frames → K frames with contiguous sequence numbers | internal/halfchannel | proptest |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | internal/admission | proptest |
 
-### P1 Properties Added in Phase 1c-refinement (Should Prove)
+### Phase 1c-refinement: Boundary/Integration Additions
 
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|

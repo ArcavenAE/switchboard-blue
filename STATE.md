@@ -1,8 +1,9 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-adversary-pass-7
+phase_step: pending-adversary-pass-8
 refinement_round_7_complete: true
+refinement_round_8_complete: true
 refinement_round_2_complete: true
 refinement_round_3_complete: true
 refinement_round_4_complete: true
@@ -134,5 +135,7 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 - Cycle 1 round-6 refinement: all 17 pass-5 findings closed across architect + PO refinement (split into 4 small bursts due to API connection drops).
 - Pass 6 findings: 14 (0 critical, 7 high, 6 medium, 1 low)
 - Cycle 1 round-7 refinement: all 14 pass-6 findings closed across 3 PO bursts + 1 architect burst. Priority drift (4 BCs P1→P0), BC contradiction fixes (BC-2.05.004, BC-2.06.001), error-taxonomy exit codes (E-ADM-011/012/013/014, E-CFG-006), interface-definitions --yes attribution + destructive sbctl svtn ops removal, module-criticality drop-cache placement, BC-2.09.003 DI-007 trace removal, 5 BCs missing VP rows added, BC-2.05.007 phantom sbctl debug removed, ARCH-11 module counts corrected.
-- Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → ? (Pass 7 pending; convergence target = 3 consecutive zero-findings passes)
+- Pass 7 findings: 7 (0 critical, 2 high, 4 medium, 1 low)
+- Cycle 8 refinement: all 7 pass-7 findings closed.
+- Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → ? (Pass 8 pending; convergence target = 3 consecutive zero-findings passes)
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-03.md`
