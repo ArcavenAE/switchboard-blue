@@ -88,6 +88,11 @@ s_1_02_adversary_status: CONVERGED
 s_1_02_adversary_total_passes: 9
 s_1_02_adversary_total_findings: 39
 s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
+wave_1_integration_gate_status: in-progress
+wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
+wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
+wave_1_holdout_HS_001_v1: FAIL (sequence-semantics wording defect)
+wave_1_holdout_HS_001_v2_pending: true
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
 
@@ -186,6 +191,7 @@ Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy 
 
 - Wave 1 integration gate (after S-1.02 merges): consistency-validator + wave-1 holdout HS-001 + wave-adversary on the merged S-1.01+S-1.02 diff.
 - Phase 3 Wave 4 will be first multi-story fan-out opportunity (4 stories: S-4.01, S-4.02, S-4.03, S-6.01 in parallel after Wave 2+3 complete).
+- Wave-1 integration gate burst 1 launched 2026-06-24: PO patches HS-001 to v1.1 (sequence-semantics wording); architect fixes VP-041/VP-016/VP-051 drift; state-manager persists adversary + holdout reports. Burst 2 will re-run HS-001 v1.1 holdout-evaluator.
 
 ## S-1.02 Closed — 2026-06-24
 
@@ -306,6 +312,21 @@ authoritative; `.factory/specs/` will derive from them via
 - Q: PE router-to-router Noise — share node admission keypair, or separate router identity?
 - F-027 [process-gap] — 4 of 6 kos frontier files have empty `content:` blocks (`question-asymmetric-channels`, `question-encryption-model`, `question-marvel-integration`, `question-timeslice-framing`). Lint at kos-edge creation time should disallow empty content. Filed upstream.
 
+
+## Wave-1 Drift Register (2026-06-24)
+
+Findings from wave-1 integration gate that do NOT block wave-1 closure but require follow-up:
+
+### Deferred to outer-assembler story (TBD)
+- **wave-adversary F-001 (MED)** — Payload-MTU contract gap between halfchannel.Enqueue and frame.OuterHeader.PayloadLen (uint16 max ~65523 with channel header). Route: PO writes contract into BC; halfchannel either documents caller-side responsibility or rejects over-MTU.
+- **wave-adversary F-003 (LOW)** — No composed wire-format test today. Coverage marker for outer-assembler story.
+- **wave-adversary F-004 (LOW, per-story-scope)** — ARCH-02 channel-header serializer not implemented. Architect-territory for outer-assembler story.
+
+### Deferred to type-safety refactor story (TBD)
+- **wave-adversary F-002 (MED)** — Introduce `type FrameType byte` named type in internal/frame; retype constants; add `Valid()` method; have `ParseOuterHeader` reject unknown values with new ErrInvalidFrameType sentinel.
+
+### Consistency-validator findings beyond F-001/F-002/F-004 (fixed in burst 1)
+- See `.factory/cycles/cycle-1/wave-1/consistency-validation.md` for the remaining 1 MED + 2 LOW (review when address-now decision is made).
 
 ## Non-blocking debt
 
