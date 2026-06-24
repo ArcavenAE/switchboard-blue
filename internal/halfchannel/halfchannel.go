@@ -56,12 +56,12 @@ type ChannelFrame struct {
 // scheduling layer MUST ensure Tick() and Enqueue() are called from a
 // single goroutine or under external synchronisation.
 type HalfChannel struct {
-	chanID       uint32
-	direction    Direction
-	seq          uint32
-	pending      [][]byte
-	tickInterval time.Duration
-	mtu          int
+	chanID       uint32        //nolint:unused // used by implementer in Tick/Seq/Enqueue
+	direction    Direction     //nolint:unused // used by implementer in Tick
+	seq          uint32        //nolint:unused // used by implementer in Tick/Seq
+	pending      [][]byte      //nolint:unused // used by implementer in Enqueue/Tick
+	tickInterval time.Duration //nolint:unused // used by implementer in TickInterval
+	mtu          int           //nolint:unused // used by implementer in Tick for payload truncation
 }
 
 // New constructs a HalfChannel with the given channel identifier, direction,
