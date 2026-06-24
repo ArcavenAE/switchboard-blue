@@ -135,7 +135,3 @@ defined in interface-definitions.md. Error objects include the E-code.
 
 If the socket is absent, sbctl falls back to TCP on `--target`.
 
-## PRD Section 7 RTM — Module Column
-
-The Requirements Traceability Matrix (PRD §7) `Module(s)` column is now populated
-from the BC→Package mapping table above. This backfill is complete.

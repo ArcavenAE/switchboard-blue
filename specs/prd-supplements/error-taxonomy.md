@@ -58,6 +58,9 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-009 | ADM | broken | 1 | "insufficient authority for operation <operation>: key <key_fingerprint> has role <role>" | BC-2.05.004, BC-2.07.002 |
 | E-ADM-010 | ADM | broken | 1 | "authentication failed: key <key_fingerprint> not authorized for daemon at <address>" | BC-2.07.002 |
 | E-ADM-011 | ADM | broken | 0 (continues) | "permission denied: <role> key cannot revoke <target_role> key (control > console > readonly)" | BC-2.05.004 |
+| E-ADM-012 | ADM | broken | 0 | "key already registered: pubkey <key_fingerprint> already exists for SVTN <svtn_id>" | BC-2.05.004 (register-key) |
+| E-ADM-013 | ADM | broken | 0 | "key not found: no key with fingerprint <key_fingerprint> registered in SVTN <svtn_id>" | BC-2.05.004 (revoke-key) |
+| E-ADM-014 | ADM | broken | 0 | "bootstrap key mismatch: provided key does not match SVTN <svtn_id> bootstrap" | ADR-004 (recover) |
 
 ### CFG — Configuration
 
@@ -68,6 +71,7 @@ traces_to: '.factory/specs/prd.md'
 | E-CFG-003 | CFG | broken | 1 | "invalid upstream router address: <addr>. Expected format: <ip>:<port>" | BC-2.09.001 |
 | E-CFG-004 | CFG | broken | 1 | "config file not found: <path>" | BC-2.09.003 |
 | E-CFG-005 | CFG | broken | 1 | "config parse error: invalid YAML at line <N>: <detail>" | FM-010, BC-2.09.003 |
+| E-CFG-006 | CFG | broken | 1 | "--yes used without --confirm target: specify --confirm=<svtn-short-id> or omit --yes" | interface-definitions.md sbctl admin |
 
 ### NET — Network
 

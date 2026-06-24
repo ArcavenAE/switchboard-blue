@@ -37,7 +37,7 @@ See ARCH-09 for the complete per-package classification.
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
 | VP-001 | `ParseOuterHeader` and `EncodeOuterHeader` are inverses: decode(encode(x)) == x for all valid headers | internal/frame | proptest |
-| VP-002 | `ParseOuterHeader` rejects any byte sequence with `version_major != 1` with ErrVersionMismatch | internal/frame | proptest |
+| VP-002 | `ParseOuterHeader` rejects any byte sequence with `version_major != 0` with ErrVersionMismatch | internal/frame | proptest |
 | VP-003 | `EncodeOuterHeader` produces exactly 44 bytes for all valid inputs | internal/frame | proptest |
 | VP-004 | `ComputeHMAC` and `VerifyHMAC` are consistent: VerifyHMAC(key, frame, ComputeHMAC(key, frame)) == true | internal/hmac | proptest |
 | VP-005 | `VerifyHMAC` returns false for any single-bit flip in the frame payload | internal/hmac | fuzz |

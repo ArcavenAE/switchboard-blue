@@ -34,7 +34,7 @@ pure-core, they do not implement logic.**
 
 | Package | Bucket | Rationale | Formal Verification Target |
 |---------|--------|-----------|---------------------------|
-| `internal/frame` | **pure-core** | Encoding/decoding is a pure transformation over byte slices and structs. No I/O, no state. | Yes — proptest + fuzz (VP-001–003, VP-014, VP-015) |
+| `internal/frame` | **pure-core** | Encoding/decoding is a pure transformation over byte slices and structs. No I/O, no state. | Yes — proptest + fuzz (VP-001–003, VP-014) |
 | `internal/hmac` | **pure-core** | MAC computation is a pure function: `(key, data) → tag`. No I/O. | Yes — proptest + fuzz (VP-004–006) |
 | `internal/config` | **pure-core** | Config parsing and validation are pure: `([]byte YAML) → (Config, []error)`. No file I/O in the pure layer; file reading is in the caller. | Yes — proptest (VP-028–029) |
 | `internal/halfchannel` | **pure-core** | The `HalfChannel` state machine is pure: `Tick(state, payload) → (newState, frame)`. The ticker goroutine is in the effectful caller. | Yes — proptest (VP-016–018) |
@@ -45,7 +45,7 @@ pure-core, they do not implement logic.**
 | `internal/metrics` | **pure-core** | Quality indicator computation: `(path_metrics, thresholds) → QualityState`. Pure transition function. | Yes — proptest (VP-027) |
 | `internal/admission` | **boundary** | Holds admitted key set (mutable under mutex). Admission logic is pure; the key set is mutable state. Nonce verification is deterministic given the nonce store. | Partial — proptest for logic (VP-007–009), integration for key store mutation |
 | `internal/session` | **boundary** | Holds per-session authorized key list (mutable under mutex). Authorization logic is pure; the key list is mutable state. | Partial — proptest for auth logic (VP-012–013), integration for lifecycle |
-| `internal/routing` | **boundary** | Holds SVTN forwarding table and admitted node map (mutable under mutex). Routing decisions are pure; the forwarding table is mutable state. | Partial — proptest for routing logic (VP-010–011), integration for SVTN isolation |
+| `internal/routing` | **boundary** | Holds SVTN forwarding table and admitted node map (mutable under mutex). Routing decisions are pure; the forwarding table is mutable state. | Partial — proptest for routing logic (VP-010–011), fuzz for channel header opacity (VP-015), integration for SVTN isolation |
 | `internal/discovery` | **boundary** | Parses presence advertisements; maintains session list (mutable). Presence serialization/deserialization is pure. | Integration tests |
 | `internal/svtnmgmt` | **boundary** | Manages SVTN lifecycle and key registration. Calls into `internal/admission` for key store mutations. | Integration tests |
 | `internal/tmux` | **effectful** | Connects to tmux via Unix socket. Reads `%output` events. Manages the control mode connection lifecycle. No business logic in this package. | Integration + race detector |

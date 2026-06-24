@@ -30,7 +30,7 @@ modified:
 | BC-2.01.002 | Empty-tick frame is a valid liveness signal | internal/halfchannel | VP-018, VP-053 | proptest | P0 |
 | BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-017, VP-051 | proptest | P0 |
 | BC-2.01.004 | 44-byte outer header encoding and decoding | internal/frame | VP-001, VP-003 | proptest | P0 |
-| BC-2.01.005 | Channel header opaque to routers | internal/frame | VP-015 | fuzz + audit | P0 |
+| BC-2.01.005 | Channel header opaque to routers | internal/routing | VP-015 | fuzz + audit | P0 |
 | BC-2.01.006 | Session identity cryptographic derivation | internal/frame | VP-014 | proptest | P0 |
 | BC-2.01.007 | Session continuity across IP change | internal/admission | VP-036 | e2e | P0 |
 | BC-2.02.001 | Duplicate-and-race: same frame on two paths | internal/multipath | VP-024 | proptest | P0 |
@@ -87,16 +87,16 @@ VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
-| internal/frame | 4 | proptest (3), fuzz (1) |
+| internal/frame | 3 | proptest (3) |
 | internal/hmac | 3 | proptest (2), fuzz (1) |
 | internal/halfchannel | 7 | proptest (5), benchmark (2) |
-| internal/arq | 4 | proptest (3), proptest-PE (1) |
+| internal/arq | 4 | proptest (4) |
 | internal/replay | 2 | proptest (2) |
-| internal/multipath | 4 | proptest (3), integration (1) |
+| internal/multipath | 4 | proptest (2), e2e (1), integration (1) |
 | internal/paths | 1 | proptest (1) |
 | internal/metrics | 3 | proptest (1), integration (2) |
 | internal/admission | 5 | proptest (4), e2e (1) |
-| internal/routing | 4 | proptest (2), fuzz+audit (1), e2e (1) |
+| internal/routing | 5 | proptest (2), fuzz+audit (2), e2e (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
 | internal/tmux | 2 | integration (2) |
 | internal/config | 3 | proptest (2), e2e (1) |

@@ -16,12 +16,11 @@ inputDocuments:
 kos_anchors:
   - elem-single-binary-three-modes
   - elem-node-router-architecture
-traces_to: ARCH-INDEX.md
 ---
 
 # ARCH-01: Core Services
 
-## Single Binary, Six Runtime Modes
+## Single Binary, Six Subcommands
 
 Per elem-single-binary-three-modes, one binary serves all deployment roles.
 Mode is selected by subcommand, not by build flags (except P router).
