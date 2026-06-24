@@ -39,7 +39,7 @@ kos_anchors:
 
 ## Description
 
-Control nodes and admitted console nodes can manage the public key registry for an SVTN: registering new keys (with role designation), revoking existing keys, and setting expiry dates. Key changes propagate via the router's distributed key store to all routers serving the SVTN. Registration allows a new node to join; revocation removes a node's SVTN membership; expiry sets an automatic future revocation.
+Control nodes can manage the public key registry for an SVTN: registering new keys (with role designation), revoking existing keys, and setting expiry dates. Per ADR-004, key management is exclusive to the control node; console and access nodes have no key-management capability. Key changes propagate via the router's distributed key store to all routers serving the SVTN. Registration allows a new node to join; revocation removes a node's SVTN membership; expiry sets an automatic future revocation.
 
 ## Preconditions
 

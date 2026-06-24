@@ -93,7 +93,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | Field | Value |
 |-------|-------|
 | L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
-| L2 Domain Invariants | DI-007 (outer header format stability — config errors at startup prevent mismatched protocol state) |
+| L2 Domain Invariants | (none directly; anchored to FM-010 via capability CAP-028) |
 | Architecture Module | internal/config |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. Anchored to FM-010 (deployment misconfig). |

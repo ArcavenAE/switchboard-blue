@@ -88,6 +88,7 @@ Frame ready for transmission in the send queue.
 | VP-024 | At most 2 paths used per frame dispatch | unit |
 | VP-024 | Selected paths are the two lowest-RTT ranked paths | proptest |
 | VP-024 | Frame identical on both paths (same bytes) | unit |
+| VP-042 | Keystroke-to-echo: p99 ≤ 100ms | benchmark |
 
 ## Traceability
 

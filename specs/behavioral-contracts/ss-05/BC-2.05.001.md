@@ -91,6 +91,7 @@ Node initiates a connection to the router and begins the admission handshake.
 | VP-007, VP-009 | Private key never appears in network traffic during admission | property/audit |
 | VP-007, VP-009 | Admission fails for any key not in the admitted set | proptest |
 | VP-007, VP-009 | Nonce is unique and single-use | unit |
+| VP-008 | Admission fails for unregistered key | proptest |
 
 ## Traceability
 

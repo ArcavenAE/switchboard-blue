@@ -88,6 +88,7 @@ Channel establishment; ongoing operation of an active terminal session.
 | VP-017, VP-051 | Upstream and downstream sequence spaces never share values | proptest |
 | VP-017, VP-051 | Upstream loss does not trigger downstream retransmit | integration |
 | VP-017, VP-051 | Each half-channel's tick fires independently | proptest |
+| VP-016 | HalfChannel.Tick emits exactly one frame per tick | proptest |
 
 ## Traceability
 

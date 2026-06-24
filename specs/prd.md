@@ -138,9 +138,9 @@ Key architectural invariants: every router sees only outer-header metadata (no s
 |-------|-------|----------|-------------|
 | BC-2.04.001 | Access node connects to local tmux via control mode and publishes sessions over SVTN | P0 | E |
 | BC-2.04.002 | Access node falls back to PTY proxy when tmux control mode unavailable | P0 | E |
-| BC-2.04.003 | Console attaches to session by name; receives downstream stream and sends upstream keystrokes | P1 | E |
-| BC-2.04.004 | Console detach releases session without closing it; session continues on access node | P1 | E |
-| BC-2.04.005 | Read-only console receives downstream stream; upstream keystrokes are rejected by access node | P1 | E |
+| BC-2.04.003 | Console attaches to session by name; receives downstream stream and sends upstream keystrokes | P0 | E |
+| BC-2.04.004 | Console detach releases session without closing it; session continues on access node | P0 | E |
+| BC-2.04.005 | Read-only console receives downstream stream; upstream keystrokes are rejected by access node | P0 | E |
 | BC-2.04.006 | Two or more consoles may subscribe to the same session output simultaneously | P0 | E |
 
 > Full contracts: `behavioral-contracts/ss-04/BC-2.04.001.md` – `BC-2.04.006.md`
@@ -152,7 +152,7 @@ Key architectural invariants: every router sees only outer-header metadata (no s
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | P0 | E |
 | BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | P0 | E |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | P0 | E |
-| BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | P1 | E |
+| BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | P0 | E |
 | BC-2.05.005 | HMAC frame authentication at first router boundary | P0 | E |
 | BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | P0 | E |
 | BC-2.05.007 | Node private keys never transit the network under any condition | P0 | E |
@@ -315,14 +315,14 @@ Summary: Error codes follow `E-<subsystem>-NNN` convention. 12 FM-NNN failure mo
 | BC-2.03.003 | CAP-011, CAP-012 | session-discovery | P1 | PE | integration |
 | BC-2.04.001 | CAP-013 | session-access | P0 | E | integration/e2e |
 | BC-2.04.002 | CAP-013 | session-access | P0 | E | integration |
-| BC-2.04.003 | CAP-014 | session-access | P1 | E | integration/e2e |
-| BC-2.04.004 | CAP-014 | session-access | P1 | E | integration |
-| BC-2.04.005 | CAP-015 | session-access | P1 | E | integration |
+| BC-2.04.003 | CAP-014 | session-access | P0 | E | integration/e2e |
+| BC-2.04.004 | CAP-014 | session-access | P0 | E | integration |
+| BC-2.04.005 | CAP-015 | session-access | P0 | E | integration |
 | BC-2.04.006 | CAP-016 | session-access | P0 | E | integration/e2e |
 | BC-2.05.001 | CAP-017 | admission-security | P0 | E | unit/integration |
 | BC-2.05.002 | CAP-017 | admission-security | P0 | E | unit/integration/property |
 | BC-2.05.003 | CAP-018 | admission-security | P0 | E | unit/integration |
-| BC-2.05.004 | CAP-019 | admission-security | P1 | E | integration |
+| BC-2.05.004 | CAP-019 | admission-security | P0 | E | integration |
 | BC-2.05.005 | CAP-020 | admission-security | P0 | E | unit/property/fuzz |
 | BC-2.05.006 | CAP-020b | admission-security | P0 | E | integration/property |
 | BC-2.05.007 | CAP-020a | admission-security | P0 | E | unit/property |

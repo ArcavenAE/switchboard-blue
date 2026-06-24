@@ -61,11 +61,10 @@ sbctl svtn destroy --id=<svtn_id>               # Destroy an SVTN
 sbctl svtn list                                  # List known SVTNs
 sbctl svtn status --id=<svtn_id>                # SVTN status and admitted node count
 
-# Key Management
-sbctl svtn keys register --key=<pubkey_path> --role=<control|console|access> [--svtn=<id>]
-sbctl svtn keys revoke --key=<pubkey_path> [--svtn=<id>]
+# Key Management (read-only; destructive ops exclusively via sbctl admin)
 sbctl svtn keys list [--svtn=<id>]
-sbctl svtn keys expire --key=<pubkey_path> --at=<timestamp> [--svtn=<id>]
+# NOTE: Destructive key operations (register/revoke/expire) are exclusively via
+# `sbctl admin` (operator-only with --confirm gating). See `sbctl admin` table below.
 
 # Session Operations
 sbctl sessions list [--svtn=<id>]               # List all SVTN sessions
@@ -108,7 +107,7 @@ Operator-only subcommand requiring `--confirm` token. Used for SVTN key manageme
 
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
-Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning (E-CFG-006).
+Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
 
 ## Exit Code Semantics
 

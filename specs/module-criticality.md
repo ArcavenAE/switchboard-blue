@@ -37,11 +37,11 @@ traces_to: '.factory/specs/prd.md'
 - **admission** — Tier 1 signed-challenge admission, admitted key set management
 - **session-auth** — Tier 2 per-session authorization, read-only enforcement
 - **halfchannel** — Timeslice clock, upstream/downstream state machines, tick regularity
-- **multipath** — Duplicate-and-race dispatch, receiver deduplication
+- **multipath** — Duplicate-and-race dispatch, receiver deduplication, drop cache
 - **paths** — Per-path RTT/loss metrics, keep-alive, path ranking
 - **arq** — Downstream ARQ with piggybacked ACK/SACK
 - **replay** — Upstream idempotent replay window
-- **routing** — Router split-horizon, drop cache, per-SVTN frame partitioning
+- **routing** — Router split-horizon, per-SVTN frame partitioning
 - **discovery** — Presence advertisement, session enumeration
 - **metrics** — Quality indicator computation, threshold logic
 - **tmux-control** — tmux control mode integration, PTY fallback

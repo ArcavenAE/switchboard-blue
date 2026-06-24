@@ -88,6 +88,7 @@ Timeslice clock fires with empty application data queue.
 | VP-053 | K consecutive empty ticks emit K frames with contiguous seq nums, EMPTY_TICK type, zero payload | proptest |
 | VP-052 | Missing expected tick within deadline triggers quality indicator downgrade (Green→Yellow, Yellow→Red) | integration |
 | VP-016 | Router routes empty-tick frames via same half-channel emit path as data frames (one frame per tick) | proptest |
+| VP-018 | HalfChannel emits empty frame when no payload | proptest |
 
 ## Traceability
 

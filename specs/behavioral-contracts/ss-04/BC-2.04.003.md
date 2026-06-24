@@ -91,6 +91,7 @@ Console operator runs `sbctl sessions attach <session-name>` or equivalent API c
 | VP-033 | Tier 2 authorization checked before channel established | integration |
 | VP-033 | Downstream stream starts immediately on successful attach | e2e |
 | VP-033 | Explicit error returned (not timeout) when session not found | unit |
+| VP-012 | SessionAuth rejects unauthorized console key | proptest |
 
 ## Traceability
 

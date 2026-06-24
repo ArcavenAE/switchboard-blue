@@ -65,7 +65,7 @@ Any operation involving the private key: admission challenge signing, HMAC compu
 
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
-| EC-001 | Operator runs `sbctl debug --export-keys` | Command succeeds for public key export only. Private key is never included in any export output. If private key export is requested, E-CFG-002 "private key export not supported". |
+| EC-001 | Operator attempts to extract private key material via any code path (no such CLI command exists per interface-definitions.md; this is a defensive test that any extraction attempt fails with E-CFG-002) | Any code path that reads the private key must not pass it to any network I/O function, serializer, or logger. If a hypothetical extraction command were invoked, E-CFG-002 "private key export not supported" is returned and no private key bytes are emitted. |
 | EC-002 | Crash dump / core dump | Implementation must not include private key material in crash reports. Private key material should be kept in memory regions marked non-dumpable (OS-specific; implementation detail). |
 | EC-003 | Error in HMAC computation; error logged | Log entry includes error type and SVTN ID; never includes the key bytes. |
 | EC-004 | Diagnostic trace mode enabled | Even in maximum verbosity trace mode, private key bytes are never output. This must be enforced by code review, not configuration. |
