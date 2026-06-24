@@ -11,7 +11,7 @@ bc_id: BC-2.05.004
 subsystem: admission-security
 architecture_module: internal/svtnmgmt
 capability: CAP-019
-priority: P1
+priority: P0
 criticality: critical
 scope_phase: E
 origin: greenfield

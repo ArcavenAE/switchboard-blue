@@ -9,7 +9,7 @@ timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.08.001
 subsystem: console-operations
-architecture_module: cmd/sbctl
+architecture_module: internal/session
 capability: CAP-025
 priority: P1
 criticality: high
@@ -95,7 +95,7 @@ Operator runs `sbctl console attach|detach|switch|navigate`.
 |-------|-------|
 | L2 Capability | CAP-025 ("Remote console control plane") per capabilities.md §CAP-025 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced — still applies via the console daemon's key) |
-| Architecture Module | cmd/sbctl |
+| Architecture Module | internal/session |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-025 ("Remote console control plane") per capabilities.md §CAP-025 — this BC specifies the remote controllability that CAP-025 defines as "remotely controllable via sbctl: attach, detach, switch session, navigate" |
 

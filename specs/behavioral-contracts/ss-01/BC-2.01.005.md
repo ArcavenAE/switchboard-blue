@@ -89,7 +89,7 @@ Frame arrival at a router; frame arrival at an endpoint.
 | Input | Expected Output | Category |
 |-------|----------------|----------|
 | Router receives frame; inspects forwarding | Router reads bytes 0–43 only; bytes 44+ untouched | happy-path |
-| Endpoint receives frame; parses channel header at offset 44 | channel_id, sequence, timestamp, fec_meta, flags correctly extracted | happy-path |
+| Endpoint receives frame; parses channel header at offset 44 | chan_id, chan_seq, flags (FEC_present/ARQ_req/SACK_present), sack_bitmap (when present) correctly extracted | happy-path |
 | Channel header with unknown TLV type 0xFF | Endpoint skips TLV cleanly; no error; frame processed normally | edge-case |
 | Router diagnostic query via `sbctl router frames --svtn=X` | Returns: src_addr, dst_addr, frame_type, frame_count, timestamp. No channel header fields. | happy-path |
 

@@ -83,6 +83,7 @@ Frame arrives at receiver endpoint.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
+| VP-024 | Receiver delivers first-arriving copy, silently discards second | integration |
 | VP-054 | First-arriving copy delivered; identical duplicate discarded silently with no ACK side-effects | integration |
 | VP-025 | Deduplication window bounded (drop cache never exceeds capacity; ≥1s history covered by bounded cache) | proptest |
 | VP-054 | Discarded duplicates produce no ACK side-effects (verified in VP-054 harness ackRecorder assertion) | integration |

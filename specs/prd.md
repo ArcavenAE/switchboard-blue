@@ -187,7 +187,7 @@ Key architectural invariants: every router sees only outer-header metadata (no s
 
 > Full contract: `behavioral-contracts/ss-08/BC-2.08.001.md`
 
-### 2.09 Deployment Operations (CAP-026–CAP-027)
+### 2.09 Deployment Operations (CAP-026–CAP-028)
 
 | BC ID | Title | Priority | Scope Phase |
 |-------|-------|----------|-------------|

@@ -11,7 +11,7 @@ bc_id: BC-2.04.004
 subsystem: session-access
 architecture_module: internal/session
 capability: CAP-014
-priority: P1
+priority: P0
 criticality: critical
 scope_phase: E
 origin: greenfield

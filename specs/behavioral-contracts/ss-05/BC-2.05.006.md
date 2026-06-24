@@ -56,7 +56,7 @@ A node admitted to SVTN-A cannot receive or observe any frames from SVTN-B, even
 
 1. **DI-005**: Cross-SVTN visibility requires possession of keys registered against both SVTNs. There is no single-key cross-SVTN access path.
 2. SVTN ID in the frame outer header is router-visible metadata that enforces routing isolation.
-3. `frame_auth_key` (per-node-per-SVTN HKDF derivation) is scoped per `(node_admission_pubkey, svtn_id)` pair: a node's key for SVTN-A is cryptographically distinct from its key for SVTN-B.
+3. `frame_auth_key` (per-node-per-SVTN HKDF derivation) is scoped per `(node_admission_pubkey, svtn_id)` pair with info=`switchboard-frame-auth` and length=32 (see ADR-001 in ARCH-04 §HMAC keying): a node's key for SVTN-A is cryptographically distinct from its key for SVTN-B.
 
 ## Trigger
 
@@ -95,7 +95,7 @@ Frame routing decision at the router when multiple SVTNs share the router.
 | L2 Domain Invariants | DI-005 (SVTN cryptographic isolation), DI-003 (router compromise → availability/quality, not content) |
 | Architecture Module | internal/routing |
 | Stories | [filled by story-writer] |
-| Architecture Decision | ADR-001 (amended): per-(node, svtn) HMAC keying via HKDF-SHA256 is the mechanism by which SVTN isolation is enforced — a node's frame_auth_key for SVTN-A is cryptographically distinct from its key for SVTN-B |
+| Architecture Decision | ADR-001 (amended): per-(node, svtn) HMAC keying via HKDF-SHA256 with info=`switchboard-frame-auth` and length=32 (ARCH-04 §HMAC keying) is the mechanism by which SVTN isolation is enforced — a node's frame_auth_key for SVTN-A is cryptographically distinct from its key for SVTN-B |
 | Capability Anchor Justification | CAP-020b ("SVTN cryptographic isolation") per capabilities.md §CAP-020b — this BC specifies the per-(node, SVTN) HMAC keying as the mechanism that enforces SVTN isolation, which is exactly what CAP-020b defines |
 
 ## Related BCs

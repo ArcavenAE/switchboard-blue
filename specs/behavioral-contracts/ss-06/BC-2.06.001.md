@@ -50,8 +50,8 @@ Each active session displays a quality indicator (green/yellow/red) at the conso
 ## Postconditions
 
 1. After each metric update cycle, the quality indicator is recomputed.
-2. Green: best path RTT p99 < 100ms AND loss < 5%.
-3. Yellow: best path RTT p99 in [100ms, 500ms] OR loss in [5%, 20%].
+2. Green: best path RTT p99 ≤ 100ms AND loss ≤ 5%.
+3. Yellow: best path RTT p99 in (100ms, 500ms] OR loss in (5%, 20%].
 4. Red: all paths RTT p99 > 500ms OR loss > 20% OR no paths available.
 5. The indicator is surfaced via `sbctl sessions status` and in the console's session list view.
 
@@ -89,7 +89,7 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
 | VP-027 | Quality indicator is always one of: green, yellow, red | unit |
-| VP-027 | Green threshold: RTT p99 < 100ms AND loss < 5% | unit |
+| VP-027 | Green threshold: RTT p99 ≤ 100ms AND loss ≤ 5% | unit |
 | VP-027 | Hysteresis prevents rapid toggling | proptest |
 
 ## Traceability

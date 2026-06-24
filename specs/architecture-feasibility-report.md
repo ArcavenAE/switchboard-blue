@@ -25,8 +25,7 @@ The PRD v1.0 (42 BCs across 9 subsystems) is architecturally feasible with the
 chosen Go-native toolchain. All 42 BCs have verification strategies using available
 tools. No BCs are infeasible. The subsystem grouping is coherent with clean
 purity-boundary separation. One structural correction is made (consolidating
-admission + HMAC into a unified security module dependency layer), and five deferred
-decisions from the PO are resolved as explicit ADRs. The PRD is approved for Phase 2
+admission + HMAC into a unified security module dependency layer). Eight architecture decisions are recorded as ADRs (ADR-001 through ADR-008). The PRD is approved for Phase 2
 story decomposition.
 
 ## Constraint Mapping
@@ -130,6 +129,7 @@ feasibility assessment as the standard approach for this class of security prope
 | ARQ failover continuity (ADR-005) | Stateful transfer | Resync from last ACK | Simpler; correct; stateful transfer deferred to PE phase |
 | Daemon RPC (ADR-006) | gRPC, custom binary | JSON-over-Unix-socket | Zero dependency; debuggable; JSON schema already specified |
 | P router build (ADR-007) | Include in main binary | Separate build target | NFR-012 (binary size); prevents accidental use |
+| Tick interval range (ADR-008) | Fixed 10ms | 5-50ms range | Tuning parameter, validated empirically in Phase 3; ARCH-02 §Tick Interval Range |
 
 ## Approval
 

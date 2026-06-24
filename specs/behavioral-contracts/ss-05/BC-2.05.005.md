@@ -44,7 +44,7 @@ Every SVTN-scoped frame carries an 8-byte HMAC tag in the outer header, computed
 ## Preconditions
 
 1. The sending node is admitted to the SVTN and has a valid admission key.
-2. The `frame_auth_key` is derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256. The HMAC tag is computed over the full frame (outer header fields + payload) using HMAC-SHA256 with `frame_auth_key`; the tag is the first 8 bytes of the 32-byte HMAC-SHA256 output.
+2. The `frame_auth_key` is derived per `(node_admission_pubkey, svtn_id)` via HKDF-SHA256 with info=`switchboard-frame-auth` and length=32 (see ADR-001 in ARCH-04 §HMAC keying). The HMAC tag is computed over the full frame (outer header fields + payload) using HMAC-SHA256 with `frame_auth_key`; the tag is the first 8 bytes of the 32-byte HMAC-SHA256 output.
 3. The first router has the sending node's public key in its admitted key set.
 
 ## Postconditions

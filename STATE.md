@@ -1,11 +1,12 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-adversary-pass-5
+phase_step: pending-adversary-pass-6
 refinement_round_2_complete: true
 refinement_round_3_complete: true
 refinement_round_4_complete: true
 refinement_round_5_complete: true
+refinement_round_6_complete: true
 structural_audit_complete: true
 product: switchboard
 mode: greenfield
@@ -128,5 +129,7 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 - Structural consistency audit (post-pass-4): 64 defects across 10 axes; 51 structural (closeable by 2 mechanical sweeps), 13 individual
 - Cycle 1 round-4 refinement: 64 audit defects addressed mechanically + pass-4 findings F-P4-002, F-P4-008–013 covered by mechanical sweep (E-ADM-007→011, ARCH-11 counts, VP titles, --confirm flag, BC-2.01.005 module). F-P4-001 (PRD §7 BC-2.09.003→CAP-028) NOT yet addressed; F-P4-004 (best/any path quality) NOT yet addressed; F-P4-006 (VP-028/029 BC postcondition gap) NOT yet addressed; F-P4-014 (VP-001 uint32 vs u16) NOT yet addressed; F-P4-017 (module-criticality row count) NOT yet addressed.
 - Cycle 1 round-5 refinement: all remaining pass-4 findings closed (F-P4-001, F-P4-004, F-P4-006, F-P4-014, F-P4-017, F-P4-018). Total pass-4 in-cycle resolution: 20 of 21 (F-P4-019 = stale CAP range in feasibility-report, deferred — Sweep 2 closed broader bug).
-- Trajectory: 27 → 18 → 17 → 21 → ? (Pass 5 pending; convergence target = 3 consecutive zero-findings passes)
+- Pass 5 findings: 17 (0 critical, 8 high, 7 medium, 2 low)
+- Cycle 1 round-6 refinement: all 17 pass-5 findings closed across architect + PO refinement (split into 4 small bursts due to API connection drops).
+- Trajectory: 27 → 18 → 17 → 21 → 17 → ? (Pass 6 pending; convergence target = 3 consecutive zero-findings passes)
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-03.md`
