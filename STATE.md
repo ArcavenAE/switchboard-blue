@@ -6,6 +6,7 @@ phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_completed_stories: [S-1.01, S-1.02]
+phase_3_active_wave: 2
 phase_3_active_stories: []
 phase_3_pause_point: "Wave 1 closed (2/2 stories merged: S-1.01@1c76160, S-1.02@9e9a98a; gate PASS-WITH-DRIFT). Wave 2 begins — 3 stories, 18 pts (security foundation + session continuity). Read STORY-INDEX wave-2 row for exact story IDs; dispatch story-writer or implementer per per-story-delivery."
 s_1_02_merge_sha: 9e9a98a
