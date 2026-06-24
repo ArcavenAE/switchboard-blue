@@ -1,6 +1,9 @@
 package hmac_test
 
 import (
+	"bytes"
+	crypto_hmac "crypto/hmac"
+	"crypto/sha256"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/hmac"
@@ -25,7 +28,6 @@ func TestKeySize(t *testing.T) {
 }
 
 // TestComputeHMAC_EightByteTag verifies AC-001: ComputeHMAC produces an 8-byte tag.
-// Red Gate: panics with "not implemented: S-2.01 ComputeHMAC".
 func TestComputeHMAC_EightByteTag(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 32)
@@ -34,12 +36,29 @@ func TestComputeHMAC_EightByteTag(t *testing.T) {
 	if tag[0] == 0 && tag[1] == 0 && tag[2] == 0 && tag[3] == 0 &&
 		tag[4] == 0 && tag[5] == 0 && tag[6] == 0 && tag[7] == 0 {
 		// A real all-zero HMAC is astronomically unlikely; treat it as a stub leak.
-		t.Log("ComputeHMAC returned all-zero tag (stub or genuine zero)")
+		t.Fatalf("ComputeHMAC returned all-zero tag (stub or genuine zero)")
+	}
+}
+
+// TestComputeHMAC_KnownAnswerVector pins ComputeHMAC against RFC 4231 §4.2 test case 2:
+// key = "Jefe" (4 bytes), data = "what do ya want for nothing?"
+// Expected HMAC-SHA256 full: 5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843
+// First 8 bytes (TagSize): 5bdcc146bf60754e
+//
+// Exercises VP-004 (compute/verify consistency) at the ground-truth level: if truncation
+// or algorithm deviates, this test fails before consistency tests even run.
+func TestComputeHMAC_KnownAnswerVector(t *testing.T) {
+	t.Parallel()
+	key := []byte("Jefe")
+	data := []byte("what do ya want for nothing?")
+	expected := [hmac.TagSize]byte{0x5b, 0xdc, 0xc1, 0x46, 0xbf, 0x60, 0x75, 0x4e}
+	got := hmac.ComputeHMAC(key, data)
+	if got != expected {
+		t.Errorf("ComputeHMAC RFC 4231 §4.2 vector mismatch: got %x, want %x", got, expected)
 	}
 }
 
 // TestVerifyHMAC_ValidTag verifies AC-002: VerifyHMAC returns true for a correct tag.
-// Red Gate: panics with "not implemented: S-2.01 ComputeHMAC".
 func TestVerifyHMAC_ValidTag(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 32)
@@ -51,7 +70,6 @@ func TestVerifyHMAC_ValidTag(t *testing.T) {
 }
 
 // TestVerifyHMAC_WrongKey verifies AC-004: VerifyHMAC returns false for a different key.
-// Red Gate: panics with "not implemented: S-2.01 ComputeHMAC".
 func TestVerifyHMAC_WrongKey(t *testing.T) {
 	t.Parallel()
 	rightKey := make([]byte, 32)
@@ -65,7 +83,6 @@ func TestVerifyHMAC_WrongKey(t *testing.T) {
 }
 
 // TestDeriveKey_Deterministic verifies AC-005: DeriveKey is deterministic.
-// Red Gate: panics with "not implemented: S-2.01 DeriveKey".
 func TestDeriveKey_Deterministic(t *testing.T) {
 	t.Parallel()
 	pubkey := []byte("node-admission-pubkey-bytes-here")
@@ -79,7 +96,6 @@ func TestDeriveKey_Deterministic(t *testing.T) {
 }
 
 // TestDeriveKey_ZeroSVTN verifies EC-002: DeriveKey accepts all-zero svtnID.
-// Red Gate: panics with "not implemented: S-2.01 DeriveKey".
 func TestDeriveKey_ZeroSVTN(t *testing.T) {
 	t.Parallel()
 	pubkey := []byte("node-admission-pubkey-bytes-here")
@@ -87,9 +103,11 @@ func TestDeriveKey_ZeroSVTN(t *testing.T) {
 	_ = hmac.DeriveKey(pubkey, svtnID)
 }
 
-// TestVerifyHMAC_ShortTag verifies EC-003: VerifyHMAC returns false for a zero/mismatched tag.
-// Red Gate: panics with "not implemented: S-2.01 VerifyHMAC".
-func TestVerifyHMAC_ShortTag(t *testing.T) {
+// TestVerifyHMAC_ZeroTagRejected verifies EC-003: VerifyHMAC returns false for a
+// zero/mismatched tag. (Previously TestVerifyHMAC_ShortTag — renamed because a
+// "short" tag is impossible given the [TagSize]byte signature; "zero tag" is the
+// actual edge case being exercised.)
+func TestVerifyHMAC_ZeroTagRejected(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 32)
 	frame := []byte("test-frame-bytes")
@@ -99,11 +117,140 @@ func TestVerifyHMAC_ShortTag(t *testing.T) {
 	}
 }
 
-// TestComputeHMAC_EmptyFrame verifies EC-001: ComputeHMAC handles empty frame bytes.
-// Red Gate: panics with "not implemented: S-2.01 ComputeHMAC".
+// TestComputeHMAC_EmptyFrame verifies EC-001: ComputeHMAC handles empty frame bytes
+// and produces the correct HMAC-SHA256 truncation.
+// Expected: HMAC-SHA256(zero-32-byte-key, "") first 8 bytes = b613679a0814d9ec
 func TestComputeHMAC_EmptyFrame(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 32)
-	tag := hmac.ComputeHMAC(key, []byte{})
-	_ = tag
+
+	// Compute expected value using crypto/hmac directly to pin the result.
+	h := crypto_hmac.New(sha256.New, key)
+	// Write nothing — empty frame.
+	var expected [hmac.TagSize]byte
+	copy(expected[:], h.Sum(nil)[:hmac.TagSize])
+
+	got := hmac.ComputeHMAC(key, []byte{})
+	if got != expected {
+		t.Errorf("ComputeHMAC empty-frame: got %x, want %x", got, expected)
+	}
+}
+
+// TestPropComputeVerifyConsistency verifies VP-004: for any (key, frame_bytes) pair,
+// ComputeHMAC produces a tag that VerifyHMAC accepts with the same key and rejects
+// with a different key.
+//
+// VP-006 (wrong-key rejection) is covered in the cross-check sub-step of each case
+// below — each case asserts both same-key acceptance and different-key rejection.
+// The property is exercised across varied input sizes and key patterns; a random
+// property engine is not needed because HMAC-SHA256 is deterministic and the
+// correctness property holds by construction for all lengths, not just a sampled
+// subset.
+//
+// Covers: VP-004 (consistency), VP-006 (wrong-key rejection).
+func TestPropComputeVerifyConsistency(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		keyLen   int
+		frameLen int
+	}{
+		{"32B key, 0B frame", 32, 0},
+		{"32B key, 1B frame", 32, 1},
+		{"32B key, 44B frame (outer-header sized)", 32, 44},
+		{"32B key, 1024B frame", 32, 1024},
+		{"32B key, 65515B frame (MaxPayloadSize)", 32, 65515},
+		{"16B key, 1024B frame (short key edge)", 16, 1024},
+		{"1B key, 1B frame (minimum key)", 1, 1},
+		{"64B key, 512B frame (long key)", 64, 512},
+		{"32B key, 3B frame (sub-block)", 32, 3},
+		{"32B key, 64B frame (SHA256 block boundary)", 32, 64},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			key := bytes.Repeat([]byte{0xAB}, tc.keyLen)
+			frame := bytes.Repeat([]byte{0xCD}, tc.frameLen)
+
+			tag := hmac.ComputeHMAC(key, frame)
+
+			// VP-004: same key must accept.
+			if !hmac.VerifyHMAC(key, frame, tag) {
+				t.Errorf("VP-004: VerifyHMAC rejected its own ComputeHMAC tag: keyLen=%d frameLen=%d", tc.keyLen, tc.frameLen)
+			}
+
+			// VP-006: different key must reject.
+			otherKey := bytes.Repeat([]byte{0xEF}, tc.keyLen)
+			if hmac.VerifyHMAC(otherKey, frame, tag) {
+				t.Errorf("VP-006: VerifyHMAC accepted tag with wrong key: keyLen=%d frameLen=%d", tc.keyLen, tc.frameLen)
+			}
+		})
+	}
+}
+
+// TestDeriveKey_DistinctPubkeysProduceDistinctKeys asserts the per-(node, SVTN)
+// forge-resistance invariant from ARCH-04 lines 175-180: different
+// nodeAdmissionPubkey inputs MUST yield different derived keys (otherwise a
+// constant-return implementation would pass TestDeriveKey_Deterministic).
+func TestDeriveKey_DistinctPubkeysProduceDistinctKeys(t *testing.T) {
+	t.Parallel()
+	svtnID := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	pubkeyA := bytes.Repeat([]byte{0xAA}, 32)
+	pubkeyB := bytes.Repeat([]byte{0xBB}, 32)
+	keyA := hmac.DeriveKey(pubkeyA, svtnID)
+	keyB := hmac.DeriveKey(pubkeyB, svtnID)
+	if keyA == keyB {
+		t.Error("DeriveKey produced identical output for distinct pubkeys (forge-resistance violated)")
+	}
+}
+
+// TestDeriveKey_DistinctSVTNsProduceDistinctKeys verifies the same forge-resistance
+// invariant with the SVTN salt axis: same pubkey, different svtnID MUST yield different
+// derived keys (salt mixing required by RFC 5869 §3.1).
+func TestDeriveKey_DistinctSVTNsProduceDistinctKeys(t *testing.T) {
+	t.Parallel()
+	pubkey := bytes.Repeat([]byte{0xCD}, 32)
+	svtnA := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	svtnB := [16]byte{16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1}
+	keyA := hmac.DeriveKey(pubkey, svtnA)
+	keyB := hmac.DeriveKey(pubkey, svtnB)
+	if keyA == keyB {
+		t.Error("DeriveKey produced identical output for distinct SVTNs (salt mixing violated)")
+	}
+}
+
+// TestDeriveKey_RFC5869_DeterministicAnchor pins the inline HKDF implementation
+// against a pre-computed known-answer derived from the same stdlib crypto/hmac +
+// crypto/sha256 primitives used in the implementation.
+//
+// Test inputs: pubkey = 0xAA * 32, svtnID = {1, 2, ..., 16}.
+// Expected OKM (32 bytes): 0290a95d2e07c48b8ecfdd3bef63328a547336fdf5b09a1d5902946718a325b1
+//
+// This "deterministic anchor" approach catches drift in the inline HKDF implementation
+// without requiring a separate RFC 5869 test-vector API surface. Full RFC 5869 vector
+// testing (with arbitrary IKM/salt/info/L) is deferred to Phase-6 formal verification,
+// where the inline HKDF may be extracted into a standalone testable unit.
+//
+// Rationale for deferral: DeriveKey hard-codes info = "switchboard-frame-auth" and the
+// key/svtn argument shape, making it impossible to directly exercise RFC 5869's
+// variable-info test cases. The anchor below provides forgery-resistance confidence
+// for the production input shape. (F-004 follow-through; adversary pass-2 to adjudicate.)
+func TestDeriveKey_RFC5869_DeterministicAnchor(t *testing.T) {
+	t.Parallel()
+	pubkey := bytes.Repeat([]byte{0xAA}, 32)
+	svtnID := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+
+	// Expected value computed independently using stdlib crypto/hmac + crypto/sha256
+	// following the same HKDF-Extract + HKDF-Expand sequence as DeriveKey.
+	expected := [hmac.KeySize]byte{
+		0x02, 0x90, 0xa9, 0x5d, 0x2e, 0x07, 0xc4, 0x8b,
+		0x8e, 0xcf, 0xdd, 0x3b, 0xef, 0x63, 0x32, 0x8a,
+		0x54, 0x73, 0x36, 0xfd, 0xf5, 0xb0, 0x9a, 0x1d,
+		0x59, 0x02, 0x94, 0x67, 0x18, 0xa3, 0x25, 0xb1,
+	}
+	got := hmac.DeriveKey(pubkey, svtnID)
+	if got != expected {
+		t.Errorf("DeriveKey RFC 5869 anchor mismatch: got %x, want %x", got, expected)
+	}
 }
