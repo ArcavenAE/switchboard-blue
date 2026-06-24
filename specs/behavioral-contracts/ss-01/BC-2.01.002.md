@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,9 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-24T00:00:00
+    reason: "F-002 resolution: postcondition 2 clarified to distinguish ChannelFrame.FrameType (pure-core surface) from OuterHeader.frame_type (outer-assembler responsibility per ARCH-09)"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -48,7 +50,7 @@ When the timeslice clock fires and no application payload is available, the half
 ## Postconditions
 
 1. An empty-tick frame is emitted with zero-length payload.
-2. The outer header is fully populated (version, frame type = EMPTY_TICK, SVTN ID, destination, source, length=0, HMAC).
+2. The `ChannelFrame` returned by `HalfChannel.Tick()` carries `FrameType = EMPTY_TICK (0x02)` as a discriminator field. The outer-assembler layer (outside `internal/halfchannel`, per ARCH-09 pure-core boundary) reads this field and sets `OuterHeader.frame_type = 0x02`. The outer header itself is populated fully (version, frame type = EMPTY_TICK, SVTN ID, destination, source, length=0, HMAC) by the outer-assembler, not by `internal/halfchannel`.
 3. The channel header is fully populated (channel ID, sequence number, flags (FEC_present=0, EMPTY_TICK indicator)).
 4. The frame is forwarded by the router identically to a data frame (same routing path selection).
 5. On receipt, the receiver does not surface the empty-tick frame as application data; it uses it only for liveness and path metric updates.
