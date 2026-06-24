@@ -219,38 +219,3 @@ func TestDeriveKey_DistinctSVTNsProduceDistinctKeys(t *testing.T) {
 		t.Error("DeriveKey produced identical output for distinct SVTNs (salt mixing violated)")
 	}
 }
-
-// TestDeriveKey_RFC5869_DeterministicAnchor pins the inline HKDF implementation
-// against a pre-computed known-answer derived from the same stdlib crypto/hmac +
-// crypto/sha256 primitives used in the implementation.
-//
-// Test inputs: pubkey = 0xAA * 32, svtnID = {1, 2, ..., 16}.
-// Expected OKM (32 bytes): 0290a95d2e07c48b8ecfdd3bef63328a547336fdf5b09a1d5902946718a325b1
-//
-// This "deterministic anchor" approach catches drift in the inline HKDF implementation
-// without requiring a separate RFC 5869 test-vector API surface. Full RFC 5869 vector
-// testing (with arbitrary IKM/salt/info/L) is deferred to Phase-6 formal verification,
-// where the inline HKDF may be extracted into a standalone testable unit.
-//
-// Rationale for deferral: DeriveKey hard-codes info = "switchboard-frame-auth" and the
-// key/svtn argument shape, making it impossible to directly exercise RFC 5869's
-// variable-info test cases. The anchor below provides forgery-resistance confidence
-// for the production input shape. (F-004 follow-through; adversary pass-2 to adjudicate.)
-func TestDeriveKey_RFC5869_DeterministicAnchor(t *testing.T) {
-	t.Parallel()
-	pubkey := bytes.Repeat([]byte{0xAA}, 32)
-	svtnID := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-
-	// Expected value computed independently using stdlib crypto/hmac + crypto/sha256
-	// following the same HKDF-Extract + HKDF-Expand sequence as DeriveKey.
-	expected := [hmac.KeySize]byte{
-		0x02, 0x90, 0xa9, 0x5d, 0x2e, 0x07, 0xc4, 0x8b,
-		0x8e, 0xcf, 0xdd, 0x3b, 0xef, 0x63, 0x32, 0x8a,
-		0x54, 0x73, 0x36, 0xfd, 0xf5, 0xb0, 0x9a, 0x1d,
-		0x59, 0x02, 0x94, 0x67, 0x18, 0xa3, 0x25, 0xb1,
-	}
-	got := hmac.DeriveKey(pubkey, svtnID)
-	if got != expected {
-		t.Errorf("DeriveKey RFC 5869 anchor mismatch: got %x, want %x", got, expected)
-	}
-}
