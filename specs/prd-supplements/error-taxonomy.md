@@ -92,6 +92,25 @@ traces_to: '.factory/specs/prd.md'
 | E-PRT-002 | PRT | broken | 1 | "header truncated: expected <N> bytes, got <M>" | BC-2.01.004 |
 | E-PRT-003 | PRT | broken | 1 | "frame truncated: outer header complete but frame body shorter than indicated length" | BC-2.01.005 |
 
+### Namespace Aliases (informational)
+
+Some scenario documents (e.g., HS-001 v1.1) use the prefix `E-FRM-*` for
+protocol-layer framing errors synonymously with `E-PRT-*`. The canonical names
+use `E-PRT-*`. No renaming is planned. The aliases arose because the holdout
+scenario was authored before the category-code table above was finalized; the
+`errors.Is` identity checks in the scenario still passed because the underlying
+sentinel values are the same.
+
+Mapping for cross-reference:
+
+| Alias (non-canonical) | Canonical | Notes |
+|-----------------------|-----------|-------|
+| E-FRM-001 | E-PRT-001 | Unsupported protocol version |
+| E-FRM-002 | E-PRT-002 | Header truncated |
+
+All new scenarios and BCs MUST use the canonical `E-PRT-*` names.
+This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026-06-24).
+
 ### FWD — Forwarding
 
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |

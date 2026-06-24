@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.002
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -22,6 +22,8 @@ modified:
     reason: "F-002 resolution: postcondition 2 clarified to distinguish ChannelFrame.FrameType (pure-core surface) from OuterHeader.frame_type (outer-assembler responsibility per ARCH-09)"
   - date: 2026-06-24T00:00:00
     reason: "F-007 resolution: added precondition 4 rejecting len(payload)==0 with ErrEmptyPayload; F-008 resolution: PC3 reworded to remove phantom EMPTY_TICK flag-bit reference and clarify discriminator lives in ChannelFrame.FrameType"
+  - date: 2026-06-24T00:00:00
+    reason: "Added PC5 (max payload size) per drbothen/vsdd-factory#260 rollback — wave-adv F-001 MTU contract gap. ErrPayloadTooLarge sentinel pending code-side implementation in F-001+F-002 refactor PR."
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -49,6 +51,7 @@ When the timeslice clock fires and no application payload is available, the half
 2. The timeslice clock fires (per BC-2.01.001).
 3. The receiver has a known expected tick interval for this half-channel.
 4. **Enqueue rejection (F-007):** `HalfChannel.Enqueue` rejects any call where `len(payload) == 0` (including nil slices and `[]byte{}`), returning `ErrEmptyPayload`. There is no legitimate MVP use case for a zero-byte data frame; the "no-data-pending" state must only be entered by not calling `Enqueue`, not by enqueuing an empty slice. This collapses the nil/empty-slice asymmetry and prevents a silent protocol violation where a queued-but-empty enqueue would produce a `FrameTypeData` frame with zero-length payload.
+5. **PC5 — Maximum payload size (F-001):** `HalfChannel.Enqueue` rejects any call where `len(payload) > MaxPayloadSize`, returning `ErrPayloadTooLarge`. `MaxPayloadSize` = 65535 − channel_header_size: **65523 bytes** when SACK_present=0 (12-byte channel header per ARCH-02 §3.2); **65515 bytes** when SACK_present=1 (20-byte channel header). The bound exists to prevent silent uint16 truncation of `OuterHeader.PayloadLen` (which encodes channel_header_size + len(payload)). The pure-core `HalfChannel` enforces this via a length check in `Enqueue`; the outer-assembler relies on this invariant when encoding `payload_len` in the wire frame. Code-side validation lands in the F-001+F-002 refactor PR.
 
 ## Postconditions
 
