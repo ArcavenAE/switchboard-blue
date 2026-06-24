@@ -65,7 +65,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.08.001 | Console remotely controllable via sbctl: attach, detach, switch session, navigate | console-operations | CAP-025 | P1 | PE | active | ss-08/BC-2.08.001.md |
 | BC-2.09.001 | E router graduates to PE mode by adding upstream router connections in config | deployment-operations | CAP-026 | P2 | PE | active | ss-09/BC-2.09.001.md |
 | BC-2.09.002 | Router sends drain signal before shutdown; nodes migrate to alternate routers | deployment-operations | CAP-027 | P2 | PE | active | ss-09/BC-2.09.002.md |
-| BC-2.09.003 | Router startup fails cleanly on malformed config with actionable error message | deployment-operations | CAP-023, CAP-024 | P0 | E | active | ss-09/BC-2.09.003.md |
+| BC-2.09.003 | Router startup fails cleanly on malformed config with actionable error message | deployment-operations | CAP-028 | P0 | E | active | ss-09/BC-2.09.003.md |
 
 ## Coverage Summary
 
@@ -79,8 +79,8 @@ traces_to: '.factory/specs/prd.md'
 | quality-observability | CAP-021–022 | 3 | 3 | 0 | 0 |
 | network-management | CAP-023–024 | 3 | 3 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
-| deployment-operations | CAP-026–027 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–027 + CAP-020a, CAP-020b** | **42** | **35** | **7** | **0** |
+| deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
+| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **42** | **35** | **7** | **0** |
 
 ## CAP Coverage Verification
 
@@ -110,8 +110,9 @@ traces_to: '.factory/specs/prd.md'
 | CAP-020b | BC-2.05.006 | covered |
 | CAP-021 | BC-2.06.001, BC-2.06.002 | covered |
 | CAP-022 | BC-2.06.003 | covered |
-| CAP-023 | BC-2.07.001, BC-2.09.003 | covered |
+| CAP-023 | BC-2.07.001 | covered |
 | CAP-024 | BC-2.07.002, BC-2.07.003 | covered |
 | CAP-025 | BC-2.08.001 | covered |
 | CAP-026 | BC-2.09.001 | covered |
 | CAP-027 | BC-2.09.002 | covered |
+| CAP-028 | BC-2.09.003 | covered |

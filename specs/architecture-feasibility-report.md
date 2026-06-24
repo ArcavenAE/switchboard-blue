@@ -123,7 +123,7 @@ feasibility assessment as the standard approach for this class of security prope
 
 | Decision | Alternatives Considered | Chosen | Rationale |
 |----------|------------------------|--------|-----------|
-| HMAC algorithm (ADR-001) | BLAKE2, SHA-512, Poly1305 | HMAC-SHA256 | Aligns with HKDF-SHA256 in Noise; stdlib only; truncated to 16 bytes |
+| HMAC algorithm (ADR-001) | BLAKE2, SHA-512, Poly1305 | HMAC-SHA256 | Aligns with HKDF-SHA256 in Noise; stdlib only; truncated to 8 bytes |
 | FEC group size (ADR-002) | N=2 (50% overhead), N=8 (delayed recovery) | N=4 (20% overhead) | MOSH precedent; Phase 3 validates |
 | Duplicate key registration (ADR-003) | Reject duplicate | Last-write-wins | Operational flexibility; authenticated registrant |
 | Console key registration (ADR-004) | Allow console to register | Control node only | Principle of least privilege; access nodes have no management capability |

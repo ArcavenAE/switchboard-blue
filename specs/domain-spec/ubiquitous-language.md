@@ -118,10 +118,10 @@ transmit clock on a fixed tick interval, regardless of whether there is data.
 frame type, SVTN ID, destination address, source address, length, HMAC.
 
 **Channel header** — The endpoint-visible inner header: channel ID, sequence
-number, sender timestamp, FEC metadata, flags. Follows the outer header.
+number, flags. Follows the outer header.
 Opaque to routers.
 
-**HMAC** — The 16-byte authentication tag in the outer header. Computed by
+**HMAC** — The 8-byte authentication tag (first 8 bytes of HMAC-SHA256 output) in the outer header. Computed by
 the sending node using its SVTN admission key. Verified by the first router
 to reject frames from non-admitted sources.
 

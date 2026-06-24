@@ -121,6 +121,8 @@ those `payload_len` bytes.
 | 12 | 8 | sack_bitmap | **conditional**: present only when flags bit 2 (SACK_present) is set; covers 64 sequence slots |
 | **Total** | **12** or **20** | | 12 bytes fixed; +8 bytes when SACK_present=1 |
 
+**Channel header timestamp and FEC metadata decision (canonical):** The channel header does NOT carry a sender timestamp field — timestamping is end-to-end and lives in the SSH-encrypted payload. FEC metadata is signaled by `flags` bit 0 (FEC_present) only; FEC group seq/parity coefficients live in the payload header of FEC frames (frame_type=fec), not in the channel header. This keeps the channel header router-opaque and avoids version coupling between FEC implementation and the channel header format.
+
 **SACK bitmap location (F-012):** The SACK bitmap is embedded in the channel header
 as a conditional 8-byte field, present when `flags` bit 2 is set. This avoids a
 separate ARQ control message for acknowledgement. When SACK_present=0, the channel

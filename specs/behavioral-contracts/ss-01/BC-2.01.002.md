@@ -49,7 +49,7 @@ When the timeslice clock fires and no application payload is available, the half
 
 1. An empty-tick frame is emitted with zero-length payload.
 2. The outer header is fully populated (version, frame type = EMPTY_TICK, SVTN ID, destination, source, length=0, HMAC).
-3. The channel header is fully populated (channel ID, sequence number, timestamp, FEC metadata = none, flags = EMPTY_TICK).
+3. The channel header is fully populated (channel ID, sequence number, flags (FEC_present=0, EMPTY_TICK indicator)).
 4. The frame is forwarded by the router identically to a data frame (same routing path selection).
 5. On receipt, the receiver does not surface the empty-tick frame as application data; it uses it only for liveness and path metric updates.
 

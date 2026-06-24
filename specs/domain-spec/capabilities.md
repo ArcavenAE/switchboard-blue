@@ -51,7 +51,7 @@ _Anchor: Brief §"Session-native primitives"; elem-asymmetric-half-channels. CAP
 **CAP-003** — Frame envelope encoding and decoding (P0)
 Each frame carries a 44-byte outer header (version, frame type, SVTN ID,
 destination, source, length, HMAC) plus a channel header (channel ID,
-sequence, timestamp, FEC metadata, flags). Router parses outer; endpoints
+sequence, flags). Router parses outer; endpoints
 parse channel header.
 _Anchor: PRD §"Wire Protocol Constraints" + Morphological Parameter 10. CAP-003 covers the wire format because carrier-grade separation requires a defined router-visible / endpoint-only boundary._
 
@@ -239,3 +239,10 @@ A router signals impending shutdown to connected nodes. Nodes migrate to
 alternate routers before the router disconnects. Enables rolling updates
 without dropping active sessions.
 _Anchor: PRD FR19; NFR §Reliability "Graceful router drain." CAP-027 covers drain because it prevents the "rolling update drops all sessions" death condition._
+
+**CAP-028** — Daemon startup config validation (P0)
+Daemons (router, access, console, control) validate their configuration at
+startup. Malformed config produces a clear, actionable error message naming
+the file, line, and field; the daemon exits non-zero before opening any
+network sockets or accepting connections.
+_Anchor: FM-010 (deployment misconfig). CAP-028 covers daemon startup config validation because a daemon that starts in a partially-configured state is a deployment correctness invariant — clean failure prevents silent misconfiguration from entering production. Subsystem: deployment-operations. Realized by: BC-2.09.003._

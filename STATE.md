@@ -1,8 +1,9 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-adversary-pass-3
+phase_step: pending-adversary-pass-4
 refinement_round_2_complete: true
+refinement_round_3_complete: true
 product: switchboard
 mode: greenfield
 anchor_strategy: reference-via-frontmatter
@@ -11,8 +12,8 @@ l2_artifact_count: 11
 l2_subsystems: [session-networking, multipath-forwarding, session-discovery, session-access, admission-security, quality-observability, network-management, console-operations, deployment-operations]
 l3_complete: true
 l3_bc_count: 42
-l3_cap_coverage: "29/29"
-l3_cap_count: 29
+l3_cap_coverage: "30/30"
+l3_cap_count: 30
 l3_error_codes: 31
 l3_bc_id_scheme: "BC-2.SS.NNN — S=2 stable L3-PRD prefix, SS=subsystem 01-09, NNN=sequence"
 l3_subsystem_field_status: "patched — all 42 BCs have canonical subsystem + architecture_module fields"
@@ -36,7 +37,7 @@ cicd_p2_gaps: 5
 internal_packages: 18
 purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
 go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
-timestamp: 2026-06-23T19:25:54Z
+timestamp: 2026-06-23T20:30:00Z
 last_update: 2026-06-23
 
 ---
@@ -117,5 +118,8 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-01.md`
 - Pass 2 findings: 18 (3 critical, 8 high, 6 medium, 1 low; 2 process-gap)
 - Cycle 1 round-2 refinement: 17 in-cycle (3 critical + 8 high + 6 medium addressed); F-019 (1 low) by-design at Phase 1d, deferred to Phase 2 backfill rule.
-- Trajectory: 27 → 18 → ? (Pass 3 pending; convergence target = 3 consecutive zero-findings passes)
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-02.md`
+- Pass 3 findings: 17 (4 critical, 9 high, 3 medium, 1 low; 1 process-gap)
+- Cycle 1 round-3 refinement: all 17 in-cycle addressed (4 critical + 9 high + 3 medium + 1 low); F-P3-018 [process-gap] VP↔BC title-sync check filed upstream.
+- Trajectory: 27 → 18 → 17 → ? (Pass 4 pending; convergence target = 3 consecutive zero-findings passes)
+- Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-03.md`

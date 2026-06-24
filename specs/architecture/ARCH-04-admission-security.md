@@ -42,7 +42,7 @@ removes access to a specific session.
 
 **Decision:** Last-write-wins (LWW).
 
-**OQ-003 resolution:** When a public key is registered twice (same key, different
+**DEC-007 resolution:** When a public key is registered twice (same key, different
 roles or same key, same role), the most recent registration takes effect. The
 previous entry is overwritten.
 

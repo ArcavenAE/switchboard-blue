@@ -88,10 +88,29 @@ sbctl console attach --session=<name> --console=<addr> [--svtn=<id>]
 sbctl console detach --console=<addr>
 sbctl console switch --session=<name> --console=<addr>
 
+# Admin (operator key management and emergency recovery)
+sbctl admin register-key --svtn=<id> --pubkey=<path> --role=<control|console|access>
+sbctl admin revoke-key --svtn=<id> --key-fingerprint=<fp>
+sbctl admin recover --svtn=<id> --bootstrap-key=<path>
+sbctl admin list-keys --svtn=<id>
+
 # Diagnostics
 sbctl version                                   # Print daemon version
 sbctl ping                                      # Connectivity check to daemon
 ```
+
+### `sbctl admin`
+
+Operator-only subcommand requiring `--confirm` token. Used for SVTN key management and emergency recovery.
+
+| Subcommand | Purpose | Auth | Exit codes |
+|-----------|---------|------|-----------|
+| `sbctl admin register-key --svtn <id> --pubkey <path> --role <control\|console\|access>` | Register a new admission key | Requires existing control-role key + interactive `--confirm` token | 0=ok, E-ADM-008, E-CFG-004 |
+| `sbctl admin revoke-key --svtn <id> --key-fingerprint <fp>` | Revoke admission key | Requires existing control-role key + `--confirm`; per ADR-004 console cannot revoke control | 0=ok, E-ADM-011 (hierarchy violation), E-ADM-009 (not found) |
+| `sbctl admin recover --svtn <id> --bootstrap-key <path>` | Emergency recovery when all control keys are lost | Requires bootstrap key (set at SVTN creation per BC-2.07.001) | 0=ok, E-ADM-010 (bootstrap mismatch) |
+| `sbctl admin list-keys --svtn <id>` | List admission keys | Any admitted role | 0=ok |
+
+Confirmation flow: interactive commands prompt for `Type SVTN-<short-id> to confirm:`. The confirmation token is the SVTN's short ID — operator must type it to prevent accidental mass-revocation. `--yes` flag bypasses prompt for scripted use (with E-CFG-005 warning emitted to stderr).
 
 ## Exit Code Semantics
 

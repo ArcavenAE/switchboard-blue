@@ -73,7 +73,7 @@ Frame received at router after HMAC verification.
 | EC-003 | Same frame arrives on the same interface twice within the cache window | Second arrival is suppressed. The compound key `(checksum, arrival_interface_id)` matches the cache entry from the first arrival — drop cache hit counter incremented. |
 | EC-004 (DEC-009) | Drop cache is full; new compound key evicts old entry | Evicted entry may no longer suppress a re-arriving old frame on the same interface (acceptable — old frames arriving after eviction are harmless and will be deduplicated at the receiver). |
 | EC-005 | Two different frames hash to the same checksum on the same interface (collision) | Legitimate frame incorrectly suppressed. Probability negligible with 32-bit checksum at typical traffic rates. Logged as a potential collision event for investigation. |
-| EC-004 | Router restart clears drop cache | Previously seen frames may briefly pass through if they re-arrive after restart. Receiver deduplication (BC-2.02.002) handles this. |
+| EC-006 | Router restart clears drop cache | Previously seen frames may briefly pass through if they re-arrive after restart. Receiver deduplication (BC-2.02.002) handles this. |
 
 ## Canonical Test Vectors
 

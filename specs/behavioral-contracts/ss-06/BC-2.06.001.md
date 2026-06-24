@@ -60,6 +60,7 @@ Each active session displays a quality indicator (green/yellow/red) at the conso
 1. **DI-008**: The indicator depends on empty-tick frame liveness. If the timeslice clock breaks (DI-008 violation), the indicator becomes unreliable (FM-008).
 2. The indicator reflects path quality to the router, not end-to-end terminal quality (access node health is a separate signal).
 3. Indicator transitions are hysteretic: a brief spike to yellow does not immediately return to green (implementation: 3-consecutive-measurement hysteresis).
+4. The session-aggregated quality indicator is derived from the BEST current path. Per-path scoring (for routing decisions) uses each path's own metrics independently per ARCH-03. These are two distinct computations: this BC governs the aggregated console indicator; ARCH-03 governs per-path scoring for routing.
 
 ## Trigger
 

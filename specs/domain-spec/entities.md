@@ -118,8 +118,8 @@ frame type, SVTN ID, destination address, source address, length, HMAC) plus
 a channel header (endpoint-only). Router parses the outer header only.
 
 ### Frame (Channel Header)
-The endpoint-visible inner header: channel ID, sequence number, sender
-timestamp, FEC metadata, flags (degradation signal, priority). Followed by
+The endpoint-visible inner header: channel ID, sequence number, flags
+(FEC_present, ARQ_req, SACK_present). Followed by
 SSH-encrypted payload. Opaque to routers.
 
 ### Node Address

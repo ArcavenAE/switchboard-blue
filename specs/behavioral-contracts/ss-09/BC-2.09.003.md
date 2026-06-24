@@ -10,7 +10,7 @@ phase: 1a
 bc_id: BC-2.09.003
 subsystem: deployment-operations
 architecture_module: internal/config
-capability: CAP-023
+capability: CAP-028
 priority: P0
 criticality: critical
 scope_phase: E
@@ -29,7 +29,7 @@ inputDocuments:
   - '.factory/specs/domain-spec/invariants.md'
   - '.factory/specs/domain-spec/failure-modes.md'
   - '_bmad-output/planning-artifacts/prd.md'
-traces_to: [CAP-023, CAP-024]
+traces_to: [CAP-028]
 kos_anchors:
   - elem-single-binary-three-modes
 ---
@@ -92,11 +92,11 @@ Daemon startup config parsing failure; config reload with invalid config.
 
 | Field | Value |
 |-------|-------|
-| L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023; CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 |
+| L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
 | L2 Domain Invariants | DI-007 (outer header format stability — config errors at startup prevent mismatched protocol state) |
 | Architecture Module | internal/config |
 | Stories | [filled by story-writer] |
-| Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — router startup is the prerequisite for SVTN creation; also CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 because sbctl-launched daemon operations depend on clean startup behavior |
+| Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. Anchored to FM-010 (deployment misconfig). |
 
 ## Related BCs
 

@@ -37,7 +37,7 @@ kos_anchors:
 
 ## Description
 
-The channel header immediately follows the 44-byte outer header in every frame. It carries endpoint-visible state: channel ID, sequence number, sender timestamp, FEC metadata, and flags. Routers have no code path that reads or parses the channel header. Endpoints (access nodes and consoles) parse it for session management. This boundary enforces carrier-grade content separation at the protocol level.
+The channel header immediately follows the 44-byte outer header in every frame. It carries endpoint-visible state: channel ID, sequence number, and flags. Routers have no code path that reads or parses the channel header. Endpoints (access nodes and consoles) parse it for session management. This boundary enforces carrier-grade content separation at the protocol level.
 
 ## Preconditions
 

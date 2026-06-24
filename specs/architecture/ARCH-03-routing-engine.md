@@ -161,6 +161,8 @@ dropping. Configurable via `arq_drop_timeout_multiplier`.
 
 ## ADR-005: Downstream ARQ Continuity Under Router Failover
 
+**OQ-004 resolution:** Resolves the open question in invariants.md OQ-004 — downstream switchover continuity. The chosen approach is resync-from-last-ACK rather than stateful ARQ state transfer, on grounds of simplicity and correctness within MVP scope.
+
 **Decision:** On path failover (node disconnects from one router and reconnects to
 another), the downstream half-channel performs a **resync**: the receiver sends a
 `RESYNC` control frame requesting the sender to retransmit from the last

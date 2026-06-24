@@ -73,10 +73,12 @@ modified:
 > BC-INDEX subsystem column, story `subsystems:` fields, and PRD subsystem
 > references MUST all use the exact Name from this table.
 
+Modules tagged `(shared with SS-NN)` indicate a Go package that serves multiple subsystems. The primary owning subsystem is listed first; consumers are noted in parentheses.
+
 | SS ID | Name | Architecture Doc | Implementing Modules | Phase Introduced |
 |-------|------|-----------------|---------------------|-----------------|
-| SS-01 | session-networking | ARCH-02-protocol-stack.md | internal/frame, internal/halfchannel | Phase 1 (E) |
-| SS-02 | multipath-forwarding | ARCH-03-routing-engine.md | internal/multipath, internal/arq, internal/replay, internal/paths | Phase 1 (E) |
+| SS-01 | session-networking | ARCH-02-protocol-stack.md | internal/frame, internal/halfchannel, internal/admission (shared with SS-05; used for re-auth on IP change per BC-2.01.007) | Phase 1 (E) |
+| SS-02 | multipath-forwarding | ARCH-03-routing-engine.md | internal/multipath, internal/arq, internal/replay, internal/paths, internal/routing (shared with SS-05; used for forwarding decisions per BC-2.02.008) | Phase 1 (E) |
 | SS-03 | session-discovery | ARCH-03-routing-engine.md | internal/discovery | Phase 2 (PE) |
 | SS-04 | session-access | ARCH-01-core-services.md | internal/tmux, internal/session | Phase 1 (E) |
 | SS-05 | admission-security | ARCH-04-admission-security.md | internal/hmac, internal/admission, internal/session | Phase 1 (E) |

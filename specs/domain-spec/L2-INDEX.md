@@ -56,7 +56,7 @@ never session content.
 
 | Section | File | Primary Consumer | Purpose |
 |---------|------|-----------------|---------|
-| Domain Capabilities | capabilities.md | product-owner, architect, story-writer | CAP-NNN capability catalog — 9 subsystems, 29 capabilities |
+| Domain Capabilities | capabilities.md | product-owner, architect, story-writer | CAP-NNN capability catalog — 9 subsystems, 30 capabilities |
 | Domain Entities | entities.md | architect, product-owner | Entity model — nodes, routers, SVTNs, keys, frames, sessions |
 | Domain Invariants | invariants.md | product-owner, architect | DI-NNN business rules — content separation, admission, framing |
 | Bounded Contexts | bounded-contexts.md | architect | Context boundaries — 9 subsystems, scope-phase topology |
@@ -104,7 +104,7 @@ artifact for domain terminology.
 
 | ID Format | Count | Section |
 |-----------|-------|---------|
-| CAP-NNN | 29 | capabilities.md |
+| CAP-NNN | 30 | capabilities.md |
 | DI-NNN | 12 | invariants.md |
 | DEC-NNN | 14 | edge-cases.md |
 | ASM-NNN | 8 | assumptions.md |
@@ -115,6 +115,6 @@ artifact for domain terminology.
 
 | Priority | Count | Items |
 |----------|-------|-------|
-| P0 (must-have) | 16 | CAP-001–CAP-008, CAP-010, CAP-013, CAP-016–CAP-018, CAP-020, CAP-020a, CAP-020b |
+| P0 (must-have) | 17 | CAP-001–CAP-008, CAP-010, CAP-013, CAP-016–CAP-018, CAP-020, CAP-020a, CAP-020b, CAP-028 |
 | P1 (should-have) | 9 | CAP-009, CAP-011–CAP-012, CAP-014–CAP-015, CAP-019, CAP-021–CAP-022, CAP-025 |
 | P2 (nice-to-have) | 4 | CAP-023–CAP-024, CAP-026–CAP-027 |
