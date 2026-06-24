@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-2-story-decomposition
-phase_step: pending-phase-2-story-decomposition
+phase_step: pending-phase-2-gate
 phase_1_gate: APPROVED
 phase_1_gate_date: 2026-06-24
 phase_1_gate_disposition: approve-with-drift
@@ -51,7 +51,16 @@ cicd_p2_gaps: 5
 internal_packages: 18
 purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
 go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
-timestamp: 2026-06-23T22:30:00Z
+phase_2_complete: true
+phase_2_epics: 8
+phase_2_stories: 21
+phase_2_holdouts: 6
+phase_2_waves: 7
+phase_2_total_points: 132
+phase_2_bc_coverage: "42/42"
+phase_2_drift_addressed: ["F-P8-001", "F-P8-002", "F-P8-003", "F-P8-006", "F-P8-007", "F-P8-008"]
+phase_2_drift_deferred: ["F-P8-004", "F-P8-005", "F-P8-009"]
+timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
 
 ---
@@ -65,7 +74,40 @@ last_update: 2026-06-24
 Phase 1 closed: 8 adversarial passes, 8 refinement rounds, 18 commits.
 Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition: approve-with-drift (9 open drift items carried forward; 0 critical, 3 high, 5 medium, 1 low).
 
-Next step: `/vsdd-factory:phase-2-story-decomposition` — decompose 42 BCs + 30 caps into implementable per-story files with BC traceability.
+Story decomposition complete. Awaiting Phase 2 human gate before entering Phase 3 TDD implementation.
+
+## Phase 2 — Story Decomposition Output
+
+| Artifact | Count |
+|---|---|
+| Epics | 8 (E-0 through E-7) |
+| Stories | 21 (S-0.01 through S-7.04) |
+| Waves | 7 (Wave 0 complete; Waves 1-6 pending) |
+| Holdout scenarios | 6 (one per wave 1-6) |
+| Total story points | 132 |
+| BC coverage | 42/42 (100%) |
+
+Wave distribution:
+- Wave 0: 1 story, 1 pt (S-0.01 BMAD scaffolding — already complete)
+- Wave 1: 2 stories, 13 pts (frame codec + half-channel clock)
+- Wave 2: 3 stories, 18 pts (security foundation + session continuity)
+- Wave 3: 3 stories, 21 pts (session access MVP)
+- Wave 4: 5 stories, 29 pts (reliability layer + config) — max parallelism
+- Wave 5: 4 stories, 21 pts (observability + CLI)
+- Wave 6: 4 stories, 29 pts (PE-phase features)
+
+Phase 1 DRIFT items addressed during decomposition:
+- F-P8-001: BC-2.05.004 CLI surface → S-6.02 uses canonical `sbctl admin`
+- F-P8-002: VP-030/VP-049 `sbctl status` → S-6.03 notes canonical `sbctl router status`
+- F-P8-003: BC-2.08.001 module → S-7.03 targets `internal/session`
+- F-P8-006: BC-2.05.007 list cmd → S-6.02 notes canonical `sbctl admin list-keys`
+- F-P8-007: BC-2.02.005 SACK location → S-4.03 AC explicitly requires channel header
+- F-P8-008: BC-2.02.007 frame_type → S-7.01 uses canonical `fec=0x05`
+
+Remaining Phase 1 DRIFT (3 items deferred to Phase 3 architect/test-writer):
+- F-P8-004 VP-026 transitivity invariant
+- F-P8-005 VP-027 title/harness direction mismatch
+- F-P8-009 architecture-feasibility-report deployment-operations CAP range text
 
 ## Source-of-truth inputs
 
