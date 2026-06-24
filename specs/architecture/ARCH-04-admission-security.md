@@ -71,6 +71,8 @@ can view their own key status but not modify the key store.
 **OQ-002 resolution:** Access nodes have no key management capability whatsoever. They
 hold their own keypair for admission but cannot modify the SVTN key store.
 
+**OQ-003 resolution:** A permission hierarchy exists among key roles: control > console > readonly. A console-role or readonly-role key cannot revoke a control-role key (such attempts fail with E-ADM-011). Control-to-control revocation requires `sbctl admin` human authorization (split-brain mitigation, ADR-004 paragraph above).
+
 **Permission hierarchy:**
 ```
 Control node:
@@ -95,7 +97,7 @@ roles cannot revoke higher-tier roles.
 
 **Can a console-role key revoke a control-role key?** NO. Console role is below
 control in the hierarchy. Any revocation operation by a console-role key on a
-control-role key is rejected with E-ADM-007.
+control-role key is rejected with E-ADM-011.
 
 **Can a control node revoke another control node's key?** YES — but only with
 human operator approval through `sbctl admin` audit. Control-key changes are NOT

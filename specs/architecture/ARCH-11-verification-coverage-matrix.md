@@ -26,11 +26,11 @@ modified:
 
 | BC ID | Title (abbreviated) | Module | VP(s) | Method | Phase |
 |-------|---------------------|--------|-------|--------|-------|
-| BC-2.01.001 | Timeslice clock fires on every tick | internal/halfchannel | VP-016, VP-018 | proptest | P0 |
+| BC-2.01.001 | Timeslice clock fires on every tick | internal/halfchannel | VP-016, VP-018, VP-041, VP-042 | proptest | P0 |
 | BC-2.01.002 | Empty-tick frame is a valid liveness signal | internal/halfchannel | VP-018, VP-053 | proptest | P0 |
-| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-016, VP-017, VP-051 | proptest | P0 |
+| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-017, VP-051 | proptest | P0 |
 | BC-2.01.004 | 44-byte outer header encoding and decoding | internal/frame | VP-001, VP-003 | proptest | P0 |
-| BC-2.01.005 | Channel header opaque to routers | internal/routing | VP-015 | fuzz + audit | P0 |
+| BC-2.01.005 | Channel header opaque to routers | internal/frame | VP-015 | fuzz + audit | P0 |
 | BC-2.01.006 | Session identity cryptographic derivation | internal/frame | VP-014 | proptest | P0 |
 | BC-2.01.007 | Session continuity across IP change | internal/admission | VP-036 | e2e | P0 |
 | BC-2.02.001 | Duplicate-and-race: same frame on two paths | internal/multipath | VP-024 | proptest | P0 |
@@ -49,9 +49,9 @@ modified:
 | BC-2.04.002 | PTY fallback when control mode unavailable | internal/tmux | VP-032 | integration | P0 |
 | BC-2.04.003 | Console attach by name | internal/session | VP-033 | e2e | P1 |
 | BC-2.04.004 | Console detach without closing session | internal/session | VP-033, VP-056 | e2e + integration | P1 |
-| BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-035 | integration | P1 |
+| BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-013, VP-035 | proptest + integration | P1 |
 | BC-2.04.006 | Multi-console fan-out | internal/session | VP-034 | e2e | P0 |
-| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-008, VP-009 | proptest | P0 |
+| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-009 | proptest | P0 |
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
 | BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt | VP-046 | integration | P1 |
@@ -89,26 +89,24 @@ VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 |--------|---------|---------|
 | internal/frame | 4 | proptest (3), fuzz (1) |
 | internal/hmac | 3 | proptest (2), fuzz (1) |
-| internal/halfchannel | 6 | proptest (5), benchmark (1) |
+| internal/halfchannel | 7 | proptest (5), benchmark (2) |
 | internal/arq | 4 | proptest (3), proptest-PE (1) |
 | internal/replay | 2 | proptest (2) |
 | internal/multipath | 4 | proptest (3), integration (1) |
-| internal/paths | 2 | proptest (1), e2e (1) |
-| internal/metrics | 4 | proptest (2), integration (2) |
+| internal/paths | 1 | proptest (1) |
+| internal/metrics | 3 | proptest (1), integration (2) |
 | internal/admission | 5 | proptest (4), e2e (1) |
 | internal/routing | 4 | proptest (2), fuzz+audit (1), e2e (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
 | internal/tmux | 2 | integration (2) |
-| internal/config | 2 | proptest (2) |
+| internal/config | 3 | proptest (2), e2e (1) |
 | internal/discovery | 3 | integration (1), e2e (1), proptest (1) |
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
 | cmd/sbctl | 3 | integration (1), e2e (2) |
 | **Total** | **57** | |
 
-Per-module sum = 57 (no off-table VPs). VP-042 (benchmark, `internal/halfchannel`)
-and VP-052 (integration, `internal/metrics`) are included in the per-module counts
-above. VP-040 module is `internal/multipath` (per VP-INDEX and VP-040.md frontmatter).
+Per-module sum = 57 (no off-table VPs).
 
 ## Zero-VP BCs Check
 

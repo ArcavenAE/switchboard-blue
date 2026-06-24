@@ -64,7 +64,7 @@ traces_to: '.factory/specs/prd.md'
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-CFG-001 | CFG | broken | 1 | "config error: <field>: <problem>. Fix: <suggestion>" | FM-010, BC-2.09.003 |
-| E-CFG-002 | CFG | broken | 1 | "private key export not supported: <reason>" | BC-2.05.007 |
+| E-CFG-002 | CFG | broken | 1 | "private key export not supported: <reason>" | BC-2.05.007 (defensive: emitted if any attempted private-key extraction path is invoked; BC-2.05.007 requires this path to be unreachable. Presence of this code at runtime would indicate a code defect.) |
 | E-CFG-003 | CFG | broken | 1 | "invalid upstream router address: <addr>. Expected format: <ip>:<port>" | BC-2.09.001 |
 | E-CFG-004 | CFG | broken | 1 | "config file not found: <path>" | BC-2.09.003 |
 | E-CFG-005 | CFG | broken | 1 | "config parse error: invalid YAML at line <N>: <detail>" | FM-010, BC-2.09.003 |

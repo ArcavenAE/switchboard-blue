@@ -1,9 +1,11 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-1-spec-crystallization
-phase_step: pending-adversary-pass-4
+phase_step: pending-adversary-pass-5
 refinement_round_2_complete: true
 refinement_round_3_complete: true
+refinement_round_4_complete: true
+structural_audit_complete: true
 product: switchboard
 mode: greenfield
 anchor_strategy: reference-via-frontmatter
@@ -37,7 +39,7 @@ cicd_p2_gaps: 5
 internal_packages: 18
 purity_distribution: {pure_core: 9, boundary: 5, effectful: 4}
 go_verification_toolchain: ["go test", "go test -race", "go test -fuzz", "golangci-lint", "staticcheck", "go-mutesting"]
-timestamp: 2026-06-23T20:30:00Z
+timestamp: 2026-06-23T22:00:00Z
 last_update: 2026-06-23
 
 ---
@@ -121,5 +123,8 @@ Full CI/CD inventory, P0 remediation steps, and P1/P2 gaps: `.factory/specs/cicd
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-02.md`
 - Pass 3 findings: 17 (4 critical, 9 high, 3 medium, 1 low; 1 process-gap)
 - Cycle 1 round-3 refinement: all 17 in-cycle addressed (4 critical + 9 high + 3 medium + 1 low); F-P3-018 [process-gap] VP↔BC title-sync check filed upstream.
-- Trajectory: 27 → 18 → 17 → ? (Pass 4 pending; convergence target = 3 consecutive zero-findings passes)
+- Pass 4 findings: 21 (4 critical, 9 high, 6 medium, 2 low; 1 process-gap)
+- Structural consistency audit (post-pass-4): 64 defects across 10 axes; 51 structural (closeable by 2 mechanical sweeps), 13 individual
+- Cycle 1 round-4 refinement: 64 audit defects addressed mechanically + pass-4 findings F-P4-002, F-P4-008–013 covered by mechanical sweep (E-ADM-007→011, ARCH-11 counts, VP titles, --confirm flag, BC-2.01.005 module). F-P4-001 (PRD §7 BC-2.09.003→CAP-028) NOT yet addressed; F-P4-004 (best/any path quality) NOT yet addressed; F-P4-006 (VP-028/029 BC postcondition gap) NOT yet addressed; F-P4-014 (VP-001 uint32 vs u16) NOT yet addressed; F-P4-017 (module-criticality row count) NOT yet addressed.
+- Trajectory: 27 → 18 → 17 → 21 → ? (Pass 5 pending; convergence target = 3 consecutive zero-findings passes)
 - Full findings: `.factory/cycles/cycle-1/adversarial-reviews/pass-03.md`

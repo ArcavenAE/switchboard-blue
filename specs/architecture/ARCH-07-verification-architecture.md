@@ -40,7 +40,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-002 | `ParseOuterHeader` rejects any byte sequence with `version_major != 1` with ErrVersionMismatch | internal/frame | proptest |
 | VP-003 | `EncodeOuterHeader` produces exactly 44 bytes for all valid inputs | internal/frame | proptest |
 | VP-004 | `ComputeHMAC` and `VerifyHMAC` are consistent: VerifyHMAC(key, frame, ComputeHMAC(key, frame)) == true | internal/hmac | proptest |
-| VP-005 | `VerifyHMAC` returns false for any single-bit flip in the frame payload | internal/hmac | proptest/fuzz |
+| VP-005 | `VerifyHMAC` returns false for any single-bit flip in the frame payload | internal/hmac | fuzz |
 | VP-006 | `VerifyHMAC` returns false for any key not used to compute the HMAC | internal/hmac | proptest |
 | VP-007 | `AdmissionChallenge` private key bytes never appear in the returned challenge or response structs | internal/admission | proptest |
 | VP-008 | `VerifyAdmission` returns false for any public key not in the admitted set | internal/admission | proptest |
@@ -50,7 +50,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-012 | `SessionAuth.Authorize` returns false for any console key not in the session's authorized set | internal/session | proptest |
 | VP-013 | `SessionAuth.Authorize` returns false for a read-only key submitting an upstream frame | internal/session | proptest |
 | VP-014 | `DeriveNodeAddress` is deterministic: same (svtn_id, pubkey) always produces same address | internal/frame | proptest |
-| VP-015 | Outer header payload field is treated as opaque bytes by all router code paths: no attempt to parse channel header | internal/routing | fuzz + code audit |
+| VP-015 | Outer header payload field is treated as opaque bytes by all router code paths: no attempt to parse channel header | internal/routing | fuzz (harness + manual audit) |
 
 ### P1 Properties (Should Prove — Session Correctness)
 
@@ -68,7 +68,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-025 | `DropCache` never exceeds its configured capacity | internal/multipath | proptest |
 | VP-026 | `PathScore` ranking is transitive: if score(A) < score(B) < score(C) then rank(A) < rank(B) < rank(C) | internal/paths | proptest |
 | VP-027 | `QualityIndicator.Compute` transitions are monotonic under sustained degradation: green→yellow→red only | internal/metrics | proptest |
-| VP-028 | `Config.Validate` returns an error for tick_interval outside [5ms, 50ms] | internal/config | unit |
+| VP-028 | `Config.Validate` returns an error for tick_interval outside [5ms, 50ms] | internal/config | proptest |
 | VP-029 | `Config.Validate` returns an error for any missing required field | internal/config | proptest |
 | VP-030 | `sbctl` exits with code 1 and E-NET-001 when daemon connection is refused | cmd/sbctl | integration |
 
