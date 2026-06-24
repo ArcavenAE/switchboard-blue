@@ -1,0 +1,22 @@
+=== RUN   TestParseOuterHeader_TooShort
+=== PAUSE TestParseOuterHeader_TooShort
+=== CONT  TestParseOuterHeader_TooShort
+=== RUN   TestParseOuterHeader_TooShort/zero_bytes
+=== PAUSE TestParseOuterHeader_TooShort/zero_bytes
+=== RUN   TestParseOuterHeader_TooShort/one_byte
+=== PAUSE TestParseOuterHeader_TooShort/one_byte
+=== RUN   TestParseOuterHeader_TooShort/half_size
+=== PAUSE TestParseOuterHeader_TooShort/half_size
+=== RUN   TestParseOuterHeader_TooShort/one_short
+=== PAUSE TestParseOuterHeader_TooShort/one_short
+=== CONT  TestParseOuterHeader_TooShort/zero_bytes
+=== CONT  TestParseOuterHeader_TooShort/one_byte
+=== CONT  TestParseOuterHeader_TooShort/half_size
+=== CONT  TestParseOuterHeader_TooShort/one_short
+--- PASS: TestParseOuterHeader_TooShort (0.00s)
+    --- PASS: TestParseOuterHeader_TooShort/zero_bytes (0.00s)
+    --- PASS: TestParseOuterHeader_TooShort/one_byte (0.00s)
+    --- PASS: TestParseOuterHeader_TooShort/half_size (0.00s)
+    --- PASS: TestParseOuterHeader_TooShort/one_short (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.258s

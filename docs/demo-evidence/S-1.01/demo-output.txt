@@ -1,0 +1,4 @@
+=== RUN   Example_encodeParseRoundTrip
+--- PASS: Example_encodeParseRoundTrip (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.387s

@@ -1,0 +1,6 @@
+=== RUN   TestDeriveNodeAddress_ReturnsExpectedSHA256Prefix
+=== PAUSE TestDeriveNodeAddress_ReturnsExpectedSHA256Prefix
+=== CONT  TestDeriveNodeAddress_ReturnsExpectedSHA256Prefix
+--- PASS: TestDeriveNodeAddress_ReturnsExpectedSHA256Prefix (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.274s
