@@ -257,7 +257,7 @@ func TestParseEncodeRoundTrip(t *testing.T) {
 }
 
 // AC-003 — TestParseOuterHeader_TooShort
-// Traces to BC-2.01.004 precondition 1 (ErrFrameTooShort / E-FRM-001).
+// Traces to BC-2.01.004 precondition 1 (ErrFrameTooShort / E-PRT-002).
 func TestParseOuterHeader_TooShort(t *testing.T) {
 	t.Parallel()
 
@@ -289,7 +289,7 @@ func TestParseOuterHeader_TooShort(t *testing.T) {
 }
 
 // AC-004 — TestParseOuterHeader_VersionMismatch
-// Traces to BC-2.01.004 precondition 2 (ErrVersionMismatch / E-FRM-002).
+// Traces to BC-2.01.004 precondition 2 (ErrVersionMismatch / E-PRT-001).
 // Major version nibble (bits [7:4]) is non-zero → ErrVersionMismatch.
 // Minor version differences (major nibble == 0) must NOT return ErrVersionMismatch.
 func TestParseOuterHeader_VersionMismatch(t *testing.T) {

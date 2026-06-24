@@ -33,12 +33,12 @@ const (
 )
 
 // ErrFrameTooShort is returned by ParseOuterHeader when the input slice
-// is shorter than OuterHeaderSize (44) bytes. Traces to E-FRM-001 /
+// is shorter than OuterHeaderSize (44) bytes. Traces to E-PRT-002 /
 // BC-2.01.004 precondition 1.
 var ErrFrameTooShort = errors.New("frame: outer header requires 44 bytes")
 
-// ErrVersionMismatch is returned by ParseOuterHeader when the version field
-// does not equal VersionByte. Traces to E-FRM-002 / BC-2.01.004
+// ErrVersionMismatch is returned by ParseOuterHeader when the version field's
+// major nibble (bits[7:4]) is non-zero. Traces to E-PRT-001 / BC-2.01.004
 // precondition 2.
 var ErrVersionMismatch = errors.New("frame: unsupported protocol version")
 
@@ -83,11 +83,13 @@ func EncodeOuterHeader(h OuterHeader) [OuterHeaderSize]byte {
 // major nibble (bits[7:4]) is non-zero. Minor-version differences are tolerated.
 func ParseOuterHeader(b []byte) (OuterHeader, error) {
 	if len(b) < OuterHeaderSize {
-		return OuterHeader{}, fmt.Errorf("parse outer header: %w", ErrFrameTooShort)
+		return OuterHeader{}, fmt.Errorf("header truncated: expected %d bytes, got %d: %w", OuterHeaderSize, len(b), ErrFrameTooShort)
 	}
 	// Check major version nibble only — minor differences are forward-compatible.
-	if (b[0]>>4)&0x0F != VersionMajor {
-		return OuterHeader{}, fmt.Errorf("parse outer header: %w", ErrVersionMismatch)
+	major := (b[0] >> 4) & 0x0F
+	minor := b[0] & 0x0F
+	if major != VersionMajor {
+		return OuterHeader{}, fmt.Errorf("unsupported protocol version %d.%d: expected major version %d: %w", major, minor, VersionMajor, ErrVersionMismatch)
 	}
 	var h OuterHeader
 	h.Version = b[0]
