@@ -1,7 +1,12 @@
 ---
 pipeline: IN_PROGRESS
-phase: phase-2-story-decomposition
-phase_step: pending-phase-2-gate
+phase: phase-3-tdd-implementation
+phase_step: wave-1-in-progress
+phase_2_gate: APPROVED
+phase_2_gate_date: 2026-06-24
+phase_2_gate_disposition: approve-proceed-to-wave-1
+phase_3_active_wave: 1
+phase_3_active_stories: [S-1.01, S-1.02]
 phase_1_gate: APPROVED
 phase_1_gate_date: 2026-06-24
 phase_1_gate_disposition: approve-with-drift
@@ -69,12 +74,43 @@ last_update: 2026-06-24
 
 ## Current phase
 
-**Phase 2 — Story Decomposition** (entered 2026-06-24 after Phase 1 gate APPROVED).
+**Phase 3 — TDD Implementation** (entered 2026-06-24 after Phase 2 gate APPROVED).
+
+Phase 2 gate: `approve-proceed-to-wave-1` (2026-06-24). Wave 1 active (S-1.01, S-1.02).
 
 Phase 1 closed: 8 adversarial passes, 8 refinement rounds, 18 commits.
-Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition: approve-with-drift (9 open drift items carried forward; 0 critical, 3 high, 5 medium, 1 low).
+Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition: approve-with-drift.
 
-Story decomposition complete. Awaiting Phase 2 human gate before entering Phase 3 TDD implementation.
+## Phase 3 — TDD Implementation (active)
+
+**Wave 1 active** — frame format + half-channel clock foundation.
+
+| Story | Title | Status | Points | Module |
+|---|---|---|---|---|
+| S-1.01 | Frame codec | pending | 8 | internal/frame |
+| S-1.02 | Half-channel clock | pending | 5 | internal/halfchannel |
+
+Wave 1 dependencies: none (pure-core foundation; both stories independent).
+
+Wave 1 holdout: `.factory/holdout-scenarios/wave-scenarios/wave-1.md` (HS-001).
+
+### Phase 3 prerequisites (BEING ADDRESSED)
+
+- P0-001: branch protection on `develop` — devops-engineer dispatched.
+- P0-002: branch protection on `main` — devops-engineer dispatched.
+- P0-003: required-signatures on protected branches — devops-engineer dispatched.
+
+### Per-story delivery flow
+
+Each story follows `/vsdd-factory:deliver-story`:
+1. devops creates worktree at `.worktrees/<story-id>/`
+2. stub-architect: compilable stubs (todo!() bodies — Red Gate)
+3. test-writer: failing tests from BCs/ACs
+4. implementer: TDD (red → green → refactor)
+5. demo-recorder: per-AC visual demos
+6. devops: push feature branch
+7. pr-manager: full PR lifecycle (open → CI gate → AI review → fix loop → merge)
+8. devops: worktree cleanup
 
 ## Phase 2 — Story Decomposition Output
 
