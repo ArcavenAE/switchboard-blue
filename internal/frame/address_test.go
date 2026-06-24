@@ -63,26 +63,31 @@ func TestDeriveNodeAddress_Deterministic(t *testing.T) {
 
 			// Result must be exactly 8 bytes (asserted by the [8]byte return type,
 			// but we also verify it is non-nil and fully populated).
-			var zero [8]byte
-			// A zero address is valid only when the hash happens to produce it —
-			// which is astronomically unlikely for any of our test inputs.
-			// We rely on assertSHA256Address above for the real check.
-			_ = zero
 		})
 	}
 }
 
-// TestDeriveNodeAddress_OutputIsEightBytes verifies the return type is exactly
-// 8 bytes (structural; compile-time guarantee, but makes the constraint explicit).
-func TestDeriveNodeAddress_OutputIsEightBytes(t *testing.T) {
+// AC-006 / BC-2.01.006 — TestDeriveNodeAddress_ReturnsExpectedSHA256Prefix
+// Verifies the concrete golden value: DeriveNodeAddress must return exactly
+// SHA-256(svtn_id || public_key)[:8] for a deterministic input. Replaces the
+// tautological len-check that SA4006 flagged — [8]byte return type already
+// guarantees length; this test locks in the actual hash content.
+func TestDeriveNodeAddress_ReturnsExpectedSHA256Prefix(t *testing.T) {
 	t.Parallel()
 
 	svtnID := [16]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}
 	publicKey := []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE}
 
+	// Compute expected: SHA-256(svtn_id || public_key)[:8]
+	input := append([]byte{}, svtnID[:]...)
+	input = append(input, publicKey...)
+	sum := sha256.Sum256(input)
+	var expected [8]byte
+	copy(expected[:], sum[:8])
+
 	addr := frame.DeriveNodeAddress(svtnID, publicKey)
-	if len(addr) != 8 {
-		t.Errorf("DeriveNodeAddress returned %d bytes, want 8", len(addr))
+	if addr != expected {
+		t.Errorf("DeriveNodeAddress = %x, want %x", addr, expected)
 	}
 }
 

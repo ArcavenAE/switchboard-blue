@@ -10,33 +10,60 @@ import (
 	"github.com/arcavenae/switchboard/internal/frame"
 )
 
-// AC-001 — TestEncodeOuterHeader_ExactlyFortyFourBytes
-// Traces to BC-2.01.004 postcondition 1.
-func TestEncodeOuterHeader_ExactlyFortyFourBytes(t *testing.T) {
+// AC-001 / BC-2.01.004 — TestEncodeOuterHeader_WireFormatByteOffsets
+// Verifies that EncodeOuterHeader places each field at the correct wire-format
+// byte offset and that payload_len is encoded big-endian (256 → 0x01 0x00 at
+// bytes 2-3). A little-endian regression would fail this test.
+func TestEncodeOuterHeader_WireFormatByteOffsets(t *testing.T) {
 	t.Parallel()
 
 	h := frame.OuterHeader{
-		Version:   frame.VersionByte,
-		FrameType: frame.FrameTypeData,
-		PayloadLen: 256,
-		SVTNID: [16]byte{
-			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-			0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
-		},
-		SrcAddr: [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
-		DstAddr: [8]byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11},
-		HMACTag: [8]byte{0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04},
+		Version:    frame.VersionByte,   // 0x01 (major=0, minor=1)
+		FrameType:  frame.FrameTypeData, // 0x01
+		PayloadLen: 256,                 // big-endian: bytes [01, 00]
+		SVTNID:     [16]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00},
+		SrcAddr:    [8]byte{0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8},
+		DstAddr:    [8]byte{0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8},
+		HMACTag:    [8]byte{0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8},
 	}
 
 	encoded := frame.EncodeOuterHeader(h)
 
-	// The return type is [OuterHeaderSize]byte — a fixed-size array.
-	// Its length is always OuterHeaderSize (44) by construction.
-	if len(encoded) != frame.OuterHeaderSize {
-		t.Errorf("EncodeOuterHeader returned %d bytes, want %d", len(encoded), frame.OuterHeaderSize)
+	// byte 0 = version
+	if encoded[0] != 0x01 {
+		t.Errorf("byte 0 (version) = 0x%02x, want 0x01", encoded[0])
 	}
-	if frame.OuterHeaderSize != 44 {
-		t.Errorf("OuterHeaderSize is %d, want 44", frame.OuterHeaderSize)
+	// byte 1 = frame_type
+	if encoded[1] != 0x01 {
+		t.Errorf("byte 1 (frame_type) = 0x%02x, want 0x01 (FrameTypeData)", encoded[1])
+	}
+	// AC-001 / F-004: bytes 2-3 = payload_len BIG-ENDIAN (256 → 0x01, 0x00)
+	if encoded[2] != 0x01 || encoded[3] != 0x00 {
+		t.Errorf("bytes 2-3 (payload_len big-endian for 256) = 0x%02x 0x%02x, want 0x01 0x00", encoded[2], encoded[3])
+	}
+	// bytes 4-19 = svtn_id (16 bytes)
+	for i := 0; i < 16; i++ {
+		if encoded[4+i] != h.SVTNID[i] {
+			t.Errorf("byte %d (svtn_id[%d]) = 0x%02x, want 0x%02x", 4+i, i, encoded[4+i], h.SVTNID[i])
+		}
+	}
+	// bytes 20-27 = src_addr (8 bytes)
+	for i := 0; i < 8; i++ {
+		if encoded[20+i] != h.SrcAddr[i] {
+			t.Errorf("byte %d (src_addr[%d]) = 0x%02x, want 0x%02x", 20+i, i, encoded[20+i], h.SrcAddr[i])
+		}
+	}
+	// bytes 28-35 = dst_addr (8 bytes)
+	for i := 0; i < 8; i++ {
+		if encoded[28+i] != h.DstAddr[i] {
+			t.Errorf("byte %d (dst_addr[%d]) = 0x%02x, want 0x%02x", 28+i, i, encoded[28+i], h.DstAddr[i])
+		}
+	}
+	// bytes 36-43 = hmac_tag (8 bytes)
+	for i := 0; i < 8; i++ {
+		if encoded[36+i] != h.HMACTag[i] {
+			t.Errorf("byte %d (hmac_tag[%d]) = 0x%02x, want 0x%02x", 36+i, i, encoded[36+i], h.HMACTag[i])
+		}
 	}
 }
 
@@ -210,6 +237,11 @@ func TestParseOuterHeader_TooShort(t *testing.T) {
 			if !errors.Is(err, frame.ErrFrameTooShort) {
 				t.Errorf("ParseOuterHeader(%d bytes) = %v, want ErrFrameTooShort", tc.size, err)
 			}
+			// F-005 contract: error must be WRAPPED (not the bare sentinel)
+			// so callers can attach context via %w without losing the sentinel match.
+			if err == frame.ErrFrameTooShort {
+				t.Errorf("ParseOuterHeader(%d bytes) returned bare sentinel, want wrapped error", tc.size)
+			}
 		})
 	}
 }
@@ -235,6 +267,11 @@ func TestParseOuterHeader_VersionMismatch(t *testing.T) {
 		if !errors.Is(err, frame.ErrVersionMismatch) {
 			t.Errorf("ParseOuterHeader(version=0x10) = %v, want ErrVersionMismatch", err)
 		}
+		// F-005 contract: error must be WRAPPED (not the bare sentinel)
+		// so callers can attach context via %w without losing the sentinel match.
+		if err == frame.ErrVersionMismatch {
+			t.Errorf("ParseOuterHeader(version=0x10) returned bare sentinel, want wrapped error")
+		}
 	})
 
 	t.Run("major=15 (0xF0) returns ErrVersionMismatch", func(t *testing.T) {
@@ -242,6 +279,11 @@ func TestParseOuterHeader_VersionMismatch(t *testing.T) {
 		_, err := frame.ParseOuterHeader(makeFrame(0xF0))
 		if !errors.Is(err, frame.ErrVersionMismatch) {
 			t.Errorf("ParseOuterHeader(version=0xF0) = %v, want ErrVersionMismatch", err)
+		}
+		// F-005 contract: error must be WRAPPED (not the bare sentinel)
+		// so callers can attach context via %w without losing the sentinel match.
+		if err == frame.ErrVersionMismatch {
+			t.Errorf("ParseOuterHeader(version=0xF0) returned bare sentinel, want wrapped error")
 		}
 	})
 
@@ -376,14 +418,11 @@ func FuzzEncodeParseRoundTrip(f *testing.F) {
 		return enc[:]
 	}
 
-	// Add seeds after stubs are implemented (they panic now, but the fuzz
-	// corpus structure is required for the harness to compile).
-	_ = seed1
-	_ = seed2
-	_ = seed3
-	_ = seed4
-	_ = seed5
-
+	f.Add(seed1())
+	f.Add(seed2())
+	f.Add(seed3())
+	f.Add(seed4())
+	f.Add(seed5())
 	f.Add(make([]byte, frame.OuterHeaderSize))
 
 	f.Fuzz(func(t *testing.T, b []byte) {

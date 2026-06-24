@@ -33,18 +33,6 @@ linters:
       # We enforce this — keeps `fmt.Errorf("...: %w", err)` uniform.
       checks: ["all"]
 
-  exclusions:
-    rules:
-      # SA4006: "value is never used" fires on len([N]byte) in test files because
-      # len() on a fixed-size array is a compile-time constant — staticcheck
-      # considers the variable value never read. Test code uses this pattern
-      # intentionally to call the function under test and verify the return type.
-      # Suppressing only in test files; production code remains fully checked.
-      - path: "_test\\.go"
-        linters:
-          - staticcheck
-        text: "SA4006"
-
 formatters:
   enable:
     - gofumpt        # stricter gofmt; CI also checks this separately
