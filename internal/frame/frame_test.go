@@ -67,6 +67,36 @@ func TestEncodeOuterHeader_WireFormatByteOffsets(t *testing.T) {
 	}
 }
 
+// TestEncodeOuterHeader_ExactlyFortyFourBytes is the AC-001-named test per
+// S-1.01 story spec line 52. It asserts the size invariant in isolation
+// (VP-003): if a future refactor changes the return type from [44]byte to
+// a slice, this test must still observe the 44-byte requirement directly.
+// Pairs with TestEncodeOuterHeader_WireFormatByteOffsets which verifies
+// per-byte field offsets.
+func TestEncodeOuterHeader_ExactlyFortyFourBytes(t *testing.T) {
+	t.Parallel()
+
+	h := frame.OuterHeader{
+		Version:    frame.VersionByte,
+		FrameType:  frame.FrameTypeData,
+		PayloadLen: 0,
+	}
+
+	encoded := frame.EncodeOuterHeader(h)
+
+	// VP-003 size invariant: encoded MUST be exactly 44 bytes.
+	// Indexing into encoded[:] makes the value "used" per SA4006 and
+	// exercises the slice length path (which differs from compile-time len
+	// on a fixed array).
+	if got := len(encoded[:]); got != 44 {
+		t.Errorf("EncodeOuterHeader returned %d bytes, want 44", got)
+	}
+	// Pin OuterHeaderSize to the wire-format literal.
+	if frame.OuterHeaderSize != 44 {
+		t.Errorf("OuterHeaderSize = %d, want 44 per BC-2.01.004", frame.OuterHeaderSize)
+	}
+}
+
 // AC-002 — TestParseEncodeRoundTrip
 // Traces to BC-2.01.004 postcondition 2 (round-trip identity).
 func TestParseEncodeRoundTrip(t *testing.T) {
@@ -125,7 +155,7 @@ func TestParseEncodeRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			name: "fec frame all-ones hmac_tag (EC-004)",
+			name: "fec frame all-ones hmac_tag (max-value boundary)",
 			h: frame.OuterHeader{
 				Version:    frame.VersionByte,
 				FrameType:  frame.FrameTypeFec,
@@ -134,6 +164,18 @@ func TestParseEncodeRoundTrip(t *testing.T) {
 				SrcAddr:    [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
 				DstAddr:    [8]byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01},
 				HMACTag:    [8]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			},
+		},
+		{
+			name: "data frame all-zero hmac_tag (EC-004)",
+			h: frame.OuterHeader{
+				Version:    frame.VersionByte,
+				FrameType:  frame.FrameTypeData,
+				PayloadLen: 128,
+				SVTNID:     [16]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10},
+				SrcAddr:    [8]byte{0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89},
+				DstAddr:    [8]byte{0x98, 0x76, 0x54, 0x32, 0x10, 0xFE, 0xDC, 0xBA},
+				HMACTag:    [8]byte{},
 			},
 		},
 		{
