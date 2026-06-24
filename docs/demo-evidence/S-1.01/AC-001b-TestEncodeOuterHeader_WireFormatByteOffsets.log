@@ -1,0 +1,6 @@
+=== RUN   TestEncodeOuterHeader_WireFormatByteOffsets
+=== PAUSE TestEncodeOuterHeader_WireFormatByteOffsets
+=== CONT  TestEncodeOuterHeader_WireFormatByteOffsets
+--- PASS: TestEncodeOuterHeader_WireFormatByteOffsets (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.260s

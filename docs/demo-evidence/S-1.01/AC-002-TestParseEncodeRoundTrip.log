@@ -1,0 +1,50 @@
+=== RUN   TestParseEncodeRoundTrip
+=== PAUSE TestParseEncodeRoundTrip
+=== CONT  TestParseEncodeRoundTrip
+=== RUN   TestParseEncodeRoundTrip/data_frame_v0.1
+=== PAUSE TestParseEncodeRoundTrip/data_frame_v0.1
+=== RUN   TestParseEncodeRoundTrip/empty_tick_frame_with_non-zero_payload_len
+=== PAUSE TestParseEncodeRoundTrip/empty_tick_frame_with_non-zero_payload_len
+=== RUN   TestParseEncodeRoundTrip/ctl_frame_all-zero_svtn_id_(EC-002)
+=== PAUSE TestParseEncodeRoundTrip/ctl_frame_all-zero_svtn_id_(EC-002)
+=== RUN   TestParseEncodeRoundTrip/arq_frame_src_equals_dst_(EC-003)
+=== PAUSE TestParseEncodeRoundTrip/arq_frame_src_equals_dst_(EC-003)
+=== RUN   TestParseEncodeRoundTrip/fec_frame_all-ones_hmac_tag_(max-value_boundary)
+=== PAUSE TestParseEncodeRoundTrip/fec_frame_all-ones_hmac_tag_(max-value_boundary)
+=== RUN   TestParseEncodeRoundTrip/data_frame_all-zero_hmac_tag_(EC-004)
+=== PAUSE TestParseEncodeRoundTrip/data_frame_all-zero_hmac_tag_(EC-004)
+=== RUN   TestParseEncodeRoundTrip/data_frame_payload_len=1
+=== PAUSE TestParseEncodeRoundTrip/data_frame_payload_len=1
+=== RUN   TestParseEncodeRoundTrip/ctl_frame_minor_version_boundary
+=== PAUSE TestParseEncodeRoundTrip/ctl_frame_minor_version_boundary
+=== RUN   TestParseEncodeRoundTrip/fec_frame_max_payload_len_boundary
+=== PAUSE TestParseEncodeRoundTrip/fec_frame_max_payload_len_boundary
+=== RUN   TestParseEncodeRoundTrip/arq_frame_distinctive_bit_patterns
+=== PAUSE TestParseEncodeRoundTrip/arq_frame_distinctive_bit_patterns
+=== RUN   TestParseEncodeRoundTrip/data_frame_all_fields_distinguished
+=== PAUSE TestParseEncodeRoundTrip/data_frame_all_fields_distinguished
+=== CONT  TestParseEncodeRoundTrip/data_frame_v0.1
+=== CONT  TestParseEncodeRoundTrip/data_frame_payload_len=1
+=== CONT  TestParseEncodeRoundTrip/fec_frame_max_payload_len_boundary
+=== CONT  TestParseEncodeRoundTrip/ctl_frame_minor_version_boundary
+=== CONT  TestParseEncodeRoundTrip/data_frame_all-zero_hmac_tag_(EC-004)
+=== CONT  TestParseEncodeRoundTrip/fec_frame_all-ones_hmac_tag_(max-value_boundary)
+=== CONT  TestParseEncodeRoundTrip/arq_frame_src_equals_dst_(EC-003)
+=== CONT  TestParseEncodeRoundTrip/ctl_frame_all-zero_svtn_id_(EC-002)
+=== CONT  TestParseEncodeRoundTrip/empty_tick_frame_with_non-zero_payload_len
+=== CONT  TestParseEncodeRoundTrip/arq_frame_distinctive_bit_patterns
+=== CONT  TestParseEncodeRoundTrip/data_frame_all_fields_distinguished
+--- PASS: TestParseEncodeRoundTrip (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/data_frame_v0.1 (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/data_frame_payload_len=1 (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/fec_frame_max_payload_len_boundary (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/ctl_frame_minor_version_boundary (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/data_frame_all-zero_hmac_tag_(EC-004) (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/fec_frame_all-ones_hmac_tag_(max-value_boundary) (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/arq_frame_src_equals_dst_(EC-003) (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/ctl_frame_all-zero_svtn_id_(EC-002) (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/empty_tick_frame_with_non-zero_payload_len (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/arq_frame_distinctive_bit_patterns (0.00s)
+    --- PASS: TestParseEncodeRoundTrip/data_frame_all_fields_distinguished (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.246s

@@ -1,0 +1,6 @@
+=== RUN   TestDeriveNodeAddress_DifferentSVTNYieldsDifferentAddress
+=== PAUSE TestDeriveNodeAddress_DifferentSVTNYieldsDifferentAddress
+=== CONT  TestDeriveNodeAddress_DifferentSVTNYieldsDifferentAddress
+--- PASS: TestDeriveNodeAddress_DifferentSVTNYieldsDifferentAddress (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.260s

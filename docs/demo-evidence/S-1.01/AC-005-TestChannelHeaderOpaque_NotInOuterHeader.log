@@ -1,0 +1,6 @@
+=== RUN   TestChannelHeaderOpaque_NotInOuterHeader
+=== PAUSE TestChannelHeaderOpaque_NotInOuterHeader
+=== CONT  TestChannelHeaderOpaque_NotInOuterHeader
+--- PASS: TestChannelHeaderOpaque_NotInOuterHeader (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.263s
