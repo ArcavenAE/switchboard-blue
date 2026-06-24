@@ -21,7 +21,8 @@ const (
 )
 
 // Direction identifies which half of a bidirectional channel this instance
-// represents.
+// represents. Effectful consumers route on this value; see Direction() for
+// the list of planned consumers.
 type Direction uint8
 
 const (
@@ -152,9 +153,19 @@ func (h *HalfChannel) TickInterval() time.Duration {
 }
 
 // Direction returns the channel direction (Upstream or Downstream) configured
-// at construction. The pure-core HalfChannel does not behave differently by
-// direction; the field exists so effectful upstream code can route by direction
-// without re-threading the value.
+// at construction.
+//
+// The pure-core HalfChannel does not branch on direction — Tick produces
+// structurally identical frames either way. The field is preserved on the
+// accessor for downstream effectful consumers:
+//
+//   - S-3.01 (tmux/PTY session access): routes ARQ control frames by direction
+//   - S-4.03 (downstream ARQ with ACK/SACK): direction selects retransmit policy
+//   - ADR-008: default tick cadence differs by direction (upstream eager,
+//     downstream paced)
+//
+// BC-2.01.003 establishes upstream and downstream as semantically distinct
+// channels with independent sequence spaces.
 func (h *HalfChannel) Direction() Direction {
 	return h.direction
 }
