@@ -1,13 +1,16 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-1-in-progress
+phase_step: wave-1-in-progress (S-1.01 merged, S-1.02 pending)
 phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_active_wave: 1
-phase_3_active_stories: [S-1.01, S-1.02]
-phase_3_active_story_status: "S-1.01: ready (dispatching deliver-story); S-1.02: pending (blocked by S-1.01)"
+phase_3_completed_stories: [S-1.01]
+phase_3_active_stories: [S-1.02]
+phase_3_active_story_status: "S-1.01: completed (PR #1 merged 1c76160 2026-06-24); S-1.02: ready (next eligible)"
+s_1_01_merge_sha: 1c76160
+s_1_01_pr_number: 1
 phase_1_gate: APPROVED
 phase_1_gate_date: 2026-06-24
 phase_1_gate_disposition: approve-with-drift
@@ -88,7 +91,7 @@ Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition:
 
 | Story | Title | Status | Points | Module |
 |---|---|---|---|---|
-| S-1.01 | Frame codec | pending | 8 | internal/frame |
+| S-1.01 | Frame codec | completed (PR #1 merged 1c76160) | 8 | internal/frame |
 | S-1.02 | Half-channel clock | pending | 5 | internal/halfchannel |
 
 Wave 1 dependencies: none (pure-core foundation; both stories independent).

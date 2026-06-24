@@ -20,8 +20,8 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 21 |
-| Complete | 1 (S-0.01) |
-| Pending | 20 |
+| Complete | 2 (S-0.01, S-1.01) |
+| Pending | 19 |
 | E-phase | 17 |
 | PE-phase | 4 |
 | Total points | 102 |
@@ -32,7 +32,7 @@ inputDocuments:
 | Story ID | Title | Epic | Wave | BC Traces | Subsystems | Points | Priority | Scope | Status |
 |---------|-------|------|------|-----------|-----------|--------|---------|-------|--------|
 | S-0.01 | Port BMAD scaffolding as wave-0 baseline | E-0 | 0 | (none) | cmd/switchboard | 1 | P0 | E | complete |
-| S-1.01 | Implement 44-byte outer header codec | E-1 | 1 | BC-2.01.004, BC-2.01.005, BC-2.01.006 | session-networking | 5 | P0 | E | ready |
+| S-1.01 | Implement 44-byte outer header codec | E-1 | 1 | BC-2.01.004, BC-2.01.005, BC-2.01.006 | session-networking | 5 | P0 | E | completed |
 | S-1.02 | Implement timeslice clock state machine | E-1 | 1 | BC-2.01.001, BC-2.01.002, BC-2.01.003 | session-networking | 8 | P0 | E | pending |
 | S-1.03 | Session continuity via cryptographic re-authentication | E-1 | 2 | BC-2.01.007 | session-networking, admission-security | 5 | P0 | E | pending |
 | S-2.01 | Implement HMAC-SHA256 frame authentication | E-2 | 2 | BC-2.05.005 | admission-security | 5 | P0 | E | pending |

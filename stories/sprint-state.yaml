@@ -25,11 +25,14 @@ stories:
     title: "Implement 44-byte outer header codec in internal/frame"
     epic: E-1
     wave: 1
-    status: ready
+    status: completed
     priority: P0
     scope_phase: E
     points: 5
     bc_traces: [BC-2.01.004, BC-2.01.005, BC-2.01.006]
+    merge_sha: 1c76160
+    pr: 1
+    merged_at: "2026-06-24T16:02:24Z"
 
   - story_id: S-1.02
     title: "Implement timeslice clock state machine in internal/halfchannel"
