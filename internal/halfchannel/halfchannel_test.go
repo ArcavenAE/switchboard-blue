@@ -19,7 +19,7 @@ import (
 //
 // VP-017 ("sequence increments by exactly 1 per tick") is NOT structurally
 // enforced — it requires runtime verification.
-// TestProperty_VP017_SingleFramePerTick exercises this invariant by
+// TestProperty_VP017_SequenceIncrementsByOne exercises this invariant by
 // asserting f2.ChanSeq - f1.ChanSeq == 1 across consecutive ticks.
 
 // -----------------------------------------------------------------------------
@@ -260,10 +260,12 @@ func TestHalfChannelSequenceIncrement(t *testing.T) {
 // AC-005 / VP-041 — Benchmark
 // -----------------------------------------------------------------------------
 
-// BenchmarkHalfChannelTickJitter measures the deviation of successive inter-tick
-// intervals from the configured tick interval. It reports p99 jitter in
-// milliseconds. VP-041 gate (≤ 2ms p99) is enforced in the formal-verification
-// phase; this benchmark records the metric only.
+// BenchmarkHalfChannelTickJitter measures the end-to-end inter-tick interval
+// including the scheduled work (sleep accuracy + tick execution time). It
+// reports p99 jitter in milliseconds. This matches NFR-009 / VP-041 semantics:
+// how often does a frame actually arrive at a downstream consumer, not how
+// accurate the sleep itself is. VP-041 gate (≤ 2ms p99) is enforced in the
+// formal-verification phase; this benchmark records the metric only.
 //
 // The benchmark uses b.N so -benchtime controls the sample count:
 //
@@ -287,8 +289,8 @@ func BenchmarkHalfChannelTickJitter(b *testing.B) {
 		if d := time.Until(target); d > 0 {
 			time.Sleep(d)
 		}
-		now := time.Now().UTC()
 		_ = hc.Tick()
+		now := time.Now().UTC()
 		actual := now.Sub(prev)
 		if actual >= interval {
 			deviations[i] = actual - interval
@@ -441,13 +443,13 @@ func TestHalfChannelTick_MultiplePayloadsQueuedOneTick(t *testing.T) {
 // Property tests
 // -----------------------------------------------------------------------------
 
-// TestProperty_VP017_SingleFramePerTick verifies that successive Tick calls
+// TestProperty_VP017_SequenceIncrementsByOne verifies that successive Tick calls
 // increment ChanSeq by exactly 1. VP-017 is NOT structurally enforced — the
 // return type enforces cardinality (VP-016), but the +1 increment is a runtime
 // invariant. This test asserts f.ChanSeq - prev.ChanSeq == 1 using uint32
 // modular subtraction, so it correctly handles the MaxUint32 → 0 wraparound.
 // VP-017: invariant — every Tick increments ChanSeq by exactly 1.
-func TestProperty_VP017_SingleFramePerTick(t *testing.T) {
+func TestProperty_VP017_SequenceIncrementsByOne(t *testing.T) {
 	t.Parallel()
 
 	const iterations = 10_000
@@ -525,10 +527,11 @@ func TestTickIntervalConstants(t *testing.T) {
 	}
 }
 
-// TestProperty_VP018_Independence verifies that two channels with different
-// ChanIDs maintain independent sequence state across interleaved ticks.
-// VP-018: two channels maintain independent sequence spaces.
-func TestProperty_VP018_Independence(t *testing.T) {
+// TestProperty_VP051_Independence verifies that two channels with different
+// ChanIDs maintain independent sequence spaces and clocks across interleaved
+// ticks. VP-051: two channels maintain independent sequence spaces and clocks
+// across interleaved ticks.
+func TestProperty_VP051_Independence(t *testing.T) {
 	t.Parallel()
 
 	const iterations = 10_000
@@ -547,7 +550,7 @@ func TestProperty_VP018_Independence(t *testing.T) {
 			ticksA++
 			// B must still equal ticksB.
 			if got := b.Seq(); got != ticksB {
-				t.Fatalf("VP-018 violated at iteration %d: ticking A changed B.Seq to %d, want %d",
+				t.Fatalf("VP-051 violated at iteration %d: ticking A changed B.Seq to %d, want %d",
 					i+1, got, ticksB)
 			}
 		} else {
@@ -555,9 +558,49 @@ func TestProperty_VP018_Independence(t *testing.T) {
 			ticksB++
 			// A must still equal ticksA.
 			if got := a.Seq(); got != ticksA {
-				t.Fatalf("VP-018 violated at iteration %d: ticking B changed A.Seq to %d, want %d",
+				t.Fatalf("VP-051 violated at iteration %d: ticking B changed A.Seq to %d, want %d",
 					i+1, got, ticksA)
 			}
 		}
+	}
+}
+
+// TestProperty_VP018_EmptyFrameEmitsForNoPayload verifies VP-018: when Tick
+// is called with no queued payload, the returned frame's Payload field has
+// zero length and FrameType is FrameTypeEmptyTick. Property-style: table-
+// driven over varied (chanID, direction) seeds to surface state-dependent
+// regressions.
+func TestProperty_VP018_EmptyFrameEmitsForNoPayload(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		chanID    uint32
+		direction halfchannel.Direction
+	}{
+		{"upstream-low-id", 0x1, halfchannel.Upstream},
+		{"upstream-high-id", 0xFFFFFFFF, halfchannel.Upstream},
+		{"downstream-low-id", 0x1, halfchannel.Downstream},
+		{"downstream-high-id", 0xFFFFFFFF, halfchannel.Downstream},
+		{"upstream-zero-id", 0x0, halfchannel.Upstream},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			hc := halfchannel.New(tc.chanID, tc.direction, 10*time.Millisecond)
+			// 100 consecutive ticks with no Enqueue — every frame must be empty-tick.
+			for i := 0; i < 100; i++ {
+				f := hc.Tick()
+				if len(f.Payload) != 0 {
+					t.Fatalf("iter %d: len(f.Payload) = %d, want 0", i, len(f.Payload))
+				}
+				if f.FrameType != halfchannel.FrameTypeEmptyTick {
+					t.Fatalf("iter %d: f.FrameType = %#x, want FrameTypeEmptyTick (%#x)", i, f.FrameType, halfchannel.FrameTypeEmptyTick)
+				}
+				if f.ChanID != tc.chanID {
+					t.Fatalf("iter %d: f.ChanID = %#x, want %#x", i, f.ChanID, tc.chanID)
+				}
+			}
+		})
 	}
 }
