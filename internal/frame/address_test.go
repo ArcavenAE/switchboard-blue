@@ -134,3 +134,21 @@ func TestDeriveNodeAddress_DifferentSVTNYieldsDifferentAddress(t *testing.T) {
 		t.Errorf("addr2 mismatch: got %x, want %x", addr2, expectedAddr2)
 	}
 }
+
+// TestDeriveNodeAddress_DifferentPubkeyYieldsDifferentAddress verifies VP-014
+// and BC-2.01.006 canonical "same svtn_id, different pubkey → different address"
+// property. Symmetric to TestDeriveNodeAddress_DifferentSVTNYieldsDifferentAddress.
+func TestDeriveNodeAddress_DifferentPubkeyYieldsDifferentAddress(t *testing.T) {
+	t.Parallel()
+
+	svtnID := [16]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}
+	pubkeyA := []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE}
+	pubkeyB := []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBF} // differs in last byte
+
+	addrA := frame.DeriveNodeAddress(svtnID, pubkeyA)
+	addrB := frame.DeriveNodeAddress(svtnID, pubkeyB)
+
+	if addrA == addrB {
+		t.Errorf("expected different addresses for different pubkeys with same svtn_id, both got %x", addrA)
+	}
+}
