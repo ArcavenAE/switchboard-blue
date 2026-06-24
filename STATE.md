@@ -1,14 +1,15 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-1-in-progress (S-1.01 merged, S-1.02 pending)
+phase_step: wave-1-in-progress (S-1.02 step-2 stubs complete; pause point for context clear)
 phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_active_wave: 1
 phase_3_completed_stories: [S-1.01]
 phase_3_active_stories: [S-1.02]
-phase_3_active_story_status: "S-1.01: completed (PR #1 merged 1c76160); S-1.02: ready (dispatching deliver-story)"
+phase_3_active_story_status: "S-1.02: in-progress, Step 2 of 9 complete, Step 3 (test-writer failing tests) pending"
+phase_3_pause_point: "S-1.02 Step 2/9 (stubs) complete at 63f12f4 on feature/S-1.02-halfchannel-clock; resume by dispatching test-writer for Step 3"
 s_1_01_merge_sha: 1c76160
 s_1_01_pr_number: 1
 phase_1_gate: APPROVED
@@ -84,6 +85,54 @@ Phase 2 gate: `approve-proceed-to-wave-1` (2026-06-24). Wave 1 active (S-1.01, S
 
 Phase 1 closed: 8 adversarial passes, 8 refinement rounds, 18 commits.
 Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition: approve-with-drift.
+
+## Pause/Resume Bookmark — 2026-06-24
+
+**Pipeline paused mid per-story-delivery for S-1.02.**
+
+### Where we are
+
+- Wave 1: S-1.01 ✅ merged (PR #1, develop tip 1c76160)
+- Wave 1: S-1.02 🔄 in-progress, Step 2 of 9 complete
+
+### S-1.02 per-story-delivery progress
+
+| Step | Agent | Status | Artifact |
+|------|-------|--------|----------|
+| 1. Worktree | devops-engineer | ✅ done | `.worktrees/S-1.02/` on `feature/S-1.02-halfchannel-clock` from `origin/develop` (1c76160) |
+| 2. Stubs | stub-architect | ✅ done | commit `63f12f4` — internal/halfchannel/halfchannel.go (5 panic stubs: New, Tick, Enqueue, Seq, TickInterval) + Direction enum + ChannelFrame type + interval constants |
+| 3. Failing tests | test-writer | ⏸ pending | Will write tests for 6 ACs (TestHalfChannelTick_OneFramePerCall etc.) |
+| 4. Implementation | implementer | ⏸ pending | TDD per failing test |
+| 4.5. Adversary convergence | adversary loop | ⏸ pending | BC-5.39.001 ≥3 clean passes |
+| 5. Demos | demo-recorder | ⏸ pending | Per-AC evidence logs + Example godoc test |
+| 6. Push | implementer/devops | ⏸ pending | (Stubs already pushed at this bookmark) |
+| 7. PR lifecycle | pr-manager | ⏸ pending | 9-step process; target develop |
+| 8. Worktree cleanup | devops-engineer | ⏸ pending | Remove `.worktrees/S-1.02/`, delete feature branch |
+| 9. State update | state-manager | ⏸ pending | Mark S-1.02 completed in STORY-INDEX + sprint-state |
+
+### Resume instructions
+
+1. New session reads `.factory/STATE.md` (this section).
+2. Verify worktree state: `git worktree list` shows `.worktrees/S-1.02` on `feature/S-1.02-halfchannel-clock`.
+3. Verify branch state: `git -C .worktrees/S-1.02 log --oneline develop..HEAD` shows `63f12f4 feat(S-1.02): add internal/halfchannel stubs (Red Gate)`.
+4. Dispatch `vsdd-factory:test-writer` for Step 3 (failing tests) — see `.factory/stories/S-1.02-halfchannel-clock.md` ACs.
+5. After tests written, independently verify Red Gate (tests panic per stub), record `.factory/cycles/cycle-1/S-1.02/implementation/red-gate-log.md`, then dispatch `vsdd-factory:implementer` for Step 4.
+6. After implementer: Step 4.5 adversary convergence loop until ≥3 clean passes.
+7. Continue per `agents/orchestrator/per-story-delivery.md`.
+
+### Lessons-learned guardrails to inject into S-1.02 dispatches (from S-1.01)
+
+- DO NOT modify `.golangci.yml` or any project-wide lint/format config to silence findings.
+- DO NOT use language-agnostic placeholders (`todo!()` etc.) — Go uses `panic("not implemented: S-1.02 <name>")`.
+- For SA4006-prone test patterns (calling `len()` on a fixed-size array return), use `encoded[:]` slicing or byte-offset assertions, not bare `len(arr) != N` (compile-time tautology).
+- If error codes are needed, USE ONLY codes that exist in `.factory/specs/prd-supplements/error-taxonomy.md` (don't fabricate). S-1.01 needed `E-PRT-001/002`.
+- VP Source Contract titles in any new VP files must match `BC-INDEX.md` canonical titles verbatim (sentence-case).
+- Adversary returns chat text not files (per #211) — orchestrator must Write findings to disk after each pass.
+
+### Open items (independent of S-1.02)
+
+- Wave 1 integration gate (after S-1.02 merges): consistency-validator + wave-1 holdout HS-001 + wave-adversary on the merged S-1.01+S-1.02 diff.
+- Phase 3 Wave 4 will be first multi-story fan-out opportunity (4 stories: S-4.01, S-4.02, S-4.03, S-6.01 in parallel after Wave 2+3 complete).
 
 ## Phase 3 — TDD Implementation (active)
 
