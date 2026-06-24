@@ -8,8 +8,8 @@ phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_active_wave: 1
 phase_3_completed_stories: [S-1.01]
 phase_3_active_stories: [S-1.02]
-phase_3_active_story_status: "S-1.02: in-progress, Step 2 of 9 complete, Step 3 (test-writer failing tests) pending"
-phase_3_pause_point: "S-1.02 Step 2/9 (stubs) complete at 63f12f4 on feature/S-1.02-halfchannel-clock; resume by dispatching test-writer for Step 3"
+phase_3_active_story_status: "S-1.02: in-progress, Step 4.5 adversarial convergence COMPLETE (BC-5.39.001 satisfied, 3 consecutive clean passes), Step 5 (demos) pending"
+phase_3_pause_point: "S-1.02 Steps 1-4.5 complete (worktree, stubs, tests, impl, adversarial convergence); resume by dispatching demo-recorder for Step 5"
 s_1_01_merge_sha: 1c76160
 s_1_01_pr_number: 1
 phase_1_gate: APPROVED
@@ -78,7 +78,12 @@ s_1_02_adversary_pass_05: 4_findings_not_converged
 s_1_02_adversary_pass_06: 3_findings_not_converged
 s_1_02_adversary_pass_07: 0_findings_converged
 s_1_02_adversary_pass_08: 0_findings_converged
-s_1_02_adversary_clean_streak: 2
+s_1_02_adversary_pass_09: 0_findings_converged
+s_1_02_adversary_clean_streak: 3
+s_1_02_adversary_status: CONVERGED
+s_1_02_adversary_total_passes: 9
+s_1_02_adversary_total_findings: 39
+s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
 timestamp: 2026-06-24T00:00:00Z
 last_update: 2026-06-24
 
@@ -127,7 +132,33 @@ Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition:
 - Adversary pass 6 complete: 3 findings (1 high BC↔story drift, 1 med AC trace, 1 low file structure); finding count decaying.
 - Adversary pass 7 complete: 0 findings — CONVERGED. Clean streak 1/3. Need passes 8 and 9 also clean to declare BC-5.39.001 convergence.
 - Adversary pass 8 complete: 0 findings — CONVERGED. Clean streak 2/3. Pass 9 pending for full convergence.
-- Finding trajectory: 9 → 11 → 7 → 5 → 4 → 3 → 0 → 0
+- Adversary pass 9 complete: 0 findings — CONVERGED. Clean streak 3/3. BC-5.39.001 convergence declared.
+- Finding trajectory: 9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0
+
+## S-1.02 Adversarial Convergence — COMPLETE 2026-06-24
+
+Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy BC-5.39.001.
+
+- Total passes: 9
+- Total findings resolved: 39 (5 critical, 8 high, 11 medium, 12 low, 3 nitpick across passes 1-6)
+- Trajectory: 9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0
+- Worktree HEAD: 1a6005e on feature/S-1.02-halfchannel-clock
+- Final tree: halfchannel.go (171 LOC), halfchannel_test.go (612 LOC), wraparound_test.go (35 LOC)
+- Spec versions: BC-2.01.001 v1.1, BC-2.01.002 v1.3, story S-1.02 revision 1.5, VP-053 v1.2
+
+### Per-story-delivery progress
+| Step | Status |
+|------|--------|
+| 1. Worktree | done (63f12f4) |
+| 2. Stubs | done (63f12f4) |
+| 3. Failing tests | done (bf00775) |
+| 4. Implementation | done (0868af9) |
+| 4.5. Adversarial convergence | done (9 passes, 1a6005e tip) |
+| 5. Per-AC demos | pending |
+| 6. Push | pending |
+| 7. PR lifecycle | pending |
+| 8. Worktree cleanup | pending |
+| 9. State update | pending |
 
 ### Resume instructions
 
