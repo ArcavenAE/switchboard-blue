@@ -5,7 +5,8 @@
 // The HMAC tag is always 8 bytes (64-bit truncation of the 32-byte HMAC-SHA256 output).
 //
 // Import constraints (ARCH-08 §boundary-violation-rules): this package MUST NOT
-// import any other internal/ package. Only stdlib and golang.org/x/crypto are permitted.
+// import any other internal/ package. Only stdlib is permitted; no internal/
+// imports and no external dependencies.
 package hmac
 
 import (
@@ -62,6 +63,43 @@ func VerifyHMAC(key []byte, frameBytes []byte, tag [TagSize]byte) bool {
 	return ghmac.Equal(expected[:], tag[:])
 }
 
+// hkdfSHA256 implements HKDF (RFC 5869) over SHA-256.
+//
+// Extract: PRK = HMAC-SHA256(salt, IKM)
+// Expand: OKM = T(1) || T(2) || ... || T(N), where
+//
+//	T(0) = empty,
+//	T(i) = HMAC-SHA256(PRK, T(i-1) || info || byte(i))
+//
+// Output: OKM truncated to length bytes.
+//
+// Supports L up to 255 * HMAC-SHA256 output size = 8160 bytes per RFC 5869 §2.3.
+// Callers pass a non-nil salt (the empty case is the caller's responsibility:
+// RFC 5869 §2.2 says salt is OPTIONAL and substitutes a zero-byte string of
+// HMAC-SHA256 output length when nil — we do NOT auto-substitute here; callers
+// must pass the salt they want).
+func hkdfSHA256(ikm, salt, info []byte, length int) []byte {
+	// Extract: PRK = HMAC-SHA256(salt, IKM)
+	extractMAC := ghmac.New(sha256.New, salt)
+	extractMAC.Write(ikm)
+	prk := extractMAC.Sum(nil) // 32 bytes
+
+	// Expand: build T(1), T(2), ..., until we have at least `length` bytes.
+	// Each iteration appends one 32-byte block; for L=32 only T(1) is needed,
+	// for L=42 (RFC 5869 §A.1) T(1)+T(2) are needed.
+	var okm []byte
+	var prev []byte
+	for i := byte(1); len(okm) < length; i++ {
+		expandMAC := ghmac.New(sha256.New, prk)
+		expandMAC.Write(prev)
+		expandMAC.Write(info)
+		expandMAC.Write([]byte{i})
+		prev = expandMAC.Sum(nil)
+		okm = append(okm, prev...)
+	}
+	return okm[:length]
+}
+
 // DeriveKey derives a per-(node, SVTN) frame_auth_key via HKDF-SHA256.
 //
 // Per BC-2.05.005 precondition 2 and ADR-001 (amended 2026-06-23):
@@ -71,23 +109,11 @@ func VerifyHMAC(key []byte, frameBytes []byte, tag [TagSize]byte) bool {
 // inputs always produce the same output (AC-005). svtnID of all-zeros is
 // accepted (EC-002).
 //
-// HKDF is implemented inline per RFC 5869 using stdlib crypto/hmac + crypto/sha256
-// (golang.org/x/crypto/hkdf is not vendored; pure-core stdlib-only discipline).
-// For L=32 bytes only one expand iteration is needed (T(1) == OKM).
+// HKDF is implemented via hkdfSHA256 per RFC 5869 using stdlib crypto/hmac +
+// crypto/sha256 (pure-core stdlib-only discipline).
 func DeriveKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
-	// HKDF-Extract: PRK = HMAC-SHA256(salt=svtnID, IKM=nodeAdmissionPubkey)
-	extractor := ghmac.New(sha256.New, svtnID[:])
-	extractor.Write(nodeAdmissionPubkey)
-	prk := extractor.Sum(nil)
-
-	// HKDF-Expand: T(1) = HMAC-SHA256(PRK, info || 0x01)
-	// For L=32, T(1) is the entire OKM (one iteration suffices).
-	expander := ghmac.New(sha256.New, prk)
-	expander.Write([]byte(HKDFInfo))
-	expander.Write([]byte{0x01})
-	okm := expander.Sum(nil)
-
-	var key [KeySize]byte
-	copy(key[:], okm[:KeySize])
-	return key
+	okm := hkdfSHA256(nodeAdmissionPubkey, svtnID[:], []byte(HKDFInfo), KeySize)
+	var out [KeySize]byte
+	copy(out[:], okm)
+	return out
 }
