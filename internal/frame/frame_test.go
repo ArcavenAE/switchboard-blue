@@ -472,12 +472,22 @@ func FuzzEncodeParseRoundTrip(f *testing.F) {
 			return
 		}
 		h, err := frame.ParseOuterHeader(b)
+
+		// VP-002: any non-zero major nibble must trigger ErrVersionMismatch.
+		if (b[0]>>4)&0x0F != 0 {
+			if !errors.Is(err, frame.ErrVersionMismatch) {
+				t.Fatalf("VP-002 violation: major nibble=%d non-zero but err=%v, want errors.Is(ErrVersionMismatch)", (b[0]>>4)&0x0F, err)
+			}
+			return
+		}
+
+		// VP-001 round-trip identity for accepted frames.
 		if err != nil {
 			return
 		}
 		encoded := frame.EncodeOuterHeader(h)
 		// Every encoded byte must match the original input byte-for-byte
-		// (round-trip identity; VP-001/002/003).
+		// (round-trip identity; VP-001/003).
 		for i := range frame.OuterHeaderSize {
 			if encoded[i] != b[i] {
 				t.Errorf("round-trip mismatch at byte %d: got 0x%02x, want 0x%02x", i, encoded[i], b[i])

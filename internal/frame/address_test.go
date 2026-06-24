@@ -60,9 +60,6 @@ func TestDeriveNodeAddress_Deterministic(t *testing.T) {
 
 			// Correctness: verify result equals SHA-256(svtn_id || public_key)[:8].
 			assertSHA256Address(t, tc.svtnID, tc.publicKey, addr1)
-
-			// Result must be exactly 8 bytes (asserted by the [8]byte return type,
-			// but we also verify it is non-nil and fully populated).
 		})
 	}
 }
