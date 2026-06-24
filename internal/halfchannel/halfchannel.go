@@ -7,15 +7,17 @@ package halfchannel
 import (
 	"errors"
 	"time"
+
+	"github.com/arcavenae/switchboard/internal/frame"
 )
 
-// FrameType discriminators for ChannelFrame. These byte values are intentionally
-// kept in sync with internal/frame.FrameTypeData (0x01) and
-// internal/frame.FrameTypeEmptyTick (0x02) per ARCH-02 §3.x wire-format
-// frame-type byte table. If those values ever change, update both packages.
+// FrameTypeData and FrameTypeEmptyTick are aliases of the canonical wire-format
+// constants defined in internal/frame (ARCH-02 §3.1). Using aliases instead of
+// local literals ensures these values stay in sync with the wire-format source
+// of truth automatically — no "keep in sync" comment is needed.
 const (
-	FrameTypeData      byte = 0x01
-	FrameTypeEmptyTick byte = 0x02
+	FrameTypeData      = frame.FrameTypeData
+	FrameTypeEmptyTick = frame.FrameTypeEmptyTick
 )
 
 // Direction identifies which half of a bidirectional channel this instance
@@ -29,9 +31,14 @@ const (
 	Downstream
 )
 
-// Tick interval bounds per ADR-008. The effectful scheduling layer MUST keep
-// its timer period within [MinTickInterval, MaxTickInterval]. The pure-core
-// HalfChannel itself never reads a wall clock.
+// MinTickInterval and MaxTickInterval are the canonical bounds for tick
+// scheduling per ADR-008. They are exported as documentary constants for
+// the effectful scheduling layer to use in its own range check; the
+// pure-core HalfChannel does NOT validate `tickInterval` against these
+// bounds inside New (purity: a constructor that panics is a code smell).
+// Callers MUST keep their configured interval within [MinTickInterval,
+// MaxTickInterval] — exceeding the bounds is undefined behavior at this
+// layer.
 const (
 	MinTickInterval = 5 * time.Millisecond
 	MaxTickInterval = 50 * time.Millisecond
@@ -42,9 +49,10 @@ const (
 // (OuterHeader from internal/frame) is assembled by the effectful network
 // layer, not here (ARCH-09 purity boundary; BC-2.01.005 invariant 1).
 //
-// FrameType is set to FrameTypeData (0x01) when Payload is non-nil, or
-// FrameTypeEmptyTick (0x02) when Payload is nil (BC-2.01.002 postcondition 2).
-// The outer-assembler reads FrameType and sets OuterHeader.frame_type accordingly.
+// FrameType is set to frame.FrameTypeData (0x01) when Payload is non-nil, or
+// frame.FrameTypeEmptyTick (0x02) when Payload is nil (BC-2.01.002
+// postcondition 1–2). The outer-assembler reads FrameType and sets
+// OuterHeader.frame_type accordingly.
 //
 // Flags bit layout (ARCH-02 §3.2):
 //
@@ -59,9 +67,9 @@ type ChannelFrame struct {
 	Payload   []byte
 }
 
-// ErrNilPayload is returned by Enqueue when a nil payload is passed
-// (BC-2.01.002 precondition).
-var ErrNilPayload = errors.New("halfchannel: payload is nil")
+// ErrEmptyPayload is returned by Enqueue when a nil or zero-length payload is
+// passed (BC-2.01.002 precondition 4).
+var ErrEmptyPayload = errors.New("enqueue: payload must not be empty")
 
 // HalfChannel is a pure-core timeslice clock state machine for one
 // directional half of a Switchboard session channel.
@@ -98,7 +106,7 @@ func (h *HalfChannel) Tick() ChannelFrame {
 	h.seq++
 
 	var payload []byte
-	frameType := FrameTypeEmptyTick
+	var frameType byte = FrameTypeEmptyTick
 	if len(h.pending) > 0 {
 		payload = h.pending[0]
 		// Nil the freed slot before reslicing to allow GC of large payloads.
@@ -118,10 +126,11 @@ func (h *HalfChannel) Tick() ChannelFrame {
 
 // Enqueue appends payload to the pending queue for emission on subsequent
 // ticks. The payload is not copied; the caller must not mutate it after
-// passing it to Enqueue. Returns ErrNilPayload if payload is nil.
+// passing it to Enqueue. Returns ErrEmptyPayload if payload is nil or has
+// zero length (BC-2.01.002 precondition 4).
 func (h *HalfChannel) Enqueue(payload []byte) error {
-	if payload == nil {
-		return ErrNilPayload
+	if len(payload) == 0 {
+		return ErrEmptyPayload
 	}
 
 	h.pending = append(h.pending, payload)
@@ -140,4 +149,12 @@ func (h *HalfChannel) Seq() uint32 {
 // accessing unexported fields.
 func (h *HalfChannel) TickInterval() time.Duration {
 	return h.tickInterval
+}
+
+// Direction returns the channel direction (Upstream or Downstream) configured
+// at construction. The pure-core HalfChannel does not behave differently by
+// direction; the field exists so effectful upstream code can route by direction
+// without re-threading the value.
+func (h *HalfChannel) Direction() Direction {
+	return h.direction
 }
