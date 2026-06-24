@@ -6,6 +6,7 @@ package halfchannel
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/frame"
@@ -63,14 +64,24 @@ const (
 type ChannelFrame struct {
 	ChanID    uint32
 	ChanSeq   uint32
-	FrameType byte
+	FrameType frame.FrameType
 	Flags     byte
 	Payload   []byte
 }
 
+// MaxPayloadSize is the maximum byte length accepted by Enqueue, derived from
+// BC-2.01.002 v1.4 PC5: uint16 max (65535) minus the worst-case channel header
+// size (20 bytes when SACK_present=1). The bound is conservative — it always
+// holds, regardless of whether the outer-assembler chooses to include SACK bytes
+// for a given frame.
+const MaxPayloadSize = 65535 - 20 // = 65515 bytes
+
 // ErrEmptyPayload is returned by Enqueue when a nil or zero-length payload is
 // passed (BC-2.01.002 precondition 4).
 var ErrEmptyPayload = errors.New("enqueue: payload must not be empty")
+
+// ErrPayloadTooLarge is returned by Enqueue when len(payload) > MaxPayloadSize.
+var ErrPayloadTooLarge = errors.New("halfchannel: payload exceeds MaxPayloadSize")
 
 // HalfChannel is a pure-core timeslice clock state machine for one
 // directional half of a Switchboard session channel.
@@ -107,7 +118,7 @@ func (h *HalfChannel) Tick() ChannelFrame {
 	h.seq++
 
 	var payload []byte
-	var frameType byte = FrameTypeEmptyTick
+	frameType := FrameTypeEmptyTick
 	if len(h.pending) > 0 {
 		payload = h.pending[0]
 		// Nil the freed slot before reslicing to allow GC of large payloads.
@@ -132,6 +143,9 @@ func (h *HalfChannel) Tick() ChannelFrame {
 func (h *HalfChannel) Enqueue(payload []byte) error {
 	if len(payload) == 0 {
 		return ErrEmptyPayload
+	}
+	if len(payload) > MaxPayloadSize {
+		return fmt.Errorf("len(payload)=%d max=%d: %w", len(payload), MaxPayloadSize, ErrPayloadTooLarge)
 	}
 
 	h.pending = append(h.pending, payload)

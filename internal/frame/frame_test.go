@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -298,7 +299,7 @@ func TestParseOuterHeader_VersionMismatch(t *testing.T) {
 	makeFrame := func(versionByte byte) []byte {
 		b := make([]byte, frame.OuterHeaderSize)
 		b[0] = versionByte
-		b[1] = frame.FrameTypeData
+		b[1] = byte(frame.FrameTypeData)
 		binary.BigEndian.PutUint16(b[2:4], 0)
 		return b
 	}
@@ -494,6 +495,99 @@ func FuzzEncodeParseRoundTrip(f *testing.F) {
 			}
 		}
 	})
+}
+
+// TestFrameType_Valid asserts FrameType.Valid() returns true exactly for the
+// five canonical enum values (ARCH-02 §3.1) and false otherwise.
+//
+// Red Gate: references frame.FrameType (named type) and (FrameType).Valid()
+// which do not exist until the implementer's commit lands.
+func TestFrameType_Valid(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ft   frame.FrameType
+		want bool
+	}{
+		{"data", frame.FrameTypeData, true},
+		{"empty_tick", frame.FrameTypeEmptyTick, true},
+		{"ctl", frame.FrameTypeCtl, true},
+		{"arq", frame.FrameTypeArq, true},
+		{"fec", frame.FrameTypeFec, true},
+		{"zero", frame.FrameType(0x00), false},
+		{"just_above_max", frame.FrameType(0x06), false},
+		{"max_byte", frame.FrameType(0xFF), false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.ft.Valid(); got != tc.want {
+				t.Errorf("FrameType(%#x).Valid() = %v, want %v", byte(tc.ft), got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseOuterHeader_RejectsInvalidFrameType asserts that a 44-byte buffer
+// with an out-of-range frame_type byte returns an error wrapping
+// frame.ErrInvalidFrameType per errors.Is (ARCH-02 §3.1, F-002).
+//
+// Red Gate: references frame.ErrInvalidFrameType which does not exist until
+// the implementer's commit lands.
+func TestParseOuterHeader_RejectsInvalidFrameType(t *testing.T) {
+	t.Parallel()
+	// Bytes not in {0x01..0x05}: the canonical five enum values.
+	invalids := []byte{0x00, 0x06, 0x77, 0xFF}
+	for _, b := range invalids {
+		b := b
+		t.Run(fmt.Sprintf("frame_type=%#x", b), func(t *testing.T) {
+			t.Parallel()
+			buf := make([]byte, frame.OuterHeaderSize)
+			buf[0] = frame.VersionByte // valid version
+			buf[1] = b                 // invalid frame_type
+			_, err := frame.ParseOuterHeader(buf)
+			if err == nil {
+				t.Fatalf("ParseOuterHeader with frame_type=%#x returned nil error, want ErrInvalidFrameType", b)
+			}
+			if !errors.Is(err, frame.ErrInvalidFrameType) {
+				t.Errorf("err = %v, want errors.Is(err, frame.ErrInvalidFrameType)", err)
+			}
+		})
+	}
+}
+
+// TestParseOuterHeader_AcceptsAllValidFrameTypes asserts that all five
+// canonical FrameType values pass ParseOuterHeader's enum validation.
+// This is a regression guard against an over-strict validator.
+//
+// Red Gate: references frame.FrameType (named type) and frame.ErrInvalidFrameType
+// which do not exist until the implementer's commit lands.
+func TestParseOuterHeader_AcceptsAllValidFrameTypes(t *testing.T) {
+	t.Parallel()
+	valid := []frame.FrameType{
+		frame.FrameTypeData,
+		frame.FrameTypeEmptyTick,
+		frame.FrameTypeCtl,
+		frame.FrameTypeArq,
+		frame.FrameTypeFec,
+	}
+	for _, ft := range valid {
+		ft := ft
+		t.Run(fmt.Sprintf("frame_type=%#x", byte(ft)), func(t *testing.T) {
+			t.Parallel()
+			buf := make([]byte, frame.OuterHeaderSize)
+			buf[0] = frame.VersionByte
+			buf[1] = byte(ft)
+			hdr, err := frame.ParseOuterHeader(buf)
+			if err != nil {
+				t.Fatalf("ParseOuterHeader with valid frame_type=%#x: unexpected err: %v", byte(ft), err)
+			}
+			if hdr.FrameType != ft {
+				t.Errorf("hdr.FrameType = %#x, want %#x", byte(hdr.FrameType), byte(ft))
+			}
+		})
+	}
 }
 
 // assertSHA256Address is a test helper that derives the expected 8-byte node
