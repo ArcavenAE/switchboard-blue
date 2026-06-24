@@ -38,11 +38,15 @@ stories:
     title: "Implement timeslice clock state machine in internal/halfchannel"
     epic: E-1
     wave: 1
-    status: ready
+    status: completed
     priority: P0
     scope_phase: E
     points: 8
     bc_traces: [BC-2.01.001, BC-2.01.002, BC-2.01.003]
+    merge_sha: 9e9a98a
+    pr: 2
+    merged_at: "2026-06-24"
+    alpha_tag: alpha-20260624-193019-9e9a98a
 
   - story_id: S-1.03
     title: "Session continuity via cryptographic re-authentication"

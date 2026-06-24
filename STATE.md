@@ -6,10 +6,14 @@ phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_active_wave: 1
-phase_3_completed_stories: [S-1.01]
-phase_3_active_stories: [S-1.02]
-phase_3_active_story_status: "S-1.02: in-progress, Step 4.5 adversarial convergence COMPLETE (BC-5.39.001 satisfied, 3 consecutive clean passes), Step 5 (demos) pending"
-phase_3_pause_point: "S-1.02 Steps 1-4.5 complete (worktree, stubs, tests, impl, adversarial convergence); resume by dispatching demo-recorder for Step 5"
+phase_3_completed_stories: [S-1.01, S-1.02]
+phase_3_active_stories: []
+phase_3_pause_point: "S-1.02 fully delivered. Wave 1 has 2/2 stories merged (S-1.01 #1@1c76160, S-1.02 #2@9e9a98a). Awaiting wave-1 integration gate (consistency-validator + HS-001 holdout + wave-adversary on merged develop tip 9e9a98a)."
+s_1_02_merge_sha: 9e9a98a
+s_1_02_pr_number: 2
+s_1_02_alpha_tag: alpha-20260624-193019-9e9a98a
+s_1_02_status: completed
+s_1_02_unblocks: [S-3.01, S-4.02, S-4.03]
 s_1_01_merge_sha: 1c76160
 s_1_01_pr_number: 1
 phase_1_gate: APPROVED
@@ -115,14 +119,13 @@ Trajectory: 27 → 18 → 17 → 21 → 17 → 14 → 7 → 9. Gate disposition:
 |------|-------|--------|----------|
 | 1. Worktree | devops-engineer | ✅ done | `.worktrees/S-1.02/` on `feature/S-1.02-halfchannel-clock` from `origin/develop` (1c76160) |
 | 2. Stubs | stub-architect | ✅ done | commit `63f12f4` — internal/halfchannel/halfchannel.go (5 panic stubs: New, Tick, Enqueue, Seq, TickInterval) + Direction enum + ChannelFrame type + interval constants |
-| 3. Failing tests | test-writer | ⏸ pending | Will write tests for 6 ACs (TestHalfChannelTick_OneFramePerCall etc.) |
-| 4. Implementation | implementer | ⏸ pending | TDD per failing test |
-| 4.5. Adversary convergence | adversary loop | ⏸ pending | BC-5.39.001 ≥3 clean passes |
-| 5. Demos | demo-recorder | ⏸ pending | Per-AC evidence logs + Example godoc test |
-| 6. Push | implementer/devops | ⏸ pending | (Stubs already pushed at this bookmark) |
-| 7. PR lifecycle | pr-manager | ⏸ pending | 9-step process; target develop |
-| 8. Worktree cleanup | devops-engineer | ⏸ pending | Remove `.worktrees/S-1.02/`, delete feature branch |
-| 9. State update | state-manager | ⏸ pending | Mark S-1.02 completed in STORY-INDEX + sprint-state |
+| 3. Failing tests | test-writer | ✅ done | commit `bf00775` |
+| 4. Implementation | implementer | ✅ done | commit `0868af9` |
+| 4.5. Adversary convergence | adversary loop | ✅ done | 9 passes, 3 consecutive clean (passes 7-9), tip `1a6005e` |
+| 5. Demos | demo-recorder | ✅ done | commit `394f661` (worktree) + `cecc28f` (factory evidence) |
+| 6. Push + 7. PR lifecycle | pr-manager | ✅ done | PR #2, merged at `9e9a98a` on develop |
+| 8. Worktree cleanup | devops-engineer | ✅ done | 2026-06-24 (devops a0757c650029e8c29) |
+| 9. State update | state-manager | ✅ done | this commit |
 
 - Adversary pass 1 complete: 9 findings (2 critical, 3 high, 2 medium, 2 low); routing to PO + architect + test-writer + implementer.
 - Adversary pass 2 complete: 11 findings (0 crit, 4 high, 4 med, 3 low); routing.
@@ -154,11 +157,11 @@ Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy 
 | 3. Failing tests | done (bf00775) |
 | 4. Implementation | done (0868af9) |
 | 4.5. Adversarial convergence | done (9 passes, 1a6005e tip) |
-| 5. Per-AC demos | pending |
-| 6. Push | pending |
-| 7. PR lifecycle | pending |
-| 8. Worktree cleanup | pending |
-| 9. State update | pending |
+| 5. Per-AC demos | done (394f661 worktree, cecc28f factory) |
+| 6. Push | done |
+| 7. PR lifecycle | done (PR #2, merge 9e9a98a) |
+| 8. Worktree cleanup | done (2026-06-24, devops a0757c650029e8c29) |
+| 9. State update | done (this commit) |
 
 ### Resume instructions
 
@@ -184,6 +187,16 @@ Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy 
 - Wave 1 integration gate (after S-1.02 merges): consistency-validator + wave-1 holdout HS-001 + wave-adversary on the merged S-1.01+S-1.02 diff.
 - Phase 3 Wave 4 will be first multi-story fan-out opportunity (4 stories: S-4.01, S-4.02, S-4.03, S-6.01 in parallel after Wave 2+3 complete).
 
+## S-1.02 Closed — 2026-06-24
+
+- PR #2 merged via squash at `9e9a98a` on `develop`; alpha tag `alpha-20260624-193019-9e9a98a` cut automatically
+- 9 commits on feature branch: stubs → failing tests → implementation → 5 fix commits → demos
+- 9 adversary passes; finding trajectory 9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0; 39 findings resolved across passes 1-6
+- Spec versions advanced: story S-1.02 rev 1.0 → 1.5; BC-2.01.001 v1.0 → 1.1; BC-2.01.002 v1.1 → 1.3; VP-053 v1.0 → 1.2
+- Final tree: halfchannel.go (171 LOC), halfchannel_test.go (612 LOC), wraparound_test.go (35 LOC); lint clean; race-free
+- Worktree `.worktrees/S-1.02/` removed; local + remote `feature/S-1.02-halfchannel-clock` branches deleted
+- Unblocks: S-3.01, S-4.02, S-4.03
+
 ## Phase 3 — TDD Implementation (active)
 
 **Wave 1 active** — frame format + half-channel clock foundation.
@@ -191,7 +204,7 @@ Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy 
 | Story | Title | Status | Points | Module |
 |---|---|---|---|---|
 | S-1.01 | Frame codec | completed (PR #1 merged 1c76160) | 8 | internal/frame |
-| S-1.02 | Half-channel clock | pending | 5 | internal/halfchannel |
+| S-1.02 | Half-channel clock | completed (PR #2 merged 9e9a98a) | 5 | internal/halfchannel |
 
 Wave 1 dependencies: none (pure-core foundation; both stories independent).
 
