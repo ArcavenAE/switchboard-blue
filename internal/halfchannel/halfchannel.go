@@ -7,11 +7,15 @@ package halfchannel
 import (
 	"errors"
 	"time"
+)
 
-	// frame is the only internal dependency permitted by ARCH-08 topological
-	// order position 7. FrameTypeData and FrameTypeEmptyTick are used by the
-	// implementer when populating ChannelFrame.Flags and related fields.
-	_ "github.com/arcavenae/switchboard/internal/frame"
+// FrameType discriminators for ChannelFrame. These byte values are intentionally
+// kept in sync with internal/frame.FrameTypeData (0x01) and
+// internal/frame.FrameTypeEmptyTick (0x02) per ARCH-02 §3.x wire-format
+// frame-type byte table. If those values ever change, update both packages.
+const (
+	FrameTypeData      byte = 0x01
+	FrameTypeEmptyTick byte = 0x02
 )
 
 // Direction identifies which half of a bidirectional channel this instance
@@ -38,16 +42,21 @@ const (
 // (OuterHeader from internal/frame) is assembled by the effectful network
 // layer, not here (ARCH-09 purity boundary; BC-2.01.005 invariant 1).
 //
+// FrameType is set to FrameTypeData (0x01) when Payload is non-nil, or
+// FrameTypeEmptyTick (0x02) when Payload is nil (BC-2.01.002 postcondition 2).
+// The outer-assembler reads FrameType and sets OuterHeader.frame_type accordingly.
+//
 // Flags bit layout (ARCH-02 §3.2):
 //
 //	bit 0 — FEC_present
 //	bit 1 — ARQ_req
 //	bit 2 — SACK_present
 type ChannelFrame struct {
-	ChanID  uint32
-	ChanSeq uint32
-	Flags   byte
-	Payload []byte
+	ChanID    uint32
+	ChanSeq   uint32
+	FrameType byte
+	Flags     byte
+	Payload   []byte
 }
 
 // ErrNilPayload is returned by Enqueue when a nil payload is passed
@@ -82,24 +91,28 @@ func New(chanID uint32, direction Direction, tickInterval time.Duration) *HalfCh
 
 // Tick advances the state machine by one timeslice and returns exactly one
 // ChannelFrame (AC-001). When the pending queue is empty the returned frame
-// has nil Payload (AC-002, BC-2.01.002 postcondition 1). Each call
-// increments seq by 1 (AC-004, BC-2.01.001 postcondition 5).
+// has nil Payload and FrameType = FrameTypeEmptyTick (AC-002, BC-2.01.002
+// postcondition 1–2). When payload is available, FrameType = FrameTypeData.
+// Each call increments seq by 1 (AC-004, BC-2.01.001 postcondition 5).
 func (h *HalfChannel) Tick() ChannelFrame {
 	h.seq++
 
 	var payload []byte
+	frameType := FrameTypeEmptyTick
 	if len(h.pending) > 0 {
 		payload = h.pending[0]
 		// Nil the freed slot before reslicing to allow GC of large payloads.
 		h.pending[0] = nil
 		h.pending = h.pending[1:]
+		frameType = FrameTypeData
 	}
 
 	return ChannelFrame{
-		ChanID:  h.chanID,
-		ChanSeq: h.seq,
-		Flags:   0,
-		Payload: payload,
+		ChanID:    h.chanID,
+		ChanSeq:   h.seq,
+		FrameType: frameType,
+		Flags:     0,
+		Payload:   payload,
 	}
 }
 
