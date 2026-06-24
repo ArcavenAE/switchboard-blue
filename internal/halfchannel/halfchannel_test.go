@@ -1,6 +1,7 @@
 package halfchannel_test
 
 import (
+	"errors"
 	"sort"
 	"testing"
 	"time"
@@ -8,17 +9,21 @@ import (
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 )
 
-// VP-016 is enforced structurally by func (h *HalfChannel) Tick() ChannelFrame —
-// a singular return value cannot return zero or more than one frame. No runtime
-// test asserts this; the type system does.
+// VP-016 and AC-001 ("exactly one frame per Tick call") are enforced
+// structurally by func (h *HalfChannel) Tick() ChannelFrame — a singular
+// return value cannot return zero or more than one frame. No runtime test
+// asserts this; the type system does. TestHalfChannelTick_ChanIDPropagation
+// (the test formerly named TestHalfChannelTick_OneFramePerCall) verifies
+// the ChanID propagation aspect of BC-2.01.001 — not the cardinality.
 
 // -----------------------------------------------------------------------------
 // AC-001 / BC-2.01.001 postcondition 1
 // -----------------------------------------------------------------------------
 
-// TestHalfChannelTick_OneFramePerCall verifies that Tick produces exactly one
-// ChannelFrame per call regardless of whether payload is queued.
-func TestHalfChannelTick_OneFramePerCall(t *testing.T) {
+// TestHalfChannelTick_ChanIDPropagation verifies that Tick propagates the
+// channel's ChanID into every returned ChannelFrame regardless of direction or
+// payload state.
+func TestHalfChannelTick_ChanIDPropagation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -153,29 +158,37 @@ func TestHalfChannelTick_DataFrameType(t *testing.T) {
 // AC-003 / BC-2.01.003 postcondition 1
 // -----------------------------------------------------------------------------
 
-// TestHalfChannelIndependentSequences verifies that ticking channel A does not
-// advance channel B's sequence counter.
+// TestHalfChannelIndependentSequences verifies that ticking one channel does not
+// advance another channel's sequence counter. Both channels share the same chanID
+// but differ in direction — pinning BC-2.01.003 PC1's claim that sequence spaces
+// are independent per instance (not per chanID).
 func TestHalfChannelIndependentSequences(t *testing.T) {
 	t.Parallel()
 
-	a := halfchannel.New(100, halfchannel.Upstream, 10*time.Millisecond)
-	b := halfchannel.New(200, halfchannel.Downstream, 10*time.Millisecond)
+	const chanID uint32 = 0x100
+	up := halfchannel.New(chanID, halfchannel.Upstream, 10*time.Millisecond)
+	down := halfchannel.New(chanID, halfchannel.Downstream, 10*time.Millisecond)
 
-	// Tick A three times.
+	// Tick the upstream channel 5 times.
+	for range 5 {
+		up.Tick()
+	}
+	if got := up.Seq(); got != 5 {
+		t.Errorf("upstream Seq after 5 ticks = %d, want 5", got)
+	}
+	if got := down.Seq(); got != 0 {
+		t.Errorf("downstream Seq after upstream ticks = %d, want 0 (sequence spaces independent)", got)
+	}
+
+	// Tick the downstream channel 3 times.
 	for range 3 {
-		a.Tick()
+		down.Tick()
 	}
-
-	// B must still be at seq 0 (never ticked).
-	if got := b.Seq(); got != 0 {
-		t.Errorf("B.Seq() = %d after ticking A, want 0", got)
+	if got := up.Seq(); got != 5 {
+		t.Errorf("upstream Seq after downstream ticks = %d, want 5 (unchanged)", got)
 	}
-
-	// Tick B once; A's counter must not change.
-	// A was ticked exactly 3 times; its seq must still be 3 after B ticks.
-	b.Tick()
-	if got := a.Seq(); got != 3 {
-		t.Errorf("A.Seq() = %d after ticking B, want 3 (unchanged from 3 ticks of A)", got)
+	if got := down.Seq(); got != 3 {
+		t.Errorf("downstream Seq after 3 ticks = %d, want 3", got)
 	}
 }
 
@@ -228,9 +241,9 @@ func BenchmarkHalfChannelTickJitter(b *testing.B) {
 	hc := halfchannel.New(0, halfchannel.Upstream, interval)
 
 	deviations := make([]time.Duration, samples)
+	b.ResetTimer()
 	prev := time.Now().UTC()
 
-	b.ResetTimer()
 	for i := 0; i < samples; i++ {
 		// Sleep until the next tick boundary relative to prev.
 		target := prev.Add(interval)
@@ -302,16 +315,36 @@ func TestHalfChannelEmptyTickSequence(t *testing.T) {
 // Edge case: BC-2.01.002 precondition — Enqueue rejects nil payload
 // -----------------------------------------------------------------------------
 
-// TestHalfChannel_EnqueueNilPayload verifies that Enqueue returns an error
-// when passed a nil payload (BC-2.01.002 precondition).
-func TestHalfChannel_EnqueueNilPayload(t *testing.T) {
+// TestHalfChannelEnqueue_NilRejected verifies that Enqueue returns ErrEmptyPayload
+// when passed a nil payload (BC-2.01.002 precondition 4).
+func TestHalfChannelEnqueue_NilRejected(t *testing.T) {
 	t.Parallel()
 
 	hc := halfchannel.New(5, halfchannel.Upstream, 10*time.Millisecond)
 
 	err := hc.Enqueue(nil)
 	if err == nil {
-		t.Error("Enqueue(nil) returned nil error, want non-nil error")
+		t.Fatal("Enqueue(nil) returned nil error")
+	}
+	if !errors.Is(err, halfchannel.ErrEmptyPayload) {
+		t.Errorf("Enqueue(nil) error = %v, want errors.Is ErrEmptyPayload", err)
+	}
+}
+
+// TestHalfChannelEnqueue_EmptySliceRejected verifies that Enqueue returns
+// ErrEmptyPayload when passed a zero-length byte slice (BC-2.01.002
+// precondition 4 — "nil or zero-length").
+func TestHalfChannelEnqueue_EmptySliceRejected(t *testing.T) {
+	t.Parallel()
+
+	hc := halfchannel.New(5, halfchannel.Upstream, 10*time.Millisecond)
+
+	err := hc.Enqueue([]byte{})
+	if err == nil {
+		t.Fatal("Enqueue([]byte{}) returned nil error")
+	}
+	if !errors.Is(err, halfchannel.ErrEmptyPayload) {
+		t.Errorf("Enqueue([]byte{}) error = %v, want errors.Is ErrEmptyPayload", err)
 	}
 }
 
@@ -388,6 +421,66 @@ func TestProperty_VP017_SingleFramePerTick(t *testing.T) {
 			t.Fatalf("VP-017 violated at iteration %d: frame.ChanSeq=%d but Seq()=%d",
 				i+1, f.ChanSeq, wantSeq)
 		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// F-004 follow-through / Direction() accessor
+// -----------------------------------------------------------------------------
+
+// TestHalfChannelDirection verifies that Direction() returns the direction
+// configured at construction for both Upstream and Downstream.
+func TestHalfChannelDirection(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		dir  halfchannel.Direction
+	}{
+		{"upstream", halfchannel.Upstream},
+		{"downstream", halfchannel.Downstream},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			hc := halfchannel.New(0x100, tc.dir, 10*time.Millisecond)
+			if got := hc.Direction(); got != tc.dir {
+				t.Errorf("Direction() = %v, want %v", got, tc.dir)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// F-005 / TickInterval() accessor
+// -----------------------------------------------------------------------------
+
+// TestHalfChannelTickInterval verifies that TickInterval() returns the exact
+// duration passed to New.
+func TestHalfChannelTickInterval(t *testing.T) {
+	t.Parallel()
+
+	const want = 17 * time.Millisecond
+	hc := halfchannel.New(0x100, halfchannel.Upstream, want)
+	if got := hc.TickInterval(); got != want {
+		t.Errorf("TickInterval() = %v, want %v", got, want)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// F-009 follow-through / ADR-008 constant regression
+// -----------------------------------------------------------------------------
+
+// TestTickIntervalConstants pins MinTickInterval and MaxTickInterval to the
+// ADR-008 documented values. Any change must come with a matching ADR-008
+// revision.
+func TestTickIntervalConstants(t *testing.T) {
+	if halfchannel.MinTickInterval != 5*time.Millisecond {
+		t.Errorf("MinTickInterval = %v, want 5ms", halfchannel.MinTickInterval)
+	}
+	if halfchannel.MaxTickInterval != 50*time.Millisecond {
+		t.Errorf("MaxTickInterval = %v, want 50ms", halfchannel.MaxTickInterval)
 	}
 }
 
