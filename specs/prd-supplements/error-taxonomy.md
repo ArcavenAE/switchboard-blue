@@ -61,6 +61,7 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-012 | ADM | broken | 1 | "key already registered: pubkey <key_fingerprint> already exists for SVTN <svtn_id>" | BC-2.05.004 (register-key) |
 | E-ADM-013 | ADM | broken | 1 | "key not found: no key with fingerprint <key_fingerprint> registered in SVTN <svtn_id>" | BC-2.05.004 (revoke-key) |
 | E-ADM-014 | ADM | broken | 1 | "bootstrap key mismatch: provided key does not match SVTN <svtn_id> bootstrap" | ADR-004 (recover) |
+| E-ADM-015 | ADM | broken | 1 | "key expired: <key_fingerprint> on SVTN <svtn_id> (expired at <expiry_time>)" | FM-013, BC-2.01.007 |
 
 ### CFG — Configuration
 
@@ -152,3 +153,4 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-010 | Config error on startup | E-CFG-001, E-CFG-004, E-CFG-005 |
 | FM-011 | tmux not present | E-SYS-001 (if PTY also fails); log message on PTY fallback |
 | FM-012 | sbctl cannot connect | E-NET-001 |
+| FM-013 | Key expired at re-authentication time | E-ADM-015 |

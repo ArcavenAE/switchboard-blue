@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -25,6 +25,7 @@ modified:
   - 2026-06-23T00:00:00
   - 2026-06-24T00:00:00 # v1.1 — permit inline HKDF for 32-byte single-block case (refs drbothen/vsdd-factory#260 family, S-2.01 rev 2)
   - 2026-06-25T00:00:00 # v1.2 — clarify ADR-003 LWW resets admitted=false (security-by-default; refs adversary pass-2 L-2, S-2.02 rev 1.2)
+  - 2026-06-25T00:00:00 # v1.3 — Key Lifecycle: replace E-ADM-005 "key expired" with E-ADM-015 (new sentinel minted per S-1.03 spec patch rev 1.1; E-ADM-005 = key revoked, not expired)
 ---
 
 # ARCH-04: Admission & Security
@@ -237,7 +238,7 @@ Expire:   control_node → router → admitted_key_set[svtn_id].set_expiry(pubke
 ```
 
 Expiry check is at re-authentication time: if `now > expiry`, the node is not
-re-admitted (E-ADM-005 "key expired"). Between expiry and re-authentication, the
+re-admitted (E-ADM-015 "key expired"). Between expiry and re-authentication, the
 node continues operating (FM-007 documented tradeoff).
 
 **Key propagation (PE phase):** In multi-router deployments, key changes propagate

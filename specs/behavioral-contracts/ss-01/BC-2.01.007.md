@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.007
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,8 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - 2026-06-25T00:00:00 # v1.2 — add EC-005 expiry-at-reauth mapped to E-ADM-015 (spec patch S-1.03 rev 1.1)
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -76,6 +77,7 @@ Node detects IP address change (OS network interface event or failed keep-alive 
 | EC-002 | IP changes and router is temporarily unreachable at new IP | Node retries re-authentication up to configured max attempts. Sessions frozen (not closed) during retry window. If router unreachable after timeout: E-NET-003 (router unreachable after IP change). |
 | EC-003 | Node changes IP twice in rapid succession | Each re-authentication uses the latest IP. Previous re-auth in-progress is superseded. Router updates to final IP. |
 | EC-004 (DEC-002) | E router phase: single router fails at moment of IP change | Session lost. No failover path available in E router phase. User must restart. |
+| EC-005 | Node re-authenticates after key expiry | Router checks expiry at re-auth time; expired key is not re-admitted. Router returns E-ADM-015 (key expired). Session terminated; node receives explicit rejection. (FM-013) |
 
 ## Canonical Test Vectors
 
@@ -85,6 +87,7 @@ Node detects IP address change (OS network interface event or failed keep-alive 
 | Node IP changes; router offline for 2s then recovers | Session frozen during 2s; resumes on router recovery; gap covered by ARQ | edge-case |
 | Node IP changes; re-auth challenge signature invalid (wrong key) | Router rejects with E-ADM-001; session terminated | error |
 | Node IP changes; router has revoked the node's key | Router rejects with E-ADM-005; session terminated; node receives explicit rejection | error |
+| Node IP changes; node's key has expired (now > expiry_time) | Router rejects with E-ADM-015 at re-auth time; session terminated; node receives explicit rejection | error |
 
 ## Verification Properties
 

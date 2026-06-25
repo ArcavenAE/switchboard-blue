@@ -101,6 +101,7 @@ Wave 2 dependency chain: S-2.01 ✅ → S-2.02 ✅ → **S-1.03** (unblocked).
 | F-P8-009 | LOW | feasibility-report:61 deployment-ops range "(CAP-026–027)" should be "(CAP-026–028)" | architect | open — Phase 2 deferred |
 | F-003 | LOW | Payload-MTU composed wire-format test | story S-BL.OA | deferred to outer-assembler story |
 | F-004 | LOW | ARCH-02 channel-header serializer not implemented | story S-BL.OA | deferred to outer-assembler story |
+| VP-036 testenv | Phase-6 hardening | S-1.03 unit tests cover AC-001..003; property test (TestProperty_VP036_SessionContinuity) deferred until internal/testenv.ConnectWithSourceIP exists | 2026-06-25 |
 
 ## Non-Blocking Debt
 
