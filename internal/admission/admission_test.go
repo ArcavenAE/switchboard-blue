@@ -499,13 +499,15 @@ func TestRegisterKey_AfterRevoke_ClearsRevokedFlag(t *testing.T) {
 //
 // Traces to VP-008 (Admission Fails for Unregistered Key).
 func FuzzAdmitNode_UnregisteredKey(f *testing.F) {
-	// Seed corpus: 64 bytes — 32 for node keypair seed, 16 for SVTN, 16 for
-	// router keypair seed. Crashes are reproducible from the corpus entry.
-	f.Add([]byte("seed-node-keypair-00000000000000seed-router-keypair-000000000000"))
+	// Seed corpus: 80 bytes — 32 node seed + 16 SVTN + 32 router seed.
+	// Each ed25519.GenerateKey call requires exactly 32 bytes of seed material;
+	// the prior 64-byte corpus only gave the router keygen 16 bytes, causing
+	// io.ErrUnexpectedEOF and t.Skip on every seeded iteration (pass-3 M-1).
+	f.Add([]byte("node-seed-deterministic000000000svtn-id-00000000router-seed-deterministic0000000"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Need at least 64 bytes: 32 node seed + 16 SVTN + 16 router seed.
-		if len(data) < 64 {
+		// Need at least 80 bytes: 32 node seed + 16 SVTN + 32 router seed.
+		if len(data) < 80 {
 			t.Skip()
 			return
 		}
@@ -521,8 +523,8 @@ func FuzzAdmitNode_UnregisteredKey(f *testing.F) {
 		var svtnID [16]byte
 		copy(svtnID[:], data[32:48])
 
-		// Derive router keypair from corpus bytes [48:64].
-		_, routerPriv, err := ed25519.GenerateKey(bytes.NewReader(data[48:64]))
+		// Derive router keypair from corpus bytes [48:80].
+		_, routerPriv, err := ed25519.GenerateKey(bytes.NewReader(data[48:80]))
 		if err != nil {
 			t.Skip()
 			return

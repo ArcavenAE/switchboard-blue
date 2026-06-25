@@ -272,8 +272,9 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 // and BC-2.05.002 invariant 1.
 func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 	// Seed corpus: 80 bytes — 32 unadmitted seed + 32 admitted seed + 16 SVTN.
-	// Crashes are reproducible from the corpus entry.
-	f.Add([]byte("seed-unadmitted-keypair-00000000seed-admitted-keypair-000000000000svtn"))
+	// The prior 70-byte corpus caused t.Skip on every seeded run because the
+	// length gate requires 80 bytes (pass-3 M-2).
+	f.Add([]byte("unadmitted-seed-deterministic000admitted-seed-deterministic00000svtn-id-00000000"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Need at least 80 bytes: 32 unadmitted seed + 32 admitted seed + 16 SVTN.
