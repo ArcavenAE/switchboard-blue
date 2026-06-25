@@ -55,6 +55,9 @@ const (
 // nonceTTL is the maximum age of a used nonce per ARCH-04 §Nonce uniqueness.
 const nonceTTL = 60 * time.Second
 
+// noncePurgePeriod is the minimum interval between O(N) nonce-map sweeps (M-2).
+const noncePurgePeriod = time.Second
+
 // AdmittedKey holds the state the router stores after a successful
 // challenge-response for a single node on a single SVTN.
 type AdmittedKey struct {
@@ -71,6 +74,10 @@ type AdmittedKey struct {
 	// revoked records whether this key has been revoked. A revoked key causes
 	// E-ADM-005 on the next re-authentication attempt (FM-007).
 	revoked bool
+	// admitted records whether this key has completed the challenge-response
+	// handshake (BC-2.05.001 PC4). False at RegisterKey; true only after a
+	// successful AdmitNode call. IsAdmitted AND-gates on this field.
+	admitted bool
 }
 
 // Challenge is the router-issued, router-signed nonce sent to a node during
@@ -106,9 +113,10 @@ type ChallengeResponse struct {
 //
 // All exported methods are safe for concurrent use.
 type AdmittedKeySet struct {
-	mu     sync.RWMutex
-	keys   map[[16]byte]map[[8]byte]*AdmittedKey
-	nonces map[[32]byte]time.Time // value = insertion time; entries older than nonceTTL are purged
+	mu        sync.RWMutex
+	keys      map[[16]byte]map[[8]byte]*AdmittedKey
+	nonces    map[[32]byte]time.Time // value = insertion time; entries older than nonceTTL are purged
+	lastPurge time.Time              // tracks last O(N) nonce-map sweep for lazy-purge gate (M-2)
 }
 
 // NewAdmittedKeySet returns an empty AdmittedKeySet ready for use.
@@ -123,11 +131,17 @@ func NewAdmittedKeySet() *AdmittedKeySet {
 // pair. Last-write-wins semantics per ADR-003: duplicate registration overwrites
 // the prior entry without error.
 //
+// The resulting entry has admitted=false — the node must complete the
+// challenge-response handshake via AdmitNode before IsAdmitted returns true
+// (BC-2.05.001 PC4; H-2).
+//
 // Traces to BC-2.05.001 precondition 2 and ADR-003 (ARCH-04 §ADR-003).
 func (s *AdmittedKeySet) RegisterKey(svtnID [16]byte, pubkey ed25519.PublicKey, role KeyRole) {
 	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
 	authKey := hmac.DeriveKey([]byte(pubkey), svtnID)
 
+	// admitted is intentionally zero (false) — the node must complete the
+	// challenge-response handshake before IsAdmitted returns true.
 	entry := &AdmittedKey{
 		PublicKey:    pubkey,
 		Role:         role,
@@ -167,6 +181,9 @@ func (s *AdmittedKeySet) RevokeKey(svtnID [16]byte, nodeAddr [8]byte) error {
 // Lookup returns a copy of the AdmittedKey for (svtnID, nodeAddr), or nil if
 // not found. Returns a value copy — callers do not hold a pointer into internal
 // state (go.md rule 12; finding-032-store-sync-contract-leak).
+//
+// PublicKey is deep-cloned so the returned copy's backing array is independent
+// of the live map entry (M-3).
 func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) *AdmittedKey {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -181,10 +198,18 @@ func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) *AdmittedKey 
 	}
 	// Return a value copy so callers cannot mutate internal state.
 	cp := *entry
+	// Deep-clone PublicKey: ed25519.PublicKey is []byte; shallow copy shares
+	// the backing array. Callers must not alias live state (go.md rule 12; M-3).
+	cp.PublicKey = append(ed25519.PublicKey(nil), entry.PublicKey...)
 	return &cp
 }
 
-// IsAdmitted reports whether nodeAddr is currently in the admitted set for svtnID.
+// IsAdmitted reports whether nodeAddr has completed the challenge-response
+// handshake for svtnID and has not been revoked.
+//
+// AND-gates on both admitted and !revoked (BC-2.05.001 PC4; H-2):
+// a registered-but-not-handshaked node returns false.
+//
 // Used by internal/routing for fail-closed frame admission (BC-2.05.002
 // postcondition 3: admitted-set check happens before any forwarding logic).
 func (s *AdmittedKeySet) IsAdmitted(svtnID [16]byte, nodeAddr [8]byte) bool {
@@ -199,8 +224,8 @@ func (s *AdmittedKeySet) IsAdmitted(svtnID [16]byte, nodeAddr [8]byte) bool {
 	if !ok {
 		return false
 	}
-	// Revoked keys are not admitted.
-	return !entry.revoked
+	// Both conditions required: handshake completed AND key not revoked.
+	return entry.admitted && !entry.revoked
 }
 
 // GenerateChallenge produces a fresh admission challenge: a 32-byte random
@@ -226,16 +251,17 @@ func GenerateChallenge(routerPrivKey ed25519.PrivateKey) (Challenge, error) {
 	}, nil
 }
 
-// AdmitNode verifies a node's challenge-response and, on success, registers
-// the node in the AdmittedKeySet.
+// AdmitNode verifies a node's challenge-response and, on success, marks the
+// node as admitted in the AdmittedKeySet (BC-2.05.001 PC4).
 //
 // Per BC-2.05.001 postcondition 3: verifies resp.NonceSig using pubKey against
-// challenge.Nonce. On success (postcondition 4): derives the frame_auth_key via
-// hmac.DeriveKey(pubKey, svtnID) and adds the node to ks[svtnID].
+// challenge.Nonce. On success (postcondition 4): records the nonce (replay
+// prevention) and sets entry.admitted = true atomically under the write lock.
 //
 // Error returns:
-//   - ErrNonceReplay  (E-ADM-008) if the nonce has already been consumed (invariant 3).
+//   - ErrNotAdmitted  (E-ADM-003) if the key is not registered for this SVTN.
 //   - ErrKeyRevoked   (E-ADM-005) if the key is registered but revoked (EC-001).
+//   - ErrNonceReplay  (E-ADM-008) if the nonce has already been consumed (invariant 3).
 //   - ErrSignatureVerificationFailed (E-ADM-001) if signature verification fails.
 //
 // Implements DI-002: pubKey is the Ed25519 *public* key. The caller's private key
@@ -247,54 +273,87 @@ func AdmitNode(
 	svtnID [16]byte,
 	ks *AdmittedKeySet,
 ) error {
-	// Check if key is registered for this SVTN before expensive crypto ops.
-	// This enforces BC-2.05.002 precondition 1 and EC-001 (revoked check).
 	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubKey))
 
+	// Step 1: snapshot the entry under RLock (H-1).
+	// Reading existingEntry.revoked OUTSIDE the lock is a Go memory-model
+	// violation; snapshot the value while the lock is held instead.
 	ks.mu.RLock()
 	svtnMap, hasSVTN := ks.keys[svtnID]
-	var existingEntry *AdmittedKey
+	var snap AdmittedKey
+	var found bool
 	if hasSVTN {
-		existingEntry = svtnMap[nodeAddr]
+		if e := svtnMap[nodeAddr]; e != nil {
+			snap = *e // value copy inside RLock — revoked bool safely captured
+			found = true
+		}
 	}
 	ks.mu.RUnlock()
 
-	if existingEntry == nil {
-		// Key not registered for this SVTN — admission fails (EC-001 covers
-		// unregistered case; ErrNotAdmitted used as the "not registered" signal).
+	if !found {
+		// Key not registered for this SVTN (ErrNotAdmitted; E-ADM-003).
 		return ErrNotAdmitted
 	}
 
-	if existingEntry.revoked {
+	if snap.revoked {
 		return ErrKeyRevoked
 	}
 
-	// Record nonce (replay check + TTL purge) before verifying signature.
-	// This prevents timing oracle: we record before verifying so a valid nonce
-	// cannot be extracted by an attacker who checks timing of the replay error.
-	if err := ks.recordNonce(challenge.Nonce, time.Now().UTC()); err != nil {
+	// Step 2: verify signature outside the lock — pure computation, no shared state.
+	// Record nonce BEFORE verifying to prevent timing oracle: an attacker who
+	// can measure response latency cannot distinguish "valid nonce, bad sig" from
+	// "replayed nonce" by replay-racing valid nonces.
+	//
+	// NOTE: nonce is recorded here (before sig verify) to preserve the original
+	// timing-oracle defence. If sig verify fails, the nonce is consumed — the
+	// caller must re-challenge with a fresh nonce. This is intentional (ARCH-04).
+	now := time.Now().UTC()
+
+	// Step 3: acquire write lock once — record nonce AND set admitted=true atomically (H-2).
+	// Re-checking revoked under the write lock defends against a concurrent RevokeKey
+	// call that raced between our RUnlock (step 1) and this Lock.
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+
+	// Re-fetch entry; it may have been replaced by a concurrent RegisterKey (ADR-003 LWW).
+	liveEntry := ks.keys[svtnID][nodeAddr]
+	if liveEntry == nil || liveEntry.revoked {
+		return ErrKeyRevoked
+	}
+
+	// Inline nonce record (replaces recordNonce call — avoids double-lock and
+	// keeps nonce + admitted mutation in a single critical section).
+	if err := ks.recordNonceUnlocked(challenge.Nonce, now); err != nil {
 		return err
 	}
 
-	// Verify the node's signature over the challenge nonce (constant-time via ed25519.Verify).
+	// Verify signature (pure, but placed here to keep the nonce-consume-before-verify
+	// invariant — nonce is already consumed above; sig failure returns error and
+	// the consumed nonce prevents replay of the same challenge).
 	if !ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig) {
 		return ErrSignatureVerificationFailed
 	}
 
+	// Mark admitted on success (BC-2.05.001 PC4; H-2).
+	liveEntry.admitted = true
 	return nil
 }
 
-// recordNonce records the nonce with timestamp, purging expired entries, and
-// returns ErrNonceReplay if the nonce was already consumed within the TTL window.
-func (s *AdmittedKeySet) recordNonce(n [32]byte, now time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Purge expired nonces (ARCH-04: 60s TTL).
-	for nonce, t := range s.nonces {
-		if now.Sub(t) > nonceTTL {
-			delete(s.nonces, nonce)
+// recordNonceUnlocked records the nonce with timestamp and returns ErrNonceReplay
+// if already consumed within the TTL window. Performs a lazy O(N) purge sweep
+// gated by elapsed time or map size (M-2).
+//
+// MUST be called with ks.mu held for writing. Does not acquire the lock itself.
+func (s *AdmittedKeySet) recordNonceUnlocked(n [32]byte, now time.Time) error {
+	// Lazy purge: sweep only when the map has grown large OR enough time has
+	// passed since the last sweep. Amortised O(1) per call at steady state (M-2).
+	if now.Sub(s.lastPurge) > noncePurgePeriod || len(s.nonces) > 10000 {
+		for nonce, t := range s.nonces {
+			if now.Sub(t) > nonceTTL {
+				delete(s.nonces, nonce)
+			}
 		}
+		s.lastPurge = now
 	}
 
 	// Check for replay within the live window.
