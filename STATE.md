@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-2-s-1.03-next
+phase_step: wave-2-s-1.03-step-4.5-converged
 phase_3_active_wave: 2
 phase_3_active_stories: [S-1.03]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02]
@@ -58,7 +58,11 @@ refactor_frametype_mtu_merge_sha: 4be1b53f85655110035de4f0f38422662afa2ed9
 cicd_setup_complete: true
 internal_packages: 18
 plugin_version_adopted: "1.0.0-rc.21"
-timestamp: 2026-06-25T14:00:00Z
+s_1_03_adversary_step_4_5: "CONVERGED (3/3 clean: passes 3, 4, 5) — BC-5.39.001 satisfied"
+s_1_03_adversary_pass_03_sha: dc37fe1
+s_1_03_adversary_pass_04_sha: 52ee1d3
+s_1_03_adversary_pass_05_sha: 6bcde7d
+timestamp: 2026-06-25T14:30:00Z
 last_update: 2026-06-25
 ---
 
@@ -88,9 +92,9 @@ Dispatch per-story-delivery for S-1.03 to begin Wave 2 story 3 of 3.
 | 1 | refactor | FrameType + MTU | completed | #3 | 4be1b53 |
 | 2 | S-2.01 | HMAC codec | completed | #5 | 3c4104e |
 | 2 | S-2.02 | Admission + SVTN isolation | completed | #6 | a06b306 |
-| 2 | **S-1.03** | **Session continuity** | **NEXT** | — | — |
+| 2 | **S-1.03** | **Session continuity** | **Step 4.5 CONVERGED** | — | 7a4a6c5 |
 
-Wave 2 dependency chain: S-2.01 ✅ → S-2.02 ✅ → **S-1.03** (unblocked).
+Wave 2 dependency chain: S-2.01 ✅ → S-2.02 ✅ → **S-1.03** Step 4.5 CONVERGED → Step 5 next (per-AC demos).
 
 ## Open Drift Items
 
@@ -123,15 +127,18 @@ Wave 2 dependency chain: S-2.01 ✅ → S-2.02 ✅ → **S-1.03** (unblocked).
 
 ## Session Resume Checkpoint — 2026-06-25
 
-**Position:** Phase 3, Wave 2, Story 3 of 3. S-2.02 closed. S-1.03 next.
+**Position:** Phase 3, Wave 2, Story 3 of 3. S-1.03 Step 4.5 adversary CONVERGED (3/3 clean passes: pass-03 dc37fe1, pass-04 52ee1d3, pass-05 6bcde7d). BC-5.39.001 satisfied.
+
+**Cycle-Closing Checklist note:** Zero process-gap findings across passes 3/4/5; no follow-up codifications required for this convergence streak.
 
 **Immediate next action:**
 
-Dispatch `vsdd-factory:deliver-story` for S-1.03 (Session continuity, 5pts):
+S-1.03 Step 5: per-AC demos.
+- Branch: `feature/S-1.03-node-identity-session-continuity` (tip `7a4a6c5`)
 - Story spec: `.factory/stories/S-1.03-session-continuity.md`
-- depends_on: [S-1.01 ✅, S-2.02 ✅]
-- Wave 2 holdout: `.factory/holdout-scenarios/wave-scenarios/wave-2.md` (HS-002)
-- develop tip: `a06b306`
+- AC-001 (re-auth success), AC-002 (pre-condition violations), AC-003 (invariant preservation)
+
+**After Step 5:** Steps 6+7 (pr-manager 9-step lifecycle), Steps 8+9 (worktree cleanup + state closure), then Wave-2 integration gate (consistency-validator + HS-002 holdout + wave-adversary on merged S-2.01+S-2.02+S-1.03 diff).
 
 **After S-1.03 merges:** Wave-2 integration gate (consistency-validator + HS-002 holdout + wave-adversary on merged S-2.01+S-2.02+S-1.03 diff).
 
