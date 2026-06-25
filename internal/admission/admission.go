@@ -40,6 +40,13 @@ var ErrNonceReplay = errors.New("nonce replay: challenge nonce already consumed"
 // admitted set for the frame's SVTN (E-ADM-003; BC-2.05.002 postcondition 2).
 var ErrNotAdmitted = errors.New("frame from non-admitted source")
 
+// ErrKeyNotRegistered is returned when a key-lifecycle operation (e.g.,
+// RevokeKey) is called against a (SVTN, node) tuple that has no registered
+// key. Distinct from ErrNotAdmitted (frame-routing sentinel, E-ADM-003) so
+// callers can distinguish "no such key" from "frame from non-admitted source"
+// via errors.Is. Maps to E-ADM-013 per error-taxonomy.md.
+var ErrKeyNotRegistered = errors.New("admission: key not registered for (SVTN, node)")
+
 // KeyRole identifies the authorization role of an admitted key.
 type KeyRole uint8
 
@@ -161,18 +168,20 @@ func (s *AdmittedKeySet) RegisterKey(svtnID [16]byte, pubkey ed25519.PublicKey, 
 // RevokeKey marks the key for nodeAddr in svtnID as revoked.
 // A revoked key causes ErrKeyRevoked on the next AdmitNode call.
 //
-// Returns ErrNotAdmitted if no such key is registered.
+// Returns ErrKeyNotRegistered (E-ADM-013) if no such (SVTN, node) tuple is
+// registered. Use errors.Is to distinguish this from ErrNotAdmitted
+// (E-ADM-003), which is the frame-routing sentinel.
 func (s *AdmittedKeySet) RevokeKey(svtnID [16]byte, nodeAddr [8]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	svtnMap, ok := s.keys[svtnID]
 	if !ok {
-		return ErrNotAdmitted
+		return ErrKeyNotRegistered
 	}
 	entry, ok := svtnMap[nodeAddr]
 	if !ok {
-		return ErrNotAdmitted
+		return ErrKeyNotRegistered
 	}
 	entry.revoked = true
 	return nil
@@ -299,17 +308,12 @@ func AdmitNode(
 		return ErrKeyRevoked
 	}
 
-	// Step 2: verify signature outside the lock — pure computation, no shared state.
-	// Record the nonce BEFORE signature verification as CPU DoS mitigation:
-	// a replay attacker who can intercept a challenge can burn the nonce on
-	// the legitimate node's behalf, but we avoid the ~50μs ed25519.Verify
-	// cost for already-seen nonces. This is NOT a timing-oracle defence —
-	// recording-before-verify actually makes replay detection MORE
-	// timing-distinguishable, since replays return before the Verify step
-	// runs. The protocol mitigates the burn-the-nonce DoS at the architecture
-	// level (router re-issues a fresh challenge after the failed admission
-	// attempt). If sig verify fails, the nonce is consumed — this is
-	// intentional (ARCH-04).
+	// Step 2: snapshot the current time before acquiring the write lock.
+	// ed25519.Verify (~50μs) is held INSIDE the write lock by design (see
+	// Step 3) — it is part of the nonce-consume + verify + admit critical
+	// section. This preserves the invariant that a replay attempt cannot
+	// race a legitimate sig-verify on the same nonce. See inline comments
+	// at Step 3 for the order-of-operations rationale.
 	now := time.Now().UTC()
 
 	// Step 3: acquire write lock once — record nonce AND set admitted=true atomically (H-2).
