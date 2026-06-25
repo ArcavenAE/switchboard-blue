@@ -46,8 +46,10 @@ func ComputeHMAC(key []byte, frameBytes []byte) [TagSize]byte {
 // VerifyHMAC checks whether tag is the HMAC-SHA256 of frameBytes under key,
 // truncated to the first TagSize (8) bytes.
 //
-// The comparison is constant-time (uses crypto/hmac.Equal) to prevent timing
-// oracles (BC-2.05.005 postcondition 3). Returns true on exact match; false
+// The comparison is constant-time (uses crypto/hmac.Equal) — defense-in-depth
+// against timing-oracle attacks on tag verification. This is implementer
+// best-practice for MAC verification, not anchored to a specific BC
+// postcondition (per crypto/hmac.Equal docs). Returns true on exact match; false
 // otherwise — including any single-bit perturbation of frameBytes (AC-003),
 // tag, or key (AC-004), as verified by VP-005's fuzz harness.
 //
@@ -58,8 +60,8 @@ func ComputeHMAC(key []byte, frameBytes []byte) [TagSize]byte {
 // in router fast-path frame validation.
 func VerifyHMAC(key []byte, frameBytes []byte, tag [TagSize]byte) bool {
 	expected := ComputeHMAC(key, frameBytes)
-	// hmac.Equal is constant-time over the full slice length, preventing
-	// timing side-channels on tag comparison (BC-2.05.005 postcondition 3).
+	// hmac.Equal is constant-time over the full slice length — defense-in-depth
+	// against timing-oracle attacks on tag comparison (implementer best-practice).
 	return ghmac.Equal(expected[:], tag[:])
 }
 
