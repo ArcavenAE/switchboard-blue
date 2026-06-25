@@ -53,6 +53,7 @@ type ReAuthRequest struct {
 // All exported methods are safe for concurrent use.
 type ReAuthState struct {
 	mu sync.RWMutex
+
 	// TODO(phase-6): no eviction path; map grows monotonically with admitted nodes.
 	// Eviction hook needed when RevokeKey or expiry cleanup runs. Track in STATE.md drift register.
 	// VP-036 backlog item.
