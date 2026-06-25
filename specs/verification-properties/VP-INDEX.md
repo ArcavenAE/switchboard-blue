@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -30,10 +30,10 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-004 | ComputeHMAC / VerifyHMAC consistency | BC-2.05.005 | internal/hmac | proptest | P0 | draft | VP-004.md |
 | VP-005 | VerifyHMAC rejects single-bit flips | BC-2.05.005 | internal/hmac | fuzz | P0 | draft | VP-005.md |
 | VP-006 | VerifyHMAC rejects wrong key | BC-2.05.005 | internal/hmac | proptest | P0 | draft | VP-006.md |
-| VP-007 | Admission: private key never in wire structs | BC-2.05.001, BC-2.05.007 | internal/admission | proptest | P0 | draft | VP-007.md |
-| VP-008 | Admission fails for unregistered key | BC-2.05.001, BC-2.05.002 | internal/admission | proptest | P0 | draft | VP-008.md |
-| VP-009 | Admission rejects replayed nonce | BC-2.05.001 | internal/admission | proptest | P0 | draft | VP-009.md |
-| VP-010 | SVTNRoute never delivers to wrong SVTN | BC-2.05.006 | internal/routing | proptest | P0 | draft | VP-010.md |
+| VP-007 | Admission: private key never in wire structs | BC-2.05.001, BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-007.md |
+| VP-008 | Admission fails for unregistered key | BC-2.05.001, BC-2.05.002 | internal/admission | proptest | P0 | implemented | VP-008.md |
+| VP-009 | Admission rejects replayed nonce | BC-2.05.001 | internal/admission | proptest | P0 | implemented | VP-009.md |
+| VP-010 | SVTNRoute never delivers to wrong SVTN | BC-2.05.006 | internal/routing | proptest | P0 | implemented | VP-010.md |
 | VP-011 | Split-horizon: no forward toward arrival interface | BC-2.02.008 | internal/routing | proptest | P0 | draft | VP-011.md |
 | VP-012 | SessionAuth rejects unauthorized console key | BC-2.05.003, BC-2.04.003 | internal/session | proptest | P0 | draft | VP-012.md |
 | VP-013 | SessionAuth rejects upstream from read-only key | BC-2.04.005, BC-2.05.003 | internal/session | proptest | P0 | draft | VP-013.md |
@@ -59,10 +59,10 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-033 | Console attach/detach lifecycle | BC-2.04.003, BC-2.04.004 | internal/session | e2e | P1 | draft | VP-033.md |
 | VP-034 | Multi-console fan-out: both consoles receive all frames | BC-2.04.006 | internal/session | e2e | P0 | draft | VP-034.md |
 | VP-035 | Read-only console: upstream rejected by access node | BC-2.04.005 | internal/session | integration | P1 | draft | VP-035.md |
-| VP-036 | Session continuity across IP address change | BC-2.01.007 | internal/admission | e2e | P0 | draft | VP-036.md |
+| VP-036 | Session continuity across IP address change | BC-2.01.007 | internal/admission | e2e | P0 | deferred | VP-036.md |
 | VP-037 | Router drain: nodes migrate within 2s | BC-2.09.002 | internal/drain | e2e | P2 | draft | VP-037.md |
 | VP-038 | E→PE graduation: config change only | BC-2.09.001 | internal/config | e2e | P2 | draft | VP-038.md |
-| VP-039 | SVTN isolation: no cross-SVTN frame delivery | BC-2.05.006 | internal/routing | e2e | P0 | draft | VP-039.md |
+| VP-039 | SVTN isolation: no cross-SVTN frame delivery | BC-2.05.006 | internal/routing | e2e | P0 | deferred | VP-039.md |
 | VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | internal/multipath | e2e | P1 | draft | VP-040.md |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms | BC-2.01.001 | internal/halfchannel | benchmark | P0 | draft | VP-041.md |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | internal/halfchannel | benchmark | P0 | draft | VP-042.md |
@@ -80,7 +80,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | draft | VP-054.md |
 | VP-055 | Presence advertisement payload round-trip: required fields present and stable | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
 | VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
-| VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | draft | VP-057.md |
+| VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
 
 ## Counts
 
