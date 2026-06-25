@@ -98,7 +98,7 @@ func (s *AdmittedKeySet) SetKeyExpiry(svtnID [16]byte, nodeAddr [8]byte, expiry 
 	if !ok {
 		return ErrKeyNotRegistered
 	}
-	entry.Expiry = expiry
+	entry.expiry = expiry
 	return nil
 }
 
@@ -110,6 +110,9 @@ func (s *AdmittedKeySet) SetKeyExpiry(svtnID [16]byte, nodeAddr [8]byte, expiry 
 //  1. The node has an active session (admitted=true in ks).
 //  2. The node's SVTN admission keypair is unchanged (Pre3).
 //  3. The node presents a valid signed challenge response.
+//
+// Precondition: the caller has verified challenge.RouterSig against the router's public key
+// before invoking ReAuthenticate (same caller-trust model as AdmitNode; see BC-2.01.007 Pre-2).
 //
 // Postconditions on success:
 //  1. The node remains admitted; its cryptographic node address is unchanged (PC4 / Inv3, VP-036).
@@ -145,7 +148,7 @@ func ReAuthenticate(req ReAuthRequest, ks *AdmittedKeySet, rs *ReAuthState) erro
 
 	// Step 2: check expiry before acquiring the write lock (pure, no side effects).
 	now := time.Now().UTC()
-	if !snap.Expiry.IsZero() && now.After(snap.Expiry) {
+	if !snap.expiry.IsZero() && now.After(snap.expiry) {
 		return ErrKeyExpired
 	}
 
@@ -169,7 +172,7 @@ func ReAuthenticate(req ReAuthRequest, ks *AdmittedKeySet, rs *ReAuthState) erro
 		return ErrKeyRevoked
 	}
 	// Re-check expiry under write lock in case SetKeyExpiry raced.
-	if !liveEntry.Expiry.IsZero() && now.After(liveEntry.Expiry) {
+	if !liveEntry.expiry.IsZero() && now.After(liveEntry.expiry) {
 		ks.mu.Unlock()
 		return ErrKeyExpired
 	}

@@ -85,11 +85,16 @@ type AdmittedKey struct {
 	// handshake (BC-2.05.001 PC4). False at RegisterKey; true only after a
 	// successful AdmitNode call. IsAdmitted AND-gates on this field.
 	admitted bool
-	// Expiry is the optional key expiry time. A zero value means no expiry.
-	// ReAuthenticate checks this at re-auth time; if now > Expiry the node is
+	// expiry is the optional key expiry time. A zero value means no expiry.
+	// ReAuthenticate checks this at re-auth time; if now > expiry the node is
 	// not re-admitted (E-ADM-015; ARCH-04 §Key Lifecycle; BC-2.01.007 EC-005).
-	Expiry time.Time
+	// Unexported to prevent direct mutation; use SetKeyExpiry and KeyExpiry().
+	expiry time.Time
 }
+
+// KeyExpiry returns the key's expiry time. A zero Time means no expiry is set.
+// Use AdmittedKeySet.SetKeyExpiry to set or clear the expiry (E-ADM-015).
+func (k AdmittedKey) KeyExpiry() time.Time { return k.expiry }
 
 // Challenge is the router-issued, router-signed nonce sent to a node during
 // the admission handshake (ARCH-04 §Tier 1 Admission Protocol step 2).
