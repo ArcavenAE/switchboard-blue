@@ -65,6 +65,8 @@ func VerifyHMAC(key []byte, frameBytes []byte, tag [TagSize]byte) bool {
 
 // hkdfSHA256 implements HKDF (RFC 5869) over SHA-256.
 //
+// Returns nil for length outside [0, 8160] (RFC 5869 §2.3 max: 255 * HashLen).
+//
 // Extract: PRK = HMAC-SHA256(salt, IKM)
 // Expand: OKM = T(1) || T(2) || ... || T(N), where
 //
@@ -73,12 +75,15 @@ func VerifyHMAC(key []byte, frameBytes []byte, tag [TagSize]byte) bool {
 //
 // Output: OKM truncated to length bytes.
 //
-// Supports L up to 255 * HMAC-SHA256 output size = 8160 bytes per RFC 5869 §2.3.
 // Callers pass a non-nil salt (the empty case is the caller's responsibility:
 // RFC 5869 §2.2 says salt is OPTIONAL and substitutes a zero-byte string of
 // HMAC-SHA256 output length when nil — we do NOT auto-substitute here; callers
 // must pass the salt they want).
 func hkdfSHA256(ikm, salt, info []byte, length int) []byte {
+	// RFC 5869 §2.3: max OKM length is 255 * HashLen.
+	if length < 0 || length > 255*sha256.Size {
+		return nil
+	}
 	// Extract: PRK = HMAC-SHA256(salt, IKM)
 	extractMAC := ghmac.New(sha256.New, salt)
 	extractMAC.Write(ikm)
