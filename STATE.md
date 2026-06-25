@@ -5,12 +5,12 @@ phase_step: wave-1-in-progress (S-1.02 step-2 stubs complete; pause point for co
 phase_2_gate: APPROVED
 phase_2_gate_date: 2026-06-24
 phase_2_gate_disposition: approve-proceed-to-wave-1
-phase_3_completed_stories: [S-1.01, S-1.02]
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01]
 refactor_frametype_mtu_closes: [F-001, F-002, vsdd-factory#260]
 phase_3_active_wave: 2
 phase_3_active_stories: []
-phase_3_active_story_status: "S-2.01: in-progress, Step 4.5 adversarial convergence COMPLETE (BC-5.39.001 satisfied, 3 consecutive clean passes 10/11/12), Step 5 (demos) in progress in parallel"
-phase_3_pause_point: "Wave 1 CLOSED 2026-06-24 (pass-with-clean-drift). Stories: S-1.01@1c76160, S-1.02@9e9a98a; refactor PR #3 @4be1b53 closed F-001/F-002 code-side. Drift: S-BL.OA backlog stub holds F-003/F-004 (LOW). Wave 2 begins — 3 stories serial (S-2.01 → S-2.02 → S-1.03), 18 pts total. Dispatch story-writer or per-story-delivery for S-2.01 (HMAC codec, 5pts)."
+phase_3_active_story_status: "S-2.01 fully delivered (PR #5 squash-merged at 3c4104e, alpha tag alpha-20260625-023528-3c4104e). Wave 2 progress: 1/3 stories merged. Next: S-2.02 (Admission + SVTN isolation, 8pts) — S-2.01 was its precondition; now unblocked."
+phase_3_pause_point: "S-2.01 closed; alpha tag cut; develop tip 3c4104e. Wave 2 chain: S-2.02 next (depends_on [S-1.01, S-2.01] — both satisfied). Dispatch story-writer or per-story-delivery for S-2.02."
 s_1_02_merge_sha: 9e9a98a
 s_1_02_pr_number: 2
 s_1_02_alpha_tag: alpha-20260624-193019-9e9a98a
@@ -90,6 +90,11 @@ s_1_02_adversary_status: CONVERGED
 s_1_02_adversary_total_passes: 9
 s_1_02_adversary_total_findings: 39
 s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
+s_2_01_merge_sha: 3c4104e
+s_2_01_pr_number: 5
+s_2_01_alpha_tag: alpha-20260625-023528-3c4104e
+s_2_01_status: completed
+s_2_01_unblocks: [S-2.02, S-4.04]
 s_2_01_adversary_pass_12: 0_findings_converged
 s_2_01_adversary_clean_streak: 3
 s_2_01_adversary_status: CONVERGED
@@ -242,11 +247,21 @@ Notable mid-flight events:
 | 3. Failing tests | ✅ done (combined with stubs) |
 | 4. Implementation | ✅ done (93cdc2c, single-commit TDD) |
 | 4.5. Adversarial convergence | ✅ done (3-pass streak: 10/11/12; worktree tip 9a1ef34) |
-| 5. Per-AC demos | ⏸ pending |
-| 6. Push | ⏸ pending |
-| 7. PR lifecycle | ⏸ pending |
-| 8. Worktree cleanup | ⏸ pending |
-| 9. State update | ⏸ pending |
+| 5. Per-AC demos | ✅ done (bf40e82 feature branch example_test.go; be94426 factory-artifacts evidence) |
+| 6. Push + 7. PR lifecycle | ✅ done (PR #5, squash-merged at 3c4104e; alpha alpha-20260625-023528-3c4104e) |
+| 8. Worktree cleanup | ✅ done (devops dispatch parallel; landed before S-2.02 begins) |
+| 9. State update | ✅ done (this commit) |
+
+## S-2.01 Closed — 2026-06-24
+
+- PR #5 merged via squash at `3c4104e` on `develop`; alpha tag `alpha-20260625-023528-3c4104e` cut automatically
+- 7 commits on feature branch: stubs+tests / impl / pass-2 helper / pass-2 KAT / pass-3 length guard / pass-7 doc fix / Step 5 example
+- 12 adversary passes; finding trajectory 9 → 2 → 4 → 1 → 0 → 0 → 1 → 0 → 1 → 0 → 0 → 0; 17 findings resolved across 9 fix bursts
+- AI code review: APPROVE, 2 informational notes
+- Security review: CLEARED on 9 axes; 1 LOW (SEC-001: unreachable nil-OKM in hkdfSHA256, defensive-coding nit)
+- Spec versions at closure: BC-2.05.005 (no change), story rev 5, VP-004/005/006 v1.1, ARCH-04 v1.1
+- Notable mid-cycle: filed drbothen/vsdd-factory#263 (PO agent overreach — PR #4 closed without merge)
+- Unblocks: S-2.02 (Admission + SVTN isolation), S-4.04 (Split-horizon loop prevention)
 
 ## S-1.02 Closed — 2026-06-24
 
@@ -260,14 +275,17 @@ Notable mid-flight events:
 
 ## Phase 3 — TDD Implementation (active)
 
-**Wave 1 active** — frame format + half-channel clock foundation.
+**Wave 2 active** — security foundation + session continuity.
 
 | Story | Title | Status | Points | Module |
 |---|---|---|---|---|
 | S-1.01 | Frame codec | completed (PR #1 merged 1c76160) | 8 | internal/frame |
 | S-1.02 | Half-channel clock | completed (PR #2 merged 9e9a98a) | 5 | internal/halfchannel |
+| S-2.01 | HMAC codec | completed (PR #5 squash-merged 3c4104e) | 5 | internal/hmac |
+| S-2.02 | Admission + SVTN isolation | pending (unblocked by S-2.01) | 8 | admission-security |
+| S-1.03 | Session continuity | pending (depends_on S-2.02) | 5 | session-networking |
 
-Wave 1 dependencies: none (pure-core foundation; both stories independent).
+Wave 2 dependencies: S-2.01 → S-2.02 → S-1.03 (serial chain).
 
 Wave 1 holdout: `.factory/holdout-scenarios/wave-scenarios/wave-1.md` (HS-001).
 
@@ -508,6 +526,7 @@ Wave-2 holdout: `.factory/holdout-scenarios/wave-scenarios/wave-2.md` (HS-002).
 ## Non-blocking debt
 
 - `.factory/.gitignore` not bootstrapped (drbothen/vsdd-factory#230 + this-session comment).
+- SEC-001 (LOW from S-2.01 PR #5 security review) — `internal/hmac/hkdfSHA256` returns nil for length outside [0, 8160]. DeriveKey hardcodes KeySize=32, so the path is unreachable today. Defensive-coding nit; any future caller passing variable length should branch on nil. Tracked here as awareness; not blocking.
 
 ## Adversary cycle-1 metrics
 
