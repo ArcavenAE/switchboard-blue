@@ -10,8 +10,10 @@ package admission
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/hmac"
@@ -50,6 +52,9 @@ const (
 	RoleAccess
 )
 
+// nonceTTL is the maximum age of a used nonce per ARCH-04 §Nonce uniqueness.
+const nonceTTL = 60 * time.Second
+
 // AdmittedKey holds the state the router stores after a successful
 // challenge-response for a single node on a single SVTN.
 type AdmittedKey struct {
@@ -65,7 +70,7 @@ type AdmittedKey struct {
 	NodeAddr [8]byte
 	// revoked records whether this key has been revoked. A revoked key causes
 	// E-ADM-005 on the next re-authentication attempt (FM-007).
-	revoked bool //nolint:unused // implementer wires in AdmitNode and RevokeKey
+	revoked bool
 }
 
 // Challenge is the router-issued, router-signed nonce sent to a node during
@@ -97,21 +102,20 @@ type ChallengeResponse struct {
 // closed frame admission) and BC-2.05.006 (SVTN cryptographic isolation).
 //
 // It also owns the used-nonce set for replay prevention (ARCH-04 §Nonce
-// uniqueness: TTL = 60s in implementation; stub stores nonces without TTL).
+// uniqueness: TTL = 60s).
 //
 // All exported methods are safe for concurrent use.
 type AdmittedKeySet struct {
-	mu       sync.RWMutex                          //nolint:unused // implementer wires in all methods
-	keys     map[[16]byte]map[[8]byte]*AdmittedKey //nolint:unused // implementer wires in all methods
-	nonces   map[[32]byte]struct{}                 //nolint:unused // implementer wires in AdmitNode (replay prevention)
-	noncesMu sync.Mutex                            //nolint:unused // implementer wires in AdmitNode (replay prevention)
+	mu     sync.RWMutex
+	keys   map[[16]byte]map[[8]byte]*AdmittedKey
+	nonces map[[32]byte]time.Time // value = insertion time; entries older than nonceTTL are purged
 }
 
 // NewAdmittedKeySet returns an empty AdmittedKeySet ready for use.
 func NewAdmittedKeySet() *AdmittedKeySet {
 	return &AdmittedKeySet{
 		keys:   make(map[[16]byte]map[[8]byte]*AdmittedKey),
-		nonces: make(map[[32]byte]struct{}),
+		nonces: make(map[[32]byte]time.Time),
 	}
 }
 
@@ -121,7 +125,23 @@ func NewAdmittedKeySet() *AdmittedKeySet {
 //
 // Traces to BC-2.05.001 precondition 2 and ADR-003 (ARCH-04 §ADR-003).
 func (s *AdmittedKeySet) RegisterKey(svtnID [16]byte, pubkey ed25519.PublicKey, role KeyRole) {
-	panic("not implemented: S-2.02 AdmittedKeySet.RegisterKey")
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+	authKey := hmac.DeriveKey([]byte(pubkey), svtnID)
+
+	entry := &AdmittedKey{
+		PublicKey:    pubkey,
+		Role:         role,
+		FrameAuthKey: authKey,
+		NodeAddr:     nodeAddr,
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.keys[svtnID] == nil {
+		s.keys[svtnID] = make(map[[8]byte]*AdmittedKey)
+	}
+	s.keys[svtnID][nodeAddr] = entry
 }
 
 // RevokeKey marks the key for nodeAddr in svtnID as revoked.
@@ -129,21 +149,58 @@ func (s *AdmittedKeySet) RegisterKey(svtnID [16]byte, pubkey ed25519.PublicKey, 
 //
 // Returns ErrNotAdmitted if no such key is registered.
 func (s *AdmittedKeySet) RevokeKey(svtnID [16]byte, nodeAddr [8]byte) error {
-	panic("not implemented: S-2.02 AdmittedKeySet.RevokeKey")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	svtnMap, ok := s.keys[svtnID]
+	if !ok {
+		return ErrNotAdmitted
+	}
+	entry, ok := svtnMap[nodeAddr]
+	if !ok {
+		return ErrNotAdmitted
+	}
+	entry.revoked = true
+	return nil
 }
 
 // Lookup returns a copy of the AdmittedKey for (svtnID, nodeAddr), or nil if
 // not found. Returns a value copy — callers do not hold a pointer into internal
 // state (go.md rule 12; finding-032-store-sync-contract-leak).
 func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) *AdmittedKey {
-	panic("not implemented: S-2.02 AdmittedKeySet.Lookup")
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	svtnMap, ok := s.keys[svtnID]
+	if !ok {
+		return nil
+	}
+	entry, ok := svtnMap[nodeAddr]
+	if !ok {
+		return nil
+	}
+	// Return a value copy so callers cannot mutate internal state.
+	cp := *entry
+	return &cp
 }
 
 // IsAdmitted reports whether nodeAddr is currently in the admitted set for svtnID.
 // Used by internal/routing for fail-closed frame admission (BC-2.05.002
 // postcondition 3: admitted-set check happens before any forwarding logic).
 func (s *AdmittedKeySet) IsAdmitted(svtnID [16]byte, nodeAddr [8]byte) bool {
-	panic("not implemented: S-2.02 AdmittedKeySet.IsAdmitted")
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	svtnMap, ok := s.keys[svtnID]
+	if !ok {
+		return false
+	}
+	entry, ok := svtnMap[nodeAddr]
+	if !ok {
+		return false
+	}
+	// Revoked keys are not admitted.
+	return !entry.revoked
 }
 
 // GenerateChallenge produces a fresh admission challenge: a 32-byte random
@@ -156,7 +213,17 @@ func (s *AdmittedKeySet) IsAdmitted(svtnID [16]byte, nodeAddr [8]byte) bool {
 //
 // routerPrivKey is the router's Ed25519 private key, used locally only.
 func GenerateChallenge(routerPrivKey ed25519.PrivateKey) (Challenge, error) {
-	panic("not implemented: S-2.02 GenerateChallenge")
+	var nonce [32]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return Challenge{}, err
+	}
+
+	sig := ed25519.Sign(routerPrivKey, nonce[:])
+
+	return Challenge{
+		Nonce:     nonce,
+		RouterSig: sig,
+	}, nil
 }
 
 // AdmitNode verifies a node's challenge-response and, on success, registers
@@ -180,14 +247,60 @@ func AdmitNode(
 	svtnID [16]byte,
 	ks *AdmittedKeySet,
 ) error {
-	panic("not implemented: S-2.02 AdmitNode")
+	// Check if key is registered for this SVTN before expensive crypto ops.
+	// This enforces BC-2.05.002 precondition 1 and EC-001 (revoked check).
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubKey))
+
+	ks.mu.RLock()
+	svtnMap, hasSVTN := ks.keys[svtnID]
+	var existingEntry *AdmittedKey
+	if hasSVTN {
+		existingEntry = svtnMap[nodeAddr]
+	}
+	ks.mu.RUnlock()
+
+	if existingEntry == nil {
+		// Key not registered for this SVTN — admission fails (EC-001 covers
+		// unregistered case; ErrNotAdmitted used as the "not registered" signal).
+		return ErrNotAdmitted
+	}
+
+	if existingEntry.revoked {
+		return ErrKeyRevoked
+	}
+
+	// Record nonce (replay check + TTL purge) before verifying signature.
+	// This prevents timing oracle: we record before verifying so a valid nonce
+	// cannot be extracted by an attacker who checks timing of the replay error.
+	if err := ks.recordNonce(challenge.Nonce, time.Now().UTC()); err != nil {
+		return err
+	}
+
+	// Verify the node's signature over the challenge nonce (constant-time via ed25519.Verify).
+	if !ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig) {
+		return ErrSignatureVerificationFailed
+	}
+
+	return nil
 }
 
-// nodeAddrFromPubKey is a convenience wrapper around frame.DeriveNodeAddress.
-// Unexported — used by AdmitNode to compute the canonical nodeAddr before
-// storing in AdmittedKeySet.
-//
-//nolint:unused // implementer wires in AdmitNode (derives node address for key store)
-func nodeAddrFromPubKey(svtnID [16]byte, pubKey ed25519.PublicKey) [8]byte {
-	return frame.DeriveNodeAddress(svtnID, []byte(pubKey))
+// recordNonce records the nonce with timestamp, purging expired entries, and
+// returns ErrNonceReplay if the nonce was already consumed within the TTL window.
+func (s *AdmittedKeySet) recordNonce(n [32]byte, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Purge expired nonces (ARCH-04: 60s TTL).
+	for nonce, t := range s.nonces {
+		if now.Sub(t) > nonceTTL {
+			delete(s.nonces, nonce)
+		}
+	}
+
+	// Check for replay within the live window.
+	if _, exists := s.nonces[n]; exists {
+		return ErrNonceReplay
+	}
+	s.nonces[n] = now
+	return nil
 }

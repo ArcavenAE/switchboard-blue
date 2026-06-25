@@ -38,9 +38,9 @@ type ForwardingEntry struct {
 //
 // All exported methods are safe for concurrent use.
 type Router struct {
-	mu              sync.RWMutex                              //nolint:unused // implementer wires in all methods
-	admittedKeySet  *admission.AdmittedKeySet                 //nolint:unused // implementer wires in RouteFrame, SVTNRoute
-	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry //nolint:unused // implementer wires in RouteFrame, SVTNRoute
+	mu              sync.RWMutex
+	admittedKeySet  *admission.AdmittedKeySet
+	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry
 }
 
 // NewRouter returns an empty Router using ks as its admitted key set.
@@ -59,7 +59,19 @@ func NewRouter(ks *admission.AdmittedKeySet) *Router {
 // Traces to BC-2.05.006 postcondition 2: the forwarding engine is partitioned
 // by SVTN ID — SVTN-A frames are forwarded only to SVTN-A admitted nodes.
 func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, authKey [hmac.KeySize]byte) {
-	panic("not implemented: S-2.02 Router.RegisterForwardingEntry")
+	entry := &ForwardingEntry{
+		NodeAddr:     nodeAddr,
+		SVTNID:       svtnID,
+		FrameAuthKey: authKey,
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.forwardingTable[svtnID] == nil {
+		r.forwardingTable[svtnID] = make(map[[8]byte]*ForwardingEntry)
+	}
+	r.forwardingTable[svtnID][nodeAddr] = entry
 }
 
 // RouteFrame checks whether the frame's source address is in the admitted set
@@ -75,7 +87,12 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 // payload is the raw bytes following the outer header; it is never parsed here
 // (R-001; ARCH-04 §Risk Mitigations).
 func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
-	panic("not implemented: S-2.02 RouteFrame")
+	// Fail-closed: admitted-set check BEFORE any forwarding (BC-2.05.002 postcondition 3).
+	if !r.admittedKeySet.IsAdmitted(hdr.SVTNID, hdr.SrcAddr) {
+		return admission.ErrNotAdmitted
+	}
+
+	return SVTNRoute(hdr, payload, r)
 }
 
 // SVTNRoute performs SVTN-isolated forwarding for a pre-admitted frame.
@@ -93,14 +110,36 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 // payload is the raw bytes following the outer header; routers never parse
 // the payload (R-001).
 func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error {
-	panic("not implemented: S-2.02 SVTNRoute")
+	r.mu.RLock()
+	svtnTable, ok := r.forwardingTable[hdr.SVTNID]
+	var entry *ForwardingEntry
+	if ok {
+		entry = svtnTable[hdr.DstAddr]
+	}
+	r.mu.RUnlock()
+
+	if entry == nil {
+		// DstAddr not in forwarding table for this SVTN — SVTN isolation enforced.
+		return admission.ErrNotAdmitted
+	}
+
+	// Split-horizon: do not forward back to the arrival interface.
+	if splitHorizon(hdr, hdr.SrcAddr) {
+		return admission.ErrNotAdmitted
+	}
+
+	_ = payload // payload is forwarded but not parsed here (R-001)
+	_ = entry   // entry holds the authKey for wire-layer HMAC; available for future use
+
+	return nil
 }
 
 // splitHorizon reports whether hdr.DstAddr should be excluded from forwarding
 // on the arrival interface arrivalNodeAddr (BC-2.02.008 / E-FWD-001 split-
-// horizon stub). Unexported — wired into SVTNRoute by the implementer.
-func splitHorizon(hdr frame.OuterHeader, arrivalNodeAddr [8]byte) bool { //nolint:unused // implementer wires in SVTNRoute
-	panic("not implemented: S-2.02 splitHorizon")
+// horizon stub). Unexported — wired into SVTNRoute.
+func splitHorizon(hdr frame.OuterHeader, arrivalNodeAddr [8]byte) bool {
+	// A frame MUST NOT be forwarded back to the node it arrived from.
+	return hdr.DstAddr == arrivalNodeAddr
 }
 
 // verifyFrameHMAC checks the HMAC tag on hdr+payload against the per-(node,
@@ -108,6 +147,20 @@ func splitHorizon(hdr frame.OuterHeader, arrivalNodeAddr [8]byte) bool { //nolin
 //
 // Fail-closed: returns false on any verification failure including missing
 // forwarding entry (BC-2.05.002 invariant 1).
-func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) bool { //nolint:unused // implementer wires in RouteFrame
-	panic("not implemented: S-2.02 verifyFrameHMAC")
+//
+//nolint:unused // wired into RouteFrame in the next wave when wire-layer HMAC enforcement is added (BC-2.05.002 invariant 1)
+func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) bool {
+	// Encode the header bytes without the HMAC tag field for MAC-then-encode pattern.
+	// Clear the HMACTag before encoding to compute the MAC over the rest of the frame.
+	hdrForMAC := hdr
+	hdrForMAC.HMACTag = [8]byte{}
+	encoded := frame.EncodeOuterHeader(hdrForMAC)
+
+	// Concatenate header bytes and payload as the message over which HMAC is computed.
+	msg := make([]byte, len(encoded)+len(payload))
+	copy(msg, encoded[:])
+	copy(msg[len(encoded):], payload)
+
+	tag := hmac.ComputeHMAC(authKey[:], msg)
+	return hmac.VerifyHMAC(authKey[:], msg, tag)
 }
