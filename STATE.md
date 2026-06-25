@@ -101,6 +101,13 @@ s_2_01_adversary_status: CONVERGED
 s_2_01_adversary_total_passes: 12
 s_2_01_adversary_total_findings: "17 (resolved across 9 fix-bursts)"
 s_2_01_adversary_trajectory: "9 → 2 → 4 → 1 → 0 → 0 → 1 → 0 → 1 → 0 → 0 → 0"
+s_2_02_adversary_pass_06: 0_findings_converged (commit 276ac85)
+s_2_02_adversary_pass_07: 0_findings_converged (commit 4f07b90)
+s_2_02_adversary_pass_08: 0_findings_converged (commit 0313c6f)
+s_2_02_adversary_clean_streak: 3
+s_2_02_adversary_status: CONVERGED
+s_2_02_step_4_5_status: "CONVERGED (3/3 clean: passes 6, 7, 8) — BC-5.39.001 satisfied"
+s_2_02_next: Step 5 (per-AC demos)
 wave_1_integration_gate_status: closed
 wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
 wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
@@ -252,6 +259,24 @@ Notable mid-flight events:
 | 8. Worktree cleanup | ✅ done (devops dispatch parallel; landed before S-2.02 begins) |
 | 9. State update | ✅ done (this commit) |
 
+## S-2.02 Adversarial Convergence — COMPLETE 2026-06-25
+
+Step 4.5 complete. Three consecutive clean passes (6, 7, 8) — BC-5.39.001 satisfied.
+
+| Pass | Findings | Commit |
+|------|----------|--------|
+| 6 | 0 | 276ac85 |
+| 7 | 0 | 4f07b90 |
+| 8 | 0 | 0313c6f |
+
+Coverage: admission.go (lock discipline, nonce TTL/purge, LWW, deep-clone, distinct sentinels),
+routing.go (fail-closed admitted-set, SVTN-partitioned table, HMAC tag-snapshot guard),
+tests (AC-001..007 anchored to BCs; VP-007/008/010/039/057; H-1 race regression; LWW-after-revoke ADR-003).
+
+Process-gap findings across passes 6/7/8: zero. No follow-up codifications required for this streak.
+
+**Next: Step 5 — per-AC demos.**
+
 ## S-2.01 Closed — 2026-06-24
 
 - PR #5 merged via squash at `3c4104e` on `develop`; alpha tag `alpha-20260625-023528-3c4104e` cut automatically
@@ -282,7 +307,7 @@ Notable mid-flight events:
 | S-1.01 | Frame codec | completed (PR #1 merged 1c76160) | 8 | internal/frame |
 | S-1.02 | Half-channel clock | completed (PR #2 merged 9e9a98a) | 5 | internal/halfchannel |
 | S-2.01 | HMAC codec | completed (PR #5 squash-merged 3c4104e) | 5 | internal/hmac |
-| S-2.02 | Admission + SVTN isolation | pending (unblocked by S-2.01) | 8 | admission-security |
+| S-2.02 | Admission + SVTN isolation | Step 4.5 CONVERGED (3/3 clean: passes 6/7/8); next: Step 5 demos | 8 | admission-security |
 | S-1.03 | Session continuity | pending (depends_on S-2.02) | 5 | session-networking |
 
 Wave 2 dependencies: S-2.01 → S-2.02 → S-1.03 (serial chain).
