@@ -13,6 +13,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -229,8 +230,8 @@ func TestSessionContinuity_NodeAddressStableAfterReauth(t *testing.T) {
 //
 // Traces to:
 //
-//	BC-2.01.007 EC-001 (expired key at re-auth time; ARCH-04 §Key Lifecycle)
-//	E-ADM-002 / ErrKeyExpired (story EC-001 — see ambiguity flag in reauth.go)
+//	BC-2.01.007 EC-005 (re-authenticate after key expiry → E-ADM-015; see ARCH-04 v1.3 §Key Lifecycle)
+//	E-ADM-015 / ErrKeyExpired (story EC-001, S-1.03 rev 1.2 Spec Patches)
 //	EC-001 (S-1.03)
 func TestReauth_ExpiredKey(t *testing.T) {
 	t.Parallel()
@@ -279,11 +280,11 @@ func TestReauth_ExpiredKey(t *testing.T) {
 
 // TestReauth_EvictsOldPath verifies that a successful re-authentication from a
 // new source IP evicts the old path: the stored source address for the node
-// transitions from the old IP to the new IP (BC-2.01.007 EC-002).
+// transitions from the old IP to the new IP (BC-2.01.007 EC-006).
 //
 // Traces to:
 //
-//	BC-2.01.007 EC-002 (previous session on old IP evicted on new re-auth)
+//	BC-2.01.007 EC-006 (old path evicted on new re-auth; BC v1.3)
 //	EC-002 (S-1.03)
 func TestReauth_EvictsOldPath(t *testing.T) {
 	t.Parallel()
@@ -353,7 +354,7 @@ func TestReauth_EvictsOldPath(t *testing.T) {
 // EC-003).
 //
 // Serialised simulation: call ReAuthenticate twice in sequence; the second
-// call's source IP wins. Concurrent variant is covered by the race detector.
+// call's source IP wins. Concurrent variant is covered by TestReAuthenticate_NoRace.
 //
 // Traces to:
 //
@@ -414,6 +415,105 @@ func TestReauth_LastWriteWins(t *testing.T) {
 	got := rs.CurrentSourceAddr(svtnID, nodeAddr)
 	if got != ip2 {
 		t.Errorf("LWW: want last write %s, got %s", ip2, got)
+	}
+}
+
+// ── M-3: TestReAuthenticate_NoRace ────────────────────────────────────────────
+
+// TestReAuthenticate_NoRace exercises concurrent re-authentication from two
+// goroutines racing to claim the same (svtnID, nodeAddr) with different source
+// IPs. Each goroutine has its own distinct challenge (the router issues a fresh
+// challenge per path), so neither attempt collides on nonce replay. Both
+// ReAuthenticate calls must complete without error; the final CurrentSourceAddr
+// must contain exactly one of the two source IPs with no torn write.
+//
+// This is the concurrent companion to TestReauth_LastWriteWins (serialised
+// proof). The race detector enforces the lock discipline mandated by ADR-003.
+//
+// Traces to:
+//
+//	BC-2.01.007 EC-003 (concurrent re-auth — last one wins; LWW)
+//	BC-2.01.007 EC-006 (old path evicted on new re-auth; BC v1.3)
+//	ADR-003 (last-write-wins policy)
+//	M-3 (adversary pass-1 finding: concurrent re-auth race not covered)
+func TestReAuthenticate_NoRace(t *testing.T) {
+	t.Parallel()
+
+	// Deterministic seed for reproducibility.
+	seed := bytes.Repeat([]byte("reauth-norace-test0"), 2)[:32]
+	nodePub, nodePriv, err := ed25519.GenerateKey(bytes.NewReader(seed))
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey: %v", err)
+	}
+
+	_, routerPriv := mustGenEd25519(t)
+	svtnID := mustSVTN(0xC1)
+
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+
+	// Register and admit the node (initial handshake required before re-auth).
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+	ch0 := mustGenerateChallenge(t, routerPriv)
+	sig0 := ed25519.Sign(nodePriv, ch0.Nonce[:])
+	if err := admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: sig0}, nodePub, svtnID, ks); err != nil {
+		t.Fatalf("initial AdmitNode: %v", err)
+	}
+
+	nodeAddr := nodeAddrForTest(svtnID, nodePub)
+	sourceA := netip.MustParseAddr("10.100.0.1")
+	sourceB := netip.MustParseAddr("10.100.0.2")
+
+	// Each goroutine generates its own fresh challenge so nonces are distinct
+	// (the router would issue a unique challenge per network path).
+	chA := mustGenerateChallenge(t, routerPriv)
+	sigA := ed25519.Sign(nodePriv, chA.Nonce[:])
+	reqA := admission.ReAuthRequest{
+		SVTNID:        svtnID,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: sourceA,
+		Challenge:     chA,
+		Response:      admission.ChallengeResponse{NonceSig: sigA},
+	}
+
+	chB := mustGenerateChallenge(t, routerPriv)
+	sigB := ed25519.Sign(nodePriv, chB.Nonce[:])
+	reqB := admission.ReAuthRequest{
+		SVTNID:        svtnID,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: sourceB,
+		Challenge:     chB,
+		Response:      admission.ChallengeResponse{NonceSig: sigB},
+	}
+
+	var errA, errB error
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		errA = admission.ReAuthenticate(reqA, ks, rs)
+	}()
+	go func() {
+		defer wg.Done()
+		errB = admission.ReAuthenticate(reqB, ks, rs)
+	}()
+
+	wg.Wait()
+
+	// Both goroutines use fresh, distinct challenges — neither should fail.
+	if errA != nil {
+		t.Errorf("goroutine A ReAuthenticate: want nil, got %v", errA)
+	}
+	if errB != nil {
+		t.Errorf("goroutine B ReAuthenticate: want nil, got %v", errB)
+	}
+
+	// CurrentSourceAddr must contain exactly one of the two IPs (LWW; ADR-003).
+	// A torn write would produce a zero-value addr — verify it is non-zero.
+	got := rs.CurrentSourceAddr(svtnID, nodeAddr)
+	if got != sourceA && got != sourceB {
+		t.Errorf("LWW post-race: CurrentSourceAddr = %s; want either %s or %s (no torn write)", got, sourceA, sourceB)
 	}
 }
 
