@@ -240,6 +240,14 @@ func TestGenerateChallenge_NoChallengeContainsPrivateKey(t *testing.T) {
 //
 // Traces to BC-2.05.007 invariant 1 (DI-002: private key non-transit) and
 // VP-007 (private key absent from wire structs).
+//
+// VP-057 (Node Private Keys Never Appear as Literal Bytes in Any
+// Emitted Frame) — admission-wire-struct SUBSET covered by this test
+// (ChallengeResponse is one of VP-057's enumerated wire structs). Full
+// VP-057 coverage across DATA, EMPTY_TICK, CTL/ARQ/FEC, CONTROL_DRAIN,
+// CONTROL_KEY_REG, CONTROL_KEY_REVOKE frame types is deferred to the
+// wave where those frame types are emitted (per S-2.02 task 8 and
+// story rev 1.3 Spec Patches).
 func TestProperty_VP007_PrivateKeyByteSubstringAbsent(t *testing.T) {
 	t.Parallel()
 
@@ -547,6 +555,74 @@ func TestRegisterKey_AfterRevoke_ClearsRevokedFlag(t *testing.T) {
 	}
 	if !ks.IsAdmitted(svtnID, nodeAddr) {
 		t.Fatal("post-Step-3: IsAdmitted should be true after re-handshake; LWW un-revoke verified")
+	}
+}
+
+// ── L-2 pass-5: TestRevokeKey_ReturnsErrKeyNotRegistered ────────────────────
+
+// TestRevokeKey_ReturnsErrKeyNotRegistered pins the L-2 sentinel fix:
+// RevokeKey must return ErrKeyNotRegistered (E-ADM-013) — NOT
+// ErrNotAdmitted (E-ADM-003, frame-routing sentinel) — when the
+// (svtnID, nodeAddr) tuple has no registered key. Prior to the fix,
+// errors.Is(err, ErrNotAdmitted) conflated frame-rejection with
+// key-lifecycle-not-found.
+//
+// Traces to E-ADM-013 (BC-2.05.001 key-lifecycle error path).
+func TestRevokeKey_ReturnsErrKeyNotRegistered(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		setupAndCall func(t *testing.T) error
+	}{
+		{
+			name: "unknown_svtn",
+			setupAndCall: func(t *testing.T) error {
+				t.Helper()
+				ks := admission.NewAdmittedKeySet()
+				var svtnID [16]byte
+				copy(svtnID[:], "test-svtn-id-16b")
+				var nodeAddr [8]byte
+				copy(nodeAddr[:], "node1234")
+				// svtnID has never been used; entire map miss.
+				return ks.RevokeKey(svtnID, nodeAddr)
+			},
+		},
+		{
+			name: "known_svtn_unknown_node",
+			setupAndCall: func(t *testing.T) error {
+				t.Helper()
+				ks := admission.NewAdmittedKeySet()
+				var svtnID [16]byte
+				copy(svtnID[:], "test-svtn-id-16b")
+
+				// Register a DIFFERENT key in this SVTN so the SVTN map entry exists.
+				otherPub, _, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					return err
+				}
+				ks.RegisterKey(svtnID, otherPub, admission.RoleAccess)
+
+				// Attempt to revoke a node address that was never registered in this SVTN.
+				// Fabricate an address that cannot match otherPub's derived address.
+				var missing [8]byte
+				copy(missing[:], "missing1")
+				return ks.RevokeKey(svtnID, missing)
+			},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.setupAndCall(t)
+			if !errors.Is(err, admission.ErrKeyNotRegistered) {
+				t.Errorf("RevokeKey: got err=%v, want errors.Is(err, ErrKeyNotRegistered)", err)
+			}
+			if errors.Is(err, admission.ErrNotAdmitted) {
+				t.Errorf("RevokeKey: err must NOT be ErrNotAdmitted (frame-routing sentinel); got %v", err)
+			}
+		})
 	}
 }
 
