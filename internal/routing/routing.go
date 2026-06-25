@@ -18,11 +18,11 @@ import (
 	"github.com/arcavenae/switchboard/internal/hmac"
 )
 
-// ErrNoForwardingEntry is returned by SVTNRoute when the destination
-// address has no forwarding-table entry for the SVTN. Distinct from
-// admission.ErrNotAdmitted (which signals source admission failure)
-// to enable callers to distinguish admission rejection from forwarding-
-// table miss via errors.Is.
+// ErrNoForwardingEntry is returned by SVTNRoute when no forwarding-table
+// entry exists for (svtnID, dstAddr). Maps to E-FWD-002 in the error
+// taxonomy. Distinct from admission.ErrNotAdmitted (E-ADM-003, source
+// admission failure) — callers use errors.Is to distinguish a
+// forwarding-table miss from an admission rejection.
 var ErrNoForwardingEntry = errors.New("routing: no forwarding entry for destination in this SVTN")
 
 // ForwardingEntry records a forwarding table entry for one destination node.
