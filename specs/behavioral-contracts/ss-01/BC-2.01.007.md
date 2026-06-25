@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.007
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -19,6 +19,7 @@ lifecycle_status: active
 introduced: v0.1.0
 modified:
   - 2026-06-25T00:00:00 # v1.2 — add EC-005 expiry-at-reauth mapped to E-ADM-015 (spec patch S-1.03 rev 1.1)
+  - 2026-06-25T00:00:00 # v1.3 — mint EC-006 old path eviction on re-auth from new IP; PC3 note added (adversary pass-1 H-2)
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -53,7 +54,7 @@ When a node's IP address changes (wifi-to-LAN handoff, DHCP renewal, mobile roam
 
 1. The node initiates a re-authentication challenge to the router from its new IP.
 2. The router verifies the challenge signature against the admitted key set.
-3. The router updates its routing entry for the node to reflect the new source IP.
+3. The router updates its routing entry for the node to reflect the new source IP; the prior routing entry for the old source IP is evicted (last-write-wins per ADR-003; see EC-006).
 4. Session traffic resumes on the existing channel; no new channel establishment required.
 5. Frames lost during the transition are recovered by the half-channel recovery mechanisms (upstream: idempotent replay; downstream: ARQ).
 6. Re-authentication completes within the configured timeout (implementation: ≤ 5 seconds).
@@ -78,6 +79,7 @@ Node detects IP address change (OS network interface event or failed keep-alive 
 | EC-003 | Node changes IP twice in rapid succession | Each re-authentication uses the latest IP. Previous re-auth in-progress is superseded. Router updates to final IP. |
 | EC-004 (DEC-002) | E router phase: single router fails at moment of IP change | Session lost. No failover path available in E router phase. User must restart. |
 | EC-005 | Node re-authenticates after key expiry | Router checks expiry at re-auth time; expired key is not re-admitted. Router returns E-ADM-015 (key expired). Session terminated; node receives explicit rejection. (FM-013) |
+| EC-006 | Successful re-auth from new source IP while old IP entry is still tracked | Old path entry evicted; new path replaces it. Last write wins per ADR-003. No frame replay/dedup obligation. |
 
 ## Canonical Test Vectors
 
