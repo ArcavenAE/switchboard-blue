@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -42,8 +43,6 @@ func mustGenerateChallenge(t *testing.T, routerPriv ed25519.PrivateKey) admissio
 // nodeAddrForTest mirrors frame.DeriveNodeAddress for tests: SHA-256(svtnID ||
 // pubKey), truncated to 8 bytes. Avoids importing internal/frame in tests by
 // reproducing the same pure computation.
-//
-//nolint:unparam // return value is consumed once stub methods are implemented
 func nodeAddrForTest(svtnID [16]byte, pubKey ed25519.PublicKey) [8]byte {
 	h := sha256.New()
 	h.Write(svtnID[:])
@@ -64,9 +63,8 @@ func nodeAddrForTest(svtnID [16]byte, pubKey ed25519.PublicKey) [8]byte {
 func TestAdmitNode_ValidChallenge(t *testing.T) {
 	t.Parallel()
 
-	_, routerPriv := mustGenEd25519(t) //nolint:staticcheck // consumed by mustGenerateChallenge once stub is implemented
+	_, routerPriv := mustGenEd25519(t)
 	nodePub, nodePriv := mustGenEd25519(t)
-	_ = nodePriv //nolint:staticcheck // consumed by ed25519.Sign once stub is implemented
 	svtnID := mustSVTN(0x01)
 
 	ks := admission.NewAdmittedKeySet()
@@ -87,15 +85,13 @@ func TestAdmitNode_ValidChallenge(t *testing.T) {
 // TestAdmitNode_InvalidSignature verifies that AdmitNode returns
 // ErrSignatureVerificationFailed when the presented signature is invalid.
 //
-// Traces to BC-2.05.001 precondition 1 (public key registered);
-// postcondition 5 (failure path: E-ADM-001).
+// Traces to BC-2.05.001 postcondition 5 (failure path: E-ADM-001).
 func TestAdmitNode_InvalidSignature(t *testing.T) {
 	t.Parallel()
 
-	_, routerPriv := mustGenEd25519(t) //nolint:staticcheck // consumed by mustGenerateChallenge once stub is implemented
+	_, routerPriv := mustGenEd25519(t)
 	nodePub, _ := mustGenEd25519(t)
 	_, wrongNodePriv := mustGenEd25519(t) // wrong keypair — not registered
-	_ = wrongNodePriv                     //nolint:staticcheck // consumed by ed25519.Sign once stub is implemented
 	svtnID := mustSVTN(0x02)
 
 	ks := admission.NewAdmittedKeySet()
@@ -117,13 +113,12 @@ func TestAdmitNode_InvalidSignature(t *testing.T) {
 // TestAdmitNode_ReplayedNonce verifies that AdmitNode returns ErrNonceReplay
 // when the same challenge nonce is presented a second time.
 //
-// Traces to BC-2.05.001 invariant 3 (nonces are single-use, E-ADM-008).
+// Traces to BC-2.05.001 invariant 3 (nonces are single-use); E-ADM-008.
 func TestAdmitNode_ReplayedNonce(t *testing.T) {
 	t.Parallel()
 
-	_, routerPriv := mustGenEd25519(t) //nolint:staticcheck // consumed once stub is implemented
+	_, routerPriv := mustGenEd25519(t)
 	nodePub, nodePriv := mustGenEd25519(t)
-	_ = nodePriv //nolint:staticcheck // consumed by ed25519.Sign once stub is implemented
 	svtnID := mustSVTN(0x03)
 
 	ks := admission.NewAdmittedKeySet()
@@ -231,17 +226,15 @@ func TestGenerateChallenge_NoChallengeContainsPrivateKey(t *testing.T) {
 // TestAdmitNode_KeyNotRegisteredForSVTN verifies that a node presenting a
 // key for an SVTN it is not registered on returns an error.
 //
-// Traces to story EC-001 (E-ADM-005 returned; frame dropped) and
+// Traces to story EC-001 (E-ADM-003 returned; unregistered key) and
 // BC-2.05.002 precondition 1.
 func TestAdmitNode_KeyNotRegisteredForSVTN(t *testing.T) {
 	t.Parallel()
 
-	_, routerPriv := mustGenEd25519(t) //nolint:staticcheck // consumed once stub is implemented
+	_, routerPriv := mustGenEd25519(t)
 	nodePub, nodePriv := mustGenEd25519(t)
-	_ = nodePriv //nolint:staticcheck // consumed by ed25519.Sign once stub is implemented
 	svtnA := mustSVTN(0x0A)
 	svtnB := mustSVTN(0x0B) // node is only registered on svtnA
-	_ = svtnB               //nolint:staticcheck // consumed by AdmitNode once stub is implemented
 
 	ks := admission.NewAdmittedKeySet()
 	ks.RegisterKey(svtnA, nodePub, admission.RoleAccess)
@@ -295,9 +288,8 @@ func TestDuplicateKeyRegistration_LastWriteWins(t *testing.T) {
 func TestAdmitNode_RevokedKey(t *testing.T) {
 	t.Parallel()
 
-	_, routerPriv := mustGenEd25519(t) //nolint:staticcheck // consumed once stub is implemented
+	_, routerPriv := mustGenEd25519(t)
 	nodePub, nodePriv := mustGenEd25519(t)
-	_ = nodePriv //nolint:staticcheck // consumed by ed25519.Sign once stub is implemented
 	svtnID := mustSVTN(0x04)
 
 	ks := admission.NewAdmittedKeySet()
@@ -322,8 +314,10 @@ func TestAdmitNode_RevokedKey(t *testing.T) {
 // ── Property / VP harness: VP-007 — nonce uniqueness ────────────────────────
 
 // TestGenerateChallenge_NonceUniqueness verifies that GenerateChallenge
-// produces distinct nonces across multiple calls (BC-2.05.001 invariant 3;
-// VP-007, VP-009).
+// produces distinct nonces across multiple calls.
+//
+// Traces to BC-2.05.001 invariant 3 (nonce uniqueness). Nonce uniqueness is a
+// precondition for VP-009's replay rejection; it is not itself VP-007 or VP-009.
 //
 // Deterministic boundary property: 100 independent GenerateChallenge calls
 // must all produce distinct Nonce values.
@@ -373,13 +367,113 @@ func TestIsAdmitted_FailClosed(t *testing.T) {
 	}
 }
 
+// ── H-2 follow-through: two-state model (registered ≠ admitted) ─────────────
+
+// TestIsAdmitted_FailsBeforeHandshake verifies BC-2.05.001 postcondition 4:
+// a node that has been RegisterKey'd but has NOT completed the AdmitNode
+// challenge-response handshake is NOT in the active admitted set.
+// IsAdmitted must return false until AdmitNode succeeds.
+func TestIsAdmitted_FailsBeforeHandshake(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	svtnID := mustSVTN(0x20)
+	nodePub, _ := mustGenEd25519(t)
+
+	// Register the key (but do NOT call AdmitNode).
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+
+	nodeAddr := nodeAddrForTest(svtnID, nodePub)
+
+	// Verify NOT admitted yet — registered ≠ admitted under the two-state model.
+	if ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Error("IsAdmitted returned true for registered-but-not-handshaked node; BC-2.05.001 PC4 requires false until AdmitNode succeeds")
+	}
+}
+
+// ── H-1 follow-through: race regression under -race detector ────────────────
+
+// TestAdmitNodeRevokeKey_NoRace exercises the H-1 race condition fix.
+// Runs many goroutines concurrently calling AdmitNode and RevokeKey on the
+// same (svtnID, nodeAddr); MUST pass under `go test -race`.
+//
+// Prior to the fix, AdmitNode read AdmittedKey.revoked after RUnlock while
+// RevokeKey wrote under Lock — a Go memory-model violation detected by -race.
+func TestAdmitNodeRevokeKey_NoRace(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	svtnID := mustSVTN(0x21)
+	_, routerPriv := mustGenEd25519(t)
+	nodePub, nodePriv := mustGenEd25519(t)
+
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			ch, err := admission.GenerateChallenge(routerPriv)
+			if err != nil {
+				return
+			}
+			sig := ed25519.Sign(nodePriv, ch.Nonce[:])
+			resp := admission.ChallengeResponse{NonceSig: sig}
+			_ = admission.AdmitNode(ch, resp, nodePub, svtnID, ks)
+		}()
+		go func() {
+			defer wg.Done()
+			nodeAddr := nodeAddrForTest(svtnID, nodePub)
+			_ = ks.RevokeKey(svtnID, nodeAddr)
+		}()
+	}
+	wg.Wait()
+	// Pass if no -race detector hit and no panic.
+}
+
+// ── L-2: pin ADR-003 LWW re-registration semantic ───────────────────────────
+
+// TestRegisterKey_AfterRevoke_ClearsRevokedFlag pins the ADR-003 LWW (last-
+// write-wins) semantic: re-registering a key after revocation un-revokes it.
+// Acts as a regression guard so unrelated refactors do not accidentally change
+// this behavior.
+func TestRegisterKey_AfterRevoke_ClearsRevokedFlag(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	svtnID := mustSVTN(0x22)
+	nodePub, _ := mustGenEd25519(t)
+	nodeAddr := nodeAddrForTest(svtnID, nodePub)
+
+	// Register → Revoke → Re-register.
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+	if err := ks.RevokeKey(svtnID, nodeAddr); err != nil {
+		t.Fatalf("RevokeKey: %v", err)
+	}
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+
+	// After re-register the key should be in the set and not revoked.
+	// Verify via Lookup: entry must exist (LWW replaced the revoked entry).
+	entry := ks.Lookup(svtnID, nodeAddr)
+	if entry == nil {
+		t.Fatal("Lookup found nothing after re-register; LWW semantic lost the entry")
+	}
+	// The revoked flag is unexported; we verify behavior: RevokeKey on a freshly
+	// re-registered key must succeed (key is present) and after a second revoke +
+	// no re-register the key remains revocable — confirming revoked=false was reset.
+	if err := ks.RevokeKey(svtnID, nodeAddr); err != nil {
+		t.Errorf("RevokeKey after re-register: want nil (LWW cleared revoked=false), got %v", err)
+	}
+}
+
 // ── Fuzz harness: VP-009 — admission rejects unregistered keys ──────────────
 
 // FuzzAdmitNode_UnregisteredKey is a fuzz target that verifies AdmitNode
 // always returns a non-nil error when the presented public key is NOT
 // registered in the AdmittedKeySet.
 //
-// Traces to VP-009 (admission fails for any key not in the admitted set).
+// Traces to VP-008 (Admission Fails for Unregistered Key).
 func FuzzAdmitNode_UnregisteredKey(f *testing.F) {
 	// Seed corpus: a single known valid nonce seed.
 	f.Add([]byte("seed-nonce-000000000000000000000"))

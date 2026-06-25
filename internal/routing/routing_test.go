@@ -32,10 +32,6 @@ func mustSVTN(b byte) [16]byte {
 }
 
 // nodeAddrForTest mirrors frame.DeriveNodeAddress: SHA-256(svtnID || pubKey)[:8].
-// The return value is consumed once stub methods are implemented; during the stub
-// phase, stubs panic before return values are used.
-//
-//nolint:unparam // return value is consumed once stub methods are implemented
 func nodeAddrForTest(svtnID [16]byte, pubKey ed25519.PublicKey) [8]byte {
 	h := sha256.New()
 	h.Write(svtnID[:])
@@ -59,10 +55,10 @@ func TestRouteFrame_DropsUnadmitted(t *testing.T) {
 
 	svtnID := mustSVTN(0x01)
 	unadmittedPub, _ := mustGenEd25519(t)
-	unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub) //nolint:staticcheck // consumed once stub is implemented
+	unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub)
 
 	admittedPub, _ := mustGenEd25519(t)
-	admittedAddr := nodeAddrForTest(svtnID, admittedPub) //nolint:staticcheck // consumed once stub is implemented
+	admittedAddr := nodeAddrForTest(svtnID, admittedPub)
 
 	ks := admission.NewAdmittedKeySet()
 	// Only admittedPub is registered — unadmittedPub is NOT.
@@ -102,8 +98,8 @@ func TestSVTNRoute_NoCrossContamination(t *testing.T) {
 
 	nodeAPub, _ := mustGenEd25519(t)
 	nodeBPub, _ := mustGenEd25519(t)
-	nodeAAddr := nodeAddrForTest(svtnA, nodeAPub) //nolint:staticcheck // consumed once stub is implemented
-	nodeBAddr := nodeAddrForTest(svtnB, nodeBPub) //nolint:staticcheck // consumed once stub is implemented
+	nodeAAddr := nodeAddrForTest(svtnA, nodeAPub)
+	nodeBAddr := nodeAddrForTest(svtnB, nodeBPub)
 
 	ks := admission.NewAdmittedKeySet()
 	ks.RegisterKey(svtnA, nodeAPub, admission.RoleAccess)
@@ -157,8 +153,8 @@ func TestSVTNRoute_SVTNPartitionBoundary(t *testing.T) {
 
 			srcPub, _ := mustGenEd25519(t)
 			dstPub, _ := mustGenEd25519(t)
-			srcAddr := nodeAddrForTest(tc.srcSVTN, srcPub) //nolint:staticcheck // consumed once stub is implemented
-			dstAddr := nodeAddrForTest(tc.dstSVTN, dstPub) //nolint:staticcheck // consumed once stub is implemented
+			srcAddr := nodeAddrForTest(tc.srcSVTN, srcPub)
+			dstAddr := nodeAddrForTest(tc.dstSVTN, dstPub)
 
 			ks := admission.NewAdmittedKeySet()
 			ks.RegisterKey(tc.srcSVTN, srcPub, admission.RoleAccess)
@@ -198,8 +194,8 @@ func TestSVTNRoute_AdmittedFrameForwardedToCorrectSVTN(t *testing.T) {
 	svtnA := mustSVTN(0x0A)
 	srcPub, _ := mustGenEd25519(t)
 	dstPub, _ := mustGenEd25519(t)
-	srcAddr := nodeAddrForTest(svtnA, srcPub) //nolint:staticcheck // consumed once stub is implemented
-	dstAddr := nodeAddrForTest(svtnA, dstPub) //nolint:staticcheck // consumed once stub is implemented
+	srcAddr := nodeAddrForTest(svtnA, srcPub)
+	dstAddr := nodeAddrForTest(svtnA, dstPub)
 
 	ks := admission.NewAdmittedKeySet()
 	ks.RegisterKey(svtnA, srcPub, admission.RoleAccess)
@@ -238,10 +234,10 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 
 	svtnID := mustSVTN(0x05)
 	unadmittedPub, _ := mustGenEd25519(t)
-	unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub) //nolint:staticcheck // consumed once stub is implemented
+	unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub)
 
 	admittedPub, _ := mustGenEd25519(t)
-	admittedAddr := nodeAddrForTest(svtnID, admittedPub) //nolint:staticcheck // consumed once stub is implemented
+	admittedAddr := nodeAddrForTest(svtnID, admittedPub)
 
 	ks := admission.NewAdmittedKeySet()
 	ks.RegisterKey(svtnID, admittedPub, admission.RoleAccess)
@@ -296,17 +292,15 @@ func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 			t.Skip()
 			return
 		}
-		_ = unadmittedPub //nolint:staticcheck // consumed once stub is implemented
-
 		ks := admission.NewAdmittedKeySet()
 		ks.RegisterKey(svtnID, admittedPub, admission.RoleAccess)
 		// unadmittedPub deliberately NOT registered.
 
 		r := routing.NewRouter(ks)
-		admittedAddr := nodeAddrForTest(svtnID, admittedPub) //nolint:staticcheck // consumed once stub is implemented
+		admittedAddr := nodeAddrForTest(svtnID, admittedPub)
 		r.RegisterForwardingEntry(svtnID, admittedAddr, [32]byte{})
 
-		unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub) //nolint:staticcheck // consumed once stub is implemented
+		unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub)
 
 		var dstAddr [8]byte
 		dstAddr[0] = dstByte
