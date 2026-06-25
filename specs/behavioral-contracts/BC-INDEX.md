@@ -30,7 +30,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.01.004 | Frame outer-header encoding and decoding at 44-byte fixed layout | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.004.md |
 | BC-2.01.005 | Channel header is opaque to routers — parseable only by endpoints | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.005.md |
 | BC-2.01.006 | Session identity is cryptographic: node address derived from hash(SVTN-ID, public-key) | session-networking | CAP-004 | P0 | E | active | ss-01/BC-2.01.006.md |
-| BC-2.01.007 | Session continuity survives IP address change via cryptographic re-authentication | session-networking | CAP-004 | P0 | E | active | ss-01/BC-2.01.007.md |
+| BC-2.01.007 | Session continuity survives IP address change via cryptographic re-authentication | session-networking | CAP-004 | P0 | E | implemented (S-1.03 / PR #7) | ss-01/BC-2.01.007.md |
 | BC-2.02.001 | Duplicate-and-race: same frame sent on two fastest paths simultaneously | multipath-forwarding | CAP-005 | P0 | E | active | ss-02/BC-2.02.001.md |
 | BC-2.02.002 | Receiver delivers first-arriving copy and silently discards subsequent duplicates | multipath-forwarding | CAP-005 | P0 | E | active | ss-02/BC-2.02.002.md |
 | BC-2.02.003 | Per-path RTT and loss tracked via keep-alive probes; paths ranked by quality | multipath-forwarding | CAP-006 | P0 | E | active | ss-02/BC-2.02.003.md |

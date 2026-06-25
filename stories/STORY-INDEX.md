@@ -20,8 +20,8 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 21 |
-| Complete | 5 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02) |
-| Pending | 16 |
+| Complete | 6 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03) |
+| Pending | 15 |
 | E-phase | 17 |
 | PE-phase | 4 |
 | Total points | 102 |
@@ -35,7 +35,7 @@ inputDocuments:
 | S-0.01 | Port BMAD scaffolding as wave-0 baseline | E-0 | 0 | (none) | cmd/switchboard | 1 | P0 | E | complete |
 | S-1.01 | Implement 44-byte outer header codec | E-1 | 1 | BC-2.01.004, BC-2.01.005, BC-2.01.006 | session-networking | 5 | P0 | E | completed |
 | S-1.02 | Implement timeslice clock state machine | E-1 | 1 | BC-2.01.001, BC-2.01.002, BC-2.01.003 | session-networking | 8 | P0 | E | completed (PR #2, merge 9e9a98a) |
-| S-1.03 | Session continuity via cryptographic re-authentication | E-1 | 2 | BC-2.01.007 | session-networking, admission-security | 5 | P0 | E | pending |
+| S-1.03 | Session continuity via cryptographic re-authentication | E-1 | 2 | BC-2.01.007 | session-networking, admission-security | 5 | P0 | E | completed (PR #7, merge f35e836) |
 | S-2.01 | Implement HMAC-SHA256 frame authentication | E-2 | 2 | BC-2.05.005 | admission-security | 5 | P0 | E | completed (PR #5, merge 3c4104e) |
 | S-2.02 | Tier-1 admission and SVTN isolation | E-2 | 2 | BC-2.05.001, BC-2.05.002, BC-2.05.006, BC-2.05.007 | admission-security | 8 | P0 | E | completed (PR #6, merge a06b306) |
 | S-3.01 | Tmux control mode integration with PTY fallback | E-3 | 3 | BC-2.04.001, BC-2.04.002 | session-access | 8 | P0 | E | pending |
@@ -61,7 +61,7 @@ inputDocuments:
 |------|---------|--------|-------|
 | 0 | S-0.01 | 1 | BMAD scaffolding (complete) |
 | 1 | S-1.01, S-1.02 + refactor PR #3 | 13 | Frame codec + half-channel clock — **CLOSED 2026-06-24 (pass-with-clean-drift; rollback resolved 2026-06-24)** |
-| 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity |
+| 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity — **COMPLETE 2026-06-25 (3/3 merged; integration gate next)** |
 | 3 | S-3.01, S-3.02, S-3.03 | 21 | Session access MVP |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
 | 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
