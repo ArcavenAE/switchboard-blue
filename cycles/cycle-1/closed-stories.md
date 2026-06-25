@@ -110,3 +110,34 @@ All items resolved or routed to concrete backlog targets:
 - **E-FRM ↔ E-PRT namespace (informational) — RESOLVED.** Cross-reference subsection added to `.factory/specs/prd-supplements/error-taxonomy.md` (burst A commit `6c064d9`). Canonical is E-PRT-*.
 
 See `.factory/cycles/cycle-1/wave-1/consistency-validation.md` for the detailed consistency-validator report.
+
+---
+
+## Wave 2 Closure — 2026-06-25
+
+**Gate disposition:** PASS_WITH_OBSERVATIONS
+**Stories merged:** S-2.01 (5 pts, PR #5, `3c4104e`), S-2.02 (8 pts, PR #6, `a06b306`), S-1.03 (5 pts, PR #7, `f35e836`)
+**Total points:** 18 pts
+**Wave 2 total:** 3/3 stories merged
+
+### S-1.03 — Session Continuity (5 pts, PR #7)
+
+HMAC-authenticated session continuity for ReAuthenticate path. Adversary passes 3/4/5 clean (BC-5.39.001 satisfied). Merged at `f35e836` (2026-06-25).
+
+Open carry-forwards:
+- WAVE-2-MED-001: ReAuthState not evicted on RevokeKey/RegisterKey reset (Phase-6 hardening).
+- VP-036: property test deferred (needs `internal/testenv.ConnectWithSourceIP`).
+- VP-039-test-skip: t.Skip placeholder needed in `internal/routing/*_test.go`.
+- SEC-003: sub-microsecond TOCTOU on `now` in ReAuthenticate (ACCEPTED, Phase-6).
+
+### Wave 2 Gate Reports
+
+- Consistency-validator: `cycles/cycle-1/wave-2/consistency-report.md` (0C/0H/2M/3L/4O)
+- Fresh-context audit: `cycles/cycle-1/wave-2/fresh-context-audit.md` (0C/0H/1M/3L/3O)
+
+### Wave 2 Drift Register
+
+- **WAVE-2-MED-001 (OPEN, Phase-6):** ReAuthState not evicted on RevokeKey or RegisterKey reset; stale source-IP survives via CurrentSourceAddr.
+- **WAVE-3-DEP-001 (OPEN, Wave 3 critical path):** verifyFrameHMAC is //nolint:unused on develop; Wave-2 router has zero frame-forgery defense until wired into RouteFrame.
+
+See `cycles/cycle-1/wave-2/` for detailed gate reports.

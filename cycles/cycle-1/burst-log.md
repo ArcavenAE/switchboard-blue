@@ -118,3 +118,44 @@ Gate verdict commits: `44f5bc3`, `e8af50a`, `1d2993a`, `b05880a`, `345d4f4`, `6c
 | 6+7. Push + PR | pr-manager | PR #6, squash-merged at `a06b306`; alpha `alpha-20260625-135909-a06b306` |
 | 8. Cleanup | devops-engineer | `.worktrees/S-2.02/` removed; local + remote branches deleted |
 | 9. State update | state-manager | this log |
+
+---
+
+## S-1.03 Delivery Burst (2026-06-25)
+
+**Agents dispatched:** devops-engineer, stub-architect, implementer, adversary (×5), pr-manager, state-manager
+**Files touched:** internal/routing/session.go, internal/routing/session_test.go, internal/routing/routing.go, internal/routing/routing_test.go
+**Versions bumped:** BC-2.04.001, BC-2.04.002, BC-2.04.003, BC-2.04.004 implemented
+**Summary:** Full per-story-delivery for S-1.03 (Session continuity). 5 adversary passes; passes 3/4/5 clean (BC-5.39.001 satisfied). PR #7 squash-merged at f35e836 on develop (2026-06-25). Adversary pass SHAs: pass 3 `dc37fe1`, pass 4 `52ee1d3`, pass 5 `6bcde7d`.
+
+| Step | Agent | Output |
+|------|-------|--------|
+| 1. Worktree | devops-engineer | `.worktrees/S-1.03/` on `feature/S-1.03-session-continuity` |
+| 2+3. Stubs+tests | stub-architect | Red Gate — stubs + failing tests |
+| 4. Implementation | implementer | TDD: session.go + routing.go |
+| 4.5. Adversary ×5 | adversary + fixers | passes 3/4/5 clean |
+| 6+7. Push + PR | pr-manager | PR #7, squash-merged at `f35e836` |
+| 8. Cleanup | devops-engineer | `.worktrees/S-1.03/` removed |
+| 9. State update | state-manager | this log |
+
+---
+
+## Wave 2 Governance Burst (2026-06-25)
+
+**Agents dispatched:** architect, spec-steward, product-owner, state-manager, devops-engineer
+**Triggered by:** Wave 2 integration gate findings (consistency-validator: 0C/0H/2M/3L/4O; fresh-context audit: 0C/0H/1M/3L/3O)
+**factory-artifacts SHAs:** `1d09664` (ARCH-08 v1.1), `c4ee7db` (demo-evidence + E-FWD-002 minted), `918acb4` (VP lifecycle _LIFECYCLE.md v1.0), `cdac793` (drift rows)
+**develop tip post-cleanup:** `d8d7ae6` (PR #8 E-FWD-002 merged)
+
+| Finding | Resolution | Commit / PR |
+|---------|-----------|-------------|
+| MED-consistency-1 (ARCH-08 §6 missing) | architect v1.0→v1.1: added §6 Import Constraints + `halfchannel` package doc | factory-artifacts `1d09664` |
+| MED-consistency-2 (demo-evidence missing) | state-manager backfilled `per-ac-evidence.md` for S-2.02 and S-1.03 | factory-artifacts `c4ee7db` |
+| LOW-consistency-1 (E-FWD-002 not in taxonomy) | PO minted E-FWD-002; godoc cite via PR #8 merged → develop `d8d7ae6` | factory-artifacts `c4ee7db` + develop PR #8 |
+| LOW-consistency-3 (VP lifecycle policy undefined) | spec-steward created `_LIFECYCLE.md` v1.0; VP-007/008/009/010/057 → implemented; VP-039 → deferred (Phase-6) | factory-artifacts `918acb4` |
+| MED-cross-1 (ReAuthState eviction gap) | tracked as WAVE-2-MED-001 in drift register; Phase-6 hardening target | factory-artifacts `cdac793` |
+| LOW-cross-1 (verifyFrameHMAC wire-up dep) | tracked as WAVE-3-DEP-001 in drift register; Wave 3 critical path | factory-artifacts `cdac793` |
+
+Process note: spec-steward inadvertent commit `04eb5f5` (duplicate of `918acb4`) is harmless but flags a parallel-burst race pattern on factory-artifacts working tree. Orchestrator to watch for recurrence; no follow-up story unless it repeats.
+
+Cycle-closing checklist per S-7.02: LOW-003 pass-count asymmetry and OBS-001..003 (fresh-context) are observations — no codification follow-up required.
