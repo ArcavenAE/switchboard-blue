@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -24,6 +24,7 @@ kos_anchors:
 modified:
   - 2026-06-23T00:00:00
   - 2026-06-24T00:00:00 # v1.1 — permit inline HKDF for 32-byte single-block case (refs drbothen/vsdd-factory#260 family, S-2.01 rev 2)
+  - 2026-06-25T00:00:00 # v1.2 — clarify ADR-003 LWW resets admitted=false (security-by-default; refs adversary pass-2 L-2, S-2.02 rev 1.2)
 ---
 
 # ARCH-04: Admission & Security
@@ -54,6 +55,16 @@ previous entry is overwritten.
 - The control node who performs the registration must be authenticated (DI-012), so
   LWW does not weaken the trust model — the last writer is an authenticated operator.
 - If an operator registers a key accidentally, they can correct it by re-registering.
+
+**Admission reset on re-registration (security-by-default):** Any `RegisterKey` call
+replaces the prior `AdmittedKey` entry in full, including resetting `admitted=false`.
+A previously admitted node whose key is re-registered (e.g., to change role) MUST
+complete a fresh challenge-response handshake (`AdmitNode`) before it appears in the
+active admitted set again. The implementation zero-initializes new `AdmittedKey`
+structs, so this reset is automatic and unconditional. Rationale: an operator who
+re-registers a key (even to the same value) cannot be assumed to have validated that
+the prior session is still trusted; forcing re-handshake is the safer default.
+References: S-2.02 EC-004, BC-2.05.001 PC4.
 
 **Security implication:** LWW means a compromised control node key could overwrite
 key registrations. Mitigated by: (a) control node admission uses the same signed
