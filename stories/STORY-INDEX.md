@@ -20,8 +20,8 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 21 |
-| Complete | 4 (S-0.01, S-1.01, S-1.02, S-2.01) |
-| Pending | 17 |
+| Complete | 5 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02) |
+| Pending | 16 |
 | E-phase | 17 |
 | PE-phase | 4 |
 | Total points | 102 |
@@ -37,7 +37,7 @@ inputDocuments:
 | S-1.02 | Implement timeslice clock state machine | E-1 | 1 | BC-2.01.001, BC-2.01.002, BC-2.01.003 | session-networking | 8 | P0 | E | completed (PR #2, merge 9e9a98a) |
 | S-1.03 | Session continuity via cryptographic re-authentication | E-1 | 2 | BC-2.01.007 | session-networking, admission-security | 5 | P0 | E | pending |
 | S-2.01 | Implement HMAC-SHA256 frame authentication | E-2 | 2 | BC-2.05.005 | admission-security | 5 | P0 | E | completed (PR #5, merge 3c4104e) |
-| S-2.02 | Tier-1 admission and SVTN isolation | E-2 | 2 | BC-2.05.001, BC-2.05.002, BC-2.05.006, BC-2.05.007 | admission-security | 8 | P0 | E | pending |
+| S-2.02 | Tier-1 admission and SVTN isolation | E-2 | 2 | BC-2.05.001, BC-2.05.002, BC-2.05.006, BC-2.05.007 | admission-security | 8 | P0 | E | completed (PR #6, merge a06b306) |
 | S-3.01 | Tmux control mode integration with PTY fallback | E-3 | 3 | BC-2.04.001, BC-2.04.002 | session-access | 8 | P0 | E | pending |
 | S-3.02 | Console attach/detach and multi-console fan-out | E-3 | 3 | BC-2.04.003, BC-2.04.004, BC-2.04.006 | session-access | 8 | P0 | E | pending |
 | S-3.03 | Tier-2 per-session authorization and read-only | E-3 | 3 | BC-2.04.005, BC-2.05.003 | session-access, admission-security | 5 | P0 | E | pending |

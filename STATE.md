@@ -8,9 +8,9 @@ phase_2_gate_disposition: approve-proceed-to-wave-1
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01]
 refactor_frametype_mtu_closes: [F-001, F-002, vsdd-factory#260]
 phase_3_active_wave: 2
-phase_3_active_stories: []
-phase_3_active_story_status: "S-2.01 fully delivered (PR #5 squash-merged at 3c4104e, alpha tag alpha-20260625-023528-3c4104e). Wave 2 progress: 1/3 stories merged. Next: S-2.02 (Admission + SVTN isolation, 8pts) — S-2.01 was its precondition; now unblocked."
-phase_3_pause_point: "S-2.01 closed; alpha tag cut; develop tip 3c4104e. Wave 2 chain: S-2.02 next (depends_on [S-1.01, S-2.01] — both satisfied). Dispatch story-writer or per-story-delivery for S-2.02."
+phase_3_active_stories: [S-1.03]
+phase_3_active_story_status: "S-2.02 fully delivered (PR #6 squash-merged at a06b306, alpha tag alpha-20260625-135909-a06b306). Wave 2 progress: 2/3 stories merged. Next: S-1.03 (Session continuity, 5pts) — S-2.02 was its precondition; now unblocked."
+phase_3_pause_point: "S-2.02 closed; alpha tag cut; develop tip a06b306. Wave 2 chain: S-1.03 next (depends_on [S-1.01, S-2.02] — both satisfied). Dispatch per-story-delivery for S-1.03."
 s_1_02_merge_sha: 9e9a98a
 s_1_02_pr_number: 2
 s_1_02_alpha_tag: alpha-20260624-193019-9e9a98a
@@ -105,9 +105,16 @@ s_2_02_adversary_pass_06: 0_findings_converged (commit 276ac85)
 s_2_02_adversary_pass_07: 0_findings_converged (commit 4f07b90)
 s_2_02_adversary_pass_08: 0_findings_converged (commit 0313c6f)
 s_2_02_adversary_clean_streak: 3
+s_2_02_merge_sha: a06b306
+s_2_02_pr_number: 6
+s_2_02_alpha_tag: alpha-20260625-135909-a06b306
+s_2_02_status: completed
+s_2_02_pr_commits: 13
+s_2_02_unblocks: [S-1.03]
 s_2_02_adversary_status: CONVERGED
 s_2_02_step_4_5_status: "CONVERGED (3/3 clean: passes 6, 7, 8) — BC-5.39.001 satisfied"
-s_2_02_next: Step 5 (per-AC demos)
+s_2_02_cycle_close_gaps: none
+s_2_02_followup_codifications: none
 wave_1_integration_gate_status: closed
 wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
 wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
@@ -123,8 +130,8 @@ wave_1_rollback_started_at: 2026-06-24
 wave_1_rollback_resolved_at: 2026-06-24
 wave_1_rollback_resolution: "Burst A landed concrete spec/doc fixes (commits 345d4f4, 6c064d9, 8b45a07); refactor PR #3 (merge 4be1b53) closed F-001/F-002 code-side; backlog story S-BL.OA created for F-003/F-004 (covered in S-BL.OA-outer-assembler.md)."
 phase_3_active_wave: 2
-timestamp: 2026-06-24T00:00:00Z
-last_update: 2026-06-24
+timestamp: 2026-06-25T13:57:58Z
+last_update: 2026-06-25
 
 ---
 
@@ -275,7 +282,18 @@ tests (AC-001..007 anchored to BCs; VP-007/008/010/039/057; H-1 race regression;
 
 Process-gap findings across passes 6/7/8: zero. No follow-up codifications required for this streak.
 
-**Next: Step 5 — per-AC demos.**
+All 8 steps complete. PR #6 squash-merged at `a06b306a981561df49cec01fe6b441cd030e183b` on develop (2026-06-25T13:57:58Z). Alpha tag `alpha-20260625-135909-a06b306` cut from develop; CI green. Post-merge: `go test -race` PASS, `just lint` 0 issues. Worktree `.worktrees/S-2.02/` removed; local + remote feature branches deleted.
+
+## S-2.02 Closed — 2026-06-25
+
+- PR #6 merged via squash at `a06b306` on `develop` (2026-06-25T13:57:58Z); alpha tag `alpha-20260625-135909-a06b306` cut automatically
+- 13 commits on feature branch: stubs+tests / impl / 5 adversary fix commits / Step 5 example godoc
+- 8 adversary passes; finding trajectory converged at passes 6/7/8 (3 consecutive clean); BC-5.39.001 satisfied
+- 8 Example godoc demos pinning AC-001..007 + EC-003
+- Post-merge: `go test -race` PASS, `just lint` 0 issues on develop main worktree
+- Cycle-closing checklist: zero process-gap findings; no follow-up codifications required
+- Spec versions at closure: BC-2.05.001, BC-2.05.002, BC-2.05.006, BC-2.05.007 (implemented via S-2.02 / PR #6)
+- Unblocks: S-1.03 (Session continuity, 5pts)
 
 ## S-2.01 Closed — 2026-06-24
 
@@ -307,8 +325,8 @@ Process-gap findings across passes 6/7/8: zero. No follow-up codifications requi
 | S-1.01 | Frame codec | completed (PR #1 merged 1c76160) | 8 | internal/frame |
 | S-1.02 | Half-channel clock | completed (PR #2 merged 9e9a98a) | 5 | internal/halfchannel |
 | S-2.01 | HMAC codec | completed (PR #5 squash-merged 3c4104e) | 5 | internal/hmac |
-| S-2.02 | Admission + SVTN isolation | Step 4.5 CONVERGED (3/3 clean: passes 6/7/8); next: Step 5 demos | 8 | admission-security |
-| S-1.03 | Session continuity | pending (depends_on S-2.02) | 5 | session-networking |
+| S-2.02 | Admission + SVTN isolation | completed (PR #6 squash-merged a06b306; alpha alpha-20260625-135909-a06b306) | 8 | admission-security |
+| S-1.03 | Session continuity | next — unblocked (depends_on [S-1.01 ✅, S-2.02 ✅]) | 5 | session-networking |
 
 Wave 2 dependencies: S-2.01 → S-2.02 → S-1.03 (serial chain).
 

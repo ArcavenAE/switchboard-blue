@@ -49,13 +49,13 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.04.004 | Console detach releases session without closing it; session continues on access node | session-access | CAP-014 | P0 | E | active | ss-04/BC-2.04.004.md |
 | BC-2.04.005 | Read-only console receives downstream stream; upstream keystrokes are rejected by access node | session-access | CAP-015 | P0 | E | active | ss-04/BC-2.04.005.md |
 | BC-2.04.006 | Two or more consoles may subscribe to the same session output simultaneously | session-access | CAP-016 | P0 | E | active | ss-04/BC-2.04.006.md |
-| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | active | ss-05/BC-2.05.001.md |
-| BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | active | ss-05/BC-2.05.002.md |
+| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.001.md |
+| BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.002.md |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | admission-security | CAP-018 | P0 | E | active | ss-05/BC-2.05.003.md |
 | BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.004.md |
-| BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | active | ss-05/BC-2.05.005.md |
-| BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | admission-security | CAP-020b | P0 | E | active | ss-05/BC-2.05.006.md |
-| BC-2.05.007 | Node private keys never transit the network under any condition | admission-security | CAP-020a | P0 | E | active | ss-05/BC-2.05.007.md |
+| BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | implemented (S-2.01 / PR #5) | ss-05/BC-2.05.005.md |
+| BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | admission-security | CAP-020b | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.006.md |
+| BC-2.05.007 | Node private keys never transit the network under any condition | admission-security | CAP-020a | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.007.md |
 | BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | quality-observability | CAP-021 | P1 | E | active | ss-06/BC-2.06.001.md |
 | BC-2.06.002 | Missing expected frame is a degradation signal triggering indicator downgrade | quality-observability | CAP-021 | P1 | E | active | ss-06/BC-2.06.002.md |
 | BC-2.06.003 | Per-path RTT and loss metrics queryable via sbctl | quality-observability | CAP-022 | P1 | E | active | ss-06/BC-2.06.003.md |
