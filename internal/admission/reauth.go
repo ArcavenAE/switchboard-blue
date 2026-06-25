@@ -112,7 +112,7 @@ func (s *AdmittedKeySet) SetKeyExpiry(svtnID [16]byte, nodeAddr [8]byte, expiry 
 //  3. The node presents a valid signed challenge response.
 //
 // Postconditions on success:
-//  1. The node remains admitted; its cryptographic node address is unchanged (PC1, VP-036).
+//  1. The node remains admitted; its cryptographic node address is unchanged (PC4 / Inv3, VP-036).
 //  2. The routing entry is updated to reflect the new source IP (PC3).
 //  3. The previous source IP entry is evicted (EC-006).
 //
@@ -185,7 +185,7 @@ func ReAuthenticate(req ReAuthRequest, ks *AdmittedKeySet, rs *ReAuthState) erro
 	}
 	ks.mu.Unlock()
 
-	// Step 5: update source address (rs has its own lock; ks.mu already released).
+	// Step 4: update source address (rs has its own lock; ks.mu already released).
 	// Old path is evicted by overwrite (BC-2.01.007 EC-006; ADR-003 LWW).
 	rs.setSourceAddr(req.SVTNID, req.NodeAddr, req.NewSourceAddr)
 	return nil

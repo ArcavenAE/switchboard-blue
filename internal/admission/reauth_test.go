@@ -28,9 +28,9 @@ import (
 //
 // Traces to:
 //
-//	BC-2.01.007 postcondition 1 (session continues after re-auth from new IP)
 //	BC-2.01.007 postcondition 3 (router updates routing entry to new source IP)
-//	AC-001 (S-1.03)
+//	BC-2.01.007 postcondition 4 (session traffic resumes on the existing channel)
+//	AC-001 (S-1.03, story rev 1.3 — corrected from PC1 per pass-2 F-M2)
 func TestSessionContinuity_ReauthOnIPChange(t *testing.T) {
 	t.Parallel()
 
