@@ -66,7 +66,7 @@ func NewReAuthState() *ReAuthState {
 
 // setSourceAddr updates the source address for (svtnID, nodeAddr) under the
 // write lock. Old path is implicitly evicted by the map overwrite (BC-2.01.007
-// EC-002; ADR-003 LWW for EC-003).
+// EC-006; ADR-003 LWW).
 func (rs *ReAuthState) setSourceAddr(svtnID [16]byte, nodeAddr [8]byte, addr netip.Addr) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
@@ -104,7 +104,7 @@ func (s *AdmittedKeySet) SetKeyExpiry(svtnID [16]byte, nodeAddr [8]byte, expiry 
 
 // ReAuthenticate verifies a node's re-authentication request, updates the
 // source IP routing entry on success, and evicts the old path (BC-2.01.007
-// postconditions 1–4; EC-002; ADR-003 LWW for EC-003).
+// postconditions 1–4; EC-006; ADR-003 LWW).
 //
 // Preconditions (BC-2.01.007):
 //  1. The node has an active session (admitted=true in ks).
@@ -114,7 +114,7 @@ func (s *AdmittedKeySet) SetKeyExpiry(svtnID [16]byte, nodeAddr [8]byte, expiry 
 // Postconditions on success:
 //  1. The node remains admitted; its cryptographic node address is unchanged (PC1, VP-036).
 //  2. The routing entry is updated to reflect the new source IP (PC3).
-//  3. The previous source IP entry is evicted (EC-002).
+//  3. The previous source IP entry is evicted (EC-006).
 //
 // Error returns:
 //   - ErrNotAdmitted      (E-ADM-003) if the node is not currently admitted.
@@ -149,16 +149,12 @@ func ReAuthenticate(req ReAuthRequest, ks *AdmittedKeySet, rs *ReAuthState) erro
 		return ErrKeyExpired
 	}
 
-	// Step 3: verify the signature against the admitted public key (pure).
-	// Signature verification is done before the write lock for performance, but
-	// the nonce is recorded under the write lock (replay-safe: if two concurrent
-	// attempts pass sig-verify, only the first to acquire the lock records the
-	// nonce; the second sees ErrNonceReplay).
-	if !ed25519.Verify(snap.PublicKey, req.Challenge.Nonce[:], req.Response.NonceSig) {
-		return ErrSignatureVerificationFailed
-	}
-
-	// Step 4: acquire write lock — record nonce atomically with final checks.
+	// Step 3: acquire write lock — record nonce, then verify signature.
+	// Nonce is recorded BEFORE signature verification (BC-2.05.001 invariant 3:
+	// "challenge nonce must be uniquely consumed"). This mirrors the AdmitNode
+	// path in admission.go (recordNonceUnlocked at line ~337, ed25519.Verify at
+	// line ~344): a failed-signature attempt still burns the nonce, preventing
+	// same-nonce probe attacks on the re-authentication path.
 	// Explicit lock/unlock (no defer) so we can release ks.mu before updating
 	// rs (which has its own lock). Holding two locks simultaneously risks deadlock
 	// if another goroutine acquires them in the opposite order.
@@ -177,15 +173,20 @@ func ReAuthenticate(req ReAuthRequest, ks *AdmittedKeySet, rs *ReAuthState) erro
 		ks.mu.Unlock()
 		return ErrKeyExpired
 	}
-	// Record nonce (replay prevention, E-ADM-008).
+	// Record nonce first (replay prevention, E-ADM-008; BC-2.05.001 invariant 3).
 	if err := ks.recordNonceUnlocked(req.Challenge.Nonce, now); err != nil {
 		ks.mu.Unlock()
 		return err
 	}
+	// Verify signature after nonce is consumed — symmetric with AdmitNode.
+	if !ed25519.Verify(snap.PublicKey, req.Challenge.Nonce[:], req.Response.NonceSig) {
+		ks.mu.Unlock()
+		return ErrSignatureVerificationFailed
+	}
 	ks.mu.Unlock()
 
 	// Step 5: update source address (rs has its own lock; ks.mu already released).
-	// Old path is evicted by overwrite (BC-2.01.007 EC-002; ADR-003 LWW for EC-003).
+	// Old path is evicted by overwrite (BC-2.01.007 EC-006; ADR-003 LWW).
 	rs.setSourceAddr(req.SVTNID, req.NodeAddr, req.NewSourceAddr)
 	return nil
 }
