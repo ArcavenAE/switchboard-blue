@@ -225,7 +225,7 @@ func TestSessionContinuity_NodeAddressStableAfterReauth(t *testing.T) {
 
 // ── EC-001: TestSessionContinuity_ExpiredKeyRejected ─────────────────────────
 
-// TestReauth_ExpiredKey verifies that a re-authentication attempt by a node
+// TestSessionContinuity_ExpiredKeyRejected verifies that a re-authentication attempt by a node
 // whose key has passed its expiry timestamp is rejected.
 //
 // Traces to:
@@ -278,7 +278,7 @@ func TestSessionContinuity_ExpiredKeyRejected(t *testing.T) {
 
 // ── EC-002: TestSessionContinuity_OldPathEvicted ─────────────────────────────
 
-// TestReauth_EvictsOldPath verifies that a successful re-authentication from a
+// TestSessionContinuity_OldPathEvicted verifies that a successful re-authentication from a
 // new source IP evicts the old path: the stored source address for the node
 // transitions from the old IP to the new IP (BC-2.01.007 EC-006).
 //
@@ -348,7 +348,7 @@ func TestSessionContinuity_OldPathEvicted(t *testing.T) {
 
 // ── EC-003: TestSessionContinuity_LastWriteWins ───────────────────────────────
 
-// TestReauth_LastWriteWins verifies that when two concurrent re-authentication
+// TestSessionContinuity_LastWriteWins verifies that when two concurrent re-authentication
 // attempts from the same node arrive (e.g., double-tap on IP change), the last
 // accepted one determines the stored source address (ADR-003 LWW; BC-2.01.007
 // EC-003).
