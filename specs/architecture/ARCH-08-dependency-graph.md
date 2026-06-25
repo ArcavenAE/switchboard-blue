@@ -2,10 +2,11 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
+modified: 2026-06-25T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -153,3 +154,67 @@ failure from import cycles is a P0 blocker.
 - `internal/session` is imported by both `internal/tmux` (access node enforces
   Tier 2) and `cmd/sbctl` (console control). The session package is a pure
   authorization boundary, not an I/O package, so this coupling is clean.
+
+## §6 Import Constraints
+
+The dependency graph in §§1–5 is a hard contract on import direction. The
+following constraints apply to every Go file under `internal/`. This section
+codifies what the compiler and `go vet` already enforce structurally and what
+the consistency-validator audits at every wave gate.
+
+### §6.1 Topological ordering (live packages, Wave-2 state)
+
+Each package occupies a fixed position in the DAG. A package at position N may
+only import packages at positions 1..N-1. The table below covers all `internal/`
+packages present on `develop` at Wave-2 close (f35e836).
+
+| Position | Package | Allowed imports | Classification |
+|----------|---------|-----------------|----------------|
+| 1 | `internal/frame` | ∅ (stdlib only) | pure-core |
+| 2 | `internal/hmac` | ∅ (stdlib only) | pure-core |
+| 3 | `internal/halfchannel` | {frame} | pure-core |
+| 4 | `internal/admission` | {frame, hmac} | boundary |
+| 5 | `internal/routing` | {frame, hmac, admission} | boundary |
+
+Positions 6 and above are reserved for packages introduced in later waves; they
+must be declared here before their first commit (see §6.4).
+
+Verified against `grep -rn "switchboard/internal" --include="*.go" internal/ | grep -v _test.go`
+at f35e836. No deviations found.
+
+### §6.2 Forbidden edges
+
+- `internal/frame` MUST NOT import any other `internal/` package.
+- `internal/hmac` MUST NOT import any other `internal/` package.
+- `internal/halfchannel` MUST NOT import `internal/admission` or `internal/routing`.
+- `internal/admission` MUST NOT import `internal/routing`.
+- No package may import a package at a higher position than itself.
+
+### §6.3 Enforcement
+
+- `go vet ./...` (run via `just lint`) catches cyclic imports at build time.
+  Any import-cycle failure is a P0 CI blocker.
+- The consistency-validator audits positional drift at every wave gate, verifying
+  that no import edge exists outside the allowed set declared in §6.1.
+- The adversary will flag any new import edge not declared in §6.1 as a finding
+  requiring an explicit §6.4 declaration before the wave gate passes.
+
+### §6.4 Adding a new internal package
+
+New packages must, before their first commit to any branch:
+
+1. Declare their position (1..N) in this section, extending the §6.1 table.
+2. Declare their classification (pure-core vs boundary) per ARCH-09.
+3. List their allowed imports explicitly in the §6.1 table.
+4. Pass the consistency-validator check at the wave gate.
+
+Undeclared packages discovered at the wave gate are an architecture violation.
+
+---
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0 | 2026-06-23 | Initial dependency graph, topological order, and boundary violation rules |
+| 1.1 | 2026-06-25 | Added §6 Import Constraints (§§6.1–6.4) — explicit codification of DAG positions, forbidden edges, enforcement mechanism, and new-package protocol; prompted by Wave-2 gate audit finding WAVE-2-MED-001 |
