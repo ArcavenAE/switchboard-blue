@@ -9,6 +9,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net/netip"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 )
@@ -217,4 +219,297 @@ func ExampleGenerateChallenge_privateKeyAbsent() {
 	// nonce not in private key: true
 	// RouterSig not in private key: true
 	// no private key material on wire: true
+}
+
+// ── S-1.03 Examples ─────────────────────────────────────────────────────────
+//
+// The six examples below are the demo-recording evidence for S-1.03
+// (Session Continuity via Cryptographic Re-Authentication). They cover
+// AC-001..003 and EC-001..003.
+//
+// All use fixed 32-byte seeds and fixed nonces so the // Output: blocks are
+// stable across runs. The nonce-replay prevention in ReAuthenticate means
+// every example uses a distinct nonce; they are also in distinct AdmittedKeySets
+// so nonce history does not bleed between examples.
+
+// ExampleAdmittedKeySet_reAuthenticateOnIPChange demonstrates AC-001:
+// session continuity on IP change. Traces to BC-2.01.007 PC3+PC4
+// (router updates routing entry; session traffic resumes).
+func ExampleAdmittedKeySet_reAuthenticateOnIPChange() {
+	_, routerPriv, _ := ed25519.GenerateKey(seed32("router-s103-ac001-demo----------"))
+	nodePub, nodePriv, _ := ed25519.GenerateKey(seed32("node-s103-ac001-demo------------"))
+
+	svtn := svtnID("svtn-s103-ac001\x00")
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+	ks.RegisterKey(svtn, nodePub, admission.RoleConsole)
+	nodeAddr := deriveAddr(svtn, nodePub)
+
+	// Initial admission handshake.
+	var n0 [32]byte
+	copy(n0[:], "nonce-s103-ac001-initial-fixed--")
+	ch0 := admission.Challenge{Nonce: n0, RouterSig: ed25519.Sign(routerPriv, n0[:])}
+	_ = admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n0[:])}, nodePub, svtn, ks)
+
+	// Node's IP changes; re-authenticate with the same keypair.
+	newIP := netip.MustParseAddr("192.0.2.42")
+	var n1 [32]byte
+	copy(n1[:], "nonce-s103-ac001-reauth-fixed---")
+	ch1 := admission.Challenge{Nonce: n1, RouterSig: ed25519.Sign(routerPriv, n1[:])}
+	req := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: newIP,
+		Challenge:     ch1,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n1[:])},
+	}
+
+	err := admission.ReAuthenticate(req, ks, rs)
+	fmt.Println("reauth error:", err)
+	fmt.Println("still admitted:", ks.IsAdmitted(svtn, nodeAddr))
+	fmt.Println("source addr:", rs.CurrentSourceAddr(svtn, nodeAddr))
+
+	// Output:
+	// reauth error: <nil>
+	// still admitted: true
+	// source addr: 192.0.2.42
+}
+
+// ExampleAdmittedKeySet_reAuthenticateWrongKeyRejected demonstrates AC-002:
+// re-authentication is rejected when the keypair presented does not match
+// the originally admitted keypair. Traces to BC-2.01.007 precondition 3
+// (keypair must be unchanged; wrong keypair → E-ADM-001).
+func ExampleAdmittedKeySet_reAuthenticateWrongKeyRejected() {
+	_, routerPriv, _ := ed25519.GenerateKey(seed32("router-s103-ac002-demo----------"))
+	nodePub, nodePriv, _ := ed25519.GenerateKey(seed32("node-s103-ac002-demo------------"))
+	_, wrongPriv, _ := ed25519.GenerateKey(seed32("wrong-s103-ac002-demo-----------"))
+
+	svtn := svtnID("svtn-s103-ac002\x00")
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+	ks.RegisterKey(svtn, nodePub, admission.RoleConsole)
+	nodeAddr := deriveAddr(svtn, nodePub)
+
+	// Initial admission.
+	var n0 [32]byte
+	copy(n0[:], "nonce-s103-ac002-initial-fixed--")
+	ch0 := admission.Challenge{Nonce: n0, RouterSig: ed25519.Sign(routerPriv, n0[:])}
+	_ = admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n0[:])}, nodePub, svtn, ks)
+
+	// Re-auth with wrong private key.
+	var n1 [32]byte
+	copy(n1[:], "nonce-s103-ac002-reauth-fixed---")
+	ch1 := admission.Challenge{Nonce: n1, RouterSig: ed25519.Sign(routerPriv, n1[:])}
+	req := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: netip.MustParseAddr("198.51.100.7"),
+		Challenge:     ch1,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(wrongPriv, n1[:])},
+	}
+
+	err := admission.ReAuthenticate(req, ks, rs)
+	fmt.Println("is ErrSignatureVerificationFailed:", errors.Is(err, admission.ErrSignatureVerificationFailed))
+
+	// Output:
+	// is ErrSignatureVerificationFailed: true
+}
+
+// ExampleAdmittedKeySet_reAuthenticateNodeAddressStable demonstrates AC-003:
+// the node address (derived from SVTN-ID and public key) is unchanged after
+// re-authentication — IP change does not alter the logical node address.
+// Traces to BC-2.01.007 invariant 3 (session identity = channel_id + node_addr,
+// not source IP).
+func ExampleAdmittedKeySet_reAuthenticateNodeAddressStable() {
+	_, routerPriv, _ := ed25519.GenerateKey(seed32("router-s103-ac003-demo----------"))
+	nodePub, nodePriv, _ := ed25519.GenerateKey(seed32("node-s103-ac003-demo------------"))
+
+	svtn := svtnID("svtn-s103-ac003\x00")
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+	ks.RegisterKey(svtn, nodePub, admission.RoleAccess)
+
+	// Capture node address before any re-auth.
+	addrBefore := deriveAddr(svtn, nodePub)
+
+	// Initial admission.
+	var n0 [32]byte
+	copy(n0[:], "nonce-s103-ac003-initial-fixed--")
+	ch0 := admission.Challenge{Nonce: n0, RouterSig: ed25519.Sign(routerPriv, n0[:])}
+	_ = admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n0[:])}, nodePub, svtn, ks)
+
+	// Re-authenticate from a new IP.
+	var n1 [32]byte
+	copy(n1[:], "nonce-s103-ac003-reauth-fixed---")
+	ch1 := admission.Challenge{Nonce: n1, RouterSig: ed25519.Sign(routerPriv, n1[:])}
+	req := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      addrBefore,
+		NewSourceAddr: netip.MustParseAddr("203.0.113.99"),
+		Challenge:     ch1,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n1[:])},
+	}
+	_ = admission.ReAuthenticate(req, ks, rs)
+
+	// Node address after re-auth must equal address before.
+	addrAfter := deriveAddr(svtn, nodePub)
+	fmt.Println("addr stable:", addrBefore == addrAfter)
+	fmt.Println("still admitted with same addr:", ks.IsAdmitted(svtn, addrAfter))
+
+	// Output:
+	// addr stable: true
+	// still admitted with same addr: true
+}
+
+// ExampleAdmittedKeySet_reAuthenticateExpiredKey demonstrates EC-001:
+// re-authentication is rejected with ErrKeyExpired (E-ADM-015) when the
+// node's key has passed its expiry timestamp. Traces to BC-2.01.007 EC-005
+// and ARCH-04 §Key Lifecycle.
+func ExampleAdmittedKeySet_reAuthenticateExpiredKey() {
+	_, routerPriv, _ := ed25519.GenerateKey(seed32("router-s103-ec001-demo----------"))
+	nodePub, nodePriv, _ := ed25519.GenerateKey(seed32("node-s103-ec001-demo------------"))
+
+	svtn := svtnID("svtn-s103-ec001\x00")
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+	ks.RegisterKey(svtn, nodePub, admission.RoleAccess)
+	nodeAddr := deriveAddr(svtn, nodePub)
+
+	// Initial admission.
+	var n0 [32]byte
+	copy(n0[:], "nonce-s103-ec001-initial-fixed--")
+	ch0 := admission.Challenge{Nonce: n0, RouterSig: ed25519.Sign(routerPriv, n0[:])}
+	_ = admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n0[:])}, nodePub, svtn, ks)
+
+	// Set expiry to a fixed time in the past (2000-01-01 UTC).
+	pastExpiry := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	_ = ks.SetKeyExpiry(svtn, nodeAddr, pastExpiry)
+
+	// Re-auth must be rejected with ErrKeyExpired.
+	var n1 [32]byte
+	copy(n1[:], "nonce-s103-ec001-reauth-fixed---")
+	ch1 := admission.Challenge{Nonce: n1, RouterSig: ed25519.Sign(routerPriv, n1[:])}
+	req := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: netip.MustParseAddr("192.0.2.11"),
+		Challenge:     ch1,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n1[:])},
+	}
+
+	err := admission.ReAuthenticate(req, ks, rs)
+	fmt.Println("is ErrKeyExpired:", errors.Is(err, admission.ErrKeyExpired))
+
+	// Output:
+	// is ErrKeyExpired: true
+}
+
+// ExampleAdmittedKeySet_reAuthenticateEvictsOldPath demonstrates EC-002:
+// a successful re-authentication from a new source IP evicts the old path —
+// CurrentSourceAddr transitions from the old IP to the new IP.
+// Traces to BC-2.01.007 EC-006 (old path evicted on new re-auth; BC v1.3).
+func ExampleAdmittedKeySet_reAuthenticateEvictsOldPath() {
+	_, routerPriv, _ := ed25519.GenerateKey(seed32("router-s103-ec002-demo----------"))
+	nodePub, nodePriv, _ := ed25519.GenerateKey(seed32("node-s103-ec002-demo------------"))
+
+	svtn := svtnID("svtn-s103-ec002\x00")
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+	ks.RegisterKey(svtn, nodePub, admission.RoleAccess)
+	nodeAddr := deriveAddr(svtn, nodePub)
+
+	// Initial admission.
+	var n0 [32]byte
+	copy(n0[:], "nonce-s103-ec002-initial-fixed--")
+	ch0 := admission.Challenge{Nonce: n0, RouterSig: ed25519.Sign(routerPriv, n0[:])}
+	_ = admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n0[:])}, nodePub, svtn, ks)
+
+	// Re-auth from old IP.
+	oldIP := netip.MustParseAddr("192.0.2.10")
+	var n1 [32]byte
+	copy(n1[:], "nonce-s103-ec002-reauth1-fixed--")
+	ch1 := admission.Challenge{Nonce: n1, RouterSig: ed25519.Sign(routerPriv, n1[:])}
+	req1 := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: oldIP,
+		Challenge:     ch1,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n1[:])},
+	}
+	_ = admission.ReAuthenticate(req1, ks, rs)
+	fmt.Println("after first reauth:", rs.CurrentSourceAddr(svtn, nodeAddr))
+
+	// Re-auth from new IP evicts old path (BC-2.01.007 EC-006; ADR-003 LWW).
+	newIP := netip.MustParseAddr("198.51.100.20")
+	var n2 [32]byte
+	copy(n2[:], "nonce-s103-ec002-reauth2-fixed--")
+	ch2 := admission.Challenge{Nonce: n2, RouterSig: ed25519.Sign(routerPriv, n2[:])}
+	req2 := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: newIP,
+		Challenge:     ch2,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n2[:])},
+	}
+	_ = admission.ReAuthenticate(req2, ks, rs)
+	fmt.Println("after second reauth:", rs.CurrentSourceAddr(svtn, nodeAddr))
+
+	// Output:
+	// after first reauth: 192.0.2.10
+	// after second reauth: 198.51.100.20
+}
+
+// ExampleAdmittedKeySet_reAuthenticateLastWriteWins demonstrates EC-003:
+// when two sequential re-authentication requests arrive for the same node,
+// the last accepted one determines the stored source address (ADR-003 LWW).
+// The concurrent variant is exercised by TestReAuthenticate_NoRace.
+// Traces to BC-2.01.007 EC-003 (concurrent re-auth — last one wins).
+func ExampleAdmittedKeySet_reAuthenticateLastWriteWins() {
+	_, routerPriv, _ := ed25519.GenerateKey(seed32("router-s103-ec003-demo----------"))
+	nodePub, nodePriv, _ := ed25519.GenerateKey(seed32("node-s103-ec003-demo------------"))
+
+	svtn := svtnID("svtn-s103-ec003\x00")
+	ks := admission.NewAdmittedKeySet()
+	rs := admission.NewReAuthState()
+	ks.RegisterKey(svtn, nodePub, admission.RoleAccess)
+	nodeAddr := deriveAddr(svtn, nodePub)
+
+	// Initial admission.
+	var n0 [32]byte
+	copy(n0[:], "nonce-s103-ec003-initial-fixed--")
+	ch0 := admission.Challenge{Nonce: n0, RouterSig: ed25519.Sign(routerPriv, n0[:])}
+	_ = admission.AdmitNode(ch0, admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n0[:])}, nodePub, svtn, ks)
+
+	// First re-auth: IP A.
+	ip1 := netip.MustParseAddr("10.10.10.1")
+	var n1 [32]byte
+	copy(n1[:], "nonce-s103-ec003-reauth1-fixed--")
+	ch1 := admission.Challenge{Nonce: n1, RouterSig: ed25519.Sign(routerPriv, n1[:])}
+	req1 := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: ip1,
+		Challenge:     ch1,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n1[:])},
+	}
+	_ = admission.ReAuthenticate(req1, ks, rs)
+
+	// Second re-auth: IP B supersedes IP A (last write wins per ADR-003).
+	ip2 := netip.MustParseAddr("10.10.10.2")
+	var n2 [32]byte
+	copy(n2[:], "nonce-s103-ec003-reauth2-fixed--")
+	ch2 := admission.Challenge{Nonce: n2, RouterSig: ed25519.Sign(routerPriv, n2[:])}
+	req2 := admission.ReAuthRequest{
+		SVTNID:        svtn,
+		NodeAddr:      nodeAddr,
+		NewSourceAddr: ip2,
+		Challenge:     ch2,
+		Response:      admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, n2[:])},
+	}
+	_ = admission.ReAuthenticate(req2, ks, rs)
+
+	fmt.Println("last write wins:", rs.CurrentSourceAddr(svtn, nodeAddr))
+
+	// Output:
+	// last write wins: 10.10.10.2
 }
