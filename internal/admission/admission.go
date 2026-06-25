@@ -300,13 +300,16 @@ func AdmitNode(
 	}
 
 	// Step 2: verify signature outside the lock — pure computation, no shared state.
-	// Record nonce BEFORE verifying to prevent timing oracle: an attacker who
-	// can measure response latency cannot distinguish "valid nonce, bad sig" from
-	// "replayed nonce" by replay-racing valid nonces.
-	//
-	// NOTE: nonce is recorded here (before sig verify) to preserve the original
-	// timing-oracle defence. If sig verify fails, the nonce is consumed — the
-	// caller must re-challenge with a fresh nonce. This is intentional (ARCH-04).
+	// Record the nonce BEFORE signature verification as CPU DoS mitigation:
+	// a replay attacker who can intercept a challenge can burn the nonce on
+	// the legitimate node's behalf, but we avoid the ~50μs ed25519.Verify
+	// cost for already-seen nonces. This is NOT a timing-oracle defence —
+	// recording-before-verify actually makes replay detection MORE
+	// timing-distinguishable, since replays return before the Verify step
+	// runs. The protocol mitigates the burn-the-nonce DoS at the architecture
+	// level (router re-issues a fresh challenge after the failed admission
+	// attempt). If sig verify fails, the nonce is consumed — this is
+	// intentional (ARCH-04).
 	now := time.Now().UTC()
 
 	// Step 3: acquire write lock once — record nonce AND set admitted=true atomically (H-2).

@@ -105,7 +105,7 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 // routes SVTN-B traffic to SVTN-A admitted nodes.
 //
 // Returns admission.ErrNotAdmitted (E-ADM-003) if hdr.DstAddr is not in the
-// forwarding table for hdr.SVTNID, or if the frame is self-addressed.
+// forwarding table for hdr.SVTNID.
 //
 // payload is the raw bytes following the outer header; routers never parse
 // the payload (R-001).
@@ -123,26 +123,10 @@ func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error {
 		return admission.ErrNotAdmitted
 	}
 
-	// Self-addressed guard: do not forward a frame back to its own source.
-	if isSelfAddressed(hdr, hdr.SrcAddr) {
-		return admission.ErrNotAdmitted
-	}
-
 	_ = payload // payload is forwarded but not parsed here (R-001)
 	_ = entry   // entry holds the authKey for wire-layer HMAC; available for future use
 
 	return nil
-}
-
-// isSelfAddressed reports whether the frame's destination address equals its
-// source/arrival address (i.e., the frame is a self-loop). Returns true for
-// self-addressed frames; false for normal frames. Unexported — wired into SVTNRoute.
-//
-// NOTE: This is NOT BC-2.02.008's split-horizon semantic (which is interface-level,
-// not address-level). BC-2.02.008 implementation is deferred to a future story
-// that introduces multi-interface routing (L-1).
-func isSelfAddressed(hdr frame.OuterHeader, arrivalNodeAddr [8]byte) bool {
-	return hdr.DstAddr == arrivalNodeAddr
 }
 
 // verifyFrameHMAC checks the HMAC tag on hdr+payload against the per-(node,
