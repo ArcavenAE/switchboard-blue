@@ -9,6 +9,7 @@ phase_3_completed_stories: [S-1.01, S-1.02]
 refactor_frametype_mtu_closes: [F-001, F-002, vsdd-factory#260]
 phase_3_active_wave: 2
 phase_3_active_stories: []
+phase_3_active_story_status: "S-2.01: in-progress, Step 4.5 adversarial convergence COMPLETE (BC-5.39.001 satisfied, 3 consecutive clean passes 10/11/12), Step 5 (demos) in progress in parallel"
 phase_3_pause_point: "Wave 1 CLOSED 2026-06-24 (pass-with-clean-drift). Stories: S-1.01@1c76160, S-1.02@9e9a98a; refactor PR #3 @4be1b53 closed F-001/F-002 code-side. Drift: S-BL.OA backlog stub holds F-003/F-004 (LOW). Wave 2 begins — 3 stories serial (S-2.01 → S-2.02 → S-1.03), 18 pts total. Dispatch story-writer or per-story-delivery for S-2.01 (HMAC codec, 5pts)."
 s_1_02_merge_sha: 9e9a98a
 s_1_02_pr_number: 2
@@ -89,6 +90,12 @@ s_1_02_adversary_status: CONVERGED
 s_1_02_adversary_total_passes: 9
 s_1_02_adversary_total_findings: 39
 s_1_02_adversary_trajectory: "9 → 11 → 7 → 5 → 4 → 3 → 0 → 0 → 0"
+s_2_01_adversary_pass_12: 0_findings_converged
+s_2_01_adversary_clean_streak: 3
+s_2_01_adversary_status: CONVERGED
+s_2_01_adversary_total_passes: 12
+s_2_01_adversary_total_findings: "17 (resolved across 9 fix-bursts)"
+s_2_01_adversary_trajectory: "9 → 2 → 4 → 1 → 0 → 0 → 1 → 0 → 1 → 0 → 0 → 0"
 wave_1_integration_gate_status: closed
 wave_1_consistency_validation: pass-with-drift (7 findings, commit c71c0b3)
 wave_1_adversary_pass_01: converged (4 findings, 2 deferrable)
@@ -204,6 +211,42 @@ Pass 9 returned zero findings. Three consecutive clean passes (7, 8, 9) satisfy 
 - Phase 3 Wave 4 will be first multi-story fan-out opportunity (4 stories: S-4.01, S-4.02, S-4.03, S-6.01 in parallel after Wave 2+3 complete).
 - Wave-1 integration gate burst 1 launched 2026-06-24: PO patches HS-001 to v1.1 (sequence-semantics wording); architect fixes VP-041/VP-016/VP-051 drift; state-manager persists adversary + holdout reports. Burst 2 will re-run HS-001 v1.1 holdout-evaluator.
 - **2026-06-24** — Wave-1 gate ROLLBACK initiated per drbothen/vsdd-factory#260. Drift items being re-routed to concrete targets with human approval. Re-closure pending burst A (spec fixes) + burst B (F-001+F-002 refactor PR).
+
+## S-2.01 Adversarial Convergence — COMPLETE 2026-06-24
+
+Pass 12 returned zero findings — third consecutive clean (passes 10, 11, 12).
+BC-5.39.001 satisfied. Twelve passes total over multiple fix cycles surfaced 17
+findings; all resolved across 9 fix bursts (Pass 1, 3, 4, 9 had spec-side fixes;
+Pass 2 added inline-HKDF helper + KAT; Pass 7 was a doc citation fix; Pass 9 was
+File Structure table; passes 5/6/8/10/11/12 all converged).
+
+Notable mid-flight events:
+- drbothen/vsdd-factory#260 family — PO agent unilaterally introduced .factory
+  as tracked gitlink (PR #4); closed without merge; filed as drbothen/vsdd-factory#263
+- HKDF KAT requirement initially used self-circular anchor (pass-2); replaced with
+  RFC 5869 §A.1 vector via unexported hkdfSHA256 helper (pass-3)
+- AC↔BC trace systematically mis-anchored (pass-4); story rev 4 corrected
+
+- Total passes: 12
+- Total findings resolved: 17 (0 critical, 6 high, 5 medium, 6 low across all passes)
+- Trajectory: 9 → 2 → 4 → 1 → 0 → 0 → 1 → 0 → 1 → 0 → 0 → 0
+- Worktree HEAD: 9a1ef34 on feature/S-2.01-hmac-codec
+- Final tree: hmac.go (124 LOC), hmac_test.go (~660 LOC), fuzz_test.go, hkdf_internal_test.go (45 LOC)
+- Spec versions at convergence: BC-2.05.005 unchanged, story rev 5, VP-004/005/006 v1.1, ARCH-04 v1.1
+
+### Per-story-delivery progress
+| Step | Status |
+|------|--------|
+| 1. Worktree | ✅ done |
+| 2. Stubs | ✅ done (298a06f, stub-architect did combined stubs+tests) |
+| 3. Failing tests | ✅ done (combined with stubs) |
+| 4. Implementation | ✅ done (93cdc2c, single-commit TDD) |
+| 4.5. Adversarial convergence | ✅ done (3-pass streak: 10/11/12; worktree tip 9a1ef34) |
+| 5. Per-AC demos | ⏸ pending |
+| 6. Push | ⏸ pending |
+| 7. PR lifecycle | ⏸ pending |
+| 8. Worktree cleanup | ⏸ pending |
+| 9. State update | ⏸ pending |
 
 ## S-1.02 Closed — 2026-06-24
 
