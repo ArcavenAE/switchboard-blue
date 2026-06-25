@@ -10,12 +10,20 @@
 package routing
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/hmac"
 )
+
+// ErrNoForwardingEntry is returned by SVTNRoute when the destination
+// address has no forwarding-table entry for the SVTN. Distinct from
+// admission.ErrNotAdmitted (which signals source admission failure)
+// to enable callers to distinguish admission rejection from forwarding-
+// table miss via errors.Is.
+var ErrNoForwardingEntry = errors.New("routing: no forwarding entry for destination in this SVTN")
 
 // ForwardingEntry records a forwarding table entry for one destination node.
 type ForwardingEntry struct {
@@ -104,8 +112,10 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 // Per BC-2.05.006 postcondition 4: there is no administrative override that
 // routes SVTN-B traffic to SVTN-A admitted nodes.
 //
-// Returns admission.ErrNotAdmitted (E-ADM-003) if hdr.DstAddr is not in the
-// forwarding table for hdr.SVTNID.
+// Returns ErrNoForwardingEntry if hdr.DstAddr is not in the forwarding table
+// for hdr.SVTNID. This is semantically distinct from admission.ErrNotAdmitted
+// (E-ADM-003), which signals source admission failure; callers use errors.Is
+// to distinguish the two conditions.
 //
 // payload is the raw bytes following the outer header; routers never parse
 // the payload (R-001).
@@ -120,7 +130,7 @@ func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error {
 
 	if entry == nil {
 		// DstAddr not in forwarding table for this SVTN — SVTN isolation enforced.
-		return admission.ErrNotAdmitted
+		return ErrNoForwardingEntry
 	}
 
 	_ = payload // payload is forwarded but not parsed here (R-001)
@@ -129,16 +139,24 @@ func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error {
 	return nil
 }
 
-// verifyFrameHMAC checks the HMAC tag on hdr+payload against the per-(node,
-// SVTN) frame_auth_key stored in the forwarding table.
+// verifyFrameHMAC verifies a frame's wire HMAC tag against a freshly-computed
+// expected MAC.
 //
-// Fail-closed: returns false on any verification failure including missing
-// forwarding entry (BC-2.05.002 invariant 1).
+// The wire tag is read from hdr.HMACTag BEFORE the outer header is zero-tagged
+// for MAC computation. The expected MAC is computed over the zeroed-tag header
+// + payload bytes with authKey, then compared constant-time against the wire
+// tag via hmac.VerifyHMAC (which wraps crypto/hmac.Equal).
+//
+// Returns true if and only if the wire tag exactly matches the expected MAC.
+// Fail-closed: returns false on any mismatch or zero-length wire tag.
 //
 //nolint:unused // wired into RouteFrame in the next wave when wire-layer HMAC enforcement is added (BC-2.05.002 invariant 1)
 func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) bool {
-	// Encode the header bytes without the HMAC tag field for MAC-then-encode pattern.
-	// Clear the HMACTag before encoding to compute the MAC over the rest of the frame.
+	// Save the wire tag BEFORE clearing — defends against the tautological-verify
+	// defect: clearing first and then "verifying" would check the computed tag
+	// against itself and return true unconditionally.
+	wireTag := hdr.HMACTag
+
 	hdrForMAC := hdr
 	hdrForMAC.HMACTag = [8]byte{}
 	encoded := frame.EncodeOuterHeader(hdrForMAC)
@@ -148,6 +166,7 @@ func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySiz
 	copy(msg, encoded[:])
 	copy(msg[len(encoded):], payload)
 
-	tag := hmac.ComputeHMAC(authKey[:], msg)
-	return hmac.VerifyHMAC(authKey[:], msg, tag)
+	// Verify the wire tag (the one the sender computed against the zeroed-tag
+	// message and inserted back into the frame) against our recomputed expected MAC.
+	return hmac.VerifyHMAC(authKey[:], msg, wireTag)
 }
