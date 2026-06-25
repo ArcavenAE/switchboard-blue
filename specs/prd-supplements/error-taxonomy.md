@@ -48,7 +48,8 @@ traces_to: '.factory/specs/prd.md'
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-ADM-001 | ADM | broken | 1 | "admission denied: signature verification failed for <node_addr> on SVTN <svtn_id>" | BC-2.05.001 |
-| E-ADM-002 | ADM | broken | — (dropped) | "HMAC verification failed: SVTN <svtn_id>, src <src_addr>, type <frame_type>" | FM-006, BC-2.05.005, BC-2.05.008; Go sentinel: `routing.ErrHMACVerificationFailed` (returned by `RouteFrame`; logged before return) |
+| E-ADM-002 | ADM | broken | — (dropped) | "HMAC verification failed: SVTN <svtn_id>, src <src_addr>, type <frame_type>" | FM-006, BC-2.05.005 |
+| E-ADM-016 | ADM | broken | 0 | "wire HMAC verification failed at RouteFrame: tag mismatch for SVTN <svtn_id> from src <src_addr>" | BC-2.05.008; mapped to Go sentinel routing.ErrHMACVerificationFailed; distinct from E-ADM-002 which covers HMAC primitive failure in internal/hmac |
 | E-ADM-003 | ADM | broken | — (dropped) | "frame from non-admitted source: src <src_addr>, SVTN <svtn_id>" | BC-2.05.002 |
 | E-ADM-004 | ADM | broken | 1 | "address collision: node address <addr> already admitted on SVTN <svtn_id>" | BC-2.01.006 |
 | E-ADM-005 | ADM | broken | 1 | "key revoked: <key_fingerprint> on SVTN <svtn_id>" | DEC-005, FM-007 |
@@ -147,7 +148,8 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-003 | Frame duplication storm | E-FWD-001 (drop cache metric), operator diagnostic |
 | FM-004 | Access node loses tmux control mode | No error code — degradation signal + log |
 | FM-005 | Presence message lost/stale | No error code — eventual consistency |
-| FM-006 | HMAC verification failure | E-ADM-002 |
+| FM-006 | HMAC verification failure (primitive layer) | E-ADM-002 |
+| FM-014 | Wire-layer HMAC mismatch at RouteFrame (tag mismatch from admitted node) | E-ADM-016 |
 | FM-007 | Key revocation propagation delay | Acknowledged gap; no error code |
 | FM-008 | Quality indicator stuck green | Bug in DI-008 implementation |
 | FM-009 | Router crashes without drain | E-NET-004 (detected by nodes) |
