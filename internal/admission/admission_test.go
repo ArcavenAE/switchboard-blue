@@ -222,6 +222,65 @@ func TestGenerateChallenge_NoChallengeContainsPrivateKey(t *testing.T) {
 	}
 }
 
+// ── Property / VP-007: TestProperty_VP007_PrivateKeyByteSubstringAbsent ─────
+
+// TestProperty_VP007_PrivateKeyByteSubstringAbsent is the canonical VP-007
+// verification: for random (privKey, challenge) inputs, the serialized wire
+// form of the ChallengeResponse must NOT contain either the 32-byte private-key
+// seed (priv[0:32]) or the 32-byte public-key portion (priv[32:64]) as a
+// contiguous byte substring at any offset.
+//
+// This replaces the structurally-weak field-length checks in AC-006/AC-007 as
+// the canonical VP-007 evidence. Those tests remain below as fast smoke tests
+// for structural invariants.
+//
+// Stdlib-only random sampling — no gopter (consistent with S-2.01 inline-HKDF
+// precedent). 1000 samples per run provides statistical evidence that the
+// property holds at the wire level.
+//
+// Traces to BC-2.05.007 invariant 1 (DI-002: private key non-transit) and
+// VP-007 (private key absent from wire structs).
+func TestProperty_VP007_PrivateKeyByteSubstringAbsent(t *testing.T) {
+	t.Parallel()
+
+	const sampleCount = 1000
+
+	for i := range sampleCount {
+		// Generate a fresh keypair per sample. priv is 64 bytes: seed (0:32) ||
+		// public (32:64) in the Go ed25519 encoding.
+		_, priv, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("sample %d: keygen: %v", i, err)
+		}
+
+		// Generate a fresh challenge nonce per sample.
+		var nonce [32]byte
+		if _, err := rand.Read(nonce[:]); err != nil {
+			t.Fatalf("sample %d: nonce gen: %v", i, err)
+		}
+
+		// Build a ChallengeResponse: sign the nonce with the private key.
+		sig := ed25519.Sign(priv, nonce[:])
+		resp := admission.ChallengeResponse{NonceSig: sig}
+
+		// Wire form: NonceSig is the only field of ChallengeResponse.
+		// If a Marshal method is added later, swap to that.
+		wire := resp.NonceSig
+
+		seed := []byte(priv)[0:32]
+		pubPortion := []byte(priv)[32:64]
+
+		// VP-007 property: wire must not contain the private-key seed or
+		// public-key portion as a contiguous byte substring.
+		if bytes.Contains(wire, seed) {
+			t.Errorf("sample %d: wire contains private-key seed as contiguous substring — VP-007 violated", i)
+		}
+		if bytes.Contains(wire, pubPortion) {
+			t.Errorf("sample %d: wire contains private-key public-portion as contiguous substring — VP-007 violated", i)
+		}
+	}
+}
+
 // ── EC-001: TestAdmitNode_KeyNotRegisteredForSVTN ───────────────────────────
 
 // TestAdmitNode_KeyNotRegisteredForSVTN verifies that a node presenting a

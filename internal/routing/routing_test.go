@@ -257,8 +257,16 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 		DstAddr:   admittedAddr,
 	}
 	err := routing.RouteFrame(hdr, nil, r)
+
+	// Precision pin (pass-4 M-1): assert the EXACT sentinel that proves admission
+	// fires first. ErrNotAdmitted means the admission check caught the source
+	// before any forwarding logic ran. ErrNoForwardingEntry would mean forwarding
+	// logic ran first — that would violate BC-2.05.002 postcondition 3.
 	if !errors.Is(err, admission.ErrNotAdmitted) {
 		t.Errorf("admitted-set check before forwarding: want ErrNotAdmitted, got %v", err)
+	}
+	if errors.Is(err, routing.ErrNoForwardingEntry) {
+		t.Errorf("admitted-set check before forwarding: got ErrNoForwardingEntry — forwarding ran before admission check, BC-2.05.002 postcondition 3 violated")
 	}
 }
 
