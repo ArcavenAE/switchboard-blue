@@ -2,10 +2,10 @@
 artifact_id: BC-2.05.005
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-25T00:00:00
 phase: 1a
 bc_id: BC-2.05.005
 subsystem: admission-security
@@ -17,7 +17,7 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified: ['2026-06-25: added Related BCs entry for BC-2.05.008 (Wave 3 wire-up)']
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -104,3 +104,4 @@ Frame arrival at the first router after transmission from the source node.
 
 - BC-2.05.002 — composes with: admitted-set check + HMAC together enforce the SVTN boundary
 - BC-2.01.004 — depends on: HMAC field is in the outer header defined by BC-2.01.004
+- BC-2.05.008 — composes with: wire-layer integration in RouteFrame (internal/routing); this BC defines the HMAC primitive, BC-2.05.008 defines where it is called

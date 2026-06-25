@@ -2,7 +2,7 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -210,6 +210,57 @@ New packages must, before their first commit to any branch:
 
 Undeclared packages discovered at the wave gate are an architecture violation.
 
+### §6.5 Topological positions declared for Wave 3
+
+Wave 3 introduces two packages that were already present in the full DAG (§§1–4) but
+had not yet been committed: `internal/session` and `internal/tmux`. The packages
+`internal/config`, `internal/paths`, `internal/arq`, `internal/replay`,
+`internal/multipath`, `internal/metrics`, `internal/drain`, `internal/discovery`,
+and `internal/svtnmgmt` were delivered in Waves 1–2 and are included here for
+completeness as the §6.1 table grows to cover the full `internal/` package space.
+
+The extended table below supersedes §6.1 for all waves from Wave 3 onward. The Wave-2
+live rows (positions 1–5) are reproduced unchanged.
+
+| Position | Package | Allowed imports | Classification | Wave introduced |
+|----------|---------|-----------------|----------------|-----------------|
+| 1 | `internal/frame` | ∅ (stdlib only) | pure-core | Wave 1 |
+| 2 | `internal/hmac` | ∅ (stdlib only) | pure-core | Wave 1 |
+| 3 | `internal/config` | ∅ (stdlib only) | pure-core | Wave 1 |
+| 4 | `internal/halfchannel` | {frame} | pure-core | Wave 1 |
+| 5 | `internal/admission` | {frame, hmac} | boundary | Wave 2 |
+| 6 | `internal/session` | {frame} | boundary | **Wave 3** (S-3.02) |
+| 7 | `internal/routing` | {frame, hmac, admission} | boundary | Wave 2 |
+| 8 | `internal/paths` | {frame} | pure-core | Wave 2 |
+| 9 | `internal/arq` | {frame, halfchannel} | pure-core | Wave 2 |
+| 10 | `internal/replay` | {frame, halfchannel} | pure-core | Wave 2 |
+| 11 | `internal/multipath` | {frame, paths} | pure-core | Wave 2 |
+| 12 | `internal/metrics` | {paths} | pure-core | Wave 2 |
+| 13 | `internal/tmux` | {halfchannel, session} | effectful | **Wave 3** (S-3.01) |
+| 14 | `internal/discovery` | {routing} | boundary | Wave 2 |
+| 15 | `internal/svtnmgmt` | {admission, config} | boundary | Wave 2 |
+| 16 | `internal/drain` | {routing} | effectful | Wave 2 |
+
+Positions 17 and above are reserved for packages introduced in later waves.
+
+**Cycle-freeness check for Wave 3 additions:**
+- `internal/session` (position 6) imports {frame} (position 1) — OK.
+- `internal/tmux` (position 13) imports {halfchannel (4), session (6)} — OK (13 > 4, 13 > 6).
+- No new back-edges introduced. DAG remains acyclic.
+
+**Note on §6.1 table ordering:** The §6.1 table used a compact 5-row scope covering
+only Wave-2 live packages. This §6.5 table is the authoritative forward-going list
+and includes all Waves 1–3 packages. The §6.1 forbidden edges in §6.2 continue to
+apply in addition to any new forbidden edges implied by this table.
+
+**Additional forbidden edges (Wave 3):**
+- `internal/session` MUST NOT import `internal/admission` or `internal/routing`.
+  Session-level authorization state is managed within `internal/session` itself;
+  it does not delegate to admission. (See ARCH-04 Two-Tier Key Model — Tier 2 auth
+  is at the access node, not the router/admission layer.)
+- `internal/tmux` MUST NOT import `internal/admission` or `internal/routing`.
+  Tmux is a pure I/O shell; all policy is in `internal/session`.
+
 ---
 
 ## Changelog
@@ -218,3 +269,4 @@ Undeclared packages discovered at the wave gate are an architecture violation.
 |---------|------|--------|
 | 1.0 | 2026-06-23 | Initial dependency graph, topological order, and boundary violation rules |
 | 1.1 | 2026-06-25 | Added §6 Import Constraints (§§6.1–6.4) — explicit codification of DAG positions, forbidden edges, enforcement mechanism, and new-package protocol; prompted by Wave-2 gate audit finding WAVE-2-MED-001 |
+| 1.2 | 2026-06-25 | Added §6.5: extended topological table declaring Wave 3 packages (`internal/session` at position 6, `internal/tmux` at position 13); backfilled all Wave 1–2 packages for completeness; additional forbidden edges for session and tmux |

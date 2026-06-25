@@ -56,6 +56,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | implemented (S-2.01 / PR #5) | ss-05/BC-2.05.005.md |
 | BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | admission-security | CAP-020b | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.006.md |
 | BC-2.05.007 | Node private keys never transit the network under any condition | admission-security | CAP-020a | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.007.md |
+| BC-2.05.008 | RouteFrame wire-layer HMAC enforcement (Fail-Closed for Writes) | admission-security | CAP-020 | P0 | E | pending (S-3.04 / Wave 3) | ss-05/BC-2.05.008.md |
 | BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | quality-observability | CAP-021 | P1 | E | active | ss-06/BC-2.06.001.md |
 | BC-2.06.002 | Missing expected frame is a degradation signal triggering indicator downgrade | quality-observability | CAP-021 | P1 | E | active | ss-06/BC-2.06.002.md |
 | BC-2.06.003 | Per-path RTT and loss metrics queryable via sbctl | quality-observability | CAP-022 | P1 | E | active | ss-06/BC-2.06.003.md |
@@ -75,12 +76,12 @@ traces_to: '.factory/specs/prd.md'
 | multipath-forwarding | CAP-005–010 | 9 | 8 | 1 | 0 |
 | session-discovery | CAP-011–012 | 3 | 0 | 3 | 0 |
 | session-access | CAP-013–016 | 6 | 6 | 0 | 0 |
-| admission-security | CAP-017–020, CAP-020a, CAP-020b | 7 | 7 | 0 | 0 |
+| admission-security | CAP-017–020, CAP-020a, CAP-020b | 8 | 8 | 0 | 0 |
 | quality-observability | CAP-021–022 | 3 | 3 | 0 | 0 |
 | network-management | CAP-023–024 | 3 | 3 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
 | deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **42** | **35** | **7** | **0** |
+| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **43** | **36** | **7** | **0** |
 
 ## CAP Coverage Verification
 
@@ -105,7 +106,7 @@ traces_to: '.factory/specs/prd.md'
 | CAP-017 | BC-2.05.001, BC-2.05.002 | covered |
 | CAP-018 | BC-2.05.003 | covered |
 | CAP-019 | BC-2.05.004 | covered |
-| CAP-020 | BC-2.05.005 | covered |
+| CAP-020 | BC-2.05.005, BC-2.05.008 | covered |
 | CAP-020a | BC-2.05.007 | covered |
 | CAP-020b | BC-2.05.006 | covered |
 | CAP-021 | BC-2.06.001, BC-2.06.002 | covered |

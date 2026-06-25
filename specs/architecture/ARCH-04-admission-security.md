@@ -26,6 +26,7 @@ modified:
   - 2026-06-24T00:00:00 # v1.1 — permit inline HKDF for 32-byte single-block case (refs drbothen/vsdd-factory#260 family, S-2.01 rev 2)
   - 2026-06-25T00:00:00 # v1.2 — clarify ADR-003 LWW resets admitted=false (security-by-default; refs adversary pass-2 L-2, S-2.02 rev 1.2)
   - 2026-06-25T00:00:00 # v1.3 — Key Lifecycle: replace E-ADM-005 "key expired" with E-ADM-015 (new sentinel minted per S-1.03 spec patch rev 1.1; E-ADM-005 = key revoked, not expired)
+  - 2026-06-25T00:00:00 # v1.4 — ADR-009: HMAC enforcement at RouteFrame boundary (S-3.04 wire-up); declares fail-fast ordering and forbidden bypass paths
 ---
 
 # ARCH-04: Admission & Security
@@ -245,10 +246,61 @@ node continues operating (FM-007 documented tradeoff).
 via the router distributed database. Propagation delay is a known gap (FM-007).
 Immediate revocation requires `sbctl router reload` on each router individually.
 
+## ADR-009: HMAC Enforcement at RouteFrame Boundary (S-3.04)
+
+**Decision:** `internal/routing.RouteFrame` calls `verifyFrameHMAC` as the **first
+operation after outer header parsing**, before any admitted-set lookup, before any
+forwarding table consultation, and before any logging of frame content.
+
+**Ordering rationale:**
+1. HMAC verification gates all downstream routing logic. A frame that fails HMAC is
+   dropped immediately. This prevents unauthenticated frames from touching forwarding
+   state, timing side-channels, or log infrastructure.
+2. The admitted-set lookup happens AFTER HMAC verification. Calling admitted-set lookup
+   before HMAC would allow an unauthenticated frame to probe the admitted-set (timing
+   oracle). The correct order is: (a) parse outer header → (b) verify HMAC →
+   (c) check admitted set → (d) route frame.
+3. Frames from source addresses not in the admitted set are dropped during step (c).
+   Frames with invalid HMAC from admitted-set members are dropped during step (b) —
+   this handles the key rotation window where a node is admitted but is using a stale
+   frame_auth_key.
+
+**Fail-fast on bad MAC:** `verifyFrameHMAC` returns an error. `RouteFrame` MUST drop
+the frame and return without further processing. The caller (daemon main loop) MUST NOT
+retry or buffer failed frames. The error is logged at DEBUG level with the source
+address only (not frame content, per R-001 content separation).
+
+**Key lookup in RouteFrame:** `verifyFrameHMAC` receives the per-node frame_auth_key
+from `admitted_key_set[svtn_id][src_node_addr].frame_auth_key`. This is an O(1) read
+under `RLock`. If the src_node_addr is not in the admitted set at key-lookup time,
+the frame is treated as HMAC-unverifiable and dropped (this merges the admitted-set
+check with the HMAC key lookup in one `RLock` acquisition — permissible optimization).
+
+**Rejected alternatives:**
+- Verify HMAC after admitted-set check: rejected — timing oracle on admitted set.
+- Skip HMAC for frames from known-good source addresses: rejected — defeats the per-frame
+  authentication guarantee of BC-2.05.002 and BC-2.05.005.
+- Async HMAC verification (separate goroutine): rejected — adds complexity without
+  throughput benefit for the MVP LAN target (HMAC-SHA256 over 44-byte outer header
+  is approximately 200ns on modern hardware; sync is fine).
+
+**Implementation note (S-3.04):** The `verifyFrameHMAC` function signature:
+```go
+func verifyFrameHMAC(header *frame.OuterHeader, rest []byte, key []byte) error
+```
+`rest` is the channel header + payload (the bytes over which the HMAC was computed).
+`key` is the 32-byte per-node frame_auth_key. The function computes HMAC-SHA256 over
+`header[0:36] || rest` (treating `hmac_tag` bytes as zeros in the header) and compares
+against `header.HMACTag`. Returns `nil` on success, `E-ADM-016` on mismatch.
+
+**References:** BC-2.05.002 (fail-closed HMAC enforcement), BC-2.05.005 (HMAC frame
+authentication), ARCH-02 (outer header `hmac_tag` field at bytes 36–43),
+ARCH-04 HMAC Keying section.
+
 ## Risk Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
 | R-001 (content separation) | Router HMAC and routing logic operate only on outer header fields; `payload []byte` is never parsed in router code path |
 | R-009 (traffic analysis) | Explicitly in-scope per DI-003; documented in operator guide |
-| R-010 (DoS via forged frames) | HMAC verification at first router boundary; forged frames never reach routing logic; per-node keying prevents cross-node forgery |
+| R-010 (DoS via forged frames) | HMAC verification at first router boundary (ADR-009 ordering); forged frames never reach routing logic; per-node keying prevents cross-node forgery |

@@ -2,10 +2,11 @@
 artifact_id: ARCH-01-core-services
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
+modified: 2026-06-25T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -111,3 +112,51 @@ shared-memory pool for frame buffers. The goroutine model for 1,000 concurrent
 sessions is an open question (NFR-004 notes in ARCH-INDEX Open Frontier Questions).
 Initial design: one goroutine pair (reader + writer) per connection. Profiling gates
 refactoring to an event-loop model before PE phase.
+
+## ADR-010: Terminal Session Backend — Tmux Control Mode Primary, PTY Proxy Fallback (S-3.01)
+
+**Decision:** `internal/tmux` uses tmux control mode (`tmux -C`) as the primary
+terminal session backend. PTY proxy mode is an automatic fallback triggered only at
+initial connection time when the control mode connection fails.
+
+**Why tmux control mode is preferred:**
+1. Machine-readable event stream: `%output`, `%session-changed`, `%window-add`, and
+   `%exit` events arrive as structured lines — no screen-scraping required.
+2. Named session addressing: consoles connect by session name (`tmux attach -t NAME`);
+   control mode natively enumerates sessions.
+3. Session persistence: the tmux server persists sessions independently of the access
+   node process. If the access node restarts, it reconnects to the existing tmux
+   server rather than losing session state.
+4. Fan-out compatibility: `ConsoleSet` fan-out (S-3.02) distributes the event stream
+   to multiple consoles from a single tmux control mode connection, avoiding N×tmux
+   connections for N attached consoles.
+
+**Why PTY fallback is included:**
+- tmux may not be installed on the target host. PTY proxy provides degraded-mode
+  operation so the access node does not hard-fail.
+- PTY mode does not support named sessions; the fallback is a single-session proxy.
+- PTY mode provides functionally equivalent keystroke-to-echo behavior (AC-004) but
+  lacks session listing, named session attach, and persistence.
+
+**Fallback semantics (BC-2.04.002):**
+- Fallback is triggered only on initial `TmuxControlMode.Attach` failure. It is NOT
+  triggered if the control mode connection drops mid-session (EC-002 in S-3.01).
+- Once in PTY fallback mode, the access node stays in PTY mode for the lifetime of
+  that session. There is no automatic upgrade to control mode.
+- At next daemon restart, `TmuxControlMode.Attach` is retried before falling back.
+
+**Rejected alternatives:**
+- PTY-only mode: loses session naming, persistence, and efficient fan-out.
+- screen as alternative: no structured event protocol; screen-scraping required.
+  Adds fragile parsing, not a clean boundary.
+- libvterm embedding: complex C dependency; not justified for MVP LAN target.
+
+**References:** BC-2.04.001 (control mode attach), BC-2.04.002 (PTY fallback),
+S-3.01 EC-002 (mid-session drop does not trigger fallback).
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0 | 2026-06-23 | Initial core services architecture |
+| 1.1 | 2026-06-25 | Added ADR-010: tmux control mode primary, PTY proxy fallback (Wave 3 / S-3.01) |

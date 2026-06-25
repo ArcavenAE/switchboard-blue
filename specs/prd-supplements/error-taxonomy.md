@@ -48,7 +48,7 @@ traces_to: '.factory/specs/prd.md'
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-ADM-001 | ADM | broken | 1 | "admission denied: signature verification failed for <node_addr> on SVTN <svtn_id>" | BC-2.05.001 |
-| E-ADM-002 | ADM | broken | — (dropped) | "HMAC verification failed: SVTN <svtn_id>, src <src_addr>, type <frame_type>" | FM-006, BC-2.05.005 |
+| E-ADM-002 | ADM | broken | — (dropped) | "HMAC verification failed: SVTN <svtn_id>, src <src_addr>, type <frame_type>" | FM-006, BC-2.05.005, BC-2.05.008; Go sentinel: `routing.ErrHMACVerificationFailed` (returned by `RouteFrame`; logged before return) |
 | E-ADM-003 | ADM | broken | — (dropped) | "frame from non-admitted source: src <src_addr>, SVTN <svtn_id>" | BC-2.05.002 |
 | E-ADM-004 | ADM | broken | 1 | "address collision: node address <addr> already admitted on SVTN <svtn_id>" | BC-2.01.006 |
 | E-ADM-005 | ADM | broken | 1 | "key revoked: <key_fingerprint> on SVTN <svtn_id>" | DEC-005, FM-007 |

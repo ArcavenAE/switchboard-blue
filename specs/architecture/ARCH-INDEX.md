@@ -48,7 +48,7 @@ modified:
 | Core Services | ARCH-01-core-services.md | implementer, story-writer | Daemon modes, lifecycle, supervision, mode dispatch |
 | Protocol Stack | ARCH-02-protocol-stack.md | implementer, formal-verifier | Wire format, HMAC auth, Noise handshake (ADR-001, ADR-002) |
 | Routing Engine | ARCH-03-routing-engine.md | implementer, formal-verifier | Path selection, duplicate-and-race, FEC, ARQ, failover |
-| Admission & Security | ARCH-04-admission-security.md | security-reviewer, formal-verifier | Keypair admission, SVTN isolation, key model (ADR-003–005) |
+| Admission & Security | ARCH-04-admission-security.md | security-reviewer, formal-verifier | Keypair admission, SVTN isolation, key model (ADR-003–005, ADR-009) |
 | CLI & API | ARCH-05-cli-and-api.md | implementer, test-writer | sbctl, daemon RPC, Go package layout, module→BC mapping |
 | Deployment & Ops | ARCH-06-deployment-and-ops.md | devops-engineer | Binary build, platform support, signing, upgrade model |
 | Verification Architecture | ARCH-07-verification-architecture.md | formal-verifier | Purity boundaries, VP strategy, P0/P1 proof catalog |
@@ -99,6 +99,8 @@ Modules tagged `(shared with SS-NN)` indicate a Go package that serves multiple 
 | ADR-006 | Daemon RPC: JSON-over-Unix-socket with SSH signature auth | ARCH-05 | decided |
 | ADR-007 | P router: separate build target, not included in MVP binary | ARCH-06 | decided |
 | ADR-008 | Tick interval range: 5–50ms; validated as tuning parameter in Phase 3 | ARCH-02 | decided |
+| ADR-009 | HMAC enforcement at RouteFrame boundary: fail-fast before admitted-set lookup (S-3.04) | ARCH-04 | decided |
+| ADR-010 | Terminal session backend: tmux control mode primary, PTY proxy fallback (S-3.01) | ARCH-01, ARCH-04 | decided |
 
 ## Tuning Parameters (to be validated in Phase 3)
 
@@ -114,6 +116,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 |------|--------|--------|
 | 2026-06-23 | architect | Round-1 architectural refinement (pass-01 adversarial review): wire format canonicalized to bit-precise 44-byte outer header (F-001, F-002, F-004, F-011); HMAC keying updated to per-node HKDF-SHA256 (F-003); drop cache key extended to (checksum, arrival_interface_id) (F-006); quality thresholds aligned to NFR-001/BC-2.06.001 (F-008); hysteresis canonical value set to 3 measurements (F-021); read-only console ACK resolved via degenerate upstream half-channel (F-023); permission hierarchy (control > console > readonly) and cross-role revocation rules documented in ADR-004 (F-010); SHA-256 adopted for address derivation replacing Blake3 (F-007); VP-051 and VP-052 added; VP total now 52; VP-040 module corrected to internal/multipath (F-014). |
 | 2026-06-23 | architect | Phase 1c-refinement: VP-053 through VP-057 added for BC coverage closure (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004, BC-2.05.007). VP total now 57. |
+| 2026-06-25 | architect | Wave 3 planning refresh: ADR-009 (HMAC enforcement at RouteFrame boundary, S-3.04) and ADR-010 (tmux control mode + PTY fallback, S-3.01) added to ADR Registry. ARCH-04 bumped to v1.4 (ADR-009 section). ARCH-08 bumped to v1.2 (§6.5: full Wave 1–3 package table declaring `internal/session` at position 6, `internal/tmux` at position 13). No new packages — Wave 3 reuses existing DAG positions from the full topological order already documented in §§1–4. |
 
 ## Open Frontier Questions (for KoS process)
 

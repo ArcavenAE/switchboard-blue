@@ -81,27 +81,27 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-055 | Presence advertisement payload round-trip: required fields present and stable | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
 | VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
+| VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | draft | VP-058.md |
 
 ## Counts
 
-| Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark |
-|-----------|---------|------|-------------|-----|-----------|
-| 57 | 32 | 2 | 11 | 10 | 2 |
+| Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit |
+|-----------|---------|------|-------------|-----|-----------|------------|
+| 58 | 32 | 2 | 11 | 10 | 2 | 1 |
 
-> Arithmetic check: 32 + 2 + 11 + 10 + 2 = 57. Consistent.
+> Arithmetic check: 32 + 2 + 11 + 10 + 2 + 1 = 58. Consistent.
 
 ## Phase Distribution
 
 | Phase | Count |
 |-------|-------|
-| P0 | 39 |
+| P0 | 40 |
 | P1 | 14 |
 | P2 | 4 |
-| **Total** | **57** |
+| **Total** | **58** |
 
-> Phase recounted: P0 adds VP-053 (P0), VP-054 (P0), VP-057 (P0) = +3 → 36+3=39.
-> P1 adds VP-055 (P1), VP-056 (P1) = +2 → 12+2=14. P2 unchanged = 4. Total = 57.
+> Phase recounted: VP-058 (P0) added. P0 = 39+1 = 40. P1 = 14. P2 = 4. Total = 58.
 
 ## BC Coverage Check
 
-42 BCs total. All 42 have at least 1 VP. Zero coverage gaps.
+43 BCs total. 42 have at least 1 VP. BC-2.05.008 has VP-058 (draft, Wave 3). Zero coverage gaps.
