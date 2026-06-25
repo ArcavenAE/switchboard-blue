@@ -1,6 +1,7 @@
 package routing_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -48,7 +49,7 @@ func nodeAddrForTest(svtnID [16]byte, pubKey ed25519.PublicKey) [8]byte {
 // admission.ErrNotAdmitted and drops the frame when the frame's src_addr
 // is not in the admitted set for the frame's svtn_id.
 //
-// Traces to BC-2.05.002 postcondition 1 (frame from non-admitted source →
+// Traces to BC-2.05.002 postcondition 2 (frame from non-admitted source →
 // dropped; E-ADM-003 logged).
 func TestRouteFrame_DropsUnadmitted(t *testing.T) {
 	t.Parallel()
@@ -261,37 +262,44 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 	}
 }
 
-// ── Fuzz harness: VP-057 — no frame from non-admitted source reaches any dest ─
+// ── Fuzz harness: VP-008 — non-admitted source never forwarded ──────────────
 
 // FuzzRouteFrame_NonAdmittedNeverForwarded is a fuzz target verifying that
 // RouteFrame always returns a non-nil error when the frame's source address is
 // not in the admitted set.
 //
-// Traces to VP-057 (no frame from non-admitted source reaches any destination)
+// Traces to VP-008 (Admission Fails for Unregistered Key, applied at routing layer)
 // and BC-2.05.002 invariant 1.
 func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
-	// Seed corpus.
-	f.Add(byte(0x01), byte(0x02))
+	// Seed corpus: 80 bytes — 32 unadmitted seed + 32 admitted seed + 16 SVTN.
+	// Crashes are reproducible from the corpus entry.
+	f.Add([]byte("seed-unadmitted-keypair-00000000seed-admitted-keypair-000000000000svtn"))
 
-	f.Fuzz(func(t *testing.T, svtnByte, dstByte byte) {
-		svtnID := mustSVTN(svtnByte)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Need at least 80 bytes: 32 unadmitted seed + 32 admitted seed + 16 SVTN.
+		if len(data) < 80 {
+			t.Skip()
+			return
+		}
 
-		// Router key — not used in stub, skip if keygen fails.
-		_, _, err := ed25519.GenerateKey(rand.Reader)
+		// Derive unadmitted keypair from corpus bytes [0:32].
+		unadmittedPub, _, err := ed25519.GenerateKey(bytes.NewReader(data[:32]))
 		if err != nil {
 			t.Skip()
 			return
 		}
-		unadmittedPub, _, err := ed25519.GenerateKey(rand.Reader)
+
+		// Derive admitted keypair from corpus bytes [32:64].
+		admittedPub, _, err := ed25519.GenerateKey(bytes.NewReader(data[32:64]))
 		if err != nil {
 			t.Skip()
 			return
 		}
-		admittedPub, _, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			t.Skip()
-			return
-		}
+
+		// Derive SVTN ID from corpus bytes [64:80].
+		var svtnID [16]byte
+		copy(svtnID[:], data[64:80])
+
 		ks := admission.NewAdmittedKeySet()
 		ks.RegisterKey(svtnID, admittedPub, admission.RoleAccess)
 		// unadmittedPub deliberately NOT registered.
@@ -302,15 +310,12 @@ func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 
 		unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub)
 
-		var dstAddr [8]byte
-		dstAddr[0] = dstByte
-
 		hdr := frame.OuterHeader{
 			Version:   frame.VersionByte,
 			FrameType: frame.FrameTypeData,
 			SVTNID:    svtnID,
 			SrcAddr:   unadmittedAddr,
-			DstAddr:   dstAddr,
+			DstAddr:   admittedAddr,
 		}
 		err = routing.RouteFrame(hdr, nil, r)
 		if err == nil {

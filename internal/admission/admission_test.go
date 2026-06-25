@@ -1,6 +1,7 @@
 package admission_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -432,42 +433,65 @@ func TestAdmitNodeRevokeKey_NoRace(t *testing.T) {
 	// Pass if no -race detector hit and no panic.
 }
 
-// ── L-2: pin ADR-003 LWW re-registration semantic ───────────────────────────
+// ── L-2 / M-4: pin ADR-003 LWW re-registration semantic via full handshake ──
 
-// TestRegisterKey_AfterRevoke_ClearsRevokedFlag pins the ADR-003 LWW (last-
-// write-wins) semantic: re-registering a key after revocation un-revokes it.
-// Acts as a regression guard so unrelated refactors do not accidentally change
-// this behavior.
+// TestRegisterKey_AfterRevoke_ClearsRevokedFlag pins ADR-003 LWW un-revoke
+// semantic: re-registering a key after RevokeKey results in a fresh entry;
+// subsequent AdmitNode should succeed. Per user decision 2026-06-25 + ADR-003
+// amendment in story rev 1.2: LWW re-registration resets admitted=false (force
+// re-handshake), so the test verifies AdmitNode succeeds (taking the node from
+// registered-not-admitted to admitted=true).
 func TestRegisterKey_AfterRevoke_ClearsRevokedFlag(t *testing.T) {
 	t.Parallel()
 
 	ks := admission.NewAdmittedKeySet()
 	svtnID := mustSVTN(0x22)
-	nodePub, _ := mustGenEd25519(t)
+
+	_, routerPriv := mustGenEd25519(t)
+	nodePub, nodePriv := mustGenEd25519(t)
 	nodeAddr := nodeAddrForTest(svtnID, nodePub)
 
-	// Register → Revoke → Re-register.
+	// Step 1: Register → AdmitNode → assert IsAdmitted true.
 	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+	ch1 := mustGenerateChallenge(t, routerPriv)
+	sig1 := ed25519.Sign(nodePriv, ch1.Nonce[:])
+	resp1 := admission.ChallengeResponse{NonceSig: sig1}
+	if err := admission.AdmitNode(ch1, resp1, nodePub, svtnID, ks); err != nil {
+		t.Fatalf("AdmitNode (initial): %v", err)
+	}
+	if !ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Fatal("post-Step-1: IsAdmitted should be true after successful handshake")
+	}
+
+	// Step 2: Revoke → assert AdmitNode now fails with ErrKeyRevoked.
 	if err := ks.RevokeKey(svtnID, nodeAddr); err != nil {
 		t.Fatalf("RevokeKey: %v", err)
 	}
-	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
-
-	// After re-register the key should be in the set and not revoked.
-	// Verify via Lookup: entry must exist (LWW replaced the revoked entry).
-	entry := ks.Lookup(svtnID, nodeAddr)
-	if entry == nil {
-		t.Fatal("Lookup found nothing after re-register; LWW semantic lost the entry")
+	ch2 := mustGenerateChallenge(t, routerPriv)
+	sig2 := ed25519.Sign(nodePriv, ch2.Nonce[:])
+	resp2 := admission.ChallengeResponse{NonceSig: sig2}
+	if err := admission.AdmitNode(ch2, resp2, nodePub, svtnID, ks); !errors.Is(err, admission.ErrKeyRevoked) {
+		t.Fatalf("post-revoke AdmitNode: got %v, want ErrKeyRevoked", err)
 	}
-	// The revoked flag is unexported; we verify behavior: RevokeKey on a freshly
-	// re-registered key must succeed (key is present) and after a second revoke +
-	// no re-register the key remains revocable — confirming revoked=false was reset.
-	if err := ks.RevokeKey(svtnID, nodeAddr); err != nil {
-		t.Errorf("RevokeKey after re-register: want nil (LWW cleared revoked=false), got %v", err)
+
+	// Step 3: Re-Register → assert IsAdmitted=false until fresh handshake, then
+	// AdmitNode succeeds (LWW un-revoke + reset-admitted verified).
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+	if ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Fatal("post-re-register: IsAdmitted should be false until fresh handshake (LWW reset semantic)")
+	}
+	ch3 := mustGenerateChallenge(t, routerPriv)
+	sig3 := ed25519.Sign(nodePriv, ch3.Nonce[:])
+	resp3 := admission.ChallengeResponse{NonceSig: sig3}
+	if err := admission.AdmitNode(ch3, resp3, nodePub, svtnID, ks); err != nil {
+		t.Fatalf("post-re-register AdmitNode: got %v, want nil (revoke cleared by LWW)", err)
+	}
+	if !ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Fatal("post-Step-3: IsAdmitted should be true after re-handshake; LWW un-revoke verified")
 	}
 }
 
-// ── Fuzz harness: VP-009 — admission rejects unregistered keys ──────────────
+// ── Fuzz harness: VP-008 — admission rejects unregistered keys ──────────────
 
 // FuzzAdmitNode_UnregisteredKey is a fuzz target that verifies AdmitNode
 // always returns a non-nil error when the presented public key is NOT
@@ -475,22 +499,34 @@ func TestRegisterKey_AfterRevoke_ClearsRevokedFlag(t *testing.T) {
 //
 // Traces to VP-008 (Admission Fails for Unregistered Key).
 func FuzzAdmitNode_UnregisteredKey(f *testing.F) {
-	// Seed corpus: a single known valid nonce seed.
-	f.Add([]byte("seed-nonce-000000000000000000000"))
+	// Seed corpus: 64 bytes — 32 for node keypair seed, 16 for SVTN, 16 for
+	// router keypair seed. Crashes are reproducible from the corpus entry.
+	f.Add([]byte("seed-node-keypair-00000000000000seed-router-keypair-000000000000"))
 
-	f.Fuzz(func(t *testing.T, _ []byte) {
-		_, routerPriv, err := ed25519.GenerateKey(rand.Reader)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Need at least 64 bytes: 32 node seed + 16 SVTN + 16 router seed.
+		if len(data) < 64 {
+			t.Skip()
+			return
+		}
+
+		// Deterministically derive node keypair from corpus bytes [0:32].
+		unregisteredPub, unregisteredPriv, err := ed25519.GenerateKey(bytes.NewReader(data[:32]))
 		if err != nil {
 			t.Skip()
 			return
 		}
-		// Unregistered: generate a fresh key not added to ks.
-		unregisteredPub, unregisteredPriv, err := ed25519.GenerateKey(rand.Reader)
+
+		// Derive SVTN ID from corpus bytes [32:48].
+		var svtnID [16]byte
+		copy(svtnID[:], data[32:48])
+
+		// Derive router keypair from corpus bytes [48:64].
+		_, routerPriv, err := ed25519.GenerateKey(bytes.NewReader(data[48:64]))
 		if err != nil {
 			t.Skip()
 			return
 		}
-		svtnID := mustSVTN(0x01)
 
 		ks := admission.NewAdmittedKeySet()
 		// Deliberately do NOT call ks.RegisterKey — key is unregistered.
