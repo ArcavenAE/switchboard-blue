@@ -231,9 +231,9 @@ func TestSessionContinuity_NodeAddressStableAfterReauth(t *testing.T) {
 // Traces to:
 //
 //	BC-2.01.007 EC-005 (re-authenticate after key expiry → E-ADM-015; see ARCH-04 v1.3 §Key Lifecycle)
-//	E-ADM-015 / ErrKeyExpired (story EC-001, S-1.03 rev 1.2 Spec Patches)
+//	E-ADM-015 / ErrKeyExpired (story EC-001, S-1.03 rev 1.3 Spec Patches)
 //	EC-001 (S-1.03)
-func TestReauth_ExpiredKey(t *testing.T) {
+func TestSessionContinuity_ExpiredKeyRejected(t *testing.T) {
 	t.Parallel()
 
 	_, routerPriv := mustGenEd25519(t)
@@ -286,7 +286,7 @@ func TestReauth_ExpiredKey(t *testing.T) {
 //
 //	BC-2.01.007 EC-006 (old path evicted on new re-auth; BC v1.3)
 //	EC-002 (S-1.03)
-func TestReauth_EvictsOldPath(t *testing.T) {
+func TestSessionContinuity_OldPathEvicted(t *testing.T) {
 	t.Parallel()
 
 	_, routerPriv := mustGenEd25519(t)
@@ -361,7 +361,7 @@ func TestReauth_EvictsOldPath(t *testing.T) {
 //	BC-2.01.007 EC-003 (concurrent re-auth — last one wins)
 //	ARCH-04 §ADR-003 (LWW)
 //	EC-003 (S-1.03)
-func TestReauth_LastWriteWins(t *testing.T) {
+func TestSessionContinuity_LastWriteWins(t *testing.T) {
 	t.Parallel()
 
 	_, routerPriv := mustGenEd25519(t)

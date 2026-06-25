@@ -28,8 +28,7 @@ var ErrKeyExpired = errors.New("admission: key expired")
 // a new source IP address (BC-2.01.007 preconditions 1–4).
 //
 // IMPORTANT: This struct MUST NOT contain private key material. Only the
-// public challenge-response (a signature) is transmitted (DI-002;
-// BC-2.05.007 invariant 1).
+// public challenge-response (a signature) is transmitted (DI-002).
 type ReAuthRequest struct {
 	// SVTNID is the SVTN the node is re-authenticating into.
 	SVTNID [16]byte
@@ -53,7 +52,10 @@ type ReAuthRequest struct {
 //
 // All exported methods are safe for concurrent use.
 type ReAuthState struct {
-	mu    sync.RWMutex
+	mu sync.RWMutex
+	// TODO(phase-6): no eviction path; map grows monotonically with admitted nodes.
+	// Eviction hook needed when RevokeKey or expiry cleanup runs. Track in STATE.md drift register.
+	// VP-036 backlog item.
 	addrs map[[16]byte]map[[8]byte]netip.Addr // svtnID → nodeAddr → current source IP
 }
 
