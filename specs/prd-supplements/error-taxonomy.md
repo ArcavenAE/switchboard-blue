@@ -2,10 +2,10 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-25T00:00:00
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -117,6 +117,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-FWD-001 | FWD | degraded | 0 | "split-horizon: no non-arrival interface available for dst <dst_addr>; frame dropped" | BC-2.02.008 |
+| E-FWD-002 | FWD | degraded | — (dropped) | "routing: no forwarding entry for destination <dst_addr> in SVTN <svtn_id>" | BC-2.05.006; distinguishes forwarding-table miss from admission failure (E-ADM-003); callers use errors.Is to separate the two conditions |
 
 ### SES — Session
 
@@ -154,3 +155,4 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-011 | tmux not present | E-SYS-001 (if PTY also fails); log message on PTY fallback |
 | FM-012 | sbctl cannot connect | E-NET-001 |
 | FM-013 | Key expired at re-authentication time | E-ADM-015 |
+| (no FM) | Forwarding-table miss for (svtnID, dstAddr) — distinct from admission failure | E-FWD-002 |
