@@ -119,6 +119,8 @@ Next: Wave 2 integration gate — consistency-validator + fresh-context audit ac
 | F-004 | LOW | ARCH-02 channel-header serializer not implemented | story S-BL.OA | deferred to outer-assembler story |
 | VP-036 testenv | Phase-6 hardening | S-1.03 unit tests cover AC-001..003; property test (TestProperty_VP036_SessionContinuity) deferred until internal/testenv.ConnectWithSourceIP exists | 2026-06-25 |
 | SEC-003 | Phase-6 hardening | Sub-microsecond TOCTOU on now timestamp in ReAuthenticate; worst case one re-auth on just-expired key. Accepted disposition per pr-reviewer security review of PR #7 | 2026-06-25 |
+| WAVE-2-MED-001 | Phase-6 hardening | ReAuthState not evicted on RevokeKey or RegisterKey reset; stale source-IP survives via CurrentSourceAddr; gated by IsAdmitted in RouteFrame but no cross-check in the accessor itself | 2026-06-25 |
+| WAVE-3-DEP-001 | Wave 3 (HMAC wire-up) | verifyFrameHMAC is //nolint:unused on develop; Wave-2 router has zero frame-forgery defense until wired into RouteFrame; test scaffolding ready (S-2.02 pass-4 fix) | 2026-06-25 |
 
 ## Non-Blocking Debt
 
