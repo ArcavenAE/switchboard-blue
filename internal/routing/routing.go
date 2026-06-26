@@ -110,9 +110,15 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 // payload is the raw bytes following the outer header; it is never parsed here
 // (R-001; ARCH-04 §Risk Mitigations).
 func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
-	// Step 1: Look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
-	// If absent → auth key is unavailable → frame is unverifiable → fail-closed.
-	// Hold the lock across steps 1–2 (single RLock acquisition per ADR-009).
+	// Step 1: forwarding-table lookup under RLock.
+	//
+	// Per ADR-009 v1.6: the RLock is held only for this forwarding-table lookup
+	// (steps 1–3 below). FrameAuthKey is a [32]byte value type and is copied out
+	// before the lock is released; HMAC verification (step 2) runs lock-free. This
+	// keeps the critical section small and avoids holding the forwarding-table RLock
+	// during CPU-bound HMAC computation. Sequential HMAC-before-admitted ordering is
+	// preserved by statement order in this function, not by lock holding (see
+	// ADR-009 v1.6 §"Ordering specification").
 	r.mu.RLock()
 	svtnTable, ok := r.forwardingTable[hdr.SVTNID]
 	var entry *ForwardingEntry

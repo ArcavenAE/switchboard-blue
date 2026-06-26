@@ -1,13 +1,10 @@
 // Package routing — internal tests with access to unexported helpers.
 //
-// verifyFrameHMAC is //nolint:unused until wire-layer HMAC enforcement is wired
-// into RouteFrame (S-3.04). This file exercises the function directly to pin
-// the H-1 tautology fix: the function must read hdr.HMACTag from the wire before
-// zeroing the field for MAC computation, not vice versa.
-//
-// S-3.04 additions: VP-058 proof harness tests for ADR-009 ordering invariant.
-// These tests are RED against the S-3.04 stub (RouteFrame does not yet call
-// verifyFrameHMAC). They become GREEN once the wire-up is complete.
+// Tests in this file exercise the internal verifyFrameHMAC contract directly
+// (not via RouteFrame). They verify the tag-snapshot-before-zero anti-tautology
+// fix (S-2.02 pass-4 H-1) and the HMAC-before-admitted ordering invariant
+// (VP-058, wired in S-3.04). All tests are GREEN against the post-S-3.04
+// implementation.
 package routing
 
 import (
@@ -83,8 +80,8 @@ func TestVerifyFrameHMAC_RejectsWrongTag(t *testing.T) {
 // ── S-3.04: VP-058 proof harness ─────────────────────────────────────────────
 //
 // These tests are adapted from the VP-058.md v1.1 proof harness skeleton.
-// They are RED against the S-3.04 stub (RouteFrame does not yet call
-// verifyFrameHMAC). They become GREEN once the wire-up is complete.
+// They exercise RouteFrame's HMAC-before-admitted ordering invariant (ADR-009,
+// VP-058) post-wire-up. All tests are GREEN against the post-S-3.04 implementation.
 //
 // Internal test file required: tests call RouteFrame (public) but the file is in
 // package routing to keep it alongside verifyFrameHMAC tests for audit coherence.
@@ -114,8 +111,6 @@ func seedKeyInternal(t *testing.T, seed [32]byte) (ed25519.PublicKey, ed25519.Pr
 // HMAC verification — that is the ADR-009 ordering violation VP-058 guards against.
 //
 // Traces to VP-058 properties 1, 2, 3; BC-2.05.008 PC-3; ADR-009.
-//
-// RED against the S-3.04 stub: stub skips HMAC, admitted node returns nil.
 func TestRouteFrame_HMACEnforcedBeforeAdmission_VP058(t *testing.T) {
 	t.Parallel()
 
@@ -180,9 +175,6 @@ func TestRouteFrame_HMACEnforcedBeforeAdmission_VP058(t *testing.T) {
 // rejected as unverifiable — ErrHMACVerificationFailed, not ErrNotAdmitted.
 //
 // Traces to VP-058 property 4; BC-2.05.008 PC-4; ADR-009 step 2.
-//
-// RED against the S-3.04 stub: stub skips forwarding-table auth-key lookup,
-// admitted node reaches SVTNRoute and returns ErrNoForwardingEntry.
 func TestRouteFrame_NoForwardingEntry_RejectsAsUnverifiable_VP058(t *testing.T) {
 	t.Parallel()
 

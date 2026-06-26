@@ -352,10 +352,8 @@ func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 
 // ── S-3.04: HMAC wire-up tests (BC-2.05.008, ADR-009, VP-058) ────────────────
 //
-// These tests are RED (failing) against the S-3.04 stub because RouteFrame does
-// not yet call verifyFrameHMAC. They become GREEN once the wire-up is complete.
-//
-// Red Gate discipline: BC-5.38.001 (tdd_mode: strict).
+// These tests exercise RouteFrame's post-S-3.04 HMAC enforcement. All tests
+// are GREEN against the post-S-3.04 implementation.
 
 // seedKeyDet generates a deterministic Ed25519 keypair from a fixed 32-byte seed.
 // Uses bytes.NewReader to satisfy ed25519.GenerateKey's io.Reader contract
@@ -454,10 +452,8 @@ func computeValidTag(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySiz
 //
 // Traces to BC-2.05.008 PC-1; ADR-009 step 5 (proceed after HMAC passes).
 //
-// GREEN-BY-DESIGN against the S-3.04 stub: the stub skips HMAC and the existing
-// admitted-set + SVTNRoute path already returns nil for an admitted node with a
-// forwarding entry. This test guards against regressions once HMAC is wired —
-// a mis-wired verifyFrameHMAC that rejects valid tags would make this test RED.
+// Regression guard: a mis-wired verifyFrameHMAC that rejects valid tags would
+// make this test RED.
 func TestRouteFrame_ValidHMAC_ProceedsToAdmission(t *testing.T) {
 	t.Parallel()
 
@@ -496,9 +492,6 @@ func TestRouteFrame_ValidHMAC_ProceedsToAdmission(t *testing.T) {
 //
 // Traces to BC-2.05.008 PC-2; ADR-009 step 4 (drop on HMAC mismatch);
 // VP-058 property 3 (ErrHMACVerificationFailed before IsAdmitted/SVTNRoute).
-//
-// RED against the S-3.04 stub: the stub skips HMAC verification, so admitted
-// nodes reach SVTNRoute and return nil — not ErrHMACVerificationFailed.
 func TestRouteFrame_InvalidHMAC_ReturnsErrHMACVerificationFailed(t *testing.T) {
 	t.Parallel()
 
@@ -540,9 +533,6 @@ func TestRouteFrame_InvalidHMAC_ReturnsErrHMACVerificationFailed(t *testing.T) {
 //
 // Traces to BC-2.05.008 PC-3; ADR-009 step 4 (ordering invariant);
 // VP-058 property 1 (verifyFrameHMAC before IsAdmitted).
-//
-// RED against the S-3.04 stub: stub skips HMAC, admitted node proceeds to
-// SVTNRoute returning nil — not ErrHMACVerificationFailed.
 func TestRouteFrame_HMACEnforcedBeforeAdmission(t *testing.T) {
 	t.Parallel()
 
@@ -586,10 +576,6 @@ func TestRouteFrame_HMACEnforcedBeforeAdmission(t *testing.T) {
 //
 // Traces to BC-2.05.008 PC-4; ADR-009 step 2 (absent entry → drop);
 // VP-058 property 4.
-//
-// RED against the S-3.04 stub: stub skips the forwarding-table lookup for HMAC,
-// so an admitted node with no forwarding entry proceeds to SVTNRoute which returns
-// ErrNoForwardingEntry — not ErrHMACVerificationFailed.
 func TestRouteFrame_NoForwardingEntry_RejectsAsUnverifiable(t *testing.T) {
 	t.Parallel()
 
@@ -651,11 +637,6 @@ func TestRouteFrame_NoForwardingEntry_RejectsAsUnverifiable(t *testing.T) {
 // sentinels are distinct and that HMAC passes before admission fails.
 //
 // Traces to BC-2.05.008 EC-005; BC-2.05.008 invariant 2 (sentinel distinction).
-//
-// GREEN-BY-DESIGN against the S-3.04 stub: the stub returns ErrNotAdmitted for
-// any unadmitted source — which happens to be the correct post-implementation
-// behavior for valid HMAC + unadmitted node. This test guards the sentinel
-// distinction invariant.
 func TestRouteFrame_ValidHMAC_Unadmitted_ReturnsErrNotAdmitted(t *testing.T) {
 	t.Parallel()
 
@@ -715,8 +696,6 @@ func TestRouteFrame_ValidHMAC_Unadmitted_ReturnsErrNotAdmitted(t *testing.T) {
 // HMACTag is rejected with ErrHMACVerificationFailed (EC-001; E-ADM-016 logged).
 //
 // Traces to BC-2.05.008 EC-001.
-//
-// RED against the S-3.04 stub: stub skips HMAC, admitted node returns nil.
 func TestRouteFrame_ZeroHMACTag_Rejected(t *testing.T) {
 	t.Parallel()
 
@@ -751,8 +730,6 @@ func TestRouteFrame_ZeroHMACTag_Rejected(t *testing.T) {
 // ErrHMACVerificationFailed (EC-002; E-ADM-016 logged).
 //
 // Traces to BC-2.05.008 EC-002; ADR-009 (per-node keying prevents cross-node forgery).
-//
-// RED against the S-3.04 stub: stub skips HMAC, admitted node returns nil.
 func TestRouteFrame_WrongKeyHMAC_Rejected(t *testing.T) {
 	t.Parallel()
 
@@ -793,9 +770,6 @@ func TestRouteFrame_WrongKeyHMAC_Rejected(t *testing.T) {
 // is never reached.
 //
 // Traces to BC-2.05.008 EC-003; ADR-009 step 2.
-//
-// RED against the S-3.04 stub: stub skips the forwarding-table auth-key lookup,
-// so admitted node reaches SVTNRoute and returns ErrNoForwardingEntry.
 func TestRouteFrame_AdmittedNodeForwardingEntryPurged(t *testing.T) {
 	t.Parallel()
 
@@ -855,10 +829,8 @@ func TestRouteFrame_AdmittedNodeForwardingEntryPurged(t *testing.T) {
 //
 // Traces to BC-2.05.008 EC-004; BC-2.05.005 EC-001 (HMAC over empty payload valid).
 //
-// GREEN-BY-DESIGN against the S-3.04 stub: the stub skips HMAC and returns nil
-// for admitted nodes with forwarding entries — which happens to be correct. This
-// test guards that the empty-payload case is not accidentally rejected after
-// HMAC is wired.
+// Regression guard: verifyFrameHMAC must handle nil/empty payload (HMAC over
+// header-only message) without error.
 func TestRouteFrame_EmptyPayload_ValidHMAC_Forwarded(t *testing.T) {
 	t.Parallel()
 
@@ -899,9 +871,6 @@ func TestRouteFrame_EmptyPayload_ValidHMAC_Forwarded(t *testing.T) {
 // admitted-set check fails because the key is revoked.
 //
 // Traces to BC-2.05.008 EC-005; BC-2.05.004 (key revocation).
-//
-// GREEN-BY-DESIGN against the S-3.04 stub: the stub returns ErrNotAdmitted for
-// any node where IsAdmitted returns false, which is correct after revocation.
 func TestRouteFrame_ValidHMAC_RevokedNode_ReturnsErrNotAdmitted(t *testing.T) {
 	t.Parallel()
 
