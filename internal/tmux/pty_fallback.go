@@ -128,6 +128,14 @@ type PTYProxy struct {
 
 	// wg joins the I/O relay goroutine on Close.
 	wg sync.WaitGroup
+
+	// H-001 (pass-3): frames is the output stream of ChannelFrames produced by
+	// ioRelay. Symmetric to ControlMode.frames. Each PTY-master read produces
+	// (after fragmentation if needed) one or more frames via Tick(). Buffered to
+	// absorb burst; non-blocking send drops on backpressure. Closed once on Close
+	// via closeFrames.
+	frames      chan halfchannel.ChannelFrame
+	closeFrames sync.Once
 }
 
 // NewPTYProxy constructs a PTYProxy that publishes sessions via publisher and
@@ -140,6 +148,8 @@ func NewPTYProxy(publisher *session.Publisher, downstream *halfchannel.HalfChann
 		downstream: downstream,
 		logger:     stderrLogger{},
 		ptyAlloc:   defaultPTYAlloc,
+		// H-001 (pass-3): match ControlMode capacity.
+		frames: make(chan halfchannel.ChannelFrame, framesBufferSize),
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -211,6 +221,10 @@ func (p *PTYProxy) Connect(_ context.Context) error {
 // ioRelay reads from the PTY master and drives the downstream half-channel.
 // It exits when the master returns io.EOF or an error.
 func (p *PTYProxy) ioRelay(master io.ReadWriteCloser) {
+	// H-001 (pass-3): close frames on every exit path (normal, EOF, error).
+	// sync.Once guards against double-close with Close().
+	defer p.closeFrames.Do(func() { close(p.frames) })
+
 	buf := make([]byte, 4096)
 	for {
 		n, err := master.Read(buf)
@@ -224,7 +238,15 @@ func (p *PTYProxy) ioRelay(master io.ReadWriteCloser) {
 				if enqErr := p.downstream.Enqueue(data[i:end]); enqErr != nil {
 					break
 				}
-				_ = p.downstream.Tick()
+				frame := p.downstream.Tick()
+				// H-001 (pass-3): publish dequeued frame for downstream consumers
+				// (S-3.02). Non-blocking — if consumer falls behind, drop with note.
+				// TODO(phase-6): add metrics counter.
+				select {
+				case p.frames <- frame:
+				default:
+					// Frame dropped due to downstream backpressure.
+				}
 			}
 		}
 		if err != nil {
@@ -239,6 +261,18 @@ func (p *PTYProxy) ioRelay(master io.ReadWriteCloser) {
 // The slice is a value copy — callers may freely mutate it.
 func (p *PTYProxy) Sessions() []session.Info {
 	return p.publisher.ListSessions()
+}
+
+// Frames returns the read-only channel of ChannelFrames produced by the PTY
+// proxy's ioRelay goroutine. Symmetric to ControlMode.Frames(). The channel is
+// buffered; if the consumer falls behind, frames are dropped (backpressure
+// protection — ioRelay must not stall on PTY reads). The channel is closed when
+// Close() is called or ioRelay exits.
+//
+// Callers should drain Frames() concurrently with reading any error signaling
+// channel.
+func (p *PTYProxy) Frames() <-chan halfchannel.ChannelFrame {
+	return p.frames
 }
 
 // Close tears down the PTY proxy: terminates the child process, closes the
@@ -261,6 +295,10 @@ func (p *PTYProxy) Close() error {
 
 	// Wait for the I/O relay goroutine to exit.
 	p.wg.Wait()
+
+	// H-001 (pass-3): close frames after ioRelay has exited. sync.Once guards
+	// against double-close with the defer in ioRelay (either path wins safely).
+	p.closeFrames.Do(func() { close(p.frames) })
 
 	// Unpublish the synthetic session.
 	if sessionName != "" {
@@ -320,10 +358,15 @@ type SessionConnector struct {
 		Close() error
 	}
 
-	// mu protects active, inPTYMode, ctrl, closed.
+	// mu protects active, inPTYMode, ctrl, closed, connectCancel.
 	mu        sync.Mutex
 	inPTYMode bool
 	closed    bool // set true on Close; gates watchAndFallback resurrection
+
+	// L-001 (pass-3): connectCancel cancels the context passed to
+	// watchAndFallback, allowing Close to unblock the goroutine without
+	// waiting for an ErrControlModeDropped signal that may never arrive.
+	connectCancel context.CancelFunc
 
 	// wg joins watchAndFallback goroutine(s) on Close.
 	wg sync.WaitGroup
@@ -353,13 +396,18 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 	ctrlErr := sc.ctrl.Connect(ctx)
 	if ctrlErr == nil {
 		// Control mode connected — set active and start the watch goroutine.
+		// L-001 (pass-3): use a cancellable child so Close can unblock the
+		// goroutine without waiting for a drop signal that may never arrive.
+		innerCtx, cancel := context.WithCancel(ctx)
+
 		sc.mu.Lock()
 		sc.active = sc.ctrl
+		sc.connectCancel = cancel
 		sc.mu.Unlock()
 
 		// Start watching for mid-session drops (EC-003).
 		sc.wg.Add(1)
-		go sc.watchAndFallback(ctx)
+		go sc.watchAndFallback(innerCtx)
 
 		return nil
 	}
@@ -439,7 +487,17 @@ func (sc *SessionConnector) Close() error {
 		return nil
 	}
 	sc.closed = true
+	// L-001 (pass-3): capture and clear connectCancel under the lock so we
+	// can call it after releasing the lock (no lock-while-calling convention).
+	cancelFunc := sc.connectCancel
+	sc.connectCancel = nil
 	sc.mu.Unlock()
+
+	// L-001 (pass-3): cancel the watchAndFallback context BEFORE closing
+	// ctrl so the goroutine observes ctx.Done() and exits promptly.
+	if cancelFunc != nil {
+		cancelFunc()
+	}
 
 	// Close BOTH ctrl AND pty regardless of which was active.
 	var firstErr error
@@ -479,6 +537,20 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 		reconnected := false
 		if sc.factory != nil {
 			for attempt := 1; attempt <= maxReconnectAttempts; attempt++ {
+				// L-001 (pass-3): honor Close() and ctx cancellation between attempts.
+				sc.mu.Lock()
+				if sc.closed {
+					sc.mu.Unlock()
+					return
+				}
+				sc.mu.Unlock()
+
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
 				newCtrl, connErr := sc.factory(ctx)
 				if connErr == nil {
 					sc.mu.Lock()
