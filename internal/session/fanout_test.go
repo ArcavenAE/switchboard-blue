@@ -161,11 +161,11 @@ func TestConsoleSet_Deliver_SkipsRemovedConsole(t *testing.T) {
 	cs := newTestConsoleSet(t)
 
 	// Add two consoles: A will be removed before delivery, B remains.
-	downstreamA, _, err := cs.Add("fan-skip-A") //nolint:staticcheck // used below after Remove
+	downstreamA, _, err := cs.Add("fan-skip-A")
 	if err != nil {
 		t.Fatalf("Add A: %v", err)
 	}
-	downstreamB, _, errB := cs.Add("fan-skip-B") //nolint:staticcheck // used below after Deliver
+	downstreamB, _, errB := cs.Add("fan-skip-B")
 	if errB != nil {
 		t.Fatalf("Add B: %v", errB)
 	}

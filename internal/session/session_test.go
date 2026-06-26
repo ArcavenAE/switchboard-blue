@@ -267,7 +267,7 @@ func TestSession_Detach_ReadOnlyObserversUnaffected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Attach full-access: %v", err)
 	}
-	observerDownstream, _, err := an.Attach("observer", "monitor") //nolint:staticcheck // used below after DeliverFrame; stub panics before assignment
+	observerDownstream, _, err := an.Attach("observer", "monitor")
 	if err != nil {
 		t.Fatalf("Attach observer: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestSession_CrashDetach_EvictsFromFanOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Attach crash-victim: %v", err)
 	}
-	survivorDownstream, _, err := an.Attach("survivor", "crash-session") //nolint:staticcheck // used below after DeliverFrame; stub panics before assignment
+	survivorDownstream, _, err := an.Attach("survivor", "crash-session")
 	if err != nil {
 		t.Fatalf("Attach survivor: %v", err)
 	}
