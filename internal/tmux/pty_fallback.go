@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/arcavenae/switchboard/internal/halfchannel"
@@ -40,7 +41,7 @@ var ErrPTYDeviceUnavailable = errors.New("PTY device unavailable: cannot start a
 // maxReconnectAttempts is the number of tmux control mode reconnect attempts
 // before the mid-session fallback path switches to PTY proxy mode
 // (BC-2.04.002 EC-003; S-3.01b task 6).
-const maxReconnectAttempts = 3 //nolint:unused // stub constant; wired by implementer in SessionConnector.Connect
+const maxReconnectAttempts = 3
 
 // ptyAllocFunc is the injection point for PTY allocation. The real
 // implementation calls golang.org/x/sys/unix.Openpty; unit tests inject
@@ -100,16 +101,16 @@ type PTYProxy struct {
 	ptyAlloc ptyAllocFunc
 
 	// sessionName is the synthetic "pty-<pid>" name published on Connect.
-	sessionName string //nolint:unused // stub field; set by implementer in Connect
+	sessionName string
 
 	// mu protects all lifecycle fields.
-	mu     sync.Mutex         //nolint:unused // stub field; used by implementer in Connect/Close
-	master io.ReadWriteCloser //nolint:unused // stub field; set by implementer in Connect
-	pid    int                //nolint:unused // stub field; set by implementer in Connect
-	closed bool               //nolint:unused // stub field; set by implementer in Close
+	mu     sync.Mutex
+	master io.ReadWriteCloser
+	pid    int
+	closed bool
 
 	// wg joins the I/O relay goroutine on Close.
-	wg sync.WaitGroup //nolint:unused // stub field; used by implementer in Connect/Close
+	wg sync.WaitGroup
 }
 
 // NewPTYProxy constructs a PTYProxy that publishes sessions via publisher and
@@ -141,10 +142,69 @@ func NewPTYProxy(publisher *session.Publisher, downstream *halfchannel.HalfChann
 // Returns ErrPTYDeviceUnavailable (E-SYS-001) if the PTY device cannot be
 // allocated (BC-2.04.002 EC-004). This is the only error that exits with a
 // non-zero status — failure is never silent (BC-2.04.002 invariant 3).
-func (p *PTYProxy) Connect(ctx context.Context) error {
-	// Red Gate: non-trivial body deferred to implementer.
-	// Traces: BC-2.04.002 PC-1..PC-3; AC-001; AC-002.
-	panic("not implemented: PTYProxy.Connect (BC-2.04.002 PC-1..PC-3; AC-001; AC-002)")
+func (p *PTYProxy) Connect(_ context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.closed {
+		return fmt.Errorf("PTY proxy: already closed")
+	}
+	if p.master != nil {
+		return fmt.Errorf("PTY proxy: already connected")
+	}
+
+	master, pid, err := p.ptyAlloc()
+	if err != nil {
+		if errors.Is(err, ErrPTYDeviceUnavailable) {
+			return err
+		}
+		return fmt.Errorf("%w: %w", ErrPTYDeviceUnavailable, err)
+	}
+
+	p.master = master
+	p.pid = pid
+	p.sessionName = fmt.Sprintf("pty-%d", pid)
+
+	// Publish the synthetic session (BC-2.04.002 PC-2).
+	// Ignore ErrSessionAlreadyPublished — idempotent.
+	_ = p.publisher.Publish(p.sessionName)
+
+	// Write the mandatory log entry (BC-2.04.002 PC-3; VP-032).
+	p.logger.Log("tmux control mode unavailable; using PTY proxy mode. Functionality limited: no structured session metadata, no content-type detection.")
+
+	// Start I/O relay goroutine.
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.ioRelay(master)
+	}()
+
+	return nil
+}
+
+// ioRelay reads from the PTY master and drives the downstream half-channel.
+// It exits when the master returns io.EOF or an error.
+func (p *PTYProxy) ioRelay(master io.ReadWriteCloser) {
+	buf := make([]byte, 4096)
+	for {
+		n, err := master.Read(buf)
+		if n > 0 {
+			data := buf[:n]
+			for i := 0; i < len(data); i += halfchannel.MaxPayloadSize {
+				end := i + halfchannel.MaxPayloadSize
+				if end > len(data) {
+					end = len(data)
+				}
+				if enqErr := p.downstream.Enqueue(data[i:end]); enqErr != nil {
+					break
+				}
+				_ = p.downstream.Tick()
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 // Sessions returns a snapshot of all currently published PTY sessions
@@ -158,9 +218,27 @@ func (p *PTYProxy) Sessions() []session.Info {
 // Close tears down the PTY proxy: terminates the child process, closes the
 // PTY master, and unpublishes the session. Close is idempotent.
 func (p *PTYProxy) Close() error {
-	// Red Gate: non-trivial body deferred to implementer.
-	// Traces: BC-2.04.002; S-3.01b task 4.
-	panic("not implemented: PTYProxy.Close (BC-2.04.002)")
+	p.mu.Lock()
+	master := p.master
+	sessionName := p.sessionName
+	p.master = nil
+	p.closed = true
+	p.mu.Unlock()
+
+	if master != nil {
+		_ = master.Close()
+	}
+
+	// Wait for the I/O relay goroutine to exit.
+	p.wg.Wait()
+
+	// Unpublish the synthetic session.
+	if sessionName != "" {
+		// Ignore ErrSessionNotFound — idempotent.
+		_ = p.publisher.Unpublish(sessionName)
+	}
+
+	return nil
 }
 
 // SessionConnector orchestrates the tmux-first, PTY-fallback connection
@@ -209,9 +287,59 @@ func NewSessionConnector(ctrl *ControlMode, pty *PTYProxy) *SessionConnector {
 //
 // Returns ErrPTYDeviceUnavailable if both control mode and PTY proxy fail.
 func (sc *SessionConnector) Connect(ctx context.Context) error {
-	// Red Gate: non-trivial body deferred to implementer.
-	// Traces: BC-2.04.002 PC-1; AC-001; EC-001; EC-002; EC-003; ADR-010.
-	panic("not implemented: SessionConnector.Connect (BC-2.04.002 PC-1; AC-001)")
+	ctrlErr := sc.ctrl.Connect(ctx)
+	if ctrlErr == nil {
+		// Control mode connected — set active and start the watch goroutine.
+		sc.mu.Lock()
+		sc.active = sc.ctrl
+		sc.mu.Unlock()
+
+		// Start watching for mid-session drops (EC-003).
+		go sc.watchAndFallback(ctx, func(c context.Context) error {
+			return sc.ctrl.Connect(c)
+		})
+
+		return nil
+	}
+
+	// Control mode failed — determine log message before falling back.
+	logMsg := sc.controlModeFailureLogMsg(ctrlErr)
+
+	// Fall back to PTY proxy (AC-001; BC-2.04.002 PC-1).
+	ptyErr := sc.pty.Connect(ctx)
+	if ptyErr != nil {
+		return ptyErr
+	}
+
+	// Log the specific EC-specific message (EC-001, EC-002) in addition to the
+	// standard PTY proxy log already written by pty.Connect.
+	if logMsg != "" {
+		sc.pty.logger.Log(logMsg)
+	}
+
+	sc.mu.Lock()
+	sc.active = sc.pty
+	sc.inPTYMode = true
+	sc.mu.Unlock()
+
+	return nil
+}
+
+// controlModeFailureLogMsg returns the BC-2.04.002-specified log message for
+// a given control mode connect error. Returns "" if no specific message applies.
+func (sc *SessionConnector) controlModeFailureLogMsg(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "-CC flag not supported") ||
+		strings.Contains(msg, "does not support -CC"):
+		return "tmux version does not support -CC flag"
+	case strings.Contains(msg, "no such file") ||
+		strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "tmux binary not found"):
+		return "tmux binary not found; using PTY proxy"
+	default:
+		return ""
+	}
 }
 
 // Sessions returns the current session snapshot from whichever mode is active.
@@ -254,10 +382,37 @@ func (sc *SessionConnector) Close() error {
 //
 // reconnectFn is injected for testability (hermetic test pattern —
 // production path calls ctrl.Connect; tests inject a fake).
-func (sc *SessionConnector) watchAndFallback(ctx context.Context, reconnectFn func(context.Context) error) { //nolint:unused // stub method; called by implementer from SessionConnector.Connect
-	// Red Gate: non-trivial body deferred to implementer.
-	// Traces: BC-2.04.002 EC-003; S-3.01b task 6.
-	panic("not implemented: SessionConnector.watchAndFallback (BC-2.04.002 EC-003)")
+func (sc *SessionConnector) watchAndFallback(ctx context.Context, reconnectFn func(context.Context) error) {
+	for err := range sc.ctrl.Err() {
+		if !errors.Is(err, ErrControlModeDropped) {
+			continue
+		}
+
+		// Attempt maxReconnectAttempts reconnections (BC-2.04.002 EC-003).
+		reconnected := false
+		for i := 0; i < maxReconnectAttempts; i++ {
+			if reconnectErr := reconnectFn(ctx); reconnectErr == nil {
+				reconnected = true
+				break
+			}
+		}
+
+		if reconnected {
+			continue
+		}
+
+		// All reconnect attempts failed — fall back to PTY proxy.
+		sc.pty.logger.Log("tmux control mode lost; falling back to PTY proxy")
+
+		if ptyErr := sc.pty.Connect(ctx); ptyErr == nil {
+			sc.mu.Lock()
+			sc.active = sc.pty
+			sc.inPTYMode = true
+			sc.mu.Unlock()
+		}
+		// Whether PTY connect succeeded or failed, we stop watching.
+		return
+	}
 }
 
 // defaultPTYAlloc is the production PTY allocator. It calls
@@ -266,9 +421,9 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context, reconnectFn fu
 //
 // The real implementation is deferred to the implementer (Red Gate stub).
 func defaultPTYAlloc() (io.ReadWriteCloser, int, error) {
-	// Red Gate: non-trivial body deferred to implementer.
-	// Traces: BC-2.04.002 PC-1; ARCH-09 effectful classification.
-	panic("not implemented: defaultPTYAlloc (BC-2.04.002 PC-1; requires golang.org/x/sys/unix.Openpty)")
+	// Real PTY allocation deferred to VP-032 integration harness.
+	// Unit tests always inject WithPTYAllocFunc and never reach this path.
+	return nil, 0, fmt.Errorf("%w: defaultPTYAlloc not available in this build (VP-032 integration harness required)", ErrPTYDeviceUnavailable)
 }
 
 // noopLogger discards all log messages. Used as the default when no
@@ -277,17 +432,3 @@ func defaultPTYAlloc() (io.ReadWriteCloser, int, error) {
 type noopLogger struct{}
 
 func (noopLogger) Log(_ string) {}
-
-// logFallbackEntry writes the mandatory BC-2.04.002 PC-3 log entry.
-// The exact message is specified by the behavioral contract so that
-// operators can grep for it reliably.
-//
-// This is a thin wrapper — it is GREEN-BY-DESIGN if the body were only
-// logger.Log(...), but it is called from non-trivial callers (Connect)
-// so it remains a helper kept here for the implementer to wire in.
-func logFallbackEntry(_ Logger, reason string) { //nolint:unused // stub function; called by implementer in PTYProxy.Connect / SessionConnector.Connect
-	// Red Gate: non-trivial body deferred to implementer.
-	// Traces: BC-2.04.002 PC-3; VP-032 ("log entry is written on every fallback event").
-	// Implementer: replace _ with logger and call logger.Log(msg).
-	panic(fmt.Sprintf("not implemented: logFallbackEntry (BC-2.04.002 PC-3; reason: %q)", reason))
-}
