@@ -2,10 +2,10 @@
 artifact_id: BC-2.04.003
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-26T12:00:00
 phase: 1a
 bc_id: BC-2.04.003
 subsystem: session-access
@@ -21,6 +21,9 @@ modified:
   - date: 2026-06-26
     version: "1.2"
     change: "adversary pass-3 F-H-6/F-PG-2: anchor KeystrokeSink abstraction in Inv-4; mark PC-4 (presence advertisement) and PC-5 (initial screen refresh) deferred to future story"
+  - date: 2026-06-26
+    version: "1.3"
+    change: "adversary pass-4 F-H-2: strengthen Inv-4 — SendKeystroke MUST validate sessionName matches attached session; mismatch returns E-SES-006 / ErrSessionMismatch"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -64,7 +67,7 @@ A console attaches to a remote session by specifying the session name (not a hos
 1. **DI-010**: Tier 2 authorization is enforced by the access node. The router does not decide whether a console may attach.
 2. **DI-011**: Tier 2 session authorization is independent of Tier 1 admission. A console admitted to the SVTN cannot attach without Tier 2 authorization.
 3. Session content flows SSH-encrypted end-to-end; the channel is not a raw TCP stream.
-4. **Inv-4 (Keystroke forwarding boundary):** Upstream keystrokes from any attached console are accepted by `AccessNode.SendKeystroke` and dispatched to a `KeystrokeSink` (the tmux command-mode pipe or PTY master) under a per-AccessNode serialization mutex. The `KeystrokeSink` interface is defined in `internal/session` and implemented by `internal/tmux.SessionConnector`. This boundary ensures that all keystroke routing is decoupled from the transport layer and testable via mock `KeystrokeSink` implementations.
+4. **Inv-4 (Keystroke forwarding boundary + session validation):** Upstream keystrokes from any attached console are accepted by `AccessNode.SendKeystroke(key, sessionName, payload)` and dispatched to a `KeystrokeSink` (the tmux command-mode pipe or PTY master) under a per-AccessNode serialization mutex. The `KeystrokeSink` interface is defined in `internal/session` and implemented by `internal/tmux.SessionConnector`. This boundary ensures that all keystroke routing is decoupled from the transport layer and testable via mock `KeystrokeSink` implementations. **Session validation obligation:** Before dispatching to the `KeystrokeSink`, `SendKeystroke` MUST verify that the `sessionName` argument matches the session_name recorded when this console attached. If the names do not match, `SendKeystroke` MUST return `E-SES-006 / session.ErrSessionMismatch` ("session: console <console_id> attached to session <attached_session_name>, not <requested_session_name>") without forwarding any keystroke. This catches misconfigured callers that route to the wrong access node or hold stale session state. It also anchors the future S-3.03 `SessionAuth` pattern, which will extend this boundary for authorization checks.
 
 ## Trigger
 
@@ -78,6 +81,7 @@ Console operator runs `sbctl sessions attach <session-name>` or equivalent API c
 | EC-002 | Named session does not exist | Access node returns E-SES-001 "session not found: <session-name>". Console receives explicit error. |
 | EC-003 | Session exists but access node is unreachable | Router returns E-NET-005 "access node unreachable". Session may appear in list (stale advertisement). |
 | EC-004 (DEC-011) | Second console attempts to attach while first is attached | Both attach succeeds (per CAP-016); see BC-2.04.006. |
+| EC-005 | SendKeystroke called with wrong session_name (sessionName does not match the session_name the console attached with) | `SendKeystroke` returns E-SES-006 / `session.ErrSessionMismatch`. No keystroke is forwarded. Caller must re-attach or correct routing. |
 
 ## Canonical Test Vectors
 
@@ -87,6 +91,7 @@ Console operator runs `sbctl sessions attach <session-name>` or equivalent API c
 | `sbctl sessions attach agent-01`; Tier 2 not authorized | E-ADM-006 "session authorization denied for agent-01" | error |
 | `sbctl sessions attach nonexistent` | E-SES-001 "session not found: nonexistent" | error |
 | Two consoles attach to same session | Both channels established; both receive output (BC-2.04.006) | edge-case |
+| Console attached to "agent-01" calls `SendKeystroke(key, "agent-02", payload)` | E-SES-006 ErrSessionMismatch; no keystroke forwarded | error |
 
 ## Verification Properties
 
