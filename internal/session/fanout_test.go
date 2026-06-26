@@ -232,22 +232,25 @@ func TestConsoleSet_EvictStale_RemovesStaleConsoles(t *testing.T) {
 		t.Errorf("Len after EvictStale(1h): got %d; want 2", n)
 	}
 
-	// Phase 2: EvictStale with 0 deadline. Cutoff = time.Now() which is after
-	// the heartbeats set by Add, so all consoles are immediately stale.
-	evicted := cs.EvictStale(0)
+	// Phase 2: EvictStale with a negative deadline: cutoff = time.Now() + 1s
+	// (one second in the future). Every lastHeartbeat (at most "now") is
+	// deterministically before that cutoff, so all consoles are always evicted.
+	// Using 0 would be racy: a heartbeat set to time.Now().UTC() might equal
+	// the cutoff (Before is strict), causing flaky test runs at -count=10.
+	evicted := cs.EvictStale(-time.Second)
 	if evicted != 2 {
-		t.Errorf("EvictStale(0): evicted %d; want 2 (all consoles stale)", evicted)
+		t.Errorf("EvictStale(-time.Second): evicted %d; want 2 (all consoles stale)", evicted)
 	}
 
 	if cs.IsAttached("evict-stale-A") {
-		t.Error("evict-stale-A still attached after EvictStale(0); want removed")
+		t.Error("evict-stale-A still attached after EvictStale(-time.Second); want removed")
 	}
 	if cs.IsAttached("evict-stale-B") {
-		t.Error("evict-stale-B still attached after EvictStale(0); want removed")
+		t.Error("evict-stale-B still attached after EvictStale(-time.Second); want removed")
 	}
 
 	if n := cs.Len(); n != 0 {
-		t.Errorf("Len after EvictStale(0): got %d; want 0", n)
+		t.Errorf("Len after EvictStale(-time.Second): got %d; want 0", n)
 	}
 }
 

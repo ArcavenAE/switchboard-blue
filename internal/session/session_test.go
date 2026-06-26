@@ -580,12 +580,15 @@ func TestSession_CrashDetach_EvictsFromFanOut(t *testing.T) {
 	// via a direct call to EvictStale on the ConsoleSet). But AccessNode.Sweep
 	// delegates to ConsoleSet.EvictStale which uses time.Now() — no clock injection.
 	//
-	// SIMPLEST CORRECT TEST: attach two consoles, Sweep(0) evicts both, verify
-	// both are evicted (Len==0), verify SendKeystroke returns ErrConsoleNotFound
-	// for both. This directly tests the crash path without needing clock injection.
-	evicted := an.Sweep(0)
+	// Use a negative deadline: Sweep(-time.Second) → cutoff = time.Now() + 1s
+	// (one second in the future). Every lastHeartbeat (which is at most "now")
+	// is before that cutoff, so all consoles are deterministically evicted
+	// regardless of how fast the machine is. This avoids the Sweep(0) race
+	// where a heartbeat set at "now" might equal the cutoff rather than being
+	// before it (Before is strict).
+	evicted := an.Sweep(-time.Second)
 	if evicted != 2 {
-		t.Errorf("Sweep(0): evicted %d; want 2 (both consoles stale at 0 deadline)", evicted)
+		t.Errorf("Sweep(-time.Second): evicted %d; want 2 (all consoles stale)", evicted)
 	}
 
 	// After eviction, SendKeystroke for the crash victim must return ErrConsoleNotFound.
@@ -601,14 +604,16 @@ func TestSession_CrashDetach_EvictsFromFanOut(t *testing.T) {
 		PayloadLen: 3,
 	})
 
-	// Drain survivorDownstream to check it was closed by EvictStale.
+	// Drain survivorDownstream; it should be closed by EvictStale.
+	// Give it a brief timeout: the channel is closed by EvictStale (which ran
+	// above), so it should be immediately readable with ok=false.
 	select {
 	case _, ok := <-survivorDownstream:
 		if ok {
 			t.Error("survivor: downstream received value; want closed after Sweep eviction")
 		}
-		// ok == false: closed as expected
-	default:
-		t.Error("survivor: downstream not closed after Sweep eviction; default case reached")
+		// ok == false: closed as expected by EvictStale
+	case <-time.After(100 * time.Millisecond):
+		t.Error("survivor: downstream not closed within 100ms after Sweep eviction")
 	}
 }
