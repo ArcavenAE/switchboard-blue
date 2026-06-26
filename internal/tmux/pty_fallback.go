@@ -13,7 +13,7 @@ package tmux
 // in unit tests (hermetic test pattern — no real PTY shell-out in unit
 // tests; real-PTY coverage deferred to VP-032 integration harness).
 //
-// Allowed internal imports: {halfchannel, session} per ARCH-08 §6.6.
+// Allowed internal imports: {halfchannel, session} per ARCH-08 §6.5.
 // Forbidden: internal/admission, internal/routing, internal/hmac.
 
 import (
@@ -30,9 +30,15 @@ import (
 )
 
 // ErrPTYDeviceUnavailable is returned by PTYProxy.Connect when no PTY device
-// can be allocated on the host. Maps to E-SYS-001: "PTY device unavailable:
-// Install 'openpty' support or check kernel PTY configuration" (error-taxonomy.md
-// §SYS; BC-2.04.002 EC-004; FM-011).
+// can be allocated on the host. Maps to E-SYS-001 (error-taxonomy.md §SYS;
+// BC-2.04.002 EC-004; FM-011). The operator-facing guidance emitted to the
+// configured Logger is:
+//
+//	"PTY device unavailable: cannot start access node. Install 'openpty'
+//	 or check device permissions."
+//
+// The sentinel text is terse (ST1005 — no trailing period); the full guidance
+// is emitted via the logger on every allocation failure (BC-2.04.002 EC-004).
 //
 // When both tmux control mode and PTY device are unavailable, the access node
 // must return this error and exit with a non-zero status. Failure is never
@@ -166,6 +172,10 @@ func (p *PTYProxy) Connect(_ context.Context) error {
 
 	master, pid, err := p.ptyAlloc()
 	if err != nil {
+		// BC-2.04.002 EC-004 / story AC-003: operator-facing guidance MUST reach
+		// the operator. The sentinel text is terse (ST1005); the full guidance
+		// is emitted here via the configured logger.
+		p.logger.Log("PTY device unavailable: cannot start access node. Install 'openpty' or check device permissions.")
 		if errors.Is(err, ErrPTYDeviceUnavailable) {
 			return err
 		}

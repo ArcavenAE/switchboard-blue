@@ -309,6 +309,12 @@ func TestPTYProxy_NoPTY_ReturnsErrSysOne(t *testing.T) {
 	if !errors.Is(err, tmux.ErrPTYDeviceUnavailable) {
 		t.Errorf("Connect error = %v; want errors.Is(_, ErrPTYDeviceUnavailable)", err)
 	}
+
+	// BC-2.04.002 EC-004: the full operator-facing guidance MUST be emitted via
+	// the configured logger. Failure is never silent (invariant 3).
+	if !log.HasLine("Install 'openpty' or check device permissions") {
+		t.Errorf("logger did not emit BC-2.04.002 EC-004 guidance text; got: %v", log.Lines())
+	}
 }
 
 // -- EC-001: tmux exists but old version (no -CC support) -------------------
