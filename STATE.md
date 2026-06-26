@@ -74,14 +74,18 @@ s_1_03_adversary_pass_03_sha: dc37fe1
 s_1_03_adversary_pass_04_sha: 52ee1d3
 s_1_03_adversary_pass_05_sha: 6bcde7d
 s_1_03_merge_sha: f35e836
+s_3_04_adversary_step_4_5: "CONVERGED (3/3 clean: passes 3, 4, 5) — BC-5.39.001 satisfied"
+s_3_04_adversary_pass_03_sha: pending
+s_3_04_adversary_pass_04_sha: pending
+s_3_04_adversary_pass_05_sha: 5c3f93a
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
 wave_2_complete: true
 wave_2_stories_merged: 3
 wave_2_points: 18
-timestamp: 2026-06-25T00:00:00Z
-last_update: 2026-06-25
+timestamp: 2026-06-26T00:00:00Z
+last_update: 2026-06-26
 ---
 
 # Switchboard Factory State
@@ -147,24 +151,26 @@ Gate reports: `cycles/cycle-1/wave-2/`.
 | Wave-1 rollback/re-closure | all drift items routed concretely; drbothen/vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
 
-## Session Resume Checkpoint — 2026-06-25
+## Session Resume Checkpoint — 2026-06-26
 
-**Position:** Phase 3, Wave 2 integration gate CLOSED — PASS_WITH_OBSERVATIONS (2026-06-25).
-Governance burst fully landed. Develop tip (post-cleanup): `d8d7ae6` (PR #8 E-FWD-002 merged).
-factory-artifacts governance burst SHAs: `1d09664` (ARCH-08 v1.1), `c4ee7db` (demo-evidence + E-FWD-002 minted), `918acb4` (VP lifecycle `_LIFECYCLE.md` v1.0), `cdac793` (drift rows WAVE-2-MED-001 + WAVE-3-DEP-001).
+**Position:** Phase 3, Wave 3 in progress — S-3.04 Step 4.5 COMPLETE (adversary CONVERGED).
+S-3.04 (HMAC RouteFrame wire-up): adversary passes 3/4/5 all clean (0 findings each).
+BC-5.39.001 satisfied. Develop tip: `d8d7ae6`. S-3.04 branch tip: `e214f8d`.
+factory-artifacts adversary pass-05 SHA: `5c3f93a`.
+
+**S-3.04 adversary streak (Step 4.5):** Pass 1: 1M/1L, Pass 2: 1M/1L, Pass 3: 0, Pass 4: 0, Pass 5: 0 — CONVERGED.
+Zero process-gap findings across passes 3/4/5.
 
 **Carry-forward drift (not blockers):**
 - WAVE-2-MED-001 (Phase-6): ReAuthState eviction on RevokeKey/RegisterKey — Phase-6 hardening target.
-- WAVE-3-DEP-001 (Wave 3 critical path): verifyFrameHMAC wire-up into RouteFrame.
+- WAVE-3-DEP-001 (Wave 3): resolved by S-3.04 implementation — pending PR merge.
 - VP-036 (Phase-6): property test deferred to Phase-6 (needs `internal/testenv.ConnectWithSourceIP`).
 - VP-039-test-skip (Phase-6): t.Skip placeholder needed in `internal/routing/*_test.go`.
 - SEC-003 (Phase-6, ACCEPTED): sub-microsecond TOCTOU on `now` in ReAuthenticate.
 
 **Immediate next action:**
 
-Wave 3 planning — dispatch PO + architect + story-writer to scope Wave 3 stories. Wave 3 critical
-path includes verifyFrameHMAC wire-up (WAVE-3-DEP-001). Wave 3 planning pauses pending explicit
-user launch.
+S-3.04 Step 5 — per-AC demo recordings (demo-recorder agent, AC-001..AC-005 + EC-001..EC-005).
 
 **KoS frontier open questions** (for future phases):
 - Router-to-router PE phase Noise XX mutual auth?
