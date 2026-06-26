@@ -1,14 +1,23 @@
 // Package routing — internal tests with access to unexported helpers.
 //
 // verifyFrameHMAC is //nolint:unused until wire-layer HMAC enforcement is wired
-// into RouteFrame (next wave). This file exercises the function directly to pin
+// into RouteFrame (S-3.04). This file exercises the function directly to pin
 // the H-1 tautology fix: the function must read hdr.HMACTag from the wire before
 // zeroing the field for MAC computation, not vice versa.
+//
+// S-3.04 additions: VP-058 proof harness tests for ADR-009 ordering invariant.
+// These tests are RED against the S-3.04 stub (RouteFrame does not yet call
+// verifyFrameHMAC). They become GREEN once the wire-up is complete.
 package routing
 
 import (
+	"bytes"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"errors"
 	"testing"
 
+	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/hmac"
 )
@@ -68,5 +77,153 @@ func TestVerifyFrameHMAC_RejectsWrongTag(t *testing.T) {
 
 	if !verifyFrameHMAC(hdr, payload, authKey) {
 		t.Fatal("verifyFrameHMAC rejected the correct wire tag — implementation bug")
+	}
+}
+
+// ── S-3.04: VP-058 proof harness ─────────────────────────────────────────────
+//
+// These tests are adapted from the VP-058.md v1.1 proof harness skeleton.
+// They are RED against the S-3.04 stub (RouteFrame does not yet call
+// verifyFrameHMAC). They become GREEN once the wire-up is complete.
+//
+// Internal test file required: tests call RouteFrame (public) but the file is in
+// package routing to keep it alongside verifyFrameHMAC tests for audit coherence.
+
+// seedKeyInternal generates a deterministic Ed25519 keypair from a fixed 32-byte seed.
+// Uses bytes.NewReader to avoid crypto/rand, making tests fully reproducible.
+// (Per VP-058.md proof harness skeleton; mirrors seedKeyDet in routing_test.go.)
+func seedKeyInternal(t *testing.T, seed [32]byte) (ed25519.PublicKey, ed25519.PrivateKey) {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(bytes.NewReader(seed[:]))
+	if err != nil {
+		t.Fatalf("seedKeyInternal: %v", err)
+	}
+	return pub, priv
+}
+
+// TestRouteFrame_HMACEnforcedBeforeAdmission_VP058 verifies VP-058 properties 1–3:
+// HMAC failure returns ErrHMACVerificationFailed without touching the admitted-set.
+//
+// Setup:
+//  1. RegisterKey (admitted=false initially).
+//  2. GenerateChallenge + AdmitNode → admitted=true.
+//  3. RegisterForwardingEntry with all-zero auth key (wrong key → HMAC will fail).
+//  4. RouteFrame must return ErrHMACVerificationFailed, not ErrNotAdmitted.
+//
+// Ordering test: if ErrNotAdmitted surfaces, the admission check fired before
+// HMAC verification — that is the ADR-009 ordering violation VP-058 guards against.
+//
+// Traces to VP-058 properties 1, 2, 3; BC-2.05.008 PC-3; ADR-009.
+//
+// RED against the S-3.04 stub: stub skips HMAC, admitted node returns nil.
+func TestRouteFrame_HMACEnforcedBeforeAdmission_VP058(t *testing.T) {
+	t.Parallel()
+
+	var svtnID [16]byte
+	copy(svtnID[:], "test-svtn-000001")
+
+	var nodeSeed [32]byte
+	copy(nodeSeed[:], "vp058-node-seed-0000000000000001")
+	nodePub, nodePriv := seedKeyInternal(t, nodeSeed)
+
+	var routerSeed [32]byte
+	copy(routerSeed[:], "vp058-rtr-seed-00000000000000001")
+	_, routerPriv := seedKeyInternal(t, routerSeed)
+
+	ks := admission.NewAdmittedKeySet()
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+
+	// Derive node address: SHA-256(svtnID || pubKey)[:8].
+	h := sha256.New()
+	h.Write(svtnID[:])
+	h.Write([]byte(nodePub))
+	sum := h.Sum(nil)
+	var nodeAddr [8]byte
+	copy(nodeAddr[:], sum[:8])
+
+	challenge, err := admission.GenerateChallenge(routerPriv)
+	if err != nil {
+		t.Fatalf("GenerateChallenge: %v", err)
+	}
+	nonceSig := ed25519.Sign(nodePriv, challenge.Nonce[:])
+	resp := admission.ChallengeResponse{NonceSig: nonceSig}
+	if err := admission.AdmitNode(challenge, resp, nodePub, svtnID, ks); err != nil {
+		t.Fatalf("AdmitNode: %v", err)
+	}
+
+	// All-zero auth key: guarantees HMAC verification will fail for any frame.
+	var wrongAuthKey [hmac.KeySize]byte
+	r := NewRouter(ks)
+	r.RegisterForwardingEntry(svtnID, nodeAddr, wrongAuthKey)
+
+	// Send a frame with all-zero HMACTag (invalid) — HMAC check must fire first.
+	hdr := frame.OuterHeader{
+		SVTNID:  svtnID,
+		SrcAddr: nodeAddr,
+		// HMACTag intentionally zero (invalid).
+	}
+	payload := []byte("test-payload")
+
+	err = RouteFrame(hdr, payload, r)
+	if !errors.Is(err, ErrHMACVerificationFailed) {
+		t.Errorf("VP-058 property 1–3: want ErrHMACVerificationFailed, got: %v", err)
+	}
+	// Property 1: if ErrNotAdmitted surfaces, the admission check fired before
+	// HMAC verification — that is the ordering violation VP-058 guards against.
+	if errors.Is(err, admission.ErrNotAdmitted) {
+		t.Error("VP-058 ordering violation: admission check fired before HMAC verification (ADR-009)")
+	}
+}
+
+// TestRouteFrame_NoForwardingEntry_RejectsAsUnverifiable_VP058 verifies VP-058
+// property 4: a frame with no forwarding-table entry (auth key unavailable) is
+// rejected as unverifiable — ErrHMACVerificationFailed, not ErrNotAdmitted.
+//
+// Traces to VP-058 property 4; BC-2.05.008 PC-4; ADR-009 step 2.
+//
+// RED against the S-3.04 stub: stub skips forwarding-table auth-key lookup,
+// admitted node reaches SVTNRoute and returns ErrNoForwardingEntry.
+func TestRouteFrame_NoForwardingEntry_RejectsAsUnverifiable_VP058(t *testing.T) {
+	t.Parallel()
+
+	var svtnID [16]byte
+	copy(svtnID[:], "test-svtn-000002")
+
+	var nodeSeed [32]byte
+	copy(nodeSeed[:], "vp058-node-seed-0000000000000002")
+	nodePub, nodePriv := seedKeyInternal(t, nodeSeed)
+
+	var routerSeed [32]byte
+	copy(routerSeed[:], "vp058-rtr-seed-00000000000000002")
+	_, routerPriv := seedKeyInternal(t, routerSeed)
+
+	ks := admission.NewAdmittedKeySet()
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+
+	challenge, err := admission.GenerateChallenge(routerPriv)
+	if err != nil {
+		t.Fatalf("GenerateChallenge: %v", err)
+	}
+	nonceSig := ed25519.Sign(nodePriv, challenge.Nonce[:])
+	resp := admission.ChallengeResponse{NonceSig: nonceSig}
+	if err := admission.AdmitNode(challenge, resp, nodePub, svtnID, ks); err != nil {
+		t.Fatalf("AdmitNode: %v", err)
+	}
+
+	// Derive node address.
+	h := sha256.New()
+	h.Write(svtnID[:])
+	h.Write([]byte(nodePub))
+	sum := h.Sum(nil)
+	var nodeAddr [8]byte
+	copy(nodeAddr[:], sum[:8])
+
+	// No forwarding entry registered — auth key is unavailable → unverifiable.
+	r := NewRouter(ks)
+
+	hdr := frame.OuterHeader{SVTNID: svtnID, SrcAddr: nodeAddr}
+	err = RouteFrame(hdr, nil, r)
+	if !errors.Is(err, ErrHMACVerificationFailed) {
+		t.Errorf("VP-058 property 4: want ErrHMACVerificationFailed for missing forwarding entry, got: %v", err)
 	}
 }
