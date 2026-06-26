@@ -9,6 +9,7 @@
 package session
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/arcavenae/switchboard/internal/frame"
@@ -48,18 +49,25 @@ func (NoOpAuthorizer) Allow(_ ConsoleKey, _ string, _ []byte) error {
 //
 // Concurrency: AccessNode is safe for concurrent use.
 type AccessNode struct {
-	pub        *Publisher  //nolint:unused // wired in NewAccessNode implementation
-	consoles   *ConsoleSet //nolint:unused // wired in NewAccessNode implementation
-	authorizer Authorizer  //nolint:unused // wired in NewAccessNode implementation
+	pub        *Publisher
+	consoles   *ConsoleSet
+	authorizer Authorizer
 	// upstreamMu serializes all keystroke writes to the tmux session before
 	// forwarding (BC-2.04.006 Invariant 3: no keystroke race condition).
-	upstreamMu sync.Mutex //nolint:unused // wired in SendKeystroke implementation
+	upstreamMu sync.Mutex
 }
 
 // NewAccessNode constructs an AccessNode using the given Publisher and
 // Authorizer. If auth is nil, NoOpAuthorizer is used.
 func NewAccessNode(pub *Publisher, auth Authorizer) *AccessNode {
-	panic("not implemented") // todo: BC-2.04.003 — construct access node with publisher + authorizer
+	if auth == nil {
+		auth = NoOpAuthorizer{}
+	}
+	return &AccessNode{
+		pub:        pub,
+		consoles:   NewConsoleSet(),
+		authorizer: auth,
+	}
 }
 
 // Attach establishes a bidirectional channel for the console identified by key
@@ -77,7 +85,11 @@ func NewAccessNode(pub *Publisher, auth Authorizer) *AccessNode {
 // A successful Attach adds key to the ConsoleSet. Subsequent DeliverFrame calls
 // will fan out to the new console.
 func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-chan frame.OuterHeader, upstream chan<- []byte, err error) {
-	panic("not implemented") // todo: BC-2.04.003 PC-1..PC-3 — verify session exists, add to ConsoleSet, return channels
+	if _, err := a.pub.Get(sessionName); err != nil {
+		return nil, nil, fmt.Errorf("%w: %s", ErrSessionNotFound, sessionName)
+	}
+
+	return a.consoles.Add(key)
 }
 
 // Detach closes the console's downstream channel and removes it from the
@@ -88,24 +100,52 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 //
 // Returns ErrConsoleNotFound if key is not currently attached.
 func (a *AccessNode) Detach(key ConsoleKey) error {
-	panic("not implemented") // todo: BC-2.04.004 PC-1/PC-2/PC-3 — close channel, remove from ConsoleSet, session continues
+	return a.consoles.Remove(key)
 }
 
 // SendKeystroke forwards payload to the tmux session on behalf of console key,
 // after consulting the Authorizer (BC-2.04.006 Invariant 3: serialization).
 //
-// The upstreamMu mutex is held during the tmux send to prevent keystroke
+// The upstreamMu mutex is held during the send to prevent keystroke
 // interleaving under concurrent calls (AC-007).
 //
 // Returns ErrConsoleNotFound if key is not currently attached. Returns the
 // Authorizer's error if authorization is denied.
 func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload []byte) error {
-	panic("not implemented") // todo: BC-2.04.006 Invariant 3 — serialize keystrokes before tmux forward
+	if err := a.authorizer.Allow(key, sessionName, payload); err != nil {
+		return err
+	}
+
+	// Verify the console is attached before acquiring the serialization lock.
+	// Snapshot returns a value copy; check presence by scanning keys.
+	keys := a.consoles.Snapshot()
+	found := false
+	for _, k := range keys {
+		if k == key {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("%w: %s", ErrConsoleNotFound, key)
+	}
+
+	// Serialize: only one goroutine forwards keystrokes at a time.
+	a.upstreamMu.Lock()
+	defer a.upstreamMu.Unlock()
+
+	// Hermetic unit test boundary: real tmux forwarding is effectful (internal/tmux).
+	// At this layer we accept the keystroke and acknowledge it. The effectful
+	// layer (S-3.03+) wires actual tmux writes through this serialization point.
+	_ = payload
+
+	return nil
 }
 
 // DeliverFrame fans out hdr to all currently-attached consoles, then calls
 // Evict to remove any consoles whose channels have been closed (AC-008;
 // BC-2.04.004 EC-002).
 func (a *AccessNode) DeliverFrame(hdr frame.OuterHeader) {
-	panic("not implemented") // todo: BC-2.04.006 PC-1 — deliver + evict crashed consoles
+	a.consoles.Deliver(hdr)
+	a.consoles.Evict()
 }
