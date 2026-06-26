@@ -2,10 +2,10 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
-timestamp: 2026-06-26T00:00:00
+timestamp: 2026-06-26T12:00:00
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -126,9 +126,10 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-SES-001 | SES | broken | 1 | "session not found: <session_name> on SVTN <svtn_id>" | BC-2.04.003 |
 | E-SES-002 | SES | broken | 0 | "session: console <console_id> already attached to session <session_name>" | BC-2.04.003; mapped to Go sentinel session.ErrConsoleAlreadyAttached (S-3.02); prefix "session:" follows Go package-name idiomatic error prefix convention |
-| E-SES-003 | SES | broken | 0 | "session: console <console_id> not found for session <session_name>" | BC-2.04.004; mapped to Go sentinel session.ErrConsoleNotFound (S-3.02); prefix "session:" follows Go package-name idiomatic error prefix convention |
+| E-SES-003 | SES | broken | 0 | "session: console <console_id> not found for session <session_name>" | BC-2.04.004; mapped to Go sentinel session.ErrConsoleNotFound (S-3.02); prefix "session:" follows Go package-name idiomatic error prefix convention. **Both Detach and SendKeystroke emit this format when the console key is not found in the fan-out set. Detach MUST receive session_name in its signature to satisfy this format — `Detach(key string, sessionName string) error`.** The preposition is "for" throughout — any use of "in" is a defect. |
 | E-SES-004 | SES | broken | 0 | "console <console_id> not attached for command" | BC-2.08.001; S-7.03 detach-when-not-attached edge case |
 | E-SES-005 | SES | degraded | 0 | "console <console_id> read-only role: upstream write rejected" | BC-2.04.005; read-only enforcement (S-3.03 scope) |
+| E-SES-006 | SES | broken | 0 | "session: console <console_id> attached to session <attached_session_name>, not <requested_session_name>" | BC-2.04.003 Inv-4 (session validation in SendKeystroke); mapped to Go sentinel session.ErrSessionMismatch (S-3.02). Emitted when `SendKeystroke(key, sessionName, payload)` is called but the console's recorded attached session_name does not match the `sessionName` argument. This is a client-error (the caller routed to the wrong access node or has stale session state). Severity: client-error / broken. Anchored to: BC-2.04.003 + session validation invariant. |
 
 ### SVTN — SVTN Management
 
@@ -162,3 +163,4 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-012 | sbctl cannot connect | E-NET-001 |
 | FM-013 | Key expired at re-authentication time | E-ADM-015 |
 | (no FM) | Forwarding-table miss for (svtnID, dstAddr) — distinct from admission failure | E-FWD-002 |
+| (no FM) | SendKeystroke session_name mismatch — caller routed to wrong access node or has stale session state | E-SES-006 |
