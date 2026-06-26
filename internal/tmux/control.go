@@ -337,12 +337,20 @@ func (c *ControlMode) Sessions() []session.Info {
 	return c.publisher.ListSessions()
 }
 
-// Err returns the error channel that receives a non-nil error when the
-// control mode connection is lost (BC-2.04.001 EC-002; S-3.01b API surface).
+// Err returns the error channel that receives a non-nil sentinel when the
+// control mode connection fails or is lost (BC-2.04.001 EC-001/EC-002;
+// S-3.01b API surface).
 //
-// The channel receives ErrControlModeDropped and is then closed when the
-// event loop exits unexpectedly. S-3.01b reads this channel (or ranges over
-// it) to trigger PTY fallback.
+// Possible values delivered before close:
+//   - ErrControlModeUnsupportedFlag: tmux binary rejected the -C flag
+//     (typically old tmux version). Classification supersedes the drop signal
+//     per the contract in the dispatchLoop exit path.
+//   - ErrControlModeDropped: control mode connection lost mid-session
+//     (subprocess exited or stdout EOF) without flag-rejection classification.
+//
+// The channel is closed after exactly one error is delivered (the sync.Once
+// guard in dispatchLoop ensures at-most-one signal). Callers may use
+// errors.Is to discriminate between the sentinels.
 //
 // The channel is never written to by the caller.
 func (c *ControlMode) Err() <-chan error {

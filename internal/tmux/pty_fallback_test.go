@@ -420,6 +420,94 @@ func TestPTYProxy_EC001_OldTmuxVersion_ViaAsyncClassify(t *testing.T) {
 	}
 }
 
+// TestSessionConnector_AsyncEC001_PTYFallback verifies that when ctrl.Err()
+// delivers ErrControlModeUnsupportedFlag (EC-001 async path — subprocess
+// started then exited with flag-rejection classification), SessionConnector:
+//
+//  1. Emits the BC-2.04.002 EC-001 log message "tmux version does not support -CC flag"
+//  2. Invokes PTY fallback immediately (no reconnect attempts)
+//  3. Sets sc.inPTYMode = true
+//
+// This is the pass-8 H-001 regression guard — prior to fix, watchAndFallback
+// filtered ErrControlModeUnsupportedFlag out silently (continue on
+// !ErrControlModeDropped).
+//
+// Hermetic: WithExecFunc injects a fake that delivers ErrControlModeUnsupportedFlag
+// via the classifyCh with empty stdout (no real tmux or PTY).
+func TestSessionConnector_AsyncEC001_PTYFallback(t *testing.T) {
+	t.Parallel()
+
+	// classifyCh delivers ErrControlModeUnsupportedFlag and is then closed,
+	// matching the production dispatchLoop exit path (pass-7).
+	classifyCh := make(chan error, 1)
+	classifyCh <- tmux.ErrControlModeUnsupportedFlag
+	close(classifyCh)
+
+	fake := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		// Empty stdout → immediate EOF → dispatchLoop hits unexpected-exit path,
+		// which drains classifyCh and delivers ErrControlModeUnsupportedFlag.
+		return nopWriteCloser{}, nopCloser{strings.NewReader("")}, classifyCh, nil
+	})
+
+	master := newFakePTYMaster()
+	log := &fakeLogCapture{}
+
+	// Factory should NEVER be called for EC-001 (immediate fallback, no reconnect).
+	var factoryMu sync.Mutex
+	factoryCalls := 0
+	factory := func(_ context.Context) (*tmux.ControlMode, error) {
+		factoryMu.Lock()
+		factoryCalls++
+		factoryMu.Unlock()
+		return nil, fmt.Errorf("factory must not be called for EC-001")
+	}
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	ctrl := tmux.New(pub, ds, fake)
+	ptyProxy := tmux.NewPTYProxy(pub, ds,
+		fakePTYAlloc(master, 99999),
+		tmux.WithLogger(log),
+	)
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy, tmux.WithControlModeFactory(factory))
+	t.Cleanup(func() {
+		_ = sc.Close()
+		_ = master.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initial connect succeeds (the exec func returns nil error; fake stream
+	// triggers async classification).
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v; want nil (control mode starts OK; EC-001 classification is async)", err)
+	}
+
+	// Wait for PTY fallback to engage (poll InPTYMode with deadline).
+	deadline := time.Now().Add(2 * time.Second)
+	for !sc.InPTYMode() {
+		if time.Now().After(deadline) {
+			t.Fatal("PTY fallback did not engage within 2s after EC-001 async classification")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Assert factory was NOT called (immediate fallback, no reconnect).
+	factoryMu.Lock()
+	got := factoryCalls
+	factoryMu.Unlock()
+	if got != 0 {
+		t.Errorf("factory called %d times; want 0 for EC-001 (no reconnect — same binary will reject again)", got)
+	}
+
+	// Assert log contains the EC-001 canonical message.
+	if !log.HasLine("tmux version does not support -CC flag") {
+		t.Errorf("log lines = %v; want line containing 'tmux version does not support -CC flag' (BC-2.04.002 EC-001)", log.Lines())
+	}
+}
+
 // -- EC-002: tmux not found in PATH ----------------------------------------
 
 // TestPTYProxy_EC002_TmuxNotFound verifies PTY fallback when tmux binary is

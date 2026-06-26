@@ -578,10 +578,17 @@ func (sc *SessionConnector) Close() error {
 	return firstErr
 }
 
-// watchAndFallback monitors the control mode Err() channel. On receiving
-// ErrControlModeDropped, it attempts up to maxReconnectAttempts reconnections
-// via the ControlModeFactory (EC-003). If all fail (or factory is nil), it
-// activates PTY proxy mode (BC-2.04.002 EC-003; S-3.01b task 6).
+// watchAndFallback monitors the control mode Err() channel and handles two
+// sentinels:
+//
+//   - ErrControlModeDropped (BC-2.04.002 EC-003): mid-session loss — attempt
+//     up to maxReconnectAttempts reconnections via the ControlModeFactory;
+//     if all fail (or factory is nil), activate PTY proxy mode.
+//
+//   - ErrControlModeUnsupportedFlag (BC-2.04.002 EC-001 async path): the
+//     control mode subprocess started and then exited with flag-rejection
+//     classification. Immediate PTY fallback — no reconnect, because the
+//     same binary will keep rejecting -C.
 //
 // Each reconnect attempt uses a fresh ControlMode instance per the SINGLE-USE
 // contract (ADR-010; ErrAlreadyConnected is avoided by construction).
@@ -589,7 +596,46 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 	defer sc.wg.Done()
 
 	for err := range sc.ctrl.Err() {
-		if !errors.Is(err, ErrControlModeDropped) {
+		switch {
+		case err == nil:
+			continue
+
+		case errors.Is(err, ErrControlModeUnsupportedFlag):
+			// BC-2.04.002 EC-001 async path: subprocess rejected -C flag.
+			// Immediate PTY fallback — no reconnect (same binary will reject again).
+			sc.mu.Lock()
+			if sc.closed {
+				sc.mu.Unlock()
+				return
+			}
+			sc.mu.Unlock()
+
+			logMsg := controlModeFailureLogMsg(err)
+			if logMsg != "" {
+				sc.pty.logger.Log(logMsg)
+			}
+
+			if ptyErr := sc.pty.Connect(ctx); ptyErr == nil {
+				sc.mu.Lock()
+				sc.active = sc.pty
+				sc.inPTYMode = true
+				sc.mu.Unlock()
+			} else {
+				sc.closeErrCh.Do(func() {
+					select {
+					case sc.errCh <- ptyErr:
+					default:
+					}
+					close(sc.errCh)
+				})
+			}
+			return
+
+		case errors.Is(err, ErrControlModeDropped):
+			// fall through to the reconnect + PTY-fallback path below
+
+		default:
+			// Unknown sentinel — skip (defensive; future sentinels may need handling).
 			continue
 		}
 
