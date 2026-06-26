@@ -289,12 +289,20 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 
 // ── Fuzz harness: VP-008 — non-admitted source never forwarded ──────────────
 
-// FuzzRouteFrame_NonAdmittedNeverForwarded is a fuzz target verifying that
-// RouteFrame always returns a non-nil error when the frame's source address is
-// not in the admitted set.
+// FuzzRouteFrame_NonAdmittedNeverForwarded exercises VP-008 at the routing layer.
 //
-// Traces to VP-008 (Admission Fails for Unregistered Key, applied at routing layer)
-// and BC-2.05.002 invariant 1.
+// Setup: an admitted source and an UNADMITTED source. The unadmitted source has
+// a forwarding entry with a known FrameAuthKey (added by S-3.04 to ensure the
+// fuzz iteration passes the HMAC verification gate at routing.go:Step 2 and
+// reaches the admission check at Step 3 — see ADR-009 v1.6 ordering).
+//
+// Invariant: no input that arrives from the unadmitted source can be forwarded.
+// RouteFrame must return errors.Is(err, admission.ErrNotAdmitted) — NOT
+// errors.Is(err, routing.ErrHMACVerificationFailed). The latter would indicate
+// the HMAC step failed before admission was reached, defeating the purpose of
+// this fuzz target.
+//
+// Traces to: VP-008 (Admission Fails for Unregistered Key), BC-2.05.002 inv 1.
 func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 	// Seed corpus: 80 bytes — 32 unadmitted seed + 32 admitted seed + 16 SVTN.
 	// The prior 70-byte corpus caused t.Skip on every seeded run because the
@@ -328,13 +336,20 @@ func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 
 		ks := admission.NewAdmittedKeySet()
 		ks.RegisterKey(svtnID, admittedPub, admission.RoleAccess)
-		// unadmittedPub deliberately NOT registered.
+		// unadmittedPub deliberately NOT registered in admitted set.
 
 		r := routing.NewRouter(ks)
 		admittedAddr := nodeAddrForTest(svtnID, admittedPub)
 		r.RegisterForwardingEntry(svtnID, admittedAddr, [32]byte{})
 
 		unadmittedAddr := nodeAddrForTest(svtnID, unadmittedPub)
+
+		// S-3.04: register a forwarding entry for unadmittedAddr with a known auth
+		// key so the HMAC verification gate passes and the admission check fires.
+		// Without this entry, RouteFrame returns ErrHMACVerificationFailed (no auth
+		// key available) and never reaches admission — VP-008 would not be exercised.
+		unadmittedAuthKey := hmac.DeriveKey([]byte(unadmittedPub), svtnID)
+		r.RegisterForwardingEntry(svtnID, unadmittedAddr, unadmittedAuthKey)
 
 		hdr := frame.OuterHeader{
 			Version:   frame.VersionByte,
@@ -343,9 +358,15 @@ func FuzzRouteFrame_NonAdmittedNeverForwarded(f *testing.F) {
 			SrcAddr:   unadmittedAddr,
 			DstAddr:   admittedAddr,
 		}
+		// Compute a valid HMAC tag so the HMAC gate passes; admission must then fire.
+		hdr.HMACTag = computeValidTag(hdr, nil, unadmittedAuthKey)
+
 		err = routing.RouteFrame(hdr, nil, r)
-		if err == nil {
-			t.Errorf("RouteFrame with unadmitted src on svtn %v: want error, got nil", svtnID)
+		// VP-008 invariant: must return ErrNotAdmitted (admission check fired).
+		// ErrHMACVerificationFailed here would mean HMAC failed before admission —
+		// that would defeat the purpose of this fuzz target.
+		if !errors.Is(err, admission.ErrNotAdmitted) {
+			t.Errorf("RouteFrame with unadmitted src on svtn %v: want ErrNotAdmitted, got %v", svtnID, err)
 		}
 	})
 }
