@@ -60,10 +60,13 @@ func defaultPTYAlloc() (io.ReadWriteCloser, int, error) {
 	cmd.Stdin = slave
 	cmd.Stdout = slave
 	cmd.Stderr = slave
+	// Ctty is in the child's FD namespace. cmd.Stdin=slave, so the child sees
+	// slave on FD 0. Ctty: 0 is the correct value — not slave.Fd() which is a
+	// parent-process FD number.
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:  true,
 		Setctty: true,
-		Ctty:    int(slave.Fd()),
+		Ctty:    0,
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -75,8 +78,9 @@ func defaultPTYAlloc() (io.ReadWriteCloser, int, error) {
 	// Parent does not need the slave; child inherited it via fork.
 	_ = slave.Close()
 
-	// Reap the shell when it exits to prevent zombies.
+	// Reap the shell when it exits to prevent zombies. After ptyMaster.Close
+	// calls cmd.Process.Kill, this goroutine unblocks and completes cleanly.
 	go func() { _ = cmd.Wait() }()
 
-	return master, cmd.Process.Pid, nil
+	return &ptyMaster{master: master, cmd: cmd}, cmd.Process.Pid, nil
 }
