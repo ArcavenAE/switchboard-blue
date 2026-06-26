@@ -186,16 +186,13 @@ func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 			// cmd.Wait() guarantees stderr draining is complete before returning,
 			// so stderrBuf is safe to read here without additional synchronisation.
 			captured := stderrBuf.String()
-			// Best-effort classification: if stderr indicates flag rejection,
-			// note it. The sentinel ErrControlModeUnsupportedFlag is already
-			// defined; synchronous propagation to the caller requires phase-6
-			// restructuring of execFunc's return signature.
-			if strings.Contains(captured, "-C") || strings.Contains(captured, "unknown option") ||
-				strings.Contains(captured, "invalid option") || strings.Contains(captured, "need more arguments") {
-				// Flag-rejection detected. TODO(phase-6): propagate via execFunc
-				// signature so callers receive ErrControlModeUnsupportedFlag.
-				_ = ErrControlModeUnsupportedFlag // sentinel referenced to document intent
-			}
+			// Best-effort classification via ClassifyStderr (pure helper in stderr.go).
+			// The sentinel ErrControlModeUnsupportedFlag is defined; synchronous
+			// propagation to the caller requires phase-6 restructuring of execFunc's
+			// return signature.
+			// TODO(phase-6): propagate via execFunc signature so callers receive
+			// ErrControlModeUnsupportedFlag.
+			_ = ClassifyStderr(captured)
 		}
 	}()
 
