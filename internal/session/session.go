@@ -6,7 +6,8 @@
 // does not spawn goroutines itself — those are the responsibility of the
 // effectful layer (internal/tmux).
 //
-// Allowed internal imports: {frame, admission} per ARCH-08 §6.6.
+// Allowed internal imports: {admission} per ARCH-08 §6.6 (frame import removed
+// when FrameTypeData re-export was deleted — no remaining consumer).
 // Forbidden: internal/routing, internal/tmux (circular).
 package session
 
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
-	"github.com/arcavenae/switchboard/internal/frame"
 )
 
 // ErrSessionNotFound is returned when an operation targets a named session
@@ -141,10 +141,3 @@ func (p *Publisher) Get(sessionName string) (Info, error) {
 func (p *Publisher) AdmittedKeySet() *admission.AdmittedKeySet {
 	return p.keys
 }
-
-// FrameTypeData re-exports the canonical data frame type constant from
-// internal/frame so that internal/tmux can reference it without importing
-// internal/frame directly (ARCH-08 §6.6 tmux allowed imports: {halfchannel, session}).
-//
-// GREEN-BY-DESIGN: zero branching, no I/O, no helpers, 1 line.
-const FrameTypeData = frame.FrameTypeData
