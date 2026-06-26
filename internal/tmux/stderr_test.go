@@ -49,14 +49,23 @@ func TestClassifyStderr(t *testing.T) {
 			wantErr:  tmux.ErrControlModeUnsupportedFlag,
 		},
 		{
-			name:     "standalone -C in output",
-			captured: "usage: tmux [-C] [-f file]",
-			wantErr:  tmux.ErrControlModeUnsupportedFlag,
+			// Usage banners contain "[-C]" but must NOT trigger a false positive:
+			// the regex is anchored to the "option" keyword context.
+			name:     "usage banner with [-C] — no match",
+			captured: "usage: tmux [-2CDlLNuvV] [-C] ...",
+			wantErr:  nil,
 		},
 		{
-			name:     "multiline output with flag rejection",
+			// Session names containing "-C" must NOT match.
+			name:     "session name containing -C — no match",
+			captured: "session not found: -C-test",
+			wantErr:  nil,
+		},
+		{
+			// Generic "invalid option" without the C flag must NOT match.
+			name:     "invalid option without C flag — no match",
 			captured: "tmux 1.8\ninvalid option passed\nusage: tmux",
-			wantErr:  tmux.ErrControlModeUnsupportedFlag,
+			wantErr:  nil,
 		},
 		{
 			name:     "error unrelated to flags",
