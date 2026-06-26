@@ -228,6 +228,17 @@ func (cs *ConsoleSet) EvictStale(deadline time.Duration) int {
 	return len(stale)
 }
 
+// IsAttached reports whether the console identified by key is currently in the
+// attached set. It is the single authoritative check for attachment state
+// (F-C-4: ConsoleSet is the single source of truth; callers must not
+// maintain a parallel map that can drift after EvictStale).
+func (cs *ConsoleSet) IsAttached(key ConsoleKey) bool {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	_, ok := cs.consoles[key]
+	return ok
+}
+
 // Len returns the number of currently-attached consoles.
 func (cs *ConsoleSet) Len() int {
 	cs.mu.RLock()
