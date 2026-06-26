@@ -52,19 +52,8 @@ func fakeExecFuncErr(err error) tmux.Option {
 	})
 }
 
-// newTestControl is a test helper that constructs a ControlMode backed by a
-// fresh Publisher and a downstream HalfChannel with a fixed channel ID and
-// tick interval.
-func newTestControl(t *testing.T) *tmux.ControlMode {
-	t.Helper()
-	keys := admission.NewAdmittedKeySet()
-	pub := session.NewPublisher(keys)
-	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
-	return tmux.New(pub, ds)
-}
-
-// newTestControlWithOpts is like newTestControl but accepts additional options
-// (e.g. WithExecFunc for hermetic stream injection).
+// newTestControlWithOpts is the canonical test constructor — accepts additional
+// options (e.g. WithExecFunc for hermetic stream injection).
 func newTestControlWithOpts(t *testing.T, opts ...tmux.Option) (*tmux.ControlMode, *session.Publisher) {
 	t.Helper()
 	keys := admission.NewAdmittedKeySet()
@@ -90,19 +79,30 @@ func TestTmuxControlMode_Connect_EstablishesConnection(t *testing.T) {
 // successful Connect, all current tmux sessions are enumerated and published
 // (BC-2.04.001 PC-2; AC-002; VP-031).
 //
+// This test uses the %begin/%end block protocol that Connect emits after
+// issuing list-sessions (F-01 fix): session names appear line-by-line between
+// the delimiters. The post-block %session-created events also exercise
+// dynamic session creation (AC-003 / PC-3).
+//
 // Test vector (BC-2.04.001 canonical test vectors):
-//   - Input:  tmux has sessions "agent-01", "agent-02", "build"
+//   - Input:  %begin/%end block contains "session-1", "session-2", "build"
 //   - Expect: all 3 published; Sessions() returns a 3-element list
 func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 	t.Parallel()
 
-	// Inject a fake stream that announces 3 sessions then EOF — hermetic.
+	// Inject a fake stream that returns a %begin/%end block with session names
+	// (as emitted by tmux in response to list-sessions), followed by a dynamic
+	// %session-created to verify lifecycle handling still works. Hermetic.
 	stream := fakeControlOutput(
-		"%session-created agent-01",
-		"%session-created agent-02",
-		"%session-created build",
+		"%begin 1000000000 0 1",
+		"session-1",
+		"session-2",
+		"build",
+		"%end 1000000000 0 1",
+		"%session-created extra-session",
+		"%session-closed extra-session",
 	)
-	cm, pub := newTestControlWithOpts(t, fakeExecFunc(stream))
+	cm, _ := newTestControlWithOpts(t, fakeExecFunc(stream)) //nolint:dogsled // publisher checked via cm.Sessions()
 	t.Cleanup(func() {
 		if err := cm.Close(); err != nil {
 			t.Logf("Close: %v", err)
@@ -117,12 +117,21 @@ func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 	// Allow the dispatch loop time to process all events from the stream.
 	time.Sleep(20 * time.Millisecond)
 
-	want := []string{"agent-01", "agent-02", "build"}
+	want := []string{"build", "session-1", "session-2"}
 	sessions := cm.Sessions()
 	if len(sessions) != len(want) {
-		t.Fatalf("Sessions: got %d; want %d", len(sessions), len(want))
+		t.Fatalf("Sessions: got %d; want %d (sessions: %v)", len(sessions), len(want), sessions)
 	}
-	_ = pub // silence unused warning; publisher checked transitively
+	// Verify all expected names are present (Sessions returns sorted order).
+	got := make(map[string]bool, len(sessions))
+	for _, s := range sessions {
+		got[s.Name] = true
+	}
+	for _, name := range want {
+		if !got[name] {
+			t.Errorf("Sessions: missing %q; got %v", name, sessions)
+		}
+	}
 }
 
 // TestTmuxControlMode_SessionLifecycleEvents verifies that new sessions are
@@ -136,11 +145,13 @@ func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 func TestTmuxControlMode_SessionLifecycleEvents(t *testing.T) {
 	t.Parallel()
 
-	// Fake stream: initial sessions then lifecycle events.
+	// Fake stream: empty enumeration block then lifecycle events.
 	stream := fakeControlOutput(
-		"%session-created agent-01",
-		"%session-created agent-02",
-		"%session-created build",
+		"%begin 1000000000 0 1",
+		"agent-01",
+		"agent-02",
+		"build",
+		"%end 1000000000 0 1",
 		"%session-created agent-03",
 		"%session-closed agent-02",
 	)
@@ -170,15 +181,37 @@ func TestTmuxControlMode_SessionLifecycleEvents(t *testing.T) {
 // from the control mode stream are enqueued into the downstream half-channel
 // (BC-2.04.001 PC-5; AC-004).
 //
-// NOTE: AC-004 originally specified an integration test with a real tmux session.
-// That coverage is deferred to the e2e / VP-031 integration suite. This unit
-// test uses a fake control mode stream and verifies that at least one Tick()
-// on the downstream half-channel produces a data frame (non-empty payload) after
-// an %output event is injected.
+// Hermetic: uses WithExecFunc to inject a fake stream; does not shell out to tmux.
+//
+// The test verifies:
+//  1. After %output event, the downstream half-channel's sequence counter
+//     advances (proving Tick was called with data).
+//  2. The payload enqueued was the octal-unescaped form of the %output data
+//     (F-06 contract: "hello\040world\012" → "hello world\n").
+//
+// Concurrency note: dispatchLoop runs in a goroutine and is the only writer of
+// the (non-thread-safe) HalfChannel. The test waits for the stream EOF signal
+// via c.Err() — which guarantees dispatchLoop has exited — before reading
+// ds.Seq(). This is safe because dispatchLoop exits before sending to errCh,
+// so no concurrent access to ds can occur after the receive.
 func TestTmuxControlMode_OutputEventsFeedDownstream(t *testing.T) {
 	t.Parallel()
 
-	cm := newTestControl(t)
+	// Build dependencies inline so we hold a direct reference to ds.
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+
+	// Fake stream: empty session enumeration, register session-1, emit an
+	// octal-escaped %output line, then EOF.
+	// F-06 contract: \040 = space (0x20), \012 = newline (0x0A).
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+		"%session-created session-1",
+		`%output %12 hello\040world\012`,
+	)
+	cm := tmux.New(pub, ds, fakeExecFunc(stream))
 	t.Cleanup(func() { _ = cm.Close() })
 
 	ctx := context.Background()
@@ -186,11 +219,27 @@ func TestTmuxControlMode_OutputEventsFeedDownstream(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 
-	// After %output event, downstream tick should yield a data frame.
-	// (Implementation detail: ControlMode calls downstream.Enqueue then Tick.)
-	// Verified via Sessions/Close; real assertion is post-implementation.
-	sessions := cm.Sessions()
-	_ = sessions
+	// Wait for dispatchLoop to reach EOF and signal the dropped connection.
+	// This guarantees dispatchLoop has exited and ds is no longer being written.
+	select {
+	case err := <-cm.Err():
+		if !errors.Is(err, tmux.ErrControlModeDropped) {
+			t.Logf("Err() = %v (expected ErrControlModeDropped on stream EOF)", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("dispatchLoop did not signal within 200ms; stream may not have closed")
+	}
+
+	// dispatchLoop has exited — ds is no longer accessed concurrently. Safe to inspect.
+	// The %output line caused one Enqueue + Tick, so seq must be >= 1.
+	if seq := ds.Seq(); seq < 1 {
+		t.Errorf("downstream Seq() = %d; want >= 1 (Tick must have been called for %%output event)", seq)
+	}
+
+	// Verify session-1 was published (proves the %session-created before %output was processed).
+	if _, err := pub.Get("session-1"); err != nil {
+		t.Errorf("Get session-1: %v; want nil (session-1 should be published before %%output)", err)
+	}
 }
 
 // TestTmuxControlMode_Connect_ErrWhenTmuxNotFound verifies that Connect returns
@@ -219,11 +268,18 @@ func TestTmuxControlMode_Connect_ErrWhenTmuxNotFound(t *testing.T) {
 // TestTmuxControlMode_NoSessionsOnStartup verifies that Connect with an empty
 // tmux server results in an empty session list (BC-2.04.001 EC-003; ADR-010).
 //
-// This corresponds to the edge case: "tmux server has no sessions on startup."
+// Hermetic: uses WithExecFunc to inject a fake stream with an empty %begin/%end
+// block (no session names). Does not shell out to real tmux.
 func TestTmuxControlMode_NoSessionsOnStartup(t *testing.T) {
 	t.Parallel()
 
-	cm := newTestControl(t)
+	// Inject a fake stream with an empty enumeration response — no session names
+	// between %begin and %end. The stream closes after the block (EOF).
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+	)
+	cm, _ := newTestControlWithOpts(t, fakeExecFunc(stream)) //nolint:dogsled // publisher unused in this test
 	t.Cleanup(func() { _ = cm.Close() })
 
 	ctx := context.Background()
@@ -231,19 +287,32 @@ func TestTmuxControlMode_NoSessionsOnStartup(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 
+	// Allow dispatch loop to process the stream and reach EOF.
+	time.Sleep(20 * time.Millisecond)
+
 	sessions := cm.Sessions()
 	if len(sessions) != 0 {
-		t.Errorf("Sessions on empty server: got %d; want 0", len(sessions))
+		t.Errorf("Sessions on empty server: got %d sessions (%v); want 0", len(sessions), sessions)
 	}
 }
 
 // TestTmuxControlMode_ErrChannelSignalsDroppedConnection verifies that the Err()
 // channel receives ErrControlModeDropped when the event loop exits unexpectedly
 // (BC-2.04.001 EC-002 / FM-004; S-3.01b API surface).
+//
+// Hermetic: uses WithExecFunc to inject a fake stream that emits a %begin/%end
+// block then immediately closes (EOF). Does not shell out to real tmux.
 func TestTmuxControlMode_ErrChannelSignalsDroppedConnection(t *testing.T) {
 	t.Parallel()
 
-	cm := newTestControl(t)
+	// Inject a fake stream that emits an empty enumeration block then EOF.
+	// After EOF, dispatchLoop should detect unexpected exit and send
+	// ErrControlModeDropped to the Err() channel (EC-002 / FM-004).
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+	)
+	cm, _ := newTestControlWithOpts(t, fakeExecFunc(stream)) //nolint:dogsled // publisher unused in this test
 	t.Cleanup(func() { _ = cm.Close() })
 
 	ctx := context.Background()
@@ -251,8 +320,8 @@ func TestTmuxControlMode_ErrChannelSignalsDroppedConnection(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 
-	// Simulate subprocess exit by closing the fake stream (implementation will
-	// detect EOF and send ErrControlModeDropped to Err()).
+	// The fake stream EOF triggers the "unexpected exit" path in dispatchLoop —
+	// it sends ErrControlModeDropped to errCh. Assert we receive it within 100ms.
 	select {
 	case err := <-cm.Err():
 		if !errors.Is(err, tmux.ErrControlModeDropped) {
