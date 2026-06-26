@@ -1,17 +1,18 @@
 // Package tmux implements tmux control mode integration for the access node
-// (ARCH-08 §6.6 position 7; BC-2.04.001; ADR-010).
+// (ARCH-08 §6.5 position 7; BC-2.04.001; ADR-010).
 //
 // Classification: effectful (ARCH-09). This package spawns the tmux subprocess
 // via os/exec, consumes the tmux control mode event stream, drives the
 // downstream half-channel tick loop, and surfaces a session lifecycle event
 // channel to callers (S-3.01b reads the Err() channel for fallback signalling).
 //
-// Allowed internal imports: {halfchannel, session} per ARCH-08 §6.6.
-// Forbidden: internal/admission, internal/routing (ARCH-08 §6.6 forbidden edges).
+// Allowed internal imports: {halfchannel, session} per ARCH-08 §6.5.
+// Forbidden: internal/admission, internal/routing (ARCH-08 §6.5 forbidden edges).
 package tmux
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/session"
@@ -45,6 +47,17 @@ var ErrAlreadyConnected = errors.New("tmux: control mode already connected")
 // tmux.New(...). M-2 (pass-12): enforces the documented SINGLE-USE contract.
 var ErrControlModeClosed = errors.New("tmux: control mode is closed (single-use)")
 
+// ErrControlModeUnsupportedFlag is returned by Connect if tmux rejects the
+// -C / -CC flag (older tmux versions that do not support control mode).
+// TODO(S-3.01b H-003): detection requires stderr capture during subprocess
+// launch; deferred to a future story. The sentinel is defined now so that
+// callers can use errors.Is once detection is wired in.
+var ErrControlModeUnsupportedFlag = errors.New("tmux: control mode flag not supported")
+
+// ErrControlModeBinaryNotFound is returned by Connect if the tmux binary
+// is not found in PATH. Wraps the underlying exec.LookPath error via %w.
+var ErrControlModeBinaryNotFound = errors.New("tmux: binary not found in PATH")
+
 // execFunc is the function signature for spawning the tmux subprocess.
 // Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
 // control mode stream. Hermetic test injection point: tests use WithExecFunc
@@ -54,7 +67,16 @@ var ErrControlModeClosed = errors.New("tmux: control mode is closed (single-use)
 // H-03: returns both stdin (for writing commands) and stdout (for reading
 // events), so Connect can actually send commands like list-sessions. Tests
 // that use fakeExecFunc must adapt to this signature.
-type execFunc func(ctx context.Context) (stdin io.WriteCloser, stdout io.ReadCloser, err error)
+//
+// M-002/L-004 (pass-4): classifyCh delivers exactly one classification result
+// after the subprocess exits — either ErrControlModeUnsupportedFlag (flag
+// rejection detected in stderr) or nil (clean exit or unrecognized stderr).
+// The channel is buffered(1) and closed after the result is sent, so callers
+// can drain it without blocking. Connect forwards a non-nil classification to
+// the Err() channel so callers can distinguish ErrControlModeUnsupportedFlag
+// from ErrControlModeDropped.
+// Test fakes that do not care about classification may return a closed nil channel.
+type execFunc func(ctx context.Context) (stdin io.WriteCloser, stdout io.ReadCloser, classifyCh <-chan error, err error)
 
 // ControlMode manages a single tmux control mode connection and bridges
 // control mode events to the session publisher and downstream half-channel.
@@ -97,6 +119,14 @@ type ControlMode struct {
 	// c.downstream are no longer accessed by ControlMode (M-2, pass-5).
 	wg sync.WaitGroup
 
+	// classifyCh is set by Connect when execFn returns a classification channel.
+	// dispatchLoop drains it on unexpected EOF (pass-7 H-001/M-001): a non-nil
+	// sentinel delivered within classifyTimeout supersedes ErrControlModeDropped
+	// (per the contract documented at line 70-77).
+	// Access is single-writer (Connect) then single-reader (dispatchLoop); no
+	// mutex needed because dispatchLoop only reads it after Connect returns.
+	classifyCh <-chan error
+
 	// execFn spawns the tmux subprocess; replaced in tests via WithExecFunc.
 	execFn execFunc
 }
@@ -108,8 +138,10 @@ type Option func(*ControlMode)
 // Hermetic test injection point: tests use this to substitute the process
 // spawn without shelling out to real tmux.
 //
-// H-03: fn now returns (stdin, stdout, err) so Connect can write commands.
-func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, error)) Option {
+// H-03: fn now returns (stdin, stdout, classifyCh, err) so Connect can write
+// commands and monitor post-start classification. Test fakes that do not
+// exercise classification must return a pre-closed nil channel for classifyCh.
+func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error)) Option {
 	return func(c *ControlMode) {
 		c.execFn = fn
 	}
@@ -119,37 +151,82 @@ func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, e
 //
 // H-01: reaps the subprocess in a goroutine via cmd.Wait() to avoid zombies.
 // H-03: returns both stdin and stdout so Connect can write commands.
-func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
+// M-002/L-004 (pass-4): adds sync.WaitGroup to synchronize the stderr drain
+// goroutine with the reaper, ensuring the full stderr capture is available for
+// ClassifyStderr before classifyCh is written. Returns classifyCh (buffered 1)
+// that receives ErrControlModeUnsupportedFlag on flag-rejection, or nil on clean
+// exit, then is closed. Connect forwards non-nil classification to Err().
+func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
 	path, err := exec.LookPath("tmux")
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+		return nil, nil, nil, fmt.Errorf("%w: %w: %w", ErrControlModeUnavailable, ErrControlModeBinaryNotFound, err)
 	}
 
 	cmd := exec.CommandContext(ctx, path, "-C")
 
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("tmux: stdin pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("tmux: stdin pipe: %w", err)
 	}
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = stdinPipe.Close()
-		return nil, nil, fmt.Errorf("tmux: stdout pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("tmux: stdout pipe: %w", err)
+	}
+
+	// M-001 (pass-3): capture stderr to detect -C flag rejection.
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		_ = stdinPipe.Close()
+		_ = stdoutPipe.Close()
+		return nil, nil, nil, fmt.Errorf("tmux: stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
 		_ = stdinPipe.Close()
 		_ = stdoutPipe.Close()
-		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+		_ = stderrPipe.Close()
+		return nil, nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
 	}
 
-	// H-01: reap the subprocess when it exits so it does not remain a zombie.
+	// M-002 (pass-4): synchronize the stderr drain goroutine with the reaper
+	// via sync.WaitGroup so that stderrBuf.String() is safe to read in the
+	// reaper only after all bytes have been copied from stderrPipe.
+	// Without this, cmd.Wait() returns before io.Copy finishes (StderrPipe
+	// transfers responsibility for draining to the caller; Wait only closes
+	// the write-end of the pipe, it does not join the caller's drain goroutine).
+	var stderrBuf bytes.Buffer
+	var drainWG sync.WaitGroup
+	drainWG.Add(1)
 	go func() {
-		_ = cmd.Wait()
+		defer drainWG.Done()
+		_, _ = io.Copy(&stderrBuf, stderrPipe)
 	}()
 
-	return stdinPipe, stdoutPipe, nil
+	// classifyCh delivers the post-exit classification to Connect.
+	// Buffered 1 so the reaper goroutine never blocks on a non-draining caller.
+	classifyCh := make(chan error, 1)
+
+	// H-01: reap the subprocess; classify stderr on abnormal exit.
+	go func() {
+		waitErr := cmd.Wait()
+		// M-002 (pass-4): wait for the drain goroutine to complete before reading
+		// stderrBuf. This is the critical synchronization point.
+		drainWG.Wait()
+		if waitErr != nil {
+			captured := stderrBuf.String()
+			// L-004 (pass-4): emit ErrControlModeUnsupportedFlag via classifyCh
+			// so Connect can forward it to the Err() channel. Non-nil classification
+			// supersedes ErrControlModeDropped from the dispatchLoop EOF path.
+			if classified := ClassifyStderr(captured); classified != nil {
+				classifyCh <- classified
+			}
+		}
+		close(classifyCh)
+	}()
+
+	return stdinPipe, stdoutPipe, classifyCh, nil
 }
 
 // framesBufferSize is the capacity of the frames channel. Large enough to
@@ -210,7 +287,7 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 
 	innerCtx, cancel := context.WithCancel(ctx)
 
-	stdinPipe, stdoutPipe, err := c.execFn(innerCtx)
+	stdinPipe, stdoutPipe, classifyCh, err := c.execFn(innerCtx)
 	if err != nil {
 		cancel()
 		if errors.Is(err, ErrControlModeUnavailable) {
@@ -222,6 +299,9 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 	c.cancel = cancel
 	c.proc = stdoutPipe
 	c.stdin = stdinPipe
+	// pass-7 H-001/M-001: store classifyCh so dispatchLoop can drain it on
+	// unexpected EOF (see the select in the unexpected-exit path below).
+	c.classifyCh = classifyCh
 
 	// H-03: send the list-sessions command so tmux emits a %begin/%end block
 	// containing pre-existing session names (BC-2.04.001 PC-2; F-01 fix).
@@ -257,12 +337,20 @@ func (c *ControlMode) Sessions() []session.Info {
 	return c.publisher.ListSessions()
 }
 
-// Err returns the error channel that receives a non-nil error when the
-// control mode connection is lost (BC-2.04.001 EC-002; S-3.01b API surface).
+// Err returns the error channel that receives a non-nil sentinel when the
+// control mode connection fails or is lost (BC-2.04.001 EC-001/EC-002;
+// S-3.01b API surface).
 //
-// The channel receives ErrControlModeDropped and is then closed when the
-// event loop exits unexpectedly. S-3.01b reads this channel (or ranges over
-// it) to trigger PTY fallback.
+// Possible values delivered before close:
+//   - ErrControlModeUnsupportedFlag: tmux binary rejected the -C flag
+//     (typically old tmux version). Classification supersedes the drop signal
+//     per the contract in the dispatchLoop exit path.
+//   - ErrControlModeDropped: control mode connection lost mid-session
+//     (subprocess exited or stdout EOF) without flag-rejection classification.
+//
+// The channel is closed after exactly one error is delivered (the sync.Once
+// guard in dispatchLoop ensures at-most-one signal). Callers may use
+// errors.Is to discriminate between the sentinels.
 //
 // The channel is never written to by the caller.
 func (c *ControlMode) Err() <-chan error {
@@ -443,6 +531,32 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 		// F-03: unexpected exit — signal dropped connection to S-3.01b,
 		// then close the channel so range-over-channel consumers unblock.
 		//
+		// pass-7 H-001/M-001: wait briefly for classification to deliver a
+		// sentinel that supersedes ErrControlModeDropped (per the contract
+		// documented at line 70-77). Without this wait, dispatchLoop always
+		// wins the race: stdout EOF arrives before cmd.Wait()+drainWG.Wait()
+		// can complete, so ErrControlModeUnsupportedFlag is never surfaced.
+		//
+		// classifyTimeout is chosen to be safely above the time cmd.Wait() +
+		// drainWG.Wait() need to complete on a healthy OS (typically <1ms),
+		// but short enough to not materially delay the error signal in the
+		// common "real drop" case. 200ms is well within CI flakiness budgets.
+		const classifyTimeout = 200 * time.Millisecond
+		dropErr := ErrControlModeDropped // default if classification doesn't supersede
+
+		if c.classifyCh != nil {
+			select {
+			case classified, ok := <-c.classifyCh:
+				// classifyCh is closed by the reaper when it finishes;
+				// ok==false means closed-with-no-value → keep default drop.
+				if ok && classified != nil {
+					dropErr = classified // classification supersedes drop
+				}
+			case <-time.After(classifyTimeout):
+				// Classification didn't complete in time; surface drop signal.
+			}
+		}
+
 		// H-02: perform the send and close atomically inside sync.Once to
 		// prevent a concurrent Close() from closing the channel while we
 		// attempt to send, which would panic. If Close() wins the Once,
@@ -450,7 +564,7 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 		// Close winning means the shutdown was not truly unexpected).
 		c.closeErrCh.Do(func() {
 			select {
-			case c.errCh <- ErrControlModeDropped:
+			case c.errCh <- dropErr:
 			default:
 				// Channel already has an error; don't block.
 			}
