@@ -63,16 +63,42 @@ func newTestControlWithOpts(t *testing.T, opts ...tmux.Option) (*tmux.ControlMod
 	return cm, pub
 }
 
-// TestTmuxControlMode_Connect_EstablishesConnection verifies that Connect
-// succeeds when a control mode stream is available (BC-2.04.001 PC-1; AC-001;
-// ADR-010).
+// TestTmuxControlMode_Connect_EstablishesConnection verifies AC-001 (BC-2.04.001
+// PC-1): Connect against a fake control-mode stream succeeds and places the
+// ControlMode into a connected state. A second Connect call must return
+// ErrAlreadyConnected (H-04 idempotency fix).
 //
 // Hermetic: uses a fake control mode stream; does not shell out to tmux.
+// VP-031 (e2e against real tmux) is deferred to the integration test harness.
 func TestTmuxControlMode_Connect_EstablishesConnection(t *testing.T) {
 	t.Parallel()
-	// Integration tests with a real tmux binary are deferred to the e2e suite
-	// (VP-031); this unit test uses a fake stream.
-	t.Skip("stub: todo() — implement Connect before enabling (S-3.01a AC-001)")
+
+	// Minimal fake stream: empty %begin/%end block so dispatchLoop can parse it
+	// cleanly, then keeps reading until ctx cancellation (no premature EOF).
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+	)
+	cm, _ := newTestControlWithOpts(t, fakeExecFunc(stream)) //nolint:dogsled // publisher unused in AC-001
+	t.Cleanup(func() {
+		if err := cm.Close(); err != nil {
+			t.Logf("Close: %v", err)
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// AC-001 primary assertion: first Connect must succeed.
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v; want nil", err)
+	}
+
+	// H-04 idempotency: second Connect on an already-connected ControlMode must
+	// return ErrAlreadyConnected (not nil, not a different error).
+	if err := cm.Connect(ctx); !errors.Is(err, tmux.ErrAlreadyConnected) {
+		t.Errorf("second Connect: got %v; want ErrAlreadyConnected", err)
+	}
 }
 
 // TestTmuxControlMode_Connect_EnumeratesSessions verifies that after a
