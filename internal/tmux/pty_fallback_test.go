@@ -416,6 +416,62 @@ func TestPTYProxy_EC002_TmuxNotFound(t *testing.T) {
 	}
 }
 
+// TestPTYProxy_EC002_TmuxNotFound_ViaSentinel verifies that wrapping
+// ErrControlModeBinaryNotFound directly (the production path from
+// defaultExecFn) causes controlModeFailureLogMsg to emit the canonical
+// EC-002 message via the errors.Is branch, not via the string-match
+// fallback exercised by TestPTYProxy_EC002_TmuxNotFound.
+//
+// Traces to:
+//
+//	BC-2.04.002 EC-002 (tmux binary not present)
+//	pass-6 L-04 (cover errors.Is branch in controlModeFailureLogMsg)
+func TestPTYProxy_EC002_TmuxNotFound_ViaSentinel(t *testing.T) {
+	t.Parallel()
+
+	master := newFakePTYMaster()
+	log := &fakeLogCapture{}
+
+	// Wrap ErrControlModeBinaryNotFound directly — this hits the
+	// errors.Is(err, ErrControlModeBinaryNotFound) branch in
+	// controlModeFailureLogMsg, not the strings.Contains fallback.
+	sentinelErr := fmt.Errorf("%w: %w: synthetic LookPath failure",
+		tmux.ErrControlModeUnavailable,
+		tmux.ErrControlModeBinaryNotFound,
+	)
+
+	sc := newTestSessionConnector(
+		t,
+		[]tmux.Option{
+			fakeExecFuncErr(sentinelErr),
+		},
+		[]tmux.PTYProxyOption{
+			fakePTYAlloc(master, 33333),
+			tmux.WithLogger(log),
+		},
+	)
+	t.Cleanup(func() {
+		_ = sc.Close()
+		_ = master.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v; want nil (PTY fallback should succeed for EC-002 via sentinel)", err)
+	}
+
+	if !sc.InPTYMode() {
+		t.Error("InPTYMode() = false; want true after tmux-not-found via sentinel (EC-002)")
+	}
+
+	// EC-002 log requirement via errors.Is path: "tmux binary not found; using PTY proxy"
+	if !log.HasLine("tmux binary not found; using PTY proxy") {
+		t.Errorf("log lines = %v; want line containing 'tmux binary not found; using PTY proxy' (BC-2.04.002 EC-002 via errors.Is sentinel)", log.Lines())
+	}
+}
+
 // -- EC-003: mid-session control mode loss (3 reconnect attempts) -----------
 
 // TestSessionConnector_MidSessionFallback_ReconnectAttempts verifies that
