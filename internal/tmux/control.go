@@ -288,10 +288,14 @@ func (c *ControlMode) Close() error {
 //
 //   - %begin / %end         — command response delimiters; F-01 uses these
 //     to collect the list-sessions response and register existing sessions.
-//   - %sessions-changed     — re-enumerate sessions
 //   - %session-created name — AC-003 (PC-3)
 //   - %session-closed name  — AC-003 (PC-4)
 //   - %output pane data     — AC-004 (PC-5): feed downstream half-channel
+//
+// Not handled here (future work):
+//   - %sessions-changed — would trigger full re-enumeration; deferred to a
+//     future story (currently we rely on per-event create/closed signals
+//     which suffice for BC-2.04.001 PC-3/PC-4).
 //
 // dispatchLoop is unexported; it is started only by Connect and exits when the
 // subprocess exits or ctx is cancelled.
