@@ -365,3 +365,213 @@ func TestTmuxControlMode_ErrChannelSignalsDroppedConnection(t *testing.T) {
 		t.Error("Err() did not signal within 100ms; want ErrControlModeDropped on stream EOF")
 	}
 }
+
+// TestTmuxControlMode_LargeOutputLine_NoFalseDrop pins pass-5 H-1: a %output
+// line whose octal-escaped payload exceeds bufio's default 64 KiB scanner token
+// limit (but is well under the 2 MiB raised limit) must be processed correctly:
+// the payload must reach the downstream half-channel (Seq advances), proving the
+// scanner did NOT abort on ErrTooLong.
+//
+// Without the fix, bufio.Scanner.Scan returns false when a single line exceeds
+// the default 64 KiB buffer and scanner.Err() returns bufio.ErrTooLong. The
+// current dispatchLoop does not inspect scanner.Err(), so it falls through to
+// the post-loop code which sends ErrControlModeDropped and the large %output
+// payload is silently dropped (ds.Seq() stays 0). With the H-1 fix (scanner
+// buffer raised to 2 MiB), the line is read cleanly and Tick is called:
+// ds.Seq() >= 1.
+//
+// Hermetic: no real tmux. Traces: BC-2.04.001 PC-5; pass-5 H-1.
+func TestTmuxControlMode_LargeOutputLine_NoFalseDrop(t *testing.T) {
+	t.Parallel()
+
+	// Build dependencies inline to hold a direct reference to ds.
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+
+	// 100 KiB of octal-escaped spaces: "\040" × 100*1024 = 400 KiB on the wire.
+	// Default bufio scanner limit is 64 KiB, so this line exceeds it.
+	// After the H-1 fix the scanner buffer is raised to 2 MiB; the line must
+	// be processed without error. The decoded payload is 100 KiB (all spaces),
+	// which fits within halfchannel.MaxPayloadSize (65515 bytes)... actually
+	// 100 KiB = 102400 bytes > 65515. So this test also exercises M-1 fragmentation
+	// if that fix is applied. The minimum assertion is ds.Seq() >= 1 (any tick at
+	// all proves the large line was read rather than dropped by the scanner).
+	largePayload := strings.Repeat(`\040`, 100*1024) // 400 KiB wire; decodes to 100 KiB
+	largeOutput := fmt.Sprintf("%%output %%12 %s", largePayload)
+
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+		"%session-created session-1",
+		largeOutput,
+	)
+	cm := tmux.New(pub, ds, fakeExecFunc(stream))
+	t.Cleanup(func() { _ = cm.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Wait for dispatchLoop to process all events (stream EOF signals via Err()).
+	select {
+	case <-cm.Err():
+		// dispatchLoop exited after stream EOF — all events have been processed.
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("dispatchLoop did not signal exit within 500ms")
+	}
+
+	// The distinguishing assertion: the %output data from the large line must
+	// have been enqueued + ticked (ds.Seq() >= 1). Pre-fix: scanner aborts on
+	// ErrTooLong, the %output handler is never called, Seq stays 0. Post-fix:
+	// the line is read cleanly and at least one Tick occurs.
+	if seq := ds.Seq(); seq < 1 {
+		t.Errorf("downstream Seq() = %d; want >= 1 — large %%output line must reach downstream (H-1 fix: raise scanner buffer)", seq)
+	}
+
+	// Also verify session-1 was published (proves lifecycle events processed).
+	if _, err := pub.Get("session-1"); err != nil {
+		t.Errorf("Get session-1: %v; want nil", err)
+	}
+}
+
+// TestTmuxControlMode_OversizePayload_Fragmented pins pass-5 M-1: a %output
+// payload whose decoded length exceeds halfchannel.MaxPayloadSize must be split
+// into multiple chunks, each enqueued + ticked separately, so that every byte
+// reaches the downstream and downstream.Seq() advances by at least the number
+// of chunks (>= 1 per MaxPayloadSize-sized segment).
+//
+// Without the fix, handleLine calls Enqueue once for the entire decoded payload;
+// Enqueue returns ErrPayloadTooLarge and the data is silently dropped (Seq += 0).
+// With the fix, handleLine fragments the payload into ceiling(len/MaxPayloadSize)
+// chunks; each chunk is enqueued + ticked, so Seq advances by that many steps.
+//
+// Test vector: 200 KiB decoded payload, MaxPayloadSize = 65515 bytes.
+// Chunks = ceil(200*1024 / 65515) = ceil(204800 / 65515) = ceil(3.127) = 4.
+// Post-fix: Seq >= 4. Pre-fix: Seq == 0 (drop) or 1 (if guard is missing).
+//
+// Hermetic: no real tmux. Traces: BC-2.04.001 PC-5; halfchannel BC-2.01.002 PC5;
+// pass-5 M-1.
+func TestTmuxControlMode_OversizePayload_Fragmented(t *testing.T) {
+	t.Parallel()
+
+	// Build dependencies inline to hold a direct reference to ds (same pattern
+	// as TestTmuxControlMode_OutputEventsFeedDownstream).
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+
+	// 200 KiB of literal 'A': no octal escaping, so the decoded payload is
+	// exactly 200*1024 bytes. This is well above MaxPayloadSize (65515 bytes).
+	// The line is ~200 KiB + prefix — within the 2 MiB scanner buffer (H-1).
+	largeASCII := strings.Repeat("A", 200*1024)
+	largeOutput := fmt.Sprintf("%%output %%12 %s", largeASCII)
+
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+		"%session-created session-1",
+		largeOutput,
+	)
+	cm := tmux.New(pub, ds, fakeExecFunc(stream))
+	t.Cleanup(func() { _ = cm.Close() })
+
+	ctx := context.Background()
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Wait for dispatchLoop to finish processing.
+	select {
+	case <-cm.Err():
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("dispatchLoop did not signal exit within 500ms")
+	}
+
+	// 200 KiB / 65515 bytes per chunk = ceil(204800 / 65515) = 4 chunks.
+	// Each chunk triggers one Enqueue + Tick, so Seq must be >= 4.
+	// Pre-fix Seq == 0 (Enqueue fails with ErrPayloadTooLarge, no Tick called).
+	const wantMinSeq = uint32(4)
+	if seq := ds.Seq(); seq < wantMinSeq {
+		t.Errorf("downstream Seq() = %d; want >= %d — payload must be fragmented into chunks (M-1 fix)", seq, wantMinSeq)
+	}
+}
+
+// TestTmuxControlMode_Close_WaitsForDispatchLoop pins pass-5 M-2: Close() must
+// block until dispatchLoop has fully exited before returning. Without the fix,
+// Close cancels the context and returns immediately while the dispatchLoop
+// goroutine may still be running, creating a data race on c.publisher and
+// c.downstream. With the fix, Close calls c.wg.Wait() after cancellation, so it
+// returns only after the goroutine exits.
+//
+// Strategy: use a deliberate delay between ctx cancellation and closing the pipe
+// writer. If Close() does wg.Wait(), it blocks for at least that delay. If it
+// doesn't, it returns before the delay expires. We measure the elapsed time of
+// Close() and require it to be >= the delay duration, proving the goroutine join
+// happened.
+//
+// Hermetic: no real tmux. Traces: BC-2.04.001 PC-1; pass-5 M-2.
+// Go memory model: sync.WaitGroup provides the happens-before guarantee.
+func TestTmuxControlMode_Close_WaitsForDispatchLoop(t *testing.T) {
+	t.Parallel()
+
+	// delay is the deliberate pause between ctx cancellation and pipe close.
+	// dispatchLoop blocks in scanner.Scan during this window. Close() must
+	// wait at least this long if wg.Wait() is present.
+	const delay = 80 * time.Millisecond
+
+	stdoutReader, stdoutWriter := io.Pipe()
+
+	fake := tmux.WithExecFunc(func(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
+		// Write the enumeration block asynchronously so execFn can return
+		// before dispatchLoop is reading (io.Pipe synchronises; blocking here
+		// would deadlock Connect before dispatchLoop is spawned).
+		go func() {
+			_, _ = io.WriteString(stdoutWriter, "%begin 0 0 1\n%end 0 0 1\n")
+			// Hold the pipe open until ctx is cancelled, then wait `delay`
+			// before closing — this is the window where dispatchLoop is still
+			// alive after ctx.Done() fires but before the scanner unblocks.
+			<-ctx.Done()
+			time.Sleep(delay)
+			_ = stdoutWriter.Close()
+		}()
+		return nopWriteCloser{}, stdoutReader, nil
+	})
+
+	cm, _ := newTestControlWithOpts(t, fake) //nolint:dogsled // publisher unused in M-2 test
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Allow dispatchLoop to enter its scan loop and block on the open pipe.
+	time.Sleep(10 * time.Millisecond)
+
+	// Measure how long Close() takes. With wg.Wait() it must block until
+	// dispatchLoop exits (after the delay). Without wg.Wait() it returns
+	// almost immediately after cancelling the context.
+	start := time.Now()
+	if err := cm.Close(); err != nil {
+		t.Logf("Close: %v (non-nil close error is acceptable)", err)
+	}
+	elapsed := time.Since(start)
+
+	// The minimum elapsed time is `delay` because Close must wait for
+	// dispatchLoop to exit (which only happens after the pipe goroutine
+	// sleeps `delay` then closes the writer). Allow 20ms slop for scheduling.
+	const minExpected = delay - 20*time.Millisecond
+	if elapsed < minExpected {
+		t.Errorf("Close returned after %v; want >= %v — Close must join dispatchLoop goroutine via wg.Wait() (M-2 fix)", elapsed, minExpected)
+	}
+	// Sanity: Close must not block forever.
+	const maxExpected = delay + 500*time.Millisecond
+	if elapsed > maxExpected {
+		t.Errorf("Close took %v; want <= %v — something is blocking Close beyond the expected goroutine join", elapsed, maxExpected)
+	}
+}
