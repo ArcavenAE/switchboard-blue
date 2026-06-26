@@ -38,10 +38,10 @@ phase_2_bc_coverage: "42/42"
 l2_complete: true
 l2_artifact_count: 11
 l3_complete: true
-l3_bc_count: 42
+l3_bc_count: 43
 l3_cap_coverage: "30/30"
 l4_complete: true
-l4_vp_count: 57
+l4_vp_count: 58
 arch_sections: 13
 arch_adrs: 8
 dtu_required: false
@@ -80,7 +80,7 @@ s_1_03_status: completed
 wave_2_complete: true
 wave_2_stories_merged: 3
 wave_2_points: 18
-timestamp: 2026-06-25T21:00:00Z
+timestamp: 2026-06-25T00:00:00Z
 last_update: 2026-06-25
 ---
 
