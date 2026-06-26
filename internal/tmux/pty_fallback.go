@@ -200,6 +200,11 @@ func (p *PTYProxy) Connect(_ context.Context) error {
 	if err := p.publisher.Publish(p.sessionName); err != nil {
 		if !errors.Is(err, session.ErrSessionAlreadyPublished) {
 			p.logger.Log(fmt.Sprintf("PTY proxy publish failed: %v", err))
+			// M-001 (pass-4): close the master to prevent resource leak on
+			// Connect failure. ioRelay has not been started yet, so there is
+			// no goroutine to join — Close the master directly.
+			_ = master.Close()
+			p.master = nil
 			return fmt.Errorf("tmux: pty proxy publish: %w", err)
 		}
 		// ErrSessionAlreadyPublished is idempotent; continue.
