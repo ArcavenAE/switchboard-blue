@@ -41,7 +41,11 @@ var ErrAlreadyConnected = errors.New("tmux: control mode already connected")
 // execFunc is the function signature for spawning the tmux subprocess.
 // Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
 // control mode stream (BC-5.38.001; test hermetic constraint).
-type execFunc func(ctx context.Context) (io.ReadCloser, error)
+//
+// H-03: returns both stdin (for writing commands) and stdout (for reading
+// events), so Connect can actually send commands like list-sessions. Tests
+// that use fakeExecFunc must adapt to this signature.
+type execFunc func(ctx context.Context) (stdin io.WriteCloser, stdout io.ReadCloser, err error)
 
 // ControlMode manages a single tmux control mode connection and bridges
 // control mode events to the session publisher and downstream half-channel.
@@ -51,6 +55,9 @@ type execFunc func(ctx context.Context) (io.ReadCloser, error)
 // Concurrency: ControlMode spawns exactly one internal goroutine (the event
 // dispatch loop) when Connect succeeds. All exported methods are safe to call
 // from any goroutine.
+//
+// mu protects all lifecycle fields (proc, stdin, cancel). Channel fields
+// (errCh, closeErrCh) are safe by their own Go concurrency contracts.
 type ControlMode struct {
 	publisher  *session.Publisher
 	downstream *halfchannel.HalfChannel
@@ -58,8 +65,13 @@ type ControlMode struct {
 	// on Close. One error is the maximum meaningful signal (dropped = fatal).
 	errCh      chan error
 	closeErrCh sync.Once
-	cancel     context.CancelFunc
-	proc       io.ReadCloser
+
+	// mu protects lifecycle fields below (proc, stdin, cancel).
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	proc   io.ReadCloser
+	stdin  io.WriteCloser
+
 	// execFn spawns the tmux subprocess; replaced in tests via WithExecFunc.
 	execFn execFunc
 }
@@ -70,30 +82,49 @@ type Option func(*ControlMode)
 // WithExecFunc replaces the default os/exec-based tmux launcher with fn.
 // This is the injection point for hermetic unit tests (BC-5.38.001; test
 // hermetic constraint: MUST NOT shell out to real tmux).
-func WithExecFunc(fn func(ctx context.Context) (io.ReadCloser, error)) Option {
+//
+// H-03: fn now returns (stdin, stdout, err) so Connect can write commands.
+func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, error)) Option {
 	return func(c *ControlMode) {
 		c.execFn = fn
 	}
 }
 
 // defaultExecFn is the production exec function that launches `tmux -C`.
-func defaultExecFn(ctx context.Context) (io.ReadCloser, error) {
+//
+// H-01: reaps the subprocess in a goroutine via cmd.Wait() to avoid zombies.
+// H-03: returns both stdin and stdout so Connect can write commands.
+func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 	path, err := exec.LookPath("tmux")
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
 	}
 
 	cmd := exec.CommandContext(ctx, path, "-C")
-	stdout, err := cmd.StdoutPipe()
+
+	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, fmt.Errorf("tmux: stdout pipe: %w", err)
+		return nil, nil, fmt.Errorf("tmux: stdin pipe: %w", err)
+	}
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = stdinPipe.Close()
+		return nil, nil, fmt.Errorf("tmux: stdout pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+		_ = stdinPipe.Close()
+		_ = stdoutPipe.Close()
+		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
 	}
 
-	return stdout, nil
+	// H-01: reap the subprocess when it exits so it does not remain a zombie.
+	go func() {
+		_ = cmd.Wait()
+	}()
+
+	return stdinPipe, stdoutPipe, nil
 }
 
 // New constructs a ControlMode that publishes sessions via publisher and
@@ -130,27 +161,43 @@ func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel, opts
 // ControlMode; callers must Close first.
 // Returns a wrapped error for any other subprocess launch failure.
 func (c *ControlMode) Connect(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// F-04: idempotency guard — second call must not leak subprocess + goroutine.
 	if c.proc != nil || c.cancel != nil {
 		return ErrAlreadyConnected
 	}
 
 	innerCtx, cancel := context.WithCancel(ctx)
-	c.cancel = cancel
 
-	r, err := c.execFn(innerCtx)
+	stdinPipe, stdoutPipe, err := c.execFn(innerCtx)
 	if err != nil {
 		cancel()
-		c.cancel = nil
 		if errors.Is(err, ErrControlModeUnavailable) {
 			return err
 		}
 		return fmt.Errorf("tmux: connect: %w", err)
 	}
 
-	c.proc = r
+	c.cancel = cancel
+	c.proc = stdoutPipe
+	c.stdin = stdinPipe
 
-	go c.dispatchLoop(innerCtx, r)
+	// H-03: send the list-sessions command so tmux emits a %begin/%end block
+	// containing pre-existing session names (BC-2.04.001 PC-2; F-01 fix).
+	// -F #{session_name} formats each session as its name only (one per line).
+	if _, err := io.WriteString(stdinPipe, "list-sessions -F #{session_name}\n"); err != nil {
+		_ = stdinPipe.Close()
+		_ = stdoutPipe.Close()
+		cancel()
+		c.cancel = nil
+		c.proc = nil
+		c.stdin = nil
+		return fmt.Errorf("tmux: list-sessions write: %w", err)
+	}
+
+	go c.dispatchLoop(innerCtx, stdoutPipe)
 
 	return nil
 }
@@ -178,12 +225,22 @@ func (c *ControlMode) Err() <-chan error {
 // Close shuts down the event loop and terminates the tmux subprocess.
 // It is safe to call Close multiple times; subsequent calls are no-ops.
 func (c *ControlMode) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.cancel != nil {
 		c.cancel()
+		c.cancel = nil
+	}
+
+	if c.stdin != nil {
+		_ = c.stdin.Close()
+		c.stdin = nil
 	}
 
 	if c.proc != nil {
 		_ = c.proc.Close()
+		c.proc = nil
 	}
 
 	// F-03: ensure errCh is closed so consumers using range-over-channel
@@ -222,7 +279,9 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			// F-03: close errCh on context cancellation (graceful Close path).
+			// H-02: close errCh on context cancellation (graceful Close path).
+			// Use sync.Once atomically — both send decision and close happen
+			// inside the same Do invocation to prevent send-on-closed-channel.
 			c.closeErrCh.Do(func() {
 				close(c.errCh)
 			})
@@ -259,18 +318,25 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 	select {
 	case <-ctx.Done():
 		// Normal shutdown via Close; don't signal dropped connection.
+		// H-02: sync.Once guards close; no send on graceful exit.
 		c.closeErrCh.Do(func() {
 			close(c.errCh)
 		})
 	default:
 		// F-03: unexpected exit — signal dropped connection to S-3.01b,
 		// then close the channel so range-over-channel consumers unblock.
-		select {
-		case c.errCh <- ErrControlModeDropped:
-		default:
-			// Channel already has an error; don't block.
-		}
+		//
+		// H-02: perform the send and close atomically inside sync.Once to
+		// prevent a concurrent Close() from closing the channel while we
+		// attempt to send, which would panic. If Close() wins the Once,
+		// this Do is a no-op — the send is skipped entirely (acceptable:
+		// Close winning means the shutdown was not truly unexpected).
 		c.closeErrCh.Do(func() {
+			select {
+			case c.errCh <- ErrControlModeDropped:
+			default:
+				// Channel already has an error; don't block.
+			}
 			close(c.errCh)
 		})
 	}
