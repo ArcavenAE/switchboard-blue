@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.004
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,10 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-26
+    version: "1.2"
+    change: "adversary pass-3 F-H-6/F-PG-3: anchor crash detection (EC-002) with explicit EvictStale/Sweep/Heartbeat API; clarify PC-3 covers both graceful Detach and keepalive-eviction Sweep; mark PC-4 (presence advertisement) deferred to future story"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -49,8 +52,8 @@ When a console detaches from a session, the console's channel to the access node
 
 1. The console's channel to the access node is closed cleanly (FIN exchange or equivalent).
 2. The tmux session on the access node continues running unchanged.
-3. No keystrokes are forwarded from the detached console after the detach.
-4. If this was the last full-access console, the access node updates presence advertisement: attached=false.
+3. No keystrokes are forwarded from the detached console after the detach. **This postcondition applies equally to graceful `Detach` calls AND to keepalive-eviction via `AccessNode.Sweep(deadline)` — in both cases the console MUST be removed from the fan-out set before any subsequent `SendKeystroke` call returns `ErrConsoleNotFound`.**
+4. **[DEFERRED — presence-advertisement story]** If this was the last full-access console, the access node updates presence advertisement: attached=false. This postcondition is documented for completeness but its enforcement is deferred to a future advertisement-update story (tentatively S-3.03 or later). S-3.02 does not implement presence advertisement.
 5. Read-only observers (if any) continue receiving the downstream stream.
 6. The session becomes available for a new full-access console to attach.
 
@@ -69,7 +72,7 @@ Console operator runs `sbctl sessions detach`; console process exits; channel ke
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
 | EC-001 (DEC-012) | Full-access console detaches; read-only observers remain | Read-only observers continue receiving output. Session continues. Session shows attached=false in advertisements (no full-access console). |
-| EC-002 | Console crashes without sending detach | Access node detects channel closure on next keepalive timeout. Session released. Same outcome as graceful detach. |
+| EC-002 | Console crashes without sending detach | **Crash detection via keepalive timeout:** When a console's keepalive timestamp ages beyond a configurable deadline, the access node MUST evict the console from its fan-out set and release any session resources held on its behalf. This is implemented as `ConsoleSet.EvictStale(deadline)` driven by an external sweeper that periodically calls `AccessNode.Sweep(deadline)`. Heartbeats are recorded via `ConsoleSet.Heartbeat(key)`. The eviction MUST also clean up `AccessNode`'s console-tracking maps so that subsequent `SendKeystroke` calls for the evicted console return `ErrConsoleNotFound`. Same outcome as graceful detach: session released; presence: attached=false (deferred). |
 | EC-003 (DEC-014) | tmux session closes after console detach | Access node detects session closure; sends session-terminated presence update. Any subsequent attach attempt returns E-SES-001. |
 | EC-004 | Console detaches and immediately re-attaches | Second attach proceeds normally (as per BC-2.04.003). |
 
