@@ -2,10 +2,10 @@
 artifact_id: BC-2.04.004
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-26T12:00:00
 phase: 1a
 bc_id: BC-2.04.004
 subsystem: session-access
@@ -21,6 +21,9 @@ modified:
   - date: 2026-06-26
     version: "1.2"
     change: "adversary pass-3 F-H-6/F-PG-3: anchor crash detection (EC-002) with explicit EvictStale/Sweep/Heartbeat API; clarify PC-3 covers both graceful Detach and keepalive-eviction Sweep; mark PC-4 (presence advertisement) deferred to future story"
+  - date: 2026-06-26
+    version: "1.3"
+    change: "adversary pass-4 F-H-1/F-C-3: strengthen PC-1 — both downstream AND upstream channels closed symmetrically for Detach and Sweep; note Detach signature must include session_name for E-SES-003 format compliance"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -50,7 +53,7 @@ When a console detaches from a session, the console's channel to the access node
 
 ## Postconditions
 
-1. The console's channel to the access node is closed cleanly (FIN exchange or equivalent).
+1. The console's downstream AND upstream channels are BOTH closed cleanly (FIN exchange or equivalent). **Channel lifecycle is symmetric across teardown paths:** this invariant holds for both graceful `Detach(key, sessionName)` calls AND for keepalive-eviction via `AccessNode.Sweep(deadline)`. Neither path may leave a dangling half-channel. **Detach signature:** `Detach` MUST accept `sessionName string` as a parameter so it can emit the correct E-SES-003 format ("session: console <console_id> not found for session <session_name>") when the console key is not found. The `Remove` path (used by `ConsoleSet`) closes the downstream channel; it is the caller's responsibility (`Detach` and `EvictStale`) to also close the upstream channel before calling `Remove`.
 2. The tmux session on the access node continues running unchanged.
 3. No keystrokes are forwarded from the detached console after the detach. **This postcondition applies equally to graceful `Detach` calls AND to keepalive-eviction via `AccessNode.Sweep(deadline)` — in both cases the console MUST be removed from the fan-out set before any subsequent `SendKeystroke` call returns `ErrConsoleNotFound`.**
 4. **[DEFERRED — presence-advertisement story]** If this was the last full-access console, the access node updates presence advertisement: attached=false. This postcondition is documented for completeness but its enforcement is deferred to a future advertisement-update story (tentatively S-3.03 or later). S-3.02 does not implement presence advertisement.
