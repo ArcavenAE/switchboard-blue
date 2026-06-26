@@ -21,7 +21,7 @@ import (
 )
 
 // ErrSessionNotFound is returned when an operation targets a named session
-// that is not present in the publisher's live set (E-SES-001; BC-2.04.001).
+// that is not present in the publisher's live set (E-SES-001; BC-2.04.003).
 var ErrSessionNotFound = errors.New("session not found")
 
 // ErrSessionAlreadyPublished is returned when Publish is called for a session
@@ -102,7 +102,7 @@ func (p *Publisher) Unpublish(sessionName string) error {
 // alphabetically by name (BC-2.04.001 PC-2; VP-031).
 //
 // The returned slice is a value copy — mutations do not affect the Publisher's
-// internal state (ARCH-08 §6.6 rule 12: no internal pointer leak).
+// internal state (go.md rule 12: no internal pointer leak).
 func (p *Publisher) ListSessions() []Info {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -120,7 +120,7 @@ func (p *Publisher) ListSessions() []Info {
 }
 
 // Get returns the Info for sessionName, or ErrSessionNotFound if absent
-// (E-SES-001; BC-2.04.001).
+// (E-SES-001; BC-2.04.003).
 func (p *Publisher) Get(sessionName string) (Info, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
