@@ -260,8 +260,15 @@ func (p *PTYProxy) ioRelay(master io.ReadWriteCloser) {
 	}
 }
 
-// Sessions returns a snapshot of all currently published PTY sessions
-// (BC-2.04.002 PC-2). In PTY proxy mode there is at most one session active.
+// Sessions returns a snapshot of all sessions currently published via the
+// shared publisher (BC-2.04.002 PC-2). In PTY proxy mode there is at most
+// one session active (the synthetic "pty-<pid>" name set on Connect).
+//
+// Note: the publisher is shared with ControlMode when both are wired through
+// a SessionConnector. Sessions() reflects the publisher's current state,
+// which may include sessions from either mode if the connector is in a
+// transitional state. In steady-state PTY proxy mode, only the PTY session
+// is present.
 //
 // The slice is a value copy — callers may freely mutate it.
 func (p *PTYProxy) Sessions() []session.Info {

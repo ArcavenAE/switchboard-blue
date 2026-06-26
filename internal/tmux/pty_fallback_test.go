@@ -226,7 +226,7 @@ func TestPTYProxy_PublishesSessionAndLogs(t *testing.T) {
 	master := newFakePTYMaster()
 	const fakePID = 99999
 	const wantSessionName = "pty-99999"
-	const wantLogSubstr = "tmux control mode unavailable; using PTY proxy mode"
+	const wantLogSubstr = "Functionality limited"
 
 	log := &fakeLogCapture{}
 
