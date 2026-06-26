@@ -226,7 +226,8 @@ func TestPTYProxy_PublishesSessionAndLogs(t *testing.T) {
 	master := newFakePTYMaster()
 	const fakePID = 99999
 	const wantSessionName = "pty-99999"
-	const wantLogSubstr = "Functionality limited"
+	// BC-2.04.002 PC-3 mandates the exact two-sentence canonical message.
+	const wantLogSubstr = "tmux control mode unavailable; using PTY proxy mode. Functionality limited: no structured session metadata, no content-type detection."
 
 	log := &fakeLogCapture{}
 
