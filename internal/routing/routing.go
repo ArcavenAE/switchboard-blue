@@ -25,6 +25,19 @@ import (
 // forwarding-table miss from an admission rejection.
 var ErrNoForwardingEntry = errors.New("routing: no forwarding entry for destination in this SVTN")
 
+// ErrHMACVerificationFailed is returned by RouteFrame when the frame's
+// wire HMAC tag does not match the expected MAC for the source node's
+// FrameAuthKey, or when no forwarding-table entry exists for the source
+// (auth key unavailable → frame is unverifiable → dropped fail-closed).
+//
+// Maps to E-ADM-016 in the error taxonomy (wire HMAC verification failed
+// at RouteFrame: tag mismatch). Distinct from admission.ErrNotAdmitted
+// (E-ADM-003, admitted-set rejection) — callers use errors.Is to
+// distinguish forgery rejection from admission rejection.
+//
+// Traces to BC-2.05.008 postconditions 2 and 4; ADR-009.
+var ErrHMACVerificationFailed = errors.New("routing: HMAC verification failed (E-ADM-016)")
+
 // ForwardingEntry records a forwarding table entry for one destination node.
 type ForwardingEntry struct {
 	// NodeAddr is the 8-byte destination node address.
@@ -82,24 +95,36 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 	r.forwardingTable[svtnID][nodeAddr] = entry
 }
 
-// RouteFrame checks whether the frame's source address is in the admitted set
-// for the frame's SVTN, then dispatches it via SVTNRoute.
+// RouteFrame checks the frame's wire HMAC tag first, then checks whether the
+// frame's source address is in the admitted set, then dispatches via SVTNRoute.
 //
-// Fail-closed (BC-2.05.002 invariant 2): if hdr.SrcAddr is NOT in the admitted
-// set for hdr.SVTNID, the frame is dropped and admission.ErrNotAdmitted is
-// returned (E-ADM-003). No frame is ever forwarded before this check.
+// Ordering (ADR-009; BC-2.05.008 PC-3; VP-058):
+//  1. Look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
+//     If absent → no auth key → ErrHMACVerificationFailed (fail-closed).
+//  2. Call verifyFrameHMAC with entry.FrameAuthKey.
+//     If false → log E-ADM-016 → return ErrHMACVerificationFailed.
+//  3. Check admitted set (admission.IsAdmitted).
+//     If false → return admission.ErrNotAdmitted.
+//  4. Dispatch via SVTNRoute.
 //
-// Per BC-2.05.002 postcondition 3: the admitted-set check happens BEFORE any
-// forwarding logic executes.
+// TODO(S-3.04): Steps 1–2 (HMAC verification) are not yet wired.
+// The current body skips HMAC and proceeds directly to steps 3–4.
+// Tests for AC-001..005 and EC-001..005 are red until the wire-up is complete.
 //
 // payload is the raw bytes following the outer header; it is never parsed here
 // (R-001; ARCH-04 §Risk Mitigations).
 func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
-	// Fail-closed: admitted-set check BEFORE any forwarding (BC-2.05.002 postcondition 3).
+	// TODO(S-3.04): Step 1 — look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
+	// If absent → return ErrHMACVerificationFailed (auth key unavailable; fail-closed).
+	// TODO(S-3.04): Step 2 — call verifyFrameHMAC(hdr, payload, entry.FrameAuthKey).
+	// If false → log E-ADM-016 → return ErrHMACVerificationFailed.
+
+	// Step 3: Fail-closed admitted-set check BEFORE any forwarding (BC-2.05.002 postcondition 3).
 	if !r.admittedKeySet.IsAdmitted(hdr.SVTNID, hdr.SrcAddr) {
 		return admission.ErrNotAdmitted
 	}
 
+	// Step 4: Dispatch.
 	return SVTNRoute(hdr, payload, r)
 }
 
