@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.003
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,10 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-26
+    version: "1.2"
+    change: "adversary pass-3 F-H-6/F-PG-2: anchor KeystrokeSink abstraction in Inv-4; mark PC-4 (presence advertisement) and PC-5 (initial screen refresh) deferred to future story"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -52,15 +55,16 @@ A console attaches to a remote session by specifying the session name (not a hos
 
 1. A bidirectional channel is established between console and access node.
 2. The console receives the downstream half-channel (terminal output) from the access node.
-3. The console's upstream half-channel (keystrokes) is accepted by the access node and forwarded to the tmux session.
-4. The access node's session advertisement updates to attached=true.
-5. The console displays the current terminal output state (implementation: may request a full screen refresh from tmux on attach).
+3. The console's upstream half-channel (keystrokes) is accepted by the access node and forwarded to the tmux session via the `KeystrokeSink` abstraction (see Inv-4).
+4. **[DEFERRED — presence-advertisement story]** The access node's session advertisement updates to attached=true. This postcondition is documented for completeness but its enforcement is deferred to a future advertisement-update story (tentatively S-3.03 or later). S-3.02 does not implement presence advertisement.
+5. **[DEFERRED — S-3.03 or later]** The console displays the current terminal output state (implementation: may request a full screen refresh from tmux on attach). Initial screen refresh on attach is not implemented in S-3.02.
 
 ## Invariants
 
 1. **DI-010**: Tier 2 authorization is enforced by the access node. The router does not decide whether a console may attach.
 2. **DI-011**: Tier 2 session authorization is independent of Tier 1 admission. A console admitted to the SVTN cannot attach without Tier 2 authorization.
 3. Session content flows SSH-encrypted end-to-end; the channel is not a raw TCP stream.
+4. **Inv-4 (Keystroke forwarding boundary):** Upstream keystrokes from any attached console are accepted by `AccessNode.SendKeystroke` and dispatched to a `KeystrokeSink` (the tmux command-mode pipe or PTY master) under a per-AccessNode serialization mutex. The `KeystrokeSink` interface is defined in `internal/session` and implemented by `internal/tmux.SessionConnector`. This boundary ensures that all keystroke routing is decoupled from the transport layer and testable via mock `KeystrokeSink` implementations.
 
 ## Trigger
 
