@@ -8,6 +8,7 @@ package session
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/frame"
 )
@@ -24,12 +25,15 @@ var ErrConsoleNotFound = errors.New("session: console not found")
 // It is opaque to this package; the caller is responsible for uniqueness.
 type ConsoleKey string
 
-// consoleEntry holds the channels for one attached console.
+// consoleEntry holds the channels and keepalive state for one attached console.
 // downstream delivers frames from the session to the console.
 // upstream receives keystrokes from the console for forwarding to tmux.
+// lastHeartbeat records the last time Heartbeat was called for this console;
+// used by EvictStale to detect crash/disconnect.
 type consoleEntry struct {
-	downstream chan frame.OuterHeader
-	upstream   chan []byte
+	downstream    chan frame.OuterHeader
+	upstream      chan []byte
+	lastHeartbeat time.Time
 }
 
 // ConsoleSet manages the set of consoles attached to a single session and fans
@@ -87,8 +91,9 @@ func (cs *ConsoleSet) Add(key ConsoleKey) (downstream <-chan frame.OuterHeader, 
 	}
 
 	entry := consoleEntry{
-		downstream: make(chan frame.OuterHeader, downstreamBufSize),
-		upstream:   make(chan []byte, upstreamBufSize),
+		downstream:    make(chan frame.OuterHeader, downstreamBufSize),
+		upstream:      make(chan []byte, upstreamBufSize),
+		lastHeartbeat: time.Now().UTC(),
 	}
 	cs.consoles[key] = entry
 
@@ -160,6 +165,67 @@ func (cs *ConsoleSet) Evict() int {
 	cs.evictQueue = cs.evictQueue[:0]
 
 	return n
+}
+
+// Heartbeat records a keepalive timestamp for the console identified by key
+// (AC-008; BC-2.04.004 EC-002). The timestamp is used by EvictStale to
+// distinguish live consoles from stale/crashed ones.
+//
+// Returns ErrConsoleNotFound if key is not registered. The timestamp is
+// recorded as time.Now().UTC() at the moment Heartbeat is called.
+func (cs *ConsoleSet) Heartbeat(key ConsoleKey) error {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	entry, ok := cs.consoles[key]
+	if !ok {
+		return ErrConsoleNotFound
+	}
+
+	entry.lastHeartbeat = time.Now().UTC()
+	cs.consoles[key] = entry
+
+	return nil
+}
+
+// EvictStale removes consoles whose lastHeartbeat is older than deadline ago
+// from now (AC-008; BC-2.04.004 EC-002 keepalive crash path). Each evicted
+// console's downstream channel is closed under WLock (same as Remove), and its
+// upstream channel is closed to release any blocked sender. The upstream
+// channel close is deferred to outside the lock (same rationale as Remove).
+//
+// Returns the count of consoles evicted.
+//
+// Caller is responsible for invoking EvictStale periodically (e.g. via a timer
+// in cmd/switchboard or AccessNode.Sweep). AccessNode is goroutine-free, so
+// no background sweeper is started here; tests drive Sweep directly.
+func (cs *ConsoleSet) EvictStale(deadline time.Duration) int {
+	cutoff := time.Now().UTC().Add(-deadline)
+
+	cs.mu.Lock()
+
+	var stale []ConsoleKey
+	var upstreams []chan []byte
+
+	for key, entry := range cs.consoles {
+		if entry.lastHeartbeat.Before(cutoff) {
+			stale = append(stale, key)
+			upstreams = append(upstreams, entry.upstream)
+			close(entry.downstream)
+			delete(cs.consoles, key)
+			cs.evictQueue = append(cs.evictQueue, key)
+		}
+	}
+
+	cs.mu.Unlock()
+
+	// Close upstream channels outside the lock (writes may block; avoid
+	// holding WLock during a potential send from a concurrent caller).
+	for _, us := range upstreams {
+		close(us)
+	}
+
+	return len(stale)
 }
 
 // Len returns the number of currently-attached consoles.
