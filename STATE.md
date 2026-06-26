@@ -5,7 +5,7 @@ phase_step: wave-2-integration-gate-closed
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04]
-phase_3_pause_point: "Wave 3 in progress — S-3.04 MERGED (PR #9, d54bf1a, 2026-06-26). 4 stories remaining: S-3.01a, S-3.01b, S-3.02, S-3.03."
+phase_3_pause_point: "Wave 3 in progress — S-3.04 MERGED (PR #9, d54bf1a, 2026-06-26). S-3.01a Step 4.5 CONVERGED. 4 stories remaining: S-3.01a (PR pending), S-3.01b, S-3.02, S-3.03."
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 wave_2_gate_consistency_validator: "PASS_WITH_OBSERVATIONS (0C/0H/2M/3L/4O)"
@@ -82,6 +82,11 @@ s_3_04_merge_sha: d54bf1a
 s_3_04_pr_number: 9
 s_3_04_merge_date: 2026-06-26
 s_3_04_status: completed
+s_3_01a_adversary_step_4_5: "CONVERGED (3/3 clean: passes 13, 14, 15) — BC-5.39.001 satisfied"
+s_3_01a_adversary_passes_total: 15
+s_3_01a_adversary_not_converged: 8
+s_3_01a_adversary_converged: 7
+s_3_01a_adversary_pass_15_sha: f939f41
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
@@ -91,7 +96,7 @@ wave_2_points: 18
 wave_3_stories_merged: 1
 wave_3_points_complete: 3
 wave_3_points_remaining: 29
-timestamp: 2026-06-26T12:00:00Z
+timestamp: 2026-06-26T18:00:00Z
 last_update: 2026-06-26
 ---
 
@@ -100,10 +105,11 @@ last_update: 2026-06-26
 ## Current State
 
 Phase 3 TDD Implementation, Wave 3 in progress — S-3.04 MERGED (PR #9, `d54bf1a`, 2026-06-26).
-S-3.04 (HMAC RouteFrame wire-up, 3pts): 5 adversary passes, 3 consecutive clean (passes 3/4/5)
-satisfying BC-5.39.001; 9 godoc Example demos (7 S-3.04 + 2 S-2.02); pr-reviewer APPROVE in single
-pass; WAVE-3-DEP-001 resolved. Wave 3: 1/5 stories merged (3/32 pts). Next: S-3.01a (8pts), S-3.02
-(8pts), or S-3.03 (8pts) — S-3.01b (5pts) and S-3.02 depend on S-3.01a per dependency graph.
+S-3.01a (tmux control mode, 8pts): Step 4.5 CONVERGED — 15 passes total (8 NOT_CONVERGED + 7
+CONVERGED), 3 consecutive clean (passes 13/14/15), BC-5.39.001 satisfied. Key defect categories:
+test-masks-defect (×4), concurrency contract gaps (×3), spec drift, cross-namespace BC cite
+(systemic). No follow-up codifications needed (all process-gap issues filed as #272–#288). Next:
+Step 5 per-AC demos. Wave 3: 1/5 stories merged (3/32 pts).
 
 ## Phase Progress
 
@@ -163,30 +169,24 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 
 ## Session Resume Checkpoint — 2026-06-26
 
-**Position:** Phase 3, Wave 3 in progress — S-3.04 CLOSED (PR #9 merged `d54bf1a`, 2026-06-26).
-Develop tip: `d54bf1a`. WAVE-3-DEP-001 resolved. Wave 3: 1/5 stories (3/32 pts).
+**Position:** Phase 3, Wave 3 — S-3.01a Step 4.5 CONVERGED (pass-15, 2026-06-26). Branch:
+`feature/S-3.01a-tmux-control-mode` tip `5e54aa4`. Develop tip: `d54bf1a`.
 
-**S-3.04 delivery summary:** 5 adversary passes (3/3 clean = BC-5.39.001 satisfied); 9 Example
-godoc demos; pr-reviewer APPROVE in 1 pass; 9 commits on PR branch. Zero process-gap findings;
-no follow-up codifications required.
+**S-3.01a adversary summary:** 15 passes, 8 NOT_CONVERGED + 7 CONVERGED. Streak: passes 13/14/15
+all clean. BC-5.39.001 satisfied. Defect categories: test-masks-defect (×4), concurrency contract
+gaps (×3), spec drift, cross-namespace BC cite (systemic, M-1 pass-11). All process-gap issues
+filed as vsdd-factory #272–#288. No follow-up codifications needed.
 
 **Carry-forward drift (not blockers):**
-- WAVE-2-MED-001 (Phase-6): ReAuthState eviction on RevokeKey/RegisterKey — Phase-6 hardening target.
-- VP-036 (Phase-6): property test deferred to Phase-6 (needs `internal/testenv.ConnectWithSourceIP`).
+- WAVE-2-MED-001 (Phase-6): ReAuthState eviction on RevokeKey/RegisterKey.
+- VP-036 (Phase-6): property test deferred (needs `internal/testenv.ConnectWithSourceIP`).
 - VP-039-test-skip (Phase-6): t.Skip placeholder needed in `internal/routing/*_test.go`.
 - SEC-003 (Phase-6, ACCEPTED): sub-microsecond TOCTOU on `now` in ReAuthenticate.
 
-**Immediate next action:**
+**Immediate next action:** S-3.01a Step 5 — per-AC demo recordings (4 ACs).
 
-Wave 3 next story: pick from S-3.01a (8pts), S-3.02 (8pts), or S-3.03 (8pts).
-S-3.01b (5pts) depends on S-3.01a. S-3.02 depends on S-3.01a per dependency graph.
-
-**KoS frontier open questions** (for future phases):
-- Router-to-router PE phase Noise XX mutual auth?
-- SACK bitmap window configurable (64-bit may be too narrow for PE high-latency)?
-- Goroutine model for 1k concurrent sessions — per-session pair vs event-loop (NFR-004)?
-- Drop cache — TTL eviction in addition to LRU?
-- PE router-to-router Noise — share node admission keypair, or separate router identity?
+**KoS frontier open questions** (deferred; see burst-log): PE Noise XX mutual auth; SACK window
+configurable; goroutine model for 1k sessions; drop-cache TTL; router identity keypair separation.
 
 ## Historical Content
 
