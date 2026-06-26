@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.003
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,11 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-25
+    actor: product-owner
+    finding: F-W3-M-001 (consistency-validator)
+    change: "Fixed VP traceability table: replaced three duplicate VP-012 rows (conflicting property text) with one row each for VP-012, VP-013, and VP-035, matching their H1 titles and proof methods from VP-INDEX."
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -86,9 +90,9 @@ Console attach request arrives at the access node after SVTN frame routing.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-012 | Router code has no per-session authorization data structure | code-audit |
-| VP-012 | Tier 2 check is performed before upstream channel is opened | integration |
-| VP-012 | Tier 2 authorization is per-session: different sessions require separate authorization | integration |
+| VP-012 | SessionAuth rejects unauthorized console key | proptest |
+| VP-013 | SessionAuth rejects upstream from read-only key | proptest |
+| VP-035 | Read-only console upstream rejected by access node | integration |
 
 ## Traceability
 
