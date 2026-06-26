@@ -72,6 +72,11 @@ type ControlMode struct {
 	proc   io.ReadCloser
 	stdin  io.WriteCloser
 
+	// wg joins dispatchLoop on Close to provide a hard lifecycle boundary.
+	// After Close returns, dispatchLoop has exited and c.publisher /
+	// c.downstream are no longer accessed by ControlMode (M-2, pass-5).
+	wg sync.WaitGroup
+
 	// execFn spawns the tmux subprocess; replaced in tests via WithExecFunc.
 	execFn execFunc
 }
@@ -197,7 +202,15 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 		return fmt.Errorf("tmux: list-sessions write: %w", err)
 	}
 
-	go c.dispatchLoop(innerCtx, stdoutPipe)
+	// M-2 (pass-5): register goroutine with wg before spawning so that
+	// Close can call wg.Wait() to guarantee dispatchLoop has exited before
+	// returning. This provides the happens-before guarantee for all accesses
+	// to c.publisher and c.downstream from the goroutine.
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.dispatchLoop(innerCtx, stdoutPipe)
+	}()
 
 	return nil
 }
@@ -222,25 +235,40 @@ func (c *ControlMode) Err() <-chan error {
 	return c.errCh
 }
 
-// Close shuts down the event loop and terminates the tmux subprocess.
-// It is safe to call Close multiple times; subsequent calls are no-ops.
+// Close cancels the control mode connection and waits for the dispatch loop
+// to exit. After Close returns, the dispatch goroutine has exited and the
+// publisher/downstream are no longer accessed by ControlMode.
+// Close is idempotent; multiple calls are no-ops after the first.
 func (c *ControlMode) Close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
-	if c.cancel != nil {
-		c.cancel()
-		c.cancel = nil
+	cancel := c.cancel
+	stdin := c.stdin
+	proc := c.proc
+	c.cancel = nil
+	c.stdin = nil
+	c.proc = nil
+
+	c.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
 
-	if c.stdin != nil {
-		_ = c.stdin.Close()
-		c.stdin = nil
+	if stdin != nil {
+		_ = stdin.Close()
 	}
 
-	if c.proc != nil {
-		_ = c.proc.Close()
-		c.proc = nil
+	// M-2 (pass-5): block until dispatchLoop has fully exited before closing
+	// proc. This is important: closing proc (the stdout ReadCloser) would cause
+	// scanner.Scan to return immediately with an error, racing with the natural
+	// exit path. We want dispatchLoop to observe ctx cancellation and exit
+	// naturally, then we clean up. The mutex is released above so dispatchLoop
+	// can complete without deadlock.
+	c.wg.Wait()
+
+	if proc != nil {
+		_ = proc.Close()
 	}
 
 	// F-03: ensure errCh is closed so consumers using range-over-channel
@@ -269,6 +297,12 @@ func (c *ControlMode) Close() error {
 // subprocess exits or ctx is cancelled.
 func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 	scanner := bufio.NewScanner(r)
+	// H-1 (pass-5): raise scanner token buffer to 2 MiB so that large %output
+	// lines (e.g. a terminal repaint of a 100 KiB scrollback) are not silently
+	// truncated by the default 64 KiB limit (bufio.ErrTooLong causes scanner.Scan
+	// to return false, which dispatchLoop previously misread as an unexpected drop).
+	const maxTmuxOutputLine = 2 * 1024 * 1024 // 2 MiB
+	scanner.Buffer(make([]byte, 0, 64*1024), maxTmuxOutputLine)
 
 	// F-01: inSession tracks whether we are currently inside a %begin/%end
 	// block that is the response to the initial list-sessions command we issue
@@ -315,6 +349,11 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 	}
 
 	// Scanner stopped — either EOF (process exited) or ctx cancelled.
+	// H-1 (pass-5): consume scanner.Err() for debuggability. ErrTooLong would
+	// mean a line exceeded the 2 MiB buffer; other errors indicate I/O failure.
+	// We don't currently log (no logger injected), but the read prevents the
+	// result from being silently discarded and documents intent for future use.
+	_ = scanner.Err()
 	select {
 	case <-ctx.Done():
 		// Normal shutdown via Close; don't signal dropped connection.
@@ -368,8 +407,26 @@ func (c *ControlMode) handleLine(line string) {
 		parts := strings.SplitN(rest, " ", 2)
 		if len(parts) == 2 && len(parts[1]) > 0 {
 			data := unescapeTmuxOutput(parts[1])
-			_ = c.downstream.Enqueue(data)
-			c.downstream.Tick()
+			if len(data) == 0 {
+				return
+			}
+			// M-1 (pass-5): fragment payloads larger than MaxPayloadSize to
+			// preserve BC-2.04.001 PC-5. Enqueue rejects payloads above
+			// halfchannel.MaxPayloadSize (65515 bytes); split into chunks so
+			// that arbitrarily large terminal output reaches the downstream.
+			for i := 0; i < len(data); i += halfchannel.MaxPayloadSize {
+				end := i + halfchannel.MaxPayloadSize
+				if end > len(data) {
+					end = len(data)
+				}
+				if err := c.downstream.Enqueue(data[i:end]); err != nil {
+					// Chunk is within MaxPayloadSize after fragmentation;
+					// an error here is unexpected. Break to preserve partial
+					// delivery semantics rather than silently dropping.
+					break
+				}
+				c.downstream.Tick()
+			}
 		}
 	}
 }
