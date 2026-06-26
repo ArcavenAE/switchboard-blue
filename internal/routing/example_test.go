@@ -12,6 +12,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/frame"
+	"github.com/arcavenae/switchboard/internal/hmac"
 	"github.com/arcavenae/switchboard/internal/routing"
 )
 
@@ -56,9 +57,26 @@ func admitNode(ks *admission.AdmittedKeySet, svtn [16]byte, pub ed25519.PublicKe
 	}
 }
 
-// ExampleRouter_dropsUnadmitted demonstrates AC-004: RouteFrame drops the frame
-// and returns admission.ErrNotAdmitted (E-ADM-003) when the frame's SrcAddr is
-// not in the admitted set for the frame's SVTN.
+// exampleComputeTag computes the HMAC tag a sender would place in hdr.HMACTag.
+// Protocol: zero HMACTag, encode header + payload, compute HMAC.
+func exampleComputeTag(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) [hmac.TagSize]byte {
+	hdrForMAC := hdr
+	hdrForMAC.HMACTag = [hmac.TagSize]byte{}
+	encoded := frame.EncodeOuterHeader(hdrForMAC)
+	msg := make([]byte, len(encoded)+len(payload))
+	copy(msg, encoded[:])
+	copy(msg[len(encoded):], payload)
+	return hmac.ComputeHMAC(authKey[:], msg)
+}
+
+// ExampleRouter_dropsUnadmitted demonstrates AC-004 (post-S-3.04): RouteFrame
+// drops the frame and returns admission.ErrNotAdmitted (E-ADM-003) when the
+// frame's SrcAddr is not in the admitted set for the frame's SVTN.
+//
+// S-3.04: HMAC is enforced before admission. The forwarding entry and a valid
+// HMAC tag are required so that the HMAC check passes and the admission
+// check (ErrNotAdmitted) fires as the rejection reason.
+//
 // Traces to BC-2.05.002 postcondition 2.
 func ExampleRouter_dropsUnadmitted() {
 	nodePub, _, _ := ed25519.GenerateKey(seed32("node-key-for-routing-ac004------"))
@@ -72,6 +90,12 @@ func ExampleRouter_dropsUnadmitted() {
 	r := routing.NewRouter(ks)
 	nodeAddr := deriveAddr(svtn, nodePub)
 
+	// S-3.04: HMAC verified before admission; provide a forwarding entry and
+	// compute a valid tag so the admission check (not HMAC) is the rejection.
+	var authKey [hmac.KeySize]byte
+	copy(authKey[:], "example-drops-unadmitted-key000")
+	r.RegisterForwardingEntry(svtn, nodeAddr, authKey)
+
 	hdr := frame.OuterHeader{
 		Version:   frame.VersionByte,
 		FrameType: frame.FrameTypeData,
@@ -79,6 +103,7 @@ func ExampleRouter_dropsUnadmitted() {
 		SrcAddr:   nodeAddr,
 		DstAddr:   nodeAddr, // self-addressed; only source admission matters here
 	}
+	hdr.HMACTag = exampleComputeTag(hdr, nil, authKey)
 
 	err := routing.RouteFrame(hdr, nil, r)
 	fmt.Println("is ErrNotAdmitted:", errors.Is(err, admission.ErrNotAdmitted))
@@ -87,9 +112,15 @@ func ExampleRouter_dropsUnadmitted() {
 	// is ErrNotAdmitted: true
 }
 
-// ExampleRouter_svtnIsolation demonstrates AC-005: SVTNRoute never delivers a
-// frame to a node on a different SVTN. A frame with svtn_id=A is never forwarded
-// to a node admitted only to svtn_id=B.
+// ExampleRouter_svtnIsolation demonstrates AC-005 (post-S-3.04): SVTNRoute never
+// delivers a frame to a node on a different SVTN. A frame with svtn_id=A is
+// never forwarded to a node admitted only to svtn_id=B.
+//
+// S-3.04: HMAC is enforced before admission and forwarding. A forwarding entry
+// for nodeA in svtnA (with a valid HMAC tag) is required so that HMAC and
+// admission pass; SVTNRoute then rejects addrB (only in svtnB) with
+// ErrNoForwardingEntry — demonstrating SVTN isolation.
+//
 // Traces to BC-2.05.006 postcondition 1.
 func ExampleRouter_svtnIsolation() {
 	pubA, privA, _ := ed25519.GenerateKey(seed32("node-key-for-routing-ac005-svtnA"))
@@ -109,14 +140,22 @@ func ExampleRouter_svtnIsolation() {
 	addrA := deriveAddr(svtnA, pubA)
 	addrB := deriveAddr(svtnB, pubB)
 
+	// S-3.04: register nodeA's forwarding entry in svtnA with a known auth key.
+	// HMAC is verified before admission and forwarding; nodeA needs an entry.
+	var authKeyA [hmac.KeySize]byte
+	copy(authKeyA[:], "svtn-isolation-example-keyA0000")
+	r.RegisterForwardingEntry(svtnA, addrA, authKeyA)
+
 	// Register nodeB's forwarding entry under svtn-B only.
-	var authKey [32]byte // zero authKey for demo purposes
-	r.RegisterForwardingEntry(svtnB, addrB, authKey)
+	var authKeyB [hmac.KeySize]byte
+	copy(authKeyB[:], "svtn-isolation-example-keyB0000")
+	r.RegisterForwardingEntry(svtnB, addrB, authKeyB)
 
 	// Build a frame: src=nodeA (on svtn-A), dst=nodeB (on svtn-B).
-	// AdmittedKeySet check uses frame's svtn_id=svtnA; nodeA IS admitted to svtnA.
-	// SVTNRoute looks up addrB in svtnA's forwarding table — which is empty.
-	// This enforces SVTN isolation: nodeB is only reachable via svtnB frames.
+	// HMAC passes (nodeA has a valid entry in svtnA). Admission passes (nodeA
+	// is admitted to svtnA). SVTNRoute looks up addrB in svtnA's forwarding
+	// table — which has no entry for addrB. This enforces SVTN isolation:
+	// nodeB is only reachable via svtnB frames.
 	hdr := frame.OuterHeader{
 		Version:   frame.VersionByte,
 		FrameType: frame.FrameTypeData,
@@ -124,6 +163,7 @@ func ExampleRouter_svtnIsolation() {
 		SrcAddr:   addrA,
 		DstAddr:   addrB, // destination belongs to svtn-B, not svtn-A
 	}
+	hdr.HMACTag = exampleComputeTag(hdr, nil, authKeyA)
 
 	err := routing.RouteFrame(hdr, nil, r)
 	fmt.Println("is ErrNoForwardingEntry:", errors.Is(err, routing.ErrNoForwardingEntry))

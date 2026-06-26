@@ -69,7 +69,14 @@ func TestRouteFrame_DropsUnadmitted(t *testing.T) {
 	r := routing.NewRouter(ks)
 	r.RegisterForwardingEntry(svtnID, admittedAddr, [32]byte{})
 
-	// Frame from unadmitted source.
+	// S-3.04: HMAC is now enforced before admission. Register a forwarding entry
+	// for unadmittedAddr so the auth key is present; compute a valid tag with
+	// that key so HMAC passes and the admission check (ErrNotAdmitted) fires.
+	var unadmittedAuthKey [hmac.KeySize]byte
+	copy(unadmittedAuthKey[:], "drops-unadmitted-test-key-00000")
+	r.RegisterForwardingEntry(svtnID, unadmittedAddr, unadmittedAuthKey)
+
+	// Frame from unadmitted source with valid HMAC (so admission check fires).
 	hdr := frame.OuterHeader{
 		Version:   frame.VersionByte,
 		FrameType: frame.FrameTypeData,
@@ -77,6 +84,7 @@ func TestRouteFrame_DropsUnadmitted(t *testing.T) {
 		SrcAddr:   unadmittedAddr,
 		DstAddr:   admittedAddr,
 	}
+	hdr.HMACTag = computeValidTag(hdr, nil, unadmittedAuthKey)
 	err := routing.RouteFrame(hdr, nil, r)
 	if !errors.Is(err, admission.ErrNotAdmitted) {
 		t.Errorf("RouteFrame unadmitted src: want ErrNotAdmitted, got %v", err)
@@ -246,7 +254,13 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 
 	r := routing.NewRouter(ks)
 	r.RegisterForwardingEntry(svtnID, admittedAddr, [32]byte{})
-	r.RegisterForwardingEntry(svtnID, unadmittedAddr, [32]byte{}) // in table but not admitted
+
+	// S-3.04: HMAC is now enforced before admission. Use a known key for
+	// unadmittedAddr and compute a valid tag so HMAC passes; the admitted-set
+	// check (ErrNotAdmitted) must still fire before SVTNRoute.
+	var unadmittedKey [hmac.KeySize]byte
+	copy(unadmittedKey[:], "admitted-set-precedes-test-key0")
+	r.RegisterForwardingEntry(svtnID, unadmittedAddr, unadmittedKey) // in table but not admitted
 
 	// Source (unadmittedAddr) is NOT in admitted set, even though it has a
 	// forwarding entry. RouteFrame must reject it before forwarding.
@@ -257,6 +271,8 @@ func TestRouteFrame_AdmittedSetCheckPrecedesForwarding(t *testing.T) {
 		SrcAddr:   unadmittedAddr,
 		DstAddr:   admittedAddr,
 	}
+	// Compute a valid HMAC tag so HMAC passes; admission check must still fire.
+	hdr.HMACTag = computeValidTag(hdr, nil, unadmittedKey)
 	err := routing.RouteFrame(hdr, nil, r)
 
 	// Precision pin (pass-4 M-1): assert the EXACT sentinel that proves admission
