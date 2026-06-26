@@ -205,6 +205,8 @@ func (p *PTYProxy) Connect(_ context.Context) error {
 			// no goroutine to join — Close the master directly.
 			_ = master.Close()
 			p.master = nil
+			p.pid = 0
+			p.sessionName = ""
 			return fmt.Errorf("tmux: pty proxy publish: %w", err)
 		}
 		// ErrSessionAlreadyPublished is idempotent; continue.
@@ -664,12 +666,3 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 		return
 	}
 }
-
-// defaultPTYAlloc is the production PTY allocator.
-// Platform-specific implementations are in pty_alloc_darwin.go (darwin) and
-// pty_alloc_linux.go (linux). This stub is compiled for all other platforms
-// (e.g., Windows, BSD not covered above) to satisfy the compiler; it returns
-// ErrPTYDeviceUnavailable at runtime since PTY allocation is OS-specific.
-//
-// Unit tests always inject WithPTYAllocFunc and never reach this path.
-// VP-032 integration harness exercises the real implementations.
