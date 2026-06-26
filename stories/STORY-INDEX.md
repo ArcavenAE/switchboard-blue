@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "1.0"
+version: "1.1"
 status: draft
 producer: story-writer
-timestamp: 2026-06-24T00:00:00
+timestamp: 2026-06-25T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -19,12 +19,12 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 21 |
+| Total stories | 22 |
 | Complete | 6 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03) |
-| Pending | 15 |
-| E-phase | 17 |
+| Pending | 16 |
+| E-phase | 18 |
 | PE-phase | 4 |
-| Total points | 102 |
+| Total points | 135 |
 | Waves | 7 (Wave 0–6) |
 | Backlog | 1 (S-BL.OA) |
 
@@ -41,6 +41,7 @@ inputDocuments:
 | S-3.01 | Tmux control mode integration with PTY fallback | E-3 | 3 | BC-2.04.001, BC-2.04.002 | session-access | 8 | P0 | E | pending |
 | S-3.02 | Console attach/detach and multi-console fan-out | E-3 | 3 | BC-2.04.003, BC-2.04.004, BC-2.04.006 | session-access | 8 | P0 | E | pending |
 | S-3.03 | Tier-2 per-session authorization and read-only | E-3 | 3 | BC-2.04.005, BC-2.05.003 | session-access, admission-security | 5 | P0 | E | pending |
+| S-3.04 | Wire verifyFrameHMAC into RouteFrame (HMAC enforcement at router boundary) | E-2 | 3 | BC-2.05.008 | admission-security | 3 | P0 | E | pending |
 | S-4.01 | Per-path RTT/loss tracking and dup-and-race | E-4 | 4 | BC-2.02.001, BC-2.02.002, BC-2.02.003, BC-2.02.009 | multipath-forwarding | 8 | P0 | E | pending |
 | S-4.02 | Upstream idempotent replay window | E-4 | 4 | BC-2.02.004 | multipath-forwarding | 5 | P0 | E | pending |
 | S-4.03 | Downstream ARQ with ACK/SACK and TLPKTDROP | E-4 | 4 | BC-2.02.005, BC-2.02.006 | multipath-forwarding | 8 | P0 | E | pending |
@@ -62,17 +63,17 @@ inputDocuments:
 | 0 | S-0.01 | 1 | BMAD scaffolding (complete) |
 | 1 | S-1.01, S-1.02 + refactor PR #3 | 13 | Frame codec + half-channel clock — **CLOSED 2026-06-24 (pass-with-clean-drift; rollback resolved 2026-06-24)** |
 | 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity — **COMPLETE 2026-06-25 (3/3 merged; integration gate next)** |
-| 3 | S-3.01, S-3.02, S-3.03 | 21 | Session access MVP |
+| 3 | S-3.01, S-3.02, S-3.03, S-3.04 | 24 | Session access MVP + HMAC wire-up |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
 | 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
 | 6 | S-7.01, S-7.02, S-7.03, S-7.04 | 29 | PE-phase features |
-| **Total** | **21** | **132** | |
+| **Total** | **22** | **135** | |
 
-> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Total points including Wave 0: 133. Per-wave counts above use story points from individual story files.
+> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0). Total points including Wave 0: 136. Per-wave counts above use story points from individual story files.
 
 ## BC Coverage Check
 
-All 42 BCs covered. See dependency-graph.md BC-to-Stories matrix for full traceability.
+All 43 BCs covered (42 original + BC-2.05.008 minted Wave 3). S-3.04 covers BC-2.05.008 (VP-058). See dependency-graph.md BC-to-Stories matrix for full traceability.
 
 ## Backlog / Deferred Stories
 
