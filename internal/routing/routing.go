@@ -107,17 +107,29 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 //     If false → return admission.ErrNotAdmitted.
 //  4. Dispatch via SVTNRoute.
 //
-// TODO(S-3.04): Steps 1–2 (HMAC verification) are not yet wired.
-// The current body skips HMAC and proceeds directly to steps 3–4.
-// Tests for AC-001..005 and EC-001..005 are red until the wire-up is complete.
-//
 // payload is the raw bytes following the outer header; it is never parsed here
 // (R-001; ARCH-04 §Risk Mitigations).
 func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
-	// TODO(S-3.04): Step 1 — look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
-	// If absent → return ErrHMACVerificationFailed (auth key unavailable; fail-closed).
-	// TODO(S-3.04): Step 2 — call verifyFrameHMAC(hdr, payload, entry.FrameAuthKey).
-	// If false → log E-ADM-016 → return ErrHMACVerificationFailed.
+	// Step 1: Look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
+	// If absent → auth key is unavailable → frame is unverifiable → fail-closed.
+	// Hold the lock across steps 1–2 (single RLock acquisition per ADR-009).
+	r.mu.RLock()
+	svtnTable, ok := r.forwardingTable[hdr.SVTNID]
+	var entry *ForwardingEntry
+	if ok {
+		entry = svtnTable[hdr.SrcAddr]
+	}
+	r.mu.RUnlock()
+
+	if entry == nil {
+		return ErrHMACVerificationFailed
+	}
+
+	// Step 2: Verify the wire HMAC tag against the entry's FrameAuthKey.
+	// E-ADM-016: wire HMAC verification failed at RouteFrame (BC-2.05.008 PC-2).
+	if !verifyFrameHMAC(hdr, payload, entry.FrameAuthKey) {
+		return ErrHMACVerificationFailed
+	}
 
 	// Step 3: Fail-closed admitted-set check BEFORE any forwarding (BC-2.05.002 postcondition 3).
 	if !r.admittedKeySet.IsAdmitted(hdr.SVTNID, hdr.SrcAddr) {
@@ -174,8 +186,6 @@ func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error {
 //
 // Returns true if and only if the wire tag exactly matches the expected MAC.
 // Fail-closed: returns false on any mismatch or zero-length wire tag.
-//
-//nolint:unused // wired into RouteFrame in the next wave when wire-layer HMAC enforcement is added (BC-2.05.002 invariant 1)
 func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) bool {
 	// Save the wire tag BEFORE clearing — defends against the tautological-verify
 	// defect: clearing first and then "verifying" would check the computed tag
