@@ -948,6 +948,119 @@ func TestSessionConnector_Err_ClosedOnNormalShutdown(t *testing.T) {
 	}
 }
 
+// -- L-003 (pass-9): successful factory reconnect path ----------------------
+
+// TestSessionConnector_FactoryReconnectSucceeds verifies the BC-2.04.002 EC-003
+// happy path: mid-session control mode drop → factory returns a freshly-
+// Connected ControlMode → watchAndFallback swaps in the new ctrl + spawns
+// recursive watcher → sc.InPTYMode() remains false (still in control mode).
+//
+// Closes the L-003 (pass-9) coverage gap.
+func TestSessionConnector_FactoryReconnectSucceeds(t *testing.T) {
+	t.Parallel()
+
+	// Track factory calls.
+	var factoryMu sync.Mutex
+	factoryCalls := 0
+
+	// The factory returns a NEW ControlMode backed by a pipe that stays open
+	// (no EOF) for the duration of the test.  The pipe's write end is kept
+	// alive via t.Cleanup so the new ctrl never drops within the test window.
+	factory := func(ctx context.Context) (*tmux.ControlMode, error) {
+		factoryMu.Lock()
+		factoryCalls++
+		factoryMu.Unlock()
+
+		// Pipe: pr is the fake stdout read by ControlMode; pw is held open.
+		pr, pw := io.Pipe()
+		t.Cleanup(func() { _ = pw.Close() })
+
+		// The new ctrl's classifyCh is never written to — just pre-closed so the
+		// dispatcher doesn't block waiting for classification.
+		newClassifyCh := make(chan error)
+		close(newClassifyCh)
+
+		newExec := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+			return nopWriteCloser{}, pr, newClassifyCh, nil
+		})
+
+		keys := admission.NewAdmittedKeySet()
+		pub := session.NewPublisher(keys)
+		ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+		newCM := tmux.New(pub, ds, newExec)
+		if err := newCM.Connect(ctx); err != nil {
+			_ = pr.Close()
+			return nil, fmt.Errorf("factory newCM.Connect: %w", err)
+		}
+		return newCM, nil
+	}
+
+	// Initial ctrl: stream with a minimal valid header that EOFs immediately,
+	// triggering ErrControlModeDropped via the dispatchLoop unexpected-exit path.
+	initialStream := fakeControlOutput(
+		"%begin 5000000000 0 1",
+		"%end 5000000000 0 1",
+		// EOF immediately follows — causes ErrControlModeDropped.
+	)
+
+	master := newFakePTYMaster()
+	log := &fakeLogCapture{}
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	ctrl := tmux.New(pub, ds, fakeExecFunc(initialStream))
+	ptyProxy := tmux.NewPTYProxy(pub, ds,
+		fakePTYAlloc(master, 66666),
+		tmux.WithLogger(log),
+	)
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy, tmux.WithControlModeFactory(factory))
+	t.Cleanup(func() {
+		_ = sc.Close()
+		_ = master.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("sc.Connect: %v", err)
+	}
+
+	// Wait for factory to be called exactly once (initial drop → reconnect succeeds).
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		factoryMu.Lock()
+		calls := factoryCalls
+		factoryMu.Unlock()
+		if calls >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("factory was not called within 2s")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Give watchAndFallback a moment to complete the swap and spawn the
+	// recursive watcher on the new ctrl.
+	time.Sleep(50 * time.Millisecond)
+
+	// PRIMARY ASSERTION: successful reconnect means we stayed in control mode.
+	if sc.InPTYMode() {
+		t.Error("sc.InPTYMode() = true after successful factory reconnect; want false (still in control mode)")
+	}
+
+	// SECONDARY ASSERTION: factory called exactly once (one successful reconnect
+	// — no further retries needed).
+	factoryMu.Lock()
+	got := factoryCalls
+	factoryMu.Unlock()
+	if got != 1 {
+		t.Errorf("factoryCalls = %d after successful reconnect; want 1", got)
+	}
+}
+
 // -- Real-PTY deferral sentinel --------------------------------------------
 
 // TestPTYProxy_RealPTY_Integration is a placeholder that documents the
