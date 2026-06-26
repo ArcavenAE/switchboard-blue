@@ -13,6 +13,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/session"
@@ -197,23 +198,25 @@ func TestConsoleSet_Deliver_SkipsRemovedConsole(t *testing.T) {
 	}
 }
 
-// TestConsoleSet_Evict_RemovesCrashedConsoles verifies that Evict removes
-// consoles whose downstream channels are closed and returns the eviction count
-// (BC-2.04.004 EC-002; BC-2.04.006 Invariant; AC-008).
+// TestConsoleSet_EvictStale_RemovesStaleConsoles verifies that EvictStale
+// removes consoles whose keepalive heartbeat is older than the deadline and
+// returns the eviction count (BC-2.04.004 EC-002 keepalive crash path; AC-008).
 //
-// Phase 1 (healthy set): verifies Evict returns 0 when no channels are closed.
-// Phase 2 (post-crash): verifies Evict removes crashed consoles and returns
-// the correct count (tested at the AccessNode level in TestSession_CrashDetach_EvictsFromFanOut).
-func TestConsoleSet_Evict_RemovesCrashedConsoles(t *testing.T) {
+// Phase 1 (healthy set): EvictStale with 1-hour deadline returns 0 — no
+// consoles are stale immediately after Add.
+// Phase 2 (stale detection): EvictStale with 0 deadline evicts all consoles
+// whose lastHeartbeat is before time.Now().UTC() — which includes any console
+// added more than 0 nanoseconds ago.
+func TestConsoleSet_EvictStale_RemovesStaleConsoles(t *testing.T) {
 	t.Parallel()
 	cs := newTestConsoleSet(t)
 
 	// Add two consoles.
-	if _, _, err := cs.Add("evict-A"); err != nil {
-		t.Fatalf("Add evict-A: %v", err)
+	if _, _, err := cs.Add("evict-stale-A"); err != nil {
+		t.Fatalf("Add evict-stale-A: %v", err)
 	}
-	if _, _, err := cs.Add("evict-B"); err != nil {
-		t.Fatalf("Add evict-B: %v", err)
+	if _, _, err := cs.Add("evict-stale-B"); err != nil {
+		t.Fatalf("Add evict-stale-B: %v", err)
 	}
 
 	// Verify initial Len.
@@ -221,13 +224,30 @@ func TestConsoleSet_Evict_RemovesCrashedConsoles(t *testing.T) {
 		t.Fatalf("Len before eviction: got %d; want 2", n)
 	}
 
-	// No channels are closed yet; Evict should return 0.
-	evicted := cs.Evict()
-	if evicted != 0 {
-		t.Errorf("Evict on healthy set: got %d; want 0", evicted)
+	// Phase 1: EvictStale with 1-hour deadline — no console is 1hr stale.
+	if n := cs.EvictStale(time.Hour); n != 0 {
+		t.Errorf("EvictStale(1h) on fresh consoles: got %d; want 0", n)
 	}
 	if n := cs.Len(); n != 2 {
-		t.Errorf("Len after Evict(0): got %d; want 2", n)
+		t.Errorf("Len after EvictStale(1h): got %d; want 2", n)
+	}
+
+	// Phase 2: EvictStale with 0 deadline. Cutoff = time.Now() which is after
+	// the heartbeats set by Add, so all consoles are immediately stale.
+	evicted := cs.EvictStale(0)
+	if evicted != 2 {
+		t.Errorf("EvictStale(0): evicted %d; want 2 (all consoles stale)", evicted)
+	}
+
+	if cs.IsAttached("evict-stale-A") {
+		t.Error("evict-stale-A still attached after EvictStale(0); want removed")
+	}
+	if cs.IsAttached("evict-stale-B") {
+		t.Error("evict-stale-B still attached after EvictStale(0); want removed")
+	}
+
+	if n := cs.Len(); n != 0 {
+		t.Errorf("Len after EvictStale(0): got %d; want 0", n)
 	}
 }
 

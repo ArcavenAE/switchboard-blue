@@ -45,11 +45,6 @@ type consoleEntry struct {
 type ConsoleSet struct {
 	mu       sync.RWMutex
 	consoles map[ConsoleKey]consoleEntry
-	// evictQueue holds keys that have been gracefully detached via Remove but
-	// were pending the next Evict sweep. In S-3.02 the keepalive-driven crash
-	// path is deferred to S-3.03+; Remove enqueues here so Evict has a seam
-	// for future crash detection without API change.
-	evictQueue []ConsoleKey
 }
 
 // NewConsoleSet constructs an empty ConsoleSet ready for use.
@@ -116,8 +111,6 @@ func (cs *ConsoleSet) Remove(key ConsoleKey) error {
 
 	close(entry.downstream)
 	delete(cs.consoles, key)
-	// Enqueue for Evict bookkeeping so callers can query eviction count.
-	cs.evictQueue = append(cs.evictQueue, key)
 
 	return nil
 }
@@ -144,27 +137,6 @@ func (cs *ConsoleSet) Deliver(hdr frame.OuterHeader) {
 			// Deliver() to clean up any consoles that are no longer draining.
 		}
 	}
-}
-
-// Evict drains the internal evict queue, returning the count of evicted entries.
-// (BC-2.04.004 EC-002; BC-2.04.006 invariant).
-//
-// In S-3.02, evictions are enqueued by Remove (graceful detach / crash-sim).
-// Remove closes the downstream channel under WLock; Deliver holds RLock for its
-// entire send loop, so close-during-send cannot race (F-01/F-05 pass-1 fix).
-//
-// The keepalive-driven crash path that calls Remove on timeout is deferred to
-// S-3.03+; this method provides the seam without requiring an API change.
-//
-// Returns 0 when no evictions are pending.
-func (cs *ConsoleSet) Evict() int {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
-	n := len(cs.evictQueue)
-	cs.evictQueue = cs.evictQueue[:0]
-
-	return n
 }
 
 // Heartbeat records a keepalive timestamp for the console identified by key
@@ -213,7 +185,6 @@ func (cs *ConsoleSet) EvictStale(deadline time.Duration) int {
 			upstreams = append(upstreams, entry.upstream)
 			close(entry.downstream)
 			delete(cs.consoles, key)
-			cs.evictQueue = append(cs.evictQueue, key)
 		}
 	}
 
