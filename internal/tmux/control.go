@@ -1,13 +1,13 @@
 // Package tmux implements tmux control mode integration for the access node
-// (ARCH-08 §6.6 position 7; BC-2.04.001; ADR-010).
+// (ARCH-08 §6.5 position 7; BC-2.04.001; ADR-010).
 //
 // Classification: effectful (ARCH-09). This package spawns the tmux subprocess
 // via os/exec, consumes the tmux control mode event stream, drives the
 // downstream half-channel tick loop, and surfaces a session lifecycle event
 // channel to callers (S-3.01b reads the Err() channel for fallback signalling).
 //
-// Allowed internal imports: {halfchannel, session} per ARCH-08 §6.6.
-// Forbidden: internal/admission, internal/routing (ARCH-08 §6.6 forbidden edges).
+// Allowed internal imports: {halfchannel, session} per ARCH-08 §6.5.
+// Forbidden: internal/admission, internal/routing (ARCH-08 §6.5 forbidden edges).
 package tmux
 
 import (

@@ -534,6 +534,11 @@ func (sc *SessionConnector) Close() error {
 	// can call it after releasing the lock (no lock-while-calling convention).
 	cancelFunc := sc.connectCancel
 	sc.connectCancel = nil
+	// H-01 (pass-6): snapshot ctrl and pty under the same lock that sets
+	// closed=true. After this Unlock, watchAndFallback will see closed=true
+	// and abort any in-flight reconnect swap, so the snapshots are coherent.
+	ctrl := sc.ctrl
+	pty := sc.pty
 	sc.mu.Unlock()
 
 	// L-001 (pass-3): cancel the watchAndFallback context BEFORE closing
@@ -544,13 +549,13 @@ func (sc *SessionConnector) Close() error {
 
 	// Close BOTH ctrl AND pty regardless of which was active.
 	var firstErr error
-	if sc.ctrl != nil {
-		if err := sc.ctrl.Close(); err != nil {
+	if ctrl != nil {
+		if err := ctrl.Close(); err != nil {
 			firstErr = err
 		}
 	}
-	if sc.pty != nil {
-		if err := sc.pty.Close(); err != nil && firstErr == nil {
+	if pty != nil {
+		if err := pty.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
