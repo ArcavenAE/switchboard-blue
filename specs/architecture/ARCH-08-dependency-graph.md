@@ -2,11 +2,11 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
-modified: 2026-06-25T12:00:00
+modified: 2026-06-25T14:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -19,6 +19,17 @@ kos_anchors:
 # ARCH-08: Dependency Graph
 
 ## Module Dependency DAG
+
+> **Scope.** This document describes the **target architecture** of the
+> complete Switchboard product — all packages planned across all waves of
+> delivery. References below to packages such as `internal/session`,
+> `internal/tmux`, `internal/paths`, `internal/arq`, `internal/replay`,
+> `internal/multipath`, `internal/metrics`, `internal/discovery`,
+> `internal/svtnmgmt`, `internal/drain`, `internal/config`, and the `sbctl`
+> binary describe **planned** components, not committed code. For the
+> authoritative list of packages currently present on the `develop` branch,
+> consult §6.5 (current import positions). Section §6.6 tracks the
+> wave-by-wave delivery plan for upcoming packages.
 
 Import direction convention: `A → B` means package A imports package B (A depends on B).
 **No cycles.** Any cycle is an architecture violation per SOUL.md #11.
@@ -271,3 +282,4 @@ be promoted into §6.5. Until then, treat them as architectural intent only.
 | 1.1 | 2026-06-25 | Added §6 Import Constraints (§§6.1–6.4) — explicit codification of DAG positions, forbidden edges, enforcement mechanism, and new-package protocol; prompted by Wave-2 gate audit finding WAVE-2-MED-001 |
 | 1.2 | 2026-06-25 | Added §6.5: extended topological table declaring Wave 3 packages (`internal/session` at position 6, `internal/tmux` at position 13); backfilled all Wave 1–2 packages for completeness; additional forbidden edges for session and tmux |
 | 1.3 | 2026-06-25 | Corrected §6.5: replaced hallucinated 16-package table (paths, arq, replay, multipath, metrics, tmux, discovery, svtnmgmt, drain, config, session not on develop) with the 5 packages actually present on develop at d8d7ae6; moved Wave 3 prospective packages (session, tmux) to new §6.6 as PLANNED; corrected session allowed imports to {frame, admission} per S-3.03 SessionAuth requirement |
+| 1.4 | 2026-06-25 | Added §1 scope callout making the target-architecture-vs-current-state contract explicit: §§1–5 describe planned target architecture; §6.5 is authoritative for packages currently on develop; §6.6 tracks wave-by-wave delivery plan |
