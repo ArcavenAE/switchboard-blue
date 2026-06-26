@@ -50,13 +50,19 @@ var ErrPTYDeviceUnavailable = errors.New("PTY device unavailable: cannot start a
 // (BC-2.04.002 EC-003; S-3.01b task 6).
 const maxReconnectAttempts = 3
 
-// ptyAllocFunc is the injection point for PTY allocation. The real
-// implementation calls golang.org/x/sys/unix.Openpty; unit tests inject
-// a fake that returns pre-wired io.ReadWriteCloser pairs without forking
-// a real PTY process (hermetic test pattern).
+// ptyAllocFunc allocates a PTY pair and starts a child shell connected to the
+// slave side. Returns the master end (the slave is held only by the child
+// process), the shell's process ID for synthetic session naming ("pty-<pid>"),
+// and any error.
 //
-// Returns (masterFD, slaveFD io.ReadWriteCloser, pid int, err error) where
-// pid is the PID of the shell process spawned on the slave side.
+// The default implementation (defaultPTYAlloc) opens /dev/ptmx and uses
+// platform-specific ioctls to obtain the slave path:
+//   - Linux: TIOCSPTLCK to unlock + TIOCGPTN to read the slave number
+//   - Darwin: TIOCPTYGNAME to read the slave device path
+//
+// Other platforms return ErrPTYDeviceUnavailable.
+//
+// Test callers inject hermetic stubs via WithPTYAllocFunc.
 type ptyAllocFunc func() (master io.ReadWriteCloser, pid int, err error)
 
 // PTYProxyOption is a functional option for NewPTYProxy.
@@ -64,8 +70,8 @@ type PTYProxyOption func(*PTYProxy)
 
 // WithPTYAllocFunc replaces the default PTY allocator with fn.
 // Hermetic test injection point: unit tests supply a fake that avoids
-// forking a real PTY process. Production callers use the default
-// golang.org/x/sys/unix.Openpty path.
+// forking a real PTY process. Production callers use defaultPTYAlloc,
+// which opens /dev/ptmx and applies platform ioctls to find the slave.
 func WithPTYAllocFunc(fn ptyAllocFunc) PTYProxyOption {
 	return func(p *PTYProxy) {
 		p.ptyAlloc = fn
