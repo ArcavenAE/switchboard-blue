@@ -1,0 +1,26 @@
+---
+artifact_id: tech-debt-register
+document_type: tech-debt-register
+version: "1.0"
+status: active
+last_updated: 2026-06-26
+---
+
+# Technical Debt Register: Switchboard
+
+> Open items carry-forwarded from story adversary/pr-reviewer cycles.
+> Resolved items move to `cycles/<cycle>/blocking-issues-resolved.md`.
+
+## Open Items
+
+| ID | Severity | Source | Description | Target | Status |
+|----|----------|--------|-------------|--------|--------|
+| F-002 | LOW | S-3.01b pr-reviewer | godoc Example sleeps (20/50ms) flaky on slow CI — bump to 200ms or poll-with-deadline | Wave 4 / test-hardening epic | open |
+| F-003 | LOW | S-3.01b pr-reviewer | TestSessionConnector_NoAutoUpgrade_AfterFallback uses 200ms sleep as negative oracle — expose `lastReconnectAttemptedAt` test hook | Wave 4 / test-hardening epic | open |
+| F-004 | LOW | S-3.01b pr-reviewer | PTYProxy.Connect(_ context.Context) discards ctx — pass ctx to ptyAlloc when alloc supports cancellation | Wave 4 | open |
+| SEC-001 | LOW (security) | S-3.01b pr-reviewer | SHELL env var used without allowlist validation — add exec.LookPath-based allowlist in defaultPTYAlloc | Phase-6 hardening (security review) | open |
+| VP-032 | deferred | S-3.01b story task 8 | Real-PTY integration test for pty_alloc_* — requires PTY device in test environment | Phase-6 / future wave | deferred |
+
+## Resolved Items
+
+> None yet. Resolved items will be moved to `cycles/cycle-1/blocking-issues-resolved.md`.

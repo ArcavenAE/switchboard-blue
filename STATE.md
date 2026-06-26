@@ -4,8 +4,8 @@ phase: phase-3-tdd-implementation
 phase_step: wave-2-integration-gate-closed
 phase_3_active_wave: 3
 phase_3_active_stories: []
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a]
-phase_3_pause_point: "Wave 3 in progress — S-3.04 MERGED (PR #9, d54bf1a). S-3.01a MERGED (PR #11, 43208ab, 2026-06-26). 3 stories remaining: S-3.01b, S-3.02, S-3.03."
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b]
+phase_3_pause_point: "Wave 3 in progress — S-3.04 (PR #9), S-3.01a (PR #11), S-3.01b (PR #12) MERGED. 2 stories remaining: S-3.02, S-3.03."
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 wave_2_gate_consistency_validator: "PASS_WITH_OBSERVATIONS (0C/0H/2M/3L/4O)"
@@ -97,17 +97,21 @@ s_3_01b_adversary_not_converged: 9
 s_3_01b_adversary_converged: 3
 s_3_01b_adversary_pass_12_sha: 47df731
 s_3_01b_adversary_defect_classes: "test-masks-defect (×4), concurrency contract gaps (×3), cross-platform PTY bugs (×3), spec drift (×4)"
+s_3_01b_merge_sha: 56ec9c7
+s_3_01b_pr_number: 12
+s_3_01b_merge_date: 2026-06-26
+s_3_01b_status: completed
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
 wave_2_complete: true
 wave_2_stories_merged: 3
 wave_2_points: 18
-wave_3_stories_merged: 2
-wave_3_points_complete: 11
-wave_3_points_remaining: 21
+wave_3_stories_merged: 3
+wave_3_points_complete: 16
+wave_3_points_remaining: 16
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
-timestamp: 2026-06-26T23:30:00Z
+timestamp: 2026-06-26T23:59:00Z
 last_update: 2026-06-26
 ---
 
@@ -115,10 +119,10 @@ last_update: 2026-06-26
 
 ## Current State
 
-Phase 3, Wave 3. S-3.04 + S-3.01a MERGED (PRs #9/#11). Wave 3: 2/5 stories (11/32 pts).
-S-3.01b Step 4.5 CONVERGED: 12 passes (9 NOT_CONVERGED + 3 CONVERGED), streak 10/11/12,
-BC-5.39.001 satisfied. ~40 defects fixed; no follow-up codifications (#272–#288 filed).
-Next: S-3.01b Step 5 (per-AC demos).
+Phase 3, Wave 3. S-3.04 + S-3.01a + S-3.01b MERGED (PRs #9/#11/#12). Wave 3: 3/5 stories (16/32 pts).
+S-3.01b CLOSED (PR #12, 56ec9c7). 12 adversary passes (9 NOT_CONVERGED + 3 CONVERGED); streak 10/11/12.
+4 tech-debt items carried forward (F-002, F-003, F-004, SEC-001). VP-032 deferred.
+Wave 3 next: S-3.02 (attach/detach/fanout, 8pts, dep: S-3.01a OK) OR S-3.03 (Tier-2 auth, 8pts, dep: S-3.02). User to choose.
 
 ## Phase Progress
 
@@ -126,7 +130,7 @@ Next: S-3.01b Step 5 (per-AC demos).
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 2/5 done (S-3.04 PR #9 d54bf1a; S-3.01a PR #11 43208ab) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 3/5 done (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12 56ec9c7) |
 
 ## Wave / Story Status
 
@@ -140,12 +144,12 @@ Next: S-3.01b Step 5 (per-AC demos).
 | 2 | S-1.03 | Session continuity | completed | #7 | f35e836 |
 | 3 | S-3.04 | HMAC RouteFrame wire-up | completed | #9 | d54bf1a |
 | 3 | S-3.01a | Tmux control mode integration | completed | #11 | 43208ab |
-| 3 | S-3.01b | PTY proxy fallback | pending (dep: S-3.01a) | — | — |
+| 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
 | 3 | S-3.02 | Console attach/detach + multi-console | pending (dep: S-3.01a) | — | — |
 | 3 | S-3.03 | Tier-2 per-session authorization | pending | — | — |
 
 Wave 2: 3/3 stories merged (18 pts). Gate: PASS_WITH_OBSERVATIONS — CLOSED 2026-06-25.
-Wave 3: 2/5 stories merged (11/32 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. Next: S-3.01b, S-3.02, or S-3.03.
+Wave 3: 3/5 stories merged (16/32 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. S-3.01b CLOSED 2026-06-26. Next: S-3.02 or S-3.03 (user to choose).
 Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-1/S-3.04/adversary/`.
 
 ## Open Drift Items
@@ -157,11 +161,10 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | F-P8-009 | LOW | feasibility-report:61 deployment-ops range "(CAP-026–027)" should be "(CAP-026–028)" | architect | open — Phase 2 deferred |
 | F-003 | LOW | Payload-MTU composed wire-format test | story S-BL.OA | deferred to outer-assembler story |
 | F-004 | LOW | ARCH-02 channel-header serializer not implemented | story S-BL.OA | deferred to outer-assembler story |
-| VP-036 testenv | Phase-6 hardening | S-1.03 unit tests cover AC-001..003; property test (TestProperty_VP036_SessionContinuity) deferred until internal/testenv.ConnectWithSourceIP exists | 2026-06-25 |
-| SEC-003 | Phase-6 hardening | Sub-microsecond TOCTOU on now timestamp in ReAuthenticate; worst case one re-auth on just-expired key. Accepted disposition per pr-reviewer security review of PR #7 | 2026-06-25 |
-| WAVE-2-MED-001 | Phase-6 hardening | ReAuthState not evicted on RevokeKey or RegisterKey reset; stale source-IP survives via CurrentSourceAddr; gated by IsAdmitted in RouteFrame but no cross-check in the accessor itself | 2026-06-25 |
-| ~~WAVE-3-DEP-001~~ | RESOLVED (2026-06-26) | verifyFrameHMAC wired into RouteFrame — CLOSED by PR #9 / merge d54bf1a; Wave-2 LOW-cross-1 ("zero frame-forgery defense") closed | — |
-| VP-039-test-skip | Phase-6 hardening | t.Skip placeholder needed in internal/routing/*_test.go for VP-039 (deferred property test); spec-steward flagged during Wave-2 governance burst | 2026-06-25 |
+| VP-036 testenv | Phase-6 hardening | property test (TestProperty_VP036_SessionContinuity) deferred until internal/testenv.ConnectWithSourceIP exists | 2026-06-25 |
+| SEC-003 | Phase-6 hardening | Sub-microsecond TOCTOU on now in ReAuthenticate; accepted per pr-reviewer PR #7 security review | 2026-06-25 |
+| WAVE-2-MED-001 | Phase-6 hardening | ReAuthState not evicted on RevokeKey/RegisterKey reset; stale source-IP survives via CurrentSourceAddr | 2026-06-25 |
+| VP-039-test-skip | Phase-6 hardening | t.Skip placeholder needed in internal/routing/*_test.go for VP-039 (deferred property test) | 2026-06-25 |
 
 ## Decisions Log
 
@@ -176,22 +179,18 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | Wave-1 rollback/re-closure | all drift items routed concretely; drbothen/vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
 
-## Session Resume Checkpoint — 2026-06-26 (S-3.01b Step 4.5 CONVERGED)
+## Session Resume Checkpoint — 2026-06-26 (S-3.01b CLOSED)
 
-**Position:** Phase 3, Wave 3 — S-3.01b Step 4.5 done. Branch: `feature/S-3.01b-pty-proxy-fallback`,
-tip `3628624`. Develop tip: `43208ab` (S-3.01a). Wave 3: 2/5 stories merged; S-3.01b in-flight.
+**Position:** Phase 3, Wave 3. S-3.01b MERGED (PR #12, 56ec9c7, develop tip). Wave 3: 3/5 stories (16/32 pts).
 
-**S-3.01b Step 4.5:** 12 adversary passes (9 NOT_CONVERGED + 3 CONVERGED); streak 10/11/12 clean.
-BC-5.39.001 satisfied. ~40 defects fixed across 9 passes. No follow-up codifications needed
-(all process-gap issues already filed as vsdd-factory #272–#288).
+**S-3.01b:** 12 adversary passes (9 NOT_CONVERGED + 3 CONVERGED); streak 10/11/12 clean.
+Defect classes: test-masks-defect ×4, concurrency ×3, cross-platform PTY ×3, spec drift ×4.
+New files: pty_fallback.go, stderr.go, pty_alloc_{unix,darwin,linux,other}.go. New dep: golang.org/x/sys.
+5 godoc examples (11 total with S-3.01a). PR #12 approved/merged. No follow-up codifications (#272–#288 filed).
 
-**Next:** S-3.01b Step 5 — per-AC demos (AC-001, AC-002, AC-003).
+**Tech-debt carry-forward (tech-debt-register.md):** F-002, F-003, F-004 (Wave 4), SEC-001 (Phase-6). VP-032 deferred.
 
-**Carry-forward drift (not blockers):**
-- WAVE-2-MED-001 (Phase-6): ReAuthState eviction on RevokeKey/RegisterKey.
-- VP-036 (Phase-6): property test deferred (needs `internal/testenv.ConnectWithSourceIP`).
-- VP-039-test-skip (Phase-6): t.Skip placeholder in `internal/routing/*_test.go`.
-- SEC-003 (Phase-6, ACCEPTED): sub-microsecond TOCTOU on `now` in ReAuthenticate.
+**Next:** S-3.02 (attach/detach/fanout, 8pts, dep: S-3.01a OK) OR S-3.03 (Tier-2 auth, 8pts, dep: S-3.02). User to choose. Open Phase-6 deferred items: see Open Drift Items table above.
 
 ## Historical Content
 
