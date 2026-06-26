@@ -11,9 +11,13 @@
 package tmux
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os/exec"
+	"strings"
 
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/session"
@@ -30,6 +34,11 @@ var ErrControlModeUnavailable = errors.New("tmux: control mode unavailable")
 // Callers (S-3.01b fallback path) receive this via the Err() channel.
 var ErrControlModeDropped = errors.New("tmux: control mode connection dropped")
 
+// execFunc is the function signature for spawning the tmux subprocess.
+// Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
+// control mode stream (BC-5.38.001; test hermetic constraint).
+type execFunc func(ctx context.Context) (io.ReadCloser, error)
+
 // ControlMode manages a single tmux control mode connection and bridges
 // control mode events to the session publisher and downstream half-channel.
 //
@@ -39,23 +48,68 @@ var ErrControlModeDropped = errors.New("tmux: control mode connection dropped")
 // dispatch loop) when Connect succeeds. All exported methods are safe to call
 // from any goroutine.
 type ControlMode struct {
-	publisher  *session.Publisher       //nolint:unused // Red Gate stub — used post-implementation
-	downstream *halfchannel.HalfChannel //nolint:unused // Red Gate stub — used post-implementation
-	errCh      chan error               //nolint:unused // Red Gate stub — used post-implementation
-	cancel     context.CancelFunc       //nolint:unused // Red Gate stub — used post-implementation
-	// proc holds the running tmux process handle (set by Connect).
-	// Type is io.ReadCloser to allow fake injection in tests (hermetic; no
-	// direct reference to os.Process which would require a real tmux binary).
-	proc io.ReadCloser //nolint:unused // Red Gate stub — used post-implementation
+	publisher  *session.Publisher
+	downstream *halfchannel.HalfChannel
+	// errCh is buffered with 1 so dispatchLoop can always send without blocking
+	// on Close. One error is the maximum meaningful signal (dropped = fatal).
+	errCh  chan error
+	cancel context.CancelFunc
+	proc   io.ReadCloser
+	// execFn spawns the tmux subprocess; replaced in tests via WithExecFunc.
+	execFn execFunc
+}
+
+// Option is a functional option for New.
+type Option func(*ControlMode)
+
+// WithExecFunc replaces the default os/exec-based tmux launcher with fn.
+// This is the injection point for hermetic unit tests (BC-5.38.001; test
+// hermetic constraint: MUST NOT shell out to real tmux).
+func WithExecFunc(fn func(ctx context.Context) (io.ReadCloser, error)) Option {
+	return func(c *ControlMode) {
+		c.execFn = fn
+	}
+}
+
+// defaultExecFn is the production exec function that launches `tmux -C`.
+func defaultExecFn(ctx context.Context) (io.ReadCloser, error) {
+	path, err := exec.LookPath("tmux")
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+	}
+
+	cmd := exec.CommandContext(ctx, path, "-C")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("tmux: stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+	}
+
+	return stdout, nil
 }
 
 // New constructs a ControlMode that publishes sessions via publisher and
 // delivers output frames to downstream (BC-2.04.001; S-3.01a task 5+6).
 //
 // publisher and downstream must not be nil.
-func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel) *ControlMode {
-	todo() // TODO(S-3.01a): implement; init errCh (unbuffered — no buffer without justification)
-	return nil
+func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel, opts ...Option) *ControlMode {
+	c := &ControlMode{
+		publisher:  publisher,
+		downstream: downstream,
+		// Buffer 1 so dispatchLoop can always deliver the drop signal without
+		// blocking, even if the caller has not yet called Err().
+		errCh:  make(chan error, 1),
+		execFn: defaultExecFn,
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
 }
 
 // Connect launches `tmux -C` as a subprocess and begins the control mode event
@@ -70,7 +124,22 @@ func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel) *Con
 // Connect is idempotent — calling Connect on an already-connected ControlMode
 // is an error (caller bug; the caller must Close first).
 func (c *ControlMode) Connect(ctx context.Context) error {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001 PC-1; AC-001
+	innerCtx, cancel := context.WithCancel(ctx)
+	c.cancel = cancel
+
+	r, err := c.execFn(innerCtx)
+	if err != nil {
+		cancel()
+		if errors.Is(err, ErrControlModeUnavailable) {
+			return err
+		}
+		return fmt.Errorf("tmux: connect: %w", err)
+	}
+
+	c.proc = r
+
+	go c.dispatchLoop(innerCtx, r)
+
 	return nil
 }
 
@@ -79,8 +148,7 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 //
 // The slice is a value copy — callers may freely mutate it.
 func (c *ControlMode) Sessions() []session.Info {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001 PC-2; VP-031
-	return nil
+	return c.publisher.ListSessions()
 }
 
 // Err returns the error channel that receives a non-nil error when the
@@ -91,14 +159,20 @@ func (c *ControlMode) Sessions() []session.Info {
 //
 // The channel is never written to by the caller.
 func (c *ControlMode) Err() <-chan error {
-	todo() // TODO(S-3.01a): implement; return c.errCh
-	return nil
+	return c.errCh
 }
 
 // Close shuts down the event loop and terminates the tmux subprocess.
 // It is safe to call Close multiple times; subsequent calls are no-ops.
 func (c *ControlMode) Close() error {
-	todo() // TODO(S-3.01a): implement; cancel ctx, drain errCh, close proc
+	if c.cancel != nil {
+		c.cancel()
+	}
+
+	if c.proc != nil {
+		_ = c.proc.Close()
+	}
+
 	return nil
 }
 
@@ -107,28 +181,71 @@ func (c *ControlMode) Close() error {
 // appropriate handler, and drives the downstream half-channel Tick loop.
 //
 // Protocol events handled (BC-2.04.001 trigger + PC-3, PC-4, PC-5):
-//   - %begin / %end     — command response delimiters
-//   - %sessions-changed — re-enumerate sessions
-//   - %session-created  — AC-003 (PC-3)
-//   - %session-closed   — AC-003 (PC-4)
-//   - %output           — AC-004 (PC-5): feed downstream half-channel
+//
+//   - %begin / %end         — command response delimiters
+//   - %sessions-changed     — re-enumerate sessions
+//   - %session-created name — AC-003 (PC-3)
+//   - %session-closed name  — AC-003 (PC-4)
+//   - %output pane data     — AC-004 (PC-5): feed downstream half-channel
 //
 // dispatchLoop is unexported; it is started only by Connect and exits when the
 // subprocess exits or ctx is cancelled.
-//
-//nolint:unused,unparam // Red Gate stub — ctx and r both used post-implementation
 func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
-	todo() // TODO(S-3.01a): implement event dispatch; drive c.downstream.Tick()
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		line := scanner.Text()
+		c.handleLine(line)
+	}
+
+	// Scanner stopped — either EOF (process exited) or ctx cancelled.
+	select {
+	case <-ctx.Done():
+		// Normal shutdown via Close; don't signal dropped connection.
+	default:
+		// Unexpected exit — signal dropped connection to S-3.01b.
+		select {
+		case c.errCh <- ErrControlModeDropped:
+		default:
+			// Channel already has an error; don't block.
+		}
+	}
 }
 
-// todo is a package-local helper that panics with a "not implemented" message.
-// Its sole purpose is to satisfy the Red Gate discipline (BC-5.38.001): every
-// non-trivial stub body calls todo() so that tests fail immediately rather than
-// returning silent zero values.
-//
-// BC-5.38.005 self-check: "If I include this real implementation, will the test
-// for this function pass trivially without any implementer work?" — yes for every
-// function above; all use todo().
-func todo() {
-	panic("not implemented") //nolint:forbidigo // Red Gate stub — implementer replaces with real body
+// handleLine processes a single control mode protocol line.
+func (c *ControlMode) handleLine(line string) {
+	switch {
+	case strings.HasPrefix(line, "%session-created "):
+		name := strings.TrimPrefix(line, "%session-created ")
+		name = strings.TrimSpace(name)
+		if name != "" {
+			// Ignore ErrSessionAlreadyPublished — idempotent on re-connect.
+			_ = c.publisher.Publish(name)
+		}
+
+	case strings.HasPrefix(line, "%session-closed "):
+		name := strings.TrimPrefix(line, "%session-closed ")
+		name = strings.TrimSpace(name)
+		if name != "" {
+			// Ignore ErrSessionNotFound — idempotent.
+			_ = c.publisher.Unpublish(name)
+		}
+
+	case strings.HasPrefix(line, "%output "):
+		// %output <pane-id> <data>
+		// Feed the raw data bytes into the downstream half-channel.
+		rest := strings.TrimPrefix(line, "%output ")
+		// rest = "<pane-id> <data>"; skip pane-id, take data.
+		parts := strings.SplitN(rest, " ", 2)
+		if len(parts) == 2 && len(parts[1]) > 0 {
+			_ = c.downstream.Enqueue([]byte(parts[1]))
+			c.downstream.Tick()
+		}
+	}
 }

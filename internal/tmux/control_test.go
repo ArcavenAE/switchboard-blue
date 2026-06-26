@@ -13,6 +13,7 @@ package tmux_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -26,28 +27,50 @@ import (
 
 // nopCloser wraps an io.Reader with a no-op Close so fakeControlOutput can be
 // injected as the tmux subprocess stdout in tests (hermetic; no real tmux).
-// Used by the implementer when Connect accepts an io.ReadCloser injection point.
-type nopCloser struct{ io.Reader } //nolint:unused // stub phase — used post-implementation
+type nopCloser struct{ io.Reader }
 
-func (nopCloser) Close() error { return nil } //nolint:unused // stub phase — used post-implementation
+func (nopCloser) Close() error { return nil }
 
 // fakeControlOutput returns a fake tmux control mode stdout stream containing
 // the provided pre-scripted lines. The caller controls exactly what "tmux"
 // reports, so tests are hermetic and deterministic.
-// Used by the implementer when Connect accepts an io.ReadCloser injection point.
-func fakeControlOutput(lines ...string) io.ReadCloser { //nolint:unused // stub phase — used post-implementation
+func fakeControlOutput(lines ...string) io.ReadCloser {
 	return nopCloser{strings.NewReader(strings.Join(lines, "\n") + "\n")}
+}
+
+// fakeExecFunc returns a WithExecFunc option that yields the given stream.
+func fakeExecFunc(r io.ReadCloser) tmux.Option {
+	return tmux.WithExecFunc(func(_ context.Context) (io.ReadCloser, error) {
+		return r, nil
+	})
+}
+
+// fakeExecFuncErr returns a WithExecFunc option that returns the given error.
+func fakeExecFuncErr(err error) tmux.Option {
+	return tmux.WithExecFunc(func(_ context.Context) (io.ReadCloser, error) {
+		return nil, err
+	})
 }
 
 // newTestControl is a test helper that constructs a ControlMode backed by a
 // fresh Publisher and a downstream HalfChannel with a fixed channel ID and
 // tick interval.
-func newTestControl(t *testing.T) (*tmux.ControlMode, *session.Publisher) {
+func newTestControl(t *testing.T) *tmux.ControlMode {
 	t.Helper()
 	keys := admission.NewAdmittedKeySet()
 	pub := session.NewPublisher(keys)
 	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
-	cm := tmux.New(pub, ds)
+	return tmux.New(pub, ds)
+}
+
+// newTestControlWithOpts is like newTestControl but accepts additional options
+// (e.g. WithExecFunc for hermetic stream injection).
+func newTestControlWithOpts(t *testing.T, opts ...tmux.Option) (*tmux.ControlMode, *session.Publisher) {
+	t.Helper()
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	cm := tmux.New(pub, ds, opts...)
 	return cm, pub
 }
 
@@ -73,18 +96,26 @@ func TestTmuxControlMode_Connect_EstablishesConnection(t *testing.T) {
 func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 	t.Parallel()
 
-	cm, pub := newTestControl(t)
+	// Inject a fake stream that announces 3 sessions then EOF — hermetic.
+	stream := fakeControlOutput(
+		"%session-created agent-01",
+		"%session-created agent-02",
+		"%session-created build",
+	)
+	cm, pub := newTestControlWithOpts(t, fakeExecFunc(stream))
 	t.Cleanup(func() {
 		if err := cm.Close(); err != nil {
 			t.Logf("Close: %v", err)
 		}
 	})
 
-	// The Connect stub will panic("not implemented") — Red Gate holds.
 	ctx := context.Background()
 	if err := cm.Connect(ctx); err != nil {
 		t.Fatalf("Connect: unexpected error: %v", err)
 	}
+
+	// Allow the dispatch loop time to process all events from the stream.
+	time.Sleep(20 * time.Millisecond)
 
 	want := []string{"agent-01", "agent-02", "build"}
 	sessions := cm.Sessions()
@@ -105,16 +136,23 @@ func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 func TestTmuxControlMode_SessionLifecycleEvents(t *testing.T) {
 	t.Parallel()
 
-	cm, pub := newTestControl(t)
+	// Fake stream: initial sessions then lifecycle events.
+	stream := fakeControlOutput(
+		"%session-created agent-01",
+		"%session-created agent-02",
+		"%session-created build",
+		"%session-created agent-03",
+		"%session-closed agent-02",
+	)
+	cm, pub := newTestControlWithOpts(t, fakeExecFunc(stream))
 	t.Cleanup(func() { _ = cm.Close() })
 
 	ctx := context.Background()
-	// Stub panics here — Red Gate holds.
 	if err := cm.Connect(ctx); err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
 
-	// Wait for event loop to process lifecycle events (stub: never reached).
+	// Wait for event loop to process lifecycle events.
 	time.Sleep(20 * time.Millisecond)
 
 	// After %session-created agent-03 — verify it appears.
@@ -140,10 +178,9 @@ func TestTmuxControlMode_SessionLifecycleEvents(t *testing.T) {
 func TestTmuxControlMode_OutputEventsFeedDownstream(t *testing.T) {
 	t.Parallel()
 
-	cm, _ := newTestControl(t)
+	cm := newTestControl(t)
 	t.Cleanup(func() { _ = cm.Close() })
 
-	// Stub panics here — Red Gate holds.
 	ctx := context.Background()
 	if err := cm.Connect(ctx); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -160,23 +197,17 @@ func TestTmuxControlMode_OutputEventsFeedDownstream(t *testing.T) {
 // ErrControlModeUnavailable when the tmux binary is not present (BC-2.04.001
 // EC-004 / FM-011; ADR-010).
 //
-// This test does NOT skip — it is hermetic because the binary is injected via
-// the fake stream mechanism. The stub panics; Red Gate holds.
+// Hermetic: injects a fake exec function that returns ErrControlModeUnavailable.
 func TestTmuxControlMode_Connect_ErrWhenTmuxNotFound(t *testing.T) {
 	t.Parallel()
 
-	// TODO(S-3.01a): this test requires a ControlMode constructor variant that
-	// accepts an explicit exec.Cmd factory so the binary path can be overridden
-	// in tests without touching PATH. If the implementer adds WithExecFunc
-	// option, wire it here. Until then, the stub panics on Connect — Red Gate.
-	cm, _ := newTestControl(t)
+	// Simulate "tmux not in PATH" via WithExecFunc — hermetic, no PATH manipulation.
+	notFoundErr := fmt.Errorf("%w: exec: tmux: no such file", tmux.ErrControlModeUnavailable)
+	cm, _ := newTestControlWithOpts(t, fakeExecFuncErr(notFoundErr)) //nolint:dogsled // publisher unused in this test
 	t.Cleanup(func() { _ = cm.Close() })
 
-	// Simulate "tmux not in PATH" by connecting with a context that already
-	// knows tmux is absent. Stub panics — Red Gate holds.
 	ctx := context.Background()
 	err := cm.Connect(ctx)
-	// Stub panics before reaching this assertion — that is the Red Gate.
 	if err == nil {
 		t.Fatal("Connect with no tmux binary: got nil error; want ErrControlModeUnavailable")
 	}
@@ -192,11 +223,10 @@ func TestTmuxControlMode_Connect_ErrWhenTmuxNotFound(t *testing.T) {
 func TestTmuxControlMode_NoSessionsOnStartup(t *testing.T) {
 	t.Parallel()
 
-	cm, _ := newTestControl(t)
+	cm := newTestControl(t)
 	t.Cleanup(func() { _ = cm.Close() })
 
 	ctx := context.Background()
-	// Stub panics — Red Gate holds.
 	if err := cm.Connect(ctx); err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
@@ -213,11 +243,10 @@ func TestTmuxControlMode_NoSessionsOnStartup(t *testing.T) {
 func TestTmuxControlMode_ErrChannelSignalsDroppedConnection(t *testing.T) {
 	t.Parallel()
 
-	cm, _ := newTestControl(t)
+	cm := newTestControl(t)
 	t.Cleanup(func() { _ = cm.Close() })
 
 	ctx := context.Background()
-	// Stub panics — Red Gate holds.
 	if err := cm.Connect(ctx); err != nil {
 		t.Fatalf("Connect: %v", err)
 	}

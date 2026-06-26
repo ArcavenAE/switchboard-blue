@@ -12,6 +12,7 @@ package session
 
 import (
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -45,9 +46,9 @@ type Info struct {
 //
 // Concurrency: Publisher is safe for concurrent use.
 type Publisher struct {
-	mu       sync.RWMutex              //nolint:unused // Red Gate stub — used post-implementation
-	sessions map[string]Info           //nolint:unused // Red Gate stub — used post-implementation
-	keys     *admission.AdmittedKeySet //nolint:unused // Red Gate stub — used post-implementation
+	mu       sync.RWMutex
+	sessions map[string]Info
+	keys     *admission.AdmittedKeySet
 }
 
 // NewPublisher constructs a Publisher that checks publication admission using
@@ -55,8 +56,10 @@ type Publisher struct {
 //
 // keys must not be nil.
 func NewPublisher(keys *admission.AdmittedKeySet) *Publisher {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001 PC-2; init sessions map
-	return nil
+	return &Publisher{
+		sessions: make(map[string]Info),
+		keys:     keys,
+	}
 }
 
 // Publish adds sessionName to the live set with the current UTC timestamp
@@ -64,7 +67,18 @@ func NewPublisher(keys *admission.AdmittedKeySet) *Publisher {
 //
 // Returns ErrSessionAlreadyPublished if name is already present.
 func (p *Publisher) Publish(sessionName string) error {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001 PC-2
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.sessions[sessionName]; ok {
+		return ErrSessionAlreadyPublished
+	}
+
+	p.sessions[sessionName] = Info{
+		Name:        sessionName,
+		PublishedAt: time.Now().UTC(),
+	}
+
 	return nil
 }
 
@@ -72,7 +86,15 @@ func (p *Publisher) Publish(sessionName string) error {
 //
 // Returns ErrSessionNotFound if the session is not in the live set.
 func (p *Publisher) Unpublish(sessionName string) error {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001 PC-4
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.sessions[sessionName]; !ok {
+		return ErrSessionNotFound
+	}
+
+	delete(p.sessions, sessionName)
+
 	return nil
 }
 
@@ -82,15 +104,33 @@ func (p *Publisher) Unpublish(sessionName string) error {
 // The returned slice is a value copy — mutations do not affect the Publisher's
 // internal state (ARCH-08 §6.6 rule 12: no internal pointer leak).
 func (p *Publisher) ListSessions() []Info {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001 PC-2; return sorted snapshot
-	return nil
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	out := make([]Info, 0, len(p.sessions))
+	for _, info := range p.sessions {
+		out = append(out, info)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name < out[j].Name
+	})
+
+	return out
 }
 
 // Get returns the Info for sessionName, or ErrSessionNotFound if absent
 // (E-SES-001; BC-2.04.001).
 func (p *Publisher) Get(sessionName string) (Info, error) {
-	todo() // TODO(S-3.01a): implement per BC-2.04.001; E-SES-001
-	return Info{}, nil
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	info, ok := p.sessions[sessionName]
+	if !ok {
+		return Info{}, ErrSessionNotFound
+	}
+
+	return info, nil
 }
 
 // AdmittedKeySet exposes the underlying admission key set for read access by
@@ -99,8 +139,7 @@ func (p *Publisher) Get(sessionName string) (Info, error) {
 // The return type is a pointer to the concrete type, not an interface
 // (Go rule 6: accept interfaces, return concrete types).
 func (p *Publisher) AdmittedKeySet() *admission.AdmittedKeySet {
-	todo() // TODO(S-3.01a): implement
-	return nil
+	return p.keys
 }
 
 // FrameTypeData re-exports the canonical data frame type constant from
@@ -109,15 +148,3 @@ func (p *Publisher) AdmittedKeySet() *admission.AdmittedKeySet {
 //
 // GREEN-BY-DESIGN: zero branching, no I/O, no helpers, 1 line.
 const FrameTypeData = frame.FrameTypeData
-
-// todo is a package-local helper that panics with an "not implemented" message.
-// Its sole purpose is to satisfy the Red Gate discipline (BC-5.38.001): every
-// non-trivial stub body calls todo() so that tests fail immediately rather than
-// returning silent zero values.
-//
-// BC-5.38.005 self-check: "If I include this real implementation, will the test
-// for this function pass trivially without any implementer work?" — yes for every
-// function above; all use todo().
-func todo() {
-	panic("not implemented") //nolint:forbidigo // Red Gate stub — implementer replaces with real body
-}
