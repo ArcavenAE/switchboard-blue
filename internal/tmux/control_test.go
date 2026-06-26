@@ -45,18 +45,27 @@ func fakeControlOutput(lines ...string) io.ReadCloser {
 	return nopCloser{strings.NewReader(strings.Join(lines, "\n") + "\n")}
 }
 
+// closedNilChan returns a pre-closed nil-classification channel for test fakes
+// that do not exercise the classification path (M-002/L-004).
+func closedNilChan() <-chan error {
+	ch := make(chan error, 1)
+	close(ch)
+	return ch
+}
+
 // fakeExecFunc returns a WithExecFunc option that yields the given stream.
-// H-03: updated to match the new execFunc signature (stdin, stdout, err).
+// H-03: updated to match the new execFunc signature (stdin, stdout, classifyCh, err).
+// classifyCh is a pre-closed nil channel — test fakes do not exercise classification.
 func fakeExecFunc(r io.ReadCloser) tmux.Option {
-	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, error) {
-		return nopWriteCloser{}, r, nil
+	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return nopWriteCloser{}, r, closedNilChan(), nil
 	})
 }
 
 // fakeExecFuncErr returns a WithExecFunc option that returns the given error.
 func fakeExecFuncErr(err error) tmux.Option {
-	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, error) {
-		return nil, nil, err
+	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return nil, nil, nil, err
 	})
 }
 
@@ -546,7 +555,7 @@ func TestTmuxControlMode_Close_WaitsForDispatchLoop(t *testing.T) {
 
 	stdoutReader, stdoutWriter := io.Pipe()
 
-	fake := tmux.WithExecFunc(func(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
+	fake := tmux.WithExecFunc(func(ctx context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
 		// Write the enumeration block asynchronously so execFn can return
 		// before dispatchLoop is reading (io.Pipe synchronises; blocking here
 		// would deadlock Connect before dispatchLoop is spawned).
@@ -559,7 +568,7 @@ func TestTmuxControlMode_Close_WaitsForDispatchLoop(t *testing.T) {
 			time.Sleep(delay)
 			_ = stdoutWriter.Close()
 		}()
-		return nopWriteCloser{}, stdoutReader, nil
+		return nopWriteCloser{}, stdoutReader, closedNilChan(), nil
 	})
 
 	cm, _ := newTestControlWithOpts(t, fake) //nolint:dogsled // publisher unused in M-2 test

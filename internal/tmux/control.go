@@ -66,7 +66,16 @@ var ErrControlModeBinaryNotFound = errors.New("tmux: binary not found in PATH")
 // H-03: returns both stdin (for writing commands) and stdout (for reading
 // events), so Connect can actually send commands like list-sessions. Tests
 // that use fakeExecFunc must adapt to this signature.
-type execFunc func(ctx context.Context) (stdin io.WriteCloser, stdout io.ReadCloser, err error)
+//
+// M-002/L-004 (pass-4): classifyCh delivers exactly one classification result
+// after the subprocess exits — either ErrControlModeUnsupportedFlag (flag
+// rejection detected in stderr) or nil (clean exit or unrecognized stderr).
+// The channel is buffered(1) and closed after the result is sent, so callers
+// can drain it without blocking. Connect forwards a non-nil classification to
+// the Err() channel so callers can distinguish ErrControlModeUnsupportedFlag
+// from ErrControlModeDropped.
+// Test fakes that do not care about classification may return a closed nil channel.
+type execFunc func(ctx context.Context) (stdin io.WriteCloser, stdout io.ReadCloser, classifyCh <-chan error, err error)
 
 // ControlMode manages a single tmux control mode connection and bridges
 // control mode events to the session publisher and downstream half-channel.
@@ -120,8 +129,10 @@ type Option func(*ControlMode)
 // Hermetic test injection point: tests use this to substitute the process
 // spawn without shelling out to real tmux.
 //
-// H-03: fn now returns (stdin, stdout, err) so Connect can write commands.
-func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, error)) Option {
+// H-03: fn now returns (stdin, stdout, classifyCh, err) so Connect can write
+// commands and monitor post-start classification. Test fakes that do not
+// exercise classification must return a pre-closed nil channel for classifyCh.
+func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error)) Option {
 	return func(c *ControlMode) {
 		c.execFn = fn
 	}
@@ -131,29 +142,28 @@ func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, e
 //
 // H-01: reaps the subprocess in a goroutine via cmd.Wait() to avoid zombies.
 // H-03: returns both stdin and stdout so Connect can write commands.
-// M-001 (pass-3): captures stderr to detect -C flag rejection on old tmux
-// versions. Detection is best-effort via the reaper goroutine: if cmd.Wait()
-// returns non-nil and stderr contains flag-rejection patterns, the sentinel
-// ErrControlModeUnsupportedFlag is logged. Full synchronous classification
-// (returning the sentinel from defaultExecFn itself) would require
-// restructuring execFunc's signature and is deferred to phase-6 hardening.
-func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
+// M-002/L-004 (pass-4): adds sync.WaitGroup to synchronize the stderr drain
+// goroutine with the reaper, ensuring the full stderr capture is available for
+// ClassifyStderr before classifyCh is written. Returns classifyCh (buffered 1)
+// that receives ErrControlModeUnsupportedFlag on flag-rejection, or nil on clean
+// exit, then is closed. Connect forwards non-nil classification to Err().
+func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
 	path, err := exec.LookPath("tmux")
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %w: %w", ErrControlModeUnavailable, ErrControlModeBinaryNotFound, err)
+		return nil, nil, nil, fmt.Errorf("%w: %w: %w", ErrControlModeUnavailable, ErrControlModeBinaryNotFound, err)
 	}
 
 	cmd := exec.CommandContext(ctx, path, "-C")
 
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("tmux: stdin pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("tmux: stdin pipe: %w", err)
 	}
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = stdinPipe.Close()
-		return nil, nil, fmt.Errorf("tmux: stdout pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("tmux: stdout pipe: %w", err)
 	}
 
 	// M-001 (pass-3): capture stderr to detect -C flag rejection.
@@ -161,42 +171,53 @@ func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 	if err != nil {
 		_ = stdinPipe.Close()
 		_ = stdoutPipe.Close()
-		return nil, nil, fmt.Errorf("tmux: stderr pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("tmux: stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
 		_ = stdinPipe.Close()
 		_ = stdoutPipe.Close()
 		_ = stderrPipe.Close()
-		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+		return nil, nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
 	}
 
-	// M-001 (pass-3): drain stderr concurrently so it does not block the
-	// subprocess. The reaper classifies exit errors using the captured text.
-	// cmd.Wait() provides the happens-before between the drain goroutine's
-	// io.Copy and the reaper's stderrBuf.String() read — no mutex needed.
+	// M-002 (pass-4): synchronize the stderr drain goroutine with the reaper
+	// via sync.WaitGroup so that stderrBuf.String() is safe to read in the
+	// reaper only after all bytes have been copied from stderrPipe.
+	// Without this, cmd.Wait() returns before io.Copy finishes (StderrPipe
+	// transfers responsibility for draining to the caller; Wait only closes
+	// the write-end of the pipe, it does not join the caller's drain goroutine).
 	var stderrBuf bytes.Buffer
+	var drainWG sync.WaitGroup
+	drainWG.Add(1)
 	go func() {
+		defer drainWG.Done()
 		_, _ = io.Copy(&stderrBuf, stderrPipe)
 	}()
 
+	// classifyCh delivers the post-exit classification to Connect.
+	// Buffered 1 so the reaper goroutine never blocks on a non-draining caller.
+	classifyCh := make(chan error, 1)
+
 	// H-01: reap the subprocess; classify stderr on abnormal exit.
 	go func() {
-		if waitErr := cmd.Wait(); waitErr != nil {
-			// cmd.Wait() guarantees stderr draining is complete before returning,
-			// so stderrBuf is safe to read here without additional synchronisation.
+		waitErr := cmd.Wait()
+		// M-002 (pass-4): wait for the drain goroutine to complete before reading
+		// stderrBuf. This is the critical synchronization point.
+		drainWG.Wait()
+		if waitErr != nil {
 			captured := stderrBuf.String()
-			// Best-effort classification via ClassifyStderr (pure helper in stderr.go).
-			// The sentinel ErrControlModeUnsupportedFlag is defined; synchronous
-			// propagation to the caller requires phase-6 restructuring of execFunc's
-			// return signature.
-			// TODO(phase-6): propagate via execFunc signature so callers receive
-			// ErrControlModeUnsupportedFlag.
-			_ = ClassifyStderr(captured)
+			// L-004 (pass-4): emit ErrControlModeUnsupportedFlag via classifyCh
+			// so Connect can forward it to the Err() channel. Non-nil classification
+			// supersedes ErrControlModeDropped from the dispatchLoop EOF path.
+			if classified := ClassifyStderr(captured); classified != nil {
+				classifyCh <- classified
+			}
 		}
+		close(classifyCh)
 	}()
 
-	return stdinPipe, stdoutPipe, nil
+	return stdinPipe, stdoutPipe, classifyCh, nil
 }
 
 // framesBufferSize is the capacity of the frames channel. Large enough to
@@ -257,7 +278,7 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 
 	innerCtx, cancel := context.WithCancel(ctx)
 
-	stdinPipe, stdoutPipe, err := c.execFn(innerCtx)
+	stdinPipe, stdoutPipe, classifyCh, err := c.execFn(innerCtx)
 	if err != nil {
 		cancel()
 		if errors.Is(err, ErrControlModeUnavailable) {
@@ -292,6 +313,24 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 		defer c.wg.Done()
 		c.dispatchLoop(innerCtx, stdoutPipe)
 	}()
+
+	// L-004 (pass-4): if execFn returns a classification channel, monitor it
+	// in a goroutine. A non-nil classification (ErrControlModeUnsupportedFlag)
+	// supersedes the ErrControlModeDropped that dispatchLoop emits on EOF —
+	// forward it to errCh so callers get the more specific sentinel.
+	if classifyCh != nil {
+		go func() {
+			if classified, ok := <-classifyCh; ok && classified != nil {
+				c.closeErrCh.Do(func() {
+					select {
+					case c.errCh <- classified:
+					default:
+					}
+					close(c.errCh)
+				})
+			}
+		}()
+	}
 
 	return nil
 }

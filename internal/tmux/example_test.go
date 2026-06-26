@@ -36,11 +36,19 @@ func exampleStream(lines ...string) io.ReadCloser {
 	return exampleNopCloser{strings.NewReader(strings.Join(lines, "\n") + "\n")}
 }
 
+// exampleClosedNilChan returns a pre-closed nil-classification channel.
+// Example fakes do not exercise the classification path (M-002/L-004).
+func exampleClosedNilChan() <-chan error {
+	ch := make(chan error, 1)
+	close(ch)
+	return ch
+}
+
 // exampleFakeExec returns a WithExecFunc option that yields the given stream.
-// H-03: signature is (stdin WriteCloser, stdout ReadCloser, err).
+// M-002/L-004: updated to match the new execFunc signature (stdin, stdout, classifyCh, err).
 func exampleFakeExec(r io.ReadCloser) tmux.Option {
-	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, error) {
-		return exampleNopWriteCloser{}, r, nil
+	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return exampleNopWriteCloser{}, r, exampleClosedNilChan(), nil
 	})
 }
 
@@ -182,8 +190,8 @@ func ExampleControlMode_outputFramesDelivered() {
 func ExampleControlMode_tmuxUnavailable() {
 	// Inject an exec function that returns ErrControlModeUnavailable, simulating
 	// a missing tmux binary (lookup failure; hermetic — no real PATH search).
-	unavailableExec := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, error) {
-		return nil, nil, tmux.ErrControlModeUnavailable
+	unavailableExec := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return nil, nil, nil, tmux.ErrControlModeUnavailable
 	})
 	cm := newExampleControl(unavailableExec)
 
