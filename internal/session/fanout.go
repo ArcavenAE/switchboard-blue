@@ -72,6 +72,14 @@ const upstreamBufSize = 16
 // by the console operator. The caller receives a bidirectional upstream chan so
 // that AccessNode can close it (signalling the consumer goroutine) on Detach.
 //
+// CLOSE-RACE CONTRACT (F-H-5 pass-3): ConsoleSet owns the upstream channel.
+// Remove and EvictStale close the upstream channel outside the write lock.
+// Callers MUST NOT send to the upstream channel concurrently with Remove or
+// EvictStale — closing a channel while a concurrent goroutine is sending to it
+// panics. Production callers route all sends through AccessNode.SendKeystroke,
+// which does not write to the upstream channel; direct sends are only for test
+// harnesses that fully control the lifecycle.
+//
 // downstream is buffered with capacity downstreamBufSize; upstream is buffered
 // with capacity upstreamBufSize so that a single keystroke does not block the
 // sender when the effectful consumer is not yet draining.

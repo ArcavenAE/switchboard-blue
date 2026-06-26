@@ -162,12 +162,14 @@ func NewAccessNode(pub *Publisher, auth Authorizer, opts ...AccessNodeOption) *A
 // does NOT drain it — callers must use SendKeystroke for the authorizer +
 // serialization guarantees.
 //
-// OWNERSHIP CONTRACT: The upstream channel is owned by the ConsoleSet. The
-// caller receives a send-only view for convenience (test harnesses). Callers
-// MUST NOT write to the upstream channel concurrently with Detach or Sweep.
-// Production callers use SendKeystroke for the safe path; direct channel
-// writes are for test harnesses only that fully control attach/detach
-// lifecycle and do not send after detaching.
+// OWNERSHIP CONTRACT (F-H-5 pass-3): The upstream channel is owned by the
+// ConsoleSet entry. The returned chan<- []byte is a send-only narrow view.
+// Callers MUST NOT write to the upstream channel concurrently with Detach or
+// Sweep — closing a channel while a concurrent goroutine is sending to it
+// panics. The safe path for production callers is SendKeystroke, which does
+// not write to the upstream channel at all; direct channel writes are for test
+// harnesses only that fully control the attach/detach lifecycle and guarantee
+// no sends occur after detach.
 //
 // Returns:
 //   - downstream: a receive-only channel of frame.OuterHeader values delivered
