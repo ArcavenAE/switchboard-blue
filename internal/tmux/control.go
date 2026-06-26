@@ -57,7 +57,8 @@ type execFunc func(ctx context.Context) (stdin io.WriteCloser, stdout io.ReadClo
 // from any goroutine.
 //
 // mu protects all lifecycle fields (proc, stdin, cancel). Channel fields
-// (errCh, closeErrCh) are safe by their own Go concurrency contracts.
+// (errCh, closeErrCh, frames, closeFrames) are safe by their own Go
+// concurrency contracts.
 type ControlMode struct {
 	publisher  *session.Publisher
 	downstream *halfchannel.HalfChannel
@@ -65,6 +66,15 @@ type ControlMode struct {
 	// on Close. One error is the maximum meaningful signal (dropped = fatal).
 	errCh      chan error
 	closeErrCh sync.Once
+
+	// frames is the output stream of ChannelFrames produced by the dispatch
+	// loop (F-PASS7-H-001, pass-7). Each %output event yields one or more
+	// frames via M-1 fragmentation. Callers drain via Frames(). Buffered to
+	// absorb burst latency; on overflow, frames are dropped with a non-blocking
+	// select (backpressure protection — dispatchLoop must not stall on a slow
+	// consumer). The channel is closed when dispatchLoop exits.
+	frames      chan halfchannel.ChannelFrame
+	closeFrames sync.Once // guards close(frames) against double-close
 
 	// mu protects lifecycle fields below (proc, stdin, cancel).
 	mu     sync.Mutex
@@ -132,6 +142,11 @@ func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 	return stdinPipe, stdoutPipe, nil
 }
 
+// framesBufferSize is the capacity of the frames channel. Large enough to
+// absorb tmux burst output (BC-2.04.001 PC-5) without backpressure stalling
+// dispatchLoop; small enough that memory overhead is negligible.
+const framesBufferSize = 256
+
 // New constructs a ControlMode that publishes sessions via publisher and
 // delivers output frames to downstream (BC-2.04.001; S-3.01a task 5+6).
 //
@@ -142,7 +157,9 @@ func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel, opts
 		downstream: downstream,
 		// Buffer 1 so dispatchLoop can always deliver the drop signal without
 		// blocking, even if the caller has not yet called Err().
-		errCh:  make(chan error, 1),
+		errCh: make(chan error, 1),
+		// F-PASS7-H-001 (pass-7): buffered output stream; drained via Frames().
+		frames: make(chan halfchannel.ChannelFrame, framesBufferSize),
 		execFn: defaultExecFn,
 	}
 
@@ -235,6 +252,19 @@ func (c *ControlMode) Err() <-chan error {
 	return c.errCh
 }
 
+// Frames returns the read-only channel of ChannelFrames produced by the
+// control mode dispatch loop (F-PASS7-H-001, pass-7). Each %output event
+// yields one or more frames via M-1 fragmentation. The channel is buffered;
+// if the consumer falls behind, frames are dropped (backpressure protection —
+// dispatchLoop must not stall on a slow drain). The channel is closed when
+// dispatchLoop exits (via Close or unexpected EOF).
+//
+// Callers should drain Frames() concurrently with reading Err() to receive
+// both data and lifecycle signals.
+func (c *ControlMode) Frames() <-chan halfchannel.ChannelFrame {
+	return c.frames
+}
+
 // Close cancels the control mode connection and waits for the dispatch loop
 // to exit. After Close returns, the dispatch goroutine has exited and the
 // publisher/downstream are no longer accessed by ControlMode.
@@ -275,6 +305,11 @@ func (c *ControlMode) Close() error {
 	// unblock after a graceful Close. sync.Once guards against double-close.
 	c.closeErrCh.Do(func() {
 		close(c.errCh)
+	})
+
+	// F-PASS7-H-001 (pass-7): close frames so Frames() consumers unblock.
+	c.closeFrames.Do(func() {
+		close(c.frames)
 	})
 
 	return nil
@@ -383,6 +418,12 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 			close(c.errCh)
 		})
 	}
+
+	// F-PASS7-H-001 (pass-7): close frames on dispatchLoop exit so Frames()
+	// consumers unblock. sync.Once guards against double-close with Close().
+	c.closeFrames.Do(func() {
+		close(c.frames)
+	})
 }
 
 // handleLine processes a single control mode protocol line.
@@ -429,7 +470,17 @@ func (c *ControlMode) handleLine(line string) {
 					// delivery semantics rather than silently dropping.
 					break
 				}
-				c.downstream.Tick()
+				frame := c.downstream.Tick()
+				// F-PASS7-H-001 (pass-7): publish the dequeued frame to the
+				// Frames channel. Non-blocking: if the consumer is slow, drop
+				// the frame rather than stalling dispatchLoop (backpressure
+				// would block tmux output processing).
+				// TODO(phase-6): structured logging on drop.
+				select {
+				case c.frames <- frame:
+				default:
+					// Frame dropped due to downstream backpressure.
+				}
 			}
 		}
 	}
