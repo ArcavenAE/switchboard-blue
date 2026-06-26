@@ -2,10 +2,11 @@
 artifact_id: BC-2.04.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
+modified: 2026-06-26T00:00:00Z
 phase: 1a
 bc_id: BC-2.04.002
 subsystem: session-access
@@ -72,7 +73,7 @@ tmux control mode initialization failure detected at access node startup or mid-
 | EC-001 (DEC-013, ASM-003) | tmux binary exists but control mode flag not supported (old version) | PTY fallback; log: "tmux version does not support -CC flag". |
 | EC-002 (FM-011) | tmux not found in PATH | PTY fallback immediately; no retry for tmux. Log: "tmux binary not found; using PTY proxy". |
 | EC-003 | tmux control mode drops after successful start (mid-operation) | Access node attempts control mode reconnect; if reconnect fails after 3 attempts, switches to PTY proxy mode for existing sessions. Log: "tmux control mode lost; falling back to PTY proxy". |
-| EC-004 | PTY device not available on host | Access node fails to start entirely; E-SYS-001 "PTY device unavailable; cannot start access node". No silent failure. |
+| EC-004 | PTY device not available on host | Access node fails to start entirely; E-SYS-001 "PTY device unavailable: cannot start access node. Install 'openpty' or check device permissions." No silent failure. |
 
 ## Canonical Test Vectors
 
