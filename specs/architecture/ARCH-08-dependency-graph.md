@@ -2,13 +2,14 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
   - 2026-06-25T14:00:00 # v1.4 — Added §1 scope callout
   - 2026-06-25T00:00:00 # v1.5 — Add prose note below Mermaid: positions in §6.5/§6.6 are authoritative for import-order layering; Mermaid groupings reflect functional domain (consistency-validator F-W3-M-004)
+  - 2026-06-26T00:00:00 # v1.6 — Promote internal/session (pos 6) and internal/tmux (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab)
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -187,11 +188,12 @@ following constraints apply to every Go file under `internal/`. This section
 codifies what the compiler and `go vet` already enforce structurally and what
 the consistency-validator audits at every wave gate.
 
-### §6.1 Topological ordering (live packages, Wave-2 state)
+### §6.1 Topological ordering (Wave-2 baseline — see §6.5 for current state)
 
 Each package occupies a fixed position in the DAG. A package at position N may
 only import packages at positions 1..N-1. The table below covers all `internal/`
-packages present on `develop` at Wave-2 close (f35e836).
+packages present on `develop` at Wave-2 close (f35e836). For the live Wave-3
+state (including `internal/session` and `internal/tmux`), consult §6.5.
 
 | Position | Package | Allowed imports | Classification |
 |----------|---------|-----------------|----------------|
@@ -235,7 +237,7 @@ New packages must, before their first commit to any branch:
 
 Undeclared packages discovered at the wave gate are an architecture violation.
 
-### §6.5 Current import positions (post-Wave-2, develop @ `d8d7ae6`)
+### §6.5 Current import positions (post-Wave-3 S-3.01a, develop @ `43208ab`)
 
 The following packages are present in `internal/` on develop. Positions are
 strict — position N may import packages at positions 1..N-1 only.
@@ -247,39 +249,26 @@ strict — position N may import packages at positions 1..N-1 only.
 | 3 | `internal/halfchannel` | {frame} | pure-core | Wave 1 |
 | 4 | `internal/admission` | {frame, hmac} | boundary | Wave 2 (S-2.02 + S-1.03) |
 | 5 | `internal/routing` | {frame, hmac, admission} | boundary | Wave 2 (S-2.02) |
+| 6 | `internal/session` | {frame, admission} (current code uses admission only) | boundary | Wave 3 (S-3.01a) |
+| 7 | `internal/tmux` | {halfchannel, session} | effectful (PTY, child process) | Wave 3 (S-3.01a) |
 
 This table is authoritative for the develop branch. Any package not listed
 above does NOT exist in the codebase.
 
 Verified against `ls internal/` and
 `grep -rn "switchboard/internal" --include="*.go" internal/ | grep -v _test.go`
-at d8d7ae6. No deviations found.
+at 43208ab. No deviations found.
 
-### §6.6 Planned positions (Wave 3 prospective)
+### §6.6 Planned positions (Wave 4+ prospective)
 
-The following positions are **proposed for Wave 3** and are NOT YET present
-on develop. Story-writer must treat these as targets, not as committed state.
-The positions are reserved here so that wave planning can proceed without
-position-number conflicts.
+Positions 6 and 7 (`internal/session` and `internal/tmux`) were previously
+planned here. They shipped in Wave 3 (S-3.01a, PR #11, merged 2026-06-26 at
+`43208ab`) and are now listed in §6.5.
 
-| Position | Package | Allowed imports | Classification | Wave | Status |
-|----------|---------|-----------------|----------------|------|--------|
-| 6 | `internal/session` | {frame, admission} | boundary | Wave 3 (S-3.01/02/03) | PLANNED |
-| 7 | `internal/tmux` | {halfchannel, session} | effectful (PTY, child process) | Wave 3 (S-3.01) | PLANNED |
+No packages are currently planned for positions 8+. Future waves will register
+new positions here before their first commit, per the §6.4 protocol.
 
-Note on `internal/session` imports: session imports {frame, admission} so
-SessionAuth (S-3.03 Tier-2) can verify against `admission.AdmittedKeySet`.
-Position 6 is placed after admission at position 4.
-
-When these packages are created during Wave 3 implementation, this table will
-be promoted into §6.5. Until then, treat them as architectural intent only.
-
-**Cycle-freeness check for Wave 3 additions:**
-- `internal/session` (position 6) imports {frame (1), admission (4)} — OK (6 > 1, 6 > 4).
-- `internal/tmux` (position 7) imports {halfchannel (3), session (6)} — OK (7 > 3, 7 > 6).
-- No back-edges. DAG remains acyclic.
-
-**Additional forbidden edges (Wave 3):**
+**Additional forbidden edges (carried forward from Wave 3):**
 - `internal/session` MUST NOT import `internal/routing`.
   Session-level authorization state is managed within `internal/session` itself;
   routing is a peer layer, not a dependency.
@@ -298,3 +287,4 @@ be promoted into §6.5. Until then, treat them as architectural intent only.
 | 1.3 | 2026-06-25 | Corrected §6.5: replaced hallucinated 16-package table (paths, arq, replay, multipath, metrics, tmux, discovery, svtnmgmt, drain, config, session not on develop) with the 5 packages actually present on develop at d8d7ae6; moved Wave 3 prospective packages (session, tmux) to new §6.6 as PLANNED; corrected session allowed imports to {frame, admission} per S-3.03 SessionAuth requirement |
 | 1.4 | 2026-06-25 | Added §1 scope callout making the target-architecture-vs-current-state contract explicit: §§1–5 describe planned target architecture; §6.5 is authoritative for packages currently on develop; §6.6 tracks wave-by-wave delivery plan |
 | 1.5 | 2026-06-25 | Added prose note after Mermaid diagram clarifying that Mermaid layer groupings reflect functional domain, not import-order positions; §6.5/§6.6 are authoritative for import ordering (consistency-validator finding F-W3-M-004) |
+| 1.6 | 2026-06-26 | Promoted `internal/session` (pos 6) and `internal/tmux` (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab); §6.6 updated to Wave 4+ planning placeholder |
