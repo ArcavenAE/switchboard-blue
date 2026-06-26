@@ -665,13 +665,11 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 	}
 }
 
-// defaultPTYAlloc is the production PTY allocator. It calls
-// golang.org/x/sys/unix.Openpty and spawns a shell process on the slave
-// side. Replaced in unit tests via WithPTYAllocFunc (hermetic test pattern).
+// defaultPTYAlloc is the production PTY allocator.
+// Platform-specific implementations are in pty_alloc_darwin.go (darwin) and
+// pty_alloc_linux.go (linux). This stub is compiled for all other platforms
+// (e.g., Windows, BSD not covered above) to satisfy the compiler; it returns
+// ErrPTYDeviceUnavailable at runtime since PTY allocation is OS-specific.
 //
-// The real implementation is deferred to the implementer (Red Gate stub).
-func defaultPTYAlloc() (io.ReadWriteCloser, int, error) {
-	// Real PTY allocation deferred to VP-032 integration harness.
-	// Unit tests always inject WithPTYAllocFunc and never reach this path.
-	return nil, 0, fmt.Errorf("%w: defaultPTYAlloc not available in this build (VP-032 integration harness required)", ErrPTYDeviceUnavailable)
-}
+// Unit tests always inject WithPTYAllocFunc and never reach this path.
+// VP-032 integration harness exercises the real implementations.
