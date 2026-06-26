@@ -1,16 +1,23 @@
 // Package session — upstream.go defines the Authorizer hook that the access
-// node consults before accepting a keystroke from an attached console, and the
-// AccessNode type that wires together Publisher + ConsoleSet + keystroke
-// serialization (BC-2.04.003; BC-2.04.004; BC-2.04.006).
+// node consults before accepting a keystroke from an attached console, the
+// KeystrokeSink interface for delegating keystroke forwarding to the effectful
+// tmux layer, and the AccessNode type that wires together Publisher +
+// ConsoleSet + keystroke serialization (BC-2.04.003; BC-2.04.004; BC-2.04.006).
 //
 // S-3.03 will replace NoOpAuthorizer with SessionAuth (Tier-2 per-session
 // authorization); S-3.02 ships the hook so that AC-001..AC-008 pass with the
 // default allow-all behaviour.
+//
+// Classification: boundary (ARCH-09). AccessNode is goroutine-free; the
+// KeystrokeSink is implemented by the effectful tmux layer (internal/tmux),
+// which writes to the real tmux subprocess. Tests inject a fake KeystrokeSink
+// to assert forwarding without shelling out to tmux.
 package session
 
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/frame"
 )
@@ -41,14 +48,52 @@ func (NoOpAuthorizer) Allow(_ ConsoleKey, _ string, _ []byte) error {
 	return nil
 }
 
-// upstreamSinkCap is the buffer depth for the AccessNode's upstream sink
-// channel. Large enough to absorb bursts from concurrent consoles without
-// blocking the consumer goroutines.
-const upstreamSinkCap = 256
+// KeystrokeSink is the interface implemented by the effectful tmux layer
+// (internal/tmux.ControlMode, internal/tmux.PTYProxy, and
+// internal/tmux.SessionConnector) for forwarding keystrokes into the running
+// tmux session or PTY.
+//
+// AccessNode.SendKeystroke delegates to the injected KeystrokeSink after
+// authorization and serialization. Tests inject a fake sink that records calls
+// for assertion (AC-002; AC-007). Production callers inject
+// internal/tmux.SessionConnector.
+//
+// SendInput must be safe for concurrent calls from multiple goroutines. It is
+// called while AccessNode holds sinkMu, so the implementation must not call
+// back into AccessNode under any lock.
+type KeystrokeSink interface {
+	// SendInput writes payload to the tmux session or PTY. The payload slice
+	// must not be retained after SendInput returns.
+	SendInput(payload []byte) error
+}
+
+// noOpSink is the default KeystrokeSink used when no sink is injected. It
+// discards all payloads silently. Tests that do not assert forwarding use
+// this via NewAccessNode without a WithKeystrokeSink option.
+type noOpSink struct{}
+
+func (noOpSink) SendInput(_ []byte) error { return nil }
+
+// AccessNodeOption is a functional option for NewAccessNode.
+type AccessNodeOption func(*AccessNode)
+
+// WithKeystrokeSink sets the KeystrokeSink that AccessNode.SendKeystroke
+// delegates to. Tests inject a fake sink; production callers inject
+// tmux.SessionConnector (which implements KeystrokeSink via SendInput).
+func WithKeystrokeSink(sink KeystrokeSink) AccessNodeOption {
+	return func(a *AccessNode) {
+		a.sink = sink
+	}
+}
 
 // AccessNode is the in-process access node: it owns a Publisher (session
-// lifecycle), a ConsoleSet (fan-out), a keystroke serialization mutex, and an
-// Authorizer hook for upstream keystroke gating.
+// lifecycle), a ConsoleSet (fan-out), a keystroke serialization mutex, an
+// Authorizer hook for upstream keystroke gating, and a KeystrokeSink for
+// forwarding keystrokes to the effectful tmux layer.
+//
+// AccessNode is goroutine-free (ARCH-09: boundary classification). It spawns
+// no goroutines. The effectful tmux layer is responsible for I/O and goroutine
+// management. Tests drive AccessNode synchronously without goroutine leaks.
 //
 // The zero value is not usable; construct with NewAccessNode.
 //
@@ -57,47 +102,52 @@ type AccessNode struct {
 	pub        *Publisher
 	consoles   *ConsoleSet
 	authorizer Authorizer
-	// upstreamMu serializes all keystroke writes to the tmux session before
-	// forwarding (BC-2.04.006 Invariant 3: no keystroke race condition).
-	upstreamMu sync.Mutex
+	sink       KeystrokeSink
+
+	// sinkMu serializes all keystroke writes through the sink before
+	// forwarding to tmux (BC-2.04.006 Invariant 3: no keystroke race condition).
+	// All consoles' keystrokes from any SendKeystroke call funnel through this
+	// single mutex — the spec-mandated serialization point.
+	sinkMu sync.Mutex
 
 	// mu guards upstreams — the per-console bidirectional channel map used to
-	// close channels on Detach and to write in SendKeystroke.
+	// verify console attachment in SendKeystroke.
 	mu        sync.Mutex
 	upstreams map[ConsoleKey]chan []byte
-
-	// consumerWg tracks all per-console consumer goroutines. Used by tests and
-	// graceful shutdown to wait for goroutines to drain.
-	consumerWg sync.WaitGroup
-
-	// UpstreamSink receives all keystroke payloads forwarded by the per-console
-	// consumer goroutines in the order they arrive. Accessible to tests for
-	// assertion (AC-002 PC-3; AC-007 serialization). S-3.03+ wires this into
-	// the real tmux forwarding path.
-	UpstreamSink chan []byte
 }
 
 // NewAccessNode constructs an AccessNode using the given Publisher and
-// Authorizer. If auth is nil, NoOpAuthorizer is used.
-func NewAccessNode(pub *Publisher, auth Authorizer) *AccessNode {
+// Authorizer. If auth is nil, NoOpAuthorizer is used. Functional options
+// (e.g. WithKeystrokeSink) customize the node further. If no
+// WithKeystrokeSink option is provided, a no-op sink is used (keystrokes are
+// accepted but silently discarded — suitable for tests that do not assert
+// forwarding).
+func NewAccessNode(pub *Publisher, auth Authorizer, opts ...AccessNodeOption) *AccessNode {
 	if auth == nil {
 		auth = NoOpAuthorizer{}
 	}
-	return &AccessNode{
-		pub:          pub,
-		consoles:     NewConsoleSet(),
-		authorizer:   auth,
-		upstreams:    make(map[ConsoleKey]chan []byte),
-		UpstreamSink: make(chan []byte, upstreamSinkCap),
+	a := &AccessNode{
+		pub:        pub,
+		consoles:   NewConsoleSet(),
+		authorizer: auth,
+		sink:       noOpSink{},
+		upstreams:  make(map[ConsoleKey]chan []byte),
 	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // Attach establishes a bidirectional channel for the console identified by key
 // on the named session (BC-2.04.003 PC-1 through PC-3).
 //
-// A per-console consumer goroutine is started to drain the upstream channel and
-// forward keystrokes to UpstreamSink (F-06 pass-1 fix; AC-002 PC-3). The
-// goroutine exits when the upstream channel is closed (i.e. on Detach).
+// AccessNode is goroutine-free: no per-console consumer goroutine is started.
+// Keystrokes are forwarded synchronously via SendKeystroke → sink.SendInput
+// (F-06 pass-2 arch rework). The upstream channel is still returned for
+// callers that write directly to it (e.g. test helpers); however, AccessNode
+// does NOT drain it — callers must use SendKeystroke for the authorizer +
+// serialization guarantees.
 //
 // Returns:
 //   - downstream: a receive-only channel of frame.OuterHeader values delivered
@@ -120,22 +170,11 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 		return nil, nil, err
 	}
 
-	// Store bidirectional reference so Detach can close it (stopping consumer)
-	// and SendKeystroke can write to it.
+	// Store bidirectional reference so Detach can close it and SendKeystroke
+	// can verify console attachment.
 	a.mu.Lock()
 	a.upstreams[key] = us
 	a.mu.Unlock()
-
-	// Start a per-console consumer goroutine that drains the upstream channel
-	// and forwards each payload to UpstreamSink. The goroutine exits when the
-	// upstream channel is closed in Detach (F-06 pass-1 fix).
-	a.consumerWg.Add(1)
-	go func() {
-		defer a.consumerWg.Done()
-		for payload := range us {
-			a.UpstreamSink <- payload
-		}
-	}()
 
 	// Return send-only upstream to the caller (they must not close it).
 	return ds, us, nil
@@ -144,8 +183,8 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 // Detach closes the console's downstream channel and removes it from the
 // ConsoleSet (BC-2.04.004 PC-1 through PC-3).
 //
-// Detach also closes the upstream channel to stop the per-console consumer
-// goroutine started in Attach (F-03 pass-1 fix: console close-signal API).
+// The upstream channel is closed to free the ConsoleSet entry and signal any
+// goroutine that may be draining it (F-03 pass-1 fix: console close-signal API).
 //
 // The tmux session on the access node continues running (BC-2.04.004 invariant 1:
 // detach is non-destructive).
@@ -157,7 +196,7 @@ func (a *AccessNode) Detach(key ConsoleKey) error {
 		return err
 	}
 
-	// Close upstream channel to stop the consumer goroutine.
+	// Close upstream channel to signal any waiting reader.
 	a.mu.Lock()
 	us, ok := a.upstreams[key]
 	if ok {
@@ -175,21 +214,25 @@ func (a *AccessNode) Detach(key ConsoleKey) error {
 // SendKeystroke forwards payload to the tmux session on behalf of console key,
 // after consulting the Authorizer (BC-2.04.006 Invariant 3: serialization).
 //
-// The upstreamMu mutex is held during the send to prevent keystroke
-// interleaving under concurrent calls (AC-007). The payload is written to the
-// console's upstream channel, which the per-console consumer goroutine drains
-// into UpstreamSink (F-02 pass-1 fix: payload no longer discarded).
+// sinkMu is held during the sink.SendInput call to prevent keystroke
+// interleaving under concurrent calls from multiple consoles (AC-007). All
+// consoles' keystrokes funnel through this single mutex — the
+// spec-mandated serialization point ("before forwarding to tmux").
+//
+// AccessNode is goroutine-free: SendKeystroke is synchronous. No channel send
+// or goroutine is involved; the sink writes directly.
 //
 // Returns ErrConsoleNotFound if key is not currently attached. Returns the
-// Authorizer's error if authorization is denied.
+// Authorizer's error if authorization is denied. Propagates sink.SendInput
+// errors.
 func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload []byte) error {
 	if err := a.authorizer.Allow(key, sessionName, payload); err != nil {
 		return err
 	}
 
-	// Look up the upstream channel under the AccessNode's own lock.
+	// Verify the console is currently attached under a.mu.
 	a.mu.Lock()
-	us, ok := a.upstreams[key]
+	_, ok := a.upstreams[key]
 	a.mu.Unlock()
 
 	if !ok {
@@ -197,22 +240,11 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 	}
 
 	// Serialize: only one goroutine forwards keystrokes at a time
-	// (BC-2.04.006 Invariant 3; AC-007).
-	a.upstreamMu.Lock()
-	defer a.upstreamMu.Unlock()
+	// (BC-2.04.006 Invariant 3; AC-007). All consoles share this mutex.
+	a.sinkMu.Lock()
+	defer a.sinkMu.Unlock()
 
-	// Write payload to the upstream channel. The per-console consumer goroutine
-	// drains it into UpstreamSink. Non-blocking send: if the channel is full,
-	// the keystroke is dropped to avoid blocking the caller (same backpressure
-	// semantics as Deliver; S-3.03+ will tune this with flow-control).
-	select {
-	case us <- payload:
-	default:
-		// Upstream channel full: keystroke dropped under backpressure.
-		// The upstreamMu ensures no interleaving even on drop.
-	}
-
-	return nil
+	return a.sink.SendInput(payload)
 }
 
 // DeliverFrame fans out hdr to all currently-attached consoles, then calls
@@ -221,4 +253,15 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 func (a *AccessNode) DeliverFrame(hdr frame.OuterHeader) {
 	a.consoles.Deliver(hdr)
 	a.consoles.Evict()
+}
+
+// Sweep evicts stale consoles whose keepalive heartbeat has not been updated
+// within the given deadline (AC-008; BC-2.04.004 EC-002 keepalive crash path).
+// Delegates to ConsoleSet.EvictStale. AccessNode is goroutine-free: the caller
+// is responsible for invoking Sweep periodically (e.g. from a timer in
+// cmd/switchboard). Tests call Sweep directly to advance the deadline.
+//
+// Returns the count of consoles evicted.
+func (a *AccessNode) Sweep(deadline time.Duration) int {
+	return a.consoles.EvictStale(deadline)
 }
