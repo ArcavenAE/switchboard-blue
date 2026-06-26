@@ -180,10 +180,10 @@ func (p *PTYProxy) Connect(_ context.Context) error {
 	defer p.mu.Unlock()
 
 	if p.closed {
-		return fmt.Errorf("PTY proxy: already closed")
+		return fmt.Errorf("PTY proxy: connect: %w", ErrPTYProxyAlreadyClosed)
 	}
 	if p.master != nil {
-		return fmt.Errorf("PTY proxy: already connected")
+		return fmt.Errorf("PTY proxy: connect: %w", ErrPTYProxyAlreadyConnected)
 	}
 
 	master, pid, err := p.ptyAlloc()
@@ -333,6 +333,18 @@ func (p *PTYProxy) Close() error {
 // closed or was never connected.
 var ErrPTYProxyClosed = errors.New("PTY proxy: closed or not connected")
 
+// ErrPTYProxyAlreadyClosed is returned by PTYProxy.Connect when the proxy has
+// already been closed. PTYProxy is single-use per session lifecycle.
+var ErrPTYProxyAlreadyClosed = errors.New("PTY proxy: already closed")
+
+// ErrPTYProxyAlreadyConnected is returned by PTYProxy.Connect when the proxy
+// has already been connected.
+var ErrPTYProxyAlreadyConnected = errors.New("PTY proxy: already connected")
+
+// ErrSessionConnectorClosed is returned by SessionConnector.SendInput when the
+// connector has been closed. Construct a new SessionConnector for each session.
+var ErrSessionConnectorClosed = errors.New("session connector: closed")
+
 // SendInput writes payload to the PTY master, forwarding keystrokes to the
 // shell running in the PTY. It implements session.KeystrokeSink.
 //
@@ -375,7 +387,7 @@ func (sc *SessionConnector) SendInput(payload []byte) error {
 	sc.mu.Unlock()
 
 	if closed {
-		return fmt.Errorf("session connector: closed")
+		return fmt.Errorf("session connector: send input: %w", ErrSessionConnectorClosed)
 	}
 
 	if inPTY {
