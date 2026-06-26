@@ -70,14 +70,15 @@ const upstreamBufSize = 16
 //
 // The returned downstream channel receives frame.OuterHeader values delivered
 // by Deliver. The returned upstream channel delivers keystroke payloads sent
-// by the console operator.
+// by the console operator. The caller receives a bidirectional upstream chan so
+// that AccessNode can close it (signalling the consumer goroutine) on Detach.
 //
 // downstream is buffered with capacity downstreamBufSize; upstream is buffered
 // with capacity upstreamBufSize so that a single keystroke does not block the
 // sender when the effectful consumer is not yet draining.
 //
 // Returns ErrConsoleAlreadyAttached if key is already registered.
-func (cs *ConsoleSet) Add(key ConsoleKey) (downstream <-chan frame.OuterHeader, upstream chan<- []byte, err error) {
+func (cs *ConsoleSet) Add(key ConsoleKey) (downstream <-chan frame.OuterHeader, upstream chan []byte, err error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -119,21 +120,20 @@ func (cs *ConsoleSet) Remove(key ConsoleKey) error {
 // Deliver sends a copy of hdr to every currently-attached console's downstream
 // channel (BC-2.04.006 PC-1; invariant: no console is skipped).
 //
-// Deliver takes a value-copy snapshot of the channel set under RLock, releases
-// the lock, then broadcasts to each channel. If a console's channel is full,
-// the frame is dropped for that console to avoid head-of-line blocking on a
-// slow consumer (BC-2.04.006 NFR-004 note).
+// The RLock is held for the entire loop — snapshot and sends happen under the
+// same lock acquisition. This prevents a concurrent Remove (which takes WLock)
+// from closing a channel while a send is in-flight, eliminating the
+// close-during-send race that would cause a panic (F-01 pass-1 fix).
+//
+// If a console's channel is full the frame is dropped for that console to avoid
+// head-of-line blocking on a slow consumer (BC-2.04.006 NFR-004).
 func (cs *ConsoleSet) Deliver(hdr frame.OuterHeader) {
 	cs.mu.RLock()
-	snapshot := make([]chan frame.OuterHeader, 0, len(cs.consoles))
-	for _, entry := range cs.consoles {
-		snapshot = append(snapshot, entry.downstream)
-	}
-	cs.mu.RUnlock()
+	defer cs.mu.RUnlock()
 
-	for _, ch := range snapshot {
+	for _, entry := range cs.consoles {
 		select {
-		case ch <- hdr:
+		case entry.downstream <- hdr:
 		default:
 			// Frame dropped: channel buffer full. Caller may call Evict() after
 			// Deliver() to clean up any consoles that are no longer draining.
@@ -145,6 +145,9 @@ func (cs *ConsoleSet) Deliver(hdr frame.OuterHeader) {
 // (BC-2.04.004 EC-002; BC-2.04.006 invariant).
 //
 // In S-3.02, evictions are enqueued by Remove (graceful detach / crash-sim).
+// Remove closes the downstream channel under WLock; Deliver holds RLock for its
+// entire send loop, so close-during-send cannot race (F-01/F-05 pass-1 fix).
+//
 // The keepalive-driven crash path that calls Remove on timeout is deferred to
 // S-3.03+; this method provides the seam without requiring an API change.
 //
