@@ -319,7 +319,9 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 	// supersedes the ErrControlModeDropped that dispatchLoop emits on EOF —
 	// forward it to errCh so callers get the more specific sentinel.
 	if classifyCh != nil {
+		c.wg.Add(1)
 		go func() {
+			defer c.wg.Done()
 			if classified, ok := <-classifyCh; ok && classified != nil {
 				c.closeErrCh.Do(func() {
 					select {
