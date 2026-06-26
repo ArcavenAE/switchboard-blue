@@ -25,6 +25,19 @@ import (
 // forwarding-table miss from an admission rejection.
 var ErrNoForwardingEntry = errors.New("routing: no forwarding entry for destination in this SVTN")
 
+// ErrHMACVerificationFailed is returned by RouteFrame when the frame's
+// wire HMAC tag does not match the expected MAC for the source node's
+// FrameAuthKey, or when no forwarding-table entry exists for the source
+// (auth key unavailable → frame is unverifiable → dropped fail-closed).
+//
+// Maps to E-ADM-016 in the error taxonomy (wire HMAC verification failed
+// at RouteFrame: tag mismatch). Distinct from admission.ErrNotAdmitted
+// (E-ADM-003, admitted-set rejection) — callers use errors.Is to
+// distinguish forgery rejection from admission rejection.
+//
+// Traces to BC-2.05.008 postconditions 2 and 4; ADR-009.
+var ErrHMACVerificationFailed = errors.New("routing: HMAC verification failed (E-ADM-016)")
+
 // ForwardingEntry records a forwarding table entry for one destination node.
 type ForwardingEntry struct {
 	// NodeAddr is the 8-byte destination node address.
@@ -82,24 +95,62 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 	r.forwardingTable[svtnID][nodeAddr] = entry
 }
 
-// RouteFrame checks whether the frame's source address is in the admitted set
-// for the frame's SVTN, then dispatches it via SVTNRoute.
+// RouteFrame checks the frame's wire HMAC tag first, then checks whether the
+// frame's source address is in the admitted set, then dispatches via SVTNRoute.
 //
-// Fail-closed (BC-2.05.002 invariant 2): if hdr.SrcAddr is NOT in the admitted
-// set for hdr.SVTNID, the frame is dropped and admission.ErrNotAdmitted is
-// returned (E-ADM-003). No frame is ever forwarded before this check.
-//
-// Per BC-2.05.002 postcondition 3: the admitted-set check happens BEFORE any
-// forwarding logic executes.
+// Ordering (ADR-009; BC-2.05.008 PC-3; VP-058):
+//  1. Look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
+//     If absent → no auth key → ErrHMACVerificationFailed (fail-closed).
+//  2. Call verifyFrameHMAC with entry.FrameAuthKey.
+//     If false → log E-ADM-016 → return ErrHMACVerificationFailed.
+//  3. Check admitted set (admission.IsAdmitted).
+//     If false → return admission.ErrNotAdmitted.
+//  4. Dispatch via SVTNRoute.
 //
 // payload is the raw bytes following the outer header; it is never parsed here
 // (R-001; ARCH-04 §Risk Mitigations).
 func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
-	// Fail-closed: admitted-set check BEFORE any forwarding (BC-2.05.002 postcondition 3).
+	// Step 1: forwarding-table lookup under RLock.
+	//
+	// Per ADR-009 v1.6: the RLock is held only for this forwarding-table lookup
+	// and key copy (steps 1–3 below). FrameAuthKey is a [32]byte value type and
+	// is copied into a local variable (authKey) before the lock is released —
+	// defensive copy per ADR-009 v1.6 step 3. HMAC verification (step 2) runs
+	// lock-free against that local copy. This keeps the critical section small
+	// and avoids holding the forwarding-table RLock during CPU-bound HMAC
+	// computation. Sequential HMAC-before-admitted ordering is preserved by
+	// statement order in this function, not by lock holding (see ADR-009 v1.6
+	// §"Ordering specification").
+	r.mu.RLock()
+	svtnTable, ok := r.forwardingTable[hdr.SVTNID]
+	var (
+		entry   *ForwardingEntry
+		authKey [hmac.KeySize]byte
+	)
+	if ok {
+		entry = svtnTable[hdr.SrcAddr]
+		if entry != nil {
+			authKey = entry.FrameAuthKey // copy before unlock (ADR-009 v1.6 step 3)
+		}
+	}
+	r.mu.RUnlock()
+
+	if entry == nil {
+		return ErrHMACVerificationFailed
+	}
+
+	// Step 2: Verify the wire HMAC tag against the local copy of FrameAuthKey.
+	// E-ADM-016: wire HMAC verification failed at RouteFrame (BC-2.05.008 PC-2).
+	if !verifyFrameHMAC(hdr, payload, authKey) {
+		return ErrHMACVerificationFailed
+	}
+
+	// Step 3: Fail-closed admitted-set check BEFORE any forwarding (BC-2.05.002 postcondition 3).
 	if !r.admittedKeySet.IsAdmitted(hdr.SVTNID, hdr.SrcAddr) {
 		return admission.ErrNotAdmitted
 	}
 
+	// Step 4: Dispatch.
 	return SVTNRoute(hdr, payload, r)
 }
 
@@ -149,8 +200,6 @@ func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error {
 //
 // Returns true if and only if the wire tag exactly matches the expected MAC.
 // Fail-closed: returns false on any mismatch or zero-length wire tag.
-//
-//nolint:unused // wired into RouteFrame in the next wave when wire-layer HMAC enforcement is added (BC-2.05.002 invariant 1)
 func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) bool {
 	// Save the wire tag BEFORE clearing — defends against the tautological-verify
 	// defect: clearing first and then "verifying" would check the computed tag
