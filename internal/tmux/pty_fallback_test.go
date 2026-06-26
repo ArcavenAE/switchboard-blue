@@ -1061,6 +1061,245 @@ func TestSessionConnector_FactoryReconnectSucceeds(t *testing.T) {
 	}
 }
 
+// -- SendInput coverage (F-C-5 pass-3) -----------------------------------------
+
+// capturingPTYMaster is a fake PTY master that records Write calls for
+// assertion in PTYProxy.SendInput tests. Read blocks until Close is called
+// (so the ioRelay goroutine stays alive during the test).
+type capturingPTYMaster struct {
+	mu     sync.Mutex
+	buf    bytes.Buffer
+	cond   *sync.Cond
+	closed bool
+}
+
+func newCapturingPTYMaster() *capturingPTYMaster {
+	m := &capturingPTYMaster{}
+	m.cond = sync.NewCond(&m.mu)
+	return m
+}
+
+func (m *capturingPTYMaster) Write(p []byte) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.buf.Write(p)
+}
+
+func (m *capturingPTYMaster) Read(p []byte) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for !m.closed {
+		m.cond.Wait()
+	}
+	return 0, io.EOF
+}
+
+func (m *capturingPTYMaster) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	m.cond.Broadcast()
+	return nil
+}
+
+func (m *capturingPTYMaster) Written() []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]byte, m.buf.Len())
+	copy(out, m.buf.Bytes())
+	return out
+}
+
+// TestPTYProxy_SendInput_HappyPath verifies that PTYProxy.SendInput writes the
+// payload to the PTY master when the proxy is connected (F-C-5;
+// session.KeystrokeSink contract).
+//
+// Hermetic: WithPTYAllocFunc injects a capturingPTYMaster so we can observe
+// the bytes written. No real PTY.
+func TestPTYProxy_SendInput_HappyPath(t *testing.T) {
+	t.Parallel()
+
+	master := newCapturingPTYMaster()
+	t.Cleanup(func() { _ = master.Close() })
+
+	pty, _ := newTestPTYProxy(t,
+		tmux.WithPTYAllocFunc(func() (io.ReadWriteCloser, int, error) {
+			return master, 12345, nil
+		}),
+	)
+	t.Cleanup(func() { _ = pty.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := pty.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	payload := []byte("hello\r")
+	if err := pty.SendInput(payload); err != nil {
+		t.Fatalf("SendInput: unexpected error: %v", err)
+	}
+
+	got := master.Written()
+	if string(got) != string(payload) {
+		t.Errorf("master.Written() = %q; want %q", got, payload)
+	}
+}
+
+// TestPTYProxy_SendInput_AfterClose_ReturnsSentinel verifies that
+// PTYProxy.SendInput returns ErrPTYProxyClosed after the proxy has been closed
+// (F-C-5; F-H-1 sentinel inspection via errors.Is).
+func TestPTYProxy_SendInput_AfterClose_ReturnsSentinel(t *testing.T) {
+	t.Parallel()
+
+	master := newFakePTYMaster()
+	pty, _ := newTestPTYProxy(t, fakePTYAlloc(master, 9999))
+	t.Cleanup(func() { _ = master.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := pty.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if err := pty.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	err := pty.SendInput([]byte("after-close"))
+	if !errors.Is(err, tmux.ErrPTYProxyClosed) {
+		t.Errorf("SendInput after Close: got %v; want errors.Is(_, ErrPTYProxyClosed)", err)
+	}
+}
+
+// TestSessionConnector_SendInput_ControlMode_Dispatches verifies that when
+// SessionConnector is in control mode (not PTY mode), SendInput delegates to
+// the active ControlMode's SendInput (F-C-5; session.KeystrokeSink contract).
+//
+// Hermetic: WithExecFunc injects a capturingWriteCloser as stdin; WithPTYAllocFunc
+// is unused (stays in control mode). Asserts the payload arrives at the fake stdin.
+func TestSessionConnector_SendInput_ControlMode_Dispatches(t *testing.T) {
+	t.Parallel()
+
+	stdin := &bytes.Buffer{}
+	var stdinMu sync.Mutex
+	var stdinClosed bool
+
+	captureExec := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return &bufWriteCloser{buf: stdin, mu: &stdinMu, closed: &stdinClosed},
+			nopCloser{strings.NewReader(
+				"%begin 9000000000 0 1\n%end 9000000000 0 1\n",
+			)},
+			closedNilChan(),
+			nil
+	})
+
+	master := newFakePTYMaster()
+	log := &fakeLogCapture{}
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	ctrl := tmux.New(pub, ds, captureExec)
+	ptyProxy := tmux.NewPTYProxy(pub, ds,
+		fakePTYAlloc(master, 77777),
+		tmux.WithLogger(log),
+	)
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy)
+	t.Cleanup(func() {
+		_ = sc.Close()
+		_ = master.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Must be in control mode (not PTY mode).
+	if sc.InPTYMode() {
+		t.Fatal("InPTYMode() = true; want false (control mode should be active)")
+	}
+
+	payload := []byte("ctrl-mode-input\r")
+	if err := sc.SendInput(payload); err != nil {
+		t.Fatalf("SendInput (control mode): unexpected error: %v", err)
+	}
+
+	stdinMu.Lock()
+	got := make([]byte, stdin.Len())
+	copy(got, stdin.Bytes())
+	stdinMu.Unlock()
+
+	// stdin also receives the list-sessions command written by Connect.
+	// Assert the payload was written (it must be present in stdin output).
+	if !strings.Contains(string(got), string(payload)) {
+		t.Errorf("stdin.Written() = %q; want to contain %q", got, payload)
+	}
+}
+
+// TestSessionConnector_SendInput_AfterClose_ReturnsSentinel verifies that
+// SessionConnector.SendInput returns ErrSessionConnectorClosed after Close
+// (F-C-5; F-H-1 sentinel inspection via errors.Is).
+func TestSessionConnector_SendInput_AfterClose_ReturnsSentinel(t *testing.T) {
+	t.Parallel()
+
+	master := newFakePTYMaster()
+	sc := newTestSessionConnector(
+		t,
+		[]tmux.Option{
+			fakeExecFuncErr(fmt.Errorf("%w: tmux not found", tmux.ErrControlModeUnavailable)),
+		},
+		[]tmux.PTYProxyOption{
+			fakePTYAlloc(master, 88888),
+		},
+	)
+	t.Cleanup(func() {
+		_ = sc.Close()
+		_ = master.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if err := sc.Close(); err != nil {
+		t.Logf("Close: %v (non-nil close acceptable)", err)
+	}
+
+	err := sc.SendInput([]byte("after-close"))
+	if !errors.Is(err, tmux.ErrSessionConnectorClosed) {
+		t.Errorf("SendInput after Close: got %v; want errors.Is(_, ErrSessionConnectorClosed)", err)
+	}
+}
+
+// bufWriteCloser is a goroutine-safe io.WriteCloser wrapping a bytes.Buffer.
+// Used in TestSessionConnector_SendInput_ControlMode_Dispatches to capture
+// stdin writes from ControlMode.SendInput.
+type bufWriteCloser struct {
+	buf    *bytes.Buffer
+	mu     *sync.Mutex
+	closed *bool
+}
+
+func (b *bufWriteCloser) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *bufWriteCloser) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	*b.closed = true
+	return nil
+}
+
 // -- Real-PTY deferral sentinel --------------------------------------------
 
 // TestPTYProxy_RealPTY_Integration is a placeholder that documents the

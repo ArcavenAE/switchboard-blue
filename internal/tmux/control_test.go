@@ -11,11 +11,13 @@
 package tmux_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +26,35 @@ import (
 	"github.com/arcavenae/switchboard/internal/session"
 	"github.com/arcavenae/switchboard/internal/tmux"
 )
+
+// capturingWriteCloser is an io.WriteCloser that records all writes for
+// assertion in SendInput tests. It is goroutine-safe.
+type capturingWriteCloser struct {
+	mu     sync.Mutex
+	buf    bytes.Buffer
+	closed bool
+}
+
+func (c *capturingWriteCloser) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.buf.Write(p)
+}
+
+func (c *capturingWriteCloser) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	return nil
+}
+
+func (c *capturingWriteCloser) Written() []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]byte, c.buf.Len())
+	copy(out, c.buf.Bytes())
+	return out
+}
 
 // nopCloser wraps an io.Reader with a no-op Close so fakeControlOutput can be
 // injected as the tmux subprocess stdout in tests (hermetic; no real tmux).
@@ -750,5 +781,77 @@ func TestControlMode_ClassifyTimeoutFallback(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("no error received within 2s; classify timeout fallback did not fire")
+	}
+}
+
+// -- SendInput coverage (F-C-5 pass-3) -----------------------------------------
+
+// TestControlMode_SendInput_HappyPath verifies that ControlMode.SendInput writes
+// the payload to the stdin pipe when the ControlMode is connected (F-C-5;
+// session.KeystrokeSink contract).
+//
+// Hermetic: WithExecFunc injects a capturingWriteCloser as stdin so we can
+// observe the bytes written. No real tmux subprocess.
+func TestControlMode_SendInput_HappyPath(t *testing.T) {
+	t.Parallel()
+
+	stdin := &capturingWriteCloser{}
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+	)
+
+	execFn := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return stdin, stream, closedNilChan(), nil
+	})
+
+	cm, _ := newTestControlWithOpts(t, execFn)
+	t.Cleanup(func() { _ = cm.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	payload := []byte("hello\r")
+	if err := cm.SendInput(payload); err != nil {
+		t.Fatalf("SendInput: unexpected error: %v", err)
+	}
+
+	got := stdin.Written()
+	// stdin also receives the list-sessions command written by Connect.
+	// Assert that the payload was written (it must be present in stdin output).
+	if !strings.Contains(string(got), string(payload)) {
+		t.Errorf("stdin.Written() = %q; want to contain %q", got, payload)
+	}
+}
+
+// TestControlMode_SendInput_AfterClose_ReturnsSentinel verifies that
+// ControlMode.SendInput returns ErrControlModeClosed after the ControlMode has
+// been closed (F-C-5; F-H-1 sentinel inspection via errors.Is).
+func TestControlMode_SendInput_AfterClose_ReturnsSentinel(t *testing.T) {
+	t.Parallel()
+
+	stream := fakeControlOutput(
+		"%begin 2000000000 0 1",
+		"%end 2000000000 0 1",
+	)
+	cm, _ := newTestControlWithOpts(t, fakeExecFunc(stream))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if err := cm.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	err := cm.SendInput([]byte("after-close"))
+	if !errors.Is(err, tmux.ErrControlModeClosed) {
+		t.Errorf("SendInput after Close: got %v; want errors.Is(_, ErrControlModeClosed)", err)
 	}
 }
