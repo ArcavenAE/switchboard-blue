@@ -2,11 +2,13 @@
 artifact_id: ARCH-01-core-services
 document_type: architecture-section
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
-modified: 2026-06-25T00:00:00
+modified:
+  - 2026-06-25T00:00:00 # v1.1 — Added ADR-010: tmux control mode primary, PTY proxy fallback (Wave 3 / S-3.01)
+  - 2026-06-25T00:00:00 # v1.2 — ADR-010: allow mid-session PTY fallback on control-mode loss (Wave-3 reviewer F-W3-H-003 + user decision; BCs win over initial-connect-only restriction)
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -116,8 +118,9 @@ refactoring to an event-loop model before PE phase.
 ## ADR-010: Terminal Session Backend — Tmux Control Mode Primary, PTY Proxy Fallback (S-3.01)
 
 **Decision:** `internal/tmux` uses tmux control mode (`tmux -C`) as the primary
-terminal session backend. PTY proxy mode is an automatic fallback triggered only at
-initial connection time when the control mode connection fails.
+terminal session backend. PTY proxy mode is the automatic fallback, triggered by
+control-mode failure at **any point in the session lifecycle** — both initial connect
+failure and mid-session control-mode loss.
 
 **Why tmux control mode is preferred:**
 1. Machine-readable event stream: `%output`, `%session-changed`, `%window-add`, and
@@ -138,21 +141,31 @@ initial connection time when the control mode connection fails.
 - PTY mode provides functionally equivalent keystroke-to-echo behavior (AC-004) but
   lacks session listing, named session attach, and persistence.
 
-**Fallback semantics (BC-2.04.002):**
-- Fallback is triggered only on initial `TmuxControlMode.Attach` failure. It is NOT
-  triggered if the control mode connection drops mid-session (EC-002 in S-3.01).
-- Once in PTY fallback mode, the access node stays in PTY mode for the lifetime of
-  that session. There is no automatic upgrade to control mode.
-- At next daemon restart, `TmuxControlMode.Attach` is retried before falling back.
+**Fallback semantics:**
+- PTY fallback is triggered by any control-mode failure: initial `TmuxControlMode.Attach`
+  failure OR mid-session control-mode loss (e.g., tmux server crash, control socket
+  disconnect). This matches BC-2.04.001 EC-002 and BC-2.04.002 EC-003 documented
+  behavior.
+- Once in PTY fallback mode, the session remains in PTY mode for the lifetime of that
+  connection. There is no automatic upgrade back to control mode within the same
+  connection.
+- At next session start (new connection or daemon restart), `TmuxControlMode.Attach`
+  is retried before falling back. Control mode is NOT retried mid-session after a
+  mid-session failure; that would risk inconsistent state on an already-active PTY session.
 
 **Rejected alternatives:**
 - PTY-only mode: loses session naming, persistence, and efficient fan-out.
 - screen as alternative: no structured event protocol; screen-scraping required.
   Adds fragile parsing, not a clean boundary.
 - libvterm embedding: complex C dependency; not justified for MVP LAN target.
+- Initial-connect-only fallback (prior v1.1 decision): rejected as too restrictive.
+  BC-2.04.001 EC-002 and BC-2.04.002 EC-003 explicitly describe mid-session
+  control-mode failure → PTY fallback transitions. Restricting fallback to initial
+  connect only would leave mid-session control-mode loss unhandled (hard failure vs.
+  degraded-mode operation). BCs are authoritative; ADR-010 v1.1 was overridden.
 
-**References:** BC-2.04.001 (control mode attach), BC-2.04.002 (PTY fallback),
-S-3.01 EC-002 (mid-session drop does not trigger fallback).
+**References:** BC-2.04.001 (control mode attach, EC-002 mid-session fallback),
+BC-2.04.002 (PTY fallback, EC-003 mid-session fallback), S-3.01 fallback semantics.
 
 ## Changelog
 
@@ -160,3 +173,4 @@ S-3.01 EC-002 (mid-session drop does not trigger fallback).
 |---------|------|--------|
 | 1.0 | 2026-06-23 | Initial core services architecture |
 | 1.1 | 2026-06-25 | Added ADR-010: tmux control mode primary, PTY proxy fallback (Wave 3 / S-3.01) |
+| 1.2 | 2026-06-25 | ADR-010: revised fallback semantics to allow mid-session PTY fallback on control-mode loss (Wave-3 reviewer F-W3-H-003; BCs win: BC-2.04.001 EC-002, BC-2.04.002 EC-003; initial-connect-only restriction deemed too restrictive) |
