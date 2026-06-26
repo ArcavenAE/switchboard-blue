@@ -329,6 +329,62 @@ func (p *PTYProxy) Close() error {
 	return nil
 }
 
+// ErrPTYProxyClosed is returned by PTYProxy.SendInput when the proxy has been
+// closed or was never connected.
+var ErrPTYProxyClosed = errors.New("PTY proxy: closed or not connected")
+
+// SendInput writes payload to the PTY master, forwarding keystrokes to the
+// shell running in the PTY. It implements session.KeystrokeSink.
+//
+// Lock discipline: mu is acquired briefly to capture p.master; the write
+// occurs outside the lock because writes can block on a full PTY buffer and
+// holding the lock during a blocking write would deadlock Close.
+//
+// Returns ErrPTYProxyClosed if the proxy has been closed or was never
+// connected (p.master is nil). Propagates any io.Writer error.
+func (p *PTYProxy) SendInput(payload []byte) error {
+	p.mu.Lock()
+	master := p.master
+	closed := p.closed
+	p.mu.Unlock()
+
+	if closed || master == nil {
+		return ErrPTYProxyClosed
+	}
+
+	_, err := master.Write(payload)
+	if err != nil {
+		return fmt.Errorf("PTY proxy: send input: %w", err)
+	}
+
+	return nil
+}
+
+// SendInput dispatches to the active mode's SendInput (ControlMode or
+// PTYProxy). It implements session.KeystrokeSink.
+//
+// Lock discipline: sc.mu is acquired briefly to capture the active sink; the
+// delegated write occurs outside the lock. Returns an appropriate error if the
+// connector has been closed or was never connected.
+func (sc *SessionConnector) SendInput(payload []byte) error {
+	sc.mu.Lock()
+	ctrl := sc.ctrl
+	pty := sc.pty
+	inPTY := sc.inPTYMode
+	closed := sc.closed
+	sc.mu.Unlock()
+
+	if closed {
+		return fmt.Errorf("session connector: closed")
+	}
+
+	if inPTY {
+		return pty.SendInput(payload)
+	}
+
+	return ctrl.SendInput(payload)
+}
+
 // ControlModeFactory constructs a fresh ControlMode for reconnect attempts.
 // Per ControlMode SINGLE-USE contract (control.go ADR-010), each reconnect
 // must produce a new instance. The factory captures the construction

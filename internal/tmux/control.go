@@ -635,6 +635,33 @@ func (c *ControlMode) handleLine(line string) {
 	}
 }
 
+// SendInput writes payload to the tmux control mode stdin pipe, forwarding the
+// keystroke to the active tmux session. It implements session.KeystrokeSink.
+//
+// Lock discipline: mu is acquired briefly to capture c.stdin; the write
+// occurs outside the lock because writes can block on a full pipe and
+// holding the lock during a blocking write would deadlock Close.
+//
+// Returns ErrControlModeClosed if the ControlMode has been closed or was
+// never connected (c.stdin is nil). Propagates any io.WriteCloser error.
+func (c *ControlMode) SendInput(payload []byte) error {
+	c.mu.Lock()
+	stdin := c.stdin
+	closed := c.closed
+	c.mu.Unlock()
+
+	if closed || stdin == nil {
+		return ErrControlModeClosed
+	}
+
+	_, err := stdin.Write(payload)
+	if err != nil {
+		return fmt.Errorf("tmux: send input: %w", err)
+	}
+
+	return nil
+}
+
 // unescapeTmuxOutput decodes a tmux control-mode octal-escaped payload.
 //
 // tmux encodes non-printable bytes and spaces using octal escapes of the form
