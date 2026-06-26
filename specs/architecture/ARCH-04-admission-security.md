@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -28,6 +28,7 @@ modified:
   - 2026-06-25T00:00:00 # v1.3 — Key Lifecycle: replace E-ADM-005 "key expired" with E-ADM-015 (new sentinel minted per S-1.03 spec patch rev 1.1; E-ADM-005 = key revoked, not expired)
   - 2026-06-25T00:00:00 # v1.4 — ADR-009: HMAC enforcement at RouteFrame boundary (S-3.04 wire-up); declares fail-fast ordering and forbidden bypass paths
   - 2026-06-25T00:00:00 # v1.5 — ADR-009: fix three contradictions (spec-reviewer C-2/C-3): correct verifyFrameHMAC signature (bool not error, value args not pointers), correct auth key location (forwardingTable not admitted_key_set), clarify ordering vs. single-lock-acquisition (sequential checks, shared RLock)
+  - 2026-06-25T00:00:00 # v1.6 — ADR-009: amended to permit lock-free HMAC verify; RLock released after [32]byte key copy; HMAC runs lock-free; admitted check re-locks internally; sequential ordering preserved by line order not lock holding (Wave-3 pass-1 M-1)
 ---
 
 # ARCH-04: Admission & Security
@@ -274,31 +275,51 @@ per R-001 content separation).
 
 **Key lookup in RouteFrame:** `verifyFrameHMAC` receives the per-node frame_auth_key
 from `Router.forwardingTable[svtnID][srcNodeAddr].FrameAuthKey`. This is an O(1) read
-under a single `RLock` on the forwarding table. If `srcNodeAddr` is not present in the
-forwarding table at key-lookup time, the key is unavailable and the frame is treated as
-HMAC-unverifiable and dropped immediately.
+under `RLock`; the key is copied (value type) before the lock is released. If
+`srcNodeAddr` is not present in the forwarding table at key-lookup time, the key is
+unavailable and the frame is dropped immediately (fail-closed; return
+ErrHMACVerificationFailed — key unknown).
 
-**Ordering within a single RLock:** Although the forwarding-table lookup and the
-admitted-set check share one `RLock` acquisition (permissible performance optimization),
-the **sequential check order is strict and non-negotiable**:
+**Ordering specification (lock-free HMAC verify — amended v1.6):**
 
-1. Acquire `RLock` on forwarding table.
-2. Look up `forwardingTable[svtnID][srcNodeAddr]` — if absent, drop and release lock.
-3. Extract `FrameAuthKey` from the entry.
-4. Call `verifyFrameHMAC`; if it returns `false`, drop and release lock.
-5. Only after step 4 returns `true`: proceed to admitted-set and routing logic.
-6. Release `RLock`.
+1. Acquire `RLock` on `Router.forwardingTable`.
+2. Look up entry for `(svtnID, srcNodeAddr)`. If absent: release lock and return
+   `ErrHMACVerificationFailed` (fail-closed; key unknown).
+3. **Copy** `FrameAuthKey` (a `[32]byte` value type, not a pointer) into a local
+   variable.
+4. Release the forwarding-table `RLock`.
+5. **Lock-free:** call `verifyFrameHMAC(hdr, payload, copiedAuthKey)`. If `false`:
+   return `ErrHMACVerificationFailed` (E-ADM-016).
+6. Call `admittedKeySet.IsAdmitted(svtnID, nodeAddr)` (which acquires its own internal
+   `RLock` on the admission state). If `false`: return `ErrNotAdmitted`.
+7. Proceed to SVTNRoute / forward.
 
-The HMAC check (steps 3–4) completes and gates steps 5–6. Sharing one lock acquisition
-does NOT mean the checks execute simultaneously or that admitted-set logic runs before
-the HMAC result is known. Fail-fast requires sequential evaluation; the shared lock is
-purely a latency optimization.
+**Rationale for lock-free HMAC verify:**
+- The `RLock` would be held during a CPU-bound (~10–50µs) HMAC computation, hurting
+  concurrency on the forwarding table. Releasing early removes this contention.
+- `FrameAuthKey` is a `[32]byte` value type; copying it is cheap and atomic from a
+  sharing perspective. No pointer aliasing into the forwarding-table entry.
+- LWW (last-write-wins, ADR-003) on `RegisterForwardingEntry` creates a new
+  `*ForwardingEntry` struct; even if `RegisterForwardingEntry` races after the
+  `RUnlock`, the copied `[32]byte` reflects the value authoritative at lookup time.
+  Caller gets a consistent verify against whichever entry was live at lookup time.
+- Sequential ordering (HMAC-before-admitted) is preserved by line ordering in
+  `RouteFrame`, not by lock holding.
 
 **Rejected alternatives:**
-- Verify HMAC after admitted-set check: rejected — timing oracle on admitted set.
-- Skip HMAC for frames from known-good source addresses: rejected — defeats the per-frame
-  authentication guarantee of BC-2.05.002 and BC-2.05.005.
-- Async HMAC verification (separate goroutine): rejected — adds complexity without
+- **Single RLock spanning steps 1–6 (previous v1.5 prescription):** would hold the
+  forwarding-table `RLock` through CPU-bound HMAC and into `admittedKeySet.IsAdmitted`,
+  introducing lock-order risk between `r.mu` and `admittedKeySet.mu`, and stretching
+  the critical section longer than necessary. Rejected in favour of the copy-and-release
+  pattern.
+- **Verify-without-copy:** holding the pointer to `entry.FrameAuthKey` after `RUnlock`
+  would risk a data race if `RegisterForwardingEntry` overwrote the field in-place.
+  Although LWW replacement creates a new entry (not in-place mutation), defensive
+  copying eliminates the concern entirely.
+- **Verify HMAC after admitted-set check:** rejected — timing oracle on admitted set.
+- **Skip HMAC for frames from known-good source addresses:** rejected — defeats the
+  per-frame authentication guarantee of BC-2.05.002 and BC-2.05.005.
+- **Async HMAC verification (separate goroutine):** rejected — adds complexity without
   throughput benefit for the MVP LAN target (HMAC-SHA256 over 44-byte outer header
   is approximately 200ns on modern hardware; sync is fine).
 
