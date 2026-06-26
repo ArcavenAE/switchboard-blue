@@ -40,6 +40,11 @@ var ErrControlModeDropped = errors.New("tmux: control mode connection dropped")
 // reconnect, construct a new ControlMode via tmux.New(...).
 var ErrAlreadyConnected = errors.New("tmux: control mode already connected")
 
+// ErrControlModeClosed is returned by Connect if the ControlMode has been
+// Closed. ControlMode is single-use; reconnect requires a new instance via
+// tmux.New(...). M-2 (pass-12): enforces the documented SINGLE-USE contract.
+var ErrControlModeClosed = errors.New("tmux: control mode is closed (single-use)")
+
 // execFunc is the function signature for spawning the tmux subprocess.
 // Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
 // control mode stream. Hermetic test injection point: tests use WithExecFunc
@@ -80,11 +85,12 @@ type ControlMode struct {
 	frames      chan halfchannel.ChannelFrame
 	closeFrames sync.Once // guards close(frames) against double-close
 
-	// mu protects lifecycle fields below (proc, stdin, cancel).
+	// mu protects lifecycle fields below (proc, stdin, cancel, closed).
 	mu     sync.Mutex
 	cancel context.CancelFunc
 	proc   io.ReadCloser
 	stdin  io.WriteCloser
+	closed bool // M-2 (pass-12): true after Close; Connect rejects with ErrControlModeClosed
 
 	// wg joins dispatchLoop on Close to provide a hard lifecycle boundary.
 	// After Close returns, dispatchLoop has exited and c.publisher /
@@ -185,10 +191,17 @@ func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel, opts
 // Returns ErrControlModeUnavailable if tmux is not found in PATH (EC-004).
 // Returns ErrAlreadyConnected if Connect is called on an already-connected
 // ControlMode; callers must Close first.
+// Returns ErrControlModeClosed if the instance has been Closed — ControlMode
+// is single-use; reconnect requires a new instance via tmux.New(...).
 // Returns a wrapped error for any other subprocess launch failure.
 func (c *ControlMode) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// M-2 (pass-12): single-use guard — reject Connect after Close.
+	if c.closed {
+		return ErrControlModeClosed
+	}
 
 	// F-04: idempotency guard — second call must not leak subprocess + goroutine.
 	if c.proc != nil || c.cancel != nil {
@@ -282,6 +295,7 @@ func (c *ControlMode) Close() error {
 	c.cancel = nil
 	c.stdin = nil
 	c.proc = nil
+	c.closed = true // M-2 (pass-12): enforce single-use; Connect rejects after Close
 
 	c.mu.Unlock()
 
@@ -339,6 +353,12 @@ func (c *ControlMode) Close() error {
 // dispatchLoop is unexported; it is started only by Connect and exits when the
 // subprocess exits or ctx is cancelled.
 func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
+	// M-1 (pass-12): close frames on every exit path (normal return, ctx
+	// cancellation, %error, panic). sync.Once guards against double-close with
+	// Close(). Without this defer, the inline ctx.Done() arm returned without
+	// closing frames, causing range-consumers to block forever.
+	defer c.closeFrames.Do(func() { close(c.frames) })
+
 	scanner := bufio.NewScanner(r)
 	// H-1 (pass-5): raise scanner token buffer to 2 MiB so that large %output
 	// lines (e.g. a terminal repaint of a 100 KiB scrollback) are not silently
@@ -389,10 +409,7 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 				}
 				close(c.errCh)
 			})
-			// Close frames so Frames() consumers unblock.
-			c.closeFrames.Do(func() {
-				close(c.frames)
-			})
+			// frames closed via defer at top of dispatchLoop.
 			return
 		}
 
@@ -441,11 +458,7 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 		})
 	}
 
-	// F-PASS7-H-001 (pass-7): close frames on dispatchLoop exit so Frames()
-	// consumers unblock. sync.Once guards against double-close with Close().
-	c.closeFrames.Do(func() {
-		close(c.frames)
-	})
+	// frames closed via defer at top of dispatchLoop (M-1, pass-12).
 }
 
 // handleLine processes a single control mode protocol line.
