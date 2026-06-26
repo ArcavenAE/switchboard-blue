@@ -31,6 +31,13 @@ type nopCloser struct{ io.Reader }
 
 func (nopCloser) Close() error { return nil }
 
+// nopWriteCloser is a no-op io.WriteCloser used as the fake stdin pipe.
+// Connect writes list-sessions to stdin; the fake discards the write.
+type nopWriteCloser struct{}
+
+func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
+func (nopWriteCloser) Close() error                { return nil }
+
 // fakeControlOutput returns a fake tmux control mode stdout stream containing
 // the provided pre-scripted lines. The caller controls exactly what "tmux"
 // reports, so tests are hermetic and deterministic.
@@ -39,16 +46,17 @@ func fakeControlOutput(lines ...string) io.ReadCloser {
 }
 
 // fakeExecFunc returns a WithExecFunc option that yields the given stream.
+// H-03: updated to match the new execFunc signature (stdin, stdout, err).
 func fakeExecFunc(r io.ReadCloser) tmux.Option {
-	return tmux.WithExecFunc(func(_ context.Context) (io.ReadCloser, error) {
-		return r, nil
+	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, error) {
+		return nopWriteCloser{}, r, nil
 	})
 }
 
 // fakeExecFuncErr returns a WithExecFunc option that returns the given error.
 func fakeExecFuncErr(err error) tmux.Option {
-	return tmux.WithExecFunc(func(_ context.Context) (io.ReadCloser, error) {
-		return nil, err
+	return tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, error) {
+		return nil, nil, err
 	})
 }
 
