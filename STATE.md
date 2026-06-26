@@ -91,6 +91,12 @@ s_3_01a_merge_sha: 43208ab
 s_3_01a_pr_number: 11
 s_3_01a_merge_date: 2026-06-26
 s_3_01a_status: completed
+s_3_01b_adversary_step_4_5: "CONVERGED (3/3 clean: passes 10, 11, 12) — BC-5.39.001 satisfied"
+s_3_01b_adversary_passes_total: 12
+s_3_01b_adversary_not_converged: 9
+s_3_01b_adversary_converged: 3
+s_3_01b_adversary_pass_12_sha: 47df731
+s_3_01b_adversary_defect_classes: "test-masks-defect (×4), concurrency contract gaps (×3), cross-platform PTY bugs (×3), spec drift (×4)"
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
@@ -101,7 +107,7 @@ wave_3_stories_merged: 2
 wave_3_points_complete: 11
 wave_3_points_remaining: 21
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
-timestamp: 2026-06-26T22:00:00Z
+timestamp: 2026-06-26T23:30:00Z
 last_update: 2026-06-26
 ---
 
@@ -109,14 +115,10 @@ last_update: 2026-06-26
 
 ## Current State
 
-Phase 3 TDD Implementation, Wave 3 in progress. S-3.04 MERGED (PR #9, `d54bf1a`, 2026-06-26).
-S-3.01a MERGED (PR #11, `43208ab`, 2026-06-26): 15 adversary passes (8 NOT_CONVERGED + 7
-CONVERGED), 3 consecutive clean (13/14/15), BC-5.39.001 satisfied. ARCH-08 v1.6 promotes
-`internal/session` (pos 6, boundary) + `internal/tmux` (pos 7, effectful) to CURRENT. Supporting:
-PR #10 (BC-5.38.001 cleanup) merged same window. vsdd-factory #288 filed (stub-architect
-BC-5.NN cross-namespace cite pattern). Wave 3: 2/5 stories merged (11/32 pts).
-Wave 3 next: S-3.01b (PTY fallback, 5pts) or S-3.02 (attach/detach, 8pts) — both dep S-3.01a ✅;
-S-3.03 (Tier-2 auth, 8pts) deps S-3.02. User to choose.
+Phase 3, Wave 3. S-3.04 + S-3.01a MERGED (PRs #9/#11). Wave 3: 2/5 stories (11/32 pts).
+S-3.01b Step 4.5 CONVERGED: 12 passes (9 NOT_CONVERGED + 3 CONVERGED), streak 10/11/12,
+BC-5.39.001 satisfied. ~40 defects fixed; no follow-up codifications (#272–#288 filed).
+Next: S-3.01b Step 5 (per-AC demos).
 
 ## Phase Progress
 
@@ -174,23 +176,22 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | Wave-1 rollback/re-closure | all drift items routed concretely; drbothen/vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
 
-## Session Resume Checkpoint — 2026-06-26 (S-3.01a CLOSED)
+## Session Resume Checkpoint — 2026-06-26 (S-3.01b Step 4.5 CONVERGED)
 
-**Position:** Phase 3, Wave 3 — S-3.01a MERGED (PR #11, `43208ab`). Develop tip: `43208ab`.
-Wave 3: 2/5 stories (11/32 pts). 3 stories remaining: S-3.01b, S-3.02, S-3.03.
+**Position:** Phase 3, Wave 3 — S-3.01b Step 4.5 done. Branch: `feature/S-3.01b-pty-proxy-fallback`,
+tip `3628624`. Develop tip: `43208ab` (S-3.01a). Wave 3: 2/5 stories merged; S-3.01b in-flight.
 
-**S-3.01a summary:** 15 adversary passes (8 NOT_CONVERGED + 7 CONVERGED); streak 13/14/15 clean.
-BC-5.39.001 satisfied. ARCH-08 v1.6: `internal/session` + `internal/tmux` promoted to CURRENT.
-vsdd-factory #272–#288 filed (all process-gap). No follow-up codifications.
+**S-3.01b Step 4.5:** 12 adversary passes (9 NOT_CONVERGED + 3 CONVERGED); streak 10/11/12 clean.
+BC-5.39.001 satisfied. ~40 defects fixed across 9 passes. No follow-up codifications needed
+(all process-gap issues already filed as vsdd-factory #272–#288).
+
+**Next:** S-3.01b Step 5 — per-AC demos (AC-001, AC-002, AC-003).
 
 **Carry-forward drift (not blockers):**
 - WAVE-2-MED-001 (Phase-6): ReAuthState eviction on RevokeKey/RegisterKey.
 - VP-036 (Phase-6): property test deferred (needs `internal/testenv.ConnectWithSourceIP`).
 - VP-039-test-skip (Phase-6): t.Skip placeholder in `internal/routing/*_test.go`.
 - SEC-003 (Phase-6, ACCEPTED): sub-microsecond TOCTOU on `now` in ReAuthenticate.
-
-**Wave 3 next:** S-3.01b (PTY fallback, 5pts, deps S-3.01a ✅) OR S-3.02 (attach/detach, 8pts,
-deps S-3.01a ✅). S-3.03 (Tier-2 auth, 8pts) deps S-3.02. User to choose next story.
 
 ## Historical Content
 
