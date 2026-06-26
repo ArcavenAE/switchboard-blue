@@ -6,8 +6,9 @@
 // does not spawn goroutines itself — those are the responsibility of the
 // effectful layer (internal/tmux).
 //
-// Allowed internal imports: {admission} per ARCH-08 §6.6 (frame import removed
-// when FrameTypeData re-export was deleted — no remaining consumer).
+// Allowed internal imports: {frame, admission} per ARCH-08 §6.6.
+// Current code imports only admission; frame is permitted but unused
+// (FrameTypeData re-export was deleted when no consumer materialised).
 // Forbidden: internal/routing, internal/tmux (circular).
 package session
 
