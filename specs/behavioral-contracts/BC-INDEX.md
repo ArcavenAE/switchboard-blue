@@ -43,7 +43,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.03.001 | Access node advertises session presence via SVTN-scoped multicast on state change and periodic heartbeat | session-discovery | CAP-011 | P1 | PE | active | ss-03/BC-2.03.001.md |
 | BC-2.03.002 | Console enumerates all SVTN sessions without specifying hostnames or IP addresses | session-discovery | CAP-012 | P1 | PE | active | ss-03/BC-2.03.002.md |
 | BC-2.03.003 | Presence advertisement includes session name, attachment status, and quality indicator | session-discovery | CAP-011, CAP-012 | P1 | PE | active | ss-03/BC-2.03.003.md |
-| BC-2.04.001 | Access node connects to local tmux via control mode and publishes sessions over SVTN | session-access | CAP-013 | P0 | E | active | ss-04/BC-2.04.001.md |
+| BC-2.04.001 | Access node connects to local tmux via control mode and publishes sessions over SVTN | session-access | CAP-013 | P0 | E | implemented (S-3.01a / PR #11) | ss-04/BC-2.04.001.md |
 | BC-2.04.002 | Access node falls back to PTY proxy when tmux control mode unavailable | session-access | CAP-013 | P0 | E | active | ss-04/BC-2.04.002.md |
 | BC-2.04.003 | Console attaches to session by name; receives downstream stream and sends upstream keystrokes | session-access | CAP-014 | P0 | E | active | ss-04/BC-2.04.003.md |
 | BC-2.04.004 | Console detach releases session without closing it; session continues on access node | session-access | CAP-014 | P0 | E | active | ss-04/BC-2.04.004.md |
