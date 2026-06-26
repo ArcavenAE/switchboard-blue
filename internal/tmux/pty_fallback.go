@@ -375,6 +375,18 @@ type SessionConnector struct {
 
 	// wg joins watchAndFallback goroutine(s) on Close.
 	wg sync.WaitGroup
+
+	// M-003 (pass-4): errCh surfaces mid-session fallback failures to the
+	// caller. It receives ErrPTYDeviceUnavailable when watchAndFallback
+	// activates the PTY fallback path and pty.Connect fails (undefined state:
+	// control mode dropped AND PTY unavailable). Buffered 1 so the sender
+	// never blocks on a non-draining caller. Closed on Close() so consumers
+	// using range-over-channel unblock after graceful shutdown.
+	//
+	// Per BC-2.04.002 invariant 3 (never silent): callers MUST drain this
+	// channel to detect mid-session fallback failures.
+	errCh      chan error
+	closeErrCh sync.Once
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control
@@ -385,6 +397,9 @@ func NewSessionConnector(ctrl *ControlMode, pty *PTYProxy, opts ...SessionConnec
 	sc := &SessionConnector{
 		ctrl: ctrl,
 		pty:  pty,
+		// M-003 (pass-4): buffered 1 so watchAndFallback can always deliver
+		// a failure signal without blocking on a non-draining caller.
+		errCh: make(chan error, 1),
 	}
 	for _, opt := range opts {
 		opt(sc)
@@ -484,6 +499,20 @@ func (sc *SessionConnector) InPTYMode() bool {
 	return sc.inPTYMode
 }
 
+// Err returns a channel that receives an error if the SessionConnector enters
+// an undefined state — specifically, when mid-session control-mode drop occurs
+// AND the subsequent PTY fallback also fails (ErrPTYDeviceUnavailable).
+//
+// The channel is closed (with no error) when the connector is closed normally
+// via Close(), so callers ranging over it will unblock.
+//
+// Per BC-2.04.002 invariant 3 (never silent): callers SHOULD drain this
+// channel to detect mid-session fallback failures. Missing this means a
+// "both paths down" scenario is silently absorbed.
+func (sc *SessionConnector) Err() <-chan error {
+	return sc.errCh
+}
+
 // Close tears down whichever mode is active. Close is idempotent.
 func (sc *SessionConnector) Close() error {
 	sc.mu.Lock()
@@ -519,6 +548,12 @@ func (sc *SessionConnector) Close() error {
 
 	// Wait for watchAndFallback goroutine(s) to exit.
 	sc.wg.Wait()
+
+	// M-003 (pass-4): close errCh so consumers ranging over it unblock after
+	// a graceful Close. sync.Once guards against double-close with watchAndFallback.
+	sc.closeErrCh.Do(func() {
+		close(sc.errCh)
+	})
 
 	return firstErr
 }
@@ -603,6 +638,20 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 			sc.active = sc.pty
 			sc.inPTYMode = true
 			sc.mu.Unlock()
+		} else {
+			// M-003 (pass-4): PTY fallback also failed — connector is in an
+			// undefined state (control mode dropped AND PTY unavailable).
+			// Surface the failure via Err() per BC-2.04.002 invariant 3
+			// (never silent). closeErrCh.Do guards against double-close
+			// if Close() races with this path.
+			sc.closeErrCh.Do(func() {
+				select {
+				case sc.errCh <- ptyErr:
+				default:
+					// Channel already occupied; drop (buffered-1 invariant).
+				}
+				close(sc.errCh)
+			})
 		}
 		// Whether PTY connect succeeded or failed, stop watching ctrl.
 		return

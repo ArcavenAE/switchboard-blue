@@ -636,6 +636,121 @@ func TestPTYProxy_DirectConnect_NoPTY(t *testing.T) {
 	}
 }
 
+// -- M-003: SessionConnector.Err() channel -----------------------------------
+
+// TestSessionConnector_Err_MidSessionPTYFallbackFail verifies that when
+// tmux control mode drops mid-session (ErrControlModeDropped) AND the
+// subsequent PTY fallback also fails (ErrPTYDeviceUnavailable), the
+// SessionConnector surfaces the failure via the Err() channel
+// (M-003; BC-2.04.002 invariant 3 — never silent).
+//
+// This exercises the "both paths down" undefined-state scenario where
+// the operator must be notified that the access node has lost all viable
+// connection paths.
+//
+// Hermetic: initial control-mode stream EOF triggers ErrControlModeDropped
+// (no factory → immediate PTY fallback); PTY alloc returns ErrPTYDeviceUnavailable.
+// No real tmux or PTY forked.
+func TestSessionConnector_Err_MidSessionPTYFallbackFail(t *testing.T) {
+	t.Parallel()
+
+	log := &fakeLogCapture{}
+
+	// Initial stream EOFs immediately to trigger ErrControlModeDropped
+	// without any reconnect factory (nil factory → immediate PTY fallback).
+	initialStream := fakeControlOutput(
+		"%begin 3000000000 0 1",
+		"%end 3000000000 0 1",
+		// EOF immediately follows.
+	)
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	ctrl := tmux.New(pub, ds, fakeExecFunc(initialStream))
+
+	// PTY alloc always fails — simulates no PTY device available.
+	ptyProxy := tmux.NewPTYProxy(pub, ds,
+		fakePTYAllocErr(fmt.Errorf("%w: /dev/ptmx: no such device", tmux.ErrPTYDeviceUnavailable)),
+		tmux.WithLogger(log),
+	)
+
+	// No factory → watchAndFallback falls back to PTY immediately on drop.
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy)
+	t.Cleanup(func() { _ = sc.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initial connect succeeds (fake stream is valid).
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v; want nil (initial control mode must succeed)", err)
+	}
+
+	// Wait for the Err() channel to receive the PTY failure.
+	// The fake stream has an immediate EOF, so ErrControlModeDropped is
+	// dispatched; watchAndFallback attempts PTY connect (which fails);
+	// then sends ErrPTYDeviceUnavailable to Err().
+	select {
+	case err, ok := <-sc.Err():
+		if !ok {
+			// Channel closed without an error — only valid if Close() raced.
+			// In this test, Close() has not been called yet, so this is a failure.
+			t.Fatal("Err() channel closed without an error; want ErrPTYDeviceUnavailable")
+		}
+		if !errors.Is(err, tmux.ErrPTYDeviceUnavailable) {
+			t.Errorf("Err() = %v; want errors.Is(_, ErrPTYDeviceUnavailable)", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Err() channel did not receive an error within 2s; mid-session fallback failure not surfaced")
+	}
+}
+
+// TestSessionConnector_Err_ClosedOnNormalShutdown verifies that the Err()
+// channel is closed (not written to) on a graceful Close(), so callers
+// ranging over it unblock without receiving an error (M-003 normal-path).
+func TestSessionConnector_Err_ClosedOnNormalShutdown(t *testing.T) {
+	t.Parallel()
+
+	master := newFakePTYMaster()
+	initialStream := fakeControlOutput(
+		"%begin 4000000000 0 1",
+		"%end 4000000000 0 1",
+	)
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	ctrl := tmux.New(pub, ds, fakeExecFunc(initialStream))
+	ptyProxy := tmux.NewPTYProxy(pub, ds, fakePTYAlloc(master, 55555))
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v; want nil", err)
+	}
+
+	// Graceful Close — Err() channel must close cleanly.
+	if err := sc.Close(); err != nil {
+		t.Logf("Close: %v (non-nil close error acceptable)", err)
+	}
+	_ = master.Close()
+
+	// Assert Err() is closed by draining it in a non-blocking way.
+	// After Close(), the channel must be closed (ok == false), not blocking.
+	select {
+	case err, ok := <-sc.Err():
+		if ok {
+			t.Errorf("Err() sent %v after graceful Close; want channel closed with no error", err)
+		}
+		// ok == false: channel is closed, no error — correct.
+	case <-time.After(500 * time.Millisecond):
+		t.Error("Err() channel not closed within 500ms after sc.Close(); want closed on graceful shutdown")
+	}
+}
+
 // -- Real-PTY deferral sentinel --------------------------------------------
 
 // TestPTYProxy_RealPTY_Integration is a placeholder that documents the
