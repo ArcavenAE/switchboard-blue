@@ -34,7 +34,7 @@ import (
 func TestSessionContinuity_ReauthOnIPChange(t *testing.T) {
 	t.Parallel()
 
-	// Deterministic seed for reproducibility (BC-5.38.001 pattern).
+	// Deterministic seed for reproducibility.
 	seed := bytes.Repeat([]byte("reauth-ip-change-0"), 2) // 32 bytes
 	nodePub, nodePriv, err := ed25519.GenerateKey(bytes.NewReader(seed))
 	if err != nil {
