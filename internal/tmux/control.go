@@ -18,6 +18,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/session"
@@ -25,14 +26,17 @@ import (
 
 // ErrControlModeUnavailable is returned by Connect when the tmux binary is not
 // found in PATH (BC-2.04.001 EC-004 / FM-011; log: "tmux not found; using PTY
-// fallback"). FM-004 explicitly assigns no catalog code to this degradation
-// signal; the sentinel here is provided for errors.Is checks in S-3.01b.
+// fallback").
 var ErrControlModeUnavailable = errors.New("tmux: control mode unavailable")
 
 // ErrControlModeDropped signals that a previously established control mode
 // connection has been lost mid-session (BC-2.04.001 EC-002 / FM-004).
 // Callers (S-3.01b fallback path) receive this via the Err() channel.
 var ErrControlModeDropped = errors.New("tmux: control mode connection dropped")
+
+// ErrAlreadyConnected is returned by Connect when the ControlMode is already
+// connected. Callers must Close before reconnecting.
+var ErrAlreadyConnected = errors.New("tmux: control mode already connected")
 
 // execFunc is the function signature for spawning the tmux subprocess.
 // Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
@@ -52,9 +56,10 @@ type ControlMode struct {
 	downstream *halfchannel.HalfChannel
 	// errCh is buffered with 1 so dispatchLoop can always send without blocking
 	// on Close. One error is the maximum meaningful signal (dropped = fatal).
-	errCh  chan error
-	cancel context.CancelFunc
-	proc   io.ReadCloser
+	errCh      chan error
+	closeErrCh sync.Once
+	cancel     context.CancelFunc
+	proc       io.ReadCloser
 	// execFn spawns the tmux subprocess; replaced in tests via WithExecFunc.
 	execFn execFunc
 }
@@ -116,20 +121,27 @@ func New(publisher *session.Publisher, downstream *halfchannel.HalfChannel, opts
 // subscription loop (BC-2.04.001 PC-1; AC-001).
 //
 // On success: the event loop goroutine is running and all current sessions are
-// enumerated and published (BC-2.04.001 PC-2; AC-002).
+// enumerated and published (BC-2.04.001 PC-2; AC-002). Connect sends a
+// "list-sessions" command immediately after establishing the stream; the
+// resulting %begin/%end block is consumed to register pre-existing sessions.
 //
 // Returns ErrControlModeUnavailable if tmux is not found in PATH (EC-004).
+// Returns ErrAlreadyConnected if Connect is called on an already-connected
+// ControlMode; callers must Close first.
 // Returns a wrapped error for any other subprocess launch failure.
-//
-// Connect is idempotent — calling Connect on an already-connected ControlMode
-// is an error (caller bug; the caller must Close first).
 func (c *ControlMode) Connect(ctx context.Context) error {
+	// F-04: idempotency guard — second call must not leak subprocess + goroutine.
+	if c.proc != nil || c.cancel != nil {
+		return ErrAlreadyConnected
+	}
+
 	innerCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
 	r, err := c.execFn(innerCtx)
 	if err != nil {
 		cancel()
+		c.cancel = nil
 		if errors.Is(err, ErrControlModeUnavailable) {
 			return err
 		}
@@ -154,8 +166,9 @@ func (c *ControlMode) Sessions() []session.Info {
 // Err returns the error channel that receives a non-nil error when the
 // control mode connection is lost (BC-2.04.001 EC-002; S-3.01b API surface).
 //
-// The channel is closed and sends ErrControlModeDropped when the event loop
-// exits unexpectedly. S-3.01b reads this channel to trigger PTY fallback.
+// The channel receives ErrControlModeDropped and is then closed when the
+// event loop exits unexpectedly. S-3.01b reads this channel (or ranges over
+// it) to trigger PTY fallback.
 //
 // The channel is never written to by the caller.
 func (c *ControlMode) Err() <-chan error {
@@ -173,6 +186,12 @@ func (c *ControlMode) Close() error {
 		_ = c.proc.Close()
 	}
 
+	// F-03: ensure errCh is closed so consumers using range-over-channel
+	// unblock after a graceful Close. sync.Once guards against double-close.
+	c.closeErrCh.Do(func() {
+		close(c.errCh)
+	})
+
 	return nil
 }
 
@@ -182,7 +201,8 @@ func (c *ControlMode) Close() error {
 //
 // Protocol events handled (BC-2.04.001 trigger + PC-3, PC-4, PC-5):
 //
-//   - %begin / %end         — command response delimiters
+//   - %begin / %end         — command response delimiters; F-01 uses these
+//     to collect the list-sessions response and register existing sessions.
 //   - %sessions-changed     — re-enumerate sessions
 //   - %session-created name — AC-003 (PC-3)
 //   - %session-closed name  — AC-003 (PC-4)
@@ -193,14 +213,45 @@ func (c *ControlMode) Close() error {
 func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 	scanner := bufio.NewScanner(r)
 
+	// F-01: inSession tracks whether we are currently inside a %begin/%end
+	// block that is the response to the initial list-sessions command we issue
+	// immediately after establishing the connection. Lines between %begin and
+	// %end are session names from a pre-existing tmux server state.
+	inSessionList := false
+
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
+			// F-03: close errCh on context cancellation (graceful Close path).
+			c.closeErrCh.Do(func() {
+				close(c.errCh)
+			})
 			return
 		default:
 		}
 
 		line := scanner.Text()
+
+		// F-01: handle %begin/%end block for list-sessions response.
+		switch {
+		case strings.HasPrefix(line, "%begin "):
+			inSessionList = true
+			continue
+		case strings.HasPrefix(line, "%end "):
+			inSessionList = false
+			continue
+		}
+
+		if inSessionList {
+			// Each line between %begin and %end is a session name.
+			name := strings.TrimSpace(line)
+			if name != "" {
+				// Ignore ErrSessionAlreadyPublished — idempotent on re-connect.
+				_ = c.publisher.Publish(name)
+			}
+			continue
+		}
+
 		c.handleLine(line)
 	}
 
@@ -208,13 +259,20 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 	select {
 	case <-ctx.Done():
 		// Normal shutdown via Close; don't signal dropped connection.
+		c.closeErrCh.Do(func() {
+			close(c.errCh)
+		})
 	default:
-		// Unexpected exit — signal dropped connection to S-3.01b.
+		// F-03: unexpected exit — signal dropped connection to S-3.01b,
+		// then close the channel so range-over-channel consumers unblock.
 		select {
 		case c.errCh <- ErrControlModeDropped:
 		default:
 			// Channel already has an error; don't block.
 		}
+		c.closeErrCh.Do(func() {
+			close(c.errCh)
+		})
 	}
 }
 
@@ -238,14 +296,56 @@ func (c *ControlMode) handleLine(line string) {
 		}
 
 	case strings.HasPrefix(line, "%output "):
-		// %output <pane-id> <data>
-		// Feed the raw data bytes into the downstream half-channel.
+		// %output <pane-id> <octal-escaped-data>
+		// F-06: split on first space to isolate pane-id; unescape the payload.
 		rest := strings.TrimPrefix(line, "%output ")
-		// rest = "<pane-id> <data>"; skip pane-id, take data.
 		parts := strings.SplitN(rest, " ", 2)
 		if len(parts) == 2 && len(parts[1]) > 0 {
-			_ = c.downstream.Enqueue([]byte(parts[1]))
+			data := unescapeTmuxOutput(parts[1])
+			_ = c.downstream.Enqueue(data)
 			c.downstream.Tick()
 		}
 	}
+}
+
+// unescapeTmuxOutput decodes a tmux control-mode octal-escaped payload.
+//
+// tmux encodes non-printable bytes and spaces using octal escapes of the form
+// \NNN (three octal digits). Double-backslash \\ encodes a literal backslash.
+// All other bytes are passed through unchanged.
+//
+// Example: "hello\040world" → "hello world" (0x20 = space = octal 040).
+func unescapeTmuxOutput(s string) []byte {
+	b := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' {
+			b = append(b, s[i])
+			continue
+		}
+		// Peek at the next character.
+		if i+1 >= len(s) {
+			b = append(b, s[i])
+			continue
+		}
+		next := s[i+1]
+		if next == '\\' {
+			// \\ → literal backslash.
+			b = append(b, '\\')
+			i++
+			continue
+		}
+		// Check for three-digit octal sequence \NNN.
+		if i+3 < len(s) &&
+			next >= '0' && next <= '7' &&
+			s[i+2] >= '0' && s[i+2] <= '7' &&
+			s[i+3] >= '0' && s[i+3] <= '7' {
+			octal := (next-'0')*64 + (s[i+2]-'0')*8 + (s[i+3] - '0')
+			b = append(b, octal)
+			i += 3
+			continue
+		}
+		// Unrecognised escape — pass through as-is.
+		b = append(b, s[i])
+	}
+	return b
 }
