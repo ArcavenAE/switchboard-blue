@@ -15,6 +15,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -67,12 +68,28 @@ type KeystrokeSink interface {
 	SendInput(payload []byte) error
 }
 
-// noOpSink is the default KeystrokeSink used when no sink is injected. It
-// discards all payloads silently. Tests that do not assert forwarding use
-// this via NewAccessNode without a WithKeystrokeSink option.
-type noOpSink struct{}
+// ErrNoKeystrokeSink is returned by the default sink when no KeystrokeSink has
+// been injected at construction. Callers that need a real sink MUST use
+// WithKeystrokeSink; callers that explicitly want to discard keystrokes should
+// use WithKeystrokeSink(NoOpSink{}).
+var ErrNoKeystrokeSink = errors.New("session: no keystroke sink installed; construct AccessNode with WithKeystrokeSink")
 
-func (noOpSink) SendInput(_ []byte) error { return nil }
+// noSink is the default fail-loud sink. It returns ErrNoKeystrokeSink on every
+// call so that production callers that forget to inject a sink fail visibly
+// rather than silently discarding keystrokes (F-L-2 pass-3: anti-silent-failure).
+type noSink struct{}
+
+func (noSink) SendInput(_ []byte) error { return ErrNoKeystrokeSink }
+
+// NoOpSink is an exported KeystrokeSink that discards all payloads silently.
+// Tests that do not assert forwarding use this explicitly to make the
+// "no-op" intent clear at the call site.
+//
+// Use: session.NewAccessNode(pub, auth, session.WithKeystrokeSink(session.NoOpSink{}))
+type NoOpSink struct{}
+
+// SendInput discards payload and returns nil.
+func (NoOpSink) SendInput(_ []byte) error { return nil }
 
 // AccessNodeOption is a functional option for NewAccessNode.
 type AccessNodeOption func(*AccessNode)
@@ -109,19 +126,16 @@ type AccessNode struct {
 	// All consoles' keystrokes from any SendKeystroke call funnel through this
 	// single mutex — the spec-mandated serialization point.
 	sinkMu sync.Mutex
-
-	// mu guards upstreams — the per-console bidirectional channel map used to
-	// verify console attachment in SendKeystroke.
-	mu        sync.Mutex
-	upstreams map[ConsoleKey]chan []byte
 }
 
 // NewAccessNode constructs an AccessNode using the given Publisher and
 // Authorizer. If auth is nil, NoOpAuthorizer is used. Functional options
-// (e.g. WithKeystrokeSink) customize the node further. If no
-// WithKeystrokeSink option is provided, a no-op sink is used (keystrokes are
-// accepted but silently discarded — suitable for tests that do not assert
-// forwarding).
+// (e.g. WithKeystrokeSink) customize the node further.
+//
+// If no WithKeystrokeSink option is provided, SendKeystroke returns
+// ErrNoKeystrokeSink on every call. This is a deliberate fail-loud default
+// (F-L-2): production callers MUST inject a real sink; tests that do not
+// assert forwarding should use WithKeystrokeSink(NoOpSink{}).
 func NewAccessNode(pub *Publisher, auth Authorizer, opts ...AccessNodeOption) *AccessNode {
 	if auth == nil {
 		auth = NoOpAuthorizer{}
@@ -130,8 +144,7 @@ func NewAccessNode(pub *Publisher, auth Authorizer, opts ...AccessNodeOption) *A
 		pub:        pub,
 		consoles:   NewConsoleSet(),
 		authorizer: auth,
-		sink:       noOpSink{},
-		upstreams:  make(map[ConsoleKey]chan []byte),
+		sink:       noSink{},
 	}
 	for _, opt := range opts {
 		opt(a)
@@ -149,14 +162,22 @@ func NewAccessNode(pub *Publisher, auth Authorizer, opts ...AccessNodeOption) *A
 // does NOT drain it — callers must use SendKeystroke for the authorizer +
 // serialization guarantees.
 //
+// OWNERSHIP CONTRACT: The upstream channel is owned by the ConsoleSet. The
+// caller receives a send-only view for convenience (test harnesses). Callers
+// MUST NOT write to the upstream channel concurrently with Detach or Sweep.
+// Production callers use SendKeystroke for the safe path; direct channel
+// writes are for test harnesses only that fully control attach/detach
+// lifecycle and do not send after detaching.
+//
 // Returns:
 //   - downstream: a receive-only channel of frame.OuterHeader values delivered
 //     from the session to the console (BC-2.04.003 PC-2).
 //   - upstream: a send-only channel for keystroke payloads from the console to
-//     the access node (BC-2.04.003 PC-3).
+//     the access node (BC-2.04.003 PC-3). Not drained by AccessNode.
 //   - err: ErrSessionNotFound if sessionName is not in the publisher's live set
 //     (E-SES-001; BC-2.04.003 EC-002); ErrConsoleAlreadyAttached if key is
-//     already attached.
+//     already attached (E-SES-002), including console_id and session_name in
+//     the message.
 //
 // A successful Attach adds key to the ConsoleSet. Subsequent DeliverFrame calls
 // will fan out to the new console.
@@ -167,52 +188,48 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 
 	ds, us, err := a.consoles.Add(key)
 	if err != nil {
+		if errors.Is(err, ErrConsoleAlreadyAttached) {
+			return nil, nil, fmt.Errorf("session: console %s already attached to session %s: %w", key, sessionName, ErrConsoleAlreadyAttached)
+		}
 		return nil, nil, err
 	}
 
-	// Store bidirectional reference so Detach can close it and SendKeystroke
-	// can verify console attachment.
-	a.mu.Lock()
-	a.upstreams[key] = us
-	a.mu.Unlock()
-
-	// Return send-only upstream to the caller (they must not close it).
+	// Return send-only upstream to the caller (they must not close it;
+	// ownership stays with ConsoleSet).
 	return ds, us, nil
 }
 
 // Detach closes the console's downstream channel and removes it from the
 // ConsoleSet (BC-2.04.004 PC-1 through PC-3).
 //
-// The upstream channel is closed to free the ConsoleSet entry and signal any
-// goroutine that may be draining it (F-03 pass-1 fix: console close-signal API).
+// ConsoleSet.Remove closes the downstream channel under its write-lock (same
+// as Add), and EvictStale also closes the upstream channel outside the lock.
+// After Detach the console's entry is removed from ConsoleSet — future
+// SendKeystroke calls for this key return ErrConsoleNotFound (BC-2.04.004 PC-3).
 //
 // The tmux session on the access node continues running (BC-2.04.004 invariant 1:
 // detach is non-destructive).
 //
-// Returns ErrConsoleNotFound if key is not currently attached.
+// Returns ErrConsoleNotFound if key is not currently attached (E-SES-003),
+// including console_id in the message.
 func (a *AccessNode) Detach(key ConsoleKey) error {
-	// Remove from ConsoleSet first (closes downstream, removes from map).
 	if err := a.consoles.Remove(key); err != nil {
+		if errors.Is(err, ErrConsoleNotFound) {
+			return fmt.Errorf("session: console %s not found: %w", key, ErrConsoleNotFound)
+		}
 		return err
 	}
-
-	// Close upstream channel to signal any waiting reader.
-	a.mu.Lock()
-	us, ok := a.upstreams[key]
-	if ok {
-		delete(a.upstreams, key)
-	}
-	a.mu.Unlock()
-
-	if ok {
-		close(us)
-	}
-
 	return nil
 }
 
 // SendKeystroke forwards payload to the tmux session on behalf of console key,
 // after consulting the Authorizer (BC-2.04.006 Invariant 3: serialization).
+//
+// ConsoleSet is the single source of truth for attachment state (F-C-4
+// pass-3 fix). SendKeystroke consults cs.IsAttached directly — there is no
+// parallel map that could drift after EvictStale evicts a stale console. This
+// eliminates the class of bug where an evicted console's keystrokes leak
+// through because a stale a.upstreams entry was not cleaned up.
 //
 // sinkMu is held during the sink.SendInput call to prevent keystroke
 // interleaving under concurrent calls from multiple consoles (AC-007). All
@@ -222,7 +239,8 @@ func (a *AccessNode) Detach(key ConsoleKey) error {
 // AccessNode is goroutine-free: SendKeystroke is synchronous. No channel send
 // or goroutine is involved; the sink writes directly.
 //
-// Returns ErrConsoleNotFound if key is not currently attached. Returns the
+// Returns ErrConsoleNotFound if key is not currently attached (E-SES-003),
+// including console_id and session_name in the message. Returns the
 // Authorizer's error if authorization is denied. Propagates sink.SendInput
 // errors.
 func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload []byte) error {
@@ -230,13 +248,11 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 		return err
 	}
 
-	// Verify the console is currently attached under a.mu.
-	a.mu.Lock()
-	_, ok := a.upstreams[key]
-	a.mu.Unlock()
-
-	if !ok {
-		return fmt.Errorf("%w: %s", ErrConsoleNotFound, key)
+	// ConsoleSet is the single source of truth: check attachment here, not in
+	// a parallel map. EvictStale removes from cs.consoles; after that, any
+	// SendKeystroke call returns ErrConsoleNotFound without touching the sink.
+	if !a.consoles.IsAttached(key) {
+		return fmt.Errorf("session: console %s not found in session %s: %w", key, sessionName, ErrConsoleNotFound)
 	}
 
 	// Serialize: only one goroutine forwards keystrokes at a time
@@ -247,12 +263,9 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 	return a.sink.SendInput(payload)
 }
 
-// DeliverFrame fans out hdr to all currently-attached consoles, then calls
-// Evict to remove any consoles whose channels have been closed (AC-008;
-// BC-2.04.004 EC-002).
+// DeliverFrame fans out hdr to all currently-attached consoles.
 func (a *AccessNode) DeliverFrame(hdr frame.OuterHeader) {
 	a.consoles.Deliver(hdr)
-	a.consoles.Evict()
 }
 
 // Sweep evicts stale consoles whose keepalive heartbeat has not been updated
@@ -264,4 +277,11 @@ func (a *AccessNode) DeliverFrame(hdr frame.OuterHeader) {
 // Returns the count of consoles evicted.
 func (a *AccessNode) Sweep(deadline time.Duration) int {
 	return a.consoles.EvictStale(deadline)
+}
+
+// Heartbeat records a keepalive timestamp for the console identified by key.
+// Delegates to ConsoleSet.Heartbeat. Returns ErrConsoleNotFound if key is not
+// currently attached.
+func (a *AccessNode) Heartbeat(key ConsoleKey) error {
+	return a.consoles.Heartbeat(key)
 }

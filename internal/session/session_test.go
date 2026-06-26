@@ -144,6 +144,9 @@ func TestPublisher_EmptyOnStartup(t *testing.T) {
 
 // newTestAccessNode is a test helper that builds an AccessNode backed by a
 // Publisher seeded with the given sessionNames and a NoOpAuthorizer.
+// A NoOpSink is injected so that tests that do not assert forwarding do not
+// fail with ErrNoKeystrokeSink (F-L-2: the default sink is now fail-loud;
+// tests must explicitly opt into discard or supply a recording sink).
 func newTestAccessNode(t *testing.T, sessionNames ...string) *session.AccessNode {
 	t.Helper()
 	keys := admission.NewAdmittedKeySet()
@@ -153,7 +156,7 @@ func newTestAccessNode(t *testing.T, sessionNames ...string) *session.AccessNode
 			t.Fatalf("newTestAccessNode: Publish %q: %v", name, err)
 		}
 	}
-	return session.NewAccessNode(pub, session.NoOpAuthorizer{})
+	return session.NewAccessNode(pub, session.NoOpAuthorizer{}, session.WithKeystrokeSink(session.NoOpSink{}))
 }
 
 // TestSession_Attach_EstablishesBidirectionalChannel verifies that Attach
