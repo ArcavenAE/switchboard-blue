@@ -596,3 +596,59 @@ func TestTmuxControlMode_Close_WaitsForDispatchLoop(t *testing.T) {
 		t.Errorf("Close took %v; want <= %v — something is blocking Close beyond the expected goroutine join", elapsed, maxExpected)
 	}
 }
+
+// TestTmuxControlMode_Frames_DeliversChannelFrames verifies the positive path
+// of the Frames() API surface (F-PASS7-H-001): a %output event produces a
+// ChannelFrame on cm.Frames() with the correctly unescaped payload.
+//
+// This is the load-bearing coverage for the c.frames <- frame send path in
+// dispatchLoop. A bug in ChanID assignment, sequence advancement, or the
+// fragment-to-frame pipeline would surface as a timeout here.
+//
+// Traces to:
+//
+//	F-PASS7-H-001 (Tick() result piped to c.frames channel)
+//	BC-2.04.001 PC-5 (output events feed downstream)
+//
+// Hermetic: uses fakeExecFunc; does not shell out to tmux.
+func TestTmuxControlMode_Frames_DeliversChannelFrames(t *testing.T) {
+	t.Parallel()
+
+	stream := fakeControlOutput(
+		"%begin 1000000000 0 1",
+		"%end 1000000000 0 1",
+		"%session-created session-1",
+		`%output %12 hello\040world`, // \040 is octal for space (0x20)
+	)
+	cm, _ := newTestControlWithOpts(t, fakeExecFunc(stream)) //nolint:dogsled // publisher unused here
+	t.Cleanup(func() { _ = cm.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Drain one frame from Frames() with a generous timeout.
+	// The frame must arrive before dispatchLoop reaches EOF.
+	select {
+	case frame, ok := <-cm.Frames():
+		if !ok {
+			t.Fatal("Frames() channel closed before yielding a frame")
+		}
+		// Primary assertion: payload is the octal-unescaped content of the %output line.
+		if got, want := string(frame.Payload), "hello world"; got != want {
+			t.Errorf("frame.Payload = %q; want %q (octal-unescaped %%output data)", got, want)
+		}
+		// Sanity: ChanID and ChanSeq must be nonzero — the frame travelled
+		// through a real halfchannel, not a zero-value placeholder.
+		if frame.ChanID == 0 {
+			t.Errorf("frame.ChanID = 0; want nonzero (channel must be assigned)")
+		}
+		if frame.ChanSeq == 0 {
+			t.Errorf("frame.ChanSeq = 0; want nonzero (Tick must have advanced the sequence)")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("no frame received on cm.Frames() within 1s")
+	}
+}
