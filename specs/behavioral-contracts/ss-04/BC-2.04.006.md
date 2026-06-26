@@ -2,10 +2,10 @@
 artifact_id: BC-2.04.006
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-26T12:00:00
 phase: 1a
 bc_id: BC-2.04.006
 subsystem: session-access
@@ -21,6 +21,9 @@ modified:
   - date: 2026-06-26
     version: "1.2"
     change: "adversary pass-3 F-H-6/F-M-4/F-M-6: mark PC-2 (SVTN router multicast) partial-implementation; mark PC-3 (read-only keystroke rejection) deferred to S-3.03; clarify Inv-3 (keystroke serialization) is enforced at AccessNode SerializationMutex (sinkMu boundary)"
+  - date: 2026-06-26
+    version: "1.3"
+    change: "adversary pass-4 F-H-5: add NFR-004 (backpressure/drop semantics + framesDropped counter); clarify PC-1 fan-out completeness is conditional on consoles being well-behaved (draining downstream channel)"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -61,6 +64,7 @@ Multiple consoles can be subscribed to the same session's output stream at the s
 1. **DI-001**: Each subscriber receives an identically encrypted downstream stream — there is no per-subscriber re-encryption at the router.
 2. Fan-out is a router responsibility — the access node sends one copy per frame. (S-3.02 implements the access-node half of this; the router multicast layer is deferred per PC-2 note above.)
 3. All full-access console keystrokes are serialized by the access node before forwarding to tmux (no keystroke race condition). **This serialization is enforced at the `AccessNode` `sinkMu` serialization mutex — the mutex boundary immediately wraps the `KeystrokeSink.Write` call. Serialization is not enforced at the channel boundary, which is unbuffered and subject to Go scheduler ordering. Tests must target the post-mutex tmux delivery order, not the channel arrival order.**
+4. **NFR-004 (Backpressure handling — drop-rather-than-block):** When a console's downstream buffer is full (the console is not draining its channel), the access node MUST drop the frame for that console rather than block fan-out delivery to other consoles. **Justification:** liveness of well-behaved consoles takes priority over completeness for a slow or stalled console. The "fan-out completeness" invariant in PC-1 is therefore conditional: it holds for consoles that are draining their downstream channel. A console that persistently fails to drain SHOULD trigger Sweep-style eviction via heartbeat absence (already covered by BC-2.04.004 EC-002). **Observability obligation:** The access node MUST expose a `framesDropped` counter — per-console or aggregate — that increments on each drop. This counter must be readable by monitoring tooling without requiring a restart. The counter implementation detail (field name, exposure mechanism) is an architecture decision; the requirement is that it exists and is non-zero-on-drop.
 
 ## Trigger
 
@@ -74,6 +78,7 @@ Second (or subsequent) console attaches to an already-subscribed session.
 | EC-002 (DEC-012) | Full-access console detaches; read-only still subscribed | Output continues to read-only console. Session not affected. |
 | EC-003 | Two full-access consoles both send keystrokes simultaneously | Keystrokes from both are accepted; serialized by the access node before forwarding to tmux. tmux receives them in the order they arrive at the access node. |
 | EC-004 | 50 consoles subscribed to one session | Router fans out to all 50; no artificial limit. Performance is an NFR (NFR-004). |
+| EC-005 | A console's downstream channel buffer is full (console is stalled / not draining) | Access node drops the frame for that console (NFR-004 backpressure rule); increments `framesDropped` counter; continues fan-out to all other consoles without delay. The stalled console is not immediately evicted but will be evicted by Sweep if keepalive ages out. |
 
 ## Canonical Test Vectors
 
