@@ -113,17 +113,25 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 	// Step 1: forwarding-table lookup under RLock.
 	//
 	// Per ADR-009 v1.6: the RLock is held only for this forwarding-table lookup
-	// (steps 1–3 below). FrameAuthKey is a [32]byte value type and is copied out
-	// before the lock is released; HMAC verification (step 2) runs lock-free. This
-	// keeps the critical section small and avoids holding the forwarding-table RLock
-	// during CPU-bound HMAC computation. Sequential HMAC-before-admitted ordering is
-	// preserved by statement order in this function, not by lock holding (see
-	// ADR-009 v1.6 §"Ordering specification").
+	// and key copy (steps 1–3 below). FrameAuthKey is a [32]byte value type and
+	// is copied into a local variable (authKey) before the lock is released —
+	// defensive copy per ADR-009 v1.6 step 3. HMAC verification (step 2) runs
+	// lock-free against that local copy. This keeps the critical section small
+	// and avoids holding the forwarding-table RLock during CPU-bound HMAC
+	// computation. Sequential HMAC-before-admitted ordering is preserved by
+	// statement order in this function, not by lock holding (see ADR-009 v1.6
+	// §"Ordering specification").
 	r.mu.RLock()
 	svtnTable, ok := r.forwardingTable[hdr.SVTNID]
-	var entry *ForwardingEntry
+	var (
+		entry   *ForwardingEntry
+		authKey [hmac.KeySize]byte
+	)
 	if ok {
 		entry = svtnTable[hdr.SrcAddr]
+		if entry != nil {
+			authKey = entry.FrameAuthKey // copy before unlock (ADR-009 v1.6 step 3)
+		}
 	}
 	r.mu.RUnlock()
 
@@ -131,9 +139,9 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 		return ErrHMACVerificationFailed
 	}
 
-	// Step 2: Verify the wire HMAC tag against the entry's FrameAuthKey.
+	// Step 2: Verify the wire HMAC tag against the local copy of FrameAuthKey.
 	// E-ADM-016: wire HMAC verification failed at RouteFrame (BC-2.05.008 PC-2).
-	if !verifyFrameHMAC(hdr, payload, entry.FrameAuthKey) {
+	if !verifyFrameHMAC(hdr, payload, authKey) {
 		return ErrHMACVerificationFailed
 	}
 
