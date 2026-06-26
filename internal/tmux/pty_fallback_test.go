@@ -411,27 +411,35 @@ func TestPTYProxy_EC002_TmuxNotFound(t *testing.T) {
 
 // -- EC-003: mid-session control mode loss (3 reconnect attempts) -----------
 
-// TestPTYProxy_FallbackOnMidSessionLoss verifies that when tmux control mode
-// drops mid-session (ErrControlModeDropped via Err()), the SessionConnector
-// attempts maxReconnectAttempts (3) reconnections, then switches to PTY proxy
-// mode (BC-2.04.002 EC-003; ADR-010 reversion at commit 1aedebc).
+// TestSessionConnector_MidSessionFallback_ReconnectAttempts verifies that
+// when tmux control mode drops mid-session (ErrControlModeDropped via Err()),
+// the SessionConnector calls the injected factory exactly maxReconnectAttempts
+// (3) times before switching to PTY proxy mode (BC-2.04.002 EC-003; ADR-010).
 //
-// Strategy: the initial connect succeeds (fake stream with empty enumeration
-// block), then the stream EOF triggers ErrControlModeDropped. The reconnect
-// function is injected and always returns ErrControlModeUnavailable. After
-// 3 failed reconnects, InPTYMode() must be true.
+// Fix for C-001: the previous version defined reconnectFn but never wired it
+// into the production path — the connector used sc.ctrl.Connect internally.
+// This version uses WithControlModeFactory to inject a counting factory so
+// that the 3-attempt assertion exercises the real reconnect loop.
 //
-// Hermetic: all control mode streams are fakes; PTY alloc is fake.
-// No real tmux or PTY forked.
-func TestPTYProxy_FallbackOnMidSessionLoss(t *testing.T) {
+// Hermetic: initial control-mode stream EOF triggers ErrControlModeDropped;
+// the injected factory returns ErrControlModeUnavailable on every call;
+// PTY alloc succeeds. No real tmux or PTY forked.
+func TestSessionConnector_MidSessionFallback_ReconnectAttempts(t *testing.T) {
 	t.Parallel()
 
 	master := newFakePTYMaster()
 	log := &fakeLogCapture{}
 
-	// connectCalls counts how many times the reconnect function is called.
-	var reconnectCalls int
-	var reconnectMu sync.Mutex
+	// Track how many times the factory is invoked during the reconnect loop.
+	var factoryMu sync.Mutex
+	factoryCalls := 0
+	factory := func(_ context.Context) (*tmux.ControlMode, error) {
+		factoryMu.Lock()
+		factoryCalls++
+		factoryMu.Unlock()
+		// All reconnects fail — forces eventual PTY fallback per BC-2.04.002 EC-003.
+		return nil, fmt.Errorf("%w: reconnect attempt failed (synthetic)", tmux.ErrControlModeUnavailable)
+	}
 
 	// Build the SessionConnector with a fake initial control-mode stream that
 	// closes immediately (triggering ErrControlModeDropped).
@@ -449,22 +457,14 @@ func TestPTYProxy_FallbackOnMidSessionLoss(t *testing.T) {
 		fakePTYAlloc(master, 33333),
 		tmux.WithLogger(log),
 	)
-	sc := tmux.NewSessionConnector(ctrl, ptyProxy)
+	// WithControlModeFactory injects the counting factory into watchAndFallback
+	// so that reconnect attempts are observable (C-001 fix).
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy, tmux.WithControlModeFactory(factory))
 
 	t.Cleanup(func() {
 		_ = sc.Close()
 		_ = master.Close()
 	})
-
-	// Inject a reconnect function that always fails (all 3 attempts fail).
-	// ctx is passed by the watchAndFallback caller; unused in the fake.
-	reconnectFn := func(_ context.Context) error {
-		reconnectMu.Lock()
-		reconnectCalls++
-		reconnectMu.Unlock()
-		return fmt.Errorf("%w: cannot reconnect", tmux.ErrControlModeUnavailable)
-	}
-	_ = reconnectFn // used by watchAndFallback; injected for assertion below
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -476,13 +476,21 @@ func TestPTYProxy_FallbackOnMidSessionLoss(t *testing.T) {
 
 	// Wait for mid-session fallback to complete. The fake stream has an
 	// immediate EOF, so ErrControlModeDropped is dispatched and watched.
-	// After 3 failed reconnects, PTY fallback activates.
+	// After 3 failed factory calls, PTY fallback activates.
 	deadline := time.Now().Add(2 * time.Second)
 	for !sc.InPTYMode() {
 		if time.Now().After(deadline) {
 			t.Fatal("InPTYMode() never became true within 2s; mid-session PTY fallback did not activate")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+
+	// PRIMARY ASSERTION (BC-2.04.002 EC-003): factory called exactly 3 times.
+	factoryMu.Lock()
+	got := factoryCalls
+	factoryMu.Unlock()
+	if got != 3 {
+		t.Errorf("factory called %d times; want exactly 3 (BC-2.04.002 EC-003 maxReconnectAttempts)", got)
 	}
 
 	// EC-003 log requirement: "tmux control mode lost; falling back to PTY proxy"
@@ -493,33 +501,58 @@ func TestPTYProxy_FallbackOnMidSessionLoss(t *testing.T) {
 
 // -- No auto-upgrade from PTY back to control mode -------------------------
 
-// TestPTYProxy_NoAutoUpgrade verifies that once the SessionConnector enters
-// PTY proxy mode, it does NOT automatically attempt to return to control mode
-// (BC-2.04.002 invariant; S-3.01b task 9; story architecture rule "no
-// auto-upgrade from PTY back to control mode during a session").
+// TestSessionConnector_NoAutoUpgrade_AfterFallback verifies that once the
+// SessionConnector enters PTY proxy mode, the injected factory is NOT called
+// again — no background goroutine retries control mode after fallback
+// (BC-2.04.002 invariant; ADR-010 "no auto-upgrade"; S-3.01b task 9).
 //
-// Strategy: establish PTY mode via initial connect failure, then assert that
-// even after a long wait, InPTYMode() remains true. The connector must not
-// spawn a background goroutine that silently attempts to re-establish control
-// mode.
+// Fix for M-003: the previous version relied on a 100ms time.Sleep to
+// "observe" that InPTYMode stayed true — this is a weak temporal assertion
+// (sleep proves nothing about long-term invariance). This version uses
+// WithControlModeFactory to inject a counting factory. After PTY fallback
+// is confirmed, we wait an additional period and assert the factory call
+// count has not increased. A sticky call count proves the no-auto-upgrade
+// invariant structurally.
 //
-// Hermetic: fake control mode failure; fake PTY. No real tmux or PTY forked.
-func TestPTYProxy_NoAutoUpgrade(t *testing.T) {
+// Strategy: drive into PTY mode via a mid-session EOF (same as EC-003 test).
+// Once InPTYMode() is true, snapshot factoryCalls. Sleep 200ms to give any
+// hypothetical "auto-upgrade" goroutine time to fire. Assert factory call
+// count is unchanged. Assert InPTYMode() is still true.
+//
+// Hermetic: fake initial control-mode stream; factory always fails; PTY
+// alloc succeeds. No real tmux or PTY forked.
+func TestSessionConnector_NoAutoUpgrade_AfterFallback(t *testing.T) {
 	t.Parallel()
 
 	master := newFakePTYMaster()
 	log := &fakeLogCapture{}
 
-	sc := newTestSessionConnector(
-		t,
-		[]tmux.Option{
-			fakeExecFuncErr(fmt.Errorf("%w: tmux not found", tmux.ErrControlModeUnavailable)),
-		},
-		[]tmux.PTYProxyOption{
-			fakePTYAlloc(master, 44444),
-			tmux.WithLogger(log),
-		},
+	// Count every factory invocation. Post-fallback count must not increase.
+	var factoryMu sync.Mutex
+	factoryCalls := 0
+	factory := func(_ context.Context) (*tmux.ControlMode, error) {
+		factoryMu.Lock()
+		factoryCalls++
+		factoryMu.Unlock()
+		return nil, fmt.Errorf("%w: synthetic reconnect failure", tmux.ErrControlModeUnavailable)
+	}
+
+	// Initial stream EOFs immediately to trigger ErrControlModeDropped.
+	initialStream := fakeControlOutput(
+		"%begin 2000000000 0 1",
+		"%end 2000000000 0 1",
 	)
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+	ctrl := tmux.New(pub, ds, fakeExecFunc(initialStream))
+	ptyProxy := tmux.NewPTYProxy(pub, ds,
+		fakePTYAlloc(master, 44444),
+		tmux.WithLogger(log),
+	)
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy, tmux.WithControlModeFactory(factory))
+
 	t.Cleanup(func() {
 		_ = sc.Close()
 		_ = master.Close()
@@ -529,20 +562,42 @@ func TestPTYProxy_NoAutoUpgrade(t *testing.T) {
 	defer cancel()
 
 	if err := sc.Connect(ctx); err != nil {
-		t.Fatalf("Connect: %v; want nil", err)
+		t.Fatalf("Connect: %v; want nil (initial connect must succeed)", err)
 	}
 
-	// Primary: PTY mode is active immediately.
-	if !sc.InPTYMode() {
-		t.Fatal("InPTYMode() = false immediately after connect; expected PTY mode")
+	// Wait for PTY fallback to engage (same poll pattern as EC-003 test).
+	deadline := time.Now().Add(2 * time.Second)
+	for !sc.InPTYMode() {
+		if time.Now().After(deadline) {
+			t.Fatal("InPTYMode() never became true within 2s; PTY fallback did not activate")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Wait a brief period — any auto-upgrade attempt would flip InPTYMode to
-	// false. Remains true means no auto-upgrade goroutine fired.
-	time.Sleep(100 * time.Millisecond)
+	// Snapshot factory call count at the moment fallback is confirmed.
+	factoryMu.Lock()
+	callsAtFallback := factoryCalls
+	factoryMu.Unlock()
 
+	// Give any hypothetical auto-upgrade goroutine time to fire.
+	// ADR-010 "no auto-upgrade" means this window must remain quiet.
+	time.Sleep(200 * time.Millisecond)
+
+	// STRUCTURAL ASSERTION (ADR-010; BC-2.04.002 invariant): factory must NOT
+	// be called again after PTY fallback is active.
+	factoryMu.Lock()
+	callsAfterWait := factoryCalls
+	factoryMu.Unlock()
+	if callsAfterWait != callsAtFallback {
+		t.Errorf(
+			"factory called %d additional times after PTY fallback; want 0 (ADR-010 no-auto-upgrade)",
+			callsAfterWait-callsAtFallback,
+		)
+	}
+
+	// InPTYMode must remain sticky true (BC-2.04.002 invariant; S-3.01b task 9).
 	if !sc.InPTYMode() {
-		t.Error("InPTYMode() = false after 100ms; auto-upgrade must not occur (BC-2.04.002 invariant; S-3.01b task 9)")
+		t.Error("InPTYMode() = false after fallback + 200ms wait; expected sticky true (ADR-010)")
 	}
 }
 

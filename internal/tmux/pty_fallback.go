@@ -1,6 +1,6 @@
 package tmux
 
-// PTY proxy fallback for the access node (BC-2.04.002; ADR-010).
+// PTY proxy fallback for the access node (BC-2.04.002; ADR-010; ARCH-08 §6.5).
 //
 // When tmux control mode is unavailable (initial connect failure or
 // mid-session drop after 3 reconnect attempts), the access node enters
@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -30,8 +31,8 @@ import (
 
 // ErrPTYDeviceUnavailable is returned by PTYProxy.Connect when no PTY device
 // can be allocated on the host. Maps to E-SYS-001: "PTY device unavailable:
-// cannot start access node" (error-taxonomy.md §SYS; BC-2.04.002 EC-004;
-// FM-011).
+// Install 'openpty' support or check kernel PTY configuration" (error-taxonomy.md
+// §SYS; BC-2.04.002 EC-004; FM-011).
 //
 // When both tmux control mode and PTY device are unavailable, the access node
 // must return this error and exit with a non-zero status. Failure is never
@@ -75,21 +76,31 @@ type Logger interface {
 }
 
 // WithLogger sets the logger used by PTYProxy. If not set, PTYProxy uses
-// a no-op logger (log entries are discarded). Tests inject a fake logger
-// to assert mandatory log messages (BC-2.04.002 PC-3).
+// stderrLogger (log entries are written to os.Stderr). Tests inject a fake
+// logger to assert mandatory log messages (BC-2.04.002 PC-3).
 func WithLogger(l Logger) PTYProxyOption {
 	return func(p *PTYProxy) {
 		p.logger = l
 	}
 }
 
+// stderrLogger is the default logger. Writes to os.Stderr so operators see
+// mandatory fallback notifications (BC-2.04.002 invariant 3) without requiring
+// explicit logger injection in production callers.
+type stderrLogger struct{}
+
+func (stderrLogger) Log(msg string) {
+	fmt.Fprintln(os.Stderr, msg)
+}
+
 // PTYProxy implements PTY proxy mode for the access node
 // (BC-2.04.002; ADR-010). It opens a PTY and proxies its I/O as a single
 // anonymous session published under a synthetic name ("pty-<pid>").
 //
-// Concurrency: PTYProxy is safe for concurrent use. All exported methods
-// are protected by mu. The I/O goroutine (started by Connect) is the
-// only writer to the downstream half-channel; it is joined by Close via wg.
+// Concurrency: PTYProxy is safe for concurrent use. Lifecycle state (master,
+// closed) is protected by mu; the wg synchronizes the ioRelay goroutine
+// shutdown. Sessions() delegates to the thread-safe publisher and does not
+// take mu.
 //
 // The zero value is not usable; construct with NewPTYProxy.
 type PTYProxy struct {
@@ -121,7 +132,7 @@ func NewPTYProxy(publisher *session.Publisher, downstream *halfchannel.HalfChann
 	p := &PTYProxy{
 		publisher:  publisher,
 		downstream: downstream,
-		logger:     noopLogger{},
+		logger:     stderrLogger{},
 		ptyAlloc:   defaultPTYAlloc,
 	}
 	for _, opt := range opts {
@@ -166,8 +177,13 @@ func (p *PTYProxy) Connect(_ context.Context) error {
 	p.sessionName = fmt.Sprintf("pty-%d", pid)
 
 	// Publish the synthetic session (BC-2.04.002 PC-2).
-	// Ignore ErrSessionAlreadyPublished — idempotent.
-	_ = p.publisher.Publish(p.sessionName)
+	if err := p.publisher.Publish(p.sessionName); err != nil {
+		if !errors.Is(err, session.ErrSessionAlreadyPublished) {
+			p.logger.Log(fmt.Sprintf("PTY proxy publish failed: %v", err))
+			return fmt.Errorf("tmux: pty proxy publish: %w", err)
+		}
+		// ErrSessionAlreadyPublished is idempotent; continue.
+	}
 
 	// Write the mandatory log entry (BC-2.04.002 PC-3; VP-032).
 	p.logger.Log("tmux control mode unavailable; using PTY proxy mode. Functionality limited: no structured session metadata, no content-type detection.")
@@ -219,6 +235,10 @@ func (p *PTYProxy) Sessions() []session.Info {
 // PTY master, and unpublishes the session. Close is idempotent.
 func (p *PTYProxy) Close() error {
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return nil
+	}
 	master := p.master
 	sessionName := p.sessionName
 	p.master = nil
@@ -241,6 +261,27 @@ func (p *PTYProxy) Close() error {
 	return nil
 }
 
+// ControlModeFactory constructs a fresh ControlMode for reconnect attempts.
+// Per ControlMode SINGLE-USE contract (control.go ADR-010), each reconnect
+// must produce a new instance. The factory captures the construction
+// parameters (publisher, downstream, options) closed over from New.
+//
+// BC-2.04.002 EC-003: SessionConnector retries control mode up to 3 times
+// using this factory before falling back to PTY proxy. A nil factory means
+// no reconnect is attempted — SessionConnector falls back to PTY proxy
+// immediately on ErrControlModeDropped.
+type ControlModeFactory func(ctx context.Context) (*ControlMode, error)
+
+// SessionConnectorOption is a functional option for NewSessionConnector.
+type SessionConnectorOption func(*SessionConnector)
+
+// WithControlModeFactory sets the factory used for reconnect attempts after
+// mid-session control-mode drop. If unset, no reconnection is attempted —
+// SessionConnector falls back to PTY proxy immediately on ErrControlModeDropped.
+func WithControlModeFactory(f ControlModeFactory) SessionConnectorOption {
+	return func(sc *SessionConnector) { sc.factory = f }
+}
+
 // SessionConnector orchestrates the tmux-first, PTY-fallback connection
 // strategy (ADR-010; BC-2.04.002). It attempts control mode first; if
 // Connect returns ErrControlModeUnavailable or the Err() channel delivers
@@ -258,6 +299,10 @@ type SessionConnector struct {
 	ctrl *ControlMode
 	pty  *PTYProxy
 
+	// factory constructs a fresh ControlMode for EC-003 reconnect attempts.
+	// Nil means immediate PTY fallback on ErrControlModeDropped.
+	factory ControlModeFactory
+
 	// active points to whichever mode is currently running (ctrl or pty)
 	// after Connect. Nil until Connect succeeds.
 	active interface {
@@ -265,20 +310,28 @@ type SessionConnector struct {
 		Close() error
 	}
 
-	// mu protects active and inPTYMode.
+	// mu protects active, inPTYMode, ctrl, closed.
 	mu        sync.Mutex
 	inPTYMode bool
+	closed    bool // set true on Close; gates watchAndFallback resurrection
+
+	// wg joins watchAndFallback goroutine(s) on Close.
+	wg sync.WaitGroup
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control
 // mode and PTY proxy (S-3.01b task 5+6).
 //
 // ctrl and pty must not be nil.
-func NewSessionConnector(ctrl *ControlMode, pty *PTYProxy) *SessionConnector {
-	return &SessionConnector{
+func NewSessionConnector(ctrl *ControlMode, pty *PTYProxy, opts ...SessionConnectorOption) *SessionConnector {
+	sc := &SessionConnector{
 		ctrl: ctrl,
 		pty:  pty,
 	}
+	for _, opt := range opts {
+		opt(sc)
+	}
+	return sc
 }
 
 // Connect attempts tmux control mode; falls back to PTY proxy on initial
@@ -295,15 +348,14 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 		sc.mu.Unlock()
 
 		// Start watching for mid-session drops (EC-003).
-		go sc.watchAndFallback(ctx, func(c context.Context) error {
-			return sc.ctrl.Connect(c)
-		})
+		sc.wg.Add(1)
+		go sc.watchAndFallback(ctx)
 
 		return nil
 	}
 
 	// Control mode failed — determine log message before falling back.
-	logMsg := sc.controlModeFailureLogMsg(ctrlErr)
+	logMsg := controlModeFailureLogMsg(ctrlErr)
 
 	// Fall back to PTY proxy (AC-001; BC-2.04.002 PC-1).
 	ptyErr := sc.pty.Connect(ctx)
@@ -327,15 +379,22 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 
 // controlModeFailureLogMsg returns the BC-2.04.002-specified log message for
 // a given control mode connect error. Returns "" if no specific message applies.
-func (sc *SessionConnector) controlModeFailureLogMsg(err error) string {
-	msg := err.Error()
+//
+// Uses errors.Is for new sentinel types (production path via defaultExecFn).
+// Falls back to string matching for backward compatibility with wrapped
+// ErrControlModeUnavailable errors that carry diagnostic strings.
+func controlModeFailureLogMsg(err error) string {
 	switch {
-	case strings.Contains(msg, "-CC flag not supported") ||
-		strings.Contains(msg, "does not support -CC"):
+	case errors.Is(err, ErrControlModeUnsupportedFlag):
 		return "tmux version does not support -CC flag"
-	case strings.Contains(msg, "no such file") ||
-		strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "tmux binary not found"):
+	case errors.Is(err, ErrControlModeBinaryNotFound):
+		return "tmux binary not found; using PTY proxy"
+	case strings.Contains(err.Error(), "-CC flag not supported") ||
+		strings.Contains(err.Error(), "does not support -CC"):
+		return "tmux version does not support -CC flag"
+	case strings.Contains(err.Error(), "no such file") ||
+		strings.Contains(err.Error(), "not found") ||
+		strings.Contains(err.Error(), "tmux binary not found"):
 		return "tmux binary not found; using PTY proxy"
 	default:
 		return ""
@@ -362,46 +421,94 @@ func (sc *SessionConnector) InPTYMode() bool {
 	return sc.inPTYMode
 }
 
-// Close tears down whichever mode is active.
+// Close tears down whichever mode is active. Close is idempotent.
 func (sc *SessionConnector) Close() error {
 	sc.mu.Lock()
-	active := sc.active
-	sc.active = nil
-	sc.mu.Unlock()
-
-	if active == nil {
+	if sc.closed {
+		sc.mu.Unlock()
 		return nil
 	}
-	return active.Close()
+	sc.closed = true
+	sc.mu.Unlock()
+
+	// Close BOTH ctrl AND pty regardless of which was active.
+	var firstErr error
+	if sc.ctrl != nil {
+		if err := sc.ctrl.Close(); err != nil {
+			firstErr = err
+		}
+	}
+	if sc.pty != nil {
+		if err := sc.pty.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	// Wait for watchAndFallback goroutine(s) to exit.
+	sc.wg.Wait()
+
+	return firstErr
 }
 
-// watchAndFallback monitors the control mode Err() channel in a goroutine.
-// On receiving ErrControlModeDropped, it attempts maxReconnectAttempts
-// reconnections (EC-003). If all fail, it activates PTY proxy mode
-// (BC-2.04.002 EC-003; S-3.01b task 6).
+// watchAndFallback monitors the control mode Err() channel. On receiving
+// ErrControlModeDropped, it attempts up to maxReconnectAttempts reconnections
+// via the ControlModeFactory (EC-003). If all fail (or factory is nil), it
+// activates PTY proxy mode (BC-2.04.002 EC-003; S-3.01b task 6).
 //
-// reconnectFn is injected for testability (hermetic test pattern —
-// production path calls ctrl.Connect; tests inject a fake).
-func (sc *SessionConnector) watchAndFallback(ctx context.Context, reconnectFn func(context.Context) error) {
+// Each reconnect attempt uses a fresh ControlMode instance per the SINGLE-USE
+// contract (ADR-010; ErrAlreadyConnected is avoided by construction).
+func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
+	defer sc.wg.Done()
+
 	for err := range sc.ctrl.Err() {
 		if !errors.Is(err, ErrControlModeDropped) {
 			continue
 		}
 
-		// Attempt maxReconnectAttempts reconnections (BC-2.04.002 EC-003).
+		// BC-2.04.002 EC-003: up to maxReconnectAttempts via factory.
 		reconnected := false
-		for i := 0; i < maxReconnectAttempts; i++ {
-			if reconnectErr := reconnectFn(ctx); reconnectErr == nil {
-				reconnected = true
-				break
+		if sc.factory != nil {
+			for attempt := 1; attempt <= maxReconnectAttempts; attempt++ {
+				newCtrl, connErr := sc.factory(ctx)
+				if connErr == nil {
+					sc.mu.Lock()
+					if sc.closed {
+						sc.mu.Unlock()
+						_ = newCtrl.Close()
+						return
+					}
+					oldCtrl := sc.ctrl
+					sc.ctrl = newCtrl
+					sc.active = newCtrl
+					sc.mu.Unlock()
+					_ = oldCtrl.Close()
+					reconnected = true
+					break
+				}
+				// factory returned an error; newCtrl may be nil
+				if newCtrl != nil {
+					_ = newCtrl.Close()
+				}
 			}
 		}
 
 		if reconnected {
-			continue
+			// Re-enter watchAndFallback on the new ctrl in a fresh goroutine,
+			// then exit the current one. The wg count stays balanced because
+			// we Add(1) before spawning and this goroutine decrements on return.
+			sc.wg.Add(1)
+			go sc.watchAndFallback(ctx)
+			return
 		}
 
-		// All reconnect attempts failed — fall back to PTY proxy.
+		// All reconnect attempts failed (or factory was nil) → PTY fallback.
+		sc.mu.Lock()
+		if sc.closed {
+			sc.mu.Unlock()
+			return
+		}
+		sc.mu.Unlock()
+
 		sc.pty.logger.Log("tmux control mode lost; falling back to PTY proxy")
 
 		if ptyErr := sc.pty.Connect(ctx); ptyErr == nil {
@@ -410,7 +517,7 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context, reconnectFn fu
 			sc.inPTYMode = true
 			sc.mu.Unlock()
 		}
-		// Whether PTY connect succeeded or failed, we stop watching.
+		// Whether PTY connect succeeded or failed, stop watching ctrl.
 		return
 	}
 }
@@ -425,10 +532,3 @@ func defaultPTYAlloc() (io.ReadWriteCloser, int, error) {
 	// Unit tests always inject WithPTYAllocFunc and never reach this path.
 	return nil, 0, fmt.Errorf("%w: defaultPTYAlloc not available in this build (VP-032 integration harness required)", ErrPTYDeviceUnavailable)
 }
-
-// noopLogger discards all log messages. Used as the default when no
-// Logger is injected. BC-2.04.002 invariant 3 requires mandatory log
-// entries; tests must inject a real Logger to assert them.
-type noopLogger struct{}
-
-func (noopLogger) Log(_ string) {}

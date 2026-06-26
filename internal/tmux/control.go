@@ -45,6 +45,17 @@ var ErrAlreadyConnected = errors.New("tmux: control mode already connected")
 // tmux.New(...). M-2 (pass-12): enforces the documented SINGLE-USE contract.
 var ErrControlModeClosed = errors.New("tmux: control mode is closed (single-use)")
 
+// ErrControlModeUnsupportedFlag is returned by Connect if tmux rejects the
+// -C / -CC flag (older tmux versions that do not support control mode).
+// TODO(S-3.01b H-003): detection requires stderr capture during subprocess
+// launch; deferred to a future story. The sentinel is defined now so that
+// callers can use errors.Is once detection is wired in.
+var ErrControlModeUnsupportedFlag = errors.New("tmux: control mode flag not supported")
+
+// ErrControlModeBinaryNotFound is returned by Connect if the tmux binary
+// is not found in PATH. Wraps the underlying exec.LookPath error via %w.
+var ErrControlModeBinaryNotFound = errors.New("tmux: binary not found in PATH")
+
 // execFunc is the function signature for spawning the tmux subprocess.
 // Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
 // control mode stream. Hermetic test injection point: tests use WithExecFunc
@@ -122,7 +133,7 @@ func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, e
 func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 	path, err := exec.LookPath("tmux")
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
+		return nil, nil, fmt.Errorf("%w: %w: %w", ErrControlModeUnavailable, ErrControlModeBinaryNotFound, err)
 	}
 
 	cmd := exec.CommandContext(ctx, path, "-C")
