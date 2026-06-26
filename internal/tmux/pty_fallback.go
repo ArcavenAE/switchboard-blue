@@ -338,6 +338,13 @@ func (p *PTYProxy) Close() error {
 // using this factory before falling back to PTY proxy. A nil factory means
 // no reconnect is attempted — SessionConnector falls back to PTY proxy
 // immediately on ErrControlModeDropped.
+//
+// CONTRACT (pass-9 L-001): the returned *ControlMode MUST already have
+// Connect(ctx) completed successfully. SessionConnector does NOT call
+// Connect on the returned instance — it expects to range over its Err()
+// channel immediately. A constructed-but-unconnected ControlMode will
+// deadlock the watcher (Err() never fires). Returning (nil, nil) is a
+// contract violation and is treated as a failed attempt.
 type ControlModeFactory func(ctx context.Context) (*ControlMode, error)
 
 // SessionConnectorOption is a functional option for NewSessionConnector.
@@ -658,7 +665,7 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 				}
 
 				newCtrl, connErr := sc.factory(ctx)
-				if connErr == nil {
+				if connErr == nil && newCtrl != nil {
 					sc.mu.Lock()
 					if sc.closed {
 						sc.mu.Unlock()
@@ -673,7 +680,9 @@ func (sc *SessionConnector) watchAndFallback(ctx context.Context) {
 					reconnected = true
 					break
 				}
-				// factory returned an error; newCtrl may be nil
+				// connErr != nil OR (connErr == nil but newCtrl == nil) — both treated as
+				// failed reconnect attempt. L-002 (pass-9): defensive guard against factory
+				// contract violation (returning nil, nil).
 				if newCtrl != nil {
 					_ = newCtrl.Close()
 				}
