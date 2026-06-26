@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-25T00:00:00
@@ -125,6 +125,10 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-SES-001 | SES | broken | 1 | "session not found: <session_name> on SVTN <svtn_id>" | BC-2.04.003 |
+| E-SES-002 | SES | broken | 0 | "console <console_id> is already attached to session <session_name>" | BC-2.04.003; mapped to Go sentinel session.ErrConsoleAlreadyAttached (S-3.02) |
+| E-SES-003 | SES | broken | 0 | "console <console_id> not found for session <session_name>" | BC-2.04.004; mapped to Go sentinel session.ErrConsoleNotFound (S-3.02) |
+| E-SES-004 | SES | broken | 0 | "console <console_id> not attached for command" | BC-2.08.001; S-7.03 detach-when-not-attached edge case |
+| E-SES-005 | SES | degraded | 0 | "console <console_id> read-only role: upstream write rejected" | BC-2.04.005; read-only enforcement (S-3.03 scope) |
 
 ### SVTN — SVTN Management
 
