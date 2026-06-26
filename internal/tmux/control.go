@@ -34,13 +34,17 @@ var ErrControlModeUnavailable = errors.New("tmux: control mode unavailable")
 // Callers (S-3.01b fallback path) receive this via the Err() channel.
 var ErrControlModeDropped = errors.New("tmux: control mode connection dropped")
 
-// ErrAlreadyConnected is returned by Connect when the ControlMode is already
-// connected. Callers must Close before reconnecting.
+// ErrAlreadyConnected is returned by Connect if the ControlMode has already
+// been connected. ControlMode instances are SINGLE-USE: after Close (or after
+// dispatchLoop has exited on stream EOF), the instance is terminal. To
+// reconnect, construct a new ControlMode via tmux.New(...).
 var ErrAlreadyConnected = errors.New("tmux: control mode already connected")
 
 // execFunc is the function signature for spawning the tmux subprocess.
 // Replacing it via WithExecFunc allows hermetic unit tests to inject a fake
-// control mode stream (BC-5.38.001; test hermetic constraint).
+// control mode stream. Hermetic test injection point: tests use WithExecFunc
+// to substitute the process spawn; production callers use the default
+// exec.LookPath("tmux") + exec.CommandContext path.
 //
 // H-03: returns both stdin (for writing commands) and stdout (for reading
 // events), so Connect can actually send commands like list-sessions. Tests
@@ -95,8 +99,8 @@ type ControlMode struct {
 type Option func(*ControlMode)
 
 // WithExecFunc replaces the default os/exec-based tmux launcher with fn.
-// This is the injection point for hermetic unit tests (BC-5.38.001; test
-// hermetic constraint: MUST NOT shell out to real tmux).
+// Hermetic test injection point: tests use this to substitute the process
+// spawn without shelling out to real tmux.
 //
 // H-03: fn now returns (stdin, stdout, err) so Connect can write commands.
 func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, error)) Option {
@@ -372,6 +376,24 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 		case strings.HasPrefix(line, "%end "):
 			inSessionList = false
 			continue
+		case strings.HasPrefix(line, "%error "):
+			// tmux command failure (e.g., list-sessions failed; server starting;
+			// permissions). BC-2.04.001 EC-001: control-mode init failure →
+			// ErrControlModeDropped → PTY fallback (ADR-010).
+			// inSessionList reset is implicit — we return immediately below.
+			c.closeErrCh.Do(func() {
+				select {
+				case c.errCh <- ErrControlModeDropped:
+				default:
+					// Channel already has an error; don't block.
+				}
+				close(c.errCh)
+			})
+			// Close frames so Frames() consumers unblock.
+			c.closeFrames.Do(func() {
+				close(c.frames)
+			})
+			return
 		}
 
 		if inSessionList {
