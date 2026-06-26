@@ -148,8 +148,15 @@ func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 		t.Fatalf("Connect: unexpected error: %v", err)
 	}
 
-	// Allow the dispatch loop time to process all events from the stream.
-	time.Sleep(20 * time.Millisecond)
+	// Wait for dispatchLoop to finish processing the input stream.
+	// dispatchLoop exits on EOF and signals via Err(); the fake stream is
+	// finite so this is deterministic.
+	select {
+	case <-cm.Err():
+		// dispatchLoop has finished processing.
+	case <-time.After(1 * time.Second):
+		t.Fatal("dispatchLoop did not signal exit within 1s")
+	}
 
 	want := []string{"build", "session-1", "session-2"}
 	sessions := cm.Sessions()
@@ -197,8 +204,15 @@ func TestTmuxControlMode_SessionLifecycleEvents(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 
-	// Wait for event loop to process lifecycle events.
-	time.Sleep(20 * time.Millisecond)
+	// Wait for dispatchLoop to finish processing the input stream.
+	// dispatchLoop exits on EOF and signals via Err(); the fake stream is
+	// finite so this is deterministic.
+	select {
+	case <-cm.Err():
+		// dispatchLoop has finished processing.
+	case <-time.After(1 * time.Second):
+		t.Fatal("dispatchLoop did not signal exit within 1s")
+	}
 
 	// After %session-created agent-03 — verify it appears.
 	if _, err := pub.Get("agent-03"); err != nil {
@@ -321,8 +335,15 @@ func TestTmuxControlMode_NoSessionsOnStartup(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 
-	// Allow dispatch loop to process the stream and reach EOF.
-	time.Sleep(20 * time.Millisecond)
+	// Wait for dispatchLoop to finish processing the input stream.
+	// dispatchLoop exits on EOF and signals via Err(); the fake stream is
+	// finite so this is deterministic.
+	select {
+	case <-cm.Err():
+		// dispatchLoop has finished processing.
+	case <-time.After(1 * time.Second):
+		t.Fatal("dispatchLoop did not signal exit within 1s")
+	}
 
 	sessions := cm.Sessions()
 	if len(sessions) != 0 {
