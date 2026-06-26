@@ -661,3 +661,94 @@ func TestTmuxControlMode_Frames_DeliversChannelFrames(t *testing.T) {
 		t.Fatal("no frame received on cm.Frames() within 1s")
 	}
 }
+
+// TestControlMode_ClassifySupersedesDrop verifies that when classification
+// delivers a sentinel within the timeout, it supersedes ErrControlModeDropped
+// (per the contract documented at control.go:70-77).
+//
+// pass-7 H-001 / M-001: the prior implementation always raced dispatchLoop's
+// drop-signal ahead of classification because dispatchLoop wrote to errCh
+// immediately on stdout EOF, while the classify goroutine wrote only after
+// cmd.Wait() + drainWG.Wait() — strictly later by causal ordering. The fix
+// makes dispatchLoop wait on classifyCh with a bounded timeout.
+//
+// Hermetic: classifyCh is pre-populated with ErrControlModeUnsupportedFlag
+// and closed before Connect returns, so the select in dispatchLoop drains it
+// synchronously without a real subprocess.
+func TestControlMode_ClassifySupersedesDrop(t *testing.T) {
+	t.Parallel()
+
+	// classifyCh is buffered and pre-populated: it delivers immediately when
+	// dispatchLoop drains it in the unexpected-exit select.
+	classifyCh := make(chan error, 1)
+	classifyCh <- tmux.ErrControlModeUnsupportedFlag
+	close(classifyCh)
+
+	// stdout is empty → immediate EOF → dispatchLoop hits the unexpected-exit
+	// path and must drain classifyCh before writing to errCh.
+	fake := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return nopWriteCloser{}, nopCloser{strings.NewReader("")}, classifyCh, nil
+	})
+
+	cm, _ := newTestControlWithOpts(t, fake) //nolint:dogsled // publisher unused here
+	t.Cleanup(func() { _ = cm.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Drain Err(); MUST be ErrControlModeUnsupportedFlag, not ErrControlModeDropped.
+	select {
+	case err := <-cm.Err():
+		if !errors.Is(err, tmux.ErrControlModeUnsupportedFlag) {
+			t.Errorf("Err() = %v; want ErrControlModeUnsupportedFlag (classification supersedes; pass-7 H-001/M-001)", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no error received within 2s")
+	}
+}
+
+// TestControlMode_ClassifyTimeoutFallback verifies that if classifyCh does not
+// deliver within the timeout, ErrControlModeDropped is surfaced as a fallback.
+//
+// pass-7 H-001 / M-001: boundedness requirement — the timeout must fire and
+// the error signal must still be delivered to callers even when the classifier
+// hangs (e.g., subprocess stuck in Wait()).
+//
+// Hermetic: classifyCh is an unbuffered channel that is never written to,
+// simulating a hung classifier. dispatchLoop must not block indefinitely.
+func TestControlMode_ClassifyTimeoutFallback(t *testing.T) {
+	t.Parallel()
+
+	// classifyCh is never written and never closed — simulates a hung classifier.
+	classifyCh := make(chan error)
+
+	fake := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return nopWriteCloser{}, nopCloser{strings.NewReader("")}, classifyCh, nil
+	})
+
+	cm, _ := newTestControlWithOpts(t, fake) //nolint:dogsled // publisher unused here
+	t.Cleanup(func() {
+		_ = cm.Close()
+		close(classifyCh) // unblock any goroutine that may have been waiting
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Should receive ErrControlModeDropped after classifyTimeout (~200ms).
+	// Allow 2s for the timeout to fire plus scheduling slop.
+	select {
+	case err := <-cm.Err():
+		if !errors.Is(err, tmux.ErrControlModeDropped) {
+			t.Errorf("Err() = %v; want ErrControlModeDropped (classify timeout fallback; pass-7 H-001/M-001)", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no error received within 2s; classify timeout fallback did not fire")
+	}
+}

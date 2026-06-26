@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/session"
@@ -117,6 +118,14 @@ type ControlMode struct {
 	// After Close returns, dispatchLoop has exited and c.publisher /
 	// c.downstream are no longer accessed by ControlMode (M-2, pass-5).
 	wg sync.WaitGroup
+
+	// classifyCh is set by Connect when execFn returns a classification channel.
+	// dispatchLoop drains it on unexpected EOF (pass-7 H-001/M-001): a non-nil
+	// sentinel delivered within classifyTimeout supersedes ErrControlModeDropped
+	// (per the contract documented at line 70-77).
+	// Access is single-writer (Connect) then single-reader (dispatchLoop); no
+	// mutex needed because dispatchLoop only reads it after Connect returns.
+	classifyCh <-chan error
 
 	// execFn spawns the tmux subprocess; replaced in tests via WithExecFunc.
 	execFn execFunc
@@ -290,6 +299,9 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 	c.cancel = cancel
 	c.proc = stdoutPipe
 	c.stdin = stdinPipe
+	// pass-7 H-001/M-001: store classifyCh so dispatchLoop can drain it on
+	// unexpected EOF (see the select in the unexpected-exit path below).
+	c.classifyCh = classifyCh
 
 	// H-03: send the list-sessions command so tmux emits a %begin/%end block
 	// containing pre-existing session names (BC-2.04.001 PC-2; F-01 fix).
@@ -313,26 +325,6 @@ func (c *ControlMode) Connect(ctx context.Context) error {
 		defer c.wg.Done()
 		c.dispatchLoop(innerCtx, stdoutPipe)
 	}()
-
-	// L-004 (pass-4): if execFn returns a classification channel, monitor it
-	// in a goroutine. A non-nil classification (ErrControlModeUnsupportedFlag)
-	// supersedes the ErrControlModeDropped that dispatchLoop emits on EOF —
-	// forward it to errCh so callers get the more specific sentinel.
-	if classifyCh != nil {
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			if classified, ok := <-classifyCh; ok && classified != nil {
-				c.closeErrCh.Do(func() {
-					select {
-					case c.errCh <- classified:
-					default:
-					}
-					close(c.errCh)
-				})
-			}
-		}()
-	}
 
 	return nil
 }
@@ -531,6 +523,32 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 		// F-03: unexpected exit — signal dropped connection to S-3.01b,
 		// then close the channel so range-over-channel consumers unblock.
 		//
+		// pass-7 H-001/M-001: wait briefly for classification to deliver a
+		// sentinel that supersedes ErrControlModeDropped (per the contract
+		// documented at line 70-77). Without this wait, dispatchLoop always
+		// wins the race: stdout EOF arrives before cmd.Wait()+drainWG.Wait()
+		// can complete, so ErrControlModeUnsupportedFlag is never surfaced.
+		//
+		// classifyTimeout is chosen to be safely above the time cmd.Wait() +
+		// drainWG.Wait() need to complete on a healthy OS (typically <1ms),
+		// but short enough to not materially delay the error signal in the
+		// common "real drop" case. 200ms is well within CI flakiness budgets.
+		const classifyTimeout = 200 * time.Millisecond
+		dropErr := ErrControlModeDropped // default if classification doesn't supersede
+
+		if c.classifyCh != nil {
+			select {
+			case classified, ok := <-c.classifyCh:
+				// classifyCh is closed by the reaper when it finishes;
+				// ok==false means closed-with-no-value → keep default drop.
+				if ok && classified != nil {
+					dropErr = classified // classification supersedes drop
+				}
+			case <-time.After(classifyTimeout):
+				// Classification didn't complete in time; surface drop signal.
+			}
+		}
+
 		// H-02: perform the send and close atomically inside sync.Once to
 		// prevent a concurrent Close() from closing the channel while we
 		// attempt to send, which would panic. If Close() wins the Once,
@@ -538,7 +556,7 @@ func (c *ControlMode) dispatchLoop(ctx context.Context, r io.Reader) {
 		// Close winning means the shutdown was not truly unexpected).
 		c.closeErrCh.Do(func() {
 			select {
-			case c.errCh <- ErrControlModeDropped:
+			case c.errCh <- dropErr:
 			default:
 				// Channel already has an error; don't block.
 			}

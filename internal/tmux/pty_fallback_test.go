@@ -368,6 +368,58 @@ func TestPTYProxy_EC001_OldTmuxVersion(t *testing.T) {
 	}
 }
 
+// TestPTYProxy_EC001_OldTmuxVersion_ViaAsyncClassify verifies the async
+// classification path for EC-001: Connect succeeds (stdout opens), but the
+// classifier later delivers ErrControlModeUnsupportedFlag via classifyCh.
+// dispatchLoop must surface ErrControlModeUnsupportedFlag on ctrl.Err()
+// (not ErrControlModeDropped) per the pass-7 H-001/M-001 fix.
+//
+// This test is a regression guard for the production async path; the existing
+// TestPTYProxy_EC001_OldTmuxVersion covers the sync error-from-execFn path.
+//
+// Hermetic: ControlMode is constructed directly (not via SessionConnector)
+// to isolate the classification-supersedes-drop contract at the ControlMode
+// layer, independent of watchAndFallback routing logic.
+func TestPTYProxy_EC001_OldTmuxVersion_ViaAsyncClassify(t *testing.T) {
+	t.Parallel()
+
+	// classifyCh is pre-populated with ErrControlModeUnsupportedFlag and closed.
+	// stdout is empty → immediate EOF → dispatchLoop hits unexpected-exit path.
+	// With the pass-7 fix, classifyCh is drained before writing to errCh.
+	classifyCh := make(chan error, 1)
+	classifyCh <- tmux.ErrControlModeUnsupportedFlag
+	close(classifyCh)
+
+	fake := tmux.WithExecFunc(func(_ context.Context) (io.WriteCloser, io.ReadCloser, <-chan error, error) {
+		return nopWriteCloser{}, nopCloser{strings.NewReader("")}, classifyCh, nil
+	})
+
+	cm, _ := newTestControlWithOpts(t, fake) //nolint:dogsled // publisher unused here
+	t.Cleanup(func() { _ = cm.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := cm.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v; want nil (control mode starts OK; classification is async)", err)
+	}
+
+	// Drain ctrl.Err(). With the pass-7 fix, classification supersedes the drop
+	// sentinel, so we expect ErrControlModeUnsupportedFlag — not ErrControlModeDropped.
+	select {
+	case err := <-cm.Err():
+		if !errors.Is(err, tmux.ErrControlModeUnsupportedFlag) {
+			t.Errorf(
+				"ctrl.Err() = %v; want ErrControlModeUnsupportedFlag "+
+					"(classification must supersede ErrControlModeDropped; pass-7 H-001/M-001)",
+				err,
+			)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no error on ctrl.Err() within 2s; async classification did not fire")
+	}
+}
+
 // -- EC-002: tmux not found in PATH ----------------------------------------
 
 // TestPTYProxy_EC002_TmuxNotFound verifies PTY fallback when tmux binary is
