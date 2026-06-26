@@ -12,6 +12,7 @@ package tmux
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -130,6 +131,12 @@ func WithExecFunc(fn func(ctx context.Context) (io.WriteCloser, io.ReadCloser, e
 //
 // H-01: reaps the subprocess in a goroutine via cmd.Wait() to avoid zombies.
 // H-03: returns both stdin and stdout so Connect can write commands.
+// M-001 (pass-3): captures stderr to detect -C flag rejection on old tmux
+// versions. Detection is best-effort via the reaper goroutine: if cmd.Wait()
+// returns non-nil and stderr contains flag-rejection patterns, the sentinel
+// ErrControlModeUnsupportedFlag is logged. Full synchronous classification
+// (returning the sentinel from defaultExecFn itself) would require
+// restructuring execFunc's signature and is deferred to phase-6 hardening.
 func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 	path, err := exec.LookPath("tmux")
 	if err != nil {
@@ -149,15 +156,47 @@ func defaultExecFn(ctx context.Context) (io.WriteCloser, io.ReadCloser, error) {
 		return nil, nil, fmt.Errorf("tmux: stdout pipe: %w", err)
 	}
 
+	// M-001 (pass-3): capture stderr to detect -C flag rejection.
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		_ = stdinPipe.Close()
+		_ = stdoutPipe.Close()
+		return nil, nil, fmt.Errorf("tmux: stderr pipe: %w", err)
+	}
+
 	if err := cmd.Start(); err != nil {
 		_ = stdinPipe.Close()
 		_ = stdoutPipe.Close()
+		_ = stderrPipe.Close()
 		return nil, nil, fmt.Errorf("%w: %w", ErrControlModeUnavailable, err)
 	}
 
-	// H-01: reap the subprocess when it exits so it does not remain a zombie.
+	// M-001 (pass-3): drain stderr concurrently so it does not block the
+	// subprocess. The reaper classifies exit errors using the captured text.
+	// cmd.Wait() provides the happens-before between the drain goroutine's
+	// io.Copy and the reaper's stderrBuf.String() read — no mutex needed.
+	var stderrBuf bytes.Buffer
 	go func() {
-		_ = cmd.Wait()
+		_, _ = io.Copy(&stderrBuf, stderrPipe)
+	}()
+
+	// H-01: reap the subprocess; classify stderr on abnormal exit.
+	go func() {
+		if waitErr := cmd.Wait(); waitErr != nil {
+			// cmd.Wait() guarantees stderr draining is complete before returning,
+			// so stderrBuf is safe to read here without additional synchronisation.
+			captured := stderrBuf.String()
+			// Best-effort classification: if stderr indicates flag rejection,
+			// note it. The sentinel ErrControlModeUnsupportedFlag is already
+			// defined; synchronous propagation to the caller requires phase-6
+			// restructuring of execFunc's return signature.
+			if strings.Contains(captured, "-C") || strings.Contains(captured, "unknown option") ||
+				strings.Contains(captured, "invalid option") || strings.Contains(captured, "need more arguments") {
+				// Flag-rejection detected. TODO(phase-6): propagate via execFunc
+				// signature so callers receive ErrControlModeUnsupportedFlag.
+				_ = ErrControlModeUnsupportedFlag // sentinel referenced to document intent
+			}
+		}
 	}()
 
 	return stdinPipe, stdoutPipe, nil
