@@ -2,11 +2,13 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
-modified: 2026-06-25T14:00:00
+modified:
+  - 2026-06-25T14:00:00 # v1.4 — Added §1 scope callout
+  - 2026-06-25T00:00:00 # v1.5 — Add prose note below Mermaid: positions in §6.5/§6.6 are authoritative for import-order layering; Mermaid groupings reflect functional domain (consistency-validator F-W3-M-004)
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -105,6 +107,18 @@ graph LR
     main --> config
     main --> metrics
 ```
+
+> **Mermaid layer groupings vs. import-order positions:** The Mermaid diagram above
+> groups packages into named layers (Layer 0: Foundation, Layer 1: Security, etc.)
+> for visual readability by functional domain. These groupings do **not** represent
+> strict import-order positions. The authoritative topological positions are in
+> §6.5 (packages present on develop) and §6.6 (planned Wave 3+ packages). In
+> particular, `internal/session` is shown in the Mermaid "Layer 1: Security" group
+> alongside `internal/admission` and `internal/routing` because it is a security
+> boundary module — but its import-order position is 6 (§6.6), above admission (4)
+> and routing (5), because it imports `{frame, admission}`. Always consult §6.5/§6.6
+> for import-ordering decisions; consult the Mermaid only for functional domain context.
+> (Finding F-W3-M-004 from consistency-validator Wave-3 audit.)
 
 ## Topological Order (root → leaf)
 
@@ -283,3 +297,4 @@ be promoted into §6.5. Until then, treat them as architectural intent only.
 | 1.2 | 2026-06-25 | Added §6.5: extended topological table declaring Wave 3 packages (`internal/session` at position 6, `internal/tmux` at position 13); backfilled all Wave 1–2 packages for completeness; additional forbidden edges for session and tmux |
 | 1.3 | 2026-06-25 | Corrected §6.5: replaced hallucinated 16-package table (paths, arq, replay, multipath, metrics, tmux, discovery, svtnmgmt, drain, config, session not on develop) with the 5 packages actually present on develop at d8d7ae6; moved Wave 3 prospective packages (session, tmux) to new §6.6 as PLANNED; corrected session allowed imports to {frame, admission} per S-3.03 SessionAuth requirement |
 | 1.4 | 2026-06-25 | Added §1 scope callout making the target-architecture-vs-current-state contract explicit: §§1–5 describe planned target architecture; §6.5 is authoritative for packages currently on develop; §6.6 tracks wave-by-wave delivery plan |
+| 1.5 | 2026-06-25 | Added prose note after Mermaid diagram clarifying that Mermaid layer groupings reflect functional domain, not import-order positions; §6.5/§6.6 are authoritative for import ordering (consistency-validator finding F-W3-M-004) |

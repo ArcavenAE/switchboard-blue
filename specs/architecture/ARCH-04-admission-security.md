@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.3"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -27,6 +27,7 @@ modified:
   - 2026-06-25T00:00:00 # v1.2 — clarify ADR-003 LWW resets admitted=false (security-by-default; refs adversary pass-2 L-2, S-2.02 rev 1.2)
   - 2026-06-25T00:00:00 # v1.3 — Key Lifecycle: replace E-ADM-005 "key expired" with E-ADM-015 (new sentinel minted per S-1.03 spec patch rev 1.1; E-ADM-005 = key revoked, not expired)
   - 2026-06-25T00:00:00 # v1.4 — ADR-009: HMAC enforcement at RouteFrame boundary (S-3.04 wire-up); declares fail-fast ordering and forbidden bypass paths
+  - 2026-06-25T00:00:00 # v1.5 — ADR-009: fix three contradictions (spec-reviewer C-2/C-3): correct verifyFrameHMAC signature (bool not error, value args not pointers), correct auth key location (forwardingTable not admitted_key_set), clarify ordering vs. single-lock-acquisition (sequential checks, shared RLock)
 ---
 
 # ARCH-04: Admission & Security
@@ -208,10 +209,10 @@ derived `frame_auth_key` to the node in the `ADMITTED` message (encrypted with t
 node's public key). The node stores this key locally and uses it to compute the
 `hmac_tag` for all subsequent frames.
 
-**Router hot path:** The router maintains `frame_auth_key` per admitted node
-in `admitted_key_set[svtn_id][node_addr].frame_auth_key`. HMAC verification at
-first router boundary uses the per-node key. This is an O(1) lookup after
-admitted-set check.
+**Router hot path:** The router maintains `FrameAuthKey` per admitted node
+in `Router.forwardingTable[svtnID][nodeAddr].FrameAuthKey`. HMAC verification at
+the first router boundary uses the per-node key retrieved from the forwarding table.
+This is an O(1) lookup under `RLock`; see ADR-009 ordering for the exact sequence.
 
 **References:** BC-2.05.002 (fail-closed enforcement), BC-2.05.006 (per-node,
 per-SVTN isolation guarantee), ARCH-02 outer header `hmac_tag` field.
@@ -265,16 +266,33 @@ forwarding table consultation, and before any logging of frame content.
    this handles the key rotation window where a node is admitted but is using a stale
    frame_auth_key.
 
-**Fail-fast on bad MAC:** `verifyFrameHMAC` returns an error. `RouteFrame` MUST drop
-the frame and return without further processing. The caller (daemon main loop) MUST NOT
-retry or buffer failed frames. The error is logged at DEBUG level with the source
-address only (not frame content, per R-001 content separation).
+**Fail-fast on bad MAC:** `verifyFrameHMAC` returns `false` on HMAC mismatch.
+`RouteFrame` MUST drop the frame and return without further processing when the return
+value is `false`. The caller (daemon main loop) MUST NOT retry or buffer failed frames.
+The failure is logged at DEBUG level with the source address only (not frame content,
+per R-001 content separation).
 
 **Key lookup in RouteFrame:** `verifyFrameHMAC` receives the per-node frame_auth_key
-from `admitted_key_set[svtn_id][src_node_addr].frame_auth_key`. This is an O(1) read
-under `RLock`. If the src_node_addr is not in the admitted set at key-lookup time,
-the frame is treated as HMAC-unverifiable and dropped (this merges the admitted-set
-check with the HMAC key lookup in one `RLock` acquisition — permissible optimization).
+from `Router.forwardingTable[svtnID][srcNodeAddr].FrameAuthKey`. This is an O(1) read
+under a single `RLock` on the forwarding table. If `srcNodeAddr` is not present in the
+forwarding table at key-lookup time, the key is unavailable and the frame is treated as
+HMAC-unverifiable and dropped immediately.
+
+**Ordering within a single RLock:** Although the forwarding-table lookup and the
+admitted-set check share one `RLock` acquisition (permissible performance optimization),
+the **sequential check order is strict and non-negotiable**:
+
+1. Acquire `RLock` on forwarding table.
+2. Look up `forwardingTable[svtnID][srcNodeAddr]` — if absent, drop and release lock.
+3. Extract `FrameAuthKey` from the entry.
+4. Call `verifyFrameHMAC`; if it returns `false`, drop and release lock.
+5. Only after step 4 returns `true`: proceed to admitted-set and routing logic.
+6. Release `RLock`.
+
+The HMAC check (steps 3–4) completes and gates steps 5–6. Sharing one lock acquisition
+does NOT mean the checks execute simultaneously or that admitted-set logic runs before
+the HMAC result is known. Fail-fast requires sequential evaluation; the shared lock is
+purely a latency optimization.
 
 **Rejected alternatives:**
 - Verify HMAC after admitted-set check: rejected — timing oracle on admitted set.
@@ -284,14 +302,22 @@ check with the HMAC key lookup in one `RLock` acquisition — permissible optimi
   throughput benefit for the MVP LAN target (HMAC-SHA256 over 44-byte outer header
   is approximately 200ns on modern hardware; sync is fine).
 
-**Implementation note (S-3.04):** The `verifyFrameHMAC` function signature:
+**Implementation note (S-3.04):** The `verifyFrameHMAC` function signature (actual, from
+`internal/routing/routing.go`):
 ```go
-func verifyFrameHMAC(header *frame.OuterHeader, rest []byte, key []byte) error
+func verifyFrameHMAC(hdr frame.OuterHeader, payload []byte, authKey [hmac.KeySize]byte) bool
 ```
-`rest` is the channel header + payload (the bytes over which the HMAC was computed).
-`key` is the 32-byte per-node frame_auth_key. The function computes HMAC-SHA256 over
-`header[0:36] || rest` (treating `hmac_tag` bytes as zeros in the header) and compares
-against `header.HMACTag`. Returns `nil` on success, `E-ADM-016` on mismatch.
+`hdr` is the outer header passed by value. `payload` is the channel header + payload
+(the bytes over which the HMAC was computed). `authKey` is the 32-byte per-node
+frame_auth_key, passed as a fixed-size array (not a slice). The function saves
+`hdr.HMACTag` before zeroing it, computes HMAC-SHA256 over the modified header bytes
+`||` `payload`, and compares against the saved wire tag. Returns `true` on success,
+`false` on mismatch. Error wrapping (if any) is the caller's responsibility at the
+`RouteFrame` call site.
+
+Note: error-type return (`error`) was considered during design and rejected — the
+function has exactly two outcomes (valid / invalid); `bool` is unambiguous and avoids
+allocating an error value on every frame in the hot path.
 
 **References:** BC-2.05.002 (fail-closed HMAC enforcement), BC-2.05.005 (HMAC frame
 authentication), ARCH-02 (outer header `hmac_tag` field at bytes 36–43),
