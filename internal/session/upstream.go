@@ -1,0 +1,111 @@
+// Package session — upstream.go defines the Authorizer hook that the access
+// node consults before accepting a keystroke from an attached console, and the
+// AccessNode type that wires together Publisher + ConsoleSet + keystroke
+// serialization (BC-2.04.003; BC-2.04.004; BC-2.04.006).
+//
+// S-3.03 will replace NoOpAuthorizer with SessionAuth (Tier-2 per-session
+// authorization); S-3.02 ships the hook so that AC-001..AC-008 pass with the
+// default allow-all behaviour.
+package session
+
+import (
+	"sync"
+
+	"github.com/arcavenae/switchboard/internal/frame"
+)
+
+// Authorizer is consulted by the access node's upstream-receive path before
+// forwarding a console's keystroke frame to tmux. Returning a non-nil error
+// causes the frame to be dropped and the error to be surfaced to the console.
+//
+// S-3.03 wires SessionAuth as the Authorizer. S-3.02 ships with NoOpAuthorizer
+// (allow-all) so that attach/detach/fan-out tests pass without auth wired.
+//
+// Allow must be safe for concurrent calls from multiple goroutines.
+type Authorizer interface {
+	// Allow returns nil if the console identified by key is authorized to send
+	// the given payload to sessionName, or a non-nil error otherwise.
+	// The payload slice must not be retained after Allow returns.
+	Allow(key ConsoleKey, sessionName string, payload []byte) error
+}
+
+// NoOpAuthorizer is the default allow-all implementation of Authorizer.
+// Every Allow call returns nil unconditionally. It is safe for concurrent use.
+//
+// S-3.03 replaces this with SessionAuth (Tier-2 enforcement).
+type NoOpAuthorizer struct{}
+
+// Allow always returns nil (allow-all; no authorization logic).
+func (NoOpAuthorizer) Allow(_ ConsoleKey, _ string, _ []byte) error {
+	return nil
+}
+
+// AccessNode is the in-process access node: it owns a Publisher (session
+// lifecycle), a ConsoleSet (fan-out), a keystroke serialization mutex, and an
+// Authorizer hook for upstream keystroke gating.
+//
+// The zero value is not usable; construct with NewAccessNode.
+//
+// Concurrency: AccessNode is safe for concurrent use.
+type AccessNode struct {
+	pub        *Publisher  //nolint:unused // wired in NewAccessNode implementation
+	consoles   *ConsoleSet //nolint:unused // wired in NewAccessNode implementation
+	authorizer Authorizer  //nolint:unused // wired in NewAccessNode implementation
+	// upstreamMu serializes all keystroke writes to the tmux session before
+	// forwarding (BC-2.04.006 Invariant 3: no keystroke race condition).
+	upstreamMu sync.Mutex //nolint:unused // wired in SendKeystroke implementation
+}
+
+// NewAccessNode constructs an AccessNode using the given Publisher and
+// Authorizer. If auth is nil, NoOpAuthorizer is used.
+func NewAccessNode(pub *Publisher, auth Authorizer) *AccessNode {
+	panic("not implemented") // todo: BC-2.04.003 — construct access node with publisher + authorizer
+}
+
+// Attach establishes a bidirectional channel for the console identified by key
+// on the named session (BC-2.04.003 PC-1 through PC-3).
+//
+// Returns:
+//   - downstream: a receive-only channel of frame.OuterHeader values delivered
+//     from the session to the console (BC-2.04.003 PC-2).
+//   - upstream: a send-only channel for keystroke payloads from the console to
+//     the access node (BC-2.04.003 PC-3).
+//   - err: ErrSessionNotFound if sessionName is not in the publisher's live set
+//     (E-SES-001; BC-2.04.003 EC-002); ErrConsoleAlreadyAttached if key is
+//     already attached.
+//
+// A successful Attach adds key to the ConsoleSet. Subsequent DeliverFrame calls
+// will fan out to the new console.
+func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-chan frame.OuterHeader, upstream chan<- []byte, err error) {
+	panic("not implemented") // todo: BC-2.04.003 PC-1..PC-3 — verify session exists, add to ConsoleSet, return channels
+}
+
+// Detach closes the console's downstream channel and removes it from the
+// ConsoleSet (BC-2.04.004 PC-1 through PC-3).
+//
+// The tmux session on the access node continues running (BC-2.04.004 invariant 1:
+// detach is non-destructive).
+//
+// Returns ErrConsoleNotFound if key is not currently attached.
+func (a *AccessNode) Detach(key ConsoleKey) error {
+	panic("not implemented") // todo: BC-2.04.004 PC-1/PC-2/PC-3 — close channel, remove from ConsoleSet, session continues
+}
+
+// SendKeystroke forwards payload to the tmux session on behalf of console key,
+// after consulting the Authorizer (BC-2.04.006 Invariant 3: serialization).
+//
+// The upstreamMu mutex is held during the tmux send to prevent keystroke
+// interleaving under concurrent calls (AC-007).
+//
+// Returns ErrConsoleNotFound if key is not currently attached. Returns the
+// Authorizer's error if authorization is denied.
+func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload []byte) error {
+	panic("not implemented") // todo: BC-2.04.006 Invariant 3 — serialize keystrokes before tmux forward
+}
+
+// DeliverFrame fans out hdr to all currently-attached consoles, then calls
+// Evict to remove any consoles whose channels have been closed (AC-008;
+// BC-2.04.004 EC-002).
+func (a *AccessNode) DeliverFrame(hdr frame.OuterHeader) {
+	panic("not implemented") // todo: BC-2.04.006 PC-1 — deliver + evict crashed consoles
+}
