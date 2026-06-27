@@ -8,6 +8,7 @@ package session
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/frame"
@@ -46,9 +47,10 @@ type consoleEntry struct {
 //
 // Concurrency: ConsoleSet is safe for concurrent use.
 type ConsoleSet struct {
-	mu       sync.RWMutex
-	consoles map[ConsoleKey]consoleEntry
-	nowFn    func() time.Time
+	mu            sync.RWMutex
+	consoles      map[ConsoleKey]consoleEntry
+	nowFn         func() time.Time
+	framesDropped atomic.Uint64
 }
 
 // ConsoleSetOption is a functional option for NewConsoleSet.
@@ -75,10 +77,11 @@ func NewConsoleSet(opts ...ConsoleSetOption) *ConsoleSet {
 	return cs
 }
 
-// downstreamBufSize is the buffer depth for per-console downstream channels.
+// DownstreamBufSize is the buffer depth for per-console downstream channels.
 // A modest buffer prevents a slow console from blocking Deliver entirely while
-// still bounding memory per console.
-const downstreamBufSize = 64
+// still bounding memory per console. Exported so tests can compute exact
+// drop counts (F-H-5).
+const DownstreamBufSize = 64
 
 // upstreamBufSize is the buffer depth for per-console upstream channels.
 // A modest buffer lets the test helper (and real callers) enqueue a keystroke
@@ -115,7 +118,7 @@ func (cs *ConsoleSet) Add(key ConsoleKey, sessionName string) (downstream <-chan
 	}
 
 	entry := consoleEntry{
-		downstream:    make(chan frame.OuterHeader, downstreamBufSize),
+		downstream:    make(chan frame.OuterHeader, DownstreamBufSize),
 		upstream:      make(chan []byte, upstreamBufSize),
 		lastHeartbeat: cs.nowFn(),
 		sessionName:   sessionName,
@@ -188,8 +191,10 @@ func (cs *ConsoleSet) Deliver(hdr frame.OuterHeader) {
 		select {
 		case entry.downstream <- hdr:
 		default:
-			// Frame dropped: channel buffer full. Caller may call Evict() after
-			// Deliver() to clean up any consoles that are no longer draining.
+			// Channel buffer full: frame dropped for this console to avoid
+			// head-of-line blocking. framesDropped counter is incremented for
+			// observability (F-H-5).
+			cs.framesDropped.Add(1)
 		}
 	}
 }
@@ -284,4 +289,10 @@ func (cs *ConsoleSet) Snapshot() []ConsoleKey {
 	}
 
 	return out
+}
+
+// FramesDropped returns the total number of frames dropped due to full
+// downstream channel buffers since this ConsoleSet was constructed.
+func (cs *ConsoleSet) FramesDropped() uint64 {
+	return cs.framesDropped.Load()
 }

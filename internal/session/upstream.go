@@ -302,3 +302,9 @@ func (a *AccessNode) Sweep(deadline time.Duration) int {
 func (a *AccessNode) Heartbeat(key ConsoleKey) error {
 	return a.consoles.Heartbeat(key)
 }
+
+// FramesDropped returns the total number of frames dropped due to full
+// downstream channel buffers. Delegates to ConsoleSet.FramesDropped.
+func (a *AccessNode) FramesDropped() uint64 {
+	return a.consoles.FramesDropped()
+}
