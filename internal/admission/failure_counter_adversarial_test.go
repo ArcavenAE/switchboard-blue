@@ -502,6 +502,24 @@ func TestNewFailureCounter_PanicsOnInvalidArgs(t *testing.T) {
 	}
 }
 
+// TestNewFailureCounter_PanicsOnNilLogger verifies that NewFailureCounter panics
+// immediately when a nil logger is passed. This is consistent with the existing
+// programmer-error panic guards for threshold and windowDuration (AC-013 extension).
+//
+// SEC-001 fix: nil logger deferred panic → synchronous constructor panic.
+// Traces to BC-2.05.005 PC-3; S-W3.05 AC-013.
+func TestNewFailureCounter_PanicsOnNilLogger(t *testing.T) {
+	t.Parallel()
+
+	didPanic := mustPanic(t, func() {
+		admission.NewFailureCounter(5, 60*time.Second, nil)
+	})
+	if !didPanic {
+		t.Error("AC-013/SEC-001: NewFailureCounter with nil logger must panic immediately " +
+			"but did not — nil logger deferred to first alert emission is a deferred panic")
+	}
+}
+
 // mustPanic calls fn and reports whether it panicked. It is a t.Helper.
 func mustPanic(t *testing.T, fn func()) (panicked bool) {
 	t.Helper()

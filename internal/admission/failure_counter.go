@@ -77,6 +77,9 @@ func NewFailureCounter(threshold int, windowDuration time.Duration, logger Logge
 	if windowDuration <= 0 {
 		panic("admission: NewFailureCounter: windowDuration must be > 0")
 	}
+	if logger == nil {
+		panic("admission: NewFailureCounter: logger must not be nil")
+	}
 	c := &FailureCounter{
 		counts:         make(map[string][]time.Time),
 		firedAt:        make(map[string]time.Time),
