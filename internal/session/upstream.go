@@ -205,6 +205,13 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 		return nil, nil, fmt.Errorf("%w: %s", ErrSessionNotFound, sessionName)
 	}
 
+	// Tier-2 attach-time authorization gate (BC-2.05.003 PC-2 / EC-001).
+	// Call Allow with an empty payload: a missing key returns ErrSessionAuthDenied;
+	// a read-only key passes (len(nil)==0 satisfies the empty-tick exemption).
+	if err := a.authorizer.Allow(key, sessionName, nil); err != nil {
+		return nil, nil, err
+	}
+
 	ds, us, err := a.consoles.Add(key, sessionName)
 	if err != nil {
 		if errors.Is(err, ErrConsoleAlreadyAttached) {
