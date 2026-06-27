@@ -481,10 +481,22 @@ func TestReadOnlyConsole_UpstreamRejected_DownstreamContinues(t *testing.T) {
 // The two-assertion structure prevents vacuous passing.
 // ---------------------------------------------------------------------------
 
-// TestReadOnlyConsole_EmptyTickAccepted verifies that an empty-tick frame
-// (zero-length payload, a liveness probe) from a read-only console is accepted
-// by the access node, while a payload-bearing frame from the same console is
-// correctly rejected (BC-2.04.005 EC-004; AC-006).
+// TestReadOnlyConsole_EmptyTickAccepted verifies the full AC-006 / BC-2.04.005
+// EC-004 contract: an empty-tick frame (zero-length payload, a liveness probe)
+// from a read-only console is accepted AND FORWARDED to the KeystrokeSink
+// (liveness credited), while a payload-bearing frame from the same console is
+// rejected and NOT forwarded.
+//
+// Using a captureSink instead of NoOpSink makes this test self-sufficient for
+// the AC-006 traceability requirement: it proves both acceptance (no error) and
+// forwarding (sink.SendInput called) in one test (pass-4 M-1 traceability fix).
+//
+// Mutation resistance:
+//   - If the implementation stops forwarding empty-ticks (e.g. short-circuits
+//     before calling sink.SendInput for zero-length payloads), the sink-count
+//     assertions in STEPs 2 and 3 will fail.
+//   - If the read-only payload-rejection check is removed, STEP 1 will fail,
+//     making the forwarding result meaningless — caught by t.Fatal.
 func TestReadOnlyConsole_EmptyTickAccepted(t *testing.T) {
 	t.Parallel()
 
@@ -493,17 +505,20 @@ func TestReadOnlyConsole_EmptyTickAccepted(t *testing.T) {
 		roKey       = session.ConsoleKey("console-readonly-002")
 	)
 
+	var sinkReceived [][]byte
+	sink := &captureSink{received: &sinkReceived}
+
 	sa := session.NewSessionAuth()
 	sa.RegisterKey(sessionName, roKey, session.RoleReadOnly)
 
 	pub := newAuthPublisher(t, sessionName)
-	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(session.NoOpSink{}))
+	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(sink))
 
 	_ = mustAttachConsole(t, an, roKey, sessionName)
 
-	// STEP 1: Send a non-empty payload first. This MUST be rejected.
-	// Failing to reject it would mean the enforcement check is absent,
-	// which would make the empty-tick acceptance in STEP 2 meaningless.
+	// STEP 1: Send a non-empty payload first. This MUST be rejected and must NOT
+	// reach the sink. Failing to reject it would mean the enforcement check is
+	// absent, which would make the empty-tick forwarding result meaningless.
 	payloadErr := an.SendKeystroke(roKey, sessionName, []byte("keystroke"))
 	if payloadErr == nil {
 		t.Fatal("SendKeystroke (payload-bearing): expected ErrUpstreamReadOnly, got nil; " +
@@ -512,19 +527,36 @@ func TestReadOnlyConsole_EmptyTickAccepted(t *testing.T) {
 	if !errors.Is(payloadErr, session.ErrUpstreamReadOnly) {
 		t.Errorf("SendKeystroke (payload-bearing): got %v, want ErrUpstreamReadOnly", payloadErr)
 	}
+	if len(sinkReceived) != 0 {
+		t.Errorf("sink: got %d call(s) after read-only payload rejection, want 0; "+
+			"rejected keystroke must not reach the sink", len(sinkReceived))
+	}
 
-	// STEP 2: Send an empty-tick frame (nil/zero-length payload). MUST succeed.
+	// STEP 2: Send an empty-tick frame (zero-length payload). MUST be accepted
+	// AND forwarded to the sink (BC-2.04.005 EC-004 / AC-006: liveness credited).
 	emptyErr := an.SendKeystroke(roKey, sessionName, []byte{})
 	if emptyErr != nil {
 		t.Errorf("SendKeystroke (empty-tick): expected nil, got %v; "+
 			"empty-tick frames must be accepted from read-only consoles (BC-2.04.005 EC-004)", emptyErr)
 	}
+	if len(sinkReceived) != 1 {
+		t.Errorf("sink: got %d call(s) after empty-tick, want 1; "+
+			"empty-tick must be FORWARDED to the sink (liveness probe credited, BC-2.04.005 EC-004)",
+			len(sinkReceived))
+	}
+	if len(sinkReceived) == 1 && len(sinkReceived[0]) != 0 {
+		t.Errorf("sink: forwarded empty-tick payload has length %d, want 0", len(sinkReceived[0]))
+	}
 
-	// Also test with a nil payload (equivalent to empty-tick).
+	// STEP 3: nil payload (equivalent to empty-tick). MUST be accepted AND forwarded.
 	nilErr := an.SendKeystroke(roKey, sessionName, nil)
 	if nilErr != nil {
 		t.Errorf("SendKeystroke (nil payload): expected nil, got %v; "+
 			"nil payload is an empty-tick and must be accepted (BC-2.04.005 EC-004)", nilErr)
+	}
+	if len(sinkReceived) != 2 {
+		t.Errorf("sink: got %d call(s) after nil payload, want 2; "+
+			"nil-payload empty-tick must be forwarded (BC-2.04.005 EC-004)", len(sinkReceived))
 	}
 
 	if err := an.Detach(roKey, sessionName); err != nil {
