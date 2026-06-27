@@ -91,6 +91,7 @@ s_3_02_merge_sha: 1ff74f5
 s_3_02_pr_number: 13
 s_3_02_merge_date: 2026-06-27
 s_3_02_status: completed
+s_3_03_adversary_converged: "CONVERGED (passes 2-5 clean, 5 total; pass-1 1C/2H/3M decayed to 0/0; 4 consecutive clean passes) — cycles/cycle-1/S-3.03/adversary/"
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
@@ -111,7 +112,7 @@ last_update: 2026-06-27
 
 Phase 3, Wave 3. S-3.02 MERGED (PR #13, 1ff74f5). Wave 3: 4/5 stories (24/29 pts).
 4 tech-debt items carried forward (F-002, F-003, F-004, SEC-001). VP-032 deferred.
-Next and FINAL Wave 3 story: S-3.03 (Tier-2 per-session authorization, BC-2.04.005 + BC-2.05.003), then Wave 3 integration gate.
+S-3.03 (Tier-2 per-session authorization, BC-2.04.005 + BC-2.05.003): Step 4.5 adversarial review CONVERGED (5 passes, 4 consecutive clean). Proceeding to demo evidence + PR. Branch: feature/S-3.03-tier2-session-authorization, worktree tip 0b9b776 (final, includes M-1/M-2 coverage tests). Pre-merge — awaiting human approval.
 Drift item S-3.02-FM1 (vestigial upstream channel) deferred to S-3.03.
 
 ## Phase Progress
