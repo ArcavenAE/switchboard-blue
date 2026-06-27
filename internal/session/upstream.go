@@ -259,18 +259,19 @@ func (a *AccessNode) Detach(key ConsoleKey, sessionName string) error {
 // or goroutine is involved; the sink writes directly.
 //
 // Returns ErrConsoleNotFound if key is not currently attached (E-SES-003),
-// including console_id and session_name in the message. Returns the
-// Authorizer's error if authorization is denied. Propagates sink.SendInput
-// errors.
+// including console_id and session_name in the message. Returns
+// ErrSessionMismatch if the console is attached to a different session.
+// Returns the Authorizer's error if authorization is denied. Propagates
+// sink.SendInput errors.
 func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload []byte) error {
-	if err := a.authorizer.Allow(key, sessionName, payload); err != nil {
-		return err
-	}
-
 	// Take sinkMu FIRST (before consulting ConsoleSet) to eliminate the TOCTOU
 	// window between IsAttached and SendInput (F-H-6). Under the lock, use the
 	// ConsoleSet's Session accessor to atomically verify the console is attached
 	// and that it is attached to the correct session (F-H-2).
+	//
+	// Attachment validation precedes authorization (F-L-1 pass-5): a detached or
+	// wrong-session console must be rejected before the authorizer sees the
+	// keystroke. Attachment is a precondition of authorization, not a post-check.
 	a.sinkMu.Lock()
 	defer a.sinkMu.Unlock()
 
@@ -280,6 +281,10 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 	}
 	if attached != sessionName {
 		return fmt.Errorf("session: console %s attached to session %s, not %s: %w", key, attached, sessionName, ErrSessionMismatch)
+	}
+
+	if err := a.authorizer.Allow(key, sessionName, payload); err != nil {
+		return err
 	}
 
 	return a.sink.SendInput(payload)
