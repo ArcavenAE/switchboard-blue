@@ -11,6 +11,7 @@ package session_test
 
 import (
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -20,9 +21,9 @@ import (
 )
 
 // newTestConsoleSet is a test helper that constructs a ConsoleSet.
-func newTestConsoleSet(t *testing.T) *session.ConsoleSet {
+func newTestConsoleSet(t *testing.T, opts ...session.ConsoleSetOption) *session.ConsoleSet {
 	t.Helper()
-	return session.NewConsoleSet()
+	return session.NewConsoleSet(opts...)
 }
 
 // makeTestHeader builds a minimal frame.OuterHeader for use as a test
@@ -135,7 +136,7 @@ func TestConsoleSet_Deliver_FanOutAllConsoles(t *testing.T) {
 	const numConsoles = 2
 	downstreams := make([]<-chan frame.OuterHeader, numConsoles)
 	for i := range numConsoles {
-		key := session.ConsoleKey("console-fan-" + string(rune('A'+i)))
+		key := session.ConsoleKey("console-fan-" + strconv.Itoa(i))
 		downstream, _, err := cs.Add(key, "test-session")
 		if err != nil {
 			t.Fatalf("Add %q: %v", key, err)
@@ -213,16 +214,26 @@ func TestConsoleSet_Deliver_SkipsRemovedConsole(t *testing.T) {
 // removes consoles whose keepalive heartbeat is older than the deadline and
 // returns the eviction count (BC-2.04.004 EC-002 keepalive crash path; AC-008).
 //
-// Phase 1 (healthy set): EvictStale with 1-hour deadline returns 0 — no
-// consoles are stale immediately after Add.
-// Phase 2 (stale detection): EvictStale with 0 deadline evicts all consoles
-// whose lastHeartbeat is before time.Now().UTC() — which includes any console
-// added more than 0 nanoseconds ago.
+// Uses a fake clock (injected via ConsoleSetWithClock) for deterministic eviction
+// without sleeps or negative deadlines.
 func TestConsoleSet_EvictStale_RemovesStaleConsoles(t *testing.T) {
 	t.Parallel()
-	cs := newTestConsoleSet(t)
 
-	// Add two consoles.
+	var mu sync.Mutex
+	fakeNow := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	clock := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return fakeNow
+	}
+	advance := func(d time.Duration) {
+		mu.Lock()
+		defer mu.Unlock()
+		fakeNow = fakeNow.Add(d)
+	}
+
+	cs := newTestConsoleSet(t, session.ConsoleSetWithClock(clock))
+
 	if _, _, err := cs.Add("evict-stale-A", "s"); err != nil {
 		t.Fatalf("Add evict-stale-A: %v", err)
 	}
@@ -230,38 +241,60 @@ func TestConsoleSet_EvictStale_RemovesStaleConsoles(t *testing.T) {
 		t.Fatalf("Add evict-stale-B: %v", err)
 	}
 
-	// Verify initial Len.
 	if n := cs.Len(); n != 2 {
 		t.Fatalf("Len before eviction: got %d; want 2", n)
 	}
 
-	// Phase 1: EvictStale with 1-hour deadline — no console is 1hr stale.
+	// Phase 1: advance 30 min, deadline 1 hour — not stale.
+	advance(30 * time.Minute)
 	if n := cs.EvictStale(time.Hour); n != 0 {
-		t.Errorf("EvictStale(1h) on fresh consoles: got %d; want 0", n)
+		t.Errorf("EvictStale(1h) after 30min: got %d; want 0", n)
 	}
 	if n := cs.Len(); n != 2 {
 		t.Errorf("Len after EvictStale(1h): got %d; want 2", n)
 	}
 
-	// Phase 2: EvictStale with a negative deadline: cutoff = time.Now() + 1s
-	// (one second in the future). Every lastHeartbeat (at most "now") is
-	// deterministically before that cutoff, so all consoles are always evicted.
-	// Using 0 would be racy: a heartbeat set to time.Now().UTC() might equal
-	// the cutoff (Before is strict), causing flaky test runs at -count=10.
-	evicted := cs.EvictStale(-time.Second)
+	// Phase 2: advance 1 more hour (total 1h30m), deadline 1 hour — stale.
+	advance(time.Hour)
+	evicted := cs.EvictStale(time.Hour)
 	if evicted != 2 {
-		t.Errorf("EvictStale(-time.Second): evicted %d; want 2 (all consoles stale)", evicted)
+		t.Errorf("EvictStale(1h) after 1h30m: evicted %d; want 2", evicted)
 	}
 
 	if cs.IsAttached("evict-stale-A") {
-		t.Error("evict-stale-A still attached after EvictStale(-time.Second); want removed")
+		t.Error("evict-stale-A still attached after eviction")
 	}
 	if cs.IsAttached("evict-stale-B") {
-		t.Error("evict-stale-B still attached after EvictStale(-time.Second); want removed")
+		t.Error("evict-stale-B still attached after eviction")
+	}
+	if n := cs.Len(); n != 0 {
+		t.Errorf("Len after eviction: got %d; want 0", n)
+	}
+}
+
+// TestConsoleSet_Deliver_DropsFramesWhenBufferFull verifies that frames dropped
+// due to a full downstream channel buffer are counted by FramesDropped (F-H-5;
+// BC-2.04.006 NFR-004 head-of-line blocking prevention).
+func TestConsoleSet_Deliver_DropsFramesWhenBufferFull(t *testing.T) {
+	t.Parallel()
+	cs := newTestConsoleSet(t)
+
+	// Add one console but do NOT drain its downstream channel.
+	if _, _, err := cs.Add("drop-console", "drop-session"); err != nil {
+		t.Fatalf("Add: %v", err)
 	}
 
-	if n := cs.Len(); n != 0 {
-		t.Errorf("Len after EvictStale(-time.Second): got %d; want 0", n)
+	// Deliver DownstreamBufSize + 5 frames. The first DownstreamBufSize fit in
+	// the buffer; the remaining 5 are dropped.
+	const extra = 5
+	total := session.DownstreamBufSize + extra
+	for i := range total {
+		cs.Deliver(makeTestHeader(uint16(i)))
+	}
+
+	got := cs.FramesDropped()
+	if got != extra {
+		t.Errorf("FramesDropped() = %d; want %d", got, extra)
 	}
 }
 

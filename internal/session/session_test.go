@@ -351,6 +351,28 @@ func TestSession_SendKeystroke_AfterDetach_ReturnsErrConsoleNotFound(t *testing.
 	}
 }
 
+// TestSession_SendKeystroke_WrongSession_ReturnsErrSessionMismatch verifies
+// that SendKeystroke returns ErrSessionMismatch when the console is attached
+// to a different session than the one named in the call (F-H-2).
+func TestSession_SendKeystroke_WrongSession_ReturnsErrSessionMismatch(t *testing.T) {
+	t.Parallel()
+	rec := &recordingSink{}
+	an := newTestAccessNodeWithSink(t, rec, "session-1", "session-2")
+
+	if _, _, err := an.Attach("console-A", "session-1"); err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+
+	err := an.SendKeystroke("console-A", "session-2", []byte("payload"))
+	if !errors.Is(err, session.ErrSessionMismatch) {
+		t.Errorf("SendKeystroke wrong session: got %v; want ErrSessionMismatch", err)
+	}
+
+	if rec.Len() != 0 {
+		t.Errorf("recordingSink: got %d entries; want 0 (no send on mismatch)", rec.Len())
+	}
+}
+
 // TestSession_Detach_ReadOnlyObserversUnaffected verifies that after a
 // full-access console detaches, a second console (read-only observer) that is
 // still attached continues receiving downstream frames unaffected
