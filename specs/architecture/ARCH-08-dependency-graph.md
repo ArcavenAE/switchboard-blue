@@ -2,7 +2,7 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -11,6 +11,7 @@ modified:
   - 2026-06-25T00:00:00 # v1.5 — Add prose note below Mermaid: positions in §6.5/§6.6 are authoritative for import-order layering; Mermaid groupings reflect functional domain (consistency-validator F-W3-M-004)
   - 2026-06-26T00:00:00 # v1.6 — Promote internal/session (pos 6) and internal/tmux (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab)
   - 2026-06-26T12:00:00 # v1.7 — Reconcile all position references: routing=5, session=6; session imports {frame, admission} (upstream.go+fanout.go→frame; session.go→admission); fix Cycle-Freeness tmux→session reference; fix §6.5 session annotation (WG3-H-003)
+  - 2026-06-26T18:00:00 # v1.8 — Update §6.5 SHA annotation from 43208ab to b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14); import set unchanged through S-3.03 (F-04 drift fix)
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -238,7 +239,7 @@ New packages must, before their first commit to any branch:
 
 Undeclared packages discovered at the wave gate are an architecture violation.
 
-### §6.5 Current import positions (post-Wave-3 S-3.01a, develop @ `43208ab`)
+### §6.5 Current import positions (post-Wave-3 S-3.03, develop @ `b68e498`)
 
 The following packages are present in `internal/` on develop. Positions are
 strict — position N may import packages at positions 1..N-1 only.
@@ -258,7 +259,8 @@ above does NOT exist in the codebase.
 
 Verified against `ls internal/` and
 `grep -rn "switchboard/internal" --include="*.go" internal/ | grep -v _test.go`
-at 43208ab. No deviations found.
+at b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14). Import set
+unchanged through S-3.03 — no new internal packages introduced since S-3.01a.
 
 ### §6.6 Planned positions (Wave 4+ prospective)
 
@@ -290,3 +292,4 @@ new positions here before their first commit, per the §6.4 protocol.
 | 1.5 | 2026-06-25 | Added prose note after Mermaid diagram clarifying that Mermaid layer groupings reflect functional domain, not import-order positions; §6.5/§6.6 are authoritative for import ordering (consistency-validator finding F-W3-M-004) |
 | 1.6 | 2026-06-26 | Promoted `internal/session` (pos 6) and `internal/tmux` (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab); §6.6 updated to Wave 4+ planning placeholder |
 | 1.7 | 2026-06-26 | WG3-H-003: Reconcile all topological position references to the correct ordering (admission=4, routing=5, session=6). Fix Topological Order section (session was incorrectly at 5, routing at 6). Fix Cycle-Freeness section (tmux→session now references position 6). Fix §6.5 session annotation to reflect actual imports: upstream.go+fanout.go import frame; session.go imports admission |
+| 1.8 | 2026-06-26 | F-04 drift fix: update §6.5 heading and verification SHA from 43208ab (S-3.01a) to b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14); note import set unchanged through S-3.03 |

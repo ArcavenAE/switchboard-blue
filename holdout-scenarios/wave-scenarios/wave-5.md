@@ -35,7 +35,7 @@ retired: null
 
 **Key Lifecycle (sbctl admin):**
 5. `sbctl admin key register --key <pubkeyA> --svtn <SVTN-1>` registers key A. Subsequent admission attempt with key A succeeds.
-6. `sbctl admin key revoke --key <pubkeyA> --svtn <SVTN-1>` revokes key A. Subsequent admission attempt with key A returns E-ADM-002.
+6. `sbctl admin key revoke --key <pubkeyA> --svtn <SVTN-1>` revokes key A. Subsequent admission attempt with key A returns E-ADM-005.
 7. Attempting to revoke a control key without `--confirm` flag returns an error (ADR-004).
 
 **sbctl Connection Error:**
@@ -80,13 +80,13 @@ echo "exit: $?"   # must be 1
 ## Evaluation Rubric
 
 - **Functional correctness** (0.5): Quality hysteresis enforced (3 measurements for upgrade/downgrade); key lifecycle register/revoke/expire work; sbctl exits 1 with E-NET-001.
-- **Edge case handling** (0.2): Single good probe after Red doesn't upgrade; revoke of non-existent key returns E-ADM-007.
-- **Error quality** (0.2): E-NET-001 on connection refused; E-ADM-002 on revoked key; error message contains attempted address.
+- **Edge case handling** (0.2): Single good probe after Red doesn't upgrade; revoke of non-existent key returns E-ADM-013.
+- **Error quality** (0.2): E-NET-001 on connection refused; E-ADM-005 on revoked key; error message contains attempted address.
 - **Performance** (0.1): sbctl connection failure detected within 2s.
 
 ## Edge Conditions
 
-- `sbctl admin key revoke --key <unknown>`: E-ADM-007 (not E-ADM-002)
+- `sbctl admin key revoke --key <unknown>`: E-ADM-013 (not E-ADM-002)
 - Quality indicator with all-zero RTT and loss: Green (degenerate case)
 
 ## Failure Guidance

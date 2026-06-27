@@ -30,7 +30,7 @@ retired: null
 1. An access node connects to a real local tmux session via control mode.
 2. Console A (read-write key) attaches to the session by name. It receives the live output stream.
 3. Console B (read-write key) also attaches simultaneously. Both A and B receive all downstream frames — fan-out verified.
-4. Console C (read-only key) attaches. It receives the downstream stream. Console C sends an upstream keystroke. The access node rejects it (E-SES-005). Consoles A and B are unaffected — they still receive frames.
+4. Console C (read-only key) attaches. It receives the downstream stream. Console C sends an upstream keystroke. The access node rejects it (E-ADM-007). Consoles A and B are unaffected — they still receive frames.
 5. Console A detaches. The session continues. Console B and C still receive frames. Console A receives nothing further.
 6. A keystroke is typed in the tmux session. Console B receives it within 200ms (latency gate).
 7. tmux control mode is killed (simulated). The access node falls back to PTY mode automatically. Session stream continues.
@@ -55,7 +55,7 @@ retired: null
 
 # Step 1: access node connects to tmux
 # Step 2-3: A and B attach; inject 10 downstream frames; both must receive all 10
-# Step 4: C attaches; C sends upstream; assert E-SES-005; assert A and B still receive
+# Step 4: C attaches; C sends upstream; assert errors.Is(err, session.ErrUpstreamReadOnly) / error message carries E-ADM-007; assert A and B still receive
 # Step 5: A detaches; inject 5 more frames; B and C receive 5; A receives 0
 # Step 6: keystroke injected; latency measured; assert < 200ms
 # Step 7: kill tmux socket; assert PTY fallback without error; assert stream continues
@@ -65,7 +65,7 @@ retired: null
 
 - **Functional correctness** (0.5): All 7 steps succeed in order; exact frame counts match expected fan-out.
 - **Edge case handling** (0.2): C's upstream rejected without affecting A or B; A's detach doesn't close session.
-- **Error quality** (0.1): E-SES-005 returned for C's upstream keystroke.
+- **Error quality** (0.1): E-ADM-007 returned for C's upstream keystroke (errors.Is(err, session.ErrUpstreamReadOnly) must hold; error message must carry E-ADM-007).
 - **Performance** (0.1): Keystroke-to-echo < 200ms (soft gate; 100ms is P99 NFR target).
 - **Data integrity** (0.1): PTY fallback stream is byte-identical to control mode stream for simple output.
 
