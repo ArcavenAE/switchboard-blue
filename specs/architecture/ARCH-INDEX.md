@@ -37,7 +37,7 @@ modified:
 # Architecture Index: Switchboard
 
 > **Context Engineering:** Lightweight index (~300 tokens). Load only the section
-> files needed for your task. All 42 BCs are covered; every module has a purity
+> files needed for your task. All 44 BCs are covered; every module has a purity
 > boundary classification.
 
 ## Document Map

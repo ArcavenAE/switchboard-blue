@@ -2,7 +2,7 @@
 artifact_id: ARCH-01-core-services
 document_type: architecture-section
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
