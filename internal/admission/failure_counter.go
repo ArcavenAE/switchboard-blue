@@ -43,14 +43,14 @@ const maxTrackedSources = 65536
 // FailureCounter tracks per-source HMAC failure timestamps in a sliding window
 // and emits E-ADM-017 exactly once per threshold crossing.
 //
-// Hysteresis: after an alert fires, it is suppressed until all in-window entries
-// that were present at the time of the alert have been trimmed away — i.e., the
-// oldest entry in the trimmed window is newer than the alert fire timestamp.
-// Only at that point does the alert re-arm, allowing a fresh crossing to fire again.
+// Drain-only re-arm (BC-2.05.005 v1.6): after an alert fires, timestamps are no
+// longer appended (append-skip). Re-arm triggers only when the sliding window
+// fully empties (len==0 after trim). This guarantees the slice is bounded at
+// threshold entries while an alert is active, and prevents spurious re-fires.
 //
 // All exported methods are safe for concurrent use.
 //
-// Traces to BC-2.05.005 PC-3; S-W3.05 AC-001 through AC-015.
+// Traces to BC-2.05.005 PC-3; S-W3.05 AC-001 through AC-017.
 type FailureCounter struct {
 	mu             sync.Mutex
 	counts         map[string][]time.Time // per-srcAddr timestamp slices
@@ -99,17 +99,18 @@ func NewFailureCounter(threshold int, windowDuration time.Duration, logger Logge
 //  2. If post-trim count is zero and the key existed, deletes counts[srcAddr] and
 //     firedAt[srcAddr] (dead-key eviction — prevents unbounded map growth from
 //     inactive sources; AC-012).
-//  3. Checks hysteresis: if the oldest remaining entry is newer than the last
-//     alert fire time (i.e., all "pre-fire" entries have been trimmed away),
-//     re-arms the alert. Also re-arms when the window is completely empty.
+//  3. Drain-only re-arm (BC-2.05.005 v1.6): if firedAt is set and len(keep)==0,
+//     clear firedAt[srcAddr]. The "oldest surviving entry is newer than firedAt"
+//     path is removed — it is dead code under append-skip (Step 5).
 //  4. Evicts the LRU source before inserting a new srcAddr key if
 //     len(counts) == maxTrackedSources (CWE-770; AC-011).
-//  5. Appends now().
+//  5. Append-skip: appends now() only when lastFire.IsZero() (not currently fired).
+//     The slice is bounded at threshold entries while an alert is active (EC-011).
 //  6. If post-append count >= threshold AND not yet fired since re-arm: captures
 //     the alert message under the lock, then logs after unlock to avoid holding
 //     the lock during I/O.
 //
-// Traces to BC-2.05.005 PC-3; S-W3.05 AC-002 through AC-015.
+// Traces to BC-2.05.005 PC-3; S-W3.05 AC-002 through AC-017.
 func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 	c.mu.Lock()
 
@@ -135,14 +136,15 @@ func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 		keep = nil
 	}
 
-	// Step 3: Hysteresis re-arm check.
-	// Re-arm when the window has drained completely, OR when all surviving entries
-	// post-trim are newer than the last fire time (the "old window" entries that
-	// were present when the alert fired have all expired).
+	// Step 3: Drain-only re-arm (BC-2.05.005 v1.6).
+	// Re-arm when the window has drained completely (len(keep)==0 after trim).
+	// Under append-skip (Step 5), no new timestamps are added while firedAt is set,
+	// so the "oldest surviving entry is newer than firedAt" path is dead code and
+	// is removed to match the reconciled spec exactly.
 	lastFire := c.firedAt[srcAddr]
 	if !lastFire.IsZero() {
-		if len(keep) == 0 || keep[0].After(lastFire) {
-			// Safe to re-arm: no entries from the previous alert window remain.
+		if len(keep) == 0 {
+			// All pre-fire entries have aged out — safe to re-arm.
 			delete(c.firedAt, srcAddr)
 			lastFire = time.Time{} // re-arm: treat as not-yet-fired
 		}
@@ -155,8 +157,15 @@ func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 		c.evictLRU()
 	}
 
-	// Step 5: Append current timestamp.
-	keep = append(keep, now)
+	// Step 5: Append-skip per-source slice bound (BC-2.05.005 EC-011; AC-016).
+	// Only append a new timestamp when not currently fired. While firedAt is set,
+	// pre-fire entries cannot age out (append-skip keeps the slice from growing),
+	// so the slice is bounded at threshold entries during an active alert.
+	// Re-arm (Step 3) clears lastFire to zero, so the first call after drain
+	// does append (the re-arm and append are both visible in the same call).
+	if lastFire.IsZero() {
+		keep = append(keep, now)
+	}
 	c.counts[srcAddr] = keep
 
 	// Step 6: Emit E-ADM-017 on threshold crossing, exactly once per crossing.
@@ -166,7 +175,7 @@ func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 	if len(keep) >= c.threshold && lastFire.IsZero() {
 		c.firedAt[srcAddr] = now
 		alertMsg = fmt.Sprintf(
-			"E-ADM-017 ≥%d failures in %.0fs from src %s",
+			"E-ADM-017 HMAC failure rate alert: ≥%d failures in %.0fs from src %s",
 			c.threshold,
 			c.windowDuration.Seconds(),
 			srcAddr,
