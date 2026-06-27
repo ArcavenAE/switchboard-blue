@@ -42,7 +42,7 @@ func TestConsoleSet_Add_ReturnsChannels(t *testing.T) {
 	t.Parallel()
 	cs := newTestConsoleSet(t)
 
-	downstream, upstream, err := cs.Add("console-A")
+	downstream, upstream, err := cs.Add("console-A", "test-session")
 	if err != nil {
 		t.Fatalf("Add: unexpected error: %v", err)
 	}
@@ -60,10 +60,10 @@ func TestConsoleSet_Add_DuplicateKey(t *testing.T) {
 	t.Parallel()
 	cs := newTestConsoleSet(t)
 
-	if _, _, err := cs.Add("console-A"); err != nil {
+	if _, _, err := cs.Add("console-A", "test-session"); err != nil {
 		t.Fatalf("first Add: unexpected error: %v", err)
 	}
-	_, _, err := cs.Add("console-A")
+	_, _, err := cs.Add("console-A", "test-session")
 	if !errors.Is(err, session.ErrConsoleAlreadyAttached) {
 		t.Errorf("second Add: got %v; want ErrConsoleAlreadyAttached", err)
 	}
@@ -78,7 +78,7 @@ func TestConsoleSet_Remove_ClosesDownstream(t *testing.T) {
 	t.Parallel()
 	cs := newTestConsoleSet(t)
 
-	downstream, _, err := cs.Add("console-B")
+	downstream, _, err := cs.Add("console-B", "test-session")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestConsoleSet_Deliver_FanOutAllConsoles(t *testing.T) {
 	downstreams := make([]<-chan frame.OuterHeader, numConsoles)
 	for i := range numConsoles {
 		key := session.ConsoleKey("console-fan-" + string(rune('A'+i)))
-		downstream, _, err := cs.Add(key)
+		downstream, _, err := cs.Add(key, "test-session")
 		if err != nil {
 			t.Fatalf("Add %q: %v", key, err)
 		}
@@ -162,11 +162,11 @@ func TestConsoleSet_Deliver_SkipsRemovedConsole(t *testing.T) {
 	cs := newTestConsoleSet(t)
 
 	// Add two consoles: A will be removed before delivery, B remains.
-	downstreamA, _, err := cs.Add("fan-skip-A")
+	downstreamA, _, err := cs.Add("fan-skip-A", "test-session")
 	if err != nil {
 		t.Fatalf("Add A: %v", err)
 	}
-	downstreamB, _, errB := cs.Add("fan-skip-B")
+	downstreamB, _, errB := cs.Add("fan-skip-B", "test-session")
 	if errB != nil {
 		t.Fatalf("Add B: %v", errB)
 	}
@@ -212,10 +212,10 @@ func TestConsoleSet_EvictStale_RemovesStaleConsoles(t *testing.T) {
 	cs := newTestConsoleSet(t)
 
 	// Add two consoles.
-	if _, _, err := cs.Add("evict-stale-A"); err != nil {
+	if _, _, err := cs.Add("evict-stale-A", "s"); err != nil {
 		t.Fatalf("Add evict-stale-A: %v", err)
 	}
-	if _, _, err := cs.Add("evict-stale-B"); err != nil {
+	if _, _, err := cs.Add("evict-stale-B", "s"); err != nil {
 		t.Fatalf("Add evict-stale-B: %v", err)
 	}
 
@@ -261,10 +261,10 @@ func TestConsoleSet_Snapshot_ReturnsValueCopy(t *testing.T) {
 	t.Parallel()
 	cs := newTestConsoleSet(t)
 
-	if _, _, err := cs.Add("snap-A"); err != nil {
+	if _, _, err := cs.Add("snap-A", "test-session"); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	if _, _, err := cs.Add("snap-B"); err != nil {
+	if _, _, err := cs.Add("snap-B", "test-session"); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 

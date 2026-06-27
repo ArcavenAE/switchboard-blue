@@ -30,10 +30,13 @@ type ConsoleKey string
 // upstream receives keystrokes from the console for forwarding to tmux.
 // lastHeartbeat records the last time Heartbeat was called for this console;
 // used by EvictStale to detect crash/disconnect.
+// sessionName is the name of the session this console is attached to;
+// used by SendKeystroke to detect mismatched session (F-H-2).
 type consoleEntry struct {
 	downstream    chan frame.OuterHeader
 	upstream      chan []byte
 	lastHeartbeat time.Time
+	sessionName   string
 }
 
 // ConsoleSet manages the set of consoles attached to a single session and fans
@@ -103,7 +106,7 @@ const upstreamBufSize = 16
 // sender when the effectful consumer is not yet draining.
 //
 // Returns ErrConsoleAlreadyAttached if key is already registered.
-func (cs *ConsoleSet) Add(key ConsoleKey) (downstream <-chan frame.OuterHeader, upstream chan []byte, err error) {
+func (cs *ConsoleSet) Add(key ConsoleKey, sessionName string) (downstream <-chan frame.OuterHeader, upstream chan []byte, err error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -115,10 +118,23 @@ func (cs *ConsoleSet) Add(key ConsoleKey) (downstream <-chan frame.OuterHeader, 
 		downstream:    make(chan frame.OuterHeader, downstreamBufSize),
 		upstream:      make(chan []byte, upstreamBufSize),
 		lastHeartbeat: cs.nowFn(),
+		sessionName:   sessionName,
 	}
 	cs.consoles[key] = entry
 
 	return entry.downstream, entry.upstream, nil
+}
+
+// Session returns the session name associated with the console identified by
+// key, and true. Returns ("", false) if key is not attached.
+func (cs *ConsoleSet) Session(key ConsoleKey) (string, bool) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	entry, ok := cs.consoles[key]
+	if !ok {
+		return "", false
+	}
+	return entry.sessionName, true
 }
 
 // Remove deregisters the console identified by key, closing its downstream

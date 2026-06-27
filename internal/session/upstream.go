@@ -203,7 +203,7 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 		return nil, nil, fmt.Errorf("%w: %s", ErrSessionNotFound, sessionName)
 	}
 
-	ds, us, err := a.consoles.Add(key)
+	ds, us, err := a.consoles.Add(key, sessionName)
 	if err != nil {
 		if errors.Is(err, ErrConsoleAlreadyAttached) {
 			return nil, nil, fmt.Errorf("session: console %s already attached to session %s: %w", key, sessionName, ErrConsoleAlreadyAttached)
