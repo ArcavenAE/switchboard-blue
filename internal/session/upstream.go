@@ -229,10 +229,10 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 //
 // Returns ErrConsoleNotFound if key is not currently attached (E-SES-003),
 // including console_id in the message.
-func (a *AccessNode) Detach(key ConsoleKey) error {
+func (a *AccessNode) Detach(key ConsoleKey, sessionName string) error {
 	if err := a.consoles.Remove(key); err != nil {
 		if errors.Is(err, ErrConsoleNotFound) {
-			return fmt.Errorf("session: console %s not found: %w", key, ErrConsoleNotFound)
+			return fmt.Errorf("session: console %s not found for session %s: %w", key, sessionName, ErrConsoleNotFound)
 		}
 		return err
 	}

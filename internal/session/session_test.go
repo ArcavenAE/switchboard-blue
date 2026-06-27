@@ -293,7 +293,7 @@ func TestSession_Detach_SessionContinues(t *testing.T) {
 		t.Fatalf("Attach: %v", err)
 	}
 
-	if err := an.Detach("console-D"); err != nil {
+	if err := an.Detach("console-D", "build"); err != nil {
 		t.Fatalf("Detach: unexpected error: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func TestSession_SendKeystroke_AfterDetach_ReturnsErrConsoleNotFound(t *testing.
 		t.Fatalf("SendKeystroke pre-Detach: unexpected error: %v", err)
 	}
 
-	if err := an.Detach("console-detach"); err != nil {
+	if err := an.Detach("console-detach", "detach-session"); err != nil {
 		t.Fatalf("Detach: unexpected error: %v", err)
 	}
 
@@ -369,7 +369,7 @@ func TestSession_Detach_ReadOnlyObserversUnaffected(t *testing.T) {
 	}
 
 	// Detach the full-access console.
-	if err := an.Detach("full-access"); err != nil {
+	if err := an.Detach("full-access", "monitor"); err != nil {
 		t.Fatalf("Detach full-access: %v", err)
 	}
 
