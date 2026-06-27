@@ -28,6 +28,14 @@ type Logger interface {
 	Log(msg string)
 }
 
+// hmacFailureRecorder is the interface RouteFrame uses to record per-source
+// HMAC failures. *admission.FailureCounter satisfies this interface; tests
+// may inject a fake. Using an interface here avoids an import cycle and
+// allows test doubles (BC-2.05.008 invariant 5; BC-2.05.005 PC-3).
+type hmacFailureRecorder interface {
+	RecordHMACFailure(srcAddr string)
+}
+
 // RouterOption is a functional option for NewRouter.
 type RouterOption func(*Router)
 
@@ -37,6 +45,19 @@ type RouterOption func(*Router)
 func WithLogger(l Logger) RouterOption {
 	return func(r *Router) {
 		r.logger = l
+	}
+}
+
+// WithFailureCounter sets the per-source HMAC failure counter on the Router.
+// When set, RouteFrame calls fc.RecordHMACFailure on every ErrHMACVerificationFailed
+// return path. If not set (nil), the counter calls are skipped and existing
+// behaviour is preserved.
+//
+// Accepts *admission.FailureCounter or any type satisfying hmacFailureRecorder
+// (test doubles). Traces to BC-2.05.008 PC-5; BC-2.05.008 invariant 5; S-W3.05.
+func WithFailureCounter(fc hmacFailureRecorder) RouterOption {
+	return func(r *Router) {
+		r.failureCounter = fc
 	}
 }
 
@@ -92,6 +113,7 @@ type Router struct {
 	admittedKeySet  *admission.AdmittedKeySet
 	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry
 	logger          Logger
+	failureCounter  hmacFailureRecorder // nil = no counter; set via WithFailureCounter
 }
 
 // NewRouter returns an empty Router using ks as its admitted key set.
@@ -178,6 +200,10 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 			"wire HMAC verification failed at RouteFrame: auth key unavailable for SVTN %x from src %x (E-ADM-016)",
 			hdr.SVTNID, hdr.SrcAddr,
 		))
+		// Record per-source failure count for E-ADM-017 alert (BC-2.05.008 invariant 5; BC-2.05.005 PC-3).
+		if r.failureCounter != nil {
+			r.failureCounter.RecordHMACFailure(fmt.Sprintf("%x", hdr.SrcAddr))
+		}
 		return ErrHMACVerificationFailed
 	}
 
@@ -189,6 +215,10 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 			"wire HMAC verification failed at RouteFrame: tag mismatch for SVTN %x from src %x (E-ADM-016)",
 			hdr.SVTNID, hdr.SrcAddr,
 		))
+		// Record per-source failure count for E-ADM-017 alert (BC-2.05.008 PC-5; BC-2.05.005 PC-3).
+		if r.failureCounter != nil {
+			r.failureCounter.RecordHMACFailure(fmt.Sprintf("%x", hdr.SrcAddr))
+		}
 		return ErrHMACVerificationFailed
 	}
 

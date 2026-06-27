@@ -4,11 +4,11 @@
 // # RED GATE
 //
 // These tests WILL NOT COMPILE against the current codebase because:
-//   1. routing.WithFailureCounter does not yet exist.
-//   2. The Router struct has no failureCounter field.
-//   3. admission.FailureCounter does not yet exist.
-//   4. admission.NewFailureCounter does not yet exist.
-//   5. admission.WithNow does not yet exist.
+//  1. routing.WithFailureCounter does not yet exist.
+//  2. The Router struct has no failureCounter field.
+//  3. admission.FailureCounter does not yet exist.
+//  4. admission.NewFailureCounter does not yet exist.
+//  5. admission.WithNow does not yet exist.
 //
 // Compile failure is the Red Gate: it proves the wire-up is absent before
 // implementation begins.
@@ -17,28 +17,28 @@
 //
 // In internal/routing/routing.go:
 //
-//   1. Add `failureCounter *admission.FailureCounter` field to the Router struct.
+//  1. Add `failureCounter *admission.FailureCounter` field to the Router struct.
 //
-//   2. Add functional option:
+//  2. Add functional option:
 //
-//	func WithFailureCounter(fc *admission.FailureCounter) RouterOption {
-//	    return func(r *Router) { r.failureCounter = fc }
-//	}
+//     func WithFailureCounter(fc *admission.FailureCounter) RouterOption {
+//     return func(r *Router) { r.failureCounter = fc }
+//     }
 //
-//   3. In RouteFrame, on BOTH ErrHMACVerificationFailed return paths, call
-//      r.failureCounter.RecordHMACFailure(string(hdr.SrcAddr[:])) (or use the
-//      canonical string representation of hdr.SrcAddr — must match what the
-//      FailureCounter and callers expect; typically fmt.Sprintf("%x", hdr.SrcAddr)
-//      or just string(hdr.SrcAddr[:]); be consistent with BC-2.05.005 PC-3).
+//  3. In RouteFrame, on BOTH ErrHMACVerificationFailed return paths, call
+//     r.failureCounter.RecordHMACFailure(string(hdr.SrcAddr[:])) (or use the
+//     canonical string representation of hdr.SrcAddr — must match what the
+//     FailureCounter and callers expect; typically fmt.Sprintf("%x", hdr.SrcAddr)
+//     or just string(hdr.SrcAddr[:]); be consistent with BC-2.05.005 PC-3).
 //
-//      Guard with nil-check so existing tests without a counter still pass:
+//     Guard with nil-check so existing tests without a counter still pass:
 //
-//	if r.failureCounter != nil {
-//	    r.failureCounter.RecordHMACFailure(srcKey)
-//	}
-//	return ErrHMACVerificationFailed
+//     if r.failureCounter != nil {
+//     r.failureCounter.RecordHMACFailure(srcKey)
+//     }
+//     return ErrHMACVerificationFailed
 //
-//   4. Do NOT call RecordHMACFailure on the success path (BC-2.05.008 PC-5 negative).
+//  4. Do NOT call RecordHMACFailure on the success path (BC-2.05.008 PC-5 negative).
 //
 // In internal/admission/failure_counter.go (full contract in failure_counter_test.go):
 //
@@ -367,8 +367,9 @@ func TestRouteFrame_CallsRecordHMACFailureOnBothFailurePaths(t *testing.T) {
 //
 // Canonical BC-2.05.008 EC-006 test vector:
 // "5 consecutive HMAC failures from same src_addr within 60s →
-//  after 5th: E-ADM-017 emitted by FailureCounter; RouteFrame called
-//  RecordHMACFailure 5 times."
+//
+//	after 5th: E-ADM-017 emitted by FailureCounter; RouteFrame called
+//	RecordHMACFailure 5 times."
 //
 // Uses the REAL admission.FailureCounter with admission.WithNow for clock control.
 // Requires both admission.NewFailureCounter and routing.WithFailureCounter.

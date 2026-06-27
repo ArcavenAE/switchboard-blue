@@ -48,9 +48,10 @@
 //
 // The tests below use a package-level exported helper SetNowFunc for injection
 // — the implementer must either add:
-//   (a) an unexported `now` field settable from the test package via an
-//       exported SetNowFunc (visible only in admission_test), OR
-//   (b) a WithNow functional option on NewFailureCounter
+//
+//	(a) an unexported `now` field settable from the test package via an
+//	    exported SetNowFunc (visible only in admission_test), OR
+//	(b) a WithNow functional option on NewFailureCounter
 //
 // Because the tests are in package admission_test (black-box), option (b) is
 // cleaner and is what these tests assume:
