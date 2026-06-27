@@ -157,6 +157,7 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | VP-039-test-skip | Phase-6 hardening | t.Skip placeholder needed in internal/routing/*_test.go for VP-039 (deferred property test) | 2026-06-25 |
 | S-3.02-FM1 | MED | Upstream channel from Attach is vestigial in production (SendKeystroke forwards directly to sink); close-race contract guards an unwritten path. Reconcile BC-2.04.003 PC-3 to SendKeystroke path OR stop returning the channel until S-3.03 adds a draining consumer | architect/story-writer | deferred to S-3.03 |
 | S-3.03-L1-REVOKE | LOW | BC-2.05.003 EC-004 "revoke" half unenforced: SessionAuth has RegisterKey (add/overwrite) but no RevokeKey/Remove. Out of S-3.03 AC scope. | story-writer/architect | deferred to operator-provisioning story (Wave 4+) |
+| S-3.03-O1-VPSKEL | LOW | VP-013/VP-035 proof-harness skeletons reference stale API (NewAuthList/AddWithRole/AuthorizeFrameType/ErrReadOnlyUpstreamDenied) and VP-035 property statement cites E-ADM-003 for read-only upstream rejection; canonical taxonomy uses E-ADM-007 (E-SES-005 retired). Implementation is correct; VP skeletons not refreshed on error-code re-anchor. | architect/formal-verifier | deferred to Phase-6 hardening; codification follow-up at cycle-close (process-gap) |
 
 ## Decisions Log
 
