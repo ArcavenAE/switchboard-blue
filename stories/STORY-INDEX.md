@@ -19,13 +19,15 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 25 |
+| Total stories | 25 (24 wave stories + S-M.01 maintenance) |
 | Complete | 11 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03) |
-| Pending | 14 |
-| E-phase | 19 |
-| PE-phase | 4 |
+| Pending | 13 |
+| Draft/unscheduled | 1 (S-M.01) |
+| E-phase | 20 (waves 0–5) |
+| PE-phase | 4 (wave 6) |
 | Maintenance (draft/unscheduled) | 1 (S-M.01) |
-| Total points | 143 |
+| Total points (waves 0–6) | 143 |
+| Total points (incl. S-M.01) | 148 |
 | Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
 | Backlog | 1 (S-BL.OA) |
 
@@ -69,7 +71,7 @@ inputDocuments:
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
 | 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
 | 6 | S-7.01, S-7.02, S-7.03, S-7.04 | 29 | PE-phase features |
-| **Total** | **24** | **143** | |
+| **Total** | **24** (wave stories) | **143** | (+ S-M.01 maintenance, 5 pts, unscheduled — grand total 25 stories / 148 pts) |
 
 > Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 total: 5 stories, 32 pts. Total points including Wave 0: 143. Per-wave counts above use story points from individual story files.
 

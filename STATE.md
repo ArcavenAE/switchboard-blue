@@ -117,7 +117,7 @@ last_update: 2026-06-27
 
 Phase 3, Wave 3. ALL 5 STORIES MERGED. S-3.03 MERGED (PR #14, b68e498, alpha-20260627-042402-b68e498). Wave 3: 5/5 stories (32/32 pts).
 4 tech-debt items carried forward (F-002, F-003, F-004, SEC-001). VP-032 deferred.
-Next action: Wave 3 integration gate. Drift item S-3.02-FM1 resolved by S-3.03 merge.
+Next action: Wave 3 integration gate. Drift item S-3.02-FM1 partially addressed by S-3.03 (residual upstream-channel drain path open; see Open Drift Items).
 
 ## Phase Progress
 
@@ -160,7 +160,7 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | SEC-003 | Phase-6 hardening | Sub-microsecond TOCTOU on now in ReAuthenticate; accepted per pr-reviewer PR #7 security review | 2026-06-25 |
 | WAVE-2-MED-001 | Phase-6 hardening | ReAuthState not evicted on RevokeKey/RegisterKey reset; stale source-IP survives via CurrentSourceAddr | 2026-06-25 |
 | VP-039-test-skip | Phase-6 hardening | t.Skip placeholder needed in internal/routing/*_test.go for VP-039 (deferred property test) | 2026-06-25 |
-| S-3.02-FM1 | MED | Upstream channel from Attach is vestigial in production (SendKeystroke forwards directly to sink); close-race contract guards an unwritten path. Reconcile BC-2.04.003 PC-3 to SendKeystroke path OR stop returning the channel until S-3.03 adds a draining consumer | architect/story-writer | deferred to S-3.03 |
+| S-3.02-FM1 | MED | Upstream channel from Attach is vestigial in production (SendKeystroke forwards directly to sink); close-race contract guards an unwritten path. Partially addressed by S-3.03 (SessionAuth wired as live Authorizer at attach-time); residual: upstream channel still returned but undrained in production, documented test-harness-only path — future cleanup. BC-2.04.003 PC-3 reconciliation deferred. | architect/story-writer | open |
 | S-3.03-L1-REVOKE | LOW | BC-2.05.003 EC-004 "revoke" half unenforced: SessionAuth has RegisterKey (add/overwrite) but no RevokeKey/Remove. Out of S-3.03 AC scope. | story-writer/architect | deferred to operator-provisioning story (Wave 4+) |
 | S-3.03-O1-VPSKEL | LOW | VP-013/VP-035 proof-harness skeletons reference stale API (NewAuthList/AddWithRole/AuthorizeFrameType/ErrReadOnlyUpstreamDenied) and VP-035 property statement cites E-ADM-003 for read-only upstream rejection; canonical taxonomy uses E-ADM-007 (E-SES-005 retired). Implementation is correct; VP skeletons not refreshed on error-code re-anchor. | architect/formal-verifier | deferred to Phase-6 hardening; codification follow-up at cycle-close (process-gap) |
 | MISE-DX-001 | LOW | Toolchain provisioning migrating brew→mise; covered by story S-M.01 (mise.toml, CI, lefthook, devcontainer, CONTRIBUTING/CLAUDE.md). | dx-engineer/devops-engineer | open — story S-M.01 drafted, unscheduled (maintenance sweep) |

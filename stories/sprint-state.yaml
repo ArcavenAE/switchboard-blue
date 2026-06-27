@@ -6,8 +6,8 @@
 
 cycle: cycle-1
 phase: 2
-total_stories: 21
-total_points: 102
+total_stories: 25
+total_points: 148
 waves: 7
 
 wave_status:
@@ -112,15 +112,44 @@ stories:
     pr: 6
     merged_at: "2026-06-25"
 
-  - story_id: S-3.01
-    title: "Tmux control mode integration with PTY fallback"
+  - story_id: S-3.01a
+    title: "Tmux control mode integration"
     epic: E-3
     wave: 3
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
     points: 8
-    bc_traces: [BC-2.04.001, BC-2.04.002]
+    bc_traces: [BC-2.04.001]
+    merge_sha: 43208ab
+    pr: 11
+    merged_at: "2026-06-26"
+
+  - story_id: S-3.01b
+    title: "PTY proxy fallback for control-mode failures"
+    epic: E-3
+    wave: 3
+    status: completed
+    priority: P0
+    scope_phase: E
+    points: 5
+    bc_traces: [BC-2.04.002]
+    merge_sha: 56ec9c7
+    pr: 12
+    merged_at: "2026-06-26"
+
+  - story_id: S-3.04
+    title: "Wire verifyFrameHMAC into RouteFrame (HMAC enforcement at router boundary)"
+    epic: E-2
+    wave: 3
+    status: completed
+    priority: P0
+    scope_phase: E
+    points: 3
+    bc_traces: [BC-2.05.008]
+    merge_sha: d54bf1a
+    pr: 9
+    merged_at: "2026-06-26"
 
   - story_id: S-3.02
     title: "Console attach/detach and multi-console fan-out"
@@ -279,3 +308,13 @@ stories:
     scope_phase: PE
     points: 8
     bc_traces: [BC-2.09.001, BC-2.09.002]
+
+  - story_id: S-M.01
+    title: "Migrate toolchain provisioning from Homebrew to mise"
+    epic: E-MAINT
+    wave: unscheduled
+    status: draft
+    priority: P2
+    scope_phase: E
+    points: 5
+    bc_traces: []
