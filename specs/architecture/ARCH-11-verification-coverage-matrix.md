@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -14,13 +14,14 @@ inputDocuments:
 kos_anchors: []
 modified:
   - 2026-06-23T00:00:00
+  - 2026-06-26T12:00:00 # v1.1 — WG3-H-001: Update totals to 43 BCs / 58 VPs; add missing BC-2.05.008 → VP-058 trace row; update internal/routing VP count from 4 to 5 (add code-audit)
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 57 (VP-001 through VP-057, per VP-INDEX).
+> Total VP count: 58 (VP-001 through VP-058, per VP-INDEX).
 
 ## BC → VP Coverage Table
 
@@ -58,6 +59,7 @@ modified:
 | BC-2.05.005 | HMAC frame authentication at first router | internal/hmac | VP-004, VP-005, VP-006 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
 | BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
+| BC-2.05.008 | RouteFrame HMAC enforcement | internal/routing | VP-058 | code-audit | P0 |
 | BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027 | proptest | P1 |
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
 | BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics | VP-047 | integration | P1 |
@@ -73,17 +75,17 @@ modified:
 
 | Metric | Value |
 |--------|-------|
-| Total BCs | 42 |
-| BCs with ≥1 VP | 42 |
+| Total BCs | 43 |
+| BCs with ≥1 VP | 43 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 57 |
-| P0 VPs (pure-core proptest/fuzz) | 39 |
+| Total unique VPs | 58 |
+| P0 VPs (pure-core proptest/fuzz) | 40 |
 | P1 VPs (integration/e2e) | 14 |
 | P2+ VPs (advanced/PE phase) | 4 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 58 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -96,7 +98,7 @@ VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 | internal/paths | 1 | proptest (1) |
 | internal/metrics | 3 | proptest (1), integration (2) |
 | internal/admission | 5 | proptest (4), e2e (1) |
-| internal/routing | 4 | proptest (2), fuzz (1), e2e (1) |
+| internal/routing | 5 | proptest (2), fuzz (1), e2e (1), code-audit (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
 | internal/tmux | 2 | integration (2) |
 | internal/config | 3 | proptest (2), e2e (1) |
@@ -104,13 +106,13 @@ VP counts recounted from VP-INDEX (canonical source of truth, 57 VPs total).
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
 | cmd/sbctl | 3 | integration (1), e2e (2) |
-| **Total** | **57** | |
+| **Total** | **58** | |
 
-Per-module sum = 57 (no off-table VPs).
+Per-module sum = 58 (no off-table VPs).
 
 ## Zero-VP BCs Check
 
-Per the coverage table above, all 42 BCs have at least one VP. No gaps.
+Per the coverage table above, all 43 BCs have at least one VP. No gaps.
 
 VP-053 through VP-057 were added in Phase 1c-refinement to close coverage gaps
 identified by the PO sweep (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004,

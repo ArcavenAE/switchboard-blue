@@ -2,7 +2,7 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -10,6 +10,7 @@ modified:
   - 2026-06-25T14:00:00 # v1.4 — Added §1 scope callout
   - 2026-06-25T00:00:00 # v1.5 — Add prose note below Mermaid: positions in §6.5/§6.6 are authoritative for import-order layering; Mermaid groupings reflect functional domain (consistency-validator F-W3-M-004)
   - 2026-06-26T00:00:00 # v1.6 — Promote internal/session (pos 6) and internal/tmux (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab)
+  - 2026-06-26T12:00:00 # v1.7 — Reconcile all position references: routing=5, session=6; session imports {frame, admission} (upstream.go+fanout.go→frame; session.go→admission); fix Cycle-Freeness tmux→session reference; fix §6.5 session annotation (WG3-H-003)
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -130,8 +131,8 @@ Packages listed root-first. Any package may only import packages earlier in this
 2.  internal/frame          (no internal imports)
 3.  internal/hmac           (no internal imports)
 4.  internal/admission      (imports: frame, hmac)
-5.  internal/session        (imports: frame)
-6.  internal/routing        (imports: frame, hmac, admission)
+5.  internal/routing        (imports: frame, hmac, admission)
+6.  internal/session        (imports: frame, admission)
 7.  internal/halfchannel    (imports: frame)
 8.  internal/paths          (imports: frame)
 9.  internal/arq            (imports: frame, halfchannel)
@@ -151,9 +152,9 @@ Packages listed root-first. Any package may only import packages earlier in this
 Mental topological sort: no package in positions 1–16 imports any package at a higher
 position. Verification:
 
-- `internal/routing` imports `admission` (position 4) — OK (routing is 6, admission is 4).
-- `internal/tmux` imports `session` (position 5) — OK (tmux is 13, session is 5).
-- `internal/discovery` imports `routing` (position 6) — OK (discovery is 14, routing is 6).
+- `internal/routing` imports `admission` (position 4) — OK (routing is 5, admission is 4).
+- `internal/tmux` imports `session` (position 6) — OK (tmux is 13, session is 6).
+- `internal/discovery` imports `routing` (position 5) — OK (discovery is 14, routing is 5).
 - `cmd/sbctl` imports `svtnmgmt` (position 15) — OK (sbctl is 17, svtnmgmt is 15).
 - No back-edges. DAG is acyclic.
 
@@ -249,7 +250,7 @@ strict — position N may import packages at positions 1..N-1 only.
 | 3 | `internal/halfchannel` | {frame} | pure-core | Wave 1 |
 | 4 | `internal/admission` | {frame, hmac} | boundary | Wave 2 (S-2.02 + S-1.03) |
 | 5 | `internal/routing` | {frame, hmac, admission} | boundary | Wave 2 (S-2.02) |
-| 6 | `internal/session` | {frame, admission} (current code uses admission only) | boundary | Wave 3 (S-3.01a) |
+| 6 | `internal/session` | {frame, admission} (upstream.go + fanout.go import frame; session.go imports admission) | boundary | Wave 3 (S-3.01a) |
 | 7 | `internal/tmux` | {halfchannel, session} | effectful (PTY, child process) | Wave 3 (S-3.01a) |
 
 This table is authoritative for the develop branch. Any package not listed
@@ -288,3 +289,4 @@ new positions here before their first commit, per the §6.4 protocol.
 | 1.4 | 2026-06-25 | Added §1 scope callout making the target-architecture-vs-current-state contract explicit: §§1–5 describe planned target architecture; §6.5 is authoritative for packages currently on develop; §6.6 tracks wave-by-wave delivery plan |
 | 1.5 | 2026-06-25 | Added prose note after Mermaid diagram clarifying that Mermaid layer groupings reflect functional domain, not import-order positions; §6.5/§6.6 are authoritative for import ordering (consistency-validator finding F-W3-M-004) |
 | 1.6 | 2026-06-26 | Promoted `internal/session` (pos 6) and `internal/tmux` (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab); §6.6 updated to Wave 4+ planning placeholder |
+| 1.7 | 2026-06-26 | WG3-H-003: Reconcile all topological position references to the correct ordering (admission=4, routing=5, session=6). Fix Topological Order section (session was incorrectly at 5, routing at 6). Fix Cycle-Freeness section (tmux→session now references position 6). Fix §6.5 session annotation to reflect actual imports: upstream.go+fanout.go import frame; session.go imports admission |
