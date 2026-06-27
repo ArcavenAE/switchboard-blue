@@ -49,12 +49,12 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.04.004 | Console detach releases session without closing it; session continues on access node | session-access | CAP-014 | P0 | E | implemented (S-3.02 / PR #13) | ss-04/BC-2.04.004.md |
 | BC-2.04.005 | Read-only console receives downstream stream; upstream keystrokes are rejected by access node | session-access | CAP-015 | P0 | E | implemented (S-3.03 / PR #14) | ss-04/BC-2.04.005.md |
 | BC-2.04.006 | Two or more consoles may subscribe to the same session output simultaneously | session-access | CAP-016 | P0 | E | implemented (S-3.02 / PR #13) | ss-04/BC-2.04.006.md |
-| BC-2.04.007 | Access node daemon startup succeeds or exits non-zero; SIGTERM/SIGINT triggers clean shutdown | session-access | CAP-013 | P0 | E | active | ss-04/BC-2.04.007.md |
+| BC-2.04.007 | Access node daemon startup succeeds or exits non-zero; SIGTERM/SIGINT triggers clean shutdown | session-access | CAP-013 | P0 | E | implemented (S-W3.04 / PR #17) | ss-04/BC-2.04.007.md |
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.001.md |
 | BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.002.md |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | admission-security | CAP-018 | P0 | E | implemented (S-3.03 / PR #14) | ss-05/BC-2.05.003.md |
 | BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.004.md |
-| BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | partially implemented (S-2.01 / PR #5 = crypto primitive; PC-3 per-source alert = FIX-NOW → S-W3.05) | ss-05/BC-2.05.005.md |
+| BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | implemented (S-W3.05 / PR #16) | ss-05/BC-2.05.005.md |
 | BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | admission-security | CAP-020b | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.006.md |
 | BC-2.05.007 | Node private keys never transit the network under any condition | admission-security | CAP-020a | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.007.md |
 | BC-2.05.008 | RouteFrame wire-layer HMAC enforcement (Fail-Closed for Writes) | admission-security | CAP-020 | P0 | E | implemented (S-3.04 / PR #9) | ss-05/BC-2.05.008.md |

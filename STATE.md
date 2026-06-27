@@ -38,7 +38,7 @@ phase_2_bc_coverage: "42/42"
 l2_complete: true
 l2_artifact_count: 11
 l3_complete: true
-l3_bc_count: 43
+l3_bc_count: 44
 l3_cap_coverage: "30/30"
 l4_complete: true
 l4_vp_count: 58
@@ -103,8 +103,8 @@ s_1_03_status: completed
 wave_2_complete: true
 wave_2_stories_merged: 3
 wave_2_points: 18
-wave_3_stories_merged: 5
-wave_3_points_complete: 32
+wave_3_stories_merged: 7
+wave_3_points_complete: 48
 wave_3_points_remaining: 0
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
 wave_3_gate_adversary_streak: 0
@@ -118,7 +118,10 @@ s_w3_05_adversary_converged: "RE-CONVERGED (passes 10-12 clean at f6038d2, 12 to
 s_w3_05_impl_commit: f6038d2
 s_w3_05_test_commit: 5c3d7ea
 s_w3_05_pr_number: 16
-s_w3_05_pr_status: "open; CI 5/5 pass; pr-reviewer APPROVE; READY FOR HUMAN MERGE APPROVAL"
+s_w3_05_pr_status: "MERGED (fa6345e, 2026-06-27)"
+s_w3_05_merge_sha: fa6345e
+s_w3_05_merge_date: 2026-06-27
+s_w3_05_status: completed
 s_w3_04_adversary_converged: "CONVERGED (passes 10/11/12 clean, 3 consecutive; 0C/0H) at tip 1c3c864; comment-only 77c6229 preserves convergence (zero behavioral delta) — cycles/cycle-1/S-W3.04/adversary/"
 s_w3_04_impl_commit: 1c3c864
 s_w3_04_comment_follow_up_sha: 77c6229
@@ -135,7 +138,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-All Wave-3 stories merged. S-W3.04 merged via PR #17 (squash aeb442d, 2026-06-27); S-W3.05 PR #16 status pending. Next: run /vsdd-factory:check-input-drift to clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3), then fresh-context consistency audit, then Wave-3 wave-level adversarial convergence (3 clean passes), then structured Wave-3 human gate.
+All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27); S-W3.05 merged PR #16 (squash fa6345e, 2026-06-27). Next: run /vsdd-factory:check-input-drift to clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3), then fresh-context consistency audit, then Wave-3 wave-level adversarial convergence (3 clean passes), then structured Wave-3 human gate.
 
 ## Phase Progress
 
@@ -160,7 +163,7 @@ All Wave-3 stories merged. S-W3.04 merged via PR #17 (squash aeb442d, 2026-06-27
 | 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
-| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | adversary-RE-CONVERGED (10-12); PR open | #16 | f6038d2 |
+| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | completed | #16 | fa6345e |
 | 3 | S-W3.04 | Full daemon assembly | completed | #17 | aeb442d |
 
 ## Open Drift Items
@@ -193,13 +196,13 @@ Drift note: BC-2.05.005 v1.8 + VP-059 v1.2 + story v1.3 + taxonomy v2.0 are hygi
 | S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs (taxonomy v1.9 + BC-2.05.005 + BC-2.05.008) authoritative — include "HMAC failure rate alert:" phrase; prior story-writer reconciliation + orchestrator ruling that dropped it were erroneous; code/tests/story AC-003/AC-015 to conform | 2026-06-27 |
 | S-W3.05 re-arm semantics finalized | drain-only (full window-drain) re-arm + per-source append-skip; dead keep[0].After(lastFire) branch removed; reconciled across BC-2.05.005 v1.6, VP-059 v1.1, EC-009/EC-011 | 2026-06-27 |
 | S-W3.05 per-story adversarial CONVERGED + error-taxonomy v2.0 | 3 clean passes (07-09), 0C/0H; error-taxonomy v1.9→v2.0 prose-only (msg-format UNCHANGED); proceeding to S-W3.04 | 2026-06-27 |
-| S-W3.05 SEC-001 + re-convergence at f6038d2 | SEC-001 (HIGH CWE-476) fixed f6038d2; BC-2.05.005 v1.8 + VP-059 v1.2 sanction precondition (hygiene); 3 fresh passes (10-12) RE-CONVERGED; PR #16 open, READY FOR HUMAN MERGE | 2026-06-27 |
+| S-W3.05 SEC-001 + re-convergence at f6038d2 | SEC-001 (HIGH CWE-476) fixed f6038d2; BC-2.05.005 v1.8 + VP-059 v1.2 sanction precondition (hygiene); 3 fresh passes (10-12) RE-CONVERGED; PR #16 MERGED fa6345e | 2026-06-27 |
 | S-W3.04 per-story adversarial CONVERGED (BC-5.39.001) | 3 consecutive clean passes (10/11/12; 0C/0H) at 1c3c864; comment-only 77c6229 preserves convergence (zero behavioral delta); demo evidence captured: test transcripts AC-001..AC-009 | 2026-06-27 |
 | Per-story-delivery merge-handoff pathology diagnosed (vsdd-factory#302) | Auto-mode classifier's self-approval/two-party-review guard blocks agent self-merge; resolution is human-performed merge — the sign-off the guard requires (NOT a fabricated user directive). Recurrence comment filed against drbothen/vsdd-factory#302. | 2026-06-27 |
 
 ## Session Resume Checkpoint — 2026-06-27 (S-W3.04 merged; Wave-3 wave-level convergence pending)
 
-**Position:** Phase 3, Wave 3. All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27). S-W3.05 PR #16 status: check develop tip for merge.
+**Position:** Phase 3, Wave 3. All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27). S-W3.05 merged PR #16 (squash fa6345e, 2026-06-27).
 **Next immediate step:** Run `/vsdd-factory:check-input-drift` first — clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3). Then fresh-context consistency audit. Then Wave-3 wave-level adversarial convergence (need 3 clean passes). Then structured Wave-3 human gate.
 **Wave-gate open drift:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ownership (PO adjudication). SW305-M2/M3/M4 remain open.
 **Open Wave-4 follow-ups (3 items):** (a) EC-005 durable CI import-perimeter guard; (b) real-connector PTY-EOF lifecycle integration test; (c) embed worktree-identity tuple in adversary dispatches.
