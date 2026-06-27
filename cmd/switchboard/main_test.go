@@ -291,6 +291,15 @@ func TestDaemonAuthRejectsUnregisteredConsole(t *testing.T) {
 		t.Fatalf("Attach(fullAccess): %v", err)
 	}
 
+	// Attach the read-only console before sending a keystroke.
+	// BC-2.04.005 Trigger: "Console attaches with a read-only session authorization key;
+	// console sends a keystroke while in read-only mode." Attachment is a precondition
+	// of the authorization check; without it SendKeystroke returns ErrConsoleNotFound
+	// (E-SES-003) before the authorizer can return ErrUpstreamReadOnly (E-ADM-007).
+	if _, _, err := an2.Attach(readOnlyKey, sessionName); err != nil {
+		t.Fatalf("Attach(readOnly): %v", err)
+	}
+
 	// Assertion 2: read-only upstream keystroke → ErrUpstreamReadOnly (E-ADM-007).
 	roErr := an2.SendKeystroke(readOnlyKey, sessionName, []byte("key"))
 	if !errors.Is(roErr, session.ErrUpstreamReadOnly) {
