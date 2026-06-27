@@ -1,11 +1,11 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-gate-consistency-audit-pass
+phase_step: wave-3-gate-adversary-convergence-restart
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
-phase_3_pause_point: "Wave 3 COMPLETE — S-3.04 (PR #9), S-3.01a (PR #11), S-3.01b (PR #12), S-3.02 (PR #13), S-3.03 (PR #14) ALL MERGED. Wave 3 integration gate is next action."
+phase_3_pause_point: "Wave 3 convergence restart: r1+r2 CONVERGED, r3 NOT_CONVERGED (2 adjudication-dependent HIGHs). Architect+PO adjudication in progress."
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 wave_2_gate_consistency_validator: "PASS_WITH_OBSERVATIONS (0C/0H/2M/3L/4O)"
@@ -108,11 +108,11 @@ wave_3_points_complete: 32
 wave_3_points_remaining: 0
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
 wave_3_gate_adversary_streak: 0
-wave_3_gate_adversary_passes: "RESTARTED after F-1 fix (PR #15, 10dd880). Prior: pass-1 clean, pass-2/3 NOT_CONVERGED on HIGH F-1 (now resolved). New convergence run begins at develop @ 10dd880 — 3 fresh consecutive clean passes required."
+wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CONVERGED 0C/0H/4M; r3 NOT_CONVERGED 0C/2H (F-1 cmd-wiring, F-2 EC-006 alert — both ADJUDICATION-DEPENDENT scope-boundary findings, NOT raw code defects). Passes r1+r2 rated F-1 as in-scope-deferred OBSERVATION. ADJUDICATION IN PROGRESS: architect (F-1 cmd-wiring deferral vs ARCH-08 position-18) + product-owner (F-2 EC-006 ownership/deferral). Convergence on hold pending scope decision."
 s_wave3_f1_fix_pr: 15
 s_wave3_f1_fix_merge_sha: 10dd880
 s_wave3_f1_fix_merge_date: 2026-06-27
-timestamp: 2026-06-27T18:00:00Z
+timestamp: 2026-06-27T20:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -120,7 +120,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED + merged (PR #15, 10dd880). Wave 3 wave-level adversarial convergence RESTARTED at develop @ 10dd880 — running 3 fresh clean passes.
+Wave 3 convergence RESTART: r1+r2 CONVERGED, r3 NOT_CONVERGED on 2 adjudication-dependent HIGHs (F-1 cmd-wiring, F-2 EC-006). Architect + product-owner adjudicating scope/deferral; human scope decision pending.
 
 ## Phase Progress
 
@@ -128,7 +128,7 @@ Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED + merg
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 5/5 DONE (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13; S-3.03 PR #14 b68e498) — F-1 fix merged PR #15 10dd880 — Wave 3 adversary RESTARTED @ 10dd880 (0/3 fresh passes) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: 5/5 DONE; F-1 fix PR #15 10dd880; restart r1 CONV/r2 CONV/r3 NOT_CONV (2 adj-HIGHs) |
 
 ## Wave / Story Status
 
@@ -146,55 +146,54 @@ Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED + merg
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
 
-Wave 2: 3/3 merged — CLOSED 2026-06-25. Wave 3: 5/5 merged — F-1 fix PR #15 10dd880 — gate reports: `cycles/cycle-1/`.
+Wave 3: 5/5 merged; F-1 fix PR #15 10dd880; gate reports: `cycles/cycle-1/`.
 
 ## Open Drift Items
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
-| F-P8-004 | MED | VP-026 cites "transitivity" invariant missing from BC-2.02.003 | architect | open — Phase 3 test-writing for BC-2.02.003 |
-| F-P8-005 | MED | VP-027 title "degradation goes down" but harness tests recovery direction | architect | open — Phase 3 test-writing |
-| F-P8-009 | LOW | feasibility-report:61 deployment-ops range "(CAP-026–027)" should be "(CAP-026–028)" | architect | open — Phase 2 deferred |
-| F-003 | LOW | Payload-MTU composed wire-format test | story S-BL.OA | deferred to outer-assembler story |
-| F-004 | LOW | ARCH-02 channel-header serializer not implemented | story S-BL.OA | deferred to outer-assembler story |
-| VP-036 testenv | Phase-6 hardening | property test (TestProperty_VP036_SessionContinuity) deferred until internal/testenv.ConnectWithSourceIP exists | 2026-06-25 |
-| SEC-003 | Phase-6 hardening | Sub-microsecond TOCTOU on now in ReAuthenticate; accepted per pr-reviewer PR #7 security review | 2026-06-25 |
-| WAVE-2-MED-001 | Phase-6 hardening | ReAuthState not evicted on RevokeKey/RegisterKey reset; stale source-IP survives via CurrentSourceAddr | 2026-06-25 |
-| VP-039-test-skip | Phase-6 hardening | t.Skip placeholder needed in internal/routing/*_test.go for VP-039 (deferred property test) | 2026-06-25 |
-| S-3.02-FM1 | MED | Upstream channel from Attach is vestigial in production (SendKeystroke forwards directly to sink); close-race contract guards an unwritten path. Partially addressed by S-3.03 (SessionAuth wired as live Authorizer at attach-time); residual: upstream channel still returned but undrained in production, documented test-harness-only path — future cleanup. BC-2.04.003 PC-3 reconciliation deferred. | architect/story-writer | open |
-| S-3.03-L1-REVOKE | LOW | BC-2.05.003 EC-004 "revoke" half unenforced: SessionAuth has RegisterKey (add/overwrite) but no RevokeKey/Remove. Out of S-3.03 AC scope. | story-writer/architect | deferred to operator-provisioning story (Wave 4+) |
-| S-3.03-O1-VPSKEL | LOW | VP-012/VP-013/VP-035 proof-harness skeletons refreshed to real shipped session API (NewSessionAuth/RegisterKey/Authorize). VP-012 skeleton previously referenced non-existent NewAuthList/Authorize(consoleKey,authList); VP-013/VP-035 referenced NewAuthList/AddWithRole/AuthorizeFrameType/ErrReadOnlyUpstreamDenied; VP-035 property statement cited E-ADM-003 (now corrected). Skeleton API references corrected at Wave 3 gate; full proof-harness EXECUTION still deferred. | architect/formal-verifier | open — Phase-6 hardening (skeleton API fixed; execution deferred) |
-| MISE-DX-001 | LOW | Toolchain provisioning migrating brew→mise; covered by story S-M.01 (mise.toml, CI, lefthook, devcontainer, CONTRIBUTING/CLAUDE.md). | dx-engineer/devops-engineer | open — story S-M.01 drafted, unscheduled (maintenance sweep) |
-| MISE-DOC-002 | LOW | Project CLAUDE.md says "prefer brew" — preference shifting to mise; update during S-M.01. Operator's GLOBAL ~/.claude/CLAUDE.md "Prefer brew" directive also shifting to mise (operator must update their personal file; factory will not edit the global file). | dx-engineer | open — tracked for S-M.01 + operator global-file note |
-| SIGN-DX-001 | LOW | Apple code-signing/notarization of release binaries: release.yml has sign-and-notarize job gated on vars.SIGNING_ENABLED (default OFF); capability to be completed + reconciled (justfile recipes, missing packaging scripts, release-verify conditional, CONTRIBUTING secrets docs) via story S-M.02. Gene source: aae-orc/ThreeDoors. ACTIVATION milestone-gated — toggle stays OFF until functional/testable product exists. | dx-engineer/devops-engineer | open — story S-M.02 drafted, unscheduled (milestone-gated) |
-| W3-F1-FU1 | LOW | BC-2.05.008 PC-4 PATH-A (no-forwarding-entry) E-ADM-016 logging obligation not formally ratified by spec-steward — implementer logged it conservatively for operator visibility; PC-2 (verify-fail path) is clearly mandated. Confirm/ratify PC-4 logging in BC-2.05.008. | spec-steward | open — post-merge follow-up |
-| W3-F1-FU2 | LOW | BC-2.05.008 evidence-report traceability row for PC-2 still cites the old Example test, not the new routing_log_test.go log-assertion tests; update the trace. | technical-writer/spec-steward | open — post-merge follow-up |
-| W3-M-2 | MED | SessionConnector exposes no failover-stable Frames(); control→PTY failover can silently drop downstream output for a consumer holding the old channel. Latent (no consumer yet). | architect/implementer | open — fix in cmd/switchboard wiring story |
-| W3-M-3 | MED | NewAccessNode(pub,nil) installs allow-all NoOpAuthorizer (fail-OPEN), opposite polarity to fail-loud noSink default; future nil-auth wiring would silently disable all Tier-2 enforcement. Latent (no production caller yet). | architect/implementer | open — fix in cmd/switchboard wiring story |
-| W3-PG-001 | LOW [process-gap] | Constructor security-perimeter default-polarity inconsistency (noSink fail-loud vs NoOpAuthorizer fail-open) — no review axis catches this. Candidate go.md/governance rule: security-perimeter defaults must fail closed unless justified. | rules/governance | open — codification follow-up at cycle-close (S-7.02) |
-Resolved drift archived: `cycles/cycle-1/closed-drift.md` (WG3-TAX-001, W3-M-1)
+| W3-R3-F1 | HIGH? | cmd/switchboard wires none of 5 Wave-3 subsystems; production RouteFrame Logger never injected (E-ADM-016 discarded by nopLogger in real builds); AccessNode Sweep timer uninstantiated. r3 HIGH; r1+r2 OBSERVATION (in-scope-deferred per ARCH-08 pos-18, no Wave-3 story scopes cmd wiring). | architect | pending-adjudication — is cmd-wiring a later wave? annotate STORY-INDEX/ARCH-08 + create wiring story if deferred |
+| W3-R3-F2 | HIGH? | BC-2.05.008 EC-006 (≥5 HMAC fails/60s → admission alert, ref BC-2.05.005 PC-3) neither implemented nor marked [DEFERRED]. | product-owner | pending-adjudication — implement now OR explicit [DEFERRED] + target story |
+| W3-R3-F3 | MED | E-ADM-016 PATH-A message ("auth key unavailable") diverges from canonical taxonomy string ("tag mismatch"); both carry E-ADM-016; unpinned by test. | product-owner/implementer | open |
+| W3-R3-F4 | MED | BC-2.05.008 PC-4 does not mandate E-ADM-016 logging on no-entry PATH-A, but code+test now emit/assert it (unadjudicated test-writer assumption). Overlaps W3-F1-FU1. | product-owner/spec-steward | open |
+| W3-R3-F5 | LOW | ErrSessionMismatch sentinel text lacks "(E-SES-006)" code token (parity with E-ADM-006/007 sentinels). | implementer | open |
+| W3-R2-M2 | MED | Route-time LWW snapshot window: RouteFrame RUnlocks after key-copy, verifies HMAC, then SVTNRoute re-locks for fresh lookup — concurrent RegisterForwardingEntry between unlock+relock not one atomic snapshot. Document in BC-2.05.008/ADR-009 or pass resolved entry under one lock. | architect/implementer | open |
+| W3-R2-M4 | MED | SessionConnector exposes no aggregated Frames() surviving ctrl→PTY failover swap; consumer on oldCtrl.Frames() loses output on newCtrl. Fix: SessionConnector.Frames() API or document re-subscribe. | architect/implementer | open |
+| F-P8-004/005 | MED | VP-026 "transitivity" invariant missing from BC-2.02.003; VP-027 title/harness direction mismatch. | architect | open — Phase 3 test-writing |
+| F-P8-009 | LOW | feasibility-report:61 deployment-ops range off-by-one (CAP-026–028) | architect | open |
+| F-003/F-004 | LOW | Payload-MTU wire-format test + ARCH-02 serializer | story S-BL.OA | deferred to outer-assembler story |
+| S-3.02-FM1 | MED | Attach upstream channel vestigial/undrained; BC-2.04.003 PC-3 deferred. | architect | open |
+| S-3.03-L1-REVOKE | LOW | BC-2.05.003 EC-004 "revoke" half: no RevokeKey. Out of S-3.03 scope. | architect | deferred — Wave 4+ operator-provisioning story |
+| S-3.03-O1-VPSKEL | LOW | VP-012/013/035 proof-harness skeletons API-fixed; execution deferred. | formal-verifier | open — Phase-6 |
+| W3-M-2/M-3 | MED | SessionConnector no failover Frames(); NewAccessNode nil→fail-OPEN polarity gap. | architect/implementer | open — fix in wiring story |
+| W3-PG-001 | LOW | Security-perimeter default-polarity inconsistency — candidate go.md rule. | rules/governance | open — cycle-close |
+| W3-F1-FU1/FU2 | LOW | BC-2.05.008 PC-4 PATH-A log not ratified; PC-2 trace row cites old test. | spec-steward | open |
+| MISE-DX-001/002 | LOW | brew→mise migration + CLAUDE.md update; story S-M.01. | dx-engineer | open |
+| SIGN-DX-001 | LOW | Apple code-signing: release.yml gated OFF; story S-M.02, milestone-gated. | dx-engineer | open |
+Resolved drift + stable Phase-6 deferrals archived: `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
 
 | Decision | Outcome | Date |
 |----------|---------|------|
-| HMAC algorithm | HMAC-SHA256, 16-byte tag, HKDF-SHA256 per-SVTN key derivation (ADR-001, ARCH-02/04) | 2026-06-23 |
+| HMAC algorithm | HMAC-SHA256, 16-byte tag, HKDF-SHA256 per-SVTN (ADR-001, ARCH-02/04) | 2026-06-23 |
 | FEC group size | N=4 default; tunable (ADR-002, ARCH-03) | 2026-06-23 |
 | Duplicate key registration | last-write-wins (ADR-003, ARCH-04) | 2026-06-23 |
 | Console/access key permissions | control > console > access (ADR-004, ARCH-04) | 2026-06-23 |
-| Downstream ARQ failover | resync from last ACK; in-flight lost (ADR-005, ARCH-03) | 2026-06-23 |
-| HMAC keying | per-(node, svtn) HKDF using node_admission_pubkey as IKM (amended ADR-001) | 2026-06-23 |
-| Wave-1 rollback/re-closure | all drift items routed concretely; drbothen/vsdd-factory#260 | 2026-06-24 |
-| Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
-| S-3.03 repointed 5→8 | Story v1.1 upstream-wiring integration scope expansion; sprint-state.yaml reconciled to 8 pts; Wave 3 total corrected 29→32 pts | 2026-06-27 |
+| HMAC keying | per-(node, svtn) HKDF using node_admission_pubkey as IKM (ADR-001 amended) | 2026-06-23 |
+| Wave-1 rollback/re-closure | all drift items routed concretely; vsdd-factory#260 | 2026-06-24 |
+| Marvel integration | explicitly deferred — no MVP integration | 2026-06-24 |
+| S-3.03 repointed 5→8 | upstream-wiring scope expansion; Wave 3 total 29→32 pts | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (F-1 FIX MERGED — WAVE 3 CONVERGENCE RESTARTED)
+## Session Resume Checkpoint — 2026-06-27 (WAVE 3 RESTART: r1+r2 CONVERGED, r3 NOT_CONVERGED)
 
-**Position:** Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED + merged via PR #15 (squash commit 10dd880). RouteFrame now logs E-ADM-016 on both no-forwarding-entry and HMAC-verify-fail paths; injectable Logger + WithLogger option added to Router; 4 new routing tests assert log emission (Red-Gate proven). Tree: develop @ 10dd880.
+**Position:** Phase 3, Wave 3 gate, develop @ 10dd880. Restart run: r1 CONVERGED (0C/0H/0M/2L/3O), r2 CONVERGED (0C/0H/4M/3L/3O), r3 NOT_CONVERGED (0C/2H/3M/2O). Both HIGHs are adjudication-dependent.
 
-**Wave 3 adversary convergence RESTARTED.** Prior run: pass-1 CONVERGED (0C/0H/3M/2L/3O), passes 2+3 NOT_CONVERGED on HIGH F-1 (now resolved). Streak reset to 0/3. 3 fresh consecutive clean passes required at develop @ 10dd880. Reports: `cycles/cycle-1/wave-3/adversary/pass-0{1,2,3}.md`.
+**r3 F-1:** cmd/switchboard wires none of 5 Wave-3 subsystems (E-ADM-016 discarded by nopLogger in real builds). r1+r2 rated in-scope-deferred per ARCH-08 pos-18. Architect adjudicating: annotate STORY-INDEX/ARCH-08 + new wiring story OR scope into active work.
 
-**Next:** Run 3 fresh adversary passes at develop @ 10dd880 to close Wave 3 gate. After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Post-merge follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open. Previous checkpoint archived: `cycles/cycle-1/session-checkpoints.md`.
+**r3 F-2:** BC-2.05.008 EC-006 (per-source HMAC failure counter + admission alert) not implemented and not marked [DEFERRED]. Product-owner adjudicating: implement now OR explicit [DEFERRED] + target story.
+
+**Next:** Adjudication → pass-r4. After convergence: Wave 4 (29 pts). Pass reports: `cycles/cycle-1/wave-3/adversary/pass-r{1,2,3}.md`. Previous checkpoint archived: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 

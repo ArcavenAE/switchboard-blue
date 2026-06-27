@@ -150,6 +150,23 @@ Unblocks: S-2.02, S-4.04.
 
 ---
 
+## Archived: 2026-06-27 — Wave 3 Adversary Convergence Restart Begins (F-1 FIX MERGED)
+
+**Position:** Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED +
+merged via PR #15 (squash commit 10dd880). RouteFrame now logs E-ADM-016 on both
+no-forwarding-entry and HMAC-verify-fail paths; injectable Logger + WithLogger option added
+to Router; 4 new routing tests assert log emission (Red-Gate proven). Tree: develop @ 10dd880.
+
+**Wave 3 adversary convergence RESTARTED.** Prior run: pass-1 CONVERGED (0C/0H/3M/2L/3O),
+passes 2+3 NOT_CONVERGED on HIGH F-1 (now resolved). Streak reset to 0/3. 3 fresh consecutive
+clean passes required at develop @ 10dd880. Reports: `cycles/cycle-1/wave-3/adversary/pass-0{1,2,3}.md`.
+
+**Next at archive time:** Run 3 fresh adversary passes at develop @ 10dd880 to close Wave 3 gate.
+After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Post-merge
+follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
+
+---
+
 ## Archived: 2026-06-27 — Wave 3 Gate Consistency Audit Pass
 
 **Position:** Phase 3, Wave 3 — ALL 5 STORIES MERGED. Wave 3 gate consistency audit re-run: PASS_WITH_OBSERVATIONS (0C/0H/3M/3L/5O), all MEDIUMs fixed. Alpha tag: alpha-20260627-042402-b68e498.
