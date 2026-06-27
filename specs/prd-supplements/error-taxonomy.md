@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-26T12:00:00
@@ -54,7 +54,9 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-004 | ADM | broken | 1 | "address collision: node address <addr> already admitted on SVTN <svtn_id>" | BC-2.01.006 |
 | E-ADM-005 | ADM | broken | 1 | "key revoked: <key_fingerprint> on SVTN <svtn_id>" | DEC-005, FM-007 |
 | E-ADM-006 | ADM | broken | 1 | "session authorization denied: console <key_fingerprint> not authorized for session <session_name> on <node_addr>" | DEC-006, BC-2.05.003 |
+| _(layering note)_ | | | | **internal/session layer:** `ConsoleKey` serves as `<key_fingerprint>` and `<node_addr>` is omitted — the session layer has no node identity (ARCH-08 §6.6, position-6). The transport/admission boundary caller, which owns node identity, supplies `<node_addr>` when re-surfacing this error to the operator. `errors.Is` identity is preserved via `%w` wrapping. | |
 | E-ADM-007 | ADM | degraded | 0 (continues) | "upstream rejected: read-only access for console <key_fingerprint> on session <session_name>" | BC-2.04.005 |
+| _(layering note)_ | | | | **internal/session layer:** same layering applies as E-ADM-006 — `ConsoleKey` serves as `<key_fingerprint>`; `<node_addr>` is omitted at this layer and supplied by the transport/admission boundary caller when re-surfacing. | |
 | E-ADM-008 | ADM | broken | 1 | "nonce replay: challenge nonce already consumed for <node_addr>" | BC-2.05.001 |
 | E-ADM-009 | ADM | broken | 1 | "insufficient authority for operation <operation>: key <key_fingerprint> has role <role>" | BC-2.05.004, BC-2.07.002 |
 | E-ADM-010 | ADM | broken | 1 | "authentication failed: key <key_fingerprint> not authorized for daemon at <address>" | BC-2.07.002 |
@@ -164,3 +166,10 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-013 | Key expired at re-authentication time | E-ADM-015 |
 | (no FM) | Forwarding-table miss for (svtnID, dstAddr) — distinct from admission failure | E-FWD-002 |
 | (no FM) | SendKeystroke session_name mismatch — caller routed to wrong access node or has stale session state | E-SES-006 |
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| v1.6 | 2026-06-26 | Added layering notes to E-ADM-006 and E-ADM-007: clarifies that at the internal/session layer `ConsoleKey` serves as `<key_fingerprint>` and `<node_addr>` is legitimately omitted (session layer has no node identity per ARCH-08 §6.6); transport/admission boundary supplies `<node_addr>` when re-surfacing. No behavioral change; closes recurring M-1 adversarial finding from S-3.03 passes. |
+| v1.5 | 2026-06-26 | Added E-ADM-016 (wire HMAC mismatch at RouteFrame), E-SES-004, E-SES-005 (RETIRED), E-SES-006; retired E-SES-005 duplicate; added namespace-aliases note for E-FRM-* → E-PRT-*; added FM-014 mapping; updated E-SES-002 and E-SES-003 anchors. |
