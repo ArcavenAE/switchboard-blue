@@ -26,9 +26,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -93,7 +93,7 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	// (via Publisher) AND the Router, so AC-001's test can register a key and
 	// observe E-ADM-016 emission on the daemon's own router instance without a
 	// separate reconstruction (ARCH-08 v2.0 §6.5.1 obligation 1 non-tautology
-	// requirement; adversarial-convergence FIX 1 + FIX 2).
+	// requirement).
 	keys := admission.NewAdmittedKeySet()
 	pub := session.NewPublisher(keys)
 
@@ -101,10 +101,15 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	pty := tmux.NewPTYProxy(pub, ds)
 	sc := tmux.NewSessionConnector(ctrl, pty)
 
+	// Production router logger uses the injected stderr writer (FIX 2 — AC-001
+	// injectable logger; FIX 1 — respects stderr redirection, not os.Stderr).
+	routerLogger := stdLogger{log.New(stderr, "", 0)}
+
 	// buildAccessComponents wires the full set of access-node components using
-	// the shared keys and sc. The router is also returned so tests can call
-	// RouteFrame on the daemon's own instance (non-tautological — shared keyset).
-	an, router := buildAccessComponents(keys, pub, sc)
+	// the shared keys and sc, and accepts the injectable routerLogger. The router
+	// is also returned so tests can call RouteFrame on the daemon's own instance
+	// (non-tautological — shared keyset).
+	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
 	_ = router // router retained (not discarded); used by AC-001 test surface
 
 	if err := sc.Connect(runCtx); err != nil {
@@ -117,10 +122,16 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 
 	var wg sync.WaitGroup
 
+	// FIX 3 (exit-code race): explicit latch set by the drain goroutine BEFORE
+	// calling cancel(). After wg.Wait() we branch on this latch — never on
+	// sigCtx.Err() — making the exit-code mapping race-free.
+	// (BC-2.04.007 PC-2.6 / EC-007 / invariant 5).
+	var internalFailure atomic.Bool
+
 	// BC-2.04.007 v1.1 invariant 5 / PC-2.6 / EC-007 / AC-007:
 	// Drain sc.Err() in a wg-tracked goroutine. On non-nil error (mid-session
 	// double-failure: both ctrl and PTY paths down), log E-SYS-002 at ERROR
-	// level and cancel the root context, triggering the PC-2 shutdown path.
+	// level, set the internalFailure latch, and cancel the root context.
 	// The goroutine also exits when sc.Err() is closed (normal sc.Close() path).
 	//
 	// This MUST be registered with wg before the frame bridge goroutine so
@@ -132,8 +143,13 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 		for err := range sc.Err() {
 			if err != nil {
 				// E-SYS-002: "fatal: cannot connect to session backend: <reason>"
+				// FIX 1: write to injected stderr, not os.Stderr (BC-2.04.002 Inv-3
+				// never-silent; respects stderr redirection).
 				msg := fmt.Sprintf("fatal: cannot connect to session backend: %v", err)
-				fmt.Fprintln(os.Stderr, msg) //nolint:errcheck // best-effort stderr write
+				fmt.Fprintln(stderr, msg) //nolint:errcheck // best-effort stderr write
+				// FIX 3: set latch BEFORE cancel() so the exit-code branch after
+				// wg.Wait() sees a consistent value regardless of SIGTERM timing.
+				internalFailure.Store(true)
 				// Cancel runCtx — triggers <-runCtx.Done() below and starts PC-2
 				// shutdown sequence. The non-nil error from runAccess causes
 				// main() to call os.Exit(1) (BC-2.04.007 PC-2.6 / EC-007).
@@ -153,9 +169,11 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	// Obligation 3 (AC-003): sweep ticker — startSweepTicker starts its own goroutine.
 	startSweepTicker(runCtx, an, sweepInterval, sweepDeadline)
 
-	// Obligation 6 (AC-006): frames-dropped ticker — startFramesDroppedTicker starts its own goroutine.
-	lg := log.New(os.Stderr, "", 0)
-	startFramesDroppedTicker(runCtx, sc, an, lg)
+	// Obligation 6 (AC-006): frames-dropped ticker — startFramesDroppedTicker starts
+	// its own goroutine. FIX 2: lg uses injected stderr (not os.Stderr).
+	// FIX 4: pass framesDroppedInterval so the interval is injectable in tests.
+	lg := log.New(stderr, "", 0)
+	startFramesDroppedTicker(runCtx, sc, an, lg, framesDroppedInterval)
 
 	// Block until context cancellation (SIGTERM/SIGINT, mid-session double-failure,
 	// or direct cancel — AC-008 / BC-2.04.007 PC-2 / PC-2.6).
@@ -166,16 +184,13 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	_ = sc.Close()
 	wg.Wait()
 
-	// Determine exit code: if context was cancelled by the Err() drain goroutine
-	// (mid-session double-failure), return a non-nil error so main() exits 1
-	// (BC-2.04.007 PC-2.6 / EC-007). A clean SIGTERM/SIGINT cancellation from
-	// sigCtx propagation yields nil (exit 0 — BC-2.04.007 PC-2).
-	//
-	// We distinguish the two cases: if sigCtx is still un-cancelled when runCtx
-	// is done, the cancellation came from inside (double-failure via cancel()),
-	// not from a signal.
-	if sigCtx.Err() == nil {
-		// runCtx was cancelled internally (mid-session double-failure).
+	// Determine exit code: if the Err() drain goroutine set internalFailure before
+	// calling cancel(), return a non-nil error so main() exits 1
+	// (BC-2.04.007 PC-2.6 / EC-007). A clean SIGTERM/SIGINT cancellation yields nil
+	// (exit 0 — BC-2.04.007 PC-2). Using an atomic latch makes this race-free: the
+	// latch is set BEFORE cancel(), so the value is stable by the time wg.Wait()
+	// returns (FIX 3).
+	if internalFailure.Load() {
 		return fmt.Errorf("fatal: mid-session backend failure")
 	}
 
@@ -189,10 +204,13 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 // This satisfies the ARCH-08 v2.0 §6.5.1 obligation 1 non-tautology
 // requirement: AC-001 can register a key into keys, then call
 // router.RouteFrame(...) on the returned router instance, and observe
-// E-ADM-016 emission — because the router and access node share ONE keyset
-// (adversarial-convergence FIX 1 + FIX 2).
+// E-ADM-016 emission — because the router and access node share ONE keyset.
 //
 // sc is wired as the KeystrokeSink (obligation 2 — AC-002; BC-2.04.005 PC-3).
+//
+// routerLogger is the routing.Logger injected into the router (FIX 2 — AC-001
+// injectable logger; production passes stdLogger wrapping the injected stderr
+// writer so observability respects stderr redirection and is capturable in tests).
 //
 // Returns: an (AccessNode with live SessionAuth), router (logger-wired Router).
 // Neither return value is nil.
@@ -204,10 +222,11 @@ func buildAccessComponents(
 	keys *admission.AdmittedKeySet,
 	pub *session.Publisher,
 	sc *tmux.SessionConnector,
+	routerLogger routing.Logger,
 ) (*session.AccessNode, *routing.Router) {
 	auth := session.NewSessionAuth()
 	an := session.NewAccessNode(pub, auth, session.WithKeystrokeSink(sc))
-	router := buildRouter(keys)
+	router := buildRouter(keys, routerLogger)
 	return an, router
 }
 
@@ -216,10 +235,12 @@ type stdLogger struct{ l *log.Logger }
 
 func (s stdLogger) Log(msg string) { s.l.Print(msg) }
 
-// buildRouter constructs the routing.Router with a real routing.Logger injected
-// (obligation 1 — AC-001; BC-2.05.008 PC-2).
-func buildRouter(ks *admission.AdmittedKeySet) *routing.Router {
-	return routing.NewRouter(ks, routing.WithLogger(stdLogger{log.New(os.Stderr, "", 0)}))
+// buildRouter constructs the routing.Router with the provided routing.Logger
+// injected (obligation 1 — AC-001; BC-2.05.008 PC-2; FIX 2 injectable logger).
+// The logger is supplied by the caller (runAccess passes stdLogger wrapping the
+// injected stderr writer; tests may pass a captureLogger for assertion).
+func buildRouter(ks *admission.AdmittedKeySet, rl routing.Logger) *routing.Router {
+	return routing.NewRouter(ks, routing.WithLogger(rl))
 }
 
 // startFramesBridge starts the sc.Frames() → accessNode.DeliverFrame goroutine
@@ -278,6 +299,10 @@ func startSweepTicker(
 // layer drops) on each tick (ARCH-08 §6.5.1 obligation 6; AC-006;
 // BC-2.04.006 v1.4 invariant 4; ARCH-01 v1.4 §Relay-drop counter contract).
 //
+// tickInterval controls how often the log line is emitted. Production passes
+// framesDroppedInterval (30s); tests may pass a shorter interval for fast
+// tick-driven assertions (FIX 4 — mirrors startSweepTicker parameterisation).
+//
 // Log format: "frames_dropped relay=<N> consoles=<M>" (both counters cumulative,
 // no reset). Emitted unconditionally on each tick — operators can distinguish
 // relay overload (relay=N non-zero) from stalled console (consoles=M non-zero).
@@ -288,9 +313,10 @@ func startFramesDroppedTicker(
 	sc *tmux.SessionConnector,
 	an *session.AccessNode,
 	lg *log.Logger,
+	tickInterval time.Duration,
 ) {
 	go func() {
-		ticker := time.NewTicker(framesDroppedInterval)
+		ticker := time.NewTicker(tickInterval)
 		defer ticker.Stop()
 		for {
 			select {

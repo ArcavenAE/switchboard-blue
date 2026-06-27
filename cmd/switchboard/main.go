@@ -21,10 +21,6 @@ var version = "dev"
 //
 // The run(stdout, args) signature is established by the wave-0 stub and MUST be
 // preserved (ARCH-01 §cmd/switchboard Package Layout).
-//
-// STUB: the "access" dispatch path is compilable but calls runAccess which
-// panics. Existing "version" path is preserved and GREEN-BY-DESIGN (zero
-// branching in that path once the subcommand check is passed).
 func run(stdout io.Writer, args []string) error {
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	fs.SetOutput(stdout)
@@ -50,11 +46,13 @@ func run(stdout io.Writer, args []string) error {
 		return nil
 
 	case "access":
-		// STUB: runAccess panics — all AC-001..AC-008 daemon integration tests
-		// are red (Red Gate, BC-5.38.001). Subcommand dispatch compiles cleanly.
+		// Daemon entry point: install signal handler, then delegate to runAccess.
+		// runAccess blocks until shutdown (SIGTERM/SIGINT → exit 0; connect failure
+		// or mid-session double-failure → non-nil error → main() calls os.Exit(1)).
+		// Diagnostic output goes to os.Stderr; stdout is reserved for structured output.
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer cancel()
-		return runAccess(ctx, stdout)
+		return runAccess(ctx, os.Stderr)
 
 	default:
 		return fmt.Errorf("unknown subcommand %q; try: access, version", subcommand)
