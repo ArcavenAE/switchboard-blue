@@ -861,13 +861,11 @@ func TestSessionAuth_ImplementsAuthorizer(t *testing.T) {
 
 	var _ session.Authorizer = session.NewSessionAuth()
 
-	// Additional runtime check: the concrete type satisfies the interface
-	// method signatures at runtime (belt-and-suspenders over the compile check).
+	// Additional runtime check: NewSessionAuth returns a non-nil concrete value.
 	sa := session.NewSessionAuth()
 	if sa == nil {
 		t.Fatal("NewSessionAuth returned nil")
 	}
-	_ = fmt.Sprintf("sa implements Authorizer: %T", sa)
 }
 
 // ---------------------------------------------------------------------------

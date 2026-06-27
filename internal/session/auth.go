@@ -2,14 +2,8 @@
 // authorization component for the access node (BC-2.04.005; BC-2.05.003).
 //
 // SessionAuth maintains a per-session authorization list guarded by a
-// sync.RWMutex. It implements the Authorizer interface declared in upstream.go,
-// so that S-3.03's test suite can wire it in place of NoOpAuthorizer.
-//
-// S-3.03 implementer tasks:
-//   - Task 5: implement Authorize (returns role or E-ADM-006)
-//   - Task 6: implement RegisterKey (operator provisioning)
-//   - Task 7: wire SessionAuth as the live Authorizer in upstream.go
-//   - Task 8: confirm empty-tick frames pass Allow without rejection
+// sync.RWMutex. It implements the Authorizer interface declared in upstream.go
+// and is wired as the live Authorizer in AccessNode (S-3.03, Task 7).
 //
 // Classification: boundary (ARCH-09; mutable per-session state).
 package session
