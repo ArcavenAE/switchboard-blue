@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-s-w3-04-per-story-converged-demo-evidence-done-pr-in-flight
+phase_step: wave-3-all-stories-merged-wave-level-convergence-pending
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
@@ -123,7 +123,11 @@ s_w3_04_adversary_converged: "CONVERGED (passes 10/11/12 clean, 3 consecutive; 0
 s_w3_04_impl_commit: 1c3c864
 s_w3_04_comment_follow_up_sha: 77c6229
 s_w3_04_demo_evidence: "test-transcripts AC-001..AC-009; AC-005 indirect (story-declared); AC-008 SKIP sandbox (no /dev/ptmx) — PC-2 confirmed TestRunAccessWithConnectorPC2"
-timestamp: 2026-06-27T01:00:00Z
+s_w3_04_pr_number: 17
+s_w3_04_merge_sha: aeb442d
+s_w3_04_merge_date: 2026-06-27
+s_w3_04_status: completed
+timestamp: 2026-06-27T12:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -131,7 +135,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-S-W3.04 per-story adversarial CONVERGED (passes 10/11/12; 0C/0H at 1c3c864; comment-only follow-up 77c6229 preserves convergence). Demo evidence captured: test transcripts AC-001..AC-009 (AC-005 indirect/story-declared; AC-008 SKIP sandbox/PTY, PC-2 confirmed). PR in flight into develop. S-W3.05 PR #16 still open (READY FOR HUMAN MERGE); Wave-3 gate r3 adjudication (W3-R3-F1/F2) still pending.
+All Wave-3 stories merged. S-W3.04 merged via PR #17 (squash aeb442d, 2026-06-27); S-W3.05 PR #16 status pending. Next: run /vsdd-factory:check-input-drift to clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3), then fresh-context consistency audit, then Wave-3 wave-level adversarial convergence (3 clean passes), then structured Wave-3 human gate.
 
 ## Phase Progress
 
@@ -139,7 +143,7 @@ S-W3.04 per-story adversarial CONVERGED (passes 10/11/12; 0C/0H at 1c3c864; comm
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: S-W3.05 RE-CONVERGED PR #16 READY FOR MERGE; S-W3.04 per-story CONVERGED (10-12 at 1c3c864) demo-evidence done PR in flight |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: all stories merged; wave-level adversarial convergence pending (run check-input-drift first) |
 
 ## Wave / Story Status
 
@@ -157,7 +161,7 @@ S-W3.04 per-story adversarial CONVERGED (passes 10/11/12; 0C/0H at 1c3c864; comm
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
 | 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | adversary-RE-CONVERGED (10-12); PR open | #16 | f6038d2 |
-| 3 | S-W3.04 | Full daemon assembly | per-story CONVERGED (10-12 at 1c3c864); demo-evidence done; PR in flight | — | 77c6229 |
+| 3 | S-W3.04 | Full daemon assembly | completed | #17 | aeb442d |
 
 ## Open Drift Items
 
@@ -191,15 +195,15 @@ Drift note: BC-2.05.005 v1.8 + VP-059 v1.2 + story v1.3 + taxonomy v2.0 are hygi
 | S-W3.05 per-story adversarial CONVERGED + error-taxonomy v2.0 | 3 clean passes (07-09), 0C/0H; error-taxonomy v1.9→v2.0 prose-only (msg-format UNCHANGED); proceeding to S-W3.04 | 2026-06-27 |
 | S-W3.05 SEC-001 + re-convergence at f6038d2 | SEC-001 (HIGH CWE-476) fixed f6038d2; BC-2.05.005 v1.8 + VP-059 v1.2 sanction precondition (hygiene); 3 fresh passes (10-12) RE-CONVERGED; PR #16 open, READY FOR HUMAN MERGE | 2026-06-27 |
 | S-W3.04 per-story adversarial CONVERGED (BC-5.39.001) | 3 consecutive clean passes (10/11/12; 0C/0H) at 1c3c864; comment-only 77c6229 preserves convergence (zero behavioral delta); demo evidence captured: test transcripts AC-001..AC-009 | 2026-06-27 |
+| Per-story-delivery merge-handoff pathology diagnosed (vsdd-factory#302) | Auto-mode classifier's self-approval/two-party-review guard blocks agent self-merge; resolution is human-performed merge — the sign-off the guard requires (NOT a fabricated user directive). Recurrence comment filed against drbothen/vsdd-factory#302. | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (S-W3.04 per-story CONVERGED; demo evidence done; PR in flight)
+## Session Resume Checkpoint — 2026-06-27 (S-W3.04 merged; Wave-3 wave-level convergence pending)
 
-**Position:** Phase 3, Wave 3. Develop @ 10dd880. S-W3.04 branch feat/S-W3.04-daemon-assembly HEAD = 77c6229 (comment-only follow-up; impl tip 1c3c864). Per-story adversary CONVERGED (passes 10/11/12; 0C/0H). Demo evidence: test transcripts AC-001..AC-009 in `.factory/demo-evidence/S-W3.04/`. PR in flight into develop.
-**S-W3.05 PR #16:** RE-CONVERGED (f6038d2); CI 5/5; pr-reviewer APPROVE. READY FOR HUMAN MERGE.
-**Wave-gate r3:** W3-R3-F1 cmd-wiring (architect), W3-R3-F2 EC-006 (PO). Pending adjudication.
-**Open Wave-4 follow-ups:** EC-005 durable CI import-perimeter guard; real-connector PTY-EOF lifecycle integration test; embed worktree-identity tuple in adversary dispatches.
-**Open SW305:** SW305-M2 (iface → PO), SW305-M3 (clock seam BC → PO), SW305-M4 (fire-once test → test-writer).
-**Next:** Merge S-W3.04 PR → HUMAN MERGE PR #16 (S-W3.05) → wave-gate pass-r4 → Wave 4. Previous: `cycles/cycle-1/session-checkpoints.md`.
+**Position:** Phase 3, Wave 3. All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27). S-W3.05 PR #16 status: check develop tip for merge.
+**Next immediate step:** Run `/vsdd-factory:check-input-drift` first — clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3). Then fresh-context consistency audit. Then Wave-3 wave-level adversarial convergence (need 3 clean passes). Then structured Wave-3 human gate.
+**Wave-gate open drift:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ownership (PO adjudication). SW305-M2/M3/M4 remain open.
+**Open Wave-4 follow-ups (3 items):** (a) EC-005 durable CI import-perimeter guard; (b) real-connector PTY-EOF lifecycle integration test; (c) embed worktree-identity tuple in adversary dispatches.
+**Previous checkpoint:** `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
