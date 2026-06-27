@@ -5,8 +5,10 @@ package session_test
 
 import (
 	"errors"
+	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -459,33 +461,72 @@ func TestSession_MultiConsoleFanOut_AllReceiveFrames(t *testing.T) {
 	wg.Wait()
 }
 
-// TestSession_ConcurrentKeystrokes_Serialized verifies that keystrokes from N
-// consoles sent concurrently are serialized at the sink — no interleaving and
-// all payloads arrive intact (AC-007; BC-2.04.006 Invariant 3).
+// contentionSink is a KeystrokeSink that detects concurrent entry into
+// SendInput. It has NO internal lock — the serialization guarantee must come
+// entirely from the caller (AccessNode.sinkMu). The in-flight counter is
+// accessed via atomic ops so the test logic itself is race-free, but if two
+// goroutines enter simultaneously the counter exceeds 1 and violated is set.
+// runtime.Gosched() widens the concurrency window: without an outer lock,
+// goroutines preempted between AddInt64(+1) and AddInt64(-1) will overlap.
 //
-// Pass-3 F-C-2 fix: the original test used a NoOpSink that discarded everything;
-// deleting sinkMu.Lock() would have left the test green. This rewrite uses a
-// recordingSink and asserts that every payload is complete (no torn writes) and
-// all N*M sends are recorded. The race detector (-race flag) enforces absence
-// of data races on the sink.
+// With AccessNode.sinkMu in place: calls are serialized; the counter is always
+// exactly 1 during a call; `go test -race` stays clean.
+// With AccessNode.sinkMu removed: goroutines overlap; violated is set to 1
+// and `go test -race` detects unsynchronized access.
+type contentionSink struct {
+	inFlight int64 // number of goroutines currently inside SendInput
+	maxSeen  int64 // high-water mark of concurrent in-flight calls
+	calls    int64 // total completed calls
+	violated int32 // 1 if inFlight ever exceeded 1
+}
+
+// SendInput implements KeystrokeSink using an unsynchronized in-flight counter.
+func (s *contentionSink) SendInput(_ []byte) error {
+	cur := atomic.AddInt64(&s.inFlight, 1)
+	for {
+		prev := atomic.LoadInt64(&s.maxSeen)
+		if cur <= prev || atomic.CompareAndSwapInt64(&s.maxSeen, prev, cur) {
+			break
+		}
+	}
+	if cur > 1 {
+		atomic.StoreInt32(&s.violated, 1)
+	}
+	// Yield so that any other goroutine waiting outside the (absent) lock can
+	// enter and overlap with this call.
+	runtime.Gosched()
+	atomic.AddInt64(&s.inFlight, -1)
+	atomic.AddInt64(&s.calls, 1)
+	return nil
+}
+
+// TestSession_ConcurrentKeystrokes_Serialized verifies that keystrokes from N
+// consoles sent concurrently are serialized at the sinkMu boundary in
+// AccessNode.SendKeystroke (AC-007; BC-2.04.006 Invariant 3).
+//
+// Pass-5 F-H-1 fix: earlier passes used recordingSink whose internal r.mu lock
+// made the test tautological — it passed whether or not AccessNode.sinkMu
+// existed because the sink's own lock masked the missing outer lock.
+//
+// This rewrite injects a contentionSink (see type above) whose SendInput has
+// NO lock. It detects concurrent entry via an atomic in-flight counter. With
+// AccessNode.sinkMu present, calls are serialized and the counter never
+// exceeds 1. With sinkMu absent, goroutines overlap: the counter exceeds 1
+// (violated is set) and `go test -race` fires on the unsynchronized counter
+// access.
 func TestSession_ConcurrentKeystrokes_Serialized(t *testing.T) {
 	t.Parallel()
 
 	const numConsoles = 4
 	const sendsPerConsole = 100
 
-	rec := &recordingSink{}
-	an := newTestAccessNodeWithSink(t, rec, "shared")
+	sink := &contentionSink{}
+	an := newTestAccessNodeWithSink(t, sink, "shared")
 
 	consoleKeys := make([]session.ConsoleKey, numConsoles)
-	payloads := make([][]byte, numConsoles)
 	for i := range numConsoles {
 		key := session.ConsoleKey("writer-" + strconv.Itoa(i))
 		consoleKeys[i] = key
-		// Each console has a distinct multi-byte payload so torn writes are
-		// detectable (a torn write would produce a payload with wrong length
-		// or mixed bytes).
-		payloads[i] = []byte{byte('A' + i), byte('A' + i), byte('A' + i), byte('A' + i)}
 		if _, _, err := an.Attach(key, "shared"); err != nil {
 			t.Fatalf("Attach %q: %v", key, err)
 		}
@@ -493,12 +534,13 @@ func TestSession_ConcurrentKeystrokes_Serialized(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(numConsoles)
+	payload := []byte("k")
 	for i := range numConsoles {
 		idx := i
 		go func() {
 			defer wg.Done()
 			for range sendsPerConsole {
-				if err := an.SendKeystroke(consoleKeys[idx], "shared", payloads[idx]); err != nil {
+				if err := an.SendKeystroke(consoleKeys[idx], "shared", payload); err != nil {
 					t.Errorf("SendKeystroke %q: %v", consoleKeys[idx], err)
 				}
 			}
@@ -506,24 +548,12 @@ func TestSession_ConcurrentKeystrokes_Serialized(t *testing.T) {
 	}
 	wg.Wait()
 
-	// Assert total count: every send must have been recorded.
-	total := numConsoles * sendsPerConsole
-	got := rec.Received()
-	if len(got) != total {
-		t.Fatalf("recordingSink: got %d entries; want %d", len(got), total)
+	total := int64(numConsoles * sendsPerConsole)
+	if got := atomic.LoadInt64(&sink.calls); got != total {
+		t.Fatalf("contentionSink: got %d calls; want %d", got, total)
 	}
-
-	// Assert each entry is a complete, non-torn payload.
-	// A torn payload would have a length other than 4 bytes or mixed byte
-	// values (the serialization mutex must prevent interleaving).
-	for i, entry := range got {
-		if len(entry) != 4 {
-			t.Errorf("entry[%d]: len=%d; want 4 (torn write detected)", i, len(entry))
-			continue
-		}
-		if entry[0] != entry[1] || entry[1] != entry[2] || entry[2] != entry[3] {
-			t.Errorf("entry[%d]: %v; want uniform bytes (torn write detected)", i, entry)
-		}
+	if atomic.LoadInt32(&sink.violated) != 0 {
+		t.Fatalf("contentionSink: concurrent entry detected (maxSeen=%d); sinkMu serialization broken (AC-007 / BC-2.04.006 Inv-3)", atomic.LoadInt64(&sink.maxSeen))
 	}
 }
 
