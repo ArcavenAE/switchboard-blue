@@ -16,6 +16,7 @@ package session
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -109,11 +110,13 @@ func (sa *SessionAuth) Authorize(key ConsoleKey, sessionName string) (Role, erro
 
 	sessionKeys, ok := sa.sessions[sessionName]
 	if !ok {
-		return 0, ErrSessionAuthDenied
+		return 0, fmt.Errorf("session authorization denied: console %s not authorized for session %s: %w",
+			string(key), sessionName, ErrSessionAuthDenied)
 	}
 	entry, ok := sessionKeys[key]
 	if !ok {
-		return 0, ErrSessionAuthDenied
+		return 0, fmt.Errorf("session authorization denied: console %s not authorized for session %s: %w",
+			string(key), sessionName, ErrSessionAuthDenied)
 	}
 	return entry.role, nil
 }
@@ -140,7 +143,8 @@ func (sa *SessionAuth) Allow(key ConsoleKey, sessionName string, payload []byte)
 		return err
 	}
 	if role == RoleReadOnly && len(payload) > 0 {
-		return ErrUpstreamReadOnly
+		return fmt.Errorf("upstream rejected: read-only access for console %s on session %s: %w",
+			string(key), sessionName, ErrUpstreamReadOnly)
 	}
 	return nil
 }
