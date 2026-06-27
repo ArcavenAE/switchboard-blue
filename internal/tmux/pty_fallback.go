@@ -477,6 +477,34 @@ type SessionConnector struct {
 	// channel to detect mid-session fallback failures.
 	errCh      chan error
 	closeErrCh sync.Once
+
+	// ADR-011: forwarding channel and relay goroutine for failover-stable
+	// frame delivery to cmd/switchboard. sc.frames is the stable channel
+	// returned by Frames(); the relay goroutine (forwardFrames) copies from
+	// the active mode's Frames() channel into sc.frames, re-subscribing
+	// transparently on ctrl→PTY mode switch.
+	//
+	// sc.frames is created in NewSessionConnector (buffered to framesBufferSize).
+	// The relay goroutine is started in Connect after the active mode is
+	// confirmed. sc.Close() closes sc.frames exactly once via closeForwardFrames.
+	frames             chan halfchannel.ChannelFrame
+	closeForwardFrames sync.Once
+
+	// relayDropped counts frames dropped at the relay layer (forwardFrames
+	// non-blocking select default branch — sc.frames full). Distinct from
+	// AccessNode.FramesDropped() which counts ConsoleSet-level drops.
+	// Incremented atomically; read via RelayDropped().
+	// ARCH-01 v1.4 §Relay-drop counter contract; BC-2.04.006 v1.4 Inv-4.
+	relayDropped uint64
+
+	// swapBarrier is a test-only deterministic interleaving seam (nil in
+	// production — zero cost, single nil check in activeSourceSnapshot).
+	// When non-nil, activeSourceSnapshot blocks on it after completing its
+	// atomic snapshot and releasing sc.mu, letting the test goroutine complete
+	// a ctrl→PTY swap before the relay acts on the snapshot. Used by T2 stress
+	// tests to deterministically exercise the race window fixed in ADR-011 v1.6.
+	// ARCH-01 ADR-011 v1.6 §HIGH-A T2 Option B.
+	swapBarrier chan struct{}
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control
@@ -490,6 +518,9 @@ func NewSessionConnector(ctrl *ControlMode, pty *PTYProxy, opts ...SessionConnec
 		// M-003 (pass-4): buffered 1 so watchAndFallback can always deliver
 		// a failure signal without blocking on a non-draining caller.
 		errCh: make(chan error, 1),
+		// ADR-011: forwarding channel created here; relay goroutine started in
+		// Connect. Buffered to match the underlying mode channels.
+		frames: make(chan halfchannel.ChannelFrame, framesBufferSize),
 	}
 	for _, opt := range opts {
 		opt(sc)
@@ -519,6 +550,11 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 		sc.wg.Add(1)
 		go sc.watchAndFallback(innerCtx)
 
+		// ADR-011: start the forwarding relay goroutine after active is set.
+		// Pass innerCtx so forwardFrames can exit on ctx.Done() without busy-spinning
+		// (ARCH-01 v1.4 §Relay busy-spin guard).
+		sc.startForwardFrames(innerCtx)
+
 		return nil
 	}
 
@@ -537,10 +573,19 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 		sc.pty.logger.Log(logMsg)
 	}
 
+	// Create a cancellable context for the PTY-direct path so forwardFrames
+	// can observe ctx.Done() and exit cleanly (ARCH-01 v1.4 §Relay busy-spin
+	// guard). Store the cancel so Close() can cancel it.
+	innerCtx, cancel := context.WithCancel(ctx)
+
 	sc.mu.Lock()
 	sc.active = sc.pty
 	sc.inPTYMode = true
+	sc.connectCancel = cancel
 	sc.mu.Unlock()
+
+	// ADR-011: start the forwarding relay goroutine after active is set.
+	sc.startForwardFrames(innerCtx)
 
 	return nil
 }
@@ -641,8 +686,13 @@ func (sc *SessionConnector) Close() error {
 		}
 	}
 
-	// Wait for watchAndFallback goroutine(s) to exit.
+	// Wait for watchAndFallback and forwardFrames goroutines to exit.
 	sc.wg.Wait()
+
+	// ADR-011: close sc.frames after all goroutines exit. sync.Once guards
+	// against double-close with forwardFrames defer. Handles the case where
+	// startForwardFrames was never called (Connect not invoked before Close).
+	sc.closeForwardFrames.Do(func() { close(sc.frames) })
 
 	// M-003 (pass-4): close errCh so consumers ranging over it unblock after
 	// a graceful Close. sync.Once guards against double-close with watchAndFallback.
