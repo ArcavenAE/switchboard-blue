@@ -176,3 +176,17 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 **Tech-debt carry-forward (tech-debt-register.md):** F-002, F-003, F-004 (Wave 4), SEC-001 (Phase-6). VP-032 deferred.
 
 **Next at archive time:** Wave 3 wave-level adversarial convergence. After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts).
+
+---
+
+## Archived: 2026-06-27 — S-W3.05 fix-loop GREEN; per-story adversary RESTART dispatched
+
+**Position:** Phase 3, Wave 3. Develop @ 10dd880. S-W3.05 worktree feat/S-W3.05-hmac-failure-counter HEAD = 5c3d7ea (test), prod impl = b945aab.
+
+**S-W3.05 fix-loop result (GREEN):** All prior blocking items resolved — E-ADM-017 canonical phrase restored (b945aab); append-skip per-source slice bound CWE-770/EC-011 (b945aab); drain-only re-arm, dead branch removed (b945aab); VP-059 proptest 3 configs no divergence (5c3d7ea); dead-key discriminating test; AC-016/AC-017 added; story v1.2 af05c04. Lint 0, test+race clean. Spec versions: BC-2.05.005 v1.6, VP-059 v1.1, BC-2.05.008 v1.3, story v1.2. Per-story adversarial RESTART DISPATCHED (need 3 consecutive clean).
+
+**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ratification (PO adjudication). Pending adjudication does NOT block S-W3.05 adversary restart.
+
+**Open SW305:** SW305-M2 (WithFailureCounter iface → PO), SW305-M3 (clock seam BC → PO), SW305-M4 (integration fire-once test → test-writer).
+
+**Next at archive time:** S-W3.05 per-story adversary restart — 3 consecutive clean passes required → merge S-W3.05 PR → wave-gate pass-r4. Wave 4 (29 pts) follows.
