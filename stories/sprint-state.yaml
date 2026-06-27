@@ -23,8 +23,16 @@ wave_status:
     refactor_merge_sha: 4be1b53f85655110035de4f0f38422662afa2ed9
     drift_items_clean: true
   - wave: 2
-    status: active
+    status: closed
+    gate_disposition: PASS_WITH_OBSERVATIONS
+    closed_at: 2026-06-25
     stories: [S-1.03, S-2.01, S-2.02]
+  - wave: 3
+    status: active
+    stories_merged: [S-3.04, S-3.01a, S-3.01b, S-3.02]
+    stories_pending: [S-3.03]
+    points_complete: 24
+    points_remaining: 5
 
 stories:
   - story_id: S-0.01
@@ -68,11 +76,14 @@ stories:
     title: "Session continuity via cryptographic re-authentication"
     epic: E-1
     wave: 2
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
     points: 5
     bc_traces: [BC-2.01.007]
+    merge_sha: f35e836
+    pr: 7
+    merged_at: "2026-06-25"
 
   - story_id: S-2.01
     title: "Implement HMAC-SHA256 frame authentication in internal/hmac"
@@ -92,11 +103,14 @@ stories:
     title: "Tier-1 admission and SVTN isolation"
     epic: E-2
     wave: 2
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
     points: 8
     bc_traces: [BC-2.05.001, BC-2.05.002, BC-2.05.006, BC-2.05.007]
+    merge_sha: a06b306
+    pr: 6
+    merged_at: "2026-06-25"
 
   - story_id: S-3.01
     title: "Tmux control mode integration with PTY fallback"
@@ -112,11 +126,14 @@ stories:
     title: "Console attach/detach and multi-console fan-out"
     epic: E-3
     wave: 3
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
     points: 8
     bc_traces: [BC-2.04.003, BC-2.04.004, BC-2.04.006]
+    merge_sha: 1ff74f5
+    pr: 13
+    merged_at: "2026-06-27"
 
   - story_id: S-3.03
     title: "Tier-2 per-session authorization and read-only enforcement"
