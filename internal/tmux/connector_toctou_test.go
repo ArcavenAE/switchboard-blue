@@ -44,11 +44,22 @@
 //     relay starts ranging over PTY source.
 //  7. PTY frame arrives on sc.Frames() — no ErrPTYSourceEOF misfire.
 //
-// Discriminating: a broken implementation that reads sc.inPTYMode under a
-// SEPARATE lock acquisition after the barrier releases would observe
-// inPTY=true (the swap has already landed) while srcCh == ctrl.frames.
-// The condition srcCh == prevSrcCh AND inPTY == true would fire ErrPTYSourceEOF,
-// which this test would detect at the sc.Err() case.
+// What this test verifies: activeSourceSnapshot captures {source, srcCh,
+// inPTYMode} under a single sc.mu hold, producing a self-consistent snapshot.
+// Forcing a ctrl→PTY swap to land while the relay is blocked at the barrier
+// confirms that the relay correctly re-subscribes to the PTY source on the
+// next iteration rather than closing sc.frames prematurely. The test asserts
+// that a PTY frame arrives on sc.Frames() with no ErrPTYSourceEOF misfire.
+//
+// Note: because sc.swapBarrier is an unexported field that only exists in the
+// fixed (v1.6) code, this test cannot compile or run against the pre-fix
+// implementation — it is not a regression detector for the two-lock bug itself.
+// Additionally, prevSrcCh == nil on the first relay iteration, so the relay
+// takes the srcCh != prevSrcCh (re-subscribe) branch rather than the
+// srcCh == prevSrcCh && inPTY misclassification branch. The probabilistic
+// regression guard for the historical ~1/5 misclassification is carried by
+// TestForwardFramesTOCTOUCount50 (stress) and TestForwardFramesPTYEOFExitsCleanly
+// (bounded terminal-EOF detection).
 package tmux
 
 import (
@@ -141,19 +152,29 @@ func (m *toctouPipeMaster) Close() error {
 	return nil
 }
 
-// TestForwardFramesTOCTOURegressionDeterministic — T2 TOCTOU regression guard
+// TestForwardFramesTOCTOURegressionDeterministic — T2 swap-interleaving guard
 // (ADR-011 v1.6; ARCH-01 §"Test obligations" T2 Option B; BC-2.04.002 EC-003)
 //
-// Exercises the exact race window that commit 5ffac2d closed. The swapBarrier
-// forces the relay to act on a snapshot taken before a ctrl→PTY swap lands,
-// confirming that the atomic snapshot (not the pre-v1.6 two-lock read) prevents
-// misclassification as ErrPTYSourceEOF.
+// Verifies that activeSourceSnapshot produces a self-consistent {source, srcCh,
+// inPTYMode} snapshot under a single sc.mu hold. The swapBarrier forces a
+// ctrl→PTY swap to land while the relay holds a snapshot but has not yet acted
+// on it — then confirms that the relay correctly re-subscribes to the PTY
+// source with no ErrPTYSourceEOF misfire and no premature sc.frames close.
+//
+// Scope: this test checks the snapshot-consistency property and the correct
+// re-subscribe behaviour on the first relay iteration (prevSrcCh == nil →
+// srcCh != prevSrcCh). It does NOT reproduce the historical ~1/5
+// misclassification path (srcCh == prevSrcCh AND inPTY == true) — that path
+// requires prevSrcCh to already equal the closed ctrl.frames, which does not
+// hold on the first iteration. The probabilistic regression guard for the
+// original bug is TestForwardFramesTOCTOUCount50 (50-iteration stress) and
+// TestForwardFramesPTYEOFExitsCleanly (bounded terminal-EOF detection).
 //
 // Race-safety: sc.swapBarrier is written once, before sc.Connect() starts the
-// relay goroutine. Subsequent reads by the relay happen-after the goroutine
-// creation (Go memory model §"Goroutine creation"). The barrier channel is
-// released by close() from the test goroutine; channel close is safe for
-// concurrent receive.
+// relay goroutine. Subsequent reads by the relay happen-after goroutine
+// creation (Go memory model §"Goroutine creation"). The barrier is released
+// by close() from the test goroutine; channel close is safe for concurrent
+// receive.
 func TestForwardFramesTOCTOURegressionDeterministic(t *testing.T) {
 	// NOT t.Parallel(): goroutine lifecycle depends on sequential phase completion.
 
@@ -248,9 +269,13 @@ func TestForwardFramesTOCTOURegressionDeterministic(t *testing.T) {
 	// loop → fresh snapshot {pty.frames, inPTY=true} → srcCh != prevSrcCh
 	// (pty.frames is a NEW object, guaranteed ≠ ctrl.frames) → range PTY.
 	//
-	// The broken (pre-v1.6) path: relay re-reads inPTYMode under a second lock
-	// after barrier — inPTY=true (swap landed) while srcCh == ctrl.frames ==
-	// prevSrcCh → fires ErrPTYSourceEOF. This test detects that regression.
+	// With the atomic snapshot: inPTY=false in the snapshot because the snapshot
+	// was taken before the swap. prevSrcCh is nil on this first iteration, so
+	// the relay takes the srcCh != prevSrcCh re-subscribe path, not the
+	// srcCh == prevSrcCh && inPTY misclassification branch. The relay sets
+	// prevSrcCh = ctrl.frames, ranges over the already-closed ctrl.frames
+	// (exits immediately), then takes a fresh snapshot {pty.frames, inPTY=true}
+	// and begins delivering PTY frames.
 	close(barrier)
 
 	// Step 7: inject a PTY frame after the barrier is released.
