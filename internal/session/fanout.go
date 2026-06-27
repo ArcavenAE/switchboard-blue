@@ -45,13 +45,31 @@ type consoleEntry struct {
 type ConsoleSet struct {
 	mu       sync.RWMutex
 	consoles map[ConsoleKey]consoleEntry
+	nowFn    func() time.Time
+}
+
+// ConsoleSetOption is a functional option for NewConsoleSet.
+type ConsoleSetOption func(*ConsoleSet)
+
+// ConsoleSetWithClock replaces the wall-clock source used by ConsoleSet.
+// Tests inject a fake clock to deterministically control time; production
+// code uses the default time.Now().UTC().
+func ConsoleSetWithClock(fn func() time.Time) ConsoleSetOption {
+	return func(cs *ConsoleSet) {
+		cs.nowFn = fn
+	}
 }
 
 // NewConsoleSet constructs an empty ConsoleSet ready for use.
-func NewConsoleSet() *ConsoleSet {
-	return &ConsoleSet{
+func NewConsoleSet(opts ...ConsoleSetOption) *ConsoleSet {
+	cs := &ConsoleSet{
 		consoles: make(map[ConsoleKey]consoleEntry),
+		nowFn:    func() time.Time { return time.Now().UTC() },
 	}
+	for _, opt := range opts {
+		opt(cs)
+	}
+	return cs
 }
 
 // downstreamBufSize is the buffer depth for per-console downstream channels.
@@ -96,7 +114,7 @@ func (cs *ConsoleSet) Add(key ConsoleKey) (downstream <-chan frame.OuterHeader, 
 	entry := consoleEntry{
 		downstream:    make(chan frame.OuterHeader, downstreamBufSize),
 		upstream:      make(chan []byte, upstreamBufSize),
-		lastHeartbeat: time.Now().UTC(),
+		lastHeartbeat: cs.nowFn(),
 	}
 	cs.consoles[key] = entry
 
@@ -162,7 +180,7 @@ func (cs *ConsoleSet) Heartbeat(key ConsoleKey) error {
 		return ErrConsoleNotFound
 	}
 
-	entry.lastHeartbeat = time.Now().UTC()
+	entry.lastHeartbeat = cs.nowFn()
 	cs.consoles[key] = entry
 
 	return nil
@@ -180,7 +198,7 @@ func (cs *ConsoleSet) Heartbeat(key ConsoleKey) error {
 // in cmd/switchboard or AccessNode.Sweep). AccessNode is goroutine-free, so
 // no background sweeper is started here; tests drive Sweep directly.
 func (cs *ConsoleSet) EvictStale(deadline time.Duration) int {
-	cutoff := time.Now().UTC().Add(-deadline)
+	cutoff := cs.nowFn().Add(-deadline)
 
 	cs.mu.Lock()
 

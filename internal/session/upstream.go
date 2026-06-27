@@ -107,6 +107,17 @@ func WithKeystrokeSink(sink KeystrokeSink) AccessNodeOption {
 	}
 }
 
+// WithClock sets the clock function used by the ConsoleSet for heartbeat
+// timestamps and eviction deadlines. Tests inject a fake clock; production
+// uses the default time.Now().UTC().
+func WithClock(fn func() time.Time) AccessNodeOption {
+	return func(a *AccessNode) {
+		// Replace the ConsoleSet with one that uses the injected clock.
+		// No entries have been added yet at option-application time.
+		a.consoles = NewConsoleSet(ConsoleSetWithClock(fn))
+	}
+}
+
 // AccessNode is the in-process access node: it owns a Publisher (session
 // lifecycle), a ConsoleSet (fan-out), a keystroke serialization mutex, an
 // Authorizer hook for upstream keystroke gating, and a KeystrokeSink for
