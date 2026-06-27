@@ -9,11 +9,24 @@ package tmux
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"sync/atomic"
 
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 )
+
+// ErrPTYSourceEOF is sent on sc.Err() when the forwardFrames relay detects EOF
+// on the active PTY source channel without a prior sc.Close() call. This is
+// E-SYS-003 (error-taxonomy.md §SYS; ARCH-01 ADR-011 v1.5 §HIGH-A;
+// BC-2.04.002 EC-008).
+//
+// The sentinel string satisfies ST1005 (no trailing punctuation). Callers use
+// errors.Is to detect this condition. It flows through the sc.Err() drain path
+// in runAccess and is surfaced to the operator as E-SYS-002 format:
+//
+//	"fatal: cannot connect to session backend: session connector: PTY source EOF"
+var ErrPTYSourceEOF = errors.New("session connector: PTY source EOF")
 
 // framesSource is the interface satisfied by both ControlMode and PTYProxy for
 // their per-instance frame channel. activeFrSource returns this interface so the
@@ -112,10 +125,30 @@ func (sc *SessionConnector) forwardFrames(ctx context.Context) {
 		}
 		srcCh := src.Frames()
 
-		// ARCH-01 v1.4 §Relay busy-spin guard: if the returned source channel
-		// is the same already-closed channel as the previous iteration (swap has
-		// not landed under sc.mu yet), yield to let the swap proceed.
+		// ARCH-01 v1.5 §HIGH-A + v1.4 §Relay busy-spin guard: if the returned
+		// source channel is the same already-closed channel as the previous
+		// iteration, discriminate by mode:
+		//   PTY mode (inPTYMode true): no swap will arrive — the PTY shell
+		//     process has exited. Signal session-fatal backend loss via sc.Err()
+		//     and exit the relay.
+		//   Control mode (inPTYMode false): a mode swap may be in flight
+		//     (ctrl → PTY via watchAndFallback). Yield and retry so the swap
+		//     can land under sc.mu.
 		if srcCh == prevSrcCh {
+			if sc.InPTYMode() {
+				// Terminal source EOF — no swap coming. Signal fatal backend loss
+				// (BC-2.04.002 EC-008; E-SYS-003). closeErrCh.Do guards against
+				// double-close with sc.Close() or watchAndFallback.
+				sc.closeErrCh.Do(func() {
+					select {
+					case sc.errCh <- ErrPTYSourceEOF:
+					default:
+					}
+					close(sc.errCh)
+				})
+				return
+			}
+			// Control mode: swap is in flight. Yield and retry.
 			runtime.Gosched()
 			continue
 		}
