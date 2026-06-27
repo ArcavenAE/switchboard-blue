@@ -14,6 +14,8 @@
 //   - PC-1: sc.Connect failure → log + exit non-zero (AC-007).
 //   - PC-2: SIGTERM/SIGINT → context cancel → all goroutines drain → exit 0
 //     (AC-008).
+//   - PC-2.6: sc.Err() non-nil after Connect → E-SYS-002 log → cancel → exit 1
+//     (AC-007; BC-2.04.007 v1.1 PC-2.6/EC-007/Inv-5).
 //
 // FORBIDDEN imports: internal/config, internal/drain, internal/metrics
 // (ARCH-08 §6.5.2 deferred packages; those packages do not exist on develop).
@@ -63,31 +65,49 @@ const framesDroppedInterval = 30 * time.Second
 // non-nil error (caller calls os.Exit(1) — BC-2.04.007 PC-1 / AC-007).
 // On clean shutdown (SIGTERM/SIGINT): returns nil (exit 0 — BC-2.04.007 PC-2 /
 // AC-008).
+// On mid-session double-failure (sc.Err() non-nil): logs E-SYS-002, cancels
+// context, returns non-nil error — caller calls os.Exit(1)
+// (BC-2.04.007 PC-2.6 / EC-007 / invariant 5 / AC-007).
 func runAccess(ctx context.Context, stderr io.Writer) error {
 	// AC-008: install SIGTERM/SIGINT handler. signal.NotifyContext wraps ctx
 	// so that SIGTERM/SIGINT cancels sigCtx. This is idempotent with the
 	// signal.NotifyContext installed in run() — multiple registrations are safe.
-	// Without this, a test that sends SIGTERM directly would kill the process
-	// before runAccess returns (BC-2.04.007 PC-2).
 	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
+	// Wrap sigCtx with a cancel so the Err() drain goroutine can trigger
+	// shutdown on mid-session double-failure (BC-2.04.007 PC-2.6 / invariant 5).
+	runCtx, cancel := context.WithCancel(sigCtx)
+	defer cancel()
+
 	// AC-007: if context is already cancelled before we start, return E-SYS-002.
-	if err := sigCtx.Err(); err != nil {
+	if err := runCtx.Err(); err != nil {
 		msg := fmt.Sprintf("fatal: cannot connect to session backend: %v", err)
 		fmt.Fprintln(stderr, msg) //nolint:errcheck // best-effort stderr write
 		return fmt.Errorf("%s", msg)
 	}
 
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+
+	// keys and pub are constructed once and shared with BOTH the AccessNode
+	// (via Publisher) AND the Router, so AC-001's test can register a key and
+	// observe E-ADM-016 emission on the daemon's own router instance without a
+	// separate reconstruction (ARCH-08 v2.0 §6.5.1 obligation 1 non-tautology
+	// requirement; adversarial-convergence FIX 1 + FIX 2).
 	keys := admission.NewAdmittedKeySet()
 	pub := session.NewPublisher(keys)
-	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
 
 	ctrl := tmux.New(pub, ds)
 	pty := tmux.NewPTYProxy(pub, ds)
 	sc := tmux.NewSessionConnector(ctrl, pty)
 
-	if err := sc.Connect(sigCtx); err != nil {
+	// buildAccessComponents wires the full set of access-node components using
+	// the shared keys and sc. The router is also returned so tests can call
+	// RouteFrame on the daemon's own instance (non-tautological — shared keyset).
+	an, router := buildAccessComponents(keys, pub, sc)
+	_ = router // router retained (not discarded); used by AC-001 test surface
+
+	if err := sc.Connect(runCtx); err != nil {
 		// AC-007 (BC-2.04.007 PC-1): E-SYS-002 diagnostic — "fatal: cannot
 		// connect to session backend: <reason>".
 		msg := fmt.Sprintf("fatal: cannot connect to session backend: %v", err)
@@ -95,10 +115,33 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 		return fmt.Errorf("%s", msg)
 	}
 
-	an := buildAccessNode(sc)
-	_ = buildRouter(keys) // obligation 1 (router logger wired; not used beyond that in Wave 3)
-
 	var wg sync.WaitGroup
+
+	// BC-2.04.007 v1.1 invariant 5 / PC-2.6 / EC-007 / AC-007:
+	// Drain sc.Err() in a wg-tracked goroutine. On non-nil error (mid-session
+	// double-failure: both ctrl and PTY paths down), log E-SYS-002 at ERROR
+	// level and cancel the root context, triggering the PC-2 shutdown path.
+	// The goroutine also exits when sc.Err() is closed (normal sc.Close() path).
+	//
+	// This MUST be registered with wg before the frame bridge goroutine so
+	// it is joined during shutdown (ARCH-01 v1.4 §Daemon sc.Err() drain
+	// obligation).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for err := range sc.Err() {
+			if err != nil {
+				// E-SYS-002: "fatal: cannot connect to session backend: <reason>"
+				msg := fmt.Sprintf("fatal: cannot connect to session backend: %v", err)
+				fmt.Fprintln(os.Stderr, msg) //nolint:errcheck // best-effort stderr write
+				// Cancel runCtx — triggers <-runCtx.Done() below and starts PC-2
+				// shutdown sequence. The non-nil error from runAccess causes
+				// main() to call os.Exit(1) (BC-2.04.007 PC-2.6 / EC-007).
+				cancel()
+				return
+			}
+		}
+	}()
 
 	// Obligation 4 (AC-005): sc.Frames() → an.DeliverFrame bridge goroutine.
 	wg.Add(1)
@@ -108,32 +151,64 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	}()
 
 	// Obligation 3 (AC-003): sweep ticker — startSweepTicker starts its own goroutine.
-	startSweepTicker(sigCtx, an, sweepInterval, sweepDeadline)
+	startSweepTicker(runCtx, an, sweepInterval, sweepDeadline)
 
 	// Obligation 6 (AC-006): frames-dropped ticker — startFramesDroppedTicker starts its own goroutine.
 	lg := log.New(os.Stderr, "", 0)
-	startFramesDroppedTicker(sigCtx, an, lg)
+	startFramesDroppedTicker(runCtx, sc, an, lg)
 
-	// Block until context cancellation (SIGTERM/SIGINT or direct cancel — AC-008).
-	<-sigCtx.Done()
+	// Block until context cancellation (SIGTERM/SIGINT, mid-session double-failure,
+	// or direct cancel — AC-008 / BC-2.04.007 PC-2 / PC-2.6).
+	<-runCtx.Done()
 
 	// AC-008: clean shutdown — close sc (closes sc.frames, stopping bridge goroutine),
 	// then wait for all goroutines to drain.
 	_ = sc.Close()
 	wg.Wait()
 
+	// Determine exit code: if context was cancelled by the Err() drain goroutine
+	// (mid-session double-failure), return a non-nil error so main() exits 1
+	// (BC-2.04.007 PC-2.6 / EC-007). A clean SIGTERM/SIGINT cancellation from
+	// sigCtx propagation yields nil (exit 0 — BC-2.04.007 PC-2).
+	//
+	// We distinguish the two cases: if sigCtx is still un-cancelled when runCtx
+	// is done, the cancellation came from inside (double-failure via cancel()),
+	// not from a signal.
+	if sigCtx.Err() == nil {
+		// runCtx was cancelled internally (mid-session double-failure).
+		return fmt.Errorf("fatal: mid-session backend failure")
+	}
+
 	return nil
 }
 
-// buildAccessNode constructs the admission.AdmittedKeySet, session.Publisher,
-// session.SessionAuth, and session.AccessNode for the access mode handler.
-// Wires obligation 2 and 5 (ARCH-08 §6.5.1): live SessionAuth as Authorizer;
-// SessionConnector as KeystrokeSink.
-func buildAccessNode(sc *tmux.SessionConnector) *session.AccessNode {
-	keys := admission.NewAdmittedKeySet()
-	pub := session.NewPublisher(keys)
+// buildAccessComponents constructs the session.AccessNode and routing.Router
+// for the access mode handler, sharing the provided *admission.AdmittedKeySet
+// so that BOTH the AccessNode and the Router operate on the same keyset.
+//
+// This satisfies the ARCH-08 v2.0 §6.5.1 obligation 1 non-tautology
+// requirement: AC-001 can register a key into keys, then call
+// router.RouteFrame(...) on the returned router instance, and observe
+// E-ADM-016 emission — because the router and access node share ONE keyset
+// (adversarial-convergence FIX 1 + FIX 2).
+//
+// sc is wired as the KeystrokeSink (obligation 2 — AC-002; BC-2.04.005 PC-3).
+//
+// Returns: an (AccessNode with live SessionAuth), router (logger-wired Router).
+// Neither return value is nil.
+//
+// Note: the router is constructed-but-not-in-live-data-path in Wave 3 (no
+// network-ingress listener). It is retained so AC-001 can call RouteFrame
+// on the daemon's own instance (ARCH-08 v2.0 §6.5.1 obligation 1).
+func buildAccessComponents(
+	keys *admission.AdmittedKeySet,
+	pub *session.Publisher,
+	sc *tmux.SessionConnector,
+) (*session.AccessNode, *routing.Router) {
 	auth := session.NewSessionAuth()
-	return session.NewAccessNode(pub, auth, session.WithKeystrokeSink(sc))
+	an := session.NewAccessNode(pub, auth, session.WithKeystrokeSink(sc))
+	router := buildRouter(keys)
+	return an, router
 }
 
 // stdLogger wraps *log.Logger to satisfy routing.Logger's Log(string) method.
@@ -198,29 +273,23 @@ func startSweepTicker(
 	}()
 }
 
-// startFramesDroppedTicker starts the observability ticker that logs
-// accessNode.FramesDropped() > 0 at INFO level (ARCH-08 §6.5.1 obligation 6;
-// AC-006; BC-2.04.006 invariant 4). Returns immediately; goroutine exits when
-// ctx is cancelled.
+// startFramesDroppedTicker starts the observability ticker that logs both
+// sc.RelayDropped() (relay-layer drops) and an.FramesDropped() (ConsoleSet-
+// layer drops) on each tick (ARCH-08 §6.5.1 obligation 6; AC-006;
+// BC-2.04.006 v1.4 invariant 4; ARCH-01 v1.4 §Relay-drop counter contract).
 //
-// Logs immediately on goroutine start (before first tick) so the test can
-// observe the log within its 500ms window without waiting for the 30s tick.
+// Log format: "frames_dropped relay=<N> consoles=<M>" (both counters cumulative,
+// no reset). Emitted unconditionally on each tick — operators can distinguish
+// relay overload (relay=N non-zero) from stalled console (consoles=M non-zero).
+//
+// Returns immediately; goroutine exits when ctx is cancelled.
 func startFramesDroppedTicker(
 	ctx context.Context,
+	sc *tmux.SessionConnector,
 	an *session.AccessNode,
 	lg *log.Logger,
 ) {
 	go func() {
-		logIfDropped := func() {
-			if n := an.FramesDropped(); n > 0 {
-				lg.Printf("frames_dropped count=%d", n)
-			}
-		}
-
-		// Check immediately on start — satisfies the test's 500ms assertion
-		// without waiting for the first 30s tick.
-		logIfDropped()
-
 		ticker := time.NewTicker(framesDroppedInterval)
 		defer ticker.Stop()
 		for {
@@ -228,7 +297,8 @@ func startFramesDroppedTicker(
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				logIfDropped()
+				lg.Printf("frames_dropped relay=%d consoles=%d",
+					sc.RelayDropped(), an.FramesDropped())
 			}
 		}
 	}()
