@@ -221,8 +221,9 @@ func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-ch
 // Detach closes the console's downstream channel and removes it from the
 // ConsoleSet (BC-2.04.004 PC-1 through PC-3).
 //
-// ConsoleSet.Remove closes the downstream channel under its write-lock (same
-// as Add), and EvictStale also closes the upstream channel outside the lock.
+// ConsoleSet.Remove closes the downstream channel under its write-lock, then
+// closes the upstream channel outside the lock (a sender blocked on the
+// channel would deadlock if the lock were held; see fanout.go Remove).
 // After Detach the console's entry is removed from ConsoleSet — future
 // SendKeystroke calls for this key return ErrConsoleNotFound (BC-2.04.004 PC-3).
 //
