@@ -1,11 +1,11 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-gate-adversary-convergence-restart
+phase_step: wave-3-per-story-adversary-s-w3-05-not-converged
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
-phase_3_pause_point: "Wave 3 convergence restart: r1+r2 CONVERGED, r3 NOT_CONVERGED (2 adjudication-dependent HIGHs). Architect+PO adjudication in progress."
+phase_3_pause_point: "S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (0C/3H consolidated). Wave-level gate r1+r2 CONVERGED, r3 NOT_CONVERGED (2 adj-HIGHs). All convergence paused pending PO spec adjudication."
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 wave_2_gate_consistency_validator: "PASS_WITH_OBSERVATIONS (0C/0H/2M/3L/4O)"
@@ -112,7 +112,9 @@ wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CO
 s_wave3_f1_fix_pr: 15
 s_wave3_f1_fix_merge_sha: 10dd880
 s_wave3_f1_fix_merge_date: 2026-06-27
-timestamp: 2026-06-27T20:00:00Z
+s_w3_05_adversary_status: "NOT_CONVERGED — pass-01 0C/1H, pass-02 0C/2H, pass-03 0C/3H. Streak 0. 3 consolidated HIGHs (HF-1 hysteresis semantics, HF-2 memory DoS CWE-770, HF-3 VP-059 missing). PO adjudicating; fix loop pending."
+s_w3_05_impl_commit: 1e74d76
+timestamp: 2026-06-27T20:30:00Z
 last_update: 2026-06-27
 ---
 
@@ -120,7 +122,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Wave 3 convergence RESTART: r1+r2 CONVERGED, r3 NOT_CONVERGED on 2 adjudication-dependent HIGHs (F-1 cmd-wiring, F-2 EC-006). Architect + product-owner adjudicating scope/deferral; human scope decision pending.
+S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (pass-01 0C/1H, pass-02 0C/2H, pass-03 0C/3H). Consolidated HIGHs: HF-1 hysteresis re-fire semantics (spec-contradicting/tautological), HF-2 unbounded attacker-keyed map memory DoS CWE-770, HF-3 VP-059 missing spec+proptest. Wave-3 gate: r1+r2 CONVERGED, r3 NOT_CONVERGED (cmd-wiring + EC-006 adj-HIGHs). PO adjudicating all; fix loop pending.
 
 ## Phase Progress
 
@@ -145,8 +147,7 @@ Wave 3 convergence RESTART: r1+r2 CONVERGED, r3 NOT_CONVERGED on 2 adjudication-
 | 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
-
-Wave 3: 5/5 merged; F-1 fix PR #15 10dd880; gate reports: `cycles/cycle-1/`.
+| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | per-story-adversary-NOT_CONVERGED | — | 1e74d76 |
 
 ## Open Drift Items
 
@@ -158,18 +159,16 @@ Wave 3: 5/5 merged; F-1 fix PR #15 10dd880; gate reports: `cycles/cycle-1/`.
 | W3-R3-F4 | MED | BC-2.05.008 PC-4 does not mandate E-ADM-016 logging on no-entry PATH-A, but code+test now emit/assert it (unadjudicated test-writer assumption). Overlaps W3-F1-FU1. | product-owner/spec-steward | open |
 | W3-R3-F5 | LOW | ErrSessionMismatch sentinel text lacks "(E-SES-006)" code token (parity with E-ADM-006/007 sentinels). | implementer | open |
 | W3-R2-M2 | MED | Route-time LWW snapshot window: RouteFrame RUnlocks after key-copy, verifies HMAC, then SVTNRoute re-locks for fresh lookup — concurrent RegisterForwardingEntry between unlock+relock not one atomic snapshot. Document in BC-2.05.008/ADR-009 or pass resolved entry under one lock. | architect/implementer | open |
-| W3-R2-M4 | MED | SessionConnector exposes no aggregated Frames() surviving ctrl→PTY failover swap; consumer on oldCtrl.Frames() loses output on newCtrl. Fix: SessionConnector.Frames() API or document re-subscribe. | architect/implementer | open |
-| F-P8-004/005 | MED | VP-026 "transitivity" invariant missing from BC-2.02.003; VP-027 title/harness direction mismatch. | architect | open — Phase 3 test-writing |
-| F-P8-009 | LOW | feasibility-report:61 deployment-ops range off-by-one (CAP-026–028) | architect | open |
-| F-003/F-004 | LOW | Payload-MTU wire-format test + ARCH-02 serializer | story S-BL.OA | deferred to outer-assembler story |
 | S-3.02-FM1 | MED | Attach upstream channel vestigial/undrained; BC-2.04.003 PC-3 deferred. | architect | open |
-| S-3.03-L1-REVOKE | LOW | BC-2.05.003 EC-004 "revoke" half: no RevokeKey. Out of S-3.03 scope. | architect | deferred — Wave 4+ operator-provisioning story |
-| S-3.03-O1-VPSKEL | LOW | VP-012/013/035 proof-harness skeletons API-fixed; execution deferred. | formal-verifier | open — Phase-6 |
-| W3-M-2/M-3 | MED | SessionConnector no failover Frames(); NewAccessNode nil→fail-OPEN polarity gap. | architect/implementer | open — fix in wiring story |
-| W3-PG-001 | LOW | Security-perimeter default-polarity inconsistency — candidate go.md rule. | rules/governance | open — cycle-close |
+| W3-M-2/M-3 | MED | SessionConnector no failover Frames(); NewAccessNode nil→fail-OPEN polarity gap; Frames() lost on ctrl→PTY failover swap. | architect/implementer | open — fix in wiring story |
 | W3-F1-FU1/FU2 | LOW | BC-2.05.008 PC-4 PATH-A log not ratified; PC-2 trace row cites old test. | spec-steward | open |
-| MISE-DX-001/002 | LOW | brew→mise migration + CLAUDE.md update; story S-M.01. | dx-engineer | open |
-| SIGN-DX-001 | LOW | Apple code-signing: release.yml gated OFF; story S-M.02, milestone-gated. | dx-engineer | open |
+| SW305-HF1 | HIGH | Hysteresis re-fire semantics: impl rule contradicts BC-2.05.005 EC-005/AC-004 literal; untested under sustained attack; tautological tests. | product-owner→implementer/test-writer | in-fix |
+| SW305-HF2 | HIGH | Unbounded attacker-keyed map (counts/firedAt by SrcAddr never deleted) = memory DoS CWE-770; detector amplifies flood. | product-owner→implementer/test-writer | in-fix |
+| SW305-HF3 | HIGH | VP-059 (story's named P0 VP) has no spec file + no proptest exists. | architect→test-writer | in-fix |
+| SW305-M1 | MED | E-ADM-017 msg format + src_addr rendering diverge from canonical taxonomy (unpinned). | product-owner | in-fix |
+| SW305-M2 | MED | WithFailureCounter uses unexported iface not spec-pinned *admission.FailureCounter — ratify or revert. | product-owner | in-fix |
+| SW305-M3 | MED | WithNow clock seam + threshold<=0 guard absent from BC contract. | product-owner→implementer | in-fix |
+| SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | in-fix |
 Resolved drift + stable Phase-6 deferrals archived: `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -185,15 +184,15 @@ Resolved drift + stable Phase-6 deferrals archived: `cycles/cycle-1/closed-drift
 | Marvel integration | explicitly deferred — no MVP integration | 2026-06-24 |
 | S-3.03 repointed 5→8 | upstream-wiring scope expansion; Wave 3 total 29→32 pts | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (WAVE 3 RESTART: r1+r2 CONVERGED, r3 NOT_CONVERGED)
+## Session Resume Checkpoint — 2026-06-27 (S-W3.05 per-story NOT_CONVERGED; wave-level r3 NOT_CONVERGED)
 
-**Position:** Phase 3, Wave 3 gate, develop @ 10dd880. Restart run: r1 CONVERGED (0C/0H/0M/2L/3O), r2 CONVERGED (0C/0H/4M/3L/3O), r3 NOT_CONVERGED (0C/2H/3M/2O). Both HIGHs are adjudication-dependent.
+**Position:** Phase 3, Wave 3. Develop @ 10dd880 (S-W3.05 impl commit 1e74d76 on feat/S-W3.05-hmac-failure-counter).
 
-**r3 F-1:** cmd/switchboard wires none of 5 Wave-3 subsystems (E-ADM-016 discarded by nopLogger in real builds). r1+r2 rated in-scope-deferred per ARCH-08 pos-18. Architect adjudicating: annotate STORY-INDEX/ARCH-08 + new wiring story OR scope into active work.
+**S-W3.05 per-story adversary:** 3 passes NOT_CONVERGED. HF-1 hysteresis semantics (spec contradiction + tautological tests), HF-2 memory DoS CWE-770 (unbounded SrcAddr map), HF-3 VP-059 missing. PO adjudicating BC-2.05.005 re-fire semantics + map cap policy; architect to author VP-059.md.
 
-**r3 F-2:** BC-2.05.008 EC-006 (per-source HMAC failure counter + admission alert) not implemented and not marked [DEFERRED]. Product-owner adjudicating: implement now OR explicit [DEFERRED] + target story.
+**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (ARCH-08 adjudication), W3-R3-F2 EC-006 not implemented/deferred (PO adjudication).
 
-**Next:** Adjudication → pass-r4. After convergence: Wave 4 (29 pts). Pass reports: `cycles/cycle-1/wave-3/adversary/pass-r{1,2,3}.md`. Previous checkpoint archived: `cycles/cycle-1/session-checkpoints.md`.
+**Next:** PO adjudication → implementer/test-writer/architect fixes → S-W3.05 re-convergence (3 clean required) → wave-gate pass-r4. Wave 4 (29 pts) follows. Reports: `cycles/cycle-1/`. Previous checkpoint: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
