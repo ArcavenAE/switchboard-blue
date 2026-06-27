@@ -28,8 +28,8 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-05/BC-2.05.008.md'
   - '.factory/specs/verification-properties/VP-059.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
-acceptance_criteria_count: 15
-version: "1.1"
+acceptance_criteria_count: 17
+version: "1.2"
 ---
 
 # S-W3.05: Per-Source HMAC Failure Counter and Admission Alert
@@ -73,21 +73,34 @@ entries with `timestamp < now - windowDuration` are removed; entries at exactly
 window, not a fixed bucket.
 - **Test:** `TestFailureCounter_SlidingWindowTrimsStaleEntries`
 
-### AC-003 (traces to BC-2.05.005 PC-3 — E-ADM-017 emission on threshold crossing)
+### AC-003 (traces to BC-2.05.005 PC-3 + error-taxonomy v1.9 / E-ADM-017 — E-ADM-017 emission on threshold crossing)
 When the post-trim count for a `srcAddr` reaches or exceeds `threshold`, the
-`FailureCounter` emits a structured log event at ERROR level with code E-ADM-017.
-Format: `"HMAC failure rate alert: ≥5 failures in 60s from src <src_addr>"`.
-The event is emitted via the injected logger. No global state. No direct call to
+`FailureCounter` emits a structured log event via the injected `Logger` interface
+(`Log(msg string)` — level-less seam; severity is taxonomy-owned, not a logger level)
+carrying the canonical E-ADM-017 message format:
+`"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"`.
+The code literal "E-ADM-017" is embedded at message start for operator grep-ability.
+`<threshold>` and `<window_seconds>` are the FailureCounter's configured values (default:
+5 and 60); `<src_addr>` is the lowercase hex encoding of the 8-byte SrcAddr field.
+Severity is `degraded` (daemon continues) per error-taxonomy v1.9 — the Logger seam
+does NOT encode severity as a logger level. No global state. No direct call to
 `log.Printf` or any package-level logger.
 - **Test:** `TestFailureCounter_EmitsEADM017AtThreshold`
 
-### AC-004 (traces to BC-2.05.005 PC-3 + EC-005 + EC-009 — hysteresis/re-fire)
+### AC-004 (traces to BC-2.05.005 PC-3 + EC-005 + EC-009 — hysteresis/re-fire, drain-only re-arm)
 E-ADM-017 fires on the Nth call that causes the sliding-window count to reach threshold
 (N = threshold). Subsequent `RecordHMACFailure` calls in the same un-re-armed window do
-NOT re-emit the alert. The counter re-arms when the oldest surviving entry after trim is
-STRICTLY newer than the last-fire timestamp, OR when the window drains to zero. An entry
-whose timestamp == last-fire timestamp does NOT trigger re-arm (boundary). Test:
-`TestFailureCounter_HysteresisNoBriefRefire`, `TestFailureCounter_RearmBoundaryAtLastFireTimestamp`.
+NOT re-emit the alert (append-skip is in force: new timestamps are NOT appended while
+`firedAt[srcAddr]` is set and re-arm has not yet triggered). The counter re-arms using
+**drain-only re-arm**: re-arm triggers when `len(keep) == 0` after trim — i.e., all
+pre-fire entries have aged out of the window. Under the append-skip policy (EC-011), no
+post-fire timestamps are ever appended, so `keep[0].After(firedAt[srcAddr])` is dead
+code and is NOT a re-arm condition. On re-arm, `firedAt[srcAddr]` is deleted and normal
+append+counting resumes. Period between alerts ≈ `windowDuration` under sustained attack.
+- **Test:** `TestFailureCounter_HysteresisNoBriefRefire`,
+  `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` (renamed per BC-2.05.005 v1.6
+  test-writer hand-off; replaces `TestFailureCounter_RearmBoundaryAtLastFireTimestamp`
+  which tested now-dead code under append-skip).
 (traces to BC-2.05.005 PC-3 + EC-005 + EC-009)
 
 ### AC-005 (traces to BC-2.05.005 EC-005 — hysteresis: alert resets after window expires)
@@ -148,7 +161,12 @@ timestamp) is evicted from both `counts` and `firedAt` before inserting the new 
 After 5 failures then a full window drain (all entries age out), the source re-arms — a
 subsequent post-drain threshold crossing fires E-ADM-017 again; `firedAt[srcAddr]` is
 cleared on drain. Both `counts` and `firedAt` entries are deleted entirely when the
-post-trim slice is empty (dead-key eviction — no unbounded map growth).
+post-trim slice is empty (dead-key eviction — no unbounded map growth). **Discriminating
+test requirement:** the test must distinguish an implementation that calls
+`delete(counts, srcAddr)` on drain from one that leaves an empty slice. The test must
+observe the key deletion directly — e.g., by asserting that `SourceCount()` drops when
+drain occurs without a same-call re-append (drain-then-rearm ordering). Asserting only
+`SourceCount() >= 1` is non-discriminating and insufficient.
 - **Test:** `TestFailureCounter_DeadKeyEvictedAfterDrain`. (traces to BC-2.05.005 EC-005)
 
 ### AC-013 (traces to BC-2.05.005 PC-3 — constructor validation)
@@ -163,11 +181,52 @@ to T=61s drains the window and re-arms the counter; 5 more failures at T=61–62
 2nd E-ADM-017 alert; total exactly 2 alerts.
 - **Test:** `TestFailureCounter_SustainedAttackReFires`. (traces to BC-2.05.005 EC-009)
 
-### AC-015 (traces to error-taxonomy v1.9 / E-ADM-017 — alert message format)
-The E-ADM-017 log message matches the canonical parameterized format from error-taxonomy
-v1.9: `"≥<threshold> failures in <window>s from src <hex>"`. The message embeds the code
-literal "E-ADM-017" for operator grep-ability.
+### AC-015 (traces to error-taxonomy v1.9 / E-ADM-017 — alert message format, FULL canonical form)
+The E-ADM-017 log message MUST match the FULL canonical parameterized format from
+error-taxonomy v1.9 (row E-ADM-017, line 53):
+`"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"`.
+The format requires **both** the leading "E-ADM-017" code literal **and** the
+"HMAC failure rate alert:" phrase — neither may be omitted. `<threshold>` and
+`<window_seconds>` are the FailureCounter's configured integer values (not string
+literals); `<src_addr>` is the lowercase hex encoding of the 8-byte SrcAddr field.
+The test MUST assert the phrase "HMAC failure rate alert:" IS present in the emitted
+message (not absent). Any implementation that drops this phrase is non-conformant.
+Note: a prior erroneous reconciliation note incorrectly claimed AC-015 should drop
+the "HMAC failure rate alert:" phrase — that was false. Error-taxonomy v1.9 includes
+the phrase and the v1.9 changelog NEVER removed it. This AC restores the canonical form.
 - **Test:** `TestFailureCounter_AlertMessageFormat`. (traces to error-taxonomy v1.9 / E-ADM-017)
+
+### AC-016 (traces to BC-2.05.005 EC-011 — per-source slice bound, CWE-770 amplification mitigation)
+After an alert fires for a `srcAddr` (i.e., `firedAt[srcAddr]` is non-zero and re-arm
+has not yet triggered), new timestamps MUST NOT be appended to the slice for that
+source (append-skip policy). The per-source slice is bounded at `threshold` entries at
+all times — the entries present at or before the alert threshold-crossing. Under a
+high-rate attack (`rate >> threshold/windowDuration`), memory per source is bounded at
+`threshold × sizeof(time.Time)` regardless of call rate. The test injects `threshold`
+failures to fire the alert, then injects 1,000,000 additional calls with the clock
+frozen (no entries can age out), and asserts that `len(Timestamps(src)) == threshold`
+(slice did not grow beyond `threshold` entries).
+- **Test:** `TestFailureCounter_HighRateAttackBoundedSlice`. (traces to BC-2.05.005 EC-011)
+
+### AC-017 (traces to VP-059 v1.1 — property-based test, stateful model checker)
+A property-based test using a stateful model checker over arbitrary generated call
+sequences with injected clock verifies VP-059 properties (a)–(e):
+- **(a)** E-ADM-017 fires exactly on the call that brings the post-trim count to
+  threshold (not before).
+- **(b)** Subsequent calls in the same un-re-armed window do NOT fire E-ADM-017.
+- **(c)** After re-arm (drain-only: `len(keep) == 0` after trim, which is the sole
+  re-arm trigger under append-skip), the next threshold crossing fires E-ADM-017 again.
+- **(d)** Under a continuous stream of failures at rate ≥ threshold/windowDuration,
+  E-ADM-017 alert count is ≥ 2 (counter never goes permanently silent).
+- **(e)** Live key count `len(counts)` is always ≤ `maxTrackedSources` (65,536)
+  regardless of distinct source count.
+
+The `capturingLogger` must satisfy the `admission.Logger` interface as `Log(msg string)`
+(level-less seam — not `Error(msg string)`). Clock injection is via `WithNow`. All
+vectors are deterministic; no real-time waits.
+- **Tests:** `TestFailureCounter_PropertiesABCD` (properties a–d, stateful model);
+  `TestFailureCounter_PropertyE_MemoryBound` (property e, adversarial injection:
+  2 × maxTrackedSources distinct sources). (traces to VP-059 v1.1)
 
 ## Edge Cases
 
@@ -209,9 +268,9 @@ literal "E-ADM-017" for operator grep-ability.
 | internal/admission (existing, ~3 files) | ~600 |
 | internal/routing/routing.go (existing, ~170 lines) | ~500 |
 | internal/routing/routing_test.go (existing) | ~400 |
-| New test files (2 new) | ~1,200 |
+| New test files (2 new; includes VP-059 proptest) | ~1,500 |
 | Tool outputs overhead | ~200 |
-| **Total** | **~7,000** |
+| **Total** | **~7,300** |
 | Agent context window | 200K |
 | **Budget usage** | **~3.5%** |
 
@@ -219,10 +278,10 @@ literal "E-ADM-017" for operator grep-ability.
 
 1. [ ] Read BC-2.05.005 (full, including PC-3 API contract + EC-005–EC-008), BC-2.05.008
        (full, including EC-006 + PC-5 + invariant 5), ARCH-08 §6.5 (positions 4 and 5)
-2. [ ] Write failing tests for AC-001 through AC-015 in:
-       - `internal/admission/failure_counter_test.go` (AC-001 through AC-008, AC-010 through AC-015)
+2. [ ] Write failing tests for AC-001 through AC-017 in:
+       - `internal/admission/failure_counter_test.go` (AC-001 through AC-008, AC-010 through AC-017)
        - `internal/routing/routing_test.go` extension (AC-009)
-3. [ ] Verify Red Gate: all 15 tests fail before any implementation
+3. [ ] Verify Red Gate: all 17 tests fail before any implementation
 4. [ ] Create `internal/admission/failure_counter.go`:
        - `type FailureCounter struct` with `mu sync.Mutex`, `counts map[string][]time.Time`,
          `threshold int`, `windowDuration time.Duration`, `logger Logger`,
@@ -232,8 +291,12 @@ literal "E-ADM-017" for operator grep-ability.
        - `WithNow(fn func() time.Time) FailureCounterOption` — clock injection for tests (AC-014)
        - `hmacFailureRecorder` unexported interface `{ RecordHMACFailure(srcAddr string) }` (AC-009)
        - `RecordHMACFailure(srcAddr string)` — trim (`timestamp < now - windowDuration`),
-         dead-key eviction when count=0 (delete counts + firedAt entries), LRU source cap at
-         65,536 (AC-011), append, check threshold, emit E-ADM-017 using re-arm semantics (AC-004),
+         drain-only re-arm check (if `firedAt[srcAddr]` set and `len(keep)==0`, delete
+         `firedAt[srcAddr]` — AC-004), dead-key eviction when count=0 after trim+re-arm
+         (delete both `counts` and `firedAt` entries — AC-012), LRU source cap at
+         65,536 (AC-011), **append-skip**: only append new timestamp if `firedAt[srcAddr]`
+         is zero (not currently fired — AC-016), check threshold, emit canonical E-ADM-017
+         message `"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"`,
          update `firedAt` state (AC-014)
        - No background goroutine; lazy eviction on every call
        - `Timestamps(srcAddr string) []time.Time` returning a copy (if needed for testing)
@@ -272,6 +335,10 @@ literal "E-ADM-017" for operator grep-ability.
 | `RecordHMACFailure` NOT called on successful HMAC verification | BC-2.05.008 PC-5 (negative) | Verified by TestRouteFrame test for success path (AC-009 negative assertion) |
 | E-ADM-017 is distinct from E-ADM-016 | BC-2.05.005 PC-3 (E-ADM-017) vs BC-2.05.008 PC-2 (E-ADM-016) | String format; do NOT reuse E-ADM-016 for the aggregate alert |
 | Boundary trimming: `timestamp < now - windowDuration` (strictly less) | BC-2.05.005 EC-008 | `TestFailureCounter_BoundaryEntryIsKept` |
+| E-ADM-017 message MUST include BOTH "E-ADM-017" prefix AND "HMAC failure rate alert:" phrase | error-taxonomy v1.9 row E-ADM-017 + BC-2.05.005 PC-3 canonical test vector | `TestFailureCounter_AlertMessageFormat` asserts both substrings present |
+| Logger seam is level-less: `Log(msg string)` — severity is NOT encoded as a logger level | BC-2.05.005 v1.5 O-1 adjudication; VP-059 v1.1 | `capturingLogger.Log(msg string)` in tests; no `Error()` method on Logger interface |
+| Append-skip: no post-fire timestamp appended while `firedAt[srcAddr]` is set | BC-2.05.005 PC-3 / EC-011 (CWE-770 M-1) | `TestFailureCounter_HighRateAttackBoundedSlice` |
+| Re-arm is drain-only: `len(keep) == 0` after trim | BC-2.05.005 v1.6 PC-3; `keep[0].After(firedAt)` path is dead code under append-skip | `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` |
 
 ### Additional API / Constructor Constraints
 
@@ -305,7 +372,7 @@ fail (Go import cycle detection via `go vet`/`go build`).
 | File | Action | Purpose |
 |------|--------|---------|
 | `internal/admission/failure_counter.go` | create | `FailureCounter` type; `NewFailureCounter`; `RecordHMACFailure`; lazy eviction; fire-once-per-crossing; E-ADM-017 emission via injected logger |
-| `internal/admission/failure_counter_test.go` | create | AC-001 through AC-008, AC-010: sliding window, hysteresis, boundary, multi-source, concurrent-safe |
+| `internal/admission/failure_counter_test.go` | create | AC-001 through AC-008, AC-010 through AC-017: sliding window, hysteresis, boundary, multi-source, concurrent-safe, append-skip bound (AC-016), VP-059 proptest (AC-017) |
 | `internal/routing/routing.go` | modify | Add `failureCounter *admission.FailureCounter` to `Router` struct; wire via option; call `RecordHMACFailure` on both `ErrHMACVerificationFailed` return paths |
 | `internal/routing/routing_test.go` | extend | AC-009: `TestRouteFrame_WithFailureCounterInterface`; verify not called on success |
 
@@ -315,3 +382,4 @@ fail (Go import cycle detection via `go vet`/`go build`).
 |---------|------|--------|
 | 1.0 | 2026-06-27 | Initial story — Wave 3 FIX-NOW gate blocker F-2; implements BC-2.05.005 PC-3; adds E-ADM-017 aggregate alert |
 | 1.1 | 2026-06-27 | PO adjudication of adversarial-convergence findings: new ACs 011-015, amended AC-004/009, points 5→8 (BC-2.05.005 v1.4, BC-2.05.008 v1.3, error-taxonomy v1.9) |
+| 1.2 | 2026-06-27 | Correct defect introduced in prior reconciliation pass: (1) AC-003 and AC-015 now assert the FULL canonical E-ADM-017 message format from error-taxonomy v1.9 — `"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"` — including BOTH the "E-ADM-017" prefix AND the "HMAC failure rate alert:" phrase (prior pass erroneously dropped the phrase); (2) AC-003 O-1 fix: Logger seam is level-less (`Log(msg string)`), severity is taxonomy-owned (degraded), not a logger ERROR level; (3) AC-004 rewritten to drain-only re-arm per BC-2.05.005 v1.6 — `len(keep)==0` after trim is the sole re-arm condition; `keep[0].After(firedAt)` is dead code under append-skip and removed; test renamed to `TestFailureCounter_RearmOccursOnFirstCallAfterDrain`; (4) AC-012 discrimination note added — test must observe `delete(counts, srcAddr)` directly; (5) AC-016 added: per-source slice bound/CWE-770 (BC-2.05.005 EC-011, `TestFailureCounter_HighRateAttackBoundedSlice`); (6) AC-017 added: VP-059 v1.1 property-based test mandate (`TestFailureCounter_PropertiesABCD` + `TestFailureCounter_PropertyE_MemoryBound`); AC count 15→17; points unchanged at 8 |
