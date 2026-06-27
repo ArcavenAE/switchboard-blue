@@ -101,6 +101,7 @@ Modules tagged `(shared with SS-NN)` indicate a Go package that serves multiple 
 | ADR-008 | Tick interval range: 5–50ms; validated as tuning parameter in Phase 3 | ARCH-02 | decided |
 | ADR-009 | HMAC enforcement at RouteFrame boundary: fail-fast before admitted-set lookup (S-3.04) | ARCH-04 | decided |
 | ADR-010 | Terminal session backend: tmux control mode primary, PTY proxy fallback (S-3.01) | ARCH-01, ARCH-04 | decided |
+| ADR-011 | SessionConnector.Frames(): forwarding-channel design for failover-stable frame delivery (S-4.00) | ARCH-01 | decided |
 
 ## Tuning Parameters (to be validated in Phase 3)
 
@@ -117,6 +118,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 | 2026-06-23 | architect | Round-1 architectural refinement (pass-01 adversarial review): wire format canonicalized to bit-precise 44-byte outer header (F-001, F-002, F-004, F-011); HMAC keying updated to per-node HKDF-SHA256 (F-003); drop cache key extended to (checksum, arrival_interface_id) (F-006); quality thresholds aligned to NFR-001/BC-2.06.001 (F-008); hysteresis canonical value set to 3 measurements (F-021); read-only console ACK resolved via degenerate upstream half-channel (F-023); permission hierarchy (control > console > readonly) and cross-role revocation rules documented in ADR-004 (F-010); SHA-256 adopted for address derivation replacing Blake3 (F-007); VP-051 and VP-052 added; VP total now 52; VP-040 module corrected to internal/multipath (F-014). |
 | 2026-06-23 | architect | Phase 1c-refinement: VP-053 through VP-057 added for BC coverage closure (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004, BC-2.05.007). VP total now 57. |
 | 2026-06-25 | architect | Wave 3 planning refresh: ADR-009 (HMAC enforcement at RouteFrame boundary, S-3.04) and ADR-010 (tmux control mode + PTY fallback, S-3.01) added to ADR Registry. ARCH-04 bumped to v1.4 (ADR-009 section). ARCH-08 bumped to v1.2 (§6.5: full Wave 1–3 package table declaring `internal/session` at position 6, `internal/tmux` at position 13). No new packages — Wave 3 reuses existing DAG positions from the full topological order already documented in §§1–4. |
+| 2026-06-27 | architect | ADR-011 added (SessionConnector.Frames() forwarding-channel design, S-4.00). ARCH-01 bumped to v1.3. ARCH-08 bumped to v1.9 (§6.5.1 wiring obligations, §6.5.2 import set, §6.6.1 feasibility register, §6.6.2 prospective positions). cmd/switchboard position 18 registered as ACTIVE SCOPE for story S-4.00. |
 
 ## Open Frontier Questions (for KoS process)
 

@@ -2,7 +2,7 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -12,6 +12,7 @@ modified:
   - 2026-06-26T00:00:00 # v1.6 — Promote internal/session (pos 6) and internal/tmux (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab)
   - 2026-06-26T12:00:00 # v1.7 — Reconcile all position references: routing=5, session=6; session imports {frame, admission} (upstream.go+fanout.go→frame; session.go→admission); fix Cycle-Freeness tmux→session reference; fix §6.5 session annotation (WG3-H-003)
   - 2026-06-26T18:00:00 # v1.8 — Update §6.5 SHA annotation from 43208ab to b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14); import set unchanged through S-3.03 (F-04 drift fix)
+  - 2026-06-27T00:00:00 # v1.9 — Register cmd/switchboard position 18 as ACTIVE SCOPE for story S-4.00 (daemon assembly); document import set, wiring obligations, story assignment, and ADR-011 pointer
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -241,6 +242,33 @@ Undeclared packages discovered at the wave gate are an architecture violation.
 
 ### §6.5 Current import positions (post-Wave-3 S-3.03, develop @ `b68e498`)
 
+> **cmd/switchboard position-18 note (S-4.00 daemon assembly):** `cmd/switchboard`
+> occupies position 18 — the top leaf that imports every layer beneath it. As of
+> develop @ b68e498, `cmd/switchboard/main.go` is a version-printing stub that wires
+> none of the Wave-3 subsystems. Story **S-4.00** (daemon assembly) places position 18
+> fully in scope: it wires the six obligations listed below. Position 18 is now
+> **ACTIVE** — see §6.5.1 for the S-4.00 wiring specification. ADR-011 documents
+> the SessionConnector.Frames() API decision and the FramesDropped surfacing strategy.
+
+#### §6.5.1 S-4.00 daemon-assembly wiring obligations for cmd/switchboard
+
+The following six wiring obligations make up the full-daemon scope of S-4.00. Each
+maps to a buildability tier (see §6.6 feasibility register):
+
+| # | Obligation | Packages used | Buildability |
+|---|-----------|---------------|-------------|
+| 1 | Inject real `routing.Logger` into `NewRouter` via `WithLogger` so `RouteFrame` E-ADM-016 paths write to `os.Stderr` (or a `log.New` sink) in production builds | `internal/routing` (exists) | BUILDABLE NOW |
+| 2 | Construct `admission.AdmittedKeySet`, `session.Publisher`, `session.SessionAuth`, then wire `NewAccessNode(pub, auth, WithKeystrokeSink(sc))` replacing the nil/NoOp defaults | `internal/admission`, `internal/session` (both exist) | BUILDABLE NOW |
+| 3 | Instantiate Sweep eviction `time.Ticker` in `main()` and call `accessNode.Sweep(deadline)` on each tick | `internal/session` (exists); `time.Ticker` stdlib | BUILDABLE NOW |
+| 4 | Pipe `SessionConnector.Frames()` → `accessNode.DeliverFrame()` in a goroutine after `sc.Connect(ctx)` succeeds. Requires `SessionConnector.Frames()` API to be pinned (drift W3-R2-M4); see ADR-011 for the chosen design | `internal/tmux` (exists); ADR-011 (new) | BUILDABLE NOW after ADR-011 pins API |
+| 5 | Replace `NoOpAuthorizer` with live `*SessionAuth` (drift W3-M-3; fail-open closed) | `internal/session` (exists) | BUILDABLE NOW (done by obligation 2 above) |
+| 6 | Surface `accessNode.FramesDropped()` counter via periodic structured log line (drift W3-R2-M3) — no metrics endpoint or sbctl needed | `internal/session` (exists); `log` / `fmt` stdlib | BUILDABLE NOW |
+
+**No hard blockers.** All six obligations are buildable using only packages present
+on develop @ b68e498. `internal/config`, `internal/drain`, and `internal/metrics`
+(Wave 4+) are NOT imported by S-4.00 — see §6.6 feasibility register for
+detailed rationale.
+
 The following packages are present in `internal/` on develop. Positions are
 strict — position N may import packages at positions 1..N-1 only.
 
@@ -262,14 +290,73 @@ Verified against `ls internal/` and
 at b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14). Import set
 unchanged through S-3.03 — no new internal packages introduced since S-3.01a.
 
+#### §6.5.2 S-4.00 import set for cmd/switchboard
+
+When S-4.00 is complete, `cmd/switchboard` will import:
+
+```
+internal/admission      (AdmittedKeySet construction)
+internal/routing        (NewRouter, WithLogger)
+internal/session        (Publisher, SessionAuth, AccessNode, NewAccessNode, WithKeystrokeSink)
+internal/tmux           (ControlMode, PTYProxy, SessionConnector, NewSessionConnector, WithControlModeFactory)
+internal/halfchannel    (HalfChannel, for ControlMode / PTYProxy construction)
+```
+
+Packages NOT imported by S-4.00 (deferred to later waves):
+- `internal/config` — no file-based config loading in S-4.00; construction parameters are hardcoded or supplied via CLI flags
+- `internal/drain` — graceful-drain lifecycle is a Wave 4+ story
+- `internal/metrics` — no HTTP metrics endpoint; FramesDropped is surfaced via structured log only
+- `cmd/sbctl` — never imported (top leaf; CLI tool)
+
+This import set is consistent with ARCH-08 §§1–5 (no new edges introduced that
+are not already in the target DAG), and introduces no forbidden edges per §6.2.
+
 ### §6.6 Planned positions (Wave 4+ prospective)
 
 Positions 6 and 7 (`internal/session` and `internal/tmux`) were previously
 planned here. They shipped in Wave 3 (S-3.01a, PR #11, merged 2026-06-26 at
 `43208ab`) and are now listed in §6.5.
 
-No packages are currently planned for positions 8+. Future waves will register
-new positions here before their first commit, per the §6.4 protocol.
+#### §6.6.1 S-4.00 feasibility register (daemon assembly buildability)
+
+This register documents, for each of the six S-4.00 wiring obligations, whether
+a required package/API exists on develop or not, and the resolution.
+
+| Obligation | Required package or API | On develop? | Resolution |
+|-----------|------------------------|-------------|-----------|
+| (1) Router Logger injection | `routing.WithLogger` — exists in `routing.go` | YES | No action needed |
+| (2) SessionAuth as Authorizer | `session.NewSessionAuth()`, `session.NewAccessNode(pub, auth, ...)` — all exist | YES | No action needed |
+| (3) Sweep timer | `accessNode.Sweep(deadline)` — exists; `time.Ticker` stdlib | YES | No action needed |
+| (4) SessionConnector.Frames() → DeliverFrame bridge | `ControlMode.Frames()` and `PTYProxy.Frames()` exist; `SessionConnector` has NO `Frames()` method yet | NO — but see resolution | ADR-011 pins the design: add `SessionConnector.Frames()` returning a forwarding channel that is re-plumbed on ctrl→PTY swap; this is a small addition to `internal/tmux/pty_fallback.go`, fully within S-4.00 scope. NOT a hard blocker — it requires one new exported method, not a new package. |
+| (5) Replace NoOpAuthorizer | Satisfied by obligation (2) — `NewAccessNode` accepts `Authorizer`; `*SessionAuth` implements it | YES | No action needed |
+| (6) FramesDropped structured log | `accessNode.FramesDropped()` exists; `log`/`fmt` stdlib | YES | No action needed |
+| Future: config file loading | `internal/config` — NOT on develop | NOT on develop | DEFERRED to Wave 4+. S-4.00 hardcodes sweep deadline and uses CLI flags for any tuning needed. |
+| Future: graceful drain | `internal/drain` — NOT on develop | NOT on develop | DEFERRED to Wave 4+. S-4.00 uses `os/signal` + `context.WithCancel` for a clean-exit signal only. |
+| Future: /metrics HTTP endpoint | `internal/metrics` — NOT on develop | NOT on develop | DEFERRED to Wave 4+. S-4.00 surfaces FramesDropped as a structured log line on a ticker. |
+| Future: sbctl CLI surface | `cmd/sbctl` — NOT on develop | NOT on develop | DEFERRED to Wave 4+. Not imported by cmd/switchboard. |
+
+**HARD BLOCKER: NONE.** The one gap (SessionConnector.Frames()) is resolved by
+adding a single exported method to `internal/tmux` within S-4.00 scope. No
+future-wave package must be pulled forward.
+
+#### §6.6.2 Post-Wave-3 prospective positions (Wave 4+)
+
+Future waves will register new positions here before their first commit, per the
+§6.4 protocol. Anticipated Wave 4+ additions (informational; subject to story
+decomposition):
+
+| Position (prospective) | Package | Wave |
+|------------------------|---------|------|
+| 8 | `internal/paths` | Wave 4 |
+| 9 | `internal/arq` | Wave 4 |
+| 10 | `internal/replay` | Wave 4 |
+| 11 | `internal/multipath` | Wave 4 |
+| 12 | `internal/metrics` | Wave 4+ |
+| 13 | `internal/config` | Wave 4 |
+| 14 | `internal/discovery` | Wave 5+ |
+| 15 | `internal/svtnmgmt` | Wave 5+ |
+| 16 | `internal/drain` | Wave 5+ |
+| 17 | `cmd/sbctl` | Wave 5+ |
 
 **Additional forbidden edges (carried forward from Wave 3):**
 - `internal/session` MUST NOT import `internal/routing`.
@@ -293,3 +380,4 @@ new positions here before their first commit, per the §6.4 protocol.
 | 1.6 | 2026-06-26 | Promoted `internal/session` (pos 6) and `internal/tmux` (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab); §6.6 updated to Wave 4+ planning placeholder |
 | 1.7 | 2026-06-26 | WG3-H-003: Reconcile all topological position references to the correct ordering (admission=4, routing=5, session=6). Fix Topological Order section (session was incorrectly at 5, routing at 6). Fix Cycle-Freeness section (tmux→session now references position 6). Fix §6.5 session annotation to reflect actual imports: upstream.go+fanout.go import frame; session.go imports admission |
 | 1.8 | 2026-06-26 | F-04 drift fix: update §6.5 heading and verification SHA from 43208ab (S-3.01a) to b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14); note import set unchanged through S-3.03 |
+| 1.9 | 2026-06-27 | S-4.00 daemon assembly: register cmd/switchboard position 18 as ACTIVE SCOPE; add §6.5.1 (six wiring obligations + buildability tiers), §6.5.2 (S-4.00 import set, deferred packages), §6.6.1 (feasibility register with HARD BLOCKER: NONE ruling), §6.6.2 (Wave 4+ prospective positions). ADR-011 (SessionConnector.Frames()) pointer added. |

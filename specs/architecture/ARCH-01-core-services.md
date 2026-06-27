@@ -2,13 +2,14 @@
 artifact_id: ARCH-01-core-services
 document_type: architecture-section
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
   - 2026-06-25T00:00:00 # v1.1 — Added ADR-010: tmux control mode primary, PTY proxy fallback (Wave 3 / S-3.01)
   - 2026-06-25T00:00:00 # v1.2 — ADR-010: allow mid-session PTY fallback on control-mode loss (Wave-3 reviewer F-W3-H-003 + user decision; BCs win over initial-connect-only restriction)
+  - 2026-06-27T00:00:00 # v1.3 — Added ADR-011: SessionConnector.Frames() forwarding-channel API design (S-4.00 daemon assembly; drift W3-R2-M4)
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -167,6 +168,69 @@ failure and mid-session control-mode loss.
 **References:** BC-2.04.001 (control mode attach, EC-002 mid-session fallback),
 BC-2.04.002 (PTY fallback, EC-003 mid-session fallback), S-3.01 fallback semantics.
 
+## ADR-011: SessionConnector.Frames() — Forwarding Channel Design for Failover-Stable Frame Delivery (S-4.00)
+
+**Context:** `ControlMode.Frames()` and `PTYProxy.Frames()` each return a
+`<-chan halfchannel.ChannelFrame` tied to the lifetime of that mode instance.
+`SessionConnector` orchestrates ctrl→PTY failover: when control mode drops,
+`watchAndFallback` closes the old `ControlMode` and activates `PTYProxy`. Any
+goroutine in `cmd/switchboard` that is ranging over `ctrl.Frames()` will see the
+channel closed without the new frames from `PTYProxy.Frames()` being delivered.
+This is drift W3-R2-M4.
+
+**Decision:** Add `SessionConnector.Frames() <-chan halfchannel.ChannelFrame` as a
+new exported method on `*SessionConnector`. The implementation holds an internal
+forwarding channel (`sc.frames chan halfchannel.ChannelFrame`, buffered to
+`framesBufferSize`) and a single relay goroutine (`sc.forwardFrames`) that is
+started by `Connect`. The relay goroutine:
+
+1. Ranges over the current mode's `Frames()` channel, writing each frame to
+   `sc.frames` (non-blocking: drops on full, same backpressure semantics as
+   `ControlMode`).
+2. When the source channel closes (mode switch or shutdown), re-reads
+   `sc.activeFrSource()` under `sc.mu` and continues ranging over the new
+   source.
+3. Exits when `sc.frames` is closed — triggered by `sc.Close()` calling
+   `sc.closeForwardFrames.Do(func() { close(sc.frames) })`.
+
+The forwarding channel is closed exactly once via `sync.Once`.
+
+**Why this design over alternatives:**
+
+- *Re-subscribe signal (document only):* Requires `cmd/switchboard` to implement
+  its own re-subscription logic, duplicating the fallback-awareness concern in
+  every call site. Violates the encapsulation principle — `SessionConnector` already
+  knows when the mode switches.
+- *Channel-of-channels:* Requires the caller to handle a meta-channel; more complex
+  to range over in a simple goroutine and error-prone under Close.
+- *Merged/demux approach:* Same result as the forwarding-channel approach but with
+  more goroutines and no clear ownership of the close signal.
+
+**Why a forwarding channel is clean:**
+- `cmd/switchboard` calls `sc.Frames()` once, gets one channel, and ranges
+  over it for the lifetime of the session. No re-subscribe, no mode awareness.
+- The forwarding relay goroutine is the single point of mode-switch awareness.
+- It is symmetric with `ControlMode.Frames()` and `PTYProxy.Frames()` in
+  terms of API shape, so callers do not need to handle a different type.
+- Drop semantics are preserved: if `sc.frames` is full, the frame is dropped
+  (same policy as the underlying sources).
+
+**Concurrency contract:**
+- `sc.frames` is created in `NewSessionConnector` (buffered).
+- The relay goroutine is started in `sc.Connect` after the active mode is
+  confirmed. It is registered with `sc.wg`.
+- `sc.Close()` closes `sc.frames` via `closeForwardFrames.Do` after `sc.wg.Wait()`.
+- No lock is held while writing to `sc.frames` (non-blocking select).
+- `sc.activeFrSource()` acquires `sc.mu` to snapshot the current active source;
+  the relay goroutine holds no lock during the range-over.
+
+**Impact on internal/tmux package:** One new method `Frames()` on `*SessionConnector`
+in `pty_fallback.go` (or a new file `connector_frames.go`). No new exported types.
+No new packages. No forbidden import edges introduced. Full buildability on develop.
+
+**References:** W3-R2-M4 (drift), W3-M-2/M-3 (related), ARCH-08 §6.5.1 obligation 4,
+BC-2.04.006 (FramesDropped observability, NFR-004), S-4.00 daemon assembly.
+
 ## Changelog
 
 | Version | Date | Change |
@@ -174,3 +238,4 @@ BC-2.04.002 (PTY fallback, EC-003 mid-session fallback), S-3.01 fallback semanti
 | 1.0 | 2026-06-23 | Initial core services architecture |
 | 1.1 | 2026-06-25 | Added ADR-010: tmux control mode primary, PTY proxy fallback (Wave 3 / S-3.01) |
 | 1.2 | 2026-06-25 | ADR-010: revised fallback semantics to allow mid-session PTY fallback on control-mode loss (Wave-3 reviewer F-W3-H-003; BCs win: BC-2.04.001 EC-002, BC-2.04.002 EC-003; initial-connect-only restriction deemed too restrictive) |
+| 1.3 | 2026-06-27 | Added ADR-011: SessionConnector.Frames() forwarding-channel design (S-4.00 daemon assembly; drift W3-R2-M4 resolution) |
