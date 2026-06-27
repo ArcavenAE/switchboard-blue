@@ -74,6 +74,7 @@
 package admission_test
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -266,10 +267,14 @@ func TestFailureCounter_EmitsEADM017AtThreshold(t *testing.T) {
 	if !log.HasAll(src) {
 		t.Errorf("AC-003: log record missing srcAddr %q; lines: %v", src, log.Lines())
 	}
-	// (d) record contains canonical message prefix.
-	if !log.HasAll("HMAC failure rate alert") {
-		t.Errorf("AC-003: log record missing canonical prefix \"HMAC failure rate alert\"; lines: %v",
-			log.Lines())
+	// (d) record contains the canonical parameterized body per error-taxonomy v1.9.
+	// Format: "E-ADM-017 ≥<threshold> failures in <window>s from src <srcAddr>"
+	// The "HMAC failure rate alert:" prefix was pre-v1.9 and is no longer canonical;
+	// AC-015 (adversarial tests) asserts it must NOT appear.
+	wantBody := fmt.Sprintf("≥%d failures in %.0fs from src %s", threshold, window.Seconds(), src)
+	if !log.HasAll(wantBody) {
+		t.Errorf("AC-003: log record missing canonical v1.9 body %q; lines: %v",
+			wantBody, log.Lines())
 	}
 }
 
