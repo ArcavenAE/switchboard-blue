@@ -298,6 +298,85 @@ func TestConsoleSet_Deliver_DropsFramesWhenBufferFull(t *testing.T) {
 	}
 }
 
+// TestConsoleSet_Deliver_StalledConsoleDoesNotBlockOthers verifies the headline
+// NFR-004 invariant: when console A's downstream buffer is full and not being
+// drained, Deliver must still deliver every frame to console B (which is
+// draining) without blocking or delay (BC-2.04.006 NFR-004; EC-005).
+//
+// The existing TestConsoleSet_Deliver_DropsFramesWhenBufferFull only uses one
+// non-draining console; it cannot prove sibling continuity (F-M-2 pass-7).
+//
+// Guard: each Deliver call is run inside a select with a per-call timeout so
+// that a regression (blocking fan-out) fails fast rather than hanging the suite.
+func TestConsoleSet_Deliver_StalledConsoleDoesNotBlockOthers(t *testing.T) {
+	t.Parallel()
+	cs := newTestConsoleSet(t)
+
+	// Console A: attached but never drained — its buffer will fill up.
+	if _, _, err := cs.Add("stall-A", "stall-session"); err != nil {
+		t.Fatalf("Add A: %v", err)
+	}
+
+	// Console B: drained by a goroutine so its buffer stays clear.
+	downstreamB, _, err := cs.Add("stall-B", "stall-session")
+	if err != nil {
+		t.Fatalf("Add B: %v", err)
+	}
+
+	// Saturate A's buffer: deliver exactly DownstreamBufSize frames without
+	// draining. A's channel is now full; subsequent frames for A are dropped.
+	for i := range session.DownstreamBufSize {
+		cs.Deliver(makeTestHeader(uint16(i)))
+	}
+
+	// Deliver one more frame beyond A's capacity.  B must receive this frame
+	// promptly; A must drop it (counted by FramesDropped).
+	const extraFrames = 3
+	// Drain B's buffer from the saturation phase first, then collect the extra
+	// frames.  We need to drain the DownstreamBufSize frames that B already
+	// received from the saturation loop before we start counting the extras.
+	drainedB := 0
+	for drainedB < session.DownstreamBufSize {
+		select {
+		case _, ok := <-downstreamB:
+			if !ok {
+				t.Fatal("B: downstream closed unexpectedly during drain")
+			}
+			drainedB++
+		case <-time.After(500 * time.Millisecond):
+			t.Fatalf("B: timed out draining saturation frames (got %d/%d)", drainedB, session.DownstreamBufSize)
+		}
+	}
+
+	// Now deliver the extra frames while A remains stalled.
+	droppedBefore := cs.FramesDropped()
+	for i := range extraFrames {
+		cs.Deliver(makeTestHeader(uint16(100 + i)))
+	}
+
+	// B must receive all extra frames — one at a time, with a tight timeout per
+	// frame so a blocking Deliver fails fast.
+	for i := range extraFrames {
+		select {
+		case got, ok := <-downstreamB:
+			if !ok {
+				t.Fatalf("B: downstream closed on extra frame %d", i)
+			}
+			if got.PayloadLen != uint16(100+i) {
+				t.Errorf("B: extra frame %d: PayloadLen = %d; want %d", i, got.PayloadLen, 100+i)
+			}
+		case <-time.After(500 * time.Millisecond):
+			t.Fatalf("B: timed out waiting for extra frame %d (blocking fan-out regression)", i)
+		}
+	}
+
+	// FramesDropped must account for exactly the extra frames dropped for A.
+	gotDropped := cs.FramesDropped() - droppedBefore
+	if gotDropped != extraFrames {
+		t.Errorf("FramesDropped delta = %d; want %d (A must drop extras, B must not)", gotDropped, extraFrames)
+	}
+}
+
 // TestConsoleSet_Snapshot_ReturnsValueCopy verifies that Snapshot returns a
 // value-copy of the key set and that mutating the returned slice does not affect
 // the ConsoleSet (CLAUDE.md Go rule 12: no internal pointer leak).
