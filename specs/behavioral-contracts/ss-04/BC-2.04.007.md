@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.007
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: active
 producer: product-owner
 timestamp: 2026-06-27T00:00:00Z
@@ -24,6 +24,9 @@ modified:
   - date: 2026-06-27
     version: "1.2"
     change: "S-W3.04 adversarial convergence pass-2; architect ADR-011 v1.5 §HIGH-A ruling: EC-007 extended with PTY-source EOF as an explicit PC-2.6 trigger; E-SYS-003 added to Error Codes table; clarified that ErrPTYSourceEOF on sc.Err() is one trigger of the same PC-2.6 drain path alongside watchAndFallback double-failure"
+  - date: 2026-06-27
+    version: "1.3"
+    change: "Wave-3 wave-level adversarial pass-1 I-1 adjudication: PC-2 postcon-6 clarified — all four post-connect goroutines MUST be wg-tracked; postcon-6 amended to make explicit that sweep ticker and frames-dropped ticker goroutines must be in the sync.WaitGroup (not merely ctx-observable); ARCH-01 §Goroutine WaitGroup Contract is the authoritative ruling"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -88,7 +91,7 @@ operators and process supervisors.
    exit within one ticker period.
 4. `sc.Close()` is called exactly once (enforced by `sync.Once` per ADR-011).
 5. The process exits with code 0.
-6. No goroutines are leaked (verified by test with `t.Cleanup` + short timeout).
+6. No goroutines are leaked. All four post-connect goroutines — the Err-drain goroutine, the frames-bridge goroutine, the sweep ticker goroutine, and the frames-dropped ticker goroutine — MUST be tracked in `sync.WaitGroup` and joined via `wg.Wait()` at shutdown. Test verification: `t.Cleanup` + a bounded `wg.Wait()` timeout (≤100ms after cancellation). `ctx.Done()` observation alone is not sufficient; `wg.Add(1)` / `defer wg.Done()` inside each goroutine is required for deterministic leak detection. See ARCH-01 §Goroutine WaitGroup Contract (I-1 adjudication, v1.7).
 7. No panic occurs.
 
 **PC-2.6 (mid-session double-failure):** If `sc.Err()` delivers a non-nil error after the relay loop has started (both tmux control-mode and PTY fallback have failed mid-session), the daemon MUST log the error at ERROR level in E-SYS-002 format and cancel the root context. The subsequent shutdown sequence is identical to the SIGTERM/SIGINT path. The E-SYS-002 log entry constitutes the 'never silent' obligation (BC-2.04.002 invariant 3). The relay goroutine continues until `sc.Close()` is called in the shutdown sequence; it does not deadlock because `forwardFrames` observes `ctx.Done()` in its outer loop (ARCH-01 v1.4 §Relay busy-spin guard) and exits cleanly.
@@ -197,6 +200,7 @@ VP-060 (new — to be registered by architect per bc_array_changes_propagate_to_
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 I-1 adjudication: PC-2 postcon-6 amended — all four post-connect goroutines (Err-drain, frames-bridge, sweep ticker, frames-dropped ticker) MUST be wg-tracked; `ctx.Done()` alone is insufficient for deterministic leak verification; test MUST use `wg.Wait()` with a bounded timeout. ARCH-01 §Goroutine WaitGroup Contract is the authoritative ruling. |
 | 1.2 | 2026-06-27 | S-W3.04 adversarial convergence pass-2; architect ADR-011 v1.5 §HIGH-A ruling: EC-007 extended — PTY-source EOF (ErrPTYSourceEOF on sc.Err()) is an explicit second trigger of the PC-2.6 drain path alongside watchAndFallback double-failure; E-SYS-003 added to Error Codes table; clarified that both triggers share identical PC-2.6/invariant-5 semantics; relay busy-spin prevention noted (forwardFrames exits on PTY-mode EOF detection). |
 | 1.1 | 2026-06-27 | S-W3.04 adversarial convergence; architect ADR-011 v1.4 ruling: added PC-2.6 (mid-session double-failure path via sc.Err()); added EC-007 (mid-session double-failure edge case); added Inv-5 (Err() drain obligation, wg-tracked goroutine). |
 | 1.0 | 2026-06-27 | Initial draft — daemon startup/shutdown lifecycle contract. |

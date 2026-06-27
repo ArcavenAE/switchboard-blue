@@ -2,7 +2,7 @@
 artifact_id: ARCH-01-core-services
 document_type: architecture-section
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -13,6 +13,7 @@ modified:
   - 2026-06-27T00:00:00 # v1.4 — ADR-011 §Concurrency: amend relay-drop counter contract (relay-level drops MUST be metered via sc.relayDropped), relay busy-spin contract (ctx.Done guard REQUIRED in outer relay loop), and daemon sc.Err() drain obligation; per S-W3.04 adversarial convergence adjudication
   - 2026-06-27T00:00:00 # v1.5 — ADR-011 §Terminal-source EOF: three new rulings from S-W3.04 adversarial convergence pass-2: (HIGH-A) terminal PTY-source EOF hot-spin — PTY EOF without prior Close() is a session-fatal backend loss; relay MUST detect and surface via sc.Err(); new EC-008 (PTY-death); (HIGH-B) runAccess injection seam — split into runAccess/runAccessWithConnector; (MEDIUM) §6.5.2 internal/frame import addition
   - 2026-06-27T00:00:00 # v1.6 — ADR-011 §HIGH-A tightened: TOCTOU fix — {src, srcCh, inPTYMode} MUST be read as a single atomic snapshot under one sc.mu acquisition via activeSourceSnapshot(); two separate locked reads can straddle a watchAndFallback swap and misclassify in-flight failover as terminal PTY-EOF (EC-002 regression 1-in-5); soundness proof for the atomic-snapshot discriminator; updated test obligations (EC-002 stress + EOF unit)
+  - 2026-06-27T00:00:00 # v1.7 — Wave-3 wave-level adversarial pass-1 I-1 adjudication: §Goroutine WaitGroup Contract clarification added to Daemon Lifecycle; startSweepTicker and startFramesDroppedTicker MUST accept *sync.WaitGroup and use wg.Add(1)/defer wg.Done() so BC-2.04.007 PC-2 postcon-6 leak verification is deterministic; BC-2.04.007 PC-2 postcon-6 cross-reference added.
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -80,6 +81,49 @@ main() → run(stdout, os.Args)
       6. serve() → event loop until shutdown
       7. shutdown() → drain active sessions, close listeners
 ```
+
+### Goroutine WaitGroup Contract (I-1 adjudication — Wave-3 wave-level adversarial pass-1, 2026-06-27)
+
+BC-2.04.007 PC-2 postcondition 6 requires: "No goroutines are leaked (verified by
+test with `t.Cleanup` + short timeout)." This is only deterministically verifiable
+if EVERY goroutine spawned after a successful `sc.Connect(ctx)` call is tracked by
+the `sync.WaitGroup` that `runAccessWithConnector` joins via `wg.Wait()` at
+shutdown.
+
+**Ruling:** All four post-connect goroutines in `runAccessWithConnector` MUST be
+wg-tracked. Specifically:
+
+- **Err-drain goroutine** (already wg-tracked via `wg.Add(1)` / `defer wg.Done()`): compliant.
+- **Frames-bridge goroutine** (already wg-tracked via `wg.Add(1)` / `defer wg.Done()`): compliant.
+- **Sweep ticker goroutine** (spawned inside `startSweepTicker`): **MUST be wg-tracked**.
+  `startSweepTicker` MUST accept a `*sync.WaitGroup` parameter, call `wg.Add(1)`
+  before launching the goroutine, and call `defer wg.Done()` inside the goroutine.
+- **Frames-dropped ticker goroutine** (spawned inside `startFramesDroppedTicker`):
+  **MUST be wg-tracked.** Same requirement as sweep ticker.
+
+`ctx.Done()` observation alone is not sufficient to satisfy PC-2 postcon-6: the test
+`t.Cleanup` timeout-and-check pattern requires `wg.Wait()` to block until each
+goroutine has actually exited, not merely until cancellation has been delivered.
+Without wg-tracking, a test that calls `cancel()` and then `wg.Wait()` will return
+immediately (the tickers are not in the WaitGroup) while the ticker goroutines are
+still executing their select-branch — a genuine leak window. This is the I-1 gap.
+
+**Implementation constraint:** The callers of `startSweepTicker` and
+`startFramesDroppedTicker` inside `runAccessWithConnector` MUST pass `&wg` as the
+first argument. The goroutine bodies MUST call `wg.Add(1)` before the `go` statement
+(to avoid the race where the goroutine might not start before `wg.Wait()` is called).
+The canonical pattern:
+
+```go
+wg.Add(1)
+go func() {
+    defer wg.Done()
+    // ticker loop observing ctx.Done()
+}()
+```
+
+**References:** BC-2.04.007 PC-2 postcon-6, ARCH-08 §6.5.1 obligations 3 and 6
+(I-1 wg-join clarification, v2.2), S-W3.04 AC-008.
 
 ## Signal Handling
 
@@ -537,3 +581,4 @@ does not block S-W3.04 convergence.
 | 1.4 | 2026-06-27 | ADR-011 §Concurrency amended: (1) relay-drop counter contract — `sc.relayDropped` atomic, `RelayDropped()` method, AC-006 log MUST report both relay and console drop counts; (2) relay busy-spin guard — `forwardFrames` receives `ctx` param, selects on `ctx.Done()` in outer loop, calls `runtime.Gosched()` on unchanged-closed-source retry; (3) daemon `sc.Err()` drain obligation — `runAccess` MUST drain Err() in a wg-tracked goroutine, cancel context on non-nil error (E-SYS-002, BC-2.04.002 invariant 3). Per S-W3.04 adversarial convergence adjudication. |
 | 1.5 | 2026-06-27 | ADR-011 Amendment v1.5: (HIGH-A) Terminal PTY-source EOF is a session-fatal backend loss — relay MUST detect `srcCh==prevSrcCh` in PTY mode and send `ErrPTYSourceEOF` on `sc.errCh` then exit (no hot-spin); discrimination: PTY mode → fatal; control mode → yield-and-retry (swap in flight). New E-SYS-003 taxonomy entry (canonical display remains E-SYS-002 format). Test obligation: inject pipe-pair PTY, close write end without sc.Close(), assert Err() delivers ErrPTYSourceEOF within 100ms. (HIGH-B) runAccess injection seam — split into `runAccess` (thin ctor wrapper) + `runAccessWithConnector(ctx, stderr, connectorIface)` (all logic); `connectorIface` covers Connect/Frames/Err/Close/RelayDropped; tests inject fake connector for PC-2 and PC-2.6 end-to-end coverage. (MEDIUM) EC-005 wording note: "CI enforces this structurally" overstates enforcement; corrected wording deferred to story-writer. Per S-W3.04 adversarial convergence pass-2. |
 | 1.6 | 2026-06-27 | ADR-011 HIGH-A tightened (TOCTOU fix): two separate sc.mu acquisitions (activeFrSource + InPTYMode) can straddle a watchAndFallback swap, causing ~20% EC-002 false-EOF misclassification. Fix: new activeSourceSnapshot() helper reads {src, srcCh=src.Frames(), inPTYMode} under one sc.mu hold; src.Frames() called inside the lock. Soundness proof: watchAndFallback sets sc.active+sc.inPTYMode atomically; freshly-landed PTY introduces pty.frames != prevSrcCh, so srcCh==prevSrcCh AND inPTY=true is sound terminal-EOF signal only. Two test obligations: T1 terminal-EOF bounded-exit (unchanged) + T2 EC-002 stress (-count=50 or deterministic swap-barrier interleaving). Per S-W3.04 adversarial convergence pass-3. |
+| 1.7 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 I-1 adjudication: Added §Goroutine WaitGroup Contract under Daemon Lifecycle. Ruling: all four post-connect goroutines in runAccessWithConnector MUST be wg-tracked. `startSweepTicker` and `startFramesDroppedTicker` MUST accept `*sync.WaitGroup`, call `wg.Add(1)` before `go`, and `defer wg.Done()` inside — so BC-2.04.007 PC-2 postcon-6 no-goroutine-leak verification is deterministic via `wg.Wait()` in tests. ctx.Done observation alone is insufficient to satisfy postcon-6. Cross-references: BC-2.04.007 PC-2 postcon-6, ARCH-08 §6.5.1 v2.2 obligations 3+6, S-W3.04 AC-008. |

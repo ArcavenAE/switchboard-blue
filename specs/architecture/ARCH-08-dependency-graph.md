@@ -2,7 +2,7 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.1"
+version: "2.2"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -15,6 +15,7 @@ modified:
   - 2026-06-27T00:00:00 # v1.9 — Register cmd/switchboard position 18 as ACTIVE SCOPE for story S-4.00 (daemon assembly); document import set, wiring obligations, story assignment, and ADR-011 pointer
   - 2026-06-27T00:00:00 # v2.0 — Clarify obligation 1: router is constructed-but-not-yet-in-data-path in Wave 3; AC-001 test targets the router instance returned by buildRouter, not a parallel reconstruction; two-bug fix (stale keyset + discarded return value) documented
   - 2026-06-27T00:00:00 # v2.1 — (MEDIUM) §6.5.2 import set: add internal/frame (OuterHeader carrier in startFramesBridge → AccessNode.DeliverFrame); (HIGH-B) §6.5.1 obligation 4: note runAccess injection seam (runAccessWithConnector + connectorIface) as testability refinement; §6.5.1 obligation 4 note on EC-005 wording. Per S-W3.04 adversarial convergence pass-2.
+  - 2026-06-27T00:00:00 # v2.2 — Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication: §6.5.1 TRACKED-DEFER note added after obligation table (E-ADM-016/017 dormancy and FailureCounter wiring gap); I-1 wg-join clarification note added to obligation 3 and 6 rows.
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -261,15 +262,40 @@ maps to a buildability tier (see §6.6 feasibility register):
 |---|-----------|---------------|-------------|
 | 1 | Inject real `routing.Logger` into `NewRouter` via `WithLogger` so `RouteFrame` E-ADM-016 paths write to `os.Stderr` (or a `log.New` sink) in production builds. **Wave-3 data-path clarification (v2.0):** The `routing.Router` constructed by obligation 1 is NOT in the Wave-3 frame data path — there is no network-ingress listener wired in S-W3.04. The router is constructed with a live logger so that (a) it is non-nil and non-noop in the binary, and (b) AC-001's `TestRouterLoggerEmitsEADM016` can call `RouteFrame` on the returned `*routing.Router` instance directly to verify E-ADM-016 emission. **The router instance returned by `buildRouter` MUST NOT be discarded** (`_ = buildRouter(keys)` is wrong); it MUST be assigned to a named variable and passed to the AC-001 test via the exported test surface or a package-level accessor. Additionally, `buildRouter` MUST receive the **same** `*admission.AdmittedKeySet` used by `buildAccessNode` — both must share one keyset instance so AC-001 can register a key, call `buildRouter(keys).RouteFrame(...)`, and observe the E-ADM-016 log without a separate keyset. The network-ingress wiring (router in live data path) is deferred to a future story. | `internal/routing` (exists) | BUILDABLE NOW |
 | 2 | Construct `admission.AdmittedKeySet`, `session.Publisher`, `session.SessionAuth`, then wire `NewAccessNode(pub, auth, WithKeystrokeSink(sc))` replacing the nil/NoOp defaults | `internal/admission`, `internal/session` (both exist) | BUILDABLE NOW |
-| 3 | Instantiate Sweep eviction `time.Ticker` in `main()` and call `accessNode.Sweep(deadline)` on each tick | `internal/session` (exists); `time.Ticker` stdlib | BUILDABLE NOW |
+| 3 | Instantiate Sweep eviction `time.Ticker` in `main()` and call `accessNode.Sweep(deadline)` on each tick. **I-1 wg-join clarification (v2.2):** `startSweepTicker` MUST accept a `*sync.WaitGroup`, call `wg.Add(1)` before launching its goroutine, and call `defer wg.Done()` inside. This ensures BC-2.04.007 PC-2 postcondition 6 ("no goroutines leaked — verified by test with `t.Cleanup` + short timeout") is deterministically verifiable: the test's `wg.Wait()` blocks until the sweep ticker goroutine has exited, not just until ctx is cancelled. | `internal/session` (exists); `time.Ticker` stdlib | BUILDABLE NOW |
 | 4 | Pipe `SessionConnector.Frames()` → `accessNode.DeliverFrame()` in a goroutine after `sc.Connect(ctx)` succeeds. Requires `SessionConnector.Frames()` API to be pinned (drift W3-R2-M4); see ADR-011 for the chosen design. **Testability refinement (v2.1):** `runAccess` is split into a thin constructor wrapper + `runAccessWithConnector(ctx, stderr, connectorIface)` where `connectorIface` covers `Connect/Frames/Err/Close/RelayDropped`. Tests inject a `fakeConnector` to exercise PC-2 (clean) and PC-2.6 (mid-session double-failure → exit 1) end-to-end through the production function. See ARCH-01 ADR-011 Amendment v1.5 §HIGH-B. | `internal/tmux` (exists); ADR-011 (new) | BUILDABLE NOW after ADR-011 pins API |
 | 5 | Replace `NoOpAuthorizer` with live `*SessionAuth` (drift W3-M-3; fail-open closed) | `internal/session` (exists) | BUILDABLE NOW (done by obligation 2 above) |
-| 6 | Surface `accessNode.FramesDropped()` counter via periodic structured log line (drift W3-R2-M3) — no metrics endpoint or sbctl needed | `internal/session` (exists); `log` / `fmt` stdlib | BUILDABLE NOW |
+| 6 | Surface `accessNode.FramesDropped()` counter via periodic structured log line (drift W3-R2-M3) — no metrics endpoint or sbctl needed. **I-1 wg-join clarification (v2.2):** `startFramesDroppedTicker` MUST accept a `*sync.WaitGroup`, call `wg.Add(1)` before launching its goroutine, and call `defer wg.Done()` inside. Same rationale as obligation 3: BC-2.04.007 PC-2 postcondition 6 requires deterministic leak verification via wg-join, not race-prone timeout-without-join. | `internal/session` (exists); `log` / `fmt` stdlib | BUILDABLE NOW |
 
 **No hard blockers.** All six obligations are buildable using only packages present
 on develop @ b68e498. `internal/config`, `internal/drain`, and `internal/metrics`
 (Wave 4+) are NOT imported by S-4.00 — see §6.6 feasibility register for
 detailed rationale.
+
+> **C-1 TRACKED-DEFER — FailureCounter wiring (Wave-3 wave-level adversarial pass-1,
+> 2026-06-27):** Obligation 1 wires `routing.WithLogger` so that E-ADM-016 (per-failure
+> log) is produced on every `RouteFrame` HMAC failure. `routing.WithFailureCounter`
+> (which drives E-ADM-017, the per-source HMAC failure-rate alert — BC-2.05.005 PC-3)
+> is **NOT** wired in S-4.00. This is a deliberate tracked deferral, not an oversight.
+> Rationale: in Wave 3 the router is constructed-but-not-in-data-path (no
+> network-ingress listener is wired; `RouteFrame` has no non-test caller in `cmd/`).
+> Neither E-ADM-016 nor E-ADM-017 can fire in the production daemon in Wave 3
+> regardless of FailureCounter wiring. Wiring `WithFailureCounter` now would
+> construct a live `*admission.FailureCounter` (with its mandatory non-nil logger,
+> threshold ≥ 1, and window > 0) for a dead code path with no observable production
+> effect in this wave. The deferral is correct.
+>
+> **Mandatory constraint for the future network-ingress story:** When a network-ingress
+> listener is wired (the story that places `RouteFrame` in a live data path), that
+> story MUST wire BOTH `routing.WithLogger` (already present) AND
+> `routing.WithFailureCounter(fc)` in `buildRouter`. The two event codes activate
+> together or not at all — partial wiring (logger without counter) is forbidden at
+> that boundary. The story MUST include a daemon-level integration test asserting
+> that E-ADM-017 fires through the daemon's own router instance when the threshold
+> is crossed (analogous to AC-001 for E-ADM-016). Story-writer MUST cite
+> BC-2.05.005 PC-3, this §6.5.1 note, and the S-W3.05 AC-6 wiring obligation when
+> drafting that future story. The orchestrator MUST track this as a STATE drift item
+> or follow-up story so the obligation is not lost between waves.
 
 The following packages are present in `internal/` on develop. Positions are
 strict — position N may import packages at positions 1..N-1 only.
@@ -404,3 +430,4 @@ decomposition):
 | 1.9 | 2026-06-27 | S-4.00 daemon assembly: register cmd/switchboard position 18 as ACTIVE SCOPE; add §6.5.1 (six wiring obligations + buildability tiers), §6.5.2 (S-4.00 import set, deferred packages), §6.6.1 (feasibility register with HARD BLOCKER: NONE ruling), §6.6.2 (Wave 4+ prospective positions). ADR-011 (SessionConnector.Frames()) pointer added. |
 | 2.0 | 2026-06-27 | §6.5.1 obligation 1 clarified: router is constructed-but-not-yet-in-data-path in Wave 3 (no network-ingress listener). `buildRouter` return value MUST be assigned (not discarded). `buildRouter` MUST receive the same `*admission.AdmittedKeySet` instance as `buildAccessNode` (single shared keyset). AC-001 verification targets the returned router instance directly — it is non-tautological because it exercises the real `RouteFrame` → `verifyFrameHMAC` → logger path. Per S-W3.04 adversarial convergence adjudication. |
 | 2.1 | 2026-06-27 | (MEDIUM) §6.5.2 import set: `internal/frame` added (OuterHeader carrier in `startFramesBridge`; DAG position 2 leaf; no forbidden edge). (HIGH-B) §6.5.1 obligation 4 note: `runAccess` injection seam — split into `runAccess` + `runAccessWithConnector(connectorIface)`; tests inject `fakeConnector` for PC-2/PC-2.6 end-to-end. (EC-005) §6.5.2 note: "CI enforces structurally" wording overstated; accepted Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |
+| 2.2 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication. C-1 TRACKED-DEFER: `routing.WithFailureCounter` wiring deferred to the future network-ingress story; TRACKED-DEFER note added after obligation table mandating that E-ADM-016 and E-ADM-017 MUST be wired together when `RouteFrame` enters the live data path; orchestrator MUST register a follow-up story/STATE drift item. I-1 wg-join: obligations 3 and 6 updated to require `startSweepTicker` and `startFramesDroppedTicker` to accept `*sync.WaitGroup` and track the goroutine with `wg.Add(1)` / `defer wg.Done()` so BC-2.04.007 PC-2 postcon-6 no-goroutine-leak assertion is deterministic. |
