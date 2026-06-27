@@ -1,7 +1,7 @@
 // Package admission — FailureCounter tracks per-source HMAC failure rates and
 // emits E-ADM-017 admission alerts when the sliding-window threshold is crossed.
 //
-// Traces to BC-2.05.005 PC-3; S-W3.05 AC-001 through AC-010.
+// Traces to BC-2.05.005 PC-3; S-W3.05 AC-001 through AC-015.
 package admission
 
 import (
@@ -31,6 +31,15 @@ func WithNow(fn func() time.Time) FailureCounterOption {
 	}
 }
 
+// maxTrackedSources is the hard upper bound on the number of distinct source
+// addresses tracked simultaneously. When a new source would exceed this limit,
+// the LRU source (oldest most-recent failure timestamp) is evicted from both
+// counts and firedAt before the new source is inserted.
+//
+// Prevents unbounded map growth (CWE-770). O(N) LRU scan is acceptable for V1.
+// Traces to BC-2.05.005 EC-010; S-W3.05 AC-011.
+const maxTrackedSources = 65536
+
 // FailureCounter tracks per-source HMAC failure timestamps in a sliding window
 // and emits E-ADM-017 exactly once per threshold crossing.
 //
@@ -41,7 +50,7 @@ func WithNow(fn func() time.Time) FailureCounterOption {
 //
 // All exported methods are safe for concurrent use.
 //
-// Traces to BC-2.05.005 PC-3; S-W3.05 AC-001 through AC-010.
+// Traces to BC-2.05.005 PC-3; S-W3.05 AC-001 through AC-015.
 type FailureCounter struct {
 	mu             sync.Mutex
 	counts         map[string][]time.Time // per-srcAddr timestamp slices
@@ -55,7 +64,19 @@ type FailureCounter struct {
 // NewFailureCounter constructs a FailureCounter with the given threshold and
 // sliding window duration. logger must not be nil. Optional FailureCounterOption
 // values (e.g. WithNow) are applied after construction.
+//
+// NewFailureCounter panics if threshold < 1 or windowDuration <= 0. These are
+// programmer-error guards: a zero/negative threshold or non-positive window is
+// always a caller bug, not a runtime condition.
+//
+// Traces to BC-2.05.005 PC-3 v1.4 (constructor-arg validation); S-W3.05 AC-013.
 func NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger, opts ...FailureCounterOption) *FailureCounter {
+	if threshold < 1 {
+		panic("admission: NewFailureCounter: threshold must be >= 1")
+	}
+	if windowDuration <= 0 {
+		panic("admission: NewFailureCounter: windowDuration must be > 0")
+	}
 	c := &FailureCounter{
 		counts:         make(map[string][]time.Time),
 		firedAt:        make(map[string]time.Time),
@@ -75,17 +96,22 @@ func NewFailureCounter(threshold int, windowDuration time.Duration, logger Logge
 // Under the mutex it:
 //  1. Trims entries where timestamp < now()-windowDuration (strictly less-than;
 //     boundary entries are kept — BC-2.05.005 EC-008, AC-008).
-//  2. Checks hysteresis: if the oldest remaining entry is newer than the last
+//  2. If post-trim count is zero and the key existed, deletes counts[srcAddr] and
+//     firedAt[srcAddr] (dead-key eviction — prevents unbounded map growth from
+//     inactive sources; AC-012).
+//  3. Checks hysteresis: if the oldest remaining entry is newer than the last
 //     alert fire time (i.e., all "pre-fire" entries have been trimmed away),
 //     re-arms the alert. Also re-arms when the window is completely empty.
-//  3. Appends now().
-//  4. If post-append count >= threshold AND not yet fired since re-arm: emits
-//     E-ADM-017 via logger (fire-once-per-crossing, AC-004).
+//  4. Evicts the LRU source before inserting a new srcAddr key if
+//     len(counts) == maxTrackedSources (CWE-770; AC-011).
+//  5. Appends now().
+//  6. If post-append count >= threshold AND not yet fired since re-arm: captures
+//     the alert message under the lock, then logs after unlock to avoid holding
+//     the lock during I/O.
 //
-// Traces to BC-2.05.005 PC-3; S-W3.05 AC-002 through AC-010.
+// Traces to BC-2.05.005 PC-3; S-W3.05 AC-002 through AC-015.
 func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	now := c.now()
 	cutoff := now.Add(-c.windowDuration)
@@ -100,7 +126,16 @@ func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 		}
 	}
 
-	// Step 2: Hysteresis re-arm check.
+	// Step 2: Dead-key eviction — if the window drained fully for this source,
+	// delete it from both maps so len(counts) reflects only live sources and a
+	// future re-arm starts clean (AC-012).
+	if len(keep) == 0 && existing != nil {
+		delete(c.counts, srcAddr)
+		delete(c.firedAt, srcAddr)
+		keep = nil
+	}
+
+	// Step 3: Hysteresis re-arm check.
 	// Re-arm when the window has drained completely, OR when all surviving entries
 	// post-trim are newer than the last fire time (the "old window" entries that
 	// were present when the alert fired have all expired).
@@ -113,19 +148,60 @@ func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 		}
 	}
 
-	// Step 3: Append current timestamp.
+	// Step 4: LRU source cap — before inserting a brand-new key, evict the
+	// source whose most-recent failure is oldest if we are at capacity (AC-011).
+	_, exists := c.counts[srcAddr]
+	if !exists && len(c.counts) >= maxTrackedSources {
+		c.evictLRU()
+	}
+
+	// Step 5: Append current timestamp.
 	keep = append(keep, now)
 	c.counts[srcAddr] = keep
 
-	// Step 4: Emit E-ADM-017 on threshold crossing, exactly once per crossing.
+	// Step 6: Emit E-ADM-017 on threshold crossing, exactly once per crossing.
+	// Capture the message under lock; log after unlock to avoid holding the
+	// mutex during logger I/O.
+	var alertMsg string
 	if len(keep) >= c.threshold && lastFire.IsZero() {
 		c.firedAt[srcAddr] = now
-		c.logger.Log(fmt.Sprintf(
-			"E-ADM-017 HMAC failure rate alert: ≥%d failures in %.0fs from src %s",
+		alertMsg = fmt.Sprintf(
+			"E-ADM-017 ≥%d failures in %.0fs from src %s",
 			c.threshold,
 			c.windowDuration.Seconds(),
 			srcAddr,
-		))
+		)
+	}
+
+	c.mu.Unlock()
+
+	if alertMsg != "" {
+		c.logger.Log(alertMsg)
+	}
+}
+
+// evictLRU removes the source with the oldest most-recent failure timestamp
+// from both counts and firedAt. Must be called with c.mu already held.
+// O(N) scan is acceptable for V1 per product-owner adjudication (AC-011).
+// Traces to BC-2.05.005 EC-010; S-W3.05 AC-011; CWE-770.
+func (c *FailureCounter) evictLRU() {
+	var lruKey string
+	var lruTime time.Time
+	for k, ts := range c.counts {
+		if len(ts) == 0 {
+			// Empty slice — evict immediately (treat as infinitely old).
+			lruKey = k
+			break
+		}
+		last := ts[len(ts)-1]
+		if lruKey == "" || last.Before(lruTime) {
+			lruKey = k
+			lruTime = last
+		}
+	}
+	if lruKey != "" {
+		delete(c.counts, lruKey)
+		delete(c.firedAt, lruKey)
 	}
 }
 
@@ -143,4 +219,15 @@ func (c *FailureCounter) Timestamps(srcAddr string) []time.Time {
 	out := make([]time.Time, len(src))
 	copy(out, src)
 	return out
+}
+
+// SourceCount returns the number of distinct source addresses currently tracked
+// in the sliding window (i.e., sources with at least one non-evicted entry in
+// counts). Returns an int copy — safe for concurrent use (go.md rule 12).
+//
+// Traces to BC-2.05.005 EC-010; S-W3.05 AC-011.
+func (c *FailureCounter) SourceCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.counts)
 }
