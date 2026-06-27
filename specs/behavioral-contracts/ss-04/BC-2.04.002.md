@@ -2,11 +2,11 @@
 artifact_id: BC-2.04.002
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
-modified: 2026-06-26T00:00:00Z
+modified: 2026-06-27T00:00:00Z
 phase: 1a
 bc_id: BC-2.04.002
 subsystem: session-access
@@ -60,7 +60,7 @@ When tmux control mode is unavailable (tmux absent, version incompatible, or con
 
 1. **DI-001**: PTY proxy mode provides the same carrier-grade content separation as control mode — the access node still routes through the SVTN.
 2. PTY proxy mode is a degraded-functionality state, not a failure. The session is still usable.
-3. The fallback state is clearly communicated to the operator — never silent.
+3. The fallback state is clearly communicated to the operator — **never silent**. This covers ALL PTY-mode termination events, including terminal-source EOF (the proxied shell process exiting normally), which MUST surface as `ErrPTYSourceEOF` on `sc.Err()` and produce an E-SYS-002-format log entry. Silent exit — including the hot-spin case where `forwardFrames` busy-loops on a closed PTY channel without signalling — is a violation of this invariant.
 
 ## Trigger
 
@@ -74,6 +74,7 @@ tmux control mode initialization failure detected at access node startup or mid-
 | EC-002 (FM-011) | tmux not found in PATH | PTY fallback immediately; no retry for tmux. Log: "tmux binary not found; using PTY proxy". |
 | EC-003 | tmux control mode drops after successful start (mid-operation) | Access node attempts control mode reconnect; if reconnect fails after 3 attempts, switches to PTY proxy mode for existing sessions. Log: "tmux control mode lost; falling back to PTY proxy". |
 | EC-004 | PTY device not available on host | Access node fails to start entirely; E-SYS-001 "PTY device unavailable: cannot start access node. Install 'openpty' or check device permissions." No silent failure. |
+| EC-008 (ARCH-01 ADR-011 v1.5 §HIGH-A) | PTY shell process exits (EOF on PTY master) while the access node is running in PTY mode, WITHOUT `sc.Close()` being called | The `forwardFrames` relay detects `srcCh==prevSrcCh` in PTY mode and MUST NOT hot-spin. It sends `ErrPTYSourceEOF` (E-SYS-003 sentinel, message: `"session connector: PTY source EOF"`) on `sc.errCh` via `sc.closeErrCh.Do` (buffered-1, non-blocking) then returns. The daemon's PC-2.6 drain path (BC-2.04.007) receives the error on `sc.Err()`, logs it as E-SYS-002 format (`"fatal: cannot connect to session backend: session connector: PTY source EOF"`) at ERROR level, cancels the root context, and exits with code 1. The relay goroutine MUST exit (never busy-spin). Invariant 3 (never-silent) is satisfied by the E-SYS-002 log entry. No silent exit is permitted. |
 
 ## Canonical Test Vectors
 
@@ -105,3 +106,13 @@ tmux control mode initialization failure detected at access node startup or mid-
 ## Related BCs
 
 - BC-2.04.001 — depends on: control mode failure triggers this BC
+- BC-2.04.007 — composes with: PC-2.6 drain path is the receiver of `ErrPTYSourceEOF` signalled by EC-008
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.3 | 2026-06-27 | S-W3.04 adversarial convergence pass-2: (HIGH-A) Invariant 3 (never-silent) extended to explicitly cover terminal-source EOF — hot-spin on a closed PTY channel is a violation; (HIGH-A) Added EC-008: PTY shell process exits (EOF on PTY master) without sc.Close() — relay must signal ErrPTYSourceEOF on sc.errCh and exit; daemon PC-2.6 drain path logs E-SYS-002 format and exits 1. Per ARCH-01 ADR-011 v1.5 §HIGH-A. |
+| 1.2 | 2026-06-26 | Added EC-003 mid-operation fallback; EC-004 PTY-unavailable error code. |
+| 1.1 | 2026-06-25 | Initial Wave 3 review pass. |
+| 1.0 | 2026-06-23 | Initial draft. |

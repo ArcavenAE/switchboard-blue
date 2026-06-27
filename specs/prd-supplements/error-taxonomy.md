@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "2.0"
+version: "2.1"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -11,7 +11,7 @@ inputs:
   - '.factory/specs/prd.md'
   - '.factory/specs/domain-spec/failure-modes.md'
   - '.factory/specs/domain-spec/edge-cases.md'
-input-hash: "[md5-pending]"
+input-hash: "bc4367a"
 traces_to: '.factory/specs/prd.md'
 ---
 
@@ -146,7 +146,8 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-SYS-001 | SYS | broken | 1 | "PTY device unavailable: cannot start access node. Install 'openpty' or check device permissions." | FM-011, BC-2.04.002 |
-| E-SYS-002 | SYS | broken | 1 | "fatal: cannot connect to session backend: <reason>" | BC-2.04.007 PC-1; emitted when `SessionConnector.Connect(ctx)` returns non-nil (both tmux control mode and PTY fallback exhausted). Distinct from E-SYS-001 (OS-level PTY device unavailable) — E-SYS-002 is the aggregate connect-failure at the `SessionConnector` level after all fallbacks are tried. |
+| E-SYS-002 | SYS | broken | 1 | "fatal: cannot connect to session backend: <reason>" | BC-2.04.007 PC-1; emitted when `SessionConnector.Connect(ctx)` returns non-nil (both tmux control mode and PTY fallback exhausted). Distinct from E-SYS-001 (OS-level PTY device unavailable) — E-SYS-002 is the aggregate connect-failure at the `SessionConnector` level after all fallbacks are tried. Also emitted on E-SYS-003 (PTY-source EOF mid-session) because the `<reason>` is interpolated from `ErrPTYSourceEOF`; the wire-visible message format is always E-SYS-002 in both cases. |
+| E-SYS-003 | SYS | broken | 1 | "session connector: PTY source EOF" | BC-2.04.002 invariant 3 (never silent); ARCH-01 ADR-011 v1.5 §HIGH-A. Emitted as the sentinel `ErrPTYSourceEOF` on `sc.Err()` when the active PTY source reaches EOF (shell process exits normally) without a prior `sc.Close()` call. The `forwardFrames` relay detects `srcCh==prevSrcCh` in PTY mode and sends this sentinel rather than hot-spinning. Operator-visible as E-SYS-002 format — `"fatal: cannot connect to session backend: session connector: PTY source EOF"` — because it flows through the existing `runAccess` sc.Err() drain path. E-SYS-003 is the taxonomy cross-reference for the sentinel; E-SYS-002 is the operator message format. Exit code: 1 (non-zero; same as PC-2.6 path). |
 
 ## Failure Mode to Error Code Mapping
 
@@ -165,6 +166,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-009 | Router crashes without drain | E-NET-004 (detected by nodes) |
 | FM-010 | Config error on startup | E-CFG-001, E-CFG-004, E-CFG-005 |
 | FM-011 | tmux not present | E-SYS-001 (if PTY also fails); E-SYS-002 (if both tmux and PTY fail at SessionConnector level); log message on PTY fallback |
+| (no FM) | PTY shell exits (normal end-of-session or crash) while access node is running | E-SYS-003 (`ErrPTYSourceEOF`) delivered on `sc.Err()`; surfaces to operator as E-SYS-002 format message; triggers PC-2.6 exit-1 path |
 | FM-012 | sbctl cannot connect | E-NET-001 |
 | FM-013 | Key expired at re-authentication time | E-ADM-015 |
 | (no FM) | Forwarding-table miss for (svtnID, dstAddr) — distinct from admission failure | E-FWD-002 |
@@ -174,6 +176,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v2.1 | 2026-06-27 | (HIGH-A) Added E-SYS-003 (`ErrPTYSourceEOF`): sentinel for PTY-source EOF mid-session detected by forwardFrames relay (ARCH-01 ADR-011 v1.5 §HIGH-A). Updated E-SYS-002 note to clarify it is also the wire-visible message format for E-SYS-003 events. Per S-W3.04 adversarial convergence pass-2. |
 | v2.0 | 2026-06-27 | Align E-ADM-017 re-fire annotation with drain-only re-arm (BC-2.05.005 v1.6 PC-3, VP-059 v1.1 property (c), S-W3.05 AC-004/AC-016): replaced stale "re-fires when the oldest surviving in-window entry is newer than the last-fire timestamp" prose with drain-only re-arm + append-skip semantics; message format unchanged. |
 | v1.9 | 2026-06-27 | Per-story adversarial convergence adjudication: (1) E-ADM-016 message format updated — added "(E-ADM-016)" literal suffix for grep-ability; clarified `<src_addr>` is lowercase hex of 8-byte SrcAddr. (2) E-ADM-017 message format updated — parameterized `<threshold>` and `<window_seconds>` (not hardcoded ≥5/60s); added "E-ADM-017" literal prefix; clarified `<src_addr>` hex rendering; added re-fire semantics description (periodic re-arm under sustained attack). Closes HF-1 (hysteresis), item-3 (format + src_addr rendering) adversary findings. |
 | v1.8 | 2026-06-27 | Added E-SYS-002 (SessionConnector aggregate connect failure: both tmux ctrl and PTY exhausted, exit 1). Registered per BC-2.04.007 authorship (daemon lifecycle contract). Updated FM-011 mapping row. |

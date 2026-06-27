@@ -2,7 +2,7 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "1.9"
+version: "2.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -13,6 +13,8 @@ modified:
   - 2026-06-26T12:00:00 # v1.7 — Reconcile all position references: routing=5, session=6; session imports {frame, admission} (upstream.go+fanout.go→frame; session.go→admission); fix Cycle-Freeness tmux→session reference; fix §6.5 session annotation (WG3-H-003)
   - 2026-06-26T18:00:00 # v1.8 — Update §6.5 SHA annotation from 43208ab to b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14); import set unchanged through S-3.03 (F-04 drift fix)
   - 2026-06-27T00:00:00 # v1.9 — Register cmd/switchboard position 18 as ACTIVE SCOPE for story S-4.00 (daemon assembly); document import set, wiring obligations, story assignment, and ADR-011 pointer
+  - 2026-06-27T00:00:00 # v2.0 — Clarify obligation 1: router is constructed-but-not-yet-in-data-path in Wave 3; AC-001 test targets the router instance returned by buildRouter, not a parallel reconstruction; two-bug fix (stale keyset + discarded return value) documented
+  - 2026-06-27T00:00:00 # v2.1 — (MEDIUM) §6.5.2 import set: add internal/frame (OuterHeader carrier in startFramesBridge → AccessNode.DeliverFrame); (HIGH-B) §6.5.1 obligation 4: note runAccess injection seam (runAccessWithConnector + connectorIface) as testability refinement; §6.5.1 obligation 4 note on EC-005 wording. Per S-W3.04 adversarial convergence pass-2.
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -257,10 +259,10 @@ maps to a buildability tier (see §6.6 feasibility register):
 
 | # | Obligation | Packages used | Buildability |
 |---|-----------|---------------|-------------|
-| 1 | Inject real `routing.Logger` into `NewRouter` via `WithLogger` so `RouteFrame` E-ADM-016 paths write to `os.Stderr` (or a `log.New` sink) in production builds | `internal/routing` (exists) | BUILDABLE NOW |
+| 1 | Inject real `routing.Logger` into `NewRouter` via `WithLogger` so `RouteFrame` E-ADM-016 paths write to `os.Stderr` (or a `log.New` sink) in production builds. **Wave-3 data-path clarification (v2.0):** The `routing.Router` constructed by obligation 1 is NOT in the Wave-3 frame data path — there is no network-ingress listener wired in S-W3.04. The router is constructed with a live logger so that (a) it is non-nil and non-noop in the binary, and (b) AC-001's `TestRouterLoggerEmitsEADM016` can call `RouteFrame` on the returned `*routing.Router` instance directly to verify E-ADM-016 emission. **The router instance returned by `buildRouter` MUST NOT be discarded** (`_ = buildRouter(keys)` is wrong); it MUST be assigned to a named variable and passed to the AC-001 test via the exported test surface or a package-level accessor. Additionally, `buildRouter` MUST receive the **same** `*admission.AdmittedKeySet` used by `buildAccessNode` — both must share one keyset instance so AC-001 can register a key, call `buildRouter(keys).RouteFrame(...)`, and observe the E-ADM-016 log without a separate keyset. The network-ingress wiring (router in live data path) is deferred to a future story. | `internal/routing` (exists) | BUILDABLE NOW |
 | 2 | Construct `admission.AdmittedKeySet`, `session.Publisher`, `session.SessionAuth`, then wire `NewAccessNode(pub, auth, WithKeystrokeSink(sc))` replacing the nil/NoOp defaults | `internal/admission`, `internal/session` (both exist) | BUILDABLE NOW |
 | 3 | Instantiate Sweep eviction `time.Ticker` in `main()` and call `accessNode.Sweep(deadline)` on each tick | `internal/session` (exists); `time.Ticker` stdlib | BUILDABLE NOW |
-| 4 | Pipe `SessionConnector.Frames()` → `accessNode.DeliverFrame()` in a goroutine after `sc.Connect(ctx)` succeeds. Requires `SessionConnector.Frames()` API to be pinned (drift W3-R2-M4); see ADR-011 for the chosen design | `internal/tmux` (exists); ADR-011 (new) | BUILDABLE NOW after ADR-011 pins API |
+| 4 | Pipe `SessionConnector.Frames()` → `accessNode.DeliverFrame()` in a goroutine after `sc.Connect(ctx)` succeeds. Requires `SessionConnector.Frames()` API to be pinned (drift W3-R2-M4); see ADR-011 for the chosen design. **Testability refinement (v2.1):** `runAccess` is split into a thin constructor wrapper + `runAccessWithConnector(ctx, stderr, connectorIface)` where `connectorIface` covers `Connect/Frames/Err/Close/RelayDropped`. Tests inject a `fakeConnector` to exercise PC-2 (clean) and PC-2.6 (mid-session double-failure → exit 1) end-to-end through the production function. See ARCH-01 ADR-011 Amendment v1.5 §HIGH-B. | `internal/tmux` (exists); ADR-011 (new) | BUILDABLE NOW after ADR-011 pins API |
 | 5 | Replace `NoOpAuthorizer` with live `*SessionAuth` (drift W3-M-3; fail-open closed) | `internal/session` (exists) | BUILDABLE NOW (done by obligation 2 above) |
 | 6 | Surface `accessNode.FramesDropped()` counter via periodic structured log line (drift W3-R2-M3) — no metrics endpoint or sbctl needed | `internal/session` (exists); `log` / `fmt` stdlib | BUILDABLE NOW |
 
@@ -296,17 +298,36 @@ When S-4.00 is complete, `cmd/switchboard` will import:
 
 ```
 internal/admission      (AdmittedKeySet construction)
+internal/frame          (OuterHeader — used in startFramesBridge to construct frame.OuterHeader
+                          delivered to AccessNode.DeliverFrame; DAG position 2, leaf, no forbidden edge)
 internal/routing        (NewRouter, WithLogger)
 internal/session        (Publisher, SessionAuth, AccessNode, NewAccessNode, WithKeystrokeSink)
 internal/tmux           (ControlMode, PTYProxy, SessionConnector, NewSessionConnector, WithControlModeFactory)
 internal/halfchannel    (HalfChannel, for ControlMode / PTYProxy construction)
 ```
 
+> **v2.1 note:** `internal/frame` is added to this import set (finding from
+> S-W3.04 adversarial convergence pass-2 — MEDIUM ruling). `access.go`'s
+> `startFramesBridge` already imports `internal/frame` for `frame.OuterHeader`
+> (used when delivering frames to `AccessNode.DeliverFrame`). `internal/frame` is a
+> foundation-layer leaf at DAG position 2 (no internal imports); adding it here
+> introduces no new edges not already present in the target DAG (§§1–5), and no
+> forbidden edge per §6.2. The FORBIDDEN set is unchanged.
+
 Packages NOT imported by S-4.00 (deferred to later waves):
 - `internal/config` — no file-based config loading in S-4.00; construction parameters are hardcoded or supplied via CLI flags
 - `internal/drain` — graceful-drain lifecycle is a Wave 4+ story
 - `internal/metrics` — no HTTP metrics endpoint; FramesDropped is surfaced via structured log only
 - `cmd/sbctl` — never imported (top leaf; CLI tool)
+
+> **EC-005 wording (accepted Wave-4 follow-up, v2.1):** The comment in
+> `access.go` stating "CI enforces this structurally" overstates current
+> enforcement. The real guard is that `internal/config`, `internal/drain`, and
+> `internal/metrics` do not exist on develop — the compiler refuses the import.
+> A durable `go list` CI assertion that explicitly forbids these edges even after
+> the packages land in Wave 4+ does not yet exist. See ARCH-01 ADR-011 Amendment
+> v1.5 §EC-005 for the accepted follow-up scope. Story-writer MUST correct the
+> comment before the S-W3.04 gate.
 
 This import set is consistent with ARCH-08 §§1–5 (no new edges introduced that
 are not already in the target DAG), and introduces no forbidden edges per §6.2.
@@ -381,3 +402,5 @@ decomposition):
 | 1.7 | 2026-06-26 | WG3-H-003: Reconcile all topological position references to the correct ordering (admission=4, routing=5, session=6). Fix Topological Order section (session was incorrectly at 5, routing at 6). Fix Cycle-Freeness section (tmux→session now references position 6). Fix §6.5 session annotation to reflect actual imports: upstream.go+fanout.go import frame; session.go imports admission |
 | 1.8 | 2026-06-26 | F-04 drift fix: update §6.5 heading and verification SHA from 43208ab (S-3.01a) to b68e498 (HEAD after S-3.01b #12, S-3.02 #13, S-3.03 #14); note import set unchanged through S-3.03 |
 | 1.9 | 2026-06-27 | S-4.00 daemon assembly: register cmd/switchboard position 18 as ACTIVE SCOPE; add §6.5.1 (six wiring obligations + buildability tiers), §6.5.2 (S-4.00 import set, deferred packages), §6.6.1 (feasibility register with HARD BLOCKER: NONE ruling), §6.6.2 (Wave 4+ prospective positions). ADR-011 (SessionConnector.Frames()) pointer added. |
+| 2.0 | 2026-06-27 | §6.5.1 obligation 1 clarified: router is constructed-but-not-yet-in-data-path in Wave 3 (no network-ingress listener). `buildRouter` return value MUST be assigned (not discarded). `buildRouter` MUST receive the same `*admission.AdmittedKeySet` instance as `buildAccessNode` (single shared keyset). AC-001 verification targets the returned router instance directly — it is non-tautological because it exercises the real `RouteFrame` → `verifyFrameHMAC` → logger path. Per S-W3.04 adversarial convergence adjudication. |
+| 2.1 | 2026-06-27 | (MEDIUM) §6.5.2 import set: `internal/frame` added (OuterHeader carrier in `startFramesBridge`; DAG position 2 leaf; no forbidden edge). (HIGH-B) §6.5.1 obligation 4 note: `runAccess` injection seam — split into `runAccess` + `runAccessWithConnector(connectorIface)`; tests inject `fakeConnector` for PC-2/PC-2.6 end-to-end. (EC-005) §6.5.2 note: "CI enforces structurally" wording overstated; accepted Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |

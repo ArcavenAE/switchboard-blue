@@ -18,7 +18,7 @@ inputs:
   - '.factory/specs/domain-spec/differentiators.md'
   - '_bmad-output/planning-artifacts/product-brief-switchboard-2026-03-31.md'
   - '_bmad-output/planning-artifacts/prd.md'
-input-hash: "[md5-pending]"
+input-hash: "72cb2e9"
 traces_to: '.factory/specs/domain-spec/L2-INDEX.md'
 supplements:
   - 'prd-supplements/interface-definitions.md'

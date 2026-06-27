@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.007
 document_type: behavioral-contract
 level: L3
-version: "1.0"
+version: "1.2"
 status: active
 producer: product-owner
 timestamp: 2026-06-27T00:00:00Z
@@ -17,7 +17,13 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v1.0.0-greenfield
-modified: []
+modified:
+  - date: 2026-06-27
+    version: "1.1"
+    change: "S-W3.04 adversarial convergence; architect ADR-011 v1.4 ruling: added PC-2.6 (mid-session double-failure path via sc.Err()); added EC-007 (mid-session double-failure edge case); added Inv-5 (Err() drain obligation, wg-tracked goroutine)"
+  - date: 2026-06-27
+    version: "1.2"
+    change: "S-W3.04 adversarial convergence pass-2; architect ADR-011 v1.5 §HIGH-A ruling: EC-007 extended with PTY-source EOF as an explicit PC-2.6 trigger; E-SYS-003 added to Error Codes table; clarified that ErrPTYSourceEOF on sc.Err() is one trigger of the same PC-2.6 drain path alongside watchAndFallback double-failure"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -85,6 +91,8 @@ operators and process supervisors.
 6. No goroutines are leaked (verified by test with `t.Cleanup` + short timeout).
 7. No panic occurs.
 
+**PC-2.6 (mid-session double-failure):** If `sc.Err()` delivers a non-nil error after the relay loop has started (both tmux control-mode and PTY fallback have failed mid-session), the daemon MUST log the error at ERROR level in E-SYS-002 format and cancel the root context. The subsequent shutdown sequence is identical to the SIGTERM/SIGINT path. The E-SYS-002 log entry constitutes the 'never silent' obligation (BC-2.04.002 invariant 3). The relay goroutine continues until `sc.Close()` is called in the shutdown sequence; it does not deadlock because `forwardFrames` observes `ctx.Done()` in its outer loop (ARCH-01 v1.4 §Relay busy-spin guard) and exits cleanly.
+
 ## Invariants
 
 1. **Fail-before-serve**: The daemon MUST NOT enter its relay loop if `Connect(ctx)`
@@ -97,6 +105,7 @@ operators and process supervisors.
 4. **DI-001 compliance**: Even during shutdown, session content is not exposed to the
    router — `sc.Close()` closes the forwarding channel cleanly before any goroutines
    are torn down.
+5. **Err() drain obligation:** The daemon MUST drain `sc.Err()` throughout the session lifetime. The drain goroutine MUST be tracked in `sync.WaitGroup` so it is joined during shutdown. Missing this drain violates BC-2.04.002 invariant 3.
 
 ## Trigger
 
@@ -107,16 +116,19 @@ operators and process supervisors.
 
 | Code | Condition | Severity | Exit Code |
 |------|-----------|----------|-----------|
-| E-SYS-002 | `sc.Connect(ctx)` failed; both ctrl and PTY paths exhausted | broken | 1 |
+| E-SYS-002 | `sc.Connect(ctx)` failed; both ctrl and PTY paths exhausted. Also the operator-visible message format when E-SYS-003 flows through the PC-2.6 drain path. | broken | 1 |
+| E-SYS-003 | PTY-source EOF: `ErrPTYSourceEOF` sentinel delivered on `sc.Err()` when `forwardFrames` detects EOF on PTY master without prior `sc.Close()`. Surfaces to operator as E-SYS-002 format with `<reason>` = `"session connector: PTY source EOF"`. | broken | 1 |
 
-> **Note on E-SYS-002:** This code is newly registered in this BC. It is distinct
-> from E-SYS-001 (PTY device unavailable at OS level). E-SYS-002 covers the
-> aggregate connect failure at the `SessionConnector` level, after both control-mode
-> and PTY fallback have been tried and failed.
+> **Note on E-SYS-002 and E-SYS-003:** E-SYS-002 is the wire-visible operator message
+> format for both aggregate connect failure AND PTY-source EOF events — the `<reason>`
+> field carries the distinguishing detail. E-SYS-003 is the taxonomy cross-reference
+> for the `ErrPTYSourceEOF` sentinel specifically (ARCH-01 ADR-011 v1.5 §HIGH-A).
+> E-SYS-002 is distinct from E-SYS-001 (OS-level PTY device unavailable).
 >
-> Message format: `"fatal: cannot connect to session backend: <reason>"`
+> E-SYS-002 message format: `"fatal: cannot connect to session backend: <reason>"`
+> E-SYS-003 sentinel message: `"session connector: PTY source EOF"`
 >
-> See error-taxonomy.md §SYS for the full catalog. E-SYS-002 must be added there.
+> See error-taxonomy.md v2.1 §SYS for the full catalog.
 
 ## Edge Cases
 
@@ -128,6 +140,7 @@ operators and process supervisors.
 | EC-004 | Second SIGINT arrives while shutdown is already in progress | First signal fires `cancel()`; second signal hits the same `sync.Once`-guarded cancel path — no double-close or panic. |
 | EC-005 | One ticker goroutine is blocked when ctx is cancelled | Goroutine exits at the next `select` that includes `<-ctx.Done()` — within one tick period. Test enforces a deadline via `t.Cleanup` + `time.AfterFunc`. |
 | EC-006 (FM-004) | tmux control-mode drops mid-relay (after successful Connect) | This is BC-2.04.002's domain: `SessionConnector` activates PTY fallback transparently. The relay channel remains open. BC-2.04.007 is not triggered. |
+| EC-007 | Mid-session double-failure: `watchAndFallback` fails PTY fallback after control-mode drop, OR PTY-source EOF: `forwardFrames` relay detects EOF on PTY master (shell process exits normally) while in PTY mode without a prior `sc.Close()` call | Both conditions are triggers of the same PC-2.6 drain path. In both cases `sc.Err()` delivers a non-nil error: `watchAndFallback` double-failure sends a backend-exhausted error; PTY-source EOF sends `ErrPTYSourceEOF` (E-SYS-003 sentinel, message: `"session connector: PTY source EOF"`). In both cases: the daemon logs the error at ERROR level as E-SYS-002 format (`"fatal: cannot connect to session backend: <reason>"`), cancels the root context, waits for all wg-tracked goroutines to drain (including the sc.Err() drain goroutine itself), calls `sc.Close()`, and exits with code 1. PC-1/PC-2/PC-2.6 invariants and invariant 5 (wg-tracked Err()-drain goroutine) remain intact for both triggers. The relay goroutine in `forwardFrames` exits cleanly rather than busy-spinning: for PTY-source EOF, `forwardFrames` detects `srcCh==prevSrcCh` in PTY mode, signals `ErrPTYSourceEOF` via `sc.closeErrCh.Do`, and returns (ARCH-01 ADR-011 v1.5 §HIGH-A). |
 
 ## Canonical Test Vectors
 
@@ -179,3 +192,11 @@ S-W3.04 — AC-007 traces to PC-1 postconditions; AC-008 traces to PC-2 postcond
 ## VP Anchors
 
 VP-060 (new — to be registered by architect per bc_array_changes_propagate_to_body_and_acs and vp_index_is_vp_catalog_source_of_truth policies).
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.2 | 2026-06-27 | S-W3.04 adversarial convergence pass-2; architect ADR-011 v1.5 §HIGH-A ruling: EC-007 extended — PTY-source EOF (ErrPTYSourceEOF on sc.Err()) is an explicit second trigger of the PC-2.6 drain path alongside watchAndFallback double-failure; E-SYS-003 added to Error Codes table; clarified that both triggers share identical PC-2.6/invariant-5 semantics; relay busy-spin prevention noted (forwardFrames exits on PTY-mode EOF detection). |
+| 1.1 | 2026-06-27 | S-W3.04 adversarial convergence; architect ADR-011 v1.4 ruling: added PC-2.6 (mid-session double-failure path via sc.Err()); added EC-007 (mid-session double-failure edge case); added Inv-5 (Err() drain obligation, wg-tracked goroutine). |
+| 1.0 | 2026-06-27 | Initial draft — daemon startup/shutdown lifecycle contract. |

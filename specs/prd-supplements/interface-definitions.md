@@ -11,7 +11,7 @@ inputs:
   - '.factory/specs/prd.md'
   - '.factory/specs/domain-spec/capabilities.md'
   - '_bmad-output/planning-artifacts/prd.md'
-input-hash: "[md5-pending]"
+input-hash: "bc4367a"
 traces_to: '.factory/specs/prd.md'
 ---
 
