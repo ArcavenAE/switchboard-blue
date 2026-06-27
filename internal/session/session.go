@@ -23,7 +23,7 @@ import (
 
 // ErrSessionNotFound is returned when an operation targets a named session
 // that is not present in the publisher's live set (E-SES-001; BC-2.04.003).
-var ErrSessionNotFound = errors.New("session not found")
+var ErrSessionNotFound = errors.New("session: not found")
 
 // ErrSessionAlreadyPublished is returned when Publish is called for a session
 // name that is already in the live set. The caller should treat duplicate
