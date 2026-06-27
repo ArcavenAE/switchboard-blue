@@ -58,7 +58,7 @@ func mustAttachConsole(t *testing.T, an *session.AccessNode, key session.Console
 
 // drainN receives exactly n frames from ch, fataling if the channel is closed
 // before n frames arrive. Returns the received frames.
-func drainN(t *testing.T, ch <-chan frame.OuterHeader, n int) []frame.OuterHeader {
+func drainN(t *testing.T, ch <-chan frame.OuterHeader, n int) []frame.OuterHeader { //nolint:unparam // n is semantically variable; current callers all pass 1 but the helper is reused across tests
 	t.Helper()
 	out := make([]frame.OuterHeader, 0, n)
 	for range n {
@@ -835,4 +835,361 @@ func TestSessionAuth_ImplementsAuthorizer(t *testing.T) {
 		t.Fatal("NewSessionAuth returned nil")
 	}
 	_ = fmt.Sprintf("sa implements Authorizer: %T", sa)
+}
+
+// ---------------------------------------------------------------------------
+// FINDING C-1 (CRITICAL) — Attach-time Tier-2 enforcement
+// BC-2.05.003 PC-2 / EC-001
+//
+// Current Attach does NOT consult the Authorizer, so an unauthorized console
+// is incorrectly admitted. The tests below MUST FAIL against current code
+// (Red Gate proving the C-1 defect).
+//
+// Red Gate expectation:
+//   TestAccessNode_Attach_UnauthorizedKey_Rejected — FAIL (Attach returns nil)
+//   TestAccessNode_Attach_AuthorizedKey_Succeeds   — PASS (already works)
+//   TestAccessNode_Attach_EmptyAuthList_Rejected   — FAIL (Attach returns nil)
+// ---------------------------------------------------------------------------
+
+// TestAccessNode_Attach_UnauthorizedKey_Rejected verifies that AccessNode.Attach
+// returns ErrSessionAuthDenied when the console's key is not in the session's
+// authorization list (BC-2.05.003 PC-2; EC-001).
+//
+// Proves both the error identity and that the console is NOT added to the
+// fan-out set: a downstream frame delivered after the failed attach must NOT
+// be received by the unauthorized console.
+//
+// This test MUST FAIL against current code — Attach does not call the
+// Authorizer (Red Gate for C-1).
+func TestAccessNode_Attach_UnauthorizedKey_Rejected(t *testing.T) {
+	t.Parallel()
+
+	const sessionName = "agent-01"
+	const authorizedKey = session.ConsoleKey("console-authorized-001")
+	const unauthorizedKey = session.ConsoleKey("console-unauthorized-001")
+
+	sa := session.NewSessionAuth()
+	// Register only the authorized key — unauthorized key is deliberately absent.
+	sa.RegisterKey(sessionName, authorizedKey, session.RoleFull)
+
+	pub := newAuthPublisher(t, sessionName)
+	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(session.NoOpSink{}))
+
+	// ASSERTION 1: Attach must return ErrSessionAuthDenied for the unauthorized key.
+	ds, us, err := an.Attach(unauthorizedKey, sessionName)
+	if err == nil {
+		t.Fatal("Attach(unauthorizedKey): expected ErrSessionAuthDenied, got nil; " +
+			"Attach does not consult the Authorizer at attach-time (BC-2.05.003 PC-2 / C-1)")
+	}
+	if !errors.Is(err, session.ErrSessionAuthDenied) {
+		t.Errorf("Attach(unauthorizedKey): got %v, want errors.Is(err, ErrSessionAuthDenied)", err)
+	}
+
+	// ASSERTION 2: channels must be nil (channel not established).
+	if ds != nil {
+		t.Error("Attach(unauthorizedKey): downstream channel must be nil after rejection (BC-2.05.003 PC-2)")
+	}
+	if us != nil {
+		t.Error("Attach(unauthorizedKey): upstream channel must be nil after rejection (BC-2.05.003 PC-2)")
+	}
+
+	// ASSERTION 3: the unauthorized console must NOT receive downstream frames —
+	// it was never added to the fan-out set. We attach an authorized console,
+	// deliver a frame, and verify the unauthorized console does not receive it
+	// (its channel is nil; attempting to receive would block/panic; the assertion
+	// is structural — nil channel is sufficient proof of non-membership).
+	//
+	// Belt-and-suspenders: also verify the authorized console DOES receive it,
+	// confirming fan-out is working and the nil check above is not vacuous.
+	dsFull := mustAttachConsole(t, an, authorizedKey, sessionName)
+
+	hdr := frame.OuterHeader{}
+	an.DeliverFrame(hdr)
+
+	frames := drainN(t, dsFull, 1)
+	if len(frames) != 1 {
+		t.Errorf("authorized downstream: expected 1 frame, got %d; "+
+			"fan-out must still work for authorized console", len(frames))
+	}
+
+	if err := an.Detach(authorizedKey, sessionName); err != nil {
+		t.Errorf("Detach: %v", err)
+	}
+}
+
+// TestAccessNode_Attach_AuthorizedKey_Succeeds is the positive complement of
+// TestAccessNode_Attach_UnauthorizedKey_Rejected. It verifies that an
+// authorized console CAN attach and receives downstream frames after the
+// Tier-2 attach gate is implemented. This makes the rejection test non-vacuous.
+//
+// BC-2.05.003 PC-1 (registered key attaches normally and receives downstream).
+// This test PASSES against current code (Attach allows all) and MUST continue
+// to pass after C-1 is fixed.
+func TestAccessNode_Attach_AuthorizedKey_Succeeds(t *testing.T) {
+	t.Parallel()
+
+	const sessionName = "agent-01"
+	const authorizedKey = session.ConsoleKey("console-authorized-002")
+
+	sa := session.NewSessionAuth()
+	sa.RegisterKey(sessionName, authorizedKey, session.RoleFull)
+
+	pub := newAuthPublisher(t, sessionName)
+	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(session.NoOpSink{}))
+
+	ds := mustAttachConsole(t, an, authorizedKey, sessionName)
+	if ds == nil {
+		t.Fatal("Attach(authorizedKey): downstream channel is nil; authorized key must attach successfully")
+	}
+
+	hdr := frame.OuterHeader{}
+	an.DeliverFrame(hdr)
+
+	frames := drainN(t, ds, 1)
+	if len(frames) != 1 {
+		t.Fatalf("downstream: expected 1 frame, got %d", len(frames))
+	}
+
+	if err := an.Detach(authorizedKey, sessionName); err != nil {
+		t.Errorf("Detach: %v", err)
+	}
+}
+
+// TestAccessNode_Attach_EmptyAuthList_Rejected verifies EC-002: when the
+// session's authorization list is empty (no keys registered), every attach
+// request must be rejected with ErrSessionAuthDenied (BC-2.05.003 EC-002).
+//
+// This test MUST FAIL against current code — Attach does not consult the
+// Authorizer (Red Gate for C-1).
+func TestAccessNode_Attach_EmptyAuthList_Rejected(t *testing.T) {
+	t.Parallel()
+
+	const sessionName = "agent-01"
+
+	// SessionAuth with NO keys registered — empty auth list.
+	sa := session.NewSessionAuth()
+
+	pub := newAuthPublisher(t, sessionName)
+	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(session.NoOpSink{}))
+
+	keys := []session.ConsoleKey{
+		"console-empty-a",
+		"console-empty-b",
+		"console-empty-c",
+	}
+
+	for _, k := range keys {
+		k := k
+		t.Run(string(k), func(t *testing.T) {
+			t.Parallel()
+
+			ds, us, err := an.Attach(k, sessionName)
+			if err == nil {
+				t.Fatalf("Attach(%q): expected ErrSessionAuthDenied for empty auth list, got nil; "+
+					"BC-2.05.003 EC-002: empty auth list must reject all attach requests", k)
+			}
+			if !errors.Is(err, session.ErrSessionAuthDenied) {
+				t.Errorf("Attach(%q): got %v, want ErrSessionAuthDenied", k, err)
+			}
+			if ds != nil {
+				t.Errorf("Attach(%q): downstream must be nil after rejection", k)
+			}
+			if us != nil {
+				t.Errorf("Attach(%q): upstream must be nil after rejection", k)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FINDING H-2 (HIGH) — operator-facing error messages must include the
+// interpolated fields mandated by the error taxonomy.
+//
+// error-taxonomy.md line 56:
+//   E-ADM-006: "session authorization denied: console <key_fingerprint>
+//               not authorized for session <session_name> on <node_addr>"
+//
+// error-taxonomy.md line 57:
+//   E-ADM-007: "upstream rejected: read-only access for console
+//               <key_fingerprint> on session <session_name>"
+//
+// The current sentinel strings are bare ("session: authorization denied
+// (E-ADM-006)") and do not include the console fingerprint or session name.
+// The Authorize/Allow methods must return interpolated errors (via fmt.Errorf
+// or similar) that wrap the sentinel AND include the required fields.
+//
+// This test MUST FAIL against current code — the interpolated fields are
+// absent from the returned error strings (Red Gate for H-1's fix).
+//
+// NOTE: errors.Is identity checks are preserved — this test adds string
+// assertions ONLY for the operator-message contract; it does not replace
+// the sentinel-identity checks elsewhere.
+// ---------------------------------------------------------------------------
+
+// TestSessionAuth_ErrorMessages_MatchTaxonomy verifies that the FORMATTED error
+// returned by Authorize/Allow contains the interpolated fields required by the
+// error taxonomy for E-ADM-006 and E-ADM-007 respectively.
+//
+// The formatted error must:
+//   - satisfy errors.Is(err, ErrSessionAuthDenied) or ErrUpstreamReadOnly
+//     (sentinel identity preserved), AND
+//   - contain the console key fingerprint AND session name in the message
+//     (operator observability; error-taxonomy.md §ADM lines 56–57).
+//
+// This test MUST FAIL against current code (Red Gate for H-2).
+func TestSessionAuth_ErrorMessages_MatchTaxonomy(t *testing.T) {
+	t.Parallel()
+
+	const sessionName = "agent-01"
+	const roKey = session.ConsoleKey("console-ro-taxonomy-001")
+	const unknownKey = session.ConsoleKey("console-unknown-taxonomy-001")
+
+	sa := session.NewSessionAuth()
+	sa.RegisterKey(sessionName, roKey, session.RoleReadOnly)
+
+	t.Run("E-ADM-006: Authorize returns key and session in error message", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := sa.Authorize(unknownKey, sessionName)
+		if err == nil {
+			t.Fatal("Authorize(unknownKey): expected error, got nil")
+		}
+
+		// Sentinel identity must be preserved (errors.Is).
+		if !errors.Is(err, session.ErrSessionAuthDenied) {
+			t.Errorf("Authorize: got %v, want errors.Is(err, ErrSessionAuthDenied)", err)
+		}
+
+		// Operator-message contract: formatted error must contain the console key
+		// fingerprint and session name (error-taxonomy.md line 56).
+		msg := err.Error()
+		if !strings.Contains(msg, string(unknownKey)) {
+			t.Errorf("E-ADM-006 message missing console key fingerprint %q: got %q\n"+
+				"taxonomy requires: \"session authorization denied: console <key_fingerprint> "+
+				"not authorized for session <session_name> on <node_addr>\"", unknownKey, msg)
+		}
+		if !strings.Contains(msg, sessionName) {
+			t.Errorf("E-ADM-006 message missing session name %q: got %q\n"+
+				"taxonomy requires: \"session authorization denied: console <key_fingerprint> "+
+				"not authorized for session <session_name> on <node_addr>\"", sessionName, msg)
+		}
+	})
+
+	t.Run("E-ADM-007: Allow returns key and session in error message for read-only console", func(t *testing.T) {
+		t.Parallel()
+
+		err := sa.Allow(roKey, sessionName, []byte("keystroke"))
+		if err == nil {
+			t.Fatal("Allow(roKey, payload): expected error, got nil")
+		}
+
+		// Sentinel identity must be preserved.
+		if !errors.Is(err, session.ErrUpstreamReadOnly) {
+			t.Errorf("Allow: got %v, want errors.Is(err, ErrUpstreamReadOnly)", err)
+		}
+
+		// Operator-message contract: formatted error must contain the console key
+		// fingerprint and session name (error-taxonomy.md line 57).
+		msg := err.Error()
+		if !strings.Contains(msg, string(roKey)) {
+			t.Errorf("E-ADM-007 message missing console key fingerprint %q: got %q\n"+
+				"taxonomy requires: \"upstream rejected: read-only access for console "+
+				"<key_fingerprint> on session <session_name>\"", roKey, msg)
+		}
+		if !strings.Contains(msg, sessionName) {
+			t.Errorf("E-ADM-007 message missing session name %q: got %q\n"+
+				"taxonomy requires: \"upstream rejected: read-only access for console "+
+				"<key_fingerprint> on session <session_name>\"", sessionName, msg)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// FINDING M-3 (MEDIUM) — empty-tick forwarding (BC-2.04.005 EC-004 liveness)
+//
+// TestReadOnlyConsole_EmptyTickAccepted already exists (AC-006) but uses
+// NoOpSink — it proves the empty-tick is not rejected but does NOT prove
+// the empty-tick is forwarded to the downstream sink (liveness credited).
+//
+// This companion test proves that:
+//   1. Empty-tick from a read-only console IS forwarded to the captureSink.
+//   2. A payload-bearing frame from the same console is NOT forwarded.
+//
+// If the current code swallows empty-ticks (returns nil but does not call
+// sink.SendInput for empty payloads), assertion (1) fails — Red Gate for M-3.
+// If forwarded, it passes — report which.
+// ---------------------------------------------------------------------------
+
+// TestReadOnlyConsole_EmptyTickForwarded_WithCaptureSink is a companion to
+// TestReadOnlyConsole_EmptyTickAccepted. It uses a captureSink instead of
+// NoOpSink to prove the empty-tick frame is FORWARDED to the sink (liveness
+// probe credited / BC-2.04.005 EC-004), not merely accepted without effect.
+//
+// A payload-bearing frame from the same console must be rejected AND must NOT
+// reach the sink.
+func TestReadOnlyConsole_EmptyTickForwarded_WithCaptureSink(t *testing.T) {
+	t.Parallel()
+
+	const (
+		sessionName = "agent-01"
+		roKey       = session.ConsoleKey("console-readonly-emptytick-003")
+	)
+
+	var sinkReceived [][]byte
+	sink := &captureSink{received: &sinkReceived}
+
+	sa := session.NewSessionAuth()
+	sa.RegisterKey(sessionName, roKey, session.RoleReadOnly)
+
+	pub := newAuthPublisher(t, sessionName)
+	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(sink))
+
+	_ = mustAttachConsole(t, an, roKey, sessionName)
+
+	// STEP 1: payload-bearing frame — must be rejected, must NOT reach sink.
+	payloadErr := an.SendKeystroke(roKey, sessionName, []byte("keystroke"))
+	if payloadErr == nil {
+		t.Fatal("SendKeystroke (payload-bearing): expected ErrUpstreamReadOnly, got nil; " +
+			"enforcement check absent — empty-tick forwarding result is not meaningful")
+	}
+	if !errors.Is(payloadErr, session.ErrUpstreamReadOnly) {
+		t.Errorf("SendKeystroke (payload-bearing): got %v, want ErrUpstreamReadOnly", payloadErr)
+	}
+	if len(sinkReceived) != 0 {
+		t.Errorf("sink: got %d call(s) after read-only payload rejection, want 0; "+
+			"rejected keystroke must not reach the sink", len(sinkReceived))
+	}
+
+	// STEP 2: empty-tick (zero-length payload) — must be accepted AND forwarded.
+	// BC-2.04.005 EC-004: "accepted; liveness probe credited".
+	// This is the liveness forwarding assertion. If the implementation accepts
+	// the empty-tick (returns nil) but does not call sink.SendInput, this fails.
+	emptyErr := an.SendKeystroke(roKey, sessionName, []byte{})
+	if emptyErr != nil {
+		t.Errorf("SendKeystroke (empty-tick): expected nil, got %v; "+
+			"empty-tick must be accepted from read-only console (BC-2.04.005 EC-004)", emptyErr)
+	}
+	if len(sinkReceived) != 1 {
+		t.Errorf("sink: got %d call(s) after empty-tick, want 1; "+
+			"empty-tick must be FORWARDED to the sink (liveness probe credited, BC-2.04.005 EC-004)",
+			len(sinkReceived))
+	}
+	if len(sinkReceived) == 1 && len(sinkReceived[0]) != 0 {
+		t.Errorf("sink: forwarded empty-tick payload has length %d, want 0", len(sinkReceived[0]))
+	}
+
+	// STEP 3: nil payload (equivalent to empty-tick) — also forwarded.
+	nilErr := an.SendKeystroke(roKey, sessionName, nil)
+	if nilErr != nil {
+		t.Errorf("SendKeystroke (nil payload): expected nil, got %v; "+
+			"nil payload is an empty-tick and must be accepted (BC-2.04.005 EC-004)", nilErr)
+	}
+	if len(sinkReceived) != 2 {
+		t.Errorf("sink: got %d call(s) after nil payload, want 2; "+
+			"nil-payload empty-tick must be forwarded (BC-2.04.005 EC-004)", len(sinkReceived))
+	}
+
+	if err := an.Detach(roKey, sessionName); err != nil {
+		t.Errorf("Detach: %v", err)
+	}
 }
