@@ -107,7 +107,8 @@ wave_3_stories_merged: 5
 wave_3_points_complete: 32
 wave_3_points_remaining: 0
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
-timestamp: 2026-06-27T12:00:00Z
+wave_3_gate_adversary_pass_1: "CONVERGED 0C/0H/3M/2L/3O — 1/3 clean passes — cycles/cycle-1/wave-3/adversary/pass-01.md"
+timestamp: 2026-06-27T14:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -115,8 +116,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Phase 3, Wave 3. ALL 5 STORIES MERGED. Wave 3 gate consistency audit re-run: PASS_WITH_OBSERVATIONS (0C/0H/3M/3L/5O), all MEDIUMs fixed (holdout/story error-code corrections + VP-012 API skeleton). 4 tech-debt items carried forward (F-002, F-003, F-004, SEC-001). VP-032 deferred.
-Next action: Wave 3 wave-level adversarial convergence. Drift item S-3.02-FM1 partially addressed by S-3.03 (residual upstream-channel drain path open; see Open Drift Items).
+Phase 3, Wave 3. ALL 5 STORIES MERGED. Wave 3 integration gate adversary pass-1: CONVERGED (0C/0H/3M/2L/3O). 3 MEDIUMs latent (main.go stub; no live caller). Carry-forward to cmd/switchboard wiring story (mandatory re-gate). Next: passes 2+3 for 3-clean-pass convergence criterion.
 
 ## Phase Progress
 
@@ -124,7 +124,7 @@ Next action: Wave 3 wave-level adversarial convergence. Drift item S-3.02-FM1 pa
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 5/5 DONE (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13; S-3.03 PR #14 b68e498) — Wave 3 integration gate pending |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 5/5 DONE (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13; S-3.03 PR #14 b68e498) — Wave 3 adversary pass-1 CONVERGED 0C/0H/3M/2L — 1/3 passes |
 
 ## Wave / Story Status
 
@@ -165,7 +165,11 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | MISE-DX-001 | LOW | Toolchain provisioning migrating brew→mise; covered by story S-M.01 (mise.toml, CI, lefthook, devcontainer, CONTRIBUTING/CLAUDE.md). | dx-engineer/devops-engineer | open — story S-M.01 drafted, unscheduled (maintenance sweep) |
 | MISE-DOC-002 | LOW | Project CLAUDE.md says "prefer brew" — preference shifting to mise; update during S-M.01. Operator's GLOBAL ~/.claude/CLAUDE.md "Prefer brew" directive also shifting to mise (operator must update their personal file; factory will not edit the global file). | dx-engineer | open — tracked for S-M.01 + operator global-file note |
 | SIGN-DX-001 | LOW | Apple code-signing/notarization of release binaries: release.yml has sign-and-notarize job gated on vars.SIGNING_ENABLED (default OFF); capability to be completed + reconciled (justfile recipes, missing packaging scripts, release-verify conditional, CONTRIBUTING secrets docs) via story S-M.02. Gene source: aae-orc/ThreeDoors. ACTIVATION milestone-gated — toggle stays OFF until functional/testable product exists. | dx-engineer/devops-engineer | open — story S-M.02 drafted, unscheduled (milestone-gated) |
-| WG3-TAX-001 | — | Wave 3 gate audit found retired/incorrect error codes in holdout + story specs: wave-3.md HS-003 cited retired E-SES-005 (→E-ADM-007, must-pass fix); wave-5.md revoke-not-found cited E-ADM-007 (→E-ADM-013) and revoked-key re-admission cited E-ADM-002 (→E-ADM-005); S-6.02 EC-002 cited E-ADM-007 for key-not-found (→E-ADM-013). All corrected against error-taxonomy.md v1.6 canonical codes. | consistency-validator/product-owner/story-writer | RESOLVED 2026-06-26 |
+| W3-M-1 | MED | E-ADM-016 not logged at router on HMAC failure (BC-2.05.008 PC-2 observability postcondition unmet; drop itself is enforced+tested). Router has no logger. | implementer | open — fix in cmd/switchboard wiring story |
+| W3-M-2 | MED | SessionConnector exposes no failover-stable Frames(); control→PTY failover can silently drop downstream output for a consumer holding the old channel. Latent (no consumer yet). | architect/implementer | open — fix in cmd/switchboard wiring story |
+| W3-M-3 | MED | NewAccessNode(pub,nil) installs allow-all NoOpAuthorizer (fail-OPEN), opposite polarity to fail-loud noSink default; future nil-auth wiring would silently disable all Tier-2 enforcement. Latent (no production caller yet). | architect/implementer | open — fix in cmd/switchboard wiring story |
+| W3-PG-001 | LOW [process-gap] | Constructor security-perimeter default-polarity inconsistency (noSink fail-loud vs NoOpAuthorizer fail-open) — no review axis catches this. Candidate go.md/governance rule: security-perimeter defaults must fail closed unless justified. | rules/governance | open — codification follow-up at cycle-close (S-7.02) |
+Resolved drift archived: `cycles/cycle-1/closed-drift.md` (WG3-TAX-001)
 
 ## Decisions Log
 
@@ -181,18 +185,14 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
 | S-3.03 repointed 5→8 | Story v1.1 upstream-wiring integration scope expansion; sprint-state.yaml reconciled to 8 pts; Wave 3 total corrected 29→32 pts | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (WAVE 3 GATE CONSISTENCY AUDIT PASS)
+## Session Resume Checkpoint — 2026-06-27 (WAVE 3 ADVERSARY PASS-1)
 
-**Position:** Phase 3, Wave 3 — ALL 5 STORIES MERGED. Wave 3 gate consistency audit re-run: PASS_WITH_OBSERVATIONS (0C/0H/3M/3L/5O), all MEDIUMs fixed. Alpha tag: alpha-20260627-042402-b68e498.
+**Position:** Phase 3, Wave 3 — adversary pass-1 CONVERGED (0C/0H/3M/2L/3O). Tree: develop @ b68e498. 3 MEDIUMs latent (main.go stub); carry-forward to cmd/switchboard wiring story. Alpha tag: alpha-20260627-042402-b68e498.
 
-**Gate audit fixes committed this burst:** wave-3.md HS-003 (E-SES-005→E-ADM-007), wave-5.md (E-ADM-007→E-ADM-013 revoke-not-found; E-ADM-002→E-ADM-005 re-admission), S-6.02 EC-002 (E-ADM-007→E-ADM-013), VP-012 (v1.1 real session API in harness skeleton), ARCH-08 §6.5 SHA annotation (43208ab→b68e498). Drift items: WG3-TAX-001 RESOLVED; S-3.03-O1-VPSKEL expanded to VP-012/VP-013/VP-035.
+**Pass-1 report:** `cycles/cycle-1/wave-3/adversary/pass-01.md`. Convergence trajectory updated.
 
-**Tech-debt carry-forward (tech-debt-register.md):** F-002, F-003, F-004 (Wave 4), SEC-001 (Phase-6). VP-032 deferred.
-
-**Next:** Wave 3 wave-level adversarial convergence. After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Open Phase-6 deferred items: see Open Drift Items table above.
+**Next:** adversary passes 2+3 (3-clean-pass convergence criterion per BC-5.39.001). After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Previous checkpoint archived: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
-Burst logs, adversary passes, session checkpoints, and closed-story narratives: `cycles/cycle-1/`
-(burst-log.md, convergence-trajectory.md, session-checkpoints.md, closed-stories.md, wave-1/,
-wave-2/, S-1.02/adversary/, S-2.01/adversary/, S-2.02/adversary/, S-1.03/, S-3.04/, S-3.01a/)
+Burst logs, adversary passes, session checkpoints, closed-stories, closed-drift: `cycles/cycle-1/`

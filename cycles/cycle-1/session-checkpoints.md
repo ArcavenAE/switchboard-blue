@@ -147,3 +147,15 @@ PR #5 squash-merged at 3c4104e on develop; alpha tag alpha-20260625-023528-3c410
 AI code review: APPROVE. Security review: CLEARED (1 LOW: SEC-001 unreachable nil-OKM).
 Spec versions: BC-2.05.005 unchanged, story rev 5, VP-004/005/006 v1.1, ARCH-04 v1.1.
 Unblocks: S-2.02, S-4.04.
+
+---
+
+## Archived: 2026-06-27 — Wave 3 Gate Consistency Audit Pass
+
+**Position:** Phase 3, Wave 3 — ALL 5 STORIES MERGED. Wave 3 gate consistency audit re-run: PASS_WITH_OBSERVATIONS (0C/0H/3M/3L/5O), all MEDIUMs fixed. Alpha tag: alpha-20260627-042402-b68e498.
+
+**Gate audit fixes committed this burst:** wave-3.md HS-003 (E-SES-005→E-ADM-007), wave-5.md (E-ADM-007→E-ADM-013 revoke-not-found; E-ADM-002→E-ADM-005 re-admission), S-6.02 EC-002 (E-ADM-007→E-ADM-013), VP-012 (v1.1 real session API in harness skeleton), ARCH-08 §6.5 SHA annotation (43208ab→b68e498). Drift items: WG3-TAX-001 RESOLVED; S-3.03-O1-VPSKEL expanded to VP-012/VP-013/VP-035.
+
+**Tech-debt carry-forward (tech-debt-register.md):** F-002, F-003, F-004 (Wave 4), SEC-001 (Phase-6). VP-032 deferred.
+
+**Next at archive time:** Wave 3 wave-level adversarial convergence. After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts).

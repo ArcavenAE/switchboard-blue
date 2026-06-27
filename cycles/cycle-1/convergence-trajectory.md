@@ -208,3 +208,35 @@ Process-gap findings across passes 6/7/8: zero. No follow-up codifications requi
 | 1 | 0 | CONVERGED (1/3) |
 | 2 | 0 | CONVERGED (2/3) |
 | 3 | 0 | CONVERGED (3/3) — BC-5.39.001 satisfied |
+
+---
+
+## Wave 3 Integration Gate Adversary
+
+Tree: develop @ b68e498 (all 5 Wave 3 stories merged: S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03)
+
+| Pass | Date | Total | CRIT | HIGH | MED | LOW | OBS | Verdict |
+|------|------|-------|------|------|-----|-----|-----|---------|
+| 1 | 2026-06-27 | 8 | 0 | 0 | 3 | 2 | 3 | CONVERGED — wave-gate criterion met (0C/0H) |
+
+### Trajectory Shorthand
+
+`8 (0C/0H/3M/2L/3O)` — pass 1 CONVERGED
+
+- MEDIUMs are LATENT (cmd/switchboard/main.go is a version stub; no live production caller)
+- All 3 MEDIUMs carry forward to the cmd/switchboard wiring story (mandatory re-gate)
+- Full report: `cycles/cycle-1/wave-3/adversary/pass-01.md`
+
+### Finding Summary
+
+| ID | Sev | File | Contract | Status |
+|----|-----|------|----------|--------|
+| W3-M-1 | MED | internal/routing/routing.go:144-146 | BC-2.05.008 PC-2 | carry-forward → wiring story |
+| W3-M-2 | MED | internal/tmux/pty_fallback.go | BC-2.04.001 PC-5 / BC-2.04.002 | carry-forward → wiring story |
+| W3-M-3 | MED | internal/session/upstream.go:156-159 | BC-2.05.003 PC-2 | carry-forward → wiring story |
+| W3-L-1 | LOW | internal/session/upstream.go:213 | — (verified-inert) | recorded; no action |
+| W3-L-2 | LOW | internal/tmux/pty_fallback.go:560-566 | — | carry-forward → wiring story |
+| W3-O-1 | OBS | internal/routing/routing.go | BC-2.05.008 EC-006 | architect adjudication pending |
+| W3-O-2 | OBS | cmd/switchboard/main.go | — | resolved when wiring story ships |
+| W3-O-3 | OBS | internal/session/upstream.go:300 | — | informational |
+| W3-PG-001 | [process-gap] | go.md/governance | constructor-default-polarity rule | codification follow-up at cycle-close |
