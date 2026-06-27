@@ -2,9 +2,9 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
-producer: product-owner
+producer: architect
 timestamp: 2026-06-27T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
@@ -16,13 +16,14 @@ modified:
   - 2026-06-23T00:00:00
   - 2026-06-26T12:00:00 # v1.1 — WG3-H-001: Update totals to 43 BCs / 58 VPs; add missing BC-2.05.008 → VP-058 trace row; update internal/routing VP count from 4 to 5 (add code-audit)
   - 2026-06-27T00:00:00 # v1.2 — Wave 3 gate F-2 adjudication: add VP-059 (FailureCounter threshold proptest, internal/admission); update totals to 59 VPs; update internal/admission VP count from 5 to 6
+  - 2026-06-27T00:00:00 # v1.3 — BC-2.04.007 registration: add VP-060 (daemon lifecycle integration, cmd/switchboard); update totals to 60 VPs; add cmd/switchboard row (0→1 VP); update BC coverage 43→44 BCs
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 59 (VP-001 through VP-059, per VP-INDEX).
+> Total VP count: 60 (VP-001 through VP-060, per VP-INDEX).
 
 ## BC → VP Coverage Table
 
@@ -53,6 +54,7 @@ modified:
 | BC-2.04.004 | Console detach without closing session | internal/session | VP-033, VP-056 | e2e + integration | P0 |
 | BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-013, VP-035 | proptest + integration | P0 |
 | BC-2.04.006 | Multi-console fan-out | internal/session | VP-034 | e2e | P0 |
+| BC-2.04.007 | Daemon startup exits non-zero on connect failure; SIGTERM/SIGINT triggers clean shutdown | cmd/switchboard | VP-060 | integration | P0 |
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-009 | proptest | P0 |
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
@@ -76,17 +78,17 @@ modified:
 
 | Metric | Value |
 |--------|-------|
-| Total BCs | 43 |
-| BCs with ≥1 VP | 43 |
+| Total BCs | 44 |
+| BCs with ≥1 VP | 44 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 59 |
-| P0 VPs (pure-core proptest/fuzz) | 41 |
+| Total unique VPs | 60 |
+| P0 VPs (pure-core proptest/fuzz) | 42 |
 | P1 VPs (integration/e2e) | 14 |
 | P2+ VPs (advanced/PE phase) | 4 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 58 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 60 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -107,9 +109,10 @@ VP counts recounted from VP-INDEX (canonical source of truth, 58 VPs total).
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
 | cmd/sbctl | 3 | integration (1), e2e (2) |
-| **Total** | **59** | |
+| cmd/switchboard | 1 | integration (1) |
+| **Total** | **60** | |
 
-Per-module sum = 59 (no off-table VPs). VP-059 (proptest, internal/admission) added 2026-06-27.
+Per-module sum = 60 (no off-table VPs). VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
 
 ## Zero-VP BCs Check
 
@@ -122,6 +125,11 @@ BC-2.05.007 previously lacked a VP with `source_bc:` pointing at them).
 VP-059 was added 2026-06-27 for BC-2.05.005 PC-3 (per-source HMAC failure rate alert).
 BC-2.05.005 PC-3 previously had no dedicated VP — VP-004/005/006 cover the HMAC
 primitive but not the FailureCounter threshold behavior. VP-059 closes this gap.
+
+VP-060 was added 2026-06-27 for BC-2.04.007 (daemon lifecycle: connect-failure exit
+and clean SIGTERM/SIGINT shutdown). BC-2.04.007 is a new BC authored by the PO for
+Wave 3 scope. VP-060 covers both lifecycle postcondition paths via integration testing
+with subprocess launch and OS signal delivery.
 
 ## Infeasible Properties
 

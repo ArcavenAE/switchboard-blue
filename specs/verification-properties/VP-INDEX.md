@@ -2,9 +2,9 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "1.2"
+version: "1.3"
 status: draft
-producer: product-owner
+producer: architect
 timestamp: 2026-06-27T00:00:00
 phase: 1b
 inputDocuments:
@@ -83,27 +83,28 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
 | VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | implemented | VP-058.md |
 | VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | draft | VP-059.md |
+| VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | draft | VP-060.md |
 
 ## Counts
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit |
 |-----------|---------|------|-------------|-----|-----------|------------|
-| 59 | 33 | 2 | 11 | 10 | 2 | 1 |
+| 60 | 33 | 2 | 12 | 10 | 2 | 1 |
 
-> Arithmetic check: 33 + 2 + 11 + 10 + 2 + 1 = 59. Consistent.
-> VP-059 added 2026-06-27 for BC-2.05.005 PC-3 (FailureCounter threshold proptest).
+> Arithmetic check: 33 + 2 + 12 + 10 + 2 + 1 = 60. Consistent.
+> VP-060 added 2026-06-27 for BC-2.04.007 (daemon startup/shutdown lifecycle; integration/subprocess).
 
 ## Phase Distribution
 
 | Phase | Count |
 |-------|-------|
-| P0 | 41 |
+| P0 | 42 |
 | P1 | 14 |
 | P2 | 4 |
-| **Total** | **59** |
+| **Total** | **60** |
 
-> Phase recounted: VP-059 (P0) added. P0 = 40+1 = 41. P1 = 14. P2 = 4. Total = 59.
+> Phase recounted: VP-060 (P0) added. P0 = 41+1 = 42. P1 = 14. P2 = 4. Total = 60.
 
 ## BC Coverage Check
 
-43 BCs total. All 43 have at least 1 VP. VP-059 added for BC-2.05.005 PC-3 (FailureCounter threshold — previously the per-source alert postcondition had no dedicated VP). Zero coverage gaps.
+44 BCs total (BC-2.04.007 added). All 44 have at least one VP. VP-060 added for BC-2.04.007 (daemon lifecycle — connect-failure exit and clean SIGTERM/SIGINT shutdown). Zero coverage gaps.
