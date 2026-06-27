@@ -110,11 +110,13 @@ func WithKeystrokeSink(sink KeystrokeSink) AccessNodeOption {
 // WithClock sets the clock function used by the ConsoleSet for heartbeat
 // timestamps and eviction deadlines. Tests inject a fake clock; production
 // uses the default time.Now().UTC().
+//
+// The clock is applied in-place to the existing ConsoleSet (via
+// ConsoleSetWithClock) so that option ordering does not matter — any option
+// that mutates a.consoles before WithClock will not be silently clobbered.
 func WithClock(fn func() time.Time) AccessNodeOption {
 	return func(a *AccessNode) {
-		// Replace the ConsoleSet with one that uses the injected clock.
-		// No entries have been added yet at option-application time.
-		a.consoles = NewConsoleSet(ConsoleSetWithClock(fn))
+		ConsoleSetWithClock(fn)(a.consoles)
 	}
 }
 
