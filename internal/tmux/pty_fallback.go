@@ -489,6 +489,13 @@ type SessionConnector struct {
 	// confirmed. sc.Close() closes sc.frames exactly once via closeForwardFrames.
 	frames             chan halfchannel.ChannelFrame
 	closeForwardFrames sync.Once
+
+	// relayDropped counts frames dropped at the relay layer (forwardFrames
+	// non-blocking select default branch — sc.frames full). Distinct from
+	// AccessNode.FramesDropped() which counts ConsoleSet-level drops.
+	// Incremented atomically; read via RelayDropped().
+	// ARCH-01 v1.4 §Relay-drop counter contract; BC-2.04.006 v1.4 Inv-4.
+	relayDropped uint64
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control
@@ -535,7 +542,9 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 		go sc.watchAndFallback(innerCtx)
 
 		// ADR-011: start the forwarding relay goroutine after active is set.
-		sc.startForwardFrames()
+		// Pass innerCtx so forwardFrames can exit on ctx.Done() without busy-spinning
+		// (ARCH-01 v1.4 §Relay busy-spin guard).
+		sc.startForwardFrames(innerCtx)
 
 		return nil
 	}
@@ -555,13 +564,19 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 		sc.pty.logger.Log(logMsg)
 	}
 
+	// Create a cancellable context for the PTY-direct path so forwardFrames
+	// can observe ctx.Done() and exit cleanly (ARCH-01 v1.4 §Relay busy-spin
+	// guard). Store the cancel so Close() can cancel it.
+	innerCtx, cancel := context.WithCancel(ctx)
+
 	sc.mu.Lock()
 	sc.active = sc.pty
 	sc.inPTYMode = true
+	sc.connectCancel = cancel
 	sc.mu.Unlock()
 
 	// ADR-011: start the forwarding relay goroutine after active is set.
-	sc.startForwardFrames()
+	sc.startForwardFrames(innerCtx)
 
 	return nil
 }
