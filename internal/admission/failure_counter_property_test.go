@@ -4,28 +4,24 @@
 // call sequences with injected clock, verifying VP-059 properties (a)–(e).
 //
 // Properties verified:
-//   (a) E-ADM-017 fires exactly on the call that brings post-trim count to threshold.
-//   (b) Subsequent calls in the same un-re-armed window do NOT fire E-ADM-017.
-//   (c) After re-arm (drain-only: len(keep)==0 after trim under append-skip policy),
-//       the next threshold crossing fires E-ADM-017 again.
-//   (d) Under a continuous stream at rate ≥ threshold/windowDuration, E-ADM-017
-//       alert count is ≥ 2 (counter never goes permanently silent).
-//   (e) Live key count SourceCount() ≤ maxTrackedSources (65536) at all times.
 //
-// RED GATE status:
-//   - Properties (a)–(d): RED because the current impl uses append-always (no
-//     append-skip), so the stateful model (which tracks drain-only re-arm) will
-//     diverge from the actual alert count under sustained attack. Specifically,
-//     the current impl re-fires on the "oldest surviving newer than lastFire" path
-//     (drain-only is not yet enforced), causing model mismatch.
-//   - Property (e): currently PASSES (LRU cap is already in the impl) — this is
-//     a regression guard, not a new failing test.
-//   - TestFailureCounter_PropertyE_MemoryBound references SourceCount() (not
-//     TrackedSourceCount() — per VP-059 v1.1 reconciliation note: the method is
-//     SourceCount() on the production impl).
+//	(a) E-ADM-017 fires exactly on the call that brings post-trim count to threshold.
+//	(b) Subsequent calls in the same un-re-armed window do NOT fire E-ADM-017.
+//	(c) After re-arm (drain-only: len(keep)==0 after trim under append-skip policy),
+//	    the next threshold crossing fires E-ADM-017 again.
+//	(d) Under a continuous stream at rate ≥ threshold/windowDuration, E-ADM-017
+//	    alert count is ≥ 2 (counter never goes permanently silent).
+//	(e) Live key count SourceCount() ≤ maxTrackedSources (65536) at all times.
 //
-// Determinism: all tests use a fixed seed (1337) or deterministic sequences via
-// a simple LCG PRNG. No math/rand/time-based seeds. Reproducible across runs.
+// VP-059 specifies that properties (a)–(e) hold for ANY valid (threshold, window).
+// Tests are therefore parameterized over multiple configurations:
+//
+//	{threshold:5, window:60s}   — production default
+//	{threshold:3, window:30s}   — lower threshold, shorter window
+//	{threshold:10, window:120s} — higher threshold, longer window
+//
+// Determinism: all tests use seeds derived from a fixed base (1337). No wall-clock
+// or global-rand seeding. Fully reproducible across runs and goroutine schedules.
 //
 // capturingLogger implements admission.Logger via Log(msg string) — level-less
 // seam per BC-2.05.005 v1.5 O-1 adjudication + VP-059 v1.1.
@@ -97,18 +93,35 @@ func (p *lcgPRNG) intn(n int) int {
 	return int(p.next() % uint64(n))
 }
 
+// ── propConfig — parameterized test configuration ────────────────────────────
+
+// propConfig holds one (threshold, window) pair for VP-059 property tests.
+// VP-059 properties (a)–(e) must hold for any valid configuration.
+type propConfig struct {
+	threshold int
+	window    time.Duration
+	name      string
+}
+
+// propConfigs is the set of configurations exercised by all property tests.
+// Three distinct configs ensure threshold is genuinely varied across call sites
+// (satisfying unparam) and broaden VP-059 coverage beyond the production default.
+var propConfigs = []propConfig{
+	{threshold: 5, window: 60 * time.Second, name: "threshold5_window60s"},
+	{threshold: 3, window: 30 * time.Second, name: "threshold3_window30s"},
+	{threshold: 10, window: 120 * time.Second, name: "threshold10_window120s"},
+}
+
 // ── VP-059 stateful model ─────────────────────────────────────────────────────
 
 // modelState tracks the expected E-ADM-017 alert count for a single srcAddr,
 // mirroring the drain-only re-arm + append-skip semantics of BC-2.05.005 v1.6.
 //
 // Model rules:
-//   - Maintains a slice of in-window timestamps (sliding window).
-//   - On each RecordHMACFailure(src, now):
-//     1. Trim entries where ts < now-window.
-//     2. If firedAt is set and len(trim)==0: re-arm (clear firedAt).
-//     3. If firedAt is zero: append now. Otherwise: skip (append-skip).
-//     4. If post-trim+append count >= threshold AND firedAt is zero: fire; set firedAt=now.
+//  1. Trim entries where ts < now-window.
+//  2. If firedAt is set and len(trim)==0: re-arm (clear firedAt).
+//  3. If firedAt is zero: append now. Otherwise: skip (append-skip).
+//  4. If post-trim+append count >= threshold AND firedAt is zero: fire; set firedAt=now.
 type modelState struct {
 	timestamps []time.Time
 	firedAt    time.Time // zero = not fired
@@ -154,7 +167,8 @@ func (m *modelState) record(now time.Time) {
 // ── TestFailureCounter_PropertiesABCD ─────────────────────────────────────────
 
 // TestFailureCounter_PropertiesABCD verifies VP-059 properties (a)–(d) using
-// deterministic, reproducible call sequences with injected clock.
+// deterministic, reproducible call sequences with injected clock, across all
+// propConfigs (threshold-invariance per VP-059 v1.1).
 //
 // Property (a): alert fires exactly at threshold, not before.
 // Property (b): subsequent calls in same un-re-armed window do NOT re-fire.
@@ -165,216 +179,208 @@ func (m *modelState) record(now time.Time) {
 // is the primary discriminating mechanism: if the impl's re-arm/append semantics
 // diverge from the drain-only model, the alert counts will differ.
 //
-// RED GATE: the current impl uses append-always (no append-skip guard), so under
-// sustained attack the actual alert count will diverge from the model's drain-only
-// prediction (the impl may fire more alerts or fewer, depending on timing), causing
-// the subtests to fail with "expected N alerts ... got M".
-//
 // Traces to VP-059 v1.1 properties (a)–(d); BC-2.05.005 PC-3; S-W3.05 AC-017.
 func TestFailureCounter_PropertiesABCD(t *testing.T) {
 	t.Parallel()
 
-	const threshold = 5
-	const windowDuration = 60 * time.Second
 	const src = "deadbeefcafebabe"
 
-	// Property (a): alert fires exactly on the call that reaches threshold, not before.
-	t.Run("fires_exactly_at_threshold", func(t *testing.T) {
-		t.Parallel()
+	for _, cfg := range propConfigs {
+		cfg := cfg // capture loop var
 
-		now := time.Unix(1000, 0)
-		logger := &capturingLogger{}
-		fc := admission.NewFailureCounter(threshold, windowDuration, logger,
-			admission.WithNow(func() time.Time { return now }))
+		// Property (a): alert fires exactly on the call that reaches threshold, not before.
+		t.Run(fmt.Sprintf("fires_exactly_at_threshold/%s", cfg.name), func(t *testing.T) {
+			t.Parallel()
 
-		model := newModelState(threshold, windowDuration)
+			now := time.Unix(1000, 0)
+			logger := &capturingLogger{}
+			fc := admission.NewFailureCounter(cfg.threshold, cfg.window, logger,
+				admission.WithNow(func() time.Time { return now }))
 
-		for i := 1; i < threshold; i++ {
-			fc.RecordHMACFailure(src)
-			model.record(now)
-			if logger.alertCount() != 0 {
-				t.Errorf("VP-059 (a): call %d: expected 0 alerts before threshold, got %d",
-					i, logger.alertCount())
+			model := newModelState(cfg.threshold, cfg.window)
+
+			for i := 1; i < cfg.threshold; i++ {
+				fc.RecordHMACFailure(src)
+				model.record(now)
+				if logger.alertCount() != 0 {
+					t.Errorf("VP-059 (a) %s: call %d: expected 0 alerts before threshold, got %d",
+						cfg.name, i, logger.alertCount())
+				}
 			}
-			if model.alertCount != 0 {
-				t.Errorf("VP-059 (a): model error: expected 0 model alerts before threshold at call %d", i)
-			}
-		}
 
-		// threshold-th call must fire exactly one alert.
-		fc.RecordHMACFailure(src)
-		model.record(now)
-
-		if logger.alertCount() != 1 {
-			t.Errorf("VP-059 (a): expected exactly 1 alert at threshold, got %d", logger.alertCount())
-		}
-		if model.alertCount != logger.alertCount() {
-			t.Errorf("VP-059 (a): model/actual mismatch: model=%d actual=%d",
-				model.alertCount, logger.alertCount())
-		}
-	})
-
-	// Property (b): subsequent calls in same un-re-armed window do NOT re-fire.
-	t.Run("suppressed_within_same_window", func(t *testing.T) {
-		t.Parallel()
-
-		now := time.Unix(1000, 0)
-		logger := &capturingLogger{}
-		fc := admission.NewFailureCounter(threshold, windowDuration, logger,
-			admission.WithNow(func() time.Time { return now }))
-
-		model := newModelState(threshold, windowDuration)
-
-		// Fire first alert.
-		for range threshold {
+			// threshold-th call must fire exactly one alert.
 			fc.RecordHMACFailure(src)
 			model.record(now)
-		}
-		if logger.alertCount() != 1 {
-			t.Fatalf("VP-059 (b): setup: expected 1 alert, got %d", logger.alertCount())
-		}
 
-		// Additional calls within the same window must not fire additional alerts.
-		for i := range 10 {
-			fc.RecordHMACFailure(src)
-			model.record(now)
 			if logger.alertCount() != 1 {
-				t.Errorf("VP-059 (b): call %d: expected still 1 alert (suppressed), got %d",
-					i+1, logger.alertCount())
+				t.Errorf("VP-059 (a) %s: expected exactly 1 alert at threshold=%d, got %d",
+					cfg.name, cfg.threshold, logger.alertCount())
 			}
-		}
+			if model.alertCount != logger.alertCount() {
+				t.Errorf("VP-059 (a) %s: model/actual mismatch: model=%d actual=%d",
+					cfg.name, model.alertCount, logger.alertCount())
+			}
+		})
 
-		if model.alertCount != logger.alertCount() {
-			t.Errorf("VP-059 (b): model/actual mismatch: model=%d actual=%d",
-				model.alertCount, logger.alertCount())
-		}
-	})
+		// Property (b): subsequent calls in same un-re-armed window do NOT re-fire.
+		t.Run(fmt.Sprintf("suppressed_within_same_window/%s", cfg.name), func(t *testing.T) {
+			t.Parallel()
 
-	// Property (c): after window drains (all entries age out), re-arm fires on next crossing.
-	// Drain-only re-arm: len(keep)==0 after trim is the sole re-arm condition under append-skip.
-	t.Run("rearm_after_window_drain", func(t *testing.T) {
-		t.Parallel()
+			now := time.Unix(1000, 0)
+			logger := &capturingLogger{}
+			fc := admission.NewFailureCounter(cfg.threshold, cfg.window, logger,
+				admission.WithNow(func() time.Time { return now }))
 
-		base := time.Unix(1000, 0)
-		now := base
-		logger := &capturingLogger{}
-		fc := admission.NewFailureCounter(threshold, windowDuration, logger,
-			admission.WithNow(func() time.Time { return now }))
+			model := newModelState(cfg.threshold, cfg.window)
 
-		model := newModelState(threshold, windowDuration)
+			for range cfg.threshold {
+				fc.RecordHMACFailure(src)
+				model.record(now)
+			}
+			if logger.alertCount() != 1 {
+				t.Fatalf("VP-059 (b) %s: setup: expected 1 alert, got %d", cfg.name, logger.alertCount())
+			}
 
-		// First batch: fire alert-1.
-		for range threshold {
-			fc.RecordHMACFailure(src)
-			model.record(now)
-		}
-		if logger.alertCount() != 1 {
-			t.Fatalf("VP-059 (c): setup: expected 1 alert after first batch, got %d", logger.alertCount())
-		}
+			for i := range 10 {
+				fc.RecordHMACFailure(src)
+				model.record(now)
+				if logger.alertCount() != 1 {
+					t.Errorf("VP-059 (b) %s: call %d: expected still 1 alert (suppressed), got %d",
+						cfg.name, i+1, logger.alertCount())
+				}
+			}
 
-		// Advance clock past the full window so all pre-fire entries age out.
-		now = base.Add(windowDuration + time.Second)
+			if model.alertCount != logger.alertCount() {
+				t.Errorf("VP-059 (b) %s: model/actual mismatch: model=%d actual=%d",
+					cfg.name, model.alertCount, logger.alertCount())
+			}
+		})
 
-		// Second batch: should re-arm and fire alert-2.
-		for range threshold {
-			fc.RecordHMACFailure(src)
-			model.record(now)
-		}
-		if logger.alertCount() != 2 {
-			t.Errorf("VP-059 (c): expected 2 alerts after second batch (drain re-arm), got %d\n"+
-				"(RED: current impl may not have drain-only re-arm + append-skip — "+
-				"BC-2.05.005 v1.6 requires re-arm only when len(keep)==0 after trim)",
-				logger.alertCount())
-		}
-		if model.alertCount != logger.alertCount() {
-			t.Errorf("VP-059 (c): model/actual mismatch: model=%d actual=%d",
-				model.alertCount, logger.alertCount())
-		}
-	})
+		// Property (c): after window drains (drain-only re-arm), next crossing fires again.
+		t.Run(fmt.Sprintf("rearm_after_window_drain/%s", cfg.name), func(t *testing.T) {
+			t.Parallel()
 
-	// Property (d): under continuous stream ≥ threshold/window, alert count ≥ 2.
-	t.Run("periodic_refire_sustained_attack", func(t *testing.T) {
-		t.Parallel()
+			base := time.Unix(1000, 0)
+			now := base
+			logger := &capturingLogger{}
+			fc := admission.NewFailureCounter(cfg.threshold, cfg.window, logger,
+				admission.WithNow(func() time.Time { return now }))
 
-		base := time.Unix(1000, 0)
-		now := base
-		logger := &capturingLogger{}
-		fc := admission.NewFailureCounter(threshold, windowDuration, logger,
-			admission.WithNow(func() time.Time { return now }))
+			model := newModelState(cfg.threshold, cfg.window)
 
-		model := newModelState(threshold, windowDuration)
+			for range cfg.threshold {
+				fc.RecordHMACFailure(src)
+				model.record(now)
+			}
+			if logger.alertCount() != 1 {
+				t.Fatalf("VP-059 (c) %s: setup: expected 1 alert after first batch, got %d",
+					cfg.name, logger.alertCount())
+			}
 
-		// First batch: fire alert-1.
-		for range threshold {
-			fc.RecordHMACFailure(src)
-			model.record(now)
-		}
-		if logger.alertCount() != 1 {
-			t.Fatalf("VP-059 (d): setup: expected 1 alert, got %d", logger.alertCount())
-		}
+			// Advance clock past the full window so all pre-fire entries age out.
+			now = base.Add(cfg.window + time.Second)
 
-		// Advance clock by windowDuration+1s: entries from the first batch age out.
-		// This simulates a sustained attack crossing the re-arm boundary.
-		now = base.Add(windowDuration + time.Second)
+			for range cfg.threshold {
+				fc.RecordHMACFailure(src)
+				model.record(now)
+			}
+			if logger.alertCount() != 2 {
+				t.Errorf("VP-059 (c) %s: expected 2 alerts after drain re-arm, got %d "+
+					"(BC-2.05.005 v1.6 requires re-arm only when len(keep)==0 after trim)",
+					cfg.name, logger.alertCount())
+			}
+			if model.alertCount != logger.alertCount() {
+				t.Errorf("VP-059 (c) %s: model/actual mismatch: model=%d actual=%d",
+					cfg.name, model.alertCount, logger.alertCount())
+			}
+		})
 
-		// Second batch to fire alert-2.
-		for range threshold {
-			fc.RecordHMACFailure(src)
-			model.record(now)
-		}
+		// Property (d): under continuous stream ≥ threshold/window, alert count ≥ 2.
+		t.Run(fmt.Sprintf("periodic_refire_sustained_attack/%s", cfg.name), func(t *testing.T) {
+			t.Parallel()
 
-		if logger.alertCount() < 2 {
-			t.Errorf("VP-059 (d): expected ≥2 alerts under sustained attack, got %d "+
-				"— counter went permanently silent\n"+
-				"(RED: impl may not re-arm after drain; BC-2.05.005 EC-009 drain-only re-arm required)",
-				logger.alertCount())
-		}
-		if model.alertCount != logger.alertCount() {
-			t.Errorf("VP-059 (d): model/actual mismatch: model=%d actual=%d",
-				model.alertCount, logger.alertCount())
-		}
-	})
+			base := time.Unix(1000, 0)
+			now := base
+			logger := &capturingLogger{}
+			fc := admission.NewFailureCounter(cfg.threshold, cfg.window, logger,
+				admission.WithNow(func() time.Time { return now }))
 
-	// Stateful model checker over a generated call sequence.
-	// Uses LCG PRNG (seed=1337) to produce deterministic sequences.
-	// Generates 200 operations: either advance-clock or RecordHMACFailure.
-	t.Run("stateful_model_generated_sequence", func(t *testing.T) {
-		t.Parallel()
+			model := newModelState(cfg.threshold, cfg.window)
 
-		const seed = 1337
-		prng := newLCG(seed)
+			for range cfg.threshold {
+				fc.RecordHMACFailure(src)
+				model.record(now)
+			}
+			if logger.alertCount() != 1 {
+				t.Fatalf("VP-059 (d) %s: setup: expected 1 alert, got %d", cfg.name, logger.alertCount())
+			}
 
-		base := time.Unix(10000, 0)
-		now := base
-		logger := &capturingLogger{}
-		fc := admission.NewFailureCounter(threshold, windowDuration, logger,
-			admission.WithNow(func() time.Time { return now }))
+			now = base.Add(cfg.window + time.Second)
 
-		model := newModelState(threshold, windowDuration)
-
-		const numOps = 200
-		for i := range numOps {
-			op := prng.intn(2) // 0 = advance clock, 1 = RecordHMACFailure
-			if op == 0 {
-				// Advance clock by 0–120 seconds (random).
-				delta := time.Duration(prng.intn(121)) * time.Second
-				now = now.Add(delta)
-			} else {
+			for range cfg.threshold {
 				fc.RecordHMACFailure(src)
 				model.record(now)
 			}
 
-			// After each operation, model and actual alert counts must match.
-			if got := logger.alertCount(); got != model.alertCount {
-				t.Errorf("VP-059 stateful model: op %d (op=%d): actual alert count %d != model %d\n"+
-					"  (RED: impl re-arm/append semantics diverge from drain-only model; "+
-					"check append-skip and drain-only re-arm in RecordHMACFailure)",
-					i, op, got, model.alertCount)
-				// Stop after first mismatch to avoid noise.
-				return
+			if logger.alertCount() < 2 {
+				t.Errorf("VP-059 (d) %s: expected ≥2 alerts under sustained attack, got %d "+
+					"— counter went permanently silent (BC-2.05.005 EC-009)",
+					cfg.name, logger.alertCount())
 			}
-		}
-	})
+			if model.alertCount != logger.alertCount() {
+				t.Errorf("VP-059 (d) %s: model/actual mismatch: model=%d actual=%d",
+					cfg.name, model.alertCount, logger.alertCount())
+			}
+		})
+
+		// Stateful model checker over a generated call sequence.
+		// Seed is derived per-config: 1337 + index, so each config exercises a
+		// distinct operation sequence while remaining fully deterministic.
+		t.Run(fmt.Sprintf("stateful_model_generated_sequence/%s", cfg.name), func(t *testing.T) {
+			t.Parallel()
+
+			const baseSeed = uint64(1337)
+			var configIndex uint64
+			for i, c := range propConfigs {
+				if c.name == cfg.name {
+					configIndex = uint64(i)
+					break
+				}
+			}
+			prng := newLCG(baseSeed + configIndex)
+
+			base := time.Unix(10000, 0)
+			now := base
+			logger := &capturingLogger{}
+			fc := admission.NewFailureCounter(cfg.threshold, cfg.window, logger,
+				admission.WithNow(func() time.Time { return now }))
+
+			model := newModelState(cfg.threshold, cfg.window)
+
+			// maxDelta: clock advances up to 2× the window to exercise both
+			// within-window and full-drain scenarios deterministically.
+			maxDeltaSec := int(cfg.window.Seconds()) * 2
+
+			const numOps = 200
+			for i := range numOps {
+				op := prng.intn(2) // 0 = advance clock, 1 = RecordHMACFailure
+				if op == 0 {
+					delta := time.Duration(prng.intn(maxDeltaSec+1)) * time.Second
+					now = now.Add(delta)
+				} else {
+					fc.RecordHMACFailure(src)
+					model.record(now)
+				}
+
+				if got := logger.alertCount(); got != model.alertCount {
+					t.Errorf("VP-059 stateful model %s: op %d (op=%d): actual=%d != model=%d\n"+
+						"  impl re-arm/append semantics diverge from drain-only model",
+						cfg.name, i, op, got, model.alertCount)
+					return
+				}
+			}
+		})
+	}
 }
 
 // ── TestFailureCounter_PropertyE_MemoryBound ──────────────────────────────────
@@ -382,28 +388,22 @@ func TestFailureCounter_PropertiesABCD(t *testing.T) {
 // TestFailureCounter_PropertyE_MemoryBound verifies VP-059 property (e):
 // SourceCount() <= maxTrackedSources regardless of distinct source count.
 //
-// Adversarial injection: 2 × maxTrackedSources (131,072) distinct srcAddrs.
-// After each insertion, assert fc.SourceCount() <= maxTrackedSources (65,536).
+// Adversarial injection: maxTrackedSources+1000 distinct srcAddrs. Checks at the
+// cap boundary and final insertion; per-call checking is avoided to keep runtime
+// bounded given the O(N) LRU scan in V1.
 //
-// Note: this test uses SourceCount() — the method name on the production impl.
-// VP-059 v1.1 harness skeleton referenced "TrackedSourceCount()" but that was
-// not the implemented name; SourceCount() is the correct accessor per the impl.
-//
-// This test currently PASSES (LRU cap is in the impl). It is a regression guard.
-// If the impl's LRU eviction is broken by a future change, this test will catch it.
+// Note: uses SourceCount() — the correct accessor per the production impl.
+// VP-059 v1.1 harness skeleton referenced "TrackedSourceCount()"; reconciled.
 //
 // Traces to VP-059 v1.1 property (e); BC-2.05.005 EC-010; S-W3.05 AC-017.
 func TestFailureCounter_PropertyE_MemoryBound(t *testing.T) {
-	// Not t.Parallel() — inserts 131,072 distinct sources; keep single-threaded.
+	// Not t.Parallel() — inserts 66,536 distinct sources; keep single-threaded.
 
 	const threshold = 5
 	const windowDuration = 60 * time.Second
 	const maxTrackedSources = 65536
-	// Insert maxTrackedSources+1000 sources: enough to prove the LRU cap triggers
-	// and is enforced over many eviction cycles, without O(N²) runtime from the
-	// O(N) LRU scan in V1. VP-059 v1.1 spec says "2×maxTrackedSources" conceptually;
-	// this count exercises the eviction path repeatedly while staying under 5s on
-	// the current O(N) LRU scan impl.
+	// Insert maxTrackedSources+1000 sources: exercises the LRU eviction path
+	// repeatedly while staying well under 5s given the O(N) LRU scan impl.
 	const adversarialSources = maxTrackedSources + 1000
 
 	now := time.Unix(1000, 0)
@@ -411,9 +411,6 @@ func TestFailureCounter_PropertyE_MemoryBound(t *testing.T) {
 	fc := admission.NewFailureCounter(threshold, windowDuration, logger,
 		admission.WithNow(func() time.Time { return now }))
 
-	// Check SourceCount at key milestones rather than per-insertion, to bound runtime.
-	// Uses SourceCount() — the correct method name on *FailureCounter.
-	// (VP-059 v1.1 harness skeleton used TrackedSourceCount(); reconciled to SourceCount().)
 	for i := range adversarialSources {
 		src := fmt.Sprintf("spoofed%016x", i)
 		fc.RecordHMACFailure(src)
@@ -427,7 +424,6 @@ func TestFailureCounter_PropertyE_MemoryBound(t *testing.T) {
 		}
 	}
 
-	// Final check: SourceCount must be exactly maxTrackedSources (cap enforced, not under).
 	if got := fc.SourceCount(); got == 0 {
 		t.Errorf("VP-059 (e): SourceCount() returned 0 after %d insertions — "+
 			"method may be a stub; LRU eviction must actually track live sources",
@@ -442,9 +438,6 @@ func TestFailureCounter_PropertyE_MemoryBound(t *testing.T) {
 
 // TestFailureCounter_ConstructorValidation verifies that invalid constructor
 // arguments cause a panic (programmer-error guard per BC-2.05.005 PC-3 v1.4).
-//
-// Duplicates TestNewFailureCounter_PanicsOnInvalidArgs in adversarial_test.go
-// for VP-059 property harness completeness.
 //
 // Traces to BC-2.05.005 PC-3; VP-059 v1.1; S-W3.05 AC-013/AC-017.
 func TestFailureCounter_ConstructorValidation(t *testing.T) {
@@ -475,7 +468,7 @@ func TestFailureCounter_ConstructorValidation(t *testing.T) {
 // ── TestFailureCounter_BoundaryEC008 ─────────────────────────────────────────
 
 // TestFailureCounter_BoundaryEC008 verifies BC-2.05.005 EC-008 via the VP-059
-// property harness: the 5th failure timestamp exactly at windowDuration after the
+// property harness: the threshold-th failure at exactly windowDuration after the
 // 1st keeps the boundary entry (strictly-less-than trim); alert fires.
 //
 // Traces to BC-2.05.005 EC-008; VP-059 v1.1; S-W3.05 AC-017.
@@ -492,14 +485,14 @@ func TestFailureCounter_BoundaryEC008(t *testing.T) {
 	fc := admission.NewFailureCounter(threshold, windowDuration, logger,
 		admission.WithNow(func() time.Time { return now }))
 
-	// Record failures 1–4 at T=0.
+	// Record failures 1–(threshold-1) at T=0.
 	for range threshold - 1 {
 		fc.RecordHMACFailure(src)
 	}
 
 	// Advance clock to exactly T=windowDuration (boundary).
-	// Under strict less-than trim: entry at T=0 is NOT trimmed (0 == now-window, not < now-window).
-	// Post-trim count = 4; after append = 5 → alert fires.
+	// Under strict less-than trim: entry at T=0 is NOT trimmed (not strictly < T=0).
+	// Post-trim count = threshold-1; after append = threshold → alert fires.
 	now = base.Add(windowDuration)
 	fc.RecordHMACFailure(src)
 
