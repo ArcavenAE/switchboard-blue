@@ -18,7 +18,10 @@
 //     (AC-007; BC-2.04.007 v1.1 PC-2.6/EC-007/Inv-5).
 //
 // FORBIDDEN imports: internal/config, internal/drain, internal/metrics
-// (ARCH-08 §6.5.2 deferred packages; those packages do not exist on develop).
+// Build fails because internal/config, internal/drain, internal/metrics do not
+// yet exist on develop; a durable go-list CI assertion enforcing this boundary
+// after those packages land is deferred to Wave 4.
+// (ARCH-08 §6.5.2 deferred packages; ARCH-01 ADR-011 v1.5 §EC-005; task 13.)
 package main
 
 import (
@@ -52,41 +55,27 @@ const sweepDeadline = 60 * time.Second
 // Hardcoded for Wave 3 (AC-006; BC-2.04.006 invariant 4).
 const framesDroppedInterval = 30 * time.Second
 
-// runAccess is the access-mode subcommand handler. It wires all six ARCH-08
-// §6.5.1 obligations, and blocks until the daemon shuts down.
+// connectorIface is the minimal subset of *tmux.SessionConnector used by
+// runAccessWithConnector. *tmux.SessionConnector satisfies this interface by
+// construction — no changes to internal/tmux are required for the interface
+// itself. The seam enables tests to inject a fakeConnector for PC-2 and PC-2.6
+// end-to-end coverage (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1
+// obligation 4).
+type connectorIface interface {
+	Connect(ctx context.Context) error
+	Frames() <-chan halfchannel.ChannelFrame
+	Err() <-chan error
+	Close() error
+	RelayDropped() uint64
+}
+
+// runAccess is the thin constructor wrapper for the access-mode handler. It
+// builds the real *tmux.SessionConnector (with defaultPTYAlloc), constructs
+// access components via buildAccessComponents, and delegates to
+// runAccessWithConnector (ARCH-01 ADR-011 v1.5 §HIGH-B).
 //
-// stderr is the writer for error diagnostics. ctx is the parent context (root
-// context from main; signal handling is installed in main.go via
-// signal.NotifyContext before calling runAccess).
-//
-// On ctx already done: returns E-SYS-002 error immediately without starting
-// goroutines (BC-2.04.007 PC-1 / AC-007).
-// On sc.Connect failure: writes E-SYS-002 diagnostic to stderr and returns a
-// non-nil error (caller calls os.Exit(1) — BC-2.04.007 PC-1 / AC-007).
-// On clean shutdown (SIGTERM/SIGINT): returns nil (exit 0 — BC-2.04.007 PC-2 /
-// AC-008).
-// On mid-session double-failure (sc.Err() non-nil): logs E-SYS-002, cancels
-// context, returns non-nil error — caller calls os.Exit(1)
-// (BC-2.04.007 PC-2.6 / EC-007 / invariant 5 / AC-007).
+// main.go calls runAccess(ctx, os.Stderr); a non-nil return triggers os.Exit(1).
 func runAccess(ctx context.Context, stderr io.Writer) error {
-	// AC-008: install SIGTERM/SIGINT handler. signal.NotifyContext wraps ctx
-	// so that SIGTERM/SIGINT cancels sigCtx. This is idempotent with the
-	// signal.NotifyContext installed in run() — multiple registrations are safe.
-	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-
-	// Wrap sigCtx with a cancel so the Err() drain goroutine can trigger
-	// shutdown on mid-session double-failure (BC-2.04.007 PC-2.6 / invariant 5).
-	runCtx, cancel := context.WithCancel(sigCtx)
-	defer cancel()
-
-	// AC-007: if context is already cancelled before we start, return E-SYS-002.
-	if err := runCtx.Err(); err != nil {
-		msg := fmt.Sprintf("fatal: cannot connect to session backend: %v", err)
-		fmt.Fprintln(stderr, msg) //nolint:errcheck // best-effort stderr write
-		return fmt.Errorf("%s", msg)
-	}
-
 	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
@@ -108,9 +97,57 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	// buildAccessComponents wires the full set of access-node components using
 	// the shared keys and sc, and accepts the injectable routerLogger. The router
 	// is also returned so tests can call RouteFrame on the daemon's own instance
-	// (non-tautological — shared keyset).
+	// (non-tautological — shared keyset). buildAccessComponents signature is
+	// UNCHANGED per ARCH-01 ADR-011 v1.5 §HIGH-B.
 	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
+
+	return runAccessWithConnector(ctx, stderr, sc, an, router)
+}
+
+// runAccessWithConnector contains all orchestration logic for the access-mode
+// handler: wiring obligations 3–6 (ARCH-08 §6.5.1), the PC-1 connect-failure
+// path, the PC-2 clean-shutdown path, and the PC-2.6 sc.Err() drain path.
+//
+// sc is the connector interface — *tmux.SessionConnector in production; a
+// fakeConnector in tests (enabling PC-2 and PC-2.6 end-to-end coverage without
+// a real PTY environment). an and router are pre-constructed by runAccess or the
+// test caller. (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1 obligation 4.)
+//
+// On ctx already done: returns E-SYS-002 error immediately without starting
+// goroutines (BC-2.04.007 PC-1 / AC-007).
+// On sc.Connect failure: writes E-SYS-002 diagnostic to stderr and returns a
+// non-nil error (caller calls os.Exit(1) — BC-2.04.007 PC-1 / AC-007).
+// On clean shutdown (SIGTERM/SIGINT): returns nil (exit 0 — BC-2.04.007 PC-2 /
+// AC-008).
+// On mid-session double-failure (sc.Err() non-nil): logs E-SYS-002, cancels
+// context, returns non-nil error — caller calls os.Exit(1)
+// (BC-2.04.007 PC-2.6 / EC-007 / invariant 5 / AC-007).
+func runAccessWithConnector(
+	ctx context.Context,
+	stderr io.Writer,
+	sc connectorIface,
+	an *session.AccessNode,
+	router *routing.Router,
+) error {
 	_ = router // router retained (not discarded); used by AC-001 test surface
+
+	// AC-008: install SIGTERM/SIGINT handler. signal.NotifyContext wraps ctx
+	// so that SIGTERM/SIGINT cancels sigCtx. This is idempotent with any
+	// signal.NotifyContext installed upstream — multiple registrations are safe.
+	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	// Wrap sigCtx with a cancel so the Err() drain goroutine can trigger
+	// shutdown on mid-session double-failure (BC-2.04.007 PC-2.6 / invariant 5).
+	runCtx, cancel := context.WithCancel(sigCtx)
+	defer cancel()
+
+	// AC-007: if context is already cancelled before we start, return E-SYS-002.
+	if err := runCtx.Err(); err != nil {
+		msg := fmt.Sprintf("fatal: cannot connect to session backend: %v", err)
+		fmt.Fprintln(stderr, msg) //nolint:errcheck // best-effort stderr write
+		return fmt.Errorf("%s", msg)
+	}
 
 	if err := sc.Connect(runCtx); err != nil {
 		// AC-007 (BC-2.04.007 PC-1): E-SYS-002 diagnostic — "fatal: cannot
@@ -130,8 +167,9 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 
 	// BC-2.04.007 v1.1 invariant 5 / PC-2.6 / EC-007 / AC-007:
 	// Drain sc.Err() in a wg-tracked goroutine. On non-nil error (mid-session
-	// double-failure: both ctrl and PTY paths down), log E-SYS-002 at ERROR
-	// level, set the internalFailure latch, and cancel the root context.
+	// double-failure: both ctrl and PTY paths down, OR PTY-source EOF via
+	// ErrPTYSourceEOF), log E-SYS-002 at ERROR level, set the internalFailure
+	// latch, and cancel the root context.
 	// The goroutine also exits when sc.Err() is closed (normal sc.Close() path).
 	//
 	// This MUST be registered with wg before the frame bridge goroutine so
@@ -151,8 +189,8 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 				// wg.Wait() sees a consistent value regardless of SIGTERM timing.
 				internalFailure.Store(true)
 				// Cancel runCtx — triggers <-runCtx.Done() below and starts PC-2
-				// shutdown sequence. The non-nil error from runAccess causes
-				// main() to call os.Exit(1) (BC-2.04.007 PC-2.6 / EC-007).
+				// shutdown sequence. The non-nil error from runAccessWithConnector
+				// causes main() to call os.Exit(1) (BC-2.04.007 PC-2.6 / EC-007).
 				cancel()
 				return
 			}
@@ -299,6 +337,10 @@ func startSweepTicker(
 // layer drops) on each tick (ARCH-08 §6.5.1 obligation 6; AC-006;
 // BC-2.04.006 v1.4 invariant 4; ARCH-01 v1.4 §Relay-drop counter contract).
 //
+// sc is connectorIface so that runAccessWithConnector can pass either a real
+// *tmux.SessionConnector (production) or a fakeConnector (tests). Only
+// RelayDropped() is called on sc here.
+//
 // tickInterval controls how often the log line is emitted. Production passes
 // framesDroppedInterval (30s); tests may pass a shorter interval for fast
 // tick-driven assertions (FIX 4 — mirrors startSweepTicker parameterisation).
@@ -310,7 +352,7 @@ func startSweepTicker(
 // Returns immediately; goroutine exits when ctx is cancelled.
 func startFramesDroppedTicker(
 	ctx context.Context,
-	sc *tmux.SessionConnector,
+	sc connectorIface,
 	an *session.AccessNode,
 	lg *log.Logger,
 	tickInterval time.Duration,
