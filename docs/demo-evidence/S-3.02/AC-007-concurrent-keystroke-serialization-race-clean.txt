@@ -1,0 +1,16 @@
+$ go test -race -v -run "TestSession_ConcurrentKeystrokes_Serialized" ./internal/session/
+=== RUN   TestSession_ConcurrentKeystrokes_Serialized
+=== PAUSE TestSession_ConcurrentKeystrokes_Serialized
+=== CONT  TestSession_ConcurrentKeystrokes_Serialized
+--- PASS: TestSession_ConcurrentKeystrokes_Serialized (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.277s
+
+Race detector: CLEAN (no data races detected)
+
+Demonstrates: keystrokes from multiple full-access consoles attached
+simultaneously are serialized by the access node before forwarding to the
+tmux session sink. The test uses a contentionSink (thread-safe recorder) and
+launches N goroutines each calling SendKeystroke concurrently. The race
+detector finds no data races; every keystroke arrives intact with no
+interleaving or corruption (BC-2.04.006 Invariant 3).
