@@ -2,10 +2,10 @@
 artifact_id: BC-2.04.005
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-26T00:00:00
 phase: 1a
 bc_id: BC-2.04.005
 subsystem: session-access
@@ -17,7 +17,14 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-06-26
+    author: architect
+    changes: >
+      EC-003: clarified that per-SVTN describes a provisioning pattern, not a separate data structure
+      (M-2 adjudication, S-3.03 adversarial review). PC-5: added cross-reference to BC-2.03.003 Inv-3
+      as mechanical owner of presence-advertisement invariant (M-1 adjudication, S-3.03 adversarial review).
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -53,7 +60,7 @@ A console holding a read-only session authorization key may subscribe to a sessi
 2. The console receives all downstream frames for the session.
 3. Any upstream keystroke frame from this console is rejected by the access node with E-ADM-007 "upstream rejected: read-only access".
 4. The rejection does not terminate the console's downstream subscription.
-5. The access node's presence advertisement does not change attached=true for a read-only subscriber (read-only subscribers are not "attached" in the full-access sense).
+5. The access node's presence advertisement does not change attached=true for a read-only subscriber (read-only subscribers are not "attached" in the full-access sense). [Mechanism owned by BC-2.03.003 Inv-3 (internal/discovery); this PC is satisfied structurally there and is out of scope for the per-session authorization path (S-3.03).]
 
 ## Invariants
 
@@ -71,7 +78,7 @@ Console attaches with a read-only session authorization key; console sends a key
 |----|-------------|-------------------|
 | EC-001 (DEC-011) | Full-access console and read-only console both attached | Full-access console's keystrokes are forwarded. Read-only console's keystrokes are rejected. Both receive the same downstream output. |
 | EC-002 | Read-only console attempts to detach using a control keystroke sequence | The keystroke (as payload data) is rejected; the read-only console must use `sbctl sessions detach` to detach cleanly. |
-| EC-003 | Scope is per-SVTN (all sessions read-only for this key) | Access node enforces read-only on all sessions this console attaches to on this SVTN. Not just one session. |
+| EC-003 | Scope is per-SVTN (all sessions read-only for this key) | Access node enforces read-only on all sessions this console attaches to on this SVTN. Not just one session. The enforcement mechanism is per-(session,key) role lookup; "SVTN-wide" describes a provisioning pattern where the operator registers the key as read-only in each session's authorization list, not a separate SVTN-level data structure. |
 | EC-004 | Read-only console sends empty-tick frame (not a keystroke) | Empty-tick frames are part of the half-channel clock and are sent by both upstream and downstream. The access node accepts empty-tick frames from read-only consoles (they are liveness probes, not keystrokes). Only payload-bearing upstream frames are rejected. |
 
 ## Canonical Test Vectors
