@@ -4,8 +4,8 @@ phase: phase-3-tdd-implementation
 phase_step: wave-2-integration-gate-closed
 phase_3_active_wave: 3
 phase_3_active_stories: []
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02]
-phase_3_pause_point: "Wave 3 in progress — S-3.04 (PR #9), S-3.01a (PR #11), S-3.01b (PR #12), S-3.02 (PR #13) MERGED. 1 story remaining: S-3.03."
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
+phase_3_pause_point: "Wave 3 COMPLETE — S-3.04 (PR #9), S-3.01a (PR #11), S-3.01b (PR #12), S-3.02 (PR #13), S-3.03 (PR #14) ALL MERGED. Wave 3 integration gate is next action."
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 wave_2_gate_consistency_validator: "PASS_WITH_OBSERVATIONS (0C/0H/2M/3L/4O)"
@@ -92,17 +92,22 @@ s_3_02_pr_number: 13
 s_3_02_merge_date: 2026-06-27
 s_3_02_status: completed
 s_3_03_adversary_converged: "CONVERGED (passes 2-5 clean, 5 total; pass-1 1C/2H/3M decayed to 0/0; 4 consecutive clean passes) — cycles/cycle-1/S-3.03/adversary/"
+s_3_03_merge_sha: b68e498
+s_3_03_pr_number: 14
+s_3_03_merge_date: 2026-06-27
+s_3_03_status: completed
+s_3_03_alpha_tag: alpha-20260627-042402-b68e498
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
 wave_2_complete: true
 wave_2_stories_merged: 3
 wave_2_points: 18
-wave_3_stories_merged: 4
-wave_3_points_complete: 24
-wave_3_points_remaining: 5
+wave_3_stories_merged: 5
+wave_3_points_complete: 32
+wave_3_points_remaining: 0
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
-timestamp: 2026-06-27T12:00:00Z
+timestamp: 2026-06-27T06:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -110,10 +115,9 @@ last_update: 2026-06-27
 
 ## Current State
 
-Phase 3, Wave 3. S-3.02 MERGED (PR #13, 1ff74f5). Wave 3: 4/5 stories (24/29 pts).
+Phase 3, Wave 3. ALL 5 STORIES MERGED. S-3.03 MERGED (PR #14, b68e498, alpha-20260627-042402-b68e498). Wave 3: 5/5 stories (32/32 pts).
 4 tech-debt items carried forward (F-002, F-003, F-004, SEC-001). VP-032 deferred.
-S-3.03 (Tier-2 per-session authorization, BC-2.04.005 + BC-2.05.003): Step 4.5 adversarial review CONVERGED (5 passes, 4 consecutive clean). Proceeding to demo evidence + PR. Branch: feature/S-3.03-tier2-session-authorization, worktree tip 0b9b776 (final, includes M-1/M-2 coverage tests). Pre-merge — awaiting human approval.
-Drift item S-3.02-FM1 (vestigial upstream channel) deferred to S-3.03.
+Next action: Wave 3 integration gate. Drift item S-3.02-FM1 resolved by S-3.03 merge.
 
 ## Phase Progress
 
@@ -121,7 +125,7 @@ Drift item S-3.02-FM1 (vestigial upstream channel) deferred to S-3.03.
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 4/5 done (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13 1ff74f5) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 5/5 DONE (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13; S-3.03 PR #14 b68e498) — Wave 3 integration gate pending |
 
 ## Wave / Story Status
 
@@ -137,10 +141,10 @@ Drift item S-3.02-FM1 (vestigial upstream channel) deferred to S-3.03.
 | 3 | S-3.01a | Tmux control mode integration | completed | #11 | 43208ab |
 | 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
-| 3 | S-3.03 | Tier-2 per-session authorization | pending | — | — |
+| 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
 
 Wave 2: 3/3 stories merged (18 pts). Gate: PASS_WITH_OBSERVATIONS — CLOSED 2026-06-25.
-Wave 3: 4/5 stories merged (24/29 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. S-3.01b CLOSED 2026-06-26. S-3.02 CLOSED 2026-06-27 (PR #13). Next: S-3.03 (Tier-2 auth, 5 pts) → Wave 3 integration gate.
+Wave 3: 5/5 stories merged (32 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. S-3.01b CLOSED 2026-06-26. S-3.02 CLOSED 2026-06-27 (PR #13). S-3.03 CLOSED 2026-06-27 (PR #14, b68e498). Next: Wave 3 integration gate.
 Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-1/S-3.04/adversary/`.
 
 ## Open Drift Items
@@ -159,6 +163,8 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | S-3.02-FM1 | MED | Upstream channel from Attach is vestigial in production (SendKeystroke forwards directly to sink); close-race contract guards an unwritten path. Reconcile BC-2.04.003 PC-3 to SendKeystroke path OR stop returning the channel until S-3.03 adds a draining consumer | architect/story-writer | deferred to S-3.03 |
 | S-3.03-L1-REVOKE | LOW | BC-2.05.003 EC-004 "revoke" half unenforced: SessionAuth has RegisterKey (add/overwrite) but no RevokeKey/Remove. Out of S-3.03 AC scope. | story-writer/architect | deferred to operator-provisioning story (Wave 4+) |
 | S-3.03-O1-VPSKEL | LOW | VP-013/VP-035 proof-harness skeletons reference stale API (NewAuthList/AddWithRole/AuthorizeFrameType/ErrReadOnlyUpstreamDenied) and VP-035 property statement cites E-ADM-003 for read-only upstream rejection; canonical taxonomy uses E-ADM-007 (E-SES-005 retired). Implementation is correct; VP skeletons not refreshed on error-code re-anchor. | architect/formal-verifier | deferred to Phase-6 hardening; codification follow-up at cycle-close (process-gap) |
+| MISE-DX-001 | LOW | Toolchain provisioning migrating brew→mise; covered by story S-M.01 (mise.toml, CI, lefthook, devcontainer, CONTRIBUTING/CLAUDE.md). | dx-engineer/devops-engineer | open — story S-M.01 drafted, unscheduled (maintenance sweep) |
+| MISE-DOC-002 | LOW | Project CLAUDE.md says "prefer brew" — preference shifting to mise; update during S-M.01. Operator's GLOBAL ~/.claude/CLAUDE.md "Prefer brew" directive also shifting to mise (operator must update their personal file; factory will not edit the global file). | dx-engineer | open — tracked for S-M.01 + operator global-file note |
 
 ## Decisions Log
 
@@ -172,16 +178,17 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | HMAC keying | per-(node, svtn) HKDF using node_admission_pubkey as IKM (amended ADR-001) | 2026-06-23 |
 | Wave-1 rollback/re-closure | all drift items routed concretely; drbothen/vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
+| S-3.03 repointed 5→8 | Story v1.1 upstream-wiring integration scope expansion; sprint-state.yaml reconciled to 8 pts; Wave 3 total corrected 29→32 pts | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (S-3.02 MERGED)
+## Session Resume Checkpoint — 2026-06-27 (WAVE 3 COMPLETE)
 
-**Position:** Phase 3, Wave 3. S-3.02 MERGED (PR #13, squash SHA 1ff74f5, develop tip). Wave 3: 4/5 stories merged (24/29 pts).
+**Position:** Phase 3, Wave 3 — ALL 5 STORIES MERGED. Wave 3: 5/5 stories (32/32 pts). Alpha tag: alpha-20260627-042402-b68e498.
 
-**S-3.02:** Completed. 8 adversary passes (passes 6-8 CONVERGED). PR #13 approved (pr-reviewer: 0 blocking), CI green, squash-merged 2026-06-27. Drift item S-3.02-FM1 (vestigial upstream channel) deferred to S-3.03.
+**S-3.03:** Completed. 5 adversary passes (passes 2-5 CONVERGED, pass-1 1C/2H/3M decayed to 0/0). PR #14 approved, CI green, squash-merged 2026-06-27 (SHA b68e498). Resolves S-3.02-FM1 drift (vestigial upstream channel). Points corrected 5→8 (v1.1 scope, sprint-state.yaml reconciled).
 
 **Tech-debt carry-forward (tech-debt-register.md):** F-002, F-003, F-004 (Wave 4), SEC-001 (Phase-6). VP-032 deferred.
 
-**Next:** S-3.03 (Tier-2 per-session authorization, BC-2.04.005 + BC-2.05.003, 5 pts) — FINAL Wave 3 story. After S-3.03 merge: Wave 3 integration gate. Open Phase-6 deferred items: see Open Drift Items table above.
+**Next:** Wave 3 integration gate. After gate: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Open Phase-6 deferred items: see Open Drift Items table above.
 
 ## Historical Content
 

@@ -19,13 +19,14 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 24 |
-| Complete | 9 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b) |
-| Pending | 15 |
+| Total stories | 25 |
+| Complete | 11 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03) |
+| Pending | 14 |
 | E-phase | 19 |
 | PE-phase | 4 |
+| Maintenance (draft/unscheduled) | 1 (S-M.01) |
 | Total points | 143 |
-| Waves | 7 (Wave 0–6) |
+| Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
 | Backlog | 1 (S-BL.OA) |
 
 ## Master Story Index
@@ -40,8 +41,8 @@ inputDocuments:
 | S-2.02 | Tier-1 admission and SVTN isolation | E-2 | 2 | BC-2.05.001, BC-2.05.002, BC-2.05.006, BC-2.05.007 | admission-security | 8 | P0 | E | completed (PR #6, merge a06b306) |
 | S-3.01a | Tmux control mode integration | E-3 | 3 | BC-2.04.001 | session-access | 8 | P0 | E | completed (PR #11, merge 43208ab) |
 | S-3.01b | PTY proxy fallback | E-3 | 3 | BC-2.04.002 | session-access | 5 | P0 | E | completed (PR #12, merge 56ec9c7) |
-| S-3.02 | Console attach/detach and multi-console fan-out | E-3 | 3 | BC-2.04.003, BC-2.04.004, BC-2.04.006 | session-access | 8 | P0 | E | pending (v1.2) |
-| S-3.03 | Tier-2 per-session authorization and read-only | E-3 | 3 | BC-2.04.005, BC-2.05.003 | session-access, admission-security | 8 | P0 | E | pending (v1.1) |
+| S-3.02 | Console attach/detach and multi-console fan-out | E-3 | 3 | BC-2.04.003, BC-2.04.004, BC-2.04.006 | session-access | 8 | P0 | E | completed (PR #13, merge 1ff74f5) |
+| S-3.03 | Tier-2 per-session authorization and read-only | E-3 | 3 | BC-2.04.005, BC-2.05.003 | session-access, admission-security | 8 | P0 | E | completed (PR #14, merge b68e498) |
 | S-3.04 | Wire verifyFrameHMAC into RouteFrame (HMAC enforcement at router boundary) | E-2 | 3 | BC-2.05.008 | admission-security | 3 | P0 | E | completed (PR #9, merge d54bf1a) |
 | S-4.01 | Per-path RTT/loss tracking and dup-and-race | E-4 | 4 | BC-2.02.001, BC-2.02.002, BC-2.02.003, BC-2.02.009 | multipath-forwarding | 8 | P0 | E | pending |
 | S-4.02 | Upstream idempotent replay window | E-4 | 4 | BC-2.02.004 | multipath-forwarding | 5 | P0 | E | pending |
@@ -64,7 +65,7 @@ inputDocuments:
 | 0 | S-0.01 | 1 | BMAD scaffolding (complete) |
 | 1 | S-1.01, S-1.02 + refactor PR #3 | 13 | Frame codec + half-channel clock — **CLOSED 2026-06-24 (pass-with-clean-drift; rollback resolved 2026-06-24)** |
 | 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity — **COMPLETE 2026-06-25 (3/3 merged; integration gate next)** |
-| 3 | S-3.01a, S-3.01b, S-3.02, S-3.03, S-3.04 | 32 | Session access MVP + HMAC wire-up — S-3.04 CLOSED (PR #9); S-3.01a CLOSED (PR #11); S-3.01b CLOSED (PR #12, 56ec9c7); 2 stories remaining |
+| 3 | S-3.01a, S-3.01b, S-3.02, S-3.03, S-3.04 | 32 | Session access MVP + HMAC wire-up — ALL CLOSED: S-3.04 (PR #9), S-3.01a (PR #11), S-3.01b (PR #12), S-3.02 (PR #13), S-3.03 (PR #14, b68e498) — Wave 3 integration gate pending |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
 | 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
 | 6 | S-7.01, S-7.02, S-7.03, S-7.04 | 29 | PE-phase features |
@@ -90,6 +91,19 @@ addresses the "deferred to TBD story" anti-pattern.
 |----------|-------|--------|----------------------|---------------|
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
 
+## Maintenance Stories
+
+Stories for DX/tooling/infrastructure work that are NOT part of feature waves 1–7.
+Maintenance IDs use the scheme `S-M.NN` (introduced 2026-06-27). No BC anchor required.
+Execute in a post-Wave-7 maintenance sweep or standalone orchestrator dispatch.
+
+| Story ID | Title | Epic | Wave | BC Traces | Points | Priority | Status |
+|----------|-------|------|------|-----------|--------|----------|--------|
+| S-M.01 | Migrate toolchain provisioning from Homebrew to mise | E-MAINT | unscheduled | (none — DX/tooling) | 5 | P2 | draft |
+
+Epic E-MAINT covers maintenance/DX/self-improvement stories. No BC anchor applies to tooling stories.
+Drift items MISE-DX-001 and MISE-DOC-002 are consumed by S-M.01.
+
 ## Files
 
-All story files are in `.factory/stories/S-N.MM-*.md`. Backlog stubs use `.factory/stories/S-BL.*-*.md`. Epic files are in `.factory/stories/epics/E-N-*.md`.
+All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files use `.factory/stories/S-M.NN-*.md`. Backlog stubs use `.factory/stories/S-BL.*-*.md`. Epic files are in `.factory/stories/epics/E-N-*.md`.

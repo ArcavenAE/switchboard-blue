@@ -28,11 +28,11 @@ wave_status:
     closed_at: 2026-06-25
     stories: [S-1.03, S-2.01, S-2.02]
   - wave: 3
-    status: active
-    stories_merged: [S-3.04, S-3.01a, S-3.01b, S-3.02]
-    stories_pending: [S-3.03]
-    points_complete: 24
-    points_remaining: 5
+    status: all_stories_merged
+    stories_merged: [S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
+    stories_pending: []
+    points_complete: 32
+    points_remaining: 0
 
 stories:
   - story_id: S-0.01
@@ -139,11 +139,16 @@ stories:
     title: "Tier-2 per-session authorization and read-only enforcement"
     epic: E-3
     wave: 3
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
-    points: 5
+    points: 8
+    # points: repointed 5→8 (story v1.1, upstream-wiring integration scope); corrects sprint-state drift vs story frontmatter
     bc_traces: [BC-2.04.005, BC-2.05.003]
+    merge_sha: b68e498
+    pr: 14
+    merged_at: "2026-06-27"
+    alpha_tag: alpha-20260627-042402-b68e498
 
   - story_id: S-4.01
     title: "Per-path RTT/loss tracking and duplicate-and-race dispatch"
