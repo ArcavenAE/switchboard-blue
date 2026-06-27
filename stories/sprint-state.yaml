@@ -6,8 +6,8 @@
 
 cycle: cycle-1
 phase: 2
-total_stories: 25
-total_points: 148
+total_stories: 26
+total_points: 153
 waves: 7
 
 wave_status:
@@ -318,3 +318,15 @@ stories:
     scope_phase: E
     points: 5
     bc_traces: []
+
+  - story_id: S-M.02
+    title: "Formalize Apple code-signing and notarization of release binaries (toggle-gated)"
+    epic: E-MAINT
+    wave: unscheduled
+    status: draft
+    priority: P2
+    scope_phase: M
+    points: 5
+    bc_traces: []
+    # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
+    # drift_item: SIGN-DX-001

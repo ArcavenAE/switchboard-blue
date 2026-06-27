@@ -19,15 +19,15 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 25 (24 wave stories + S-M.01 maintenance) |
+| Total stories | 26 (24 wave stories + S-M.01 + S-M.02 maintenance) |
 | Complete | 11 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03) |
 | Pending | 13 |
-| Draft/unscheduled | 1 (S-M.01) |
+| Draft/unscheduled | 2 (S-M.01, S-M.02) |
 | E-phase | 20 (waves 0–5) |
 | PE-phase | 4 (wave 6) |
-| Maintenance (draft/unscheduled) | 1 (S-M.01) |
+| Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
 | Total points (waves 0–6) | 143 |
-| Total points (incl. S-M.01) | 148 |
+| Total points (incl. S-M.01 + S-M.02) | 153 |
 | Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
 | Backlog | 1 (S-BL.OA) |
 
@@ -71,7 +71,7 @@ inputDocuments:
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
 | 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
 | 6 | S-7.01, S-7.02, S-7.03, S-7.04 | 29 | PE-phase features |
-| **Total** | **24** (wave stories) | **143** | (+ S-M.01 maintenance, 5 pts, unscheduled — grand total 25 stories / 148 pts) |
+| **Total** | **24** (wave stories) | **143** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 26 stories / 153 pts) |
 
 > Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 total: 5 stories, 32 pts. Total points including Wave 0: 143. Per-wave counts above use story points from individual story files.
 
@@ -102,9 +102,11 @@ Execute in a post-Wave-7 maintenance sweep or standalone orchestrator dispatch.
 | Story ID | Title | Epic | Wave | BC Traces | Points | Priority | Status |
 |----------|-------|------|------|-----------|--------|----------|--------|
 | S-M.01 | Migrate toolchain provisioning from Homebrew to mise | E-MAINT | unscheduled | (none — DX/tooling) | 5 | P2 | draft |
+| S-M.02 | Formalize Apple code-signing and notarization of release binaries (toggle-gated) | E-MAINT | unscheduled | (none — release infra) | 5 | P2 | draft |
 
 Epic E-MAINT covers maintenance/DX/self-improvement stories. No BC anchor applies to tooling stories.
 Drift items MISE-DX-001 and MISE-DOC-002 are consumed by S-M.01.
+Drift item SIGN-DX-001 is consumed by S-M.02. S-M.02 is milestone-gated — SIGNING_ENABLED stays OFF until functional-product milestone.
 
 ## Files
 
