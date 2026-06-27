@@ -154,7 +154,7 @@ S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (pass-01 0C/1H, pass-02 0C/2
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
 | W3-R3-F1 | HIGH? | cmd/switchboard wires none of 5 Wave-3 subsystems; production RouteFrame Logger never injected (E-ADM-016 discarded by nopLogger in real builds); AccessNode Sweep timer uninstantiated. r3 HIGH; r1+r2 OBSERVATION (in-scope-deferred per ARCH-08 pos-18, no Wave-3 story scopes cmd wiring). | architect | pending-adjudication — is cmd-wiring a later wave? annotate STORY-INDEX/ARCH-08 + create wiring story if deferred |
-| W3-R3-F2 | HIGH? | BC-2.05.008 EC-006 (≥5 HMAC fails/60s → admission alert, ref BC-2.05.005 PC-3) neither implemented nor marked [DEFERRED]. | product-owner | pending-adjudication — implement now OR explicit [DEFERRED] + target story |
+| W3-R3-F2 | HIGH? | BC-2.05.008 EC-006 (≥5 HMAC fails/60s → admission alert, ref BC-2.05.005 PC-3) neither implemented nor marked [DEFERRED]. | product-owner | resolved — S-W3.05 implements this; BC-2.05.005 v1.3+ / BC-2.05.008 v1.2+ ratify the mechanism |
 | W3-R3-F3 | MED | E-ADM-016 PATH-A message ("auth key unavailable") diverges from canonical taxonomy string ("tag mismatch"); both carry E-ADM-016; unpinned by test. | product-owner/implementer | open |
 | W3-R3-F4 | MED | BC-2.05.008 PC-4 does not mandate E-ADM-016 logging on no-entry PATH-A, but code+test now emit/assert it (unadjudicated test-writer assumption). Overlaps W3-F1-FU1. | product-owner/spec-steward | open |
 | W3-R3-F5 | LOW | ErrSessionMismatch sentinel text lacks "(E-SES-006)" code token (parity with E-ADM-006/007 sentinels). | implementer | open |
@@ -165,10 +165,12 @@ S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (pass-01 0C/1H, pass-02 0C/2
 | SW305-HF1 | HIGH | Hysteresis re-fire semantics: impl rule contradicts BC-2.05.005 EC-005/AC-004 literal; untested under sustained attack; tautological tests. | product-owner→implementer/test-writer | in-fix |
 | SW305-HF2 | HIGH | Unbounded attacker-keyed map (counts/firedAt by SrcAddr never deleted) = memory DoS CWE-770; detector amplifies flood. | product-owner→implementer/test-writer | in-fix |
 | SW305-HF3 | HIGH | VP-059 (story's named P0 VP) has no spec file + no proptest exists. | architect→test-writer | in-fix |
-| SW305-M1 | MED | E-ADM-017 msg format + src_addr rendering diverge from canonical taxonomy (unpinned). | product-owner | in-fix |
+| SW305-M1 | MED | E-ADM-017 msg format + src_addr rendering diverge from canonical taxonomy (unpinned). | product-owner | spec-confirmed — canonical format "E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>" is UNCHANGED in error-taxonomy v1.9, BC-2.05.005 PC-3, BC-2.05.008 EC-006; code/test (failure_counter.go:169) missing "HMAC failure rate alert:" phrase — implementer/test-writer must fix the Sprintf format string and AC-015 test assertion |
 | SW305-M2 | MED | WithFailureCounter uses unexported iface not spec-pinned *admission.FailureCounter — ratify or revert. | product-owner | in-fix |
 | SW305-M3 | MED | WithNow clock seam + threshold<=0 guard absent from BC contract. | product-owner→implementer | in-fix |
 | SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | in-fix |
+| SW305-M5 | MED | VP-059 proof harness capturingLogger uses Error(msg string, _ ...any) — does not satisfy admission.Logger interface Log(msg string); harness will not compile. | architect→test-writer | open — VP-059 harness must be updated to use Log(msg string) and assert on E-ADM-017 prefix; O-1 adjudication confirms Log(msg string) is the correct seam |
+| SW305-M6 | HIGH | Per-source timestamp slice unbounded within window (CWE-770 amplification) — failure_counter.go always appends even after firedAt set; 1M/s attack = unbounded memory for one source. | implementer | fix-now — BC-2.05.005 v1.5 PC-3 mandates append-skip when firedAt[srcAddr] non-zero and re-arm not met; add EC-011 test (inject threshold failures then 1M more; assert len(counts[src])==threshold); update failure_counter.go RecordHMACFailure step 5 to skip append under this condition |
 Resolved drift + stable Phase-6 deferrals archived: `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
