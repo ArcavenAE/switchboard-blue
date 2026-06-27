@@ -1,0 +1,12 @@
+$ go test -race -v -run "TestSession_Attach_NonexistentSession_ErrSesOne" ./internal/session/
+=== RUN   TestSession_Attach_NonexistentSession_ErrSesOne
+=== PAUSE TestSession_Attach_NonexistentSession_ErrSesOne
+=== CONT  TestSession_Attach_NonexistentSession_ErrSesOne
+--- PASS: TestSession_Attach_NonexistentSession_ErrSesOne (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.434s
+
+Race detector: CLEAN (no data races detected)
+
+Demonstrates: Attach("console-1", "nonexistent") returns ErrSessionNotFound
+wrapping E-SES-001 "session not found: nonexistent".

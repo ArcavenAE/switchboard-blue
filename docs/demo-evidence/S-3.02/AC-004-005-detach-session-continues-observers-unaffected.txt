@@ -1,0 +1,22 @@
+$ go test -race -v -run "TestSession_Detach_SessionContinues|TestSession_Detach_ReadOnlyObserversUnaffected" ./internal/session/
+=== RUN   TestSession_Detach_SessionContinues
+=== PAUSE TestSession_Detach_SessionContinues
+=== RUN   TestSession_Detach_ReadOnlyObserversUnaffected
+=== PAUSE TestSession_Detach_ReadOnlyObserversUnaffected
+=== CONT  TestSession_Detach_ReadOnlyObserversUnaffected
+=== CONT  TestSession_Detach_SessionContinues
+--- PASS: TestSession_Detach_ReadOnlyObserversUnaffected (0.00s)
+--- PASS: TestSession_Detach_SessionContinues (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.358s
+
+Race detector: CLEAN (no data races detected)
+
+AC-004: Detach closes the console's downstream channel cleanly; the tmux
+session on the access node continues running; no keystrokes forwarded from
+the detached console (SendKeystroke returns ErrConsoleNotFound).
+
+AC-005: After the full-access console detaches, already-subscribed consoles
+("observer-1", "observer-2") in the fan-out set continue receiving downstream
+frames unaffected. Fan-out continuity confirmed; read-only role enforcement
+is deferred to S-3.03.

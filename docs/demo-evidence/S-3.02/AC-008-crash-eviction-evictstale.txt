@@ -1,0 +1,20 @@
+$ go test -race -v -run "TestSession_CrashDetach_EvictsFromFanOut" ./internal/session/
+=== RUN   TestSession_CrashDetach_EvictsFromFanOut
+=== PAUSE TestSession_CrashDetach_EvictsFromFanOut
+=== CONT  TestSession_CrashDetach_EvictsFromFanOut
+--- PASS: TestSession_CrashDetach_EvictsFromFanOut (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.267s
+
+Race detector: CLEAN (no data races detected)
+
+Demonstrates: ConsoleSet.EvictStale(deadline time.Duration) selectively
+evicts consoles whose lastHeartbeat is older than `deadline` (computed as
+cutoff := nowFn().Add(-deadline)) while consoles with current heartbeats
+continue receiving downstream output unaffected.
+
+Test technique: clock is injected via ConsoleSetWithClock(fn func() time.Time)
+(the WithClock seam). The test advances a fake clock to a known point in time
+so eviction is fully deterministic without real sleeps. EvictStale returns the
+count of evicted consoles; the test asserts exactly the stale console is
+evicted and the healthy observer receives subsequent frames.
