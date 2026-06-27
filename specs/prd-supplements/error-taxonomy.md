@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -49,8 +49,8 @@ traces_to: '.factory/specs/prd.md'
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-ADM-001 | ADM | broken | 1 | "admission denied: signature verification failed for <node_addr> on SVTN <svtn_id>" | BC-2.05.001 |
 | E-ADM-002 | ADM | broken | — (dropped) | "HMAC verification failed: SVTN <svtn_id>, src <src_addr>, type <frame_type>" | FM-006, BC-2.05.005 |
-| E-ADM-016 | ADM | broken | 0 | "wire HMAC verification failed at RouteFrame: tag mismatch for SVTN <svtn_id> from src <src_addr>" | BC-2.05.008; mapped to Go sentinel routing.ErrHMACVerificationFailed; distinct from E-ADM-002 (HMAC primitive failure in internal/hmac) and E-ADM-017 (aggregate rate alert) |
-| E-ADM-017 | ADM | degraded | 0 (daemon continues) | "HMAC failure rate alert: ≥5 failures in 60s from src <src_addr>" | BC-2.05.005 PC-3, BC-2.05.008 EC-006; emitted by admission.FailureCounter when the per-src_addr sliding-window count reaches the threshold (default: 5 failures / 60s window); fire-once-per-threshold-crossing; distinct from E-ADM-016 (per-failure wire log) and E-ADM-002 (per-failure primitive log); severity=degraded because the router continues operating — the alert signals a suspicious pattern but does not itself drop the source |
+| E-ADM-016 | ADM | broken | 0 | "wire HMAC verification failed at RouteFrame: tag mismatch for SVTN <svtn_id> from src <src_addr> (E-ADM-016)" | BC-2.05.008; mapped to Go sentinel routing.ErrHMACVerificationFailed; `<src_addr>` is the lowercase hex encoding of the 8-byte SrcAddr field (e.g. "a1b2c3d4e5f60102"); code literal "(E-ADM-016)" embedded in message for grep-ability; distinct from E-ADM-002 (HMAC primitive failure in internal/hmac) and E-ADM-017 (aggregate rate alert) |
+| E-ADM-017 | ADM | degraded | 0 (daemon continues) | "E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>" | BC-2.05.005 PC-3, BC-2.05.008 EC-006; emitted by admission.FailureCounter when the per-src_addr sliding-window count reaches the configured threshold; `<threshold>` and `<window_seconds>` are the FailureCounter's configured values (default: 5 and 60); `<src_addr>` is the lowercase hex encoding of the 8-byte SrcAddr field; code literal "E-ADM-017" embedded at message start for grep-ability; re-fire semantics: alert fires on the threshold crossing and re-fires when the oldest surviving in-window entry is newer than the last-fire timestamp (periodic re-arm under sustained attack, roughly once per windowDuration); severity=degraded because the router continues operating; distinct from E-ADM-016 (per-failure wire log) and E-ADM-002 (per-failure primitive log) |
 | E-ADM-003 | ADM | broken | — (dropped) | "frame from non-admitted source: src <src_addr>, SVTN <svtn_id>" | BC-2.05.002 |
 | E-ADM-004 | ADM | broken | 1 | "address collision: node address <addr> already admitted on SVTN <svtn_id>" | BC-2.01.006 |
 | E-ADM-005 | ADM | broken | 1 | "key revoked: <key_fingerprint> on SVTN <svtn_id>" | DEC-005, FM-007 |
@@ -174,6 +174,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.9 | 2026-06-27 | Per-story adversarial convergence adjudication: (1) E-ADM-016 message format updated — added "(E-ADM-016)" literal suffix for grep-ability; clarified `<src_addr>` is lowercase hex of 8-byte SrcAddr. (2) E-ADM-017 message format updated — parameterized `<threshold>` and `<window_seconds>` (not hardcoded ≥5/60s); added "E-ADM-017" literal prefix; clarified `<src_addr>` hex rendering; added re-fire semantics description (periodic re-arm under sustained attack). Closes HF-1 (hysteresis), item-3 (format + src_addr rendering) adversary findings. |
 | v1.8 | 2026-06-27 | Added E-SYS-002 (SessionConnector aggregate connect failure: both tmux ctrl and PTY exhausted, exit 1). Registered per BC-2.04.007 authorship (daemon lifecycle contract). Updated FM-011 mapping row. |
 | v1.7 | 2026-06-27 | Added E-ADM-017 (aggregate HMAC failure rate alert: ≥5 failures in 60s from same src_addr, severity=degraded, emitted by admission.FailureCounter); updated E-ADM-016 note to distinguish from E-ADM-017; added FM mapping row for E-ADM-017. Closes Wave 3 gate F-2 (product-owner adjudication: FIX-NOW, not deferred). |
 | v1.6 | 2026-06-26 | Added layering notes to E-ADM-006 and E-ADM-007: clarifies that at the internal/session layer `ConsoleKey` serves as `<key_fingerprint>` and `<node_addr>` is legitimately omitted (session layer has no node identity per ARCH-08 §6.6); transport/admission boundary supplies `<node_addr>` when re-surfacing. No behavioral change; closes recurring M-1 adversarial finding from S-3.03 passes. |

@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.005
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -20,6 +20,7 @@ introduced: v0.1.0
 modified:
   - '2026-06-25: added Related BCs entry for BC-2.05.008 (Wave 3 wire-up)'
   - '2026-06-27: v1.3 — PC-3 made concrete and testable: specify admission-layer API (RecordHMACFailure), sliding-window semantics, threshold, alert event code E-ADM-017, concurrency contract; remove [DEFERRED] ambiguity; FIX-NOW per Wave 3 gate F-2 adjudication'
+  - '2026-06-27: v1.4 — per-story adversarial convergence adjudication: (HF-1) ratify periodic-re-fire semantics under sustained attack; (HF-2) mandate dead-key eviction + hard source-cap (max 65536 tracked sources, LRU); (item-5) add WithNow clock-injection to constructor signature; (item-5) add constructor validation clause for threshold<1 and window<=0; amend EC-005, EC-008, add EC-009/EC-010; update PC-3 API contract'
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -53,17 +54,22 @@ Every SVTN-scoped frame carries an 8-byte HMAC tag in the outer header, computed
 
 1. HMAC verification succeeds: frame forwarded to destination.
 2. HMAC verification fails: frame dropped; E-ADM-002 "HMAC verification failed: <svtn_id>, <src_addr>, <frame_type>" logged at the router; the sending node receives no delivery confirmation.
-3. **Per-source HMAC failure rate alert:** When `RouteFrame` returns `ErrHMACVerificationFailed` for a frame from `src_addr`, it MUST call `admission.RecordHMACFailure(srcAddr string)` on the router's `*admission.FailureCounter` before returning. The `FailureCounter` maintains a per-`src_addr` sliding-window counter over a 60-second window. When the count for a `src_addr` reaches or exceeds **5** within any trailing 60-second window, the `FailureCounter` emits a structured log event at ERROR level with code **E-ADM-017** ("HMAC failure rate alert: ≥5 failures in 60s from src `<src_addr>`"). The alert fires once per threshold crossing (i.e., on the 5th failure and again only if the count drops below 5 and then rises to 5 again — see EC-005 for hysteresis semantics). Subsequent failures within the same window do NOT re-emit the alert (fire-once-per-crossing).
+3. **Per-source HMAC failure rate alert:** When `RouteFrame` returns `ErrHMACVerificationFailed` for a frame from `src_addr`, it MUST call `admission.RecordHMACFailure(srcAddr string)` on the router's failure recorder before returning. The `FailureCounter` maintains a per-`src_addr` sliding-window counter over a 60-second window. When the count for a `src_addr` reaches or exceeds **5** within any trailing 60-second window, the `FailureCounter` emits a structured log event at ERROR level with code **E-ADM-017** ("E-ADM-017 HMAC failure rate alert: ≥`<threshold>` failures in `<window_seconds>`s from src `<src_addr>`"). The message embeds the code literal "E-ADM-017" for operator grep-ability.
+
+   **Re-fire semantics under sustained attack (ratified):** The alert fires on the threshold crossing AND re-fires under a sustained attack. Specifically: after an alert fires, the alert is suppressed until all in-window entries that were present at the time of the alert have been trimmed away — i.e., the oldest surviving entry after trim is newer than the last-fire timestamp. At that point the counter re-arms. If failures are still arriving at that moment (sustained attack), the next threshold crossing fires another alert. This means: under a sustained attack of exactly N failures/60s (N≥threshold), alerts fire roughly once per window-length. Under a brief attack that drops below threshold after the alert fires, only one alert fires (classic hysteresis). This is operationally correct: security operators receive ongoing alerts during active forgery floods without per-failure spam. See EC-005 (brief attack), EC-009 (sustained attack) for canonical scenarios.
 
    **Admission-layer API contract** (the seam the implementer builds — no Go code, but the contract is precise):
    - Type: `admission.FailureCounter` in `internal/admission`
    - Method: `RecordHMACFailure(srcAddr string)` — pure in-memory; takes no `context.Context` (no I/O; a mutex-guarded in-memory sliding window qualifies as pure-enough for this call path)
-   - Constructor: `admission.NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger) *FailureCounter` — logger is injected (dependency injection; no package-level global)
+   - Constructor: `admission.NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger, opts ...FailureCounterOption) *FailureCounter` — logger is injected (dependency injection; no package-level global). Optional `FailureCounterOption` values include `WithNow(fn func() time.Time)` for deterministic clock injection in tests.
+   - **Constructor validation:** If `threshold < 1`, the constructor MUST panic with a clear message (a threshold of 0 or negative would fire on every single failure, which is always a programmer error, not a configuration error). If `windowDuration <= 0`, the constructor MUST panic. Both panics use `panic(fmt.Sprintf(...))` in `NewFailureCounter`; they are programmer-error guards, not runtime error paths.
    - Internal state: a `map[string][]time.Time` of per-`src_addr` timestamp slices, guarded by `sync.Mutex`; entries are evicted lazily when a `RecordHMACFailure` call trims stale timestamps older than `windowDuration` (no background goroutine required; per go.md rule #12 the map entries are value-copied on read; no internal pointer to a live slice is returned to callers)
-   - `RouteFrame` receives the `*admission.FailureCounter` via constructor injection on the `Router` struct; `internal/routing` imports `internal/admission` (position 4→5, consistent with ARCH-08 §6.5)
-   - Window semantics: **sliding** (not fixed-bucket) — at each `RecordHMACFailure` call, timestamps older than `now - windowDuration` are trimmed; the count of remaining entries is compared against `threshold`
+   - **Dead-key eviction:** When the post-trim slice for a `srcAddr` is empty (count = 0), the `srcAddr` key MUST be deleted from the `counts` map entirely (not kept as an empty slice). The corresponding `firedAt` entry MUST also be deleted when the window drains to zero. This prevents unbounded map growth from sources that sent a few failures and then disappeared.
+   - **Hard source cap (CWE-770 mitigation):** The `FailureCounter` tracks at most **65,536** distinct `srcAddr` keys. When a new `srcAddr` would exceed this cap, the key with the oldest most-recent-failure timestamp (LRU) is evicted from both `counts` and `firedAt` before inserting the new key. This bounds memory under spoofed-source floods. The cap is a compile-time constant `maxTrackedSources = 65536` defined in the package; it is not configurable at runtime via the constructor (security invariant: the cap cannot be disabled).
+   - `RouteFrame` receives the failure recorder via constructor injection on the `Router` struct using the `hmacFailureRecorder` interface (`RecordHMACFailure(string)`); `*admission.FailureCounter` is the production implementation. `internal/routing` imports `internal/admission` (position 4→5, consistent with ARCH-08 §6.5).
+   - Window semantics: **sliding** (not fixed-bucket) — at each `RecordHMACFailure` call, timestamps older than `now - windowDuration` are trimmed; the count of remaining entries (after trim, before append) determines threshold comparison.
 
-   **Concurrency contract:** `RecordHMACFailure` is safe for concurrent calls from multiple goroutines. The `sync.Mutex` in `FailureCounter` is held for the duration of the trim+append+check sequence. Per go.md rule #12: the slice of timestamps is never returned by reference to the caller; if a `Timestamps(srcAddr string) []time.Time` inspector is ever needed (e.g., for tests), it returns a copy.
+   **Concurrency contract:** `RecordHMACFailure` is safe for concurrent calls from multiple goroutines. The `sync.Mutex` in `FailureCounter` is held for the duration of the trim+eviction+append+check sequence. Per go.md rule #12: the slice of timestamps is never returned by reference to the caller; if a `Timestamps(srcAddr string) []time.Time` inspector is ever needed (e.g., for tests), it returns a copy.
 
 ## Invariants
 
@@ -83,10 +89,12 @@ Frame arrival at the first router after transmission from the source node.
 | EC-002 | Frame corruption in transit causes HMAC mismatch | Same as non-member HMAC — E-ADM-002 logged; frame dropped. Sending node will retransmit. |
 | EC-003 | Key rotation: node uses new key, router has old key | HMAC verification fails until router receives new key propagation. Node retransmits; after key propagation, HMAC succeeds. |
 | EC-004 | Empty-tick frame has no payload | HMAC computed over outer header fields + zero-length payload. This is valid; verification proceeds normally. |
-| EC-005 | Alert hysteresis: 6 failures in 60s, then 0 failures for 61s, then 5 more failures in 60s | First batch: E-ADM-017 fires on the 5th failure. After the window expires, the counter resets (stale entries trimmed). Second batch: E-ADM-017 fires again on the 5th failure of the new window. Exactly 2 alert events total. |
+| EC-005 | Alert hysteresis — brief attack: 6 failures in 60s, then 0 failures for 61s, then 5 more failures in 60s | First batch: E-ADM-017 fires on the 5th failure. After the window expires (all 6 entries age out), the counter re-arms. Second batch: E-ADM-017 fires again on the 5th failure of the new window. Exactly 2 alert events total. Dead-key eviction: after both windows drain, both `counts` and `firedAt` entries for the srcAddr are deleted entirely. |
 | EC-006 | Exactly 4 failures within 60s, no 5th failure | No E-ADM-017 emitted. Counter holds 4 timestamps; next trimmed-window check returns 4 < threshold. |
 | EC-007 | Concurrent HMAC failures from two different src_addrs, each hitting ≥5 threshold | Each src_addr has its own counter slot. Both cross the threshold independently; two separate E-ADM-017 events emitted (one per src_addr). No interference between counters. |
-| EC-008 | 5th failure arrives at exactly windowDuration after the 1st failure (boundary) | After trimming entries older than `now - windowDuration`, the 1st entry falls on the boundary. Implementation MUST treat the boundary as exclusive (trim if `age >= windowDuration`). If implementation trims the boundary entry, count is 4 and no alert; if it keeps it, count is 5 and alert fires. **Correct behavior: trim entries where `timestamp < now - windowDuration` (strictly less); boundary entry is kept; count = 5; alert fires.** |
+| EC-008 | 5th failure arrives at exactly windowDuration after the 1st failure (boundary) | After trimming entries older than `now - windowDuration`, the 1st entry falls on the boundary. **Correct behavior: trim entries where `timestamp < now - windowDuration` (strictly less-than); boundary entry is kept; post-trim count = 4; after append = 5; alert fires.** An implementation using `<=` (trim-at-boundary) yields count=4 and fails to alert — that is a defect. This test discriminates the two comparisons. |
+| EC-009 | Sustained attack: ≥5 failures/60s continuously, window never drains below threshold | **Canonical sustained-attack scenario:** 5 failures at T=0s → alert-1 fires on the 5th. Then 1 more failure per second continuously. After approximately 60s, the entries from T=0..4s age out of the window; at that moment the oldest surviving entry is newer than the last-fire timestamp → counter re-arms. The next failure that brings the post-trim+append count to threshold fires alert-2. Pattern repeats: alerts fire roughly once every windowDuration while the attack is sustained. **The exact count of alerts is not pinned** (it depends on the rate of arrivals relative to the window); the testable property is: under a continuous stream of failures at rate ≥ threshold/window, MORE THAN ONE E-ADM-017 alert fires (i.e., the counter does not go permanently silent after the first alert). Discriminating test: inject 5 failures, advance clock by 61s (all aged out), inject 5 more → must fire a 2nd alert. For the truly continuous case: inject threshold failures, advance clock by windowDuration+ε (so at least one old entry ages out while new ones remain), inject threshold more → must fire a 3rd alert. |
+| EC-010 | Memory bound: 65,537 distinct spoofed src_addrs each send 1 failure | After 65,536 insertions the cap is reached. The 65,537th srcAddr evicts the LRU key (the one with the oldest most-recent-failure timestamp) from `counts` and `firedAt`. Live key count remains ≤ 65,536 at all times. No unbounded map growth. Test: after inserting `maxTrackedSources+1` distinct sources, assert `len(counts) <= maxTrackedSources`. |
 
 ## Canonical Test Vectors
 
@@ -96,10 +104,14 @@ Frame arrival at the first router after transmission from the source node.
 | Frame with HMAC computed with wrong key | E-ADM-002 logged; frame dropped | error |
 | Frame with HMAC field all-zeros | E-ADM-002 logged; frame dropped | error |
 | Empty-tick frame with correct HMAC | Frame forwarded normally | happy-path |
-| 5 HMAC failures in 30s from same src_addr (RecordHMACFailure called 5 times) | E-ADM-017 emitted exactly once on the 5th call | alert-threshold |
+| 5 HMAC failures in 30s from same src_addr (RecordHMACFailure called 5 times) | E-ADM-017 emitted exactly once on the 5th call; message is "E-ADM-017 HMAC failure rate alert: ≥5 failures in 60s from src <src_addr>" | alert-threshold |
 | 4 HMAC failures in 60s from same src_addr, no 5th | No E-ADM-017 emitted | below-threshold |
 | 5 HMAC failures from src_addr A + 5 from src_addr B, interleaved | E-ADM-017 emitted once for A and once for B, independently | multi-source |
-| 5 HMAC failures, then 61s pause, then 5 more from same src_addr | Two E-ADM-017 events (one per window crossing), not one | hysteresis |
+| 5 HMAC failures, then 61s pause, then 5 more from same src_addr | Two E-ADM-017 events (one per window crossing), not one; dead-key eviction: map entries deleted after drain | hysteresis |
+| 5 failures, advance clock by windowDuration+ε (1 entry ages out, 4 remain), then 1 more failure | Counter re-arms (oldest surviving entry is newer than last-fire); 6th failure does NOT immediately re-fire; fires only when count reaches threshold again (i.e., on the 5th new failure after re-arm) | sustained-attack-rearm |
+| threshold=0 (invalid) | NewFailureCounter panics with a clear message | constructor-validation |
+| windowDuration=0 (invalid) | NewFailureCounter panics with a clear message | constructor-validation |
+| 65,537 distinct src_addrs each send 1 failure | len(counts) ≤ 65,536; LRU key evicted | memory-bound |
 
 ## Verification Properties
 
@@ -108,7 +120,7 @@ Frame arrival at the first router after transmission from the source node.
 | VP-004, VP-005, VP-006 | For all admitted nodes: frames with correct HMAC are forwarded | proptest |
 | VP-004, VP-005, VP-006 | For all non-admitted sources: frames are dropped | proptest |
 | VP-004, VP-005, VP-006 | HMAC covers outer header bytes 0–35 + channel header + payload | unit |
-| VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at exactly ≥5 calls in 60s window and not before | proptest |
+| VP-059 | For any sequence of RecordHMACFailure calls with injected clock: (a) E-ADM-017 fires exactly on the call that brings the post-trim count to threshold; (b) subsequent calls in the same un-re-armed window do NOT fire E-ADM-017; (c) after re-arm (oldest surviving entry is newer than last-fire timestamp), the next threshold crossing fires E-ADM-017 again; (d) under a continuous stream of failures, alert count is ≥ 2 (counter never goes permanently silent); (e) live key count is always ≤ maxTrackedSources | proptest |
 
 ## Traceability
 

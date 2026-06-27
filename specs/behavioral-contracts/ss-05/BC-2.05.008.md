@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.008
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -19,6 +19,7 @@ lifecycle_status: active
 introduced: v0.3.0
 modified:
   - '2026-06-27: v1.2 — EC-006 replaced with concrete mechanism spec: RouteFrame calls admission.RecordHMACFailure(srcAddr) on each ErrHMACVerificationFailed; cross-reference to BC-2.05.005 PC-3 admission-layer contract; FIX-NOW per Wave 3 gate F-2 adjudication'
+  - '2026-06-27: v1.3 — per-story adversarial convergence adjudication: (M-2) ratify hmacFailureRecorder interface seam; amend PC-5, EC-006, and injection description; (item-3) ratify src_addr hex rendering; update E-ADM-016/E-ADM-017 message format to embed code literal; version bump'
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -59,7 +60,7 @@ Note: `verifyFrameHMAC` currently carries `//nolint:unused` in `internal/routing
 2. **Invalid HMAC:** `verifyFrameHMAC(hdr, payload, entry.FrameAuthKey)` returns `false` → `RouteFrame` returns `ErrHMACVerificationFailed` immediately. The frame is dropped. E-ADM-016 "wire HMAC verification failed at RouteFrame: tag mismatch for SVTN `<svtn_id>` from src `<src_addr>`" is logged at the router before return.
 3. **HMAC verification occurs BEFORE the admitted-set check.** The ordering is: HMAC first → admitted-set second → SVTNRoute third. This ensures forged frames are rejected before touching the admitted-set data structure (fail-fast on forgery).
 4. **Auth key unavailable (no forwarding-table entry for src):** `RouteFrame` returns `ErrHMACVerificationFailed` — the frame is treated as unverifiable and is dropped. Rationale: a frame from a node with no forwarding-table entry has no derivable auth key; admitting such a frame would bypass HMAC verification entirely.
-5. **Failure event forwarded to admission layer (per BC-2.05.005 PC-3):** On every `ErrHMACVerificationFailed` return path (postconditions 2 and 4), `RouteFrame` calls `router.failureCounter.RecordHMACFailure(hdr.SrcAddr)` BEFORE returning. This call is the seam between the routing layer and the admission-layer aggregate-alert mechanism. No call is made on a successful HMAC verification (postcondition 1). `RouteFrame` does NOT evaluate the threshold or emit the alert — that is entirely the responsibility of `admission.FailureCounter` (see BC-2.05.005 PC-3 for full contract).
+5. **Failure event forwarded to admission layer (per BC-2.05.005 PC-3):** On every `ErrHMACVerificationFailed` return path (postconditions 2 and 4), `RouteFrame` calls `router.failureCounter.RecordHMACFailure(srcAddrHex)` BEFORE returning, where `srcAddrHex` is the lowercase hex encoding of the 8-byte `hdr.SrcAddr` field (e.g. `fmt.Sprintf("%x", hdr.SrcAddr)`). This call is the seam between the routing layer and the admission-layer aggregate-alert mechanism. No call is made on a successful HMAC verification (postcondition 1). `RouteFrame` does NOT evaluate the threshold or emit the alert — that is entirely the responsibility of the `hmacFailureRecorder` implementation (see BC-2.05.005 PC-3 for full contract). The `failureCounter` field is typed as the unexported `hmacFailureRecorder` interface (`RecordHMACFailure(string)`); `*admission.FailureCounter` is the production implementation injected via `WithFailureCounter`. Test doubles may inject any satisfying type.
 
 ## Invariants
 
@@ -82,7 +83,7 @@ Frame arrival at the router; `RouteFrame` entry point.
 | EC-003 | Frame from a node that IS in the admitted set but whose forwarding-table entry has been purged (auth key unavailable) | No auth key → frame treated as unverifiable → `ErrHMACVerificationFailed`. The admitted-set check is never reached. |
 | EC-004 | Empty-tick frame (zero-length payload) with correct HMAC | `verifyFrameHMAC` returns true; frame proceeds normally. HMAC over empty payload is valid per BC-2.05.005 EC-004. |
 | EC-005 | Frame with correct HMAC but from a node not in the admitted set | HMAC passes (postcondition 1); admitted-set check then rejects with `admission.ErrNotAdmitted` (E-ADM-003). Two distinct errors for two distinct conditions. |
-| EC-006 | Repeated HMAC failures (≥5 in 60 s) from same `src_addr` | `RouteFrame` calls `router.failureCounter.RecordHMACFailure(hdr.SrcAddr)` immediately before returning `ErrHMACVerificationFailed`. The `failureCounter` is an `*admission.FailureCounter` (defined in `internal/admission`; injected into the `Router` struct via constructor). When `RecordHMACFailure` detects that the sliding-window count for `hdr.SrcAddr` has reached ≥5 within 60 seconds, it emits E-ADM-017 ("HMAC failure rate alert: ≥5 failures in 60s from src `<src_addr>`") at ERROR level. This mechanism is fully specified in BC-2.05.005 PC-3 (sliding window semantics, fire-once-per-crossing, concurrency contract, eviction). `RouteFrame` itself has no alert logic — it is a call-through; the alert is the sole responsibility of `admission.FailureCounter`. |
+| EC-006 | Repeated HMAC failures (≥5 in 60 s) from same `src_addr` | `RouteFrame` calls `router.failureCounter.RecordHMACFailure(fmt.Sprintf("%x", hdr.SrcAddr))` immediately before returning `ErrHMACVerificationFailed`. The `failureCounter` field is typed as `hmacFailureRecorder` (unexported interface: `RecordHMACFailure(string)`); `*admission.FailureCounter` is the production implementation injected via `WithFailureCounter`. Tests may inject a fake satisfying the same interface. When `RecordHMACFailure` detects that the sliding-window count for the srcAddr hex string has reached ≥5 within 60 seconds, it emits E-ADM-017 ("E-ADM-017 HMAC failure rate alert: ≥5 failures in 60s from src `<src_addr>`") at ERROR level. The message embeds the code literal for grep-ability. This mechanism is fully specified in BC-2.05.005 PC-3 (sliding window semantics, periodic-re-fire under sustained attack, concurrency contract, dead-key eviction, hard source cap). `RouteFrame` itself has no alert logic — it is a call-through. |
 
 ## Canonical Test Vectors
 
