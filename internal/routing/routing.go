@@ -11,12 +11,41 @@ package routing
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/hmac"
 )
+
+// Logger is a minimal logging interface injected into Router.
+// BC-2.05.008 PC-2 requires E-ADM-016 to be logged at the router before
+// RouteFrame returns on every HMAC-failure path. Callers supply a real
+// logger; tests inject a fake that captures log lines for assertion.
+type Logger interface {
+	// Log records a single log line.
+	Log(msg string)
+}
+
+// RouterOption is a functional option for NewRouter.
+type RouterOption func(*Router)
+
+// WithLogger sets the logger used by the Router. If not set, the Router
+// uses nopLogger (log events are silently discarded). Tests inject a fake
+// logger to assert mandatory E-ADM-016 emissions per BC-2.05.008.
+func WithLogger(l Logger) RouterOption {
+	return func(r *Router) {
+		r.logger = l
+	}
+}
+
+// nopLogger is the default logger. Log events are silently discarded.
+// Production callers that want operator-visible log records should inject
+// a real logger via WithLogger.
+type nopLogger struct{}
+
+func (nopLogger) Log(string) {}
 
 // ErrNoForwardingEntry is returned by SVTNRoute when no forwarding-table
 // entry exists for (svtnID, dstAddr). Maps to E-FWD-002 in the error
@@ -62,16 +91,23 @@ type Router struct {
 	mu              sync.RWMutex
 	admittedKeySet  *admission.AdmittedKeySet
 	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry
+	logger          Logger
 }
 
 // NewRouter returns an empty Router using ks as its admitted key set.
 // ks must not be nil; the router does not own ks — the caller retains
-// responsibility for key registration.
-func NewRouter(ks *admission.AdmittedKeySet) *Router {
-	return &Router{
+// responsibility for key registration. Optional RouterOption values (e.g.
+// WithLogger) are applied after construction.
+func NewRouter(ks *admission.AdmittedKeySet, opts ...RouterOption) *Router {
+	r := &Router{
 		admittedKeySet:  ks,
 		forwardingTable: make(map[[16]byte]map[[8]byte]*ForwardingEntry),
+		logger:          nopLogger{},
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // RegisterForwardingEntry adds or replaces a forwarding table entry for
@@ -100,7 +136,7 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 //
 // Ordering (ADR-009; BC-2.05.008 PC-3; VP-058):
 //  1. Look up forwarding-table entry for (hdr.SVTNID, hdr.SrcAddr).
-//     If absent → no auth key → ErrHMACVerificationFailed (fail-closed).
+//     If absent → no auth key → log E-ADM-016 → return ErrHMACVerificationFailed (fail-closed).
 //  2. Call verifyFrameHMAC with entry.FrameAuthKey.
 //     If false → log E-ADM-016 → return ErrHMACVerificationFailed.
 //  3. Check admitted set (admission.IsAdmitted).
@@ -136,12 +172,23 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 	r.mu.RUnlock()
 
 	if entry == nil {
+		// PATH-A: no forwarding-table entry → auth key unavailable → frame unverifiable.
+		// Log E-ADM-016 so operators see every dropped frame (BC-2.05.008 PC-4).
+		r.logger.Log(fmt.Sprintf(
+			"wire HMAC verification failed at RouteFrame: auth key unavailable for SVTN %x from src %x (E-ADM-016)",
+			hdr.SVTNID, hdr.SrcAddr,
+		))
 		return ErrHMACVerificationFailed
 	}
 
 	// Step 2: Verify the wire HMAC tag against the local copy of FrameAuthKey.
 	// E-ADM-016: wire HMAC verification failed at RouteFrame (BC-2.05.008 PC-2).
 	if !verifyFrameHMAC(hdr, payload, authKey) {
+		// PATH-B: tag mismatch — log before return per BC-2.05.008 PC-2.
+		r.logger.Log(fmt.Sprintf(
+			"wire HMAC verification failed at RouteFrame: tag mismatch for SVTN %x from src %x (E-ADM-016)",
+			hdr.SVTNID, hdr.SrcAddr,
+		))
 		return ErrHMACVerificationFailed
 	}
 
