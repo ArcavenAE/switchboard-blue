@@ -47,6 +47,17 @@ These items have no active work pending before Phase 6. Archived to keep STATE.m
 | SW305-HF1 | HIGH | Hysteresis re-fire semantics: RESOLVED — re-fire/dead-key implemented+tested (3af388c). Msg-format separate defect tracked as SW305-M1 REOPENED. | product-owner | RESOLVED 3af388c |
 | SW305-HF2 | HIGH | Unbounded attacker-keyed map (counts/firedAt) = memory DoS CWE-770 — source-count cap RESOLVED (maxTrackedSources+LRU evict in 3af388c). Per-source slice bound tracked as SW305-M5 PO adjudication. | implementer | RESOLVED (source-count) 3af388c |
 
+## S-W3.05 Fix-Loop Resolved Items (archived from STATE.md 2026-06-27)
+
+| ID | Severity | Description | Owner | Resolved |
+|----|----------|-------------|-------|----------|
+| SW305-M1 | MED | E-ADM-017 msg format REOPENED — missing "HMAC failure rate alert:" phrase; prior orchestrator adjudication was erroneous; specs authoritative. | implementer+test-writer | RESOLVED b945aab — canonical phrase "HMAC failure rate alert: ≥&lt;threshold&gt; failures in &lt;window&gt;s from src &lt;src_addr&gt;" restored. |
+| SW305-HF3 | HIGH | VP-059 proptest still missing (C-2 reopened) — VP-059.md created 20011cc but proptest harness never ported. | test-writer | RESOLVED 5c3d7ea — stateful model proptest, seed 1337+idx, 3 configs {5,60s}/{3,30s}/{10,120s}, no divergence. |
+| SW305-M5 | MED | Per-source timestamp slice unbounded within window (CWE-770, EC-011) — ADJUDICATED FIX-NOW (BC-2.05.005 v1.6). | implementer+test-writer | RESOLVED b945aab — append-skip: slice bounded at threshold entries while fired; drain-only re-arm: dead keep[0].After(lastFire) branch removed; EC-011 test added; BC-2.05.005 bumped to v1.6. |
+| SW305-M6 | MED | VP-059 names TrackedSourceCount, impl SourceCount — naming mismatch; VP harness won't compile. | implementer | RESOLVED VP-059 v1.1 (b7431fd) — VP-059 uses SourceCount throughout; naming reconciled. |
+| SW305-M7 | MED | ERROR-level (PC-3, AC-003) unsatisfiable through level-less admission.Logger — ADJUDICATED option-a: Logger seam is level-less (Log(msg string)); "at ERROR level" phrase removed from PC-3. | implementer+test-writer | RESOLVED b945aab — AC-003 test fixture uses Log(msg string); no Error() method reference in admission_test; BC-2.05.005 v1.6 PC-3 amended. O-1 closed. |
+| SW305-M8 | MED | AC-012 dead-key delete(counts) path: no discriminating test; assertion is >=1 regardless. | test-writer | RESOLVED b945aab — discriminating test added confirming dead-key entry eviction. |
+
 ## Pre-Restart Wave 3 Adversary Passes (superseded by restart run at 10dd880)
 
 Prior run (before PR #15 fix): pass-01 CONVERGED (0C/0H/3M/2L/3O), pass-02 NOT_CONVERGED
