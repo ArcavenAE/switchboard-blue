@@ -42,8 +42,9 @@ type Info struct {
 
 // Publisher manages the set of published tmux sessions (BC-2.04.001 PC-2;
 // ARCH-08 §6.6 position 6). It holds a reference to the admission key set
-// for use by future per-session admission gating (S-3.03 SessionAuth /
-// Tier-2); the current Publish/Unpublish path does NOT consult the key set.
+// exposed to internal/tmux via AdmittedKeySet(). Tier-2 SessionAuth keys
+// are registered independently via RegisterKey (BC-2.05.003 DI-011) and do
+// NOT flow through this key set.
 //
 // The zero value is not usable; construct with NewPublisher.
 //
@@ -55,9 +56,9 @@ type Publisher struct {
 }
 
 // NewPublisher constructs a Publisher seeded with an admission key set.
-// The key set is reserved for S-3.03 SessionAuth (Tier-2 per-session
-// admission gating); the current Publish/Unpublish path does not consult
-// it. keys must not be nil.
+// The key set is consumed only by AdmittedKeySet() for internal/tmux;
+// Tier-2 SessionAuth keys are registered independently (BC-2.05.003 DI-011).
+// keys must not be nil.
 func NewPublisher(keys *admission.AdmittedKeySet) *Publisher {
 	return &Publisher{
 		sessions: make(map[string]Info),
