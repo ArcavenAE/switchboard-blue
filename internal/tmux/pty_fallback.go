@@ -496,6 +496,15 @@ type SessionConnector struct {
 	// Incremented atomically; read via RelayDropped().
 	// ARCH-01 v1.4 §Relay-drop counter contract; BC-2.04.006 v1.4 Inv-4.
 	relayDropped uint64
+
+	// swapBarrier is a test-only deterministic interleaving seam (nil in
+	// production — zero cost, single nil check in activeSourceSnapshot).
+	// When non-nil, activeSourceSnapshot blocks on it after completing its
+	// atomic snapshot and releasing sc.mu, letting the test goroutine complete
+	// a ctrl→PTY swap before the relay acts on the snapshot. Used by T2 stress
+	// tests to deterministically exercise the race window fixed in ADR-011 v1.6.
+	// ARCH-01 ADR-011 v1.6 §HIGH-A T2 Option B.
+	swapBarrier chan struct{}
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control

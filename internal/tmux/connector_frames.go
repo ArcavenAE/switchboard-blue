@@ -29,27 +29,54 @@ import (
 var ErrPTYSourceEOF = errors.New("session connector: PTY source EOF")
 
 // framesSource is the interface satisfied by both ControlMode and PTYProxy for
-// their per-instance frame channel. activeFrSource returns this interface so the
-// relay goroutine does not need to know which concrete mode is active.
+// their per-instance frame channel. activeSourceSnapshot uses this interface so
+// the relay goroutine does not need to know which concrete mode is active.
 type framesSource interface {
 	Frames() <-chan halfchannel.ChannelFrame
 }
 
-// activeFrSource returns the active frame source under sc.mu. The relay
-// goroutine calls this after a mode switch to re-read the new source.
+// activeSourceSnapshot returns the current active source, its Frames() channel,
+// and whether the connector is in PTY mode — all read under a single sc.mu hold
+// (ARCH-01 ADR-011 v1.6 §HIGH-A TOCTOU fix).
 //
-// Returns nil if sc.active is nil or does not implement framesSource.
-func (sc *SessionConnector) activeFrSource() framesSource {
+// src.Frames() is called inside the lock because src is the interface value
+// captured from sc.active; calling it outside would allow watchAndFallback to
+// replace sc.active between the two reads, breaking the soundness proof
+// (pty.frames != ctrl.frames is the discriminator — it must be stable).
+//
+// Returns (nil, nil, false) if the connector is closed or has no active source.
+//
+// swapBarrier (test-only deterministic interleaving seam; nil in production):
+// if sc.swapBarrier is set, the snapshot is held at this point — outside the
+// lock, after all three fields are read — so a test goroutine can complete a
+// ctrl→PTY swap before the relay acts on the snapshot. This confirms that the
+// atomic snapshot (not a two-lock read) prevents misclassification.
+func (sc *SessionConnector) activeSourceSnapshot() (framesSource, <-chan halfchannel.ChannelFrame, bool) {
 	sc.mu.Lock()
-	active := sc.active
 	closed := sc.closed
+	active := sc.active
+	inPTY := sc.inPTYMode
+	var src framesSource
+	var srcCh <-chan halfchannel.ChannelFrame
+	if !closed && active != nil {
+		if s, ok := active.(framesSource); ok {
+			src = s
+			srcCh = s.Frames() // called inside the lock — safe, pure accessor
+		}
+	}
 	sc.mu.Unlock()
 
-	if closed || active == nil {
-		return nil
+	if src == nil {
+		return nil, nil, false
 	}
-	src, _ := active.(framesSource)
-	return src
+
+	// Test-only deterministic interleaving seam. swapBarrier is always nil in
+	// production; the nil check is the only cost (branch prediction friendly).
+	if sc.swapBarrier != nil {
+		<-sc.swapBarrier
+	}
+
+	return src, srcCh, inPTY
 }
 
 // Frames returns the stable forwarding channel for downstream frame consumers
@@ -89,19 +116,26 @@ func (sc *SessionConnector) startForwardFrames(ctx context.Context) {
 }
 
 // forwardFrames is the relay goroutine body (ADR-011 §Concurrency contract,
-// amended v1.4).
+// amended v1.6).
 //
 // Outer loop: select on ctx.Done() first — exits cleanly on Close without
-// busy-spinning when a mode swap is in flight (ARCH-01 v1.4 §Relay busy-spin
-// guard). On source-channel close, if the re-read source is identical to the
-// just-closed source (swap has not landed yet), yields via runtime.Gosched()
-// before retrying.
+// busy-spinning (ARCH-01 v1.4 §Relay busy-spin guard, retained). Then takes
+// an atomic snapshot {src, srcCh, inPTY} via activeSourceSnapshot() — a single
+// sc.mu hold so source identity, channel, and mode flag are mutually consistent
+// (ARCH-01 ADR-011 v1.6 §HIGH-A TOCTOU fix).
+//
+// Post-inner-range discrimination (ARCH-01 v1.6 §(d)):
+//
+//	srcCh == prevSrcCh AND inPTY → terminal PTY-source EOF (sound, see soundness
+//	  proof in ARCH-01 v1.6 §(c)): signal ErrPTYSourceEOF and exit.
+//	srcCh == prevSrcCh AND !inPTY → ctrl→PTY swap in flight: yield and retry.
+//	srcCh != prevSrcCh → new source has landed: range over it.
 //
 // Inner loop: ranges over the current source channel; writes each frame
 // non-blocking to sc.frames. Drops on full, incrementing sc.relayDropped
 // atomically (ARCH-01 v1.4 §Relay-drop counter contract).
 //
-// Exits when ctx is cancelled or sc is closed (activeFrSource returns nil).
+// Exits when ctx is cancelled or sc is closed (activeSourceSnapshot returns nil).
 func (sc *SessionConnector) forwardFrames(ctx context.Context) {
 	// Close sc.frames exactly once on exit, so range-consumers unblock cleanly.
 	defer sc.closeForwardFrames.Do(func() { close(sc.frames) })
@@ -109,36 +143,31 @@ func (sc *SessionConnector) forwardFrames(ctx context.Context) {
 	var prevSrcCh <-chan halfchannel.ChannelFrame
 
 	for {
-		// ARCH-01 v1.4 §Relay busy-spin guard: check ctx.Done() before
-		// re-reading the active source — prevents spinning if Close races
-		// with a mode swap.
+		// ARCH-01 v1.4 §Relay busy-spin guard: check ctx.Done() before re-reading
+		// the active source — exits cleanly when Close cancels innerCtx.
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		src := sc.activeFrSource()
-		if src == nil {
+		// Atomic snapshot: {src, srcCh, inPTY} from one sc.mu hold.
+		// src.Frames() is called inside the lock (see activeSourceSnapshot).
+		_, srcCh, inPTY := sc.activeSourceSnapshot()
+		if srcCh == nil {
 			// Connector closed or no active source — exit.
 			return
 		}
-		srcCh := src.Frames()
 
-		// ARCH-01 v1.5 §HIGH-A + v1.4 §Relay busy-spin guard: if the returned
-		// source channel is the same already-closed channel as the previous
-		// iteration, discriminate by mode:
-		//   PTY mode (inPTYMode true): no swap will arrive — the PTY shell
-		//     process has exited. Signal session-fatal backend loss via sc.Err()
-		//     and exit the relay.
-		//   Control mode (inPTYMode false): a mode swap may be in flight
-		//     (ctrl → PTY via watchAndFallback). Yield and retry so the swap
-		//     can land under sc.mu.
+		// Discriminate same-closed-channel case (ARCH-01 v1.6 §(d)).
 		if srcCh == prevSrcCh {
-			if sc.InPTYMode() {
-				// Terminal source EOF — no swap coming. Signal fatal backend loss
-				// (BC-2.04.002 EC-008; E-SYS-003). closeErrCh.Do guards against
-				// double-close with sc.Close() or watchAndFallback.
+			if inPTY {
+				// Terminal PTY-source EOF: PTY swap already landed (inPTY=true
+				// from same snapshot as srcCh), and pty.frames closed (same
+				// channel as prevSrcCh). No further swap will arrive.
+				// Signal session-fatal backend loss (BC-2.04.002 EC-008; E-SYS-003).
+				// closeErrCh.Do guards against double-close with sc.Close() and
+				// watchAndFallback.
 				sc.closeErrCh.Do(func() {
 					select {
 					case sc.errCh <- ErrPTYSourceEOF:
@@ -148,14 +177,17 @@ func (sc *SessionConnector) forwardFrames(ctx context.Context) {
 				})
 				return
 			}
-			// Control mode: swap is in flight. Yield and retry.
+			// Control mode: the snapshot shows inPTY=false, meaning watchAndFallback
+			// has not yet set sc.inPTYMode=true. A ctrl→PTY swap may be in flight.
+			// Yield and retry — the swap will update sc.active and sc.inPTYMode
+			// atomically under sc.mu on the next snapshot.
 			runtime.Gosched()
 			continue
 		}
 		prevSrcCh = srcCh
 
 		// Range over the current source channel. When it closes (mode switch or
-		// Close), the for-range exits and we re-read the active source.
+		// Close), the for-range exits and we loop back for a fresh snapshot.
 		for f := range srcCh {
 			select {
 			case sc.frames <- f:
@@ -165,14 +197,6 @@ func (sc *SessionConnector) forwardFrames(ctx context.Context) {
 				atomic.AddUint64(&sc.relayDropped, 1)
 			}
 		}
-
-		// Source channel closed — check if we should exit or switch sources.
-		sc.mu.Lock()
-		closed := sc.closed
-		sc.mu.Unlock()
-		if closed {
-			return
-		}
-		// Loop: re-read activeFrSource() for the new backend (PTY after ctrl drop).
+		// Loop: fresh snapshot at top — activeSourceSnapshot handles closed check.
 	}
 }
