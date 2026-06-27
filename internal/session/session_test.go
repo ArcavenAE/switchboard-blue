@@ -5,6 +5,7 @@ package session_test
 
 import (
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -401,7 +402,7 @@ func TestSession_MultiConsoleFanOut_AllReceiveFrames(t *testing.T) {
 	const numConsoles = 3
 	downstreams := make([]<-chan frame.OuterHeader, numConsoles)
 	for i := range numConsoles {
-		key := session.ConsoleKey("fan-console-" + string(rune('A'+i)))
+		key := session.ConsoleKey("fan-console-" + strconv.Itoa(i))
 		downstream, _, err := an.Attach(key, "fleet")
 		if err != nil {
 			t.Fatalf("Attach %q: %v", key, err)
@@ -457,7 +458,7 @@ func TestSession_ConcurrentKeystrokes_Serialized(t *testing.T) {
 	consoleKeys := make([]session.ConsoleKey, numConsoles)
 	payloads := make([][]byte, numConsoles)
 	for i := range numConsoles {
-		key := session.ConsoleKey("writer-" + string(rune('A'+i)))
+		key := session.ConsoleKey("writer-" + strconv.Itoa(i))
 		consoleKeys[i] = key
 		// Each console has a distinct multi-byte payload so torn writes are
 		// detectable (a torn write would produce a payload with wrong length
@@ -507,22 +508,39 @@ func TestSession_ConcurrentKeystrokes_Serialized(t *testing.T) {
 // TestSession_CrashDetach_EvictsFromFanOut verifies the keepalive crash
 // detection path (AC-008; BC-2.04.004 EC-002): a console that misses its
 // heartbeat deadline is evicted by Sweep, and subsequent SendKeystroke calls
-// for that console return ErrConsoleNotFound.
+// for that console return ErrConsoleNotFound. The surviving console is unaffected.
 //
-// Pass-3 F-C-3 fix: the original test simulated "crash" by calling Detach —
-// a graceful detach, not the crash-detection code path. This rewrite exercises
-// the real path: Heartbeat + Sweep(very short deadline) evicts the console from
-// ConsoleSet. After eviction, cs.IsAttached returns false and SendKeystroke
-// returns ErrConsoleNotFound.
-//
-// The surviving console is unaffected and continues to receive frames.
+// Uses a fake clock (injected via WithClock) for deterministic selective eviction
+// without sleeps (F-C-1/F-C-2/F-H-3).
 func TestSession_CrashDetach_EvictsFromFanOut(t *testing.T) {
 	t.Parallel()
-	rec := &recordingSink{}
-	an := newTestAccessNodeWithSink(t, rec, "crash-session")
 
-	// Attach two consoles.
-	_, _, err := an.Attach("crash-victim", "crash-session")
+	var mu sync.Mutex
+	fakeNow := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	clock := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return fakeNow
+	}
+	advance := func(d time.Duration) {
+		mu.Lock()
+		defer mu.Unlock()
+		fakeNow = fakeNow.Add(d)
+	}
+
+	rec := &recordingSink{}
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	if err := pub.Publish("crash-session"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	an := session.NewAccessNode(pub, session.NoOpAuthorizer{},
+		session.WithKeystrokeSink(rec),
+		session.WithClock(clock),
+	)
+
+	// T=0: attach both consoles.
+	victimDownstream, _, err := an.Attach("crash-victim", "crash-session")
 	if err != nil {
 		t.Fatalf("Attach crash-victim: %v", err)
 	}
@@ -531,89 +549,58 @@ func TestSession_CrashDetach_EvictsFromFanOut(t *testing.T) {
 		t.Fatalf("Attach survivor: %v", err)
 	}
 
-	// Heartbeat survivor (keeps it alive through the sweep).
-	// crash-victim never gets a fresh heartbeat.
+	// Advance to T=2s, heartbeat only survivor.
+	advance(2 * time.Second)
 	if err := an.Heartbeat("survivor"); err != nil {
 		t.Fatalf("Heartbeat survivor: %v", err)
 	}
 
-	// Sweep with deadline=0: evicts any console whose lastHeartbeat is before
-	// time.Now(). crash-victim's heartbeat was set at Attach time (slightly
-	// before now); survivor's was just refreshed but may also be stale at 0
-	// deadline. Use deadline=time.Millisecond so survivor's just-refreshed
-	// heartbeat is within the window but crash-victim's older one is not.
-	//
-	// Actually: both consoles were added roughly simultaneously. At deadline=0
-	// both would be evicted. To reliably evict only the victim, we need the
-	// victim's heartbeat to be "older" than the survivor's. Since Add sets
-	// lastHeartbeat = time.Now().UTC() for both, and we heartbeat survivor right
-	// after, the survivor's timestamp is newer.
-	//
-	// Use deadline=1ns — both will be older than 1ns ago (they were added more
-	// than 1ns ago in wall time). So both would be evicted at 1ns deadline too.
-	//
-	// Correct approach: use a large deadline (1hr) but verify Heartbeat causes
-	// the survivor to survive. Wait — with a 1hr deadline, nothing gets evicted.
-	//
-	// The real semantics: EvictStale(d) evicts entries where
-	// lastHeartbeat < time.Now().UTC().Add(-d). To selectively evict only the
-	// victim, we need: victim.lastHeartbeat < cutoff AND survivor.lastHeartbeat >= cutoff.
-	// The only reliable way without clock injection is to heartbeat survivor,
-	// then use a 0 deadline (cutoff = now) — survivor was just heartbeated so
-	// its timestamp is >= cutoff, victim's is < cutoff by construction.
-	//
-	// BUT: at 0 deadline cutoff = time.Now().UTC(), which is effectively
-	// "older than right now". The survivor was heartbeated a few microseconds
-	// ago, so its heartbeat is slightly before time.Now().UTC() — it would
-	// ALSO be evicted at 0 deadline.
-	//
-	// Conclusion: to cleanly separate the two, heartbeat survivor, then sleep
-	// a tiny bit, then use a small deadline. The sleep ensures the survivor's
-	// timestamp is "newer" than the victim's. But we want no sleeps.
-	//
-	// Best approach: test the full path with both evicted by Sweep(0), verify
-	// both are gone, and verify the "surviving console" path with a separate
-	// DeliverFrame test (which is already covered by existing tests).
-	//
-	// Alternative: use Sweep with a very large deadline and just test that
-	// eviction works when the victim's heartbeat is old (inject stale timestamps
-	// via a direct call to EvictStale on the ConsoleSet). But AccessNode.Sweep
-	// delegates to ConsoleSet.EvictStale which uses time.Now() — no clock injection.
-	//
-	// Use a negative deadline: Sweep(-time.Second) → cutoff = time.Now() + 1s
-	// (one second in the future). Every lastHeartbeat (which is at most "now")
-	// is before that cutoff, so all consoles are deterministically evicted
-	// regardless of how fast the machine is. This avoids the Sweep(0) race
-	// where a heartbeat set at "now" might equal the cutoff rather than being
-	// before it (Before is strict).
-	evicted := an.Sweep(-time.Second)
-	if evicted != 2 {
-		t.Errorf("Sweep(-time.Second): evicted %d; want 2 (all consoles stale)", evicted)
+	// Advance to T=4s. Sweep with 3s deadline:
+	// cutoff = T=4s - 3s = T=1s.
+	// victim.lastHeartbeat = T=0 < T=1s → evicted.
+	// survivor.lastHeartbeat = T=2s >= T=1s → survives.
+	advance(2 * time.Second)
+	evicted := an.Sweep(3 * time.Second)
+	if evicted != 1 {
+		t.Errorf("Sweep(3s): evicted %d; want 1 (only victim evicted)", evicted)
 	}
 
-	// After eviction, SendKeystroke for the crash victim must return ErrConsoleNotFound.
-	err = an.SendKeystroke("crash-victim", "crash-session", []byte("x"))
-	if !errors.Is(err, session.ErrConsoleNotFound) {
-		t.Errorf("SendKeystroke post-Sweep for crash-victim: got %v; want ErrConsoleNotFound", err)
+	// victim's downstream channel must be closed.
+	select {
+	case _, ok := <-victimDownstream:
+		if ok {
+			t.Error("victim: downstream channel open after eviction; want closed")
+		}
+	default:
+		t.Error("victim: downstream channel not closed after eviction")
 	}
 
-	// DeliverFrame must not panic even with no consoles attached.
+	// survivor's downstream must still be open: deliver a frame and receive it.
 	an.DeliverFrame(frame.OuterHeader{
 		Version:    frame.VersionByte,
 		FrameType:  frame.FrameTypeData,
-		PayloadLen: 3,
+		PayloadLen: 5,
 	})
-
-	// Drain survivorDownstream; it should be closed by EvictStale.
-	// Give it a brief timeout: the channel is closed by EvictStale (which ran
-	// above), so it should be immediately readable with ok=false.
 	select {
-	case _, ok := <-survivorDownstream:
-		if ok {
-			t.Error("survivor: downstream received value; want closed after Sweep eviction")
+	case got, ok := <-survivorDownstream:
+		if !ok {
+			t.Fatal("survivor: downstream closed unexpectedly")
 		}
-		// ok == false: closed as expected by EvictStale
+		if got.PayloadLen != 5 {
+			t.Errorf("survivor: PayloadLen = %d; want 5", got.PayloadLen)
+		}
 	case <-time.After(100 * time.Millisecond):
-		t.Error("survivor: downstream not closed within 100ms after Sweep eviction")
+		t.Fatal("survivor: no frame received within 100ms")
+	}
+
+	// SendKeystroke to victim returns ErrConsoleNotFound.
+	err = an.SendKeystroke("crash-victim", "crash-session", []byte("x"))
+	if !errors.Is(err, session.ErrConsoleNotFound) {
+		t.Errorf("SendKeystroke post-eviction victim: got %v; want ErrConsoleNotFound", err)
+	}
+
+	// SendKeystroke to survivor succeeds.
+	if err := an.SendKeystroke("survivor", "crash-session", []byte("y")); err != nil {
+		t.Errorf("SendKeystroke survivor: got %v; want nil", err)
 	}
 }
