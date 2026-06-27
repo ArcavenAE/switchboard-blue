@@ -267,13 +267,20 @@ func TestFailureCounter_EmitsEADM017AtThreshold(t *testing.T) {
 	if !log.HasAll(src) {
 		t.Errorf("AC-003: log record missing srcAddr %q; lines: %v", src, log.Lines())
 	}
-	// (d) record contains the canonical parameterized body per error-taxonomy v1.9.
-	// Format: "E-ADM-017 ≥<threshold> failures in <window>s from src <srcAddr>"
-	// The "HMAC failure rate alert:" prefix was pre-v1.9 and is no longer canonical;
-	// AC-015 (adversarial tests) asserts it must NOT appear.
-	wantBody := fmt.Sprintf("≥%d failures in %.0fs from src %s", threshold, window.Seconds(), src)
+	// (d) record contains the FULL canonical message per error-taxonomy v1.9 + BC-2.05.005 PC-3:
+	// "E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window>s from src <srcAddr>"
+	// BOTH the "E-ADM-017" code literal AND the "HMAC failure rate alert:" phrase are REQUIRED.
+	// A prior reconciliation pass wrongly omitted the phrase — this assertion restores the
+	// correct canonical form (story v1.2 AC-003; error-taxonomy v1.9 row E-ADM-017).
+	wantPhrase := "HMAC failure rate alert:"
+	if !log.HasAll(wantPhrase) {
+		t.Errorf("AC-003: log record missing required phrase %q (error-taxonomy v1.9 canonical format requires this phrase); lines: %v",
+			wantPhrase, log.Lines())
+	}
+	wantBody := fmt.Sprintf("E-ADM-017 HMAC failure rate alert: ≥%d failures in %.0fs from src %s",
+		threshold, window.Seconds(), src)
 	if !log.HasAll(wantBody) {
-		t.Errorf("AC-003: log record missing canonical v1.9 body %q; lines: %v",
+		t.Errorf("AC-003: log record missing full canonical body %q; lines: %v",
 			wantBody, log.Lines())
 	}
 }
