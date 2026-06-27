@@ -27,6 +27,12 @@ type Role int
 
 const (
 	// RoleFull grants full read-write access: upstream keystrokes are forwarded.
+	//
+	// ZERO-VALUE NOTE: RoleFull == 0 (iota). authEntry values only enter the map
+	// through RegisterKey, which always sets the role field explicitly. A zero-value
+	// authEntry{} constructed outside RegisterKey would silently grant RoleFull —
+	// do not bypass the constructor. If a future story adds a deny/unset sentinel,
+	// insert it before RoleFull so the zero value becomes the most restrictive state.
 	RoleFull Role = iota
 
 	// RoleReadOnly grants downstream-only access: upstream payload-bearing frames
