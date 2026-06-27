@@ -2,10 +2,10 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "1.1"
+version: "1.2"
 status: draft
-producer: architect
-timestamp: 2026-06-23T00:00:00
+producer: product-owner
+timestamp: 2026-06-27T00:00:00
 phase: 1b
 inputDocuments:
   - '.factory/specs/behavioral-contracts/BC-INDEX.md'
@@ -82,26 +82,28 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
 | VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | implemented | VP-058.md |
+| VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | draft | VP-059.md |
 
 ## Counts
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit |
 |-----------|---------|------|-------------|-----|-----------|------------|
-| 58 | 32 | 2 | 11 | 10 | 2 | 1 |
+| 59 | 33 | 2 | 11 | 10 | 2 | 1 |
 
-> Arithmetic check: 32 + 2 + 11 + 10 + 2 + 1 = 58. Consistent.
+> Arithmetic check: 33 + 2 + 11 + 10 + 2 + 1 = 59. Consistent.
+> VP-059 added 2026-06-27 for BC-2.05.005 PC-3 (FailureCounter threshold proptest).
 
 ## Phase Distribution
 
 | Phase | Count |
 |-------|-------|
-| P0 | 40 |
+| P0 | 41 |
 | P1 | 14 |
 | P2 | 4 |
-| **Total** | **58** |
+| **Total** | **59** |
 
-> Phase recounted: VP-058 (P0) added. P0 = 39+1 = 40. P1 = 14. P2 = 4. Total = 58.
+> Phase recounted: VP-059 (P0) added. P0 = 40+1 = 41. P1 = 14. P2 = 4. Total = 59.
 
 ## BC Coverage Check
 
-43 BCs total. 42 have at least 1 VP. BC-2.05.008 has VP-058 (draft, Wave 3). Zero coverage gaps.
+43 BCs total. All 43 have at least 1 VP. VP-059 added for BC-2.05.005 PC-3 (FailureCounter threshold — previously the per-source alert postcondition had no dedicated VP). Zero coverage gaps.

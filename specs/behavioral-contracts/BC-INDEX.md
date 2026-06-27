@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-27T00:00:00
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -53,7 +53,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.002.md |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | admission-security | CAP-018 | P0 | E | implemented (S-3.03 / PR #14) | ss-05/BC-2.05.003.md |
 | BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.004.md |
-| BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | implemented (S-2.01 / PR #5) | ss-05/BC-2.05.005.md |
+| BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | partially implemented (S-2.01 / PR #5 = crypto primitive; PC-3 per-source alert = FIX-NOW → S-W3.05) | ss-05/BC-2.05.005.md |
 | BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | admission-security | CAP-020b | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.006.md |
 | BC-2.05.007 | Node private keys never transit the network under any condition | admission-security | CAP-020a | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.007.md |
 | BC-2.05.008 | RouteFrame wire-layer HMAC enforcement (Fail-Closed for Writes) | admission-security | CAP-020 | P0 | E | implemented (S-3.04 / PR #9) | ss-05/BC-2.05.008.md |

@@ -2,10 +2,10 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
-timestamp: 2026-06-26T12:00:00
+timestamp: 2026-06-27T00:00:00
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -49,7 +49,8 @@ traces_to: '.factory/specs/prd.md'
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-ADM-001 | ADM | broken | 1 | "admission denied: signature verification failed for <node_addr> on SVTN <svtn_id>" | BC-2.05.001 |
 | E-ADM-002 | ADM | broken | — (dropped) | "HMAC verification failed: SVTN <svtn_id>, src <src_addr>, type <frame_type>" | FM-006, BC-2.05.005 |
-| E-ADM-016 | ADM | broken | 0 | "wire HMAC verification failed at RouteFrame: tag mismatch for SVTN <svtn_id> from src <src_addr>" | BC-2.05.008; mapped to Go sentinel routing.ErrHMACVerificationFailed; distinct from E-ADM-002 which covers HMAC primitive failure in internal/hmac |
+| E-ADM-016 | ADM | broken | 0 | "wire HMAC verification failed at RouteFrame: tag mismatch for SVTN <svtn_id> from src <src_addr>" | BC-2.05.008; mapped to Go sentinel routing.ErrHMACVerificationFailed; distinct from E-ADM-002 (HMAC primitive failure in internal/hmac) and E-ADM-017 (aggregate rate alert) |
+| E-ADM-017 | ADM | degraded | 0 (daemon continues) | "HMAC failure rate alert: ≥5 failures in 60s from src <src_addr>" | BC-2.05.005 PC-3, BC-2.05.008 EC-006; emitted by admission.FailureCounter when the per-src_addr sliding-window count reaches the threshold (default: 5 failures / 60s window); fire-once-per-threshold-crossing; distinct from E-ADM-016 (per-failure wire log) and E-ADM-002 (per-failure primitive log); severity=degraded because the router continues operating — the alert signals a suspicious pattern but does not itself drop the source |
 | E-ADM-003 | ADM | broken | — (dropped) | "frame from non-admitted source: src <src_addr>, SVTN <svtn_id>" | BC-2.05.002 |
 | E-ADM-004 | ADM | broken | 1 | "address collision: node address <addr> already admitted on SVTN <svtn_id>" | BC-2.01.006 |
 | E-ADM-005 | ADM | broken | 1 | "key revoked: <key_fingerprint> on SVTN <svtn_id>" | DEC-005, FM-007 |
@@ -157,6 +158,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-005 | Presence message lost/stale | No error code — eventual consistency |
 | FM-006 | HMAC verification failure (primitive layer) | E-ADM-002 |
 | FM-014 | Wire-layer HMAC mismatch at RouteFrame (tag mismatch from admitted node) | E-ADM-016 |
+| (no FM) | Per-source HMAC failure rate alert: sustained forgery or misconfiguration from same src_addr | E-ADM-017 |
 | FM-007 | Key revocation propagation delay | Acknowledged gap; no error code |
 | FM-008 | Quality indicator stuck green | Bug in DI-008 implementation |
 | FM-009 | Router crashes without drain | E-NET-004 (detected by nodes) |
@@ -171,5 +173,6 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.7 | 2026-06-27 | Added E-ADM-017 (aggregate HMAC failure rate alert: ≥5 failures in 60s from same src_addr, severity=degraded, emitted by admission.FailureCounter); updated E-ADM-016 note to distinguish from E-ADM-017; added FM mapping row for E-ADM-017. Closes Wave 3 gate F-2 (product-owner adjudication: FIX-NOW, not deferred). |
 | v1.6 | 2026-06-26 | Added layering notes to E-ADM-006 and E-ADM-007: clarifies that at the internal/session layer `ConsoleKey` serves as `<key_fingerprint>` and `<node_addr>` is legitimately omitted (session layer has no node identity per ARCH-08 §6.6); transport/admission boundary supplies `<node_addr>` when re-surfacing. No behavioral change; closes recurring M-1 adversarial finding from S-3.03 passes. |
 | v1.5 | 2026-06-26 | Added E-ADM-016 (wire HMAC mismatch at RouteFrame), E-SES-004, E-SES-005 (RETIRED), E-SES-006; retired E-SES-005 duplicate; added namespace-aliases note for E-FRM-* → E-PRT-*; added FM-014 mapping; updated E-SES-002 and E-SES-003 anchors. |

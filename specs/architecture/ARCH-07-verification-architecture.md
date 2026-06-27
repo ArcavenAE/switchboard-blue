@@ -91,8 +91,10 @@ See ARCH-09 for the complete per-package classification.
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
 
-> VP catalog total = 57; full BC→VP coverage in ARCH-11. VP-043 through VP-057
-> were added in Phase 1c-refinement to close coverage gaps.
+> VP catalog total = 59; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> were added in Phase 1c-refinement to close coverage gaps. VP-059 added 2026-06-27
+> for BC-2.05.005 PC-3 (Wave 3 gate F-2 remediation — FailureCounter threshold proptest).
+> VP-058 added at Wave 3 for BC-2.05.008 (RouteFrame HMAC code-audit).
 
 ### Phase 1c-refinement: Pure-Core Additions
 
@@ -100,6 +102,12 @@ See ARCH-09 for the complete per-package classification.
 |-------|----------|--------|--------|
 | VP-053 | K empty-tick frames → K frames with contiguous sequence numbers | internal/halfchannel | proptest |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | internal/admission | proptest |
+
+### Wave 3 Gate F-2 Remediation Additions (2026-06-27)
+
+| VP ID | Property | Module | Method |
+|-------|----------|--------|--------|
+| VP-059 | `FailureCounter.RecordHMACFailure` fires E-ADM-017 at exactly the ≥5th call within 60s sliding window and not before; fire-once-per-crossing; concurrent-safe (race detector) | internal/admission | proptest |
 
 ### Phase 1c-refinement: Boundary/Integration Additions
 

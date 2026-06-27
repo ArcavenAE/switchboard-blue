@@ -2,10 +2,10 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
-producer: architect
-timestamp: 2026-06-23T00:00:00
+producer: product-owner
+timestamp: 2026-06-27T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -15,13 +15,14 @@ kos_anchors: []
 modified:
   - 2026-06-23T00:00:00
   - 2026-06-26T12:00:00 # v1.1 — WG3-H-001: Update totals to 43 BCs / 58 VPs; add missing BC-2.05.008 → VP-058 trace row; update internal/routing VP count from 4 to 5 (add code-audit)
+  - 2026-06-27T00:00:00 # v1.2 — Wave 3 gate F-2 adjudication: add VP-059 (FailureCounter threshold proptest, internal/admission); update totals to 59 VPs; update internal/admission VP count from 5 to 6
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 58 (VP-001 through VP-058, per VP-INDEX).
+> Total VP count: 59 (VP-001 through VP-059, per VP-INDEX).
 
 ## BC → VP Coverage Table
 
@@ -56,10 +57,10 @@ modified:
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
 | BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt | VP-046 | integration | P0 |
-| BC-2.05.005 | HMAC frame authentication at first router | internal/hmac | VP-004, VP-005, VP-006 | proptest + fuzz | P0 |
+| BC-2.05.005 | HMAC frame authentication at first router | internal/hmac, internal/admission (PC-3) | VP-004, VP-005, VP-006, VP-059 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
 | BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
-| BC-2.05.008 | RouteFrame HMAC enforcement | internal/routing | VP-058 | code-audit | P0 |
+| BC-2.05.008 | RouteFrame HMAC enforcement | internal/routing | VP-058, VP-059 | code-audit + proptest | P0 |
 | BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027 | proptest | P1 |
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
 | BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics | VP-047 | integration | P1 |
@@ -78,8 +79,8 @@ modified:
 | Total BCs | 43 |
 | BCs with ≥1 VP | 43 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 58 |
-| P0 VPs (pure-core proptest/fuzz) | 40 |
+| Total unique VPs | 59 |
+| P0 VPs (pure-core proptest/fuzz) | 41 |
 | P1 VPs (integration/e2e) | 14 |
 | P2+ VPs (advanced/PE phase) | 4 |
 
@@ -97,7 +98,7 @@ VP counts recounted from VP-INDEX (canonical source of truth, 58 VPs total).
 | internal/multipath | 4 | proptest (2), e2e (1), integration (1) |
 | internal/paths | 1 | proptest (1) |
 | internal/metrics | 3 | proptest (1), integration (2) |
-| internal/admission | 5 | proptest (4), e2e (1) |
+| internal/admission | 6 | proptest (5), e2e (1) |
 | internal/routing | 5 | proptest (2), fuzz (1), e2e (1), code-audit (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
 | internal/tmux | 2 | integration (2) |
@@ -106,9 +107,9 @@ VP counts recounted from VP-INDEX (canonical source of truth, 58 VPs total).
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
 | cmd/sbctl | 3 | integration (1), e2e (2) |
-| **Total** | **58** | |
+| **Total** | **59** | |
 
-Per-module sum = 58 (no off-table VPs).
+Per-module sum = 59 (no off-table VPs). VP-059 (proptest, internal/admission) added 2026-06-27.
 
 ## Zero-VP BCs Check
 
@@ -117,6 +118,10 @@ Per the coverage table above, all 43 BCs have at least one VP. No gaps.
 VP-053 through VP-057 were added in Phase 1c-refinement to close coverage gaps
 identified by the PO sweep (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004,
 BC-2.05.007 previously lacked a VP with `source_bc:` pointing at them).
+
+VP-059 was added 2026-06-27 for BC-2.05.005 PC-3 (per-source HMAC failure rate alert).
+BC-2.05.005 PC-3 previously had no dedicated VP — VP-004/005/006 cover the HMAC
+primitive but not the FailureCounter threshold behavior. VP-059 closes this gap.
 
 ## Infeasible Properties
 
