@@ -656,3 +656,35 @@ func TestSession_CrashDetach_EvictsFromFanOut(t *testing.T) {
 		t.Errorf("SendKeystroke survivor: got %v; want nil", err)
 	}
 }
+
+// TestAccessNode_SendKeystroke_NoSink_ReturnsError verifies that an AccessNode
+// constructed WITHOUT a WithKeystrokeSink option returns ErrNoKeystrokeSink on
+// every SendKeystroke call (F-L-3 pass-7; anti-silent-failure guard).
+//
+// noSink{} is the default sink wired in NewAccessNode. This test proves the
+// fail-loud path fires so that production callers that forget to inject a real
+// sink fail visibly rather than silently discarding keystrokes.
+//
+// newTestAccessNode injects NoOpSink to avoid this error in all other tests;
+// here we bypass that helper and construct the AccessNode without any sink
+// option to exercise the default path.
+func TestAccessNode_SendKeystroke_NoSink_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	if err := pub.Publish("nosink-session"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	// Deliberately omit WithKeystrokeSink — noSink{} default must fire.
+	an := session.NewAccessNode(pub, session.NoOpAuthorizer{})
+
+	if _, _, err := an.Attach("nosink-console", "nosink-session"); err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+
+	err := an.SendKeystroke("nosink-console", "nosink-session", []byte("x"))
+	if !errors.Is(err, session.ErrNoKeystrokeSink) {
+		t.Errorf("SendKeystroke with no sink: got %v; want ErrNoKeystrokeSink", err)
+	}
+}
