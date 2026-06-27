@@ -108,8 +108,11 @@ wave_3_points_complete: 32
 wave_3_points_remaining: 0
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
 wave_3_gate_adversary_streak: 0
-wave_3_gate_adversary_passes: "pass-1 CONVERGED 0C/0H; pass-2 NOT_CONVERGED 0C/1H (F-1 MEDIUM→HIGH); pass-3 NOT_CONVERGED 0C/1H — streak RESET to 0; HIGH F-1 (E-ADM-016 router logging) must be resolved, then 3 fresh clean passes required — reports: cycles/cycle-1/wave-3/adversary/pass-0{1,2,3}.md"
-timestamp: 2026-06-27T16:00:00Z
+wave_3_gate_adversary_passes: "RESTARTED after F-1 fix (PR #15, 10dd880). Prior: pass-1 clean, pass-2/3 NOT_CONVERGED on HIGH F-1 (now resolved). New convergence run begins at develop @ 10dd880 — 3 fresh consecutive clean passes required."
+s_wave3_f1_fix_pr: 15
+s_wave3_f1_fix_merge_sha: 10dd880
+s_wave3_f1_fix_merge_date: 2026-06-27
+timestamp: 2026-06-27T18:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -117,7 +120,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Phase 3, Wave 3. ALL 5 STORIES MERGED. Wave 3 integration gate adversary IN PROGRESS — pass-1 CONVERGED (0C/0H/3M/2L/3O), passes 2+3 NOT_CONVERGED on HIGH F-1 (E-ADM-016 router logging unimplemented). Streak RESET to 0. Next action: resolve F-1 (router E-ADM-016 logging fix-PR) then restart 3-clean-pass convergence.
+Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED + merged (PR #15, 10dd880). Wave 3 wave-level adversarial convergence RESTARTED at develop @ 10dd880 — running 3 fresh clean passes.
 
 ## Phase Progress
 
@@ -125,7 +128,7 @@ Phase 3, Wave 3. ALL 5 STORIES MERGED. Wave 3 integration gate adversary IN PROG
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 5/5 DONE (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13; S-3.03 PR #14 b68e498) — Wave 3 adversary: pass-1 CONVERGED 0C/0H; pass-2 NOT_CONVERGED 0C/1H; pass-3 NOT_CONVERGED 0C/1H — streak RESET (0/3) — BLOCKED on HIGH F-1 |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 2: 3/3 done; Wave 3: 5/5 DONE (S-3.04 PR #9; S-3.01a PR #11; S-3.01b PR #12; S-3.02 PR #13; S-3.03 PR #14 b68e498) — F-1 fix merged PR #15 10dd880 — Wave 3 adversary RESTARTED @ 10dd880 (0/3 fresh passes) |
 
 ## Wave / Story Status
 
@@ -143,9 +146,7 @@ Phase 3, Wave 3. ALL 5 STORIES MERGED. Wave 3 integration gate adversary IN PROG
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
 
-Wave 2: 3/3 stories merged (18 pts). Gate: PASS_WITH_OBSERVATIONS — CLOSED 2026-06-25.
-Wave 3: 5/5 stories merged (32 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. S-3.01b CLOSED 2026-06-26. S-3.02 CLOSED 2026-06-27 (PR #13). S-3.03 CLOSED 2026-06-27 (PR #14, b68e498). Next: Wave 3 integration gate.
-Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-1/S-3.04/adversary/`.
+Wave 2: 3/3 merged — CLOSED 2026-06-25. Wave 3: 5/5 merged — F-1 fix PR #15 10dd880 — gate reports: `cycles/cycle-1/`.
 
 ## Open Drift Items
 
@@ -166,11 +167,12 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | MISE-DX-001 | LOW | Toolchain provisioning migrating brew→mise; covered by story S-M.01 (mise.toml, CI, lefthook, devcontainer, CONTRIBUTING/CLAUDE.md). | dx-engineer/devops-engineer | open — story S-M.01 drafted, unscheduled (maintenance sweep) |
 | MISE-DOC-002 | LOW | Project CLAUDE.md says "prefer brew" — preference shifting to mise; update during S-M.01. Operator's GLOBAL ~/.claude/CLAUDE.md "Prefer brew" directive also shifting to mise (operator must update their personal file; factory will not edit the global file). | dx-engineer | open — tracked for S-M.01 + operator global-file note |
 | SIGN-DX-001 | LOW | Apple code-signing/notarization of release binaries: release.yml has sign-and-notarize job gated on vars.SIGNING_ENABLED (default OFF); capability to be completed + reconciled (justfile recipes, missing packaging scripts, release-verify conditional, CONTRIBUTING secrets docs) via story S-M.02. Gene source: aae-orc/ThreeDoors. ACTIVATION milestone-gated — toggle stays OFF until functional/testable product exists. | dx-engineer/devops-engineer | open — story S-M.02 drafted, unscheduled (milestone-gated) |
-| W3-M-1 | HIGH | E-ADM-016 not logged at router on HMAC failure — BC-2.05.008 PC-2 observability postcondition UNIMPLEMENTED and UNTESTED on P0 security contract; confirmed HIGH by Wave-3 adversary passes 2+3 (pass-1 under-rated as MED). Router has no logger; routing tests assert only the sentinel. Drop itself is enforced. | implementer + test-writer | open — BLOCKS Wave 3 gate; fix-PR pending |
+| W3-F1-FU1 | LOW | BC-2.05.008 PC-4 PATH-A (no-forwarding-entry) E-ADM-016 logging obligation not formally ratified by spec-steward — implementer logged it conservatively for operator visibility; PC-2 (verify-fail path) is clearly mandated. Confirm/ratify PC-4 logging in BC-2.05.008. | spec-steward | open — post-merge follow-up |
+| W3-F1-FU2 | LOW | BC-2.05.008 evidence-report traceability row for PC-2 still cites the old Example test, not the new routing_log_test.go log-assertion tests; update the trace. | technical-writer/spec-steward | open — post-merge follow-up |
 | W3-M-2 | MED | SessionConnector exposes no failover-stable Frames(); control→PTY failover can silently drop downstream output for a consumer holding the old channel. Latent (no consumer yet). | architect/implementer | open — fix in cmd/switchboard wiring story |
 | W3-M-3 | MED | NewAccessNode(pub,nil) installs allow-all NoOpAuthorizer (fail-OPEN), opposite polarity to fail-loud noSink default; future nil-auth wiring would silently disable all Tier-2 enforcement. Latent (no production caller yet). | architect/implementer | open — fix in cmd/switchboard wiring story |
 | W3-PG-001 | LOW [process-gap] | Constructor security-perimeter default-polarity inconsistency (noSink fail-loud vs NoOpAuthorizer fail-open) — no review axis catches this. Candidate go.md/governance rule: security-perimeter defaults must fail closed unless justified. | rules/governance | open — codification follow-up at cycle-close (S-7.02) |
-Resolved drift archived: `cycles/cycle-1/closed-drift.md` (WG3-TAX-001)
+Resolved drift archived: `cycles/cycle-1/closed-drift.md` (WG3-TAX-001, W3-M-1)
 
 ## Decisions Log
 
@@ -186,13 +188,13 @@ Resolved drift archived: `cycles/cycle-1/closed-drift.md` (WG3-TAX-001)
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
 | S-3.03 repointed 5→8 | Story v1.1 upstream-wiring integration scope expansion; sprint-state.yaml reconciled to 8 pts; Wave 3 total corrected 29→32 pts | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (WAVE 3 ADVERSARY PASSES 2+3 — STREAK RESET)
+## Session Resume Checkpoint — 2026-06-27 (F-1 FIX MERGED — WAVE 3 CONVERGENCE RESTARTED)
 
-**Position:** Phase 3, Wave 3 — adversary convergence IN PROGRESS. pass-1 CONVERGED (0C/0H/3M/2L/3O). pass-2 NOT_CONVERGED (0C/1H/2M/4OBS). pass-3 NOT_CONVERGED (0C/1H/4M/3L/3OBS). Streak RESET to 0. Tree: develop @ b68e498.
+**Position:** Phase 3, Wave 3 integration gate. F-1 (E-ADM-016 router logging) RESOLVED + merged via PR #15 (squash commit 10dd880). RouteFrame now logs E-ADM-016 on both no-forwarding-entry and HMAC-verify-fail paths; injectable Logger + WithLogger option added to Router; 4 new routing tests assert log emission (Red-Gate proven). Tree: develop @ 10dd880.
 
-**Blocking HIGH F-1:** BC-2.05.008 PC-2 — E-ADM-016 not logged at router on HMAC failure. Router has no logger field. Fix: injectable logger + emit E-ADM-016 before both ErrHMACVerificationFailed returns + log-assertion test. Requires fix-PR before resuming convergence. Reports: `cycles/cycle-1/wave-3/adversary/pass-0{1,2,3}.md`.
+**Wave 3 adversary convergence RESTARTED.** Prior run: pass-1 CONVERGED (0C/0H/3M/2L/3O), passes 2+3 NOT_CONVERGED on HIGH F-1 (now resolved). Streak reset to 0/3. 3 fresh consecutive clean passes required at develop @ 10dd880. Reports: `cycles/cycle-1/wave-3/adversary/pass-0{1,2,3}.md`.
 
-**Next:** Resolve F-1 (E-ADM-016 router logging fix-PR), then restart 3-clean-pass convergence. After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Previous checkpoint archived: `cycles/cycle-1/session-checkpoints.md`.
+**Next:** Run 3 fresh adversary passes at develop @ 10dd880 to close Wave 3 gate. After convergence: Wave 4 (S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 — 29 pts). Post-merge follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open. Previous checkpoint archived: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
