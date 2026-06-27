@@ -4,7 +4,7 @@ document_type: story
 level: ops
 story_id: S-W3.04
 title: "full daemon assembly — wire all Wave-3 subsystems in cmd/switchboard"
-status: draft
+status: ready
 producer: story-writer
 timestamp: 2026-06-27T00:00:00Z
 phase: 2
@@ -20,6 +20,7 @@ bc_traces:
   - BC-2.04.004
   - BC-2.04.005
   - BC-2.04.006
+  - BC-2.04.007
   - BC-2.05.008
 vp_traces: [VP-058]
 subsystems: [session-access, admission-security]
@@ -35,14 +36,14 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-04/BC-2.04.004.md'
   - '.factory/specs/behavioral-contracts/ss-04/BC-2.04.005.md'
   - '.factory/specs/behavioral-contracts/ss-04/BC-2.04.006.md'
+  - '.factory/specs/behavioral-contracts/ss-04/BC-2.04.007.md'
   - '.factory/specs/behavioral-contracts/ss-05/BC-2.05.008.md'
   - '.factory/specs/architecture/ARCH-01-core-services.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
 acceptance_criteria_count: 8
-version: "1.0"
-# BC status: BC-2.04.007 (daemon lifecycle) PENDING PO authorship — see Open Question section.
-# behavioral_contracts field lists only currently-anchored BCs; status remains draft until
-# PO resolves BC-2.04.007 and all BC↔AC bidirectional traces are confirmed.
+version: "1.1"
+# BC-2.04.007 authored by PO 2026-06-27. AC-007 traces to BC-2.04.007 PC-1;
+# AC-008 traces to BC-2.04.007 PC-2. Gate blocker resolved; status flipped to ready.
 ---
 
 # S-W3.04: Full Daemon Assembly — Wire All Wave-3 Subsystems in cmd/switchboard
@@ -152,13 +153,13 @@ INFO level: `"frames_dropped count=<N>"` (or equivalent structured key-value for
 The counter is read without resetting (cumulative). This closes drift W3-R2-M3.
 - **Test:** `TestDaemonFramesDroppedLoggedOnTick`
 
-### AC-007 (traces to BC-2.04.001 PC-1 — weak trace; pending BC-2.04.007 PO decision)
+### AC-007 (traces to BC-2.04.007 PC-1)
 If `sc.Connect(ctx)` returns a non-nil error (both control mode and PTY fallback fail),
 `cmd/switchboard` logs the error at ERROR level, emits a human-readable message to
 stdout/stderr, and exits with non-zero exit code. The process does not panic.
 - **Test:** `TestDaemonConnectFailureExitsNonZero`
 
-### AC-008 (traces to BC-2.04.001 PC-1 — weak trace; pending BC-2.04.007 PO decision)
+### AC-008 (traces to BC-2.04.007 PC-2)
 When SIGTERM or SIGINT is received, the daemon cancels its root context. All goroutines
 that depend on the context (relay goroutine, sweep ticker, frames-dropped ticker)
 observe the cancellation and exit within one ticker period or immediately (whichever
@@ -208,6 +209,7 @@ comes first). The process exits with code 0. The shutdown does not leak goroutin
 | BC-2.04.004.md | ~800 |
 | BC-2.04.005.md | ~600 |
 | BC-2.04.006.md | ~900 |
+| BC-2.04.007.md | ~600 |
 | BC-2.05.008.md | ~900 |
 | ARCH-01-core-services.md (ADR-010, ADR-011) | ~1,200 |
 | ARCH-08-dependency-graph.md (§6.5–§6.6) | ~1,000 |
@@ -218,14 +220,14 @@ comes first). The process exits with code 0. The shutdown does not leak goroutin
 | cmd/switchboard/main.go (stub) | ~100 |
 | New/modified test files (3 files) | ~1,500 |
 | Tool outputs overhead | ~300 |
-| **Total** | **~14,300** |
+| **Total** | **~14,900** |
 | Agent context window | 200K |
 | **Budget usage** | **~7.2%** |
 
 ## Tasks
 
 1. [ ] Read BC-2.04.001, BC-2.04.002, BC-2.04.003, BC-2.04.004, BC-2.04.005, BC-2.04.006,
-       BC-2.05.008, ARCH-01 (ADR-010 + ADR-011), ARCH-08 §6.5.1–§6.5.2
+       BC-2.04.007, BC-2.05.008, ARCH-01 (ADR-010 + ADR-011), ARCH-08 §6.5.1–§6.5.2
 2. [ ] Add `SessionConnector.Frames() <-chan halfchannel.ChannelFrame` to `internal/tmux`
        per ADR-011 design (forwarding channel + relay goroutine in `pty_fallback.go` or
        new `connector_frames.go`; closed exactly once via `sync.Once` in `sc.Close()`)
@@ -317,4 +319,5 @@ don't exist on develop and cannot be imported; CI enforces this structurally).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-06-27 | PO decision (A): BC-2.04.007 authored (daemon lifecycle contract); AC-007 re-traced to BC-2.04.007 PC-1; AC-008 re-traced to BC-2.04.007 PC-2; E-SYS-002 registered in error-taxonomy.md; BC-INDEX updated; story flipped draft→ready |
 | 1.0 | 2026-06-27 | Initial story — Wave 3 FIX-NOW gate blocker F-1; closes W3-R3-F1, W3-M-3, W3-R2-M3, W3-R2-M4, SessionConnector half of W3-M-2; BC-2.04.007 lifecycle gap flagged for PO |

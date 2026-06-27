@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -146,6 +146,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-SYS-001 | SYS | broken | 1 | "PTY device unavailable: cannot start access node. Install 'openpty' or check device permissions." | FM-011, BC-2.04.002 |
+| E-SYS-002 | SYS | broken | 1 | "fatal: cannot connect to session backend: <reason>" | BC-2.04.007 PC-1; emitted when `SessionConnector.Connect(ctx)` returns non-nil (both tmux control mode and PTY fallback exhausted). Distinct from E-SYS-001 (OS-level PTY device unavailable) — E-SYS-002 is the aggregate connect-failure at the `SessionConnector` level after all fallbacks are tried. |
 
 ## Failure Mode to Error Code Mapping
 
@@ -163,7 +164,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | FM-008 | Quality indicator stuck green | Bug in DI-008 implementation |
 | FM-009 | Router crashes without drain | E-NET-004 (detected by nodes) |
 | FM-010 | Config error on startup | E-CFG-001, E-CFG-004, E-CFG-005 |
-| FM-011 | tmux not present | E-SYS-001 (if PTY also fails); log message on PTY fallback |
+| FM-011 | tmux not present | E-SYS-001 (if PTY also fails); E-SYS-002 (if both tmux and PTY fail at SessionConnector level); log message on PTY fallback |
 | FM-012 | sbctl cannot connect | E-NET-001 |
 | FM-013 | Key expired at re-authentication time | E-ADM-015 |
 | (no FM) | Forwarding-table miss for (svtnID, dstAddr) — distinct from admission failure | E-FWD-002 |
@@ -173,6 +174,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.8 | 2026-06-27 | Added E-SYS-002 (SessionConnector aggregate connect failure: both tmux ctrl and PTY exhausted, exit 1). Registered per BC-2.04.007 authorship (daemon lifecycle contract). Updated FM-011 mapping row. |
 | v1.7 | 2026-06-27 | Added E-ADM-017 (aggregate HMAC failure rate alert: ≥5 failures in 60s from same src_addr, severity=degraded, emitted by admission.FailureCounter); updated E-ADM-016 note to distinguish from E-ADM-017; added FM mapping row for E-ADM-017. Closes Wave 3 gate F-2 (product-owner adjudication: FIX-NOW, not deferred). |
 | v1.6 | 2026-06-26 | Added layering notes to E-ADM-006 and E-ADM-007: clarifies that at the internal/session layer `ConsoleKey` serves as `<key_fingerprint>` and `<node_addr>` is legitimately omitted (session layer has no node identity per ARCH-08 §6.6); transport/admission boundary supplies `<node_addr>` when re-surfacing. No behavioral change; closes recurring M-1 adversarial finding from S-3.03 passes. |
 | v1.5 | 2026-06-26 | Added E-ADM-016 (wire HMAC mismatch at RouteFrame), E-SES-004, E-SES-005 (RETIRED), E-SES-006; retired E-SES-005 duplicate; added namespace-aliases note for E-FRM-* → E-PRT-*; added FM-014 mapping; updated E-SES-002 and E-SES-003 anchors. |

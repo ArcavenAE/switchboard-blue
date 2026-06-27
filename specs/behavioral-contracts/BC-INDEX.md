@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -49,6 +49,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.04.004 | Console detach releases session without closing it; session continues on access node | session-access | CAP-014 | P0 | E | implemented (S-3.02 / PR #13) | ss-04/BC-2.04.004.md |
 | BC-2.04.005 | Read-only console receives downstream stream; upstream keystrokes are rejected by access node | session-access | CAP-015 | P0 | E | implemented (S-3.03 / PR #14) | ss-04/BC-2.04.005.md |
 | BC-2.04.006 | Two or more consoles may subscribe to the same session output simultaneously | session-access | CAP-016 | P0 | E | implemented (S-3.02 / PR #13) | ss-04/BC-2.04.006.md |
+| BC-2.04.007 | Access node daemon startup succeeds or exits non-zero; SIGTERM/SIGINT triggers clean shutdown | session-access | CAP-013 | P0 | E | active | ss-04/BC-2.04.007.md |
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.001.md |
 | BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.002.md |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | admission-security | CAP-018 | P0 | E | implemented (S-3.03 / PR #14) | ss-05/BC-2.05.003.md |
@@ -75,13 +76,13 @@ traces_to: '.factory/specs/prd.md'
 | session-networking | CAP-001–004 | 7 | 7 | 0 | 0 |
 | multipath-forwarding | CAP-005–010 | 9 | 8 | 1 | 0 |
 | session-discovery | CAP-011–012 | 3 | 0 | 3 | 0 |
-| session-access | CAP-013–016 | 6 | 6 | 0 | 0 |
+| session-access | CAP-013–016 | 7 | 7 | 0 | 0 |
 | admission-security | CAP-017–020, CAP-020a, CAP-020b | 8 | 8 | 0 | 0 |
 | quality-observability | CAP-021–022 | 3 | 3 | 0 | 0 |
 | network-management | CAP-023–024 | 3 | 3 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
 | deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **43** | **36** | **7** | **0** |
+| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **44** | **37** | **7** | **0** |
 
 ## CAP Coverage Verification
 
@@ -99,7 +100,7 @@ traces_to: '.factory/specs/prd.md'
 | CAP-010 | BC-2.02.008, BC-2.02.009 | covered |
 | CAP-011 | BC-2.03.001, BC-2.03.003 | covered |
 | CAP-012 | BC-2.03.002, BC-2.03.003 | covered |
-| CAP-013 | BC-2.04.001, BC-2.04.002 | covered |
+| CAP-013 | BC-2.04.001, BC-2.04.002, BC-2.04.007 | covered |
 | CAP-014 | BC-2.04.003, BC-2.04.004 | covered |
 | CAP-015 | BC-2.04.005 | covered |
 | CAP-016 | BC-2.04.006 | covered |
