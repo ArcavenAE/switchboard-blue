@@ -138,21 +138,34 @@ func (cs *ConsoleSet) Session(key ConsoleKey) (string, bool) {
 }
 
 // Remove deregisters the console identified by key, closing its downstream
-// channel (BC-2.04.004 PC-1). The tmux session is unaffected — closing the
-// downstream channel does not terminate the underlying session.
+// and upstream channels (BC-2.04.004 PC-1; F-C-3 symmetric lifecycle). The
+// tmux session is unaffected — closing the channels does not terminate the
+// underlying session.
+//
+// The downstream channel is closed under the write lock (same as EvictStale).
+// The upstream channel is closed outside the lock — a sender blocked on the
+// channel would cause a deadlock if we held the lock here (same rationale as
+// EvictStale; F-C-3 symmetric lifecycle).
 //
 // Returns ErrConsoleNotFound if key is not registered.
 func (cs *ConsoleSet) Remove(key ConsoleKey) error {
 	cs.mu.Lock()
-	defer cs.mu.Unlock()
 
 	entry, ok := cs.consoles[key]
 	if !ok {
+		cs.mu.Unlock()
 		return ErrConsoleNotFound
 	}
 
 	close(entry.downstream)
 	delete(cs.consoles, key)
+
+	cs.mu.Unlock()
+
+	// Close upstream outside the lock (same rationale as EvictStale: a sender
+	// blocked on the channel would cause a deadlock if we held the lock here;
+	// F-C-3 symmetric lifecycle).
+	close(entry.upstream)
 
 	return nil
 }

@@ -78,7 +78,7 @@ func TestConsoleSet_Remove_ClosesDownstream(t *testing.T) {
 	t.Parallel()
 	cs := newTestConsoleSet(t)
 
-	downstream, _, err := cs.Add("console-B", "test-session")
+	downstream, upstream, err := cs.Add("console-B", "test-session")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -96,6 +96,17 @@ func TestConsoleSet_Remove_ClosesDownstream(t *testing.T) {
 		// ok == false: channel closed as expected
 	default:
 		t.Error("Remove: downstream channel not closed; default case reached (channel open and empty)")
+	}
+
+	// Also check upstream is closed.
+	select {
+	case _, ok := <-upstream:
+		if ok {
+			t.Error("Remove: upstream channel not closed; received value instead")
+		}
+		// ok == false: closed as expected
+	default:
+		t.Error("Remove: upstream channel not closed; default case reached (channel open and empty)")
 	}
 }
 
