@@ -86,6 +86,7 @@ s_3_01b_merge_sha: 56ec9c7
 s_3_01b_pr_number: 12
 s_3_01b_merge_date: 2026-06-26
 s_3_01b_status: completed
+s_3_02_adversary_converged: "CONVERGED (passes 6-8 clean, 8 total; pass-5 1H/1M/2L → decayed to 0/0) — cycles/cycle-1/S-3.02/adversary/"
 s_1_03_pr_number: 7
 s_1_03_merge_date: 2026-06-25
 s_1_03_status: completed
@@ -96,7 +97,7 @@ wave_3_stories_merged: 3
 wave_3_points_complete: 16
 wave_3_points_remaining: 16
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
-timestamp: 2026-06-26T23:59:00Z
+timestamp: 2026-06-27T00:30:00Z
 last_update: 2026-06-26
 ---
 
@@ -107,7 +108,7 @@ last_update: 2026-06-26
 Phase 3, Wave 3. S-3.04 + S-3.01a + S-3.01b MERGED (PRs #9/#11/#12). Wave 3: 3/5 stories (16/32 pts).
 S-3.01b CLOSED (PR #12, 56ec9c7). 12 adversary passes (9 NOT_CONVERGED + 3 CONVERGED); streak 10/11/12.
 4 tech-debt items carried forward (F-002, F-003, F-004, SEC-001). VP-032 deferred.
-Wave 3 next: S-3.02 (attach/detach/fanout, 8pts, dep: S-3.01a OK) OR S-3.03 (Tier-2 auth, 8pts, dep: S-3.02). User to choose.
+S-3.02 Step 4.5 CONVERGED (3 consecutive clean passes 6-8, 8 total). Next: demo recording → PR (per per-story-delivery). S-3.03 (Tier-2 auth, 8pts) pending S-3.02 merge.
 
 ## Phase Progress
 
@@ -130,11 +131,11 @@ Wave 3 next: S-3.02 (attach/detach/fanout, 8pts, dep: S-3.01a OK) OR S-3.03 (Tie
 | 3 | S-3.04 | HMAC RouteFrame wire-up | completed | #9 | d54bf1a |
 | 3 | S-3.01a | Tmux control mode integration | completed | #11 | 43208ab |
 | 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
-| 3 | S-3.02 | Console attach/detach + multi-console | pending (dep: S-3.01a) | — | — |
+| 3 | S-3.02 | Console attach/detach + multi-console | converged (pre-demo, pre-PR) | — | 4017192 |
 | 3 | S-3.03 | Tier-2 per-session authorization | pending | — | — |
 
 Wave 2: 3/3 stories merged (18 pts). Gate: PASS_WITH_OBSERVATIONS — CLOSED 2026-06-25.
-Wave 3: 3/5 stories merged (16/32 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. S-3.01b CLOSED 2026-06-26. Next: S-3.02 or S-3.03 (user to choose).
+Wave 3: 3/5 stories merged (16/32 pts). S-3.04 CLOSED 2026-06-26. S-3.01a CLOSED 2026-06-26. S-3.01b CLOSED 2026-06-26. S-3.02 Step 4.5 CONVERGED 2026-06-26 (pre-demo, pre-PR). Next: S-3.02 demo → PR.
 Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-1/S-3.04/adversary/`.
 
 ## Open Drift Items
@@ -165,18 +166,15 @@ Gate reports: `cycles/cycle-1/wave-2/`. S-3.04 adversary reports: `cycles/cycle-
 | Wave-1 rollback/re-closure | all drift items routed concretely; drbothen/vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP or PE-phase integration | 2026-06-24 |
 
-## Session Resume Checkpoint — 2026-06-26 (S-3.01b CLOSED)
+## Session Resume Checkpoint — 2026-06-26 (S-3.02 Step 4.5 CONVERGED)
 
-**Position:** Phase 3, Wave 3. S-3.01b MERGED (PR #12, 56ec9c7, develop tip). Wave 3: 3/5 stories (16/32 pts).
+**Position:** Phase 3, Wave 3. S-3.01b MERGED (PR #12, 56ec9c7, develop tip). Wave 3: 3/5 stories merged (16/32 pts). S-3.02 adversary-converged, pre-demo, pre-PR.
 
-**S-3.01b:** 12 adversary passes (9 NOT_CONVERGED + 3 CONVERGED); streak 10/11/12 clean.
-Defect classes: test-masks-defect ×4, concurrency ×3, cross-platform PTY ×3, spec drift ×4.
-New files: pty_fallback.go, stderr.go, pty_alloc_{unix,darwin,linux,other}.go. New dep: golang.org/x/sys.
-5 godoc examples (11 total with S-3.01a). PR #12 approved/merged. No follow-up codifications (#272–#288 filed).
+**S-3.02:** 8 adversary passes (passes 6-8 all CONVERGED, 3 consecutive clean). Branch: feature/S-3.02-session-attach-detach-fanout, tip 4017192. Pass-5 had 1H/1M/2L; fully decayed to 0/0 by pass-6. Drift item S-3.02-FM1 (vestigial upstream channel) deferred to S-3.03.
 
 **Tech-debt carry-forward (tech-debt-register.md):** F-002, F-003, F-004 (Wave 4), SEC-001 (Phase-6). VP-032 deferred.
 
-**Next:** S-3.02 (attach/detach/fanout, 8pts, dep: S-3.01a OK) OR S-3.03 (Tier-2 auth, 8pts, dep: S-3.02). User to choose. Open Phase-6 deferred items: see Open Drift Items table above.
+**Next:** S-3.02 demo recording → PR (per per-story-delivery). S-3.03 (Tier-2 auth, 8pts) pending S-3.02 merge. Open Phase-6 deferred items: see Open Drift Items table above.
 
 ## Historical Content
 
