@@ -823,8 +823,8 @@ func TestControlMode_SendInput_HappyPath(t *testing.T) {
 	got := stdin.Written()
 	// stdin also receives the list-sessions command written by Connect.
 	// Assert that the payload was written (it must be present in stdin output).
-	if !strings.Contains(string(got), string(payload)) {
-		t.Errorf("stdin.Written() = %q; want to contain %q", got, payload)
+	if !strings.HasSuffix(string(got), string(payload)) {
+		t.Errorf("stdin.Written() = %q; want suffix %q", got, payload)
 	}
 }
 
