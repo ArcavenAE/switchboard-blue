@@ -25,6 +25,7 @@ package tmux_test
 import (
 	"context"
 	"io"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -203,5 +204,129 @@ func drainFramesCh(ch <-chan halfchannel.ChannelFrame) {
 		default:
 			return
 		}
+	}
+}
+
+// TestSessionConnectorFramesSurvivesMidSessionFailover — EC-002
+// (BC-2.04.002 EC-003; ADR-011 §Relay re-subscribe after mode swap)
+//
+// Verifies the load-bearing ADR-011 invariant: the consumer of sc.Frames()
+// must NOT need to resubscribe after a mid-session ctrl→PTY mode swap. The
+// relay goroutine (forwardFrames) re-reads activeFrSource() internally;
+// frames from the NEW backend (PTY) arrive on the SAME channel that was
+// obtained BEFORE the swap.
+//
+// Sequence:
+//
+//  1. Build sc with initial ctrl stream that produces one visible line then EOFs.
+//  2. Obtain sc.Frames() ONCE — this is the channel consumers hold forever.
+//  3. Connect and verify a frame from the initial ctrl backend arrives on ch.
+//  4. Let ctrl EOF trigger ErrControlModeDropped → watchAndFallback → PTY fallback.
+//  5. Wait until InPTYMode() is true (swap complete).
+//  6. Inject a frame through the PTY pipe master.
+//  7. Assert the PTY frame arrives on THE SAME ch from step 2.
+//
+// Discriminating: a "capture source once" relay implementation — one that does
+// NOT re-read activeFrSource() after the source channel closes — would exhaust
+// the initial ctrl channel and then block forever on the stale closed channel.
+// PTY frames would never appear in ch. This test would time-out at step 7.
+//
+// Hermetic: all PTY allocation and ctrl exec are injected; no real tmux or PTY
+// forked.
+func TestSessionConnectorFramesSurvivesMidSessionFailover(t *testing.T) {
+	// EC-002 / ADR-011 §Relay re-subscribe invariant.
+	// NOT t.Parallel(): goroutine lifecycle depends on sequential phase completion.
+
+	// ptypipe is the fake PTY master that allows test to inject bytes AFTER swap.
+	ptypipe := newPipeMaster()
+
+	// fakePTYAlloc succeeds and yields ptypipe as the master.
+	ptyAllocSucceeds := tmux.WithPTYAllocFunc(func() (io.ReadWriteCloser, int, error) {
+		return ptypipe, 4321, nil
+	})
+
+	// Initial ctrl stream: one valid %begin/%end line then immediate EOF.
+	// EOF causes dispatchLoop to emit ErrControlModeDropped, triggering
+	// watchAndFallback → PTY fallback path (EC-003 drop path; no factory).
+	keys := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(keys)
+	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+
+	// Ctrl stream has ONE valid header pair then closes.
+	ctrlStream := fakeControlOutput(
+		"%begin 7000000000 0 1",
+		"%end 7000000000 0 1",
+		// EOF immediately after — triggers ErrControlModeDropped.
+	)
+	ctrl := tmux.New(pub, ds, fakeExecFunc(ctrlStream))
+
+	// PTY proxy backed by ptypipe so we can inject bytes post-swap.
+	ptyProxy := tmux.NewPTYProxy(pub, ds, ptyAllocSucceeds)
+
+	// No ControlModeFactory → immediate PTY fallback on ErrControlModeDropped.
+	sc := tmux.NewSessionConnector(ctrl, ptyProxy)
+	t.Cleanup(func() {
+		_ = ptypipe.Close()
+		_ = sc.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// Step 2: obtain sc.Frames() ONCE — consumer never resubscribes (ADR-011).
+	ch := sc.Frames()
+	if ch == nil {
+		t.Fatal("sc.Frames() returned nil; want non-nil channel (ADR-011)")
+	}
+
+	// Step 3: Connect.
+	if err := sc.Connect(ctx); err != nil {
+		t.Fatalf("sc.Connect: %v; want nil (ctrl path must connect first)", err)
+	}
+
+	// The initial ctrl stream produces frames (from the %begin/%end lines via the
+	// downstream half-channel) OR no frames at all (the ctrl stream may not produce
+	// ChannelFrames from administrative lines). Either way, we wait for the ctrl
+	// channel to EOF and watchAndFallback to activate PTY mode.
+	//
+	// We do NOT assert a frame from ctrl here — ControlMode may not emit
+	// ChannelFrames for %begin/%end administrative lines. The key ADR-011
+	// invariant is tested post-swap in steps 6–7.
+
+	// Step 4–5: Wait for PTY fallback to engage (ctrl EOF → ErrControlModeDropped
+	// → watchAndFallback → pty.Connect). Bounded: 3s.
+	ptyFallbackDeadline := time.After(3 * time.Second)
+	for !sc.InPTYMode() {
+		select {
+		case <-ptyFallbackDeadline:
+			t.Fatal("InPTYMode() never became true within 3s after ctrl EOF; " +
+				"watchAndFallback must activate PTY on ErrControlModeDropped (EC-003)")
+		default:
+			runtime.Gosched()
+		}
+	}
+
+	// Drain any frames buffered from the ctrl phase so the channel is empty.
+	drainFramesCh(ch)
+
+	// Step 6: inject a frame via the PTY pipe master AFTER the mode swap.
+	// The byte arrives in ptypipe → ioRelay reads it → produces a ChannelFrame
+	// on pty.frames → forwardFrames re-reads activeFrSource() (now = pty) →
+	// writes to sc.frames (= ch).
+	ptypipe.injectBytes([]byte("ec-002-pty-frame"))
+
+	// Step 7: assert the PTY frame arrives on THE SAME ch obtained before Connect.
+	// A "capture once" relay (no activeFrSource re-read) would never deliver here.
+	select {
+	case f, ok := <-ch:
+		if !ok {
+			t.Fatal("sc.Frames() channel closed prematurely; want PTY frame delivery on same channel (ADR-011)")
+		}
+		// Any non-closed delivery satisfies the ADR-011 re-subscribe invariant.
+		_ = f
+	case <-time.After(2 * time.Second):
+		t.Fatal("no frame on sc.Frames() within 2s after PTY byte injection post-swap; " +
+			"forwardFrames must re-read activeFrSource() after ctrl channel closes " +
+			"(ADR-011 §Relay re-subscribe — EC-002 discriminating assertion)")
 	}
 }

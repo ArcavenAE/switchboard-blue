@@ -10,13 +10,10 @@
 //   - AC-007/PC-2.6 → BC-2.04.007 PC-2.6 (mid-session double-failure → E-SYS-002 + exit 1)
 //   - AC-008 → BC-2.04.007 PC-2 (SIGTERM/SIGINT → clean shutdown + exit 0)
 //
-// NOTE on startFramesDroppedTicker testability: startFramesDroppedTicker
-// hardcodes framesDroppedInterval (30s) and does not accept an interval
-// parameter, unlike startSweepTicker which accepts tickInterval. This makes
-// it impossible to drive a fast tick in tests. The AC-006 test therefore
-// verifies the dual-counter format and counter isolation WITHOUT exercising
-// the ticker-goroutine loop directly. See [process-gap] comment in
-// TestDaemonFramesDroppedLoggedOnTick.
+// NOTE on startFramesDroppedTicker testability: startFramesDroppedTicker accepts
+// a tickInterval parameter (FIX 4; symmetric with startSweepTicker), enabling the
+// AC-006 test to drive a real tick with time.Millisecond and assert the production
+// code path emits "frames_dropped relay=<N> consoles=<M>".
 package main
 
 import (
@@ -183,26 +180,30 @@ func newFakeSessionConnector(t *testing.T) (
 // TestRouterLoggerEmitsEADM016 — AC-001 (BC-2.05.008 PC-2 + invariant 1)
 //
 // Verifies that buildAccessComponents constructs a routing.Router with a real
-// routing.Logger injected (not nil, not a no-op sink). The test exercises the
-// DAEMON'S OWN router instance — the *routing.Router returned by
-// buildAccessComponents — sharing the same AdmittedKeySet the access node uses.
+// routing.Logger injected — not nil, not a no-op sink — and that the daemon's
+// OWN router instance emits E-ADM-016 to the injected logger when an HMAC-bad
+// frame is routed.
 //
-// Strategy (non-tautological per task-6a test-quality rule):
+// Strategy (non-tautological):
 //
-//  1. Construct ONE shared keys+pub+sc.
-//  2. Call buildAccessComponents(keys, pub, sc) → (an, router).
-//  3. Register a key into the SHARED keyset and router (admitAndRegister).
-//  4. Call routing.RouteFrame(hdr, payload, router) with an HMAC-bad frame.
-//  5. Assert ErrHMACVerificationFailed — the daemon's router, wired with the
-//     shared keyset, correctly rejects the tampered frame.
+//  1. Construct a captureLogger.
+//  2. Call buildAccessComponents(keys, pub, sc, captureLogger) — passing the
+//     capture logger as the router's logger (the 4th argument introduced by FIX 2).
+//  3. Register a key into the SHARED keyset and the RETURNED router
+//     (admitAndRegister).
+//  4. Call routing.RouteFrame on the RETURNED router with an HMAC-bad frame.
+//  5. Assert captureLogger received E-ADM-016 canonical string AND
+//     ErrHMACVerificationFailed is returned.
 //
-// This test FAILS if buildAccessComponents wires a nil/noop logger or a
-// different keyset (the router would not have the key registered).
+// Discriminating property: if buildAccessComponents wires the router with a
+// nil/noop logger, captureLogger records nothing and the test fails at step 5.
+// If it wires a DIFFERENT keyset, admitAndRegister's forwarding entry would not
+// be visible and RouteFrame would return ErrHMACVerificationFailed for the
+// wrong reason (no auth key path) — the SVTN-hex assertion still passes but
+// that is fine because the SVTN ID appears in both log paths.
 //
-// Format assertion (E-ADM-016 canonical log message):
-// A captureLogger-wired router verifies the canonical E-ADM-016 message
-// format from error-taxonomy.md §ADM. This is separate from the daemon's
-// own router (whose logger writes to os.Stderr, which tests cannot capture).
+// NO parallel r2 reconstruction: the captureLogger IS the daemon's own logger.
+// There is no second router.
 func TestRouterLoggerEmitsEADM016(t *testing.T) {
 	// AC-001 — BC-2.05.008 PC-2 + invariant 1.
 	// NOT t.Parallel(): depends on shared keyset construction order.
@@ -213,7 +214,6 @@ func TestRouterLoggerEmitsEADM016(t *testing.T) {
 	// Build ONE shared keyset+pub+sc to pass to buildAccessComponents.
 	// This matches the production wiring — keys is shared with BOTH an AND router.
 	sc, keys, pub := newFakeSessionConnector(t)
-	_ = pub // pub held in sc
 
 	// Connect sc so buildAccessComponents has a live connector.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -222,13 +222,21 @@ func TestRouterLoggerEmitsEADM016(t *testing.T) {
 		t.Fatalf("sc.Connect: %v; want nil (PTY fallback path)", err)
 	}
 
-	// buildAccessComponents — exercises the daemon's own wiring (non-tautological).
-	// The router returned here IS the daemon's router, sharing keys with the access node.
-	_, router := buildAccessComponents(keys, pub, sc)
+	// captureLogger is injected as the router's logger into buildAccessComponents.
+	// This IS the daemon's own router logger — no parallel reconstruction.
+	cl := &captureLogger{}
+
+	// buildAccessComponents with captureLogger as the routing.Logger (FIX 2).
+	// The returned router IS the daemon's router, wired with the shared keyset
+	// AND with cl as the logger. Any E-ADM-016 emission goes into cl.
+	_, router := buildAccessComponents(keys, pub, sc, cl)
 
 	// Register a key into the SHARED keyset and the daemon's router.
 	// If buildAccessComponents wired the router with a DIFFERENT keyset, this
-	// registration would not be visible to the router and admitAndRegister would fail.
+	// registration would not be visible to the router and the HMAC check would
+	// fail at the "no auth key" path (PATH-B) rather than the "tag mismatch"
+	// path (PATH-A) — but E-ADM-016 is emitted on BOTH paths, so the test still
+	// verifies the logger received the event.
 	srcAddr, _ := admitAndRegister(t, keys, router, svtnID, nodePub, nodePriv)
 
 	// Craft a frame with an all-zero HMAC tag — mismatch for any derived key.
@@ -237,50 +245,37 @@ func TestRouterLoggerEmitsEADM016(t *testing.T) {
 		SrcAddr:   srcAddr,
 		DstAddr:   [8]byte{},
 		FrameType: frame.FrameTypeData,
-		// HMACTag zero-value: guaranteed to fail verifyFrameHMAC.
+		// HMACTag zero-value: guaranteed to fail verifyFrameHMAC (PATH-A).
 	}
 	payload := []byte("tampered")
 
-	// Assertion 1 (primary — non-tautological): daemon's OWN router rejects the
-	// tampered frame with ErrHMACVerificationFailed. This FAILS if the router
-	// were wired with a nil/noop logger (ErrHMACVerificationFailed would still be
-	// returned, but the log event would not be written).
-	//
-	// We cannot capture the daemon's router logger output (it writes to os.Stderr).
-	// The structural assertion is: ErrHMACVerificationFailed is returned, which
-	// proves the router processed the frame through the verifyFrameHMAC path.
+	// Primary assertion: daemon's OWN router (with captureLogger) returns
+	// ErrHMACVerificationFailed and logs E-ADM-016 into cl.
+	// FAILS if buildAccessComponents wired a nil/noop logger: cl records nothing.
 	routeErr := routing.RouteFrame(hdr, payload, router)
 	if !errors.Is(routeErr, routing.ErrHMACVerificationFailed) {
 		t.Fatalf("RouteFrame(daemon router, tampered): got %v; want ErrHMACVerificationFailed (E-ADM-016)", routeErr)
 	}
 
-	// Assertion 2: canonical E-ADM-016 log format (error-taxonomy.md §ADM).
-	// We use a captureLogger-wired router to verify the message format, since the
-	// daemon's router logs to os.Stderr which tests cannot capture.
-	// The captureLogger is injected the same way production injects stdLogger —
-	// this verifies the log event IS emitted, not merely that the error is returned.
-	cl := &captureLogger{}
-	r2 := routing.NewRouter(keys, routing.WithLogger(cl))
-	r2.RegisterForwardingEntry(svtnID, srcAddr, hmacpkg.DeriveKey([]byte(nodePub), svtnID))
+	// Canonical E-ADM-016 assertions (error-taxonomy.md §ADM).
+	// These assert that cl (the daemon's own injected logger) received the event —
+	// not a parallel router. The test is RED if cl.lines is empty.
 
-	r2Err := routing.RouteFrame(hdr, payload, r2)
-	if !errors.Is(r2Err, routing.ErrHMACVerificationFailed) {
-		t.Fatalf("RouteFrame(captureLogger router): got %v; want ErrHMACVerificationFailed", r2Err)
-	}
-
-	// Canonical E-ADM-016 assertions (error-taxonomy.md §ADM):
-	// 1. Literal "(E-ADM-016)" must appear for grep-ability.
+	// 1. Literal "E-ADM-016" must appear for grep-ability.
 	if !cl.HasLine("E-ADM-016") {
-		t.Errorf("logger did not receive E-ADM-016 literal; got: %v", cl.Lines())
+		t.Errorf("daemon router logger did not receive E-ADM-016 literal; got: %v\n"+
+			"(FAIL: buildAccessComponents must inject the captureLogger into the router — "+
+			"not a nil/noop logger)", cl.Lines())
 	}
-	// 2. Canonical prefix per error-taxonomy.md.
+	// 2. Canonical prefix per error-taxonomy.md §ADM.
 	if !cl.HasLine("wire HMAC verification failed") {
-		t.Errorf("logger missing canonical prefix; got: %v", cl.Lines())
+		t.Errorf("daemon router logger missing canonical prefix 'wire HMAC verification failed'; "+
+			"got: %v", cl.Lines())
 	}
-	// 3. SVTN ID (lowercase hex) appears in the log line.
+	// 3. SVTN ID (lowercase hex) appears in the log line — identifies the source.
 	svtnHex := fmt.Sprintf("%x", svtnID)
 	if !cl.HasLine(svtnHex) {
-		t.Errorf("logger missing svtn_id=%q; got: %v", svtnHex, cl.Lines())
+		t.Errorf("daemon router logger missing svtn_id=%q; got: %v", svtnHex, cl.Lines())
 	}
 }
 
@@ -329,7 +324,9 @@ func TestDaemonAuthRejectsUnregisteredConsole(t *testing.T) {
 
 	// buildAccessComponents — production wiring (non-tautological assertion 1).
 	// The returned an uses a live *session.SessionAuth as the Authorizer.
-	an, _ := buildAccessComponents(keys, pub, sc)
+	// Pass a captureLogger; its contents are not asserted here (AC-002 does not
+	// test the router logger — that is AC-001's scope).
+	an, _ := buildAccessComponents(keys, pub, sc, &captureLogger{})
 
 	// Ensure session is published (buildAccessComponents may or may not publish it).
 	if err := pub.Publish(sessionName); err != nil {
@@ -514,18 +511,10 @@ func TestDaemonSweepEvictsStaleConsole(t *testing.T) {
 //   - Log format: "frames_dropped relay=<N> consoles=<M>" (both counters required)
 //   - Relay-layer drops and ConsoleSet-layer drops are SEPARATE counters (EC-003)
 //
-// [process-gap]: startFramesDroppedTicker hardcodes framesDroppedInterval (30s)
-// and does not accept an interval parameter (unlike startSweepTicker which
-// accepts tickInterval). This makes it impossible to drive a fast tick in tests.
-// The ticker goroutine lifecycle (start/stop on ctx cancel) is verified via
-// startFramesDroppedTicker being called and the goroutine exiting cleanly. The
-// log FORMAT and counter isolation are verified via a direct call to lg.Printf
-// with the production format string arguments — this asserts the correct format
-// would be produced when the ticker fires.
-//
-// Fix required in production: startFramesDroppedTicker should accept a
-// tickInterval parameter (matching startSweepTicker pattern) so the AC-006
-// test can drive a fast tick.
+// Now that startFramesDroppedTicker accepts a tickInterval parameter (FIX 4,
+// matching startSweepTicker pattern), this test drives an actual tick via
+// time.Millisecond and asserts the PRODUCTION code path wrote the log line —
+// not a hand-rolled lg.Printf.
 //
 // Counter isolation assertion (EC-003): relay-layer drops (sc.RelayDropped())
 // are NOT reflected in an.FramesDropped() (ConsoleSet-layer). Verified by
@@ -569,23 +558,34 @@ func TestDaemonFramesDroppedLoggedOnTick(t *testing.T) {
 	// sc.RelayDropped() starts at 0 — relay has not run yet.
 	sc, _, _ := newFakeSessionConnector(t)
 
-	relayDropped := sc.RelayDropped()
-	if relayDropped != 0 {
-		t.Fatalf("sc.RelayDropped() initial value: got %d; want 0", relayDropped)
+	if sc.RelayDropped() != 0 {
+		t.Fatalf("sc.RelayDropped() initial value: got %d; want 0", sc.RelayDropped())
 	}
 
-	// Counter isolation (EC-003): relay drops (relayDropped) must NOT be
-	// reflected in ConsoleSet drops (consolesDropped) and vice versa.
-	// Both are currently 0/N respectively; the log line must report both.
-	//
-	// Verify log format: "frames_dropped relay=<N> consoles=<M>"
-	// (BC-2.04.006 v1.4 invariant 4; ARCH-01 v1.4 §Relay-drop counter contract)
+	// Drive an actual tick through the production goroutine. cw captures whatever
+	// the goroutine's lg.Printf writes — this asserts the production code path, not
+	// a hand-typed format string (FIX 4: tickInterval is now injectable).
 	cw := &captureWriter{}
 	lg := log.New(cw, "", 0)
 
-	// Emit the log line in the same format startFramesDroppedTicker uses.
-	// This tests the FORMAT assertion without depending on the 30s ticker interval.
-	lg.Printf("frames_dropped relay=%d consoles=%d", sc.RelayDropped(), an.FramesDropped())
+	ctx, cancel := context.WithCancel(context.Background())
+	gorsBefore := runtime.NumGoroutine()
+	// time.Millisecond: fast enough that at least one tick fires before the
+	// 500ms wait deadline below.
+	startFramesDroppedTicker(ctx, sc, an, lg, time.Millisecond)
+
+	// Wait for the production ticker goroutine to emit at least one log line.
+	tickDeadline := time.After(500 * time.Millisecond)
+	for !strings.Contains(cw.String(), "frames_dropped") {
+		select {
+		case <-tickDeadline:
+			t.Fatalf("startFramesDroppedTicker produced no 'frames_dropped' log line within 500ms; " +
+				"production goroutine must emit on each tick (BC-2.04.006 v1.4 invariant 4)")
+		default:
+			runtime.Gosched()
+		}
+	}
+	cancel()
 
 	logged := cw.String()
 
@@ -601,22 +601,18 @@ func TestDaemonFramesDroppedLoggedOnTick(t *testing.T) {
 	}
 
 	// Assert relay=0 (no relay drops yet) and consoles=<N> (ConsoleSet drops from above).
+	// Note: the ticker may have fired multiple times; we check that at least one line
+	// has the exact values. The first tick captures the values at that moment.
 	wantRelayField := "relay=0"
 	wantConsolesField := fmt.Sprintf("consoles=%d", consolesDropped)
 	if !strings.Contains(logged, wantRelayField) {
-		t.Errorf("log line: want %q; got: %q", wantRelayField, logged)
+		t.Errorf("log output: want %q; got: %q", wantRelayField, logged)
 	}
 	if !strings.Contains(logged, wantConsolesField) {
-		t.Errorf("log line: want %q; got: %q", wantConsolesField, logged)
+		t.Errorf("log output: want %q; got: %q", wantConsolesField, logged)
 	}
 
-	// AC-006 ticker goroutine lifecycle: verify startFramesDroppedTicker starts
-	// and exits cleanly when context is cancelled (no goroutine leak).
-	ctx, cancel := context.WithCancel(context.Background())
-	gorsBefore := runtime.NumGoroutine()
-	startFramesDroppedTicker(ctx, sc, an, lg)
-	cancel()
-	// Give the goroutine time to observe ctx.Done() and exit.
+	// AC-006 goroutine lifecycle: verify goroutine exits cleanly on ctx cancel.
 	t.Cleanup(func() {
 		deadline := time.After(200 * time.Millisecond)
 		for {
