@@ -29,7 +29,7 @@ inputDocuments:
   - '.factory/specs/verification-properties/VP-059.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
 acceptance_criteria_count: 17
-version: "1.2"
+version: "1.3"
 ---
 
 # S-W3.05: Per-Source HMAC Failure Counter and Admission Alert
@@ -98,7 +98,7 @@ post-fire timestamps are ever appended, so `keep[0].After(firedAt[srcAddr])` is 
 code and is NOT a re-arm condition. On re-arm, `firedAt[srcAddr]` is deleted and normal
 append+counting resumes. Period between alerts ≈ `windowDuration` under sustained attack.
 - **Test:** `TestFailureCounter_HysteresisNoBriefRefire`,
-  `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` (renamed per BC-2.05.005 v1.6
+  `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` (renamed per BC-2.05.005 v1.7
   test-writer hand-off; replaces `TestFailureCounter_RearmBoundaryAtLastFireTimestamp`
   which tested now-dead code under append-skip).
 (traces to BC-2.05.005 PC-3 + EC-005 + EC-009)
@@ -170,10 +170,21 @@ drain occurs without a same-call re-append (drain-then-rearm ordering). Assertin
 - **Test:** `TestFailureCounter_DeadKeyEvictedAfterDrain`. (traces to BC-2.05.005 EC-005)
 
 ### AC-013 (traces to BC-2.05.005 PC-3 — constructor validation)
-`NewFailureCounter(0, 60s, logger)` panics; `NewFailureCounter(5, 0, logger)` panics —
-invalid constructor args are rejected eagerly. Both panics use `panic(fmt.Sprintf(...))`
-in `NewFailureCounter`; they are programmer-error guards, not runtime error paths.
-- **Test:** `TestNewFailureCounter_PanicsOnInvalidArgs`. (traces to BC-2.05.005 PC-3)
+`NewFailureCounter` rejects three classes of invalid arguments eagerly at construction
+time; all are programmer-error guards, not runtime error paths:
+1. `NewFailureCounter(0, 60s, logger)` panics — `threshold < 1`.
+2. `NewFailureCounter(5, 0, logger)` panics — `windowDuration <= 0`.
+3. `NewFailureCounter(5, 60s, nil)` panics with message
+   `"admission: NewFailureCounter: logger must not be nil"` — a nil logger would be
+   dereferenced at E-ADM-017 emission (CWE-476 / SEC-001); the same class of
+   programmer error as threshold < 1 or windowDuration <= 0.
+
+All three panics use `panic(...)` in `NewFailureCounter` and are covered by the
+`TestNewFailureCounter_PanicsOnInvalidArgs` test (sub-cases: threshold=0, windowDuration=0,
+nil-logger; the nil-logger sub-case was added in commit f6038d2 and resides in
+`internal/admission/failure_counter_adversarial_test.go`).
+- **Test:** `TestNewFailureCounter_PanicsOnInvalidArgs` (covers all three sub-cases).
+  (traces to BC-2.05.005 PC-3)
 
 ### AC-014 (traces to BC-2.05.005 EC-009 — sustained attack re-fires)
 With `WithNow` clock injection — 5 failures at T=0 fire 1 E-ADM-017 alert; advancing
@@ -287,7 +298,7 @@ vectors are deterministic; no real-time waits.
          `threshold int`, `windowDuration time.Duration`, `logger Logger`,
          `firedAt map[string]time.Time` (last-fire timestamp per srcAddr), `now func() time.Time`
        - `NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger, opts ...FailureCounterOption) *FailureCounter`
-         — panic if `threshold < 1` or `windowDuration <= 0` (AC-013)
+         — panic if `threshold < 1`, `windowDuration <= 0`, or `logger == nil` (AC-013)
        - `WithNow(fn func() time.Time) FailureCounterOption` — clock injection for tests (AC-014)
        - `hmacFailureRecorder` unexported interface `{ RecordHMACFailure(srcAddr string) }` (AC-009)
        - `RecordHMACFailure(srcAddr string)` — trim (`timestamp < now - windowDuration`),
@@ -338,12 +349,12 @@ vectors are deterministic; no real-time waits.
 | E-ADM-017 message MUST include BOTH "E-ADM-017" prefix AND "HMAC failure rate alert:" phrase | error-taxonomy v1.9 row E-ADM-017 + BC-2.05.005 PC-3 canonical test vector | `TestFailureCounter_AlertMessageFormat` asserts both substrings present |
 | Logger seam is level-less: `Log(msg string)` — severity is NOT encoded as a logger level | BC-2.05.005 v1.5 O-1 adjudication; VP-059 v1.1 | `capturingLogger.Log(msg string)` in tests; no `Error()` method on Logger interface |
 | Append-skip: no post-fire timestamp appended while `firedAt[srcAddr]` is set | BC-2.05.005 PC-3 / EC-011 (CWE-770 M-1) | `TestFailureCounter_HighRateAttackBoundedSlice` |
-| Re-arm is drain-only: `len(keep) == 0` after trim | BC-2.05.005 v1.6 PC-3; `keep[0].After(firedAt)` path is dead code under append-skip | `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` |
+| Re-arm is drain-only: `len(keep) == 0` after trim | BC-2.05.005 v1.7 PC-3; `keep[0].After(firedAt)` path is dead code under append-skip | `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` |
 
 ### Additional API / Constructor Constraints
 
 - `WithNow(fn func() time.Time)` functional option on `FailureCounter` enables clock injection for deterministic tests (BC-2.05.005 PC-3 v1.4).
-- Constructor panics if `threshold < 1` or `windowDuration <= 0` (BC-2.05.005 PC-3 v1.4 constructor contract).
+- Constructor panics if `threshold < 1`, `windowDuration <= 0`, or `logger == nil` (BC-2.05.005 PC-3 v1.7 constructor contract; nil-logger panic added in v1.7 per SEC-001/CWE-476).
 
 ## Forbidden Dependencies
 
@@ -382,4 +393,5 @@ fail (Go import cycle detection via `go vet`/`go build`).
 |---------|------|--------|
 | 1.0 | 2026-06-27 | Initial story — Wave 3 FIX-NOW gate blocker F-2; implements BC-2.05.005 PC-3; adds E-ADM-017 aggregate alert |
 | 1.1 | 2026-06-27 | PO adjudication of adversarial-convergence findings: new ACs 011-015, amended AC-004/009, points 5→8 (BC-2.05.005 v1.4, BC-2.05.008 v1.3, error-taxonomy v1.9) |
+| 1.3 | 2026-06-27 | Propagate BC-2.05.005 v1.7 nil-logger constructor precondition (SEC-001/CWE-476) into AC-013: NewFailureCounter(5, 60s, nil) panics with "admission: NewFailureCounter: logger must not be nil"; update all forward-facing BC-2.05.005 v1.6 references to v1.7 |
 | 1.2 | 2026-06-27 | Correct defect introduced in prior reconciliation pass: (1) AC-003 and AC-015 now assert the FULL canonical E-ADM-017 message format from error-taxonomy v1.9 — `"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"` — including BOTH the "E-ADM-017" prefix AND the "HMAC failure rate alert:" phrase (prior pass erroneously dropped the phrase); (2) AC-003 O-1 fix: Logger seam is level-less (`Log(msg string)`), severity is taxonomy-owned (degraded), not a logger ERROR level; (3) AC-004 rewritten to drain-only re-arm per BC-2.05.005 v1.6 — `len(keep)==0` after trim is the sole re-arm condition; `keep[0].After(firedAt)` is dead code under append-skip and removed; test renamed to `TestFailureCounter_RearmOccursOnFirstCallAfterDrain`; (4) AC-012 discrimination note added — test must observe `delete(counts, srcAddr)` directly; (5) AC-016 added: per-source slice bound/CWE-770 (BC-2.05.005 EC-011, `TestFailureCounter_HighRateAttackBoundedSlice`); (6) AC-017 added: VP-059 v1.1 property-based test mandate (`TestFailureCounter_PropertiesABCD` + `TestFailureCounter_PropertyE_MemoryBound`); AC count 15→17; points unchanged at 8 |

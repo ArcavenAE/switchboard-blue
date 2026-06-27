@@ -190,3 +190,15 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 **Open SW305:** SW305-M2 (WithFailureCounter iface → PO), SW305-M3 (clock seam BC → PO), SW305-M4 (integration fire-once test → test-writer).
 
 **Next at archive time:** S-W3.05 per-story adversary restart — 3 consecutive clean passes required → merge S-W3.05 PR → wave-gate pass-r4. Wave 4 (29 pts) follows.
+
+---
+
+## Archived: 2026-06-27 — S-W3.05 per-story adversary CONVERGED (07-09, superseded by SEC-001)
+
+**Position:** Phase 3, Wave 3. Develop @ 10dd880. S-W3.05 worktree feat/S-W3.05-hmac-failure-counter HEAD = 5c3d7ea (test), prod impl = b945aab.
+
+**S-W3.05 adversary CONVERGED (superseded):** 3 consecutive clean passes (07, 08, 09). Zero CRITICAL/HIGH. Lenses: spec-conformance/anti-taut, concurrency/memory-bounds, integration/RouteFrame wiring. Deferred LOWs: obs-1/p09 → S-W3.04 (routing e2e full-phrase); cosmetic comments → post-wave. error-taxonomy.md v2.0 committed (prose-only; msg-format UNCHANGED). NOTE: SEC-001 (HIGH, CWE-476 nil-logger deref) found post-convergence by PR #16 security-reviewer. Streak reset; re-ran passes 10-12 at f6038d2.
+
+**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ratification (PO adjudication). Still pending.
+
+**Next at archive time:** SEC-001 fix at f6038d2; 3 fresh passes (10/11/12) re-converge; PR #16 ready for human merge approval.

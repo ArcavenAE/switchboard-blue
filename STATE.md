@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-s-w3-05-converged-proceeding-to-s-w3-04
+phase_step: wave-3-s-w3-05-reconverged-at-f6038d2-pr16-ready-for-human-merge
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
@@ -113,10 +113,12 @@ wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CO
 s_wave3_f1_fix_pr: 15
 s_wave3_f1_fix_merge_sha: 10dd880
 s_wave3_f1_fix_merge_date: 2026-06-27
-s_w3_05_adversary_status: "CONVERGED — 3 consecutive clean passes (07,08,09); 0C/0H across streak. Prior fix-loop passes 04-06 NOT_CONVERGED resolved. 2026-06-27."
-s_w3_05_adversary_converged: "CONVERGED (passes 07-09 clean, 9 total, 6 NOT+3 OK) — cycles/cycle-1/S-W3.05/adversary/"
-s_w3_05_impl_commit: b945aab
+s_w3_05_adversary_status: "RE-CONVERGED at f6038d2 — 3 fresh passes (10,11,12); 0C/0H. Streak reset by SEC-001 HIGH (nil-logger deref, CWE-476) found post-5c3d7ea, fixed f6038d2. 2026-06-27."
+s_w3_05_adversary_converged: "RE-CONVERGED (passes 10-12 clean at f6038d2, 12 total, 6 NOT+3 superseded+3 OK) — cycles/cycle-1/S-W3.05/adversary/"
+s_w3_05_impl_commit: f6038d2
 s_w3_05_test_commit: 5c3d7ea
+s_w3_05_pr_number: 16
+s_w3_05_pr_status: "open; CI 5/5 pass; pr-reviewer APPROVE; READY FOR HUMAN MERGE APPROVAL"
 timestamp: 2026-06-27T00:00:00Z
 last_update: 2026-06-27
 ---
@@ -125,7 +127,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-S-W3.05 per-story adversarial convergence ACHIEVED — 3 consecutive clean passes (07, 08, 09), zero CRITICAL/HIGH. Fix-loop (passes 04-06) resolved all blockers: E-ADM-017 canonical phrase, append-skip CWE-770, drain-only re-arm, VP-059 proptest, dead-key discriminating test. error-taxonomy.md bumped v1.9→v2.0 (prose/annotation only; message-format string UNCHANGED). Proceeding to S-W3.04 (daemon assembly). Wave-3 gate r3 adjudication (W3-R3-F1/F2) still pending.
+S-W3.05 RE-CONVERGED at f6038d2 — SEC-001 (HIGH, CWE-476 nil-logger deref panic) fixed post-5c3d7ea convergence, PR #16 open on develop. Spec bumps: BC-2.05.005 v1.8, VP-059 v1.2 (hygiene only; no behavioral change). Three fresh passes (10/11/12) at f6038d2: all CONVERGED, 0C/0H. PR #16 CI 5/5, pr-reviewer APPROVE. READY FOR HUMAN MERGE APPROVAL. Wave-3 gate r3 adjudication (W3-R3-F1/F2) still pending.
 
 ## Phase Progress
 
@@ -133,7 +135,7 @@ S-W3.05 per-story adversarial convergence ACHIEVED — 3 consecutive clean passe
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: 5/5 DONE; F-1 fix PR #15 10dd880; restart r1 CONV/r2 CONV/r3 NOT_CONV; S-W3.05 per-story CONVERGED (07-09) → proceeding to S-W3.04 |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: 5/5 DONE; F-1 fix PR #15 10dd880; restart r1 CONV/r2 CONV/r3 NOT_CONV; S-W3.05 RE-CONVERGED (10-12 at f6038d2) PR #16 READY FOR MERGE |
 
 ## Wave / Story Status
 
@@ -150,7 +152,7 @@ S-W3.05 per-story adversarial convergence ACHIEVED — 3 consecutive clean passe
 | 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
-| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | adversary-CONVERGED (3 clean) | — | b945aab |
+| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | adversary-RE-CONVERGED (10-12); PR open | #16 | f6038d2 |
 
 ## Open Drift Items
 
@@ -163,9 +165,10 @@ S-W3.05 per-story adversarial convergence ACHIEVED — 3 consecutive clean passe
 | SW305-M3 | MED | WithNow clock seam + threshold<=0 guard absent from BC contract. | product-owner→implementer | open |
 | SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | open |
 | obs-1/p09 | LOW | Routing e2e full-canonical-phrase assertion through RouteFrame — coverage seam | test-writer | FOLD INTO S-W3.04 |
-| SW305-p07-09-cosmetic | LOW | Stale comments: Red-Gate test (pre-v1.6 model), TrackedSourceCount() name, AC-016 iteration count. | cosmetic | defer post-wave |
+| SW305-cosmetic | LOW | Stale comments: Red-Gate test (pre-v1.6 model), TrackedSourceCount() name, AC-016 count, v1.7 citation in test header. | cosmetic | defer post-wave |
+| process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001) — lesson recorded in cycles/cycle-1/lessons.md. Follow-up: candidate for self-improvement epic story. | orchestrator | open/deferred |
 Resolved SW305-M1/M5/M6/M7/M8/HF3 + stable Phase-6 deferrals + wave-gate rows: `cycles/cycle-1/closed-drift.md`
-Drift note: error-taxonomy.md v1.9→v2.0 is prose/annotation-only; message-format string unchanged. Wave-3 gate drift check may flag citation input-hash change — expected; clear after confirming format-string identity.
+Drift note: BC-2.05.005 v1.8 + VP-059 v1.2 + story v1.3 + taxonomy v2.0 are hygiene/precondition-sanction only; message-format string UNCHANGED. Wave-3 gate drift check may flag input-hash change — expected; clear after confirming format-string identity.
 
 ## Decisions Log
 
@@ -182,18 +185,15 @@ Drift note: error-taxonomy.md v1.9→v2.0 is prose/annotation-only; message-form
 | S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs (taxonomy v1.9 + BC-2.05.005 + BC-2.05.008) authoritative — include "HMAC failure rate alert:" phrase; prior story-writer reconciliation + orchestrator ruling that dropped it were erroneous; code/tests/story AC-003/AC-015 to conform | 2026-06-27 |
 | S-W3.05 re-arm semantics finalized | drain-only (full window-drain) re-arm + per-source append-skip; dead keep[0].After(lastFire) branch removed; reconciled across BC-2.05.005 v1.6, VP-059 v1.1, EC-009/EC-011 | 2026-06-27 |
 | S-W3.05 per-story adversarial CONVERGED + error-taxonomy v2.0 | 3 clean passes (07-09), 0C/0H; error-taxonomy v1.9→v2.0 prose-only (msg-format UNCHANGED); proceeding to S-W3.04 | 2026-06-27 |
+| S-W3.05 SEC-001 + re-convergence at f6038d2 | SEC-001 (HIGH CWE-476) fixed f6038d2; BC-2.05.005 v1.8 + VP-059 v1.2 sanction precondition (hygiene); 3 fresh passes (10-12) RE-CONVERGED; PR #16 open, READY FOR HUMAN MERGE | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (S-W3.05 per-story adversary CONVERGED; proceeding to S-W3.04)
+## Session Resume Checkpoint — 2026-06-27 (S-W3.05 RE-CONVERGED at f6038d2; PR #16 READY FOR MERGE)
 
-**Position:** Phase 3, Wave 3. Develop @ 10dd880. S-W3.05 worktree feat/S-W3.05-hmac-failure-counter HEAD = 5c3d7ea (test), prod impl = b945aab.
-
-**S-W3.05 adversary CONVERGED:** 3 consecutive clean passes (07, 08, 09). Zero CRITICAL/HIGH. Lenses: spec-conformance/anti-taut, concurrency/memory-bounds, integration/RouteFrame wiring. Deferred LOWs: obs-1/p09 → S-W3.04 (routing e2e full-phrase); cosmetic comments → post-wave. error-taxonomy.md v2.0 committed (prose-only; msg-format UNCHANGED).
-
-**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ratification (PO adjudication). Still pending.
-
-**Open SW305:** SW305-M2 (WithFailureCounter iface → PO), SW305-M3 (clock seam BC → PO), SW305-M4 (integration fire-once test → test-writer).
-
-**Next:** Open S-W3.04 PR → merge S-W3.05 PR → wave-gate pass-r4. Wave 4 (29 pts) follows. Previous checkpoint: `cycles/cycle-1/session-checkpoints.md`.
+**Position:** Phase 3, Wave 3. Develop @ 10dd880. S-W3.05 branch feat/S-W3.05-hmac-failure-counter HEAD = f6038d2 (SEC-001 nil-logger fix). PR #16 open; CI 5/5 pass; pr-reviewer APPROVE.
+**S-W3.05 RE-CONVERGED:** 3 fresh passes (10/11/12) at f6038d2. Zero CRITICAL/HIGH. SEC-001 (CWE-476) fixed. Spec: BC-2.05.005 v1.8, VP-059 v1.2, story v1.3, taxonomy v2.0. Lesson: `cycles/cycle-1/lessons.md`.
+**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (architect), W3-R3-F2 EC-006 (PO). Pending adjudication.
+**Open SW305:** SW305-M2 (iface → PO), SW305-M3 (clock seam BC → PO), SW305-M4 (fire-once test → test-writer).
+**Next:** HUMAN MERGE PR #16 → open S-W3.04 PR → wave-gate pass-r4. Wave 4 (29 pts) follows. Previous: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 

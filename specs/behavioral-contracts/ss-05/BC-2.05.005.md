@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.005
 document_type: behavioral-contract
 level: L3
-version: "1.6"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-27T00:00:00
@@ -23,6 +23,8 @@ modified:
   - '2026-06-27: v1.4 — per-story adversarial convergence adjudication: (HF-1) ratify periodic-re-fire semantics under sustained attack; (HF-2) mandate dead-key eviction + hard source-cap (max 65536 tracked sources, LRU); (item-5) add WithNow clock-injection to constructor signature; (item-5) add constructor validation clause for threshold<1 and window<=0; amend EC-005, EC-008, add EC-009/EC-010; update PC-3 API contract'
   - '2026-06-27: v1.5 — S-W3.05 per-story adversarial convergence adjudication (M-1, O-1): (M-1 FIX-NOW CWE-770) mandate per-source append-skip policy: when firedAt[srcAddr] is set and re-arm has not triggered, new timestamps are NOT appended — slice is bounded at threshold entries maximum; add EC-011 (high-rate attack, bounded-slice invariant); (O-1) remove "at ERROR level" phrase — Logger seam is level-less (Log(msg string)); severity is taxonomy-owned (degraded per E-ADM-017); amend PC-3 + Window semantics clause accordingly'
   - '2026-06-27: v1.6 — reconcile append-skip re-arm: under append-skip no post-fire entry is ever appended, so keep[0].After(lastFire) is permanently dead code; re-arm collapses to drain-only (len(keep)==0 after trim); rewrite re-fire semantics paragraph + Window semantics clause to describe drain-only re-arm; rewrite EC-009 worked example to match (no post-fire entries survive); remove now-unreachable "oldest surviving newer than last-fire" re-arm path from PC-3 + EC-009; update implementer hand-off in STATE.md (simplify failure_counter.go:144 to drain-only condition); note test-writer: TestFailureCounter_RearmBoundaryAtLastFireTimestamp now tests dead code — re-point to drain-first-call test'
+  - '2026-06-27: v1.7 — SEC-001 / S-W3.05 PR review: add nil-logger constructor precondition (CWE-476); logger is dereferenced when emitting E-ADM-017 — a nil logger is a programmer error that must fail at construction, not at first alert-fire; same class as threshold<1 and window<=0 guards; add constructor-validation test vector for nil logger'
+  - '2026-06-27: v1.8 — spec-hygiene: align stale test-vector/VP-table re-arm rows with authoritative drain-only re-arm prose (no behavioral change; adversary OBS-3)'
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -64,7 +66,7 @@ Every SVTN-scoped frame carries an 8-byte HMAC tag in the outer header, computed
    - Type: `admission.FailureCounter` in `internal/admission`
    - Method: `RecordHMACFailure(srcAddr string)` — pure in-memory; takes no `context.Context` (no I/O; a mutex-guarded in-memory sliding window qualifies as pure-enough for this call path)
    - Constructor: `admission.NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger, opts ...FailureCounterOption) *FailureCounter` — logger is injected (dependency injection; no package-level global). Optional `FailureCounterOption` values include `WithNow(fn func() time.Time)` for deterministic clock injection in tests.
-   - **Constructor validation:** If `threshold < 1`, the constructor MUST panic with a clear message (a threshold of 0 or negative would fire on every single failure, which is always a programmer error, not a configuration error). If `windowDuration <= 0`, the constructor MUST panic. Both panics use `panic(fmt.Sprintf(...))` in `NewFailureCounter`; they are programmer-error guards, not runtime error paths.
+   - **Constructor validation:** If `threshold < 1`, the constructor MUST panic with a clear message (a threshold of 0 or negative would fire on every single failure, which is always a programmer error, not a configuration error). If `windowDuration <= 0`, the constructor MUST panic. If `logger == nil`, the constructor MUST panic with `panic("admission: NewFailureCounter: logger must not be nil")` — the logger is dereferenced when emitting E-ADM-017; a nil logger is a programmer error that must be caught eagerly at construction time rather than deferred to an async panic at first alert-fire (SEC-001 / CWE-476). All three panics are programmer-error guards, not runtime error paths.
    - Internal state: a `map[string][]time.Time` of per-`src_addr` timestamp slices, guarded by `sync.Mutex`; entries are evicted lazily when a `RecordHMACFailure` call trims stale timestamps older than `windowDuration` (no background goroutine required; per go.md rule #12 the map entries are value-copied on read; no internal pointer to a live slice is returned to callers)
    - **Dead-key eviction:** When the post-trim slice for a `srcAddr` is empty (count = 0), the `srcAddr` key MUST be deleted from the `counts` map entirely (not kept as an empty slice). The corresponding `firedAt` entry MUST also be deleted when the window drains to zero. This prevents unbounded map growth from sources that sent a few failures and then disappeared.
    - **Hard source cap (CWE-770 mitigation):** The `FailureCounter` tracks at most **65,536** distinct `srcAddr` keys. When a new `srcAddr` would exceed this cap, the key with the oldest most-recent-failure timestamp (LRU) is evicted from both `counts` and `firedAt` before inserting the new key. This bounds memory under spoofed-source floods. The cap is a compile-time constant `maxTrackedSources = 65536` defined in the package; it is not configurable at runtime via the constructor (security invariant: the cap cannot be disabled).
@@ -112,9 +114,10 @@ Frame arrival at the first router after transmission from the source node.
 | 4 HMAC failures in 60s from same src_addr, no 5th | No E-ADM-017 emitted | below-threshold |
 | 5 HMAC failures from src_addr A + 5 from src_addr B, interleaved | E-ADM-017 emitted once for A and once for B, independently | multi-source |
 | 5 HMAC failures, then 61s pause, then 5 more from same src_addr | Two E-ADM-017 events (one per window crossing), not one; dead-key eviction: map entries deleted after drain | hysteresis |
-| 5 failures, advance clock by windowDuration+ε (1 entry ages out, 4 remain), then 1 more failure | Counter re-arms (oldest surviving entry is newer than last-fire); 6th failure does NOT immediately re-fire; fires only when count reaches threshold again (i.e., on the 5th new failure after re-arm) | sustained-attack-rearm |
+| 5 failures at T=0, advance clock by windowDuration+ε (all 5 entries age out, len(keep)==0), then 5 more failures | Counter re-arms (drain-only: len(keep)==0 after trim); alert fires again on the 5th new failure after re-arm; total: 2 alerts | sustained-attack-rearm |
 | threshold=0 (invalid) | NewFailureCounter panics with a clear message | constructor-validation |
 | windowDuration=0 (invalid) | NewFailureCounter panics with a clear message | constructor-validation |
+| logger=nil (invalid) | NewFailureCounter panics with "admission: NewFailureCounter: logger must not be nil" | constructor-validation |
 | 65,537 distinct src_addrs each send 1 failure | len(counts) ≤ 65,536; LRU key evicted | memory-bound |
 
 ## Verification Properties
@@ -124,7 +127,7 @@ Frame arrival at the first router after transmission from the source node.
 | VP-004, VP-005, VP-006 | For all admitted nodes: frames with correct HMAC are forwarded | proptest |
 | VP-004, VP-005, VP-006 | For all non-admitted sources: frames are dropped | proptest |
 | VP-004, VP-005, VP-006 | HMAC covers outer header bytes 0–35 + channel header + payload | unit |
-| VP-059 | For any sequence of RecordHMACFailure calls with injected clock: (a) E-ADM-017 fires exactly on the call that brings the post-trim count to threshold; (b) subsequent calls in the same un-re-armed window do NOT fire E-ADM-017; (c) after re-arm (oldest surviving entry is newer than last-fire timestamp), the next threshold crossing fires E-ADM-017 again; (d) under a continuous stream of failures, alert count is ≥ 2 (counter never goes permanently silent); (e) live key count is always ≤ maxTrackedSources | proptest |
+| VP-059 | For any sequence of RecordHMACFailure calls with injected clock: (a) E-ADM-017 fires exactly on the call that brings the post-trim count to threshold; (b) subsequent calls in the same un-re-armed window do NOT fire E-ADM-017; (c) after re-arm (drain-only: len(keep)==0 after trim — all pre-fire entries have aged out), the next threshold crossing fires E-ADM-017 again; (d) under a continuous stream of failures, alert count is ≥ 2 (counter never goes permanently silent); (e) live key count is always ≤ maxTrackedSources | proptest |
 
 ## Traceability
 

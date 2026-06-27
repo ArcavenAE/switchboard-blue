@@ -1,7 +1,7 @@
 # S-W3.05 Demo Evidence: Per-Source HMAC Failure Counter and E-ADM-017 Alert
 
 **Story:** S-W3.05 — per-source HMAC failure counter and admission alert (BC-2.05.005 PC-3)
-**Story spec version:** v1.2
+**Story spec version:** v1.3
 **Evidence type:** Go test transcripts (project standing preference — no VHS/terminal recordings)
 **Date:** 2026-06-27
 **Branch:** feat/S-W3.05-hmac-failure-counter
@@ -11,14 +11,19 @@
 | Role | SHA | Message |
 |------|-----|---------|
 | Implementation | b945aab | feat(S-W3.05): drain-only re-arm + append-skip + restore E-ADM-017 phrase |
-| Tests (final) | 5c3d7ea | test(admission): parameterize VP-059 property tests over multiple configs |
+| Tests (VP-059 parameterised) | 5c3d7ea | test(admission): parameterize VP-059 property tests over multiple configs |
+| SEC-001 nil-logger guard | f6038d2 | fix(admission): add nil logger guard in NewFailureCounter (SEC-001) |
+
+Note: f6038d2 adds the nil-logger constructor guard (CWE-476 / SEC-001) and the
+standalone `TestNewFailureCounter_PanicsOnNilLogger` test that covers the third AC-013
+panic sub-case. This is the HEAD commit for evidence capture.
 
 ## Test Files
 
 | File | Package | ACs covered |
 |------|---------|-------------|
 | `internal/admission/failure_counter_test.go` | `admission_test` | AC-001–008, AC-010 |
-| `internal/admission/failure_counter_adversarial_test.go` | `admission_test` | AC-004, AC-011–016 |
+| `internal/admission/failure_counter_adversarial_test.go` | `admission_test` | AC-004, AC-011–016 (including AC-013 nil-logger sub-case via `TestNewFailureCounter_PanicsOnNilLogger`) |
 | `internal/admission/failure_counter_property_test.go` | `admission_test` | AC-017 (VP-059 a–e) |
 | `internal/routing/routing_hmac_counter_test.go` | `routing_test` | AC-009 |
 
@@ -31,8 +36,8 @@
 | AC-001 | `FailureCounter` constructor fields, `NewFailureCounter` signature | `TestNewFailureCounter_ConstructorFields` | **PASS** | Non-nil, callable, no alert on 1 call |
 | AC-002 | Sliding-window trimming (stale entries evicted) | `TestFailureCounter_SlidingWindowTrimsStaleEntries` | **PASS** | 3 failures at T=0, 2 more at T=61s → post-trim count=2, 2 timestamps held |
 | AC-003 | E-ADM-017 emitted at threshold (exactly 1, contains code + srcAddr + full phrase) | `TestFailureCounter_EmitsEADM017AtThreshold` | **PASS** | Canonical form: "E-ADM-017 HMAC failure rate alert: ≥5 failures in 60s from src …" |
-| AC-004 | Hysteresis / drain-only re-arm; no re-fire; `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` | `TestFailureCounter_FiresOncePerCrossing`, `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` (adversarial) | **PASS** | Fire-once-per-crossing; drain at T=65 clears firedAt; first post-drain call appends (len==1) |
-| AC-005 | Hysteresis: re-fires after window fully expires | `TestFailureCounter_HysteresisRefirersAfterWindowExpires` | **PASS** | Batch-1 at T=0 → 1 alert; batch-2 at T=61–65 → 2nd alert; total=2 |
+| AC-004 | Hysteresis / drain-only re-arm; no re-fire in same window | `TestFailureCounter_FiresOncePerCrossing`, `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` (adversarial) | **PASS** | Fire-once-per-crossing; drain at T=65 clears firedAt; first post-drain call appends (len==1) |
+| AC-005 | Hysteresis: re-fires after window fully expires | `TestFailureCounter_HysteresisRefirersAfterWindowExpires` | **PASS** | Batch-1 at T=0 → 1 alert; batch-2 at T=61–65s → 2nd alert; total=2 |
 | AC-006 | Below-threshold: no alert for N−1 failures | `TestFailureCounter_BelowThresholdNoAlert` | **PASS** | 4 failures → 0 alerts, 4 timestamps held; 5th → 1 alert |
 | AC-007 | Multi-source isolation: two srcAddrs counted independently | `TestFailureCounter_MultiSourceIsolation`, `TestFailureCounter_MultiSourceInterleaved` | **PASS** | addr-A fires 1 alert at 5; addr-B fires 1 alert independently |
 | AC-008 | Boundary entry kept (strictly-less-than trim) | `TestFailureCounter_BoundaryEntryIsKept` | **PASS** | 1st entry at T=0; 5th at T=0+60s; T=0 kept (not < T=0); count=5 → alert fires |
@@ -40,7 +45,7 @@
 | AC-010 | Concurrent calls race-safe; `Timestamps()` returns copy | `TestFailureCounter_ConcurrentCallsRaceSafe` | **PASS** | 10 goroutines → 1 alert (fire-once); appending to returned slice does not mutate internal state |
 | AC-011 | Memory cap: ≤65,536 tracked sources (LRU eviction) | `TestFailureCounter_SourceCapBoundsMapGrowth` | **PASS** | 65,537 insertions → `SourceCount()` ≤ 65,536 |
 | AC-012 | Dead-key eviction: `delete(counts, srcAddr)` on drain; firedAt cleared | `TestFailureCounter_DeadKeyEvictedAfterDrain` | **PASS** | srcA+srcB drain; eviction observed via re-arm + fresh alert re-fire; SourceCount() correct throughout |
-| AC-013 | Constructor panics on invalid args (`threshold<1` or `windowDuration<=0`) | `TestNewFailureCounter_PanicsOnInvalidArgs`, `TestFailureCounter_ConstructorValidation` | **PASS** | Zero/negative threshold panics; zero/negative window panics; valid args do not panic |
+| AC-013 | Constructor panics on **all three** invalid-arg classes: `threshold<1`, `windowDuration<=0`, **and `logger==nil`** | `TestNewFailureCounter_PanicsOnInvalidArgs` (sub-cases: zero_threshold, negative_threshold, zero_window, negative_window, valid_args); `TestNewFailureCounter_PanicsOnNilLogger` (SEC-001/CWE-476) | **PASS** | (1) threshold=0 panics; (2) windowDuration=0 panics; (3) `NewFailureCounter(5, 60s, nil)` panics with `"admission: NewFailureCounter: logger must not be nil"` — added in f6038d2. All three sub-cases pass. |
 | AC-014 | Sustained attack re-fires periodically (not permanently silent) | `TestFailureCounter_SustainedAttackReFires` | **PASS** | 2 alert batches total; `SourceCount()==1` after sustained attack |
 | AC-015 | E-ADM-017 canonical format: BOTH "E-ADM-017" AND "HMAC failure rate alert:" present | `TestFailureCounter_AlertMessageFormat`, `TestRouteFrame_EndToEnd_EADMAlertMessageFormat` | **PASS** | Full canonical: "E-ADM-017 HMAC failure rate alert: ≥5 failures in 60s from src deadbeef01020304" |
 | AC-016 | Append-skip: per-source slice bounded at threshold entries under high-rate attack | `TestFailureCounter_HighRateAttackBoundedSlice` | **PASS** | 10,000 extra calls with frozen clock; `len(Timestamps)==5` (not 10,005) |
@@ -55,8 +60,7 @@
 ### Admission Package — All Tests
 
 Command: `go test -v -count=1 ./internal/admission/`
-
-Key PASS lines for S-W3.05 tests (trimmed; full run also includes pre-existing admission tests):
+Working directory: `.worktrees/S-W3.05` (HEAD f6038d2)
 
 ```
 --- PASS: TestNewFailureCounter_ConstructorFields (0.00s)
@@ -72,14 +76,15 @@ Key PASS lines for S-W3.05 tests (trimmed; full run also includes pre-existing a
 --- PASS: TestFailureCounter_MultiSourceInterleaved (0.00s)
 --- PASS: TestFailureCounter_SustainedAttackReFires (0.00s)
 --- PASS: TestFailureCounter_RearmOccursOnFirstCallAfterDrain (0.00s)
---- PASS: TestFailureCounter_SourceCapBoundsMapGrowth (0.02s)
+--- PASS: TestFailureCounter_SourceCapBoundsMapGrowth (0.04s)
 --- PASS: TestFailureCounter_DeadKeyEvictedAfterDrain (0.00s)
 --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs (0.00s)
     --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs/zero_threshold_panics (0.00s)
-    --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs/negative_threshold_panics (0.00s)
     --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs/zero_window_duration_panics (0.00s)
     --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs/negative_window_duration_panics (0.00s)
+    --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs/negative_threshold_panics (0.00s)
     --- PASS: TestNewFailureCounter_PanicsOnInvalidArgs/valid_args_do_not_panic (0.00s)
+--- PASS: TestNewFailureCounter_PanicsOnNilLogger (0.00s)
 --- PASS: TestFailureCounter_AlertMessageFormat (0.00s)
 --- PASS: TestFailureCounter_HighRateAttackBoundedSlice (0.00s)
 --- PASS: TestRouteFrame_EndToEnd_EADMAlertMessageFormat (0.00s)
@@ -100,18 +105,32 @@ Key PASS lines for S-W3.05 tests (trimmed; full run also includes pre-existing a
     --- PASS: TestFailureCounter_PropertiesABCD/stateful_model_generated_sequence/threshold5_window60s (0.00s)
     --- PASS: TestFailureCounter_PropertiesABCD/stateful_model_generated_sequence/threshold3_window30s (0.00s)
     --- PASS: TestFailureCounter_PropertiesABCD/stateful_model_generated_sequence/threshold10_window120s (0.00s)
---- PASS: TestFailureCounter_PropertyE_MemoryBound (0.86s)
+--- PASS: TestFailureCounter_PropertyE_MemoryBound (0.85s)
 --- PASS: TestFailureCounter_ConstructorValidation (0.00s)
     --- PASS: TestFailureCounter_ConstructorValidation/threshold_zero_panics (0.00s)
     --- PASS: TestFailureCounter_ConstructorValidation/window_zero_panics (0.00s)
 --- PASS: TestFailureCounter_BoundaryEC008 (0.00s)
 PASS
-ok  	github.com/arcavenae/switchboard/internal/admission	1.151s
+ok  	github.com/arcavenae/switchboard/internal/admission	1.383s
 ```
+
+#### AC-013 nil-logger sub-case (SEC-001, commit f6038d2)
+
+The following PASS line (highlighted from the full transcript above) confirms the nil-logger
+panic sub-case added in f6038d2 is exercised and passing:
+
+```
+--- PASS: TestNewFailureCounter_PanicsOnNilLogger (0.00s)
+```
+
+Test asserts: `NewFailureCounter(5, 60*time.Second, nil)` panics with message
+`"admission: NewFailureCounter: logger must not be nil"` (CWE-476 / SEC-001).
+Located at: `internal/admission/failure_counter_adversarial_test.go:511`.
 
 ### Routing Package — RouteFrame + FailureCounter Tests
 
 Command: `go test -v -count=1 -run 'TestRouteFrame' ./internal/routing/`
+Working directory: `.worktrees/S-W3.05` (HEAD f6038d2)
 
 ```
 --- PASS: TestRouteFrame_CallsRecordHMACFailureOnBothFailurePaths (0.00s)
@@ -120,7 +139,7 @@ Command: `go test -v -count=1 -run 'TestRouteFrame' ./internal/routing/`
     --- PASS: TestRouteFrame_CallsRecordHMACFailureOnBothFailurePaths/SUCCESS_valid_HMAC_does_NOT_call_RecordHMACFailure (0.00s)
 --- PASS: TestRouteFrame_FiveConsecutiveFailures_TriggersEADM017 (0.00s)
 PASS
-ok  	github.com/arcavenae/switchboard/internal/routing	0.285s
+ok  	github.com/arcavenae/switchboard/internal/routing	0.302s
 ```
 
 ---
@@ -128,10 +147,11 @@ ok  	github.com/arcavenae/switchboard/internal/routing	0.285s
 ## Race Detector Summary
 
 Command: `go test -race -count=1 ./internal/admission/ ./internal/routing/`
+Working directory: `.worktrees/S-W3.05` (HEAD f6038d2)
 
 ```
-ok  	github.com/arcavenae/switchboard/internal/admission	11.096s
-ok  	github.com/arcavenae/switchboard/internal/routing	1.721s
+ok  	github.com/arcavenae/switchboard/internal/admission	10.612s
+ok  	github.com/arcavenae/switchboard/internal/routing	1.361s
 ```
 
 **Result: PASS — zero data races detected.** AC-010 concurrent safety requirement verified.
@@ -150,7 +170,14 @@ None. All 17 acceptance criteria have at least one passing test transcript.
   No VHS/terminal recordings, no `.tape`/`.gif`/`.cast` files produced.
 - Test transcripts are deterministic (clock-injected via `WithNow`; no wall-clock waits).
 - Race detector run covers both packages containing S-W3.05 implementation.
-- `TestFailureCounter_PropertyE_MemoryBound` took 0.86s for 66,536 adversarial source
+- Commit f6038d2 adds `TestNewFailureCounter_PanicsOnNilLogger` in
+  `internal/admission/failure_counter_adversarial_test.go` (line 511). This is a
+  standalone test (not a sub-case of `TestNewFailureCounter_PanicsOnInvalidArgs`) that
+  covers the third AC-013 panic sub-case: nil logger → immediate constructor panic with
+  `"admission: NewFailureCounter: logger must not be nil"`.
+- `TestFailureCounter_PropertyE_MemoryBound` took 0.85s for 66,536 adversarial source
   insertions — well within the 5s bound noted in the test comment.
-- `TestFailureCounter_SourceCapBoundsMapGrowth` took 0.02s for 65,537 insertions
+- `TestFailureCounter_SourceCapBoundsMapGrowth` took 0.04s for 65,537 insertions
   (sequential, not parallel, per test comment).
+- Story spec updated from v1.2 to v1.3 in this evidence refresh (v1.3 canonicalises
+  the nil-logger AC-013 sub-case).
