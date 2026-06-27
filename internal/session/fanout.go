@@ -204,7 +204,9 @@ func (cs *ConsoleSet) Deliver(hdr frame.OuterHeader) {
 // distinguish live consoles from stale/crashed ones.
 //
 // Returns ErrConsoleNotFound if key is not registered. The timestamp is
-// recorded as time.Now().UTC() at the moment Heartbeat is called.
+// recorded via the ConsoleSet's injectable clock (cs.nowFn()), which defaults
+// to time.Now().UTC() in production but can be overridden via
+// ConsoleSetWithClock for deterministic tests.
 func (cs *ConsoleSet) Heartbeat(key ConsoleKey) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
