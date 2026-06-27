@@ -201,6 +201,8 @@ func NewAccessNode(pub *Publisher, auth Authorizer, opts ...AccessNodeOption) *A
 // A successful Attach adds key to the ConsoleSet. Subsequent DeliverFrame calls
 // will fan out to the new console.
 func (a *AccessNode) Attach(key ConsoleKey, sessionName string) (downstream <-chan frame.OuterHeader, upstream chan<- []byte, err error) {
+	// Session-existence check precedes the auth gate intentionally: BC-2.05.003 EC-001 permits
+	// unauthorized consoles to list sessions, so existence is not secret on this SVTN.
 	if _, err := a.pub.Get(sessionName); err != nil {
 		return nil, nil, fmt.Errorf("%w: %s", ErrSessionNotFound, sessionName)
 	}
@@ -285,7 +287,7 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 
 	attached, ok := a.consoles.Session(key)
 	if !ok {
-		return fmt.Errorf("session: console %s not found in session %s: %w", key, sessionName, ErrConsoleNotFound)
+		return fmt.Errorf("session: console %s not found for session %s: %w", key, sessionName, ErrConsoleNotFound)
 	}
 	if attached != sessionName {
 		return fmt.Errorf("session: console %s attached to session %s, not %s: %w", key, attached, sessionName, ErrSessionMismatch)
