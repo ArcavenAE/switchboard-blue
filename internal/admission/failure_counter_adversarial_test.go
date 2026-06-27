@@ -37,17 +37,23 @@ import (
 // the E-ADM-017 alert fires periodically — once per window-drain-and-rearm cycle —
 // rather than going permanently silent after the first crossing.
 //
-// Scenario (BC-2.05.005 EC-009):
+// Scenario (BC-2.05.005 EC-009 discriminating test, drain-only re-arm):
 //
-//	T=0..4:  5 failures → assert exactly 1 E-ADM-017 emitted.
-//	T=61s:   window fully drains; counter re-arms on the next call.
-//	T=61..65: 5 more failures → assert a 2nd E-ADM-017.
-//	Assert EXACTLY 2 total alerts for this source.
-//	Also assert SourceCount() == 1 after the second batch (dead-key state check).
+//	T=0:     ALL 5 failures at the same instant → assert exactly 1 E-ADM-017.
+//	         firedAt[src]=T=0. Append-skip in force; slice=[T=0 ×5].
+//	T=61s:   window fully drains on first call (cutoff=T=1; all T=0 entries < T=1).
+//	         Re-arm triggers → firedAt deleted → T=61 appended (count=1, no alert).
+//	T=61..65: 5 more failures → count reaches threshold → 2nd E-ADM-017.
+//	Total: exactly 2 alerts.
 //
-// The SourceCount() call provides a compile-time Red Gate: the method does not yet
-// exist on *FailureCounter. Once added, the behavioral assertions will also verify
-// periodic re-fire vs. permanent silence.
+// Timing invariant (drain-only re-arm + append-skip, BC-2.05.005 v1.6):
+// Batch-2's first call must occur strictly MORE than windowDuration after the LAST
+// batch-1 entry so the window fully drains on that call. Batch-1 all at T=0 →
+// last entry T=0 → batch-2 starts at T=61 > T=0+60s ✓.
+//
+// Do NOT spread batch-1 over T=0..4: if spread, the last batch-1 entry is T=4 and
+// at T=61 cutoff=T=1 keeps entries T=1..4 (len=4 ≠ 0 → no drain, no re-arm →
+// only 1 total alert). That is a test-timing defect under drain-only semantics.
 //
 // Traces to BC-2.05.005 EC-009; S-W3.05 AC-014.
 func TestFailureCounter_SustainedAttackReFires(t *testing.T) {
@@ -65,9 +71,10 @@ func TestFailureCounter_SustainedAttackReFires(t *testing.T) {
 		admission.WithNow(func() time.Time { return current }),
 	)
 
-	// First batch: 5 failures at T=0..4s → exactly 1 alert.
-	for i := range 5 {
-		current = base.Add(time.Duration(i) * time.Second)
+	// First batch: ALL 5 failures at T=0 (same instant).
+	// Last pre-fire entry = T=0. At T=61 cutoff=T=1 → T=0 < T=1 → fully drained.
+	current = base // T=0 for all batch-1 calls
+	for range 5 {
 		fc.RecordHMACFailure(src)
 	}
 	if log.Count() != 1 {
@@ -75,8 +82,8 @@ func TestFailureCounter_SustainedAttackReFires(t *testing.T) {
 			log.Count(), log.Lines())
 	}
 
-	// Advance to T=61s — all first-batch entries (T=0..4) are now outside the 60s window.
-	// The next call triggers a trim-to-zero, which re-arms the counter.
+	// Advance to T=61s. Cutoff = T=1. All batch-1 entries (T=0) < T=1 → drained.
+	// First batch-2 call triggers drain → re-arm → appends T=61.
 	batchTwoBase := base.Add(61 * time.Second)
 
 	// Second batch: 5 failures at T=61..65s → counter re-armed, should fire 2nd alert.
@@ -289,8 +296,9 @@ func TestFailureCounter_SourceCapBoundsMapGrowth(t *testing.T) {
 // delete, call srcA again AFTER its window drains — the drain+delete happens inside
 // that very call, then the new entry is appended (re-arm+append). SourceCount stays 1
 // for srcA, but we can observe the delete happened because:
-//   (a) firedAt[srcA] is cleared → a fresh threshold crossing fires E-ADM-017 again.
-//   (b) SourceCount() == 1 for srcA after re-arm (NOT 0, because the call re-appends).
+//
+//	(a) firedAt[srcA] is cleared → a fresh threshold crossing fires E-ADM-017 again.
+//	(b) SourceCount() == 1 for srcA after re-arm (NOT 0, because the call re-appends).
 //
 // To discriminate "empty slice retained" vs "key deleted": use SourceCount across two
 // sources. If srcA leaves an empty slice without delete, the map still has two keys
@@ -629,10 +637,10 @@ func TestFailureCounter_AlertMessageFormat(t *testing.T) {
 //
 // Scenario (threshold=5, frozen clock — no entries can age out):
 //
-//	1. Inject 5 failures → alert fires; firedAt[src] set; slice has 5 entries.
-//	2. Inject 1,000,000 more failures with clock FROZEN (cutoff unchanged;
-//	   pre-fire entries never age out → re-arm never triggers).
-//	3. Assert: len(Timestamps(src)) == threshold (5), not 1,000,005.
+//  1. Inject 5 failures → alert fires; firedAt[src] set; slice has 5 entries.
+//  2. Inject 1,000,000 more failures with clock FROZEN (cutoff unchanged;
+//     pre-fire entries never age out → re-arm never triggers).
+//  3. Assert: len(Timestamps(src)) == threshold (5), not 1,000,005.
 //
 // Against the current implementation (which appends on every call), the slice
 // grows to 1,000,005 → this test is RED. It will pass only after the implementer

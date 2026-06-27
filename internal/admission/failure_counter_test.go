@@ -336,10 +336,19 @@ func TestFailureCounter_FiresOncePerCrossing(t *testing.T) {
 // TestFailureCounter_HysteresisRefirersAfterWindowExpires verifies the hysteresis
 // semantics from BC-2.05.005 EC-005:
 //
-//	T=0:  5 failures → E-ADM-017 fires (1st time).
-//	T=61s: all prior entries trimmed (window expired) → fired state resets.
-//	T=61s: 5 more failures → E-ADM-017 fires again (2nd time).
+//	T=0:  5 failures (all at same instant) → E-ADM-017 fires (1st time).
+//	T=61s: first call at T=61 — cutoff=T=1; all batch-1 entries at T=0 < T=1
+//	       → window fully drains → re-arm triggers on this call; new entry appended.
+//	T=61..65: 5 more failures → count reaches threshold → E-ADM-017 fires again (2nd time).
 //	Total: exactly 2 E-ADM-017 events.
+//
+// Timing invariant (drain-only re-arm, BC-2.05.005 v1.6 + append-skip):
+// Batch-2's FIRST call must occur strictly MORE than windowDuration after the LAST
+// batch-1 entry so the window fully drains on that call. Batch-1 all at T=0 →
+// last entry at T=0 → batch-2 starts at T=61 > T=0+60s ✓.
+// If batch-1 were spread T=0..4, T=61 would only trim T=0 (cutoff=T=1), leaving
+// T=1..4 in window (4 entries), and re-arm would NOT trigger. That is a test-timing
+// defect under drain-only re-arm semantics.
 //
 // Traces to BC-2.05.005 EC-005; S-W3.05 AC-005.
 func TestFailureCounter_HysteresisRefirersAfterWindowExpires(t *testing.T) {
@@ -357,9 +366,13 @@ func TestFailureCounter_HysteresisRefirersAfterWindowExpires(t *testing.T) {
 		admission.WithNow(func() time.Time { return current }),
 	)
 
-	// First batch: 5 failures at T=0 → 1 alert.
-	for i := range 5 {
-		current = base.Add(time.Duration(i) * time.Second)
+	// First batch: ALL 5 failures at T=0 (same instant).
+	// Last entry = T=0. Under drain-only re-arm, batch-2 starts at T=61:
+	// cutoff = T=1; T=0 < T=1 → all 5 entries trimmed → window fully drains.
+	// (Do NOT spread T=0..4: last entry T=4 at T=61 cutoff=T=1 keeps T=1..4,
+	//  len(keep)=4 ≠ 0, no drain, no re-arm — that would be a timing defect.)
+	current = base // T=0 for all batch-1 calls
+	for range 5 {
 		fc.RecordHMACFailure(src)
 	}
 	if log.Count() != 1 {
@@ -367,12 +380,11 @@ func TestFailureCounter_HysteresisRefirersAfterWindowExpires(t *testing.T) {
 			log.Count(), log.Lines())
 	}
 
-	// Advance time by 61s so all prior entries are outside the window.
-	// After the next RecordHMACFailure, trim will remove all T=0 entries.
-	// The fired state for src must reset when count drops below threshold.
+	// Advance to T=61s. Cutoff = T=1. All batch-1 entries (T=0) < T=1 → drained.
+	// First batch-2 call triggers drain → re-arm → appends T=61 (count=1, no alert).
 	batchTwoBase := base.Add(61 * time.Second)
 
-	// Second batch: 5 failures at T=61s → fired state reset → 2nd alert fires.
+	// Second batch: 5 failures at T=61..65s → count reaches threshold → 2nd alert.
 	for i := range 5 {
 		current = batchTwoBase.Add(time.Duration(i) * time.Second)
 		fc.RecordHMACFailure(src)
