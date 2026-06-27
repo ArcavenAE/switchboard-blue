@@ -74,6 +74,10 @@ type KeystrokeSink interface {
 // use WithKeystrokeSink(NoOpSink{}).
 var ErrNoKeystrokeSink = errors.New("session: no keystroke sink installed; construct AccessNode with WithKeystrokeSink")
 
+// ErrSessionMismatch is returned by SendKeystroke when the console identified
+// by key is attached but to a different session than sessionName (F-H-2).
+var ErrSessionMismatch = errors.New("session: console attached to different session")
+
 // noSink is the default fail-loud sink. It returns ErrNoKeystrokeSink on every
 // call so that production callers that forget to inject a sink fail visibly
 // rather than silently discarding keystrokes (F-L-2 pass-3: anti-silent-failure).
