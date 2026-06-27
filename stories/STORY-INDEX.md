@@ -26,8 +26,8 @@ inputDocuments:
 | E-phase | 22 (waves 0–5 + Wave 3 fix-now additions) |
 | PE-phase | 4 (wave 6) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
-| Total points (waves 0–6) | 156 |
-| Total points (incl. S-M.01 + S-M.02) | 166 |
+| Total points (waves 0–6) | 159 |
+| Total points (incl. S-M.01 + S-M.02) | 169 |
 | Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
 | Backlog | 1 (S-BL.OA) |
 
@@ -47,7 +47,7 @@ inputDocuments:
 | S-3.03 | Tier-2 per-session authorization and read-only | E-3 | 3 | BC-2.04.005, BC-2.05.003 | session-access, admission-security | 8 | P0 | E | completed (PR #14, merge b68e498) |
 | S-3.04 | Wire verifyFrameHMAC into RouteFrame (HMAC enforcement at router boundary) | E-2 | 3 | BC-2.05.008 | admission-security | 3 | P0 | E | completed (PR #9, merge d54bf1a) |
 | S-W3.04 | Full daemon assembly — wire all Wave-3 subsystems in cmd/switchboard | E-3 | 3 | BC-2.04.001, BC-2.04.002, BC-2.04.003, BC-2.04.004, BC-2.04.005, BC-2.04.006, BC-2.05.008 | session-access, admission-security | 8 | P0 | E | draft (fix-now F-1; BC-2.04.007 PO decision pending) |
-| S-W3.05 | Per-source HMAC failure counter and admission alert (BC-2.05.005 PC-3) | E-2 | 3 | BC-2.05.005, BC-2.05.008 | admission-security | 5 | P0 | E | ready (fix-now F-2) |
+| S-W3.05 | Per-source HMAC failure counter and admission alert (BC-2.05.005 PC-3) | E-2 | 3 | BC-2.05.005, BC-2.05.008 | admission-security | 8 | P0 | E | ready (fix-now F-2) |
 | S-4.01 | Per-path RTT/loss tracking and dup-and-race | E-4 | 4 | BC-2.02.001, BC-2.02.002, BC-2.02.003, BC-2.02.009 | multipath-forwarding | 8 | P0 | E | pending |
 | S-4.02 | Upstream idempotent replay window | E-4 | 4 | BC-2.02.004 | multipath-forwarding | 5 | P0 | E | pending |
 | S-4.03 | Downstream ARQ with ACK/SACK and TLPKTDROP | E-4 | 4 | BC-2.02.005, BC-2.02.006 | multipath-forwarding | 8 | P0 | E | pending |
@@ -69,13 +69,13 @@ inputDocuments:
 | 0 | S-0.01 | 1 | BMAD scaffolding (complete) |
 | 1 | S-1.01, S-1.02 + refactor PR #3 | 13 | Frame codec + half-channel clock — **CLOSED 2026-06-24 (pass-with-clean-drift; rollback resolved 2026-06-24)** |
 | 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity — **COMPLETE 2026-06-25 (3/3 merged; integration gate next)** |
-| 3 | S-3.01a, S-3.01b, S-3.02, S-3.03, S-3.04, **S-W3.04**, **S-W3.05** | 45 | Session access MVP + HMAC wire-up + Wave 3 fix-now blockers — original 5 closed; S-W3.04 (daemon assembly, 8pts, draft, F-1 fix-now), S-W3.05 (HMAC alert, 5pts, ready, F-2 fix-now) |
+| 3 | S-3.01a, S-3.01b, S-3.02, S-3.03, S-3.04, **S-W3.04**, **S-W3.05** | 48 | Session access MVP + HMAC wire-up + Wave 3 fix-now blockers — original 5 closed; S-W3.04 (daemon assembly, 8pts, draft, F-1 fix-now), S-W3.05 (HMAC alert, 8pts, ready, F-2 fix-now) |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config |
 | 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
 | 6 | S-7.01, S-7.02, S-7.03, S-7.04 | 29 | PE-phase features |
-| **Total** | **26** (wave stories) | **156** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 28 stories / 166 pts) |
+| **Total** | **26** (wave stories) | **159** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 28 stories / 169 pts) |
 
-> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 now also includes two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1) and S-W3.05 (HMAC failure counter, 5pts, E-2, F-2). Wave 3 total: 7 stories, 45 pts. Total points including Wave 0: 156. Per-wave counts above use story points from individual story files.
+> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 now also includes two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication of adversarial-convergence findings). Wave 3 total: 7 stories, 48 pts. Total points including Wave 0: 159. Per-wave counts above use story points from individual story files.
 
 ## BC Coverage Check
 

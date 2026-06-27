@@ -12,7 +12,7 @@ epic: E-2
 wave: 3
 priority: P0
 scope_phase: E
-estimated_points: 5
+estimated_points: 8
 bc_traces:
   - BC-2.05.005
   - BC-2.05.008
@@ -28,8 +28,8 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-05/BC-2.05.008.md'
   - '.factory/specs/verification-properties/VP-059.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
-acceptance_criteria_count: 10
-version: "1.0"
+acceptance_criteria_count: 15
+version: "1.1"
 ---
 
 # S-W3.05: Per-Source HMAC Failure Counter and Admission Alert
@@ -81,13 +81,14 @@ The event is emitted via the injected logger. No global state. No direct call to
 `log.Printf` or any package-level logger.
 - **Test:** `TestFailureCounter_EmitsEADM017AtThreshold`
 
-### AC-004 (traces to BC-2.05.005 PC-3 — fire-once-per-threshold-crossing)
-E-ADM-017 fires exactly once when the count crosses the threshold (on the Nth call
-where N = threshold). Subsequent `RecordHMACFailure` calls in the same window (the
-N+1th, N+2th, etc.) do NOT re-emit E-ADM-017. The counter MUST track whether the
-threshold has already fired for the current window crossing; the fired state resets
-only when the count drops back below threshold (all entries trimmed, window expired).
-- **Test:** `TestFailureCounter_FiresOncePerCrossing`
+### AC-004 (traces to BC-2.05.005 PC-3 + EC-005 + EC-009 — hysteresis/re-fire)
+E-ADM-017 fires on the Nth call that causes the sliding-window count to reach threshold
+(N = threshold). Subsequent `RecordHMACFailure` calls in the same un-re-armed window do
+NOT re-emit the alert. The counter re-arms when the oldest surviving entry after trim is
+STRICTLY newer than the last-fire timestamp, OR when the window drains to zero. An entry
+whose timestamp == last-fire timestamp does NOT trigger re-arm (boundary). Test:
+`TestFailureCounter_HysteresisNoBriefRefire`, `TestFailureCounter_RearmBoundaryAtLastFireTimestamp`.
+(traces to BC-2.05.005 PC-3 + EC-005 + EC-009)
 
 ### AC-005 (traces to BC-2.05.005 EC-005 — hysteresis: alert resets after window expires)
 After a threshold crossing fires E-ADM-017, if all timestamps for that `srcAddr` age
@@ -118,15 +119,15 @@ Post-trim count = 5; E-ADM-017 fires. Implementations that use `<=` (trim-at-bou
 instead of `<` (keep-at-boundary) will produce count = 4 and fail this test.
 - **Test:** `TestFailureCounter_BoundaryEntryIsKept`
 
-### AC-009 (traces to BC-2.05.008 PC-5 + invariant 5 — RouteFrame calls RecordHMACFailure)
-`RouteFrame` in `internal/routing` calls `router.failureCounter.RecordHMACFailure(hdr.SrcAddr)`
-immediately before returning `ErrHMACVerificationFailed` on BOTH failure paths:
-(a) tag mismatch (`verifyFrameHMAC` returns false), and (b) no forwarding-table entry
-(auth key unavailable). `RecordHMACFailure` is NOT called on a successful HMAC
-verification. The `failureCounter *admission.FailureCounter` field is added to the
-`Router` struct and wired via constructor injection (`NewRouter` or `WithFailureCounter`
-option).
-- **Test:** `TestRouteFrame_CallsRecordHMACFailureOnBothFailurePaths`
+### AC-009 (traces to BC-2.05.008 EC-006 — injection seam)
+`RouteFrame`'s Router is wired via `WithFailureCounter(fc hmacFailureRecorder)` — an
+unexported interface `{ RecordHMACFailure(srcAddr string) }`; `*admission.FailureCounter`
+is the production implementation; tests may inject a fake satisfying the interface.
+`RecordHMACFailure` is called immediately before returning `ErrHMACVerificationFailed`
+on BOTH failure paths: (a) tag mismatch (`verifyFrameHMAC` returns false), and (b) no
+forwarding-table entry (auth key unavailable). `RecordHMACFailure` is NOT called on a
+successful HMAC verification.
+- **Test:** `TestRouteFrame_WithFailureCounterInterface`. (traces to BC-2.05.008 EC-006)
 
 ### AC-010 (traces to BC-2.05.005 PC-3 — concurrency safety)
 `RecordHMACFailure` is safe for concurrent calls from multiple goroutines. The
@@ -136,6 +137,37 @@ internal slice is returned by reference to callers. If a `Timestamps(srcAddr str
 (go.md rule 12: no internal pointer leaks from locked accessors). `go test -race` MUST
 pass with concurrent callers.
 - **Test:** `TestFailureCounter_ConcurrentCallsRaceSafe` (run with `-race`)
+
+### AC-011 (traces to BC-2.05.005 EC-010 — memory cap)
+After inserting `maxTrackedSources+1` (65,537) distinct `srcAddr`s, `len(counts) <=
+maxTrackedSources` (65,536) — map growth is capped. The LRU key (oldest most-recent-failure
+timestamp) is evicted from both `counts` and `firedAt` before inserting the new key.
+- **Test:** `TestFailureCounter_SourceCapBoundsMapGrowth`. (traces to BC-2.05.005 EC-010)
+
+### AC-012 (traces to BC-2.05.005 EC-005 — dead-key eviction after drain)
+After 5 failures then a full window drain (all entries age out), the source re-arms — a
+subsequent post-drain threshold crossing fires E-ADM-017 again; `firedAt[srcAddr]` is
+cleared on drain. Both `counts` and `firedAt` entries are deleted entirely when the
+post-trim slice is empty (dead-key eviction — no unbounded map growth).
+- **Test:** `TestFailureCounter_DeadKeyEvictedAfterDrain`. (traces to BC-2.05.005 EC-005)
+
+### AC-013 (traces to BC-2.05.005 PC-3 — constructor validation)
+`NewFailureCounter(0, 60s, logger)` panics; `NewFailureCounter(5, 0, logger)` panics —
+invalid constructor args are rejected eagerly. Both panics use `panic(fmt.Sprintf(...))`
+in `NewFailureCounter`; they are programmer-error guards, not runtime error paths.
+- **Test:** `TestNewFailureCounter_PanicsOnInvalidArgs`. (traces to BC-2.05.005 PC-3)
+
+### AC-014 (traces to BC-2.05.005 EC-009 — sustained attack re-fires)
+With `WithNow` clock injection — 5 failures at T=0 fire 1 E-ADM-017 alert; advancing
+to T=61s drains the window and re-arms the counter; 5 more failures at T=61–62s fire a
+2nd E-ADM-017 alert; total exactly 2 alerts.
+- **Test:** `TestFailureCounter_SustainedAttackReFires`. (traces to BC-2.05.005 EC-009)
+
+### AC-015 (traces to error-taxonomy v1.9 / E-ADM-017 — alert message format)
+The E-ADM-017 log message matches the canonical parameterized format from error-taxonomy
+v1.9: `"≥<threshold> failures in <window>s from src <hex>"`. The message embeds the code
+literal "E-ADM-017" for operator grep-ability.
+- **Test:** `TestFailureCounter_AlertMessageFormat`. (traces to error-taxonomy v1.9 / E-ADM-017)
 
 ## Edge Cases
 
@@ -187,25 +219,32 @@ pass with concurrent callers.
 
 1. [ ] Read BC-2.05.005 (full, including PC-3 API contract + EC-005–EC-008), BC-2.05.008
        (full, including EC-006 + PC-5 + invariant 5), ARCH-08 §6.5 (positions 4 and 5)
-2. [ ] Write failing tests for AC-001 through AC-010 in:
-       - `internal/admission/failure_counter_test.go` (AC-001 through AC-008, AC-010)
+2. [ ] Write failing tests for AC-001 through AC-015 in:
+       - `internal/admission/failure_counter_test.go` (AC-001 through AC-008, AC-010 through AC-015)
        - `internal/routing/routing_test.go` extension (AC-009)
-3. [ ] Verify Red Gate: all 10 tests fail before any implementation
+3. [ ] Verify Red Gate: all 15 tests fail before any implementation
 4. [ ] Create `internal/admission/failure_counter.go`:
        - `type FailureCounter struct` with `mu sync.Mutex`, `counts map[string][]time.Time`,
-         `threshold int`, `windowDuration time.Duration`, `logger Logger`, `fired map[string]bool`
-       - `NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger) *FailureCounter`
+         `threshold int`, `windowDuration time.Duration`, `logger Logger`,
+         `firedAt map[string]time.Time` (last-fire timestamp per srcAddr), `now func() time.Time`
+       - `NewFailureCounter(threshold int, windowDuration time.Duration, logger Logger, opts ...FailureCounterOption) *FailureCounter`
+         — panic if `threshold < 1` or `windowDuration <= 0` (AC-013)
+       - `WithNow(fn func() time.Time) FailureCounterOption` — clock injection for tests (AC-014)
+       - `hmacFailureRecorder` unexported interface `{ RecordHMACFailure(srcAddr string) }` (AC-009)
        - `RecordHMACFailure(srcAddr string)` — trim (`timestamp < now - windowDuration`),
-         append, check threshold, emit E-ADM-017 once per crossing, update `fired` state
+         dead-key eviction when count=0 (delete counts + firedAt entries), LRU source cap at
+         65,536 (AC-011), append, check threshold, emit E-ADM-017 using re-arm semantics (AC-004),
+         update `firedAt` state (AC-014)
        - No background goroutine; lazy eviction on every call
        - `Timestamps(srcAddr string) []time.Time` returning a copy (if needed for testing)
+       - Compile-time constant `maxTrackedSources = 65536` (AC-011)
 5. [ ] Confirm UTC timestamps: all `time.Now()` calls in `RecordHMACFailure` use `time.Now().UTC()`
 6. [ ] Confirm no internal pointer returned: `Timestamps()` returns `append([]time.Time{}, ...)` copy
 7. [ ] Modify `internal/routing/routing.go`:
-       - Add `failureCounter *admission.FailureCounter` field to `Router` struct
-       - Wire via `WithFailureCounter(fc *admission.FailureCounter)` option (or constructor param)
-       - In `RouteFrame`: call `r.failureCounter.RecordHMACFailure(hdr.SrcAddr)` on BOTH
-         `ErrHMACVerificationFailed` paths (tag mismatch + no forwarding entry),
+       - Add `failureCounter hmacFailureRecorder` field to `Router` struct (unexported interface)
+       - Wire via `WithFailureCounter(fc hmacFailureRecorder)` option
+       - In `RouteFrame`: call `r.failureCounter.RecordHMACFailure(fmt.Sprintf("%x", hdr.SrcAddr))`
+         on BOTH `ErrHMACVerificationFailed` paths (tag mismatch + no forwarding entry),
          BEFORE the return statement; no call on success
 8. [ ] Verify `internal/routing` imports unchanged: {frame, hmac, admission} — position 5 constraint holds
 9. [ ] `just fmt && just lint` pass with zero warnings
@@ -225,7 +264,7 @@ pass with concurrent callers.
 | Rule | Source | Enforcement |
 |------|--------|-------------|
 | `internal/admission` at position 4 — imports {frame, hmac} only | ARCH-08 §6.5 | `go vet` + import guard; `failure_counter.go` MUST NOT import `internal/routing` |
-| `internal/routing` at position 5 — imports {frame, hmac, admission} | ARCH-08 §6.5 | Import of `internal/admission` for `*FailureCounter` type is already in the allowed set |
+| `internal/routing` at position 5 — imports {frame, hmac, admission} | ARCH-08 §6.5 | Import of `internal/admission` for the `hmacFailureRecorder` interface is already in the allowed set |
 | `FailureCounter` internal map slice NEVER returned by reference | go.md rule 12 | `Timestamps()` returns value copy; `just test-race` verifies |
 | Timestamps in UTC | go.md rule 11 | `time.Now().UTC()` in `RecordHMACFailure` |
 | Logger injected; no package-level logger | BC-2.05.005 PC-3 API contract | Constructor takes `logger Logger`; no `log.SetOutput` or global |
@@ -233,6 +272,11 @@ pass with concurrent callers.
 | `RecordHMACFailure` NOT called on successful HMAC verification | BC-2.05.008 PC-5 (negative) | Verified by TestRouteFrame test for success path (AC-009 negative assertion) |
 | E-ADM-017 is distinct from E-ADM-016 | BC-2.05.005 PC-3 (E-ADM-017) vs BC-2.05.008 PC-2 (E-ADM-016) | String format; do NOT reuse E-ADM-016 for the aggregate alert |
 | Boundary trimming: `timestamp < now - windowDuration` (strictly less) | BC-2.05.005 EC-008 | `TestFailureCounter_BoundaryEntryIsKept` |
+
+### Additional API / Constructor Constraints
+
+- `WithNow(fn func() time.Time)` functional option on `FailureCounter` enables clock injection for deterministic tests (BC-2.05.005 PC-3 v1.4).
+- Constructor panics if `threshold < 1` or `windowDuration <= 0` (BC-2.05.005 PC-3 v1.4 constructor contract).
 
 ## Forbidden Dependencies
 
@@ -263,10 +307,11 @@ fail (Go import cycle detection via `go vet`/`go build`).
 | `internal/admission/failure_counter.go` | create | `FailureCounter` type; `NewFailureCounter`; `RecordHMACFailure`; lazy eviction; fire-once-per-crossing; E-ADM-017 emission via injected logger |
 | `internal/admission/failure_counter_test.go` | create | AC-001 through AC-008, AC-010: sliding window, hysteresis, boundary, multi-source, concurrent-safe |
 | `internal/routing/routing.go` | modify | Add `failureCounter *admission.FailureCounter` to `Router` struct; wire via option; call `RecordHMACFailure` on both `ErrHMACVerificationFailed` return paths |
-| `internal/routing/routing_test.go` | extend | AC-009: `TestRouteFrame_CallsRecordHMACFailureOnBothFailurePaths`; verify not called on success |
+| `internal/routing/routing_test.go` | extend | AC-009: `TestRouteFrame_WithFailureCounterInterface`; verify not called on success |
 
 ## Spec Patches
 
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 | 2026-06-27 | Initial story — Wave 3 FIX-NOW gate blocker F-2; implements BC-2.05.005 PC-3; adds E-ADM-017 aggregate alert |
+| 1.1 | 2026-06-27 | PO adjudication of adversarial-convergence findings: new ACs 011-015, amended AC-004/009, points 5→8 (BC-2.05.005 v1.4, BC-2.05.008 v1.3, error-taxonomy v1.9) |
