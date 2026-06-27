@@ -34,6 +34,19 @@ These items have no active work pending before Phase 6. Archived to keep STATE.m
 | WAVE-2-MED-001 | Phase-6 hardening | ReAuthState not evicted on RevokeKey/RegisterKey reset; stale source-IP survives via CurrentSourceAddr | — | deferred to Phase 6 |
 | VP-039-test-skip | Phase-6 hardening | t.Skip placeholder needed in internal/routing/*_test.go for VP-039 (deferred property test) | — | deferred to Phase 6 |
 
+## Wave-Gate Detail Rows (archived from STATE.md 2026-06-27 to stay ≤200 lines)
+
+| ID | Severity | Description | Owner | Status |
+|----|----------|-------------|-------|--------|
+| W3-R3-F3 | MED | E-ADM-016 PATH-A message ("auth key unavailable") diverges from canonical taxonomy string ("tag mismatch"); both carry E-ADM-016; unpinned by test. | product-owner/implementer | open |
+| W3-R3-F4 | MED | BC-2.05.008 PC-4 does not mandate E-ADM-016 logging on no-entry PATH-A, but code+test now emit/assert it (unadjudicated test-writer assumption). Overlaps W3-F1-FU1. | product-owner/spec-steward | open |
+| W3-R3-F5 | LOW | ErrSessionMismatch sentinel text lacks "(E-SES-006)" code token (parity with E-ADM-006/007 sentinels). | implementer | open |
+| S-3.02-FM1 | MED | Attach upstream channel vestigial/undrained; BC-2.04.003 PC-3 deferred. | architect | open |
+| W3-M-2/M-3 | MED | SessionConnector no failover Frames(); NewAccessNode nil→fail-OPEN polarity gap; Frames() lost on ctrl→PTY failover swap. | architect/implementer | open — fix in wiring story |
+| W3-F1-FU1/FU2 | LOW | BC-2.05.008 PC-4 PATH-A log not ratified; PC-2 trace row cites old test. | spec-steward | open |
+| SW305-HF1 | HIGH | Hysteresis re-fire semantics: RESOLVED — re-fire/dead-key implemented+tested (3af388c). Msg-format separate defect tracked as SW305-M1 REOPENED. | product-owner | RESOLVED 3af388c |
+| SW305-HF2 | HIGH | Unbounded attacker-keyed map (counts/firedAt) = memory DoS CWE-770 — source-count cap RESOLVED (maxTrackedSources+LRU evict in 3af388c). Per-source slice bound tracked as SW305-M5 PO adjudication. | implementer | RESOLVED (source-count) 3af388c |
+
 ## Pre-Restart Wave 3 Adversary Passes (superseded by restart run at 10dd880)
 
 Prior run (before PR #15 fix): pass-01 CONVERGED (0C/0H/3M/2L/3O), pass-02 NOT_CONVERGED

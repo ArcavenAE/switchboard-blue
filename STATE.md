@@ -1,11 +1,11 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-per-story-adversary-s-w3-05-not-converged
+phase_step: wave-3-per-story-adversary-s-w3-05-restart-not-converged
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
-phase_3_pause_point: "S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (0C/3H consolidated). Wave-level gate r1+r2 CONVERGED, r3 NOT_CONVERGED (2 adj-HIGHs). All convergence paused pending PO spec adjudication."
+phase_3_pause_point: "S-W3.05 per-story adversary: 6 passes NOT_CONVERGED (restart passes 4-6: 0C/1H/2M/1L, 2C/1H/3L, 0C/1H). Blocking: msg-format (3/3), missing VP-059 proptest (C-2), AC-012 dead-key untested (H-1 pass-05). Wave-level gate r1+r2 CONVERGED, r3 NOT_CONVERGED (2 adj-HIGHs). All convergence paused pending fixes."
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 wave_2_gate_consistency_validator: "PASS_WITH_OBSERVATIONS (0C/0H/2M/3L/4O)"
@@ -112,9 +112,9 @@ wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CO
 s_wave3_f1_fix_pr: 15
 s_wave3_f1_fix_merge_sha: 10dd880
 s_wave3_f1_fix_merge_date: 2026-06-27
-s_w3_05_adversary_status: "NOT_CONVERGED — pass-01 0C/1H, pass-02 0C/2H, pass-03 0C/3H. Streak 0. 3 consolidated HIGHs (HF-1 hysteresis semantics, HF-2 memory DoS CWE-770, HF-3 VP-059 missing). PO adjudicating; fix loop pending."
-s_w3_05_impl_commit: 1e74d76
-timestamp: 2026-06-27T20:30:00Z
+s_w3_05_adversary_status: "RESTART NOT_CONVERGED — pass-04 0C/1H/2M/1L, pass-05 2C/1H/2L (C-1 msg-format, C-2 missing proptest), pass-06 0C/1H. Streak 0. Blocking: msg-format (3/3), missing VP-059 proptest, AC-012 dead-key untested. M-1/O-1 → PO. Orchestrator prior msg-format adjudication was ERRONEOUS — specs authoritative, code/tests/story to conform."
+s_w3_05_impl_commit: 3af388c
+timestamp: 2026-06-27T00:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -122,7 +122,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (pass-01 0C/1H, pass-02 0C/2H, pass-03 0C/3H). Consolidated HIGHs: HF-1 hysteresis re-fire semantics (spec-contradicting/tautological), HF-2 unbounded attacker-keyed map memory DoS CWE-770, HF-3 VP-059 missing spec+proptest. Wave-3 gate: r1+r2 CONVERGED, r3 NOT_CONVERGED (cmd-wiring + EC-006 adj-HIGHs). PO adjudicating all; fix loop pending.
+S-W3.05 per-story adversary restart: passes 4–6 NOT_CONVERGED (0C/1H/2M/1L, 2C/1H/3L, 0C/1H). Streak 0. Blocking: E-ADM-017 msg-format missing "HMAC failure rate alert:" phrase (3/3 passes, specs authoritative, prior orchestrator adjudication corrected), missing VP-059 proptest (C-2), AC-012 dead-key delete path untested (H-1 pass-05). Non-blocking → PO: M-1 per-source slice bound (CWE-770), O-1 ERROR-level vs level-less Logger. Wave-3 gate: r1+r2 CONVERGED, r3 NOT_CONVERGED (cmd-wiring + EC-006 adj-HIGHs).
 
 ## Phase Progress
 
@@ -130,7 +130,7 @@ S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (pass-01 0C/1H, pass-02 0C/2
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: 5/5 DONE; F-1 fix PR #15 10dd880; restart r1 CONV/r2 CONV/r3 NOT_CONV (2 adj-HIGHs) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: 5/5 DONE; F-1 fix PR #15 10dd880; restart r1 CONV/r2 CONV/r3 NOT_CONV; S-W3.05 passes 4–6 NOT_CONV |
 
 ## Wave / Story Status
 
@@ -147,31 +147,25 @@ S-W3.05 per-story adversary: 3 passes NOT_CONVERGED (pass-01 0C/1H, pass-02 0C/2
 | 3 | S-3.01b | PTY proxy fallback | completed | #12 | 56ec9c7 |
 | 3 | S-3.02 | Console attach/detach + multi-console | completed | #13 | 1ff74f5 |
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
-| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | per-story-adversary-NOT_CONVERGED | — | 1e74d76 |
+| 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | per-story-adversary-NOT_CONVERGED | — | 3af388c |
 
 ## Open Drift Items
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
-| W3-R3-F1 | HIGH? | cmd/switchboard wires none of 5 Wave-3 subsystems; production RouteFrame Logger never injected (E-ADM-016 discarded by nopLogger in real builds); AccessNode Sweep timer uninstantiated. r3 HIGH; r1+r2 OBSERVATION (in-scope-deferred per ARCH-08 pos-18, no Wave-3 story scopes cmd wiring). | architect | pending-adjudication — is cmd-wiring a later wave? annotate STORY-INDEX/ARCH-08 + create wiring story if deferred |
-| W3-R3-F2 | HIGH? | BC-2.05.008 EC-006 (≥5 HMAC fails/60s → admission alert, ref BC-2.05.005 PC-3) neither implemented nor marked [DEFERRED]. | product-owner | resolved — S-W3.05 implements this; BC-2.05.005 v1.3+ / BC-2.05.008 v1.2+ ratify the mechanism |
-| W3-R3-F3 | MED | E-ADM-016 PATH-A message ("auth key unavailable") diverges from canonical taxonomy string ("tag mismatch"); both carry E-ADM-016; unpinned by test. | product-owner/implementer | open |
-| W3-R3-F4 | MED | BC-2.05.008 PC-4 does not mandate E-ADM-016 logging on no-entry PATH-A, but code+test now emit/assert it (unadjudicated test-writer assumption). Overlaps W3-F1-FU1. | product-owner/spec-steward | open |
-| W3-R3-F5 | LOW | ErrSessionMismatch sentinel text lacks "(E-SES-006)" code token (parity with E-ADM-006/007 sentinels). | implementer | open |
-| W3-R2-M2 | MED | Route-time LWW snapshot window: RouteFrame RUnlocks after key-copy, verifies HMAC, then SVTNRoute re-locks for fresh lookup — concurrent RegisterForwardingEntry between unlock+relock not one atomic snapshot. Document in BC-2.05.008/ADR-009 or pass resolved entry under one lock. | architect/implementer | open |
-| S-3.02-FM1 | MED | Attach upstream channel vestigial/undrained; BC-2.04.003 PC-3 deferred. | architect | open |
-| W3-M-2/M-3 | MED | SessionConnector no failover Frames(); NewAccessNode nil→fail-OPEN polarity gap; Frames() lost on ctrl→PTY failover swap. | architect/implementer | open — fix in wiring story |
-| W3-F1-FU1/FU2 | LOW | BC-2.05.008 PC-4 PATH-A log not ratified; PC-2 trace row cites old test. | spec-steward | open |
-| SW305-HF1 | HIGH | Hysteresis re-fire semantics: impl rule contradicts BC-2.05.005 EC-005/AC-004 literal; untested under sustained attack; tautological tests. | product-owner→implementer/test-writer | in-fix |
-| SW305-HF2 | HIGH | Unbounded attacker-keyed map (counts/firedAt by SrcAddr never deleted) = memory DoS CWE-770; detector amplifies flood. | product-owner→implementer/test-writer | in-fix |
-| SW305-HF3 | HIGH | VP-059 (story's named P0 VP) has no spec file + no proptest exists. | architect→test-writer | in-fix |
-| SW305-M1 | MED | E-ADM-017 msg format + src_addr rendering diverge from canonical taxonomy (unpinned). | product-owner | spec-confirmed — canonical format "E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>" is UNCHANGED in error-taxonomy v1.9, BC-2.05.005 PC-3, BC-2.05.008 EC-006; code/test (failure_counter.go:169) missing "HMAC failure rate alert:" phrase — implementer/test-writer must fix the Sprintf format string and AC-015 test assertion |
-| SW305-M2 | MED | WithFailureCounter uses unexported iface not spec-pinned *admission.FailureCounter — ratify or revert. | product-owner | in-fix |
-| SW305-M3 | MED | WithNow clock seam + threshold<=0 guard absent from BC contract. | product-owner→implementer | in-fix |
-| SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | in-fix |
-| SW305-M5 | MED | VP-059 proof harness capturingLogger uses Error(msg string, _ ...any) — does not satisfy admission.Logger interface Log(msg string); harness will not compile. | architect→test-writer | open — VP-059 harness must be updated to use Log(msg string) and assert on E-ADM-017 prefix; O-1 adjudication confirms Log(msg string) is the correct seam |
-| SW305-M6 | HIGH | Per-source timestamp slice unbounded within window (CWE-770 amplification) — failure_counter.go always appends even after firedAt set; 1M/s attack = unbounded memory for one source. | implementer | fix-now — BC-2.05.005 v1.5 PC-3 mandates append-skip when firedAt[srcAddr] non-zero and re-arm not met; add EC-011 test (inject threshold failures then 1M more; assert len(counts[src])==threshold); update failure_counter.go RecordHMACFailure step 5 to skip append under this condition |
-Resolved drift + stable Phase-6 deferrals archived: `cycles/cycle-1/closed-drift.md`
+| W3-R3-F1 | HIGH? | cmd wiring: none of 5 Wave-3 subsystems wired; E-ADM-016 discarded by nopLogger in real builds. | architect | pending-adjudication |
+| W3-R3-F2 | HIGH? | BC-2.05.008 EC-006 ownership/deferral — S-W3.05 implements the mechanism; ratification pending. | product-owner | pending-adjudication |
+| W3-R2-M2 | MED | Route-time LWW snapshot: concurrent RegisterForwardingEntry not atomic with HMAC verify. | architect/implementer | open |
+| SW305-M1 | MED | E-ADM-017 msg format REOPENED — missing "HMAC failure rate alert:" phrase; prior fix was wrong-direction; specs authoritative (all 4 authorities). | implementer+test-writer | REOPENED |
+| SW305-M2 | MED | WithFailureCounter uses unexported iface not spec-pinned *admission.FailureCounter — ratify or revert. | product-owner | open |
+| SW305-M3 | MED | WithNow clock seam + threshold<=0 guard absent from BC contract. | product-owner→implementer | open |
+| SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | open |
+| SW305-M5 | MED | Per-source timestamp slice unbounded within window (CWE-770) — PO adjudicating. | product-owner | pending-adjudication |
+| SW305-M6 | MED | VP-059 names TrackedSourceCount, impl SourceCount — naming mismatch; VP harness won't compile. | implementer | open |
+| SW305-M7 | MED | ERROR-level (PC-3, AC-003) unsatisfiable through level-less admission.Logger — PO adjudicating. | product-owner | pending-adjudication |
+| SW305-M8 | MED | AC-012 dead-key delete(counts) path: no discriminating test; assertion is >=1 regardless. | test-writer | open |
+| SW305-HF3 | HIGH | VP-059 proptest still missing (C-2 reopened) — VP-059.md created 20011cc but proptest harness never ported. | test-writer | REOPENED |
+Resolved drift + stable Phase-6 deferrals + archived wave-gate rows: `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
 
@@ -185,16 +179,17 @@ Resolved drift + stable Phase-6 deferrals archived: `cycles/cycle-1/closed-drift
 | Wave-1 rollback/re-closure | all drift items routed concretely; vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP integration | 2026-06-24 |
 | S-3.03 repointed 5→8 | upstream-wiring scope expansion; Wave 3 total 29→32 pts | 2026-06-27 |
+| S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs (taxonomy v1.9 + BC-2.05.005 + BC-2.05.008) authoritative — include "HMAC failure rate alert:" phrase; prior story-writer reconciliation + orchestrator ruling that dropped it were erroneous; code/tests/story AC-003/AC-015 to conform | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (S-W3.05 per-story NOT_CONVERGED; wave-level r3 NOT_CONVERGED)
+## Session Resume Checkpoint — 2026-06-27 (S-W3.05 restart passes 4–6 NOT_CONVERGED; wave-level r3 NOT_CONVERGED)
 
-**Position:** Phase 3, Wave 3. Develop @ 10dd880 (S-W3.05 impl commit 1e74d76 on feat/S-W3.05-hmac-failure-counter).
+**Position:** Phase 3, Wave 3. Develop @ 10dd880. S-W3.05 impl commit 3af388c on feat/S-W3.05-hmac-failure-counter.
 
-**S-W3.05 per-story adversary:** 3 passes NOT_CONVERGED. HF-1 hysteresis semantics (spec contradiction + tautological tests), HF-2 memory DoS CWE-770 (unbounded SrcAddr map), HF-3 VP-059 missing. PO adjudicating BC-2.05.005 re-fire semantics + map cap policy; architect to author VP-059.md.
+**S-W3.05 per-story adversary (restart):** Passes 4–6 NOT_CONVERGED. Blocking: E-ADM-017 missing "HMAC failure rate alert:" phrase (all 3 passes; specs authoritative; prior orchestrator adjudication was erroneous — corrected in Decisions Log); missing VP-059 proptest harness (C-2 pass-05); AC-012 dead-key delete path untested (H-1 pass-05). Non-blocking → PO: M-1 per-source slice bound (CWE-770), O-1 ERROR-level Logger. Reports: `cycles/cycle-1/S-W3.05/adversary/pass-04..06.md`.
 
-**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (ARCH-08 adjudication), W3-R3-F2 EC-006 not implemented/deferred (PO adjudication).
+**Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ratification (PO adjudication).
 
-**Next:** PO adjudication → implementer/test-writer/architect fixes → S-W3.05 re-convergence (3 clean required) → wave-gate pass-r4. Wave 4 (29 pts) follows. Reports: `cycles/cycle-1/`. Previous checkpoint: `cycles/cycle-1/session-checkpoints.md`.
+**Next:** Fix E-ADM-017 msg-format (implementer) + add VP-059 proptest (test-writer) + fix AC-012 dead-key test → S-W3.05 re-convergence (3 clean required) → wave-gate pass-r4. Wave 4 (29 pts) follows. Previous checkpoint: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
