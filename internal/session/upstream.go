@@ -265,17 +265,20 @@ func (a *AccessNode) SendKeystroke(key ConsoleKey, sessionName string, payload [
 		return err
 	}
 
-	// ConsoleSet is the single source of truth: check attachment here, not in
-	// a parallel map. EvictStale removes from cs.consoles; after that, any
-	// SendKeystroke call returns ErrConsoleNotFound without touching the sink.
-	if !a.consoles.IsAttached(key) {
-		return fmt.Errorf("session: console %s not found in session %s: %w", key, sessionName, ErrConsoleNotFound)
-	}
-
-	// Serialize: only one goroutine forwards keystrokes at a time
-	// (BC-2.04.006 Invariant 3; AC-007). All consoles share this mutex.
+	// Take sinkMu FIRST (before consulting ConsoleSet) to eliminate the TOCTOU
+	// window between IsAttached and SendInput (F-H-6). Under the lock, use the
+	// ConsoleSet's Session accessor to atomically verify the console is attached
+	// and that it is attached to the correct session (F-H-2).
 	a.sinkMu.Lock()
 	defer a.sinkMu.Unlock()
+
+	attached, ok := a.consoles.Session(key)
+	if !ok {
+		return fmt.Errorf("session: console %s not found in session %s: %w", key, sessionName, ErrConsoleNotFound)
+	}
+	if attached != sessionName {
+		return fmt.Errorf("session: console %s attached to session %s, not %s: %w", key, attached, sessionName, ErrSessionMismatch)
+	}
 
 	return a.sink.SendInput(payload)
 }
