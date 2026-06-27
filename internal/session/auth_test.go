@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -1224,4 +1225,210 @@ func TestReadOnlyConsole_EmptyTickForwarded_WithCaptureSink(t *testing.T) {
 	if err := an.Detach(roKey, sessionName); err != nil {
 		t.Errorf("Detach: %v", err)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// M-1 (pass-5): positive read-only attach coverage
+// BC-2.04.005 PC-1 / BC-2.05.003 PC-1
+//
+// MUTATION-RESISTANCE CONTRACT:
+// TestAccessNode_Attach_AuthorizedKey_Succeeds only exercises RoleFull. The
+// read-only attach path passes the Attach gate via the empty-payload exemption
+// (Allow(key, session, nil) → len(nil)==0 → accepted), but no previous test
+// asserts that a RoleReadOnly key successfully attaches AND receives downstream
+// frames (fan-out membership). This test catches any future regression where
+// the attach gate wrongly denies a read-only key (e.g. an erroneous len>0
+// check on nil, or a separate read-only rejection branch).
+//
+// If the attach gate ever wrongly denies a read-only key, err != nil and the
+// test fatals at ASSERTION 1. If the fan-out membership is not established,
+// ASSERTION 3 (downstream frame receipt) fails.
+// ---------------------------------------------------------------------------
+
+// TestAccessNode_Attach_ReadOnlyKey_Succeeds verifies that a console registered
+// with RoleReadOnly is admitted by AccessNode.Attach (BC-2.04.005 PC-1;
+// BC-2.05.003 PC-1) and becomes a member of the fan-out set: a subsequently
+// delivered downstream frame is received on its channel.
+//
+// This decouples attach-admission coverage from the RoleFull-only path in
+// TestAccessNode_Attach_AuthorizedKey_Succeeds. It will FAIL if the attach gate
+// ever wrongly denies a read-only key.
+func TestAccessNode_Attach_ReadOnlyKey_Succeeds(t *testing.T) {
+	t.Parallel()
+
+	const (
+		sessionName = "agent-01"
+		roKey       = session.ConsoleKey("console-ro-attach-m1")
+	)
+
+	sa := session.NewSessionAuth()
+	sa.RegisterKey(sessionName, roKey, session.RoleReadOnly)
+
+	pub := newAuthPublisher(t, sessionName)
+	an := session.NewAccessNode(pub, sa, session.WithKeystrokeSink(session.NoOpSink{}))
+
+	// ASSERTION 1: Attach must succeed for a registered read-only key.
+	// Fails if the attach gate wrongly denies the read-only role.
+	ds, us, err := an.Attach(roKey, sessionName)
+	if err != nil {
+		t.Fatalf("Attach(roKey, RoleReadOnly): unexpected error %v; "+
+			"read-only key must be admitted at attach-time (BC-2.04.005 PC-1 / BC-2.05.003 PC-1)", err)
+	}
+
+	// ASSERTION 2: both channels must be non-nil (connection established).
+	if ds == nil {
+		t.Fatal("Attach(roKey): downstream channel is nil; must be non-nil after successful attach")
+	}
+	if us == nil {
+		t.Fatal("Attach(roKey): upstream channel is nil; must be non-nil after successful attach")
+	}
+
+	// ASSERTION 3: deliver a downstream frame and assert the read-only console
+	// receives it — proving fan-out membership was established at attach-time.
+	// This is the structural proof that mirrors TestAccessNode_Attach_AuthorizedKey_Succeeds
+	// for the RoleFull path. If the read-only console were silently excluded from
+	// the fan-out set, drainN would block and the test would timeout/fatal.
+	hdr := frame.OuterHeader{}
+	an.DeliverFrame(hdr)
+
+	frames := drainN(t, ds, 1)
+	if len(frames) != 1 {
+		t.Fatalf("downstream: expected 1 frame for read-only console, got %d; "+
+			"read-only console must be a fan-out member after successful attach (BC-2.04.005 PC-1)", len(frames))
+	}
+
+	if err := an.Detach(roKey, sessionName); err != nil {
+		t.Errorf("Detach: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// M-2 (pass-5): SessionAuth concurrency regression net
+// BC-2.05.003 EC-004 mid-session auth-list change; go.md -race
+//
+// MUTATION-RESISTANCE CONTRACT:
+// No previous test mutates the SessionAuth map concurrently with reads.
+// A dropped RLock in Authorize (or a dropped Lock in RegisterKey) would NOT
+// be caught by -race because every prior test runs RegisterKey strictly before
+// any Authorize call. This test creates genuine concurrent RegisterKey↔Authorize
+// interleaving so that removing either lock would trip the Go race detector.
+//
+// The test asserts:
+//   1. No panic (the runtime check: concurrent map access without sync panics).
+//   2. Every Authorize/Allow result is well-formed: either (Role, nil) for a key
+//      that was visible at the time of the read, or ErrSessionAuthDenied for a
+//      key not yet (or no longer) visible — never a corrupted or zero Role with
+//      nil error.
+//
+// Run with: go test -race ./internal/session/
+// ---------------------------------------------------------------------------
+
+// TestSessionAuth_ConcurrentRegisterAndAuthorize exercises concurrent
+// RegisterKey (writers) against Authorize and Allow (readers) to verify that
+// SessionAuth's sync.RWMutex is correctly held throughout both paths.
+//
+// This test is designed to be run under `go test -race`. Without the RLock in
+// Authorize or the Lock in RegisterKey, the race detector trips. The test's
+// assertion (well-formed results) is the functional check; the race detector is
+// the concurrency check.
+//
+// BC-2.05.003 EC-004: mid-session auth-list change must not corrupt state.
+func TestSessionAuth_ConcurrentRegisterAndAuthorize(t *testing.T) {
+	t.Parallel()
+
+	const (
+		numWriters   = 8
+		numReaders   = 16
+		opsPerWriter = 50
+		opsPerReader = 100
+		sessPrefix   = "concurrent-sess-"
+		keyPrefix    = "concurrent-key-"
+	)
+
+	sa := session.NewSessionAuth()
+
+	// Pre-seed some keys so readers have something to find immediately.
+	// This ensures the first reader wave does not see only misses, which
+	// would not exercise the RLock/data-read path meaningfully.
+	for i := range numWriters {
+		sess := fmt.Sprintf("%s%d", sessPrefix, i)
+		key := session.ConsoleKey(fmt.Sprintf("%s%d-seed", keyPrefix, i))
+		sa.RegisterKey(sess, key, session.RoleFull)
+	}
+
+	var wg sync.WaitGroup
+
+	// Writers: call RegisterKey varying session, key, and role concurrently.
+	for w := range numWriters {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for op := range opsPerWriter {
+				// Vary the session and key across operations to exercise map
+				// growth and cross-session isolation under concurrent load.
+				sess := fmt.Sprintf("%s%d", sessPrefix, (w+op)%numWriters)
+				key := session.ConsoleKey(fmt.Sprintf("%s%d-%d", keyPrefix, w, op))
+				role := session.RoleFull
+				if op%2 == 0 {
+					role = session.RoleReadOnly
+				}
+				sa.RegisterKey(sess, key, role)
+			}
+		}(w)
+	}
+
+	// Readers: call Authorize and Allow on overlapping keys concurrently with
+	// the writers above. Results must be well-formed: either a valid role or
+	// ErrSessionAuthDenied — never a nil error with an unrecognized role value,
+	// or a panic from an unsynchronized map read.
+	for r := range numReaders {
+		wg.Add(1)
+		go func(r int) {
+			defer wg.Done()
+			for op := range opsPerReader {
+				sess := fmt.Sprintf("%s%d", sessPrefix, (r+op)%numWriters)
+				// Mix seeded keys (likely to exist) with non-seeded keys (likely absent).
+				var key session.ConsoleKey
+				if op%3 == 0 {
+					key = session.ConsoleKey(fmt.Sprintf("%s%d-seed", keyPrefix, (r+op)%numWriters))
+				} else {
+					key = session.ConsoleKey(fmt.Sprintf("%s%d-%d-reader", keyPrefix, r, op))
+				}
+
+				if op%2 == 0 {
+					// Authorize path.
+					role, err := sa.Authorize(key, sess)
+					if err != nil {
+						// ErrSessionAuthDenied is the only valid error; anything else
+						// indicates a corruption or unexpected code path.
+						if !errors.Is(err, session.ErrSessionAuthDenied) {
+							t.Errorf("Authorize(%q, %q): unexpected error %v; "+
+								"want nil or ErrSessionAuthDenied", key, sess, err)
+						}
+					} else {
+						// nil error → role must be one of the defined Role values.
+						if role != session.RoleFull && role != session.RoleReadOnly {
+							t.Errorf("Authorize(%q, %q): undefined Role value %d with nil error; "+
+								"result is not well-formed", key, sess, role)
+						}
+					}
+				} else {
+					// Allow path (nil payload — empty-tick exemption avoids read-only rejection).
+					err := sa.Allow(key, sess, nil)
+					if err != nil {
+						if !errors.Is(err, session.ErrSessionAuthDenied) &&
+							!errors.Is(err, session.ErrUpstreamReadOnly) {
+							t.Errorf("Allow(%q, %q, nil): unexpected error %v; "+
+								"want nil, ErrSessionAuthDenied, or ErrUpstreamReadOnly", key, sess, err)
+						}
+					}
+				}
+			}
+		}(r)
+	}
+
+	wg.Wait()
+	// Reaching here without panic or t.Errorf means both the functional contract
+	// and race-freedom hold. The race detector (go test -race) is the backstop
+	// for locking correctness.
 }
