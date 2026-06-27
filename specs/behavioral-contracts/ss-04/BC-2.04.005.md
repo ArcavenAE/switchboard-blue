@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.005
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-26T00:00:00
@@ -18,6 +18,13 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.3"
+    date: 2026-06-26
+    author: architect
+    changes: >
+      EC-004: appended clarifying sentence specifying that "liveness probe credited" means forwarding
+      the zero-length frame to the KeystrokeSink, not updating the ConsoleSet keepalive heartbeat
+      (M-1 adjudication, S-3.03 adversarial review). No behavioral change.
   - version: "1.2"
     date: 2026-06-26
     author: architect
@@ -79,7 +86,7 @@ Console attaches with a read-only session authorization key; console sends a key
 | EC-001 (DEC-011) | Full-access console and read-only console both attached | Full-access console's keystrokes are forwarded. Read-only console's keystrokes are rejected. Both receive the same downstream output. |
 | EC-002 | Read-only console attempts to detach using a control keystroke sequence | The keystroke (as payload data) is rejected; the read-only console must use `sbctl sessions detach` to detach cleanly. |
 | EC-003 | Scope is per-SVTN (all sessions read-only for this key) | Access node enforces read-only on all sessions this console attaches to on this SVTN. Not just one session. The enforcement mechanism is per-(session,key) role lookup; "SVTN-wide" describes a provisioning pattern where the operator registers the key as read-only in each session's authorization list, not a separate SVTN-level data structure. |
-| EC-004 | Read-only console sends empty-tick frame (not a keystroke) | Empty-tick frames are part of the half-channel clock and are sent by both upstream and downstream. The access node accepts empty-tick frames from read-only consoles (they are liveness probes, not keystrokes). Only payload-bearing upstream frames are rejected. |
+| EC-004 | Read-only console sends empty-tick frame (not a keystroke) | Empty-tick frames are part of the half-channel clock and are sent by both upstream and downstream. The access node accepts empty-tick frames from read-only consoles (they are liveness probes, not keystrokes). Only payload-bearing upstream frames are rejected. Liveness is credited by forwarding the zero-length frame to the KeystrokeSink (the downstream tmux/PTY peer); it does not update the ConsoleSet keepalive heartbeat, which is a separate timeout-tracking mechanism (BC-2.04.004 EC-002). |
 
 ## Canonical Test Vectors
 
