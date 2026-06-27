@@ -477,6 +477,18 @@ type SessionConnector struct {
 	// channel to detect mid-session fallback failures.
 	errCh      chan error
 	closeErrCh sync.Once
+
+	// ADR-011: forwarding channel and relay goroutine for failover-stable
+	// frame delivery to cmd/switchboard. sc.frames is the stable channel
+	// returned by Frames(); the relay goroutine (forwardFrames) copies from
+	// the active mode's Frames() channel into sc.frames, re-subscribing
+	// transparently on ctrl→PTY mode switch.
+	//
+	// sc.frames is created in NewSessionConnector (buffered to framesBufferSize).
+	// The relay goroutine is started in Connect after the active mode is
+	// confirmed. sc.Close() closes sc.frames exactly once via closeForwardFrames.
+	frames             chan halfchannel.ChannelFrame
+	closeForwardFrames sync.Once
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control
@@ -490,6 +502,9 @@ func NewSessionConnector(ctrl *ControlMode, pty *PTYProxy, opts ...SessionConnec
 		// M-003 (pass-4): buffered 1 so watchAndFallback can always deliver
 		// a failure signal without blocking on a non-draining caller.
 		errCh: make(chan error, 1),
+		// ADR-011: forwarding channel created here; relay goroutine started in
+		// Connect. Buffered to match the underlying mode channels.
+		frames: make(chan halfchannel.ChannelFrame, framesBufferSize),
 	}
 	for _, opt := range opts {
 		opt(sc)
