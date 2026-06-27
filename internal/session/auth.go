@@ -50,7 +50,7 @@ var ErrUpstreamReadOnly = errors.New("session: upstream rejected: read-only acce
 
 // authEntry holds a console's Tier-2 authorization record for a single session.
 type authEntry struct {
-	role Role //nolint:unused // stub: field used by S-3.03 implementation (BC-5.38.001)
+	role Role
 }
 
 // SessionAuth is the Tier-2 per-session authorization component. It maintains
@@ -67,7 +67,7 @@ type authEntry struct {
 // Never return internal pointers from locked accessors: all exported read
 // methods return value copies (S-3.02 precedent; Go quality rule §12).
 type SessionAuth struct {
-	mu       sync.RWMutex                        //nolint:unused // stub: field used by S-3.03 implementation (BC-5.38.001)
+	mu       sync.RWMutex
 	sessions map[string]map[ConsoleKey]authEntry // sessionName → consoleKey → entry
 }
 
@@ -85,7 +85,13 @@ func NewSessionAuth() *SessionAuth {
 //
 // RegisterKey is safe for concurrent use (takes full write lock).
 func (sa *SessionAuth) RegisterKey(sessionName string, key ConsoleKey, role Role) {
-	panic("not implemented: BC-2.04.005/BC-2.05.003")
+	sa.mu.Lock()
+	defer sa.mu.Unlock()
+
+	if sa.sessions[sessionName] == nil {
+		sa.sessions[sessionName] = make(map[ConsoleKey]authEntry)
+	}
+	sa.sessions[sessionName][key] = authEntry{role: role}
 }
 
 // Authorize checks whether key is in the authorization list for sessionName,
@@ -98,7 +104,18 @@ func (sa *SessionAuth) RegisterKey(sessionName string, key ConsoleKey, role Role
 //
 // Authorize is safe for concurrent use (takes RLock).
 func (sa *SessionAuth) Authorize(key ConsoleKey, sessionName string) (Role, error) {
-	panic("not implemented: BC-2.04.005/BC-2.05.003")
+	sa.mu.RLock()
+	defer sa.mu.RUnlock()
+
+	sessionKeys, ok := sa.sessions[sessionName]
+	if !ok {
+		return 0, ErrSessionAuthDenied
+	}
+	entry, ok := sessionKeys[key]
+	if !ok {
+		return 0, ErrSessionAuthDenied
+	}
+	return entry.role, nil
 }
 
 // Allow implements the Authorizer interface (upstream.go). It is called by
@@ -118,5 +135,12 @@ func (sa *SessionAuth) Authorize(key ConsoleKey, sessionName string) (Role, erro
 // Allow must be safe for concurrent calls from multiple goroutines (Authorizer
 // interface contract).
 func (sa *SessionAuth) Allow(key ConsoleKey, sessionName string, payload []byte) error {
-	panic("not implemented: BC-2.04.005/BC-2.05.003")
+	role, err := sa.Authorize(key, sessionName)
+	if err != nil {
+		return err
+	}
+	if role == RoleReadOnly && len(payload) > 0 {
+		return ErrUpstreamReadOnly
+	}
+	return nil
 }

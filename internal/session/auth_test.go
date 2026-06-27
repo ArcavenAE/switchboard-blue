@@ -47,7 +47,7 @@ func newAuthPublisher(t *testing.T, sessionNames ...string) *session.Publisher {
 // mustAttachConsole calls AccessNode.Attach and fatals on error. Named
 // "mustAttachConsole" to avoid collision if session_test.go ever declares
 // a similar helper. t.Helper() ensures failures point to the caller.
-func mustAttachConsole(t *testing.T, an *session.AccessNode, key session.ConsoleKey, sessionName string) <-chan frame.OuterHeader {
+func mustAttachConsole(t *testing.T, an *session.AccessNode, key session.ConsoleKey, sessionName string) <-chan frame.OuterHeader { //nolint:unparam // sessionName is a genuine parameter; current callers happen to use "agent-01" but the helper is reused across tests
 	t.Helper()
 	ds, _, err := an.Attach(key, sessionName)
 	if err != nil {
