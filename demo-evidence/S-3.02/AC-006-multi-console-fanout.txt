@@ -1,0 +1,14 @@
+$ go test -race -v -run "TestSession_MultiConsoleFanOut_AllReceiveFrames" ./internal/session/
+=== RUN   TestSession_MultiConsoleFanOut_AllReceiveFrames
+=== PAUSE TestSession_MultiConsoleFanOut_AllReceiveFrames
+=== CONT  TestSession_MultiConsoleFanOut_AllReceiveFrames
+--- PASS: TestSession_MultiConsoleFanOut_AllReceiveFrames (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.289s
+
+Race detector: CLEAN (no data races detected)
+
+Demonstrates: two or more consoles attached to the same session simultaneously
+each receive every downstream frame independently. ConsoleSet.Deliver iterates
+a snapshot of the attachment set and writes each frame to all buffered channels;
+no console is skipped (BC-2.04.006 PC-1 / fan-out completeness invariant).
