@@ -534,6 +534,9 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 		sc.wg.Add(1)
 		go sc.watchAndFallback(innerCtx)
 
+		// ADR-011: start the forwarding relay goroutine after active is set.
+		sc.startForwardFrames()
+
 		return nil
 	}
 
@@ -556,6 +559,9 @@ func (sc *SessionConnector) Connect(ctx context.Context) error {
 	sc.active = sc.pty
 	sc.inPTYMode = true
 	sc.mu.Unlock()
+
+	// ADR-011: start the forwarding relay goroutine after active is set.
+	sc.startForwardFrames()
 
 	return nil
 }
@@ -656,8 +662,13 @@ func (sc *SessionConnector) Close() error {
 		}
 	}
 
-	// Wait for watchAndFallback goroutine(s) to exit.
+	// Wait for watchAndFallback and forwardFrames goroutines to exit.
 	sc.wg.Wait()
+
+	// ADR-011: close sc.frames after all goroutines exit. sync.Once guards
+	// against double-close with forwardFrames defer. Handles the case where
+	// startForwardFrames was never called (Connect not invoked before Close).
+	sc.closeForwardFrames.Do(func() { close(sc.frames) })
 
 	// M-003 (pass-4): close errCh so consumers ranging over it unblock after
 	// a graceful Close. sync.Once guards against double-close with watchAndFallback.

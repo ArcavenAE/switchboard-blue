@@ -5,10 +5,6 @@
 // Design rationale: see ARCH-01 ADR-011. The caller receives one stable channel
 // for the lifetime of the session; the relay goroutine (forwardFrames) re-plumbs
 // internally on ctrl→PTY mode switch without disturbing the consumer.
-//
-// Stub: Frames() compiles and returns sc.frames, but the relay goroutine is not
-// started (panic("not implemented")). Tests exercising failover will fail (Red
-// Gate — BC-5.38.001).
 package tmux
 
 import "github.com/arcavenae/switchboard/internal/halfchannel"
@@ -23,11 +19,18 @@ type framesSource interface {
 // activeFrSource returns the active frame source under sc.mu. The relay
 // goroutine calls this after a mode switch to re-read the new source.
 //
-// STUB: panics (S-W3.04 AC-004). The real body must type-assert sc.active to
-// framesSource and return it; that assertion is non-trivial (may panic if active
-// is nil or wrong type — needs guard logic). Keeping as panic per BC-5.38.001.
+// Returns nil if sc.active is nil or does not implement framesSource.
 func (sc *SessionConnector) activeFrSource() framesSource {
-	panic("not implemented: SessionConnector.activeFrSource (S-W3.04 AC-004)")
+	sc.mu.Lock()
+	active := sc.active
+	closed := sc.closed
+	sc.mu.Unlock()
+
+	if closed || active == nil {
+		return nil
+	}
+	src, _ := active.(framesSource)
+	return src
 }
 
 // Frames returns the stable forwarding channel for downstream frame consumers
@@ -37,21 +40,56 @@ func (sc *SessionConnector) activeFrSource() framesSource {
 // over the returned channel for the session lifetime. When sc.Close() is called,
 // the channel is closed exactly once via closeForwardFrames (sync.Once).
 //
-// STUB: the relay goroutine that feeds sc.frames is not yet started; this method
-// compiles but the forwarding relay is unimplemented. Callers will see sc.frames
-// remain empty across a ctrl→PTY failover — TestSessionConnectorFramesSurviveFailover
-// will fail (Red Gate, BC-5.38.001 / S-W3.04 AC-004).
+// The relay goroutine (forwardFrames) is started by Connect; callers should call
+// Frames() before or after Connect — the channel is the same either way.
 func (sc *SessionConnector) Frames() <-chan halfchannel.ChannelFrame {
-	panic("not implemented: SessionConnector.Frames() relay goroutine (S-W3.04 AC-004)")
+	return sc.frames
+}
+
+// startForwardFrames starts the relay goroutine and registers it with sc.wg.
+// Called from Connect after the active mode is set.
+func (sc *SessionConnector) startForwardFrames() {
+	sc.wg.Add(1)
+	go func() {
+		defer sc.wg.Done()
+		sc.forwardFrames()
+	}()
 }
 
 // forwardFrames is the relay goroutine body (ADR-011 §Concurrency contract).
 // It ranges over the current active mode's Frames() channel, writing each frame
 // non-blocking to sc.frames (drop on full). On source-channel close it
 // re-reads sc.activeFrSource() and continues ranging over the new source.
-// Exits when sc.frames is closed.
-//
-// STUB: not implemented — started as a goroutine in Connect once implemented.
+// Exits when sc is closed (activeFrSource returns nil).
 func (sc *SessionConnector) forwardFrames() {
-	panic("not implemented: SessionConnector.forwardFrames relay goroutine (S-W3.04 AC-004)")
+	// Close sc.frames exactly once on exit, so range-consumers unblock cleanly.
+	defer sc.closeForwardFrames.Do(func() { close(sc.frames) })
+
+	for {
+		src := sc.activeFrSource()
+		if src == nil {
+			// Connector closed or no active source — exit.
+			return
+		}
+		srcCh := src.Frames()
+
+		// Range over the current source channel. When it closes (mode switch or
+		// Close), the for-range exits and we re-read the active source.
+		for f := range srcCh {
+			select {
+			case sc.frames <- f:
+			default:
+				// EC-003: sc.frames full — drop frame, do not block.
+			}
+		}
+
+		// Source channel closed — check if we should exit or switch sources.
+		sc.mu.Lock()
+		closed := sc.closed
+		sc.mu.Unlock()
+		if closed {
+			return
+		}
+		// Loop: re-read activeFrSource() for the new backend (PTY after ctrl drop).
+	}
 }
