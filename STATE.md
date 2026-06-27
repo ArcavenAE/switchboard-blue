@@ -69,34 +69,19 @@ refactor_frametype_mtu_merge_sha: 4be1b53f85655110035de4f0f38422662afa2ed9
 cicd_setup_complete: true
 internal_packages: 18
 plugin_version_adopted: "1.0.0-rc.21"
-s_1_03_adversary_step_4_5: "CONVERGED (3/3 clean: passes 3, 4, 5) — BC-5.39.001 satisfied"
-s_1_03_adversary_pass_03_sha: dc37fe1
-s_1_03_adversary_pass_04_sha: 52ee1d3
-s_1_03_adversary_pass_05_sha: 6bcde7d
+s_1_03_adversary_converged: "CONVERGED (passes 3–5 clean, 5 total) — cycles/cycle-1/S-1.03/adversary/"
 s_1_03_merge_sha: f35e836
-s_3_04_adversary_step_4_5: "CONVERGED (3/3 clean: passes 3, 4, 5) — BC-5.39.001 satisfied"
-s_3_04_adversary_pass_03_sha: pending
-s_3_04_adversary_pass_04_sha: pending
-s_3_04_adversary_pass_05_sha: 5c3f93a
+s_3_04_adversary_converged: "CONVERGED (passes 3–5 clean, 5 total) — cycles/cycle-1/S-3.04/adversary/"
 s_3_04_merge_sha: d54bf1a
 s_3_04_pr_number: 9
 s_3_04_merge_date: 2026-06-26
 s_3_04_status: completed
-s_3_01a_adversary_step_4_5: "CONVERGED (3/3 clean: passes 13, 14, 15) — BC-5.39.001 satisfied"
-s_3_01a_adversary_passes_total: 15
-s_3_01a_adversary_not_converged: 8
-s_3_01a_adversary_converged: 7
-s_3_01a_adversary_pass_15_sha: f939f41
+s_3_01a_adversary_converged: "CONVERGED (passes 13–15 clean, 15 total, 8 NOT+7 OK) — cycles/cycle-1/S-3.01a/adversary/"
 s_3_01a_merge_sha: 43208ab
 s_3_01a_pr_number: 11
 s_3_01a_merge_date: 2026-06-26
 s_3_01a_status: completed
-s_3_01b_adversary_step_4_5: "CONVERGED (3/3 clean: passes 10, 11, 12) — BC-5.39.001 satisfied"
-s_3_01b_adversary_passes_total: 12
-s_3_01b_adversary_not_converged: 9
-s_3_01b_adversary_converged: 3
-s_3_01b_adversary_pass_12_sha: 47df731
-s_3_01b_adversary_defect_classes: "test-masks-defect (×4), concurrency contract gaps (×3), cross-platform PTY bugs (×3), spec drift (×4)"
+s_3_01b_adversary_converged: "CONVERGED (passes 10–12 clean, 12 total, 9 NOT+3 OK) — cycles/cycle-1/S-3.01b/adversary/"
 s_3_01b_merge_sha: 56ec9c7
 s_3_01b_pr_number: 12
 s_3_01b_merge_date: 2026-06-26
