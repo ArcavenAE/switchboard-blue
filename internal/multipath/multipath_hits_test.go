@@ -1,50 +1,10 @@
 // Package multipath_test — hit-counter tests for BC-2.02.009 postcondition 2.
 //
-// # Build tag: dropcache_hits
+// These tests verify DropCache.Hits() (AC-007): the cumulative hit counter
+// increments on each cache hit (Add or AddIfAbsent on an already-present key)
+// and does not increment on first-arrival misses.
 //
-// These tests reference DropCache.Hits() int64, which does NOT exist yet.
-// They are gated behind the `dropcache_hits` build tag so that the regular
-// `go test ./...` run compiles cleanly while the implementer adds Hits().
-//
-// # Implementer contract (required for this file to compile without the tag)
-//
-// Add the following to DropCache in internal/multipath/multipath.go:
-//
-//  1. A hits counter field (increment under the existing mutex, or atomically):
-//     hits int64  // cumulative cache hits (AddIfAbsent or Add on already-present key)
-//
-//  2. Increment in AddIfAbsent when the key is already present (the "cache hit" path):
-//     // already present → hit; move to front and return false
-//     c.lru.MoveToFront(elem)
-//     c.hits++
-//     return false
-//
-//  3. Increment in Add when the key is already present (re-add of a known key = hit):
-//     // already present → move to front; count as a hit
-//     c.lru.MoveToFront(elem)
-//     c.hits++
-//     return
-//
-//  4. Add a Hits() int64 accessor:
-//     func (c *DropCache) Hits() int64 {
-//         c.mu.Lock()
-//         defer c.mu.Unlock()
-//         return c.hits
-//     }
-//
-// Once Hits() is added the implementer MUST remove the `//go:build dropcache_hits`
-// tag from this file so these tests run as part of the regular suite.
-//
-// # Red Gate status
-//
-// This file does NOT compile without the build tag because Hits() does not exist.
-// That is the correct Red state. Run with the tag to see compilation fail before
-// Hits() is implemented:
-//
-//	go test -tags dropcache_hits ./internal/multipath/...
-//
-// After Hits() is implemented (and the tag removed), all tests in this file MUST
-// pass under `go test -race ./internal/multipath/...`.
+// Pass-2 ruling F-H2 (FIX-IN-S4.01) / BC-2.02.009 postcondition 2.
 
 package multipath_test
 
