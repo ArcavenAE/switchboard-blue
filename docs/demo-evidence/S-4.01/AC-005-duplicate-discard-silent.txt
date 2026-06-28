@@ -1,0 +1,10 @@
+$ go test ./internal/multipath/... \
+    -run 'TestBC_2_02_002_Receive_DuplicateDiscardSilent' \
+    -v
+
+=== RUN   TestBC_2_02_002_Receive_DuplicateDiscardSilent
+=== PAUSE TestBC_2_02_002_Receive_DuplicateDiscardSilent
+=== CONT  TestBC_2_02_002_Receive_DuplicateDiscardSilent
+--- PASS: TestBC_2_02_002_Receive_DuplicateDiscardSilent (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/multipath     0.257s
