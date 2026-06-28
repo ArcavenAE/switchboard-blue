@@ -802,15 +802,23 @@ func TestBC_2_02_005_GapsToRetransmit_EmptyInFlight(t *testing.T) {
 
 // ─── EC-003: TLPKTDROP during failover ────────────────────────────────────────
 
-// TestBC_2_02_006_EC003_TLPKTDROPDuringFailover verifies EC-003: when TLPKTDROP
-// fires during a router failover scenario, the degradation signal is emitted and
-// the ARQ state machine allows resync on reconnect (ADR-005).
+// DRIFT-S4.03-001: ADR-005 resync mechanics (RESYNC frame, delivery-pointer reset,
+// in-flight-loss on failover) are not verified in internal/arq. Deferred to S-5.01
+// (router reconnect layer). See RULING-003 EC-003 disposition.
+
+// TestBC_2_02_006_EC003_DegradationAndPostDropContinuation verifies that after
+// a TLPKTDROP event — as would occur during a router failover — the ARQ emits
+// the degradation signal and continues accepting subsequent frames normally.
 //
-// ADR-005 resync: on path failover, in-flight frames are lost; the console sends
-// a RESYNC (modeled here by sending a fresh cumulative ACK with ackSeq reset to
-// last_acked_seq+1 after the drop). The test verifies the ARQ accepts subsequent
-// frames normally after TLPKTDROP + resync.
-func TestBC_2_02_006_EC003_TLPKTDROPDuringFailover(t *testing.T) {
+// Traces to: BC-2.02.006 EC-003 (TLPKTDROP during failover, degradation emitted).
+//
+// NOTE: ADR-005 resync mechanics (RESYNC control frame, delivery-pointer reset
+// from last_acked_seq+1, in-flight loss handling on reconnect) are router/reconnect-
+// layer concerns deferred to S-5.01. internal/arq is pure-core; it has no concept
+// of reconnect and cannot initiate or observe a resync event. The S-5.01 story
+// will wire the reconnect trigger and add tests for the full ADR-005 state machine.
+// Drift item: DRIFT-S4.03-001.
+func TestBC_2_02_006_EC003_DegradationAndPostDropContinuation(t *testing.T) {
 	t.Parallel()
 
 	const dropTimeout = 100 * time.Millisecond
@@ -1322,7 +1330,7 @@ func TestARQ_ReorderBuf_BoundedByWindowSize(t *testing.T) {
 // rejects a cumulative ACK whose distance from nextExpected exceeds
 // sackWindowSize (64) without executing the Step-1 iteration loop.
 //
-// Red-gate obligation: RULING-003. Traces to BC-2.02.005 PC-3, EC-004.
+// Red-gate obligation: RULING-003. Traces to BC-2.02.005 PC-3, EC-005.
 func TestOnAck_OutOfWindowAckSeq_RejectsWithoutIteration(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
