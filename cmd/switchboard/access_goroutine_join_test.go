@@ -127,7 +127,7 @@ func TestRunAccessWithConnectorNoGoroutineLeak(t *testing.T) {
 	// Launch the PRODUCTION function. `done` is closed when it returns.
 	done := make(chan struct{})
 	go func() {
-		_ = runAccessWithConnector(ctx, &stderr, brc, an, router)
+		_ = runAccessWithConnector(ctx, &stderr, brc, an, router, nil)
 		close(done)
 	}()
 

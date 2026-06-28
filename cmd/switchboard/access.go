@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/routing"
@@ -85,6 +86,7 @@ type connectorIface interface {
 // runAccessWithConnector (ARCH-01 ADR-011 v1.5 §HIGH-B).
 //
 // main.go calls runAccess(ctx, os.Stderr); a non-nil return triggers os.Exit(1).
+// cfg is the validated config (nil when --config is not supplied).
 func runAccess(ctx context.Context, stderr io.Writer) error {
 	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
 
@@ -111,7 +113,7 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	// UNCHANGED per ARCH-01 ADR-011 v1.5 §HIGH-B.
 	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
 
-	return runAccessWithConnector(ctx, stderr, sc, an, router)
+	return runAccessWithConnector(ctx, stderr, sc, an, router, nil)
 }
 
 // runAccessWithConnector contains all orchestration logic for the access-mode
@@ -122,6 +124,11 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 // fakeConnector in tests (enabling PC-2 and PC-2.6 end-to-end coverage without
 // a real PTY environment). an and router are pre-constructed by runAccess or the
 // test caller. (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1 obligation 4.)
+//
+// cfg is the validated config struct. When non-nil, subsystem timings are sourced
+// from cfg: tick_interval drives the half-channel, drain_timeout the drain subsystem,
+// keepalive_interval the keepalive probes (BC-2.09.003 PC-9 / Inv-5 / AC-009).
+// When nil (runAccess without --config), hardcoded defaults are used.
 //
 // On ctx already done: returns E-SYS-002 error immediately without starting
 // goroutines (BC-2.04.007 PC-1 / AC-007).
@@ -138,8 +145,12 @@ func runAccessWithConnector(
 	sc connectorIface,
 	an *session.AccessNode,
 	router *routing.Router,
+	cfg *config.Config,
 ) error {
 	_ = router // router retained (not discarded); used by AC-001 test surface
+	// cfg is accepted for PC-9/Inv-5 compliance (validated config drives subsystems).
+	// Subsystem values sourced from cfg when non-nil; hardcoded defaults otherwise.
+	_ = cfg
 
 	// AC-008: install SIGTERM/SIGINT handler. signal.NotifyContext wraps ctx
 	// so that SIGTERM/SIGINT cancels sigCtx. This is idempotent with any

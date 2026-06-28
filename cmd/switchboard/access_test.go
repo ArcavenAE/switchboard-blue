@@ -176,7 +176,7 @@ func TestRunAccessWithConnectorPC26(t *testing.T) {
 	const returnDeadline = 500 * time.Millisecond
 	resultCh := make(chan error, 1)
 	go func() {
-		resultCh <- runAccessWithConnector(ctx, &stderr, fc, an, router)
+		resultCh <- runAccessWithConnector(ctx, &stderr, fc, an, router, nil)
 	}()
 
 	var err error
@@ -252,7 +252,7 @@ func TestRunAccessWithConnectorPC2(t *testing.T) {
 	const returnDeadline = 500 * time.Millisecond
 	resultCh := make(chan error, 1)
 	go func() {
-		resultCh <- runAccessWithConnector(ctx, &stderr, fc, an, router)
+		resultCh <- runAccessWithConnector(ctx, &stderr, fc, an, router, nil)
 	}()
 
 	// Give the production goroutines a brief window to start (sweep ticker,
