@@ -15,6 +15,7 @@ package multipath
 import (
 	"container/list"
 	"errors"
+	"hash/crc32"
 	"sync"
 
 	"github.com/arcavenae/switchboard/internal/paths"
@@ -67,26 +68,57 @@ type DropCache struct {
 // NewDropCache constructs a DropCache with the given maximum capacity.
 // capacity must be ≥ 1; a typical value is DefaultDropCacheSize (10,000).
 func NewDropCache(capacity int) *DropCache {
-	panic("not implemented: NewDropCache")
+	return &DropCache{
+		capacity: capacity,
+		index:    make(map[dropKey]*list.Element, capacity),
+		lru:      list.New(),
+	}
 }
 
 // Contains reports whether the compound key (checksum, arrivalInterfaceID) is
 // present in the cache. A hit means the frame is a loop duplicate and should
 // be silently discarded (BC-2.02.009 postcondition 2).
 func (c *DropCache) Contains(checksum uint32, arrivalInterfaceID uint64) bool {
-	panic("not implemented: DropCache.Contains")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.index[dropKey{checksum, arrivalInterfaceID}]
+	return ok
 }
 
 // Add inserts the compound key (checksum, arrivalInterfaceID) into the cache.
 // If the cache is already at capacity, the least-recently-used entry is evicted
 // before insertion (BC-2.02.009 postcondition 3, AC-006).
 func (c *DropCache) Add(checksum uint32, arrivalInterfaceID uint64) {
-	panic("not implemented: DropCache.Add")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := dropKey{checksum, arrivalInterfaceID}
+
+	// If already present, move to front (most-recently used) and return.
+	if elem, ok := c.index[key]; ok {
+		c.lru.MoveToFront(elem)
+		return
+	}
+
+	// Evict LRU entry if at capacity.
+	if c.lru.Len() >= c.capacity {
+		oldest := c.lru.Back()
+		if oldest != nil {
+			c.lru.Remove(oldest)
+			delete(c.index, oldest.Value.(dropEntry).key)
+		}
+	}
+
+	// Insert new entry at front.
+	elem := c.lru.PushFront(dropEntry{key: key})
+	c.index[key] = elem
 }
 
 // Len returns the current number of entries in the cache.
 func (c *DropCache) Len() int {
-	panic("not implemented: DropCache.Len")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lru.Len()
 }
 
 // SendResult describes the dispatch outcome for a single path when Multipath.Send
@@ -117,14 +149,24 @@ type Multipath struct {
 // NewMultipath constructs a Multipath dispatcher with the provided initial
 // ranked path set and a drop cache of the given capacity.
 func NewMultipath(pathSet []paths.RankedPath, dropCacheCapacity int) *Multipath {
-	panic("not implemented: NewMultipath")
+	// Clone the slice so the caller cannot mutate our internal state.
+	cloned := make([]paths.RankedPath, len(pathSet))
+	copy(cloned, pathSet)
+	return &Multipath{
+		pathSet:   cloned,
+		dropCache: NewDropCache(dropCacheCapacity),
+	}
 }
 
 // UpdatePaths atomically replaces the ranked path set used for dispatch
 // decisions (BC-2.02.001 postcondition 5: rankings are snapshotted at dispatch
 // time; this call updates the snapshot for future dispatches only).
 func (m *Multipath) UpdatePaths(pathSet []paths.RankedPath) {
-	panic("not implemented: Multipath.UpdatePaths")
+	cloned := make([]paths.RankedPath, len(pathSet))
+	copy(cloned, pathSet)
+	m.mu.Lock()
+	m.pathSet = cloned
+	m.mu.Unlock()
 }
 
 // Send dispatches f on the two highest-scoring paths in the current path set
@@ -136,7 +178,41 @@ func (m *Multipath) UpdatePaths(pathSet []paths.RankedPath) {
 //
 // The returned []SendResult has one entry per path on which fn was called.
 func (m *Multipath) Send(f Frame, fn SendFunc) ([]SendResult, error) {
-	panic("not implemented: Multipath.Send")
+	// Snapshot the path set under lock so rank changes mid-dispatch do not
+	// affect this frame (BC-2.02.001 postcondition 5).
+	m.mu.Lock()
+	snapshot := make([]paths.RankedPath, len(m.pathSet))
+	copy(snapshot, m.pathSet)
+	m.mu.Unlock()
+
+	ranked, err := paths.Rank(snapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Select at most two fastest paths (BC-2.02.001 invariant 2).
+	selected := ranked
+	if len(selected) > 2 {
+		selected = selected[:2]
+	}
+
+	results := make([]SendResult, 0, len(selected))
+	for _, rp := range selected {
+		// fn is called without holding any internal lock.
+		if fnErr := fn(rp.ID, f); fnErr == nil {
+			results = append(results, SendResult{PathID: rp.ID, Sent: true})
+		}
+	}
+	return results, nil
+}
+
+// frameChecksum computes the CRC32 IEEE checksum over the outer header
+// concatenated with the payload (ARCH-03: crc32(outer_header || payload)).
+func frameChecksum(f Frame) uint32 {
+	h := crc32.NewIEEE()
+	_, _ = h.Write(f.OuterHeader[:])
+	_, _ = h.Write(f.Payload)
+	return h.Sum32()
 }
 
 // Receive deduplicates an arriving frame using the drop cache. It computes
@@ -150,5 +226,12 @@ func (m *Multipath) Send(f Frame, fn SendFunc) ([]SendResult, error) {
 // discarded without ACK side-effects (BC-2.02.002 postcondition 2, AC-004,
 // AC-005).
 func (m *Multipath) Receive(f Frame, arrivalInterfaceID uint64) error {
-	panic("not implemented: Multipath.Receive")
+	checksum := frameChecksum(f)
+
+	if m.dropCache.Contains(checksum, arrivalInterfaceID) {
+		return ErrDuplicate
+	}
+
+	m.dropCache.Add(checksum, arrivalInterfaceID)
+	return nil
 }

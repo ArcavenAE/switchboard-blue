@@ -10,12 +10,17 @@ package paths
 
 import (
 	"errors"
+	"sort"
 	"sync"
 )
 
 // DefaultLossWeight is the coefficient applied to the loss fraction in the
 // composite path score formula (ARCH-03: loss_weight = 10).
 const DefaultLossWeight = 10.0
+
+// consecutiveMissThreshold is the number of consecutive missed keepalives
+// required to mark a path inactive (BC-2.02.003 postcondition 6).
+const consecutiveMissThreshold = 3
 
 // ErrNoActivePaths is returned by Rank when the tracker has no paths in the
 // active set (all paths have been removed due to consecutive missed keepalives).
@@ -38,7 +43,7 @@ type Score float64
 // Lower score is better. Ranking by PathScore is deterministic and transitive
 // (BC-2.02.003 postcondition 3, AC-001).
 func PathScore(rttMS float64, lossPct float64) Score {
-	panic("not implemented: PathScore")
+	return Score(rttMS * (1 + (lossPct/100)*DefaultLossWeight))
 }
 
 // PathTracker maintains the EWMA RTT and loss estimate for a single path.
@@ -62,6 +67,12 @@ type PathTracker struct {
 
 	// active reports whether this path is in the active set.
 	active bool
+
+	// firstProbe is true until the first successful probe has been received.
+	// On first arrival the RTT estimate is replaced outright (TCP RFC 6298
+	// style) rather than EWMA-blended, so the conservative initial value does
+	// not poison the EWMA for many probe intervals (BC-2.02.003 EC-003).
+	firstProbe bool
 }
 
 // NewPathTracker constructs a PathTracker with a conservative initial RTT
@@ -71,7 +82,13 @@ type PathTracker struct {
 // BC-2.02.003 precondition 3: metrics are initialized with a high-RTT default
 // on first connection.
 func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
-	panic("not implemented: NewPathTracker")
+	return &PathTracker{
+		ewmaAlpha:   alpha,
+		ewmaRTTMS:   initialRTTMS,
+		ewmaLossPct: 0,
+		active:      true,
+		firstProbe:  true,
+	}
 }
 
 // OnProbe updates the EWMA RTT and loss estimate for the path based on a
@@ -85,29 +102,61 @@ func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
 // Consecutive missed keepalives are tracked; once the miss count reaches
 // consecutiveMissThreshold the path is marked inactive (BC-2.02.003 postcondition 6).
 func (t *PathTracker) OnProbe(arrivalRTTMS float64, lossEvent bool) {
-	panic("not implemented: PathTracker.OnProbe")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if lossEvent {
+		// EWMA update for loss: treat a miss as 100% loss sample.
+		t.ewmaLossPct = t.ewmaAlpha*100 + (1-t.ewmaAlpha)*t.ewmaLossPct
+		t.consecutiveMisses++
+		if t.consecutiveMisses >= consecutiveMissThreshold {
+			t.active = false
+		}
+	} else {
+		// Successful probe: update RTT EWMA, zero out loss sample, reset misses.
+		// On first successful probe, replace the conservative initial RTT outright
+		// (RFC 6298 style) so the high-RTT default does not slow convergence for
+		// many probe intervals (BC-2.02.003 EC-003: "after first measured RTT,
+		// path ranked appropriately").
+		if t.firstProbe {
+			t.ewmaRTTMS = arrivalRTTMS
+			t.firstProbe = false
+		} else {
+			t.ewmaRTTMS = t.ewmaAlpha*arrivalRTTMS + (1-t.ewmaAlpha)*t.ewmaRTTMS
+		}
+		t.ewmaLossPct = (1 - t.ewmaAlpha) * t.ewmaLossPct
+		t.consecutiveMisses = 0
+	}
 }
 
 // Score returns the current composite quality score for this path.
 // Delegates to PathScore using the tracker's current EWMA estimates.
 func (t *PathTracker) Score() Score {
-	panic("not implemented: PathTracker.Score")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return PathScore(t.ewmaRTTMS, t.ewmaLossPct)
 }
 
 // IsActive reports whether the path is still in the active set (i.e., has not
 // accumulated consecutiveMissThreshold consecutive missed keepalives).
 func (t *PathTracker) IsActive() bool {
-	panic("not implemented: PathTracker.IsActive")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.active
 }
 
 // RTT returns the current EWMA RTT estimate in milliseconds.
 func (t *PathTracker) RTT() float64 {
-	panic("not implemented: PathTracker.RTT")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.ewmaRTTMS
 }
 
 // LossPct returns the current EWMA loss percentage estimate (0–100).
 func (t *PathTracker) LossPct() float64 {
-	panic("not implemented: PathTracker.LossPct")
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.ewmaLossPct
 }
 
 // RankedPath associates a caller-supplied path identifier with its current
@@ -130,5 +179,34 @@ type RankedPath struct {
 //
 // The returned slice is a fresh allocation; mutations do not affect candidates.
 func Rank(candidates []RankedPath) ([]RankedPath, error) {
-	panic("not implemented: Rank")
+	// Snapshot active paths and their scores.
+	type scoredPath struct {
+		rp    RankedPath
+		score Score
+	}
+
+	active := make([]scoredPath, 0, len(candidates))
+	for _, rp := range candidates {
+		if rp.Tracker.IsActive() {
+			active = append(active, scoredPath{rp: rp, score: rp.Tracker.Score()})
+		}
+	}
+
+	if len(active) == 0 {
+		return nil, ErrNoActivePaths
+	}
+
+	sort.Slice(active, func(i, j int) bool {
+		if active[i].score != active[j].score {
+			return active[i].score < active[j].score
+		}
+		// Tiebreak: ascending ID for determinism (EC-002).
+		return active[i].rp.ID < active[j].rp.ID
+	})
+
+	result := make([]RankedPath, len(active))
+	for i, sp := range active {
+		result[i] = sp.rp
+	}
+	return result, nil
 }
