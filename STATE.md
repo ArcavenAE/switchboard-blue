@@ -9,12 +9,19 @@ s_4_04_adversary_streak: 3
 s_4_04_adversary_converged: true
 s_4_04_impl_sha: 24c4378
 s_4_04_impl_branch: feat/S-4.04-split-horizon-drop-cache
-s_4_04_status: adversary-converged
+s_4_04_status: pr-open-pending-human-merge
+s_4_04_pr_number: 27
+s_4_04_pr_head: 24c4378
+s_4_04_pr_state: OPEN/MERGEABLE/CLEAN
 s_6_01_adversary_streak: 3
 s_6_01_adversary_converged: true
 s_6_01_impl_sha: 37d45fa
+s_6_01_pr_source_sha: 37d45fa
+s_6_01_pr_head: 07a4b00
 s_6_01_impl_branch: feat/S-6.01-config-validation
-s_6_01_status: adversary-converged
+s_6_01_status: pr-open-pending-human-merge
+s_6_01_pr_number: 28
+s_6_01_pr_state: OPEN/MERGEABLE/CLEAN
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 product: switchboard
@@ -95,7 +102,7 @@ s_4_03_status: completed
 s_4_03_demo_evidence: "5/5 ACs PASS, race-clean"
 s_4_03_ruling: "RULING-003 v1.1 — cycles/cycle-1/S-4.03/adversary/ackseq-dos-ruling.md; F-A-001 VP-052 mis-anchor fixed @ 02f317d (re-anchored to BC-2.02.005 SACK-accuracy / VP-019-020; story v1.1)"
 develop_head: 8d9744f
-open_prs: 0
+open_prs: 2
 timestamp: 2026-06-28T23:59:00Z
 last_update: 2026-06-28
 ---
@@ -104,7 +111,7 @@ last_update: 2026-06-28
 
 ## Current State
 
-Wave 4 ACTIVE — 3/5 stories merged; 2/5 adversary-converged awaiting delivery. S-4.01 MERGED (e415d31, #24). S-4.02 MERGED (95729c7, #25). S-4.03 MERGED (8d9744f, #26). S-4.04 ADVERSARY-CONVERGED (3/3 clean, HEAD 24c4378, branch feat/S-4.04-split-horizon-drop-cache). S-6.01 ADVERSARY-CONVERGED (3/3 clean, HEAD 37d45fa, branch feat/S-6.01-config-validation). develop HEAD = 8d9744f. 0 open PRs. Next: per-story delivery (demo → push → PR → human-merge gate → cleanup) for S-4.04 then S-6.01.
+Wave 4 ACTIVE — 3/5 stories merged; 2/5 PRs open at HUMAN MERGE GATE. S-4.01 MERGED (e415d31, #24). S-4.02 MERGED (95729c7, #25). S-4.03 MERGED (8d9744f, #26). S-4.04 PR #27 OPEN/MERGEABLE/CLEAN (feat/S-4.04-split-horizon-drop-cache → develop, HEAD 24c4378, CI green, pr-reviewer APPROVE, awaiting human merge). S-6.01 PR #28 OPEN/MERGEABLE/CLEAN (feat/S-6.01-config-validation → develop, HEAD 07a4b00, CI green, pr-reviewer APPROVE, awaiting human merge). develop HEAD = 8d9744f. 2 open PRs.
 
 ## Phase Progress
 
@@ -112,7 +119,7 @@ Wave 4 ACTIVE — 3/5 stories merged; 2/5 adversary-converged awaiting delivery.
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01/S-4.02/S-4.03 MERGED; S-4.04/S-6.01 ADVERSARY-CONVERGED, pending delivery) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01/S-4.02/S-4.03 MERGED; S-4.04/S-6.01 3/3 CONVERGED |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01/S-4.02/S-4.03 MERGED; S-4.04 PR#27 OPEN; S-6.01 PR#28 OPEN — both at HUMAN MERGE GATE) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01/S-4.02/S-4.03 MERGED; S-4.04/S-6.01 3/3 CONVERGED, PRs open |
 
 ## Wave / Story Status
 
@@ -123,8 +130,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | MERGED | #24 | e415d31 |
 | 4 | S-4.02 | Upstream replay (internal/replay) | MERGED | #25 | 95729c7 |
 | 4 | S-4.03 | Downstream ARQ + TLPKTDROP (internal/arq) | MERGED | #26 | 8d9744f |
-| 4 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | ADVERSARY-CONVERGED | — | 24c4378 |
-| 4 | S-6.01 | Config parsing and validation | ADVERSARY-CONVERGED | — | 37d45fa |
+| 4 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | PR OPEN — HUMAN MERGE GATE | #27 | 24c4378 |
+| 4 | S-6.01 | Config parsing and validation | PR OPEN — HUMAN MERGE GATE | #28 | 07a4b00 |
 
 ## Open Drift Items
 
@@ -144,8 +151,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | S403-O4 | LOW | S-4.03: DegradationEvent single-seq vs BC-2.02.006 PC2 range — per-frame drop OK for MVP. | product-owner | deferred MVP |
 | S403-H1-DEFER | MED | S-4.03: retransmit-SEND PC3 deferred to router/multipath wiring story. | product-owner/architect | deferred |
 | DRIFT-S4.03-001 | MED | ADR-005 resync-on-reconnect wire-mechanics deferred to S-5.01. | architect/implementer | open deferred S-5.01 |
-| S403-COS1 | OBS | S-4.03 arq.go SACKPopCount doc comment stale ref to "encoding/binary" (uses package-local bitmapToUint64). | implementer | carry to S-4.04 or maintenance sweep (artifact merged at 8d9744f; cosmetic-only) |
-| S403-COS2 | OBS | S-4.03 arq_test.go:949 leftover "GREEN-BY-DESIGN per stub notes" docstring (now a real characterisation test). | implementer | carry to S-4.04 or maintenance sweep (artifact merged at 8d9744f; cosmetic-only) |
+| S403-COS1/2 | OBS | S-4.03 cosmetics: stale "encoding/binary" doc ref + leftover stub docstring — both in merged artifact (8d9744f); maintenance sweep. | implementer | deferred maintenance |
 | S601-NITPICK-A | NITPICK | S-6.01 story File Structure table omits cmd/switchboard/access.go though Task 17 mandates modifying it (doc completeness gap). | story-writer | cycle-close |
 | S601-NITPICK-B | NITPICK | S-6.01 story EC ids diverge from BC EC ids (e.g. keepalive story-EC-012 vs BC-EC-009) — cosmetic id drift. | story-writer | cycle-close |
 | S601-NITPICK-C | NITPICK | S-6.01 E-CFG-005 reused for non-regular/too-large files; E-CFG-004 reused for non-ErrNotExist open/stat/read errors — no dedicated BC code. | product-owner | cycle-close cosmetic |
@@ -155,6 +161,9 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | S404-OBS-G | OBS | S-4.04 BC-2.02.008 PC-4 (split-horizon/drop-cache independence) has no dedicated negative test — satisfied structurally. | test-writer | cycle-close |
 | BC-2.09.003-STALE | NITPICK | BC-2.09.003 traceability table + Story Anchor say "AC-001 through AC-006"; story now reaches AC-009. Needs refresh to AC-009. | story-writer/spec-steward | cycle-close |
 | S601-DRAFT-STORY | OBS | Dedicated SIGHUP/reload story (BC-2.09.003 Inv-3/EC-004) to be opened as draft. | product-owner | cycle-close |
+| S404-LOW-1 | LOW | S-4.04: 3 LOW + NITPICK findings from adversary final pass (SEC-001 CRC32 collision accepted per BC-2.02.009 EC-004) — details in cycles/cycle-1/S-4.04/adversary/. | implementer | cycle-close follow-up |
+| S601-SEC-001 | LOW | S-6.01: CWE-117 — sanitize operator-supplied --config PATH arg in E-CFG-004 messages via stripControlChars at 3 LoadFile error sites (file-content path already sanitized; this is the operator path arg). | implementer | deferred cycle-close |
+| S601-SEC-002 | LOW | S-6.01: CWE-400 — explicit length cap on upstream_routers slice; implicitly bounded by 1 MiB file guard but no declared limit. | product-owner/architect | deferred cycle-close |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -178,21 +187,23 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-4.03 MERGED (8d9744f, PR #26) | 5/5 ACs, 3/3 adversary clean; F-A-001 VP-052 fix included; squash-merged via auto-merge; CI all SUCCESS | 2026-06-28 |
 | S-4.04 ADVERSARY-CONVERGED (24c4378) | 7/7 ACs (AC-007 E-FWD-001 added v1.5); 3 consecutive 6-lens clean rounds (spec/BC↔AC; security/CWE; concurrency/race); BC-5.39.001 C=0 H=0 M=0. Pending demo/push/PR/merge. | 2026-06-28 |
 | S-6.01 ADVERSARY-CONVERGED (37d45fa) | 9/9 ACs; 3 consecutive 6-lens clean rounds; final fix 37d45fa (io.LimitReader + close TOCTOU, F-SEC-L1). All prior findings closed with regression tests. BC-5.39.001 NITPICK_ONLY. Pending demo/push/PR/merge. | 2026-06-28 |
+| S-4.04 PR #27 OPEN — HUMAN MERGE GATE | feat/S-4.04-split-horizon-drop-cache → develop, HEAD 24c4378. CI green, pr-reviewer APPROVE. 1 MED (SEC-001 CRC32 collision) ACCEPTED per BC-2.02.009 EC-004; 3 LOW + NITPICKs as follow-ups. | 2026-06-28 |
+| S-6.01 PR #28 OPEN — HUMAN MERGE GATE | feat/S-6.01-config-validation → develop, HEAD 07a4b00 (= converged SHA 37d45fa + DOCS-ONLY commit for docs/demo-evidence/S-6.01/; no source/test/go.mod/go.sum change; BC-5.39.001 preserved). CI green, pr-reviewer APPROVE (2 review cycles). 0 C/H; SEC-001 (CWE-117 path sanitization) + SEC-002 (CWE-400 slice cap) deferred LOW. | 2026-06-28 |
 Older decisions (Wave 3 per-story): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-28 (Wave 4 — S-4.04 + S-6.01 delivery next)
+## Session Resume Checkpoint — 2026-06-28 (Wave 4 — S-4.04 + S-6.01 at human merge gate)
 
-**Position:** Phase 3 Wave 4. S-4.01 MERGED (#24, e415d31). S-4.02 MERGED (#25, 95729c7). S-4.03 MERGED (#26, 8d9744f). S-4.04 ADVERSARY-CONVERGED (3/3, HEAD 24c4378, branch feat/S-4.04-split-horizon-drop-cache). S-6.01 ADVERSARY-CONVERGED (3/3, HEAD 37d45fa, branch feat/S-6.01-config-validation). develop HEAD = 8d9744f. 0 open PRs.
+**Position:** Phase 3 Wave 4. S-4.01 MERGED (#24, e415d31). S-4.02 MERGED (#25, 95729c7). S-4.03 MERGED (#26, 8d9744f). S-4.04 PR #27 OPEN/MERGEABLE/CLEAN (HEAD 24c4378, CI green, pr-reviewer APPROVE). S-6.01 PR #28 OPEN/MERGEABLE/CLEAN (HEAD 07a4b00, CI green, pr-reviewer APPROVE). develop HEAD = 8d9744f. 2 open PRs.
 
-**NEXT ACTION on resume:** Per-story delivery for S-4.04 then S-6.01 (demo → push → PR → human-merge gate → worktree cleanup). After both merged: Wave 4 integration gate + wave-gate.
+**NEXT ACTION on resume:** Await human merge of PR #27 (S-4.04) and PR #28 (S-6.01). After both merged: Wave 4 integration gate + wave-gate.
 
-**S-4.04 notes:** 7/7 ACs. AC-007 (E-FWD-001 emission on all-paths split-horizon drop, BC-2.02.008 PC-3) added v1.5 and fully traced/tested. Branch feat/S-4.04-split-horizon-drop-cache at 24c4378.
+**S-4.04 notes:** 7/7 ACs. PR #27 feat/S-4.04-split-horizon-drop-cache → develop. SEC-001 (CRC32 collision frame suppression) ACCEPTED per BC-2.02.009 EC-004. 3 LOW + NITPICKs deferred to cycle-close.
 
-**S-6.01 notes:** 9/9 ACs. Final fix 37d45fa (io.LimitReader + TOCTOU close, F-SEC-L1). Branch feat/S-6.01-config-validation at 37d45fa. Residual NITPICKs logged in Drift Items table (S601-NITPICK-A..E); all below re-open bar, deferred to cycle-close.
+**S-6.01 notes:** 9/9 ACs. PR #28 feat/S-6.01-config-validation → develop. HEAD 07a4b00 = converged SHA 37d45fa + DOCS-ONLY commit; BC-5.39.001 convergence preserved. SEC-001 (CWE-117 path sanitization) + SEC-002 (CWE-400 slice cap) deferred LOW. Converged in 2 review cycles.
 
 **Settled rulings:** RULING-001/002/002-A1/003-v1.1 and F-A-001 (VP-052 re-anchored) — do NOT re-open unless a fresh pass finds a NEW Critical/High.
 
-**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4, DRIFT-S4.03-001, S403-COS1, S403-COS2, S601-NITPICK-A..E, S404-OBS-F/G, BC-2.09.003-STALE, S601-DRAFT-STORY (see Drift Items table). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4, DRIFT-S4.03-001, S403-COS1, S403-COS2, S601-NITPICK-A..E, S404-OBS-F/G, BC-2.09.003-STALE, S601-DRAFT-STORY, S404-SEC-001-ACCEPTED, S404-LOW-1, S601-SEC-001, S601-SEC-002 (see Drift Items table). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 

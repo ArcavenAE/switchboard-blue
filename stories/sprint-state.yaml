@@ -40,8 +40,7 @@ wave_status:
     stories: [S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
     points: 29
     merged: [S-4.01, S-4.02, S-4.03]
-    adversary_converged: [S-4.04, S-6.01]
-    pending_delivery: [S-4.04, S-6.01]
+    pr_open_pending_human_merge: [S-4.04, S-6.01]
 
 stories:
   - story_id: S-0.01
@@ -231,17 +230,21 @@ stories:
     title: "Split-horizon loop prevention in internal/routing"
     epic: E-4
     wave: 4
-    status: adversary-converged
+    status: pr-open-pending-human-merge
     adversary_streak: 3
     adversary_converged: true
     impl_sha: 24c4378
     impl_branch: feat/S-4.04-split-horizon-drop-cache
+    pr: 27
+    pr_head: 24c4378
+    pr_state: OPEN/MERGEABLE/CLEAN
+    ci_status: green
+    pr_reviewer: APPROVE
     acceptance_criteria_count: 7
     priority: P0
     scope_phase: E
     points: 5
     bc_traces: [BC-2.02.008, BC-2.02.009]
-    # pending: demo → push → PR → human-merge → cleanup
 
   - story_id: S-5.01
     title: "Green/yellow/red quality indicator with hysteresis"
@@ -267,17 +270,22 @@ stories:
     title: "Config parsing and validation with actionable startup errors"
     epic: E-6
     wave: 4
-    status: adversary-converged
+    status: pr-open-pending-human-merge
     adversary_streak: 3
     adversary_converged: true
     impl_sha: 37d45fa
     impl_branch: feat/S-6.01-config-validation
+    pr: 28
+    pr_head: 07a4b00
+    pr_source_sha: 37d45fa
+    pr_state: OPEN/MERGEABLE/CLEAN
+    ci_status: green
+    pr_reviewer: APPROVE
     acceptance_criteria_count: 9
     priority: P0
     scope_phase: E
     points: 3
     bc_traces: [BC-2.09.003]
-    # pending: demo → push → PR → human-merge → cleanup
 
   - story_id: S-6.02
     title: "SVTN lifecycle and key management via sbctl admin"
