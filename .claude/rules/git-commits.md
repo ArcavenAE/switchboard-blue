@@ -13,9 +13,6 @@
 ### Types
 feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
-### kos-specific actions (from KOS process cycle)
-harvest, promote, graveyard, probe, finding, schema, charter, question
-
 ### Rules
 - Imperative, present tense: "add feature" not "added feature"
 - No capitalized first letter in description
