@@ -312,7 +312,7 @@ func TestARQ_SACKInChannelHeader(t *testing.T) {
 		t.Errorf("SACK bitmap mismatch:\n  want %08b\n  got  %08b", want, got)
 	}
 
-	// Verify population count matches via SACKPopCount (VP-052).
+	// Verify population count matches via SACKPopCount (BC-2.02.005 SACK-accuracy clause).
 	popWant := arq.SACKPopCount(want)
 	popGot := arq.SACKPopCount(got)
 	if popGot != popWant {
@@ -943,11 +943,11 @@ func TestBC_2_02_005_VP019_VP020_NoDoubleDelivery(t *testing.T) {
 	}
 }
 
-// TestBC_2_02_005_VP052_SACKPopCount verifies VP-052: SACKPopCount returns the
-// correct number of set bits for canonical bitmaps. This test exercises the
-// already-implemented SACKPopCount (GREEN-BY-DESIGN per stub notes) — included
-// for traceability.
-func TestBC_2_02_005_VP052_SACKPopCount(t *testing.T) {
+// TestBC_2_02_005_SACKPopCount verifies BC-2.02.005 SACK-accuracy clause
+// (VP-019/VP-020 unit): SACKPopCount returns the correct number of set bits
+// for canonical bitmaps. This test exercises the already-implemented
+// SACKPopCount (GREEN-BY-DESIGN per stub notes) — included for traceability.
+func TestBC_2_02_005_SACKPopCount(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {

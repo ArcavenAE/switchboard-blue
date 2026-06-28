@@ -26,7 +26,7 @@
 // Single-writer contract: OnAck and TLPKTDROP must be called from a single
 // goroutine (the half-channel tick loop). Concurrent calls are not safe.
 //
-// math/bits is used for SACK bitmap population count (VP-052).
+// math/bits is used for SACK bitmap population count (BC-2.02.005 SACK-accuracy clause; VP-019/VP-020).
 package arq
 
 import (
@@ -449,7 +449,7 @@ func (a *ARQ) GapsToRetransmit(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) 
 
 // SACKPopCount returns the number of set bits in the SACK bitmap. Used by
 // tests to assert the bitmap accurately reflects received/missing frames
-// (VP-052).
+// (BC-2.02.005 SACK-accuracy clause; VP-019/VP-020).
 //
 // Uses math/bits.OnesCount64 via encoding/binary for a one-line body.
 func SACKPopCount(bitmap [SACKBitmapBytes]byte) int {
