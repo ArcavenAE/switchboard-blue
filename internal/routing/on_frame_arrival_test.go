@@ -162,24 +162,28 @@ func TestBC_2_02_009_Router_DropCacheHitCounterIncremented(t *testing.T) {
 
 // ---- AC-005 / BC-2.02.009 postcondition 2 / EC-004 + EC-005 ---------------
 
-// TestBC_2_02_009_Router_CollisionEventLogged verifies that an injected Logger
-// receives a log line when a drop-cache hit occurs (potential collision event).
+// TestBC_2_02_009_Router_CollisionLogRateLimited verifies the rate-limited /
+// sampled collision-event logging contract of OnFrameArrival (AC-005 v1.3 /
+// BC-2.02.009 postcondition 2 / EC-005).
 //
-// AC-005 / BC-2.02.009 postcondition 2 / EC-005:
-// "EC-005 collision-event logging: the router's OnFrameArrival path injects
-// a logger so that drop-cache hits are logged as potential collision events
-// for investigation."
+// AC-005 v1.3 requires:
+//  1. The FIRST drop-cache hit on a given compound key (checksum, iface) MUST
+//     produce at least one log line (observability preserved; operator alerted).
+//  2. N rapid identical-key hits MUST produce far fewer than N log lines
+//     (bounded; CWE-779 log-spam DoS mitigation; BC-2.02.009 EC-002).
+//     Threshold: log_lines <= max(2, N/100).  For N=1000 → at most 10 lines.
 //
-// EC-004: "Two different frames share a checksum on the same interface
-// (hash collision) → legitimate frame incorrectly suppressed; event logged
-// via injected logger as potential collision."
-func TestBC_2_02_009_Router_CollisionEventLogged(t *testing.T) {
+// EC-004: "Two different frames share a checksum on the same interface →
+// legitimate frame incorrectly suppressed; event logged via injected logger
+// as potential collision."
+func TestBC_2_02_009_Router_CollisionLogRateLimited(t *testing.T) {
 	t.Parallel()
 
-	t.Run("logger_receives_line_on_cache_hit", func(t *testing.T) {
+	t.Run("first_hit_produces_at_least_one_log_line", func(t *testing.T) {
 		t.Parallel()
-		// AC-005 / BC-2.02.009 PC-2 / EC-005: injected logger must be called
-		// when a drop-cache hit is observed.
+		// AC-005 v1.3 / BC-2.02.009 PC-2 / EC-005: the first drop-cache hit on
+		// a given compound key MUST produce at least one collision-event log line.
+		// Operators must be alerted on the first occurrence.
 		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 		logger := &captureLogger{}
 		h := NewFrameArrivalHandler(dc)
@@ -193,13 +197,13 @@ func TestBC_2_02_009_Router_CollisionEventLogged(t *testing.T) {
 		// First arrival: miss — logger should NOT be called.
 		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherColl}, nopFnColl)
 		if len(logger.lines) != 0 {
-			t.Errorf("logger called on cache miss; want no log on first arrival (AC-005)")
+			t.Errorf("logger called on cache miss; want no log on first arrival (AC-005 v1.3)")
 		}
 
-		// Second arrival: hit — logger MUST be called.
+		// Second arrival: first HIT — logger MUST produce at least one line.
 		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherColl}, nopFnColl)
 		if len(logger.lines) == 0 {
-			t.Errorf("logger not called on cache hit; want collision-event log line (AC-005 / BC-2.02.009 PC-2 / EC-005)")
+			t.Errorf("logger not called on first cache hit; want at least one collision-event log line (AC-005 v1.3 / BC-2.02.009 PC-2 / EC-005)")
 		}
 	})
 
@@ -222,25 +226,59 @@ func TestBC_2_02_009_Router_CollisionEventLogged(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple_hits_log_each_time", func(t *testing.T) {
+	t.Run("flood_of_hits_produces_bounded_log_lines", func(t *testing.T) {
 		t.Parallel()
-		// AC-005: every cache hit emits a log line — not just the first.
+		// AC-005 v1.3 / EC-005 (flood scenario):
+		//
+		// N rapid identical-key drop-cache hits (N=1000) MUST produce at most
+		// max(2, N/100) = max(2, 10) = 10 log lines.
+		//
+		// Current implementation logs on every hit (unbounded), so this test
+		// MUST FAIL until rate-limiting is implemented (Red Gate / BC-5.38.001).
+		//
+		// Rationale: unbounded per-hit logging under a routing loop or replayed-
+		// frame flood violates CWE-779 (log injection / unbounded log output)
+		// and is inconsistent with BC-2.02.009 EC-002's bounded-defense model.
+		const N = 1000
+		maxLines := func(n int) int {
+			// threshold: max(2, N/100) — from AC-005 v1.3
+			if n/100 > 2 {
+				return n / 100
+			}
+			return 2
+		}(N)
+
 		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 		logger := &captureLogger{}
 		h := NewFrameArrivalHandler(dc)
 		WithFrameArrivalLogger(logger)(h)
 
-		frame := []byte("repeated-hit-frame")
-		const iface InterfaceID = 99
-		const ifaceOtherMulti InterfaceID = 202
-		nopFnMulti := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
+		frame := []byte("flood-hit-frame-ec005")
+		const iface InterfaceID = 77
+		const ifaceOtherFlood InterfaceID = 204
+		nopFnFlood := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
-		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherMulti}, nopFnMulti) // first: miss
-		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherMulti}, nopFnMulti) // second: hit → log
-		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherMulti}, nopFnMulti) // third: hit → log
+		// First arrival: cache miss — populates the drop-cache key.
+		if err := h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherFlood}, nopFnFlood); err != nil {
+			t.Fatalf("first arrival (cache miss) unexpected error: %v", err)
+		}
 
-		if len(logger.lines) < 2 {
-			t.Errorf("got %d log lines; want ≥ 2 (one per hit) (AC-005)", len(logger.lines))
+		// N identical-key hits in rapid succession (simulating a routing loop or
+		// replayed-frame flood — BC-2.02.009 EC-002 / EC-005).
+		for i := 0; i < N; i++ {
+			_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherFlood}, nopFnFlood)
+		}
+
+		got := len(logger.lines)
+		if got > maxLines {
+			t.Errorf(
+				"flood of %d identical-key hits produced %d log lines; want <= %d (max(2, N/100)) — unbounded logging violates AC-005 v1.3 / CWE-779 (EC-005)",
+				N, got, maxLines,
+			)
+		}
+		// Also assert that at least one line was emitted (first-hit observability).
+		if got == 0 {
+			t.Errorf("no log lines produced for %d hits; want at least one (first-hit observability — AC-005 v1.3)", N)
 		}
 	})
 }
