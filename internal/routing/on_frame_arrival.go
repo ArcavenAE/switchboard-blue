@@ -245,6 +245,14 @@ func (h *FrameArrivalHandler) OnFrameArrival(
 	// and calls fn for every eligible interface (BC-2.02.008 PC-2).
 	sh := SplitHorizon{}
 	_, err := sh.Forward(frameBytes, arrivalIface, interfaceSet, fn)
+	if errors.Is(err, ErrAllPathsSplitHorizon) {
+		// All eligible interfaces are the arrival interface — topology misconfiguration
+		// or transient single-interface set. Log E-FWD-001 per BC-2.02.008 PC-3 (AC-007).
+		h.logger.Log(fmt.Sprintf(
+			"all paths split-horizon-blocked: frame dropped (checksum=0x%08x iface=%d) (BC-2.02.008 E-FWD-001)",
+			checksum, arrivalIface,
+		))
+	}
 	return err
 }
 
