@@ -53,7 +53,9 @@ const sweepDeadline = 60 * time.Second
 
 // framesDroppedInterval is the period between FramesDropped log checks.
 // Hardcoded for Wave 3 (AC-006; BC-2.04.006 invariant 4).
-const framesDroppedInterval = 30 * time.Second
+// Declared as var (not const) so tests can inject a short interval via
+// package-level assignment (framesDroppedInterval = 1ms before the call).
+var framesDroppedInterval = 30 * time.Second
 
 // connectorIface is the minimal subset of *tmux.SessionConnector used by
 // runAccessWithConnector. *tmux.SessionConnector satisfies this interface by
