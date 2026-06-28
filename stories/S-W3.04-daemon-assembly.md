@@ -22,7 +22,7 @@ bc_traces:
   - BC-2.04.006
   - BC-2.04.007
   - BC-2.05.008
-vp_traces: [VP-058]
+vp_traces: [VP-058, VP-060]
 subsystems: [session-access, admission-security]
 architecture_modules: [cmd/switchboard, internal/tmux]
 tdd_mode: strict
@@ -41,8 +41,8 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-01-core-services.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
   - '.factory/specs/prd-supplements/error-taxonomy.md'
-acceptance_criteria_count: 9
-version: "1.3"
+acceptance_criteria_count: 10
+version: "1.4"
 # BC-2.04.007 authored by PO 2026-06-27. AC-007 traces to BC-2.04.007 PC-1;
 # AC-008 traces to BC-2.04.007 PC-2. Gate blocker resolved; status flipped to ready.
 # v1.2 2026-06-27: adversarial-convergence adjudication; architect ARCH-01 v1.4 /
@@ -51,6 +51,10 @@ version: "1.3"
 # AC-007 mid-session double-failure path (BC-2.04.007 PC-2.6/EC-007/Inv-5); Tasks
 # updated with shared-keyset, RelayDropped, Err() drain, and busy-spin guard
 # implementation obligations.
+# v1.4 2026-06-27: consistency-audit Finding 4.1 — bind ARCH-01 v1.6 Obligation T2 to existing
+# passing tests (traceability-only, no code change); add VP-060 to vp_traces (Finding 1.2);
+# update BC-2.04.007 version pin in AC-007 to v1.3 (Finding 2.1); update ARCH-01 ADR-011
+# version pin in token-budget table to v1.7 (Finding 2.2).
 # v1.3 2026-06-27: S-W3.04 adversarial convergence pass-2 — HIGH-A/HIGH-B/MEDIUM
 # rulings from ARCH-01 v1.5 + ARCH-08 v2.1 + BC-2.04.002 v1.3 + BC-2.04.007 v1.2
 # + error-taxonomy v2.1 propagated. (HIGH-A) AC-009 added: PTY-EOF no-spin obligation
@@ -192,7 +196,7 @@ Additionally, if `sc.Err()` delivers a non-nil error AFTER `sc.Connect` succeeds
 (mid-session double-failure: control-mode drop followed by PTY-fallback failure, OR
 PTY-source EOF via `ErrPTYSourceEOF` — both are triggers of the same PC-2.6 drain path),
 the daemon logs E-SYS-002 at ERROR level to the INJECTED stderr, cancels the root
-context, and exits with code 1 (BC-2.04.007 v1.1 PC-2.6 / EC-007 / invariant 5). The
+context, and exits with code 1 (BC-2.04.007 v1.3 PC-2.6 / EC-007 / invariant 5). The
 `sc.Err()` drain goroutine MUST be tracked in `sync.WaitGroup` so it is joined during
 shutdown (invariant 5). If `sc.Err()` is not drained, BC-2.04.002 invariant 3
 ("never silent") is violated.
@@ -231,6 +235,32 @@ causes the test to fail).
   `ErrPTYSourceEOF` (or a wrapping error satisfying `errors.Is`) and the relay goroutine
   has exited. A `t.Cleanup` with `time.AfterFunc` enforces the deadline; test fails if relay
   is still running.
+
+### AC-010 (traces to BC-2.04.002 EC-002 + EC-003; ARCH-01 v1.6 §ADR-011 Obligation T2)
+ARCH-01 v1.6 §ADR-011 Obligation T2 (failover-under-stress — the ~20% TOCTOU
+false-EOF misclassification guard) is satisfied by the following existing tests, all
+verified passing on develop at e9421d8:
+
+- `TestForwardFramesTOCTOUCount50` in `internal/tmux/connector_toctou_test.go` — embeds
+  a 50-iteration in-body stress loop (`for i := range 50 { t.Run(...) }`) exercising the
+  TOCTOU window across ctrl→PTY transition; this satisfies the T2 requirement for "a
+  stress test with ≥50 iterations OR equivalent stress loop in the test body using t.Run
+  in a loop."
+- `TestForwardFramesTOCTOURegressionDeterministic` in
+  `internal/tmux/connector_toctou_test.go` — uses the deterministic `swapBarrier`
+  interleaving hook (the T2 "alternatively/additionally" deterministic approach) to force
+  the exact TOCTOU interleaving and assert correct frame continuity.
+- `TestForwardFramesPTYEOFExitsCleanly` in `internal/tmux/connector_eof_test.go` —
+  the bounded terminal-EOF test (T1 sibling per ADR-011 §Obligation T1/T2 split);
+  included here for completeness as it exercises the PTY-mode relay exit path that T2
+  guards against false-positive misclassification.
+
+The obligation is fully satisfied in code. This AC is a traceability-only binding —
+no code change is required or expected.
+- **Tests (existing, passing):** `TestForwardFramesTOCTOUCount50`,
+  `TestForwardFramesTOCTOURegressionDeterministic` (both in
+  `internal/tmux/connector_toctou_test.go`), `TestForwardFramesPTYEOFExitsCleanly`
+  (in `internal/tmux/connector_eof_test.go`)
 
 ## Edge Cases
 
@@ -276,7 +306,7 @@ causes the test to fail).
 | BC-2.04.006.md | ~900 |
 | BC-2.04.007.md (v1.2 — EC-007 extended, E-SYS-003) | ~800 |
 | BC-2.05.008.md | ~900 |
-| ARCH-01-core-services.md (ADR-010, ADR-011 v1.5) | ~1,500 |
+| ARCH-01-core-services.md (ADR-010, ADR-011 v1.7) | ~1,500 |
 | ARCH-08-dependency-graph.md (§6.5–§6.6 v2.1) | ~1,100 |
 | error-taxonomy.md (v2.1 — E-SYS-003) | ~500 |
 | internal/tmux package (existing, ~4 files) | ~1,500 |
@@ -459,6 +489,7 @@ ARCH-08 §6.5.2 v2.1 (DAG position 2 leaf, no forbidden edge).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-06-27 | Bind ARCH-01 v1.6 §ADR-011 Obligation T2 to existing passing tests (consistency-audit Finding 4.1); traceability-only, no code change. AC-010 added citing TestForwardFramesTOCTOUCount50, TestForwardFramesTOCTOURegressionDeterministic (connector_toctou_test.go), and TestForwardFramesPTYEOFExitsCleanly (connector_eof_test.go); BC-2.04.002 EC-002 + EC-003 traces. Secondary hygiene: VP-060 added to vp_traces (Finding 1.2); BC-2.04.007 version pin in AC-007 updated v1.1→v1.3 (Finding 2.1); ARCH-01 ADR-011 token-budget pin updated v1.5→v1.7 (Finding 2.2). acceptance_criteria_count: 9→10. |
 | 1.3 | 2026-06-27 | S-W3.04 adversarial convergence pass-2 — ARCH-01 v1.5 / ARCH-08 v2.1 / BC-2.04.002 v1.3 / BC-2.04.007 v1.2 / error-taxonomy v2.1 propagated. (HIGH-A) AC-009 added: PTY-EOF no-spin obligation — relay detects `srcCh==prevSrcCh` in PTY mode, sends `ErrPTYSourceEOF` on `sc.errCh` via `sc.closeErrCh.Do`, exits without busy-spinning; E-SYS-002 drain path logs and exits 1; test `TestForwardFramesPTYEOFExitsCleanly` in `internal/tmux` must fail on busy-spin/no-exit regression. Traces to BC-2.04.002 EC-008 and BC-2.04.007 EC-007 + PC-2.6. (HIGH-B) runAccess injection seam: task 6b added — split `runAccess` into thin ctor wrapper + `runAccessWithConnector(ctx, stderr, connectorIface, an, router)` holding all orchestration/PC-1/PC-2/PC-2.6 logic; `connectorIface` (unexported, 5 methods: Connect/Frames/Err/Close/RelayDropped); `buildAccessComponents` signature unchanged; AC-007 updated to reference `runAccessWithConnector` end-to-end tests; `TestRunAccessWithConnectorPC26` + `TestRunAccessWithConnectorPC2` in `access_test.go` replace tautological `TestDaemonMidSessionDoubleFailureExitsNonZero`. (MEDIUM §6.5.2) `internal/frame` added to approved import set in task 10, Architecture Compliance table, and Forbidden Dependencies note. (MEDIUM EC-005) task 13 added: correct EC-005 comment from "CI enforces this structurally" to accurate wording; Wave-4 durable CI import-guard is an explicit follow-up non-blocker. Token budget updated: +300 tokens (v1.3 story size, error-taxonomy.md, additional test file). |
 | 1.2 | 2026-06-27 | Adversarial-convergence adjudication + architect ARCH-01 v1.4 / ARCH-08 v2.0 rulings. (A) AC-001: replaced tautology-risk sentence with non-tautological wiring obligation — test must target daemon's OWN router instance (shared `AdmittedKeySet`, `buildRouter` return value must not be discarded); router is constructed-but-not-in-live-data-path per ARCH-08 v2.0 §6.5.1 obligation 1. (B) EC-003: corrected counter name from `FramesDropped` to `sc.RelayDropped()` (relay-layer); added clarification that ConsoleSet-level `FramesDropped()` is a separate counter not incremented by relay drops (BC-2.04.006 v1.4). (C) AC-006: updated log format to `"frames_dropped relay=<N> consoles=<M>"` (both counters, cumulative, no reset); log emitted unconditionally per BC-2.04.006 v1.4 invariant 4. (D) AC-007: extended with mid-session double-failure path (BC-2.04.007 v1.1 PC-2.6 / EC-007 / invariant 5) — `sc.Err()` non-nil triggers E-SYS-002, cancel, exit 1; drain goroutine must be wg-tracked; added `TestDaemonMidSessionDoubleFailureExitsNonZero`. (E) Tasks: added item 6a with five implementation obligations (shared keyset, `RelayDropped` counter, `sc.Err()` drain goroutine, `forwardFrames` ctx.Done select, busy-spin guard) and test-quality rule against parallel reconstruction. |
 | 1.1 | 2026-06-27 | PO decision (A): BC-2.04.007 authored (daemon lifecycle contract); AC-007 re-traced to BC-2.04.007 PC-1; AC-008 re-traced to BC-2.04.007 PC-2; E-SYS-002 registered in error-taxonomy.md; BC-INDEX updated; story flipped draft→ready |

@@ -29,7 +29,7 @@ inputDocuments:
   - '.factory/specs/verification-properties/VP-059.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
 acceptance_criteria_count: 17
-version: "1.3.1"
+version: "1.3.2"
 ---
 
 # S-W3.05: Per-Source HMAC Failure Counter and Admission Alert
@@ -73,7 +73,7 @@ entries with `timestamp < now - windowDuration` are removed; entries at exactly
 window, not a fixed bucket.
 - **Test:** `TestFailureCounter_SlidingWindowTrimsStaleEntries`
 
-### AC-003 (traces to BC-2.05.005 PC-3 + error-taxonomy v1.9 / E-ADM-017 — E-ADM-017 emission on threshold crossing)
+### AC-003 (traces to BC-2.05.005 PC-3 + error-taxonomy v2.2 / E-ADM-017 — E-ADM-017 emission on threshold crossing)
 When the post-trim count for a `srcAddr` reaches or exceeds `threshold`, the
 `FailureCounter` emits a structured log event via the injected `Logger` interface
 (`Log(msg string)` — level-less seam; severity is taxonomy-owned, not a logger level)
@@ -82,7 +82,7 @@ carrying the canonical E-ADM-017 message format:
 The code literal "E-ADM-017" is embedded at message start for operator grep-ability.
 `<threshold>` and `<window_seconds>` are the FailureCounter's configured values (default:
 5 and 60); `<src_addr>` is the lowercase hex encoding of the 8-byte SrcAddr field.
-Severity is `degraded` (daemon continues) per error-taxonomy v1.9 — the Logger seam
+Severity is `degraded` (daemon continues) per error-taxonomy v2.2 — the Logger seam
 does NOT encode severity as a logger level. No global state. No direct call to
 `log.Printf` or any package-level logger.
 - **Test:** `TestFailureCounter_EmitsEADM017AtThreshold`
@@ -192,9 +192,9 @@ to T=61s drains the window and re-arms the counter; 5 more failures at T=61–62
 2nd E-ADM-017 alert; total exactly 2 alerts.
 - **Test:** `TestFailureCounter_SustainedAttackReFires`. (traces to BC-2.05.005 EC-009)
 
-### AC-015 (traces to error-taxonomy v1.9 / E-ADM-017 — alert message format, FULL canonical form)
+### AC-015 (traces to error-taxonomy v2.2 / E-ADM-017 — alert message format, FULL canonical form)
 The E-ADM-017 log message MUST match the FULL canonical parameterized format from
-error-taxonomy v1.9 (row E-ADM-017, line 53):
+error-taxonomy v2.2 (row E-ADM-017):
 `"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"`.
 The format requires **both** the leading "E-ADM-017" code literal **and** the
 "HMAC failure rate alert:" phrase — neither may be omitted. `<threshold>` and
@@ -203,9 +203,9 @@ literals); `<src_addr>` is the lowercase hex encoding of the 8-byte SrcAddr fiel
 The test MUST assert the phrase "HMAC failure rate alert:" IS present in the emitted
 message (not absent). Any implementation that drops this phrase is non-conformant.
 Note: a prior erroneous reconciliation note incorrectly claimed AC-015 should drop
-the "HMAC failure rate alert:" phrase — that was false. Error-taxonomy v1.9 includes
-the phrase and the v1.9 changelog NEVER removed it. This AC restores the canonical form.
-- **Test:** `TestFailureCounter_AlertMessageFormat`. (traces to error-taxonomy v1.9 / E-ADM-017)
+the "HMAC failure rate alert:" phrase — that was false. Error-taxonomy v2.2 includes
+the phrase and the changelog NEVER removed it. This AC restores the canonical form.
+- **Test:** `TestFailureCounter_AlertMessageFormat`. (traces to error-taxonomy v2.2 / E-ADM-017)
 
 ### AC-016 (traces to BC-2.05.005 EC-011 — per-source slice bound, CWE-770 amplification mitigation)
 After an alert fires for a `srcAddr` (i.e., `firedAt[srcAddr]` is non-zero and re-arm
@@ -346,7 +346,7 @@ vectors are deterministic; no real-time waits.
 | `RecordHMACFailure` NOT called on successful HMAC verification | BC-2.05.008 PC-5 (negative) | Verified by TestRouteFrame test for success path (AC-009 negative assertion) |
 | E-ADM-017 is distinct from E-ADM-016 | BC-2.05.005 PC-3 (E-ADM-017) vs BC-2.05.008 PC-2 (E-ADM-016) | String format; do NOT reuse E-ADM-016 for the aggregate alert |
 | Boundary trimming: `timestamp < now - windowDuration` (strictly less) | BC-2.05.005 EC-008 | `TestFailureCounter_BoundaryEntryIsKept` |
-| E-ADM-017 message MUST include BOTH "E-ADM-017" prefix AND "HMAC failure rate alert:" phrase | error-taxonomy v1.9 row E-ADM-017 + BC-2.05.005 PC-3 canonical test vector | `TestFailureCounter_AlertMessageFormat` asserts both substrings present |
+| E-ADM-017 message MUST include BOTH "E-ADM-017" prefix AND "HMAC failure rate alert:" phrase | error-taxonomy v2.2 row E-ADM-017 + BC-2.05.005 PC-3 canonical test vector | `TestFailureCounter_AlertMessageFormat` asserts both substrings present |
 | Logger seam is level-less: `Log(msg string)` — severity is NOT encoded as a logger level | BC-2.05.005 v1.5 O-1 adjudication; VP-059 v1.1 | `capturingLogger.Log(msg string)` in tests; no `Error()` method on Logger interface |
 | Append-skip: no post-fire timestamp appended while `firedAt[srcAddr]` is set | BC-2.05.005 PC-3 / EC-011 (CWE-770 M-1) | `TestFailureCounter_HighRateAttackBoundedSlice` |
 | Re-arm is drain-only: `len(keep) == 0` after trim | BC-2.05.005 v1.8 PC-3; `keep[0].After(firedAt)` path is dead code under append-skip | `TestFailureCounter_RearmOccursOnFirstCallAfterDrain` |
@@ -394,5 +394,6 @@ fail (Go import cycle detection via `go vet`/`go build`).
 | 1.0 | 2026-06-27 | Initial story — Wave 3 FIX-NOW gate blocker F-2; implements BC-2.05.005 PC-3; adds E-ADM-017 aggregate alert |
 | 1.1 | 2026-06-27 | PO adjudication of adversarial-convergence findings: new ACs 011-015, amended AC-004/009, points 5→8 (BC-2.05.005 v1.4, BC-2.05.008 v1.3, error-taxonomy v1.9) |
 | 1.3 | 2026-06-27 | Propagate BC-2.05.005 v1.7 nil-logger constructor precondition (SEC-001/CWE-476) into AC-013: NewFailureCounter(5, 60s, nil) panics with "admission: NewFailureCounter: logger must not be nil"; update all forward-facing BC-2.05.005 v1.6 references to v1.7 |
+| 1.3.2 | 2026-06-27 | Version-pin refresh (consistency-audit Finding 2.3): all error-taxonomy version citations updated v1.9→v2.2 (AC-003 heading + body, AC-015 heading + body × 2, Architecture Compliance table row). E-ADM-017 format is unchanged across v1.9→v2.2; no behavioral change. |
 | 1.3.1 | 2026-06-27 | Wave-3 consistency audit F-2.2: corrected stale BC-2.05.005 version citation v1.7→v1.8 (spec-hygiene bump per adversary OBS-3; no behavioral change) |
 | 1.2 | 2026-06-27 | Correct defect introduced in prior reconciliation pass: (1) AC-003 and AC-015 now assert the FULL canonical E-ADM-017 message format from error-taxonomy v1.9 — `"E-ADM-017 HMAC failure rate alert: ≥<threshold> failures in <window_seconds>s from src <src_addr>"` — including BOTH the "E-ADM-017" prefix AND the "HMAC failure rate alert:" phrase (prior pass erroneously dropped the phrase); (2) AC-003 O-1 fix: Logger seam is level-less (`Log(msg string)`), severity is taxonomy-owned (degraded), not a logger ERROR level; (3) AC-004 rewritten to drain-only re-arm per BC-2.05.005 v1.6 — `len(keep)==0` after trim is the sole re-arm condition; `keep[0].After(firedAt)` is dead code under append-skip and removed; test renamed to `TestFailureCounter_RearmOccursOnFirstCallAfterDrain`; (4) AC-012 discrimination note added — test must observe `delete(counts, srcAddr)` directly; (5) AC-016 added: per-source slice bound/CWE-770 (BC-2.05.005 EC-011, `TestFailureCounter_HighRateAttackBoundedSlice`); (6) AC-017 added: VP-059 v1.1 property-based test mandate (`TestFailureCounter_PropertiesABCD` + `TestFailureCounter_PropertyE_MemoryBound`); AC count 15→17; points unchanged at 8 |

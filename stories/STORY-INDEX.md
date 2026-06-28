@@ -94,7 +94,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.NI | network-ingress: wire live frame path through router (RouteFrame production caller) — MUST wire routing.WithFailureCounter(fc) alongside routing.WithLogger(rl) in buildRouter; MUST include daemon-level integration test asserting E-ADM-017 fires through the daemon's own router (analogous to AC-001 for E-ADM-016); partial wiring (logger only) is FORBIDDEN per ARCH-08 v2.2 §6.5.1 | draft | C-1-W3P1-defer (FailureCounter/E-ADM-017 wiring obligation; ARCH-08 §6.5.1 TRACKED-DEFER commit 14a61d2; BC-2.05.005 PC-3, S-W3.05 AC-6) | Wave 4+ |
+| S-BL.NI | network-ingress: wire live frame path through router (RouteFrame production caller) — MUST wire routing.WithFailureCounter(fc) alongside routing.WithLogger(rl) in buildRouter; MUST include daemon-level integration test asserting E-ADM-017 fires through the daemon's own router (analogous to AC-001 for E-ADM-016); partial wiring (logger only) is FORBIDDEN per ARCH-08 v2.2 §6.5.1 | draft | C-1-W3P1-defer (FailureCounter/E-ADM-017 wiring obligation; ARCH-08 §6.5.1 TRACKED-DEFER commit 14a61d2; BC-2.05.005 PC-3, S-W3.05 AC-009) | Wave 4+ |
 
 ## Maintenance Stories
 

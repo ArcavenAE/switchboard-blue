@@ -116,7 +116,7 @@ Per-module sum = 60 (no off-table VPs). VP-059 (proptest, internal/admission) ad
 
 ## Zero-VP BCs Check
 
-Per the coverage table above, all 43 BCs have at least one VP. No gaps.
+Per the coverage table above, all 44 BCs have at least one VP. No gaps.
 
 VP-053 through VP-057 were added in Phase 1c-refinement to close coverage gaps
 identified by the PO sweep (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004,
