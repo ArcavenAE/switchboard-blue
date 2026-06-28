@@ -387,6 +387,117 @@ func TestOnFrameArrival_ForwardsViaSplitHorizon_AfterDropCacheMiss(t *testing.T)
 	})
 }
 
+// ---- AC-005-a/b / EC-006 — distinct-key flood: bounded memory + bounded log --
+
+// TestBC_2_02_009_Router_CollisionLog_DistinctKeyFlood_Bounded verifies the
+// two security-critical bounds introduced by AC-005 v1.4 to close CWE-401/400
+// (unbounded tracking structure) and CWE-779 (aggregate log-spam DoS) under an
+// attacker-controlled distinct-key flood (EC-006).
+//
+// Sub-requirement (a): BOUNDED MEMORY — the per-key collision-tracking structure
+// MUST be capped to at most the DropCache capacity (DefaultDropCacheSize = 10,000)
+// or a fixed implementation-chosen maximum. With K=20,000 distinct keys the
+// current unbounded hitCounts map grows to K entries (>10,000), violating the
+// cap. A correct bounded implementation stays at or below its declared cap.
+//
+// Sub-requirement (b): BOUNDED AGGREGATE LOG — N distinct-key collisions MUST
+// produce far fewer than N aggregate log lines. Threshold: max(10, K/50). With
+// K=20,000 the threshold is max(10, 400) = 400. The current implementation logs
+// on every first hit (count%100==1 is true when count==1), so it emits K≈20,000
+// lines — far above 400. This is the primary RED.
+//
+// AC-005 v1.4 / BC-2.02.009 EC-002 / EC-006 / CWE-401 / CWE-779.
+func TestBC_2_02_009_Router_CollisionLog_DistinctKeyFlood_Bounded(t *testing.T) {
+	// NOT t.Parallel() — this test mutates a shared handler in a tight loop;
+	// parallelism with other tests that share the package-level state would
+	// produce false results. Running serially keeps the assertion deterministic.
+
+	const K = 20_000
+
+	maxAggregateLogLines := func(k int) int {
+		// AC-005 v1.4 threshold: max(10, K/50).
+		if k/50 > 10 {
+			return k / 50
+		}
+		return 10
+	}(K) // = max(10, 400) = 400 for K=20_000
+
+	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+	logger := &captureLogger{}
+	h := NewFrameArrivalHandler(dc)
+	WithFrameArrivalLogger(logger)(h)
+
+	const baseIface InterfaceID = 1
+	const egressIface InterfaceID = 2
+	nopFn := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
+
+	// Generate K distinct compound keys: vary the frame bytes so each key gets a
+	// unique CRC32 checksum. Each distinct frame produces a unique
+	// (checksum, baseIface) compound key.
+	//
+	// Sequence per key:
+	//   1. First arrival (cache miss): populates the DropCache entry.
+	//   2. Second arrival (cache hit): triggers the collision-logging path.
+	//
+	// This exercises the distinct-key flood scenario from EC-006.
+	for i := range K {
+		// Construct frame bytes that produce a distinct (checksum, iface) key.
+		// We embed i directly in the frame payload; CRC32 of distinct payloads
+		// will differ with overwhelming probability for all i in [0, K).
+		frame := make([]byte, 8)
+		frame[0] = byte(i)
+		frame[1] = byte(i >> 8)
+		frame[2] = byte(i >> 16)
+		frame[3] = byte(i >> 24)
+		frame[4] = 0xAB
+		frame[5] = 0xCD
+		frame[6] = 0xEF
+		frame[7] = 0x01
+
+		// First arrival on baseIface: cache miss — populates the DropCache key.
+		// Ignore error: it may be nil (miss) or ErrDropCacheHit (if checksum
+		// happened to collide with a prior key — vanishingly unlikely but harmless
+		// for this test's purpose since we are measuring aggregate log output).
+		_ = h.OnFrameArrival(frame, baseIface, []InterfaceID{baseIface, egressIface}, nopFn)
+
+		// Second arrival on baseIface: cache hit — triggers collision logging.
+		_ = h.OnFrameArrival(frame, baseIface, []InterfaceID{baseIface, egressIface}, nopFn)
+	}
+
+	// --- Assert (b): aggregate log bound (primary RED) ---
+	//
+	// The current implementation logs on count%100==1, which is true when
+	// count==1 (first hit per key). With K distinct keys each generating one
+	// first-hit log line, the current code emits ~K lines >> maxAggregateLogLines.
+	// A correct implementation applies a global rate-limit/token-bucket/sampling
+	// budget so that aggregate output stays <= max(10, K/50).
+	gotLines := len(logger.lines)
+	if gotLines > maxAggregateLogLines {
+		t.Errorf(
+			"distinct-key flood (K=%d): got %d aggregate collision-log lines; want <= %d (max(10, K/50)) — unbounded aggregate logging violates AC-005 v1.4-b / CWE-779 (EC-006)",
+			K, gotLines, maxAggregateLogLines,
+		)
+	}
+
+	// --- Assert (a): tracking-structure memory bound ---
+	//
+	// trackedKeyCount() returns len(hitCounts) — currently unbounded. With K
+	// distinct keys, the map grows to ~K entries. A correct bounded implementation
+	// caps the structure at <= DefaultDropCacheSize (10,000) with LRU or
+	// equivalent eviction (AC-005 v1.4-a / EC-006).
+	//
+	// K=20,000 > DefaultDropCacheSize=10,000 so the current unbounded map
+	// exceeds the cap, producing a RED on this assertion once (b) is fixed but
+	// (a) is not.
+	trackedKeys := h.trackedKeyCount()
+	if trackedKeys > multipath.DefaultDropCacheSize {
+		t.Errorf(
+			"distinct-key flood (K=%d): tracking structure holds %d keys; want <= %d (DropCache cap) — unbounded map violates AC-005 v1.4-a / CWE-401/400 (EC-006)",
+			K, trackedKeys, multipath.DefaultDropCacheSize,
+		)
+	}
+}
+
 // ---- constructor nil-guard -------------------------------------------------
 
 // TestNewFrameArrivalHandler_NilDropCachePanics verifies that constructing a

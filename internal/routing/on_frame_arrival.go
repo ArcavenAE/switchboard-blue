@@ -92,6 +92,22 @@ func WithFrameArrivalLogger(l Logger) func(*FrameArrivalHandler) {
 	}
 }
 
+// trackedKeyCount returns the number of distinct compound keys currently held
+// in the per-key hit-count tracking structure.
+//
+// This accessor exists as a test seam only (AC-005-a / BC-5.38.001 Red Gate).
+// It allows TestBC_2_02_009_Router_CollisionLog_DistinctKeyFlood_Bounded to
+// assert that the tracking structure does not exceed its declared cap under a
+// distinct-key flood (EC-006 / CWE-401/400).
+//
+// The current implementation returns len(hitCounts), which is unbounded.
+// A correct bounded implementation would return the size of a capped structure.
+func (h *FrameArrivalHandler) trackedKeyCount() int {
+	h.hitCountMu.Lock()
+	defer h.hitCountMu.Unlock()
+	return len(h.hitCounts)
+}
+
 // OnFrameArrival is the router-level end-to-end frame-arrival handler.
 //
 // It composes DropCache loop-duplicate suppression (BC-2.02.009, AC-004) and
