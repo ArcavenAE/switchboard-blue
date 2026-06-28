@@ -797,6 +797,16 @@ func TestReplay_BC_2_02_004_invariant_window_monotonic_seqs(t *testing.T) {
 func TestReplay_OnUpstream_MedianPerCall(t *testing.T) {
 	t.Parallel()
 
+	// Skip the timing assertion when the race detector or coverage
+	// instrumentation is active. Both add per-memory-access overhead that
+	// dwarfs the actual O(1) operation cost and would cause false failures
+	// unrelated to any algorithmic regression. The correctness tests above
+	// continue to run; only the latency gate is bypassed here.
+	// Use -bench=BenchmarkReplay_OnUpstream_PerCall for true latency profiling.
+	if raceEnabled {
+		t.Skip("AC-004 latency gate skipped under race detector (overhead dominates measurement)")
+	}
+
 	const (
 		windowSize = uint32(64)
 		prewarm    = windowSize
