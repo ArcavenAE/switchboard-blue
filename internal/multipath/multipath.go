@@ -15,6 +15,7 @@ package multipath
 import (
 	"container/list"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"sync"
 
@@ -240,11 +241,27 @@ func (m *Multipath) Send(f Frame, fn SendFunc) ([]SendResult, error) {
 	}
 
 	results := make([]SendResult, 0, len(selected))
+	var lastErr error
 	for _, rp := range selected {
 		// fn is called without holding any internal lock.
 		if fnErr := fn(rp.ID, f); fnErr == nil {
 			results = append(results, SendResult{PathID: rp.ID, Sent: true})
+		} else {
+			// Record the failed attempt so callers can observe it (F-003).
+			results = append(results, SendResult{PathID: rp.ID, Sent: false})
+			lastErr = fnErr
 		}
+	}
+	// If every selected path failed, surface a wrapped error rather than
+	// returning ([], nil) which would silently hide the total failure (F-003).
+	sent := 0
+	for _, r := range results {
+		if r.Sent {
+			sent++
+		}
+	}
+	if sent == 0 && lastErr != nil {
+		return results, fmt.Errorf("multipath: all %d path(s) failed: %w", len(selected), lastErr)
 	}
 	return results, nil
 }
