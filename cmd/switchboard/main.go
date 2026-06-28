@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/arcavenae/switchboard/internal/config"
 )
 
 var version = "dev"
@@ -46,13 +48,37 @@ func run(stdout io.Writer, args []string) error {
 		return nil
 
 	case "access":
+		// Parse access-subcommand flags (--config) from the remaining args.
+		accessFS := flag.NewFlagSet("access", flag.ContinueOnError)
+		accessFS.SetOutput(stdout)
+		configPath := accessFS.String("config", "", "path to YAML config file")
+		if err := accessFS.Parse(fs.Args()[1:]); err != nil {
+			return err
+		}
+
+		// ARCH-06 binding sequence: Config.Validate BEFORE any socket open.
+		// If --config is provided, load and validate; abort with E-CFG-* on failure.
+		// cfg is threaded into runAccess so that tick_interval is sourced from the
+		// validated config (BC-2.09.003 PC-9 / Inv-5 / AC-009).
+		var cfg *config.Config
+		if *configPath != "" {
+			loaded, err := config.LoadFile(*configPath)
+			if err != nil {
+				return err
+			}
+			if err := loaded.Validate(); err != nil {
+				return err
+			}
+			cfg = loaded
+		}
+
 		// Daemon entry point: install signal handler, then delegate to runAccess.
 		// runAccess blocks until shutdown (SIGTERM/SIGINT → exit 0; connect failure
 		// or mid-session double-failure → non-nil error → main() calls os.Exit(1)).
 		// Diagnostic output goes to os.Stderr; stdout is reserved for structured output.
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer cancel()
-		return runAccess(ctx, os.Stderr)
+		return runAccess(ctx, os.Stderr, cfg)
 
 	default:
 		return fmt.Errorf("unknown subcommand %q; try: access, version", subcommand)

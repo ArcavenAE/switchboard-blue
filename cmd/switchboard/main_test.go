@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -34,6 +36,7 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	hmacpkg "github.com/arcavenae/switchboard/internal/hmac"
@@ -682,7 +685,7 @@ func TestDaemonConnectFailureExitsNonZero(t *testing.T) {
 	var stderr bytes.Buffer
 
 	// runAccess panics in the stub — that panic IS the Red Gate failure.
-	err := runAccess(ctx, &stderr)
+	err := runAccess(ctx, &stderr, nil)
 
 	// AC-007 assertion 1 (BC-2.04.007 PC-3): non-nil error → caller exits non-zero.
 	if err == nil {
@@ -943,7 +946,7 @@ func TestDaemonCleanShutdown(t *testing.T) {
 	var stderr bytes.Buffer
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runAccess(ctx, &stderr)
+		errCh <- runAccess(ctx, &stderr, nil)
 	}()
 
 	// Give the daemon a brief window to start its goroutines before cancellation.
@@ -1058,6 +1061,492 @@ func ptyAvailableForTest() bool {
 	err := pty.Connect(ctx)
 	_ = pty.Close()
 	return err == nil
+}
+
+// ── S-6.01 AC-003: TestRouterStartup_ExitsWithActionableError ─────────────────
+
+// TestRouterStartup_ExitsWithActionableError — AC-003 (BC-2.09.003 postconditions 1 and 2)
+//
+// Verifies that the daemon cmd-level startup path:
+//  1. Accepts a --config flag pointing to a config file.
+//  2. Calls config.LoadFile and cfg.Validate() at startup BEFORE any socket bind.
+//  3. On validation failure: returns a non-nil error whose message follows the
+//     E-CFG-001 actionable format "config error: <field>: <problem>. Fix: <suggestion>".
+//  4. The error is returned by run() so that main() can print it to stderr and
+//     call os.Exit(1) — exit code 1 behavior (BC-2.09.003 postconditions 1 and 2).
+//
+// This test exercises the cmd-level path — not just the config-layer contract in
+// isolation. It deliberately tests that run() wires LoadFile → Validate → return
+// error, which is distinct from the internal/config unit tests.
+//
+// Red Gate: run() currently has no --config flag and no config loading. Calling
+// run(stdout, []string{"switchboard", "access", "--config", path}) returns a flag
+// parse error ("flag provided but not defined: -config"), NOT an E-CFG-001
+// actionable message. This test fails until the implementer:
+//   - Adds a --config flag to the "access" subcommand FlagSet in run()
+//   - Calls config.LoadFile(configPath) before runAccess
+//   - Calls cfg.Validate() and returns E-CFG-001 error on failure
+//
+// Traces: BC-2.09.003 postconditions 1 and 2, AC-003, S-6.01 v1.1.
+func TestRouterStartup_ExitsWithActionableError(t *testing.T) {
+	// NOT t.Parallel(): exercises the cmd startup path; not safe to parallelise
+	// with tests that also call run() with "access".
+
+	// Write a config file that is syntactically valid YAML but has an invalid
+	// tick_interval (below the 5ms minimum) so it passes LoadFile but fails Validate.
+	// This exercises the Validate → E-CFG-001 path.
+	const badConfigContent = "listen_addr: 0.0.0.0:9090\ntick_interval: 1ms\n"
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "bad-config.yaml")
+	if err := os.WriteFile(configPath, []byte(badConfigContent), 0o600); err != nil {
+		t.Fatalf("WriteFile bad config: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	// run() must accept --config; currently it does not, so this call returns a
+	// flag-parse error. The test asserts the error message matches the E-CFG-001
+	// actionable format — which will NOT match a flag error.
+	err := run(&stdout, []string{"switchboard", "access", "--config", configPath})
+
+	// AC-003 assertion 1: non-nil error (exit code 1 — BC-2.09.003 postconditions 1 and 2).
+	if err == nil {
+		t.Fatal("run(access --config bad-config): got nil error; want non-nil " +
+			"(config validation must cause exit 1 — BC-2.09.003 postconditions 1 and 2)")
+	}
+
+	// AC-003 assertion 2: error message follows E-CFG-001 actionable format.
+	// BC-2.09.003 postconditions 1 and 2: "config error: <field>: <problem>. Fix: <suggestion>"
+	// The "tick_interval" field must be named; the suggestion must contain "Fix:".
+	msg := err.Error()
+	if !strings.Contains(msg, "config error") {
+		t.Errorf("run(access --config bad-config): error must contain 'config error' "+
+			"(E-CFG-001 actionable format); got: %q\n"+
+			"(FAIL: run() must call LoadFile+Validate and return E-CFG-001 on bad config, "+
+			"not a flag-parse error)", msg)
+	}
+	if !strings.Contains(msg, "tick_interval") {
+		t.Errorf("run(access --config bad-config): error must name the invalid field "+
+			"'tick_interval'; got: %q", msg)
+	}
+	if !strings.Contains(msg, "Fix") && !strings.Contains(msg, "fix") {
+		t.Errorf("run(access --config bad-config): error must contain a fix suggestion "+
+			"(BC-2.09.003 postconditions 1 and 2 / AC-003); got: %q", msg)
+	}
+
+	// AC-003 assertion 3: stdout must be empty (BC-2.09.003 postcondition 3).
+	if stdout.Len() != 0 {
+		t.Errorf("run(access --config bad-config): stdout must be empty on config error; "+
+			"got: %q", stdout.String())
+	}
+}
+
+// ── S-6.01 F-002a: TestBC_2_09_003_MissingConfigFile_ExitsNonZero ──────────────
+
+// TestBC_2_09_003_MissingConfigFile_ExitsNonZero — F-002a (BC-2.09.003 EC-001)
+//
+// Verifies that when the daemon is started with --config pointing at a
+// NON-EXISTENT path, the cmd-level run() function:
+//  1. Returns a non-nil error (caller exits with code 1).
+//  2. The error message contains E-CFG-004 and the literal "config file not found"
+//     followed by the path that was not found.
+//
+// This is a coverage-backfill test for the DAEMON-STARTUP path (not a red-gate):
+// the wiring in main.go already returns the LoadFile error to run()'s caller
+// before reaching runAccess. The test verifies the end-to-end cmd-level observable.
+//
+// Traces: BC-2.09.003 EC-001, postconditions 1 and 2.
+func TestBC_2_09_003_MissingConfigFile_ExitsNonZero(t *testing.T) {
+	// NOT t.Parallel(): exercises the cmd startup path alongside other "access" tests.
+
+	dir := t.TempDir()
+	// Construct a path that does not exist inside the temp dir.
+	missingPath := filepath.Join(dir, "does-not-exist.yaml")
+
+	var stdout bytes.Buffer
+	err := run(&stdout, []string{"switchboard", "access", "--config", missingPath})
+
+	// Assertion 1: non-nil error → exit code 1 (BC-2.09.003 postcondition 1).
+	if err == nil {
+		t.Fatal("run(access --config <missing>): got nil error; want non-nil " +
+			"(missing config file must cause exit 1 — BC-2.09.003 EC-001, postcondition 1)")
+	}
+
+	// Assertion 2: error carries E-CFG-004 code (BC-2.09.003 EC-001).
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("run(access --config <missing>): error is %T %q; want *config.ConfigError "+
+			"with code E-CFG-004 (BC-2.09.003 EC-001)", err, err.Error())
+	}
+	if ce.Code != "E-CFG-004" {
+		t.Errorf("run(access --config <missing>): error code = %q; want E-CFG-004 "+
+			"(BC-2.09.003 EC-001)", ce.Code)
+	}
+
+	// Assertion 3: message contains canonical "config file not found: <path>"
+	// (BC-2.09.003 EC-001 canonical format).
+	msg := err.Error()
+	if !strings.Contains(msg, "config file not found") {
+		t.Errorf("run(access --config <missing>): error must contain 'config file not found'; "+
+			"got: %q", msg)
+	}
+	if !strings.Contains(msg, missingPath) {
+		t.Errorf("run(access --config <missing>): error must contain the missing path %q; "+
+			"got: %q", missingPath, msg)
+	}
+
+	// Assertion 4: stdout must be empty — no partial output on error
+	// (BC-2.09.003 postcondition 3).
+	if stdout.Len() != 0 {
+		t.Errorf("run(access --config <missing>): stdout must be empty on config error; "+
+			"got: %q", stdout.String())
+	}
+}
+
+// ── S-6.01 F-002b: TestBC_2_09_003_MalformedYAML_ExitsNonZero ────────────────
+
+// TestBC_2_09_003_MalformedYAML_ExitsNonZero — F-002b (BC-2.09.003 EC-003)
+//
+// Verifies that when the daemon is started with --config pointing at a
+// syntactically malformed YAML file, the cmd-level run() function:
+//  1. Returns a non-nil error (caller exits with code 1).
+//  2. The error message contains E-CFG-005 and the canonical "at line" fragment
+//     per BC-2.09.003 EC-003 format: "config parse error: invalid YAML at line N: <detail>".
+//
+// The malformed fixture is written to t.TempDir() at test time.
+//
+// This is a coverage-backfill test: the wiring in main.go returns the LoadFile
+// error before reaching runAccess. The test verifies the end-to-end cmd observable.
+//
+// Traces: BC-2.09.003 EC-003 (FM-010), postconditions 1 and 2.
+func TestBC_2_09_003_MalformedYAML_ExitsNonZero(t *testing.T) {
+	// NOT t.Parallel(): exercises the cmd startup path alongside other "access" tests.
+
+	// Malformed YAML: a tab-indented key is a syntax error in YAML.
+	// yaml.v3 will report this as "yaml: line 3: found character that cannot start
+	// any token" — the line number is load-bearing for the E-CFG-005 canonical format.
+	const malformedContent = "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\n\tfoo: bad\n"
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "malformed.yaml")
+	if err := os.WriteFile(configPath, []byte(malformedContent), 0o600); err != nil {
+		t.Fatalf("WriteFile malformed config: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err := run(&stdout, []string{"switchboard", "access", "--config", configPath})
+
+	// Assertion 1: non-nil error → exit code 1 (BC-2.09.003 postcondition 1).
+	if err == nil {
+		t.Fatal("run(access --config <malformed>): got nil error; want non-nil " +
+			"(malformed YAML must cause exit 1 — BC-2.09.003 EC-003, postcondition 1)")
+	}
+
+	// Assertion 2: error carries E-CFG-005 code (BC-2.09.003 EC-003).
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("run(access --config <malformed>): error is %T %q; want *config.ConfigError "+
+			"with code E-CFG-005 (BC-2.09.003 EC-003)", err, err.Error())
+	}
+	if ce.Code != "E-CFG-005" {
+		t.Errorf("run(access --config <malformed>): error code = %q; want E-CFG-005 "+
+			"(BC-2.09.003 EC-003)", ce.Code)
+	}
+
+	// Assertion 3: message contains "at line" — the canonical E-CFG-005 format
+	// "config parse error: invalid YAML at line N: <detail>" (BC-2.09.003 EC-003).
+	// This distinguishes the properly-formatted error from a raw yaml library string.
+	msg := err.Error()
+	if !strings.Contains(msg, "at line") {
+		t.Errorf("run(access --config <malformed>): E-CFG-005 message must contain 'at line' "+
+			"(canonical format 'config parse error: invalid YAML at line N: <detail>'); "+
+			"got: %q", msg)
+	}
+
+	// Assertion 4: stdout must be empty on error (BC-2.09.003 postcondition 3).
+	if stdout.Len() != 0 {
+		t.Errorf("run(access --config <malformed>): stdout must be empty on config error; "+
+			"got: %q", stdout.String())
+	}
+}
+
+// ── S-6.01 F-003: TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess ─────────
+
+// TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess — F-003
+// (BC-2.09.003 PC4 + invariant 1)
+//
+// Verifies that when --config is invalid, the daemon does NOT proceed into the
+// socket/PTY work (runAccess) — i.e. no partial binding occurs.
+//
+// Observable contract: the ARCH-06 binding sequence in main.go (lines 61-77) is:
+//
+//  1. if *configPath != "": LoadFile(path)  →  on error: return err  (line 64)
+//  2. cfg.Validate()                        →  on error: return err  (line 67)
+//  3. runAccess(ctx, stderr)                ←  only reached on success (line 77)
+//
+// This test observes the short-circuit WITHOUT a production seam by asserting:
+//
+//	(a) run() returns a *config.ConfigError — proving the error came from the
+//	    config layer, not from runAccess (which would return nil on clean shutdown
+//	    or a session-layer error, never a *config.ConfigError).
+//
+//	(b) run() returns in well under the 50ms window given to runAccess at startup.
+//	    runAccess always takes at least ~1ms to begin and would block indefinitely
+//	    on a successful PTY connect. A config-error return is synchronous and
+//	    completes in microseconds. A 500ms deadline is conservative but sufficient
+//	    to distinguish the two paths.
+//
+// NO production seam required: the error type and return speed together provide
+// unambiguous evidence that runAccess was not entered.
+//
+// Traces: BC-2.09.003 PC4, invariant 1, postconditions 1 and 2.
+func TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess(t *testing.T) {
+	// NOT t.Parallel(): exercises the cmd startup path alongside other "access" tests.
+
+	// Use a missing-file path so LoadFile returns E-CFG-004 before Validate runs.
+	// Any config error suffices to exercise the short-circuit; missing file is the
+	// simplest because it requires no fixture and cannot accidentally be valid.
+	dir := t.TempDir()
+	missingPath := filepath.Join(dir, "not-here.yaml")
+
+	// Measure elapsed time to distinguish config-error path (synchronous, ~µs)
+	// from runAccess path (blocks on PTY/tmux connect, always >1ms).
+	start := time.Now()
+
+	var stdout bytes.Buffer
+	err := run(&stdout, []string{"switchboard", "access", "--config", missingPath})
+
+	elapsed := time.Since(start)
+
+	// Assertion 1: run() returned a non-nil error (BC-2.09.003 postcondition 1).
+	if err == nil {
+		t.Fatal("run(access --config <missing>): got nil error; want non-nil " +
+			"(config error must short-circuit before runAccess — BC-2.09.003 invariant 1)")
+	}
+
+	// Assertion 2: the error is a *config.ConfigError — ONLY the config layer
+	// returns this type. runAccess never returns a *config.ConfigError, so this
+	// proves the short-circuit without requiring an injectable runAccess seam.
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("run(access --config <missing>): error is %T (%q); want *config.ConfigError "+
+			"(BC-2.09.003 invariant 1: config error must come from config layer, not runAccess)",
+			err, err.Error())
+	}
+
+	// Assertion 3: run() returned within 500ms — the config-error path is
+	// synchronous (I/O: one ReadFile call). runAccess blocks on PTY/tmux
+	// connect; if that path were entered, this deadline would fire.
+	// 500ms is chosen to be robust across slow CI while still being 10× the
+	// maximum reasonable config-layer latency.
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("run(access --config <missing>): took %v; want < 500ms "+
+			"(config-error path is synchronous — if runAccess was entered, it would block "+
+			"on PTY/network: BC-2.09.003 invariant 1)", elapsed)
+	}
+
+	// Assertion 4: stdout must be empty (BC-2.09.003 postcondition 3).
+	if stdout.Len() != 0 {
+		t.Errorf("run(access --config <missing>): stdout must be empty on config error; "+
+			"got: %q", stdout.String())
+	}
+}
+
+// ── S-6.01 AC-009 / PC-9 / Inv-5: TestConfigTickIntervalApplied ──────────────
+
+// TestConfigTickIntervalApplied — AC-009 (BC-2.09.003 PC-9 / Inv-5, S-6.01 v1.4)
+//
+// Verifies that tickIntervalFor correctly sources cfg.TickInterval from the
+// validated config rather than always returning the hardcoded 10ms default.
+//
+// Seam: tickIntervalFor(cfg *config.Config) time.Duration is the extracted
+// helper that runAccess must use when constructing halfchannel.New (Task 17).
+// Testing the helper directly is the honest observable: if tickIntervalFor
+// ignores cfg, the 20ms case fails with "got 10ms; want 20ms". If tickIntervalFor
+// is not yet wired into runAccess, an end-to-end test would also fail — but the
+// helper test gives a precise, deterministic failure signal without PTY/network
+// machinery.
+//
+// RED Gate: tickIntervalFor currently returns the hardcoded 10ms default
+// regardless of cfg (RED stub in access.go). The cfg.TickInterval=20ms case
+// fails: "got 10ms; want 20ms". The cfg=nil case passes (10ms == 10ms default).
+// Both cases MUST pass once Task 17 is complete.
+//
+// Scope note (Deferred Application — BC-2.09.003 v1.3 DEFERRED-APPLICATION):
+// This test covers ONLY tick_interval application. The following fields are
+// validated at startup (AC-005 through AC-008) but their application is deferred:
+//   - listen_addr binding → S-BL.NI (network-ingress listener, no current owner)
+//   - drain_timeout / upstream_routers / keepalive_interval → S-7.04 (Wave 7)
+//
+// Those deferred fields are intentionally NOT asserted here.
+//
+// Traces: BC-2.09.003 PC-9, Inv-5; AC-009; S-6.01 v1.4 EC-011.
+func TestConfigTickIntervalApplied(t *testing.T) {
+	// NOT t.Parallel(): stateless helper test, but exercises package-level code path.
+
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		wantTick time.Duration
+	}{
+		{
+			// cfg=nil: no --config supplied; must fall back to the hardcoded 10ms default.
+			name:     "nil cfg returns hardcoded 10ms default",
+			cfg:      nil,
+			wantTick: 10 * time.Millisecond,
+		},
+		{
+			// cfg.TickInterval=20ms: must NOT fall back to the hardcoded 10ms default.
+			// This case is RED until Task 17 wires cfg.TickInterval into tickIntervalFor.
+			// Expected failure: "got 10ms; want 20ms" (tickIntervalFor returns 10ms stub).
+			name: "non-nil cfg returns cfg.TickInterval not hardcoded default",
+			cfg: &config.Config{
+				ListenAddr:        "127.0.0.1:19282",
+				TickInterval:      20 * time.Millisecond, // deliberately != 10ms default
+				DrainTimeout:      10 * time.Second,
+				KeepaliveInterval: 1 * time.Second,
+			},
+			wantTick: 20 * time.Millisecond,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Precondition: if cfg is non-nil, it must be a valid config so we know the
+			// test inputs themselves are not the source of a failure (test hygiene only).
+			if tc.cfg != nil {
+				if err := tc.cfg.Validate(); err != nil {
+					t.Fatalf("cfg.Validate(fixture): %v — test fixture must be valid", err)
+				}
+			}
+
+			got := tickIntervalFor(tc.cfg)
+			if got != tc.wantTick {
+				t.Errorf("tickIntervalFor(cfg): got %v; want %v "+
+					"(BC-2.09.003 PC-9/Inv-5 — cfg.TickInterval must drive halfchannel.New, "+
+					"not the hardcoded 10ms constant)",
+					got, tc.wantTick)
+			}
+		})
+	}
+}
+
+// ── S-6.01 AC-009 seam test: TestBC_2_09_003_TickIntervalWiredToHalfChannel ───
+
+// TestBC_2_09_003_TickIntervalWiredToHalfChannel — AC-009 end-to-end seam
+// (BC-2.09.003 PC-9 / Inv-5, M-1 wiring gap)
+//
+// The existing TestConfigTickIntervalApplied verifies tickIntervalFor() in
+// isolation; it does NOT verify that the return value actually reaches
+// halfchannel.New. A regression that hardcodes defaultTickInterval directly
+// at access.go line 116 would leave TestConfigTickIntervalApplied green while
+// silently ignoring the config.
+//
+// This test closes that gap by overriding a package-level constructor seam
+// (newHalfChannel, mirroring the existing framesDroppedInterval pattern) and
+// asserting that the tick value flows through runAccess end-to-end.
+//
+// Seam requirement: access.go must expose:
+//
+//	var newHalfChannel = halfchannel.New
+//
+// and the halfchannel.New call at access.go line 116 must be changed to:
+//
+//	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
+//
+// The test replaces newHalfChannel with a capturing stub that records the third
+// argument (tickInterval), delegates to the real halfchannel.New so runAccess
+// receives a valid *HalfChannel and proceeds normally, then immediately returns
+// via a pre-cancelled ctx so no PTY connection is attempted.
+//
+// RED Gate: newHalfChannel does not exist — this file will not compile.
+// That is the intended red: the implementer adds the seam var and rewires
+// access.go line 116.
+//
+// Traces: BC-2.09.003 PC-9, Inv-5; AC-009; S-6.01 v1.4 EC-013; M-1.
+func TestBC_2_09_003_TickIntervalWiredToHalfChannel(t *testing.T) {
+	// NOT t.Parallel(): mutates package-level newHalfChannel seam.
+
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		wantTick time.Duration
+	}{
+		{
+			// With a valid config carrying TickInterval=20ms, runAccess must pass
+			// 20ms (not the hardcoded 10ms constant) to halfchannel.New.
+			name: "cfg_tick_interval_20ms_reaches_halfchannel_New",
+			cfg: &config.Config{
+				ListenAddr:        "127.0.0.1:19283",
+				TickInterval:      20 * time.Millisecond,
+				DrainTimeout:      10 * time.Second,
+				KeepaliveInterval: 1 * time.Second,
+			},
+			wantTick: 20 * time.Millisecond,
+		},
+		{
+			// With cfg=nil (no --config supplied), runAccess must fall back to
+			// defaultTickInterval (10ms) — the seam must pass through the real value.
+			name:     "nil_cfg_uses_defaultTickInterval_10ms",
+			cfg:      nil,
+			wantTick: defaultTickInterval, // 10ms constant in access.go
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Precondition: valid config must pass Validate so we know the fixture
+			// is not accidentally the source of failure (test hygiene only).
+			if tc.cfg != nil {
+				if err := tc.cfg.Validate(); err != nil {
+					t.Fatalf("cfg.Validate(fixture): %v — fixture must be valid", err)
+				}
+			}
+
+			// captured records the tickInterval argument passed to newHalfChannel.
+			var captured time.Duration
+			var capturedOnce bool
+
+			// Save and restore the seam after this sub-test.
+			original := newHalfChannel
+			t.Cleanup(func() { newHalfChannel = original })
+
+			// Override the seam: record tickInterval and delegate to real halfchannel.New
+			// so runAccess receives a functional *HalfChannel.
+			newHalfChannel = func(chanID uint32, dir halfchannel.Direction, tickInterval time.Duration) *halfchannel.HalfChannel {
+				if !capturedOnce {
+					captured = tickInterval
+					capturedOnce = true
+				}
+				return halfchannel.New(chanID, dir, tickInterval)
+			}
+
+			// Pre-cancelled context: runAccessWithConnector returns E-SYS-002
+			// immediately when runCtx.Err() != nil — BEFORE sc.Connect — so no
+			// real PTY or network connection is needed. The halfchannel is
+			// constructed at access.go line 116 BEFORE runAccessWithConnector is
+			// called, so the capture still fires.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // cancel immediately
+
+			// runAccess is expected to return a non-nil error (E-SYS-002 — cancelled
+			// ctx before connect). We do not assert the error value here; the only
+			// assertion is on captured.
+			_ = runAccess(ctx, io.Discard, tc.cfg)
+
+			// AC-009 primary assertion: the tick value passed to halfchannel.New
+			// must equal what tickIntervalFor(cfg) would return.
+			if !capturedOnce {
+				t.Fatal("newHalfChannel seam was never called; " +
+					"access.go line 116 must use newHalfChannel(...) not halfchannel.New(...) directly " +
+					"(BC-2.09.003 Inv-5 / AC-009)")
+			}
+			if captured != tc.wantTick {
+				t.Errorf("halfchannel.New tick arg: got %v; want %v "+
+					"(BC-2.09.003 PC-9/Inv-5 — cfg.TickInterval must drive halfchannel.New, "+
+					"not the hardcoded 10ms constant)",
+					captured, tc.wantTick)
+			}
+		})
+	}
 }
 
 // ── Existing tests (preserved) ────────────────────────────────────────────────

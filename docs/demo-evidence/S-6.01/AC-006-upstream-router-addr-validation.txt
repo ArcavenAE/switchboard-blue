@@ -1,0 +1,22 @@
+=== RUN   TestConfigValidate_RejectsInvalidUpstreamRouterAddr
+=== PAUSE TestConfigValidate_RejectsInvalidUpstreamRouterAddr
+=== CONT  TestConfigValidate_RejectsInvalidUpstreamRouterAddr
+=== RUN   TestConfigValidate_RejectsInvalidUpstreamRouterAddr/single_invalid_at_index_0
+=== PAUSE TestConfigValidate_RejectsInvalidUpstreamRouterAddr/single_invalid_at_index_0
+=== RUN   TestConfigValidate_RejectsInvalidUpstreamRouterAddr/first_valid_second_invalid_at_index_1
+=== PAUSE TestConfigValidate_RejectsInvalidUpstreamRouterAddr/first_valid_second_invalid_at_index_1
+=== RUN   TestConfigValidate_RejectsInvalidUpstreamRouterAddr/missing_port_on_upstream
+=== PAUSE TestConfigValidate_RejectsInvalidUpstreamRouterAddr/missing_port_on_upstream
+=== RUN   TestConfigValidate_RejectsInvalidUpstreamRouterAddr/valid_upstream_addr_passes
+=== PAUSE TestConfigValidate_RejectsInvalidUpstreamRouterAddr/valid_upstream_addr_passes
+=== CONT  TestConfigValidate_RejectsInvalidUpstreamRouterAddr/single_invalid_at_index_0
+=== CONT  TestConfigValidate_RejectsInvalidUpstreamRouterAddr/valid_upstream_addr_passes
+=== CONT  TestConfigValidate_RejectsInvalidUpstreamRouterAddr/first_valid_second_invalid_at_index_1
+=== CONT  TestConfigValidate_RejectsInvalidUpstreamRouterAddr/missing_port_on_upstream
+--- PASS: TestConfigValidate_RejectsInvalidUpstreamRouterAddr (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidUpstreamRouterAddr/single_invalid_at_index_0 (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidUpstreamRouterAddr/valid_upstream_addr_passes (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidUpstreamRouterAddr/first_valid_second_invalid_at_index_1 (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidUpstreamRouterAddr/missing_port_on_upstream (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.282s

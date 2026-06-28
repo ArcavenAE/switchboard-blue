@@ -1,0 +1,5 @@
+listen_addr: "0.0.0.0:9090"
+tick_interval: 10ms
+upstream_routers: []
+drain_timeout: 10s
+keepalive_interval: 1s

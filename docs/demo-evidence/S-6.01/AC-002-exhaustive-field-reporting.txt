@@ -1,0 +1,18 @@
+=== RUN   TestConfigValidate_RejectsMissingRequiredFields
+=== PAUSE TestConfigValidate_RejectsMissingRequiredFields
+=== CONT  TestConfigValidate_RejectsMissingRequiredFields
+=== RUN   TestConfigValidate_RejectsMissingRequiredFields/both_required_fields_missing
+=== PAUSE TestConfigValidate_RejectsMissingRequiredFields/both_required_fields_missing
+=== RUN   TestConfigValidate_RejectsMissingRequiredFields/listen_addr_missing_tick_valid
+=== PAUSE TestConfigValidate_RejectsMissingRequiredFields/listen_addr_missing_tick_valid
+=== RUN   TestConfigValidate_RejectsMissingRequiredFields/tick_interval_missing_listen_valid
+=== PAUSE TestConfigValidate_RejectsMissingRequiredFields/tick_interval_missing_listen_valid
+=== CONT  TestConfigValidate_RejectsMissingRequiredFields/listen_addr_missing_tick_valid
+=== CONT  TestConfigValidate_RejectsMissingRequiredFields/tick_interval_missing_listen_valid
+=== CONT  TestConfigValidate_RejectsMissingRequiredFields/both_required_fields_missing
+--- PASS: TestConfigValidate_RejectsMissingRequiredFields (0.00s)
+    --- PASS: TestConfigValidate_RejectsMissingRequiredFields/listen_addr_missing_tick_valid (0.00s)
+    --- PASS: TestConfigValidate_RejectsMissingRequiredFields/tick_interval_missing_listen_valid (0.00s)
+    --- PASS: TestConfigValidate_RejectsMissingRequiredFields/both_required_fields_missing (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.270s

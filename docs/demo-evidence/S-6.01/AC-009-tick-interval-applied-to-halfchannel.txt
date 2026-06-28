@@ -1,0 +1,14 @@
+=== RUN   TestConfigTickIntervalApplied
+=== RUN   TestConfigTickIntervalApplied/nil_cfg_returns_hardcoded_10ms_default
+=== RUN   TestConfigTickIntervalApplied/non-nil_cfg_returns_cfg.TickInterval_not_hardcoded_default
+--- PASS: TestConfigTickIntervalApplied (0.00s)
+    --- PASS: TestConfigTickIntervalApplied/nil_cfg_returns_hardcoded_10ms_default (0.00s)
+    --- PASS: TestConfigTickIntervalApplied/non-nil_cfg_returns_cfg.TickInterval_not_hardcoded_default (0.00s)
+=== RUN   TestBC_2_09_003_TickIntervalWiredToHalfChannel
+=== RUN   TestBC_2_09_003_TickIntervalWiredToHalfChannel/cfg_tick_interval_20ms_reaches_halfchannel_New
+=== RUN   TestBC_2_09_003_TickIntervalWiredToHalfChannel/nil_cfg_uses_defaultTickInterval_10ms
+--- PASS: TestBC_2_09_003_TickIntervalWiredToHalfChannel (0.00s)
+    --- PASS: TestBC_2_09_003_TickIntervalWiredToHalfChannel/cfg_tick_interval_20ms_reaches_halfchannel_New (0.00s)
+    --- PASS: TestBC_2_09_003_TickIntervalWiredToHalfChannel/nil_cfg_uses_defaultTickInterval_10ms (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.299s

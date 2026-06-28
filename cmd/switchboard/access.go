@@ -36,12 +36,17 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/routing"
 	"github.com/arcavenae/switchboard/internal/session"
 	"github.com/arcavenae/switchboard/internal/tmux"
 )
+
+// defaultTickInterval is the half-channel tick cadence used when no config file
+// is supplied (Wave-3 hardcoded default, BC-2.09.003 PC-9 / Inv-5).
+const defaultTickInterval = 10 * time.Millisecond
 
 // sweepInterval is the period between consecutive Sweep eviction passes.
 // Hardcoded for Wave 3 (no file-based config loading; internal/config is Wave 4).
@@ -65,6 +70,12 @@ const (
 // package-level assignment (framesDroppedInterval = 1ms before the call).
 var framesDroppedInterval = 30 * time.Second
 
+// newHalfChannel is the half-channel constructor seam.
+// Declared as var (not called directly) so tests can inject a capturing stub
+// to verify that tickIntervalFor(cfg) reaches halfchannel.New end-to-end
+// (BC-2.09.003 PC-9 / Inv-5 / AC-009; mirrors the framesDroppedInterval pattern).
+var newHalfChannel = halfchannel.New
+
 // connectorIface is the minimal subset of *tmux.SessionConnector used by
 // runAccessWithConnector. *tmux.SessionConnector satisfies this interface by
 // construction — no changes to internal/tmux are required for the interface
@@ -79,14 +90,36 @@ type connectorIface interface {
 	RelayDropped() uint64
 }
 
+// tickIntervalFor returns the half-channel tick interval to use.
+//
+// When cfg is non-nil and cfg.TickInterval > 0, cfg.TickInterval is the single
+// source of truth (BC-2.09.003 PC-9 / Inv-5 / AC-009). When cfg is nil (no
+// --config supplied) or cfg.TickInterval is zero, defaultTickInterval (10ms) is
+// returned.
+//
+// Note: listen_addr, drain_timeout, upstream_routers, and keepalive_interval
+// application is explicitly deferred — listen_addr to S-BL.NI (network-ingress
+// listener story, no current owner), drain_timeout/upstream_routers/
+// keepalive_interval to S-7.04 (Wave 7). Those fields are validated at startup
+// (AC-005 through AC-008) but NOT applied here.
+func tickIntervalFor(cfg *config.Config) time.Duration {
+	if cfg != nil && cfg.TickInterval > 0 {
+		return cfg.TickInterval
+	}
+	return defaultTickInterval
+}
+
 // runAccess is the thin constructor wrapper for the access-mode handler. It
 // builds the real *tmux.SessionConnector (with defaultPTYAlloc), constructs
 // access components via buildAccessComponents, and delegates to
 // runAccessWithConnector (ARCH-01 ADR-011 v1.5 §HIGH-B).
 //
-// main.go calls runAccess(ctx, os.Stderr); a non-nil return triggers os.Exit(1).
-func runAccess(ctx context.Context, stderr io.Writer) error {
-	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+// main.go calls runAccess(ctx, os.Stderr, cfg); a non-nil return triggers
+// os.Exit(1). cfg is the validated config (nil when --config is not supplied).
+// When cfg is non-nil, the half-channel tick interval is sourced from
+// cfg.TickInterval (BC-2.09.003 PC-9 / Inv-5 / AC-009).
+func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
+	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
 	// (via Publisher) AND the Router, so AC-001's test can register a key and
@@ -122,6 +155,11 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 // fakeConnector in tests (enabling PC-2 and PC-2.6 end-to-end coverage without
 // a real PTY environment). an and router are pre-constructed by runAccess or the
 // test caller. (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1 obligation 4.)
+//
+// tick_interval is applied in runAccess (via tickIntervalFor) before the
+// half-channel is constructed and before this function is called. Further
+// deferred config fields (drain_timeout, upstream_routers, keepalive_interval)
+// are owned by S-7.04 (Wave 7). listen_addr binding is owned by S-BL.NI.
 //
 // On ctx already done: returns E-SYS-002 error immediately without starting
 // goroutines (BC-2.04.007 PC-1 / AC-007).
