@@ -122,7 +122,15 @@ func (r *Replay) OnUpstream(f Frame) error {
 	// Future frame within the window [nextSeq+1, nextSeq+windowSize-1]: buffer.
 	// Frames at or beyond nextSeq+windowSize are discarded (BC-2.02.004 invariant 3,
 	// PC5: loss of windowSize consecutive frames is irrecoverable).
-	if seq > r.nextSeq && seq < r.nextSeq+r.windowSize {
+	//
+	// Use wrap-safe distance arithmetic: uint32 subtraction wraps correctly mod 2^32,
+	// so (seq - r.nextSeq) gives the true forward gap even when seq < r.nextSeq in
+	// the integer sense (e.g. near MaxUint32). A distance of 0 means in-order (handled
+	// above); distance in [1, windowSize-1] is an in-window future frame; distance
+	// >= windowSize is too far ahead (or wrapped-around past, since past frames also
+	// produce large distance values after wrapping). The existing too-old lower-bound
+	// guard above handles the past-frame case before we reach this point.
+	if dist := seq - r.nextSeq; dist > 0 && dist < r.windowSize {
 		r.pending[seq] = f
 		return nil
 	}
