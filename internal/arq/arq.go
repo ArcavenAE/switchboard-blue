@@ -76,6 +76,11 @@ var ErrFrameNotOverdue = fmt.Errorf("arq: frame has not exceeded drop deadline")
 type DegradationEvent struct {
 	// DroppedSeq is the channel sequence number of the frame that was
 	// terminated by TLPKTDROP.
+	//
+	// The zero value (DroppedSeq == 0) is the "no event" sentinel. 0 is never
+	// a valid frame sequence number because chan_seq is reserved to start at 1
+	// per ARCH-02 §chan_seq (RULING-001 §R1); the sentinel therefore cannot
+	// collide with a real dropped sequence.
 	DroppedSeq uint32
 }
 
@@ -199,6 +204,11 @@ func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) ([][]byte, 
 	// the remote side received them; we only surface what we have locally.
 	// Advancing past locally-absent seqs is correct and intended: see BC-2.02.005
 	// invariant 4 and PC-4 scope note (F-H4 ruling, disposition A).
+	//
+	// Note: this loop does not implement RFC-1982-style serial-number arithmetic
+	// for uint32 wraparound (MaxUint32 → 1). 32-bit sequence wraparound is out
+	// of MVP scope per RULING-001 §R2: sessions are bounded well below the
+	// ~49–497-day wrap interval at any normal tick rate (BC-2.02.002 EC-004).
 	for seq := a.nextExpected + 1; seq <= ackSeq; seq++ {
 		payload := a.payloadFor(seq)
 		a.nextExpected = seq
