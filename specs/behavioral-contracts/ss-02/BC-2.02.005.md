@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.005
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,15 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-06-28
+    author: product-owner
+    reason: "F-H4 ruling: add PC-4 scope note and Invariant 4 to clarify sender-side cumulative-ACK semantics; no behavior change"
+  - version: "1.3"
+    date: 2026-06-28
+    author: architect
+    reason: "RULING-003: add EC-005 out-of-window cumulative-ACK rejection contract"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -51,6 +59,16 @@ The downstream half-channel (terminal output from access node to console) uses r
 2. The access node detects gaps by comparing sent sequence numbers against the SACK bitmap.
 3. On gap detection, the access node retransmits the missing content in a new frame with the current send sequence number.
 4. The console delivers downstream frames to the terminal in sequence order: gaps held until filled.
+
+   > **Scope note (PC-4, sender side):** PC-4 is a receiver-side postcondition governing the console's
+   > `reorderBuf`. On the sender (access node) side, advancing `nextExpected` past a cumulatively-ACKed
+   > sequence that is not present in `inFlight` is correct and intended. The cumulative ACK is an
+   > assertion by the remote that it received those bytes. The sender has no obligation to hold or
+   > re-deliver content already confirmed received. Locally-absent entries in the sender's ACK scan loop
+   > are a normal consequence of prior window advancement, QUIC-style retransmit cleanup, or post-resync
+   > state (ADR-005). This does NOT violate invariant 2 — the bytes were not lost; the ACK proves they
+   > arrived at the remote.
+
 5. Retransmit frames carry the original content but a new frame sequence number (QUIC retransmit model).
 
 ## Invariants
@@ -58,6 +76,9 @@ The downstream half-channel (terminal output from access node to console) uses r
 1. Terminal output is delivered to the console in the order it was produced by the access node.
 2. No byte of terminal output is permanently lost within the ARQ window (loss beyond window: TLPKTDROP, see BC-2.02.006).
 3. ACK/SACK is not a separate connection — it is piggybacked on the normal upstream half-channel traffic.
+4. The cumulative ACK is trusted as an assertion by the remote. Sender-side `nextExpected` advancement
+   past locally-absent sequences does not violate invariant 2 — remote receipt is the delivery guarantee,
+   not local holding. See PC-4 scope note for full rationale.
 
 ## Trigger
 
@@ -71,6 +92,7 @@ Console receives an out-of-order downstream frame; ACK timer fires; access node 
 | EC-002 | ACK piggyback lost (upstream frame lost) | ARQ timer at access node expires; access node resends; console reACKs on next upstream frame. |
 | EC-003 (read-only console, no payload-bearing upstream) | Read-only consoles have no payload-bearing upstream half-channel | Read-only consoles piggyback SACK on empty-tick frames produced by the degenerate upstream half-channel (SACK_present=1 in channel header flags, per BC-2.01.002 + BC-2.01.005). Empty-tick frames carry SACK bitmaps when needed; no separate channel is used. |
 | EC-004 | SACK bitmap overflow (too many out-of-order frames simultaneously) | Bitmap covers a fixed range; frames outside the range trigger a NACK or rely on the ARQ timeout to retransmit. |
+| EC-005 | Out-of-window cumulative ACK received (`ackSeq - nextExpected > 64`) | `OnAck` returns `ErrAckOutOfWindow`; ARQ state is unmodified; caller discards the frame. A legal cumulative ACK advances at most `sackWindowSize` (64) positions from `nextExpected`. Stale ACKs (`ackSeq < nextExpected`) also trigger this path via unsigned wrap. See RULING-003. |
 
 ## Canonical Test Vectors
 
@@ -80,6 +102,7 @@ Console receives an out-of-order downstream frame; ACK timer fires; access node 
 | Downstream frames: [1,3] arrive; 2 missing | SACK indicates gap at 2; access node retransmits 2; console delivers [1,2,3] | edge-case |
 | All downstream frames lost for 500ms | ARQ retransmit on timer; frames delivered on recovery | edge-case |
 | Frame 2 retransmit arrives before original (which arrives later) | Original frame 2 deduplicated on arrival; content applied once | happy-path |
+| Sender sends frames 1,2,3; frame 2 cleaned from inFlight by prior partial ACK; cumulative ACK for seq=3 arrives | `nextExpected` advances to 4; `inFlight` emptied; no error or gap event emitted (TestARQ_OnAck_CumulativeAckPastLocallyAbsentSeq) | sender-semantics |
 
 ## Verification Properties
 

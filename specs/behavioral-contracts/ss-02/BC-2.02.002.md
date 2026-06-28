@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,11 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-06-28
+    author: product-owner
+    reason: "RULING-001: update EC-004 to document 32-bit wrap as outside MVP scope; add EC-005 for seq=0 reservation"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -68,7 +72,8 @@ Frame arrives at receiver endpoint.
 | EC-001 (DEC-009) | Router drop cache detects routing loop duplicate | Router discards at router level before forwarding. Receiver also deduplicates if one copy passes. |
 | EC-002 | Duplicate arrives 500ms after original on slow path | If within deduplication window, discarded silently. If outside window (implementation edge): treated as out-of-order frame per the half-channel's sequence handling. |
 | EC-003 | Upstream idempotent replay: same keystroke sequence arrives twice | Both copies pass deduplication if they differ in content (replay window content). Receiver applies idempotent dedup by keystroke sequence, not frame sequence. |
-| EC-004 | Frame sequence number wraps around (overflow) | Sequence space must be large enough to prevent overlap within the duplication window. Implementation: 32-bit sequence space; at normal tick rates, wrap takes > 24 hours. |
+| EC-004 | Frame sequence number wraps around (overflow) | Sequence space must be large enough to prevent overlap within the duplication window. Implementation: 32-bit sequence space; at 10ms tick rate, wrap takes ~497 days. **32-bit wraparound across an active session is outside MVP scope** (RULING-001 §R2). Sessions are assumed to terminate before the wrap boundary. Receiver-side comparison loops (including cumulative-ACK scan in OnAck) need not handle the MaxUint32→1 transition for MVP. Implementations SHOULD add a doc comment at wrap-adjacent comparisons citing this assumption. |
+| EC-005 | Frame arrives on wire with chan_seq=0 | chan_seq=0 is reserved and never a valid frame sequence number (RULING-001 §R1). The receiver MUST discard the frame without delivery or ACK side-effects. This applies to both replay deduplication and ARQ reorder-buffer insertion. |
 
 ## Canonical Test Vectors
 

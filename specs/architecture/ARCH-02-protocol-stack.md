@@ -133,6 +133,21 @@ header is 12 bytes. When SACK_present=1, the channel header is 20 bytes. The
 field in the outer header. Per-half-channel ordering and deduplication are performed
 by the endpoint using `chan_seq`. Routers do not read or modify `chan_seq`.
 
+**chan_seq initial value and seq=0 reservation (RULING-001):** chan_seq starts at 1.
+The value 0 is reserved and is never a valid wire-frame sequence number. On wrap
+from MaxUint32, the next value is 1 (not 0): senders MUST skip 0 on wrap. A
+received frame with chan_seq=0 is malformed and MUST be discarded without delivery.
+This reservation makes seq=0 a safe "unset/none" sentinel in receiver-side data
+structures (e.g., DegradationEvent.DroppedSeq=0 means "no event").
+
+**chan_seq session-lifetime assumption (RULING-001):** 32-bit sequence wraparound
+across an active session is not a supported scenario for MVP. At a 10ms tick rate,
+the 32-bit space (values 1–MaxUint32) wraps after approximately 497 days; at 100Hz
+it wraps after approximately 49 days. Sessions are assumed to terminate before
+wraparound. Receiver-side comparison loops (e.g., cumulative-ACK scan) need not
+handle the MaxUint32→1 boundary for MVP. This assumption is documented in
+BC-2.02.002 (EC-004) and BC-2.02.004 (EC-005).
+
 ## Half-Channel Architecture (internal/halfchannel)
 
 Per elem-timeslice-framing and elem-asymmetric-half-channels, each direction is

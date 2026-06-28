@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.003
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,8 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - 2026-06-27T00:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -52,7 +53,7 @@ Each node maintains real-time per-path quality metrics (RTT and loss rate) by se
 3. Paths are re-ranked by (RTT, loss_rate) in ascending order after each metric update.
 4. Path metrics are available for query via sbctl (BC-2.06.003).
 5. A path whose RTT exceeds the degradation threshold (implementation: >200ms) is flagged as degraded.
-6. A path with > N consecutive missed keep-alives (implementation: N=3) is marked as failed and removed from the active path set.
+6. A path with > N consecutive missed keep-alives (implementation: N=3) is marked as failed and removed from the active path set. A failed path is re-added to the active path set upon the first successful keep-alive round-trip; its RTT is initialized from the reactivating probe's measured RTT and its loss EWMA resets to 0. Probes continue to be sent to failed paths so that recovery is detected.
 
 ## Invariants
 

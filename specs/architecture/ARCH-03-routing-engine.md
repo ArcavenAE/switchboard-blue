@@ -2,7 +2,7 @@
 artifact_id: ARCH-03-routing-engine
 document_type: architecture-section
 level: L3
-version: "1.1"
+version: "1.3"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -26,6 +26,7 @@ kos_anchors:
 modified:
   - 2026-06-23T00:00:00
   - 2026-06-27T00:00:00
+  - 2026-06-28T00:00:00
 changelog:
   - version: "1.1"
     date: 2026-06-27T00:00:00
@@ -33,6 +34,16 @@ changelog:
     changes:
       - "Correction 1 (§Duplicate-and-Race, F-006 block): fixed endpoint dedup key description. The destination endpoint deduplicates by checksum alone (BC-2.02.002); the compound (checksum, arrival_interface_id) key applies only to the router-level drop cache (BC-2.02.009). Also corrected the OnFrameArrival pseudo-code comment citation from BC-2.02.002 to BC-2.02.009."
       - "Correction 2 (§Path Selection, degenerate single-path case): replaced 'both copies go to the same path (degenerate case)' with single-path no-duplication language per BC-2.02.001 postcondition 3 and EC-001."
+  - version: "1.2"
+    date: 2026-06-28T00:00:00
+    adjudication: S-4.03 pass2-adjudication
+    changes:
+      - "Correction (§Downstream ARQ, delivery contract): OnAck returns deliverable frames synchronously as [][]byte. The caller's tick loop forwards them to the terminal. There is no internal DeliveredFrames channel or goroutine for frame delivery (pure-core constraint; S-4.03 pass-2 adjudication ruling 1)."
+  - version: "1.3"
+    date: 2026-06-28T00:00:00
+    adjudication: S-4.03 RULING-003 ackseq-dos-ruling
+    changes:
+      - "Addition (§Downstream ARQ, input validation): OnAck validates ackSeq is within sackWindowSize (64) of nextExpected before iterating. Out-of-window ackSeq returns ErrAckOutOfWindow without state mutation. Unsigned subtraction handles stale-ACK case. Traces to BC-2.02.005 EC-005."
 ---
 
 # ARCH-03: Routing Engine
@@ -162,6 +173,22 @@ even when carrying no data payload. This means:
 - The 8-byte SACK bitmap in the channel header carries the ACK state for the
   downstream half-channel.
 - No dedicated ACK channel is needed, defined, or implemented.
+
+**Delivery contract (S-4.03 pass-2 adjudication):** `OnAck` returns deliverable
+frames synchronously as `[][]byte`. The caller's tick loop forwards them to the
+terminal. There is no internal `DeliveredFrames` channel or goroutine for frame
+delivery — `internal/arq` is pure-core and may not spawn goroutines (same
+constraint as `internal/halfchannel`). `TLPKTDROP` returns the degradation event
+as a value and additionally sends it to the buffered `DegradationEvents` channel
+for the metrics layer.
+
+**Input validation (RULING-003):** `OnAck` validates that `ackSeq` lies within one
+SACK window (64 positions) of `nextExpected` before executing the Step-1 iteration
+loop. An out-of-window cumulative ACK is a protocol-illegal frame; `OnAck` returns
+`ErrAckOutOfWindow` without iterating and without mutating ARQ state. Callers must
+check this error and discard the frame. The guard uses unsigned subtraction:
+stale ACKs (`ackSeq < nextExpected`) also trigger rejection via uint32 wrap, with
+no separate comparison required. Traces to BC-2.02.005 EC-005.
 
 **BC-2.02.006 (TLPKTDROP):** When a downstream frame is overdue beyond
 `tlpktdrop_timeout` (default: 2 × tick_interval), the frame is dropped with a

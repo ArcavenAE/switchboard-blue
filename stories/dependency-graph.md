@@ -5,7 +5,7 @@ level: ops
 version: "1.0"
 status: draft
 producer: story-writer
-timestamp: 2026-06-24T00:00:00
+timestamp: 2026-06-27T00:00:00
 phase: 2
 inputDocuments:
   - '.factory/stories/STORY-INDEX.md'
@@ -82,7 +82,7 @@ Manual topological sort confirms no back-edges:
 | BC-2.02.006 | S-4.03 | yes |
 | BC-2.02.007 | S-7.01 | yes |
 | BC-2.02.008 | S-4.04 | yes |
-| BC-2.02.009 | S-4.01 | yes |
+| BC-2.02.009 | S-4.01 (postconditions 1+2: DropCache primitive + Hits() accessor), S-4.04 (router OnFrameArrival wiring + EC-005 logging) | yes |
 | BC-2.03.001 | S-7.02 | yes |
 | BC-2.03.002 | S-7.02 | yes |
 | BC-2.03.003 | S-7.02 | yes |

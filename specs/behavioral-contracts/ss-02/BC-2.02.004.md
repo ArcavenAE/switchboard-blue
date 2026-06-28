@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.004
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,15 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-06-28
+    author: product-owner
+    reason: "RULING-001: pin chan_seq initial value (starts at 1; 0 reserved; skip-0-on-wrap); add session-lifetime assumption; add invariant 4 and EC-005/EC-006"
+  - version: "1.3"
+    date: 2026-06-28
+    author: product-owner
+    reason: "RULING-002/Finding 2: add Invariant 5 (bounded-state / DoS-resistance: replay receiver retains at most O(windowSize) pending+seen entries)"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -58,6 +66,8 @@ The upstream half-channel (keystrokes from console to access node) uses an idemp
 1. **DI-001**: The replay window contains keystroke content which is SSH-encrypted end-to-end; it is opaque to routers.
 2. Keystroke sequence numbers are monotonically increasing within a channel; duplicates are discarded.
 3. The replay window size N is fixed for the lifetime of a channel (not adaptive).
+4. **chan_seq >= 1 always** (RULING-001): chan_seq starts at 1 and the value 0 is reserved. The sender MUST skip 0 on wrap (after emitting MaxUint32, the next value is 1). A received frame with chan_seq=0 is malformed and MUST be discarded.
+5. **Bounded receiver state (DoS-resistance)** (RULING-002): The replay receiver retains at most O(windowSize) entries across its pending (buffered, awaiting in-order delivery) and seen (dedup) sets combined. Formally: |pending| + |seen| ≤ 2 × windowSize at all times. No unbounded allocation is permitted regardless of the sequence of incoming chan_seq values. Implementations MUST enforce this cap by evicting the oldest seen entries once the seen set would exceed windowSize entries, and MUST silently discard any incoming frame whose distance from the current delivery frontier exceeds windowSize (treating it as irrecoverably old, consistent with PC5).
 
 ## Trigger
 
@@ -71,6 +81,8 @@ Timeslice clock fires on the upstream half-channel with pending keystrokes.
 | EC-002 | Replay window N=5; 6 consecutive frames lost | First 5 keystroke losses self-healed by subsequent frames. Keystroke 1 (6th in the lost sequence) cannot be recovered. Access node notes the gap. |
 | EC-003 | Empty replay window (no keystrokes in the last N ticks) | Frame carries empty payload; this is an empty-tick frame from the upstream half-channel's perspective. |
 | EC-004 | Access node receives the same keystroke sequence twice (from different paths or replay) | Keystroke deduplication by sequence number ensures exactly-once application. |
+| EC-005 | Sender has emitted seq=MaxUint32 and must emit the next frame | Sender skips 0: next chan_seq = 1. Receiver's seq=0 discard guard is not triggered by a legitimate next frame. (RULING-001; session-lifetime assumption means this boundary is reached only after ~497 days at 10ms tick rate, outside MVP scope.) |
+| EC-006 | Session lifetime assumption | 32-bit chan_seq wraparound across an active session is outside MVP scope. Sessions are assumed to terminate before the 4,294,967,295-frame limit. Receiver-side comparison loops need not handle the MaxUint32→1 boundary. See ARCH-02 §chan_seq session-lifetime assumption. |
 
 ## Canonical Test Vectors
 
