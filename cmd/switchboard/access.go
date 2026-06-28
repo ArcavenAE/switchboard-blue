@@ -44,6 +44,10 @@ import (
 	"github.com/arcavenae/switchboard/internal/tmux"
 )
 
+// defaultTickInterval is the half-channel tick cadence used when no config file
+// is supplied (Wave-3 hardcoded default, BC-2.09.003 PC-9 / Inv-5).
+const defaultTickInterval = 10 * time.Millisecond
+
 // sweepInterval is the period between consecutive Sweep eviction passes.
 // Hardcoded for Wave 3 (no file-based config loading; internal/config is Wave 4).
 const sweepInterval = 30 * time.Second
@@ -82,26 +86,21 @@ type connectorIface interface {
 
 // tickIntervalFor returns the half-channel tick interval to use.
 //
-// When cfg is non-nil, cfg.TickInterval is the single source of truth
-// (BC-2.09.003 PC-9 / Inv-5 / AC-009). When cfg is nil (no --config supplied),
-// the hardcoded Wave-3 default of 10ms is used.
+// When cfg is non-nil and cfg.TickInterval > 0, cfg.TickInterval is the single
+// source of truth (BC-2.09.003 PC-9 / Inv-5 / AC-009). When cfg is nil (no
+// --config supplied) or cfg.TickInterval is zero, defaultTickInterval (10ms) is
+// returned.
 //
 // Note: listen_addr, drain_timeout, upstream_routers, and keepalive_interval
 // application is explicitly deferred — listen_addr to S-BL.NI (network-ingress
 // listener story, no current owner), drain_timeout/upstream_routers/
 // keepalive_interval to S-7.04 (Wave 7). Those fields are validated at startup
 // (AC-005 through AC-008) but NOT applied here.
-//
-// RED stub: currently returns the hardcoded 10ms default regardless of cfg.
-// The implementer must replace the body with:
-//
-//	if cfg != nil {
-//	    return cfg.TickInterval
-//	}
-//	return 10 * time.Millisecond
-func tickIntervalFor(_ *config.Config) time.Duration {
-	// RED stub — does not yet inspect cfg.TickInterval (Task 17).
-	return 10 * time.Millisecond
+func tickIntervalFor(cfg *config.Config) time.Duration {
+	if cfg != nil && cfg.TickInterval > 0 {
+		return cfg.TickInterval
+	}
+	return defaultTickInterval
 }
 
 // runAccess is the thin constructor wrapper for the access-mode handler. It
@@ -109,10 +108,12 @@ func tickIntervalFor(_ *config.Config) time.Duration {
 // access components via buildAccessComponents, and delegates to
 // runAccessWithConnector (ARCH-01 ADR-011 v1.5 §HIGH-B).
 //
-// main.go calls runAccess(ctx, os.Stderr); a non-nil return triggers os.Exit(1).
-// cfg is the validated config (nil when --config is not supplied).
-func runAccess(ctx context.Context, stderr io.Writer) error {
-	ds := halfchannel.New(1, halfchannel.Downstream, 10*time.Millisecond)
+// main.go calls runAccess(ctx, os.Stderr, cfg); a non-nil return triggers
+// os.Exit(1). cfg is the validated config (nil when --config is not supplied).
+// When cfg is non-nil, the half-channel tick interval is sourced from
+// cfg.TickInterval (BC-2.09.003 PC-9 / Inv-5 / AC-009).
+func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
+	ds := halfchannel.New(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
 	// (via Publisher) AND the Router, so AC-001's test can register a key and
@@ -137,7 +138,7 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 	// UNCHANGED per ARCH-01 ADR-011 v1.5 §HIGH-B.
 	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
 
-	return runAccessWithConnector(ctx, stderr, sc, an, router, nil)
+	return runAccessWithConnector(ctx, stderr, sc, an, router)
 }
 
 // runAccessWithConnector contains all orchestration logic for the access-mode
@@ -149,10 +150,10 @@ func runAccess(ctx context.Context, stderr io.Writer) error {
 // a real PTY environment). an and router are pre-constructed by runAccess or the
 // test caller. (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1 obligation 4.)
 //
-// cfg is the validated config struct. When non-nil, subsystem timings are sourced
-// from cfg: tick_interval drives the half-channel, drain_timeout the drain subsystem,
-// keepalive_interval the keepalive probes (BC-2.09.003 PC-9 / Inv-5 / AC-009).
-// When nil (runAccess without --config), hardcoded defaults are used.
+// tick_interval is applied in runAccess (via tickIntervalFor) before the
+// half-channel is constructed and before this function is called. Further
+// deferred config fields (drain_timeout, upstream_routers, keepalive_interval)
+// are owned by S-7.04 (Wave 7). listen_addr binding is owned by S-BL.NI.
 //
 // On ctx already done: returns E-SYS-002 error immediately without starting
 // goroutines (BC-2.04.007 PC-1 / AC-007).
@@ -169,12 +170,8 @@ func runAccessWithConnector(
 	sc connectorIface,
 	an *session.AccessNode,
 	router *routing.Router,
-	cfg *config.Config,
 ) error {
 	_ = router // router retained (not discarded); used by AC-001 test surface
-	// cfg is accepted for PC-9/Inv-5 compliance (validated config drives subsystems).
-	// Subsystem values sourced from cfg when non-nil; hardcoded defaults otherwise.
-	_ = cfg
 
 	// AC-008: install SIGTERM/SIGINT handler. signal.NotifyContext wraps ctx
 	// so that SIGTERM/SIGINT cancels sigCtx. This is idempotent with any

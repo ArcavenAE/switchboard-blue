@@ -685,7 +685,7 @@ func TestDaemonConnectFailureExitsNonZero(t *testing.T) {
 	var stderr bytes.Buffer
 
 	// runAccess panics in the stub — that panic IS the Red Gate failure.
-	err := runAccess(ctx, &stderr)
+	err := runAccess(ctx, &stderr, nil)
 
 	// AC-007 assertion 1 (BC-2.04.007 PC-3): non-nil error → caller exits non-zero.
 	if err == nil {
@@ -946,7 +946,7 @@ func TestDaemonCleanShutdown(t *testing.T) {
 	var stderr bytes.Buffer
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runAccess(ctx, &stderr)
+		errCh <- runAccess(ctx, &stderr, nil)
 	}()
 
 	// Give the daemon a brief window to start its goroutines before cancellation.
