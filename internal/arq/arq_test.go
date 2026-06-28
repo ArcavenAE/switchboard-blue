@@ -945,8 +945,8 @@ func TestBC_2_02_005_VP019_VP020_NoDoubleDelivery(t *testing.T) {
 
 // TestBC_2_02_005_SACKPopCount verifies BC-2.02.005 SACK-accuracy clause
 // (VP-019/VP-020 unit): SACKPopCount returns the correct number of set bits
-// for canonical bitmaps. This test exercises the already-implemented
-// SACKPopCount (GREEN-BY-DESIGN per stub notes) — included for traceability.
+// for canonical bitmaps. SACKPopCount (green-by-design — pure bit-count helper)
+// — included for traceability.
 func TestBC_2_02_005_SACKPopCount(t *testing.T) {
 	t.Parallel()
 
