@@ -70,16 +70,17 @@ type ValidationError struct {
 
 // Error implements the error interface.
 // Format: "config error: <field>: <problem>. Fix: <suggestion>" per BC-2.09.003 postcondition 2.
+// The field name appears exactly once (in the <field>: slot); the problem describes the value/range.
 func (v *ValidationError) Error() string {
 	if v.Suggestion != "" {
 		if v.Value != "" {
-			return fmt.Sprintf("config error: %s: field %q = %s %s. Fix: %s",
-				v.Field, v.Field, v.Value, v.Problem, v.Suggestion)
+			return fmt.Sprintf("config error: %s: value %s %s. Fix: %s",
+				v.Field, v.Value, v.Problem, v.Suggestion)
 		}
 		return fmt.Sprintf("config error: %s: %s. Fix: %s", v.Field, v.Problem, v.Suggestion)
 	}
 	if v.Value != "" {
-		return fmt.Sprintf("config error: %s: field %q = %s %s", v.Field, v.Field, v.Value, v.Problem)
+		return fmt.Sprintf("config error: %s: value %s %s", v.Field, v.Value, v.Problem)
 	}
 	return fmt.Sprintf("config error: %s: %s", v.Field, v.Problem)
 }
