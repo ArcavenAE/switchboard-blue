@@ -1429,6 +1429,126 @@ func TestConfigTickIntervalApplied(t *testing.T) {
 	}
 }
 
+// ── S-6.01 AC-009 seam test: TestBC_2_09_003_TickIntervalWiredToHalfChannel ───
+
+// TestBC_2_09_003_TickIntervalWiredToHalfChannel — AC-009 end-to-end seam
+// (BC-2.09.003 PC-9 / Inv-5, M-1 wiring gap)
+//
+// The existing TestConfigTickIntervalApplied verifies tickIntervalFor() in
+// isolation; it does NOT verify that the return value actually reaches
+// halfchannel.New. A regression that hardcodes defaultTickInterval directly
+// at access.go line 116 would leave TestConfigTickIntervalApplied green while
+// silently ignoring the config.
+//
+// This test closes that gap by overriding a package-level constructor seam
+// (newHalfChannel, mirroring the existing framesDroppedInterval pattern) and
+// asserting that the tick value flows through runAccess end-to-end.
+//
+// Seam requirement: access.go must expose:
+//
+//	var newHalfChannel = halfchannel.New
+//
+// and the halfchannel.New call at access.go line 116 must be changed to:
+//
+//	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
+//
+// The test replaces newHalfChannel with a capturing stub that records the third
+// argument (tickInterval), delegates to the real halfchannel.New so runAccess
+// receives a valid *HalfChannel and proceeds normally, then immediately returns
+// via a pre-cancelled ctx so no PTY connection is attempted.
+//
+// RED Gate: newHalfChannel does not exist — this file will not compile.
+// That is the intended red: the implementer adds the seam var and rewires
+// access.go line 116.
+//
+// Traces: BC-2.09.003 PC-9, Inv-5; AC-009; S-6.01 v1.4 EC-013; M-1.
+func TestBC_2_09_003_TickIntervalWiredToHalfChannel(t *testing.T) {
+	// NOT t.Parallel(): mutates package-level newHalfChannel seam.
+
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		wantTick time.Duration
+	}{
+		{
+			// With a valid config carrying TickInterval=20ms, runAccess must pass
+			// 20ms (not the hardcoded 10ms constant) to halfchannel.New.
+			name: "cfg_tick_interval_20ms_reaches_halfchannel_New",
+			cfg: &config.Config{
+				ListenAddr:        "127.0.0.1:19283",
+				TickInterval:      20 * time.Millisecond,
+				DrainTimeout:      10 * time.Second,
+				KeepaliveInterval: 1 * time.Second,
+			},
+			wantTick: 20 * time.Millisecond,
+		},
+		{
+			// With cfg=nil (no --config supplied), runAccess must fall back to
+			// defaultTickInterval (10ms) — the seam must pass through the real value.
+			name:     "nil_cfg_uses_defaultTickInterval_10ms",
+			cfg:      nil,
+			wantTick: defaultTickInterval, // 10ms constant in access.go
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Precondition: valid config must pass Validate so we know the fixture
+			// is not accidentally the source of failure (test hygiene only).
+			if tc.cfg != nil {
+				if err := tc.cfg.Validate(); err != nil {
+					t.Fatalf("cfg.Validate(fixture): %v — fixture must be valid", err)
+				}
+			}
+
+			// captured records the tickInterval argument passed to newHalfChannel.
+			var captured time.Duration
+			var capturedOnce bool
+
+			// Save and restore the seam after this sub-test.
+			original := newHalfChannel
+			t.Cleanup(func() { newHalfChannel = original })
+
+			// Override the seam: record tickInterval and delegate to real halfchannel.New
+			// so runAccess receives a functional *HalfChannel.
+			newHalfChannel = func(chanID uint32, dir halfchannel.Direction, tickInterval time.Duration) *halfchannel.HalfChannel {
+				if !capturedOnce {
+					captured = tickInterval
+					capturedOnce = true
+				}
+				return halfchannel.New(chanID, dir, tickInterval)
+			}
+
+			// Pre-cancelled context: runAccessWithConnector returns E-SYS-002
+			// immediately when runCtx.Err() != nil — BEFORE sc.Connect — so no
+			// real PTY or network connection is needed. The halfchannel is
+			// constructed at access.go line 116 BEFORE runAccessWithConnector is
+			// called, so the capture still fires.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // cancel immediately
+
+			// runAccess is expected to return a non-nil error (E-SYS-002 — cancelled
+			// ctx before connect). We do not assert the error value here; the only
+			// assertion is on captured.
+			_ = runAccess(ctx, io.Discard, tc.cfg)
+
+			// AC-009 primary assertion: the tick value passed to halfchannel.New
+			// must equal what tickIntervalFor(cfg) would return.
+			if !capturedOnce {
+				t.Fatal("newHalfChannel seam was never called; " +
+					"access.go line 116 must use newHalfChannel(...) not halfchannel.New(...) directly " +
+					"(BC-2.09.003 Inv-5 / AC-009)")
+			}
+			if captured != tc.wantTick {
+				t.Errorf("halfchannel.New tick arg: got %v; want %v "+
+					"(BC-2.09.003 PC-9/Inv-5 — cfg.TickInterval must drive halfchannel.New, "+
+					"not the hardcoded 10ms constant)",
+					captured, tc.wantTick)
+			}
+		})
+	}
+}
+
 // ── Existing tests (preserved) ────────────────────────────────────────────────
 
 func TestRun(t *testing.T) {

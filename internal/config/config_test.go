@@ -1105,7 +1105,7 @@ func TestConfigValidate_RejectsNegativeDrainTimeout(t *testing.T) {
 		cfg := &config.Config{
 			ListenAddr:        "0.0.0.0:9090",
 			TickInterval:      10 * time.Millisecond,
-			DrainTimeout:      0,              // zero == absent per Go yaml / time.Duration semantics
+			DrainTimeout:      0,               // zero == absent per Go yaml / time.Duration semantics
 			KeepaliveInterval: 1 * time.Second, // positive — not under test
 		}
 		requireNoError(t, cfg.Validate())
@@ -1204,8 +1204,8 @@ func TestConfigValidate_RejectsNegativeKeepaliveInterval(t *testing.T) {
 		cfg := &config.Config{
 			ListenAddr:        "0.0.0.0:9090",
 			TickInterval:      10 * time.Millisecond,
-			DrainTimeout:      10 * time.Second,  // positive — not under test
-			KeepaliveInterval: 0,                 // zero == absent per Go yaml / time.Duration semantics
+			DrainTimeout:      10 * time.Second, // positive — not under test
+			KeepaliveInterval: 0,                // zero == absent per Go yaml / time.Duration semantics
 		}
 		requireNoError(t, cfg.Validate())
 	})
@@ -1260,7 +1260,7 @@ func TestConfigValidate_AcceptsZeroOrAbsentDurationFields(t *testing.T) {
 		cfg := &config.Config{
 			ListenAddr:        "0.0.0.0:9090",
 			TickInterval:      10 * time.Millisecond,
-			DrainTimeout:      0,              // absent/zero — accepted
+			DrainTimeout:      0,               // absent/zero — accepted
 			KeepaliveInterval: 1 * time.Second, // explicit positive — accepted
 		}
 		requireNoError(t, cfg.Validate())
@@ -1276,6 +1276,185 @@ func TestConfigValidate_AcceptsZeroOrAbsentDurationFields(t *testing.T) {
 			KeepaliveInterval: 0,                // absent/zero — accepted
 		}
 		requireNoError(t, cfg.Validate())
+	})
+}
+
+// ---- F-SEC-002 (CWE-117): log/error injection via control chars in addr ------
+
+// TestConfigValidate_RejectsControlCharsInAddrError verifies that Validate()
+// does NOT propagate raw control characters from attacker-controlled field
+// values into the returned error message (F-SEC-002, CWE-117).
+//
+// Current code (config.go line 164-167 and 191-194) interpolates the raw
+// value verbatim with fmt.Sprintf("%s", c.ListenAddr). A listen_addr or
+// upstream_routers[N].addr that embeds a newline, carriage return, or ANSI
+// escape sequence therefore produces a multi-line error string that an
+// attacker could use to forge log lines or corrupt terminal output.
+//
+// Security assertions:
+//  1. The error message must still identify a listen_addr / upstream_routers
+//     validation failure (the value is not a valid host:port — both because
+//     embedded control chars make the value structurally invalid AND because
+//     even without them the base value is not host:port format).
+//  2. The raw newline (\n), carriage return (\r), and ESC (\x1b) characters
+//     from the attacker-supplied value MUST NOT appear in the error message.
+//     The implementer must neutralize the value before interpolation (e.g.,
+//     strconv.Quote or a strip function).
+//
+// Positive regression case: a plain invalid value with no control characters
+// (e.g. "not-a-host-port") MUST still appear verbatim (or quoted) in the
+// error message so the operator can identify what they mistyped. This pins
+// the BC 'value' format for the common case while neutralizing control chars.
+//
+// RED Gate: current code interpolates the raw value verbatim — the \n
+// character WILL appear in the error string, causing the "must not contain
+// raw newline" assertion to fail.
+//
+// Traces: BC-2.09.003 PC-5 / PC-6, F-SEC-002, CWE-117.
+func TestConfigValidate_RejectsControlCharsInAddrError(t *testing.T) {
+	t.Parallel()
+
+	// ---- listen_addr injection cases ----------------------------------------
+
+	type addrCase struct {
+		name           string
+		addr           string
+		wantFieldInMsg string // must appear in error
+		mustNotContain []string // raw control chars that must NOT appear in error
+	}
+
+	listenCases := []addrCase{
+		{
+			// Primary injection: embedded newline after a plausible address.
+			// An attacker sets listen_addr to "0.0.0.0:9090\nswitchboard: FORGED LOG LINE"
+			// and hopes the error message leaks the newline, forging a second log line.
+			name:           "listen_addr_embedded_newline",
+			addr:           "0.0.0.0:9090\nswitchboard: FORGED LOG LINE",
+			wantFieldInMsg: "listen_addr",
+			mustNotContain: []string{"\n"},
+		},
+		{
+			// Bare carriage return.
+			name:           "listen_addr_carriage_return",
+			addr:           "0.0.0.0:9090\r",
+			wantFieldInMsg: "listen_addr",
+			mustNotContain: []string{"\r"},
+		},
+		{
+			// ANSI escape sequence (terminal colour attack).
+			name:           "listen_addr_ansi_escape",
+			addr:           "0.0.0.0:9090\x1b[31mRED",
+			wantFieldInMsg: "listen_addr",
+			mustNotContain: []string{"\x1b"},
+		},
+	}
+
+	for _, tc := range listenCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:   tc.addr,
+				TickInterval: 10 * time.Millisecond,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+
+			msg := err.Error()
+
+			// Assertion 1: error still identifies the field.
+			requireContains(t, msg, tc.wantFieldInMsg)
+
+			// Assertion 2 (security): raw control chars must NOT appear in message.
+			for _, forbidden := range tc.mustNotContain {
+				if strings.Contains(msg, forbidden) {
+					t.Errorf("error message contains raw control char %q (CWE-117 / F-SEC-002); "+
+						"value must be sanitized before interpolation; got: %q",
+						forbidden, msg)
+				}
+			}
+		})
+	}
+
+	// ---- upstream_routers injection cases ------------------------------------
+
+	upstreamCases := []addrCase{
+		{
+			// Embedded newline in upstream_routers[0].addr.
+			name:           "upstream_routers_addr_embedded_newline",
+			addr:           "10.0.0.1:9090\nswitchboard: FORGED",
+			wantFieldInMsg: "upstream_routers",
+			mustNotContain: []string{"\n"},
+		},
+		{
+			// Carriage return in upstream_routers[0].addr.
+			name:           "upstream_routers_addr_carriage_return",
+			addr:           "10.0.0.1:9090\r",
+			wantFieldInMsg: "upstream_routers",
+			mustNotContain: []string{"\r"},
+		},
+	}
+
+	for _, tc := range upstreamCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:   "0.0.0.0:9090",
+				TickInterval: 10 * time.Millisecond,
+				UpstreamRouters: []config.UpstreamRouter{
+					{Addr: tc.addr},
+				},
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+
+			msg := err.Error()
+
+			// Assertion 1: error still identifies the field.
+			requireContains(t, msg, tc.wantFieldInMsg)
+
+			// Assertion 2 (security): raw control chars must NOT appear.
+			for _, forbidden := range tc.mustNotContain {
+				if strings.Contains(msg, forbidden) {
+					t.Errorf("error message contains raw control char %q (CWE-117 / F-SEC-002); "+
+						"upstream addr value must be sanitized; got: %q",
+						forbidden, msg)
+				}
+			}
+		})
+	}
+
+	// ---- Positive regression: plain invalid value must appear in message -----
+	//
+	// When the value has no control characters, the error message must still
+	// contain the offending value (or a quoted form) so the operator knows what
+	// they mistyped. This guards against over-eager sanitization that swallows
+	// the value entirely.
+	t.Run("plain_invalid_value_appears_in_message", func(t *testing.T) {
+		t.Parallel()
+
+		const plainInvalid = "not-a-host-port"
+		cfg := &config.Config{
+			ListenAddr:   plainInvalid,
+			TickInterval: 10 * time.Millisecond,
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+
+		msg := err.Error()
+		requireContains(t, msg, "listen_addr")
+		// The offending value (or its quoted form) must appear so the operator
+		// can identify the problem. strconv.Quote("not-a-host-port") ==
+		// `"not-a-host-port"` — either the raw value or the quoted form is fine;
+		// both contain the key substring.
+		if !strings.Contains(msg, plainInvalid) && !strings.Contains(msg, `"not-a-host-port"`) {
+			t.Errorf("error message does not contain the offending value %q (or its quoted form); "+
+				"sanitization must not swallow the value entirely; got: %q", plainInvalid, msg)
+		}
 	})
 }
 
@@ -1304,7 +1483,7 @@ func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
 		// Config with two distinct invalid fields: bad listen_addr (E-CFG-002) and
 		// negative drain_timeout (E-CFG-006). Both must appear in a single error.
 		cfg := &config.Config{
-			ListenAddr:   "no-port-here",   // invalid host:port → E-CFG-002
+			ListenAddr:   "no-port-here", // invalid host:port → E-CFG-002
 			TickInterval: 10 * time.Millisecond,
 			DrainTimeout: -5 * time.Second, // negative → E-CFG-006 (zero would be valid per v1.4)
 		}
