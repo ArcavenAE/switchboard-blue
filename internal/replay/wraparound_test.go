@@ -9,38 +9,33 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// F-001 RED TEST — uint32 sequence wraparound silently discards in-window frame
+// Regression guard — uint32 sequence wraparound correctly buffers in-window frame
 // BC-2.02.004 invariant 2 (in-order recovery) / VP-023
 // ---------------------------------------------------------------------------
 
-// TestReplay_BC_2_02_004_WraparoundInWindowFrameBuffered is the RED Gate test for
-// finding F-001 (pass-2 adversarial review, S-4.02).
+// TestReplay_BC_2_02_004_WraparoundInWindowFrameBuffered is a regression guard
+// for the wrap-safe dist classification introduced to fix finding F-001
+// (pass-2 adversarial review, S-4.02).
 //
-// The bug: in OnUpstream, the window-upper-bound check
+// Historical bug (now fixed): the window-upper-bound check used plain uint32
+// addition (seq < nextSeq + windowSize), which overflows near MaxUint32,
+// causing a legitimately in-window future frame to be silently discarded.
+// The fix replaced the non-wrap-safe check with a single modular-distance
+// branch (dist = seq - nextSeq; 0 < dist < windowSize → buffer).
 //
-//	seq < r.nextSeq + r.windowSize   (replay.go:125)
-//
-// uses plain uint32 addition. When nextSeq is within windowSize of
-// math.MaxUint32, the addition overflows to a small number. A legitimately
-// in-window future frame (e.g. nextSeq = MaxUint32-1, windowSize = 5,
-// incoming seq = MaxUint32 = nextSeq+1) satisfies the in-window definition
-// conceptually, but the overflow makes `seq < small_number` false, so the
-// frame is dropped instead of buffered — breaking VP-023 (in-order delivery)
-// at the wrap boundary.
+// This test now PASSES against the current implementation. It is kept as a
+// regression guard: if a future refactor re-introduces a non-wrap-safe
+// upper-bound check, this test will catch it.
 //
 // Test scenario (windowSize=5):
 //  1. Seed nextSeq = math.MaxUint32 - 1 directly (in-package access).
-//  2. Send seq = MaxUint32 (= nextSeq + 1, legitimately in-window).
-//     Correct impl: buffered. Buggy impl: silently discarded.
-//  3. Send seq = MaxUint32 - 1 (the filling frame, == nextSeq).
-//     Correct impl: delivers MaxUint32-1 then drains MaxUint32.
-//     Buggy impl: delivers only MaxUint32-1 (MaxUint32 was dropped).
+//  2. Send seq = MaxUint32 (= nextSeq + 1, dist = 1 < 5 → must be buffered).
+//  3. Send seq = MaxUint32 - 1 (filler == nextSeq → delivers filler, drains MaxUint32).
 //
 // Note: wrapping past seq=0 is not exercised here because seq=0 is the
 // documented discard sentinel; the wrap scenario is kept within [1, MaxUint32].
 //
-// This test MUST FAIL against the current implementation (Red Gate).
-// It exercises VP-023 and BC-2.02.004 invariant 2.
+// Exercises VP-023 and BC-2.02.004 invariant 2.
 func TestReplay_BC_2_02_004_WraparoundInWindowFrameBuffered(t *testing.T) {
 	t.Parallel()
 
@@ -103,12 +98,13 @@ func seqsFromFrames(frames []Frame) []uint32 {
 }
 
 // ---------------------------------------------------------------------------
-// F-005 GUARD TEST — bounded internal state under sustained far-future traffic
-// BC-2.02.004 invariant 3 / PC5 (DoS resistance)
+// Regression guard — bounded internal state under sustained far-future traffic
+// BC-2.02.004 invariant 5 (bounded-state / DoS-resistance, RULING-002, v1.3)
 // ---------------------------------------------------------------------------
 
 // TestReplay_BC_2_02_004_BoundedStateUnderNeverFillingGap is a regression guard
-// for BC-2.02.004 invariant 3 and PC5 (DoS resistance / bounded memory).
+// for BC-2.02.004 invariant 5 (bounded receiver state / DoS-resistance,
+// RULING-002, v1.3).
 //
 // This test PASSES against the current implementation — it pins the existing
 // correct bounding behaviour as a regression guard. If a future refactor
@@ -150,12 +146,14 @@ func TestReplay_BC_2_02_004_BoundedStateUnderNeverFillingGap(t *testing.T) {
 		// pending holds at most windowSize-1 buffered future frames
 		// (the slot at nextSeq itself is not pending — it triggers immediate delivery).
 		if uint32(pendingLen) > windowSize-1 {
-			t.Errorf("%s: len(pending)=%d exceeds windowSize-1=%d (BC-2.02.004 invariant 3 / PC5 violation)",
+			t.Errorf("%s: len(pending)=%d exceeds windowSize-1=%d "+
+				"(BC-2.02.004 invariant 5, RULING-002, v1.3: bounded-state violation)",
 				label, pendingLen, windowSize-1)
 		}
 		// seen holds at most windowSize entries (eviction keeps it bounded).
 		if uint32(seenLen) > windowSize {
-			t.Errorf("%s: len(seen)=%d exceeds windowSize=%d (seen set unbounded, eviction broken)",
+			t.Errorf("%s: len(seen)=%d exceeds windowSize=%d "+
+				"(BC-2.02.004 invariant 5, RULING-002, v1.3: seen set unbounded, eviction broken)",
 				label, seenLen, windowSize)
 		}
 	}

@@ -9,49 +9,35 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// F-001 RED TEST — lower-bound "too-old" guard is NOT wrap-safe
+// Regression guard — wrap-safe lower-bound: in-window future frame not misclassified
 // BC-2.02.004 invariant 2 (in-order recovery)
 // ---------------------------------------------------------------------------
 
-// TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow is the RED Gate
-// test for finding F-001, pass-3 adversarial review (S-4.02).
+// TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow is a regression
+// guard for finding F-001, pass-3 adversarial review (S-4.02).
 //
-// The bug: replay.go line 112 uses a plain integer comparison
+// Historical bug (now fixed): a non-wrap-safe lower-bound guard
 //
 //	r.nextSeq > r.windowSize && seq < r.nextSeq-r.windowSize
 //
-// to guard against "too-old" frames. This check executes BEFORE the wrap-safe
-// upper-bound distance check on line 133 and returns early (discards the frame)
-// without evaluating whether the frame is actually in the forward window.
+// executed before the modular-distance check and returned early (discarded)
+// for in-window future frames whose seq value had numerically wrapped below
+// nextSeq near MaxUint32. The fix unified the classification into a single
+// wrap-safe modular-distance branch (dist = seq - nextSeq; dist >= windowSize →
+// discard), eliminating the separate lower-bound guard entirely.
 //
-// Near the uint32 wraparound, an in-window FUTURE frame whose seq value has
-// wrapped below nextSeq in the integer sense is wrongly classified as "too old"
-// and silently discarded — breaking BC-2.02.004 invariant 2 (in-order recovery).
+// This test now PASSES against the current implementation. It is kept as a
+// regression guard: if a future refactor re-introduces a non-wrap-safe
+// lower-bound check for "too-old" frames, this test will catch it.
 //
 // Concrete scenario (windowSize=5):
 //
 //	nextSeq = MaxUint32 - 2
 //	In-window future frame: seq = 1
-//	  True forward distance: (1 - (MaxUint32-2)) mod 2^32
-//	                        = 1 - MaxUint32 + 2 mod 2^32
-//	                        = 4  (inside (0, windowSize))  ← MUST be buffered
-//	  Bug: nextSeq > windowSize  → true
-//	       seq < nextSeq-windowSize → 1 < MaxUint32-7 → true  ← wrongly discards
+//	  True forward dist: (1 - (MaxUint32-2)) mod 2^32 = 4 ∈ (0, 5) → MUST buffer
 //
-// Assertion strategy: after sending seq=1 with nextSeq seeded to MaxUint32-2,
-// inspect r.pending[1] directly. A correct implementation buffers the frame
-// (r.pending[1] is present). The buggy line-112 guard discards it before the
-// wrap-safe distance check, so r.pending[1] is absent.
-//
-// Note on delivery path: completing in-order delivery of seq=1 from pending
-// would require nextSeq to advance through MaxUint32 and then 0 (the discard
-// sentinel), which is a separate design consideration. The Red assertion here
-// is purely that seq=1 is BUFFERED, not that it is auto-delivered — buffering
-// is the necessary precondition for eventual delivery and is sufficient to
-// distinguish correct from buggy behaviour at this boundary.
-//
-// This test MUST FAIL against the current implementation (Red Gate):
-// line 112 discards seq=1 before line 133 can buffer it.
+// Assertion: r.pending[1] is present after OnUpstream — the frame was buffered,
+// not discarded. Exercises BC-2.02.004 invariant 2.
 func TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow(t *testing.T) {
 	t.Parallel()
 
@@ -94,14 +80,13 @@ func TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// F-003 COVERAGE TEST — advancing-window bounded seen-set eviction
-// BC-2.02.004 invariant 3 / PC5 (bounded memory)
+// Regression guard — advancing-window bounded seen-set eviction
+// BC-2.02.004 invariant 5 (bounded-state / DoS-resistance, RULING-002, v1.3)
 // ---------------------------------------------------------------------------
 
 // TestReplay_BC_2_02_004_SeenBoundedUnderAdvancingWindow verifies that
 // len(r.seen) and len(r.pending) stay within their declared bounds as nextSeq
-// advances far past windowSize, exercising the evictOldSeen delete path at
-// replay.go line ≈180.
+// advances far past windowSize, exercising the evictOldSeen delete path.
 //
 // The existing bounded-state test (TestReplay_BC_2_02_004_BoundedStateUnderNeverFillingGap
 // in wraparound_test.go) pins nextSeq=2 for its entire run — evictOldSeen is
@@ -109,10 +94,12 @@ func TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow(t *testing.T) {
 // complementary path: a long in-order stream that forces nextSeq to advance
 // thousands of steps past windowSize, repeatedly triggering eviction.
 //
-// Invariants asserted after EVERY OnUpstream call:
+// Invariants asserted after EVERY OnUpstream call
+// (BC-2.02.004 invariant 5, RULING-002, v1.3):
 //
-//	len(r.seen)    <= windowSize      (BC-2.02.004 invariant 3 / PC5)
+//	len(r.seen)    <= windowSize      (seen set bounded by eviction)
 //	len(r.pending) <= windowSize - 1  (at most windowSize-1 bufferable futures)
+//	|pending| + |seen| <= 2 * windowSize  (normative combined bound)
 //
 // This test PASSES against the current implementation — it is a regression
 // guard. If a future refactor accidentally breaks eviction under a sliding
@@ -141,13 +128,19 @@ func TestReplay_BC_2_02_004_SeenBoundedUnderAdvancingWindow(t *testing.T) {
 		pendingLen := uint32(len(r.pending))
 		if seenLen > windowSize {
 			t.Errorf("%s: len(seen)=%d exceeds windowSize=%d "+
-				"(BC-2.02.004 invariant 3 / PC5: seen set unbounded, eviction broken)",
+				"(BC-2.02.004 invariant 5, RULING-002, v1.3: seen set unbounded, eviction broken)",
 				label, seenLen, windowSize)
 		}
 		if pendingLen > windowSize-1 {
 			t.Errorf("%s: len(pending)=%d exceeds windowSize-1=%d "+
-				"(BC-2.02.004 invariant 3 / PC5: pending map unbounded)",
+				"(BC-2.02.004 invariant 5, RULING-002, v1.3: pending map unbounded)",
 				label, pendingLen, windowSize-1)
+		}
+		// Normative combined bound from invariant 5: |pending| + |seen| <= 2 * windowSize.
+		if seenLen+pendingLen > 2*windowSize {
+			t.Errorf("%s: |pending|+|seen|=%d exceeds 2*windowSize=%d "+
+				"(BC-2.02.004 invariant 5, RULING-002, v1.3: combined bound violated)",
+				label, seenLen+pendingLen, 2*windowSize)
 		}
 	}
 

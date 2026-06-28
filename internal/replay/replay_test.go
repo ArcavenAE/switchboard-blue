@@ -10,6 +10,19 @@ import (
 	"github.com/arcavenae/switchboard/internal/replay"
 )
 
+// medianDuration returns the median value from a sorted slice of durations.
+// The slice must already be sorted ascending; this avoids an extra allocation.
+func medianDuration(sorted []time.Duration) time.Duration {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
 // newCollector returns a DeliverFunc and a pointer to the slice it appends to.
 // t.Helper() is intentionally omitted here — it is only useful inside test
 // helper functions called from test bodies, not in constructor helpers.
@@ -289,6 +302,91 @@ func TestReplay_WindowBoundary_ExactBoundarySeq(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// dist == windowSize boundary: discard-vs-buffer off-by-one pin
+// BC-2.02.004 invariant 5 (bounded-state / DoS-resistance, RULING-002, v1.3)
+// ---------------------------------------------------------------------------
+
+// TestReplay_DistWindowSizeBoundary pins the discard-vs-buffer decision at the
+// exact boundary dist == windowSize (BC-2.02.004 invariant 5, RULING-002).
+//
+// The spec requires: 0 < dist < windowSize → buffer; dist >= windowSize → discard.
+// This guards the strict < vs <= off-by-one at the boundary.
+//
+// Scenario (windowSize=5, nextSeq=2 after delivering seq=1):
+//   - seq=6: dist = 6 - 2 = 4 < 5 → MUST be buffered (delivered when gap filled).
+//   - seq=7: dist = 7 - 2 = 5 == windowSize → MUST be discarded; after filling
+//     seq=2..6 (nextSeq advances to 7), seq=7 must NOT have auto-drained from
+//     pending, so an explicit re-delivery at nextSeq=7 must succeed (nil).
+func TestReplay_DistWindowSizeBoundary(t *testing.T) {
+	t.Parallel()
+
+	t.Run("dist=4 (windowSize-1) is buffered", func(t *testing.T) {
+		t.Parallel()
+
+		const windowSize = uint32(5)
+		deliver, got := newCollector()
+		r := mustNew(t, windowSize, deliver)
+
+		// seq=1 → nextSeq becomes 2.
+		if err := r.OnUpstream(replay.Frame{Seq: 1}); err != nil {
+			t.Fatalf("seq=1: %v", err)
+		}
+
+		// seq=6, dist = 6-2 = 4 < windowSize → must be buffered.
+		if err := r.OnUpstream(replay.Frame{Seq: 6}); err != nil {
+			t.Fatalf("seq=6 (dist=4, in-window): unexpected error %v", err)
+		}
+		// Not yet delivered — held in pending.
+		assertDelivered(t, *got, []uint32{1})
+
+		// Fill gap seq=2..5; seq=6 must drain automatically via pending.
+		for fill := uint32(2); fill <= 5; fill++ {
+			if err := r.OnUpstream(replay.Frame{Seq: fill}); err != nil {
+				t.Fatalf("fill seq=%d: %v", fill, err)
+			}
+		}
+		assertDelivered(t, *got, []uint32{1, 2, 3, 4, 5, 6})
+	})
+
+	t.Run("dist=5 (==windowSize) is discarded", func(t *testing.T) {
+		t.Parallel()
+
+		const windowSize = uint32(5)
+		deliver, got := newCollector()
+		r := mustNew(t, windowSize, deliver)
+
+		// seq=1 → nextSeq becomes 2.
+		if err := r.OnUpstream(replay.Frame{Seq: 1}); err != nil {
+			t.Fatalf("seq=1: %v", err)
+		}
+
+		// seq=7, dist = 7-2 = 5 == windowSize → must be discarded (nil return).
+		if err := r.OnUpstream(replay.Frame{Seq: 7}); err != nil {
+			t.Fatalf("seq=7 (dist=5=windowSize): unexpected error %v", err)
+		}
+		// seq=7 was discarded: no additional delivery.
+		assertDelivered(t, *got, []uint32{1})
+
+		// Fill gap seq=2..6 to advance nextSeq to 7.
+		for fill := uint32(2); fill <= 6; fill++ {
+			if err := r.OnUpstream(replay.Frame{Seq: fill}); err != nil {
+				t.Fatalf("fill seq=%d: %v", fill, err)
+			}
+		}
+		// Only seqs 1..6 delivered; seq=7 was discarded, not auto-drained.
+		assertDelivered(t, *got, []uint32{1, 2, 3, 4, 5, 6})
+
+		// Now nextSeq=7. Explicit delivery of seq=7 must succeed (nil) —
+		// it was discarded, not seen, so it is not ErrAlreadyDelivered.
+		if err := r.OnUpstream(replay.Frame{Seq: 7}); err != nil {
+			t.Fatalf("explicit seq=7 after discard: got %v, want nil"+
+				" (seq was discarded, not recorded in seen)", err)
+		}
+		assertDelivered(t, *got, []uint32{1, 2, 3, 4, 5, 6, 7})
+	})
+}
+
+// ---------------------------------------------------------------------------
 // EC-002: all N frames in window re-sent → all N deduplicated
 // ---------------------------------------------------------------------------
 
@@ -360,7 +458,9 @@ func TestReplay_EC003_GapBufferedThenFilled(t *testing.T) {
 
 // TestReplay_VP022_NoDoubleDelivery_Property exercises VP-022 with 1000+
 // randomised delivery scenarios. Each seq must appear in the delivery log at
-// most once regardless of arrival order or replay.
+// most once regardless of arrival order or replay. Also asserts completeness:
+// every seq that was sent (and fits within the window) must have been delivered
+// exactly once, so a deliver-nothing regression also fails.
 func TestReplay_VP022_NoDoubleDelivery_Property(t *testing.T) {
 	t.Parallel()
 
@@ -390,20 +490,37 @@ func TestReplay_VP022_NoDoubleDelivery_Property(t *testing.T) {
 		deliver, got := newCollector()
 		r := mustNew(t, windowSize, deliver)
 
+		sent := make(map[uint32]struct{})
 		for _, seq := range seqs {
+			sent[seq] = struct{}{}
 			err := r.OnUpstream(replay.Frame{Seq: seq})
 			if err != nil && !errors.Is(err, replay.ErrAlreadyDelivered) {
 				t.Fatalf("iter %d: unexpected error for seq=%d: %v", i, seq, err)
 			}
 		}
 
-		// Each seq may appear in *got at most once.
-		seen := make(map[uint32]int)
+		// Each seq may appear in *got at most once (VP-022: no double delivery).
+		deliveredCount := make(map[uint32]int)
 		for _, f := range *got {
-			seen[f.Seq]++
-			if seen[f.Seq] > 1 {
+			deliveredCount[f.Seq]++
+			if deliveredCount[f.Seq] > 1 {
 				t.Errorf("iter %d: seq=%d delivered %d times (VP-022 violation)",
-					i, f.Seq, seen[f.Seq])
+					i, f.Seq, deliveredCount[f.Seq])
+			}
+		}
+
+		// Completeness: every in-window seq that was sent must have been delivered
+		// exactly once. With windowSize=10 and maxSeqs=20, seqs 1..n where n<=10
+		// are all within the window starting from seq=1. For n > windowSize, some
+		// seqs may be outside the window from each other, but seqs 1..windowSize
+		// that were sent (which is the contiguous prefix) must all be delivered.
+		// We verify that no seq in sent with value <= windowSize was skipped.
+		for seq := uint32(1); seq <= uint32(n) && seq <= windowSize; seq++ {
+			if _, wasSent := sent[seq]; wasSent {
+				if deliveredCount[seq] == 0 {
+					t.Errorf("iter %d: seq=%d was sent but never delivered (completeness violation)",
+						i, seq)
+				}
 			}
 		}
 	}
@@ -651,37 +768,55 @@ func TestReplay_BC_2_02_004_invariant_window_monotonic_seqs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-004 / VP-042: Keystroke-to-echo latency gate ≤ p99 100ms
+// AC-004 / BC-2.02.004 invariant 5 — bounded-state micro-latency regression guard
+//
+// VP-042 (keystroke-to-echo p99 ≤ 100ms) is an integration property verified
+// at the internal/halfchannel wave-gate benchmark, not here. S-4.02 verifies
+// VP-022 and VP-023 only (no-duplicate-delivery and in-order-delivery property
+// tests). See RULING-002 §Finding 1 for the full rationale.
 // ---------------------------------------------------------------------------
 
-// TestReplay_VP042_KeystrokeLatencyP99 is the VP-042 CI gate.
-// It measures the steady-state OnUpstream→deliver round-trip for 10 000
-// in-order keystrokes and FAILS if p99 > 100ms. The Replay instance is
-// constructed once outside the measured region; the loop exercises only the
-// delivery path. VP-042 requires the p99 ≤ 100ms; the implementation is
-// expected to be well under 1µs per call.
-func TestReplay_VP042_KeystrokeLatencyP99(t *testing.T) {
+// TestReplay_OnUpstream_MedianPerCall is the AC-004 regression guard
+// (BC-2.02.004 invariant 5 — bounded-state / micro-latency, RULING-002).
+//
+// It asserts that the median per-call overhead of OnUpstream is ≤ 1µs under
+// no-contention conditions with windowSize=64 and a pre-warmed window, over
+// 10,000 iterations. This guards against inadvertent O(N²) or
+// allocation-heavy regressions in the replay state machine.
+//
+// This is NOT the VP-042 NFR gate (which is verified at the
+// internal/halfchannel integration level).
+//
+// The 1µs threshold is deliberately generous: a naive O(N) scan over a
+// window of 64 entries would still exceed it on most hardware. It is
+// falsifiable while not being unreachably tight.
+func TestReplay_OnUpstream_MedianPerCall(t *testing.T) {
 	t.Parallel()
 
 	const (
-		iterations = 10_000
-		p99limit   = 100 * time.Millisecond
-		p99index   = iterations * 99 / 100 // index of the 99th-percentile sample
+		windowSize  = uint32(64)
+		prewarm     = windowSize
+		iterations  = 10_000
+		medianLimit = time.Microsecond // 1µs
 	)
 
 	deliver := func(_ replay.Frame) {}
-	r := replay.New(100, deliver)
+	r := replay.New(windowSize, deliver)
 
-	// Pre-warm: establish a rolling window so steady-state is measured.
-	for seq := uint32(1); seq <= 100; seq++ {
+	// Pre-warm: deliver seqs 1..windowSize to establish a rolling window so
+	// the steady-state code path (seen-set eviction, pending-map drain) is
+	// exercised, not constructor-adjacent paths.
+	for seq := uint32(1); seq <= prewarm; seq++ {
 		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
 			t.Fatalf("pre-warm seq=%d: %v", seq, err)
 		}
 	}
 
+	// Measure steady-state: windowSize+1 .. windowSize+iterations, all in order.
+	// Constructor cost is excluded (pre-warm runs before timer start).
 	samples := make([]time.Duration, iterations)
 	for i := 0; i < iterations; i++ {
-		seq := uint32(101 + i)
+		seq := prewarm + uint32(i) + 1
 		start := time.Now()
 		if err := r.OnUpstream(replay.Frame{Seq: seq, Payload: []byte("k")}); err != nil {
 			t.Fatalf("iteration %d seq=%d: %v", i, seq, err)
@@ -689,25 +824,28 @@ func TestReplay_VP042_KeystrokeLatencyP99(t *testing.T) {
 		samples[i] = time.Since(start)
 	}
 
-	// Sort to find p99.
 	sort.Slice(samples, func(a, b int) bool { return samples[a] < samples[b] })
-	p99 := samples[p99index]
+	median := medianDuration(samples)
 
-	if p99 > p99limit {
-		t.Fatalf("VP-042: p99 latency %v exceeds 100ms gate (p99 index %d of %d)",
-			p99, p99index, iterations)
+	if median > medianLimit {
+		t.Fatalf("AC-004 regression: median OnUpstream per-call latency %v exceeds 1µs gate"+
+			" (BC-2.02.004 invariant 5, RULING-002); possible O(N²) or allocation regression",
+			median)
 	}
 }
 
-// BenchmarkReplay_KeystrokeLatency measures the steady-state OnUpstream() cost
-// for sequential in-order frames (no reorder buffer churn). VP-042 requires
-// p99 ≤ 100ms; this benchmark is expected to complete each iteration in
-// sub-microsecond time. Named per AC-004 traceability (S-4.02-upstream-replay).
-func BenchmarkReplay_KeystrokeLatency(b *testing.B) {
+// BenchmarkReplay_OnUpstream_PerCall measures the steady-state OnUpstream()
+// cost for sequential in-order frames (no reorder buffer churn), excluding
+// constructor cost. Named per AC-004 (BC-2.02.004 invariant 5, RULING-002).
+//
+// This replaces the former BenchmarkReplay_KeystrokeLatency, which was
+// incorrectly labelled as a VP-042 gate. VP-042 is verified at the
+// internal/halfchannel integration level.
+func BenchmarkReplay_OnUpstream_PerCall(b *testing.B) {
 	deliver := func(_ replay.Frame) {}
-	r := replay.New(100, deliver)
-	// Pre-warm: deliver seqs 1..100.
-	for seq := uint32(1); seq <= 100; seq++ {
+	r := replay.New(64, deliver)
+	// Pre-warm: deliver seqs 1..64 to establish steady-state.
+	for seq := uint32(1); seq <= 64; seq++ {
 		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
 			b.Fatalf("pre-warm seq=%d: %v", seq, err)
 		}
@@ -715,7 +853,7 @@ func BenchmarkReplay_KeystrokeLatency(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		seq := uint32(101 + i)
+		seq := uint32(65 + i)
 		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
 			b.Fatalf("seq=%d: %v", seq, err)
 		}
@@ -723,10 +861,11 @@ func BenchmarkReplay_KeystrokeLatency(b *testing.B) {
 }
 
 // ---------------------------------------------------------------------------
-// F-001 / BC-2.02.004 invariant 3: bounded pending buffer
+// F-001 / BC-2.02.004 invariant 5: bounded pending buffer
 // ---------------------------------------------------------------------------
 
-// TestReplay_BoundedPendingBuffer verifies BC-2.02.004 invariant 3 (PC5):
+// TestReplay_BoundedPendingBuffer verifies BC-2.02.004 invariant 5
+// (bounded receiver state / DoS-resistance, RULING-002, v1.3):
 // frames with seq >= nextSeq + windowSize must be discarded, not buffered.
 // A never-filled gap (seq=2 never arrives) combined with a stream of far-future
 // frames must not cause the replay buffer to accumulate unbounded state.
