@@ -10,6 +10,9 @@ package routing
 
 import (
 	"errors"
+	"fmt"
+	"hash/crc32"
+	"strings"
 	"sync"
 	"testing"
 
@@ -793,6 +796,89 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 		"concurrent flood complete: lruLen=%d indexLen=%d logLines=%d totalCacheHitCalls=%d aggregateBound=%d collisionTrackCap=%d dropCacheCapacity=%d evictionFired=%v",
 		lruLen, indexLen, logLines, totalCacheHitCalls, aggregateBound, collisionTrackCap, dropCacheCapacity, lruLen == collisionTrackCap,
 	)
+}
+
+// ---- AC-007 / BC-2.02.008 postcondition 3 — E-FWD-001 log when all paths blocked --
+
+// TestOnFrameArrival_AllPathsSplitHorizon_LogsEFWD001 verifies that when the
+// only interface in the set is the arrival interface (all eligible paths are
+// split-horizon-blocked), OnFrameArrival drops the frame AND emits exactly one
+// E-FWD-001 log event via its injected logger (AC-007 / BC-2.02.008 PC-3).
+//
+// AC-007 requires:
+//
+//	(i)   return value is ErrAllPathsSplitHorizon (frame dropped, no forward).
+//	(ii)  the capturing logger received exactly one log line containing
+//	      "E-FWD-001", the arrival interface ID, and the frame checksum.
+//	(iii) the forward function fn was never called (no forward occurred).
+//
+// This test MUST FAIL (RED) because OnFrameArrival currently returns
+// ErrAllPathsSplitHorizon without emitting any log line on the all-paths-blocked
+// drop path.
+func TestOnFrameArrival_AllPathsSplitHorizon_LogsEFWD001(t *testing.T) {
+	t.Parallel()
+
+	const arrivalIface InterfaceID = 17
+
+	// Frame with a deterministic payload so checksum is reproducible.
+	frameBytes := []byte("ac007-split-horizon-all-paths-blocked")
+
+	// Compute the expected checksum using the same algorithm as OnFrameArrival
+	// (hash/crc32 IEEE) so the assertion can check the exact formatted value.
+	expectedChecksum := crc32.ChecksumIEEE(frameBytes)
+
+	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+	logger := &captureLogger{}
+	h := NewFrameArrivalHandler(dc)
+	WithFrameArrivalLogger(logger)(h)
+
+	// fn must NOT be called — track whether it was invoked.
+	fnCalled := false
+	fn := ForwardFunc(func(_ InterfaceID, _ []byte) error {
+		fnCalled = true
+		return nil
+	})
+
+	// interfaceSet contains ONLY the arrival interface, so every candidate is
+	// split-horizon-blocked — SplitHorizon.Forward returns ErrAllPathsSplitHorizon.
+	err := h.OnFrameArrival(frameBytes, arrivalIface, []InterfaceID{arrivalIface}, fn)
+
+	// Assert (i): ErrAllPathsSplitHorizon returned (frame dropped).
+	if !errors.Is(err, ErrAllPathsSplitHorizon) {
+		t.Errorf("got err = %v; want ErrAllPathsSplitHorizon (AC-007 / BC-2.02.008 PC-3 — frame must be dropped)", err)
+	}
+
+	// Assert (ii): exactly one log line containing E-FWD-001, the arrival
+	// interface ID, and the frame checksum (AC-007 / BC-2.02.008 PC-3).
+	//
+	// Field format is consistent with the EC-005 drop-cache-hit log line:
+	//   checksum=0x%08x  iface=%d
+	// Both must appear in the single log line that OnFrameArrival must emit.
+	wantChecksum := fmt.Sprintf("0x%08x", expectedChecksum)
+	wantIface := fmt.Sprintf("%d", arrivalIface)
+
+	if len(logger.lines) != 1 {
+		t.Errorf(
+			"logger received %d log lines; want exactly 1 E-FWD-001 line (AC-007 / BC-2.02.008 PC-3) — lines: %v",
+			len(logger.lines), logger.lines,
+		)
+	} else {
+		line := logger.lines[0]
+		if !strings.Contains(line, "E-FWD-001") {
+			t.Errorf("log line %q does not contain \"E-FWD-001\" (AC-007 / BC-2.02.008 PC-3)", line)
+		}
+		if !strings.Contains(line, wantChecksum) {
+			t.Errorf("log line %q does not contain checksum %s (AC-007 / BC-2.02.008 PC-3)", line, wantChecksum)
+		}
+		if !strings.Contains(line, wantIface) {
+			t.Errorf("log line %q does not contain iface %s (AC-007 / BC-2.02.008 PC-3)", line, wantIface)
+		}
+	}
+
+	// Assert (iii): forward function fn was never called (no forwarding on drop).
+	if fnCalled {
+		t.Errorf("ForwardFunc was called; want fn never invoked when all paths are split-horizon-blocked (AC-007 / BC-2.02.008 PC-3)")
+	}
 }
 
 // ---- constructor nil-guard -------------------------------------------------
