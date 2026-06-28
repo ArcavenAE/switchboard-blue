@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/replay"
 )
@@ -456,31 +457,48 @@ func TestReplay_VP023_InOrderDelivery_Property(t *testing.T) {
 }
 
 // TestReplay_VP023_SortedDelivery_Canonical verifies VP-023 against the
-// canonical test vector from BC-2.02.004: seq=10 'a' lost, recovered from
-// replay window in seq=11.
+// canonical test vector from BC-2.02.004 row 2: seq=10 'a' is lost in
+// transit; seq=11 arrives first (out-of-order gap at 10). The receiver must
+// buffer seq=11, NOT deliver it, until seq=10 arrives from the replay window
+// carried in a later frame. Delivery must be 10 then 11, in order.
 func TestReplay_VP023_SortedDelivery_Canonical(t *testing.T) {
 	t.Parallel()
 
-	// Canonical BC vector: seq 6–9 delivered first, then seq=11 carries replay
-	// window including seq=10. Receiver must deliver 6,7,8,9,10,11 in order.
 	deliver, got := newCollector()
 	r := mustNew(t, 10, deliver)
 
-	// Deliver in-order seqs 1–9 first to establish the state.
+	// Deliver in-order seqs 1–9 to establish state; nextSeq is now 10.
 	for seq := uint32(1); seq <= 9; seq++ {
 		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
 			t.Fatalf("seq=%d: %v", seq, err)
 		}
 	}
+	assertDelivered(t, *got, func() []uint32 {
+		s := make([]uint32, 9)
+		for i := range s {
+			s[i] = uint32(i + 1)
+		}
+		return s
+	}())
 
-	// seq=10 is "lost" — skip it.
-	// seq=11 arrives and carries replay of seq=10 in a prior call.
-	// Simulate recovery: deliver seq=10 (from replay window) then seq=11.
-	if err := r.OnUpstream(replay.Frame{Seq: 10, Payload: []byte("a")}); err != nil {
-		t.Fatalf("seq=10 (recovered): %v", err)
-	}
+	// seq=10 is "lost" — skip it entirely.
+	// seq=11 arrives out-of-order (gap at 10): must be buffered, NOT delivered.
 	if err := r.OnUpstream(replay.Frame{Seq: 11}); err != nil {
-		t.Fatalf("seq=11: %v", err)
+		t.Fatalf("seq=11 (out-of-order): %v", err)
+	}
+	// Still only 1..9 delivered — seq=11 is buffered pending seq=10.
+	assertDelivered(t, *got, func() []uint32 {
+		s := make([]uint32, 9)
+		for i := range s {
+			s[i] = uint32(i + 1)
+		}
+		return s
+	}())
+
+	// seq=10 arrives (recovered from replay window in a later frame).
+	// Now the gap is filled: 10 then 11 must drain in order.
+	if err := r.OnUpstream(replay.Frame{Seq: 10, Payload: []byte("a")}); err != nil {
+		t.Fatalf("seq=10 (recovered from replay window): %v", err)
 	}
 
 	wantSeqs := make([]uint32, 11)
@@ -633,29 +651,51 @@ func TestReplay_BC_2_02_004_invariant_window_monotonic_seqs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-004 / VP-042: Keystroke-to-echo latency benchmark ≤ p99 100ms
+// AC-004 / VP-042: Keystroke-to-echo latency gate ≤ p99 100ms
 // ---------------------------------------------------------------------------
 
-// BenchmarkReplay_KeystrokeLatency is the VP-042 benchmark gate.
-// It measures the single-path OnUpstream() round-trip — New + one frame
-// delivery per operation. The benchmark is the Red Gate for the 100ms p99
-// constraint; once implemented the sub-microsecond call must be well under
-// the 100ms ceiling.
-func BenchmarkReplay_KeystrokeLatency(b *testing.B) {
-	deliver := func(f replay.Frame) {}
-	r := replay.New(5, deliver)
+// TestReplay_VP042_KeystrokeLatencyP99 is the VP-042 CI gate.
+// It measures the steady-state OnUpstream→deliver round-trip for 10 000
+// in-order keystrokes and FAILS if p99 > 100ms. The Replay instance is
+// constructed once outside the measured region; the loop exercises only the
+// delivery path. VP-042 requires the p99 ≤ 100ms; the implementation is
+// expected to be well under 1µs per call.
+func TestReplay_VP042_KeystrokeLatencyP99(t *testing.T) {
+	t.Parallel()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// Re-create per iteration to keep seq fresh without allocation
-		// overhead dominating. The reconstruction is cheap for a pure state
-		// machine; the benchmark measures the delivery path, not setup.
-		deliver2 := func(f replay.Frame) {}
-		r2 := replay.New(5, deliver2)
-		if err := r2.OnUpstream(replay.Frame{Seq: 1, Payload: []byte("k")}); err != nil {
-			b.Fatalf("OnUpstream: %v", err)
+	const (
+		iterations = 10_000
+		p99limit   = 100 * time.Millisecond
+		p99index   = iterations * 99 / 100 // index of the 99th-percentile sample
+	)
+
+	deliver := func(_ replay.Frame) {}
+	r := replay.New(100, deliver)
+
+	// Pre-warm: establish a rolling window so steady-state is measured.
+	for seq := uint32(1); seq <= 100; seq++ {
+		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
+			t.Fatalf("pre-warm seq=%d: %v", seq, err)
 		}
-		_ = r
+	}
+
+	samples := make([]time.Duration, iterations)
+	for i := 0; i < iterations; i++ {
+		seq := uint32(101 + i)
+		start := time.Now()
+		if err := r.OnUpstream(replay.Frame{Seq: seq, Payload: []byte("k")}); err != nil {
+			t.Fatalf("iteration %d seq=%d: %v", i, seq, err)
+		}
+		samples[i] = time.Since(start)
+	}
+
+	// Sort to find p99.
+	sort.Slice(samples, func(a, b int) bool { return samples[a] < samples[b] })
+	p99 := samples[p99index]
+
+	if p99 > p99limit {
+		t.Fatalf("VP-042: p99 latency %v exceeds 100ms gate (p99 index %d of %d)",
+			p99, p99index, iterations)
 	}
 }
 
@@ -664,7 +704,7 @@ func BenchmarkReplay_KeystrokeLatency(b *testing.B) {
 // VP-042 requires p99 ≤ 100ms; this benchmark is expected to complete each
 // iteration in sub-microsecond time.
 func BenchmarkReplay_KeystrokeLatency_Sequential(b *testing.B) {
-	deliver := func(f replay.Frame) {}
+	deliver := func(_ replay.Frame) {}
 	r := replay.New(100, deliver)
 	// Pre-warm: deliver seqs 1..100.
 	for seq := uint32(1); seq <= 100; seq++ {
@@ -680,4 +720,170 @@ func BenchmarkReplay_KeystrokeLatency_Sequential(b *testing.B) {
 			b.Fatalf("seq=%d: %v", seq, err)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// F-001 / BC-2.02.004 invariant 3: bounded pending buffer
+// ---------------------------------------------------------------------------
+
+// TestReplay_BoundedPendingBuffer verifies BC-2.02.004 invariant 3 (PC5):
+// frames with seq >= nextSeq + windowSize must be discarded, not buffered.
+// A never-filled gap (seq=2 never arrives) combined with a stream of far-future
+// frames must not cause the replay buffer to accumulate unbounded state.
+//
+// The behavioral proof: after filling the gap (seq=2) and advancing nextSeq
+// all the way to seq=100, the far-future frames that were sent while nextSeq=2
+// (i.e., seq=100..window+1+2 which equals seq=7...) must NOT be delivered when
+// nextSeq reaches them — they must have been discarded at arrival time.
+//
+// Concretely: send seq=1 (nextSeq→2), then send seq=50 (far future, >= 2+5=7).
+// Then deliver seq=2..49 in order. When nextSeq reaches 50, if seq=50 was
+// buffered (current impl) it WILL be auto-delivered as nextSeq drains through
+// pending. If seq=50 was discarded (correct impl) it must NOT be delivered,
+// and delivering seq=50 again after the gap returns nil (not ErrAlreadyDelivered).
+//
+// This test is expected to FAIL against the current unbounded implementation
+// (Red Gate for the implementer).
+func TestReplay_BoundedPendingBuffer(t *testing.T) {
+	t.Parallel()
+
+	const windowSize = 5
+
+	deliver, got := newCollector()
+	r := mustNew(t, windowSize, deliver)
+
+	// Deliver seq=1 so nextSeq advances to 2.
+	if err := r.OnUpstream(replay.Frame{Seq: 1}); err != nil {
+		t.Fatalf("seq=1: %v", err)
+	}
+	assertDelivered(t, *got, []uint32{1})
+
+	// nextSeq=2, windowSize=5: in-window upper bound is nextSeq+windowSize-1 = 6.
+	// seq=50 is far outside the window (50 >= 2+5 = 7) — must be discarded.
+	if err := r.OnUpstream(replay.Frame{Seq: 50, Payload: []byte("far")}); err != nil {
+		t.Fatalf("far-future seq=50: expected nil (silent discard), got %v", err)
+	}
+	// Still only seq=1 delivered.
+	assertDelivered(t, *got, []uint32{1})
+
+	// Now deliver seq=2..49 in order — this fills the gap and advances
+	// nextSeq step by step. When nextSeq reaches 50, the pending map will be
+	// checked for seq=50. A correct (bounded) impl will NOT have seq=50 in
+	// pending (it was discarded). A buggy (unbounded) impl WILL have it and
+	// will auto-deliver it.
+	for seq := uint32(2); seq <= 49; seq++ {
+		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
+			t.Fatalf("seq=%d: %v", seq, err)
+		}
+	}
+
+	// At this point nextSeq should be 50 (we've delivered 1..49).
+	// The far-future frame (seq=50) must NOT have been auto-delivered via pending.
+	// Correct: 49 deliveries (seq 1..49). Buggy: 50 deliveries (seq 1..50).
+	wantSeqs := make([]uint32, 49)
+	for i := range wantSeqs {
+		wantSeqs[i] = uint32(i + 1)
+	}
+	assertDelivered(t, *got, wantSeqs) // FAILS on current impl: seq=50 auto-drains
+
+	// Confirm nextSeq is 50 (not 51, which would be evidence seq=50 was drained).
+	if ns := r.NextSeq(); ns != 50 {
+		t.Errorf("NextSeq: got %d, want 50", ns)
+	}
+
+	// Now explicitly deliver seq=50 — it was discarded so this must succeed
+	// (not ErrAlreadyDelivered) and deliver seq=50 for the first time.
+	if err := r.OnUpstream(replay.Frame{Seq: 50}); err != nil {
+		t.Fatalf("seq=50 explicit delivery: got %v, want nil", err)
+	}
+	wantSeqs = append(wantSeqs, 50)
+	assertDelivered(t, *got, wantSeqs)
+}
+
+// ---------------------------------------------------------------------------
+// F-004: evicted-seq redelivery returns nil (no double delivery)
+// ---------------------------------------------------------------------------
+
+// TestReplay_EvictedSeqRedeliveryReturnsNil verifies that a seq which has been
+// delivered AND evicted from the window (slid out of the seen set) returns nil
+// when re-sent, and is NOT delivered again (PC2 holds).
+//
+// Contrast with TestReplay_NoDuplicateDelivery: that test verifies
+// ErrAlreadyDelivered for in-window duplicates. This test verifies the evicted
+// case returns nil instead.
+func TestReplay_EvictedSeqRedeliveryReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	const windowSize = 3
+	deliver, got := newCollector()
+	r := mustNew(t, windowSize, deliver)
+
+	// Deliver seqs 1..windowSize+1 so seq=1 is evicted from the seen window.
+	for seq := uint32(1); seq <= windowSize+1; seq++ {
+		if err := r.OnUpstream(replay.Frame{Seq: seq}); err != nil {
+			t.Fatalf("seq=%d: %v", seq, err)
+		}
+	}
+	// Delivered 1,2,3,4. Window now covers 2..4 (seq=1 evicted).
+	assertDelivered(t, *got, []uint32{1, 2, 3, 4})
+
+	deliveredBefore := len(*got)
+
+	// Re-send seq=1 — it was delivered but is now outside the window.
+	// Must return nil (silent discard), NOT ErrAlreadyDelivered, AND must
+	// not invoke deliver again.
+	err := r.OnUpstream(replay.Frame{Seq: 1})
+	if err != nil {
+		t.Fatalf("evicted seq=1 redelivery: got %v, want nil", err)
+	}
+	if len(*got) != deliveredBefore {
+		t.Errorf("evicted seq=1 redelivery caused extra delivery: got %d calls, want %d",
+			len(*got), deliveredBefore)
+	}
+}
+
+// TestReplay_InWindowDuplicateReturnsErrAlreadyDelivered is the complement of
+// TestReplay_EvictedSeqRedeliveryReturnsNil: an in-window duplicate must still
+// return ErrAlreadyDelivered.
+func TestReplay_InWindowDuplicateReturnsErrAlreadyDelivered(t *testing.T) {
+	t.Parallel()
+
+	const windowSize = 5
+	deliver, _ := newCollector()
+	r := mustNew(t, windowSize, deliver)
+
+	if err := r.OnUpstream(replay.Frame{Seq: 1}); err != nil {
+		t.Fatalf("seq=1: %v", err)
+	}
+
+	// seq=1 is still inside the window — must return ErrAlreadyDelivered.
+	if !errors.Is(r.OnUpstream(replay.Frame{Seq: 1}), replay.ErrAlreadyDelivered) {
+		t.Error("in-window duplicate seq=1: want ErrAlreadyDelivered")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// F-005: seq=0 (unset/invalid) is discarded
+// ---------------------------------------------------------------------------
+
+// TestReplay_SeqZeroDiscarded verifies that a Frame{Seq:0} returns nil and is
+// not delivered. Seq=0 is the unset/invalid sentinel per the monotonically-
+// increasing invariant in BC-2.02.004.
+func TestReplay_SeqZeroDiscarded(t *testing.T) {
+	t.Parallel()
+
+	deliver, got := newCollector()
+	r := mustNew(t, 5, deliver)
+
+	// Seq=0 must be silently discarded (nil return, no delivery).
+	if err := r.OnUpstream(replay.Frame{Seq: 0, Payload: []byte("x")}); err != nil {
+		t.Fatalf("seq=0: expected nil, got %v", err)
+	}
+	assertDelivered(t, *got, []uint32{}) // nothing delivered
+
+	// Normal delivery after seq=0 must still work.
+	if err := r.OnUpstream(replay.Frame{Seq: 1}); err != nil {
+		t.Fatalf("seq=1 after seq=0: %v", err)
+	}
+	assertDelivered(t, *got, []uint32{1})
 }
