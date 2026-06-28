@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -28,6 +28,19 @@ modified:
       (b) config-application postcondition added (PC-9) — daemon MUST use
       the validated config struct to configure subsystems, not discarded values
       or hardcoded constants. Edge cases EC-005 through EC-009 added.
+  - date: 2026-06-28
+    version: "1.3"
+    change: >
+      Right-sized PC-9 and Inv-5 per fresh-eyes verification (2026-06-28) and
+      human ruling "apply what exists now, track the rest as concrete
+      dependencies." PC-9 now requires application ONLY of tick_interval, whose
+      target subsystem (halfchannel.New tick cadence in cmd/switchboard/access.go)
+      exists today. listen_addr binding, drain_timeout, and upstream_routers
+      application are deferred with named owning stories (listener introduction:
+      no current owner — flagged; drain/PE: S-7.04). DEFERRED-APPLICATION note
+      added. Inv-5 narrowed to "applicable fields" so legitimately-deferred
+      fields do not constitute a violation. EC-010 and the PC-9 canonical test
+      vector updated to match.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -44,11 +57,11 @@ kos_anchors:
   - elem-single-binary-three-modes
 ---
 
-# Behavioral Contract BC-2.09.003: Router Startup Fails Cleanly on Malformed Config with Actionable Error Message; Validated Config Is Applied to the Daemon
+# Behavioral Contract BC-2.09.003: Router Startup Fails Cleanly on Malformed Config with Actionable Error Message; Validated Config Is Applied to Applicable Subsystems
 
 ## Description
 
-When the router daemon starts with a malformed, incomplete, or invalid configuration file, it exits immediately with a non-zero exit code and prints a clear, actionable error message identifying the specific problem (field name, line number, value). The daemon does not start in a partially-configured state. No sessions are affected (the daemon was not running). When startup succeeds, the daemon MUST use the validated config struct to configure all subsystems — it MUST NOT fall back to hardcoded defaults or discard the validated config.
+When the router daemon starts with a malformed, incomplete, or invalid configuration file, it exits immediately with a non-zero exit code and prints a clear, actionable error message identifying the specific problem (field name, line number, value). The daemon does not start in a partially-configured state. No sessions are affected (the daemon was not running). When startup succeeds, the daemon MUST use the validated config struct to configure all subsystems whose implementation exists — it MUST NOT fall back to hardcoded defaults or discard the validated config for fields whose target subsystems are built. Fields whose target subsystems are not yet implemented are validated but their application is explicitly deferred (see DEFERRED-APPLICATION note in PC-9).
 
 ## Preconditions
 
@@ -72,9 +85,24 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
 7. `drain_timeout` (if present) must be a positive duration (> 0); if zero or negative, exits with E-CFG-006: `"config error: drain_timeout: must be > 0; got '<value>'. Fix: set to a positive duration, e.g. '10s'"`.
 8. `keepalive_interval` (if present) must be a positive duration (> 0); if zero or negative, exits with E-CFG-007: `"config error: keepalive_interval: must be > 0; got '<value>'. Fix: set to a positive duration, e.g. '1s'"`.
 
-### Config application postcondition (v1.2 addition)
+### Config application postcondition (v1.3 right-sized)
 
-9. When `--config` is supplied and validation passes, the daemon initializes all subsystems using the validated config struct. Specifically: it binds the listen socket on the address from `listen_addr` (not a hardcoded default); it sets the tick interval for half-channels from `tick_interval`; it configures `drain_timeout` for the drain subsystem; it configures `keepalive_interval` for keepalive probes. The daemon MUST NOT silently ignore a supplied config and fall back to hardcoded constants.
+9. When `--config` is supplied and validation passes, the daemon initializes all subsystems using the validated config struct for fields whose target subsystems exist today. Specifically, the following field IS applied immediately:
+
+   - **`tick_interval`** — the half-channel tick cadence is sourced from `cfg.TickInterval` (passed to `halfchannel.New`), not the hardcoded `10ms` default. (Target subsystem: `internal/halfchannel` via `cmd/switchboard/access.go`. Exists on develop.)
+
+   The daemon MUST NOT silently ignore `tick_interval` and fall back to the hardcoded `10*time.Millisecond` constant when a config file is supplied.
+
+   **DEFERRED-APPLICATION note (v1.3):** The following config fields are fully VALIDATED by PC-5 through PC-8 but their APPLICATION to daemon subsystems is explicitly deferred because the target subsystems do not yet exist on the develop branch. This is not a spec gap — it is a tracked forward dependency. Each deferred field is owned by a named story:
+
+   | Field | Reason for Deferral | Owning Story / Flag |
+   |-------|---------------------|---------------------|
+   | `listen_addr` | No TCP listener (`net.Listen` / `.Accept`) exists anywhere in the codebase; the daemon is a PTY/tmux relay with no network-ingress listener today. | **No current owner story — a network-listener introduction story is needed (flagged for STORY-INDEX).** The listener story must create `internal/listener` (or equivalent) and wire `cfg.ListenAddr` at that time. |
+   | `drain_timeout` | `internal/drain` does not exist on develop. | S-7.04 (Wave 7, PE graduation and graceful drain). |
+   | `upstream_routers` | PE-mode upstream connection logic is owned by the PE graduation work; `internal/drain` does not exist. | S-7.04 (Wave 7). |
+   | `keepalive_interval` | The `sweepDeadline` constant (60s, console eviction window) is architecturally distinct from the node reconnect keepalive interval described by FM-009 ("after `keepalive_interval`, default 1s, nodes attempt reconnect"). Wiring `cfg.KeepaliveInterval` to `sweepDeadline` would misrepresent their semantics. The correct keepalive mechanism is part of the drain/node-keepalive subsystem work. | S-7.04 (Wave 7). |
+
+   These deferred fields are validated at startup (PC-6, PC-7, PC-8) — a bad value still causes an actionable error and exit 1. Only their APPLICATION to running subsystems is deferred.
 
 ## Invariants
 
@@ -82,7 +110,7 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
 2. Error messages name the specific field (and index for array fields) and provide a fix suggestion.
 3. This applies equally to initial startup and config reload (SIGHUP): a bad config reload leaves the daemon running on the previous config.
 4. All validation errors are collected and reported together (exhaustive reporting), not just the first.
-5. The validated config is the single source of truth for subsystem configuration; hardcoded fallback values for configurable fields are prohibited when a config file is supplied.
+5. The validated config is the single source of truth for subsystem configuration of **applicable fields** — those whose target subsystem exists on develop. Hardcoded fallback values for applicable fields are prohibited when a config file is supplied. Fields whose target subsystems are not yet built (see DEFERRED-APPLICATION note in PC-9) are excluded from this invariant until their owning stories deliver the subsystem.
 
 ## Trigger
 
@@ -113,7 +141,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | EC-007 | `upstream_routers` has two entries; first is valid, second is invalid | E-CFG-003 naming index 1 (0-based); all errors collected before exit 1 (exhaustive reporting). |
 | EC-008 | `drain_timeout: 0s` | E-CFG-006 with value `"0s"`; exit 1. |
 | EC-009 | `keepalive_interval: -1s` | E-CFG-007 with value `"-1s"`; exit 1. |
-| EC-010 | Config file supplied and valid; daemon starts | PC-9: listen socket bound on `listen_addr` from config (not `":9090"` or any hardcoded address); tick interval, drain_timeout, keepalive_interval all sourced from config struct. |
+| EC-010 | Config file supplied and valid; daemon starts | PC-9 (v1.3): `tick_interval` from config is passed to `halfchannel.New` (not the hardcoded `10ms` fallback). `listen_addr`, `drain_timeout`, `keepalive_interval`, and `upstream_routers` application deferred to their owning stories (see DEFERRED-APPLICATION note). |
 
 ## Canonical Test Vectors
 
@@ -127,7 +155,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | Invalid YAML syntax | E-CFG-005 "config parse error: invalid YAML at line 5: unexpected token"; exit 1 | error |
 | Config file not found | E-CFG-004 "config file not found: /etc/switchboard/router.yaml"; exit 1 | error |
 | Config reload with bad config | Daemon logs "config reload failed"; continues on previous config; exits 0 (daemon still running) | edge-case |
-| Valid config supplied | Daemon binds `listen_addr` from config, not a hardcoded default; tick_interval, drain_timeout, keepalive_interval sourced from config | happy-path (PC-9) |
+| Valid config supplied with `tick_interval: 20ms` | `halfchannel.New` receives `20ms` tick interval (not hardcoded `10ms`); daemon starts normally | happy-path (PC-9 v1.3) |
 
 ## Verification Properties
 
@@ -173,5 +201,6 @@ VP-028, VP-029 (existing; cover all postconditions including v1.2 additions).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-06-28 | Right-sized PC-9 and Inv-5. Fresh-eyes verification confirmed that `listen_addr` binding, `drain_timeout`, `upstream_routers`, and `keepalive_interval` APPLICATION targets subsystems that do not exist on develop. Human ruling: "apply what exists now, track the rest as concrete dependencies." PC-9 narrowed: only `tick_interval` is applied now (wired to `halfchannel.New` in `cmd/switchboard/access.go`, currently hardcoded at `10ms`). DEFERRED-APPLICATION note added with named owning stories for each deferred field (listener introduction: no owner yet — flagged for STORY-INDEX; drain/PE/keepalive: S-7.04 Wave 7). Inv-5 narrowed to "applicable fields" so legitimately-deferred fields do not constitute an invariant violation. H1 title updated to "Applicable Subsystems." EC-010 and PC-9 canonical test vector updated. |
 | 1.2 | 2026-06-28 | S-6.01 scope expansion to cover (a) deep field validation and (b) config application. Added PC-5 through PC-9; added E-CFG-002, E-CFG-003, E-CFG-006, E-CFG-007 error codes; added EC-005 through EC-010; updated title H1 to reflect both behaviors; added Inv-4 and Inv-5. Fixed `subsystem:` frontmatter to use SS-09 (ARCH-INDEX Subsystem Registry). |
 | 1.1 | 2026-06-23 | Initial draft — router startup fails cleanly on malformed config. |
