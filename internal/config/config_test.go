@@ -1706,6 +1706,182 @@ func TestLoadFile_StripsControlCharsFromParseError(t *testing.T) {
 	})
 }
 
+// ---- F-SEC-V1 (CWE-117): control chars via escape sequences in double-quoted scalar values --
+
+// TestLoadFile_StripsControlCharsFromEscapedValue verifies empirically whether
+// yaml.v3 preserves raw control bytes that were introduced via YAML escape sequences
+// inside double-quoted scalar values of known typed fields (F-SEC-V1, CWE-117).
+//
+// This is a DISTINCT path from F-SEC-005 (which tested control chars in YAML KEY names,
+// where yaml.v3's raw-stream scanner rejects them with "control characters are not allowed").
+//
+// The F-SEC-V1 path:
+//  1. A double-quoted YAML value like "\e[31mRED" or "\x9b31m" is decoded by yaml.v3
+//     into a string containing the raw control byte (0x1B or 0x9B).
+//  2. yaml.v3 tries to unmarshal that decoded string into time.Duration — this fails.
+//  3. yaml.v3 returns a TypeError whose message includes the offending value
+//     (truncated, e.g. the first 7 bytes), VERBATIM — with the raw control byte intact.
+//  4. That TypeError flows through:
+//     dec.Decode(&cfg) → KnownFields(true) error → yamlParseDetail (strings.TrimSpace only,
+//     NO control stripping) → ConfigError{Code: "E-CFG-005", Detail: yamlParseDetail(err)}.
+//
+// The sanitizeAddrForError chokepoint (lines 240-248 in config.go) is applied ONLY at
+// the two Validate() addr sites, NEVER in the parse/decode path.
+//
+// Empirical determination:
+//   - If any control-char subtest FAILS: yaml.v3 embeds the raw decoded control byte into its
+//     TypeError message, and that byte survives all the way to err.Error() →
+//     F-SEC-V1 CONFIRMED as a real CWE-117 vector. Routes to implementer to add
+//     control-char stripping in yamlParseDetail (or the E-CFG-005 ConfigError construction).
+//   - If all subtests PASS: yaml.v3 escapes/quotes the value in its error message, or
+//     rejects the escape sequence before decoding, so no raw control rune survives →
+//     F-SEC-V1 NOT exploitable today. Tests are kept as a regression fence.
+//     Defense-in-depth sanitization of the parse path is still advisable.
+//
+// Positive regression: a plain invalid duration like "abc" (no control chars) must still
+// appear in the error so the operator can identify the problem — guards against any
+// future over-eager sanitization.
+//
+// Traces: F-SEC-V1, CWE-117, BC-2.09.003 EC-003 / FM-010.
+func TestLoadFile_StripsControlCharsFromEscapedValue(t *testing.T) {
+	t.Parallel()
+
+	// requireNoControlRune fails if any rune in msg satisfies unicode.IsControl.
+	// unicode.IsControl covers C0 (U+0000–U+001F), DEL (U+007F), and C1 (U+0080–U+009F).
+	requireNoControlRune := func(t *testing.T, msg string) {
+		t.Helper()
+		for i, r := range msg {
+			if unicode.IsControl(r) {
+				t.Errorf("error message contains control rune U+%04X at byte offset %d "+
+					"(F-SEC-V1 / CWE-117); yamlParseDetail must strip control chars from "+
+					"the yaml.v3 TypeError before embedding it in the E-CFG-005 detail; "+
+					"got message: %q", r, i, msg)
+			}
+		}
+	}
+
+	// writeConfig writes content to a temp file and returns the path.
+	writeConfig := func(t *testing.T, content string) string {
+		t.Helper()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "config.yaml")
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		return path
+	}
+
+	// requireECFG005 asserts that err wraps a *ConfigError with code E-CFG-005.
+	requireECFG005 := func(t *testing.T, err error) {
+		t.Helper()
+		var ce *config.ConfigError
+		if !errors.As(err, &ce) {
+			t.Fatalf("expected *config.ConfigError with E-CFG-005, got %T: %v", err, err)
+		}
+		if ce.Code != "E-CFG-005" {
+			t.Errorf("expected error code E-CFG-005 (BC-2.09.003 EC-003), got %q", ce.Code)
+		}
+	}
+
+	// These cases use a YAML file with valid surrounding fields (listen_addr + tick_interval
+	// are NOT set because we want tick_interval to be the failing field) plus a
+	// tick_interval whose double-quoted value contains an escape sequence that yaml.v3
+	// decodes into a raw control byte. The typed unmarshal into time.Duration fails →
+	// yaml.v3 returns a TypeError that embeds the decoded (raw control byte) value.
+	//
+	// listen_addr is set to a valid value so that the ONLY yaml.v3 decode error is the
+	// tick_interval TypeError. This keeps the error message focused on a single field.
+	//
+	// Note: "\e" is a YAML double-quoted escape for ESC (U+001B). "\x9b" decodes to the
+	// C1 CSI byte (U+009B as a raw byte 0x9B, which is NOT valid UTF-8 — yaml.v3 may
+	// handle this as a raw byte). "\r" decodes to CR (U+000D).
+	type escapeCase struct {
+		name        string
+		yamlContent string // full config file content
+		desc        string // description of the injected control char
+	}
+
+	cases := []escapeCase{
+		{
+			// Primary vector: ESC via YAML \e escape in double-quoted Duration value.
+			// yaml.v3 decodes "\e[31mRED" → []byte{0x1B, '[', '3', '1', 'm', 'R', 'E', 'D'}
+			// time.Duration unmarshal fails → TypeError embeds ~first 7 decoded bytes verbatim.
+			name:        "tick_interval_ESC_via_backslash_e",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: \"\\e[31mRED\"\n",
+			desc:        "ESC (U+001B) via YAML \\e escape",
+		},
+		{
+			// C1 CSI via YAML \x9b escape. 0x9B is a raw non-UTF-8 byte; yaml.v3 may
+			// decode \x9b as the Unicode codepoint U+009B (C1 CSI) or as the raw byte.
+			name:        "tick_interval_C1_CSI_via_backslash_x9b",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: \"\\x9b31m\"\n",
+			desc:        "C1 CSI (U+009B / 0x9B) via YAML \\x9b escape",
+		},
+		{
+			// CR via YAML \r escape in double-quoted Duration value.
+			name:        "tick_interval_CR_via_backslash_r",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: \"\\rINJECT\"\n",
+			desc:        "CR (U+000D) via YAML \\r escape",
+		},
+		{
+			// ESC via YAML \x1b hex escape — same byte as \e, different syntax.
+			name:        "tick_interval_ESC_via_backslash_x1b",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: \"\\x1b[0mRESET\"\n",
+			desc:        "ESC (U+001B) via YAML \\x1b hex escape",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := writeConfig(t, tc.yamlContent)
+			_, err := config.LoadFile(path)
+
+			// The typed unmarshal of a non-Duration string always fails → E-CFG-005.
+			requireError(t, err)
+			requireECFG005(t, err)
+
+			msg := err.Error()
+
+			// Log the observed yaml.v3 error string verbatim for empirical determination.
+			// The %q verb shows escape sequences for any non-printable bytes, making the
+			// presence of raw control bytes immediately visible in test output.
+			t.Logf("observed yaml.v3 error string for %s case: %q", tc.desc, msg)
+
+			// Security assertion: no control rune (C0, DEL, or C1) may survive to the
+			// caller's error message (F-SEC-V1 / CWE-117).
+			//
+			// If this assertion fires, the raw decoded control byte survived the entire
+			// pipeline (yaml.v3 TypeError → yamlParseDetail → ConfigError.Detail → Error())
+			// and F-SEC-V1 is CONFIRMED as a real vulnerability.
+			requireNoControlRune(t, msg)
+		})
+	}
+
+	// Positive regression: a plain invalid duration ("abc") must still appear in the
+	// error message. This guards against any future over-eager sanitization that
+	// silently swallows the offending value, leaving operators unable to diagnose
+	// misconfiguration.
+	t.Run("plain_invalid_duration_preserved_in_error", func(t *testing.T) {
+		t.Parallel()
+
+		content := "listen_addr: 0.0.0.0:9090\ntick_interval: \"abc\"\n"
+		path := writeConfig(t, content)
+		_, err := config.LoadFile(path)
+		requireError(t, err)
+		requireECFG005(t, err)
+
+		msg := err.Error()
+		t.Logf("plain invalid duration error: %q", msg)
+
+		// "abc" has no control chars; it must survive into the error message.
+		requireContains(t, msg, "abc")
+		// And naturally no control rune either.
+		requireNoControlRune(t, msg)
+	})
+}
+
 // ---- F-SEC-C1 (CWE-117): C1 control block U+0080–U+009F passes through sanitizer --
 
 // TestConfigValidate_StripsC1ControlChars verifies that sanitizeAddrForError strips
