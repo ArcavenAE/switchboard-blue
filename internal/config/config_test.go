@@ -29,6 +29,7 @@ package config_test
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -350,11 +351,14 @@ func TestConfigValidate_BeforeSocketOpen(t *testing.T) {
 
 // ---- EC-001: config file missing entirely ----------------------------------
 
-// TestLoadFile_MissingFile verifies that LoadFile returns E-CFG-004 (or the
-// canonical E-CFG-002 alias per story EC-001) with an actionable message that
-// includes the expected path when the config file does not exist.
+// TestLoadFile_MissingFile verifies that LoadFile returns E-CFG-004 with an
+// actionable message that includes the expected path when the config file does
+// not exist.
 //
-// Traces: BC-2.09.003 EC-001.
+// v1.1 correction (SP-001): E-CFG-002 is no longer an acceptable code for this
+// case. The canonical code per BC-2.09.003 EC-001 is E-CFG-004.
+//
+// Traces: BC-2.09.003 EC-001, S-6.01 EC-001 (v1.1).
 func TestLoadFile_MissingFile(t *testing.T) {
 	t.Parallel()
 
@@ -369,14 +373,14 @@ func TestLoadFile_MissingFile(t *testing.T) {
 	msg := err.Error()
 	requireContains(t, msg, missingPath)
 
-	// Accept either canonical E-CFG-004 (per BC EC-001) or E-CFG-002 (per story EC-001).
-	// The implementer may consolidate; both codes are acceptable here.
+	// v1.1 (SP-001): ONLY E-CFG-004 is acceptable. E-CFG-002 was the pre-revision
+	// code and must no longer be returned for file-not-found.
 	var ce *config.ConfigError
 	if !errors.As(err, &ce) {
 		t.Fatalf("expected *config.ConfigError, got %T: %v", err, err)
 	}
-	if ce.Code != "E-CFG-004" && ce.Code != "E-CFG-002" {
-		t.Errorf("expected error code E-CFG-004 or E-CFG-002, got %q", ce.Code)
+	if ce.Code != "E-CFG-004" {
+		t.Errorf("expected error code E-CFG-004 (BC-2.09.003 EC-001 v1.1), got %q", ce.Code)
 	}
 }
 
@@ -663,4 +667,57 @@ func TestValidationError_ImplementsError(t *testing.T) {
 	if err != nil && err.Error() == "" {
 		t.Errorf("error.Error() must return a non-empty string")
 	}
+}
+
+// ---- M-1 (CWE-400): config file size guard ----------------------------------
+
+// TestLoadFile_FileTooLarge verifies that LoadFile rejects a config file that
+// exceeds maxConfigFileSize with E-CFG-005 (CWE-400 defence).
+//
+// Traces: M-1 security finding, BC-2.09.003 EC-003 family.
+func TestLoadFile_FileTooLarge(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "huge.yaml")
+	// Write slightly more than 1 MiB (maxConfigFileSize = 1 << 20).
+	huge := make([]byte, (1<<20)+1)
+	if err := os.WriteFile(path, huge, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := config.LoadFile(path)
+	requireError(t, err)
+
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected *config.ConfigError, got %T: %v", err, err)
+	}
+	if ce.Code != "E-CFG-005" {
+		t.Errorf("expected E-CFG-005 for oversized file, got %q", ce.Code)
+	}
+	requireContains(t, err.Error(), "too large")
+}
+
+// TestLoadFile_NonRegularFile verifies that LoadFile rejects a non-regular file
+// (e.g. a directory) with E-CFG-005 (fail-closed, CWE-400 defence).
+//
+// Traces: M-1 security finding, BC-2.09.003 EC-003 family.
+func TestLoadFile_NonRegularFile(t *testing.T) {
+	t.Parallel()
+
+	// Pass a directory path — directories are not regular files.
+	dir := t.TempDir()
+
+	_, err := config.LoadFile(dir)
+	requireError(t, err)
+
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected *config.ConfigError, got %T: %v", err, err)
+	}
+	if ce.Code != "E-CFG-005" {
+		t.Errorf("expected E-CFG-005 for non-regular file, got %q", ce.Code)
+	}
+	requireContains(t, err.Error(), "not a regular file")
 }

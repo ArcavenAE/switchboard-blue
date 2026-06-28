@@ -13,6 +13,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// maxConfigFileSize is the upper bound on config file size accepted by LoadFile.
+// A router config is tiny; 1 MiB is a generous cap that protects against
+// accidental --config /dev/zero or a mispointed path to a large file (CWE-400).
+const maxConfigFileSize = 1 << 20 // 1 MiB
+
 // ErrValidation (E-CFG-001) is returned when one or more config fields fail validation
 // (range violation, constraint violation, or a required field is missing).
 var ErrValidation = &ConfigError{Code: "E-CFG-001"}
@@ -181,6 +186,34 @@ func (c *Config) Validate() error {
 // Does NOT call Validate — the caller is responsible for calling Validate
 // after LoadFile (see ARCH-06 binding sequence).
 func LoadFile(path string) (*Config, error) {
+	// Guard: stat before reading to reject non-regular files (e.g. /dev/zero,
+	// directories) and files that exceed maxConfigFileSize (CWE-400).
+	fi, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, &ConfigError{
+				Code:   "E-CFG-004",
+				Detail: fmt.Sprintf("config file not found: %s", path),
+			}
+		}
+		return nil, &ConfigError{
+			Code:   "E-CFG-004",
+			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
+		}
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, &ConfigError{
+			Code:   "E-CFG-005",
+			Detail: fmt.Sprintf("config parse error: %s is not a regular file", path),
+		}
+	}
+	if fi.Size() > maxConfigFileSize {
+		return nil, &ConfigError{
+			Code:   "E-CFG-005",
+			Detail: fmt.Sprintf("config parse error: config file too large (%d bytes, max %d)", fi.Size(), maxConfigFileSize),
+		}
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
