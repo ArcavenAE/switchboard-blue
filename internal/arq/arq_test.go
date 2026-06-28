@@ -747,7 +747,8 @@ func TestBC_2_02_005_GapsToRetransmit_SACKExcludesSomeSeqs(t *testing.T) {
 	// ackSeq=1 (cumulatively received through 1); SACK marks seq=3 received
 	// out-of-order (bit 1 above ackSeq+1=2 → seq=3).
 	// In-flight: 1,2,3,4. After ackSeq=1: 1 is cumulatively ACKed.
-	// SACK bit 1 = seq 3 received. Gap: seq=2 (and seq=4, outside SACK window).
+	// SACK bit 1 = seq 3 received. Gap: seq=2 (in-window but SACK bit unset)
+	// and seq=4 (in-window but SACK bit unset).
 	// Expected gaps: [2, 4] — seq 1 is cumulatively ACKed, seq 3 is in SACK.
 	sack := bitmapWithBits(1) // bit 1 = seq 3 (ackSeq+1+1 = 3)
 	gaps := a.GapsToRetransmit(1, sack)
@@ -816,11 +817,19 @@ func TestBC_2_02_006_EC003_TLPKTDROPDuringFailover(t *testing.T) {
 	a := newTestARQ(dropTimeout)
 
 	sendTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Model a session already in progress: nextExpected=98 means frames 1..98
+	// have been delivered. Seq=99 is the next in-flight frame at failover.
+	// This reflects realistic ARQ state — RULING-003 requires ackSeq to be
+	// within sackWindowSize of nextExpected; setting nextExpected=98 puts seq=99
+	// and seq=100 firmly in-window.
+	a.SetNextExpected(98)
 	a.EnqueueSend(99, []byte("in-flight-at-failover"), sendTime)
 
 	now := sendTime.Add(dropTimeout + time.Millisecond)
 
 	// TLPKTDROP fires for the in-flight frame during failover.
+	// Since overdueSeq(99) == nextExpected(98)+1, nextExpected advances to 99.
 	ev, err := a.TLPKTDROP(99, now)
 	if err != nil {
 		t.Fatalf("TLPKTDROP(99) during failover: %v", err)
@@ -840,6 +849,7 @@ func TestBC_2_02_006_EC003_TLPKTDROPDuringFailover(t *testing.T) {
 	}
 
 	// ADR-005 resync: after failover reconnect, send new frame at seq=100.
+	// nextExpected is now 99; ackSeq=100 is 1 step ahead — well within window.
 	// The ARQ must accept and deliver it without error.
 	a.EnqueueSend(100, []byte("post-failover"), now)
 	frames, err := a.OnAck(100, zeroBitmap())
@@ -1303,6 +1313,149 @@ func TestARQ_ReorderBuf_BoundedByWindowSize(t *testing.T) {
 	if len(frames1) != windowSize {
 		t.Errorf("OnAck(1) flush: expected %d delivered (window-bounded), got %d — possible unbounded reorderBuf growth",
 			windowSize, len(frames1))
+	}
+}
+
+// ─── RULING-003: out-of-window cumulative-ACK rejection ──────────────────────
+
+// TestOnAck_OutOfWindowAckSeq_RejectsWithoutIteration verifies that OnAck
+// rejects a cumulative ACK whose distance from nextExpected exceeds
+// sackWindowSize (64) without executing the Step-1 iteration loop.
+//
+// Red-gate obligation: RULING-003. Traces to BC-2.02.005 PC-3, EC-004.
+func TestOnAck_OutOfWindowAckSeq_RejectsWithoutIteration(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		nextExpected uint32
+		ackSeq       uint32
+	}{
+		{
+			name:         "large gap from zero",
+			nextExpected: 0,
+			ackSeq:       arq.SackWindowSize + 1, // 65 — first illegal value
+		},
+		{
+			name:         "max uint32 attack",
+			nextExpected: 0,
+			ackSeq:       0xFFFFFFFF,
+		},
+		{
+			name:         "stale ack (already delivered)",
+			nextExpected: 100,
+			ackSeq:       50, // behind nextExpected — wraps to large uint32
+		},
+		{
+			name:         "exactly one over window",
+			nextExpected: 10,
+			ackSeq:       10 + arq.SackWindowSize + 1, // 75 — first illegal from 10
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := arq.New(arq.Config{DropTimeout: time.Second})
+			a.SetNextExpected(tc.nextExpected)
+
+			// Enqueue a frame at ackSeq to confirm the loop would have done
+			// work if it ran (absence of side-effects proves no iteration).
+			a.EnqueueSend(tc.ackSeq, []byte("payload"), time.Now().UTC())
+
+			var zeroSACK [arq.SACKBitmapBytes]byte
+			frames, err := a.OnAck(tc.ackSeq, zeroSACK)
+
+			if !errors.Is(err, arq.ErrAckOutOfWindow) {
+				t.Fatalf("want ErrAckOutOfWindow, got %v", err)
+			}
+			if len(frames) != 0 {
+				t.Fatalf("want no frames delivered on rejection, got %d", len(frames))
+			}
+			// nextExpected must be unchanged — no state mutation on rejection.
+			if a.NextExpected() != tc.nextExpected {
+				t.Fatalf("want nextExpected unchanged (%d), got %d",
+					tc.nextExpected, a.NextExpected())
+			}
+			// inFlight entry must still be present — no deletes executed.
+			if !a.InFlightContains(tc.ackSeq) {
+				t.Fatalf("want inFlight entry preserved on rejection, got deleted")
+			}
+		})
+	}
+}
+
+// TestOnAck_BoundaryWindowValues_Accepted verifies that ackSeq values at exactly
+// the window boundary are accepted (ackSeq - nextExpected == sackWindowSize).
+//
+// Companion to TestOnAck_OutOfWindowAckSeq_RejectsWithoutIteration.
+// Traces to: RULING-003, BC-2.02.005 PC-3.
+func TestOnAck_BoundaryWindowValues_Accepted(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		nextExpected uint32
+		ackSeq       uint32
+	}{
+		{
+			name:         "exactly at window edge",
+			nextExpected: 0,
+			ackSeq:       arq.SackWindowSize, // 64 — last legal value
+		},
+		{
+			name:         "no-op ack (ackSeq == nextExpected)",
+			nextExpected: 5,
+			ackSeq:       5,
+		},
+		{
+			name:         "one step advance",
+			nextExpected: 10,
+			ackSeq:       11,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := arq.New(arq.Config{DropTimeout: time.Second})
+			a.SetNextExpected(tc.nextExpected)
+
+			var zeroSACK [arq.SACKBitmapBytes]byte
+			_, err := a.OnAck(tc.ackSeq, zeroSACK)
+			if err != nil {
+				t.Fatalf("want nil error for in-window ackSeq, got %v", err)
+			}
+		})
+	}
+}
+
+// ─── Pass-7 F-1: GapsToRetransmit beyond bitmap window ───────────────────────
+
+// TestBC_2_02_005_GapsToRetransmit_BeyondBitmapWindow pins the "in-flight frames
+// beyond the bitmap window are also gaps" branch (EC-004, GapsToRetransmit doc).
+//
+// Enqueue seq=1 (inside window) and seq=70 (outside 64-bit bitmap window).
+// With ackSeq=0 and empty SACK bitmap, both must appear in gaps.
+func TestBC_2_02_005_GapsToRetransmit_BeyondBitmapWindow(t *testing.T) {
+	t.Parallel()
+
+	a := newTestARQ(500 * time.Millisecond)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	a.EnqueueSend(1, []byte("data"), now)
+	a.EnqueueSend(70, []byte("data"), now)
+
+	gaps := a.GapsToRetransmit(0, zeroBitmap())
+
+	wantGaps := []uint32{1, 70}
+	if len(gaps) != len(wantGaps) {
+		t.Fatalf("GapsToRetransmit(0, zeroBitmap): want %v, got %v", wantGaps, gaps)
+	}
+	for i, g := range gaps {
+		if g != wantGaps[i] {
+			t.Errorf("gap[%d]: want %d, got %d", i, wantGaps[i], g)
+		}
 	}
 }
 
