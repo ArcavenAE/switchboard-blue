@@ -195,18 +195,20 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// AC-007 / PC-7 / E-CFG-006: drain_timeout must be > 0 when set.
-	if c.DrainTimeout <= 0 {
+	// AC-007 / PC-7 / E-CFG-006: drain_timeout must not be negative when set.
+	// Zero means absent — the daemon applies the default (10s) at startup (S-7.04).
+	if c.DrainTimeout < 0 {
 		failures = append(failures, fmt.Sprintf(
-			"config error: drain_timeout: must be > 0; got '%s'. Fix: set to a positive duration, e.g. '10s'",
+			"config error: drain_timeout: must not be negative; got '%s'. Fix: remove the field to use the daemon default (10s), or set to a positive duration, e.g. '10s'",
 			c.DrainTimeout,
 		))
 	}
 
-	// AC-008 / PC-8 / E-CFG-007: keepalive_interval must be > 0 when set.
-	if c.KeepaliveInterval <= 0 {
+	// AC-008 / PC-8 / E-CFG-007: keepalive_interval must not be negative when set.
+	// Zero means absent — the daemon applies the default (1s) at startup (S-7.04).
+	if c.KeepaliveInterval < 0 {
 		failures = append(failures, fmt.Sprintf(
-			"config error: keepalive_interval: must be > 0; got '%s'. Fix: set to a positive duration, e.g. '1s'",
+			"config error: keepalive_interval: must not be negative; got '%s'. Fix: remove the field to use the daemon default (1s), or set to a positive duration, e.g. '1s'",
 			c.KeepaliveInterval,
 		))
 	}
