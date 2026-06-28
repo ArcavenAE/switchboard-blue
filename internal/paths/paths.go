@@ -114,6 +114,19 @@ func (t *PathTracker) OnProbe(arrivalRTTMS float64, lossEvent bool) {
 		}
 	} else {
 		// Successful probe: update RTT EWMA, zero out loss sample, reset misses.
+		//
+		// Reactivation (BC-2.02.003 postcondition 6 v1.2): if the path was
+		// deactivated by consecutive misses, the first successful probe restores
+		// it to the active set, resets RTT from the reactivating probe (same as
+		// first-probe semantics), and clears the loss EWMA.
+		if !t.active {
+			t.active = true
+			t.ewmaRTTMS = arrivalRTTMS
+			t.ewmaLossPct = 0
+			t.consecutiveMisses = 0
+			t.firstProbe = false
+			return
+		}
 		// On first successful probe, replace the conservative initial RTT outright
 		// (RFC 6298 style) so the high-RTT default does not slow convergence for
 		// many probe intervals (BC-2.02.003 EC-003: "after first measured RTT,
