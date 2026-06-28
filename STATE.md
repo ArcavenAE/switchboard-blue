@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-c1-t2-pre-gate-delivered-human-gate-pending
+phase_step: wave-3-closed-wave-4-pending
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
@@ -56,7 +56,9 @@ wave_3_gate_pass1_disposition: "C-1 deferred (C-1-W3P1-defer/S-BL.NI, ARCH-08 v2
 wave_3_gate_pass2_disposition: "CONVERGED 0C/0H — contract-conformance"
 wave_3_gate_pass3_disposition: "CONVERGED 0C/0H — security"
 wave_3_gate_convergence_summary: "3/3 CLEAN passes (Pass-1 concurrency/lifecycle, Pass-2 contract-conformance, Pass-3 security); consistency-audit HIGH Finding-4.1 downgraded to traceability-only (T2 satisfied in code: TestForwardFramesTOCTOUCount50 + deterministic swapBarrier test)"
-wave_3_gate_human_gate: PENDING
+wave_3_gate_human_gate: APPROVED
+wave_3_gate_closed_at: 2026-06-27
+wave_3_gate_disposition: "APPROVED — close Wave 3; carry 5 tracked deferrals + process-gap #7 to Wave 4"
 w3_c1_pr: 20
 w3_c1_merge_sha: 418de54
 w3_c1_disposition: "RESOLVED — WithFailureCounter wired buildRouter (threshold=5/window=60s); OBS-3 closed; network-ingress listener deferred S-BL.NI"
@@ -89,7 +91,7 @@ s_w3_04_pr_number: 17
 s_w3_04_merge_sha: aeb442d
 s_w3_04_merge_date: 2026-06-27
 s_w3_04_status: completed
-timestamp: 2026-06-27T23:30:00Z
+timestamp: 2026-06-27T23:59:00Z
 last_update: 2026-06-27
 ---
 
@@ -97,7 +99,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Wave-3 pre-gate items COMPLETE. Wave-level adversarial convergence: 3/3 CLEAN passes. Both human-scoped pre-gate items delivered and merged to develop (HEAD 849bd86): C-1 (PR #20, 418de54) — WithFailureCounter wired into buildRouter (threshold=5/window=60s); OBS-3 spec-forbidden partial-wiring RESOLVED; only network-ingress listener remains deferred to S-BL.NI. T2 (PR #19, 849bd86) — deterministic TOCTOU misclassification-branch regression test added (ADR-011 v1.6 Obligation T2). ARCH-08 bumped to v2.3; ARCH-INDEX changelog updated. Wave 3 HUMAN APPROVAL GATE PENDING.
+Wave 3 CLOSED. Human approved the Wave 3 integration gate 2026-06-27. Wave-level adversarial convergence: 3/3 CLEAN passes. Both pre-gate items C-1 + T2 merged. Consistency audit PASSED (0 blocking, 3 non-blocking resolved). Cycle-close checklist complete: 6 Wave-4 deferrals recorded in Drift Items. Next step: Wave 4 kickoff (Reliability Layer + Config — S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts).
 
 ## Phase Progress
 
@@ -105,7 +107,7 @@ Wave-3 pre-gate items COMPLETE. Wave-level adversarial convergence: 3/3 CLEAN pa
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3 gate: HUMAN_GATE_PENDING | 2026-06-27 | Wave 3: 3/3 CLEAN passes; pre-gate C-1 + T2 DELIVERED (PRs #20/#19); develop @ 849bd86 |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED (human approved 2026-06-27); Wave 4 pending | 2026-06-27 | Wave 3: 3/3 CLEAN passes; C-1+T2 merged; 0 blocking; develop @ 849bd86 |
 
 ## Wave / Story Status
 
@@ -140,6 +142,12 @@ Wave-3 pre-gate items COMPLETE. Wave-level adversarial convergence: 3/3 CLEAN pa
 | SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | open |
 | SW305-cosmetic | LOW | Stale comments: Red-Gate test (pre-v1.6 model), TrackedSourceCount() name, AC-016 count, v1.7 citation in test header. | cosmetic | defer post-wave |
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001) — lesson recorded in cycles/cycle-1/lessons.md. Follow-up: candidate for self-improvement epic story. | orchestrator | open/deferred |
+| W3-DEFER-1 | OBS | Process-gap: codify worktree-identity tuple in adversary dispatch templates (applied ad hoc this cycle). | orchestrator | deferred → Wave 4 process hardening |
+| W3-DEFER-2 | MED | M-1 relay busy-spin: double-failure-no-PTY scenario — watchAndFallback exhausted + no PTY path; daemon behavior under total connector failure not integration-tested. | implementer | deferred → Wave 4 / S-BL.NI |
+| W3-DEFER-3 | MED | Fired-source LRU eviction-priority inversion — WithFailureCounter evicts sources in insertion order, not by fired-first priority; live-traffic bias possible. | implementer | deferred → Wave 4 |
+| W3-DEFER-4 | MED | M-2 unbounded E-ADM-016 log volume: per-source slot cap exists but per-burst log cardinality under sustained attack not bounded by spec (BC-2.05.005 gap). | product-owner/spec-steward | deferred → Wave 4 |
+| W3-DEFER-5 | MED | EC-005: durable CI import-perimeter guard — BC-2.04.002 EC-005 comment corrected (PR #17), but no CI lint rule enforces the `internal/` import boundary structurally. | devops-engineer | deferred → Wave 4 |
+| W3-DEFER-6 | MED | Real-connector PTY-EOF lifecycle integration test — TestForwardFramesPTYEOFExitsCleanly uses mock; no test exercises actual PTY master EOF through live SessionConnector. | test-writer | deferred → Wave 4 |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate rows): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -161,15 +169,15 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | Per-story-delivery merge-handoff pathology (vsdd-factory#302) | Agent self-merge blocked by classifier; human-performed merge is the correct resolution | 2026-06-27 |
 | Wave-3 Pass-1: C-1 deferred, I-1 fixed PR #18 e9421d8 | C-1 → ARCH-08 v2.2 §6.5.1 TRACKED-DEFER/S-BL.NI; I-1 (BC-2.04.007) fixed; streak 0/3 | 2026-06-27 |
 | Wave-3 pre-gate consistency audit | PASS — 0 blocking; 3 non-blocking findings resolved: D5-1 (STORY-INDEX S-BL.NI row rewritten), T2-1 + V-1 (S-W3.04 AC-010 + ARCH-08 pin updated to v2.3) | 2026-06-27 |
+| Wave 3 integration gate | APPROVED — close Wave 3; carry 5 tracked deferrals + process-gap #7 to Wave 4 | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (Wave 3 pre-gate items delivered; human gate PENDING)
+## Session Resume Checkpoint — 2026-06-27 (Wave 3 CLOSED; Wave 4 pending)
 
-**Position:** Phase 3, Wave 3. All pre-gate items complete. develop HEAD = 849bd86.
-**Pre-gate deliveries:** C-1 (PR #20, 418de54) — WithFailureCounter wired into buildRouter; OBS-3 RESOLVED. T2 (PR #19, 849bd86) — deterministic TOCTOU misclassification-branch regression test (ADR-011 v1.6 T2). ARCH-08 v2.3 + ARCH-INDEX changelog updated (architect).
-**Next immediate step:** Human approval of Wave 3 gate.
-**Remaining network-ingress deferral:** S-BL.NI MUST wire routing.WithFailureCounter(fc) + E-ADM-017 integration test (ARCH-08 v2.3 §6.5.1).
-**Open deferred findings (non-blocking):** M-1 relay busy-spin, LRU eviction-priority, M-2 log-volume cardinality. W3-R3-F2 EC-006 PO adjudication pending. SW305-M2/M3/M4 open/deferred.
-**Open Wave-4 follow-ups (3 items):** (a) EC-005 durable CI import-perimeter guard; (b) real-connector PTY-EOF lifecycle integration test; (c) embed worktree-identity tuple in adversary dispatches.
+**Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 849bd86.
+**Wave 3 summary:** 10 stories + 3 fix PRs delivered; 3/3 clean adversary passes; consistency audit PASS (0 blocking); C-1 + T2 merged. Cycle-close checklist complete.
+**Next immediate step:** Wave 4 kickoff — Reliability Layer + Config (S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts). Wave 4 is the next wave in the 7-wave plan.
+**Remaining network-ingress deferral:** S-BL.NI tracks ARCH-08 v2.3 §6.5.1 — network-ingress listener + E-ADM-017 live-data-path integration test. Target Wave 4+.
+**Open Drift Items carried to Wave 4:** W3-DEFER-1..6 (see Drift Items table) + W3-R3-F1/F2 adjudication pending + W3-R2-M2 + SW305-M2/M3/M4.
 **Previous checkpoint:** `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
