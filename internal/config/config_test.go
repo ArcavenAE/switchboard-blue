@@ -321,8 +321,10 @@ func TestConfigValidate_BeforeSocketOpen(t *testing.T) {
 
 		// Valid config must return nil — no side effects, no sockets opened.
 		cfg := &config.Config{
-			ListenAddr:   "0.0.0.0:9090",
-			TickInterval: 10 * time.Millisecond,
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second,
+			KeepaliveInterval: 1 * time.Second,
 		}
 		err := cfg.Validate()
 		requireNoError(t, err)
@@ -903,8 +905,10 @@ func TestConfigValidate_RejectsInvalidListenAddrFormat(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{
-			ListenAddr:   "0.0.0.0:9090",
-			TickInterval: 10 * time.Millisecond,
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second,
+			KeepaliveInterval: 1 * time.Second,
 		}
 		requireNoError(t, cfg.Validate())
 	})
@@ -913,8 +917,10 @@ func TestConfigValidate_RejectsInvalidListenAddrFormat(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{
-			ListenAddr:   "127.0.0.1:8080",
-			TickInterval: 10 * time.Millisecond,
+			ListenAddr:        "127.0.0.1:8080",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second,
+			KeepaliveInterval: 1 * time.Second,
 		}
 		requireNoError(t, cfg.Validate())
 	})
@@ -1012,6 +1018,8 @@ func TestConfigValidate_RejectsInvalidUpstreamRouterAddr(t *testing.T) {
 				{Addr: "10.0.0.1:9090"},
 				{Addr: "10.0.0.2:9091"},
 			},
+			DrainTimeout:      10 * time.Second,
+			KeepaliveInterval: 1 * time.Second,
 		}
 		requireNoError(t, cfg.Validate())
 	})
@@ -1082,9 +1090,10 @@ func TestConfigValidate_RejectsNonPositiveDrainTimeout(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{
-			ListenAddr:   "0.0.0.0:9090",
-			TickInterval: 10 * time.Millisecond,
-			DrainTimeout: 10 * time.Second,
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second,
+			KeepaliveInterval: 1 * time.Second,
 		}
 		requireNoError(t, cfg.Validate())
 	})
@@ -1177,6 +1186,7 @@ func TestConfigValidate_RejectsNonPositiveKeepaliveInterval(t *testing.T) {
 		cfg := &config.Config{
 			ListenAddr:        "0.0.0.0:9090",
 			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second,
 			KeepaliveInterval: 1 * time.Second,
 		}
 		requireNoError(t, cfg.Validate())
