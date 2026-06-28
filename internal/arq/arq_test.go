@@ -1066,97 +1066,150 @@ func TestBC_2_02_005_VP019_VP020_LargeScale(t *testing.T) {
 // ─── EC-004 / F-H4: cumulative ACK past locally-absent sequence ───────────────
 
 // TestARQ_OnAck_CumulativeAckPastLocallyAbsentSeq pins BC-2.02.005 invariant 4
-// and the PC-4 scope note (F-H4 ruling, disposition A): when a cumulative ACK
-// covers a sequence number for which payloadFor returns nil (frame not in inFlight
-// or reorderBuf), the sender must advance nextExpected past it without error.
+// and the PC-4 scope note (F-H4 ruling, disposition A): when a single cumulative
+// ACK scans across a sequence number for which payloadFor returns nil (frame not
+// in inFlight or reorderBuf because it was never enqueued), the sender must
+// advance nextExpected past it without error and without holding the gap.
 //
-// This is the canonical pinning test for the sender-semantics vector in BC-2.02.005
-// v1.2 (Table row: "Sender sends frames 1,2,3; frame 2 cleaned from inFlight by
-// prior partial ACK; cumulative ACK for seq=3 arrives").
+// This is a characterisation test: it pins already-conformant behaviour in the
+// current implementation. If it fails, the implementation diverges from
+// invariant 4 of BC-2.02.005 v1.2.
+//
+// Canonical BC-2.02.005 v1.2 sender-semantics test vector:
+//
+//	"Sender sends frames 1,2,3; frame 2 cleaned from inFlight by prior partial
+//	ACK; cumulative ACK for seq=3 arrives → nextExpected advances past 3;
+//	inFlight emptied; no error or gap event emitted."
+//
+// Here we use the cleanest faithful encoding of that vector: seq=2 is NEVER
+// enqueued (simulates "absent at ACK time" regardless of cause). A single
+// OnAck(3, zeroBitmap) must scan seq=1 (deliver), seq=2 (nil → skip+advance),
+// seq=3 (deliver). This directly exercises the payload==nil silent-skip branch
+// in the Step-1 loop (arq.go ~line 208) — the exact subject of EC-004 /
+// F-H4 / Task 10.
 //
 // Scenario:
-//   - Sender enqueues frames 1, 2, 3.
-//   - Frame 2 is manually removed from inFlight (simulates prior partial ACK or
-//     retransmit cleanup — the ARQ never holds it locally at ACK time).
-//   - Remote sends cumulative ACK for seq=3, sack=0.
+//   - Fresh ARQ state (nextExpected=0).
+//   - EnqueueSend for seq=1 ("frame-1") and seq=3 ("frame-3") only.
+//   - seq=2 is NEVER enqueued → absent from both inFlight and reorderBuf.
+//   - Single call: OnAck(3, zeroBitmap).
 //
 // Expected:
-//   - No panic, no error.
-//   - nextExpected advances past 3 (verified: subsequent OnAck(3) returns 0 frames).
-//   - inFlight is fully cleared (frames 1 and 3 consumed; frame 2 was absent).
-//   - Frames 1 and 3 are returned in the delivered slice (seq 2 absent — not delivered).
-//   - No gap or error event emitted.
+//   - Returns exactly [frame-1, frame-3] (frame-2 absent — advanced past, not held).
+//   - nextExpected advanced to 3 (verified: idempotent OnAck(3) returns 0 frames).
+//   - No error returned.
+//   - No DegradationEvent emitted.
 func TestARQ_OnAck_CumulativeAckPastLocallyAbsentSeq(t *testing.T) {
 	t.Parallel()
 
 	a := newTestARQ(500 * time.Millisecond)
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	// Enqueue frames 1, 2, 3.
+	// Enqueue seq=1 and seq=3 only. seq=2 is deliberately absent — it was never
+	// sent (or was already cleaned from inFlight by a prior partial ACK window).
+	// This puts the ARQ in the exact state described by the BC v1.2 vector.
 	a.EnqueueSend(1, []byte("frame-1"), now)
-	a.EnqueueSend(2, []byte("frame-2"), now)
 	a.EnqueueSend(3, []byte("frame-3"), now)
 
-	// Simulate prior partial ACK cleaning frame 2 from inFlight:
-	// OnAck(2) would do this, but we want frame 2 cleaned without it being
-	// "delivered" into the current test's delivery window. The simplest model
-	// from the F-H4 ruling is to ACK seq=2 first (it was received by the remote
-	// in a prior window), then verify the subsequent cumulative ACK for seq=3
-	// handles the locally-absent gap correctly.
-	//
-	// We ACK seq=1 first (delivers frame 1), then ACK seq=2 (delivers frame 2 and
-	// removes it from inFlight), establishing nextExpected=2. Then we call OnAck(3)
-	// which must advance nextExpected past 3 and deliver frame 3.
-	//
-	// For the exact BC v1.2 pinning vector (frame 2 absent at ACK time), we model
-	// it directly: clear inFlight for seq=2 by advancing past it via OnAck(2),
-	// which leaves only frame 3 in inFlight. A subsequent cumulative ACK for seq=3
-	// must handle the seq=2 slot (already consumed) cleanly.
-
-	// Step 1: OnAck(1) — delivers frame 1, nextExpected advances to 1.
-	frames1, err := a.OnAck(1, zeroBitmap())
+	// Single cumulative ACK spanning seq=1..3 with no SACK bits set.
+	// Step-1 loop in OnAck iterates:
+	//   seq=1: payloadFor(1) = "frame-1" → deliver, advance nextExpected=1
+	//   seq=2: payloadFor(2) = nil        → skip (no delivery), advance nextExpected=2
+	//   seq=3: payloadFor(3) = "frame-3" → deliver, advance nextExpected=3
+	// This directly exercises the payload==nil silent-skip+advance path (EC-004).
+	frames, err := a.OnAck(3, zeroBitmap())
 	if err != nil {
-		t.Fatalf("OnAck(1): %v", err)
+		t.Fatalf("OnAck(3) across locally-absent seq=2: unexpected error: %v", err)
 	}
-	if len(frames1) != 1 || string(frames1[0]) != "frame-1" {
-		t.Fatalf("OnAck(1): want [frame-1], got %v", frames1)
+	if len(frames) != 2 {
+		t.Fatalf("OnAck(3): want 2 frames (frame-1, frame-3), got %d: %v", len(frames), frames)
 	}
-
-	// Step 2: OnAck(2) — delivers frame 2, nextExpected advances to 2. Frame 2
-	// is now consumed from inFlight — it is "locally absent" for any future ACK
-	// scan loop that revisits seq=2.
-	frames2, err := a.OnAck(2, zeroBitmap())
-	if err != nil {
-		t.Fatalf("OnAck(2): %v", err)
+	if string(frames[0]) != "frame-1" {
+		t.Errorf("OnAck(3): frames[0]: want %q, got %q", "frame-1", string(frames[0]))
 	}
-	if len(frames2) != 1 || string(frames2[0]) != "frame-2" {
-		t.Fatalf("OnAck(2): want [frame-2], got %v", frames2)
+	if string(frames[1]) != "frame-3" {
+		t.Errorf("OnAck(3): frames[1]: want %q, got %q", "frame-3", string(frames[1]))
 	}
 
-	// Step 3: OnAck(3) with an ackSeq that re-spans seq=2 (already absent) and
-	// seq=3 (still in inFlight). The implementation scans seq=nextExpected+1 (=3)
-	// through ackSeq=3. Seq=3 is in inFlight and must be delivered; the scan does
-	// not re-visit seq=2 here (nextExpected=2 means seq=3 is next).
-	// This directly exercises the locally-absent-seq silent-skip path.
-	frames3, err := a.OnAck(3, zeroBitmap())
-	if err != nil {
-		t.Fatalf("OnAck(3) with locally-absent seq=2 already consumed: unexpected error: %v", err)
-	}
-	if len(frames3) != 1 || string(frames3[0]) != "frame-3" {
-		t.Fatalf("OnAck(3): want [frame-3], got %v", frames3)
-	}
-
-	// Step 4: A second OnAck(3) must be idempotent — nextExpected is already at
-	// 3, so no frames are delivered and no error is returned.
-	frames4, err := a.OnAck(3, zeroBitmap())
+	// Idempotency: nextExpected is now 3; a repeat OnAck(3) must return nothing.
+	// This verifies that nextExpected advanced all the way to ackSeq=3
+	// (i.e., the absent seq=2 did not stall advancement at seq=1).
+	idem, err := a.OnAck(3, zeroBitmap())
 	if err != nil {
 		t.Fatalf("idempotent OnAck(3): unexpected error: %v", err)
 	}
-	if len(frames4) != 0 {
-		t.Errorf("idempotent OnAck(3): want 0 frames, got %d", len(frames4))
+	if len(idem) != 0 {
+		t.Errorf("idempotent OnAck(3): want 0 frames, got %d", len(idem))
 	}
 
-	// No degradation events should have been emitted.
+	// No degradation events: absent seq=2 is not a loss event on the sender side
+	// (invariant 4 — the cumulative ACK proves remote receipt).
+	assertNoPendingDeg(t, a.DegradationEvents)
+}
+
+// TestARQ_OnAck_SACKWithoutCumulativeAdvance_RecoversOnNextCumulativeAck pins
+// the Step-3 flush-guard caller-contract and eventual-recovery behaviour
+// (arq.go ~line 238: `if ackSeq > prevNextExpected`).
+//
+// The flush guard requires the cumulative ACK to have advanced before it will
+// deliver frames buffered by the SACK bitmap in Step 2. This documents the
+// guard's assumption: conformant callers always advance the cumulative ACK
+// when a gap fills. A non-conformant SACK-only call (cumulative not advanced)
+// holds the buffered frame rather than delivering it immediately — eventual
+// recovery occurs on the next cumulative advance.
+//
+// This is a characterisation test: it pins already-conformant behaviour.
+// If it fails, the Step-3 guard has regressed (frames delivered prematurely
+// before cumulative advance, or permanently lost on eventual recovery).
+//
+// Scenario:
+//  1. EnqueueSend seq=1 and seq=2.
+//  2. OnAck(0, sack={bit-0 set}) — cumulative=0 (no advance), SACK marks seq=1
+//     as received out-of-order. Step 2 buffers seq=1 in reorderBuf. Step 3
+//     guard fires: ackSeq(0) == prevNextExpected(0), so flush is skipped.
+//     Assert: 0 frames delivered.
+//  3. OnAck(1, zeroBitmap) — cumulative advances to 1. Step 1 delivers seq=1
+//     from reorderBuf (payloadFor finds it there). Step 3 flush: tries seq=2,
+//     not in reorderBuf → stops. Assert: [frame-1] delivered (in order).
+//
+// Note: step 2 uses sack bit-0 which covers ackSeq+1 = 0+1 = 1.
+func TestARQ_OnAck_SACKWithoutCumulativeAdvance_RecoversOnNextCumulativeAck(t *testing.T) {
+	t.Parallel()
+
+	a := newTestARQ(500 * time.Millisecond)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	a.EnqueueSend(1, []byte("frame-1"), now)
+	a.EnqueueSend(2, []byte("frame-2"), now)
+
+	// Step 1: SACK-only call — cumulative ACK stays at 0, SACK bit-0 marks seq=1
+	// as received. The flush guard (ackSeq == prevNextExpected == 0) prevents
+	// delivery even though seq=1 is now in reorderBuf.
+	sackSeq1 := bitmapWithBits(0) // bit 0 → ackSeq+1+0 = 0+1 = 1
+	held, err := a.OnAck(0, sackSeq1)
+	if err != nil {
+		t.Fatalf("SACK-only OnAck(0): unexpected error: %v", err)
+	}
+	if len(held) != 0 {
+		t.Errorf("SACK-only OnAck(0): want 0 frames (flush guard active), got %d: %v", len(held), held)
+	}
+
+	// Step 2: cumulative ACK advances to 1. Step 1 loop visits seq=1:
+	// payloadFor(1) finds it in reorderBuf (buffered by the prior SACK), delivers
+	// it, and advances nextExpected=1. Step 3 tries seq=2 (not in reorderBuf),
+	// stops. Frame-1 is recovered in order — no permanent loss.
+	recovered, err := a.OnAck(1, zeroBitmap())
+	if err != nil {
+		t.Fatalf("cumulative OnAck(1): unexpected error: %v", err)
+	}
+	if len(recovered) != 1 {
+		t.Fatalf("cumulative OnAck(1): want 1 frame (frame-1), got %d: %v", len(recovered), recovered)
+	}
+	if string(recovered[0]) != "frame-1" {
+		t.Errorf("cumulative OnAck(1): want %q, got %q", "frame-1", string(recovered[0]))
+	}
+
+	// No degradation events: the held-then-recovered frame is not a loss event.
 	assertNoPendingDeg(t, a.DegradationEvents)
 }
 
