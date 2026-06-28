@@ -40,3 +40,8 @@ Thumbs.db
 /bin/
 /dist/
 .beads
+
+# Factory worktree and feature worktrees (never commit these gitlinks)
+.factory
+.factory/
+.worktrees/
