@@ -11,6 +11,9 @@
 //	TestARQ_SACKInChannelHeader         (AC-003, BC-2.02.005 postcondition 3, ARCH-02)
 //	TestARQ_TLPKTDROP_TerminatesOverdueFrame (AC-004, BC-2.02.006 postconditions 1/2)
 //	TestARQ_TLPKTDROP_OnlyOverdueFrames (AC-005, BC-2.02.006 postcondition 2)
+//
+// ARQ is single-writer per half-channel; concurrent-use claims have been
+// removed and no concurrent-OnAck tests are included.
 package arq_test
 
 import (
@@ -140,6 +143,7 @@ func buildChannelHeader(channelID, seq uint32, flags byte, sack [arq.SACKBitmapB
 // a frame acknowledged once is never delivered a second time.
 //
 // Exercises VP-019 (no double delivery).
+// Idempotent ACK returns nil exactly (M-1 ruling: ErrDuplicateSequence removed).
 func TestARQ_OnAck_NoDuplicateDelivery(t *testing.T) {
 	t.Parallel()
 
@@ -155,22 +159,20 @@ func TestARQ_OnAck_NoDuplicateDelivery(t *testing.T) {
 	}
 	_ = mustDrainOne(t, a.DeliveredFrames)
 
-	// Second OnAck for same sequence — must be idempotent per EC-001;
-	// no frame must be delivered again (would be a double-delivery).
+	// Second OnAck for same sequence — must return nil exactly (idempotent per
+	// EC-001; ErrDuplicateSequence sentinel is being removed by implementer).
 	if err := a.OnAck(1, zeroBitmap()); err != nil {
-		// ErrDuplicateSequence is an acceptable explicit signal; nil is also
-		// acceptable (silent idempotent). Either is correct per BC.
-		if !errors.Is(err, arq.ErrDuplicateSequence) {
-			t.Fatalf("second OnAck(1): unexpected error %v (want nil or ErrDuplicateSequence)", err)
-		}
+		t.Fatalf("second OnAck(1): want nil, got %v", err)
 	}
 	// Crucially: no additional frame must have been delivered.
 	assertNoPending(t, a.DeliveredFrames)
 }
 
 // TestBC_2_02_005_EC001_IdempotentAck verifies EC-001: ACKing an already-acked
-// sequence is idempotent and returns no error (or ErrDuplicateSequence — both
-// are compliant, but must never double-deliver).
+// sequence is idempotent and returns nil — not an error, and never double-delivers.
+//
+// M-1 ruling: idempotent ACK returns nil exactly. The ErrDuplicateSequence
+// sentinel is being removed; accepting it here would be tautological.
 func TestBC_2_02_005_EC001_IdempotentAck(t *testing.T) {
 	t.Parallel()
 
@@ -183,10 +185,9 @@ func TestBC_2_02_005_EC001_IdempotentAck(t *testing.T) {
 	}
 	_ = mustDrainOne(t, a.DeliveredFrames)
 
-	// Re-ACK same seq — must not panic, must not double-deliver.
-	err := a.OnAck(5, zeroBitmap())
-	if err != nil && !errors.Is(err, arq.ErrDuplicateSequence) {
-		t.Fatalf("idempotent OnAck(5) unexpected error: %v", err)
+	// Re-ACK same seq — must return nil exactly; must not double-deliver.
+	if err := a.OnAck(5, zeroBitmap()); err != nil {
+		t.Fatalf("idempotent OnAck(5): want nil, got %v", err)
 	}
 	assertNoPending(t, a.DeliveredFrames)
 }
@@ -352,10 +353,11 @@ func TestARQ_SACKInChannelHeader(t *testing.T) {
 	}
 }
 
-// TestBC_2_02_005_SACKNotInOuterHeader confirms that SACKFromChannelHeader only
-// reads the channel-header slice; it cannot accidentally read SACK data from
-// the outer header payload area (ARCH-02 F-P8-007 fix).
-func TestBC_2_02_005_SACKNotInOuterHeader(t *testing.T) {
+// TestBC_2_02_005_SACK_TruncatedHeaderErrors confirms that SACKFromChannelHeader
+// returns an error when the channel header claims SACK_present but the slice is
+// too short to contain the 8-byte SACK field (ARCH-02 F-P8-007 fix). It only
+// reads the slice passed to it — not any outer header payload area.
+func TestBC_2_02_005_SACK_TruncatedHeaderErrors(t *testing.T) {
 	t.Parallel()
 
 	const sackPresentFlag = byte(0x04)
@@ -463,6 +465,71 @@ func TestBC_2_02_006_TLPKTDROP_SessionContinues(t *testing.T) {
 	}
 }
 
+// ─── C-1: TLPKTDROP must not abandon lower undelivered frames ─────────────────
+
+// TestARQ_TLPKTDROP_DoesNotAbandonLowerFrames is a regression test for C-1:
+// TLPKTDROP on seq=3 must abandon ONLY seq=3. Frames 1 and 2 (already
+// in-flight and later ACKed) must still be delivered in order.
+//
+// The current impl advances nextExpected to overdueSeq unconditionally, which
+// leapfrogs 1 and 2 — causing them to be silently skipped on OnAck. This test
+// FAILS against the current implementation (Red Gate) and passes after the
+// implementer fixes nextExpected to advance only when overdueSeq == nextExpected+1.
+//
+// BC-2.02.006 postcondition 5: "only the overdue frame's content is abandoned."
+func TestARQ_TLPKTDROP_DoesNotAbandonLowerFrames(t *testing.T) {
+	t.Parallel()
+
+	const dropTimeout = 200 * time.Millisecond
+	a := newTestARQ(dropTimeout)
+
+	sendTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Enqueue three frames with the same send time.
+	// All three share the same deadline (sendTime + dropTimeout).
+	a.EnqueueSend(1, []byte("frame-1"), sendTime)
+	a.EnqueueSend(2, []byte("frame-2"), sendTime)
+	a.EnqueueSend(3, []byte("frame-3"), sendTime)
+
+	// Advance time past the deadline for ALL three, but we will only drop seq=3.
+	// The test requires that only seq=3 is abandoned; frames 1 and 2 survive.
+	pastDeadline := sendTime.Add(dropTimeout + time.Millisecond)
+
+	// Drop only seq=3 (e.g. the access node drops only the highest overdue seq).
+	if err := a.TLPKTDROP(3, pastDeadline); err != nil {
+		t.Fatalf("TLPKTDROP(3): unexpected error: %v", err)
+	}
+
+	// Exactly one DegradationEvent for seq=3.
+	ev := mustDrainOneDeg(t, a.DegradationEvents)
+	if ev.DroppedSeq != 3 {
+		t.Errorf("DegradationEvent.DroppedSeq: want 3, got %d", ev.DroppedSeq)
+	}
+	assertNoPendingDeg(t, a.DegradationEvents)
+
+	// Now ACK frames 1 and 2 — they must be delivered in order.
+	// If nextExpected was wrongly leapfrogged to 3, OnAck(1) and OnAck(2) will
+	// not produce any delivery (the bug this test catches).
+	if err := a.OnAck(1, zeroBitmap()); err != nil {
+		t.Fatalf("OnAck(1) after TLPKTDROP(3): %v", err)
+	}
+	got1 := mustDrainOne(t, a.DeliveredFrames)
+	if string(got1) != "frame-1" {
+		t.Errorf("frame 1: want %q, got %q", "frame-1", got1)
+	}
+
+	if err := a.OnAck(2, zeroBitmap()); err != nil {
+		t.Fatalf("OnAck(2) after TLPKTDROP(3): %v", err)
+	}
+	got2 := mustDrainOne(t, a.DeliveredFrames)
+	if string(got2) != "frame-2" {
+		t.Errorf("frame 2: want %q, got %q", "frame-2", got2)
+	}
+
+	// No additional frames should be pending (seq=3 was dropped).
+	assertNoPending(t, a.DeliveredFrames)
+}
+
 // ─── AC-005: TLPKTDROP only for overdue frames ────────────────────────────────
 
 // TestARQ_TLPKTDROP_OnlyOverdueFrames verifies BC-2.02.006 postcondition 2:
@@ -563,46 +630,124 @@ func TestBC_2_02_006_OnlyOverdue_TableDriven(t *testing.T) {
 	}
 }
 
-// ─── EC-002: SACK bitmap gaps spanning whole window ──────────────────────────
+// ─── H-1: gap detection via GapsToRetransmit ─────────────────────────────────
 
-// TestBC_2_02_005_EC002_SACKWholeWindowGap tests EC-002: when the SACK bitmap
-// indicates gaps spanning the entire window, the ARQ state reflects all
-// unacknowledged frames as missing (available for retransmit).
+// TestBC_2_02_005_EC002_SACKWholeWindowGap tests BC-2.02.005 postcondition 2
+// and EC-002 (retransmits all unacknowledged frames in window) via the pure
+// gap-detection method GapsToRetransmit.
 //
-// This test verifies that OnAck with an all-zero SACK (no out-of-order frames
-// received) and a cumulative ACK at seq=0 correctly represents a fully-gapped
-// window — nothing has been received, nothing is buffered as received.
+// GapsToRetransmit(ackSeq, sackBitmap) returns the in-flight seqs that are
+// unacknowledged (not cumulatively ACKed and not marked received in the SACK
+// bitmap), in ascending order. The actual retransmit-send is deferred to the
+// router-wiring story; this test covers only the pure detection result.
+//
+// NOTE: these tests will NOT COMPILE until the implementer adds:
+//
+//	func (a *ARQ) GapsToRetransmit(ackSeq uint32, sackBitmap [8]byte) []uint32
+//
+// That is the expected Red Gate state.
 func TestBC_2_02_005_EC002_SACKWholeWindowGap(t *testing.T) {
 	t.Parallel()
 
-	// Enqueue 64 frames (full 64-bit SACK window).
-	const windowSize = 64
 	a := newTestARQ(500 * time.Millisecond)
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	for i := uint32(1); i <= windowSize; i++ {
+	// Enqueue 5 frames covering the window.
+	for i := uint32(1); i <= 5; i++ {
 		a.EnqueueSend(i, []byte("data"), now)
 	}
 
-	// all-zero SACK with ackSeq=0 means: nothing received (all 64 are gaps).
-	allGaps := zeroBitmap()
-	if err := a.OnAck(0, allGaps); err != nil {
-		t.Fatalf("OnAck(0, allZero): %v", err)
+	// All-zero SACK with ackSeq=0: none received out-of-order; nothing
+	// cumulatively ACKed. All 5 in-flight seqs are gaps.
+	gaps := a.GapsToRetransmit(0, zeroBitmap())
+	if len(gaps) != 5 {
+		t.Fatalf("GapsToRetransmit(0, allZero): want 5 gaps, got %d: %v", len(gaps), gaps)
 	}
-	// Nothing should be delivered — all frames are gaps.
-	assertNoPending(t, a.DeliveredFrames)
-
-	// Now simulate all 64 frames arriving via retransmit: cumulative ACK up.
-	// OnAck(64) with zero SACK — all frames in window received in order.
-	// This is the "retransmit all" recovery path. The implementation must
-	// deliver all 64 frames.
-	for i := uint32(1); i <= windowSize; i++ {
-		if err := a.OnAck(i, zeroBitmap()); err != nil {
-			t.Fatalf("OnAck(%d): %v", i, err)
+	for i, g := range gaps {
+		if g != uint32(i+1) {
+			t.Errorf("gap[%d]: want %d, got %d", i, i+1, g)
 		}
-		_ = mustDrainOne(t, a.DeliveredFrames)
 	}
-	assertNoPending(t, a.DeliveredFrames)
+}
+
+// TestBC_2_02_005_GapsToRetransmit_SACKExcludesSomeSeqs verifies that seqs
+// marked as received in the SACK bitmap are excluded from the gap list.
+//
+// BC-2.02.005 PC2: gap detection must respect the SACK bitmap to avoid
+// retransmitting frames the receiver already has.
+//
+// NOTE: will not compile until GapsToRetransmit is added (Red Gate).
+func TestBC_2_02_005_GapsToRetransmit_SACKExcludesSomeSeqs(t *testing.T) {
+	t.Parallel()
+
+	a := newTestARQ(500 * time.Millisecond)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Enqueue seqs 1..4.
+	for i := uint32(1); i <= 4; i++ {
+		a.EnqueueSend(i, []byte("data"), now)
+	}
+
+	// ackSeq=1 (cumulatively received through 1); SACK marks seq=3 received
+	// out-of-order (bit 1 above ackSeq+1=2 → seq=3).
+	// In-flight: 1,2,3,4. After ackSeq=1: 1 is cumulatively ACKed.
+	// SACK bit 1 = seq 3 received. Gap: seq=2 (and seq=4, outside SACK window).
+	// Expected gaps: [2, 4] — seq 1 is cumulatively ACKed, seq 3 is in SACK.
+	sack := bitmapWithBits(1) // bit 1 = seq 3 (ackSeq+1+1 = 3)
+	gaps := a.GapsToRetransmit(1, sack)
+
+	// seq 1 is cumulatively ACKed — not a gap.
+	// seq 3 is in SACK bitmap — not a gap.
+	// seq 2 and seq 4 are missing — gaps.
+	wantGaps := []uint32{2, 4}
+	if len(gaps) != len(wantGaps) {
+		t.Fatalf("GapsToRetransmit(1, sack={seq3}): want %v, got %v", wantGaps, gaps)
+	}
+	for i, g := range gaps {
+		if g != wantGaps[i] {
+			t.Errorf("gap[%d]: want %d, got %d", i, wantGaps[i], g)
+		}
+	}
+}
+
+// TestBC_2_02_005_GapsToRetransmit_AllSACKed verifies that when all in-flight
+// seqs above ackSeq are covered by the SACK bitmap, GapsToRetransmit returns
+// an empty slice (nothing to retransmit).
+//
+// NOTE: will not compile until GapsToRetransmit is added (Red Gate).
+func TestBC_2_02_005_GapsToRetransmit_AllSACKed(t *testing.T) {
+	t.Parallel()
+
+	a := newTestARQ(500 * time.Millisecond)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Enqueue seqs 1..3.
+	for i := uint32(1); i <= 3; i++ {
+		a.EnqueueSend(i, []byte("data"), now)
+	}
+
+	// ackSeq=0; SACK marks all three as received out-of-order:
+	// bit 0 = seq 1, bit 1 = seq 2, bit 2 = seq 3.
+	sack := bitmapWithBits(0, 1, 2)
+	gaps := a.GapsToRetransmit(0, sack)
+	if len(gaps) != 0 {
+		t.Errorf("GapsToRetransmit with all seqs in SACK: want [], got %v", gaps)
+	}
+}
+
+// TestBC_2_02_005_GapsToRetransmit_EmptyInFlight verifies that
+// GapsToRetransmit returns an empty slice when no frames are in flight.
+//
+// NOTE: will not compile until GapsToRetransmit is added (Red Gate).
+func TestBC_2_02_005_GapsToRetransmit_EmptyInFlight(t *testing.T) {
+	t.Parallel()
+
+	a := newTestARQ(500 * time.Millisecond)
+
+	gaps := a.GapsToRetransmit(0, zeroBitmap())
+	if len(gaps) != 0 {
+		t.Errorf("GapsToRetransmit on empty ARQ: want [], got %v", gaps)
+	}
 }
 
 // ─── EC-003: TLPKTDROP during failover ────────────────────────────────────────
@@ -883,6 +1028,83 @@ func TestBC_2_02_005_VP019_VP020_LargeScale(t *testing.T) {
 				t.Errorf("trial %d: seq %d delivered %d times", trial, seq, seen[seq])
 			}
 		}
+	}
+}
+
+// ─── O-3: reorderBuf/inFlight must not grow unbounded ─────────────────────────
+
+// TestARQ_ReorderBuf_BoundedByWindow verifies that the reorder buffer and
+// in-flight map do not grow unbounded when a stream of far-future out-of-order
+// frames beyond the configured window are submitted.
+//
+// BC-2.02.005 invariant: frames outside the ARQ window are not retained.
+// The SACK bitmap covers exactly 64 positions above ackSeq — frames at
+// position >= 64 are outside the window.
+//
+// This test FAILS against the current implementation (Red Gate): the current
+// impl stores every SACK-bitmap entry without a window bound, and OnAck with
+// a SACK that has seqs far beyond the window will grow reorderBuf indefinitely.
+// After the implementer adds window bounding, only seqs within [ackSeq+1,
+// ackSeq+64] are retained.
+//
+// Observable behavior: after streaming N >> 64 far-future seqs via SACK and
+// then ACKing them cumulatively, the delivered count must equal exactly the
+// window size (64), not N. Frames beyond the window are silently discarded.
+func TestARQ_ReorderBuf_BoundedByWindow(t *testing.T) {
+	t.Parallel()
+
+	// Use a window of 64 (one full SACK bitmap worth).
+	// EnqueueSend far beyond the window to create unbounded-growth pressure.
+	const windowSize = 64
+	const farBeyond = 200 // enqueue seqs 1..200; only 1..64 are in-window
+
+	a := newTestARQ(500 * time.Millisecond)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Enqueue all 200 frames in-flight so GapsToRetransmit would find them.
+	for i := uint32(1); i <= farBeyond; i++ {
+		a.EnqueueSend(i, []byte{byte(i % 256)}, now)
+	}
+
+	// Submit OnAck(0) with a SACK bitmap that marks seqs 1..64 all received
+	// out-of-order (all 64 bits set). Seqs 65..200 are in inFlight but outside
+	// the SACK window — they must not be buffered in reorderBuf.
+	allBitsSet := func() [arq.SACKBitmapBytes]byte {
+		var b [arq.SACKBitmapBytes]byte
+		for i := range b {
+			b[i] = 0xFF
+		}
+		return b
+	}()
+	if err := a.OnAck(0, allBitsSet); err != nil {
+		t.Fatalf("OnAck(0, allBitsSet): %v", err)
+	}
+
+	// Nothing is delivered yet — nextExpected is still 0, and the first seq (1)
+	// is now in reorderBuf (it was in the SACK window).
+	// Now ACK seq 0→64 cumulatively to flush the window.
+	// Deliver the 64 in-window frames one by one.
+	if err := a.OnAck(1, zeroBitmap()); err != nil {
+		t.Fatalf("OnAck(1): %v", err)
+	}
+	// seq 1 flushes, then the consecutive reorderBuf entries flush through 64.
+	var deliveredCount int
+drainWindow:
+	for {
+		select {
+		case <-a.DeliveredFrames:
+			deliveredCount++
+		case <-time.After(20 * time.Millisecond):
+			break drainWindow
+		}
+	}
+
+	// Exactly windowSize (64) frames should have been delivered.
+	// If the implementation stored seqs 65..200 in reorderBuf they would also
+	// flush here — that would be the unbounded-growth bug this test catches.
+	if deliveredCount != windowSize {
+		t.Errorf("expected %d delivered (window-bounded), got %d — possible unbounded reorderBuf growth",
+			windowSize, deliveredCount)
 	}
 }
 
