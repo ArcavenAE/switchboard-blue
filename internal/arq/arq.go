@@ -55,10 +55,20 @@ const channelHeaderSACKLen = 20
 // (ARCH-02 §3.2: flags byte at offset 8, bit 2).
 const sackPresentMask = byte(0x04)
 
-// sackWindowSize is the number of sequence positions covered by the SACK
+// SackWindowSize is the number of sequence positions covered by the SACK
 // bitmap (64 bits = 64 positions above ackSeq). Frames outside this window
 // are not retained in reorderBuf (BC-2.02.005 precondition 3).
-const sackWindowSize = 64
+const SackWindowSize = 64
+
+// sackWindowSize is the package-internal alias for SackWindowSize.
+const sackWindowSize = SackWindowSize
+
+// ErrAckOutOfWindow is returned by OnAck when the cumulative ACK sequence
+// number falls outside the valid window: ackSeq must satisfy
+// ackSeq - nextExpected <= sackWindowSize (64). An out-of-window ackSeq is
+// a protocol-illegal frame; the caller should log and discard it.
+// Traces to: BC-2.02.005 PC-3, EC-004; RULING-003.
+var ErrAckOutOfWindow = fmt.Errorf("arq: cumulative ACK out of window")
 
 // ErrSequenceNotInFlight is returned by TLPKTDROP when the supplied sequence
 // number is not present in the retransmit queue — either it was already
@@ -197,6 +207,19 @@ func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) ([][]byte, 
 	// frames buffered in Step 2 would be immediately flushed in Step 3 even when
 	// no cumulative progress occurred (e.g. OnAck(0, allBitsSet)).
 	prevNextExpected := a.nextExpected
+
+	// Validate ackSeq is within one ARQ window of nextExpected.
+	// ackSeq is wire-derived (peer/attacker-controlled). A legal cumulative ACK
+	// advances at most sackWindowSize (64) positions. An out-of-window value
+	// would drive the Step-1 loop for up to 2^32 iterations — a per-frame DoS.
+	// Reject without iterating (RULING-003; BC-2.02.005 PC-3, EC-004).
+	//
+	// The subtraction is unsigned: if ackSeq < nextExpected the result wraps to
+	// a large uint32 (> sackWindowSize), so the guard also correctly rejects
+	// stale (already-ACKed) values without a separate comparison.
+	if ackSeq-a.nextExpected > sackWindowSize {
+		return nil, ErrAckOutOfWindow
+	}
 
 	// Step 1: deliver all frames from nextExpected+1 through ackSeq in order.
 	// Frames with no known payload (not in inFlight or reorderBuf) are skipped
@@ -431,6 +454,28 @@ func (a *ARQ) GapsToRetransmit(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) 
 // Uses math/bits.OnesCount64 via encoding/binary for a one-line body.
 func SACKPopCount(bitmap [SACKBitmapBytes]byte) int {
 	return bits.OnesCount64(bitmapToUint64(bitmap))
+}
+
+// SetNextExpected sets the cumulative delivery pointer directly. This method
+// exists to support tests that need to construct ARQ state without driving
+// the state machine through a full sequence of ACKs (RULING-003 red-gate tests).
+func (a *ARQ) SetNextExpected(seq uint32) {
+	a.nextExpected = seq
+}
+
+// NextExpected returns the current cumulative delivery pointer. Used by tests
+// to assert that OnAck does not mutate state on an out-of-window rejection
+// (RULING-003; BC-2.02.005 PC-3).
+func (a *ARQ) NextExpected() uint32 {
+	return a.nextExpected
+}
+
+// InFlightContains reports whether seq is present in the sender's retransmit
+// queue. Used by tests to assert that out-of-window rejection leaves inFlight
+// unmodified (RULING-003; BC-2.02.005 PC-3).
+func (a *ARQ) InFlightContains(seq uint32) bool {
+	_, ok := a.inFlight[seq]
+	return ok
 }
 
 // bitmapToUint64 converts the 8-byte big-endian SACK bitmap to a uint64.
