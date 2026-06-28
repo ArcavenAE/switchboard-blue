@@ -121,6 +121,41 @@ func (c *DropCache) Len() int {
 	return c.lru.Len()
 }
 
+// AddIfAbsent atomically inserts the compound key (checksum, arrivalInterfaceID)
+// into the cache if it is not already present, and reports whether the key was
+// newly added (i.e., this is the first arrival). The check and insert are
+// performed under a single lock acquisition, eliminating the Contains-then-Add
+// TOCTOU window (F-005 / BC-2.02.002 invariant 1).
+//
+// Returns true when the frame is a first-arrival (caller should deliver).
+// Returns false when the frame is a duplicate (caller should discard).
+func (c *DropCache) AddIfAbsent(checksum uint32, arrivalInterfaceID uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := dropKey{checksum, arrivalInterfaceID}
+
+	if elem, ok := c.index[key]; ok {
+		// Already present: move to front (LRU refresh) and report duplicate.
+		c.lru.MoveToFront(elem)
+		return false
+	}
+
+	// Evict LRU entry if at capacity.
+	if c.lru.Len() >= c.capacity {
+		oldest := c.lru.Back()
+		if oldest != nil {
+			c.lru.Remove(oldest)
+			delete(c.index, oldest.Value.(dropEntry).key)
+		}
+	}
+
+	// Insert new entry at front.
+	elem := c.lru.PushFront(dropEntry{key: key})
+	c.index[key] = elem
+	return true
+}
+
 // SendResult describes the dispatch outcome for a single path when Multipath.Send
 // is called.
 type SendResult struct {
@@ -137,13 +172,20 @@ type SendResult struct {
 type SendFunc func(pathID uint64, f Frame) error
 
 // Multipath orchestrates duplicate-and-race dispatch and receiver-side
-// deduplication. It holds the active set of ranked paths and a DropCache.
+// deduplication. It holds the active set of ranked paths and two drop caches:
+//
+//   - dropCache: router-level loop-duplicate suppression, keyed on
+//     (checksum, arrival_interface_id) (BC-2.02.009).
+//   - recvDedup: endpoint-level first-arrival dedup, keyed on checksum alone
+//     (BC-2.02.002 / DI-009). Implemented as a DropCache with a fixed zero
+//     interface ID so the compound key collapses to checksum-only.
 //
 // Zero value is not usable; construct via NewMultipath.
 type Multipath struct {
 	mu        sync.Mutex
 	pathSet   []paths.RankedPath
 	dropCache *DropCache
+	recvDedup *DropCache
 }
 
 // NewMultipath constructs a Multipath dispatcher with the provided initial
@@ -155,6 +197,7 @@ func NewMultipath(pathSet []paths.RankedPath, dropCacheCapacity int) *Multipath 
 	return &Multipath{
 		pathSet:   cloned,
 		dropCache: NewDropCache(dropCacheCapacity),
+		recvDedup: NewDropCache(dropCacheCapacity),
 	}
 }
 
@@ -215,23 +258,31 @@ func frameChecksum(f Frame) uint32 {
 	return h.Sum32()
 }
 
-// Receive deduplicates an arriving frame using the drop cache. It computes
-// the CRC32 checksum of (outerHeader || payload) and looks up the compound
-// key (checksum, arrivalInterfaceID).
+// Receive deduplicates an arriving frame at the endpoint layer. It computes
+// the CRC32 checksum of (outerHeader || payload) and performs an atomic
+// check-and-insert on the endpoint dedup cache keyed by checksum alone
+// (BC-2.02.002 / DI-009 / F-002).
 //
-// On cache miss: the key is added to the drop cache; nil is returned — the
-// caller should deliver f to the application layer (BC-2.02.002 postcondition 1).
+// Endpoint dedup is checksum-only: a duplicate copy of the same frame arriving
+// on a different interface is still suppressed (DI-009 first-arrival-wins).
+// The arrival interface is NOT part of the endpoint dedup key; it is only used
+// at the router level (BC-2.02.009 / dropCache).
 //
-// On cache hit: ErrDuplicate is returned and the frame must be silently
+// The check and insert are performed under a single lock acquisition to
+// eliminate the Contains-then-Add TOCTOU race (F-005 / BC-2.02.002 invariant 1).
+//
+// On first arrival: nil is returned — the caller should deliver f to the
+// application layer (BC-2.02.002 postcondition 1).
+//
+// On duplicate: ErrDuplicate is returned and the frame must be silently
 // discarded without ACK side-effects (BC-2.02.002 postcondition 2, AC-004,
 // AC-005).
-func (m *Multipath) Receive(f Frame, arrivalInterfaceID uint64) error {
+func (m *Multipath) Receive(f Frame, _ uint64) error {
 	checksum := frameChecksum(f)
-
-	if m.dropCache.Contains(checksum, arrivalInterfaceID) {
+	// recvDedup uses a fixed zero interface ID so the compound key collapses to
+	// checksum-only semantics (F-002). AddIfAbsent is atomic (F-005).
+	if !m.recvDedup.AddIfAbsent(checksum, 0) {
 		return ErrDuplicate
 	}
-
-	m.dropCache.Add(checksum, arrivalInterfaceID)
 	return nil
 }
