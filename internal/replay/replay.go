@@ -80,18 +80,22 @@ func New(windowSize uint32, deliver DeliverFunc) *Replay {
 
 // OnUpstream processes one incoming upstream frame from the network layer.
 //
-//   - If frame.Seq is 0 (the unset/invalid sentinel), the frame is silently
-//     discarded and nil is returned.
-//   - If frame.Seq has already been delivered (within the current window),
-//     returns ErrAlreadyDelivered without calling deliver.
-//   - If frame.Seq is older than the window (seq < nextSeq - windowSize),
-//     the frame is silently discarded and nil is returned.
-//   - If frame.Seq is the next expected sequence number, deliver is called
-//     immediately; then any buffered in-order successors are drained.
-//   - If frame.Seq is ahead but within the window [nextSeq+1, nextSeq+windowSize-1],
-//     the frame is held in the pending buffer until its predecessors arrive.
-//   - If frame.Seq is beyond the window (seq >= nextSeq + windowSize),
-//     the frame is silently discarded and nil is returned (BC-2.02.004 invariant 3).
+// Frame classification uses a wrap-safe forward distance: dist = seq - nextSeq
+// (uint32 modular subtraction). The four cases in delivery order are:
+//
+//   - If frame.Seq is 0 (the reserved sentinel per RULING-001), the frame is
+//     silently discarded and nil is returned. Senders MUST skip 0 on wrap.
+//   - If frame.Seq is already in the seen set, returns ErrAlreadyDelivered
+//     without calling deliver.
+//   - If dist == 0 (seq == nextSeq), deliver is called immediately; then any
+//     buffered in-order successors are drained.
+//   - If 0 < dist < windowSize, the frame is in the forward window: it is
+//     held in the pending buffer until its predecessors arrive.
+//   - If dist >= windowSize, the frame is out-of-window and silently discarded
+//     (nil returned). This single branch covers both far-future frames (dist is
+//     a small integer > windowSize) and past/too-old frames (a sequence number
+//     behind nextSeq produces a large modular distance ≈ 2^32 − k, which
+//     exceeds any practical windowSize). BC-2.02.004 invariant 3.
 //
 // Returns ErrAlreadyDelivered on duplicate delivery; nil in all other cases.
 func (r *Replay) OnUpstream(f Frame) error {
