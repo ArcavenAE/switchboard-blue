@@ -39,6 +39,9 @@ wave_status:
     started_at: 2026-06-27
     stories: [S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
     points: 29
+    merged: [S-4.01, S-4.02, S-4.03]
+    adversary_converged: [S-4.04, S-6.01]
+    pending_delivery: [S-4.04, S-6.01]
 
 stories:
   - story_id: S-0.01
@@ -202,31 +205,43 @@ stories:
     title: "Upstream idempotent replay window"
     epic: E-4
     wave: 4
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
     points: 5
     bc_traces: [BC-2.02.004]
+    merge_sha: 95729c7
+    pr: 25
+    merged_at: "2026-06-28"
 
   - story_id: S-4.03
     title: "Downstream ARQ with piggybacked ACK/SACK and TLPKTDROP"
     epic: E-4
     wave: 4
-    status: pending
+    status: completed
     priority: P0
     scope_phase: E
     points: 8
     bc_traces: [BC-2.02.005, BC-2.02.006]
+    merge_sha: 8d9744f
+    pr: 26
+    merged_at: "2026-06-28"
 
   - story_id: S-4.04
     title: "Split-horizon loop prevention in internal/routing"
     epic: E-4
     wave: 4
-    status: pending
+    status: adversary-converged
+    adversary_streak: 3
+    adversary_converged: true
+    impl_sha: 24c4378
+    impl_branch: feat/S-4.04-split-horizon-drop-cache
+    acceptance_criteria_count: 7
     priority: P0
     scope_phase: E
     points: 5
-    bc_traces: [BC-2.02.008]
+    bc_traces: [BC-2.02.008, BC-2.02.009]
+    # pending: demo → push → PR → human-merge → cleanup
 
   - story_id: S-5.01
     title: "Green/yellow/red quality indicator with hysteresis"
@@ -252,11 +267,17 @@ stories:
     title: "Config parsing and validation with actionable startup errors"
     epic: E-6
     wave: 4
-    status: pending
+    status: adversary-converged
+    adversary_streak: 3
+    adversary_converged: true
+    impl_sha: 37d45fa
+    impl_branch: feat/S-6.01-config-validation
+    acceptance_criteria_count: 9
     priority: P0
     scope_phase: E
     points: 3
     bc_traces: [BC-2.09.003]
+    # pending: demo → push → PR → human-merge → cleanup
 
   - story_id: S-6.02
     title: "SVTN lifecycle and key management via sbctl admin"

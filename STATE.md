@@ -5,6 +5,16 @@ phase_step: wave-4-active
 phase_3_active_wave: 4
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03]
+s_4_04_adversary_streak: 3
+s_4_04_adversary_converged: true
+s_4_04_impl_sha: 24c4378
+s_4_04_impl_branch: feat/S-4.04-split-horizon-drop-cache
+s_4_04_status: adversary-converged
+s_6_01_adversary_streak: 3
+s_6_01_adversary_converged: true
+s_6_01_impl_sha: 37d45fa
+s_6_01_impl_branch: feat/S-6.01-config-validation
+s_6_01_status: adversary-converged
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 product: switchboard
@@ -86,7 +96,7 @@ s_4_03_demo_evidence: "5/5 ACs PASS, race-clean"
 s_4_03_ruling: "RULING-003 v1.1 — cycles/cycle-1/S-4.03/adversary/ackseq-dos-ruling.md; F-A-001 VP-052 mis-anchor fixed @ 02f317d (re-anchored to BC-2.02.005 SACK-accuracy / VP-019-020; story v1.1)"
 develop_head: 8d9744f
 open_prs: 0
-timestamp: 2026-06-28T23:30:00Z
+timestamp: 2026-06-28T23:59:00Z
 last_update: 2026-06-28
 ---
 
@@ -94,7 +104,7 @@ last_update: 2026-06-28
 
 ## Current State
 
-Wave 4 ACTIVE — 3/5 stories merged. S-4.01 MERGED (e415d31, #24). S-4.02 MERGED (95729c7, #25). S-4.03 MERGED (8d9744f, #26). develop HEAD = 8d9744f. 0 open PRs. Remaining Wave 4: S-4.04 (split-horizon + drop-cache router wiring, status pending) and S-6.01 (config validation, status pending). .gitignore .factory-protection regression found + fixed this session; recurrence note filed on vsdd-factory#263 (issuecomment-4825446246).
+Wave 4 ACTIVE — 3/5 stories merged; 2/5 adversary-converged awaiting delivery. S-4.01 MERGED (e415d31, #24). S-4.02 MERGED (95729c7, #25). S-4.03 MERGED (8d9744f, #26). S-4.04 ADVERSARY-CONVERGED (3/3 clean, HEAD 24c4378, branch feat/S-4.04-split-horizon-drop-cache). S-6.01 ADVERSARY-CONVERGED (3/3 clean, HEAD 37d45fa, branch feat/S-6.01-config-validation). develop HEAD = 8d9744f. 0 open PRs. Next: per-story delivery (demo → push → PR → human-merge gate → cleanup) for S-4.04 then S-6.01.
 
 ## Phase Progress
 
@@ -102,7 +112,7 @@ Wave 4 ACTIVE — 3/5 stories merged. S-4.01 MERGED (e415d31, #24). S-4.02 MERGE
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01/S-4.02/S-4.03 MERGED; S-4.04 + S-6.01 pending) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01/S-4.02/S-4.03 MERGED; S-4.04/S-6.01 not started |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01/S-4.02/S-4.03 MERGED; S-4.04/S-6.01 ADVERSARY-CONVERGED, pending delivery) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01/S-4.02/S-4.03 MERGED; S-4.04/S-6.01 3/3 CONVERGED |
 
 ## Wave / Story Status
 
@@ -113,8 +123,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | MERGED | #24 | e415d31 |
 | 4 | S-4.02 | Upstream replay (internal/replay) | MERGED | #25 | 95729c7 |
 | 4 | S-4.03 | Downstream ARQ + TLPKTDROP (internal/arq) | MERGED | #26 | 8d9744f |
-| 4 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | pending | — | — |
-| 4 | S-6.01 | Config parsing and validation | pending | — | — |
+| 4 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | ADVERSARY-CONVERGED | — | 24c4378 |
+| 4 | S-6.01 | Config parsing and validation | ADVERSARY-CONVERGED | — | 37d45fa |
 
 ## Open Drift Items
 
@@ -136,6 +146,15 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | DRIFT-S4.03-001 | MED | ADR-005 resync-on-reconnect wire-mechanics deferred to S-5.01. | architect/implementer | open deferred S-5.01 |
 | S403-COS1 | OBS | S-4.03 arq.go SACKPopCount doc comment stale ref to "encoding/binary" (uses package-local bitmapToUint64). | implementer | carry to S-4.04 or maintenance sweep (artifact merged at 8d9744f; cosmetic-only) |
 | S403-COS2 | OBS | S-4.03 arq_test.go:949 leftover "GREEN-BY-DESIGN per stub notes" docstring (now a real characterisation test). | implementer | carry to S-4.04 or maintenance sweep (artifact merged at 8d9744f; cosmetic-only) |
+| S601-NITPICK-A | NITPICK | S-6.01 story File Structure table omits cmd/switchboard/access.go though Task 17 mandates modifying it (doc completeness gap). | story-writer | cycle-close |
+| S601-NITPICK-B | NITPICK | S-6.01 story EC ids diverge from BC EC ids (e.g. keepalive story-EC-012 vs BC-EC-009) — cosmetic id drift. | story-writer | cycle-close |
+| S601-NITPICK-C | NITPICK | S-6.01 E-CFG-005 reused for non-regular/too-large files; E-CFG-004 reused for non-ErrNotExist open/stat/read errors — no dedicated BC code. | product-owner | cycle-close cosmetic |
+| S601-NITPICK-D | NITPICK | S-6.01 ValidationError.Error() inserts "value" token not present in BC canonical template (byte-level cosmetic). | implementer | cycle-close |
+| S601-NITPICK-E | OBS | S-6.01 yaml.v3 billion-laughs bound is implicit/library-version-dependent — optional decode-site comment suggested. | implementer | cycle-close optional |
+| S404-OBS-F | OBS | S-4.04 E-FWD-001 emission is per-event/not-rate-limited (unlike EC-005 sibling); LATENT CWE-779 only if production caller makes eligible-interface set attacker-steerable. Deferred cross-story. | architect/product-owner | re-confirm when production caller lands |
+| S404-OBS-G | OBS | S-4.04 BC-2.02.008 PC-4 (split-horizon/drop-cache independence) has no dedicated negative test — satisfied structurally. | test-writer | cycle-close |
+| BC-2.09.003-STALE | NITPICK | BC-2.09.003 traceability table + Story Anchor say "AC-001 through AC-006"; story now reaches AC-009. Needs refresh to AC-009. | story-writer/spec-steward | cycle-close |
+| S601-DRAFT-STORY | OBS | Dedicated SIGHUP/reload story (BC-2.09.003 Inv-3/EC-004) to be opened as draft. | product-owner | cycle-close |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -157,17 +176,23 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-4.03 F-A-001 VP-052 mis-anchor (NEW HIGH) | fresh confirm-round Pass A found VP-052 (belongs to S-5.01/internal/metrics) wrongly anchored to SACK pop-count; fixed @ 02f317d + story v1.1; re-confirmed 3/3 clean; PR #26 merge-ready | 2026-06-28 |
 | S-4.02 MERGED (95729c7, PR #25) | 4/4 ACs, 3/3 adversary clean; squash-merged into develop; CI all SUCCESS | 2026-06-28 |
 | S-4.03 MERGED (8d9744f, PR #26) | 5/5 ACs, 3/3 adversary clean; F-A-001 VP-052 fix included; squash-merged via auto-merge; CI all SUCCESS | 2026-06-28 |
+| S-4.04 ADVERSARY-CONVERGED (24c4378) | 7/7 ACs (AC-007 E-FWD-001 added v1.5); 3 consecutive 6-lens clean rounds (spec/BC↔AC; security/CWE; concurrency/race); BC-5.39.001 C=0 H=0 M=0. Pending demo/push/PR/merge. | 2026-06-28 |
+| S-6.01 ADVERSARY-CONVERGED (37d45fa) | 9/9 ACs; 3 consecutive 6-lens clean rounds; final fix 37d45fa (io.LimitReader + close TOCTOU, F-SEC-L1). All prior findings closed with regression tests. BC-5.39.001 NITPICK_ONLY. Pending demo/push/PR/merge. | 2026-06-28 |
 Older decisions (Wave 3 per-story): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-28 (Wave 4 — S-4.04 + S-6.01 next)
+## Session Resume Checkpoint — 2026-06-28 (Wave 4 — S-4.04 + S-6.01 delivery next)
 
-**Position:** Phase 3 Wave 4. S-4.01 MERGED (#24, e415d31). S-4.02 MERGED (#25, 95729c7). S-4.03 MERGED (#26, 8d9744f). develop HEAD = 8d9744f. 0 open PRs. Worktrees for S-4.02/S-4.03 cleaned up; branches deleted; worktree prune clean.
+**Position:** Phase 3 Wave 4. S-4.01 MERGED (#24, e415d31). S-4.02 MERGED (#25, 95729c7). S-4.03 MERGED (#26, 8d9744f). S-4.04 ADVERSARY-CONVERGED (3/3, HEAD 24c4378, branch feat/S-4.04-split-horizon-drop-cache). S-6.01 ADVERSARY-CONVERGED (3/3, HEAD 37d45fa, branch feat/S-6.01-config-validation). develop HEAD = 8d9744f. 0 open PRs.
 
-**NEXT ACTION on resume:** Deliver S-4.04 (split-horizon loop prevention + drop-cache router wiring, 5 pts, BC-2.02.008 + BC-2.02.009 router-side, depends on S-2.02 + S-4.01 — both merged) and S-6.01 (config parsing + validation, 3 pts, BC-2.09.003, no upstream deps). After both merged: run Wave 4 per-story adversarial passes, then Wave 4 integration gate + wave-gate.
+**NEXT ACTION on resume:** Per-story delivery for S-4.04 then S-6.01 (demo → push → PR → human-merge gate → worktree cleanup). After both merged: Wave 4 integration gate + wave-gate.
+
+**S-4.04 notes:** 7/7 ACs. AC-007 (E-FWD-001 emission on all-paths split-horizon drop, BC-2.02.008 PC-3) added v1.5 and fully traced/tested. Branch feat/S-4.04-split-horizon-drop-cache at 24c4378.
+
+**S-6.01 notes:** 9/9 ACs. Final fix 37d45fa (io.LimitReader + TOCTOU close, F-SEC-L1). Branch feat/S-6.01-config-validation at 37d45fa. Residual NITPICKs logged in Drift Items table (S601-NITPICK-A..E); all below re-open bar, deferred to cycle-close.
 
 **Settled rulings:** RULING-001/002/002-A1/003-v1.1 and F-A-001 (VP-052 re-anchored) — do NOT re-open unless a fresh pass finds a NEW Critical/High.
 
-**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4, DRIFT-S4.03-001, S403-COS1, S403-COS2 (see Drift Items table). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4, DRIFT-S4.03-001, S403-COS1, S403-COS2, S601-NITPICK-A..E, S404-OBS-F/G, BC-2.09.003-STALE, S601-DRAFT-STORY (see Drift Items table). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
