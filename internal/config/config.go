@@ -106,9 +106,10 @@ type Config struct {
 	// Required.
 	TickInterval time.Duration `yaml:"tick_interval"`
 
-	// UpstreamRouters lists upstream router addresses for PE mode.
+	// UpstreamRouters lists upstream router entries for PE mode.
 	// An empty slice means E mode (BC-2.09.001).
-	UpstreamRouters []string `yaml:"upstream_routers"`
+	// Each entry has an Addr field validated as host:port (BC-2.09.003 PC-6 / AC-006).
+	UpstreamRouters []UpstreamRouter `yaml:"upstream_routers"`
 
 	// DrainTimeout is the maximum time allowed for graceful drain (BC-2.09.002).
 	// Optional; defaults applied by the daemon, not by Validate.
@@ -117,6 +118,14 @@ type Config struct {
 	// KeepaliveInterval is the node keepalive cadence (FM-009).
 	// Optional; defaults applied by the daemon, not by Validate.
 	KeepaliveInterval time.Duration `yaml:"keepalive_interval"`
+}
+
+// UpstreamRouter is a single entry in the upstream_routers list.
+// Addr is the TCP address of the upstream router, validated as host:port
+// (BC-2.09.003 PC-6 / AC-006 / E-CFG-003).
+type UpstreamRouter struct {
+	// Addr is the TCP address of the upstream router, e.g. "10.0.0.1:9090".
+	Addr string `yaml:"addr"`
 }
 
 // TickIntervalMin is the lower bound of the valid tick_interval range (ADR-008).

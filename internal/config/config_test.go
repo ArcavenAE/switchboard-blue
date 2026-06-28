@@ -824,3 +824,458 @@ func TestLoadFile_ValidFixture_StrictDecode(t *testing.T) {
 	valErr := cfg.Validate()
 	requireNoError(t, valErr)
 }
+
+// ---- AC-005 / PC-5: listen_addr host:port format validation -----------------
+
+// TestConfigValidate_RejectsInvalidListenAddrFormat verifies that Validate()
+// rejects a listen_addr that is not a valid host:port with E-CFG-002.
+//
+// The error message must match the canonical E-CFG-002 format:
+//
+//	"config error: listen_addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '0.0.0.0:9090'"
+//
+// Specifically: the error must (a) carry E-CFG-001 (Validate wraps field errors in
+// E-CFG-001), (b) contain the prefix "config error: listen_addr:", (c) contain the
+// offending value verbatim, and (d) contain "is not a valid host:port".
+//
+// A valid host:port (e.g. "0.0.0.0:9090") with a valid tick_interval must pass.
+//
+// Traces: BC-2.09.003 postcondition 5, AC-005, EC-006, EC-007.
+func TestConfigValidate_RejectsInvalidListenAddrFormat(t *testing.T) {
+	t.Parallel()
+
+	invalidCases := []struct {
+		name       string
+		listenAddr string
+		wantInMsg  []string // fragments that must appear in error message
+	}{
+		{
+			// EC-006: missing port
+			name:       "missing_port",
+			listenAddr: "0.0.0.0",
+			wantInMsg:  []string{"config error: listen_addr:", "'0.0.0.0'", "is not a valid host:port"},
+		},
+		{
+			// EC-007: non-numeric port
+			name:       "non_numeric_port",
+			listenAddr: "0.0.0.0:notaport",
+			wantInMsg:  []string{"config error: listen_addr:", "'0.0.0.0:notaport'", "is not a valid host:port"},
+		},
+		{
+			// Bare hostname with no port
+			name:       "hostname_no_port",
+			listenAddr: "not-a-host-port",
+			wantInMsg:  []string{"config error: listen_addr:", "'not-a-host-port'", "is not a valid host:port"},
+		},
+		{
+			// Empty string is the "missing required field" case — already covered by
+			// AC-001/AC-002 but included here to confirm it is caught under the same
+			// E-CFG-001 umbrella (the exact sub-code / message varies by implementation).
+			name:       "empty_string",
+			listenAddr: "",
+			wantInMsg:  []string{"listen_addr"},
+		},
+	}
+
+	for _, tc := range invalidCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:   tc.listenAddr,
+				TickInterval: 10 * time.Millisecond,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+
+			// Must carry E-CFG-001 (Validate wraps field errors in E-CFG-001 envelope).
+			requireECFG001(t, err)
+
+			msg := err.Error()
+			for _, want := range tc.wantInMsg {
+				requireContains(t, msg, want)
+			}
+		})
+	}
+
+	// Valid host:port must pass validation (regression guard).
+	t.Run("valid_host_port_passes", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("valid_loopback_port_passes", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:   "127.0.0.1:8080",
+			TickInterval: 10 * time.Millisecond,
+		}
+		requireNoError(t, cfg.Validate())
+	})
+}
+
+// ---- AC-006 / PC-6: upstream_routers[N].addr host:port validation -----------
+
+// TestConfigValidate_RejectsInvalidUpstreamRouterAddr verifies that Validate()
+// rejects an upstream_routers entry whose addr is not a valid host:port with
+// E-CFG-003, naming the 0-based index N and the offending value.
+//
+// The error message must match the canonical E-CFG-003 format:
+//
+//	"config error: upstream_routers[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'"
+//
+// Traces: BC-2.09.003 postcondition 6, AC-006, EC-008.
+func TestConfigValidate_RejectsInvalidUpstreamRouterAddr(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name            string
+		upstreamRouters []config.UpstreamRouter
+		wantInMsg       []string // fragments that must appear in error message
+	}{
+		{
+			// Single invalid entry at index 0 (canonical test vector from BC).
+			name: "single_invalid_at_index_0",
+			upstreamRouters: []config.UpstreamRouter{
+				{Addr: "notvalid"},
+			},
+			wantInMsg: []string{
+				"config error: upstream_routers[0].addr:",
+				"'notvalid'",
+				"is not a valid host:port",
+			},
+		},
+		{
+			// EC-008: first valid, second invalid — must name index 1.
+			name: "first_valid_second_invalid_at_index_1",
+			upstreamRouters: []config.UpstreamRouter{
+				{Addr: "10.0.0.1:9090"},
+				{Addr: "badaddr"},
+			},
+			// Must name index 1 (0-based).
+			wantInMsg: []string{
+				"upstream_routers[1].addr",
+				"'badaddr'",
+				"is not a valid host:port",
+			},
+		},
+		{
+			// Missing port on an upstream addr.
+			name: "missing_port_on_upstream",
+			upstreamRouters: []config.UpstreamRouter{
+				{Addr: "10.0.0.1"},
+			},
+			wantInMsg: []string{
+				"upstream_routers[0].addr",
+				"'10.0.0.1'",
+				"is not a valid host:port",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:      "0.0.0.0:9090",
+				TickInterval:    10 * time.Millisecond,
+				UpstreamRouters: tc.upstreamRouters,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+
+			// Must carry E-CFG-001 (Validate wraps all field errors in E-CFG-001).
+			requireECFG001(t, err)
+
+			msg := err.Error()
+			for _, want := range tc.wantInMsg {
+				requireContains(t, msg, want)
+			}
+		})
+	}
+
+	// Valid upstream addr must pass (regression guard).
+	t.Run("valid_upstream_addr_passes", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+			UpstreamRouters: []config.UpstreamRouter{
+				{Addr: "10.0.0.1:9090"},
+				{Addr: "10.0.0.2:9091"},
+			},
+		}
+		requireNoError(t, cfg.Validate())
+	})
+}
+
+// ---- AC-007 / PC-7: drain_timeout must be positive -------------------------
+
+// TestConfigValidate_RejectsNonPositiveDrainTimeout verifies that Validate()
+// rejects drain_timeout <= 0 with E-CFG-006.
+//
+// The error message must match the canonical E-CFG-006 format:
+//
+//	"config error: drain_timeout: must be > 0; got '<value>'. Fix: set to a positive duration, e.g. '10s'"
+//
+// Traces: BC-2.09.003 postcondition 7, AC-007, EC-009.
+func TestConfigValidate_RejectsNonPositiveDrainTimeout(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		drainTimeout time.Duration
+		wantInMsg    []string // fragments that must appear in error message
+	}{
+		{
+			// EC-009: drain_timeout = 0s must be rejected.
+			name:         "zero_drain_timeout",
+			drainTimeout: 0,
+			wantInMsg:    []string{"config error: drain_timeout:", "must be > 0"},
+		},
+		{
+			// Negative drain_timeout must be rejected.
+			name:         "negative_drain_timeout",
+			drainTimeout: -1 * time.Second,
+			wantInMsg:    []string{"config error: drain_timeout:", "must be > 0"},
+		},
+		{
+			// Very small negative value.
+			name:         "negative_1ns",
+			drainTimeout: -1,
+			wantInMsg:    []string{"config error: drain_timeout:", "must be > 0"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:   "0.0.0.0:9090",
+				TickInterval: 10 * time.Millisecond,
+				DrainTimeout: tc.drainTimeout,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+
+			// Must carry E-CFG-001 (Validate wraps all field errors in E-CFG-001).
+			requireECFG001(t, err)
+
+			msg := err.Error()
+			for _, want := range tc.wantInMsg {
+				requireContains(t, msg, want)
+			}
+		})
+	}
+
+	// Positive drain_timeout must pass.
+	t.Run("positive_drain_timeout_passes", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+			DrainTimeout: 10 * time.Second,
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	// Zero-value (unset) drain_timeout currently uses default (0), but the field
+	// is optional — Validate must only reject it when explicitly set to <= 0.
+	// The "omit = use daemon default" semantics are: if DrainTimeout == 0, Validate
+	// MUST reject it per BC-2.09.003 PC-7. This confirms the BC requirement.
+	// NOTE: if the implementation treats 0 as "use default, skip validation", this
+	// test will fail — that is the intended Red Gate.
+	t.Run("zero_is_rejected_not_skipped", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+			DrainTimeout: 0, // zero-value — BC-2.09.003 PC-7 says this must be rejected
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+		requireContains(t, err.Error(), "drain_timeout")
+	})
+}
+
+// ---- AC-008 / PC-8: keepalive_interval must be positive --------------------
+
+// TestConfigValidate_RejectsNonPositiveKeepaliveInterval verifies that Validate()
+// rejects keepalive_interval <= 0 with E-CFG-007.
+//
+// The error message must match the canonical E-CFG-007 format:
+//
+//	"config error: keepalive_interval: must be > 0; got '<value>'. Fix: set to a positive duration, e.g. '1s'"
+//
+// Traces: BC-2.09.003 postcondition 8, AC-008, EC-010.
+func TestConfigValidate_RejectsNonPositiveKeepaliveInterval(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name              string
+		keepaliveInterval time.Duration
+		wantInMsg         []string
+	}{
+		{
+			// keepalive_interval = 0 must be rejected.
+			name:              "zero_keepalive",
+			keepaliveInterval: 0,
+			wantInMsg:         []string{"config error: keepalive_interval:", "must be > 0"},
+		},
+		{
+			// EC-010: keepalive_interval = -1s must be rejected.
+			name:              "negative_1s",
+			keepaliveInterval: -1 * time.Second,
+			wantInMsg:         []string{"config error: keepalive_interval:", "must be > 0"},
+		},
+		{
+			// Very small negative.
+			name:              "negative_1ns",
+			keepaliveInterval: -1,
+			wantInMsg:         []string{"config error: keepalive_interval:", "must be > 0"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:        "0.0.0.0:9090",
+				TickInterval:      10 * time.Millisecond,
+				KeepaliveInterval: tc.keepaliveInterval,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+
+			// Must carry E-CFG-001 (Validate wraps all field errors in E-CFG-001).
+			requireECFG001(t, err)
+
+			msg := err.Error()
+			for _, want := range tc.wantInMsg {
+				requireContains(t, msg, want)
+			}
+		})
+	}
+
+	// Positive keepalive_interval must pass.
+	t.Run("positive_keepalive_passes", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			KeepaliveInterval: 1 * time.Second,
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	// Zero keepalive_interval is rejected per BC-2.09.003 PC-8 (same note as
+	// drain_timeout: if impl treats 0 as "default/skip", this test catches it).
+	t.Run("zero_is_rejected_not_skipped", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			KeepaliveInterval: 0,
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+		requireContains(t, err.Error(), "keepalive_interval")
+	})
+}
+
+// ---- AC-002 (Inv-4) amendment: exhaustive multi-field error reporting -------
+
+// TestConfigValidate_ReportsAllErrorsTogether verifies that when multiple fields
+// are simultaneously invalid, Validate() collects ALL errors and reports them in
+// a single E-CFG-001 error — not just the first one encountered.
+//
+// This tests the amended AC-002 requirement (S-6.01 v1.3 / BC-2.09.003 Inv-4):
+// exhaustive reporting must cover E-CFG-002 (bad listen_addr), E-CFG-003 (bad
+// upstream addr), E-CFG-006 (non-positive drain_timeout), and E-CFG-007
+// (non-positive keepalive_interval) together.
+//
+// Traces: BC-2.09.003 invariant 4, AC-002 (amendment), S-6.01 v1.3.
+func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
+	t.Parallel()
+
+	t.Run("bad_listen_addr_and_drain_timeout_together", func(t *testing.T) {
+		t.Parallel()
+
+		// Config with two distinct invalid fields: bad listen_addr (E-CFG-002) and
+		// non-positive drain_timeout (E-CFG-006). Both must appear in a single error.
+		cfg := &config.Config{
+			ListenAddr:   "no-port-here", // invalid host:port → E-CFG-002
+			TickInterval: 10 * time.Millisecond,
+			DrainTimeout: -1 * time.Second, // negative → E-CFG-006
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+
+		// Inv-4: BOTH offending fields must appear in the single combined error.
+		msg := err.Error()
+		requireContains(t, msg, "listen_addr")
+		requireContains(t, msg, "drain_timeout")
+	})
+
+	t.Run("bad_upstream_addr_and_non_positive_keepalive_together", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+			UpstreamRouters: []config.UpstreamRouter{
+				{Addr: "notvalid"}, // invalid → E-CFG-003 at index 0
+			},
+			KeepaliveInterval: 0, // zero → E-CFG-007
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+
+		msg := err.Error()
+		// Both upstream_routers[0].addr and keepalive_interval must appear.
+		requireContains(t, msg, "upstream_routers[0].addr")
+		requireContains(t, msg, "keepalive_interval")
+	})
+
+	t.Run("three_invalid_fields_all_reported", func(t *testing.T) {
+		t.Parallel()
+
+		// Maximum coverage: bad listen_addr + non-positive drain_timeout + bad upstream addr.
+		// All three must appear in a single E-CFG-001 error (Inv-4: exhaustive reporting).
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0", // missing port → E-CFG-002
+			TickInterval: 10 * time.Millisecond,
+			UpstreamRouters: []config.UpstreamRouter{
+				{Addr: "badupstream"}, // invalid host:port → E-CFG-003 at [0]
+			},
+			DrainTimeout: 0, // zero → E-CFG-006
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+
+		msg := err.Error()
+		// All three offending fields must appear in the single aggregated error.
+		requireContains(t, msg, "listen_addr")
+		requireContains(t, msg, "upstream_routers[0].addr")
+		requireContains(t, msg, "drain_timeout")
+	})
+}
