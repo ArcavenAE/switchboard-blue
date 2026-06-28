@@ -51,6 +51,14 @@ const sweepInterval = 30 * time.Second
 // evicted by Sweep. Hardcoded for Wave 3.
 const sweepDeadline = 60 * time.Second
 
+// hmacFailureThreshold and hmacFailureWindow are the FailureCounter constants
+// mandated by BC-2.05.005 PC-3: emit E-ADM-017 after ≥5 failures from the
+// same source within a 60-second sliding window.
+const (
+	hmacFailureThreshold = 5
+	hmacFailureWindow    = 60 * time.Second
+)
+
 // framesDroppedInterval is the period between FramesDropped log checks.
 // Hardcoded for Wave 3 (AC-006; BC-2.04.006 invariant 4).
 // Declared as var (not const) so tests can inject a short interval via
@@ -280,14 +288,23 @@ type stdLogger struct{ l *log.Logger }
 func (s stdLogger) Log(msg string) { s.l.Print(msg) }
 
 // buildRouter constructs the routing.Router with the provided routing.Logger
-// injected (obligation 1 — AC-001; BC-2.05.008 PC-2; FIX 2 injectable logger).
+// and a FailureCounter injected (obligation 1 — AC-001; BC-2.05.008 PC-2/PC-5;
+// FIX 2 injectable logger; C-1 wire-up).
+//
+// The FailureCounter (threshold=5, window=60s per BC-2.05.005 PC-3) is now wired
+// and will emit E-ADM-017 after ≥5 HMAC failures from the same source within the
+// window. The counter is dormant-but-present in Wave 3 because the live
+// network-ingress listener (which feeds RouteFrame from the network) is deferred
+// to story S-BL.NI — the counter itself is not deferred.
+//
 // The logger is supplied by the caller (runAccess passes stdLogger wrapping the
 // injected stderr writer; tests may pass a captureLogger for assertion).
+// stdLogger satisfies both routing.Logger and admission.Logger (both are
+// interface{ Log(string) }) so the same instance serves both the router and
+// the counter.
 func buildRouter(ks *admission.AdmittedKeySet, rl routing.Logger) *routing.Router {
-	// WithFailureCounter is intentionally NOT wired here: deferred to the
-	// network-ingress story per tracked deferral C-1-W3P1-defer
-	// (ARCH-08 v2.2 §6.5.1).
-	return routing.NewRouter(ks, routing.WithLogger(rl))
+	fc := admission.NewFailureCounter(hmacFailureThreshold, hmacFailureWindow, rl)
+	return routing.NewRouter(ks, routing.WithLogger(rl), routing.WithFailureCounter(fc))
 }
 
 // startFramesBridge starts the sc.Frames() → accessNode.DeliverFrame goroutine
