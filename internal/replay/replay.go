@@ -80,25 +80,34 @@ func New(windowSize uint32, deliver DeliverFunc) *Replay {
 
 // OnUpstream processes one incoming upstream frame from the network layer.
 //
+//   - If frame.Seq is 0 (the unset/invalid sentinel), the frame is silently
+//     discarded and nil is returned.
 //   - If frame.Seq has already been delivered (within the current window),
 //     returns ErrAlreadyDelivered without calling deliver.
 //   - If frame.Seq is older than the window (seq < nextSeq - windowSize),
 //     the frame is silently discarded and nil is returned.
 //   - If frame.Seq is the next expected sequence number, deliver is called
 //     immediately; then any buffered in-order successors are drained.
-//   - If frame.Seq is ahead of the next expected sequence number, the frame
-//     is held in the pending buffer until its predecessors arrive.
+//   - If frame.Seq is ahead but within the window [nextSeq+1, nextSeq+windowSize-1],
+//     the frame is held in the pending buffer until its predecessors arrive.
+//   - If frame.Seq is beyond the window (seq >= nextSeq + windowSize),
+//     the frame is silently discarded and nil is returned (BC-2.02.004 invariant 3).
 //
 // Returns ErrAlreadyDelivered on duplicate delivery; nil in all other cases.
 func (r *Replay) OnUpstream(f Frame) error {
 	seq := f.Seq
+
+	// Seq=0 is the unset/invalid sentinel — discard silently without delivery.
+	if seq == 0 {
+		return nil
+	}
 
 	// Already delivered: seq is in the seen set.
 	if r.seen[seq] {
 		return ErrAlreadyDelivered
 	}
 
-	// Outside the window: seq is older than nextSeq - windowSize.
+	// Outside the window (too old): seq < nextSeq - windowSize.
 	// Guard against uint32 underflow when nextSeq <= windowSize.
 	if r.nextSeq > r.windowSize && seq < r.nextSeq-r.windowSize {
 		return nil
@@ -110,18 +119,16 @@ func (r *Replay) OnUpstream(f Frame) error {
 		return nil
 	}
 
-	// Future frame: buffer it for later delivery.
-	if seq > r.nextSeq {
+	// Future frame within the window [nextSeq+1, nextSeq+windowSize-1]: buffer.
+	// Frames at or beyond nextSeq+windowSize are discarded (BC-2.02.004 invariant 3,
+	// PC5: loss of windowSize consecutive frames is irrecoverable).
+	if seq > r.nextSeq && seq < r.nextSeq+r.windowSize {
 		r.pending[seq] = f
 		return nil
 	}
 
-	// seq < nextSeq but not in seen and not old enough to be discarded.
-	// This means it was delivered (nextSeq passed it) but it fell out of the
-	// seen window. Treat as already delivered to avoid double delivery.
-	// Actually with the seen map we track everything that's been delivered, so
-	// reaching here means seq < nextSeq and not in seen — this is a past frame
-	// that was evicted from seen due to window cleanup. Discard silently.
+	// seq >= nextSeq+windowSize (too far ahead) or seq < nextSeq and not in seen
+	// (evicted from seen after window slide). Both cases: discard silently.
 	return nil
 }
 
