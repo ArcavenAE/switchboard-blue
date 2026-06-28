@@ -545,13 +545,31 @@ func (c *concurrentCaptureLogger) logCount() int {
 // Combined: ~51,200 total cache-hit calls (16 goroutines × 3,200 calls each,
 // half same-key, half distinct).
 //
+// DropCache sizing: the DropCache is constructed with capacity dropCacheCapacity
+// (= 30,000), which is large enough to hold all 25,604 seeded distinct keys
+// (25,600 goroutine-distinct + 4 same-key). This ensures that every key seeded
+// in the pre-seed phase stays RESIDENT in the DropCache throughout the storm, so
+// every storm call is a genuine DropCache HIT — driving the hit-count LRU on
+// every call. Without this, seeded keys fall off the DropCache's own LRU (which
+// has DefaultDropCacheSize=10,000 << 25,604), so later storm calls become MISSES
+// that bypass the hit-count LRU entirely and the eviction path is never reached.
+// collisionTrackCap (the hit-count LRU cap) is hardwired to
+// multipath.DefaultDropCacheSize in production; only the DropCache capacity in
+// the test is changed here so all hits land.
+//
 // Invariants asserted (all must hold — do NOT weaken bounds to force green):
 //
-//	(a) MAP/LRU PARITY: after the storm, len(hitCountIndex) == hitCountLRU.Len()
+//	(a) EVICTION FIRED: after the storm, trackedKeyCount() == collisionTrackCap
+//	    exactly. With 25,600 distinct keys all resident in the DropCache, every
+//	    storm call drives the hit-count LRU; 25,600 > cap=10,000 guarantees
+//	    eviction fired and pinned the LRU at its cap. A value < cap means eviction
+//	    never triggered (the path we are here to fence). Do NOT relax to <=.
+//
+//	(b) MAP/LRU PARITY: after the storm, len(hitCountIndex) == hitCountLRU.Len()
 //	    and both values <= collisionTrackCap. Catches a leak where eviction removes
 //	    from one structure but not the other (the real CWE-401 risk).
 //
-//	(b) BOUNDED AGGREGATE LOG: total log lines emitted across all goroutines MUST
+//	(c) BOUNDED AGGREGATE LOG: total log lines emitted across all goroutines MUST
 //	    be far below total cache-hit calls. Bound: logLines <= totalHits/aggregateLogSampleN + safetyMargin.
 //	    Arithmetic: totalHits ≈ 51,200; aggregateLogSampleN=50;
 //	    totalHits/aggregateLogSampleN = 1,024; safetyMargin = 500 (generous, accounts
@@ -559,7 +577,7 @@ func (c *concurrentCaptureLogger) logCount() int {
 //	    relative to totalHits (1,524/51,200 < 3%). If this assertion FAILS, M-1 is
 //	    a confirmed defect — report numbers, do NOT relax the bound.
 //
-//	(c) RACE-FREE: no data race reported by the race detector (-race flag).
+//	(d) RACE-FREE: no data race reported by the race detector (-race flag).
 //
 // Exact log-line counts are NOT asserted — they are nondeterministic under
 // concurrent scheduling. Only the bound is checked.
@@ -574,8 +592,6 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 		// distinctPerGoroutine: each goroutine generates this many unique keys.
 		// 16 × 1,600 = 25,600 distinct keys — 2.56× collisionTrackCap (=10,000),
 		// so hitCountLRU and hitCountIndex eviction fire heavily under contention.
-		// Previous test used 500 total (4,000 distinct) which was BELOW cap — not
-		// exercising eviction at all. This is the corrected, factually-accurate value.
 		distinctPerGoroutine = 1600
 
 		// sameKeyHitsPerGoroutine: each goroutine hits each pre-seeded same-key
@@ -584,11 +600,21 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 
 		// Number of shared same-key frames (each hit sameKeyHitsPerGoroutine × numGoroutines times).
 		numSameKeyFrames = 4
+
+		// dropCacheCapacity: large enough to keep ALL seeded keys resident so every
+		// storm call is a DropCache HIT. Total distinct keys seeded:
+		//   numGoroutines × distinctPerGoroutine + numSameKeyFrames = 25,604.
+		// 30,000 provides headroom above that without being excessively large.
+		// NOTE: collisionTrackCap (the hit-count LRU cap) stays at
+		// multipath.DefaultDropCacheSize = 10,000 per production wiring; only this
+		// test-local DropCache capacity is enlarged.
+		dropCacheCapacity = 30_000
 	)
 
 	// totalCacheHitCalls: all calls after the seed that land as drop-cache hits.
-	// Each goroutine: distinctPerGoroutine distinct-key hits (all seeded first,
-	// see below) + numSameKeyFrames*sameKeyHitsPerGoroutine same-key hits.
+	// Each goroutine: distinctPerGoroutine distinct-key hits (all seeded and kept
+	// resident by the oversized DropCache) + numSameKeyFrames*sameKeyHitsPerGoroutine
+	// same-key hits.
 	// Across all goroutines: 16 × (1,600 + 4×400) = 16 × 3,200 = 51,200.
 	const totalCacheHitCalls = numGoroutines * (distinctPerGoroutine + numSameKeyFrames*sameKeyHitsPerGoroutine)
 
@@ -599,7 +625,7 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 	// If this bound fails, M-1 is a confirmed defect.
 	const aggregateBound = totalCacheHitCalls/aggregateLogSampleN + 500
 
-	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+	dc := multipath.NewDropCache(dropCacheCapacity)
 	logger := &concurrentCaptureLogger{}
 	h := NewFrameArrivalHandler(dc)
 	WithFrameArrivalLogger(logger)(h)
@@ -631,9 +657,14 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 		_ = h.OnFrameArrival(sameKeyFrames[i], arrivalIface, interfaceSet, nopFn) // seed: cache miss, adds key
 	}
 
-	// Pre-seed the drop cache for ALL distinct keys each goroutine will use, so
-	// every goroutine call is a cache hit (exercises the hitCountLRU eviction +
-	// map cleanup path, not the initial-insertion path).
+	// Pre-seed the drop cache for ALL distinct keys each goroutine will use.
+	// The DropCache capacity (dropCacheCapacity=30,000) exceeds total distinct keys
+	// (25,604), so every seeded key stays resident. During the storm every call
+	// is therefore a DropCache HIT — routing execution into the hit-count LRU
+	// path (on_frame_arrival.go incrementHitCountLocked). Without the oversized
+	// DropCache, the DropCache's own LRU would evict earlier seeds (its default
+	// cap is only 10,000), turning later storm calls into MISSES that bypass the
+	// hit-count LRU entirely and leave eviction untested.
 	for g := range numGoroutines {
 		for i := range distinctPerGoroutine {
 			seed := (g+1)*0x10000 + i
@@ -646,9 +677,11 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 	// Each goroutine interleaves:
 	//   - sameKeyHitsPerGoroutine hits per same-key frame (×numSameKeyFrames)
 	//   - distinctPerGoroutine distinct-key cache hits
-	// This exercises both the MoveToFront (same-key) and evict-then-readmit
-	// (distinct-key, since >cap total distinct keys were seeded above) paths
-	// under heavy lock contention.
+	// Because all keys are resident in the DropCache, all calls are HITs that
+	// drive the hit-count LRU. 25,600 distinct keys > collisionTrackCap=10,000,
+	// so the hit-count LRU evicts 15,600 entries and pins at exactly cap.
+	// This exercises the evict-from-both-structures path (map + list) under
+	// heavy lock contention — the real CWE-401 risk being fenced.
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -656,7 +689,7 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 		go func(goroutineID int) {
 			defer wg.Done()
 
-			// Distinct-key hits for this goroutine (all already in drop cache).
+			// Distinct-key hits for this goroutine (all resident in oversized DropCache).
 			for i := range distinctPerGoroutine {
 				seed := (goroutineID+1)*0x10000 + i
 				frame := buildFrame(seed)
@@ -674,15 +707,36 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	// --- Assert (a): MAP/LRU PARITY (CWE-401 leak detection) ---
+	lruLen := h.trackedKeyCount()
+	indexLen := h.trackedIndexLen()
+
+	// --- Assert (a): EVICTION FIRED (F-CONC-M1 / CWE-401 evict-from-both-structures) ---
+	//
+	// 25,600 distinct keys were seeded and all stayed resident in the DropCache
+	// (capacity=30,000). Every storm call was therefore a DropCache HIT driving
+	// the hit-count LRU. Since 25,600 > collisionTrackCap=10,000, the LRU MUST
+	// have evicted 15,600 entries and be pinned at exactly collisionTrackCap.
+	// A value < collisionTrackCap means eviction never triggered — the
+	// evict-from-both-structures path (the real CWE-401 risk) was not exercised.
+	// Do NOT change == to <= here; a strict equality check is the whole point.
+	if lruLen != collisionTrackCap {
+		t.Errorf(
+			"EVICTION NOT FIRED: trackedKeyCount()=%d != collisionTrackCap=%d — "+
+				"hit-count LRU eviction path was not reached (F-CONC-M1 / CWE-401); "+
+				"DropCache capacity=%d, distinct keys seeded=%d; "+
+				"if lruLen < cap, eviction never triggered (check DropCache resident count); "+
+				"if lruLen > cap, the cap invariant is broken",
+			lruLen, collisionTrackCap,
+			dropCacheCapacity, numGoroutines*distinctPerGoroutine+numSameKeyFrames,
+		)
+	}
+
+	// --- Assert (b): MAP/LRU PARITY (CWE-401 leak detection) ---
 	//
 	// Both structures must agree on the count of tracked keys, and neither may
 	// exceed collisionTrackCap. A divergence means eviction removed from the
 	// LRU list without cleaning the map (memory leak) or vice versa (dangling
 	// pointer into freed list element).
-	lruLen := h.trackedKeyCount()
-	indexLen := h.trackedIndexLen()
-
 	if lruLen != indexLen {
 		t.Errorf(
 			"MAP/LRU PARITY VIOLATED: hitCountLRU.Len()=%d != len(hitCountIndex)=%d — eviction leaked one structure (CWE-401 / F-CONC-001)",
@@ -702,7 +756,7 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 		)
 	}
 
-	// --- Assert (b): BOUNDED AGGREGATE LOG (AC-005-b / CWE-779 / M-1 empirical test) ---
+	// --- Assert (c): BOUNDED AGGREGATE LOG (AC-005-b / CWE-779 / M-1 empirical test) ---
 	//
 	// Arithmetic (see const declarations above):
 	//   totalCacheHitCalls = 51,200
@@ -736,8 +790,8 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 	}
 
 	t.Logf(
-		"concurrent flood complete: lruLen=%d indexLen=%d logLines=%d totalCacheHitCalls=%d aggregateBound=%d",
-		lruLen, indexLen, logLines, totalCacheHitCalls, aggregateBound,
+		"concurrent flood complete: lruLen=%d indexLen=%d logLines=%d totalCacheHitCalls=%d aggregateBound=%d collisionTrackCap=%d dropCacheCapacity=%d evictionFired=%v",
+		lruLen, indexLen, logLines, totalCacheHitCalls, aggregateBound, collisionTrackCap, dropCacheCapacity, lruLen == collisionTrackCap,
 	)
 }
 
