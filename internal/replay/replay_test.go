@@ -699,11 +699,11 @@ func TestReplay_VP042_KeystrokeLatencyP99(t *testing.T) {
 	}
 }
 
-// BenchmarkReplay_KeystrokeLatency_Sequential measures the steady-state
-// OnUpstream() cost for sequential in-order frames (no reorder buffer churn).
-// VP-042 requires p99 ≤ 100ms; this benchmark is expected to complete each
-// iteration in sub-microsecond time.
-func BenchmarkReplay_KeystrokeLatency_Sequential(b *testing.B) {
+// BenchmarkReplay_KeystrokeLatency measures the steady-state OnUpstream() cost
+// for sequential in-order frames (no reorder buffer churn). VP-042 requires
+// p99 ≤ 100ms; this benchmark is expected to complete each iteration in
+// sub-microsecond time. Named per AC-004 traceability (S-4.02-upstream-replay).
+func BenchmarkReplay_KeystrokeLatency(b *testing.B) {
 	deliver := func(_ replay.Frame) {}
 	r := replay.New(100, deliver)
 	// Pre-warm: deliver seqs 1..100.
