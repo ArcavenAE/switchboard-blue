@@ -793,3 +793,44 @@ func TestBC_2_02_003_PathScore_PropertyTransitive_Manual(t *testing.T) {
 		}
 	}
 }
+
+// ─── Pass-2 adversarial findings ─────────────────────────────────────────────
+
+// TestNewPathTracker_RejectsInvalidAlpha asserts that NewPathTracker panics
+// when alpha is outside the documented precondition range (0 < alpha ≤ 1).
+//
+// The NewPathTracker godoc states "alpha must satisfy 0 < alpha ≤ 1". Passing
+// alpha=0 freezes the EWMA (no update ever applied — all measurements silently
+// ignored). Passing alpha<0 or alpha>1 produces nonsensical EWMA arithmetic.
+// These are programmer errors, not runtime conditions; panic is appropriate.
+//
+// Contract chosen: panic on alpha ≤ 0 or alpha > 1. The implementer must add
+// a guard at the top of NewPathTracker:
+//
+//	if alpha <= 0 || alpha > 1 {
+//	    panic("paths: NewPathTracker alpha must satisfy 0 < alpha <= 1")
+//	}
+//
+// This test is RED until that guard is added — without it, NewPathTracker(10,0)
+// silently creates a tracker with a frozen EWMA.
+//
+// Pass-2 finding F-L1 / NewPathTracker doc precondition (0 < alpha ≤ 1)
+func TestNewPathTracker_RejectsInvalidAlpha(t *testing.T) {
+	t.Parallel()
+
+	invalidAlphas := []float64{0, -0.001, -1, -100, 1.0001, 2, 100}
+
+	for _, alpha := range invalidAlphas {
+		alpha := alpha
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("NewPathTracker(10, %v): want panic (alpha outside (0,1]), got no panic", alpha)
+				}
+			}()
+			// Must panic — invalid alpha violates the PathTracker contract.
+			paths.NewPathTracker(10.0, alpha)
+		})
+	}
+}
