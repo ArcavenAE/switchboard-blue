@@ -19,6 +19,7 @@
 package routing
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -36,10 +37,32 @@ import (
 // BC-2.02.009 postcondition 2 (implicit): cache hit → silent discard.
 var ErrDropCacheHit = errors.New("routing: drop cache hit — frame suppressed as loop duplicate (BC-2.02.009)")
 
+// collisionTrackCap is the maximum number of distinct (checksum, iface) keys
+// held in the per-key hit-count LRU. Capped at multipath.DefaultDropCacheSize
+// to satisfy AC-005 v1.4-a (CWE-401/400 — bounded memory under distinct-key
+// flood, EC-006).
+const collisionTrackCap = multipath.DefaultDropCacheSize
+
+// aggregateLogSampleN is the global aggregate emission stride: one log line is
+// emitted for every aggregateLogSampleN eligible candidates across all keys.
+// With K=20000 distinct-key first hits each producing 1 candidate, this yields
+// K/aggregateLogSampleN = 400 lines ≤ max(10, K/50) = 400 (AC-005 v1.4-b).
+// For N=1000 same-key hits with per-key sampling producing 10 candidates, this
+// yields at most ceil(10/aggregateLogSampleN) = 1 line ≥ 1 (observability OK)
+// and ≤ max(2, N/100) = 10 (AC-005 v1.3).
+const aggregateLogSampleN = 50
+
 // dropCacheKey is the compound key used for per-key collision-event rate limiting.
 type dropCacheKey struct {
 	checksum uint32
 	iface    InterfaceID
+}
+
+// hitCountEntry is stored in the per-key LRU list so that eviction can clean up
+// the map entry in O(1).
+type hitCountEntry struct {
+	key   dropCacheKey
+	count uint64
 }
 
 // FrameArrivalHandler is the router-level frame-arrival processing path.
@@ -52,14 +75,25 @@ type FrameArrivalHandler struct {
 	dropCache *multipath.DropCache
 	logger    Logger // injected via WithFrameArrivalLogger; nopLogger if nil
 
-	// hitCountMu guards hitCounts for concurrent OnFrameArrival calls.
+	// hitCountMu guards the per-key hit-count LRU and the aggregate emission
+	// counter for concurrent OnFrameArrival calls.
 	// Per go.md rule 12: no internal pointer leaks from locked accessors.
 	hitCountMu sync.Mutex
-	// hitCounts tracks per-compound-key drop-cache hit counts for
-	// log-first-then-sample rate limiting (AC-005 v1.3 / EC-005).
-	// Growth is bounded by the number of distinct (checksum, iface) pairs
-	// observed — same bound as the underlying DropCache.
-	hitCounts map[dropCacheKey]uint64
+
+	// hitCountIndex maps a dropCacheKey to its list.Element in hitCountLRU.
+	// Together with hitCountLRU, this forms a bounded LRU capped at
+	// collisionTrackCap entries (AC-005 v1.4-a / EC-006 / CWE-401/400).
+	hitCountIndex map[dropCacheKey]*list.Element
+	// hitCountLRU is the ordered list (front = most-recently used) of
+	// hitCountEntry values. Len() never exceeds collisionTrackCap.
+	hitCountLRU *list.List
+
+	// aggregateEmitCount is the global (cross-key) count of log-eligible
+	// candidates produced by the per-key sampler. A log line is actually
+	// emitted only when aggregateEmitCount%aggregateLogSampleN == 1, bounding
+	// total aggregate output to K/aggregateLogSampleN for K distinct first-hits
+	// (AC-005 v1.4-b / EC-006 / CWE-779).
+	aggregateEmitCount uint64
 }
 
 // NewFrameArrivalHandler constructs a FrameArrivalHandler that consults dc
@@ -75,9 +109,10 @@ func NewFrameArrivalHandler(dc *multipath.DropCache) *FrameArrivalHandler {
 		panic("routing: NewFrameArrivalHandler dc must not be nil")
 	}
 	return &FrameArrivalHandler{
-		dropCache: dc,
-		logger:    nopLogger{},
-		hitCounts: make(map[dropCacheKey]uint64),
+		dropCache:     dc,
+		logger:        nopLogger{},
+		hitCountIndex: make(map[dropCacheKey]*list.Element, collisionTrackCap),
+		hitCountLRU:   list.New(),
 	}
 }
 
@@ -100,12 +135,11 @@ func WithFrameArrivalLogger(l Logger) func(*FrameArrivalHandler) {
 // assert that the tracking structure does not exceed its declared cap under a
 // distinct-key flood (EC-006 / CWE-401/400).
 //
-// The current implementation returns len(hitCounts), which is unbounded.
-// A correct bounded implementation would return the size of a capped structure.
+// The bounded LRU ensures the returned value never exceeds collisionTrackCap.
 func (h *FrameArrivalHandler) trackedKeyCount() int {
 	h.hitCountMu.Lock()
 	defer h.hitCountMu.Unlock()
-	return len(h.hitCounts)
+	return h.hitCountLRU.Len()
 }
 
 // OnFrameArrival is the router-level end-to-end frame-arrival handler.
@@ -153,18 +187,37 @@ func (h *FrameArrivalHandler) OnFrameArrival(
 	firstArrival := h.dropCache.AddIfAbsent(checksum, uint64(arrivalIface))
 	if !firstArrival {
 		// Cache hit: loop duplicate (or hash collision).
-		// Rate-limited logging strategy: log-first-then-sample (AC-005 v1.3 / EC-005).
-		// Always log hit #1 for a given key (operator alert). Log every 100th
-		// subsequent hit (count % 100 == 1). This bounds log output to
-		// ceil(N/100) lines for N hits, satisfying max(2, N/100) for N >= 100.
+		//
+		// Two-tier rate-limiting strategy (AC-005 v1.4 / EC-005):
+		//
+		// Tier 1 — per-key sampler: increment the per-key hit count in a
+		// bounded LRU (cap: collisionTrackCap). Emit a candidate only when
+		// count%100==1 (first hit + every 100th subsequent). This gives
+		// ceil(N/100) candidates for N same-key hits (≤ max(2, N/100)).
+		//
+		// Tier 2 — aggregate limiter: only actually log when the global
+		// candidate count is ≡1 (mod aggregateLogSampleN). This bounds
+		// aggregate output to K/aggregateLogSampleN for K distinct-key
+		// first-hits (AC-005 v1.4-b / CWE-779).
+		//
+		// Combination correctness:
+		//   - Same-key N=1000: 10 candidates → at most 1 log line (≥1 ✓, ≤10 ✓).
+		//   - Distinct-key K=20000: 20000 candidates → 400 log lines (≤400 ✓).
+		//
 		// Mutation goes through the handler under the lock (go.md rule 12).
 		key := dropCacheKey{checksum: checksum, iface: arrivalIface}
+
 		h.hitCountMu.Lock()
-		h.hitCounts[key]++
-		count := h.hitCounts[key]
+		count := h.incrementHitCountLocked(key)
+		var shouldLog bool
+		if count%100 == 1 {
+			// Tier-1 candidate: increment the aggregate counter and check tier-2.
+			h.aggregateEmitCount++
+			shouldLog = h.aggregateEmitCount%aggregateLogSampleN == 1
+		}
 		h.hitCountMu.Unlock()
 
-		if count%100 == 1 {
+		if shouldLog {
 			h.logger.Log(fmt.Sprintf(
 				"drop cache hit: potential loop duplicate or collision (checksum=0x%08x iface=%d hit=%d) (BC-2.02.009 EC-005)",
 				checksum, arrivalIface, count,
@@ -179,4 +232,36 @@ func (h *FrameArrivalHandler) OnFrameArrival(
 	sh := SplitHorizon{}
 	_, err := sh.Forward(frameBytes, arrivalIface, interfaceSet, fn)
 	return err
+}
+
+// incrementHitCountLocked increments the hit count for key in the bounded LRU
+// and returns the new count. It must be called with hitCountMu held.
+//
+// The LRU is capped at collisionTrackCap entries. When the cap is reached, the
+// least-recently-used entry is evicted before inserting a new key. This bounds
+// memory to O(collisionTrackCap) regardless of the number of distinct keys
+// observed (AC-005 v1.4-a / EC-006 / CWE-401/400).
+func (h *FrameArrivalHandler) incrementHitCountLocked(key dropCacheKey) uint64 {
+	if elem, ok := h.hitCountIndex[key]; ok {
+		// Key exists: update count in-place and move to front (MRU).
+		entry := elem.Value.(hitCountEntry)
+		entry.count++
+		elem.Value = entry
+		h.hitCountLRU.MoveToFront(elem)
+		return entry.count
+	}
+
+	// New key: evict LRU entry if at capacity.
+	if h.hitCountLRU.Len() >= collisionTrackCap {
+		oldest := h.hitCountLRU.Back()
+		if oldest != nil {
+			h.hitCountLRU.Remove(oldest)
+			delete(h.hitCountIndex, oldest.Value.(hitCountEntry).key)
+		}
+	}
+
+	// Insert new entry at front with count=1.
+	elem := h.hitCountLRU.PushFront(hitCountEntry{key: key, count: 1})
+	h.hitCountIndex[key] = elem
+	return 1
 }
