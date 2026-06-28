@@ -1,0 +1,3 @@
+upstream_routers: []
+drain_timeout: 10s
+keepalive_interval: 1s
