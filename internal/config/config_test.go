@@ -721,3 +721,51 @@ func TestLoadFile_NonRegularFile(t *testing.T) {
 	}
 	requireContains(t, err.Error(), "not a regular file")
 }
+
+// ---- L-1 (CWE-20): strict YAML decoding rejects unknown keys ----------------
+
+// TestLoadFile_UnknownKey_ReturnsECFG005 verifies that LoadFile rejects a config
+// file containing an unknown (typo'd) key with E-CFG-005 (L-1 finding, CWE-20).
+// This prevents silent misconfiguration when an operator misspells an optional key.
+//
+// Traces: L-1 security finding, BC-2.09.003 FM-010.
+func TestLoadFile_UnknownKey_ReturnsECFG005(t *testing.T) {
+	t.Parallel()
+
+	// keepalive_intervall is a misspelling of keepalive_interval.
+	content := "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\nkeepalive_intervall: 1s\n"
+	dir := t.TempDir()
+	path := filepath.Join(dir, "unknown-key.yaml")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := config.LoadFile(path)
+	requireError(t, err)
+
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected *config.ConfigError with E-CFG-005, got %T: %v", err, err)
+	}
+	if ce.Code != "E-CFG-005" {
+		t.Errorf("expected E-CFG-005 for unknown key, got %q", ce.Code)
+	}
+	// Error must mention the unknown key name so the operator can identify the typo.
+	requireContains(t, err.Error(), "keepalive_intervall")
+}
+
+// TestLoadFile_ValidFixture_StrictDecode verifies that the canonical valid.yaml
+// fixture is accepted cleanly after switching to strict (KnownFields) decoding —
+// no false rejection of known keys.
+//
+// Traces: L-1 security finding regression guard.
+func TestLoadFile_ValidFixture_StrictDecode(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.LoadFile("testdata/valid.yaml")
+	requireNoError(t, err)
+
+	// valid.yaml must still decode and validate cleanly.
+	valErr := cfg.Validate()
+	requireNoError(t, valErr)
+}

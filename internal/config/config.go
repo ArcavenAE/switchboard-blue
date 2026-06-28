@@ -3,8 +3,10 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -229,28 +231,40 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, &ConfigError{
-			Code:   "E-CFG-005",
-			Detail: yamlParseDetail(err),
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		// An empty file produces io.EOF from the decoder — that is valid YAML
+		// syntax (the document is simply absent), yielding a zero-value Config.
+		// All other errors are genuine parse failures → E-CFG-005.
+		if !errors.Is(err, io.EOF) {
+			return nil, &ConfigError{
+				Code:   "E-CFG-005",
+				Detail: yamlParseDetail(err),
+			}
 		}
 	}
 
 	return &cfg, nil
 }
 
-// yamlParseDetail formats a yaml.Unmarshal error into the canonical E-CFG-005
-// detail string: "config parse error: invalid YAML at line N: <detail>".
+// yamlParseDetail formats a yaml.Decode/Unmarshal error into the canonical
+// E-CFG-005 detail string: "config parse error: invalid YAML at line N: <detail>".
 //
-// yaml.v3 encodes parse errors as strings like "yaml: line N: <detail>".
-// We extract N and reformat into the canonical BC-2.09.003 EC-003 form so the
-// operator can navigate directly to the bad line.
+// yaml.v3 produces two distinct error shapes:
+//
+//  1. Syntax errors: "yaml: line N: <detail>"
+//  2. Multi-error (KnownFields / type errors): "yaml: unmarshal errors:\n  line N: <detail>"
+//
+// We extract N from whichever shape applies and reformat into the canonical
+// BC-2.09.003 EC-003 form so the operator can navigate directly to the bad line.
 func yamlParseDetail(err error) string {
 	raw := err.Error()
-	// yaml.v3 format: "yaml: line N: <detail>" or "yaml: <detail>" (no line).
-	const prefix = "yaml: line "
-	if strings.HasPrefix(raw, prefix) {
-		rest := raw[len(prefix):]
+
+	// Shape 1: "yaml: line N: <detail>"
+	const linePrefix = "yaml: line "
+	if strings.HasPrefix(raw, linePrefix) {
+		rest := raw[len(linePrefix):]
 		colonIdx := strings.Index(rest, ":")
 		if colonIdx > 0 {
 			lineStr := rest[:colonIdx]
@@ -260,6 +274,28 @@ func yamlParseDetail(err error) string {
 			}
 		}
 	}
+
+	// Shape 2: "yaml: unmarshal errors:\n  line N: <detail>[; line M: ...]"
+	// KnownFields(true) and type-mismatch errors use this multi-error envelope.
+	const multiPrefix = "yaml: unmarshal errors:\n"
+	if strings.HasPrefix(raw, multiPrefix) {
+		rest := strings.TrimPrefix(raw, multiPrefix)
+		// Each sub-error is "  line N: <detail>"; take the first one.
+		first := strings.SplitN(strings.TrimSpace(rest), "\n", 2)[0]
+		const subPrefix = "line "
+		if strings.HasPrefix(first, subPrefix) {
+			sub := first[len(subPrefix):]
+			colonIdx := strings.Index(sub, ":")
+			if colonIdx > 0 {
+				lineStr := sub[:colonIdx]
+				if _, parseErr := strconv.Atoi(lineStr); parseErr == nil {
+					detail := strings.TrimSpace(sub[colonIdx+1:])
+					return fmt.Sprintf("config parse error: invalid YAML at line %s: %s", lineStr, detail)
+				}
+			}
+		}
+	}
+
 	// Fallback: no line number available; still use canonical prefix.
 	return fmt.Sprintf("config parse error: invalid YAML at line ?: %s", raw)
 }
