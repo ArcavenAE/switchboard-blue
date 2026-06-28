@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -230,15 +231,16 @@ func (c *Config) Validate() error {
 //
 // Embedding raw control characters (\n, \r, \x1b, etc.) into an error string
 // allows an attacker to forge log lines or corrupt terminal output (CWE-117 /
-// F-SEC-002). We strip any character with Unicode category "control" (i.e.
-// codepoints in the ranges U+0000–U+001F and U+007F–U+009F).
+// F-SEC-002). We strip all Unicode control characters — C0 (U+0000–U+001F),
+// DEL (U+007F), and C1 (U+0080–U+009F) — using unicode.IsControl so the
+// predicate matches the full Unicode definition rather than a hand-rolled range.
 //
 // Legitimate values (e.g. "not-a-host-port") pass through unchanged so the
 // operator can see what they mistyped (BC-2.09.003 PC-5/PC-6).
 func sanitizeAddrForError(addr string) string {
 	var b strings.Builder
 	for _, r := range addr {
-		if r >= 0x20 && r != 0x7F {
+		if !unicode.IsControl(r) {
 			b.WriteRune(r)
 		}
 	}
