@@ -119,3 +119,64 @@ Make each test pass, one at a time, with minimum code:
    `forwardFrames()` per ADR-011 §Concurrency contract.
 2. `cmd/switchboard/access.go`: implement `buildRouter`, `buildAccessNode`,
    `startSweepTicker`, `startFramesDroppedTicker`, `runAccess`.
+
+---
+
+# Red Gate Log — S-4.03 Downstream ARQ with TLPKTDROP
+
+**Story:** S-4.03 — Downstream ARQ with Piggybacked ACK/SACK and TLPKTDROP
+**Date:** 2026-06-28
+**Phase:** TDD (test-writer pass)
+**BC-5.38.001 Status:** RED GATE VERIFIED
+
+## Summary
+
+17 tests written (16 failing + 1 GREEN-BY-DESIGN). All 16 AC/BC/VP/EC tests
+panic against stubs. `TestBC_2_02_005_VP052_SACKPopCount` passes because
+`SACKPopCount` is already implemented in the stub (per stub file comments —
+GREEN-BY-DESIGN).
+
+## Test File
+
+| File | Tests | Status |
+|------|-------|--------|
+| `internal/arq/arq_test.go` | 17 total | 16 FAILING (Red Gate), 1 GREEN-BY-DESIGN |
+
+## Per-Test Red Gate Results
+
+| Test Name | AC/VP/EC Trace | Failure Mode |
+|-----------|----------------|--------------|
+| `TestARQ_OnAck_NoDuplicateDelivery` | AC-001 / BC-2.02.005 PC-1, VP-019 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_005_EC001_IdempotentAck` | EC-001 / BC-2.02.005 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestARQ_InOrderDelivery` | AC-002 / BC-2.02.005 PC-2,4, VP-020 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_005_InOrder_CanonicalVector` | AC-002 / BC-2.02.005 canonical test vector | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestARQ_SACKInChannelHeader` | AC-003 / BC-2.02.005 PC-3, ARCH-02 F-P8-007 | `panic: not yet implemented` (SACKFromChannelHeader stub) |
+| `TestBC_2_02_005_SACKNotInOuterHeader` | AC-003 / ARCH-02 | `panic: not yet implemented` (SACKFromChannelHeader stub) |
+| `TestARQ_TLPKTDROP_TerminatesOverdueFrame` | AC-004 / BC-2.02.006 PC-1,2, VP-021, EC-003 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_006_TLPKTDROP_FiresExactlyOnce` | VP-021 / BC-2.02.006 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_006_TLPKTDROP_SessionContinues` | VP-021 / BC-2.02.006 invariant 1 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestARQ_TLPKTDROP_OnlyOverdueFrames` | AC-005 / BC-2.02.006 PC-2 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_006_OnlyOverdue_TableDriven` | AC-005 / BC-2.02.006 PC-2 (boundary) | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_005_EC002_SACKWholeWindowGap` | EC-002 / BC-2.02.005 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_006_EC003_TLPKTDROPDuringFailover` | EC-003 / BC-2.02.006, ADR-005 | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_005_VP019_VP020_NoDoubleDelivery` | VP-019, VP-020 (24 permutations) | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_006_VP021_TLPKTDROPNotSessionTermination` | VP-021 (10 drops, session survives) | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_005_VP019_VP020_LargeScale` | VP-019, VP-020 (1024 trials × 8 frames) | `panic: not yet implemented` (EnqueueSend stub) |
+| `TestBC_2_02_005_VP052_SACKPopCount` | VP-052 (GREEN-BY-DESIGN) | **PASS** — SACKPopCount already implemented |
+
+## Red Gate Verification Command
+
+```bash
+go test ./internal/arq/... 2>&1
+# Expected: FAIL with panic: not yet implemented
+# SACKPopCount passes by design; all others panic.
+```
+
+## Implementer Handoff (S-4.03)
+
+Make each test pass, one at a time, with minimum code:
+
+1. `EnqueueSend(seq, payload, now)`: record frame in inFlight map with deadline = now+dropTimeout
+2. `OnAck(ackSeq, sackBitmap)`: advance nextExpected, buffer out-of-order frames (reorderBuf), flush in-order frames to DeliveredFrames, mark acked set for duplicate prevention
+3. `SACKFromChannelHeader(channelHeader)`: check flags byte bit 2 at offset 8; return bitmap from bytes [12:20] when set; error if slice too short for 20 bytes when SACK_present=1
+4. `TLPKTDROP(overdueSeq, now)`: check inFlight[overdueSeq] exists (ErrSequenceNotInFlight), check now > frame.deadline (ErrFrameNotOverdue), delete from inFlight, send DegradationEvent{DroppedSeq: overdueSeq}
