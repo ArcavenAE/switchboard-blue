@@ -2,7 +2,7 @@
 artifact_id: ARCH-03-routing-engine
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -25,6 +25,14 @@ kos_anchors:
   - elem-asymmetric-half-channels
 modified:
   - 2026-06-23T00:00:00
+  - 2026-06-27T00:00:00
+changelog:
+  - version: "1.1"
+    date: 2026-06-27T00:00:00
+    adjudication: S-4.01 pass1-spec-rulings
+    changes:
+      - "Correction 1 (§Duplicate-and-Race, F-006 block): fixed endpoint dedup key description. The destination endpoint deduplicates by checksum alone (BC-2.02.002); the compound (checksum, arrival_interface_id) key applies only to the router-level drop cache (BC-2.02.009). Also corrected the OnFrameArrival pseudo-code comment citation from BC-2.02.002 to BC-2.02.009."
+      - "Correction 2 (§Path Selection, degenerate single-path case): replaced 'both copies go to the same path (degenerate case)' with single-path no-duplication language per BC-2.02.001 postcondition 3 and EC-001."
 ---
 
 # ARCH-03: Routing Engine
@@ -43,7 +51,9 @@ Lower score = better path. `loss_weight` = 10 (configurable). This penalizes
 lossy paths more than pure latency measurements.
 
 **Top-2 paths** are selected for duplicate-and-race (BC-2.02.001). If only one
-path exists (E router MVP), both copies go to the same path (degenerate case).
+path exists, the frame is sent on that single path with no duplication
+(BC-2.02.001 postcondition 3, EC-001). Single-path mode is noted in the quality
+indicator.
 
 ## Duplicate-and-Race (internal/multipath)
 
@@ -58,7 +68,7 @@ OnFrameArrival(frame, arrival_interface_id):
   checksum = crc32(frame.outer_header || frame.payload)
   key = (checksum, arrival_interface_id)
   if DropCache.contains(key):
-    silently discard (BC-2.02.002, DI-009)
+    silently discard (BC-2.02.009, DI-009)
     return
   DropCache.add(key)
   deliver(frame)
@@ -71,8 +81,11 @@ intermediate hops so the fastest arrives first. Deduplication per-destination
 happens in the forwarding stage: if both copies arrive at the same destination
 interface, the second is discarded. If they arrive on different interfaces (as
 expected in dup-and-race), both are forwarded. The destination node receives at
-most two copies and delivers the first, discarding the duplicate via the same
-`(checksum, arrival_interface_id)` keying.
+most two copies. The endpoint receiver deduplicates by checksum alone
+(BC-2.02.002): the first-arriving copy is delivered; the second is silently
+discarded regardless of arrival interface. Router-side compound keying ensures
+both copies reach the destination; endpoint-side checksum-only keying ensures
+only one is delivered to the application.
 
 **BC-2.02.009 (bounded drop cache):** LRU eviction ensures the cache never exceeds
 capacity. When the cache is full, the oldest entry is evicted. This means very old
