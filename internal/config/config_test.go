@@ -1025,52 +1025,63 @@ func TestConfigValidate_RejectsInvalidUpstreamRouterAddr(t *testing.T) {
 	})
 }
 
-// ---- AC-007 / PC-7: drain_timeout must be positive -------------------------
+// ---- AC-007 / PC-7: drain_timeout — negative rejected, zero/absent accepted --
 
-// TestConfigValidate_RejectsNonPositiveDrainTimeout verifies that Validate()
-// rejects drain_timeout <= 0 with E-CFG-006.
+// TestConfigValidate_RejectsNegativeDrainTimeout verifies that Validate()
+// rejects drain_timeout ONLY when negative (E-CFG-006), and ACCEPTS zero or
+// absent (Go yaml / time.Duration zero-value semantics: absent == zero).
 //
-// The error message must match the canonical E-CFG-006 format:
+// The error message must match the canonical E-CFG-006 format (BC-2.09.003 v1.4):
 //
-//	"config error: drain_timeout: must be > 0; got '<value>'. Fix: set to a positive duration, e.g. '10s'"
+//	"config error: drain_timeout: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (10s), or set to a positive duration, e.g. '10s'"
 //
-// Traces: BC-2.09.003 postcondition 7, AC-007, EC-009.
-func TestConfigValidate_RejectsNonPositiveDrainTimeout(t *testing.T) {
+// Red Gate note: the CURRENT config.go rejects zero with "must be > 0".
+// These tests are written for the NEW v1.4 contract:
+//   - Zero-accepted cases FAIL against current code (it rejects zero).
+//   - "must not be negative" assertions FAIL against current code (it emits "must be > 0").
+//
+// Traces: BC-2.09.003 postcondition 7 (v1.4), AC-007, EC-009, EC-010, VP-028, VP-029.
+func TestConfigValidate_RejectsNegativeDrainTimeout(t *testing.T) {
 	t.Parallel()
 
-	cases := []struct {
+	// Negative values must be rejected with the canonical E-CFG-006 message.
+	negativeCases := []struct {
 		name         string
 		drainTimeout time.Duration
 		wantInMsg    []string // fragments that must appear in error message
 	}{
 		{
-			// EC-009: drain_timeout = 0s must be rejected.
-			name:         "zero_drain_timeout",
-			drainTimeout: 0,
-			wantInMsg:    []string{"config error: drain_timeout:", "must be > 0"},
+			// EC-010: drain_timeout = -5s must be rejected with E-CFG-006.
+			name:         "negative_5s",
+			drainTimeout: -5 * time.Second,
+			wantInMsg: []string{
+				"config error: drain_timeout:",
+				"must not be negative",
+				"-5s",
+			},
 		},
 		{
-			// Negative drain_timeout must be rejected.
-			name:         "negative_drain_timeout",
-			drainTimeout: -1 * time.Second,
-			wantInMsg:    []string{"config error: drain_timeout:", "must be > 0"},
-		},
-		{
-			// Very small negative value.
+			// Very small negative value (-1ns) must also be rejected.
 			name:         "negative_1ns",
 			drainTimeout: -1,
-			wantInMsg:    []string{"config error: drain_timeout:", "must be > 0"},
+			wantInMsg: []string{
+				"config error: drain_timeout:",
+				"must not be negative",
+			},
 		},
 	}
 
-	for _, tc := range cases {
+	for _, tc := range negativeCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			// Set KeepaliveInterval to a positive value so the only failing field is
+			// drain_timeout, and the message check is not obscured by a second error.
 			cfg := &config.Config{
-				ListenAddr:   "0.0.0.0:9090",
-				TickInterval: 10 * time.Millisecond,
-				DrainTimeout: tc.drainTimeout,
+				ListenAddr:        "0.0.0.0:9090",
+				TickInterval:      10 * time.Millisecond,
+				DrainTimeout:      tc.drainTimeout,
+				KeepaliveInterval: 1 * time.Second,
 			}
 			err := cfg.Validate()
 			requireError(t, err)
@@ -1085,7 +1096,22 @@ func TestConfigValidate_RejectsNonPositiveDrainTimeout(t *testing.T) {
 		})
 	}
 
-	// Positive drain_timeout must pass.
+	// EC-009: drain_timeout = 0s (or absent — Go yaml / time.Duration cannot
+	// distinguish absent from explicit-zero) must be ACCEPTED. Validate() returns nil.
+	// Red Gate: current code rejects zero, so this subtest FAILS against current config.go.
+	t.Run("zero_drain_timeout_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      0,              // zero == absent per Go yaml / time.Duration semantics
+			KeepaliveInterval: 1 * time.Second, // positive — not under test
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	// Positive drain_timeout must pass (regression guard).
 	t.Run("positive_drain_timeout_passes", func(t *testing.T) {
 		t.Parallel()
 
@@ -1097,73 +1123,64 @@ func TestConfigValidate_RejectsNonPositiveDrainTimeout(t *testing.T) {
 		}
 		requireNoError(t, cfg.Validate())
 	})
-
-	// Zero-value (unset) drain_timeout currently uses default (0), but the field
-	// is optional — Validate must only reject it when explicitly set to <= 0.
-	// The "omit = use daemon default" semantics are: if DrainTimeout == 0, Validate
-	// MUST reject it per BC-2.09.003 PC-7. This confirms the BC requirement.
-	// NOTE: if the implementation treats 0 as "use default, skip validation", this
-	// test will fail — that is the intended Red Gate.
-	t.Run("zero_is_rejected_not_skipped", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{
-			ListenAddr:   "0.0.0.0:9090",
-			TickInterval: 10 * time.Millisecond,
-			DrainTimeout: 0, // zero-value — BC-2.09.003 PC-7 says this must be rejected
-		}
-		err := cfg.Validate()
-		requireError(t, err)
-		requireECFG001(t, err)
-		requireContains(t, err.Error(), "drain_timeout")
-	})
 }
 
-// ---- AC-008 / PC-8: keepalive_interval must be positive --------------------
+// ---- AC-008 / PC-8: keepalive_interval — negative rejected, zero/absent accepted --
 
-// TestConfigValidate_RejectsNonPositiveKeepaliveInterval verifies that Validate()
-// rejects keepalive_interval <= 0 with E-CFG-007.
+// TestConfigValidate_RejectsNegativeKeepaliveInterval verifies that Validate()
+// rejects keepalive_interval ONLY when negative (E-CFG-007), and ACCEPTS zero or
+// absent (Go yaml / time.Duration zero-value semantics: absent == zero).
 //
-// The error message must match the canonical E-CFG-007 format:
+// The error message must match the canonical E-CFG-007 format (BC-2.09.003 v1.4):
 //
-//	"config error: keepalive_interval: must be > 0; got '<value>'. Fix: set to a positive duration, e.g. '1s'"
+//	"config error: keepalive_interval: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (1s), or set to a positive duration, e.g. '1s'"
 //
-// Traces: BC-2.09.003 postcondition 8, AC-008, EC-010.
-func TestConfigValidate_RejectsNonPositiveKeepaliveInterval(t *testing.T) {
+// Red Gate note: the CURRENT config.go rejects zero with "must be > 0".
+// These tests are written for the NEW v1.4 contract:
+//   - Zero-accepted cases FAIL against current code (it rejects zero).
+//   - "must not be negative" assertions FAIL against current code (it emits "must be > 0").
+//
+// Traces: BC-2.09.003 postcondition 8 (v1.4), AC-008, EC-011, EC-012, VP-028, VP-029.
+func TestConfigValidate_RejectsNegativeKeepaliveInterval(t *testing.T) {
 	t.Parallel()
 
-	cases := []struct {
+	// Negative values must be rejected with the canonical E-CFG-007 message.
+	negativeCases := []struct {
 		name              string
 		keepaliveInterval time.Duration
 		wantInMsg         []string
 	}{
 		{
-			// keepalive_interval = 0 must be rejected.
-			name:              "zero_keepalive",
-			keepaliveInterval: 0,
-			wantInMsg:         []string{"config error: keepalive_interval:", "must be > 0"},
-		},
-		{
-			// EC-010: keepalive_interval = -1s must be rejected.
+			// EC-012: keepalive_interval = -1s must be rejected with E-CFG-007.
 			name:              "negative_1s",
 			keepaliveInterval: -1 * time.Second,
-			wantInMsg:         []string{"config error: keepalive_interval:", "must be > 0"},
+			wantInMsg: []string{
+				"config error: keepalive_interval:",
+				"must not be negative",
+				"-1s",
+			},
 		},
 		{
-			// Very small negative.
+			// Very small negative value (-1ns) must also be rejected.
 			name:              "negative_1ns",
 			keepaliveInterval: -1,
-			wantInMsg:         []string{"config error: keepalive_interval:", "must be > 0"},
+			wantInMsg: []string{
+				"config error: keepalive_interval:",
+				"must not be negative",
+			},
 		},
 	}
 
-	for _, tc := range cases {
+	for _, tc := range negativeCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			// Set DrainTimeout to a positive value so the only failing field is
+			// keepalive_interval, and the message check is not obscured by a second error.
 			cfg := &config.Config{
 				ListenAddr:        "0.0.0.0:9090",
 				TickInterval:      10 * time.Millisecond,
+				DrainTimeout:      10 * time.Second,
 				KeepaliveInterval: tc.keepaliveInterval,
 			}
 			err := cfg.Validate()
@@ -1179,7 +1196,21 @@ func TestConfigValidate_RejectsNonPositiveKeepaliveInterval(t *testing.T) {
 		})
 	}
 
-	// Positive keepalive_interval must pass.
+	// EC-011: keepalive_interval = 0s (or absent) must be ACCEPTED. Validate() returns nil.
+	// Red Gate: current code rejects zero, so this subtest FAILS against current config.go.
+	t.Run("zero_keepalive_interval_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second,  // positive — not under test
+			KeepaliveInterval: 0,                 // zero == absent per Go yaml / time.Duration semantics
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	// Positive keepalive_interval must pass (regression guard).
 	t.Run("positive_keepalive_passes", func(t *testing.T) {
 		t.Parallel()
 
@@ -1191,21 +1222,60 @@ func TestConfigValidate_RejectsNonPositiveKeepaliveInterval(t *testing.T) {
 		}
 		requireNoError(t, cfg.Validate())
 	})
+}
 
-	// Zero keepalive_interval is rejected per BC-2.09.003 PC-8 (same note as
-	// drain_timeout: if impl treats 0 as "default/skip", this test catches it).
-	t.Run("zero_is_rejected_not_skipped", func(t *testing.T) {
+// ---- EC-009 / EC-011: zero/absent drain_timeout and keepalive_interval accepted --
+
+// TestConfigValidate_AcceptsZeroOrAbsentDurationFields verifies that a fully valid
+// config with drain_timeout and keepalive_interval both zero (== absent per Go yaml
+// / time.Duration zero-value semantics) passes Validate() with no error.
+//
+// This is the EC-009 + EC-011 happy path: the daemon will apply the documented
+// defaults (10s / 1s) at startup (S-7.04). Validate() must not reject these fields
+// when zero.
+//
+// Red Gate: current config.go rejects zero for both fields ("must be > 0").
+// These tests FAIL against current code — they pass only after the v1.4 fix lands.
+//
+// Traces: BC-2.09.003 PC-7 v1.4, PC-8 v1.4, EC-009, EC-011, AC-007, AC-008.
+func TestConfigValidate_AcceptsZeroOrAbsentDurationFields(t *testing.T) {
+	t.Parallel()
+
+	t.Run("both_zero_drain_and_keepalive_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		// Both optional duration fields absent/zero: Validate() must return nil.
+		cfg := &config.Config{
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      0, // absent/zero — daemon default 10s applied by S-7.04
+			KeepaliveInterval: 0, // absent/zero — daemon default 1s applied by S-7.04
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("zero_drain_positive_keepalive_accepted", func(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{
 			ListenAddr:        "0.0.0.0:9090",
 			TickInterval:      10 * time.Millisecond,
-			KeepaliveInterval: 0,
+			DrainTimeout:      0,              // absent/zero — accepted
+			KeepaliveInterval: 1 * time.Second, // explicit positive — accepted
 		}
-		err := cfg.Validate()
-		requireError(t, err)
-		requireECFG001(t, err)
-		requireContains(t, err.Error(), "keepalive_interval")
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("positive_drain_zero_keepalive_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:        "0.0.0.0:9090",
+			TickInterval:      10 * time.Millisecond,
+			DrainTimeout:      10 * time.Second, // explicit positive — accepted
+			KeepaliveInterval: 0,                // absent/zero — accepted
+		}
+		requireNoError(t, cfg.Validate())
 	})
 }
 
@@ -1215,24 +1285,28 @@ func TestConfigValidate_RejectsNonPositiveKeepaliveInterval(t *testing.T) {
 // are simultaneously invalid, Validate() collects ALL errors and reports them in
 // a single E-CFG-001 error — not just the first one encountered.
 //
-// This tests the amended AC-002 requirement (S-6.01 v1.3 / BC-2.09.003 Inv-4):
+// This tests the amended AC-002 requirement (S-6.01 v1.5 / BC-2.09.003 v1.4 Inv-4):
 // exhaustive reporting must cover E-CFG-002 (bad listen_addr), E-CFG-003 (bad
-// upstream addr), E-CFG-006 (non-positive drain_timeout), and E-CFG-007
-// (non-positive keepalive_interval) together.
+// upstream addr), E-CFG-006 (negative drain_timeout), and E-CFG-007
+// (negative keepalive_interval) together.
 //
-// Traces: BC-2.09.003 invariant 4, AC-002 (amendment), S-6.01 v1.3.
+// BC-2.09.003 v1.4 note: drain_timeout and keepalive_interval are triggered ONLY
+// by NEGATIVE values. Zero is now accepted (daemon default). The multi-field cases
+// below use -5s / -1s (not zero) so they still trigger E-CFG-006 / E-CFG-007.
+//
+// Traces: BC-2.09.003 invariant 4, AC-002 (amendment), S-6.01 v1.5.
 func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
 	t.Parallel()
 
-	t.Run("bad_listen_addr_and_drain_timeout_together", func(t *testing.T) {
+	t.Run("bad_listen_addr_and_negative_drain_timeout_together", func(t *testing.T) {
 		t.Parallel()
 
 		// Config with two distinct invalid fields: bad listen_addr (E-CFG-002) and
-		// non-positive drain_timeout (E-CFG-006). Both must appear in a single error.
+		// negative drain_timeout (E-CFG-006). Both must appear in a single error.
 		cfg := &config.Config{
-			ListenAddr:   "no-port-here", // invalid host:port → E-CFG-002
+			ListenAddr:   "no-port-here",   // invalid host:port → E-CFG-002
 			TickInterval: 10 * time.Millisecond,
-			DrainTimeout: -1 * time.Second, // negative → E-CFG-006
+			DrainTimeout: -5 * time.Second, // negative → E-CFG-006 (zero would be valid per v1.4)
 		}
 		err := cfg.Validate()
 		requireError(t, err)
@@ -1244,16 +1318,18 @@ func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
 		requireContains(t, msg, "drain_timeout")
 	})
 
-	t.Run("bad_upstream_addr_and_non_positive_keepalive_together", func(t *testing.T) {
+	t.Run("bad_upstream_addr_and_negative_keepalive_together", func(t *testing.T) {
 		t.Parallel()
 
+		// keepalive_interval: -1s is negative → E-CFG-007.
+		// (Previously this case used zero, which is now accepted per BC-2.09.003 v1.4.)
 		cfg := &config.Config{
 			ListenAddr:   "0.0.0.0:9090",
 			TickInterval: 10 * time.Millisecond,
 			UpstreamRouters: []config.UpstreamRouter{
 				{Addr: "notvalid"}, // invalid → E-CFG-003 at index 0
 			},
-			KeepaliveInterval: 0, // zero → E-CFG-007
+			KeepaliveInterval: -1 * time.Second, // negative → E-CFG-007
 		}
 		err := cfg.Validate()
 		requireError(t, err)
@@ -1268,15 +1344,16 @@ func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
 	t.Run("three_invalid_fields_all_reported", func(t *testing.T) {
 		t.Parallel()
 
-		// Maximum coverage: bad listen_addr + non-positive drain_timeout + bad upstream addr.
+		// Maximum coverage: bad listen_addr + negative drain_timeout + bad upstream addr.
 		// All three must appear in a single E-CFG-001 error (Inv-4: exhaustive reporting).
+		// drain_timeout is -5s (negative) so E-CFG-006 is triggered; zero would be valid.
 		cfg := &config.Config{
 			ListenAddr:   "0.0.0.0", // missing port → E-CFG-002
 			TickInterval: 10 * time.Millisecond,
 			UpstreamRouters: []config.UpstreamRouter{
 				{Addr: "badupstream"}, // invalid host:port → E-CFG-003 at [0]
 			},
-			DrainTimeout: 0, // zero → E-CFG-006
+			DrainTimeout: -5 * time.Second, // negative → E-CFG-006 (zero would be valid per v1.4)
 		}
 		err := cfg.Validate()
 		requireError(t, err)
