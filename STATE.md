@@ -160,6 +160,7 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | S-W3.04 CONVERGED (BC-5.39.001) + PR #17 merged | 3 clean passes (10-12) at 1c3c864; aeb442d | 2026-06-27 |
 | Per-story-delivery merge-handoff pathology (vsdd-factory#302) | Agent self-merge blocked by classifier; human-performed merge is the correct resolution | 2026-06-27 |
 | Wave-3 Pass-1: C-1 deferred, I-1 fixed PR #18 e9421d8 | C-1 → ARCH-08 v2.2 §6.5.1 TRACKED-DEFER/S-BL.NI; I-1 (BC-2.04.007) fixed; streak 0/3 | 2026-06-27 |
+| Wave-3 pre-gate consistency audit | PASS — 0 blocking; 3 non-blocking findings resolved: D5-1 (STORY-INDEX S-BL.NI row rewritten), T2-1 + V-1 (S-W3.04 AC-010 + ARCH-08 pin updated to v2.3) | 2026-06-27 |
 
 ## Session Resume Checkpoint — 2026-06-27 (Wave 3 pre-gate items delivered; human gate PENDING)
 

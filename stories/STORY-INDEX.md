@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "1.3"
+version: "1.4"
 status: draft
 producer: story-writer
 timestamp: 2026-06-25T00:00:00
@@ -94,7 +94,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.NI | network-ingress: wire live frame path through router (RouteFrame production caller) — MUST wire routing.WithFailureCounter(fc) alongside routing.WithLogger(rl) in buildRouter; MUST include daemon-level integration test asserting E-ADM-017 fires through the daemon's own router (analogous to AC-001 for E-ADM-016); partial wiring (logger only) is FORBIDDEN per ARCH-08 v2.2 §6.5.1 | draft | C-1-W3P1-defer (FailureCounter/E-ADM-017 wiring obligation; ARCH-08 §6.5.1 TRACKED-DEFER commit 14a61d2; BC-2.05.005 PC-3, S-W3.05 AC-009) | Wave 4+ |
+| S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009) | Wave 4+ |
 
 ## Maintenance Stories
 
@@ -114,3 +114,10 @@ Drift item SIGN-DX-001 is consumed by S-M.02. S-M.02 is milestone-gated — SIGN
 ## Files
 
 All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files use `.factory/stories/S-M.NN-*.md`. Backlog stubs use `.factory/stories/S-BL.*-*.md`. Epic files are in `.factory/stories/epics/E-N-*.md`.
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.4 | 2026-06-27 | Post-merge traceability correction: rewrite S-BL.NI backlog row — remove stale FailureCounter-wiring obligation (COMPLETED by PR #20, C-1 RESOLVED per ARCH-08 v2.3 §6.5.1); scope S-BL.NI to remaining network-ingress listener obligation only; update ARCH-08 citation from v2.2 to v2.3. (Wave 3 pre-gate consistency audit Finding D5-1.) |
+| 1.3 | 2026-06-27 | Added S-M.01, S-M.02 maintenance stories; introduced E-MAINT epic; updated summary counts. |

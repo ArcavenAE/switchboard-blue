@@ -42,7 +42,15 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'
   - '.factory/specs/prd-supplements/error-taxonomy.md'
 acceptance_criteria_count: 10
-version: "1.4"
+version: "1.5"
+# v1.5 2026-06-27: post-merge traceability corrections (Wave 3 pre-gate consistency audit).
+# T2-1: AC-010 updated to add TestForwardFramesTOCTOUMisclassificationBranchDeterministic
+# (internal/tmux/connector_toctou_misclass_test.go, PR #19 849bd86) — deterministically covers
+# the srcCh==prevSrcCh && inPTY==true misclassification branch in the SECOND relay iteration
+# that TestForwardFramesTOCTOURegressionDeterministic does not reach; develop reference commit
+# updated from e9421d8 to 849bd86. V-1: ARCH-08 version pins updated v2.1→v2.3 throughout
+# (token-budget table, task 6b, task 10, task 13, Architecture Compliance table, Forbidden
+# Dependencies note). Historical changelog entries (v1.2/v1.3) left intact.
 # BC-2.04.007 authored by PO 2026-06-27. AC-007 traces to BC-2.04.007 PC-1;
 # AC-008 traces to BC-2.04.007 PC-2. Gate blocker resolved; status flipped to ready.
 # v1.2 2026-06-27: adversarial-convergence adjudication; architect ARCH-01 v1.4 /
@@ -239,7 +247,7 @@ causes the test to fail).
 ### AC-010 (traces to BC-2.04.002 EC-002 + EC-003; ARCH-01 v1.6 §ADR-011 Obligation T2)
 ARCH-01 v1.6 §ADR-011 Obligation T2 (failover-under-stress — the ~20% TOCTOU
 false-EOF misclassification guard) is satisfied by the following existing tests, all
-verified passing on develop at e9421d8:
+verified passing on develop at 849bd86:
 
 - `TestForwardFramesTOCTOUCount50` in `internal/tmux/connector_toctou_test.go` — embeds
   a 50-iteration in-body stress loop (`for i := range 50 { t.Run(...) }`) exercising the
@@ -250,6 +258,15 @@ verified passing on develop at e9421d8:
   `internal/tmux/connector_toctou_test.go` — uses the deterministic `swapBarrier`
   interleaving hook (the T2 "alternatively/additionally" deterministic approach) to force
   the exact TOCTOU interleaving and assert correct frame continuity.
+- `TestForwardFramesTOCTOUMisclassificationBranchDeterministic` in
+  `internal/tmux/connector_toctou_misclass_test.go` (PR #19, 849bd86) — uses two seam
+  channels (`swapBarrier`, `swapBarrier2`) to deterministically reach the
+  `srcCh==prevSrcCh && inPTY==true` branch in `forwardFrames` during the SECOND relay
+  iteration (prevSrcCh=ctrl.frames path). This is the specific misclassification branch
+  that `TestForwardFramesTOCTOURegressionDeterministic` does NOT cover; the test header
+  documents that distinction explicitly. `ptyAllocFunc` blocks until `ptyAllocReady` is
+  sent, guaranteeing `sc.active=ctrl` during the relay's second `activeSourceSnapshot`
+  call.
 - `TestForwardFramesPTYEOFExitsCleanly` in `internal/tmux/connector_eof_test.go` —
   the bounded terminal-EOF test (T1 sibling per ADR-011 §Obligation T1/T2 split);
   included here for completeness as it exercises the PTY-mode relay exit path that T2
@@ -259,7 +276,8 @@ The obligation is fully satisfied in code. This AC is a traceability-only bindin
 no code change is required or expected.
 - **Tests (existing, passing):** `TestForwardFramesTOCTOUCount50`,
   `TestForwardFramesTOCTOURegressionDeterministic` (both in
-  `internal/tmux/connector_toctou_test.go`), `TestForwardFramesPTYEOFExitsCleanly`
+  `internal/tmux/connector_toctou_test.go`), `TestForwardFramesTOCTOUMisclassificationBranchDeterministic`
+  (in `internal/tmux/connector_toctou_misclass_test.go`), `TestForwardFramesPTYEOFExitsCleanly`
   (in `internal/tmux/connector_eof_test.go`)
 
 ## Edge Cases
@@ -307,7 +325,7 @@ no code change is required or expected.
 | BC-2.04.007.md (v1.2 — EC-007 extended, E-SYS-003) | ~800 |
 | BC-2.05.008.md | ~900 |
 | ARCH-01-core-services.md (ADR-010, ADR-011 v1.7) | ~1,500 |
-| ARCH-08-dependency-graph.md (§6.5–§6.6 v2.1) | ~1,100 |
+| ARCH-08-dependency-graph.md (§6.5–§6.6 v2.3) | ~1,100 |
 | error-taxonomy.md (v2.1 — E-SYS-003) | ~500 |
 | internal/tmux package (existing, ~4 files) | ~1,500 |
 | internal/session package (existing, ~4 files) | ~1,200 |
@@ -362,7 +380,7 @@ no code change is required or expected.
         instances returned by the production constructors (`buildRouter`, `buildAccessNode`), not
         against separately constructed parallel instances. Separate reconstruction would make the
         test tautological (it would not exercise the shared `AdmittedKeySet` wiring).
-6b. [ ] **runAccess injection seam (ARCH-01 ADR-011 v1.5 §HIGH-B + ARCH-08 v2.1 §6.5.1 obligation 4):**
+6b. [ ] **runAccess injection seam (ARCH-01 ADR-011 v1.5 §HIGH-B + ARCH-08 v2.3 §6.5.1 obligation 4):**
         Split `runAccess` into two functions in `cmd/switchboard/access.go`:
         (1) `runAccess(ctx context.Context, stderr io.Writer) error` — thin wrapper: constructs the
             real `*tmux.SessionConnector` via the default PTY allocator (same construction as current
@@ -404,12 +422,12 @@ no code change is required or expected.
 10. [ ] Verify ARCH-08 §6.5.2: `cmd/switchboard` imports only
         `{internal/admission, internal/frame, internal/routing, internal/session, internal/tmux,
         internal/halfchannel}` plus stdlib — no `internal/config`, `internal/drain`,
-        `internal/metrics`. Note: `internal/frame` is now part of the approved set (ARCH-08 v2.1
+        `internal/metrics`. Note: `internal/frame` is now part of the approved set (ARCH-08 v2.3
         §6.5.2 MEDIUM ruling) — `startFramesBridge` uses `frame.OuterHeader` when calling
         `AccessNode.DeliverFrame`. `internal/frame` is a DAG position-2 leaf; no forbidden edge.
 11. [ ] `just fmt && just lint` pass with zero warnings
 12. [ ] `just test-race` passes (relay goroutine and `sync.Once` close must be data-race free)
-13. [ ] **EC-005 comment correction (ARCH-01 ADR-011 v1.5 §EC-005 / ARCH-08 v2.1 §6.5.2 accepted
+13. [ ] **EC-005 comment correction (ARCH-01 ADR-011 v1.5 §EC-005 / ARCH-08 v2.3 §6.5.2 accepted
         Wave-4 follow-up):** In `cmd/switchboard/access.go`, locate the EC-005 comment on the
         forbidden-package guard and replace the text `"CI enforces this structurally"` with:
         `"Build fails because internal/config, internal/drain, internal/metrics do not yet exist
@@ -432,7 +450,7 @@ no code change is required or expected.
 
 | Rule | Source | Enforcement |
 |------|--------|-------------|
-| `cmd/switchboard` imports only positions 1–7 plus stdlib | ARCH-08 §6.5.2 v2.1 (import set enumerated, includes `internal/frame`) | `go vet` import cycle detection; lint |
+| `cmd/switchboard` imports only positions 1–7 plus stdlib | ARCH-08 §6.5.2 v2.3 (import set enumerated, includes `internal/frame`) | `go vet` import cycle detection; lint |
 | `internal/config`, `internal/drain`, `internal/metrics` MUST NOT be imported | ARCH-08 §6.5.2 deferred-packages list | Build fails if those packages don't exist; CI fails if import added |
 | `SessionConnector.Frames()` relay goroutine exits via `sc.frames` close | ADR-011 §Concurrency contract | `TestDaemonCleanShutdown` + `just test-race` |
 | No `log.Fatal` / `os.Exit` outside `main()` | ARCH-01 §Supervision; go.md rule | golangci-lint |
@@ -459,7 +477,7 @@ MUST read: "Build fails because internal/config, internal/drain, internal/metric
 not yet exist on develop; a durable go-list CI assertion enforcing this boundary after
 those packages land is deferred to Wave 4." (ARCH-01 ADR-011 v1.5 §EC-005; task 13.)
 Note: `internal/frame` is NOT in the forbidden set — it is an approved import per
-ARCH-08 §6.5.2 v2.1 (DAG position 2 leaf, no forbidden edge).
+ARCH-08 §6.5.2 v2.3 (DAG position 2 leaf, no forbidden edge).
 
 ## Library & Framework Requirements
 
@@ -489,6 +507,7 @@ ARCH-08 §6.5.2 v2.1 (DAG position 2 leaf, no forbidden edge).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-06-27 | Post-merge traceability corrections (Wave 3 pre-gate consistency audit). (T2-1) AC-010: added `TestForwardFramesTOCTOUMisclassificationBranchDeterministic` in `internal/tmux/connector_toctou_misclass_test.go` (PR #19, 849bd86) — deterministically covers `srcCh==prevSrcCh && inPTY==true` misclassification branch in SECOND relay iteration, the gap not reached by `TestForwardFramesTOCTOURegressionDeterministic`; updated develop reference commit from e9421d8 to 849bd86. (V-1) Updated ARCH-08 version pins v2.1→v2.3 in token-budget table (§6.5–§6.6), task 6b, task 10, task 13, Architecture Compliance table, and Forbidden Dependencies note. Changelog entries for v1.2/v1.3 left intact (historical). |
 | 1.4 | 2026-06-27 | Bind ARCH-01 v1.6 §ADR-011 Obligation T2 to existing passing tests (consistency-audit Finding 4.1); traceability-only, no code change. AC-010 added citing TestForwardFramesTOCTOUCount50, TestForwardFramesTOCTOURegressionDeterministic (connector_toctou_test.go), and TestForwardFramesPTYEOFExitsCleanly (connector_eof_test.go); BC-2.04.002 EC-002 + EC-003 traces. Secondary hygiene: VP-060 added to vp_traces (Finding 1.2); BC-2.04.007 version pin in AC-007 updated v1.1→v1.3 (Finding 2.1); ARCH-01 ADR-011 token-budget pin updated v1.5→v1.7 (Finding 2.2). acceptance_criteria_count: 9→10. |
 | 1.3 | 2026-06-27 | S-W3.04 adversarial convergence pass-2 — ARCH-01 v1.5 / ARCH-08 v2.1 / BC-2.04.002 v1.3 / BC-2.04.007 v1.2 / error-taxonomy v2.1 propagated. (HIGH-A) AC-009 added: PTY-EOF no-spin obligation — relay detects `srcCh==prevSrcCh` in PTY mode, sends `ErrPTYSourceEOF` on `sc.errCh` via `sc.closeErrCh.Do`, exits without busy-spinning; E-SYS-002 drain path logs and exits 1; test `TestForwardFramesPTYEOFExitsCleanly` in `internal/tmux` must fail on busy-spin/no-exit regression. Traces to BC-2.04.002 EC-008 and BC-2.04.007 EC-007 + PC-2.6. (HIGH-B) runAccess injection seam: task 6b added — split `runAccess` into thin ctor wrapper + `runAccessWithConnector(ctx, stderr, connectorIface, an, router)` holding all orchestration/PC-1/PC-2/PC-2.6 logic; `connectorIface` (unexported, 5 methods: Connect/Frames/Err/Close/RelayDropped); `buildAccessComponents` signature unchanged; AC-007 updated to reference `runAccessWithConnector` end-to-end tests; `TestRunAccessWithConnectorPC26` + `TestRunAccessWithConnectorPC2` in `access_test.go` replace tautological `TestDaemonMidSessionDoubleFailureExitsNonZero`. (MEDIUM §6.5.2) `internal/frame` added to approved import set in task 10, Architecture Compliance table, and Forbidden Dependencies note. (MEDIUM EC-005) task 13 added: correct EC-005 comment from "CI enforces this structurally" to accurate wording; Wave-4 durable CI import-guard is an explicit follow-up non-blocker. Token budget updated: +300 tokens (v1.3 story size, error-taxonomy.md, additional test file). |
 | 1.2 | 2026-06-27 | Adversarial-convergence adjudication + architect ARCH-01 v1.4 / ARCH-08 v2.0 rulings. (A) AC-001: replaced tautology-risk sentence with non-tautological wiring obligation — test must target daemon's OWN router instance (shared `AdmittedKeySet`, `buildRouter` return value must not be discarded); router is constructed-but-not-in-live-data-path per ARCH-08 v2.0 §6.5.1 obligation 1. (B) EC-003: corrected counter name from `FramesDropped` to `sc.RelayDropped()` (relay-layer); added clarification that ConsoleSet-level `FramesDropped()` is a separate counter not incremented by relay drops (BC-2.04.006 v1.4). (C) AC-006: updated log format to `"frames_dropped relay=<N> consoles=<M>"` (both counters, cumulative, no reset); log emitted unconditionally per BC-2.04.006 v1.4 invariant 4. (D) AC-007: extended with mid-session double-failure path (BC-2.04.007 v1.1 PC-2.6 / EC-007 / invariant 5) — `sc.Err()` non-nil triggers E-SYS-002, cancel, exit 1; drain goroutine must be wg-tracked; added `TestDaemonMidSessionDoubleFailureExitsNonZero`. (E) Tasks: added item 6a with five implementation obligations (shared keyset, `RelayDropped` counter, `sc.Err()` drain goroutine, `forwardFrames` ctx.Done select, busy-spin guard) and test-quality rule against parallel reconstruction. |
