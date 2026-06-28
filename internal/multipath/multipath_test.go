@@ -347,7 +347,7 @@ func TestBC_2_02_002_Receive_FirstCopyDelivered(t *testing.T) {
 	mp := multipath.NewMultipath(nil, multipath.DefaultDropCacheSize)
 	f := makeFrame(t, []byte("first arrival"))
 
-	if err := mp.Receive(f, 1); err != nil {
+	if err := mp.Receive(f); err != nil {
 		t.Errorf("first arrival: want nil, got %v", err)
 	}
 }
@@ -365,16 +365,15 @@ func TestBC_2_02_002_Receive_DuplicateReturnsErr(t *testing.T) {
 	mp := multipath.NewMultipath(nil, multipath.DefaultDropCacheSize)
 
 	f := makeFrame(t, []byte("dup frame"))
-	const ifaceID = uint64(1)
 
 	// First arrival.
-	if err := mp.Receive(f, ifaceID); err != nil {
+	if err := mp.Receive(f); err != nil {
 		t.Fatalf("first arrival: want nil, got %v", err)
 	}
 
-	// Duplicate arrival (same frame bytes → same checksum, same interface).
+	// Duplicate arrival (same frame bytes → same checksum).
 	fDup := makeFrame(t, []byte("dup frame")) // byte-identical
-	if !errors.Is(mp.Receive(fDup, ifaceID), multipath.ErrDuplicate) {
+	if !errors.Is(mp.Receive(fDup), multipath.ErrDuplicate) {
 		t.Errorf("duplicate arrival: want ErrDuplicate, got nil")
 	}
 }
@@ -395,9 +394,9 @@ func TestBC_2_02_002_Receive_DuplicateDiscardSilent(t *testing.T) {
 	mp := multipath.NewMultipath(nil, multipath.DefaultDropCacheSize)
 
 	f := makeFrame(t, []byte("silent dup"))
-	_ = mp.Receive(f, 1) // first: delivered
+	_ = mp.Receive(f) // first: delivered
 
-	err := mp.Receive(makeFrame(t, []byte("silent dup")), 1) // dup
+	err := mp.Receive(makeFrame(t, []byte("silent dup"))) // dup
 	if err == nil {
 		t.Fatal("duplicate: want ErrDuplicate, got nil")
 	}
@@ -417,13 +416,12 @@ func TestBC_2_02_002_Receive_MultipleArrivalsSameFrame(t *testing.T) {
 	mp := multipath.NewMultipath(nil, multipath.DefaultDropCacheSize)
 
 	f := makeFrame(t, []byte("looping frame"))
-	const iface = uint64(7)
 
-	_ = mp.Receive(f, iface) // first: delivered
+	_ = mp.Receive(f) // first: delivered
 
 	for i := 2; i <= 5; i++ {
 		dup := makeFrame(t, []byte("looping frame"))
-		if !errors.Is(mp.Receive(dup, iface), multipath.ErrDuplicate) {
+		if !errors.Is(mp.Receive(dup), multipath.ErrDuplicate) {
 			t.Errorf("arrival #%d: want ErrDuplicate, got nil", i)
 		}
 	}
@@ -442,10 +440,10 @@ func TestBC_2_02_002_Receive_DistinctFramesNotSuppressed(t *testing.T) {
 	f1 := makeFrameWithHeader(t, 42, []byte("abc"))
 	f2 := makeFrameWithHeader(t, 43, []byte("def"))
 
-	if err := mp.Receive(f1, 1); err != nil {
+	if err := mp.Receive(f1); err != nil {
 		t.Errorf("frame1 (seq=42): want nil, got %v", err)
 	}
-	if err := mp.Receive(f2, 1); err != nil {
+	if err := mp.Receive(f2); err != nil {
 		t.Errorf("frame2 (seq=43): want nil, got %v", err)
 	}
 }
@@ -475,15 +473,16 @@ func TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed(t *testing.T) {
 	f1 := makeFrame(t, payload)
 	f2 := makeFrame(t, payload) // byte-identical → same checksum
 
-	// First arrival on interface 1: must be delivered (nil).
-	if err := mp.Receive(f1, 1); err != nil {
+	// First arrival: must be delivered (nil).
+	if err := mp.Receive(f1); err != nil {
 		t.Errorf("iface=1 first arrival: want nil, got %v", err)
 	}
 
-	// Second arrival on interface 2: same checksum → endpoint dedup MUST suppress it.
-	// Endpoint dedup keys on checksum alone (BC-2.02.002 postcondition 2 / DI-009);
-	// the arrival interface is irrelevant at the receiver. ErrDuplicate required.
-	if !errors.Is(mp.Receive(f2, 2), multipath.ErrDuplicate) {
+	// Second arrival (same checksum, different conceptual interface) → endpoint dedup
+	// MUST suppress it. Endpoint dedup keys on checksum alone (BC-2.02.002
+	// postcondition 2 / DI-009); the arrival interface is irrelevant at the receiver.
+	// ErrDuplicate required.
+	if !errors.Is(mp.Receive(f2), multipath.ErrDuplicate) {
 		t.Errorf("iface=2 same-checksum second arrival: want ErrDuplicate (suppressed), got nil")
 	}
 }
@@ -516,7 +515,7 @@ func TestBC_2_02_002_Receive_ConcurrentFirstArrivalWins(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			f := makeFrame(t, payload) // byte-identical across all goroutines
-			err := mp.Receive(f, uint64(i+1))
+			err := mp.Receive(f)
 			if err == nil {
 				deliveries.Add(1)
 			} else if !errors.Is(err, multipath.ErrDuplicate) {

@@ -82,6 +82,9 @@ type PathTracker struct {
 // BC-2.02.003 precondition 3: metrics are initialized with a high-RTT default
 // on first connection.
 func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
+	if alpha <= 0 || alpha > 1 {
+		panic("paths: NewPathTracker alpha must satisfy 0 < alpha <= 1")
+	}
 	return &PathTracker{
 		ewmaAlpha:   alpha,
 		ewmaRTTMS:   initialRTTMS,
@@ -89,6 +92,18 @@ func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
 		active:      true,
 		firstProbe:  true,
 	}
+}
+
+// resetRTT sets the RTT outright from a measured sample, clearing loss and
+// miss counters and marking the path active. Called on first-probe arrival and
+// on reactivation after consecutive misses (BC-2.02.003 EC-003 / postcondition 6
+// v1.2). Caller must hold t.mu.
+func (t *PathTracker) resetRTT(arrivalRTTMS float64) {
+	t.ewmaRTTMS = arrivalRTTMS
+	t.ewmaLossPct = 0
+	t.consecutiveMisses = 0
+	t.firstProbe = false
+	t.active = true
 }
 
 // OnProbe updates the EWMA RTT and loss estimate for the path based on a
@@ -117,26 +132,14 @@ func (t *PathTracker) OnProbe(arrivalRTTMS float64, lossEvent bool) {
 		//
 		// Reactivation (BC-2.02.003 postcondition 6 v1.2): if the path was
 		// deactivated by consecutive misses, the first successful probe restores
-		// it to the active set, resets RTT from the reactivating probe (same as
-		// first-probe semantics), and clears the loss EWMA.
-		if !t.active {
-			t.active = true
-			t.ewmaRTTMS = arrivalRTTMS
-			t.ewmaLossPct = 0
-			t.consecutiveMisses = 0
-			t.firstProbe = false
+		// it to the active set. First-probe semantics apply: RTT is reset outright
+		// rather than EWMA-blended (shared invariant with the initial first-probe
+		// path below — both use resetRTT to prevent divergence).
+		if !t.active || t.firstProbe {
+			t.resetRTT(arrivalRTTMS)
 			return
 		}
-		// On first successful probe, replace the conservative initial RTT outright
-		// (RFC 6298 style) so the high-RTT default does not slow convergence for
-		// many probe intervals (BC-2.02.003 EC-003: "after first measured RTT,
-		// path ranked appropriately").
-		if t.firstProbe {
-			t.ewmaRTTMS = arrivalRTTMS
-			t.firstProbe = false
-		} else {
-			t.ewmaRTTMS = t.ewmaAlpha*arrivalRTTMS + (1-t.ewmaAlpha)*t.ewmaRTTMS
-		}
+		t.ewmaRTTMS = t.ewmaAlpha*arrivalRTTMS + (1-t.ewmaAlpha)*t.ewmaRTTMS
 		t.ewmaLossPct = (1 - t.ewmaAlpha) * t.ewmaLossPct
 		t.consecutiveMisses = 0
 	}

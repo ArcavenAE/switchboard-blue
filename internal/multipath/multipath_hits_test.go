@@ -46,8 +46,6 @@
 // After Hits() is implemented (and the tag removed), all tests in this file MUST
 // pass under `go test -race ./internal/multipath/...`.
 
-//go:build dropcache_hits
-
 package multipath_test
 
 import (
