@@ -70,6 +70,12 @@ const (
 // package-level assignment (framesDroppedInterval = 1ms before the call).
 var framesDroppedInterval = 30 * time.Second
 
+// newHalfChannel is the half-channel constructor seam.
+// Declared as var (not called directly) so tests can inject a capturing stub
+// to verify that tickIntervalFor(cfg) reaches halfchannel.New end-to-end
+// (BC-2.09.003 PC-9 / Inv-5 / AC-009; mirrors the framesDroppedInterval pattern).
+var newHalfChannel = halfchannel.New
+
 // connectorIface is the minimal subset of *tmux.SessionConnector used by
 // runAccessWithConnector. *tmux.SessionConnector satisfies this interface by
 // construction — no changes to internal/tmux are required for the interface
@@ -113,7 +119,7 @@ func tickIntervalFor(cfg *config.Config) time.Duration {
 // When cfg is non-nil, the half-channel tick interval is sourced from
 // cfg.TickInterval (BC-2.09.003 PC-9 / Inv-5 / AC-009).
 func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	ds := halfchannel.New(1, halfchannel.Downstream, tickIntervalFor(cfg))
+	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
 	// (via Publisher) AND the Router, so AC-001's test can register a key and

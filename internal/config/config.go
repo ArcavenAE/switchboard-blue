@@ -163,7 +163,7 @@ func (c *Config) Validate() error {
 		if err := validateHostPort(c.ListenAddr); err != nil {
 			failures = append(failures, fmt.Sprintf(
 				"config error: listen_addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '0.0.0.0:9090'",
-				c.ListenAddr,
+				sanitizeAddrForError(c.ListenAddr),
 			))
 		}
 	}
@@ -190,7 +190,7 @@ func (c *Config) Validate() error {
 		if err := validateHostPort(r.Addr); err != nil {
 			failures = append(failures, fmt.Sprintf(
 				"config error: upstream_routers[%d].addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'",
-				i, r.Addr,
+				i, sanitizeAddrForError(r.Addr),
 			))
 		}
 	}
@@ -223,6 +223,26 @@ func (c *Config) Validate() error {
 		Code:   "E-CFG-001",
 		Detail: strings.Join(failures, "; "),
 	}
+}
+
+// sanitizeAddrForError strips control characters from an operator-supplied
+// address value before interpolating it into an error message.
+//
+// Embedding raw control characters (\n, \r, \x1b, etc.) into an error string
+// allows an attacker to forge log lines or corrupt terminal output (CWE-117 /
+// F-SEC-002). We strip any character with Unicode category "control" (i.e.
+// codepoints in the ranges U+0000–U+001F and U+007F–U+009F).
+//
+// Legitimate values (e.g. "not-a-host-port") pass through unchanged so the
+// operator can see what they mistyped (BC-2.09.003 PC-5/PC-6).
+func sanitizeAddrForError(addr string) string {
+	var b strings.Builder
+	for _, r := range addr {
+		if r >= 0x20 && r != 0x7F {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // validateHostPort returns nil if addr is a valid host:port as defined by

@@ -1319,7 +1319,7 @@ func TestConfigValidate_RejectsControlCharsInAddrError(t *testing.T) {
 	type addrCase struct {
 		name           string
 		addr           string
-		wantFieldInMsg string // must appear in error
+		wantFieldInMsg string   // must appear in error
 		mustNotContain []string // raw control chars that must NOT appear in error
 	}
 
