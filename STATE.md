@@ -102,9 +102,11 @@ s_4_01_merge_date: 2026-06-28
 s_4_01_status: completed
 s_4_01_head_sha: ee75d83
 s_4_01_demo_evidence: "7/7 ACs PASS (test-transcript based, S-W3.04 precedent); race-clean"
+s_4_02_adversary_streak: 0
+s_4_03_adversary_streak: 0
 develop_head: 36c5e98
 open_prs: 0
-timestamp: 2026-06-28T12:00:00Z
+timestamp: 2026-06-28T18:00:00Z
 last_update: 2026-06-28
 ---
 
@@ -158,6 +160,11 @@ Wave 4 ACTIVE. S-4.01 (first Wave-4 delivery) COMPLETE — merged as e415d31 (PR
 | W3-DEFER-5 | MED | EC-005: durable CI import-perimeter guard — BC-2.04.002 EC-005 comment corrected (PR #17), but no CI lint rule enforces the `internal/` import boundary structurally. | devops-engineer | deferred → Wave 4 |
 | W3-DEFER-6 | MED | Real-connector PTY-EOF lifecycle integration test — TestForwardFramesPTYEOFExitsCleanly uses mock; no test exercises actual PTY master EOF through live SessionConnector. | test-writer | deferred → Wave 4 |
 | S401-O3 | MED | BC-2.02.003 PC5: degraded-path flag (RTT >200ms) unimplemented in internal/paths — feeds quality-indicator subsystem (BC-2.06.001/ARCH-03), out of S-4.01 scope. Ranking already deprioritizes slow paths via score; flag wiring tracked for quality-indicator story. | product-owner/architect | deferred → quality-indicator story |
+| S402-F006 | LOW | S-4.02: uint32 nextSeq wraparound in replay — document lifetime assumption. | architect | deferred |
+| S402-F007 | LOW | S-4.02: ARCH-03 line 122 N=3 vs BC-2.02.004 N=5 default — reconcile ARCH-03 to N=5 (BC is behavior authority). | architect | open |
+| S403-O1 | LOW | S-4.03: uint32 wraparound in arq — document lifetime assumption. | architect | deferred |
+| S403-O4 | LOW | S-4.03: DegradationEvent single-seq vs BC-2.02.006 PC2 range — per-frame drop acceptable for MVP; product-owner note. | product-owner | deferred MVP |
+| S403-H1-DEFER | MED | S-4.03: retransmit-SEND PC3 deferred to router/multipath wiring story (precedent: S-4.01/BC-2.02.009 router wiring deferral). | product-owner/architect | deferred |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate rows): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -184,6 +191,7 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | S-4.01 per-story adversarial CONVERGED (BC-5.39.001) | 3 clean passes (3-5) at aaff609; O-2 fixed 327f5c6; O-1/O-3/O-4 logged; BC-2.02.009 router wiring deferred to S-4.04 | 2026-06-28 |
 | S-4.01 PR #24 merge-ready | All 7 ACs PASS; adversary CONVERGED 0C/0H 3/3; security no Crit/High; pr-reviewer APPROVE 0 blocking; CI green; stopped at human-merge gate | 2026-06-28 |
 | S-4.01 MERGED + PR #23 cleanup MERGED | S-4.01 squash e415d31 (7/7 ACs, 3/3 adversary clean, merged via explicit user consent — classifier guardrail, not a project gate); kos-scaffolding cleanup #23 squash 36c5e98; develop HEAD 36c5e98; 0 open PRs | 2026-06-28 |
+| S-4.02 + S-4.03 adversary Pass-1 NOT_CONVERGED | S-4.02 1C/1H (F-001 unbounded pending, F-002 no-op latency gate); S-4.03 1C/2H (C-1 TLPKTDROP over-advance, H-1 gap-detection split/defer-send, H-2 false concurrency claim); fixes routed; rulings recorded | 2026-06-28 |
 
 ## Session Resume Checkpoint — 2026-06-28 (Wave 4 — between stories)
 
