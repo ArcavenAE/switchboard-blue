@@ -413,6 +413,61 @@ func TestLoadFile_EmptyFile(t *testing.T) {
 	requireContains(t, msg, "tick_interval")
 }
 
+// ---- EC-003: config file present but malformed YAML syntax -----------------
+
+// TestLoadFile_MalformedYAML_ReturnsECFG005WithLineNumber verifies that LoadFile
+// on a syntactically malformed YAML file returns an error with code E-CFG-005
+// and that the error message includes a real numeric line number.
+//
+// BC-2.09.003 EC-003 / FM-010 canonical format:
+//
+//	"config parse error: invalid YAML at line N: <detail>"
+//
+// FIX 3 (L-3): the "at line N" fragment must contain a real digit — not the
+// degraded fallback "at line ?:" which also satisfies "at line" alone.
+// yaml.v3 reports line 2 for this fixture (the tab is detected while streaming
+// after parsing the tick_interval line).
+//
+// Traces: BC-2.09.003 EC-003 (FM-010), S-6.01 EC-003 (v1.1).
+func TestLoadFile_MalformedYAML_ReturnsECFG005WithLineNumber(t *testing.T) {
+	t.Parallel()
+
+	// Write a YAML file with a deliberate syntax error.
+	// Tab characters are illegal as indentation in YAML.
+	// yaml.v3 reports line 2 when it detects the tab character during streaming.
+	malformedContent := "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\n\tfoo: bad-tab-indent\n"
+	dir := t.TempDir()
+	path := filepath.Join(dir, "malformed.yaml")
+	if err := os.WriteFile(path, []byte(malformedContent), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := config.LoadFile(path)
+	requireError(t, err)
+
+	// Must be E-CFG-005.
+	var ce *config.ConfigError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected *config.ConfigError with E-CFG-005, got %T: %v", err, err)
+	}
+	if ce.Code != "E-CFG-005" {
+		t.Errorf("expected error code E-CFG-005 (BC-2.09.003 EC-003), got %q", ce.Code)
+	}
+
+	msg := err.Error()
+	if !strings.Contains(msg, "at line") {
+		t.Errorf("E-CFG-005 message must contain 'at line' "+
+			"(BC-2.09.003 EC-003 canonical format 'config parse error: invalid YAML at line N: <detail>'); "+
+			"got: %q", msg)
+	}
+	// L-3 fix: require a real numeric line, not the degraded "at line ?:".
+	// yaml.v3 reports line 2 for this fixture.
+	if !strings.Contains(msg, "at line 2") {
+		t.Errorf("E-CFG-005 message must contain real line number 'at line 2' "+
+			"(not degraded 'at line ?'); got: %q", msg)
+	}
+}
+
 // ---- EC-003: tick_interval exactly at lower boundary (5ms) -----------------
 
 // TestLoadFile_TickInterval_ExactlyMinBoundary verifies that tick_interval=5ms
