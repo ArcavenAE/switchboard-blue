@@ -48,6 +48,12 @@ func TestBC_2_02_009_Router_DropCacheWiring(t *testing.T) {
 
 	frameBytes := []byte("test-frame-content-deterministic")
 
+	// ifaces used by sub-tests: ifaceA and ifaceB are the arrival interfaces;
+	// ifaceOther is a non-arrival interface so SplitHorizon.Forward succeeds on
+	// cache-miss paths (required by the 4-param AC-006 signature).
+	const ifaceOther InterfaceID = 99
+	nopFn := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
+
 	t.Run("cache_miss_first_arrival_returns_nil", func(t *testing.T) {
 		t.Parallel()
 		// AC-004 / BC-2.02.009 postcondition 1: first arrival on a fresh cache is a miss.
@@ -55,7 +61,7 @@ func TestBC_2_02_009_Router_DropCacheWiring(t *testing.T) {
 		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 		h := NewFrameArrivalHandler(dc)
 
-		err := h.OnFrameArrival(frameBytes, ifaceA)
+		err := h.OnFrameArrival(frameBytes, ifaceA, []InterfaceID{ifaceA, ifaceOther}, nopFn)
 		if err != nil {
 			t.Errorf("got err = %v; want nil on cache miss (AC-004 / BC-2.02.009 PC-1)", err)
 		}
@@ -68,11 +74,11 @@ func TestBC_2_02_009_Router_DropCacheWiring(t *testing.T) {
 		h := NewFrameArrivalHandler(dc)
 
 		// First arrival: populate the cache.
-		if err := h.OnFrameArrival(frameBytes, ifaceA); err != nil {
+		if err := h.OnFrameArrival(frameBytes, ifaceA, []InterfaceID{ifaceA, ifaceOther}, nopFn); err != nil {
 			t.Fatalf("first arrival unexpected error: %v", err)
 		}
 		// Second arrival: must be suppressed.
-		err := h.OnFrameArrival(frameBytes, ifaceA)
+		err := h.OnFrameArrival(frameBytes, ifaceA, []InterfaceID{ifaceA, ifaceOther}, nopFn)
 		if !errors.Is(err, ErrDropCacheHit) {
 			t.Errorf("got err = %v; want ErrDropCacheHit on second arrival (AC-004 / BC-2.02.009 PC-1)", err)
 		}
@@ -87,12 +93,12 @@ func TestBC_2_02_009_Router_DropCacheWiring(t *testing.T) {
 		h := NewFrameArrivalHandler(dc)
 
 		// First: arrive on ifaceA.
-		if err := h.OnFrameArrival(frameBytes, ifaceA); err != nil {
+		if err := h.OnFrameArrival(frameBytes, ifaceA, []InterfaceID{ifaceA, ifaceOther}, nopFn); err != nil {
 			t.Fatalf("first arrival on ifaceA unexpected error: %v", err)
 		}
 		// Second: same bytes, different interface → must NOT be a hit.
 		// Multipath duplicate-and-race requires both copies to survive (ARCH-03 F-006).
-		err := h.OnFrameArrival(frameBytes, ifaceB)
+		err := h.OnFrameArrival(frameBytes, ifaceB, []InterfaceID{ifaceB, ifaceOther}, nopFn)
 		if err != nil {
 			t.Errorf("got err = %v on ifaceB; want nil — compound key must not collapse to checksum alone (AC-004 / F-006)", err)
 		}
@@ -105,10 +111,10 @@ func TestBC_2_02_009_Router_DropCacheWiring(t *testing.T) {
 		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 		h := NewFrameArrivalHandler(dc)
 
-		_ = h.OnFrameArrival(frameBytes, ifaceA) // first arrival (miss, adds key)
+		_ = h.OnFrameArrival(frameBytes, ifaceA, []InterfaceID{ifaceA, ifaceOther}, nopFn) // first arrival (miss, adds key)
 
 		// The key must now be in the cache: second arrival returns ErrDropCacheHit.
-		err := h.OnFrameArrival(frameBytes, ifaceA)
+		err := h.OnFrameArrival(frameBytes, ifaceA, []InterfaceID{ifaceA, ifaceOther}, nopFn)
 		if !errors.Is(err, ErrDropCacheHit) {
 			t.Errorf("got err = %v after first arrival; want ErrDropCacheHit — key must be added on miss (AC-004)", err)
 		}
@@ -134,15 +140,17 @@ func TestBC_2_02_009_Router_DropCacheHitCounterIncremented(t *testing.T) {
 
 	frame := []byte("ec003-frame")
 	const iface InterfaceID = 7
+	const ifaceOtherHit InterfaceID = 100
+	nopFnHit := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
 	// First arrival: miss.
-	if err := h.OnFrameArrival(frame, iface); err != nil {
+	if err := h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherHit}, nopFnHit); err != nil {
 		t.Fatalf("first arrival unexpected error: %v", err)
 	}
 	hitsBefore := dc.Hits()
 
 	// Second arrival: hit — counter must increment.
-	if err := h.OnFrameArrival(frame, iface); !errors.Is(err, ErrDropCacheHit) {
+	if err := h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherHit}, nopFnHit); !errors.Is(err, ErrDropCacheHit) {
 		t.Fatalf("second arrival: got err = %v; want ErrDropCacheHit (EC-003)", err)
 	}
 
@@ -174,22 +182,22 @@ func TestBC_2_02_009_Router_CollisionEventLogged(t *testing.T) {
 		// when a drop-cache hit is observed.
 		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 		logger := &captureLogger{}
-		// SA4006 false positive: WithFrameArrivalLogger panics in the Red Gate stub,
-		// making h.OnFrameArrival appear unreachable to staticcheck. h IS used.
-		h := NewFrameArrivalHandler(dc) //nolint:staticcheck // SA4006: Red Gate stub
+		h := NewFrameArrivalHandler(dc)
 		WithFrameArrivalLogger(logger)(h)
 
 		frame := []byte("collision-test-frame")
 		const iface InterfaceID = 42
+		const ifaceOtherColl InterfaceID = 200
+		nopFnColl := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
 		// First arrival: miss — logger should NOT be called.
-		_ = h.OnFrameArrival(frame, iface)
+		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherColl}, nopFnColl)
 		if len(logger.lines) != 0 {
 			t.Errorf("logger called on cache miss; want no log on first arrival (AC-005)")
 		}
 
 		// Second arrival: hit — logger MUST be called.
-		_ = h.OnFrameArrival(frame, iface)
+		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherColl}, nopFnColl)
 		if len(logger.lines) == 0 {
 			t.Errorf("logger not called on cache hit; want collision-event log line (AC-005 / BC-2.02.009 PC-2 / EC-005)")
 		}
@@ -204,9 +212,11 @@ func TestBC_2_02_009_Router_CollisionEventLogged(t *testing.T) {
 
 		frame := []byte("nop-logger-frame")
 		const iface InterfaceID = 5
+		const ifaceOtherNop InterfaceID = 201
+		nopFnNop := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
-		_ = h.OnFrameArrival(frame, iface)    // miss
-		err := h.OnFrameArrival(frame, iface) // hit — must not panic
+		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherNop}, nopFnNop)    // miss
+		err := h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherNop}, nopFnNop) // hit — must not panic
 		if !errors.Is(err, ErrDropCacheHit) {
 			t.Errorf("got err = %v; want ErrDropCacheHit (nopLogger path)", err)
 		}
@@ -217,19 +227,124 @@ func TestBC_2_02_009_Router_CollisionEventLogged(t *testing.T) {
 		// AC-005: every cache hit emits a log line — not just the first.
 		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 		logger := &captureLogger{}
-		// SA4006 false positive: same as logger_receives_line_on_cache_hit subtest.
-		h := NewFrameArrivalHandler(dc) //nolint:staticcheck // SA4006: Red Gate stub
+		h := NewFrameArrivalHandler(dc)
 		WithFrameArrivalLogger(logger)(h)
 
 		frame := []byte("repeated-hit-frame")
 		const iface InterfaceID = 99
+		const ifaceOtherMulti InterfaceID = 202
+		nopFnMulti := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
-		_ = h.OnFrameArrival(frame, iface) // first: miss
-		_ = h.OnFrameArrival(frame, iface) // second: hit → log
-		_ = h.OnFrameArrival(frame, iface) // third: hit → log
+		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherMulti}, nopFnMulti) // first: miss
+		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherMulti}, nopFnMulti) // second: hit → log
+		_ = h.OnFrameArrival(frame, iface, []InterfaceID{iface, ifaceOtherMulti}, nopFnMulti) // third: hit → log
 
 		if len(logger.lines) < 2 {
 			t.Errorf("got %d log lines; want ≥ 2 (one per hit) (AC-005)", len(logger.lines))
+		}
+	})
+}
+
+// ---- AC-006 / BC-2.02.009 PC-1 + BC-2.02.008 PC-2 — end-to-end composition --
+
+// TestOnFrameArrival_ForwardsViaSplitHorizon_AfterDropCacheMiss verifies that
+// OnFrameArrival composes DropCache suppression and split-horizon forwarding
+// into a single end-to-end frame-arrival handler (AC-006 / BC-2.02.009 PC-1 +
+// BC-2.02.008 PC-2 / ARCH-03 §Duplicate-and-Race).
+//
+// AC-006 (a) — DropCache MISS: OnFrameArrival adds the compound key
+// (checksum, arrival_interface_id) to the DropCache, then calls
+// SplitHorizon.Forward(frame, arrival_interface_id, interface_set), and the
+// frame is forwarded on all interfaces in the set EXCEPT arrival_interface_id.
+//
+// AC-006 (b) — DropCache HIT: OnFrameArrival silently discards the frame and
+// does NOT invoke SplitHorizon.Forward; no forwarding occurs.
+//
+// Constraint: SplitHorizon.Forward must have at least one non-test caller
+// (OnFrameArrival) — this test enforces that observable requirement.
+//
+// The test calls OnFrameArrival with the full end-to-end signature:
+//
+//	OnFrameArrival(frameBytes []byte, arrivalIface InterfaceID,
+//	               interfaceSet []InterfaceID, fn ForwardFunc) error
+//
+// This new 4-parameter signature is what the implementer must add to
+// FrameArrivalHandler so that OnFrameArrival can compose the two surfaces
+// directly. The existing 2-parameter signature is the pre-AC-006 stub.
+func TestOnFrameArrival_ForwardsViaSplitHorizon_AfterDropCacheMiss(t *testing.T) {
+	t.Parallel()
+
+	const (
+		arrival InterfaceID = 1
+		ifaceB  InterfaceID = 2
+		ifaceC  InterfaceID = 3
+	)
+
+	interfaceSet := []InterfaceID{arrival, ifaceB, ifaceC}
+	frameBytes := []byte("ac006-end-to-end-frame-composition")
+
+	// ---- AC-006 (a): DropCache MISS → forwarded on ifaceB and ifaceC only ----
+	t.Run("miss_forwards_on_non_arrival_interfaces", func(t *testing.T) {
+		t.Parallel()
+
+		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+		h := NewFrameArrivalHandler(dc)
+
+		var forwarded []InterfaceID
+		fn := func(iface InterfaceID, _ []byte) error {
+			forwarded = append(forwarded, iface)
+			return nil
+		}
+
+		// AC-006 (a): first arrival is a DropCache miss. OnFrameArrival must:
+		//   1. Add compound key to DropCache.
+		//   2. Call SplitHorizon.Forward → fn called for ifaceB and ifaceC.
+		err := h.OnFrameArrival(frameBytes, arrival, interfaceSet, ForwardFunc(fn))
+		if err != nil {
+			t.Fatalf("OnFrameArrival on miss: got err = %v; want nil (AC-006)", err)
+		}
+
+		// Frame must have been forwarded on exactly the 2 non-arrival interfaces.
+		if containsIface(forwarded, arrival) {
+			t.Errorf("arrival interface %d was forwarded — split-horizon must exclude it (AC-006 / BC-2.02.008 PC-1)", arrival)
+		}
+		if !containsIface(forwarded, ifaceB) {
+			t.Errorf("interface %d was NOT forwarded; want forwarding on all non-arrival ifaces (AC-006 / BC-2.02.008 PC-2)", ifaceB)
+		}
+		if !containsIface(forwarded, ifaceC) {
+			t.Errorf("interface %d was NOT forwarded; want forwarding on all non-arrival ifaces (AC-006 / BC-2.02.008 PC-2)", ifaceC)
+		}
+		if len(forwarded) != 2 {
+			t.Errorf("got %d forwarded interfaces; want exactly 2 (AC-006)", len(forwarded))
+		}
+	})
+
+	// ---- AC-006 (b): DropCache HIT → no forwarding -------------------------
+	t.Run("hit_discards_without_forwarding", func(t *testing.T) {
+		t.Parallel()
+
+		dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+		h := NewFrameArrivalHandler(dc)
+
+		mustNotForward := func(iface InterfaceID, _ []byte) error {
+			t.Errorf("ForwardFunc called on iface %d on DropCache HIT — must not forward (AC-006 b)", iface)
+			return nil
+		}
+
+		// First arrival: miss — populates DropCache. Forwarding is expected here.
+		var firstForwarded []InterfaceID
+		firstFn := func(iface InterfaceID, _ []byte) error {
+			firstForwarded = append(firstForwarded, iface)
+			return nil
+		}
+		if err := h.OnFrameArrival(frameBytes, arrival, interfaceSet, ForwardFunc(firstFn)); err != nil {
+			t.Fatalf("first arrival unexpected error: %v", err)
+		}
+
+		// Second arrival: HIT — OnFrameArrival must NOT call ForwardFunc.
+		err := h.OnFrameArrival(frameBytes, arrival, interfaceSet, ForwardFunc(mustNotForward))
+		if !errors.Is(err, ErrDropCacheHit) {
+			t.Errorf("got err = %v; want ErrDropCacheHit on second arrival (AC-006 b)", err)
 		}
 	})
 }
@@ -257,15 +372,16 @@ func TestBC_2_02_009_Router_HashCollisionLogged(t *testing.T) {
 	// potential collision regardless of actual content.
 	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 	logger := &captureLogger{}
-	// SA4006 false positive: same pattern as AC-005 collision tests.
-	h := NewFrameArrivalHandler(dc) //nolint:staticcheck // SA4006: Red Gate stub
+	h := NewFrameArrivalHandler(dc)
 	WithFrameArrivalLogger(logger)(h)
 
 	frameFirst := []byte("ec004-first-frame")
 	const iface InterfaceID = 11
+	const ifaceOtherEC InterfaceID = 203
+	nopFnEC := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
 	// Populate cache with first frame.
-	if err := h.OnFrameArrival(frameFirst, iface); err != nil {
+	if err := h.OnFrameArrival(frameFirst, iface, []InterfaceID{iface, ifaceOtherEC}, nopFnEC); err != nil {
 		t.Fatalf("first arrival unexpected error: %v", err)
 	}
 
@@ -273,7 +389,7 @@ func TestBC_2_02_009_Router_HashCollisionLogged(t *testing.T) {
 	// From the router's perspective: cache hit → suppress + log.
 	// We use the same bytes here because we cannot force a real CRC32 collision,
 	// but the behavioral contract says ANY cache hit is logged (EC-005).
-	err := h.OnFrameArrival(frameFirst, iface)
+	err := h.OnFrameArrival(frameFirst, iface, []InterfaceID{iface, ifaceOtherEC}, nopFnEC)
 	if !errors.Is(err, ErrDropCacheHit) {
 		t.Errorf("got err = %v; want ErrDropCacheHit (EC-004)", err)
 	}

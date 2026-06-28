@@ -49,17 +49,15 @@ type FrameArrivalHandler struct {
 // NewFrameArrivalHandler constructs a FrameArrivalHandler that consults dc
 // for drop-cache loop-duplicate suppression (BC-2.02.009).
 //
-// opts are applied after construction; supply WithFrameArrivalLogger to enable
-// EC-005 collision-event logging (AC-005).
+// To enable EC-005 collision-event logging (AC-005), apply
+// WithFrameArrivalLogger(l)(h) after construction.
 //
 // dc must not be nil.
-func NewFrameArrivalHandler(dc *multipath.DropCache, opts ...RouterOption) *FrameArrivalHandler {
-	h := &FrameArrivalHandler{
+func NewFrameArrivalHandler(dc *multipath.DropCache) *FrameArrivalHandler {
+	return &FrameArrivalHandler{
 		dropCache: dc,
 		logger:    nopLogger{},
 	}
-	_ = opts // RouterOption applies to *Router; use WithFrameArrivalLogger instead
-	return h
 }
 
 // WithFrameArrivalLogger returns a FrameArrivalHandlerOption that injects l
@@ -73,7 +71,11 @@ func WithFrameArrivalLogger(l Logger) func(*FrameArrivalHandler) {
 	}
 }
 
-// OnFrameArrival is the router-level frame-arrival handler.
+// OnFrameArrival is the router-level end-to-end frame-arrival handler.
+//
+// It composes DropCache loop-duplicate suppression (BC-2.02.009, AC-004) and
+// split-horizon forwarding (BC-2.02.008, AC-001/AC-002) into a single
+// frame-arrival path (AC-006 / ARCH-03 §Duplicate-and-Race).
 //
 // frameBytes is the raw frame (outer header + payload). It is treated as
 // opaque — the channel header section is NEVER parsed (BC-2.01.005 / VP-015).
@@ -82,19 +84,28 @@ func WithFrameArrivalLogger(l Logger) func(*FrameArrivalHandler) {
 // the CRC32 checksum of frameBytes it forms the compound drop-cache key
 // (checksum, arrival_interface_id) per ARCH-03 F-006 and BC-2.02.009.
 //
-// On cache miss: the compound key is added to the DropCache and nil is
-// returned — the caller should proceed to split-horizon forwarding
-// (BC-2.02.009 postcondition 1; AC-004).
+// interfaceSet is the set of all interfaces to consider for forwarding.
+// fn is the caller-supplied function that writes the frame to a specific output
+// interface; it is called by SplitHorizon.Forward on each eligible interface.
 //
-// On cache hit: ErrDropCacheHit is returned and the frame must be silently
-// discarded (BC-2.02.009; EC-003). If the hit may represent a hash collision
-// (EC-005 / EC-004 in the story), a collision-event log line is emitted via
-// the injected logger (AC-005).
+// On cache miss (AC-006 a): the compound key is added to the DropCache, then
+// SplitHorizon.Forward is called — forwarding the frame on all interfaces in
+// interfaceSet except arrivalIface (BC-2.02.008 PC-1/PC-2; BC-2.02.009 PC-1).
+// If all interfaces are the arrival interface, ErrAllPathsSplitHorizon is returned.
+//
+// On cache hit (AC-006 b): ErrDropCacheHit is returned, no forwarding occurs.
+// A collision-event log line is emitted via the injected logger (AC-005;
+// BC-2.02.009 EC-005).
 //
 // The DropCache hit counter is incremented on every cache hit as required by
 // BC-2.02.009 postcondition 2 (operator diagnostics). Increment is performed
 // inside DropCache.AddIfAbsent (S-4.01).
-func (h *FrameArrivalHandler) OnFrameArrival(frameBytes []byte, arrivalIface InterfaceID) error {
+func (h *FrameArrivalHandler) OnFrameArrival(
+	frameBytes []byte,
+	arrivalIface InterfaceID,
+	interfaceSet []InterfaceID,
+	fn ForwardFunc,
+) error {
 	// Compute compound drop-cache key: (crc32(frameBytes), arrival_interface_id).
 	// frameBytes is treated as opaque — the channel header is NEVER parsed here
 	// (BC-2.01.005 / VP-015 / AC-003).
@@ -112,5 +123,11 @@ func (h *FrameArrivalHandler) OnFrameArrival(frameBytes []byte, arrivalIface Int
 		))
 		return ErrDropCacheHit
 	}
-	return nil
+
+	// Cache miss: forward via split-horizon (AC-006 a).
+	// SplitHorizon.Forward excludes arrivalIface from the output set (BC-2.02.008 PC-1)
+	// and calls fn for every eligible interface (BC-2.02.008 PC-2).
+	sh := SplitHorizon{}
+	_, err := sh.Forward(frameBytes, arrivalIface, interfaceSet, fn)
+	return err
 }
