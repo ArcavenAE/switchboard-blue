@@ -65,17 +65,23 @@ func (sc *SessionConnector) activeSourceSnapshot() (framesSource, <-chan halfcha
 		}
 	}
 	sc.mu.Unlock()
-
 	if src == nil {
 		return nil, nil, false
 	}
-
-	// Test-only deterministic interleaving seam. swapBarrier is always nil in
-	// production; the nil check is the only cost (branch prediction friendly).
+	// swapBarrier2: test seam — non-blocking signal fired after sc.active has
+	// been read under sc.mu. The test uses this to know sc.active was captured
+	// (as ctrl, while ptyAlloc is blocking) before it triggers the swap.
+	// Buffered so the relay never blocks here; nil in production.
+	if sc.swapBarrier2 != nil {
+		select {
+		case sc.swapBarrier2 <- struct{}{}:
+		default:
+		}
+	}
+	// swapBarrier: test-only seam — blocks the relay here for deterministic interleaving. Always nil in production (the nil check is the only cost).
 	if sc.swapBarrier != nil {
 		<-sc.swapBarrier
 	}
-
 	return src, srcCh, inPTY
 }
 

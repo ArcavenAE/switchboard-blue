@@ -505,6 +505,19 @@ type SessionConnector struct {
 	// tests to deterministically exercise the race window fixed in ADR-011 v1.6.
 	// ARCH-01 ADR-011 v1.6 §HIGH-A T2 Option B.
 	swapBarrier chan struct{}
+
+	// swapBarrier2 is a companion test-only seam (nil in production) that fires
+	// a non-blocking send AFTER sc.active has been read under sc.mu in
+	// activeSourceSnapshot, but BEFORE swapBarrier blocks.
+	// In the atomic (fixed) form, swapBarrier2 fires after the single lock;
+	// in a two-lock (buggy) scratch edit, it fires after lock1 — in both cases
+	// the test receives this signal to know sc.active has been captured
+	// (with sc.active=ctrl while ptyAlloc is blocking) before it triggers the
+	// ctrl→PTY swap and releases swapBarrier. This enables fully deterministic
+	// misclassification-branch detection in
+	// TestForwardFramesTOCTOUMisclassificationBranchDeterministic.
+	// Buffered to avoid blocking the relay on spurious snapshot iterations.
+	swapBarrier2 chan struct{}
 }
 
 // NewSessionConnector constructs a SessionConnector with the given control
