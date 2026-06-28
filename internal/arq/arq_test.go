@@ -284,10 +284,12 @@ func TestBC_2_02_005_InOrder_CanonicalVector(t *testing.T) {
 //  1. Builds a channel header with SACK_present=1 (flags bit 2) and a known
 //     bitmap — the SACK field sits at bytes [12:20].
 //  2. Calls SACKFromChannelHeader and asserts it returns the correct bitmap.
-//  3. Builds an outer-header-style slice with identical raw bytes placed in
-//     the outer payload position (bytes > 44) — asserts SACKFromChannelHeader
-//     does NOT read that position (it only reads the channel-header slice passed
-//     to it, not an outer header byte range).
+//  3. Builds a byte slice sized like an outer header (>44 bytes) where the
+//     channel-header SACK region (bytes 8 flags, 12-19 bitmap) is zeroed but
+//     the SACK-present flag and bitmap data are placed at an outer-header offset
+//     (byte 45+). Asserts SACKFromChannelHeader returns present=false, proving
+//     it only reads channel-header offsets and cannot pick up outer-header bytes
+//     (F-P8-007 anti-regression, ARCH-02).
 func TestARQ_SACKInChannelHeader(t *testing.T) {
 	t.Parallel()
 
@@ -326,6 +328,31 @@ func TestARQ_SACKInChannelHeader(t *testing.T) {
 	}
 	if presentNo {
 		t.Error("SACKFromChannelHeader: flags bit 2 clear but returned present=true")
+	}
+
+	// F-P8-007 anti-regression (ARCH-02): SACKFromChannelHeader must read ONLY
+	// channel-header offsets, never outer-header payload bytes.
+	//
+	// Build a 60-byte slice that mimics a frame whose outer header occupies bytes
+	// 0..43 and whose payload starts at byte 44.  Within this slice:
+	//   - Bytes 8 (flags) and 12-19 (SACK bitmap) — the channel-header region —
+	//     are all zero (SACK_present bit clear, bitmap zeroed).
+	//   - Byte 45 is set to 0x04 (SACK_present flag value) and bytes 48-55 carry
+	//     the known SACK bitmap — these are in the outer-payload region.
+	//
+	// Passing this slice as the channelHeader argument must return present=false
+	// because the function reads flags from byte 8 (clear), not byte 45.
+	outerStyleSlice := make([]byte, 60)
+	const outerPayloadFlagsOff = 45
+	const outerPayloadBitmapOff = 48
+	outerStyleSlice[outerPayloadFlagsOff] = sackPresentFlag
+	copy(outerStyleSlice[outerPayloadBitmapOff:outerPayloadBitmapOff+arq.SACKBitmapBytes], want[:])
+	_, presentOuter, errOuter := arq.SACKFromChannelHeader(outerStyleSlice)
+	if errOuter != nil {
+		t.Fatalf("SACKFromChannelHeader (outer-style slice): unexpected error: %v", errOuter)
+	}
+	if presentOuter {
+		t.Error("SACKFromChannelHeader: read SACK_present from outer-header offset instead of channel-header flags byte")
 	}
 }
 
