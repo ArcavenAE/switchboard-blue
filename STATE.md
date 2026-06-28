@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-all-stories-merged-wave-level-convergence-pending
+phase_step: wave-3-i1-fixed-pr18-merged-wave-level-convergence-restarted-streak-0of3
 phase_3_active_wave: 3
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
@@ -108,6 +108,10 @@ wave_3_points_complete: 48
 wave_3_points_remaining: 0
 s_3_01a_supporting_merge_pr10: "BC-5.38.001 chore cleanup merged during S-3.01a lifecycle"
 wave_3_gate_adversary_streak: 0
+wave_3_gate_pass1_disposition: "C-1 deferred (C-1-W3P1-defer/S-BL.NI, ARCH-08 v2.2 §6.5.1); I-1 fixed PR #18 e9421d8"
+w3_i1_fix_pr: 18
+w3_i1_fix_merge_sha: e9421d8
+w3_i1_fix_merge_date: 2026-06-27
 s_w3_05_per_story_adversary_streak: 3
 wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CONVERGED 0C/0H/4M; r3 NOT_CONVERGED 0C/2H (F-1 cmd-wiring, F-2 EC-006 alert — both ADJUDICATION-DEPENDENT scope-boundary findings, NOT raw code defects). Passes r1+r2 rated F-1 as in-scope-deferred OBSERVATION. ADJUDICATION IN PROGRESS: architect (F-1 cmd-wiring deferral vs ARCH-08 position-18) + product-owner (F-2 EC-006 ownership/deferral). Convergence on hold pending scope decision."
 s_wave3_f1_fix_pr: 15
@@ -130,7 +134,7 @@ s_w3_04_pr_number: 17
 s_w3_04_merge_sha: aeb442d
 s_w3_04_merge_date: 2026-06-27
 s_w3_04_status: completed
-timestamp: 2026-06-27T12:00:00Z
+timestamp: 2026-06-27T20:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -138,7 +142,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27); S-W3.05 merged PR #16 (squash fa6345e, 2026-06-27). Next: run /vsdd-factory:check-input-drift to clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3), then fresh-context consistency audit, then Wave-3 wave-level adversarial convergence (3 clean passes), then structured Wave-3 human gate.
+Wave-3 wave-level adversarial convergence restarted (streak 0/3). Pass-1 found C-1 + I-1. C-1 (FailureCounter daemon wiring) deferred as C-1-W3P1-defer/S-BL.NI per ARCH-08 v2.2 §6.5.1 TRACKED-DEFER. I-1 (ticker wg-join, BC-2.04.007) fixed and merged via PR #18 (fix/W3-i1-ticker-wg-join) into develop at e9421d8 (2026-06-27). Fresh-context consistency audit captured in cycles/cycle-1/wave-3-consistency-audit.md. Next: dispatch Pass-2 of wave-level adversarial convergence.
 
 ## Phase Progress
 
@@ -146,7 +150,7 @@ All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27); S
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: all stories merged; wave-level adversarial convergence pending (run check-input-drift first) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 2 gate: PASS_WITH_OBSERVATIONS | 2026-06-25 | Wave 3: all stories + I-1 fix merged; wave-level convergence restarted (Pass-1: C-1 deferred/I-1 fixed); streak 0/3 |
 
 ## Wave / Story Status
 
@@ -165,6 +169,7 @@ All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27); S
 | 3 | S-3.03 | Tier-2 per-session authorization | completed | #14 | b68e498 |
 | 3 | S-W3.05 | HMAC failure counter + E-ADM-017 | completed | #16 | fa6345e |
 | 3 | S-W3.04 | Full daemon assembly | completed | #17 | aeb442d |
+| 3 | fix/W3-i1 | Ticker wg-join (I-1, BC-2.04.007) | completed | #18 | e9421d8 |
 
 ## Open Drift Items
 
@@ -178,7 +183,7 @@ All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27); S
 | SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | open |
 | SW305-cosmetic | LOW | Stale comments: Red-Gate test (pre-v1.6 model), TrackedSourceCount() name, AC-016 count, v1.7 citation in test header. | cosmetic | defer post-wave |
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001) — lesson recorded in cycles/cycle-1/lessons.md. Follow-up: candidate for self-improvement epic story. | orchestrator | open/deferred |
-| C-1-W3P1-defer | DEFER | FailureCounter/E-ADM-017 daemon wiring deferred to network-ingress story. RouteFrame is test-only in Wave 3; wiring now is dead code. Intentional per ARCH-08 v2.2 §6.5.1 TRACKED-DEFER (commit 14a61d2). Target: S-BL.NI (network-ingress). That story MUST wire routing.WithFailureCounter(fc) alongside routing.WithLogger(rl) in buildRouter AND include a daemon-level integration test asserting E-ADM-017 fires (analogous to AC-001 for E-ADM-016). Refs: BC-2.05.005 PC-3, S-W3.05 AC-6, ARCH-08 §6.5.1. Owner when activated: story-writer (ACs) → test-writer (integration test) → implementer (wiring). | architect-ruled | intentional-deferred/S-BL.NI |
+| C-1-W3P1-defer | DEFER | FailureCounter/E-ADM-017 daemon wiring deferred to S-BL.NI (network-ingress). RouteFrame test-only in Wave 3; wiring now is dead code. ARCH-08 v2.2 §6.5.1 TRACKED-DEFER (14a61d2). S-BL.NI MUST wire routing.WithFailureCounter(fc) + E-ADM-017 integration test. Refs: BC-2.05.005 PC-3, S-W3.05 AC-6. | architect-ruled | intentional-deferred/S-BL.NI |
 Resolved SW305-M1/M5/M6/M7/M8/HF3 + stable Phase-6 deferrals + wave-gate rows: `cycles/cycle-1/closed-drift.md`
 Drift note: BC-2.05.005 v1.8 + VP-059 v1.2 + story v1.3 + taxonomy v2.0 are hygiene/precondition-sanction only; message-format string UNCHANGED. Wave-3 gate drift check may flag input-hash change — expected; clear after confirming format-string identity.
 
@@ -194,18 +199,19 @@ Drift note: BC-2.05.005 v1.8 + VP-059 v1.2 + story v1.3 + taxonomy v2.0 are hygi
 | Wave-1 rollback/re-closure | all drift items routed concretely; vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP integration | 2026-06-24 |
 | S-3.03 repointed 5→8 | upstream-wiring scope expansion; Wave 3 total 29→32 pts | 2026-06-27 |
-| S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs (taxonomy v1.9 + BC-2.05.005 + BC-2.05.008) authoritative — include "HMAC failure rate alert:" phrase; prior story-writer reconciliation + orchestrator ruling that dropped it were erroneous; code/tests/story AC-003/AC-015 to conform | 2026-06-27 |
-| S-W3.05 re-arm semantics finalized | drain-only (full window-drain) re-arm + per-source append-skip; dead keep[0].After(lastFire) branch removed; reconciled across BC-2.05.005 v1.6, VP-059 v1.1, EC-009/EC-011 | 2026-06-27 |
-| S-W3.05 per-story adversarial CONVERGED + error-taxonomy v2.0 | 3 clean passes (07-09), 0C/0H; error-taxonomy v1.9→v2.0 prose-only (msg-format UNCHANGED); proceeding to S-W3.04 | 2026-06-27 |
-| S-W3.05 SEC-001 + re-convergence at f6038d2 | SEC-001 (HIGH CWE-476) fixed f6038d2; BC-2.05.005 v1.8 + VP-059 v1.2 sanction precondition (hygiene); 3 fresh passes (10-12) RE-CONVERGED; PR #16 MERGED fa6345e | 2026-06-27 |
-| S-W3.04 per-story adversarial CONVERGED (BC-5.39.001) | 3 consecutive clean passes (10/11/12; 0C/0H) at 1c3c864; comment-only 77c6229 preserves convergence (zero behavioral delta); demo evidence captured: test transcripts AC-001..AC-009 | 2026-06-27 |
-| Per-story-delivery merge-handoff pathology diagnosed (vsdd-factory#302) | Auto-mode classifier's self-approval/two-party-review guard blocks agent self-merge; resolution is human-performed merge — the sign-off the guard requires (NOT a fabricated user directive). Recurrence comment filed against drbothen/vsdd-factory#302. | 2026-06-27 |
+| S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs authoritative — include "HMAC failure rate alert:" phrase; code/tests/story AC-003/AC-015 conform | 2026-06-27 |
+| S-W3.05 re-arm semantics finalized | drain-only re-arm + per-source append-skip; reconciled BC-2.05.005 v1.6/VP-059 v1.1 | 2026-06-27 |
+| S-W3.05 CONVERGED + SEC-001 fixed + PR #16 merged | 3 clean passes (10-12) at f6038d2; fa6345e | 2026-06-27 |
+| S-W3.04 CONVERGED (BC-5.39.001) + PR #17 merged | 3 clean passes (10-12) at 1c3c864; aeb442d | 2026-06-27 |
+| Per-story-delivery merge-handoff pathology (vsdd-factory#302) | Agent self-merge blocked by classifier; human-performed merge is the correct resolution | 2026-06-27 |
+| Wave-3 Pass-1: C-1 deferred, I-1 fixed PR #18 e9421d8 | C-1 → ARCH-08 v2.2 §6.5.1 TRACKED-DEFER/S-BL.NI; I-1 (BC-2.04.007) fixed; streak 0/3 | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (S-W3.04 merged; Wave-3 wave-level convergence pending)
+## Session Resume Checkpoint — 2026-06-27 (I-1 fixed PR #18; wave-level convergence restarted streak 0/3)
 
-**Position:** Phase 3, Wave 3. All Wave-3 stories merged. S-W3.04 merged PR #17 (squash aeb442d, 2026-06-27). S-W3.05 merged PR #16 (squash fa6345e, 2026-06-27).
-**Next immediate step:** Run `/vsdd-factory:check-input-drift` first — clear expected drift from spec bumps (ARCH-01 v1.6, ARCH-08 v2.1, BC-2.04.002 v1.3, BC-2.04.007 v1.2, error-taxonomy v2.1, S-W3.04 story v1.3). Then fresh-context consistency audit. Then Wave-3 wave-level adversarial convergence (need 3 clean passes). Then structured Wave-3 human gate.
-**Wave-gate open drift:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ownership (PO adjudication). SW305-M2/M3/M4 remain open.
+**Position:** Phase 3, Wave 3. All Wave-3 stories merged + I-1 fix (PR #18, e9421d8) merged into develop.
+**Wave-level convergence:** Pass-1 found C-1 (deferred: C-1-W3P1-defer/S-BL.NI, ARCH-08 v2.2 §6.5.1) + I-1 (fixed: PR #18). Streak reset to 0/3. Consistency audit in cycles/cycle-1/wave-3-consistency-audit.md.
+**Next immediate step:** Dispatch Pass-2 of wave-level adversarial convergence. Need 3 consecutive clean passes (0C/0H) to close Wave-3 gate.
+**Wave-gate open drift:** C-1-W3P1-defer (intentional, S-BL.NI target). W3-R3-F2 EC-006 ownership (PO adjudication). SW305-M2/M3/M4 remain open.
 **Open Wave-4 follow-ups (3 items):** (a) EC-005 durable CI import-perimeter guard; (b) real-connector PTY-EOF lifecycle integration test; (c) embed worktree-identity tuple in adversary dispatches.
 **Previous checkpoint:** `cycles/cycle-1/session-checkpoints.md`.
 
