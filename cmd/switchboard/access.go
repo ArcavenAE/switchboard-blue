@@ -206,14 +206,18 @@ func runAccessWithConnector(
 		startFramesBridge(an, sc.Frames())
 	}()
 
-	// Obligation 3 (AC-003): sweep ticker — startSweepTicker starts its own goroutine.
-	startSweepTicker(runCtx, an, sweepInterval, sweepDeadline)
+	// Obligation 3 (AC-003): sweep ticker — wg-tracked per ARCH-01 v1.7
+	// §Goroutine WaitGroup Contract and ARCH-08 v2.2 obligation 3.
+	wg.Add(1)
+	startSweepTicker(runCtx, &wg, an, sweepInterval, sweepDeadline)
 
-	// Obligation 6 (AC-006): frames-dropped ticker — startFramesDroppedTicker starts
-	// its own goroutine. FIX 2: lg uses injected stderr (not os.Stderr).
+	// Obligation 6 (AC-006): frames-dropped ticker — wg-tracked per ARCH-01 v1.7
+	// §Goroutine WaitGroup Contract and ARCH-08 v2.2 obligation 6.
+	// FIX 2: lg uses injected stderr (not os.Stderr).
 	// FIX 4: pass framesDroppedInterval so the interval is injectable in tests.
 	lg := log.New(stderr, "", 0)
-	startFramesDroppedTicker(runCtx, sc, an, lg, framesDroppedInterval)
+	wg.Add(1)
+	startFramesDroppedTicker(runCtx, &wg, sc, an, lg, framesDroppedInterval)
 
 	// Block until context cancellation (SIGTERM/SIGINT, mid-session double-failure,
 	// or direct cancel — AC-008 / BC-2.04.007 PC-2 / PC-2.6).
@@ -280,6 +284,9 @@ func (s stdLogger) Log(msg string) { s.l.Print(msg) }
 // The logger is supplied by the caller (runAccess passes stdLogger wrapping the
 // injected stderr writer; tests may pass a captureLogger for assertion).
 func buildRouter(ks *admission.AdmittedKeySet, rl routing.Logger) *routing.Router {
+	// WithFailureCounter is intentionally NOT wired here: deferred to the
+	// network-ingress story per tracked deferral C-1-W3P1-defer
+	// (ARCH-08 v2.2 §6.5.1).
 	return routing.NewRouter(ks, routing.WithLogger(rl))
 }
 
@@ -316,11 +323,13 @@ func startFramesBridge(
 // to Sweep.
 func startSweepTicker(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	an *session.AccessNode,
 	tickInterval time.Duration,
 	sweepDead time.Duration,
 ) {
 	go func() {
+		defer wg.Done()
 		ticker := time.NewTicker(tickInterval)
 		defer ticker.Stop()
 		for {
@@ -354,12 +363,14 @@ func startSweepTicker(
 // Returns immediately; goroutine exits when ctx is cancelled.
 func startFramesDroppedTicker(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	sc connectorIface,
 	an *session.AccessNode,
 	lg *log.Logger,
 	tickInterval time.Duration,
 ) {
 	go func() {
+		defer wg.Done()
 		ticker := time.NewTicker(tickInterval)
 		defer ticker.Stop()
 		for {

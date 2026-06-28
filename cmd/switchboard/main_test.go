@@ -481,7 +481,9 @@ func TestDaemonSweepEvictsStaleConsole(t *testing.T) {
 
 	// startSweepTicker panics in the stub — Red Gate.
 	// Use 1ms interval so the sweep fires immediately.
-	startSweepTicker(ctx, an, time.Millisecond, sweepDeadlineTest)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	startSweepTicker(ctx, &wg, an, time.Millisecond, sweepDeadlineTest)
 
 	// Wait for the sweep to evict the console (bounded: 500ms).
 	deadline := time.After(500 * time.Millisecond)
@@ -572,7 +574,9 @@ func TestDaemonFramesDroppedLoggedOnTick(t *testing.T) {
 	gorsBefore := runtime.NumGoroutine()
 	// time.Millisecond: fast enough that at least one tick fires before the
 	// 500ms wait deadline below.
-	startFramesDroppedTicker(ctx, sc, an, lg, time.Millisecond)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	startFramesDroppedTicker(ctx, &wg, sc, an, lg, time.Millisecond)
 
 	// Wait for the production ticker goroutine to emit at least one log line.
 	tickDeadline := time.After(500 * time.Millisecond)
