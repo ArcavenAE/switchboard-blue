@@ -126,6 +126,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 | 2026-06-27 | architect | ARCH-08 v2.0: §6.5.1 obligation 1 clarified — router is constructed-but-not-yet-in-data-path in Wave 3; `buildRouter` return value MUST be assigned (not discarded); shared `*admission.AdmittedKeySet` instance required. Per S-W3.04 adversarial convergence adjudication. |
 | 2026-06-27 | architect | ARCH-08 v2.1: §6.5.2 import set adds `internal/frame` (OuterHeader carrier, DAG pos 2 leaf). §6.5.1 obligation 4 note: `runAccess` injection seam split. EC-005 "CI enforces structurally" wording accepted as Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |
 | 2026-06-27 | architect | ARCH-08 v2.2: Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication. C-1 TRACKED-DEFER: `routing.WithFailureCounter` wiring deferred to future network-ingress story (E-ADM-016/017 must wire together when RouteFrame enters live data path). I-1 wg-join: obligations 3 and 6 updated — `startSweepTicker` and `startFramesDroppedTicker` accept `*sync.WaitGroup` for deterministic BC-2.04.007 PC-2 postcon-6 verification. |
+| 2026-06-27 | architect | ARCH-08 v2.3: C-1 RESOLVED — `routing.WithFailureCounter(fc)` (threshold=5, window=60s) wired in `buildRouter` alongside `routing.WithLogger`, PR #20 (commit 418de54). Partial-wiring concern closed; BC-2.05.008 PC-5 and BC-2.05.005 PC-3 satisfied. OBS-3 resolved. Only remaining deferral is the network-ingress listener (S-BL.NI). |
 
 ## Open Frontier Questions (for KoS process)
 

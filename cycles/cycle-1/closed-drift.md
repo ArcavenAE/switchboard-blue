@@ -58,6 +58,13 @@ These items have no active work pending before Phase 6. Archived to keep STATE.m
 | SW305-M7 | MED | ERROR-level (PC-3, AC-003) unsatisfiable through level-less admission.Logger — ADJUDICATED option-a: Logger seam is level-less (Log(msg string)); "at ERROR level" phrase removed from PC-3. | implementer+test-writer | RESOLVED b945aab — AC-003 test fixture uses Log(msg string); no Error() method reference in admission_test; BC-2.05.005 v1.6 PC-3 amended. O-1 closed. |
 | SW305-M8 | MED | AC-012 dead-key delete(counts) path: no discriminating test; assertion is >=1 regardless. | test-writer | RESOLVED b945aab — discriminating test added confirming dead-key entry eviction. |
 
+## Wave-3 Pre-Gate Items (resolved 2026-06-27)
+
+| ID | Severity | Description | Owner | Resolved |
+|----|----------|-------------|-------|----------|
+| C-1/OBS-3 | CRITICAL | WithFailureCounter/E-ADM-017 wiring gap: buildRouter returned counter but caller discarded it; OBS-3 spec-forbidden partial-wiring. | implementer | RESOLVED PR #20 (418de54) — WithFailureCounter wired into buildRouter(threshold=5,window=60s); OBS-3 closed. Only remaining deferral: network-ingress LISTENER → S-BL.NI (ARCH-08 v2.3 §6.5.1). |
+| T2 | OBLIGATION | ADR-011 v1.6 Obligation T2: deterministic TOCTOU misclassification-branch test required (complementing probabilistic 50-loop test). | test-writer | RESOLVED PR #19 (849bd86) — deterministic swapBarrier test added to TestForwardFramesTOCTOUCount50 path; ARCH-08 v2.3 documents T2 satisfied. |
+
 ## Pre-Restart Wave 3 Adversary Passes (superseded by restart run at 10dd880)
 
 Prior run (before PR #15 fix): pass-01 CONVERGED (0C/0H/3M/2L/3O), pass-02 NOT_CONVERGED

@@ -4,7 +4,7 @@ level: ops
 version: "1.0"
 status: archive
 producer: state-manager
-timestamp: 2026-06-25T00:00:00Z
+timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
 input-hash: ""
@@ -202,3 +202,17 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 **Wave-gate r3 HIGHs:** W3-R3-F1 cmd-wiring (architect adjudication), W3-R3-F2 EC-006 ratification (PO adjudication). Still pending.
 
 **Next at archive time:** SEC-001 fix at f6038d2; 3 fresh passes (10/11/12) re-converge; PR #16 ready for human merge approval.
+
+---
+
+## Archived: 2026-06-27 — Wave 3 convergence 3/3 CLEAN; consistency-audit remediated; human gate PENDING
+
+**Position:** Phase 3, Wave 3. All Wave-3 stories merged + I-1 fix merged. Wave-level adversarial convergence COMPLETE (3/3 CLEAN passes).
+
+**Convergence summary:** Pass-1 concurrency/lifecycle 0C/0H (C-1 deferred ARCH-08 v2.2 §6.5.1/S-BL.NI; I-1 fixed PR #18). Pass-2 contract-conformance 0C/0H. Pass-3 security 0C/0H. Consistency-audit Finding-4.1 HIGH downgraded to traceability-only — T2 satisfied in code (TestForwardFramesTOCTOUCount50 + deterministic swapBarrier test); resolved via S-W3.04 v1.4 + ARCH-INDEX backfill.
+
+**Non-blocking deferred findings (open):** M-1 relay busy-spin, fired-source LRU eviction-priority, M-2 log-volume cardinality, OBS-3 no-CI-guard partial-wiring.
+
+**Wave-gate open drift:** C-1-W3P1-defer (intentional, S-BL.NI target). W3-R3-F2 EC-006 ownership (PO adjudication pending). SW305-M2/M3/M4 open/deferred.
+
+**Next at archive time:** Human gate review of Wave 3 + delivery of human-scoped pre-gate items C-1 (WithFailureCounter wiring) + T2 (deterministic test).

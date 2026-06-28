@@ -159,3 +159,13 @@ Gate verdict commits: `44f5bc3`, `e8af50a`, `1d2993a`, `b05880a`, `345d4f4`, `6c
 Process note: spec-steward inadvertent commit `04eb5f5` (duplicate of `918acb4`) is harmless but flags a parallel-burst race pattern on factory-artifacts working tree. Orchestrator to watch for recurrence; no follow-up story unless it repeats.
 
 Cycle-closing checklist per S-7.02: LOW-003 pass-count asymmetry and OBS-001..003 (fresh-context) are observations — no codification follow-up required.
+
+---
+
+## Wave-3 Pre-Gate Delivery Burst (2026-06-27)
+
+**Agents dispatched:** human (merge), state-manager (recording)
+**Files touched:** STATE.md, cycles/cycle-1/closed-drift.md, cycles/cycle-1/session-checkpoints.md, .factory/specs/architecture/ARCH-08-dependency-graph.md (architect, v2.3), .factory/specs/architecture/ARCH-INDEX.md (architect, changelog)
+**PRs merged:** T2 (PR #19, 849bd86) — deterministic TOCTOU misclassification-branch test (ADR-011 v1.6 T2); C-1 (PR #20, 418de54) — WithFailureCounter wired buildRouter (threshold=5/window=60s), OBS-3 RESOLVED.
+**develop HEAD:** 849bd86
+**Summary:** Both human-scoped Wave-3 pre-gate items delivered and merged. ARCH-08 bumped to v2.3 (C-1 RESOLVED). C-1/OBS-3 and T2 archived to closed-drift.md. Wave 3 human approval gate PENDING.
