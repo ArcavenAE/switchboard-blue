@@ -1547,6 +1547,165 @@ func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
 	})
 }
 
+// ---- F-SEC-005 (CWE-117): control chars in yaml parse-error path (unknown key / parse detail) --
+
+// TestLoadFile_StripsControlCharsFromParseError verifies that LoadFile does NOT
+// propagate raw control characters from attacker-controlled YAML key names into
+// the returned E-CFG-005 error message (F-SEC-005, CWE-117).
+//
+// Background: config.go yamlParseDetail (~line 349) builds the E-CFG-005 detail
+// by embedding raw := err.Error() with only strings.TrimSpace — NO control-char
+// stripping. With dec.KnownFields(true), an unknown YAML key appears in yaml.v3's
+// error message as "field <KEY> not found in type config.Config". If the YAML key
+// carries control runes (C0, DEL, C1), they will appear verbatim in the detail
+// string unless the parse path sanitizes them.
+//
+// This test settles EMPIRICALLY whether yaml.v3 preserves or escapes raw control
+// runes in its error strings (the adversary had MEDIUM confidence on this).
+//
+// Empirical determination:
+//   - If any control-char subtest FAILS: yaml.v3 preserves the raw bytes →
+//     F-SEC-005 is a CONFIRMED CWE-117 vulnerability. Routes to implementer to
+//     sanitize yamlParseDetail (or the E-CFG-005 ConfigError construction site).
+//   - If all control-char subtests PASS as-is: yaml.v3 escapes/quotes the key →
+//     F-SEC-005 is NOT exploitable today. Tests are kept as regression fence.
+//     Defense-in-depth sanitization of the parse path is still recommended.
+//
+// Positive regression: a plain misspelled key like "keepalive_intervall" must
+// still appear in the error so the operator can identify the typo. This guards
+// against over-eager sanitization that swallows the key name entirely.
+//
+// Traces: F-SEC-005, CWE-117, BC-2.09.003 EC-003.
+func TestLoadFile_StripsControlCharsFromParseError(t *testing.T) {
+	t.Parallel()
+
+	// requireNoControlRune fails if any rune in msg satisfies unicode.IsControl.
+	// unicode.IsControl returns true for C0 (U+0000–U+001F), DEL (U+007F), and
+	// C1 (U+0080–U+009F) — the full Unicode control-character definition.
+	requireNoControlRune := func(t *testing.T, msg string) {
+		t.Helper()
+		for i, r := range msg {
+			if unicode.IsControl(r) {
+				t.Errorf("error message contains control rune U+%04X at byte offset %d "+
+					"(F-SEC-005 / CWE-117); yamlParseDetail must strip control chars from "+
+					"the yaml.v3 error string before embedding it in the E-CFG-005 detail; "+
+					"got message: %q", r, i, msg)
+			}
+		}
+	}
+
+	// writeConfig writes content to a temp file and returns the path.
+	writeConfig := func(t *testing.T, content string) string {
+		t.Helper()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "config.yaml")
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		return path
+	}
+
+	// requireECFG005 asserts that err wraps a *ConfigError with code E-CFG-005.
+	requireECFG005 := func(t *testing.T, err error) {
+		t.Helper()
+		var ce *config.ConfigError
+		if !errors.As(err, &ce) {
+			t.Fatalf("expected *config.ConfigError with E-CFG-005, got %T: %v", err, err)
+		}
+		if ce.Code != "E-CFG-005" {
+			t.Errorf("expected error code E-CFG-005 (BC-2.09.003 EC-003), got %q", ce.Code)
+		}
+	}
+
+	// ---- Unknown-key path (Shape-2 via KnownFields): primary injection site ---
+	//
+	// With dec.KnownFields(true), an unknown YAML key causes yaml.v3 to return:
+	//   "yaml: unmarshal errors:\n  line N: field <KEY> not found in type config.Config"
+	// If the key carries control runes, they appear in the <KEY> slot verbatim
+	// (or escaped, depending on yaml.v3 internals — this test determines which).
+
+	type unknownKeyCase struct {
+		name string
+		// yamlContent is a valid config with one unknown field whose key carries
+		// an embedded control character. The minimal valid surrounding fields
+		// (listen_addr + tick_interval) ensure the ONLY error is the unknown key.
+		yamlContent string
+		// desc describes the injected control char for diagnostics.
+		desc string
+	}
+
+	unknownKeyCases := []unknownKeyCase{
+		{
+			// U+009B (8-bit CSI — Control Sequence Introducer): highest-risk C1 rune.
+			// On UTF-8/8-bit terminals "\x9b" == "\x1b[" — the ANSI SGR escape prefix.
+			// YAML quoted key: "x\u009bmFORGED" (U+009B is embedded inside the quoted key).
+			name:        "unknown_key_C1_U009B_CSI",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\n\"x\u009bmFORGED\": bad\n",
+			desc:        "C1 U+009B (8-bit CSI)",
+		},
+		{
+			// U+001B (ESC — C0 escape): classic ANSI terminal-injection byte.
+			name:        "unknown_key_C0_ESC",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\n\"x\x1bmFORGED\": bad\n",
+			desc:        "C0 U+001B (ESC)",
+		},
+		{
+			// Embedded carriage return (U+000D) — can forge log line endings.
+			name:        "unknown_key_C0_CR",
+			yamlContent: "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\n\"forged\rkey\": bad\n",
+			desc:        "C0 U+000D (CR)",
+		},
+	}
+
+	for _, tc := range unknownKeyCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := writeConfig(t, tc.yamlContent)
+			_, err := config.LoadFile(path)
+
+			// NOTE: if yaml.v3 cannot parse the quoted key at all (treating the
+			// control byte as invalid), the error might be a syntax error (Shape-1)
+			// rather than an unknown-field error (Shape-2). Either way it must be
+			// E-CFG-005 and must not carry raw control runes.
+			requireError(t, err)
+			requireECFG005(t, err)
+
+			msg := err.Error()
+
+			// Log the observed yaml.v3 error string for empirical determination.
+			t.Logf("observed error for %s case: %q", tc.desc, msg)
+
+			// Security assertion: no control rune (C0, DEL, or C1) may appear in
+			// the returned error message (F-SEC-005 / CWE-117).
+			requireNoControlRune(t, msg)
+		})
+	}
+
+	// ---- Positive regression: plain misspelled key must still appear ----------
+	//
+	// "keepalive_intervall" carries no control characters and must survive in the
+	// error message so the operator can identify the typo. This guards against
+	// over-eager sanitization that silences the key name entirely.
+	t.Run("plain_misspelled_key_preserved", func(t *testing.T) {
+		t.Parallel()
+
+		content := "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\nkeepalive_intervall: 1s\n"
+		path := writeConfig(t, content)
+		_, err := config.LoadFile(path)
+		requireError(t, err)
+		requireECFG005(t, err)
+
+		msg := err.Error()
+		t.Logf("plain misspelled key error: %q", msg)
+
+		// The misspelled key name must appear in the error.
+		requireContains(t, msg, "keepalive_intervall")
+		// No control rune either (regression fence for the sanitized case).
+		requireNoControlRune(t, msg)
+	})
+}
+
 // ---- F-SEC-C1 (CWE-117): C1 control block U+0080–U+009F passes through sanitizer --
 
 // TestConfigValidate_StripsC1ControlChars verifies that sanitizeAddrForError strips
