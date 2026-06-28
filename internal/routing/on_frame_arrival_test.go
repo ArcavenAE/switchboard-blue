@@ -523,34 +523,81 @@ func (c *concurrentCaptureLogger) logCount() int {
 	return c.count
 }
 
-// TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess is a race-guard test
-// that verifies hitCountMu correctly serialises all concurrent mutations to the
-// per-key hit-count LRU and the aggregate emit counter (F-CONC-001 / go.md
-// rule 12).
+// TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess is a combined
+// race-guard and security-property test (F-CONC-001 / AC-005-a/b / BC-2.02.009).
 //
-// Static analysis confirms the locking is currently CORRECT; this test is a
-// regression fence.  It is expected to PASS immediately under -race.  If the
-// race detector fires here, that is a genuine implementer bug — report it, do
-// NOT paper over it.
+// It resolves the M-1 vs Pass-2 dispute empirically: M-1 (pass-3 security lens)
+// claims that under a combined same-key + >cap distinct-key flood, per-key
+// hit-count eviction from hitCountLRU resets count=1 and re-arms the
+// count%100==1 per-key candidate, potentially unbounding aggregate log output.
+// Pass-2 (security lens) ruled this BENIGN because the global tier-2 limiter
+// (aggregateEmitCount%aggregateLogSampleN==1) still bounds TOTAL output
+// sublinearly (AC-005-b / CWE-779 holds).
 //
-// The invariant under test is "bounded + race-free":
-//   - h.trackedKeyCount() <= collisionTrackCap after concurrent load (EC-006).
-//   - No data race reported by the race detector.
+// This test exercises BOTH flood paths simultaneously under concurrency:
+//   - Distinct-key flood: 25,600 distinct compound keys (16 goroutines × 1,600
+//     distinct seeds) — well above collisionTrackCap (=DefaultDropCacheSize=10,000),
+//     so hitCountLRU eviction fires heavily.
+//   - Same-key hammering: 4 pre-seeded keys, each hit thousands of times across
+//     goroutines — exercises MoveToFront under lock contention and the
+//     count%100==1 per-key re-arm path.
+//
+// Combined: ~51,200 total cache-hit calls (16 goroutines × 3,200 calls each,
+// half same-key, half distinct).
+//
+// Invariants asserted (all must hold — do NOT weaken bounds to force green):
+//
+//	(a) MAP/LRU PARITY: after the storm, len(hitCountIndex) == hitCountLRU.Len()
+//	    and both values <= collisionTrackCap. Catches a leak where eviction removes
+//	    from one structure but not the other (the real CWE-401 risk).
+//
+//	(b) BOUNDED AGGREGATE LOG: total log lines emitted across all goroutines MUST
+//	    be far below total cache-hit calls. Bound: logLines <= totalHits/aggregateLogSampleN + safetyMargin.
+//	    Arithmetic: totalHits ≈ 51,200; aggregateLogSampleN=50;
+//	    totalHits/aggregateLogSampleN = 1,024; safetyMargin = 500 (generous, accounts
+//	    for nondeterministic scheduling). Bound = 1,524. This is strongly sublinear
+//	    relative to totalHits (1,524/51,200 < 3%). If this assertion FAILS, M-1 is
+//	    a confirmed defect — report numbers, do NOT relax the bound.
+//
+//	(c) RACE-FREE: no data race reported by the race detector (-race flag).
 //
 // Exact log-line counts are NOT asserted — they are nondeterministic under
-// concurrent scheduling.
+// concurrent scheduling. Only the bound is checked.
 func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 	// NOT t.Parallel() — this test is CPU-intensive and uses many goroutines;
 	// running concurrently with the distinct-key flood test would produce
-	// misleading timing.  Serial execution keeps coverage deterministic.
+	// misleading timing. Serial execution keeps assertions deterministic.
 
 	const (
-		numGoroutines    = 16
-		hitsPerGoroutine = 500
+		numGoroutines = 16
 
-		// Number of same-key frame bytes (repeated hits into the LRU front path).
+		// distinctPerGoroutine: each goroutine generates this many unique keys.
+		// 16 × 1,600 = 25,600 distinct keys — 2.56× collisionTrackCap (=10,000),
+		// so hitCountLRU and hitCountIndex eviction fire heavily under contention.
+		// Previous test used 500 total (4,000 distinct) which was BELOW cap — not
+		// exercising eviction at all. This is the corrected, factually-accurate value.
+		distinctPerGoroutine = 1600
+
+		// sameKeyHitsPerGoroutine: each goroutine hits each pre-seeded same-key
+		// frame this many times (exercises MoveToFront + count%100==1 re-arm).
+		sameKeyHitsPerGoroutine = 400
+
+		// Number of shared same-key frames (each hit sameKeyHitsPerGoroutine × numGoroutines times).
 		numSameKeyFrames = 4
 	)
+
+	// totalCacheHitCalls: all calls after the seed that land as drop-cache hits.
+	// Each goroutine: distinctPerGoroutine distinct-key hits (all seeded first,
+	// see below) + numSameKeyFrames*sameKeyHitsPerGoroutine same-key hits.
+	// Across all goroutines: 16 × (1,600 + 4×400) = 16 × 3,200 = 51,200.
+	const totalCacheHitCalls = numGoroutines * (distinctPerGoroutine + numSameKeyFrames*sameKeyHitsPerGoroutine)
+
+	// aggregateBound: AC-005-b security property.
+	// logLines <= totalCacheHitCalls/aggregateLogSampleN + safetyMargin.
+	// = 51,200/50 + 500 = 1,024 + 500 = 1,524.
+	// This is strongly sublinear: 1,524 / 51,200 < 3%.
+	// If this bound fails, M-1 is a confirmed defect.
+	const aggregateBound = totalCacheHitCalls/aggregateLogSampleN + 500
 
 	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
 	logger := &concurrentCaptureLogger{}
@@ -562,14 +609,6 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 	interfaceSet := []InterfaceID{arrivalIface, egressIface}
 	nopFn := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
 
-	// Pre-build a mix of frame payloads:
-	//   - numSameKeyFrames repeated-key payloads (warm LRU front path + per-key
-	//     count increment — exercises MoveToFront under lock contention).
-	//   - remaining distinct-key payloads whose count exceeds collisionTrackCap
-	//     (forces eviction: Back/Remove/delete/PushFront under contention).
-	//
-	// Total distinct keys across all goroutines = numGoroutines * hitsPerGoroutine,
-	// well above DefaultDropCacheSize = 10 000, so eviction is heavily exercised.
 	buildFrame := func(seed int) []byte {
 		f := make([]byte, 8)
 		f[0] = byte(seed)
@@ -583,39 +622,51 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 		return f
 	}
 
-	// sameKeyFrames are shared across goroutines: they resolve to the same
-	// (checksum, iface) key after the first arrival populates the drop cache.
+	// sameKeyFrames: 4 frames pre-seeded into the drop cache so ALL goroutine
+	// hits on these frames are cache hits (exercises MoveToFront + per-key count
+	// re-arm under high contention across 16 goroutines).
 	sameKeyFrames := make([][]byte, numSameKeyFrames)
 	for i := range sameKeyFrames {
 		sameKeyFrames[i] = buildFrame(0xDEAD_0000 + i)
+		_ = h.OnFrameArrival(sameKeyFrames[i], arrivalIface, interfaceSet, nopFn) // seed: cache miss, adds key
 	}
 
-	// Seed the drop cache for same-key frames so all goroutine hits are cache
-	// hits (exercises the locked LRU + per-key increment path from the first call).
-	for _, f := range sameKeyFrames {
-		_ = h.OnFrameArrival(f, arrivalIface, interfaceSet, nopFn)
+	// Pre-seed the drop cache for ALL distinct keys each goroutine will use, so
+	// every goroutine call is a cache hit (exercises the hitCountLRU eviction +
+	// map cleanup path, not the initial-insertion path).
+	for g := range numGoroutines {
+		for i := range distinctPerGoroutine {
+			seed := (g+1)*0x10000 + i
+			frame := buildFrame(seed)
+			_ = h.OnFrameArrival(frame, arrivalIface, interfaceSet, nopFn) // seed: cache miss
+		}
 	}
 
+	// Storm phase: all goroutines hammer simultaneously.
+	// Each goroutine interleaves:
+	//   - sameKeyHitsPerGoroutine hits per same-key frame (×numSameKeyFrames)
+	//   - distinctPerGoroutine distinct-key cache hits
+	// This exercises both the MoveToFront (same-key) and evict-then-readmit
+	// (distinct-key, since >cap total distinct keys were seeded above) paths
+	// under heavy lock contention.
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
 	for g := range numGoroutines {
 		go func(goroutineID int) {
 			defer wg.Done()
-			for i := range hitsPerGoroutine {
-				// Alternate: half the calls are repeated same-key hits (LRU front
-				// path + MoveToFront contention), the other half use distinct keys
-				// (eviction path: Back/Remove/PushFront contention).
-				var frame []byte
-				if i%2 == 0 {
-					// Same-key: pick one of the pre-seeded frames.
-					frame = sameKeyFrames[i%numSameKeyFrames]
-				} else {
-					// Distinct key per (goroutineID, i): ensures eviction under
-					// concurrent load across goroutines.
-					seed := goroutineID*hitsPerGoroutine + i
-					frame = buildFrame(seed)
-				}
+
+			// Distinct-key hits for this goroutine (all already in drop cache).
+			for i := range distinctPerGoroutine {
+				seed := (goroutineID+1)*0x10000 + i
+				frame := buildFrame(seed)
+				_ = h.OnFrameArrival(frame, arrivalIface, interfaceSet, nopFn)
+			}
+
+			// Same-key hammering: each of the numSameKeyFrames frames hit
+			// sameKeyHitsPerGoroutine times, interleaved to maximise contention.
+			for i := range sameKeyHitsPerGoroutine {
+				frame := sameKeyFrames[i%numSameKeyFrames]
 				_ = h.OnFrameArrival(frame, arrivalIface, interfaceSet, nopFn)
 			}
 		}(g)
@@ -623,17 +674,71 @@ func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	// Invariant: the tracking structure must remain bounded regardless of the
-	// number of distinct keys observed (AC-005 v1.4-a / EC-006 / CWE-401/400).
-	tracked := h.trackedKeyCount()
-	if tracked > collisionTrackCap {
+	// --- Assert (a): MAP/LRU PARITY (CWE-401 leak detection) ---
+	//
+	// Both structures must agree on the count of tracked keys, and neither may
+	// exceed collisionTrackCap. A divergence means eviction removed from the
+	// LRU list without cleaning the map (memory leak) or vice versa (dangling
+	// pointer into freed list element).
+	lruLen := h.trackedKeyCount()
+	indexLen := h.trackedIndexLen()
+
+	if lruLen != indexLen {
 		t.Errorf(
-			"concurrent load: trackedKeyCount() = %d; want <= collisionTrackCap (%d) — LRU bound violated under concurrent access (F-CONC-001 / AC-005 v1.4-a / EC-006)",
-			tracked, collisionTrackCap,
+			"MAP/LRU PARITY VIOLATED: hitCountLRU.Len()=%d != len(hitCountIndex)=%d — eviction leaked one structure (CWE-401 / F-CONC-001)",
+			lruLen, indexLen,
 		)
 	}
-	// Log count is informational only — nondeterministic under concurrency.
-	t.Logf("concurrent access test complete: trackedKeyCount=%d logCount=%d", tracked, logger.logCount())
+	if lruLen > collisionTrackCap {
+		t.Errorf(
+			"LRU bound violated: hitCountLRU.Len()=%d > collisionTrackCap=%d (AC-005 v1.4-a / EC-006 / CWE-401/400)",
+			lruLen, collisionTrackCap,
+		)
+	}
+	if indexLen > collisionTrackCap {
+		t.Errorf(
+			"index bound violated: len(hitCountIndex)=%d > collisionTrackCap=%d (AC-005 v1.4-a / EC-006 / CWE-401/400)",
+			indexLen, collisionTrackCap,
+		)
+	}
+
+	// --- Assert (b): BOUNDED AGGREGATE LOG (AC-005-b / CWE-779 / M-1 empirical test) ---
+	//
+	// Arithmetic (see const declarations above):
+	//   totalCacheHitCalls = 51,200
+	//   aggregateLogSampleN = 50 (from on_frame_arrival.go)
+	//   upper bound = totalCacheHitCalls/aggregateLogSampleN + safetyMargin
+	//               = 1,024 + 500 = 1,524
+	//
+	// If the two-tier rate limiter is correct (Pass-2 / M-1-benign), logLines
+	// will be on the order of 1,000–1,024 (the aggregate counter fires once per
+	// aggregateLogSampleN candidates). If M-1 is a real defect (per-key eviction
+	// resets count=1, re-arms tier-1 candidate unconditionally, bypassing tier-2
+	// throttling), logLines will approach totalCacheHitCalls/100 ≈ 512 per
+	// re-arm cycle — still below this bound in the single-pass case, but the
+	// aggregate counter's monotone growth means tier-2 will NOT fire on every
+	// re-arm. The bound is generous enough that a benign implementation passes
+	// with margin, while a broken tier-2 (e.g. reset aggregateEmitCount on
+	// eviction) would blow through it.
+	//
+	// Do NOT relax this bound to force green. If it fails, report:
+	//   totalCacheHitCalls, logLines, aggregateBound — and route to implementer.
+	logLines := logger.logCount()
+	if logLines > aggregateBound {
+		t.Errorf(
+			"AGGREGATE LOG BOUND VIOLATED (AC-005-b / CWE-779 / M-1 confirmed defect): "+
+				"totalCacheHitCalls=%d logLines=%d aggregateBound=%d "+
+				"(bound = totalHits/%d + 500 = %d/%d + 500) — "+
+				"aggregate log output is NOT sublinear; M-1 is a real bug",
+			totalCacheHitCalls, logLines, aggregateBound,
+			aggregateLogSampleN, totalCacheHitCalls, aggregateLogSampleN,
+		)
+	}
+
+	t.Logf(
+		"concurrent flood complete: lruLen=%d indexLen=%d logLines=%d totalCacheHitCalls=%d aggregateBound=%d",
+		lruLen, indexLen, logLines, totalCacheHitCalls, aggregateBound,
+	)
 }
 
 // ---- constructor nil-guard -------------------------------------------------

@@ -142,6 +142,20 @@ func (h *FrameArrivalHandler) trackedKeyCount() int {
 	return h.hitCountLRU.Len()
 }
 
+// trackedIndexLen returns the number of entries in the hitCountIndex map.
+//
+// This accessor exists as a test seam only (CWE-401 parity check).
+// TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess asserts that
+// len(hitCountIndex) == hitCountLRU.Len() after a concurrent flood, verifying
+// that eviction removes from BOTH the LRU list and the backing map — a leak in
+// either direction is the real CWE-401 risk that trackedKeyCount() alone cannot
+// detect.
+func (h *FrameArrivalHandler) trackedIndexLen() int {
+	h.hitCountMu.Lock()
+	defer h.hitCountMu.Unlock()
+	return len(h.hitCountIndex)
+}
+
 // OnFrameArrival is the router-level end-to-end frame-arrival handler.
 //
 // It composes DropCache loop-duplicate suppression (BC-2.02.009, AC-004) and
