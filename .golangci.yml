@@ -33,6 +33,15 @@ linters:
       # We enforce this — keeps `fmt.Errorf("...: %w", err)` uniform.
       checks: ["all"]
 
+  exclusions:
+    rules:
+      # Test helper functions intentionally accept a timeout parameter that
+      # callers always pass as 100ms — the parameter exists for future
+      # flexibility and readability, not dead code.
+      - path: "_test\\.go"
+        linters:
+          - unparam
+
 formatters:
   enable:
     - gofumpt        # stricter gofmt; CI also checks this separately

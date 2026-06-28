@@ -691,7 +691,7 @@ func TestBC_2_02_005_VP019_VP020_NoDoubleDelivery(t *testing.T) {
 
 			// Drain all delivered frames and verify ordering and no duplicates.
 			var delivered []uint32
-			drainLoop:
+		drainLoop:
 			for {
 				select {
 				case f := <-a.DeliveredFrames:

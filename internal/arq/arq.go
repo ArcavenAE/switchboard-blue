@@ -28,6 +28,7 @@ package arq
 
 import (
 	"errors"
+	"fmt"
 	"math/bits"
 	"sync"
 	"time"
@@ -40,6 +41,17 @@ const SACKBitmapBytes = 8
 // DefaultDropTimeoutMultiplier is the coefficient applied to tick_interval to
 // derive the TLPKTDROP deadline (ARCH-03: 2 × tick_interval).
 const DefaultDropTimeoutMultiplier = 2
+
+// channelHeaderBaseLen is the minimum channel header length (bytes 0–11).
+const channelHeaderBaseLen = 12
+
+// channelHeaderSACKLen is the full channel header length when SACK_present=1
+// (base 12 bytes + 8-byte SACK field).
+const channelHeaderSACKLen = 20
+
+// sackPresentMask is the channel-header flags bit that signals SACK_present
+// (ARCH-02 §3.2: flags byte at offset 8, bit 2).
+const sackPresentMask = byte(0x04)
 
 // ErrDuplicateSequence is returned by OnAck when the caller attempts to
 // acknowledge a sequence number that has already been acknowledged and
@@ -72,12 +84,6 @@ type inFlightFrame struct {
 	deadline time.Time
 }
 
-// recvEntry is a slot in the receiver's reorder buffer.
-type recvEntry struct {
-	seq     uint32
-	payload []byte
-}
-
 // ARQ is the state machine for downstream ARQ with piggybacked ACK/SACK and
 // TLPKTDROP. It is safe for concurrent use.
 //
@@ -96,17 +102,14 @@ type ARQ struct {
 	// their send time are eligible for TLPKTDROP (AC-005).
 	dropTimeout time.Duration
 
-	// nextExpected is the next sequence number the receiver expects to deliver
-	// in-order (cumulative ACK pointer).
+	// nextExpected is the cumulative delivery pointer: we have delivered all
+	// frames with seq <= nextExpected. The next frame to deliver in order is
+	// nextExpected+1.
 	nextExpected uint32
 
-	// acked is the set of sequence numbers that have been acknowledged and
-	// delivered. Used to enforce no-duplicate-delivery (AC-001).
-	acked map[uint32]struct{}
-
 	// reorderBuf holds out-of-order received frames awaiting in-order delivery
-	// (AC-002).
-	reorderBuf []recvEntry
+	// (AC-002). Keyed by sequence number.
+	reorderBuf map[uint32][]byte
 
 	// inFlight is the sender's retransmit queue: frames sent but not yet ACKed.
 	inFlight map[uint32]*inFlightFrame
@@ -148,7 +151,7 @@ func New(cfg Config) *ARQ {
 	}
 	return &ARQ{
 		dropTimeout:       dropTimeout,
-		acked:             make(map[uint32]struct{}),
+		reorderBuf:        make(map[uint32][]byte),
 		inFlight:          make(map[uint32]*inFlightFrame),
 		DeliveredFrames:   make(chan []byte, cfg.DeliveredBufSize),
 		DegradationEvents: make(chan DegradationEvent, cfg.DegradationBufSize),
@@ -167,10 +170,84 @@ func New(cfg Config) *ARQ {
 //
 // Frames newly made deliverable in-order are sent on DeliveredFrames.
 // Duplicate sequence numbers are ignored (idempotent per EC-001).
-//
-// Not yet implemented — this is a stub.
 func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) error {
-	panic("not yet implemented")
+	a.mu.Lock()
+
+	// Collect frames to deliver outside the lock to avoid blocking on channel
+	// send while holding the mutex (DegradationBufSize / DeliveredBufSize
+	// buffering contract: callers must keep channels drained; sends are
+	// non-blocking only when the buffer has capacity).
+	var toDeliver [][]byte
+
+	// Step 1: deliver all frames from nextExpected+1 through ackSeq in order.
+	// Frames with no known payload (not in inFlight or reorderBuf) are skipped
+	// for delivery but still advance nextExpected — the cumulative ACK tells us
+	// the remote side received them; we only surface what we have locally.
+	for seq := a.nextExpected + 1; seq <= ackSeq; seq++ {
+		payload := a.payloadFor(seq)
+		a.nextExpected = seq
+		// Remove from inFlight once delivered (or skipped).
+		delete(a.inFlight, seq)
+		delete(a.reorderBuf, seq)
+		if payload != nil {
+			toDeliver = append(toDeliver, payload)
+		}
+	}
+
+	// Step 2: process SACK bitmap — buffer out-of-order frames for later flush.
+	// Bit i (MSB-first, bit 0 = MSB of byte 0) = seq ackSeq+1+i.
+	u := bitmapToUint64(sackBitmap)
+	for i := 0; i < 64; i++ {
+		if u&(uint64(1)<<(63-i)) != 0 {
+			seq := ackSeq + 1 + uint32(i)
+			if seq > a.nextExpected {
+				if _, buffered := a.reorderBuf[seq]; !buffered {
+					if f, ok := a.inFlight[seq]; ok {
+						// Clone payload to decouple buffer from inFlight.
+						p := make([]byte, len(f.payload))
+						copy(p, f.payload)
+						a.reorderBuf[seq] = p
+					}
+				}
+			}
+		}
+	}
+
+	// Step 3: flush consecutive frames from the reorder buffer.
+	for {
+		next := a.nextExpected + 1
+		if p, ok := a.reorderBuf[next]; ok {
+			toDeliver = append(toDeliver, p)
+			a.nextExpected = next
+			delete(a.reorderBuf, next)
+			delete(a.inFlight, next)
+		} else {
+			break
+		}
+	}
+
+	a.mu.Unlock()
+
+	// Send collected frames to the delivery channel outside the lock.
+	for _, p := range toDeliver {
+		a.DeliveredFrames <- p
+	}
+
+	return nil
+}
+
+// payloadFor returns the payload for seq, checking reorderBuf then inFlight.
+// Returns nil if not found. Must be called with a.mu held.
+func (a *ARQ) payloadFor(seq uint32) []byte {
+	if p, ok := a.reorderBuf[seq]; ok {
+		return p
+	}
+	if f, ok := a.inFlight[seq]; ok {
+		p := make([]byte, len(f.payload))
+		copy(p, f.payload)
+		return p
+	}
+	return nil
 }
 
 // SACKFromChannelHeader extracts the 8-byte SACK bitmap from a channel header
@@ -180,19 +257,46 @@ func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) error {
 //
 // Returns the bitmap and true if SACK_present=1, or a zero bitmap and false
 // if the flag is clear.
-//
-// Not yet implemented — this is a stub.
 func SACKFromChannelHeader(channelHeader []byte) ([SACKBitmapBytes]byte, bool, error) {
-	panic("not yet implemented")
+	if len(channelHeader) < channelHeaderBaseLen {
+		return [SACKBitmapBytes]byte{}, false, fmt.Errorf(
+			"arq: channel header too short: need %d bytes, got %d",
+			channelHeaderBaseLen, len(channelHeader),
+		)
+	}
+
+	flags := channelHeader[8]
+	if flags&sackPresentMask == 0 {
+		return [SACKBitmapBytes]byte{}, false, nil
+	}
+
+	// SACK_present=1: the 8-byte bitmap must be present at bytes 12–19.
+	if len(channelHeader) < channelHeaderSACKLen {
+		return [SACKBitmapBytes]byte{}, false, fmt.Errorf(
+			"arq: channel header too short for SACK field: need %d bytes, got %d",
+			channelHeaderSACKLen, len(channelHeader),
+		)
+	}
+
+	var bitmap [SACKBitmapBytes]byte
+	copy(bitmap[:], channelHeader[12:20])
+	return bitmap, true, nil
 }
 
 // EnqueueSend records a newly-sent frame in the sender's retransmit queue and
 // sets its deadline to now+dropTimeout. The frame is eligible for TLPKTDROP
 // once the deadline passes.
-//
-// Not yet implemented — this is a stub.
 func (a *ARQ) EnqueueSend(seq uint32, payload []byte, now time.Time) {
-	panic("not yet implemented")
+	p := make([]byte, len(payload))
+	copy(p, payload)
+
+	a.mu.Lock()
+	a.inFlight[seq] = &inFlightFrame{
+		seq:      seq,
+		payload:  p,
+		deadline: now.Add(a.dropTimeout),
+	}
+	a.mu.Unlock()
 }
 
 // TLPKTDROP terminates the overdue frame identified by overdueSeq. It removes
@@ -201,11 +305,36 @@ func (a *ARQ) EnqueueSend(seq uint32, payload []byte, now time.Time) {
 //
 // Returns ErrSequenceNotInFlight if overdueSeq is not in the retransmit queue.
 // Returns ErrFrameNotOverdue if the frame has not yet passed its deadline
-// (AC-005: only overdue frames may be dropped).
-//
-// Not yet implemented — this is a stub.
+// (AC-005: only overdue frames may be dropped). The deadline check is
+// exclusive: now must be strictly after the deadline (now.After(deadline)).
 func (a *ARQ) TLPKTDROP(overdueSeq uint32, now time.Time) error {
-	panic("not yet implemented")
+	a.mu.Lock()
+
+	f, ok := a.inFlight[overdueSeq]
+	if !ok {
+		a.mu.Unlock()
+		return ErrSequenceNotInFlight
+	}
+
+	// Deadline is exclusive: the frame must be strictly past its deadline.
+	if !now.After(f.deadline) {
+		a.mu.Unlock()
+		return ErrFrameNotOverdue
+	}
+
+	// Remove from retransmit queue and advance the delivery pointer past the
+	// dropped frame so subsequent OnAck calls can proceed (BC-2.02.006
+	// invariant 1: session continues after TLPKTDROP).
+	delete(a.inFlight, overdueSeq)
+	if overdueSeq >= a.nextExpected+1 {
+		a.nextExpected = overdueSeq
+	}
+
+	a.mu.Unlock()
+
+	// Send degradation event outside the lock.
+	a.DegradationEvents <- DegradationEvent{DroppedSeq: overdueSeq}
+	return nil
 }
 
 // SACKPopCount returns the number of set bits in the SACK bitmap. Used by
