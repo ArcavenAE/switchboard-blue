@@ -119,3 +119,77 @@ Make each test pass, one at a time, with minimum code:
    `forwardFrames()` per ADR-011 §Concurrency contract.
 2. `cmd/switchboard/access.go`: implement `buildRouter`, `buildAccessNode`,
    `startSweepTicker`, `startFramesDroppedTicker`, `runAccess`.
+
+---
+
+# Red Gate Log — S-4.04 Split-Horizon Loop Prevention + DropCache Router Wiring
+
+**Story:** S-4.04 — Split-Horizon Loop Prevention in internal/routing  
+**Date:** 2026-06-28  
+**Phase:** TDD (test-writer pass)  
+**BC-5.38.001 Status:** RED GATE VERIFIED
+
+## Summary
+
+12 tests + 1 fuzz target written across 2 files. All 12 unit tests fail against
+current stubs (`panic: not implemented`). Fuzz target compiles. Lint passes (0
+issues). Build passes.
+
+## Test Files
+
+| File | Tests | Status |
+|------|-------|--------|
+| `internal/routing/split_horizon_test.go` | 6 unit + 1 fuzz + 1 property | FAILING (Red Gate) |
+| `internal/routing/on_frame_arrival_test.go` | 7 unit (incl. subtests) | FAILING (Red Gate) |
+
+## Per-Test Red Gate Results
+
+| Test Name | AC/BC Trace | Failure Mode |
+|-----------|-------------|--------------|
+| `TestSplitHorizon_NoForwardTowardArrivalInterface` | AC-001 / BC-2.02.008 PC-1 | `panic: not implemented` (SplitHorizon.Forward stub) |
+| `TestSplitHorizon_ForwardOnAllOtherInterfaces` | AC-002 / BC-2.02.008 PC-2 | `panic: not implemented` (SplitHorizon.Forward stub) |
+| `TestSplitHorizon_OnlyArrivalInterfaceInSet` | EC-001 / BC-2.02.008 PC-3 | `panic: not implemented` (SplitHorizon.Forward stub) |
+| `TestSplitHorizon_EmptyInterfaceSet` | BC-2.02.008 PC-3 (empty set) | `panic: not implemented` (SplitHorizon.Forward stub) |
+| `TestSplitHorizon_UnknownArrivalInterfaceID` | EC-002 / BC-2.02.008 | `panic: not implemented` (SplitHorizon.Forward stub) |
+| `TestSplitHorizon_VP011_ArrivalIfaceNeverForwarded` | VP-011 (1024-case property) | `panic: not implemented` (SplitHorizon.Forward stub) |
+| `FuzzSplitHorizon_ChannelHeaderOpaque` | AC-003 / BC-2.02.008 invariant 1 / VP-015 | compiles; fuzz run would panic (Forward stub) |
+| `TestBC_2_02_009_Router_DropCacheWiring` | AC-004 / BC-2.02.009 PC-1 | `panic: not implemented` (OnFrameArrival stub) |
+| `TestBC_2_02_009_Router_DropCacheHitCounterIncremented` | EC-003 / BC-2.02.009 PC-2 | `panic: not implemented` (OnFrameArrival stub) |
+| `TestBC_2_02_009_Router_CollisionEventLogged` | AC-005 / BC-2.02.009 PC-2 / EC-005 | `panic: not implemented` (WithFrameArrivalLogger stub) |
+| `TestBC_2_02_009_Router_HashCollisionLogged` | EC-004 / BC-2.02.009 EC-005 | `panic: not implemented` (WithFrameArrivalLogger stub) |
+
+## Red Gate Verification Command
+
+```bash
+go test ./internal/routing/... -run "TestSplitHorizon|TestBC_2_02_009" 2>&1
+# Expected: FAIL — all tests panic with "not implemented" from stubs
+```
+
+## Signature Mismatch Notes
+
+None. Stubs compiled cleanly before tests were written. No production file
+modifications were needed.
+
+### nolint:staticcheck Justification (SA4006)
+
+Three `//nolint:staticcheck` directives appear in `on_frame_arrival_test.go`.
+Each marks a `h := NewFrameArrivalHandler(dc)` assignment that is immediately
+followed by `WithFrameArrivalLogger(...)(h)`. Because `WithFrameArrivalLogger`
+panics in the stub, staticcheck's SSA considers the code after the call
+unreachable and flags `h` as "never used". The nolint is justified: `h` IS used
+after the stub is replaced by the implementer. The directives must be removed
+after the stubs are implemented.
+
+## Implementer Handoff (S-4.04)
+
+Make each test pass, one at a time, with minimum code:
+
+1. `SplitHorizon.Forward`: filter arrivalIface from interfaceSet; call fn for
+   each remaining interface; return ErrAllPathsSplitHorizon if no interfaces
+   remain. Never parse frameBytes.
+2. `WithFrameArrivalLogger(l Logger) func(*FrameArrivalHandler)`: return a
+   function that sets `h.logger = l`.
+3. `FrameArrivalHandler.OnFrameArrival`: compute CRC32 of frameBytes, call
+   `h.dropCache.AddIfAbsent(checksum, uint64(arrivalIface))`. On hit: log via
+   `h.logger.Log(...)`, return `ErrDropCacheHit`. On miss: return nil.
+4. Remove `//nolint:staticcheck` directives once stubs are implemented.
