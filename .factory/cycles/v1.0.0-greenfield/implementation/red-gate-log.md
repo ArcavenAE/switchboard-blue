@@ -61,6 +61,56 @@ It is covered structurally by AC-004 (TestSessionConnectorFramesSurviveFailover,
 which exercises the relay goroutine) and AC-008 (TestDaemonCleanShutdown, which
 verifies the bridge goroutine exits cleanly on sc.Close()).
 
+---
+
+## Wave-3 Finding I-1 — Goroutine Join Red Gate (2026-06-27)
+
+**Story:** S-W3.04 — Finding I-1 (ticker wg-tracking)
+**Branch:** `fix/W3-i1-ticker-wg-join`
+**Commit:** `74a6de2`
+**BC-5.38.001 Status:** RED GATE VERIFIED (build failure)
+
+### Test
+
+`cmd/switchboard/access_goroutine_join_test.go`
+`TestRunAccessWithConnectorNoGoroutineLeak` (AC-008 / BC-2.04.007 PC-2 postcon-6)
+
+### Red Gate Result
+
+```
+# github.com/arcavenae/switchboard/cmd/switchboard [github.com/arcavenae/switchboard/cmd/switchboard.test]
+cmd/switchboard/access_goroutine_join_test.go:105:2: cannot assign to framesDroppedInterval (neither addressable nor a map index expression)
+cmd/switchboard/access_goroutine_join_test.go:106:21: cannot assign to framesDroppedInterval (neither addressable nor a map index expression)
+FAIL    github.com/arcavenae/switchboard/cmd/switchboard [build failed]
+```
+
+The test assigns `framesDroppedInterval = time.Millisecond` to inject a fast tick
+interval. `framesDroppedInterval` is currently a `const` in `access.go`, which is
+not assignable. The build failure is the Red Gate.
+
+### Why This Is The Correct Red Gate
+
+The compile error enforces the full scope of the required fix: the implementer must
+change `framesDroppedInterval` from `const` to `var` (testability) AND add `wg.Add(1)`
+before both `startSweepTicker` and `startFramesDroppedTicker` (correctness). Neither
+change alone is sufficient — both are required for the test to build AND pass.
+
+### Discriminating Mechanism (channel handshake)
+
+Once `framesDroppedInterval` is a `var`:
+- `blockingRelayConnector.RelayDropped()` parks the ticker goroutine on first call
+- Test cancels ctx, then selects: if `done` closes within 150ms → goroutine not joined → RED
+- On fixed code: `wg.Wait()` blocks until goroutine is released → `done` stays open → PASS
+
+### Required Fix
+
+1. In `access.go`: change `const framesDroppedInterval = 30 * time.Second` to
+   `var framesDroppedInterval = 30 * time.Second`
+2. In `runAccessWithConnector`: add `wg.Add(1)` + `defer wg.Done()` inside both
+   `startSweepTicker` and `startFramesDroppedTicker` goroutines
+
+---
+
 ## Implementer Handoff
 
 Make each test pass, one at a time, with minimum code:
