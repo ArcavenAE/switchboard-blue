@@ -349,6 +349,25 @@ func TestOnFrameArrival_ForwardsViaSplitHorizon_AfterDropCacheMiss(t *testing.T)
 	})
 }
 
+// ---- constructor nil-guard -------------------------------------------------
+
+// TestNewFrameArrivalHandler_NilDropCachePanics verifies that constructing a
+// FrameArrivalHandler with a nil DropCache panics at construction time, not
+// deferred to the first OnFrameArrival call (CWE-476 / go.md "no panics in
+// library code" adjacency — programmer-precondition panic is appropriate at
+// wiring time, mirroring NewDropCache's fail-fast contract).
+func TestNewFrameArrivalHandler_NilDropCachePanics(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("NewFrameArrivalHandler(nil) did not panic; want panic at construction time")
+		}
+	}()
+
+	NewFrameArrivalHandler(nil)
+}
+
 // ---- EC-004 / BC-2.02.009 EC-005 (hash collision scenario) ----------------
 
 // TestBC_2_02_009_Router_HashCollisionLogged verifies that when a hash collision

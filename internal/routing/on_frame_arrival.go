@@ -52,8 +52,12 @@ type FrameArrivalHandler struct {
 // To enable EC-005 collision-event logging (AC-005), apply
 // WithFrameArrivalLogger(l)(h) after construction.
 //
-// dc must not be nil.
+// dc must not be nil. Passing nil is a programmer error and panics at
+// construction time (consistent with NewDropCache's fail-fast contract).
 func NewFrameArrivalHandler(dc *multipath.DropCache) *FrameArrivalHandler {
+	if dc == nil {
+		panic("routing: NewFrameArrivalHandler dc must not be nil")
+	}
 	return &FrameArrivalHandler{
 		dropCache: dc,
 		logger:    nopLogger{},
