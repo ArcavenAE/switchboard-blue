@@ -129,10 +129,12 @@ func TestReplay_NoDuplicateDelivery_MultipleSeqs(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // AC-002 / VP-023: in-order delivery
-// BC-2.02.004 postcondition 2: "in sequence order"
+// BC-2.02.004 invariant 2 (chan_seq monotonically increasing; out-of-order buffered)
 // ---------------------------------------------------------------------------
 
-// TestReplay_InOrderDelivery verifies BC-2.02.004 postcondition 2.
+// TestReplay_InOrderDelivery verifies BC-2.02.004 invariant 2 (chan_seq
+// monotonically increasing within a channel; out-of-order frames buffered and
+// delivered in sequence order). RULING-002 Finding 3.
 // seq N+1 arriving before N must be buffered and delivered after N arrives,
 // in order. Exercises VP-023 (in-order delivery).
 func TestReplay_InOrderDelivery(t *testing.T) {
@@ -231,10 +233,16 @@ func TestReplay_InOrderDelivery_TableDriven(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-003 / BC-2.02.004 invariant 2: window boundary
+// AC-003 / BC-2.02.004 invariant 3 + invariant 5: window boundary
 // ---------------------------------------------------------------------------
 
-// TestReplay_WindowBoundary verifies BC-2.02.004 invariant 2.
+// TestReplay_WindowBoundary verifies BC-2.02.004 invariant 3 (replay window
+// size N is fixed for the lifetime of a channel; N is the configurable bound)
+// + invariant 5 (receiver silently discards any frame whose distance from
+// delivery frontier exceeds windowSize; no error returned to caller).
+// RULING-002 Amendment 1.
+// NOTE: postcondition 1 (payload carries last N-1 keystrokes) is sender-side;
+// it is verified at internal/halfchannel, NOT here.
 // Frames older than the window (seq < nextSeq - windowSize) are discarded
 // without error. EC-001: seq exactly at boundary evicts oldest entry.
 func TestReplay_WindowBoundary(t *testing.T) {
@@ -881,8 +889,10 @@ func BenchmarkReplay_OnUpstream_PerCall(b *testing.B) {
 // pending. If seq=50 was discarded (correct impl) it must NOT be delivered,
 // and delivering seq=50 again after the gap returns nil (not ErrAlreadyDelivered).
 //
-// This test is expected to FAIL against the current unbounded implementation
-// (Red Gate for the implementer).
+// This test PASSES against the current implementation. It is kept as a
+// regression guard: if a future refactor re-introduces unbounded pending
+// buffering (e.g. by removing the dist >= windowSize discard check), this
+// test will catch it.
 func TestReplay_BoundedPendingBuffer(t *testing.T) {
 	t.Parallel()
 
@@ -923,7 +933,7 @@ func TestReplay_BoundedPendingBuffer(t *testing.T) {
 	for i := range wantSeqs {
 		wantSeqs[i] = uint32(i + 1)
 	}
-	assertDelivered(t, *got, wantSeqs) // FAILS on current impl: seq=50 auto-drains
+	assertDelivered(t, *got, wantSeqs) // regression guard: seq=50 must NOT auto-drain from pending
 
 	// Confirm nextSeq is 50 (not 51, which would be evidence seq=50 was drained).
 	if ns := r.NextSeq(); ns != 50 {

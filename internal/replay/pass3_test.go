@@ -57,7 +57,8 @@ func TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow(t *testing.T) {
 	// Send the in-window future frame: seq=1.
 	//   True forward distance: (1 - (MaxUint32-2)) mod 2^32 = 4 ∈ (0, 5).
 	//   Correct: buffered in r.pending[1].
-	//   Buggy:   discarded by line-112 guard (1 < MaxUint32-7).
+	//   (The former non-wrap-safe lower-bound guard would have discarded it; that
+	//    guard was removed and replaced with the unified modular-distance check.)
 	futureSeq := uint32(1)
 	if err := r.OnUpstream(Frame{Seq: futureSeq, Payload: []byte("wrap-future")}); err != nil {
 		t.Fatalf("in-window future frame seq=%d: unexpected error %v", futureSeq, err)
@@ -69,12 +70,13 @@ func TestReplay_BC_2_02_004_WraparoundTooOldGuardBuffersInWindow(t *testing.T) {
 			len(delivered), seqsFromFrames(delivered))
 	}
 
-	// Critical Red assertion: the frame must be held in r.pending[1].
-	// If line 112 discards it, r.pending[1] will be absent.
+	// Regression assertion: the frame must be held in r.pending[1].
+	// The former non-wrap-safe lower-bound guard would have discarded it;
+	// the unified modular-distance check correctly buffers it instead.
 	if _, ok := r.pending[futureSeq]; !ok {
 		t.Errorf("BC-2.02.004 invariant 2 violation: in-window post-wrap frame seq=%d "+
-			"was discarded by the too-old guard instead of being buffered "+
-			"(r.pending[%d] absent; line-112 lower-bound check is not wrap-safe)",
+			"was discarded instead of being buffered "+
+			"(r.pending[%d] absent; wrap-safe modular-distance check may be broken)",
 			futureSeq, futureSeq)
 	}
 }
