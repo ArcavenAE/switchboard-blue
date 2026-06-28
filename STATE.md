@@ -1,9 +1,9 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-3-closed-wave-4-pending
-phase_3_active_wave: 3
-phase_3_active_stories: []
+phase_step: wave-4-active
+phase_3_active_wave: 4
+phase_3_active_stories: [S-4.01]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
@@ -91,7 +91,7 @@ s_w3_04_pr_number: 17
 s_w3_04_merge_sha: aeb442d
 s_w3_04_merge_date: 2026-06-27
 s_w3_04_status: completed
-timestamp: 2026-06-27T23:59:59Z
+timestamp: 2026-06-27T00:00:00Z
 last_update: 2026-06-27
 ---
 
@@ -99,7 +99,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Wave 3 CLOSED. Human approved the Wave 3 integration gate 2026-06-27. Wave-level adversarial convergence: 3/3 CLEAN passes. Both pre-gate items C-1 + T2 merged. Consistency audit PASSED (0 blocking, 3 non-blocking resolved). Cycle-close checklist complete: 6 Wave-4 deferrals recorded in Drift Items. Both front-loaded Wave-3-carried adjudications resolved 2026-06-27 (W3-R3-F1 + W3-R3-F2 — see adjudications/). SW305-M2/M3 closed; SW305-M4 deferred to W4-TEST-001. PR #22 (plugin opt-in) merged to develop (now 85c2d2f). PR #23 (kos-scaffolding cleanup) open. Next step: Wave 4 kickoff (Reliability Layer + Config — S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts).
+Wave 4 (Reliability Layer + Config) ACTIVE. Stories: S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 (29 pts). Sub-wave 4A (parallel-eligible): S-4.01, S-4.02, S-4.03, S-6.01 — all Wave 1-2 deps merged. Sub-wave 4B: S-4.04 (depends on S-4.01 internal/paths). Deferred test task W4-TEST-001 (RouteFrame fire-once E-ADM-017 integration test, owner: test-writer). First delivery: S-4.01 (per-path RTT/loss tracking + duplicate-and-race dispatch, 8 pts, BC-2.02.001/002/003/009). develop HEAD = 85c2d2f. PR #23 (kos-scaffolding cleanup) open, awaiting human merge.
 
 ## Phase Progress
 
@@ -107,7 +107,7 @@ Wave 3 CLOSED. Human approved the Wave 3 integration gate 2026-06-27. Wave-level
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED (human approved 2026-06-27); Wave 4 pending | 2026-06-27 | Wave 3: 3/3 CLEAN passes; C-1+T2 merged; 0 blocking; develop @ 849bd86 |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 in_progress) | 2026-06-27 | Wave 3: 3/3 CLEAN; Wave 4 started 2026-06-27; develop @ 85c2d2f |
 
 ## Wave / Story Status
 
@@ -173,14 +173,14 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | W3-R3-F1 cmd-wiring adjudication | RESOLVED — all 6 ARCH-08 §6.5.1 wiring obligations met in real binary; adversary saw stale SHA; no Wave-4 work | 2026-06-27 |
 | W3-R3-F2 EC-006 adjudication | RATIFY — BC-2.05.008 v1.3 / VP-059 v1.2 already specify implemented semantics; SW305-M2/M3 closed; SW305-M4 deferred to W4-TEST-001 | 2026-06-27 |
 
-## Session Resume Checkpoint — 2026-06-27 (Wave 3 CLOSED; Wave 4 pending)
+## Session Resume Checkpoint — 2026-06-27 (Wave 4 ACTIVE)
 
-**Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 85c2d2f (PR #22 plugin opt-in merged). PR #23 (kos-scaffolding cleanup) open.
-**Wave 3 summary:** 10 stories + 3 fix PRs delivered; 3/3 clean adversary passes; consistency audit PASS (0 blocking); C-1 + T2 merged. Cycle-close checklist complete.
-**Adjudications resolved (2026-06-27):** W3-R3-F1 RESOLVED (all 6 ARCH-08 §6.5.1 obligations met); W3-R3-F2 RATIFY (BC-2.05.008 v1.3 + VP-059 v1.2 cover EC-006); SW305-M2/M3 CLOSED; SW305-M4 → W4-TEST-001.
-**Next immediate step:** Wave 4 kickoff — Reliability Layer + Config (S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts). Wave 4 is the next wave in the 7-wave plan.
-**Remaining network-ingress deferral:** S-BL.NI tracks ARCH-08 v2.3 §6.5.1 — network-ingress listener + E-ADM-017 live-data-path integration test. Target Wave 4+.
-**Open Drift Items carried to Wave 4:** W3-DEFER-1..6 (see Drift Items table) + W3-R2-M2 + SW305-M4 (W4-TEST-001).
+**Position:** Phase 3, Wave 4 ACTIVE. develop HEAD = 85c2d2f. PR #23 (kos-scaffolding cleanup) open, awaiting human merge.
+**Wave 4 scope:** S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 (29 pts). Sub-wave 4A parallel: S-4.01/S-4.02/S-4.03/S-6.01. Sub-wave 4B: S-4.04 after S-4.01 (internal/paths dep).
+**First delivery:** S-4.01 in_progress (per-path RTT/loss tracking + duplicate-and-race dispatch, 8 pts, BC-2.02.001/002/003/009).
+**Deferred task:** W4-TEST-001 (RouteFrame fire-once E-ADM-017 integration test, owner: test-writer).
+**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001 (see Drift Items table).
+**S-BL.NI:** ARCH-08 v2.3 §6.5.1 network-ingress listener + E-ADM-017 live-data-path integration test — Wave 4+.
 **Previous checkpoint:** `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content

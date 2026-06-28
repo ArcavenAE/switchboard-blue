@@ -216,3 +216,12 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 **Wave-gate open drift:** C-1-W3P1-defer (intentional, S-BL.NI target). W3-R3-F2 EC-006 ownership (PO adjudication pending). SW305-M2/M3/M4 open/deferred.
 
 **Next at archive time:** Human gate review of Wave 3 + delivery of human-scoped pre-gate items C-1 (WithFailureCounter wiring) + T2 (deterministic test).
+
+---
+
+## Archived: 2026-06-27 — Wave 3 CLOSED; Wave 4 pending
+
+**Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 85c2d2f (PR #22 plugin opt-in merged). PR #23 (kos-scaffolding cleanup) open.
+**Wave 3 summary:** 10 stories + 3 fix PRs delivered; 3/3 clean adversary passes; consistency audit PASS (0 blocking); C-1 + T2 merged. Cycle-close checklist complete.
+**Adjudications resolved (2026-06-27):** W3-R3-F1 RESOLVED (all 6 ARCH-08 §6.5.1 obligations met); W3-R3-F2 RATIFY (BC-2.05.008 v1.3 + VP-059 v1.2 cover EC-006); SW305-M2/M3 CLOSED; SW305-M4 → W4-TEST-001.
+**Next at archive time:** Wave 4 kickoff — S-4.01/S-4.02/S-4.03/S-4.04/S-6.01 (29 pts).

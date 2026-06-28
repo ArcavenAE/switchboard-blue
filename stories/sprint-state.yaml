@@ -28,11 +28,17 @@ wave_status:
     closed_at: 2026-06-25
     stories: [S-1.03, S-2.01, S-2.02]
   - wave: 3
-    status: all_stories_merged
+    status: closed
+    gate_disposition: APPROVED
+    closed_at: 2026-06-27
     stories_merged: [S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
-    stories_pending: []
     points_complete: 32
     points_remaining: 0
+  - wave: 4
+    status: active
+    started_at: 2026-06-27
+    stories: [S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
+    points: 29
 
 stories:
   - story_id: S-0.01
@@ -183,7 +189,7 @@ stories:
     title: "Per-path RTT/loss tracking and duplicate-and-race dispatch"
     epic: E-4
     wave: 4
-    status: pending
+    status: in_progress
     priority: P0
     scope_phase: E
     points: 8
