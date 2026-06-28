@@ -20,8 +20,11 @@
 // RESYNC signal requesting retransmit from last_acked_seq+1. In-flight
 // frames during failover are lost; the SACK bitmap drives recovery.
 //
-// This package is pure-core: no I/O. TLPKTDROP signals via channel not OS
-// calls. All side-effects (timers, network) are owned by the caller.
+// This package is pure-core: no I/O, no goroutines, no timers. OnAck returns
+// deliverable frames synchronously; the caller's tick loop routes them to the
+// terminal. All side-effects (timers, network) are owned by the caller.
+// Single-writer contract: OnAck and TLPKTDROP must be called from a single
+// goroutine (the half-channel tick loop). Concurrent calls are not safe.
 //
 // math/bits is used for SACK bitmap population count (VP-052).
 package arq
@@ -30,7 +33,6 @@ import (
 	"fmt"
 	"math/bits"
 	"sort"
-	"sync"
 	"time"
 )
 
@@ -85,20 +87,20 @@ type inFlightFrame struct {
 }
 
 // ARQ is the state machine for downstream ARQ with piggybacked ACK/SACK and
-// TLPKTDROP. It is driven by a single half-channel tick loop and is NOT safe
-// for concurrent OnAck or TLPKTDROP calls from multiple goroutines.
+// TLPKTDROP. It is driven by a single half-channel tick loop.
+//
+// Single-writer contract: OnAck and TLPKTDROP MUST be called from a single
+// goroutine. Concurrent calls are NOT safe. There are no internal goroutines
+// or mutexes — this is a pure-core state machine (see package doc).
 //
 // Receiver role (console): OnAck advances the cumulative acknowledgment,
-// processes the SACK bitmap, and delivers frames in order via DeliveredFrames.
+// processes the SACK bitmap, and returns frames in delivery order.
 //
-// Sender role (access node): TLPKTDROP terminates an overdue frame, signals
-// degradation via DegradationEvents, and removes the frame from the retransmit
-// queue.
+// Sender role (access node): TLPKTDROP terminates an overdue frame, returns
+// a DegradationEvent, and signals degradation via DegradationEvents channel.
 //
 // Zero value is not usable; construct via New.
 type ARQ struct {
-	mu sync.Mutex
-
 	// dropTimeout is the per-frame deadline. Frames past this duration since
 	// their send time are eligible for TLPKTDROP (AC-005).
 	dropTimeout time.Duration
@@ -114,22 +116,17 @@ type ARQ struct {
 	reorderBuf map[uint32][]byte
 
 	// inFlight is the sender's retransmit queue: frames sent but not yet ACKed.
+	//
+	// NOTE: inFlight has no window bound in this package. The caller (sender-side
+	// wiring, S-5.01) is responsible for bounding the number of concurrent
+	// EnqueueSend calls to the negotiated ARQ window size. Unbounded EnqueueSend
+	// calls without corresponding OnAck calls will grow this map without limit.
+	// Window enforcement is deferred to S-5.01 (BC-2.02.005 precondition 3).
 	inFlight map[uint32]*inFlightFrame
-
-	// prevDelivery is the "done" signal from the previously launched delivery
-	// goroutine. Each OnAck call that produces frames launches a goroutine
-	// that waits on prevDelivery before writing to DeliveredFrames, ensuring
-	// global FIFO delivery order even though individual OnAck calls return
-	// immediately (non-blocking). Guarded by mu.
-	prevDelivery chan struct{}
-
-	// DeliveredFrames receives frames in order as they are ready for terminal
-	// output. Callers drain this channel to consume delivered payloads.
-	DeliveredFrames chan []byte
 
 	// DegradationEvents receives a DegradationEvent each time TLPKTDROP fires.
 	// The metrics layer reads this channel to update the quality indicator
-	// (BC-2.02.006 invariant 3).
+	// (BC-2.02.006 invariant 3). Always buffered (minimum 1; see New).
 	DegradationEvents chan DegradationEvent
 }
 
@@ -143,12 +140,10 @@ type Config struct {
 	// when DropTimeout is zero.
 	TickInterval time.Duration
 
-	// DeliveredBufSize is the buffer depth of the DeliveredFrames channel.
-	// Zero means unbuffered.
-	DeliveredBufSize int
-
 	// DegradationBufSize is the buffer depth of the DegradationEvents channel.
-	// Zero means unbuffered.
+	// Zero or negative defaults to a minimum buffer of 1 — the DegradationEvents
+	// channel is always buffered so TLPKTDROP never blocks the caller when the
+	// metrics layer is momentarily behind.
 	DegradationBufSize int
 }
 
@@ -158,17 +153,15 @@ func New(cfg Config) *ARQ {
 	if dropTimeout == 0 {
 		dropTimeout = time.Duration(DefaultDropTimeoutMultiplier) * cfg.TickInterval
 	}
-	// prevDelivery is pre-signalled so the first delivery goroutine starts
-	// immediately without waiting.
-	ready := make(chan struct{}, 1)
-	ready <- struct{}{}
+	degBufSize := cfg.DegradationBufSize
+	if degBufSize < 1 {
+		degBufSize = 1
+	}
 	return &ARQ{
 		dropTimeout:       dropTimeout,
 		reorderBuf:        make(map[uint32][]byte),
 		inFlight:          make(map[uint32]*inFlightFrame),
-		prevDelivery:      ready,
-		DeliveredFrames:   make(chan []byte, cfg.DeliveredBufSize),
-		DegradationEvents: make(chan DegradationEvent, cfg.DegradationBufSize),
+		DegradationEvents: make(chan DegradationEvent, degBufSize),
 	}
 }
 
@@ -182,20 +175,30 @@ func New(cfg Config) *ARQ {
 // (SACK_present=1, flags bit 2). Each bit i at offset above ackSeq indicates
 // that frame ackSeq+1+i has been received out of order.
 //
-// Frames newly made deliverable in-order are sent on DeliveredFrames.
+// Returns the ordered slice of frame payloads ready for terminal output.
+// The returned slices are owned by the caller; ARQ retains no reference to
+// them after return. The caller's tick loop forwards them to the terminal.
+//
 // Duplicate sequence numbers are ignored (idempotent per EC-001).
-func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) error {
-	a.mu.Lock()
-
-	// Collect frames to deliver. All payloads are deep-copied above (in
-	// payloadFor / the SACK clone), so the goroutine below owns the slice
-	// and touches no other shared state.
+//
+// Concurrency: must be called from a single goroutine (the tick loop).
+// Not safe for concurrent calls.
+func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) ([][]byte, error) {
 	var toDeliver [][]byte
+
+	// Record the pre-call nextExpected so Step 3 can guard the flush: reorderBuf
+	// frames are only deliverable once the cumulative ACK has advanced past at
+	// least one sequence (prevNextExpected < ackSeq). Without this guard, SACK
+	// frames buffered in Step 2 would be immediately flushed in Step 3 even when
+	// no cumulative progress occurred (e.g. OnAck(0, allBitsSet)).
+	prevNextExpected := a.nextExpected
 
 	// Step 1: deliver all frames from nextExpected+1 through ackSeq in order.
 	// Frames with no known payload (not in inFlight or reorderBuf) are skipped
 	// for delivery but still advance nextExpected — the cumulative ACK tells us
 	// the remote side received them; we only surface what we have locally.
+	// Advancing past locally-absent seqs is correct and intended: see BC-2.02.005
+	// invariant 4 and PC-4 scope note (F-H4 ruling, disposition A).
 	for seq := a.nextExpected + 1; seq <= ackSeq; seq++ {
 		payload := a.payloadFor(seq)
 		a.nextExpected = seq
@@ -228,45 +231,30 @@ func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) error {
 		}
 	}
 
-	// Step 3: flush consecutive frames from the reorder buffer.
-	for {
-		next := a.nextExpected + 1
-		if p, ok := a.reorderBuf[next]; ok {
-			toDeliver = append(toDeliver, p)
-			a.nextExpected = next
-			delete(a.reorderBuf, next)
-			delete(a.inFlight, next)
-		} else {
-			break
+	// Step 3: flush consecutive frames from the reorder buffer, but only when
+	// the cumulative ACK advanced in Step 1 (ackSeq > prevNextExpected). SACK
+	// frames are buffered speculatively in Step 2; delivery only occurs once
+	// the cumulative pointer has reached the frame immediately below them.
+	if ackSeq > prevNextExpected {
+		for {
+			next := a.nextExpected + 1
+			if p, ok := a.reorderBuf[next]; ok {
+				toDeliver = append(toDeliver, p)
+				a.nextExpected = next
+				delete(a.reorderBuf, next)
+				delete(a.inFlight, next)
+			} else {
+				break
+			}
 		}
 	}
 
-	if len(toDeliver) == 0 {
-		a.mu.Unlock()
-		return nil
-	}
-
-	// Chain delivery goroutines to preserve global FIFO order of DeliveredFrames
-	// while keeping OnAck non-blocking (the caller must not block on a partially-
-	// drained channel — DeliveredBufSize may be smaller than the flush batch).
-	prev := a.prevDelivery
-	next := make(chan struct{}, 1)
-	a.prevDelivery = next
-	a.mu.Unlock()
-
-	go func(frames [][]byte, prev, next chan struct{}) {
-		<-prev // wait for the previous batch to finish delivering
-		for _, p := range frames {
-			a.DeliveredFrames <- p
-		}
-		next <- struct{}{} // signal the next batch it may start
-	}(toDeliver, prev, next)
-
-	return nil
+	return toDeliver, nil
 }
 
 // payloadFor returns the payload for seq, checking reorderBuf then inFlight.
-// Returns nil if not found. Must be called with a.mu held.
+// Returns nil if not found. The returned slice is a fully-owned copy; ARQ
+// retains no reference to it after return (satisfies go.md rule 12).
 func (a *ARQ) payloadFor(seq uint32) []byte {
 	if p, ok := a.reorderBuf[seq]; ok {
 		return p
@@ -319,18 +307,25 @@ func (a *ARQ) EnqueueSend(seq uint32, payload []byte, now time.Time) {
 	p := make([]byte, len(payload))
 	copy(p, payload)
 
-	a.mu.Lock()
 	a.inFlight[seq] = &inFlightFrame{
 		seq:      seq,
 		payload:  p,
 		deadline: now.Add(a.dropTimeout),
 	}
-	a.mu.Unlock()
 }
 
-// TLPKTDROP terminates the overdue frame identified by overdueSeq. It removes
-// the frame from the retransmit queue and sends a DegradationEvent on
-// DegradationEvents.
+// TLPKTDROP terminates the overdue frame identified by overdueSeq.
+//
+// Returns ErrSequenceNotInFlight if overdueSeq is not in the retransmit queue.
+// Returns ErrFrameNotOverdue if the frame has not exceeded its deadline (AC-005).
+//
+// On success, sends a DegradationEvent to DegradationEvents (non-blocking;
+// the channel must be buffered — see New). The caller must drain
+// DegradationEvents on its tick loop. The dropped sequence is also returned
+// as a DegradationEvent value for callers that prefer synchronous inspection.
+//
+// The zero value of DegradationEvent (DroppedSeq == 0) is the "no event"
+// sentinel returned on error paths (seq 0 is never a valid in-flight seq).
 //
 // Only the overdue frame's content is abandoned (BC-2.02.006 postcondition 5).
 // Frames below overdueSeq that are still undelivered remain in-flight and are
@@ -338,25 +333,21 @@ func (a *ARQ) EnqueueSend(seq uint32, payload []byte, now time.Time) {
 //
 // nextExpected is advanced only when overdueSeq == nextExpected+1 (the dropped
 // frame was the next expected frame in sequence). If overdueSeq is ahead of
-// nextExpected+1, lower undelivered frames are preserved.
+// nextExpected+1, lower undelivered frames are preserved (C-1 fix).
 //
-// Returns ErrSequenceNotInFlight if overdueSeq is not in the retransmit queue.
-// Returns ErrFrameNotOverdue if the frame has not yet passed its deadline
-// (AC-005: only overdue frames may be dropped). The deadline check is
-// exclusive: now must be strictly after the deadline (now.After(deadline)).
-func (a *ARQ) TLPKTDROP(overdueSeq uint32, now time.Time) error {
-	a.mu.Lock()
-
+// The deadline check is exclusive: now must be strictly after the deadline
+// (now.After(deadline)).
+//
+// Concurrency: must be called from a single goroutine (the tick loop).
+func (a *ARQ) TLPKTDROP(overdueSeq uint32, now time.Time) (DegradationEvent, error) {
 	f, ok := a.inFlight[overdueSeq]
 	if !ok {
-		a.mu.Unlock()
-		return ErrSequenceNotInFlight
+		return DegradationEvent{}, ErrSequenceNotInFlight
 	}
 
 	// Deadline is exclusive: the frame must be strictly past its deadline.
 	if !now.After(f.deadline) {
-		a.mu.Unlock()
-		return ErrFrameNotOverdue
+		return DegradationEvent{}, ErrFrameNotOverdue
 	}
 
 	// Remove from retransmit queue.
@@ -370,11 +361,19 @@ func (a *ARQ) TLPKTDROP(overdueSeq uint32, now time.Time) error {
 		a.nextExpected = overdueSeq
 	}
 
-	a.mu.Unlock()
+	ev := DegradationEvent{DroppedSeq: overdueSeq}
 
-	// Send degradation event outside the lock.
-	a.DegradationEvents <- DegradationEvent{DroppedSeq: overdueSeq}
-	return nil
+	// Send non-blocking to the buffered DegradationEvents channel. The channel
+	// is always buffered (minimum 1; see New) so this select is safe as long as
+	// the caller drains DegradationEvents at tick rate.
+	select {
+	case a.DegradationEvents <- ev:
+	default:
+		// Channel full — caller is not draining. The return value still carries
+		// the event; the metrics layer will observe it on next drain cycle.
+	}
+
+	return ev, nil
 }
 
 // GapsToRetransmit returns the sequence numbers of in-flight frames that are
@@ -383,9 +382,6 @@ func (a *ARQ) TLPKTDROP(overdueSeq uint32, now time.Time) error {
 // SACK bitmap covers positions ackSeq+1..ackSeq+64 (bit 0 = MSB of byte 0 = ackSeq+1).
 // In-flight frames at seq >= ackSeq+65 (outside the bitmap window) are also gaps.
 func (a *ARQ) GapsToRetransmit(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) []uint32 {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if len(a.inFlight) == 0 {
 		return nil
 	}
