@@ -70,7 +70,7 @@ w3_i1_fix_pr: 18
 w3_i1_fix_merge_sha: e9421d8
 w3_i1_fix_merge_date: 2026-06-27
 s_w3_05_per_story_adversary_streak: 3
-wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CONVERGED 0C/0H/4M; r3 NOT_CONVERGED 0C/2H (F-1 cmd-wiring, F-2 EC-006 alert — both ADJUDICATION-DEPENDENT scope-boundary findings, NOT raw code defects). Passes r1+r2 rated F-1 as in-scope-deferred OBSERVATION. ADJUDICATION IN PROGRESS: architect (F-1 cmd-wiring deferral vs ARCH-08 position-18) + product-owner (F-2 EC-006 ownership/deferral). Convergence on hold pending scope decision."
+wave_3_gate_adversary_passes: "RESTART run at 10dd880: r1 CONVERGED 0C/0H; r2 CONVERGED 0C/0H/4M; r3 NOT_CONVERGED 0C/2H (F-1 cmd-wiring, F-2 EC-006 — both scope-boundary; adjudicated 2026-06-27). W3-R3-F1 RESOLVED (all 6 ARCH-08 §6.5.1 wiring obligations met; stale SHA). W3-R3-F2 RATIFIED (BC-2.05.008 v1.3 + VP-059 v1.2 cover EC-006). SW305-M4 deferred W4-TEST-001."
 s_wave3_f1_fix_pr: 15
 s_wave3_f1_fix_merge_sha: 10dd880
 s_wave3_f1_fix_merge_date: 2026-06-27
@@ -91,7 +91,7 @@ s_w3_04_pr_number: 17
 s_w3_04_merge_sha: aeb442d
 s_w3_04_merge_date: 2026-06-27
 s_w3_04_status: completed
-timestamp: 2026-06-27T23:59:00Z
+timestamp: 2026-06-27T23:59:59Z
 last_update: 2026-06-27
 ---
 
@@ -99,7 +99,7 @@ last_update: 2026-06-27
 
 ## Current State
 
-Wave 3 CLOSED. Human approved the Wave 3 integration gate 2026-06-27. Wave-level adversarial convergence: 3/3 CLEAN passes. Both pre-gate items C-1 + T2 merged. Consistency audit PASSED (0 blocking, 3 non-blocking resolved). Cycle-close checklist complete: 6 Wave-4 deferrals recorded in Drift Items. Next step: Wave 4 kickoff (Reliability Layer + Config — S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts).
+Wave 3 CLOSED. Human approved the Wave 3 integration gate 2026-06-27. Wave-level adversarial convergence: 3/3 CLEAN passes. Both pre-gate items C-1 + T2 merged. Consistency audit PASSED (0 blocking, 3 non-blocking resolved). Cycle-close checklist complete: 6 Wave-4 deferrals recorded in Drift Items. Both front-loaded Wave-3-carried adjudications resolved 2026-06-27 (W3-R3-F1 + W3-R3-F2 — see adjudications/). SW305-M2/M3 closed; SW305-M4 deferred to W4-TEST-001. PR #22 (plugin opt-in) merged to develop (now 85c2d2f). PR #23 (kos-scaffolding cleanup) open. Next step: Wave 4 kickoff (Reliability Layer + Config — S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts).
 
 ## Phase Progress
 
@@ -134,12 +134,12 @@ Wave 3 CLOSED. Human approved the Wave 3 integration gate 2026-06-27. Wave-level
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
-| W3-R3-F1 | HIGH? | cmd wiring: none of 5 Wave-3 subsystems wired; E-ADM-016 discarded by nopLogger in real builds. | architect | pending-adjudication |
-| W3-R3-F2 | HIGH? | BC-2.05.008 EC-006 ownership/deferral — S-W3.05 implements the mechanism; ratification pending. | product-owner | pending-adjudication |
+| W3-R3-F1 | HIGH? | cmd wiring: all 6 ARCH-08 §6.5.1 obligations met in real binary (buildRouter wires stdLogger, SessionAuth, sweep ticker, frames bridge, sc.Err() drain, FailureCounter via PR#20); adversary saw stale SHA 10dd880. No Wave-4 work. See adjudications/W3-R3-F1-cmd-wiring.md. | architect | RESOLVED |
+| W3-R3-F2 | HIGH? | BC-2.05.008 v1.3 + VP-059 v1.2 already specify implemented EC-006 semantics (hmacFailureRecorder iface, WithFailureCounter seam, PATH-A/PATH-B, srcAddrHex). No version bumps needed. See adjudications/W3-R3-F2-ec006.md. | product-owner | RESOLVED (RATIFY) |
 | W3-R2-M2 | MED | Route-time LWW snapshot: concurrent RegisterForwardingEntry not atomic with HMAC verify. | architect/implementer | open |
-| SW305-M2 | MED | WithFailureCounter uses unexported iface not spec-pinned *admission.FailureCounter — ratify or revert. | product-owner | open |
-| SW305-M3 | MED | WithNow clock seam + threshold<=0 guard absent from BC contract. | product-owner→implementer | open |
-| SW305-M4 | MED | Integration test doesn't pin fire-once end-to-end (no 6th/7th through RouteFrame). | test-writer | open |
+| SW305-M2 | MED | unexported hmacFailureRecorder interface design correct — inject-via-interface idiom; specified in BC-2.05.008 v1.3 PC-5. No revert. | product-owner | CLOSED (RATIFIED) |
+| SW305-M3 | MED | WithNow clock seam + threshold<=0 guard are admission.FailureCounter concerns per BC-2.05.005 PC-3 / VP-059. Wrong-BC ownership noted. | product-owner | CLOSED |
+| SW305-M4 | MED | Test coverage gap: need routing integration test for 6th/7th call through RouteFrame not re-firing E-ADM-017 in same window, using real *admission.FailureCounter + WithNow injection. | test-writer | DEFER-WAVE-4 (W4-TEST-001) |
 | SW305-cosmetic | LOW | Stale comments: Red-Gate test (pre-v1.6 model), TrackedSourceCount() name, AC-016 count, v1.7 citation in test header. | cosmetic | defer post-wave |
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001) — lesson recorded in cycles/cycle-1/lessons.md. Follow-up: candidate for self-improvement epic story. | orchestrator | open/deferred |
 | W3-DEFER-1 | OBS | Process-gap: codify worktree-identity tuple in adversary dispatch templates (applied ad hoc this cycle). | orchestrator | deferred → Wave 4 process hardening |
@@ -170,14 +170,17 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | Wave-3 Pass-1: C-1 deferred, I-1 fixed PR #18 e9421d8 | C-1 → ARCH-08 v2.2 §6.5.1 TRACKED-DEFER/S-BL.NI; I-1 (BC-2.04.007) fixed; streak 0/3 | 2026-06-27 |
 | Wave-3 pre-gate consistency audit | PASS — 0 blocking; 3 non-blocking findings resolved: D5-1 (STORY-INDEX S-BL.NI row rewritten), T2-1 + V-1 (S-W3.04 AC-010 + ARCH-08 pin updated to v2.3) | 2026-06-27 |
 | Wave 3 integration gate | APPROVED — close Wave 3; carry 5 tracked deferrals + process-gap #7 to Wave 4 | 2026-06-27 |
+| W3-R3-F1 cmd-wiring adjudication | RESOLVED — all 6 ARCH-08 §6.5.1 wiring obligations met in real binary; adversary saw stale SHA; no Wave-4 work | 2026-06-27 |
+| W3-R3-F2 EC-006 adjudication | RATIFY — BC-2.05.008 v1.3 / VP-059 v1.2 already specify implemented semantics; SW305-M2/M3 closed; SW305-M4 deferred to W4-TEST-001 | 2026-06-27 |
 
 ## Session Resume Checkpoint — 2026-06-27 (Wave 3 CLOSED; Wave 4 pending)
 
-**Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 849bd86.
+**Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 85c2d2f (PR #22 plugin opt-in merged). PR #23 (kos-scaffolding cleanup) open.
 **Wave 3 summary:** 10 stories + 3 fix PRs delivered; 3/3 clean adversary passes; consistency audit PASS (0 blocking); C-1 + T2 merged. Cycle-close checklist complete.
+**Adjudications resolved (2026-06-27):** W3-R3-F1 RESOLVED (all 6 ARCH-08 §6.5.1 obligations met); W3-R3-F2 RATIFY (BC-2.05.008 v1.3 + VP-059 v1.2 cover EC-006); SW305-M2/M3 CLOSED; SW305-M4 → W4-TEST-001.
 **Next immediate step:** Wave 4 kickoff — Reliability Layer + Config (S-4.01/S-4.02/S-4.03/S-4.04/S-6.01, 29 pts). Wave 4 is the next wave in the 7-wave plan.
 **Remaining network-ingress deferral:** S-BL.NI tracks ARCH-08 v2.3 §6.5.1 — network-ingress listener + E-ADM-017 live-data-path integration test. Target Wave 4+.
-**Open Drift Items carried to Wave 4:** W3-DEFER-1..6 (see Drift Items table) + W3-R3-F1/F2 adjudication pending + W3-R2-M2 + SW305-M2/M3/M4.
+**Open Drift Items carried to Wave 4:** W3-DEFER-1..6 (see Drift Items table) + W3-R2-M2 + SW305-M4 (W4-TEST-001).
 **Previous checkpoint:** `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
