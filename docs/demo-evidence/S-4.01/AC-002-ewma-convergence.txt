@@ -1,0 +1,14 @@
+$ go test ./internal/paths/... \
+    -run 'TestBC_2_02_003_PathTracker_EWMAConvergence' \
+    -v
+
+=== RUN   TestBC_2_02_003_PathTracker_EWMAConvergence
+=== PAUSE TestBC_2_02_003_PathTracker_EWMAConvergence
+=== RUN   TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== PAUSE TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== CONT  TestBC_2_02_003_PathTracker_EWMAConvergence
+--- PASS: TestBC_2_02_003_PathTracker_EWMAConvergence (0.00s)
+=== CONT  TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+--- PASS: TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/paths 0.248s

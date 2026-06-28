@@ -1,0 +1,14 @@
+$ go test ./internal/multipath/... \
+    -run 'TestBC_2_02_002_Receive_FirstCopyDelivered|TestBC_2_02_002_Receive_DuplicateReturnsErr' \
+    -v
+
+=== RUN   TestBC_2_02_002_Receive_FirstCopyDelivered
+=== PAUSE TestBC_2_02_002_Receive_FirstCopyDelivered
+=== RUN   TestBC_2_02_002_Receive_DuplicateReturnsErr
+=== PAUSE TestBC_2_02_002_Receive_DuplicateReturnsErr
+=== CONT  TestBC_2_02_002_Receive_FirstCopyDelivered
+=== CONT  TestBC_2_02_002_Receive_DuplicateReturnsErr
+--- PASS: TestBC_2_02_002_Receive_FirstCopyDelivered (0.00s)
+--- PASS: TestBC_2_02_002_Receive_DuplicateReturnsErr (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/multipath     0.268s

@@ -1,0 +1,12 @@
+$ go test ./internal/multipath/... \
+    -run 'TestBC_2_02_009_DropCache_HitCounterIncremented|TestBC_2_02_009_DropCache_HitCounterConcurrent' \
+    -v
+
+=== RUN   TestBC_2_02_009_DropCache_HitCounterIncremented
+=== PAUSE TestBC_2_02_009_DropCache_HitCounterIncremented
+=== RUN   TestBC_2_02_009_DropCache_HitCounterConcurrent
+--- PASS: TestBC_2_02_009_DropCache_HitCounterConcurrent (0.00s)
+=== CONT  TestBC_2_02_009_DropCache_HitCounterIncremented
+--- PASS: TestBC_2_02_009_DropCache_HitCounterIncremented (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/multipath     0.257s
