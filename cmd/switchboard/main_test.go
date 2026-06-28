@@ -1350,88 +1350,83 @@ func TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess(t *testing.T) {
 	}
 }
 
-// ── S-6.01 AC-009 / PC-9 / Inv-5: TestRouterStartup_AppliesValidatedConfig ────
+// ── S-6.01 AC-009 / PC-9 / Inv-5: TestConfigTickIntervalApplied ──────────────
 
-// TestRouterStartup_AppliesValidatedConfig — AC-009 (BC-2.09.003 postcondition 9
-// and invariant 5)
+// TestConfigTickIntervalApplied — AC-009 (BC-2.09.003 PC-9 / Inv-5, S-6.01 v1.4)
 //
-// Verifies that when a valid --config is supplied, the daemon wires the validated
-// config struct into its subsystems rather than discarding it or falling back to
-// hardcoded constants (BC-2.09.003 Inv-5: "validated config is the single source
-// of truth for subsystem configuration").
+// Verifies that tickIntervalFor correctly sources cfg.TickInterval from the
+// validated config rather than always returning the hardcoded 10ms default.
 //
-// RED Gate mechanism:
+// Seam: tickIntervalFor(cfg *config.Config) time.Duration is the extracted
+// helper that runAccess must use when constructing halfchannel.New (Task 17).
+// Testing the helper directly is the honest observable: if tickIntervalFor
+// ignores cfg, the 20ms case fails with "got 10ms; want 20ms". If tickIntervalFor
+// is not yet wired into runAccess, an end-to-end test would also fail — but the
+// helper test gives a precise, deterministic failure signal without PTY/network
+// machinery.
 //
-//	runAccessWithConnector currently has signature:
-//	  func runAccessWithConnector(ctx, stderr, sc, an, router) error
-//	It does NOT accept a *config.Config. This test calls it with a *config.Config
-//	as an additional argument, which causes a compile error:
-//	  "too many arguments in call to runAccessWithConnector"
-//	That compile failure IS the Red Gate for AC-009.
+// RED Gate: tickIntervalFor currently returns the hardcoded 10ms default
+// regardless of cfg (RED stub in access.go). The cfg.TickInterval=20ms case
+// fails: "got 10ms; want 20ms". The cfg=nil case passes (10ms == 10ms default).
+// Both cases MUST pass once Task 17 is complete.
 //
-//	The implementer must (Task 17):
-//	  1. Add *config.Config as a parameter to runAccessWithConnector.
-//	  2. Use cfg.ListenAddr for the listen socket bind.
-//	  3. Use cfg.TickInterval for the half-channel tick interval.
-//	  4. Use cfg.DrainTimeout for the drain subsystem.
-//	  5. Use cfg.KeepaliveInterval for keepalive probes.
+// Scope note (Deferred Application — BC-2.09.003 v1.3 DEFERRED-APPLICATION):
+// This test covers ONLY tick_interval application. The following fields are
+// validated at startup (AC-005 through AC-008) but their application is deferred:
+//   - listen_addr binding → S-BL.NI (network-ingress listener, no current owner)
+//   - drain_timeout / upstream_routers / keepalive_interval → S-7.04 (Wave 7)
 //
-// After Task 17, this test verifies that the returned error is NOT a
-// *config.ConfigError (config-layer errors must not propagate from the access layer).
+// Those deferred fields are intentionally NOT asserted here.
 //
-// Traces: BC-2.09.003 postcondition 9, invariant 5, AC-009, S-6.01 v1.3 EC-011.
-func TestRouterStartup_AppliesValidatedConfig(t *testing.T) {
-	// NOT t.Parallel(): exercises the daemon wiring path.
+// Traces: BC-2.09.003 PC-9, Inv-5; AC-009; S-6.01 v1.4 EC-011.
+func TestConfigTickIntervalApplied(t *testing.T) {
+	// NOT t.Parallel(): stateless helper test, but exercises package-level code path.
 
-	// Build a valid config with a distinctive non-default listen_addr.
-	// "127.0.0.1:19282" differs from any plausible hardcoded default
-	// (":9090", "0.0.0.0:9090") — a future socket-level assertion would catch
-	// a daemon that ignores the config and uses a hardcoded addr.
-	cfg := &config.Config{
-		ListenAddr:        "127.0.0.1:19282",
-		TickInterval:      10 * time.Millisecond,
-		DrainTimeout:      10 * time.Second,
-		KeepaliveInterval: 1 * time.Second,
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		wantTick time.Duration
+	}{
+		{
+			// cfg=nil: no --config supplied; must fall back to the hardcoded 10ms default.
+			name:     "nil cfg returns hardcoded 10ms default",
+			cfg:      nil,
+			wantTick: 10 * time.Millisecond,
+		},
+		{
+			// cfg.TickInterval=20ms: must NOT fall back to the hardcoded 10ms default.
+			// This case is RED until Task 17 wires cfg.TickInterval into tickIntervalFor.
+			// Expected failure: "got 10ms; want 20ms" (tickIntervalFor returns 10ms stub).
+			name: "non-nil cfg returns cfg.TickInterval not hardcoded default",
+			cfg: &config.Config{
+				ListenAddr:        "127.0.0.1:19282",
+				TickInterval:      20 * time.Millisecond, // deliberately != 10ms default
+				DrainTimeout:      10 * time.Second,
+				KeepaliveInterval: 1 * time.Second,
+			},
+			wantTick: 20 * time.Millisecond,
+		},
 	}
 
-	// Precondition: fixture must be a valid config (validates without error).
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("cfg.Validate(valid fixture): %v — fixture must be valid (test precondition)", err)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Precondition: if cfg is non-nil, it must be a valid config so we know the
+			// test inputs themselves are not the source of a failure (test hygiene only).
+			if tc.cfg != nil {
+				if err := tc.cfg.Validate(); err != nil {
+					t.Fatalf("cfg.Validate(fixture): %v — test fixture must be valid", err)
+				}
+			}
 
-	// Build a fakeConnector so the test does not require a real PTY.
-	sc, keys, pub := newFakeSessionConnector(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	if err := sc.Connect(ctx); err != nil {
-		t.Fatalf("sc.Connect: %v; want nil (PTY fallback path)", err)
+			got := tickIntervalFor(tc.cfg)
+			if got != tc.wantTick {
+				t.Errorf("tickIntervalFor(cfg): got %v; want %v "+
+					"(BC-2.09.003 PC-9/Inv-5 — cfg.TickInterval must drive halfchannel.New, "+
+					"not the hardcoded 10ms constant)",
+					got, tc.wantTick)
+			}
+		})
 	}
-
-	an, router := buildAccessComponents(keys, pub, sc, &captureLogger{})
-
-	// AC-009 / PC-9 / Inv-5 (RED — compile failure until Task 17):
-	//
-	// runAccessWithConnector MUST accept a *config.Config so it can:
-	//   - bind the listen socket on cfg.ListenAddr (not a hardcoded default)
-	//   - set cfg.TickInterval as the half-channel tick interval
-	//   - set cfg.DrainTimeout for the drain subsystem
-	//   - set cfg.KeepaliveInterval for keepalive probes
-	//
-	// Currently runAccessWithConnector signature is:
-	//   func runAccessWithConnector(ctx, stderr, sc, an, router) error
-	// Passing cfg as an extra argument produces:
-	//   "too many arguments in call to runAccessWithConnector"
-	// — that compile error IS the Red Gate. Do NOT remove cfg from the call.
-	cancel() // cancel context so runAccessWithConnector exits immediately after wiring
-	var stderr bytes.Buffer
-	runErr := runAccessWithConnector(ctx, &stderr, sc, an, router, cfg) // RED: extra cfg arg not yet in signature
-	// After Task 17 lands: assert runErr is NOT a *config.ConfigError.
-	var ce *config.ConfigError
-	if errors.As(runErr, &ce) {
-		t.Fatalf("runAccessWithConnector(..., cfg): got config error %v; "+
-			"config-layer errors must not propagate from the access layer (AC-009 / BC-2.09.003 PC-9)", runErr)
-	}
-	_ = router // suppress unused warning if router is not otherwise referenced
 }
 
 // ── Existing tests (preserved) ────────────────────────────────────────────────

@@ -80,6 +80,30 @@ type connectorIface interface {
 	RelayDropped() uint64
 }
 
+// tickIntervalFor returns the half-channel tick interval to use.
+//
+// When cfg is non-nil, cfg.TickInterval is the single source of truth
+// (BC-2.09.003 PC-9 / Inv-5 / AC-009). When cfg is nil (no --config supplied),
+// the hardcoded Wave-3 default of 10ms is used.
+//
+// Note: listen_addr, drain_timeout, upstream_routers, and keepalive_interval
+// application is explicitly deferred — listen_addr to S-BL.NI (network-ingress
+// listener story, no current owner), drain_timeout/upstream_routers/
+// keepalive_interval to S-7.04 (Wave 7). Those fields are validated at startup
+// (AC-005 through AC-008) but NOT applied here.
+//
+// RED stub: currently returns the hardcoded 10ms default regardless of cfg.
+// The implementer must replace the body with:
+//
+//	if cfg != nil {
+//	    return cfg.TickInterval
+//	}
+//	return 10 * time.Millisecond
+func tickIntervalFor(_ *config.Config) time.Duration {
+	// RED stub — does not yet inspect cfg.TickInterval (Task 17).
+	return 10 * time.Millisecond
+}
+
 // runAccess is the thin constructor wrapper for the access-mode handler. It
 // builds the real *tmux.SessionConnector (with defaultPTYAlloc), constructs
 // access components via buildAccessComponents, and delegates to
