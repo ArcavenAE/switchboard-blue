@@ -91,8 +91,12 @@ s_w3_04_pr_number: 17
 s_w3_04_merge_sha: aeb442d
 s_w3_04_merge_date: 2026-06-27
 s_w3_04_status: completed
-timestamp: 2026-06-27T00:00:00Z
-last_update: 2026-06-27
+s_4_01_per_story_adversary_streak: 3
+s_4_01_adversary_converged: true
+s_4_01_impl_commit: aaff609
+s_4_01_doc_commit: 327f5c6
+timestamp: 2026-06-28T00:00:00Z
+last_update: 2026-06-28
 ---
 
 # Switchboard Factory State
@@ -107,7 +111,7 @@ Wave 4 (Reliability Layer + Config) ACTIVE. Stories: S-4.01, S-4.02, S-4.03, S-4
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 in_progress) | 2026-06-27 | Wave 3: 3/3 CLEAN; Wave 4 started 2026-06-27; develop @ 85c2d2f |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 adversary CONVERGED, pending demo+PR) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01 adversary 3/3 CLEAN @ aaff609 |
 
 ## Wave / Story Status
 
@@ -129,6 +133,7 @@ Wave 4 (Reliability Layer + Config) ACTIVE. Stories: S-4.01, S-4.02, S-4.03, S-4
 | 3 | fix/W3-i1 | Ticker wg-join (I-1, BC-2.04.007) | completed | #18 | e9421d8 |
 | 3 | fix/W3-t2 | Deterministic TOCTOU test (ADR-011 T2) | completed | #19 | 849bd86 |
 | 3 | fix/W3-c1 | WithFailureCounter wiring (OBS-3 resolved) | completed | #20 | 418de54 |
+| 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | adversary_converged (pending demo+PR) | — | aaff609 |
 
 ## Open Drift Items
 
@@ -148,6 +153,7 @@ Wave 4 (Reliability Layer + Config) ACTIVE. Stories: S-4.01, S-4.02, S-4.03, S-4
 | W3-DEFER-4 | MED | M-2 unbounded E-ADM-016 log volume: per-source slot cap exists but per-burst log cardinality under sustained attack not bounded by spec (BC-2.05.005 gap). | product-owner/spec-steward | deferred → Wave 4 |
 | W3-DEFER-5 | MED | EC-005: durable CI import-perimeter guard — BC-2.04.002 EC-005 comment corrected (PR #17), but no CI lint rule enforces the `internal/` import boundary structurally. | devops-engineer | deferred → Wave 4 |
 | W3-DEFER-6 | MED | Real-connector PTY-EOF lifecycle integration test — TestForwardFramesPTYEOFExitsCleanly uses mock; no test exercises actual PTY master EOF through live SessionConnector. | test-writer | deferred → Wave 4 |
+| S401-O3 | MED | BC-2.02.003 PC5: degraded-path flag (RTT >200ms) unimplemented in internal/paths — feeds quality-indicator subsystem (BC-2.06.001/ARCH-03), out of S-4.01 scope. Ranking already deprioritizes slow paths via score; flag wiring tracked for quality-indicator story. | product-owner/architect | deferred → quality-indicator story |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate rows): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -172,14 +178,15 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | Wave 3 integration gate | APPROVED — close Wave 3; carry 5 tracked deferrals + process-gap #7 to Wave 4 | 2026-06-27 |
 | W3-R3-F1 cmd-wiring adjudication | RESOLVED — all 6 ARCH-08 §6.5.1 wiring obligations met in real binary; adversary saw stale SHA; no Wave-4 work | 2026-06-27 |
 | W3-R3-F2 EC-006 adjudication | RATIFY — BC-2.05.008 v1.3 / VP-059 v1.2 already specify implemented semantics; SW305-M2/M3 closed; SW305-M4 deferred to W4-TEST-001 | 2026-06-27 |
+| S-4.01 per-story adversarial CONVERGED (BC-5.39.001) | 3 clean passes (3-5) at aaff609; O-2 fixed 327f5c6; O-1/O-3/O-4 logged; BC-2.02.009 router wiring deferred to S-4.04 | 2026-06-28 |
 
-## Session Resume Checkpoint — 2026-06-27 (Wave 4 ACTIVE)
+## Session Resume Checkpoint — 2026-06-28 (Wave 4 ACTIVE)
 
-**Position:** Phase 3, Wave 4 ACTIVE. develop HEAD = 85c2d2f. PR #23 (kos-scaffolding cleanup) open, awaiting human merge.
+**Position:** Phase 3, Wave 4 ACTIVE. develop HEAD = 85c2d2f (pre-PR). S-4.01 adversarial convergence COMPLETE (3/3 CLEAN @ aaff609 + doc-trim 327f5c6). Next: S-4.01 demo + PR + merge.
 **Wave 4 scope:** S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 (29 pts). Sub-wave 4A parallel: S-4.01/S-4.02/S-4.03/S-6.01. Sub-wave 4B: S-4.04 after S-4.01 (internal/paths dep).
-**First delivery:** S-4.01 in_progress (per-path RTT/loss tracking + duplicate-and-race dispatch, 8 pts, BC-2.02.001/002/003/009).
+**S-4.01 state:** adversary CONVERGED (BC-5.39.001) — pending demo + PR + merge. impl @ aaff609, doc @ 327f5c6. BC-2.02.009 router wiring deferred to S-4.04.
 **Deferred task:** W4-TEST-001 (RouteFrame fire-once E-ADM-017 integration test, owner: test-writer).
-**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001 (see Drift Items table).
+**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3 (see Drift Items table).
 **S-BL.NI:** ARCH-08 v2.3 §6.5.1 network-ingress listener + E-ADM-017 live-data-path integration test — Wave 4+.
 **Previous checkpoint:** `cycles/cycle-1/session-checkpoints.md`.
 
