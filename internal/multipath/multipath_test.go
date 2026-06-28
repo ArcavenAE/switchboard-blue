@@ -870,6 +870,157 @@ func TestBC_2_02_001_Send_ConcurrentWithUpdatePaths(t *testing.T) {
 	wg.Wait()
 }
 
+// ─── Pass-3 adversarial findings (F-1 coverage gap) ─────────────────────────
+
+// TestBC_2_02_001_Send_ErrorPaths pins the three error-handling branches inside
+// Send that were previously untested (pass-3 adversarial finding F-1):
+//
+//	(a) per-path failure records SendResult{Sent:false} with lastErr captured
+//	(b) when ALL selected paths fail, Send returns a wrapped error
+//	    "multipath: all N path(s) failed: %w" (F-003)
+//	(c) partial failure (some paths succeed) returns nil error, with
+//	    per-path Sent correctly set
+//
+// Observations from reading the implementation (lines ~264-285):
+//   - failed paths ARE appended to results as SendResult{PathID:..., Sent:false}
+//   - results length == number of paths fn was called on (both success and failure)
+//   - the error is %w-wrapped, so errors.Is traverses the chain
+//
+// BC-2.02.001 / pass-3 finding F-1
+func TestBC_2_02_001_Send_ErrorPaths(t *testing.T) {
+	t.Parallel()
+
+	// sentinel is the error returned by the send function to simulate path failure.
+	sentinel := errors.New("simulated path write failure")
+
+	type pathSpec struct {
+		id    uint64
+		rttMS float64
+		fail  bool // whether fn should return sentinel for this path
+	}
+
+	tests := []struct {
+		name string
+		// paths to configure (sorted by rttMS ascending → selected first)
+		paths []pathSpec
+		// wantErr: if true, Send must return a non-nil error AND errors.Is(err, sentinel)
+		wantErr bool
+		// wantSentCount: number of SendResult entries with Sent==true
+		wantSentCount int
+		// wantResultLen: total length of results slice (all paths fn was called on)
+		wantResultLen int
+	}{
+		{
+			// All selected paths fail → wrapped error, all results Sent==false.
+			name: "all_paths_fail",
+			paths: []pathSpec{
+				{id: 10, rttMS: 10.0, fail: true},
+				{id: 20, rttMS: 20.0, fail: true},
+			},
+			wantErr:       true,
+			wantSentCount: 0,
+			wantResultLen: 2,
+		},
+		{
+			// Partial failure: one of two paths fails.
+			// fn is called on both; one succeeds, one fails.
+			// Send must return nil error, exactly one Sent==true.
+			name: "partial_failure_one_of_two",
+			paths: []pathSpec{
+				{id: 10, rttMS: 10.0, fail: false}, // lower RTT → selected first
+				{id: 20, rttMS: 20.0, fail: true},  // higher RTT → selected second
+			},
+			wantErr:       false,
+			wantSentCount: 1,
+			wantResultLen: 2,
+		},
+		{
+			// Single path fails — only one path active.
+			// Send must return wrapped error; result slice has one entry with Sent==false.
+			name: "single_path_fails",
+			paths: []pathSpec{
+				{id: 99, rttMS: 15.0, fail: true},
+			},
+			wantErr:       true,
+			wantSentCount: 0,
+			wantResultLen: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ps := make([]paths.RankedPath, len(tc.paths))
+			// Build a map of path ID → fail flag so fn can look up the right behavior.
+			failMap := make(map[uint64]bool, len(tc.paths))
+			for i, p := range tc.paths {
+				ps[i] = paths.RankedPath{ID: p.id, Tracker: activeTracker(t, p.rttMS)}
+				failMap[p.id] = p.fail
+			}
+
+			mp := multipath.NewMultipath(ps, multipath.DefaultDropCacheSize)
+			f := makeFrame(t, []byte("error-path test frame"))
+
+			results, err := mp.Send(f, func(pathID uint64, _ multipath.Frame) error {
+				if failMap[pathID] {
+					return sentinel
+				}
+				return nil
+			})
+
+			// --- error contract ---
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("want non-nil error (all/only path(s) failed), got nil")
+				}
+				// %w wrapping must preserve the sentinel in the chain (go.md rule 4).
+				if !errors.Is(err, sentinel) {
+					t.Errorf("errors.Is(err, sentinel)=false; want true (%%w chain broken): %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("want nil error (partial success), got: %v", err)
+				}
+			}
+
+			// --- results length contract ---
+			// Failed paths still appear in results (F-003 / implementation lines ~269-272).
+			if len(results) != tc.wantResultLen {
+				t.Errorf("len(results)=%d, want %d (failed paths must appear in results)", len(results), tc.wantResultLen)
+			}
+
+			// --- Sent flag contract ---
+			sentCount := 0
+			for _, r := range results {
+				if r.Sent {
+					sentCount++
+				}
+			}
+			if sentCount != tc.wantSentCount {
+				t.Errorf("SendResult Sent==true count=%d, want %d", sentCount, tc.wantSentCount)
+			}
+
+			// --- PathID mapping for partial failure ---
+			if tc.name == "partial_failure_one_of_two" {
+				// Path 10 (low RTT, no failure) must be Sent==true.
+				// Path 20 (high RTT, failure) must be Sent==false.
+				byID := make(map[uint64]bool, len(results))
+				for _, r := range results {
+					byID[r.PathID] = r.Sent
+				}
+				if sent, ok := byID[10]; !ok || !sent {
+					t.Errorf("path 10 (no failure): want Sent==true, got Sent==%v (present=%v)", sent, ok)
+				}
+				if sent, ok := byID[20]; !ok || sent {
+					t.Errorf("path 20 (failure): want Sent==false, got Sent==%v (present=%v)", sent, ok)
+				}
+			}
+		})
+	}
+}
+
 // TestNewDropCache_RejectsInvalidCapacity asserts that NewDropCache panics
 // when capacity < 1 (zero or negative). A capacity of zero produces a
 // degenerate cache (pins at 1 entry, violates contract) — this is a
