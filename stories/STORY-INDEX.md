@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "1.4"
+version: "1.6"
 status: draft
 producer: story-writer
-timestamp: 2026-06-25T00:00:00
+timestamp: 2026-06-27T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -51,7 +51,7 @@ inputDocuments:
 | S-4.01 | Per-path RTT/loss tracking and dup-and-race | E-4 | 4 | BC-2.02.001, BC-2.02.002, BC-2.02.003, BC-2.02.009 | multipath-forwarding | 8 | P0 | E | pending |
 | S-4.02 | Upstream idempotent replay window | E-4 | 4 | BC-2.02.004 | multipath-forwarding | 5 | P0 | E | pending |
 | S-4.03 | Downstream ARQ with ACK/SACK and TLPKTDROP | E-4 | 4 | BC-2.02.005, BC-2.02.006 | multipath-forwarding | 8 | P0 | E | pending |
-| S-4.04 | Split-horizon loop prevention | E-4 | 4 | BC-2.02.008 | multipath-forwarding | 5 | P0 | E | pending |
+| S-4.04 | Split-horizon loop prevention + drop-cache router wiring | E-4 | 4 | BC-2.02.008, BC-2.02.009 (router wiring) | multipath-forwarding | 5 | P0 | E | pending |
 | S-5.01 | Green/yellow/red quality indicator with hysteresis | E-5 | 5 | BC-2.06.001, BC-2.06.002 | quality-observability | 5 | P1 | E | pending |
 | S-5.02 | sbctl router status metrics query | E-5 | 5 | BC-2.06.003 | quality-observability, network-management | 3 | P1 | E | pending |
 | S-6.01 | Config parsing and validation | E-6 | 4 | BC-2.09.003 | deployment-operations | 3 | P0 | E | pending |
@@ -79,7 +79,7 @@ inputDocuments:
 
 ## BC Coverage Check
 
-All 44 BCs covered (42 original + BC-2.05.008 minted Wave 3 + BC-2.04.007 minted Wave 3). S-3.04 covers BC-2.05.008 (VP-058). S-W3.04 adds coverage for BC-2.04.001–007 wiring obligations (SessionConnector.Frames() + daemon assembly + lifecycle) and BC-2.05.008 wiring. S-W3.05 adds coverage for BC-2.05.005 PC-3 (E-ADM-017 aggregate alert, VP-059). See dependency-graph.md BC-to-Stories matrix for full traceability.
+All 44 BCs covered (42 original + BC-2.05.008 minted Wave 3 + BC-2.04.007 minted Wave 3). S-3.04 covers BC-2.05.008 (VP-058). S-W3.04 adds coverage for BC-2.04.001–007 wiring obligations (SessionConnector.Frames() + daemon assembly + lifecycle) and BC-2.05.008 wiring. S-W3.05 adds coverage for BC-2.05.005 PC-3 (E-ADM-017 aggregate alert, VP-059). BC-2.02.009 is now split: S-4.01 covers postconditions 1+2 (DropCache primitive + Hits() accessor); S-4.04 covers router-side OnFrameArrival wiring + EC-005 collision logging (per pass-2 ruling). See dependency-graph.md BC-to-Stories matrix for full traceability.
 
 ## Backlog / Deferred Stories
 
@@ -94,7 +94,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009) | Wave 4+ |
+| S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 
 ## Maintenance Stories
 
@@ -119,5 +119,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.6 | 2026-06-28 | S-6.01 narrowed to v1.4 per BC-2.09.003 v1.3 right-sizing (commit bc52270): AC-009 scoped to tick_interval application only (TestConfigTickIntervalApplied); listen_addr binding dependency flagged on S-BL.NI (updated backlog row to own cfg.ListenAddr wiring per BC-2.09.003 PC-9 DEFERRED-APPLICATION); drain_timeout/upstream_routers/keepalive_interval application remains S-7.04 Wave 7. |
+| 1.5 | 2026-06-27 | S-4.01: AC-007 (Hits() hit counter, BC-2.02.009 postcondition 2) + deferrals section (router wiring → S-4.04; EC-005 logging → S-4.04; BC-2.02.001 EC-003 queue-with-timeout out of scope). S-4.04: added BC-2.02.009 to bc_traces; AC-004 (OnFrameArrival DropCache wiring) + AC-005 (EC-005 collision logging via WithLogger); scope transfer note citing pass-2 ruling. dependency-graph.md BC-2.02.009 row updated. Per pass-2 scope ruling pass2-bc009-scope.md. |
 | 1.4 | 2026-06-27 | Post-merge traceability correction: rewrite S-BL.NI backlog row — remove stale FailureCounter-wiring obligation (COMPLETED by PR #20, C-1 RESOLVED per ARCH-08 v2.3 §6.5.1); scope S-BL.NI to remaining network-ingress listener obligation only; update ARCH-08 citation from v2.2 to v2.3. (Wave 3 pre-gate consistency audit Finding D5-1.) |
 | 1.3 | 2026-06-27 | Added S-M.01, S-M.02 maintenance stories; introduced E-MAINT epic; updated summary counts. |
