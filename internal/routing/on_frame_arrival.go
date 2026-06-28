@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"sync"
 
 	"github.com/arcavenae/switchboard/internal/multipath"
 )
@@ -35,6 +36,12 @@ import (
 // BC-2.02.009 postcondition 2 (implicit): cache hit → silent discard.
 var ErrDropCacheHit = errors.New("routing: drop cache hit — frame suppressed as loop duplicate (BC-2.02.009)")
 
+// dropCacheKey is the compound key used for per-key collision-event rate limiting.
+type dropCacheKey struct {
+	checksum uint32
+	iface    InterfaceID
+}
+
 // FrameArrivalHandler is the router-level frame-arrival processing path.
 // It wires:
 //   - drop-cache loop-duplicate suppression (BC-2.02.009, AC-004)
@@ -44,6 +51,15 @@ var ErrDropCacheHit = errors.New("routing: drop cache hit — frame suppressed a
 type FrameArrivalHandler struct {
 	dropCache *multipath.DropCache
 	logger    Logger // injected via WithFrameArrivalLogger; nopLogger if nil
+
+	// hitCountMu guards hitCounts for concurrent OnFrameArrival calls.
+	// Per go.md rule 12: no internal pointer leaks from locked accessors.
+	hitCountMu sync.Mutex
+	// hitCounts tracks per-compound-key drop-cache hit counts for
+	// log-first-then-sample rate limiting (AC-005 v1.3 / EC-005).
+	// Growth is bounded by the number of distinct (checksum, iface) pairs
+	// observed — same bound as the underlying DropCache.
+	hitCounts map[dropCacheKey]uint64
 }
 
 // NewFrameArrivalHandler constructs a FrameArrivalHandler that consults dc
@@ -61,6 +77,7 @@ func NewFrameArrivalHandler(dc *multipath.DropCache) *FrameArrivalHandler {
 	return &FrameArrivalHandler{
 		dropCache: dc,
 		logger:    nopLogger{},
+		hitCounts: make(map[dropCacheKey]uint64),
 	}
 }
 
@@ -119,12 +136,24 @@ func (h *FrameArrivalHandler) OnFrameArrival(
 	// (F-005 / BC-2.02.002 invariant 1). Returns false on hit (duplicate).
 	firstArrival := h.dropCache.AddIfAbsent(checksum, uint64(arrivalIface))
 	if !firstArrival {
-		// Cache hit: loop duplicate (or hash collision) — log as potential
-		// collision event for operator investigation (BC-2.02.009 EC-005; AC-005).
-		h.logger.Log(fmt.Sprintf(
-			"drop cache hit: potential loop duplicate or collision (checksum=0x%08x iface=%d) (BC-2.02.009 EC-005)",
-			checksum, arrivalIface,
-		))
+		// Cache hit: loop duplicate (or hash collision).
+		// Rate-limited logging strategy: log-first-then-sample (AC-005 v1.3 / EC-005).
+		// Always log hit #1 for a given key (operator alert). Log every 100th
+		// subsequent hit (count % 100 == 1). This bounds log output to
+		// ceil(N/100) lines for N hits, satisfying max(2, N/100) for N >= 100.
+		// Mutation goes through the handler under the lock (go.md rule 12).
+		key := dropCacheKey{checksum: checksum, iface: arrivalIface}
+		h.hitCountMu.Lock()
+		h.hitCounts[key]++
+		count := h.hitCounts[key]
+		h.hitCountMu.Unlock()
+
+		if count%100 == 1 {
+			h.logger.Log(fmt.Sprintf(
+				"drop cache hit: potential loop duplicate or collision (checksum=0x%08x iface=%d hit=%d) (BC-2.02.009 EC-005)",
+				checksum, arrivalIface, count,
+			))
+		}
 		return ErrDropCacheHit
 	}
 
