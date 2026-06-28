@@ -7,10 +7,6 @@
 // delivers them in order. Out-of-order frames are buffered until the missing
 // predecessor(s) arrive. Frames whose sequence number falls outside the
 // configured sliding window are discarded without error.
-//
-// This file contains stubs only. All non-trivial function bodies are
-// not yet implemented — they will be filled in by the implementer.
-// Tests calling these functions will fail until the real logic is added.
 package replay
 
 import "errors"
@@ -44,8 +40,8 @@ type Frame struct {
 type DeliverFunc func(f Frame)
 
 // Replay is a pure-core sliding-window deduplication and reorder buffer for
-// upstream keystroke frames. It maintains a ring-style seen-set of the last N
-// sequence numbers and a pending map for out-of-order arrivals.
+// upstream keystroke frames. It maintains a seen-set of the last N sequence
+// numbers and a pending map for out-of-order arrivals.
 //
 // Concurrency: Replay is not safe for concurrent use. The effectful scheduling
 // layer MUST ensure OnUpstream() is called from a single goroutine or under
@@ -66,8 +62,6 @@ type Replay struct {
 // New constructs a Replay with the given window size and delivery callback.
 // windowSize must be >= 1; deliver must not be nil. Both are preconditions —
 // violating them is a programming error and will panic.
-//
-// Not yet implemented: the real constructor body is a stub.
 func New(windowSize uint32, deliver DeliverFunc) *Replay {
 	if windowSize < 1 {
 		panic("replay: New: windowSize must be >= 1")
@@ -75,12 +69,17 @@ func New(windowSize uint32, deliver DeliverFunc) *Replay {
 	if deliver == nil {
 		panic("replay: New: deliver must not be nil")
 	}
-	panic("replay: New: not yet implemented")
+	return &Replay{
+		windowSize: windowSize,
+		deliver:    deliver,
+		nextSeq:    1,
+		seen:       make(map[uint32]bool),
+		pending:    make(map[uint32]Frame),
+	}
 }
 
 // OnUpstream processes one incoming upstream frame from the network layer.
 //
-// Behaviour (not yet implemented — Red Gate):
 //   - If frame.Seq has already been delivered (within the current window),
 //     returns ErrAlreadyDelivered without calling deliver.
 //   - If frame.Seq is older than the window (seq < nextSeq - windowSize),
@@ -92,16 +91,87 @@ func New(windowSize uint32, deliver DeliverFunc) *Replay {
 //
 // Returns ErrAlreadyDelivered on duplicate delivery; nil in all other cases.
 func (r *Replay) OnUpstream(f Frame) error {
-	panic("replay: OnUpstream: not yet implemented")
+	seq := f.Seq
+
+	// Already delivered: seq is in the seen set.
+	if r.seen[seq] {
+		return ErrAlreadyDelivered
+	}
+
+	// Outside the window: seq is older than nextSeq - windowSize.
+	// Guard against uint32 underflow when nextSeq <= windowSize.
+	if r.nextSeq > r.windowSize && seq < r.nextSeq-r.windowSize {
+		return nil
+	}
+
+	// In-order: deliver immediately and drain any buffered successors.
+	if seq == r.nextSeq {
+		r.deliverAndDrain(f)
+		return nil
+	}
+
+	// Future frame: buffer it for later delivery.
+	if seq > r.nextSeq {
+		r.pending[seq] = f
+		return nil
+	}
+
+	// seq < nextSeq but not in seen and not old enough to be discarded.
+	// This means it was delivered (nextSeq passed it) but it fell out of the
+	// seen window. Treat as already delivered to avoid double delivery.
+	// Actually with the seen map we track everything that's been delivered, so
+	// reaching here means seq < nextSeq and not in seen — this is a past frame
+	// that was evicted from seen due to window cleanup. Discard silently.
+	return nil
+}
+
+// deliverAndDrain delivers the given frame and then drains any pending frames
+// that have now become in-order.
+func (r *Replay) deliverAndDrain(f Frame) {
+	r.deliver(f)
+	r.seen[f.Seq] = true
+	r.nextSeq++
+
+	// Evict entries that have fallen outside the window.
+	r.evictOldSeen()
+
+	// Drain any pending frames that are now in order.
+	for {
+		next, ok := r.pending[r.nextSeq]
+		if !ok {
+			break
+		}
+		delete(r.pending, r.nextSeq)
+		r.deliver(next)
+		r.seen[next.Seq] = true
+		r.nextSeq++
+		r.evictOldSeen()
+	}
+}
+
+// evictOldSeen removes entries from the seen map that are now outside the
+// sliding window. This keeps memory bounded at O(windowSize).
+func (r *Replay) evictOldSeen() {
+	// Window covers [nextSeq-windowSize, nextSeq-1]. Evict anything older.
+	if r.nextSeq <= r.windowSize {
+		return
+	}
+	evictBefore := r.nextSeq - r.windowSize
+	// We only need to check the one entry that just fell out.
+	// Since nextSeq advances by 1 at a time, evictBefore advances by 1 at a time,
+	// so we only need to delete evictBefore-1 = nextSeq - windowSize - 1.
+	// But to be safe during drain (multiple advances), we clean up anything old.
+	// Since we call this after each advance, at most one entry needs eviction.
+	delete(r.seen, evictBefore-1)
 }
 
 // WindowSize returns the configured window size.
 func (r *Replay) WindowSize() uint32 {
-	panic("replay: WindowSize: not yet implemented")
+	return r.windowSize
 }
 
 // NextSeq returns the next in-order sequence number the receiver is waiting
 // for. Useful for testing and observability.
 func (r *Replay) NextSeq() uint32 {
-	panic("replay: NextSeq: not yet implemented")
+	return r.nextSeq
 }
