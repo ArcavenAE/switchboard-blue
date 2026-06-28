@@ -200,6 +200,12 @@ func Rank(candidates []RankedPath) ([]RankedPath, error) {
 
 	active := make([]scoredPath, 0, len(candidates))
 	for _, rp := range candidates {
+		// Guard against nil Tracker: skip the entry rather than panic on the
+		// routing hot path (CWE-476 / F-001). A nil Tracker has no metrics and
+		// cannot be ranked; treat it as inactive.
+		if rp.Tracker == nil {
+			continue
+		}
 		if rp.Tracker.IsActive() {
 			active = append(active, scoredPath{rp: rp, score: rp.Tracker.Score()})
 		}
