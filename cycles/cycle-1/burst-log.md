@@ -169,3 +169,36 @@ Cycle-closing checklist per S-7.02: LOW-003 pass-count asymmetry and OBS-001..00
 **PRs merged:** T2 (PR #19, 849bd86) — deterministic TOCTOU misclassification-branch test (ADR-011 v1.6 T2); C-1 (PR #20, 418de54) — WithFailureCounter wired buildRouter (threshold=5/window=60s), OBS-3 RESOLVED.
 **develop HEAD:** 849bd86
 **Summary:** Both human-scoped Wave-3 pre-gate items delivered and merged. ARCH-08 bumped to v2.3 (C-1 RESOLVED). C-1/OBS-3 and T2 archived to closed-drift.md. Wave 3 human approval gate PENDING.
+
+---
+
+## Archived Decisions Log — Wave 3 entries (extracted from STATE.md 2026-06-28)
+
+The following decisions were in STATE.md from Wave 3 and have been moved here to keep STATE.md under 200 lines. They remain part of the permanent cycle-1 record.
+
+| Decision | Outcome | Date |
+|----------|---------|------|
+| S-3.03 repointed 5→8 | upstream-wiring scope expansion; Wave 3 total 29→32 pts | 2026-06-27 |
+| S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs authoritative — include "HMAC failure rate alert:" phrase; code/tests/story AC-003/AC-015 conform | 2026-06-27 |
+| S-W3.05 re-arm semantics finalized | drain-only re-arm + per-source append-skip; reconciled BC-2.05.005 v1.6/VP-059 v1.1 | 2026-06-27 |
+| S-W3.05 CONVERGED + SEC-001 fixed + PR #16 merged | 3 clean passes (10-12) at f6038d2; fa6345e | 2026-06-27 |
+| S-W3.04 CONVERGED (BC-5.39.001) + PR #17 merged | 3 clean passes (10-12) at 1c3c864; aeb442d | 2026-06-27 |
+| Per-story-delivery merge-handoff pathology (vsdd-factory#302) | Agent self-merge blocked by classifier; human-performed merge is the correct resolution | 2026-06-27 |
+| Wave-3 Pass-1: C-1 deferred, I-1 fixed PR #18 e9421d8 | C-1 → ARCH-08 v2.2 §6.5.1 TRACKED-DEFER/S-BL.NI; I-1 (BC-2.04.007) fixed; streak 0/3 | 2026-06-27 |
+| Wave-3 pre-gate consistency audit | PASS — 0 blocking; 3 non-blocking findings resolved: D5-1, T2-1, V-1 | 2026-06-27 |
+| Wave 3 integration gate | APPROVED — close Wave 3; carry 5 tracked deferrals + process-gap #7 to Wave 4 | 2026-06-27 |
+| W3-R3-F1 cmd-wiring adjudication | RESOLVED — all 6 ARCH-08 §6.5.1 wiring obligations met; adversary saw stale SHA | 2026-06-27 |
+| W3-R3-F2 EC-006 adjudication | RATIFY — BC-2.05.008 v1.3 / VP-059 v1.2 already specify implemented semantics; SW305-M4 → W4-TEST-001 | 2026-06-27 |
+
+---
+
+## S-4.01 + S-4.02 + S-4.03 Wave-4 Burst (2026-06-28)
+
+**Agents dispatched:** implementer, test-writer, stub-architect, adversary (multiple passes), spec-steward, architect, state-manager
+**Stories:** S-4.01 (internal/paths RTT/loss tracking + dedup/race dispatch), S-4.02 (internal/replay upstream replay), S-4.03 (internal/arq downstream ARQ + TLPKTDROP)
+**S-4.01:** MERGED PR #24 squash e415d31 (7/7 ACs, 3/3 adversary clean @ aaff609). kos-scaffolding cleanup PR #23 squash 36c5e98. develop HEAD = 36c5e98.
+**S-4.02 adversary:** Pass-4 clean (pre-cleanup, superseded). Confirmation round at ce2ae7c: 1/3 clean. RULING-002 + Amendment 1 issued: VP-042 removed, AC-004 rescoped, BC-2.02.004 v1.3 (invariant 5), AC-003 anchor corrected. All fixes applied. Final tip 73781a4 (comment/anchor-only from last clean pass). Streak = 0.
+**S-4.03 adversary:** 3/3 CONVERGED at d4899ed (RULING-003 v1.1 ackSeq-DoS guard; BC-2.02.005 v1.3, ARCH-03 v1.3). EC-004→EC-005 relabel + EC-003 test rename at 34bc98f (cosmetic). Streak reset at 34bc98f; re-confirm recommended. DRIFT-S4.03-001 opened (ADR-005 resync deferred to S-5.01).
+**develop HEAD:** 36c5e98
+**Summary:** S-4.01 fully delivered and merged. S-4.02 + S-4.03 at final converged-candidate tips pending 3-consecutive-clean confirmation round in fresh session. Rulings on disk: S-4.02/adversary/spec-adjudication.md, S-4.03/adversary/ackseq-dos-ruling.md. Session paused for context-compression management.
+

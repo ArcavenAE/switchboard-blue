@@ -219,6 +219,19 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 
 ---
 
+## Archived: 2026-06-28 — S-4.01 MERGED; S-4.02/S-4.03 per-story delivery in progress
+
+**Position:** Phase 3, Wave 4 ACTIVE. S-4.01 MERGED (e415d31, PR #24). PR #23 kos-scaffolding cleanup MERGED (36c5e98). develop HEAD = 36c5e98. 0 open PRs.
+**Wave 4 scope:** S-4.01 (done), S-4.02, S-4.03, S-4.04, S-6.01 (29 pts). Sub-wave 4A remaining: S-4.02, S-4.03, S-6.01 (not yet started). Sub-wave 4B: S-4.04 UNBLOCKED (internal/paths on develop).
+**S-4.01:** COMPLETE — 7/7 ACs, 3/3 adversary clean @ aaff609, merged e415d31. BC-2.02.009 router wiring deferred to S-4.04.
+**Next:** start S-4.02, S-4.03, S-6.01 in parallel; S-4.04 unblocked.
+**S-4.02 adversary:** Pass-1 NOT_CONVERGED (1C/1H); fixes applied; Pass-4 clean (pre-cleanup, superseded). Streak = 0, needs fresh 3-consecutive-clean round.
+**S-4.03 adversary:** Pass-1 NOT_CONVERGED (1C/2H); fixes applied. Streak = 0 at session start; 3/3 clean passes reached at d4899ed (confirmation round). Streak = 0 after cosmetic relabel at 34bc98f — needs re-confirm at final tip.
+**Deferred task:** W4-TEST-001 (RouteFrame fire-once E-ADM-017 integration test, owner: test-writer).
+**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4 (see Drift Items table).
+
+---
+
 ## Archived: 2026-06-27 — Wave 3 CLOSED; Wave 4 pending
 
 **Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 85c2d2f (PR #22 plugin opt-in merged). PR #23 (kos-scaffolding cleanup) open.
