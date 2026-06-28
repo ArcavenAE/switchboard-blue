@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,11 +17,8 @@ import (
 // (range violation, constraint violation, or a required field is missing).
 var ErrValidation = &ConfigError{Code: "E-CFG-001"}
 
-// ErrFileNotFound (E-CFG-002) is returned when the config file cannot be found at the expected path.
-var ErrFileNotFound = &ConfigError{Code: "E-CFG-002"}
-
-// ErrConfigFileNotFound (E-CFG-004) is the canonical file-not-found error code per BC-2.09.003 EC-001.
-// Alias kept for BC alignment; implementer may consolidate with ErrFileNotFound.
+// ErrConfigFileNotFound (E-CFG-004) is returned when the config file cannot be found
+// at the expected path (BC-2.09.003 EC-001).
 var ErrConfigFileNotFound = &ConfigError{Code: "E-CFG-004"}
 
 // ErrParseError (E-CFG-005) is returned when the config file contains malformed YAML
@@ -28,7 +26,7 @@ var ErrConfigFileNotFound = &ConfigError{Code: "E-CFG-004"}
 var ErrParseError = &ConfigError{Code: "E-CFG-005"}
 
 // ConfigError is the sentinel error type for config package errors.
-// Code is one of E-CFG-001, E-CFG-002, E-CFG-004, E-CFG-005.
+// Code is one of E-CFG-001, E-CFG-004, E-CFG-005.
 type ConfigError struct {
 	// Code is the machine-readable error code (e.g., "E-CFG-001").
 	Code string
@@ -200,9 +198,34 @@ func LoadFile(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, &ConfigError{
 			Code:   "E-CFG-005",
-			Detail: fmt.Sprintf("config parse error: invalid YAML: %v", err),
+			Detail: yamlParseDetail(err),
 		}
 	}
 
 	return &cfg, nil
+}
+
+// yamlParseDetail formats a yaml.Unmarshal error into the canonical E-CFG-005
+// detail string: "config parse error: invalid YAML at line N: <detail>".
+//
+// yaml.v3 encodes parse errors as strings like "yaml: line N: <detail>".
+// We extract N and reformat into the canonical BC-2.09.003 EC-003 form so the
+// operator can navigate directly to the bad line.
+func yamlParseDetail(err error) string {
+	raw := err.Error()
+	// yaml.v3 format: "yaml: line N: <detail>" or "yaml: <detail>" (no line).
+	const prefix = "yaml: line "
+	if strings.HasPrefix(raw, prefix) {
+		rest := raw[len(prefix):]
+		colonIdx := strings.Index(rest, ":")
+		if colonIdx > 0 {
+			lineStr := rest[:colonIdx]
+			if _, parseErr := strconv.Atoi(lineStr); parseErr == nil {
+				detail := strings.TrimSpace(rest[colonIdx+1:])
+				return fmt.Sprintf("config parse error: invalid YAML at line %s: %s", lineStr, detail)
+			}
+		}
+	}
+	// Fallback: no line number available; still use canonical prefix.
+	return fmt.Sprintf("config parse error: invalid YAML at line ?: %s", raw)
 }
