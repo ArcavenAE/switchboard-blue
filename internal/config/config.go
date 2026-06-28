@@ -288,9 +288,12 @@ func validateHostPort(addr string) error {
 // Does NOT call Validate — the caller is responsible for calling Validate
 // after LoadFile (see ARCH-06 binding sequence).
 func LoadFile(path string) (*Config, error) {
-	// Guard: stat before reading to reject non-regular files (e.g. /dev/zero,
-	// directories) and files that exceed maxConfigFileSize (CWE-400).
-	fi, err := os.Stat(path)
+	// Open the file once. All subsequent checks (regular-file, size) are made via
+	// the open handle (fstat) to close the TOCTOU window (CWE-367): between a
+	// path-based os.Stat and the subsequent os.ReadFile the file could be swapped
+	// for an unbounded one (e.g. /dev/zero). Using the handle for both the check
+	// and the read prevents that race.
+	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, &ConfigError{
@@ -298,6 +301,18 @@ func LoadFile(path string) (*Config, error) {
 				Detail: fmt.Sprintf("config file not found: %s", path),
 			}
 		}
+		return nil, &ConfigError{
+			Code:   "E-CFG-004",
+			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
+		}
+	}
+	// Close is deferred; errors on a read-only handle are informational only
+	// and cannot affect the data already read.
+	defer func() { _ = f.Close() }()
+
+	// fstat on the open handle — no path re-resolution, no TOCTOU.
+	fi, err := f.Stat()
+	if err != nil {
 		return nil, &ConfigError{
 			Code:   "E-CFG-004",
 			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
@@ -309,24 +324,22 @@ func LoadFile(path string) (*Config, error) {
 			Detail: fmt.Sprintf("config parse error: %s is not a regular file", path),
 		}
 	}
-	if fi.Size() > maxConfigFileSize {
-		return nil, &ConfigError{
-			Code:   "E-CFG-005",
-			Detail: fmt.Sprintf("config parse error: config file too large (%d bytes, max %d)", fi.Size(), maxConfigFileSize),
-		}
-	}
 
-	data, err := os.ReadFile(path)
+	// Bound the actual read to maxConfigFileSize+1 bytes regardless of what stat
+	// reported (CWE-400). If we read maxConfigFileSize+1 bytes the file exceeds
+	// the cap; reject it with the same error code and message as the stat-based
+	// guard so callers see a consistent interface.
+	data, err := io.ReadAll(io.LimitReader(f, maxConfigFileSize+1))
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, &ConfigError{
-				Code:   "E-CFG-004",
-				Detail: fmt.Sprintf("config file not found: %s", path),
-			}
-		}
 		return nil, &ConfigError{
 			Code:   "E-CFG-004",
 			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
+		}
+	}
+	if int64(len(data)) > maxConfigFileSize {
+		return nil, &ConfigError{
+			Code:   "E-CFG-005",
+			Detail: fmt.Sprintf("config parse error: config file too large (>%d bytes, max %d)", maxConfigFileSize, maxConfigFileSize),
 		}
 	}
 

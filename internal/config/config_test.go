@@ -757,6 +757,76 @@ func TestLoadFile_FileTooLarge(t *testing.T) {
 	requireContains(t, err.Error(), "too large")
 }
 
+// TestLoadFile_RejectsFileExceedingSizeCapViaBoundedRead pins the bounded-read
+// rejection path: even if os.Stat were bypassed, io.LimitReader enforces the
+// cap so a file of maxConfigFileSize+1 bytes is always rejected (F-SEC-L1,
+// CWE-400 / CWE-367).
+//
+// It also verifies the boundary: a file of exactly maxConfigFileSize bytes that
+// contains valid YAML is accepted (the cap is inclusive).
+//
+// Traces: F-SEC-L1, CWE-400, CWE-367.
+func TestLoadFile_RejectsFileExceedingSizeCapViaBoundedRead(t *testing.T) {
+	t.Parallel()
+
+	t.Run("exactly_max_plus_one_rejected", func(t *testing.T) {
+		t.Helper()
+		t.Parallel()
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "over-cap.yaml")
+		// maxConfigFileSize+1 bytes — must be rejected regardless of stat.
+		over := make([]byte, (1<<20)+1)
+		if err := os.WriteFile(path, over, 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		_, err := config.LoadFile(path)
+		if err == nil {
+			t.Fatal("expected an error for over-cap file, got nil")
+		}
+
+		var ce *config.ConfigError
+		if !errors.As(err, &ce) {
+			t.Fatalf("expected *config.ConfigError, got %T: %v", err, err)
+		}
+		if ce.Code != "E-CFG-005" {
+			t.Errorf("expected E-CFG-005 for over-cap file, got %q", ce.Code)
+		}
+		requireContains(t, err.Error(), "too large")
+	})
+
+	t.Run("exactly_max_valid_yaml_accepted", func(t *testing.T) {
+		t.Helper()
+		t.Parallel()
+
+		// Build a file of exactly maxConfigFileSize bytes containing valid YAML at
+		// the front and padded with '#' comments (valid YAML) to fill the rest.
+		// This confirms the cap is inclusive: len(data) == maxConfigFileSize is allowed.
+		const header = "listen_addr: 0.0.0.0:9090\ntick_interval: 10ms\n# "
+		const maxSize = 1 << 20
+		pad := make([]byte, maxSize-len(header))
+		for i := range pad {
+			pad[i] = 'x' // 'x' characters after the "# " comment marker — valid YAML
+		}
+		content := append([]byte(header), pad...)
+		if len(content) != maxSize {
+			t.Fatalf("test setup error: content length %d != maxConfigFileSize %d", len(content), maxSize)
+		}
+
+		dir := t.TempDir()
+		path := filepath.Join(dir, "at-cap.yaml")
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		_, err := config.LoadFile(path)
+		if err != nil {
+			t.Errorf("expected no error for file at maxConfigFileSize boundary, got: %v", err)
+		}
+	})
+}
+
 // TestLoadFile_NonRegularFile verifies that LoadFile rejects a non-regular file
 // (e.g. a directory) with E-CFG-005 (fail-closed, CWE-400 defence).
 //
