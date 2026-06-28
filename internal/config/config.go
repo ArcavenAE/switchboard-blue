@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -141,20 +142,30 @@ const TickIntervalMax = 50 * time.Millisecond
 // called before any socket is opened (BC-2.09.003 invariant 1, AC-004).
 //
 // All validation failures are collected and returned together so the operator
-// sees every problem in one pass (BC-2.09.003 postcondition 2, AC-002).
+// sees every problem in one pass (BC-2.09.003 postcondition 2 / invariant 4, AC-002).
 //
 // Returns *ConfigError with code E-CFG-001 wrapping all ValidationErrors on failure,
 // or nil on success.
 func (c *Config) Validate() error {
-	var failures []ValidationError
+	var failures []string
 
 	// Required: listen_addr must be non-empty and non-whitespace.
 	if strings.TrimSpace(c.ListenAddr) == "" {
-		failures = append(failures, ValidationError{
+		failures = append(failures, (&ValidationError{
 			Field:      "listen_addr",
 			Problem:    "required field missing",
 			Suggestion: "add 'listen_addr: <ip>:<port>' to config, e.g. 'listen_addr: 0.0.0.0:9090'",
-		})
+		}).Error())
+	} else {
+		// AC-005 / PC-5 / E-CFG-002: listen_addr must be a valid host:port.
+		// net.SplitHostPort validates the host:port structure; additionally we
+		// require the port to be a non-empty numeric string.
+		if err := validateHostPort(c.ListenAddr); err != nil {
+			failures = append(failures, fmt.Sprintf(
+				"config error: listen_addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '0.0.0.0:9090'",
+				c.ListenAddr,
+			))
+		}
 	}
 
 	// Required: tick_interval must be in [5ms, 50ms].
@@ -166,12 +177,38 @@ func (c *Config) Validate() error {
 		} else {
 			val = c.TickInterval.String()
 		}
-		failures = append(failures, ValidationError{
+		failures = append(failures, (&ValidationError{
 			Field:      "tick_interval",
 			Value:      val,
 			Problem:    fmt.Sprintf("is outside allowed range [%s, %s]", TickIntervalMin, TickIntervalMax),
 			Suggestion: fmt.Sprintf("set to a value in [%s, %s], e.g. 'tick_interval: 10ms' for interactive sessions", TickIntervalMin, TickIntervalMax),
-		})
+		}).Error())
+	}
+
+	// AC-006 / PC-6 / E-CFG-003: each upstream_routers[N].addr must be host:port.
+	for i, r := range c.UpstreamRouters {
+		if err := validateHostPort(r.Addr); err != nil {
+			failures = append(failures, fmt.Sprintf(
+				"config error: upstream_routers[%d].addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'",
+				i, r.Addr,
+			))
+		}
+	}
+
+	// AC-007 / PC-7 / E-CFG-006: drain_timeout must be > 0 when set.
+	if c.DrainTimeout <= 0 {
+		failures = append(failures, fmt.Sprintf(
+			"config error: drain_timeout: must be > 0; got '%s'. Fix: set to a positive duration, e.g. '10s'",
+			c.DrainTimeout,
+		))
+	}
+
+	// AC-008 / PC-8 / E-CFG-007: keepalive_interval must be > 0 when set.
+	if c.KeepaliveInterval <= 0 {
+		failures = append(failures, fmt.Sprintf(
+			"config error: keepalive_interval: must be > 0; got '%s'. Fix: set to a positive duration, e.g. '1s'",
+			c.KeepaliveInterval,
+		))
 	}
 
 	if len(failures) == 0 {
@@ -179,15 +216,33 @@ func (c *Config) Validate() error {
 	}
 
 	// Build combined detail: all field errors in one message so the operator
-	// sees every problem at once (AC-002 / BC-2.09.003 postcondition 2).
-	var parts []string
-	for _, f := range failures {
-		parts = append(parts, f.Error())
-	}
+	// sees every problem at once (AC-002 / BC-2.09.003 postcondition 2 / invariant 4).
 	return &ConfigError{
 		Code:   "E-CFG-001",
-		Detail: strings.Join(parts, "; "),
+		Detail: strings.Join(failures, "; "),
 	}
+}
+
+// validateHostPort returns nil if addr is a valid host:port as defined by
+// net.SplitHostPort, with an additional requirement that the port is a non-empty
+// numeric string in [0, 65535]. An empty host is allowed (e.g. ":9090").
+func validateHostPort(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	_ = host // empty host is valid (listen on all interfaces)
+	if port == "" {
+		return fmt.Errorf("missing port in address")
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		return fmt.Errorf("non-numeric port %q", port)
+	}
+	if n < 0 || n > 65535 {
+		return fmt.Errorf("port %d out of range [0, 65535]", n)
+	}
+	return nil
 }
 
 // LoadFile reads and parses a YAML config file at path, returning a *Config.
