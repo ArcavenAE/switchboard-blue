@@ -232,6 +232,16 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 
 ---
 
+## Archived: 2026-06-28 — S-4.02 #25 + S-4.03 #26 MERGED; Wave 4 remaining = S-4.04 + S-6.01
+
+**Position:** Phase 3, Wave 4 ACTIVE. S-4.01 MERGED (e415d31, #24). S-4.02 MERGED (95729c7, #25). S-4.03 MERGED (8d9744f, #26). develop HEAD = 8d9744f. 0 open PRs. Worktrees for S-4.02/S-4.03 cleaned up; branches deleted; worktree prune clean.
+**F-A-001:** VP-052 mis-anchor (HIGH) found + fixed during S-4.03 confirm round; re-anchored to BC-2.02.005 SACK-accuracy / VP-019-020; story v1.1. Merged at 8d9744f.
+**Remaining Wave 4:** S-4.04 (split-horizon + drop-cache router wiring, 5 pts, depends on S-2.02 + S-4.01 — both merged) and S-6.01 (config validation, 3 pts, no upstream deps). Both status: pending.
+**gitignore regression:** .gitignore .factory-protection regression found + fixed this session; recurrence note filed on vsdd-factory#263 (issuecomment-4825446246).
+**Next:** deliver S-4.04 + S-6.01 → per-story adversary passes → Wave 4 integration gate + wave-gate.
+
+---
+
 ## Archived: 2026-06-27 — Wave 3 CLOSED; Wave 4 pending
 
 **Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 85c2d2f (PR #22 plugin opt-in merged). PR #23 (kos-scaffolding cleanup) open.
