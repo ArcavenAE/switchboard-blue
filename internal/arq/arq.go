@@ -67,7 +67,7 @@ const sackWindowSize = SackWindowSize
 // number falls outside the valid window: ackSeq must satisfy
 // ackSeq - nextExpected <= sackWindowSize (64). An out-of-window ackSeq is
 // a protocol-illegal frame; the caller should log and discard it.
-// Traces to: BC-2.02.005 PC-3, EC-004; RULING-003.
+// Traces to: BC-2.02.005 PC-3, EC-005; RULING-003.
 var ErrAckOutOfWindow = fmt.Errorf("arq: cumulative ACK out of window")
 
 // ErrSequenceNotInFlight is returned by TLPKTDROP when the supplied sequence
@@ -212,7 +212,7 @@ func (a *ARQ) OnAck(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) ([][]byte, 
 	// ackSeq is wire-derived (peer/attacker-controlled). A legal cumulative ACK
 	// advances at most sackWindowSize (64) positions. An out-of-window value
 	// would drive the Step-1 loop for up to 2^32 iterations — a per-frame DoS.
-	// Reject without iterating (RULING-003; BC-2.02.005 PC-3, EC-004).
+	// Reject without iterating (RULING-003; BC-2.02.005 PC-3, EC-005).
 	//
 	// The subtraction is unsigned: if ackSeq < nextExpected the result wraps to
 	// a large uint32 (> sackWindowSize), so the guard also correctly rejects
