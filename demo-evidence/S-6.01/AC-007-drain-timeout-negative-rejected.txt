@@ -1,0 +1,22 @@
+=== RUN   TestConfigValidate_RejectsNegativeDrainTimeout
+=== PAUSE TestConfigValidate_RejectsNegativeDrainTimeout
+=== CONT  TestConfigValidate_RejectsNegativeDrainTimeout
+=== RUN   TestConfigValidate_RejectsNegativeDrainTimeout/negative_5s
+=== PAUSE TestConfigValidate_RejectsNegativeDrainTimeout/negative_5s
+=== RUN   TestConfigValidate_RejectsNegativeDrainTimeout/negative_1ns
+=== PAUSE TestConfigValidate_RejectsNegativeDrainTimeout/negative_1ns
+=== RUN   TestConfigValidate_RejectsNegativeDrainTimeout/zero_drain_timeout_accepted
+=== PAUSE TestConfigValidate_RejectsNegativeDrainTimeout/zero_drain_timeout_accepted
+=== RUN   TestConfigValidate_RejectsNegativeDrainTimeout/positive_drain_timeout_passes
+=== PAUSE TestConfigValidate_RejectsNegativeDrainTimeout/positive_drain_timeout_passes
+=== CONT  TestConfigValidate_RejectsNegativeDrainTimeout/zero_drain_timeout_accepted
+=== CONT  TestConfigValidate_RejectsNegativeDrainTimeout/negative_5s
+=== CONT  TestConfigValidate_RejectsNegativeDrainTimeout/positive_drain_timeout_passes
+=== CONT  TestConfigValidate_RejectsNegativeDrainTimeout/negative_1ns
+--- PASS: TestConfigValidate_RejectsNegativeDrainTimeout (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeDrainTimeout/zero_drain_timeout_accepted (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeDrainTimeout/negative_5s (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeDrainTimeout/positive_drain_timeout_passes (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeDrainTimeout/negative_1ns (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.279s

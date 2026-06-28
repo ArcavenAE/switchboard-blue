@@ -1,0 +1,30 @@
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat/missing_port
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat/missing_port
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat/non_numeric_port
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat/non_numeric_port
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat/hostname_no_port
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat/hostname_no_port
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat/empty_string
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat/empty_string
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat/valid_host_port_passes
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat/valid_host_port_passes
+=== RUN   TestConfigValidate_RejectsInvalidListenAddrFormat/valid_loopback_port_passes
+=== PAUSE TestConfigValidate_RejectsInvalidListenAddrFormat/valid_loopback_port_passes
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat/missing_port
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat/empty_string
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat/valid_loopback_port_passes
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat/non_numeric_port
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat/valid_host_port_passes
+=== CONT  TestConfigValidate_RejectsInvalidListenAddrFormat/hostname_no_port
+--- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat/missing_port (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat/empty_string (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat/valid_loopback_port_passes (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat/non_numeric_port (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat/valid_host_port_passes (0.00s)
+    --- PASS: TestConfigValidate_RejectsInvalidListenAddrFormat/hostname_no_port (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.279s
