@@ -34,6 +34,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/arcavenae/switchboard/internal/config"
 )
@@ -1543,5 +1544,170 @@ func TestConfigValidate_ReportsAllErrorsTogether(t *testing.T) {
 		requireContains(t, msg, "listen_addr")
 		requireContains(t, msg, "upstream_routers[0].addr")
 		requireContains(t, msg, "drain_timeout")
+	})
+}
+
+// ---- F-SEC-C1 (CWE-117): C1 control block U+0080–U+009F passes through sanitizer --
+
+// TestConfigValidate_StripsC1ControlChars verifies that sanitizeAddrForError strips
+// the entire C1 control block (U+0080–U+009F) before interpolating an address into
+// an error message.
+//
+// Background: the existing predicate `r >= 0x20 && r != 0x7F` strips C0 (U+0000–U+001F)
+// and the lone DEL (U+007F) but lets the C1 block (U+0080–U+009F) through unchanged.
+// U+009B is the 8-bit CSI (Control Sequence Introducer) — on UTF-8/8-bit terminals it
+// initiates an ANSI escape exactly like ESC[. This is the same log/terminal-injection
+// vector that the round-1 fix (F-SEC-002) was meant to close, left half-open.
+//
+// The doc comment on sanitizeAddrForError claims it strips "U+0000–U+001F AND
+// U+007F–U+009F". These tests enforce that claim.
+//
+// Red Gate: the current predicate DOES NOT strip 0x80–0x9F, so the C1 rune in each
+// addr case survives and appears verbatim in the error message. Every C1 subtest
+// therefore FAILS against current code.
+//
+// Traces: F-SEC-C1, CWE-117, BC-2.09.003 PC-5/PC-6.
+func TestConfigValidate_StripsC1ControlChars(t *testing.T) {
+	t.Parallel()
+
+	// requireNoControlRune fails if any rune in msg satisfies unicode.IsControl.
+	// unicode.IsControl returns true for U+0000–U+001F, U+007F–U+009F — exactly
+	// the range the sanitizer doc comment promises to strip.
+	requireNoControlRune := func(t *testing.T, msg string) {
+		t.Helper()
+		for i, r := range msg {
+			if unicode.IsControl(r) {
+				t.Errorf("error message contains control rune U+%04X at byte offset %d "+
+					"(F-SEC-C1 / CWE-117); sanitizeAddrForError must strip U+0080–U+009F; "+
+					"got message: %q", r, i, msg)
+			}
+		}
+	}
+
+	// ---- listen_addr C1 injection cases ----------------------------------------
+
+	type c1Case struct {
+		name string
+		addr string
+	}
+
+	listenC1Cases := []c1Case{
+		{
+			// U+0080 (PAD — Padding Character) — first C1 codepoint.
+			name: "listen_addr_C1_U0080_PAD",
+			addr: "0.0.0.0:9090\u0080injected",
+		},
+		{
+			// U+009B (CSI — 8-bit Control Sequence Introducer).
+			// On many terminals "\x9b" == "\x1b[" — the ANSI SGR escape prefix.
+			// This is the highest-risk C1 codepoint for terminal injection.
+			name: "listen_addr_C1_U009B_CSI",
+			addr: "0.0.0.0:9090\u009b31mRED",
+		},
+		{
+			// U+009F (APC — Application Program Command) — last C1 codepoint.
+			name: "listen_addr_C1_U009F_APC",
+			addr: "0.0.0.0:9090\u009f",
+		},
+		{
+			// Spread across the full C1 block: U+0081, U+008D, U+0090, U+009B, U+009C.
+			// A sanitizer that strips only individual codepoints rather than the full
+			// range would let at least one of these through.
+			name: "listen_addr_C1_spread_across_block",
+			addr: "0.0.0.0:9090\u0081\u008d\u0090\u009b\u009c",
+		},
+	}
+
+	for _, tc := range listenC1Cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:   tc.addr,
+				TickInterval: 10 * time.Millisecond,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+
+			msg := err.Error()
+
+			// Assertion 1: error still identifies the field.
+			requireContains(t, msg, "listen_addr")
+
+			// Assertion 2 (security): no control rune — C0, DEL, or C1 — may appear
+			// in the error message (F-SEC-C1 / CWE-117).
+			requireNoControlRune(t, msg)
+		})
+	}
+
+	// ---- upstream_routers C1 injection cases ------------------------------------
+
+	upstreamC1Cases := []c1Case{
+		{
+			// U+009B (CSI) in upstream_routers[0].addr — same terminal-injection risk.
+			name: "upstream_routers_addr_C1_U009B_CSI",
+			addr: "10.0.0.1:9090\u009b31mRED",
+		},
+		{
+			// U+0085 (NEL — Next Line) — a C1 line-terminator; may split log lines
+			// on some parsers just like \n.
+			name: "upstream_routers_addr_C1_U0085_NEL",
+			addr: "10.0.0.1:9090\u0085",
+		},
+	}
+
+	for _, tc := range upstreamC1Cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:   "0.0.0.0:9090",
+				TickInterval: 10 * time.Millisecond,
+				UpstreamRouters: []config.UpstreamRouter{
+					{Addr: tc.addr},
+				},
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+
+			msg := err.Error()
+
+			// Assertion 1: error still identifies the upstream field.
+			requireContains(t, msg, "upstream_routers")
+
+			// Assertion 2 (security): no control rune may appear.
+			requireNoControlRune(t, msg)
+		})
+	}
+
+	// ---- Positive regression: plain printable invalid value must still appear ---
+	//
+	// Confirm that the sanitizer does not over-strip printable characters.
+	// "not-a-host-port" has no control characters and must survive verbatim
+	// (or quoted) so the operator can identify the problem.
+	//
+	// This subtest PASSES against current code — it guards against over-sanitization.
+	t.Run("plain_printable_value_preserved_after_sanitization", func(t *testing.T) {
+		t.Parallel()
+
+		const plainInvalid = "not-a-host-port"
+		cfg := &config.Config{
+			ListenAddr:   plainInvalid,
+			TickInterval: 10 * time.Millisecond,
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+
+		msg := err.Error()
+		requireContains(t, msg, "listen_addr")
+		// The offending value (or its quoted form) must appear so the operator
+		// can identify the problem; sanitization must not swallow printable chars.
+		if !strings.Contains(msg, plainInvalid) && !strings.Contains(msg, `"not-a-host-port"`) {
+			t.Errorf("sanitization must preserve printable value %q in error message; got: %q",
+				plainInvalid, msg)
+		}
 	})
 }
