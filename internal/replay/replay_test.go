@@ -10,19 +10,6 @@ import (
 	"github.com/arcavenae/switchboard/internal/replay"
 )
 
-// medianDuration returns the median value from a sorted slice of durations.
-// The slice must already be sorted ascending; this avoids an extra allocation.
-func medianDuration(sorted []time.Duration) time.Duration {
-	n := len(sorted)
-	if n == 0 {
-		return 0
-	}
-	if n%2 == 1 {
-		return sorted[n/2]
-	}
-	return (sorted[n/2-1] + sorted[n/2]) / 2
-}
-
 // newCollector returns a DeliverFunc and a pointer to the slice it appends to.
 // t.Helper() is intentionally omitted here — it is only useful inside test
 // helper functions called from test bodies, not in constructor helpers.
@@ -787,13 +774,22 @@ func TestReplay_BC_2_02_004_invariant_window_monotonic_seqs(t *testing.T) {
 // TestReplay_OnUpstream_MedianPerCall is the AC-004 regression guard
 // (BC-2.02.004 invariant 5 — bounded-state / micro-latency, RULING-002).
 //
-// It asserts that the median per-call overhead of OnUpstream is ≤ 1µs under
+// It asserts that the mean per-call overhead of OnUpstream is ≤ 1µs under
 // no-contention conditions with windowSize=64 and a pre-warmed window, over
 // 10,000 iterations. This guards against inadvertent O(N²) or
 // allocation-heavy regressions in the replay state machine.
 //
+// Measurement uses bulk timing (single start/stop around the full loop) to
+// avoid per-call timer syscall overhead (~100ns–1µs each) contaminating the
+// samples, which causes false failures on CI VMs with shared compute. For a
+// tight, deterministic O(1) loop without outliers, bulk mean is equivalent
+// to median but immune to timer-call overhead.
+//
 // This is NOT the VP-042 NFR gate (which is verified at the
 // internal/halfchannel integration level).
+//
+// NOT-VP-042: VP-042 (keystroke-to-echo p99 ≤ 100ms) is an end-to-end
+// integration property verified at internal/halfchannel, not here.
 //
 // The 1µs threshold is deliberately generous: a naive O(N) scan over a
 // window of 64 entries would still exceed it on most hardware. It is
@@ -802,10 +798,10 @@ func TestReplay_OnUpstream_MedianPerCall(t *testing.T) {
 	t.Parallel()
 
 	const (
-		windowSize  = uint32(64)
-		prewarm     = windowSize
-		iterations  = 10_000
-		medianLimit = time.Microsecond // 1µs
+		windowSize = uint32(64)
+		prewarm    = windowSize
+		iterations = 10_000
+		meanLimit  = time.Microsecond // 1µs
 	)
 
 	deliver := func(_ replay.Frame) {}
@@ -820,25 +816,24 @@ func TestReplay_OnUpstream_MedianPerCall(t *testing.T) {
 		}
 	}
 
-	// Measure steady-state: windowSize+1 .. windowSize+iterations, all in order.
-	// Constructor cost is excluded (pre-warm runs before timer start).
-	samples := make([]time.Duration, iterations)
+	// Measure steady-state with bulk timing: single start/stop around the
+	// entire loop avoids per-call timer syscall overhead dominating samples.
+	// Mean-per-call = total / iterations; for a tight O(1) loop this is
+	// equivalent to median but CI-stable.
+	start := time.Now()
 	for i := 0; i < iterations; i++ {
 		seq := prewarm + uint32(i) + 1
-		start := time.Now()
 		if err := r.OnUpstream(replay.Frame{Seq: seq, Payload: []byte("k")}); err != nil {
 			t.Fatalf("iteration %d seq=%d: %v", i, seq, err)
 		}
-		samples[i] = time.Since(start)
 	}
+	total := time.Since(start)
+	mean := total / iterations
 
-	sort.Slice(samples, func(a, b int) bool { return samples[a] < samples[b] })
-	median := medianDuration(samples)
-
-	if median > medianLimit {
-		t.Fatalf("AC-004 regression: median OnUpstream per-call latency %v exceeds 1µs gate"+
+	if mean > meanLimit {
+		t.Fatalf("AC-004 regression: mean OnUpstream per-call latency %v exceeds 1µs gate"+
 			" (BC-2.02.004 invariant 5, RULING-002); possible O(N²) or allocation regression",
-			median)
+			mean)
 	}
 }
 
