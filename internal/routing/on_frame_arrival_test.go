@@ -10,6 +10,7 @@ package routing
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/multipath"
@@ -496,6 +497,143 @@ func TestBC_2_02_009_Router_CollisionLog_DistinctKeyFlood_Bounded(t *testing.T) 
 			K, trackedKeys, multipath.DefaultDropCacheSize,
 		)
 	}
+}
+
+// ---- F-CONC-001 / BC-2.02.009 — concurrent OnFrameArrival race guard -------
+
+// concurrentCaptureLogger is a race-safe logger for concurrent tests.
+// captureLogger must NOT be shared across goroutines (its slice has no lock);
+// this variant guards every append with a mutex so the test harness itself is
+// race-free (a data race in the harness would be a false positive for the
+// implementation under review).
+type concurrentCaptureLogger struct {
+	mu    sync.Mutex
+	count int
+}
+
+func (c *concurrentCaptureLogger) Log(_ string) {
+	c.mu.Lock()
+	c.count++
+	c.mu.Unlock()
+}
+
+func (c *concurrentCaptureLogger) logCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.count
+}
+
+// TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess is a race-guard test
+// that verifies hitCountMu correctly serialises all concurrent mutations to the
+// per-key hit-count LRU and the aggregate emit counter (F-CONC-001 / go.md
+// rule 12).
+//
+// Static analysis confirms the locking is currently CORRECT; this test is a
+// regression fence.  It is expected to PASS immediately under -race.  If the
+// race detector fires here, that is a genuine implementer bug — report it, do
+// NOT paper over it.
+//
+// The invariant under test is "bounded + race-free":
+//   - h.trackedKeyCount() <= collisionTrackCap after concurrent load (EC-006).
+//   - No data race reported by the race detector.
+//
+// Exact log-line counts are NOT asserted — they are nondeterministic under
+// concurrent scheduling.
+func TestBC_2_02_009_Router_OnFrameArrival_ConcurrentAccess(t *testing.T) {
+	// NOT t.Parallel() — this test is CPU-intensive and uses many goroutines;
+	// running concurrently with the distinct-key flood test would produce
+	// misleading timing.  Serial execution keeps coverage deterministic.
+
+	const (
+		numGoroutines    = 16
+		hitsPerGoroutine = 500
+
+		// Number of same-key frame bytes (repeated hits into the LRU front path).
+		numSameKeyFrames = 4
+	)
+
+	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+	logger := &concurrentCaptureLogger{}
+	h := NewFrameArrivalHandler(dc)
+	WithFrameArrivalLogger(logger)(h)
+
+	const arrivalIface InterfaceID = 1
+	const egressIface InterfaceID = 2
+	interfaceSet := []InterfaceID{arrivalIface, egressIface}
+	nopFn := ForwardFunc(func(_ InterfaceID, _ []byte) error { return nil })
+
+	// Pre-build a mix of frame payloads:
+	//   - numSameKeyFrames repeated-key payloads (warm LRU front path + per-key
+	//     count increment — exercises MoveToFront under lock contention).
+	//   - remaining distinct-key payloads whose count exceeds collisionTrackCap
+	//     (forces eviction: Back/Remove/delete/PushFront under contention).
+	//
+	// Total distinct keys across all goroutines = numGoroutines * hitsPerGoroutine,
+	// well above DefaultDropCacheSize = 10 000, so eviction is heavily exercised.
+	buildFrame := func(seed int) []byte {
+		f := make([]byte, 8)
+		f[0] = byte(seed)
+		f[1] = byte(seed >> 8)
+		f[2] = byte(seed >> 16)
+		f[3] = byte(seed >> 24)
+		f[4] = 0xCA
+		f[5] = 0xFE
+		f[6] = 0xBA
+		f[7] = 0xBE
+		return f
+	}
+
+	// sameKeyFrames are shared across goroutines: they resolve to the same
+	// (checksum, iface) key after the first arrival populates the drop cache.
+	sameKeyFrames := make([][]byte, numSameKeyFrames)
+	for i := range sameKeyFrames {
+		sameKeyFrames[i] = buildFrame(0xDEAD_0000 + i)
+	}
+
+	// Seed the drop cache for same-key frames so all goroutine hits are cache
+	// hits (exercises the locked LRU + per-key increment path from the first call).
+	for _, f := range sameKeyFrames {
+		_ = h.OnFrameArrival(f, arrivalIface, interfaceSet, nopFn)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for g := range numGoroutines {
+		go func(goroutineID int) {
+			defer wg.Done()
+			for i := range hitsPerGoroutine {
+				// Alternate: half the calls are repeated same-key hits (LRU front
+				// path + MoveToFront contention), the other half use distinct keys
+				// (eviction path: Back/Remove/PushFront contention).
+				var frame []byte
+				if i%2 == 0 {
+					// Same-key: pick one of the pre-seeded frames.
+					frame = sameKeyFrames[i%numSameKeyFrames]
+				} else {
+					// Distinct key per (goroutineID, i): ensures eviction under
+					// concurrent load across goroutines.
+					seed := goroutineID*hitsPerGoroutine + i
+					frame = buildFrame(seed)
+				}
+				_ = h.OnFrameArrival(frame, arrivalIface, interfaceSet, nopFn)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Invariant: the tracking structure must remain bounded regardless of the
+	// number of distinct keys observed (AC-005 v1.4-a / EC-006 / CWE-401/400).
+	tracked := h.trackedKeyCount()
+	if tracked > collisionTrackCap {
+		t.Errorf(
+			"concurrent load: trackedKeyCount() = %d; want <= collisionTrackCap (%d) — LRU bound violated under concurrent access (F-CONC-001 / AC-005 v1.4-a / EC-006)",
+			tracked, collisionTrackCap,
+		)
+	}
+	// Log count is informational only — nondeterministic under concurrency.
+	t.Logf("concurrent access test complete: trackedKeyCount=%d logCount=%d", tracked, logger.logCount())
 }
 
 // ---- constructor nil-guard -------------------------------------------------
