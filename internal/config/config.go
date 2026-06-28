@@ -226,6 +226,24 @@ func (c *Config) Validate() error {
 	}
 }
 
+// stripControlChars removes all Unicode control characters from s —
+// C0 (U+0000–U+001F), DEL (U+007F), and C1 (U+0080–U+009F) — using
+// unicode.IsControl so the predicate matches the full Unicode definition.
+//
+// Embedding raw control bytes in error strings allows an attacker to forge
+// log lines or corrupt terminal output (CWE-117 / F-SEC-002 / F-SEC-V1).
+// Printable characters are never altered, so operator-visible values survive
+// intact for diagnosis.
+func stripControlChars(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if !unicode.IsControl(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // sanitizeAddrForError strips control characters from an operator-supplied
 // address value before interpolating it into an error message.
 //
@@ -238,13 +256,7 @@ func (c *Config) Validate() error {
 // Legitimate values (e.g. "not-a-host-port") pass through unchanged so the
 // operator can see what they mistyped (BC-2.09.003 PC-5/PC-6).
 func sanitizeAddrForError(addr string) string {
-	var b strings.Builder
-	for _, r := range addr {
-		if !unicode.IsControl(r) {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+	return stripControlChars(addr)
 }
 
 // validateHostPort returns nil if addr is a valid host:port as defined by
@@ -347,7 +359,11 @@ func LoadFile(path string) (*Config, error) {
 // We extract N from whichever shape applies and reformat into the canonical
 // BC-2.09.003 EC-003 form so the operator can navigate directly to the bad line.
 func yamlParseDetail(err error) string {
-	raw := err.Error()
+	// Strip control characters before embedding in the E-CFG-005 detail string.
+	// yaml.v3 TypeError messages include the offending decoded value verbatim —
+	// a double-quoted YAML scalar like "\e[31m" decodes to raw 0x1B bytes that
+	// would survive into the error message unchanged (F-SEC-V1 / CWE-117).
+	raw := stripControlChars(err.Error())
 
 	// Shape 1: "yaml: line N: <detail>"
 	const linePrefix = "yaml: line "
