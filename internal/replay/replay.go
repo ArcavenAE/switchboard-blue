@@ -98,6 +98,8 @@ func (r *Replay) OnUpstream(f Frame) error {
 	seq := f.Seq
 
 	// Seq=0 is the unset/invalid sentinel — discard silently without delivery.
+	// Per RULING-001 §R1: chan_seq starts at 1; 0 is reserved and never a valid
+	// wire-frame sequence number. Senders MUST skip 0 on wrap (MaxUint32 → 1).
 	if seq == 0 {
 		return nil
 	}
@@ -107,11 +109,20 @@ func (r *Replay) OnUpstream(f Frame) error {
 		return ErrAlreadyDelivered
 	}
 
-	// Outside the window (too old): seq < nextSeq - windowSize.
-	// Guard against uint32 underflow when nextSeq <= windowSize.
-	if r.nextSeq > r.windowSize && seq < r.nextSeq-r.windowSize {
-		return nil
-	}
+	// Classify seq by its wrap-safe forward distance from nextSeq.
+	//
+	// uint32 subtraction wraps correctly mod 2^32, so dist = seq - r.nextSeq gives
+	// the true forward gap for any uint32 pair:
+	//   dist == 0              → in-order: deliver immediately (handled above)
+	//   0 < dist < windowSize  → in-window future frame: buffer in pending
+	//   dist >= windowSize     → out-of-window: covers BOTH far-future frames
+	//                            (dist is a small number > windowSize) AND past/"too-old"
+	//                            frames (dist ≈ 2^32 - k, which is >> windowSize).
+	//
+	// This single check replaces the old separate non-wrap-safe lower-bound guard
+	// (r.nextSeq > r.windowSize && seq < r.nextSeq-r.windowSize), which failed near
+	// the uint32 boundary because integer-sense past frames with wrapped seq values
+	// were evaluated before the distance check could classify them correctly.
 
 	// In-order: deliver immediately and drain any buffered successors.
 	if seq == r.nextSeq {
@@ -119,24 +130,15 @@ func (r *Replay) OnUpstream(f Frame) error {
 		return nil
 	}
 
-	// Future frame within the window [nextSeq+1, nextSeq+windowSize-1]: buffer.
-	// Frames at or beyond nextSeq+windowSize are discarded (BC-2.02.004 invariant 3,
-	// PC5: loss of windowSize consecutive frames is irrecoverable).
-	//
-	// Use wrap-safe distance arithmetic: uint32 subtraction wraps correctly mod 2^32,
-	// so (seq - r.nextSeq) gives the true forward gap even when seq < r.nextSeq in
-	// the integer sense (e.g. near MaxUint32). A distance of 0 means in-order (handled
-	// above); distance in [1, windowSize-1] is an in-window future frame; distance
-	// >= windowSize is too far ahead (or wrapped-around past, since past frames also
-	// produce large distance values after wrapping). The existing too-old lower-bound
-	// guard above handles the past-frame case before we reach this point.
-	if dist := seq - r.nextSeq; dist > 0 && dist < r.windowSize {
+	dist := seq - r.nextSeq
+	if dist > 0 && dist < r.windowSize {
+		// In-window future frame: buffer until predecessor(s) arrive.
 		r.pending[seq] = f
 		return nil
 	}
 
-	// seq >= nextSeq+windowSize (too far ahead) or seq < nextSeq and not in seen
-	// (evicted from seen after window slide). Both cases: discard silently.
+	// dist >= windowSize: out-of-window (too far ahead or too old). Discard silently.
+	// seq < nextSeq and not in seen (evicted after window slide) also lands here.
 	return nil
 }
 
@@ -146,6 +148,11 @@ func (r *Replay) deliverAndDrain(f Frame) {
 	r.deliver(f)
 	r.seen[f.Seq] = true
 	r.nextSeq++
+	// Per RULING-001 §R1: senders skip seq=0 on wrap (MaxUint32 → 1). The receiver
+	// mirrors that skip so it never waits for the reserved seq=0 frame.
+	if r.nextSeq == 0 {
+		r.nextSeq = 1
+	}
 
 	// Evict entries that have fallen outside the window.
 	r.evictOldSeen()
@@ -160,6 +167,10 @@ func (r *Replay) deliverAndDrain(f Frame) {
 		r.deliver(next)
 		r.seen[next.Seq] = true
 		r.nextSeq++
+		// Per RULING-001 §R1: skip seq=0 on wrap.
+		if r.nextSeq == 0 {
+			r.nextSeq = 1
+		}
 		r.evictOldSeen()
 	}
 }
