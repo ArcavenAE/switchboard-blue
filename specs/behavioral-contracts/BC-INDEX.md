@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-27T00:00:00
+timestamp: 2026-06-28T00:00:00
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -67,7 +67,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.08.001 | Console remotely controllable via sbctl: attach, detach, switch session, navigate | console-operations | CAP-025 | P1 | PE | active | ss-08/BC-2.08.001.md |
 | BC-2.09.001 | E router graduates to PE mode by adding upstream router connections in config | deployment-operations | CAP-026 | P2 | PE | active | ss-09/BC-2.09.001.md |
 | BC-2.09.002 | Router sends drain signal before shutdown; nodes migrate to alternate routers | deployment-operations | CAP-027 | P2 | PE | active | ss-09/BC-2.09.002.md |
-| BC-2.09.003 | Router startup fails cleanly on malformed config with actionable error message | deployment-operations | CAP-028 | P0 | E | active | ss-09/BC-2.09.003.md |
+| BC-2.09.003 | Router Startup Fails Cleanly on Malformed Config with Actionable Error Message; Validated Config Is Applied to the Daemon | deployment-operations | CAP-028 | P0 | E | active | ss-09/BC-2.09.003.md |
 
 ## Coverage Summary
 
