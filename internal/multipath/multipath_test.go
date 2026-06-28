@@ -6,30 +6,35 @@
 //
 // BC/AC coverage map:
 //
-//	TestBC_2_02_001_Send_TwoFastestPaths           → AC-003, BC-2.02.001 postcondition 1
-//	TestBC_2_02_001_Send_ThreePathsSelectLowest     → AC-003, BC-2.02.001 postcondition 1 (test vector)
-//	TestBC_2_02_001_Send_SinglePathFallback         → EC-001, BC-2.02.001 postcondition 3, AC-003
-//	TestBC_2_02_001_Send_NoPathsReturnsError        → BC-2.02.001 postcondition 4
-//	TestBC_2_02_001_Send_AtMostTwoPaths             → VP-024, BC-2.02.001 invariant 2
-//	TestBC_2_02_001_Send_SnapshotsRankAtDispatch    → BC-2.02.001 postcondition 5
-//	TestBC_2_02_001_Send_IdenticalBytesOnBothPaths  → BC-2.02.001 postcondition 2
-//	TestBC_2_02_002_Receive_FirstCopyDelivered      → AC-004, BC-2.02.002 postcondition 1, VP-054
-//	TestBC_2_02_002_Receive_DuplicateReturnsErr     → AC-004, BC-2.02.002 postcondition 2
-//	TestBC_2_02_002_Receive_DuplicateDiscardSilent  → AC-005, BC-2.02.002 postcondition 2
-//	TestBC_2_02_002_Receive_MultipleArrivalsSameFrame→ EC-004, BC-2.02.002
-//	TestBC_2_02_002_Receive_DistinctFramesNotSuppressed→ BC-2.02.002 postcondition 1
-//	TestBC_2_02_009_DropCache_MissForwards          → BC-2.02.009 postcondition 1, VP-025
-//	TestBC_2_02_009_DropCache_HitSuppresses         → BC-2.02.009 postcondition 2, VP-025
-//	TestBC_2_02_009_DropCache_CompoundKey           → BC-2.02.009 EC-001 (different interface IDs)
-//	TestBC_2_02_009_DropCache_BoundedCapacity       → AC-006, BC-2.02.009 postcondition 3, VP-025
-//	TestBC_2_02_009_DropCache_LRUEvictsOldest       → AC-006, EC-003, BC-2.02.009 postcondition 3
-//	TestBC_2_02_009_DropCache_Len                   → AC-006
-//	TestBC_2_02_009_DropCache_KeyedOnChecksumAndInterface → ARCH compliance (story architecture rule)
-//	TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep → VP-025 (stdlib sweep)
+//	TestBC_2_02_001_Send_TwoFastestPaths                          → AC-003, BC-2.02.001 postcondition 1
+//	TestBC_2_02_001_Send_ThreePathsSelectLowest                   → AC-003, BC-2.02.001 postcondition 1 (test vector)
+//	TestBC_2_02_001_Send_SinglePathFallback                       → EC-001, BC-2.02.001 postcondition 3, AC-003
+//	TestBC_2_02_001_Send_NoPathsReturnsError                      → BC-2.02.001 postcondition 4
+//	TestBC_2_02_001_Send_AtMostTwoPaths                           → VP-024, BC-2.02.001 invariant 2
+//	TestBC_2_02_001_Send_SnapshotsRankAtDispatch                  → BC-2.02.001 postcondition 5
+//	TestBC_2_02_001_Send_IdenticalBytesOnBothPaths                → BC-2.02.001 postcondition 2
+//	TestBC_2_02_002_Receive_FirstCopyDelivered                    → AC-004, BC-2.02.002 postcondition 1, VP-054
+//	TestBC_2_02_002_Receive_DuplicateReturnsErr                   → AC-004, BC-2.02.002 postcondition 2
+//	TestBC_2_02_002_Receive_DuplicateDiscardSilent                → AC-005, BC-2.02.002 postcondition 2
+//	TestBC_2_02_002_Receive_MultipleArrivalsSameFrame             → EC-004, BC-2.02.002
+//	TestBC_2_02_002_Receive_DistinctFramesNotSuppressed           → BC-2.02.002 postcondition 1
+//	TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed     → F-002, BC-2.02.002 postcondition 2, DI-009, VP-024 (replaces deleted wrong test)
+//	TestBC_2_02_002_Receive_ConcurrentFirstArrivalWins            → F-004, F-005, DI-009, BC-2.02.002 invariant 1 (TOCTOU regression)
+//	TestBC_2_02_009_DropCache_MissForwards                        → BC-2.02.009 postcondition 1, VP-025
+//	TestBC_2_02_009_DropCache_HitSuppresses                       → BC-2.02.009 postcondition 2, VP-025
+//	TestBC_2_02_009_DropCache_CompoundKey                         → BC-2.02.009 EC-001 (different interface IDs)
+//	TestBC_2_02_009_DropCache_BoundedCapacity                     → AC-006, BC-2.02.009 postcondition 3, VP-025
+//	TestBC_2_02_009_DropCache_LRUEvictsOldest                     → AC-006, EC-003, BC-2.02.009 postcondition 3
+//	TestBC_2_02_009_DropCache_Len                                 → AC-006
+//	TestBC_2_02_009_DropCache_KeyedOnChecksumAndInterface         → ARCH compliance (story architecture rule)
+//	TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep       → VP-025 (stdlib sweep)
+//	TestBC_2_02_009_DropCache_ConcurrentAddContains               → F-004, BC-2.02.009 (concurrent safety)
 package multipath_test
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/multipath"
@@ -44,7 +49,6 @@ import (
 func makeFrame(t *testing.T, payload []byte) multipath.Frame {
 	t.Helper()
 	var f multipath.Frame
-	copy(f.Payload, payload) // Payload is a slice; assign directly.
 	f.Payload = append([]byte(nil), payload...)
 	return f
 }
@@ -446,39 +450,85 @@ func TestBC_2_02_002_Receive_DistinctFramesNotSuppressed(t *testing.T) {
 	}
 }
 
-// TestBC_2_02_002_Receive_DifferentInterfaceSameChecksumNotSuppressed verifies
-// the compound-key semantic: the same checksum arriving on a different interface
-// is NOT suppressed (multipath duplicate-and-race forward from two routers).
+// TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed verifies that a
+// second copy of the SAME frame (identical bytes, same checksum) arriving on a
+// DIFFERENT interface IS suppressed at the endpoint receiver.
 //
-// BC-2.02.009 EC-001
-func TestBC_2_02_002_Receive_DifferentInterfaceSameChecksumNotSuppressed(t *testing.T) {
+// BC-2.02.002 postcondition 2, DI-009, VP-024 (endpoint dedup is checksum-only,
+// not compound (checksum, interface) — see pass-1-spec-rulings F-002 and
+// RULING 1). Canonical test vector: "Frame seq=42 arrives on path A at t=0ms;
+// same frame arrives on path B at t=8ms → delivered at t=0ms; second copy
+// discarded silently."
+//
+// NOTE: The deleted test TestBC_2_02_002_Receive_DifferentInterfaceSameChecksumNotSuppressed
+// pinned the WRONG behavior (compound-key endpoint dedup). This replacement
+// asserts the correct behavior per spec ruling. This test MUST FAIL against the
+// current implementation (which uses compound key) — that is the Red Gate.
+func TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed(t *testing.T) {
 	t.Parallel()
 
 	mp := multipath.NewMultipath(nil, multipath.DefaultDropCacheSize)
 
-	// Same frame bytes → same checksum, but different arrival interface IDs.
+	// Same frame bytes → same checksum; arrives on two different interfaces
+	// (simulating duplicate-and-race delivery via two different routers).
 	payload := []byte("multipath copy")
 	f1 := makeFrame(t, payload)
-	f2 := makeFrame(t, payload) // byte-identical
+	f2 := makeFrame(t, payload) // byte-identical → same checksum
 
-	// Arrive on interface 1: first delivery.
+	// First arrival on interface 1: must be delivered (nil).
 	if err := mp.Receive(f1, 1); err != nil {
 		t.Errorf("iface=1 first arrival: want nil, got %v", err)
 	}
 
-	// Arrive on interface 2 (different interface): NOT a compound-key hit.
-	// BC-2.02.009 EC-001: "compound keys (checksum, iface-A) and (checksum, iface-B) are distinct."
-	// At the Multipath.Receive level (endpoint dedup) this arrives as a duplicate
-	// regardless of interface — the endpoint cares about the frame checksum only
-	// (VP-024 / BC-2.02.002). This test confirms the actual Multipath behaviour.
-	//
-	// Note: BC-2.02.009 compound-key behaviour is at the ROUTER drop cache
-	// (NewDropCache / Add / Contains) tested separately below. The Multipath.Receive
-	// function implements BC-2.02.002 endpoint dedup; it uses the drop cache with
-	// the (checksum, arrivalInterfaceID) compound key — so a different interface ID
-	// SHOULD pass through here as well.
-	if err := mp.Receive(f2, 2); err != nil {
-		t.Errorf("iface=2 (different interface, same checksum): want nil (compound key miss), got %v", err)
+	// Second arrival on interface 2: same checksum → endpoint dedup MUST suppress it.
+	// Endpoint dedup keys on checksum alone (BC-2.02.002 postcondition 2 / DI-009);
+	// the arrival interface is irrelevant at the receiver. ErrDuplicate required.
+	if !errors.Is(mp.Receive(f2, 2), multipath.ErrDuplicate) {
+		t.Errorf("iface=2 same-checksum second arrival: want ErrDuplicate (suppressed), got nil")
+	}
+}
+
+// TestBC_2_02_002_Receive_ConcurrentFirstArrivalWins drives two goroutines
+// delivering the SAME frame concurrently to a single Multipath.Receive and
+// asserts that EXACTLY ONE delivery is returned (nil) and all others return
+// ErrDuplicate. This exercises the DI-009 first-arrival-wins invariant under
+// concurrent load and MUST expose the Contains-then-Add TOCTOU race
+// (F-005 / BC-2.02.002 invariant 1).
+//
+// Run under `go test -race` to detect the data race. The test also checks the
+// semantic invariant: exactly one nil return from N concurrent deliveries.
+//
+// F-004, F-005 / BC-2.02.002 invariant 1 / DI-009
+func TestBC_2_02_002_Receive_ConcurrentFirstArrivalWins(t *testing.T) {
+	// Not parallel at the outer level — the inner goroutines provide concurrency.
+
+	const goroutines = 8
+
+	mp := multipath.NewMultipath(nil, multipath.DefaultDropCacheSize)
+	payload := []byte("concurrent dedup frame")
+
+	var deliveries atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := range goroutines {
+		i := i
+		go func() {
+			defer wg.Done()
+			f := makeFrame(t, payload) // byte-identical across all goroutines
+			err := mp.Receive(f, uint64(i+1))
+			if err == nil {
+				deliveries.Add(1)
+			} else if !errors.Is(err, multipath.ErrDuplicate) {
+				t.Errorf("goroutine %d: unexpected error %v (want nil or ErrDuplicate)", i, err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// DI-009 invariant: first arrival wins — EXACTLY ONE delivery.
+	if n := deliveries.Load(); n != 1 {
+		t.Errorf("concurrent Receive: %d deliveries, want exactly 1 (DI-009 first-arrival-wins violated)", n)
 	}
 }
 
@@ -699,5 +749,42 @@ func TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestBC_2_02_009_DropCache_ConcurrentAddContains drives multiple goroutines
+// calling Add and Contains on the same DropCache concurrently. Run under
+// `go test -race` — any missing lock on DropCache will produce a data race.
+//
+// F-004 / BC-2.02.009 (concurrent safety of router drop cache)
+func TestBC_2_02_009_DropCache_ConcurrentAddContains(t *testing.T) {
+	// Not parallel at the outer level — inner goroutines provide the concurrency.
+
+	const goroutines = 16
+	const opsPerGoroutine = 64
+
+	dc := multipath.NewDropCache(128)
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := range goroutines {
+		g := g
+		go func() {
+			defer wg.Done()
+			base := uint32(g * opsPerGoroutine)
+			for i := uint32(0); i < opsPerGoroutine; i++ {
+				key := base + i
+				dc.Add(key, uint64(g))
+				// Contains must not panic or race under concurrent access.
+				_ = dc.Contains(key, uint64(g))
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Len must not exceed capacity.
+	if dc.Len() > 128 {
+		t.Errorf("after concurrent ops: Len=%d exceeds capacity=128", dc.Len())
 	}
 }

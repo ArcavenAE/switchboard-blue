@@ -7,28 +7,32 @@
 //
 // BC/AC coverage map:
 //
-//	TestBC_2_02_003_PathScore_LowerRTTLowerScore          → AC-001, BC-2.02.003 postcondition 3
-//	TestBC_2_02_003_PathScore_HigherLossRaisesScore        → AC-001, BC-2.02.003 postcondition 3
-//	TestBC_2_02_003_PathScore_Transitive                   → AC-001, VP-026
-//	TestBC_2_02_003_PathScore_ZeroLossPureRTT              → AC-001, BC-2.02.003 postcondition 1
-//	TestBC_2_02_003_PathScore_Formula                      → AC-001, ARCH-03 formula
-//	TestBC_2_02_003_PathTracker_NewInitialRTT              → BC-2.02.003 precondition 3
-//	TestBC_2_02_003_PathTracker_EWMAConvergence            → AC-002, BC-2.02.003 postcondition 1
-//	TestBC_2_02_003_PathTracker_LossUpdatesEWMA            → BC-2.02.003 postcondition 2
-//	TestBC_2_02_003_PathTracker_InactiveAfterMisses        → BC-2.02.003 postcondition 6, VP-026/VP-040
-//	TestBC_2_02_003_PathTracker_ResetMissesOnSuccess       → BC-2.02.003 postcondition 6
-//	TestBC_2_02_003_PathTracker_ScoreDelegates             → AC-001/AC-002
-//	TestBC_2_02_003_Rank_OrderedByScore                    → BC-2.02.003 postcondition 3
-//	TestBC_2_02_003_Rank_ExcludesInactivePaths             → BC-2.02.003 postcondition 6
-//	TestBC_2_02_003_Rank_ErrNoActivePaths                  → BC-2.02.001 precondition 1 / ErrNoActivePaths
-//	TestBC_2_02_003_Rank_TiebreakByID                      → EC-002, BC-2.02.001 invariant 3
-//	TestBC_2_02_003_Rank_SinglePath                        → EC-001, BC-2.02.001 postcondition 3
-//	TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors     → API surface
-//	TestBC_2_02_003_PathScore_PropertyTransitive_Manual    → VP-026 (stdlib property sweep)
+//	TestBC_2_02_003_PathScore_LowerRTTLowerScore                  → AC-001, BC-2.02.003 postcondition 3
+//	TestBC_2_02_003_PathScore_HigherLossRaisesScore               → AC-001, BC-2.02.003 postcondition 3
+//	TestBC_2_02_003_PathScore_Transitive                          → AC-001, VP-026
+//	TestBC_2_02_003_PathScore_ZeroLossPureRTT                     → AC-001, BC-2.02.003 postcondition 1
+//	TestBC_2_02_003_PathScore_Formula                             → AC-001, ARCH-03 formula
+//	TestBC_2_02_003_PathTracker_NewInitialRTT                     → BC-2.02.003 precondition 3
+//	TestBC_2_02_003_PathTracker_EWMAConvergence                   → AC-002, BC-2.02.003 postcondition 1 (F-007: varying RTTs, distinguishes EWMA from last-value)
+//	TestBC_2_02_003_PathTracker_LossUpdatesEWMA                   → BC-2.02.003 postcondition 2
+//	TestBC_2_02_003_PathTracker_InactiveAfterMisses               → BC-2.02.003 postcondition 6, VP-026/VP-040
+//	TestBC_2_02_003_PathTracker_ResetMissesOnSuccess              → BC-2.02.003 postcondition 6
+//	TestBC_2_02_003_PathTracker_Reactivation                      → F-006, BC-2.02.003 postcondition 6 (v1.2) — FAILED→ACTIVE on first success
+//	TestBC_2_02_003_PathTracker_FirstProbeRTTOverride             → F-008, BC-2.02.003 postcondition 1 — first-probe override with alpha<1
+//	TestBC_2_02_003_PathTracker_ScoreDelegates                    → AC-001/AC-002
+//	TestBC_2_02_003_Rank_OrderedByScore                           → BC-2.02.003 postcondition 3
+//	TestBC_2_02_003_Rank_ExcludesInactivePaths                    → BC-2.02.003 postcondition 6
+//	TestBC_2_02_003_Rank_ErrNoActivePaths                         → BC-2.02.001 precondition 1 / ErrNoActivePaths
+//	TestBC_2_02_003_Rank_TiebreakByID                             → EC-002, BC-2.02.001 invariant 3
+//	TestBC_2_02_003_Rank_SinglePath                               → EC-001, BC-2.02.001 postcondition 3
+//	TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors            → API surface
+//	TestBC_2_02_003_PathScore_PropertyTransitive_Manual           → VP-026 (stdlib property sweep)
+//	TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore            → F-004, BC-2.02.003 (concurrent safety)
 package paths_test
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/paths"
@@ -234,31 +238,56 @@ func TestBC_2_02_003_PathTracker_NewInitialRTT(t *testing.T) {
 	}
 }
 
-// TestBC_2_02_003_PathTracker_EWMAConvergence verifies that after 3+ successful
-// probe arrivals the EWMA RTT converges toward the measured RTT.
+// TestBC_2_02_003_PathTracker_EWMAConvergence verifies that the RTT tracker
+// implements genuine EWMA smoothing, not a degenerate last-value (alpha=1)
+// implementation. This is accomplished by feeding VARYING probe RTTs and
+// asserting that the EWMA reflects smoothed history rather than the most
+// recent sample.
 //
-// AC-002 / BC-2.02.003 postcondition 1
+// F-007 / AC-002 / BC-2.02.003 postcondition 1
+//
+// Test design: feed a baseline of probes at 100ms to establish an EWMA, then
+// fire one probe at 10ms (a sudden improvement). A true EWMA (alpha=0.125)
+// must NOT jump all the way to 10ms — it must reflect the weighted history.
+// A degenerate last-value (alpha=1) implementation would return exactly 10ms.
+// We assert the result is strictly between 10ms and 100ms, proving smoothing lag.
 func TestBC_2_02_003_PathTracker_EWMAConvergence(t *testing.T) {
 	t.Parallel()
 
-	// Start with a high conservative RTT; feed 10 probes at 20ms.
-	// After 10 probes with alpha=0.5, EWMA should be within 5ms of 20ms.
-	const initRTT = 1000.0
-	const targetRTT = 20.0
-	const alpha = 0.5
-	const probes = 10
+	const initRTT = 100.0
+	const alpha = 0.125
+	// Feed 8 probes at 100ms to let EWMA settle near 100ms.
+	const warmupProbes = 8
+	const warmupRTT = 100.0
+	// Then one sudden-improvement probe at 10ms.
+	const spikeRTT = 10.0
 
 	tracker := paths.NewPathTracker(initRTT, alpha)
 
-	for i := 0; i < probes; i++ {
-		tracker.OnProbe(targetRTT, false)
+	for i := 0; i < warmupProbes; i++ {
+		tracker.OnProbe(warmupRTT, false)
 	}
 
+	// After warmup, RTT should be close to 100ms (EWMA settled).
+	afterWarmup := tracker.RTT()
+	if afterWarmup < 90.0 || afterWarmup > 110.0 {
+		t.Errorf("after %d probes at %vms: EWMA=%v, expected ~100ms (±10ms)", warmupProbes, warmupRTT, afterWarmup)
+	}
+
+	// Fire one probe at 10ms — a sudden improvement.
+	tracker.OnProbe(spikeRTT, false)
+
 	got := tracker.RTT()
-	// After 10 probes at alpha=0.5 from 1000ms initial, convergence is rapid.
-	// Exact bound: 1000 * (1-0.5)^10 + 20*(1-(1-0.5)^10) ≈ 20.97ms
-	if got < 15.0 || got > 25.0 {
-		t.Errorf("EWMA after %d probes (alpha=%v, target=%vms): got %vms, want ~%vms (within ±5ms)", probes, alpha, targetRTT, got, targetRTT)
+
+	// A degenerate last-value (alpha=1) implementation would return exactly 10ms.
+	// True EWMA (alpha=0.125): new_ewma = 0.875*~100 + 0.125*10 ≈ 88.75ms.
+	// We assert: got > 10ms (proves it is NOT last-value) AND got < 90ms
+	// (proves EWMA did move toward the new sample).
+	if got <= spikeRTT {
+		t.Errorf("EWMA after sudden drop: got %vms ≤ %vms; looks like last-value (alpha=1), not EWMA", got, spikeRTT)
+	}
+	if got >= afterWarmup {
+		t.Errorf("EWMA did not move toward new sample: got %vms ≥ warmup %vms; EWMA should decrease", got, afterWarmup)
 	}
 }
 
@@ -359,6 +388,150 @@ func TestBC_2_02_003_PathTracker_ResetMissesOnSuccess(t *testing.T) {
 	if !tracker.IsActive() {
 		t.Error("path became inactive; 2+2=4 total misses but NOT consecutive; want active")
 	}
+}
+
+// TestBC_2_02_003_PathTracker_Reactivation verifies the full lifecycle:
+// ACTIVE → (3 consecutive misses) → FAILED → (first successful probe) → ACTIVE.
+//
+// Per BC-2.02.003 postcondition 6 (v1.2, amended by pass-1 spec ruling F-006):
+// A failed path is re-added to the active path set upon the FIRST successful
+// keep-alive round-trip. On reactivation, RTT is initialized from the
+// reactivating probe's measured RTT, and loss EWMA resets to 0.
+//
+// This test MUST FAIL against the current implementation (571a31b) because
+// paths.go:108-129 never restores active=true after deactivation — that is the
+// Red Gate for this fix.
+//
+// F-006 / BC-2.02.003 postcondition 6 (v1.2) / pass-1-spec-rulings RULING 2
+func TestBC_2_02_003_PathTracker_Reactivation(t *testing.T) {
+	t.Parallel()
+
+	tracker := paths.NewPathTracker(50.0, 0.125)
+
+	// ── Phase 1: confirm active initially ────────────────────────────────────
+	if !tracker.IsActive() {
+		t.Fatal("precondition: new tracker must be active")
+	}
+
+	// ── Phase 2: 3 consecutive misses → FAILED ────────────────────────────────
+	for i := range 3 {
+		tracker.OnProbe(0, true) // missed keepalive
+		if i < 2 && !tracker.IsActive() {
+			t.Fatalf("path became inactive prematurely after %d consecutive misses (want 3)", i+1)
+		}
+	}
+	if tracker.IsActive() {
+		t.Fatal("after 3 consecutive misses: path still active; want FAILED")
+	}
+
+	// ── Phase 3: path absent from Rank while FAILED ───────────────────────────
+	rp := []paths.RankedPath{{ID: 1, Tracker: tracker}}
+	_, rankErr := paths.Rank(rp)
+	if !errors.Is(rankErr, paths.ErrNoActivePaths) {
+		t.Errorf("FAILED path should be absent from Rank; want ErrNoActivePaths, got %v", rankErr)
+	}
+
+	// ── Phase 4: first successful probe → ACTIVE ─────────────────────────────
+	const reactivationRTT = 75.0
+	tracker.OnProbe(reactivationRTT, false)
+
+	if !tracker.IsActive() {
+		t.Fatal("after first successful probe on FAILED path: want ACTIVE (reactivation), got FAILED")
+	}
+
+	// RTT must be initialized from the reactivating probe (not carried over from before deactivation).
+	if tracker.RTT() != reactivationRTT {
+		t.Errorf("reactivated RTT: got %v, want %v (must be initialized from reactivating probe)", tracker.RTT(), reactivationRTT)
+	}
+
+	// Loss EWMA must reset to 0 on reactivation (conservative assumption: loss-free until probes accumulate).
+	if tracker.LossPct() != 0.0 {
+		t.Errorf("reactivated loss EWMA: got %v, want 0 (must reset on reactivation)", tracker.LossPct())
+	}
+
+	// ── Phase 5: path present in Rank after reactivation ─────────────────────
+	ranked, err := paths.Rank(rp)
+	if err != nil {
+		t.Fatalf("after reactivation: Rank returned error %v; want success", err)
+	}
+	if len(ranked) != 1 || ranked[0].ID != 1 {
+		t.Errorf("after reactivation: Rank=%v; want [{ID:1}]", ranked)
+	}
+}
+
+// TestBC_2_02_003_PathTracker_FirstProbeRTTOverride verifies that when alpha < 1,
+// after exactly ONE successful probe, RTT() equals that probe's measured RTT
+// (proving the first-probe override fired, not a blend from the conservative
+// initial value).
+//
+// Without the override, the first EWMA update would be:
+//
+//	ewma = alpha*probe + (1-alpha)*initRTT
+//
+// With the override:
+//
+//	ewma = probe  (first probe sets RTT directly, ignoring the conservative init)
+//
+// F-008 / BC-2.02.003 postcondition 1 (first-probe override)
+func TestBC_2_02_003_PathTracker_FirstProbeRTTOverride(t *testing.T) {
+	t.Parallel()
+
+	const initRTT = 999.0
+	const alpha = 0.125 // deliberately < 1 so blend ≠ override
+	const probeRTT = 42.0
+
+	tracker := paths.NewPathTracker(initRTT, alpha)
+
+	// Exactly one successful probe.
+	tracker.OnProbe(probeRTT, false)
+
+	got := tracker.RTT()
+
+	// Without the first-probe override, EWMA would be:
+	//   0.125 * 42 + 0.875 * 999 = 5.25 + 874.125 = 879.375
+	// With the override: RTT() == 42.0.
+	// We assert got == probeRTT to prove the override fired.
+	if got != probeRTT {
+		blended := alpha*probeRTT + (1-alpha)*initRTT
+		t.Errorf("first-probe RTT: got %v, want %v (first-probe override); blended value would be %v",
+			got, probeRTT, blended)
+	}
+}
+
+// TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore drives multiple goroutines
+// calling OnProbe and Score concurrently on a single PathTracker. Run under
+// `go test -race` — any missing lock will produce a data race report.
+//
+// F-004 / BC-2.02.003 (concurrent safety of PathTracker)
+func TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore(t *testing.T) {
+	// Not parallel at the outer level — inner goroutines provide the concurrency.
+
+	const goroutines = 8
+	const probesPerGoroutine = 50
+
+	tracker := paths.NewPathTracker(100.0, 0.125)
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := range goroutines {
+		g := g
+		go func() {
+			defer wg.Done()
+			for i := range probesPerGoroutine {
+				rtt := float64((g*probesPerGoroutine + i + 1) % 200)
+				tracker.OnProbe(rtt, i%5 == 0) // every 5th is a miss
+				_ = tracker.Score()
+				_ = tracker.IsActive()
+				_ = tracker.RTT()
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Post-concurrency: tracker must still be in a valid state (no panic, no race).
+	_ = tracker.RTT()
+	_ = tracker.LossPct()
 }
 
 // TestBC_2_02_003_PathTracker_ScoreDelegates verifies that PathTracker.Score()
