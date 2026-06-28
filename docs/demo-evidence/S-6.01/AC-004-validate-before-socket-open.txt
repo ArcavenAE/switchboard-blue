@@ -1,0 +1,22 @@
+=== RUN   TestConfigValidate_BeforeSocketOpen
+=== PAUSE TestConfigValidate_BeforeSocketOpen
+=== CONT  TestConfigValidate_BeforeSocketOpen
+=== RUN   TestConfigValidate_BeforeSocketOpen/invalid_config_returns_error_without_io
+=== PAUSE TestConfigValidate_BeforeSocketOpen/invalid_config_returns_error_without_io
+=== RUN   TestConfigValidate_BeforeSocketOpen/valid_config_returns_nil_without_io
+=== PAUSE TestConfigValidate_BeforeSocketOpen/valid_config_returns_nil_without_io
+=== RUN   TestConfigValidate_BeforeSocketOpen/validate_does_not_mutate_config
+=== PAUSE TestConfigValidate_BeforeSocketOpen/validate_does_not_mutate_config
+=== CONT  TestConfigValidate_BeforeSocketOpen/invalid_config_returns_error_without_io
+=== CONT  TestConfigValidate_BeforeSocketOpen/validate_does_not_mutate_config
+=== CONT  TestConfigValidate_BeforeSocketOpen/valid_config_returns_nil_without_io
+--- PASS: TestConfigValidate_BeforeSocketOpen (0.00s)
+    --- PASS: TestConfigValidate_BeforeSocketOpen/invalid_config_returns_error_without_io (0.00s)
+    --- PASS: TestConfigValidate_BeforeSocketOpen/validate_does_not_mutate_config (0.00s)
+    --- PASS: TestConfigValidate_BeforeSocketOpen/valid_config_returns_nil_without_io (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.281s
+=== RUN   TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess
+--- PASS: TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.482s
