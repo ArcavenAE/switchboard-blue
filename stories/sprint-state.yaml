@@ -189,11 +189,14 @@ stories:
     title: "Per-path RTT/loss tracking and duplicate-and-race dispatch"
     epic: E-4
     wave: 4
-    status: in_progress
+    status: completed
     priority: P0
     scope_phase: E
     points: 8
     bc_traces: [BC-2.02.001, BC-2.02.002, BC-2.02.003, BC-2.02.009]
+    merge_sha: e415d31
+    pr: 24
+    merged_at: "2026-06-28"
 
   - story_id: S-4.02
     title: "Upstream idempotent replay window"

@@ -3,8 +3,8 @@ pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
 phase_step: wave-4-active
 phase_3_active_wave: 4
-phase_3_active_stories: [S-4.01]
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
+phase_3_active_stories: []
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01]
 wave_2_gate_closed_at: 2026-06-25
 wave_2_gate_disposition: "PASS_WITH_OBSERVATIONS"
 product: switchboard
@@ -65,7 +65,7 @@ w3_c1_disposition: "RESOLVED — WithFailureCounter wired buildRouter (threshold
 w3_t2_pr: 19
 w3_t2_merge_sha: 849bd86
 w3_t2_disposition: "DELIVERED — deterministic TOCTOU misclassification-branch test (ADR-011 v1.6 Obligation T2)"
-wave_3_pre_gate_items: "COMPLETE — C-1 (PR #20/418de54) + T2 (PR #19/849bd86) both merged; develop HEAD 849bd86"
+wave_3_pre_gate_items: "COMPLETE — C-1 (PR #20/418de54) + T2 (PR #19/849bd86) both merged"
 w3_i1_fix_pr: 18
 w3_i1_fix_merge_sha: e9421d8
 w3_i1_fix_merge_date: 2026-06-27
@@ -96,10 +96,15 @@ s_4_01_adversary_converged: true
 s_4_01_impl_commit: aaff609
 s_4_01_doc_commit: 327f5c6
 s_4_01_pr_number: 24
-s_4_01_pr_status: "MERGE_READY — awaiting human merge (vsdd-factory#302)"
+s_4_01_pr_status: "MERGED (e415d31, 2026-06-28)"
+s_4_01_merge_sha: e415d31
+s_4_01_merge_date: 2026-06-28
+s_4_01_status: completed
 s_4_01_head_sha: ee75d83
 s_4_01_demo_evidence: "7/7 ACs PASS (test-transcript based, S-W3.04 precedent); race-clean"
-timestamp: 2026-06-28T00:00:00Z
+develop_head: 36c5e98
+open_prs: 0
+timestamp: 2026-06-28T12:00:00Z
 last_update: 2026-06-28
 ---
 
@@ -107,7 +112,7 @@ last_update: 2026-06-28
 
 ## Current State
 
-Wave 4 ACTIVE. S-4.01 first Wave-4 delivery: PR #24 merge-ready, awaiting human merge (vsdd-factory#302). Sub-wave 4A remaining (S-4.02, S-4.03, S-6.01) not yet started. Sub-wave 4B: S-4.04 blocked on S-4.01 merge (internal/paths dep). W4-TEST-001 deferred (test-writer). develop HEAD = 85c2d2f.
+Wave 4 ACTIVE. S-4.01 (first Wave-4 delivery) COMPLETE — merged as e415d31 (PR #24, 7/7 ACs, 3/3 adversary clean). kos-scaffolding cleanup PR #23 also merged (36c5e98). develop HEAD = 36c5e98. 0 open PRs. Sub-wave 4A remaining: S-4.02, S-4.03, S-6.01 (not yet started). Sub-wave 4B: S-4.04 now UNBLOCKED (internal/paths on develop). W4-TEST-001 deferred (test-writer).
 
 ## Phase Progress
 
@@ -115,7 +120,7 @@ Wave 4 ACTIVE. S-4.01 first Wave-4 delivery: PR #24 merge-ready, awaiting human 
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 PR #24 merge-ready) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01 adversary 3/3 CLEAN @ aaff609; PR #24 MERGE_READY |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 MERGED; S-4.02/03/06.01 pending) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01 adversary 3/3 CLEAN @ aaff609; MERGED e415d31 |
 
 ## Wave / Story Status
 
@@ -137,19 +142,14 @@ Wave 4 ACTIVE. S-4.01 first Wave-4 delivery: PR #24 merge-ready, awaiting human 
 | 3 | fix/W3-i1 | Ticker wg-join (I-1, BC-2.04.007) | completed | #18 | e9421d8 |
 | 3 | fix/W3-t2 | Deterministic TOCTOU test (ADR-011 T2) | completed | #19 | 849bd86 |
 | 3 | fix/W3-c1 | WithFailureCounter wiring (OBS-3 resolved) | completed | #20 | 418de54 |
-| 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | merge-ready (PR #24, awaiting human merge) | #24 | ee75d83 |
+| 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | completed | #24 | e415d31 |
 
 ## Open Drift Items
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
-| W3-R3-F1 | HIGH? | cmd wiring: all 6 ARCH-08 §6.5.1 obligations met in real binary (buildRouter wires stdLogger, SessionAuth, sweep ticker, frames bridge, sc.Err() drain, FailureCounter via PR#20); adversary saw stale SHA 10dd880. No Wave-4 work. See adjudications/W3-R3-F1-cmd-wiring.md. | architect | RESOLVED |
-| W3-R3-F2 | HIGH? | BC-2.05.008 v1.3 + VP-059 v1.2 already specify implemented EC-006 semantics (hmacFailureRecorder iface, WithFailureCounter seam, PATH-A/PATH-B, srcAddrHex). No version bumps needed. See adjudications/W3-R3-F2-ec006.md. | product-owner | RESOLVED (RATIFY) |
 | W3-R2-M2 | MED | Route-time LWW snapshot: concurrent RegisterForwardingEntry not atomic with HMAC verify. | architect/implementer | open |
-| SW305-M2 | MED | unexported hmacFailureRecorder interface design correct — inject-via-interface idiom; specified in BC-2.05.008 v1.3 PC-5. No revert. | product-owner | CLOSED (RATIFIED) |
-| SW305-M3 | MED | WithNow clock seam + threshold<=0 guard are admission.FailureCounter concerns per BC-2.05.005 PC-3 / VP-059. Wrong-BC ownership noted. | product-owner | CLOSED |
-| SW305-M4 | MED | Test coverage gap: need routing integration test for 6th/7th call through RouteFrame not re-firing E-ADM-017 in same window, using real *admission.FailureCounter + WithNow injection. | test-writer | DEFER-WAVE-4 (W4-TEST-001) |
-| SW305-cosmetic | LOW | Stale comments: Red-Gate test (pre-v1.6 model), TrackedSourceCount() name, AC-016 count, v1.7 citation in test header. | cosmetic | defer post-wave |
+| SW305-M4 | MED | Test coverage gap: RouteFrame fire-once E-ADM-017 integration test with real *admission.FailureCounter + WithNow injection. | test-writer | DEFER-WAVE-4 (W4-TEST-001) |
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001) — lesson recorded in cycles/cycle-1/lessons.md. Follow-up: candidate for self-improvement epic story. | orchestrator | open/deferred |
 | W3-DEFER-1 | OBS | Process-gap: codify worktree-identity tuple in adversary dispatch templates (applied ad hoc this cycle). | orchestrator | deferred → Wave 4 process hardening |
 | W3-DEFER-2 | MED | M-1 relay busy-spin: double-failure-no-PTY scenario — watchAndFallback exhausted + no PTY path; daemon behavior under total connector failure not integration-tested. | implementer | deferred → Wave 4 / S-BL.NI |
@@ -169,7 +169,6 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | Duplicate key registration | last-write-wins (ADR-003, ARCH-04) | 2026-06-23 |
 | Console/access key permissions | control > console > access (ADR-004, ARCH-04) | 2026-06-23 |
 | HMAC keying | per-(node, svtn) HKDF using node_admission_pubkey as IKM (ADR-001 amended) | 2026-06-23 |
-| Wave-1 rollback/re-closure | all drift items routed concretely; vsdd-factory#260 | 2026-06-24 |
 | Marvel integration | explicitly deferred — no MVP integration | 2026-06-24 |
 | S-3.03 repointed 5→8 | upstream-wiring scope expansion; Wave 3 total 29→32 pts | 2026-06-27 |
 | S-W3.05 E-ADM-017 msg-format adjudication CORRECTED | specs authoritative — include "HMAC failure rate alert:" phrase; code/tests/story AC-003/AC-015 conform | 2026-06-27 |
@@ -184,13 +183,14 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, Phase-6 deferrals, wave-gate r
 | W3-R3-F2 EC-006 adjudication | RATIFY — BC-2.05.008 v1.3 / VP-059 v1.2 already specify implemented semantics; SW305-M2/M3 closed; SW305-M4 deferred to W4-TEST-001 | 2026-06-27 |
 | S-4.01 per-story adversarial CONVERGED (BC-5.39.001) | 3 clean passes (3-5) at aaff609; O-2 fixed 327f5c6; O-1/O-3/O-4 logged; BC-2.02.009 router wiring deferred to S-4.04 | 2026-06-28 |
 | S-4.01 PR #24 merge-ready | All 7 ACs PASS; adversary CONVERGED 0C/0H 3/3; security no Crit/High; pr-reviewer APPROVE 0 blocking; CI green; stopped at human-merge gate | 2026-06-28 |
+| S-4.01 MERGED + PR #23 cleanup MERGED | S-4.01 squash e415d31 (7/7 ACs, 3/3 adversary clean, merged via explicit user consent — classifier guardrail, not a project gate); kos-scaffolding cleanup #23 squash 36c5e98; develop HEAD 36c5e98; 0 open PRs | 2026-06-28 |
 
-## Session Resume Checkpoint — 2026-06-28 (Wave 4 ACTIVE)
+## Session Resume Checkpoint — 2026-06-28 (Wave 4 — between stories)
 
-**Position:** Phase 3, Wave 4 ACTIVE. S-4.01 PR #24 open, merge-ready — awaiting human merge (vsdd-factory#302). develop HEAD = 85c2d2f (pre-merge).
-**Wave 4 scope:** S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 (29 pts). Sub-wave 4A remaining: S-4.02, S-4.03, S-6.01 (not yet started). Sub-wave 4B: S-4.04 blocked on S-4.01 merge.
-**S-4.01 state:** PR #24 MERGE_READY. head_sha ee75d83. 7/7 ACs PASS; adversary 0C/0H 3/3 CONVERGED; security no Crit/High; pr-reviewer APPROVE 0 blocking; CI green. BC-2.02.009 router wiring deferred to S-4.04.
-**Next after S-4.01 merges:** unblock S-4.04; start S-4.02/S-4.03/S-6.01 in parallel.
+**Position:** Phase 3, Wave 4 ACTIVE. S-4.01 MERGED (e415d31, PR #24). PR #23 kos-scaffolding cleanup MERGED (36c5e98). develop HEAD = 36c5e98. 0 open PRs.
+**Wave 4 scope:** S-4.01 (done), S-4.02, S-4.03, S-4.04, S-6.01 (29 pts). Sub-wave 4A remaining: S-4.02, S-4.03, S-6.01 (not yet started). Sub-wave 4B: S-4.04 UNBLOCKED (internal/paths on develop).
+**S-4.01:** COMPLETE — 7/7 ACs, 3/3 adversary clean @ aaff609, merged e415d31. BC-2.02.009 router wiring deferred to S-4.04.
+**Next:** start S-4.02, S-4.03, S-6.01 in parallel; S-4.04 unblocked.
 **Deferred task:** W4-TEST-001 (RouteFrame fire-once E-ADM-017 integration test, owner: test-writer).
 **Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3 (see Drift Items table).
 **S-BL.NI:** ARCH-08 v2.3 §6.5.1 network-ingress listener + E-ADM-017 live-data-path integration test — Wave 4+.
