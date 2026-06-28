@@ -23,9 +23,10 @@ import (
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-// mustDrainOne reads one []byte off ch within timeout or calls t.Fatal.
-func mustDrainOne(t *testing.T, ch <-chan []byte, timeout time.Duration) []byte {
+// mustDrainOne reads one []byte off ch within 100ms or calls t.Fatal.
+func mustDrainOne(t *testing.T, ch <-chan []byte) []byte {
 	t.Helper()
+	const timeout = 100 * time.Millisecond
 	select {
 	case got := <-ch:
 		return got
@@ -47,9 +48,10 @@ func assertNoPending(t *testing.T, ch <-chan []byte) {
 	}
 }
 
-// mustDrainOneDeg reads one DegradationEvent off ch within timeout or calls t.Fatal.
-func mustDrainOneDeg(t *testing.T, ch <-chan arq.DegradationEvent, timeout time.Duration) arq.DegradationEvent {
+// mustDrainOneDeg reads one DegradationEvent off ch within 100ms or calls t.Fatal.
+func mustDrainOneDeg(t *testing.T, ch <-chan arq.DegradationEvent) arq.DegradationEvent {
 	t.Helper()
+	const timeout = 100 * time.Millisecond
 	select {
 	case ev := <-ch:
 		return ev
@@ -151,7 +153,7 @@ func TestARQ_OnAck_NoDuplicateDelivery(t *testing.T) {
 	if err := a.OnAck(1, zeroBitmap()); err != nil {
 		t.Fatalf("first OnAck(1) returned unexpected error: %v", err)
 	}
-	_ = mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	_ = mustDrainOne(t, a.DeliveredFrames)
 
 	// Second OnAck for same sequence — must be idempotent per EC-001;
 	// no frame must be delivered again (would be a double-delivery).
@@ -179,7 +181,7 @@ func TestBC_2_02_005_EC001_IdempotentAck(t *testing.T) {
 	if err := a.OnAck(5, zeroBitmap()); err != nil {
 		t.Fatalf("initial OnAck(5): %v", err)
 	}
-	_ = mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	_ = mustDrainOne(t, a.DeliveredFrames)
 
 	// Re-ACK same seq — must not panic, must not double-deliver.
 	err := a.OnAck(5, zeroBitmap())
@@ -232,7 +234,7 @@ func TestARQ_InOrderDelivery(t *testing.T) {
 	if err := a.OnAck(1, zeroBitmap()); err != nil {
 		t.Fatalf("OnAck(1): %v", err)
 	}
-	got1 := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got1 := mustDrainOne(t, a.DeliveredFrames)
 	if string(got1) != "one" {
 		t.Errorf("expected first delivered = %q, got %q", "one", got1)
 	}
@@ -243,11 +245,11 @@ func TestARQ_InOrderDelivery(t *testing.T) {
 	if err := a.OnAck(2, zeroBitmap()); err != nil {
 		t.Fatalf("OnAck(2): %v", err)
 	}
-	got2 := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got2 := mustDrainOne(t, a.DeliveredFrames)
 	if string(got2) != "two" {
 		t.Errorf("expected second delivered = %q, got %q", "two", got2)
 	}
-	got3 := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got3 := mustDrainOne(t, a.DeliveredFrames)
 	if string(got3) != "three" {
 		t.Errorf("expected third delivered = %q, got %q", "three", got3)
 	}
@@ -275,7 +277,7 @@ func TestBC_2_02_005_InOrder_CanonicalVector(t *testing.T) {
 		t.Fatalf("OnAck(1, sack={seq3}): %v", err)
 	}
 	// seq 1 must be delivered; seq 3 buffered; seq 2 not yet.
-	got1 := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got1 := mustDrainOne(t, a.DeliveredFrames)
 	if string(got1) != "seq1" {
 		t.Errorf("expected seq1, got %q", got1)
 	}
@@ -285,11 +287,11 @@ func TestBC_2_02_005_InOrder_CanonicalVector(t *testing.T) {
 	if err := a.OnAck(2, zeroBitmap()); err != nil {
 		t.Fatalf("OnAck(2): %v", err)
 	}
-	got2 := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got2 := mustDrainOne(t, a.DeliveredFrames)
 	if string(got2) != "seq2" {
 		t.Errorf("expected seq2, got %q", got2)
 	}
-	got3 := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got3 := mustDrainOne(t, a.DeliveredFrames)
 	if string(got3) != "seq3" {
 		t.Errorf("expected seq3, got %q", got3)
 	}
@@ -393,7 +395,7 @@ func TestARQ_TLPKTDROP_TerminatesOverdueFrame(t *testing.T) {
 	}
 
 	// A DegradationEvent must be emitted identifying the dropped sequence.
-	ev := mustDrainOneDeg(t, a.DegradationEvents, 100*time.Millisecond)
+	ev := mustDrainOneDeg(t, a.DegradationEvents)
 	if ev.DroppedSeq != 50 {
 		t.Errorf("DegradationEvent.DroppedSeq: want 50, got %d", ev.DroppedSeq)
 	}
@@ -423,7 +425,7 @@ func TestBC_2_02_006_TLPKTDROP_FiresExactlyOnce(t *testing.T) {
 	if err := a.TLPKTDROP(10, now); err != nil {
 		t.Fatalf("first TLPKTDROP(10): %v", err)
 	}
-	_ = mustDrainOneDeg(t, a.DegradationEvents, 100*time.Millisecond)
+	_ = mustDrainOneDeg(t, a.DegradationEvents)
 
 	// Second call: must NOT emit a second degradation event.
 	_ = a.TLPKTDROP(10, now) // error expected; don't care which one
@@ -449,13 +451,13 @@ func TestBC_2_02_006_TLPKTDROP_SessionContinues(t *testing.T) {
 	if err := a.TLPKTDROP(50, now); err != nil {
 		t.Fatalf("TLPKTDROP(50): %v", err)
 	}
-	_ = mustDrainOneDeg(t, a.DegradationEvents, 100*time.Millisecond)
+	_ = mustDrainOneDeg(t, a.DegradationEvents)
 
 	// ACK seq 51 (next frame after the drop) — must be deliverable.
 	if err := a.OnAck(51, zeroBitmap()); err != nil {
 		t.Fatalf("OnAck(51) after TLPKTDROP: %v", err)
 	}
-	got := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got := mustDrainOne(t, a.DeliveredFrames)
 	if string(got) != "next" {
 		t.Errorf("expected 'next' after session continues, got %q", got)
 	}
@@ -551,7 +553,7 @@ func TestBC_2_02_006_OnlyOverdue_TableDriven(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 				}
 				if tc.wantDegrade {
-					ev := mustDrainOneDeg(t, a.DegradationEvents, 100*time.Millisecond)
+					ev := mustDrainOneDeg(t, a.DegradationEvents)
 					if ev.DroppedSeq != 1 {
 						t.Errorf("DegradationEvent.DroppedSeq: want 1, got %d", ev.DroppedSeq)
 					}
@@ -598,7 +600,7 @@ func TestBC_2_02_005_EC002_SACKWholeWindowGap(t *testing.T) {
 		if err := a.OnAck(i, zeroBitmap()); err != nil {
 			t.Fatalf("OnAck(%d): %v", i, err)
 		}
-		_ = mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+		_ = mustDrainOne(t, a.DeliveredFrames)
 	}
 	assertNoPending(t, a.DeliveredFrames)
 }
@@ -630,7 +632,7 @@ func TestBC_2_02_006_EC003_TLPKTDROPDuringFailover(t *testing.T) {
 	}
 
 	// Degradation signal must be emitted.
-	ev := mustDrainOneDeg(t, a.DegradationEvents, 100*time.Millisecond)
+	ev := mustDrainOneDeg(t, a.DegradationEvents)
 	if ev.DroppedSeq != 99 {
 		t.Errorf("DegradationEvent.DroppedSeq: want 99, got %d", ev.DroppedSeq)
 	}
@@ -641,7 +643,7 @@ func TestBC_2_02_006_EC003_TLPKTDROPDuringFailover(t *testing.T) {
 	if err := a.OnAck(100, zeroBitmap()); err != nil {
 		t.Fatalf("OnAck(100) after failover resync: %v", err)
 	}
-	got := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got := mustDrainOne(t, a.DeliveredFrames)
 	if string(got) != "post-failover" {
 		t.Errorf("expected 'post-failover' after resync, got %q", got)
 	}
@@ -788,7 +790,7 @@ func TestBC_2_02_006_VP021_TLPKTDROPNotSessionTermination(t *testing.T) {
 		if err := a.TLPKTDROP(i, now); err != nil {
 			t.Fatalf("TLPKTDROP(%d): %v", i, err)
 		}
-		ev := mustDrainOneDeg(t, a.DegradationEvents, 100*time.Millisecond)
+		ev := mustDrainOneDeg(t, a.DegradationEvents)
 		if ev.DroppedSeq != i {
 			t.Errorf("drop %d: DegradationEvent.DroppedSeq: want %d, got %d", i, i, ev.DroppedSeq)
 		}
@@ -799,7 +801,7 @@ func TestBC_2_02_006_VP021_TLPKTDROPNotSessionTermination(t *testing.T) {
 	if err := a.OnAck(11, zeroBitmap()); err != nil {
 		t.Fatalf("OnAck(11) after 10 drops: %v", err)
 	}
-	got := mustDrainOne(t, a.DeliveredFrames, 100*time.Millisecond)
+	got := mustDrainOne(t, a.DeliveredFrames)
 	if string(got) != "alive" {
 		t.Errorf("expected 'alive' after 10 drops, got %q", got)
 	}
