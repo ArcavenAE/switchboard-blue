@@ -17,11 +17,11 @@
 //   - PC-2.6: sc.Err() non-nil after Connect → E-SYS-002 log → cancel → exit 1
 //     (AC-007; BC-2.04.007 v1.1 PC-2.6/EC-007/Inv-5).
 //
-// FORBIDDEN imports: internal/config, internal/drain, internal/metrics
-// Build fails because internal/config, internal/drain, internal/metrics do not
-// yet exist on develop; a durable go-list CI assertion enforcing this boundary
-// after those packages land is deferred to Wave 4.
-// (ARCH-08 §6.5.2 deferred packages; ARCH-01 ADR-011 v1.5 §EC-005; task 13.)
+// Dependency boundary (ARCH-08 §6.5.2; ARCH-01 ADR-011 v1.5 §EC-005):
+//   - internal/config: PERMITTED — wired as of S-6.01/Wave 4 (tickIntervalFor,
+//     runAccess config parameter). Import is present and intentional.
+//   - internal/drain:   NOT imported — still deferred; do not add without a story.
+//   - internal/metrics: NOT imported — still deferred; do not add without a story.
 package main
 
 import (

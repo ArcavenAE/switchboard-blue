@@ -451,7 +451,7 @@ func (a *ARQ) GapsToRetransmit(ackSeq uint32, sackBitmap [SACKBitmapBytes]byte) 
 // tests to assert the bitmap accurately reflects received/missing frames
 // (BC-2.02.005 SACK-accuracy clause; VP-019/VP-020).
 //
-// Uses math/bits.OnesCount64 via encoding/binary for a one-line body.
+// Uses math/bits.OnesCount64 for a one-line body.
 func SACKPopCount(bitmap [SACKBitmapBytes]byte) int {
 	return bits.OnesCount64(bitmapToUint64(bitmap))
 }
