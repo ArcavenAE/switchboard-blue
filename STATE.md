@@ -64,17 +64,23 @@ s_4_01_merge_date: 2026-06-28
 s_4_01_status: completed
 s_4_01_head_sha: ee75d83
 s_4_01_demo_evidence: "7/7 ACs PASS (test-transcript based, S-W3.04 precedent); race-clean"
-s_4_02_adversary_streak: 0
-s_4_02_tip: 73781a4
-s_4_02_tip_note: "comment/anchor-only changes since last clean pass; needs FRESH 3-consecutive-clean at 73781a4"
+s_4_02_adversary_streak: 3
+s_4_02_adversary_converged: true
+s_4_02_tip: d7a1925
+s_4_02_pr_number: 25
+s_4_02_pr_status: "MERGE-READY (human-merge gate)"
+s_4_02_demo_evidence: "4/4 ACs PASS, race-clean"
 s_4_02_ruling: "RULING-002 + Amendment 1 — cycles/cycle-1/S-4.02/adversary/spec-adjudication.md"
-s_4_03_adversary_streak: 0
-s_4_03_tip: 34bc98f
-s_4_03_tip_note: "3/3 clean at d4899ed; cosmetic relabel at 34bc98f → re-confirm 3 clean at 34bc98f before merge"
-s_4_03_ruling: "RULING-003 v1.1 — cycles/cycle-1/S-4.03/adversary/ackseq-dos-ruling.md"
+s_4_03_adversary_streak: 3
+s_4_03_adversary_converged: true
+s_4_03_tip: 02f317d
+s_4_03_pr_number: 26
+s_4_03_pr_status: "MERGE-READY (human-merge gate)"
+s_4_03_demo_evidence: "5/5 ACs PASS, race-clean"
+s_4_03_ruling: "RULING-003 v1.1 — cycles/cycle-1/S-4.03/adversary/ackseq-dos-ruling.md; F-A-001 VP-052 mis-anchor fixed @ 02f317d (re-anchored to BC-2.02.005 SACK-accuracy / VP-019-020; story v1.1)"
 develop_head: 36c5e98
-open_prs: 0
-timestamp: 2026-06-28T22:00:00Z
+open_prs: 2
+timestamp: 2026-06-28T23:00:00Z
 last_update: 2026-06-28
 ---
 
@@ -82,7 +88,7 @@ last_update: 2026-06-28
 
 ## Current State
 
-Wave 4 ACTIVE. S-4.01 MERGED (e415d31, PR #24, 7/7 ACs, 3/3 adversary clean). S-4.02 (internal/replay) + S-4.03 (internal/arq) at final converged-candidate tips (73781a4 / 34bc98f) — comment/anchor/rename-only since last clean passes; FRESH confirmation rounds required before merge. develop HEAD = 36c5e98. 0 open PRs. DRIFT-S4.03-001 added (ADR-005 resync-on-reconnect deferred to S-5.01). Rulings on disk: RULING-002+Amendment-1 (S-4.02), RULING-003-v1.1 (S-4.03).
+Wave 4 ACTIVE. S-4.01 MERGED (e415d31, PR #24). S-4.02 (internal/replay) CONVERGED 3/3 clean @ d7a1925 — PR #25 MERGE-READY, awaiting human-merge gate. S-4.03 (internal/arq) CONVERGED 3/3 clean @ 02f317d — PR #26 MERGE-READY, awaiting human-merge gate. F-A-001 VP-052 mis-anchor (HIGH) found + fixed during S-4.03 confirm round; re-anchored to BC-2.02.005 SACK-accuracy / VP-019-020; story v1.1. develop HEAD = 36c5e98. 2 open PRs (#25, #26). Rulings on disk: RULING-002+Amendment-1 (S-4.02), RULING-003-v1.1 (S-4.03).
 
 ## Phase Progress
 
@@ -90,7 +96,7 @@ Wave 4 ACTIVE. S-4.01 MERGED (e415d31, PR #24, 7/7 ACs, 3/3 adversary clean). S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 MERGED; S-4.02/03/06.01 pending) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01 adversary 3/3 CLEAN @ aaff609; MERGED e415d31 |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 3: CLOSED; Wave 4: ACTIVE (S-4.01 MERGED; S-4.02 #25 + S-4.03 #26 MERGE-READY) | 2026-06-28 | Wave 3: 3/3 CLEAN; Wave 4: S-4.01 MERGED; S-4.02 3/3 CLEAN; S-4.03 3/3 CLEAN |
 
 ## Wave / Story Status
 
@@ -99,8 +105,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | Wave | Story | Title | Status | PR | SHA |
 |------|-------|-------|--------|----|-----|
 | 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | completed | #24 | e415d31 |
-| 4 | S-4.02 | Upstream replay (internal/replay) | in-progress — confirm-round pending | — | 73781a4 |
-| 4 | S-4.03 | Downstream ARQ + TLPKTDROP (internal/arq) | in-progress — confirm-round pending | — | 34bc98f |
+| 4 | S-4.02 | Upstream replay (internal/replay) | MERGE-READY — human-merge gate | #25 | d7a1925 |
+| 4 | S-4.03 | Downstream ARQ + TLPKTDROP (internal/arq) | MERGE-READY — human-merge gate | #26 | 02f317d |
 
 ## Open Drift Items
 
@@ -120,6 +126,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | S403-O4 | LOW | S-4.03: DegradationEvent single-seq vs BC-2.02.006 PC2 range — per-frame drop OK for MVP. | product-owner | deferred MVP |
 | S403-H1-DEFER | MED | S-4.03: retransmit-SEND PC3 deferred to router/multipath wiring story. | product-owner/architect | deferred |
 | DRIFT-S4.03-001 | MED | ADR-005 resync-on-reconnect wire-mechanics deferred to S-5.01. | architect/implementer | open deferred S-5.01 |
+| S403-COS1 | OBS | S-4.03 arq.go SACKPopCount doc comment stale ref to "encoding/binary" (uses package-local bitmapToUint64). | implementer | deferred (cosmetic; avoids re-triggering BC-5.39.001 on converged artifact) |
+| S403-COS2 | OBS | S-4.03 arq_test.go:949 leftover "GREEN-BY-DESIGN per stub notes" docstring (now a real characterisation test). | implementer | deferred (cosmetic, same rationale) |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -132,32 +140,26 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Console/access key permissions | control > console > access (ADR-004, ARCH-04) | 2026-06-23 |
 | HMAC keying | per-(node, svtn) HKDF using node_admission_pubkey as IKM (ADR-001 amended) | 2026-06-23 |
 | Marvel integration | explicitly deferred — no MVP integration | 2026-06-24 |
-| Wave 3 gate APPROVED | 3/3 adversary clean; carry 5 deferrals + process-gap #7 to Wave 4 (2026-06-27) | 2026-06-27 |
+| Wave 3 gate APPROVED | 3/3 adversary clean; carry 5 deferrals + process-gap #7 to Wave 4 | 2026-06-27 |
 | Per-story merge classifier (vsdd-factory#302) | Agent self-merge blocked; human-performed merge is correct resolution | 2026-06-27 |
 | S-4.01 MERGED (e415d31, PR #24) | 7/7 ACs, 3/3 adversary clean; BC-2.02.009 router wiring deferred to S-4.04 | 2026-06-28 |
 | S-4.02 RULING-002 + Amendment 1 | VP-042 removed; AC-004 per-call guard; BC-2.02.004 v1.3 invariant-5; AC-003 anchor corrected; story v1.2 | 2026-06-28 |
 | S-4.03 RULING-003 v1.1 | ackSeq-DoS guard verified; EC-004→EC-005; BC-2.02.005 v1.3; ARCH-03 v1.3; DRIFT-S4.03-001 | 2026-06-28 |
-| S-4.02 confirm-round at ce2ae7c → tip 73781a4 | 1/3 clean; F-001 HIGH + F-002 MED fixed via RULING-002; streak 0; re-confirm required | 2026-06-28 |
-| S-4.03 confirm-round at d4899ed → tip 34bc98f | 3/3 CONVERGED; cosmetic relabel → streak 0; re-confirm at 34bc98f before merge | 2026-06-28 |
+| S-4.02 CONVERGED 3/3 + PR #25 | fresh 6-pass confirmation round 3/3 clean @ 73781a4; CI fix @ d7a1925 (race-build-tag latency skip); merge-ready | 2026-06-28 |
+| S-4.03 F-A-001 VP-052 mis-anchor (NEW HIGH) | fresh confirm-round Pass A found VP-052 (belongs to S-5.01/internal/metrics) wrongly anchored to SACK pop-count; fixed @ 02f317d + story v1.1; re-confirmed 3/3 clean; PR #26 merge-ready | 2026-06-28 |
 Older decisions (Wave 3 per-story): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-28 (Wave 4 — S-4.02/S-4.03 confirmation-round pause)
+## Session Resume Checkpoint — 2026-06-28 (Wave 4 — S-4.02/S-4.03 at human-merge gate)
 
-**Position:** Phase 3 Wave 4 ACTIVE. S-4.01 merged (e415d31). S-4.02 + S-4.03 in parallel per-story delivery, both at final converged-candidate tips (S-4.02 tip 73781a4, S-4.03 tip 34bc98f). develop HEAD 36c5e98. 0 open PRs.
+**Position:** Phase 3 Wave 4. S-4.01 MERGED (#24). S-4.02 (#25, tip d7a1925) + S-4.03 (#26, tip 02f317d) BOTH CONVERGED 3/3 and MERGE-READY, awaiting HUMAN-MERGE GATE. develop HEAD still 36c5e98 (neither PR merged yet). 0 prior open PRs; now 2 open (#25, #26).
 
-**NEXT ACTION on resume** (paused before final confirmation round to conserve context): run ONE fresh 6-pass adversarial confirmation round (3 passes per story, diverse lenses) at tips 73781a4 / 34bc98f. Both stories carry ONLY comment/anchor/rename changes since their last reviews — expectation 0C/0H — but BC-5.39.001 requires 3 consecutive clean passes on the FINAL unchanged artifact. If both converge 0C/0H ×3, proceed per per-story-delivery.md: demo-recorder → push → pr-manager full PR lifecycle → human-merge gate → worktree cleanup, for each story. Dispatch state-manager LAST.
+**NEXT ACTION on resume:** (1) Human merges PR #25 and #26 into develop (agent self-merge blocked per vsdd-factory#302). (2) After both merges: worktree cleanup for .worktrees/S-4.02 and .worktrees/S-4.03; update phase_3_completed_stories to include S-4.02, S-4.03; clear phase_3_active_stories. (3) Assess remaining Wave 4 scope — S-4.04 (split-horizon, BC-2.02.009 router wiring deferred from S-4.01) and S-6.01 pending; confirm Wave 4 story set, then proceed or run Wave 4 adversarial gate + wave-gate if all Wave 4 stories are delivered.
 
-**Worktrees:** feat/S-4.02-upstream-replay @ .worktrees/S-4.02 (tip 73781a4); feat/S-4.03-downstream-arq-tlpktdrop @ .worktrees/S-4.03 (tip 34bc98f). Both clean; just fmt/lint/test/test-race all pass.
+**Worktrees:** .worktrees/S-4.02 (feat/S-4.02-upstream-replay @ d7a1925), .worktrees/S-4.03 (feat/S-4.03-downstream-arq-tlpktdrop @ 02f317d) — both clean, all gates pass, both pushed.
 
-**S-4.02 adversary history:** Pass-4 clean (pre-cleanup, superseded). Confirmation round at ce2ae7c: 1/3 clean; F-001 HIGH (test-docstring mis-anchor) + F-001/F-002 MED (AC-003 AC-004 anchors) all fixed via RULING-002 + Amendment 1. Streak = 0. Rulings on disk: cycles/cycle-1/S-4.02/adversary/spec-adjudication.md.
+**Do NOT re-open settled rulings** (RULING-001/002/002-A1/003-v1.1) or the now-fixed F-A-001 unless a fresh pass finds a NEW Critical/High.
 
-**S-4.03 adversary history:** 3/3 CONVERGED at d4899ed (RULING-003 v1.1 ackSeq-DoS guard verified). Cosmetic relabel at 34bc98f → recommend fresh confirm at 34bc98f. Streak = 0. Rulings on disk: cycles/cycle-1/S-4.03/adversary/ackseq-dos-ruling.md.
-
-**Do NOT re-open settled rulings** (RULING-001/002/002-A1/003-v1.1) unless a fresh pass finds a NEW Critical/High.
-
-**Context-pause rationale:** Session paused for context-compression management after ~1.3 convergence cycles (~28 agent runs since last compaction); the expensive 6-pass confirmation round + dual PR lifecycle was deferred to a fresh session to avoid mid-PR compaction.
-
-**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4, DRIFT-S4.03-001 (see Drift Items table). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Open Drift Items:** W3-DEFER-1..6, W3-R2-M2, SW305-M4/W4-TEST-001, S401-O3, S402-F007, S403-H1-DEFER, S403-O4, DRIFT-S4.03-001, S403-COS1, S403-COS2 (see Drift Items table). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 ## Historical Content
 
