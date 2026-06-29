@@ -574,8 +574,8 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	// Connection is now authenticated.
 	authenticated := true
 
-	// Step 11: Apply RPCIdleTimeout before reading the first RPC.
-	if err := conn.SetReadDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
+	// Step 11: Apply s.rpcIdleTimeout before reading the first RPC.
+	if err := conn.SetReadDeadline(time.Now().Add(s.rpcIdleTimeout)); err != nil {
 		return
 	}
 
@@ -657,8 +657,8 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 			}
 		}
 
-		// Write deadline for RPC response (Ruling E / VP-072): use RPCIdleTimeout.
-		if err := conn.SetWriteDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
+		// Write deadline for RPC response (Ruling E / VP-072): use s.rpcIdleTimeout.
+		if err := conn.SetWriteDeadline(time.Now().Add(s.rpcIdleTimeout)); err != nil {
 			return
 		}
 		if err := sendJSON(conn, resp); err != nil {
@@ -666,8 +666,8 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		}
 		_ = conn.SetWriteDeadline(time.Time{})
 
-		// Re-apply RPCIdleTimeout before reading the next RPC.
-		if err := conn.SetReadDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
+		// Re-apply s.rpcIdleTimeout before reading the next RPC.
+		if err := conn.SetReadDeadline(time.Now().Add(s.rpcIdleTimeout)); err != nil {
 			return
 		}
 	}
