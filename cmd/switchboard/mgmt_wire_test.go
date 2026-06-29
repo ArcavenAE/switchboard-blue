@@ -26,6 +26,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -45,6 +47,22 @@ func mustGenKeyWire(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	return pub, priv
+}
+
+// tempSockPath creates a temporary directory with a short path and returns the
+// path to a socket file within it. Uses os.MkdirTemp with a brief prefix to
+// stay well under the 104-character Unix socket path limit on macOS (sockaddr_un
+// sun_path is 104 bytes on Darwin, 108 on Linux).
+//
+// The directory is removed via t.Cleanup.
+func tempSockPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "sb-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "m.sock")
 }
 
 // ── mgmtDefaultSocket and mgmtNetwork ─────────────────────────────────────────
@@ -152,76 +170,113 @@ func TestResolveManagementSocket(t *testing.T) {
 
 // ── buildMgmtListener ─────────────────────────────────────────────────────────
 
-// TestBuildMgmtListener_NotImplemented verifies that buildMgmtListener currently
-// returns a "not implemented" error (Red Gate). Once implemented, it must return
-// a real net.Listener.
+// TestBuildMgmtListener verifies that buildMgmtListener returns a working
+// net.Listener for a valid socket path and an error for an un-bindable path.
 //
-// Traces: S-W5.01 AC-010 / ARCH-12 §Wiring (Red Gate).
-func TestBuildMgmtListener_NotImplemented(t *testing.T) {
+// Uses t.TempDir() for hermetic, OS-independent socket paths — never binds to
+// system paths like /run/ which do not exist on macOS.
+//
+// Traces: S-W5.01 AC-010 / ARCH-12 §Wiring.
+func TestBuildMgmtListener(t *testing.T) {
 	t.Parallel()
 
-	cfg := &config.Config{}
-	ln, err := buildMgmtListener(cfg, "router")
-	if err == nil {
-		// Stub is implemented — skip this test; it becomes a regression guard.
+	t.Run("valid_unix_socket_returns_listener", func(t *testing.T) {
+		t.Parallel()
+
+		sockPath := tempSockPath(t)
+		cfg := &config.Config{ManagementSocket: sockPath}
+
+		ln, err := buildMgmtListener(cfg, "router")
+		if err != nil {
+			t.Fatalf("buildMgmtListener: got error %v; want nil", err)
+		}
+		if ln == nil {
+			t.Fatal("buildMgmtListener: got nil listener; want non-nil")
+		}
+		t.Cleanup(func() { _ = ln.Close() })
+
+		// Addr must reflect the bound socket path.
+		if !strings.Contains(ln.Addr().String(), sockPath) {
+			t.Errorf("listener Addr = %q; want it to contain %q", ln.Addr().String(), sockPath)
+		}
+	})
+
+	t.Run("invalid_path_returns_error", func(t *testing.T) {
+		t.Parallel()
+
+		// A path into a non-existent directory is un-bindable on all platforms.
+		cfg := &config.Config{ManagementSocket: "/nonexistent-dir-sbtest/mgmt.sock"}
+
+		ln, err := buildMgmtListener(cfg, "router")
+		if err == nil {
+			_ = ln.Close()
+			t.Fatal("buildMgmtListener(bad path): got nil error; want error")
+		}
+		// Listener must be nil on error.
 		if ln != nil {
 			_ = ln.Close()
+			t.Error("buildMgmtListener(bad path): got non-nil listener with error")
 		}
-		t.Skip("buildMgmtListener is implemented; Red Gate test no longer applies")
-		return
-	}
-	// Red Gate: error must mention "not implemented".
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("buildMgmtListener: want 'not implemented' error; got %q", err.Error())
-	}
+	})
 }
 
 // ── startMgmtServer ───────────────────────────────────────────────────────────
 
-// TestStartMgmtServer_NotImplemented verifies that startMgmtServer returns a
-// "not implemented" error (Red Gate). Once implemented it must:
-//   - Open the management listener
-//   - Construct mgmt.NewServer with the listener, daemon key, operator keys, handlers
-//   - Launch a WaitGroup-tracked goroutine: wg.Add(1); go func() { defer wg.Done(); srv.Serve(ctx) }()
-//   - Return the *mgmt.Server so the caller can Shutdown it
+// TestStartMgmtServer verifies that startMgmtServer:
+//   - Opens the management listener on a hermetic temp-dir socket path
+//   - Returns a non-nil *mgmt.Server with nil error
+//   - Launches a WaitGroup-tracked goroutine that drains on ctx cancel (ARCH-01)
+//   - Shuts down cleanly via Shutdown
 //
-// Traces: S-W5.01 AC-010, ARCH-12 §Wiring (Red Gate).
-func TestStartMgmtServer_NotImplemented(t *testing.T) {
+// Uses t.TempDir() for hermetic, OS-independent socket paths.
+//
+// Traces: S-W5.01 AC-010, ARCH-12 §Wiring (Goroutine WaitGroup Contract).
+func TestStartMgmtServer(t *testing.T) {
 	t.Parallel()
 
 	_, daemonPriv := mustGenKeyWire(t)
+	sockPath := tempSockPath(t)
 	cfg := &config.Config{
-		ListenAddr:   "0.0.0.0:9090",
-		TickInterval: 10 * time.Millisecond,
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	var wg sync.WaitGroup
 
 	srv, err := startMgmtServer(ctx, &wg, cfg, "router", daemonPriv, nil)
-	if err == nil {
-		// Implementation is present — verify it returned a non-nil Server.
-		if srv == nil {
-			t.Error("startMgmtServer returned nil Server with nil error")
-		}
-		// Cleanup: shutdown the server if it started.
-		shutCtx, shutCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-		defer shutCancel()
-		if srv != nil {
-			_ = srv.Shutdown(shutCtx)
-		}
+	if err != nil {
 		cancel()
-		wg.Wait()
-		t.Skip("startMgmtServer is implemented; Red Gate test no longer applies")
-		return
+		t.Fatalf("startMgmtServer: got error %v; want nil", err)
+	}
+	if srv == nil {
+		cancel()
+		t.Fatal("startMgmtServer: got nil Server with nil error")
 	}
 
-	// Red Gate: must return "not implemented" error.
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("startMgmtServer: want 'not implemented' error; got %q", err.Error())
+	// Cancel context → Serve returns → wg.Done() is called (ARCH-01 WaitGroup contract).
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// WaitGroup drained — goroutine lifecycle contract satisfied.
+	case <-time.After(500 * time.Millisecond):
+		t.Error("WaitGroup.Wait() did not complete within 500ms after context cancel; " +
+			"mgmt goroutine must call wg.Done() on Serve return (ARCH-01 §Goroutine WaitGroup Contract)")
 	}
+
+	// Shutdown for final cleanup (idempotent if Serve already returned).
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	t.Cleanup(shutCancel)
+	_ = srv.Shutdown(shutCtx)
 }
 
 // ── WaitGroup lifecycle contract ──────────────────────────────────────────────
