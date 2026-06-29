@@ -1918,6 +1918,243 @@ func TestWriteDeadline_SlowlorisDefense_VP072(t *testing.T) {
 	time.Sleep(30 * time.Millisecond) // let goroutines drain for test cleanup
 }
 
+// ── VP-072 / AC-018: RPC-response write-deadline uses s.rpcIdleTimeout field ──
+
+// TestWriteDeadline_RPCResponse_VP072_Round5F4 verifies that the RPC-response
+// write deadline on line 661 of mgmt.go uses the injectable s.rpcIdleTimeout
+// field (set by WithRPCIdleTimeout), NOT the package constant RPCIdleTimeout (30s).
+//
+// This is the Round-5 Finding 4 discriminating test. The existing
+// TestWriteDeadline_SlowlorisDefense_VP072 only exercises the handshake-phase
+// write path (CHALLENGE send, client never reads). This test exercises the
+// RPC-response write path: client completes auth, sends one RPC, then stops
+// reading. The server's sendJSON for the response blocks on the net.Pipe write
+// because the client is not draining. With the constant (current code at line 661),
+// the write deadline is 30s — the goroutine remains pinned far past our 500ms
+// bound. With the field fix (s.rpcIdleTimeout, 50ms), the goroutine exits within
+// ~50ms + overhead.
+//
+// Discriminating property:
+//   - CURRENT CODE (bug): line 661 uses RPCIdleTimeout (30s constant).
+//     WithRPCIdleTimeout(50ms) reaches s.rpcIdleTimeout but NOT the write deadline.
+//     The connection goroutine is still pinned at the 500ms measurement point → RED.
+//   - FIXED CODE: line 661 uses s.rpcIdleTimeout (50ms).
+//     Write deadline fires at ~50ms → goroutine exits → count drops → GREEN.
+//
+// Test strategy: net.Pipe (no internal buffer) + goroutine counting.
+// A handshake helper goroutine reads CHALLENGE, sends CHALLENGE_RESPONSE, reads
+// AUTH_OK (so handshake writes don't block), then sends one RPC request and
+// signals via rpcSent channel before returning (stopping all client-side reads).
+// The main goroutine waits for rpcSent, then waits for the 50ms write deadline
+// to fire, then measures goroutine count before closing the pipe.
+//
+// No t.Parallel: goroutine-count measurements are sensitive to concurrent load.
+//
+// Traces: BC-2.07.004 PC-1 (amended, Ruling E), AC-018, VP-072.
+func TestWriteDeadline_RPCResponse_VP072_Round5F4(t *testing.T) {
+	// NOT t.Parallel(): measures goroutine counts; concurrent goroutines from other
+	// tests would introduce false-positive goroutine-leak readings.
+
+	_, daemonPriv := mustGenKey(t)
+	opPub, opPriv := mustGenKey(t)
+	keySet := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+	// Register a handler that returns a small result immediately (not a blocking handler).
+	// We need the handler to SUCCEED quickly so the server reaches sendJSON for the
+	// response — the blocking happens in the write, not the handler.
+	quickHandler := mgmt.Handler{
+		Command: "test.quick",
+		Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+			return map[string]string{"result": "ok"}, nil
+		},
+	}
+
+	// Use a singleConnListener backed by net.Pipe so we control both sides.
+	// Manage pipe lifecycle manually — we need to close AFTER measuring goroutines.
+	serverConn, clientConn := net.Pipe()
+
+	ln := newSingleConnListener(serverConn)
+	// Construct server with:
+	//   - WithHandshakeTimeout(200ms): generous budget so the handshake completes fast
+	//     without waiting for the 10s production default. The handshake write deadline
+	//     does NOT need to be the discriminating variable here.
+	//   - WithRPCIdleTimeout(50ms): this is what the test discriminates on.
+	//     CURRENT BUG: line 661 uses RPCIdleTimeout (30s) not s.rpcIdleTimeout (50ms).
+	//     FIXED CODE: line 661 uses s.rpcIdleTimeout (50ms) — write deadline fires at ~50ms.
+	srv := mgmt.NewServer(ln, daemonPriv, keySet, []mgmt.Handler{quickHandler}, "dev",
+		mgmt.WithHandshakeTimeout(200*time.Millisecond),
+		mgmt.WithRPCIdleTimeout(50*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Measure goroutine baseline BEFORE starting Serve.
+	gorsBefore := runtime.NumGoroutine()
+
+	go func() {
+		_ = srv.Serve(ctx)
+	}()
+
+	// rpcSent is closed by the handshake goroutine after it has:
+	//   1. Completed the ADR-012 handshake (CHALLENGE → CHALLENGE_RESPONSE → AUTH_OK)
+	//   2. Sent one RPC request ("test.quick")
+	//   3. Returned — no further reads from clientConn
+	// After rpcSent is closed, clientConn is dead to the server's response write.
+	rpcSent := make(chan struct{})
+	handshakeDone := make(chan error, 1)
+
+	go func() {
+		// Give Serve time to accept the connection and spawn the connection goroutine.
+		time.Sleep(10 * time.Millisecond)
+
+		// Step 1: Read the CHALLENGE. This must succeed — the server writes it with
+		// a 200ms handshake deadline. The client is reading here so it does not block.
+		dec := json.NewDecoder(clientConn)
+		var challenge struct {
+			Type  string `json:"type"`
+			Nonce string `json:"nonce"`
+		}
+		if err := dec.Decode(&challenge); err != nil {
+			handshakeDone <- fmt.Errorf("read challenge: %w", err)
+			return
+		}
+		if challenge.Type != "challenge" {
+			handshakeDone <- fmt.Errorf("expected challenge, got %q", challenge.Type)
+			return
+		}
+
+		// Step 2: Send CHALLENGE_RESPONSE.
+		nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+		if err != nil {
+			handshakeDone <- fmt.Errorf("decode nonce: %w", err)
+			return
+		}
+		sig := ed25519.Sign(opPriv, nonceBytes)
+		resp, err := json.Marshal(map[string]any{
+			"type":      "challenge_response",
+			"nonce_sig": base64.RawURLEncoding.EncodeToString(sig),
+			"pubkey":    base64.RawURLEncoding.EncodeToString([]byte(opPub)),
+		})
+		if err != nil {
+			handshakeDone <- fmt.Errorf("marshal challenge_response: %w", err)
+			return
+		}
+		resp = append(resp, '\n')
+		if _, err := clientConn.Write(resp); err != nil {
+			handshakeDone <- fmt.Errorf("write challenge_response: %w", err)
+			return
+		}
+
+		// Step 3: Read AUTH_OK. The server writes it with the handshake write deadline.
+		// The client is reading here so it does not block.
+		var authResp struct {
+			Type string `json:"type"`
+		}
+		if err := dec.Decode(&authResp); err != nil {
+			handshakeDone <- fmt.Errorf("read auth response: %w", err)
+			return
+		}
+		if authResp.Type != "auth_ok" {
+			handshakeDone <- fmt.Errorf("expected auth_ok, got %q", authResp.Type)
+			return
+		}
+
+		// Step 4: Send ONE RPC request to the server. After this write, we return
+		// immediately — no further reads from clientConn.
+		// The server will decode the request, execute the quick handler (immediate
+		// return), then attempt sendJSON(response) — which blocks because the client
+		// pipe is not being drained (net.Pipe has no internal buffer).
+		rpcMsg, err := json.Marshal(map[string]any{
+			"type":    "request",
+			"id":      "req-vp072-rpcwrite",
+			"command": "test.quick",
+			"args":    map[string]any{},
+		})
+		if err != nil {
+			handshakeDone <- fmt.Errorf("marshal rpc request: %w", err)
+			return
+		}
+		rpcMsg = append(rpcMsg, '\n')
+		if _, err := clientConn.Write(rpcMsg); err != nil {
+			handshakeDone <- fmt.Errorf("write rpc request: %w", err)
+			return
+		}
+
+		// Signal that the RPC request has been sent and we are no longer reading.
+		close(rpcSent)
+		handshakeDone <- nil
+	}()
+
+	// Wait for the handshake goroutine to complete (or fail).
+	select {
+	case err := <-handshakeDone:
+		if err != nil {
+			// Close the pipe to unblock any stuck goroutine before aborting.
+			_ = clientConn.Close()
+			_ = serverConn.Close()
+			cancel()
+			t.Fatalf("VP-072 RPC-response: handshake/rpc-send failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		_ = clientConn.Close()
+		_ = serverConn.Close()
+		cancel()
+		t.Fatal("VP-072 RPC-response: handshake did not complete within 2s")
+	}
+
+	// The RPC request has been sent. The server is now:
+	//   1. Decoding the RPC request (fast — the bytes are already in the pipe)
+	//   2. Running the quick handler (immediate return)
+	//   3. Hitting conn.SetWriteDeadline(time.Now().Add(RPCIdleTimeout)) at line 661
+	//      BUG: uses the 30s constant, not s.rpcIdleTimeout (50ms)
+	//   4. Attempting sendJSON(response) — blocks because client is not reading
+	//
+	// With the constant (30s): write deadline does NOT fire within our 500ms bound.
+	// The connection goroutine stays pinned → goroutine count stays elevated → RED.
+	//
+	// With the field fix (50ms): write deadline fires at ~50ms → goroutine exits
+	// → goroutine count drops back to baseline → GREEN.
+
+	gorsAfterRPC := runtime.NumGoroutine()
+	t.Logf("VP-072 RPC-response: goroutines before=%d after-rpc-send=%d", gorsBefore, gorsAfterRPC)
+
+	// Wait for the RPCIdleTimeout (50ms) + generous buffer (300ms) = 350ms.
+	// If line 661 uses s.rpcIdleTimeout (50ms): goroutine exits within ~50ms.
+	// If line 661 uses RPCIdleTimeout (30s constant): goroutine still pinned at 350ms.
+	time.Sleep(350 * time.Millisecond)
+
+	// Measure goroutine count BEFORE closing the pipe.
+	// Closing the pipe would unblock the stuck goroutine, masking the bug.
+	gorsAtDeadline := runtime.NumGoroutine()
+	t.Logf("VP-072 RPC-response: goroutines at 350ms measurement=%d (before=%d)",
+		gorsAtDeadline, gorsBefore)
+
+	// Discriminating assertion:
+	//   FIXED: gorsAtDeadline <= gorsBefore+2 (Serve goroutine + ctx-watcher remain)
+	//   BUG:   gorsAtDeadline > gorsBefore+2  (connection goroutine still pinned in Write)
+	//
+	// The +2 tolerance accounts for the Serve accept-loop goroutine and the ctx-watcher
+	// goroutine that Serve launches. The connection goroutine should have exited.
+	connectionGoroutineStuck := gorsAtDeadline > gorsBefore+2
+	if connectionGoroutineStuck {
+		t.Errorf("VP-072 (Round-5 Finding 4) violated: 350ms after RPC request sent "+
+			"(> WithRPCIdleTimeout=50ms), goroutine count is %d (was %d before, +2 allowed "+
+			"for Serve+ctx-watcher). The RPC-response write deadline is NOT using "+
+			"s.rpcIdleTimeout — it is using the package constant RPCIdleTimeout (30s). "+
+			"Fix: change line 661 in mgmt.go from: "+
+			"conn.SetWriteDeadline(time.Now().Add(RPCIdleTimeout)) to: "+
+			"conn.SetWriteDeadline(time.Now().Add(s.rpcIdleTimeout)). "+
+			"WithRPCIdleTimeout(50ms) must govern the RPC-response write deadline "+
+			"(AC-018 / BC-2.07.004 PC-1 amended, Ruling E).",
+			gorsAtDeadline, gorsBefore)
+	}
+
+	// Clean up: close pipe to unblock any stuck goroutine, then cancel context.
+	_ = clientConn.Close()
+	_ = serverConn.Close()
+	cancel()
+	time.Sleep(30 * time.Millisecond) // let goroutines drain for test cleanup
+}
+
 // ── AC-017 / VP-069 (Ruling G): unexpected listener close returns non-nil ─────
 
 // TestServe_ReturnsErrOnUnexpectedListenerClose_VP069 verifies VP-069 Ruling G /
