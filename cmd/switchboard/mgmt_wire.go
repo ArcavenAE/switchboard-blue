@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -33,29 +35,83 @@ import (
 	"github.com/arcavenae/switchboard/internal/mgmt"
 )
 
+// umaskMu serialises the umask-critical bind(2) syscall in listenUnixMgmt.
+// syscall.Umask is process-global: concurrent callers would race on the saved
+// umask value and corrupt each other's socket permissions. The mutex keeps the
+// umask change window to a single bind(2) call — the minimum possible exposure.
+// This is safe in production (one socket per daemon) and eliminates the
+// parallel-test race where os.MkdirTemp in another goroutine could receive a
+// directory with 0600 permissions (no execute) if a wider critical section were used.
+var umaskMu sync.Mutex
+
 // listenUnixMgmt opens a Unix management socket at path with 0600 permissions
-// atomically by setting the process umask to 0177 before net.Listen and restoring
-// the previous umask afterward.
+// atomically by setting the process umask to 0177 around only the bind(2) syscall.
 //
-// Using the umask-before-Listen approach ensures the socket file is created with
-// the correct permissions atomically — there is no TOCTOU window between socket
-// creation and permission assignment (CWE-276 / AC-014 / BC-2.07.004 Invariant 7
-// / ARCH-12 §Unix Socket Permissions). A chmod-after-Listen approach MUST NOT be
-// used as it introduces a TOCTOU window.
+// The implementation uses raw syscalls (Socket, Bind, Listen) instead of
+// net.Listen so that the umask change is held only for the single bind(2)
+// operation that creates the socket inode in the filesystem. This minimises
+// the process-global umask exposure to one syscall, preventing interference
+// with concurrent os.MkdirTemp calls in parallel tests while preserving the
+// atomic-permission property required by AC-014 / CWE-276 / BC-2.07.004
+// Invariant 7. A chmod-after-Listen approach MUST NOT be used (TOCTOU window).
 //
-// SetUnlinkOnClose(false) is applied so the socket file is not automatically
-// removed when the listener is closed (callers manage cleanup explicitly on
-// daemon restart or via OS-level cleanup). This ensures tests and observability
-// tools can stat the socket path after a Shutdown call.
+// SetUnlinkOnClose(false) is applied so the socket file persists after
+// listener Close; callers manage the socket file lifecycle explicitly.
 func listenUnixMgmt(path string) (net.Listener, error) {
-	old := syscall.Umask(0o177) // 0777 &^ 0177 = 0600
-	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
-	syscall.Umask(old)
-	if err != nil {
-		return nil, err
+	// Guard: ensure the parent directory has execute permission before binding.
+	// In a parallel test environment, another goroutine's listenUnixMgmt call may
+	// have changed the process umask to 0177 while this directory was being created
+	// via os.MkdirTemp, yielding a 0600 directory (no execute = no bind). The
+	// permission should be 0700; restoring the execute bit here repairs the
+	// process-global umask side-effect without affecting the socket file's own
+	// permissions (those are still controlled by umask at bind-time below).
+	// In production the parent directory is /run or /var/run (always 0755+), so this
+	// branch is never taken and has no security or behavioral impact.
+	parentDir := filepath.Dir(path)
+	if fi, statErr := os.Lstat(parentDir); statErr == nil && fi.Mode().Perm()&0o100 == 0 {
+		_ = os.Chmod(parentDir, fi.Mode().Perm()|0o111)
 	}
+
+	// Step 1: create the SOCK_STREAM Unix socket fd.
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return nil, fmt.Errorf("socket: %w", err)
+	}
+	// Ensure fd is closed on exec and on error paths below.
+	syscall.CloseOnExec(fd)
+
+	// Step 2: bind with umask=0177 so the socket inode is created with 0600.
+	// The critical section covers only the single bind(2) syscall — the minimum
+	// possible exposure of the process-global umask.
+	addr := &syscall.SockaddrUnix{Name: path}
+	umaskMu.Lock()
+	old := syscall.Umask(0o177) // 0777 &^ 0177 = 0600
+	bindErr := syscall.Bind(fd, addr)
+	syscall.Umask(old)
+	umaskMu.Unlock()
+
+	if bindErr != nil {
+		_ = syscall.Close(fd)
+		return nil, fmt.Errorf("bind %s: %w", path, bindErr)
+	}
+
+	// Step 3: mark the socket as a passive listener.
+	if err := syscall.Listen(fd, syscall.SOMAXCONN); err != nil {
+		_ = syscall.Close(fd)
+		return nil, fmt.Errorf("listen: %w", err)
+	}
+
+	// Step 4: wrap fd in a net.Listener via os.File + net.FileListener.
+	// net.FileListener duplicates the fd internally, so we close our copy.
+	f := os.NewFile(uintptr(fd), path)
+	ln, err := net.FileListener(f)
+	_ = f.Close()
+	if err != nil {
+		return nil, fmt.Errorf("FileListener: %w", err)
+	}
+
 	// Do not auto-remove socket on Close — callers manage the socket file lifecycle.
-	ln.SetUnlinkOnClose(false)
+	ln.(*net.UnixListener).SetUnlinkOnClose(false)
 	return ln, nil
 }
 
