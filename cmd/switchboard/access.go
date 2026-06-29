@@ -143,17 +143,10 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	var mgmtWG sync.WaitGroup
 	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {
-		// Ruling J (BC-2.07.004 EC-013): when the user explicitly configured a
-		// management_socket path and it fails to bind, abort startup immediately —
-		// the operator's intent is clear, and silently running without it would
-		// be a silent-failure violation (AC-015 / S-W5.01 v1.3).
-		// When no ManagementSocket is set in config (using the mode default path),
-		// the failure may reflect an environment where /run/ is not writable;
-		// log the failure and continue so the data plane can still operate.
-		if cfg != nil && cfg.ManagementSocket != "" {
-			return fmt.Errorf("access: start management server: %w", mgmtErr)
-		}
-		fmt.Fprintf(stderr, "mgmt: failed to start management server: %v\n", mgmtErr) //nolint:errcheck
+		// Ruling J / BC-2.07.004 v1.4 EC-013: ANY mgmt-start failure aborts startup.
+		// No degraded-management mode — a daemon that cannot be administered must not
+		// serve the data plane (SOUL #4 silent-failure).
+		return fmt.Errorf("access: start management server: %w", mgmtErr)
 	}
 
 	// Construct the downstream half-channel (pure in-memory struct, no goroutines).

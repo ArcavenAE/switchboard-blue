@@ -682,10 +682,22 @@ func TestDaemonConnectFailureExitsNonZero(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
+	// Ruling J (BC-2.07.004 EC-013): runAccess aborts unconditionally if
+	// startMgmtServer fails. Provide a bindable management socket so mgmt-start
+	// succeeds and runAccess proceeds to runAccessWithConnector, where the
+	// cancelled ctx triggers E-SYS-002 — the path this test actually exercises.
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19291",
+		TickInterval:      10 * time.Millisecond,
+		DrainTimeout:      10 * time.Second,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+	}
+
 	var stderr bytes.Buffer
 
 	// runAccess panics in the stub — that panic IS the Red Gate failure.
-	err := runAccess(ctx, &stderr, nil)
+	err := runAccess(ctx, &stderr, cfg)
 
 	// AC-007 assertion 1 (BC-2.04.007 PC-3): non-nil error → caller exits non-zero.
 	if err == nil {
@@ -1466,28 +1478,47 @@ func TestBC_2_09_003_TickIntervalWiredToHalfChannel(t *testing.T) {
 	// NOT t.Parallel(): mutates package-level newHalfChannel seam.
 
 	tests := []struct {
-		name     string
-		cfg      *config.Config
-		wantTick time.Duration
+		name         string
+		cfg          *config.Config
+		wantTick     time.Duration
+		skipValidate bool // true when cfg intentionally contains a zero/invalid TickInterval
 	}{
 		{
 			// With a valid config carrying TickInterval=20ms, runAccess must pass
 			// 20ms (not the hardcoded 10ms constant) to halfchannel.New.
+			// ManagementSocket is set to a bindable temp path so mgmt-start succeeds
+			// and runAccess reaches the newHalfChannel seam (Ruling J / BC-2.07.004
+			// EC-013: unconditional abort on mgmt-start failure).
 			name: "cfg_tick_interval_20ms_reaches_halfchannel_New",
 			cfg: &config.Config{
 				ListenAddr:        "127.0.0.1:19283",
 				TickInterval:      20 * time.Millisecond,
 				DrainTimeout:      10 * time.Second,
 				KeepaliveInterval: 1 * time.Second,
+				ManagementSocket:  tempSockPath(t),
 			},
 			wantTick: 20 * time.Millisecond,
 		},
 		{
-			// With cfg=nil (no --config supplied), runAccess must fall back to
-			// defaultTickInterval (10ms) — the seam must pass through the real value.
-			name:     "nil_cfg_uses_defaultTickInterval_10ms",
-			cfg:      nil,
-			wantTick: defaultTickInterval, // 10ms constant in access.go
+			// When cfg.TickInterval == 0, tickIntervalFor falls back to
+			// defaultTickInterval (10ms). The original sub-case used cfg=nil to
+			// exercise this path, but Ruling J requires mgmt-start to succeed before
+			// runAccess reaches newHalfChannel — and nil cfg resolves to the
+			// unbindable default socket /run/switchboard-access.sock. Use a non-nil
+			// cfg with TickInterval=0 (intentionally zero — triggering the fallback)
+			// and a bindable ManagementSocket. TickInterval=0 is outside the
+			// [5ms,50ms] Validate range, so skipValidate is set (Validate is a
+			// startup gate, not a gate on tickIntervalFor's fallback behavior).
+			name: "zero_tick_interval_uses_defaultTickInterval_10ms",
+			cfg: &config.Config{
+				ListenAddr:        "127.0.0.1:19284",
+				TickInterval:      0, // intentionally zero → tickIntervalFor returns defaultTickInterval
+				DrainTimeout:      10 * time.Second,
+				KeepaliveInterval: 1 * time.Second,
+				ManagementSocket:  tempSockPath(t),
+			},
+			wantTick:     defaultTickInterval, // 10ms constant in access.go
+			skipValidate: true,
 		},
 	}
 
@@ -1495,7 +1526,9 @@ func TestBC_2_09_003_TickIntervalWiredToHalfChannel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Precondition: valid config must pass Validate so we know the fixture
 			// is not accidentally the source of failure (test hygiene only).
-			if tc.cfg != nil {
+			// skipValidate is set when the fixture intentionally uses an out-of-range
+			// TickInterval to exercise tickIntervalFor's fallback path.
+			if tc.cfg != nil && !tc.skipValidate {
 				if err := tc.cfg.Validate(); err != nil {
 					t.Fatalf("cfg.Validate(fixture): %v — fixture must be valid", err)
 				}

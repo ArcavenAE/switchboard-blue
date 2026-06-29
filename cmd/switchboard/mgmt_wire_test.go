@@ -915,44 +915,70 @@ func TestRunAccess_GeneratesEphemeralKey_AC015(t *testing.T) {
 func TestRunAccess_MgmtStartFailureAborts_RulingJ(t *testing.T) {
 	// NOT t.Parallel: accesses filesystem; runAccess may create/unlink sockets.
 
-	// Use an unbindable socket path to force startMgmtServer to fail.
-	// /nonexistent-dir-swtest does not exist → listenUnixMgmt returns ENOENT.
-	const unbindableSock = "/nonexistent-dir-swtest-rulingj/mgmt.sock"
-
-	cfg := &config.Config{
-		ListenAddr:       "0.0.0.0:9090",
-		TickInterval:     10 * time.Millisecond,
-		ManagementSocket: unbindableSock,
+	// Table-driven: both the explicit-socket path (cfg.ManagementSocket != "")
+	// and the default-path case (cfg.ManagementSocket == "") must abort startup.
+	// The prior implementation only aborted on the explicit-socket path — the
+	// default-path log-and-continue was exactly the defect Ruling J overruled.
+	tests := []struct {
+		name string
+		cfg  *config.Config
+	}{
+		{
+			// Original sub-case: operator explicitly configured an unbindable path.
+			name: "explicit_socket_unbindable",
+			cfg: &config.Config{
+				ListenAddr:       "0.0.0.0:9090",
+				TickInterval:     10 * time.Millisecond,
+				ManagementSocket: "/nonexistent-dir-swtest-rulingj/mgmt.sock",
+			},
+		},
+		{
+			// New sub-case (Ruling J default-path): no ManagementSocket configured →
+			// resolveManagementSocket returns the mode-default "/run/switchboard-access.sock"
+			// which is unbindable without root in a test environment. The prior code
+			// logged-and-continued here (the "degraded-management mode" Ruling J forbids).
+			// runAccess must abort unconditionally — there is NO degraded-management mode.
+			name: "default_path_unbindable",
+			cfg: &config.Config{
+				ListenAddr:       "0.0.0.0:9090",
+				TickInterval:     10 * time.Millisecond,
+				ManagementSocket: "", // → resolves to /run/switchboard-access.sock
+			},
+		},
 	}
 
-	// Pre-cancel context so if runAccess somehow reaches the data plane it exits
-	// quickly (Connect will fail with ctx.Err()).
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Pre-cancel context so if runAccess somehow reaches the data plane it
+			// exits quickly (Connect will fail with ctx.Err()).
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
 
-	var stderr strings.Builder
-	err := runAccess(ctx, &stderr, cfg)
+			var stderr strings.Builder
+			err := runAccess(ctx, &stderr, tc.cfg)
 
-	// Ruling J RED assertion: runAccess must return a non-nil error when
-	// startMgmtServer fails. Current code logs and continues → may return nil
-	// (if context is already cancelled before any other error) or may return a
-	// data-plane error — but must NOT proceed past the mgmt start point.
-	if err == nil {
-		t.Errorf("Ruling J violated: runAccess returned nil when startMgmtServer failed "+
-			"(socket path %q is unbindable). "+
-			"Fix: check mgmtErr != nil and return immediately after startMgmtServer call. "+
-			"Canonical pattern: if mgmtErr != nil { return fmt.Errorf(\"access: start management server: %%w\", mgmtErr) }",
-			unbindableSock)
-	}
+			// Ruling J assertion: runAccess must return a non-nil error when
+			// startMgmtServer fails — regardless of whether the socket path came
+			// from cfg or from the mode default. No degraded-management mode.
+			if err == nil {
+				t.Errorf("Ruling J violated: runAccess returned nil when startMgmtServer failed "+
+					"(ManagementSocket=%q). "+
+					"Fix: check mgmtErr != nil and return immediately after startMgmtServer call. "+
+					"Canonical pattern: if mgmtErr != nil { return fmt.Errorf(\"access: start management server: %%w\", mgmtErr) }",
+					tc.cfg.ManagementSocket)
+			}
 
-	// Secondary assertion: if the data plane WAS entered, stderr will contain
-	// "cannot connect to session backend" (from runAccessWithConnector PC-1 path).
-	// Ruling J requires the data plane to NOT be entered on mgmt failure.
-	stderrStr := stderr.String()
-	if strings.Contains(stderrStr, "cannot connect to session backend") {
-		t.Errorf("Ruling J violated: runAccess entered data-plane setup after startMgmtServer " +
-			"failure (stderr contains 'cannot connect to session backend'). " +
-			"The data plane must NEVER be entered when mgmt start fails.")
+			// Secondary assertion: if the data plane WAS entered, stderr will contain
+			// "cannot connect to session backend" (from runAccessWithConnector PC-1 path).
+			// Ruling J requires the data plane to NOT be entered on mgmt failure.
+			stderrStr := stderr.String()
+			if strings.Contains(stderrStr, "cannot connect to session backend") {
+				t.Errorf("Ruling J violated: runAccess entered data-plane setup after startMgmtServer "+
+					"failure (stderr contains 'cannot connect to session backend'). "+
+					"ManagementSocket=%q. The data plane must NEVER be entered when mgmt start fails.",
+					tc.cfg.ManagementSocket)
+			}
+		})
 	}
 }
 
