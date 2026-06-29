@@ -23,6 +23,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"runtime"
@@ -1367,6 +1369,554 @@ type fakeSyncListener struct {
 func (f *fakeSyncListener) Accept() (net.Conn, error) { return f.acceptFn() }
 func (f *fakeSyncListener) Close() error              { return f.closeFn() }
 func (f *fakeSyncListener) Addr() net.Addr            { return f.addrFn() }
+
+// ── VP-068 / AC-016 / Invariant 8: nil/short-key construction guard ──────────
+
+// doHandshake performs the ADR-012 challenge-response handshake over conn
+// using opPriv (the operator private key). Returns nil on success or an error
+// if any step fails. Used by VP-070 and VP-071 tests.
+func doHandshake(t *testing.T, conn net.Conn, opPriv ed25519.PrivateKey) error {
+	t.Helper()
+	dec := json.NewDecoder(conn)
+
+	var challenge struct {
+		Type  string `json:"type"`
+		Nonce string `json:"nonce"`
+	}
+	if err := dec.Decode(&challenge); err != nil {
+		return fmt.Errorf("read challenge: %w", err)
+	}
+	if challenge.Type != "challenge" {
+		return fmt.Errorf("expected challenge, got %q", challenge.Type)
+	}
+	nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+	if err != nil {
+		return fmt.Errorf("decode nonce: %w", err)
+	}
+	sig := ed25519.Sign(opPriv, nonceBytes)
+	opPub := opPriv.Public().(ed25519.PublicKey)
+	msg, err := json.Marshal(map[string]any{
+		"type":      "challenge_response",
+		"nonce_sig": base64.RawURLEncoding.EncodeToString(sig),
+		"pubkey":    base64.RawURLEncoding.EncodeToString([]byte(opPub)),
+	})
+	if err != nil {
+		return fmt.Errorf("marshal challenge_response: %w", err)
+	}
+	msg = append(msg, '\n')
+	if _, err := conn.Write(msg); err != nil {
+		return fmt.Errorf("write challenge_response: %w", err)
+	}
+
+	var authResp struct {
+		Type string `json:"type"`
+	}
+	if err := dec.Decode(&authResp); err != nil {
+		return fmt.Errorf("read auth response: %w", err)
+	}
+	if authResp.Type != "auth_ok" {
+		return fmt.Errorf("expected auth_ok, got %q", authResp.Type)
+	}
+	return nil
+}
+
+// TestNewServer_PanicsOnNilKey_VP068 verifies VP-068 / BC-2.07.004 Invariant 8
+// / AC-016: NewServer MUST panic immediately if daemonKey is nil (len == 0).
+//
+// Currently mgmt.go has no nil-key guard → NewServer does NOT panic with nil
+// key → the defer/recover sees r==nil → t.Errorf fires → RED.
+//
+// Traces: BC-2.07.004 Invariant 8, AC-016, VP-068.
+func TestNewServer_PanicsOnNilKey_VP068(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	didPanic := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				didPanic = true
+			}
+		}()
+		// VP-068: nil key (len==0) MUST panic at construction time.
+		// Without the guard, this returns a *Server with a nil daemonKey field,
+		// which will later panic mid-connection — a remote-panic DoS vector.
+		_ = mgmt.NewServer(ln, nil, mgmt.NewOperatorKeySet(nil), nil, "dev")
+	}()
+
+	if !didPanic {
+		t.Errorf("VP-068 violated: NewServer(nil daemonKey) did not panic; " +
+			"implementer must add: if len(daemonKey) != ed25519.PrivateKeySize { panic(...) }")
+	}
+}
+
+// TestNewServer_PanicsOnShortKey_VP068 verifies VP-068 / BC-2.07.004 Invariant 8
+// / AC-016: NewServer MUST panic if daemonKey length != ed25519.PrivateKeySize.
+//
+// A 32-byte slice is the ed25519.PublicKey size — a common programmer mistake
+// (passing the public key where the private key is required).
+//
+// Currently mgmt.go has no short-key guard → no panic → RED.
+//
+// Traces: BC-2.07.004 Invariant 8, AC-016, VP-068.
+func TestNewServer_PanicsOnShortKey_VP068(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		keyLen int
+	}{
+		{name: "len_32_public_key_size", keyLen: ed25519.PublicKeySize}, // 32
+		{name: "len_63_one_short", keyLen: ed25519.PrivateKeySize - 1},  // 63
+		{name: "len_1_single_byte", keyLen: 1},
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			shortKey := make(ed25519.PrivateKey, tc.keyLen)
+
+			didPanic := false
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						didPanic = true
+					}
+				}()
+				_ = mgmt.NewServer(ln, shortKey, mgmt.NewOperatorKeySet(nil), nil, "dev")
+			}()
+
+			if !didPanic {
+				t.Errorf("VP-068 violated (%s, len=%d): NewServer did not panic; "+
+					"a short key must be rejected at construction, not at first connection",
+					tc.name, tc.keyLen)
+			}
+		})
+	}
+}
+
+// ── VP-069 / AC-017 / PC-10: Serve returns nil on intentional shutdown ────────
+
+// TestServe_ReturnsNilOnShutdown_VP069 verifies VP-069 / BC-2.07.004 PC-10
+// / AC-017: Server.Serve returns nil (not net.ErrClosed) when Shutdown is called.
+//
+// Currently Serve's Accept-error path does not check shuttingDown and returns
+// net.ErrClosed → the non-nil-error assertion fires → RED.
+//
+// Traces: BC-2.07.004 PC-10, AC-017, VP-069.
+func TestServe_ReturnsNilOnShutdown_VP069(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	// Do NOT t.Cleanup(ln.Close) — Shutdown will close the listener.
+
+	srv := mgmt.NewServer(ln, daemonPriv, mgmt.NewOperatorKeySet(nil), nil, "dev")
+
+	ctx := context.Background()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.Serve(ctx)
+	}()
+
+	// Give Serve time to enter the Accept loop.
+	time.Sleep(10 * time.Millisecond)
+
+	if err := srv.Shutdown(context.Background()); err != nil {
+		t.Logf("Shutdown returned: %v (non-nil is acceptable here)", err)
+	}
+
+	select {
+	case serveErr := <-errCh:
+		// VP-069: Serve MUST return nil on intentional Shutdown.
+		// Currently returns net.ErrClosed → this assertion fires.
+		if serveErr != nil {
+			t.Errorf("VP-069 violated: Serve returned %v after Shutdown; want nil "+
+				"(implementer must add shuttingDown atomic.Bool and nil-on-shutdown logic)",
+				serveErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("VP-069: Serve did not return within 2s of Shutdown")
+	}
+}
+
+// TestServe_ReturnsNilOnCtxCancel_VP069 verifies VP-069 / BC-2.07.004 PC-10
+// / AC-017: Server.Serve returns nil when the context is cancelled.
+//
+// Currently Serve's ctx-watcher goroutine calls s.ln.Close() but does not set
+// shuttingDown, so the Accept error path returns net.ErrClosed → RED.
+//
+// Traces: BC-2.07.004 PC-10, AC-017, VP-069.
+func TestServe_ReturnsNilOnCtxCancel_VP069(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	srv := mgmt.NewServer(ln, daemonPriv, mgmt.NewOperatorKeySet(nil), nil, "dev")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.Serve(ctx)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	select {
+	case serveErr := <-errCh:
+		// VP-069: Serve MUST return nil on ctx cancel.
+		// Currently returns net.ErrClosed → this assertion fires.
+		if serveErr != nil {
+			t.Errorf("VP-069 violated: Serve returned %v after ctx cancel; want nil "+
+				"(implementer must add shuttingDown atomic.Bool; ctx-watcher sets it before ln.Close())",
+				serveErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("VP-069: Serve did not return within 2s of ctx cancel")
+	}
+}
+
+// ── VP-070 / AC-007 / PC-11: E-RPC-010 for unknown commands ──────────────────
+
+// TestUnknownCommand_ReturnsERPC010_VP070 verifies VP-070 / BC-2.07.004 PC-11
+// / AC-007: an authenticated client naming an unregistered command receives
+// ok:false, error.code == "E-RPC-010", and the connection stays OPEN.
+//
+// Currently handleConnection sends E-RPC-001 for unknown commands → the
+// assertion on "E-RPC-010" fires → RED.
+// Also verifies E-RPC-002 does NOT appear (which would indicate the defective
+// handler-error code was used).
+//
+// Traces: BC-2.07.004 PC-11, AC-007 (Ruling C), VP-070.
+func TestUnknownCommand_ReturnsERPC010_VP070(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+	opPub, opPriv := mustGenKey(t)
+	keySet := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+	// No handlers registered — every command is "unknown".
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	srv := mgmt.NewServer(ln, daemonPriv, keySet, nil, "dev")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go srv.Serve(ctx) //nolint:errcheck
+
+	conn, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	if err := doHandshake(t, conn, opPriv); err != nil {
+		t.Fatalf("handshake failed: %v", err)
+	}
+
+	enc := json.NewEncoder(conn)
+	dec := json.NewDecoder(conn)
+
+	// Send an unregistered command.
+	if err := enc.Encode(map[string]any{
+		"type":    "request",
+		"id":      "req-vp070",
+		"command": "nonexistent.command",
+		"args":    map[string]any{},
+	}); err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+
+	var resp struct {
+		Type  string `json:"type"`
+		ID    string `json:"id"`
+		OK    bool   `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := dec.Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.OK {
+		t.Error("VP-070 violated: ok=true for unregistered command")
+	}
+	// VP-070 core assertion: must be E-RPC-010, not E-RPC-001 or E-RPC-002.
+	if resp.Error.Code != "E-RPC-010" {
+		t.Errorf("VP-070 violated: error.code = %q; want E-RPC-010 "+
+			"(implementer must replace E-RPC-001 with E-RPC-010 in handleConnection dispatch)",
+			resp.Error.Code)
+	}
+	if resp.ID != "req-vp070" {
+		t.Errorf("VP-070: response id = %q; want %q", resp.ID, "req-vp070")
+	}
+	wantMsg := "unknown command: nonexistent.command"
+	if resp.Error.Message != wantMsg {
+		t.Errorf("VP-070: error.message = %q; want %q", resp.Error.Message, wantMsg)
+	}
+
+	// Connection must still be open: send a second unknown command.
+	if err := enc.Encode(map[string]any{
+		"type":    "request",
+		"id":      "req-vp070b",
+		"command": "another.unknown",
+		"args":    map[string]any{},
+	}); err != nil {
+		t.Fatalf("VP-070: connection was closed after first unknown command (must stay open): %v", err)
+	}
+	var resp2 struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := dec.Decode(&resp2); err != nil {
+		t.Fatalf("VP-070: decode second response: %v", err)
+	}
+	if resp2.OK || resp2.Error.Code != "E-RPC-010" {
+		t.Errorf("VP-070: second unknown command: ok=%v code=%q; want ok=false code=E-RPC-010",
+			resp2.OK, resp2.Error.Code)
+	}
+}
+
+// ── VP-071 / AC-007 / PC-12: E-RPC-011 for handler errors ────────────────────
+
+// TestHandlerError_ReturnsERPC011_VP071 verifies VP-071 / BC-2.07.004 PC-12
+// / AC-007: a registered handler returning an error causes the server to send
+// ok:false, error.code == "E-RPC-011", message == the verbatim error string,
+// and the connection stays OPEN.
+//
+// Currently handleConnection sends E-RPC-002 for handler errors → the assertion
+// on "E-RPC-011" fires → RED.
+//
+// Traces: BC-2.07.004 PC-12, AC-007 (Ruling C), VP-071.
+func TestHandlerError_ReturnsERPC011_VP071(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+	opPub, opPriv := mustGenKey(t)
+	keySet := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+	const sentinelErr = "boom: simulated handler failure"
+	handlers := []mgmt.Handler{
+		{
+			Command: "test.fail",
+			Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+				return nil, errors.New(sentinelErr)
+			},
+		},
+		{
+			Command: "test.ok",
+			Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+				return map[string]string{"status": "ok"}, nil
+			},
+		},
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	srv := mgmt.NewServer(ln, daemonPriv, keySet, handlers, "dev")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go srv.Serve(ctx) //nolint:errcheck
+
+	conn, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	if err := doHandshake(t, conn, opPriv); err != nil {
+		t.Fatalf("handshake failed: %v", err)
+	}
+
+	enc := json.NewEncoder(conn)
+	dec := json.NewDecoder(conn)
+
+	// Invoke the failing handler.
+	if err := enc.Encode(map[string]any{
+		"type":    "request",
+		"id":      "req-vp071",
+		"command": "test.fail",
+		"args":    map[string]any{},
+	}); err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+
+	var resp struct {
+		Type  string `json:"type"`
+		ID    string `json:"id"`
+		OK    bool   `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := dec.Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.OK {
+		t.Error("VP-071 violated: ok=true after handler returned error")
+	}
+	// VP-071 core assertion: must be E-RPC-011, not E-RPC-002 or E-RPC-001.
+	if resp.Error.Code != "E-RPC-011" {
+		t.Errorf("VP-071 violated: error.code = %q; want E-RPC-011 "+
+			"(implementer must replace E-RPC-002 with E-RPC-011 in handleConnection dispatch)",
+			resp.Error.Code)
+	}
+	// VP-071: error message must be the handler's verbatim error string.
+	if resp.Error.Message != sentinelErr {
+		t.Errorf("VP-071 violated: error.message = %q; want verbatim %q", resp.Error.Message, sentinelErr)
+	}
+	if resp.ID != "req-vp071" {
+		t.Errorf("VP-071: response id = %q; want %q", resp.ID, "req-vp071")
+	}
+
+	// Connection must still be open: send a request to the succeeding handler.
+	if err := enc.Encode(map[string]any{
+		"type":    "request",
+		"id":      "req-vp071b",
+		"command": "test.ok",
+		"args":    map[string]any{},
+	}); err != nil {
+		t.Fatalf("VP-071: connection closed after handler error (must stay open): %v", err)
+	}
+	var resp2 struct {
+		OK bool `json:"ok"`
+	}
+	if err := dec.Decode(&resp2); err != nil {
+		t.Fatalf("VP-071: decode second response: %v", err)
+	}
+	if !resp2.OK {
+		t.Error("VP-071: second request (ok handler) after error returned ok=false")
+	}
+}
+
+// ── VP-072 / AC-018 / PC-1 write-deadline: slowloris-on-write defense ────────
+
+// TestWriteDeadline_SlowlorisDefense_VP072 verifies VP-072 / BC-2.07.004 PC-1
+// (amended) / AC-018: the server sets conn.SetWriteDeadline before every
+// sendJSON call, so a non-draining client cannot pin the connection goroutine
+// forever.
+//
+// Test strategy: use net.Pipe (zero internal buffer). The server's first action
+// is sendJSON(CHALLENGE). With no write deadline, this Write blocks until the
+// client reads — forever, since the client never reads. With a write deadline
+// set to HandshakeTimeout (injected as 100ms), the Write times out in ≤100ms
+// and the connection goroutine exits.
+//
+// Observable: we measure goroutine count BEFORE closing the pipe. If the
+// connection goroutine has exited (write deadline fired), count drops to
+// baseline. If it is still stuck (no write deadline), count stays elevated.
+// We close the pipe AFTER measuring to ensure we don't influence the result.
+//
+// Currently sendJSON has no SetWriteDeadline call → the Write blocks forever
+// → the goroutine count stays elevated at the measurement point → RED.
+//
+// Traces: BC-2.07.004 PC-1 (amended, Ruling E), AC-018, VP-072.
+func TestWriteDeadline_SlowlorisDefense_VP072(t *testing.T) {
+	// NOT t.Parallel(): measures goroutine counts; concurrent goroutines from other
+	// tests would introduce false-positive goroutine-leak readings.
+
+	_, daemonPriv := mustGenKey(t)
+
+	// Use a singleConnListener backed by net.Pipe so we control the client side.
+	serverConn, clientConn := net.Pipe()
+	// Manage pipe lifecycle manually — we need to close AFTER measuring goroutines.
+
+	ln := newSingleConnListener(serverConn)
+	// WithHandshakeTimeout injects 100ms so the write deadline fires quickly
+	// without waiting 10s for the production default.
+	srv := mgmt.NewServer(ln, daemonPriv, mgmt.NewOperatorKeySet(nil), nil, "dev",
+		mgmt.WithHandshakeTimeout(100*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	gorsBefore := runtime.NumGoroutine()
+
+	go func() {
+		_ = srv.Serve(ctx)
+	}()
+
+	// Give Serve time to accept the connection and spawn the connection goroutine.
+	// The connection goroutine immediately tries to Write the CHALLENGE —
+	// which blocks indefinitely on net.Pipe because the client never reads.
+	time.Sleep(30 * time.Millisecond)
+
+	gorsAfterConnect := runtime.NumGoroutine()
+	t.Logf("VP-072: goroutines before=%d after-connect=%d", gorsBefore, gorsAfterConnect)
+
+	// Wait for write deadline to have fired (100ms timeout + 100ms buffer = 200ms total).
+	// With write deadline: the connection goroutine exits within ~100ms of connecting.
+	// Without write deadline: the goroutine is still stuck in Write at this point.
+	time.Sleep(200 * time.Millisecond)
+
+	// Measure goroutine count BEFORE closing the pipe.
+	// This is the critical measurement window:
+	//   - If write deadline was set: goroutine has already exited → count ≈ gorsBefore+1 (Serve loop)
+	//   - If write deadline was NOT set: goroutine is still stuck → count > gorsBefore+2
+	gorsAtDeadline := runtime.NumGoroutine()
+	t.Logf("VP-072: goroutines at deadline point=%d (before=%d)", gorsAtDeadline, gorsBefore)
+
+	// VP-072 core assertion: after the injected HandshakeTimeout (100ms) + 200ms buffer,
+	// the connection goroutine MUST have exited (write deadline fired → Write returned error).
+	// Tolerance: +2 for Serve goroutine + ctx-watcher goroutine.
+	// If the goroutine is still alive (no write deadline), this fires → RED.
+	connectionGoroutineStuck := gorsAtDeadline > gorsBefore+2
+	if connectionGoroutineStuck {
+		t.Errorf("VP-072 violated: %dms after connection (> HandshakeTimeout=100ms), "+
+			"goroutine count is %d (was %d before connection, +2 expected for Serve+ctx-watcher). "+
+			"The connection goroutine is pinned — no write deadline was set on the CHALLENGE send. "+
+			"Implementer must add conn.SetWriteDeadline(time.Now().Add(s.handshakeTimeout)) "+
+			"before sendJSON(CHALLENGE) in handleConnection.",
+			230, gorsAtDeadline, gorsBefore)
+	}
+
+	// Clean up: close pipe to unblock any stuck goroutine, then cancel context.
+	_ = clientConn.Close()
+	_ = serverConn.Close()
+	cancel()
+	time.Sleep(30 * time.Millisecond) // let goroutines drain for test cleanup
+}
 
 // ── Authorized-key-set rejection (no AC number — additional coverage) ─────────
 
