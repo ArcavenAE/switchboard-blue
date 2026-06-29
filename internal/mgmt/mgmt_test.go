@@ -132,7 +132,9 @@ func startServerOnPipe(
 	})
 
 	ln := newSingleConnListener(serverConn)
-	srv := mgmt.NewServer(ln, daemonPriv, ops, handlers)
+	// "dev" is the unreleased-build sentinel — acceptable for test helpers that
+	// do not assert on daemon_version (tests that do assert use NewServer directly).
+	srv := mgmt.NewServer(ln, daemonPriv, ops, handlers, "dev")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -634,7 +636,7 @@ func FuzzMgmtServer_BoundedRead_VP066(f *testing.F) {
 
 		serverConn, clientConn := net.Pipe()
 		ln := newSingleConnListener(serverConn)
-		srv := mgmt.NewServer(ln, daemonPriv, keySet, nil)
+		srv := mgmt.NewServer(ln, daemonPriv, keySet, nil, "dev")
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -856,7 +858,7 @@ func TestMgmtServer_GracefulShutdown_AC010(t *testing.T) {
 
 	serverConn, clientConn := net.Pipe()
 	ln := newSingleConnListener(serverConn)
-	srv := mgmt.NewServer(ln, daemonPriv, ops, nil)
+	srv := mgmt.NewServer(ln, daemonPriv, ops, nil, "dev")
 
 	serveCtx, serveCancel := context.WithCancel(context.Background())
 	defer serveCancel()
@@ -906,6 +908,465 @@ func TestMgmtServer_GracefulShutdown_AC010(t *testing.T) {
 		}
 	})
 }
+
+// ── AC-001 (v1.1): HandshakeTimeout silent-stall sub-case (VP-064 sub-case a) ─
+
+// TestMgmtServer_HandshakeTimeout_SilentStall_AC001 verifies that after sending
+// CHALLENGE the server applies a HandshakeTimeout read deadline. A client that
+// connects, receives the CHALLENGE, and then sends NOTHING triggers E-ADM-010
+// (connection closed) within the deadline. No goroutine leak.
+//
+// This sub-case is VP-064 property "no CHALLENGE_RESPONSE at all" from Ruling 1.
+// The test uses a 50ms injected HandshakeTimeout (mgmt.HandshakeTimeout default
+// is 10s — too slow for a unit test). The implementer MUST add a
+// HandshakeTimeout field to Server (or a WithHandshakeTimeout option) so this
+// injectable deadline can be exercised.
+//
+// COMPILE FAILURE IS EXPECTED until the implementer adds:
+//   - mgmt.HandshakeTimeout constant (default 10s)
+//   - mgmt.WithHandshakeTimeout(d time.Duration) option (or equivalent injectable field)
+//   - mgmt.NewServer(..., daemonVersion string) updated signature (AC-007)
+//
+// Traces: BC-2.07.004 PC-1, EC-001, AC-001, VP-064 sub-case (a), Ruling 1.
+func TestMgmtServer_HandshakeTimeout_SilentStall_AC001(t *testing.T) {
+	t.Parallel()
+
+	// Verify the HandshakeTimeout constant exists with the required value.
+	// This assertion fails to compile until the implementer exports the constant.
+	if mgmt.HandshakeTimeout != 10*time.Second {
+		t.Errorf("AC-001: mgmt.HandshakeTimeout = %v; want 10s (ADR-012 §7 / Ruling 1)", mgmt.HandshakeTimeout)
+	}
+
+	_, daemonPriv := mustGenKey(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+
+	gorsBefore := runtime.NumGoroutine()
+
+	// Construct a server with a 50ms HandshakeTimeout override so the test
+	// completes in milliseconds rather than 10 seconds.
+	// WithHandshakeTimeout is the required injectable option — the test encodes
+	// the API contract the implementer must satisfy.
+	serverConn, clientConn := net.Pipe()
+	t.Cleanup(func() {
+		_ = serverConn.Close()
+		_ = clientConn.Close()
+	})
+
+	ln := newSingleConnListener(serverConn)
+	srv := mgmt.NewServer(ln, daemonPriv, ops, nil, "0.1.0-test",
+		mgmt.WithHandshakeTimeout(50*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	go func() {
+		_ = srv.Serve(ctx)
+	}()
+
+	// Set client read deadline slightly beyond the injected HandshakeTimeout.
+	if err := clientConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+
+	// Consume the CHALLENGE message (server must send it first — AC-001).
+	msg := readMsg(t, clientConn)
+	if msg == nil {
+		t.Fatal("AC-001: expected CHALLENGE as first server message; got nil")
+	}
+	if msg["type"] != "challenge" {
+		t.Fatalf("AC-001: want type=challenge; got %v", msg["type"])
+	}
+
+	// Now send NOTHING — simulate silent stall (VP-064 sub-case a).
+	// The server should close the connection after the 50ms HandshakeTimeout.
+	start := time.Now()
+	next := readMsg(t, clientConn)
+	elapsed := time.Since(start)
+
+	// VP-064 sub-case a: server must close the connection.
+	// The next read must return nil (connection closed) within ~100ms.
+	if next != nil {
+		t.Errorf("AC-001: VP-064 sub-case a: expected connection closed after HandshakeTimeout; got message: %v", next)
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("AC-001: connection close took %v; want within 200ms of 50ms HandshakeTimeout", elapsed)
+	}
+
+	// Goroutine leak check: all server goroutines must exit after deadline.
+	t.Cleanup(func() {
+		deadline := time.After(300 * time.Millisecond)
+		for {
+			after := runtime.NumGoroutine()
+			if after <= gorsBefore+2 {
+				return
+			}
+			select {
+			case <-deadline:
+				t.Errorf("AC-001: goroutine leak after HandshakeTimeout: before=%d after=%d",
+					gorsBefore, runtime.NumGoroutine())
+				return
+			default:
+				runtime.Gosched()
+			}
+		}
+	})
+}
+
+// ── AC-003 / VP-065 (v1.1): post-auth structural guard ───────────────────────
+
+// TestMgmtServer_PostAuthChallengeResponseRejected_VP065 verifies the v1.1 AC-003:
+// after a successful handshake (AUTH_OK), a second {"type":"challenge_response",...}
+// on the same connection triggers E-ADM-010 + close. The per-connection
+// authenticated boolean (not a nonce-set) causes the rejection.
+//
+// The registered RPC handler must NOT be invoked by the second challenge_response.
+//
+// Note: the existing TestMgmtServer_RejectsReplayedNonce_VP065 tests cross-connection
+// replay (Ruling 7 pre-ADR-012 v1.2 framing). This test is the NEW v1.1 structural
+// guard test per BC-2.07.004 PC-3 v1.2 / AC-003 v1.1 / Ruling 7.
+//
+// COMPILE FAILURE IS EXPECTED until the implementer adds:
+//   - mgmt.NewServer(..., daemonVersion string) updated signature (AC-007)
+//
+// Traces: BC-2.07.004 PC-3 v1.2, EC-004, AC-003 v1.1, VP-065.
+func TestMgmtServer_PostAuthChallengeResponseRejected_VP065(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+	opPub, opPriv := mustGenKey(t)
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+	rpcCallCount := 0
+	handlers := sentinelHandlers(&rpcCallCount)
+
+	// Construct server with daemonVersion "0.1.0-test" (required by AC-007 / Ruling 6).
+	serverConn, clientConn := net.Pipe()
+	t.Cleanup(func() {
+		_ = serverConn.Close()
+		_ = clientConn.Close()
+	})
+
+	ln := newSingleConnListener(serverConn)
+	// AC-007: NewServer MUST accept daemonVersion as fifth parameter.
+	// This call will fail to compile until the implementer updates the signature.
+	srv := mgmt.NewServer(ln, daemonPriv, ops, handlers, "0.1.0-test")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	go func() {
+		_ = srv.Serve(ctx)
+	}()
+
+	if err := clientConn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	// Step 1: complete a successful handshake → AUTH_OK.
+	challenge := readMsg(t, clientConn)
+	if challenge == nil || challenge["type"] != "challenge" {
+		t.Fatalf("VP-065: expected challenge; got %v", challenge)
+	}
+	nonceB64, _ := challenge["nonce"].(string)
+	nonce := decB64(t, nonceB64)
+	sig := ed25519.Sign(opPriv, nonce)
+
+	writeMsg(t, clientConn, map[string]any{
+		"type":      "challenge_response",
+		"nonce_sig": encB64(sig),
+		"pubkey":    encB64([]byte(opPub)),
+	})
+
+	authResp := readMsg(t, clientConn)
+	if authResp == nil {
+		t.Fatal("VP-065: expected AUTH_OK after valid handshake; got nil")
+	}
+	if authResp["type"] != "auth_ok" {
+		t.Fatalf("VP-065: want AUTH_OK after valid handshake; got type=%v", authResp["type"])
+	}
+
+	// Step 2: on the same authenticated connection C1, send a second challenge_response.
+	// The per-connection `authenticated` boolean causes the server to reject this.
+	// The RPC handler must NOT be invoked.
+	writeMsg(t, clientConn, map[string]any{
+		"type":      "challenge_response",
+		"nonce_sig": encB64(sig), // same sig — irrelevant; type check comes first
+		"pubkey":    encB64([]byte(opPub)),
+	})
+
+	// Expect AUTH_FAIL (E-ADM-010) — the structural guard fires.
+	failResp := readMsg(t, clientConn)
+	if failResp == nil {
+		t.Fatal("VP-065: expected AUTH_FAIL for post-auth challenge_response; got nil (connection closed without message)")
+	}
+	if failResp["type"] != "auth_fail" {
+		t.Errorf("VP-065: want type=auth_fail for post-auth challenge_response; got %v", failResp["type"])
+	}
+	if failResp["code"] != "E-ADM-010" {
+		t.Errorf("VP-065: want code=E-ADM-010; got %v", failResp["code"])
+	}
+
+	// Connection must be closed after AUTH_FAIL.
+	_ = clientConn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	extra := readMsg(t, clientConn)
+	if extra != nil {
+		t.Errorf("VP-065: expected connection closed after AUTH_FAIL; got extra message: %v", extra)
+	}
+
+	// RPC sentinel must not have been called by the second challenge_response.
+	if rpcCallCount != 0 {
+		t.Errorf("VP-065: RPC handler called %d times; want 0 (post-auth challenge_response must not dispatch RPC)", rpcCallCount)
+	}
+}
+
+// ── AC-007 (v1.1): daemonVersion injection ───────────────────────────────────
+
+// TestMgmtServer_DaemonVersion_Injected_AC007 verifies that AUTH_OK carries the
+// daemonVersion string injected into NewServer, not a hardcoded "dev" sentinel.
+// Also verifies that NewServer panics when daemonVersion is "".
+//
+// COMPILE FAILURE IS EXPECTED until the implementer adds:
+//   - mgmt.NewServer(ln, daemonKey, ops, handlers, daemonVersion string) (fifth param)
+//   - panic on empty daemonVersion (or equivalent initialization error)
+//
+// Traces: BC-2.07.004 PC-7, AC-007 v1.1, Ruling 6.
+func TestMgmtServer_DaemonVersion_Injected_AC007(t *testing.T) {
+	t.Parallel()
+
+	t.Run("auth_ok_carries_injected_version", func(t *testing.T) {
+		t.Parallel()
+
+		_, daemonPriv := mustGenKey(t)
+		opPub, opPriv := mustGenKey(t)
+		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+		serverConn, clientConn := net.Pipe()
+		t.Cleanup(func() {
+			_ = serverConn.Close()
+			_ = clientConn.Close()
+		})
+
+		ln := newSingleConnListener(serverConn)
+		// AC-007: daemonVersion "0.1.0-test" must appear in AUTH_OK.
+		srv := mgmt.NewServer(ln, daemonPriv, ops, nil, "0.1.0-test")
+
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+
+		go func() {
+			_ = srv.Serve(ctx)
+		}()
+
+		if err := clientConn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("SetDeadline: %v", err)
+		}
+
+		challenge := readMsg(t, clientConn)
+		if challenge == nil || challenge["type"] != "challenge" {
+			t.Fatalf("AC-007: expected challenge; got %v", challenge)
+		}
+		nonceB64, _ := challenge["nonce"].(string)
+		nonce := decB64(t, nonceB64)
+
+		sig := ed25519.Sign(opPriv, nonce)
+		writeMsg(t, clientConn, map[string]any{
+			"type":      "challenge_response",
+			"nonce_sig": encB64(sig),
+			"pubkey":    encB64([]byte(opPub)),
+		})
+
+		authResp := readMsg(t, clientConn)
+		if authResp == nil {
+			t.Fatal("AC-007: expected AUTH_OK; got nil")
+		}
+		if authResp["type"] != "auth_ok" {
+			t.Fatalf("AC-007: want type=auth_ok; got %v", authResp["type"])
+		}
+
+		// AC-007: daemon_version must equal the injected value, NOT "dev".
+		ver, ok := authResp["daemon_version"].(string)
+		if !ok {
+			t.Fatalf("AC-007: AUTH_OK missing daemon_version field or wrong type; got %v", authResp["daemon_version"])
+		}
+		if ver != "0.1.0-test" {
+			t.Errorf("AC-007: AUTH_OK daemon_version = %q; want %q (must equal NewServer daemonVersion param, not hardcoded sentinel)",
+				ver, "0.1.0-test")
+		}
+	})
+
+	t.Run("empty_daemonVersion_panics", func(t *testing.T) {
+		t.Parallel()
+
+		_, daemonPriv := mustGenKey(t)
+		ops := mgmt.NewOperatorKeySet(nil)
+
+		serverConn, _ := net.Pipe()
+		ln := newSingleConnListener(serverConn)
+
+		// AC-007: NewServer MUST panic (or equivalent) if daemonVersion == "".
+		// The implementer documents the chosen enforcement in comments per the story task.
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("AC-007: NewServer with empty daemonVersion must panic; did not panic")
+			}
+			// Cleanup the pipe after recover.
+			_ = serverConn.Close()
+		}()
+		// This call must panic.
+		_ = mgmt.NewServer(ln, daemonPriv, ops, nil, "")
+	})
+}
+
+// ── AC-013: connection cap (bounded accept loop, CWE-770) ────────────────────
+
+// TestMgmtServer_ConnectionCap_AC013 verifies that Server does not spawn more
+// than MaxConcurrentConnections simultaneous connection goroutines. With a cap of
+// 3 (injected via constructor option), the 4th connection does not immediately
+// receive a CHALLENGE — the accept loop back-pressures. When one of the 3 held
+// connections is released, the 4th proceeds.
+//
+// COMPILE FAILURE IS EXPECTED until the implementer adds:
+//   - mgmt.MaxConcurrentConnections constant (default 128)
+//   - mgmt.WithMaxConnections(n int) option (or equivalent)
+//   - mgmt.NewServer(..., daemonVersion string) updated signature (AC-007)
+//
+// Traces: BC-2.07.004 EC-012, AC-013 v1.1, Ruling 3.
+func TestMgmtServer_ConnectionCap_AC013(t *testing.T) {
+	// NOT t.Parallel(): measures goroutine counts for leak detection.
+
+	// Verify the MaxConcurrentConnections constant exists.
+	// Fails to compile until the implementer exports it.
+	if mgmt.MaxConcurrentConnections != 128 {
+		t.Errorf("AC-013: mgmt.MaxConcurrentConnections = %d; want 128 (ADR-012 §8 / Ruling 3)",
+			mgmt.MaxConcurrentConnections)
+	}
+
+	_, daemonPriv := mustGenKey(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+
+	// multiConnListener accepts up to n connections from pre-connected net.Pipe pairs.
+	// It is an in-process fake that drives the bounded accept loop without touching
+	// the OS network stack.
+	type multiConnListener struct {
+		conns  chan net.Conn
+		closed chan struct{}
+	}
+	newMultiConnListener := func(capacity int) *multiConnListener {
+		return &multiConnListener{
+			conns:  make(chan net.Conn, capacity),
+			closed: make(chan struct{}),
+		}
+	}
+	mln := newMultiConnListener(10)
+	mlnAddr := &net.UnixAddr{Name: "test-cap", Net: "unix"}
+
+	// Embed Accept/Close/Addr on multiConnListener to satisfy net.Listener.
+	acceptFn := func() (net.Conn, error) {
+		select {
+		case <-mln.closed:
+			return nil, net.ErrClosed
+		case c := <-mln.conns:
+			return c, nil
+		}
+	}
+	closeFn := func() error {
+		select {
+		case <-mln.closed:
+		default:
+			close(mln.closed)
+		}
+		return nil
+	}
+	addrFn := func() net.Addr { return mlnAddr }
+
+	ln := &fakeSyncListener{acceptFn: acceptFn, closeFn: closeFn, addrFn: addrFn}
+
+	// Construct server with MaxConcurrentConnections = 3 via WithMaxConnections.
+	// AC-013: the implementer must add WithMaxConnections(n int) functional option.
+	srv := mgmt.NewServer(ln, daemonPriv, ops, nil, "0.1.0-test",
+		mgmt.WithMaxConnections(3))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	go func() {
+		_ = srv.Serve(ctx)
+	}()
+
+	// Give Serve a moment to start its accept loop.
+	time.Sleep(10 * time.Millisecond)
+
+	// Open 3 connections that stall at the handshake phase (receive CHALLENGE, send nothing).
+	var stalledClients [3]net.Conn
+	for i := range stalledClients {
+		srvConn, cliConn := net.Pipe()
+		mln.conns <- srvConn
+		stalledClients[i] = cliConn
+	}
+
+	// Wait for all 3 to receive their CHALLENGE (proving they are in the accept-loop
+	// goroutine, holding the semaphore slots).
+	for i, cli := range stalledClients {
+		if err := cli.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+			t.Fatalf("client[%d] SetReadDeadline: %v", i, err)
+		}
+		msg := readMsg(t, cli)
+		if msg == nil || msg["type"] != "challenge" {
+			t.Fatalf("AC-013: client[%d]: expected challenge; got %v", i, msg)
+		}
+		// Clear deadline — we want this client to stall indefinitely.
+		if err := cli.SetReadDeadline(time.Time{}); err != nil {
+			t.Fatalf("client[%d] clear deadline: %v", i, err)
+		}
+	}
+
+	// Now attempt a 4th connection. The server semaphore is at capacity (3/3).
+	// Inject the 4th server-side conn into the listener.
+	srvConn4, cliConn4 := net.Pipe()
+	t.Cleanup(func() {
+		_ = srvConn4.Close()
+		_ = cliConn4.Close()
+	})
+	mln.conns <- srvConn4
+
+	// AC-013: the 4th client must NOT immediately receive a CHALLENGE.
+	// Set a short deadline — if it times out, the semaphore is back-pressuring correctly.
+	if err := cliConn4.SetReadDeadline(time.Now().Add(80 * time.Millisecond)); err != nil {
+		t.Fatalf("client4 SetReadDeadline: %v", err)
+	}
+	msg4 := readMsg(t, cliConn4)
+	if msg4 != nil {
+		t.Errorf("AC-013: 4th client received message while semaphore should be full; "+
+			"got type=%v (server must back-pressure, not spawn unbounded goroutines)", msg4["type"])
+	}
+
+	// Release one stalled client → semaphore slot freed → 4th client should proceed.
+	_ = stalledClients[0].Close()
+	// Register cleanup for remaining stalled clients (indices 1 and 2).
+	t.Cleanup(func() { _ = stalledClients[1].Close() })
+	t.Cleanup(func() { _ = stalledClients[2].Close() })
+
+	// Give the 4th client a fresh deadline to receive its CHALLENGE.
+	if err := cliConn4.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+		t.Fatalf("client4 fresh deadline: %v", err)
+	}
+	msg4b := readMsg(t, cliConn4)
+	if msg4b == nil || msg4b["type"] != "challenge" {
+		t.Errorf("AC-013: 4th client: expected challenge after semaphore slot freed; got %v", msg4b)
+	}
+}
+
+// fakeSyncListener is an in-process net.Listener backed by injectable functions.
+// Used by TestMgmtServer_ConnectionCap_AC013 to avoid real OS sockets.
+type fakeSyncListener struct {
+	acceptFn func() (net.Conn, error)
+	closeFn  func() error
+	addrFn   func() net.Addr
+}
+
+func (f *fakeSyncListener) Accept() (net.Conn, error) { return f.acceptFn() }
+func (f *fakeSyncListener) Close() error              { return f.closeFn() }
+func (f *fakeSyncListener) Addr() net.Addr            { return f.addrFn() }
 
 // ── Authorized-key-set rejection (no AC number — additional coverage) ─────────
 

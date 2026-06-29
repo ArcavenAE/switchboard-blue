@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 // MaxMessageBytes is the maximum JSON message size accepted on the management
@@ -29,6 +30,41 @@ import (
 // json.Decoder.Decode call. 64 KiB is generous for all management RPCs.
 // Defined here per ADR-012 §6 Bounded Read (CWE-400); BC-2.07.004 PC-6.
 const MaxMessageBytes = 1 << 16 // 64 KiB
+
+// HandshakeTimeout is the read deadline applied during the challenge-response
+// handshake (from CHALLENGE sent to CHALLENGE_RESPONSE received). Default 10s.
+// Closes EC-001 CWE-400 gap (ADR-012 §7 / BC-2.07.004 PC-1 / Ruling 1).
+const HandshakeTimeout = 10 * time.Second
+
+// RPCIdleTimeout is the read deadline applied after AUTH_OK is sent, while
+// waiting for the first RPC request. Default 30s (ADR-012 §7 / Ruling 1).
+const RPCIdleTimeout = 30 * time.Second
+
+// MaxConcurrentConnections is the default semaphore size for concurrent
+// per-connection goroutines. Excess connections back-pressure into the OS
+// accept backlog. Prevents CWE-770 fd/goroutine exhaustion (ADR-012 §8 / Ruling 3).
+const MaxConcurrentConnections = 128
+
+// Option is a functional option for NewServer.
+type Option func(*Server)
+
+// WithHandshakeTimeout overrides the HandshakeTimeout used for the challenge-response
+// phase. The default is HandshakeTimeout (10s). This option exists to allow tests
+// to use a short timeout without waiting 10s (AC-001, VP-064 sub-case a).
+func WithHandshakeTimeout(d time.Duration) Option {
+	return func(s *Server) {
+		s.handshakeTimeout = d
+	}
+}
+
+// WithMaxConnections overrides the MaxConcurrentConnections semaphore size.
+// The default is MaxConcurrentConnections (128). This option exists to allow
+// tests to verify connection-cap back-pressure with a small cap (AC-013).
+func WithMaxConnections(n int) Option {
+	return func(s *Server) {
+		s.sem = make(chan struct{}, n)
+	}
+}
 
 // Handler is a registered command handler. Command is the RPC command name
 // (e.g. "svtn.list"). Fn receives the authenticated connection context and the
@@ -56,9 +92,6 @@ func NewOperatorKeySet(keys []ed25519.PublicKey) *OperatorKeySet {
 
 // IsBootstrap reports whether no authorized operator keys were configured.
 // In bootstrap mode the caller authorizes by comparing against the daemon's own key.
-//
-// GREEN-BY-DESIGN: zero branching beyond the return expression, no I/O, no helpers,
-// 1 line. Test for this passes immediately against the stub — expected and documented.
 func (o *OperatorKeySet) IsBootstrap() bool {
 	return len(o.keys) == 0
 }
@@ -78,13 +111,16 @@ func (o *OperatorKeySet) IsAuthorized(pubkey ed25519.PublicKey) bool {
 // Server is the management plane server. It is started once per daemon mode.
 // Construct via NewServer; never copy after first use.
 type Server struct {
-	ln        net.Listener
-	daemonKey ed25519.PrivateKey
-	ops       *OperatorKeySet
-	handlers  []Handler
-	connWG    sync.WaitGroup // tracks per-connection goroutines; used by Shutdown
+	ln               net.Listener
+	daemonKey        ed25519.PrivateKey
+	ops              *OperatorKeySet
+	handlers         []Handler
+	daemonVersion    string
+	handshakeTimeout time.Duration
+	sem              chan struct{} // bounded accept semaphore (CWE-770)
+	connWG           sync.WaitGroup
 
-	// mu protects the active connection set.
+	// mu protects the active connection set. Never hold mu while calling conn.Close().
 	mu    sync.Mutex
 	conns map[net.Conn]struct{}
 }
@@ -92,19 +128,39 @@ type Server struct {
 // NewServer constructs a Server with the given listener, operator key set,
 // and registered handlers. No init() functions — all dependencies injected.
 // daemonKey is the daemon's own Ed25519 private key, used to sign challenges.
+// daemonVersion is the semver string embedded in AUTH_OK messages — must be
+// non-empty (e.g. "1.2.3" from ldflags, or "dev" for unreleased builds).
+// NewServer panics if daemonVersion is empty; this enforces the invariant that
+// the build system always injects a version string (ADR-012 §Ruling 6 / AC-007).
 func NewServer(
 	ln net.Listener,
 	daemonKey ed25519.PrivateKey,
 	ops *OperatorKeySet,
 	handlers []Handler,
+	daemonVersion string,
+	opts ...Option,
 ) *Server {
-	return &Server{
-		ln:        ln,
-		daemonKey: daemonKey,
-		ops:       ops,
-		handlers:  handlers,
-		conns:     make(map[net.Conn]struct{}),
+	// Panic on empty daemonVersion: enforces that the build system injects a version.
+	// The sentinel "dev" is accepted — it is the defined unreleased-build value.
+	// An empty string is a defect (hardcoded "" or a missing ldflags wiring).
+	if daemonVersion == "" {
+		panic("mgmt.NewServer: daemonVersion must not be empty (ADR-012 §Ruling 6)")
 	}
+
+	s := &Server{
+		ln:               ln,
+		daemonKey:        daemonKey,
+		ops:              ops,
+		handlers:         handlers,
+		daemonVersion:    daemonVersion,
+		handshakeTimeout: HandshakeTimeout,
+		sem:              make(chan struct{}, MaxConcurrentConnections),
+		conns:            make(map[net.Conn]struct{}),
+	}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // trackConn registers conn in the active connection set.
@@ -121,39 +177,97 @@ func (s *Server) untrackConn(conn net.Conn) {
 	s.mu.Unlock()
 }
 
-// closeAllConns closes all tracked connections, unblocking their goroutines.
+// closeAllConns snapshots the connection set under the lock, then closes each
+// connection outside the lock. This prevents holding mu while calling Close(),
+// which would deadlock if Close() triggers untrackConn (go.md rule 12).
 func (s *Server) closeAllConns() {
 	s.mu.Lock()
+	snapshot := make([]net.Conn, 0, len(s.conns))
 	for conn := range s.conns {
-		_ = conn.Close()
+		snapshot = append(snapshot, conn)
 	}
 	s.mu.Unlock()
+	for _, conn := range snapshot {
+		_ = conn.Close()
+	}
 }
 
 // Serve accepts connections and handles them until ctx is cancelled or the
-// listener is closed. Returns when all in-flight connections have terminated
-// (WaitGroup-tracked). Safe to call from a wg-tracked goroutine in the daemon
-// lifecycle per ARCH-01 §Goroutine WaitGroup Contract.
+// listener is closed. Returns nil on normal Shutdown, or a non-nil error on
+// unexpected listener failure. Safe to call from a wg-tracked goroutine in the
+// daemon lifecycle per ARCH-01 §Goroutine WaitGroup Contract.
 func (s *Server) Serve(ctx context.Context) error {
-	// Close the listener when ctx is cancelled so Accept unblocks and returns.
-	// Shutdown also calls ln.Close; the second close is a no-op error that's ignored.
+	// ctx-watcher goroutine: closes the listener when the context is cancelled so
+	// Accept unblocks. Uses a done channel to ensure this goroutine exits when
+	// Serve returns (preventing a goroutine leak if Shutdown is never called).
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
-		<-ctx.Done()
-		_ = s.ln.Close()
-		// Also force-close all in-flight connections so their goroutines exit promptly.
-		s.closeAllConns()
+		select {
+		case <-ctx.Done():
+			_ = s.ln.Close()
+			s.closeAllConns()
+		case <-done:
+			// Serve returned (e.g. Shutdown called) — exit cleanly.
+		}
 	}()
 
+	var backoff time.Duration
 	for {
+		// Acquire semaphore slot before Accept so we block here (not after spawning
+		// a goroutine) when at capacity. This provides back-pressure into the OS
+		// accept queue without spawning unbounded goroutines (CWE-770 / AC-013).
+		select {
+		case s.sem <- struct{}{}:
+		case <-done:
+			s.connWG.Wait()
+			return nil
+		}
+
 		conn, err := s.ln.Accept()
 		if err != nil {
-			// Listener closed — drain in-flight connections, then return.
+			// Release the semaphore slot we pre-acquired.
+			<-s.sem
+
+			// Check if this is a normal shutdown: listener closed.
+			select {
+			case <-done:
+				s.connWG.Wait()
+				return nil
+			default:
+			}
+
+			// Transient error: back off exponentially (5ms→1s) and retry.
+			// Non-temporary fatal errors cause Serve to return.
+			if ne, ok := err.(net.Error); ok && ne.Temporary() { //nolint:staticcheck // net.Error.Temporary deprecated but still needed for EMFILE
+				if backoff == 0 {
+					backoff = 5 * time.Millisecond
+				} else {
+					backoff *= 2
+					if backoff > time.Second {
+						backoff = time.Second
+					}
+				}
+				select {
+				case <-time.After(backoff):
+				case <-done:
+					s.connWG.Wait()
+					return nil
+				}
+				continue
+			}
+
+			// Fatal accept error — drain in-flight connections and return.
 			s.connWG.Wait()
 			return err
 		}
+		backoff = 0
+
 		s.connWG.Add(1)
 		go func() {
 			defer s.connWG.Done()
+			defer func() { <-s.sem }() // release semaphore when connection goroutine exits
 			s.trackConn(conn)
 			defer s.untrackConn(conn)
 			s.handleConnection(ctx, conn)
@@ -162,21 +276,20 @@ func (s *Server) Serve(ctx context.Context) error {
 }
 
 // Shutdown drains in-flight connections and closes the listener.
-// Called by the daemon on SIGTERM/context cancel. Blocks until drained or
-// ctx expires (mirrors drain timeout semantics from internal/drain).
+// Called by the daemon on SIGTERM/context cancel. Returns nil on success.
 func (s *Server) Shutdown(ctx context.Context) error {
 	// Close the listener so Serve's Accept loop unblocks and returns.
 	_ = s.ln.Close()
 	// Force-close all in-flight connections so their goroutines return.
 	s.closeAllConns()
 	// Wait for all in-flight connection goroutines to finish.
-	done := make(chan struct{})
+	waited := make(chan struct{})
 	go func() {
 		s.connWG.Wait()
-		close(done)
+		close(waited)
 	}()
 	select {
-	case <-done:
+	case <-waited:
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("mgmt shutdown: %w", ctx.Err())
@@ -247,6 +360,17 @@ func sendJSON(conn net.Conn, v any) error {
 	return err
 }
 
+// sendAuthFail sends an AUTH_FAIL message and closes conn. Helper to avoid
+// repetition across all auth failure paths.
+func sendAuthFail(conn net.Conn) {
+	_ = sendJSON(conn, authFailMsg{
+		Type:    "auth_fail",
+		Code:    "E-ADM-010",
+		Message: "authentication failed",
+	})
+	_ = conn.Close()
+}
+
 // handleConnection performs the ADR-012 auth handshake on a single connection:
 // send CHALLENGE, read CHALLENGE_RESPONSE (via io.LimitReader), verify signature,
 // send AUTH_OK or AUTH_FAIL, then dispatch authenticated RPCs.
@@ -264,6 +388,11 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	}
 
 	// Step 2: Sign the nonce with the daemon's private key to prevent nonce forgery by MITM.
+	pub, ok := s.daemonKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return
+	}
+	_ = pub // public key available for bootstrap comparison below
 	daemonSig := ed25519.Sign(s.daemonKey, nonceBytes[:])
 
 	// Step 3: Send CHALLENGE message immediately before reading any client data (PC-1).
@@ -276,70 +405,70 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		return
 	}
 
-	// Step 4: Read CHALLENGE_RESPONSE via io.LimitReader (CWE-400, PC-6).
+	// Step 4: Apply HandshakeTimeout read deadline before reading CHALLENGE_RESPONSE.
+	// Closes EC-001 CWE-400 gap (ADR-012 §7 / BC-2.07.004 PC-1 / Ruling 1).
+	if err := conn.SetReadDeadline(time.Now().Add(s.handshakeTimeout)); err != nil {
+		return
+	}
+
+	// Step 5: Read CHALLENGE_RESPONSE via io.LimitReader (CWE-400, PC-6).
 	// Any message exceeding MaxMessageBytes causes decode error → connection close.
 	dec := json.NewDecoder(io.LimitReader(conn, MaxMessageBytes))
 
 	var cresp challengeResponseMsg
 	if err := dec.Decode(&cresp); err != nil {
-		// EOF, timeout, oversized message, or malformed JSON → fail closed, no AUTH_FAIL
-		// (no point sending if connection is broken/oversized).
-		_ = sendJSON(conn, authFailMsg{
-			Type:    "auth_fail",
-			Code:    "E-ADM-010",
-			Message: "authentication failed",
-		})
+		// EOF, timeout, oversized message, or malformed JSON → fail closed.
+		// On timeout (HandshakeTimeout expiry / silent stall) just close — no point
+		// sending AUTH_FAIL to a non-responsive client (AC-001 VP-064 sub-case a).
+		// On other errors (malformed JSON, oversized) send AUTH_FAIL.
+		_ = conn.SetReadDeadline(time.Time{})
+		if ne, ok := err.(net.Error); !ok || !ne.Timeout() {
+			sendAuthFail(conn)
+		}
 		return
 	}
 
-	// Step 5: Validate that type=="challenge_response" (PC-5: wrong type → AUTH_FAIL).
+	// Clear the handshake read deadline.
+	_ = conn.SetReadDeadline(time.Time{})
+
+	// Step 6: Validate that type=="challenge_response".
+	// Post-auth structural guard (AC-003 / VP-065 / BC-2.07.004 PC-3 / Ruling 7):
+	// The authenticated bool is managed per-connection in this function. On entry
+	// (first CHALLENGE_RESPONSE decode), authenticated is false. If any
+	// challenge_response arrives after auth succeeds, the guard fires below.
+	// Here we also reject non-challenge_response types (AC-005: RPC without auth).
 	if cresp.Type != "challenge_response" {
-		_ = sendJSON(conn, authFailMsg{
-			Type:    "auth_fail",
-			Code:    "E-ADM-010",
-			Message: "authentication failed",
-		})
+		// Wrong type (e.g. "request") at the auth step → AUTH_FAIL + close.
+		sendAuthFail(conn)
 		return
 	}
 
-	// Step 6: Decode nonce_sig and pubkey from base64url.
+	// Step 7: Decode nonce_sig and pubkey from base64url.
 	nonceSig, err := base64.RawURLEncoding.DecodeString(cresp.NonceSig)
 	if err != nil {
-		_ = sendJSON(conn, authFailMsg{
-			Type:    "auth_fail",
-			Code:    "E-ADM-010",
-			Message: "authentication failed",
-		})
+		sendAuthFail(conn)
 		return
 	}
 	pubkeyBytes, err := base64.RawURLEncoding.DecodeString(cresp.Pubkey)
 	if err != nil {
-		_ = sendJSON(conn, authFailMsg{
-			Type:    "auth_fail",
-			Code:    "E-ADM-010",
-			Message: "authentication failed",
-		})
+		sendAuthFail(conn)
 		return
 	}
 
-	// Step 7: Validate pubkey length before using (ed25519 requires exactly 32 bytes).
+	// Step 8: Validate pubkey length (ed25519 requires exactly 32 bytes).
 	if len(pubkeyBytes) != ed25519.PublicKeySize {
-		_ = sendJSON(conn, authFailMsg{
-			Type:    "auth_fail",
-			Code:    "E-ADM-010",
-			Message: "authentication failed",
-		})
+		sendAuthFail(conn)
 		return
 	}
 
 	pubkey := ed25519.PublicKey(pubkeyBytes)
 
-	// Determine the effective authorized key set. In bootstrap mode (no operator keys
-	// configured), the daemon's own public key is the sole authorized key (PC-9).
+	// Step 9: Determine the effective authorized key set.
+	// Bootstrap mode: daemon's own public key is the sole authorized key (PC-9).
 	var authorized bool
 	if s.ops.IsBootstrap() {
 		daemonPub := s.daemonKey.Public().(ed25519.PublicKey)
-		// Use constant-time comparison for bootstrap check too (Inv-5).
+		// Constant-time comparison for bootstrap check too (Inv-5).
 		authorized = subtle.ConstantTimeCompare([]byte(pubkey), []byte(daemonPub)) == 1
 	} else {
 		authorized = s.ops.IsAuthorized(pubkey)
@@ -348,26 +477,30 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	// Verify signature: ed25519.Verify(pubkey, nonceBytes, nonceSig).
 	sigValid := ed25519.Verify(pubkey, nonceBytes[:], nonceSig)
 
-	// Both checks must pass. Fail closed — same AUTH_FAIL for all failure modes (Inv-5, PC-8).
+	// Both checks must pass. Fail closed — same AUTH_FAIL for all failures (Inv-5, PC-8).
 	if !authorized || !sigValid {
-		_ = sendJSON(conn, authFailMsg{
-			Type:    "auth_fail",
-			Code:    "E-ADM-010",
-			Message: "authentication failed",
-		})
+		sendAuthFail(conn)
 		return
 	}
 
-	// Step 8: Send AUTH_OK (PC-7).
-	authOK := authOKMsg{
+	// Step 10: Send AUTH_OK with the injected daemonVersion (PC-7 / Ruling 6).
+	// daemonVersion comes from NewServer — never hardcoded here.
+	if err := sendJSON(conn, authOKMsg{
 		Type:          "auth_ok",
-		DaemonVersion: "dev",
-	}
-	if err := sendJSON(conn, authOK); err != nil {
+		DaemonVersion: s.daemonVersion,
+	}); err != nil {
 		return
 	}
 
-	// Step 9: Dispatch authenticated RPCs until connection closes or ctx is done.
+	// Connection is now authenticated.
+	authenticated := true
+
+	// Step 11: Apply RPCIdleTimeout before reading the first RPC.
+	if err := conn.SetReadDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
+		return
+	}
+
+	// Step 12: Dispatch authenticated RPCs until connection closes or ctx is done.
 	// Each RPC read is bounded by a fresh io.LimitReader (PC-6 applies to all reads).
 	for {
 		select {
@@ -381,11 +514,26 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 		var req rpcRequestMsg
 		if err := rpcDec.Decode(&req); err != nil {
-			// EOF, deadline, oversized message → clean disconnect
+			// EOF, deadline, oversized message → clean disconnect.
+			_ = conn.SetReadDeadline(time.Time{})
+			return
+		}
+
+		// Reset read deadline after successful decode.
+		_ = conn.SetReadDeadline(time.Time{})
+
+		// Post-auth structural guard (AC-003 / VP-065 / BC-2.07.004 PC-3 / Ruling 7):
+		// After AUTH_OK, any further "challenge_response" message triggers E-ADM-010 + close.
+		// The authenticated boolean is true at this point; this guard enforces that
+		// the protocol state machine does not allow re-authentication on a live connection.
+		if authenticated && req.Type == "challenge_response" {
+			// Security event: post-auth challenge_response protocol violation.
+			sendAuthFail(conn)
 			return
 		}
 
 		if req.Type != "request" {
+			// Unknown type after auth → close (clean disconnect).
 			return
 		}
 
@@ -420,6 +568,11 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		}
 
 		if err := sendJSON(conn, resp); err != nil {
+			return
+		}
+
+		// Re-apply RPCIdleTimeout before reading the next RPC.
+		if err := conn.SetReadDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
 			return
 		}
 	}
