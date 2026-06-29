@@ -43,7 +43,7 @@ Thumbs.db
 /switchboard
 .beads
 
-# Factory worktree and feature worktrees (never commit these gitlinks)
+# Factory worktree and feature worktrees (never commit these as tracked files or gitlinks)
 .factory
 .factory/
 .worktrees/
