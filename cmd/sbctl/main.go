@@ -56,7 +56,7 @@ func main() {
 	case "console":
 		err = connectAndRun(ctx, *target, *key, *jsonOut, "console.attach", nil)
 	case "admin":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "admin.list-keys", nil)
+		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:])
 	case "version":
 		err = connectAndRun(ctx, *target, *key, *jsonOut, "version", nil)
 	case "ping":
