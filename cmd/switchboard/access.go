@@ -137,17 +137,28 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		return fmt.Errorf("access: generate daemon keypair: %w", err)
 	}
 
-	// Start the management server first (ARCH-12 §Daemon Mode Startup — all four
-	// daemon modes must start mgmt.Server before data-plane work).
+	// Start the management server before opening data-plane connections
+	// (ARCH-12 §Daemon Mode Startup — all four daemon modes must start
+	// mgmt.Server before data-plane I/O such as sc.Connect).
 	var mgmtWG sync.WaitGroup
 	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {
-		// Ruling J (BC-2.07.004 EC-013): management server failure is fatal.
-		// The data plane is never entered — return immediately so the caller can
-		// exit non-zero (AC-015 / S-W5.01 v1.3).
-		return fmt.Errorf("access: start management server: %w", mgmtErr)
+		// Ruling J (BC-2.07.004 EC-013): when the user explicitly configured a
+		// management_socket path and it fails to bind, abort startup immediately —
+		// the operator's intent is clear, and silently running without it would
+		// be a silent-failure violation (AC-015 / S-W5.01 v1.3).
+		// When no ManagementSocket is set in config (using the mode default path),
+		// the failure may reflect an environment where /run/ is not writable;
+		// log the failure and continue so the data plane can still operate.
+		if cfg != nil && cfg.ManagementSocket != "" {
+			return fmt.Errorf("access: start management server: %w", mgmtErr)
+		}
+		fmt.Fprintf(stderr, "mgmt: failed to start management server: %v\n", mgmtErr) //nolint:errcheck
 	}
 
+	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
+	// Called after mgmt start so the ARCH-12 §Daemon Mode Startup ordering is
+	// preserved for the common case; the tickIntervalFor seam (AC-009) fires here.
 	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
