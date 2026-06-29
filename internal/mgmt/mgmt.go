@@ -579,14 +579,16 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		resp.ID = req.ID
 
 		if handlerFn == nil {
+			// PC-11 (Ruling C): unknown command → E-RPC-010; connection stays OPEN.
 			resp.OK = false
-			resp.Error = &rpcError{Code: "E-RPC-001", Message: "unknown command"}
+			resp.Error = &rpcError{Code: "E-RPC-010", Message: "unknown command: " + req.Command}
 			resp.Data = nil
 		} else {
 			data, err := handlerFn(ctx, req.Args)
 			if err != nil {
+				// PC-12 (Ruling C): handler error → E-RPC-011; connection stays OPEN.
 				resp.OK = false
-				resp.Error = &rpcError{Code: "E-RPC-002", Message: err.Error()}
+				resp.Error = &rpcError{Code: "E-RPC-011", Message: err.Error()}
 				resp.Data = nil
 			} else {
 				resp.OK = true
