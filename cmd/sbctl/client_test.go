@@ -874,6 +874,122 @@ func TestSbctl_ConnectAndRun_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestDispatch_EmitsCorrectWireType verifies AC-010 (BC-2.07.002 PC-3 / ADR-012
+// §3 step 6 / Ruling M):
+// dispatch() MUST emit `"type":"request"` in the outbound RPC envelope.
+// The server (internal/mgmt) expects exactly `"type":"request"` and closes the
+// connection silently on any other value after authentication — a wire-type
+// mismatch causes every RPC to fail with a connection-closed E-RPC-001 decode
+// error on the client side.
+//
+// RED because: current client.go sets Type: "rpc_request" (line ~254); the
+// spec requires Type: "request" per ADR-012 §3 step 6. This test asserts the
+// spec wire-type, so it MUST fail against the current buggy literal until the
+// one-line fix is applied.
+//
+// Test strategy: drive dispatch() over a net.Pipe; the mock server side reads
+// the raw bytes the client writes and checks the type field, then returns a
+// canonical `"type":"response"` envelope; dispatch() must decode that as a
+// successful call (nil error, non-nil data).
+//
+// BC: BC-2.07.002 PC-3; AC-010; ADR-012 §3 step 6; Ruling M.
+func TestDispatch_EmitsCorrectWireType(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	t.Cleanup(func() { _ = client.Close() })
+
+	// rawRequestCh receives the raw JSON bytes the client sends for the RPC request.
+	rawRequestCh := make(chan []byte, 1)
+
+	go func() {
+		defer func() { _ = server.Close() }()
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+
+		// Read the entire RPC request line written by dispatch().
+		buf := make([]byte, 4096)
+		n, err := server.Read(buf)
+		if err != nil || n == 0 {
+			rawRequestCh <- nil
+			return
+		}
+		raw := make([]byte, n)
+		copy(raw, buf[:n])
+		rawRequestCh <- raw
+
+		// Respond with the canonical server wire-type per ADR-012 §3 step 6.
+		// "type":"response" is the ONLY accepted server wire-type (Ruling M).
+		const response = `{"type":"response","id":"1","ok":true,"data":{}}` + "\n"
+		_, _ = server.Write([]byte(response))
+	}()
+
+	data, err := dispatch(client, "ping", nil)
+
+	// Retrieve what the mock server captured before asserting.
+	raw := <-rawRequestCh
+
+	// AC-010 / Ruling M primary assertion: the type field MUST be "request".
+	// RED because: current code emits "rpc_request", spec requires "request".
+	if raw == nil {
+		t.Fatal("AC-010: mock server received no bytes from dispatch() — dispatch may have failed before writing")
+	}
+	rawStr := string(raw)
+	if !strings.Contains(rawStr, `"type":"request"`) {
+		t.Errorf("AC-010 violated (ADR-012 §3 step 6 / Ruling M): dispatch() emitted wrong wire-type.\n  raw bytes: %s\n  want:       contains %q\n  RED because: client emits \"rpc_request\", spec requires \"request\"",
+			rawStr, `"type":"request"`)
+	}
+	if strings.Contains(rawStr, `"type":"rpc_request"`) {
+		t.Errorf("AC-010 violated: dispatch() emitted forbidden wire-type \"rpc_request\" (must be \"request\")")
+	}
+
+	// Secondary assertion: dispatch() must decode the canonical "type":"response"
+	// server response as a successful call — nil error and non-nil data.
+	if err != nil {
+		t.Errorf("AC-010: dispatch() returned unexpected error with canonical \"type\":\"response\" server response: %v", err)
+	}
+	if data == nil {
+		t.Error("AC-010: dispatch() returned nil data with a successful server response")
+	}
+}
+
+// TestDispatch_AcceptsResponseType verifies AC-010 (BC-2.07.002 PC-3 / Ruling M):
+// dispatch() MUST accept a server response envelope carrying `"type":"response"`
+// as a successful RPC reply. The canonical server wire-type is `"response"` per
+// ADR-012 §3 step 6; the client must not reject or hang on this type.
+//
+// This test locks in the acceptance contract so that a future refactor cannot
+// accidentally break the response-type handling.
+//
+// BC: BC-2.07.002 PC-3; AC-010; ADR-012 §3 step 6; Ruling M.
+func TestDispatch_AcceptsResponseType(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	t.Cleanup(func() { _ = client.Close() })
+
+	go func() {
+		defer func() { _ = server.Close() }()
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+
+		// Drain the RPC request so dispatch() does not block on its Encode call.
+		buf := make([]byte, 4096)
+		_, _ = server.Read(buf)
+
+		// Reply with the canonical "type":"response" wire-type (ADR-012 §3 step 6).
+		const response = `{"type":"response","id":"1","ok":true,"data":{"status":"ok"}}` + "\n"
+		_, _ = server.Write([]byte(response))
+	}()
+
+	data, err := dispatch(client, "router.status", nil)
+	// dispatch() must decode "type":"response" as success (nil error, non-nil data).
+	if err != nil {
+		t.Errorf("AC-010 violated: dispatch() rejected canonical \"type\":\"response\" server response: %v", err)
+	}
+	if data == nil {
+		t.Error("AC-010: dispatch() returned nil data for a successful \"type\":\"response\" server reply")
+	}
+}
+
 // TestSbctl_JSONEnvelopeFormat verifies AC-006:
 // newSuccessEnvelope produces {"ok":true,"error":null,"data":{...}} and
 // newErrorEnvelope produces {"ok":false,"error":{"code":"...","message":"..."},"data":null}.
