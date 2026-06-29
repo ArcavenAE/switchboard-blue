@@ -2,14 +2,14 @@
 artifact_id: BC-2.02.009
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
 bc_id: BC-2.02.009
 subsystem: multipath-forwarding
-architecture_module: internal/multipath
+architecture_module: "internal/multipath, internal/routing"
 capability: CAP-010
 priority: P0
 criticality: critical
@@ -17,7 +17,11 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-06-28
+    author: architect
+    reason: "Wave 4 fresh-context audit L-3: architecture_module updated to co-ownership — internal/multipath (DropCache primitive, S-4.01) + internal/routing (router wiring / collision logging, S-4.04); Traceability table updated accordingly"
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -88,9 +92,17 @@ Frame received at router after HMAC verification.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-025 | Cache hit suppresses frame; miss forwards frame | unit |
-| VP-025 | Cache never grows beyond configured maximum | proptest |
-| VP-025 | Retransmit (different content) always produces cache miss | unit |
+| VP-025 | Cache never grows beyond configured maximum (bounded capacity proptest) | proptest |
+| — (AC-level test; no separate VP) | Cache hit suppresses frame; cache miss forwards frame | unit (S-4.04 AC tests) |
+| — (AC-level test; no separate VP) | Retransmit (different content, different checksum) always produces cache miss | unit (S-4.04 AC tests) |
+
+> **VP table note (Wave 4 audit L-4, 2026-06-28):** Prior v1.1 listed all three rows
+> as VP-025, but VP-025 covers only the bounded-capacity proptest (∀ N: len(cache) ≤ N
+> after any number of inserts). The hit-suppression and retransmit-miss sub-properties
+> are verified by S-4.04 unit/AC tests, not by a separate registered verification
+> property. This is consistent with the repo convention (see BC-2.02.005 VP table):
+> unit-test-sufficient sub-properties are marked "AC-level test; no separate VP" rather
+> than assigned a redundant VP number. No new VP registered; no VP-INDEX change required.
 
 ## Traceability
 
@@ -99,7 +111,7 @@ Frame received at router after HMAC verification.
 | L2 Capability | CAP-010 ("Router split-horizon and duplicate suppression") per capabilities.md §CAP-010 |
 | L2 Domain Invariants | DI-009 (receiver deduplication: first arrival wins; retransmits produce different checksums) |
 | Architecture Cross-reference | ARCH-03 §"Drop cache key (F-006 resolution)" — compound key `(checksum, arrival_interface_id)` mandated for multipath correctness |
-| Architecture Module | internal/multipath |
+| Architecture Module | internal/multipath (DropCache primitive, S-4.01) + internal/routing (router wiring / collision logging, S-4.04) |
 | Stories | [filled by story-writer] |
 | Capability Anchor Justification | CAP-010 ("Router split-horizon and duplicate suppression") per capabilities.md §CAP-010 — this BC specifies the checksum-based drop cache that CAP-010 defines as the "bounded drop cache of frame checksums" |
 

@@ -65,6 +65,20 @@ These items have no active work pending before Phase 6. Archived to keep STATE.m
 | C-1/OBS-3 | CRITICAL | WithFailureCounter/E-ADM-017 wiring gap: buildRouter returned counter but caller discarded it; OBS-3 spec-forbidden partial-wiring. | implementer | RESOLVED PR #20 (418de54) — WithFailureCounter wired into buildRouter(threshold=5,window=60s); OBS-3 closed. Only remaining deferral: network-ingress LISTENER → S-BL.NI (ARCH-08 v2.3 §6.5.1). |
 | T2 | OBLIGATION | ADR-011 v1.6 Obligation T2: deterministic TOCTOU misclassification-branch test required (complementing probabilistic 50-loop test). | test-writer | RESOLVED PR #19 (849bd86) — deterministic swapBarrier test added to TestForwardFramesTOCTOUCount50 path; ARCH-08 v2.3 documents T2 satisfied. |
 
+## Wave 4 Cycle-Close Resolved Items (archived from STATE.md 2026-06-28)
+
+| ID | Severity | Description | Owner | Resolved |
+|----|----------|-------------|-------|----------|
+| BC-2.09.003-STALE | NITPICK | BC-2.09.003 traceability table + Story Anchor said "AC-001 through AC-006"; story now reaches AC-009. | story-writer/spec-steward | RESOLVED — BC-2.09.003 v1.5 updated AC-001..AC-009 in cycle-close burst. |
+| S601-NITPICK-A | NITPICK | S-6.01 story File Structure table omits cmd/switchboard/access.go though Task 17 mandates modifying it. | story-writer | RESOLVED — S-6.01 story updated in cycle-close. |
+| S601-NITPICK-B | NITPICK | S-6.01 story EC ids diverge from BC EC ids (cosmetic id drift). | story-writer | RESOLVED — S-6.01 story updated in cycle-close. |
+| S601-NITPICK-C | NITPICK | S-6.01 E-CFG-005/E-CFG-004 reuse — no dedicated BC code (cosmetic). | product-owner | RESOLVED — accepted as MVP cosmetic; no spec change needed. |
+| S601-NITPICK-D | NITPICK | S-6.01 ValidationError.Error() "value" token not in BC canonical template (byte-level cosmetic). | implementer | RESOLVED — accepted as MVP cosmetic; implementation matches spirit. |
+| S601-NITPICK-E | OBS | S-6.01 yaml.v3 billion-laughs bound is implicit/library-version-dependent. | implementer | RESOLVED — optional; accepted with note that library handles it. |
+| S601-DRAFT-STORY | OBS | Dedicated SIGHUP/reload story (BC-2.09.003 Inv-3/EC-004) to be opened as draft. | product-owner | RESOLVED — S-6.04 created (cycle-close burst). |
+| S403-COS1/2 | OBS | S-4.03 cosmetics: stale "encoding/binary" doc ref + leftover stub docstring in merged artifact (8d9744f). | implementer | RESOLVED — PR #29 (7ef43b8) hygiene pass fixed both. |
+| S404-OBS-G | OBS | S-4.04 BC-2.02.008 PC-4 (split-horizon/drop-cache independence) has no dedicated negative test — satisfied structurally. | test-writer | RESOLVED — structural satisfaction accepted by architect; no further test needed at this scope. |
+
 ## Pre-Restart Wave 3 Adversary Passes (superseded by restart run at 10dd880)
 
 Prior run (before PR #15 fix): pass-01 CONVERGED (0C/0H/3M/2L/3O), pass-02 NOT_CONVERGED

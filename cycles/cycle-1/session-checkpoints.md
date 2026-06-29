@@ -242,6 +242,14 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 
 ---
 
+## Archived: 2026-06-28 — Wave 4 ALL STORIES MERGED; integration gate PASSED
+
+**Position:** Phase 3 Wave 4. All 5 stories MERGED. S-4.01 MERGED (#24, e415d31). S-4.02 MERGED (#25, 95729c7). S-4.03 MERGED (#26, 8d9744f). S-4.04 MERGED (#27, 42c51e2). S-6.01 MERGED (#28, abeba27). develop HEAD = abeba27. 0 open PRs. Wave 4 integration gate PASSED (build clean, race 13/13 ok, lint 0 issues). Worktrees + feature branches cleaned.
+
+**NEXT ACTION at archive time:** Wave 4 wave-level adversarial convergence (3 clean passes) + wave gate; then cycle-close items (SIGHUP/reload draft story, BC-2.09.003 traceability refresh, process-gap follow-ups).
+
+---
+
 ## Archived: 2026-06-27 — Wave 3 CLOSED; Wave 4 pending
 
 **Position:** Phase 3, Wave 3 CLOSED (gate approved 2026-06-27). develop HEAD = 85c2d2f (PR #22 plugin opt-in merged). PR #23 (kos-scaffolding cleanup) open.

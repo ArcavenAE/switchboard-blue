@@ -2,7 +2,7 @@
 artifact_id: ARCH-03-routing-engine
 document_type: architecture-section
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -27,6 +27,7 @@ modified:
   - 2026-06-23T00:00:00
   - 2026-06-27T00:00:00
   - 2026-06-28T00:00:00
+  - 2026-06-28T12:00:00
 changelog:
   - version: "1.1"
     date: 2026-06-27T00:00:00
@@ -44,6 +45,11 @@ changelog:
     adjudication: S-4.03 RULING-003 ackseq-dos-ruling
     changes:
       - "Addition (§Downstream ARQ, input validation): OnAck validates ackSeq is within sackWindowSize (64) of nextExpected before iterating. Out-of-window ackSeq returns ErrAckOutOfWindow without state mutation. Unsigned subtraction handles stale-ACK case. Traces to BC-2.02.005 EC-005."
+  - version: "1.4"
+    date: 2026-06-28T12:00:00
+    adjudication: Wave 4 fresh-context consistency audit — DRIFT-S4.03-001 owner correction
+    changes:
+      - "Addition (§ADR-005, implementation ownership note): DRIFT-S4.03-001 resolution — ADR-005 resync-on-reconnect wire-mechanics are owned by S-BL.NI (network-ingress), not S-5.01. S-5.01 is scoped only to internal/metrics quality indicator (BC-2.06.001/002). Drift entry owner field corrected to S-BL.NI."
 ---
 
 # ARCH-03: Routing Engine
@@ -222,6 +228,17 @@ Resync is simpler and correct.
 **Open question for KoS:** This sketches the PE-phase design. The exact `RESYNC`
 frame format and state machine are deferred to PE implementation. E router has a
 single path; failover only occurs on manual restart.
+
+**Implementation ownership (DRIFT-S4.03-001 resolution, 2026-06-28):** The
+wire-mechanics of ADR-005 (RESYNC frame emission, reconnect state machine, replay
+from `last_acked_seq + 1`) belong to **S-BL.NI** (network-ingress story), not
+S-5.01. Rationale: resync fires when the node re-establishes a network connection
+to a new router — this is a connection-lifecycle concern owned by the network-ingress
+layer (internal/arq + network-ingress wiring). S-5.01 is scoped exclusively to the
+quality-indicator state machine in `internal/metrics` (BC-2.06.001/002) and has no
+ARQ reconnect scope. The `internal/arq` pure-core state machine (S-4.03) provides the
+primitives (last ACK seq, retransmit); the effectful reconnect trigger lives in the
+ingress layer. DRIFT-S4.03-001 owner field should read: `S-BL.NI`.
 
 ## Quality Indicator (internal/metrics, BC-2.06.001–002)
 

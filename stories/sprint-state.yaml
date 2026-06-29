@@ -31,16 +31,27 @@ wave_status:
     status: closed
     gate_disposition: APPROVED
     closed_at: 2026-06-27
-    stories_merged: [S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03]
+    stories_merged: [S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05]
     points_complete: 32
     points_remaining: 0
   - wave: 4
-    status: active
+    status: closed
     started_at: 2026-06-27
+    closed_at: 2026-06-28
+    gate_disposition: APPROVED
+    wave_adversary_converged: true
+    wave_adversary_passes: 6
+    wave_adversary_streak: "6/6 C=0/H=0/M=0 (2 rounds x 3 lenses)"
+    wavegate_consistency_audit: "CONDITIONAL PASS — 14 findings, all resolved in cycle-close burst; 0 CRITICAL"
     stories: [S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
     points: 29
-    merged: [S-4.01, S-4.02, S-4.03]
-    pr_open_pending_human_merge: [S-4.04, S-6.01]
+    stories_merged: [S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
+    merge_shas:
+      S-4.01: e415d31  # PR #24
+      S-4.02: 95729c7  # PR #25
+      S-4.03: 8d9744f  # PR #26
+      S-4.04: 42c51e2  # PR #27
+      S-6.01: abeba27  # PR #28
 
 stories:
   - story_id: S-0.01
@@ -230,16 +241,14 @@ stories:
     title: "Split-horizon loop prevention in internal/routing"
     epic: E-4
     wave: 4
-    status: pr-open-pending-human-merge
+    status: completed
     adversary_streak: 3
     adversary_converged: true
     impl_sha: 24c4378
     impl_branch: feat/S-4.04-split-horizon-drop-cache
     pr: 27
-    pr_head: 24c4378
-    pr_state: OPEN/MERGEABLE/CLEAN
-    ci_status: green
-    pr_reviewer: APPROVE
+    merge_sha: 42c51e2
+    merged_at: "2026-06-28"
     acceptance_criteria_count: 7
     priority: P0
     scope_phase: E
@@ -270,17 +279,14 @@ stories:
     title: "Config parsing and validation with actionable startup errors"
     epic: E-6
     wave: 4
-    status: pr-open-pending-human-merge
+    status: completed
     adversary_streak: 3
     adversary_converged: true
     impl_sha: 37d45fa
     impl_branch: feat/S-6.01-config-validation
     pr: 28
-    pr_head: 07a4b00
-    pr_source_sha: 37d45fa
-    pr_state: OPEN/MERGEABLE/CLEAN
-    ci_status: green
-    pr_reviewer: APPROVE
+    merge_sha: abeba27
+    merged_at: "2026-06-28"
     acceptance_criteria_count: 9
     priority: P0
     scope_phase: E

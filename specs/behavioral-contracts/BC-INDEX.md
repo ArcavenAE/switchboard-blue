@@ -31,15 +31,15 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.01.005 | Channel header is opaque to routers — parseable only by endpoints | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.005.md |
 | BC-2.01.006 | Session identity is cryptographic: node address derived from hash(SVTN-ID, public-key) | session-networking | CAP-004 | P0 | E | active | ss-01/BC-2.01.006.md |
 | BC-2.01.007 | Session continuity survives IP address change via cryptographic re-authentication | session-networking | CAP-004 | P0 | E | implemented (S-1.03 / PR #7) | ss-01/BC-2.01.007.md |
-| BC-2.02.001 | Duplicate-and-race: same frame sent on two fastest paths simultaneously | multipath-forwarding | CAP-005 | P0 | E | active | ss-02/BC-2.02.001.md |
-| BC-2.02.002 | Receiver delivers first-arriving copy and silently discards subsequent duplicates | multipath-forwarding | CAP-005 | P0 | E | active | ss-02/BC-2.02.002.md |
-| BC-2.02.003 | Per-path RTT and loss tracked via keep-alive probes; paths ranked by quality | multipath-forwarding | CAP-006 | P0 | E | active | ss-02/BC-2.02.003.md |
-| BC-2.02.004 | Upstream idempotent replay window: each frame carries last N keystrokes | multipath-forwarding | CAP-007 | P0 | E | active | ss-02/BC-2.02.004.md |
-| BC-2.02.005 | Downstream ARQ with piggybacked ACK and SACK bitmap | multipath-forwarding | CAP-008 | P0 | E | active | ss-02/BC-2.02.005.md |
-| BC-2.02.006 | TLPKTDROP terminates overdue downstream frames and signals degradation | multipath-forwarding | CAP-008 | P0 | E | active | ss-02/BC-2.02.006.md |
+| BC-2.02.001 | Duplicate-and-race: same frame sent on two fastest paths simultaneously | multipath-forwarding | CAP-005 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.001.md |
+| BC-2.02.002 | Receiver delivers first-arriving copy and silently discards subsequent duplicates | multipath-forwarding | CAP-005 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.002.md |
+| BC-2.02.003 | Per-path RTT and loss tracked via keep-alive probes; paths ranked by quality | multipath-forwarding | CAP-006 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.003.md |
+| BC-2.02.004 | Upstream idempotent replay window: each frame carries last N keystrokes | multipath-forwarding | CAP-007 | P0 | E | implemented (S-4.02 / PR #25) | ss-02/BC-2.02.004.md |
+| BC-2.02.005 | Downstream ARQ with piggybacked ACK and SACK bitmap | multipath-forwarding | CAP-008 | P0 | E | implemented (S-4.03 / PR #26) | ss-02/BC-2.02.005.md |
+| BC-2.02.006 | TLPKTDROP terminates overdue downstream frames and signals degradation | multipath-forwarding | CAP-008 | P0 | E | implemented (S-4.03 / PR #26) | ss-02/BC-2.02.006.md |
 | BC-2.02.007 | XOR parity FEC covers frame groups; single loss in group recoverable without retransmit | multipath-forwarding | CAP-009 | P1 | PE | active | ss-02/BC-2.02.007.md |
-| BC-2.02.008 | Router split-horizon prevents frames being forwarded back toward arrival interface | multipath-forwarding | CAP-010 | P0 | E | active | ss-02/BC-2.02.008.md |
-| BC-2.02.009 | Bounded drop cache suppresses looping duplicate frames by checksum | multipath-forwarding | CAP-010 | P0 | E | active | ss-02/BC-2.02.009.md |
+| BC-2.02.008 | Router split-horizon prevents frames being forwarded back toward arrival interface | multipath-forwarding | CAP-010 | P0 | E | implemented (S-4.04 / PR #27) | ss-02/BC-2.02.008.md |
+| BC-2.02.009 | Bounded drop cache suppresses looping duplicate frames by checksum | multipath-forwarding | CAP-010 | P0 | E | implemented (S-4.04 / PR #27) | ss-02/BC-2.02.009.md |
 | BC-2.03.001 | Access node advertises session presence via SVTN-scoped multicast on state change and periodic heartbeat | session-discovery | CAP-011 | P1 | PE | active | ss-03/BC-2.03.001.md |
 | BC-2.03.002 | Console enumerates all SVTN sessions without specifying hostnames or IP addresses | session-discovery | CAP-012 | P1 | PE | active | ss-03/BC-2.03.002.md |
 | BC-2.03.003 | Presence advertisement includes session name, attachment status, and quality indicator | session-discovery | CAP-011, CAP-012 | P1 | PE | active | ss-03/BC-2.03.003.md |
@@ -67,7 +67,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.08.001 | Console remotely controllable via sbctl: attach, detach, switch session, navigate | console-operations | CAP-025 | P1 | PE | active | ss-08/BC-2.08.001.md |
 | BC-2.09.001 | E router graduates to PE mode by adding upstream router connections in config | deployment-operations | CAP-026 | P2 | PE | active | ss-09/BC-2.09.001.md |
 | BC-2.09.002 | Router sends drain signal before shutdown; nodes migrate to alternate routers | deployment-operations | CAP-027 | P2 | PE | active | ss-09/BC-2.09.002.md |
-| BC-2.09.003 | Router Startup Fails Cleanly on Malformed Config with Actionable Error Message; Validated Config Is Applied to the Daemon | deployment-operations | CAP-028 | P0 | E | active | ss-09/BC-2.09.003.md |
+| BC-2.09.003 | Router Startup Fails Cleanly on Malformed Config with Actionable Error Message; Validated Config Is Applied to the Daemon | deployment-operations | CAP-028 | P0 | E | implemented (S-6.01 / PR #28) | ss-09/BC-2.09.003.md |
 
 ## Coverage Summary
 

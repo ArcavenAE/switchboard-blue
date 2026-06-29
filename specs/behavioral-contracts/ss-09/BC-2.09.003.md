@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -18,6 +18,18 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-06-28
+    version: "1.5"
+    change: >
+      Traceability refresh (KNOWN-STALE audit): Stories/Story-Anchor rows updated from
+      "AC-001 through AC-006" to "AC-001 through AC-009" to reflect the S-6.01 v1.5
+      expansion (SP-003/SP-004/SP-005 added AC-007, AC-008, AC-009; the BC's PC-5..PC-9
+      already defined the postconditions those ACs trace to). EC canonical numbering
+      affirmed as authoritative (BC EC-NNN is source of truth per VSDD); story-writer
+      must reconcile story S-6.01 EC IDs to match BC EC IDs (drift item S601-NITPICK-B):
+      story EC-012 should be EC-009, story EC-011 should be EC-008 (drain_timeout:0s
+      accepted), story EC-013 should be EC-010. Story EC numbering is cosmetic drift only
+      — no behavior change.
   - date: 2026-06-28
     version: "1.2"
     change: >
@@ -112,9 +124,9 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
    | Field | Reason for Deferral | Owning Story / Flag |
    |-------|---------------------|---------------------|
    | `listen_addr` | No TCP listener (`net.Listen` / `.Accept`) exists anywhere in the codebase; the daemon is a PTY/tmux relay with no network-ingress listener today. | **No current owner story — a network-listener introduction story is needed (flagged for STORY-INDEX).** The listener story must create `internal/listener` (or equivalent) and wire `cfg.ListenAddr` at that time. |
-   | `drain_timeout` | `internal/drain` does not exist on develop. | S-7.04 (Wave 7, PE graduation and graceful drain). |
-   | `upstream_routers` | PE-mode upstream connection logic is owned by the PE graduation work; `internal/drain` does not exist. | S-7.04 (Wave 7). |
-   | `keepalive_interval` | The `sweepDeadline` constant (60s, console eviction window) is architecturally distinct from the node reconnect keepalive interval described by FM-009 ("after `keepalive_interval`, default 1s, nodes attempt reconnect"). Wiring `cfg.KeepaliveInterval` to `sweepDeadline` would misrepresent their semantics. The correct keepalive mechanism is part of the drain/node-keepalive subsystem work. | S-7.04 (Wave 7). |
+   | `drain_timeout` | `internal/drain` does not exist on develop. | S-7.04 (Wave 7, PE graduation and graceful drain). **S-7.04 obligation (L-5):** Must wire `cfg.DrainTimeout` into the graceful-drain coordinator (the `internal/drain` package it introduces), replacing any hardcoded drain-timeout constant. The application point is the drain sequence initiated on graceful shutdown / PE graduation, specifically the deadline passed to the drain context or equivalent timeout mechanism. Default: 10s per ARCH-06 §Graceful Drain when field is zero/absent. |
+   | `upstream_routers` | PE-mode upstream connection logic is owned by the PE graduation work; `internal/drain` does not exist. | S-7.04 (Wave 7). **S-7.04 obligation (L-5):** Must wire `cfg.UpstreamRouters` (slice of `{addr string}`) into the PE-mode upstream connector, replacing any hardcoded upstream address list. The application point is the upstream connection pool / peer-list initialization in the PE graduation path. |
+   | `keepalive_interval` | The `sweepDeadline` constant (60s, console eviction window) is architecturally distinct from the node reconnect keepalive interval described by FM-009 ("after `keepalive_interval`, default 1s, nodes attempt reconnect"). Wiring `cfg.KeepaliveInterval` to `sweepDeadline` would misrepresent their semantics. The correct keepalive mechanism is part of the drain/node-keepalive subsystem work. | S-7.04 (Wave 7). **S-7.04 obligation (L-5):** Must wire `cfg.KeepaliveInterval` into the node-reconnect keepalive ticker (the mechanism described by FM-009), replacing any hardcoded 1s constant or equivalent. The application point is the keepalive goroutine / ticker that fires reconnect attempts from a drained or disconnected PE node. Default: 1s per ARCH-06 §Graceful Drain (FM-009) when field is zero/absent. MUST NOT wire to `sweepDeadline` (console eviction window — semantically unrelated). |
 
    These deferred fields are validated at startup (PC-6, PC-7, PC-8) — a bad value still causes an actionable error and exit 1. Only their APPLICATION to running subsystems is deferred.
 
@@ -191,7 +203,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
 | L2 Domain Invariants | (none directly; anchored to FM-010 via capability CAP-028) |
 | Architecture Module | internal/config |
-| Stories | S-6.01 (AC-001, AC-002, AC-003, AC-004, AC-005, AC-006) |
+| Stories | S-6.01 (AC-001 through AC-009) |
 | Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. The config-application postcondition (PC-9) is a necessary corollary: validation is meaningless if the validated config is then discarded. Anchored to FM-010 (deployment misconfig). |
 
 ## Related BCs
@@ -206,7 +218,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 
 ## Story Anchor
 
-S-6.01 — AC-001 through AC-006 trace to postconditions in this BC.
+S-6.01 — AC-001 through AC-009 trace to postconditions in this BC.
 
 ## VP Anchors
 
@@ -216,6 +228,7 @@ VP-028, VP-029 (existing; cover all postconditions including v1.2 additions).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-06-28 | Traceability refresh (KNOWN-STALE / Wave 4 audit): Stories row and Story Anchor updated from "AC-001 through AC-006" to "AC-001 through AC-009". S-6.01 gained AC-007 (drain_timeout negative rejection, PC-7), AC-008 (keepalive_interval negative rejection, PC-8), and AC-009 (tick_interval config application, PC-9) via SP-003/SP-004/SP-005 — the BC's postconditions PC-5..PC-9 were already fully defined; only the human-readable anchor summary was stale. Canonical EC numbering reaffirmed: BC EC-NNN is authoritative (VSDD policy); story-writer must reconcile S-6.01 EC IDs to BC EC IDs per S601-NITPICK-B: story EC-009 → BC EC-008 (drain_timeout:0s accepted), story EC-010 → BC EC-009 (drain_timeout:-5s → E-CFG-006, already correct in BC), story EC-011 → new (keepalive_interval:0s accepted — not yet in BC; story-writer to add BC EC-011 for symmetry if desired), story EC-012 → BC EC-009 (keepalive_interval:-1s → E-CFG-007), story EC-013 → BC EC-010 (valid config/daemon start). |
 | 1.4 | 2026-06-28 | Resolved 3-way contradiction: BC PC-7/PC-8 said "if present, must be > 0" (implying optional but rejecting zero), config.go rejected zero/absent as required fields (E-CFG-006/007), and ARCH-06 documented defaults (drain_timeout 10s, keepalive_interval 1s). Human ruling: "optional with defaults, align to ARCH-06." PC-7 and PC-8 updated: both fields are optional; Validate() rejects ONLY a negative value; zero/absent is accepted (daemon default applied at startup by S-7.04). E-CFG-006/007 trigger conditions updated from "zero or negative" to "negative"; message templates updated from "must be > 0" to "must not be negative." EC-008 corrected: drain_timeout: 0s is now accepted (daemon default 10s). Canonical test vector updated to match. |
 | 1.3 | 2026-06-28 | Right-sized PC-9 and Inv-5. Fresh-eyes verification confirmed that `listen_addr` binding, `drain_timeout`, `upstream_routers`, and `keepalive_interval` APPLICATION targets subsystems that do not exist on develop. Human ruling: "apply what exists now, track the rest as concrete dependencies." PC-9 narrowed: only `tick_interval` is applied now (wired to `halfchannel.New` in `cmd/switchboard/access.go`, currently hardcoded at `10ms`). DEFERRED-APPLICATION note added with named owning stories for each deferred field (listener introduction: no owner yet — flagged for STORY-INDEX; drain/PE/keepalive: S-7.04 Wave 7). Inv-5 narrowed to "applicable fields" so legitimately-deferred fields do not constitute an invariant violation. H1 title updated to "Applicable Subsystems." EC-010 and PC-9 canonical test vector updated. |
 | 1.2 | 2026-06-28 | S-6.01 scope expansion to cover (a) deep field validation and (b) config application. Added PC-5 through PC-9; added E-CFG-002, E-CFG-003, E-CFG-006, E-CFG-007 error codes; added EC-005 through EC-010; updated title H1 to reflect both behaviors; added Inv-4 and Inv-5. Fixed `subsystem:` frontmatter to use SS-09 (ARCH-INDEX Subsystem Registry). |

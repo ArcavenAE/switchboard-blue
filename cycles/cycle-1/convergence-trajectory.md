@@ -240,3 +240,44 @@ Tree: develop @ b68e498 (all 5 Wave 3 stories merged: S-3.04, S-3.01a, S-3.01b, 
 | W3-O-2 | OBS | cmd/switchboard/main.go | — | resolved when wiring story ships |
 | W3-O-3 | OBS | internal/session/upstream.go:300 | — | informational |
 | W3-PG-001 | [process-gap] | go.md/governance | constructor-default-polarity rule | codification follow-up at cycle-close |
+
+---
+
+## Wave 4 Wave-Level Adversary (6 diverse-lens passes, 2 rounds)
+
+Tree: develop @ abeba27 (all 5 Wave 4 stories merged: S-4.01, S-4.02, S-4.03, S-4.04, S-6.01)
+
+### Round 1 (3 passes)
+
+| Pass | Date | Lenses | CRIT | HIGH | MED | LOW | OBS | Verdict |
+|------|------|--------|------|------|-----|-----|-----|---------|
+| W4-R1-1 | 2026-06-28 | spec/BC↔AC, security/CWE, concurrency/race | 0 | 0 | 0 | — | — | CONVERGED (1/3) |
+| W4-R1-2 | 2026-06-28 | spec/BC↔AC, security/CWE, concurrency/race | 0 | 0 | 0 | — | — | CONVERGED (2/3) |
+| W4-R1-3 | 2026-06-28 | spec/BC↔AC, security/CWE, concurrency/race | 0 | 0 | 0 | — | — | CONVERGED (3/3) — BC-5.39.001 satisfied |
+
+### Round 2 (3 passes — fresh context confirmation)
+
+| Pass | Date | Lenses | CRIT | HIGH | MED | LOW | OBS | Verdict |
+|------|------|--------|------|------|-----|-----|-----|---------|
+| W4-R2-1 | 2026-06-28 | spec/BC↔AC, security/CWE, concurrency/race | 0 | 0 | 0 | — | — | CONVERGED (1/3) |
+| W4-R2-2 | 2026-06-28 | spec/BC↔AC, security/CWE, concurrency/race | 0 | 0 | 0 | — | — | CONVERGED (2/3) |
+| W4-R2-3 | 2026-06-28 | spec/BC↔AC, security/CWE, concurrency/race | 0 | 0 | 0 | — | — | CONVERGED (3/3) — BC-5.39.001 satisfied |
+
+### Trajectory Shorthand
+
+`6/6 diverse-lens passes C=0/H=0/M=0` — Wave 4 wave-level adversary CONVERGED
+
+---
+
+## Wave 4 Gate Consistency Audit
+
+Audit date: 2026-06-28. Auditor: consistency-validator.
+
+| Finding | Severity | Status |
+|---------|----------|--------|
+| 14 total findings | CRIT:0 / HIGH:0 / MED:0 / LOW:+ / OBS:+ | All resolved in cycle-close burst |
+| L-1: doc hygiene (stale ref + leftover stub docstring) | LOW | RESOLVED — PR #29 (7ef43b8) |
+| S403-COS1: stale "encoding/binary" doc ref | OBS | RESOLVED — PR #29 (7ef43b8) |
+| S403-COS2: leftover stub docstring | OBS | RESOLVED — PR #29 (7ef43b8) |
+
+**Disposition:** CONDITIONAL PASS — 14 findings, all resolved in cycle-close burst; 0 CRITICAL. Wave gate APPROVED 2026-06-28.
