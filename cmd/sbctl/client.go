@@ -27,6 +27,15 @@ const maxMessageBytes = 1 << 16 // 64 KiB
 // carries no deadline. Prevents indefinite hangs (CWE-400 slowloris, Ruling 2).
 const handshakeTimeout = 10 * time.Second
 
+// rpcResponseFallbackTimeout is the fallback read deadline for dispatch() when
+// the context carries no deadline (AC-011, BC-2.07.003 Invariant 2, Ruling V).
+// Symmetric with handshakeTimeout/RPCIdleTimeout on the server side (ARCH-12 v1.5).
+//
+// This var (not const) is intentionally overridable in tests: a test may set it
+// to a small value (e.g. 100ms) and restore it via t.Cleanup so the no-deadline
+// fallback path can be exercised without waiting 30 seconds.
+var rpcResponseFallbackTimeout = 30 * time.Second
+
 // challengeMsg is the CHALLENGE message received from the daemon (ADR-012 step 2).
 type challengeMsg struct {
 	Type      string `json:"type"`

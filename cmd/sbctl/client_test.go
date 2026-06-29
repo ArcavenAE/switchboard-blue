@@ -1095,7 +1095,7 @@ func TestSbctl_JSONEnvelopeFormat(t *testing.T) {
 	})
 }
 
-// TestDispatch_RejectsNonResponseType verifies AC-010 (BC-2.07.002 PC-3, Ruling U /
+// TestDispatch_RejectsWrongResponseType verifies AC-010 (BC-2.07.002 PC-3, Ruling U /
 // ARCH-12 v1.5): dispatch() MUST validate resp.Type == "response" after decoding. A
 // server reply carrying "type":"rpc_response" (even with "ok":true) MUST be rejected
 // with a non-nil E-RPC-001 error containing "unexpected response type". A wrong-type
@@ -1106,7 +1106,7 @@ func TestSbctl_JSONEnvelopeFormat(t *testing.T) {
 // the type check takes precedence over the ok check.
 //
 // BC: BC-2.07.002 PC-3; AC-010; Ruling U (ARCH-12 v1.5).
-func TestDispatch_RejectsNonResponseType(t *testing.T) {
+func TestDispatch_RejectsWrongResponseType(t *testing.T) {
 	t.Parallel()
 
 	t.Run("rpc_response_type_with_ok_true_is_rejected", func(t *testing.T) {
@@ -1167,131 +1167,359 @@ func TestDispatch_RejectsNonResponseType(t *testing.T) {
 	})
 }
 
-// TestDispatch_SetsReadDeadline_SlowServerBounded verifies AC-011 (BC-2.07.003
-// Invariant 2, ADR-012 §7, Ruling V / ARCH-12 v1.5): dispatch() MUST apply a read
-// deadline derived from ctx before decoding the RPC response. When the mock server
-// completes AUTH_OK then goes silent (never sends the RPC response), dispatch() must
-// return a non-nil timeout error — it must NOT block indefinitely.
+// TestDispatch_RespReadDeadlineEnforced verifies AC-011 (BC-2.07.003 Invariant 2,
+// ADR-012 §7, Ruling V / ARCH-12 v1.5): dispatch() MUST apply a read deadline
+// derived from ctx before decoding the RPC response. Two sub-cases:
 //
-// RED because: current dispatch() sets no read deadline. A slow/silent server after
-// auth would block dispatch() forever. After Ruling V is implemented, dispatch() will
-// call conn.SetReadDeadline from ctx before the response Decode, so this test passes.
+//  1. ctx WITH deadline: the ctx deadline fires when the server goes silent.
+//  2. ctx WITHOUT deadline (context.Background()): the 30s fallback
+//     (rpcResponseFallbackTimeout) must arm the read deadline. To make this
+//     observable without a 30s wait, the test overrides rpcResponseFallbackTimeout
+//     to 100ms via t.Cleanup-restored assignment.
+//
+// Also asserts the deadline is CLEARED after dispatch returns: a subsequent
+// blocking read on the same conn (post-dispatch) must not inherit the old deadline.
+// This is verified by capturing SetReadDeadline calls through a recording wrapper.
+//
+// RED because: current dispatch() only sets the deadline when ctx has one
+// (if dl, ok := ctx.Deadline(); ok { _ = conn.SetReadDeadline(dl) }) — it has NO
+// 30s fallback for a deadline-less ctx, swallows the SetReadDeadline error, and
+// never clears the deadline via defer. The no-deadline sub-case hangs or fires too
+// late; the deadline-clear sub-case never zeroes the deadline.
 //
 // BC: BC-2.07.003 Invariant 2; AC-011; Ruling V (ARCH-12 v1.5); go.md rule 7.
-func TestDispatch_SetsReadDeadline_SlowServerBounded(t *testing.T) {
+func TestDispatch_RespReadDeadlineEnforced(t *testing.T) {
 	t.Parallel()
 
-	// net.Pipe() — no real sockets; both ends are synchronous in-process.
-	server, client := net.Pipe()
-	t.Cleanup(func() {
-		_ = client.Close()
-		_ = server.Close()
+	// sub-case 1: ctx WITH deadline — existing coverage preserved.
+	t.Run("ctx_with_deadline_fires_before_silent_server", func(t *testing.T) {
+		t.Parallel()
+
+		server, client := net.Pipe()
+		t.Cleanup(func() {
+			_ = client.Close()
+			_ = server.Close()
+		})
+
+		// Mock server: drain the RPC request then go permanently silent.
+		go func() {
+			defer func() { _ = server.Close() }()
+			// Server deadline longer than ctx (200ms) so ctx fires first (GREEN).
+			// In RED state (no deadline), dispatch blocks until server deadline expires.
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			buf := make([]byte, 4096)
+			_, _ = server.Read(buf) // drain the RPC request line
+			// Go silent — never write the response.
+			buf2 := make([]byte, 1)
+			_, _ = server.Read(buf2)
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		_, err := dispatch(ctx, client, "router.status", nil)
+		elapsed := time.Since(start)
+
+		if err == nil {
+			t.Errorf("Ruling V (ctx deadline) violated: dispatch() returned nil with a silent server — expected a non-nil timeout error; dispatch() must call conn.SetReadDeadline from ctx before the response Decode (RED Gate)")
+		}
+		const maxAllowed = 1 * time.Second
+		if elapsed > maxAllowed {
+			t.Errorf("Ruling V (ctx deadline) violated: dispatch() hung for %v (> %v) — read deadline from ctx was not applied (RED Gate)", elapsed, maxAllowed)
+		}
 	})
 
-	// Mock server: drain the RPC request (one line) then go permanently silent.
-	// Never sends the RPC response — simulates a server that accepted the connection
-	// and auth'd but then hung on processing the RPC command.
-	go func() {
-		defer func() { _ = server.Close() }()
-		// Server deadline: 2s — longer than the ctx deadline (200ms) so the ctx fires
-		// first when dispatch() has SetReadDeadline implemented (GREEN). In the RED
-		// state (no deadline), dispatch() blocks until this server deadline fires and
-		// the pipe closes, producing the elapsed > maxAllowed assertion failure.
-		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
-		buf := make([]byte, 4096)
-		_, _ = server.Read(buf) // drain the RPC request line
-		// Now go silent — never write the response.
-		// Block until the deadline expires or the pipe is closed by the client.
-		buf2 := make([]byte, 1)
-		_, _ = server.Read(buf2)
-	}()
+	// sub-case 2: ctx WITHOUT deadline — the 30s fallback (rpcResponseFallbackTimeout)
+	// must arm a deadline so dispatch does not hang forever.
+	//
+	// Strategy (option a from spec): override rpcResponseFallbackTimeout to 100ms
+	// and restore via t.Cleanup. The test asserts dispatch returns a non-nil error
+	// within a bounded window, proving the fallback was armed.
+	//
+	// RED because: current dispatch() checks `if dl, ok := ctx.Deadline(); ok { ... }`
+	// — with context.Background() (no deadline), ok==false and SetReadDeadline is
+	// never called. dispatch() hangs until the server goroutine closes the pipe.
+	t.Run("no_deadline_ctx_fallback_arms_deadline", func(t *testing.T) {
+		t.Parallel()
 
-	// Short context deadline — dispatch() must return before this expires significantly.
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+		// Override the fallback timeout to 100ms so the test completes quickly.
+		// Restore via t.Cleanup so parallel tests are unaffected.
+		orig := rpcResponseFallbackTimeout
+		rpcResponseFallbackTimeout = 100 * time.Millisecond
+		t.Cleanup(func() { rpcResponseFallbackTimeout = orig })
 
-	start := time.Now()
-	_, err := dispatch(ctx, client, "router.status", nil)
-	elapsed := time.Since(start)
+		server, client := net.Pipe()
+		t.Cleanup(func() {
+			_ = client.Close()
+			_ = server.Close()
+		})
 
-	// dispatch() MUST return a non-nil error (timeout).
-	// RED: current dispatch() has no SetReadDeadline logic and will block until the
-	// outer test framework kills it or the server goroutine's 5s deadline expires.
-	if err == nil {
-		t.Errorf("Ruling V violated: dispatch() returned nil with a silent server — expected a non-nil timeout error; dispatch() must call conn.SetReadDeadline from ctx before the response Decode (RED Gate)")
-	}
-	// Must return within a comfortable bound after the ctx deadline.
-	// 1s allows generous headroom while definitively ruling out an indefinite hang.
-	const maxAllowed = 1 * time.Second
-	if elapsed > maxAllowed {
-		t.Errorf("Ruling V violated: dispatch() hung for %v (> %v) — read deadline from ctx was not applied; current dispatch() blocks indefinitely without SetReadDeadline (RED Gate)", elapsed, maxAllowed)
-	}
+		// Mock server: drain the RPC request then hang (never writes response).
+		// Server deadline is 2s — much longer than the 100ms fallback so the
+		// fallback fires first (GREEN). In RED state, dispatch() blocks until the
+		// server deadline expires.
+		go func() {
+			defer func() { _ = server.Close() }()
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			buf := make([]byte, 4096)
+			_, _ = server.Read(buf) // drain RPC request
+			// Hang — never send response.
+			buf2 := make([]byte, 1)
+			_, _ = server.Read(buf2)
+		}()
+
+		// No deadline on context — fallback path must engage.
+		start := time.Now()
+		_, err := dispatch(context.Background(), client, "router.status", nil)
+		elapsed := time.Since(start)
+
+		// dispatch() MUST return a non-nil error (fallback deadline fires).
+		// RED: current dispatch() skips SetReadDeadline with no-deadline ctx —
+		// it blocks until the server goroutine's 2s deadline closes the pipe.
+		if err == nil {
+			t.Errorf("Ruling V (no-deadline fallback) violated: dispatch() returned nil with no-deadline ctx and silent server — rpcResponseFallbackTimeout must arm conn.SetReadDeadline (RED Gate)")
+		}
+		// Must return within a generous bound (fallback=100ms; allow 1s headroom).
+		// RED: without fallback, dispatch blocks ~2s (server deadline), failing this.
+		const maxAllowed = 1 * time.Second
+		if elapsed > maxAllowed {
+			t.Errorf("Ruling V (no-deadline fallback) violated: dispatch() hung for %v (> %v) — rpcResponseFallbackTimeout fallback was not applied to conn.SetReadDeadline (RED Gate)", elapsed, maxAllowed)
+		}
+	})
+
+	// sub-case 3: deadline is CLEARED after dispatch returns (defer-clear).
+	// After a successful dispatch call on a conn, a subsequent read on that
+	// conn must not immediately time out due to a stale deadline.
+	//
+	// Strategy: use a recordingConn wrapper that tracks all SetReadDeadline calls.
+	// After dispatch returns, assert the final SetReadDeadline call used time.Time{}
+	// (zero time = cleared). This proves defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+	// was executed.
+	//
+	// RED because: current dispatch() never calls SetReadDeadline at all, so no
+	// clearing call is made. The recordingConn assertion for a zero-time final
+	// call will fail (no calls recorded).
+	t.Run("deadline_cleared_after_dispatch_returns", func(t *testing.T) {
+		t.Parallel()
+
+		server, client := net.Pipe()
+		t.Cleanup(func() {
+			_ = client.Close()
+			_ = server.Close()
+		})
+
+		// Mock server: drain request, reply with a successful response.
+		go func() {
+			defer func() { _ = server.Close() }()
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			buf := make([]byte, 4096)
+			_, _ = server.Read(buf)
+			const resp = `{"type":"response","id":"1","ok":true,"data":{}}` + "\n"
+			_, _ = server.Write([]byte(resp))
+		}()
+
+		// Wrap client in a recordingConn to capture SetReadDeadline calls.
+		rec := &recordingConn{Conn: client}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+
+		_, err := dispatch(ctx, rec, "router.status", nil)
+		if err != nil {
+			t.Fatalf("dispatch() returned unexpected error: %v", err)
+		}
+
+		// After dispatch returns, the last SetReadDeadline call MUST be time.Time{} (clear).
+		// RED: current dispatch() makes no SetReadDeadline calls at all.
+		if len(rec.deadlines) == 0 {
+			t.Errorf("Ruling V (deadline-clear) violated: dispatch() made no SetReadDeadline calls — expected at least one call to arm and one to clear (RED Gate)")
+		} else {
+			last := rec.deadlines[len(rec.deadlines)-1]
+			if !last.IsZero() {
+				t.Errorf("Ruling V (deadline-clear) violated: last SetReadDeadline call was %v, want time.Time{} (zero) — deadline must be cleared via defer after dispatch returns (RED Gate)", last)
+			}
+		}
+	})
 }
 
-// TestDispatch_RejectsIDMismatch verifies AC-010 (BC-2.07.002 PC-3, Ruling X /
-// ARCH-12 v1.5 / ADR-012 §3 step 6): dispatch() MUST verify resp.ID == req.ID after
-// decoding the server response. A response carrying a different ID than the request
-// MUST cause dispatch() to return a non-nil E-RPC-001 error.
+// recordingConn wraps a net.Conn and records all SetReadDeadline calls.
+// Used by TestDispatch_RespReadDeadlineEnforced sub-case 3.
+type recordingConn struct {
+	net.Conn
+	deadlines []time.Time
+}
+
+func (r *recordingConn) SetReadDeadline(t time.Time) error {
+	r.deadlines = append(r.deadlines, t)
+	return r.Conn.SetReadDeadline(t)
+}
+
+// TestDispatch_IDEchoEnforced verifies AC-010 (BC-2.07.002 PC-3, Ruling X /
+// ARCH-12 v1.5 / ADR-012 §3 step 6): dispatch() MUST generate a non-constant
+// per-call request id, and MUST verify resp.ID == req.ID after decoding. A response
+// carrying a different ID than the request MUST cause dispatch() to return a
+// non-nil E-RPC-001 error.
 //
-// Additionally asserts that the request ID sent by dispatch() is non-empty (the ID
-// must be present so the server can echo it back — a constant or empty ID would make
-// the echo check meaningless for multiplexed connections).
+// Two sub-cases:
+//  1. ID mismatch: server replies with a wrong id — dispatch() must return non-nil error.
+//  2. Non-constant id: two sequential dispatch() calls (each on its own conn) emit
+//     DIFFERENT ids, and neither equals the constant "1". The mock server echoes
+//     back whatever id it received, so the echo-check still passes once the impl
+//     uses a non-constant id.
 //
-// RED because: current dispatch() hardcodes req.ID = "1" and never checks resp.ID.
-// A server that echoes a different ID (or mismatches) is silently accepted.
+// RED because: current dispatch() hardcodes req.ID = "1". The non-constant
+// sub-case directly fails the "not equal to '1'" assertion. The mismatch sub-case
+// is also RED because dispatch() never checks resp.ID.
 //
 // BC: BC-2.07.002 PC-3; AC-010; Ruling X (ARCH-12 v1.5); ADR-012 §3 step 6.
-func TestDispatch_RejectsIDMismatch(t *testing.T) {
+func TestDispatch_IDEchoEnforced(t *testing.T) {
 	t.Parallel()
 
-	server, client := net.Pipe()
-	t.Cleanup(func() { _ = client.Close() })
+	// sub-case 1: ID mismatch — server replies with a wrong id.
+	// Preserved from the prior TestDispatch_RejectsIDMismatch.
+	t.Run("id_mismatch_returns_error", func(t *testing.T) {
+		t.Parallel()
 
-	// rawRequestCh captures the raw JSON request bytes sent by dispatch().
-	rawRequestCh := make(chan []byte, 1)
+		server, client := net.Pipe()
+		t.Cleanup(func() { _ = client.Close() })
 
-	go func() {
-		defer func() { _ = server.Close() }()
-		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+		rawRequestCh := make(chan []byte, 1)
 
-		// Read the RPC request and capture it.
-		buf := make([]byte, 4096)
-		n, err := server.Read(buf)
-		if err != nil || n == 0 {
-			rawRequestCh <- nil
-			return
+		go func() {
+			defer func() { _ = server.Close() }()
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+
+			buf := make([]byte, 4096)
+			n, err := server.Read(buf)
+			if err != nil || n == 0 {
+				rawRequestCh <- nil
+				return
+			}
+			raw := make([]byte, n)
+			copy(raw, buf[:n])
+			rawRequestCh <- raw
+
+			// Reply with a DELIBERATELY WRONG id.
+			const wrongIDResponse = `{"type":"response","id":"WRONG-ID","ok":true,"data":{}}` + "\n"
+			_, _ = server.Write([]byte(wrongIDResponse))
+		}()
+
+		_, err := dispatch(context.Background(), client, "router.status", nil)
+
+		raw := <-rawRequestCh
+
+		// dispatch() MUST return non-nil error on ID mismatch.
+		// RED: current dispatch() hardcodes id "1" and never verifies resp.ID.
+		if err == nil {
+			t.Errorf("Ruling X violated: dispatch() returned nil on ID mismatch (server sent 'WRONG-ID') — expected non-nil E-RPC-001; dispatch() must check resp.ID == req.ID (RED Gate)")
 		}
-		raw := make([]byte, n)
-		copy(raw, buf[:n])
-		rawRequestCh <- raw
 
-		// Reply with a DELIBERATELY WRONG id — "WRONG-ID" instead of the client's id.
-		// Ruling X: dispatch() MUST reject this mismatch with E-RPC-001.
-		const wrongIDResponse = `{"type":"response","id":"WRONG-ID","ok":true,"data":{}}` + "\n"
-		_, _ = server.Write([]byte(wrongIDResponse))
-	}()
+		if raw == nil {
+			t.Fatal("Ruling X: mock server received no bytes from dispatch()")
+		}
+		rawStr := string(raw)
+		if !strings.Contains(rawStr, `"id":`) {
+			t.Errorf("Ruling X: dispatch() request missing 'id' field; got: %s", rawStr)
+		}
+		if strings.Contains(rawStr, `"id":""`) {
+			t.Errorf("Ruling X: dispatch() sent empty 'id' field; got: %s", rawStr)
+		}
+	})
 
-	_, err := dispatch(context.Background(), client, "router.status", nil)
+	// sub-case 2: non-constant id — two sequential dispatch() calls emit different
+	// ids, and neither equals the hardcoded constant "1".
+	//
+	// Each call gets its own net.Pipe (single-RPC-per-connection). The mock server
+	// captures the raw request JSON and echoes back the received id so the echo
+	// check passes once the impl uses a non-constant id.
+	//
+	// RED because: current dispatch() hardcodes ID: "1". Both captured ids will be
+	// "1", directly triggering the "must not equal '1'" assertion.
+	t.Run("id_is_non_constant_across_calls", func(t *testing.T) {
+		t.Parallel()
 
-	// Retrieve the raw request to inspect the id field.
-	raw := <-rawRequestCh
+		// makeEchoConn sets up a net.Pipe mock server that:
+		//   1. Reads one request line, captures it.
+		//   2. Decodes the id from the raw JSON.
+		//   3. Echoes back {"type":"response","id":"<captured_id>","ok":true,"data":{}}.
+		//
+		// Returns (client conn, channel that delivers the captured id string).
+		// All t.Fatalf calls are hoisted before go func() per Ruling W discipline.
+		makeEchoConn := func(t *testing.T) (net.Conn, <-chan string) {
+			t.Helper()
+			server, client := net.Pipe()
+			t.Cleanup(func() { _ = client.Close() })
 
-	// Primary assertion: dispatch() MUST return non-nil error on ID mismatch.
-	// RED: current dispatch() hardcodes id "1" and never verifies resp.ID.
-	if err == nil {
-		t.Errorf("Ruling X violated: dispatch() returned nil on ID mismatch (server sent 'WRONG-ID', client sent a different id) — expected non-nil E-RPC-001; dispatch() must check resp.ID == req.ID (RED Gate)")
-	}
+			idCh := make(chan string, 1)
+			go func() {
+				defer func() { _ = server.Close() }()
+				_ = server.SetDeadline(time.Now().Add(2 * time.Second))
 
-	// Secondary: the request must contain a non-empty "id" field.
-	if raw == nil {
-		t.Fatal("Ruling X: mock server received no bytes from dispatch() — dispatch may have failed before writing the request")
-	}
-	rawStr := string(raw)
-	if !strings.Contains(rawStr, `"id":`) {
-		t.Errorf("Ruling X: dispatch() request is missing 'id' field; got: %s", rawStr)
-	}
-	// The id must not be empty string.
-	if strings.Contains(rawStr, `"id":""`) {
-		t.Errorf("Ruling X: dispatch() sent an empty 'id' field — id must be non-empty; got: %s", rawStr)
-	}
+				buf := make([]byte, 4096)
+				n, err := server.Read(buf)
+				if err != nil || n == 0 {
+					idCh <- ""
+					return
+				}
+				raw := buf[:n]
+
+				// Decode the id field from the raw JSON request.
+				var req struct {
+					ID string `json:"id"`
+				}
+				capturedID := ""
+				if jsonErr := json.Unmarshal(raw, &req); jsonErr == nil {
+					capturedID = req.ID
+				}
+				idCh <- capturedID
+
+				// Echo the id back in the response so dispatch()'s echo-check passes.
+				resp := fmt.Sprintf(`{"type":"response","id":%q,"ok":true,"data":{}}`, capturedID) + "\n"
+				_, _ = server.Write([]byte(resp))
+			}()
+			return client, idCh
+		}
+
+		// Call 1.
+		conn1, idCh1 := makeEchoConn(t)
+		_, err1 := dispatch(context.Background(), conn1, "router.status", nil)
+		id1 := <-idCh1
+
+		// Call 2.
+		conn2, idCh2 := makeEchoConn(t)
+		_, err2 := dispatch(context.Background(), conn2, "router.status", nil)
+		id2 := <-idCh2
+
+		// Both calls should succeed (echo-check passes when ids match).
+		if err1 != nil {
+			t.Errorf("Ruling X (non-constant id): dispatch() call 1 returned unexpected error: %v", err1)
+		}
+		if err2 != nil {
+			t.Errorf("Ruling X (non-constant id): dispatch() call 2 returned unexpected error: %v", err2)
+		}
+
+		// IDs must not be the constant "1".
+		// RED: current impl hardcodes ID: "1"; this assertion fires immediately.
+		if id1 == "1" {
+			t.Errorf("Ruling X (non-constant id) violated: dispatch() call 1 used constant id %q — id must be non-constant per AC-010 (RED Gate)", id1)
+		}
+		if id2 == "1" {
+			t.Errorf("Ruling X (non-constant id) violated: dispatch() call 2 used constant id %q — id must be non-constant per AC-010 (RED Gate)", id2)
+		}
+
+		// IDs must differ across calls (probabilistically guaranteed if non-constant).
+		// With time.Now().UnixNano() this is deterministic for sequential calls.
+		if id1 != "" && id2 != "" && id1 == id2 {
+			t.Errorf("Ruling X (non-constant id) violated: dispatch() produced the same id %q for two different calls — id must vary per call per AC-010 (RED Gate)", id1)
+		}
+
+		// IDs must be non-empty.
+		if id1 == "" {
+			t.Error("Ruling X: dispatch() call 1 emitted empty id")
+		}
+		if id2 == "" {
+			t.Error("Ruling X: dispatch() call 2 emitted empty id")
+		}
+	})
 }
