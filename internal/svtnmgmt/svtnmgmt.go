@@ -43,8 +43,10 @@ var ErrInvalidDuration = errors.New("invalid duration: must be positive")
 // ErrControlRevocationRequiresConfirm is returned when a control-to-control
 // key revocation is attempted without the --confirm flag (E-ADM-004;
 // BC-2.05.004 invariant 1; ADR-004; AC-005).
+// The ADR-004 reference belongs here in the doc comment, not in the error
+// string, per Go error string conventions (go.md rule 5 / ST1005).
 var ErrControlRevocationRequiresConfirm = errors.New(
-	"control-to-control revocation requires --confirm flag (ADR-004)",
+	"control-to-control revocation requires --confirm flag",
 )
 
 // ErrRoleMismatch is returned by SVTNManager.RevokeKey when the caller-supplied

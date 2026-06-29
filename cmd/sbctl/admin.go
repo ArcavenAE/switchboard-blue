@@ -226,7 +226,7 @@ func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool
 		return fmt.Errorf("admin key expire: invalid --after duration %q: %w", *afterFlag, err)
 	}
 	if d <= 0 {
-		return fmt.Errorf("admin key expire: --after duration must be positive (got %q)", *afterFlag)
+		return fmt.Errorf("admin key expire: --after duration must be positive, got %q", *afterFlag)
 	}
 
 	rpcArgs := adminKeyExpireArgs{
