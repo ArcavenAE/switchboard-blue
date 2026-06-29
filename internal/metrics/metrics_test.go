@@ -7,12 +7,14 @@ package metrics_test
 //	TestQualityIndicator_ThresholdClassification — AC-001, BC-2.06.001 PC-2/PC-3/PC-4
 //	TestQualityIndicator_ThresholdBoundary         — AC-001, BC-2.06.001 PC-2/PC-3/PC-4 (exact boundary values)
 //	TestQualityIndicator_HysteresisUpgrade         — AC-002, BC-2.06.001 invariant 3
+//	TestQualityIndicator_RedToGreenViaSixMeasurements — AC-002, BC-2.06.001 invariant 3 (CR-001: full recovery path)
 //	TestQualityIndicator_SingleGoodMeasurementNoUpgrade — AC-002, EC-001 (story edge-case catalog)
 //	TestQualityIndicator_HysteresisResetOnBadMeasurement — AC-002, BC-2.06.001 invariant 3 (streak resets)
 //	TestQualityIndicator_MissingFrameDowngradeGreenToYellow — AC-003, BC-2.06.002 PC-2, VP-052
 //	TestQualityIndicator_MissingFrameDowngradeYellowToRed   — AC-003, BC-2.06.002 PC-2, VP-052
 //	TestQualityIndicator_MissingFrameSubthresholdNoDowngrade — AC-003, BC-2.06.002 PC-1 (N-1 misses insufficient)
 //	TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate — BC-2.06.002 PC-4
+//	TestQualityIndicator_MissingFrameCounterResetByYellowUpdate — BC-2.06.002 PC-4 (CR-002: Yellow-range also resets)
 //	TestQualityIndicator_DegradationNeverSkipsLevel — AC-004, BC-2.06.002 PC-2, VP-027
 //	TestQualityIndicator_RecoveryNeverSkipsLevel    — AC-004, VP-027
 //	TestQualityIndicator_DowngradeIsImmediate       — AC-004, BC-2.06.001 (no hysteresis on downgrade)
@@ -228,6 +230,46 @@ func TestQualityIndicator_HysteresisUpgrade(t *testing.T) {
 	})
 }
 
+// TestQualityIndicator_RedToGreenViaSixMeasurements documents the full Red→Green
+// recovery path using exactly 6 consecutive Green-range measurements (2×HysteresisCount).
+//
+// The indicator starts Red. Each group of HysteresisCount consecutive Green-range
+// measurements upgrades exactly one level: calls 1–3 bring it to Yellow; calls 4–6
+// bring it to Green. Intermediate calls 4 and 5 must still be Yellow because the
+// streak resets when the level changes — the new window counts toward Yellow→Green.
+//
+// This test intentionally documents that the streak-resets-on-level-change
+// behaviour is required: the 3-call window is relative to the current level, not
+// accumulated globally.
+//
+// BC-2.06.001 invariant 3 — upgrade requires HysteresisCount consecutive measurements
+// AC-002
+func TestQualityIndicator_RedToGreenViaSixMeasurements(t *testing.T) {
+	t.Parallel()
+	qi := metrics.NewQualityIndicator()
+	driveToRed(t, qi)
+
+	// Calls 1–2: streak building toward Yellow (n-1 = 2 calls, must stay Red).
+	qi.Update(50, 1)
+	assertLevel(t, qi.Current(), metrics.Red, "after 1 green-range measurement from Red")
+	qi.Update(50, 1)
+	assertLevel(t, qi.Current(), metrics.Red, "after 2 green-range measurements from Red")
+
+	// Call 3: completes the first HysteresisCount window → Red upgrades to Yellow.
+	qi.Update(50, 1)
+	assertLevel(t, qi.Current(), metrics.Yellow, "after 3 green-range measurements from Red: must reach Yellow")
+
+	// Calls 4–5: streak building toward Green (new window; must stay Yellow).
+	qi.Update(50, 1)
+	assertLevel(t, qi.Current(), metrics.Yellow, "after 4 green-range measurements: still Yellow (streak reset at level change)")
+	qi.Update(50, 1)
+	assertLevel(t, qi.Current(), metrics.Yellow, "after 5 green-range measurements: still Yellow")
+
+	// Call 6: completes the second HysteresisCount window → Yellow upgrades to Green.
+	qi.Update(50, 1)
+	assertLevel(t, qi.Current(), metrics.Green, "after 6 green-range measurements: must reach Green")
+}
+
 // TestQualityIndicator_SingleGoodMeasurementNoUpgrade verifies EC-001 from the
 // story edge-case catalog: a single good measurement after Red does not upgrade.
 //
@@ -275,13 +317,14 @@ func TestQualityIndicator_HysteresisResetOnBadMeasurement(t *testing.T) {
 			n-1, n)
 	}
 
-	// Complete the n-th consecutive Green measurement; now upgrade is allowed.
+	// Complete the n-th consecutive Green measurement after reset.
+	// Trace: driveToRed→Red; 2×Green (streak=2, candidate=Green); Yellow (candidate
+	// switches to Yellow, streak=1, still Red); 2×Green (candidate switches back to
+	// Green, streak=2, still Red); final Green (streak=3 ≥ n) → upgrades one level
+	// to Yellow. Current must be exactly Yellow at this point.
 	qi.Update(50, 1)
-	// The indicator may still be Yellow (upgraded from Red via Yellow) or Green;
-	// it must not be Red.
-	if qi.Current() == metrics.Red {
-		t.Errorf("after interrupted streak + fresh %d consecutive green measurements, indicator must not remain Red", n)
-	}
+	assertLevel(t, qi.Current(), metrics.Yellow,
+		"after interrupted streak + fresh n consecutive green measurements from Red, must reach Yellow (one level at a time)")
 }
 
 // -----------------------------------------------------------------------
@@ -405,6 +448,41 @@ func TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate(t *testing.T) {
 		"n-1 missing frames after streak reset must not downgrade")
 }
 
+// TestQualityIndicator_MissingFrameCounterResetByYellowUpdate verifies that a
+// Yellow-range Update also resets the missing-frame counter, not just Green-range
+// Updates. Any received frame — regardless of measured quality level — breaks the
+// consecutive-gap streak (BC-2.06.002 PC-4).
+//
+// Sequence: 2 missing frames, then Update(200,0) (Yellow-range, resets counter and
+// downgrades Green→Yellow immediately), then 1 more missing frame. The single
+// post-reset gap must not trigger a further downgrade to Red.
+//
+// BC-2.06.002 PC-4 — any Update resets the missing-frame counter
+func TestQualityIndicator_MissingFrameCounterResetByYellowUpdate(t *testing.T) {
+	t.Parallel()
+	n := metrics.HysteresisCount
+	qi := metrics.NewQualityIndicator()
+	driveGreenBaseline(t, qi)
+
+	// Accumulate n-1 missing frames (below downgrade threshold).
+	for i := 0; i < n-1; i++ {
+		qi.OnMissingFrame()
+	}
+	assertLevel(t, qi.Current(), metrics.Green,
+		"n-1 missing frames must not downgrade")
+
+	// A Yellow-range Update resets missingFrameCount=0 and downgrades Green→Yellow immediately.
+	qi.Update(200, 0)
+	assertLevel(t, qi.Current(), metrics.Yellow,
+		"Yellow-range update from Green must downgrade immediately to Yellow")
+
+	// One more missing frame after the reset: count=1, below threshold.
+	// Must NOT downgrade further to Red.
+	qi.OnMissingFrame()
+	assertLevel(t, qi.Current(), metrics.Yellow,
+		"single missing frame after counter reset must not trigger another downgrade")
+}
+
 // -----------------------------------------------------------------------
 // AC-004 / BC-2.06.002 PC-2, VP-027 — level-by-level transitions
 // -----------------------------------------------------------------------
@@ -504,11 +582,10 @@ func TestQualityIndicator_DowngradeIsImmediate(t *testing.T) {
 	qi := metrics.NewQualityIndicator()
 	driveGreenBaseline(t, qi)
 
-	// Single Yellow-range measurement: must downgrade to Yellow immediately.
+	// Single Yellow-range measurement: must downgrade to Yellow immediately (no hysteresis on downgrade).
 	qi.Update(200, 0)
-	if qi.Current() == metrics.Green {
-		t.Errorf("downgrade to Yellow must be immediate (no hysteresis on downgrade): still Green after one yellow-range measurement")
-	}
+	assertLevel(t, qi.Current(), metrics.Yellow,
+		"single yellow-range measurement from Green must downgrade immediately to Yellow")
 }
 
 // TestQualityIndicator_MissingFrameRecoveryAfterDowngrade verifies the

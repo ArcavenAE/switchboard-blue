@@ -40,9 +40,16 @@ type degradationStep struct {
 func genMonotoneRisingSteps() gopter.Gen {
 	// Generate a slice of 32 uint32 values: [rttInc0, lossInc0, rttInc1, lossInc1, ...].
 	// Each pair (i*2, i*2+1) is the increment for step i.
-	return gen.SliceOfN(32, gen.UInt32Range(0, 50)).Map(func(incs []uint32) []degradationStep {
+	//
+	// CR-004 bias fix: start in the Yellow range (300 ms) and use a minimum RTT
+	// increment of 20 ms. Starting at 300 ms means the Red threshold (> 500 ms)
+	// is crossed after at most ceil(200/20) = 10 steps — well within 16.
+	// Using gen.UInt32Range(20, 60) keeps the increments meaningful and gives a
+	// near-certain probability (>99%) of reaching Red within the 16-step budget.
+	return gen.SliceOfN(32, gen.UInt32Range(20, 60)).Map(func(incs []uint32) []degradationStep {
 		steps := make([]degradationStep, 16)
-		var rttAcc, lossAcc float64
+		rttAcc := float64(300) // start in Yellow range so Red is reachable within 16 steps
+		var lossAcc float64
 		for i := 0; i < 16; i++ {
 			rttAcc += float64(incs[i*2])
 			lossAcc += float64(incs[i*2+1] % 6) // 0-5 loss increment
@@ -58,7 +65,12 @@ func genMonotoneRisingSteps() gopter.Gen {
 // genMonotoneRecoverySteps generates steps starting at Red-range, monotonically
 // decreasing toward Green-range.
 func genMonotoneRecoverySteps() gopter.Gen {
-	return gen.SliceOfN(32, gen.UInt32Range(0, 50)).Map(func(decs []uint32) []degradationStep {
+	// CR-005 bias fix: use gen.UInt32Range(25, 50) so each step decrements RTT by
+	// at least 25 ms. Starting at 800 ms, 16 steps at minimum decrement brings RTT
+	// down to 800 - 25*16 = 400 ms (Yellow), and at maximum (50 ms/step) down to
+	// 800 - 50*16 = 0 ms (Green). This makes Green-range reachable in practice
+	// while keeping the monotone-recovery invariant exercised across the full range.
+	return gen.SliceOfN(32, gen.UInt32Range(25, 50)).Map(func(decs []uint32) []degradationStep {
 		steps := make([]degradationStep, 16)
 		rttAcc := float64(800)
 		lossAcc := float64(25)
