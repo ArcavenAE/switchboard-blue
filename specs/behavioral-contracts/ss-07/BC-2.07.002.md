@@ -2,10 +2,10 @@
 artifact_id: BC-2.07.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-28T00:00:00
 phase: 1a
 bc_id: BC-2.07.002
 subsystem: network-management
@@ -17,7 +17,17 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-28
+    version: "1.2"
+    change: >
+      Wave-5 management plane cross-reference: added BC-2.07.004 to Related BCs
+      as the server-side counterpart that completes the ADR-012 handshake. Updated
+      Verification Properties table to add VP-067 (Authenticate() fail-closed, unit).
+      PC-2 and PC-3 now have explicit server-side anchoring via BC-2.07.004;
+      VP-049 e2e property anchors both client and server behaviors end-to-end.
+      Story anchor updated: S-6.03 implements client-side (this BC + VP-067 + VP-030);
+      S-W5.01 implements server-side (BC-2.07.004); S-W5.02 implements e2e (VP-049).
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -85,9 +95,10 @@ Operator runs any `sbctl <subcommand>` command.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-049 | All subcommands require authentication | integration |
+| VP-049 | All subcommands require authentication — e2e across all four daemon types (router, access, console, control) | e2e |
 | VP-049 | `--json` flag produces valid JSON for all subcommands | fuzz |
 | VP-049 | sbctl exits after command completion (not a daemon) | unit |
+| VP-067 | `Authenticate()` is fail-closed — returns nil only on verified AUTH_OK; all other outcomes (AUTH_FAIL, truncated stream, malformed message, connection error) return non-nil error | unit |
 
 ## Traceability
 
@@ -96,9 +107,17 @@ Operator runs any `sbctl <subcommand>` command.
 | L2 Capability | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 |
 | L2 Domain Invariants | DI-002 (private keys never transit — sbctl uses key-based auth without transmitting the private key) |
 | Architecture Module | cmd/sbctl |
-| Stories | [filled by story-writer] |
+| Stories | S-6.03 (client auth, Authenticate() fail-closed, connection error); S-W5.02 (e2e VP-049 across all four daemon types) |
 | Capability Anchor Justification | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 — this BC specifies the unified CLI contract that CAP-024 defines as "single operator CLI for all four daemon types" with "OpenSSH key" authentication |
 
 ## Related BCs
 
 - BC-2.07.003 — composes with: connection error handling is common to all sbctl operations
+- BC-2.07.004 — composes with: server-side daemon auth counterpart (ADR-012); PC-2 (key auth) and PC-3 (execute if authenticated) of this BC require BC-2.07.004's server-side handshake enforcement to be meaningful end-to-end. VP-049 (e2e across all four daemon types) jointly verifies both BCs.
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.2 | 2026-06-28 | Wave-5 management plane cross-reference: added BC-2.07.004 (server-side counterpart) to Related BCs. Verification Properties table extended with VP-067 (Authenticate() fail-closed, unit). Traceability Stories row updated: S-6.03 (client auth + VP-067 + VP-030), S-W5.02 (e2e VP-049 across all four daemon types). VP-049 description clarified to reflect e2e scope across all four daemon types (implementing story: S-W5.02). |
+| 1.1 | 2026-06-23 | Initial published draft — sbctl unified CLI with OpenSSH key auth. |

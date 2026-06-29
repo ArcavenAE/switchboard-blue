@@ -2,10 +2,10 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "1.5"
+version: "1.7"
 status: draft
 producer: architect
-timestamp: 2026-06-27T00:00:00
+timestamp: 2026-06-28T00:00:01
 phase: 1b
 inputDocuments:
   - '.factory/specs/behavioral-contracts/BC-INDEX.md'
@@ -87,30 +87,46 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | draft | VP-061.md |
 | VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
 | VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | draft | VP-063.md |
+| VP-064 | Management server rejects unauthenticated connections (no CHALLENGE_RESPONSE, wrong key, or bad signature) → AUTH_FAIL + close; no RPC dispatched | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-064.md |
+| VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | draft | VP-065.md |
+| VP-066 | Management server enforces bounded read: message > 64 KiB → error + close, no OOM (CWE-400) | BC-2.07.004 | internal/mgmt | unit+fuzz | P0 | draft | VP-066.md |
+| VP-067 | sbctl Authenticate() is fail-closed — returns nil only on verified AUTH_OK; all other outcomes return non-nil error | BC-2.07.002 | cmd/sbctl | integration | P0 | draft | VP-067.md |
 
 ## Counts
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit |
 |-----------|---------|------|-------------|-----|-----------|------------|
-| 63 | 34 | 3 | 12 | 10 | 2 | 2 |
+| 67 | 34 | 4 | 15 | 10 | 2 | 2 |
 
-> Arithmetic check: 34 + 3 + 12 + 10 + 2 + 2 = 63. Consistent.
+> Arithmetic check: 34 + 4 + 15 + 10 + 2 + 2 = 67. Consistent.
 > VP-060 added 2026-06-27 for BC-2.04.007 (daemon startup/shutdown lifecycle; integration/subprocess).
 > VP-061 added 2026-06-28 for BC-2.06.003 (metrics content-absence code-audit; DI-001 enforcement).
 > VP-062 added 2026-06-28 for BC-2.06.003 (JSON well-formedness fuzz across all CLI forms including alias).
 > VP-063 added 2026-06-28 for BC-2.02.003 PC-5 (degraded-flag boolean: IsDegraded() tracks EWMA vs DegradedRTTThresholdMS; proptest).
+> VP-064 added 2026-06-28 for BC-2.07.004 (management server rejects unauthenticated; integration). Wave-5.
+> VP-065 added 2026-06-28 for BC-2.07.004 (management server rejects replayed nonce; integration). Wave-5.
+> VP-066 added 2026-06-28 for BC-2.07.004 (management server bounded read CWE-400; proof_method=unit+fuzz — counted under Fuzz bucket only; the unit component is NOT double-counted in the Proptest/Unit bucket). Wave-5. F-012: VP-066 is a compound method (unit+fuzz); it is counted once, in the Fuzz bucket (Fuzz=4 includes VP-066). The unit boundary-check component is subordinate to the fuzz harness and does not add a separate Proptest tally row.
+> VP-067 added 2026-06-28 for BC-2.07.002 (Authenticate() fail-closed; integration via net.Pipe). Wave-5. F-006: proof_method corrected from `unit` to `integration` (2026-06-28); Authenticate() tests the two-party wire protocol over a net.Conn pair — integration-style. Method column updated; Integration=15 tally was already correct.
 
 ## Phase Distribution
 
 | Phase | Count |
 |-------|-------|
-| P0 | 43 |
-| P1 | 16 |
+| P0 | 46 |
+| P1 | 17 |
 | P2 | 4 |
-| **Total** | **63** |
+| **Total** | **67** |
 
-> Phase recounted: VP-061 (P1) and VP-062 (P1) added 2026-06-28. VP-063 (P0) added 2026-06-28. P0 = 43. P1 = 16. P2 = 4. Total = 63.
+> Phase recounted: VP-061 (P1) and VP-062 (P1) added 2026-06-28. VP-063 (P0) added 2026-06-28.
+> VP-064 (P0), VP-066 (P0), VP-067 (P0), VP-065 (P1) added 2026-06-28. P0 = 46. P1 = 17. P2 = 4. Total = 67.
 
 ## BC Coverage Check
 
-44 BCs total. All 44 have at least one VP. VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening — content-absence audit and JSON well-formedness fuzz). VP-063 added for BC-2.02.003 PC-5 (dedicated degraded-flag property; proptest). Zero coverage gaps.
+45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). Zero coverage gaps.
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.7 | 2026-06-28 | Wave-5 consistency audit F-006/F-012: (1) VP-067 Method column corrected from `unit` to `integration` — Authenticate() tests two-party wire protocol over net.Pipe (net.Conn pair); Integration=15 tally was already correct. (2) VP-066 bucket disambiguation added: proof_method=unit+fuzz is counted once in the Fuzz bucket only; the unit component is not double-counted. Tally 34+4+15+10+2+2=67 verified and unchanged. |
+| 1.6 | 2026-06-28 | Wave-5 management plane VPs added: VP-064 (management server rejects unauthenticated; integration), VP-065 (replayed nonce rejection; integration), VP-066 (bounded read CWE-400; unit+fuzz → fuzz bucket), VP-067 (Authenticate() fail-closed; integration via net.Pipe). BC-2.07.004 coverage complete. Phase counts updated: P0=46, P1=17, P2=4. |

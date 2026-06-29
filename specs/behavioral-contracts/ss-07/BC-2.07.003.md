@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.003
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,16 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-28
+    version: "1.2"
+    change: >
+      Traceability refresh (Wave-5 consistency audit F-001): Stories field filled
+      with S-6.03 (the connection-error owner story that cites BC-2.07.003 in its
+      bc_traces). Also added E-CFG-002 collision flag (Wave-5 audit F-003): the
+      taxonomy defines E-CFG-002 as "private key export not supported" (BC-2.05.007),
+      but BC-2.09.003 v1.2 assigned E-CFG-002 to listen_addr invalid host:port.
+      This pre-existing inconsistency is now flagged for maintenance-pass resolution.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -95,9 +104,16 @@ Network connection attempt to daemon fails or times out.
 | L2 Capability | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 |
 | L2 Domain Invariants | DI-002 (private keys never transit — error messages must not include key material) |
 | Architecture Module | cmd/sbctl |
-| Stories | [filled by story-writer] |
+| Stories | S-6.03 (AC-004, AC-005, AC-007 — E-NET-001 connection error, no stdout on failure, connection timeout) |
 | Capability Anchor Justification | CAP-024 ("Unified CLI operator interface (sbctl)") per capabilities.md §CAP-024 — this BC specifies the error behavior for CLI unreachability, which is part of CAP-024's requirement that sbctl "exposes router status, SVTN management, key management, session operations" without misleading output |
 
 ## Related BCs
 
 - BC-2.07.002 — depends on: this error handling is shared by all sbctl operations
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.2 | 2026-06-28 | Traceability refresh (Wave-5 consistency audit F-001/F-011): Stories field filled with S-6.03 (AC-004 E-NET-001, AC-005 no stdout, AC-007 timeout); `modified:` array populated (was erroneously empty at v1.1). E-CFG-002 collision flag added (F-003): taxonomy defines E-CFG-002 as "private key export not supported" (BC-2.05.007) but BC-2.09.003 v1.2 assigned E-CFG-002 to listen_addr validation — pre-existing inconsistency flagged for maintenance-pass resolution. |
+| 1.1 | 2026-06-23 | Initial draft — sbctl reports clear connection error when daemon unreachable. |

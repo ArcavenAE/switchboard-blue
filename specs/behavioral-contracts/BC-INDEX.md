@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
-timestamp: 2026-06-28T00:00:00
+timestamp: 2026-06-28T00:00:01
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -64,6 +64,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.07.001 | Control node creates and destroys SVTNs; first control key bootstrapped locally | network-management | CAP-023 | P2 | E | active | ss-07/BC-2.07.001.md |
 | BC-2.07.002 | sbctl unified CLI for all four daemon types with OpenSSH key authentication | network-management | CAP-024 | P2 | E | active | ss-07/BC-2.07.002.md |
 | BC-2.07.003 | sbctl reports clear connection error when target daemon is unreachable | network-management | CAP-024 | P0 | E | active | ss-07/BC-2.07.003.md |
+| BC-2.07.004 | Daemon management server authenticates all connections via Ed25519 challenge-response (fail-closed) | network-management | CAP-024 | P0 | E | active | ss-07/BC-2.07.004.md |
 | BC-2.08.001 | Console remotely controllable via sbctl: attach, detach, switch session, navigate | console-operations | CAP-025 | P1 | PE | active | ss-08/BC-2.08.001.md |
 | BC-2.09.001 | E router graduates to PE mode by adding upstream router connections in config | deployment-operations | CAP-026 | P2 | PE | active | ss-09/BC-2.09.001.md |
 | BC-2.09.002 | Router sends drain signal before shutdown; nodes migrate to alternate routers | deployment-operations | CAP-027 | P2 | PE | active | ss-09/BC-2.09.002.md |
@@ -79,10 +80,10 @@ traces_to: '.factory/specs/prd.md'
 | session-access | CAP-013–016 | 7 | 7 | 0 | 0 |
 | admission-security | CAP-017–020, CAP-020a, CAP-020b | 8 | 8 | 0 | 0 |
 | quality-observability | CAP-021–022 | 3 | 3 | 0 | 0 |
-| network-management | CAP-023–024 | 3 | 3 | 0 | 0 |
+| network-management | CAP-023–024 | 4 | 4 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
 | deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **44** | **37** | **7** | **0** |
+| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **45** | **38** | **7** | **0** |
 
 ## CAP Coverage Verification
 
@@ -113,8 +114,17 @@ traces_to: '.factory/specs/prd.md'
 | CAP-021 | BC-2.06.001, BC-2.06.002 | covered |
 | CAP-022 | BC-2.06.003 | covered |
 | CAP-023 | BC-2.07.001 | covered |
-| CAP-024 | BC-2.07.002, BC-2.07.003 | covered |
+| CAP-024 | BC-2.07.002, BC-2.07.003, BC-2.07.004 | covered |
 | CAP-025 | BC-2.08.001 | covered |
 | CAP-026 | BC-2.09.001 | covered |
 | CAP-027 | BC-2.09.002 | covered |
 | CAP-028 | BC-2.09.003 | covered |
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.4 | 2026-06-28 | BC-2.07.004 (Daemon management server authenticates all connections via Ed25519 challenge-response) added; network-management count 3→4; total 44→45. |
+| 1.3 | 2026-06-28 | Wave-5 management plane BCs: BC-2.07.002 expanded with OpenSSH key authentication; BC-2.07.003 confirmed active (S-6.03 owner). network-management subsystem updated. |
+| 1.2 | 2026-06-28 | BC-2.09.003 updated to implemented (S-6.01 / PR #28); BC-2.04.007 updated to implemented (S-W3.04 / PR #17); BC-2.05.008 updated to implemented (S-3.04 / PR #9). |
+| 1.1 | 2026-06-27 | Wave-3 and Wave-4 implementation status updates. |

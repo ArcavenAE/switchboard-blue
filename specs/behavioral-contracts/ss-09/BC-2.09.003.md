@@ -2,10 +2,10 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.7"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-28T00:00:00
 phase: 1a
 bc_id: BC-2.09.003
 subsystem: SS-09
@@ -18,6 +18,35 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-06-28
+    version: "1.7"
+    change: >
+      Traceability refresh (Wave-5 consistency audit F-002): Stories field updated
+      to add S-W5.01 alongside S-6.01. S-W5.01 implements PC-10 (management_socket
+      validation, E-CFG-008, AC-011) and PC-11 (authorized_operator_keys PEM
+      validation, E-CFG-009, AC-012) added in v1.6. S-6.01 retains ownership of
+      AC-001 through AC-009 (all earlier postconditions). E-CFG-002 collision flag
+      added: error-taxonomy.md defines E-CFG-002 as "private key export not
+      supported" (BC-2.05.007), but this BC (v1.2) uses E-CFG-002 for listen_addr
+      invalid host:port validation. Pre-existing inconsistency flagged for
+      maintenance-pass resolution; no renumbering in this pass.
+  - date: 2026-06-28
+    version: "1.6"
+    change: >
+      Wave-5 management plane config additions (ARCH-12): added PC-10 (management_socket
+      validation: non-empty path, not whitespace-only; E-CFG-008) and PC-11
+      (authorized_operator_keys: each entry must be a valid PEM PUBLIC KEY block
+      containing a 32-byte Ed25519 key; E-CFG-009). Added error codes E-CFG-008 and
+      E-CFG-009 to Error Codes table. Added edge cases EC-011 (management_socket
+      whitespace) and EC-012 (malformed PEM entry in authorized_operator_keys).
+      Updated Canonical Test Vectors with two new rows. Config-schema impact note
+      added: interface-definitions.md §Config Schema requires two new fields
+      (management_socket: string, authorized_operator_keys: []string). E-CFG collision
+      flag: error-taxonomy.md E-CFG-006 is "sbctl admin --yes/--confirm conflict"
+      (sbctl flag validation), but BC-2.09.003 v1.4 uses E-CFG-006 for drain_timeout
+      negative. This is a pre-existing inconsistency in the error taxonomy that
+      predates this pass. The new codes E-CFG-008 and E-CFG-009 are free in both
+      documents. Taxonomy reconciliation is flagged for a dedicated maintenance pass.
   - date: 2026-06-28
     version: "1.5"
     change: >
@@ -111,6 +140,35 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
 7. `drain_timeout` is an **optional** config field. When absent or zero (Go yaml unmarshalling cannot distinguish absent from explicit-zero for `time.Duration` without a pointer — zero is treated as absent), Validate() **accepts** the value; the daemon applies the documented default of **10s** at application time (deferred to S-7.04; see DEFERRED-APPLICATION note in PC-9). When present and **negative**, Validate() exits with E-CFG-006: `"config error: drain_timeout: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (10s), or set to a positive duration, e.g. '10s'"`. Cross-reference: ARCH-06 §Graceful Drain documents the 10s default.
 8. `keepalive_interval` is an **optional** config field. When absent or zero (same Go yaml / `time.Duration` zero-value semantics as PC-7), Validate() **accepts** the value; the daemon applies the documented default of **1s** at application time (deferred to S-7.04; see DEFERRED-APPLICATION note in PC-9). When present and **negative**, Validate() exits with E-CFG-007: `"config error: keepalive_interval: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (1s), or set to a positive duration, e.g. '1s'"`. Cross-reference: ARCH-06 §Graceful Drain (FM-009) documents the 1s default.
 
+### Management plane config field validation postconditions (v1.6 additions)
+
+10. `management_socket` is an **optional** config field (daemon mode startup code applies
+    mode-specific defaults when absent; see ARCH-05 §Daemon Management Socket). When
+    **present**, it must be a non-empty string that is not entirely whitespace. If
+    present and blank or whitespace-only, Validate() exits with E-CFG-008:
+    `"config error: management_socket: must not be empty. Fix: set to a valid Unix socket path, e.g. '/run/switchboard-router.sock', or remove the field to use the daemon default"`.
+    A non-whitespace string is accepted at validation time regardless of whether the
+    path is reachable — path accessibility is a runtime concern, not a config-validation
+    concern.
+
+11. `authorized_operator_keys` is an **optional** config field (empty list = bootstrap
+    mode: daemon's own key is the authorized operator key per ADR-012 §2). When
+    **present and non-empty**, each entry must be a valid PEM block of type `"PUBLIC KEY"`
+    (PKIX/SubjectPublicKeyInfo encoding) containing a 32-byte Ed25519 public key. For
+    each entry that fails this validation, Validate() records an error in E-CFG-009
+    format (all errors collected before exit, exhaustive reporting):
+    `"config error: authorized_operator_keys[<N>]: entry is not a valid Ed25519 PEM PUBLIC KEY block. Fix: provide a PEM-encoded Ed25519 public key (type 'PUBLIC KEY', 32-byte key length)"`.
+    An empty list (`authorized_operator_keys: []` or field absent) is accepted.
+
+    **Config-schema impact note (for interface-definitions.md and story-writer):**
+    Two new fields are added to `internal/config.Config`:
+    - `management_socket string` (yaml: `management_socket`) — optional, validated by PC-10.
+    - `authorized_operator_keys []string` (yaml: `authorized_operator_keys`) — optional,
+      validated by PC-11.
+    The YAML config schema section in interface-definitions.md §Config Schema must be
+    updated to document these fields. This is flagged as a story-writer / implementer
+    responsibility for S-W5.01.
+
 ### Config application postcondition (v1.3 right-sized)
 
 9. When `--config` is supplied and validation passes, the daemon initializes all subsystems using the validated config struct for fields whose target subsystems exist today. Specifically, the following field IS applied immediately:
@@ -148,11 +206,14 @@ Daemon startup config parsing failure; config reload with invalid config.
 |------|-----------|----------|-----------|-----------------|
 | E-CFG-001 | Required field missing or generic validation failure | broken | 1 | `"config error: <field>: <problem>. Fix: <suggestion>"` |
 | E-CFG-002 | `listen_addr` is not a valid `host:port` | broken | 1 | `"config error: listen_addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '0.0.0.0:9090'"` |
+| _(collision flag)_ | | | | **KNOWN INCONSISTENCY (F-003):** error-taxonomy.md defines E-CFG-002 as "private key export not supported" (BC-2.05.007 defensive code). This BC (v1.2) assigned E-CFG-002 to `listen_addr` invalid host:port validation — a different failure mode. This is a pre-existing collision that predates Wave 5. Reconciliation is needed in a maintenance pass: either (a) this BC's listen_addr code should be renumbered (e.g., to E-CFG-010), or (b) the taxonomy E-CFG-002 (private-key export) should be renumbered. No renumbering in this pass. | BC-2.09.003 v1.2 vs. error-taxonomy.md v2.3 |
 | E-CFG-003 | `upstream_routers[N].addr` is not a valid `host:port` | broken | 1 | `"config error: upstream_routers[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'"` |
 | E-CFG-004 | Config file not found at the supplied path | broken | 1 | `"config file not found: <path>"` |
 | E-CFG-005 | Config file present but malformed YAML (syntax error) | broken | 1 | `"config parse error: invalid YAML at line <N>: <detail>"` |
 | E-CFG-006 | `drain_timeout` is present and negative | broken | 1 | `"config error: drain_timeout: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (10s), or set to a positive duration, e.g. '10s'"` |
 | E-CFG-007 | `keepalive_interval` is present and negative | broken | 1 | `"config error: keepalive_interval: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (1s), or set to a positive duration, e.g. '1s'"` |
+| E-CFG-008 | `management_socket` is present but empty or whitespace-only | broken | 1 | `"config error: management_socket: must not be empty. Fix: set to a valid Unix socket path, e.g. '/run/switchboard-router.sock', or remove the field to use the daemon default"` |
+| E-CFG-009 | `authorized_operator_keys[N]` is not a valid PEM PUBLIC KEY block containing an Ed25519 key | broken | 1 | `"config error: authorized_operator_keys[<N>]: entry is not a valid Ed25519 PEM PUBLIC KEY block. Fix: provide a PEM-encoded Ed25519 public key (type 'PUBLIC KEY', 32-byte key length)"` |
 
 ## Edge Cases
 
@@ -168,6 +229,10 @@ Daemon startup config parsing failure; config reload with invalid config.
 | EC-008 | `drain_timeout: 0s` (or field absent) | Validate() **accepts** the value (zero == absent per Go yaml / `time.Duration` zero-value semantics). Daemon applies default 10s at application time (S-7.04). No error; daemon starts normally. |
 | EC-009 | `keepalive_interval: -1s` | E-CFG-007 with value `"-1s"`; exit 1. |
 | EC-010 | Config file supplied and valid; daemon starts | PC-9 (v1.3): `tick_interval` from config is passed to `halfchannel.New` (not the hardcoded `10ms` fallback). `listen_addr`, `drain_timeout`, `keepalive_interval`, and `upstream_routers` application deferred to their owning stories (see DEFERRED-APPLICATION note). |
+| EC-011 | `management_socket: "   "` (whitespace-only value) | E-CFG-008 "config error: management_socket: must not be empty..."; exit 1. Exhaustive error collection: if other errors also exist, all are reported together. |
+| EC-012 | `authorized_operator_keys: ["not-pem-data", "-----BEGIN PUBLIC KEY-----\nAAA\n-----END PUBLIC KEY-----\n"]` (first entry invalid, second invalid key type/length) | E-CFG-009 reported for each invalid entry with its index (0-based). All errors collected before exit 1. |
+| EC-013 | `authorized_operator_keys: []` (empty list) | Validate() accepts; daemon starts in bootstrap mode (daemon's own key is the authorized operator key). No error. |
+| EC-014 | `management_socket` field absent entirely | Validate() accepts; daemon startup code applies mode-specific default path (e.g., `/run/switchboard-router.sock` for router). No validation error. |
 
 ## Canonical Test Vectors
 
@@ -183,6 +248,10 @@ Daemon startup config parsing failure; config reload with invalid config.
 | Config file not found | E-CFG-004 "config file not found: /etc/switchboard/router.yaml"; exit 1 | error |
 | Config reload with bad config | Daemon logs "config reload failed"; continues on previous config; exits 0 (daemon still running) | edge-case |
 | Valid config supplied with `tick_interval: 20ms` | `halfchannel.New` receives `20ms` tick interval (not hardcoded `10ms`); daemon starts normally | happy-path (PC-9 v1.3) |
+| `management_socket: "   "` (whitespace-only) | E-CFG-008 "config error: management_socket: must not be empty..."; exit 1 | error (PC-10, v1.6) |
+| `management_socket` field absent | Validate() accepts; daemon default applied at startup; exit 0 | happy-path (PC-10, optional field) |
+| `authorized_operator_keys: ["not-pem"]` | E-CFG-009 "config error: authorized_operator_keys[0]: entry is not a valid Ed25519 PEM PUBLIC KEY block..."; exit 1 | error (PC-11, v1.6) |
+| `authorized_operator_keys: []` or field absent | Validate() accepts; bootstrap mode; exit 0 | happy-path (PC-11, bootstrap) |
 
 ## Verification Properties
 
@@ -195,6 +264,8 @@ Daemon startup config parsing failure; config reload with invalid config.
 | VP-028, VP-029 | drain_timeout and keepalive_interval: zero/absent accepted; negative rejected (E-CFG-006/007) | unit |
 | VP-028, VP-029 | Config reload failure leaves daemon on previous config | integration |
 | VP-028, VP-029 | Validated config applied to daemon subsystems (not hardcoded defaults) | integration |
+| VP-028, VP-029 | management_socket present-and-blank rejected with E-CFG-008; absent accepted | unit |
+| VP-028, VP-029 | authorized_operator_keys invalid PEM entry rejected with E-CFG-009 (per-index); empty list accepted | unit |
 
 ## Traceability
 
@@ -203,7 +274,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
 | L2 Domain Invariants | (none directly; anchored to FM-010 via capability CAP-028) |
 | Architecture Module | internal/config |
-| Stories | S-6.01 (AC-001 through AC-009) |
+| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation) |
 | Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. The config-application postcondition (PC-9) is a necessary corollary: validation is meaningless if the validated config is then discarded. Anchored to FM-010 (deployment misconfig). |
 
 ## Related BCs
@@ -219,6 +290,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 ## Story Anchor
 
 S-6.01 — AC-001 through AC-009 trace to postconditions in this BC.
+S-W5.01 — AC-011 (PC-10: management_socket) and AC-012 (PC-11: authorized_operator_keys) trace to v1.6 postconditions in this BC.
 
 ## VP Anchors
 
@@ -228,6 +300,8 @@ VP-028, VP-029 (existing; cover all postconditions including v1.2 additions).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.7 | 2026-06-28 | Traceability refresh (Wave-5 consistency audit F-002/F-003): Stories field updated — S-W5.01 added for PC-10/PC-11 (AC-011: management_socket, AC-012: authorized_operator_keys); S-6.01 retains AC-001..AC-009. Story Anchor updated to include S-W5.01. E-CFG-002 collision flag added to Error Codes table: error-taxonomy.md E-CFG-002 = "private key export not supported" (BC-2.05.007); BC-2.09.003 v1.2 E-CFG-002 = listen_addr invalid host:port — pre-existing inconsistency, flagged for maintenance-pass resolution. |
+| 1.6 | 2026-06-28 | Wave-5 management plane config additions (ARCH-12): PC-10 (management_socket: non-empty when present; E-CFG-008) and PC-11 (authorized_operator_keys: valid PEM Ed25519 PUBLIC KEY per entry; E-CFG-009) added. Error codes E-CFG-008 and E-CFG-009 added to Error Codes table. Edge cases EC-011 through EC-014 added. Canonical test vectors for both new fields added. VP coverage rows added to Verification Properties table. Config-schema impact note in PC-11: interface-definitions.md §Config Schema requires update for management_socket and authorized_operator_keys fields (S-W5.01 responsibility). Pre-existing E-CFG-006 collision flagged (error-taxonomy.md E-CFG-006 = sbctl admin flag conflict; BC-2.09.003 v1.4 E-CFG-006 = drain_timeout negative) — reconciliation deferred to maintenance pass. New codes E-CFG-008/E-CFG-009 are free in both documents. |
 | 1.5 | 2026-06-28 | Traceability refresh (KNOWN-STALE / Wave 4 audit): Stories row and Story Anchor updated from "AC-001 through AC-006" to "AC-001 through AC-009". S-6.01 gained AC-007 (drain_timeout negative rejection, PC-7), AC-008 (keepalive_interval negative rejection, PC-8), and AC-009 (tick_interval config application, PC-9) via SP-003/SP-004/SP-005 — the BC's postconditions PC-5..PC-9 were already fully defined; only the human-readable anchor summary was stale. Canonical EC numbering reaffirmed: BC EC-NNN is authoritative (VSDD policy); story-writer must reconcile S-6.01 EC IDs to BC EC IDs per S601-NITPICK-B: story EC-009 → BC EC-008 (drain_timeout:0s accepted), story EC-010 → BC EC-009 (drain_timeout:-5s → E-CFG-006, already correct in BC), story EC-011 → new (keepalive_interval:0s accepted — not yet in BC; story-writer to add BC EC-011 for symmetry if desired), story EC-012 → BC EC-009 (keepalive_interval:-1s → E-CFG-007), story EC-013 → BC EC-010 (valid config/daemon start). |
 | 1.4 | 2026-06-28 | Resolved 3-way contradiction: BC PC-7/PC-8 said "if present, must be > 0" (implying optional but rejecting zero), config.go rejected zero/absent as required fields (E-CFG-006/007), and ARCH-06 documented defaults (drain_timeout 10s, keepalive_interval 1s). Human ruling: "optional with defaults, align to ARCH-06." PC-7 and PC-8 updated: both fields are optional; Validate() rejects ONLY a negative value; zero/absent is accepted (daemon default applied at startup by S-7.04). E-CFG-006/007 trigger conditions updated from "zero or negative" to "negative"; message templates updated from "must be > 0" to "must not be negative." EC-008 corrected: drain_timeout: 0s is now accepted (daemon default 10s). Canonical test vector updated to match. |
 | 1.3 | 2026-06-28 | Right-sized PC-9 and Inv-5. Fresh-eyes verification confirmed that `listen_addr` binding, `drain_timeout`, `upstream_routers`, and `keepalive_interval` APPLICATION targets subsystems that do not exist on develop. Human ruling: "apply what exists now, track the rest as concrete dependencies." PC-9 narrowed: only `tick_interval` is applied now (wired to `halfchannel.New` in `cmd/switchboard/access.go`, currently hardcoded at `10ms`). DEFERRED-APPLICATION note added with named owning stories for each deferred field (listener introduction: no owner yet — flagged for STORY-INDEX; drain/PE/keepalive: S-7.04 Wave 7). Inv-5 narrowed to "applicable fields" so legitimately-deferred fields do not constitute an invariant violation. H1 title updated to "Applicable Subsystems." EC-010 and PC-9 canonical test vector updated. |

@@ -2,7 +2,7 @@
 artifact_id: ARCH-05-cli-and-api
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -16,6 +16,9 @@ inputDocuments:
 kos_anchors:
   - elem-single-binary-three-modes
   - elem-node-router-architecture
+modified:
+  - 2026-06-28T00:00:00 # v1.1 — ADR-012 cross-reference; management plane detail deferred to ARCH-12
+  - 2026-06-28T00:00:00 # v1.2 — F-010: BC table updated to 45 BCs (added BC-2.04.007, BC-2.05.008, BC-2.07.004); mgmt row status corrected to active
 ---
 
 # ARCH-05: CLI & API
@@ -38,6 +41,13 @@ kos_anchors:
 - TCP fallback: if the Unix socket path is absent or `--target=host:port` is specified,
   sbctl uses TCP. Authentication is the same.
 
+> **Wave 5 refinement (ADR-012):** ADR-006 established the conceptual protocol.
+> ADR-012 in ARCH-12 specifies the exact message sequence (CHALLENGE / CHALLENGE_RESPONSE /
+> AUTH_OK / AUTH_FAIL), the NDJSON framing, the operator key set source, and the
+> bounded-read contract. See ARCH-12-daemon-management-plane.md for the full
+> management plane design including `internal/mgmt` package, config additions,
+> and story decomposition.
+
 ## Go Package Layout
 
 The architecture formalizes the indicative package paths from interface-definitions.md:
@@ -59,12 +69,13 @@ The architecture formalizes the indicative package paths from interface-definiti
 | tmux | `internal/tmux` | effectful | BC-2.04.001, BC-2.04.002 |
 | config | `internal/config` | pure-core (parse+validate) | BC-2.09.003, NFR-011 |
 | svtnmgmt | `internal/svtnmgmt` | boundary | BC-2.07.001, BC-2.05.004 |
+| mgmt | `internal/mgmt` | boundary (effectful: owns listener) | BC-2.07.004 — Wave 5 (active) |
 | drain | `internal/drain` | effectful | BC-2.09.002 |
 | sbctl | `cmd/sbctl` | effectful | BC-2.07.002, BC-2.07.003, BC-2.08.001 |
 
 ## BC → Architecture Module Mapping
 
-This table resolves the `architecture_module:` field for all 42 BCs:
+This table resolves the `architecture_module:` field for all 45 BCs:
 
 | BC ID | Go Package | Module Name |
 |-------|-----------|-------------|
@@ -93,6 +104,7 @@ This table resolves the `architecture_module:` field for all 42 BCs:
 | BC-2.04.004 | `internal/session` | session-auth |
 | BC-2.04.005 | `internal/session` | session-auth |
 | BC-2.04.006 | `internal/session` | session-auth |
+| BC-2.04.007 | `cmd/switchboard` | switchboard-daemon |
 | BC-2.05.001 | `internal/admission` | admission |
 | BC-2.05.002 | `internal/admission` | admission |
 | BC-2.05.003 | `internal/session` | session-auth |
@@ -100,12 +112,14 @@ This table resolves the `architecture_module:` field for all 42 BCs:
 | BC-2.05.005 | `internal/hmac` | hmac |
 | BC-2.05.006 | `internal/routing` | routing |
 | BC-2.05.007 | `internal/admission` | admission |
+| BC-2.05.008 | `internal/routing` | routing |
 | BC-2.06.001 | `internal/metrics` | metrics |
 | BC-2.06.002 | `internal/metrics` | metrics |
 | BC-2.06.003 | `internal/metrics` | metrics |
 | BC-2.07.001 | `internal/svtnmgmt` | svtn-mgmt |
 | BC-2.07.002 | `cmd/sbctl` | sbctl |
 | BC-2.07.003 | `cmd/sbctl` | sbctl |
+| BC-2.07.004 | `internal/mgmt` | mgmt |
 | BC-2.08.001 | `cmd/sbctl` | sbctl |
 | BC-2.09.001 | `internal/config` | config |
 | BC-2.09.002 | `internal/drain` | drain |
