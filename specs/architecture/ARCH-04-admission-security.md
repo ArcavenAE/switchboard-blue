@@ -2,10 +2,10 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: architect
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -350,4 +350,100 @@ ARCH-04 HMAC Keying section.
 |------|-----------|
 | R-001 (content separation) | Router HMAC and routing logic operate only on outer header fields; `payload []byte` is never parsed in router code path |
 | R-009 (traffic analysis) | Explicitly in-scope per DI-003; documented in operator guide |
+
+## ADR-004 Addendum: RevokeKey `currentRole` Parameter — Caller-Supplied vs. Internal Lookup (HOLD-001, S-6.02)
+
+**Decision date:** 2026-06-29
+**Resolved by:** architect (HOLD-001 from S-6.02 test-writer)
+**Applies to:** `SVTNManager.RevokeKey` signature in `internal/svtnmgmt`
+
+### Decision: Hybrid — caller-supplied with mandatory manager-side cross-check
+
+The `currentRole admission.KeyRole` parameter is RETAINED as a caller-supplied argument.
+The implementation MUST cross-check the supplied role against the role stored in the
+`AdmittedKeySet` registry before applying the confirm gate. If the supplied role diverges
+from the stored role, `RevokeKey` MUST return an error (distinct sentinel, E-ADM-014,
+`ErrRoleMismatch: "revoke: supplied role does not match registered role"`). The confirm
+gate (`ErrControlRevocationRequiresConfirm`) is applied only AFTER the role check passes.
+
+### Rationale
+
+**Who is the caller?** `cmd/sbctl admin revoke-key`, running on the control node under
+credentials already authenticated by the mgmt-plane Ed25519 handshake (S-6.03, ADR-006).
+The caller is not an untrusted external party — it is the local operator CLI.
+
+**Why not pure internal lookup (Option B)?** The caller-supplied role is not being
+used to grant authority; it is used as a *classification input* that determines whether
+the confirm gate fires. Authority is established by the mgmt-plane handshake, not by the
+role parameter. Dropping the parameter would change the API surface, forcing a rewrite of
+all S-6.02 test call sites with no security gain.
+
+**Why not bare caller-supplied with no cross-check (Option A, pure)?** If the caller
+passes `RoleConsole` for a key that is actually `RoleControl` in the registry, the confirm
+gate is bypassed for what is in fact a control-to-control revocation. This is a local
+privilege-escalation path available to any code that can reach the mgmt socket, even if
+the socket is local-only. The cross-check closes it.
+
+**Why hybrid is strictly more secure than pure Option B:** It catches both (a) a
+caller that misrepresents the target key's role (role mismatch error before the confirm
+gate) and (b) a caller that correctly identifies a control key but omits confirm (existing
+`ErrControlRevocationRequiresConfirm` gate). Option B catches only (b).
+
+**`currentRole` semantics post-decision:** The parameter is a *declared intent and
+confirmation token*. The operator is asserting "I know this key is role X and I intend
+to revoke a key of that role." The manager verifies the assertion against the registry
+before proceeding. This is analogous to optimistic locking: the caller states its
+expectation; the server validates it.
+
+### Implementation Invariant for `SVTNManager.RevokeKey`
+
+```
+1. Validate svtnName exists → ErrSVTNNotFound if not
+2. Look up target key in AdmittedKeySet by (svtnID, DeriveNodeAddress(svtnID, pubkey))
+   → ErrKeyNotRegistered (E-ADM-013) if not found
+3. Compare stored.Role == currentRole
+   → ErrRoleMismatch (E-ADM-014) if they diverge
+4. If currentRole == RoleControl AND confirm == false
+   → ErrControlRevocationRequiresConfirm (E-ADM-004)
+5. Call AdmittedKeySet.RevokeKey → propagate error
+6. Return KeyOpResult{Fingerprint, At: time.Now().UTC()}
+```
+
+### Sentinel Error Required
+
+Add to `internal/svtnmgmt/svtnmgmt.go`:
+
+```go
+// ErrRoleMismatch is returned by SVTNManager.RevokeKey when the caller-supplied
+// currentRole does not match the role stored in the AdmittedKeySet registry
+// (E-ADM-014). This prevents the confirm gate from being bypassed by supplying
+// a lower role for a control key.
+var ErrRoleMismatch = errors.New("revoke: supplied role does not match registered role")
+```
+
+### Test Validity Assessment
+
+All tests in `internal/svtnmgmt/svtnmgmt_test.go` as written against the current
+caller-supplied API remain VALID. No call sites need to change. The tests correctly:
+- Pass `RoleConsole` when revoking a console key (role matches → no mismatch error)
+- Pass `RoleControl` when revoking a control key (role matches → confirm gate fires)
+- Expect `ErrControlRevocationRequiresConfirm` on control revoke without confirm
+
+A NEW test should be added (but is not required before green — it covers a defence-in-depth
+path, not an AC):
+
+```go
+// TestSVTNManager_RevokeKey_RoleMismatchReturnsError (optional, defence-in-depth)
+// RevokeKey with a role that does not match the registered role returns ErrRoleMismatch.
+```
+
+This test can be added by the implementer alongside the implementation; it does not block
+the Red Gate.
+
+### ADR-004 Original Decision (unchanged)
+
+The core ADR-004 decision is unchanged: key management is exclusive to control nodes;
+console-to-control revocation is prohibited; control-to-control revocation requires
+`sbctl admin` human authorization. This addendum narrows the implementation contract for
+the confirm gate only.
 | R-010 (DoS via forged frames) | HMAC verification at first router boundary (ADR-009 ordering); forged frames never reach routing logic; per-node keying prevents cross-node forgery |
