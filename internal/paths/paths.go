@@ -18,6 +18,11 @@ import (
 // composite path score formula (ARCH-03: loss_weight = 10).
 const DefaultLossWeight = 10.0
 
+// DegradedRTTThresholdMS is the EWMA RTT threshold in milliseconds above which
+// a path is considered degraded (BC-2.02.003 postcondition 5; ARCH-03 §Degraded-Path Flag Design).
+// The comparison is exclusive: degraded = ewmaRTTMS > DegradedRTTThresholdMS.
+const DegradedRTTThresholdMS = 200.0
+
 // consecutiveMissThreshold is the number of consecutive missed keepalives
 // required to mark a path inactive (BC-2.02.003 postcondition 6).
 const consecutiveMissThreshold = 3
@@ -68,6 +73,10 @@ type PathTracker struct {
 	// active reports whether this path is in the active set.
 	active bool
 
+	// degraded is true when the EWMA RTT has converged above DegradedRTTThresholdMS
+	// (BC-2.02.003 postcondition 5). Written only under mu.
+	degraded bool
+
 	// firstProbe is true until the first successful probe has been received.
 	// On first arrival the RTT estimate is replaced outright (TCP RFC 6298
 	// style) rather than EWMA-blended, so the conservative initial value does
@@ -104,6 +113,7 @@ func (t *PathTracker) resetRTT(arrivalRTTMS float64) {
 	t.consecutiveMisses = 0
 	t.firstProbe = false
 	t.active = true
+	t.updateDegraded(arrivalRTTMS) // BC-2.02.003 PC-5: set degraded from reactivating RTT
 }
 
 // OnProbe updates the EWMA RTT and loss estimate for the path based on a
@@ -142,6 +152,7 @@ func (t *PathTracker) OnProbe(arrivalRTTMS float64, lossEvent bool) {
 		t.ewmaRTTMS = t.ewmaAlpha*arrivalRTTMS + (1-t.ewmaAlpha)*t.ewmaRTTMS
 		t.ewmaLossPct = (1 - t.ewmaAlpha) * t.ewmaLossPct
 		t.consecutiveMisses = 0
+		t.updateDegraded(t.ewmaRTTMS) // BC-2.02.003 PC-5: evaluate threshold after EWMA update
 	}
 }
 
@@ -173,6 +184,56 @@ func (t *PathTracker) LossPct() float64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.ewmaLossPct
+}
+
+// updateDegraded evaluates rttMS against DegradedRTTThresholdMS and updates
+// t.degraded accordingly. Caller must hold t.mu.
+//
+// The comparison is exclusive: degraded = rttMS > DegradedRTTThresholdMS.
+// Called at the OnProbe success path (after EWMA update) and at resetRTT
+// (first-probe and reactivation paths) so the flag always reflects the
+// current EWMA RTT (BC-2.02.003 postcondition 5; ARCH-03 §Degraded-Path Flag Design).
+func (t *PathTracker) updateDegraded(rttMS float64) {
+	t.degraded = rttMS > DegradedRTTThresholdMS
+}
+
+// IsDegraded reports whether the path's EWMA RTT has converged above
+// DegradedRTTThresholdMS (BC-2.02.003 postcondition 5; ARCH-03 §Degraded-Path Flag Design).
+// The flag is exclusive: IsDegraded returns true only when ewmaRTTMS > DegradedRTTThresholdMS.
+func (t *PathTracker) IsDegraded() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.degraded
+}
+
+// PathSnapshot is a consistent point-in-time copy of all PathTracker metrics.
+// It is a value type (go.md rule 12: never return internal pointers from a locked accessor).
+type PathSnapshot struct {
+	// EWMARTTMs is the current EWMA-smoothed RTT in milliseconds.
+	EWMARTTMs float64
+	// LossPct is the current EWMA-smoothed loss percentage (0–100).
+	LossPct float64
+	// Active reports whether the path is in the active set.
+	Active bool
+	// Degraded reports whether the path's EWMA RTT exceeds DegradedRTTThresholdMS.
+	Degraded bool
+	// P99RTTMs is the p99 RTT in milliseconds. Wired in S-5.02; placeholder 0 until that story merges.
+	P99RTTMs float64
+}
+
+// Snapshot returns a consistent copy of all PathTracker metrics under a single
+// lock acquisition. The returned PathSnapshot is fully decoupled from internal
+// state (go.md rule 12).
+func (t *PathTracker) Snapshot() PathSnapshot {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return PathSnapshot{
+		EWMARTTMs: t.ewmaRTTMS,
+		LossPct:   t.ewmaLossPct,
+		Active:    t.active,
+		Degraded:  t.degraded,
+		P99RTTMs:  0, // placeholder: wired in S-5.02
+	}
 }
 
 // RankedPath associates a caller-supplied path identifier with its current
