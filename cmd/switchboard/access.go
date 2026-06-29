@@ -118,7 +118,28 @@ func tickIntervalFor(cfg *config.Config) time.Duration {
 // os.Exit(1). cfg is the validated config (nil when --config is not supplied).
 // When cfg is non-nil, the half-channel tick interval is sourced from
 // cfg.TickInterval (BC-2.09.003 PC-9 / Inv-5 / AC-009).
+//
+// S-W5.01: the management server is started before the data-plane connector
+// per ARCH-12 §Daemon Mode Startup. The mgmt goroutine is WaitGroup-tracked
+// per ARCH-01 §Goroutine WaitGroup Contract.
 func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
+	// Start the management server first (ARCH-12 §Daemon Mode Startup — all four
+	// daemon modes must start mgmt.Server before data-plane work).
+	// The access daemon does not yet load a persistent Ed25519 keypair (that wiring
+	// is deferred to the key_file config story); a nil key is accepted by NewServer
+	// and used only when connections are handled. The bootstrap OperatorKeySet (nil
+	// keys) means the daemon's own key is the sole authorized key — in bootstrap mode
+	// with a nil daemonKey, no management connections will authenticate, which is
+	// acceptable for the access daemon until key_file wiring is implemented.
+	var mgmtWG sync.WaitGroup
+	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", nil, nil)
+	if mgmtErr != nil {
+		// Log but do not abort: management server failure is non-fatal for the
+		// access data-plane in this wave (the socket path may not be writable in
+		// some environments). The error is logged to stderr for observability.
+		fmt.Fprintf(stderr, "mgmt: failed to start management server: %v\n", mgmtErr) //nolint:errcheck
+	}
+
 	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
@@ -144,7 +165,19 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	// UNCHANGED per ARCH-01 ADR-011 v1.5 §HIGH-B.
 	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
 
-	return runAccessWithConnector(ctx, stderr, sc, an, router)
+	runErr := runAccessWithConnector(ctx, stderr, sc, an, router)
+
+	// Shutdown the management server now that the data-plane is draining.
+	// Use a short timeout; the mgmt goroutine should already be stopping since
+	// ctx is cancelled. Wait for the WaitGroup to confirm goroutine exit.
+	if mgmtSrv != nil {
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = mgmtSrv.Shutdown(shutCtx)
+		shutCancel()
+	}
+	mgmtWG.Wait()
+
+	return runErr
 }
 
 // runAccessWithConnector contains all orchestration logic for the access-mode
