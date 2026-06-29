@@ -252,7 +252,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 //
 // ctx is always the first parameter (go.md rule 7; AC-011 Ruling V).
 // TODO (Ruling V GREEN): derive conn.SetReadDeadline from ctx before response decode.
-// TODO (Ruling U GREEN): validate resp.Type == "response" before checking resp.OK.
+// Ruling U: resp.Type == "response" is validated before checking resp.OK (BC-2.07.002 PC-3).
 // TODO (Ruling X GREEN): generate non-constant per-call req.ID; verify resp.ID == req.ID.
 func dispatch(ctx context.Context, conn net.Conn, command string, args any) (json.RawMessage, error) {
 	req := rpcRequestMsg{
@@ -268,6 +268,11 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 	var resp rpcResponseMsg
 	if err := json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("rpc failed: %s: decode response: %w", command, err)
+	}
+
+	// Ruling U: type field must be "response"; any other value is rejected (BC-2.07.002 PC-3).
+	if resp.Type != "response" {
+		return nil, fmt.Errorf("rpc failed: %s: unexpected response type: %q", command, resp.Type)
 	}
 
 	if !resp.OK {
