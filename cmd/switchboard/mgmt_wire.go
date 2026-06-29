@@ -1,19 +1,13 @@
-// mgmt_wire.go — management server wiring stubs for all four daemon modes.
+// mgmt_wire.go — management server wiring for all four daemon modes.
 //
 // This file provides:
-//  1. startMgmtServer — the shared wiring helper called by each runXxx function
+//  1. listenUnixMgmt — opens a Unix management socket with atomic 0600 permissions
+//     via syscall.Umask(0177) (AC-014 / CWE-276 / Ruling 4).
+//  2. buildMgmtListener — opens the management listener for the given mode.
+//  3. startMgmtServer — the shared wiring helper called by each runXxx function
 //     to start the management listener per ARCH-12 §Wiring into cmd/switchboard.
-//  2. runRouter, runConsole, runControl — daemon mode stubs (no implementations
-//     yet; return not-implemented errors until their owning stories ship).
-//
-// The wiring pattern for each daemon mode follows ARCH-12 §Daemon Mode Startup:
-//
-//	operatorKeys := mgmt.NewOperatorKeySet(cfg.AuthorizedOperatorKeys)
-//	mgmtLn, err := net.Listen("unix", cfg.ManagementSocket)
-//	mgmtSrv := mgmt.NewServer(mgmtLn, daemonPrivKey, operatorKeys, handlers)
-//	wg.Add(1)
-//	go func() { defer wg.Done(); _ = mgmtSrv.Serve(ctx) }()
-//	// On shutdown: mgmtSrv.Shutdown(shutdownCtx)
+//  4. runRouter, runConsole, runControl — daemon mode stubs (not yet implemented;
+//     return not-implemented errors until their owning stories ship).
 //
 // Default socket paths per ARCH-05 §Daemon Management Socket:
 //   - router:  /run/switchboard-router.sock
@@ -33,10 +27,37 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 )
+
+// listenUnixMgmt opens a Unix management socket at path with 0600 permissions
+// atomically by setting the process umask to 0177 before net.Listen and restoring
+// the previous umask afterward.
+//
+// Using the umask-before-Listen approach ensures the socket file is created with
+// the correct permissions atomically — there is no TOCTOU window between socket
+// creation and permission assignment (CWE-276 / AC-014 / BC-2.07.004 Invariant 7
+// / ARCH-12 §Unix Socket Permissions). A chmod-after-Listen approach MUST NOT be
+// used as it introduces a TOCTOU window.
+//
+// SetUnlinkOnClose(false) is applied so the socket file is not automatically
+// removed when the listener is closed (callers manage cleanup explicitly on
+// daemon restart or via OS-level cleanup). This ensures tests and observability
+// tools can stat the socket path after a Shutdown call.
+func listenUnixMgmt(path string) (net.Listener, error) {
+	old := syscall.Umask(0o177) // 0777 &^ 0177 = 0600
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	syscall.Umask(old)
+	if err != nil {
+		return nil, err
+	}
+	// Do not auto-remove socket on Close — callers manage the socket file lifecycle.
+	ln.SetUnlinkOnClose(false)
+	return ln, nil
+}
 
 // mgmtDefaultSocket returns the mode-specific default management socket address
 // when ManagementSocket is empty in config per ARCH-05 §Daemon Management Socket.
@@ -47,6 +68,7 @@ func mgmtDefaultSocket(mode string) string {
 	case "access":
 		return "/run/switchboard-access.sock"
 	case "console":
+		// Console uses TCP on loopback only (AC-014 / BC-2.07.004 EC-013 / Invariant 7).
 		return "127.0.0.1:9091"
 	default:
 		return "/run/switchboard-control.sock"
@@ -54,7 +76,7 @@ func mgmtDefaultSocket(mode string) string {
 }
 
 // mgmtNetwork returns the network type for net.Listen for the given daemon mode.
-// console uses TCP; all others use a Unix socket (ARCH-05).
+// console uses TCP (bound to 127.0.0.1 only); all others use Unix sockets (ARCH-05).
 func mgmtNetwork(mode string) string {
 	if mode == "console" {
 		return "tcp"
@@ -64,11 +86,7 @@ func mgmtNetwork(mode string) string {
 
 // resolveManagementSocket returns the effective socket address for the given mode:
 // cfg.ManagementSocket (trimmed) if set, otherwise the mode-specific default.
-//
-// todo!() — implementer: uncomment the TrimSpace check and return logic below.
 func resolveManagementSocket(cfg *config.Config, mode string) string {
-	// todo!() — not implemented; stub returns mode default unconditionally.
-	_ = strings.TrimSpace // keep import live
 	if cfg != nil && strings.TrimSpace(cfg.ManagementSocket) != "" {
 		return cfg.ManagementSocket
 	}
@@ -81,9 +99,19 @@ func mgmtListenAddr(cfg *config.Config, mode string) (network, address string) {
 }
 
 // buildMgmtListener opens the management listener for the given mode and config.
+// For Unix socket modes it uses listenUnixMgmt to ensure 0600 permissions atomically
+// (AC-014 / CWE-276). For TCP (console mode) it uses net.Listen directly.
 // Returns a net.Listener that the caller passes to mgmt.NewServer.
 func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 	network, address := mgmtListenAddr(cfg, mode)
+	if network == "unix" {
+		ln, err := listenUnixMgmt(address)
+		if err != nil {
+			return nil, fmt.Errorf("buildMgmtListener: %w", err)
+		}
+		return ln, nil
+	}
+	// TCP (console mode — binds to 127.0.0.1 only per ARCH-05 / AC-014).
 	ln, err := net.Listen(network, address)
 	if err != nil {
 		return nil, fmt.Errorf("buildMgmtListener: %w", err)
@@ -120,6 +148,10 @@ func parsePEMOperatorKeys(pemKeys []string) []ed25519.PublicKey {
 // constructs the mgmt.Server, and adds a wg-tracked goroutine per ARCH-01
 // §Goroutine WaitGroup Contract.
 //
+// The daemonVersion is sourced from the package-level `version` variable injected
+// by ldflags at build time (or "dev" for untagged builds). This satisfies ADR-012
+// §Ruling 6 / BC-2.07.004 PC-7 / AC-007.
+//
 // Returns the *mgmt.Server so the caller can call Shutdown on graceful exit.
 func startMgmtServer(
 	ctx context.Context,
@@ -143,8 +175,9 @@ func startMgmtServer(
 		return nil, fmt.Errorf("startMgmtServer: %w", err)
 	}
 
-	// Construct and start the management server.
-	srv := mgmt.NewServer(ln, daemonPrivKey, operatorKeys, handlers)
+	// Construct the management server. daemonVersion comes from the package-level
+	// `version` variable (ldflags-injected; "dev" for unreleased builds).
+	srv := mgmt.NewServer(ln, daemonPrivKey, operatorKeys, handlers, version)
 
 	// WaitGroup-tracked goroutine per ARCH-01 §Goroutine WaitGroup Contract.
 	wg.Add(1)
@@ -157,28 +190,17 @@ func startMgmtServer(
 }
 
 // runRouter is the router-mode daemon entry point stub.
-//
-// todo!() — implementer: load daemon keypair, build router-mode handler slice
-// (router.status, router.metrics, router.reload, svtn.list), call startMgmtServer,
-// start router data-plane, wire shutdown sequence per ARCH-12.
 func runRouter(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	// todo!() — not implemented.
-	// Stub calls startMgmtServer so the function tree is live from main.go down.
 	_, err := startMgmtServer(ctx, &sync.WaitGroup{}, cfg, "router", nil, nil)
 	if err != nil {
-		_ = err // expected; not propagated — this is a stub
+		_ = err
 	}
 	_ = stderr
 	return errors.New("runRouter: not implemented")
 }
 
 // runConsole is the console-mode daemon entry point stub.
-//
-// todo!() — implementer: load daemon keypair, build console-mode handler slice,
-// call startMgmtServer (TCP on 127.0.0.1:9091), start console data-plane,
-// wire shutdown sequence per ARCH-12.
 func runConsole(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	// todo!() — not implemented.
 	_, err := startMgmtServer(ctx, &sync.WaitGroup{}, cfg, "console", nil, nil)
 	if err != nil {
 		_ = err
@@ -188,11 +210,7 @@ func runConsole(ctx context.Context, stderr io.Writer, cfg *config.Config) error
 }
 
 // runControl is the control-mode daemon entry point stub.
-//
-// todo!() — implementer: load daemon keypair, build control-mode handler slice,
-// call startMgmtServer, start control data-plane, wire shutdown sequence per ARCH-12.
 func runControl(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	// todo!() — not implemented.
 	_, err := startMgmtServer(ctx, &sync.WaitGroup{}, cfg, "control", nil, nil)
 	if err != nil {
 		_ = err

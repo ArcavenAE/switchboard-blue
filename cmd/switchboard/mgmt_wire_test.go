@@ -442,6 +442,158 @@ func TestRunControl_StartsWithMgmt(t *testing.T) {
 	}
 }
 
+// ── AC-014: Unix socket 0600 permissions (CWE-276, Ruling 4) ─────────────────
+
+// TestDaemonWiring_UnixSocketPermissions_AC014 verifies that the management
+// socket file is created with permissions 0600 (owner read/write only) via
+// syscall.Umask(0177) before net.Listen — NOT via chmod-after-Listen (which
+// has a TOCTOU window per CWE-276).
+//
+// The test calls a testable extract of the Unix-socket Listen setup (or
+// buildMgmtListener directly), stats the resulting socket file, and asserts
+// FileMode.Perm() == 0600.
+//
+// It also verifies that the umask is restored to its original value after
+// the Listen call, so the test process's umask is not permanently modified.
+//
+// COMPILE NOTE: this test references listenUnixMgmt — a testable extract that
+// the implementer MUST add to mgmt_wire.go:
+//
+//	func listenUnixMgmt(path string) (net.Listener, error) {
+//	    old := syscall.Umask(0177)
+//	    ln, err := net.Listen("unix", path)
+//	    syscall.Umask(old)
+//	    return ln, err
+//	}
+//
+// If the implementer chooses a different extraction point, adjust the call
+// site here accordingly. The behavioral assertion (0600 perm) is the Red Gate.
+//
+// Gates: darwin + linux only (build constraint for portability).
+//
+// Traces: BC-2.07.004 EC-013, Invariant 7, AC-014 v1.1, Ruling 4.
+func TestDaemonWiring_UnixSocketPermissions_AC014(t *testing.T) {
+	t.Parallel()
+
+	sockPath := tempSockPath(t)
+
+	// Call the testable Unix socket wiring helper.
+	// listenUnixMgmt must set syscall.Umask(0177) before net.Listen and restore
+	// the umask afterward. It is a package-level function in mgmt_wire.go.
+	//
+	// COMPILE FAILURE IS EXPECTED until the implementer adds listenUnixMgmt.
+	ln, err := listenUnixMgmt(sockPath)
+	if err != nil {
+		t.Fatalf("AC-014: listenUnixMgmt(%q): %v", sockPath, err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	// Stat the socket file — must exist because net.Listen("unix", ...) creates it.
+	fi, err := os.Stat(sockPath)
+	if err != nil {
+		t.Fatalf("AC-014: os.Stat(%q): %v (socket must exist after Listen)", sockPath, err)
+	}
+
+	// AC-014: socket permissions must be 0600 (owner r/w only).
+	// The umask of 0177 applied before net.Listen ensures this atomically.
+	// A chmod-after-Listen approach is explicitly forbidden (TOCTOU window).
+	perm := fi.Mode().Perm()
+	if perm != 0o600 {
+		t.Errorf("AC-014: socket %q perm = %04o; want 0600 (must use syscall.Umask(0177) before net.Listen, not chmod-after)", sockPath, perm)
+	}
+}
+
+// TestDaemonWiring_ConsoleBindsLocalhost_AC014 verifies that console mode binds
+// the management TCP listener to 127.0.0.1 (loopback) only — not 0.0.0.0 or ":".
+//
+// Traces: BC-2.07.004 EC-013, AC-014 v1.1 (console TCP binding constraint).
+func TestDaemonWiring_ConsoleBindsLocalhost_AC014(t *testing.T) {
+	t.Parallel()
+
+	// The console default address must be 127.0.0.1:xxxx, never 0.0.0.0 or ":"
+	addr := mgmtDefaultSocket("console")
+	if !strings.HasPrefix(addr, "127.0.0.1") {
+		t.Errorf("AC-014: console mgmtDefaultSocket = %q; must bind to 127.0.0.1 only (not 0.0.0.0 or \":\")", addr)
+	}
+}
+
+// ── Critical finding: runAccess MUST start mgmt server ───────────────────────
+
+// TestRunAccess_StartsWithMgmt verifies that runAccess calls startMgmtServer —
+// making the ACCESS daemon wired to the management plane, not unwired.
+//
+// This is the Critical finding from ARCH-12 v1.2 adversarial review: the access
+// daemon is the only non-stub mode but currently does NOT call startMgmtServer.
+// All four daemon modes (router, access, console, control) MUST start an
+// mgmt.Server per the Scope Note.
+//
+// Test strategy: we cannot call runAccess directly (it connects to a real PTY).
+// Instead we verify the behavioral invariant by checking that:
+// (1) buildMgmtListener is called by the access wiring path — demonstrated by
+//
+//	injecting a cfg with a temp-dir socket path and asserting the socket file
+//	is created during the access startup path.
+//
+// Since runAccess is not injectable for the mgmt path, we test the lower-level
+// startMgmtServer function invoked by the access wiring stub and assert it is
+// present and functional. The real behavioral test is:
+//
+//	runAccess must call startMgmtServer with the access mode.
+//
+// This test fails because runAccess does NOT call startMgmtServer today (critical
+// finding). The implementer must add the startMgmtServer call to runAccess.
+//
+// Approach: we use a side-channel observable — if runAccess calls
+// startMgmtServer("access", ...), the socket file at cfg.ManagementSocket will
+// be created. We supply a temp-dir socket path and assert it exists after a
+// brief startup window.
+//
+// NOTE: runAccess also calls tmux.New / sc.Connect which will fail in a test
+// environment. We cancel the context immediately to make it return quickly, and
+// check socket creation before/after the call. The socket file is the observable.
+//
+// Traces: S-W5.01 Scope Note (Critical: ALL FOUR modes), AC-010, ARCH-12 v1.2.
+func TestRunAccess_StartsWithMgmt(t *testing.T) {
+	// NOT t.Parallel(): touches filesystem socket path.
+
+	sockPath := tempSockPath(t)
+
+	cfg := &config.Config{
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Pre-cancel so runAccess returns immediately (Connect will fail; that's fine —
+	// we only want to observe whether the socket was created before the error path).
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	// runAccess is expected to fail quickly (PTY unavailable in test environment).
+	// We don't assert on the error — only on socket creation.
+	var buf strings.Builder
+	_ = runAccess(ctx, &buf, cfg)
+
+	// AC-014 observable: if runAccess calls startMgmtServer("access", ...) before
+	// any data-plane work, the socket file will have been created (and possibly
+	// removed on shutdown — but creation is the signal).
+	//
+	// If the socket does NOT exist, runAccess did NOT call startMgmtServer — the
+	// critical missing wiring. This is the Red Gate assertion.
+	//
+	// Note: on a successful implementation the socket may be cleaned up by
+	// Shutdown before the stat, in which case we need a different observable.
+	// The preferred approach is for the implementer to use a socketCreated hook or
+	// for the test to use a net.Listen listener injection. For now, the timing
+	// window (context already cancelled → Serve returns immediately → socket file
+	// persists because Unix sockets are not auto-removed on Close) is sufficient.
+	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
+		t.Errorf("TestRunAccess_StartsWithMgmt: socket %q was not created; "+
+			"runAccess must call startMgmtServer (critical finding: access mode unwired)",
+			sockPath)
+	}
+}
+
 // ── Mgmt.Handler type: ensure it compiles and is usable ───────────────────────
 
 // TestMgmtHandlerType verifies that mgmt.Handler can be constructed with a
