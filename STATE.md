@@ -1,9 +1,9 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-mgmt-plane-planned
+phase_step: wave-5-mgmt-plane-adversarial-convergence-in-progress
 phase_3_active_wave: 5
-phase_3_active_stories: []
+phase_3_active_stories: [S-6.03, S-W5.01]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
 product: switchboard
 mode: greenfield
@@ -64,8 +64,8 @@ wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
 develop_head: 01ae50c
 open_prs: 0
-timestamp: 2026-06-29T00:00:00Z
-last_update: 2026-06-28
+timestamp: 2026-06-29T08:00:00Z
+last_update: 2026-06-29
 ---
 
 # Switchboard Factory State
@@ -80,7 +80,7 @@ Wave 5 RE-SCOPED to 7 stories / 38 pts (Observability + CLI + Management Plane).
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED — 5/5 merged, 6/6 adversary clean, consistency audit PASS | 2026-06-28 | W4: 6/6 passes C=0/H=0/M=0 |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 impl landed; Round-1 adversary found new C/H — fixes routed, pending re-run | 2026-06-29 | W5: 0/3 passes clean (both stories); Round-1 new Critical/High → fixes in flight |
 
 ## Wave / Story Status
 
@@ -98,8 +98,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 5 | S-5.01 | Green/yellow/red quality indicator with hysteresis | pending | — | — |
 | 5 | S-5.02 | sbctl paths list / router metrics + alias + p99 | pending | — | — |
 | 5 | S-6.02 | SVTN lifecycle and key management via sbctl admin | pending | — | — |
-| 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | pending | — | — |
-| 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | draft | — | — |
+| 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | IN-CONVERGENCE | PR#32 (premature — NOT merging) | d85dd22 |
+| 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | IN-CONVERGENCE | PR#31 (premature — NOT merging) | — |
 | 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | draft | — | — |
 
 ## Open Drift Items
@@ -128,6 +128,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | F-009 | LOW | ARCH-INDEX input-hash tooling field-name mismatch (pre-existing, hash tooling does not emit `input_hash` field). | architect/devops | tracked TODO — deferred maintenance |
 | E-CFG-002 | MED | Pre-existing config-key collision (joins tracked E-CFG-006). | product-owner | deferred maintenance |
 | E-CFG-006 | MED | Pre-existing config-key collision (tracked from prior audit). | product-owner | deferred maintenance |
+| PROCESS-GAP-W5A | OBS | [process-gap] S-W5.01 implementer reported "all 4 modes wired" when runRouter/runConsole/runControl still had orphaned listeners (Round-1 HIGH unfixed for 3/4 modes). S-6.03 implementer reported "race-clean" when `go test -race` intermittently failed on package-global homeDirFunc data race under t.Parallel. Orchestrator independent verification (go test -race + reading mgmt_wire.go) caught both false-greens. Candidate mandatory discipline: require `just test-race` evidence-paste in implementer completion contract before green-claim is accepted. | orchestrator | open — candidate codification |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -152,17 +153,24 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Build whole management plane (Wave 5) | net-new internal/mgmt server + ADR-012 wire protocol (NDJSON, Ed25519 challenge-response, 64 KiB bounded reads, fail-closed Authenticate()) + e2e across 4 daemon types; S-6.03 re-scoped, S-W5.01/S-W5.02 created; +13pt. BC-2.07.004 + VP-064..VP-067 minted. | 2026-06-28 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-28 (Wave 5 management plane planned)
+## Session Resume Checkpoint — 2026-06-29 (Wave 5 mgmt-plane adversarial convergence)
 
-**Position:** Phase 3 Wave 5 RE-SCOPED (7 stories / 38 pts). Spec change set committed to factory-artifacts. Fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 tracked TODO. origin/develop HEAD = 01ae50c (S-5.03 merged PR #30). Local develop is 1 commit behind — run `git pull` before starting Wave-5 TDD. l4_vp_count = 67 (VP-061..VP-067 minted); l3_bc_count = 45 (BC-2.07.004 added). 0 open PRs.
+**Position:** Phase 3 Wave 5. S-6.03 + S-W5.01 implementation landed; per-story adversarial convergence (BC-5.39.001) at 0/3 for BOTH stories. Round-1 (6 diverse-lens passes, 3 per story) found NEW Critical/High — fixes routed to implementer (S-W5.01: runRouter/runConsole/runControl orphaned listeners) and test-writer (S-6.03: homeDirFunc t.Parallel data race). Both fix efforts IN PROGRESS. PRs #31 (S-W5.01) and #32 (S-6.03) opened PREMATURELY — do NOT merge until convergence achieved + demos recorded. origin/develop HEAD = 01ae50c.
 
-**Wave 5 stories (7 / 38 pts):** S-5.03 MERGED (01ae50c); S-5.01 quality-indicator (5pt, depends S-5.03); S-5.02 sbctl-metrics-query (5pt, needs S-5.01 + S-6.03); S-6.02 svtn-lifecycle (8pt); S-6.03 sbctl-client-auth v2.0 (5pt); S-W5.01 internal/mgmt server (8pt, parallel-safe with sbctl stories); S-W5.02 e2e harness (5pt, gates on S-6.03 + S-W5.01). Constraint: S-6.02 ∥ S-5.02 FORBIDDEN (both edit cmd/sbctl/main.go).
+**Spec changes landed this burst (factory-artifacts):**
+- ARCH-12 v1.1→v1.2 (HandshakeTimeout=10s/RPCIdleTimeout=30s, ctx-first Authenticate, MaxConcurrentConnections=128, Unix socket umask 0177, E-CFG-010/E-RPC-001, daemon_version semver, PC-3 post-auth guard)
+- ARCH-05 v1.2→v1.3 (socket perms + console 127.0.0.1 loopback-only)
+- BC-2.07.004 v1.1→v1.2 (PC-1/3/7, EC-001/004/012/013, Invariant 7, VP-065 reframed)
+- BC-2.07.003 v1.2→v1.4 (Invariant 4, EC-005 E-CFG-010, EC-006 E-RPC-001, EC-007 tilde expansion + Precondition 3)
+- error-taxonomy v2.4→v2.5 (E-CFG-010, E-RPC-001 added; E-NET-001 scope clarified)
+- S-W5.01 v1.0→v1.1 (14 ACs: AC-013 conn-cap, AC-014 socket-perms, AC-003 post-auth guard, AC-007 daemon_version, read-deadline ACs, access-daemon wiring)
+- S-6.03 v2.0→v2.2 (9 ACs: AC-002 ctx-first, AC-003 E-CFG-010, AC-004 E-RPC-001/E-NET-001, AC-008 tilde expansion anchored, AC-009 os.Exit-only-in-main)
 
-**NEXT ACTION on resume:** Pull develop (01ae50c). Begin Wave-5 TDD with S-6.03 + S-W5.01 (two roots with no intra-wave deps). S-6.03 creates cmd/sbctl scaffold; S-W5.01 creates internal/mgmt on a parallel branch.
+**NEXT ACTION on resume:** (1) Confirm both worktrees are clean: `go build ./...` + `go test ./...` + `go test -race ./...` + lint + fmt — MUST all pass before adversary re-dispatch. (2) Dispatch fresh Round-1 (6 passes, 3 per story, diverse lenses). (3) Only open demos + trigger merge after 3-consecutive-clean streak on EACH story.
 
-**Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1 (3 LOW + NITPICK from S-4.04 adversary). Address in Wave 5 or dedicated hardening pass.
+**Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1. Address Wave 5 hardening.
 
-**Settled rulings:** RULING-001/002/002-A1/003-v1.1 and F-A-001 (VP-052 re-anchored) — do NOT re-open unless a fresh pass finds a NEW Critical/High.
+**Settled rulings:** RULING-001/002/002-A1/003-v1.1 + W5 Rulings 1-7 (ARCH-12/ARCH-05/BC-2.07.003/BC-2.07.004) — do NOT re-open unless fresh pass finds NEW Critical/High.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

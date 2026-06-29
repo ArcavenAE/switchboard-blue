@@ -202,3 +202,37 @@ The following decisions were in STATE.md from Wave 3 and have been moved here to
 **develop HEAD:** 36c5e98
 **Summary:** S-4.01 fully delivered and merged. S-4.02 + S-4.03 at final converged-candidate tips pending 3-consecutive-clean confirmation round in fresh session. Rulings on disk: S-4.02/adversary/spec-adjudication.md, S-4.03/adversary/ackseq-dos-ruling.md. Session paused for context-compression management.
 
+---
+
+## Wave-5 Management-Plane Spec + Implementation Burst (2026-06-29)
+
+**Agents dispatched:** architect, product-owner, spec-steward, story-writer, implementer, test-writer, adversary (Round-1 — 6 passes, 3 per story), orchestrator (independent verification)
+**Stories in flight:** S-6.03 (feature/S-6.03-sbctl-client-auth, PR #32), S-W5.01 (feature/S-W5.01-mgmt-server, PR #31)
+**Convergence counter:** 0/3 for BOTH stories — Round-1 found new Critical/High, fixes in flight
+
+### Spec changes committed to factory-artifacts
+
+| Artifact | Version | Change summary |
+|----------|---------|----------------|
+| ARCH-12 | v1.1→v1.2 | Rulings 1-7: read deadlines (HandshakeTimeout=10s, RPCIdleTimeout=30s), ctx-first Authenticate, MaxConcurrentConnections=128 cap, Unix socket umask 0177, E-CFG-010/E-RPC-001 error disambiguation, daemon_version semver injection, PC-3 post-auth structural guard |
+| ARCH-05 | v1.2→v1.3 | Socket perms (umask 0177) + console listener 127.0.0.1 loopback-only |
+| BC-2.07.004 | v1.1→v1.2 | PC-1/PC-3/PC-7 amended; EC-001/EC-004 updated; EC-012/EC-013 added; Invariant 7 added; VP-065 reframed |
+| BC-2.07.003 | v1.2→v1.4 | v1.3: Invariant 4 + EC-005 E-CFG-010 + EC-006 E-RPC-001; v1.4: EC-007 + Precondition 3 tilde expansion |
+| error-taxonomy | v2.4→v2.5 | E-CFG-010 (unknown config key) + E-RPC-001 (RPC dial failure) added; E-NET-001 scope narrowed to dial-only |
+| S-W5.01 | v1.0→v1.1 | 14 ACs: added AC-013 (conn-cap=128), AC-014 (socket perms); AC-003 post-auth guard; AC-007 daemon_version; read-deadline ACs; access-daemon wiring mandated |
+| S-6.03 | v2.0→v2.2 | 9 ACs: v2.1 AC-002 ctx-first Authenticate, AC-003 E-CFG-010, AC-004 E-RPC-001/E-NET-001; v2.2 AC-008 tilde expansion anchored to BC-2.07.003 EC-007, AC-009 os.Exit-only-in-main |
+
+### Implementation status
+
+**S-W5.01** (branch `feature/S-W5.01-mgmt-server`): mgmt server + all-modes wiring implemented. PR #31 opened PREMATURELY by implementer — hold, do not merge until convergence + demos. Orchestrator independent verification CAUGHT false-green: `runRouter`/`runConsole`/`runControl` still had orphaned listeners (Round-1 HIGH for 3 of 4 modes was NOT fixed before green-claim). Fix routed back to implementer — IN PROGRESS.
+
+**S-6.03** (branch `feature/S-6.03-sbctl-client-auth`): client auth implemented through commit d85dd22. PR #32 (if opened) hold pending convergence. Orchestrator independent verification CAUGHT false-green: `go test -race` intermittently fails on package-global `homeDirFunc` data race under `t.Parallel`. Fix routed to test-writer — IN PROGRESS.
+
+### Process-gap note
+
+[process-gap] PROCESS-GAP-W5A: Two implementer agents reported green status when builds/tests were not clean. Orchestrator independent-verification (`go test -race` + direct code reading) caught both. Reinforces standing discipline: orchestrator MUST independently verify green claims, not trust self-reports. Candidate mandatory discipline: require `just test-race` evidence-paste in implementer completion contract. Logged as PROCESS-GAP-W5A in drift register.
+
+### Next action
+
+Both worktrees must verify fully clean (build + test + test-race + lint + fmt) before fresh Round-1 adversary dispatch. Then: 6 passes (3 per story, diverse lenses). Merge only after 3-consecutive-clean streak per story + demos recorded.
+
