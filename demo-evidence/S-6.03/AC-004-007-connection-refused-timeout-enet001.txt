@@ -1,0 +1,50 @@
+=== Demo: AC-004 / AC-007 — connection refused + timeout → E-NET-001 on stderr, exit 1 ===
+Covers: AC-004 (BC-2.07.003 PC-1 — E-NET-001 connection refused, VP-030)
+        AC-007 (BC-2.07.003 Inv-2 — timeout → E-NET-001, no hang)
+        AC-005 (BC-2.07.003 PC-3 — no stdout on failure)
+Binary: /tmp/sbctl-demo (cmd/sbctl HEAD ff1d146)
+Key fixture: cmd/sbctl/testdata/test_ed25519_key (valid Ed25519 key)
+
+--- AC-004: Connection refused ---
+$ /tmp/sbctl-demo --target=127.0.0.1:19995 --key=<testdata/test_ed25519_key> router
+stdout: (empty)
+stderr: E-NET-001 daemon unreachable: 127.0.0.1:19995: dial tcp 127.0.0.1:19995: connect: connection refused
+Exit code: 1
+
+Behavior:
+- E-NET-001 on stderr only (no stdout).
+- Human-readable address + OS error in message.
+- exit 1.
+
+--- AC-007: Listener accepts but never completes handshake (timeout) ---
+$ /tmp/sbctl-demo --target=127.0.0.1:29876 --key=<testdata/test_ed25519_key> --timeout=150ms router
+# (TCP listener accepts connection, never writes CHALLENGE)
+stdout: (empty)
+stderr: E-NET-001 daemon unreachable: 127.0.0.1:29876: connection timed out
+Exit code: 1
+Elapsed: ~173ms (within 500ms budget; --timeout=150ms honored)
+
+Behavior:
+- Dial succeeds (listener accepts), but handshake read deadline fires → E-NET-001
+  (BC-2.07.003 Inv-2 + Ruling Y: timeout during auth treated as "unreachable").
+- Message format: "daemon unreachable: <address>: connection timed out".
+- exit 1; no stdout.
+
+--- Supporting tests (go test -race -v ./cmd/sbctl/) ---
+=== RUN   TestSbctl_ConnectionRefused_ExitsOneWithENET001_VP030
+=== PAUSE TestSbctl_ConnectionRefused_ExitsOneWithENET001_VP030
+=== CONT  TestSbctl_ConnectionRefused_ExitsOneWithENET001_VP030
+--- PASS: TestSbctl_ConnectionRefused_ExitsOneWithENET001_VP030 (0.02s)
+
+=== RUN   TestSbctl_NoStdoutOnConnectionFailure
+=== PAUSE TestSbctl_NoStdoutOnConnectionFailure
+=== CONT  TestSbctl_NoStdoutOnConnectionFailure
+--- PASS: TestSbctl_NoStdoutOnConnectionFailure (0.02s)
+
+=== RUN   TestSbctl_ConnectionTimeout
+=== PAUSE TestSbctl_ConnectionTimeout
+=== CONT  TestSbctl_ConnectionTimeout
+--- PASS: TestSbctl_ConnectionTimeout (0.12s)
+
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.446s

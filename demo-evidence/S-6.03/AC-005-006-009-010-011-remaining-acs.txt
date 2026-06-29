@@ -1,0 +1,60 @@
+=== Demo: AC-005 / AC-006 / AC-009 / AC-010 / AC-011 — remaining ACs ===
+Covers: AC-005 (BC-2.07.003 PC-3 — zero stdout on failure)
+        AC-006 (BC-2.07.002 PC-3 — JSON envelope output)
+        AC-009 (ADR-012 / go.md — os.Exit only in main())
+        AC-010 (ADR-012 §3 step 6 — RPC wire type "request"/"response", Ruling M/U/X)
+        AC-011 (BC-2.07.003 Inv-2 — dispatch() ctx-first + read deadline, Ruling V)
+Binary: /tmp/sbctl-demo (cmd/sbctl HEAD ff1d146)
+
+--- Supporting tests ---
+=== RUN   TestSbctl_NoStdoutOnConnectionFailure
+--- PASS: TestSbctl_NoStdoutOnConnectionFailure (0.02s)
+
+=== RUN   TestSbctl_JSONEnvelopeFormat
+--- PASS: TestSbctl_JSONEnvelopeFormat (0.00s)
+    --- PASS: TestSbctl_JSONEnvelopeFormat/success_envelope_ok_true_error_null_data_present (0.00s)
+    --- PASS: TestSbctl_JSONEnvelopeFormat/error_envelope_ok_false_error_present_data_null (0.00s)
+
+=== RUN   TestSbctl_ConnectAndRun_ReturnsError
+E-NET-001 daemon unreachable: 127.0.0.1:19995: dial tcp 127.0.0.1:19995: connect: connection refused
+--- PASS: TestSbctl_ConnectAndRun_ReturnsError (0.00s)
+
+=== RUN   TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001
+--- PASS: TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001 (0.03s)
+
+=== RUN   TestDispatch_EmitsCorrectWireType
+--- PASS: TestDispatch_EmitsCorrectWireType (0.00s)
+
+=== RUN   TestDispatch_AcceptsResponseType
+--- PASS: TestDispatch_AcceptsResponseType (0.00s)
+
+=== RUN   TestDispatch_RejectsWrongResponseType
+--- PASS: TestDispatch_RejectsWrongResponseType (0.00s)
+    --- PASS: TestDispatch_RejectsWrongResponseType/rpc_response_type_with_ok_true_is_rejected (0.00s)
+    --- PASS: TestDispatch_RejectsWrongResponseType/ok_false_with_correct_type_is_erpc001_not_type_mismatch (0.00s)
+
+=== RUN   TestDispatch_IDEchoEnforced
+--- PASS: TestDispatch_IDEchoEnforced (0.00s)
+    --- PASS: TestDispatch_IDEchoEnforced/id_mismatch_returns_error (0.00s)
+    --- PASS: TestDispatch_IDEchoEnforced/id_is_non_constant_across_calls (0.00s)
+
+=== RUN   TestDispatch_RespReadDeadlineEnforced
+--- PASS: TestDispatch_RespReadDeadlineEnforced (0.11s)
+    --- PASS: TestDispatch_RespReadDeadlineEnforced/ctx_with_deadline_fires_before_silent_server (0.20s)
+    --- PASS: TestDispatch_RespReadDeadlineEnforced/no_deadline_ctx_fallback_arms_deadline (0.10s)
+    --- PASS: TestDispatch_RespReadDeadlineEnforced/deadline_cleared_after_dispatch_returns (0.00s)
+
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.687s
+
+Key behaviors verified:
+AC-005: stdout empty when connection refused (TestSbctl_NoStdoutOnConnectionFailure).
+AC-006: JSON envelope {"ok":true/false,"error":...,"data":...} for both success and error
+        (TestSbctl_JSONEnvelopeFormat).
+AC-009: connectAndRun() returns error, never calls os.Exit; only main() calls os.Exit
+        (TestSbctl_ConnectAndRun_ReturnsError — process would exit if os.Exit called in-test).
+AC-010: dispatch() emits "type":"request" (not "rpc_request"); accepts "type":"response";
+        rejects wrong response types including ok:true with wrong type (Ruling U);
+        validates resp.ID == req.ID, mismatch → E-RPC-001 (Ruling X).
+AC-011: dispatch() takes ctx as first parameter; sets conn.SetReadDeadline from ctx.Deadline()
+        with 30s fallback; deadline fires correctly; cleared via defer (Ruling V).

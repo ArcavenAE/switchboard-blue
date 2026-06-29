@@ -1,0 +1,54 @@
+=== Demo: AC-012 — no-subcommand and --help → usage to stdout, exit 0 ===
+Covers: AC-012 (BC-2.07.002 EC-003)
+Binary: /tmp/sbctl-demo (cmd/sbctl HEAD ff1d146)
+
+--- Invocation 1: no subcommand ---
+$ /tmp/sbctl-demo
+usage: sbctl [--target=<addr>] [--key=<path>] [--json] [--timeout=<dur>] <subcommand> [args...]
+Exit code: 0
+
+Stdout: non-empty (usage line above)
+Stderr: empty
+
+--- Invocation 2: --help ---
+$ /tmp/sbctl-demo --help
+Usage of /tmp/sbctl-demo:
+  -json
+    	machine-readable JSON output
+  -key string
+    	path to operator private key file (default "~/.ssh/id_ed25519")
+  -target string
+    	daemon address (host:port or unix socket path) (default "/run/switchboard-router.sock")
+  -timeout duration
+    	connection timeout (default 5s)
+Exit code: 0
+
+Stdout: non-empty (flag usage above)
+Stderr: empty
+
+--- Supporting tests (go test -race -v ./cmd/sbctl/) ---
+=== RUN   TestSbctl_NoSubcommand_ExitsZero
+=== PAUSE TestSbctl_NoSubcommand_ExitsZero
+=== CONT  TestSbctl_NoSubcommand_ExitsZero
+--- PASS: TestSbctl_NoSubcommand_ExitsZero (1.02s)
+PASS
+
+=== RUN   TestSbctl_HelpFlag_ExitsZeroStdout
+=== PAUSE TestSbctl_HelpFlag_ExitsZeroStdout
+=== CONT  TestSbctl_HelpFlag_ExitsZeroStdout
+=== RUN   TestSbctl_HelpFlag_ExitsZeroStdout/double-dash-help
+=== PAUSE TestSbctl_HelpFlag_ExitsZeroStdout/double-dash-help
+=== RUN   TestSbctl_HelpFlag_ExitsZeroStdout/short-h
+=== PAUSE TestSbctl_HelpFlag_ExitsZeroStdout/short-h
+=== CONT  TestSbctl_HelpFlag_ExitsZeroStdout/double-dash-help
+=== CONT  TestSbctl_HelpFlag_ExitsZeroStdout/short-h
+--- PASS: TestSbctl_HelpFlag_ExitsZeroStdout (0.00s)
+    --- PASS: TestSbctl_HelpFlag_ExitsZeroStdout/short-h (1.02s)
+    --- PASS: TestSbctl_HelpFlag_ExitsZeroStdout/double-dash-help (1.02s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	2.456s
+
+Behavior verified:
+- No-subcommand: stdout non-empty, stderr empty, exit 0 (NOT exit 2).
+- --help: flag.CommandLine.SetOutput(os.Stdout) redirects flag package output to stdout; exit 0.
+- -h: same behavior as --help.

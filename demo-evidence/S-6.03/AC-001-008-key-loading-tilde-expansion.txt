@@ -1,0 +1,49 @@
+=== Demo: AC-001 / AC-008 — key loading + tilde expansion → E-CFG-010, no dial ===
+Covers: AC-001 (BC-2.07.002 PC-2 — Ed25519 key load via OpenSSH PEM + io.LimitReader)
+        AC-008 (BC-2.07.003 EC-007 — tilde expansion via os.UserHomeDir; pre-dial ordering)
+        AC-003 (BC-2.07.003 EC-005 — E-CFG-010 on key load failure, no connection attempt)
+Binary: /tmp/sbctl-demo (cmd/sbctl HEAD ff1d146)
+
+--- Key file absent → E-CFG-010, no dial ---
+$ /tmp/sbctl-demo --target=127.0.0.1:19995 --key=/nonexistent/key.pem router
+stdout: (empty)
+stderr: E-CFG-010 key load failed: /nonexistent/key.pem: open /nonexistent/key.pem: no such file or directory
+Exit code: 1
+
+Behavior:
+- E-CFG-010 fires BEFORE any dial attempt (key load precedes net.Dial per BC-2.07.003
+  EC-005 / Ruling 5). Even though 127.0.0.1:19995 is not listening, E-NET-001
+  is NOT emitted — key failure takes precedence.
+- exit 1; no stdout.
+
+--- Supporting tests ---
+=== RUN   TestSbctl_KeyLoading_Ed25519
+--- PASS: TestSbctl_KeyLoading_Ed25519 (0.00s)
+    --- PASS: TestSbctl_KeyLoading_Ed25519/well_formed_ed25519_key_loads_to_64_bytes (0.00s)
+    --- PASS: TestSbctl_KeyLoading_Ed25519/file_larger_than_64KiB_is_rejected (0.01s)
+    --- PASS: TestSbctl_KeyLoading_Ed25519/nonexistent_file_returns_error (0.00s)
+
+=== RUN   TestSbctl_TildeExpansion_DefaultKey
+--- PASS: TestSbctl_TildeExpansion_DefaultKey (0.00s)
+    --- PASS: TestSbctl_TildeExpansion_DefaultKey/happy_path_tilde_slash_expands_to_home (0.01s)
+    --- PASS: TestSbctl_TildeExpansion_DefaultKey/sub_case_a_homedir_error_uses_original_path (0.00s)
+    --- PASS: TestSbctl_TildeExpansion_DefaultKey/sub_case_b_expansion_ok_but_file_missing_uses_expanded_path (0.01s)
+    --- PASS: TestSbctl_TildeExpansion_DefaultKey/tilde_username_treated_as_literal (0.00s)
+
+=== RUN   TestSbctl_KeyLoadFailure_ExitsOneWithECFG010
+--- PASS: TestSbctl_KeyLoadFailure_ExitsOneWithECFG010 (0.00s)
+    --- PASS: TestSbctl_KeyLoadFailure_ExitsOneWithECFG010/missing_key_file (0.02s)
+    --- PASS: TestSbctl_KeyLoadFailure_ExitsOneWithECFG010/oversized_key_file (0.01s)
+    --- PASS: TestSbctl_KeyLoadFailure_ExitsOneWithECFG010/wrong_key_type_rsa (0.01s)
+    --- PASS: TestSbctl_KeyLoadFailure_ExitsOneWithECFG010/malformed_pem_key_file (0.02s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.716s
+
+Key behaviors verified:
+- Well-formed Ed25519 key loads to 64-byte PrivateKey (AC-001).
+- Files >64 KiB rejected with "file exceeds 64 KiB limit" (AC-001, io.LimitReader bound).
+- ~/  expanded via os.UserHomeDir() before file-open (AC-008 happy path).
+- UserHomeDir() error → E-CFG-010 with original path "~/.ssh/..." (AC-008 sub-case a).
+- Expansion ok but file absent → E-CFG-010 with expanded path (AC-008 sub-case b).
+- ~username treated as literal (AC-008 out-of-scope form).
+- Key failure fires before dial (AC-003 / AC-008 ordering requirement).

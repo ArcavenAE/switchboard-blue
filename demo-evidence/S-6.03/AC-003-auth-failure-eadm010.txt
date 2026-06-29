@@ -1,0 +1,45 @@
+=== Demo: AC-003 — auth failure → E-ADM-010 on stderr, exit 1 ===
+Covers: AC-003 (BC-2.07.002 PC-4 — auth failure → E-ADM-010)
+Binary: /tmp/sbctl-demo (cmd/sbctl HEAD ff1d146)
+
+--- Auth failure scenario ---
+Mock server sends AUTH_FAIL response after CHALLENGE exchange.
+sbctl receives AUTH_FAIL → Authenticate() returns non-nil error.
+
+stdout: (empty)
+stderr: E-ADM-010 authentication failed
+Exit code: 1
+
+Behavior:
+- E-ADM-010 on stderr only (no stdout).
+- exit 1.
+- E-NET-001 is NOT emitted (auth failure is distinct from connection failure, Ruling 5).
+
+Note: This scenario requires a mock server; it is exercised in-process by
+TestSbctl_AuthFailure_ExitsOneWithEADM010 (cmd/sbctl/main_test.go).
+A live daemon responding with AUTH_FAIL (wrong key) deferred to S-W5.02 integration.
+
+--- Supporting test (go test -race -v ./cmd/sbctl/) ---
+=== RUN   TestSbctl_AuthFailure_ExitsOneWithEADM010
+=== PAUSE TestSbctl_AuthFailure_ExitsOneWithEADM010
+=== CONT  TestSbctl_AuthFailure_ExitsOneWithEADM010
+--- PASS: TestSbctl_AuthFailure_ExitsOneWithEADM010 (0.03s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.350s
+
+--- AC-002 (Authenticate() fail-closed, VP-067) full sub-case results ---
+=== RUN   TestAuthenticate_FailClosed_VP067
+--- PASS: TestAuthenticate_FailClosed_VP067 (0.01s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_a_connection_error_on_challenge_read (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_b_malformed_challenge_missing_nonce (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_b_malformed_challenge_nonce_not_base64url (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_b_malformed_challenge_json_decode_error (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_b_malformed_challenge_nonce_wrong_length (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_e_auth_fail_returns_error (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_f_wrong_response_type_returns_error (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_g_truncated_stream_after_challenge (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_happy_path_auth_ok_returns_nil (0.00s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_h_oversized_auth_response_bounded_by_limit_reader (0.01s)
+    --- PASS: TestAuthenticate_FailClosed_VP067/VP067_i_deadline_expiry_server_silent (0.05s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.399s
