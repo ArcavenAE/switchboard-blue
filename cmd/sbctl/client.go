@@ -249,7 +249,12 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 // request envelope. Returns the raw data field from the response envelope.
 // On server error (ok:false) or decode failure: returns E-RPC-001 error
 // (BC-2.07.003 EC-006; Ruling 5).
-func dispatch(conn net.Conn, command string, args any) (json.RawMessage, error) {
+//
+// ctx is always the first parameter (go.md rule 7; AC-011 Ruling V).
+// TODO (Ruling V GREEN): derive conn.SetReadDeadline from ctx before response decode.
+// TODO (Ruling U GREEN): validate resp.Type == "response" before checking resp.OK.
+// TODO (Ruling X GREEN): generate non-constant per-call req.ID; verify resp.ID == req.ID.
+func dispatch(ctx context.Context, conn net.Conn, command string, args any) (json.RawMessage, error) {
 	req := rpcRequestMsg{
 		Type:    "request",
 		ID:      "1",
@@ -329,7 +334,7 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 		return err
 	}
 
-	data, err := dispatch(conn, command, cmdArgs)
+	data, err := dispatch(ctx, conn, command, cmdArgs)
 	if err != nil {
 		writeError(useJSON, "E-RPC-001", err.Error())
 		return err

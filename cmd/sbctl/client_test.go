@@ -243,12 +243,15 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 	t.Run("VP067_g_truncated_stream_after_challenge", func(t *testing.T) {
 		t.Parallel()
 		// Server closes connection after CHALLENGE — EOF before AUTH_OK/AUTH_FAIL.
+		// Ruling W: hoist wellFormedChallenge(t) into test goroutine before go func()
+		// so t.Fatalf (called inside wellFormedChallenge) fires in the test goroutine,
+		// not a spawned goroutine where runtime.Goexit would leave the test indeterminate.
+		challenge := wellFormedChallenge(t)
 		server, client := net.Pipe()
 		t.Cleanup(func() { _ = client.Close() })
 		go func() {
 			defer func() { _ = server.Close() }()
 			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
-			challenge := wellFormedChallenge(t)
 			enc := json.NewEncoder(server)
 			if err := enc.Encode(challenge); err != nil {
 				return
@@ -268,12 +271,15 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 		// Server sends a > 64 KiB auth response. io.LimitReader must truncate it.
 		// Authenticate must return a decode error, NOT succeed or hang.
 		// This proves CWE-400 protection on the second json.Decoder (ADR-012 §6).
+		//
+		// Ruling W: hoist wellFormedChallenge(t) into test goroutine before go func()
+		// so t.Fatalf fires in the test goroutine, not the spawned goroutine.
+		challenge := wellFormedChallenge(t)
 		server, client := net.Pipe()
 		t.Cleanup(func() { _ = client.Close() })
 		go func() {
 			defer func() { _ = server.Close() }()
 			_ = server.SetDeadline(time.Now().Add(5 * time.Second))
-			challenge := wellFormedChallenge(t)
 			enc := json.NewEncoder(server)
 			if err := enc.Encode(challenge); err != nil {
 				return
@@ -387,6 +393,15 @@ func TestAuthenticate_PrivKeyNeverTransmitted(t *testing.T) {
 		_ = server.Close()
 	})
 
+	// Ruling W: hoist freshNonce(t) and daemonPriv generation into the test goroutine
+	// before spawning go func(), so t.Fatalf fires in the test goroutine.
+	nonce, nonceB64 := freshNonce(t)
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate daemon key: %v", err)
+	}
+	sig := ed25519.Sign(daemonPriv, nonce)
+
 	// doneCh signals when the server goroutine has finished capturing bytes.
 	doneCh := make(chan []byte, 1)
 
@@ -394,10 +409,6 @@ func TestAuthenticate_PrivKeyNeverTransmitted(t *testing.T) {
 		// Apply a deadline so we don't block permanently if the stub never reads.
 		_ = server.SetDeadline(time.Now().Add(1 * time.Second))
 		defer func() { _ = server.Close() }()
-
-		nonce, nonceB64 := freshNonce(t)
-		_, daemonPriv, _ := ed25519.GenerateKey(rand.Reader)
-		sig := ed25519.Sign(daemonPriv, nonce)
 
 		enc := json.NewEncoder(server)
 		_ = enc.Encode(map[string]any{
@@ -670,7 +681,11 @@ func TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001(t *testing.T) {
 		_, _ = conn.Read(rpcBuf)
 
 		// Step 5: Send RPC failure response (ok:false).
-		const rpcFail = `{"type":"rpc_response","id":"1","ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}` + "\n"
+		// Ruling U: type MUST be "response" (not "rpc_response") so dispatch() reaches
+		// the ok:false path rather than being rejected for the wrong reason (type mismatch).
+		// With Ruling U implemented, "rpc_response" would produce E-RPC-001 for the wrong
+		// reason (type mismatch), masking the intent of this test (ok:false path).
+		const rpcFail = `{"type":"response","id":"1","ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}` + "\n"
 		if _, err := fmt.Fprint(conn, rpcFail); err != nil {
 			serverDoneCh <- fmt.Errorf("write rpc_fail: %w", err)
 			return
@@ -923,7 +938,7 @@ func TestDispatch_EmitsCorrectWireType(t *testing.T) {
 		_, _ = server.Write([]byte(response))
 	}()
 
-	data, err := dispatch(client, "ping", nil)
+	data, err := dispatch(context.Background(), client, "ping", nil)
 
 	// Retrieve what the mock server captured before asserting.
 	raw := <-rawRequestCh
@@ -980,7 +995,7 @@ func TestDispatch_AcceptsResponseType(t *testing.T) {
 		_, _ = server.Write([]byte(response))
 	}()
 
-	data, err := dispatch(client, "router.status", nil)
+	data, err := dispatch(context.Background(), client, "router.status", nil)
 	// dispatch() must decode "type":"response" as success (nil error, non-nil data).
 	if err != nil {
 		t.Errorf("AC-010 violated: dispatch() rejected canonical \"type\":\"response\" server response: %v", err)
@@ -1078,4 +1093,205 @@ func TestSbctl_JSONEnvelopeFormat(t *testing.T) {
 			t.Errorf("error envelope 'data' must be null; got: %s", decoded["data"])
 		}
 	})
+}
+
+// TestDispatch_RejectsNonResponseType verifies AC-010 (BC-2.07.002 PC-3, Ruling U /
+// ARCH-12 v1.5): dispatch() MUST validate resp.Type == "response" after decoding. A
+// server reply carrying "type":"rpc_response" (even with "ok":true) MUST be rejected
+// with a non-nil E-RPC-001 error containing "unexpected response type". A wrong-type
+// response MUST NOT be silently accepted based on the ok flag alone.
+//
+// RED because: current dispatch() never checks resp.Type — it accepts any response
+// where resp.OK is true, regardless of the type field. With Ruling U implemented,
+// the type check takes precedence over the ok check.
+//
+// BC: BC-2.07.002 PC-3; AC-010; Ruling U (ARCH-12 v1.5).
+func TestDispatch_RejectsNonResponseType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rpc_response_type_with_ok_true_is_rejected", func(t *testing.T) {
+		t.Parallel()
+		// Mock server replies with forbidden "type":"rpc_response" but "ok":true.
+		// dispatch() MUST return a non-nil error (type mismatch, E-RPC-001).
+		// RED: current dispatch() accepts this (ignores resp.Type, checks resp.OK only).
+		server, client := net.Pipe()
+		t.Cleanup(func() { _ = client.Close() })
+
+		go func() {
+			defer func() { _ = server.Close() }()
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			// Drain the request so the client's Encode does not block.
+			buf := make([]byte, 4096)
+			_, _ = server.Read(buf)
+			// Respond with the FORBIDDEN type "rpc_response" + ok:true.
+			const forbidden = `{"type":"rpc_response","id":"1","ok":true,"data":{}}` + "\n"
+			_, _ = server.Write([]byte(forbidden))
+		}()
+
+		_, err := dispatch(context.Background(), client, "router.status", nil)
+		if err == nil {
+			t.Errorf("Ruling U violated: dispatch() returned nil error on 'rpc_response' type reply — expected non-nil E-RPC-001 (type mismatch); current dispatch() ignores resp.Type and silently accepts on ok:true (RED Gate)")
+		}
+		if err != nil && !strings.Contains(err.Error(), "unexpected response type") {
+			t.Errorf("Ruling U: error must mention 'unexpected response type'; got: %v", err)
+		}
+	})
+
+	t.Run("ok_false_with_correct_type_is_erpc001_not_type_mismatch", func(t *testing.T) {
+		t.Parallel()
+		// Verify that the type-check path is distinct from the ok:false path.
+		// A correct-type response with ok:false must produce E-RPC-001 from the ok-false
+		// path (not "unexpected response type"). This locks in the guard ordering:
+		// type check first, then ok check.
+		server, client := net.Pipe()
+		t.Cleanup(func() { _ = client.Close() })
+
+		go func() {
+			defer func() { _ = server.Close() }()
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			buf := make([]byte, 4096)
+			_, _ = server.Read(buf)
+			// Correct type, ok:false — should reach the ok-false error path.
+			const rpcFail = `{"type":"response","id":"1","ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}` + "\n"
+			_, _ = server.Write([]byte(rpcFail))
+		}()
+
+		_, err := dispatch(context.Background(), client, "router.status", nil)
+		if err == nil {
+			t.Error("dispatch() must return non-nil error on ok:false response")
+		}
+		// The error must NOT say "unexpected response type" — the type was correct.
+		if err != nil && strings.Contains(err.Error(), "unexpected response type") {
+			t.Errorf("Ruling U guard-ordering violated: ok:false with correct type emitted 'unexpected response type' instead of reaching the ok-false error path; got: %v", err)
+		}
+	})
+}
+
+// TestDispatch_SetsReadDeadline_SlowServerBounded verifies AC-011 (BC-2.07.003
+// Invariant 2, ADR-012 §7, Ruling V / ARCH-12 v1.5): dispatch() MUST apply a read
+// deadline derived from ctx before decoding the RPC response. When the mock server
+// completes AUTH_OK then goes silent (never sends the RPC response), dispatch() must
+// return a non-nil timeout error — it must NOT block indefinitely.
+//
+// RED because: current dispatch() sets no read deadline. A slow/silent server after
+// auth would block dispatch() forever. After Ruling V is implemented, dispatch() will
+// call conn.SetReadDeadline from ctx before the response Decode, so this test passes.
+//
+// BC: BC-2.07.003 Invariant 2; AC-011; Ruling V (ARCH-12 v1.5); go.md rule 7.
+func TestDispatch_SetsReadDeadline_SlowServerBounded(t *testing.T) {
+	t.Parallel()
+
+	// net.Pipe() — no real sockets; both ends are synchronous in-process.
+	server, client := net.Pipe()
+	t.Cleanup(func() {
+		_ = client.Close()
+		_ = server.Close()
+	})
+
+	// Mock server: drain the RPC request (one line) then go permanently silent.
+	// Never sends the RPC response — simulates a server that accepted the connection
+	// and auth'd but then hung on processing the RPC command.
+	go func() {
+		defer func() { _ = server.Close() }()
+		// Server deadline: 2s — longer than the ctx deadline (200ms) so the ctx fires
+		// first when dispatch() has SetReadDeadline implemented (GREEN). In the RED
+		// state (no deadline), dispatch() blocks until this server deadline fires and
+		// the pipe closes, producing the elapsed > maxAllowed assertion failure.
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+		buf := make([]byte, 4096)
+		_, _ = server.Read(buf) // drain the RPC request line
+		// Now go silent — never write the response.
+		// Block until the deadline expires or the pipe is closed by the client.
+		buf2 := make([]byte, 1)
+		_, _ = server.Read(buf2)
+	}()
+
+	// Short context deadline — dispatch() must return before this expires significantly.
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := dispatch(ctx, client, "router.status", nil)
+	elapsed := time.Since(start)
+
+	// dispatch() MUST return a non-nil error (timeout).
+	// RED: current dispatch() has no SetReadDeadline logic and will block until the
+	// outer test framework kills it or the server goroutine's 5s deadline expires.
+	if err == nil {
+		t.Errorf("Ruling V violated: dispatch() returned nil with a silent server — expected a non-nil timeout error; dispatch() must call conn.SetReadDeadline from ctx before the response Decode (RED Gate)")
+	}
+	// Must return within a comfortable bound after the ctx deadline.
+	// 1s allows generous headroom while definitively ruling out an indefinite hang.
+	const maxAllowed = 1 * time.Second
+	if elapsed > maxAllowed {
+		t.Errorf("Ruling V violated: dispatch() hung for %v (> %v) — read deadline from ctx was not applied; current dispatch() blocks indefinitely without SetReadDeadline (RED Gate)", elapsed, maxAllowed)
+	}
+}
+
+// TestDispatch_RejectsIDMismatch verifies AC-010 (BC-2.07.002 PC-3, Ruling X /
+// ARCH-12 v1.5 / ADR-012 §3 step 6): dispatch() MUST verify resp.ID == req.ID after
+// decoding the server response. A response carrying a different ID than the request
+// MUST cause dispatch() to return a non-nil E-RPC-001 error.
+//
+// Additionally asserts that the request ID sent by dispatch() is non-empty (the ID
+// must be present so the server can echo it back — a constant or empty ID would make
+// the echo check meaningless for multiplexed connections).
+//
+// RED because: current dispatch() hardcodes req.ID = "1" and never checks resp.ID.
+// A server that echoes a different ID (or mismatches) is silently accepted.
+//
+// BC: BC-2.07.002 PC-3; AC-010; Ruling X (ARCH-12 v1.5); ADR-012 §3 step 6.
+func TestDispatch_RejectsIDMismatch(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	t.Cleanup(func() { _ = client.Close() })
+
+	// rawRequestCh captures the raw JSON request bytes sent by dispatch().
+	rawRequestCh := make(chan []byte, 1)
+
+	go func() {
+		defer func() { _ = server.Close() }()
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+
+		// Read the RPC request and capture it.
+		buf := make([]byte, 4096)
+		n, err := server.Read(buf)
+		if err != nil || n == 0 {
+			rawRequestCh <- nil
+			return
+		}
+		raw := make([]byte, n)
+		copy(raw, buf[:n])
+		rawRequestCh <- raw
+
+		// Reply with a DELIBERATELY WRONG id — "WRONG-ID" instead of the client's id.
+		// Ruling X: dispatch() MUST reject this mismatch with E-RPC-001.
+		const wrongIDResponse = `{"type":"response","id":"WRONG-ID","ok":true,"data":{}}` + "\n"
+		_, _ = server.Write([]byte(wrongIDResponse))
+	}()
+
+	_, err := dispatch(context.Background(), client, "router.status", nil)
+
+	// Retrieve the raw request to inspect the id field.
+	raw := <-rawRequestCh
+
+	// Primary assertion: dispatch() MUST return non-nil error on ID mismatch.
+	// RED: current dispatch() hardcodes id "1" and never verifies resp.ID.
+	if err == nil {
+		t.Errorf("Ruling X violated: dispatch() returned nil on ID mismatch (server sent 'WRONG-ID', client sent a different id) — expected non-nil E-RPC-001; dispatch() must check resp.ID == req.ID (RED Gate)")
+	}
+
+	// Secondary: the request must contain a non-empty "id" field.
+	if raw == nil {
+		t.Fatal("Ruling X: mock server received no bytes from dispatch() — dispatch may have failed before writing the request")
+	}
+	rawStr := string(raw)
+	if !strings.Contains(rawStr, `"id":`) {
+		t.Errorf("Ruling X: dispatch() request is missing 'id' field; got: %s", rawStr)
+	}
+	// The id must not be empty string.
+	if strings.Contains(rawStr, `"id":""`) {
+		t.Errorf("Ruling X: dispatch() sent an empty 'id' field — id must be non-empty; got: %s", rawStr)
+	}
 }
