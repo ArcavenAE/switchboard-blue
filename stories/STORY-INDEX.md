@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "2.0"
+version: "2.3"
 status: draft
 producer: story-writer
 timestamp: 2026-06-28T00:00:00
@@ -19,10 +19,10 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 33 (29 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-BL.ARQ-TX backlog/draft) |
+| Total stories | 36 (29 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-BL.ARQ-TX backlog/draft + S-W5.03 CI gate + S-HRD.01 + S-HRD.02 hardening) |
 | Complete | 18 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01) |
 | Pending | 9 |
-| Draft/unscheduled | 6 (S-M.01, S-M.02, S-6.04, S-BL.ARQ-TX, S-W5.01, S-W5.02) |
+| Draft/unscheduled | 7 (S-M.01, S-M.02, S-6.04, S-BL.ARQ-TX, S-W5.01, S-W5.02, S-W5.03) |
 | E-phase | 25 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new) |
 | PE-phase | 4 (wave 6) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
@@ -62,6 +62,7 @@ inputDocuments:
 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON envelope, connection error | E-6 | 5 | BC-2.07.002, BC-2.07.003 | network-management | 5 | P0 | E | pending |
 | S-W5.01 | internal/mgmt server, config E-CFG-008/009, cmd/switchboard wiring (all 4 daemon modes) | E-6 | 5 | BC-2.07.004, BC-2.09.003 | network-management, deployment-operations | 8 | P0 | E | draft |
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | draft |
+| S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 5 | P1 | PE | pending |
@@ -111,6 +112,17 @@ addresses the "deferred to TBD story" anti-pattern.
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 
+## Hardening Stories
+
+Stories for security and resilience hardening deferred from wave convergence rounds.
+Hardening IDs use the scheme `S-HRD.NN` (introduced 2026-06-29 per ARCH-12 Round-5
+DEFER-WITH-FOLLOWUP rulings). Each row records the deferred finding and target release.
+
+| Story ID | Title | Status | Deferred from | Severity | Target release |
+|----------|-------|--------|---------------|----------|----------------|
+| S-HRD.01 | Add `conn.SetWriteDeadline` to client write paths in `cmd/sbctl/client.go` (CWE-400 defense-in-depth) | draft | S-6.03 Wave-5 convergence Round-5 Finding 2 (ARCH-12 v1.5 DEFER-WITH-FOLLOWUP); client write deadline deferred because server-side close bounds practical risk; Rulings V/Y scoped client deadlines to read+dial only | MEDIUM | next post-Wave-5 hardening pass |
+| S-HRD.02 | daemon logging infrastructure + security-event emission (BC-2.07.004 PC-3 / EC-004 deferred slog seam on mgmt.Server) | draft | S-W5.01 AC-003 deferral — Architect Ruling 1 (S-W5.01 mgmt-server convergence); BC-2.07.004 PC-3/EC-004 "logs a security event" deferred from S-W5.01 because daemon has no structured logging infra; connection control (AUTH_FAIL + E-ADM-010 + close) is satisfied and tested via VP-065 | MEDIUM | next post-Wave-5 hardening pass |
+
 ## Maintenance Stories
 
 Stories for DX/tooling/infrastructure work that are NOT part of feature waves 1–7.
@@ -134,6 +146,9 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.3 | 2026-06-29 | Add S-HRD.02 (draft, E-HRD hardening epic) — Architect Ruling 1 (S-W5.01 mgmt-server convergence): daemon logging infrastructure + security-event emission. Owns the BC-2.07.004 PC-3 / EC-004 "logs a security event" deferral from S-W5.01 AC-003 v1.6; establishes daemon-wide slog seam on mgmt.Server + access.go wiring. MEDIUM severity. Total stories: 35→36. |
+| 2.2 | 2026-06-29 | Add S-HRD.01 (draft, E-HRD hardening epic) — ARCH-12 v1.5 Wave-5 Convergence Round-5 Finding 2 (DEFER-WITH-FOLLOWUP): client write deadlines on `cmd/sbctl/client.go` Authenticate() + dispatch() write paths (CWE-400 defense-in-depth, MEDIUM severity). Introduces S-HRD.NN hardening story scheme. BC-2.07.003 Inv-2 annotation intent recorded in stub. Total stories: 34→35. |
+| 2.1 | 2026-06-29 | Add S-W5.03 (2pts, draft, E-9 CI/devops epic) — ARCH-12 v1.5 Ruling S follow-up: CI assertion that release binary version is semver not "dev" (BC-2.07.004 PC-7 enforcement). Non-blocking for Wave 5; must ship before first tagged management-plane release. Total stories: 33→34; Draft/unscheduled: 6→7. |
 | 2.0 | 2026-06-28 | Wave-5 management plane net-new stories: add S-W5.01 (8pts, internal/mgmt + config E-CFG-008/009 + cmd/switchboard wiring, BC-2.07.004 + BC-2.09.003 PC-10/11, VP-064/065/066) and S-W5.02 (5pts, e2e harness, BC-2.07.002, VP-049). Re-scope S-6.03 to client-auth-only boundary (v2.0): Authenticate() fail-closed, --key/--target/--json/--timeout, VP-067 + VP-030 only (VP-049 moved to S-W5.02); fix EC-002 E-ADM-001 → E-ADM-010. Wave-5 totals: 5→7 stories, 25→38 pts. Grand totals: stories 31→33, pts 163→176 (wave 0–6), 173→186 (incl. maintenance). BC coverage 44→45. VP coverage 63→67. Serialization note updated: S-W5.01 can run parallel with sbctl-side stories; S-W5.02 gates on S-6.03 + S-W5.01 both merged. |
 | 1.9 | 2026-06-28 | Consistency audit: F-005 — update Wave-5 serialization note: S-5.03 must precede S-5.01 (S-5.01.depends_on now includes S-5.03); Wave-5 arithmetic unchanged (5 stories, 25 pts). |
 | 1.8 | 2026-06-28 | Wave-5 planning: add S-5.03 (2pts, P1, depends S-4.01, closes drift S401-O3); update S-5.02 title + points 3→5 (p99 scope + canonical surface reconciliation per BC-2.06.003 v1.2); fix S-6.02 dependency inversion (depends_on adds S-6.03; blocks removes S-6.03); update Wave-5 summary 4→5 stories, 21→25pts; update totals (Pending 8→9, Total stories 30→31, points 159→163). Add Wave-5 serialization constraints note. |
