@@ -1,0 +1,60 @@
+# Demo Evidence: AC-006 — Bounded Reads / VP-066 (+ Fuzz Baseline)
+
+## Test Run
+
+Command: go test ./internal/mgmt/... -race -count=1 -v \
+  -run "TestMgmtServer_BoundedRead_VP066|FuzzMgmtServer"
+
+Output:
+=== RUN   TestMgmtServer_BoundedRead_VP066
+=== PAUSE TestMgmtServer_BoundedRead_VP066
+=== CONT  TestMgmtServer_BoundedRead_VP066
+=== RUN   TestMgmtServer_BoundedRead_VP066/under_limit_challenge_consumed
+=== PAUSE TestMgmtServer_BoundedRead_VP066/under_limit_challenge_consumed
+=== RUN   TestMgmtServer_BoundedRead_VP066/oversized_message_closes_connection
+=== PAUSE TestMgmtServer_BoundedRead_VP066/oversized_message_closes_connection
+=== CONT  TestMgmtServer_BoundedRead_VP066/oversized_message_closes_connection
+=== CONT  TestMgmtServer_BoundedRead_VP066/under_limit_challenge_consumed
+--- PASS: TestMgmtServer_BoundedRead_VP066 (0.01s)
+    --- PASS: TestMgmtServer_BoundedRead_VP066/under_limit_challenge_consumed (0.00s)
+    --- PASS: TestMgmtServer_BoundedRead_VP066/oversized_message_closes_connection (2.00s)
+=== RUN   FuzzMgmtServer_BoundedRead_VP066
+=== RUN   FuzzMgmtServer_BoundedRead_VP066/seed#0
+=== RUN   FuzzMgmtServer_BoundedRead_VP066/seed#1
+=== RUN   FuzzMgmtServer_BoundedRead_VP066/seed#2
+=== RUN   FuzzMgmtServer_BoundedRead_VP066/seed#3
+--- PASS: FuzzMgmtServer_BoundedRead_VP066 (0.51s)
+    --- PASS: FuzzMgmtServer_BoundedRead_VP066/seed#0 (0.10s)
+    --- PASS: FuzzMgmtServer_BoundedRead_VP066/seed#1 (0.20s)
+    --- PASS: FuzzMgmtServer_BoundedRead_VP066/seed#2 (0.10s)
+    --- PASS: FuzzMgmtServer_BoundedRead_VP066/seed#3 (0.10s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	3.834s
+
+## AC-006: Bounded Reads (VP-066)
+
+Tests: TestMgmtServer_BoundedRead_VP066, FuzzMgmtServer_BoundedRead_VP066
+
+Observable behavior:
+
+Sub-case (under_limit_challenge_consumed):
+- Small CHALLENGE_RESPONSE (well under MaxMessageBytes=65536) is handled without error.
+- Server returns AUTH_FAIL or closes (random key presented) — acceptable; the point is it does NOT hang.
+
+Sub-case (oversized_message_closes_connection):
+- Payload of MaxMessageBytes+1 bytes sent to server after consuming CHALLENGE.
+- io.LimitReader(conn, MaxMessageBytes) causes json.Decoder to return an error at the limit.
+- Server closes the connection cleanly; next read from client returns error (connection closed).
+- Process does NOT OOM (VP-066).
+
+Fuzz baseline (4 seed corpus entries):
+- Seed#0: valid-looking challenge_response JSON with short nonce_sig/pubkey values.
+- Seed#1: 65536+512 bytes of 'A' characters (exceeds MaxMessageBytes).
+- Seed#2: "not json at all" — malformed; triggers decode error path.
+- Seed#3: raw bytes {0x00, 0xFF, 0xFE} — binary garbage; triggers decode error path.
+- All seeds: server does not panic; connection is closed within deadline. Property holds.
+
+Implementation evidence:
+- internal/mgmt/mgmt.go: dec := json.NewDecoder(io.LimitReader(conn, MaxMessageBytes))
+  applied at EVERY decode site in handleConnection (handshake phase AND RPC phase).
+- mgmt.MaxMessageBytes = 1 << 16 = 65536 bytes (exported constant).

@@ -1,0 +1,103 @@
+# Demo Evidence: AC-002, AC-005, AC-008, AC-009, AC-010, AC-013 — Remaining ACs
+
+## Test Run
+
+Command: go test github.com/arcavenae/switchboard/internal/mgmt -race -count=1 -v \
+  -run "TestMgmtServer_RejectsUnauthenticated_VP064|TestMgmtServer_RPCWithoutAuth_Rejected_AC005|TestOperatorKeySet_ConstantTimeCompare_AC008|TestMgmtServer_BootstrapMode_DaemonKeyAuthorized_AC009|TestMgmtServer_GracefulShutdown_AC010|TestMgmtServer_ConnectionCap_AC013"
+
+Output:
+=== RUN   TestMgmtServer_RejectsUnauthenticated_VP064
+=== RUN   TestMgmtServer_RPCWithoutAuth_Rejected_AC005
+=== RUN   TestOperatorKeySet_ConstantTimeCompare_AC008
+=== RUN   TestMgmtServer_BootstrapMode_DaemonKeyAuthorized_AC009
+=== RUN   TestMgmtServer_GracefulShutdown_AC010
+    mgmt_test.go:887: Serve returned: <nil>
+--- PASS: TestMgmtServer_GracefulShutdown_AC010 (0.03s)
+=== RUN   TestMgmtServer_ConnectionCap_AC013
+--- PASS: TestMgmtServer_ConnectionCap_AC013 (0.09s)
+--- PASS: TestOperatorKeySet_ConstantTimeCompare_AC008 (0.00s)
+--- PASS: TestMgmtServer_RPCWithoutAuth_Rejected_AC005 (0.00s)
+=== RUN   TestMgmtServer_RejectsUnauthenticated_VP064/unrecognized_public_key
+=== RUN   TestMgmtServer_RejectsUnauthenticated_VP064/recognized_key_wrong_signature
+--- PASS: TestMgmtServer_BootstrapMode_DaemonKeyAuthorized_AC009 (0.01s)
+--- PASS: TestMgmtServer_RejectsUnauthenticated_VP064 (0.00s)
+    --- PASS: TestMgmtServer_RejectsUnauthenticated_VP064/recognized_key_wrong_signature (0.01s)
+    --- PASS: TestMgmtServer_RejectsUnauthenticated_VP064/unrecognized_public_key (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	1.639s
+
+## AC-002 (VP-064): Unauthenticated Connections Rejected
+
+Test: TestMgmtServer_RejectsUnauthenticated_VP064
+
+Sub-case (unrecognized_public_key):
+- Client sends CHALLENGE_RESPONSE with a key NOT in the authorized set.
+- Server responds: {"type":"auth_fail","code":"E-ADM-010","message":"authentication failed"}.
+- Connection closed after AUTH_FAIL. No RPC dispatched.
+
+Sub-case (recognized_key_wrong_signature):
+- Client sends CHALLENGE_RESPONSE with an authorized public key but a tampered nonce
+  (nonce[0] XOR 0xFF before signing) → ed25519.Verify returns false.
+- Server responds: same AUTH_FAIL (E-ADM-010).
+- Both sub-cases return IDENTICAL AUTH_FAIL → no oracle (BC-2.07.004 PC-8 / Inv-5).
+
+## AC-005: RPC Without Auth Rejected
+
+Test: TestMgmtServer_RPCWithoutAuth_Rejected_AC005
+
+Observable behavior:
+- Client reads CHALLENGE but skips CHALLENGE_RESPONSE entirely.
+- Client sends {"type":"request","id":"r1","command":"test.echo","args":{}}.
+- Server receives request-type where challenge_response was expected → AUTH_FAIL + close.
+- RPC handler NOT invoked (rpcCallCount == 0).
+
+## AC-008: OperatorKeySet Constant-Time Comparison
+
+Test: TestOperatorKeySet_ConstantTimeCompare_AC008
+
+Observable behavior:
+- IsAuthorized(authorizedPub) → true. Correct match.
+- IsAuthorized(mutated) → false. One-byte mutation of authorized key fails.
+- IsAuthorized(unrecognizedPub) → false. Unknown key fails.
+- Bootstrap (empty) set: IsAuthorized returns false for any key (daemon handles bootstrap
+  comparison separately in handleConnection using subtle.ConstantTimeCompare directly).
+
+Timing-oracle note: subtle.ConstantTimeCompare used per BC-2.07.004 PC-8 / Inv-5.
+Timing measurements in Go are not reliable at this resolution; correctness confirmed by
+code inspection and review (same code path for recognized/unrecognized, no early-return).
+
+## AC-009: Bootstrap Mode — Daemon Key Authorized
+
+Test: TestMgmtServer_BootstrapMode_DaemonKeyAuthorized_AC009
+
+Observable behavior:
+- NewOperatorKeySet(nil): IsBootstrap() == true.
+- Client connects; signs challenge nonce with the daemon's own private key.
+- Server: ops.IsBootstrap() == true → compares against daemonKey.Public() via
+  subtle.ConstantTimeCompare.
+- AUTH_OK received. Bootstrap mode works without any configured operator keys.
+
+## AC-010: Graceful Shutdown
+
+Test: TestMgmtServer_GracefulShutdown_AC010
+
+Observable behavior:
+- Server started; connection opened via net.Pipe.
+- Shutdown called with 500ms context.
+- Serve returns nil (Serve returned: <nil> confirmed in test log).
+- Goroutine count returns to baseline +2 tolerance within 300ms (no leak).
+- mgmt goroutine WaitGroup-tracked per ARCH-01 §Goroutine WaitGroup Contract.
+
+## AC-013: Connection Cap (CWE-770) Bounded Accept Loop
+
+Test: TestMgmtServer_ConnectionCap_AC013
+
+Observable behavior:
+- Server constructed with WithMaxConnections(3) (cap of 3 concurrent connections).
+- mgmt.MaxConcurrentConnections == 128 (default, compile-time verified).
+- 3 connections opened; all receive CHALLENGE and stall (hold semaphore slots).
+- 4th connection attempt: client does NOT receive CHALLENGE within 80ms → semaphore
+  is back-pressuring correctly (accept loop blocks pre-Accept, not after spawn).
+- One stalled connection closed → semaphore slot freed.
+- 4th client receives CHALLENGE within 500ms.
+- No unbounded goroutine spawning (CWE-770 / BC-2.07.004 EC-012).

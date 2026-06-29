@@ -1,0 +1,85 @@
+# Demo Evidence: AC-014/AC-019 — Unix Socket 0600 Perms, Console TCP Loopback Rejection, Pre-bind Cleanup
+
+## Test Run
+
+Command: go test ./cmd/switchboard/... -race -count=1 -v \
+  -run "TestDaemonWiring_UnixSocketPermissions_AC014|TestBuildMgmtListener_ConsoleTCP|TestListenUnixMgmt_PreBindCleanup_AC019"
+
+Output:
+=== RUN   TestDaemonWiring_UnixSocketPermissions_AC014
+--- PASS: TestDaemonWiring_UnixSocketPermissions_AC014 (0.00s)
+=== RUN   TestBuildMgmtListener_ConsoleTCP_CanonicalECFG008Format_RulingL
+--- PASS: TestBuildMgmtListener_ConsoleTCP_CanonicalECFG008Format_RulingL (0.00s)
+=== RUN   TestListenUnixMgmt_PreBindCleanup_AC019
+=== RUN   TestListenUnixMgmt_PreBindCleanup_AC019/stale_socket_removed_before_bind
+=== RUN   TestListenUnixMgmt_PreBindCleanup_AC019/regular_file_not_removed
+--- PASS: TestListenUnixMgmt_PreBindCleanup_AC019 (0.00s)
+    --- PASS: TestListenUnixMgmt_PreBindCleanup_AC019/stale_socket_removed_before_bind (0.00s)
+    --- PASS: TestListenUnixMgmt_PreBindCleanup_AC019/regular_file_not_removed (0.00s)
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/0.0.0.0:9091
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/:9091
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/192.168.1.1:9091
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/10.0.0.1:9091
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/127.0.0.1:0
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/[::1]:0
+=== RUN   TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/localhost:0
+--- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/192.168.1.1:9091 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/[::1]:0 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/127.0.0.1:0 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/0.0.0.0:9091 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/10.0.0.1:9091 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/:9091 (0.00s)
+    --- PASS: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073/localhost:0 (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.345s
+
+## AC-014: Unix Socket 0600 Permissions (CWE-276)
+
+Test: TestDaemonWiring_UnixSocketPermissions_AC014
+
+Observable behavior:
+- listenUnixMgmt uses syscall.Socket + syscall.Umask(0o177) + syscall.Bind approach (NOT net.Listen).
+- The umask is held only for the single bind(2) syscall — minimizing process-global exposure.
+- After bind, socket file created with permissions 0600 (owner read/write only).
+- os.Stat(path).Mode().Perm() == 0600. Verified by test.
+- No chmod-after-Listen TOCTOU window.
+- A sync.Mutex (umaskMu) serializes the umask-critical bind(2) so parallel tests cannot
+  corrupt each other's socket permissions.
+
+## AC-014 (Ruling D): Console TCP Loopback Rejection (VP-073)
+
+Tests: TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073,
+       TestBuildMgmtListener_ConsoleTCP_CanonicalECFG008Format_RulingL
+
+Rejected addresses (non-loopback):
+- "0.0.0.0:9091" — rejects (all-interfaces)
+- ":9091"        — rejects (bare port, empty host)
+- "192.168.1.1:9091" — rejects (non-loopback IP)
+- "10.0.0.1:9091"    — rejects (non-loopback IP)
+
+Accepted addresses (loopback):
+- "127.0.0.1:0" — accepted (IPv4 loopback, port 0 for OS assignment in CI)
+- "[::1]:0"     — accepted (IPv6 loopback)
+- "localhost:0" — accepted (hostname loopback alias)
+
+Error format (Ruling L):
+- Error string contains "E-CFG-008" as prefix (grep-able):
+  "E-CFG-008: management_socket: console mode requires a loopback address
+   (127.0.0.1, [::1], or localhost); got: 0.0.0.0:9091"
+- Test assertions use strings.Contains(err.Error(), "E-CFG-008") per Ruling L spec.
+
+## AC-019: Stale-Socket Pre-bind Cleanup (Ruling O)
+
+Test: TestListenUnixMgmt_PreBindCleanup_AC019
+
+Sub-case (stale_socket_removed_before_bind):
+- First listenUnixMgmt call succeeds; listener closed WITHOUT unlinking → socket inode persists.
+- Second listenUnixMgmt call on the same path: os.Lstat detects ModeSocket → os.Remove called.
+- Second call succeeds (no EADDRINUSE restart DoS after non-graceful daemon exit).
+
+Sub-case (regular_file_not_removed):
+- A regular file exists at the target path (not a socket).
+- listenUnixMgmt returns non-nil error; regular file was NOT removed.
+- Only socket-mode inodes are cleaned; regular files/dirs/symlinks are untouched.

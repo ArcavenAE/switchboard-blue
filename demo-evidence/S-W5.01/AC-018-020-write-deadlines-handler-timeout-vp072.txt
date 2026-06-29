@@ -1,0 +1,83 @@
+# Demo Evidence: AC-018/AC-020 — Write Deadlines / Slowloris Defense (VP-072), Per-Handler Timeout
+
+## Test Run
+
+Command: go test ./internal/mgmt/... -race -count=1 -v \
+  -run "TestWriteDeadline_SlowlorisDefense_VP072|TestWriteDeadline_RPCResponse_VP072|TestMgmtServer_HandlerTimeout_AC020"
+
+Output:
+=== RUN   TestWriteDeadline_SlowlorisDefense_VP072
+    mgmt_test.go:1886: VP-072: goroutines before=2 after-connect=5
+    mgmt_test.go:1898: VP-072: goroutines at deadline point=4 (before=2)
+--- PASS: TestWriteDeadline_SlowlorisDefense_VP072 (0.28s)
+=== RUN   TestWriteDeadline_RPCResponse_VP072_Round5F4
+    mgmt_test.go:2118: VP-072 RPC-response: goroutines before=2 after-rpc-send=5
+    mgmt_test.go:2128: VP-072 RPC-response: goroutines at 350ms measurement=4 (before=2)
+--- PASS: TestWriteDeadline_RPCResponse_VP072_Round5F4 (0.40s)
+=== RUN   TestMgmtServer_HandlerTimeout_AC020
+=== PAUSE TestMgmtServer_HandlerTimeout_AC020
+=== CONT  TestMgmtServer_HandlerTimeout_AC020
+--- PASS: TestMgmtServer_HandlerTimeout_AC020 (0.06s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	2.051s
+
+## AC-018: Write Deadlines — Slowloris-on-Write Defense (VP-072)
+
+Tests: TestWriteDeadline_SlowlorisDefense_VP072, TestWriteDeadline_RPCResponse_VP072_Round5F4
+
+### CHALLENGE write path (TestWriteDeadline_SlowlorisDefense_VP072)
+
+Test strategy: net.Pipe (zero internal buffer). Client never reads. Server tries to
+write CHALLENGE → blocks indefinitely WITHOUT a write deadline.
+
+Observable:
+- Server constructed with WithHandshakeTimeout(100ms).
+- Goroutines before connect: 2 (Go runtime baseline).
+- After connect: 5 (Serve goroutine + ctx-watcher + connection goroutine + Serve accept
+  loop blocked on next Accept + baseline).
+- At 230ms measurement point (>100ms HandshakeTimeout):
+  goroutines drop to 4 (connection goroutine exited because write deadline fired).
+- Tolerance: gorsBefore+2 = 4. gorsAtDeadline = 4 ≤ 4. PASS.
+- Implementation: conn.SetWriteDeadline(time.Now().Add(s.handshakeTimeout)) before
+  sendJSON(CHALLENGE) in handleConnection.
+
+### RPC-response write path (TestWriteDeadline_RPCResponse_VP072_Round5F4)
+
+Discriminating test: verifies line 661 in mgmt.go uses s.rpcIdleTimeout (the
+injectable field), NOT the package constant RPCIdleTimeout (30s).
+
+Test strategy: client completes auth (reads CHALLENGE + sends CHALLENGE_RESPONSE +
+reads AUTH_OK), then sends one RPC request but stops reading. Server computes
+handler result quickly, then hits sendJSON(response) which blocks on net.Pipe.
+
+Observable:
+- Server constructed with WithRPCIdleTimeout(50ms).
+- Goroutines before: 2. After RPC send: 5.
+- At 350ms measurement point (>50ms RPCIdleTimeout): goroutines drop to 4.
+- gorsAtDeadline = 4 ≤ gorsBefore+2 = 4. PASS.
+- With constant (30s bug): goroutine would still be pinned at 350ms → count stays at 5.
+
+Implementation coverage:
+- Handshake sends (CHALLENGE, AUTH_OK, AUTH_FAIL): SetWriteDeadline(s.handshakeTimeout).
+- RPC response sends: SetWriteDeadline(s.rpcIdleTimeout) — using the field, not the constant.
+- Deadline cleared (SetWriteDeadline(time.Time{})) after each successful send.
+
+## AC-020: Per-Handler Execution Timeout (Ruling R)
+
+Test: TestMgmtServer_HandlerTimeout_AC020
+
+Observable behavior:
+- Handler registered that blocks until ctx.Done() (select on ctx.Done()).
+- Server constructed with WithRPCIdleTimeout(50ms).
+- Client authenticates; sends RPC to the blocking handler.
+- Server wraps handler invocation with context.WithTimeout(ctx, s.rpcIdleTimeout).
+- Handler context cancelled at 50ms → handler returns context deadline exceeded error.
+- Server responds: {"ok":false,"error":{"code":"E-RPC-011","message":"context deadline exceeded"},...}
+- Response received within ~200ms (not blocked indefinitely).
+- Connection stays OPEN after handler timeout (AC-020 spec).
+- Client sends a second RPC → server responds normally (connection open confirmed).
+
+Implementation:
+    callCtx, callCancel := context.WithTimeout(ctx, s.rpcIdleTimeout)
+    data, err := handlerFn(callCtx, req.Args)
+    callCancel()

@@ -1,0 +1,79 @@
+# Demo Evidence: AC-007 — daemon_version Injection, E-RPC-010 Unknown Command, E-RPC-011 Handler Error
+
+## Test Run
+
+Command: go test ./internal/mgmt/... -race -count=1 -v \
+  -run "TestMgmtServer_DaemonVersion_Injected_AC007|TestMgmtServer_AuthOK_DispatchesRPC_AC007|TestUnknownCommand_ReturnsERPC010_VP070|TestHandlerError_ReturnsERPC011_VP071"
+
+Output:
+=== RUN   TestMgmtServer_AuthOK_DispatchesRPC_AC007
+=== PAUSE TestMgmtServer_AuthOK_DispatchesRPC_AC007
+=== RUN   TestMgmtServer_DaemonVersion_Injected_AC007
+=== PAUSE TestMgmtServer_DaemonVersion_Injected_AC007
+=== RUN   TestUnknownCommand_ReturnsERPC010_VP070
+=== PAUSE TestUnknownCommand_ReturnsERPC010_VP070
+=== RUN   TestHandlerError_ReturnsERPC011_VP071
+=== PAUSE TestHandlerError_ReturnsERPC011_VP071
+=== CONT  TestMgmtServer_AuthOK_DispatchesRPC_AC007
+=== CONT  TestUnknownCommand_ReturnsERPC010_VP070
+=== CONT  TestMgmtServer_DaemonVersion_Injected_AC007
+=== CONT  TestHandlerError_ReturnsERPC011_VP071
+=== RUN   TestMgmtServer_DaemonVersion_Injected_AC007/auth_ok_carries_injected_version
+=== PAUSE TestMgmtServer_DaemonVersion_Injected_AC007/auth_ok_carries_injected_version
+=== RUN   TestMgmtServer_DaemonVersion_Injected_AC007/empty_daemonVersion_panics
+=== PAUSE TestMgmtServer_DaemonVersion_Injected_AC007/empty_daemonVersion_panics
+=== CONT  TestMgmtServer_DaemonVersion_Injected_AC007/auth_ok_carries_injected_version
+=== CONT  TestMgmtServer_DaemonVersion_Injected_AC007/empty_daemonVersion_panics
+--- PASS: TestMgmtServer_DaemonVersion_Injected_AC007 (0.00s)
+    --- PASS: TestMgmtServer_DaemonVersion_Injected_AC007/empty_daemonVersion_panics (0.01s)
+    --- PASS: TestMgmtServer_DaemonVersion_Injected_AC007/auth_ok_carries_injected_version (0.02s)
+--- PASS: TestMgmtServer_AuthOK_DispatchesRPC_AC007 (0.02s)
+--- PASS: TestUnknownCommand_ReturnsERPC010_VP070 (0.02s)
+--- PASS: TestHandlerError_ReturnsERPC011_VP071 (0.02s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	1.316s
+
+## AC-007: daemon_version Injection
+
+Tests: TestMgmtServer_DaemonVersion_Injected_AC007, TestMgmtServer_AuthOK_DispatchesRPC_AC007
+
+Sub-case (auth_ok_carries_injected_version):
+- NewServer constructed with daemonVersion="0.1.0-test" as fifth parameter.
+- Client authenticates → AUTH_OK received.
+- AUTH_OK.daemon_version == "0.1.0-test" (not hardcoded "dev").
+- Confirms daemonVersion comes from NewServer parameter (ldflags-injected in production).
+
+Sub-case (empty_daemonVersion_panics):
+- NewServer called with daemonVersion="" → panic recovered by test.
+- Confirms: construction-time fail-fast guard prevents empty version sentinel at runtime.
+
+## AC-007: RPC Happy Path
+
+Test: TestMgmtServer_AuthOK_DispatchesRPC_AC007
+
+Observable behavior:
+- Client authenticates (authorized key + correct signature) → AUTH_OK received.
+- AUTH_OK carries daemon_version field (non-empty).
+- Client sends {"type":"request","id":"r1","command":"test.echo","args":{}}.
+- Server responds with {"type":"response","id":"r1","ok":true,"data":{"echo":"ok"},...}.
+- RPC handler invoked exactly once.
+
+## AC-007 (Ruling C): E-RPC-010 Unknown Command (VP-070)
+
+Test: TestUnknownCommand_ReturnsERPC010_VP070
+
+Observable behavior:
+- Authenticated client sends {"type":"request","command":"nonexistent.command",...}.
+- Server responds: {"ok":false,"error":{"code":"E-RPC-010","message":"unknown command: nonexistent.command"},"data":null}
+- Connection stays OPEN: client sends a second unregistered command → again E-RPC-010.
+- E-RPC-001 and E-RPC-002 do NOT appear (confirmed by code inspection).
+
+## AC-007 (Ruling C): E-RPC-011 Handler Error (VP-071)
+
+Test: TestHandlerError_ReturnsERPC011_VP071
+
+Observable behavior:
+- Authenticated client invokes a registered handler that returns errors.New("boom: simulated handler failure").
+- Server responds: {"ok":false,"error":{"code":"E-RPC-011","message":"boom: simulated handler failure"},"data":null}
+- Connection stays OPEN: client sends second RPC to a succeeding handler → ok:true.
+- E-RPC-002 does NOT appear (Ruling C compliant).

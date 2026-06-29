@@ -1,0 +1,81 @@
+# Demo Evidence: AC-011/AC-012 — Config Validation E-CFG-008/E-CFG-009
+
+## Test Run
+
+Command: go test ./internal/config/... -race -count=1 -v \
+  -run "TestConfig_Validate_ManagementSocket_E_CFG_008|TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009"
+
+Output:
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011
+=== PAUSE TestConfig_Validate_ManagementSocket_E_CFG_008_AC011
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012
+=== PAUSE TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012
+=== CONT  TestConfig_Validate_ManagementSocket_E_CFG_008_AC011
+=== CONT  TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/empty_string_accepted_as_absent
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/whitespace_only_rejected
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/tab_only_rejected
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/valid_unix_path_accepted
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/valid_tcp_address_accepted
+=== RUN   TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/exhaustive_reporting_with_other_errors
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/invalid_pem_at_index_0
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/valid_at_0_invalid_at_1
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/empty_list_accepted
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/nil_list_accepted
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/valid_ed25519_pem_accepted
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/multiple_valid_pem_accepted
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/rsa_pem_rejected_wrong_key_type
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/wrong_pem_block_type_rejected
+=== RUN   TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/exhaustive_reporting_both_bad_entries_collected
+--- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011 (0.00s)
+    --- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/whitespace_only_rejected (0.00s)
+    --- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/valid_tcp_address_accepted (0.00s)
+    --- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/exhaustive_reporting_with_other_errors (0.00s)
+    --- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/tab_only_rejected (0.00s)
+    --- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/empty_string_accepted_as_absent (0.00s)
+    --- PASS: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011/valid_unix_path_accepted (0.00s)
+--- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012 (0.00s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/empty_list_accepted (0.00s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/nil_list_accepted (0.00s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/invalid_pem_at_index_0 (0.00s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/wrong_pem_block_type_rejected (0.00s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/rsa_pem_rejected_wrong_key_type (0.00s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/valid_ed25519_pem_accepted (0.01s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/valid_at_0_invalid_at_1 (0.01s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/exhaustive_reporting_both_bad_entries_collected (0.01s)
+    --- PASS: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012/multiple_valid_pem_accepted (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.335s
+
+## AC-011: management_socket Validation (E-CFG-008)
+
+Test: TestConfig_Validate_ManagementSocket_E_CFG_008_AC011
+
+Sub-cases:
+(a) empty_string_accepted_as_absent: management_socket="" (Go zero-value) → no error.
+    In Go a string YAML field cannot distinguish explicit "" from absent — both unmarshal
+    to "". BC-2.09.003 PC-10 / EC-014 specify absent is accepted. PASS.
+(b) whitespace_only_rejected: management_socket="   " → E-CFG-008 error reported.
+(c) tab_only_rejected: management_socket="\t" → E-CFG-008 error reported.
+(d) valid_unix_path_accepted: management_socket="/run/sb.sock" → no error.
+(e) valid_tcp_address_accepted: management_socket="127.0.0.1:9091" → no error.
+(f) exhaustive_reporting_with_other_errors: invalid tick_interval + whitespace
+    management_socket → both errors reported together in one pass (collect-all-failures
+    pattern per BC-2.09.003 Inv-4).
+
+## AC-012: authorized_operator_keys PEM Validation (E-CFG-009)
+
+Test: TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012
+
+Sub-cases:
+(a) invalid_pem_at_index_0: not-PEM data at entry[0] → E-CFG-009[0] reported.
+(b) valid_at_0_invalid_at_1: valid Ed25519 PEM at entry[0], invalid at entry[1]
+    → E-CFG-009[1] only (entry[0] passes).
+(c) empty_list_accepted: [] → no error (bootstrap mode; daemon key is sole authority).
+(d) nil_list_accepted: nil → no error (same as empty; bootstrap mode).
+(e) valid_ed25519_pem_accepted: PEM PUBLIC KEY with 32-byte Ed25519 key → no error.
+(f) multiple_valid_pem_accepted: two valid Ed25519 PEM entries → no error.
+(g) rsa_pem_rejected_wrong_key_type: RSA PUBLIC KEY in PEM → E-CFG-009 (wrong key type).
+(h) wrong_pem_block_type_rejected: PEM block with type "PRIVATE KEY" → E-CFG-009.
+(i) exhaustive_reporting_both_bad_entries_collected: two invalid entries →
+    both E-CFG-009[0] and E-CFG-009[1] collected and returned together (Inv-4).

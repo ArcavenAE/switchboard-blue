@@ -1,0 +1,71 @@
+# Demo Evidence: AC-001, AC-003, AC-004 — Challenge-First Handshake, Post-Auth Guard, Auth-Fail Closes
+
+## Test Run
+
+Command: go test ./internal/mgmt/... -race -count=1 -v \
+  -run "TestMgmtServer_IssuesChallengeFirst_AC001|TestMgmtServer_HandshakeTimeout_SilentStall_AC001|TestMgmtServer_PostAuthChallengeResponseRejected_VP065|TestMgmtServer_AuthFailClosesConnection_AC004"
+
+Output:
+=== RUN   TestMgmtServer_IssuesChallengeFirst_AC001
+=== PAUSE TestMgmtServer_IssuesChallengeFirst_AC001
+=== RUN   TestMgmtServer_AuthFailClosesConnection_AC004
+=== PAUSE TestMgmtServer_AuthFailClosesConnection_AC004
+=== RUN   TestMgmtServer_HandshakeTimeout_SilentStall_AC001
+=== PAUSE TestMgmtServer_HandshakeTimeout_SilentStall_AC001
+=== RUN   TestMgmtServer_PostAuthChallengeResponseRejected_VP065
+=== PAUSE TestMgmtServer_PostAuthChallengeResponseRejected_VP065
+=== CONT  TestMgmtServer_IssuesChallengeFirst_AC001
+=== CONT  TestMgmtServer_HandshakeTimeout_SilentStall_AC001
+=== CONT  TestMgmtServer_AuthFailClosesConnection_AC004
+=== CONT  TestMgmtServer_PostAuthChallengeResponseRejected_VP065
+--- PASS: TestMgmtServer_IssuesChallengeFirst_AC001 (0.01s)
+--- PASS: TestMgmtServer_AuthFailClosesConnection_AC004 (0.02s)
+--- PASS: TestMgmtServer_PostAuthChallengeResponseRejected_VP065 (0.02s)
+--- PASS: TestMgmtServer_HandshakeTimeout_SilentStall_AC001 (0.06s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	1.447s
+
+## AC-001: Challenge Issued First
+
+Test: TestMgmtServer_IssuesChallengeFirst_AC001
+
+Observable behavior:
+- Server sends {"type":"challenge","nonce":"<base64url 32 bytes>","daemon_sig":"<base64url>"} as the
+  FIRST message on every new connection, before reading any client data.
+- Nonce decodes to 32 bytes (crypto/rand.Read(32)).
+- daemon_sig is non-empty (ed25519.Sign(daemonPrivKey, nonceBytes)).
+
+## AC-001 (v1.1): HandshakeTimeout Silent-Stall Sub-case (VP-064 sub-case a)
+
+Test: TestMgmtServer_HandshakeTimeout_SilentStall_AC001
+
+Observable behavior:
+- Server constructed with WithHandshakeTimeout(50ms) override.
+- Client connects, receives CHALLENGE, then sends NOTHING (silent stall).
+- Server closes connection within ~100ms of the 50ms timeout (no AUTH_FAIL on timeout — close-only
+  per Ruling K / BC-2.07.004 EC-001 v1.4).
+- mgmt.HandshakeTimeout constant == 10s (ADR-012 §7 / Ruling 1). Verified by compile-time assertion.
+- No goroutine leak after the timeout close.
+
+## AC-003 (VP-065): Post-Auth Structural Guard
+
+Test: TestMgmtServer_PostAuthChallengeResponseRejected_VP065
+
+Observable behavior:
+- Client authenticates successfully on C1 → receives AUTH_OK.
+- On the same C1, client sends a second {"type":"challenge_response",...} message.
+- Server responds with AUTH_FAIL (E-ADM-010) and closes the connection.
+- Per-connection authenticated boolean (not a nonce-set) causes the rejection (Ruling 7 / ARCH-12 v1.2).
+- RPC handler NOT invoked (rpcCallCount == 0).
+
+Note: BC-2.07.004 PC-3 / EC-004 "logs a security event" requirement explicitly DEFERRED to S-HRD.02
+(daemon logging infrastructure / slog seam on mgmt.Server).
+
+## AC-004: Auth Fail Closes Connection
+
+Test: TestMgmtServer_AuthFailClosesConnection_AC004
+
+Observable behavior:
+- Client sends unrecognized key → receives AUTH_FAIL (E-ADM-010).
+- Next read from client returns nil/error: connection is closed after AUTH_FAIL.
+- No RPC handler invoked (rpcCallCount == 0).

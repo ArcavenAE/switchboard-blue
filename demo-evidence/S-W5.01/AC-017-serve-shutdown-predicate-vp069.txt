@@ -1,0 +1,98 @@
+# Demo Evidence: AC-017 — Serve Shutdown Predicate, Graceful Drain (VP-069)
+
+## Test Run
+
+Command: go test ./internal/mgmt/... -race -count=1 -v \
+  -run "TestServe_ReturnsNilOnShutdown_VP069|TestServe_ReturnsNilOnCtxCancel_VP069|TestServe_ReturnsErrOnUnexpectedListenerClose_VP069|TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI|TestServe_DrainCompletesWithinBudget_RulingI|TestServe_FatalAcceptErrorDrainsQuickly"
+
+Output:
+=== RUN   TestServe_ReturnsNilOnShutdown_VP069
+=== PAUSE TestServe_ReturnsNilOnShutdown_VP069
+=== RUN   TestServe_ReturnsNilOnCtxCancel_VP069
+=== PAUSE TestServe_ReturnsNilOnCtxCancel_VP069
+=== RUN   TestServe_ReturnsErrOnUnexpectedListenerClose_VP069
+=== PAUSE TestServe_ReturnsErrOnUnexpectedListenerClose_VP069
+=== RUN   TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI
+--- PASS: TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI (0.19s)
+=== RUN   TestServe_DrainCompletesWithinBudget_RulingI
+=== PAUSE TestServe_DrainCompletesWithinBudget_RulingI
+=== RUN   TestServe_FatalAcceptErrorDrainsQuickly
+=== PAUSE TestServe_FatalAcceptErrorDrainsQuickly
+=== CONT  TestServe_ReturnsNilOnShutdown_VP069
+=== CONT  TestServe_DrainCompletesWithinBudget_RulingI
+=== CONT  TestServe_FatalAcceptErrorDrainsQuickly
+=== CONT  TestServe_ReturnsNilOnCtxCancel_VP069
+=== CONT  TestServe_ReturnsErrOnUnexpectedListenerClose_VP069
+--- PASS: TestServe_DrainCompletesWithinBudget_RulingI (0.01s)
+--- PASS: TestServe_ReturnsNilOnShutdown_VP069 (0.01s)
+--- PASS: TestServe_ReturnsNilOnCtxCancel_VP069 (0.01s)
+--- PASS: TestServe_ReturnsErrOnUnexpectedListenerClose_VP069 (0.02s)
+--- PASS: TestServe_FatalAcceptErrorDrainsQuickly (0.03s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	1.554s
+
+## AC-017 (a): Serve Returns nil on Shutdown
+
+Test: TestServe_ReturnsNilOnShutdown_VP069
+
+Observable behavior:
+- Server.Shutdown() called (normal daemon lifecycle).
+- shuttingDown.Store(true) set BEFORE ln.Close().
+- Serve's Accept-error path: s.shuttingDown.Load() == true → returns nil (not net.ErrClosed).
+- Serve returns nil.
+
+## AC-017 (b): Serve Returns nil on Ctx Cancel
+
+Test: TestServe_ReturnsNilOnCtxCancel_VP069
+
+Observable behavior:
+- context.WithCancel context cancelled (OS signal path).
+- ctx-watcher goroutine: sets shuttingDown.Store(true) before closing listener.
+- Serve's Accept-error path: same predicate → returns nil.
+
+## AC-017 (c): Serve Returns non-nil on Unexpected Listener Close (Ruling G)
+
+Test: TestServe_ReturnsErrOnUnexpectedListenerClose_VP069
+
+Observable behavior:
+- Listener closed DIRECTLY by test (not via Shutdown, not via ctx cancel).
+- ctx.Err() == nil (context.Background() — live context, never cancelled).
+- shuttingDown == false.
+- Accept-error predicate: s.shuttingDown.Load() || (errors.Is(err, net.ErrClosed) && ctx.Err() != nil)
+  evaluates to false → falls through to return err (non-nil).
+- This test fails without the "&& ctx.Err() != nil" conjunct (pre-Ruling G code returned nil
+  silently, violating SOUL #4 no-silent-failure).
+
+## AC-017 (d): Shutdown-Window Race Detector Smoke Test (Ruling I)
+
+Test: TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI (100 iterations, -race)
+
+Accurate property (Ruling T): concurrent dial + Shutdown does not panic and passes
+go test -race. This is a race-detector smoke test, not an Add-after-Wait-at-zero
+discriminator (Shutdown does NOT call connWG.Wait() — Serve is the sole Wait owner).
+The DROP behavior is discriminatingly tested by TestServe_DrainCompletesWithinBudget_RulingI.
+
+Observable: 100 iterations, each racing Accept against Shutdown, no panics, no data races reported.
+
+## AC-017 (e): Drain Completes Within Budget (Ruling I)
+
+Test: TestServe_DrainCompletesWithinBudget_RulingI
+
+Observable behavior:
+- Server started; client completes auth and then stalls (stops reading).
+- Shutdown called with 2s context.
+- trackConn called BEFORE connWG.Add(1) and BEFORE goroutine spawn (Ruling I ordering).
+- closeAllConns() in Shutdown force-closes tracked connections → handleConnection unblocks.
+- Shutdown returns within 2s (NOT 10s / HandshakeTimeout).
+
+## AC-017 (f): Fatal Accept Error Drains Quickly (Ruling P / VP-069 v1.2)
+
+Test: TestServe_FatalAcceptErrorDrainsQuickly
+
+Observable behavior:
+- Client completes authentication and stalls.
+- Listener closed directly (ctx live, Shutdown never called) → fatal Accept error.
+- closeAllConns() called immediately BEFORE connWG.Wait() on the fatal-error path.
+- Serve returns within 200ms (NOT blocked up to RPCIdleTimeout=30s).
+- Without closeAllConns() on the fatal path, the stalled connection goroutine would
+  remain running until its RPCIdleTimeout fires (up to 30s).

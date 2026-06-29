@@ -1,0 +1,82 @@
+# Demo Evidence: AC-015/AC-016 — Ephemeral Keypair + Fatal-Start Abort, Nil/Short-Key Panic (VP-068)
+
+## Test Run (AC-015 — runAccess ephemeral key)
+
+Command: go test ./cmd/switchboard/... -race -count=1 -v \
+  -run "TestRunAccess_GeneratesEphemeralKey|TestRunAccess_MgmtStartFailureAborts"
+
+Output:
+=== RUN   TestRunAccess_GeneratesEphemeralKey_AC015
+=== RUN   TestRunAccess_GeneratesEphemeralKey_AC015/real_key_serves_wellformed_challenge
+=== RUN   TestRunAccess_GeneratesEphemeralKey_AC015/startMgmtServer_with_nil_key_serves_no_challenge
+    mgmt_wire_test.go:991: AC-015 sub-case: startMgmtServer(nil key) returned error (VP-068 guard active):
+        startMgmtServer: NewServer: mgmt.NewServer: daemonKey must be ed25519.PrivateKeySize bytes
+        (ADR-012 §Invariant 8 / AC-016)
+--- PASS: TestRunAccess_GeneratesEphemeralKey_AC015 (0.02s)
+    --- PASS: TestRunAccess_GeneratesEphemeralKey_AC015/real_key_serves_wellformed_challenge (0.02s)
+    --- PASS: TestRunAccess_GeneratesEphemeralKey_AC015/startMgmtServer_with_nil_key_serves_no_challenge (0.00s)
+=== RUN   TestRunAccess_MgmtStartFailureAborts_RulingJ
+=== RUN   TestRunAccess_MgmtStartFailureAborts_RulingJ/explicit_socket_unbindable
+=== RUN   TestRunAccess_MgmtStartFailureAborts_RulingJ/default_path_unbindable
+--- PASS: TestRunAccess_MgmtStartFailureAborts_RulingJ (0.00s)
+    --- PASS: TestRunAccess_MgmtStartFailureAborts_RulingJ/explicit_socket_unbindable (0.00s)
+    --- PASS: TestRunAccess_MgmtStartFailureAborts_RulingJ/default_path_unbindable (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.343s
+
+## Test Run (AC-016 — nil/short-key panic)
+
+Command: go test ./internal/mgmt/... -race -count=1 -v \
+  -run "TestNewServer_PanicsOnNilKey|TestNewServer_PanicsOnShortKey"
+
+Output:
+=== RUN   TestNewServer_PanicsOnNilKey_VP068
+--- PASS: TestNewServer_PanicsOnNilKey_VP068 (0.00s)
+=== RUN   TestNewServer_PanicsOnShortKey_VP068
+=== RUN   TestNewServer_PanicsOnShortKey_VP068/len_32_public_key_size
+=== RUN   TestNewServer_PanicsOnShortKey_VP068/len_63_one_short
+=== RUN   TestNewServer_PanicsOnShortKey_VP068/len_1_single_byte
+--- PASS: TestNewServer_PanicsOnShortKey_VP068 (0.00s)
+    --- PASS: TestNewServer_PanicsOnShortKey_VP068/len_63_one_short (0.00s)
+    --- PASS: TestNewServer_PanicsOnShortKey_VP068/len_1_single_byte (0.00s)
+    --- PASS: TestNewServer_PanicsOnShortKey_VP068/len_32_public_key_size (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/mgmt	1.328s
+
+## AC-015: Ephemeral Keypair Generation in runAccess
+
+Tests: TestRunAccess_GeneratesEphemeralKey_AC015, TestRunAccess_MgmtStartFailureAborts_RulingJ
+
+Sub-case (real_key_serves_wellformed_challenge):
+- runAccess generates ephemeral ed25519.PrivateKey via ed25519.GenerateKey(rand.Reader).
+- startMgmtServer called with a non-nil, 64-byte daemonPrivKey
+  (len(daemonPrivKey) == ed25519.PrivateKeySize).
+- Server issues a well-formed CHALLENGE on the first client connection.
+- Key is ephemeral: generated every process start, never written to disk.
+
+Sub-case (startMgmtServer_with_nil_key_serves_no_challenge):
+- NewServer construction-time guard (VP-068) fires when nil key is passed.
+- startMgmtServer wraps the panic in a recover() and returns an error.
+- runAccess receives the error and returns it immediately (Ruling J).
+- Data plane NOT started.
+
+Fatal-policy (Ruling J — TestRunAccess_MgmtStartFailureAborts_RulingJ):
+- startMgmtServer returning any error (config-class or bind failure) → runAccess returns error.
+- Neither buildAccessComponents nor runAccessWithConnector is called after the failure.
+- Verified for both an explicit socket path and the default path (both unbindable in the test).
+
+## AC-016: nil/Short-Key Construction Guard (VP-068 / Invariant 8)
+
+Tests: TestNewServer_PanicsOnNilKey_VP068, TestNewServer_PanicsOnShortKey_VP068
+
+Sub-cases:
+- nil daemonKey (len==0): NewServer panics immediately at construction.
+  Prevents nil-pointer dereference mid-connection (remote-panic DoS vector).
+- len_32_public_key_size (32 bytes): common mistake of passing public key for private key → panic.
+- len_63_one_short (63 bytes): one byte under ed25519.PrivateKeySize → panic.
+- len_1_single_byte (1 byte): single byte → panic.
+
+Guard code (mgmt.go):
+    if len(daemonKey) != ed25519.PrivateKeySize {
+        panic("mgmt.NewServer: daemonKey must be ed25519.PrivateKeySize bytes (ADR-012 §Invariant 8 / AC-016)")
+    }
