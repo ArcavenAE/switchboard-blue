@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -263,6 +264,71 @@ func TestSbctl_NoStdoutOnConnectionFailure(t *testing.T) {
 
 	if stdout != "" {
 		t.Errorf("BC-2.07.003 PC-3 violated: expected empty stdout on connection failure; got %d bytes: %q", len(stdout), stdout)
+	}
+}
+
+// TestSubprocessMain_NoArgs is the subprocess hook for TestSbctl_NoSubcommand_ExitsZero.
+// When SBCTL_TEST_MAIN_NOARGS=1 is set, it resets flag.CommandLine and os.Args so
+// that main() sees an invocation with no subcommand arguments, then calls main().
+// main() calls os.Exit — this test function never returns normally in the subprocess.
+// In the parent process (env var absent), t.Skip skips it immediately.
+//
+// AC-012 (BC-2.07.002 EC-003): no-subcommand → stdout + exit 0.
+func TestSubprocessMain_NoArgs(t *testing.T) {
+	if os.Getenv("SBCTL_TEST_MAIN_NOARGS") != "1" {
+		t.Skip("subprocess hook — skip in parent process")
+	}
+	// Reset flag parsing state so main()'s flag.Parse() works cleanly.
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	// Set os.Args to just the binary name — no subcommand, no flags.
+	os.Args = []string{os.Args[0]}
+	main()
+	// main() calls os.Exit; if we reach here something is wrong.
+	t.Fatal("main() returned without calling os.Exit — unexpected")
+}
+
+// TestSbctl_NoSubcommand_ExitsZero verifies AC-012 (BC-2.07.002 EC-003):
+// When sbctl is invoked with no subcommand arguments, it prints help/usage
+// to stdout and exits 0. The current main.go (lines 31-34) prints to stderr
+// and calls os.Exit(2), so this test must fail RED against the current code.
+//
+// BC: BC-2.07.002 EC-003; AC-012.
+func TestSbctl_NoSubcommand_ExitsZero(t *testing.T) {
+	t.Parallel()
+
+	// Re-exec this test binary, landing in TestSubprocessMain_NoArgs.
+	cmd := exec.Command(os.Args[0], "-test.run=TestSubprocessMain_NoArgs")
+	cmd.Env = append(os.Environ(), "SBCTL_TEST_MAIN_NOARGS=1")
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	stdout := outBuf.String()
+	stderr := errBuf.String()
+
+	exitCode := 0
+	if err != nil {
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok {
+			t.Fatalf("subprocess execution failed with non-exit error: %v", err)
+		}
+		exitCode = exitErr.ExitCode()
+	}
+
+	// AC-012: exit code must be 0.
+	if exitCode != 0 {
+		t.Errorf("AC-012 violated: expected exit code 0, got %d\nstdout: %q\nstderr: %q",
+			exitCode, stdout, stderr)
+	}
+	// AC-012: help/usage must appear on stdout (not stderr).
+	if stdout == "" {
+		t.Errorf("AC-012 violated: expected non-empty stdout (help/usage text), got empty\nstderr: %q", stderr)
+	}
+	// AC-012: no usage text on stderr (current code prints to stderr — this must change).
+	if strings.Contains(stderr, "usage:") || strings.Contains(stderr, "Usage:") {
+		t.Errorf("AC-012 violated: usage text must not appear on stderr; got stderr: %q", stderr)
 	}
 }
 
