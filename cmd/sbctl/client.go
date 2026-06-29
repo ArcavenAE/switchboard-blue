@@ -253,7 +253,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 // ctx is always the first parameter (go.md rule 7; AC-011 Ruling V).
 // Ruling V: conn.SetReadDeadline is derived from ctx before response decode (AC-011).
 // Ruling U: resp.Type == "response" is validated before checking resp.OK (BC-2.07.002 PC-3).
-// TODO (Ruling X GREEN): generate non-constant per-call req.ID; verify resp.ID == req.ID.
+// Ruling X: resp.ID is verified to echo req.ID; mismatch returns E-RPC-001 (BC-2.07.002 PC-3).
 func dispatch(ctx context.Context, conn net.Conn, command string, args any) (json.RawMessage, error) {
 	req := rpcRequestMsg{
 		Type:    "request",
@@ -278,6 +278,11 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 	// Ruling U: type field must be "response"; any other value is rejected (BC-2.07.002 PC-3).
 	if resp.Type != "response" {
 		return nil, fmt.Errorf("rpc failed: %s: unexpected response type: %q", command, resp.Type)
+	}
+
+	// Ruling X: response ID must echo the request ID (BC-2.07.002 PC-3, ADR-012 §3 step 6).
+	if resp.ID != req.ID {
+		return nil, fmt.Errorf("rpc failed: %s: response id mismatch: got %q want %q", command, resp.ID, req.ID)
 	}
 
 	if !resp.OK {
