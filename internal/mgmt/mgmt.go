@@ -72,14 +72,9 @@ func WithMaxConnections(n int) Option {
 // BC-2.07.004 PC-6 / AC-020). The default is RPCIdleTimeout (30s). This
 // option exists to allow tests to verify handler-timeout behaviour without
 // waiting 30s for the production default.
-//
-// STUB: this option is not yet wired into handler dispatch. The implementer
-// must add an rpcIdleTimeout field to Server, populate it here, and wrap each
-// handlerFn call with context.WithTimeout(ctx, s.rpcIdleTimeout). Until then
-// this option is a no-op and TestMgmtServer_HandlerTimeout_AC020 fails (RED).
 func WithRPCIdleTimeout(d time.Duration) Option {
 	return func(s *Server) {
-		_ = d // not yet used — RED until implementer wires rpcIdleTimeout into handleConnection
+		s.rpcIdleTimeout = d
 	}
 }
 
@@ -134,6 +129,7 @@ type Server struct {
 	handlers         []Handler
 	daemonVersion    string
 	handshakeTimeout time.Duration
+	rpcIdleTimeout   time.Duration // per-handler execution timeout (Ruling R / AC-020)
 	sem              chan struct{} // bounded accept semaphore (CWE-770)
 	connWG           sync.WaitGroup
 	// shuttingDown is set to true before s.ln.Close() in both Shutdown and the
@@ -183,6 +179,7 @@ func NewServer(
 		handlers:         handlers,
 		daemonVersion:    daemonVersion,
 		handshakeTimeout: HandshakeTimeout,
+		rpcIdleTimeout:   RPCIdleTimeout,
 		sem:              make(chan struct{}, MaxConcurrentConnections),
 		conns:            make(map[net.Conn]struct{}),
 	}
@@ -638,9 +635,18 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 			resp.Error = &rpcError{Code: "E-RPC-010", Message: "unknown command: " + req.Command}
 			resp.Data = nil
 		} else {
-			data, err := handlerFn(ctx, req.Args)
+			// Wrap handler invocation with a per-call deadline derived from
+			// rpcIdleTimeout. A blocked handler is cancelled after the timeout and
+			// the connection stays open for subsequent requests (Ruling R / AC-020 /
+			// BC-2.07.004 PC-6 / Inv-3). cancel is called explicitly at the end of
+			// each iteration (not deferred to function end) to avoid context-leak
+			// accumulation across loop iterations (govet lostcancel).
+			callCtx, callCancel := context.WithTimeout(ctx, s.rpcIdleTimeout)
+			data, err := handlerFn(callCtx, req.Args)
+			callCancel()
 			if err != nil {
-				// PC-12 (Ruling C): handler error → E-RPC-011; connection stays OPEN.
+				// PC-12 (Ruling C / Ruling R): handler error or timeout → E-RPC-011;
+				// connection stays OPEN.
 				resp.OK = false
 				resp.Error = &rpcError{Code: "E-RPC-011", Message: err.Error()}
 				resp.Data = nil
