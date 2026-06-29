@@ -4,6 +4,9 @@ package config
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -120,6 +123,19 @@ type Config struct {
 	// KeepaliveInterval is the node keepalive cadence (FM-009).
 	// Optional; defaults applied by the daemon, not by Validate.
 	KeepaliveInterval time.Duration `yaml:"keepalive_interval"`
+
+	// ManagementSocket is the Unix socket path (or TCP address for console) that
+	// the daemon's management server listens on. Optional — when absent, daemon
+	// mode startup code applies a mode-specific default (ARCH-05 §Daemon Management
+	// Socket). When present, must be a non-empty, non-whitespace string (E-CFG-008).
+	ManagementSocket string `yaml:"management_socket"`
+
+	// AuthorizedOperatorKeys is a list of PEM-encoded Ed25519 public keys that are
+	// authorized to authenticate to the management plane. Optional — when empty or
+	// absent, the daemon operates in bootstrap mode: the daemon's own keypair is the
+	// sole authorized key (ADR-012 §2 / BC-2.09.003 PC-11). Each entry must be a
+	// valid PEM block of type "PUBLIC KEY" containing a 32-byte Ed25519 key (E-CFG-009).
+	AuthorizedOperatorKeys []string `yaml:"authorized_operator_keys"`
 }
 
 // UpstreamRouter is a single entry in the upstream_routers list.
@@ -212,6 +228,24 @@ func (c *Config) Validate() error {
 			"config error: keepalive_interval: must not be negative; got '%s'. Fix: remove the field to use the daemon default (1s), or set to a positive duration, e.g. '1s'",
 			c.KeepaliveInterval,
 		))
+	}
+
+	// AC-011 / PC-10 / E-CFG-008: management_socket when present must not be
+	// empty or whitespace-only. Absent (zero-value string) is accepted; the daemon
+	// mode startup code applies a mode-specific default (ARCH-05). Stub: always
+	// returns not-implemented so the test fails (Red Gate).
+	if err := validateManagementSocket(c.ManagementSocket); err != nil {
+		failures = append(failures, err.Error())
+	}
+
+	// AC-012 / PC-11 / E-CFG-009: each authorized_operator_keys entry must be a
+	// valid PEM PUBLIC KEY block containing a 32-byte Ed25519 key. Empty list is
+	// accepted (bootstrap mode). Exhaustive error collection per BC-2.09.003 Inv-4.
+	// Stub: always returns not-implemented errors so tests fail (Red Gate).
+	for i, entry := range c.AuthorizedOperatorKeys {
+		if err := validateOperatorKey(i, entry); err != nil {
+			failures = append(failures, err.Error())
+		}
 	}
 
 	if len(failures) == 0 {
@@ -359,6 +393,49 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// validateManagementSocket checks the management_socket field per E-CFG-008
+// (BC-2.09.003 PC-10 / AC-011). When the field is absent (empty string), it is
+// accepted — the daemon mode startup code applies a default. When present and
+// entirely whitespace, an E-CFG-008 error is returned.
+func validateManagementSocket(val string) error {
+	// Absent (zero-value string) is always accepted — daemon startup applies default.
+	if val == "" {
+		return nil
+	}
+	// Non-empty but whitespace-only → E-CFG-008.
+	if strings.TrimSpace(val) == "" {
+		return errors.New("config error: management_socket: must not be empty. Fix: set to a valid Unix socket path, e.g. '/run/switchboard-router.sock', or remove the field to use the daemon default")
+	}
+	return nil
+}
+
+// validateOperatorKey checks a single authorized_operator_keys entry per E-CFG-009
+// (BC-2.09.003 PC-11 / AC-012). The entry must be a valid PEM block of type
+// "PUBLIC KEY" containing a 32-byte Ed25519 public key.
+func validateOperatorKey(i int, entry string) error {
+	const e009msg = "entry is not a valid Ed25519 PEM PUBLIC KEY block. Fix: provide a PEM-encoded Ed25519 public key (type 'PUBLIC KEY', 32-byte key length)"
+
+	// pem.Decode returns nil block if no valid PEM data found.
+	block, _ := pem.Decode([]byte(entry))
+	if block == nil || block.Type != "PUBLIC KEY" {
+		return fmt.Errorf("config error: authorized_operator_keys[%d]: %s", i, e009msg)
+	}
+
+	// Parse as PKIX public key.
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("config error: authorized_operator_keys[%d]: %s", i, e009msg)
+	}
+
+	// Must be an Ed25519 public key with 32 bytes.
+	edPub, ok := pub.(ed25519.PublicKey)
+	if !ok || len(edPub) != ed25519.PublicKeySize {
+		return fmt.Errorf("config error: authorized_operator_keys[%d]: %s", i, e009msg)
+	}
+
+	return nil
 }
 
 // yamlParseDetail formats a yaml.Decode/Unmarshal error into the canonical

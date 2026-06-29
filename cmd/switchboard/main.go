@@ -80,8 +80,80 @@ func run(stdout io.Writer, args []string) error {
 		defer cancel()
 		return runAccess(ctx, os.Stderr, cfg)
 
+	case "router":
+		routerFS := flag.NewFlagSet("router", flag.ContinueOnError)
+		routerFS.SetOutput(stdout)
+		configPath := routerFS.String("config", "", "path to YAML config file")
+		if err := routerFS.Parse(fs.Args()[1:]); err != nil {
+			return err
+		}
+
+		var cfg *config.Config
+		if *configPath != "" {
+			loaded, err := config.LoadFile(*configPath)
+			if err != nil {
+				return err
+			}
+			if err := loaded.Validate(); err != nil {
+				return err
+			}
+			cfg = loaded
+		}
+
+		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer cancel()
+		return runRouter(ctx, os.Stderr, cfg)
+
+	case "console":
+		consoleFS := flag.NewFlagSet("console", flag.ContinueOnError)
+		consoleFS.SetOutput(stdout)
+		configPath := consoleFS.String("config", "", "path to YAML config file")
+		if err := consoleFS.Parse(fs.Args()[1:]); err != nil {
+			return err
+		}
+
+		var cfg *config.Config
+		if *configPath != "" {
+			loaded, err := config.LoadFile(*configPath)
+			if err != nil {
+				return err
+			}
+			if err := loaded.Validate(); err != nil {
+				return err
+			}
+			cfg = loaded
+		}
+
+		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer cancel()
+		return runConsole(ctx, os.Stderr, cfg)
+
+	case "control":
+		controlFS := flag.NewFlagSet("control", flag.ContinueOnError)
+		controlFS.SetOutput(stdout)
+		configPath := controlFS.String("config", "", "path to YAML config file")
+		if err := controlFS.Parse(fs.Args()[1:]); err != nil {
+			return err
+		}
+
+		var cfg *config.Config
+		if *configPath != "" {
+			loaded, err := config.LoadFile(*configPath)
+			if err != nil {
+				return err
+			}
+			if err := loaded.Validate(); err != nil {
+				return err
+			}
+			cfg = loaded
+		}
+
+		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer cancel()
+		return runControl(ctx, os.Stderr, cfg)
+
 	default:
-		return fmt.Errorf("unknown subcommand %q; try: access, version", subcommand)
+		return fmt.Errorf("unknown subcommand %q; try: access, router, console, control, version", subcommand)
 	}
 }
 
