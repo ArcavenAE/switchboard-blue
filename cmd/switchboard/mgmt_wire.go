@@ -175,10 +175,10 @@ func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 	// because config.Validate has no mode parameter.
 	host, _, splitErr := net.SplitHostPort(address)
 	if splitErr != nil {
-		return nil, fmt.Errorf("config error: management_socket: E-CFG-008: cannot parse address %q: %w", address, splitErr)
+		return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
 	}
 	if !isMgmtLoopbackHost(host) {
-		return nil, fmt.Errorf("config error: management_socket: E-CFG-008: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+		return nil, fmt.Errorf("E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
 	}
 	ln, err := net.Listen(network, address)
 	if err != nil {
