@@ -189,10 +189,13 @@ func (t *PathTracker) LossPct() float64 {
 // updateDegraded evaluates rttMS against DegradedRTTThresholdMS and updates
 // t.degraded accordingly. Caller must hold t.mu.
 //
-// TODO(S-5.03): not implemented — stub body; t.degraded is never set so
-// IsDegraded() always returns false. Red Gate: tests expecting degraded=true
-// will fail until the real body is written (BC-5.38.001).
-func (t *PathTracker) updateDegraded(_ float64) {}
+// The comparison is exclusive: degraded = rttMS > DegradedRTTThresholdMS.
+// Called at the OnProbe success path (after EWMA update) and at resetRTT
+// (first-probe and reactivation paths) so the flag always reflects the
+// current EWMA RTT (BC-2.02.003 postcondition 5; ARCH-03 §Degraded-Path Flag Design).
+func (t *PathTracker) updateDegraded(rttMS float64) {
+	t.degraded = rttMS > DegradedRTTThresholdMS
+}
 
 // IsDegraded reports whether the path's EWMA RTT has converged above
 // DegradedRTTThresholdMS (BC-2.02.003 postcondition 5; ARCH-03 §Degraded-Path Flag Design).
