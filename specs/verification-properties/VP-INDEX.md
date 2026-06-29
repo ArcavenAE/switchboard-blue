@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.2"
+version: "2.3"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -71,7 +71,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-045 | Console session enumeration without hostnames | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
 | VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
-| VP-048 | Control node creates/destroys SVTNs | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
+| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
 | VP-049 | sbctl unified CLI with OpenSSH auth | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
 | VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
@@ -136,6 +136,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.3 | 2026-06-29 | CR-009 ruling: VP-048 ownership split — PC-1 (create) + PC-2 (bootstrap) remain owned by S-6.02; PC-3 (destroy + admission-rejection) transferred to new story S-6.05-svtn-destroy (Wave 6, depends_on S-6.02). VP-048 row Title column updated to document the split. VP-048.md Story Trace section updated. BC-2.07.001 Stories row updated. No count or method changes. |
 | 2.2 | 2026-06-29 | H-001/H-002 remediation (S-5.01 API reconciliation): VP-052 title updated from "Missing expected tick within deadline → indicator downgrade" to "N consecutive OnMissingFrame calls → indicator downgrade (one level)" — reflects count-based API (no Clock injection). VP-027 and VP-052 proof harness skeletons reconciled with as-built internal/metrics API. No count or method changes. |
 | 2.1 | 2026-06-29 | BC-2.06.001 VP table disambiguation (L-001): VP-074 (unit) added for threshold classification (PC-2/PC-3/PC-4); BC-2.06.001 VP table updated to two clean rows — VP-074 (unit) and VP-027 (proptest). Counts: Total=74, Unit=2, P1=18. |
 | 2.0 | 2026-06-29 | ARCH-12 v1.5 Ruling P VP propagation: VP-069 bumped to v1.2 — fatal-accept-error drain obligation added (closeAllConns() before connWG.Wait() on unexpected-close path; drain budget ≤200ms; TestServe_FatalAcceptErrorDrainsQuickly test obligation); source-contract citation extended to Rulings B/G/I/P; error-taxonomy v2.7→v2.8 (E-NET-001 two-case). No count changes. |
