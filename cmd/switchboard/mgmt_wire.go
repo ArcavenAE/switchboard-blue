@@ -1,13 +1,15 @@
-// mgmt_wire.go — management server wiring for all four daemon modes.
+// mgmt_wire.go — management server wiring for cmd/switchboard.
 //
 // This file provides:
 //  1. listenUnixMgmt — opens a Unix management socket with atomic 0600 permissions
 //     via syscall.Umask(0177) (AC-014 / CWE-276 / Ruling 4).
 //  2. buildMgmtListener — opens the management listener for the given mode.
-//  3. startMgmtServer — the shared wiring helper called by each runXxx function
-//     to start the management listener per ARCH-12 §Wiring into cmd/switchboard.
+//  3. startMgmtServer — the shared wiring helper called by runAccess (and future
+//     fully-implemented daemon modes) per ARCH-12 §Wiring into cmd/switchboard.
 //  4. runRouter, runConsole, runControl — daemon mode stubs (not yet implemented;
-//     return not-implemented errors until their owning stories ship).
+//     return not-implemented errors until their owning stories ship). These stubs
+//     deliberately do NOT open a management listener — starting one for a daemon
+//     that immediately exits would leak a bound socket and an untracked goroutine.
 //
 // Default socket paths per ARCH-05 §Daemon Management Socket:
 //   - router:  /run/switchboard-router.sock
@@ -215,7 +217,7 @@ func startMgmtServer(
 	cfg *config.Config,
 	mode string,
 	daemonPrivKey ed25519.PrivateKey,
-	handlers []mgmt.Handler, //nolint:unparam // nil in mode stubs; real runRouter/runConsole/runControl callers pass mode-specific handler slices
+	handlers []mgmt.Handler, //nolint:unparam // always nil today; future router/console/control mode stories will pass mode-specific handler slices
 ) (*mgmt.Server, error) {
 	// Parse authorized operator keys from config (PEM → ed25519.PublicKey).
 	// Empty list → bootstrap mode (daemon key is the sole authorized key).
@@ -245,32 +247,29 @@ func startMgmtServer(
 	return srv, nil
 }
 
-// runRouter is the router-mode daemon entry point stub.
-func runRouter(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	_, err := startMgmtServer(ctx, &sync.WaitGroup{}, cfg, "router", nil, nil)
-	if err != nil {
-		_ = err
-	}
-	_ = stderr
+// runRouter is the router-mode daemon entry point.
+// The router daemon body (and its management server wiring) ships in its
+// owning story; until then this mode is not implemented. It deliberately
+// does NOT open a management listener — starting one for a daemon that
+// does not run would leak a bound socket and an untracked goroutine.
+func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runRouter: not implemented")
 }
 
-// runConsole is the console-mode daemon entry point stub.
-func runConsole(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	_, err := startMgmtServer(ctx, &sync.WaitGroup{}, cfg, "console", nil, nil)
-	if err != nil {
-		_ = err
-	}
-	_ = stderr
+// runConsole is the console-mode daemon entry point.
+// The console daemon body (and its management server wiring) ships in its
+// owning story; until then this mode is not implemented. It deliberately
+// does NOT open a management listener — starting one for a daemon that
+// does not run would leak a bound socket and an untracked goroutine.
+func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runConsole: not implemented")
 }
 
-// runControl is the control-mode daemon entry point stub.
-func runControl(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
-	_, err := startMgmtServer(ctx, &sync.WaitGroup{}, cfg, "control", nil, nil)
-	if err != nil {
-		_ = err
-	}
-	_ = stderr
+// runControl is the control-mode daemon entry point.
+// The control daemon body (and its management server wiring) ships in its
+// owning story; until then this mode is not implemented. It deliberately
+// does NOT open a management listener — starting one for a daemon that
+// does not run would leak a bound socket and an untracked goroutine.
+func runControl(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runControl: not implemented")
 }
