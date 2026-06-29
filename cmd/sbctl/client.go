@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -35,6 +36,11 @@ const handshakeTimeout = 10 * time.Second
 // to a small value (e.g. 100ms) and restore it via t.Cleanup so the no-deadline
 // fallback path can be exercised without waiting 30 seconds.
 var rpcResponseFallbackTimeout = 30 * time.Second
+
+// reqIDCounter is a monotonically-increasing request ID counter (CR-012).
+// Using an atomic counter rather than time.Now().UnixNano() ensures uniqueness
+// even when two concurrent dispatches fire within the same nanosecond.
+var reqIDCounter atomic.Uint64
 
 // challengeMsg is the CHALLENGE message received from the daemon (ADR-012 step 2).
 type challengeMsg struct {
@@ -266,7 +272,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 func dispatch(ctx context.Context, conn net.Conn, command string, args any) (json.RawMessage, error) {
 	req := rpcRequestMsg{
 		Type:    "request",
-		ID:      fmt.Sprintf("%x", time.Now().UnixNano()),
+		ID:      fmt.Sprintf("%d", reqIDCounter.Add(1)),
 		Command: command,
 		Args:    args,
 	}
