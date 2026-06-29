@@ -188,9 +188,12 @@ func TestSbctl_AuthFailure_ExitsOneWithEADM010(t *testing.T) {
 	// acceptErrCh allows detecting server setup problems.
 	acceptErrCh := make(chan error, 1)
 	go func() {
-		// Short accept deadline: the Red Gate subprocess exits fast (key loading
-		// fails), so if nothing connects within 1s, the server gives up.
-		_ = ln.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
+		// No accept deadline: the listener stays open until t.Cleanup closes it.
+		// Previously a 1s accept deadline raced the 3s subprocess timeout — on a
+		// slow box the server could time out before the subprocess connected,
+		// causing a net.Error.Timeout() that connectAndRun classified as E-NET-001
+		// instead of E-ADM-010. The outer t.Cleanup on ln guarantees the goroutine
+		// unblocks and exits when the test completes.
 		conn, err := ln.Accept()
 		if err != nil {
 			acceptErrCh <- fmt.Errorf("accept: %w", err)
@@ -199,7 +202,9 @@ func TestSbctl_AuthFailure_ExitsOneWithEADM010(t *testing.T) {
 		acceptErrCh <- nil
 		defer func() { _ = conn.Close() }()
 
-		_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+		// Conn deadline must be longer than the subprocess budget so the full
+		// challenge/response exchange completes within the client's timeout window.
+		_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 		// Send a well-formed CHALLENGE.
 		challenge := `{"type":"challenge","nonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","daemon_sig":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}` + "\n"
@@ -230,6 +235,10 @@ func TestSbctl_AuthFailure_ExitsOneWithEADM010(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "E-ADM-010") {
 		t.Errorf("AC-003 violated: expected stderr to contain 'E-ADM-010'; got: %q", stderr)
+	}
+	// Lock in the disambiguation: a timeout mis-classification must never appear.
+	if strings.Contains(stderr, "E-NET-001") {
+		t.Errorf("AC-003 violated: stderr must not contain 'E-NET-001' on auth failure (timeout mis-classification); got: %q", stderr)
 	}
 	if stdout != "" {
 		t.Errorf("AC-003 violated: expected no stdout output on auth failure; got: %q", stdout)
@@ -276,15 +285,26 @@ func TestSbctl_ConnectionTimeout(t *testing.T) {
 	target := ln.Addr().String()
 	keyPath := testdataKeyPath(t)
 
-	// Accept and hold connections indefinitely (cleaned up via t.Cleanup).
+	// Accept and hold connections indefinitely. The conn is closed via defer
+	// when the loop iteration's goroutine exits, which happens once ln is closed
+	// by the outer t.Cleanup. We must not call t.Cleanup/t.Error/t.Fatal from
+	// inside this goroutine — those calls race the test's cleanup-phase
+	// finalization and are flagged by the race detector.
 	go func() {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
 				return
 			}
-			// Block forever — never read or write.
-			t.Cleanup(func() { _ = conn.Close() })
+			// Spawn per-conn goroutine so the accept loop can continue.
+			// defer closes the conn when this goroutine exits.
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				// Block forever — never read or write. Exits when ln.Close()
+				// causes the next Read/Write or when the test ends and the
+				// outer t.Cleanup closes ln, which unblocks Accept above.
+				select {}
+			}(conn)
 		}
 	}()
 
