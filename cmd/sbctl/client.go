@@ -275,9 +275,15 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 	}
 
 	// Ruling V: apply read deadline from ctx before response decode (AC-011, BC-2.07.003 Inv-2).
-	if dl, ok := ctx.Deadline(); ok {
-		_ = conn.SetReadDeadline(dl)
+	// Falls back to rpcResponseFallbackTimeout when ctx carries no deadline (CWE-400 slowloris).
+	responseDeadline, ok := ctx.Deadline()
+	if !ok {
+		responseDeadline = time.Now().UTC().Add(rpcResponseFallbackTimeout)
 	}
+	if err := conn.SetReadDeadline(responseDeadline); err != nil {
+		return nil, fmt.Errorf("rpc failed: %s: set read deadline: %w", command, err)
+	}
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 
 	var resp rpcResponseMsg
 	if err := json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).Decode(&resp); err != nil {
