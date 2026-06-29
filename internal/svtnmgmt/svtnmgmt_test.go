@@ -772,26 +772,38 @@ func TestSVTNManager_VP048_BootstrappedKeyIsControlRole(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Re-register the same control key as RoleConsole (LWW); then immediately
-	// re-register as RoleControl to restore state.  If the key was NOT present
-	// (i.e., bootstrap didn't register it), the first re-register would succeed
-	// but behave as a new insert, not an LWW update.
-	// We verify the key IS present by checking that Lookup returns non-nil
-	// for the derived node address.
+	// Strengthened assertion (CR-011): confirm the bootstrapped key's role is
+	// RoleControl by calling RevokeKey with RoleControl (confirm=true) BEFORE
+	// any overwrite. If the bootstrap role were NOT RoleControl, this call would
+	// return ErrRoleMismatch instead of succeeding, catching a regression.
 	//
-	// Derive nodeAddr: internal/frame.DeriveNodeAddress(svtnID, []byte(controlPub)).
-	// We can't call frame from here, so we use a proxy: call admission.RegisterKey
-	// directly on the key set with the same inputs and compare Lookup results.
-	_ = controlPub
-	_ = svtnResult
+	// We use a fresh manager+SVTN (mgr2) so the revocation does not interfere
+	// with any other test state. mgr is left intact.
+	mgr2, controlPub2 := newManagerWithKS(t)
+	svtnResult2, err2 := mgr2.Create("role-verify-svtn-confirm")
+	if err2 != nil {
+		t.Fatalf("Create (mgr2): %v", err2)
+	}
 
-	// The test structure is: Create succeeds, then RevokeKey on a non-existing
-	// key returns ErrKeyNotRegistered, which means bootstrapped key IS present.
-	// Re-register as console to verify LWW overwrite:
+	// RevokeKey(controlPub2, RoleControl, confirm=true): if the bootstrapped role
+	// is indeed RoleControl, this must succeed. ErrRoleMismatch means wrong role.
+	_, revokeErr := mgr2.RevokeKey(svtnResult2.SVTN.Name, controlPub2, admission.RoleControl, true)
+	if revokeErr != nil {
+		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — RevokeKey(controlPub, RoleControl, confirm=true) "+
+			"on bootstrapped key: want success (confirming bootstrap role is RoleControl); got: %v", revokeErr)
+	}
+
+	// Also verify that after the LWW overwrite to RoleConsole, RevokeKey with
+	// RoleControl returns ErrRoleMismatch (key is now RoleConsole).
 	_, err = mgr.RegisterKey(svtnResult.SVTN.Name, controlPub, admission.RoleConsole)
 	if err != nil {
 		t.Errorf("VP-048 — RegisterKey(controlPub, RoleConsole) after Create: "+
 			"want success (LWW overwrite of bootstrapped control key); got: %v", err)
+	}
+	_, err = mgr.RevokeKey(svtnResult.SVTN.Name, controlPub, admission.RoleControl, true)
+	if !errors.Is(err, svtnmgmt.ErrRoleMismatch) {
+		t.Errorf("VP-048 — RevokeKey(controlPub, RoleControl) after LWW overwrite to RoleConsole: "+
+			"want ErrRoleMismatch (key is now RoleConsole); got: %v", err)
 	}
 }
 
