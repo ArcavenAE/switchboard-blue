@@ -21,6 +21,7 @@ last_updated: 2026-06-29
 | F-004 | LOW | S-3.01b pr-reviewer | PTYProxy.Connect(_ context.Context) discards ctx — pass ctx to ptyAlloc when alloc supports cancellation | Wave 4 | open |
 | SEC-001 | LOW (security) | S-3.01b pr-reviewer | SHELL env var used without allowlist validation — add exec.LookPath-based allowlist in defaultPTYAlloc | Phase-6 hardening (security review) | open |
 | VP-032 | deferred | S-3.01b story task 8 | Real-PTY integration test for pty_alloc_* — requires PTY device in test environment | Phase-6 / future wave | deferred |
+| DRIFT-001 | LOW | consistency-validator (H-003/M-002/L-003) | BC-2.06.001 PC-5 ("surfaced via `sbctl sessions status` and console session-list view") ownership: sbctl half now owned by S-5.02 (AC-007, added v1.3); console session-list half deferred to S-7.03. BC-2.06.001 was previously orphaned with no story claiming PC-5. | S-7.03 (console session-list surfacing) | open |
 
 ## Resolved Items
 
