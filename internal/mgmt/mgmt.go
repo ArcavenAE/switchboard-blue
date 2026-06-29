@@ -304,7 +304,12 @@ func (s *Server) Serve(ctx context.Context) error {
 				continue
 			}
 
-			// Fatal accept error — drain in-flight connections and return.
+			// Fatal accept error — force-close in-flight connections then drain.
+			// closeAllConns() must precede connWG.Wait() so that in-flight
+			// connections are signalled to close; without this, Wait() can stall
+			// for up to RPCIdleTimeout (30s) waiting for idle connections to time
+			// out naturally (Ruling P / BC-2.07.004 PC-10 / VP-069 v1.2).
+			s.closeAllConns()
 			s.connWG.Wait()
 			return err
 		}
