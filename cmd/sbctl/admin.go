@@ -46,6 +46,10 @@ type adminKeyRevokeArgs struct {
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key to revoke.
 	Pubkey string `json:"pubkey"`
+	// Role is the authorization role of the key being revoked: "control",
+	// "console", or "access". The daemon cross-checks this against the stored
+	// role to prevent bypassing the confirm gate (HOLD-001 hybrid; E-ADM-014).
+	Role string `json:"role"`
 	// Confirm must be true for control-to-control revocation (ADR-004;
 	// BC-2.05.004 invariant 1; AC-005).
 	Confirm bool `json:"confirm"`
@@ -149,11 +153,13 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 //
 //	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
 //	--svtn <id>      SVTN identifier (required)
+//	--role <role>    authorization role of the key: control, console, access (required)
 //	--confirm        required for control-to-control revocation (ADR-004; AC-005)
 func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
 	fs := flag.NewFlagSet("admin key revoke", flag.ContinueOnError)
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
+	roleFlag := fs.String("role", "", "authorization role of the key: control, console, access (required)")
 	confirmFlag := fs.Bool("confirm", false, "confirm control-to-control revocation (ADR-004)")
 
 	if err := fs.Parse(args); err != nil {
@@ -166,10 +172,20 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 	if *svtnFlag == "" {
 		return fmt.Errorf("admin key revoke: --svtn is required")
 	}
+	if *roleFlag == "" {
+		return fmt.Errorf("admin key revoke: --role is required")
+	}
+	switch *roleFlag {
+	case "control", "console", "access":
+		// valid
+	default:
+		return fmt.Errorf("admin key revoke: --role must be control, console, or access; got %q", *roleFlag)
+	}
 
 	rpcArgs := adminKeyRevokeArgs{
 		SVTNID:  *svtnFlag,
 		Pubkey:  *keyFlag,
+		Role:    *roleFlag,
 		Confirm: *confirmFlag,
 	}
 	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.revoke", rpcArgs)

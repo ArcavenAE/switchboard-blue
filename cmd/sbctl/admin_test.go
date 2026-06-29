@@ -121,6 +121,7 @@ func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 			original := adminKeyRevokeArgs{
 				SVTNID:  "test-svtn-id",
 				Pubkey:  "ssh-ed25519 AAAA...",
+				Role:    "control",
 				Confirm: tc.confirm,
 			}
 
@@ -141,6 +142,9 @@ func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 			if _, ok := raw["pubkey"]; !ok {
 				t.Error("adminKeyRevokeArgs: missing JSON field 'pubkey'")
 			}
+			if _, ok := raw["role"]; !ok {
+				t.Error("adminKeyRevokeArgs: missing JSON field 'role'")
+			}
 			if _, ok := raw["confirm"]; !ok {
 				t.Error("adminKeyRevokeArgs: missing JSON field 'confirm'")
 			}
@@ -156,6 +160,9 @@ func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 			}
 			if decoded.SVTNID != original.SVTNID {
 				t.Errorf("SVTNID round-trip: got %q; want %q", decoded.SVTNID, original.SVTNID)
+			}
+			if decoded.Role != original.Role {
+				t.Errorf("Role round-trip: got %q; want %q", decoded.Role, original.Role)
 			}
 		})
 	}
@@ -533,6 +540,7 @@ func TestSbctlAdmin_KeyRevoke_CLI(t *testing.T) {
 		"key", "revoke",
 		"--key", pubkey,
 		"--svtn", svtnID,
+		"--role", "console",
 		// No --confirm: defaults to false.
 	})
 	if err != nil {
@@ -553,6 +561,9 @@ func TestSbctlAdmin_KeyRevoke_CLI(t *testing.T) {
 		}
 		if args.Pubkey != pubkey {
 			t.Errorf("AC-003 — wire pubkey: got %q; want %q", args.Pubkey, pubkey)
+		}
+		if args.Role != "console" {
+			t.Errorf("AC-003 — wire role: got %q; want console", args.Role)
 		}
 		// Without --confirm, Confirm must be false.
 		if args.Confirm {
@@ -642,6 +653,10 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			if err := json.Unmarshal(args, &revokeArgs); err != nil {
 				return nil, err
 			}
+			// CR-002/CR-007: validate role field is populated.
+			if revokeArgs.Role == "" {
+				return nil, fmt.Errorf("E-ADM-014: role field missing in revoke request")
+			}
 			// Simulate daemon: reject control-to-control without confirm.
 			if !revokeArgs.Confirm {
 				return nil, fmt.Errorf("E-ADM-004: control-to-control revocation requires --confirm flag (ADR-004)")
@@ -658,6 +673,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			"key", "revoke",
 			"--key", pubkey,
 			"--svtn", "test-svtn",
+			"--role", "control",
 			// No --confirm.
 		})
 
@@ -671,6 +687,10 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			if args.Confirm {
 				t.Error("AC-005 — wire confirm: want false when --confirm not supplied; got true")
 			}
+			// CR-002/CR-007: role field must be set in the wire payload.
+			if args.Role != "control" {
+				t.Errorf("AC-005 — wire role: got %q; want control", args.Role)
+			}
 		case <-time.After(2 * time.Second):
 			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
 		}
@@ -683,7 +703,15 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 
 		// AC-005 — with --confirm flag, wire confirm field must be true.
 		requestCh := make(chan adminRPCRequest, 1)
-		addr := startFakeServer(t, requestCh, func(_ string, _ json.RawMessage) (any, error) {
+		addr := startFakeServer(t, requestCh, func(_ string, args json.RawMessage) (any, error) {
+			var revokeArgs adminKeyRevokeArgs
+			if err := json.Unmarshal(args, &revokeArgs); err != nil {
+				return nil, err
+			}
+			// CR-002/CR-007: validate role field is populated.
+			if revokeArgs.Role == "" {
+				return nil, fmt.Errorf("E-ADM-014: role field missing in revoke request")
+			}
 			return map[string]any{"fingerprint": "SHA256:EEEE..."}, nil
 		})
 
@@ -696,6 +724,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			"key", "revoke",
 			"--key", pubkey,
 			"--svtn", "test-svtn",
+			"--role", "control",
 			"--confirm",
 		})
 		_ = err
@@ -708,6 +737,10 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			}
 			if !args.Confirm {
 				t.Error("AC-005 — wire confirm: want true when --confirm supplied; got false")
+			}
+			// CR-002/CR-007: role field must be set in the wire payload.
+			if args.Role != "control" {
+				t.Errorf("AC-005 — wire role: got %q; want control", args.Role)
 			}
 		case <-time.After(2 * time.Second):
 			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
@@ -750,8 +783,9 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 		// BC-2.05.004 precondition 2 — malformed key operations must return error.
 		{"register_missing_key", []string{"key", "register", "--svtn", "test-svtn"}},
 		{"register_missing_svtn", []string{"key", "register", "--key", "ssh-ed25519 AAAA..."}},
-		{"revoke_missing_key", []string{"key", "revoke", "--svtn", "test-svtn"}},
-		{"revoke_missing_svtn", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA..."}},
+		{"revoke_missing_key", []string{"key", "revoke", "--svtn", "test-svtn", "--role", "console"}},
+		{"revoke_missing_svtn", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--role", "console"}},
+		{"revoke_missing_role", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}},
 		{"expire_missing_after", []string{"key", "expire", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}},
 		{"expire_missing_key", []string{"key", "expire", "--svtn", "test-svtn", "--after", "24h"}},
 	}
