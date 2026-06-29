@@ -7,4 +7,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/leanovate/gopter v0.2.9 // indirect
+require github.com/leanovate/gopter v0.2.9
