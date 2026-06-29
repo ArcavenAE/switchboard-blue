@@ -104,11 +104,58 @@ func (qi *QualityIndicator) Current() Quality {
 func (qi *QualityIndicator) Update(rttMs float64, lossPct float64) {
 	qi.mu.Lock()
 	defer qi.mu.Unlock()
-	// Fields and helpers referenced here so the compiler keeps them across stub commits.
-	_ = qi.consecutiveCount
-	_ = qi.candidate
-	_ = classify(rttMs, lossPct)
-	panic("not implemented: BC-2.06.001")
+
+	// A received frame resets the missing-frame counter (BC-2.06.002 PC-4).
+	qi.missingFrameCount = 0
+
+	newLevel := classify(rttMs, lossPct)
+
+	if newLevel > qi.current {
+		// Downgrade is immediate but steps one level at a time (AC-004).
+		// A single Red-range measurement on a Green indicator must go to Yellow,
+		// not skip directly to Red.
+		qi.current++
+		qi.candidate = qi.current
+		qi.consecutiveCount = 1
+		return
+	}
+
+	if newLevel < qi.current {
+		// Potential upgrade: track consecutive streak toward target level.
+		if newLevel == qi.candidate {
+			qi.consecutiveCount++
+		} else {
+			// New candidate level (e.g. jumped from Red directly feeding Green-range
+			// measurements — candidate switches, streak resets).
+			qi.candidate = newLevel
+			qi.consecutiveCount = 1
+		}
+
+		if qi.consecutiveCount >= HysteresisCount {
+			// Only upgrade one level at a time (BC-2.06.002 PC-2 / AC-004).
+			nextLevel := qi.current - 1
+			if nextLevel < Green {
+				nextLevel = Green
+			}
+			qi.current = nextLevel
+			// If we've reached the candidate level, keep tracking;
+			// otherwise reset so the next window can continue.
+			if qi.current == qi.candidate {
+				qi.consecutiveCount = HysteresisCount // remain eligible
+			} else {
+				qi.consecutiveCount = 0
+			}
+		}
+		return
+	}
+
+	// newLevel == qi.current: same level, keep streak going (or reset candidate).
+	if newLevel == qi.candidate {
+		qi.consecutiveCount++
+	} else {
+		qi.candidate = newLevel
+		qi.consecutiveCount = 1
+	}
 }
 
 // OnMissingFrame records one consecutive missing-frame event. After
@@ -121,9 +168,17 @@ func (qi *QualityIndicator) Update(rttMs float64, lossPct float64) {
 func (qi *QualityIndicator) OnMissingFrame() {
 	qi.mu.Lock()
 	defer qi.mu.Unlock()
-	// Field referenced here so the compiler keeps it across stub commits.
-	_ = qi.missingFrameCount
-	panic("not implemented: BC-2.06.002")
+
+	qi.missingFrameCount++
+	if qi.missingFrameCount >= HysteresisCount {
+		qi.missingFrameCount = 0
+		// Degrade one level — never skip (BC-2.06.002 PC-2; AC-004).
+		if qi.current < Red {
+			qi.current++
+			qi.candidate = qi.current
+			qi.consecutiveCount = 0
+		}
+	}
 }
 
 // classify returns the raw Quality level for (rttMs, lossPct) without applying
@@ -131,5 +186,11 @@ func (qi *QualityIndicator) OnMissingFrame() {
 //
 // BC-2.06.001 postconditions 2–4 (thresholds NFR-001; ARCH-INDEX F-008).
 func classify(rttMs float64, lossPct float64) Quality {
-	panic("not implemented: BC-2.06.001")
+	if rttMs <= GreenRTTMs && lossPct <= GreenLossPct {
+		return Green
+	}
+	if rttMs <= YellowRTTMs && lossPct <= YellowLossPct {
+		return Yellow
+	}
+	return Red
 }
