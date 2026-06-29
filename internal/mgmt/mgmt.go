@@ -210,6 +210,12 @@ func (s *Server) closeAllConns() {
 // listener is closed. Returns nil on normal Shutdown, or a non-nil error on
 // unexpected listener failure. Safe to call from a wg-tracked goroutine in the
 // daemon lifecycle per ARCH-01 §Goroutine WaitGroup Contract.
+//
+// Serve is the sole owner of connWG.Wait(). Shutdown does NOT call connWG.Wait()
+// (doing so would create a concurrent Wait race). Callers observe full drain
+// completion by waiting for Serve to return (e.g., via mgmtWG.Wait() in the
+// daemon lifecycle). Shutdown returns as soon as it has signalled the shutdown
+// (marked shuttingDown, closed listener, force-closed connections).
 func (s *Server) Serve(ctx context.Context) error {
 	// ctx-watcher goroutine: closes the listener when the context is cancelled so
 	// Accept unblocks. Uses a done channel to ensure this goroutine exits when
@@ -238,6 +244,10 @@ func (s *Server) Serve(ctx context.Context) error {
 		select {
 		case s.sem <- struct{}{}:
 		case <-ctx.Done():
+			// ctx cancelled — drain in-flight connections and exit. Serve is the
+			// sole owner of connWG.Wait() (Shutdown does NOT call Wait — that would
+			// race with this call). closeAllConns was already called by the
+			// ctx-watcher goroutine above, so Wait should return quickly.
 			s.connWG.Wait()
 			return nil
 		}
@@ -252,6 +262,8 @@ func (s *Server) Serve(ctx context.Context) error {
 			// (BC-2.07.004 PC-10 / AC-017 / VP-069 / Ruling G).
 			// The ctx.Err() conjunct is required: an unexpected external listener
 			// close (ctx live, Shutdown never called) must return the real error.
+			// Drain in-flight connections before returning (Serve is the sole
+			// owner of connWG.Wait — Shutdown does not call it).
 			if s.shuttingDown.Load() || (errors.Is(err, net.ErrClosed) && ctx.Err() != nil) {
 				s.connWG.Wait()
 				return nil
@@ -306,28 +318,28 @@ func (s *Server) Serve(ctx context.Context) error {
 	}
 }
 
-// Shutdown drains in-flight connections and closes the listener.
+// Shutdown signals the management server to stop accepting new connections,
+// force-closes all in-flight connections, and returns. Full drain completion
+// is observed by waiting for Serve to return (e.g., via mgmtWG.Wait() in the
+// daemon lifecycle — see startMgmtServer).
+//
+// Shutdown does NOT call connWG.Wait() because Serve is the sole owner of
+// connWG.Wait(). Concurrent Wait() calls from both Shutdown and Serve would
+// race on WaitGroup internals (Ruling H). Serve calls connWG.Wait() after
+// its accept loop exits and returns; the caller's mgmtWG.Wait() then confirms
+// all goroutines are complete.
+//
 // Called by the daemon on SIGTERM/context cancel. Returns nil on success.
-func (s *Server) Shutdown(ctx context.Context) error {
+func (s *Server) Shutdown(_ context.Context) error {
 	// Mark as shutting down BEFORE closing the listener so the Accept-error path
 	// in Serve returns nil instead of net.ErrClosed (VP-069 / PC-10).
 	s.shuttingDown.Store(true)
 	// Close the listener so Serve's Accept loop unblocks and returns.
 	_ = s.ln.Close()
-	// Force-close all in-flight connections so their goroutines return.
+	// Force-close all in-flight connections so their handleConnection goroutines
+	// return quickly, allowing Serve's connWG.Wait() to unblock promptly.
 	s.closeAllConns()
-	// Wait for all in-flight connection goroutines to finish.
-	waited := make(chan struct{})
-	go func() {
-		s.connWG.Wait()
-		close(waited)
-	}()
-	select {
-	case <-waited:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("mgmt shutdown: %w", ctx.Err())
-	}
+	return nil
 }
 
 // challengeMsg is the CHALLENGE message sent by the server on each new connection
