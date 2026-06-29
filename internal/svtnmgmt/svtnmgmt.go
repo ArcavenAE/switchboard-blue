@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
-	"github.com/arcavenae/switchboard/internal/frame"
 )
 
 // Sentinel errors for SVTN lifecycle operations.
@@ -222,11 +221,11 @@ func (m *SVTNManager) RevokeKey(
 	}
 
 	svtnID := svtn.ID
-	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
 
 	// Step 2: look up the key in the AdmittedKeySet (HOLD-001 hybrid: cross-check
 	// stored role against caller-supplied currentRole before the confirm gate).
-	stored := m.keySet.Lookup(svtnID, nodeAddr)
+	// LookupByPubkey derives the node address internally (ARCH-04 v1.8).
+	stored := m.keySet.LookupByPubkey(svtnID, pubkey)
 	if stored == nil {
 		return KeyOpResult{}, admission.ErrKeyNotRegistered
 	}
@@ -244,8 +243,8 @@ func (m *SVTNManager) RevokeKey(
 		return KeyOpResult{}, ErrControlRevocationRequiresConfirm
 	}
 
-	// Step 5: revoke the key.
-	if err := m.keySet.RevokeKey(svtnID, nodeAddr); err != nil {
+	// Step 5: revoke the key using the node address from the stored entry.
+	if err := m.keySet.RevokeKey(svtnID, stored.NodeAddr); err != nil {
 		return KeyOpResult{}, err
 	}
 
@@ -285,10 +284,15 @@ func (m *SVTNManager) ExpireKey(
 	}
 
 	svtnID := svtn.ID
-	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+
+	// LookupByPubkey derives the node address internally (ARCH-04 v1.8).
+	lookedUp := m.keySet.LookupByPubkey(svtnID, pubkey)
+	if lookedUp == nil {
+		return KeyOpResult{}, admission.ErrKeyNotRegistered
+	}
 
 	expiry := time.Now().UTC().Add(ttl)
-	if err := m.keySet.SetKeyExpiry(svtnID, nodeAddr, expiry); err != nil {
+	if err := m.keySet.SetKeyExpiry(svtnID, lookedUp.NodeAddr, expiry); err != nil {
 		// SetKeyExpiry returns ErrKeyNotRegistered if key not present (E-ADM-013).
 		return KeyOpResult{}, err
 	}

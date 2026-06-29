@@ -626,6 +626,78 @@ func TestRevokeKey_ReturnsErrKeyNotRegistered(t *testing.T) {
 	}
 }
 
+// ── TestAdmittedKeySet_LookupByPubkey ────────────────────────────────────────
+
+// TestAdmittedKeySet_LookupByPubkey verifies that LookupByPubkey returns the
+// registered AdmittedKey for a known key, nil for an unregistered key, and nil
+// when the wrong svtnID is supplied (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
+func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
+	t.Parallel()
+
+	svtnA := mustSVTN(0xA0)
+	svtnB := mustSVTN(0xB0)
+
+	cases := []struct {
+		name      string
+		setupSVTN [16]byte
+		lookupID  [16]byte
+		register  bool // whether to register the key before lookup
+		wantNil   bool
+	}{
+		{
+			name:      "registered_key_returns_match",
+			setupSVTN: svtnA,
+			lookupID:  svtnA,
+			register:  true,
+			wantNil:   false,
+		},
+		{
+			name:      "unregistered_key_returns_nil",
+			setupSVTN: svtnA,
+			lookupID:  svtnA,
+			register:  false,
+			wantNil:   true,
+		},
+		{
+			name:      "wrong_svtn_returns_nil",
+			setupSVTN: svtnA,
+			lookupID:  svtnB,
+			register:  true,
+			wantNil:   true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ks := admission.NewAdmittedKeySet()
+			pub, _, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatalf("GenerateKey: %v", err)
+			}
+
+			if tc.register {
+				ks.RegisterKey(tc.setupSVTN, pub, admission.RoleControl)
+			}
+
+			got := ks.LookupByPubkey(tc.lookupID, pub)
+			if tc.wantNil && got != nil {
+				t.Errorf("LookupByPubkey: want nil; got non-nil %+v", got)
+			}
+			if !tc.wantNil {
+				if got == nil {
+					t.Fatal("LookupByPubkey: want non-nil AdmittedKey; got nil")
+				}
+				// Verify the returned copy's public key matches.
+				if !bytes.Equal(got.PublicKey, pub) {
+					t.Errorf("LookupByPubkey: PublicKey mismatch: got %x; want %x", got.PublicKey, pub)
+				}
+			}
+		})
+	}
+}
+
 // ── Fuzz harness: VP-008 — admission rejects unregistered keys ──────────────
 
 // FuzzAdmitNode_UnregisteredKey is a fuzz target that verifies AdmitNode

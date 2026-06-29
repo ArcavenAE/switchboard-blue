@@ -222,6 +222,18 @@ func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) *AdmittedKey 
 	return &cp
 }
 
+// LookupByPubkey looks up an admitted key by SVTN ID and Ed25519 public key,
+// deriving the node address internally. Returns nil if the key is not
+// registered or if svtnID does not exist.
+//
+// Convenience wrapper over Lookup for callers that hold the raw public key
+// rather than the derived node address (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
+// Thread-safety and deep-clone guarantees are inherited from Lookup.
+func (s *AdmittedKeySet) LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey) *AdmittedKey {
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+	return s.Lookup(svtnID, nodeAddr)
+}
+
 // IsAdmitted reports whether nodeAddr has completed the challenge-response
 // handshake for svtnID and has not been revoked.
 //
