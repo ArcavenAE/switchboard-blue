@@ -21,6 +21,9 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"time"
 )
 
 // adminKeyRegisterArgs is the wire-format arguments sent to the daemon's
@@ -75,13 +78,145 @@ type adminKeyExpireArgs struct {
 //
 // Traces to BC-2.05.004 (key lifecycle) and BC-2.07.001 (SVTN lifecycle);
 // F-P8-001 CLI surface resolution.
-func runAdmin(_ context.Context, _, _ string, _ bool, _ []string) error { //nolint:unparam // ctx and params used by implementation; stub panics
-	// Ensure wire-type variables are referenced so the compiler does not
-	// flag them unused while stubs are in place. These are used by the
-	// real sub-dispatch once implemented.
-	_ = adminKeyRegisterArgs{}
-	_ = adminKeyRevokeArgs{}
-	_ = adminKeyExpireArgs{}
+func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("admin: no subcommand specified; expected 'key' or 'list-keys'")
+	}
 
-	panic("not implemented: runAdmin (BC-2.05.004, BC-2.07.001, F-P8-001)")
+	switch args[0] {
+	case "key":
+		return runAdminKey(ctx, target, keyPath, useJSON, args[1:])
+	case "list-keys":
+		return connectAndRun(ctx, target, keyPath, useJSON, "admin.list-keys", nil)
+	default:
+		return fmt.Errorf("admin: unknown subcommand %q; expected 'key' or 'list-keys'", args[0])
+	}
+}
+
+// runAdminKey dispatches `sbctl admin key <subcommand>` commands.
+func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("admin key: no subcommand specified; expected 'register', 'revoke', or 'expire'")
+	}
+
+	switch args[0] {
+	case "register":
+		return runAdminKeyRegister(ctx, target, keyPath, useJSON, args[1:])
+	case "revoke":
+		return runAdminKeyRevoke(ctx, target, keyPath, useJSON, args[1:])
+	case "expire":
+		return runAdminKeyExpire(ctx, target, keyPath, useJSON, args[1:])
+	default:
+		return fmt.Errorf("admin key: unknown subcommand %q; expected 'register', 'revoke', or 'expire'", args[0])
+	}
+}
+
+// runAdminKeyRegister implements `sbctl admin key register`.
+//
+// Flags:
+//
+//	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
+//	--svtn <id>      SVTN identifier (required)
+//	--role <role>    authorization role: control, console, access (default: console)
+func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+	fs := flag.NewFlagSet("admin key register", flag.ContinueOnError)
+	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
+	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
+	roleFlag := fs.String("role", "console", "authorization role: control, console, access")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin key register: %w", err)
+	}
+
+	if *keyFlag == "" {
+		return fmt.Errorf("admin key register: --key is required")
+	}
+	if *svtnFlag == "" {
+		return fmt.Errorf("admin key register: --svtn is required")
+	}
+
+	rpcArgs := adminKeyRegisterArgs{
+		SVTNID: *svtnFlag,
+		Pubkey: *keyFlag,
+		Role:   *roleFlag,
+	}
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.register", rpcArgs)
+}
+
+// runAdminKeyRevoke implements `sbctl admin key revoke`.
+//
+// Flags:
+//
+//	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
+//	--svtn <id>      SVTN identifier (required)
+//	--confirm        required for control-to-control revocation (ADR-004; AC-005)
+func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+	fs := flag.NewFlagSet("admin key revoke", flag.ContinueOnError)
+	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
+	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
+	confirmFlag := fs.Bool("confirm", false, "confirm control-to-control revocation (ADR-004)")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin key revoke: %w", err)
+	}
+
+	if *keyFlag == "" {
+		return fmt.Errorf("admin key revoke: --key is required")
+	}
+	if *svtnFlag == "" {
+		return fmt.Errorf("admin key revoke: --svtn is required")
+	}
+
+	rpcArgs := adminKeyRevokeArgs{
+		SVTNID:  *svtnFlag,
+		Pubkey:  *keyFlag,
+		Confirm: *confirmFlag,
+	}
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.revoke", rpcArgs)
+}
+
+// runAdminKeyExpire implements `sbctl admin key expire`.
+//
+// Flags:
+//
+//	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
+//	--svtn <id>      SVTN identifier (required)
+//	--after <dur>    TTL duration (required; e.g. "24h")
+func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+	fs := flag.NewFlagSet("admin key expire", flag.ContinueOnError)
+	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
+	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
+	afterFlag := fs.String("after", "", "TTL duration (required; e.g. \"24h\")")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin key expire: %w", err)
+	}
+
+	if *keyFlag == "" {
+		return fmt.Errorf("admin key expire: --key is required")
+	}
+	if *svtnFlag == "" {
+		return fmt.Errorf("admin key expire: --svtn is required")
+	}
+	if *afterFlag == "" {
+		return fmt.Errorf("admin key expire: --after is required")
+	}
+
+	// Client-side validation: parse duration to catch zero/negative early
+	// (S-6.02 EC-003; BC-2.05.004 postcondition 3). Zero duration returns error
+	// without dialing — avoids a round-trip for an invalid request.
+	d, err := time.ParseDuration(*afterFlag)
+	if err != nil {
+		return fmt.Errorf("admin key expire: invalid --after duration %q: %w", *afterFlag, err)
+	}
+	if d <= 0 {
+		return fmt.Errorf("admin key expire: --after duration must be positive (got %q)", *afterFlag)
+	}
+
+	rpcArgs := adminKeyExpireArgs{
+		SVTNID: *svtnFlag,
+		Pubkey: *keyFlag,
+		After:  *afterFlag,
+	}
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.expire", rpcArgs)
 }

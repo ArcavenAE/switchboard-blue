@@ -13,11 +13,16 @@ package svtnmgmt
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/frame"
 )
 
 // Sentinel errors for SVTN lifecycle operations.
@@ -42,6 +47,12 @@ var ErrInvalidDuration = errors.New("invalid duration: must be positive")
 var ErrControlRevocationRequiresConfirm = errors.New(
 	"control-to-control revocation requires --confirm flag (ADR-004)",
 )
+
+// ErrRoleMismatch is returned by SVTNManager.RevokeKey when the caller-supplied
+// currentRole does not match the role stored in the AdmittedKeySet registry
+// (E-ADM-014). This prevents the confirm gate from being bypassed by supplying
+// a lower role for a control key.
+var ErrRoleMismatch = errors.New("revoke: supplied role does not match registered role")
 
 // SVTN is a record of a single Software-Defined Virtual Topology Network
 // created and owned by this control node.
@@ -83,7 +94,7 @@ type KeyOpResult struct {
 //
 // Construct via NewSVTNManager. Never copy after first use.
 type SVTNManager struct {
-	mu     sync.RWMutex    //nolint:unused // used by implementation; stub methods all panic()
+	mu     sync.RWMutex
 	svtns  map[string]SVTN // keyed by SVTN name for uniqueness check (DI-005)
 	keySet *admission.AdmittedKeySet
 	// controlPubKey is the control node's own Ed25519 public key, bootstrapped
@@ -107,6 +118,14 @@ func NewSVTNManager(ks *admission.AdmittedKeySet, controlPubKey ed25519.PublicKe
 	}
 }
 
+// keyFingerprint computes the "SHA256:<base64>" fingerprint of an Ed25519
+// public key (DI-002; BC-2.05.004 invariant 2; VP-046).
+// Only the public key bytes are hashed — no private material.
+func keyFingerprint(pubkey ed25519.PublicKey) string {
+	digest := sha256.Sum256(pubkey)
+	return "SHA256:" + base64.StdEncoding.EncodeToString(digest[:])
+}
+
 // Create creates a new SVTN with a generated SVTN-ID and bootstraps the first
 // control key locally. The control node's public key is added to the
 // AdmittedKeySet as a control-role key without a network admission round-trip
@@ -117,7 +136,30 @@ func NewSVTNManager(ks *admission.AdmittedKeySet, controlPubKey ed25519.PublicKe
 //
 // Traces to BC-2.07.001 postcondition 1.
 func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
-	panic("not implemented: BC-2.07.001")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.svtns[svtnName]; exists {
+		return CreateResult{}, ErrSVTNAlreadyExists
+	}
+
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return CreateResult{}, fmt.Errorf("generate SVTN ID: %w", err)
+	}
+
+	svtn := SVTN{
+		ID:        id,
+		Name:      svtnName,
+		CreatedAt: time.Now().UTC(),
+	}
+	m.svtns[svtnName] = svtn
+
+	// BC-2.07.001 postcondition 2: bootstrap the control node's public key as
+	// the first admitted control-role key (local operation — trust anchor).
+	m.keySet.RegisterKey(id, m.controlPubKey, admission.RoleControl)
+
+	return CreateResult{SVTN: svtn}, nil
 }
 
 // RegisterKey registers a public key for the named SVTN with the given role.
@@ -135,7 +177,20 @@ func (m *SVTNManager) RegisterKey(
 	pubkey ed25519.PublicKey,
 	role admission.KeyRole,
 ) (KeyOpResult, error) {
-	panic("not implemented: BC-2.05.004")
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+
+	if !exists {
+		return KeyOpResult{}, ErrSVTNNotFound
+	}
+
+	m.keySet.RegisterKey(svtn.ID, pubkey, role)
+
+	return KeyOpResult{
+		Fingerprint: keyFingerprint(pubkey),
+		At:          time.Now().UTC(),
+	}, nil
 }
 
 // RevokeKey removes the public key from the admission set for the named SVTN.
@@ -157,7 +212,48 @@ func (m *SVTNManager) RevokeKey(
 	currentRole admission.KeyRole,
 	confirm bool,
 ) (KeyOpResult, error) {
-	panic("not implemented: BC-2.05.004")
+	// Step 1: validate SVTN exists.
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+
+	if !exists {
+		return KeyOpResult{}, ErrSVTNNotFound
+	}
+
+	svtnID := svtn.ID
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+
+	// Step 2: look up the key in the AdmittedKeySet (HOLD-001 hybrid: cross-check
+	// stored role against caller-supplied currentRole before the confirm gate).
+	stored := m.keySet.Lookup(svtnID, nodeAddr)
+	if stored == nil {
+		return KeyOpResult{}, admission.ErrKeyNotRegistered
+	}
+
+	// Step 3: cross-check role (ARCH-04 v1.7 HOLD-001 resolution: hybrid approach).
+	// The caller supplies currentRole; the manager verifies it matches stored.Role.
+	// This prevents bypassing the confirm gate by supplying a lower role.
+	if stored.Role != currentRole {
+		return KeyOpResult{}, ErrRoleMismatch
+	}
+
+	// Step 4: control-to-control revocation requires confirm=true (ADR-004;
+	// BC-2.05.004 invariant 1; AC-005).
+	if currentRole == admission.RoleControl && !confirm {
+		return KeyOpResult{}, ErrControlRevocationRequiresConfirm
+	}
+
+	// Step 5: revoke the key.
+	if err := m.keySet.RevokeKey(svtnID, nodeAddr); err != nil {
+		return KeyOpResult{}, err
+	}
+
+	// Step 6: return result with fingerprint and UTC timestamp.
+	return KeyOpResult{
+		Fingerprint: keyFingerprint(pubkey),
+		At:          time.Now().UTC(),
+	}, nil
 }
 
 // ExpireKey sets a TTL on the key for the named SVTN. After the TTL elapses,
@@ -176,5 +272,29 @@ func (m *SVTNManager) ExpireKey(
 	pubkey ed25519.PublicKey,
 	ttl time.Duration,
 ) (KeyOpResult, error) {
-	panic("not implemented: BC-2.05.004")
+	if ttl <= 0 {
+		return KeyOpResult{}, ErrInvalidDuration
+	}
+
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+
+	if !exists {
+		return KeyOpResult{}, ErrSVTNNotFound
+	}
+
+	svtnID := svtn.ID
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+
+	expiry := time.Now().UTC().Add(ttl)
+	if err := m.keySet.SetKeyExpiry(svtnID, nodeAddr, expiry); err != nil {
+		// SetKeyExpiry returns ErrKeyNotRegistered if key not present (E-ADM-013).
+		return KeyOpResult{}, err
+	}
+
+	return KeyOpResult{
+		Fingerprint: keyFingerprint(pubkey),
+		At:          time.Now().UTC(),
+	}, nil
 }
