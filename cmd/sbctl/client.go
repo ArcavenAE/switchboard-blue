@@ -193,7 +193,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 	// Step 1: derive read deadline from context (Ruling 2, CWE-400 slowloris).
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		deadline = time.Now().UTC().Add(handshakeTimeout)
+		deadline = time.Now().Add(handshakeTimeout)
 	}
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return fmt.Errorf("set read deadline: %w", err)
@@ -278,7 +278,7 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 	// Falls back to rpcResponseFallbackTimeout when ctx carries no deadline (CWE-400 slowloris).
 	responseDeadline, ok := ctx.Deadline()
 	if !ok {
-		responseDeadline = time.Now().UTC().Add(rpcResponseFallbackTimeout)
+		responseDeadline = time.Now().Add(rpcResponseFallbackTimeout)
 	}
 	if err := conn.SetReadDeadline(responseDeadline); err != nil {
 		return nil, fmt.Errorf("rpc failed: %s: set read deadline: %w", command, err)
