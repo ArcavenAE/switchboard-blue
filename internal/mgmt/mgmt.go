@@ -18,10 +18,12 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -119,6 +121,11 @@ type Server struct {
 	handshakeTimeout time.Duration
 	sem              chan struct{} // bounded accept semaphore (CWE-770)
 	connWG           sync.WaitGroup
+	// shuttingDown is set to true before s.ln.Close() in both Shutdown and the
+	// ctx-watcher goroutine. The Accept-error path in Serve checks this flag so
+	// it can return nil on intentional shutdown vs. the real error on a fatal
+	// Accept failure (BC-2.07.004 PC-10 / AC-017 / VP-069).
+	shuttingDown atomic.Bool
 
 	// mu protects the active connection set. Never hold mu while calling conn.Close().
 	mu    sync.Mutex
@@ -213,6 +220,9 @@ func (s *Server) Serve(ctx context.Context) error {
 	go func() {
 		select {
 		case <-ctx.Done():
+			// Mark as shutting down BEFORE closing the listener so the Accept-error
+			// path in Serve returns nil (VP-069 / PC-10 / AC-017).
+			s.shuttingDown.Store(true)
 			_ = s.ln.Close()
 			s.closeAllConns()
 		case <-done:
@@ -237,7 +247,15 @@ func (s *Server) Serve(ctx context.Context) error {
 			// Release the semaphore slot we pre-acquired.
 			<-s.sem
 
-			// Check if this is a normal shutdown: listener closed.
+			// If we are shutting down (Shutdown called or ctx cancelled), the
+			// listener close is intentional — return nil, not net.ErrClosed
+			// (BC-2.07.004 PC-10 / AC-017 / VP-069).
+			if s.shuttingDown.Load() || errors.Is(err, net.ErrClosed) {
+				s.connWG.Wait()
+				return nil
+			}
+
+			// Check if this is a normal shutdown via done channel.
 			select {
 			case <-done:
 				s.connWG.Wait()
@@ -285,6 +303,9 @@ func (s *Server) Serve(ctx context.Context) error {
 // Shutdown drains in-flight connections and closes the listener.
 // Called by the daemon on SIGTERM/context cancel. Returns nil on success.
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Mark as shutting down BEFORE closing the listener so the Accept-error path
+	// in Serve returns nil instead of net.ErrClosed (VP-069 / PC-10).
+	s.shuttingDown.Store(true)
 	// Close the listener so Serve's Accept loop unblocks and returns.
 	_ = s.ln.Close()
 	// Force-close all in-flight connections so their goroutines return.
