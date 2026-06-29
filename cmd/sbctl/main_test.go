@@ -332,6 +332,97 @@ func TestSbctl_NoSubcommand_ExitsZero(t *testing.T) {
 	}
 }
 
+// TestSubprocessMain_HelpFlag is the subprocess hook for TestSbctl_HelpFlag_ExitsZeroStdout.
+// When SBCTL_TEST_HELP_FLAG is set to a flag form ("--help" or "-h"), it resets
+// flag.CommandLine and os.Args so that main() sees that flag, then calls main().
+// main() (via flag.ExitOnError + -h → flag.ErrHelp) calls os.Exit — this function
+// never returns normally in the subprocess.
+// In the parent process (env var absent), t.Skip fires immediately.
+//
+// AC-012 (BC-2.07.002): --help/-h → stdout + exit 0.
+func TestSubprocessMain_HelpFlag(t *testing.T) {
+	flagForm := os.Getenv("SBCTL_TEST_HELP_FLAG")
+	if flagForm == "" {
+		t.Skip("subprocess hook — skip in parent process")
+	}
+	// Reset flag parsing state so main()'s flag.Parse() works cleanly.
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	// Set os.Args to the binary + the help flag so main() reaches flag.Parse
+	// and the flag package handles -h/--help via ErrHelp → os.Exit(0).
+	os.Args = []string{os.Args[0], flagForm}
+	main()
+	// main() calls os.Exit via flag.ErrHelp; reaching here is unexpected.
+	t.Fatal("main() returned without calling os.Exit — unexpected")
+}
+
+// TestSbctl_HelpFlag_ExitsZeroStdout verifies AC-012 (BC-2.07.002):
+// When sbctl is invoked with --help or -h, it must:
+//   - redirect flag.CommandLine output to os.Stdout (via SetOutput) before flag.Parse,
+//   - print help text to stdout (non-empty),
+//   - produce nothing on stderr,
+//   - exit with code 0.
+//
+// RED: current main.go (line 28) calls flag.Parse() with no prior SetOutput.
+// Go's flag package defaults help output to os.Stderr and exits 2, so
+// stdout will be empty, stderr non-empty, and exit code 2 — all three
+// assertions fail, confirming this test is RED for the right reason.
+//
+// BC: AC-012; BC-2.07.002.
+func TestSbctl_HelpFlag_ExitsZeroStdout(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		flagForm string
+	}{
+		{"double-dash-help", "--help"},
+		{"short-h", "-h"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cmd := exec.Command(os.Args[0], "-test.run=TestSubprocessMain_HelpFlag")
+			cmd.Env = append(os.Environ(), "SBCTL_TEST_HELP_FLAG="+tc.flagForm)
+
+			var outBuf, errBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			cmd.Stderr = &errBuf
+
+			err := cmd.Run()
+			stdout := outBuf.String()
+			stderr := errBuf.String()
+
+			exitCode := 0
+			if err != nil {
+				exitErr, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatalf("subprocess execution failed with non-exit error: %v", err)
+				}
+				exitCode = exitErr.ExitCode()
+			}
+
+			// AC-012: exit code must be 0 (flag.ErrHelp → os.Exit(0)).
+			if exitCode != 0 {
+				t.Errorf("AC-012 violated (flag=%q): expected exit code 0, got %d\nstdout: %q\nstderr: %q",
+					tc.flagForm, exitCode, stdout, stderr)
+			}
+			// AC-012: help text must appear on stdout (SetOutput → stdout required).
+			if len(stdout) == 0 {
+				t.Errorf("AC-012 / BC-2.07.002 violated (flag=%q): expected non-empty stdout (help text), got empty\nstderr: %q",
+					tc.flagForm, stderr)
+			}
+			// AC-012: nothing must appear on stderr (default flag behaviour writes to stderr — this must change).
+			if len(stderr) != 0 {
+				t.Errorf("AC-012 / BC-2.07.002 violated (flag=%q): expected empty stderr, got %d bytes: %q",
+					tc.flagForm, len(stderr), stderr)
+			}
+		})
+	}
+}
+
 // TestSbctl_ConnectionTimeout verifies BC-2.07.003 Inv-2 and AC-007:
 // sbctl does not hang indefinitely. After --timeout expires, it exits with
 // E-NET-001. The elapsed wall time must be >= the configured timeout, which
