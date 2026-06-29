@@ -1,0 +1,65 @@
+=== RUN   TestProp_IsDegraded_TracksEWMAThreshold
++ IsDegraded tracks EWMA vs DegradedRTTThresholdMS: OK, passed 100 tests.
+Elapsed time: 11.791583ms
+--- PASS: TestProp_IsDegraded_TracksEWMAThreshold (0.01s)
+=== RUN   TestProp_IsDegraded_RecoveryClears
++ IsDegraded sets during drive phase and clears after recovery: OK, passed
+   100 tests.
+Elapsed time: 4.784584ms
+--- PASS: TestProp_IsDegraded_RecoveryClears (0.00s)
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_Race
+--- PASS: TestBC_2_02_003_PathTracker_IsDegraded_Race (0.00s)
+=== RUN   TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded
+=== PAUSE TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded
+=== CONT  TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold
+--- PASS: TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded (0.00s)
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded
+--- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true (0.00s)
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers
+--- PASS: TestBC_2_02_003_PathTracker_IsDegraded (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/paths	(cached)
