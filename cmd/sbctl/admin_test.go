@@ -330,6 +330,15 @@ func (f *fakeMgmtServer) serve(t *testing.T, ln net.Listener) {
 		return
 	}
 
+	// CR-008: verify the signing key is the authorized operator key.
+	// Signature verification alone confirms the client knows the private key
+	// corresponding to pub, but does not confirm pub == f.opPub. Without this
+	// check, any client with a valid key pair could authenticate.
+	if !bytes.Equal(pub, f.opPub) {
+		_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "unauthorized key"})
+		return
+	}
+
 	// Send AUTH_OK.
 	if err := enc.Encode(map[string]any{
 		"type":           "auth_ok",
@@ -390,7 +399,9 @@ func (f *fakeMgmtServer) serve(t *testing.T, ln net.Listener) {
 // startFakeServer starts fakeMgmtServer on a TCP listener and returns the
 // server address. If obs is non-nil, each authenticated RPC request is forwarded
 // to obs (buffered, non-blocking) so callers can assert dispatched commands.
-// The operator key pair is generated internally.
+// The authorized operator public key is derived from the testdata key fixture so
+// that CR-008 key-authorization check (bytes.Equal(pub, f.opPub)) passes for
+// clients authenticating with testdataKeyPath(t).
 func startFakeServer(
 	t *testing.T,
 	obs chan adminRPCRequest,
@@ -398,7 +409,17 @@ func startFakeServer(
 ) string {
 	t.Helper()
 
-	opPub, opPrivKey, err := ed25519.GenerateKey(rand.Reader)
+	// Load the testdata private key so fakeMgmtServer.opPub matches what the
+	// client presents. Without this, the CR-008 authorized-key check would
+	// reject all test connections.
+	testPrivKey, err := loadEd25519Key(testdataKeyPath(t), os.UserHomeDir)
+	if err != nil {
+		t.Fatalf("startFakeServer: loadEd25519Key: %v", err)
+	}
+	opPub := testPrivKey.Public().(ed25519.PublicKey)
+
+	// Generate a fresh daemon key for signing challenges (separate from opPub).
+	_, daemonPrivKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
@@ -418,7 +439,7 @@ func startFakeServer(
 
 	fake := &fakeMgmtServer{
 		opPub:   opPub,
-		opPriv:  opPrivKey,
+		opPriv:  daemonPrivKey,
 		handler: wrappedHandler,
 	}
 
