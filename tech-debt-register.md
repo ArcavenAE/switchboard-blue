@@ -3,7 +3,7 @@ artifact_id: tech-debt-register
 document_type: tech-debt-register
 version: "1.0"
 status: active
-last_updated: 2026-06-26
+last_updated: 2026-06-29
 ---
 
 # Technical Debt Register: Switchboard
@@ -15,6 +15,7 @@ last_updated: 2026-06-26
 
 | ID | Severity | Source | Description | Target | Status |
 |----|----------|--------|-------------|--------|--------|
+| SEC-LOG-001 | LOW (security) | S-W5.01 adversarial convergence / architect Ruling 1 | Security-event log on post-auth challenge_response protocol violation (BC-2.07.004 PC-3 / EC-004) is unimplemented. internal/mgmt/mgmt.go post-auth guard (~line 608) sends AUTH_FAIL + closes but emits no audit log; the internal/mgmt package has no logger seam and the daemon has no daemon-wide structured logging infrastructure (only one-off stdlib log.New(stderr) router scaffolding in cmd/switchboard/access.go). Fail-closed CONTROL (AUTH_FAIL + E-ADM-010 + close) is fully implemented and tested via VP-065; only the audit-log side effect is deferred. | S-HRD.02 (daemon logging infrastructure / slog seam on mgmt.Server) | deferred |
 | F-002 | LOW | S-3.01b pr-reviewer | godoc Example sleeps (20/50ms) flaky on slow CI — bump to 200ms or poll-with-deadline | Wave 4 / test-hardening epic | open |
 | F-003 | LOW | S-3.01b pr-reviewer | TestSessionConnector_NoAutoUpgrade_AfterFallback uses 200ms sleep as negative oracle — expose `lastReconnectAttemptedAt` test hook | Wave 4 / test-hardening epic | open |
 | F-004 | LOW | S-3.01b pr-reviewer | PTYProxy.Connect(_ context.Context) discards ctx — pass ctx to ptyAlloc when alloc supports cancellation | Wave 4 | open |

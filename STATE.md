@@ -4,6 +4,10 @@ phase: phase-3-tdd-implementation
 phase_step: wave-5-mgmt-plane-adversarial-convergence-in-progress
 phase_3_active_wave: 5
 phase_3_active_stories: [S-6.03, S-W5.01]
+wave_5_sw501_convergence_counter: 0
+wave_5_sw501_convergence_status: fresh-pass-1-pending
+wave_5_s603_round7_pass1_status: 1/3-clean
+wave_5_s603_round7_pass2_status: in_progress
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
 product: switchboard
 mode: greenfield
@@ -153,24 +157,42 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Build whole management plane (Wave 5) | net-new internal/mgmt server + ADR-012 wire protocol (NDJSON, Ed25519 challenge-response, 64 KiB bounded reads, fail-closed Authenticate()) + e2e across 4 daemon types; S-6.03 re-scoped, S-W5.01/S-W5.02 created; +13pt. BC-2.07.004 + VP-064..VP-067 minted. | 2026-06-28 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-29 (Wave 5 mgmt-plane adversarial convergence)
+## Session Resume Checkpoint — 2026-06-29 (Wave 5 mgmt-plane adversarial convergence, post-Round-6/Round-7 burst)
 
-**Position:** Phase 3 Wave 5. S-6.03 + S-W5.01 implementation landed; per-story adversarial convergence (BC-5.39.001) at 0/3 for BOTH stories. Round-1 (6 diverse-lens passes, 3 per story) found NEW Critical/High — fixes routed to implementer (S-W5.01: runRouter/runConsole/runControl orphaned listeners) and test-writer (S-6.03: homeDirFunc t.Parallel data race). Both fix efforts IN PROGRESS. PRs #31 (S-W5.01) and #32 (S-6.03) opened PREMATURELY — do NOT merge until convergence achieved + demos recorded. origin/develop HEAD = 01ae50c.
+**Position:** Phase 3 Wave 5. Per-story adversarial convergence in progress on two stories.
 
-**Spec changes landed this burst (factory-artifacts):**
-- ARCH-12 v1.1→v1.2 (HandshakeTimeout=10s/RPCIdleTimeout=30s, ctx-first Authenticate, MaxConcurrentConnections=128, Unix socket umask 0177, E-CFG-010/E-RPC-001, daemon_version semver, PC-3 post-auth guard)
-- ARCH-05 v1.2→v1.3 (socket perms + console 127.0.0.1 loopback-only)
-- BC-2.07.004 v1.1→v1.2 (PC-1/3/7, EC-001/004/012/013, Invariant 7, VP-065 reframed)
-- BC-2.07.003 v1.2→v1.4 (Invariant 4, EC-005 E-CFG-010, EC-006 E-RPC-001, EC-007 tilde expansion + Precondition 3)
-- error-taxonomy v2.4→v2.5 (E-CFG-010, E-RPC-001 added; E-NET-001 scope clarified)
-- S-W5.01 v1.0→v1.1 (14 ACs: AC-013 conn-cap, AC-014 socket-perms, AC-003 post-auth guard, AC-007 daemon_version, read-deadline ACs, access-daemon wiring)
-- S-6.03 v2.0→v2.2 (9 ACs: AC-002 ctx-first, AC-003 E-CFG-010, AC-004 E-RPC-001/E-NET-001, AC-008 tilde expansion anchored, AC-009 os.Exit-only-in-main)
+**S-6.03 (sbctl client-auth Authenticate() fail-closed, 5pt):**
+- Story v2.6; impl tip ff1d146; 3 signed commits (M-1 fix applied: AC-012 --help/-h stream).
+- Round-7 convergence: Pass-1 = 1/3 CLEAN (L1 NITPICK_ONLY; L2+L3 CLEAN). Pass-2 in progress.
+- Pass-1 nitpicks (non-gating, for cycle-close awareness):
+  1. wrong_key_type_rsa sub-case mislabeled (untested type-assertion branch; observable postcondition still asserted — not a gap).
+  2. No e2e happy-path test (scoped to S-W5.02; not gating S-6.03).
+- PR #32 open (premature — do NOT merge until 3/3 clean streak).
 
-**NEXT ACTION on resume:** (1) Confirm both worktrees are clean: `go build ./...` + `go test ./...` + `go test -race ./...` + lint + fmt — MUST all pass before adversary re-dispatch. (2) Dispatch fresh Round-1 (6 passes, 3 per story, diverse lenses). (3) Only open demos + trigger merge after 3-consecutive-clean streak on EACH story.
+**S-W5.01 (internal/mgmt server + wiring, 8pt):**
+- Story v1.6; impl tip (PR #31).
+- Pass-2 (Round-6): L2+L3 CLEAN; L1 finding = L=1 security-event-log gap (BC-2.07.004 PC-3/EC-004).
+- Architect Ruling 1: log gap DEFERRED to S-HRD.02 (fail-closed control is full; audit-log is infra debt). Ruling 2a/2b also applied.
+- BC-2.07.004 updated to v1.6; S-W5.01 updated to v1.6; S-HRD.02 stub opened.
+- Convergence counter RESET to 0/3 — fresh Pass-1 pending.
+- PR #31 open (premature — do NOT merge until 3/3 clean streak).
 
-**Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1. Address Wave 5 hardening.
+**New follow-up stories opened this burst:**
+- S-HRD.02 (daemon logging infra / slog seam on mgmt.Server) — owns BC-2.07.004 PC-3/EC-004 deferral + SEC-LOG-001 tech-debt entry.
+- S-HRD.01 (client write deadlines / CWE-400 defense-in-depth in cmd/sbctl) — stub only.
+- S-W5.03 (release CI version gate — assert binary is semver not "dev") — non-blocking for wave; must ship before first tagged mgmt-plane release.
 
-**Settled rulings:** RULING-001/002/002-A1/003-v1.1 + W5 Rulings 1-7 (ARCH-12/ARCH-05/BC-2.07.003/BC-2.07.004) — do NOT re-open unless fresh pass finds NEW Critical/High.
+**Factory-artifacts batch committed this burst:** VP-068/070-073 (new), ARCH-05/07/11/12 (propagation), BC-2.07.002/003, error-taxonomy, VP-INDEX, red-gate-log, S-HRD.01, S-W5.03, tech-debt-register (SEC-LOG-001).
+
+**NEXT ACTION on resume:**
+1. S-W5.01: dispatch fresh Pass-1 (3 diverse-lens adversaries). Drive to 3/3 clean.
+2. S-6.03: complete Pass-2 (2 remaining lenses). If clean → Pass-3. Drive to 3/3 clean.
+3. After both reach 3/3: record demos, verify PRs #31/#32 clean, trigger human merge.
+4. Open S-W5.02 (e2e mgmt-plane harness) once both stories merged.
+
+**Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1. Address Wave 5 hardening epic.
+
+**Settled rulings:** W5 Rulings 1-7, Rulings A–Y (ARCH-12 v1.6, BC-2.07.004 v1.6, BC-2.07.003 v1.4) — do NOT re-open unless fresh pass finds NEW Critical/High.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
