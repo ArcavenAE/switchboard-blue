@@ -158,7 +158,8 @@ func mgmtListenAddr(cfg *config.Config, mode string) (network, address string) {
 
 // buildMgmtListener opens the management listener for the given mode and config.
 // For Unix socket modes it uses listenUnixMgmt to ensure 0600 permissions atomically
-// (AC-014 / CWE-276). For TCP (console mode) it uses net.Listen directly.
+// (AC-014 / CWE-276). For TCP (console mode) it validates the host is loopback
+// before calling net.Listen (BC-2.07.004 EC-013 / Ruling D / VP-073 / AC-014).
 // Returns a net.Listener that the caller passes to mgmt.NewServer.
 func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 	network, address := mgmtListenAddr(cfg, mode)
@@ -169,12 +170,39 @@ func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 		}
 		return ln, nil
 	}
-	// TCP (console mode — binds to 127.0.0.1 only per ARCH-05 / AC-014).
+	// TCP (console mode). Enforce loopback-only binding before calling net.Listen
+	// (BC-2.07.004 EC-013 / AC-014 Ruling D / VP-073). Validation must happen here
+	// because config.Validate has no mode parameter.
+	host, _, splitErr := net.SplitHostPort(address)
+	if splitErr != nil {
+		return nil, fmt.Errorf("config error: management_socket: E-CFG-008: cannot parse address %q: %w", address, splitErr)
+	}
+	if !isMgmtLoopbackHost(host) {
+		return nil, fmt.Errorf("config error: management_socket: E-CFG-008: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+	}
 	ln, err := net.Listen(network, address)
 	if err != nil {
 		return nil, fmt.Errorf("buildMgmtListener: %w", err)
 	}
 	return ln, nil
+}
+
+// isMgmtLoopbackHost reports whether host (as returned by net.SplitHostPort) is
+// an acceptable loopback address for the console-mode management TCP listener.
+// Accepts: "127.0.0.1", "::1", "localhost". Rejects empty string, "0.0.0.0", "::", etc.
+func isMgmtLoopbackHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	case "":
+		return false
+	}
+	// Also accept any address in the 127.x.x.x loopback range via net.IP check.
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }
 
 // parsePEMOperatorKeys parses a slice of PEM-encoded Ed25519 public key strings
