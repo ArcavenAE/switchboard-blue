@@ -1988,35 +1988,29 @@ func TestServe_ReturnsErrOnUnexpectedListenerClose_VP069(t *testing.T) {
 	}
 }
 
-// ── AC-017 / Ruling I: shutdown-window Add-after-Wait panic / race ─────────────
+// ── AC-017 / Ruling I: shutdown-window concurrency-safety smoke test ──────────
 
-// TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI drives the race between
-// Accept() and Shutdown() to detect a connWG.Add-after-Wait-at-zero panic (or
-// race detector violation). Best run under -race (go test -race).
+// TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI is a concurrency-safety
+// smoke test that exercises the accept-vs-Shutdown race window under the Go
+// race detector. Best run with -race (go test -race).
 //
-// RED because: the current Serve loop in mgmt.go calls connWG.Add(1) WITHOUT
-// first checking s.shuttingDown.Load(). The canonical fix (Ruling I) requires:
+// ACCURATE PROPERTY (Ruling T — ARCH-12 v1.5 test-quality correction):
+// This test's actual property is: "concurrent dial + Shutdown does not panic
+// and passes go test -race." It is a race-detector smoke test, not a
+// deterministic Add-after-Wait-at-zero discriminator.
 //
-//  1. After Accept(), check s.shuttingDown.Load(); if true, close conn, release
-//     semaphore, continue — connection never enters connWG.
-//  2. s.trackConn(conn) BEFORE s.connWG.Add(1) and BEFORE go func().
-//  3. s.connWG.Add(1) BEFORE go func().
+// The stated RED rationale (Add-after-Wait panic from connWG) is structurally
+// impossible in the current design: Shutdown does NOT call connWG.Wait() — Serve
+// is the sole Wait owner. The post-Shutdown connWG.Wait() in Serve happens inside
+// Serve's goroutine after the accept loop exits; there is no concurrent Wait().
 //
-// Without check (1), a connection accepted just after Shutdown calls connWG.Wait()
-// (when counter == 0) triggers connWG.Add(1) with counter at zero after Wait has
-// returned — undefined behavior / potential panic per sync.WaitGroup docs.
+// The DROP behavior (connections accepted in the shutdown window are discarded
+// without entering connWG) is discriminatingly tested by
+// TestServe_DrainCompletesWithinBudget_RulingI (test (e) above).
 //
-// Race scenario (tight timing):
-//
-//	T=0: Shutdown: shuttingDown.Store(true), ln.Close(), closeAllConns()
-//	T=0: Shutdown: connWG.Wait() — counter is 0, returns immediately
-//	T=1: Serve: last pending Accept unblocks (conn from OS backlog)
-//	T=1: Serve: no shuttingDown check → connWG.Add(1) after Wait returned at 0 → PANIC
-//
-// The 100-iteration loop maximizes the chance of hitting this window.
-// Under -race the race detector amplifies the timing window, making the bug more
-// likely to trigger. Under normal runs the test verifies no panic occurs in 100
-// iterations; under -race it also catches the data race on the WaitGroup state.
+// This test's value: under -race it detects data races on WaitGroup state and
+// connection maps that might not manifest as panics in normal runs. The 100-
+// iteration loop maximizes interleaving of concurrent Accept/Shutdown operations.
 //
 // Traces: BC-2.07.004 PC-10 (Ruling I, drain-ordering guarantee), AC-017 sub-case (d).
 func TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI(t *testing.T) {
@@ -2353,6 +2347,307 @@ func TestMgmtServer_HandshakeTimeout_CloseOnly_RulingK(t *testing.T) {
 	}
 	// If receivedMsg is nil (connection closed without message), that is correct.
 	// This test passes with the current correct implementation and locks the contract.
+}
+
+// ── AC-017 / Ruling P / VP-069 v1.2: fatal-accept-error drain ────────────────
+
+// TestServe_FatalAcceptErrorDrainsQuickly verifies Ruling P / BC-2.07.004 PC-10 /
+// VP-069 v1.2 / AC-017 (extended): on the fatal-accept-error path (Accept returns
+// a non-transient error while ctx is context.Background() — always live — and
+// Shutdown was never called), s.closeAllConns() MUST be called before
+// s.connWG.Wait(). Without closeAllConns(), in-flight authenticated-but-idle
+// connections remain open until their own read deadlines fire (RPCIdleTimeout =
+// 30s), causing Serve to stall for up to 30s. With closeAllConns(), they are
+// force-closed and Serve returns within milliseconds.
+//
+// Test design:
+//  1. Start a Server with a real TCP listener.
+//  2. Connect a client, complete the ADR-012 handshake (authenticated idle conn).
+//     After AUTH_OK the server applies RPCIdleTimeout (30s) read deadline —
+//     this is the read that would block Serve's connWG.Wait() for up to 30s.
+//  3. Close the listener directly from the test goroutine (ctx is
+//     context.Background(), Shutdown never called — fatal-accept scenario).
+//  4. Assert that Serve returns within 200ms. Without the closeAllConns() call,
+//     Serve's connWG.Wait() stalls until the idle conn's RPCIdleTimeout fires
+//     (production default 30s) — making the test time out. With closeAllConns(),
+//     the idle conn is force-closed, RPCIdleTimeout is aborted, and Serve returns.
+//
+// This test is RED until the implementer inserts:
+//
+//	s.closeAllConns()
+//	s.connWG.Wait()
+//	return err
+//
+// on the fatal-accept-error path in Serve (currently only `s.connWG.Wait(); return err`).
+//
+// Traces: BC-2.07.004 PC-10 (Ruling P), AC-017 sub-case (f), VP-069 v1.2.
+func TestServe_FatalAcceptErrorDrainsQuickly(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+	opPub, opPriv := mustGenKey(t)
+	keySet := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	// Do NOT register t.Cleanup(ln.Close) — we close it explicitly to trigger
+	// the fatal-accept-error path.
+
+	// Use default RPCIdleTimeout (30s) — no override.
+	// The test must return well within 200ms; if closeAllConns() is missing, it
+	// takes ~RPCIdleTimeout (30s) before Serve returns.
+	srv := mgmt.NewServer(ln, daemonPriv, keySet, nil, "dev")
+
+	// Use context.Background() — a live context that is NEVER cancelled.
+	// This is the fatal-accept-error path (not Shutdown, not ctx-cancel).
+	ctx := context.Background()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.Serve(ctx)
+	}()
+
+	// Give Serve time to enter the accept loop.
+	time.Sleep(15 * time.Millisecond)
+
+	// Connect a client and complete the ADR-012 handshake to get an authenticated
+	// idle connection tracked in connWG. After AUTH_OK, the server's goroutine for
+	// this connection blocks on RPCIdleTimeout read (30s default).
+	clientConn, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = clientConn.Close() })
+	if err := clientConn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	// Complete handshake: read CHALLENGE, send CHALLENGE_RESPONSE, read AUTH_OK.
+	dec := json.NewDecoder(clientConn)
+	enc := json.NewEncoder(clientConn)
+
+	var challenge struct {
+		Type  string `json:"type"`
+		Nonce string `json:"nonce"`
+	}
+	if err := dec.Decode(&challenge); err != nil {
+		t.Fatalf("read challenge: %v", err)
+	}
+	if challenge.Type != "challenge" {
+		t.Fatalf("expected challenge; got %q", challenge.Type)
+	}
+	nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+	if err != nil {
+		t.Fatalf("decode nonce: %v", err)
+	}
+	sig := ed25519.Sign(opPriv, nonceBytes)
+	if err := enc.Encode(map[string]any{
+		"type":      "challenge_response",
+		"nonce_sig": base64.RawURLEncoding.EncodeToString(sig),
+		"pubkey":    base64.RawURLEncoding.EncodeToString([]byte(opPub)),
+	}); err != nil {
+		t.Fatalf("write challenge_response: %v", err)
+	}
+	var authResp struct {
+		Type string `json:"type"`
+	}
+	if err := dec.Decode(&authResp); err != nil {
+		t.Fatalf("read auth response: %v", err)
+	}
+	if authResp.Type != "auth_ok" {
+		t.Fatalf("expected auth_ok; got %q", authResp.Type)
+	}
+
+	// Connection is now authenticated and idle — tracked in connWG, blocking on
+	// a 30s RPCIdleTimeout read. Now trigger the fatal-accept-error scenario by
+	// closing the listener directly (NOT via Shutdown, NOT via ctx-cancel).
+	// shuttingDown is false, ctx.Err() is nil — this is the fatal-accept path.
+	_ = clientConn.SetDeadline(time.Time{}) // clear client deadline — we want it to stay idle
+	_ = ln.Close()
+
+	// Ruling P: Serve MUST return within 200ms (NOT blocked for up to 30s).
+	// Without closeAllConns() on the fatal path, connWG.Wait() stalls until the
+	// idle conn's RPCIdleTimeout fires. With closeAllConns(), the idle conn is
+	// force-closed and Serve returns quickly.
+	select {
+	case serveErr := <-errCh:
+		// Ruling P passes — Serve returned. It should be non-nil (unexpected close).
+		if serveErr == nil {
+			t.Logf("Ruling P drain check: Serve returned nil (unexpected-close path may need && ctx.Err()!=nil fix too)")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Errorf("Ruling P (VP-069 v1.2) violated: Serve did not return within 200ms after fatal " +
+			"listener close. The in-flight authenticated-idle connection was NOT force-closed. " +
+			"Fix: insert s.closeAllConns() before s.connWG.Wait() on the fatal-accept-error " +
+			"path in Serve (currently missing per Ruling P / BC-2.07.004 PC-10).")
+	}
+}
+
+// ── AC-020 / Ruling R / BC-2.07.004 PC-6: per-handler execution timeout ───────
+
+// TestMgmtServer_HandlerTimeout_AC020 verifies AC-020 / BC-2.07.004 PC-6
+// (amended, Ruling R): a registered handler that blocks past RPCIdleTimeout is
+// cancelled via a child context derived by context.WithTimeout(ctx, RPCIdleTimeout).
+// The server responds with E-RPC-011; the connection is NOT closed.
+//
+// This test encodes the API contract the implementer must satisfy:
+//   - mgmt.WithRPCIdleTimeout(d) option (injectable for fast tests)
+//   - handler Fn must be called with context.WithTimeout(ctx, rpcIdleTimeout)
+//   - a blocking handler must return E-RPC-011 (not hang indefinitely)
+//   - the connection remains open after handler timeout (not closed)
+//
+// RED because: handlerFn(ctx, req.Args) is currently called with the raw ctx
+// (no timeout). A blocking handler causes handleConnection to stall indefinitely
+// on the handlerFn call, pinning the connection goroutine and semaphore slot
+// (CWE-400). With the fix, the child context is cancelled after RPCIdleTimeout
+// (injected here as 50ms) and the server sends E-RPC-011 in-band.
+//
+// Traces: BC-2.07.004 PC-6 (amended, Ruling R), AC-020.
+func TestMgmtServer_HandlerTimeout_AC020(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+	opPub, opPriv := mustGenKey(t)
+	keySet := mgmt.NewOperatorKeySet([]ed25519.PublicKey{opPub})
+
+	// Register a handler that blocks until its context is cancelled.
+	// This is the canonical "blocking handler" that should be timed out.
+	blockingHandler := mgmt.Handler{
+		Command: "test.block",
+		Fn: func(ctx context.Context, _ json.RawMessage) (any, error) {
+			// Block until context is cancelled — simulates a handler that hangs.
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	// Construct server with a short RPCIdleTimeout (50ms) so the test completes
+	// quickly. WithRPCIdleTimeout is the required injectable option — this test
+	// encodes the API contract the implementer must add to mgmt.go.
+	//
+	// COMPILE FAILURE IS EXPECTED until the implementer adds:
+	//   - s.rpcIdleTimeout field on Server (default RPCIdleTimeout = 30s)
+	//   - WithRPCIdleTimeout(d time.Duration) Option
+	//   - context.WithTimeout(ctx, s.rpcIdleTimeout) wrapping each handlerFn call
+	srv := mgmt.NewServer(ln, daemonPriv, keySet, []mgmt.Handler{blockingHandler}, "dev",
+		mgmt.WithRPCIdleTimeout(50*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go srv.Serve(ctx) //nolint:errcheck
+
+	clientConn, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = clientConn.Close() })
+	// Generous deadline: 50ms timeout + 200ms overhead = 250ms; use 3s to be safe.
+	if err := clientConn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	// Complete handshake.
+	if err := doHandshake(t, clientConn, opPriv); err != nil {
+		t.Fatalf("handshake: %v", err)
+	}
+
+	enc := json.NewEncoder(clientConn)
+	dec := json.NewDecoder(clientConn)
+
+	// Send the blocking RPC. The handler will block until its context is cancelled.
+	if err := enc.Encode(map[string]any{
+		"type":    "request",
+		"id":      "req-ac020",
+		"command": "test.block",
+		"args":    map[string]any{},
+	}); err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+
+	// Ruling R: within ~200ms (50ms timeout + 150ms overhead), the server must
+	// respond with E-RPC-011 (handler timeout). Without the fix, dec.Decode blocks
+	// indefinitely (no handler timeout → blocking handler pins goroutine).
+	var resp struct {
+		Type  string `json:"type"`
+		ID    string `json:"id"`
+		OK    bool   `json:"ok"`
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	// The client deadline (3s) bounds the whole test, but we want the specific
+	// assertion to be about the handler timeout (~50ms). If the server never sends
+	// a response, dec.Decode will block until the client deadline fires (3s) and
+	// the test will fail with a decode error. The 200ms assertion below is the
+	// discriminating check.
+	start := time.Now()
+	if err := dec.Decode(&resp); err != nil {
+		// This fires if the server hung and the client deadline fired first.
+		t.Fatalf("AC-020: decode response timed out or error: %v (server may be hung — "+
+			"blocking handler was not cancelled by WithRPCIdleTimeout(50ms))", err)
+	}
+	elapsed := time.Since(start)
+
+	// AC-020 timing assertion: response must arrive within ~200ms of the RPC send.
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("AC-020: handler timeout response took %v; want within 200ms "+
+			"(RPCIdleTimeout=50ms + overhead). Without WithRPCIdleTimeout fix, "+
+			"handlerFn runs indefinitely.", elapsed)
+	}
+
+	// AC-020 error code assertion: must be E-RPC-011 (handler error), not E-RPC-010.
+	if resp.OK {
+		t.Error("AC-020: ok=true after blocking handler timeout; want ok=false")
+	}
+	if resp.Error == nil {
+		t.Fatal("AC-020: response.error is nil after handler timeout; want E-RPC-011")
+	}
+	if resp.Error.Code != "E-RPC-011" {
+		t.Errorf("AC-020: response.error.code = %q; want E-RPC-011 "+
+			"(blocking handler must be cancelled and reported as handler error, "+
+			"not unknown-command E-RPC-010)", resp.Error.Code)
+	}
+	if resp.ID != "req-ac020" {
+		t.Errorf("AC-020: response.id = %q; want %q", resp.ID, "req-ac020")
+	}
+
+	// AC-020 connection-open assertion: connection must remain open after handler
+	// timeout (timeout is NOT a connection-close event per Ruling R).
+	// Send a second RPC with a no-op handler (registered during test) to verify.
+	// Since we only registered "test.block", send an unknown command — the server
+	// should respond with E-RPC-010 (connection still open).
+	if err := enc.Encode(map[string]any{
+		"type":    "request",
+		"id":      "req-ac020-conncheck",
+		"command": "test.noop.notregistered",
+		"args":    map[string]any{},
+	}); err != nil {
+		t.Fatalf("AC-020: connection was closed after handler timeout (must stay open): %v", err)
+	}
+	var resp2 struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := dec.Decode(&resp2); err != nil {
+		t.Fatalf("AC-020: decode second response failed — connection may have been closed: %v", err)
+	}
+	// Second response: E-RPC-010 (unknown command) proves connection is still open.
+	if resp2.OK || resp2.Error == nil || resp2.Error.Code != "E-RPC-010" {
+		t.Errorf("AC-020: second RPC after handler timeout: ok=%v code=%v; "+
+			"want ok=false code=E-RPC-010 (connection must stay open after handler timeout)",
+			resp2.OK, resp2.Error)
+	}
 }
 
 // ── Authorized-key-set rejection (no AC number — additional coverage) ─────────

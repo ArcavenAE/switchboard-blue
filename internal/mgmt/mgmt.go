@@ -68,6 +68,21 @@ func WithMaxConnections(n int) Option {
 	}
 }
 
+// WithRPCIdleTimeout overrides the per-handler execution timeout (Ruling R /
+// BC-2.07.004 PC-6 / AC-020). The default is RPCIdleTimeout (30s). This
+// option exists to allow tests to verify handler-timeout behaviour without
+// waiting 30s for the production default.
+//
+// STUB: this option is not yet wired into handler dispatch. The implementer
+// must add an rpcIdleTimeout field to Server, populate it here, and wrap each
+// handlerFn call with context.WithTimeout(ctx, s.rpcIdleTimeout). Until then
+// this option is a no-op and TestMgmtServer_HandlerTimeout_AC020 fails (RED).
+func WithRPCIdleTimeout(d time.Duration) Option {
+	return func(s *Server) {
+		_ = d // not yet used — RED until implementer wires rpcIdleTimeout into handleConnection
+	}
+}
+
 // Handler is a registered command handler. Command is the RPC command name
 // (e.g. "svtn.list"). Fn receives the authenticated connection context and the
 // raw args JSON, and returns a data value (marshaled into the response envelope)

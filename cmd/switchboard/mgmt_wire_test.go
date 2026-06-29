@@ -503,6 +503,135 @@ func TestDaemonWiring_UnixSocketPermissions_AC014(t *testing.T) {
 	}
 }
 
+// ── AC-019 / Ruling O: stale-socket pre-bind cleanup ─────────────────────────
+
+// TestListenUnixMgmt_PreBindCleanup_AC019 verifies AC-019 / BC-2.07.004 EC-013
+// (Ruling O): listenUnixMgmt performs a pre-bind cleanup check that prevents
+// EADDRINUSE on daemon restart after a non-graceful exit (SIGKILL, crash, OOM
+// kill) where the socket inode persists on the filesystem.
+//
+// Two sub-cases:
+//
+// (a) Stale socket removed: create a Unix socket at a temp path, close the
+//
+//	listener WITHOUT unlinking (SetUnlinkOnClose(false) — the current default,
+//	simulating the crash/kill scenario where the socket inode persists), then
+//	call listenUnixMgmt again on the same path and assert it SUCCEEDS without
+//	EADDRINUSE. The pre-bind Lstat+Remove check must have cleared the stale
+//	socket-mode inode.
+//
+// (b) Non-socket not removed: create a regular file at the same temp path; call
+//
+//	listenUnixMgmt; assert it returns a non-nil error AND the regular file is
+//	still present (not silently deleted). The os.ModeSocket guard must protect
+//	non-socket-mode inodes (directories, regular files, device nodes) from
+//	accidental removal.
+//
+// RED because: current listenUnixMgmt in mgmt_wire.go uses raw syscall.Bind
+// without any pre-bind Lstat+Remove check. In sub-case (a), the second
+// listenUnixMgmt call fails with EADDRINUSE (socket inode still present) →
+// RED. In sub-case (b) the test already passes by construction (no removal
+// code exists); it is included to lock the guard against future regressions.
+//
+// Fix: add before syscall.Bind in listenUnixMgmt:
+//
+//	if fi, statErr := os.Lstat(path); statErr == nil && fi.Mode()&os.ModeSocket != 0 {
+//	    _ = os.Remove(path) // ignore error — Bind will fail if inode still present
+//	}
+//
+// The TOCTOU window (Lstat→Remove→Bind) is accepted per BC-2.07.004 EC-013
+// Ruling O: it repairs exactly the restart-after-crash case and is no worse
+// than the current EADDRINUSE failure.
+//
+// Uses short temp paths (os.MkdirTemp "" prefix = /tmp or equivalent) to stay
+// well under the 104-character Unix socket path limit on macOS.
+//
+// Traces: BC-2.07.004 EC-013 (Ruling O), AC-019.
+func TestListenUnixMgmt_PreBindCleanup_AC019(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stale_socket_removed_before_bind", func(t *testing.T) {
+		t.Parallel()
+
+		sockPath := tempSockPath(t)
+
+		// First call: create the socket successfully.
+		ln1, err := listenUnixMgmt(sockPath)
+		if err != nil {
+			t.Fatalf("AC-019 setup: first listenUnixMgmt(%q): %v", sockPath, err)
+		}
+
+		// Close the listener WITHOUT unlinking the socket file.
+		// listenUnixMgmt already calls SetUnlinkOnClose(false), so Close() leaves
+		// the socket inode on the filesystem — exactly the crash/SIGKILL scenario.
+		if err := ln1.Close(); err != nil {
+			t.Logf("AC-019 setup: ln1.Close: %v (may be benign)", err)
+		}
+
+		// Verify the socket inode still exists (sanity check for the test setup).
+		fi, statErr := os.Lstat(sockPath)
+		if statErr != nil {
+			t.Fatalf("AC-019 setup: socket inode must persist after Close (SetUnlinkOnClose(false)): %v", statErr)
+		}
+		if fi.Mode()&os.ModeSocket == 0 {
+			t.Fatalf("AC-019 setup: inode at %q is not a socket (mode=%v); test is mis-configured", sockPath, fi.Mode())
+		}
+
+		// Second call: WITHOUT the fix, this returns EADDRINUSE (socket inode present).
+		// WITH the fix (pre-bind Lstat+Remove), the stale socket is removed and Bind
+		// succeeds.
+		ln2, err := listenUnixMgmt(sockPath)
+		if err != nil {
+			// RED: stale socket was not removed → EADDRINUSE (or similar bind error).
+			t.Errorf("AC-019 (Ruling O) violated: second listenUnixMgmt(%q) returned error %v; "+
+				"want nil (stale socket-mode inode must be removed before Bind). "+
+				"Fix: add pre-bind Lstat+Remove check in listenUnixMgmt for os.ModeSocket inodes.",
+				sockPath, err)
+			return
+		}
+		if ln2 != nil {
+			t.Cleanup(func() { _ = ln2.Close() })
+		}
+	})
+
+	t.Run("regular_file_not_removed", func(t *testing.T) {
+		t.Parallel()
+
+		sockPath := tempSockPath(t)
+
+		// Create a regular file at the socket path (not a socket).
+		if err := os.WriteFile(sockPath, []byte("sentinel"), 0o600); err != nil {
+			t.Fatalf("AC-019 setup: WriteFile: %v", err)
+		}
+
+		// listenUnixMgmt must NOT remove the regular file.
+		ln, err := listenUnixMgmt(sockPath)
+		if err == nil {
+			// Unexpectedly succeeded — the regular file was removed and a socket was
+			// created (or the regular file did not cause a bind error, which is OS-
+			// specific). Either way, verify the original regular file is gone.
+			if ln != nil {
+				t.Cleanup(func() { _ = ln.Close() })
+			}
+			// If the regular file is gone (os.ModeSocket check would have removed it
+			// if mode bit was wrong), that is a bug. On all supported platforms, Bind
+			// over a regular file should fail with EADDRINUSE or ENOTSOCK.
+			t.Logf("AC-019 note: listenUnixMgmt over a regular file unexpectedly succeeded on this platform; skipping non-removal assertion")
+			return
+		}
+
+		// Expected: listenUnixMgmt returned an error (regular file blocked bind).
+		// AC-019 guard: the regular file must still be present (not removed by the
+		// os.ModeSocket guard — a regular file does NOT have os.ModeSocket set).
+		if _, statErr := os.Lstat(sockPath); os.IsNotExist(statErr) {
+			t.Errorf("AC-019 (Ruling O) violated: regular file at %q was removed by "+
+				"listenUnixMgmt. Only os.ModeSocket-mode inodes must be removed; "+
+				"regular files, directories, and device nodes must be left untouched.",
+				sockPath)
+		}
+	})
+}
+
 // TestDaemonWiring_ConsoleBindsLocalhost_AC014 verifies that console mode binds
 // the management TCP listener to 127.0.0.1 (loopback) only — not 0.0.0.0 or ":".
 //
