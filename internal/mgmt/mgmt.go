@@ -237,7 +237,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		// accept queue without spawning unbounded goroutines (CWE-770 / AC-013).
 		select {
 		case s.sem <- struct{}{}:
-		case <-done:
+		case <-ctx.Done():
 			s.connWG.Wait()
 			return nil
 		}
@@ -249,18 +249,12 @@ func (s *Server) Serve(ctx context.Context) error {
 
 			// If we are shutting down (Shutdown called or ctx cancelled), the
 			// listener close is intentional — return nil, not net.ErrClosed
-			// (BC-2.07.004 PC-10 / AC-017 / VP-069).
-			if s.shuttingDown.Load() || errors.Is(err, net.ErrClosed) {
+			// (BC-2.07.004 PC-10 / AC-017 / VP-069 / Ruling G).
+			// The ctx.Err() conjunct is required: an unexpected external listener
+			// close (ctx live, Shutdown never called) must return the real error.
+			if s.shuttingDown.Load() || (errors.Is(err, net.ErrClosed) && ctx.Err() != nil) {
 				s.connWG.Wait()
 				return nil
-			}
-
-			// Check if this is a normal shutdown via done channel.
-			select {
-			case <-done:
-				s.connWG.Wait()
-				return nil
-			default:
 			}
 
 			// Transient error: back off exponentially (5ms→1s) and retry.
@@ -276,7 +270,7 @@ func (s *Server) Serve(ctx context.Context) error {
 				}
 				select {
 				case <-time.After(backoff):
-				case <-done:
+				case <-ctx.Done():
 					s.connWG.Wait()
 					return nil
 				}
@@ -289,11 +283,23 @@ func (s *Server) Serve(ctx context.Context) error {
 		}
 		backoff = 0
 
+		// Ruling I: drop connections accepted in the shutdown window before they
+		// enter the WaitGroup. This prevents connWG.Add(1) racing connWG.Wait()
+		// (Add-after-Wait panic) and ensures closeAllConns sees every tracked conn.
+		if s.shuttingDown.Load() {
+			_ = conn.Close()
+			<-s.sem
+			continue
+		}
+
+		// Track the connection BEFORE connWG.Add and BEFORE the goroutine spawn
+		// so that closeAllConns sees it immediately and drain is complete within
+		// the shutdown budget (Ruling I).
+		s.trackConn(conn)
 		s.connWG.Add(1)
 		go func() {
 			defer s.connWG.Done()
 			defer func() { <-s.sem }() // release semaphore when connection goroutine exits
-			s.trackConn(conn)
 			defer s.untrackConn(conn)
 			s.handleConnection(ctx, conn)
 		}()
