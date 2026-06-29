@@ -26,6 +26,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"log"
@@ -118,7 +120,38 @@ func tickIntervalFor(cfg *config.Config) time.Duration {
 // os.Exit(1). cfg is the validated config (nil when --config is not supplied).
 // When cfg is non-nil, the half-channel tick interval is sourced from
 // cfg.TickInterval (BC-2.09.003 PC-9 / Inv-5 / AC-009).
+//
+// S-W5.01: the management server is started before the data-plane connector
+// per ARCH-12 §Daemon Mode Startup. The mgmt goroutine is WaitGroup-tracked
+// per ARCH-01 §Goroutine WaitGroup Contract.
 func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
+	// Generate an ephemeral Ed25519 keypair for the daemon management identity
+	// (BC-2.07.004 Precondition 3 / AC-015 / Ruling A.1). The key is ephemeral —
+	// identity changes across restarts. Persistent key_file wiring is deferred to
+	// S-6.02. The bootstrap OperatorKeySet (nil ops) means the daemon's own
+	// ephemeral key is the sole authorized key until operator keys are configured.
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		// Extremely unlikely (DRNG failure). Abort startup — a daemon without
+		// a management identity cannot be securely administered.
+		return fmt.Errorf("access: generate daemon keypair: %w", err)
+	}
+
+	// Start the management server before opening data-plane connections
+	// (ARCH-12 §Daemon Mode Startup — the access daemon starts its own
+	// mgmt.Server before any data-plane I/O such as sc.Connect).
+	var mgmtWG sync.WaitGroup
+	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
+	if mgmtErr != nil {
+		// Ruling J / BC-2.07.004 v1.4 EC-013: ANY mgmt-start failure aborts startup.
+		// No degraded-management mode — a daemon that cannot be administered must not
+		// serve the data plane (SOUL #4 silent-failure).
+		return fmt.Errorf("access: start management server: %w", mgmtErr)
+	}
+
+	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
+	// Called after mgmt start so the ARCH-12 §Daemon Mode Startup ordering is
+	// preserved for the common case; the tickIntervalFor seam (AC-009) fires here.
 	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
@@ -144,7 +177,19 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	// UNCHANGED per ARCH-01 ADR-011 v1.5 §HIGH-B.
 	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
 
-	return runAccessWithConnector(ctx, stderr, sc, an, router)
+	runErr := runAccessWithConnector(ctx, stderr, sc, an, router)
+
+	// Shutdown the management server now that the data-plane is draining.
+	// Use a short timeout; the mgmt goroutine should already be stopping since
+	// ctx is cancelled. Wait for the WaitGroup to confirm goroutine exit.
+	if mgmtSrv != nil {
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = mgmtSrv.Shutdown(shutCtx)
+		shutCancel()
+	}
+	mgmtWG.Wait()
+
+	return runErr
 }
 
 // runAccessWithConnector contains all orchestration logic for the access-mode

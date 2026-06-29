@@ -28,6 +28,10 @@ package config_test
 //   exercise the binary exit-code and stderr output once that wiring exists.
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"os"
 	"path/filepath"
@@ -1972,6 +1976,321 @@ func TestLoadFile_StripsControlCharsFromEscapedValue(t *testing.T) {
 // therefore FAILS against current code.
 //
 // Traces: F-SEC-C1, CWE-117, BC-2.09.003 PC-5/PC-6.
+// ── AC-011 / PC-10 / E-CFG-008: management_socket validation ─────────────────
+
+// TestConfig_Validate_ManagementSocket_E_CFG_008_AC011 verifies that Validate()
+// rejects management_socket when it is present but empty or whitespace-only, and
+// accepts it when absent or a non-empty, non-whitespace string.
+//
+// Canonical E-CFG-008 message from BC-2.09.003 PC-10:
+//
+//	"config error: management_socket: must not be empty. Fix: set to a valid Unix
+//	socket path, e.g. '/run/switchboard-router.sock', or remove the field to use
+//	the daemon default"
+//
+// Traces: BC-2.09.003 PC-10, AC-011, E-CFG-008.
+func TestConfig_Validate_ManagementSocket_E_CFG_008_AC011(t *testing.T) {
+	t.Parallel()
+
+	// baseValid is a minimal valid config for all sub-cases that do NOT test
+	// management_socket errors in isolation. The new management_socket field
+	// must not cause regressions when absent/valid.
+	makeBase := func() *config.Config {
+		return &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+		}
+	}
+
+	cases := []struct {
+		name             string
+		managementSocket string
+		wantErr          bool   // true = expect E-CFG-008
+		wantInMsg        string // fragment that must appear in error message
+	}{
+		{
+			// (a) Empty string == Go zero-value == absent from YAML == accepted.
+			// BC-2.09.003 PC-10: "When present, it must be non-empty." Go yaml cannot
+			// distinguish absent from explicit empty string; empty maps to "absent" →
+			// validator returns nil (no E-CFG-008).
+			name:             "empty_string_accepted_as_absent",
+			managementSocket: "",
+			wantErr:          false,
+		},
+		{
+			// (b) Whitespace-only → E-CFG-008.
+			name:             "whitespace_only_rejected",
+			managementSocket: "   ",
+			wantErr:          true,
+			wantInMsg:        "management_socket",
+		},
+		{
+			// (c) Tab-only whitespace → E-CFG-008.
+			name:             "tab_only_rejected",
+			managementSocket: "\t",
+			wantErr:          true,
+			wantInMsg:        "management_socket",
+		},
+		{
+			// (d) Valid socket path → accepted.
+			name:             "valid_unix_path_accepted",
+			managementSocket: "/run/switchboard-router.sock",
+			wantErr:          false,
+		},
+		{
+			// (e) Valid TCP address (console mode) → accepted.
+			name:             "valid_tcp_address_accepted",
+			managementSocket: "127.0.0.1:9091",
+			wantErr:          false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := makeBase()
+			cfg.ManagementSocket = tc.managementSocket
+			err := cfg.Validate()
+
+			if tc.wantErr {
+				requireError(t, err)
+				requireECFG001(t, err)
+				msg := err.Error()
+				requireContains(t, msg, tc.wantInMsg)
+				// E-CFG-008 canonical fragment check.
+				requireContains(t, msg, "management_socket")
+				requireContains(t, msg, "must not be empty")
+			} else {
+				requireNoError(t, err)
+			}
+		})
+	}
+
+	// Exhaustive error collection: management_socket whitespace error must appear
+	// ALONGSIDE other config errors in a single E-CFG-001 response.
+	t.Run("exhaustive_reporting_with_other_errors", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			ListenAddr:       "",    // E-CFG-001 (missing required field)
+			TickInterval:     0,     // E-CFG-001 (missing required field)
+			ManagementSocket: "   ", // E-CFG-008
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+
+		msg := err.Error()
+		// All three errors must appear in a single combined E-CFG-001.
+		requireContains(t, msg, "listen_addr")
+		requireContains(t, msg, "tick_interval")
+		requireContains(t, msg, "management_socket")
+	})
+}
+
+// ── AC-012 / PC-11 / E-CFG-009: authorized_operator_keys validation ───────────
+
+// mustEd25519PEMPublicKey generates an Ed25519 keypair and marshals the public
+// key into PKIX PEM format ("PUBLIC KEY" type). Used to construct valid fixtures.
+func mustEd25519PEMPublicKey(t *testing.T) string {
+	t.Helper()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey: %v", err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: der,
+	}))
+}
+
+// TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012 verifies that
+// Validate() reports E-CFG-009 for each invalid authorized_operator_keys entry,
+// collects all errors exhaustively, and accepts empty lists or valid Ed25519 PEM keys.
+//
+// Canonical E-CFG-009 message from BC-2.09.003 PC-11:
+//
+//	"config error: authorized_operator_keys[<N>]: entry is not a valid Ed25519 PEM
+//	PUBLIC KEY block. Fix: provide a PEM-encoded Ed25519 public key (type 'PUBLIC
+//	KEY', 32-byte key length)"
+//
+// Traces: BC-2.09.003 PC-11, AC-012, E-CFG-009.
+func TestConfig_Validate_AuthorizedOperatorKeys_E_CFG_009_AC012(t *testing.T) {
+	t.Parallel()
+
+	makeValid := func() *config.Config {
+		return &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+		}
+	}
+
+	t.Run("invalid_pem_at_index_0", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{"not-pem-at-all"}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+		msg := err.Error()
+		requireContains(t, msg, "authorized_operator_keys[0]")
+		requireContains(t, msg, "not a valid Ed25519 PEM PUBLIC KEY")
+	})
+
+	t.Run("valid_at_0_invalid_at_1", func(t *testing.T) {
+		t.Parallel()
+
+		validPEM := mustEd25519PEMPublicKey(t)
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{validPEM, "garbage"}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+		msg := err.Error()
+		// index 1 must be reported.
+		requireContains(t, msg, "authorized_operator_keys[1]")
+		// index 0 must NOT be reported (it is valid).
+		if strings.Contains(msg, "authorized_operator_keys[0]") {
+			t.Errorf("E-CFG-009: valid entry at index 0 must not produce an error; got: %q", msg)
+		}
+	})
+
+	t.Run("empty_list_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{}
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("nil_list_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = nil
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("valid_ed25519_pem_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		validPEM := mustEd25519PEMPublicKey(t)
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{validPEM}
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("multiple_valid_pem_accepted", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{
+			mustEd25519PEMPublicKey(t),
+			mustEd25519PEMPublicKey(t),
+		}
+		requireNoError(t, cfg.Validate())
+	})
+
+	t.Run("rsa_pem_rejected_wrong_key_type", func(t *testing.T) {
+		// A valid PEM block of type "PUBLIC KEY" but containing an RSA key (not Ed25519)
+		// must be rejected with E-CFG-009. We simulate this by using a PEM block
+		// whose DER content is not a valid Ed25519 public key.
+		//
+		// For simplicity in a test, we use a well-known invalid DER payload by placing
+		// random bytes in a "PUBLIC KEY" PEM block — the PKIX parse will fail, which
+		// is sufficient to trigger E-CFG-009.
+		t.Parallel()
+
+		invalidDER := make([]byte, 128) // 128 random bytes — not a valid PKIX key
+		_, err := rand.Read(invalidDER)
+		if err != nil {
+			t.Fatalf("rand.Read: %v", err)
+		}
+		fakePEM := string(pem.EncodeToMemory(&pem.Block{
+			Type:  "PUBLIC KEY",
+			Bytes: invalidDER,
+		}))
+
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{fakePEM}
+		valErr := cfg.Validate()
+		requireError(t, valErr)
+		requireECFG001(t, valErr)
+		msg := valErr.Error()
+		requireContains(t, msg, "authorized_operator_keys[0]")
+		requireContains(t, msg, "not a valid Ed25519 PEM PUBLIC KEY")
+	})
+
+	t.Run("wrong_pem_block_type_rejected", func(t *testing.T) {
+		// A PEM block of type "CERTIFICATE" (not "PUBLIC KEY") must be rejected.
+		t.Parallel()
+
+		wrongTypePEM := string(pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: make([]byte, 32),
+		}))
+
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{wrongTypePEM}
+		valErr := cfg.Validate()
+		requireError(t, valErr)
+		requireECFG001(t, valErr)
+		msg := valErr.Error()
+		requireContains(t, msg, "authorized_operator_keys[0]")
+	})
+
+	// Exhaustive error collection: two bad entries at indices 0 and 2; one valid
+	// at index 1. E-CFG-009[0] and E-CFG-009[2] must both appear in a single error.
+	t.Run("exhaustive_reporting_both_bad_entries_collected", func(t *testing.T) {
+		t.Parallel()
+
+		validPEM := mustEd25519PEMPublicKey(t)
+		cfg := makeValid()
+		cfg.AuthorizedOperatorKeys = []string{
+			"bad-entry-zero", // index 0 → E-CFG-009
+			validPEM,         // index 1 → OK
+			"bad-entry-two",  // index 2 → E-CFG-009
+		}
+		err := cfg.Validate()
+		requireError(t, err)
+		requireECFG001(t, err)
+		msg := err.Error()
+		requireContains(t, msg, "authorized_operator_keys[0]")
+		requireContains(t, msg, "authorized_operator_keys[2]")
+		if strings.Contains(msg, "authorized_operator_keys[1]") {
+			t.Errorf("valid entry at index 1 must not produce an error; got: %q", msg)
+		}
+	})
+}
+
+// TestConfig_Validate_ManagementFields_DoNotBreakExistingValidCases verifies
+// that adding management_socket and authorized_operator_keys fields to an
+// otherwise valid config does not break existing validation. Regression guard.
+func TestConfig_Validate_ManagementFields_DoNotBreakExistingValidCases(t *testing.T) {
+	t.Parallel()
+
+	validPEM := mustEd25519PEMPublicKey(t)
+
+	cfg := &config.Config{
+		ListenAddr:             "0.0.0.0:9090",
+		TickInterval:           10 * time.Millisecond,
+		DrainTimeout:           10 * time.Second,
+		KeepaliveInterval:      1 * time.Second,
+		ManagementSocket:       "/run/switchboard-router.sock",
+		AuthorizedOperatorKeys: []string{validPEM},
+	}
+	requireNoError(t, cfg.Validate())
+}
+
+// TestConfig_Validate_StripsC1ControlChars is defined later in this file.
+// The next test continues the CWE-117 / F-SEC-C1 coverage:
+
 func TestConfigValidate_StripsC1ControlChars(t *testing.T) {
 	t.Parallel()
 
