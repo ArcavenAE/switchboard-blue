@@ -1,11 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"time"
 )
@@ -34,94 +33,39 @@ func main() {
 		os.Exit(2)
 	}
 
-	// Subcommand routing skeleton — empty handlers for now; filled by S-6.02 + S-5.02.
-	// Each case eventually calls connectAndRun which wires loadEd25519Key, Authenticate,
-	// dispatch, and the JSON envelope helpers.
+	// Single timeout budget threaded through dial + Authenticate + dispatch
+	// so total wall-clock honors --timeout once (defect E).
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+
 	subcommand := args[0]
 
+	var err error
 	switch subcommand {
 	case "svtn":
-		runSvtn(*target, *key, *jsonOut, *timeout, args[1:])
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "svtn.list", nil)
 	case "sessions":
-		runSessions(*target, *key, *jsonOut, *timeout, args[1:])
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "sessions.list", nil)
 	case "paths":
-		runPaths(*target, *key, *jsonOut, *timeout, args[1:])
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "paths.list", nil)
 	case "router":
-		runRouter(*target, *key, *jsonOut, *timeout, args[1:])
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "router.status", nil)
 	case "console":
-		runConsole(*target, *key, *jsonOut, *timeout, args[1:])
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "console.attach", nil)
 	case "admin":
-		runAdmin(*target, *key, *jsonOut, *timeout, args[1:])
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "admin.list-keys", nil)
 	case "version":
-		runVersion(*target, *key, *jsonOut, *timeout)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "version", nil)
 	case "ping":
-		runPing(*target, *key, *jsonOut, *timeout)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "ping", nil)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", subcommand)
 		os.Exit(2)
 	}
-}
 
-// connectAndRun dials the daemon, authenticates, dispatches command with args,
-// and writes the result to stdout (or stderr on failure). It is the common
-// execution path for all subcommands once the stub is promoted to a real implementation.
-//
-// On connection failure: prints "E-NET-001 daemon unreachable: <target>: <reason>"
-// to stderr, exits 1 (BC-2.07.003 PC-1/PC-2; AC-004).
-// On auth failure:       prints "E-ADM-010 authentication failed" to stderr,
-// exits 1 (BC-2.07.002 PC-4; AC-003).
-//
-//nolint:unparam // cmdArgs is always nil in stubs; callers will vary it after S-6.02/S-5.02 fill subcommand handlers
-func connectAndRun(target, keyPath string, useJSON bool, timeout time.Duration, command string, cmdArgs any) {
-	privKey, err := loadEd25519Key(keyPath)
 	if err != nil {
-		writeError(useJSON, "E-NET-001", fmt.Sprintf("key load failed: %s", err))
 		os.Exit(1)
 	}
-
-	dialer := net.Dialer{Timeout: timeout}
-	conn, err := dialTarget(dialer, target)
-	if err != nil {
-		writeError(useJSON, "E-NET-001", fmt.Sprintf("daemon unreachable: %s: %s", target, err))
-		os.Exit(1)
-	}
-	defer func() { _ = conn.Close() }()
-	// Apply an overall deadline so that auth + dispatch cannot hang indefinitely
-	// even after a successful TCP handshake (BC-2.07.003 Inv-2; AC-007).
-	if err = conn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		writeError(useJSON, "E-NET-001", fmt.Sprintf("daemon unreachable: %s: set deadline: %s", target, err))
-		os.Exit(1)
-	}
-
-	if err = Authenticate(conn, privKey); err != nil {
-		// If authentication failed due to a network/timeout error, report E-NET-001
-		// (BC-2.07.003 Inv-2: timeout is treated as unreachable). AUTH_FAIL from
-		// the server is reported as E-ADM-010 (BC-2.07.002 PC-4).
-		var netErr net.Error
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			writeError(useJSON, "E-NET-001", fmt.Sprintf("daemon unreachable: %s: connection timed out", target))
-		} else {
-			writeError(useJSON, "E-ADM-010", "authentication failed")
-		}
-		os.Exit(1)
-	}
-
-	data, err := dispatch(conn, command, cmdArgs)
-	if err != nil {
-		writeError(useJSON, "E-NET-001", fmt.Sprintf("dispatch failed: %s", err))
-		os.Exit(1)
-	}
-
-	writeSuccess(useJSON, data)
-}
-
-// dialTarget dials the target address. If target starts with '/' it uses a Unix
-// socket; otherwise TCP. EC-003: TCP fallback when --target=host:port specified.
-func dialTarget(d net.Dialer, target string) (net.Conn, error) {
-	if len(target) > 0 && target[0] == '/' {
-		return d.Dial("unix", target)
-	}
-	return d.Dial("tcp", target)
 }
 
 // writeSuccess writes a success JSON envelope to stdout when --json is set,
@@ -154,44 +98,4 @@ func writeError(useJSON bool, code, message string) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "%s %s\n", code, message)
-}
-
-// runSvtn handles the "svtn" subcommand group (S-6.02 fills this in).
-func runSvtn(target, key string, jsonOut bool, timeout time.Duration, _ []string) {
-	connectAndRun(target, key, jsonOut, timeout, "svtn.list", nil)
-}
-
-// runSessions handles the "sessions" subcommand group (S-5.02 fills this in).
-func runSessions(target, key string, jsonOut bool, timeout time.Duration, _ []string) {
-	connectAndRun(target, key, jsonOut, timeout, "sessions.list", nil)
-}
-
-// runPaths handles the "paths" subcommand group (S-5.02 fills this in).
-func runPaths(target, key string, jsonOut bool, timeout time.Duration, _ []string) {
-	connectAndRun(target, key, jsonOut, timeout, "paths.list", nil)
-}
-
-// runRouter handles the "router" subcommand group (S-5.02 fills this in).
-func runRouter(target, key string, jsonOut bool, timeout time.Duration, _ []string) {
-	connectAndRun(target, key, jsonOut, timeout, "router.status", nil)
-}
-
-// runConsole handles the "console" subcommand group (S-7.03 fills this in).
-func runConsole(target, key string, jsonOut bool, timeout time.Duration, _ []string) {
-	connectAndRun(target, key, jsonOut, timeout, "console.attach", nil)
-}
-
-// runAdmin handles the "admin" subcommand group (S-6.02 fills this in).
-func runAdmin(target, key string, jsonOut bool, timeout time.Duration, _ []string) {
-	connectAndRun(target, key, jsonOut, timeout, "admin.list-keys", nil)
-}
-
-// runVersion prints the daemon version (stub; S-6.02 fills this in).
-func runVersion(target, key string, jsonOut bool, timeout time.Duration) {
-	connectAndRun(target, key, jsonOut, timeout, "version", nil)
-}
-
-// runPing checks connectivity to the daemon (stub; S-6.02 fills this in).
-func runPing(target, key string, jsonOut bool, timeout time.Duration) {
-	connectAndRun(target, key, jsonOut, timeout, "ping", nil)
 }

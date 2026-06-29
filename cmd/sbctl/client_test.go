@@ -1,20 +1,23 @@
-// Tests for cmd/sbctl: Authenticate(), loadEd25519Key(), and JSON envelope
-// formatting.
+// Tests for cmd/sbctl: Authenticate(), loadEd25519Key(), tilde expansion,
+// JSON envelope formatting, and connectAndRun error-return contract.
 //
-// Tests are named per BC-based convention (BC-2.07.002, VP-067) for full
-// traceability. All tests MUST fail before implementation (Red Gate per
-// BC-5.38.001).
+// Tests are named per BC-based convention (BC-2.07.002, BC-2.07.003, VP-067)
+// for full traceability. All NEW/UPDATED tests MUST fail before implementation
+// (Red Gate per BC-5.38.001).
 //
 // Package main (internal test file) so unexported names (loadEd25519Key,
-// newSuccessEnvelope, newErrorEnvelope, Authenticate) are directly accessible.
+// homeDirFunc, newSuccessEnvelope, newErrorEnvelope, Authenticate,
+// connectAndRun) are directly accessible.
 package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -38,9 +41,11 @@ func encodeBase64URL(b []byte) string {
 // when Authenticate() has not yet sent a reply (Red Gate).
 //
 // A deadline is applied to prevent permanent hangs in the Red Gate phase.
+// The server goroutine is cleaned up via t.Cleanup (not defer-in-goroutine).
 func mockServerWithRead(t *testing.T, challenge map[string]any, authResult map[string]any) net.Conn {
 	t.Helper()
 	server, client := net.Pipe()
+	// Clean up the client connection; server goroutine closes itself.
 	t.Cleanup(func() {
 		_ = client.Close()
 	})
@@ -118,11 +123,13 @@ func assertProtocolError(t *testing.T, err error, subCase string) {
 //
 // Transport: net.Pipe (no real sockets).
 // BC: BC-2.07.002 PC-2; VP-067; ARCH-12 §Authenticate() FAIL-CLOSED Contract.
+// AC: AC-002 (ctx-first signature, deadline-expiry sub-case (i)).
 //
-// RED GATE: sub-cases (a) through (h) must FAIL before implementation because
-// the stub returns errors.New("not implemented") — which assertProtocolError
-// explicitly rejects. The happy-path sub-case must FAIL because the stub
-// returns non-nil on AUTH_OK.
+// RED GATE: this test will fail to compile because the current Authenticate
+// signature is Authenticate(net.Conn, ed25519.PrivateKey) error — missing the
+// leading context.Context parameter. That compile error IS the Red Gate.
+// After the signature is updated, sub-cases (a)–(h) must fail until the
+// implementation is complete; sub-case (i) verifies ctx deadline expiry.
 func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 	t.Parallel()
 
@@ -138,7 +145,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 		t.Cleanup(func() { _ = client.Close() })
 		go func() { _ = server.Close() }()
 
-		err := Authenticate(client, opPriv)
+		err := Authenticate(context.Background(), client, opPriv)
 		assertProtocolError(t, err, "VP067_a_connection_error_on_challenge_read")
 	})
 
@@ -156,7 +163,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			_, _ = server.Read(buf)
 		}()
 
-		err := Authenticate(client, opPriv)
+		err := Authenticate(context.Background(), client, opPriv)
 		assertProtocolError(t, err, "VP067_b_malformed_challenge_json_decode_error")
 	})
 
@@ -167,7 +174,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			map[string]any{"type": "challenge"}, // nonce absent
 			nil,                                 // no auth result (client should error before this)
 		)
-		err := Authenticate(conn, opPriv)
+		err := Authenticate(context.Background(), conn, opPriv)
 		assertProtocolError(t, err, "VP067_b_malformed_challenge_missing_nonce")
 	})
 
@@ -181,7 +188,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			},
 			nil,
 		)
-		err := Authenticate(conn, opPriv)
+		err := Authenticate(context.Background(), conn, opPriv)
 		assertProtocolError(t, err, "VP067_b_malformed_challenge_nonce_not_base64url")
 	})
 
@@ -197,7 +204,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			},
 			nil,
 		)
-		err := Authenticate(conn, opPriv)
+		err := Authenticate(context.Background(), conn, opPriv)
 		assertProtocolError(t, err, "VP067_b_malformed_challenge_nonce_wrong_length")
 	})
 
@@ -213,7 +220,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 				"message": "authentication failed",
 			},
 		)
-		err := Authenticate(conn, opPriv)
+		err := Authenticate(context.Background(), conn, opPriv)
 		assertProtocolError(t, err, "VP067_e_auth_fail_returns_error")
 		// The error must also surface E-ADM-010 so that connectAndRun can
 		// distinguish auth failures from network failures.
@@ -229,7 +236,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			wellFormedChallenge(t),
 			map[string]any{"type": "unexpected_message_type"},
 		)
-		err := Authenticate(conn, opPriv)
+		err := Authenticate(context.Background(), conn, opPriv)
 		assertProtocolError(t, err, "VP067_f_wrong_response_type_returns_error")
 	})
 
@@ -252,7 +259,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			// close immediately — truncated stream
 		}()
 
-		err := Authenticate(client, opPriv)
+		err := Authenticate(context.Background(), client, opPriv)
 		assertProtocolError(t, err, "VP067_g_truncated_stream_after_challenge")
 	})
 
@@ -283,8 +290,54 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 			_, _ = server.Write(suffix)
 		}()
 
-		err := Authenticate(client, opPriv)
+		err := Authenticate(context.Background(), client, opPriv)
 		assertProtocolError(t, err, "VP067_h_oversized_auth_response_bounded_by_limit_reader")
+	})
+
+	// VP067_i_deadline_expiry verifies AC-002 (Ruling 2, VP-067):
+	// Authenticate() derives its read deadline from the context. When the context
+	// deadline expires before the server sends anything, Authenticate must return
+	// a non-nil error and MUST NOT hang.
+	//
+	// RED GATE: current Authenticate() has no ctx parameter at all — will not
+	// compile. After the signature is updated but before deadline logic is
+	// implemented, Authenticate will block indefinitely → test times out
+	// (behaviorally failing with the right reason: missing deadline logic).
+	//
+	// BC: AC-002 §"derives the read deadline from ctx"; ARCH-12 §step 1.
+	t.Run("VP067_i_deadline_expiry_server_silent", func(t *testing.T) {
+		t.Parallel()
+		// Server never sends anything — Authenticate must time out via ctx.
+		server, client := net.Pipe()
+		t.Cleanup(func() {
+			_ = client.Close()
+			_ = server.Close()
+		})
+		// Silent server: accept connection but never write.
+		go func() {
+			// Keep the connection alive for longer than the ctx deadline so
+			// the timeout is the limiting factor, not a write error.
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			buf := make([]byte, 64)
+			_, _ = server.Read(buf) // drain anything the client might send
+		}()
+
+		// Context with a tight deadline — Authenticate must return within ~2x of this.
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		err := Authenticate(ctx, client, opPriv)
+		elapsed := time.Since(start)
+
+		if err == nil {
+			t.Error("VP067_i: Authenticate returned nil with context deadline expired — expected non-nil error")
+		}
+		// Must return within a reasonable bound (not hang indefinitely).
+		// 500ms gives generous headroom while ruling out a hang.
+		if elapsed > 500*time.Millisecond {
+			t.Errorf("VP067_i: Authenticate hung for %v (> 500ms) — context deadline not applied to conn.SetReadDeadline", elapsed)
+		}
 	})
 
 	t.Run("VP067_happy_path_auth_ok_returns_nil", func(t *testing.T) {
@@ -297,7 +350,7 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 				"daemon_version": "0.1.0",
 			},
 		)
-		err := Authenticate(conn, opPriv)
+		err := Authenticate(context.Background(), conn, opPriv)
 		if err != nil {
 			t.Errorf("VP-067 violated: Authenticate returned non-nil error on AUTH_OK: %v", err)
 		}
@@ -311,9 +364,8 @@ func TestAuthenticate_FailClosed_VP067(t *testing.T) {
 //
 // BC: BC-2.07.002 Inv-2; ARCH-12 §ADR-012 step 3 ("private key NEVER leaves the client").
 //
-// RED GATE: this test will PASS in the Red Gate phase because the stub never
-// writes anything — an empty wire message cannot contain the private key. The
-// test documents the security invariant; the implementer must keep it passing.
+// RED GATE: this test will fail to compile because the current Authenticate
+// signature lacks the leading context.Context parameter.
 func TestAuthenticate_PrivKeyNeverTransmitted(t *testing.T) {
 	t.Parallel()
 
@@ -366,7 +418,7 @@ func TestAuthenticate_PrivKeyNeverTransmitted(t *testing.T) {
 		doneCh <- captured
 	}()
 
-	_ = Authenticate(client, opPriv)
+	_ = Authenticate(context.Background(), client, opPriv)
 	captured := <-doneCh
 
 	wire := string(captured)
@@ -426,6 +478,419 @@ func TestSbctl_KeyLoading_Ed25519(t *testing.T) {
 			t.Fatal("loadEd25519Key returned nil error for a nonexistent path")
 		}
 	})
+}
+
+// TestSbctl_KeyLoadFailure_ExitsOneWithECFG010 verifies AC-003 (BC-2.07.003 EC-005,
+// Ruling 5): when the --key file is missing, oversized, malformed, or wrong key
+// type, sbctl emits E-CFG-010 "key load failed: <path>: <reason>" to stderr,
+// exits 1, and makes NO connection attempt.
+//
+// The "no connection attempt" assertion is enforced by targeting a non-listening
+// address: if the key-load error fires before dial, E-CFG-010 appears without
+// E-NET-001; if the implementation incorrectly dials first, the subprocess will
+// also emit E-NET-001 (or fail with the wrong code), failing the assertion.
+//
+// BC: BC-2.07.003 EC-005; AC-003 §key load failure.
+//
+// RED GATE: current connectAndRun emits E-NET-001 for key load failures (bug).
+// Tests fail because stderr contains "E-NET-001" not "E-CFG-010".
+func TestSbctl_KeyLoadFailure_ExitsOneWithECFG010(t *testing.T) {
+	t.Parallel()
+
+	// Non-listening address — if a dial is attempted, it will fail immediately
+	// with E-NET-001, which the test uses to detect the ordering bug.
+	const nonListeningTarget = "127.0.0.1:19996"
+
+	type tc struct {
+		name       string
+		setupKey   func(t *testing.T) string // returns path to supply as --key
+		wantInPath string                    // sub-string expected in error path portion
+	}
+
+	cases := []tc{
+		{
+			name: "missing_key_file",
+			setupKey: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "nonexistent_key")
+			},
+			wantInPath: "nonexistent_key",
+		},
+		{
+			name: "oversized_key_file",
+			setupKey: func(t *testing.T) string {
+				t.Helper()
+				tmp := t.TempDir()
+				p := filepath.Join(tmp, "oversized.key")
+				garbage := bytes.Repeat([]byte{0x41}, (1<<16)+1)
+				if err := os.WriteFile(p, garbage, 0o600); err != nil {
+					t.Fatalf("write oversized: %v", err)
+				}
+				return p
+			},
+			wantInPath: "oversized.key",
+		},
+		{
+			name: "malformed_pem_key_file",
+			setupKey: func(t *testing.T) string {
+				t.Helper()
+				tmp := t.TempDir()
+				p := filepath.Join(tmp, "malformed.key")
+				if err := os.WriteFile(p, []byte("not a pem file\n"), 0o600); err != nil {
+					t.Fatalf("write malformed: %v", err)
+				}
+				return p
+			},
+			wantInPath: "malformed.key",
+		},
+		{
+			name: "wrong_key_type_rsa",
+			setupKey: func(t *testing.T) string {
+				t.Helper()
+				// Write a PEM block with wrong header type to simulate a non-Ed25519 key.
+				// Using OPENSSH PRIVATE KEY header with garbage body to trigger parse error.
+				tmp := t.TempDir()
+				p := filepath.Join(tmp, "rsa_style.key")
+				// This PEM has the right type marker but wrong body — ParseRawPrivateKey will
+				// reject it as malformed (effectively "not Ed25519" from sbctl's perspective).
+				content := "-----BEGIN OPENSSH PRIVATE KEY-----\nbm90YW55dGhpbmc=\n-----END OPENSSH PRIVATE KEY-----\n"
+				if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+					t.Fatalf("write wrong-type key: %v", err)
+				}
+				return p
+			},
+			wantInPath: "rsa_style.key",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			keyPath := tc.setupKey(t)
+
+			exitCode, stdout, stderr := runSubprocess(t, "KeyLoadFailure",
+				"SBCTL_TEST_TARGET="+nonListeningTarget,
+				"SBCTL_TEST_KEY="+keyPath,
+				"SBCTL_TEST_TIMEOUT=200ms",
+			)
+
+			if exitCode != 1 {
+				t.Errorf("AC-003 violated: expected exit code 1, got %d\nstderr: %s", exitCode, stderr)
+			}
+			// Must emit E-CFG-010, not E-NET-001 (ordering: key load before dial).
+			if !strings.Contains(stderr, "E-CFG-010") {
+				t.Errorf("AC-003 violated: expected 'E-CFG-010' in stderr; got: %q", stderr)
+			}
+			// Path portion of the error message must reference the key file.
+			if !strings.Contains(stderr, tc.wantInPath) {
+				t.Errorf("AC-003 violated: expected path %q in stderr; got: %q", tc.wantInPath, stderr)
+			}
+			// Must NOT emit E-NET-001 (key load fails before any dial attempt).
+			if strings.Contains(stderr, "E-NET-001") {
+				t.Errorf("AC-003 violated (ordering): 'E-NET-001' must not appear when key load fails; got: %q", stderr)
+			}
+			// No stdout on failure (BC-2.07.003 PC-3).
+			if stdout != "" {
+				t.Errorf("AC-003 violated: expected empty stdout; got: %q", stdout)
+			}
+		})
+	}
+}
+
+// TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001 verifies AC-004 (BC-2.07.003
+// EC-006, Ruling 5): when authentication succeeds (AUTH_OK) but the subsequent
+// RPC dispatch fails (server returns "ok":false), sbctl emits E-RPC-001
+// "rpc failed: <command>: <reason>" to stderr, exits 1, and produces no stdout.
+//
+// BC: BC-2.07.003 EC-006; BC-2.07.003 Invariant 4 (E-RPC-001 distinct from
+// E-NET-001 and E-CFG-010); AC-004.
+//
+// RED GATE: current dispatch() returns "not implemented" and connectAndRun
+// maps that to E-NET-001 (bug). Tests fail because stderr contains "E-NET-001"
+// not "E-RPC-001", and the server never completes the handshake before the
+// subprocess fails.
+func TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001(t *testing.T) {
+	t.Parallel()
+
+	// Start a mock server that completes AUTH_OK then returns RPC failure.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	target := ln.Addr().String()
+	keyPath := testdataKeyPath(t)
+
+	// serverDoneCh carries a nil or error from the server goroutine.
+	serverDoneCh := make(chan error, 1)
+	go func() {
+		// Accept deadline: subprocess may fail before connecting in Red Gate phase.
+		if tcpLn, ok := ln.(*net.TCPListener); ok {
+			_ = tcpLn.SetDeadline(time.Now().Add(3 * time.Second))
+		}
+		conn, err := ln.Accept()
+		if err != nil {
+			serverDoneCh <- fmt.Errorf("accept: %w", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+		// Step 1: Send a valid CHALLENGE with a 32-byte nonce.
+		nonce := make([]byte, 32)
+		_, _ = rand.Read(nonce)
+		challenge := fmt.Sprintf(
+			`{"type":"challenge","nonce":"%s","daemon_sig":"%s"}`+"\n",
+			base64.RawURLEncoding.EncodeToString(nonce),
+			base64.RawURLEncoding.EncodeToString(make([]byte, 64)),
+		)
+		if _, err := fmt.Fprint(conn, challenge); err != nil {
+			serverDoneCh <- fmt.Errorf("write challenge: %w", err)
+			return
+		}
+
+		// Step 2: Read CHALLENGE_RESPONSE.
+		buf := make([]byte, 8192)
+		if _, err := conn.Read(buf); err != nil {
+			serverDoneCh <- fmt.Errorf("read challenge_response: %w", err)
+			return
+		}
+
+		// Step 3: Send AUTH_OK.
+		const authOK = `{"type":"auth_ok","daemon_version":"0.1.0"}` + "\n"
+		if _, err := fmt.Fprint(conn, authOK); err != nil {
+			serverDoneCh <- fmt.Errorf("write auth_ok: %w", err)
+			return
+		}
+
+		// Step 4: Read RPC request (if any).
+		rpcBuf := make([]byte, 8192)
+		_, _ = conn.Read(rpcBuf)
+
+		// Step 5: Send RPC failure response (ok:false).
+		const rpcFail = `{"type":"rpc_response","id":"1","ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}` + "\n"
+		if _, err := fmt.Fprint(conn, rpcFail); err != nil {
+			serverDoneCh <- fmt.Errorf("write rpc_fail: %w", err)
+			return
+		}
+
+		serverDoneCh <- nil
+	}()
+
+	exitCode, stdout, stderr := runSubprocess(t, "RPCDispatchFailure",
+		"SBCTL_TEST_TARGET="+target,
+		"SBCTL_TEST_KEY="+keyPath,
+		"SBCTL_TEST_TIMEOUT=3s",
+	)
+
+	// Log server result for debugging; don't fail the test on server errors alone.
+	if serverErr := <-serverDoneCh; serverErr != nil {
+		t.Logf("mock server error (subprocess may have failed before auth in Red Gate): %v", serverErr)
+	}
+
+	if exitCode != 1 {
+		t.Errorf("AC-004 violated: expected exit code 1, got %d\nstderr: %s", exitCode, stderr)
+	}
+	if !strings.Contains(stderr, "E-RPC-001") {
+		t.Errorf("AC-004 violated: expected 'E-RPC-001' in stderr; got: %q", stderr)
+	}
+	// E-NET-001 must NOT appear — dispatch failure is distinct from unreachable.
+	if strings.Contains(stderr, "E-NET-001") {
+		t.Errorf("AC-004 violated (Invariant 4): 'E-NET-001' must not appear for RPC dispatch failure; got: %q", stderr)
+	}
+	// No stdout on failure (BC-2.07.003 PC-3).
+	if stdout != "" {
+		t.Errorf("AC-004 violated: expected empty stdout; got: %q", stdout)
+	}
+}
+
+// TestSbctl_TildeExpansion_DefaultKey verifies AC-008 (BC-2.07.003 EC-007 +
+// Precondition 3): loadEd25519Key expands leading ~ via os.UserHomeDir() before
+// opening the file. Four sub-cases are required:
+//
+//  1. Happy path: ~ expands to a real dir with a valid key.
+//  2. Sub-case (a): os.UserHomeDir() returns error → E-CFG-010 with ORIGINAL path.
+//  3. Sub-case (b): expansion ok but file missing → E-CFG-010 with EXPANDED path.
+//  4. ~username literal: treated as literal (no expansion attempted).
+//
+// BC: BC-2.07.003 EC-007 + Precondition 3; AC-008.
+//
+// RED GATE: current loadEd25519Key has no tilde expansion (it calls os.Open(path)
+// directly). Sub-case 1 fails because "~/.ssh/id_ed25519" is not a valid absolute
+// path. Sub-cases (a) and (b) fail because no homeDirFunc injection exists yet.
+// Sub-case 4 passes (os.Open on a literal "~root/..." path returns a file-not-found
+// error, which is acceptable — but the test also asserts E-CFG-010 contains the
+// literal path, which may fail if the error message wraps differently).
+//
+// The injectable homeDirFunc package variable must be declared in client.go:
+//
+//	var homeDirFunc = os.UserHomeDir
+//
+// Tests override it in-process; the variable is restored via t.Cleanup.
+func TestSbctl_TildeExpansion_DefaultKey(t *testing.T) {
+	t.Parallel()
+
+	// generateValidKeyFile writes an OpenSSH Ed25519 private key to dir/.ssh/id_ed25519
+	// using golang.org/x/crypto/ssh and returns the full path.
+	generateValidKeyFile := func(t *testing.T, dir string) string {
+		t.Helper()
+		sshDir := filepath.Join(dir, ".ssh")
+		if err := os.MkdirAll(sshDir, 0o700); err != nil {
+			t.Fatalf("mkdir .ssh: %v", err)
+		}
+		// Copy the testdata fixture (already generated, avoids re-generating).
+		fixtureBytes, err := os.ReadFile(filepath.Join("testdata", "test_ed25519_key"))
+		if err != nil {
+			t.Fatalf("read testdata key: %v", err)
+		}
+		keyPath := filepath.Join(sshDir, "id_ed25519")
+		if err := os.WriteFile(keyPath, fixtureBytes, 0o600); err != nil {
+			t.Fatalf("write key: %v", err)
+		}
+		return keyPath
+	}
+
+	t.Run("happy_path_tilde_slash_expands_to_home", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+		generateValidKeyFile(t, tmp)
+
+		// Override homeDirFunc to return our temp dir.
+		original := homeDirFunc
+		homeDirFunc = func() (string, error) { return tmp, nil }
+		t.Cleanup(func() { homeDirFunc = original })
+
+		privKey, err := loadEd25519Key("~/.ssh/id_ed25519")
+		if err != nil {
+			t.Fatalf("AC-008 happy path: loadEd25519Key returned error: %v", err)
+		}
+		if len(privKey) != ed25519.PrivateKeySize {
+			t.Errorf("AC-008 happy path: key length = %d, want %d", len(privKey), ed25519.PrivateKeySize)
+		}
+	})
+
+	t.Run("sub_case_a_homedir_error_uses_original_path", func(t *testing.T) {
+		// AC-008 sub-case (a): os.UserHomeDir() returns error → E-CFG-010 with
+		// the ORIGINAL unexpanded path in the message.
+		t.Parallel()
+
+		original := homeDirFunc
+		homeDirFunc = func() (string, error) {
+			return "", fmt.Errorf("home directory unavailable: no HOME environment")
+		}
+		t.Cleanup(func() { homeDirFunc = original })
+
+		const inputPath = "~/.ssh/id_ed25519"
+		_, err := loadEd25519Key(inputPath)
+		if err == nil {
+			t.Fatal("AC-008(a): expected error when homeDirFunc fails, got nil")
+		}
+		// Error message must contain the ORIGINAL path (not an expanded form).
+		if !strings.Contains(err.Error(), inputPath) {
+			t.Errorf("AC-008(a): error message must contain original path %q; got: %v", inputPath, err)
+		}
+		// Must not contain an expanded path like "/home/..." or "/Users/...".
+		if strings.Contains(err.Error(), "/home/") || strings.Contains(err.Error(), "/Users/") {
+			t.Errorf("AC-008(a): error message must use original path, not expanded; got: %v", err)
+		}
+	})
+
+	t.Run("sub_case_b_expansion_ok_but_file_missing_uses_expanded_path", func(t *testing.T) {
+		// AC-008 sub-case (b): homeDirFunc succeeds but file doesn't exist →
+		// E-CFG-010 with the EXPANDED path in the message.
+		t.Parallel()
+		tmp := t.TempDir()
+		// Do NOT create the key file — the file is missing.
+
+		original := homeDirFunc
+		homeDirFunc = func() (string, error) { return tmp, nil }
+		t.Cleanup(func() { homeDirFunc = original })
+
+		const inputPath = "~/.ssh/id_ed25519"
+		expandedPath := filepath.Join(tmp, ".ssh", "id_ed25519")
+
+		_, err := loadEd25519Key(inputPath)
+		if err == nil {
+			t.Fatal("AC-008(b): expected error when expanded file is missing, got nil")
+		}
+		// Error message must contain the EXPANDED path (not the original ~-prefixed form).
+		if !strings.Contains(err.Error(), expandedPath) {
+			t.Errorf("AC-008(b): error message must contain expanded path %q; got: %v", expandedPath, err)
+		}
+	})
+
+	t.Run("tilde_username_treated_as_literal", func(t *testing.T) {
+		// AC-008 sub-case (~username): "~root/.ssh/id_ed25519" is treated as a
+		// literal path (not expanded). os.Open on this literal fails with a
+		// file-not-found error containing the literal string.
+		t.Parallel()
+
+		original := homeDirFunc
+		// homeDirFunc must NOT be called for ~username paths.
+		called := false
+		homeDirFunc = func() (string, error) {
+			called = true
+			return "", fmt.Errorf("should not have been called for ~username path")
+		}
+		t.Cleanup(func() { homeDirFunc = original })
+
+		const literalPath = "~root/.ssh/id_ed25519"
+		_, err := loadEd25519Key(literalPath)
+		if err == nil {
+			t.Fatal("AC-008(~username): expected error for literal ~username path, got nil")
+		}
+		// homeDirFunc must NOT have been called.
+		if called {
+			t.Error("AC-008(~username): homeDirFunc was called for a ~username path — only ~/ should trigger expansion")
+		}
+		// Error message must reference the literal path.
+		if !strings.Contains(err.Error(), literalPath) {
+			t.Errorf("AC-008(~username): error message must contain literal path %q; got: %v", literalPath, err)
+		}
+	})
+}
+
+// TestSbctl_ConnectAndRun_ReturnsError verifies AC-009 (go.md "no os.Exit outside
+// main()"): connectAndRun (or the equivalent dispatch entrypoint in client.go)
+// must return an error — it must NOT call os.Exit. If os.Exit were called, the
+// test process would immediately exit and the test suite would crash with a
+// non-zero status and no FAIL output, making the bug self-evidently visible.
+//
+// The test calls connectAndRun in-process with a mock that returns an auth failure
+// and asserts it returns a non-nil error (not nil, and not void).
+//
+// BC: AC-009; go.md rule "No log.Fatal / os.Exit outside main()"; Ruling 5.
+//
+// RED GATE: current connectAndRun has signature:
+//
+//	func connectAndRun(target, keyPath string, useJSON bool, timeout time.Duration, command string, cmdArgs any)
+//
+// This test calls a function expected to have signature:
+//
+//	func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, command string, cmdArgs any) error
+//
+// The call will fail to compile until the signature is updated (the ctx-first,
+// error-return version). That compile failure IS the Red Gate.
+func TestSbctl_ConnectAndRun_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	// Use a non-listening address so the connection attempt fails immediately.
+	const target = "127.0.0.1:19995"
+	keyPath := testdataKeyPath(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// connectAndRun must return an error. If it calls os.Exit instead, this
+	// test process terminates immediately — the t.Errorf line is never reached
+	// but the whole test binary exits non-zero with no FAIL output (observable
+	// from the go test harness).
+	err := connectAndRun(ctx, target, keyPath, false, "ping", nil)
+	if err == nil {
+		t.Error("AC-009 violated: connectAndRun returned nil error on connection failure — expected non-nil error")
+	}
 }
 
 // TestSbctl_JSONEnvelopeFormat verifies AC-006:

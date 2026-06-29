@@ -1,22 +1,24 @@
 // Tests for cmd/sbctl main() integration: connection-refused exit codes,
-// auth-failure exit codes, no stdout on failure, and connection timeout.
+// auth-failure exit codes, key-load failure exit codes, RPC dispatch failure
+// exit codes, no stdout on failure, and connection timeout.
 //
 // Tests are named per BC-based convention (BC-2.07.002, BC-2.07.003, VP-030)
 // for full traceability.
 //
 // RED GATE STRATEGY (BC-5.38.001):
 // Each test provides a valid testdata Ed25519 key so that loadEd25519Key
-// succeeds. With the stubs returning "not implemented", the subprocess exits
-// early at key loading (E-NET-001, not E-ADM-010) — causing the auth-failure
-// test to fail. For the connection tests, tests also assert that the error
-// message contains the specific target address, which the key-load error
-// message will not contain.
+// succeeds. With connectAndRun still calling os.Exit (not returning error),
+// TestSbctl_ConnectAndRun_ReturnsError fails to compile (wrong signature),
+// dragging the whole package to compile-fail (Red Gate). For the subprocess
+// tests that do compile, the current connectAndRun uses wrong error codes
+// (E-NET-001 for key load failures) — those assertions fail.
 //
 // Package main (internal test file) for access to connectAndRun and dialTarget.
 package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -45,6 +47,10 @@ func testdataKeyPath(t *testing.T) string {
 // subprocessEntrypoint is called at the TOP of TestSubprocessEntrypoint if the
 // subprocess guard is set. It runs the specific test scenario and calls
 // os.Exit — so it never returns.
+//
+// connectAndRun returns error (AC-009). This entrypoint checks the returned
+// error and maps it to an exit code. os.Exit is allowed here because this
+// function runs only in a subprocess (never in the parent test process).
 func subprocessEntrypoint() {
 	testCase := os.Getenv(subprocessGuard)
 	if testCase == "" {
@@ -61,19 +67,32 @@ func subprocessEntrypoint() {
 		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), to)
+	defer cancel()
+
+	var err error
 	switch testCase {
 	case "ConnectionRefused":
-		connectAndRun(target, keyPath, false, to, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
 	case "AuthFailure":
-		connectAndRun(target, keyPath, false, to, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
 	case "NoStdoutOnConnectionFailure":
-		connectAndRun(target, keyPath, false, to, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
 	case "ConnectionTimeout":
-		connectAndRun(target, keyPath, false, to, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+	case "KeyLoadFailure":
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+	case "RPCDispatchFailure":
+		err = connectAndRun(ctx, target, keyPath, false, "router.status", nil)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subprocess test case: %s\n", testCase)
 		os.Exit(3)
 	}
+
+	if err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 // runSubprocess executes this test binary as a subprocess with the given env
@@ -119,10 +138,6 @@ func TestSubprocessEntrypoint(t *testing.T) {
 // When sbctl cannot connect to the daemon, it exits with code 1 and stderr
 // contains both "E-NET-001" and the target address.
 //
-// RED GATE: with the stub, loadEd25519Key returns "not implemented" and exits
-// with "E-NET-001 key load failed..." — the address assertion FAILS because
-// the stub's error message does not contain the target address.
-//
 // BC: BC-2.07.003 PC-1 (E-NET-001 on stderr), PC-2 (exit 1); VP-030.
 func TestSbctl_ConnectionRefused_ExitsOneWithENET001_VP030(t *testing.T) {
 	t.Parallel()
@@ -153,10 +168,6 @@ func TestSbctl_ConnectionRefused_ExitsOneWithENET001_VP030(t *testing.T) {
 // TestSbctl_AuthFailure_ExitsOneWithEADM010 verifies BC-2.07.002 PC-4 and AC-003:
 // When the daemon sends AUTH_FAIL, sbctl exits with code 1 and stderr contains
 // "E-ADM-010". No stdout output is produced.
-//
-// RED GATE: with the stub, loadEd25519Key returns "not implemented" so
-// connectAndRun exits with E-NET-001 (key load failure) — NOT E-ADM-010.
-// The assertion that stderr contains "E-ADM-010" therefore FAILS.
 //
 // BC: BC-2.07.002 PC-4; AC-003.
 func TestSbctl_AuthFailure_ExitsOneWithEADM010(t *testing.T) {
@@ -251,9 +262,6 @@ func TestSbctl_NoStdoutOnConnectionFailure(t *testing.T) {
 // E-NET-001. The elapsed wall time must be >= the configured timeout, which
 // proves sbctl actually waited on the network (not just failed at key loading).
 //
-// RED GATE: with the stub, loadEd25519Key returns "not implemented" immediately
-// (< 50ms). The elapsed time assertion (>= 80ms) therefore FAILS.
-//
 // BC: BC-2.07.003 Inv-2 (timeout); AC-007.
 func TestSbctl_ConnectionTimeout(t *testing.T) {
 	t.Parallel()
@@ -268,7 +276,7 @@ func TestSbctl_ConnectionTimeout(t *testing.T) {
 	target := ln.Addr().String()
 	keyPath := testdataKeyPath(t)
 
-	// Accept and hold connections indefinitely.
+	// Accept and hold connections indefinitely (cleaned up via t.Cleanup).
 	go func() {
 		for {
 			conn, err := ln.Accept()
