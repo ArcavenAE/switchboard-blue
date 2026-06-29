@@ -388,14 +388,18 @@ func sendJSON(conn net.Conn, v any) error {
 	return err
 }
 
-// sendAuthFail sends an AUTH_FAIL message and closes conn. Helper to avoid
-// repetition across all auth failure paths.
-func sendAuthFail(conn net.Conn) {
+// sendAuthFail sends an AUTH_FAIL message (with write deadline d) and closes conn.
+// Helper to avoid repetition across all auth failure paths.
+// d is applied as a write deadline before the send so that a non-draining client
+// cannot pin the goroutine indefinitely (PC-1 write-deadline / Ruling E / VP-072).
+func sendAuthFail(conn net.Conn, d time.Duration) {
+	_ = conn.SetWriteDeadline(time.Now().Add(d))
 	_ = sendJSON(conn, authFailMsg{
 		Type:    "auth_fail",
 		Code:    "E-ADM-010",
 		Message: "authentication failed",
 	})
+	_ = conn.SetWriteDeadline(time.Time{})
 	_ = conn.Close()
 }
 
@@ -424,14 +428,21 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	daemonSig := ed25519.Sign(s.daemonKey, nonceBytes[:])
 
 	// Step 3: Send CHALLENGE message immediately before reading any client data (PC-1).
+	// Set write deadline before send to defend against slow/non-draining clients
+	// pinning the goroutine forever (slowloris-on-write / PC-1 amended / VP-072 /
+	// Ruling E). Use HandshakeTimeout for all handshake-phase writes.
 	challenge := challengeMsg{
 		Type:      "challenge",
 		Nonce:     base64.RawURLEncoding.EncodeToString(nonceBytes[:]),
 		DaemonSig: base64.RawURLEncoding.EncodeToString(daemonSig),
 	}
+	if err := conn.SetWriteDeadline(time.Now().Add(s.handshakeTimeout)); err != nil {
+		return
+	}
 	if err := sendJSON(conn, challenge); err != nil {
 		return
 	}
+	_ = conn.SetWriteDeadline(time.Time{})
 
 	// Step 4: Apply HandshakeTimeout read deadline before reading CHALLENGE_RESPONSE.
 	// Closes EC-001 CWE-400 gap (ADR-012 §7 / BC-2.07.004 PC-1 / Ruling 1).
@@ -451,7 +462,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		// On other errors (malformed JSON, oversized) send AUTH_FAIL.
 		_ = conn.SetReadDeadline(time.Time{})
 		if ne, ok := err.(net.Error); !ok || !ne.Timeout() {
-			sendAuthFail(conn)
+			sendAuthFail(conn, s.handshakeTimeout)
 		}
 		return
 	}
@@ -467,25 +478,25 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	// Here we also reject non-challenge_response types (AC-005: RPC without auth).
 	if cresp.Type != "challenge_response" {
 		// Wrong type (e.g. "request") at the auth step → AUTH_FAIL + close.
-		sendAuthFail(conn)
+		sendAuthFail(conn, s.handshakeTimeout)
 		return
 	}
 
 	// Step 7: Decode nonce_sig and pubkey from base64url.
 	nonceSig, err := base64.RawURLEncoding.DecodeString(cresp.NonceSig)
 	if err != nil {
-		sendAuthFail(conn)
+		sendAuthFail(conn, s.handshakeTimeout)
 		return
 	}
 	pubkeyBytes, err := base64.RawURLEncoding.DecodeString(cresp.Pubkey)
 	if err != nil {
-		sendAuthFail(conn)
+		sendAuthFail(conn, s.handshakeTimeout)
 		return
 	}
 
 	// Step 8: Validate pubkey length (ed25519 requires exactly 32 bytes).
 	if len(pubkeyBytes) != ed25519.PublicKeySize {
-		sendAuthFail(conn)
+		sendAuthFail(conn, s.handshakeTimeout)
 		return
 	}
 
@@ -507,18 +518,23 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 	// Both checks must pass. Fail closed — same AUTH_FAIL for all failures (Inv-5, PC-8).
 	if !authorized || !sigValid {
-		sendAuthFail(conn)
+		sendAuthFail(conn, s.handshakeTimeout)
 		return
 	}
 
 	// Step 10: Send AUTH_OK with the injected daemonVersion (PC-7 / Ruling 6).
 	// daemonVersion comes from NewServer — never hardcoded here.
+	// Write deadline guards against a slow client pinning the goroutine (Ruling E / VP-072).
+	if err := conn.SetWriteDeadline(time.Now().Add(s.handshakeTimeout)); err != nil {
+		return
+	}
 	if err := sendJSON(conn, authOKMsg{
 		Type:          "auth_ok",
 		DaemonVersion: s.daemonVersion,
 	}); err != nil {
 		return
 	}
+	_ = conn.SetWriteDeadline(time.Time{})
 
 	// Connection is now authenticated.
 	authenticated := true
@@ -556,7 +572,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		// the protocol state machine does not allow re-authentication on a live connection.
 		if authenticated && req.Type == "challenge_response" {
 			// Security event: post-auth challenge_response protocol violation.
-			sendAuthFail(conn)
+			sendAuthFail(conn, s.handshakeTimeout)
 			return
 		}
 
@@ -597,9 +613,14 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 			}
 		}
 
+		// Write deadline for RPC response (Ruling E / VP-072): use RPCIdleTimeout.
+		if err := conn.SetWriteDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
+			return
+		}
 		if err := sendJSON(conn, resp); err != nil {
 			return
 		}
+		_ = conn.SetWriteDeadline(time.Time{})
 
 		// Re-apply RPCIdleTimeout before reading the next RPC.
 		if err := conn.SetReadDeadline(time.Now().Add(RPCIdleTimeout)); err != nil {
