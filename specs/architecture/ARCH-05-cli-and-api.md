@@ -2,7 +2,7 @@
 artifact_id: ARCH-05-cli-and-api
 document_type: architecture-section
 level: L3
-version: "1.2"
+version: "1.4"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -19,6 +19,8 @@ kos_anchors:
 modified:
   - 2026-06-28T00:00:00 # v1.1 — ADR-012 cross-reference; management plane detail deferred to ARCH-12
   - 2026-06-28T00:00:00 # v1.2 — F-010: BC table updated to 45 BCs (added BC-2.04.007, BC-2.05.008, BC-2.07.004); mgmt row status corrected to active
+  - 2026-06-28T00:00:00 # v1.3 — adversarial review Ruling 4: Unix socket permission 0600 required; console TCP loopback-only confirmed; 0.0.0.0 binding forbidden
+  - 2026-06-29T00:00:00 # v1.4 — Wave-5 convergence round-2 Ruling D: console TCP loopback validation placement confirmed in buildMgmtListener (cmd/switchboard/mgmt_wire.go), not config.Validate(); rejection predicate and E-CFG-008 variant documented
 ---
 
 # ARCH-05: CLI & API
@@ -142,10 +144,50 @@ defined in interface-definitions.md. Error objects include the E-code.
 
 ## Daemon Management Socket
 
-- **Router:** Unix socket at `config.ManagementSocket` (default: `/run/switchboard-router.sock`)
-- **Access:** `/run/switchboard-access.sock`
-- **Console:** `config.MgmtListenAddr` (default: `127.0.0.1:9091`)
-- **Control:** `/run/switchboard-control.sock`
+| Daemon Mode | Socket Type | Default Address | Notes |
+|-------------|-------------|-----------------|-------|
+| router | Unix | `/run/switchboard-router.sock` | Permissions: 0600 (see below) |
+| access | Unix | `/run/switchboard-access.sock` | Permissions: 0600 |
+| console | TCP | `127.0.0.1:9091` | Loopback-only (see below) |
+| control | Unix | `/run/switchboard-control.sock` | Permissions: 0600 |
 
 If the socket is absent, sbctl falls back to TCP on `--target`.
+
+### Unix Socket Permissions (CWE-276 — adversarial review Ruling 4)
+
+All Unix management sockets MUST be created with permissions `0600`. This is
+achieved by setting `syscall.Umask(0177)` immediately before `net.Listen("unix", ...)`
+and restoring the previous umask immediately after. Relying on the system umask
+is forbidden — the daemon may run in environments where the umask is 0022 or 0000.
+
+The `chmod`-after-create approach MUST NOT be used: it introduces a TOCTOU window
+between socket creation (world-accessible) and the chmod call.
+
+The full rationale and implementation pattern are in
+ARCH-12-daemon-management-plane.md §Unix Socket Permissions.
+
+### Console TCP Loopback Binding (CWE-276 — adversarial review Ruling 4; placement refined Ruling D / v1.4)
+
+The console daemon's management TCP listener MUST bind to a loopback address only.
+Binding to `0.0.0.0`, `::`, bare port (`:9091`), or any non-loopback IP is FORBIDDEN.
+
+**Authorized loopback hosts:** `127.0.0.1`, `[::1]` (IPv6 loopback), `localhost`.
+
+**Enforcement placement (Wave-5 convergence round-2 Ruling D):** The loopback-only
+check is enforced in `buildMgmtListener` (`cmd/switchboard/mgmt_wire.go`), in the TCP
+branch, before `net.Listen` is called. It is NOT enforced in `config.Validate()`
+because `Validate()` has no mode parameter and cannot distinguish console mode from
+other modes without violating the config package's purity-boundary classification
+(pure-core parse+validate — see §Go Package Layout).
+
+**Rejection:** Any console-mode TCP `management_socket` whose host is not in the
+authorized loopback set causes `buildMgmtListener` to return an error with code
+`E-CFG-008`: `"config error: management_socket: console mode requires a loopback
+address (127.0.0.1, [::1], or localhost); got: <address>"`. Daemon startup aborts.
+
+**IPv6 note:** `[::1]` is included to support IPv6-only hosts without requiring
+a future ADR. The policy (loopback-only management plane) is unchanged.
+
+The full rationale, rejection predicate, and implementation pattern are in
+ARCH-12-daemon-management-plane.md §Ruling D.
 

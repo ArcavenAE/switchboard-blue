@@ -2,10 +2,10 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "1.7"
+version: "2.0"
 status: draft
 producer: architect
-timestamp: 2026-06-28T00:00:01
+timestamp: 2026-06-29T00:00:00
 phase: 1b
 inputDocuments:
   - '.factory/specs/behavioral-contracts/BC-INDEX.md'
@@ -91,14 +91,22 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | draft | VP-065.md |
 | VP-066 | Management server enforces bounded read: message > 64 KiB → error + close, no OOM (CWE-400) | BC-2.07.004 | internal/mgmt | unit+fuzz | P0 | draft | VP-066.md |
 | VP-067 | sbctl Authenticate() is fail-closed — returns nil only on verified AUTH_OK; all other outcomes return non-nil error | BC-2.07.002 | cmd/sbctl | integration | P0 | draft | VP-067.md |
+| VP-068 | mgmt.NewServer panics at construction if len(daemonKey) != ed25519.PrivateKeySize | BC-2.07.004 | internal/mgmt | unit | P0 | draft | VP-068.md |
+| VP-069 | mgmt.Server.Serve Returns nil on Intentional Shutdown or Context Cancellation; Non-nil on Unexpected Listener Failure | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-069.md |
+| VP-070 | Unregistered RPC command → E-RPC-010 in-band response ok:false; connection NOT closed | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-070.md |
+| VP-071 | Handler execution error → E-RPC-011 in-band response ok:false with verbatim error message; connection NOT closed | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-071.md |
+| VP-072 | mgmt.Server sets write deadline before every sendJSON (HandshakeTimeout for handshake sends, RPCIdleTimeout for RPC responses); clears after each send — closes CWE-400 write-side slowloris | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-072.md |
+| VP-073 | Console-Mode TCP Bound to Non-Loopback Address Aborts Startup with E-CFG-008 (error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message; Ruling L) | BC-2.07.004 | cmd/switchboard | integration | P0 | draft | VP-073.md |
 
 ## Counts
 
-| Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit |
-|-----------|---------|------|-------------|-----|-----------|------------|
-| 67 | 34 | 4 | 15 | 10 | 2 | 2 |
+| Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit | Unit |
+|-----------|---------|------|-------------|-----|-----------|------------|------|
+| 73 | 34 | 4 | 20 | 10 | 2 | 2 | 1 |
 
-> Arithmetic check: 34 + 4 + 15 + 10 + 2 + 2 = 67. Consistent.
+> Arithmetic check: 34 + 4 + 20 + 10 + 2 + 2 + 1 = 73. Consistent.
+> VP-068 (unit) is the first VP using the `unit` proof method bucket; it tests a pure constructor panic-guard (no I/O).
+> Integration count increased from 15 to 20: VP-069, VP-070, VP-071, VP-072, VP-073 added.
 > VP-060 added 2026-06-27 for BC-2.04.007 (daemon startup/shutdown lifecycle; integration/subprocess).
 > VP-061 added 2026-06-28 for BC-2.06.003 (metrics content-absence code-audit; DI-001 enforcement).
 > VP-062 added 2026-06-28 for BC-2.06.003 (JSON well-formedness fuzz across all CLI forms including alias).
@@ -112,21 +120,23 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Phase | Count |
 |-------|-------|
-| P0 | 46 |
+| P0 | 52 |
 | P1 | 17 |
 | P2 | 4 |
-| **Total** | **67** |
+| **Total** | **73** |
 
-> Phase recounted: VP-061 (P1) and VP-062 (P1) added 2026-06-28. VP-063 (P0) added 2026-06-28.
-> VP-064 (P0), VP-066 (P0), VP-067 (P0), VP-065 (P1) added 2026-06-28. P0 = 46. P1 = 17. P2 = 4. Total = 67.
+> Phase recounted 2026-06-29: VP-068 (P0), VP-069 (P0), VP-070 (P0), VP-071 (P0), VP-072 (P0), VP-073 (P0) added. P0 = 52. P1 = 17. P2 = 4. Total = 73.
 
 ## BC Coverage Check
 
-45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). Zero coverage gaps.
+45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). Zero coverage gaps.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.0 | 2026-06-29 | ARCH-12 v1.5 Ruling P VP propagation: VP-069 bumped to v1.2 — fatal-accept-error drain obligation added (closeAllConns() before connWG.Wait() on unexpected-close path; drain budget ≤200ms; TestServe_FatalAcceptErrorDrainsQuickly test obligation); source-contract citation extended to Rulings B/G/I/P; error-taxonomy v2.7→v2.8 (E-NET-001 two-case). No count changes. |
+| 1.9 | 2026-06-29 | ARCH-12 v1.4 Rulings G and L VP propagation: VP-069 title updated to match v1.1 H1 (adds "Non-nil on Unexpected Listener Failure"; coverage expanded to 3 paths: Shutdown, ctx-cancel, unexpected-close per Ruling G). VP-073 title updated to match v1.1 H1 (Console-Mode TCP Bound to Non-Loopback Address Aborts Startup with E-CFG-008) and source-contract annotation extended to cite error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message per Ruling L. No count changes. |
+| 1.8 | 2026-06-29 | BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E VP assignment: VP-068 (unit, Invariant 8 — NewServer key-size panic), VP-069 (integration, PC-10 — Serve nil on shutdown), VP-070 (integration, PC-11 — E-RPC-010 unknown command in-band), VP-071 (integration, PC-12 — E-RPC-011 handler error in-band), VP-072 (integration, PC-1 write-deadline / Ruling E — slowloris write defense CWE-400), VP-073 (integration, EC-013 Ruling D — console TCP loopback rejection E-CFG-008). Counts: Total=73, Proptest=34, Fuzz=4, Integration=20, E2E=10, Benchmark=2, Code-Audit=2, Unit=1. Phase: P0=52, P1=17, P2=4. |
 | 1.7 | 2026-06-28 | Wave-5 consistency audit F-006/F-012: (1) VP-067 Method column corrected from `unit` to `integration` — Authenticate() tests two-party wire protocol over net.Pipe (net.Conn pair); Integration=15 tally was already correct. (2) VP-066 bucket disambiguation added: proof_method=unit+fuzz is counted once in the Fuzz bucket only; the unit component is not double-counted. Tally 34+4+15+10+2+2=67 verified and unchanged. |
 | 1.6 | 2026-06-28 | Wave-5 management plane VPs added: VP-064 (management server rejects unauthenticated; integration), VP-065 (replayed nonce rejection; integration), VP-066 (bounded read CWE-400; unit+fuzz → fuzz bucket), VP-067 (Authenticate() fail-closed; integration via net.Pipe). BC-2.07.004 coverage complete. Phase counts updated: P0=46, P1=17, P2=4. |

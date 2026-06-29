@@ -193,3 +193,125 @@ Make each test pass, one at a time, with minimum code:
    `h.dropCache.AddIfAbsent(checksum, uint64(arrivalIface))`. On hit: log via
    `h.logger.Log(...)`, return `ErrDropCacheHit`. On miss: return nil.
 4. Remove `//nolint:staticcheck` directives once stubs are implemented.
+
+---
+
+# Red Gate Log — S-6.03 sbctl Client Auth v2.2
+
+**Story:** S-6.03 — sbctl Client Auth (Authenticate() fail-closed, flag parsing, JSON envelope, connection error)
+**Story version:** 2.2
+**Date:** 2026-06-29
+**Phase:** TDD (test-writer pass — v2.2 AC update)
+**BC-5.38.001 Status:** RED GATE VERIFIED (compile failure)
+
+## Summary
+
+Updated `cmd/sbctl/client_test.go` and `cmd/sbctl/main_test.go` for v2.2 ACs.
+The entire `cmd/sbctl` test package fails to build against current production code.
+Failure is a compile error, not a runtime panic — which is the correct Red Gate
+when the required API signature changes are the gating constraint.
+
+## Test Files Modified
+
+| File | Tests Added/Changed | Status |
+|------|---------------------|--------|
+| `cmd/sbctl/client_test.go` | Updated all `Authenticate(...)` calls to ctx-first signature; added `TestAuthenticate_FailClosed_VP067` sub-case (i) (deadline expiry); added `TestSbctl_KeyLoadFailure_ExitsOneWithECFG010`; added `TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001`; added `TestSbctl_TildeExpansion_DefaultKey` (4 sub-cases); added `TestSbctl_ConnectAndRun_ReturnsError` | FAILING (compile — Red Gate) |
+| `cmd/sbctl/main_test.go` | Added `KeyLoadFailure` and `RPCDispatchFailure` subprocess cases to `subprocessEntrypoint` | Compiles only when client_test.go compiles (same package) — FAILING |
+
+## Per-Test Red Gate Results
+
+| Test Name | AC/BC Trace | Failure Mode |
+|-----------|-------------|--------------|
+| `TestAuthenticate_FailClosed_VP067` (all sub-cases including i) | AC-002 / BC-2.07.002 PC-2 / VP-067 | Compile error: `too many arguments in call to Authenticate` — `context.Context` first param missing from current signature |
+| `TestAuthenticate_PrivKeyNeverTransmitted` | BC-2.07.002 Inv-2 / DI-002 | Same compile error |
+| `TestSbctl_KeyLoadFailure_ExitsOneWithECFG010` | AC-003 / BC-2.07.003 EC-005 | Compile error (same package); behaviorally: current `connectAndRun` emits `E-NET-001` not `E-CFG-010` |
+| `TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001` | AC-004 / BC-2.07.003 EC-006 | Compile error (same package); behaviorally: current `dispatch()` returns "not implemented" and `connectAndRun` maps to `E-NET-001` not `E-RPC-001` |
+| `TestSbctl_TildeExpansion_DefaultKey` (4 sub-cases) | AC-008 / BC-2.07.003 EC-007 + PC-3 | Compile error: `undefined: homeDirFunc` — injectable var not yet declared in `client.go` |
+| `TestSbctl_ConnectAndRun_ReturnsError` | AC-009 / go.md "no os.Exit outside main()" | Compile error: `connectAndRun(...) (no value) used as value` — current signature returns nothing; also wrong arg types (ctx-first + no timeout param) |
+
+## Red Gate Verification Command
+
+```bash
+go test -gcflags=-e ./cmd/sbctl/... 2>&1
+# Expected: build failed — 30+ compile errors covering all 3 missing API changes
+```
+
+## Full Error Count (go test -gcflags=-e)
+
+- 12 × `too many arguments in call to Authenticate` (ctx-first signature missing)
+- 12 × `undefined: homeDirFunc` (injectable home-dir lookup var missing)
+- 3 × `connectAndRun(...)` errors (no return value + wrong arg types for ctx-first refactor)
+
+All 27 errors resolve once the implementer introduces the 3 new production symbols listed below.
+
+## Required New Production Symbols (implementer must introduce)
+
+1. **`Authenticate` signature change** in `cmd/sbctl/client.go`:
+   ```go
+   // BEFORE (current — must change):
+   func Authenticate(conn net.Conn, privKey ed25519.PrivateKey) error
+
+   // AFTER (required):
+   func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey) error
+   ```
+   Implementation must: compute effective deadline from `ctx.Deadline()` (fallback
+   `time.Now().Add(mgmt.HandshakeTimeout)` — or a local const `10*time.Second` since
+   `cmd/sbctl` must NOT import `internal/mgmt`); call `conn.SetReadDeadline(deadline)`
+   before the first `json.NewDecoder` read.
+
+2. **`var homeDirFunc = os.UserHomeDir`** in `cmd/sbctl/client.go`:
+   ```go
+   // Package-level injectable for testing (AC-008 tilde expansion).
+   var homeDirFunc = os.UserHomeDir
+   ```
+   `loadEd25519Key` must use `homeDirFunc()` instead of `os.UserHomeDir()` when
+   expanding `~/` prefixes. Sub-case (a): if `homeDirFunc()` errors → return
+   `fmt.Errorf("key load failed: %s: %w", originalPath, err)`. Sub-case (b): if
+   expansion succeeds but file open fails → return
+   `fmt.Errorf("key load failed: %s: %w", expandedPath, err)`.
+
+3. **`connectAndRun` signature change** in `cmd/sbctl/main.go`:
+   ```go
+   // BEFORE (current — must change):
+   func connectAndRun(target, keyPath string, useJSON bool, timeout time.Duration, command string, cmdArgs any)
+
+   // AFTER (required):
+   func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, command string, cmdArgs any) error
+   ```
+   Must return errors instead of calling `os.Exit`. Only `main()` calls `os.Exit`.
+   The `timeout` parameter moves out of `connectAndRun` — callers wrap with
+   `context.WithTimeout` before calling (as shown in AC-002 call-site example).
+   Also: key-load failure must emit `E-CFG-010` (not `E-NET-001`); post-auth
+   dispatch failure must emit `E-RPC-001` (not `E-NET-001`).
+
+## Notes for Implementer
+
+- `cmd/sbctl` MUST NOT import `internal/mgmt` (ARCH-12 §Package DAG Constraints).
+  Use a local const `handshakeTimeout = 10 * time.Second` in `client.go` instead
+  of referencing `mgmt.HandshakeTimeout`.
+- `subprocessEntrypoint` in `main_test.go` still calls the old `connectAndRun`
+  signature (no ctx, void). Once the implementer updates the production signature,
+  they must also update `subprocessEntrypoint` to call `connectAndRun(ctx, ...)`,
+  check the returned error, and call `os.Exit(1)` based on it. The entrypoint is the
+  one place in test code permitted to call `os.Exit` (it runs in a subprocess).
+- The `~` expansion in `loadEd25519Key` must treat `~/` (tilde-slash only, not bare
+  `~`) as requiring expansion. A bare `~` without a following `/` is ambiguous; per
+  BC-2.07.003 EC-007 the default path is `~/.ssh/id_ed25519` so `~/` is the
+  expansion trigger. `~username/...` is treated as a literal.
+
+## Implementer Handoff (S-6.03)
+
+Make each test pass, one at a time, with minimum code:
+
+1. Add `var homeDirFunc = os.UserHomeDir` to `client.go`; update `loadEd25519Key`
+   to call `homeDirFunc()` for `~/` prefix expansion; return `E-CFG-010`-format
+   errors for all key-load failure modes.
+2. Change `Authenticate` signature to ctx-first; add `conn.SetReadDeadline` from
+   ctx deadline (fallback `10s`).
+3. Change `connectAndRun` to return `error`; update `main()` to call `os.Exit` on
+   returned error; map key-load failure → `E-CFG-010`; map dispatch failure →
+   `E-RPC-001`.
+4. Implement `dispatch()` to send the RPC envelope and parse the response; return
+   `E-RPC-001`-format error on `ok:false`, decode failure, or connection drop.
+5. Update `subprocessEntrypoint` in `main_test.go` to use the new `connectAndRun`
+   signature (ctx-first, error-return) — this is a test-file change, not production.

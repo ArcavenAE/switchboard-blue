@@ -2,10 +2,10 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.3"
 status: draft
 producer: architect
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -91,11 +91,24 @@ See ARCH-09 for the complete per-package classification.
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
 
-> VP catalog total = 60; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> VP catalog total = 73; full BC→VP coverage in ARCH-11. VP-043 through VP-057
 > were added in Phase 1c-refinement to close coverage gaps. VP-059 added 2026-06-27
 > for BC-2.05.005 PC-3 (Wave 3 gate F-2 remediation — FailureCounter threshold proptest).
 > VP-058 added at Wave 3 for BC-2.05.008 (RouteFrame HMAC code-audit).
 > VP-060 added 2026-06-27 for BC-2.04.007 (daemon lifecycle — integration/subprocess).
+> VP-061–VP-067 added 2026-06-28 (Phase 6 hardening, Wave-5 management plane).
+> VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E
+> (Invariant 8 key-size panic, PC-10 Serve nil on shutdown, PC-11 E-RPC-010 unknown
+> command, PC-12 E-RPC-011 handler error, PC-1 write-deadline CWE-400, EC-013 loopback).
+> VP-069 updated to v1.1 (ARCH-12 v1.4 Ruling G): property extended to require non-nil on
+> unexpected-close path; coverage expanded to 3 paths; canonical predicate documented.
+> VP-069 updated to v1.2 (ARCH-12 v1.5 Ruling P): fatal-accept-error drain obligation added —
+> closeAllConns() MUST be called before connWG.Wait() on unexpected-close path; drain budget
+> ≤200ms verified by TestServe_FatalAcceptErrorDrainsQuickly; source-contract citation extended
+> to Rulings B/G/I/P; error-taxonomy v2.7→v2.8 (E-NET-001 two-case). No count changes.
+> VP-073 updated to v1.1 (ARCH-12 v1.4 Ruling L): source-contract extended to cite
+> error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message prefix;
+> test assertion guidance requires strings.Contains(err.Error(), "E-CFG-008").
 
 ### Phase 1c-refinement: Pure-Core Additions
 
@@ -115,6 +128,17 @@ See ARCH-09 for the complete per-package classification.
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
 | VP-060 | Connect failure → exit non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT → clean shutdown (all goroutines drain within 500ms, `sc.Close()` once, exit 0, no panic) | cmd/switchboard | integration (subprocess) |
+
+### BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E Additions (2026-06-29)
+
+| VP ID | Property | Module | Method |
+|-------|----------|--------|--------|
+| VP-068 | `mgmt.NewServer` panics at construction if `len(daemonKey) != ed25519.PrivateKeySize` (nil or short key; fail-fast remote-panic-DoS guard, Invariant 8) | internal/mgmt | unit |
+| VP-069 | `mgmt.Server.Serve` returns `nil` on intentional `Shutdown` or ctx-cancel; returns **non-nil** on unexpected listener failure (fd externally closed, ctx live, Shutdown never called) — canonical predicate: `shuttingDown.Load() \|\| (errors.Is(err, net.ErrClosed) && ctx.Err() != nil)`; 3 paths: Shutdown, ctx-cancel, unexpected-close; **fatal-accept-error drain (Ruling P):** `closeAllConns()` MUST be called before `connWG.Wait()` on unexpected-close path; drain budget ≤200ms (`TestServe_FatalAcceptErrorDrainsQuickly`) (PC-10 Rulings B/G/I/P) | internal/mgmt | integration |
+| VP-070 | Unregistered RPC command → in-band `ok:false` response with `E-RPC-010 "unknown command: <cmd>"`; connection NOT closed (PC-11) | internal/mgmt | integration |
+| VP-071 | Handler `Fn` returns non-nil error → in-band `ok:false` response with `E-RPC-011 "<err>"` verbatim; connection NOT closed (PC-12) | internal/mgmt | integration |
+| VP-072 | Write deadline set before every `sendJSON` (`HandshakeTimeout` for handshake sends, `RPCIdleTimeout` for RPC responses); cleared after each send; closes CWE-400 write-side slowloris (PC-1 Ruling E) | internal/mgmt | integration |
+| VP-073 | Console-mode TCP bound to non-loopback address → `buildMgmtListener` aborts with E-CFG-008; daemon startup does not proceed (EC-013 Rulings D/L); canonical message prefix: `"E-CFG-008: management_socket: console mode requires a loopback address …"`; test assertion: `strings.Contains(err.Error(), "E-CFG-008")` (error-taxonomy.md E-CFG-008 Variant 2) | cmd/switchboard | integration |
 
 ### Phase 1c-refinement: Boundary/Integration Additions
 

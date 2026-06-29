@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.002
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -28,6 +28,26 @@ modified:
       VP-049 e2e property anchors both client and server behaviors end-to-end.
       Story anchor updated: S-6.03 implements client-side (this BC + VP-067 + VP-030);
       S-W5.01 implements server-side (BC-2.07.004); S-W5.02 implements e2e (VP-049).
+  - date: 2026-06-29
+    version: "1.3"
+    change: >
+      ARCH-12 v1.4 Wave-5 Convergence Ruling M: PC-3 annotated with RPC wire-type
+      precision — authenticated RPC request envelope MUST carry "type":"request"
+      (ADR-012 §3 step 6); server response carries "type":"response"; any other type
+      string causes the server to close the connection silently. Pins the client
+      wire contract that was previously unconstrained.
+  - date: 2026-06-29
+    version: "1.4"
+    change: >
+      ARCH-12 v1.5 Wave-5 Convergence Rulings U and X: (U) PC-3 extended with
+      receiving-side wire-type validation: dispatch() MUST verify resp.Type ==
+      "response" after decoding; any other value (e.g., "rpc_response", "auth_fail",
+      "") is treated as a protocol error and returned as E-RPC-001; a wrong-type
+      response with "ok":true must NOT be silently accepted. (X) PC-3 extended with
+      non-constant request ID and response echo check: dispatch() generates a
+      per-call non-constant request id (not always "1"); after decoding the response,
+      dispatch() verifies resp.ID echoes req.ID; mismatch treated as protocol error
+      (E-RPC-001); per ADR-012 §3 step 6.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -60,6 +80,26 @@ kos_anchors:
 1. sbctl connects to the target daemon.
 2. sbctl authenticates the operator's OpenSSH key against the daemon's authorized key list.
 3. If authenticated: the requested operation is executed; result returned in the configured output format (human-readable or JSON).
+   **Protocol-precision note (Ruling M / ADR-012 §3 step 6):** The authenticated RPC
+   request envelope sent by `dispatch()` in `cmd/sbctl/client.go` MUST carry
+   `"type":"request"`. The server response envelope carries `"type":"response"`. Any
+   other type string after authentication causes the server to close the connection
+   silently (the server reads the type field and closes on mismatch; the client then
+   receives EOF and returns E-RPC-001). `"rpc_request"` and `"rpc_response"` are NOT
+   valid wire types and MUST NOT appear in any implementation.
+   **Receiving-side wire-type validation (Ruling U):** After decoding the RPC response,
+   `dispatch()` MUST verify `resp.Type == "response"`. Any other value (e.g.,
+   `"rpc_response"`, `"auth_fail"`, `""`) is treated as a protocol error and returned
+   as E-RPC-001 with a message containing the unexpected type. A wrong-type response
+   with `"ok":true` MUST NOT be silently accepted as a successful RPC — the type check
+   takes precedence over the ok-flag check.
+   **Non-constant request ID and echo check (Ruling X / ADR-012 §3 step 6):** The `id`
+   field in the RPC request envelope is a client-generated non-constant value (not
+   always `"1"`; e.g., a hex encoding of `time.Now().UnixNano()`). After decoding the
+   response, `dispatch()` verifies that `resp.ID` echoes `req.ID`. A mismatch is
+   treated as a protocol error (E-RPC-001). For a single-RPC-per-connection client,
+   the practical impact of ID mismatch is low, but the spec-mandated echo check is
+   explicitly required per ADR-012 §3 step 6.
 4. If not authenticated: E-ADM-010 "authentication failed"; exit code 1.
 5. If daemon unreachable: E-NET-001 (per BC-2.07.003); exit code 1.
 
@@ -119,5 +159,7 @@ Operator runs any `sbctl <subcommand>` command.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-06-29 | ARCH-12 v1.5 Wave-5 Convergence Rulings U and X: (U) PC-3 extended — `dispatch()` MUST verify `resp.Type == "response"` after decoding; any other value is protocol error returned as E-RPC-001; wrong-type response with `"ok":true` must not be silently accepted. (X) PC-3 extended — `dispatch()` generates a non-constant per-call request `id`; after decoding, verifies `resp.ID == req.ID`; mismatch = E-RPC-001; per ADR-012 §3 step 6. |
+| 1.3 | 2026-06-29 | ARCH-12 v1.4 Wave-5 Convergence Ruling M: PC-3 annotated with RPC wire-type precision note — `"type":"request"` is the only valid client RPC envelope type per ADR-012 §3 step 6; server responds with `"type":"response"`; any other type causes silent connection close. Frontmatter version/modified updated. |
 | 1.2 | 2026-06-28 | Wave-5 management plane cross-reference: added BC-2.07.004 (server-side counterpart) to Related BCs. Verification Properties table extended with VP-067 (Authenticate() fail-closed, unit). Traceability Stories row updated: S-6.03 (client auth + VP-067 + VP-030), S-W5.02 (e2e VP-049 across all four daemon types). VP-049 description clarified to reflect e2e scope across all four daemon types (implementing story: S-W5.02). |
 | 1.1 | 2026-06-23 | Initial published draft — sbctl unified CLI with OpenSSH key auth. |
