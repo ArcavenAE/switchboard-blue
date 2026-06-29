@@ -135,16 +135,17 @@ func keyFingerprint(pubkey ed25519.PublicKey) string {
 //
 // Traces to BC-2.07.001 postcondition 1.
 func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, exists := m.svtns[svtnName]; exists {
-		return CreateResult{}, ErrSVTNAlreadyExists
-	}
-
+	// Generate SVTN ID before acquiring the lock to keep the critical section
+	// short and avoid holding the mutex during a syscall (CR-005).
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		return CreateResult{}, fmt.Errorf("generate SVTN ID: %w", err)
+	}
+
+	m.mu.Lock()
+	if _, exists := m.svtns[svtnName]; exists {
+		m.mu.Unlock()
+		return CreateResult{}, ErrSVTNAlreadyExists
 	}
 
 	svtn := SVTN{
@@ -153,9 +154,11 @@ func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
 		CreatedAt: time.Now().UTC(),
 	}
 	m.svtns[svtnName] = svtn
+	m.mu.Unlock()
 
 	// BC-2.07.001 postcondition 2: bootstrap the control node's public key as
 	// the first admitted control-role key (local operation — trust anchor).
+	// RegisterKey called outside the lock: AdmittedKeySet owns its own mutex.
 	m.keySet.RegisterKey(id, m.controlPubKey, admission.RoleControl)
 
 	return CreateResult{SVTN: svtn}, nil
