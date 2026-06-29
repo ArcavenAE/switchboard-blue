@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.001
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,14 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-29
+    version: "1.2"
+    actor: product-owner
+    change: >
+      VP table disambiguated. Removed dual VP-027 rows (unit+proptest) that created
+      ambiguity. VP-027 row retained for proptest (monotone-transition property).
+      New VP-074 (unit) added for threshold classification correctness. L-001 finding.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -88,9 +95,8 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-027 | Quality indicator is always one of: green, yellow, red | unit |
-| VP-027 | Green threshold: RTT p99 ≤ 100ms AND loss ≤ 5% | unit |
-| VP-027 | Hysteresis prevents rapid toggling | proptest |
+| VP-074 | (RTT, loss) → {Green, Yellow, Red} threshold classification is exact; enum cardinality = 3; all boundary values correct | unit |
+| VP-027 | Degradation transitions only downward (green→yellow→red); no red→green skip | proptest |
 
 ## Traceability
 
