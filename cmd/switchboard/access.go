@@ -138,8 +138,8 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	}
 
 	// Start the management server before opening data-plane connections
-	// (ARCH-12 §Daemon Mode Startup — all four daemon modes must start
-	// mgmt.Server before data-plane I/O such as sc.Connect).
+	// (ARCH-12 §Daemon Mode Startup — the access daemon starts its own
+	// mgmt.Server before any data-plane I/O such as sc.Connect).
 	var mgmtWG sync.WaitGroup
 	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {

@@ -2009,15 +2009,13 @@ func TestConfig_Validate_ManagementSocket_E_CFG_008_AC011(t *testing.T) {
 		wantInMsg        string // fragment that must appear in error message
 	}{
 		{
-			// (a) Empty string → E-CFG-008. Management socket present but blank.
-			name:             "empty_string_rejected",
+			// (a) Empty string == Go zero-value == absent from YAML == accepted.
+			// BC-2.09.003 PC-10: "When present, it must be non-empty." Go yaml cannot
+			// distinguish absent from explicit empty string; empty maps to "absent" →
+			// validator returns nil (no E-CFG-008).
+			name:             "empty_string_accepted_as_absent",
 			managementSocket: "",
-			// NOTE: empty string is the zero-value (absent from YAML) and is ACCEPTED
-			// per spec. The validator must return nil for the absent case.
-			// Re-check: BC-2.09.003 PC-10 says "When present, it must be non-empty".
-			// Go yaml zero-value for string is ""; the field cannot distinguish
-			// absent from explicit empty — so empty string maps to "absent" → accepted.
-			wantErr: false,
+			wantErr:          false,
 		},
 		{
 			// (b) Whitespace-only → E-CFG-008.

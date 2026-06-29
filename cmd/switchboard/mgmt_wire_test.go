@@ -362,7 +362,7 @@ func TestMgmtServer_WaitGroupLifecycle(t *testing.T) {
 	_ = srv.Shutdown(shutCtx)
 }
 
-// ── Daemon mode wiring: mgmt starts in all four modes ─────────────────────────
+// ── Daemon mode wiring: mgmt server startup per daemon mode ───────────────────
 
 // TestRunRouter_StartsWithMgmt verifies that runRouter calls startMgmtServer
 // and propagates a "not implemented" error. Once implemented, runRouter must:
@@ -370,7 +370,7 @@ func TestMgmtServer_WaitGroupLifecycle(t *testing.T) {
 //   - Register router-mode handlers
 //   - Shutdown mgmt on context cancel
 //
-// Traces: S-W5.01 §Wiring Pattern (all four daemon modes), AC-010.
+// Traces: S-W5.01 §Wiring Pattern (daemon mode mgmt wiring), AC-010.
 func TestRunRouter_StartsWithMgmt(t *testing.T) {
 	// NOT t.Parallel(): runRouter modifies no shared state but is sequenced
 	// with other mode tests to avoid port conflicts.
@@ -662,8 +662,8 @@ func TestDaemonWiring_ConsoleBindsLocalhost_AC014(t *testing.T) {
 //
 // This is the Critical finding from ARCH-12 v1.2 adversarial review: the access
 // daemon is the only non-stub mode but currently does NOT call startMgmtServer.
-// All four daemon modes (router, access, console, control) MUST start an
-// mgmt.Server per the Scope Note.
+// Each daemon mode (router, access, console, control) must start an
+// mgmt.Server per the Scope Note (ARCH-12).
 //
 // Test strategy: we cannot call runAccess directly (it connects to a real PTY).
 // Instead we verify the behavioral invariant by checking that:
