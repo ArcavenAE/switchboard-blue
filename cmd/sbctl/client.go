@@ -5,8 +5,9 @@ package main
 
 import (
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -96,20 +97,29 @@ func newErrorEnvelope(code, message string) jsonEnvelope {
 func loadEd25519Key(path string) (ed25519.PrivateKey, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, errors.New("not implemented")
+		return nil, fmt.Errorf("open key file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 	// io.LimitReader bounds the read at maxMessageBytes (CWE-400; ADR-012 §6).
-	// ssh.ParsePrivateKey is referenced here so the import is genuinely used.
-	raw, err := io.ReadAll(io.LimitReader(f, maxMessageBytes))
+	// Read one byte beyond the limit to detect oversized files.
+	raw, err := io.ReadAll(io.LimitReader(f, maxMessageBytes+1))
 	if err != nil {
-		return nil, errors.New("not implemented")
+		return nil, fmt.Errorf("read key file: %w", err)
 	}
-	_, err = ssh.ParsePrivateKey(raw)
+	if len(raw) > maxMessageBytes {
+		return nil, fmt.Errorf("key file exceeds maximum size of %d bytes (CWE-400)", maxMessageBytes)
+	}
+	// ParseRawPrivateKey returns a *crypto.PrivateKey (e.g. *ed25519.PrivateKey).
+	rawKey, err := ssh.ParseRawPrivateKey(raw)
 	if err != nil {
-		return nil, errors.New("not implemented")
+		return nil, fmt.Errorf("parse private key: %w", err)
 	}
-	return nil, errors.New("not implemented")
+	// ssh.ParseRawPrivateKey returns *ed25519.PrivateKey for Ed25519 keys.
+	edPrivPtr, ok := rawKey.(*ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("key is not an Ed25519 private key (got %T)", rawKey)
+	}
+	return *edPrivPtr, nil
 }
 
 // Authenticate performs the ADR-012 client-side challenge-response handshake on conn.
@@ -125,12 +135,54 @@ func loadEd25519Key(path string) (ed25519.PrivateKey, error) {
 //  5. Read AUTH_OK or AUTH_FAIL via json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).
 //  6. Return nil ONLY on AUTH_OK; return non-nil error for all other outcomes.
 func Authenticate(conn net.Conn, privKey ed25519.PrivateKey) error {
-	// Reference types used in the protocol so they are not flagged unused.
-	// The implementer will replace this body with the real 7-step handshake.
-	var _ challengeMsg
-	var _ challengeResponseMsg
-	var _ authResultMsg
-	return errors.New("not implemented")
+	// Step 1: Read CHALLENGE message with bounded read (CWE-400; ADR-012 §6).
+	var challenge challengeMsg
+	if err := json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).Decode(&challenge); err != nil {
+		return fmt.Errorf("read challenge: %w", err)
+	}
+
+	// Step 2: Decode nonce from base64url; must be exactly 32 bytes.
+	if challenge.Nonce == "" {
+		return fmt.Errorf("challenge missing nonce field")
+	}
+	nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+	if err != nil {
+		return fmt.Errorf("decode challenge nonce: %w", err)
+	}
+	if len(nonceBytes) != 32 {
+		return fmt.Errorf("challenge nonce must be 32 bytes, got %d", len(nonceBytes))
+	}
+
+	// Step 3: Sign the nonce with the operator private key.
+	nonceSig := ed25519.Sign(privKey, nonceBytes)
+
+	// Step 4: Send CHALLENGE_RESPONSE. The private key is NEVER transmitted —
+	// only the 32-byte public key goes over the wire (DI-002).
+	pubKey := privKey.Public().(ed25519.PublicKey)
+	resp := challengeResponseMsg{
+		Type:     "challenge_response",
+		NonceSig: base64.RawURLEncoding.EncodeToString(nonceSig),
+		PubKey:   base64.RawURLEncoding.EncodeToString(pubKey),
+	}
+	if err := json.NewEncoder(conn).Encode(resp); err != nil {
+		return fmt.Errorf("send challenge response: %w", err)
+	}
+
+	// Step 5: Read AUTH_OK or AUTH_FAIL with bounded read (CWE-400; ADR-012 §6).
+	var result authResultMsg
+	if err := json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).Decode(&result); err != nil {
+		return fmt.Errorf("read auth result: %w", err)
+	}
+
+	// Step 6: Return nil ONLY on AUTH_OK. All other outcomes are errors.
+	switch result.Type {
+	case "auth_ok":
+		return nil
+	case "auth_fail":
+		return fmt.Errorf("E-ADM-010: authentication failed")
+	default:
+		return fmt.Errorf("unexpected auth response type: %q", result.Type)
+	}
 }
 
 // dispatch sends a single authenticated RPC request over conn and returns the raw
@@ -141,5 +193,5 @@ func dispatch(conn net.Conn, command string, args any) (json.RawMessage, error) 
 	// Reference types used in the protocol so they are not flagged unused.
 	var _ rpcRequestMsg
 	var _ rpcResponseMsg
-	return nil, errors.New("not implemented")
+	return nil, fmt.Errorf("dispatch not implemented for command %q", command)
 }

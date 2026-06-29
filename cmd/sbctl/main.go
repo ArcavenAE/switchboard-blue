@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -85,9 +86,23 @@ func connectAndRun(target, keyPath string, useJSON bool, timeout time.Duration, 
 		os.Exit(1)
 	}
 	defer func() { _ = conn.Close() }()
+	// Apply an overall deadline so that auth + dispatch cannot hang indefinitely
+	// even after a successful TCP handshake (BC-2.07.003 Inv-2; AC-007).
+	if err = conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		writeError(useJSON, "E-NET-001", fmt.Sprintf("daemon unreachable: %s: set deadline: %s", target, err))
+		os.Exit(1)
+	}
 
 	if err = Authenticate(conn, privKey); err != nil {
-		writeError(useJSON, "E-ADM-010", "authentication failed")
+		// If authentication failed due to a network/timeout error, report E-NET-001
+		// (BC-2.07.003 Inv-2: timeout is treated as unreachable). AUTH_FAIL from
+		// the server is reported as E-ADM-010 (BC-2.07.002 PC-4).
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			writeError(useJSON, "E-NET-001", fmt.Sprintf("daemon unreachable: %s: connection timed out", target))
+		} else {
+			writeError(useJSON, "E-ADM-010", "authentication failed")
+		}
 		os.Exit(1)
 	}
 
