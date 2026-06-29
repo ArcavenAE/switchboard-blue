@@ -932,10 +932,20 @@ func TestDispatch_EmitsCorrectWireType(t *testing.T) {
 		copy(raw, buf[:n])
 		rawRequestCh <- raw
 
-		// Respond with the canonical server wire-type per ADR-012 §3 step 6.
-		// "type":"response" is the ONLY accepted server wire-type (Ruling M).
-		const response = `{"type":"response","id":"1","ok":true,"data":{}}` + "\n"
-		_, _ = server.Write([]byte(response))
+		// Parse the request id so we can echo it back — Ruling X requires dispatch()
+		// to verify resp.ID == req.ID, so hardcoding "1" breaks once dispatch() emits
+		// a non-constant id. If parse fails, fall back to empty string (test will
+		// still run; dispatch() will error on the mismatch and the secondary assertion
+		// will surface the issue — no t.Fatal from this goroutine per Ruling W).
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(raw, &req)
+
+		// Respond with the canonical server wire-type per ADR-012 §3 step 6,
+		// echoing the request id (Ruling X fidelity).
+		resp := fmt.Sprintf(`{"type":"response","id":%q,"ok":true,"data":{}}`, req.ID) + "\n"
+		_, _ = server.Write([]byte(resp))
 	}()
 
 	data, err := dispatch(context.Background(), client, "ping", nil)
@@ -986,13 +996,21 @@ func TestDispatch_AcceptsResponseType(t *testing.T) {
 		defer func() { _ = server.Close() }()
 		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
 
-		// Drain the RPC request so dispatch() does not block on its Encode call.
+		// Read the RPC request and parse its id so we can echo it back.
+		// Ruling X requires dispatch() to verify resp.ID == req.ID — hardcoding
+		// "1" breaks once dispatch() emits a non-constant id. If parse fails,
+		// fall back to empty string (no t.Fatal from goroutine per Ruling W).
 		buf := make([]byte, 4096)
-		_, _ = server.Read(buf)
+		n, _ := server.Read(buf)
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(buf[:n], &req)
 
-		// Reply with the canonical "type":"response" wire-type (ADR-012 §3 step 6).
-		const response = `{"type":"response","id":"1","ok":true,"data":{"status":"ok"}}` + "\n"
-		_, _ = server.Write([]byte(response))
+		// Reply with the canonical "type":"response" wire-type (ADR-012 §3 step 6),
+		// echoing the request id (Ruling X fidelity).
+		resp := fmt.Sprintf(`{"type":"response","id":%q,"ok":true,"data":{"status":"ok"}}`, req.ID) + "\n"
+		_, _ = server.Write([]byte(resp))
 	}()
 
 	data, err := dispatch(context.Background(), client, "router.status", nil)
