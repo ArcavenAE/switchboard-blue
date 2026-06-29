@@ -26,6 +26,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"log"
@@ -123,16 +125,22 @@ func tickIntervalFor(cfg *config.Config) time.Duration {
 // per ARCH-12 §Daemon Mode Startup. The mgmt goroutine is WaitGroup-tracked
 // per ARCH-01 §Goroutine WaitGroup Contract.
 func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error {
+	// Generate an ephemeral Ed25519 keypair for the daemon management identity
+	// (BC-2.07.004 Precondition 3 / AC-015 / Ruling A.1). The key is ephemeral —
+	// identity changes across restarts. Persistent key_file wiring is deferred to
+	// S-6.02. The bootstrap OperatorKeySet (nil ops) means the daemon's own
+	// ephemeral key is the sole authorized key until operator keys are configured.
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		// Extremely unlikely (DRNG failure). Abort startup — a daemon without
+		// a management identity cannot be securely administered.
+		return fmt.Errorf("access: generate daemon keypair: %w", err)
+	}
+
 	// Start the management server first (ARCH-12 §Daemon Mode Startup — all four
 	// daemon modes must start mgmt.Server before data-plane work).
-	// The access daemon does not yet load a persistent Ed25519 keypair (that wiring
-	// is deferred to the key_file config story); a nil key is accepted by NewServer
-	// and used only when connections are handled. The bootstrap OperatorKeySet (nil
-	// keys) means the daemon's own key is the sole authorized key — in bootstrap mode
-	// with a nil daemonKey, no management connections will authenticate, which is
-	// acceptable for the access daemon until key_file wiring is implemented.
 	var mgmtWG sync.WaitGroup
-	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", nil, nil)
+	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {
 		// Log but do not abort: management server failure is non-fatal for the
 		// access data-plane in this wave (the socket path may not be writable in

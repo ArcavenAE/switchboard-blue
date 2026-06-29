@@ -263,7 +263,23 @@ func startMgmtServer(
 
 	// Construct the management server. daemonVersion comes from the package-level
 	// `version` variable (ldflags-injected; "dev" for unreleased builds).
-	srv := mgmt.NewServer(ln, daemonPrivKey, operatorKeys, handlers, version)
+	// mgmt.NewServer panics on construction invariant violations (nil/short key,
+	// empty daemonVersion). Recover here so callers receive an error instead of a
+	// binary crash — the caller can log and decide whether to abort or continue.
+	var srv *mgmt.Server
+	var newServerErr error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				_ = ln.Close()
+				newServerErr = fmt.Errorf("startMgmtServer: NewServer: %v", r)
+			}
+		}()
+		srv = mgmt.NewServer(ln, daemonPrivKey, operatorKeys, handlers, version)
+	}()
+	if newServerErr != nil {
+		return nil, newServerErr
+	}
 
 	// WaitGroup-tracked goroutine per ARCH-01 §Goroutine WaitGroup Contract.
 	wg.Add(1)
