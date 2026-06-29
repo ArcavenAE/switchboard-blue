@@ -183,7 +183,7 @@ func loadEd25519Key(path string, homeDir func() (string, error)) (ed25519.Privat
 //  2. Read CHALLENGE via json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).
 //  3. Decode nonce_bytes from base64url nonce field; error if absent or invalid.
 //  4. Sign: nonce_sig = ed25519.Sign(privKey, nonce_bytes).
-//     NOTE: daemon_sig is decoded above but NOT verified in MVP.
+//     NOTE: daemon_sig is received but neither decoded nor verified in MVP.
 //     Trust-on-first-use deferral per S-6.03 AC-002 and ARCH-12 §Authenticate()
 //     FAIL-CLOSED Contract step 4 note. Verification deferred to post-MVP hardening.
 //  5. Send CHALLENGE_RESPONSE with nonce_sig and pubkey (32-byte Ed25519 public key).
@@ -218,7 +218,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 	}
 
 	// Step 4: Sign the nonce with the operator private key.
-	// daemon_sig is decoded (field present in challengeMsg) but NOT verified in MVP.
+	// daemon_sig is received (field present in challengeMsg) but NOT verified in MVP.
 	// Trust-on-first-use deferral: S-6.03 AC-002; ARCH-12 §Authenticate() step 4 note.
 	// Post-MVP: verify daemon_sig against the daemon's public key from a trust store.
 	nonceSig := ed25519.Sign(privKey, nonceBytes)
