@@ -82,6 +82,16 @@ func listenUnixMgmt(path string) (net.Listener, error) {
 	// Ensure fd is closed on exec and on error paths below.
 	syscall.CloseOnExec(fd)
 
+	// Pre-bind cleanup: if a stale socket inode exists at path (e.g. from a
+	// previous daemon crash or SIGKILL where SetUnlinkOnClose(false) left the
+	// inode on disk), remove it before Bind to prevent EADDRINUSE on restart.
+	// The os.ModeSocket guard ensures only socket-mode inodes are removed —
+	// regular files, directories, and symlinks are left untouched (AC-019 /
+	// BC-2.07.004 EC-013 / Ruling O).
+	if fi, lstatErr := os.Lstat(path); lstatErr == nil && fi.Mode()&os.ModeSocket != 0 {
+		_ = os.Remove(path) // ignore error — Bind will fail if inode still present
+	}
+
 	// Step 2: bind with umask=0177 so the socket inode is created with 0600.
 	// The critical section covers only the single bind(2) syscall — the minimum
 	// possible exposure of the process-global umask.

@@ -61,6 +61,15 @@ func tempSockPath(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
 	}
+	// Ensure execute permission on the temp directory. listenUnixMgmt sets the
+	// process umask to 0177 inside umaskMu during bind(2); if MkdirTemp runs
+	// concurrently in another goroutine, it may receive a 0600 directory (no
+	// execute). Restoring 0700 here eliminates test-setup EPERM on WriteFile
+	// and on bind itself (the same guard exists inside listenUnixMgmt but runs
+	// too late when WriteFile is called before listenUnixMgmt).
+	if fi, statErr := os.Lstat(dir); statErr == nil && fi.Mode().Perm()&0o100 == 0 {
+		_ = os.Chmod(dir, fi.Mode().Perm()|0o111)
+	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return filepath.Join(dir, "m.sock")
 }
