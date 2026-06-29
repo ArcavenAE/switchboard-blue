@@ -6,8 +6,8 @@
 // (Red Gate per BC-5.38.001).
 //
 // Package main (internal test file) so unexported names (loadEd25519Key,
-// homeDirFunc, newSuccessEnvelope, newErrorEnvelope, Authenticate,
-// connectAndRun) are directly accessible.
+// newSuccessEnvelope, newErrorEnvelope, Authenticate, connectAndRun) are
+// directly accessible.
 package main
 
 import (
@@ -446,7 +446,7 @@ func TestSbctl_KeyLoading_Ed25519(t *testing.T) {
 
 	t.Run("well_formed_ed25519_key_loads_to_64_bytes", func(t *testing.T) {
 		t.Parallel()
-		privKey, err := loadEd25519Key(fixtureKey)
+		privKey, err := loadEd25519Key(fixtureKey, os.UserHomeDir)
 		if err != nil {
 			t.Fatalf("loadEd25519Key(%q) returned unexpected error: %v", fixtureKey, err)
 		}
@@ -465,7 +465,7 @@ func TestSbctl_KeyLoading_Ed25519(t *testing.T) {
 		if err := os.WriteFile(oversized, garbage, 0o600); err != nil {
 			t.Fatalf("write oversized file: %v", err)
 		}
-		_, err := loadEd25519Key(oversized)
+		_, err := loadEd25519Key(oversized, os.UserHomeDir)
 		if err == nil {
 			t.Fatal("loadEd25519Key accepted a file > 64 KiB — io.LimitReader boundary not enforced (CWE-400)")
 		}
@@ -473,7 +473,7 @@ func TestSbctl_KeyLoading_Ed25519(t *testing.T) {
 
 	t.Run("nonexistent_file_returns_error", func(t *testing.T) {
 		t.Parallel()
-		_, err := loadEd25519Key("/nonexistent/path/to/key.pem")
+		_, err := loadEd25519Key("/nonexistent/path/to/key.pem", os.UserHomeDir)
 		if err == nil {
 			t.Fatal("loadEd25519Key returned nil error for a nonexistent path")
 		}
@@ -707,40 +707,31 @@ func TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001(t *testing.T) {
 }
 
 // TestSbctl_TildeExpansion_DefaultKey verifies AC-008 (BC-2.07.003 EC-007 +
-// Precondition 3): loadEd25519Key expands leading ~ via os.UserHomeDir() before
-// opening the file. Four sub-cases are required:
+// Precondition 3): loadEd25519Key expands leading ~ via the homeDir parameter
+// before opening the file. Four sub-cases are required:
 //
 //  1. Happy path: ~ expands to a real dir with a valid key.
-//  2. Sub-case (a): os.UserHomeDir() returns error → E-CFG-010 with ORIGINAL path.
+//  2. Sub-case (a): homeDir() returns error → E-CFG-010 with ORIGINAL path.
 //  3. Sub-case (b): expansion ok but file missing → E-CFG-010 with EXPANDED path.
-//  4. ~username literal: treated as literal (no expansion attempted).
+//  4. ~username literal: treated as literal (homeDir not called).
 //
 // BC: BC-2.07.003 EC-007 + Precondition 3; AC-008.
 //
-// RED GATE: current loadEd25519Key has no tilde expansion (it calls os.Open(path)
-// directly). Sub-case 1 fails because "~/.ssh/id_ed25519" is not a valid absolute
-// path. Sub-cases (a) and (b) fail because no homeDirFunc injection exists yet.
-// Sub-case 4 passes (os.Open on a literal "~root/..." path returns a file-not-found
-// error, which is acceptable — but the test also asserts E-CFG-010 contains the
-// literal path, which may fail if the error message wraps differently).
-//
-// The injectable homeDirFunc package variable must be declared in client.go:
-//
-//	var homeDirFunc = os.UserHomeDir
-//
-// Tests override it in-process; the variable is restored via t.Cleanup.
+// RACE-SAFE DESIGN: homeDir is injected as a per-call parameter to
+// loadEd25519Key — no package-global is mutated. All subtests can run in
+// parallel without data races under -race. (Option b from the race-fix
+// analysis: parameter injection instead of global mutation.)
 func TestSbctl_TildeExpansion_DefaultKey(t *testing.T) {
 	t.Parallel()
 
-	// generateValidKeyFile writes an OpenSSH Ed25519 private key to dir/.ssh/id_ed25519
-	// using golang.org/x/crypto/ssh and returns the full path.
-	generateValidKeyFile := func(t *testing.T, dir string) string {
+	// setupKeyFile writes an OpenSSH Ed25519 key fixture to dir/.ssh/id_ed25519
+	// and returns the full path.
+	setupKeyFile := func(t *testing.T, dir string) string {
 		t.Helper()
 		sshDir := filepath.Join(dir, ".ssh")
 		if err := os.MkdirAll(sshDir, 0o700); err != nil {
 			t.Fatalf("mkdir .ssh: %v", err)
 		}
-		// Copy the testdata fixture (already generated, avoids re-generating).
 		fixtureBytes, err := os.ReadFile(filepath.Join("testdata", "test_ed25519_key"))
 		if err != nil {
 			t.Fatalf("read testdata key: %v", err)
@@ -755,14 +746,12 @@ func TestSbctl_TildeExpansion_DefaultKey(t *testing.T) {
 	t.Run("happy_path_tilde_slash_expands_to_home", func(t *testing.T) {
 		t.Parallel()
 		tmp := t.TempDir()
-		generateValidKeyFile(t, tmp)
+		setupKeyFile(t, tmp)
 
-		// Override homeDirFunc to return our temp dir.
-		original := homeDirFunc
-		homeDirFunc = func() (string, error) { return tmp, nil }
-		t.Cleanup(func() { homeDirFunc = original })
+		// Inject homeDir returning our temp dir — no global mutation.
+		homeDir := func() (string, error) { return tmp, nil }
 
-		privKey, err := loadEd25519Key("~/.ssh/id_ed25519")
+		privKey, err := loadEd25519Key("~/.ssh/id_ed25519", homeDir)
 		if err != nil {
 			t.Fatalf("AC-008 happy path: loadEd25519Key returned error: %v", err)
 		}
@@ -772,20 +761,18 @@ func TestSbctl_TildeExpansion_DefaultKey(t *testing.T) {
 	})
 
 	t.Run("sub_case_a_homedir_error_uses_original_path", func(t *testing.T) {
-		// AC-008 sub-case (a): os.UserHomeDir() returns error → E-CFG-010 with
-		// the ORIGINAL unexpanded path in the message.
+		// AC-008 sub-case (a): homeDir() returns error → E-CFG-010 with the
+		// ORIGINAL unexpanded path in the message.
 		t.Parallel()
 
-		original := homeDirFunc
-		homeDirFunc = func() (string, error) {
+		homeDir := func() (string, error) {
 			return "", fmt.Errorf("home directory unavailable: no HOME environment")
 		}
-		t.Cleanup(func() { homeDirFunc = original })
 
 		const inputPath = "~/.ssh/id_ed25519"
-		_, err := loadEd25519Key(inputPath)
+		_, err := loadEd25519Key(inputPath, homeDir)
 		if err == nil {
-			t.Fatal("AC-008(a): expected error when homeDirFunc fails, got nil")
+			t.Fatal("AC-008(a): expected error when homeDir fails, got nil")
 		}
 		// Error message must contain the ORIGINAL path (not an expanded form).
 		if !strings.Contains(err.Error(), inputPath) {
@@ -798,20 +785,18 @@ func TestSbctl_TildeExpansion_DefaultKey(t *testing.T) {
 	})
 
 	t.Run("sub_case_b_expansion_ok_but_file_missing_uses_expanded_path", func(t *testing.T) {
-		// AC-008 sub-case (b): homeDirFunc succeeds but file doesn't exist →
+		// AC-008 sub-case (b): homeDir() succeeds but file doesn't exist →
 		// E-CFG-010 with the EXPANDED path in the message.
 		t.Parallel()
 		tmp := t.TempDir()
 		// Do NOT create the key file — the file is missing.
 
-		original := homeDirFunc
-		homeDirFunc = func() (string, error) { return tmp, nil }
-		t.Cleanup(func() { homeDirFunc = original })
+		homeDir := func() (string, error) { return tmp, nil }
 
 		const inputPath = "~/.ssh/id_ed25519"
 		expandedPath := filepath.Join(tmp, ".ssh", "id_ed25519")
 
-		_, err := loadEd25519Key(inputPath)
+		_, err := loadEd25519Key(inputPath, homeDir)
 		if err == nil {
 			t.Fatal("AC-008(b): expected error when expanded file is missing, got nil")
 		}
@@ -823,27 +808,23 @@ func TestSbctl_TildeExpansion_DefaultKey(t *testing.T) {
 
 	t.Run("tilde_username_treated_as_literal", func(t *testing.T) {
 		// AC-008 sub-case (~username): "~root/.ssh/id_ed25519" is treated as a
-		// literal path (not expanded). os.Open on this literal fails with a
-		// file-not-found error containing the literal string.
+		// literal path (not expanded). homeDir must NOT be called.
 		t.Parallel()
 
-		original := homeDirFunc
-		// homeDirFunc must NOT be called for ~username paths.
 		called := false
-		homeDirFunc = func() (string, error) {
+		homeDir := func() (string, error) {
 			called = true
 			return "", fmt.Errorf("should not have been called for ~username path")
 		}
-		t.Cleanup(func() { homeDirFunc = original })
 
 		const literalPath = "~root/.ssh/id_ed25519"
-		_, err := loadEd25519Key(literalPath)
+		_, err := loadEd25519Key(literalPath, homeDir)
 		if err == nil {
 			t.Fatal("AC-008(~username): expected error for literal ~username path, got nil")
 		}
-		// homeDirFunc must NOT have been called.
+		// homeDir must NOT have been called.
 		if called {
-			t.Error("AC-008(~username): homeDirFunc was called for a ~username path — only ~/ should trigger expansion")
+			t.Error("AC-008(~username): homeDir was called for a ~username path — only ~/ should trigger expansion")
 		}
 		// Error message must reference the literal path.
 		if !strings.Contains(err.Error(), literalPath) {

@@ -27,11 +27,6 @@ const maxMessageBytes = 1 << 16 // 64 KiB
 // carries no deadline. Prevents indefinite hangs (CWE-400 slowloris, Ruling 2).
 const handshakeTimeout = 10 * time.Second
 
-// homeDirFunc is the injectable home-directory lookup used by loadEd25519Key for
-// tilde expansion. Tests override this to avoid touching the real home directory.
-// BC-2.07.003 EC-007.
-var homeDirFunc = os.UserHomeDir
-
 // challengeMsg is the CHALLENGE message received from the daemon (ADR-012 step 2).
 type challengeMsg struct {
 	Type      string `json:"type"`
@@ -105,19 +100,24 @@ func newErrorEnvelope(code, message string) jsonEnvelope {
 // The private key is extracted as crypto/ed25519.PrivateKey via golang.org/x/crypto/ssh.
 // The key is never serialized, logged, or transmitted (DI-002).
 //
-// Tilde expansion (BC-2.07.003 EC-007 + Precondition 3):
-//   - "~/" or exactly "~" prefix: expanded via homeDirFunc() before file-open.
-//   - homeDirFunc() error → E-CFG-010 with the ORIGINAL path in the message.
+// homeDir is the home-directory lookup injected by the caller for tilde expansion
+// (BC-2.07.003 EC-007 + Precondition 3). Production callers pass os.UserHomeDir;
+// tests pass a per-call closure — no shared package-global is mutated, so parallel
+// tests are safe under -race.
+//
+// Tilde expansion rules:
+//   - "~/" or exactly "~" prefix: expanded via homeDir() before file-open.
+//   - homeDir() error → E-CFG-010 with the ORIGINAL path in the message.
 //   - expansion ok but file unreadable → E-CFG-010 with the EXPANDED path.
 //   - "~username" (other-user) is out of scope; treated as a literal path.
-func loadEd25519Key(path string) (ed25519.PrivateKey, error) {
+func loadEd25519Key(path string, homeDir func() (string, error)) (ed25519.PrivateKey, error) {
 	originalPath := path
 
 	// Expand "~" or "~/" prefix only (not "~username"); BC-2.07.003 EC-007.
 	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, err := homeDirFunc()
+		home, err := homeDir()
 		if err != nil {
-			// sub-case (a): homeDirFunc error → original path in message.
+			// sub-case (a): homeDir error → original path in message.
 			return nil, fmt.Errorf("key load failed: %s: home directory unavailable: %w", originalPath, err)
 		}
 		if path == "~" {
@@ -292,7 +292,8 @@ func dispatch(conn net.Conn, command string, args any) (json.RawMessage, error) 
 //nolint:unparam // cmdArgs is always nil in current stubs; callers will vary after S-6.02/S-5.02
 func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, command string, cmdArgs any) error {
 	// Key load and validation BEFORE any dial (BC-2.07.003 EC-005; Ruling 5).
-	privKey, err := loadEd25519Key(keyPath)
+	// os.UserHomeDir is the real home-directory lookup; tests inject per-call.
+	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
 	if err != nil {
 		writeError(useJSON, "E-CFG-010", err.Error())
 		return err
