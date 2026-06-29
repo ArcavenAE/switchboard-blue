@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "1.3"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-06-27T00:00:00
@@ -84,27 +84,33 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | implemented | VP-058.md |
 | VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | draft | VP-059.md |
 | VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | draft | VP-060.md |
+| VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | draft | VP-061.md |
+| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
+| VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | draft | VP-063.md |
 
 ## Counts
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit |
 |-----------|---------|------|-------------|-----|-----------|------------|
-| 60 | 33 | 2 | 12 | 10 | 2 | 1 |
+| 63 | 34 | 3 | 12 | 10 | 2 | 2 |
 
-> Arithmetic check: 33 + 2 + 12 + 10 + 2 + 1 = 60. Consistent.
+> Arithmetic check: 34 + 3 + 12 + 10 + 2 + 2 = 63. Consistent.
 > VP-060 added 2026-06-27 for BC-2.04.007 (daemon startup/shutdown lifecycle; integration/subprocess).
+> VP-061 added 2026-06-28 for BC-2.06.003 (metrics content-absence code-audit; DI-001 enforcement).
+> VP-062 added 2026-06-28 for BC-2.06.003 (JSON well-formedness fuzz across all CLI forms including alias).
+> VP-063 added 2026-06-28 for BC-2.02.003 PC-5 (degraded-flag boolean: IsDegraded() tracks EWMA vs DegradedRTTThresholdMS; proptest).
 
 ## Phase Distribution
 
 | Phase | Count |
 |-------|-------|
-| P0 | 42 |
-| P1 | 14 |
+| P0 | 43 |
+| P1 | 16 |
 | P2 | 4 |
-| **Total** | **60** |
+| **Total** | **63** |
 
-> Phase recounted: VP-060 (P0) added. P0 = 41+1 = 42. P1 = 14. P2 = 4. Total = 60.
+> Phase recounted: VP-061 (P1) and VP-062 (P1) added 2026-06-28. VP-063 (P0) added 2026-06-28. P0 = 43. P1 = 16. P2 = 4. Total = 63.
 
 ## BC Coverage Check
 
-44 BCs total (BC-2.04.007 added). All 44 have at least one VP. VP-060 added for BC-2.04.007 (daemon lifecycle — connect-failure exit and clean SIGTERM/SIGINT shutdown). Zero coverage gaps.
+44 BCs total. All 44 have at least one VP. VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening — content-absence audit and JSON well-formedness fuzz). VP-063 added for BC-2.02.003 PC-5 (dedicated degraded-flag property; proptest). Zero coverage gaps.

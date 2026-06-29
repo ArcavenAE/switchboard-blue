@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.003
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -19,6 +19,7 @@ lifecycle_status: active
 introduced: v0.1.0
 modified:
   - 2026-06-27T00:00:00
+  - 2026-06-28T00:00:00 # v1.3 — VP-id assignment: add VP-063 as dedicated degraded-flag property for PC-5; no behavioral change
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -87,9 +88,9 @@ Keep-alive probe frame sent; keep-alive response received; keep-alive timeout.
 
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
-| VP-026, VP-040 | Path ranking is consistent with measured RTT values | proptest |
-| VP-026, VP-040 | Path removed from active set after N=3 consecutive missed keep-alives | unit |
-| VP-026, VP-040 | EWMA converges toward true RTT within 10 probe intervals | proptest |
+| VP-026 | Path score ranking is transitive (Score ordering is total and consistent) | proptest |
+| VP-040 | Multipath failover: path recovery detected within 2s after RTT drops below threshold | e2e |
+| VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT > DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears flag | proptest |
 
 ## Traceability
 

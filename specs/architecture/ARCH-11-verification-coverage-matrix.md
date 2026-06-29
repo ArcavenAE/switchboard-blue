@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.3"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-06-27T00:00:00
@@ -17,13 +17,15 @@ modified:
   - 2026-06-26T12:00:00 # v1.1 — WG3-H-001: Update totals to 43 BCs / 58 VPs; add missing BC-2.05.008 → VP-058 trace row; update internal/routing VP count from 4 to 5 (add code-audit)
   - 2026-06-27T00:00:00 # v1.2 — Wave 3 gate F-2 adjudication: add VP-059 (FailureCounter threshold proptest, internal/admission); update totals to 59 VPs; update internal/admission VP count from 5 to 6
   - 2026-06-27T00:00:00 # v1.3 — BC-2.04.007 registration: add VP-060 (daemon lifecycle integration, cmd/switchboard); update totals to 60 VPs; add cmd/switchboard row (0→1 VP); update BC coverage 43→44 BCs
+  - 2026-06-28T00:00:00 # v1.4 — VP-id assignment: add VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) for BC-2.06.003; update totals to 62 VPs
+  - 2026-06-28T00:00:00 # v1.5 — F-002 + F-007: mint VP-063 (proptest, internal/paths) for BC-2.02.003 PC-5 degraded-flag boolean; fix stale "60 VPs total" prose to 63; update totals to 63 VPs
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 60 (VP-001 through VP-060, per VP-INDEX).
+> Total VP count: 63 (VP-001 through VP-063, per VP-INDEX).
 
 ## BC → VP Coverage Table
 
@@ -38,7 +40,7 @@ modified:
 | BC-2.01.007 | Session continuity across IP change | internal/admission | VP-036 | e2e | P0 |
 | BC-2.02.001 | Duplicate-and-race: same frame on two paths | internal/multipath | VP-024 | proptest | P0 |
 | BC-2.02.002 | First-arriving copy delivered, duplicates discarded | internal/multipath | VP-024, VP-054 | proptest + integration | P0 |
-| BC-2.02.003 | Per-path RTT/loss tracked, paths ranked | internal/paths | VP-026 | proptest | P0 |
+| BC-2.02.003 | Per-path RTT/loss tracked, paths ranked | internal/paths | VP-026, VP-063 | proptest | P0 |
 | BC-2.02.004 | Upstream idempotent replay window | internal/replay | VP-022, VP-023 | proptest | P0 |
 | BC-2.02.005 | Downstream ARQ with piggybacked ACK/SACK | internal/arq | VP-019, VP-020 | proptest | P0 |
 | BC-2.02.006 | TLPKTDROP terminates overdue downstream frames | internal/arq | VP-021 | proptest | P0 |
@@ -65,7 +67,7 @@ modified:
 | BC-2.05.008 | RouteFrame HMAC enforcement | internal/routing | VP-058, VP-059 | code-audit + proptest | P0 |
 | BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027 | proptest | P1 |
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
-| BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics | VP-047 | integration | P1 |
+| BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics, cmd/sbctl | VP-047, VP-061, VP-062 | integration + code-audit + fuzz | P1 |
 | BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
 | BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049 | e2e | P2 |
 | BC-2.07.003 | sbctl reports clear error when daemon unreachable | cmd/sbctl | VP-030 | integration | P0 |
@@ -81,14 +83,14 @@ modified:
 | Total BCs | 44 |
 | BCs with ≥1 VP | 44 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 60 |
-| P0 VPs (pure-core proptest/fuzz) | 42 |
-| P1 VPs (integration/e2e) | 14 |
+| Total unique VPs | 63 |
+| P0 VPs (pure-core proptest/fuzz) | 43 |
+| P1 VPs (integration/e2e) | 16 |
 | P2+ VPs (advanced/PE phase) | 4 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 60 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 63 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -98,8 +100,8 @@ VP counts recounted from VP-INDEX (canonical source of truth, 60 VPs total).
 | internal/arq | 4 | proptest (4) |
 | internal/replay | 2 | proptest (2) |
 | internal/multipath | 4 | proptest (2), e2e (1), integration (1) |
-| internal/paths | 1 | proptest (1) |
-| internal/metrics | 3 | proptest (1), integration (2) |
+| internal/paths | 2 | proptest (2) |
+| internal/metrics | 4 | proptest (1), integration (2), code-audit (1) |
 | internal/admission | 6 | proptest (5), e2e (1) |
 | internal/routing | 5 | proptest (2), fuzz (1), e2e (1), code-audit (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
@@ -108,11 +110,11 @@ VP counts recounted from VP-INDEX (canonical source of truth, 60 VPs total).
 | internal/discovery | 3 | integration (1), e2e (1), proptest (1) |
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
-| cmd/sbctl | 3 | integration (1), e2e (2) |
+| cmd/sbctl | 4 | integration (1), e2e (2), fuzz (1) |
 | cmd/switchboard | 1 | integration (1) |
-| **Total** | **60** | |
+| **Total** | **63** | |
 
-Per-module sum = 60 (no off-table VPs). VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
+Per-module sum = 63 (no off-table VPs). VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27. VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) added 2026-06-28 for BC-2.06.003. VP-063 (proptest, internal/paths) added 2026-06-28 for BC-2.02.003 PC-5 degraded-flag boolean.
 
 ## Zero-VP BCs Check
 

@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-4-gate-closed
+phase_step: wave-5-planning-complete
 phase_3_active_wave: 5
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
@@ -29,7 +29,7 @@ l3_complete: true
 l3_bc_count: 44
 l3_cap_coverage: "30/30"
 l4_complete: true
-l4_vp_count: 58
+l4_vp_count: 63
 arch_sections: 13
 arch_adrs: 8
 dtu_required: false
@@ -64,7 +64,7 @@ wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
 develop_head: 7ef43b8
 open_prs: 0
-timestamp: 2026-06-28T23:59:00Z
+timestamp: 2026-06-28T23:59:59Z
 last_update: 2026-06-28
 ---
 
@@ -72,7 +72,7 @@ last_update: 2026-06-28
 
 ## Current State
 
-Wave 4 GATE CLOSED — all 5 stories MERGED, wave-level adversary CONVERGED (6/6 passes C=0/H=0/M=0, 2 rounds), wave gate consistency audit CONDITIONAL PASS (14 findings all resolved), wave gate APPROVED 2026-06-28. Doc-hygiene PR #29 (7ef43b8) fixed adversary finding L-1 + S403-COS1/COS2. develop HEAD = 7ef43b8. 0 open PRs. Cycle-close items complete (S-6.04 created, BC-2.09.003 traceability refreshed, drift items resolved/archived). Next: Wave 5 planning.
+Wave 5 PLANNED (Observability + CLI; 5 stories / 25 pts: S-5.01 quality-indicator, S-5.02 sbctl-metrics-query [canonical+alias+p99], S-5.03 degraded-path-flag [new, closes drift S401-O3], S-6.02 svtn-lifecycle, S-6.03 sbctl-cli-scaffold). Spec change set committed + fresh-context consistency audit CONDITIONAL PASS with all 7 findings (F-001..F-007) resolved. Recommended sequence: S-6.03 creates cmd/sbctl scaffold → S-6.02 adds admin.go; S-5.03 (depends S-4.01) → S-5.01 (consumes Snapshot().Degraded) → S-5.02 (needs S-5.01 + S-6.03); S-6.02 ∥ S-5.02 FORBIDDEN (both edit cmd/sbctl/main.go). Next: begin Wave-5 TDD with S-6.03 + S-5.03 (the two roots with no unsatisfied intra-wave deps).
 
 ## Phase Progress
 
@@ -108,7 +108,6 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | W3-DEFER-4 | MED | M-2 unbounded E-ADM-016 log volume under sustained attack (BC-2.05.005 gap). | product-owner | deferred |
 | W3-DEFER-5 | MED | EC-005: no CI lint rule enforces internal/ import boundary structurally. | devops-engineer | deferred |
 | W3-DEFER-6 | MED | Real-connector PTY-EOF lifecycle integration test (mock-only today). | test-writer | deferred |
-| S401-O3 | MED | BC-2.02.003 PC5: degraded-path flag (RTT >200ms) unimplemented in internal/paths. | product-owner/architect | deferred quality-indicator story |
 | S402-F007 | LOW | S-4.02: ARCH-03 line 122 N=3 vs BC-2.02.004 N=5 — reconcile ARCH-03 (BC is authority). | architect | open |
 | S403-O4 | LOW | S-4.03: DegradationEvent single-seq vs BC-2.02.006 PC2 range — per-frame drop OK for MVP. | product-owner | deferred MVP |
 | S403-H1-DEFER | MED | BC-2.02.005 PC-3 retransmit-SEND now anchored to S-BL.ARQ-TX (depends S-4.03). | product-owner/architect | anchored to S-BL.ARQ-TX (was orphaned) |
@@ -119,7 +118,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | S601-SEC-002 | LOW | S-6.01: CWE-400 — explicit length cap on upstream_routers slice; implicitly bounded by 1 MiB file guard. | product-owner/architect | deferred cycle-close |
 | OBS-VP-BENCH | OBS | VP-041/VP-042 unverified pending S-BL.BENCH integration-benchmark story (not yet created). | orchestrator | deferred S-BL.BENCH |
 | PROCESS-GAP-W4 | OBS | [process-gap] S-BL.NI network-ingress wave must carry an explicit cross-component lock-ordering review axis + integration -race test driving a frame through routing→arq→replay→multipath concurrently. Per-package -race suite cannot catch future cross-package lock-order inversion. | orchestrator/architect | target S-BL.NI wave planning |
-Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G): `cycles/cycle-1/closed-drift.md`
+Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
 
@@ -136,15 +135,19 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-4.04 MERGED (42c51e2, PR #27) | 7/7 ACs, 3/3 adversary clean; SEC-001 accepted per BC-2.02.009 EC-004 | 2026-06-28 |
 | S-6.01 MERGED (abeba27, PR #28) | 9/9 ACs, 3/3 adversary clean; SEC-001/SEC-002 deferred LOW | 2026-06-28 |
 | Wave 4 gate APPROVED | 6/6 diverse-lens passes C=0/H=0/M=0; consistency audit CONDITIONAL PASS (14 findings all resolved); doc-hygiene PR #29 (7ef43b8) closed L-1 + S403-COS1/COS2 | 2026-06-28 |
+| VP-061/VP-062 minted (S-5.02 Phase-6 hardening) | VP-061: metrics content-absence code-audit (DI-001); VP-062: JSON well-formedness fuzz (all CLI forms + alias). Both trace BC-2.06.003. | 2026-06-28 |
+| VP-063 minted (S-5.03 Wave-5 functional) | Dedicated proptest for PathTracker.IsDegraded() EWMA vs DegradedRTTThresholdMS (200 ms). Traces BC-2.02.003 PC-5. | 2026-06-28 |
+| BC-2.06.003 v1.3 (sbctl canonical+alias + rtt_p99_ms) | Reconciles sbctl metrics surface: canonical `paths list`, router-metrics alias `router metrics`, router-status alias `router status`; adds rtt_p99_ms field. Closes consistency-audit F-001..F-007. | 2026-06-28 |
+| S-5.03 degraded-path-flag (new story) | New Wave-5 story closing drift S401-O3; implements BC-2.02.003 PC-5 IsDegraded() in internal/paths; VP-063 is its formal property. | 2026-06-28 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-28 (Wave 4 gate CLOSED)
+## Session Resume Checkpoint — 2026-06-28 (Wave 5 planning COMPLETE)
 
-**Position:** Phase 3 Wave 4 COMPLETE. Gate APPROVED. All 5 Wave 4 stories MERGED (PRs #24–#28). Doc-hygiene PR #29 (7ef43b8) merged. Wave-level adversary CONVERGED (6/6 passes C=0/H=0/M=0). Consistency audit CONDITIONAL PASS (14 findings all resolved). develop HEAD = 7ef43b8. 0 open PRs.
+**Position:** Phase 3 Wave 5 PLANNED. Spec change set committed. Fresh-context consistency audit CONDITIONAL PASS (7 findings F-001..F-007, all resolved). develop HEAD = 7ef43b8. 0 open PRs. l4_vp_count = 63 (VP-061..VP-063 minted this planning cycle).
 
-**Cycle-close items done:** S-6.04 created (SIGHUP/reload), BC-2.09.003 traceability refreshed to AC-001..AC-009, S403-H1-DEFER anchored to S-BL.ARQ-TX, DRIFT-S4.03-001 owner updated to S-BL.NI, BC-INDEX Wave-4 BCs marked implemented, sprint-state.yaml updated (wave-4 closed, S-4.04 + S-6.01 completed), S-W3.04 + S-W3.05 added to wave-3 merged summary.
+**Wave 5 stories (5 / 25 pts):** S-5.03 degraded-path-flag (new; depends S-4.01), S-5.01 quality-indicator (consumes Snapshot().Degraded), S-5.02 sbctl-metrics-query (needs S-5.01 + S-6.03), S-6.02 svtn-lifecycle, S-6.03 sbctl-cli-scaffold. Constraint: S-6.02 ∥ S-5.02 FORBIDDEN (both edit cmd/sbctl/main.go).
 
-**NEXT ACTION on resume:** Wave 5 planning. Stories pending: S-5.01, S-5.02, S-6.02, S-6.03. New backlog stubs: S-BL.ARQ-TX (depends S-4.03), S-BL.NI (network-ingress; carries W3-DEFER-2 + lock-ordering review axis mandate).
+**NEXT ACTION on resume:** Begin Wave-5 TDD. Start with S-6.03 + S-5.03 (the two roots with no unsatisfied intra-wave deps). S-6.03 creates cmd/sbctl scaffold; S-6.02 adds admin.go after.
 
 **Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1 (3 LOW + NITPICK from S-4.04 adversary). Address in Wave 5 or dedicated hardening pass.
 

@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "1.7"
+version: "1.9"
 status: draft
 producer: story-writer
 timestamp: 2026-06-28T00:00:00
@@ -19,15 +19,15 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 30 (26 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-BL.ARQ-TX backlog/draft) |
+| Total stories | 31 (27 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-BL.ARQ-TX backlog/draft) |
 | Complete | 18 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01) |
-| Pending | 8 |
+| Pending | 9 |
 | Draft/unscheduled | 4 (S-M.01, S-M.02, S-6.04, S-BL.ARQ-TX) |
-| E-phase | 22 (waves 0–5 + Wave 3 fix-now additions) |
+| E-phase | 23 (waves 0–5 + Wave 3 fix-now additions) |
 | PE-phase | 4 (wave 6) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
-| Total points (waves 0–6) | 159 |
-| Total points (incl. S-M.01 + S-M.02) | 169 |
+| Total points (waves 0–6) | 163 |
+| Total points (incl. S-M.01 + S-M.02) | 173 |
 | Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
 | Backlog | 2 (S-BL.OA, S-BL.ARQ-TX) |
 
@@ -53,7 +53,8 @@ inputDocuments:
 | S-4.03 | Downstream ARQ with ACK/SACK and TLPKTDROP | E-4 | 4 | BC-2.02.005, BC-2.02.006 | multipath-forwarding | 8 | P0 | E | completed (PR #26, merge 8d9744f) |
 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | E-4 | 4 | BC-2.02.008, BC-2.02.009 (router wiring) | multipath-forwarding | 5 | P0 | E | completed (PR #27, merge 42c51e2) |
 | S-5.01 | Green/yellow/red quality indicator with hysteresis | E-5 | 5 | BC-2.06.001, BC-2.06.002 | quality-observability | 5 | P1 | E | pending |
-| S-5.02 | sbctl router status metrics query | E-5 | 5 | BC-2.06.003 | quality-observability, network-management | 3 | P1 | E | pending |
+| S-5.02 | sbctl paths list / router metrics (canonical) + router status alias + p99 | E-5 | 5 | BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | pending |
+| S-5.03 | flag paths as degraded when EWMA RTT > 200ms | E-5 | 5 | BC-2.02.003 | multipath-forwarding | 2 | P1 | E | pending |
 | S-6.01 | Config parsing and validation | E-6 | 4 | BC-2.09.003 | deployment-operations | 3 | P0 | E | completed (PR #28, merge abeba27) |
 | S-6.02 | SVTN lifecycle and key management via sbctl admin | E-6 | 5 | BC-2.05.004, BC-2.07.001 | network-management, admission-security | 8 | P0 | E | pending |
 | S-6.03 | sbctl unified CLI + connection error reporting | E-6 | 5 | BC-2.07.002, BC-2.07.003 | network-management | 5 | P0 | E | pending |
@@ -71,15 +72,22 @@ inputDocuments:
 | 2 | S-1.03, S-2.01, S-2.02 | 18 | Security foundation + session continuity — **COMPLETE 2026-06-25 (3/3 merged; integration gate next)** |
 | 3 | S-3.01a, S-3.01b, S-3.02, S-3.03, S-3.04, **S-W3.04**, **S-W3.05** | 48 | Session access MVP + HMAC wire-up + Wave 3 fix-now blockers — all 7 stories MERGED |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config — **CLOSED 2026-06-28 (all 5 merged: PR #24–#28)** |
-| 5 | S-5.01, S-5.02, S-6.02, S-6.03 | 21 | Observability + CLI |
+| 5 | S-5.01, S-5.02, S-5.03, S-6.02, S-6.03 | 25 | Observability + CLI |
 | 6 | S-7.01, S-7.02, S-7.03, S-7.04 | 29 | PE-phase features |
-| **Total** | **26** (wave stories) | **159** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 28 stories / 169 pts) |
+| **Total** | **27** (wave stories) | **163** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 29 stories / 173 pts) |
 
-> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Total points including Wave 0: 159. Per-wave counts above use story points from individual story files.
+> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 5 stories, 25 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts). Total points including Wave 0: 163. Per-wave counts above use story points from individual story files.
+
+**Wave-5 Serialization Constraints:**
+- S-6.03 (creates `cmd/sbctl` scaffold) must merge **before** S-6.02 (adds `cmd/sbctl/admin.go`) — same file registration in `cmd/sbctl/main.go`.
+- S-6.03 must merge **before** S-5.02 (S-5.02 adds `cmd/sbctl/paths_list.go`, `router_metrics.go`, `router_status.go` into the scaffold).
+- **S-6.02 and S-5.02 MUST NOT run in parallel** — both edit `cmd/sbctl/main.go` command registration. Serialize: S-6.03 → S-6.02 → S-5.02 (or S-6.03 → S-5.02, then S-6.02; either order after S-6.03, but not concurrent).
+- S-5.03 (internal/paths only) depends only on S-4.01; **must merge before S-5.01** (S-5.01 depends_on now includes S-5.03 — F-005 fix; S-5.01 reads Snapshot().Degraded which S-5.03 adds).
+- S-5.01 (internal/metrics only — no cmd/sbctl edits) depends on S-4.01, S-4.03, and S-5.03; can start once all three are merged.
 
 ## BC Coverage Check
 
-All 44 BCs covered (42 original + BC-2.05.008 minted Wave 3 + BC-2.04.007 minted Wave 3). S-3.04 covers BC-2.05.008 (VP-058). S-W3.04 adds coverage for BC-2.04.001–007 wiring obligations (SessionConnector.Frames() + daemon assembly + lifecycle) and BC-2.05.008 wiring. S-W3.05 adds coverage for BC-2.05.005 PC-3 (E-ADM-017 aggregate alert, VP-059). BC-2.02.009 is now split: S-4.01 covers postconditions 1+2 (DropCache primitive + Hits() accessor); S-4.04 covers router-side OnFrameArrival wiring + EC-005 collision logging (per pass-2 ruling). See dependency-graph.md BC-to-Stories matrix for full traceability.
+All 44 BCs covered (42 original + BC-2.05.008 minted Wave 3 + BC-2.04.007 minted Wave 3). S-3.04 covers BC-2.05.008 (VP-058). S-W3.04 adds coverage for BC-2.04.001–007 wiring obligations (SessionConnector.Frames() + daemon assembly + lifecycle) and BC-2.05.008 wiring. S-W3.05 adds coverage for BC-2.05.005 PC-3 (E-ADM-017 aggregate alert, VP-059). BC-2.02.009 is now split: S-4.01 covers postconditions 1+2 (DropCache primitive + Hits() accessor); S-4.04 covers router-side OnFrameArrival wiring + EC-005 collision logging (per pass-2 ruling). **BC-2.02.003 PC-5 (degraded flag) is now additionally covered by S-5.03** — S-4.01 covered PC-1 through PC-4 and PC-6; S-5.03 closes the PC-5 drift item (S401-O3). See dependency-graph.md BC-to-Stories matrix for full traceability.
 
 ## Backlog / Deferred Stories
 
@@ -121,6 +129,8 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.9 | 2026-06-28 | Consistency audit: F-005 — update Wave-5 serialization note: S-5.03 must precede S-5.01 (S-5.01.depends_on now includes S-5.03); Wave-5 arithmetic unchanged (5 stories, 25 pts). |
+| 1.8 | 2026-06-28 | Wave-5 planning: add S-5.03 (2pts, P1, depends S-4.01, closes drift S401-O3); update S-5.02 title + points 3→5 (p99 scope + canonical surface reconciliation per BC-2.06.003 v1.2); fix S-6.02 dependency inversion (depends_on adds S-6.03; blocks removes S-6.03); update Wave-5 summary 4→5 stories, 21→25pts; update totals (Pending 8→9, Total stories 30→31, points 159→163). Add Wave-5 serialization constraints note. |
 | 1.7 | 2026-06-28 | Wave 4 cycle-close: S-4.01 (PR #24, e415d31), S-4.02 (PR #25, 95729c7), S-4.03 (PR #26, 8d9744f), S-4.04 (PR #27, 42c51e2), S-6.01 (PR #28, abeba27) marked completed. Summary counts updated: Complete 13→18, Pending 13→8, Total 28→30. Added S-6.04 (draft, SIGHUP reload, BC-2.09.003 Inv-3/EC-004) and S-BL.ARQ-TX (backlog, retransmit-SEND PC-3 wiring, depends S-4.03) as new stub rows. |
 | 1.6 | 2026-06-28 | S-6.01 narrowed to v1.4 per BC-2.09.003 v1.3 right-sizing (commit bc52270): AC-009 scoped to tick_interval application only (TestConfigTickIntervalApplied); listen_addr binding dependency flagged on S-BL.NI (updated backlog row to own cfg.ListenAddr wiring per BC-2.09.003 PC-9 DEFERRED-APPLICATION); drain_timeout/upstream_routers/keepalive_interval application remains S-7.04 Wave 7. |
 | 1.5 | 2026-06-27 | S-4.01: AC-007 (Hits() hit counter, BC-2.02.009 postcondition 2) + deferrals section (router wiring → S-4.04; EC-005 logging → S-4.04; BC-2.02.001 EC-003 queue-with-timeout out of scope). S-4.04: added BC-2.02.009 to bc_traces; AC-004 (OnFrameArrival DropCache wiring) + AC-005 (EC-005 collision logging via WithLogger); scope transfer note citing pass-2 ruling. dependency-graph.md BC-2.02.009 row updated. Per pass-2 scope ruling pass2-bc009-scope.md. |
