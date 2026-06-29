@@ -32,6 +32,7 @@ package paths_test
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -790,6 +791,349 @@ func TestBC_2_02_003_PathScore_PropertyTransitive_Manual(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+// ─── S-5.03: Degraded-path flag tests (BC-2.02.003 postcondition 5, VP-063) ──
+//
+// BC/AC coverage:
+//
+//	TestBC_2_02_003_PathTracker_IsDegraded                      → AC-001, AC-002 (table-driven; 3 sub-cases + EC-001 boundary)
+//	TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation       → AC-003
+//	TestBC_2_02_003_PathTracker_IsDegraded_Race                 → AC-004
+//	TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded          → AC-001 (Snapshot consistency)
+//	TestProp_IsDegraded_TracksEWMAThreshold                     → AC-005, VP-063
+//	TestProp_IsDegraded_RecoveryClears                          → AC-005, VP-063 recovery branch
+
+// TestBC_2_02_003_PathTracker_IsDegraded verifies that IsDegraded() tracks the
+// EWMA RTT against DegradedRTTThresholdMS (200.0ms) — both onset and recovery —
+// and that Snapshot().Degraded mirrors IsDegraded().
+//
+// Three sub-cases per AC-001 spec:
+//
+//	(a) RTT always below threshold → IsDegraded=false
+//	(b) RTT always above threshold → IsDegraded=true
+//	(c) RTT transitions above then recovers below → IsDegraded follows EWMA
+//
+// EC-001 (boundary): RTT exactly at 200.0ms → IsDegraded=false (exclusive >).
+//
+// AC-001 / AC-002 / BC-2.02.003 postcondition 5
+func TestBC_2_02_003_PathTracker_IsDegraded(t *testing.T) {
+	t.Parallel()
+
+	// checkDegradedState is a test helper that asserts IsDegraded() and
+	// Snapshot().Degraded both match wantDegraded.
+	checkDegradedState := func(t *testing.T, tracker *paths.PathTracker, wantDegraded bool, msg string) {
+		t.Helper()
+		if got := tracker.IsDegraded(); got != wantDegraded {
+			t.Errorf("%s: IsDegraded()=%v, want %v", msg, got, wantDegraded)
+		}
+		if snap := tracker.Snapshot(); snap.Degraded != wantDegraded {
+			t.Errorf("%s: Snapshot().Degraded=%v, want %v (must mirror IsDegraded)", msg, snap.Degraded, wantDegraded)
+		}
+	}
+
+	cases := []struct {
+		name string
+		run  func(t *testing.T)
+	}{
+		{
+			// (a) RTT always well below threshold: EWMA stays below 200ms → never degraded.
+			// Uses alpha=1.0 so each probe directly sets EWMA (makes arithmetic trivial).
+			name: "always_below_threshold",
+			run: func(t *testing.T) {
+				t.Parallel()
+				// alpha=1.0: each successful probe sets ewmaRTTMS = probe value directly
+				// (first probe via resetRTT, subsequent via EWMA with alpha=1).
+				tracker := paths.NewPathTracker(999.0, 1.0)
+				for _, rtt := range []float64{10, 50, 100, 150, 199.9} {
+					tracker.OnProbe(rtt, false)
+					checkDegradedState(t, tracker, false, "RTT="+fmt.Sprintf("%.1f", rtt))
+				}
+			},
+		},
+		{
+			// (b) RTT always above threshold: EWMA stays above 200ms → always degraded.
+			// Canonical test vector: probes at 300ms (well above 200ms threshold).
+			name: "always_above_threshold",
+			run: func(t *testing.T) {
+				t.Parallel()
+				tracker := paths.NewPathTracker(999.0, 1.0)
+				for i, rtt := range []float64{250, 300, 350, 400} {
+					tracker.OnProbe(rtt, false)
+					checkDegradedState(t, tracker, true, fmt.Sprintf("probe %d RTT=%.0f", i+1, rtt))
+				}
+			},
+		},
+		{
+			// (c) RTT transitions above threshold then recovers below.
+			// Using alpha=1.0 so each probe directly sets EWMA — recovery is immediate.
+			// Drive above: OnProbe(250) → ewma=250 → degraded=true.
+			// Recover: OnProbe(150) → ewma=150 → degraded=false (150 < 200).
+			name: "transitions_above_then_recovers",
+			run: func(t *testing.T) {
+				t.Parallel()
+				tracker := paths.NewPathTracker(999.0, 1.0)
+
+				// Phase 1: establish degraded state.
+				tracker.OnProbe(250.0, false)
+				checkDegradedState(t, tracker, true, "after probe at 250ms")
+
+				// Phase 2: one recovery probe below threshold.
+				tracker.OnProbe(150.0, false)
+				checkDegradedState(t, tracker, false, "after recovery probe at 150ms")
+			},
+		},
+		{
+			// EC-001: RTT exactly at threshold (200.0ms) → degraded=false.
+			// The comparison is exclusive: ewmaRTTMS > DegradedRTTThresholdMS.
+			// 200.0 > 200.0 is false → not degraded.
+			name: "boundary_exactly_at_threshold",
+			run: func(t *testing.T) {
+				t.Parallel()
+				tracker := paths.NewPathTracker(999.0, 1.0)
+				tracker.OnProbe(200.0, false) // ewma = 200.0 exactly
+				checkDegradedState(t, tracker, false, "RTT exactly at 200.0ms (exclusive boundary)")
+			},
+		},
+		{
+			// AC-002 sustained recovery: ≥5 above-threshold probes then ≥5 below-threshold.
+			// Using alpha=0.5 to exercise EWMA smoothing (not alpha=1 degenerate).
+			// After first probe at 300ms (resetRTT): ewma=300ms → degraded=true.
+			// After 4 more probes at 300ms: ewma stays at 300ms (steady-state) → degraded=true.
+			// First probe at 50ms: ewma = 0.5*50 + 0.5*300 = 175ms < 200ms → degraded=false.
+			// Subsequent probes at 50ms: ewma converges further down → still not degraded.
+			name: "sustained_degradation_then_sustained_recovery",
+			run: func(t *testing.T) {
+				t.Parallel()
+				const alpha = 0.5
+
+				tracker := paths.NewPathTracker(999.0, alpha)
+
+				// Drive above threshold: first probe resets EWMA to 300ms directly.
+				tracker.OnProbe(300.0, false) // resetRTT → ewma=300
+				checkDegradedState(t, tracker, true, "after initial probe at 300ms")
+
+				// 4 more above-threshold probes (alpha=0.5, ewma stays at 300ms with probe=300ms).
+				for i := 1; i < 5; i++ {
+					tracker.OnProbe(300.0, false)
+					checkDegradedState(t, tracker, true, fmt.Sprintf("sustained high probe %d", i+1))
+				}
+
+				// 5 recovery probes at 50ms.
+				// Probe 1: ewma = 0.5*50 + 0.5*300 = 175ms → degraded=false.
+				for i := 0; i < 5; i++ {
+					tracker.OnProbe(50.0, false)
+					// After first recovery probe, EWMA = 175ms < 200ms → not degraded.
+					checkDegradedState(t, tracker, false, fmt.Sprintf("recovery probe %d", i+1))
+				}
+			},
+		},
+		{
+			// EC-004: Loss events do not update the degraded flag.
+			// Drive EWMA to 250ms (degraded=true), then fire loss events.
+			// Loss events must not clear the degraded flag (no RTT measured on loss).
+			name: "loss_event_does_not_change_degraded",
+			run: func(t *testing.T) {
+				t.Parallel()
+				tracker := paths.NewPathTracker(999.0, 1.0)
+
+				// Establish degraded state.
+				tracker.OnProbe(250.0, false)
+				checkDegradedState(t, tracker, true, "before loss events")
+
+				// Multiple loss events — degraded must remain true.
+				for i := 0; i < 3; i++ {
+					tracker.OnProbe(0, true) // lossEvent=true
+					checkDegradedState(t, tracker, true, fmt.Sprintf("after loss event %d", i+1))
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, tc.run)
+	}
+}
+
+// TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation verifies that on path
+// reactivation (resetRTT path), the degraded flag is set from the reactivating
+// probe's RTT — not carried over from the pre-deactivation state.
+//
+//   - Reactivation at 250ms → degraded=true (250 > 200).
+//   - Reactivation at 150ms → degraded=false (150 ≤ 200).
+//   - EC-003: no stale flag from before deactivation.
+//
+// AC-003 / BC-2.02.003 postcondition 6 (resetRTT branch) / EC-003
+func TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name            string
+		reactivationRTT float64
+		wantDegraded    bool
+	}{
+		{"reactivation_at_250ms_degraded_true", 250.0, true},
+		{"reactivation_at_150ms_degraded_false", 150.0, false},
+		{"reactivation_at_200ms_boundary_not_degraded", 200.0, false},
+		{"reactivation_at_200_1ms_degraded_true", 200.1, true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tracker := paths.NewPathTracker(50.0, 0.125)
+
+			// First, establish a non-degraded baseline (first probe at 50ms).
+			// This clears the firstProbe flag via resetRTT.
+			tracker.OnProbe(50.0, false)
+
+			// Verify baseline: not degraded before deactivation.
+			if tracker.IsDegraded() {
+				t.Fatal("precondition: tracker at 50ms EWMA should not be degraded")
+			}
+
+			// Deactivate via 3 consecutive misses.
+			for i := 0; i < 3; i++ {
+				tracker.OnProbe(0, true)
+			}
+			if tracker.IsActive() {
+				t.Fatal("precondition: tracker should be inactive after 3 consecutive misses")
+			}
+
+			// EC-003: degraded flag must not be stale from the pre-deactivation state.
+			// Reactivation probe triggers resetRTT, which must set degraded from reactivating RTT.
+			tracker.OnProbe(tc.reactivationRTT, false)
+
+			if !tracker.IsActive() {
+				t.Fatal("tracker must be reactivated after first successful probe")
+			}
+			if got := tracker.IsDegraded(); got != tc.wantDegraded {
+				t.Errorf("IsDegraded() after reactivation at %.1fms: got %v, want %v",
+					tc.reactivationRTT, got, tc.wantDegraded)
+			}
+			if snap := tracker.Snapshot(); snap.Degraded != tc.wantDegraded {
+				t.Errorf("Snapshot().Degraded after reactivation at %.1fms: got %v, want %v (must mirror IsDegraded)",
+					tc.reactivationRTT, snap.Degraded, tc.wantDegraded)
+			}
+		})
+	}
+}
+
+// TestBC_2_02_003_PathTracker_IsDegraded_Race verifies that concurrent calls to
+// IsDegraded(), OnProbe(), and Snapshot() on a single PathTracker produce no
+// data races under the Go race detector (-race).
+//
+// Run with: go test -race ./internal/paths/ -run TestBC_2_02_003_PathTracker_IsDegraded_Race
+//
+// AC-004 / BC-2.02.003 invariant 2 (concurrent safety)
+func TestBC_2_02_003_PathTracker_IsDegraded_Race(t *testing.T) {
+	// Not parallel at outer level — inner goroutines provide the concurrency.
+
+	const probeGoroutines = 6
+	const readGoroutines = 6
+	const probesPerWriter = 100
+
+	tracker := paths.NewPathTracker(100.0, 0.125)
+
+	var wg sync.WaitGroup
+	wg.Add(probeGoroutines + readGoroutines)
+
+	// Writer goroutines: alternate high-RTT and low-RTT probes to exercise
+	// both degraded=true and degraded=false transitions concurrently.
+	for g := range probeGoroutines {
+		g := g
+		go func() {
+			defer wg.Done()
+			for i := range probesPerWriter {
+				// Alternate between above-threshold (250ms) and below-threshold (50ms)
+				// probes to exercise both transition directions under concurrency.
+				var rtt float64
+				if (g+i)%2 == 0 {
+					rtt = 250.0 // above threshold
+				} else {
+					rtt = 50.0 // below threshold
+				}
+				tracker.OnProbe(rtt, (g+i)%7 == 0) // occasional loss event
+			}
+		}()
+	}
+
+	// Reader goroutines: call IsDegraded() and Snapshot() concurrently.
+	for range readGoroutines {
+		go func() {
+			defer wg.Done()
+			for range probesPerWriter {
+				_ = tracker.IsDegraded()
+				_ = tracker.Snapshot()
+				_ = tracker.IsActive()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Post-concurrency sanity: tracker must still respond without panic.
+	_ = tracker.IsDegraded()
+	_ = tracker.Snapshot()
+}
+
+// TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded verifies that Snapshot().Degraded
+// is always consistent with IsDegraded() under single-threaded sequential calls,
+// AND that both reflect the expected degraded state at each step.
+//
+// Each row specifies the expected degraded value so the test fails if the stub
+// never sets degraded=true — it is not enough for the two methods to agree with
+// each other; they must also agree with the contract.
+//
+// AC-001 / BC-2.02.003 postcondition 5 (Snapshot consistency)
+func TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded(t *testing.T) {
+	t.Parallel()
+
+	// alpha=1.0: each probe directly sets EWMA (easy to track expected values).
+	// wantDegraded is computed from the EWMA value that results AFTER the probe:
+	//   - First probe always triggers resetRTT → ewma = rtt.
+	//   - Subsequent probes: ewma = 1.0*rtt + 0.0*prev = rtt.
+	//   - loss events do not update ewma → degraded unchanged.
+	type probe struct {
+		rtt          float64
+		lossEvent    bool
+		wantDegraded bool
+	}
+	probes := []probe{
+		{50.0, false, false},  // ewma=50 → not degraded
+		{250.0, false, true},  // ewma=250 → degraded (250 > 200)
+		{200.0, false, false}, // ewma=200 → not degraded (200 > 200 is false: exclusive)
+		{200.1, false, true},  // ewma=200.1 → degraded (200.1 > 200)
+		{199.9, false, false}, // ewma=199.9 → not degraded
+		{0, true, false},      // loss event → ewma unchanged (199.9) → not degraded
+		{350.0, false, true},  // ewma=350 → degraded
+		{0, true, true},       // loss event → ewma unchanged (350) → still degraded
+		{100.0, false, false}, // ewma=100 → not degraded
+	}
+
+	tracker := paths.NewPathTracker(999.0, 1.0)
+	for i, p := range probes {
+		tracker.OnProbe(p.rtt, p.lossEvent)
+		isDeg := tracker.IsDegraded()
+		snap := tracker.Snapshot()
+		// Check both methods match the expected contract value.
+		if isDeg != p.wantDegraded {
+			t.Errorf("probe %d (rtt=%.1f, loss=%v): IsDegraded()=%v, want %v",
+				i, p.rtt, p.lossEvent, isDeg, p.wantDegraded)
+		}
+		if snap.Degraded != p.wantDegraded {
+			t.Errorf("probe %d (rtt=%.1f, loss=%v): Snapshot().Degraded=%v, want %v",
+				i, p.rtt, p.lossEvent, snap.Degraded, p.wantDegraded)
+		}
+		// The two methods must also agree with each other.
+		if snap.Degraded != isDeg {
+			t.Errorf("probe %d (rtt=%.1f, loss=%v): Snapshot().Degraded=%v != IsDegraded()=%v (must mirror)",
+				i, p.rtt, p.lossEvent, snap.Degraded, isDeg)
 		}
 	}
 }
