@@ -251,7 +251,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 // (BC-2.07.003 EC-006; Ruling 5).
 //
 // ctx is always the first parameter (go.md rule 7; AC-011 Ruling V).
-// TODO (Ruling V GREEN): derive conn.SetReadDeadline from ctx before response decode.
+// Ruling V: conn.SetReadDeadline is derived from ctx before response decode (AC-011).
 // Ruling U: resp.Type == "response" is validated before checking resp.OK (BC-2.07.002 PC-3).
 // TODO (Ruling X GREEN): generate non-constant per-call req.ID; verify resp.ID == req.ID.
 func dispatch(ctx context.Context, conn net.Conn, command string, args any) (json.RawMessage, error) {
@@ -263,6 +263,11 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 	}
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return nil, fmt.Errorf("rpc failed: %s: send request: %w", command, err)
+	}
+
+	// Ruling V: apply read deadline from ctx before response decode (AC-011, BC-2.07.003 Inv-2).
+	if dl, ok := ctx.Deadline(); ok {
+		_ = conn.SetReadDeadline(dl)
 	}
 
 	var resp rpcResponseMsg
