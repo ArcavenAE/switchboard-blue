@@ -100,7 +100,7 @@ func TestAdminKeyRegisterArgs_JSONRoundTrip(t *testing.T) {
 // correctly serializes and deserializes all fields via encoding/json.
 // Specifically verifies the `confirm` field (bool) is present and round-trips.
 //
-// BC-2.05.004 invariant 1 (confirm field required for control-to-control; ADR-004).
+// BC-2.05.004 precondition 1 (confirm field required for control-to-control; ADR-004).
 // ADR-012 (NDJSON wire protocol).
 func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 	t.Parallel()
@@ -109,7 +109,7 @@ func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 		name    string
 		confirm bool
 	}{
-		// BC-2.05.004 invariant 1 / ADR-004 — confirm field must round-trip correctly.
+		// BC-2.05.004 precondition 1 / ADR-004 — confirm field must round-trip correctly.
 		{"confirm_false", false},
 		{"confirm_true", true},
 	}
@@ -659,8 +659,8 @@ func TestSbctlAdmin_KeyExpire_CLI(t *testing.T) {
 // results in the daemon returning an error; with --confirm the wire confirm field
 // is true.
 //
-// BC-2.05.004 invariant 1 (control-to-control revocation requires --confirm; ADR-004).
-// AC-005 (traces to BC-2.05.004 invariant 1 and ADR-004).
+// BC-2.05.004 precondition 1 (control-to-control revocation requires --confirm; ADR-004).
+// AC-005 (traces to BC-2.05.004 precondition 1 and ADR-004).
 func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 	t.Parallel()
 

@@ -51,7 +51,7 @@ type adminKeyRevokeArgs struct {
 	// role to prevent bypassing the confirm gate (HOLD-001 hybrid; E-ADM-014).
 	Role string `json:"role"`
 	// Confirm must be true for control-to-control revocation (ADR-004;
-	// BC-2.05.004 invariant 1; AC-005).
+	// BC-2.05.004 precondition 1; AC-005).
 	Confirm bool `json:"confirm"`
 }
 

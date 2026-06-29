@@ -343,7 +343,7 @@ func TestSVTNManager_RevokeKey_RemovesFromAdmissionSet(t *testing.T) {
 	}
 
 	// Revoke the key. confirm=false is valid for non-control-to-control revocation.
-	// BC-2.05.004 invariant 1: confirm is only required for control-to-control.
+	// BC-2.05.004 precondition 1: confirm is only required for control-to-control.
 	// We pass RoleConsole as the current role to indicate the target is console.
 	opResult, err := mgr.RevokeKey(svtnResult.SVTN.Name, pub, admission.RoleConsole, false)
 	if err != nil {
@@ -403,11 +403,11 @@ func TestSVTNManager_RevokeKey_SVTNNotFound(t *testing.T) {
 }
 
 // TestSVTNManager_ControlRevocation_RequiresConfirm verifies AC-005 and
-// BC-2.05.004 invariant 1 / ADR-004:
+// BC-2.05.004 precondition 1 / ADR-004:
 // Control-to-control revocation without confirm=true returns
 // ErrControlRevocationRequiresConfirm. With confirm=true it succeeds.
 //
-// BC-2.05.004 invariant 1 (DI-011: control-to-control revocation requires sbctl admin human authorization).
+// BC-2.05.004 precondition 1 (control-to-control revocation requires sbctl admin human authorization).
 // ADR-004 (split-brain mitigation: control-to-control revocation requires --confirm).
 // AC-005 (control revocation requires human authorization).
 func TestSVTNManager_ControlRevocation_RequiresConfirm(t *testing.T) {
@@ -431,7 +431,7 @@ func TestSVTNManager_ControlRevocation_RequiresConfirm(t *testing.T) {
 	t.Run("without_confirm_returns_error", func(t *testing.T) {
 		t.Parallel()
 
-		// AC-005 / BC-2.05.004 invariant 1 / ADR-004 — no confirm → error.
+		// AC-005 / BC-2.05.004 precondition 1 / ADR-004 — no confirm → error.
 		_, err := mgr.RevokeKey(svtnResult.SVTN.Name, targetControlPub, admission.RoleControl, false)
 		if !errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm) {
 			t.Errorf("AC-005 / ADR-004 — control-to-control revoke without confirm: "+
@@ -501,7 +501,7 @@ func TestSVTNManager_RevokeKey_RoleMismatchReturnsError(t *testing.T) {
 // TestSVTNManager_RevokeKey_NonControlNoConfirmRequired verifies that revoking
 // a non-control key (console, access) does NOT require confirm=true.
 //
-// BC-2.05.004 invariant 1 — only control-to-control requires confirmation;
+// BC-2.05.004 precondition 1 — only control-to-control requires confirmation;
 // revoking console or access keys must succeed without confirm.
 func TestSVTNManager_RevokeKey_NonControlNoConfirmRequired(t *testing.T) {
 	t.Parallel()
@@ -510,7 +510,7 @@ func TestSVTNManager_RevokeKey_NonControlNoConfirmRequired(t *testing.T) {
 		name string
 		role admission.KeyRole
 	}{
-		// BC-2.05.004 invariant 1 — console and access revocations do not require confirm.
+		// BC-2.05.004 precondition 1 — console and access revocations do not require confirm.
 		{"console_no_confirm", admission.RoleConsole},
 		{"access_no_confirm", admission.RoleAccess},
 	}
@@ -533,7 +533,7 @@ func TestSVTNManager_RevokeKey_NonControlNoConfirmRequired(t *testing.T) {
 
 			_, err = mgr.RevokeKey(svtnResult.SVTN.Name, pub, tc.role, false)
 			if err != nil {
-				t.Errorf("BC-2.05.004 invariant 1 — RevokeKey(%v, confirm=false): "+
+				t.Errorf("BC-2.05.004 precondition 1 — RevokeKey(%v, confirm=false): "+
 					"expected success; got %v", tc.role, err)
 			}
 		})

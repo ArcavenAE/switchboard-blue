@@ -42,7 +42,7 @@ var ErrInvalidDuration = errors.New("invalid duration: must be positive")
 
 // ErrControlRevocationRequiresConfirm is returned when a control-to-control
 // key revocation is attempted without the --confirm flag (E-ADM-004;
-// BC-2.05.004 invariant 1; ADR-004; AC-005).
+// BC-2.05.004 precondition 1; ADR-004; AC-005).
 // The ADR-004 reference belongs here in the doc comment, not in the error
 // string, per Go error string conventions (go.md rule 5 / ST1005).
 var ErrControlRevocationRequiresConfirm = errors.New(
@@ -202,7 +202,7 @@ func (m *SVTNManager) RegisterKey(
 // challenge (propagation delay per FM-007; BC-2.05.004 postcondition 2).
 //
 // Control-to-control revocation requires confirm=true; passing confirm=false
-// returns ErrControlRevocationRequiresConfirm (BC-2.05.004 invariant 1;
+// returns ErrControlRevocationRequiresConfirm (BC-2.05.004 precondition 1;
 // ADR-004; AC-005).
 //
 // Returns ErrSVTNNotFound if svtnName does not exist.
@@ -243,7 +243,7 @@ func (m *SVTNManager) RevokeKey(
 	}
 
 	// Step 4: control-to-control revocation requires confirm=true (ADR-004;
-	// BC-2.05.004 invariant 1; AC-005).
+	// BC-2.05.004 precondition 1; AC-005).
 	if currentRole == admission.RoleControl && !confirm {
 		return KeyOpResult{}, ErrControlRevocationRequiresConfirm
 	}
