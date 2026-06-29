@@ -676,16 +676,23 @@ func TestSbctl_RPCDispatchFailure_ExitsOneWithERPC001(t *testing.T) {
 			return
 		}
 
-		// Step 4: Read RPC request (if any).
+		// Step 4: Read RPC request and parse the id to echo back.
+		// Ruling X: dispatch() verifies resp.ID == req.ID — hardcoding "1" breaks
+		// once dispatch() emits a non-constant id (the id-mismatch error would fire
+		// before the ok:false path, masking the intent of this test).
 		rpcBuf := make([]byte, 8192)
-		_, _ = conn.Read(rpcBuf)
+		rpcN, _ := conn.Read(rpcBuf)
+		var rpcReq struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(rpcBuf[:rpcN], &rpcReq)
 
-		// Step 5: Send RPC failure response (ok:false).
-		// Ruling U: type MUST be "response" (not "rpc_response") so dispatch() reaches
-		// the ok:false path rather than being rejected for the wrong reason (type mismatch).
-		// With Ruling U implemented, "rpc_response" would produce E-RPC-001 for the wrong
-		// reason (type mismatch), masking the intent of this test (ok:false path).
-		const rpcFail = `{"type":"response","id":"1","ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}` + "\n"
+		// Step 5: Send RPC failure response (ok:false), echoing the request id.
+		// Ruling U: type MUST be "response" so dispatch() reaches the ok:false path.
+		rpcFail := fmt.Sprintf(
+			`{"type":"response","id":%q,"ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}`,
+			rpcReq.ID,
+		) + "\n"
 		if _, err := fmt.Fprint(conn, rpcFail); err != nil {
 			serverDoneCh <- fmt.Errorf("write rpc_fail: %w", err)
 			return
@@ -1168,9 +1175,19 @@ func TestDispatch_RejectsWrongResponseType(t *testing.T) {
 			defer func() { _ = server.Close() }()
 			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
 			buf := make([]byte, 4096)
-			_, _ = server.Read(buf)
+			n, _ := server.Read(buf)
+			// Parse request id to echo back — Ruling X: id check fires before ok-check,
+			// so hardcoding "1" would cause id-mismatch to fire instead of the ok-false
+			// path, masking the guard-ordering intent of this test.
+			var req struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(buf[:n], &req)
 			// Correct type, ok:false — should reach the ok-false error path.
-			const rpcFail = `{"type":"response","id":"1","ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}` + "\n"
+			rpcFail := fmt.Sprintf(
+				`{"type":"response","id":%q,"ok":false,"error":{"code":"E-RPC-001","message":"rpc failed: router.status: unknown command"},"data":null}`,
+				req.ID,
+			) + "\n"
 			_, _ = server.Write([]byte(rpcFail))
 		}()
 
@@ -1206,9 +1223,12 @@ func TestDispatch_RejectsWrongResponseType(t *testing.T) {
 // late; the deadline-clear sub-case never zeroes the deadline.
 //
 // BC: BC-2.07.003 Invariant 2; AC-011; Ruling V (ARCH-12 v1.5); go.md rule 7.
+//
+// NOTE: NOT marked t.Parallel() at the top level because sub-case 2
+// (no_deadline_ctx_fallback_arms_deadline) mutates the package-level var
+// rpcResponseFallbackTimeout. Running this test in parallel with other
+// dispatch()-calling tests would cause a data race under -race.
 func TestDispatch_RespReadDeadlineEnforced(t *testing.T) {
-	t.Parallel()
-
 	// sub-case 1: ctx WITH deadline — existing coverage preserved.
 	t.Run("ctx_with_deadline_fires_before_silent_server", func(t *testing.T) {
 		t.Parallel()
@@ -1259,10 +1279,12 @@ func TestDispatch_RespReadDeadlineEnforced(t *testing.T) {
 	// — with context.Background() (no deadline), ok==false and SetReadDeadline is
 	// never called. dispatch() hangs until the server goroutine closes the pipe.
 	t.Run("no_deadline_ctx_fallback_arms_deadline", func(t *testing.T) {
-		t.Parallel()
+		// NOT parallel: mutates package-level rpcResponseFallbackTimeout.
+		// The parent test is also not parallel, serializing this with all
+		// other top-level parallel tests.
 
 		// Override the fallback timeout to 100ms so the test completes quickly.
-		// Restore via t.Cleanup so parallel tests are unaffected.
+		// Restore via t.Cleanup so other tests that run after see the correct value.
 		orig := rpcResponseFallbackTimeout
 		rpcResponseFallbackTimeout = 100 * time.Millisecond
 		t.Cleanup(func() { rpcResponseFallbackTimeout = orig })
@@ -1327,13 +1349,18 @@ func TestDispatch_RespReadDeadlineEnforced(t *testing.T) {
 			_ = server.Close()
 		})
 
-		// Mock server: drain request, reply with a successful response.
+		// Mock server: read request, echo id back in a successful response.
+		// Ruling X: echo the request id so dispatch()'s echo-check passes.
 		go func() {
 			defer func() { _ = server.Close() }()
 			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
 			buf := make([]byte, 4096)
-			_, _ = server.Read(buf)
-			const resp = `{"type":"response","id":"1","ok":true,"data":{}}` + "\n"
+			n, _ := server.Read(buf)
+			var req struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(buf[:n], &req)
+			resp := fmt.Sprintf(`{"type":"response","id":%q,"ok":true,"data":{}}`, req.ID) + "\n"
 			_, _ = server.Write([]byte(resp))
 		}()
 
