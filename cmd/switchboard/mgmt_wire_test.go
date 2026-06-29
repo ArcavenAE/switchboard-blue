@@ -877,6 +877,185 @@ func TestRunAccess_GeneratesEphemeralKey_AC015(t *testing.T) {
 	})
 }
 
+// ── AC-015 / Ruling J: startMgmtServer failure aborts runAccess ──────────────
+
+// TestRunAccess_MgmtStartFailureAborts_RulingJ verifies AC-015 Ruling J /
+// BC-2.07.004 EC-013: if startMgmtServer returns any error, runAccess MUST
+// return that error immediately — the data plane (buildAccessComponents /
+// runAccessWithConnector) is NEVER entered.
+//
+// RED because: current access.go (lines 144–149) logs the startMgmtServer error
+// to stderr and then CONTINUES to set up the data plane. It does NOT return the
+// error. This violates the Ruling J fatal-startup policy:
+//
+//	"ANY startMgmtServer failure ... ABORTS access daemon startup immediately.
+//	The data plane is never entered."
+//
+// The fix:
+//
+//	mgmtSrv, mgmtErr := startMgmtServer(...)
+//	if mgmtErr != nil {
+//	    return fmt.Errorf("access: start management server: %w", mgmtErr)
+//	}
+//
+// Test strategy: we inject a startMgmtServer failure by supplying a cfg with an
+// unbindable socket path ("/nonexistent-dir-swtest/m.sock"). This causes
+// buildMgmtListener → listenUnixMgmt to fail with an OS error (ENOENT), which
+// startMgmtServer propagates. runAccess must return that error before reaching
+// the tmux/connector setup (which would fail anyway in a test environment, but
+// we want to verify the management-failure path specifically).
+//
+// We detect "did not abort" by checking that runAccess returns a NON-NIL error
+// AND that stderr does NOT contain any PTY/tmux error message (which would
+// indicate the data plane was attempted). The "cannot connect to session backend"
+// substring is produced by runAccessWithConnector — it must be absent if
+// runAccess aborted at mgmt startup.
+//
+// Traces: BC-2.07.004 EC-013 (Ruling J), AC-015 (fatal-policy), S-W5.01 v1.3.
+func TestRunAccess_MgmtStartFailureAborts_RulingJ(t *testing.T) {
+	// NOT t.Parallel: accesses filesystem; runAccess may create/unlink sockets.
+
+	// Use an unbindable socket path to force startMgmtServer to fail.
+	// /nonexistent-dir-swtest does not exist → listenUnixMgmt returns ENOENT.
+	const unbindableSock = "/nonexistent-dir-swtest-rulingj/mgmt.sock"
+
+	cfg := &config.Config{
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: unbindableSock,
+	}
+
+	// Pre-cancel context so if runAccess somehow reaches the data plane it exits
+	// quickly (Connect will fail with ctx.Err()).
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var stderr strings.Builder
+	err := runAccess(ctx, &stderr, cfg)
+
+	// Ruling J RED assertion: runAccess must return a non-nil error when
+	// startMgmtServer fails. Current code logs and continues → may return nil
+	// (if context is already cancelled before any other error) or may return a
+	// data-plane error — but must NOT proceed past the mgmt start point.
+	if err == nil {
+		t.Errorf("Ruling J violated: runAccess returned nil when startMgmtServer failed "+
+			"(socket path %q is unbindable). "+
+			"Fix: check mgmtErr != nil and return immediately after startMgmtServer call. "+
+			"Canonical pattern: if mgmtErr != nil { return fmt.Errorf(\"access: start management server: %%w\", mgmtErr) }",
+			unbindableSock)
+	}
+
+	// Secondary assertion: if the data plane WAS entered, stderr will contain
+	// "cannot connect to session backend" (from runAccessWithConnector PC-1 path).
+	// Ruling J requires the data plane to NOT be entered on mgmt failure.
+	stderrStr := stderr.String()
+	if strings.Contains(stderrStr, "cannot connect to session backend") {
+		t.Errorf("Ruling J violated: runAccess entered data-plane setup after startMgmtServer " +
+			"failure (stderr contains 'cannot connect to session backend'). " +
+			"The data plane must NEVER be entered when mgmt start fails.")
+	}
+}
+
+// ── VP-073 / AC-014 (Ruling L): canonical E-CFG-008 message format ───────────
+
+// TestBuildMgmtListener_ConsoleTCP_CanonicalECFG008Format_RulingL extends VP-073
+// to verify Ruling L / AC-014: the E-CFG-008 error produced by buildMgmtListener
+// for a console-mode non-loopback address MUST embed the code as a prefix in the
+// message in the canonical format:
+//
+//	"E-CFG-008: management_socket: console mode requires a loopback address ..."
+//
+// The existing TestBuildMgmtListener_ConsoleTCP_RejectsNonLoopback_VP073 asserts
+// strings.Contains(err.Error(), "E-CFG-008") — that is NECESSARY but not SUFFICIENT
+// for Ruling L compliance. This test adds:
+//  1. The canonical phrase "console mode requires a loopback address" must appear.
+//  2. The address supplied as "got: <address>" must appear in the error.
+//  3. The code "E-CFG-008" must appear (locking the existing VP-073 assertion).
+//
+// Current mgmt_wire.go buildMgmtListener TCP path produces:
+//
+//	"config error: management_socket: E-CFG-008: console mode requires a loopback ..."
+//
+// The canonical Ruling L format is:
+//
+//	"E-CFG-008: management_socket: console mode requires a loopback ..."
+//
+// So the current format has "config error: management_socket: " as a prefix BEFORE
+// "E-CFG-008" — which means E-CFG-008 does NOT appear as the canonical prefix.
+// The Ruling L requirement is that E-CFG-008 appears as the embedded code prefix
+// (i.e., the error string begins with or prominently features "E-CFG-008" before
+// "management_socket"). Specifically, strings.Index("E-CFG-008") < strings.Index("management_socket")
+// must hold — E-CFG-008 must come before "management_socket" in the error string.
+//
+// RED because: current error is "config error: management_socket: E-CFG-008: ..."
+// which has "management_socket" BEFORE "E-CFG-008" — violating the canonical prefix
+// order required by Ruling L.
+//
+// Traces: BC-2.07.004 EC-013 (Ruling L), AC-014 canonical message format, VP-073 v1.1.
+func TestBuildMgmtListener_ConsoleTCP_CanonicalECFG008Format_RulingL(t *testing.T) {
+	t.Parallel()
+
+	// Test with a clearly non-loopback address.
+	const nonLoopback = "0.0.0.0:9091"
+	cfg := &config.Config{ManagementSocket: nonLoopback}
+
+	ln, err := buildMgmtListener(cfg, "console")
+	if ln != nil {
+		t.Cleanup(func() { _ = ln.Close() })
+	}
+	if err == nil {
+		t.Fatalf("Ruling L: buildMgmtListener(console, %q) returned nil error; "+
+			"expected E-CFG-008 error", nonLoopback)
+	}
+
+	errStr := err.Error()
+
+	// Assertion 1: E-CFG-008 must appear in the error (VP-073 existing requirement).
+	if !strings.Contains(errStr, "E-CFG-008") {
+		t.Errorf("Ruling L: error does not contain E-CFG-008: %q", errStr)
+	}
+
+	// Assertion 2: the canonical phrase must appear.
+	const canonicalPhrase = "console mode requires a loopback address"
+	if !strings.Contains(errStr, canonicalPhrase) {
+		t.Errorf("Ruling L: error does not contain canonical phrase %q: got %q",
+			canonicalPhrase, errStr)
+	}
+
+	// Assertion 3: "got: <address>" must appear (the supplied address is embedded).
+	wantGot := "got: " + nonLoopback
+	if !strings.Contains(errStr, wantGot) {
+		t.Errorf("Ruling L: error does not contain %q (address not embedded): got %q",
+			wantGot, errStr)
+	}
+
+	// Assertion 4 (Ruling L canonical prefix order): E-CFG-008 must appear BEFORE
+	// "management_socket" in the error string — i.e., E-CFG-008 is the prefix code,
+	// not buried after a "config error: management_socket:" preamble.
+	//
+	// RED because: current code produces "config error: management_socket: E-CFG-008: ..."
+	// In this string, strings.Index("E-CFG-008") > strings.Index("management_socket"),
+	// violating the canonical format "E-CFG-008: management_socket: ...".
+	//
+	// Fix: change the format string in buildMgmtListener from:
+	//   "config error: management_socket: E-CFG-008: console mode ..."
+	// to:
+	//   "E-CFG-008: management_socket: console mode ..."
+	idxCode := strings.Index(errStr, "E-CFG-008")
+	idxSocket := strings.Index(errStr, "management_socket")
+	if idxCode < 0 || idxSocket < 0 {
+		// Already reported above — skip the ordering check.
+	} else if idxCode > idxSocket {
+		t.Errorf("Ruling L canonical format violated: in error %q, "+
+			"'E-CFG-008' appears at index %d AFTER 'management_socket' at index %d. "+
+			"The canonical format requires E-CFG-008 to precede management_socket: "+
+			"'E-CFG-008: management_socket: console mode requires a loopback address ...' "+
+			"Fix: change buildMgmtListener error format from 'config error: management_socket: E-CFG-008: ...' "+
+			"to 'E-CFG-008: management_socket: ...'",
+			errStr, idxCode, idxSocket)
+	}
+}
+
 // ── OperatorKeySet bootstrap via config ───────────────────────────────────────
 
 // TestNewOperatorKeySet_FromEmptyConfig verifies that NewOperatorKeySet constructed

@@ -1918,6 +1918,443 @@ func TestWriteDeadline_SlowlorisDefense_VP072(t *testing.T) {
 	time.Sleep(30 * time.Millisecond) // let goroutines drain for test cleanup
 }
 
+// ── AC-017 / VP-069 (Ruling G): unexpected listener close returns non-nil ─────
+
+// TestServe_ReturnsErrOnUnexpectedListenerClose_VP069 verifies VP-069 Ruling G /
+// BC-2.07.004 PC-10: when the listener fd is closed externally (NOT via Shutdown
+// and NOT via ctx cancel) while ctx.Err()==nil and shuttingDown==false, Serve MUST
+// return a NON-NIL error.
+//
+// RED because: the current accept-error predicate in mgmt.go is:
+//
+//	if s.shuttingDown.Load() || errors.Is(err, net.ErrClosed) { return nil }
+//
+// The `errors.Is(err, net.ErrClosed)` arm is missing the `&& ctx.Err() != nil`
+// conjunct required by BC-2.07.004 PC-10 / VP-069. Without the conjunct, closing
+// the listener directly while ctx is live returns nil — silently killing the
+// management plane (SOUL #4 no-silent-failure violation). With the fix:
+//
+//	if s.shuttingDown.Load() || (errors.Is(err, net.ErrClosed) && ctx.Err() != nil) { ... }
+//
+// the unexpected-close path falls through to `return err` (non-nil) — this test passes.
+// There is also a dead `select { case <-done: ... }` block that provides a second nil
+// return path for the same scenario; Ruling H requires that block to be removed.
+//
+// Traces: BC-2.07.004 PC-10 (Ruling G), AC-017 sub-case (c), VP-069.
+func TestServe_ReturnsErrOnUnexpectedListenerClose_VP069(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	// Do NOT register t.Cleanup(ln.Close) — we close it explicitly below.
+
+	srv := mgmt.NewServer(ln, daemonPriv, mgmt.NewOperatorKeySet(nil), nil, "dev")
+
+	// Use context.Background() — a live context that is NEVER cancelled.
+	// This is the critical difference from TestServe_ReturnsNilOnCtxCancel_VP069.
+	ctx := context.Background()
+
+	errCh := make(chan error, 1)
+	go func() {
+		// RED because: current code returns nil here after direct ln.Close().
+		// Post-fix: returns net.ErrClosed (or wrapped variant) — non-nil.
+		errCh <- srv.Serve(ctx)
+	}()
+
+	// Give Serve time to enter the Accept loop.
+	time.Sleep(15 * time.Millisecond)
+
+	// Close the listener DIRECTLY from the test — NOT via Shutdown, NOT via ctx cancel.
+	// shuttingDown is false, ctx.Err() is nil — this is the unexpected-close scenario.
+	_ = ln.Close()
+
+	select {
+	case serveErr := <-errCh:
+		// VP-069 Ruling G: MUST be non-nil. Current code (missing && ctx.Err() != nil)
+		// returns nil → this assertion fires → RED.
+		if serveErr == nil {
+			t.Errorf("VP-069 (Ruling G) violated: Serve returned nil on unexpected listener close " +
+				"(ctx live, Shutdown never called). " +
+				"Fix: change the accept-error predicate in mgmt.go to: " +
+				"s.shuttingDown.Load() || (errors.Is(err, net.ErrClosed) && ctx.Err() != nil). " +
+				"Also remove the dead 'select { case <-done: ... default: }' block (Ruling H).")
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("VP-069 (Ruling G): Serve did not return within 3s of unexpected listener close")
+	}
+}
+
+// ── AC-017 / Ruling I: shutdown-window Add-after-Wait panic / race ─────────────
+
+// TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI drives the race between
+// Accept() and Shutdown() to detect a connWG.Add-after-Wait-at-zero panic (or
+// race detector violation). Best run under -race (go test -race).
+//
+// RED because: the current Serve loop in mgmt.go calls connWG.Add(1) WITHOUT
+// first checking s.shuttingDown.Load(). The canonical fix (Ruling I) requires:
+//
+//  1. After Accept(), check s.shuttingDown.Load(); if true, close conn, release
+//     semaphore, continue — connection never enters connWG.
+//  2. s.trackConn(conn) BEFORE s.connWG.Add(1) and BEFORE go func().
+//  3. s.connWG.Add(1) BEFORE go func().
+//
+// Without check (1), a connection accepted just after Shutdown calls connWG.Wait()
+// (when counter == 0) triggers connWG.Add(1) with counter at zero after Wait has
+// returned — undefined behavior / potential panic per sync.WaitGroup docs.
+//
+// Race scenario (tight timing):
+//
+//	T=0: Shutdown: shuttingDown.Store(true), ln.Close(), closeAllConns()
+//	T=0: Shutdown: connWG.Wait() — counter is 0, returns immediately
+//	T=1: Serve: last pending Accept unblocks (conn from OS backlog)
+//	T=1: Serve: no shuttingDown check → connWG.Add(1) after Wait returned at 0 → PANIC
+//
+// The 100-iteration loop maximizes the chance of hitting this window.
+// Under -race the race detector amplifies the timing window, making the bug more
+// likely to trigger. Under normal runs the test verifies no panic occurs in 100
+// iterations; under -race it also catches the data race on the WaitGroup state.
+//
+// Traces: BC-2.07.004 PC-10 (Ruling I, drain-ordering guarantee), AC-017 sub-case (d).
+func TestServe_ShutdownWindowNoAddAfterWaitPanic_RulingI(t *testing.T) {
+	// NOT t.Parallel: stress-tests timing windows; parallel jitter reduces race coverage.
+
+	_, daemonPriv := mustGenKey(t)
+
+	// 100 iterations: each iteration races Accept against Shutdown in a tight window.
+	// Any iteration that triggers a panic or data race causes the test to fail.
+	for i := range 100 {
+		func() {
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("iter %d: net.Listen: %v", i, err)
+			}
+			addr := ln.Addr().String()
+
+			srv := mgmt.NewServer(ln, daemonPriv, mgmt.NewOperatorKeySet(nil), nil, "dev",
+				mgmt.WithMaxConnections(1))
+
+			ctx, cancel := context.WithCancel(context.Background())
+
+			serveDone := make(chan error, 1)
+			go func() {
+				serveDone <- srv.Serve(ctx)
+			}()
+
+			// Give Serve a moment to enter the accept loop before we hammer it.
+			time.Sleep(time.Millisecond)
+
+			// Dial several connections rapidly and immediately close them so the server
+			// cycles through Accept/handle quickly, creating many accept-vs-shutdown
+			// window opportunities.
+			dialsDone := make(chan struct{})
+			go func() {
+				defer close(dialsDone)
+				for range 10 {
+					c, dialErr := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+					if dialErr != nil {
+						return
+					}
+					_ = c.Close()
+					runtime.Gosched() // yield to maximize interleaving
+				}
+			}()
+
+			// Call Shutdown while dials are in progress — this is the race window.
+			// Without the shuttingDown check after Accept, a connection from the OS
+			// backlog arrives after connWG.Wait() returns at zero → Add after Wait → panic.
+			shutCtx, shutCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_ = srv.Shutdown(shutCtx)
+			shutCancel()
+			cancel()
+
+			<-dialsDone
+
+			select {
+			case err := <-serveDone:
+				_ = err
+			case <-time.After(500 * time.Millisecond):
+				t.Errorf("iter %d: Serve did not return within 500ms after Shutdown", i)
+			}
+		}()
+
+		if t.Failed() {
+			break
+		}
+	}
+}
+
+// ── AC-017 / Ruling I: drain completes within budget ─────────────────────────
+
+// shutdownWindowListener is a fake net.Listener designed to deterministically
+// test the shutdown-window drop behaviour (Ruling I).
+//
+// Its Close() is a no-op: the listener is not unblocked by Shutdown. This lets
+// Serve's accept loop remain alive after Shutdown returns so the test can inject
+// a connection in the shutdown window (after shuttingDown is set) and observe
+// whether Serve drops it (fix) or processes it (bug).
+//
+// Usage:
+//  1. Serve blocks in Accept (connCh empty).
+//  2. Call Shutdown → shuttingDown.Store(true) → ln.Close() (no-op here) →
+//     closeAllConns() (no conns) → connWG.Wait() returns (count=0) → Shutdown
+//     returns nil. Serve is still alive, blocked in Accept.
+//  3. Deliver conn2 via deliverConn() so Serve receives it post-shutdown.
+//  4. Assert clientConn2: Fix → EOF immediately (conn dropped). Bug → CHALLENGE
+//     bytes arrive (conn entered handleConnection).
+//  5. Call forceClose() so Serve's Accept returns net.ErrClosed and Serve exits.
+type shutdownWindowListener struct {
+	connCh  chan net.Conn // buffered; deliver conns via deliverConn()
+	closeCh chan struct{} // forceClose() closes this to stop Accept
+	addr    net.Addr
+}
+
+func newShutdownWindowListener(addr net.Addr) *shutdownWindowListener {
+	return &shutdownWindowListener{
+		connCh:  make(chan net.Conn, 4),
+		closeCh: make(chan struct{}),
+		addr:    addr,
+	}
+}
+
+func (l *shutdownWindowListener) Accept() (net.Conn, error) {
+	select {
+	case conn := <-l.connCh:
+		return conn, nil
+	case <-l.closeCh:
+		return nil, net.ErrClosed
+	}
+}
+
+// Close is called by Shutdown. It is a no-op here: Serve keeps running so the
+// test can inject the post-shutdown connection via deliverConn.
+func (l *shutdownWindowListener) Close() error { return nil }
+
+// forceClose stops Accept, causing Serve to see net.ErrClosed and exit.
+func (l *shutdownWindowListener) forceClose() {
+	select {
+	case <-l.closeCh:
+	default:
+		close(l.closeCh)
+	}
+}
+
+// deliverConn queues conn for the next Accept() call.
+func (l *shutdownWindowListener) deliverConn(conn net.Conn) {
+	l.connCh <- conn
+}
+
+func (l *shutdownWindowListener) Addr() net.Addr { return l.addr }
+
+// TestServe_DrainCompletesWithinBudget_RulingI verifies that a connection accepted
+// AFTER Shutdown sets shuttingDown (the "shutdown window") is dropped immediately
+// without entering the connection WaitGroup.
+//
+// Ruling I (ARCH-12 v1.4) mandates that Serve checks s.shuttingDown.Load()
+// immediately after a successful Accept(). A connection arriving in the shutdown
+// window MUST be closed + semaphore released + continue — it MUST NOT enter
+// connWG or reach handleConnection.
+//
+// Observable difference:
+//   - With fix (shuttingDown check present):
+//     conn2 is closed by Serve → clientConn2 receives EOF immediately (no data).
+//   - Without fix (check absent, current code):
+//     conn2 enters handleConnection → server attempts to write CHALLENGE →
+//     clientConn2 receives CHALLENGE JSON bytes (non-empty read).
+//
+// Test design (deterministic):
+//  1. Use shutdownWindowListener whose Close() is a no-op, so Serve stays alive.
+//  2. Call Shutdown (no in-flight connections) — returns nil quickly.
+//     shuttingDown is now true. Serve is still blocked in Accept.
+//  3. Deliver conn2 → Serve accepts it POST-shutdown.
+//  4. Give server 100 ms to process conn2 one way or the other.
+//  5. Attempt to read from clientConn2 with a 200 ms deadline.
+//     Fix: conn2 was dropped → connection closed → Read returns io.EOF or
+//     net.ErrClosed before deadline → no bytes → PASS.
+//     Bug: conn2 entered handleConnection → server writes CHALLENGE to conn2 →
+//     clientConn2.Read returns CHALLENGE bytes → RED.
+//  6. forceClose() so Serve exits cleanly.
+//
+// Traces: BC-2.07.004 PC-10 (Ruling I, shutdown-window drop), AC-017 sub-case (e).
+func TestServe_DrainCompletesWithinBudget_RulingI(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+
+	realLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	addr := realLn.Addr()
+	_ = realLn.Close()
+
+	swl := newShutdownWindowListener(addr)
+
+	const longHandshakeTimeout = 30 * time.Second
+
+	srv := mgmt.NewServer(swl, daemonPriv, mgmt.NewOperatorKeySet(nil), nil, "dev",
+		mgmt.WithHandshakeTimeout(longHandshakeTimeout))
+
+	ctx := context.Background()
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- srv.Serve(ctx)
+	}()
+
+	// Let Serve reach Accept (empty connCh — blocks immediately).
+	time.Sleep(5 * time.Millisecond)
+
+	// Call Shutdown with no in-flight connections.
+	// shuttingDown.Store(true) → ln.Close() (no-op on swl) → closeAllConns() →
+	// connWG.Wait() (count=0, instant) → returns nil.
+	// Serve is still alive, blocked in Accept.
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutCancel()
+	if shutErr := srv.Shutdown(shutCtx); shutErr != nil {
+		t.Fatalf("unexpected Shutdown error: %v", shutErr)
+	}
+
+	// Deliver conn2 AFTER Shutdown — shuttingDown is now true.
+	// Serve's accept loop will call Accept() again and receive conn2.
+	serverConn2, clientConn2 := net.Pipe()
+	t.Cleanup(func() {
+		_ = serverConn2.Close()
+		_ = clientConn2.Close()
+	})
+	swl.deliverConn(serverConn2)
+
+	// Allow 200 ms for Serve to act on conn2.
+	// With fix: conn2 is closed immediately (shuttingDown drop) → clientConn2
+	// gets EOF or a closed-pipe error before our read deadline.
+	// Without fix: conn2 enters handleConnection → server writes CHALLENGE →
+	// net.Pipe is synchronous → write blocks until we read. Calling Read here
+	// with a 200 ms deadline: if we get bytes, the server sent CHALLENGE →
+	// shutdown-window check is missing → RED.
+	if err := clientConn2.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	n, _ := clientConn2.Read(buf)
+	_ = clientConn2.SetReadDeadline(time.Time{}) // clear deadline
+
+	if n > 0 {
+		// Server sent data to conn2 — conn2 entered handleConnection.
+		// This proves the shuttingDown check after Accept is MISSING (bug).
+		t.Errorf("Ruling I (shutdown-window drop) violated: Serve sent %d bytes to a "+
+			"connection accepted AFTER Shutdown (shuttingDown=true). Received: %q. "+
+			"The accept loop MUST check s.shuttingDown.Load() after Accept() and drop "+
+			"the connection (close + semaphore release + continue) before connWG.Add. "+
+			"Fix: add the shuttingDown check per Ruling I canonical ordering.",
+			n, buf[:n])
+	}
+
+	// Clean up: close conn2's connections so that any in-flight handleConnection
+	// goroutine for conn2 unblocks and returns (otherwise connWG.Wait blocks).
+	// With the fix conn2 was never entered, so these are no-ops on already-closed
+	// connections. With the bug, conn2's goroutine is waiting on its read deadline
+	// (30s); closing serverConn2 unblocks it immediately.
+	_ = serverConn2.Close()
+	_ = clientConn2.Close()
+
+	// forceClose the listener so Serve exits its accept loop.
+	swl.forceClose()
+	select {
+	case <-serveDone:
+	case <-time.After(2 * time.Second):
+		t.Error("Serve did not exit after forceClose within 2s")
+	}
+}
+
+// ── AC-001 / Ruling K: HandshakeTimeout is close-only (no AUTH_FAIL) ─────────
+
+// TestMgmtServer_HandshakeTimeout_CloseOnly_RulingK verifies BC-2.07.004 EC-001
+// v1.4 / AC-001 / Ruling K: when HandshakeTimeout expires (silent stall — client
+// connects but sends nothing), the server MUST close the connection WITHOUT sending
+// an AUTH_FAIL JSON message. A timeout close is silent — sending AUTH_FAIL to a
+// non-responsive client delays slot reclamation and risks a slowloris-on-write.
+//
+// This test ALSO satisfies the AC-001 obligation (added in S-W5.01 v1.3) to
+// assert: "NO AUTH_FAIL JSON message was received on the client pipe before the
+// close — a timeout close is silent (close-only, no AUTH_FAIL per Ruling K /
+// BC-2.07.004 EC-001 v1.4)."
+//
+// Outcome note: current mgmt.go handleConnection correctly does NOT send AUTH_FAIL
+// on timeout (lines 463–467: `if ne, ok := err.(net.Error); !ok || !ne.Timeout()`
+// — AUTH_FAIL is only sent for non-timeout errors). This test may be GREEN already.
+// If so, it locks the contract so a future refactor cannot accidentally add AUTH_FAIL
+// to the timeout path. GREEN is the correct steady-state; RED is a defect.
+//
+// Traces: BC-2.07.004 EC-001 v1.4, AC-001 (Ruling K assertion), VP-064 sub-case (a).
+func TestMgmtServer_HandshakeTimeout_CloseOnly_RulingK(t *testing.T) {
+	t.Parallel()
+
+	_, daemonPriv := mustGenKey(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+
+	// Use a short HandshakeTimeout so the test completes quickly.
+	const shortTimeout = 60 * time.Millisecond
+
+	serverConn, clientConn := net.Pipe()
+	t.Cleanup(func() {
+		_ = serverConn.Close()
+		_ = clientConn.Close()
+	})
+
+	ln := newSingleConnListener(serverConn)
+	srv := mgmt.NewServer(ln, daemonPriv, ops, nil, "0.1.0-test",
+		mgmt.WithHandshakeTimeout(shortTimeout))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	go func() {
+		_ = srv.Serve(ctx)
+	}()
+
+	// Give client side a generous deadline to read the CHALLENGE and then wait
+	// for the server to time out and close the connection.
+	if err := clientConn.SetDeadline(time.Now().Add(1 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	// Read the CHALLENGE (server sends this first).
+	challenge := readMsg(t, clientConn)
+	if challenge == nil || challenge["type"] != "challenge" {
+		t.Fatalf("Ruling K: expected CHALLENGE as first server message; got %v", challenge)
+	}
+
+	// Now send NOTHING — simulate a silent stall.
+	// After shortTimeout (60ms) the server should close without sending AUTH_FAIL.
+
+	// Collect any messages from the server after the CHALLENGE.
+	// If AUTH_FAIL arrives before EOF, the test fails.
+	var receivedAuthFail bool
+	var receivedMsg map[string]any
+
+	// Use a short read deadline to detect the close quickly.
+	_ = clientConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	receivedMsg = readMsg(t, clientConn)
+	if receivedMsg != nil {
+		if receivedMsg["type"] == "auth_fail" {
+			receivedAuthFail = true
+		}
+	}
+
+	// Ruling K: no AUTH_FAIL must have been received before or on close.
+	// The connection should have been silently closed (EOF / closed-connection error).
+	if receivedAuthFail {
+		t.Errorf("Ruling K violated: server sent AUTH_FAIL on HandshakeTimeout expiry; " +
+			"want close-only (no AUTH_FAIL). " +
+			"BC-2.07.004 EC-001 v1.4: 'On timeout expiry: the connection is closed " +
+			"immediately WITHOUT sending AUTH_FAIL — a non-responsive client would not read it.'")
+	}
+	// If receivedMsg is nil (connection closed without message), that is correct.
+	// This test passes with the current correct implementation and locks the contract.
+}
+
 // ── Authorized-key-set rejection (no AC number — additional coverage) ─────────
 
 // TestMgmtServer_UnauthorizedKeyRejected_AuthorizedSetCheck verifies that a
