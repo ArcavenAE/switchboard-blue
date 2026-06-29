@@ -29,8 +29,8 @@ func main() {
 
 	args := flag.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: sbctl [--target=<addr>] [--key=<path>] [--json] [--timeout=<dur>] <subcommand> [args...]")
-		os.Exit(2)
+		fmt.Println("usage: sbctl [--target=<addr>] [--key=<path>] [--json] [--timeout=<dur>] <subcommand> [args...]")
+		os.Exit(0)
 	}
 
 	// Single timeout budget threaded through dial + Authenticate + dispatch
