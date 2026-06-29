@@ -142,10 +142,10 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	var mgmtWG sync.WaitGroup
 	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {
-		// Log but do not abort: management server failure is non-fatal for the
-		// access data-plane in this wave (the socket path may not be writable in
-		// some environments). The error is logged to stderr for observability.
-		fmt.Fprintf(stderr, "mgmt: failed to start management server: %v\n", mgmtErr) //nolint:errcheck
+		// Ruling J (BC-2.07.004 EC-013): management server failure is fatal.
+		// The data plane is never entered — return immediately so the caller can
+		// exit non-zero (AC-015 / S-W5.01 v1.3).
+		return fmt.Errorf("access: start management server: %w", mgmtErr)
 	}
 
 	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
