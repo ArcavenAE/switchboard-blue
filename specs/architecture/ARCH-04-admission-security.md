@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -399,8 +399,10 @@ expectation; the server validates it.
 
 ```
 1. Validate svtnName exists → ErrSVTNNotFound if not
-2. Look up target key in AdmittedKeySet by (svtnID, DeriveNodeAddress(svtnID, pubkey))
-   → ErrKeyNotRegistered (E-ADM-013) if not found
+2. Look up target key in AdmittedKeySet via AdmittedKeySet.LookupByPubkey(svtnID, pubkey)
+   — do NOT call frame.DeriveNodeAddress directly in svtnmgmt (ARCH-08 §6.5 position 15:
+   svtnmgmt imports only {admission, config}; derivation is admission's internal concern).
+   → ErrKeyNotRegistered (E-ADM-013) if LookupByPubkey returns nil
 3. Compare stored.Role == currentRole
    → ErrRoleMismatch (E-ADM-014) if they diverge
 4. If currentRole == RoleControl AND confirm == false
@@ -439,6 +441,54 @@ path, not an AC):
 
 This test can be added by the implementer alongside the implementation; it does not block
 the Red Gate.
+
+## CR-001 Ruling: `internal/svtnmgmt` Must Not Import `internal/frame` (ARCH-08 §6.5 position 15)
+
+**Decision date:** 2026-06-29
+**Resolved by:** architect (CR-001 from S-6.02 code review)
+**Applies to:** `internal/svtnmgmt/svtnmgmt.go` lines 225 and 288; `internal/admission/admission.go`
+
+### Violation
+
+`internal/svtnmgmt` imports `github.com/arcavenae/switchboard/internal/frame` (line 25 of
+`svtnmgmt.go`) to call `frame.DeriveNodeAddress(svtnID, []byte(pubkey))` at lines 225 and 288.
+ARCH-08 §6.5 position 15 enumerates svtnmgmt's permitted internal imports as `{admission, config}`
+exhaustively. `internal/frame` is not permitted. The package doc's own constraint statement
+(lines 8–11) is correct; the import violates it.
+
+### Resolution
+
+**Add `AdmittedKeySet.LookupByPubkey` to `internal/admission`.** The derivation of nodeAddr from
+(svtnID, pubkey) is already admission's internal concern — `RegisterKey` and `AdmitNode` both call
+`frame.DeriveNodeAddress` internally. svtnmgmt must not replicate that dependency.
+
+### New Symbol: `AdmittedKeySet.LookupByPubkey`
+
+Add to `internal/admission/admission.go` after the `Lookup` method:
+
+```go
+// LookupByPubkey returns a copy of the AdmittedKey for the node identified by
+// (svtnID, pubkey), or nil if not found. The 8-byte node address is derived
+// internally via frame.DeriveNodeAddress — callers do not need to import
+// internal/frame (ARCH-08 §6.5 position 15).
+//
+// Returns a value copy; the backing array of PublicKey is deep-cloned
+// (go.md rule 12; finding-032-store-sync-contract-leak).
+//
+// Traces to BC-2.05.004 (key lookup by public key identity).
+func (s *AdmittedKeySet) LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey) *AdmittedKey {
+    nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+    return s.Lookup(svtnID, nodeAddr)
+}
+```
+
+Thread-safety and deep-clone guarantees are inherited from `Lookup`. No mutex logic needed here.
+
+### svtnmgmt Changes
+
+1. Remove `"github.com/arcavenae/switchboard/internal/frame"` import.
+2. In `RevokeKey` (line 225): replace the two-line derive+lookup with `stored := m.keySet.LookupByPubkey(svtnID, pubkey)`.
+3. In `ExpireKey` (line 288): replace `nodeAddr := frame.DeriveNodeAddress(...)` with a `LookupByPubkey` call; read `nodeAddr` from the returned `AdmittedKey.NodeAddr` for the subsequent `SetKeyExpiry` call. Return `ErrKeyNotRegistered` if nil.
 
 ### ADR-004 Original Decision (unchanged)
 
