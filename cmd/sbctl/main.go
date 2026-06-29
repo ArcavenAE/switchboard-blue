@@ -25,6 +25,9 @@ func main() {
 	key := flag.String("key", defaultKeyPath, "path to operator private key file")
 	jsonOut := flag.Bool("json", false, "machine-readable JSON output")
 	timeout := flag.Duration("timeout", defaultTimeout, "connection timeout")
+	// Redirect flag usage output to stdout so --help/-h text goes to stdout
+	// and the process exits 0, per AC-012 / BC-2.07.002 EC-003 (Ruling A).
+	flag.CommandLine.SetOutput(os.Stdout)
 	flag.Parse()
 
 	args := flag.Args()
