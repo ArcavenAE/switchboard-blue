@@ -251,7 +251,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 // (BC-2.07.003 EC-006; Ruling 5).
 func dispatch(conn net.Conn, command string, args any) (json.RawMessage, error) {
 	req := rpcRequestMsg{
-		Type:    "rpc_request",
+		Type:    "request",
 		ID:      "1",
 		Command: command,
 		Args:    args,
