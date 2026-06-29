@@ -1,14 +1,10 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-mgmt-plane-adversarial-convergence-in-progress
+phase_step: wave-5-s601-s502-s502-s602-s-w502-pending
 phase_3_active_wave: 5
-phase_3_active_stories: [S-6.03, S-W5.01]
-wave_5_sw501_convergence_counter: 0
-wave_5_sw501_convergence_status: fresh-pass-1-pending
-wave_5_s603_round7_pass1_status: 1/3-clean
-wave_5_s603_round7_pass2_status: in_progress
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01]
+phase_3_active_stories: [S-5.01, S-5.02, S-6.02, S-W5.02]
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -66,9 +62,10 @@ wave_4_wavegate_consistency_audit: "CONDITIONAL PASS — 14 findings, all resolv
 wave_4_integration_gate: PASSED
 wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
-develop_head: 01ae50c
+develop_head: 0d499ac
 open_prs: 0
-timestamp: 2026-06-29T08:00:00Z
+alpha_release_tag: alpha-20260629-165045-d854978
+timestamp: 2026-06-29T17:00:00Z
 last_update: 2026-06-29
 ---
 
@@ -84,7 +81,7 @@ Wave 5 RE-SCOPED to 7 stories / 38 pts (Observability + CLI + Management Plane).
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 impl landed; Round-1 adversary found new C/H — fixes routed, pending re-run | 2026-06-29 | W5: 0/3 passes clean (both stories); Round-1 new Critical/High → fixes in flight |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01/S-5.02/S-6.02/S-W5.02 pending | 2026-06-29 | W5: S-6.03 converged BC-5.39.001 (3 clean passes); S-W5.01 converged BC-5.39.001 Round-7 (3 clean passes @ tip 5be25ef) |
 
 ## Wave / Story Status
 
@@ -102,8 +99,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 5 | S-5.01 | Green/yellow/red quality indicator with hysteresis | pending | — | — |
 | 5 | S-5.02 | sbctl paths list / router metrics + alias + p99 | pending | — | — |
 | 5 | S-6.02 | SVTN lifecycle and key management via sbctl admin | pending | — | — |
-| 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | IN-CONVERGENCE | PR#32 (premature — NOT merging) | d85dd22 |
-| 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | IN-CONVERGENCE | PR#31 (premature — NOT merging) | — |
+| 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | MERGED | #32 | d854978 |
+| 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | MERGED | #31 | 0d499ac |
 | 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | draft | — | — |
 
 ## Open Drift Items
@@ -133,6 +130,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | E-CFG-002 | MED | Pre-existing config-key collision (joins tracked E-CFG-006). | product-owner | deferred maintenance |
 | E-CFG-006 | MED | Pre-existing config-key collision (tracked from prior audit). | product-owner | deferred maintenance |
 | PROCESS-GAP-W5A | OBS | [process-gap] S-W5.01 implementer reported "all 4 modes wired" when runRouter/runConsole/runControl still had orphaned listeners (Round-1 HIGH unfixed for 3/4 modes). S-6.03 implementer reported "race-clean" when `go test -race` intermittently failed on package-global homeDirFunc data race under t.Parallel. Orchestrator independent verification (go test -race + reading mgmt_wire.go) caught both false-greens. Candidate mandatory discipline: require `just test-race` evidence-paste in implementer completion contract before green-claim is accepted. | orchestrator | open — candidate codification |
+| DRIFT-SW501-NITPICK | LOW | S-W5.01 Pass-3 nitpicks (non-gating, cosmetic): stale "Stub: ... Red Gate" comments in internal/config/config.go ~L236 & ~L244 (functions fully implemented+tested); dead `_ = pub` in internal/mgmt/mgmt.go ~L462. | implementer | defer to S-W5.02 or hygiene commit |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -155,44 +153,35 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | BC-2.06.003 v1.3 (sbctl canonical+alias + rtt_p99_ms) | Reconciles sbctl metrics surface: canonical `paths list`, router-metrics alias `router metrics`, router-status alias `router status`; adds rtt_p99_ms field. Closes consistency-audit F-001..F-007. | 2026-06-28 |
 | S-5.03 degraded-path-flag (new story) | New Wave-5 story closing drift S401-O3; implements BC-2.02.003 PC-5 IsDegraded() in internal/paths; VP-063 is its formal property. | 2026-06-28 |
 | Build whole management plane (Wave 5) | net-new internal/mgmt server + ADR-012 wire protocol (NDJSON, Ed25519 challenge-response, 64 KiB bounded reads, fail-closed Authenticate()) + e2e across 4 daemon types; S-6.03 re-scoped, S-W5.01/S-W5.02 created; +13pt. BC-2.07.004 + VP-064..VP-067 minted. | 2026-06-28 |
+| S-6.03 MERGED (d854978, PR #32) | Converged BC-5.39.001 (3 clean diverse-lens passes); Ed25519 fail-closed, flag parsing, JSON envelope, connection error reporting | 2026-06-29 |
+| S-W5.01 MERGED (0d499ac, PR #31) | Converged BC-5.39.001 Round-7 (3 clean passes @ tip 5be25ef); internal/mgmt server + cmd/switchboard wiring for all 4 daemon modes | 2026-06-29 |
+| Alpha tag auto-cut: alpha-20260629-165045-d854978 | Gitflow release-CI auto-tagged develop after both PRs merged | 2026-06-29 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-29 (Wave 5 mgmt-plane adversarial convergence, post-Round-6/Round-7 burst)
+## Session Resume Checkpoint — 2026-06-29 (Wave 5 S-6.03 + S-W5.01 cycle-close)
 
-**Position:** Phase 3 Wave 5. Per-story adversarial convergence in progress on two stories.
+**Position:** Phase 3 Wave 5. S-6.03 and S-W5.01 MERGED. Remaining Wave 5: S-5.01, S-5.02, S-6.02, S-W5.02.
 
-**S-6.03 (sbctl client-auth Authenticate() fail-closed, 5pt):**
-- Story v2.6; impl tip ff1d146; 3 signed commits (M-1 fix applied: AC-012 --help/-h stream).
-- Round-7 convergence: Pass-1 = 1/3 CLEAN (L1 NITPICK_ONLY; L2+L3 CLEAN). Pass-2 in progress.
-- Pass-1 nitpicks (non-gating, for cycle-close awareness):
-  1. wrong_key_type_rsa sub-case mislabeled (untested type-assertion branch; observable postcondition still asserted — not a gap).
-  2. No e2e happy-path test (scoped to S-W5.02; not gating S-6.03).
-- PR #32 open (premature — do NOT merge until 3/3 clean streak).
+**S-6.03 (sbctl client-auth Authenticate() fail-closed, 5pt) — MERGED:**
+- Converged BC-5.39.001 (3 consecutive clean diverse-lens passes). Demos committed b3dcc0b. pr-reviewer APPROVED.
+- Merged via PR #32, squash commit d854978f669b4cfe4e444cad0035d7388aee0958 on develop.
 
-**S-W5.01 (internal/mgmt server + wiring, 8pt):**
-- Story v1.6; impl tip (PR #31).
-- Pass-2 (Round-6): L2+L3 CLEAN; L1 finding = L=1 security-event-log gap (BC-2.07.004 PC-3/EC-004).
-- Architect Ruling 1: log gap DEFERRED to S-HRD.02 (fail-closed control is full; audit-log is infra debt). Ruling 2a/2b also applied.
-- BC-2.07.004 updated to v1.6; S-W5.01 updated to v1.6; S-HRD.02 stub opened.
-- Convergence counter RESET to 0/3 — fresh Pass-1 pending.
-- PR #31 open (premature — do NOT merge until 3/3 clean streak).
+**S-W5.01 (internal/mgmt server + wiring, 8pt) — MERGED:**
+- Converged BC-5.39.001 (Round-7, 3 clean passes at tip 5be25ef). Demos committed 8b1bfc1. pr-reviewer APPROVED.
+- Update-merged onto develop after PR #32 landed (CI re-ran green). Merged via PR #31, squash commit 0d499ac28baaa3e14873343790253532f82bf121.
+- develop advanced: 01ae50c → d854978 (#32) → 0d499ac (#31). Both feature worktrees + branches removed.
+- Alpha tag auto-cut: alpha-20260629-165045-d854978.
 
-**New follow-up stories opened this burst:**
-- S-HRD.02 (daemon logging infra / slog seam on mgmt.Server) — owns BC-2.07.004 PC-3/EC-004 deferral + SEC-LOG-001 tech-debt entry.
-- S-HRD.01 (client write deadlines / CWE-400 defense-in-depth in cmd/sbctl) — stub only.
-- S-W5.03 (release CI version gate — assert binary is semver not "dev") — non-blocking for wave; must ship before first tagged mgmt-plane release.
-
-**Factory-artifacts batch committed this burst:** VP-068/070-073 (new), ARCH-05/07/11/12 (propagation), BC-2.07.002/003, error-taxonomy, VP-INDEX, red-gate-log, S-HRD.01, S-W5.03, tech-debt-register (SEC-LOG-001).
+**Deferred / open (recorded from cycle-close):**
+- DRIFT-SW501-NITPICK (Task #49): stale "Stub: ... Red Gate" comments in internal/config/config.go ~L236/L244 and dead `_ = pub` in internal/mgmt/mgmt.go ~L462. Non-gating. Target S-W5.02 or hygiene commit.
+- S-HRD.01 follow-up stub (deferred Finding 2) and release-CI version!=dev gate (Ruling S) — tracked from prior rounds; not duplicated here.
 
 **NEXT ACTION on resume:**
-1. S-W5.01: dispatch fresh Pass-1 (3 diverse-lens adversaries). Drive to 3/3 clean.
-2. S-6.03: complete Pass-2 (2 remaining lenses). If clean → Pass-3. Drive to 3/3 clean.
-3. After both reach 3/3: record demos, verify PRs #31/#32 clean, trigger human merge.
-4. Open S-W5.02 (e2e mgmt-plane harness) once both stories merged.
+1. Open S-W5.02 (e2e mgmt-plane harness: sbctl auth + RPC across 4 daemon types).
+2. Continue pending Wave 5: S-5.01, S-5.02, S-6.02.
+3. Cosmetic sweep DRIFT-SW501-NITPICK either as part of S-W5.02 scope or a standalone hygiene commit.
 
 **Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1. Address Wave 5 hardening epic.
-
-**Settled rulings:** W5 Rulings 1-7, Rulings A–Y (ARCH-12 v1.6, BC-2.07.004 v1.6, BC-2.07.003 v1.4) — do NOT re-open unless fresh pass finds NEW Critical/High.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
