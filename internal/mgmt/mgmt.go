@@ -146,6 +146,13 @@ func NewServer(
 	if daemonVersion == "" {
 		panic("mgmt.NewServer: daemonVersion must not be empty (ADR-012 §Ruling 6)")
 	}
+	// Panic on wrong-sized daemonKey: guards against nil key and public-key-for-private-key
+	// mistakes at construction time (BC-2.07.004 Invariant 8 / AC-016 / VP-068).
+	// A nil or short key would panic mid-connection inside handleConnection — a remote DoS
+	// vector. Fail at NewServer instead.
+	if len(daemonKey) != ed25519.PrivateKeySize {
+		panic("mgmt.NewServer: daemonKey must be ed25519.PrivateKeySize bytes (ADR-012 §Invariant 8 / AC-016)")
+	}
 
 	s := &Server{
 		ln:               ln,
