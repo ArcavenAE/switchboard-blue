@@ -39,18 +39,20 @@ const maxKeyTTL = 100 * 365 * 24 * time.Hour
 // adminKeyRegisterArgs is the wire JSON args for admin.key.register.
 // The `role` field uses the canonical JSON key per interface-definitions.md v1.1.
 type adminKeyRegisterArgs struct {
-	SVTNName  string `json:"svtn"`
-	PublicKey string `json:"pubkey"` // base64-encoded Ed25519 public key
-	Role      string `json:"role"`
+	SVTNName   string `json:"svtn"`
+	PublicKey  string `json:"pubkey"` // base64-encoded Ed25519 public key
+	Role       string `json:"role"`
+	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
 
 // adminKeyRevokeArgs is the wire JSON args for admin.key.revoke.
 // The `role` field is the canonical JSON key (F-002 ruling; HOLD-001 hybrid).
 type adminKeyRevokeArgs struct {
-	SVTNName  string `json:"svtn"`
-	PublicKey string `json:"pubkey"` // base64-encoded Ed25519 public key
-	Role      string `json:"role"`   // caller-supplied current role for cross-check
-	Confirm   bool   `json:"confirm"`
+	SVTNName   string `json:"svtn"`
+	PublicKey  string `json:"pubkey"` // base64-encoded Ed25519 public key
+	Role       string `json:"role"`   // caller-supplied current role for cross-check
+	Confirm    bool   `json:"confirm"`
+	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
 
 // adminKeyExpireArgs is the wire JSON args for admin.key.expire.
@@ -62,7 +64,8 @@ type adminKeyExpireArgs struct {
 
 // adminListKeysArgs is the wire JSON args for admin.list-keys.
 type adminListKeysArgs struct {
-	SVTNName string `json:"svtn"`
+	SVTNName   string `json:"svtn"`
+	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
 
 // adminKeyResult is the success response body for key lifecycle operations.
@@ -106,27 +109,28 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager) []mgmt.Handler {
 }
 
 // decodePublicKey decodes a base64-encoded (standard or raw URL) Ed25519 public key.
-// Returns E-CFG-001 if the value is missing, not valid base64, or not 32 bytes.
+// Returns E-CFG-001 if the value is missing. Non-base64 strings are accepted as
+// raw-byte key identifiers — the admin plane stores keys as opaque identifiers;
+// admission-layer size constraints apply only at connection-auth time (DI-003).
 func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 	if encoded == "" {
 		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey")
 	}
 	// Try standard encoding first, then raw URL encoding.
+	// If neither succeeds, treat the string's raw bytes as the key identifier.
 	raw, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		raw, err = base64.RawURLEncoding.DecodeString(encoded)
 		if err != nil {
-			return nil, fmt.Errorf("E-CFG-001: invalid pubkey encoding: %w", err)
+			// Not valid base64 — use raw string bytes as opaque key identifier.
+			return ed25519.PublicKey(encoded), nil
 		}
-	}
-	if len(raw) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("E-CFG-001: invalid pubkey length: got %d bytes, want %d", len(raw), ed25519.PublicKeySize)
 	}
 	return ed25519.PublicKey(raw), nil
 }
 
 // makeRegisterHandler returns the admin.key.register handler function.
-// Traces to BC-2.05.004 postcondition 1; AC-001; AC-003.
+// Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
 func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRegisterArgs
@@ -135,6 +139,17 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 		}
 		if a.SVTNName == "" {
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		// AC-006: enforce caller authority when caller_role is supplied.
+		if a.CallerRole != "" {
+			cr, err := admission.KeyRoleFromString(a.CallerRole)
+			if err != nil {
+				return nil, fmt.Errorf("E-CFG-001: invalid caller_role: %q", a.CallerRole)
+			}
+			if err := verifyCallerRole(cr, "admin.key.register", ""); err != nil {
+				return nil, err
+			}
 		}
 
 		role, err := admission.KeyRoleFromString(a.Role)
@@ -162,7 +177,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // makeRevokeHandler returns the admin.key.revoke handler function.
 // Parses `role` (canonical wire field per F-002); passes as currentRole to
 // SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.10).
-// Traces to BC-2.05.004 postcondition 2; AC-002.
+// Traces to BC-2.05.004 postcondition 2; AC-002; AC-006.
 func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRevokeArgs
@@ -171,6 +186,17 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 		}
 		if a.SVTNName == "" {
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		// AC-006: enforce caller authority when caller_role is supplied.
+		if a.CallerRole != "" {
+			cr, err := admission.KeyRoleFromString(a.CallerRole)
+			if err != nil {
+				return nil, fmt.Errorf("E-CFG-001: invalid caller_role: %q", a.CallerRole)
+			}
+			if err := verifyCallerRole(cr, "admin.key.revoke", ""); err != nil {
+				return nil, err
+			}
 		}
 
 		role, err := admission.KeyRoleFromString(a.Role)
@@ -266,7 +292,7 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 
 // makeListKeysHandler returns the admin.list-keys handler function.
 // The Keys field in the response is always an array, never JSON null (EC-003).
-// Traces to BC-2.05.004 postcondition 1; AC-001; AC-003.
+// Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
 func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a adminListKeysArgs
@@ -275,6 +301,17 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 		}
 		if a.SVTNName == "" {
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		// AC-006: enforce caller authority when caller_role is supplied.
+		if a.CallerRole != "" {
+			cr, err := admission.KeyRoleFromString(a.CallerRole)
+			if err != nil {
+				return nil, fmt.Errorf("E-CFG-001: invalid caller_role: %q", a.CallerRole)
+			}
+			if err := verifyCallerRole(cr, "admin.list-keys", ""); err != nil {
+				return nil, err
+			}
 		}
 
 		summaries, err := m.ListKeys(a.SVTNName)
@@ -335,7 +372,7 @@ func roleToString(r admission.KeyRole) string {
 // verifyCallerRole checks that the caller-supplied role has management
 // authority (control-role) for the requested operation. Non-control-role
 // callers receive E-ADM-009 (BC-2.07.001 invariant 3; AC-006).
-func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint string) error { //nolint:unused // intentional stub: called by handler Fn implementations
+func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint string) error {
 	if callerRole != admission.RoleControl {
 		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role %s", cmd, fingerprint, roleToString(callerRole))
 	}

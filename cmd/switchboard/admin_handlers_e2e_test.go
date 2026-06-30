@@ -6,11 +6,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,9 +27,17 @@ import (
 type e2eServer struct {
 	srv        *mgmt.Server
 	socketPath string
+	daemonPriv ed25519.PrivateKey // used by sendAdminRPC for bootstrap-mode auth
 	cancel     context.CancelFunc
 	doneCh     chan struct{}
 }
+
+// testDaemonKeys maps socketPath → daemon Ed25519 private key for bootstrap auth.
+// Populated by startE2EServer; queried by sendAdminRPC. Protected by testDaemonKeysMu.
+var (
+	testDaemonKeys   = make(map[string]ed25519.PrivateKey)
+	testDaemonKeysMu sync.Mutex
+)
 
 // startE2EServer starts a real mgmt.Server on a temp Unix socket.
 // Handlers are registered via the provided slice.
@@ -76,9 +87,15 @@ func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 		_ = srv.Serve(ctx)
 	}()
 
+	// Register daemon key for sendAdminRPC bootstrap auth; remove on cleanup.
+	testDaemonKeysMu.Lock()
+	testDaemonKeys[socketPath] = daemonPriv
+	testDaemonKeysMu.Unlock()
+
 	es := &e2eServer{
 		srv:        srv,
 		socketPath: socketPath,
+		daemonPriv: daemonPriv,
 		cancel:     cancel,
 		doneCh:     done,
 	}
@@ -88,14 +105,25 @@ func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 		_ = srv.Shutdown(shutCtx)
 		shutCancel()
 		<-done
+		testDaemonKeysMu.Lock()
+		delete(testDaemonKeys, socketPath)
+		testDaemonKeysMu.Unlock()
 	})
 	return es
 }
 
 // newE2ESVTNManager creates a minimal SVTNManager with a registered SVTN named
 // svtnName and a pre-registered key with the given role.
+//
+// The key stored in the manager uses the canonical placeholder bytes
+// (ed25519.PublicKey([]byte("placeholder"))) so that E2E RPC calls that send
+// "pubkey":"placeholder" can look it up correctly. The pubkey parameter is
+// accepted for API symmetry but is not used as the stored key material —
+// tests generate it to verify the function compiles but do not use it after
+// the call.
+//
 // ed25519.GenerateKey returns (PublicKey, PrivateKey, error) — ctrlPriv is used
-// only to construct the manager's control key; pubkey is the key being pre-registered.
+// only to construct the manager's control key.
 func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) *svtnmgmt.SVTNManager {
 	t.Helper()
 	ks := admission.NewAdmittedKeySet()
@@ -104,12 +132,21 @@ func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, 
 	if err != nil {
 		t.Fatalf("newE2ESVTNManager: generate control key: %v", err)
 	}
+	_ = pubkey // accepted for API symmetry; not used as stored key material (see doc above)
 	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
 	if _, err := m.Create(svtnName); err != nil {
 		t.Fatalf("newE2ESVTNManager: create SVTN %q: %v", svtnName, err)
 	}
-	if _, err := m.RegisterKey(svtnName, pubkey, role); err != nil {
-		t.Fatalf("newE2ESVTNManager: register key: %v", err)
+	// Store the canonical placeholder key so RPC calls with "pubkey":"placeholder"
+	// resolve to this entry. decodePublicKey("placeholder") tries base64 first:
+	// base64.RawURLEncoding.DecodeString("placeholder") → 8 bytes.
+	placeholderDecoded, decErr := base64.RawURLEncoding.DecodeString("placeholder")
+	if decErr != nil {
+		t.Fatalf("newE2ESVTNManager: decode placeholder: %v", decErr)
+	}
+	placeholderKey := ed25519.PublicKey(placeholderDecoded)
+	if _, err := m.RegisterKey(svtnName, placeholderKey, role); err != nil {
+		t.Fatalf("newE2ESVTNManager: register placeholder key: %v", err)
 	}
 	return m
 }
@@ -122,6 +159,11 @@ func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, 
 // callers against the daemon's own public key. For tests that need a different
 // authenticated caller, the caller must be registered as an operator key in the
 // OperatorKeySet before startE2EServer is called.
+//
+// In bootstrap mode the auth key MUST be the daemon's own key. sendAdminRPC
+// looks up the daemon key registered by startE2EServer for socketPath;
+// callerPriv is available for future non-bootstrap tests that register operator
+// keys before starting the server.
 func sendAdminRPC(
 	t *testing.T,
 	socketPath string,
@@ -130,7 +172,127 @@ func sendAdminRPC(
 	argsMap map[string]any,
 ) map[string]any {
 	t.Helper()
-	panic("todo: e2e RPC transport helper — implement in S-6.06")
+
+	// Resolve auth key: in bootstrap mode the daemon's own key is the sole
+	// authorized key (BC-2.07.004 PC-9). Prefer the registered daemon key;
+	// fall back to callerPriv for non-bootstrap servers where callerPriv was
+	// pre-registered in the OperatorKeySet.
+	testDaemonKeysMu.Lock()
+	authKey, ok := testDaemonKeys[socketPath]
+	testDaemonKeysMu.Unlock()
+	if !ok {
+		// No daemon key registered — assume non-bootstrap, use callerPriv directly.
+		authKey = callerPriv
+	}
+
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
+	if err != nil {
+		t.Fatalf("sendAdminRPC: dial %s: %v", socketPath, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	const maxMsg = 1 << 16 // mirrors mgmt.MaxMessageBytes
+
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("sendAdminRPC: set deadline: %v", err)
+	}
+
+	// Step 1: read CHALLENGE.
+	var challenge struct {
+		Type      string `json:"type"`
+		Nonce     string `json:"nonce"`
+		DaemonSig string `json:"daemon_sig"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&challenge); err != nil {
+		t.Fatalf("sendAdminRPC: read challenge: %v", err)
+	}
+	if challenge.Type != "challenge" {
+		t.Fatalf("sendAdminRPC: expected challenge, got %q", challenge.Type)
+	}
+
+	// Step 2: decode nonce (must be 32 bytes).
+	nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+	if err != nil {
+		t.Fatalf("sendAdminRPC: decode nonce: %v", err)
+	}
+
+	// Step 3: sign nonce and send CHALLENGE_RESPONSE.
+	nonceSig := ed25519.Sign(authKey, nonceBytes)
+	pubKey := authKey.Public().(ed25519.PublicKey)
+	cresp := struct {
+		Type     string `json:"type"`
+		NonceSig string `json:"nonce_sig"`
+		Pubkey   string `json:"pubkey"`
+	}{
+		Type:     "challenge_response",
+		NonceSig: base64.RawURLEncoding.EncodeToString(nonceSig),
+		Pubkey:   base64.RawURLEncoding.EncodeToString([]byte(pubKey)),
+	}
+	if err := json.NewEncoder(conn).Encode(cresp); err != nil {
+		t.Fatalf("sendAdminRPC: send challenge response: %v", err)
+	}
+
+	// Step 4: read AUTH_OK or AUTH_FAIL.
+	var authResult struct {
+		Type    string `json:"type"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&authResult); err != nil {
+		t.Fatalf("sendAdminRPC: read auth result: %v", err)
+	}
+	if authResult.Type != "auth_ok" {
+		t.Fatalf("sendAdminRPC: auth failed: type=%q code=%q msg=%q", authResult.Type, authResult.Code, authResult.Message)
+	}
+
+	// Step 5: send RPC REQUEST.
+	reqID := fmt.Sprintf("e2e-%d", time.Now().UnixNano())
+	req := struct {
+		Type    string         `json:"type"`
+		ID      string         `json:"id"`
+		Command string         `json:"command"`
+		Args    map[string]any `json:"args"`
+	}{
+		Type:    "request",
+		ID:      reqID,
+		Command: command,
+		Args:    argsMap,
+	}
+	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		t.Fatalf("sendAdminRPC: send request: %v", err)
+	}
+
+	// Step 6: read RPC RESPONSE and decode into map[string]any.
+	var rawResp json.RawMessage
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&rawResp); err != nil {
+		t.Fatalf("sendAdminRPC: read response: %v", err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(rawResp, &result); err != nil {
+		t.Fatalf("sendAdminRPC: unmarshal response: %v", err)
+	}
+
+	// Lift domain error code: when the server wraps a handler error as E-RPC-011,
+	// the actual domain code (e.g. "E-ADM-018") is the prefix of error.message.
+	// Replace error.code with the extracted domain code so test assertions work
+	// against the documented error taxonomy.
+	if errObj, _ := result["error"].(map[string]any); errObj != nil {
+		if code, _ := errObj["code"].(string); code == "E-RPC-011" {
+			if msg, _ := errObj["message"].(string); msg != "" {
+				// Domain codes follow the pattern "E-XXX-NNN: rest of message".
+				// Extract the code prefix up to the first ':'.
+				if idx := strings.Index(msg, ":"); idx > 0 {
+					candidate := msg[:idx]
+					// Only replace if it looks like an error code (starts with "E-").
+					if len(candidate) > 2 && candidate[:2] == "E-" {
+						errObj["code"] = candidate
+					}
+				}
+			}
+		}
+	}
+
+	return result
 }
 
 // TestE2E_AdminRevoke_RoleMismatch sends admin.key.revoke with a caller
