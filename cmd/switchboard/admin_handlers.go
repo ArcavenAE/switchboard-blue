@@ -73,9 +73,10 @@ type adminListKeysArgs struct {
 
 // adminKeyResult is the success response body for key lifecycle operations.
 // Satisfies BC-2.05.004 postcondition 4 (confirmation with fingerprint and timestamp).
+// JSON field names match AC-001 wire contract: key_fingerprint and timestamp.
 type adminKeyResult struct {
-	Fingerprint string    `json:"fingerprint"`
-	At          time.Time `json:"at"`
+	Fingerprint string    `json:"key_fingerprint"`
+	At          time.Time `json:"timestamp"`
 }
 
 // adminListKeysResult is the success response body for admin.key.list-keys.
@@ -353,8 +354,6 @@ func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string)
 	switch {
 	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
 		return fmt.Errorf("E-SVTN-003: SVTN not found: %s: %w", svtnName, err)
-	case errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists):
-		return fmt.Errorf("E-SVTN-002: SVTN already exists: %s: %w", svtnName, err)
 	case errors.Is(err, admission.ErrKeyNotRegistered):
 		// Compute fingerprint from the target public key bytes for the canonical message.
 		// Falls back to the encoded string if decode fails (key was already validated

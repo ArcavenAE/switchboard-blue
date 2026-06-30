@@ -101,6 +101,43 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 	return m
 }
 
+// assertAdminKeyResult round-trips a handler result through JSON and asserts
+// the AC-001 wire contract: key_fingerprint is a non-empty 64-hex-char string
+// (SHA256:<base64> prefix + 44-char base64) and timestamp is a non-zero UTC time.
+//
+// The helper serialises to JSON so that tag names are exercised — if the struct
+// tags were wrong the fields would be absent in JSON and the assertions would
+// catch it on the parsed side.
+func assertAdminKeyResult(t *testing.T, result any) {
+	t.Helper()
+
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("assertAdminKeyResult: marshal: %v", err)
+	}
+
+	var wire struct {
+		KeyFingerprint string    `json:"key_fingerprint"`
+		Timestamp      time.Time `json:"timestamp"`
+	}
+	if err := json.Unmarshal(b, &wire); err != nil {
+		t.Fatalf("assertAdminKeyResult: unmarshal: %v", err)
+	}
+
+	if wire.KeyFingerprint == "" {
+		t.Error("assertAdminKeyResult: key_fingerprint is empty; expected non-empty SHA256:<base64> string")
+	}
+	// SHA256:<base64> is "SHA256:" (7 chars) + 44-char standard base64 of 32 bytes = 51 chars total.
+	const wantFPLen = 51
+	if len(wire.KeyFingerprint) != wantFPLen {
+		t.Errorf("assertAdminKeyResult: key_fingerprint len=%d, want %d; got %q", len(wire.KeyFingerprint), wantFPLen, wire.KeyFingerprint)
+	}
+
+	if wire.Timestamp.IsZero() {
+		t.Error("assertAdminKeyResult: timestamp is zero; expected a non-zero UTC time")
+	}
+}
+
 // TestDecodePublicKey_RejectsBadSize verifies that decodePublicKey returns E-CFG-001
 // for decoded keys that are not exactly ed25519.PublicKeySize (32) bytes.
 func TestDecodePublicKey_RejectsBadSize(t *testing.T) {
@@ -162,10 +199,11 @@ func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 	}
 
 	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-	_, handlerErr := registerFn(ctx, json.RawMessage(args))
+	result, handlerErr := registerFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from register handler: %v", handlerErr)
 	}
+	assertAdminKeyResult(t, result)
 }
 
 // TestBuildAdminHandlers_KeyRevoke_HappyPath asserts that the admin.key.revoke
@@ -200,10 +238,11 @@ func TestBuildAdminHandlers_KeyRevoke_HappyPath(t *testing.T) {
 	}
 
 	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-	_, handlerErr := revokeFn(ctx, json.RawMessage(args))
+	result, handlerErr := revokeFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from revoke handler: %v", handlerErr)
 	}
+	assertAdminKeyResult(t, result)
 }
 
 // TestBuildAdminHandlers_KeyExpire_HappyPath asserts that admin.key.expire
@@ -239,10 +278,11 @@ func TestBuildAdminHandlers_KeyExpire_HappyPath(t *testing.T) {
 	}
 
 	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-	_, handlerErr := expireFn(ctx, json.RawMessage(args))
+	result, handlerErr := expireFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from expire handler: %v", handlerErr)
 	}
+	assertAdminKeyResult(t, result)
 }
 
 // TestBuildAdminHandlers_ListKeys_HappyPath asserts that admin.key.list-keys
@@ -680,11 +720,11 @@ func TestMapAdminError_ErrorWrapping(t *testing.T) {
 		wantCode    string
 	}{
 		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "", "E-SVTN-003"},
-		{"ErrSVTNAlreadyExists", svtnmgmt.ErrSVTNAlreadyExists, "s", "k", "", "E-SVTN-002"},
 		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "", "E-ADM-013"},
 		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "control", "E-ADM-019"},
 		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "", "E-ADM-018"},
 		{"ErrInvalidDuration", svtnmgmt.ErrInvalidDuration, "s", "k", "", "E-CFG-001"},
+		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", "k", "", "E-ADM-020"},
 	}
 	for _, tc := range cases {
 		tc := tc
