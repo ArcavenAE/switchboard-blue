@@ -1,10 +1,10 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-s501-s602-converged-per-bc-5.39.001
+phase_step: wave-5-s501-s602-merged
 phase_3_active_wave: 5
-phase_3_active_stories: [S-5.01, S-5.02, S-6.02, S-W5.02]
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01]
+phase_3_active_stories: [S-5.02, S-W5.02]
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -62,11 +62,11 @@ wave_4_wavegate_consistency_audit: "CONDITIONAL PASS — 14 findings, all resolv
 wave_4_integration_gate: PASSED
 wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
-develop_head: 0d499ac
+develop_head: b36cb9b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-29T22:00:00Z
-last_update: 2026-06-29
+timestamp: 2026-06-30T12:01:28Z
+last_update: 2026-06-30
 ---
 
 # Switchboard Factory State
@@ -86,7 +86,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 + S-6.02 converged BC-5.39.001 (Pass-3 all lenses 0/0/0). S-5.02/S-W5.02 pending | 2026-06-29 | W5: S-6.03 converged BC-5.39.001 (3 clean passes); S-W5.01 converged BC-5.39.001 Round-7 (3 clean passes @ tip 5be25ef); S-5.01 converged BC-5.39.001 Pass-3 (correctness/concurrency/traceability 0/0/0); S-6.02 converged BC-5.39.001 Pass-3 (scope+wire/concurrency+security/traceability 0/0/0, 2 narrow fixes: a98bd92 + e08f567) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-5.02/S-W5.02 pending | 2026-06-30 | W5: S-5.01 merged c1c2c3d (PR #35); S-6.02 merged b36cb9b (PR #34, rebased over S-5.01); S-5.02/S-W5.02 next |
 
 ## Wave / Story Status
 
@@ -101,9 +101,9 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 4 | S-6.01 | Config parsing and validation | MERGED | #28 | abeba27 |
 | 4 | hygiene | Doc-hygiene: stale ref + leftover stub docstring fix | MERGED | #29 | 7ef43b8 |
 | 5 | S-5.03 | flag paths degraded when EWMA RTT > 200ms | MERGED | #30 | 01ae50c |
-| 5 | S-5.01 | Green/yellow/red quality indicator with hysteresis | pending | — | — |
+| 5 | S-5.01 | Green/yellow/red quality indicator with hysteresis | MERGED | #35 | c1c2c3d |
 | 5 | S-5.02 | sbctl paths list / router metrics + alias + p99 | pending | — | — |
-| 5 | S-6.02 | SVTN lifecycle and key management via sbctl admin | pending | — | — |
+| 5 | S-6.02 | SVTN lifecycle and key management via sbctl admin | MERGED | #34 | b36cb9b |
 | 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | MERGED | #32 | d854978 |
 | 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | MERGED | #31 | 0d499ac |
 | 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | draft | — | — |
@@ -161,32 +161,26 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.03 MERGED (d854978, PR #32) | Converged BC-5.39.001 (3 clean diverse-lens passes); Ed25519 fail-closed, flag parsing, JSON envelope, connection error reporting | 2026-06-29 |
 | S-W5.01 MERGED (0d499ac, PR #31) | Converged BC-5.39.001 Round-7 (3 clean passes @ tip 5be25ef); internal/mgmt server + cmd/switchboard wiring for all 4 daemon modes | 2026-06-29 |
 | Alpha tag auto-cut: alpha-20260629-165045-d854978 | Gitflow release-CI auto-tagged develop after both PRs merged | 2026-06-29 |
+| S-5.01 MERGED (c1c2c3d, PR #35) | Squash-merged to develop 2026-06-30T12:01:28Z; worktree removed, branch deleted | 2026-06-30 |
+| S-6.02 MERGED (b36cb9b, PR #34) | Squash-merged to develop (rebased over S-5.01/c1c2c3d); worktree removed, branch deleted | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-29 (Wave 5 Pass-3 convergence — BC-5.39.001)
+## Session Resume Checkpoint — 2026-06-30 (Wave 5 S-5.01 + S-6.02 merged to develop)
 
-**Position:** Phase 3 Wave 5. S-5.01 and S-6.02 have achieved 3 consecutive clean diverse-lens adversarial passes (BC-5.39.001 satisfied for both). Both worktrees race-clean. Sprint-state and burst-log updated to record convergence.
+**Position:** Phase 3 Wave 5. S-5.01 merged via PR #35 (c1c2c3d, 2026-06-30T12:01:28Z). S-6.02 merged via PR #34 (b36cb9b, rebased over S-5.01). Both worktrees removed, branches deleted. develop HEAD = b36cb9b. 0 open PRs.
 
-**BC-5.39.001 convergence summary:**
+**Completed this session:**
+- S-5.01 BC-5.39.001 converged (Pass-3 all lenses 0/0/0) → PR #35 squash-merged c1c2c3d
+- S-6.02 BC-5.39.001 converged (Pass-3 all lenses 0/0/0, 2 narrow fixes a98bd92 + e08f567) → PR #34 squash-merged b36cb9b (rebased over c1c2c3d)
 
-S-5.01:
-- Pass-3 lens 1 (correctness): CONVERGED 0/0/0
-- Pass-3 lens 2 (concurrency): CONVERGED 0/0/0
-- Pass-3 lens 3 (traceability): CONVERGED 0/0/0 (1 deferred system-level observation: STORY-INDEX VP coverage rollup 67/67→74/74, out-of-perimeter per BC-5.39.002)
-
-S-6.02:
-- Pass-3 lens 1 (scope+wire): BLOCK → fix a98bd92 (E-ADM-014 stale in admin.go:51, admin_test.go:679,734, svtnmgmt_test.go:505,530) → RE-RUN CONVERGED 0/0/0
-- Pass-3 lens 2 (concurrency+security): CONVERGED 0/0/0 (first run)
-- Pass-3 lens 3 (traceability): BLOCK → fix e08f567 (ARCH-04 v1.12, line 372/374 prose now matches canonical sentinel) → RE-RUN CONVERGED 0/0/0
-
-**Residual deferrals (all out-of-perimeter per BC-5.39.002):**
-- S-5.01: STORY-INDEX VP coverage rollup (67/67→74/74)
-- S-6.02: O-2 phantom S-BL.NI, O-3 sprint-state arithmetic, O-4 S-6.06 ErrRoleMismatch package anchor
+**Wave 5 remaining:** S-5.02 (sbctl paths list / router metrics, 5 pts), S-6.06 (daemon admin RPC handlers, 5 pts), S-W5.02 (e2e management plane harness, 5 pts).
 
 **NEXT ACTION on resume:**
-1. Open PRs for S-5.01 and S-6.02 via per-story-delivery.md PR flow.
-2. Then: S-5.02, S-6.06, S-W5.02 in dependency order.
-3. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+1. Deliver S-5.02 (sbctl paths list + router metrics canonical + alias + p99) via per-story-delivery.md.
+2. Deliver S-6.06 (daemon-side admin RPC handlers) — depends on S-6.02 (now merged).
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 (all now merged or in-flight).
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

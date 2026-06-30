@@ -256,3 +256,16 @@ follow-ups W3-F1-FU1/FU2 (both LOW, non-blocking) open.
 **Wave 3 summary:** 10 stories + 3 fix PRs delivered; 3/3 clean adversary passes; consistency audit PASS (0 blocking); C-1 + T2 merged. Cycle-close checklist complete.
 **Adjudications resolved (2026-06-27):** W3-R3-F1 RESOLVED (all 6 ARCH-08 §6.5.1 obligations met); W3-R3-F2 RATIFY (BC-2.05.008 v1.3 + VP-059 v1.2 cover EC-006); SW305-M2/M3 CLOSED; SW305-M4 → W4-TEST-001.
 **Next at archive time:** Wave 4 kickoff — S-4.01/S-4.02/S-4.03/S-4.04/S-6.01 (29 pts).
+
+---
+
+## Archived: 2026-06-29 — S-5.01 + S-6.02 BC-5.39.001 converged; both ready for PR delivery
+
+**Position:** Phase 3 Wave 5. S-5.01 and S-6.02 achieved 3 consecutive clean diverse-lens adversarial passes (BC-5.39.001 satisfied). Both worktrees race-clean.
+
+S-5.01: Pass-3 lens 1 (correctness) 0/0/0, lens 2 (concurrency) 0/0/0, lens 3 (traceability) 0/0/0.
+S-6.02: Pass-3 lens 1 (scope+wire) BLOCK → fix a98bd92 → CONVERGED 0/0/0; lens 2 (concurrency+security) 0/0/0; lens 3 (traceability) BLOCK → fix e08f567 → CONVERGED 0/0/0.
+
+Residual deferrals (all out-of-perimeter per BC-5.39.002): S-5.01 STORY-INDEX VP rollup 67→74; S-6.02 O-2 phantom S-BL.NI, O-3 sprint-state arithmetic, O-4 S-6.06 anchor.
+
+**Next at archive time:** Open PRs for S-5.01 and S-6.02; then S-5.02, S-6.06, S-W5.02 in dependency order; S-6.07 after S-6.02 + S-6.06 both merged.

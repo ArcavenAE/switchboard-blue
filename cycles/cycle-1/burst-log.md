@@ -366,3 +366,27 @@ Deferred (out-of-perimeter, BC-5.39.002):
 
 Both S-5.01 and S-6.02 satisfy BC-5.39.001 as of 2026-06-29. Both worktrees are race-clean. Ready for PR delivery via per-story-delivery.md flow.
 
+---
+
+## Wave-5 S-5.01 + S-6.02 Merged to Develop (2026-06-30)
+
+**Agents dispatched:** human (merge), state-manager (recording)
+**PRs merged:** PR #35 (S-5.01), PR #34 (S-6.02)
+**develop HEAD before:** 0d499ac (post S-W5.01 merge)
+**develop HEAD after:** b36cb9b
+
+### Merge Chain
+
+| Story | PR | Merge SHA | Merge Time | Notes |
+|-------|-----|-----------|------------|-------|
+| S-5.01 | #35 | c1c2c3d | 2026-06-30T12:01:28Z | Squash-merged |
+| S-6.02 | #34 | b36cb9b | 2026-06-30T12:01:28Z | Squash-merged; rebased over S-5.01 (c1c2c3d) before merge |
+
+**Dependency chain note:** S-6.02 depends on S-6.03 (d854978) and S-W5.01 (0d499ac), both already on develop. S-6.02 was rebased over S-5.01 (c1c2c3d) to resolve ordering before merge.
+
+**Post-merge cleanup:** Both worktrees removed; feature branches deleted.
+
+**Wave 5 merged stories:** S-5.03 (#30/01ae50c), S-6.03 (#32/d854978), S-W5.01 (#31/0d499ac), S-5.01 (#35/c1c2c3d), S-6.02 (#34/b36cb9b) — 5 of 8 wave-5 stories complete.
+
+**Remaining Wave 5:** S-5.02, S-6.06, S-W5.02 (15 pts). Next: deliver S-5.02 then S-6.06, then S-W5.02 after all dependencies merged. Wave 5 adversarial review follows all merges.
+
