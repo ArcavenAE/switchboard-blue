@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:01
@@ -108,6 +108,19 @@ modified:
       EC-007 (bootstrap non-revocable AND non-expirable). modified: list reordered
       to strict monotonic chronological order (v1.7–v1.9 were out of sequence
       relative to v1.10 insertion).
+  - date: 2026-06-30
+    version: "1.12"
+    actor: product-owner
+    change: >
+      Pass-20 lens-3 F-P20L3-001 (MEDIUM) ruling — Option B: EC-007 narrowed to
+      remove over-broad "unconditionally" claim. The bootstrap guard fires for any
+      well-formed revoke/expire request targeting the bootstrap key; malformed
+      requests (invalid duration, missing fields) are rejected by the handler's
+      input-validation layer with E-CFG-001 before the bootstrap sentinel is
+      consulted. The mutation-prevention invariant is unaffected: SVTNManager is
+      never called for either bootstrap+well-formed or any+malformed request, so
+      the key store cannot be mutated in either case. EC-007 Expected Behavior and
+      Tests citation updated accordingly. VP-076 property #3 narrowed in parallel.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -172,7 +185,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | EC-004 | Key expires while session is active | Same behavior as revocation: session continues until next re-authentication challenge. |
 | EC-005 | Operator-key first-register into fresh SVTN (bootstrap path, F-P4L1-001) | No control key is registered in the target SVTN yet. The calling key is a member of `mgmt.OperatorKeySet`. `admin.key.register` MUST proceed (bootstrap grant). Subsequent register/revoke/expire operations require the caller to be registered as RoleControl in the SVTN admitted set. |
 | EC-006 | Revoked or expired key attempts an admin.key.* operation after successful mgmt authentication (F-P4L1-003) | The key authenticated at the mgmt connection layer but its `revoked=true` or `now >= expiry` in the SVTN admitted set. Handler authority resolution treats the key as unregistered; returns E-ADM-009. This applies to register, revoke, and expire (not list-keys, which is open to all admitted roles). |
-| EC-007 | Operator attempts to revoke OR expire the bootstrap key (permanent trust anchor). | Both revoke and expire return their respective sentinel unconditionally — the bootstrap key cannot be revoked or expired at any time, regardless of whether other control keys have been registered. `ErrBootstrapKeyRevokeForbidden` → E-ADM-020 for revoke; `ErrBootstrapKeyExpireForbidden` → E-ADM-021 for expire. Tests: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden` and `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyExpireForbidden`. |
+| EC-007 | Operator attempts to revoke OR expire the bootstrap key (permanent trust anchor) with a well-formed request. | For any well-formed request (valid duration, all required fields present) targeting the bootstrap key: revoke returns `ErrBootstrapKeyRevokeForbidden` → E-ADM-020; expire returns `ErrBootstrapKeyExpireForbidden` → E-ADM-021. The bootstrap key cannot be revoked or expired at any time, regardless of whether other control keys have been registered. **Layering note (F-P20L3-001):** Handler input-validation (duration bounds check, required-field validation) fires BEFORE the bootstrap sentinel is consulted. A malformed request targeting the bootstrap key (e.g., `after:"-1h"`, `after:"0s"`, `after:">100y"`, missing `after` field) is rejected by the handler with E-CFG-001 before `SVTNManager.ExpireKey` is called. The mutation-prevention invariant is fully preserved in both paths: `SVTNManager` is never called for well-formed bootstrap-key requests (bootstrap guard fires) OR for any malformed-input requests (input-validation fires), so the key store cannot be mutated in either case. Tests: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden` (revoke sentinel); `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyExpireForbidden` (expire sentinel). |
 
 ## Canonical Test Vectors
 

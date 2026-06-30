@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:01
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.8 | 2026-06-30 | BC-2.05.004 bumped v1.11→v1.12 — Pass-20 lens-3 F-P20L3-001 (MEDIUM) Option B ruling: EC-007 narrowed; "unconditionally" claim removed; handler-layer input-validation ordering clarified; VP-076 property #3 narrowed in parallel. |
 | 1.7 | 2026-06-30 | BC-2.05.004 bumped v1.10→v1.11 — Pass-19 sibling-fix propagation: VP-076 added to Verification Properties table; Traceability Stories row updated to cite S-6.06/EC-007 bootstrap-protection coverage; modified: list reordered to monotonic chronological order. |
 | 1.6 | 2026-06-30 | BC-2.05.004 bumped to v1.10 — EC-007 extended to cover expire symmetrically; E-ADM-021 minted; VP-076 minted; refs F-P18L1-001 lens-1 pass-18. |
 | 1.5 | 2026-06-30 | BC-2.05.004 bumped to v1.9 — EC-007 narrative tightened (bootstrap key unconditionally non-revocable, refs F-P15L1-002). |
