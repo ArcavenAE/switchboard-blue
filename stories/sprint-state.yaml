@@ -450,8 +450,8 @@ stories:
     priority: P1
     scope_phase: E
     points: 5
-    bc_traces: [BC-2.05.004, BC-2.07.001]
-    vp_traces: [VP-048]
+    bc_traces: [BC-2.05.004]
+    vp_traces: [VP-075]
     depends_on: [S-6.02]
     blocks: [S-W5.02]
     # Minted per CR-W5-SCOPE-SPLIT ruling 2026-06-29.
@@ -611,6 +611,10 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.10 (2026-06-30): S-6.06 bc_traces/vp_traces sync — PO ruling factory-artifacts 2c53aad + lens-3 F-T1.
+#   - S-6.06: bc_traces [BC-2.05.004, BC-2.07.001] → [BC-2.05.004]; BC-2.07.001 removed (Inv-3 scope is admin.svtn.* only).
+#   - S-6.06: vp_traces [VP-048] → [VP-075]; VP-048 stale claim removed; VP-075 newly minted added.
+#   - Authority: BC-2.05.004 PC-1 / DI-001 for S-6.06 admin RPC handler authority.
 # v2.9 (2026-06-30): S-5.01 + S-6.02 merged to develop.
 #   - S-5.01: status pending→completed; merge_sha c1c2c3d, pr 35, merged_at 2026-06-30T12:01:28Z.
 #   - S-6.02: status pending→completed; merge_sha b36cb9b, pr 34, merged_at 2026-06-30T12:01:28Z (rebased over S-5.01).
