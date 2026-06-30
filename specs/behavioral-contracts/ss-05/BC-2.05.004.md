@@ -44,21 +44,6 @@ modified:
       DI-001 applies: key lifecycle operations authenticate the nodes that enforce
       content separation; a revoked or misconfigured key breaks DI-001 guarantees.
   - date: 2026-06-30
-    version: "1.7"
-    actor: product-owner
-    change: >
-      F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard.
-      BuildAdminHandlers (and its handler closures) live in cmd/switchboard/admin_handlers.go;
-      the authority-gate test must instantiate the handler builder from that package.
-      VP Anchors table updated accordingly.
-  - date: 2026-06-30
-    version: "1.6"
-    actor: product-owner
-    change: >
-      S-6.06 Pass-6 finding F-P6L2-002: Canonical Test Vectors list-keys row
-      annotated with wire RPC name (admin.key.list-keys) to match the annotation
-      pattern used on other rows in the table.
-  - date: 2026-06-30
     version: "1.5"
     actor: product-owner
     change: >
@@ -71,6 +56,21 @@ modified:
       E-ADM-009 (not E-ADM-011) with disambiguation note. list-keys authority scope
       clarified: any admitted role may call. EC-005 (bootstrap first-register) and
       EC-006 (revoked key residual authority) added.
+  - date: 2026-06-30
+    version: "1.6"
+    actor: product-owner
+    change: >
+      S-6.06 Pass-6 finding F-P6L2-002: Canonical Test Vectors list-keys row
+      annotated with wire RPC name (admin.key.list-keys) to match the annotation
+      pattern used on other rows in the table.
+  - date: 2026-06-30
+    version: "1.7"
+    actor: product-owner
+    change: >
+      F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard.
+      BuildAdminHandlers (and its handler closures) live in cmd/switchboard/admin_handlers.go;
+      the authority-gate test must instantiate the handler builder from that package.
+      VP Anchors table updated accordingly.
 deprecated: null
 deprecated_by: null
 replacement: null

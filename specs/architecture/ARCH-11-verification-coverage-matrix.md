@@ -31,7 +31,7 @@ modified:
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 75 (VP-001 through VP-075, per VP-INDEX v2.6).
+> Total VP count: 75 (VP-001 through VP-075, per VP-INDEX v2.7).
 
 ## BC → VP Coverage Table
 
