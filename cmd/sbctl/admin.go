@@ -5,7 +5,7 @@
 //	sbctl admin key register --key <pubkey> --svtn <id> [--role <role>]
 //	sbctl admin key revoke   --key <pubkey> --svtn <id> [--confirm]
 //	sbctl admin key expire   --key <pubkey> --svtn <id> --after <duration>
-//	sbctl admin list-keys    [--svtn <id>]
+//	sbctl admin list-keys    [--svtn <id>]   (wire: admin.key.list-keys; F-L2-001)
 //
 // All subcommands authenticate to the daemon via the management socket
 // (ADR-012 challenge-response) and send RPC requests to the svtnmgmt
@@ -13,7 +13,7 @@
 //
 // Resolution of F-P8-001: the canonical CLI surface is `sbctl admin`
 // (NOT the removed `sbctl svtn keys register|revoke|expire` path).
-// Resolution of F-P8-006: key listing is via `sbctl admin list-keys`.
+// Resolution of F-P8-006: key listing is via `sbctl admin list-keys` (wire: admin.key.list-keys; F-L2-001).
 //
 // Purity classification (ARCH-09): effectful-boundary — owns CLI I/O and
 // management socket connection.
@@ -91,7 +91,7 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 	case "key":
 		return runAdminKey(ctx, target, keyPath, useJSON, args[1:])
 	case "list-keys":
-		return connectAndRun(ctx, target, keyPath, useJSON, "admin.list-keys", nil)
+		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", nil)
 	default:
 		return fmt.Errorf("admin: unknown subcommand %q; expected 'key' or 'list-keys'", args[0])
 	}

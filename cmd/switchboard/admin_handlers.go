@@ -5,7 +5,7 @@
 //	admin.key.register   (BC-2.05.004 PC-1)
 //	admin.key.revoke     (BC-2.05.004 PC-2; HOLD-001 hybrid; ADR-004)
 //	admin.key.expire     (BC-2.05.004 PC-3; DI-003 defense-in-depth duration validation)
-//	admin.list-keys      (BC-2.05.004 PC-1 confirmation surface)
+//	admin.key.list-keys  (BC-2.05.004 PC-1 confirmation surface; any admitted role; F-L2-001/F-L2-003)
 //
 // Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion;
 // ARCH-08 §6.6.2; AC-004). Access, console, and router daemons pass nil handlers.
@@ -63,10 +63,12 @@ type adminKeyExpireArgs struct {
 	After     string `json:"after"`  // duration string e.g. "24h"
 }
 
-// adminListKeysArgs is the wire JSON args for admin.list-keys.
+// adminListKeysArgs is the wire JSON args for admin.key.list-keys.
+// admin.key.list-keys is read-only and admits any role (F-L2-003); CallerRole
+// is accepted for fallback compatibility but not used for authority gating.
 type adminListKeysArgs struct {
 	SVTNName   string `json:"svtn"`
-	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
+	CallerRole string `json:"caller_role"` // optional; NOT gated — admin.key.list-keys is any-role (F-L2-003)
 }
 
 // adminKeyResult is the success response body for key lifecycle operations.
@@ -76,13 +78,13 @@ type adminKeyResult struct {
 	At          time.Time `json:"at"`
 }
 
-// adminListKeysResult is the success response body for admin.list-keys.
+// adminListKeysResult is the success response body for admin.key.list-keys.
 // The Keys field is always an array (never JSON null) per EC-003.
 type adminListKeysResult struct {
 	Keys []adminKeyEntry `json:"keys"`
 }
 
-// adminKeyEntry is a single element in the admin.list-keys response.
+// adminKeyEntry is a single element in the admin.key.list-keys response.
 type adminKeyEntry struct {
 	Fingerprint string    `json:"fingerprint"`
 	Role        string    `json:"role"`
@@ -94,18 +96,27 @@ type adminKeyEntry struct {
 // misconfiguration at the call site; BuildAdminHandlers panics immediately
 // (EC-004; AC-001).
 //
+// ops is the OperatorKeySet for bootstrap-grant authority (F-P4L1-001): an
+// operator-set member may call admin.key.register for a SVTN with no active
+// control key. Passing nil is equivalent to an empty OperatorKeySet (no
+// operator keys configured; bootstrap mode uses the daemon's own key via
+// SVTNManager.IsBootstrapKey).
+//
 // Only the control-mode daemon should call BuildAdminHandlers. All other
 // daemon modes pass nil (or an empty slice) for admin commands so that they
 // correctly return E-RPC-010 "unknown command" (ADR-004; AC-004).
-func BuildAdminHandlers(m *svtnmgmt.SVTNManager) []mgmt.Handler {
+func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgmt.Handler {
 	if m == nil {
 		panic("BuildAdminHandlers: SVTNManager must not be nil (EC-004)")
 	}
+	if ops == nil {
+		ops = mgmt.NewOperatorKeySet(nil)
+	}
 	return []mgmt.Handler{
-		{Command: "admin.key.register", Fn: makeRegisterHandler(m)},
-		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m)},
-		{Command: "admin.key.expire", Fn: makeExpireHandler(m)},
-		{Command: "admin.list-keys", Fn: makeListKeysHandler(m)},
+		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops)},
+		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},
+		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
+		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m)},
 	}
 }
 
@@ -133,7 +144,7 @@ func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 
 // makeRegisterHandler returns the admin.key.register handler function.
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
-func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
+func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRegisterArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -145,7 +156,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
 		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
-		if err := resolveAndVerifyCallerRole(ctx, m, a.SVTNName, a.CallerRole, "admin.key.register"); err != nil {
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.register"); err != nil {
 			return nil, err
 		}
 
@@ -175,7 +186,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // Parses `role` (canonical wire field per F-002); passes as currentRole to
 // SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.10).
 // Traces to BC-2.05.004 postcondition 2; AC-002; AC-006.
-func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
+func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRevokeArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -187,7 +198,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
 		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
-		if err := resolveAndVerifyCallerRole(ctx, m, a.SVTNName, a.CallerRole, "admin.key.revoke"); err != nil {
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.revoke"); err != nil {
 			return nil, err
 		}
 
@@ -217,7 +228,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 // Re-parses and validates the `after` duration server-side (defense-in-depth;
 // DI-003) independently of sbctl CLI validation (AC-005).
 // Traces to BC-2.05.004 postcondition 3; AC-005.
-func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
+func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		// Use a raw map to detect absent fields (EC-005) vs zero-value fields.
 		var raw map[string]json.RawMessage
@@ -261,7 +272,7 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 
 		// AC-006: enforce caller authority server-side (F-006; F-001b).
 		// No CallerRole field in expire args — purely server-resolved.
-		if err := resolveAndVerifyCallerRole(ctx, m, svtnName, "", "admin.key.expire"); err != nil {
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.expire"); err != nil {
 			return nil, err
 		}
 
@@ -288,9 +299,11 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 	}
 }
 
-// makeListKeysHandler returns the admin.list-keys handler function.
+// makeListKeysHandler returns the admin.key.list-keys handler function.
+// admin.key.list-keys is a read-only operation accessible to any admitted role
+// (F-L2-003 / interface-definitions.md); no E-ADM-009 gate is applied.
 // The Keys field in the response is always an array, never JSON null (EC-003).
-// Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
+// Traces to BC-2.05.004 postcondition 1; AC-001; AC-003.
 func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminListKeysArgs
@@ -301,11 +314,8 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
 		}
 
-		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
-		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
-		if err := resolveAndVerifyCallerRole(ctx, m, a.SVTNName, a.CallerRole, "admin.list-keys"); err != nil {
-			return nil, err
-		}
+		// F-L2-003: admin.key.list-keys is read-only; any admitted role may call it.
+		// No resolveAndVerifyCallerRole call here — the authority gate does NOT apply.
 
 		summaries, err := m.ListKeys(a.SVTNName)
 		if err != nil {
@@ -389,11 +399,17 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 // the server-side context (preferred) and enforces that it is control-role.
 //
 // Server-resolved path (F-001b / BC-2.07.001 Inv-3 / AC-006):
-//   - If ctx carries a caller pubkey (set by mgmt.handleConnection after handshake),
-//     look up that pubkey's role in the SVTN via SVTNManager.CallerKeyRole.
-//   - If the key is not found in the SVTN (bootstrap or operator key), allow the
-//     operation — the daemon's own key is always the control trust anchor.
-//   - If the key is found with a non-control role, return E-ADM-009.
+//  1. Look up pubkey via CallerKeyRoleActive (F-P4L1-003): only active (not
+//     revoked, not expired) entries yield a role. Revoked or expired keys are
+//     treated as unregistered and fall through to the bootstrap/operator check.
+//  2. If active and found with control role → allow.
+//  3. If active and found with non-control role → deny with E-ADM-009.
+//  4. If not found or key is revoked/expired:
+//     a. If cmd=="admin.key.register" AND caller is in ops OperatorKeySet AND
+//     SVTN has no active control key → allow (operator-key bootstrap grant,
+//     F-P4L1-001 / BC-2.05.004 EC-005).
+//     b. If the daemon's own bootstrap key → allow (trust anchor).
+//     c. Otherwise → deny with E-ADM-009 (fail-closed, F-P2L1-001).
 //
 // Fallback path (no handshake context):
 //   - If ctx has no caller pubkey and callerRoleStr is non-empty, parse and
@@ -402,22 +418,33 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 //   - If ctx has no caller pubkey and callerRoleStr is empty, the caller's
 //     role cannot be confirmed → reject with E-ADM-009 (fail-closed,
 //     BC-2.05.004 / BC-2.07.001 Inv-3).
-func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, svtnName, callerRoleStr, cmd string) error {
+func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, svtnName, callerRoleStr, cmd string) error {
+	if ops == nil {
+		ops = mgmt.NewOperatorKeySet(nil)
+	}
 	callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
 	if hasPubkey {
-		role, found := m.CallerKeyRole(svtnName, callerPub)
-		if !found {
-			// Key not registered in this SVTN. Allow only if it is the
-			// daemon's own bootstrap control key (the trust anchor).
-			// All other authenticated-but-unregistered keys are denied (F-P2L1-001).
-			if m.IsBootstrapKey(callerPub) {
-				return nil
-			}
+		// F-P4L1-003: use CallerKeyRoleActive — revoked/expired keys return (0, false)
+		// and fall through to the bootstrap/operator check below, then deny.
+		role, found := m.CallerKeyRoleActive(svtnName, callerPub)
+		if found {
 			fp := keyFingerprintAdmin(callerPub)
-			return fmt.Errorf("E-ADM-009: caller key %s not registered in svtn %q", fp, svtnName)
+			return verifyCallerRole(role, cmd, fp)
+		}
+
+		// Key not found as active. Check bootstrap and operator-key paths (fail-closed).
+		// F-P4L1-001: operator-key bootstrap grant for admin.key.register only.
+		// The condition is: SVTN has no active non-bootstrap control key (the calling
+		// key is itself not in the SVTN, and no other human-registered control key exists).
+		if cmd == "admin.key.register" && ops.IsAuthorized(callerPub) && !m.HasNonBootstrapControlKey(svtnName) {
+			return nil
+		}
+		// Bootstrap key (daemon's own trust anchor) is always allowed.
+		if m.IsBootstrapKey(callerPub) {
+			return nil
 		}
 		fp := keyFingerprintAdmin(callerPub)
-		return verifyCallerRole(role, cmd, fp)
+		return fmt.Errorf("E-ADM-009: caller key %s not registered in svtn %q", fp, svtnName)
 	}
 
 	// No pubkey in ctx — fallback when no handshake context is present.

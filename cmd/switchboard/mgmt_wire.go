@@ -357,7 +357,10 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	m := svtnmgmt.NewSVTNManager(ks, daemonPub)
 
 	var mgmtWG sync.WaitGroup
-	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "control", daemonPriv, BuildAdminHandlers(m))
+	// Bootstrap mode: nil OperatorKeySet (no pre-configured operator keys).
+	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
+	ops := mgmt.NewOperatorKeySet(nil)
+	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "control", daemonPriv, BuildAdminHandlers(m, ops))
 	if mgmtErr != nil {
 		return fmt.Errorf("runControl: start management server: %w", mgmtErr)
 	}

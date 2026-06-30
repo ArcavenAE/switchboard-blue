@@ -134,6 +134,12 @@ type AdmittedKey struct {
 // Use AdmittedKeySet.SetKeyExpiry to set or clear the expiry (E-ADM-015).
 func (k AdmittedKey) KeyExpiry() time.Time { return k.expiry }
 
+// IsRevoked reports whether this key has been revoked.
+// A revoked key causes ErrKeyRevoked on the next re-authentication attempt (FM-007).
+// Used by svtnmgmt.CallerKeyRoleActive to deny revoked keys at handler authority
+// resolution time (F-P4L1-003 / BC-2.05.004 PC-1).
+func (k AdmittedKey) IsRevoked() bool { return k.revoked }
+
 // Challenge is the router-issued, router-signed nonce sent to a node during
 // the admission handshake (ARCH-04 §Tier 1 Admission Protocol step 2).
 //
