@@ -86,10 +86,14 @@ type adminListKeysResult struct {
 }
 
 // adminKeyEntry is a single element in the admin.key.list-keys response.
+// Expiry is a pointer so that keys with no expiry omit the field entirely in
+// JSON output — encoding/json does not treat a zero time.Time as empty for
+// omitempty, so a value field would serialize as "0001-01-01T00:00:00Z" for
+// non-expiring keys (F-P18L1-002).
 type adminKeyEntry struct {
-	Fingerprint string    `json:"fingerprint"`
-	Role        string    `json:"role"`
-	Expiry      time.Time `json:"expiry,omitempty"`
+	Fingerprint string     `json:"fingerprint"`
+	Role        string     `json:"role"`
+	Expiry      *time.Time `json:"expiry,omitempty"`
 }
 
 // BuildAdminHandlers returns a []mgmt.Handler containing the four admin key
@@ -330,11 +334,18 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 		// EC-003: always return a non-nil slice even when empty.
 		keys := make([]adminKeyEntry, 0, len(summaries))
 		for _, s := range summaries {
-			keys = append(keys, adminKeyEntry{
+			entry := adminKeyEntry{
 				Fingerprint: s.Fingerprint,
 				Role:        roleToString(s.Role),
-				Expiry:      s.Expiry,
-			})
+			}
+			// Only set Expiry when a TTL has been configured. A nil pointer
+			// causes encoding/json to omit the field entirely, so consumers
+			// see no "expiry" key for permanent keys (F-P18L1-002).
+			if !s.Expiry.IsZero() {
+				t := s.Expiry.UTC()
+				entry.Expiry = &t
+			}
+			keys = append(keys, entry)
 		}
 
 		return adminListKeysResult{Keys: keys}, nil

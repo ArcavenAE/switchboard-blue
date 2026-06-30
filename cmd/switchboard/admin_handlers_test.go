@@ -788,6 +788,98 @@ func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
 	}
 }
 
+// TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden asserts that setting a
+// TTL on the bootstrap control key returns E-ADM-021 (bootstrap-key-expire-forbidden).
+// Mirrors TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden.
+// Traces to BC-2.05.004 EC-007 v1.10; F-P18L1-001.
+func TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden(t *testing.T) {
+	t.Parallel()
+
+	// Create a manager with a known bootstrap key.
+	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+	if _, err := m.Create("test-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	handlers := BuildAdminHandlers(m, nil)
+	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.expire" {
+			expireFn = h.Fn
+			break
+		}
+	}
+	if expireFn == nil {
+		t.Fatal("admin.key.expire handler not found")
+	}
+
+	bootstrapPubEncoded := base64.StdEncoding.EncodeToString([]byte(bootstrapPub))
+	args, err := json.Marshal(adminKeyExpireArgs{
+		SVTNName:  "test-svtn",
+		PublicKey: bootstrapPubEncoded,
+		After:     "1h",
+	})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	// Inject the bootstrap key so auth passes and the handler reaches
+	// the expire-forbidden guard (E-ADM-021).
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := expireFn(ctx, json.RawMessage(args))
+	if handlerErr == nil {
+		t.Fatal("expected E-ADM-021, got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-ADM-021") {
+		t.Errorf("expected E-ADM-021, got: %v", handlerErr)
+	}
+	if !errors.Is(handlerErr, svtnmgmt.ErrBootstrapKeyExpireForbidden) {
+		t.Errorf("errors.Is(ErrBootstrapKeyExpireForbidden): expected true; err=%v", handlerErr)
+	}
+}
+
+// TestAdminKeyEntry_ZeroExpiryOmittedFromJSON asserts that an adminKeyEntry with
+// a zero Expiry does not emit an "expiry" field in JSON output.
+// encoding/json does not treat zero time.Time as empty for omitempty — using
+// *time.Time is required for correct omission (F-P18L1-002).
+func TestAdminKeyEntry_ZeroExpiryOmittedFromJSON(t *testing.T) {
+	t.Parallel()
+
+	// Zero expiry — must produce no "expiry" key.
+	entryNoExpiry := adminKeyEntry{
+		Fingerprint: "SHA256:abc",
+		Role:        "control",
+		// Expiry intentionally nil
+	}
+	data, err := json.Marshal(entryNoExpiry)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "expiry") {
+		t.Errorf("zero-expiry entry must not contain 'expiry' field; got: %s", data)
+	}
+
+	// Non-zero expiry — must produce an "expiry" key.
+	ts := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	entryWithExpiry := adminKeyEntry{
+		Fingerprint: "SHA256:def",
+		Role:        "access",
+		Expiry:      &ts,
+	}
+	data2, err := json.Marshal(entryWithExpiry)
+	if err != nil {
+		t.Fatalf("marshal with expiry: %v", err)
+	}
+	if !strings.Contains(string(data2), "expiry") {
+		t.Errorf("non-zero-expiry entry must contain 'expiry' field; got: %s", data2)
+	}
+}
+
 // TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm asserts that
 // admin.key.revoke for a control key without confirm=true returns E-ADM-018.
 // Traces to AC-002; BC-2.05.004 PC-2; ADR-004.
