@@ -428,3 +428,24 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+
+---
+
+## Session Resume Checkpoint (2026-06-30) — S-6.06 Pass-27 PASS CLEAN; clean-pass count 3/3-pending
+
+### State
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-06-30 |
+| **Position** | Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. |
+| **Clean-pass count** | 3/3-pending (Pass-16 + Pass-26 + Pass-27). Pass-27 is the second consecutive fully-clean pass. |
+| **Next action** | Pass-28 (convergence-close — clean-pass attempt #3 of 3) |
+
+### Notes
+
+Archived from STATE.md on Pass-28 PASS — checkpoint superseded by convergence-close record.
+
+Dispatch IDs: lens-1 a68ef99c2850a5ae5 / lens-2 ad7f415313ffdd259 / lens-3 a73b40208a7fef653. Lens-1: 7 LOW non-blocking OBS routed to TaskList #115. Lens-2: novelty LOW. Lens-3: novelty ZERO, Pass-25 propagation fully landed.
+
+S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: a6cdb88. Impl tip: d3f186c.

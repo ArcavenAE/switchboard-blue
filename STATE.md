@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: b36cb9b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T23:59:30Z
+timestamp: 2026-06-30T23:59:55Z
 last_update: 2026-06-30
 ---
 
@@ -90,6 +90,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-06-30 — S-6.06 Pass-25 BLOCK: lens-1 (ab521edc560a0b013) PASS CLEAN (4 LOW OBS: Obs-1 fallback-path coverage gap → TaskList #115; Obs-2 3 stale ARCH-04 v1.10 cites in impl + 1 in story [S-2.01:148 adjudicated out-of-scope historical-attribution by PO]; Obs-3 unreachable bogus fingerprint; Obs-4 dead code VP046 test); lens-2 (aae0edcaf3acf4640) PASS CLEAN novelty zero; lens-3 (a9a23dc563641c905) BLOCK — F-P25L3-001 MED (S-6.06:204 stale "VP-076 v1.1" cite; current v1.4) + O-P25L3-001 [process-gap] (7th-recurrence sibling-sweep gap; new axis: story body downstream→upstream version cites). Fix-bursts: a6cdb88 (factory-artifacts, product-owner) S-6.06 v1.20→v1.21 + STORY-INDEX v3.10→v3.11; line 204 VP-076 v1.1→v1.4; line 263 ARCH-04 v1.10→v1.13; exhaustive grep zero residuals. d3f186c (feat/S-6.06-daemon-admin-handlers, implementer) 4 ARCH-04 v1.10→v1.13 comment bumps at admission.go:287, svtnmgmt.go:252, svtnmgmt.go:279, admin_handlers.go:192; lint + test-race 17/17 clean. PROCESS-GAP-P25 codified (7th consecutive recurrence; new axis: story body downstream→upstream version cites). vsdd-factory #361 comment appended (7th recurrence). Convergence-reset ruling: doc-only + comment-only; counter NOT reset per BC-5.39.001. Pass-25 NOT counted. Clean-pass count: 1/3. Pass-26 = clean-pass attempt #3 of 3 continues. Spec tip: a6cdb88. Impl tip: d3f186c.
 - 2026-06-30 — S-6.06 Pass-26 PASS CLEAN (all 3 lenses): lens-1 (a05e401bf6bf753a1) PASS CLEAN novelty NONE (7 LOW OBS all adjudicated non-defect); lens-2 (a9efc33989be3c792) PASS CLEAN novelty NONE (all wire-error strings byte-equivalent; ARCH-04 v1.13 + VP-076 v1.4 cites coherent); lens-3 (ae6b9da5fbadbaaba) PASS CLEAN novelty LOW (2 LOW OBS out-of-scope → phase-5: O-P26L3-001 ARCH-04:30-40 modified-list non-monotonic; O-P26L3-002 error-taxonomy:9-23 mixed ordering). Both phase-5 observations routed TaskList #117. No fix-burst required. Clean-pass count advances: **2/3**. First counter-advancing pass since Pass-16 baseline (Passes 17–25 all BLOCK). Pass-27 queued (clean-pass attempt #3 of 3). Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).
 - 2026-06-30 — S-6.06 Pass-27 PASS CLEAN (all 3 lenses): lens-1 (a68ef99c2850a5ae5) PASS CLEAN novelty LOW (7 LOW non-blocking OBS: O-1 keyFingerprintAdmin nil latent footgun in list-keys; O-2 decodePublicKey Ed25519 point not validated; O-3 RoleMismatchError typed-detail path missing from TestMapAdminError_ErrorWrapping; O-4 E-ADM-018 fingerprint omission intentional per AC-005; O-5 dead privHex in VP046 DI-002 test; O-6 goroutine accounting in TOCTOU race test; O-7 ConstantTimeCompare doc-comment accuracy). All 7 adjudicated non-blocking refinements, reference TaskList #115 for post-merge polish. lens-2 (ad7f415313ffdd259) PASS CLEAN novelty LOW (wire-error strings byte-aligned; version cites coherent; layering corroborated; Lens-2 streak counter recommended for advancement). lens-3 (a73b40208a7fef653) PASS CLEAN novelty ZERO (Pass-25 sibling-fix propagation fully landed; Phase-5 deferred items TaskList #118 correctly NOT re-flagged). No fix-burst required. Clean-pass count advances: **3/3 pending** (second consecutive fully-clean pass). Pass-28 = final convergence-close attempt (#3 of 3).
+- 2026-06-30 — S-6.06 Pass-28 PASS CLEAN (all 3 lenses) — **BC-5.39.001 CONVERGENCE-CLOSED**. lens-1 PASS CLEAN novelty NONE (all 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified, no locked-accessor leaks, no init()/panic violations outside main, no tautological tests, comprehensive negative-path coverage, no hidden allocations, no sentinel-vs-wire drift, race/TOCTOU regression tests intact). lens-2 PASS CLEAN novelty ZERO (wire-error verbatim consistency verified; layering claim handler input-validation before bootstrap sentinel verified at admin_handlers.go:279-284 + svtnmgmt.go:325/334/263/268; all version cites coherent VP-076 v1.4, ARCH-04 v1.13, BC-2.05.004 v1.12, error-taxonomy v3.9; VP-INDEX arithmetic 76 total; bidirectional traceability). lens-3 PASS CLEAN novelty ZERO (all five mandatory sweeps clean; Pass-25 sibling-fix propagation fully landed; known phase-5-deferred items TaskList #118 correctly not re-flagged). THIRD consecutive fully-clean pass. Trajectory: P26:PASS(1/3→2/3) P27:PASS(2/3→3/3-pending) P28:PASS(3/3-pending→CONVERGED). No fix-burst required. **S-6.06 adversarial convergence CLOSED per BC-5.39.001.** Next: per-story-delivery.md Step 5 (demo recording per AC), then Steps 6-9.
 
 ## Phase Progress
 
@@ -97,7 +98,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-5.02/S-W5.02 pending | 2026-06-30 | W5: S-6.06 converging (Pass-27 PASS CLEAN; 3/3 pending — 2nd consecutive clean; Pass-28 queued); S-5.02/S-W5.02 next. S-6.06 trajectory: 16:PASS(1/3)→17:BLOCK→18:BLOCK→19:BLOCK→20:BLOCK→21:BLOCK→22:BLOCK→23:BLOCK→24:BLOCK→25:BLOCK→26:PASS(2/3)→27:PASS(3/3-pending) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-5.02/S-W5.02 pending | 2026-06-30 | W5: S-6.06 CONVERGED BC-5.39.001 (Pass-28 PASS CLEAN; 3/3 CLOSED); S-6.06 at Step 5 demo recording. S-5.02/S-W5.02 next. S-6.06 trajectory: 16:PASS(1/3)→17:BLOCK→18:BLOCK→19:BLOCK→20:BLOCK→21:BLOCK→22:BLOCK→23:BLOCK→24:BLOCK→25:BLOCK→26:PASS(2/3)→27:PASS(3/3-pending)→28:PASS(3/3✓CLOSED) |
 
 ## Wave / Story Status
 
@@ -180,24 +181,24 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.02 MERGED (b36cb9b, PR #34) | Squash-merged to develop (rebased over S-5.01/c1c2c3d); worktree removed, branch deleted | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-27 PASS CLEAN; clean-pass count 3/3-pending)
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-28 PASS CLEAN; BC-5.39.001 CONVERGED)
 
-**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Clean-pass count: **3/3-pending** (Pass-16 + Pass-26 + Pass-27). Pass-27 is the second consecutive fully-clean pass. No fix-burst required. Dispatch IDs: lens-1 a68ef99c2850a5ae5 / lens-2 ad7f415313ffdd259 / lens-3 a73b40208a7fef653. Lens-1: 7 LOW non-blocking OBS routed to TaskList #115 (post-merge polish). Lens-2: novelty LOW, streak counter advancement explicitly recommended. Lens-3: novelty ZERO, Pass-25 propagation fully landed.
+**Position:** Phase 3 Wave 5. S-6.06 adversarial convergence CLOSED (BC-5.39.001 satisfied). Pass-28 was the third and final consecutive clean pass. Spec tip: factory-artifacts HEAD (run `git -C .factory log -1 --format='%h %s'`). Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers.
 
-**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: factory-artifacts HEAD (run `git -C .factory log -1 --format='%h %s'`). Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers (unchanged since Pass-25).
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b.
 
-**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts — 1 clean pass for convergence-close), S-W5.02 (draft, 5 pts).
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (CONVERGED — at Step 5 demo recording, 5 pts), S-W5.02 (draft, 5 pts).
 
 **Open deferred observations:**
-- TaskList #115: lens-1 post-merge polish backlog (7 LOW non-blocking OBS from Passes 25–27).
-- TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity (O-P26L3-001/002, not re-flagged in Pass-27 per lens-3 verdict).
+- TaskList #115: lens-1 post-merge polish backlog (7 LOW non-blocking OBS from Passes 25–27, post-merge).
+- TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity (O-P26L3-001/002).
 
 **NEXT ACTION on resume:**
-1. S-6.06 Pass-28: dispatch 3 fresh-context adversary lenses (convergence-close — clean-pass #3 of 3). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c. Verify worktree HEAD = d3f186c before dispatch.
-2. On Pass-28 PASS: declare BC-5.39.001 satisfied, open PR for S-6.06, proceed to S-5.02 delivery.
-3. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+1. S-6.06 Step 5 — demo recording per AC (per-story-delivery.md Step 5). Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers.
+2. S-6.06 Steps 6-9: open PR, PR review, human merge, post-merge cleanup.
+3. S-5.02 (sbctl paths list + router metrics) — can proceed in parallel with S-6.06 Steps 6-9.
 4. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
-5. Wave 5 adversarial review after all stories merged.
+5. Wave 5 adversarial review after all Wave 5 stories merged.
 6. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

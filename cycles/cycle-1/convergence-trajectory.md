@@ -307,12 +307,13 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 25 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 4 | BLOCK (L3: F-P25L3-001 MED story VP-076 v1.1 cite; L1: 4 LOW OBS; L2: PASS CLEAN) | 1/3 |
 | 26 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 7+2 | PASS CLEAN (all 3 lenses; 7 LOW non-defect OBS L1 + 2 LOW out-of-scope OBS L3 → phase-5) | 2/3 |
 | 27 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 7+0+0 | PASS CLEAN (all 3 lenses; L1: 7 LOW non-blocking OBS; L2: novelty LOW; L3: novelty ZERO) | 3/3-pending |
+| 28 | 2026-06-30 | impl-internal/spec-impl/sibling-prop | 0 | 0 | 0 | 0 | PASS CLEAN (all 3 lenses; novelty NONE/ZERO/ZERO) — **CONVERGENCE-CLOSED** | 3/3 CLOSED |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK → 24:BLOCK → 25:BLOCK → 26:PASS(2/3) → 27:PASS(3/3-pending)`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK → 24:BLOCK → 25:BLOCK → 26:PASS(2/3) → 27:PASS(3/3-pending) → 28:PASS(3/3✓CLOSED)`
 
-Clean-pass count after Pass-27: **3/3-pending** (Pass-16 + Pass-26 + Pass-27). Pass-27 is the second consecutive fully-clean pass. No fix-burst required. Pass-28 = convergence-close (final clean-pass attempt). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
+**BC-5.39.001 CONVERGENCE-CLOSED** after Pass-28. Clean-pass count: **3/3 CLOSED** (Pass-16 baseline + Pass-26 + Pass-27 + Pass-28). Third consecutive fully-clean pass. No fix-burst required. Spec tip at convergence: factory-artifacts HEAD (a6cdb88 lineage). Impl tip at convergence: d3f186c (unchanged since Pass-25).
 
 ### Pass-26 Details
 
@@ -554,3 +555,21 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 - Impl (feat/S-6.06-daemon-admin-handlers): d3f186c — 4 impl/test ARCH-04 v1.10→v1.13 comment bumps at admission.go:287, svtnmgmt.go:252, svtnmgmt.go:279, admin_handlers.go:192; just fmt + just lint clean; just test-race 17/17 PASS, 0 races; comment-only, no behavior change.
 
 **Spec tip after fix:** a6cdb88. **Impl tip:** d3f186c.
+
+---
+
+### Pass-28 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** 3 fresh-context diverse-lens adversary passes (convergence-close)
+**Spec tip dispatched against:** factory-artifacts HEAD (post-Pass-27 closeout). **Impl tip:** d3f186c (unchanged since Pass-25).
+
+**Lens-1 (impl-internal):** PASS CLEAN — novelty NONE. All 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified, no locked-accessor leaks, no init()/panic violations outside main, no tautological tests, comprehensive negative-path coverage, no hidden allocations, no sentinel-vs-wire drift, race/TOCTOU regression tests intact.
+
+**Lens-2 (spec↔impl drift):** PASS CLEAN — novelty ZERO. Wire-error verbatim consistency verified; layering claim (handler input-validation before bootstrap sentinel) verified at admin_handlers.go:279-284 + svtnmgmt.go:325/334/263/268; all version cites coherent (VP-076 v1.4, ARCH-04 v1.13, BC-2.05.004 v1.12, error-taxonomy v3.9); VP-INDEX arithmetic 76 total; bidirectional traceability confirmed.
+
+**Lens-3 (within-doc/sibling-prop):** PASS CLEAN — novelty ZERO. All five mandatory sweeps clean; Pass-25 sibling-fix propagation fully landed; known phase-5-deferred items (TaskList #118) correctly not re-flagged per BC-5.39.002 PC2.
+
+**Verdict:** PASS CLEAN — THIRD consecutive fully-clean pass. **BC-5.39.001 CONVERGENCE-CLOSED.**
+
+**No fix-burst required.** Spec tip at convergence: factory-artifacts HEAD. Impl tip at convergence: d3f186c.

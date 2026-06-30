@@ -46,9 +46,11 @@ per-story adversarial review. A story is CONVERGED when it achieves
 
 ## S-6.06 — Daemon admin RPC handlers
 
-**Status:** IN_PROGRESS — BLOCK (1/3 clean passes; Pass-18 BLOCK, fix-burst applied, Pass-19 queued)
-**Clean-pass streak:** 0 consecutive clean passes (Pass-16 was last clean; Passes 17 and 18 both BLOCK)
-**Worktree branch:** feat/S-6.06-daemon-admin-handlers
+**Status:** CONVERGED (BC-5.39.001 satisfied 2026-06-30)
+**Clean-pass streak:** 3/3 CLOSED (Pass-16 baseline + Pass-26 + Pass-27 + Pass-28; final consecutive streak: Pass-26 + Pass-27 + Pass-28)
+**Worktree branch:** feat/S-6.06-daemon-admin-handlers (pending PR)
+**Spec tip at convergence:** factory-artifacts HEAD (a6cdb88 lineage)
+**Impl tip at convergence:** d3f186c
 
 ### Convergence History
 
@@ -448,8 +450,9 @@ Pass-24 queued. Spec tip: 82721dc. Impl tip: 0be8e97 (unchanged since Pass-21).
 | 25 | PASS CLEAN (4 LOW OBS) | PASS CLEAN (novelty zero) | BLOCK (F-P25L3-001 MED; O-P25L3-001 [process-gap]) | BLOCK (not counted) | a6cdb88 (spec) / d3f186c (impl comment) |
 | 26 | PASS CLEAN (7 LOW OBS non-defect) | PASS CLEAN (novelty NONE) | PASS CLEAN (2 LOW OBS out-of-scope → phase-5 TaskList #117) | PASS CLEAN — counter advances 1→2/3 | — (no fix required) |
 | 27 | PASS CLEAN (7 LOW non-blocking OBS → TaskList #115) | PASS CLEAN (novelty LOW; streak advancement recommended) | PASS CLEAN (novelty ZERO; propagation fully landed) | PASS CLEAN — counter advances 2→3/3-pending | — (no fix required) |
+| 28 | PASS CLEAN (novelty NONE) | PASS CLEAN (novelty ZERO) | PASS CLEAN (novelty ZERO) | PASS CLEAN — **CONVERGENCE-CLOSED** | — (no fix required) |
 
-**Status:** IN_PROGRESS — **3/3-pending clean passes** (Pass-16 + Pass-26 + Pass-27). Pass-28 = convergence-close. Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
+**Status:** CONVERGED — **BC-5.39.001 satisfied** (3/3 CLOSED: Pass-16 baseline + Pass-26 + Pass-27 + Pass-28). Third consecutive fully-clean pass at Pass-28. Spec tip at convergence: factory-artifacts HEAD (a6cdb88 lineage). Impl tip at convergence: d3f186c.
 
 ---
 
@@ -482,3 +485,25 @@ Pass-24 queued. Spec tip: 82721dc. Impl tip: 0be8e97 (unchanged since Pass-21).
 **Verdict: PASS CLEAN** — novelty ZERO. Pass-25 sibling-fix propagation has fully landed across all surfaces. Phase-5 deferred items (TaskList #118: ARCH-04 + error-taxonomy modified-list monotonicity) correctly NOT re-flagged per BC-5.39.002 PC2.
 
 **No fix-burst required.** Pass-28 = convergence-close (clean-pass #3 of 3). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
+
+---
+
+### Pass-28 Detail (2026-06-30)
+
+**Verdict:** PASS CLEAN — all 3 lenses clean. THIRD consecutive clean pass. **BC-5.39.001 CONVERGENCE-CLOSED.**
+
+**Spec tip:** factory-artifacts HEAD (post-Pass-27 closeout). **Impl tip:** d3f186c (unchanged since Pass-25).
+
+#### Lens-1 (impl-internal)
+
+**Verdict: PASS CLEAN** — novelty NONE. All 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified, no locked-accessor leaks, no init()/panic violations outside main, no tautological tests, comprehensive negative-path coverage, no hidden allocations, no sentinel-vs-wire drift, race/TOCTOU regression tests intact.
+
+#### Lens-2 (spec↔impl drift)
+
+**Verdict: PASS CLEAN** — novelty ZERO. Wire-error verbatim consistency verified; layering claim (handler input-validation before bootstrap sentinel) verified at admin_handlers.go:279-284 + svtnmgmt.go:325/334/263/268; all version cites coherent (VP-076 v1.4, ARCH-04 v1.13, BC-2.05.004 v1.12, error-taxonomy v3.9); VP-INDEX arithmetic 76 total; bidirectional traceability confirmed.
+
+#### Lens-3 (within-doc/sibling-prop)
+
+**Verdict: PASS CLEAN** — novelty ZERO. All five mandatory sweeps clean; Pass-25 sibling-fix propagation fully landed; known phase-5-deferred items (TaskList #118) correctly not re-flagged per BC-5.39.002 PC2.
+
+**No fix-burst required.** BC-5.39.001 satisfied. Next: per-story-delivery.md Step 5 (demo recording per AC).

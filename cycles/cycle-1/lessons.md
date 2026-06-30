@@ -34,3 +34,17 @@ traces_to: STATE.md
 **O-P26L3-002:** error-taxonomy.md lines 9-23 modified-list mixed ascending/descending ordering.
 
 **Action:** Phase-5 adversarial refinement should sweep ARCH-04 and error-taxonomy modified-list ordering as part of the spec consistency pass. Both documents have accumulated version entries out of order through successive narrowing fix-bursts. Recommend architect agent sorts modified-list entries by version number ascending in both files during the next spec-evolution burst.
+
+---
+
+## PATTERN-CLOSE-P21-P25 — Sibling-sweep policy now reliable (2026-06-30)
+
+**Source:** S-6.06 Passes 21–28 convergence trajectory.
+
+**Pattern observed:** PROCESS-GAP-P21 through PROCESS-GAP-P25 (passes 19–25) represented seven consecutive recurrences of the same sibling-sweep gap on successive axes: BC body VP table → EC tables → story Error Code Map → story Task Refs → VP downstream cites → impl source comments → story body upstream-version cites. Each pass found a new surface the previous fix-burst had not swept.
+
+**Resolution:** The exhaustive upstream-rooted sweep rule codified after PROCESS-GAP-P25 — "any document citing an artifact must be re-grepped when that artifact's version bumps" — held cleanly across Passes 26, 27, and 28 with zero recurrence. The three-consecutive-clean-pass streak was achieved without a single new sibling-sweep finding.
+
+**Lesson crystallized:** The sibling-sweep policy introduced from PROCESS-GAP-P21 through P25 is now empirically validated as sufficient. The pattern closed cleanly at Pass-26 and remained stable through P27/P28. The seven-recurrence sequence was the cost of discovering all axes of the gap; the policy cost is now reduced to a mechanical grep sweep per fix-burst.
+
+**Recommendation:** Codify the upstream-rooted sweep rule as a mandatory step in the story-writer and product-owner fix-burst checklist. The adversary now has high confidence this class of gap will not recur.

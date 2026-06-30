@@ -462,17 +462,23 @@ stories:
     title: "Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys)"
     epic: E-6
     wave: 5
-    status: draft
+    status: pending
     priority: P1
     scope_phase: E
     points: 5
     bc_traces: [BC-2.05.004]
-    vp_traces: [VP-075]
+    vp_traces: [VP-075, VP-076]
     depends_on: [S-6.02, S-W5.01]
     blocks: [S-W5.02]
+    adversarial_convergence: CONVERGED_PASS28_2026-06-30
+    adversary_streak: 3
+    adversary_converged: true
     # Minted per CR-W5-SCOPE-SPLIT ruling 2026-06-29.
     # Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon never registered
     # admin RPC handlers. TODO(CR-002) at mgmt_wire.go:259 is this story's entry point.
+    # BC-5.39.001 satisfied: 3 consecutive clean diverse-lens passes (P26+P27+P28).
+    # Impl tip at convergence: d3f186c on feat/S-6.06-daemon-admin-handlers.
+    # Spec tip at convergence: factory-artifacts HEAD.
 
   - story_id: S-6.07
     title: "SVTN admin create handler + CLI (sbctl admin svtn create)"
@@ -627,6 +633,21 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.21 (2026-06-30): S-6.06 adversary Pass-28 PASS CLEAN — BC-5.39.001 CONVERGENCE-CLOSED.
+#   - Pass-28 PASS CLEAN (all 3 lenses): novelty NONE across all lenses.
+#   - Lens-1: all 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified,
+#     no locked-accessor leaks, no init()/panic violations outside main, no tautological tests,
+#     comprehensive negative-path coverage, no hidden allocations, no sentinel-vs-wire drift, race/TOCTOU intact.
+#   - Lens-2: wire-error verbatim consistency verified; layering claim handler input-validation before
+#     bootstrap sentinel verified at admin_handlers.go:279-284 + svtnmgmt.go:325/334/263/268;
+#     all version cites coherent (VP-076 v1.4, ARCH-04 v1.13, BC-2.05.004 v1.12, error-taxonomy v3.9);
+#     VP-INDEX arithmetic 76 total; bidirectional traceability confirmed.
+#   - Lens-3: all five mandatory sweeps clean; Pass-25 sibling-fix propagation fully landed;
+#     known phase-5-deferred items (TaskList #118) correctly not re-flagged.
+#   - Third consecutive fully-clean pass (P26+P27+P28). BC-5.39.001 satisfied.
+#   - S-6.06: status draft→pending; adversarial_convergence, adversary_streak, adversary_converged fields added.
+#   - Impl tip at convergence: d3f186c. Spec tip at convergence: factory-artifacts HEAD.
+#   - Next: per-story-delivery.md Step 5 (demo recording per AC), then Steps 6-9.
 # v2.20 (2026-06-30): S-6.06 adversary Pass-27 PASS CLEAN recorded; clean-pass count advances 2→3/3-pending.
 #   - Pass-27 PASS CLEAN (all 3 lenses): lens-1 (a68ef99c2850a5ae5) PASS CLEAN (7 LOW non-blocking OBS);
 #     lens-2 (ad7f415313ffdd259) PASS CLEAN (novelty LOW; streak advancement recommended);
