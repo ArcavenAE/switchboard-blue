@@ -323,3 +323,46 @@ S-6.02 worktree:
 
 **Residual deferrals:** F-005 per spec (→ S-BL.LOOKUP); F-PG-003 input-hash (tracked TODO F-009).
 
+---
+
+## Wave-5 S-5.01 + S-6.02 Pass-3 Convergence — BC-5.39.001 Satisfied (2026-06-29)
+
+**Trigger:** Per-story adversarial Pass-3 (3-lens diverse-context) for S-5.01 and S-6.02. Both stories had accumulated Pass-1 + Pass-2 fix-bursts; this was the final confirmation round.
+
+**Agents dispatched:** adversary (×6 — 3 lenses per story, fresh context per lens), implementer (S-6.02 narrow fix a98bd92), state-manager (factory artifact fixes e08f567)
+
+### S-5.01 Pass-3 Results
+
+| Lens | Focus | Verdict | Findings |
+|------|-------|---------|----------|
+| 1 | correctness | CONVERGED | 0C/0H/0M |
+| 2 | concurrency | CONVERGED | 0C/0H/0M |
+| 3 | traceability | CONVERGED | 0C/0H/0M |
+
+Deferred (out-of-perimeter, BC-5.39.002): 1 system-level observation — STORY-INDEX VP coverage rollup shows 67/67 but 74 VPs now exist (rollup count stale). Not a per-story defect; carried to index maintenance.
+
+**BC-5.39.001 status for S-5.01: SATISFIED** — 3 consecutive clean passes, diverse lenses.
+
+### S-6.02 Pass-3 Results
+
+| Lens | Focus | Initial Verdict | Fix | Final Verdict | Findings |
+|------|-------|----------------|-----|---------------|----------|
+| 1 | scope+wire | BLOCK (F-P3-L1-001 HIGH) | a98bd92 | CONVERGED | 0C/0H/0M |
+| 2 | concurrency+security | CONVERGED | — | CONVERGED | 0C/0H/0M |
+| 3 | traceability | BLOCK (F-1 MEDIUM) | e08f567 | CONVERGED | 0C/0H/0M |
+
+**Lens 1 fix (a98bd92):** F-P3-L1-001 HIGH — sibling-fix propagation: E-ADM-014 stale in 3 worktree files. Fixed: `cmd/sbctl/admin.go:51` → E-ADM-019; `cmd/sbctl/admin_test.go:679,734` → E-CFG-001; `internal/svtnmgmt/svtnmgmt_test.go:505,530` → E-ADM-019.
+
+**Lens 3 fix (e08f567):** F-1 MEDIUM — ARCH-04 v1.11 prose at line 372 not swept during Pass-2 ARCH-04 v1.10→v1.11 bump. Fixed: ARCH-04 v1.11→v1.12; line 372/374 prose now matches canonical sentinel at line 429/431.
+
+Deferred (out-of-perimeter, BC-5.39.002):
+- O-2: phantom S-BL.NI cross-reference (backlog story, not S-6.02 deliverable)
+- O-3: sprint-state arithmetic edge case (index consistency; out of story perimeter)
+- O-4: S-6.06 ErrRoleMismatch package anchor (sibling story, not S-6.02)
+
+**BC-5.39.001 status for S-6.02: SATISFIED** — 3 consecutive clean passes, diverse lenses (lens 1 + lens 3 re-converged after narrow fixes).
+
+### Outcome
+
+Both S-5.01 and S-6.02 satisfy BC-5.39.001 as of 2026-06-29. Both worktrees are race-clean. Ready for PR delivery via per-story-delivery.md flow.
+

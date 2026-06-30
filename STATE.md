@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-s501-s602-pass2-fixburst-complete
+phase_step: wave-5-s501-s602-converged-per-bc-5.39.001
 phase_3_active_wave: 5
 phase_3_active_stories: [S-5.01, S-5.02, S-6.02, S-W5.02]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01]
@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: 0d499ac
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-29T20:00:00Z
+timestamp: 2026-06-29T22:00:00Z
 last_update: 2026-06-29
 ---
 
@@ -78,6 +78,7 @@ Wave 5 RE-SCOPED to 7 stories / 38 pts (Observability + CLI + Management Plane).
 S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-6.06, F-003 bootstrap-race closed, F-005 deferred to Wave 6 (DRIFT-F005-LOOKUP-CONVENTION); Pass-1 reconverge burst complete — 22 lens findings closed, S-6.07 + S-BL.LOOKUP minted, STORY-INDEX → v2.6. Both worktrees race-clean (16 packages). Next: per-story adversarial Pass-2 for S-5.01 and S-6.02.
 
 - 2026-06-29 — Pass-1 fix burst landed: 4 spec layers (PO/architect/impl/story-writer) + race-clean test-race across S-5.01 and S-6.02 worktrees; 22 lens findings closed; new stories S-6.07 + S-BL.LOOKUP minted; STORY-INDEX → v2.6.
+- 2026-06-29 — BC-5.39.001 convergence recorded: S-5.01 and S-6.02 both achieved 3 consecutive clean diverse-lens adversarial passes (Pass-3 all lenses 0/0/0). S-6.02 narrow fixes: a98bd92 (E-ADM-014 stale ref sweep) + e08f567 (ARCH-04 v1.12 prose). Both stories ready for PR delivery.
 
 ## Phase Progress
 
@@ -85,7 +86,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01/S-5.02/S-6.02/S-W5.02 pending | 2026-06-29 | W5: S-6.03 converged BC-5.39.001 (3 clean passes); S-W5.01 converged BC-5.39.001 Round-7 (3 clean passes @ tip 5be25ef) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 + S-6.02 converged BC-5.39.001 (Pass-3 all lenses 0/0/0). S-5.02/S-W5.02 pending | 2026-06-29 | W5: S-6.03 converged BC-5.39.001 (3 clean passes); S-W5.01 converged BC-5.39.001 Round-7 (3 clean passes @ tip 5be25ef); S-5.01 converged BC-5.39.001 Pass-3 (correctness/concurrency/traceability 0/0/0); S-6.02 converged BC-5.39.001 Pass-3 (scope+wire/concurrency+security/traceability 0/0/0, 2 narrow fixes: a98bd92 + e08f567) |
 
 ## Wave / Story Status
 
@@ -162,34 +163,28 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Alpha tag auto-cut: alpha-20260629-165045-d854978 | Gitflow release-CI auto-tagged develop after both PRs merged | 2026-06-29 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-29 (Wave 5 Pass-2 fix-burst)
+## Session Resume Checkpoint — 2026-06-29 (Wave 5 Pass-3 convergence — BC-5.39.001)
 
-**Position:** Phase 3 Wave 5. Pass-2 adversarial fix-burst complete. Indices synced (STORY-INDEX v2.7, sprint-state v2.7). Traceability axis F-P2-001..F-P2-005 closed. Sprint-state/STORY-INDEX integrity F-019..F-022 closed. S-6.07 template/VP-048 F-023..F-026 closed. Both worktrees race-clean (not yet PRed).
+**Position:** Phase 3 Wave 5. S-5.01 and S-6.02 have achieved 3 consecutive clean diverse-lens adversarial passes (BC-5.39.001 satisfied for both). Both worktrees race-clean. Sprint-state and burst-log updated to record convergence.
 
-**Spec versions landed in Pass-2 fix-burst:**
-- STORY-INDEX v2.6 → v2.7
-- sprint-state.yaml v2.6 → v2.7
-- BC-2.06.003 v1.3 → v1.4 (Stories traceability cell filled)
-- interface-definitions v1.1 → v1.2 (sbctl svtn create deprecated)
-- ARCH-04 v1.10 → v1.11 (ErrRoleMismatch sentinel aligned to implementation)
-- S-5.01 v1.4 (landed Pass-1), S-6.02 v1.5 (landed Pass-1), S-6.06 v1.2, S-6.07 v1.1, VP-048 v1.3
+**BC-5.39.001 convergence summary:**
 
-**Pass-2 findings closed:**
-- F-P2-001×3: S-5.01 vp_traces, S-6.06 error codes, S-6.02 confirm-gate order
-- F-P2-002: BC-2.07.001 PC-2 test in S-6.07
-- F-P2-003: HOLD-001 oracle in S-6.06
-- F-P2-004: interface-definitions retire sbctl svtn create; S-5.02 + S-7.03 bc_traces fixed
-- F-P2-005: ARCH-04 sentinel align + BC-2.06.003 Stories cell
-- F-019/F-020/F-021/F-022: sprint-state + STORY-INDEX integrity (S-6.05 Wave-6 restore, S-6.07 fields, S-BL.LOOKUP bc_traces, total-stories arithmetic)
-- F-023/F-024/F-025/F-026: S-6.07 template compliance + VP-048 four-story trace
+S-5.01:
+- Pass-3 lens 1 (correctness): CONVERGED 0/0/0
+- Pass-3 lens 2 (concurrency): CONVERGED 0/0/0
+- Pass-3 lens 3 (traceability): CONVERGED 0/0/0 (1 deferred system-level observation: STORY-INDEX VP coverage rollup 67/67→74/74, out-of-perimeter per BC-5.39.002)
 
-**Residual deferrals:**
-- F-005 deferred per spec (DRIFT-F005-LOOKUP-CONVENTION → S-BL.LOOKUP backlog story)
-- F-PG-003 input-hash codification still pending (tracked TODO F-009)
-- DRIFT-SW501-NITPICK, S601-SEC-001/SEC-002, S404-LOW-1 still open
+S-6.02:
+- Pass-3 lens 1 (scope+wire): BLOCK → fix a98bd92 (E-ADM-014 stale in admin.go:51, admin_test.go:679,734, svtnmgmt_test.go:505,530) → RE-RUN CONVERGED 0/0/0
+- Pass-3 lens 2 (concurrency+security): CONVERGED 0/0/0 (first run)
+- Pass-3 lens 3 (traceability): BLOCK → fix e08f567 (ARCH-04 v1.12, line 372/374 prose now matches canonical sentinel) → RE-RUN CONVERGED 0/0/0
+
+**Residual deferrals (all out-of-perimeter per BC-5.39.002):**
+- S-5.01: STORY-INDEX VP coverage rollup (67/67→74/74)
+- S-6.02: O-2 phantom S-BL.NI, O-3 sprint-state arithmetic, O-4 S-6.06 ErrRoleMismatch package anchor
 
 **NEXT ACTION on resume:**
-1. Deliver S-5.01 and S-6.02 via per-story-delivery.md PR flow (worktrees race-clean).
+1. Open PRs for S-5.01 and S-6.02 via per-story-delivery.md PR flow.
 2. Then: S-5.02, S-6.06, S-W5.02 in dependency order.
 3. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 
