@@ -17,9 +17,13 @@ import (
 //
 // SVTNs created:
 //   - "test-svtn": created; canonical zero key (32 zero bytes, "AAAA...=") registered
-//     as control. Required by KeyRegister/Revoke/Expire/ListKeys happy-path tests.
+//     as control. Required by KeyRegister/Revoke/Expire/ListKeys happy-path tests and
+//     KeyRevoke_ControlRequiresConfirm.
 //   - "existing-svtn": created; canonical zero key NOT registered (only the random
 //     bootstrap key is present). Required by KeyRevoke_ErrorMapping E-ADM-013 subtest.
+//   - "rolematch-svtn": created; canonical zero key registered as ROLE_CONTROL.
+//     Required by KeyRevoke_ErrorMapping E-ADM-019 subtest (role-mismatch), which
+//     revokes with ROLE_BOOTSTRAP to trigger ErrRoleMismatch.
 //   - "empty-svtn": created; no additional keys. Required by ListKeys_EmptySliceNotNil.
 //   - "nonexistent-svtn": intentionally absent. Required by KeyRegister_ErrorMapping.
 //
@@ -63,33 +67,21 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 		t.Fatalf("newTestSVTNManager: create empty-svtn: %v", err)
 	}
 
+	// "rolematch-svtn": create and register the canonical zero key as ROLE_CONTROL.
+	// Required by KeyRevoke_ErrorMapping/role_mismatch_yields_E-ADM-019, which
+	// revokes with ROLE_BOOTSTRAP to trigger ErrRoleMismatch. Using a separate
+	// SVTN from "existing-svtn" avoids conflict with the sibling subtest that
+	// requires the zero key to be absent.
+	if _, err := m.Create("rolematch-svtn"); err != nil {
+		t.Fatalf("newTestSVTNManager: create rolematch-svtn: %v", err)
+	}
+	if _, err := m.RegisterKey("rolematch-svtn", zeroKey, admission.RoleControl); err != nil {
+		t.Fatalf("newTestSVTNManager: register zero key on rolematch-svtn: %v", err)
+	}
+
 	// "nonexistent-svtn" is intentionally not created; KeyRegister_ErrorMapping
 	// expects E-SVTN-003 for that name.
 	return m
-}
-
-// generateTestKeyPair is a thin shim used by unit tests; the full
-// implementation lives in admin_handlers_e2e_test.go (integration tag).
-// For unit tests we only need a valid key for NewSVTNManager construction.
-//
-// priv is always nil in this unit-test shim — callers that need a real private
-// key must use crypto/ed25519.GenerateKey directly (available in e2e tests).
-// The unparam lint suppression is intentional: the nil priv return is the
-// declared contract of this shim so callers don't accidentally use it.
-func generateTestKeyPair(t *testing.T) (priv []byte, pub []byte, err error) { //nolint:unparam // priv intentionally always nil in unit-test shim; callers use only pub
-	t.Helper()
-	// Deferred to implementer: generate real Ed25519 keypair.
-	// For now return zero-sized slices — this placeholder will be replaced
-	// when the unit test stubs are implemented.
-	//
-	// BC-5.38.005 self-check: "If I include this real implementation, will the
-	// test for this function pass trivially without any implementer work?" — No,
-	// because the callers (handler tests below) still panic("todo:..."). Keeping
-	// this as a real helper stub that returns zeroed bytes does not make any test
-	// pass; the handlers panic before they can compare keys.
-	//
-	// This is therefore GREEN-BY-DESIGN (zero-branch, no I/O, ≤3 lines).
-	return nil, make([]byte, 32), nil
 }
 
 // TestBuildAdminHandlers_KeyRegister_HappyPath asserts that the
@@ -299,7 +291,11 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 		{
 			name: "role mismatch yields E-ADM-019",
 			args: adminKeyRevokeArgs{
-				SVTNName:  "existing-svtn",
+				// "rolematch-svtn" has the zero key registered as ROLE_CONTROL;
+				// claiming ROLE_CONSOLE triggers ErrRoleMismatch → E-ADM-019.
+				// Using a separate SVTN from "existing-svtn" avoids conflict with
+				// the sibling subtest that requires the zero key to be absent there.
+				SVTNName:  "rolematch-svtn",
 				PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 				Role:      "console", // claimed console; key registered as control
 				Confirm:   false,
@@ -585,13 +581,10 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 	t.Parallel()
 
-	// Set up an SVTN and register a control key for revocation.
-	ks := admission.NewAdmittedKeySet()
-	_, pub, err := generateTestKeyPair(t)
-	if err != nil {
-		t.Fatalf("generate keypair: %v", err)
-	}
-	m := svtnmgmt.NewSVTNManager(ks, pub)
+	// Use newTestSVTNManager so "test-svtn" exists with the zero key registered
+	// as ROLE_CONTROL. Without this, the handler hits E-SVTN-003 (SVTN not
+	// found) before it can reach the ErrControlRevocationRequiresConfirm check.
+	m := newTestSVTNManager(t)
 	handlers := BuildAdminHandlers(m)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -605,7 +598,8 @@ func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 		t.Fatal("admin.key.revoke handler not found")
 	}
 
-	// Control-to-control revocation without confirm=true must return E-ADM-018.
+	// Control-key revocation without confirm=true must return E-ADM-018
+	// (ErrControlRevocationRequiresConfirm), not E-SVTN-003.
 	args, err := json.Marshal(adminKeyRevokeArgs{
 		SVTNName:  "test-svtn",
 		PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

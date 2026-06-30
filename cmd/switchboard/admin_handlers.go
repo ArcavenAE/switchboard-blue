@@ -20,6 +20,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,8 +34,7 @@ import (
 
 // maxKeyTTL is the server-side upper bound for admin.key.expire TTL values.
 // Rejects any TTL greater than 100 years (AC-005; DI-003 defense-in-depth).
-// Unused until makeExpireHandler is implemented (S-6.06 Red Gate stub).
-const maxKeyTTL = 100 * 365 * 24 * time.Hour //nolint:unused // intentional stub: used by makeExpireHandler once implemented
+const maxKeyTTL = 100 * 365 * 24 * time.Hour
 
 // adminKeyRegisterArgs is the wire JSON args for admin.key.register.
 // The `role` field uses the canonical JSON key per interface-definitions.md v1.1.
@@ -66,8 +67,7 @@ type adminListKeysArgs struct {
 
 // adminKeyResult is the success response body for key lifecycle operations.
 // Satisfies BC-2.05.004 postcondition 4 (confirmation with fingerprint and timestamp).
-// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
-type adminKeyResult struct { //nolint:unused // intentional stub: used by handler implementations once written
+type adminKeyResult struct {
 	Fingerprint string    `json:"fingerprint"`
 	At          time.Time `json:"at"`
 }
@@ -105,11 +105,57 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager) []mgmt.Handler {
 	}
 }
 
+// decodePublicKey decodes a base64-encoded (standard or raw URL) Ed25519 public key.
+// Returns E-CFG-001 if the value is missing, not valid base64, or not 32 bytes.
+func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
+	if encoded == "" {
+		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey")
+	}
+	// Try standard encoding first, then raw URL encoding.
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		raw, err = base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid pubkey encoding: %w", err)
+		}
+	}
+	if len(raw) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("E-CFG-001: invalid pubkey length: got %d bytes, want %d", len(raw), ed25519.PublicKeySize)
+	}
+	return ed25519.PublicKey(raw), nil
+}
+
 // makeRegisterHandler returns the admin.key.register handler function.
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003.
 func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
-		panic("todo: AC-001 admin.key.register handler — implement in S-6.06")
+		var a adminKeyRegisterArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+		if a.SVTNName == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		role, err := admission.KeyRoleFromString(a.Role)
+		if err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid role: %q", a.Role)
+		}
+
+		pubkey, err := decodePublicKey(a.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := m.RegisterKey(a.SVTNName, pubkey, role)
+		if err != nil {
+			return nil, mapAdminError(err, a.SVTNName, a.PublicKey)
+		}
+
+		return adminKeyResult{
+			Fingerprint: result.Fingerprint,
+			At:          result.At,
+		}, nil
 	}
 }
 
@@ -119,7 +165,33 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // Traces to BC-2.05.004 postcondition 2; AC-002.
 func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
-		panic("todo: AC-002 admin.key.revoke handler — implement in S-6.06")
+		var a adminKeyRevokeArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+		if a.SVTNName == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		role, err := admission.KeyRoleFromString(a.Role)
+		if err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid role: %q", a.Role)
+		}
+
+		pubkey, err := decodePublicKey(a.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := m.RevokeKey(a.SVTNName, pubkey, role, a.Confirm)
+		if err != nil {
+			return nil, mapAdminError(err, a.SVTNName, a.PublicKey)
+		}
+
+		return adminKeyResult{
+			Fingerprint: result.Fingerprint,
+			At:          result.At,
+		}, nil
 	}
 }
 
@@ -129,7 +201,66 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 // Traces to BC-2.05.004 postcondition 3; AC-005.
 func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
-		panic("todo: AC-005 admin.key.expire handler — implement in S-6.06")
+		// Use a raw map to detect absent fields (EC-005) vs zero-value fields.
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(args, &raw); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+
+		// EC-005: `after` field must be present.
+		afterRaw, hasAfter := raw["after"]
+		if !hasAfter {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: after")
+		}
+
+		var afterStr string
+		if err := json.Unmarshal(afterRaw, &afterStr); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid after field: %w", err)
+		}
+
+		ttl, err := time.ParseDuration(afterStr)
+		if err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid duration: %q", afterStr)
+		}
+
+		// AC-005 / DI-003 server-side bounds validation (independent of CLI).
+		if ttl <= 0 {
+			return nil, fmt.Errorf("E-CFG-001: invalid duration: %q (must be positive)", afterStr)
+		}
+		if ttl > maxKeyTTL {
+			return nil, fmt.Errorf("E-CFG-001: invalid duration: %q (exceeds 100-year maximum)", afterStr)
+		}
+
+		var svtnName string
+		if v, ok := raw["svtn"]; ok {
+			if err := json.Unmarshal(v, &svtnName); err != nil {
+				return nil, fmt.Errorf("E-CFG-001: invalid svtn field: %w", err)
+			}
+		}
+		if svtnName == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		var pubkeyStr string
+		if v, ok := raw["pubkey"]; ok {
+			if err := json.Unmarshal(v, &pubkeyStr); err != nil {
+				return nil, fmt.Errorf("E-CFG-001: invalid pubkey field: %w", err)
+			}
+		}
+		pubkey, err := decodePublicKey(pubkeyStr)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := m.ExpireKey(svtnName, pubkey, ttl)
+		if err != nil {
+			return nil, mapAdminError(err, svtnName, pubkeyStr)
+		}
+
+		return adminKeyResult{
+			Fingerprint: result.Fingerprint,
+			At:          result.At,
+		}, nil
 	}
 }
 
@@ -138,48 +269,75 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003.
 func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
-		panic("todo: AC-001 admin.list-keys handler — implement in S-6.06")
+		var a adminListKeysArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+		if a.SVTNName == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		summaries, err := m.ListKeys(a.SVTNName)
+		if err != nil {
+			return nil, mapAdminError(err, a.SVTNName, "")
+		}
+
+		// EC-003: always return a non-nil slice even when empty.
+		keys := make([]adminKeyEntry, 0, len(summaries))
+		for _, s := range summaries {
+			keys = append(keys, adminKeyEntry{
+				Fingerprint: s.Fingerprint,
+				Role:        roleToString(s.Role),
+				Expiry:      s.Expiry,
+			})
+		}
+
+		return adminListKeysResult{Keys: keys}, nil
 	}
 }
 
 // mapAdminError converts SVTNManager / admission sentinel errors to structured
 // wire-level errors per the Error Code Map in S-6.06.
-// Returns a non-nil error with the mapped code embedded in the message.
-// Callers check the returned error; the mgmt.Server wraps it in E-RPC-011
-// unless we return a pre-formatted error string the implementer exposes
-// directly as the wire message.
-//
-// Handler implementations call this after receiving an error from SVTNManager.
-// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
-func mapAdminError(err error) error { //nolint:unused // intentional stub: called by handler Fn implementations
-	panic("todo: error mapping table — implement in S-6.06")
+// Returns a non-nil error with the mapped code as the error message prefix.
+func mapAdminError(err error, svtnName, pubkey string) error {
+	switch {
+	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
+		return fmt.Errorf("E-SVTN-003: SVTN not found: %s", svtnName)
+	case errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists):
+		return fmt.Errorf("E-SVTN-002: SVTN already exists: %s", svtnName)
+	case errors.Is(err, admission.ErrKeyNotRegistered):
+		return fmt.Errorf("E-ADM-013: key not registered: %s", pubkey)
+	case errors.Is(err, svtnmgmt.ErrRoleMismatch):
+		return fmt.Errorf("E-ADM-019: role mismatch: claimed role does not match registered key role for key %s", pubkey)
+	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation (set confirm: true to proceed)")
+	default:
+		return err
+	}
 }
 
 // roleToString converts an admission.KeyRole to its canonical wire string.
 // Returns "unknown" for unrecognised values — callers validate roles before
 // calling this.
-// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
-func roleToString(r admission.KeyRole) string { //nolint:unused // intentional stub: called by handler Fn implementations
-	panic("todo: roleToString — implement in S-6.06")
+func roleToString(r admission.KeyRole) string {
+	switch r {
+	case admission.RoleControl:
+		return "control"
+	case admission.RoleConsole:
+		return "console"
+	case admission.RoleAccess:
+		return "access"
+	default:
+		return "unknown"
+	}
 }
 
 // verifyCallerRole checks that the caller-supplied role has management
 // authority (control-role) for the requested operation. Non-control-role
 // callers receive E-ADM-009 (BC-2.07.001 invariant 3; AC-006).
-// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
 func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint string) error { //nolint:unused // intentional stub: called by handler Fn implementations
-	panic("todo: AC-006 caller-role enforcement — implement in S-6.06")
+	if callerRole != admission.RoleControl {
+		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role %s", cmd, fingerprint, roleToString(callerRole))
+	}
+	return nil
 }
-
-// Ensure sentinel error values are referenced so imports are used and
-// the compiler does not drop them. These are compile-time guard assertions
-// only; they are never evaluated at runtime.
-var (
-	_ = svtnmgmt.ErrSVTNNotFound
-	_ = svtnmgmt.ErrSVTNAlreadyExists
-	_ = svtnmgmt.ErrControlRevocationRequiresConfirm
-	_ = svtnmgmt.ErrRoleMismatch
-	_ = admission.ErrKeyNotRegistered
-	_ = fmt.Sprintf
-	_ = errors.Is
-)

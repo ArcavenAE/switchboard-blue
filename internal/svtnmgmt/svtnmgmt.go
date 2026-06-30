@@ -354,5 +354,22 @@ type KeySummary struct {
 // Traces to BC-2.05.004 postcondition 1 (key remains admitted until revoked
 // or expired; listing reflects current state).
 func (m *SVTNManager) ListKeys(svtnName string) ([]KeySummary, error) {
-	panic("todo: AC-001 ListKeys — implement in S-6.06")
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+
+	if !exists {
+		return nil, ErrSVTNNotFound
+	}
+
+	entries := m.keySet.ListBySVTN(svtn.ID)
+	out := make([]KeySummary, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, KeySummary{
+			Fingerprint: keyFingerprint(e.PublicKey),
+			Role:        e.Role,
+			Expiry:      e.KeyExpiry(),
+		})
+	}
+	return out, nil
 }

@@ -470,6 +470,25 @@ func AdmitNode(
 	return nil
 }
 
+// ListBySVTN returns a snapshot of all admitted key entries for the given SVTN.
+// Returns an empty (non-nil) slice when no keys are registered for svtnID.
+// Each returned AdmittedKey is a deep copy — PublicKey backing array is independent
+// of internal state (go.md rule 12; finding-032-store-sync-contract-leak).
+func (s *AdmittedKeySet) ListBySVTN(svtnID [16]byte) []AdmittedKey {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	svtnMap := s.keys[svtnID]
+	out := make([]AdmittedKey, 0, len(svtnMap))
+	for _, entry := range svtnMap {
+		cp := *entry
+		// Deep-clone PublicKey: []byte shallow copy shares backing array (M-3).
+		cp.PublicKey = append(ed25519.PublicKey(nil), entry.PublicKey...)
+		out = append(out, cp)
+	}
+	return out
+}
+
 // recordNonceUnlocked records the nonce with timestamp and returns ErrNonceReplay
 // if already consumed within the TTL window. Performs a lazy O(N) purge sweep
 // gated by elapsed time or map size (M-2).
