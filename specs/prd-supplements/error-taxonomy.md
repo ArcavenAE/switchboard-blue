@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "3.5"
+version: "3.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ modified:
   - 2026-06-29T00:00:00 # v2.8 — ARCH-12 v1.5 Wave-5 Convergence Ruling Y: E-NET-001 scope extended — now explicitly covers two cases: (a) net.Dial/net.DialContext failure (unchanged); (b) handshake read-deadline timeout (treated as unreachable per BC-2.07.003 Inv-2); message format for case (b) is "daemon unreachable: <address>: connection timed out"; reconciles prior Inv-2 vs Inv-4 conflict in BC-2.07.003
   - 2026-06-29T00:00:00 # v2.9 — S-6.05 PO ruling: E-ADM-011 extended with Variant 2 (destroy authorization); ErrDestroyUnauthorized sentinel maps to E-ADM-011; no new code slot allocated
   - 2026-06-29T00:00:00 # v3.0 — Task 7 reconverge (S-5.01 + S-6.02 Pass-1 adversarial, lens1 F-001): E-ADM-004 KEPT as "address collision" (BC-2.01.006 predates ARCH-04 addendum); E-ADM-014 KEPT as "bootstrap key mismatch" (ADR-004 recover). New slots: E-ADM-018 ("control-to-control revocation requires explicit confirmation", S-6.02 + ARCH-04 HOLD-001); E-ADM-019 ("role mismatch: claimed role does not match registered key role", HOLD-001 cross-check). NOTE: E-ADM-015 (key expired) and E-ADM-016 (wire HMAC mismatch) are occupied — new entries use next free slots E-ADM-018 and E-ADM-019.
+  - 2026-06-30T00:00:00 # v3.6 — F-P14L2-001 (LOW): backfill v3.4 changelog table row (frontmatter had the entry; human-readable Changelog table was missing it)
   - 2026-06-30T00:00:00 # v3.5 — F-P11L2-002 (MED): E-ADM-018 message — stripped backticks from --confirm=<svtn-id> for byte-identical canonical text
   - 2026-06-30T00:00:00 # v3.4 — F-P10L2-004 (MED): E-ADM-018 message format — <svtn-short-id> → <svtn-id> (matches impl and all other ADM messages that take svtn parameter; full svtnName used in impl, not abbreviated form)
   - 2026-06-30T00:00:00 # v3.3 — F-P8L2-003: E-ADM-020 added (bootstrap-key-revoke-forbidden); emitted by admin.key.revoke handler when svtnmgmt.ErrBootstrapKeyRevokeForbidden; source BC-2.05.004 EC-007
@@ -206,7 +207,9 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v3.6 | 2026-06-30 | F-P14L2-001 (LOW): backfill v3.4 changelog table row (was present in frontmatter modified: list but absent from human-readable Changelog table). No catalog changes. |
 | v3.5 | 2026-06-30 | F-P11L2-002 (MED): E-ADM-018 message format — stripped backticks from `--confirm=<svtn-id>` so canonical text, impl, and story are byte-identical: "use --confirm=<svtn-id> to proceed". |
+| v3.4 | 2026-06-30 | F-P10L2-004 (MED): E-ADM-018 message format — &lt;svtn-short-id&gt; → &lt;svtn-id&gt; (matches impl and all other ADM messages that take svtn parameter; full svtnName used in impl, not abbreviated form). |
 | v3.3 | 2026-06-30 | F-P8L2-003: E-ADM-020 added — `bootstrap-key-revoke-forbidden: cannot revoke the last bootstrap key in SVTN <svtn_id>`; emitted by admin.key.revoke handler when `svtnmgmt.ErrBootstrapKeyRevokeForbidden`; source BC-2.05.004 EC-007. |
 | v3.2 | 2026-06-30 | S-6.06 Pass-6 finding F-P6L3-001: E-SVTN-003 added — "SVTN not found: <svtn_id>"; emitted by admin.key.* handler layer when svtnmgmt.ErrSVTNNotFound is returned. Closes missing error code referenced in S-6.06 Error Code Map. |
 | v3.1 | 2026-06-30 | S-6.06 Pass-4 ruling F-L2-002: E-ADM-011 scope disambiguation note added — it is a Go API-layer code from `SVTNManager.RevokeKey`/`Destroy`; NOT reachable via `admin.key.*` mgmt RPC path when handler-layer authority gate (E-ADM-009) is wired. Gate fires first; SVTNManager is never invoked for non-control callers on mutating ops. |
