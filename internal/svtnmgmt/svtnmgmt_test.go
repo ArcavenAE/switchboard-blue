@@ -502,7 +502,7 @@ func TestSVTNManager_ControlRevocation_RequiresConfirm(t *testing.T) {
 
 // TestSVTNManager_RevokeKey_RoleMismatchReturnsError verifies that RevokeKey
 // returns ErrRoleMismatch when the caller-supplied currentRole does not match
-// the role stored in the AdmittedKeySet registry (E-ADM-014; HOLD-001 hybrid).
+// the role stored in the AdmittedKeySet registry (E-ADM-019; HOLD-001 hybrid).
 //
 // BC-2.05.004 precondition 1 (role must be consistent with stored registration).
 // ARCH-04 v1.7 HOLD-001 resolution: hybrid role cross-check.
@@ -527,7 +527,7 @@ func TestSVTNManager_RevokeKey_RoleMismatchReturnsError(t *testing.T) {
 	// Attempt to revoke supplying RoleConsole — should return ErrRoleMismatch.
 	_, err = mgr.RevokeKey(svtnResult.SVTN.Name, pub, admission.RoleConsole, true)
 	if !errors.Is(err, svtnmgmt.ErrRoleMismatch) {
-		t.Errorf("RevokeKey with mismatched role: want ErrRoleMismatch (E-ADM-014); got %v", err)
+		t.Errorf("RevokeKey with mismatched role: want ErrRoleMismatch (E-ADM-019); got %v", err)
 	}
 }
 

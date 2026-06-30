@@ -676,7 +676,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			}
 			// CR-002/CR-007: validate role field is populated.
 			if revokeArgs.Role == "" {
-				return nil, fmt.Errorf("E-ADM-014: role field missing in revoke request")
+				return nil, fmt.Errorf("E-CFG-001: role field missing in revoke request")
 			}
 			// Simulate daemon: reject control-to-control without confirm.
 			if !revokeArgs.Confirm {
@@ -731,7 +731,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			}
 			// CR-002/CR-007: validate role field is populated.
 			if revokeArgs.Role == "" {
-				return nil, fmt.Errorf("E-ADM-014: role field missing in revoke request")
+				return nil, fmt.Errorf("E-CFG-001: role field missing in revoke request")
 			}
 			return map[string]any{"fingerprint": "SHA256:EEEE..."}, nil
 		})

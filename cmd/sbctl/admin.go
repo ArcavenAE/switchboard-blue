@@ -48,7 +48,7 @@ type adminKeyRevokeArgs struct {
 	Pubkey string `json:"pubkey"`
 	// Role is the authorization role of the key being revoked: "control",
 	// "console", or "access". The daemon cross-checks this against the stored
-	// role to prevent bypassing the confirm gate (HOLD-001 hybrid; E-ADM-014).
+	// role to prevent bypassing the confirm gate (HOLD-001 hybrid; E-ADM-019).
 	Role string `json:"role"`
 	// Confirm must be true for control-to-control revocation (ADR-004;
 	// BC-2.05.004 precondition 1; AC-005).
