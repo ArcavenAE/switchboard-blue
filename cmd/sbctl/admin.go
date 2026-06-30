@@ -138,6 +138,14 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 	if *svtnFlag == "" {
 		return fmt.Errorf("admin key register: --svtn is required")
 	}
+	// F-CS-005: validate --role enum before dispatching the RPC.
+	// Mirrors the validation in runAdminKeyRevoke (lines ~178-183).
+	switch *roleFlag {
+	case "control", "console", "access":
+		// valid
+	default:
+		return fmt.Errorf("admin key register: --role must be control, console, or access; got %q", *roleFlag)
+	}
 
 	rpcArgs := adminKeyRegisterArgs{
 		SVTNID: *svtnFlag,

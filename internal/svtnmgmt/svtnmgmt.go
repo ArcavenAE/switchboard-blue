@@ -40,20 +40,20 @@ var ErrSVTNNotFound = errors.New("SVTN not found")
 // is provided (E-CFG-001; S-6.02 EC-003).
 var ErrInvalidDuration = errors.New("invalid duration: must be positive")
 
-// ErrControlRevocationRequiresConfirm is returned when a control-to-control
-// key revocation is attempted without the --confirm flag (E-ADM-004;
-// BC-2.05.004 precondition 1; ADR-004; AC-005).
-// The ADR-004 reference belongs here in the doc comment, not in the error
-// string, per Go error string conventions (go.md rule 5 / ST1005).
-var ErrControlRevocationRequiresConfirm = errors.New(
-	"control-to-control revocation requires --confirm flag",
-)
+// ErrControlRevocationRequiresConfirm is re-exported from admission for
+// callers that import only svtnmgmt. The underlying sentinel is
+// admission.ErrControlRevocationRequiresConfirm (E-ADM-018); use
+// errors.Is(err, admission.ErrControlRevocationRequiresConfirm) or
+// errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm) — both are
+// the same value.
+// ADR-004; BC-2.05.004 precondition 1; AC-005; ARCH-04 Addendum H2.
+var ErrControlRevocationRequiresConfirm = admission.ErrControlRevocationRequiresConfirm
 
-// ErrRoleMismatch is returned by SVTNManager.RevokeKey when the caller-supplied
-// currentRole does not match the role stored in the AdmittedKeySet registry
-// (E-ADM-014). This prevents the confirm gate from being bypassed by supplying
-// a lower role for a control key.
-var ErrRoleMismatch = errors.New("revoke: supplied role does not match registered role")
+// ErrRoleMismatch is re-exported from admission for callers that import only
+// svtnmgmt. The underlying sentinel is admission.ErrRoleMismatch (E-ADM-019);
+// use errors.Is(err, admission.ErrRoleMismatch) or errors.Is(err, svtnmgmt.ErrRoleMismatch)
+// — both are the same value.
+var ErrRoleMismatch = admission.ErrRoleMismatch
 
 // SVTN is a record of a single Software-Defined Virtual Topology Network
 // created and owned by this control node.
@@ -135,16 +135,18 @@ func keyFingerprint(pubkey ed25519.PublicKey) string {
 // Returns ErrSVTNAlreadyExists (E-SVTN-001) if a SVTN with svtnName already
 // exists (BC-2.07.001 EC-001; DI-005).
 //
-// Ordering invariant (BC-2.07.001 PC-1+PC-2 composite postcondition): the
-// bootstrap control key is registered in the AdmittedKeySet BEFORE the SVTN
-// is published to m.svtns. This prevents a concurrent caller from observing
-// a half-bootstrapped SVTN and injecting a foreign control key via
-// last-write-wins (ADR-003). The key is bound to the un-published SVTN ID
-// and is therefore inert until the SVTN appears in m.svtns.
+// Duplicate-name check (F-CS-003): the existence check is performed BEFORE
+// the bootstrap RegisterKey call. This prevents orphan AdmittedKey entries
+// under concurrent Create calls for the same name: if the SVTN already exists
+// we return ErrSVTNAlreadyExists immediately without touching keySet.
 //
-// If the subsequent existence check fails (duplicate name), the bootstrap key
-// is orphaned in the admitted set keyed by a never-published SVTN ID; this is
-// harmless because no SVTN is ever exposed for that ID.
+// Ordering invariant (BC-2.07.001 PC-1+PC-2 composite postcondition): after
+// the existence check confirms the name is available, the bootstrap control
+// key is registered in the AdmittedKeySet BEFORE the SVTN is published to
+// m.svtns. This prevents a concurrent caller from observing a half-bootstrapped
+// SVTN and injecting a foreign control key via last-write-wins (ADR-003). The
+// key is bound to the un-published SVTN ID and is therefore inert until the
+// SVTN appears in m.svtns.
 //
 // Traces to BC-2.07.001 postcondition 1.
 func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
@@ -155,19 +157,30 @@ func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
 		return CreateResult{}, fmt.Errorf("generate SVTN ID: %w", err)
 	}
 
-	// Bootstrap the control key BEFORE publishing the SVTN. The key is bound
-	// to the un-published ID, so it is inert until the SVTN appears in
-	// m.svtns. This closes the window where a concurrent RegisterKey call
-	// could observe the SVTN without the bootstrap key already in the
-	// AdmittedKeySet (F-003; ADR-003 LWW; BC-2.07.001 postcondition 2).
-	// AdmittedKeySet owns its own mutex — no nested lock ordering concern.
+	// Duplicate-name check BEFORE bootstrap RegisterKey (F-CS-003).
+	// Acquire the lock, check for duplicate name, and release. If the name is
+	// taken, return early without touching keySet — no orphan keys produced.
+	m.mu.Lock()
+	_, exists := m.svtns[svtnName]
+	m.mu.Unlock()
+	if exists {
+		return CreateResult{}, ErrSVTNAlreadyExists
+	}
+
+	// Bootstrap the control key BEFORE publishing the SVTN (F-003 ordering
+	// invariant). The key is bound to the un-published ID, so it is inert until
+	// the SVTN appears in m.svtns. AdmittedKeySet owns its own mutex — no nested
+	// lock ordering concern. The window between the existence check above and the
+	// publish below is closed by the re-check in the publish lock (see below).
 	m.keySet.RegisterKey(id, m.controlPubKey, admission.RoleControl)
 
+	// Publish the SVTN under the lock. Re-check for duplicate name in case a
+	// concurrent Create won the race between our existence check and this point.
+	// If a race was lost, the bootstrap key above is orphaned (keyed by a
+	// never-published SVTN ID) — harmless, no SVTN is ever exposed for that ID.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.svtns[svtnName]; exists {
-		// Duplicate name: the bootstrap key above is orphaned (keyed by a
-		// never-published SVTN ID) — harmless, no SVTN is exposed for that ID.
 		return CreateResult{}, ErrSVTNAlreadyExists
 	}
 
@@ -216,14 +229,16 @@ func (m *SVTNManager) RegisterKey(
 // challenge (propagation delay per FM-007; BC-2.05.004 postcondition 2).
 //
 // Control-to-control revocation requires confirm=true; passing confirm=false
-// returns ErrControlRevocationRequiresConfirm (BC-2.05.004 precondition 1;
-// ADR-004; AC-005).
+// returns ErrControlRevocationRequiresConfirm (E-ADM-018; BC-2.05.004
+// precondition 1; ADR-004; AC-005).
 //
 // Returns ErrSVTNNotFound if svtnName does not exist.
 // Returns admission.ErrKeyNotRegistered (E-ADM-013) if the key is not
 // registered (S-6.02 EC-002).
+// Returns admission.ErrRoleMismatch (E-ADM-019) if currentRole does not match
+// the stored role — prevents bypassing the confirm gate by supplying a lower role.
 //
-// Traces to BC-2.05.004 postcondition 2.
+// Traces to BC-2.05.004 postcondition 2; HOLD-001; ARCH-04 v1.10.
 func (m *SVTNManager) RevokeKey(
 	svtnName string,
 	pubkey ed25519.PublicKey,
@@ -241,33 +256,31 @@ func (m *SVTNManager) RevokeKey(
 
 	svtnID := svtn.ID
 
-	// Step 2: look up the key in the AdmittedKeySet (HOLD-001 hybrid: cross-check
-	// stored role against caller-supplied currentRole before the confirm gate).
-	// LookupByPubkey derives the node address internally (ARCH-04 v1.8).
-	stored := m.keySet.LookupByPubkey(svtnID, pubkey)
-	if stored == nil {
-		return KeyOpResult{}, admission.ErrKeyNotRegistered
-	}
-
-	// Step 3: cross-check role (ARCH-04 v1.7 HOLD-001 resolution: hybrid approach).
-	// The caller supplies currentRole; the manager verifies it matches stored.Role.
-	// This prevents bypassing the confirm gate by supplying a lower role.
-	if stored.Role != currentRole {
-		return KeyOpResult{}, ErrRoleMismatch
-	}
-
-	// Step 4: control-to-control revocation requires confirm=true (ADR-004;
-	// BC-2.05.004 precondition 1; AC-005).
-	if currentRole == admission.RoleControl && !confirm {
-		return KeyOpResult{}, ErrControlRevocationRequiresConfirm
-	}
-
-	// Step 5: revoke the key using the node address from the stored entry.
-	if err := m.keySet.RevokeKey(svtnID, stored.NodeAddr); err != nil {
+	// Step 2: atomic role cross-check + confirm-gate + revocation under a single
+	// write lock (HOLD-001; ARCH-04 v1.10 Addendum H2). RevokeKeyIfRoleMatches
+	// atomically:
+	//   (a) looks up the key by pubkey
+	//   (b) compares stored role to currentRole; returns ErrRoleMismatch (E-ADM-019)
+	//       if stored role differs — prevents confirm-gate bypass via lower-role claim
+	//   (c) enforces the confirm gate on the STORED role (existingRole), not the
+	//       caller-supplied currentRole — uses admission.ErrControlRevocationRequiresConfirm
+	//       (E-ADM-018) without revoking the key if confirm=false
+	//   (d) marks the key revoked on success
+	//
+	// The confirm gate fires inside the atomic primitive (ARCH-04 H2 ordering:
+	// atomic-FIRST, confirm-gate-SECOND). No intermediate state is observable:
+	// if ErrControlRevocationRequiresConfirm is returned, the key is unchanged.
+	//
+	// ADR-004; BC-2.05.004 precondition 1; AC-005.
+	_, err := m.keySet.RevokeKeyIfRoleMatches(svtnID, pubkey, currentRole, confirm)
+	if err != nil {
+		// ErrKeyNotRegistered (E-ADM-013), ErrRoleMismatch (E-ADM-019), or
+		// ErrControlRevocationRequiresConfirm (E-ADM-018) returned as-is;
+		// callers inspect via errors.Is.
 		return KeyOpResult{}, err
 	}
 
-	// Step 6: return result with fingerprint and UTC timestamp.
+	// Step 4: return result with fingerprint and UTC timestamp.
 	return KeyOpResult{
 		Fingerprint: keyFingerprint(pubkey),
 		At:          time.Now().UTC(),
@@ -304,7 +317,7 @@ func (m *SVTNManager) ExpireKey(
 
 	svtnID := svtn.ID
 
-	// LookupByPubkey derives the node address internally (ARCH-04 v1.8).
+	// LookupByPubkey derives the node address internally (ARCH-04 v1.10).
 	lookedUp := m.keySet.LookupByPubkey(svtnID, pubkey)
 	if lookedUp == nil {
 		return KeyOpResult{}, admission.ErrKeyNotRegistered
