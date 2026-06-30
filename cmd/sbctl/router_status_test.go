@@ -1032,6 +1032,66 @@ func TestSbctlRouterStatus_TargetFlagEmptyValue(t *testing.T) {
 	}
 }
 
+// ─── F-C5: injectJSONField propagates Marshal errors ─────────────────────────
+
+// TestInjectJSONField_PropagatesError verifies that injectJSONField returns
+// the (json.RawMessage, error) pair and that errors from json.Marshal are
+// propagated rather than swallowed (go.md rule 3 / F-C5).
+//
+// In practice, json.Marshal of a plain string never fails, but the signature
+// change ensures the contract is enforced at the type level.
+func TestInjectJSONField_PropagatesError(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		raw     json.RawMessage
+		key     string
+		value   string
+		wantErr bool
+		wantKey string
+	}{
+		{
+			name:    "valid_object_injects_field",
+			raw:     json.RawMessage(`{"path_id":"p1","rtt_ms":10.0}`),
+			key:     "quality",
+			value:   "green",
+			wantErr: false,
+			wantKey: "quality",
+		},
+		{
+			name:    "malformed_object_returns_raw",
+			raw:     json.RawMessage(`not-an-object`),
+			key:     "quality",
+			value:   "green",
+			wantErr: false, // malformed → return raw as-is, no error
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := injectJSONField(tc.raw, tc.key, tc.value)
+			if tc.wantErr && err == nil {
+				t.Errorf("F-C5: expected error from injectJSONField; got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("F-C5: unexpected error from injectJSONField: %v", err)
+			}
+			if tc.wantKey != "" {
+				var obj map[string]json.RawMessage
+				if parseErr := json.Unmarshal(got, &obj); parseErr != nil {
+					t.Fatalf("F-C5: result is not valid JSON object: %v\nraw: %s", parseErr, got)
+				}
+				if _, ok := obj[tc.wantKey]; !ok {
+					t.Errorf("F-C5: injected field %q not found in result; present: %v", tc.wantKey, mapKeys(obj))
+				}
+			}
+		})
+	}
+}
+
 // ─── F-C4: EC-001 object form passthrough ────────────────────────────────────
 
 // TestSbctlRouterStatus_EC001ObjectFormPassthrough verifies that when the daemon
