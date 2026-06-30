@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -43,6 +43,13 @@ modified:
       Added to Invariants section (item 5) and Traceability L2 Domain Invariants row.
       DI-001 applies: key lifecycle operations authenticate the nodes that enforce
       content separation; a revoked or misconfigured key breaks DI-001 guarantees.
+  - date: 2026-06-30
+    version: "1.6"
+    actor: product-owner
+    change: >
+      S-6.06 Pass-6 finding F-P6L2-002: Canonical Test Vectors list-keys row
+      annotated with wire RPC name (admin.key.list-keys) to match the annotation
+      pattern used on other rows in the table.
   - date: 2026-06-30
     version: "1.5"
     actor: product-owner
@@ -128,7 +135,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | `sbctl admin key register --svtn <id> --key <hex-pubkey> --role console` | Key registered; fingerprint returned; propagation initiated | happy-path |
 | `sbctl admin key revoke --svtn <id> --key <hex-pubkey>` | Key revoked; active sessions continue until re-auth; propagation initiated | happy-path |
 | `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <timestamp>` | CLI translates `--at <RFC3339>` → `after` duration string; expiry timestamp associated; auto-revocation scheduled | happy-path |
-| `sbctl admin list-keys --svtn <id>` | Returns all admitted keys with role, fingerprint, expiry | happy-path |
+| `sbctl admin list-keys --svtn <id>` (CLI: `admin list-keys`; wire: `admin.key.list-keys`) | Returns all admitted keys with role, fingerprint, expiry | happy-path |
 | `sbctl admin key register --svtn <id> --key <same-pubkey-already-registered> --role access` | Response: "updated" with new role (per ADR-003: last-write-wins) | edge-case |
 | Key operation by node without management authority | E-ADM-009 "insufficient authority for operation admin.key.register: key <fp> has role <role>" | error |
 | Console or readonly key attempts to revoke a control key via `admin.key.revoke` RPC | E-ADM-009 "insufficient authority for operation admin.key.revoke: key <fp> has role console" — handler gate fires first; `SVTNManager.RevokeKey` is never called (F-L2-002). Note: E-ADM-011 is the code returned by `SVTNManager.RevokeKey` directly (Go API level, unit-test path) when a lower-tier role attempts to revoke a higher-tier key; it is NOT reachable via the mgmt RPC path when the handler gate is wired. | error |

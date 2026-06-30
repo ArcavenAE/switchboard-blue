@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -112,7 +112,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 | L2 Capability | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — metrics contain no content) |
 | Architecture Module | internal/metrics |
-| Stories | S-5.02 |
+| Stories | S-5.02 (sbctl client surface: dispatch + JSON envelope passthrough), S-W5.04 (daemon-side RPC handlers + response types: PathsListResponse, PathEntry, RTTValue, RouterMetricsResponse) |
 | Capability Anchor Justification | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 — this BC specifies the `sbctl` interface for the per-path metrics that CAP-022 defines as available for both node-side and network-operator-side views |
 
 ## Related BCs
@@ -124,6 +124,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.7 | 2026-06-30 | spec-steward | F-P5-T-002 (Pass-5 lens-3): add S-W5.04 to Stories traceability cell per Pass-4 Ruling 1 split — S-5.02 owns client surface (PC-1/PC-2/PC-3 client-side serialization, PC-4 envelope, PC-5 unreachable behavior on client side); S-W5.04 owns daemon-side RPC handlers + response types (PathsListResponse, PathEntry, RTTValue union, RouterMetricsResponse). No behavioral change. |
 | 1.6 | 2026-06-30 | product-owner | F-LO1 (Pass-4 Ruling 5): align PC-1 `rtt_p99_ms` description with ARCH-03 v1.6 canonical semantics — replace "rolling sample buffer" with "fixed-bucket histogram (counts never reset; approximation error ≤ bucket width for the bucket containing the true p99)". No behavioral change; EC-003 pending sentinel unchanged. |
 | 1.5 | 2026-06-30 | spec-steward | F-M3: add explicit pending-p99 quality semantics to PC-3 — when `rtt_p99_ms` is `"pending"`, `quality` MUST also be `"pending"` (not green/yellow/red); the quality state machine must treat pending p99 as indeterminate. Add EC-006 documenting this behavior. Note for implementers: `quality: "pending"` is now a valid emit value from `cmd/sbctl/router_status.go`. |
 | 1.1 | 2026-06-23 | product-owner | Initial draft with `sbctl paths list` + `sbctl router metrics` canonical surface |
