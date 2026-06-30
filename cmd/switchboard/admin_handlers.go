@@ -189,7 +189,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 
 // makeRevokeHandler returns the admin.key.revoke handler function.
 // Parses `role` (canonical wire field per F-002); passes as currentRole to
-// SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.10).
+// SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.13).
 // Traces to BC-2.05.004 postcondition 2; AC-002; AC-006.
 func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {

@@ -249,7 +249,7 @@ func (m *SVTNManager) RegisterKey(
 // Returns admission.ErrRoleMismatch (E-ADM-019) if currentRole does not match
 // the stored role — prevents bypassing the confirm gate by supplying a lower role.
 //
-// Traces to BC-2.05.004 postcondition 2; HOLD-001; ARCH-04 v1.10.
+// Traces to BC-2.05.004 postcondition 2; HOLD-001; ARCH-04 v1.13.
 func (m *SVTNManager) RevokeKey(
 	svtnName string,
 	pubkey ed25519.PublicKey,
@@ -276,7 +276,7 @@ func (m *SVTNManager) RevokeKey(
 	svtnID := svtn.ID
 
 	// Step 2: atomic role cross-check + confirm-gate + revocation under a single
-	// write lock (HOLD-001; ARCH-04 v1.10 Addendum H2). RevokeKeyIfRoleMatches
+	// write lock (HOLD-001; ARCH-04 v1.13 Addendum H2). RevokeKeyIfRoleMatches
 	// atomically:
 	//   (a) looks up the key by pubkey
 	//   (b) compares stored role to currentRole; returns ErrRoleMismatch (E-ADM-019)

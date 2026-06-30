@@ -284,7 +284,7 @@ func (s *AdmittedKeySet) RevokeKey(svtnID [16]byte, nodeAddr [8]byte) error {
 // RevokeKeyIfRoleMatches atomically checks that the key's stored role matches
 // expectedRole, enforces the control-revocation confirm gate if needed, then
 // marks the key revoked — all under a single write lock critical section
-// (HOLD-001; ARCH-04 v1.10 Addendum H2).
+// (HOLD-001; ARCH-04 v1.13 Addendum H2).
 //
 // The confirm gate is evaluated INSIDE the write lock, after the role-match
 // check passes but BEFORE setting revoked=true. This means no revocation
