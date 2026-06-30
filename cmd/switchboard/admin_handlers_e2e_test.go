@@ -115,17 +115,18 @@ func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 // newE2ESVTNManager creates a minimal SVTNManager with a registered SVTN named
 // svtnName and a pre-registered key with the given role.
 //
-// Returns the SVTNManager and the base64-encoded pubkey string for use in RPC
-// call args. A real Ed25519 keypair is generated so decodePublicKey (which now
-// enforces 32-byte size, F-005) accepts it.
+// Returns the SVTNManager, the base64-encoded registered pubkey string for use
+// in RPC call args, and the daemon bootstrap control private key. The caller
+// must pass ctrlPriv to startE2EServerWithOps so that sendAdminRPC can
+// authenticate as the bootstrap key (F-P2L1-001 — bootstrap key is the
+// sole unconditionally-allowed key after the fail-closed fix).
 //
-// ed25519.GenerateKey returns (PublicKey, PrivateKey, error) — ctrlPriv is used
-// only to construct the manager's control key.
-func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) (*svtnmgmt.SVTNManager, string) {
+// ed25519.GenerateKey returns (PublicKey, PrivateKey, error).
+func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) (*svtnmgmt.SVTNManager, string, ed25519.PrivateKey) {
 	t.Helper()
 	ks := admission.NewAdmittedKeySet()
 	// ed25519.GenerateKey: first return is PublicKey, second is PrivateKey.
-	ctrlPub, _, err := ed25519.GenerateKey(rand.Reader)
+	ctrlPub, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("newE2ESVTNManager: generate control key: %v", err)
 	}
@@ -145,7 +146,176 @@ func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, 
 	}
 	// Return the base64-encoded pubkey so RPC call sites can use it.
 	encodedPubkey := base64.RawURLEncoding.EncodeToString([]byte(regPub))
-	return m, encodedPubkey
+	return m, encodedPubkey, ctrlPriv
+}
+
+// startE2EServerWithOps starts a real mgmt.Server using the provided daemon
+// private key and OperatorKeySet. Use this instead of startE2EServer when the
+// daemon key must match the SVTNManager bootstrap key (F-P2L1-001 fail-closed
+// fix) or when a non-nil OperatorKeySet is needed (RoleInsufficient tests).
+func startE2EServerWithOps(t *testing.T, handlers []mgmt.Handler, daemonPriv ed25519.PrivateKey, ops *mgmt.OperatorKeySet) *e2eServer {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "sw-mgmt-*")
+	if err != nil {
+		t.Fatalf("startE2EServerWithOps: MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := fmt.Sprintf("%s/m.sock", dir)
+	if len(socketPath) > 104 {
+		t.Fatalf("startE2EServerWithOps: socket path %q length %d exceeds 104-byte limit", socketPath, len(socketPath))
+	}
+
+	ln, err := listenUnixMgmt(socketPath)
+	if err != nil {
+		t.Fatalf("startE2EServerWithOps: listen: %v", err)
+	}
+
+	srv := mgmt.NewServer(ln, daemonPriv, ops, handlers, "dev",
+		mgmt.WithHandshakeTimeout(2*time.Second),
+		mgmt.WithRPCIdleTimeout(5*time.Second),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = srv.Serve(ctx)
+	}()
+
+	testDaemonKeysMu.Lock()
+	testDaemonKeys[socketPath] = daemonPriv
+	testDaemonKeysMu.Unlock()
+
+	es := &e2eServer{
+		srv:        srv,
+		socketPath: socketPath,
+		daemonPriv: daemonPriv,
+		cancel:     cancel,
+		doneCh:     done,
+	}
+	t.Cleanup(func() {
+		cancel()
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = srv.Shutdown(shutCtx)
+		shutCancel()
+		<-done
+		testDaemonKeysMu.Lock()
+		delete(testDaemonKeys, socketPath)
+		testDaemonKeysMu.Unlock()
+	})
+	return es
+}
+
+// sendAdminRPCAsKey sends a single RPC using the provided authPub/authPriv
+// keypair instead of the daemon's bootstrap key. Use for tests that need to
+// authenticate as a non-bootstrap caller (e.g., RoleInsufficient tests that
+// register an access/console key in the OperatorKeySet before starting the
+// server).
+func sendAdminRPCAsKey(
+	t *testing.T,
+	socketPath string,
+	authPub ed25519.PublicKey,
+	authPriv ed25519.PrivateKey,
+	command string,
+	argsMap map[string]any,
+) map[string]any {
+	t.Helper()
+
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
+	if err != nil {
+		t.Fatalf("sendAdminRPCAsKey: dial %s: %v", socketPath, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	const maxMsg = 1 << 16
+
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: set deadline: %v", err)
+	}
+
+	var challenge struct {
+		Type      string `json:"type"`
+		Nonce     string `json:"nonce"`
+		DaemonSig string `json:"daemon_sig"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&challenge); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: read challenge: %v", err)
+	}
+	if challenge.Type != "challenge" {
+		t.Fatalf("sendAdminRPCAsKey: expected challenge, got %q", challenge.Type)
+	}
+
+	nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+	if err != nil {
+		t.Fatalf("sendAdminRPCAsKey: decode nonce: %v", err)
+	}
+
+	nonceSig := ed25519.Sign(authPriv, nonceBytes)
+	cresp := struct {
+		Type     string `json:"type"`
+		NonceSig string `json:"nonce_sig"`
+		Pubkey   string `json:"pubkey"`
+	}{
+		Type:     "challenge_response",
+		NonceSig: base64.RawURLEncoding.EncodeToString(nonceSig),
+		Pubkey:   base64.RawURLEncoding.EncodeToString([]byte(authPub)),
+	}
+	if err := json.NewEncoder(conn).Encode(cresp); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: send challenge response: %v", err)
+	}
+
+	var authResult struct {
+		Type    string `json:"type"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&authResult); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: read auth result: %v", err)
+	}
+	if authResult.Type != "auth_ok" {
+		t.Fatalf("sendAdminRPCAsKey: auth failed: type=%q code=%q msg=%q", authResult.Type, authResult.Code, authResult.Message)
+	}
+
+	reqID := fmt.Sprintf("e2e-%d", time.Now().UnixNano())
+	req := struct {
+		Type    string         `json:"type"`
+		ID      string         `json:"id"`
+		Command string         `json:"command"`
+		Args    map[string]any `json:"args"`
+	}{
+		Type:    "request",
+		ID:      reqID,
+		Command: command,
+		Args:    argsMap,
+	}
+	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: send request: %v", err)
+	}
+
+	var rawResp json.RawMessage
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&rawResp); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: read response: %v", err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(rawResp, &result); err != nil {
+		t.Fatalf("sendAdminRPCAsKey: unmarshal response: %v", err)
+	}
+
+	if errObj, _ := result["error"].(map[string]any); errObj != nil {
+		if code, _ := errObj["code"].(string); code == "E-RPC-011" {
+			if msg, _ := errObj["message"].(string); msg != "" {
+				if idx := strings.Index(msg, ":"); idx > 0 {
+					candidate := msg[:idx]
+					if len(candidate) > 2 && candidate[:2] == "E-" {
+						errObj["code"] = candidate
+					}
+				}
+			}
+		}
+	}
+
+	return result
 }
 
 // sendAdminRPC sends a single RPC over a new Unix socket connection to the
@@ -304,9 +474,9 @@ func TestE2E_AdminRevoke_RoleMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
+	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
 	if err2 != nil {
@@ -341,9 +511,9 @@ func TestE2E_AdminRevoke_ControlWithoutConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
+	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
 	if err2 != nil {
@@ -377,9 +547,9 @@ func TestE2E_AdminRevoke_ControlWithConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
+	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
 	if err2 != nil {
@@ -405,7 +575,7 @@ func TestE2E_AdminRegister_HappyPath(t *testing.T) {
 	t.Parallel()
 
 	ks := admission.NewAdmittedKeySet()
-	ctrlPub, _, err := ed25519.GenerateKey(rand.Reader)
+	ctrlPub, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate control key: %v", err)
 	}
@@ -414,7 +584,7 @@ func TestE2E_AdminRegister_HappyPath(t *testing.T) {
 		t.Fatalf("create SVTN: %v", err)
 	}
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
 	if err2 != nil {
@@ -449,9 +619,9 @@ func TestE2E_AdminExpire_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
 	if err2 != nil {
@@ -476,7 +646,7 @@ func TestE2E_AdminListKeys_HappyPath(t *testing.T) {
 	t.Parallel()
 
 	ks := admission.NewAdmittedKeySet()
-	ctrlPub, _, err := ed25519.GenerateKey(rand.Reader)
+	ctrlPub, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate control key: %v", err)
 	}
@@ -493,7 +663,7 @@ func TestE2E_AdminListKeys_HappyPath(t *testing.T) {
 		t.Fatalf("register key 2: %v", err)
 	}
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
 	if err2 != nil {
@@ -521,7 +691,7 @@ func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 	t.Parallel()
 
 	ks := admission.NewAdmittedKeySet()
-	ctrlPub, _, _ := ed25519.GenerateKey(rand.Reader)
+	ctrlPub, ctrlPriv, _ := ed25519.GenerateKey(rand.Reader)
 	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
 	if _, err := m.Create("test-svtn"); err != nil {
 		t.Fatalf("create SVTN: %v", err)
@@ -529,7 +699,7 @@ func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 
 	// Control mode: admin handlers registered.
 	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
@@ -623,7 +793,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLNegative(t *testing.T) {
 	t.Parallel()
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, _, _ := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -651,7 +821,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLZero(t *testing.T) {
 	t.Parallel()
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, _, _ := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -679,7 +849,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLTooLong(t *testing.T) {
 	t.Parallel()
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, _, _ := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -707,22 +877,34 @@ func TestE2E_AdminExpire_ServerRejectsTTLTooLong(t *testing.T) {
 func TestE2E_AdminKeyRegister_RoleInsufficient(t *testing.T) {
 	t.Parallel()
 
+	// Use an explicit daemon key that matches the SVTNManager control key.
+	ctrlPub, ctrlPriv, _ := ed25519.GenerateKey(rand.Reader)
 	ks := admission.NewAdmittedKeySet()
-	ctrlPub, _, _ := ed25519.GenerateKey(rand.Reader)
 	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
 	if _, err := m.Create("test-svtn"); err != nil {
 		t.Fatalf("create SVTN: %v", err)
 	}
-	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
 
-	// Caller is a console-role key; expected to be rejected with E-ADM-009.
-	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
-		"svtn":        "test-svtn",
-		"pubkey":      "placeholder",
-		"role":        "access",
-		"caller_role": "console", // signals to handler that caller has console role
+	// Register a console-role caller key in the SVTN.
+	callerPub, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
+	if _, err := m.RegisterKey("test-svtn", callerPub, admission.RoleConsole); err != nil {
+		t.Fatalf("register caller key: %v", err)
+	}
+
+	// Start server with the console-role caller in the OperatorKeySet.
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
+	handlers := BuildAdminHandlers(m)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
+
+	// Generate a valid target pubkey.
+	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
+	encodedTarget := base64.RawURLEncoding.EncodeToString([]byte(targetPub))
+
+	// Authenticate as the console-role caller.
+	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.register", map[string]any{
+		"svtn":   "test-svtn",
+		"pubkey": encodedTarget,
+		"role":   "access",
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -741,21 +923,35 @@ func TestE2E_AdminKeyRegister_RoleInsufficient(t *testing.T) {
 func TestE2E_AdminKeyRevoke_RoleInsufficient(t *testing.T) {
 	t.Parallel()
 
-	targetPub, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("generate target key: %v", err)
+	ctrlPub, ctrlPriv, _ := ed25519.GenerateKey(rand.Reader)
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+	if _, err := m.Create("test-svtn"); err != nil {
+		t.Fatalf("create SVTN: %v", err)
 	}
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
-	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
 
-	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
-		"svtn":        "test-svtn",
-		"pubkey":      "placeholder",
-		"role":        "control",
-		"confirm":     false,
-		"caller_role": "access",
+	// Register a target key with control role (for revocation args).
+	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
+	if _, err := m.RegisterKey("test-svtn", targetPub, admission.RoleControl); err != nil {
+		t.Fatalf("register target key: %v", err)
+	}
+	encodedTarget := base64.RawURLEncoding.EncodeToString([]byte(targetPub))
+
+	// Register an access-role caller in the SVTN.
+	callerPub, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
+	if _, err := m.RegisterKey("test-svtn", callerPub, admission.RoleAccess); err != nil {
+		t.Fatalf("register caller key: %v", err)
+	}
+
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
+	handlers := BuildAdminHandlers(m)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
+
+	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.revoke", map[string]any{
+		"svtn":    "test-svtn",
+		"pubkey":  encodedTarget,
+		"role":    "control",
+		"confirm": false,
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -774,19 +970,25 @@ func TestE2E_AdminKeyRevoke_RoleInsufficient(t *testing.T) {
 func TestE2E_AdminListKeys_RoleInsufficient(t *testing.T) {
 	t.Parallel()
 
+	ctrlPub, ctrlPriv, _ := ed25519.GenerateKey(rand.Reader)
 	ks := admission.NewAdmittedKeySet()
-	ctrlPub, _, _ := ed25519.GenerateKey(rand.Reader)
 	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
 	if _, err := m.Create("test-svtn"); err != nil {
 		t.Fatalf("create SVTN: %v", err)
 	}
-	handlers := BuildAdminHandlers(m)
-	es := startE2EServer(t, handlers)
 
-	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.list-keys", map[string]any{
-		"svtn":        "test-svtn",
-		"caller_role": "console",
+	// Register a console-role caller in the SVTN.
+	callerPub, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
+	if _, err := m.RegisterKey("test-svtn", callerPub, admission.RoleConsole); err != nil {
+		t.Fatalf("register caller key: %v", err)
+	}
+
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
+	handlers := BuildAdminHandlers(m)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
+
+	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.list-keys", map[string]any{
+		"svtn": "test-svtn",
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
