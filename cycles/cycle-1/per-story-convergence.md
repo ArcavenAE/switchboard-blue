@@ -69,6 +69,8 @@ per-story adversarial review. A story is CONVERGED when it achieves
 | 13 | PASS | PASS | PASS | CONVERGED (reset — subsequent findings) | — |
 | 14 | BLOCK (F-P14L2-002 HIGH anchor gap) | BLOCK | — | BLOCK | 4807c4d (spec) / 0db8361 (impl) |
 | 15 | BLOCK (MED) | BLOCK (MED) | PASS | BLOCK | fad33ec (spec) / 6528f02 (impl) |
+| 16 | PASS | PASS | PASS | PASS (clean #1) | — |
+| 17 | PASS (4 LOW OBS) | BLOCK (F-P17L2-001 MED, F-P17L2-002 LOW) | PASS | BLOCK (not counted) | 5da781a (spec) / 2390541 (impl) |
 
 ### Pass-15 Detail (2026-06-30)
 
@@ -108,7 +110,47 @@ per-story adversarial review. A story is CONVERGED when it achieves
 | Spec | fad33ec | factory-artifacts | BC-2.05.004 v1.8→v1.9 (unconditional EC-007), S-6.06 story v1.13→v1.14 (line citations 257-262→275-280), BC-INDEX v1.4→v1.5, STORY-INDEX v3.3→v3.4 |
 | Impl | 6528f02 | feat/S-6.06-daemon-admin-handlers | admin_handlers.go default-arm prefix drop + comment rewrite; `just test` + `just test-race` both clean |
 
-### Next: Pass-16
+### Pass-16 Summary (2026-06-30)
 
-Pass-16 queued. Clean-pass counter reset to 0/3.
+**Verdict:** PASS — all 3 lenses clean. Clean-pass count advances to 1/3.
+
+No findings. Fix-burst tip: fad33ec (spec) / 6528f02 (impl). Pass-17 dispatched.
+
+---
+
+### Pass-17 Detail (2026-06-30)
+
+**Verdict:** BLOCK — lens-1 PASS, lens-2 BLOCK, lens-3 PASS. Pass NOT counted toward streak. Clean-pass count remains 1/3.
+
+#### Lens-1 (Implementation Correctness)
+
+**Verdict: PASS** — 4 LOW observations (pre-existing / refinement notes, non-blocking).
+
+#### Lens-2 (Spec Drift)
+
+| Finding | Severity | Confidence | Description | Disposition |
+|---------|----------|------------|-------------|-------------|
+| F-P17L2-001 | MED | HIGH | error-taxonomy.md E-ADM-020 description out-of-sync with BC-2.05.004 v1.9 unconditional phrasing | Fixed: 5da781a (error-taxonomy.md v3.6→v3.7) |
+| F-P17L2-002 | LOW | HIGH | Canonical message + impl wire string aligned to "permanent trust anchor" (terminology sync) | Fixed: 5da781a |
+
+#### Lens-3 (Sibling Propagation + VP Harness Compilability)
+
+**Verdict: PASS** — one cross-story observation (S-W5.02:191 stale 4-arg mgmt.NewServer descriptor) correctly deferred to wave-gate scope, not S-6.06 per-story scope.
+
+### Pass-17 Fix-Burst Record
+
+| Layer | Commit | Branch | Changes |
+|-------|--------|--------|---------|
+| Spec | 5da781a | factory-artifacts | error-taxonomy.md v3.6→v3.7 (E-ADM-020 description sync to BC v1.9 unconditional phrasing + "permanent trust anchor" wire string); S-6.06 story v1.14→v1.15; STORY-INDEX v3.4→v3.5 |
+| Impl | 2390541 | feat/S-6.06-daemon-admin-handlers | admin_handlers.go:397 + admin_handlers_test.go:719; `just test` + `just test-race` clean |
+
+### Wave-Gate-Deferred Item (logged from Pass-17 Lens-3)
+
+**Item:** S-W5.02:191 stale 4-arg `mgmt.NewServer` descriptor — sibling-fix gap from F-P9L2-002 sweep that hit VP-064/065/066/075 but missed S-W5.02 story body.
+**Target:** Wave-level adversarial convergence backlog (task #8).
+**Scope:** Not S-6.06 per-story scope; deferred to wave-gate.
+
+### Next: Pass-18
+
+Pass-18 queued. Clean-pass count: 1/3. Fix-burst tip: 5da781a (spec) / 2390541 (impl).
 Scope: re-run all 3 lenses fresh-context against fix-burst tip.
