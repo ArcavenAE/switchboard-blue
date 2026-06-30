@@ -2,7 +2,7 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -17,6 +17,8 @@ kos_anchors:
   - elem-timeslice-framing
   - elem-ssh-end-to-end-encryption
   - elem-asymmetric-half-channels
+modified:
+  - 2026-06-30T00:00:00 # v1.5 — F-T3-302 (S-6.06 Pass-3 lens-3): add VP-075 to Phase 1c-refinement integration table (admin.key.* handler caller-role check, internal/mgmt)
 ---
 
 # ARCH-07: Verification Architecture
@@ -165,6 +167,7 @@ VP-027 (proptest) covers transition ordering under sustained degradation. VP-074
 | VP-044 | Presence advertisement includes required fields | internal/discovery | integration |
 | VP-045 | Console session enumeration without hostnames | internal/discovery | e2e |
 | VP-046 | Key lifecycle: register/revoke/expire | internal/svtnmgmt | integration |
+| VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | internal/mgmt | integration |
 | VP-047 | Per-path metrics queryable via sbctl | internal/metrics | integration |
 | VP-048 | Control node creates/destroys SVTNs | internal/svtnmgmt | integration |
 | VP-049 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | e2e |

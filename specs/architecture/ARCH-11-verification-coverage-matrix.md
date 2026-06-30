@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -20,6 +20,7 @@ modified:
   - 2026-06-28T00:00:00 # v1.4 — VP-id assignment: add VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) for BC-2.06.003; update totals to 62 VPs
   - 2026-06-28T00:00:00 # v1.5 — F-002 + F-007: mint VP-063 (proptest, internal/paths) for BC-2.02.003 PC-5 degraded-flag boolean; fix stale "60 VPs total" prose to 63; update totals to 63 VPs
   - 2026-06-29T00:00:00 # v1.6 — BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E VP assignment: VP-068–VP-073 added; BC-2.07.004 row updated with full VP set; per-module counts updated; totals updated to 73 VPs
+  - 2026-06-30T00:00:00 # v1.10 — F-T3-301: VP-074 (P1, BC-2.06.001 threshold classification) added; P1 VPs 17→18.
   - 2026-06-30T00:00:00 # v1.9 — PO Ruling 3 (S-5.02 Pass-4 scope ruling): VP-047 implementing_story transferred S-5.02 → S-W5.04 per vp_index_is_vp_catalog_source_of_truth policy. No BC→VP row changes; no count changes.
   - 2026-06-30T00:00:00 # v1.8 — Pass-2 lens-3 F-T3-003: VP-075 minted for BC-2.05.004 handler authority (integration, internal/mgmt); BC-2.05.004 row updated VP-046→VP-046+VP-075; internal/mgmt count 8→9; P0 VPs 52→53; totals updated to 75 VPs
   - 2026-06-29T00:00:00 # v1.7 — VP-074 added for BC-2.06.001 threshold classification (unit, internal/metrics); internal/metrics count 4→5; totals updated to 74 VPs
@@ -90,7 +91,7 @@ modified:
 | BCs with 0 VPs | 0 |
 | Total unique VPs | 75 |
 | P0 VPs | 53 |
-| P1 VPs | 17 |
+| P1 VPs | 18 |
 | P2+ VPs | 4 |
 
 ## Per-Module VP Count

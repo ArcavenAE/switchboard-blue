@@ -338,7 +338,7 @@ stories:
     scope_phase: E
     points: 5
     # repointed 3→5 (p99 scope + canonical surface reconciliation per BC-2.06.003 v1.2)
-    bc_traces: [BC-2.06.001, BC-2.06.003]
+    bc_traces: [BC-2.06.003]
 
   - story_id: S-5.03
     title: "flag paths as degraded when EWMA RTT exceeds 200ms threshold"
@@ -468,7 +468,7 @@ stories:
     points: 5
     bc_traces: [BC-2.05.004]
     vp_traces: [VP-075]
-    depends_on: [S-6.02]
+    depends_on: [S-6.02, S-W5.01]
     blocks: [S-W5.02]
     # Minted per CR-W5-SCOPE-SPLIT ruling 2026-06-29.
     # Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon never registered
@@ -627,6 +627,9 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.12 (2026-06-30): F-T3-303: S-6.06 depends_on [S-6.02] → [S-6.02, S-W5.01].
+#   - S-6.06 handler integration requires the mgmt server delivered by S-W5.01 (already merged).
+#   - Authority: S-6.06 Pass-3 lens-3 F-T3-303.
 # v2.11 (2026-06-30): S-5.02 Pass-4 Ruling 1: add S-W5.04 (5pts, P1, Wave 5, draft).
 #   - Daemon-side paths.list/router.metrics/router.status handlers deferred from S-5.02.
 #   - Wave 5: 8→9 stories, 43→48 pts. total_stories 42→43, total_points 187→192.
