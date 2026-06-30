@@ -1,7 +1,7 @@
 story_id: S-6.06
 story_title: "Daemon-Side Admin RPC Handlers (admin.key.register / revoke / expire / list-keys)"
 recorded_at: "2026-06-30"
-worktree_head: d3f186c
+worktree_head: 660b91a
 vhs_version: "0.11.0"
 font: Menlo
 theme: Catppuccin Mocha
@@ -9,14 +9,15 @@ known_issues:
   - id: DEMO-ISSUE-001
     ac: AC-005
     severity: medium
+    status: CLOSED
+    closed_at: "2026-06-30"
+    closed_by: "660b91a"
     description: |
-      TestE2E_AdminExpire_ServerRejectsTTL* tests return E-ADM-009 instead of E-CFG-001
-      because the tests use a freshly-generated caller key that is not registered in the
-      test SVTNManager. The AC-006 authority gate fires before AC-005 TTL validation.
-      Unit-level evidence (TestBuildAdminHandlers_KeyExpire_NegativeTTL and
-      TestBuildAdminHandlers_KeyExpire_MissingAfterField) demonstrates the AC-005
-      behavior correctly. The e2e test wiring needs a fix: the TTL rejection tests must
-      use the SVTNManager bootstrap/control key as the authenticated caller.
+      CLOSED. Fix landed at commit 660b91a: the three TestE2E_AdminExpire_ServerRejectsTTL*
+      tests now pass ctrlPriv from newE2ESVTNManager to startE2EServerWithOps so the daemon
+      authenticates as the SVTNManager bootstrap key. The AC-005 TTL bounds check (E-CFG-001)
+      now fires correctly instead of the AC-006 authority gate (E-ADM-009).
+      AC-005 re-recorded with full e2e coverage on 2026-06-30.
 
 artifacts:
   - ac: AC-001
@@ -104,18 +105,19 @@ artifacts:
     status: PASS
 
   - ac: AC-005
-    description: "server-side TTL validation — valid TTL accepted; <=0 and >100y rejected with E-CFG-001 (unit)"
+    description: "server-side TTL validation — valid TTL accepted; <=0 and >100y rejected with E-CFG-001 (unit + e2e)"
     note: >
-      Unit-level evidence only. E2E TTL rejection tests (TestE2E_AdminExpire_ServerRejectsTTL*)
-      fail with E-ADM-009 due to DEMO-ISSUE-001 (unregistered caller key in test setup).
+      Full coverage: unit tests plus e2e tests (integration tag). DEMO-ISSUE-001 closed
+      at commit 660b91a — e2e tests now authenticate as SVTNManager bootstrap key so
+      E-CFG-001 fires from TTL bounds check, not E-ADM-009 from authority gate.
     artifacts:
       - path: docs/demo-evidence/S-6.06/AC-005-server-side-ttl-validation.gif
-        sha256: c414f1fa37e4dcee73585d4c7bf757131ebcd454dcb7a93b4e767d014059c61c
-        size_bytes: 184351
+        sha256: 8b76f092f72c1ace3d401ac140f0cff0c6511bb56660cae68b4800c404d32a19
+        size_bytes: 248015
         format: gif
       - path: docs/demo-evidence/S-6.06/AC-005-server-side-ttl-validation.webm
-        sha256: 163356bcfaf3e1e8eea435cc4c7560c7c0f730d2f3bd4572a78fed0d2b0238c1
-        size_bytes: 217271
+        sha256: 3e20e9ac5d9702838b736ec198ab66660a5beb9e86ca994ba384324922d3cae1
+        size_bytes: 398457
         format: webm
     tape: docs/demo-evidence/S-6.06/AC-005-server-side-ttl-validation.tape
     test_coverage:
@@ -124,7 +126,10 @@ artifacts:
       error_path:
         - TestBuildAdminHandlers_KeyExpire_NegativeTTL
         - TestBuildAdminHandlers_KeyExpire_MissingAfterField
-    status: PARTIAL
+        - TestE2E_AdminExpire_ServerRejectsTTLNegative
+        - TestE2E_AdminExpire_ServerRejectsTTLZero
+        - TestE2E_AdminExpire_ServerRejectsTTLTooLong
+    status: FULL
 
   - ac: AC-006
     description: "caller-role authority gate — non-control returns E-ADM-009; list-keys any-role returns ok"

@@ -1,8 +1,8 @@
 # Demo Evidence Report — S-6.06
 
 **Story:** S-6.06 — Daemon-Side Admin RPC Handlers  
-**Worktree HEAD:** d3f186c  
-**Recorded:** 2026-06-30  
+**Worktree HEAD:** 660b91a  
+**Recorded:** 2026-06-30 (AC-005 re-recorded 2026-06-30)  
 **Tool:** VHS 0.11.0 (Font: Menlo, Theme: Catppuccin Mocha)
 
 ## Coverage Summary
@@ -13,10 +13,10 @@
 | AC-002 | admin.key.revoke e2e — role-mismatch (E-ADM-019), no-confirm (E-ADM-018), success | PASS | GIF + WEBM |
 | AC-003 | register + expire + list-keys e2e — register appears in list; expire sets TTL | PASS | GIF + WEBM |
 | AC-004 | Per-daemon-mode registration — control dispatches; access returns E-RPC-010 | PASS | GIF + WEBM |
-| AC-005 | Server-side TTL validation — valid accepted; <=0 and >100y rejected E-CFG-001 | PARTIAL | GIF + WEBM (unit only) |
+| AC-005 | Server-side TTL validation — valid accepted; <=0 and >100y rejected E-CFG-001 | FULL | GIF + WEBM (unit + e2e) |
 | AC-006 | Caller-role authority gate — non-control E-ADM-009; list-keys any-role ok | PASS | GIF + WEBM |
 
-5 of 6 ACs have full coverage. AC-005 has unit-level coverage only (see known issues).
+6 of 6 ACs have full coverage. DEMO-ISSUE-001 closed at commit 660b91a.
 
 ---
 
@@ -102,13 +102,11 @@ non-control-role callers (access, console) on any daemon are rejected.
 and missing `after` field all return `E-CFG-001`; `TestBuildAdminHandlers_KeyExpire_NegativeTTL` and
 `TestBuildAdminHandlers_KeyExpire_MissingAfterField` PASS.
 
-**Known issue (DEMO-ISSUE-001):** `TestE2E_AdminExpire_ServerRejectsTTL*` tests currently fail
-with `E-ADM-009` instead of `E-CFG-001`. Root cause: the test helper `newE2ESVTNManager` creates
-a control key separate from `startE2EServer`'s daemon key. The `sendAdminRPC` authenticates as
-the server daemon key, which is not registered in the test's SVTNManager — so
-`resolveAndVerifyCallerRole` fires `E-ADM-009` before TTL validation. Fix: TTL rejection tests
-must use `startE2EServerWithOps` passing the SVTNManager's control key as `daemonPriv`, or
-register the server daemon key into the SVTNManager before the TTL test runs.
+**Error path (e2e, commit 660b91a):** `TestE2E_AdminExpire_ServerRejectsTTLNegative`,
+`TestE2E_AdminExpire_ServerRejectsTTLZero`, and `TestE2E_AdminExpire_ServerRejectsTTLTooLong`
+now all return `E-CFG-001`. Fix: tests pass `ctrlPriv` from `newE2ESVTNManager` to
+`startE2EServerWithOps` so the daemon authenticates as the registered SVTNManager bootstrap key.
+DEMO-ISSUE-001 closed.
 
 | Artifact | Path |
 |----------|------|
@@ -139,20 +137,21 @@ Caller identity resolved server-side from authenticated handshake pubkey (never 
 
 ## Known Issues
 
-### DEMO-ISSUE-001 — AC-005 e2e TTL rejection tests return E-ADM-009
+### DEMO-ISSUE-001 — AC-005 e2e TTL rejection tests return E-ADM-009 [CLOSED]
 
-**Severity:** medium (unit coverage demonstrates the behavior correctly)  
+**Status:** CLOSED at commit 660b91a (2026-06-30). Re-recording produced on same date.  
+**Severity:** medium (unit coverage was already correct; e2e wiring was the gap)  
 **Affected tests:** `TestE2E_AdminExpire_ServerRejectsTTLNegative`, `TestE2E_AdminExpire_ServerRejectsTTLZero`,
 `TestE2E_AdminExpire_ServerRejectsTTLTooLong`
 
-**Root cause:** These tests call `newE2ESVTNManager(t, "test-svtn", ...)` (which generates its own
-control key) then `startE2EServer(t, handlers)` (which generates a separate daemon key). The
-`sendAdminRPC` function authenticates using the server daemon key (from `testDaemonKeys`), but that
-key is not registered in the test SVTNManager and is not the SVTNManager's bootstrap key. Result:
-`resolveAndVerifyCallerRole` correctly denies the unregistered key with `E-ADM-009` before the
-TTL bounds check fires.
+**Root cause (archived):** These tests called `newE2ESVTNManager(t, "test-svtn", ...)` (which
+generated its own control key) then `startE2EServer(t, handlers)` (which generated a separate
+daemon key). The `sendAdminRPC` function authenticated using the server daemon key (from
+`testDaemonKeys`), but that key was not registered in the test SVTNManager. Result:
+`resolveAndVerifyCallerRole` correctly denied the unregistered key with `E-ADM-009` before
+the TTL bounds check fired.
 
-**Fix required:** Use `startE2EServerWithOps` passing the `ctrlPriv` from `newE2ESVTNManager`
-as the `daemonPriv`, so the server authenticates as the control key that IS registered in the
-SVTNManager. This aligns the test setup with the same pattern used by the passing TTL tests
-in `TestControlMode_AdminHandlersRegistered`.
+**Fix (660b91a):** Tests now capture `ctrlPriv` from `newE2ESVTNManager` and pass it to
+`startE2EServerWithOps` as `daemonPriv`. The daemon authenticates as the registered SVTNManager
+bootstrap key; `resolveAndVerifyCallerRole` passes; TTL bounds check fires and returns
+`E-CFG-001` as specified by BC-2.05.004 PC-3 / DI-003.
