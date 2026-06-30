@@ -236,3 +236,5 @@ The following decisions were in STATE.md from Wave 3 and have been moved here to
 
 Both worktrees must verify fully clean (build + test + test-race + lint + fmt) before fresh Round-1 adversary dispatch. Then: 6 passes (3 per story, diverse lenses). Merge only after 3-consecutive-clean streak per story + demos recorded.
 
+2026-06-29 — Wave-5 S-5.01/S-6.02 Pass-1 fix-burst closed: S-6.06 minted, S-5.01@cad96f7, S-6.02@d494908, ready for Pass-1 reconverge.
+

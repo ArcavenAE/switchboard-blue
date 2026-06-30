@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-s601-s502-s502-s602-s-w502-pending
+phase_step: wave-5-s501-s602-pass1-reconverge-ready
 phase_3_active_wave: 5
 phase_3_active_stories: [S-5.01, S-5.02, S-6.02, S-W5.02]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01]
@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: 0d499ac
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-29T17:00:00Z
+timestamp: 2026-06-29T18:00:00Z
 last_update: 2026-06-29
 ---
 
@@ -74,6 +74,8 @@ last_update: 2026-06-29
 ## Current State
 
 Wave 5 RE-SCOPED to 7 stories / 38 pts (Observability + CLI + Management Plane). Net-new: S-W5.01 (internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring for all 4 daemon modes, 8pt) and S-W5.02 (e2e management plane harness, 5pt). S-6.03 re-scoped v2.0 to client-auth-only boundary (Authenticate() fail-closed, 5pt). S-5.02 repointed 3→5. Management plane ADR-012: NDJSON over Unix/TCP socket, Ed25519 challenge-response, 64 KiB bounded reads, fail-closed Authenticate(). BC-2.07.004 minted (45 total); VP-064..VP-067 minted (67 total). Fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 (ARCH-INDEX input-hash field-name mismatch) converted to tracked TODO. S-5.03 merged via PR #30 (01ae50c) on origin/develop — local develop is 1 commit behind (pull before TDD). Serialization: S-6.03 → {S-6.02, S-5.02} in sequence; S-W5.01 ∥ sbctl-side stories (no cmd/sbctl conflict); S-W5.02 gates on S-6.03 + S-W5.01.
+
+S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-6.06, F-003 bootstrap-race closed, F-005 deferred to Wave 6 (DRIFT-F005-LOOKUP-CONVENTION); both stories ready for fresh-context Pass-1 re-run against updated perimeters (S-5.01 v1.3 + S-6.02 v1.4).
 
 ## Phase Progress
 
