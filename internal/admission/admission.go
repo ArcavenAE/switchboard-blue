@@ -48,12 +48,38 @@ var ErrNotAdmitted = errors.New("frame from non-admitted source")
 // via errors.Is. Maps to E-ADM-013 per error-taxonomy.md.
 var ErrKeyNotRegistered = errors.New("admission: key not registered for (SVTN, node)")
 
-// ErrRoleMismatch is returned by RevokeKeyIfRoleMatches when the caller-supplied
-// expectedRole does not match the role stored in the registry (E-ADM-019).
-// This prevents the confirm gate from being bypassed by supplying a lower role
-// for a control key. The existing role at match-time is returned alongside this
-// error so callers can branch on the actual role found.
+// ErrRoleMismatch is the sentinel error for role-mismatch (E-ADM-019).
+// RevokeKeyIfRoleMatches and SetKeyExpiryIfRoleMatches return a *RoleMismatchError
+// that wraps this sentinel — callers may use errors.Is(err, ErrRoleMismatch) or
+// errors.As(err, &*RoleMismatchError) depending on whether they need the detail.
 var ErrRoleMismatch = errors.New("admission: role mismatch: stored role differs from expected role")
+
+// RoleMismatchError is returned by RevokeKeyIfRoleMatches and
+// SetKeyExpiryIfRoleMatches when the caller-supplied role does not match the
+// role stored in the registry (E-ADM-019). It carries both the claimed role
+// (what the caller expected) and the registered role (what the registry holds)
+// so that wire-level error formatters can produce the full canonical message
+// without a second lookup.
+//
+// Unwrap returns ErrRoleMismatch so errors.Is(err, ErrRoleMismatch) continues
+// to work for callers that do not need the role detail.
+type RoleMismatchError struct {
+	// ClaimedRole is the role the caller supplied (expectedRole argument).
+	ClaimedRole KeyRole
+	// RegisteredRole is the role stored in the registry at match-time.
+	RegisteredRole KeyRole
+}
+
+// Error implements the error interface.
+func (e *RoleMismatchError) Error() string {
+	return fmt.Sprintf(
+		"admission: role mismatch: claimed role %s does not match registered role %s",
+		e.ClaimedRole, e.RegisteredRole,
+	)
+}
+
+// Unwrap returns ErrRoleMismatch so errors.Is(err, ErrRoleMismatch) works.
+func (e *RoleMismatchError) Unwrap() error { return ErrRoleMismatch }
 
 // ErrControlRevocationRequiresConfirm is returned by RevokeKeyIfRoleMatches
 // when the stored key has RoleControl and confirmControlRevocation is false
@@ -94,6 +120,21 @@ func KeyRoleFromString(s string) (KeyRole, error) {
 		return RoleAccess, nil
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnknownKeyRole, s)
+	}
+}
+
+// String returns the canonical wire string for the role ("control", "console",
+// "access"). Unknown values return "unknown(<n>)" to aid diagnostics.
+func (r KeyRole) String() string {
+	switch r {
+	case RoleControl:
+		return "control"
+	case RoleConsole:
+		return "console"
+	case RoleAccess:
+		return "access"
+	default:
+		return fmt.Sprintf("unknown(%d)", uint8(r))
 	}
 }
 
@@ -289,7 +330,10 @@ func (s *AdmittedKeySet) RevokeKeyIfRoleMatches(
 	// This prevents a concurrent RegisterKey (LWW) from changing the role
 	// between the caller's check and this revocation.
 	if entry.Role != expectedRole {
-		return existingRole, ErrRoleMismatch
+		return existingRole, &RoleMismatchError{
+			ClaimedRole:    expectedRole,
+			RegisteredRole: existingRole,
+		}
 	}
 
 	// Confirm gate (ARCH-04 H2 step ordering): evaluated AFTER role-match,

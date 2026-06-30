@@ -654,7 +654,7 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 // Traces to F-007.
 func TestMapAdminError_ErrInvalidDuration(t *testing.T) {
 	t.Parallel()
-	err := mapAdminError(svtnmgmt.ErrInvalidDuration, "s", "k")
+	err := mapAdminError(svtnmgmt.ErrInvalidDuration, "s", "k", "")
 	if err == nil {
 		t.Fatal("expected non-nil error")
 	}
@@ -672,24 +672,25 @@ func TestMapAdminError_ErrInvalidDuration(t *testing.T) {
 func TestMapAdminError_ErrorWrapping(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name     string
-		sentinel error
-		svtn     string
-		pubkey   string
-		wantCode string
+		name        string
+		sentinel    error
+		svtn        string
+		pubkey      string
+		claimedRole string
+		wantCode    string
 	}{
-		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "E-SVTN-003"},
-		{"ErrSVTNAlreadyExists", svtnmgmt.ErrSVTNAlreadyExists, "s", "k", "E-SVTN-002"},
-		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "E-ADM-013"},
-		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "E-ADM-019"},
-		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "E-ADM-018"},
-		{"ErrInvalidDuration", svtnmgmt.ErrInvalidDuration, "s", "k", "E-CFG-001"},
+		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "", "E-SVTN-003"},
+		{"ErrSVTNAlreadyExists", svtnmgmt.ErrSVTNAlreadyExists, "s", "k", "", "E-SVTN-002"},
+		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "", "E-ADM-013"},
+		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "control", "E-ADM-019"},
+		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "", "E-ADM-018"},
+		{"ErrInvalidDuration", svtnmgmt.ErrInvalidDuration, "s", "k", "", "E-CFG-001"},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := mapAdminError(tc.sentinel, tc.svtn, tc.pubkey)
+			err := mapAdminError(tc.sentinel, tc.svtn, tc.pubkey, tc.claimedRole)
 			if !strings.Contains(err.Error(), tc.wantCode) {
 				t.Errorf("expected %s in error, got: %v", tc.wantCode, err)
 			}

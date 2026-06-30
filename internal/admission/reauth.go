@@ -137,7 +137,10 @@ func (s *AdmittedKeySet) SetKeyExpiryIfRoleMatches(
 		return ErrKeyNotRegistered
 	}
 	if entry.Role != expectedRole {
-		return ErrRoleMismatch
+		return &RoleMismatchError{
+			ClaimedRole:    expectedRole,
+			RegisteredRole: entry.Role,
+		}
 	}
 	entry.expiry = expiry
 	return nil

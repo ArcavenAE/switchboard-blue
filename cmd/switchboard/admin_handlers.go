@@ -172,7 +172,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 
 		result, err := m.RegisterKey(a.SVTNName, pubkey, role)
 		if err != nil {
-			return nil, mapAdminError(err, a.SVTNName, a.PublicKey)
+			return nil, mapAdminError(err, a.SVTNName, a.PublicKey, a.Role)
 		}
 
 		return adminKeyResult{
@@ -214,7 +214,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 
 		result, err := m.RevokeKey(a.SVTNName, pubkey, role, a.Confirm)
 		if err != nil {
-			return nil, mapAdminError(err, a.SVTNName, a.PublicKey)
+			return nil, mapAdminError(err, a.SVTNName, a.PublicKey, a.Role)
 		}
 
 		return adminKeyResult{
@@ -289,7 +289,9 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 
 		result, err := m.ExpireKey(svtnName, pubkey, ttl)
 		if err != nil {
-			return nil, mapAdminError(err, svtnName, pubkeyStr)
+			// expire has no caller-supplied role; empty claimedRoleStr falls back
+			// gracefully in mapAdminError (E-ADM-019 path uses *RoleMismatchError detail).
+			return nil, mapAdminError(err, svtnName, pubkeyStr, "")
 		}
 
 		return adminKeyResult{
@@ -319,7 +321,7 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 
 		summaries, err := m.ListKeys(a.SVTNName)
 		if err != nil {
-			return nil, mapAdminError(err, a.SVTNName, "")
+			return nil, mapAdminError(err, a.SVTNName, "", "")
 		}
 
 		// EC-003: always return a non-nil slice even when empty.
@@ -340,18 +342,49 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // wire-level errors per the Error Code Map in S-6.06.
 // Returns a non-nil error with the mapped code as the error message prefix.
 // All arms use %w to preserve the error chain (go.md rule 4; F-009).
-func mapAdminError(err error, svtnName, pubkey string) error {
+//
+// Parameters:
+//   - svtnName: the SVTN name in scope at the call site (for E-SVTN-* and E-ADM-018).
+//   - targetPubEncoded: base64-encoded target public key (for E-ADM-013 / E-ADM-019
+//     fingerprint computation). May be empty for list-keys where no target key exists.
+//   - claimedRoleStr: canonical role string the caller supplied (for E-ADM-019
+//     fallback when *RoleMismatchError is not available). May be empty.
+func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string) error {
 	switch {
 	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
 		return fmt.Errorf("E-SVTN-003: SVTN not found: %s: %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists):
 		return fmt.Errorf("E-SVTN-002: SVTN already exists: %s: %w", svtnName, err)
 	case errors.Is(err, admission.ErrKeyNotRegistered):
-		return fmt.Errorf("E-ADM-013: key not registered: %s: %w", pubkey, err)
+		// Compute fingerprint from the target public key bytes for the canonical message.
+		// Falls back to the encoded string if decode fails (key was already validated
+		// before the call, so decode failure here is a programmer error).
+		fp := targetPubEncoded
+		if pub, decErr := decodePublicKey(targetPubEncoded); decErr == nil {
+			fp = keyFingerprintAdmin(pub)
+		}
+		return fmt.Errorf("E-ADM-013: key not found: no key with fingerprint %s registered in SVTN %s: %w", fp, svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrRoleMismatch):
-		return fmt.Errorf("E-ADM-019: role mismatch: claimed role does not match registered key role for key %s: %w", pubkey, err)
+		// Extract per-call role detail from *admission.RoleMismatchError when available
+		// (returned by RevokeKeyIfRoleMatches / SetKeyExpiryIfRoleMatches). Fall back
+		// to the caller-supplied claimedRoleStr when the typed error is absent.
+		fp := targetPubEncoded
+		if pub, decErr := decodePublicKey(targetPubEncoded); decErr == nil {
+			fp = keyFingerprintAdmin(pub)
+		}
+		var rmErr *admission.RoleMismatchError
+		if errors.As(err, &rmErr) {
+			return fmt.Errorf(
+				"E-ADM-019: role mismatch: claimed role %s does not match registered key role %s for key %s: %w",
+				rmErr.ClaimedRole, rmErr.RegisteredRole, fp, err,
+			)
+		}
+		return fmt.Errorf(
+			"E-ADM-019: role mismatch: claimed role %s does not match registered key role for key %s: %w",
+			claimedRoleStr, fp, err,
+		)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation (set confirm: true to proceed): %w", err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm=%s to proceed: %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrInvalidDuration):
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
