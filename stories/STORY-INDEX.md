@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.5 | 2026-06-30 | S-6.06 bumped to v1.15 — Error Code Map ErrBootstrapKeyRevokeForbidden canonical message aligned to error-taxonomy.md v3.7 unconditional phrasing (refs F-P17L2-001, F-P17L2-002, lens-2 pass-17). |
 | 3.4 | 2026-06-30 | S-6.06 bumped to v1.14 — EC-008 wording aligned to BC-2.05.004 v1.9 unconditional phrasing; admin_handlers.go ttl-guard line citation corrected (refs F-P15L1-002, F-P15L2-001). |
 | 3.3 | 2026-06-30 | F-T4L3-001: VP coverage updated 67/67 → 75/75 (100%) — VP-068..VP-075 added Wave-5; VP-074 anchored to BC-2.06.001, VP-075 anchored to BC-2.05.004. |
 | 3.2 | 2026-06-30 | Pass-5 lens-3 F-P5-T-001: S-5.02 BC column corrected — drop BC-2.06.001 (no AC traces to it; AC-007 dropped v1.5; PC-5 deferred to S-7.03). BC column now `BC-2.06.003` only. |
