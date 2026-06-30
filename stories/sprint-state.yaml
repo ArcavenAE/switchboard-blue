@@ -59,12 +59,13 @@ wave_status:
     status: planned
     started_at: 2026-06-28
     gate_disposition: pending
-    stories: [S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01, S-W5.02]
-    points: 38
+    stories: [S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01, S-W5.02, S-6.06]
+    points: 43
     # S-5.01: 5pts, S-5.02: 5pts (repointed from 3), S-5.03: 2pts (new),
     # S-6.02: 8pts, S-6.03: 5pts (re-scoped v2.0 client-auth-only),
     # S-W5.01: 8pts (net-new, internal/mgmt server + config + wiring),
-    # S-W5.02: 5pts (net-new, e2e harness)
+    # S-W5.02: 5pts (net-new, e2e harness),
+    # S-6.06: 5pts (CR-W5-SCOPE-SPLIT, adversary Pass 1 CRITICAL finding F-001)
     wave_adversary_converged: false
     wavegate_consistency_audit: "fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 tracked TODO"
 
@@ -386,7 +387,23 @@ stories:
     points: 5
     bc_traces: [BC-2.07.002]
     vp_traces: [VP-049]
-    depends_on: [S-6.03, S-W5.01]
+    depends_on: [S-6.03, S-W5.01, S-6.06]
+
+  - story_id: S-6.06
+    title: "Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys)"
+    epic: E-6
+    wave: 5
+    status: draft
+    priority: P1
+    scope_phase: E
+    points: 5
+    bc_traces: [BC-2.05.004, BC-2.07.001]
+    vp_traces: [VP-048]
+    depends_on: [S-6.02]
+    blocks: [S-W5.02]
+    # Minted per CR-W5-SCOPE-SPLIT ruling 2026-06-29.
+    # Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon never registered
+    # admin RPC handlers. TODO(CR-002) at mgmt_wire.go:259 is this story's entry point.
 
   - story_id: S-7.01
     title: "XOR parity FEC for single-loss recovery"
