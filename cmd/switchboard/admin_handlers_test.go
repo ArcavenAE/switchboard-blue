@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -10,16 +12,60 @@ import (
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
 
-// newTestSVTNManager returns a minimal SVTNManager suitable for unit tests.
-// Uses a fresh AdmittedKeySet; controlPubKey is a zero-value placeholder.
+// newTestSVTNManager returns a SVTNManager pre-populated with the SVTNs that
+// happy-path and error-mapping tests reference.
+//
+// SVTNs created:
+//   - "test-svtn": created; canonical zero key (32 zero bytes, "AAAA...=") registered
+//     as control. Required by KeyRegister/Revoke/Expire/ListKeys happy-path tests.
+//   - "existing-svtn": created; canonical zero key NOT registered (only the random
+//     bootstrap key is present). Required by KeyRevoke_ErrorMapping E-ADM-013 subtest.
+//   - "empty-svtn": created; no additional keys. Required by ListKeys_EmptySliceNotNil.
+//   - "nonexistent-svtn": intentionally absent. Required by KeyRegister_ErrorMapping.
+//
+// A random Ed25519 key is used as the manager bootstrap control key so that the
+// canonical zero key remains absent from "existing-svtn" and "empty-svtn" until
+// explicitly registered.
 func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 	t.Helper()
-	ks := admission.NewAdmittedKeySet()
-	_, pub, err := generateTestKeyPair(t)
+
+	// Generate a random bootstrap key distinct from the canonical test key (32
+	// zero bytes). This ensures Create() does not pre-register the zero key on
+	// SVTNs where it must be absent (E-ADM-013 / EC-003 cases).
+	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		t.Fatalf("newTestSVTNManager: generate key: %v", err)
+		t.Fatalf("newTestSVTNManager: generate bootstrap key: %v", err)
 	}
-	return svtnmgmt.NewSVTNManager(ks, pub)
+
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+
+	// "test-svtn": create and register the canonical zero key as control so that
+	// happy-path revoke / expire / list-keys tests can act on it.
+	if _, err := m.Create("test-svtn"); err != nil {
+		t.Fatalf("newTestSVTNManager: create test-svtn: %v", err)
+	}
+	zeroKey := make([]byte, ed25519.PublicKeySize)
+	if _, err := m.RegisterKey("test-svtn", zeroKey, admission.RoleControl); err != nil {
+		t.Fatalf("newTestSVTNManager: register zero key on test-svtn: %v", err)
+	}
+
+	// "existing-svtn": create with no additional keys. The E-ADM-013 subtest
+	// expects the canonical zero key to be absent so that revocation returns
+	// "key not registered" rather than "SVTN not found".
+	if _, err := m.Create("existing-svtn"); err != nil {
+		t.Fatalf("newTestSVTNManager: create existing-svtn: %v", err)
+	}
+
+	// "empty-svtn": create with no additional keys. Required by
+	// TestBuildAdminHandlers_ListKeys_EmptySliceNotNil (EC-003).
+	if _, err := m.Create("empty-svtn"); err != nil {
+		t.Fatalf("newTestSVTNManager: create empty-svtn: %v", err)
+	}
+
+	// "nonexistent-svtn" is intentionally not created; KeyRegister_ErrorMapping
+	// expects E-SVTN-003 for that name.
+	return m
 }
 
 // generateTestKeyPair is a thin shim used by unit tests; the full
