@@ -446,5 +446,6 @@ Pass-24 queued. Spec tip: 82721dc. Impl tip: 0be8e97 (unchanged since Pass-21).
 | 23 | PASS CLEAN | PASS CLEAN (O-P23L2-001 LOW deferred) | BLOCK (2 MED) | BLOCK (not counted) | 82721dc (spec) |
 | 24 | PASS CLEAN | PASS CLEAN (O-P24L2-001 LOW out-of-scope) | BLOCK (F-P24L3-001 MED) | BLOCK (not counted) | c5c948c (spec) / 4b626cf (impl comment) |
 | 25 | PASS CLEAN (4 LOW OBS) | PASS CLEAN (novelty zero) | BLOCK (F-P25L3-001 MED; O-P25L3-001 [process-gap]) | BLOCK (not counted) | a6cdb88 (spec) / d3f186c (impl comment) |
+| 26 | PASS CLEAN (7 LOW OBS non-defect) | PASS CLEAN (novelty NONE) | PASS CLEAN (2 LOW OBS out-of-scope → phase-5 TaskList #117) | PASS CLEAN — counter advances 1→2/3 | — (no fix required) |
 
-**Status:** IN_PROGRESS — 1/3 clean passes (Pass-16). Pass-26 = clean-pass attempt #3 of 3 continues. Spec tip: a6cdb88. Impl tip: d3f186c.
+**Status:** IN_PROGRESS — **2/3 clean passes** (Pass-16 + Pass-26). Pass-27 = clean-pass attempt #3 of 3. Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).

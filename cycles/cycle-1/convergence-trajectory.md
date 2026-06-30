@@ -303,12 +303,37 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 21 | 2026-06-30 | correctness/spec/traceability | 0 | 1 | 4+2 | 5+1 | BLOCK (L3: F-P21L3-001 HIGH EC-008 stale; L1: 4 MED impl; L2: 2 MED VP-INDEX stale) | 1/3 |
 | 22 | 2026-06-30 | correctness/spec/traceability | 0 | 2 | 2 | 0 | BLOCK (L3: F-P22L3-001/002 HIGH×2 "unconditionally" residuals; F-P22L3-003/004 MED×2 VP-076; L1+L2: PASS CLEAN) | 1/3 |
 | 23 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 2 | 1 | BLOCK (L3: F-P23L3-001/002 MED×2 stale v1.10 cites in story lines 180+245; L1+L2: PASS CLEAN) | 1/3 |
+| 24 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 0 | BLOCK (L3: F-P24L3-001 MED VP-076 v3.8 cite; L1+L2: PASS CLEAN) | 1/3 |
+| 25 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 4 | BLOCK (L3: F-P25L3-001 MED story VP-076 v1.1 cite; L1: 4 LOW OBS; L2: PASS CLEAN) | 1/3 |
+| 26 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 7+2 | PASS CLEAN (all 3 lenses; 7 LOW non-defect OBS L1 + 2 LOW out-of-scope OBS L3 → phase-5) | 2/3 |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK → 24:BLOCK → 25:BLOCK → 26:PASS(2/3)`
 
-Clean-pass count after Pass-23 fix-burst: **1/3** (baseline = Pass-16). Pass-24 is clean-pass attempt #3 (orchestrator ruling: Pass-23 fix-burst was spec-only; no impl behavioral-semantics changes; counter not reset per BC-5.39.001).
+Clean-pass count after Pass-26: **2/3** (baseline = Pass-16). Pass-26 is the first counter-advancing pass since reset. Pass-27 = clean-pass attempt #3 of 3. No fix-burst required for Pass-26. Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).
+
+### Pass-26 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** lens-1 a05e401bf6bf753a1 / lens-2 a9efc33989be3c792 / lens-3 ae6b9da5fbadbaaba
+**Spec tip dispatched against:** a6cdb88. **Impl tip:** d3f186c.
+
+**Lens-1 (a05e401bf6bf753a1):** PASS CLEAN — novelty NONE. 7 LOW observations, all adjudicated as non-defects (mis-labels, intentional design, fail-closed behavior, dead code in test). No gating findings.
+
+**Lens-2 (a9efc33989be3c792):** PASS CLEAN — novelty NONE. All wire-error strings byte-equivalent. ARCH-04 v1.13 + VP-076 v1.4 cites coherent. Sibling-sweep gap closed. No findings.
+
+**Lens-3 (ae6b9da5fbadbaaba):** PASS CLEAN — novelty LOW. 2 LOW observations, explicitly out-of-scope (architectural / system-level), deferred to phase-5:
+- O-P26L3-001 LOW: ARCH-04.md:30-40 modified-list non-monotonic + missing v1.7/v1.8/v1.11/v1.12 + v1.13 inserted before v1.9.
+- O-P26L3-002 LOW: error-taxonomy.md:9-23 modified-list mixed ascending/descending ordering.
+
+Both observations are out-of-perimeter for S-6.06 per-story scope per BC-5.39.002 PC2. Created as TaskList #117 (phase-5 routing).
+
+**Verdict:** PASS CLEAN. Clean-pass count advances: 1/3 → **2/3**.
+
+**No fix-burst required.** Pass-27 queued (clean-pass attempt #3 of 3). Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).
+
+---
 
 ### Pass-19 Details
 

@@ -388,4 +388,23 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
+
+---
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-25 BLOCK + dual fix-burst applied)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–25 all BLOCK — fix-bursts applied after each. Pass-25 fix-bursts: a6cdb88 (factory-artifacts, product-owner) S-6.06 v1.20→v1.21 + STORY-INDEX v3.10→v3.11; line 204 VP-076 v1.1→v1.4; line 263 ARCH-04 v1.10→v1.13; exhaustive grep zero residuals. d3f186c (feat/S-6.06-daemon-admin-handlers, implementer) 4 ARCH-04 v1.10→v1.13 comment bumps at admission.go:287, svtnmgmt.go:252, svtnmgmt.go:279, admin_handlers.go:192; lint + test-race 17/17 clean. Convergence-reset ruling: doc-only + comment-only; per BC-5.39.001 doc-only-fix discipline counter NOT reset. Pass-25 NOT counted. Clean-pass count: 1/3. Pass-26 = clean-pass attempt #3 of 3.
+
+**Process gaps:** PROCESS-GAP-P25 codified (7th consecutive recurrence — new axis: story body downstream→upstream version cites; upstream-rooted sweep rule crystallized). vsdd-factory #361 comment appended (7th recurrence). Issues #361–#364 remain open.
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: a6cdb88 on factory-artifacts. Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers.
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-26: dispatch 3 fresh-context adversary lenses against spec tip a6cdb88 / impl tip d3f186c (clean-pass attempt #3 of 3). Verify worktree HEAD = d3f186c before dispatch.
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.

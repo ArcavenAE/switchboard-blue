@@ -627,6 +627,15 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.19 (2026-06-30): S-6.06 adversary Pass-26 PASS CLEAN recorded; clean-pass count advances 1→2/3.
+#   - Pass-26 PASS CLEAN (all 3 lenses): lens-1 (a05e401bf6bf753a1) PASS CLEAN (7 LOW OBS non-defect);
+#     lens-2 (a9efc33989be3c792) PASS CLEAN (novelty NONE); lens-3 (ae6b9da5fbadbaaba) PASS CLEAN (2 LOW OBS out-of-scope → phase-5).
+#   - O-P26L3-001: ARCH-04:30-40 modified-list non-monotonic + missing v1.7/v1.8/v1.11/v1.12 + v1.13 before v1.9.
+#   - O-P26L3-002: error-taxonomy:9-23 modified-list mixed ascending/descending ordering.
+#   - Both observations out-of-perimeter for S-6.06 per-story scope per BC-5.39.002 PC2; routed to phase-5 (TaskList #117).
+#   - No fix-burst required. Clean-pass count: 2/3.
+#   - First counter-advancing pass since Pass-16 baseline (Passes 17-25 all BLOCK).
+#   - Pass-27 queued (clean-pass attempt #3 of 3). Spec tip: post-closeout SHA. Impl tip: d3f186c (unchanged).
 # v2.18 (2026-06-30): S-6.06 adversary Pass-25 BLOCK recorded; clean-pass count remains 1/3.
 #   - Pass-25 BLOCK: lens-1 (ab521edc560a0b013) PASS CLEAN (4 LOW OBS); lens-2 (aae0edcaf3acf4640) PASS CLEAN (novelty zero); lens-3 (a9a23dc563641c905) BLOCK — F-P25L3-001 MED (S-6.06:204 stale "VP-076 v1.1" cite; current v1.4).
 #   - Fix-burst spec (factory-artifacts): a6cdb88 (S-6.06 v1.20→v1.21 + STORY-INDEX v3.10→v3.11; line 204 VP-076 v1.1→v1.4; line 263 ARCH-04 v1.10→v1.13; grep-clean).
