@@ -126,21 +126,15 @@ func serveCannedConn(conn net.Conn, responseData json.RawMessage) {
 	_ = json.NewEncoder(conn).Encode(rpcResp)
 }
 
-// captureOut redirects the package-level stdOut writer to a bytes.Buffer,
-// calls fn, then restores stdOut and returns everything written during fn.
-//
-// This avoids mutating os.Stdout (which is not safe under t.Parallel()) by
-// instead swapping the package-level io.Writer variable that writeSuccess uses.
-// Tests that call captureOut must NOT call t.Parallel() because stdOut is a
-// package-level variable.
-func captureOut(t *testing.T, fn func()) string {
-	t.Helper()
-	var buf bytes.Buffer
-	origOut := stdOut
-	stdOut = &buf
-	t.Cleanup(func() { stdOut = origOut })
-	fn()
-	return buf.String()
+// newTestIO returns an sbctlIO backed by in-memory buffers, plus getOut and
+// getErr accessors. Using explicit sbctlIO instead of package-level globals
+// makes tests safe under t.Parallel() and -race (go.md rule 12).
+func newTestIO() (sio sbctlIO, getOut func() string, getErr func() string) {
+	var outBuf, errBuf bytes.Buffer
+	sio = sbctlIO{out: &outBuf, err: &errBuf}
+	getOut = func() string { return outBuf.String() }
+	getErr = func() string { return errBuf.String() }
+	return sio, getOut, getErr
 }
 
 // ─── AC-001: sbctl paths list canonical fields ───────────────────────────────
@@ -165,13 +159,12 @@ func TestSbctlPathsList_OutputsCanonicalFields(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var err error
-	out := captureOut(t, func() {
-		err = runPathsList(ctx, sockPath, testdataKeyPath(t), true)
-	})
+	sio, getOut, _ := newTestIO()
+	err := runPathsList(ctx, sockPath, testdataKeyPath(t), true, sio)
 	if err != nil {
 		t.Fatalf("runPathsList: unexpected error: %v", err)
 	}
+	out := getOut()
 
 	// Parse the outer JSON envelope (BC-2.06.003 PC-4: {"ok":true,"error":null,"data":[...]}).
 	var env struct {
@@ -233,13 +226,12 @@ func TestSbctlRouterMetrics_OutputsSVTNMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var err error
-	out := captureOut(t, func() {
-		err = runRouterMetrics(ctx, sockPath, testdataKeyPath(t), true, []string{"--svtn=abc123"})
-	})
+	sio, getOut, _ := newTestIO()
+	err := runRouterMetrics(ctx, sockPath, testdataKeyPath(t), true, []string{"--svtn=abc123"}, sio)
 	if err != nil {
 		t.Fatalf("runRouterMetrics: unexpected error: %v", err)
 	}
+	out := getOut()
 
 	// Parse the outer JSON envelope.
 	var env struct {
@@ -287,13 +279,12 @@ func TestSbctlRouterStatus_IsAliasForPathsList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var err error
-	out := captureOut(t, func() {
-		err = runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{})
-	})
+	sio, getOut, _ := newTestIO()
+	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{}, sio)
 	if err != nil {
 		t.Fatalf("runRouterStatus: unexpected error: %v", err)
 	}
+	out := getOut()
 
 	// Parse the outer JSON envelope.
 	var env struct {
@@ -349,13 +340,12 @@ func TestSbctlPathsList_P99Pending_LessThan10Samples(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var err error
-	out := captureOut(t, func() {
-		err = runPathsList(ctx, sockPath, testdataKeyPath(t), true)
-	})
+	sio, getOut, _ := newTestIO()
+	err := runPathsList(ctx, sockPath, testdataKeyPath(t), true, sio)
 	if err != nil {
 		t.Fatalf("runPathsList with pending p99: unexpected error: %v", err)
 	}
+	out := getOut()
 
 	// Parse the JSON envelope and extract the data array.
 	var env struct {
@@ -414,13 +404,12 @@ func TestSbctlMetrics_JSONEnvelope(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var err error
-	out := captureOut(t, func() {
-		err = runPathsList(ctx, sockPath, testdataKeyPath(t), true)
-	})
+	sio, getOut, _ := newTestIO()
+	err := runPathsList(ctx, sockPath, testdataKeyPath(t), true, sio)
 	if err != nil {
 		t.Fatalf("runPathsList JSON envelope test: unexpected error: %v", err)
 	}
+	out := getOut()
 
 	// Outer envelope shape: {"ok":true,"error":null,"data":[...]}.
 	var env map[string]json.RawMessage
@@ -479,7 +468,8 @@ func TestSbctlMetrics_DaemonUnreachable(t *testing.T) {
 
 	sockPath := filepath.Join(t.TempDir(), "nonexistent.sock")
 
-	err := runPathsList(ctx, sockPath, testdataKeyPath(t), true)
+	sio, _, _ := newTestIO()
+	err := runPathsList(ctx, sockPath, testdataKeyPath(t), true, sio)
 	if err == nil {
 		t.Fatal("AC-006 / BC-2.06.003 PC-5: runPathsList returned nil for unreachable daemon; expected non-nil error")
 	}
@@ -515,13 +505,12 @@ func TestSbctlSessionsStatus_QualityFieldPresent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var err error
-	out := captureOut(t, func() {
-		err = connectAndRun(ctx, sockPath, testdataKeyPath(t), true, "sessions.list", nil)
-	})
+	sio, getOut, _ := newTestIO()
+	err := connectAndRun(ctx, sockPath, testdataKeyPath(t), true, "sessions.list", nil, sio)
 	if err != nil {
 		t.Fatalf("sessions status: unexpected error: %v", err)
 	}
+	out := getOut()
 
 	// Parse the JSON envelope.
 	var env struct {
@@ -746,23 +735,16 @@ func TestQualityFromPathEntry_StatusOverride(t *testing.T) {
 func TestSbctlRouterStatus_DaemonUnreachable(t *testing.T) {
 	t.Parallel()
 
-	// captureErr redirects stdErr to a buffer, analogous to captureOut.
-	// Note: tests that call captureErr must NOT call t.Parallel() after this
-	// helper (stdErr is package-level). This test already sets Parallel above,
-	// which is safe because each parallel test gets its own goroutine and the
-	// re-assignment races only between tests that interleave — acceptable here
-	// since we restore via t.Cleanup.
-	var errBuf bytes.Buffer
-	origErr := stdErr
-	stdErr = &errBuf
-	t.Cleanup(func() { stdErr = origErr })
+	// newTestIO provides buffer-backed writers — no package-level mutation,
+	// safe under t.Parallel() and -race (go.md rule 12).
+	sio, _, getErr := newTestIO()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	sockPath := "/nonexistent/path/to/daemon.sock"
 
-	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{})
+	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{}, sio)
 
 	// Error must be non-nil.
 	if err == nil {
@@ -775,7 +757,7 @@ func TestSbctlRouterStatus_DaemonUnreachable(t *testing.T) {
 	}
 
 	// JSON error envelope written to stderr must also contain E-NET-001.
-	stderrOutput := errBuf.String()
+	stderrOutput := getErr()
 	if !strings.Contains(stderrOutput, "E-NET-001") {
 		t.Errorf("F-H2 / BC-2.07.003: expected stderr JSON envelope to contain \"E-NET-001\"; got: %q", stderrOutput)
 	}
@@ -895,13 +877,12 @@ func TestSbctlRouterStatus_RPCMethodIsPathsList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var pathsListErr error
-	outPathsList := captureOut(t, func() {
-		pathsListErr = runPathsList(ctx, sockA, testdataKeyPath(t), true)
-	})
+	sioA, getOutA, _ := newTestIO()
+	pathsListErr := runPathsList(ctx, sockA, testdataKeyPath(t), true, sioA)
 	if pathsListErr != nil {
 		t.Fatalf("runPathsList: unexpected error: %v", pathsListErr)
 	}
+	outPathsList := getOutA()
 
 	var recordedPathsList string
 	select {
@@ -922,13 +903,12 @@ func TestSbctlRouterStatus_RPCMethodIsPathsList(t *testing.T) {
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
 
-	var routerStatusErr error
-	outRouterStatus := captureOut(t, func() {
-		routerStatusErr = runRouterStatus(ctx2, sockB, testdataKeyPath(t), true, []string{})
-	})
+	sioB, getOutB, _ := newTestIO()
+	routerStatusErr := runRouterStatus(ctx2, sockB, testdataKeyPath(t), true, []string{}, sioB)
 	if routerStatusErr != nil {
 		t.Fatalf("runRouterStatus: unexpected error: %v", routerStatusErr)
 	}
+	outRouterStatus := getOutB()
 
 	var recordedRouterStatus string
 	select {
@@ -1004,7 +984,8 @@ func TestSbctlRouterStatus_TargetFlagMissingValue(t *testing.T) {
 	defer cancel()
 
 	// Pass ["--target"] with no following value — the flag is incomplete.
-	err := runRouterStatus(ctx, "/run/switchboard-router.sock", testdataKeyPath(t), true, []string{"--target"})
+	sio, _, _ := newTestIO()
+	err := runRouterStatus(ctx, "/run/switchboard-router.sock", testdataKeyPath(t), true, []string{"--target"}, sio)
 
 	if err == nil {
 		t.Fatal("F-M1: runRouterStatus with [\"--target\"] (no value) returned nil error; expected E-CFG-010")

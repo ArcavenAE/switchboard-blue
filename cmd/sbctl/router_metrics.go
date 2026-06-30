@@ -34,7 +34,7 @@ type RouterMetrics struct {
 // Parses the --svtn flag and dispatches the router.metrics RPC.
 //
 // AC-002 / BC-2.06.003 PC-2
-func runRouterMetrics(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runRouterMetrics(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	// Parse --svtn=<id> from args.
 	var svtnID string
 	for _, arg := range args {
@@ -43,8 +43,8 @@ func runRouterMetrics(ctx context.Context, target, keyPath string, useJSON bool,
 		}
 	}
 	if svtnID == "" {
-		writeError(useJSON, "E-CFG-010", "router metrics: --svtn=<id> is required")
+		writeError(useJSON, "E-CFG-010", "router metrics: --svtn=<id> is required", sio)
 		return fmt.Errorf("router metrics: --svtn flag is required")
 	}
-	return connectAndRun(ctx, target, keyPath, useJSON, "router.metrics", map[string]string{"svtn_id": svtnID})
+	return connectAndRun(ctx, target, keyPath, useJSON, "router.metrics", map[string]string{"svtn_id": svtnID}, sio)
 }

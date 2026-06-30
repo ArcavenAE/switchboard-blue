@@ -82,34 +82,34 @@ type adminKeyExpireArgs struct {
 //
 // Traces to BC-2.05.004 (key lifecycle) and BC-2.07.001 (SVTN lifecycle);
 // F-P8-001 CLI surface resolution.
-func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
 		return fmt.Errorf("admin: no subcommand specified; expected 'key' or 'list-keys'")
 	}
 
 	switch args[0] {
 	case "key":
-		return runAdminKey(ctx, target, keyPath, useJSON, args[1:])
+		return runAdminKey(ctx, target, keyPath, useJSON, args[1:], sio)
 	case "list-keys":
-		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", nil)
+		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", nil, sio)
 	default:
 		return fmt.Errorf("admin: unknown subcommand %q; expected 'key' or 'list-keys'", args[0])
 	}
 }
 
 // runAdminKey dispatches `sbctl admin key <subcommand>` commands.
-func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
 		return fmt.Errorf("admin key: no subcommand specified; expected 'register', 'revoke', or 'expire'")
 	}
 
 	switch args[0] {
 	case "register":
-		return runAdminKeyRegister(ctx, target, keyPath, useJSON, args[1:])
+		return runAdminKeyRegister(ctx, target, keyPath, useJSON, args[1:], sio)
 	case "revoke":
-		return runAdminKeyRevoke(ctx, target, keyPath, useJSON, args[1:])
+		return runAdminKeyRevoke(ctx, target, keyPath, useJSON, args[1:], sio)
 	case "expire":
-		return runAdminKeyExpire(ctx, target, keyPath, useJSON, args[1:])
+		return runAdminKeyExpire(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
 		return fmt.Errorf("admin key: unknown subcommand %q; expected 'register', 'revoke', or 'expire'", args[0])
 	}
@@ -122,7 +122,7 @@ func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args
 //	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
 //	--svtn <id>      SVTN identifier (required)
 //	--role <role>    authorization role: control, console, access (default: console)
-func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("admin key register", flag.ContinueOnError)
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
@@ -152,7 +152,7 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 		Pubkey: *keyFlag,
 		Role:   *roleFlag,
 	}
-	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.register", rpcArgs)
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.register", rpcArgs, sio)
 }
 
 // runAdminKeyRevoke implements `sbctl admin key revoke`.
@@ -163,7 +163,7 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 //	--svtn <id>      SVTN identifier (required)
 //	--role <role>    authorization role of the key: control, console, access (required)
 //	--confirm        required for control-to-control revocation (ADR-004; AC-005)
-func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("admin key revoke", flag.ContinueOnError)
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
@@ -196,7 +196,7 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 		Role:    *roleFlag,
 		Confirm: *confirmFlag,
 	}
-	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.revoke", rpcArgs)
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.revoke", rpcArgs, sio)
 }
 
 // runAdminKeyExpire implements `sbctl admin key expire`.
@@ -206,7 +206,7 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 //	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
 //	--svtn <id>      SVTN identifier (required)
 //	--after <dur>    TTL duration (required; e.g. "24h")
-func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("admin key expire", flag.ContinueOnError)
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
@@ -242,5 +242,5 @@ func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool
 		Pubkey: *keyFlag,
 		After:  *afterFlag,
 	}
-	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.expire", rpcArgs)
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.expire", rpcArgs, sio)
 }

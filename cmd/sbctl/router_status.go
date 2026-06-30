@@ -43,25 +43,22 @@ type PathEntryWithQuality struct {
 // qualityFromPathEntry computes the green/yellow/red/pending quality label for a path entry.
 //
 // Evaluation order (BC-2.06.003 PC-1, EC-003):
-//  1. If rtt_p99_ms == "pending" (< 10 samples), return "pending" immediately.
+//  1. If rtt_p99_ms is nil (JSON null) or any non-float64 value (including "pending"),
+//     return "pending" immediately — fewer than 10 samples or indeterminate state.
 //  2. If status == "failed", return "red".
 //  3. If status == "degraded", return max("yellow", band-classified quality).
 //  4. Otherwise, classify by p99 RTT + loss using stateless metrics.Classify.
 //
+// Per BC-2.06.003 v1.5 F-M3: pending p99 must yield pending quality; the pre-v1.5
+// fallback-to-rtt_ms behaviour is removed.
+//
 // AC-003 / BC-2.06.003 PC-1, PC-3
 func qualityFromPathEntry(entry PathEntry) string {
-	// Step 1: pending sentinel — fewer than 10 samples (BC-2.06.003 EC-003).
-	if s, ok := entry.P99RTTMs.(string); ok && s == "pending" {
+	// Step 1: any non-float64 p99 (nil, "pending", or unexpected type) → pending.
+	// BC-2.06.003 v1.5 F-M3: pending p99 must yield pending quality regardless of rtt_ms.
+	rttMs, ok := entry.P99RTTMs.(float64)
+	if !ok {
 		return "pending"
-	}
-
-	// Determine the effective RTT (p99 preferred; fall back to rtt_ms for non-pending strings).
-	var rttMs float64
-	switch v := entry.P99RTTMs.(type) {
-	case float64:
-		rttMs = v
-	default:
-		rttMs = entry.RTTMs
 	}
 
 	// Step 2: failed status → unconditional red (BC-2.06.003 PC-1).
@@ -106,14 +103,14 @@ func formatPathsTable(entries []PathEntryWithQuality) {
 // exact wire representation from the daemon (F-H3 / BC-2.06.003 EC-005).
 //
 // AC-003 / BC-2.06.003 PC-3
-func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
+func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	// Parse --target override from args (alias semantics: --target overrides daemon address).
 	// F-M1: --target without a following value is a configuration error (E-CFG-010).
 	for i, arg := range args {
 		if arg == "--target" {
 			if i+1 >= len(args) {
 				err := fmt.Errorf("E-CFG-010: router status: --target requires a value")
-				writeError(useJSON, "E-CFG-010", "router status: --target requires a value")
+				writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
 				return err
 			}
 			target = args[i+1]
@@ -122,11 +119,18 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 		}
 	}
 
+	// F-C3: --target= (empty value after equals) is a configuration error (E-CFG-010).
+	if target == "" {
+		err := fmt.Errorf("E-CFG-010: router status: --target requires a value")
+		writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
+		return err
+	}
+
 	// Dial and authenticate, then dispatch "paths.list" — same RPC as runPathsList.
 	// We handle the response ourselves to inject the quality field.
 	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
 	if err != nil {
-		writeError(useJSON, "E-CFG-010", err.Error())
+		writeError(useJSON, "E-CFG-010", err.Error(), sio)
 		return err
 	}
 
@@ -139,20 +143,29 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	}
 	if err != nil {
 		msg := fmt.Sprintf("daemon unreachable: %s: %s", target, err)
-		writeError(useJSON, "E-NET-001", msg)
+		writeError(useJSON, "E-NET-001", msg, sio)
 		return fmt.Errorf("E-NET-001: %s", msg)
 	}
 	defer func() { _ = netConn.Close() }()
 
 	if err = Authenticate(ctx, netConn, privKey); err != nil {
-		writeError(useJSON, "E-ADM-010", "authentication failed")
+		writeError(useJSON, "E-ADM-010", "authentication failed", sio)
 		return err
 	}
 
 	data, err := dispatch(ctx, netConn, "paths.list", nil)
 	if err != nil {
-		writeError(useJSON, "E-RPC-001", err.Error())
+		writeError(useJSON, "E-RPC-001", err.Error(), sio)
 		return err
+	}
+
+	// F-C4: sniff the first non-whitespace byte to detect EC-001 object form.
+	// BC-2.06.003 EC-001: empty-paths response is an object {"paths":[],...}, not an array.
+	// Pass object responses through directly — no quality column to inject.
+	trimmed := strings.TrimLeft(string(data), " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		writeSuccess(useJSON, data, sio)
+		return nil
 	}
 
 	// Decode paths.list response as a slice of raw JSON objects.
@@ -160,7 +173,7 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	// float values like 20.0 remain 20.0 rather than being re-encoded as 20.
 	var rawEntries []json.RawMessage
 	if err = json.Unmarshal(data, &rawEntries); err != nil {
-		writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode paths: %s", err))
+		writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode paths: %s", err), sio)
 		return fmt.Errorf("decode paths: %w", err)
 	}
 
@@ -171,21 +184,25 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 			// Decode only enough to compute quality; the raw bytes are preserved.
 			var entry PathEntry
 			if err = json.Unmarshal(raw, &entry); err != nil {
-				writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err))
+				writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err), sio)
 				return fmt.Errorf("decode entry %d: %w", i, err)
 			}
 			quality := qualityFromPathEntry(entry)
 			// Inject quality field into the raw JSON object by stripping the trailing
 			// "}" and appending the new field.
-			injected := injectJSONField(raw, "quality", quality)
+			injected, injectErr := injectJSONField(raw, "quality", quality)
+			if injectErr != nil {
+				writeError(useJSON, "E-RPC-001", fmt.Sprintf("inject quality entry %d: %s", i, injectErr), sio)
+				return fmt.Errorf("inject quality entry %d: %w", i, injectErr)
+			}
 			annotated[i] = injected
 		}
 		qData, err := json.Marshal(annotated)
 		if err != nil {
-			writeError(useJSON, "E-RPC-001", fmt.Sprintf("marshal quality entries: %s", err))
+			writeError(useJSON, "E-RPC-001", fmt.Sprintf("marshal quality entries: %s", err), sio)
 			return fmt.Errorf("marshal quality entries: %w", err)
 		}
-		writeSuccess(useJSON, qData)
+		writeSuccess(useJSON, qData, sio)
 		return nil
 	}
 
@@ -194,7 +211,7 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	for i, raw := range rawEntries {
 		var entry PathEntry
 		if err = json.Unmarshal(raw, &entry); err != nil {
-			writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err))
+			writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err), sio)
 			return fmt.Errorf("decode entry %d: %w", i, err)
 		}
 		withQuality[i] = PathEntryWithQuality{
@@ -210,21 +227,29 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 // raw must be a valid JSON object (ends with "}"). The field is appended
 // before the closing brace. This avoids re-encoding the object through
 // Go structs, which would normalise float representations (F-H3).
-func injectJSONField(raw json.RawMessage, key, value string) json.RawMessage {
+//
+// Returns an error if json.Marshal of key or value fails (go.md rule 3).
+func injectJSONField(raw json.RawMessage, key, value string) (json.RawMessage, error) {
 	// Trim trailing whitespace and the closing brace.
 	b := []byte(strings.TrimRight(string(raw), " \t\r\n"))
 	if len(b) == 0 || b[len(b)-1] != '}' {
 		// Malformed object: return as-is (caller will catch decode errors).
-		return raw
+		return raw, nil
 	}
 	// Append the new field: strip trailing "}", add field, close.
 	b = b[:len(b)-1]
-	fieldJSON, _ := json.Marshal(value)
-	keyJSON, _ := json.Marshal(key)
+	fieldJSON, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal field value %q: %w", value, err)
+	}
+	keyJSON, err := json.Marshal(key)
+	if err != nil {
+		return nil, fmt.Errorf("marshal field key %q: %w", key, err)
+	}
 	b = append(b, ',')
 	b = append(b, keyJSON...)
 	b = append(b, ':')
 	b = append(b, fieldJSON...)
 	b = append(b, '}')
-	return json.RawMessage(b)
+	return json.RawMessage(b), nil
 }

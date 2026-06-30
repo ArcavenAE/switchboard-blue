@@ -37,6 +37,6 @@ type PathEntry struct {
 // Dispatches the paths.list RPC to the daemon and formats the response.
 //
 // AC-001 / BC-2.06.003 PC-1
-func runPathsList(ctx context.Context, target, keyPath string, useJSON bool) error {
-	return connectAndRun(ctx, target, keyPath, useJSON, "paths.list", nil)
+func runPathsList(ctx context.Context, target, keyPath string, useJSON bool, sio sbctlIO) error {
+	return connectAndRun(ctx, target, keyPath, useJSON, "paths.list", nil, sio)
 }

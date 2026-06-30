@@ -71,20 +71,21 @@ func subprocessEntrypoint() {
 	ctx, cancel := context.WithTimeout(context.Background(), to)
 	defer cancel()
 
+	sio := defaultIO()
 	var err error
 	switch testCase {
 	case "ConnectionRefused":
-		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil, sio)
 	case "AuthFailure":
-		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil, sio)
 	case "NoStdoutOnConnectionFailure":
-		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil, sio)
 	case "ConnectionTimeout":
-		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil, sio)
 	case "KeyLoadFailure":
-		err = connectAndRun(ctx, target, keyPath, false, "ping", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "ping", nil, sio)
 	case "RPCDispatchFailure":
-		err = connectAndRun(ctx, target, keyPath, false, "router.status", nil)
+		err = connectAndRun(ctx, target, keyPath, false, "router.status", nil, sio)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subprocess test case: %s\n", testCase)
 		os.Exit(3)

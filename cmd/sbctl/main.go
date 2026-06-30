@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"time"
 )
@@ -19,14 +18,6 @@ const defaultTimeout = 5 * time.Second
 // defaultTarget is the default management socket address.
 // EC-001: when --target is absent and the default socket is absent, E-NET-001 is returned.
 const defaultTarget = "/run/switchboard-router.sock"
-
-// stdOut and stdErr are the output sinks for writeSuccess and writeError.
-// They default to os.Stdout and os.Stderr and can be overridden in tests
-// without mutating the global os.Stdout/os.Stderr file descriptors.
-var (
-	stdOut io.Writer = os.Stdout
-	stdErr io.Writer = os.Stderr
-)
 
 func main() {
 	// Global flags per interface-definitions.md §sbctl operator CLI and AC-006/AC-007.
@@ -51,20 +42,21 @@ func main() {
 	defer cancel()
 
 	subcommand := args[0]
+	sio := defaultIO()
 
 	var err error
 	switch subcommand {
 	case "svtn":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "svtn.list", nil)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "svtn.list", nil, sio)
 	case "sessions":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "sessions.list", nil)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "sessions.list", nil, sio)
 	case "paths":
 		// `sbctl paths list` — canonical per-path metrics command (BC-2.06.003 PC-1).
 		if len(args) < 2 || args[1] != "list" {
 			fmt.Fprintf(os.Stderr, "usage: sbctl paths list\n")
 			os.Exit(2)
 		}
-		err = runPathsList(ctx, *target, *key, *jsonOut)
+		err = runPathsList(ctx, *target, *key, *jsonOut, sio)
 	case "router":
 		// `sbctl router metrics --svtn=<id>` or `sbctl router status --target <router>`.
 		if len(args) < 2 {
@@ -73,21 +65,21 @@ func main() {
 		}
 		switch args[1] {
 		case "metrics":
-			err = runRouterMetrics(ctx, *target, *key, *jsonOut, args[2:])
+			err = runRouterMetrics(ctx, *target, *key, *jsonOut, args[2:], sio)
 		case "status":
-			err = runRouterStatus(ctx, *target, *key, *jsonOut, args[2:])
+			err = runRouterStatus(ctx, *target, *key, *jsonOut, args[2:], sio)
 		default:
 			fmt.Fprintf(os.Stderr, "unknown router subcommand: %s\n", args[1])
 			os.Exit(2)
 		}
 	case "console":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "console.attach", nil)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "console.attach", nil, sio)
 	case "admin":
-		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:])
+		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "version":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "version", nil)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "version", nil, sio)
 	case "ping":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "ping", nil)
+		err = connectAndRun(ctx, *target, *key, *jsonOut, "ping", nil, sio)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", subcommand)
 		os.Exit(2)
@@ -98,34 +90,34 @@ func main() {
 	}
 }
 
-// writeSuccess writes a success JSON envelope to stdOut when --json is set,
+// writeSuccess writes a success JSON envelope to sio.out when --json is set,
 // or the raw data bytes otherwise.
-func writeSuccess(useJSON bool, data json.RawMessage) {
+func writeSuccess(useJSON bool, data json.RawMessage, sio sbctlIO) {
 	if useJSON {
 		env := newSuccessEnvelope(data)
 		out, err := json.Marshal(env)
 		if err != nil {
-			_, _ = fmt.Fprintf(stdErr, "marshal error: %s\n", err)
+			_, _ = fmt.Fprintf(sio.err, "marshal error: %s\n", err)
 			os.Exit(3)
 		}
-		_, _ = fmt.Fprintln(stdOut, string(out))
+		_, _ = fmt.Fprintln(sio.out, string(out))
 		return
 	}
-	_, _ = fmt.Fprintln(stdOut, string(data))
+	_, _ = fmt.Fprintln(sio.out, string(data))
 }
 
-// writeError writes a failure JSON envelope to stdErr when --json is set,
+// writeError writes a failure JSON envelope to sio.err when --json is set,
 // or a plain text error otherwise.
-func writeError(useJSON bool, code, message string) {
+func writeError(useJSON bool, code, message string, sio sbctlIO) {
 	if useJSON {
 		env := newErrorEnvelope(code, message)
 		out, err := json.Marshal(env)
 		if err != nil {
-			_, _ = fmt.Fprintf(stdErr, "marshal error: %s\n", err)
+			_, _ = fmt.Fprintf(sio.err, "marshal error: %s\n", err)
 			return
 		}
-		_, _ = fmt.Fprintln(stdErr, string(out))
+		_, _ = fmt.Fprintln(sio.err, string(out))
 		return
 	}
-	_, _ = fmt.Fprintf(stdErr, "%s %s\n", code, message)
+	_, _ = fmt.Fprintf(sio.err, "%s %s\n", code, message)
 }
