@@ -630,6 +630,10 @@ func TestQualityIndicator_String(t *testing.T) {
 		{metrics.Green, "green"},
 		{metrics.Yellow, "yellow"},
 		{metrics.Red, "red"},
+		// Defensive default: an out-of-range Quality value should return "unknown"
+		// rather than the empty string, keeping the switch's default branch reachable
+		// and the label meaningful. (F-003, adversary Pass 1)
+		{metrics.Quality(99), "unknown"},
 	}
 
 	for _, tc := range tests {

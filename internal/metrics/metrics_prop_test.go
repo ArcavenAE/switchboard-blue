@@ -41,14 +41,20 @@ func genMonotoneRisingSteps() gopter.Gen {
 	// Generate a slice of 32 uint32 values: [rttInc0, lossInc0, rttInc1, lossInc1, ...].
 	// Each pair (i*2, i*2+1) is the increment for step i.
 	//
-	// CR-004 bias fix: start in the Yellow range (300 ms) and use a minimum RTT
-	// increment of 20 ms. Starting at 300 ms means the Red threshold (> 500 ms)
-	// is crossed after at most ceil(200/20) = 10 steps — well within 16.
-	// Using gen.UInt32Range(20, 60) keeps the increments meaningful and gives a
-	// near-certain probability (>99%) of reaching Red within the 16-step budget.
-	return gen.SliceOfN(32, gen.UInt32Range(20, 60)).Map(func(incs []uint32) []degradationStep {
+	// F-002 seeding fix (VP-027 guard coverage):
+	//
+	// Starts in Green band; transition coverage:
+	//   Green→Yellow at RTT > 100ms, Yellow→Red at RTT > 500ms.
+	// Step budget chosen to reach Red within the property's max-step count:
+	//   start RTT: 10–60ms (Green, well under 100ms threshold)
+	//   increment: 40–100ms per step
+	//   worst case to Red: ceil((500 - 10) / 40) = 13 steps — within 16-step budget.
+	// This guarantees the Green→Yellow and Yellow→Red boundaries are both crossed
+	// in a typical run, making the Green→Red skip guard actually checkable rather
+	// than dead code after step 1.
+	return gen.SliceOfN(32, gen.UInt32Range(40, 100)).Map(func(incs []uint32) []degradationStep {
 		steps := make([]degradationStep, 16)
-		rttAcc := float64(300) // start in Yellow range so Red is reachable within 16 steps
+		rttAcc := float64(10 + incs[0]%50) // start in Green band: 10–59ms
 		var lossAcc float64
 		for i := 0; i < 16; i++ {
 			rttAcc += float64(incs[i*2])
