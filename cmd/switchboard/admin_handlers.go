@@ -7,11 +7,11 @@
 //	admin.key.expire     (BC-2.05.004 PC-3; DI-003 defense-in-depth duration validation)
 //	admin.key.list-keys  (BC-2.05.004 PC-1 confirmation surface; any admitted role; F-L2-001/F-L2-003)
 //
-// Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion;
-// ARCH-08 §6.6.2; AC-004). Access, console, and router daemons pass nil handlers.
+// Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion
+// (ARCH-04 disambiguation table); AC-004). Access, console, and router daemons pass nil handlers.
 //
 // Purity classification (ARCH-09): boundary — depends on SVTNManager (boundary)
-// and mgmt.Handler (interface). No data-plane imports permitted (ARCH-08 §6.6.2).
+// and mgmt.Handler (interface). No data-plane imports permitted (ADR-004 + ARCH-12 data-plane/management-plane separation).
 //
 // Forbidden imports: internal/frame, internal/routing, internal/multipath,
 // internal/arq, internal/replay, internal/paths, internal/halfchannel,
@@ -156,7 +156,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 		}
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
-		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
+		// (F-001b / BC-2.05.004 Precondition 1 / DI-001). Falls back to CallerRole arg in unit tests.
 		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.register"); err != nil {
 			return nil, err
 		}
@@ -198,7 +198,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 		}
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
-		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
+		// (F-001b / BC-2.05.004 Precondition 1 / DI-001). Falls back to CallerRole arg in unit tests.
 		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.revoke"); err != nil {
 			return nil, err
 		}
@@ -411,7 +411,7 @@ func roleToString(r admission.KeyRole) string {
 
 // verifyCallerRole checks that the caller-supplied role has management
 // authority (control-role) for the requested operation. Non-control-role
-// callers receive E-ADM-009 (BC-2.07.001 invariant 3; AC-006).
+// callers receive E-ADM-009 (BC-2.05.004 Precondition 1 / DI-001; AC-006).
 func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint string) error {
 	if callerRole != admission.RoleControl {
 		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role %s", cmd, fingerprint, roleToString(callerRole))
@@ -430,7 +430,7 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 // resolveAndVerifyCallerRole resolves the authenticated caller's key role via
 // the server-side context (preferred) and enforces that it is control-role.
 //
-// Server-resolved path (F-001b / BC-2.07.001 Inv-3 / AC-006):
+// Server-resolved path (F-001b / BC-2.05.004 Precondition 1 / DI-001 / AC-006):
 //  1. Look up pubkey via CallerKeyRoleActive (F-P4L1-003): only active (not
 //     revoked, not expired) entries yield a role. Revoked or expired keys are
 //     denied immediately — they do NOT fall through to the bootstrap-grant path
@@ -453,7 +453,7 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 //     the mgmt handshake (e.g., unit tests that inject a known role string).
 //   - If ctx has no caller pubkey and callerRoleStr is empty, the caller's
 //     role cannot be confirmed → reject with E-ADM-009 (fail-closed,
-//     BC-2.05.004 / BC-2.07.001 Inv-3).
+//     BC-2.05.004 Precondition 1 / DI-001).
 func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, svtnName, callerRoleStr, cmd string) error {
 	if ops == nil {
 		ops = mgmt.NewOperatorKeySet(nil)
@@ -492,7 +492,7 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 
 	// No pubkey in ctx — fallback when no handshake context is present.
 	if callerRoleStr == "" {
-		// Cannot confirm caller role: fail closed (BC-2.05.004 / BC-2.07.001 Inv-3).
+		// Cannot confirm caller role: fail closed (BC-2.05.004 Precondition 1 / DI-001).
 		// DEFER(S-HRD.02): structured-log admin auth rejection — see S-HRD.02 (daemon logging infrastructure).
 		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key (unknown) has role unregistered", cmd)
 	}
