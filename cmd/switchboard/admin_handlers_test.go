@@ -25,7 +25,12 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 // generateTestKeyPair is a thin shim used by unit tests; the full
 // implementation lives in admin_handlers_e2e_test.go (integration tag).
 // For unit tests we only need a valid key for NewSVTNManager construction.
-func generateTestKeyPair(t *testing.T) (priv []byte, pub []byte, err error) {
+//
+// priv is always nil in this unit-test shim — callers that need a real private
+// key must use crypto/ed25519.GenerateKey directly (available in e2e tests).
+// The unparam lint suppression is intentional: the nil priv return is the
+// declared contract of this shim so callers don't accidentally use it.
+func generateTestKeyPair(t *testing.T) (priv []byte, pub []byte, err error) { //nolint:unparam // priv intentionally always nil in unit-test shim; callers use only pub
 	t.Helper()
 	// Deferred to implementer: generate real Ed25519 keypair.
 	// For now return zero-sized slices — this placeholder will be replaced
@@ -301,4 +306,275 @@ func TestBuildAdminHandlers_NilManager(t *testing.T) {
 		}
 	}()
 	BuildAdminHandlers(nil)
+}
+
+// TestBuildAdminHandlers_KeyRegister_MalformedJSON asserts that
+// admin.key.register returns E-CFG-001 when the args JSON is malformed.
+// Traces to AC-001 edge case EC-001; BC-2.05.004 PC-1 precondition (well-formed request).
+func TestBuildAdminHandlers_KeyRegister_MalformedJSON(t *testing.T) {
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m)
+
+	var registerFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.register" {
+			registerFn = h.Fn
+			break
+		}
+	}
+	if registerFn == nil {
+		t.Fatal("admin.key.register handler not found")
+	}
+
+	// Malformed JSON (EC-001): handler must reject with E-CFG-001.
+	_, handlerErr := registerFn(context.Background(), json.RawMessage(`{bad json`))
+	if handlerErr == nil {
+		t.Fatal("expected error for malformed JSON args, got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-CFG-001") {
+		t.Errorf("expected E-CFG-001 in error for malformed JSON, got: %v", handlerErr)
+	}
+}
+
+// TestBuildAdminHandlers_KeyRevoke_UnknownRole asserts that admin.key.revoke
+// returns E-CFG-001 when the role field is an unrecognised string.
+// Traces to AC-001 edge case EC-002; BC-2.05.004 PC-2 precondition (well-formed request).
+func TestBuildAdminHandlers_KeyRevoke_UnknownRole(t *testing.T) {
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m)
+
+	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.revoke" {
+			revokeFn = h.Fn
+			break
+		}
+	}
+	if revokeFn == nil {
+		t.Fatal("admin.key.revoke handler not found")
+	}
+
+	// Unknown role string (EC-002): must reject with E-CFG-001.
+	args, err := json.Marshal(map[string]any{
+		"svtn":    "test-svtn",
+		"pubkey":  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"role":    "superadmin", // unrecognised role
+		"confirm": false,
+	})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	if handlerErr == nil {
+		t.Fatal("expected error for unknown role, got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-CFG-001") {
+		t.Errorf("expected E-CFG-001 in error for unknown role, got: %v", handlerErr)
+	}
+}
+
+// TestBuildAdminHandlers_KeyExpire_MissingAfterField asserts that
+// admin.key.expire returns E-CFG-001 when the `after` field is absent.
+// Traces to AC-001 edge case EC-005; AC-005; BC-2.05.004 PC-3.
+func TestBuildAdminHandlers_KeyExpire_MissingAfterField(t *testing.T) {
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m)
+
+	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.expire" {
+			expireFn = h.Fn
+			break
+		}
+	}
+	if expireFn == nil {
+		t.Fatal("admin.key.expire handler not found")
+	}
+
+	// Missing `after` field (EC-005): must reject with E-CFG-001 "missing required field: after".
+	args, err := json.Marshal(map[string]any{
+		"svtn":   "test-svtn",
+		"pubkey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		// "after" is intentionally absent
+	})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, handlerErr := expireFn(context.Background(), json.RawMessage(args))
+	if handlerErr == nil {
+		t.Fatal("expected error for missing after field, got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-CFG-001") {
+		t.Errorf("expected E-CFG-001 in error for missing after field, got: %v", handlerErr)
+	}
+}
+
+// TestBuildAdminHandlers_KeyExpire_NegativeTTL asserts that admin.key.expire
+// rejects a negative TTL with E-CFG-001 (server-side validation, not CLI-side).
+// Traces to AC-005; DI-003 defense-in-depth.
+func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m)
+
+	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.expire" {
+			expireFn = h.Fn
+			break
+		}
+	}
+	if expireFn == nil {
+		t.Fatal("admin.key.expire handler not found")
+	}
+
+	tests := []struct {
+		name  string
+		after string
+	}{
+		{"negative ttl", "-1h"},
+		{"zero ttl", "0s"},
+		{"ttl exceeding 100 years", "876001h"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args, err := json.Marshal(adminKeyExpireArgs{
+				SVTNName:  "test-svtn",
+				PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+				After:     tc.after,
+			})
+			if err != nil {
+				t.Fatalf("marshal args: %v", err)
+			}
+
+			_, handlerErr := expireFn(context.Background(), json.RawMessage(args))
+			if handlerErr == nil {
+				t.Fatalf("expected E-CFG-001 for after=%q, got nil", tc.after)
+			}
+			if !strings.Contains(handlerErr.Error(), "E-CFG-001") {
+				t.Errorf("expected E-CFG-001 for after=%q, got: %v", tc.after, handlerErr)
+			}
+		})
+	}
+}
+
+// TestBuildAdminHandlers_FourHandlers asserts that BuildAdminHandlers returns
+// exactly four handlers with the correct command names.
+// Traces to AC-001; BC-2.05.004 PC-1..PC-3.
+func TestBuildAdminHandlers_FourHandlers(t *testing.T) {
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m)
+
+	want := map[string]bool{
+		"admin.key.register": false,
+		"admin.key.revoke":   false,
+		"admin.key.expire":   false,
+		"admin.list-keys":    false,
+	}
+	for _, h := range handlers {
+		want[h.Command] = true
+	}
+	for cmd, found := range want {
+		if !found {
+			t.Errorf("expected handler %q not found in BuildAdminHandlers result", cmd)
+		}
+	}
+	if len(handlers) != 4 {
+		t.Errorf("expected 4 handlers, got %d", len(handlers))
+	}
+}
+
+// TestBuildAdminHandlers_ListKeys_EmptySliceNotNil asserts that list-keys on
+// an SVTN with zero keys returns an empty slice, not nil (EC-003).
+// Traces to EC-003; BC-2.05.004 PC-1.
+func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
+	// Note: this is a duplicate focus of TestBuildAdminHandlers_ListKeys_HappyPath
+	// but isolated for clarity of the EC-003 invariant. Both must fail Red Gate.
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m)
+
+	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.list-keys" {
+			listFn = h.Fn
+			break
+		}
+	}
+	if listFn == nil {
+		t.Fatal("admin.list-keys handler not found")
+	}
+
+	// Request list-keys for an SVTN with no registered keys.
+	args, err := json.Marshal(adminListKeysArgs{SVTNName: "empty-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	result, handlerErr := listFn(context.Background(), json.RawMessage(args))
+	if handlerErr != nil {
+		t.Fatalf("unexpected error: %v", handlerErr)
+	}
+	listResult, ok := result.(adminListKeysResult)
+	if !ok {
+		t.Fatalf("expected adminListKeysResult, got %T", result)
+	}
+	if listResult.Keys == nil {
+		t.Error("EC-003: list-keys returned nil Keys; must be empty slice not nil")
+	}
+}
+
+// TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm asserts that
+// admin.key.revoke for a control key without confirm=true returns E-ADM-018.
+// Traces to AC-002; BC-2.05.004 PC-2; ADR-004.
+func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	// Set up an SVTN and register a control key for revocation.
+	ks := admission.NewAdmittedKeySet()
+	_, pub, err := generateTestKeyPair(t)
+	if err != nil {
+		t.Fatalf("generate keypair: %v", err)
+	}
+	m := svtnmgmt.NewSVTNManager(ks, pub)
+	handlers := BuildAdminHandlers(m)
+
+	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.revoke" {
+			revokeFn = h.Fn
+			break
+		}
+	}
+	if revokeFn == nil {
+		t.Fatal("admin.key.revoke handler not found")
+	}
+
+	// Control-to-control revocation without confirm=true must return E-ADM-018.
+	args, err := json.Marshal(adminKeyRevokeArgs{
+		SVTNName:  "test-svtn",
+		PublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		Role:      "control",
+		Confirm:   false, // missing confirm
+	})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	if handlerErr == nil {
+		t.Fatal("expected E-ADM-018 for control revocation without confirm, got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-ADM-018") {
+		t.Errorf("expected E-ADM-018, got: %v", handlerErr)
+	}
 }

@@ -7,7 +7,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -40,8 +42,19 @@ func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 		t.Fatalf("startE2EServer: generate daemon keypair: %v", err)
 	}
 
-	dir := t.TempDir()
-	socketPath := dir + "/mgmt.sock"
+	// macOS imposes a 108-byte limit on Unix socket paths (POSIX sockaddr_un.sun_path).
+	// t.TempDir() generates paths like /var/folders/…/<TestName><random>/NNN/ which
+	// easily exceeds 108 bytes. Use os.MkdirTemp with a short prefix under /tmp to
+	// stay well inside the limit.
+	dir, err := os.MkdirTemp("", "sw-mgmt-*")
+	if err != nil {
+		t.Fatalf("startE2EServer: MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := fmt.Sprintf("%s/m.sock", dir)
+	if len(socketPath) > 104 {
+		t.Fatalf("startE2EServer: socket path %q length %d exceeds 104-byte limit", socketPath, len(socketPath))
+	}
 
 	ln, err := listenUnixMgmt(socketPath)
 	if err != nil {

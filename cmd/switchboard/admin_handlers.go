@@ -32,7 +32,8 @@ import (
 
 // maxKeyTTL is the server-side upper bound for admin.key.expire TTL values.
 // Rejects any TTL greater than 100 years (AC-005; DI-003 defense-in-depth).
-const maxKeyTTL = 100 * 365 * 24 * time.Hour
+// Unused until makeExpireHandler is implemented (S-6.06 Red Gate stub).
+const maxKeyTTL = 100 * 365 * 24 * time.Hour //nolint:unused // intentional stub: used by makeExpireHandler once implemented
 
 // adminKeyRegisterArgs is the wire JSON args for admin.key.register.
 // The `role` field uses the canonical JSON key per interface-definitions.md v1.1.
@@ -65,7 +66,8 @@ type adminListKeysArgs struct {
 
 // adminKeyResult is the success response body for key lifecycle operations.
 // Satisfies BC-2.05.004 postcondition 4 (confirmation with fingerprint and timestamp).
-type adminKeyResult struct {
+// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
+type adminKeyResult struct { //nolint:unused // intentional stub: used by handler implementations once written
 	Fingerprint string    `json:"fingerprint"`
 	At          time.Time `json:"at"`
 }
@@ -148,21 +150,24 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // directly as the wire message.
 //
 // Handler implementations call this after receiving an error from SVTNManager.
-func mapAdminError(err error) error {
+// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
+func mapAdminError(err error) error { //nolint:unused // intentional stub: called by handler Fn implementations
 	panic("todo: error mapping table — implement in S-6.06")
 }
 
 // roleToString converts an admission.KeyRole to its canonical wire string.
 // Returns "unknown" for unrecognised values — callers validate roles before
 // calling this.
-func roleToString(r admission.KeyRole) string {
+// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
+func roleToString(r admission.KeyRole) string { //nolint:unused // intentional stub: called by handler Fn implementations
 	panic("todo: roleToString — implement in S-6.06")
 }
 
 // verifyCallerRole checks that the caller-supplied role has management
 // authority (control-role) for the requested operation. Non-control-role
 // callers receive E-ADM-009 (BC-2.07.001 invariant 3; AC-006).
-func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint string) error {
+// Unused until handler Fn bodies are implemented (S-6.06 Red Gate stub).
+func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint string) error { //nolint:unused // intentional stub: called by handler Fn implementations
 	panic("todo: AC-006 caller-role enforcement — implement in S-6.06")
 }
 
