@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -73,11 +73,11 @@ sbctl sessions detach [--session=<name>] [--svtn=<id>]
 sbctl sessions status [--session=<name>]        # Quality indicator + path metrics
 
 # Path / Quality Metrics
-sbctl paths list [--svtn=<id>]                  # Per-path RTT, loss, status
+sbctl paths list [--svtn=<id>]                  # Per-path RTT (rtt_ms, rtt_p99_ms), loss, status
 sbctl paths ping --router=<addr>                # One-shot RTT probe
 
 # Router Management
-sbctl router status [--svtn=<id>]               # Router health and forwarding stats
+sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.2 PC-3; S-5.02 v1.3 AC-003)
 sbctl router metrics [--svtn=<id>]              # Frame counts, HMAC failures, drop cache hits
 sbctl router reload                             # Reload config (SIGHUP equivalent)
 sbctl router drain                              # Graceful drain (SIGTERM equivalent)
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.3 changelog note:** S-5.02 lens-3 drift sync — F-1 (HIGH): `sbctl router status` flag corrected from `[--svtn=<id>]` to `--target <router>` (BC-2.06.003 v1.2 PC-3; S-5.02 v1.3 AC-003). F-2 (MEDIUM): `last_probe_at` removed from path list JSON example (field not defined in BC-2.06.003 PC-1). F-3 (MEDIUM): `paths list` description extended to name `rtt_p99_ms` explicitly; JSON schema note added documenting `"pending"` string variant per BC-2.06.003 PC-1 / EC-003 and S-5.02 AC-004. All changes bring this supplement into alignment with BC-2.06.003 v1.2 as canonical authority.
 
 > **v1.2 changelog note:** F-P2-004: `sbctl svtn create` marked `[DEPRECATED]` — superseded by `sbctl admin svtn create` (S-6.07; Wave 6). Retained as alias until vMINOR+1 deprecation cycle completes.
 
@@ -189,6 +191,8 @@ On error:
 
 ### Path list response (`sbctl paths list --json`)
 
+Fields per BC-2.06.003 v1.2 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC).
+
 ```json
 {
   "ok": true,
@@ -200,8 +204,7 @@ On error:
         "rtt_ms": 15,
         "rtt_p99_ms": 22,
         "loss_pct": 0.1,
-        "status": "active",
-        "last_probe_at": "2026-06-23T10:00:00Z"
+        "status": "active"
       }
     ]
   }

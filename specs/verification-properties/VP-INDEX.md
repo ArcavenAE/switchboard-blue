@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.3"
+version: "2.4"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -98,6 +98,9 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-072 | mgmt.Server sets write deadline before every sendJSON (HandshakeTimeout for handshake sends, RPCIdleTimeout for RPC responses); clears after each send — closes CWE-400 write-side slowloris | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-072.md |
 | VP-073 | Console-Mode TCP Bound to Non-Loopback Address Aborts Startup with E-CFG-008 (error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message; Ruling L) | BC-2.07.004 | cmd/switchboard | integration | P0 | draft | VP-073.md |
 | VP-074 | QualityIndicator threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct | BC-2.06.001 | internal/metrics | unit | P1 | draft | VP-074.md |
+| VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | S-BL.BENCH | deferred | (pending) |
+
+> VP-TBD-ACC is bench-deferred per ARCH-03 v1.6 (F-4, S-5.02 lens-3). The p99 estimate is computed from a rolling sample buffer; exact accuracy bound against a true p99 requires a sustained load benchmark that belongs in a dedicated bench story (S-BL.BENCH). This VP will receive a permanent ID when S-BL.BENCH is scheduled. It is registered here as a placeholder to close the F-4 process gap — the property is known and intentionally deferred, not forgotten. Implementing story: S-BL.BENCH (unscheduled).
 
 ## Counts
 
@@ -136,6 +139,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.4 | 2026-06-30 | F-4 (S-5.02 lens-3): VP-TBD-ACC placeholder registered — p99 accumulator accuracy bound (`rtt_p99_ms ≤ true_p99 + max_bucket_width`) bench-deferred per ARCH-03 v1.6; implementing story S-BL.BENCH (unscheduled). No count change to active VP tallies (deferred placeholder; bucket TBD at scheduling time). |
 | 2.3 | 2026-06-29 | CR-009 ruling: VP-048 ownership split — PC-1 (create) + PC-2 (bootstrap) remain owned by S-6.02; PC-3 (destroy + admission-rejection) transferred to new story S-6.05-svtn-destroy (Wave 6, depends_on S-6.02). VP-048 row Title column updated to document the split. VP-048.md Story Trace section updated. BC-2.07.001 Stories row updated. No count or method changes. |
 | 2.2 | 2026-06-29 | H-001/H-002 remediation (S-5.01 API reconciliation): VP-052 title updated from "Missing expected tick within deadline → indicator downgrade" to "N consecutive OnMissingFrame calls → indicator downgrade (one level)" — reflects count-based API (no Clock injection). VP-027 and VP-052 proof harness skeletons reconciled with as-built internal/metrics API. No count or method changes. |
 | 2.1 | 2026-06-29 | BC-2.06.001 VP table disambiguation (L-001): VP-074 (unit) added for threshold classification (PC-2/PC-3/PC-4); BC-2.06.001 VP table updated to two clean rows — VP-074 (unit) and VP-027 (proptest). Counts: Total=74, Unit=2, P1=18. |
