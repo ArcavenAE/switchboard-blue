@@ -553,3 +553,44 @@ Pass-19 NOT counted. Clean-pass count: 1/3. Pass-20 queued (clean-pass attempt #
 Pass-20 NOT counted. Clean-pass count: 1/3. Pass-21 queued (clean-pass attempt #2 of 3 now that BC v1.12 ground truth has moved).
 Spec tip after fix: 677140a. Impl tip: 6bd9e12.
 
+---
+
+## S-6.06 Pass-21 BLOCK + Fix-Burst (2026-06-30)
+
+**Dispatch IDs:** lens-1 ada1125598286af4e / lens-2 a19f659c98fb7441a / lens-3 a27279f4b0c6808f3
+**Spec tip dispatched against:** 677140a (factory-artifacts) / **Impl tip:** 6bd9e12 (feat/S-6.06-daemon-admin-handlers, unchanged from Pass-20)
+
+### Pass-21 Lens Results
+
+| Lens | Verdict | Findings |
+|------|---------|----------|
+| 1 | BLOCK | F-L1-A MED: mapAdminError default-arm untested; F-L1-B MED: ErrInvalidDuration unreachable-claim has no DI-D arm; F-L1-C MED: decodePublicKey silent swallow (go.md rule 3 violation); F-L1-D MED: TestResolveAndVerifyCallerRole expired_key_non_control_rejected mis-anchored, future-expiry-non-control branch uncovered; 5 LOW |
+| 2 | BLOCK | F-P21L2-001 MED: dup-confirmed lens-3 EC-008 narrowing gap; F-P21L2-002 MED NEW: VP-INDEX VP-076 row + registry note still cite "unconditionally"/v1.10 |
+| 3 | BLOCK | F-P21L3-001 HIGH: EC-008 stale "unconditionally" — sibling-fix propagation gap from Pass-20 Option-B narrowing (BC-2.05.004 v1.12 updated EC-007 but EC-008 not swept); F-P21L3-002 MED [process-gap]: BC EC narrowing not fanned out to story EC tables (recurring pattern, passes 19/20/21); O-P21L3-002 LOW: VP-076 stale v1.10 cite at line 68 |
+
+**Lens-3 F-P21L3-001 note:** This is a sibling-fix propagation gap identical in mechanism to Pass-19's root cause. Pass-20 Option-B fix narrowed EC-007 in BC-2.05.004 and updated VP-076, but EC-008 in the same BC document was not swept. High severity because a spec reader of EC-008 still sees the overstated "unconditionally" language that was ruled incorrect by the PO.
+
+**Overall: BLOCK** — all 3 lenses blocked. Clean-pass count: 1/3 (unchanged). Pass-21 NOT counted.
+
+**Convergence reset assessment recorded:** The impl changed substantively (mapAdminError signature refactored, ErrInvalidDuration DI-D arm added). Per BC-5.39.001 strict interpretation, the clean-pass counter should reset to attempt #1 because impl ground truth moved. However, all changes are pure defense-in-depth additions + test-quality fixes (no behavioral semantics changed — invariants locked in, uncovered branches covered). Orchestrator ruling: continue counting toward 3-clean from current state — Pass-22 = clean-pass attempt #2 of 3. Both interpretations recorded here; convergence-trajectory reflects the substantive-vs-cosmetic distinction.
+
+**Recurring process-gap (F-P21L3-002) codified:** Three consecutive passes (19, 20, 21) have exposed BC/VP narrowing not propagating to story EC tables. Process rule crystallized: when a BC EC is narrowed/widened in a fix-burst, story-writer MUST be dispatched in parallel to update all stories whose EC tables cite that BC EC. Added to STATE.md open drift items.
+
+### Fix-Burst Record — factory-artifacts
+
+| Layer | Agent | Commit | Changes |
+|-------|-------|--------|---------|
+| Spec | product-owner | fc90ef2 (factory-artifacts) | VP-INDEX v2.10→v2.11: VP-076 row narrowed (updated from "unconditionally" to "for any well-formed request") + EC-007 v1.10 cite corrected to v1.12 + v1.10 stale cite swept; VP-076 v1.1→v1.2: Property Statement closer updated to cite v1.12 |
+| Spec | story-writer | 4229464 (factory-artifacts) | S-6.06 v1.17→v1.18: EC-008 narrowed "unconditionally" → "for any well-formed request" with AC-005 layering note; v1.17 changelog row-attribution corrected; STORY-INDEX v3.7→v3.8 |
+
+### Fix-Burst Record — S-6.06 feature branch (worktree)
+
+| Layer | Agent | Commit | Changes |
+|-------|-------|--------|---------|
+| Impl | implementer | c519fc1 (feat/S-6.06-daemon-admin-handlers) | F-L1-D: TestResolveAndVerifyCallerRole — expired_key_non_control_rejected renamed + TTL changed to cover future-expiry-non-control branch in CallerKeyRoleActive |
+| Impl | implementer | 0be8e97 (feat/S-6.06-daemon-admin-handlers) | F-L1-A + F-L1-B + F-L1-C: mapAdminError refactored (signature now takes ed25519.PublicKey, eliminates double-decode + silent swallow); ErrInvalidDuration defense-in-depth arm added; default-arm test added. All 17 packages pass race detector. |
+
+**Spec tip after fix:** 4229464 (factory-artifacts). **Impl tip:** 0be8e97 (feat/S-6.06-daemon-admin-handlers).
+
+Pass-21 NOT counted. Clean-pass count: 1/3. Pass-22 queued (clean-pass attempt #2 of 3 per orchestrator ruling).
+

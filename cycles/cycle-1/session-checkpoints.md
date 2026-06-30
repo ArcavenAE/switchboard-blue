@@ -287,4 +287,23 @@ Residual deferrals (all out-of-perimeter per BC-5.39.002): S-5.01 STORY-INDEX VP
 4. Wave 5 adversarial review after all stories merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 
+---
+
+## Archived: 2026-06-30 (S-6.06 Pass-20 BLOCK + fix-burst applied)
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-20 BLOCK + fix-burst applied)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Passes 17, 18, 19, and 20 all BLOCK — fix-bursts applied after each. Pass-20 fix-burst (677140a): BC-2.05.004 v1.11→v1.12 (EC-007 narrowed to well-formed requests); VP-076 v1.0→v1.1 (Property #3 scoped to well-formed); BC-INDEX v1.7→v1.8; error-taxonomy.md E-ADM-021 Tests citation cleanup. Novelty: F-P20L3-001 cross-layer ordering finding (bootstrap × malformed input cross-product) resolved by Option B spec narrowing. Clean-pass count: 1/3. Pass-21 queued.
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 677140a on factory-artifacts. Impl tip: 6bd9e12 on feat/S-6.06-daemon-admin-handlers (impl unchanged by Pass-20 fix-burst — spec-only fix).
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-21: dispatch 3 fresh-context adversary lenses against spec tip 677140a / impl tip 6bd9e12 (clean-pass attempt #2 of 3).
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

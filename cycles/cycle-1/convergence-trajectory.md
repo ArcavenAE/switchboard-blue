@@ -300,12 +300,13 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 18 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 2 | 3 | BLOCK (F-P18L1-001/002 MED×2) | 1/3 |
 | 19 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 3 | 2 | BLOCK (F-P19L*-001 dup×3 MED + 2 more MED) | 1/3 |
 | 20 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 2 | BLOCK (F-P20L3-001 MED NOVEL — cross-layer ordering) | 1/3 |
+| 21 | 2026-06-30 | correctness/spec/traceability | 0 | 1 | 4+2 | 5+1 | BLOCK (L3: F-P21L3-001 HIGH EC-008 stale; L1: 4 MED impl; L2: 2 MED VP-INDEX stale) | 1/3 |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK`
 
-Clean-pass count after Pass-20 fix-burst: **1/3** (baseline = Pass-16). Pass-21 is clean-pass attempt #2.
+Clean-pass count after Pass-21 fix-burst: **1/3** (baseline = Pass-16). Pass-22 is clean-pass attempt #2 (orchestrator ruling: impl changes were defense-in-depth / test-quality only, not behavioral-semantics changes; counter not reset).
 
 ### Pass-19 Details
 
@@ -339,3 +340,38 @@ All 5 gating findings (4 MED + 1 LOW) are spec-only, no impl changes needed. Roo
 **Fix-burst commit:** 677140a — BC-2.05.004 v1.11→v1.12 (EC-007 narrowed to well-formed requests) + VP-076 v1.0→v1.1 (Property #3 scoped to well-formed) + BC-INDEX v1.7→v1.8 + error-taxonomy.md O-P20L3-001 fix (E-ADM-021 Tests citation cleanup, removed revoke test reference).
 
 **Spec tip after fix:** 677140a. **Impl tip:** 6bd9e12 (unchanged).
+
+---
+
+### Pass-21 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** lens-1 ada1125598286af4e / lens-2 a19f659c98fb7441a / lens-3 a27279f4b0c6808f3
+**Spec tip dispatched against:** 677140a. **Impl tip:** 6bd9e12.
+
+**Lens-1 (ada1125598286af4e):** BLOCK — 4 MED + 5 LOW.
+- F-L1-A MED: mapAdminError default-arm untested
+- F-L1-B MED: ErrInvalidDuration unreachable-claim has no DI-D arm
+- F-L1-C MED: decodePublicKey silent swallow (go.md rule 3 violation)
+- F-L1-D MED: TestResolveAndVerifyCallerRole expired_key_non_control_rejected mis-anchored; future-expiry-non-control branch uncovered
+- 5 LOW informational
+
+**Lens-2 (a19f659c98fb7441a):** BLOCK — 2 MED.
+- F-P21L2-001 MED: dup-confirmed lens-3 EC-008 narrowing gap (same root cause as F-P21L3-001)
+- F-P21L2-002 MED NEW: VP-INDEX VP-076 row + registry note still cite "unconditionally"/v1.10 (stale post Pass-20 Option-B)
+
+**Lens-3 (a27279f4b0c6808f3):** BLOCK — 1 HIGH + 1 MED [process-gap] + 1 LOW.
+- F-P21L3-001 HIGH: EC-008 stale "unconditionally" — sibling-fix propagation gap from Pass-20 Option-B narrowing (BC-2.05.004 v1.12 updated EC-007 but EC-008 not swept)
+- F-P21L3-002 MED [process-gap]: BC EC narrowing not fanned out to story EC tables; recurring pattern (passes 19, 20, 21)
+- O-P21L3-002 LOW: VP-076 stale v1.10 cite at line 68
+
+**Verdict:** BLOCK. All 3 lenses blocked. Clean-pass count: 1/3 (unchanged).
+
+**Substantive vs cosmetic assessment (convergence-reset question):**
+Impl changes were defense-in-depth / test-quality only (mapAdminError signature refactored to eliminate double-decode + silent swallow; ErrInvalidDuration DI-D arm added; test renamed + TTL changed to cover previously-uncovered branch). No behavioral semantics changed. Orchestrator ruling: counter not reset. Pass-22 = clean-pass attempt #2 of 3.
+
+**Fix-burst commits:**
+- Spec (factory-artifacts): fc90ef2 (VP-INDEX v2.10→v2.11, VP-076 v1.1→v1.2) + 4229464 (S-6.06 v1.17→v1.18 EC-008 narrowed, STORY-INDEX v3.7→v3.8)
+- Impl (feat/S-6.06): c519fc1 (F-L1-D test fix) + 0be8e97 (F-L1-A/B/C mapAdminError refactor + ErrInvalidDuration arm)
+
+**Spec tip after fix:** 4229464. **Impl tip:** 0be8e97.
