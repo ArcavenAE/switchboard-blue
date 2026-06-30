@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -34,6 +34,15 @@ modified:
       (confirmation response with key fingerprint and operation timestamp):
       S-6.06 (mgmt.Response success envelope). VP-075 minted for handler-layer
       caller-role enforcement (DI-001 / PC-1 admission-control authority).
+  - date: 2026-06-30
+    version: "1.4"
+    actor: architect
+    change: >
+      Pass-2 lens-3 process-gap observation (F-T3-004): DI-001 (carrier-grade content
+      separation) back-cited. DI-001 confirmed present in domain-spec/invariants.md.
+      Added to Invariants section (item 5) and Traceability L2 Domain Invariants row.
+      DI-001 applies: key lifecycle operations authenticate the nodes that enforce
+      content separation; a revoked or misconfigured key breaks DI-001 guarantees.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -76,6 +85,7 @@ Control nodes can manage the public key registry for an SVTN: registering new ke
 2. **DI-002**: Key registration and revocation operations use public keys only; private keys are never transmitted.
 3. Key management operations are authenticated: the requesting node's signature is verified before any change is applied.
 4. **DI-012**: The control node manages keys as a network participant; it does not have privileged router API access.
+5. **DI-001**: Key lifecycle operations uphold carrier-grade content separation — the keys managed by this BC authenticate only the transport/admission layer; no key managed here grants any router the ability to read, modify, or inject session payload content.
 
 ## Trigger
 
@@ -109,13 +119,14 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | VP-046 | Key registration makes key available for admission on all propagated routers | integration |
 | VP-046 | Revocation propagates to all routers within eventual consistency window | integration |
 | VP-046 | Private key never appears in key management wire messages | property |
+| VP-075 | Handler-layer caller-role enforcement: admin.key.* RPCs reject callers without control-role authority (internal/mgmt) | integration |
 
 ## Traceability
 
 | Field | Value |
 |-------|-------|
 | L2 Capability | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 |
-| L2 Domain Invariants | DI-002 (private keys never transit), DI-011 (role separation between Tier 1 and Tier 2 keys), DI-012 (control node is a participant) |
+| L2 Domain Invariants | DI-001 (carrier-grade content separation), DI-002 (private keys never transit), DI-011 (role separation between Tier 1 and Tier 2 keys), DI-012 (control node is a participant) |
 | Architecture Module | internal/svtnmgmt |
 | Stories | PC-1 (register): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-2 (revoke): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-3 (expire): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-4 (confirmation response with key fingerprint and operation timestamp): S-6.06 (mgmt.Response success envelope) |
 | Capability Anchor Justification | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 — this BC specifies the complete key lifecycle operations that CAP-019 defines as the revocation path |

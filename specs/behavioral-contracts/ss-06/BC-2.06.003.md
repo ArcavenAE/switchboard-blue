@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -20,6 +20,7 @@ introduced: v0.1.0
 modified:
   - 2026-06-28T00:00:00
   - 2026-06-30T00:00:00
+  - 2026-06-30T18:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -52,7 +53,7 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
    - `path_id` — opaque path identifier (string)
    - `router_addr` — remote router address (host:port)
    - `rtt_ms` — most-recent EWMA RTT sample in milliseconds (float64)
-   - `rtt_p99_ms` — p99 of per-path RTT samples over the observation window (float64); computed from the rolling sample buffer maintained by the PathTracker; "pending" (string) if fewer than 10 samples have been collected
+   - `rtt_p99_ms` — p99 of per-path RTT samples (float64); computed from the fixed-bucket histogram maintained by the PathTracker (histogram counts are never reset; approximation error ≤ bucket width for the bucket containing the true p99); "pending" (string) if fewer than 10 samples have been collected
    - `loss_pct` — packet loss rate as a percentage (float64, 0.0–100.0)
    - `status` — one of: `active`, `degraded` (RTT > 200ms sustained), `failed` (≥ 3 consecutive missed keep-alives)
 2. **[CANONICAL]** `sbctl router metrics --svtn=<id>` returns per-SVTN forwarding metrics: frame count, HMAC failure count, drop cache hit count, per-path frame distribution.
@@ -123,6 +124,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.6 | 2026-06-30 | product-owner | F-LO1 (Pass-4 Ruling 5): align PC-1 `rtt_p99_ms` description with ARCH-03 v1.6 canonical semantics — replace "rolling sample buffer" with "fixed-bucket histogram (counts never reset; approximation error ≤ bucket width for the bucket containing the true p99)". No behavioral change; EC-003 pending sentinel unchanged. |
 | 1.5 | 2026-06-30 | spec-steward | F-M3: add explicit pending-p99 quality semantics to PC-3 — when `rtt_p99_ms` is `"pending"`, `quality` MUST also be `"pending"` (not green/yellow/red); the quality state machine must treat pending p99 as indeterminate. Add EC-006 documenting this behavior. Note for implementers: `quality: "pending"` is now a valid emit value from `cmd/sbctl/router_status.go`. |
 | 1.1 | 2026-06-23 | product-owner | Initial draft with `sbctl paths list` + `sbctl router metrics` canonical surface |
 | 1.2 | 2026-06-28 | product-owner | Wave-5 reconciliation: canonicalize `sbctl paths list` + `sbctl router metrics --svtn=<id>`; add `sbctl router status --target <router>` as documented alias (F-P8-002 ruling, S-5.02 alignment); strengthen `rtt_p99_ms` field semantics (p99 of rolling sample buffer, "pending" when <10 samples); add EC-005 for alias; fix VP table (VP-047 was listed three times — now distinct VP-047/VP-TBD-A/VP-TBD-B); expand test vectors with alias vector and pending-state vector |
