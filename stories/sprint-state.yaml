@@ -627,6 +627,12 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.16 (2026-06-30): S-6.06 adversary Pass-23 BLOCK recorded; clean-pass count remains 1/3.
+#   - Pass-23 BLOCK: lens-1 (afd8f2e1b20cde42a) PASS CLEAN; lens-2 (aea17b5f734310b26) PASS CLEAN (O-P23L2-001 LOW non-blocking, deferred); lens-3 (a1038b24343e5e306) BLOCK — F-P23L3-001/002 MED×2 (S-6.06 lines 180+245 cite BC-2.05.004 EC-007 v1.10, should be v1.12).
+#   - Fix-burst (factory-artifacts): 82721dc (S-6.06 v1.19→v1.20 + STORY-INDEX v3.9→v3.10; both v1.10 cites bumped to v1.12; grep-clean).
+#   - PROCESS-GAP-P23 codified: 5th consecutive sibling-sweep miss (story-body prose narrative). vsdd-factory #361 comment appended.
+#   - Convergence-reset ruling: spec-only; counter NOT reset per BC-5.39.001. Pass-24 = clean-pass attempt #3 of 3.
+#   - Spec tip: 82721dc. Impl tip: 0be8e97 (unchanged).
 # v2.15 (2026-06-30): S-6.06 adversary Pass-21 BLOCK recorded; clean-pass count remains 1/3.
 #   - Pass-21 BLOCK: lens-1 4 MED (mapAdminError, ErrInvalidDuration, decodePublicKey, test anchor); lens-2 2 MED (EC-008 dup + VP-INDEX stale); lens-3 1 HIGH (EC-008 sibling-fix gap) + 1 MED [process-gap].
 #   - Fix-burst spec (factory-artifacts): fc90ef2 (VP-INDEX v2.10→v2.11, VP-076 v1.1→v1.2) + 4229464 (S-6.06 v1.17→v1.18 EC-008 narrowed, STORY-INDEX v3.7→v3.8).

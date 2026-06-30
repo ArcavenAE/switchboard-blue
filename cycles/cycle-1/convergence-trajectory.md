@@ -302,12 +302,13 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 20 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 2 | BLOCK (F-P20L3-001 MED NOVEL — cross-layer ordering) | 1/3 |
 | 21 | 2026-06-30 | correctness/spec/traceability | 0 | 1 | 4+2 | 5+1 | BLOCK (L3: F-P21L3-001 HIGH EC-008 stale; L1: 4 MED impl; L2: 2 MED VP-INDEX stale) | 1/3 |
 | 22 | 2026-06-30 | correctness/spec/traceability | 0 | 2 | 2 | 0 | BLOCK (L3: F-P22L3-001/002 HIGH×2 "unconditionally" residuals; F-P22L3-003/004 MED×2 VP-076; L1+L2: PASS CLEAN) | 1/3 |
+| 23 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 2 | 1 | BLOCK (L3: F-P23L3-001/002 MED×2 stale v1.10 cites in story lines 180+245; L1+L2: PASS CLEAN) | 1/3 |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK`
 
-Clean-pass count after Pass-22 fix-burst: **1/3** (baseline = Pass-16). Pass-23 is clean-pass attempt #2 (orchestrator ruling: Pass-22 fix-burst was spec-only narrowing; no impl behavioral-semantics changes; counter not reset per BC-5.39.001).
+Clean-pass count after Pass-23 fix-burst: **1/3** (baseline = Pass-16). Pass-24 is clean-pass attempt #3 (orchestrator ruling: Pass-23 fix-burst was spec-only; no impl behavioral-semantics changes; counter not reset per BC-5.39.001).
 
 ### Pass-19 Details
 
@@ -407,3 +408,32 @@ Impl changes were defense-in-depth / test-quality only (mapAdminError signature 
 - #364 — Adversary policy: detect test name/assertion semantic-anchoring drift
 
 **Spec tip after fix:** 4b42dd5. **Impl tip:** 0be8e97 (unchanged).
+
+---
+
+### Pass-23 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** lens-1 afd8f2e1b20cde42a / lens-2 aea17b5f734310b26 / lens-3 a1038b24343e5e306
+**Spec tip dispatched against:** 4b42dd5. **Impl tip:** 0be8e97.
+
+**Lens-1 (afd8f2e1b20cde42a):** PASS CLEAN — novelty LOW; impl tip 0be8e97 unchanged; no findings.
+
+**Lens-2 (aea17b5f734310b26):** PASS CLEAN — 1 LOW non-blocking observation only.
+- O-P23L2-001 LOW: VP-076 Source Contract section line 113 cites error-taxonomy.md v3.8; current is v3.9. Semantically coherent narrowing, paperwork drift only. Deferred to next VP-076 touch.
+
+**Lens-3 (a1038b24343e5e306):** BLOCK — 2 MED + 1 [process-gap].
+- F-P23L3-001 MED: S-6.06 v1.19 line 180 Error Code Map E-ADM-021 row cites `BC-2.05.004 EC-007 v1.10`; should be v1.12 (narrowed in Pass-20 Option-B fix-burst).
+- F-P23L3-002 MED: S-6.06 v1.19 line 245 Task 12 Refs cites `BC-2.05.004 EC-007 v1.10`; should be v1.12.
+- O-P23L3-001 LOW: VP-076 Property #1/#2 phrasing slightly tautological — noted, non-blocking.
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged — baseline Pass-16).
+
+**Process-gap codification — PROCESS-GAP-P23 (5th consecutive recurrence):**
+Sibling-sweep gap has now recurred across Passes 19, 21, 22, 22-stragglers, and 23. Pattern: BC version-narrowing sweep updates BC body + VP body + index files + error-taxonomy, but misses story-body prose narrative (Error Code Map message annotations + Task references). Pass-22 grepped for "unconditionally" but did NOT grep for "v1.10" residuals. Refines and extends PROCESS-GAP-P21. vsdd-factory #361 comment appended (5th recurrence as additional evidence).
+
+**Fix-burst commit:** 82721dc (product-owner) — S-6.06 v1.19→v1.20 + STORY-INDEX v3.9→v3.10. Both v1.10 cites at lines 180 and 245 bumped to v1.12. Exhaustive pre-edit + post-edit grep across BC/VP-076/VP-INDEX/error-taxonomy confirms zero current-state-narrative v1.10 residuals. ARCH-04 v1.10 cites at lines 263, 332 correctly left alone (different artifact, different version space). Changelog rows correctly left alone (historical-state descriptions).
+
+**Convergence-reset ruling:** Spec-only fix (no impl change; 82721dc touches only S-6.06 story + STORY-INDEX). Per BC-5.39.001 spec-only-fix discipline, clean-pass counter does NOT reset. Pass-24 = clean-pass attempt #3 of 3 continues.
+
+**Spec tip after fix:** 82721dc. **Impl tip:** 0be8e97 (unchanged).

@@ -594,3 +594,61 @@ Spec tip after fix: 677140a. Impl tip: 6bd9e12.
 
 Pass-21 NOT counted. Clean-pass count: 1/3. Pass-22 queued (clean-pass attempt #2 of 3 per orchestrator ruling).
 
+---
+
+## S-6.06 Pass-22 Adversarial Review + Fix-Burst (2026-06-30)
+
+**Agents dispatched:** adversary (lens-1, lens-2, lens-3), product-owner (spec fix)
+**Dispatch IDs:** lens-1 aeaa638b208bc006a / lens-2 a72e3013057bcc11b / lens-3 a5eef7adde2c2635e
+**Spec tip:** 4229464 (factory-artifacts). **Impl tip:** 0be8e97.
+
+**Lens-1:** PASS CLEAN — no gating findings.
+**Lens-2:** PASS CLEAN — no gating findings.
+**Lens-3:** BLOCK.
+- F-P22L3-001 HIGH: story VP table row for VP-076 still cites EC-007/EC-008 "unconditionally" language.
+- F-P22L3-002 HIGH: error-taxonomy.md E-ADM-020/E-ADM-021 still carry "unconditionally...at any time" text and stale v1.10 cites.
+- F-P22L3-003 MED: VP-076 Property #1 and Property #2 prose unnarrowed.
+- F-P22L3-004 MED: VP-076 proof-harness docstring inconsistent with narrowed scope.
+- O-P22L3-002 [process-gap]: recurring 4-pass sweep miss pattern; vsdd-factory issues #361–#364 filed.
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged). Pass-22 NOT counted.
+
+**Convergence-reset ruling:** Fix-burst was spec-only; no behavioral semantics changed in impl. Counter not reset per BC-5.39.001. Pass-23 = clean-pass attempt #2 of 3.
+
+### Fix-Burst Record — factory-artifacts
+
+| Layer | Agent | Commit | Changes |
+|-------|-------|--------|---------|
+| Spec | product-owner | 4b42dd5 (factory-artifacts) | error-taxonomy.md v3.8→v3.9 (E-ADM-020/021 text + stale v1.10 cites updated); VP-076 v1.2→v1.3 (Properties #1 & #2 narrowed + harness docstring); S-6.06 v1.18→v1.19 (story VP table row regenerated); VP-INDEX v2.11→v2.12; STORY-INDEX v3.8→v3.9. Exhaustive "unconditionally" sweep — zero current-state residuals. |
+
+**Spec tip after fix:** 4b42dd5. **Impl tip:** 0be8e97 (unchanged).
+
+---
+
+## S-6.06 Pass-23 Adversarial Review + Fix-Burst (2026-06-30)
+
+**Agents dispatched:** adversary (lens-1, lens-2, lens-3), product-owner (spec fix)
+**Dispatch IDs:** lens-1 afd8f2e1b20cde42a / lens-2 aea17b5f734310b26 / lens-3 a1038b24343e5e306
+**Spec tip:** 4b42dd5 (factory-artifacts). **Impl tip:** 0be8e97.
+
+**Lens-1:** PASS CLEAN — novelty LOW; no findings.
+**Lens-2:** PASS CLEAN — O-P23L2-001 LOW (VP-076 Source Contract §line 113 cites error-taxonomy v3.8 vs current v3.9; semantically coherent narrowing, paperwork drift only; deferred to next VP-076 touch).
+**Lens-3:** BLOCK.
+- F-P23L3-001 MED: S-6.06 v1.19 line 180 Error Code Map E-ADM-021 row cites `BC-2.05.004 EC-007 v1.10`; should be v1.12.
+- F-P23L3-002 MED: S-6.06 v1.19 line 245 Task 12 Refs cites `BC-2.05.004 EC-007 v1.10`; should be v1.12.
+- O-P23L3-001 LOW: VP-076 Property #1/#2 phrasing slightly tautological — non-blocking.
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged). Pass-23 NOT counted.
+
+**PROCESS-GAP-P23 (5th consecutive recurrence):** Sibling-sweep gap missed story-body prose narrative (Error Code Map message annotations + Task Refs). Pass-22 grepped for "unconditionally" but NOT "v1.10" residuals. vsdd-factory #361 comment appended.
+
+**Convergence-reset ruling:** Spec-only fix; counter NOT reset per BC-5.39.001. Pass-24 = clean-pass attempt #3 of 3.
+
+### Fix-Burst Record — factory-artifacts
+
+| Layer | Agent | Commit | Changes |
+|-------|-------|--------|---------|
+| Spec | product-owner | 82721dc (factory-artifacts) | S-6.06 v1.19→v1.20: both v1.10 cites at lines 180 and 245 bumped to v1.12; STORY-INDEX v3.9→v3.10. Exhaustive grep confirms zero current-state v1.10 residuals. ARCH-04 v1.10 cites at lines 263/332 left alone (different artifact). |
+
+**Spec tip after fix:** 82721dc. **Impl tip:** 0be8e97 (unchanged).
+

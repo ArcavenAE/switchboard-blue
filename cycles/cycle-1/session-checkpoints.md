@@ -326,3 +326,24 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+
+---
+
+## Archived: 2026-06-30 (S-6.06 Pass-22 BLOCK + fix-burst applied)
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-22 BLOCK + fix-burst applied)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–22 all BLOCK — fix-bursts applied after each. Pass-22 fix-burst: spec (factory-artifacts) 4b42dd5 (error-taxonomy v3.8→v3.9 + VP-076 v1.2→v1.3 + S-6.06 v1.18→v1.19 + VP-INDEX v2.11→v2.12 + STORY-INDEX v3.8→v3.9 — exhaustive "unconditionally" sweep). Convergence-reset ruling: spec-only narrowing edits; counter NOT reset per BC-5.39.001. Pass-22 NOT counted. Clean-pass count: 1/3. Pass-23 = clean-pass attempt #2 of 3.
+
+**vsdd-factory issues filed:** #361 (BC EC sibling-fix propagation gap), #362 (VP-INDEX row description drift), #363 (test-writer negative tests for unreachable default arms), #364 (adversary policy: detect semantic-anchoring drift).
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 4b42dd5 on factory-artifacts. Impl tip: 0be8e97 on feat/S-6.06-daemon-admin-handlers.
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-23: dispatch 3 fresh-context adversary lenses against spec tip 4b42dd5 / impl tip 0be8e97 (clean-pass attempt #2 of 3). Verify worktree HEAD = 0be8e97 before dispatch.
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
