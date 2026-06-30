@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 )
@@ -18,6 +19,14 @@ const defaultTimeout = 5 * time.Second
 // defaultTarget is the default management socket address.
 // EC-001: when --target is absent and the default socket is absent, E-NET-001 is returned.
 const defaultTarget = "/run/switchboard-router.sock"
+
+// stdOut and stdErr are the output sinks for writeSuccess and writeError.
+// They default to os.Stdout and os.Stderr and can be overridden in tests
+// without mutating the global os.Stdout/os.Stderr file descriptors.
+var (
+	stdOut io.Writer = os.Stdout
+	stdErr io.Writer = os.Stderr
+)
 
 func main() {
 	// Global flags per interface-definitions.md §sbctl operator CLI and AC-006/AC-007.
@@ -89,34 +98,34 @@ func main() {
 	}
 }
 
-// writeSuccess writes a success JSON envelope to stdout when --json is set,
+// writeSuccess writes a success JSON envelope to stdOut when --json is set,
 // or the raw data bytes otherwise.
 func writeSuccess(useJSON bool, data json.RawMessage) {
 	if useJSON {
 		env := newSuccessEnvelope(data)
 		out, err := json.Marshal(env)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "marshal error: %s\n", err)
+			_, _ = fmt.Fprintf(stdErr, "marshal error: %s\n", err)
 			os.Exit(3)
 		}
-		fmt.Println(string(out))
+		_, _ = fmt.Fprintln(stdOut, string(out))
 		return
 	}
-	fmt.Println(string(data))
+	_, _ = fmt.Fprintln(stdOut, string(data))
 }
 
-// writeError writes a failure JSON envelope to stderr when --json is set,
+// writeError writes a failure JSON envelope to stdErr when --json is set,
 // or a plain text error otherwise.
 func writeError(useJSON bool, code, message string) {
 	if useJSON {
 		env := newErrorEnvelope(code, message)
 		out, err := json.Marshal(env)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "marshal error: %s\n", err)
+			_, _ = fmt.Fprintf(stdErr, "marshal error: %s\n", err)
 			return
 		}
-		fmt.Fprintln(os.Stderr, string(out))
+		_, _ = fmt.Fprintln(stdErr, string(out))
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s %s\n", code, message)
+	_, _ = fmt.Fprintf(stdErr, "%s %s\n", code, message)
 }
