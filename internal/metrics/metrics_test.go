@@ -682,6 +682,18 @@ func TestQualityIndicator_ConcurrentUpdates(t *testing.T) {
 	}
 
 	wg.Wait()
-	// No assertion: -race is the correctness oracle.
-	_ = qi.Current()
+
+	// F-002: functional oracle in addition to the race detector.
+	// After all goroutines complete, the indicator must be in a defined state.
+	// The Update goroutines write RTT values in 50..149ms (Yellow range near the
+	// Green boundary) with loss in 0..9%, so the final state is one of the valid
+	// Quality values — never an uninitialised zero that falls outside the enum.
+	// We cannot predict the exact final band because goroutine scheduling is
+	// non-deterministic, but we can assert the result is in the closed set
+	// {Green, Yellow, Red} and is not some invalid value.
+	final := qi.Current()
+	if final != metrics.Green && final != metrics.Yellow && final != metrics.Red {
+		t.Errorf("after concurrent updates: Current() = %v (%d), want Green|Yellow|Red",
+			final, int(final))
+	}
 }

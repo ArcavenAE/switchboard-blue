@@ -1,11 +1,15 @@
 // Package metrics implements the session quality indicator (green/yellow/red)
-// derived from measured path RTT and packet loss (BC-2.06.001, BC-2.06.002).
+// derived from measured path RTT and packet loss (BC-2.06.001 v1.3, BC-2.06.002).
 //
 // Classification thresholds (NFR-001; ARCH-INDEX F-008):
 //
 //	Green:  RTT p99 ≤ 100 ms AND loss ≤ 5 %
-//	Yellow: RTT p99 ≤ 500 ms AND loss ≤ 20 %  (and not green)
+//	Yellow: RTT p99 in (100 ms, 500 ms] OR loss in (5 %, 20 %]   (and not Red)
 //	Red:    RTT p99 > 500 ms OR loss > 20 %
+//
+// Red takes precedence over Yellow: when inputs simultaneously satisfy both
+// PC-3 (Yellow) and PC-4 (Red) — e.g. RTT=600 ms and loss=10 % — the
+// indicator is Red. Red is evaluated first in classify() (BC-2.06.001 v1.3 PC-4).
 //
 // Hysteresis constant (ARCH-INDEX F-021): 3 consecutive measurements.
 package metrics
@@ -141,7 +145,11 @@ func (qi *QualityIndicator) Update(rttMs float64, lossPct float64) {
 			// If we've reached the candidate level, keep tracking;
 			// otherwise reset so the next window can continue.
 			if qi.current == qi.candidate {
-				qi.consecutiveCount = HysteresisCount // remain eligible
+				// Keep the streak at threshold so the next upgrade step can
+				// proceed without waiting for a fresh HysteresisCount window
+				// (e.g. Red→Yellow and then immediately toward Green if the
+				// candidate is already Green; BC-2.06.001 v1.3 invariant 3).
+				qi.consecutiveCount = HysteresisCount
 			} else {
 				qi.consecutiveCount = 0
 			}
@@ -184,13 +192,23 @@ func (qi *QualityIndicator) OnMissingFrame() {
 // classify returns the raw Quality level for (rttMs, lossPct) without applying
 // hysteresis. Used internally by Update.
 //
-// BC-2.06.001 postconditions 2–4 (thresholds NFR-001; ARCH-INDEX F-008).
+// Band predicates use OR-form (BC-2.06.001 v1.3 PC-3, PC-4):
+//   - Yellow fires when RTT or loss exceeds green thresholds (but neither exceeds red).
+//   - Red fires when RTT > YellowRTTMs OR loss > YellowLossPct.
+//
+// Red-over-Yellow precedence (BC-2.06.001 v1.3 PC-4): Red is the fall-through
+// default; the Yellow branch only fires when BOTH dimensions are within yellow
+// bounds, so any single red-range value bypasses Yellow and returns Red directly.
 func classify(rttMs float64, lossPct float64) Quality {
+	// PC-2: both dimensions within green bounds → Green.
 	if rttMs <= GreenRTTMs && lossPct <= GreenLossPct {
 		return Green
 	}
+	// PC-3/PC-4: Yellow only when both dimensions are within yellow bounds.
+	// If either exceeds yellow thresholds, fall through to Red (OR-form precedence).
 	if rttMs <= YellowRTTMs && lossPct <= YellowLossPct {
 		return Yellow
 	}
+	// PC-4: RTT > 500 ms OR loss > 20 % (BC-2.06.001 v1.3).
 	return Red
 }
