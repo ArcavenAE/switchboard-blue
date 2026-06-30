@@ -21,7 +21,7 @@ import (
 // public key. Tests that invoke handlers without a callerRoleStr (e.g.,
 // expire, list-keys) must inject the bootstrap key into the context via
 // mgmt.WithCallerPubkey — the bootstrap key satisfies m.IsBootstrapKey and is
-// allowed unconditionally (BC-2.07.001 Inv-3).
+// allowed unconditionally (BC-2.05.004 Precondition 1 / DI-001).
 //
 // SVTNs created:
 //   - "test-svtn": created; canonical zero key (32 zero bytes, "AAAA...=") registered
@@ -174,7 +174,7 @@ func TestDecodePublicKey_RejectsBadSize(t *testing.T) {
 func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 	t.Parallel()
 	// Inject bootstrap key: CallerRole in args is empty; resolveAndVerifyCallerRole
-	// must take the server-resolved IsBootstrapKey path (BC-2.07.001 Inv-3).
+	// must take the server-resolved IsBootstrapKey path (BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
@@ -212,7 +212,7 @@ func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 func TestBuildAdminHandlers_KeyRevoke_HappyPath(t *testing.T) {
 	t.Parallel()
 	// Inject bootstrap key: CallerRole in args is empty; resolveAndVerifyCallerRole
-	// must take the server-resolved IsBootstrapKey path (BC-2.07.001 Inv-3).
+	// must take the server-resolved IsBootstrapKey path (BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
@@ -253,7 +253,7 @@ func TestBuildAdminHandlers_KeyExpire_HappyPath(t *testing.T) {
 	// admin.key.expire passes "" as callerRoleStr so the handler always takes the
 	// server-resolved path. Inject the bootstrap key via WithCallerPubkey so that
 	// resolveAndVerifyCallerRole takes the IsBootstrapKey fast-path (allowed
-	// unconditionally per BC-2.07.001 Inv-3).
+	// unconditionally per BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
@@ -292,7 +292,7 @@ func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 	t.Parallel()
 	// admin.key.list-keys' args struct has CallerRole but the test omits it (empty
 	// string). Inject the bootstrap key into the context so resolveAndVerifyCallerRole
-	// takes the server-resolved IsBootstrapKey fast-path (BC-2.07.001 Inv-3).
+	// takes the server-resolved IsBootstrapKey fast-path (BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
@@ -413,7 +413,7 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 			t.Parallel()
 			// Use newTestSVTNManagerDetailed so we get the bootstrap pubkey for
 			// context injection. resolveAndVerifyCallerRole now fails-closed when
-			// no authenticated key is present in ctx (BC-2.07.001 Inv-3); inject
+			// no authenticated key is present in ctx (BC-2.05.004 Precondition 1 / DI-001); inject
 			// the bootstrap key so the handler proceeds to the domain-level check.
 			m, bootstrapPub := newTestSVTNManagerDetailed(t)
 			handlers := BuildAdminHandlers(m, nil)
@@ -654,7 +654,7 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	// but isolated for clarity of the EC-003 invariant. Both must fail Red Gate.
 	t.Parallel()
 	// Inject bootstrap key so resolveAndVerifyCallerRole takes the server-resolved
-	// IsBootstrapKey fast-path (no callerRoleStr in list-keys args; BC-2.07.001 Inv-3).
+	// IsBootstrapKey fast-path (no callerRoleStr in list-keys args; BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
@@ -689,23 +689,6 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	}
 }
 
-// TestMapAdminError_ErrInvalidDuration verifies that mapAdminError maps
-// svtnmgmt.ErrInvalidDuration to E-CFG-001.
-// Traces to F-007.
-func TestMapAdminError_ErrInvalidDuration(t *testing.T) {
-	t.Parallel()
-	err := mapAdminError(svtnmgmt.ErrInvalidDuration, "s", "k", "")
-	if err == nil {
-		t.Fatal("expected non-nil error")
-	}
-	if !strings.Contains(err.Error(), "E-CFG-001") {
-		t.Errorf("expected E-CFG-001 in error, got: %v", err)
-	}
-	if !errors.Is(err, svtnmgmt.ErrInvalidDuration) {
-		t.Errorf("expected errors.Is(err, svtnmgmt.ErrInvalidDuration), got: %v", err)
-	}
-}
-
 // TestMapAdminError_ErrorWrapping verifies that mapAdminError preserves the
 // original sentinel via errors.Is for all arms.
 // Traces to F-009 (go.md rule 4: %w wrapping).
@@ -718,13 +701,16 @@ func TestMapAdminError_ErrorWrapping(t *testing.T) {
 		pubkey      string
 		claimedRole string
 		wantCode    string
+		wantDetail  string // non-empty: additional substring that must appear in the error
 	}{
-		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "", "E-SVTN-003"},
-		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "", "E-ADM-013"},
-		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "control", "E-ADM-019"},
-		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "", "E-ADM-018"},
-		{"ErrInvalidDuration", svtnmgmt.ErrInvalidDuration, "s", "k", "", "E-CFG-001"},
-		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", "k", "", "E-ADM-020"},
+		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "", "E-SVTN-003", ""},
+		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "", "E-ADM-013", ""},
+		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "control", "E-ADM-019", ""},
+		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "", "E-ADM-018", ""},
+		// ErrInvalidDuration is intentionally absent: mapAdminError does not handle it
+		// because the handler-side ttl guards already produce E-CFG-001 with proper
+		// detail before SVTNManager.ExpireKey is called. See mapAdminError doc.
+		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", "k", "", "E-ADM-020", "cannot revoke the last bootstrap key in SVTN s"},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -733,6 +719,9 @@ func TestMapAdminError_ErrorWrapping(t *testing.T) {
 			err := mapAdminError(tc.sentinel, tc.svtn, tc.pubkey, tc.claimedRole)
 			if !strings.Contains(err.Error(), tc.wantCode) {
 				t.Errorf("expected %s in error, got: %v", tc.wantCode, err)
+			}
+			if tc.wantDetail != "" && !strings.Contains(err.Error(), tc.wantDetail) {
+				t.Errorf("expected detail substring %q in error, got: %v", tc.wantDetail, err)
 			}
 			if !errors.Is(err, tc.sentinel) {
 				t.Errorf("errors.Is(err, sentinel): expected true, got false; err=%v", err)
@@ -853,7 +842,7 @@ func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 //     role is still in the SVTN registry (expiry is enforced at admission, not at
 //     role lookup); role check fails → E-ADM-009.
 //
-// Traces to AC-006; BC-2.07.001 invariant 3; F-P2L1-001 fail-closed.
+// Traces to AC-006; BC-2.05.004 Precondition 1 / DI-001; F-P2L1-001 fail-closed.
 func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 	t.Parallel()
 

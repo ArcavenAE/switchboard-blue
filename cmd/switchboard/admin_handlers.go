@@ -345,11 +345,18 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // All arms use %w to preserve the error chain (go.md rule 4; F-009).
 //
 // Parameters:
-//   - svtnName: the SVTN name in scope at the call site (for E-SVTN-* and E-ADM-018).
+//   - svtnName: the SVTN name in scope at the call site (for E-SVTN-*, E-ADM-018,
+//     and E-ADM-020).
 //   - targetPubEncoded: base64-encoded target public key (for E-ADM-013 / E-ADM-019
 //     fingerprint computation). May be empty for list-keys where no target key exists.
 //   - claimedRoleStr: canonical role string the caller supplied (for E-ADM-019
 //     fallback when *RoleMismatchError is not available). May be empty.
+//
+// Note: ErrInvalidDuration is NOT handled here. The handler-side guards (ttl <= 0 or
+// ttl > maxKeyTTL) already produce E-CFG-001 with proper detail before calling
+// SVTNManager.ExpireKey, so ErrInvalidDuration from SVTNManager is unreachable in
+// practice. Removing the arm avoids dead code and keeps the switch exhaustive for
+// the errors that production callers can actually surface.
 func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string) error {
 	switch {
 	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
@@ -384,10 +391,8 @@ func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string)
 		)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
 		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm=%s to proceed: %w", svtnName, err)
-	case errors.Is(err, svtnmgmt.ErrInvalidDuration):
-		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
-		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: %w", err)
+		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the last bootstrap key in SVTN %s: %w", svtnName, err)
 	default:
 		return err
 	}

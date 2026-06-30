@@ -143,7 +143,7 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	var mgmtWG sync.WaitGroup
 	// AC-004 (S-6.06): access-mode daemon passes nil admin handlers.
 	// Only the control-mode daemon registers admin handlers via BuildAdminHandlers
-	// (ADR-004 role-exclusion; ARCH-08 §6.6.2). Access daemons correctly return
+	// (ADR-004 role-exclusion; ARCH-04 disambiguation table). Access daemons correctly return
 	// E-RPC-010 for any admin.key.* command.
 	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {

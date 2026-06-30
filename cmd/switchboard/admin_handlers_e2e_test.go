@@ -684,9 +684,42 @@ func TestE2E_AdminListKeys_HappyPath(t *testing.T) {
 	}
 }
 
+// TestAccessMode_AdminHandlersNotRegistered asserts that an access-mode daemon
+// socket returns E-RPC-010 "unknown command" for admin.key.register.
+//
+// The access daemon passes nil for admin handlers (AC-004; ADR-004 role-exclusion;
+// ARCH-04 disambiguation table) — startMgmtServer wires no admin.key.* handlers.
+// This test mirrors the production path: startE2EServer(t, nil) passes handlers=nil
+// to mgmt.NewServer, exactly as runAccess does via startMgmtServer(..., nil).
+//
+// Console and router mode tests are deferred until their run* functions ship.
+func TestAccessMode_AdminHandlersNotRegistered(t *testing.T) {
+	t.Parallel()
+
+	// Access mode: nil handlers — no admin.key.* commands registered.
+	es := startE2EServer(t, nil)
+
+	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
+	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
+		"svtn":   "any-svtn",
+		"pubkey": "placeholder",
+		"role":   "access",
+	})
+
+	// Access-mode daemon MUST return E-RPC-010 for any admin.key.* command.
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil {
+		t.Fatal("expected E-RPC-010 error from access-mode daemon, got none")
+	}
+	code, _ := errObj["code"].(string)
+	if code != "E-RPC-010" {
+		t.Errorf("expected E-RPC-010, got %q", code)
+	}
+}
+
 // TestControlMode_AdminHandlersRegistered asserts that a control-mode daemon
 // socket accepts admin.key.register without E-RPC-010.
-// Traces to AC-004; ADR-004 role-exclusion; ARCH-08 §6.6.2.
+// Traces to AC-004; ADR-004 role-exclusion (ARCH-04 disambiguation table).
 func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 	t.Parallel()
 
@@ -735,7 +768,7 @@ func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 // it via verifyCallerRole (E-ADM-009). A nil-handler or bootstrap-only server
 // would never reach this code path.
 //
-// Traces to AC-004; BC-2.07.001 invariant 3; ADR-004 role-exclusion.
+// Traces to AC-004; BC-2.05.004 Precondition 1 / DI-001; ADR-004 role-exclusion.
 func TestAC004_NonControlRoleRejected(t *testing.T) {
 	t.Parallel()
 
@@ -899,7 +932,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLTooLong(t *testing.T) {
 
 // TestE2E_AdminKeyRegister_RoleInsufficient sends admin.key.register using a
 // console-role caller key and asserts E-ADM-009.
-// Traces to AC-006; BC-2.07.001 invariant 3.
+// Traces to AC-006; BC-2.05.004 Precondition 1 / DI-001.
 func TestE2E_AdminKeyRegister_RoleInsufficient(t *testing.T) {
 	t.Parallel()
 
@@ -945,7 +978,7 @@ func TestE2E_AdminKeyRegister_RoleInsufficient(t *testing.T) {
 
 // TestE2E_AdminKeyRevoke_RoleInsufficient sends admin.key.revoke using an
 // access-role caller key and asserts E-ADM-009.
-// Traces to AC-006; BC-2.07.001 invariant 3.
+// Traces to AC-006; BC-2.05.004 Precondition 1 / DI-001.
 func TestE2E_AdminKeyRevoke_RoleInsufficient(t *testing.T) {
 	t.Parallel()
 

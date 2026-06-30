@@ -263,7 +263,7 @@ func startMgmtServer(
 	// CR-002 resolution (S-6.06): control mode passes BuildAdminHandlers(svtnMgr)
 	// here. Access, console, and router modes pass nil — those daemons correctly
 	// return E-RPC-010 for any admin.key.* command (ADR-004 role-exclusion;
-	// ARCH-08 §6.6.2; AC-004). The role field in admin.key.revoke args is parsed
+	// ARCH-04 disambiguation table; AC-004). The role field in admin.key.revoke args is parsed
 	// as admission.KeyRole and passed as currentRole to SVTNManager.RevokeKey
 	// (HOLD-001 hybrid; F-002 ruling; S-6.06 AC-002).
 ) (*mgmt.Server, error) {
@@ -319,7 +319,7 @@ func startMgmtServer(
 //
 // AC-004 (S-6.06): when router mode is implemented, startMgmtServer MUST pass
 // nil (or an empty slice) for admin handlers — router daemons must NOT register
-// admin.key.* handlers (ADR-004 role-exclusion; ARCH-08 §6.6.2).
+// admin.key.* handlers (ADR-004 role-exclusion; ARCH-04 disambiguation table).
 func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runRouter: not implemented")
 }
@@ -332,7 +332,7 @@ func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
 //
 // AC-004 (S-6.06): when console mode is implemented, startMgmtServer MUST pass
 // nil (or an empty slice) for admin handlers — console daemons must NOT register
-// admin.key.* handlers (ADR-004 role-exclusion; ARCH-08 §6.6.2).
+// admin.key.* handlers (ADR-004 role-exclusion; ARCH-04 disambiguation table).
 func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runConsole: not implemented")
 }
@@ -343,7 +343,7 @@ func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 // and blocks until ctx is cancelled (ARCH-01 §Goroutine WaitGroup Contract).
 //
 // Only the control-mode daemon registers admin handlers (ADR-004 role-exclusion;
-// ARCH-08 §6.6.2; AC-004). Access, console, and router daemons pass nil.
+// ARCH-04 disambiguation table; AC-004). Access, console, and router daemons pass nil.
 func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
