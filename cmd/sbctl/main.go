@@ -50,9 +50,27 @@ func main() {
 	case "sessions":
 		err = connectAndRun(ctx, *target, *key, *jsonOut, "sessions.list", nil)
 	case "paths":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "paths.list", nil)
+		// `sbctl paths list` — canonical per-path metrics command (BC-2.06.003 PC-1).
+		if len(args) < 2 || args[1] != "list" {
+			fmt.Fprintf(os.Stderr, "usage: sbctl paths list\n")
+			os.Exit(2)
+		}
+		err = runPathsList(ctx, *target, *key, *jsonOut)
 	case "router":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "router.status", nil)
+		// `sbctl router metrics --svtn=<id>` or `sbctl router status --target <router>`.
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "usage: sbctl router <metrics|status> [flags]\n")
+			os.Exit(2)
+		}
+		switch args[1] {
+		case "metrics":
+			err = runRouterMetrics(ctx, *target, *key, *jsonOut, args[2:])
+		case "status":
+			err = runRouterStatus(ctx, *target, *key, *jsonOut, args[2:])
+		default:
+			fmt.Fprintf(os.Stderr, "unknown router subcommand: %s\n", args[1])
+			os.Exit(2)
+		}
 	case "console":
 		err = connectAndRun(ctx, *target, *key, *jsonOut, "console.attach", nil)
 	case "admin":
