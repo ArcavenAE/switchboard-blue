@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.11"
+version: "2.12"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -144,6 +144,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.12 | 2026-06-30 | Pass-22 F-P22L3-003 + F-P22L3-004 sibling-fix propagation (4th-iteration narrowing sweep): VP-076 bumped v1.2→v1.3 — Properties #1 and #2 "unconditionally" narrowed to "for any well-formed request that reaches SVTNManager"; proof-harness comment narrowed to "sentinel for any well-formed bootstrap-key request". No count or catalog-row changes (row description already correct from v2.11). |
 | 2.11 | 2026-06-30 | Pass-21 F-P21L2-002 sibling-fix: VP-076 row description narrowed from "unconditionally" to "for any well-formed request" to mirror BC-2.05.004 EC-007 v1.12 + VP-076 v1.2; all v1.10 BC citation annotations updated to v1.12. No count changes. |
 | 2.10 | 2026-06-30 | VP-076 minted (integration, P0, cmd/switchboard) — bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention per BC-2.05.004 EC-007 v1.12 (E-ADM-021 symmetric counterpart to E-ADM-020); refs F-P18L1-001 lens-1 pass-18. Total: 75→76. Integration: 21→22. P0: 53→54. |
 | 2.9 | 2026-06-30 | Pass-12 lens-3 (F-P12L3-001/002/003): VP-065 v1.3 (add missing mgmt import, drop dead encoding/json); VP-066 v1.3 (add missing "io" import for fuzz harness io.Copy/io.Discard/io.LimitReader); VP-064 v1.3 (Handler.Fn first param interface{}→context.Context, return (interface{},error)→(any,error)). Imports + Handler.Fn signature alignment — closes Pass-11 partial-fix gap on harness compilability. No VP count changes. |

@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.8"
+version: "3.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.9 | 2026-06-30 | Pass-22 sibling-fix propagation (F-P22L3-001, 4th-iteration narrowing sweep): S-6.06 bumped v1.18 → v1.19 — VP-076 body table row "unconditionally" narrowed to "for any well-formed request" with E-CFG-001 layering note; mirrors BC-2.05.004 EC-007 v1.12 + VP-076 v1.3. |
 | 3.8 | 2026-06-30 | Pass-21 sibling-fix propagation: S-6.06 bumped v1.17 → v1.18 — EC-008 narrowed from "unconditionally" to "for any well-formed request" per BC-2.05.004 EC-007 v1.12 (Pass-20 Option-B) and VP-076 v1.1; added E-CFG-001 input-validation layering note (F-P21L3-001, F-P21L2-001 HIGH dup-confirmed). v1.17 changelog row-attribution correction folded as parenthetical (fix was in ErrInvalidDuration row, not E-ADM-021 row). |
 | 3.7 | 2026-06-30 | Pass-19 lens-2 fix: S-6.06 bumped v1.16 → v1.17 — correct Error Code Map ErrInvalidDuration row line citation 275-280 → 279-284 (line drift from intervening edits; F-P19L2-002). |
 | 3.6 | 2026-06-30 | F-P18L1-001 (MED) + lens-3 LOW version-drift fix: S-6.06 bumped to v1.16 — EC-008 + Error Code Map extended to cover bootstrap-expire-forbidden (E-ADM-021); VP-076 minted; VP coverage updated 75/75 → 76/76. Frontmatter version drift corrected (was "3.4", body showed v3.5; now "3.6" aligned with body changelog). |
