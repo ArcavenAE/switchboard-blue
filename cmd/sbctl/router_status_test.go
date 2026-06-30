@@ -35,26 +35,95 @@ import (
 
 // stubDaemonSocket creates a temp unix socket and returns its path plus a
 // cleanup function. The socket is not yet listening.
+//
+// Uses os.MkdirTemp with a short base path ("/tmp") to stay within macOS's
+// 104-byte Unix socket path limit (the standard t.TempDir() path is too long).
 func stubDaemonSocket(t *testing.T) (sockPath string, cleanup func()) {
 	t.Helper()
-	dir := t.TempDir()
-	sockPath = filepath.Join(dir, "stub.sock")
-	return sockPath, func() { _ = os.Remove(sockPath) }
+	dir, err := os.MkdirTemp("", "sb")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	sockPath = filepath.Join(dir, "s.sock")
+	return sockPath, func() {
+		_ = os.Remove(sockPath)
+		_ = os.RemoveAll(dir)
+	}
 }
 
 // startCannedDaemon starts a minimal stub daemon on sockPath that returns
-// response for a single RPC command. The daemon performs the ADR-012 handshake
-// minimally (challenges the client, responds AUTH_OK) then responds to the
-// first RPC with responseData.
+// a canned response for a single RPC command. The daemon performs the ADR-012
+// handshake minimally (sends CHALLENGE, reads CHALLENGE_RESPONSE, sends AUTH_OK)
+// then responds to the first RPC with responseData wrapped in a success envelope.
 //
-// RED GATE: This stub calls t.Fatal so every test that depends on a canned daemon
-// fails individually (rather than panicking the entire test binary). Replace this
-// with a real implementation once the paths.list / router.metrics / sessions.list
-// RPC dispatch layer is wired in cmd/sbctl.
-func startCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessage) net.Listener { //nolint:unparam // sockPath and responseData will be used once the stub is replaced by a real implementation
+// The returned net.Listener is registered with t.Cleanup so it closes when the
+// test ends. The daemon goroutine exits when the listener is closed.
+func startCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessage) net.Listener { //nolint:unparam // return value unused at call sites; kept for potential future use in concurrent test scenarios
 	t.Helper()
-	t.Fatal("todo: AC-001 — implement canned stub daemon for sbctl integration tests (Red Gate)")
-	return nil // unreachable; keeps compiler happy
+
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("startCannedDaemon: listen on %s: %v", sockPath, err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return // listener closed; exit goroutine
+			}
+			go serveCannedConn(conn, responseData)
+		}
+	}()
+	return ln
+}
+
+// serveCannedConn performs one full ADR-012 handshake then responds to the
+// first RPC request with responseData. The connection is closed when done.
+func serveCannedConn(conn net.Conn, responseData json.RawMessage) {
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+	// Step 1: send CHALLENGE with a static 32-byte nonce (all-zero, base64url-encoded).
+	// The client signs it and sends back a CHALLENGE_RESPONSE; we do not verify.
+	nonce := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" // 32 zero bytes, base64url
+	challenge := map[string]string{
+		"type":       "challenge",
+		"nonce":      nonce,
+		"daemon_sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	}
+	if err := json.NewEncoder(conn).Encode(challenge); err != nil {
+		return
+	}
+
+	// Step 2: read CHALLENGE_RESPONSE (discard; trust-on-first-use per ADR-012 MVP).
+	var resp map[string]string
+	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
+		return
+	}
+
+	// Step 3: send AUTH_OK.
+	authOK := map[string]string{"type": "auth_ok", "daemon_version": "test-stub"}
+	if err := json.NewEncoder(conn).Encode(authOK); err != nil {
+		return
+	}
+
+	// Step 4: read RPC request and extract the ID for echo.
+	var req map[string]interface{}
+	if err := json.NewDecoder(conn).Decode(&req); err != nil {
+		return
+	}
+	reqID, _ := req["id"].(string)
+
+	// Step 5: send RPC response with the canned data.
+	rpcResp := map[string]interface{}{
+		"type": "response",
+		"id":   reqID,
+		"ok":   true,
+		"data": responseData,
+	}
+	_ = json.NewEncoder(conn).Encode(rpcResp)
 }
 
 // ─── AC-001: sbctl paths list canonical fields ───────────────────────────────

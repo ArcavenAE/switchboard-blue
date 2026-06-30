@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"strings"
 )
 
 // PathEntryWithQuality extends PathEntry with the quality field for the
@@ -43,13 +44,15 @@ type PathEntryWithQuality struct {
 //
 // AC-003 / BC-2.06.003 PC-3
 func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
-	panic("todo: AC-003 — parse --target flag override, call same query as paths list, append quality field")
-}
-
-// qualityFromPathEntry derives the green/yellow/red quality indicator from a
-// PathEntry's status and rtt_p99_ms fields.
-//
-// AC-003 / BC-2.06.003 PC-3; green/yellow/red thresholds from metrics package (BC-2.06.001).
-func qualityFromPathEntry(entry PathEntry) string {
-	panic("todo: AC-003 — derive quality indicator from path entry status and p99")
+	// Parse --target override from args (alias semantics: --target overrides daemon address).
+	for i, arg := range args {
+		if arg == "--target" && i+1 < len(args) {
+			target = args[i+1]
+		} else if strings.HasPrefix(arg, "--target=") {
+			target = strings.TrimPrefix(arg, "--target=")
+		}
+	}
+	// Shim: delegate to the same underlying RPC as runPathsList (single code path,
+	// no divergent implementation in internal/metrics per BC-2.06.003 PC-3).
+	return connectAndRun(ctx, target, keyPath, useJSON, "paths.list", nil)
 }

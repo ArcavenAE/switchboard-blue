@@ -229,37 +229,51 @@ type rttHistogram struct {
 	total  uint64
 }
 
-// bucketFor returns the bucket index for an RTT sample (arrivalRTTMS ≥ 0).
+// bucketFor returns the bucket index for an RTT sample (arrivalRTTMS >= 0).
 // Caller must hold the PathTracker mu.
 //
-// Stub: returns 0 for all inputs until AC-005 is implemented.
-// Tests that depend on bucket selection will fail (red) until wired.
-func bucketFor(_ float64) int {
-	return 0 // todo: AC-005 — locate bucket for RTT sample
+// Iterates rttHistogramBuckets and returns the index of the first bucket whose
+// right edge (exclusive) exceeds arrivalRTTMS. The last bucket catches anything
+// beyond 2000ms via its infinity sentinel (1e18).
+func bucketFor(arrivalRTTMS float64) int {
+	for i, edge := range rttHistogramBuckets {
+		if arrivalRTTMS < edge {
+			return i
+		}
+	}
+	return len(rttHistogramBuckets) - 1
 }
 
 // record adds one RTT sample to the histogram.
 // Caller must hold the PathTracker mu.
-//
-// Stub: increments total only; does not update bucket counts.
-// The total counter populates SampleCount in PathSnapshot (AC-004 pending check).
-// Bucket-based p99 accuracy tests (AC-005) will fail red until record
-// properly routes samples into counts[bucketFor(arrivalRTTMS)].
-func (h *rttHistogram) record(_ float64) {
-	// todo: AC-005 — h.counts[bucketFor(arrivalRTTMS)]++; h.total++
+func (h *rttHistogram) record(arrivalRTTMS float64) {
+	h.counts[bucketFor(arrivalRTTMS)]++
 	h.total++
 }
 
 // p99 returns the p99 RTT estimate in milliseconds.
 // Returns 0 when total < 10 (caller should surface as "pending").
-// Approximation: p99 ≤ true_p99 + max_bucket_width (ARCH-03 §p99 RTT Accumulator).
+// Approximation: p99() <= true_p99 + max_bucket_width (ARCH-03 p99 RTT Accumulator).
 // Caller must hold the PathTracker mu.
 //
-// Stub: returns 0 for all inputs. Tests expecting P99RTTMs > 0 after ≥10 probes
-// (AC-005 / TestBC_2_06_003_P99_ValidAfter10Samples) will fail red until the
-// histogram traversal is implemented.
+// Traverses h.counts from the lowest bucket upward, accumulating sample counts
+// until the running sum reaches or exceeds 99% of total samples. The upper edge
+// of that bucket is returned as the p99 estimate.
 func (h *rttHistogram) p99() float64 {
-	return 0 // todo: AC-005 — traverse h.counts to find p99 bucket, return upper edge
+	if h.total < 10 {
+		return 0
+	}
+	// threshold is the minimum cumulative count needed to claim p99.
+	// Integer arithmetic: ceil(99 * total / 100).
+	threshold := (99*h.total + 99) / 100
+	var cumulative uint64
+	for i, count := range h.counts {
+		cumulative += count
+		if cumulative >= threshold {
+			return rttHistogramBuckets[i]
+		}
+	}
+	return rttHistogramBuckets[len(rttHistogramBuckets)-1]
 }
 
 // PathSnapshot is a consistent point-in-time copy of all PathTracker metrics.

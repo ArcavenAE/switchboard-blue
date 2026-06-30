@@ -38,13 +38,5 @@ type PathEntry struct {
 //
 // AC-001 / BC-2.06.003 PC-1
 func runPathsList(ctx context.Context, target, keyPath string, useJSON bool) error {
-	panic("todo: AC-001 — dispatch paths.list RPC and format per-path output")
-}
-
-// formatPathsTable formats a slice of PathEntry values as a human-readable
-// tab-separated table for non-JSON output mode.
-//
-// AC-001 / BC-2.06.003 PC-1
-func formatPathsTable(entries []PathEntry) string {
-	panic("todo: AC-001 — format paths as human-readable table")
+	return connectAndRun(ctx, target, keyPath, useJSON, "paths.list", nil)
 }

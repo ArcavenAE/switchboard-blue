@@ -17,6 +17,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strings"
 )
 
 // RouterMetrics is the JSON response schema for `sbctl router metrics --svtn=<id>`.
@@ -33,5 +35,16 @@ type RouterMetrics struct {
 //
 // AC-002 / BC-2.06.003 PC-2
 func runRouterMetrics(ctx context.Context, target, keyPath string, useJSON bool, args []string) error {
-	panic("todo: AC-002 — parse --svtn flag, dispatch router.metrics RPC, format output")
+	// Parse --svtn=<id> from args.
+	var svtnID string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--svtn=") {
+			svtnID = strings.TrimPrefix(arg, "--svtn=")
+		}
+	}
+	if svtnID == "" {
+		writeError(useJSON, "E-CFG-010", "router metrics: --svtn=<id> is required")
+		return fmt.Errorf("router metrics: --svtn flag is required")
+	}
+	return connectAndRun(ctx, target, keyPath, useJSON, "router.metrics", map[string]string{"svtn_id": svtnID})
 }
