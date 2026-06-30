@@ -852,9 +852,13 @@ func TestE2E_AdminExpire_ServerRejectsTTLNegative(t *testing.T) {
 	t.Parallel()
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	m, _, _ := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, _, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m, nil)
-	es := startE2EServer(t, handlers)
+	// Use startE2EServerWithOps with ctrlPriv so the daemon authenticates as the
+	// SVTNManager bootstrap key. startE2EServer generates a separate key that is
+	// not registered in the SVTNManager, causing E-ADM-009 before TTL validation
+	// fires (DEMO-ISSUE-001).
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
@@ -880,9 +884,13 @@ func TestE2E_AdminExpire_ServerRejectsTTLZero(t *testing.T) {
 	t.Parallel()
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	m, _, _ := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, _, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m, nil)
-	es := startE2EServer(t, handlers)
+	// Use startE2EServerWithOps with ctrlPriv so the daemon authenticates as the
+	// SVTNManager bootstrap key. startE2EServer generates a separate key that is
+	// not registered in the SVTNManager, causing E-ADM-009 before TTL validation
+	// fires (DEMO-ISSUE-001).
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
@@ -908,9 +916,13 @@ func TestE2E_AdminExpire_ServerRejectsTTLTooLong(t *testing.T) {
 	t.Parallel()
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	m, _, _ := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, _, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m, nil)
-	es := startE2EServer(t, handlers)
+	// Use startE2EServerWithOps with ctrlPriv so the daemon authenticates as the
+	// SVTNManager bootstrap key. startE2EServer generates a separate key that is
+	// not registered in the SVTNManager, causing E-ADM-009 before TTL validation
+	// fires (DEMO-ISSUE-001).
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	// 876001h > 100 years (100 * 365 * 24 = 876000h)
