@@ -863,9 +863,14 @@ func TestSVTNManager_ConcurrentRegisterRevoke_RaceDetector(t *testing.T) {
 		}(pub)
 
 		go func(key ed25519.PublicKey) {
-			// May return ErrKeyNotRegistered if the registration hasn't run yet;
-			// both outcomes are valid for the race-detector smoke test.
-			_, _ = mgr.RevokeKey(svtnResult.SVTN.Name, key, admission.RoleConsole, false)
+			// May return nil (success) or ErrKeyNotRegistered if the registration
+			// hasn't run yet; both are valid for the race-detector smoke test.
+			// Any other error is unexpected and must fail the test (F-006).
+			_, err := mgr.RevokeKey(svtnResult.SVTN.Name, key, admission.RoleConsole, false)
+			if err != nil && !errors.Is(err, admission.ErrKeyNotRegistered) {
+				errs <- fmt.Errorf("concurrent RevokeKey: unexpected error: %w", err)
+				return
+			}
 			errs <- nil
 		}(pub)
 	}
