@@ -395,11 +395,13 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 //     operation — the daemon's own key is always the control trust anchor.
 //   - If the key is found with a non-control role, return E-ADM-009.
 //
-// Fallback path (unit tests / no handshake context):
+// Fallback path (no handshake context):
 //   - If ctx has no caller pubkey and callerRoleStr is non-empty, parse and
-//     check it (legacy / test backward-compat). This path is only reachable
-//     when handlers are called outside the mgmt handshake (e.g., unit tests
-//     that pass context.Background()).
+//     check it. This path is only reachable when handlers are called outside
+//     the mgmt handshake (e.g., unit tests that inject a known role string).
+//   - If ctx has no caller pubkey and callerRoleStr is empty, the caller's
+//     role cannot be confirmed → reject with E-ADM-009 (fail-closed,
+//     BC-2.05.004 / BC-2.07.001 Inv-3).
 func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, svtnName, callerRoleStr, cmd string) error {
 	callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
 	if hasPubkey {
@@ -418,9 +420,11 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, sv
 		return verifyCallerRole(role, cmd, fp)
 	}
 
-	// No pubkey in ctx — fallback for unit tests.
+	// No pubkey in ctx — fallback when no handshake context is present.
 	if callerRoleStr == "" {
-		return nil
+		// Cannot confirm caller role: fail closed (BC-2.05.004 / BC-2.07.001 Inv-3).
+		// DEFER(S-HRD.02): structured-log admin auth rejection — see S-HRD.02 (daemon logging infrastructure).
+		return fmt.Errorf("E-ADM-009: caller role cannot be confirmed for operation %s: no authenticated key in context", cmd)
 	}
 	cr, err := admission.KeyRoleFromString(callerRoleStr)
 	if err != nil {

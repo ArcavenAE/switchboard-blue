@@ -9,13 +9,19 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
 
-// newTestSVTNManager returns a SVTNManager pre-populated with the SVTNs that
-// happy-path and error-mapping tests reference.
+// newTestSVTNManagerDetailed returns a SVTNManager pre-populated with the SVTNs
+// that happy-path and error-mapping tests reference, along with the bootstrap
+// public key. Tests that invoke handlers without a callerRoleStr (e.g.,
+// expire, list-keys) must inject the bootstrap key into the context via
+// mgmt.WithCallerPubkey — the bootstrap key satisfies m.IsBootstrapKey and is
+// allowed unconditionally (BC-2.07.001 Inv-3).
 //
 // SVTNs created:
 //   - "test-svtn": created; canonical zero key (32 zero bytes, "AAAA...=") registered
@@ -32,7 +38,7 @@ import (
 // A random Ed25519 key is used as the manager bootstrap control key so that the
 // canonical zero key remains absent from "existing-svtn" and "empty-svtn" until
 // explicitly registered.
-func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
+func newTestSVTNManagerDetailed(t *testing.T) (*svtnmgmt.SVTNManager, ed25519.PublicKey) {
 	t.Helper()
 
 	// Generate a random bootstrap key distinct from the canonical test key (32
@@ -40,7 +46,7 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 	// SVTNs where it must be absent (E-ADM-013 / EC-003 cases).
 	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		t.Fatalf("newTestSVTNManager: generate bootstrap key: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: generate bootstrap key: %v", err)
 	}
 
 	ks := admission.NewAdmittedKeySet()
@@ -49,24 +55,24 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 	// "test-svtn": create and register the canonical zero key as control so that
 	// happy-path revoke / expire / list-keys tests can act on it.
 	if _, err := m.Create("test-svtn"); err != nil {
-		t.Fatalf("newTestSVTNManager: create test-svtn: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: create test-svtn: %v", err)
 	}
 	zeroKey := make([]byte, ed25519.PublicKeySize)
 	if _, err := m.RegisterKey("test-svtn", zeroKey, admission.RoleControl); err != nil {
-		t.Fatalf("newTestSVTNManager: register zero key on test-svtn: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: register zero key on test-svtn: %v", err)
 	}
 
 	// "existing-svtn": create with no additional keys. The E-ADM-013 subtest
 	// expects the canonical zero key to be absent so that revocation returns
 	// "key not registered" rather than "SVTN not found".
 	if _, err := m.Create("existing-svtn"); err != nil {
-		t.Fatalf("newTestSVTNManager: create existing-svtn: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: create existing-svtn: %v", err)
 	}
 
 	// "empty-svtn": create with no additional keys. Required by
 	// TestBuildAdminHandlers_ListKeys_EmptySliceNotNil (EC-003).
 	if _, err := m.Create("empty-svtn"); err != nil {
-		t.Fatalf("newTestSVTNManager: create empty-svtn: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: create empty-svtn: %v", err)
 	}
 
 	// "rolematch-svtn": create and register the canonical zero key as ROLE_CONTROL.
@@ -75,14 +81,23 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 	// SVTN from "existing-svtn" avoids conflict with the sibling subtest that
 	// requires the zero key to be absent.
 	if _, err := m.Create("rolematch-svtn"); err != nil {
-		t.Fatalf("newTestSVTNManager: create rolematch-svtn: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: create rolematch-svtn: %v", err)
 	}
 	if _, err := m.RegisterKey("rolematch-svtn", zeroKey, admission.RoleControl); err != nil {
-		t.Fatalf("newTestSVTNManager: register zero key on rolematch-svtn: %v", err)
+		t.Fatalf("newTestSVTNManagerDetailed: register zero key on rolematch-svtn: %v", err)
 	}
 
 	// "nonexistent-svtn" is intentionally not created; KeyRegister_ErrorMapping
 	// expects E-SVTN-003 for that name.
+	return m, bootstrapPub
+}
+
+// newTestSVTNManager is a convenience wrapper around newTestSVTNManagerDetailed
+// for tests that use the callerRoleStr fallback path (register/revoke supply a
+// non-empty role string in the args JSON so the bootstrap key is not needed).
+func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
+	t.Helper()
+	m, _ := newTestSVTNManagerDetailed(t)
 	return m
 }
 
@@ -121,7 +136,9 @@ func TestDecodePublicKey_RejectsBadSize(t *testing.T) {
 // Traces to AC-001; BC-2.05.004 PC-1.
 func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Inject bootstrap key: CallerRole in args is empty; resolveAndVerifyCallerRole
+	// must take the server-resolved IsBootstrapKey path (BC-2.07.001 Inv-3).
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var registerFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -144,9 +161,8 @@ func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	// This call will panic("todo:...") until the handler is implemented.
-	// The test is red by design (BC-5.38.001 Red Gate).
-	_, handlerErr := registerFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := registerFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from register handler: %v", handlerErr)
 	}
@@ -157,7 +173,9 @@ func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 // Traces to AC-001; BC-2.05.004 PC-2.
 func TestBuildAdminHandlers_KeyRevoke_HappyPath(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Inject bootstrap key: CallerRole in args is empty; resolveAndVerifyCallerRole
+	// must take the server-resolved IsBootstrapKey path (BC-2.07.001 Inv-3).
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -181,7 +199,8 @@ func TestBuildAdminHandlers_KeyRevoke_HappyPath(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := revokeFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from revoke handler: %v", handlerErr)
 	}
@@ -192,7 +211,11 @@ func TestBuildAdminHandlers_KeyRevoke_HappyPath(t *testing.T) {
 // Traces to AC-001; BC-2.05.004 PC-3.
 func TestBuildAdminHandlers_KeyExpire_HappyPath(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// admin.key.expire passes "" as callerRoleStr so the handler always takes the
+	// server-resolved path. Inject the bootstrap key via WithCallerPubkey so that
+	// resolveAndVerifyCallerRole takes the IsBootstrapKey fast-path (allowed
+	// unconditionally per BC-2.07.001 Inv-3).
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -215,7 +238,8 @@ func TestBuildAdminHandlers_KeyExpire_HappyPath(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := expireFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := expireFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from expire handler: %v", handlerErr)
 	}
@@ -226,7 +250,10 @@ func TestBuildAdminHandlers_KeyExpire_HappyPath(t *testing.T) {
 // Traces to AC-001; BC-2.05.004 PC-1.
 func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// admin.list-keys' args struct has CallerRole but the test omits it (empty
+	// string). Inject the bootstrap key into the context so resolveAndVerifyCallerRole
+	// takes the server-resolved IsBootstrapKey fast-path (BC-2.07.001 Inv-3).
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -245,7 +272,8 @@ func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	result, handlerErr := listFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	result, handlerErr := listFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error from list-keys handler: %v", handlerErr)
 	}
@@ -265,7 +293,9 @@ func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 // Traces to AC-001 error mapping; BC-2.05.004 PC-1.
 func TestBuildAdminHandlers_KeyRegister_ErrorMapping(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Inject bootstrap key: CallerRole in args is empty; auth must pass before
+	// reaching the SVTN-not-found domain error under test.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var registerFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -289,7 +319,8 @@ func TestBuildAdminHandlers_KeyRegister_ErrorMapping(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := registerFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := registerFn(ctx, json.RawMessage(args))
 	if handlerErr == nil {
 		t.Fatal("expected error for nonexistent SVTN, got nil")
 	}
@@ -340,7 +371,11 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			m := newTestSVTNManager(t)
+			// Use newTestSVTNManagerDetailed so we get the bootstrap pubkey for
+			// context injection. resolveAndVerifyCallerRole now fails-closed when
+			// no authenticated key is present in ctx (BC-2.07.001 Inv-3); inject
+			// the bootstrap key so the handler proceeds to the domain-level check.
+			m, bootstrapPub := newTestSVTNManagerDetailed(t)
 			handlers := BuildAdminHandlers(m)
 
 			var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -359,7 +394,8 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 				t.Fatalf("marshal args: %v", err)
 			}
 
-			_, handlerErr := revokeFn(context.Background(), json.RawMessage(rawArgs))
+			ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+			_, handlerErr := revokeFn(ctx, json.RawMessage(rawArgs))
 			if handlerErr == nil {
 				t.Fatalf("expected error %s, got nil", tc.wantErrCode)
 			}
@@ -416,7 +452,9 @@ func TestBuildAdminHandlers_KeyRegister_MalformedJSON(t *testing.T) {
 // Traces to AC-001 edge case EC-002; BC-2.05.004 PC-2 precondition (well-formed request).
 func TestBuildAdminHandlers_KeyRevoke_UnknownRole(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Inject bootstrap key so auth passes and the handler reaches the role
+	// validation logic that returns E-CFG-001 for the unknown target role.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -441,7 +479,8 @@ func TestBuildAdminHandlers_KeyRevoke_UnknownRole(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := revokeFn(ctx, json.RawMessage(args))
 	if handlerErr == nil {
 		t.Fatal("expected error for unknown role, got nil")
 	}
@@ -574,7 +613,9 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	// Note: this is a duplicate focus of TestBuildAdminHandlers_ListKeys_HappyPath
 	// but isolated for clarity of the EC-003 invariant. Both must fail Red Gate.
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Inject bootstrap key so resolveAndVerifyCallerRole takes the server-resolved
+	// IsBootstrapKey fast-path (no callerRoleStr in list-keys args; BC-2.07.001 Inv-3).
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -594,7 +635,8 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	result, handlerErr := listFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	result, handlerErr := listFn(ctx, json.RawMessage(args))
 	if handlerErr != nil {
 		t.Fatalf("unexpected error: %v", handlerErr)
 	}
@@ -697,7 +739,10 @@ func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	// Inject the bootstrap key so auth passes (IsBootstrapKey fast-path) and
+	// the handler reaches the revocation-forbidden check (E-ADM-020).
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := revokeFn(ctx, json.RawMessage(args))
 	if handlerErr == nil {
 		t.Fatal("expected E-ADM-020, got nil")
 	}
@@ -712,10 +757,12 @@ func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
 func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 	t.Parallel()
 
-	// Use newTestSVTNManager so "test-svtn" exists with the zero key registered
-	// as ROLE_CONTROL. Without this, the handler hits E-SVTN-003 (SVTN not
-	// found) before it can reach the ErrControlRevocationRequiresConfirm check.
-	m := newTestSVTNManager(t)
+	// Use newTestSVTNManagerDetailed so "test-svtn" exists with the zero key
+	// registered as ROLE_CONTROL, and we get the bootstrap pubkey for context
+	// injection. Without "test-svtn" the handler hits E-SVTN-003 before reaching
+	// ErrControlRevocationRequiresConfirm; without the bootstrap key in ctx,
+	// resolveAndVerifyCallerRole fails-closed before reaching the confirm check.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -741,11 +788,136 @@ func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := revokeFn(ctx, json.RawMessage(args))
 	if handlerErr == nil {
 		t.Fatal("expected E-ADM-018 for control revocation without confirm, got nil")
 	}
 	if !strings.Contains(handlerErr.Error(), "E-ADM-018") {
 		t.Errorf("expected E-ADM-018, got: %v", handlerErr)
 	}
+}
+
+// TestResolveAndVerifyCallerRole_ServerSidePath exercises the server-side context
+// branch of resolveAndVerifyCallerRole (when ctx carries a caller pubkey set by
+// the mgmt handshake via mgmt.WithCallerPubkey). Table-driven over four cases:
+//
+//   - bootstrap_key_allowed: the daemon's own bootstrap key is the trust anchor;
+//     resolveAndVerifyCallerRole must return nil regardless of the SVTN registry.
+//   - unknown_key_rejected: a key not in the SVTN and not the bootstrap key is
+//     rejected with E-ADM-009 (F-P2L1-001 fail-closed).
+//   - revoked_key_rejected: a key that was registered then revoked is absent from
+//     the SVTN registry; treated as unknown → E-ADM-009.
+//   - expired_key_non_control_rejected: a key with an expiry set and a non-control
+//     role is still in the SVTN registry (expiry is enforced at admission, not at
+//     role lookup); role check fails → E-ADM-009.
+//
+// Traces to AC-006; BC-2.07.001 invariant 3; F-P2L1-001 fail-closed.
+func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
+	t.Parallel()
+
+	const svtnName = "test-svtn"
+	const cmd = "admin.key.register"
+
+	// newManagerWithSVTN returns a SVTNManager with svtnName pre-created and
+	// the bootstrap public key distinct from the test keys.
+	newManagerWithSVTN := func(t *testing.T) (*svtnmgmt.SVTNManager, ed25519.PublicKey) {
+		t.Helper()
+		bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate bootstrap key: %v", err)
+		}
+		ks := admission.NewAdmittedKeySet()
+		m := svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+		if _, err := m.Create(svtnName); err != nil {
+			t.Fatalf("create SVTN: %v", err)
+		}
+		return m, bootstrapPub
+	}
+
+	t.Run("bootstrap_key_allowed", func(t *testing.T) {
+		t.Parallel()
+		m, bootstrapPub := newManagerWithSVTN(t)
+		// ctx carries the bootstrap key — must be allowed unconditionally.
+		ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+		err := resolveAndVerifyCallerRole(ctx, m, svtnName, "", cmd)
+		if err != nil {
+			t.Errorf("bootstrap key: expected nil, got: %v", err)
+		}
+	})
+
+	t.Run("unknown_key_rejected", func(t *testing.T) {
+		t.Parallel()
+		m, _ := newManagerWithSVTN(t)
+		// Generate a key that is never registered in the SVTN and is not the
+		// bootstrap key. resolveAndVerifyCallerRole must return E-ADM-009
+		// (fail-closed: F-P2L1-001).
+		unknownPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate unknown key: %v", err)
+		}
+		ctx := mgmt.WithCallerPubkey(context.Background(), unknownPub)
+		gotErr := resolveAndVerifyCallerRole(ctx, m, svtnName, "", cmd)
+		if gotErr == nil {
+			t.Fatal("unknown key: expected E-ADM-009, got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("unknown key: expected E-ADM-009 in error, got: %v", gotErr)
+		}
+	})
+
+	t.Run("revoked_key_rejected", func(t *testing.T) {
+		t.Parallel()
+		m, _ := newManagerWithSVTN(t)
+		// Register a console-role key, then revoke it. After revocation the key
+		// is absent from the SVTN registry and treated as unknown → E-ADM-009.
+		keyPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate key: %v", err)
+		}
+		if _, err := m.RegisterKey(svtnName, keyPub, admission.RoleConsole); err != nil {
+			t.Fatalf("register key: %v", err)
+		}
+		if _, err := m.RevokeKey(svtnName, keyPub, admission.RoleConsole, false); err != nil {
+			t.Fatalf("revoke key: %v", err)
+		}
+		// Key is now absent — resolveAndVerifyCallerRole must return E-ADM-009.
+		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
+		gotErr := resolveAndVerifyCallerRole(ctx, m, svtnName, "", cmd)
+		if gotErr == nil {
+			t.Fatal("revoked key: expected E-ADM-009, got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("revoked key: expected E-ADM-009 in error, got: %v", gotErr)
+		}
+	})
+
+	t.Run("expired_key_non_control_rejected", func(t *testing.T) {
+		t.Parallel()
+		m, _ := newManagerWithSVTN(t)
+		// Register an access-role key and set a short TTL. The key remains in
+		// the SVTN registry until the admission layer evicts it; CallerKeyRole
+		// returns the registered role. Role check fails → E-ADM-009.
+		keyPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate key: %v", err)
+		}
+		if _, err := m.RegisterKey(svtnName, keyPub, admission.RoleAccess); err != nil {
+			t.Fatalf("register key: %v", err)
+		}
+		// Set a 1-hour TTL — key is still registered, just expires in the future.
+		if _, err := m.ExpireKey(svtnName, keyPub, time.Hour); err != nil {
+			t.Fatalf("expire key: %v", err)
+		}
+		// CallerKeyRole returns RoleAccess (expiry is not enforced at role
+		// lookup). verifyCallerRole rejects non-control role → E-ADM-009.
+		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
+		gotErr := resolveAndVerifyCallerRole(ctx, m, svtnName, "", cmd)
+		if gotErr == nil {
+			t.Fatal("expired non-control key: expected E-ADM-009, got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("expired non-control key: expected E-ADM-009 in error, got: %v", gotErr)
+		}
+	})
 }

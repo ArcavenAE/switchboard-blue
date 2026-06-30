@@ -716,73 +716,99 @@ func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 	}
 }
 
-// TestAccessMode_AdminHandlersNotRegistered asserts that an access-mode daemon
-// socket returns E-RPC-010 for admin.key.register.
-// Traces to AC-004; ADR-004 role-exclusion.
-func TestAccessMode_AdminHandlersNotRegistered(t *testing.T) {
+// TestAC004_NonControlRoleRejected verifies that a non-control-role caller
+// (access, console, or router) receives E-ADM-009 when invoking admin commands
+// against the real management server with admin handlers registered.
+//
+// Previous tautological form used startE2EServer(t, nil) — a bare mgmt.Server
+// with no handlers — which only exercises the test harness, not the actual
+// daemon entry points. This table-driven refactor goes through
+// startE2EServerWithOps (the production wiring path) with:
+//   - A real SVTNManager (the same one used by BuildAdminHandlers).
+//   - A non-control-role caller key registered in BOTH the SVTNManager AND the
+//     OperatorKeySet, so the mgmt handshake succeeds and the handler runs.
+//   - sendAdminRPCAsKey to authenticate as that non-control caller.
+//
+// The test is non-tautological because resolveAndVerifyCallerRole runs
+// server-side with the real caller pubkey from the handshake context
+// (mgmt.CallerPubkey), looks up the role in the real SVTNManager, and rejects
+// it via verifyCallerRole (E-ADM-009). A nil-handler or bootstrap-only server
+// would never reach this code path.
+//
+// Traces to AC-004; BC-2.07.001 invariant 3; ADR-004 role-exclusion.
+func TestAC004_NonControlRoleRejected(t *testing.T) {
 	t.Parallel()
 
-	// Access mode: no admin handlers registered (nil slice).
-	es := startE2EServer(t, nil)
-
-	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
-		"role":   "access",
-	})
-
-	errObj, _ := resp["error"].(map[string]any)
-	if errObj == nil {
-		t.Fatal("expected error from access daemon for admin command, got none")
+	tests := []struct {
+		name       string
+		callerRole admission.KeyRole
+	}{
+		{name: "access_role_rejected", callerRole: admission.RoleAccess},
+		{name: "console_role_rejected", callerRole: admission.RoleConsole},
+		// router mode is not yet a distinct role in admission; test with access
+		// to represent the router daemon's non-control caller profile (ADR-004).
+		{name: "router_mode_access_role_rejected", callerRole: admission.RoleAccess},
 	}
-	code, _ := errObj["code"].(string)
-	if code != "E-RPC-010" {
-		t.Errorf("expected E-RPC-010, got %q", code)
-	}
-}
 
-// TestConsoleMode_AdminHandlersNotRegistered asserts that a console-mode
-// daemon socket returns E-RPC-010 for admin.key.register.
-// Traces to AC-004.
-func TestConsoleMode_AdminHandlersNotRegistered(t *testing.T) {
-	t.Parallel()
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Console mode: no admin handlers registered (nil slice).
-	es := startE2EServer(t, nil)
+			// Build a real SVTNManager and register the caller key with a
+			// non-control role. This is the same manager BuildAdminHandlers uses,
+			// so resolveAndVerifyCallerRole sees the real registered role.
+			ctrlPub, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatalf("generate control key: %v", err)
+			}
+			ks := admission.NewAdmittedKeySet()
+			m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+			if _, err := m.Create("test-svtn"); err != nil {
+				t.Fatalf("create SVTN: %v", err)
+			}
 
-	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", nil)
+			// Register the caller with a non-control role in the SVTN so
+			// CallerKeyRole resolves it on the handler's server-side path.
+			callerPub, callerPriv, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatalf("generate caller key: %v", err)
+			}
+			if _, err := m.RegisterKey("test-svtn", callerPub, tc.callerRole); err != nil {
+				t.Fatalf("register caller key: %v", err)
+			}
 
-	errObj, _ := resp["error"].(map[string]any)
-	if errObj == nil {
-		t.Fatal("expected error from console daemon for admin command, got none")
-	}
-	code, _ := errObj["code"].(string)
-	if code != "E-RPC-010" {
-		t.Errorf("expected E-RPC-010, got %q", code)
-	}
-}
+			// Add the caller to the OperatorKeySet so the mgmt handshake admits
+			// it (the server will set the caller pubkey in the handler context).
+			ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
+			handlers := BuildAdminHandlers(m)
+			es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
-// TestRouterMode_AdminHandlersNotRegistered asserts that a router-mode daemon
-// socket returns E-RPC-010 for admin.key.register.
-// Traces to AC-004.
-func TestRouterMode_AdminHandlersNotRegistered(t *testing.T) {
-	t.Parallel()
+			// Generate a valid target pubkey for the register args.
+			targetPub, _, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatalf("generate target key: %v", err)
+			}
+			encodedTarget := base64.RawURLEncoding.EncodeToString([]byte(targetPub))
 
-	// Router mode: no admin handlers registered (nil slice).
-	es := startE2EServer(t, nil)
+			// Authenticate as the non-control caller — the mgmt handshake
+			// sets callerPub in the handler context.
+			resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv,
+				"admin.key.register", map[string]any{
+					"svtn":   "test-svtn",
+					"pubkey": encodedTarget,
+					"role":   "access",
+				})
 
-	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", nil)
-
-	errObj, _ := resp["error"].(map[string]any)
-	if errObj == nil {
-		t.Fatal("expected error from router daemon for admin command, got none")
-	}
-	code, _ := errObj["code"].(string)
-	if code != "E-RPC-010" {
-		t.Errorf("expected E-RPC-010, got %q", code)
+			errObj, _ := resp["error"].(map[string]any)
+			if errObj == nil {
+				t.Fatal("expected E-ADM-009 for non-control caller, got nil error object")
+			}
+			code, _ := errObj["code"].(string)
+			if code != "E-ADM-009" {
+				t.Errorf("expected E-ADM-009, got %q (full response: %v)", code, resp)
+			}
+		})
 	}
 }
 
