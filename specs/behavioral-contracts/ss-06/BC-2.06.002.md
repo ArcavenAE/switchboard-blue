@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,16 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-29
+    version: "1.2"
+    actor: product-owner
+    change: >
+      F-001 disposition (1): PC-3 "Gap events are recorded in path metrics" reworded
+      to make explicit that the missCount counter increment IS the gap-event record.
+      No new accessor or external telemetry export required at this layer. VP-052
+      Verification Properties row updated to match. Observability surface deferred
+      per DRIFT-001. S-5.01 adversarial convergence finding.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -50,7 +59,7 @@ The timeslice framing model guarantees one frame per tick. When a frame that was
 
 1. If a frame does not arrive by the expected-by time, the missing frame is recorded as a gap event.
 2. After N consecutive gap events (implementation: N=3), the quality indicator degrades one level (green→yellow or yellow→red).
-3. Gap events are recorded in path metrics.
+3. Each gap event is recorded by incrementing the QualityIndicator's internal missing-frame counter (missCount). This counter IS the path-metric record of the gap event — no separate accessor or external telemetry export is required at this layer. (Export to an operator-visible surface, e.g. `sbctl sessions status`, is deferred to the observability story per DRIFT-001.)
 4. When frames resume, the gap count decreases; quality indicator recovers after M consecutive good frames (implementation: M=3).
 
 ## Invariants
@@ -87,7 +96,7 @@ The timeslice framing model guarantees one frame per tick. When a frame that was
 |--------|----------|-------------|
 | VP-052 | N=3 consecutive gaps trigger indicator downgrade | unit |
 | VP-052 | M=3 consecutive good frames trigger indicator recovery | unit |
-| VP-052 | Gap events recorded in path metrics | unit |
+| VP-052 | Each OnMissingFrame() call increments missCount (the internal gap-event record); verified indirectly by TestMissingFrame_GreenToYellow streak-count assertions | unit |
 
 ## Traceability
 

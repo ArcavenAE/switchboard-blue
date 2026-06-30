@@ -3,7 +3,7 @@ artifact_id: tech-debt-register
 document_type: tech-debt-register
 version: "1.0"
 status: active
-last_updated: 2026-06-29
+last_updated: 2026-06-29T12:00:00
 ---
 
 # Technical Debt Register: Switchboard
@@ -22,6 +22,7 @@ last_updated: 2026-06-29
 | SEC-001 | LOW (security) | S-3.01b pr-reviewer | SHELL env var used without allowlist validation — add exec.LookPath-based allowlist in defaultPTYAlloc | Phase-6 hardening (security review) | open |
 | VP-032 | deferred | S-3.01b story task 8 | Real-PTY integration test for pty_alloc_* — requires PTY device in test environment | Phase-6 / future wave | deferred |
 | DRIFT-001 | LOW | consistency-validator (H-003/M-002/L-003) | BC-2.06.001 PC-5 ("surfaced via `sbctl sessions status` and console session-list view") ownership: sbctl half now owned by S-5.02 (AC-007, added v1.3); console session-list half deferred to S-7.03. BC-2.06.001 was previously orphaned with no story claiming PC-5. | S-7.03 (console session-list surfacing) | open |
+| DRIFT-002 | LOW | S-5.01 adversarial convergence Pass 1 (F-001) | BC-2.06.002 PC-3 gap-event observability surface: the missCount counter increment is the internal path-metric record (disposition 1, BC-2.06.002 v1.2). The operator-visible export of that counter (e.g. via `sbctl sessions status` or console session-list) is deferred to the same observability story as DRIFT-001 (S-7.03 or equivalent metrics-export story). | S-7.03 (or metrics-export story, same target as DRIFT-001) | open |
 
 ## Resolved Items
 
