@@ -697,33 +697,35 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 
 // TestMapAdminError_ErrorWrapping verifies that mapAdminError preserves the
 // original sentinel via errors.Is for all arms.
-// Traces to F-009 (go.md rule 4: %w wrapping).
+// Traces to F-009 (go.md rule 4: %w wrapping); F-L1-B defense-in-depth arm.
 func TestMapAdminError_ErrorWrapping(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name        string
 		sentinel    error
 		svtn        string
-		pubkey      string
+		pub         ed25519.PublicKey // nil for arms where no target key fingerprint is needed
 		claimedRole string
 		wantCode    string
 		wantDetail  string // non-empty: additional substring that must appear in the error
 	}{
-		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "", "E-SVTN-003", ""},
-		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "", "E-ADM-013", ""},
-		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "control", "E-ADM-019", ""},
-		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "", "E-ADM-018", ""},
-		// ErrInvalidDuration is intentionally absent: mapAdminError does not handle it
-		// because the handler-side ttl guards already produce E-CFG-001 with proper
-		// detail before SVTNManager.ExpireKey is called. See mapAdminError doc.
-		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", "k", "", "E-ADM-020", "cannot revoke the bootstrap key in SVTN s (permanent trust anchor)"},
-		{"ErrBootstrapKeyExpireForbidden", svtnmgmt.ErrBootstrapKeyExpireForbidden, "s", "k", "", "E-ADM-021", "cannot expire the bootstrap key in SVTN s (permanent trust anchor)"},
+		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", nil, "", "E-SVTN-003", ""},
+		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", nil, "", "E-ADM-013", ""},
+		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", nil, "control", "E-ADM-019", ""},
+		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", nil, "", "E-ADM-018", ""},
+		// ErrInvalidDuration: defense-in-depth arm (F-L1-B). Handler-side guards already
+		// produce E-CFG-001 before calling ExpireKey, so this arm is unreachable in
+		// production — but an explicit case prevents silent default-arm swallowing if the
+		// guard is ever bypassed.
+		{"ErrInvalidDuration", svtnmgmt.ErrInvalidDuration, "s", nil, "", "E-CFG-001", "invalid duration"},
+		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", nil, "", "E-ADM-020", "cannot revoke the bootstrap key in SVTN s (permanent trust anchor)"},
+		{"ErrBootstrapKeyExpireForbidden", svtnmgmt.ErrBootstrapKeyExpireForbidden, "s", nil, "", "E-ADM-021", "cannot expire the bootstrap key in SVTN s (permanent trust anchor)"},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := mapAdminError(tc.sentinel, tc.svtn, tc.pubkey, tc.claimedRole)
+			err := mapAdminError(tc.sentinel, tc.svtn, tc.pub, tc.claimedRole)
 			if !strings.Contains(err.Error(), tc.wantCode) {
 				t.Errorf("expected %s in error, got: %v", tc.wantCode, err)
 			}
@@ -734,6 +736,31 @@ func TestMapAdminError_ErrorWrapping(t *testing.T) {
 				t.Errorf("errors.Is(err, sentinel): expected true, got false; err=%v", err)
 			}
 		})
+	}
+}
+
+// TestMapAdminError_DefaultArm verifies the default arm of mapAdminError:
+//   - preserves the inner sentinel via %w (errors.Is true)
+//   - message contains "unmapped admin error"
+//   - message does NOT contain "E-RPC-011" (mgmt.go is sole authority for that code)
+//   - message does NOT start with "E-" (no error code stamped)
+//
+// Traces to mapAdminError default-arm doc comment (admin_handlers.go).
+func TestMapAdminError_DefaultArm(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("synthetic-unmapped")
+	result := mapAdminError(sentinel, "s", nil, "")
+	if !errors.Is(result, sentinel) {
+		t.Errorf("errors.Is(result, sentinel): expected true, got false; result=%v", result)
+	}
+	if !strings.Contains(result.Error(), "unmapped admin error") {
+		t.Errorf("expected \"unmapped admin error\" in result, got: %v", result)
+	}
+	if strings.Contains(result.Error(), "E-RPC-011") {
+		t.Errorf("default arm must not stamp E-RPC-011; got: %v", result)
+	}
+	if strings.HasPrefix(result.Error(), "E-") {
+		t.Errorf("default arm must not stamp any E-* code; got: %v", result)
 	}
 }
 
