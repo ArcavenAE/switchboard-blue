@@ -299,12 +299,13 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 17 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 1 | BLOCK (F-P17L2-001 MED) | 1/3 |
 | 18 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 2 | 3 | BLOCK (F-P18L1-001/002 MED×2) | 1/3 |
 | 19 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 3 | 2 | BLOCK (F-P19L*-001 dup×3 MED + 2 more MED) | 1/3 |
+| 20 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 2 | BLOCK (F-P20L3-001 MED NOVEL — cross-layer ordering) | 1/3 |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK`
 
-Clean-pass count after Pass-19 fix-burst: **1/3** (baseline = Pass-16). Pass-20 is clean-pass attempt #2.
+Clean-pass count after Pass-20 fix-burst: **1/3** (baseline = Pass-16). Pass-21 is clean-pass attempt #2.
 
 ### Pass-19 Details
 
@@ -316,3 +317,25 @@ All 5 gating findings (4 MED + 1 LOW) are spec-only, no impl changes needed. Roo
 
 **Fix-burst commits:** 13164cb (BC-2.05.004 v1.10→v1.11 + BC-INDEX v1.6→v1.7) + 9843e9a (S-6.06 v1.16→v1.17 + STORY-INDEX v3.6→v3.7).
 **Spec tip after fix:** 9843e9a. **Impl tip:** 6bd9e12 (unchanged).
+
+---
+
+### Pass-20 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** lens-1 a0ce4060b99958c55 / lens-2 a8eaa3d24878b1fc8 / lens-3 a14728dee74678c40
+**Spec tip dispatched against:** 9843e9a. **Impl tip:** 6bd9e12 (unchanged).
+
+**Lens-1 (a0ce4060b99958c55):** PASS CLEAN — 2 MED + 1 LOW non-blocking polish observations only (non-gating).
+**Lens-2 (a8eaa3d24878b1fc8):** PASS CLEAN — no gating findings.
+**Lens-3 (a14728dee74678c40):** BLOCK — F-P20L3-001 MED NOVEL: cross-layer ordering ambiguity. Handler TTL validation at admin_handlers.go:279-284 fires BEFORE svtnmgmt bootstrap guard, so `{bootstrap_pubkey, after:"-1h"}` returns E-CFG-001 not E-ADM-021, contradicting BC EC-007 "unconditionally" language.
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged — baseline Pass-16).
+
+**Novelty note:** F-P20L3-001 is genuinely new — Passes 1–19 examined symmetry, guard position, and TTL bounds in isolation but never the cross-product of (bootstrap target × malformed input). Real convergence dividend.
+
+**Product-owner ruling:** Option B (spec narrowing). Input validation precedes business-rule sentinels — current impl is correct, BC/VP wording was overstated. Mutation-prevention invariant preserved either way.
+
+**Fix-burst commit:** 677140a — BC-2.05.004 v1.11→v1.12 (EC-007 narrowed to well-formed requests) + VP-076 v1.0→v1.1 (Property #3 scoped to well-formed) + BC-INDEX v1.7→v1.8 + error-taxonomy.md O-P20L3-001 fix (E-ADM-021 Tests citation cleanup, removed revoke test reference).
+
+**Spec tip after fix:** 677140a. **Impl tip:** 6bd9e12 (unchanged).

@@ -521,3 +521,35 @@ Pass-18 NOT counted. Clean-pass count: 1/3. Pass-19 queued.
 
 Pass-19 NOT counted. Clean-pass count: 1/3. Pass-20 queued (clean-pass attempt #2 of 3 needed).
 
+---
+
+## S-6.06 Pass-20 BLOCK + Fix-Burst (2026-06-30)
+
+**Dispatch IDs:** lens-1 a0ce4060b99958c55 / lens-2 a8eaa3d24878b1fc8 / lens-3 a14728dee74678c40
+**Spec tip dispatched against:** 9843e9a (factory-artifacts) / **Impl tip:** 6bd9e12 (feat/S-6.06-daemon-admin-handlers, unchanged)
+
+### Pass-20 Lens Results
+
+| Lens | Verdict | Findings |
+|------|---------|----------|
+| 1 | PASS CLEAN | 2 MED + 1 LOW non-blocking polish observations only (non-gating) |
+| 2 | PASS CLEAN | no gating findings |
+| 3 | BLOCK | F-P20L3-001 MED NOVEL: cross-layer ordering ambiguity — handler TTL validation at admin_handlers.go:279-284 fires BEFORE svtnmgmt bootstrap guard; `{bootstrap_pubkey, after:"-1h"}` returns E-CFG-001 not E-ADM-021; contradicts BC EC-007 "unconditionally" language |
+
+**Novelty:** F-P20L3-001 is genuinely new — Passes 1–19 examined symmetry, guard position, and TTL bounds in isolation but never the cross-product of (bootstrap target × malformed input). Real convergence dividend.
+
+**Overall: BLOCK** — lens-3 BLOCK on one NOVEL MED. Lenses 1 and 2 PASS CLEAN. Clean-pass count: 1/3 (unchanged). Pass-20 NOT counted.
+
+**Product-owner ruling:** Option B (spec narrowing). Input validation precedes business-rule sentinels — current impl is correct, BC/VP wording was overstated. Mutation-prevention invariant preserved either way.
+
+### Fix-Burst Record
+
+| Layer | Commit | Changes |
+|-------|--------|---------|
+| Spec | 677140a (factory-artifacts) | BC-2.05.004 v1.11→v1.12: EC-007 narrowed to well-formed requests only; VP-076 v1.0→v1.1: Property #3 scoped to well-formed; BC-INDEX v1.7→v1.8; error-taxonomy.md O-P20L3-001 fix (E-ADM-021 Tests citation cleanup, removed revoke test reference) |
+
+**Impl unchanged** — Pass-20 fix is spec-narrowing only. Impl tip remains 6bd9e12.
+
+Pass-20 NOT counted. Clean-pass count: 1/3. Pass-21 queued (clean-pass attempt #2 of 3 now that BC v1.12 ground truth has moved).
+Spec tip after fix: 677140a. Impl tip: 6bd9e12.
+

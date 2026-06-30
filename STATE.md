@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: b36cb9b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T18:00:00Z
+timestamp: 2026-06-30T19:30:00Z
 last_update: 2026-06-30
 ---
 
@@ -82,6 +82,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-06-30 — S-6.06 Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Pass-17 BLOCK: lens-2 F-P17L2-001 MED (error-taxonomy.md E-ADM-020 out-of-sync with BC v1.9 unconditional) + F-P17L2-002 LOW ("permanent trust anchor" wire-string alignment); lens-1/lens-3 PASS. Fix-burst: 5da781a (spec: error-taxonomy.md v3.6→v3.7, story v1.14→v1.15, STORY-INDEX v3.4→v3.5) + 2390541 (impl: admin_handlers.go:397 + test:719, race-clean). Pass-17 NOT counted. Clean-pass count: 1/3. Pass-18 queued. Wave-gate deferred: S-W5.02:191 stale 4-arg mgmt.NewServer descriptor (task #8).
 - 2026-06-30 — S-6.06 Pass-18 BLOCK: lens-1 BLOCK (F-P18L1-001 MED: ExpireKey missing bootstrap-key guard — EC-007/revoke-protection parity; F-P18L1-002 MED: adminKeyEntry.Expiry time.Time omitempty zero-value serialization bug; 3 LOW OBS); lens-2 PASS; lens-3 PASS (1 LOW frontmatter drift piggyback-fixed). Fix-burst most substantive of cycle: 518a30f (spec: error-taxonomy.md v3.7→v3.8 new E-ADM-021 + ErrBootstrapKeyExpireForbidden; BC-2.05.004 v1.9→v1.10 EC-007 extended revoke OR expire; S-6.06 story v1.15→v1.16 + EC-008 + VP-076; VP-INDEX v2.9→v2.10; BC-INDEX v1.5→v1.6; STORY-INDEX v3.4→v3.6) + 9a4cf0b (impl: ExpireKey bootstrap guard + sentinel + tests) + 6bd9e12 (impl: *time.Time pointer + zero-expiry JSON test; all 17 packages race-clean). Pass-18 NOT counted. Clean-pass count: 1/3. Pass-19 queued.
 - 2026-06-30 — S-6.06 Pass-19 BLOCK: lens-1/lens-3 dup-confirmed (F-P19L*-001 MED: BC-2.05.004 body VP table missing VP-076 row); lens-3 F-P19L3-002 MED (BC-2.05.004 Traceability Stories row missing EC-007/S-6.06); lens-3 F-P19L3-003 MED (modified-list non-monotonic); lens-2 F-P19L2-002 LOW (S-6.06 Error Code Map E-ADM-021 line cite 275-280→279-284); lens-1 PASS (6 LOW informational observations, non-gating). Fix-burst: 13164cb (BC-2.05.004 v1.10→v1.11 + BC-INDEX v1.6→v1.7; product-owner) + 9843e9a (S-6.06 v1.16→v1.17 + STORY-INDEX v3.6→v3.7; story-writer). Process-gap codified: Pass-18 fix-burst sibling-fix propagation gap — VP-076/EC-007 minted but not propagated to BC body VP table, Traceability Stories row, or modified-list ordering (recurring pattern). Pass-19 NOT counted. Clean-pass count: 1/3. Pass-20 queued.
+- 2026-06-30 — S-6.06 Pass-20 BLOCK (NOVEL): lens-1 PASS CLEAN (2 MED + 1 LOW non-blocking polish); lens-2 PASS CLEAN; lens-3 BLOCK F-P20L3-001 MED NOVEL — cross-layer ordering ambiguity: handler TTL validation fires BEFORE svtnmgmt bootstrap guard, so `{bootstrap_pubkey, after:"-1h"}` returns E-CFG-001 not E-ADM-021, contradicting BC EC-007 "unconditionally" language. PO ruling: Option B (spec narrowing) — input validation precedes business-rule sentinels; impl correct; BC/VP wording overstated. Fix-burst: 677140a (BC-2.05.004 v1.11→v1.12 EC-007 narrowed; VP-076 v1.0→v1.1 Property #3 scoped to well-formed; BC-INDEX v1.7→v1.8; error-taxonomy.md E-ADM-021 Tests citation cleanup). Pass-20 NOT counted. Clean-pass count: 1/3. Pass-21 queued (spec tip: 677140a; impl tip: 6bd9e12 unchanged).
 
 ## Phase Progress
 
@@ -168,16 +169,16 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.02 MERGED (b36cb9b, PR #34) | Squash-merged to develop (rebased over S-5.01/c1c2c3d); worktree removed, branch deleted | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-19 BLOCK + fix-burst applied)
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-20 BLOCK + fix-burst applied)
 
-**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Passes 17, 18, and 19 all BLOCK — fix-bursts applied after each. Pass-19 fix-burst: BC-2.05.004 v1.10→v1.11 (VP-076 row added to body VP table; EC-007/S-6.06 added to Traceability Stories; modified-list monotonic ordering corrected); S-6.06 story v1.16→v1.17 (E-ADM-021 line cite corrected 275-280→279-284). Clean-pass count: 1/3. Pass-20 queued.
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Passes 17, 18, 19, and 20 all BLOCK — fix-bursts applied after each. Pass-20 fix-burst (677140a): BC-2.05.004 v1.11→v1.12 (EC-007 narrowed to well-formed requests); VP-076 v1.0→v1.1 (Property #3 scoped to well-formed); BC-INDEX v1.7→v1.8; error-taxonomy.md E-ADM-021 Tests citation cleanup. Novelty: F-P20L3-001 cross-layer ordering finding (bootstrap × malformed input cross-product) resolved by Option B spec narrowing. Clean-pass count: 1/3. Pass-21 queued.
 
-**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 9843e9a on factory-artifacts. Impl tip: 6bd9e12 on feat/S-6.06-daemon-admin-handlers (impl unchanged by Pass-19 fix-burst — spec-only fixes).
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 677140a on factory-artifacts. Impl tip: 6bd9e12 on feat/S-6.06-daemon-admin-handlers (impl unchanged by Pass-20 fix-burst — spec-only fix).
 
 **Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
 
 **NEXT ACTION on resume:**
-1. S-6.06 Pass-20: dispatch 3 fresh-context adversary lenses against spec tip 9843e9a / impl tip 6bd9e12 (clean-pass attempt #2 of 3).
+1. S-6.06 Pass-21: dispatch 3 fresh-context adversary lenses against spec tip 677140a / impl tip 6bd9e12 (clean-pass attempt #2 of 3).
 2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
