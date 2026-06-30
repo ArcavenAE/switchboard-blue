@@ -11,7 +11,7 @@
 // (ARCH-04 disambiguation table); AC-004). Access, console, and router daemons pass nil handlers.
 //
 // Purity classification (ARCH-09): boundary — depends on SVTNManager (boundary)
-// and mgmt.Handler (interface). No data-plane imports permitted (ADR-004 + ARCH-12 data-plane/management-plane separation).
+// and mgmt.Handler (struct). No data-plane imports permitted (ADR-004 + ARCH-12 data-plane/management-plane separation).
 //
 // Forbidden imports: internal/frame, internal/routing, internal/multipath,
 // internal/arq, internal/replay, internal/paths, internal/halfchannel,
