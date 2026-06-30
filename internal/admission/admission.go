@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -74,6 +75,27 @@ const (
 	// RoleAccess grants session publishing and Tier 2 session authorization.
 	RoleAccess
 )
+
+// ErrUnknownKeyRole is returned by KeyRoleFromString when the supplied string
+// does not match any known role (E-CFG-001).
+var ErrUnknownKeyRole = errors.New("E-CFG-001: unknown key role")
+
+// KeyRoleFromString converts a canonical role string ("control", "console",
+// "access") to a KeyRole. Returns ErrUnknownKeyRole for any unrecognised value,
+// preventing callers from accidentally mapping unknowns to the RoleControl zero
+// value (SEC-001; PR #34 security review).
+func KeyRoleFromString(s string) (KeyRole, error) {
+	switch s {
+	case "control":
+		return RoleControl, nil
+	case "console":
+		return RoleConsole, nil
+	case "access":
+		return RoleAccess, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrUnknownKeyRole, s)
+	}
+}
 
 // nonceTTL is the maximum age of a used nonce per ARCH-04 §Nonce uniqueness.
 const nonceTTL = 60 * time.Second

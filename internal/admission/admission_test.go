@@ -698,6 +698,57 @@ func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
 	}
 }
 
+// ── SEC-001: TestKeyRoleFromString ───────────────────────────────────────────
+
+// TestKeyRoleFromString verifies KeyRoleFromString for all three valid roles
+// and at least two invalid inputs (SEC-001; PR #34 security review).
+// Guards against callers accidentally mapping unknowns to the RoleControl
+// zero value when wiring admin RPC handlers in S-6.06.
+func TestKeyRoleFromString(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input   string
+		want    admission.KeyRole
+		wantErr bool
+	}{
+		{input: "control", want: admission.RoleControl, wantErr: false},
+		{input: "console", want: admission.RoleConsole, wantErr: false},
+		{input: "access", want: admission.RoleAccess, wantErr: false},
+		{input: "", want: 0, wantErr: true},
+		{input: "unknown", want: 0, wantErr: true},
+		{input: "CONTROL", want: 0, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			got, err := admission.KeyRoleFromString(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("KeyRoleFromString(%q): want error, got nil", tc.input)
+					return
+				}
+				if !errors.Is(err, admission.ErrUnknownKeyRole) {
+					t.Errorf("KeyRoleFromString(%q): want errors.Is(err, ErrUnknownKeyRole), got %v", tc.input, err)
+				}
+				// Zero value must be returned on error — never RoleControl.
+				if got != 0 {
+					t.Errorf("KeyRoleFromString(%q): want zero KeyRole on error, got %v", tc.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("KeyRoleFromString(%q): want nil error, got %v", tc.input, err)
+				return
+			}
+			if got != tc.want {
+				t.Errorf("KeyRoleFromString(%q): want %v, got %v", tc.input, tc.want, got)
+			}
+		})
+	}
+}
+
 // ── Fuzz harness: VP-008 — admission rejects unregistered keys ──────────────
 
 // FuzzAdmitNode_UnregisteredKey is a fuzz target that verifies AdmitNode
