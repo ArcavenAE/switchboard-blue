@@ -1007,6 +1007,31 @@ func TestSbctlRouterStatus_TargetFlagMissingValue(t *testing.T) {
 	}
 }
 
+// ─── F-C3: --target= (empty value after equals) returns E-CFG-010 ───────────
+
+// TestSbctlRouterStatus_TargetFlagEmptyValue verifies that invoking
+// runRouterStatus with args ["--target="] (the flag present but with an empty
+// value after the equals sign) returns an error containing E-CFG-010.
+//
+// F-C3 / BC-2.06.003 (flags validation)
+func TestSbctlRouterStatus_TargetFlagEmptyValue(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	sio, _, _ := newTestIO()
+	// Pass ["--target="] — empty value after the equals sign.
+	err := runRouterStatus(ctx, "/run/switchboard-router.sock", testdataKeyPath(t), true, []string{"--target="}, sio)
+
+	if err == nil {
+		t.Fatal("F-C3: runRouterStatus with [\"--target=\"] (empty value) returned nil error; expected E-CFG-010")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-010") {
+		t.Errorf("F-C3: expected error to contain \"E-CFG-010\"; got: %v", err)
+	}
+}
+
 // ─── assertion helpers ────────────────────────────────────────────────────────
 
 // mapKeys returns the key list of a map[string]json.RawMessage for use in error messages.
