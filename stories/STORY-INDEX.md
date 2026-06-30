@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "2.8"
+version: "2.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -159,6 +159,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.9 | 2026-06-30 | S-5.02 v1.4→v1.5: propagate Pass-3 PO rulings — drop AC-007 (tautological; sbctl sessions.list quality surfacing deferred to S-7.03 per Ruling 1); add AC-008 (pending-quality sentinel, BC-2.06.003 v1.5 PC-3 + EC-006); BC version pins v1.4→v1.5; §Scope Boundary added. |
 | 2.8 | 2026-06-30 | S-6.06 lens-3 F-006 close: Draft/unscheduled rollup corrected — removed S-W5.01 (merged per feat(S-W5.01) commit), S-W5.02 (Wave-5 in-progress pending, not unscheduled), and S-6.06 (Wave-5 in-progress, not unscheduled). Count: 11→8. Remaining draft/unscheduled: S-M.01, S-M.02, S-6.04, S-6.05, S-W5.03, S-6.07, S-HRD.01, S-HRD.02. |
 | 2.7 | 2026-06-29 | Pass-2 adversarial fix-burst: F-P2-002 — S-5.02 BC Traces add BC-2.06.001; F-P2-003 — S-7.03 BC Traces add BC-2.06.001 + BC-2.06.002; F-020 — total-stories arithmetic fixed (39→42, enumeration corrected: 33 master + 4 backlog + 1 draft-stub + 2 hardening + 2 maintenance); F-027 — backlog section split into "Backlog: 4 (S-BL.*)" and "Draft stubs: 1 (S-6.04)". Closes F-P2-002, F-P2-003, F-020, F-027. |
 | 2.6 | 2026-06-29 | HUMAN-APPROVED PATH B (product-owner + human): add S-6.07 (3pts, P2, Wave 6, draft) — `admin.svtn.create` handler + `sbctl admin svtn create` CLI, closes S-5.01/S-6.02 Pass-1 adversarial F-003/F-010 (BC-2.07.001 PC-1 had no CLI/RPC reachability). Add S-BL.LOOKUP (1pt, backlog) — closes DRIFT-F005-LOOKUP-CONVENTION ([process-gap] F-006). Wave 6 total: 5→6 stories, 32→35 pts. Grand totals: stories 38→39, pts (wave 0–6) 184→187, (incl. maintenance) 194→197. Draft/unscheduled: 9→10. E-phase stories: 26→27. Backlog: 2→3. |

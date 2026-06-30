@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -77,7 +77,7 @@ sbctl paths list [--svtn=<id>]                  # Per-path RTT (rtt_ms, rtt_p99_
 sbctl paths ping --router=<addr>                # One-shot RTT probe
 
 # Router Management
-sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.2 PC-3; S-5.02 v1.3 AC-003)
+sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.5 PC-3; S-5.02 v1.5 AC-003/AC-008)
 sbctl router metrics --svtn=<id>                # Frame counts, HMAC failures, drop cache hits
 sbctl router reload                             # Reload config (SIGHUP equivalent)
 sbctl router drain                              # Graceful drain (SIGTERM equivalent)
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.5 changelog note (2026-06-30):** F-T3-004: propagate BC-2.06.003 v1.5 version pins. Line-80 `sbctl router status` comment updated v1.2→v1.5 (now cites S-5.02 v1.5 AC-003/AC-008). §Path list response description updated v1.2→v1.5. Added pending-response JSON example showing `"rtt_p99_ms": "pending"` and note that alias emits `"quality": "pending"` when p99 pending (BC-2.06.003 v1.5 EC-003/EC-006 + PC-3).
 
 > **v1.4 changelog note:** F-T5: `sbctl router metrics --svtn=<id>` — removed surrounding brackets to mark `--svtn=<id>` as required (not optional). BC-2.06.003 PC-2 presents this flag as required and defines no semantics for the omitted-flag case; this supplement now matches that intent.
 
@@ -193,7 +195,9 @@ On error:
 
 ### Path list response (`sbctl paths list --json`)
 
-Fields per BC-2.06.003 v1.2 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC).
+Fields per BC-2.06.003 v1.5 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC).
+
+Example — normal response (≥10 samples):
 
 ```json
 {
@@ -206,6 +210,26 @@ Fields per BC-2.06.003 v1.2 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT sampl
         "rtt_ms": 15,
         "rtt_p99_ms": 22,
         "loss_pct": 0.1,
+        "status": "active"
+      }
+    ]
+  }
+}
+```
+
+Example — pending response (<10 samples; BC-2.06.003 v1.5 EC-003/EC-006). The alias `sbctl router status` also emits `"quality": "pending"` in this case (PC-3):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "paths": [
+      {
+        "path_id": "path-001",
+        "router_addr": "192.168.1.1:9090",
+        "rtt_ms": 8,
+        "rtt_p99_ms": "pending",
+        "loss_pct": 0.0,
         "status": "active"
       }
     ]
