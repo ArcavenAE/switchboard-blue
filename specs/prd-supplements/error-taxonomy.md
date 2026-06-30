@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "2.8"
+version: "2.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -11,6 +11,7 @@ modified:
   - 2026-06-29T00:00:00 # v2.6 — ARCH-12 v1.3 Wave-5 Convergence Ruling C: E-RPC-010 added (server unknown command, in-band), E-RPC-011 added (server handler error, in-band); E-RPC-001 clarified as CLIENT-SIDE only; E-RPC-002 explicitly forbidden. Ruling D: E-CFG-008 message format extended with console TCP loopback rejection variant (buildMgmtListener, not config.Validate())
   - 2026-06-29T00:00:00 # v2.7 — ARCH-12 v1.4 Wave-5 Convergence Ruling L: E-CFG-008 Variant 2 canonical string corrected — buildMgmtListener embeds the error code as prefix ("E-CFG-008: management_socket: ..."); Variant 1 (config.Validate empty socket) does NOT embed the code (different error-reporting path); test assertions must use strings.Contains(err.Error(), "E-CFG-008") not full-string match
   - 2026-06-29T00:00:00 # v2.8 — ARCH-12 v1.5 Wave-5 Convergence Ruling Y: E-NET-001 scope extended — now explicitly covers two cases: (a) net.Dial/net.DialContext failure (unchanged); (b) handshake read-deadline timeout (treated as unreachable per BC-2.07.003 Inv-2); message format for case (b) is "daemon unreachable: <address>: connection timed out"; reconciles prior Inv-2 vs Inv-4 conflict in BC-2.07.003
+  - 2026-06-29T00:00:00 # v2.9 — S-6.05 PO ruling: E-ADM-011 extended with Variant 2 (destroy authorization); ErrDestroyUnauthorized sentinel maps to E-ADM-011; no new code slot allocated
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -67,7 +68,7 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-008 | ADM | broken | 1 | "nonce replay: challenge nonce already consumed for <node_addr>" | BC-2.05.001 |
 | E-ADM-009 | ADM | broken | 1 | "insufficient authority for operation <operation>: key <key_fingerprint> has role <role>" | BC-2.05.004, BC-2.07.002 |
 | E-ADM-010 | ADM | broken | 1 | "authentication failed: key <key_fingerprint> not authorized for daemon at <address>" | BC-2.07.002 (client-side: operator CLI auth failure); BC-2.07.004 (server-side: wire format `{"type":"auth_fail","code":"E-ADM-010","message":"authentication failed"}` — response is identical for unrecognized key and wrong signature to prevent oracle; no key_fingerprint in wire message to prevent enumeration). E-ADM-010 is the **canonical operator-auth-failure code** for both sbctl (client) and internal/mgmt (server). Distinct from E-ADM-001 (SVTN node admission failure). |
-| E-ADM-011 | ADM | broken | 1 | "permission denied: <role> key cannot revoke <target_role> key (control > console > readonly)" | BC-2.05.004 |
+| E-ADM-011 | ADM | broken | 1 | E-ADM-011 has two message variants depending on the operation being denied. **Variant 1 (revocation hierarchy — existing):** `"permission denied: <role> key cannot revoke <target_role> key (control > console > readonly)"` — emitted by `SVTNManager.RevokeKey` when the caller's key role is insufficient to revoke the target key's role (e.g., console attempting to revoke a control key). **Variant 2 (destroy authorization — S-6.05):** `"permission denied: <role> key cannot destroy SVTN <svtn_name>"` — emitted by `SVTNManager.Destroy` when the caller's key is not a control-role key (BC-2.07.001 Invariant 3). Both variants use the Go sentinel `ErrRoleMismatch` (existing, Variant 1) or the new `ErrDestroyUnauthorized` (Variant 2, S-6.05) and share the E-ADM-011 code because both represent the same class of error: insufficient privilege for an admission-plane operation requiring control authority. `errors.Is` identity uses the respective sentinel for each path. | BC-2.05.004 (Variant 1); BC-2.07.001 Inv-3 (Variant 2, S-6.05) |
 | E-ADM-012 | ADM | broken | 1 | "key already registered: pubkey <key_fingerprint> already exists for SVTN <svtn_id>" | BC-2.05.004 (register-key) |
 | E-ADM-013 | ADM | broken | 1 | "key not found: no key with fingerprint <key_fingerprint> registered in SVTN <svtn_id>" | BC-2.05.004 (revoke-key) |
 | E-ADM-014 | ADM | broken | 1 | "bootstrap key mismatch: provided key does not match SVTN <svtn_id> bootstrap" | ADR-004 (recover) |
@@ -195,6 +196,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v2.9 | 2026-06-29 | S-6.05 PO ruling: E-ADM-011 extended with Variant 2 (destroy authorization). New `ErrDestroyUnauthorized` sentinel maps to E-ADM-011; message format: `"permission denied: <role> key cannot destroy SVTN <svtn_name>"`. No new code slot allocated — destroy authorization is the same class of error as revocation hierarchy violation (insufficient privilege for admission-plane operation requiring control authority). BC-2.07.001 Inv-3 source. |
 | v2.8 | 2026-06-29 | ARCH-12 v1.5 Wave-5 Convergence Ruling Y: E-NET-001 scope extended to cover two explicit cases: (a) `net.Dial`/`net.DialContext` failure (existing); (b) handshake read-deadline timeout — daemon accepted TCP connection but did not complete ADR-012 handshake within timeout budget; treated as unreachable per BC-2.07.003 Inv-2; message format for case (b): `"daemon unreachable: <address>: connection timed out"`. Reconciles BC-2.07.003 Inv-2 vs Inv-4 conflict (Ruling Y). |
 | v2.7 | 2026-06-29 | ARCH-12 v1.4 Wave-5 Convergence Ruling L: E-CFG-008 Variant 2 canonical message string corrected — `buildMgmtListener` embeds the error code as prefix: `"E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: <address>"`. Variant 1 (`config.Validate()`) does NOT embed the code in the string (different error-reporting path). Both variants distinguished clearly. Test assertion guidance added: `strings.Contains(err.Error(), "E-CFG-008")` required (not full-string match). VP-073 property description updated to cite canonical `buildMgmtListener` format. |
 | v2.6 | 2026-06-29 | ARCH-12 v1.3 Wave-5 Convergence Rulings C and D: (1) E-RPC-010 added — server-side unknown-command in-band response (`internal/mgmt`); exit code "—" (in-band); connection not closed; BC-2.07.004 PC-12. (2) E-RPC-011 added — server-side handler-error in-band response; message is handler error string verbatim; connection not closed; BC-2.07.004 PC-13. (3) E-RPC-001 clarified as CLIENT-SIDE ONLY (`cmd/sbctl` stderr); must not appear in `internal/mgmt`; E-RPC-002 forbidden. (4) E-CFG-008 row extended with Variant 2 (console TCP loopback rejection) — message: "config error: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: \<address\>"; emitted by `buildMgmtListener`, not `config.Validate()`; BC-2.07.004 EC-013 (Ruling D). |
