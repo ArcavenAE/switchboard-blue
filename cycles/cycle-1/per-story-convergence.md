@@ -447,5 +447,38 @@ Pass-24 queued. Spec tip: 82721dc. Impl tip: 0be8e97 (unchanged since Pass-21).
 | 24 | PASS CLEAN | PASS CLEAN (O-P24L2-001 LOW out-of-scope) | BLOCK (F-P24L3-001 MED) | BLOCK (not counted) | c5c948c (spec) / 4b626cf (impl comment) |
 | 25 | PASS CLEAN (4 LOW OBS) | PASS CLEAN (novelty zero) | BLOCK (F-P25L3-001 MED; O-P25L3-001 [process-gap]) | BLOCK (not counted) | a6cdb88 (spec) / d3f186c (impl comment) |
 | 26 | PASS CLEAN (7 LOW OBS non-defect) | PASS CLEAN (novelty NONE) | PASS CLEAN (2 LOW OBS out-of-scope → phase-5 TaskList #117) | PASS CLEAN — counter advances 1→2/3 | — (no fix required) |
+| 27 | PASS CLEAN (7 LOW non-blocking OBS → TaskList #115) | PASS CLEAN (novelty LOW; streak advancement recommended) | PASS CLEAN (novelty ZERO; propagation fully landed) | PASS CLEAN — counter advances 2→3/3-pending | — (no fix required) |
 
-**Status:** IN_PROGRESS — **2/3 clean passes** (Pass-16 + Pass-26). Pass-27 = clean-pass attempt #3 of 3. Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).
+**Status:** IN_PROGRESS — **3/3-pending clean passes** (Pass-16 + Pass-26 + Pass-27). Pass-28 = convergence-close. Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
+
+---
+
+### Pass-27 Detail (2026-06-30)
+
+**Verdict:** PASS CLEAN — all 3 lenses clean. Second consecutive fully-clean pass. Clean-pass count: **3/3-pending**.
+
+**Dispatch IDs:** lens-1 a68ef99c2850a5ae5 / lens-2 ad7f415313ffdd259 / lens-3 a73b40208a7fef653
+
+#### Lens-1 (a68ef99c2850a5ae5)
+
+**Verdict: PASS CLEAN** — novelty LOW. 7 LOW non-blocking observations, all adjudicated non-blocking refinements. All routed to TaskList #115 (post-merge polish backlog). No gating findings.
+
+| Obs | Severity | Description | Disposition |
+|-----|----------|-------------|-------------|
+| O-1 | LOW | keyFingerprintAdmin(nil) latent footgun in mapAdminError list-keys path | TaskList #115 — post-merge polish |
+| O-2 | LOW | decodePublicKey not validating Ed25519 point encoding | TaskList #115 — post-merge polish |
+| O-3 | LOW | RoleMismatchError typed-detail path not in TestMapAdminError_ErrorWrapping | TaskList #115 — post-merge polish |
+| O-4 | LOW | E-ADM-018 omits fingerprint — intentional per AC-005 | Adjudicated non-defect (design decision) |
+| O-5 | LOW | Dead privHex in VP046 DI-002 test | TaskList #115 — post-merge polish |
+| O-6 | LOW | Goroutine accounting in TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace | TaskList #115 — post-merge polish |
+| O-7 | LOW | subtle.ConstantTimeCompare doc-comment accuracy | TaskList #115 — post-merge polish |
+
+#### Lens-2 (ad7f415313ffdd259)
+
+**Verdict: PASS CLEAN** — novelty LOW. All wire-error strings byte-aligned; all version cites resolve coherently; layering claim corroborated against implementation. Adversary explicitly recommends Lens-2 streak counter advancement to 3/3.
+
+#### Lens-3 (a73b40208a7fef653)
+
+**Verdict: PASS CLEAN** — novelty ZERO. Pass-25 sibling-fix propagation has fully landed across all surfaces. Phase-5 deferred items (TaskList #118: ARCH-04 + error-taxonomy modified-list monotonicity) correctly NOT re-flagged per BC-5.39.002 PC2.
+
+**No fix-burst required.** Pass-28 = convergence-close (clean-pass #3 of 3). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).

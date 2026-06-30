@@ -706,6 +706,33 @@ This is the first fully-clean pass since Pass-16 (baseline). Passes 17–25 all 
 
 ---
 
+## S-6.06 Pass-27 — 2026-06-30 (PASS CLEAN — second consecutive fully-clean pass; clean-pass count 2→3/3-pending)
+
+**Dispatch IDs:** lens-1 a68ef99c2850a5ae5 / lens-2 ad7f415313ffdd259 / lens-3 a73b40208a7fef653
+**Spec tip dispatched against:** factory-artifacts HEAD (post-Pass-26 closeout). **Impl tip:** d3f186c (unchanged since Pass-25).
+
+**Lens-1 (a68ef99c2850a5ae5):** PASS CLEAN — novelty LOW. 7 LOW non-blocking observations, all adjudicated non-blocking refinements. All routed to TaskList #115 (post-merge polish backlog).
+- O-1 LOW: keyFingerprintAdmin(nil) latent footgun in mapAdminError list-keys path.
+- O-2 LOW: decodePublicKey not validating Ed25519 point encoding.
+- O-3 LOW: RoleMismatchError typed-detail path not in TestMapAdminError_ErrorWrapping.
+- O-4 LOW: E-ADM-018 omits fingerprint — intentional per AC-005 (design decision, adjudicated non-defect).
+- O-5 LOW: dead privHex variable in VP046 DI-002 test.
+- O-6 LOW: goroutine accounting in TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace.
+- O-7 LOW: subtle.ConstantTimeCompare doc-comment accuracy.
+No gating findings.
+
+**Lens-2 (ad7f415313ffdd259):** PASS CLEAN — novelty LOW. All wire-error strings byte-aligned; all version cites resolve coherently; layering claim corroborated against implementation. Adversary explicitly recommends Lens-2 streak counter advancement.
+
+**Lens-3 (a73b40208a7fef653):** PASS CLEAN — novelty ZERO. Pass-25 sibling-fix propagation has fully landed. Phase-5 deferred items (TaskList #118) correctly NOT re-flagged per BC-5.39.002 PC2.
+
+**Verdict:** PASS CLEAN (all 3 lenses). Clean-pass count advances: **3/3-pending** (second consecutive fully-clean pass).
+
+**No fix-burst required.**
+
+**Next:** Pass-28 fresh 3-lens (convergence-close — clean-pass attempt #3 of 3). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
+
+---
+
 ## S-6.06 Pass-25 — 2026-06-30 (BLOCK + dual fix-burst applied)
 
 **Dispatch IDs:** lens-1 ab521edc560a0b013 / lens-2 aae0edcaf3acf4640 / lens-3 a9a23dc563641c905

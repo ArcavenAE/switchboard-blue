@@ -627,6 +627,14 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.20 (2026-06-30): S-6.06 adversary Pass-27 PASS CLEAN recorded; clean-pass count advances 2→3/3-pending.
+#   - Pass-27 PASS CLEAN (all 3 lenses): lens-1 (a68ef99c2850a5ae5) PASS CLEAN (7 LOW non-blocking OBS);
+#     lens-2 (ad7f415313ffdd259) PASS CLEAN (novelty LOW; streak advancement recommended);
+#     lens-3 (a73b40208a7fef653) PASS CLEAN (novelty ZERO; Pass-25 propagation fully landed).
+#   - All 7 lens-1 OBS adjudicated non-blocking; routed to TaskList #115 post-merge polish.
+#   - Phase-5 deferred items (TaskList #118) correctly NOT re-flagged per BC-5.39.002 PC2.
+#   - No fix-burst required. Clean-pass count: 3/3-pending (second consecutive fully-clean pass).
+#   - Pass-28 queued (convergence-close — clean-pass attempt #3 of 3). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
 # v2.19 (2026-06-30): S-6.06 adversary Pass-26 PASS CLEAN recorded; clean-pass count advances 1→2/3.
 #   - Pass-26 PASS CLEAN (all 3 lenses): lens-1 (a05e401bf6bf753a1) PASS CLEAN (7 LOW OBS non-defect);
 #     lens-2 (a9efc33989be3c792) PASS CLEAN (novelty NONE); lens-3 (ae6b9da5fbadbaaba) PASS CLEAN (2 LOW OBS out-of-scope → phase-5).

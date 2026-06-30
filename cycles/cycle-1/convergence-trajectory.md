@@ -306,12 +306,13 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 24 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 0 | BLOCK (L3: F-P24L3-001 MED VP-076 v3.8 cite; L1+L2: PASS CLEAN) | 1/3 |
 | 25 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 4 | BLOCK (L3: F-P25L3-001 MED story VP-076 v1.1 cite; L1: 4 LOW OBS; L2: PASS CLEAN) | 1/3 |
 | 26 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 7+2 | PASS CLEAN (all 3 lenses; 7 LOW non-defect OBS L1 + 2 LOW out-of-scope OBS L3 → phase-5) | 2/3 |
+| 27 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 7+0+0 | PASS CLEAN (all 3 lenses; L1: 7 LOW non-blocking OBS; L2: novelty LOW; L3: novelty ZERO) | 3/3-pending |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK → 24:BLOCK → 25:BLOCK → 26:PASS(2/3)`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK → 24:BLOCK → 25:BLOCK → 26:PASS(2/3) → 27:PASS(3/3-pending)`
 
-Clean-pass count after Pass-26: **2/3** (baseline = Pass-16). Pass-26 is the first counter-advancing pass since reset. Pass-27 = clean-pass attempt #3 of 3. No fix-burst required for Pass-26. Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).
+Clean-pass count after Pass-27: **3/3-pending** (Pass-16 + Pass-26 + Pass-27). Pass-27 is the second consecutive fully-clean pass. No fix-burst required. Pass-28 = convergence-close (final clean-pass attempt). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
 
 ### Pass-26 Details
 
@@ -332,6 +333,32 @@ Both observations are out-of-perimeter for S-6.06 per-story scope per BC-5.39.00
 **Verdict:** PASS CLEAN. Clean-pass count advances: 1/3 → **2/3**.
 
 **No fix-burst required.** Pass-27 queued (clean-pass attempt #3 of 3). Spec tip: post-closeout SHA on factory-artifacts. Impl tip: d3f186c (unchanged).
+
+---
+
+### Pass-27 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** lens-1 a68ef99c2850a5ae5 / lens-2 ad7f415313ffdd259 / lens-3 a73b40208a7fef653
+**Spec tip dispatched against:** factory-artifacts HEAD (post-Pass-26 closeout). **Impl tip:** d3f186c (unchanged since Pass-25).
+
+**Lens-1 (a68ef99c2850a5ae5):** PASS CLEAN — novelty LOW. 7 LOW non-blocking observations, all adjudicated non-blocking refinements:
+- O-1 LOW: keyFingerprintAdmin(nil) latent footgun in mapAdminError list-keys path.
+- O-2 LOW: decodePublicKey not validating Ed25519 point encoding.
+- O-3 LOW: RoleMismatchError typed-detail path not covered by TestMapAdminError_ErrorWrapping.
+- O-4 LOW: E-ADM-018 omits fingerprint — intentional per AC-005 (design decision).
+- O-5 LOW: dead privHex variable in VP046 DI-002 test.
+- O-6 LOW: goroutine accounting assertion in TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace.
+- O-7 LOW: subtle.ConstantTimeCompare doc-comment accuracy.
+All 7 routed to TaskList #115 (post-merge polish backlog). No gating findings.
+
+**Lens-2 (ad7f415313ffdd259):** PASS CLEAN — novelty LOW. All wire-error strings byte-aligned; all version cites resolve coherently; layering claim corroborated against implementation. Adversary explicitly recommends Lens-2 streak counter advancement to 3/3.
+
+**Lens-3 (a73b40208a7fef653):** PASS CLEAN — novelty ZERO. Pass-25 sibling-fix propagation has fully landed across all surfaces. Phase-5 deferred items (TaskList #118) correctly NOT re-flagged per BC-5.39.002 PC2.
+
+**Verdict:** PASS CLEAN — second consecutive fully-clean pass. Clean-pass count advances: 2/3 → **3/3-pending**.
+
+**No fix-burst required.** Pass-28 = convergence-close (clean-pass #3 of 3). Spec tip: factory-artifacts HEAD. Impl tip: d3f186c (unchanged).
 
 ---
 

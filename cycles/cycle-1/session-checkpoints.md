@@ -407,4 +407,24 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+
+---
+
+## Archived: 2026-06-30 (S-6.06 Pass-26 PASS CLEAN; clean-pass count 2/3)
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-26 PASS CLEAN; clean-pass count 2/3)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Clean-pass count: **2/3** (Pass-16 + Pass-26). Passes 17–25 all BLOCK; Pass-26 is first counter-advancing pass since reset. No fix-burst required for Pass-26. Two deferred phase-5 observations (O-P26L3-001 ARCH-04 modified-list; O-P26L3-002 error-taxonomy modified-list) routed to TaskList #117.
+
+**Dispatch IDs:** lens-1 a05e401bf6bf753a1 / lens-2 a9efc33989be3c792 / lens-3 ae6b9da5fbadbaaba
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: factory-artifacts HEAD (post-closeout). Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers (unchanged).
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts — 1 clean pass needed), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-27: dispatch 3 fresh-context adversary lenses (clean-pass attempt #3 of 3). Impl tip: d3f186c. Verify worktree HEAD = d3f186c before dispatch.
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
