@@ -347,3 +347,24 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+
+---
+
+## Archived: 2026-06-30 (S-6.06 Pass-23 BLOCK + fix-burst applied)
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-23 BLOCK + fix-burst applied)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–23 all BLOCK — fix-bursts applied after each. Pass-23 fix-burst: spec (factory-artifacts) 82721dc (S-6.06 v1.19→v1.20 + STORY-INDEX v3.9→v3.10; both v1.10 cites at lines 180 and 245 bumped to v1.12; exhaustive grep confirms zero current-state v1.10 residuals). Convergence-reset ruling: spec-only; counter NOT reset per BC-5.39.001. Pass-23 NOT counted. Clean-pass count: 1/3. Pass-24 = clean-pass attempt #3 of 3.
+
+**Process gaps:** PROCESS-GAP-P23 codified (5th consecutive recurrence — sibling-sweep misses story-body prose narrative). vsdd-factory #361 comment appended (additional evidence). Issues #361–#364 remain open.
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 82721dc on factory-artifacts. Impl tip: 0be8e97 on feat/S-6.06-daemon-admin-handlers (unchanged since Pass-21).
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-24: dispatch 3 fresh-context adversary lenses against spec tip 82721dc / impl tip 0be8e97 (clean-pass attempt #3 of 3). Verify worktree HEAD = 0be8e97 before dispatch.
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.

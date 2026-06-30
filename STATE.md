@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: b36cb9b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T23:55:00Z
+timestamp: 2026-06-30T23:59:00Z
 last_update: 2026-06-30
 ---
 
@@ -86,6 +86,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-06-30 — S-6.06 Pass-21 BLOCK: lens-1 BLOCK (F-L1-A/B/C/D MED×4 + 5 LOW — mapAdminError default-arm untested, ErrInvalidDuration no DI-D arm, decodePublicKey silent swallow, TestResolveAndVerifyCallerRole mis-anchored); lens-2 BLOCK (F-P21L2-001 MED EC-008 dup + F-P21L2-002 MED NEW VP-INDEX stale v1.10 cite); lens-3 BLOCK (F-P21L3-001 HIGH EC-008 "unconditionally" sibling-fix propagation gap from Pass-20; F-P21L3-002 MED [process-gap] recurring; O-P21L3-002 LOW). Fix-burst spec (factory-artifacts): fc90ef2 (VP-INDEX v2.10→v2.11, VP-076 v1.1→v1.2) + 4229464 (S-6.06 v1.17→v1.18 EC-008 narrowed, STORY-INDEX v3.7→v3.8). Fix-burst impl (worktree): c519fc1 (F-L1-D test fix) + 0be8e97 (F-L1-A/B/C mapAdminError refactor, ErrInvalidDuration arm, all 17 pkgs race-clean). Convergence-reset ruling: impl changes defense-in-depth only; clean-pass counter NOT reset. Pass-21 NOT counted. Clean-pass count: 1/3. Pass-22 = clean-pass attempt #2 of 3. Spec tip: 4229464. Impl tip: 0be8e97.
 - 2026-06-30 — S-6.06 Pass-22 BLOCK: lens-1 (aeaa638b208bc006a) PASS CLEAN; lens-2 (a72e3013057bcc11b) PASS CLEAN; lens-3 (a5eef7adde2c2635e) BLOCK — F-P22L3-001 HIGH (story VP table row cites "unconditionally") + F-P22L3-002 HIGH (error-taxonomy E-ADM-020/021 stale v1.10 cites + "unconditionally...at any time") + F-P22L3-003 MED (VP-076 Property #1 & #2 unnarrowed) + F-P22L3-004 MED (VP-076 proof-harness docstring) + O-P22L3-002 [process-gap] (recurring 4-pass sweep miss; vsdd-factory issues #361–#364 filed). Fix-burst: 4b42dd5 (error-taxonomy v3.8→v3.9, VP-076 v1.2→v1.3, S-6.06 v1.18→v1.19, VP-INDEX v2.11→v2.12, STORY-INDEX v3.8→v3.9 — exhaustive "unconditionally" sweep, zero current-state residuals). Convergence-reset ruling: spec-only narrowing edits; impl-anchored counter NOT reset per BC-5.39.001. Pass-22 NOT counted. Clean-pass count: 1/3. Pass-23 = clean-pass attempt #2 of 3 continues. Spec tip: 4b42dd5. Impl tip: 0be8e97.
 - 2026-06-30 — S-6.06 Pass-23 BLOCK: lens-1 (afd8f2e1b20cde42a) PASS CLEAN (novelty LOW; no findings); lens-2 (aea17b5f734310b26) PASS CLEAN (O-P23L2-001 LOW non-blocking: VP-076 Source Contract §line 113 cites error-taxonomy v3.8, current v3.9 — semantically coherent narrowing, paperwork drift only, deferred to next VP-076 touch); lens-3 (a1038b24343e5e306) BLOCK — F-P23L3-001 MED (S-6.06 v1.19 line 180 Error Code Map E-ADM-021 row cites BC-2.05.004 EC-007 v1.10, should be v1.12) + F-P23L3-002 MED (S-6.06 v1.19 line 245 Task 12 Refs cites BC-2.05.004 EC-007 v1.10, should be v1.12) + O-P23L3-001 LOW (VP-076 Property #1/#2 phrasing slightly tautological — non-blocking). Fix-burst: 82721dc (product-owner) S-6.06 v1.19→v1.20 + STORY-INDEX v3.9→v3.10; both v1.10 cites at lines 180 and 245 bumped to v1.12; exhaustive grep confirms zero current-state v1.10 residuals. PROCESS-GAP-P23 codified (5th consecutive recurrence — sibling-sweep misses story-body prose narrative). Convergence-reset ruling: spec-only; counter NOT reset per BC-5.39.001. Pass-23 NOT counted. Clean-pass count: 1/3. Pass-24 = clean-pass attempt #3 of 3. Spec tip: 82721dc. Impl tip: 0be8e97.
+- 2026-06-30 — S-6.06 Pass-24 BLOCK: lens-1 (a6ead8d7956498972) PASS CLEAN (novelty LOW; no findings; impl tip 0be8e97 unchanged); lens-2 (a64e9dbb012bf369a) PASS CLEAN with O-P24L2-001 LOW out-of-scope obs (impl comment v1.10 cites at svtnmgmt.go:66,:332 + admin_handlers_test.go:821); lens-3 (a57d7569f4aaa7675) BLOCK — F-P24L3-001 MED (VP-076.md:113 cited error-taxonomy.md v3.8, current v3.9) + O-P24L3-001 [process-gap] (6th-pass cite-drift recurrence shifted axis: VP→error-taxonomy version cite drift). Fix-bursts: c5c948c (factory-artifacts, product-owner) VP-076 v1.3→v1.4 + VP-INDEX v2.12→v2.13; line 113 v3.8→v3.9; pre/post-edit grep clean. 4b626cf (feat/S-6.06-daemon-admin-handlers, implementer) impl comment v1.10→v1.12 at 3 sites (svtnmgmt.go:66,:332 + admin_handlers_test.go:821); just fmt + just lint clean; just test-race 17/17 PASS, 0 races. O-P24L2-001 from lens-2 closed by 4b626cf. PROCESS-GAP-P24 codified (6th consecutive recurrence — new axis: downstream-doc cite of upstream-doc version; new surface: impl source comments). Cross-ref vsdd-factory #361 (6th-recurrence comment appended). Convergence-reset ruling: doc-only + comment-only, no behavior changes; per BC-5.39.001 doc-only-fix discipline counter NOT reset. Pass-24 NOT counted. Clean-pass count: 1/3. Pass-25 = clean-pass attempt #3 of 3 continues. Spec tip: c5c948c. Impl tip: 4b626cf.
 
 ## Phase Progress
 
@@ -93,7 +94,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-5.02/S-W5.02 pending | 2026-06-30 | W5: S-6.06 converging (Pass-23 BLOCK; 1/3 clean; Pass-24 queued); S-5.02/S-W5.02 next. S-6.06 trajectory: 16:PASS(1/3)→17:BLOCK→18:BLOCK→19:BLOCK→20:BLOCK→21:BLOCK→22:BLOCK→23:BLOCK |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-5.02/S-W5.02 pending | 2026-06-30 | W5: S-6.06 converging (Pass-24 BLOCK; 1/3 clean; Pass-25 queued); S-5.02/S-W5.02 next. S-6.06 trajectory: 16:PASS(1/3)→17:BLOCK→18:BLOCK→19:BLOCK→20:BLOCK→21:BLOCK→22:BLOCK→23:BLOCK→24:BLOCK |
 
 ## Wave / Story Status
 
@@ -145,6 +146,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | DRIFT-SW501-NITPICK | LOW | S-W5.01 Pass-3 nitpicks (non-gating, cosmetic): stale "Stub: ... Red Gate" comments in internal/config/config.go ~L236 & ~L244 (functions fully implemented+tested); dead `_ = pub` in internal/mgmt/mgmt.go ~L462. | implementer | defer to S-W5.02 or hygiene commit |
 | PROCESS-GAP-P21 | OBS | [process-gap] Four consecutive passes (19, 20, 21, 22) have exposed BC/VP narrowing not propagating exhaustively. Rule crystallized: when a BC EC is narrowed/widened, story-writer + VP-INDEX + error-taxonomy MUST all be swept in one atomic fix-burst. vsdd-factory issues #361–#364 filed. | orchestrator/story-writer | open — vsdd-factory issues filed |
 | PROCESS-GAP-P23 | OBS | [process-gap] 5th consecutive recurrence (passes 19, 21, 22, 22-stragglers, 23): sibling-sweep gap misses story-body prose narrative (Error Code Map message annotations + Task Refs). Pass-22 grepped for "unconditionally" but NOT for "v1.10" residuals. Refines and extends PROCESS-GAP-P21. Cross-ref vsdd-factory #361 (comment appended noting 5th recurrence). | orchestrator/story-writer | open — additional evidence on #361 |
+| PROCESS-GAP-P24 | OBS | [process-gap] 6th consecutive recurrence. New axis: downstream-doc cite of upstream-doc version (VP-076 Source Contract cited error-taxonomy v3.8 after Pass-22 fix-burst bumped error-taxonomy to v3.9 and VP-076 to v1.3 in the same commit but missed VP-076's back-reference). New surface: impl source comments (svtnmgmt.go + admin_handlers_test.go v1.10 cite residuals). Cross-ref vsdd-factory #361 (6th-recurrence comment appended). | orchestrator/story-writer/implementer | open — additional evidence on #361 |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -174,18 +176,18 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.02 MERGED (b36cb9b, PR #34) | Squash-merged to develop (rebased over S-5.01/c1c2c3d); worktree removed, branch deleted | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-23 BLOCK + fix-burst applied)
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-24 BLOCK + dual fix-burst applied)
 
-**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–23 all BLOCK — fix-bursts applied after each. Pass-23 fix-burst: spec (factory-artifacts) 82721dc (S-6.06 v1.19→v1.20 + STORY-INDEX v3.9→v3.10; both v1.10 cites at lines 180 and 245 bumped to v1.12; exhaustive grep confirms zero current-state v1.10 residuals). Convergence-reset ruling: spec-only; counter NOT reset per BC-5.39.001. Pass-23 NOT counted. Clean-pass count: 1/3. Pass-24 = clean-pass attempt #3 of 3.
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–24 all BLOCK — fix-bursts applied after each. Pass-24 fix-bursts: c5c948c (factory-artifacts, product-owner) VP-076 v1.3→v1.4 + VP-INDEX v2.12→v2.13; line 113 v3.8→v3.9 cite fix; grep clean. 4b626cf (feat/S-6.06-daemon-admin-handlers, implementer) impl comment v1.10→v1.12 at 3 sites; lint + test-race 17/17 clean. Convergence-reset ruling: doc-only + comment-only, no behavior changes; per BC-5.39.001 doc-only-fix discipline counter NOT reset. Pass-24 NOT counted. Clean-pass count: 1/3. Pass-25 = clean-pass attempt #3 of 3.
 
-**Process gaps:** PROCESS-GAP-P23 codified (5th consecutive recurrence — sibling-sweep misses story-body prose narrative). vsdd-factory #361 comment appended (additional evidence). Issues #361–#364 remain open.
+**Process gaps:** PROCESS-GAP-P24 codified (6th consecutive recurrence — new axis: VP downstream-doc cite of error-taxonomy version; new surface: impl source comments). vsdd-factory #361 comment appended (6th recurrence). Issues #361–#364 remain open.
 
-**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 82721dc on factory-artifacts. Impl tip: 0be8e97 on feat/S-6.06-daemon-admin-handlers (unchanged since Pass-21).
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: c5c948c on factory-artifacts. Impl tip: 4b626cf on feat/S-6.06-daemon-admin-handlers.
 
 **Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
 
 **NEXT ACTION on resume:**
-1. S-6.06 Pass-24: dispatch 3 fresh-context adversary lenses against spec tip 82721dc / impl tip 0be8e97 (clean-pass attempt #3 of 3). Verify worktree HEAD = 0be8e97 before dispatch.
+1. S-6.06 Pass-25: dispatch 3 fresh-context adversary lenses against spec tip c5c948c / impl tip 4b626cf (clean-pass attempt #3 of 3). Verify worktree HEAD = 4b626cf before dispatch.
 2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.

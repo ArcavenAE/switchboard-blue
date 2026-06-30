@@ -627,6 +627,13 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.17 (2026-06-30): S-6.06 adversary Pass-24 BLOCK recorded; clean-pass count remains 1/3.
+#   - Pass-24 BLOCK: lens-1 (a6ead8d7956498972) PASS CLEAN; lens-2 (a64e9dbb012bf369a) PASS CLEAN (O-P24L2-001 LOW out-of-scope); lens-3 (a57d7569f4aaa7675) BLOCK — F-P24L3-001 MED (VP-076:113 cites error-taxonomy v3.8, current v3.9).
+#   - Fix-burst spec (factory-artifacts): c5c948c (VP-076 v1.3→v1.4 + VP-INDEX v2.12→v2.13; line 113 cite fix; grep-clean).
+#   - Fix-burst impl (feat/S-6.06-daemon-admin-handlers): 4b626cf (impl comment v1.10→v1.12 at 3 sites; lint+test-race clean; comment-only).
+#   - PROCESS-GAP-P24 codified: 6th consecutive recurrence — new axis: VP downstream-doc cite of upstream-doc version; new surface: impl source comments. vsdd-factory #361 comment appended.
+#   - Convergence-reset ruling: doc-only + comment-only, no behavior changes; per BC-5.39.001 doc-only-fix discipline counter NOT reset. Pass-25 = clean-pass attempt #3 of 3.
+#   - Spec tip: c5c948c. Impl tip: 4b626cf.
 # v2.16 (2026-06-30): S-6.06 adversary Pass-23 BLOCK recorded; clean-pass count remains 1/3.
 #   - Pass-23 BLOCK: lens-1 (afd8f2e1b20cde42a) PASS CLEAN; lens-2 (aea17b5f734310b26) PASS CLEAN (O-P23L2-001 LOW non-blocking, deferred); lens-3 (a1038b24343e5e306) BLOCK — F-P23L3-001/002 MED×2 (S-6.06 lines 180+245 cite BC-2.05.004 EC-007 v1.10, should be v1.12).
 #   - Fix-burst (factory-artifacts): 82721dc (S-6.06 v1.19→v1.20 + STORY-INDEX v3.9→v3.10; both v1.10 cites bumped to v1.12; grep-clean).
