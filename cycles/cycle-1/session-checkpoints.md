@@ -307,3 +307,22 @@ Residual deferrals (all out-of-perimeter per BC-5.39.002): S-5.01 STORY-INDEX VP
 5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+
+---
+
+## Archived: 2026-06-30 (S-6.06 Pass-21 BLOCK + fix-burst applied)
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-21 BLOCK + fix-burst applied)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–21 all BLOCK — fix-bursts applied after each. Pass-21 fix-burst: spec (factory-artifacts) fc90ef2 (VP-INDEX v2.10→v2.11, VP-076 v1.1→v1.2) + 4229464 (S-6.06 v1.17→v1.18 EC-008 narrowed, STORY-INDEX v3.7→v3.8); impl (worktree) c519fc1 (test fix) + 0be8e97 (mapAdminError refactor, ErrInvalidDuration arm, all 17 pkgs race-clean). Convergence-reset ruling: impl changes are defense-in-depth / test-quality only — counter NOT reset. Pass-21 NOT counted. Clean-pass count: 1/3. Pass-22 = clean-pass attempt #2 of 3.
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 4229464 on factory-artifacts. Impl tip: 0be8e97 on feat/S-6.06-daemon-admin-handlers.
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-22: dispatch 3 fresh-context adversary lenses against spec tip 4229464 / impl tip 0be8e97 (clean-pass attempt #2 of 3). Verify worktree HEAD = 0be8e97 before dispatch.
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.

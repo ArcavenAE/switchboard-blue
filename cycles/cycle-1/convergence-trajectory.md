@@ -301,12 +301,13 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | 19 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 3 | 2 | BLOCK (F-P19L*-001 dup×3 MED + 2 more MED) | 1/3 |
 | 20 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 2 | BLOCK (F-P20L3-001 MED NOVEL — cross-layer ordering) | 1/3 |
 | 21 | 2026-06-30 | correctness/spec/traceability | 0 | 1 | 4+2 | 5+1 | BLOCK (L3: F-P21L3-001 HIGH EC-008 stale; L1: 4 MED impl; L2: 2 MED VP-INDEX stale) | 1/3 |
+| 22 | 2026-06-30 | correctness/spec/traceability | 0 | 2 | 2 | 0 | BLOCK (L3: F-P22L3-001/002 HIGH×2 "unconditionally" residuals; F-P22L3-003/004 MED×2 VP-076; L1+L2: PASS CLEAN) | 1/3 |
 
 ### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
 
-`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK`
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK`
 
-Clean-pass count after Pass-21 fix-burst: **1/3** (baseline = Pass-16). Pass-22 is clean-pass attempt #2 (orchestrator ruling: impl changes were defense-in-depth / test-quality only, not behavioral-semantics changes; counter not reset).
+Clean-pass count after Pass-22 fix-burst: **1/3** (baseline = Pass-16). Pass-23 is clean-pass attempt #2 (orchestrator ruling: Pass-22 fix-burst was spec-only narrowing; no impl behavioral-semantics changes; counter not reset per BC-5.39.001).
 
 ### Pass-19 Details
 
@@ -375,3 +376,34 @@ Impl changes were defense-in-depth / test-quality only (mapAdminError signature 
 - Impl (feat/S-6.06): c519fc1 (F-L1-D test fix) + 0be8e97 (F-L1-A/B/C mapAdminError refactor + ErrInvalidDuration arm)
 
 **Spec tip after fix:** 4229464. **Impl tip:** 0be8e97.
+
+---
+
+### Pass-22 Details
+
+**Date:** 2026-06-30
+**Dispatch IDs:** lens-1 aeaa638b208bc006a / lens-2 a72e3013057bcc11b / lens-3 a5eef7adde2c2635e
+**Spec tip dispatched against:** 4229464. **Impl tip:** 0be8e97.
+
+**Lens-1 (aeaa638b208bc006a):** PASS CLEAN — no gating findings.
+**Lens-2 (a72e3013057bcc11b):** PASS CLEAN — no gating findings.
+**Lens-3 (a5eef7adde2c2635e):** BLOCK — 2 HIGH + 2 MED + 1 [process-gap].
+- F-P22L3-001 HIGH: story VP table row for VP-076 still cites EC-007/EC-008 "unconditionally" language (Pass-21 fix-burst narrowed BC and VP-076 body but story VP table row was not regenerated).
+- F-P22L3-002 HIGH: error-taxonomy.md E-ADM-020/E-ADM-021 entries still carry "unconditionally...at any time" text and stale v1.10 BC-2.05.004 citation (Pass-20/21 bursts updated BC and VP-076 but not error-taxonomy entry text).
+- F-P22L3-003 MED: VP-076 Property #1 and Property #2 prose still uses unnarrowed language (v1.2 updated Property #3 only).
+- F-P22L3-004 MED: VP-076 proof-harness docstring inconsistent with narrowed scope.
+- O-P22L3-002 [process-gap]: recurring 4-pass sweep miss pattern now fully documented; vsdd-factory issues #361–#364 filed.
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged — baseline Pass-16).
+
+**Convergence-reset ruling:** Fix-burst 4b42dd5 was spec-only (error-taxonomy + VP-076 + S-6.06 story + index updates). No behavioral semantics changed in impl. Orchestrator ruling: counter not reset per BC-5.39.001. Pass-23 = clean-pass attempt #2 of 3.
+
+**Fix-burst commit:** 4b42dd5 — error-taxonomy.md v3.8→v3.9 (E-ADM-020/021 text updated, stale v1.10 cites removed) + VP-076 v1.2→v1.3 (Properties #1 & #2 narrowed + harness docstring) + S-6.06 v1.18→v1.19 (story VP table row regenerated) + VP-INDEX v2.11→v2.12 + STORY-INDEX v3.8→v3.9. Post-fix grep confirms zero current-state "unconditionally" residuals across specs/ + stories/.
+
+**vsdd-factory upstream issues filed:**
+- #361 — BC EC sibling-fix propagation gap (systematic fix-burst sweep discipline)
+- #362 — VP-INDEX row description drift when VP body narrows
+- #363 — Test-writer policy: negative tests for "unreachable in practice" default arms
+- #364 — Adversary policy: detect test name/assertion semantic-anchoring drift
+
+**Spec tip after fix:** 4b42dd5. **Impl tip:** 0be8e97 (unchanged).
