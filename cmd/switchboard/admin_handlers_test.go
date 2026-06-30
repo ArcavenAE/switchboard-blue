@@ -818,7 +818,7 @@ func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
 // TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden asserts that setting a
 // TTL on the bootstrap control key returns E-ADM-021 (bootstrap-key-expire-forbidden).
 // Mirrors TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden.
-// Traces to BC-2.05.004 EC-007 v1.10; F-P18L1-001.
+// Traces to BC-2.05.004 EC-007 v1.12; F-P18L1-001.
 func TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden(t *testing.T) {
 	t.Parallel()
 
