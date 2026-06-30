@@ -2,10 +2,10 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-29T00:00:00
+timestamp: 2026-06-30T00:00:00
 phase: 1a
 bc_id: BC-2.07.001
 subsystem: network-management
@@ -27,6 +27,18 @@ modified:
       `sbctl admin svtn create --name=mynet`; (3) Stories cell updated with PC split
       (PC-1: S-6.02 + S-6.07; PC-2: S-6.02; PC-3: S-6.05); (4) PC-2 "trust anchor"
       addendum added clarifying admitted=false bootstrap semantics.
+  - date: 2026-06-30
+    version: "1.3"
+    actor: product-owner
+    change: >
+      S-6.06 lens-3 F-003 ruling (Inv-3 scope): BC-2.07.001 Invariant 3 ("Only
+      control-role keys may create or destroy SVTNs") is SVTN-lifecycle authority
+      scoped to admin.svtn.* operations only. It does NOT extend authority scope
+      to admin.key.* RPCs. S-6.06's caller-role enforcement is anchored exclusively
+      on BC-2.05.004 PC-1 / DI-001 ("admission-control authority"). S-6.06 is
+      dropped from BC-2.07.001's cite path; story-writer must remove BC-2.07.001
+      from S-6.06 bc_traces frontmatter and BC table under
+      bc_array_changes_propagate_to_body_and_acs policy.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -64,7 +76,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 
 1. **DI-012**: The control node manages SVTN lifecycle as a participant in the user/data plane. It does not have privileged access to router internals.
 2. **DI-005**: SVTN IDs must be globally unique within the router's scope; duplicate SVTN IDs are rejected.
-3. Only control-role keys may create or destroy SVTNs.
+3. Only control-role keys may create or destroy SVTNs. **Scope:** this invariant governs `admin.svtn.*` operations only. Authority enforcement for `admin.key.*` operations is governed by BC-2.05.004 PC-1 / DI-001, not this contract.
 
 ## Trigger
 

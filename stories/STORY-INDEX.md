@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "2.7"
+version: "2.8"
 status: draft
 producer: product-owner
-timestamp: 2026-06-29T00:00:00
+timestamp: 2026-06-30T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -22,7 +22,7 @@ inputDocuments:
 | Total stories | 42 (33 master-table stories + 1 draft stub S-6.04 + 4 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.LOOKUP/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 18 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01) |
 | Pending | 9 |
-| Draft/unscheduled | 11 (S-M.01, S-M.02, S-6.04, S-6.05, S-W5.01, S-W5.02, S-W5.03, S-6.06, S-6.07, S-HRD.01, S-HRD.02) |
+| Draft/unscheduled | 8 (S-M.01, S-M.02, S-6.04, S-6.05, S-W5.03, S-6.07, S-HRD.01, S-HRD.02) |
 | E-phase | 27 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07) |
 | PE-phase | 4 (wave 6 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
@@ -159,6 +159,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.8 | 2026-06-30 | S-6.06 lens-3 F-006 close: Draft/unscheduled rollup corrected — removed S-W5.01 (merged per feat(S-W5.01) commit), S-W5.02 (Wave-5 in-progress pending, not unscheduled), and S-6.06 (Wave-5 in-progress, not unscheduled). Count: 11→8. Remaining draft/unscheduled: S-M.01, S-M.02, S-6.04, S-6.05, S-W5.03, S-6.07, S-HRD.01, S-HRD.02. |
 | 2.7 | 2026-06-29 | Pass-2 adversarial fix-burst: F-P2-002 — S-5.02 BC Traces add BC-2.06.001; F-P2-003 — S-7.03 BC Traces add BC-2.06.001 + BC-2.06.002; F-020 — total-stories arithmetic fixed (39→42, enumeration corrected: 33 master + 4 backlog + 1 draft-stub + 2 hardening + 2 maintenance); F-027 — backlog section split into "Backlog: 4 (S-BL.*)" and "Draft stubs: 1 (S-6.04)". Closes F-P2-002, F-P2-003, F-020, F-027. |
 | 2.6 | 2026-06-29 | HUMAN-APPROVED PATH B (product-owner + human): add S-6.07 (3pts, P2, Wave 6, draft) — `admin.svtn.create` handler + `sbctl admin svtn create` CLI, closes S-5.01/S-6.02 Pass-1 adversarial F-003/F-010 (BC-2.07.001 PC-1 had no CLI/RPC reachability). Add S-BL.LOOKUP (1pt, backlog) — closes DRIFT-F005-LOOKUP-CONVENTION ([process-gap] F-006). Wave 6 total: 5→6 stories, 32→35 pts. Grand totals: stories 38→39, pts (wave 0–6) 184→187, (incl. maintenance) 194→197. Draft/unscheduled: 9→10. E-phase stories: 26→27. Backlog: 2→3. |
 | 2.5 | 2026-06-29 | CR-W5-SCOPE-SPLIT ruling (product-owner + human): add S-6.06 (5pts, P1, Wave 5, draft) — daemon-side admin RPC handlers minted per adversary Pass 1 CRITICAL finding F-001. S-6.02 ships CLI-layer only (deferral note added); S-6.06 wires daemon-side mgmt.Handler registration for admin.key.register / revoke / expire / list-keys on control-mode daemon only. S-W5.02 depends_on updated to include S-6.06. Wave 5 total: 7→8 stories, 38→43 pts. Grand totals: stories 37→38, pts (wave 0–6) 179→184, (incl. maintenance) 189→194. Draft/unscheduled: 8→9. E-phase stories: 25→26. |

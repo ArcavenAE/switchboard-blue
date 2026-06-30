@@ -2,10 +2,10 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-29T00:00:00
+timestamp: 2026-06-30T00:00:00
 phase: 1a
 bc_id: BC-2.05.004
 subsystem: admission-security
@@ -26,6 +26,14 @@ modified:
       `sbctl svtn keys register|revoke|expire` to `sbctl admin key {register,revoke,expire}`
       or `sbctl admin list-keys`. Canonical Test Vectors rewritten to use `sbctl admin key`
       form throughout.
+  - date: 2026-06-30
+    version: "1.3"
+    actor: product-owner
+    change: >
+      S-6.06 lens-3 F-002 close: Traceability Stories row extended to include PC-4
+      (confirmation response with key fingerprint and operation timestamp):
+      S-6.06 (mgmt.Response success envelope). VP-075 minted for handler-layer
+      caller-role enforcement (DI-001 / PC-1 admission-control authority).
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -109,7 +117,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | L2 Capability | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 |
 | L2 Domain Invariants | DI-002 (private keys never transit), DI-011 (role separation between Tier 1 and Tier 2 keys), DI-012 (control node is a participant) |
 | Architecture Module | internal/svtnmgmt |
-| Stories | PC-1 (register): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-2 (revoke): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-3 (expire): S-6.02 (CLI dispatch), S-6.06 (daemon handler) |
+| Stories | PC-1 (register): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-2 (revoke): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-3 (expire): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-4 (confirmation response with key fingerprint and operation timestamp): S-6.06 (mgmt.Response success envelope) |
 | Capability Anchor Justification | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 — this BC specifies the complete key lifecycle operations that CAP-019 defines as the revocation path |
 
 ## Related BCs
