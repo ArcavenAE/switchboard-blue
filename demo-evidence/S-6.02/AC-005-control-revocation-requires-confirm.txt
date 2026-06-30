@@ -1,0 +1,46 @@
+=== RUN   TestSVTNManager_ControlRevocation_RequiresConfirm
+=== PAUSE TestSVTNManager_ControlRevocation_RequiresConfirm
+=== RUN   TestSVTNManager_RevokeKey_RoleMismatchReturnsError
+=== PAUSE TestSVTNManager_RevokeKey_RoleMismatchReturnsError
+=== RUN   TestSVTNManager_RevokeKey_NonControlNoConfirmRequired
+=== PAUSE TestSVTNManager_RevokeKey_NonControlNoConfirmRequired
+=== CONT  TestSVTNManager_ControlRevocation_RequiresConfirm
+=== CONT  TestSVTNManager_RevokeKey_NonControlNoConfirmRequired
+=== CONT  TestSVTNManager_RevokeKey_RoleMismatchReturnsError
+=== RUN   TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/console_no_confirm
+=== PAUSE TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/console_no_confirm
+=== RUN   TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/access_no_confirm
+=== PAUSE TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/access_no_confirm
+=== CONT  TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/console_no_confirm
+=== CONT  TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/access_no_confirm
+=== RUN   TestSVTNManager_ControlRevocation_RequiresConfirm/without_confirm_returns_error
+=== PAUSE TestSVTNManager_ControlRevocation_RequiresConfirm/without_confirm_returns_error
+=== RUN   TestSVTNManager_ControlRevocation_RequiresConfirm/with_confirm_succeeds
+=== PAUSE TestSVTNManager_ControlRevocation_RequiresConfirm/with_confirm_succeeds
+=== CONT  TestSVTNManager_ControlRevocation_RequiresConfirm/without_confirm_returns_error
+--- PASS: TestSVTNManager_RevokeKey_RoleMismatchReturnsError (0.00s)
+=== CONT  TestSVTNManager_ControlRevocation_RequiresConfirm/with_confirm_succeeds
+--- PASS: TestSVTNManager_ControlRevocation_RequiresConfirm (0.00s)
+    --- PASS: TestSVTNManager_ControlRevocation_RequiresConfirm/without_confirm_returns_error (0.00s)
+    --- PASS: TestSVTNManager_ControlRevocation_RequiresConfirm/with_confirm_succeeds (0.00s)
+--- PASS: TestSVTNManager_RevokeKey_NonControlNoConfirmRequired (0.00s)
+    --- PASS: TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/console_no_confirm (0.00s)
+    --- PASS: TestSVTNManager_RevokeKey_NonControlNoConfirmRequired/access_no_confirm (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/svtnmgmt	0.255s
+=== RUN   TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI
+=== PAUSE TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI
+=== CONT  TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI
+=== RUN   TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/without_confirm_confirm_false_in_wire
+=== PAUSE TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/without_confirm_confirm_false_in_wire
+=== RUN   TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/with_confirm_confirm_true_in_wire
+=== PAUSE TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/with_confirm_confirm_true_in_wire
+=== CONT  TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/without_confirm_confirm_false_in_wire
+=== CONT  TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/with_confirm_confirm_true_in_wire
+E-RPC-001 rpc failed: admin.key.revoke: E-ADM-004: control-to-control revocation requires --confirm flag (ADR-004)
+{"fingerprint":"SHA256:EEEE..."}
+--- PASS: TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI (0.00s)
+    --- PASS: TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/without_confirm_confirm_false_in_wire (0.01s)
+    --- PASS: TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI/with_confirm_confirm_true_in_wire (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	0.451s

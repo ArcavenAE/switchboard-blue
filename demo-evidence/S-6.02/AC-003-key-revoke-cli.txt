@@ -1,0 +1,35 @@
+=== RUN   TestSVTNManager_RevokeKey_RemovesFromAdmissionSet
+=== PAUSE TestSVTNManager_RevokeKey_RemovesFromAdmissionSet
+=== RUN   TestSVTNManager_RevokeKey_KeyNotFound
+=== PAUSE TestSVTNManager_RevokeKey_KeyNotFound
+=== RUN   TestSVTNManager_RevokeKey_SVTNNotFound
+=== PAUSE TestSVTNManager_RevokeKey_SVTNNotFound
+=== RUN   TestSVTNManager_RevokeRaceVsRegister_HOLD001
+--- PASS: TestSVTNManager_RevokeRaceVsRegister_HOLD001 (0.18s)
+=== CONT  TestSVTNManager_RevokeKey_RemovesFromAdmissionSet
+=== CONT  TestSVTNManager_RevokeKey_SVTNNotFound
+=== CONT  TestSVTNManager_RevokeKey_KeyNotFound
+--- PASS: TestSVTNManager_RevokeKey_SVTNNotFound (0.00s)
+--- PASS: TestSVTNManager_RevokeKey_RemovesFromAdmissionSet (0.00s)
+--- PASS: TestSVTNManager_RevokeKey_KeyNotFound (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/svtnmgmt	1.453s
+=== RUN   TestAdminKeyRevokeArgs_JSONRoundTrip
+=== PAUSE TestAdminKeyRevokeArgs_JSONRoundTrip
+=== RUN   TestSbctlAdmin_KeyRevoke_CLI
+=== PAUSE TestSbctlAdmin_KeyRevoke_CLI
+=== CONT  TestAdminKeyRevokeArgs_JSONRoundTrip
+=== CONT  TestSbctlAdmin_KeyRevoke_CLI
+=== RUN   TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_false
+=== PAUSE TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_false
+=== RUN   TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_true
+=== PAUSE TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_true
+=== CONT  TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_false
+=== CONT  TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_true
+--- PASS: TestAdminKeyRevokeArgs_JSONRoundTrip (0.00s)
+    --- PASS: TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_false (0.00s)
+    --- PASS: TestAdminKeyRevokeArgs_JSONRoundTrip/confirm_true (0.00s)
+{"at":"2026-06-30T02:23:30Z","fingerprint":"SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="}
+--- PASS: TestSbctlAdmin_KeyRevoke_CLI (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.469s

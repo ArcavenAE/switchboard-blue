@@ -1,0 +1,45 @@
+=== RUN   TestSVTNManager_ExpireKey_SetsTTL
+=== PAUSE TestSVTNManager_ExpireKey_SetsTTL
+=== RUN   TestSVTNManager_ExpireKey_ZeroDurationReturnsError
+=== PAUSE TestSVTNManager_ExpireKey_ZeroDurationReturnsError
+=== RUN   TestSVTNManager_ExpireKey_SVTNNotFound
+=== PAUSE TestSVTNManager_ExpireKey_SVTNNotFound
+=== RUN   TestSVTNManager_ExpireKey_KeyNotFound
+=== PAUSE TestSVTNManager_ExpireKey_KeyNotFound
+=== CONT  TestSVTNManager_ExpireKey_SetsTTL
+=== CONT  TestSVTNManager_ExpireKey_SVTNNotFound
+=== CONT  TestSVTNManager_ExpireKey_ZeroDurationReturnsError
+=== CONT  TestSVTNManager_ExpireKey_KeyNotFound
+=== RUN   TestSVTNManager_ExpireKey_ZeroDurationReturnsError/zero_duration
+=== PAUSE TestSVTNManager_ExpireKey_ZeroDurationReturnsError/zero_duration
+=== RUN   TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_duration
+=== PAUSE TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_duration
+=== RUN   TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_microsecond
+=== PAUSE TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_microsecond
+=== CONT  TestSVTNManager_ExpireKey_ZeroDurationReturnsError/zero_duration
+=== CONT  TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_microsecond
+=== CONT  TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_duration
+--- PASS: TestSVTNManager_ExpireKey_SetsTTL (0.00s)
+--- PASS: TestSVTNManager_ExpireKey_SVTNNotFound (0.00s)
+--- PASS: TestSVTNManager_ExpireKey_KeyNotFound (0.00s)
+--- PASS: TestSVTNManager_ExpireKey_ZeroDurationReturnsError (0.00s)
+    --- PASS: TestSVTNManager_ExpireKey_ZeroDurationReturnsError/zero_duration (0.00s)
+    --- PASS: TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_microsecond (0.00s)
+    --- PASS: TestSVTNManager_ExpireKey_ZeroDurationReturnsError/negative_duration (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/svtnmgmt	0.224s
+=== RUN   TestAdminKeyExpireArgs_JSONRoundTrip
+=== PAUSE TestAdminKeyExpireArgs_JSONRoundTrip
+=== RUN   TestSbctlAdmin_KeyExpire_CLI
+=== PAUSE TestSbctlAdmin_KeyExpire_CLI
+=== RUN   TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag
+=== PAUSE TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag
+=== CONT  TestAdminKeyExpireArgs_JSONRoundTrip
+=== CONT  TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag
+=== CONT  TestSbctlAdmin_KeyExpire_CLI
+--- PASS: TestAdminKeyExpireArgs_JSONRoundTrip (0.00s)
+--- PASS: TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag (0.00s)
+{"at":"2026-06-30T02:23:36Z","fingerprint":"SHA256:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="}
+--- PASS: TestSbctlAdmin_KeyExpire_CLI (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	0.410s

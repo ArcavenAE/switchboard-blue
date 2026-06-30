@@ -1,0 +1,37 @@
+=== RUN   TestSVTNManager_RegisterKey_AppearsInAdmissionChecks
+=== PAUSE TestSVTNManager_RegisterKey_AppearsInAdmissionChecks
+=== RUN   TestSVTNManager_RegisterKey_SVTNNotFound
+=== PAUSE TestSVTNManager_RegisterKey_SVTNNotFound
+=== RUN   TestSVTNManager_RegisterKey_DuplicateLastWriteWins
+=== PAUSE TestSVTNManager_RegisterKey_DuplicateLastWriteWins
+=== CONT  TestSVTNManager_RegisterKey_AppearsInAdmissionChecks
+=== CONT  TestSVTNManager_RegisterKey_DuplicateLastWriteWins
+=== RUN   TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_control_key
+=== PAUSE TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_control_key
+=== RUN   TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_console_key
+=== PAUSE TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_console_key
+=== RUN   TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_access_key
+=== CONT  TestSVTNManager_RegisterKey_SVTNNotFound
+=== PAUSE TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_access_key
+=== CONT  TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_control_key
+=== CONT  TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_access_key
+=== CONT  TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_console_key
+--- PASS: TestSVTNManager_RegisterKey_DuplicateLastWriteWins (0.00s)
+--- PASS: TestSVTNManager_RegisterKey_SVTNNotFound (0.00s)
+--- PASS: TestSVTNManager_RegisterKey_AppearsInAdmissionChecks (0.00s)
+    --- PASS: TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_control_key (0.00s)
+    --- PASS: TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_access_key (0.00s)
+    --- PASS: TestSVTNManager_RegisterKey_AppearsInAdmissionChecks/register_console_key (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/svtnmgmt	0.354s
+=== RUN   TestAdminKeyRegisterArgs_JSONRoundTrip
+=== PAUSE TestAdminKeyRegisterArgs_JSONRoundTrip
+=== RUN   TestSbctlAdmin_KeyRegister_CLI
+=== PAUSE TestSbctlAdmin_KeyRegister_CLI
+=== CONT  TestAdminKeyRegisterArgs_JSONRoundTrip
+=== CONT  TestSbctlAdmin_KeyRegister_CLI
+--- PASS: TestAdminKeyRegisterArgs_JSONRoundTrip (0.00s)
+{"at":"2026-06-30T02:23:23Z","fingerprint":"SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}
+--- PASS: TestSbctlAdmin_KeyRegister_CLI (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	0.540s

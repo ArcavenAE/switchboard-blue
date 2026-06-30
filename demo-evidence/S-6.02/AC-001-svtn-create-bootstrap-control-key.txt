@@ -1,0 +1,20 @@
+=== RUN   TestSVTNManager_Create_BootstrapsControlKey
+=== PAUSE TestSVTNManager_Create_BootstrapsControlKey
+=== RUN   TestSVTNManager_Create_BootstrapKeyAdmittedFalse_TrustAnchor
+=== PAUSE TestSVTNManager_Create_BootstrapKeyAdmittedFalse_TrustAnchor
+=== RUN   TestSVTNManager_VP048_CreateIdempotentFirstInvocation
+=== PAUSE TestSVTNManager_VP048_CreateIdempotentFirstInvocation
+=== RUN   TestSVTNManager_VP048_BootstrappedKeyIsControlRole
+=== PAUSE TestSVTNManager_VP048_BootstrappedKeyIsControlRole
+=== RUN   TestSVTNManager_CreateBootstrapAtomicity_RaceDetector
+--- PASS: TestSVTNManager_CreateBootstrapAtomicity_RaceDetector (0.01s)
+=== CONT  TestSVTNManager_VP048_BootstrappedKeyIsControlRole
+=== CONT  TestSVTNManager_Create_BootstrapKeyAdmittedFalse_TrustAnchor
+=== CONT  TestSVTNManager_Create_BootstrapsControlKey
+=== CONT  TestSVTNManager_VP048_CreateIdempotentFirstInvocation
+--- PASS: TestSVTNManager_Create_BootstrapKeyAdmittedFalse_TrustAnchor (0.00s)
+--- PASS: TestSVTNManager_VP048_CreateIdempotentFirstInvocation (0.00s)
+--- PASS: TestSVTNManager_Create_BootstrapsControlKey (0.00s)
+--- PASS: TestSVTNManager_VP048_BootstrappedKeyIsControlRole (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/svtnmgmt	1.296s
