@@ -2,10 +2,12 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
+# v1.12 (2026-06-29): Pass-3 F-1 close — prose at line 372 swept to match canonical ErrRoleMismatch sentinel
+#   at line 429 (v1.11 fix-burst missed the prose paragraph; partial-fix regression per S-7.01 axis).
 # v1.11 (2026-06-29): F-P2-005 — align ErrRoleMismatch sentinel string to implementation:
 #   "revoke: supplied role does not match registered role" →
 #   "admission: role mismatch: stored role differs from expected role"
@@ -369,7 +371,7 @@ The `currentRole admission.KeyRole` parameter is RETAINED as a caller-supplied a
 The implementation MUST cross-check the supplied role against the role stored in the
 `AdmittedKeySet` registry before applying the confirm gate. If the supplied role diverges
 from the stored role, `RevokeKey` MUST return an error (distinct sentinel, E-ADM-019,
-`ErrRoleMismatch: "revoke: supplied role does not match registered role"`). The confirm
+`ErrRoleMismatch: "admission: role mismatch: stored role differs from expected role"` (see canonical definition below)). The confirm
 gate (`ErrControlRevocationRequiresConfirm`) is applied only AFTER the role check passes.
 
 ### Rationale
