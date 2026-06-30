@@ -13,7 +13,7 @@ wave: 5
 priority: P0
 scope_phase: E
 estimated_points: 5
-version: "1.0"
+version: "1.1"
 bc_traces:
   - BC-2.07.002
 vp_traces: [VP-049]
@@ -22,7 +22,7 @@ architecture_modules: [internal/mgmt, cmd/sbctl, cmd/switchboard]
 tdd_mode: strict
 target_module: internal/testenv
 cycle: v1.0.0-greenfield
-depends_on: [S-6.03, S-W5.01]
+depends_on: [S-6.03, S-W5.01, S-6.06]
 blocks: []
 inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-07/BC-2.07.002.md'
@@ -224,4 +224,5 @@ run in the normal `just test` flow. Integration tests run explicitly:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.1 | 2026-06-29 | product-owner | Add S-6.06 to `depends_on`. Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) were never wired; `startMgmtServer(..., nil)` at every call site. S-6.06 (minted per CR-W5-SCOPE-SPLIT ruling) closes that gap. S-W5.02 cannot exercise admin RPC paths end-to-end until S-6.06 is merged. |
 | 1.0 | 2026-06-28 | story-writer | Initial creation — Wave-5 net-new story per ARCH-12 product-owner handoff. E2E integration gate for management plane; implements VP-049 across all four daemon types. Depends on S-6.03 + S-W5.01. |
