@@ -94,7 +94,7 @@ Operator runs `sbctl svtn create` or `sbctl svtn destroy` or equivalent API call
 | L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 |
 | L2 Domain Invariants | DI-012 (control node is a network participant, not a router manager), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/svtnmgmt |
-| Stories | PC-1 (Create) + PC-2 (Bootstrap): S-6.02; PC-3 (Destroy): S-6.05 (deferred — Wave 6, depends_on S-6.02; CR-009 ruling 2026-06-29) |
+| Stories | PC-1 (Create) + PC-2 (Bootstrap): S-6.02 (SVTNManager + CLI), S-6.06 (daemon handler registration); PC-3 (Destroy): S-6.05 (deferred — Wave 6, depends_on S-6.02; CR-009 ruling 2026-06-29) |
 | Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — this BC specifies the create/destroy lifecycle that CAP-023 defines as the prerequisite for all other operations |
 
 ## Related BCs
