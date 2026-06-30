@@ -350,6 +350,27 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 ---
 
+## Archived: 2026-06-30 (S-6.06 Pass-24 BLOCK + dual fix-burst applied)
+
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-24 BLOCK + dual fix-burst applied)
+
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (clean-pass count baseline: 1/3). Passes 17–24 all BLOCK — fix-bursts applied after each. Pass-24 fix-bursts: c5c948c (factory-artifacts, product-owner) VP-076 v1.3→v1.4 + VP-INDEX v2.12→v2.13; line 113 v3.8→v3.9 cite fix; grep clean. 4b626cf (feat/S-6.06-daemon-admin-handlers, implementer) impl comment v1.10→v1.12 at 3 sites; lint + test-race 17/17 clean. Convergence-reset ruling: doc-only + comment-only, no behavior changes; per BC-5.39.001 doc-only-fix discipline counter NOT reset. Pass-24 NOT counted. Clean-pass count: 1/3. Pass-25 = clean-pass attempt #3 of 3.
+
+**Process gaps:** PROCESS-GAP-P24 codified (6th consecutive recurrence — new axis: VP downstream-doc cite of error-taxonomy version; new surface: impl source comments). vsdd-factory #361 comment appended (6th recurrence). Issues #361–#364 remain open.
+
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: c5c948c on factory-artifacts. Impl tip: 4b626cf on feat/S-6.06-daemon-admin-handlers.
+
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
+
+**NEXT ACTION on resume:**
+1. S-6.06 Pass-25: dispatch 3 fresh-context adversary lenses against spec tip c5c948c / impl tip 4b626cf (clean-pass attempt #3 of 3). Verify worktree HEAD = 4b626cf before dispatch.
+2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
+3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
+4. Wave 5 adversarial review after all stories merged.
+5. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+
+---
+
 ## Archived: 2026-06-30 (S-6.06 Pass-23 BLOCK + fix-burst applied)
 
 ## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-23 BLOCK + fix-burst applied)

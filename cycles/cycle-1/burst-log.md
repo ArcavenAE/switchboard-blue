@@ -679,3 +679,64 @@ Pass-21 NOT counted. Clean-pass count: 1/3. Pass-22 queued (clean-pass attempt #
 
 **Spec tip after fix:** c5c948c. **Impl tip:** 4b626cf.
 
+---
+
+## S-6.06 Pass-25 — 2026-06-30 (BLOCK + dual fix-burst applied)
+
+**Dispatch IDs:** lens-1 ab521edc560a0b013 / lens-2 aae0edcaf3acf4640 / lens-3 a9a23dc563641c905
+**Spec tip dispatched against:** c5c948c. **Impl tip:** 4b626cf.
+
+**Lens-1:** PASS CLEAN — 4 LOW observations (non-gating).
+- Obs-1 LOW: fallback-path coverage gap in resolveAndVerifyCallerRole — no-pubkey-in-ctx path untested; → TaskList #115.
+- Obs-2 LOW: 3 stale ARCH-04 v1.10 cites in impl (admission.go:287, svtnmgmt.go:252, svtnmgmt.go:279) + 1 in story; PO adjudicated S-2.01:148 as out-of-scope historical-attribution (intentional).
+- Obs-3 LOW: unreachable bogus fingerprint in list-keys default arm.
+- Obs-4 LOW: dead code in VP046 test.
+
+**Lens-2:** PASS CLEAN — novelty zero; no findings.
+
+**Lens-3:** BLOCK.
+- F-P25L3-001 MED: S-6.06:204 cites "VP-076 v1.1"; current is v1.4. Stale story-body version citation.
+- O-P25L3-001 OBS [process-gap]: 7th-recurrence sibling-sweep gap — new axis: downstream→upstream version cites (story body cites of upstream-artifact versions stale after upstream version bumps).
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged). Pass-25 NOT counted.
+
+**PROCESS-GAP-P25 (7th consecutive recurrence):** Story body cites of upstream-artifact versions are stale after upstream version bumps. Pass-24 fix-burst (c5c948c) updated VP-076 v1.3→v1.4 but did NOT sweep stories/ for "VP-076 v1.*" current-state cites. Upstream-rooted sweep rule: any document citing an artifact must be re-grepped when that artifact's version bumps. vsdd-factory #361 comment appended (7th recurrence + new axis: story body downstream→upstream cites).
+
+**Convergence-reset ruling:** Both fix-bursts doc-only / comment-only; no behavior changes; per BC-5.39.001 doc-only-fix discipline counter NOT reset. Pass-26 = clean-pass attempt #3 of 3 continues.
+
+### Fix-Burst Record — dual-layer (spec + impl)
+
+| Layer | Agent | Commit | Branch | Changes |
+|-------|-------|--------|--------|---------|
+| Spec | product-owner | a6cdb88 | factory-artifacts | S-6.06 v1.20→v1.21 + STORY-INDEX v3.10→v3.11; line 204 VP-076 v1.1→v1.4; line 263 ARCH-04 v1.10→v1.13; exhaustive pre/post-edit grep across stories+specs; zero (b)-class residuals remain. |
+| Impl | implementer | d3f186c | feat/S-6.06-daemon-admin-handlers | 4 impl/test ARCH-04 v1.10→v1.13 comment bumps at admission.go:287, svtnmgmt.go:252, svtnmgmt.go:279, admin_handlers.go:192; just fmt + just lint clean; just test-race 17/17 PASS, 0 races; comment-only, no behavior change. |
+
+**Spec tip after fix:** a6cdb88. **Impl tip:** d3f186c.
+
+---
+
+## S-6.06 Pass-24 — 2026-06-30 (BLOCK + dual fix-burst applied)
+
+**Dispatch IDs:** lens-1 a6ead8d7956498972 / lens-2 a64e9dbb012bf369a / lens-3 a57d7569f4aaa7675
+
+**Lens-1:** PASS CLEAN — novelty LOW; no findings; impl tip 0be8e97 unchanged.
+**Lens-2:** PASS CLEAN — O-P24L2-001 LOW out-of-scope obs (impl comment v1.10 cites at svtnmgmt.go:66,:332 + admin_handlers_test.go:821 — same mechanism as F-P24L3-001 but surfaced advisory by lens-2).
+**Lens-3:** BLOCK.
+- F-P24L3-001 MED: VP-076.md:113 Source Contract cited error-taxonomy.md v3.8; current version is v3.9. Root cause: Pass-22 fix-burst (4b42dd5) bumped error-taxonomy v3.8→v3.9 and VP-076 v1.2→v1.3 in the same commit but forgot to update VP-076's back-reference at line 113.
+- O-P24L3-001 OBS [process-gap]: 6th-pass cite-drift recurrence — axis shifted to downstream-doc cite of upstream-doc version; new surface: impl source comments.
+
+**Verdict:** BLOCK. Clean-pass count: 1/3 (unchanged). Pass-24 NOT counted.
+
+**PROCESS-GAP-P24 (6th consecutive recurrence):** New axis — downstream-doc cite of upstream-doc version (VP→error-taxonomy version cite drift). New surface — impl source comments (svtnmgmt.go + admin_handlers_test.go v1.10 cite residuals). vsdd-factory #361 comment appended (6th recurrence).
+
+**Convergence-reset ruling:** Doc-only + comment-only fix-bursts; no behavior changes. Per BC-5.39.001 doc-only-fix discipline, clean-pass counter NOT reset. Pass-25 = clean-pass attempt #3 of 3 continues.
+
+### Fix-Burst Record — dual-layer (spec + impl)
+
+| Layer | Agent | Commit | Branch | Changes |
+|-------|-------|--------|--------|---------|
+| Spec | product-owner | c5c948c | factory-artifacts | VP-076 v1.3→v1.4: line 113 v3.8→v3.9 cite fix; VP-INDEX v2.12→v2.13; pre/post-edit grep clean. |
+| Impl | implementer | 4b626cf | feat/S-6.06-daemon-admin-handlers | impl comment v1.10→v1.12 at 3 sites (svtnmgmt.go:66,:332 + admin_handlers_test.go:821); just fmt + just lint clean; just test-race 17/17 PASS, 0 races; comment-only, no behavior change. O-P24L2-001 from lens-2 also resolved. |
+
+**Spec tip after fix:** c5c948c. **Impl tip:** 4b626cf.
+
