@@ -238,3 +238,61 @@ Both worktrees must verify fully clean (build + test + test-race + lint + fmt) b
 
 2026-06-29 — Wave-5 S-5.01/S-6.02 Pass-1 fix-burst closed: S-6.06 minted, S-5.01@cad96f7, S-6.02@d494908, ready for Pass-1 reconverge.
 
+---
+
+## Wave-5 S-5.01 + S-6.02 Pass-1 Reconverge Burst (2026-06-29)
+
+**Trigger:** S-5.01 + S-6.02 fresh-context Pass-1 re-run (3-lens adversary × 2 stories = 6 reports, 22 findings total). Both stories had updated perimeters (S-5.01 v1.3, S-6.02 v1.4) since the original pass.
+
+**Agents dispatched:** product-owner, architect, implementer (S-5.01 worktree), implementer (S-6.02 worktree), story-writer, state-manager
+
+**Decisions resolved:**
+- Path B selected for BC-2.07.001 PC-1: mint S-6.07-svtn-admin-create for Wave 6 (svtn create/delete CLI/RPC surface deferred out of Wave 5 scope).
+- `bc_traces` field is the canonical project-wide frontmatter key for behavioral contract traceability (resolves `bc_traces` vs `bcs` convention drift F-006).
+
+**Spec changes landed:**
+
+| Artifact | Version | Change |
+|----------|---------|--------|
+| BC-2.07.001 | v1.2 | PC-1 scope narrowed; svtn create/delete anchored to S-6.07 |
+| BC-2.05.004 | v1.2 | Trigger field updated; scope annotation added |
+| BC-2.06.001 | v1.3 | S-5.01 back-link + Red-over-Yellow precedence explicit |
+| BC-2.06.002 | v1.3 | S-5.01 back-link added |
+| error-taxonomy | v3.0 | E-ADM-018 (svtn already exists) + E-ADM-019 (svtn not found) added |
+| interface-definitions | v1.1 | CLI spec updated to match implementation (role/current_role, JSON tags) |
+| STORY-INDEX | v2.6 | S-6.07 + S-BL.LOOKUP added; totals 38→39 stories, 184→187 pts |
+| ARCH-04 | v1.10 | RoleReadonly doc drift fixed; version pins updated |
+| ARCH-07 | v1.4 | VP-027/VP-052 descriptors corrected; VP-074 added |
+| ARCH-11 | v1.7 | VP-074 added to coverage matrix; VP totals reconciled |
+| VP-074 | v1.1 | Harness skeleton updated to match as-built TestQualityIndicator_OnMissingFrame |
+| VP-048 | v1.2 | Story Trace updated to include S-6.06; Wave column corrected |
+
+**Stories minted:**
+- S-6.07-svtn-admin-create.md (Wave 6, 3 pts; depends_on=[S-6.02, S-6.06]; BC-2.07.001 PC-1)
+- S-BL.LOOKUP-admitted-keyset-lookup-convention.md (backlog, 1 pt; BC-2.05.004; depends on upstream go-md PR #19)
+
+**Stories propagated:**
+- S-5.01 v1.3 → v1.4 (OR-form AC-001; DRIFT-001b/DRIFT-002 anchored in S-7.03; bc_traces canonicalized)
+- S-6.02 v1.4 → v1.5 (scope annotation phrasing fixed; BC-2.05.004 row scope-narrow note added)
+- S-6.06 v1.0 → v1.1 (AC-006 caller-key-role check added per BC-2.07.001 Inv-3; `role`→`current_role` rename; BC-2.05.004 PC-4 row added; depends_on updated to include S-W5.01)
+- S-7.03 v1.0 → v1.1 (DRIFT-001b + DRIFT-002 anchored; was not owning console-remote-control scope for these drifts)
+
+**Code changes (worktrees — not yet PRed, await Pass-2 before delivery):**
+
+S-5.01 worktree:
+- internal/metrics/metrics.go: OR-form doc-comment; Red-over-Yellow precedence explicit; PC-4 citation; invariant-3 "remain eligible" property assertion added
+- internal/metrics/metrics_test.go: genGreenToRedJump generator added; TestProp_BC_2_06_001_GreenToRedSingleStep (previously unreachable); TestQualityIndicator_OnMissingFrame_PropertyMonotone; shrinkers on rising/recovery generators; functional oracle in TestQualityIndicator_ConcurrentUpdates (F-002 tautology fixed)
+
+S-6.02 worktree:
+- internal/admission/admission.go: RevokeKeyIfRoleMatches atomic primitive added (HOLD-001 TOCTOU closed)
+- internal/svtnmgmt/svtnmgmt.go: RevokeKey rewired to call RevokeKeyIfRoleMatches; Create() orphan-key leak under concurrent same-name fixed; confirmation message softened per BC-2.07.001; v1.10 pin comments
+- cmd/sbctl/admin.go: role enum validation (runAdminKeyRegister refuses unknown --role values; E-ADM-XXX error returned)
+- internal/admission/admission_test.go: TestSVTNManager_RevokeRaceVsRegister_HOLD001 (200 iterations, -race); TestSVTNManager_ConcurrentCreate_NoOrphans
+- cmd/sbctl/admin_test.go: TestSbctlAdmin_KeyRegister_InvalidRole
+- internal/admission/admission_test.go: F-CS-001 atomicity test rewritten (no longer tautological — actually exercises concurrent register+revoke path)
+
+**Process notes:**
+- PROCESS-GAP-W5A: both worktrees verified race-clean across 16 packages. Evidence pasted in respective agent completion outputs. Reinforces mandatory `just test-race` evidence-paste discipline before green-claim.
+
+**Findings closed:** 22 (S-5.01: 11 lens findings; S-6.02: 11 lens findings across 3 passes)
+

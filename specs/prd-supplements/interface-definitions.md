@@ -2,10 +2,10 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -94,20 +94,41 @@ sbctl ping                                      # Connectivity check to daemon
 
 ### `sbctl admin`
 
-Operator-only subcommand requiring `--confirm` token. Used for SVTN key management and emergency recovery.
+Operator-only subcommand requiring `--confirm` token. Used for SVTN lifecycle management, key management, and emergency recovery.
+
+#### Key management (`sbctl admin key`)
+
+Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 | Subcommand | Purpose | Auth | Exit codes |
 |-----------|---------|------|-----------|
-| `sbctl admin register-key --svtn <id> --pubkey <path> --role <control\|console\|access>` | Register a new admission key | Requires existing control-role key + interactive `--confirm` token | 0=ok, E-ADM-012 (already registered) |
-| `sbctl admin revoke-key --svtn <id> --key-fingerprint <fp>` | Revoke admission key | Requires existing control-role key + `--confirm`; per ADR-004 console cannot revoke control | 0=ok, E-ADM-011 (hierarchy violation), E-ADM-013 (not found) |
-| `sbctl admin recover --svtn <id> --bootstrap-key <path> --confirm <svtn-short-id>\|--yes` | Emergency recovery when all control keys are lost | Requires bootstrap key (set at SVTN creation per BC-2.07.001) + interactive `--confirm` token | 0=ok, E-ADM-014 (bootstrap mismatch) |
-| `sbctl admin list-keys --svtn <id>` | List admission keys | Any admitted role | 0=ok |
+| `sbctl admin key register --svtn <id> --key <hex-pubkey> --role <control\|console\|access>` | Register a new admission key | Requires existing control-role key + interactive `--confirm` token | 0=ok, E-ADM-012 (already registered), E-ADM-018 (control-to-control confirmation required) |
+| `sbctl admin key revoke --svtn <id> --key <hex-pubkey>` | Revoke admission key | Requires existing control-role key + `--confirm`; per ADR-004 console cannot revoke control | 0=ok, E-ADM-011 (hierarchy violation), E-ADM-013 (not found), E-ADM-018 (control-to-control confirmation required) |
+| `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <RFC3339-timestamp>` | Set automatic expiry on an admission key | Requires existing control-role key; no `--confirm` required (non-destructive scheduling) | 0=ok, E-ADM-013 (key not found) |
+| `sbctl admin list-keys --svtn <id>` | List all admission keys with role, fingerprint, expiry | Any admitted role | 0=ok |
 
-**`--confirm=<svtn-short-id>`** — Required on all destructive admin operations (register-key, revoke-key, recover). Accepts the SVTN short ID (the first 8 hex characters of the SVTN ID, formatted as `SVTN-<short-id>`) as the confirmation token. Prevents accidental mass-revocation by requiring the operator to name the target SVTN explicitly. When the flag is omitted, the command enters interactive mode and prompts `Type SVTN-<short-id> to confirm:` before proceeding. Per ADR-004 split-brain mitigation.
+`--key <hex-pubkey>` — Replaces the former `--key-fingerprint <fp>` flag. Accepts the full hex-encoded public key (not a fingerprint). This matches the wire format used by `internal/svtnmgmt`.
+
+#### SVTN lifecycle (`sbctl admin svtn`)
+
+| Subcommand | Purpose | Auth | Exit codes |
+|-----------|---------|------|-----------|
+| `sbctl admin svtn create --name=<svtn-name>` | Create a new SVTN; returns `svtn_id` and bootstrap fingerprint | Requires control-role key on control-mode daemon | 0=ok, E-SVTN-001 (already exists), E-ADM-009 (insufficient role) |
+| `sbctl admin svtn destroy --name=<svtn-name>` | Destroy an SVTN and all admitted keys; terminates active sessions | Requires control-role key + `--confirm` | 0=ok, E-ADM-011 (unauthorized), E-ADM-009 (insufficient role) |
+
+#### Emergency recovery
+
+| Subcommand | Purpose | Auth | Exit codes |
+|-----------|---------|------|-----------|
+| `sbctl admin recover --svtn <id> --bootstrap-key <path> --confirm <svtn-short-id>\|--yes` | Emergency recovery when all control keys are lost | Requires bootstrap key (set at SVTN creation per BC-2.07.001) + interactive `--confirm` token | 0=ok, E-ADM-014 (bootstrap mismatch) |
+
+**`--confirm=<svtn-short-id>`** — Required on all destructive admin operations (key register, key revoke, svtn destroy, recover). Accepts the SVTN short ID (the first 8 hex characters of the SVTN ID, formatted as `SVTN-<short-id>`) as the confirmation token. Prevents accidental mass-revocation by requiring the operator to name the target SVTN explicitly. When the flag is omitted, the command enters interactive mode and prompts `Type SVTN-<short-id> to confirm:` before proceeding. Per ADR-004 split-brain mitigation.
 
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.1 changelog note:** `register-key` → `admin key register`; `revoke-key` → `admin key revoke`; `expire` subcommand added (was absent). `--key-fingerprint <fp>` replaced by `--key <hex-pubkey>` throughout. `sbctl admin svtn create --name=<svtn-name>` and `sbctl admin svtn destroy --name=<svtn-name>` added (S-6.07 Wave 6). Per Task 8 reconverge (S-6.02 lens1 F-003, interface-definitions.md CLI spec stale vs implementation).
 
 ## Exit Code Semantics
 

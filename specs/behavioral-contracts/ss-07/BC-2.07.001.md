@@ -2,10 +2,10 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1a
 bc_id: BC-2.07.001
 subsystem: network-management
@@ -17,7 +17,16 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-29
+    version: "1.2"
+    actor: product-owner
+    change: >
+      Task 2 reconverge (S-5.01 + S-6.02 Pass-1 adversarial): (1) Trigger updated to
+      `sbctl admin svtn create/destroy`; (2) Canonical Test Vectors updated to
+      `sbctl admin svtn create --name=mynet`; (3) Stories cell updated with PC split
+      (PC-1: S-6.02 + S-6.07; PC-2: S-6.02; PC-3: S-6.05); (4) PC-2 "trust anchor"
+      addendum added clarifying admitted=false bootstrap semantics.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -48,7 +57,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 ## Postconditions
 
 1. **Create**: New SVTN ID registered on the router; control node's key added as the first admitted control-role key; SVTN is ready for additional key registrations and node admissions.
-2. **Bootstrap**: The first control key is added to the router's admitted set via a local operation (no network admission required — this is the trust anchor). The mechanism must be documented and auditable.
+2. **Bootstrap**: The first control key is added to the router's admitted set via a local operation (no network admission required — this is the trust anchor). **Trust anchor semantics (F-CS-004 addendum):** the key is initially registered with `admitted=false`; the control node completes the standard challenge-response admission protocol to flip its own key to `admitted=true`. This means the bootstrap path is not a privilege bypass — it merely seeds the admitted-key set so that the challenge-response can proceed. The mechanism must be documented and auditable.
 3. **Destroy**: All admitted keys for the SVTN are removed from the router; all active sessions on that SVTN are terminated; SVTN ID is freed.
 
 ## Invariants
@@ -59,7 +68,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 
 ## Trigger
 
-Operator runs `sbctl svtn create` or `sbctl svtn destroy` or equivalent API call.
+Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equivalent management RPC.
 
 ## Edge Cases
 
@@ -74,10 +83,11 @@ Operator runs `sbctl svtn create` or `sbctl svtn destroy` or equivalent API call
 
 | Input | Expected Output | Category |
 |-------|----------------|----------|
-| `sbctl svtn create --name=mynet` | SVTN created; SVTN ID returned; control key registered | happy-path |
-| `sbctl svtn destroy --id=<svtn-id>` | All admitted keys removed; all sessions terminated; SVTN gone | happy-path |
-| `sbctl svtn create --name=mynet` (already exists) | E-SVTN-001 "SVTN already exists" | error |
-| Bootstrap: first control key added locally | Control key in admitted set; SVTN ready for node admissions | happy-path |
+| `sbctl admin svtn create --name=mynet` | SVTN created; SVTN ID returned; bootstrap fingerprint returned; control key in admitted set | happy-path |
+| `sbctl admin svtn destroy --name=mynet` | All admitted keys removed; all sessions terminated; SVTN ID freed | happy-path |
+| `sbctl admin svtn create --name=mynet` (already exists) | E-SVTN-001 "SVTN already exists: mynet" | error |
+| Bootstrap: first control key added locally | Control key in admitted set with `admitted=false`; control node completes challenge-response to flip `admitted=true`; SVTN ready for additional key registrations | happy-path |
+| Non-control-role key attempts `sbctl admin svtn create` | E-ADM-009 "insufficient authority for operation admin.svtn.create: key <fp> has role <role>" | error |
 
 ## Verification Properties
 
@@ -94,7 +104,7 @@ Operator runs `sbctl svtn create` or `sbctl svtn destroy` or equivalent API call
 | L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 |
 | L2 Domain Invariants | DI-012 (control node is a network participant, not a router manager), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/svtnmgmt |
-| Stories | PC-1 (Create) + PC-2 (Bootstrap): S-6.02 (SVTNManager + CLI), S-6.06 (daemon handler registration); PC-3 (Destroy): S-6.05 (deferred — Wave 6, depends_on S-6.02; CR-009 ruling 2026-06-29) |
+| Stories | PC-1 (Create): S-6.02 (SVTNManager Go method), S-6.07 (CLI + handler, RPC reachability); PC-2 (Bootstrap): S-6.02 (local side-effect of Create); PC-3 (Destroy): S-6.05 (CLI + handler — Wave 6, depends_on S-6.02; CR-009 ruling 2026-06-29) |
 | Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — this BC specifies the create/destroy lifecycle that CAP-023 defines as the prerequisite for all other operations |
 
 ## Related BCs

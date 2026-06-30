@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -30,6 +30,7 @@ modified:
   - 2026-06-25T00:00:00 # v1.5 — ADR-009: fix three contradictions (spec-reviewer C-2/C-3): correct verifyFrameHMAC signature (bool not error, value args not pointers), correct auth key location (forwardingTable not admitted_key_set), clarify ordering vs. single-lock-acquisition (sequential checks, shared RLock)
   - 2026-06-25T00:00:00 # v1.6 — ADR-009: amended to permit lock-free HMAC verify; RLock released after [32]byte key copy; HMAC runs lock-free; admitted check re-locks internally; sequential ordering preserved by line order not lock holding (Wave-3 pass-1 M-1)
   - 2026-06-29T00:00:00 # v1.9 — F-005 ruling: Lookup/LookupByPubkey return-type convention — Option A chosen ((AdmittedKey, bool) value + present-flag); migration deferred to DRIFT-F005-LOOKUP-CONVENTION follow-on story
+  - 2026-06-29T00:00:00 # v1.10 — Lens1 F-004: rename `readonly` → `access` in role-hierarchy prose (RoleAccess canonical); Lens2 F-CS-002: ADR-004 Addendum H2 — atomic RevokeKeyIfRoleMatches primitive added; error codes updated to E-ADM-018 (confirm-gate) and E-ADM-019 (role-mismatch); BC-2.07.001 v1.2 PC-2 cross-link; Task 6 note distinguishing daemon-mode exclusion vs caller-key-role (BC-5.39.001)
 ---
 
 # ARCH-04: Admission & Security
@@ -88,7 +89,7 @@ can view their own key status but not modify the key store.
 **OQ-002 resolution:** Access nodes have no key management capability whatsoever. They
 hold their own keypair for admission but cannot modify the SVTN key store.
 
-**OQ-003 resolution:** A permission hierarchy exists among key roles: control > console > readonly. A console-role or readonly-role key cannot revoke a control-role key (such attempts fail with E-ADM-011). Control-to-control revocation requires `sbctl admin` human authorization (split-brain mitigation, ADR-004 paragraph above).
+**OQ-003 resolution:** A permission hierarchy exists among key roles: control > console > access. A console-role or access-role key cannot revoke a control-role key (such attempts fail with E-ADM-011). Control-to-control revocation requires `sbctl admin` human authorization (split-brain mitigation, ADR-004 paragraph above).
 
 **Permission hierarchy:**
 ```
@@ -109,7 +110,7 @@ Access node:
   - Cannot modify key store
 ```
 
-**Role hierarchy (explicit — F-010):** `control > console > readonly`. Lower-tier
+**Role hierarchy (explicit — F-010):** `control > console > access`. Lower-tier
 roles cannot revoke higher-tier roles.
 
 **Can a console-role key revoke a control-role key?** NO. Console role is below
@@ -363,7 +364,7 @@ ARCH-04 HMAC Keying section.
 The `currentRole admission.KeyRole` parameter is RETAINED as a caller-supplied argument.
 The implementation MUST cross-check the supplied role against the role stored in the
 `AdmittedKeySet` registry before applying the confirm gate. If the supplied role diverges
-from the stored role, `RevokeKey` MUST return an error (distinct sentinel, E-ADM-014,
+from the stored role, `RevokeKey` MUST return an error (distinct sentinel, E-ADM-019,
 `ErrRoleMismatch: "revoke: supplied role does not match registered role"`). The confirm
 gate (`ErrControlRevocationRequiresConfirm`) is applied only AFTER the role check passes.
 
@@ -405,9 +406,9 @@ expectation; the server validates it.
    svtnmgmt imports only {admission, config}; derivation is admission's internal concern).
    → ErrKeyNotRegistered (E-ADM-013) if LookupByPubkey returns nil
 3. Compare stored.Role == currentRole
-   → ErrRoleMismatch (E-ADM-014) if they diverge
+   → ErrRoleMismatch (E-ADM-019) if they diverge
 4. If currentRole == RoleControl AND confirm == false
-   → ErrControlRevocationRequiresConfirm (E-ADM-004)
+   → ErrControlRevocationRequiresConfirm (E-ADM-018)
 5. Call AdmittedKeySet.RevokeKey → propagate error
 6. Return KeyOpResult{Fingerprint, At: time.Now().UTC()}
 ```
@@ -419,7 +420,7 @@ Add to `internal/svtnmgmt/svtnmgmt.go`:
 ```go
 // ErrRoleMismatch is returned by SVTNManager.RevokeKey when the caller-supplied
 // currentRole does not match the role stored in the AdmittedKeySet registry
-// (E-ADM-014). This prevents the confirm gate from being bypassed by supplying
+// (E-ADM-019). This prevents the confirm gate from being bypassed by supplying
 // a lower role for a control key.
 var ErrRoleMismatch = errors.New("revoke: supplied role does not match registered role")
 ```
@@ -490,6 +491,108 @@ Thread-safety and deep-clone guarantees are inherited from `Lookup`. No mutex lo
 1. Remove `"github.com/arcavenae/switchboard/internal/frame"` import.
 2. In `RevokeKey` (line 225): replace the two-line derive+lookup with `stored := m.keySet.LookupByPubkey(svtnID, pubkey)`.
 3. In `ExpireKey` (line 288): replace `nodeAddr := frame.DeriveNodeAddress(...)` with a `LookupByPubkey` call; read `nodeAddr` from the returned `AdmittedKey.NodeAddr` for the subsequent `SetKeyExpiry` call. Return `ErrKeyNotRegistered` if nil.
+
+### ADR-004 Addendum H2: Atomic Revocation Primitive — `RevokeKeyIfRoleMatches` (HOLD-001 TOCTOU Resolution, F-CS-002)
+
+**Decision date:** 2026-06-29
+**Resolved by:** architect (F-CS-002 HOLD-001 TOCTOU, Lens2 adversarial pass)
+**Applies to:** `AdmittedKeySet` in `internal/admission`
+
+#### Mandate
+
+The non-atomic Lookup → cross-check → RevokeKey sequence (formerly Steps 2/3/5 of the
+HOLD-001 hybrid analysis) introduces a TOCTOU window: between the `LookupByPubkey` call
+and the `RevokeKey` call, a concurrent `RegisterKey` (LWW, ADR-003) could change the key's
+role, causing the role cross-check performed in `SVTNManager.RevokeKey` to compare against
+a stale value.
+
+To close this window, `AdmittedKeySet` MUST expose a new atomic primitive:
+
+```go
+// RevokeKeyIfRoleMatches atomically looks up the key identified by (svtnID, pubkey),
+// compares its stored role to expectedRole, and — if they match — marks the key revoked.
+// The entire operation executes under a single Write lock.
+//
+// Returns:
+//   - (existingRole, nil) on success (role matched; key marked revoked).
+//   - (existingRole, ErrRoleMismatch) if stored role ≠ expectedRole (maps to E-ADM-019);
+//     the key is NOT mutated.
+//   - (0, ErrKeyNotRegistered) if the key is not present (maps to E-ADM-013).
+//
+// ErrRoleMismatch maps to E-ADM-019.
+// ErrKeyNotRegistered maps to E-ADM-013.
+func (s *AdmittedKeySet) RevokeKeyIfRoleMatches(
+    svtnID [16]byte,
+    pubkey ed25519.PublicKey,
+    expectedRole admission.KeyRole,
+) (existingRole admission.KeyRole, err error)
+```
+
+#### Critical Section Contract
+
+The single Write lock acquisition covers:
+1. Derive `nodeAddr` via `frame.DeriveNodeAddress(svtnID, []byte(pubkey))` (internal).
+2. Look up the entry. If absent → release lock, return `(0, ErrKeyNotRegistered)`.
+3. Read `entry.Role`. If `entry.Role != expectedRole` → release lock, return
+   `(entry.Role, ErrRoleMismatch)` without mutating. No state change.
+4. Mark `entry.revoked = true`. Release lock.
+5. Return `(entry.Role, nil)`.
+
+No intermediate lock release between steps 2–4. This eliminates the TOCTOU gap.
+
+#### SVTNManager.RevokeKey Integration
+
+`SVTNManager.RevokeKey` MUST call `RevokeKeyIfRoleMatches` instead of the two-step
+`LookupByPubkey` + `RevokeKey` sequence:
+
+```
+1. Validate svtnName exists → ErrSVTNNotFound if not
+2. Call AdmittedKeySet.RevokeKeyIfRoleMatches(svtnID, pubkey, currentRole)
+   → ErrKeyNotRegistered (E-ADM-013) if not present
+   → ErrRoleMismatch (E-ADM-019) if role diverges
+   → returns (existingRole, nil) on success
+3. If currentRole == RoleControl AND confirm == false
+   → ErrControlRevocationRequiresConfirm (E-ADM-018)
+   (use existingRole returned from step 2, not the caller-supplied currentRole,
+    for the confirm-gate check — they are guaranteed equal at this point)
+4. Return KeyOpResult{Fingerprint, At: time.Now().UTC()}
+```
+
+The previous five-step sequence (Steps 2/3/5 annotated in HOLD-001) is superseded by
+this two-call sequence. The confirm gate (step 3) still fires on the role returned from
+the atomic step, not the caller's assertion, removing the residual TOCTOU concern.
+
+#### BC-2.07.001 v1.2 PC-2 Cross-Reference
+
+The atomic revocation primitive satisfies BC-2.07.001 v1.2 PC-2 (trust-anchor addendum):
+a control node's revocation of another key is required to be role-consistent and atomic.
+Specifically, the RevokeKeyIfRoleMatches primitive is the mechanism by which PC-2's
+"only a control-role key may destroy an SVTN or revoke a control key" invariant is
+enforced at the admission layer without a TOCTOU gap.
+
+### Daemon-Mode vs Caller-Key-Role: Inv-3 Disambiguation (Task 6 — BC-2.07.001 Inv-3, BC-5.39.001)
+
+ADR-004 addresses two distinct role-enforcement concerns that must not be conflated:
+
+| Concern | Layer | Mechanism | BC Anchor |
+|---------|-------|-----------|-----------|
+| **Daemon-mode exclusion** | Process-level | A daemon launched in `access` or `console` mode MUST NOT register as a control node; enforced at startup by mode flags and rejected by `SVTNManager.RegisterKey` if a non-control-mode daemon attempts control operations | BC-5.39.001 (daemon role exclusion) |
+| **Caller-key-role check** | Per-RPC | Each RPC that mutates SVTN state (create, destroy, revoke) checks the caller's key role in `AdmittedKeySet` before executing; enforced by `RevokeKeyIfRoleMatches` (this addendum) and the SVTN create/destroy guards | BC-2.07.001 Inv-3 (S-6.06, S-6.07) |
+
+The daemon-mode exclusion is a process-level architectural constraint: it prevents
+the wrong binary mode from registering control capabilities at boot time. The
+caller-key-role check is a per-RPC runtime check: it prevents any connected client —
+regardless of which mode the daemon was launched in — from performing privileged
+operations if its key is not registered as `RoleControl` in the admission registry.
+
+Both constraints must hold simultaneously. The daemon-mode constraint is a necessary
+condition for a well-formed deployment; the per-RPC constraint is the cryptographic
+enforcement layer that closes the authorization gap even if the process-level constraint
+is somehow bypassed.
+
+**BC-2.07.001 Inv-3** ("Only control-role keys may create or destroy SVTNs") is anchored
+to S-6.06 (SVTN destroy) and S-6.07 (admin.svtn.create handler + CLI). Inv-3 is enforced
+by the per-RPC caller-key-role check, not by daemon-mode exclusion alone.
 
 ### ADR-004 Original Decision (unchanged)
 

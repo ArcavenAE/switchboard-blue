@@ -2,7 +2,7 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -69,7 +69,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-024 | `Multipath.OnFrameArrival` delivers the first copy and discards all subsequent copies for same checksum | internal/multipath | proptest |
 | VP-025 | `DropCache` never exceeds its configured capacity | internal/multipath | proptest |
 | VP-026 | `PathScore` ranking is transitive: if score(A) < score(B) < score(C) then rank(A) < rank(B) < rank(C) | internal/paths | proptest |
-| VP-027 | `QualityIndicator.Compute` transitions are monotonic under sustained degradation: green→yellow→red only | internal/metrics | proptest |
+| VP-027 | `QualityIndicator.Update(rttMs, lossPct)` transitions Quality state per BC-2.06.001 OR-form thresholds (Red > Yellow precedence); monotonic under sustained degradation: green→yellow→red only | internal/metrics | proptest |
 | VP-028 | `Config.Validate` returns an error for tick_interval outside [5ms, 50ms] | internal/config | proptest |
 | VP-029 | `Config.Validate` returns an error for any missing required field | internal/config | proptest |
 | VP-030 | `sbctl` exits with code 1 and E-NET-001 when daemon connection is refused | cmd/sbctl | integration |
@@ -91,7 +91,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
 
-> VP catalog total = 73; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> VP catalog total = 74; full BC→VP coverage in ARCH-11. VP-043 through VP-057
 > were added in Phase 1c-refinement to close coverage gaps. VP-059 added 2026-06-27
 > for BC-2.05.005 PC-3 (Wave 3 gate F-2 remediation — FailureCounter threshold proptest).
 > VP-058 added at Wave 3 for BC-2.05.008 (RouteFrame HMAC code-audit).
@@ -100,6 +100,7 @@ See ARCH-09 for the complete per-package classification.
 > VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E
 > (Invariant 8 key-size panic, PC-10 Serve nil on shutdown, PC-11 E-RPC-010 unknown
 > command, PC-12 E-RPC-011 handler error, PC-1 write-deadline CWE-400, EC-013 loopback).
+> VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation).
 > VP-069 updated to v1.1 (ARCH-12 v1.4 Ruling G): property extended to require non-nil on
 > unexpected-close path; coverage expanded to 3 paths; canonical predicate documented.
 > VP-069 updated to v1.2 (ARCH-12 v1.5 Ruling P): fatal-accept-error drain obligation added —
@@ -128,6 +129,14 @@ See ARCH-09 for the complete per-package classification.
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
 | VP-060 | Connect failure → exit non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT → clean shutdown (all goroutines drain within 500ms, `sc.Close()` once, exit 0, no panic) | cmd/switchboard | integration (subprocess) |
+
+### BC-2.06.001 Threshold Classification Addition (2026-06-29)
+
+| VP ID | Property | Module | Method |
+|-------|----------|--------|--------|
+| VP-074 | `QualityIndicator` threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct per BC-2.06.001 PC-2/PC-3/PC-4 | internal/metrics | unit |
+
+VP-027 (proptest) covers transition ordering under sustained degradation. VP-074 (unit) covers single-step threshold mapping and boundary values. The two VPs are orthogonal: VP-027 exercises state-machine sequences; VP-074 exercises the classification table directly. See VP-074.md for the 14-case table-driven harness.
 
 ### BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E Additions (2026-06-29)
 
@@ -160,7 +169,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-048 | Control node creates/destroys SVTNs | internal/svtnmgmt | integration |
 | VP-049 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | e2e |
 | VP-050 | Console remotely controllable via sbctl | cmd/sbctl | e2e |
-| VP-052 | Missing expected tick within deadline triggers quality indicator downgrade | internal/metrics | integration |
+| VP-052 | `OnMissingFrame` call accumulates missed-frame count; N consecutive calls → quality indicator downgrade (one level) per BC-2.06.002 count-based API | internal/metrics | integration |
 | VP-056 | Console detach releases session without closing it; observers unaffected | internal/session | integration |
 
 ## Fuzz Targets (P0 Security Boundaries)

@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "2.5"
+version: "2.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -19,17 +19,17 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 38 (30 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-6.05 + S-BL.ARQ-TX backlog/draft + S-W5.03 CI gate + S-HRD.01 + S-HRD.02 hardening + S-6.06) |
+| Total stories | 39 (31 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-6.05 + S-BL.ARQ-TX backlog/draft + S-W5.03 CI gate + S-HRD.01 + S-HRD.02 hardening + S-6.06 + S-6.07) |
 | Complete | 18 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01) |
 | Pending | 9 |
-| Draft/unscheduled | 9 (S-M.01, S-M.02, S-6.04, S-6.05, S-BL.ARQ-TX, S-W5.01, S-W5.02, S-W5.03, S-6.06) |
-| E-phase | 26 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new) |
-| PE-phase | 4 (wave 6) |
+| Draft/unscheduled | 10 (S-M.01, S-M.02, S-6.04, S-6.05, S-BL.ARQ-TX, S-W5.01, S-W5.02, S-W5.03, S-6.06, S-6.07) |
+| E-phase | 27 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07) |
+| PE-phase | 4 (wave 6 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
-| Total points (waves 0–6) | 184 |
-| Total points (incl. S-M.01 + S-M.02) | 194 |
+| Total points (waves 0–6) | 187 |
+| Total points (incl. S-M.01 + S-M.02) | 197 |
 | Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
-| Backlog | 2 (S-BL.OA, S-BL.ARQ-TX) |
+| Backlog | 3 (S-BL.OA, S-BL.ARQ-TX, S-BL.LOOKUP) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 67/67 (100%) — VP-064, VP-065, VP-066, VP-067 added Wave-5 |
 
@@ -65,6 +65,7 @@ inputDocuments:
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004, BC-2.07.001 | network-management, admission-security | 5 | P1 | E | draft |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
+| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 5 | P1 | PE | pending |
@@ -80,10 +81,10 @@ inputDocuments:
 | 3 | S-3.01a, S-3.01b, S-3.02, S-3.03, S-3.04, **S-W3.04**, **S-W3.05** | 48 | Session access MVP + HMAC wire-up + Wave 3 fix-now blockers — all 7 stories MERGED |
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config — **CLOSED 2026-06-28 (all 5 merged: PR #24–#28)** |
 | 5 | S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01, S-W5.02, S-6.06 | 43 | Observability + CLI + Management Plane (net-new S-W5.01 8pts + S-W5.02 5pts + S-6.06 5pts CR-W5-SCOPE-SPLIT) |
-| 6 | S-6.05, S-7.01, S-7.02, S-7.03, S-7.04 | 32 | SVTN destroy + PE-phase features |
-| **Total** | **31** (wave stories) | **184** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 33 stories / 194 pts) |
+| 6 | S-6.05, S-6.07, S-7.01, S-7.02, S-7.03, S-7.04 | 35 | SVTN lifecycle (create+destroy) + PE-phase features |
+| **Total** | **32** (wave stories) | **187** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 34 stories / 197 pts) |
 
-> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 8 stories, 43 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts [re-scoped v2.0], S-W5.01: 8pts [net-new], S-W5.02: 5pts [net-new], S-6.06: 5pts [CR-W5-SCOPE-SPLIT adversary Pass 1]). Wave 6 total: 5 stories, 32 pts (S-6.05: 3pts [deferred from S-6.02, CR-009 ruling]; S-7.01: 8pts, S-7.02: 8pts, S-7.03: 5pts, S-7.04: 8pts). Total points including Wave 0: 184. Per-wave counts above use story points from individual story files.
+> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 8 stories, 43 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts [re-scoped v2.0], S-W5.01: 8pts [net-new], S-W5.02: 5pts [net-new], S-6.06: 5pts [CR-W5-SCOPE-SPLIT adversary Pass 1]). Wave 6 total: 6 stories, 35 pts (S-6.05: 3pts [deferred from S-6.02, CR-009 ruling]; S-6.07: 3pts [net-new, HUMAN-APPROVED PATH B — admin.svtn.create handler + CLI]; S-7.01: 8pts, S-7.02: 8pts, S-7.03: 5pts, S-7.04: 8pts). Total points including Wave 0: 187. Per-wave counts above use story points from individual story files.
 
 **Wave-5 Serialization Constraints:**
 - S-6.03 (creates `cmd/sbctl` scaffold — `main.go`, `client.go`) must merge **before** S-6.02 (adds `cmd/sbctl/admin.go`) and before S-5.02 (adds paths_list.go, router_metrics.go, router_status.go) — same file registration in `cmd/sbctl/main.go`.
@@ -113,6 +114,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | S-6.04 | SIGHUP config reload with fail-closed safety | draft | S601-DRAFT-STORY (Wave 4 audit) | Wave 6+ |
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
+| S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup`/`LookupByPubkey` to `(AdmittedKey, bool)` value-return per go.md rule 12 | backlog | DRIFT-F005-LOOKUP-CONVENTION (S-6.02 adversary F-005); depends S-6.02 merge | Wave 6+ |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 
 ## Hardening Stories
@@ -149,6 +151,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.6 | 2026-06-29 | HUMAN-APPROVED PATH B (product-owner + human): add S-6.07 (3pts, P2, Wave 6, draft) — `admin.svtn.create` handler + `sbctl admin svtn create` CLI, closes S-5.01/S-6.02 Pass-1 adversarial F-003/F-010 (BC-2.07.001 PC-1 had no CLI/RPC reachability). Add S-BL.LOOKUP (1pt, backlog) — closes DRIFT-F005-LOOKUP-CONVENTION ([process-gap] F-006). Wave 6 total: 5→6 stories, 32→35 pts. Grand totals: stories 38→39, pts (wave 0–6) 184→187, (incl. maintenance) 194→197. Draft/unscheduled: 9→10. E-phase stories: 26→27. Backlog: 2→3. |
 | 2.5 | 2026-06-29 | CR-W5-SCOPE-SPLIT ruling (product-owner + human): add S-6.06 (5pts, P1, Wave 5, draft) — daemon-side admin RPC handlers minted per adversary Pass 1 CRITICAL finding F-001. S-6.02 ships CLI-layer only (deferral note added); S-6.06 wires daemon-side mgmt.Handler registration for admin.key.register / revoke / expire / list-keys on control-mode daemon only. S-W5.02 depends_on updated to include S-6.06. Wave 5 total: 7→8 stories, 38→43 pts. Grand totals: stories 37→38, pts (wave 0–6) 179→184, (incl. maintenance) 189→194. Draft/unscheduled: 8→9. E-phase stories: 25→26. |
 | 2.4 | 2026-06-29 | CR-009 ruling (product-owner): add S-6.05 (3pts, P2, Wave 6, draft) — SVTN destroy lifecycle deferred from S-6.02. BC-2.07.001 PC-3 (Destroy) and VP-048 property 2 now owned by S-6.05; PC-1/PC-2 remain S-6.02. Wave 6 total: 4→5 stories, 29→32 pts. Grand totals: stories 36→37, pts (wave 0–6) 176→179, (incl. maintenance) 186→189. Draft/unscheduled: 7→8. BC-2.07.001 Traceability updated with PC split. |
 | 2.3 | 2026-06-29 | Add S-HRD.02 (draft, E-HRD hardening epic) — Architect Ruling 1 (S-W5.01 mgmt-server convergence): daemon logging infrastructure + security-event emission. Owns the BC-2.07.004 PC-3 / EC-004 "logs a security event" deferral from S-W5.01 AC-003 v1.6; establishes daemon-wide slog seam on mgmt.Server + access.go wiring. MEDIUM severity. Total stories: 35→36. |

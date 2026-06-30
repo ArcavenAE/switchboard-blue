@@ -71,7 +71,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-045 | Console session enumeration without hostnames | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
 | VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
-| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
+| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
 | VP-049 | sbctl unified CLI with OpenSSH auth | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
 | VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |

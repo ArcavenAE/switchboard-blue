@@ -2,10 +2,10 @@
 artifact_id: BC-2.06.002
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1a
 bc_id: BC-2.06.002
 subsystem: quality-observability
@@ -27,6 +27,12 @@ modified:
       No new accessor or external telemetry export required at this layer. VP-052
       Verification Properties row updated to match. Observability surface deferred
       per DRIFT-001. S-5.01 adversarial convergence finding.
+  - date: 2026-06-29
+    version: "1.3"
+    actor: product-owner
+    change: >
+      Task 4 reconverge (S-5.01 + S-6.02 Pass-1 adversarial, lens3 F-002):
+      Stories cell updated from "[filled by story-writer]" to S-5.01 + S-7.03 trace.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -105,7 +111,7 @@ The timeslice framing model guarantees one frame per tick. When a frame that was
 | L2 Capability | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires whether or not there is data — absence is a signal) |
 | Architecture Module | internal/metrics |
-| Stories | [filled by story-writer] |
+| Stories | S-5.01 (QualityIndicator + OnMissingFrame implementation in internal/metrics), S-7.03 (operator-visible export of missCount to sbctl sessions status / console session-list — deferred per DRIFT-002) |
 | Capability Anchor Justification | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 — this BC specifies the "missing frame is a degradation signal" mechanism that CAP-021 defines as "a missing frame is a degradation signal" |
 
 ## Related BCs

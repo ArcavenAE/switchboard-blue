@@ -2,16 +2,17 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "2.9"
+version: "3.0"
 status: draft
 producer: product-owner
-timestamp: 2026-06-28T00:00:00
+timestamp: 2026-06-29T00:00:00
 modified:
   - 2026-06-28T00:00:00 # v2.5 — Wave-5 mgmt-plane adversarial review Rulings 1/3/4/5/6/7 (ARCH-12 v1.2): E-CFG-010 added (key load failure); RPC category added with E-RPC-001 (post-auth dispatch failure); E-NET-001 scope-clarification note added (strictly dial/connect-unreachable)
   - 2026-06-29T00:00:00 # v2.6 — ARCH-12 v1.3 Wave-5 Convergence Ruling C: E-RPC-010 added (server unknown command, in-band), E-RPC-011 added (server handler error, in-band); E-RPC-001 clarified as CLIENT-SIDE only; E-RPC-002 explicitly forbidden. Ruling D: E-CFG-008 message format extended with console TCP loopback rejection variant (buildMgmtListener, not config.Validate())
   - 2026-06-29T00:00:00 # v2.7 — ARCH-12 v1.4 Wave-5 Convergence Ruling L: E-CFG-008 Variant 2 canonical string corrected — buildMgmtListener embeds the error code as prefix ("E-CFG-008: management_socket: ..."); Variant 1 (config.Validate empty socket) does NOT embed the code (different error-reporting path); test assertions must use strings.Contains(err.Error(), "E-CFG-008") not full-string match
   - 2026-06-29T00:00:00 # v2.8 — ARCH-12 v1.5 Wave-5 Convergence Ruling Y: E-NET-001 scope extended — now explicitly covers two cases: (a) net.Dial/net.DialContext failure (unchanged); (b) handshake read-deadline timeout (treated as unreachable per BC-2.07.003 Inv-2); message format for case (b) is "daemon unreachable: <address>: connection timed out"; reconciles prior Inv-2 vs Inv-4 conflict in BC-2.07.003
   - 2026-06-29T00:00:00 # v2.9 — S-6.05 PO ruling: E-ADM-011 extended with Variant 2 (destroy authorization); ErrDestroyUnauthorized sentinel maps to E-ADM-011; no new code slot allocated
+  - 2026-06-29T00:00:00 # v3.0 — Task 7 reconverge (S-5.01 + S-6.02 Pass-1 adversarial, lens1 F-001): E-ADM-004 KEPT as "address collision" (BC-2.01.006 predates ARCH-04 addendum); E-ADM-014 KEPT as "bootstrap key mismatch" (ADR-004 recover). New slots: E-ADM-018 ("control-to-control revocation requires explicit confirmation", S-6.02 + ARCH-04 HOLD-001); E-ADM-019 ("role mismatch: claimed role does not match registered key role", HOLD-001 cross-check). NOTE: E-ADM-015 (key expired) and E-ADM-016 (wire HMAC mismatch) are occupied — new entries use next free slots E-ADM-018 and E-ADM-019.
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -73,6 +74,8 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-013 | ADM | broken | 1 | "key not found: no key with fingerprint <key_fingerprint> registered in SVTN <svtn_id>" | BC-2.05.004 (revoke-key) |
 | E-ADM-014 | ADM | broken | 1 | "bootstrap key mismatch: provided key does not match SVTN <svtn_id> bootstrap" | ADR-004 (recover) |
 | E-ADM-015 | ADM | broken | 1 | "key expired: <key_fingerprint> on SVTN <svtn_id> (expired at <expiry_time>)" | FM-013, BC-2.01.007 |
+| E-ADM-018 | ADM | broken | 1 | "control-to-control revocation requires explicit confirmation: use `--confirm=<svtn-short-id>` to proceed" | S-6.02 + ARCH-04 HOLD-001 (split-brain mitigation); emitted by `SVTNManager.RevokeKey` when a control-role key attempts to revoke another control-role key without the explicit `--confirm` token. The `ErrControlRevocationRequiresConfirm` sentinel maps to this code. Distinct from E-ADM-011 (hierarchy violation: console/readonly cannot revoke control at all — that is an unconditional deny). E-ADM-018 is a conditional deny: the operation is permitted for control-to-control but requires explicit confirmation. |
+| E-ADM-019 | ADM | broken | 1 | "role mismatch: claimed role <claimed_role> does not match registered key role <registered_role> for key <key_fingerprint>" | ARCH-04 HOLD-001 cross-check; emitted when the key-role asserted in an RPC request's auth metadata does not match the role stored in the admitted-key set for that key's fingerprint. This prevents a caller from escalating privileges by claiming a higher role than their registered key actually has. Distinct from E-ADM-009 (insufficient authority: correct role known but too low) and E-ADM-010 (auth failure: key not recognized at all). |
 
 ### CFG — Configuration
 
@@ -196,6 +199,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v3.0 | 2026-06-29 | Task 7 reconverge (S-5.01 + S-6.02 Pass-1 adversarial, lens1 F-001): E-ADM-004 KEPT as "address collision" (BC-2.01.006); E-ADM-014 KEPT as "bootstrap key mismatch" (ADR-004 recover). New E-ADM-018 ("control-to-control revocation requires explicit confirmation", `ErrControlRevocationRequiresConfirm`, S-6.02 + ARCH-04 HOLD-001). New E-ADM-019 ("role mismatch: claimed role does not match registered key role", ARCH-04 HOLD-001 cross-check). NOTE: Task spec requested E-ADM-015 + E-ADM-016 but those slots are occupied (E-ADM-015 = key expired, E-ADM-016 = wire HMAC mismatch); new entries use next free slots E-ADM-018 and E-ADM-019 per append-only-numbering policy. |
 | v2.9 | 2026-06-29 | S-6.05 PO ruling: E-ADM-011 extended with Variant 2 (destroy authorization). New `ErrDestroyUnauthorized` sentinel maps to E-ADM-011; message format: `"permission denied: <role> key cannot destroy SVTN <svtn_name>"`. No new code slot allocated — destroy authorization is the same class of error as revocation hierarchy violation (insufficient privilege for admission-plane operation requiring control authority). BC-2.07.001 Inv-3 source. |
 | v2.8 | 2026-06-29 | ARCH-12 v1.5 Wave-5 Convergence Ruling Y: E-NET-001 scope extended to cover two explicit cases: (a) `net.Dial`/`net.DialContext` failure (existing); (b) handshake read-deadline timeout — daemon accepted TCP connection but did not complete ADR-012 handshake within timeout budget; treated as unreachable per BC-2.07.003 Inv-2; message format for case (b): `"daemon unreachable: <address>: connection timed out"`. Reconciles BC-2.07.003 Inv-2 vs Inv-4 conflict (Ruling Y). |
 | v2.7 | 2026-06-29 | ARCH-12 v1.4 Wave-5 Convergence Ruling L: E-CFG-008 Variant 2 canonical message string corrected — `buildMgmtListener` embeds the error code as prefix: `"E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: <address>"`. Variant 1 (`config.Validate()`) does NOT embed the code in the string (different error-reporting path). Both variants distinguished clearly. Test assertion guidance added: `strings.Contains(err.Error(), "E-CFG-008")` required (not full-string match). VP-073 property description updated to cite canonical `buildMgmtListener` format. |

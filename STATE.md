@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-s501-s602-pass1-reconverge-ready
+phase_step: wave-5-s501-s602-pass1-reconverge-complete
 phase_3_active_wave: 5
 phase_3_active_stories: [S-5.01, S-5.02, S-6.02, S-W5.02]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01]
@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: 0d499ac
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-29T18:00:00Z
+timestamp: 2026-06-29T20:00:00Z
 last_update: 2026-06-29
 ---
 
@@ -75,7 +75,9 @@ last_update: 2026-06-29
 
 Wave 5 RE-SCOPED to 7 stories / 38 pts (Observability + CLI + Management Plane). Net-new: S-W5.01 (internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring for all 4 daemon modes, 8pt) and S-W5.02 (e2e management plane harness, 5pt). S-6.03 re-scoped v2.0 to client-auth-only boundary (Authenticate() fail-closed, 5pt). S-5.02 repointed 3→5. Management plane ADR-012: NDJSON over Unix/TCP socket, Ed25519 challenge-response, 64 KiB bounded reads, fail-closed Authenticate(). BC-2.07.004 minted (45 total); VP-064..VP-067 minted (67 total). Fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 (ARCH-INDEX input-hash field-name mismatch) converted to tracked TODO. S-5.03 merged via PR #30 (01ae50c) on origin/develop — local develop is 1 commit behind (pull before TDD). Serialization: S-6.03 → {S-6.02, S-5.02} in sequence; S-W5.01 ∥ sbctl-side stories (no cmd/sbctl conflict); S-W5.02 gates on S-6.03 + S-W5.01.
 
-S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-6.06, F-003 bootstrap-race closed, F-005 deferred to Wave 6 (DRIFT-F005-LOOKUP-CONVENTION); both stories ready for fresh-context Pass-1 re-run against updated perimeters (S-5.01 v1.3 + S-6.02 v1.4).
+S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-6.06, F-003 bootstrap-race closed, F-005 deferred to Wave 6 (DRIFT-F005-LOOKUP-CONVENTION); Pass-1 reconverge burst complete — 22 lens findings closed, S-6.07 + S-BL.LOOKUP minted, STORY-INDEX → v2.6. Both worktrees race-clean (16 packages). Next: per-story adversarial Pass-2 for S-5.01 and S-6.02.
+
+- 2026-06-29 — Pass-1 fix burst landed: 4 spec layers (PO/architect/impl/story-writer) + race-clean test-race across S-5.01 and S-6.02 worktrees; 22 lens findings closed; new stories S-6.07 + S-BL.LOOKUP minted; STORY-INDEX → v2.6.
 
 ## Phase Progress
 
@@ -160,30 +162,25 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Alpha tag auto-cut: alpha-20260629-165045-d854978 | Gitflow release-CI auto-tagged develop after both PRs merged | 2026-06-29 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-29 (Wave 5 S-6.03 + S-W5.01 cycle-close)
+## Session Resume Checkpoint — 2026-06-29 (Wave 5 Pass-1 reconverge burst)
 
-**Position:** Phase 3 Wave 5. S-6.03 and S-W5.01 MERGED. Remaining Wave 5: S-5.01, S-5.02, S-6.02, S-W5.02.
+**Position:** Phase 3 Wave 5. Pass-1 reconverge burst complete. S-5.01 v1.4, S-6.02 v1.5, S-6.06 v1.1, S-7.03 v1.1 updated. 22 findings closed. S-6.07 + S-BL.LOOKUP minted. STORY-INDEX v2.6. Both worktrees race-clean.
 
-**S-6.03 (sbctl client-auth Authenticate() fail-closed, 5pt) — MERGED:**
-- Converged BC-5.39.001 (3 consecutive clean diverse-lens passes). Demos committed b3dcc0b. pr-reviewer APPROVED.
-- Merged via PR #32, squash commit d854978f669b4cfe4e444cad0035d7388aee0958 on develop.
+**Spec versions landed in this burst:**
+- BC-2.07.001 v1.2, BC-2.05.004 v1.2, BC-2.06.001 v1.3, BC-2.06.002 v1.3
+- error-taxonomy v3.0 (E-ADM-018/019), interface-definitions v1.1
+- ARCH-04 v1.10, ARCH-07 v1.4, ARCH-11 v1.7, VP-074 v1.1, VP-048 v1.2
 
-**S-W5.01 (internal/mgmt server + wiring, 8pt) — MERGED:**
-- Converged BC-5.39.001 (Round-7, 3 clean passes at tip 5be25ef). Demos committed 8b1bfc1. pr-reviewer APPROVED.
-- Update-merged onto develop after PR #32 landed (CI re-ran green). Merged via PR #31, squash commit 0d499ac28baaa3e14873343790253532f82bf121.
-- develop advanced: 01ae50c → d854978 (#32) → 0d499ac (#31). Both feature worktrees + branches removed.
-- Alpha tag auto-cut: alpha-20260629-165045-d854978.
-
-**Deferred / open (recorded from cycle-close):**
-- DRIFT-SW501-NITPICK (Task #49): stale "Stub: ... Red Gate" comments in internal/config/config.go ~L236/L244 and dead `_ = pub` in internal/mgmt/mgmt.go ~L462. Non-gating. Target S-W5.02 or hygiene commit.
-- S-HRD.01 follow-up stub (deferred Finding 2) and release-CI version!=dev gate (Ruling S) — tracked from prior rounds; not duplicated here.
+**Key code changes (worktrees — not yet PRed):**
+- S-5.01 worktree: metrics.go OR-form doc + Red-over-Yellow + PC-4 cite + invariant-3; genGreenToRedJump + TestProp_BC_2_06_001_GreenToRedSingleStep; TestQualityIndicator_OnMissingFrame_PropertyMonotone; shrinkers; functional oracle in TestQualityIndicator_ConcurrentUpdates.
+- S-6.02 worktree: admission.go RevokeKeyIfRoleMatches atomic primitive (HOLD-001 closed); svtnmgmt.go RevokeKey rewired + Create orphan-key fix + msg softening; cmd/sbctl/admin.go role enum validation; TestSVTNManager_RevokeRaceVsRegister_HOLD001 (200 iter -race); TestSVTNManager_ConcurrentCreate_NoOrphans; TestSbctlAdmin_KeyRegister_InvalidRole; F-CS-001 atomicity test rewritten.
 
 **NEXT ACTION on resume:**
-1. Open S-W5.02 (e2e mgmt-plane harness: sbctl auth + RPC across 4 daemon types).
-2. Continue pending Wave 5: S-5.01, S-5.02, S-6.02.
-3. Cosmetic sweep DRIFT-SW501-NITPICK either as part of S-W5.02 scope or a standalone hygiene commit.
+1. Dispatch per-story adversarial Pass-2 for S-5.01 (v1.4) and S-6.02 (v1.5).
+2. After Pass-2 converges: deliver S-5.01 and S-6.02 via per-story-delivery.md PR flow.
+3. Then: S-5.02, S-6.06, S-W5.02 in dependency order.
 
-**Open deferred LOW items:** S601-SEC-001 (CWE-117), S601-SEC-002 (CWE-400), S404-LOW-1. Address Wave 5 hardening epic.
+**Open deferred items:** DRIFT-SW501-NITPICK, S601-SEC-001/SEC-002, S404-LOW-1, Tasks #19/#21/#32/#46/#54/#59.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -20,13 +20,14 @@ modified:
   - 2026-06-28T00:00:00 # v1.4 — VP-id assignment: add VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) for BC-2.06.003; update totals to 62 VPs
   - 2026-06-28T00:00:00 # v1.5 — F-002 + F-007: mint VP-063 (proptest, internal/paths) for BC-2.02.003 PC-5 degraded-flag boolean; fix stale "60 VPs total" prose to 63; update totals to 63 VPs
   - 2026-06-29T00:00:00 # v1.6 — BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E VP assignment: VP-068–VP-073 added; BC-2.07.004 row updated with full VP set; per-module counts updated; totals updated to 73 VPs
+  - 2026-06-29T00:00:00 # v1.7 — VP-074 added for BC-2.06.001 threshold classification (unit, internal/metrics); internal/metrics count 4→5; totals updated to 74 VPs
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 73 (VP-001 through VP-073, per VP-INDEX).
+> Total VP count: 74 (VP-001 through VP-074, per VP-INDEX).
 
 ## BC → VP Coverage Table
 
@@ -66,7 +67,7 @@ modified:
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
 | BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
 | BC-2.05.008 | RouteFrame HMAC enforcement | internal/routing | VP-058, VP-059 | code-audit + proptest | P0 |
-| BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027 | proptest | P1 |
+| BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027, VP-074 | proptest + unit | P1 |
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
 | BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics, cmd/sbctl | VP-047, VP-061, VP-062 | integration + code-audit + fuzz | P1 |
 | BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
@@ -85,14 +86,14 @@ modified:
 | Total BCs | 45 |
 | BCs with ≥1 VP | 45 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 73 |
+| Total unique VPs | 74 |
 | P0 VPs | 52 |
 | P1 VPs | 17 |
 | P2+ VPs | 4 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 73 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 74 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -103,7 +104,7 @@ VP counts recounted from VP-INDEX (canonical source of truth, 73 VPs total).
 | internal/replay | 2 | proptest (2) |
 | internal/multipath | 4 | proptest (2), e2e (1), integration (1) |
 | internal/paths | 2 | proptest (2) |
-| internal/metrics | 4 | proptest (1), integration (2), code-audit (1) |
+| internal/metrics | 5 | proptest (1), integration (2), code-audit (1), unit (1) |
 | internal/admission | 6 | proptest (5), e2e (1) |
 | internal/routing | 5 | proptest (2), fuzz (1), e2e (1), code-audit (1) |
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
@@ -115,9 +116,9 @@ VP counts recounted from VP-INDEX (canonical source of truth, 73 VPs total).
 | internal/mgmt | 8 | unit (1), fuzz (1), integration (6) |
 | cmd/sbctl | 5 | integration (2), e2e (2), fuzz (1) |
 | cmd/switchboard | 2 | integration (2) |
-| **Total** | **73** | |
+| **Total** | **74** | |
 
-Per-module sum = 73 (no off-table VPs).
+Per-module sum = 74 (no off-table VPs).
 VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
 VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) added 2026-06-28 for BC-2.06.003.
 VP-063 (proptest, internal/paths) added 2026-06-28 for BC-2.02.003 PC-5 degraded-flag boolean.
@@ -126,6 +127,7 @@ VP-067 (integration, cmd/sbctl) added 2026-06-28 for BC-2.07.002 Wave-5.
 VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E:
   VP-068 (unit, internal/mgmt), VP-069 (integration, internal/mgmt), VP-070 (integration, internal/mgmt),
   VP-071 (integration, internal/mgmt), VP-072 (integration, internal/mgmt), VP-073 (integration, cmd/switchboard).
+VP-074 (unit, internal/metrics) added 2026-06-29 for BC-2.06.001 threshold classification (L-001 disambiguation; unit test covering all 6 nominal regions + 8 boundary values).
 
 ## Zero-VP BCs Check
 

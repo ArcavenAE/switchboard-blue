@@ -2,10 +2,10 @@
 artifact_id: BC-2.06.001
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1a
 bc_id: BC-2.06.001
 subsystem: quality-observability
@@ -25,6 +25,14 @@ modified:
       VP table disambiguated. Removed dual VP-027 rows (unit+proptest) that created
       ambiguity. VP-027 row retained for proptest (monotone-transition property).
       New VP-074 (unit) added for threshold classification correctness. L-001 finding.
+  - date: 2026-06-29
+    version: "1.3"
+    actor: product-owner
+    change: >
+      Task 4 reconverge (S-5.01 + S-6.02 Pass-1 adversarial, F-C3 / lens3 F-001):
+      (1) PC-3/PC-4 OR-form precedence note added: Red takes precedence over Yellow
+      when inputs satisfy both band predicates simultaneously. (2) Stories cell
+      updated from "[filled by story-writer]" to S-5.01 + S-5.02 + S-7.03 trace.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -60,6 +68,8 @@ Each active session displays a quality indicator (green/yellow/red) at the conso
 2. Green: best path RTT p99 ≤ 100ms AND loss ≤ 5%.
 3. Yellow: best path RTT p99 in (100ms, 500ms] OR loss in (5%, 20%].
 4. Red: best path RTT p99 > 500ms OR best path loss > 20% OR no paths available.
+
+   **Precedence note (F-C3):** When inputs simultaneously satisfy both Yellow (PC-3) and Red (PC-4) predicates — e.g., RTT=600ms and loss=10% — Red takes precedence over Yellow. The implementation evaluates Red first; if any Red condition holds, the indicator is Red regardless of Yellow conditions. This matches the implementation in `internal/metrics` and codifies the OR-form precedence for single-band vs multi-band inputs.
 5. The indicator is surfaced via `sbctl sessions status` and in the console's session list view.
 
 ## Invariants
@@ -105,7 +115,7 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 | L2 Capability | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires — empty ticks are liveness probes) |
 | Architecture Module | internal/metrics |
-| Stories | [filled by story-writer] |
+| Stories | S-5.01 (QualityIndicator internal/metrics implementation), S-5.02 (path engine integration + sbctl metrics query — sbctl half of PC-5 per S-5.02 v1.3 AC-007), S-7.03 (console session-list surfacing — console half of PC-5 per DRIFT-001) |
 | Capability Anchor Justification | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 — this BC specifies the computation that CAP-021 defines as "derived from measured path latency and loss" |
 
 ## Related BCs

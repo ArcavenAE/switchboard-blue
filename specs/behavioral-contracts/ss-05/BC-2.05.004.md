@@ -2,10 +2,10 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-06-29T00:00:00
 phase: 1a
 bc_id: BC-2.05.004
 subsystem: admission-security
@@ -17,7 +17,15 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-06-29
+    version: "1.2"
+    actor: product-owner
+    change: >
+      Task 3 reconverge (S-6.02 lens3 F-011/F-012): Trigger updated from
+      `sbctl svtn keys register|revoke|expire` to `sbctl admin key {register,revoke,expire}`
+      or `sbctl admin list-keys`. Canonical Test Vectors rewritten to use `sbctl admin key`
+      form throughout.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -63,7 +71,7 @@ Control nodes can manage the public key registry for an SVTN: registering new ke
 
 ## Trigger
 
-Operator runs `sbctl svtn keys register|revoke|expire` or equivalent API call.
+Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-keys` or equivalent management RPC.
 
 ## Edge Cases
 
@@ -78,10 +86,12 @@ Operator runs `sbctl svtn keys register|revoke|expire` or equivalent API call.
 
 | Input | Expected Output | Category |
 |-------|----------------|----------|
-| `sbctl svtn keys register --key=<pubkey> --role=console` | Key registered; fingerprint returned; propagation initiated | happy-path |
-| `sbctl svtn keys revoke --key=<pubkey>` | Key revoked; active sessions continue until re-auth; propagation initiated | happy-path |
-| `sbctl svtn keys register --key=<same-pubkey-already-registered>` | Response: "updated" with new role (per ADR-003: last-write-wins) | edge-case |
-| Key operation by node without management authority | E-ADM-009 "insufficient authority for key operation" | error |
+| `sbctl admin key register --svtn <id> --key <hex-pubkey> --role console` | Key registered; fingerprint returned; propagation initiated | happy-path |
+| `sbctl admin key revoke --svtn <id> --key <hex-pubkey>` | Key revoked; active sessions continue until re-auth; propagation initiated | happy-path |
+| `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <timestamp>` | Expiry timestamp associated; auto-revocation scheduled | happy-path |
+| `sbctl admin list-keys --svtn <id>` | Returns all admitted keys with role, fingerprint, expiry | happy-path |
+| `sbctl admin key register --svtn <id> --key <same-pubkey-already-registered> --role access` | Response: "updated" with new role (per ADR-003: last-write-wins) | edge-case |
+| Key operation by node without management authority | E-ADM-009 "insufficient authority for operation admin.key.register: key <fp> has role <role>" | error |
 | Console or readonly key attempts to revoke a control key | E-ADM-011 "permission denied: console key cannot revoke control key (control > console > readonly)" | error |
 
 ## Verification Properties
