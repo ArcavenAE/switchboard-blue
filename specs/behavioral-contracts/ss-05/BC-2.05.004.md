@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.10"
+version: "1.11"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:01
@@ -64,20 +64,13 @@ modified:
       annotated with wire RPC name (admin.key.list-keys) to match the annotation
       pattern used on other rows in the table.
   - date: 2026-06-30
-    version: "1.10"
+    version: "1.7"
     actor: product-owner
     change: >
-      EC-007 extended to cover expire symmetrically; E-ADM-021 minted
-      (refs F-P18L1-001 lens-1 pass-18). EC-007 Description broadened from
-      "revoke" to "revoke OR expire". EC-007 Expected Behavior updated to cite
-      both ErrBootstrapKeyRevokeForbidden (E-ADM-020) and ErrBootstrapKeyExpireForbidden
-      (E-ADM-021). Protection invariant is now symmetric across revoke and expire.
-  - date: 2026-06-30
-    version: "1.9"
-    actor: product-owner
-    change: >
-      EC-007 narrative tightened: bootstrap key is unconditionally non-revocable
-      (refs F-P15L1-002, lens-1 finding pass-15).
+      F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard.
+      BuildAdminHandlers (and its handler closures) live in cmd/switchboard/admin_handlers.go;
+      the authority-gate test must instantiate the handler builder from that package.
+      VP Anchors table updated accordingly.
   - date: 2026-06-30
     version: "1.8"
     actor: product-owner
@@ -90,13 +83,31 @@ modified:
       in v1.5) confirmed intentional — EC-004 was added during the same v1.5 pass
       covering key-expires-while-session-active; no orphan.
   - date: 2026-06-30
-    version: "1.7"
+    version: "1.9"
     actor: product-owner
     change: >
-      F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard.
-      BuildAdminHandlers (and its handler closures) live in cmd/switchboard/admin_handlers.go;
-      the authority-gate test must instantiate the handler builder from that package.
-      VP Anchors table updated accordingly.
+      EC-007 narrative tightened: bootstrap key is unconditionally non-revocable
+      (refs F-P15L1-002, lens-1 finding pass-15).
+  - date: 2026-06-30
+    version: "1.10"
+    actor: product-owner
+    change: >
+      EC-007 extended to cover expire symmetrically; E-ADM-021 minted
+      (refs F-P18L1-001 lens-1 pass-18). EC-007 Description broadened from
+      "revoke" to "revoke OR expire". EC-007 Expected Behavior updated to cite
+      both ErrBootstrapKeyRevokeForbidden (E-ADM-020) and ErrBootstrapKeyExpireForbidden
+      (E-ADM-021). Protection invariant is now symmetric across revoke and expire.
+  - date: 2026-06-30
+    version: "1.11"
+    actor: product-owner
+    change: >
+      Pass-19 sibling-fix propagation (F-P19L*-001, F-P19L3-002, F-P19L3-003):
+      VP-076 added to Verification Properties table (bootstrap key non-revocable AND
+      non-expirable invariant, symmetric revoke + expire forbidden sentinels
+      E-ADM-020/E-ADM-021). Traceability Stories row updated to note S-6.06 covers
+      EC-007 (bootstrap non-revocable AND non-expirable). modified: list reordered
+      to strict monotonic chronological order (v1.7–v1.9 were out of sequence
+      relative to v1.10 insertion).
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -183,6 +194,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | VP-046 | Revocation propagates to all routers within eventual consistency window | integration |
 | VP-046 | Private key never appears in key management wire messages | property |
 | VP-075 | Handler-layer caller-role enforcement: admin.key.* RPCs reject callers without control-role authority (cmd/switchboard) | integration |
+| VP-076 | Bootstrap key non-revocable AND non-expirable invariant: symmetric revoke + expire forbidden sentinels (E-ADM-020/E-ADM-021) | integration |
 
 ## Traceability
 
@@ -191,7 +203,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | L2 Capability | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation), DI-002 (private keys never transit), DI-011 (role separation between Tier 1 and Tier 2 keys), DI-012 (control node is a participant) |
 | Architecture Module | internal/svtnmgmt |
-| Stories | PC-1 (register): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-2 (revoke): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-3 (expire): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-4 (confirmation response with key fingerprint and operation timestamp): S-6.06 (mgmt.Response success envelope) |
+| Stories | PC-1 (register): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-2 (revoke): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-3 (expire): S-6.02 (CLI dispatch), S-6.06 (daemon handler); PC-4 (confirmation response with key fingerprint and operation timestamp): S-6.06 (mgmt.Response success envelope); EC-007 (bootstrap non-revocable AND non-expirable): S-6.06 (bootstrap-protection guard for revoke + expire) |
 | Capability Anchor Justification | CAP-019 ("Key lifecycle management (register, revoke, expire)") per capabilities.md §CAP-019 — this BC specifies the complete key lifecycle operations that CAP-019 defines as the revocation path |
 
 ## Related BCs

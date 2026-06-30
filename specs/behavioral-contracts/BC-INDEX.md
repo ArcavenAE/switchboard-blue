@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
-timestamp: 2026-06-28T00:00:01
+timestamp: 2026-06-30T00:00:01
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.7 | 2026-06-30 | BC-2.05.004 bumped v1.10→v1.11 — Pass-19 sibling-fix propagation: VP-076 added to Verification Properties table; Traceability Stories row updated to cite S-6.06/EC-007 bootstrap-protection coverage; modified: list reordered to monotonic chronological order. |
 | 1.6 | 2026-06-30 | BC-2.05.004 bumped to v1.10 — EC-007 extended to cover expire symmetrically; E-ADM-021 minted; VP-076 minted; refs F-P18L1-001 lens-1 pass-18. |
 | 1.5 | 2026-06-30 | BC-2.05.004 bumped to v1.9 — EC-007 narrative tightened (bootstrap key unconditionally non-revocable, refs F-P15L1-002). |
 | 1.4 | 2026-06-28 | BC-2.07.004 (Daemon management server authenticates all connections via Ed25519 challenge-response) added; network-management count 3→4; total 44→45. |
