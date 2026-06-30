@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -43,6 +43,19 @@ modified:
       Added to Invariants section (item 5) and Traceability L2 Domain Invariants row.
       DI-001 applies: key lifecycle operations authenticate the nodes that enforce
       content separation; a revoked or misconfigured key breaks DI-001 guarantees.
+  - date: 2026-06-30
+    version: "1.5"
+    actor: product-owner
+    change: >
+      S-6.06 Pass-4 rulings (F-L2-001, F-L2-002, F-L2-003, F-L2-007, F-P4L1-001,
+      F-P4L1-003): PC-1 extended with bootstrap exception (operator-set membership
+      grants register authority when no control key exists in target SVTN) and
+      fail-closed revoked/expired key denial (E-ADM-009). PC-3 clarified with wire
+      field name (`after` Go duration string) vs. CLI `--at <RFC3339>` translation.
+      Canonical Test Vectors: "console attempts revoke control key" row updated to
+      E-ADM-009 (not E-ADM-011) with disambiguation note. list-keys authority scope
+      clarified: any admitted role may call. EC-005 (bootstrap first-register) and
+      EC-006 (revoked key residual authority) added.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -68,7 +81,13 @@ Control nodes can manage the public key registry for an SVTN: registering new ke
 
 ## Preconditions
 
-1. The requesting node is admitted to the SVTN with a key that has management authority for the operation. Per **ADR-004**: key management is exclusive to the control node. Console nodes have read-only access to the admitted-key set; they cannot register, revoke, or expire keys. Access nodes have no key-management capability. Console-to-control revocation is prohibited. Control-to-control revocation requires `sbctl admin` human authorization (split-brain mitigation).
+1. The requesting node is admitted to the SVTN with a key that has management authority for the operation. Per **ADR-004**: key management (register, revoke, expire) is exclusive to the control node. Console nodes may call `list-keys` (read-only); they cannot register, revoke, or expire keys. Access nodes have no key-management capability. Console-to-control revocation is prohibited. Control-to-control revocation requires `sbctl admin` human authorization (split-brain mitigation).
+
+   **Management authority definition (for register/revoke/expire):** The calling key MUST be (a) currently registered in the target SVTN's admitted set, (b) with `RoleControl`, (c) not revoked (`revoked=false`), and (d) not expired (`now < expiry` or no expiry set). A revoked or expired key is denied with E-ADM-009, even if it authenticated successfully at the mgmt connection layer.
+
+   **Bootstrap exception (F-P4L1-001):** For `admin.key.register` only — if the calling key is a member of `mgmt.OperatorKeySet` AND no control key is yet registered in the target SVTN, the handler MUST allow the operation (operator-set membership grants register authority for the initial bootstrap). For all other operations (revoke, expire), operator-set membership alone is insufficient; the key must be registered as `RoleControl` in the SVTN.
+
+   **list-keys authority (F-L2-003):** `admin.key.list-keys` is a read-only operation and may be called by any admitted role (control, console, access) or operator-set member. It is NOT subject to the control-only authority gate.
 2. The key operation is well-formed: a valid OpenSSH public key in authorized_keys format.
 3. The router's distributed key store is reachable.
 
@@ -76,7 +95,7 @@ Control nodes can manage the public key registry for an SVTN: registering new ke
 
 1. **Register**: The public key is added to the admitted key set with the specified role (control, console, access). The key becomes active for admission challenges. Propagation: key is pushed to all routers serving the SVTN.
 2. **Revoke**: The public key is removed from the admitted key set. Existing sessions using this key continue until the next re-authentication challenge (propagation delay acknowledged, FM-007). Propagation: revocation is pushed to all routers.
-3. **Expire**: An expiry timestamp is associated with the key. At expiry, the key is automatically revoked by routers that honor the expiry timestamp.
+3. **Expire**: An expiry timestamp is associated with the key. At expiry, the key is automatically revoked by routers that honor the expiry timestamp. **Wire field (F-L2-007):** the `admin.key.expire` RPC args field is `after` (a Go duration string, e.g., `"720h"`, `"30m"`). The CLI `--at <RFC3339-timestamp>` flag is translated client-side to a duration (`timestamp - time.Now()`) before sending on the wire. The daemon handler validates `after` as a positive Go duration string; zero, negative, and >100-year values are rejected with E-CFG-001.
 4. Key changes are confirmed with a success response including the key fingerprint and operation timestamp.
 
 ## Invariants
@@ -99,6 +118,8 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | EC-002 (FM-007) | Key revocation propagation is slow (one router not updated) | The un-updated router may still admit the revoked key. Propagation completes within the eventual consistency window. |
 | EC-003 (DEC-007) | Same public key registered twice with different roles | Per **ADR-003** (last-write-wins for duplicate key registration): the most recent registration supersedes earlier registrations for the same `(node_pubkey, svtn_id)` pair. The operation returns "updated" with the new role; no conflict; no manual reconciliation required. |
 | EC-004 | Key expires while session is active | Same behavior as revocation: session continues until next re-authentication challenge. |
+| EC-005 | Operator-key first-register into fresh SVTN (bootstrap path, F-P4L1-001) | No control key is registered in the target SVTN yet. The calling key is a member of `mgmt.OperatorKeySet`. `admin.key.register` MUST proceed (bootstrap grant). Subsequent register/revoke/expire operations require the caller to be registered as RoleControl in the SVTN admitted set. |
+| EC-006 | Revoked or expired key attempts an admin.key.* operation after successful mgmt authentication (F-P4L1-003) | The key authenticated at the mgmt connection layer but its `revoked=true` or `now >= expiry` in the SVTN admitted set. Handler authority resolution treats the key as unregistered; returns E-ADM-009. This applies to register, revoke, and expire (not list-keys, which is open to all admitted roles). |
 
 ## Canonical Test Vectors
 
@@ -106,11 +127,11 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 |-------|----------------|----------|
 | `sbctl admin key register --svtn <id> --key <hex-pubkey> --role console` | Key registered; fingerprint returned; propagation initiated | happy-path |
 | `sbctl admin key revoke --svtn <id> --key <hex-pubkey>` | Key revoked; active sessions continue until re-auth; propagation initiated | happy-path |
-| `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <timestamp>` | Expiry timestamp associated; auto-revocation scheduled | happy-path |
+| `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <timestamp>` | CLI translates `--at <RFC3339>` → `after` duration string; expiry timestamp associated; auto-revocation scheduled | happy-path |
 | `sbctl admin list-keys --svtn <id>` | Returns all admitted keys with role, fingerprint, expiry | happy-path |
 | `sbctl admin key register --svtn <id> --key <same-pubkey-already-registered> --role access` | Response: "updated" with new role (per ADR-003: last-write-wins) | edge-case |
 | Key operation by node without management authority | E-ADM-009 "insufficient authority for operation admin.key.register: key <fp> has role <role>" | error |
-| Console or readonly key attempts to revoke a control key | E-ADM-011 "permission denied: console key cannot revoke control key (control > console > readonly)" | error |
+| Console or readonly key attempts to revoke a control key via `admin.key.revoke` RPC | E-ADM-009 "insufficient authority for operation admin.key.revoke: key <fp> has role console" — handler gate fires first; `SVTNManager.RevokeKey` is never called (F-L2-002). Note: E-ADM-011 is the code returned by `SVTNManager.RevokeKey` directly (Go API level, unit-test path) when a lower-tier role attempts to revoke a higher-tier key; it is NOT reachable via the mgmt RPC path when the handler gate is wired. | error |
 
 ## Verification Properties
 

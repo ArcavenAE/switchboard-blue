@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -104,7 +104,7 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 |-----------|---------|------|-----------|
 | `sbctl admin key register --svtn <id> --key <hex-pubkey> --role <control\|console\|access>` | Register a new admission key | Requires existing control-role key + interactive `--confirm` token | 0=ok, E-ADM-012 (already registered), E-ADM-018 (control-to-control confirmation required) |
 | `sbctl admin key revoke --svtn <id> --key <hex-pubkey>` | Revoke admission key | Requires existing control-role key + `--confirm`; per ADR-004 console cannot revoke control | 0=ok, E-ADM-011 (hierarchy violation), E-ADM-013 (not found), E-ADM-018 (control-to-control confirmation required) |
-| `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <RFC3339-timestamp>` | Set automatic expiry on an admission key | Requires existing control-role key; no `--confirm` required (non-destructive scheduling) | 0=ok, E-ADM-013 (key not found) |
+| `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <RFC3339-timestamp>` | Set automatic expiry on an admission key. CLI translates `--at <RFC3339-timestamp>` to a Go duration string (`after` wire field) before sending: `after = timestamp - time.Now()`. Server validates `after` is positive and ≤100 years. | Requires existing control-role key; no `--confirm` required (non-destructive scheduling) | 0=ok, E-ADM-013 (key not found), E-CFG-001 (invalid `after` duration: zero, negative, or >100 years) |
 | `sbctl admin list-keys --svtn <id>` | List all admission keys with role, fingerprint, expiry | Any admitted role | 0=ok |
 
 `--key <hex-pubkey>` — Replaces the former `--key-fingerprint <fp>` flag. Accepts the full hex-encoded public key (not a fingerprint). This matches the wire format used by `internal/svtnmgmt`.
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.6 changelog note (2026-06-30):** S-6.06 Pass-4 ruling F-L2-007: `sbctl admin key expire` row updated — added wire-field translation note (`--at <RFC3339>` → `after` Go duration string), noted server-side duration validation (positive, ≤100 years), added E-CFG-001 to exit codes.
 
 > **v1.5 changelog note (2026-06-30):** F-T3-004: propagate BC-2.06.003 v1.5 version pins. Line-80 `sbctl router status` comment updated v1.2→v1.5 (now cites S-5.02 v1.5 AC-003/AC-008). §Path list response description updated v1.2→v1.5. Added pending-response JSON example showing `"rtt_p99_ms": "pending"` and note that alias emits `"quality": "pending"` when p99 pending (BC-2.06.003 v1.5 EC-003/EC-006 + PC-3).
 
