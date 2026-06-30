@@ -255,12 +255,13 @@ func startMgmtServer(
 	cfg *config.Config,
 	mode string,
 	daemonPrivKey ed25519.PrivateKey,
-	handlers []mgmt.Handler, //nolint:unparam // always nil today; future router/console/control mode stories will pass mode-specific handler slices
-	// TODO(CR-002): when admin.key.revoke handler is wired, parse args.Role
-	// into admission.KeyRole and pass as currentRole to SVTNManager.RevokeKey.
-	// The role field is already present in the wire format (adminKeyRevokeArgs.Role)
-	// and validated by runAdminKeyRevoke. Daemon-side: unmarshal adminKeyRevokeArgs,
-	// switch on Role to get admission.KeyRole, call mgr.RevokeKey(svtn, pubkey, role, confirm).
+	handlers []mgmt.Handler, //nolint:unparam // nil for access/console/router (AC-004); BuildAdminHandlers wired in control mode (S-6.06)
+	// CR-002 resolution (S-6.06): control mode passes BuildAdminHandlers(svtnMgr)
+	// here. Access, console, and router modes pass nil — those daemons correctly
+	// return E-RPC-010 for any admin.key.* command (ADR-004 role-exclusion;
+	// ARCH-08 §6.6.2; AC-004). The role field in admin.key.revoke args is parsed
+	// as admission.KeyRole and passed as currentRole to SVTNManager.RevokeKey
+	// (HOLD-001 hybrid; F-002 ruling; S-6.06 AC-002).
 ) (*mgmt.Server, error) {
 	// Parse authorized operator keys from config (PEM → ed25519.PublicKey).
 	// Empty list → bootstrap mode (daemon key is the sole authorized key).
@@ -311,6 +312,10 @@ func startMgmtServer(
 // owning story; until then this mode is not implemented. It deliberately
 // does NOT open a management listener — starting one for a daemon that
 // does not run would leak a bound socket and an untracked goroutine.
+//
+// AC-004 (S-6.06): when router mode is implemented, startMgmtServer MUST pass
+// nil (or an empty slice) for admin handlers — router daemons must NOT register
+// admin.key.* handlers (ADR-004 role-exclusion; ARCH-08 §6.6.2).
 func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runRouter: not implemented")
 }
@@ -320,6 +325,10 @@ func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
 // owning story; until then this mode is not implemented. It deliberately
 // does NOT open a management listener — starting one for a daemon that
 // does not run would leak a bound socket and an untracked goroutine.
+//
+// AC-004 (S-6.06): when console mode is implemented, startMgmtServer MUST pass
+// nil (or an empty slice) for admin handlers — console daemons must NOT register
+// admin.key.* handlers (ADR-004 role-exclusion; ARCH-08 §6.6.2).
 func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runConsole: not implemented")
 }
@@ -329,6 +338,11 @@ func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 // owning story; until then this mode is not implemented. It deliberately
 // does NOT open a management listener — starting one for a daemon that
 // does not run would leak a bound socket and an untracked goroutine.
+//
+// TODO(S-6.06): replace stub body with a real implementation that calls
+// startMgmtServer with BuildAdminHandlers(svtnMgr) instead of nil, resolving
+// CR-002 per story S-6.06 AC-001 / AC-004. Only the control-mode daemon
+// registers admin handlers (ADR-004 role-exclusion; ARCH-08 §6.6.2).
 func runControl(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runControl: not implemented")
 }

@@ -334,3 +334,25 @@ func (m *SVTNManager) ExpireKey(
 		At:          time.Now().UTC(),
 	}, nil
 }
+
+// KeySummary is an element in the list returned by ListKeys.
+// It carries only the public portion of the key entry — no private material
+// is included (DI-002; BC-2.05.004 PC-4).
+type KeySummary struct {
+	// Fingerprint is the SHA-256 fingerprint of the key in "SHA256:<base64>" form.
+	Fingerprint string
+	// Role is the authorization role of this key on the SVTN.
+	Role admission.KeyRole
+	// Expiry is the optional expiry time (zero means no expiry is set).
+	Expiry time.Time
+}
+
+// ListKeys returns a snapshot of all registered keys for the named SVTN.
+// Returns ErrSVTNNotFound if svtnName does not exist.
+// An empty slice (not nil) is returned when no keys are registered (EC-003).
+//
+// Traces to BC-2.05.004 postcondition 1 (key remains admitted until revoked
+// or expired; listing reflects current state).
+func (m *SVTNManager) ListKeys(svtnName string) ([]KeySummary, error) {
+	panic("todo: AC-001 ListKeys — implement in S-6.06")
+}
