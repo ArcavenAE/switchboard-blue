@@ -115,16 +115,13 @@ func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 // newE2ESVTNManager creates a minimal SVTNManager with a registered SVTN named
 // svtnName and a pre-registered key with the given role.
 //
-// The key stored in the manager uses the canonical placeholder bytes
-// (ed25519.PublicKey([]byte("placeholder"))) so that E2E RPC calls that send
-// "pubkey":"placeholder" can look it up correctly. The pubkey parameter is
-// accepted for API symmetry but is not used as the stored key material —
-// tests generate it to verify the function compiles but do not use it after
-// the call.
+// Returns the SVTNManager and the base64-encoded pubkey string for use in RPC
+// call args. A real Ed25519 keypair is generated so decodePublicKey (which now
+// enforces 32-byte size, F-005) accepts it.
 //
 // ed25519.GenerateKey returns (PublicKey, PrivateKey, error) — ctrlPriv is used
 // only to construct the manager's control key.
-func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) *svtnmgmt.SVTNManager {
+func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) (*svtnmgmt.SVTNManager, string) {
 	t.Helper()
 	ks := admission.NewAdmittedKeySet()
 	// ed25519.GenerateKey: first return is PublicKey, second is PrivateKey.
@@ -132,23 +129,23 @@ func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, 
 	if err != nil {
 		t.Fatalf("newE2ESVTNManager: generate control key: %v", err)
 	}
-	_ = pubkey // accepted for API symmetry; not used as stored key material (see doc above)
+	_ = pubkey // accepted for API symmetry; caller-provided pubkey is not used
 	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
 	if _, err := m.Create(svtnName); err != nil {
 		t.Fatalf("newE2ESVTNManager: create SVTN %q: %v", svtnName, err)
 	}
-	// Store the canonical placeholder key so RPC calls with "pubkey":"placeholder"
-	// resolve to this entry. decodePublicKey("placeholder") tries base64 first:
-	// base64.RawURLEncoding.DecodeString("placeholder") → 8 bytes.
-	placeholderDecoded, decErr := base64.RawURLEncoding.DecodeString("placeholder")
-	if decErr != nil {
-		t.Fatalf("newE2ESVTNManager: decode placeholder: %v", decErr)
+	// Generate a real 32-byte Ed25519 public key for the registered entry.
+	// F-005: decodePublicKey now requires exactly 32 bytes — a real key satisfies this.
+	regPub, _, genErr := ed25519.GenerateKey(rand.Reader)
+	if genErr != nil {
+		t.Fatalf("newE2ESVTNManager: generate registered key: %v", genErr)
 	}
-	placeholderKey := ed25519.PublicKey(placeholderDecoded)
-	if _, err := m.RegisterKey(svtnName, placeholderKey, role); err != nil {
-		t.Fatalf("newE2ESVTNManager: register placeholder key: %v", err)
+	if _, err := m.RegisterKey(svtnName, regPub, role); err != nil {
+		t.Fatalf("newE2ESVTNManager: register key: %v", err)
 	}
-	return m
+	// Return the base64-encoded pubkey so RPC call sites can use it.
+	encodedPubkey := base64.RawURLEncoding.EncodeToString([]byte(regPub))
+	return m, encodedPubkey
 }
 
 // sendAdminRPC sends a single RPC over a new Unix socket connection to the
@@ -307,7 +304,7 @@ func TestE2E_AdminRevoke_RoleMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
+	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -318,7 +315,7 @@ func TestE2E_AdminRevoke_RoleMismatch(t *testing.T) {
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
 		"svtn":    "test-svtn",
-		"pubkey":  "placeholder",
+		"pubkey":  encodedPubkey,
 		"role":    "console", // mismatch: key is registered as control
 		"confirm": false,
 	})
@@ -344,7 +341,7 @@ func TestE2E_AdminRevoke_ControlWithoutConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
+	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -355,7 +352,7 @@ func TestE2E_AdminRevoke_ControlWithoutConfirm(t *testing.T) {
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
 		"svtn":    "test-svtn",
-		"pubkey":  "placeholder",
+		"pubkey":  encodedPubkey,
 		"role":    "control",
 		"confirm": false, // intentionally false — should trigger E-ADM-018
 	})
@@ -380,7 +377,7 @@ func TestE2E_AdminRevoke_ControlWithConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
+	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -391,7 +388,7 @@ func TestE2E_AdminRevoke_ControlWithConfirm(t *testing.T) {
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
 		"svtn":    "test-svtn",
-		"pubkey":  "placeholder",
+		"pubkey":  encodedPubkey,
 		"role":    "control",
 		"confirm": true,
 	})
@@ -424,9 +421,16 @@ func TestE2E_AdminRegister_HappyPath(t *testing.T) {
 		t.Fatalf("generate caller key: %v", err2)
 	}
 
+	// Generate a real 32-byte Ed25519 public key for registration (F-005: 32 bytes required).
+	regPub, _, err3 := ed25519.GenerateKey(rand.Reader)
+	if err3 != nil {
+		t.Fatalf("generate register key: %v", err3)
+	}
+	encodedPubkey := base64.RawURLEncoding.EncodeToString([]byte(regPub))
+
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
 		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
+		"pubkey": encodedPubkey,
 		"role":   "access",
 	})
 
@@ -445,7 +449,7 @@ func TestE2E_AdminExpire_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate target key: %v", err)
 	}
-	m := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
+	m, encodedPubkey := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
 	handlers := BuildAdminHandlers(m)
 	es := startE2EServer(t, handlers)
 
@@ -456,7 +460,7 @@ func TestE2E_AdminExpire_HappyPath(t *testing.T) {
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
 		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
+		"pubkey": encodedPubkey,
 		"after":  "24h",
 	})
 

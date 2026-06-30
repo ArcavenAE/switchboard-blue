@@ -425,29 +425,42 @@ func TestRunConsole_StartsWithMgmt(t *testing.T) {
 }
 
 // TestRunControl_StartsWithMgmt verifies that runControl calls startMgmtServer
-// and propagates "not implemented".
+// and creates the management socket (F-002 / S-6.06 AC-004).
 //
-// Traces: S-W5.01 §Wiring Pattern.
+// The test uses a pre-cancelled context so runControl returns immediately after
+// Serve exits. We assert the socket file was created — proof that startMgmtServer
+// was wired up (same observable used by TestRunAccess_StartsWithMgmt).
+//
+// Traces: S-6.06 AC-004; F-002; ADR-004 role-exclusion.
 func TestRunControl_StartsWithMgmt(t *testing.T) {
-	// NOT t.Parallel(): runControl is sequenced with other mode tests.
+	// NOT t.Parallel(): touches filesystem socket path.
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cancel()
+	sockPath := tempSockPath(t)
 
 	cfg := &config.Config{
-		ListenAddr:   "0.0.0.0:9090",
-		TickInterval: 10 * time.Millisecond,
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
 	}
 
+	// Pre-cancel so runControl returns immediately after mgmt server starts.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// runControl should return nil (context cancelled cleanly).
+	// We only care that the socket was created — evidence startMgmtServer was called.
 	err := runControl(ctx, nil, cfg)
-	if err == nil {
-		t.Skip("runControl succeeded; Red Gate test no longer applies")
-		return
+	if err != nil {
+		t.Errorf("runControl: unexpected error: %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("runControl: want 'not implemented' in error; got %q", err.Error())
+	// AC-004 observable: socket file must have been created.
+	// Unix sockets are not auto-removed on Close (SetUnlinkOnClose(false)), so
+	// the file persists even after Shutdown.
+	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
+		t.Errorf("TestRunControl_StartsWithMgmt: socket %q was not created; "+
+			"runControl must call startMgmtServer (F-002 / AC-004)",
+			sockPath)
 	}
 }
 

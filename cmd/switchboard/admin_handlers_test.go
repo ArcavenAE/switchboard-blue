@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -82,6 +84,36 @@ func newTestSVTNManager(t *testing.T) *svtnmgmt.SVTNManager {
 	// "nonexistent-svtn" is intentionally not created; KeyRegister_ErrorMapping
 	// expects E-SVTN-003 for that name.
 	return m
+}
+
+// TestDecodePublicKey_RejectsBadSize verifies that decodePublicKey returns E-CFG-001
+// for decoded keys that are not exactly ed25519.PublicKeySize (32) bytes.
+func TestDecodePublicKey_RejectsBadSize(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		encoded string
+	}{
+		// base64 of 16 bytes (too short)
+		{"16_bytes", base64.StdEncoding.EncodeToString(make([]byte, 16))},
+		// base64 of 64 bytes (too long — private key size)
+		{"64_bytes", base64.StdEncoding.EncodeToString(make([]byte, 64))},
+		// raw string that is not valid base64 AND not 32 bytes raw
+		{"short_raw_not_base64", "hello"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := decodePublicKey(tc.encoded)
+			if err == nil {
+				t.Fatalf("expected E-CFG-001 error for %q, got nil", tc.encoded)
+			}
+			if !strings.Contains(err.Error(), "E-CFG-001") {
+				t.Errorf("expected E-CFG-001 in error, got: %v", err)
+			}
+		})
+	}
 }
 
 // TestBuildAdminHandlers_KeyRegister_HappyPath asserts that the
@@ -572,6 +604,105 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	}
 	if listResult.Keys == nil {
 		t.Error("EC-003: list-keys returned nil Keys; must be empty slice not nil")
+	}
+}
+
+// TestMapAdminError_ErrInvalidDuration verifies that mapAdminError maps
+// svtnmgmt.ErrInvalidDuration to E-CFG-001.
+// Traces to F-007.
+func TestMapAdminError_ErrInvalidDuration(t *testing.T) {
+	t.Parallel()
+	err := mapAdminError(svtnmgmt.ErrInvalidDuration, "s", "k")
+	if err == nil {
+		t.Fatal("expected non-nil error")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-001") {
+		t.Errorf("expected E-CFG-001 in error, got: %v", err)
+	}
+	if !errors.Is(err, svtnmgmt.ErrInvalidDuration) {
+		t.Errorf("expected errors.Is(err, svtnmgmt.ErrInvalidDuration), got: %v", err)
+	}
+}
+
+// TestMapAdminError_ErrorWrapping verifies that mapAdminError preserves the
+// original sentinel via errors.Is for all arms.
+// Traces to F-009 (go.md rule 4: %w wrapping).
+func TestMapAdminError_ErrorWrapping(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		sentinel error
+		svtn     string
+		pubkey   string
+		wantCode string
+	}{
+		{"ErrSVTNNotFound", svtnmgmt.ErrSVTNNotFound, "s", "k", "E-SVTN-003"},
+		{"ErrSVTNAlreadyExists", svtnmgmt.ErrSVTNAlreadyExists, "s", "k", "E-SVTN-002"},
+		{"ErrKeyNotRegistered", admission.ErrKeyNotRegistered, "s", "k", "E-ADM-013"},
+		{"ErrRoleMismatch", svtnmgmt.ErrRoleMismatch, "s", "k", "E-ADM-019"},
+		{"ErrControlRevocationRequiresConfirm", svtnmgmt.ErrControlRevocationRequiresConfirm, "s", "k", "E-ADM-018"},
+		{"ErrInvalidDuration", svtnmgmt.ErrInvalidDuration, "s", "k", "E-CFG-001"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := mapAdminError(tc.sentinel, tc.svtn, tc.pubkey)
+			if !strings.Contains(err.Error(), tc.wantCode) {
+				t.Errorf("expected %s in error, got: %v", tc.wantCode, err)
+			}
+			if !errors.Is(err, tc.sentinel) {
+				t.Errorf("errors.Is(err, sentinel): expected true, got false; err=%v", err)
+			}
+		})
+	}
+}
+
+// TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden asserts that revoking
+// the bootstrap control key returns E-ADM-020 (bootstrap-key-revoke-forbidden).
+// Traces to bootstrap revocability invariant; F-010.
+func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
+	t.Parallel()
+
+	// Create manager with a known bootstrap key.
+	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+	if _, err := m.Create("test-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	// Create() already registered the bootstrap key. Try to revoke it with confirm=true.
+	handlers := BuildAdminHandlers(m)
+	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.revoke" {
+			revokeFn = h.Fn
+		}
+	}
+	if revokeFn == nil {
+		t.Fatal("admin.key.revoke handler not found")
+	}
+
+	bootstrapPubEncoded := base64.StdEncoding.EncodeToString([]byte(bootstrapPub))
+	args, err := json.Marshal(adminKeyRevokeArgs{
+		SVTNName:  "test-svtn",
+		PublicKey: bootstrapPubEncoded,
+		Role:      "control",
+		Confirm:   true,
+	})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, handlerErr := revokeFn(context.Background(), json.RawMessage(args))
+	if handlerErr == nil {
+		t.Fatal("expected E-ADM-020, got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-ADM-020") {
+		t.Errorf("expected E-ADM-020, got: %v", handlerErr)
 	}
 }
 

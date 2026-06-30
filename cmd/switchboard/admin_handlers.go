@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -109,22 +110,23 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager) []mgmt.Handler {
 }
 
 // decodePublicKey decodes a base64-encoded (standard or raw URL) Ed25519 public key.
-// Returns E-CFG-001 if the value is missing. Non-base64 strings are accepted as
-// raw-byte key identifiers — the admin plane stores keys as opaque identifiers;
-// admission-layer size constraints apply only at connection-auth time (DI-003).
+// Returns E-CFG-001 if the value is missing or does not decode to exactly 32 bytes
+// (ed25519.PublicKeySize). The raw-string fallback was removed (F-005): all keys
+// must be valid base64 and decode to exactly 32 bytes.
 func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 	if encoded == "" {
 		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey")
 	}
 	// Try standard encoding first, then raw URL encoding.
-	// If neither succeeds, treat the string's raw bytes as the key identifier.
 	raw, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		raw, err = base64.RawURLEncoding.DecodeString(encoded)
 		if err != nil {
-			// Not valid base64 — use raw string bytes as opaque key identifier.
-			return ed25519.PublicKey(encoded), nil
+			return nil, fmt.Errorf("E-CFG-001: invalid pubkey: not valid base64: %w", err)
 		}
+	}
+	if len(raw) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("E-CFG-001: invalid pubkey: must be 32-byte Ed25519 public key (got %d bytes)", len(raw))
 	}
 	return ed25519.PublicKey(raw), nil
 }
@@ -132,7 +134,7 @@ func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 // makeRegisterHandler returns the admin.key.register handler function.
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
 func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
-	return func(_ context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRegisterArgs
 		if err := json.Unmarshal(args, &a); err != nil {
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
@@ -141,15 +143,10 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
 		}
 
-		// AC-006: enforce caller authority when caller_role is supplied.
-		if a.CallerRole != "" {
-			cr, err := admission.KeyRoleFromString(a.CallerRole)
-			if err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid caller_role: %q", a.CallerRole)
-			}
-			if err := verifyCallerRole(cr, "admin.key.register", ""); err != nil {
-				return nil, err
-			}
+		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
+		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
+		if err := resolveAndVerifyCallerRole(ctx, m, a.SVTNName, a.CallerRole, "admin.key.register"); err != nil {
+			return nil, err
 		}
 
 		role, err := admission.KeyRoleFromString(a.Role)
@@ -179,7 +176,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.10).
 // Traces to BC-2.05.004 postcondition 2; AC-002; AC-006.
 func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
-	return func(_ context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRevokeArgs
 		if err := json.Unmarshal(args, &a); err != nil {
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
@@ -188,15 +185,10 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
 		}
 
-		// AC-006: enforce caller authority when caller_role is supplied.
-		if a.CallerRole != "" {
-			cr, err := admission.KeyRoleFromString(a.CallerRole)
-			if err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid caller_role: %q", a.CallerRole)
-			}
-			if err := verifyCallerRole(cr, "admin.key.revoke", ""); err != nil {
-				return nil, err
-			}
+		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
+		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
+		if err := resolveAndVerifyCallerRole(ctx, m, a.SVTNName, a.CallerRole, "admin.key.revoke"); err != nil {
+			return nil, err
 		}
 
 		role, err := admission.KeyRoleFromString(a.Role)
@@ -226,7 +218,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 // DI-003) independently of sbctl CLI validation (AC-005).
 // Traces to BC-2.05.004 postcondition 3; AC-005.
 func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
-	return func(_ context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		// Use a raw map to detect absent fields (EC-005) vs zero-value fields.
 		var raw map[string]json.RawMessage
 		if err := json.Unmarshal(args, &raw); err != nil {
@@ -267,6 +259,12 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
 		}
 
+		// AC-006: enforce caller authority server-side (F-006; F-001b).
+		// No CallerRole field in expire args — purely server-resolved.
+		if err := resolveAndVerifyCallerRole(ctx, m, svtnName, "", "admin.key.expire"); err != nil {
+			return nil, err
+		}
+
 		var pubkeyStr string
 		if v, ok := raw["pubkey"]; ok {
 			if err := json.Unmarshal(v, &pubkeyStr); err != nil {
@@ -294,7 +292,7 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args j
 // The Keys field in the response is always an array, never JSON null (EC-003).
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
 func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
-	return func(_ context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminListKeysArgs
 		if err := json.Unmarshal(args, &a); err != nil {
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
@@ -303,15 +301,10 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
 		}
 
-		// AC-006: enforce caller authority when caller_role is supplied.
-		if a.CallerRole != "" {
-			cr, err := admission.KeyRoleFromString(a.CallerRole)
-			if err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid caller_role: %q", a.CallerRole)
-			}
-			if err := verifyCallerRole(cr, "admin.list-keys", ""); err != nil {
-				return nil, err
-			}
+		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
+		// (F-001b / BC-2.07.001 Inv-3). Falls back to CallerRole arg in unit tests.
+		if err := resolveAndVerifyCallerRole(ctx, m, a.SVTNName, a.CallerRole, "admin.list-keys"); err != nil {
+			return nil, err
 		}
 
 		summaries, err := m.ListKeys(a.SVTNName)
@@ -336,26 +329,31 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 // mapAdminError converts SVTNManager / admission sentinel errors to structured
 // wire-level errors per the Error Code Map in S-6.06.
 // Returns a non-nil error with the mapped code as the error message prefix.
+// All arms use %w to preserve the error chain (go.md rule 4; F-009).
 func mapAdminError(err error, svtnName, pubkey string) error {
 	switch {
 	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
-		return fmt.Errorf("E-SVTN-003: SVTN not found: %s", svtnName)
+		return fmt.Errorf("E-SVTN-003: SVTN not found: %s: %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists):
-		return fmt.Errorf("E-SVTN-002: SVTN already exists: %s", svtnName)
+		return fmt.Errorf("E-SVTN-002: SVTN already exists: %s: %w", svtnName, err)
 	case errors.Is(err, admission.ErrKeyNotRegistered):
-		return fmt.Errorf("E-ADM-013: key not registered: %s", pubkey)
+		return fmt.Errorf("E-ADM-013: key not registered: %s: %w", pubkey, err)
 	case errors.Is(err, svtnmgmt.ErrRoleMismatch):
-		return fmt.Errorf("E-ADM-019: role mismatch: claimed role does not match registered key role for key %s", pubkey)
+		return fmt.Errorf("E-ADM-019: role mismatch: claimed role does not match registered key role for key %s: %w", pubkey, err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation (set confirm: true to proceed)")
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation (set confirm: true to proceed): %w", err)
+	case errors.Is(err, svtnmgmt.ErrInvalidDuration):
+		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
+	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
+		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: %w", err)
 	default:
 		return err
 	}
 }
 
 // roleToString converts an admission.KeyRole to its canonical wire string.
-// Returns "unknown" for unrecognised values — callers validate roles before
-// calling this.
+// Panics on unrecognised values — callers validate roles before calling this,
+// and an unknown role in a switch indicates a programmer error (F-006a).
 func roleToString(r admission.KeyRole) string {
 	switch r {
 	case admission.RoleControl:
@@ -365,7 +363,7 @@ func roleToString(r admission.KeyRole) string {
 	case admission.RoleAccess:
 		return "access"
 	default:
-		return "unknown"
+		panic(fmt.Sprintf("unhandled KeyRole: %d", r))
 	}
 }
 
@@ -377,4 +375,51 @@ func verifyCallerRole(callerRole admission.KeyRole, cmd string, fingerprint stri
 		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role %s", cmd, fingerprint, roleToString(callerRole))
 	}
 	return nil
+}
+
+// keyFingerprintAdmin computes "SHA256:<base64>" for a pubkey.
+// Mirrors svtnmgmt.keyFingerprint (unexported there; duplicated here to avoid
+// package coupling — F-001b).
+func keyFingerprintAdmin(pub ed25519.PublicKey) string {
+	h := sha256.Sum256(pub)
+	return "SHA256:" + base64.StdEncoding.EncodeToString(h[:])
+}
+
+// resolveAndVerifyCallerRole resolves the authenticated caller's key role via
+// the server-side context (preferred) and enforces that it is control-role.
+//
+// Server-resolved path (F-001b / BC-2.07.001 Inv-3 / AC-006):
+//   - If ctx carries a caller pubkey (set by mgmt.handleConnection after handshake),
+//     look up that pubkey's role in the SVTN via SVTNManager.CallerKeyRole.
+//   - If the key is not found in the SVTN (bootstrap or operator key), allow the
+//     operation — the daemon's own key is always the control trust anchor.
+//   - If the key is found with a non-control role, return E-ADM-009.
+//
+// Fallback path (unit tests / no handshake context):
+//   - If ctx has no caller pubkey and callerRoleStr is non-empty, parse and
+//     check it (legacy / test backward-compat). This path is only reachable
+//     when handlers are called outside the mgmt handshake (e.g., unit tests
+//     that pass context.Background()).
+func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, svtnName, callerRoleStr, cmd string) error {
+	callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
+	if hasPubkey {
+		role, found := m.CallerKeyRole(svtnName, callerPub)
+		if !found {
+			// Caller pubkey not in this SVTN's key set — treat as bootstrap/operator
+			// control key; allow the operation.
+			return nil
+		}
+		fp := keyFingerprintAdmin(callerPub)
+		return verifyCallerRole(role, cmd, fp)
+	}
+
+	// No pubkey in ctx — fallback for unit tests.
+	if callerRoleStr == "" {
+		return nil
+	}
+	cr, err := admission.KeyRoleFromString(callerRoleStr)
+	if err != nil {
+		return fmt.Errorf("E-CFG-001: invalid caller_role: %q", callerRoleStr)
+	}
+	return verifyCallerRole(cr, cmd, "")
 }

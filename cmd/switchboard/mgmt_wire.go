@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -32,9 +33,12 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
+	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/mgmt"
+	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
 
 // umaskMu serialises the umask-critical bind(2) syscall in listenUnixMgmt.
@@ -333,16 +337,37 @@ func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runConsole: not implemented")
 }
 
-// runControl is the control-mode daemon entry point.
-// The control daemon body (and its management server wiring) ships in its
-// owning story; until then this mode is not implemented. It deliberately
-// does NOT open a management listener — starting one for a daemon that
-// does not run would leak a bound socket and an untracked goroutine.
+// runControl is the control-mode daemon entry point (F-002 / S-6.06 AC-004).
+// It generates an ephemeral Ed25519 keypair, constructs a SVTNManager with an
+// empty AdmittedKeySet, starts the management server with BuildAdminHandlers,
+// and blocks until ctx is cancelled (ARCH-01 §Goroutine WaitGroup Contract).
 //
-// TODO(S-6.06): replace stub body with a real implementation that calls
-// startMgmtServer with BuildAdminHandlers(svtnMgr) instead of nil, resolving
-// CR-002 per story S-6.06 AC-001 / AC-004. Only the control-mode daemon
-// registers admin handlers (ADR-004 role-exclusion; ARCH-08 §6.6.2).
-func runControl(_ context.Context, _ io.Writer, _ *config.Config) error {
-	return errors.New("runControl: not implemented")
+// Only the control-mode daemon registers admin handlers (ADR-004 role-exclusion;
+// ARCH-08 §6.6.2; AC-004). Access, console, and router daemons pass nil.
+func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
+	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
+	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("runControl: generate daemon keypair: %w", err)
+	}
+
+	daemonPub := daemonPriv.Public().(ed25519.PublicKey)
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, daemonPub)
+
+	var mgmtWG sync.WaitGroup
+	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "control", daemonPriv, BuildAdminHandlers(m))
+	if mgmtErr != nil {
+		return fmt.Errorf("runControl: start management server: %w", mgmtErr)
+	}
+
+	// Block until context is cancelled (ARCH-01 lifecycle contract).
+	<-ctx.Done()
+
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutCancel()
+	_ = mgmtSrv.Shutdown(shutCtx)
+	mgmtWG.Wait()
+	return nil
 }

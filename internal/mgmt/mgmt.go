@@ -87,6 +87,27 @@ type Handler struct {
 	Fn      func(ctx context.Context, args json.RawMessage) (any, error)
 }
 
+// callerPubkeyKey is the unexported context key for the authenticated caller pubkey.
+// Using an unexported type prevents key collision with other packages.
+type callerPubkeyKey struct{}
+
+// WithCallerPubkey returns a context with the authenticated caller Ed25519 public
+// key attached. Called by handleConnection after successful challenge-response
+// so that handlers can retrieve the caller's identity via CallerPubkey(ctx).
+// Exported so cmd/switchboard unit tests can inject the pubkey without a real
+// handshake (F-001 / ADR-012 §3 step 9 / AC-006).
+func WithCallerPubkey(ctx context.Context, pubkey ed25519.PublicKey) context.Context {
+	return context.WithValue(ctx, callerPubkeyKey{}, pubkey)
+}
+
+// CallerPubkey extracts the authenticated caller Ed25519 public key from ctx.
+// Returns (nil, false) if no pubkey was attached — e.g., in unit tests that pass
+// context.Background() directly to a handler (F-001 / AC-006).
+func CallerPubkey(ctx context.Context) (ed25519.PublicKey, bool) {
+	v, ok := ctx.Value(callerPubkeyKey{}).(ed25519.PublicKey)
+	return v, ok
+}
+
 // OperatorKeySet holds the set of authorized operator public keys for this daemon.
 // IsAuthorized is safe for concurrent use.
 type OperatorKeySet struct {
@@ -573,6 +594,11 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 	// Connection is now authenticated.
 	authenticated := true
+
+	// Attach the authenticated caller pubkey to ctx so handlers can resolve
+	// caller identity server-side (F-001 / ADR-012 §3 step 9 / AC-006).
+	// callCtx derived via context.WithTimeout(ctx, ...) propagates the value.
+	ctx = WithCallerPubkey(ctx, pubkey)
 
 	// Step 11: Apply s.rpcIdleTimeout before reading the first RPC.
 	if err := conn.SetReadDeadline(time.Now().Add(s.rpcIdleTimeout)); err != nil {

@@ -818,25 +818,32 @@ func TestSVTNManager_VP048_BootstrappedKeyIsControlRole(t *testing.T) {
 		t.Fatalf("Create (mgr2): %v", err2)
 	}
 
-	// RevokeKey(controlPub2, RoleControl, confirm=true): if the bootstrapped role
-	// is indeed RoleControl, this must succeed. ErrRoleMismatch means wrong role.
-	_, revokeErr := mgr2.RevokeKey(svtnResult2.SVTN.Name, controlPub2, admission.RoleControl, true)
-	if revokeErr != nil {
-		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — RevokeKey(controlPub, RoleControl, confirm=true) "+
-			"on bootstrapped key: want success (confirming bootstrap role is RoleControl); got: %v", revokeErr)
+	// Verify bootstrap key role via CallerKeyRole (not RevokeKey — the bootstrap
+	// guard now prevents revoking the control key directly; TODO(BC-2.07.001):
+	// spec clarification pending for E-ADM-020 bootstrap-key-revoke-forbidden).
+	// CallerKeyRole is the correct verification surface for role introspection.
+	role2, found2 := mgr2.CallerKeyRole(svtnResult2.SVTN.Name, controlPub2)
+	if !found2 {
+		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — CallerKeyRole(controlPub): " +
+			"key not found; bootstrap key must be present")
+	} else if role2 != admission.RoleControl {
+		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — CallerKeyRole(controlPub): "+
+			"want RoleControl; got %v", role2)
 	}
 
-	// Also verify that after the LWW overwrite to RoleConsole, RevokeKey with
-	// RoleControl returns ErrRoleMismatch (key is now RoleConsole).
+	// Also verify that after the LWW overwrite to RoleConsole, CallerKeyRole
+	// returns RoleConsole (key is now RoleConsole after LWW).
 	_, err = mgr.RegisterKey(svtnResult.SVTN.Name, controlPub, admission.RoleConsole)
 	if err != nil {
 		t.Errorf("VP-048 — RegisterKey(controlPub, RoleConsole) after Create: "+
 			"want success (LWW overwrite of bootstrapped control key); got: %v", err)
 	}
-	_, err = mgr.RevokeKey(svtnResult.SVTN.Name, controlPub, admission.RoleControl, true)
-	if !errors.Is(err, svtnmgmt.ErrRoleMismatch) {
-		t.Errorf("VP-048 — RevokeKey(controlPub, RoleControl) after LWW overwrite to RoleConsole: "+
-			"want ErrRoleMismatch (key is now RoleConsole); got: %v", err)
+	roleAfterLWW, foundAfterLWW := mgr.CallerKeyRole(svtnResult.SVTN.Name, controlPub)
+	if !foundAfterLWW {
+		t.Errorf("VP-048 — CallerKeyRole after LWW overwrite: key not found")
+	} else if roleAfterLWW != admission.RoleConsole {
+		t.Errorf("VP-048 — CallerKeyRole after LWW overwrite to RoleConsole: "+
+			"want RoleConsole; got %v", roleAfterLWW)
 	}
 }
 
@@ -1032,16 +1039,17 @@ func TestSVTNManager_CreateBootstrapAtomicity_RaceDetector(t *testing.T) {
 		// Since SVTNManager does not expose a Lookup(svtnName) accessor, we
 		// verify via the manager's own RevokeKey with the expected role. If
 		// the bootstrap key was overwritten by an attacker (different role),
-		// RevokeKey returns ErrRoleMismatch — the test fails appropriately.
-		// If it was never registered, it returns ErrKeyNotRegistered.
-		// Only RoleControl + confirm=true succeeds.
-		//
-		// IMPORTANT: no RegisterKey(controlPub) before this call — that is
-		// the tautology fix. The probe exercises raw post-race state.
-		_, err := mgr.RevokeKey(name, controlPub, admission.RoleControl, true)
-		if err != nil {
-			t.Errorf("F-003 atomicity — RevokeKey(%s, controlPub, RoleControl): "+
-				"want success (bootstrap key must be present and role=RoleControl); got %v", name, err)
+		// Verify via CallerKeyRole that the bootstrap key is present and RoleControl.
+		// (RevokeKey is no longer the verification surface — the bootstrap guard
+		// prevents revoking the control key; TODO(BC-2.07.001): spec clarification
+		// pending for E-ADM-020 bootstrap-key-revoke-forbidden.)
+		role, found := mgr.CallerKeyRole(name, controlPub)
+		if !found {
+			t.Errorf("F-003 atomicity — CallerKeyRole(%s, controlPub): "+
+				"bootstrap key not found; must be present after Create", name)
+		} else if role != admission.RoleControl {
+			t.Errorf("F-003 atomicity — CallerKeyRole(%s, controlPub): "+
+				"want RoleControl; got %v", name, role)
 		}
 	}
 }
@@ -1214,9 +1222,14 @@ func TestSVTNManager_ConcurrentCreate_NoOrphans(t *testing.T) {
 	// unreachable through the manager's public surface.
 	//
 	// Primary verification: the bootstrap key is present and has RoleControl.
-	_, err := mgr.RevokeKey("foo", controlPub, admission.RoleControl, true)
-	if err != nil {
-		t.Errorf("F-CS-003 — post-concurrent RevokeKey(foo, controlPub, RoleControl): "+
-			"want success (bootstrap key must be present); got %v", err)
+	// Using CallerKeyRole (not RevokeKey — the bootstrap guard prevents revoking
+	// the control key; TODO(BC-2.07.001): spec clarification pending for E-ADM-020).
+	role, found := mgr.CallerKeyRole("foo", controlPub)
+	if !found {
+		t.Errorf("F-CS-003 — post-concurrent CallerKeyRole(foo, controlPub): " +
+			"bootstrap key not found; must be present after Create")
+	} else if role != admission.RoleControl {
+		t.Errorf("F-CS-003 — post-concurrent CallerKeyRole(foo, controlPub): "+
+			"want RoleControl; got %v", role)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -54,6 +55,11 @@ var ErrControlRevocationRequiresConfirm = admission.ErrControlRevocationRequires
 // use errors.Is(err, admission.ErrRoleMismatch) or errors.Is(err, svtnmgmt.ErrRoleMismatch)
 // — both are the same value.
 var ErrRoleMismatch = admission.ErrRoleMismatch
+
+// ErrBootstrapKeyRevokeForbidden is returned when an attempt is made to revoke
+// the daemon bootstrap control key. The bootstrap key is the trust anchor for
+// the SVTN and must never be removed (E-ADM-020; bootstrap revocability invariant).
+var ErrBootstrapKeyRevokeForbidden = errors.New("bootstrap control key cannot be revoked")
 
 // SVTN is a record of a single Software-Defined Virtual Topology Network
 // created and owned by this control node.
@@ -245,6 +251,14 @@ func (m *SVTNManager) RevokeKey(
 	currentRole admission.KeyRole,
 	confirm bool,
 ) (KeyOpResult, error) {
+	// Guard: never allow the bootstrap control key to be revoked.
+	// The bootstrap key is the trust anchor for the SVTN — removing it would
+	// leave the SVTN without a control authority (E-ADM-020; bootstrap revocability
+	// invariant). Constant-time comparison prevents timing oracle (Inv-5).
+	if subtle.ConstantTimeCompare([]byte(pubkey), []byte(m.controlPubKey)) == 1 {
+		return KeyOpResult{}, ErrBootstrapKeyRevokeForbidden
+	}
+
 	// Step 1: validate SVTN exists.
 	m.mu.RLock()
 	svtn, exists := m.svtns[svtnName]
@@ -345,6 +359,25 @@ type KeySummary struct {
 	Role admission.KeyRole
 	// Expiry is the optional expiry time (zero means no expiry is set).
 	Expiry time.Time
+}
+
+// CallerKeyRole returns the KeyRole of pubkey in the named SVTN, and true.
+// Returns (0, false) if svtnName does not exist or the key is not registered.
+// Used by admin handlers to resolve the authenticated caller's role server-side
+// without trusting the client-supplied caller_role field (F-001b / BC-2.07.001 Inv-3).
+// Safe for concurrent use.
+func (m *SVTNManager) CallerKeyRole(svtnName string, pubkey ed25519.PublicKey) (admission.KeyRole, bool) {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return 0, false
+	}
+	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if entry == nil {
+		return 0, false
+	}
+	return entry.Role, true
 }
 
 // ListKeys returns a snapshot of all registered keys for the named SVTN.
