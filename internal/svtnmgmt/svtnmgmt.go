@@ -492,6 +492,26 @@ func (m *SVTNManager) HasNonBootstrapControlKey(svtnName string) bool {
 	return false
 }
 
+// IsRegisteredAnyState reports whether pubkey is registered in the named SVTN
+// in ANY state — active, revoked, or expired. Returns false if svtnName does
+// not exist or the key has never been registered.
+//
+// Use this to distinguish "key never registered" from "key registered but
+// revoked/expired" when CallerKeyRoleActive returns (0, false). Revoked or
+// expired keys that ARE registered must be denied immediately (fail-closed,
+// F-P5L1-001 / BC-2.05.004 EC-006); only truly unregistered keys fall through
+// to the bootstrap-grant path.
+// Safe for concurrent use.
+func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.PublicKey) bool {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return false
+	}
+	return m.keySet.LookupByPubkey(svtn.ID, pubkey) != nil
+}
+
 // ListKeys returns a snapshot of all registered keys for the named SVTN.
 // Returns ErrSVTNNotFound if svtnName does not exist.
 // An empty slice (not nil) is returned when no keys are registered (EC-003).

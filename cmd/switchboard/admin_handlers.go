@@ -401,15 +401,19 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 // Server-resolved path (F-001b / BC-2.07.001 Inv-3 / AC-006):
 //  1. Look up pubkey via CallerKeyRoleActive (F-P4L1-003): only active (not
 //     revoked, not expired) entries yield a role. Revoked or expired keys are
-//     treated as unregistered and fall through to the bootstrap/operator check.
+//     denied immediately — they do NOT fall through to the bootstrap-grant path
+//     (F-P5L1-001 fail-open regression fix).
 //  2. If active and found with control role → allow.
 //  3. If active and found with non-control role → deny with E-ADM-009.
-//  4. If not found or key is revoked/expired:
-//     a. If cmd=="admin.key.register" AND caller is in ops OperatorKeySet AND
-//     SVTN has no active control key → allow (operator-key bootstrap grant,
-//     F-P4L1-001 / BC-2.05.004 EC-005).
-//     b. If the daemon's own bootstrap key → allow (trust anchor).
-//     c. Otherwise → deny with E-ADM-009 (fail-closed, F-P2L1-001).
+//  4. If CallerKeyRoleActive returns (0, false):
+//     a. If the key IS registered in any state (revoked/expired) → deny with
+//     E-ADM-009 immediately (fail-closed, F-P5L1-001).
+//     b. If the key is genuinely not registered AND cmd=="admin.key.register"
+//     AND caller is in ops OperatorKeySet AND SVTN has no active non-bootstrap
+//     control key → allow (operator-key bootstrap grant, F-P4L1-001 /
+//     BC-2.05.004 EC-005).
+//     c. If the daemon's own bootstrap key → allow (trust anchor).
+//     d. Otherwise → deny with E-ADM-009 (fail-closed, F-P2L1-001).
 //
 // Fallback path (no handshake context):
 //   - If ctx has no caller pubkey and callerRoleStr is non-empty, parse and
@@ -424,38 +428,45 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 	}
 	callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
 	if hasPubkey {
-		// F-P4L1-003: use CallerKeyRoleActive — revoked/expired keys return (0, false)
-		// and fall through to the bootstrap/operator check below, then deny.
+		// F-P4L1-003: use CallerKeyRoleActive — only active keys return a role.
 		role, found := m.CallerKeyRoleActive(svtnName, callerPub)
 		if found {
 			fp := keyFingerprintAdmin(callerPub)
 			return verifyCallerRole(role, cmd, fp)
 		}
 
-		// Key not found as active. Check bootstrap and operator-key paths (fail-closed).
-		// F-P4L1-001: operator-key bootstrap grant for admin.key.register only.
-		// The condition is: SVTN has no active non-bootstrap control key (the calling
-		// key is itself not in the SVTN, and no other human-registered control key exists).
-		if cmd == "admin.key.register" && ops.IsAuthorized(callerPub) && !m.HasNonBootstrapControlKey(svtnName) {
-			return nil
+		// CallerKeyRoleActive returned (0, false). The key is either:
+		//   (a) registered but revoked/expired — must deny immediately (F-P5L1-001),
+		//   (b) genuinely not registered — may proceed to bootstrap/operator check.
+		fp := keyFingerprintAdmin(callerPub)
+		if m.IsRegisteredAnyState(svtnName, callerPub) {
+			// Registered but inactive (revoked or expired) — fail-closed, no bypass.
+			return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
 		}
+
+		// Key is genuinely not registered. Check bootstrap and operator-key paths.
 		// Bootstrap key (daemon's own trust anchor) is always allowed.
 		if m.IsBootstrapKey(callerPub) {
 			return nil
 		}
-		fp := keyFingerprintAdmin(callerPub)
-		return fmt.Errorf("E-ADM-009: caller key %s not registered in svtn %q", fp, svtnName)
+		// F-P4L1-001: operator-key bootstrap grant for admin.key.register only.
+		// The condition is: SVTN has no active non-bootstrap control key (no other
+		// human-registered control key exists).
+		if cmd == "admin.key.register" && ops.IsAuthorized(callerPub) && !m.HasNonBootstrapControlKey(svtnName) {
+			return nil
+		}
+		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
 	}
 
 	// No pubkey in ctx — fallback when no handshake context is present.
 	if callerRoleStr == "" {
 		// Cannot confirm caller role: fail closed (BC-2.05.004 / BC-2.07.001 Inv-3).
 		// DEFER(S-HRD.02): structured-log admin auth rejection — see S-HRD.02 (daemon logging infrastructure).
-		return fmt.Errorf("E-ADM-009: caller role cannot be confirmed for operation %s: no authenticated key in context", cmd)
+		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key (unknown) has role unregistered", cmd)
 	}
 	cr, err := admission.KeyRoleFromString(callerRoleStr)
 	if err != nil {
 		return fmt.Errorf("E-CFG-001: invalid caller_role: %q", callerRoleStr)
 	}
-	return verifyCallerRole(cr, cmd, "")
+	return verifyCallerRole(cr, cmd, "(unknown)")
 }

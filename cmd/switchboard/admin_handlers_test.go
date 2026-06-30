@@ -1099,4 +1099,111 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 			t.Errorf("expected E-ADM-009, got: %v", gotErr)
 		}
 	})
+
+	t.Run("revoked_in_operator_set_denied", func(t *testing.T) {
+		t.Parallel()
+		// F-P5L1-001 regression: a key that is BOTH in the OperatorKeySet AND
+		// registered-then-revoked in the SVTN must not receive the bootstrap grant.
+		// Before the fix, CallerKeyRoleActive returned (0, false), ops.IsAuthorized
+		// returned true, HasNonBootstrapControlKey returned false (revoked keys are
+		// excluded from that check), and the bootstrap-grant arm fired — allowing
+		// a revoked key to register a new control key.
+		m := newManagerWithSVTN(t)
+		// Generate a key that will be both in the operator-set and registered
+		// (then revoked) in the SVTN.
+		dualPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate dual-role key: %v", err)
+		}
+		// Register it as control, then revoke it.
+		if _, err := m.RegisterKey(svtnName, dualPub, admission.RoleControl); err != nil {
+			t.Fatalf("register dual-role key: %v", err)
+		}
+		if _, err := m.RevokeKey(svtnName, dualPub, admission.RoleControl, true); err != nil {
+			t.Fatalf("revoke dual-role key: %v", err)
+		}
+		// Also add it to the OperatorKeySet — this is the attack vector.
+		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{dualPub})
+		ctx := mgmt.WithCallerPubkey(context.Background(), dualPub)
+		// Must be denied — registered-but-revoked beats operator-set membership.
+		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		if gotErr == nil {
+			t.Fatal("revoked key in operator set: expected E-ADM-009, got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("expected E-ADM-009, got: %v", gotErr)
+		}
+	})
+}
+
+// TestResolveAndVerifyCallerRole_EC006_BootstrapAC exercises BC-2.05.004 EC-006
+// two-phase boundary: operator-set member + empty SVTN → allow; same key +
+// control key already registered → deny (F-P5L2-001).
+//
+// Cases:
+//   - operator_empty_svtn_allow: operator key + no non-bootstrap control key → ok.
+//   - operator_after_control_key_deny: same operator key after one control key is
+//     registered in the SVTN → E-ADM-009.
+//
+// Traces to BC-2.05.004 EC-006; F-P4L1-001; F-P5L2-001.
+func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
+	t.Parallel()
+
+	const svtnName = "ec006-svtn"
+
+	newManagerWithSVTN := func(t *testing.T) *svtnmgmt.SVTNManager {
+		t.Helper()
+		bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate bootstrap key: %v", err)
+		}
+		ks := admission.NewAdmittedKeySet()
+		m := svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+		if _, err := m.Create(svtnName); err != nil {
+			t.Fatalf("create SVTN: %v", err)
+		}
+		return m
+	}
+
+	t.Run("operator_empty_svtn_allow", func(t *testing.T) {
+		t.Parallel()
+		m := newManagerWithSVTN(t)
+		operatorPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate operator key: %v", err)
+		}
+		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
+		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
+		// Operator key + no non-bootstrap control key → bootstrap grant applies.
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register"); err != nil {
+			t.Errorf("EC-006 phase 1: expected nil, got: %v", err)
+		}
+	})
+
+	t.Run("operator_after_control_key_deny", func(t *testing.T) {
+		t.Parallel()
+		m := newManagerWithSVTN(t)
+		// Register a non-bootstrap control key to simulate post-bootstrap state.
+		controlPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate control key: %v", err)
+		}
+		if _, err := m.RegisterKey(svtnName, controlPub, admission.RoleControl); err != nil {
+			t.Fatalf("register control key: %v", err)
+		}
+		operatorPub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate operator key: %v", err)
+		}
+		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
+		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
+		// Non-bootstrap control key now exists → bootstrap grant no longer applies → E-ADM-009.
+		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		if gotErr == nil {
+			t.Fatal("EC-006 phase 2: expected E-ADM-009, got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("EC-006 phase 2: expected E-ADM-009, got: %v", gotErr)
+		}
+	})
 }
