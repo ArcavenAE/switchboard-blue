@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -78,7 +78,7 @@ sbctl paths ping --router=<addr>                # One-shot RTT probe
 
 # Router Management
 sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.2 PC-3; S-5.02 v1.3 AC-003)
-sbctl router metrics [--svtn=<id>]              # Frame counts, HMAC failures, drop cache hits
+sbctl router metrics --svtn=<id>                # Frame counts, HMAC failures, drop cache hits
 sbctl router reload                             # Reload config (SIGHUP equivalent)
 sbctl router drain                              # Graceful drain (SIGTERM equivalent)
 
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.4 changelog note:** F-T5: `sbctl router metrics --svtn=<id>` — removed surrounding brackets to mark `--svtn=<id>` as required (not optional). BC-2.06.003 PC-2 presents this flag as required and defines no semantics for the omitted-flag case; this supplement now matches that intent.
 
 > **v1.3 changelog note:** S-5.02 lens-3 drift sync — F-1 (HIGH): `sbctl router status` flag corrected from `[--svtn=<id>]` to `--target <router>` (BC-2.06.003 v1.2 PC-3; S-5.02 v1.3 AC-003). F-2 (MEDIUM): `last_probe_at` removed from path list JSON example (field not defined in BC-2.06.003 PC-1). F-3 (MEDIUM): `paths list` description extended to name `rtt_p99_ms` explicitly; JSON schema note added documenting `"pending"` string variant per BC-2.06.003 PC-1 / EC-003 and S-5.02 AC-004. All changes bring this supplement into alignment with BC-2.06.003 v1.2 as canonical authority.
 
