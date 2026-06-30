@@ -1247,8 +1247,14 @@ func TestBC_2_06_003_P99HistogramAccuracy(t *testing.T) {
 	}{
 		{
 			// (a) all samples in the 0–25ms bucket
-			name:       "all_samples_in_0_25ms_bucket",
-			samples:    func() []float64 { s := make([]float64, 15); for i := range s { s[i] = 10.0 }; return s }(),
+			name: "all_samples_in_0_25ms_bucket",
+			samples: func() []float64 {
+				s := make([]float64, 15)
+				for i := range s {
+					s[i] = 10.0
+				}
+				return s
+			}(),
 			maxBucketW: 25.0,
 			// true p99 ≈ 10ms; bucket [0,25) so upper bound = 25ms
 			wantP99High: 25.0,

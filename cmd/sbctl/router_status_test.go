@@ -39,7 +39,7 @@ func stubDaemonSocket(t *testing.T) (sockPath string, cleanup func()) {
 	t.Helper()
 	dir := t.TempDir()
 	sockPath = filepath.Join(dir, "stub.sock")
-	return sockPath, func() { os.Remove(sockPath) }
+	return sockPath, func() { _ = os.Remove(sockPath) }
 }
 
 // startCannedDaemon starts a minimal stub daemon on sockPath that returns
@@ -47,11 +47,14 @@ func stubDaemonSocket(t *testing.T) (sockPath string, cleanup func()) {
 // minimally (challenges the client, responds AUTH_OK) then responds to the
 // first RPC with responseData.
 //
-// This helper will panic("todo: AC-001 — implement stub daemon for integration tests")
-// until the implementation is complete.
-func startCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessage) net.Listener {
+// RED GATE: This stub calls t.Fatal so every test that depends on a canned daemon
+// fails individually (rather than panicking the entire test binary). Replace this
+// with a real implementation once the paths.list / router.metrics / sessions.list
+// RPC dispatch layer is wired in cmd/sbctl.
+func startCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessage) net.Listener { //nolint:unparam // sockPath and responseData will be used once the stub is replaced by a real implementation
 	t.Helper()
-	panic("todo: AC-001 — implement canned stub daemon for sbctl integration tests")
+	t.Fatal("todo: AC-001 — implement canned stub daemon for sbctl integration tests (Red Gate)")
+	return nil // unreachable; keeps compiler happy
 }
 
 // ─── AC-001: sbctl paths list canonical fields ───────────────────────────────
@@ -199,6 +202,11 @@ func TestSbctlMetrics_JSONEnvelope(t *testing.T) {
 // `sbctl router status --target <router>` return E-NET-001 with exit code 1
 // when the daemon is unreachable.
 //
+// RED GATE: runPathsList currently panics (stub body). The recover() guard here
+// catches the panic and fails the test with a clear message. Once runPathsList
+// is implemented, the panic disappears and the test verifies real error-return
+// behaviour (E-NET-001, exit code 1).
+//
 // AC-006 / BC-2.06.003 PC-5 / BC-2.07.003
 func TestSbctlMetrics_DaemonUnreachable(t *testing.T) {
 	t.Parallel()
@@ -208,6 +216,14 @@ func TestSbctlMetrics_DaemonUnreachable(t *testing.T) {
 	defer cancel()
 
 	sockPath := filepath.Join(t.TempDir(), "nonexistent.sock")
+
+	// Guard: catch the todo-panic from the stub so the test binary does not crash.
+	// Once runPathsList is implemented this defer becomes a no-op.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("runPathsList panicked (stub not yet implemented — Red Gate): %v", r)
+		}
+	}()
 
 	err := runPathsList(ctx, sockPath, testdataKeyPath(t), true)
 	if err == nil {

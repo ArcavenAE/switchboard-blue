@@ -23,12 +23,12 @@ import (
 // rtt_p99_ms is encoded as either float64 or the string "pending"
 // (BC-2.06.003 EC-003) — the JSON marshaling handles the union type.
 type PathEntry struct {
-	PathID    string `json:"path_id"`
-	RouterAddr string `json:"router_addr"`
-	RTTMs     float64 `json:"rtt_ms"`
+	PathID     string  `json:"path_id"`
+	RouterAddr string  `json:"router_addr"`
+	RTTMs      float64 `json:"rtt_ms"`
 	// P99RTTMs is either a float64 or the string "pending"; represented as any
 	// so the JSON encoder can emit the correct type (BC-2.06.003 EC-003).
-	P99RTTMs any    `json:"rtt_p99_ms"`
+	P99RTTMs any     `json:"rtt_p99_ms"`
 	LossPct  float64 `json:"loss_pct"`
 	Status   string  `json:"status"`
 }

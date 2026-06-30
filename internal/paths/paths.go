@@ -292,7 +292,7 @@ func (t *PathTracker) Snapshot() PathSnapshot {
 		LossPct:     t.ewmaLossPct,
 		Active:      t.active,
 		Degraded:    t.degraded,
-		P99RTTMs:    t.hist.p99(),  // S-5.02: wired from histogram; 0 when SampleCount < 10
+		P99RTTMs:    t.hist.p99(), // S-5.02: wired from histogram; 0 when SampleCount < 10
 		SampleCount: t.hist.total, // S-5.02: callers check ≥10 before trusting P99RTTMs
 	}
 }
