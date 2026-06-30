@@ -22,8 +22,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -183,35 +186,170 @@ func TestSbctlRouterMetrics_OutputsSVTNMetrics(t *testing.T) {
 	}
 }
 
+// captureStdout redirects os.Stdout to a pipe, calls fn, then restores stdout
+// and returns all bytes written during the call.
+func captureStdout(t *testing.T, fn func()) []byte {
+	t.Helper()
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("pipe close: %v", err)
+	}
+	os.Stdout = origStdout
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("pipe read: %v", err)
+	}
+	_ = r.Close()
+	return buf.Bytes()
+}
+
 // ─── AC-003: sbctl router status alias ──────────────────────────────────────
 
-// TestSbctlRouterStatus_IsAliasForPathsList asserts that:
-// (a) the JSON output (minus the quality field) is structurally identical to
-//
-//	`sbctl paths list` output, and
-//
-// (b) both commands invoke the same underlying query function.
+// TestSbctlRouterStatus_IsAliasForPathsList asserts:
+// (a) `sbctl router status` JSON output contains a `quality` field on each entry.
+// (b) `sbctl paths list` (canonical) JSON output does NOT contain a `quality` field.
+// (c) All non-quality fields are structurally identical between both outputs.
 //
 // AC-003 / BC-2.06.003 PC-3 + EC-005
 func TestSbctlRouterStatus_IsAliasForPathsList(t *testing.T) {
-	sockPath, cleanup := stubDaemonSocket(t)
-	defer cleanup()
+	// Two sockets: one for router status, one for paths list.
+	// Each must be its own daemon so the responses are independent.
+	statusSockPath, statusCleanup := stubDaemonSocket(t)
+	defer statusCleanup()
+	pathsSockPath, pathsCleanup := stubDaemonSocket(t)
+	defer pathsCleanup()
 
+	// rtt_p99_ms = 22.0 → green (≤ 100ms, loss ≤ 5%)
 	cannedPaths := json.RawMessage(`[
 		{"path_id":"path-1","router_addr":"10.0.0.1:9000","rtt_ms":15.0,"rtt_p99_ms":22.0,"loss_pct":0.1,"status":"active"}
 	]`)
-	_ = startCannedDaemon(t, sockPath, cannedPaths) // panics until implemented
+	_ = startCannedDaemon(t, statusSockPath, cannedPaths)
+	_ = startCannedDaemon(t, pathsSockPath, cannedPaths)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{})
-	if err != nil {
-		t.Fatalf("runRouterStatus: unexpected error: %v", err)
+	keyPath := testdataKeyPath(t)
+
+	// (a) router status: quality field must be present.
+	statusOut := captureStdout(t, func() {
+		err := runRouterStatus(ctx, statusSockPath, keyPath, true, []string{})
+		if err != nil {
+			t.Errorf("runRouterStatus: unexpected error: %v", err)
+		}
+	})
+
+	// Unwrap the success envelope.
+	var statusEnv struct {
+		OK   bool              `json:"ok"`
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(statusOut, &statusEnv); err != nil {
+		t.Fatalf("parse router status envelope: %v\noutput: %s", err, statusOut)
+	}
+	if !statusEnv.OK {
+		t.Fatalf("router status: ok=false in envelope\noutput: %s", statusOut)
+	}
+	if len(statusEnv.Data) == 0 {
+		t.Fatalf("router status: no entries in data\noutput: %s", statusOut)
 	}
 
-	// TODO(implementer): verify JSON output minus quality == paths list output.
-	// This assertion is intentionally left for the implementer (AC-003).
+	// Each entry must have a non-empty quality field.
+	for i, raw := range statusEnv.Data {
+		var entry map[string]interface{}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			t.Fatalf("parse router status entry %d: %v", i, err)
+		}
+		q, ok := entry["quality"]
+		if !ok {
+			t.Errorf("AC-003 violated: router status entry %d missing 'quality' field\nentry: %s", i, raw)
+			continue
+		}
+		qStr, ok := q.(string)
+		if !ok || qStr == "" {
+			t.Errorf("AC-003 violated: router status entry %d 'quality' is not a non-empty string: %v", i, q)
+		}
+		// The canned path has rtt_p99_ms=22.0 and loss=0.1% — must be green.
+		if qStr != "green" {
+			t.Errorf("AC-003 quality mismatch: entry %d: expected 'green', got %q", i, qStr)
+		}
+	}
+
+	// (b) paths list: quality field must NOT be present.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+
+	pathsOut := captureStdout(t, func() {
+		err := runPathsList(ctx2, pathsSockPath, keyPath, true)
+		if err != nil {
+			t.Errorf("runPathsList: unexpected error: %v", err)
+		}
+	})
+
+	var pathsEnv struct {
+		OK   bool              `json:"ok"`
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(pathsOut, &pathsEnv); err != nil {
+		t.Fatalf("parse paths list envelope: %v\noutput: %s", err, pathsOut)
+	}
+	if !pathsEnv.OK {
+		t.Fatalf("paths list: ok=false in envelope\noutput: %s", pathsOut)
+	}
+	if len(pathsEnv.Data) == 0 {
+		t.Fatalf("paths list: no entries in data\noutput: %s", pathsOut)
+	}
+
+	for i, raw := range pathsEnv.Data {
+		var entry map[string]interface{}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			t.Fatalf("parse paths list entry %d: %v", i, err)
+		}
+		if _, ok := entry["quality"]; ok {
+			t.Errorf("BC-2.06.003 violated: paths list entry %d must NOT contain 'quality' field\nentry: %s", i, raw)
+		}
+	}
+
+	// (c) Structural equivalence: all non-quality fields must be identical.
+	// Compare field-by-field: drop "quality" from status entries and diff.
+	for i := range statusEnv.Data {
+		if i >= len(pathsEnv.Data) {
+			break
+		}
+		var statusEntry map[string]interface{}
+		var pathsEntry map[string]interface{}
+		if err := json.Unmarshal(statusEnv.Data[i], &statusEntry); err != nil {
+			t.Fatalf("unmarshal status entry %d: %v", i, err)
+		}
+		if err := json.Unmarshal(pathsEnv.Data[i], &pathsEntry); err != nil {
+			t.Fatalf("unmarshal paths entry %d: %v", i, err)
+		}
+		delete(statusEntry, "quality")
+		for k, sv := range statusEntry {
+			pv, ok := pathsEntry[k]
+			if !ok {
+				t.Errorf("AC-003 field mismatch entry %d: field %q present in router status but missing from paths list", i, k)
+				continue
+			}
+			if fmt.Sprintf("%v", sv) != fmt.Sprintf("%v", pv) {
+				t.Errorf("AC-003 field mismatch entry %d: field %q: router status=%v, paths list=%v", i, k, sv, pv)
+			}
+		}
+		for k := range pathsEntry {
+			if _, ok := statusEntry[k]; !ok {
+				t.Errorf("AC-003 field mismatch entry %d: field %q present in paths list but missing from router status (minus quality)", i, k)
+			}
+		}
+	}
 }
 
 // ─── AC-004: p99 pending when < 10 samples ──────────────────────────────────
