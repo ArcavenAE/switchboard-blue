@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -43,6 +43,14 @@ modified:
       Added to Invariants section (item 5) and Traceability L2 Domain Invariants row.
       DI-001 applies: key lifecycle operations authenticate the nodes that enforce
       content separation; a revoked or misconfigured key breaks DI-001 guarantees.
+  - date: 2026-06-30
+    version: "1.7"
+    actor: product-owner
+    change: >
+      F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard.
+      BuildAdminHandlers (and its handler closures) live in cmd/switchboard/admin_handlers.go;
+      the authority-gate test must instantiate the handler builder from that package.
+      VP Anchors table updated accordingly.
   - date: 2026-06-30
     version: "1.6"
     actor: product-owner
@@ -147,7 +155,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | VP-046 | Key registration makes key available for admission on all propagated routers | integration |
 | VP-046 | Revocation propagates to all routers within eventual consistency window | integration |
 | VP-046 | Private key never appears in key management wire messages | property |
-| VP-075 | Handler-layer caller-role enforcement: admin.key.* RPCs reject callers without control-role authority (internal/mgmt) | integration |
+| VP-075 | Handler-layer caller-role enforcement: admin.key.* RPCs reject callers without control-role authority (cmd/switchboard) | integration |
 
 ## Traceability
 

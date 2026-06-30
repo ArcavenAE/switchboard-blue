@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.10"
+version: "1.11"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -20,6 +20,7 @@ modified:
   - 2026-06-28T00:00:00 # v1.4 — VP-id assignment: add VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) for BC-2.06.003; update totals to 62 VPs
   - 2026-06-28T00:00:00 # v1.5 — F-002 + F-007: mint VP-063 (proptest, internal/paths) for BC-2.02.003 PC-5 degraded-flag boolean; fix stale "60 VPs total" prose to 63; update totals to 63 VPs
   - 2026-06-29T00:00:00 # v1.6 — BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E VP assignment: VP-068–VP-073 added; BC-2.07.004 row updated with full VP set; per-module counts updated; totals updated to 73 VPs
+  - 2026-06-30T00:00:00 # v1.11 — F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard; BC-2.05.004 row modules cell updated; internal/mgmt count 9→8 (integration 7→6), cmd/switchboard count 2→3 (integration 2→3). Per-module sum unchanged at 75.
   - 2026-06-30T00:00:00 # v1.10 — F-T3-301: VP-074 (P1, BC-2.06.001 threshold classification) added; P1 VPs 17→18.
   - 2026-06-30T00:00:00 # v1.9 — PO Ruling 3 (S-5.02 Pass-4 scope ruling): VP-047 implementing_story transferred S-5.02 → S-W5.04 per vp_index_is_vp_catalog_source_of_truth policy. No BC→VP row changes; no count changes.
   - 2026-06-30T00:00:00 # v1.8 — Pass-2 lens-3 F-T3-003: VP-075 minted for BC-2.05.004 handler authority (integration, internal/mgmt); BC-2.05.004 row updated VP-046→VP-046+VP-075; internal/mgmt count 8→9; P0 VPs 52→53; totals updated to 75 VPs
@@ -65,7 +66,7 @@ modified:
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-009 | proptest | P0 |
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
-| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, internal/mgmt | VP-046, VP-075 | integration | P0 |
+| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075 | integration | P0 |
 | BC-2.05.005 | HMAC frame authentication at first router | internal/hmac, internal/admission (PC-3) | VP-004, VP-005, VP-006, VP-059 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
 | BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
@@ -116,9 +117,9 @@ VP counts recounted from VP-INDEX (canonical source of truth, 75 VPs total).
 | internal/discovery | 3 | integration (1), e2e (1), proptest (1) |
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
-| internal/mgmt | 9 | unit (1), fuzz (1), integration (7) |
+| internal/mgmt | 8 | unit (1), fuzz (1), integration (6) |
 | cmd/sbctl | 5 | integration (2), e2e (2), fuzz (1) |
-| cmd/switchboard | 2 | integration (2) |
+| cmd/switchboard | 3 | integration (3) |
 | **Total** | **75** | |
 
 Per-module sum = 75 (no off-table VPs).
@@ -131,7 +132,7 @@ VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings
   VP-068 (unit, internal/mgmt), VP-069 (integration, internal/mgmt), VP-070 (integration, internal/mgmt),
   VP-071 (integration, internal/mgmt), VP-072 (integration, internal/mgmt), VP-073 (integration, cmd/switchboard).
 VP-074 (unit, internal/metrics) added 2026-06-29 for BC-2.06.001 threshold classification (L-001 disambiguation; unit test covering all 6 nominal regions + 8 boundary values).
-VP-075 (integration, internal/mgmt) added 2026-06-30 for BC-2.05.004 handler-layer caller-role enforcement (Pass-2 lens-3 F-T3-003). VP-046 anchored internal/svtnmgmt (key store propagation); VP-075 anchored internal/mgmt (handler authority gate).
+VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 handler-layer caller-role enforcement (Pass-2 lens-3 F-T3-003). VP-046 anchored internal/svtnmgmt (key store propagation); VP-075 anchored cmd/switchboard (BuildAdminHandlers authority gate). F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard; internal/mgmt 9→8 (integration 7→6), cmd/switchboard 2→3 (integration 2→3).
 
 ## Zero-VP BCs Check
 
