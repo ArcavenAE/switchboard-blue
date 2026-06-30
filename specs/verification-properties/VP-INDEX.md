@@ -85,7 +85,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | draft | VP-059.md |
 | VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | draft | VP-060.md |
 | VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | draft | VP-061.md |
-| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
+| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias); pending-p99 quality sentinel propagation (v1.1) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
 | VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | draft | VP-063.md |
 | VP-064 | Management server rejects unauthenticated connections (no CHALLENGE_RESPONSE, wrong key, or bad signature) → AUTH_FAIL + close; no RPC dispatched | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-064.md |
 | VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | draft | VP-065.md |
@@ -116,6 +116,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 > VP-060 added 2026-06-27 for BC-2.04.007 (daemon startup/shutdown lifecycle; integration/subprocess).
 > VP-061 added 2026-06-28 for BC-2.06.003 (metrics content-absence code-audit; DI-001 enforcement).
 > VP-062 added 2026-06-28 for BC-2.06.003 (JSON well-formedness fuzz across all CLI forms including alias).
+> VP-062 bumped to v1.1 2026-06-30 (S-5.02 Pass-3 F-T3-003): pending-quality sentinel fuzz seed (`rttP99Valid=false`) + assertion added; EC-006 cited in Source Contract; Property 5 added to Property Statement. No count change.
 > VP-063 added 2026-06-28 for BC-2.02.003 PC-5 (degraded-flag boolean: IsDegraded() tracks EWMA vs DegradedRTTThresholdMS; proptest).
 > VP-064 added 2026-06-28 for BC-2.07.004 (management server rejects unauthenticated; integration). Wave-5.
 > VP-065 added 2026-06-28 for BC-2.07.004 (management server rejects replayed nonce; integration). Wave-5.
@@ -141,6 +142,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.6 | 2026-06-30 | S-5.02 Pass-3 F-T3-003: VP-062 bumped to v1.1 — pending-quality sentinel coverage added (BC-2.06.003 v1.5 EC-006). Fuzz corpus seed 7 (`rttP99Valid=false`, assert `quality=="pending"`); PropTest case `"pending p99 path"` added; Property 5 added. No VP count change (existing VP, behavioral extension only). |
 | 2.5 | 2026-06-30 | S-6.06 lens-3 F-005 close: VP-075 (integration, P0) minted — admin.key.* handler-layer caller-role enforcement; server-side role lookup; E-ADM-009 rejection for non-control callers; connection kept open. source_bc: BC-2.05.004 (DI-001 / PC-1 admission-control authority). Implementing story: S-6.06. Counts: Total=75, Integration=21, P0=53. |
 | 2.4 | 2026-06-30 | F-4 (S-5.02 lens-3): VP-TBD-ACC placeholder registered — p99 accumulator accuracy bound (`rtt_p99_ms ≤ true_p99 + max_bucket_width`) bench-deferred per ARCH-03 v1.6; implementing story S-BL.BENCH (unscheduled). No count change to active VP tallies (deferred placeholder; bucket TBD at scheduling time). |
 | 2.3 | 2026-06-29 | CR-009 ruling: VP-048 ownership split — PC-1 (create) + PC-2 (bootstrap) remain owned by S-6.02; PC-3 (destroy + admission-rejection) transferred to new story S-6.05-svtn-destroy (Wave 6, depends_on S-6.02). VP-048 row Title column updated to document the split. VP-048.md Story Trace section updated. BC-2.07.001 Stories row updated. No count or method changes. |

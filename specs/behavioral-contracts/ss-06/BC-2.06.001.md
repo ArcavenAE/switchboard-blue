@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.001
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -33,6 +33,15 @@ modified:
       (1) PC-3/PC-4 OR-form precedence note added: Red takes precedence over Yellow
       when inputs satisfy both band predicates simultaneously. (2) Stories cell
       updated from "[filled by story-writer]" to S-5.01 + S-5.02 + S-7.03 trace.
+  - date: 2026-06-30
+    version: "1.4"
+    actor: product-owner
+    change: >
+      S-5.02 Pass-3 Ruling 1 (F-C1 / F-T3-005): Drop S-5.02 sbctl PC-5 trace from
+      Stories cell. The sbctl half of PC-5 surfacing is deferred to S-7.03 alongside
+      the console half — both halves now land in S-7.03. The tautological AC-007 test
+      (TestSbctlSessionsStatus_QualityFieldPresent) is dropped from S-5.02 scope.
+      Stories cell updated to reflect S-5.01 + S-7.03 only.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -115,7 +124,7 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 | L2 Capability | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires — empty ticks are liveness probes) |
 | Architecture Module | internal/metrics |
-| Stories | S-5.01 (QualityIndicator internal/metrics implementation), S-5.02 (path engine integration + sbctl metrics query — sbctl half of PC-5 per S-5.02 v1.3 AC-007), S-7.03 (console session-list surfacing — console half of PC-5 per DRIFT-001) |
+| Stories | S-5.01 (QualityIndicator internal/metrics implementation), S-7.03 (console + sbctl PC-5 surfacing — both halves deferred per S-5.02 Pass-3 Ruling 1; previously S-5.02 v1.3 AC-007 for sbctl half, now consolidated to S-7.03 alongside console half per DRIFT-001) |
 | Capability Anchor Justification | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 — this BC specifies the computation that CAP-021 defines as "derived from measured path latency and loss" |
 
 ## Related BCs
