@@ -1,0 +1,74 @@
+=== RUN   TestQualityIndicator_ThresholdClassification
+=== PAUSE TestQualityIndicator_ThresholdClassification
+=== RUN   TestQualityIndicator_ThresholdBoundary
+=== PAUSE TestQualityIndicator_ThresholdBoundary
+=== CONT  TestQualityIndicator_ThresholdClassification
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_well_inside_budget
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_well_inside_budget
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms
+=== CONT  TestQualityIndicator_ThresholdBoundary
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms
+=== RUN   TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0%
+=== PAUSE TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0%
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5%
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5%
+=== RUN   TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3%
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_both_at_boundary
+=== PAUSE TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3%
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_both_at_boundary
+=== CONT  TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0%
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms)
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms)
+=== CONT  TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3%
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms)
+--- PASS: TestQualityIndicator_ThresholdBoundary (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0% (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3% (0.00s)
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms)
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%)
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%)
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%)
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%)
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms)
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms)
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%)
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%)
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_both_above_yellow
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_both_above_yellow
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_extreme_RTT
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_extreme_RTT
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_extreme_loss
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_extreme_loss
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_well_inside_budget
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%)
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_extreme_loss
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_extreme_RTT
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_both_above_yellow
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%)
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms)
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%)
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms)
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_both_at_boundary
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5%
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms)
+--- PASS: TestQualityIndicator_ThresholdClassification (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_well_inside_budget (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_extreme_loss (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_extreme_RTT (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_both_above_yellow (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_both_at_boundary (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5% (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms) (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/metrics	0.271s

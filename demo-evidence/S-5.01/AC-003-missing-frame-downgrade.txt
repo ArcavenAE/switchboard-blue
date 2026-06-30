@@ -1,0 +1,22 @@
+=== RUN   TestQualityIndicator_MissingFrameDowngradeGreenToYellow
+=== PAUSE TestQualityIndicator_MissingFrameDowngradeGreenToYellow
+=== RUN   TestQualityIndicator_MissingFrameDowngradeYellowToRed
+=== PAUSE TestQualityIndicator_MissingFrameDowngradeYellowToRed
+=== RUN   TestQualityIndicator_MissingFrameSubthresholdNoDowngrade
+=== PAUSE TestQualityIndicator_MissingFrameSubthresholdNoDowngrade
+=== RUN   TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate
+=== PAUSE TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate
+=== RUN   TestQualityIndicator_MissingFrameCounterResetByYellowUpdate
+=== PAUSE TestQualityIndicator_MissingFrameCounterResetByYellowUpdate
+=== CONT  TestQualityIndicator_MissingFrameDowngradeGreenToYellow
+--- PASS: TestQualityIndicator_MissingFrameDowngradeGreenToYellow (0.00s)
+=== CONT  TestQualityIndicator_MissingFrameSubthresholdNoDowngrade
+=== CONT  TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate
+--- PASS: TestQualityIndicator_MissingFrameSubthresholdNoDowngrade (0.00s)
+--- PASS: TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate (0.00s)
+=== CONT  TestQualityIndicator_MissingFrameDowngradeYellowToRed
+--- PASS: TestQualityIndicator_MissingFrameDowngradeYellowToRed (0.00s)
+=== CONT  TestQualityIndicator_MissingFrameCounterResetByYellowUpdate
+--- PASS: TestQualityIndicator_MissingFrameCounterResetByYellowUpdate (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/metrics	0.246s

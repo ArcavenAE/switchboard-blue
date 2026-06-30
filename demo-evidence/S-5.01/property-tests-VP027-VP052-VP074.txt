@@ -1,0 +1,23 @@
+=== RUN   TestProp_BC_2_06_001_NoSkipTransitionDuringDegradation
++ no Green→Red skip during monotone degradation: OK, passed 1000 tests.
+Elapsed time: 46.189166ms
+--- PASS: TestProp_BC_2_06_001_NoSkipTransitionDuringDegradation (0.05s)
+=== RUN   TestProp_BC_2_06_001_NoRedToGreenSkipDuringRecovery
++ no Red→Green skip during monotone recovery: OK, passed 1000 tests.
+Elapsed time: 29.84125ms
+--- PASS: TestProp_BC_2_06_001_NoRedToGreenSkipDuringRecovery (0.03s)
+=== RUN   TestProp_BC_2_06_001_QualityIsAlwaysValidEnum
++ Current() always returns a valid Quality enum value: OK, passed 1000
+   tests.
+Elapsed time: 24.049584ms
+--- PASS: TestProp_BC_2_06_001_QualityIsAlwaysValidEnum (0.02s)
+=== RUN   TestProp_BC_2_06_001_GreenToRedSingleStep
++ single Green→Red jump does not skip Yellow: OK, passed 1000 tests.
+Elapsed time: 1.608541ms
+--- PASS: TestProp_BC_2_06_001_GreenToRedSingleStep (0.00s)
+=== RUN   TestProp_BC_2_06_002_MissingFrameNeverSkipsLevel
++ OnMissingFrame never skips a degradation level: OK, passed 1000 tests.
+Elapsed time: 4.598709ms
+--- PASS: TestProp_BC_2_06_002_MissingFrameNeverSkipsLevel (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/metrics	0.362s

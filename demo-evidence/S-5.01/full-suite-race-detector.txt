@@ -1,0 +1,1 @@
+ok  	github.com/arcavenae/switchboard/internal/metrics	2.485s

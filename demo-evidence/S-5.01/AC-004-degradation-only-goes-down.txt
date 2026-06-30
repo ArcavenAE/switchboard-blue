@@ -1,0 +1,14 @@
+=== RUN   TestQualityIndicator_DegradationNeverSkipsLevel
+=== PAUSE TestQualityIndicator_DegradationNeverSkipsLevel
+=== RUN   TestQualityIndicator_RecoveryNeverSkipsLevel
+=== PAUSE TestQualityIndicator_RecoveryNeverSkipsLevel
+=== RUN   TestQualityIndicator_DowngradeIsImmediate
+=== PAUSE TestQualityIndicator_DowngradeIsImmediate
+=== CONT  TestQualityIndicator_DegradationNeverSkipsLevel
+--- PASS: TestQualityIndicator_DegradationNeverSkipsLevel (0.00s)
+=== CONT  TestQualityIndicator_RecoveryNeverSkipsLevel
+--- PASS: TestQualityIndicator_RecoveryNeverSkipsLevel (0.00s)
+=== CONT  TestQualityIndicator_DowngradeIsImmediate
+--- PASS: TestQualityIndicator_DowngradeIsImmediate (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/metrics	0.245s

@@ -1,0 +1,26 @@
+=== RUN   TestQualityIndicator_HysteresisUpgrade
+=== PAUSE TestQualityIndicator_HysteresisUpgrade
+=== RUN   TestQualityIndicator_RedToGreenViaSixMeasurements
+=== PAUSE TestQualityIndicator_RedToGreenViaSixMeasurements
+=== RUN   TestQualityIndicator_SingleGoodMeasurementNoUpgrade
+=== PAUSE TestQualityIndicator_SingleGoodMeasurementNoUpgrade
+=== RUN   TestQualityIndicator_HysteresisResetOnBadMeasurement
+=== PAUSE TestQualityIndicator_HysteresisResetOnBadMeasurement
+=== CONT  TestQualityIndicator_HysteresisUpgrade
+=== CONT  TestQualityIndicator_SingleGoodMeasurementNoUpgrade
+=== RUN   TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade
+=== PAUSE TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade
+--- PASS: TestQualityIndicator_SingleGoodMeasurementNoUpgrade (0.00s)
+=== CONT  TestQualityIndicator_RedToGreenViaSixMeasurements
+--- PASS: TestQualityIndicator_RedToGreenViaSixMeasurements (0.00s)
+=== RUN   TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade
+=== PAUSE TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade
+=== CONT  TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade
+=== CONT  TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade
+--- PASS: TestQualityIndicator_HysteresisUpgrade (0.00s)
+    --- PASS: TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade (0.00s)
+    --- PASS: TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade (0.00s)
+=== CONT  TestQualityIndicator_HysteresisResetOnBadMeasurement
+--- PASS: TestQualityIndicator_HysteresisResetOnBadMeasurement (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/metrics	0.256s
