@@ -361,6 +361,14 @@ type KeySummary struct {
 	Expiry time.Time
 }
 
+// IsBootstrapKey reports whether pubkey byte-equals the daemon's bootstrap
+// control key (the trust anchor registered at SVTN creation time).
+// Uses constant-time comparison to prevent timing oracle (BC-2.07.001 Inv-3;
+// Inv-5; AC-006 / F-P2L1-001).
+func (m *SVTNManager) IsBootstrapKey(pubkey ed25519.PublicKey) bool {
+	return subtle.ConstantTimeCompare([]byte(m.controlPubKey), []byte(pubkey)) == 1
+}
+
 // CallerKeyRole returns the KeyRole of pubkey in the named SVTN, and true.
 // Returns (0, false) if svtnName does not exist or the key is not registered.
 // Used by admin handlers to resolve the authenticated caller's role server-side

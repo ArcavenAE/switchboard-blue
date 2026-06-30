@@ -405,9 +405,14 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, sv
 	if hasPubkey {
 		role, found := m.CallerKeyRole(svtnName, callerPub)
 		if !found {
-			// Caller pubkey not in this SVTN's key set — treat as bootstrap/operator
-			// control key; allow the operation.
-			return nil
+			// Key not registered in this SVTN. Allow only if it is the
+			// daemon's own bootstrap control key (the trust anchor).
+			// All other authenticated-but-unregistered keys are denied (F-P2L1-001).
+			if m.IsBootstrapKey(callerPub) {
+				return nil
+			}
+			fp := keyFingerprintAdmin(callerPub)
+			return fmt.Errorf("E-ADM-009: caller key %s not registered in svtn %q", fp, svtnName)
 		}
 		fp := keyFingerprintAdmin(callerPub)
 		return verifyCallerRole(role, cmd, fp)
