@@ -214,16 +214,17 @@ func TestProp_P99_SampleCountMonotone(t *testing.T) {
 // histogram bucket that contains arrivalRTTMS. The bucket boundaries mirror
 // rttHistogramBuckets in paths.go exactly (ARCH-03 v1.6 §p99 RTT Accumulator):
 //
-//	Buckets: [0,25), [25,50), [50,75), [75,100), [100,125), [125,150),
-//	         [150,175), [175,200), [200,300), [300,400), [400,500),
-//	         [500,700), [700,1000), [1000,1400), [1400,2000), [2000,∞)
+//	Buckets: [0,25), [25,50), [50,75), [75,100), [100,150),
+//	         [150,200), [200,300), [300,400), [400,500),
+//	         [500,750), [750,1000), [1000,1250), [1250,1500),
+//	         [1500,1750), [1750,2000), [2000,∞)
 //
 // This is a test-local mirror — it is intentionally separate from the
 // implementation so that the property test can verify the implementation rather
 // than tautologically agree with it.
 func bucketUpperBound(rttMS float64) float64 {
 	edges := [16]float64{
-		25, 50, 75, 100, 125, 150, 175, 200, 300, 400, 500, 700, 1000, 1400, 2000, 1e18,
+		25, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000, 1250, 1500, 1750, 2000, 1e18,
 	}
 	for _, e := range edges {
 		if rttMS < e {
