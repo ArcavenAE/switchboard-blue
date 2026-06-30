@@ -2,7 +2,7 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -29,6 +29,7 @@ modified:
   - 2026-06-25T00:00:00 # v1.4 — ADR-009: HMAC enforcement at RouteFrame boundary (S-3.04 wire-up); declares fail-fast ordering and forbidden bypass paths
   - 2026-06-25T00:00:00 # v1.5 — ADR-009: fix three contradictions (spec-reviewer C-2/C-3): correct verifyFrameHMAC signature (bool not error, value args not pointers), correct auth key location (forwardingTable not admitted_key_set), clarify ordering vs. single-lock-acquisition (sequential checks, shared RLock)
   - 2026-06-25T00:00:00 # v1.6 — ADR-009: amended to permit lock-free HMAC verify; RLock released after [32]byte key copy; HMAC runs lock-free; admitted check re-locks internally; sequential ordering preserved by line order not lock holding (Wave-3 pass-1 M-1)
+  - 2026-06-29T00:00:00 # v1.9 — F-005 ruling: Lookup/LookupByPubkey return-type convention — Option A chosen ((AdmittedKey, bool) value + present-flag); migration deferred to DRIFT-F005-LOOKUP-CONVENTION follow-on story
 ---
 
 # ARCH-04: Admission & Security
@@ -497,3 +498,112 @@ console-to-control revocation is prohibited; control-to-control revocation requi
 `sbctl admin` human authorization. This addendum narrows the implementation contract for
 the confirm gate only.
 | R-010 (DoS via forged frames) | HMAC verification at first router boundary (ADR-009 ordering); forged frames never reach routing logic; per-node keying prevents cross-node forgery |
+
+## F-005 Ruling: `Lookup` / `LookupByPubkey` Return-Type Convention
+
+**Finding source:** adversary pass 1 on S-6.02, finding F-005 (MEDIUM, Security/Concurrency lens)
+**Decision date:** 2026-06-29
+**Resolved by:** architect
+**Applies to:** `AdmittedKeySet.Lookup` and `AdmittedKeySet.LookupByPubkey` in `internal/admission`
+
+### Decision: Option A — change signature to `(AdmittedKey, bool)`
+
+The `Lookup` and `LookupByPubkey` methods MUST be changed from `*AdmittedKey` to
+`(AdmittedKey, bool)`. The second return value is a present-flag following the idiomatic
+Go map-lookup pattern. Callers change from `if stored == nil` to `if !ok`.
+
+### Evidence
+
+**Struct size:** `AdmittedKey` is approximately 92 bytes on 64-bit targets:
+`PublicKey []byte` (24), `NodeAddr [8]byte` (8), `Role KeyRole / uint8` (1),
+`FrameAuthKey [32]byte` (32), `expiry time.Time` (24), `revoked bool` (1),
+`admitted bool` (1), plus alignment padding to ~96 bytes. This is below the
+~64-byte "prefer pointer receiver" threshold at which copying meaningfully hurts
+performance (go.md rule 9), and admission lookups are not on the per-frame hot path
+(IsAdmitted and HMAC key retrieval are; Lookup is a management-plane operation).
+
+**Project-wide convention survey (locked accessors returning data):**
+- `session.Publisher.ListSessions()` → `[]Info` (value slice)
+- `session.Publisher.Get()` → `(Info, error)` (value + error)
+- `paths.PathTracker.Snapshot()` → `PathSnapshot` (value; comments explicitly cite go.md rule 12)
+- `paths.PathTracker.Score()`, `RTT()`, `LossPct()`, `IsActive()`, `IsDegraded()` → all primitives/values
+- `routing.SVTNRoute` → reads `*ForwardingEntry` under lock but copies a `[32]byte` field before returning; does NOT return the pointer to callers
+
+`Lookup` returning `*AdmittedKey` is the **sole pointer-return outlier** in the codebase.
+Every other locked accessor follows the value-return or value-with-bool/error pattern.
+
+**Documentary inconsistency:** The `Lookup` godoc says "Returns a value copy" while
+the signature returns a pointer. The body correctly deep-clones the struct (go.md rule 12
+compliance in implementation) but the pointer return type contradicts both the godoc and
+the project convention, inviting future callers to write pointer-nil checks instead of
+bool-checks, and creating a false API signal that the pointer might be "live" state.
+
+**go.md rule 9 note:** Rule 9 prescribes pointer receivers for large structs (>~64 bytes).
+`AdmittedKey` at ~92 bytes sits in the border zone for receiver style, but the question
+here is return type (snapshot, not receiver), which is governed by rule 12. Rule 12
+prescribes value returns from locked accessors unconditionally; it does not carve out an
+exception for large structs. The correct return-type convention is `(AdmittedKey, bool)`.
+
+### Rejected Alternative: Option B (keep pointer, improve godoc)
+
+Option B — retaining `*AdmittedKey` and adding a prominent godoc warning that mutations
+are not propagated — was rejected for three reasons:
+
+1. It contradicts the project-wide locked-accessor convention (all others return values).
+   The convention, not the implementation cleverness of the deep-clone, is the defensive
+   layer. A future developer sees `*AdmittedKey` and infers pointer semantics.
+2. It perpetuates the type-signature/godoc mismatch (godoc says "value copy"; pointer
+   says otherwise).
+3. Codifying "pointer return is OK here because we deep-clone" creates a precedent that
+   would need to be re-argued for every future locked accessor. The rule should be uniform.
+
+### Caller Migration
+
+Current callers (as of 2026-06-29):
+- `AdmittedKeySet.LookupByPubkey` delegates to `Lookup` — both signatures change together.
+- `internal/svtnmgmt.SVTNManager.RevokeKey` and `ExpireKey` (in S-6.02 worktree) call
+  `LookupByPubkey` and currently check `if stored == nil`. These become `stored, ok :=
+  ...; if !ok { return ErrKeyNotRegistered }`.
+
+Migration is a **one-line change per call site**: nil-check → bool-check. No logic changes.
+
+### Migration Plan
+
+**This migration MUST NOT be applied to the S-6.02 worktree mid-flight.** The S-6.02
+implementer is actively delivering F-003 and F-006. A signature change now would collide.
+
+The migration is tracked as `DRIFT-F005-LOOKUP-CONVENTION` in the tech-debt register.
+Target: a dedicated follow-on story in Wave 6, estimated 1 point. See tech-debt register
+for full migration checklist.
+
+### Implementation Invariant Post-Migration
+
+After migration, the canonical Lookup signature is:
+
+```go
+func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) (AdmittedKey, bool)
+func (s *AdmittedKeySet) LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey) (AdmittedKey, bool)
+```
+
+The body logic is unchanged: deep-clone of `PublicKey` backing array is still required
+(M-3) because `ed25519.PublicKey` is `[]byte` and a value copy of the struct shares the
+slice header's backing array.
+
+```go
+// RIGHT — value return with present-flag
+func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) (AdmittedKey, bool) {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    svtnMap, ok := s.keys[svtnID]
+    if !ok {
+        return AdmittedKey{}, false
+    }
+    entry, ok := svtnMap[nodeAddr]
+    if !ok {
+        return AdmittedKey{}, false
+    }
+    cp := *entry
+    cp.PublicKey = append(ed25519.PublicKey(nil), entry.PublicKey...)
+    return cp, true
+}
+```
