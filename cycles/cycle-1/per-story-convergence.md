@@ -46,8 +46,8 @@ per-story adversarial review. A story is CONVERGED when it achieves
 
 ## S-6.06 — Daemon admin RPC handlers
 
-**Status:** IN_PROGRESS — BLOCK (0/3 clean passes)
-**Clean-pass streak:** 0 consecutive clean passes
+**Status:** IN_PROGRESS — BLOCK (1/3 clean passes; Pass-18 BLOCK, fix-burst applied, Pass-19 queued)
+**Clean-pass streak:** 0 consecutive clean passes (Pass-16 was last clean; Passes 17 and 18 both BLOCK)
 **Worktree branch:** feat/S-6.06-daemon-admin-handlers
 
 ### Convergence History
@@ -71,6 +71,7 @@ per-story adversarial review. A story is CONVERGED when it achieves
 | 15 | BLOCK (MED) | BLOCK (MED) | PASS | BLOCK | fad33ec (spec) / 6528f02 (impl) |
 | 16 | PASS | PASS | PASS | PASS (clean #1) | — |
 | 17 | PASS (4 LOW OBS) | BLOCK (F-P17L2-001 MED, F-P17L2-002 LOW) | PASS | BLOCK (not counted) | 5da781a (spec) / 2390541 (impl) |
+| 18 | BLOCK (F-P18L1-001 MED, F-P18L1-002 MED, 3 LOW OBS) | PASS | PASS (1 LOW piggyback-fixed) | BLOCK (not counted) | 518a30f (spec) / 9a4cf0b + 6bd9e12 (impl) |
 
 ### Pass-15 Detail (2026-06-30)
 
@@ -153,4 +154,43 @@ No findings. Fix-burst tip: fad33ec (spec) / 6528f02 (impl). Pass-17 dispatched.
 ### Next: Pass-18
 
 Pass-18 queued. Clean-pass count: 1/3. Fix-burst tip: 5da781a (spec) / 2390541 (impl).
+Scope: re-run all 3 lenses fresh-context against fix-burst tip.
+
+---
+
+### Pass-18 Detail (2026-06-30)
+
+**Verdict:** BLOCK — lens-1 BLOCK, lens-2 PASS, lens-3 PASS. Pass NOT counted toward streak. Clean-pass count remains 1/3.
+
+#### Lens-1 (Implementation Correctness)
+
+| Finding | Severity | Confidence | Description | Disposition |
+|---------|----------|------------|-------------|-------------|
+| F-P18L1-001 | MED | HIGH | Bootstrap-key non-expirable parallel invariant missing: ExpireKey lacks the guard RevokeKey has — would allow management lockout via expire bypassing EC-007's revoke protection | Fixed: 9a4cf0b (new ErrBootstrapKeyExpireForbidden sentinel + ExpireKey constant-time compare guard + mapAdminError arm + integration test) |
+| F-P18L1-002 | MED | HIGH | Expiry time.Time + omitempty bug — zero time serializes as "0001-01-01T00:00:00Z" instead of being omitted | Fixed: 6bd9e12 (adminKeyEntry.Expiry time.Time→*time.Time + TestAdminKeyEntry_ZeroExpiryOmittedFromJSON wire-shape test) |
+| F-P18L1-003 | LOW | MED | Default-arm observability (pre-existing observation, non-blocking) | Noted — deferred |
+| F-P18L1-004 | LOW | MED | roleToString panic in list-keys hot path (pre-existing observation, non-blocking) | Noted — deferred |
+| F-P18L1-005 | LOW | MED | Bootstrap-key self-auth scope (pre-existing observation, non-blocking) | Noted — deferred |
+
+#### Lens-2 (Spec Drift)
+
+**Verdict: PASS** — all citations verified, canonical message byte-identical.
+
+#### Lens-3 (Sibling Propagation + VP Harness Compilability)
+
+**Verdict: PASS** within perimeter — 1 LOW: STORY-INDEX frontmatter version drift v3.4 vs body v3.5; fixed in fix-burst (STORY-INDEX v3.4→v3.6).
+
+### Pass-18 Fix-Burst Record (most substantive of the cycle)
+
+| Layer | Commit | Branch | Changes |
+|-------|--------|--------|---------|
+| Spec | 518a30f | factory-artifacts | error-taxonomy.md v3.7→v3.8 (new code E-ADM-021 + new sentinel ErrBootstrapKeyExpireForbidden); BC-2.05.004 v1.9→v1.10 (EC-007 extended to cover revoke OR expire); S-6.06 story v1.15→v1.16 (Error Code Map + EC-008 + Task Plan extended; vp_traces+VP-076); VP-076 minted (symmetric bootstrap revoke+expire forbidden invariant); VP-INDEX v2.9→v2.10; BC-INDEX v1.5→v1.6; STORY-INDEX v3.4→v3.6 (frontmatter drift piggyback-fixed) |
+| Impl | 9a4cf0b | feat/S-6.06-daemon-admin-handlers | new ErrBootstrapKeyExpireForbidden sentinel + ExpireKey constant-time compare guard mirroring RevokeKey; new mapAdminError arm; new TestMapAdminError_ErrorWrapping arm; new TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden integration test |
+| Impl | 6bd9e12 | feat/S-6.06-daemon-admin-handlers | adminKeyEntry.Expiry time.Time→*time.Time; new TestAdminKeyEntry_ZeroExpiryOmittedFromJSON wire-shape test; just test + just test-race both clean (all 17 packages PASS, race-clean) |
+
+**Note:** This fix-burst added a NEW VP (VP-076) and a NEW error code (E-ADM-021) — substantive material change, not cosmetic.
+
+### Next: Pass-19
+
+Pass-19 queued. Clean-pass count: 1/3. Fix-burst tip: 518a30f (spec) / 6bd9e12 (impl).
 Scope: re-run all 3 lenses fresh-context against fix-burst tip.

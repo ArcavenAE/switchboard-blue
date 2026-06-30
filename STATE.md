@@ -65,7 +65,7 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: b36cb9b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T14:00:00Z
+timestamp: 2026-06-30T16:00:00Z
 last_update: 2026-06-30
 ---
 
@@ -80,6 +80,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-06-29 — Pass-1 fix burst landed: 4 spec layers (PO/architect/impl/story-writer) + race-clean test-race across S-5.01 and S-6.02 worktrees; 22 lens findings closed; new stories S-6.07 + S-BL.LOOKUP minted; STORY-INDEX → v2.6.
 - 2026-06-29 — BC-5.39.001 convergence recorded: S-5.01 and S-6.02 both achieved 3 consecutive clean diverse-lens adversarial passes (Pass-3 all lenses 0/0/0). S-6.02 narrow fixes: a98bd92 (E-ADM-014 stale ref sweep) + e08f567 (ARCH-04 v1.12 prose). Both stories ready for PR delivery.
 - 2026-06-30 — S-6.06 Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Pass-17 BLOCK: lens-2 F-P17L2-001 MED (error-taxonomy.md E-ADM-020 out-of-sync with BC v1.9 unconditional) + F-P17L2-002 LOW ("permanent trust anchor" wire-string alignment); lens-1/lens-3 PASS. Fix-burst: 5da781a (spec: error-taxonomy.md v3.6→v3.7, story v1.14→v1.15, STORY-INDEX v3.4→v3.5) + 2390541 (impl: admin_handlers.go:397 + test:719, race-clean). Pass-17 NOT counted. Clean-pass count: 1/3. Pass-18 queued. Wave-gate deferred: S-W5.02:191 stale 4-arg mgmt.NewServer descriptor (task #8).
+- 2026-06-30 — S-6.06 Pass-18 BLOCK: lens-1 BLOCK (F-P18L1-001 MED: ExpireKey missing bootstrap-key guard — EC-007/revoke-protection parity; F-P18L1-002 MED: adminKeyEntry.Expiry time.Time omitempty zero-value serialization bug; 3 LOW OBS); lens-2 PASS; lens-3 PASS (1 LOW frontmatter drift piggyback-fixed). Fix-burst most substantive of cycle: 518a30f (spec: error-taxonomy.md v3.7→v3.8 new E-ADM-021 + ErrBootstrapKeyExpireForbidden; BC-2.05.004 v1.9→v1.10 EC-007 extended revoke OR expire; S-6.06 story v1.15→v1.16 + EC-008 + VP-076; VP-INDEX v2.9→v2.10; BC-INDEX v1.5→v1.6; STORY-INDEX v3.4→v3.6) + 9a4cf0b (impl: ExpireKey bootstrap guard + sentinel + tests) + 6bd9e12 (impl: *time.Time pointer + zero-expiry JSON test; all 17 packages race-clean). Pass-18 NOT counted. Clean-pass count: 1/3. Pass-19 queued.
 
 ## Phase Progress
 
@@ -166,16 +167,16 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.02 MERGED (b36cb9b, PR #34) | Squash-merged to develop (rebased over S-5.01/c1c2c3d); worktree removed, branch deleted | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-17 BLOCK + fix-burst applied)
+## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-18 BLOCK + substantive fix-burst applied)
 
-**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Pass-17 BLOCK — lens-2 BLOCK (F-P17L2-001 MED: error-taxonomy.md E-ADM-020 out-of-sync with BC v1.9; F-P17L2-002 LOW: "permanent trust anchor" wire-string alignment), lens-1/lens-3 PASS. Fix-burst applied: 5da781a (spec: error-taxonomy.md v3.6→v3.7 + story v1.14→v1.15 + STORY-INDEX v3.4→v3.5) + 2390541 (impl: admin_handlers.go:397 + test:719, race-clean). Pass-17 NOT counted. Clean-pass count: 1/3. Pass-18 queued. Wave-gate deferred: S-W5.02:191 stale 4-arg mgmt.NewServer descriptor (task #8).
+**Position:** Phase 3 Wave 5. S-6.06 per-story adversarial convergence in progress. Pass-16 PASS (all 3 lenses clean; clean-pass count: 1/3). Passes 17 and 18 both BLOCK — fix-bursts applied after each. Pass-18 fix-burst most substantive of cycle: VP-076 minted, E-ADM-021 added, BC-2.05.004 v1.10 (EC-007 extended to cover revoke OR expire). Clean-pass count: 1/3. Pass-19 queued.
 
-**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 5da781a on factory-artifacts. Impl tip: 2390541 on feat/S-6.06-daemon-admin-handlers.
+**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: 518a30f on factory-artifacts. Impl tip: 6bd9e12 on feat/S-6.06-daemon-admin-handlers.
 
 **Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (converging, 5 pts), S-W5.02 (draft, 5 pts).
 
 **NEXT ACTION on resume:**
-1. S-6.06 Pass-18: dispatch 3 fresh-context adversary lenses against fix-burst tip (5da781a spec / 2390541 impl).
+1. S-6.06 Pass-19: dispatch 3 fresh-context adversary lenses against fix-burst tip (518a30f spec / 6bd9e12 impl).
 2. S-5.02 (sbctl paths list + router metrics) — deliver in parallel or after S-6.06 converges.
 3. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
 4. Wave 5 adversarial review after all stories merged.
