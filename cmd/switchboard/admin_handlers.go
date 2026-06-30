@@ -237,6 +237,24 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
 
+		var svtnName string
+		if v, ok := raw["svtn"]; ok {
+			if err := json.Unmarshal(v, &svtnName); err != nil {
+				return nil, fmt.Errorf("E-CFG-001: invalid svtn field: %w", err)
+			}
+		}
+		if svtnName == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+		}
+
+		// AC-006: enforce caller authority server-side (F-006; F-001b).
+		// Auth fires before input validation so BC-2.05.004 Precondition 1 "handler
+		// gate fires BEFORE dispatch" is uniform across all admin handlers.
+		// No CallerRole field in expire args — purely server-resolved.
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.expire"); err != nil {
+			return nil, err
+		}
+
 		// EC-005: `after` field must be present.
 		afterRaw, hasAfter := raw["after"]
 		if !hasAfter {
@@ -259,22 +277,6 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 		}
 		if ttl > maxKeyTTL {
 			return nil, fmt.Errorf("E-CFG-001: invalid duration: %q (exceeds 100-year maximum)", afterStr)
-		}
-
-		var svtnName string
-		if v, ok := raw["svtn"]; ok {
-			if err := json.Unmarshal(v, &svtnName); err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid svtn field: %w", err)
-			}
-		}
-		if svtnName == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
-		}
-
-		// AC-006: enforce caller authority server-side (F-006; F-001b).
-		// No CallerRole field in expire args — purely server-resolved.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.expire"); err != nil {
-			return nil, err
 		}
 
 		var pubkeyStr string
@@ -394,7 +396,11 @@ func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the last bootstrap key in SVTN %s: %w", svtnName, err)
 	default:
-		return err
+		// Default arm is a defense-in-depth: every sentinel SVTNManager can return
+		// should have an explicit case above. If this arm fires in production it is
+		// a programmer error — surfaces as E-RPC-011 to keep the wire contract
+		// intact while signaling the gap to the operator.
+		return fmt.Errorf("E-RPC-011: unmapped admin error: %w", err)
 	}
 }
 

@@ -534,7 +534,9 @@ func TestBuildAdminHandlers_KeyRevoke_UnknownRole(t *testing.T) {
 // Traces to AC-001 edge case EC-005; AC-005; BC-2.05.004 PC-3.
 func TestBuildAdminHandlers_KeyExpire_MissingAfterField(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Auth fires before TTL validation (BC-2.05.004 Precondition 1). Inject the
+	// bootstrap key so auth passes and the E-CFG-001 path is exercised.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -558,7 +560,8 @@ func TestBuildAdminHandlers_KeyExpire_MissingAfterField(t *testing.T) {
 		t.Fatalf("marshal args: %v", err)
 	}
 
-	_, handlerErr := expireFn(context.Background(), json.RawMessage(args))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := expireFn(ctx, json.RawMessage(args))
 	if handlerErr == nil {
 		t.Fatal("expected error for missing after field, got nil")
 	}
@@ -572,7 +575,9 @@ func TestBuildAdminHandlers_KeyExpire_MissingAfterField(t *testing.T) {
 // Traces to AC-005; DI-003 defense-in-depth.
 func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
+	// Auth fires before TTL validation (BC-2.05.004 Precondition 1). Inject the
+	// bootstrap key so auth passes and the E-CFG-001 bounds check is exercised.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	handlers := BuildAdminHandlers(m, nil)
 
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -595,6 +600,7 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 		{"ttl exceeding 100 years", "876001h"},
 	}
 
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -608,7 +614,7 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 				t.Fatalf("marshal args: %v", err)
 			}
 
-			_, handlerErr := expireFn(context.Background(), json.RawMessage(args))
+			_, handlerErr := expireFn(ctx, json.RawMessage(args))
 			if handlerErr == nil {
 				t.Fatalf("expected E-CFG-001 for after=%q, got nil", tc.after)
 			}
