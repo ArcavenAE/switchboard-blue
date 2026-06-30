@@ -189,8 +189,8 @@ func (qi *QualityIndicator) OnMissingFrame() {
 	}
 }
 
-// classify returns the raw Quality level for (rttMs, lossPct) without applying
-// hysteresis. Used internally by Update.
+// Classify returns the raw Quality level for (rttMs, lossPct) without applying
+// hysteresis. Exported for one-shot CLI classification (BC-2.06.003 PC-1).
 //
 // Band predicates use OR-form (BC-2.06.001 v1.3 PC-3, PC-4):
 //   - Yellow fires when RTT or loss exceeds green thresholds (but neither exceeds red).
@@ -199,6 +199,11 @@ func (qi *QualityIndicator) OnMissingFrame() {
 // Red-over-Yellow precedence (BC-2.06.001 v1.3 PC-4): Red is the fall-through
 // default; the Yellow branch only fires when BOTH dimensions are within yellow
 // bounds, so any single red-range value bypasses Yellow and returns Red directly.
+func Classify(rttMs float64, lossPct float64) Quality {
+	return classify(rttMs, lossPct)
+}
+
+// classify is the internal (unexported) form used by Update.
 func classify(rttMs float64, lossPct float64) Quality {
 	// PC-2: both dimensions within green bounds → Green.
 	if rttMs <= GreenRTTMs && lossPct <= GreenLossPct {

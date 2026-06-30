@@ -629,16 +629,17 @@ func TestQualityFromPathEntry_StatelessClassification(t *testing.T) {
 			p99RTTMs: 10.0, rttMs: 10.0, lossPct: 21.0,
 			wantBand: "red",
 		},
-		// Pending p99: fall back to rtt_ms for classification
+		// Pending p99: BC-2.06.003 v1.5 EC-003 sentinel — return "pending" regardless
+		// of rtt_ms value.  Supersedes the pre-v1.5 fallback-to-rtt_ms behaviour.
 		{
-			name:     "pending_p99_fallback_green",
+			name:     "pending_p99_sentinel_green_metrics",
 			p99RTTMs: "pending", rttMs: 30.0, lossPct: 0.0,
-			wantBand: "green",
+			wantBand: "pending",
 		},
 		{
-			name:     "pending_p99_fallback_red_via_rttMs",
+			name:     "pending_p99_sentinel_red_metrics",
 			p99RTTMs: "pending", rttMs: 600.0, lossPct: 25.0,
-			wantBand: "red",
+			wantBand: "pending",
 		},
 	}
 
