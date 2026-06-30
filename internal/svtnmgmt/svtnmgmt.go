@@ -135,6 +135,17 @@ func keyFingerprint(pubkey ed25519.PublicKey) string {
 // Returns ErrSVTNAlreadyExists (E-SVTN-001) if a SVTN with svtnName already
 // exists (BC-2.07.001 EC-001; DI-005).
 //
+// Ordering invariant (BC-2.07.001 PC-1+PC-2 composite postcondition): the
+// bootstrap control key is registered in the AdmittedKeySet BEFORE the SVTN
+// is published to m.svtns. This prevents a concurrent caller from observing
+// a half-bootstrapped SVTN and injecting a foreign control key via
+// last-write-wins (ADR-003). The key is bound to the un-published SVTN ID
+// and is therefore inert until the SVTN appears in m.svtns.
+//
+// If the subsequent existence check fails (duplicate name), the bootstrap key
+// is orphaned in the admitted set keyed by a never-published SVTN ID; this is
+// harmless because no SVTN is ever exposed for that ID.
+//
 // Traces to BC-2.07.001 postcondition 1.
 func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
 	// Generate SVTN ID before acquiring the lock to keep the critical section
@@ -144,9 +155,19 @@ func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
 		return CreateResult{}, fmt.Errorf("generate SVTN ID: %w", err)
 	}
 
+	// Bootstrap the control key BEFORE publishing the SVTN. The key is bound
+	// to the un-published ID, so it is inert until the SVTN appears in
+	// m.svtns. This closes the window where a concurrent RegisterKey call
+	// could observe the SVTN without the bootstrap key already in the
+	// AdmittedKeySet (F-003; ADR-003 LWW; BC-2.07.001 postcondition 2).
+	// AdmittedKeySet owns its own mutex — no nested lock ordering concern.
+	m.keySet.RegisterKey(id, m.controlPubKey, admission.RoleControl)
+
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, exists := m.svtns[svtnName]; exists {
-		m.mu.Unlock()
+		// Duplicate name: the bootstrap key above is orphaned (keyed by a
+		// never-published SVTN ID) — harmless, no SVTN is exposed for that ID.
 		return CreateResult{}, ErrSVTNAlreadyExists
 	}
 
@@ -156,13 +177,6 @@ func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
 		CreatedAt: time.Now().UTC(),
 	}
 	m.svtns[svtnName] = svtn
-	m.mu.Unlock()
-
-	// BC-2.07.001 postcondition 2: bootstrap the control node's public key as
-	// the first admitted control-role key (local operation — trust anchor).
-	// RegisterKey called outside the lock: AdmittedKeySet owns its own mutex.
-	m.keySet.RegisterKey(id, m.controlPubKey, admission.RoleControl)
-
 	return CreateResult{SVTN: svtn}, nil
 }
 
