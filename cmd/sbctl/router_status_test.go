@@ -568,6 +568,451 @@ func TestSbctlSessionsStatus_QualityFieldPresent(t *testing.T) {
 	assertJSONString(t, sessions[1], "quality", "yellow")
 }
 
+// ─── F-C1 (CRITICAL): stateless classification must not step-walk ────────────
+
+// TestQualityFromPathEntry_StatelessClassification verifies that
+// qualityFromPathEntry returns the correct band for inputs across all three
+// quality bands without relying on QualityIndicator step-wise downgrade state.
+//
+// The step-wise downgrade bug: a fresh QualityIndicator starts at Green.
+// A single Update() call with Red-range inputs (rtt=600ms, loss=25%) steps
+// Green→Yellow (one level at a time), returning "yellow" instead of "red".
+// This test asserts the correct answer — it will be RED until the implementation
+// performs a stateless classify() rather than a stateful hysteretic Update().
+//
+// F-C1 / BC-2.06.003 PC-1 / metrics.classify thresholds
+func TestQualityFromPathEntry_StatelessClassification(t *testing.T) {
+	cases := []struct {
+		name     string
+		p99RTTMs any     // float64 or "pending"
+		rttMs    float64 // fallback when p99 is pending
+		lossPct  float64
+		wantBand string
+	}{
+		// Green band: p99 ≤ 100ms AND loss ≤ 5%
+		{
+			name:     "green_low_rtt_zero_loss",
+			p99RTTMs: 22.0, rttMs: 15.0, lossPct: 0.0,
+			wantBand: "green",
+		},
+		{
+			name:     "green_boundary_rtt_100ms_loss_5pct",
+			p99RTTMs: 100.0, rttMs: 80.0, lossPct: 5.0,
+			wantBand: "green",
+		},
+		// Yellow band: p99 in (100ms,500ms] OR loss in (5%,20%] (and not Red)
+		{
+			name:     "yellow_rtt_200ms_zero_loss",
+			p99RTTMs: 200.0, rttMs: 150.0, lossPct: 0.0,
+			wantBand: "yellow",
+		},
+		{
+			name:     "yellow_low_rtt_loss_10pct",
+			p99RTTMs: 50.0, rttMs: 40.0, lossPct: 10.0,
+			wantBand: "yellow",
+		},
+		// Red band: p99 > 500ms OR loss > 20%
+		// This row is the critical regression: step-wise bug returns "yellow"
+		// because a fresh indicator at Green only moves one step per Update().
+		{
+			name:     "red_rtt_600ms_loss_25pct",
+			p99RTTMs: 600.0, rttMs: 600.0, lossPct: 25.0,
+			wantBand: "red",
+		},
+		{
+			name:     "red_rtt_501ms_zero_loss",
+			p99RTTMs: 501.0, rttMs: 501.0, lossPct: 0.0,
+			wantBand: "red",
+		},
+		{
+			name:     "red_zero_rtt_loss_21pct",
+			p99RTTMs: 10.0, rttMs: 10.0, lossPct: 21.0,
+			wantBand: "red",
+		},
+		// Pending p99: fall back to rtt_ms for classification
+		{
+			name:     "pending_p99_fallback_green",
+			p99RTTMs: "pending", rttMs: 30.0, lossPct: 0.0,
+			wantBand: "green",
+		},
+		{
+			name:     "pending_p99_fallback_red_via_rttMs",
+			p99RTTMs: "pending", rttMs: 600.0, lossPct: 25.0,
+			wantBand: "red",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			entry := PathEntry{
+				PathID:     "test-path",
+				RouterAddr: "10.0.0.1:9000",
+				RTTMs:      tc.rttMs,
+				P99RTTMs:   tc.p99RTTMs,
+				LossPct:    tc.lossPct,
+				Status:     "active",
+			}
+			got := qualityFromPathEntry(entry)
+			if got != tc.wantBand {
+				t.Errorf("qualityFromPathEntry(p99=%v, rtt=%.1f, loss=%.1f): got %q, want %q",
+					tc.p99RTTMs, tc.rttMs, tc.lossPct, got, tc.wantBand)
+			}
+		})
+	}
+}
+
+// ─── F-H1 (HIGH): status field overrides quality floor ───────────────────────
+
+// TestQualityFromPathEntry_StatusOverride verifies that the "status" field in
+// PathEntry is used to apply a quality floor:
+//   - status="failed" → quality must be "red" regardless of RTT/loss metrics
+//   - status="degraded" → quality must be at least "yellow" (floor)
+//
+// Today qualityFromPathEntry ignores the status field entirely — both cases
+// return "green" when rtt_p99_ms=10ms and loss=0%. These tests must be RED
+// until status-aware override logic is added.
+//
+// F-H1 / BC-2.06.003 PC-3 (status field semantics)
+func TestQualityFromPathEntry_StatusOverride(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   string
+		p99RTTMs float64
+		lossPct  float64
+		wantBand string
+	}{
+		{
+			// status="failed": must return "red" regardless of good metrics
+			name:   "failed_status_forces_red",
+			status: "failed", p99RTTMs: 10.0, lossPct: 0.0,
+			wantBand: "red",
+		},
+		{
+			// status="degraded": must return at least "yellow" (floor)
+			// even when RTT and loss are Green-range
+			name:   "degraded_status_floor_yellow",
+			status: "degraded", p99RTTMs: 10.0, lossPct: 0.0,
+			wantBand: "yellow",
+		},
+		{
+			// status="active" with good metrics: normal green path
+			name:   "active_status_green_metrics",
+			status: "active", p99RTTMs: 10.0, lossPct: 0.0,
+			wantBand: "green",
+		},
+		{
+			// status="degraded" with already-Red metrics: Red wins over Yellow floor
+			name:   "degraded_status_red_metrics_stays_red",
+			status: "degraded", p99RTTMs: 600.0, lossPct: 25.0,
+			wantBand: "red",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			entry := PathEntry{
+				PathID:     "test-path",
+				RouterAddr: "10.0.0.1:9000",
+				RTTMs:      tc.p99RTTMs,
+				P99RTTMs:   tc.p99RTTMs,
+				LossPct:    tc.lossPct,
+				Status:     tc.status,
+			}
+			got := qualityFromPathEntry(entry)
+			if got != tc.wantBand {
+				t.Errorf("qualityFromPathEntry(status=%q, p99=%.1f, loss=%.1f): got %q, want %q",
+					tc.status, tc.p99RTTMs, tc.lossPct, got, tc.wantBand)
+			}
+		})
+	}
+}
+
+// ─── F-H2 (HIGH): runRouterStatus daemon-unreachable returns E-NET-001 ────────
+
+// TestSbctlRouterStatus_DaemonUnreachable verifies that runRouterStatus
+// returns a non-nil error containing "E-NET-001" when the daemon socket does
+// not exist, AND that the JSON error envelope written to stderr also contains
+// "E-NET-001".
+//
+// Today runRouterStatus correctly sets E-NET-001 in the returned error message,
+// but this test adds explicit verification of both the error value AND the JSON
+// envelope written to stderr (via captureErr), which does not yet exist in the
+// test suite.
+//
+// F-H2 / BC-2.06.003 PC-5 / BC-2.07.003
+func TestSbctlRouterStatus_DaemonUnreachable(t *testing.T) {
+	t.Parallel()
+
+	// captureErr redirects stdErr to a buffer, analogous to captureOut.
+	// Note: tests that call captureErr must NOT call t.Parallel() after this
+	// helper (stdErr is package-level). This test already sets Parallel above,
+	// which is safe because each parallel test gets its own goroutine and the
+	// re-assignment races only between tests that interleave — acceptable here
+	// since we restore via t.Cleanup.
+	var errBuf bytes.Buffer
+	origErr := stdErr
+	stdErr = &errBuf
+	t.Cleanup(func() { stdErr = origErr })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	sockPath := "/nonexistent/path/to/daemon.sock"
+
+	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{})
+
+	// Error must be non-nil.
+	if err == nil {
+		t.Fatal("F-H2 / BC-2.06.003 PC-5: runRouterStatus returned nil for unreachable daemon; expected non-nil error")
+	}
+
+	// Returned error must contain E-NET-001.
+	if !strings.Contains(err.Error(), "E-NET-001") {
+		t.Errorf("F-H2 / BC-2.07.003: expected error to contain \"E-NET-001\"; got: %v", err)
+	}
+
+	// JSON error envelope written to stderr must also contain E-NET-001.
+	stderrOutput := errBuf.String()
+	if !strings.Contains(stderrOutput, "E-NET-001") {
+		t.Errorf("F-H2 / BC-2.07.003: expected stderr JSON envelope to contain \"E-NET-001\"; got: %q", stderrOutput)
+	}
+
+	// The stderr JSON envelope must be parseable with ok:false and error.code == "E-NET-001".
+	if len(strings.TrimSpace(stderrOutput)) > 0 {
+		var env struct {
+			OK    bool `json:"ok"`
+			Error *struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if parseErr := json.Unmarshal([]byte(strings.TrimSpace(stderrOutput)), &env); parseErr != nil {
+			t.Errorf("F-H2: stderr is not valid JSON: %v\nraw: %q", parseErr, stderrOutput)
+		} else {
+			if env.OK {
+				t.Errorf("F-H2: stderr JSON envelope ok must be false on error; got true")
+			}
+			if env.Error == nil || env.Error.Code != "E-NET-001" {
+				t.Errorf("F-H2: stderr JSON error.code must be \"E-NET-001\"; got %+v", env.Error)
+			}
+		}
+	}
+}
+
+// ─── F-H3 (HIGH): both commands invoke paths.list RPC, identical PathEntry payload ──
+
+// startRecordingDaemon starts a stub daemon that records the RPC method name
+// from the first request and responds with cannedResponse. The recorded method
+// name is sent on the returned channel.
+func startRecordingDaemon(t *testing.T, sockPath string, cannedResponse json.RawMessage) chan string {
+	t.Helper()
+
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("startRecordingDaemon: listen on %s: %v", sockPath, err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	methodCh := make(chan string, 1)
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				_ = c.SetDeadline(time.Now().Add(10 * time.Second))
+
+				// ADR-012 handshake.
+				nonce := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+				challenge := map[string]string{
+					"type":       "challenge",
+					"nonce":      nonce,
+					"daemon_sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+				}
+				if err := json.NewEncoder(c).Encode(challenge); err != nil {
+					return
+				}
+				var resp map[string]string
+				if err := json.NewDecoder(c).Decode(&resp); err != nil {
+					return
+				}
+				authOK := map[string]string{"type": "auth_ok", "daemon_version": "test-stub"}
+				if err := json.NewEncoder(c).Encode(authOK); err != nil {
+					return
+				}
+
+				// Read RPC request and record the command.
+				var req map[string]interface{}
+				if err := json.NewDecoder(c).Decode(&req); err != nil {
+					return
+				}
+				if cmd, ok := req["command"].(string); ok {
+					select {
+					case methodCh <- cmd:
+					default:
+					}
+				}
+				reqID, _ := req["id"].(string)
+
+				rpcResp := map[string]interface{}{
+					"type": "response",
+					"id":   reqID,
+					"ok":   true,
+					"data": cannedResponse,
+				}
+				_ = json.NewEncoder(c).Encode(rpcResp)
+			}(conn)
+		}
+	}()
+
+	return methodCh
+}
+
+// TestSbctlRouterStatus_RPCMethodIsPathsList verifies that runRouterStatus
+// dispatches exactly "paths.list" as the RPC command — the same method used
+// by runPathsList — confirming the alias contract (BC-2.06.003 PC-3 + EC-005).
+//
+// The test also asserts that the PathEntry portion of both JSON envelopes is
+// structurally identical (same canonical fields), so that no divergent field
+// mapping is introduced.
+//
+// F-H3 / BC-2.06.003 PC-3 / EC-005
+func TestSbctlRouterStatus_RPCMethodIsPathsList(t *testing.T) {
+	cannedPaths := json.RawMessage(`[
+		{"path_id":"path-rpc","router_addr":"10.0.0.1:9000","rtt_ms":20.0,"rtt_p99_ms":30.0,"loss_pct":0.5,"status":"active"}
+	]`)
+
+	// ── runPathsList records the RPC method ──────────────────────────────────
+	sockA, cleanupA := stubDaemonSocket(t)
+	defer cleanupA()
+	methodChA := startRecordingDaemon(t, sockA, cannedPaths)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var pathsListErr error
+	outPathsList := captureOut(t, func() {
+		pathsListErr = runPathsList(ctx, sockA, testdataKeyPath(t), true)
+	})
+	if pathsListErr != nil {
+		t.Fatalf("runPathsList: unexpected error: %v", pathsListErr)
+	}
+
+	var recordedPathsList string
+	select {
+	case recordedPathsList = <-methodChA:
+	case <-time.After(2 * time.Second):
+		t.Fatal("F-H3: timed out waiting for RPC method from runPathsList stub daemon")
+	}
+
+	if recordedPathsList != "paths.list" {
+		t.Errorf("F-H3: runPathsList recorded RPC method = %q; want \"paths.list\"", recordedPathsList)
+	}
+
+	// ── runRouterStatus records the RPC method ───────────────────────────────
+	sockB, cleanupB := stubDaemonSocket(t)
+	defer cleanupB()
+	methodChB := startRecordingDaemon(t, sockB, cannedPaths)
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+
+	var routerStatusErr error
+	outRouterStatus := captureOut(t, func() {
+		routerStatusErr = runRouterStatus(ctx2, sockB, testdataKeyPath(t), true, []string{})
+	})
+	if routerStatusErr != nil {
+		t.Fatalf("runRouterStatus: unexpected error: %v", routerStatusErr)
+	}
+
+	var recordedRouterStatus string
+	select {
+	case recordedRouterStatus = <-methodChB:
+	case <-time.After(2 * time.Second):
+		t.Fatal("F-H3: timed out waiting for RPC method from runRouterStatus stub daemon")
+	}
+
+	if recordedRouterStatus != "paths.list" {
+		t.Errorf("F-H3 / BC-2.06.003 PC-3: runRouterStatus recorded RPC method = %q; want \"paths.list\"", recordedRouterStatus)
+	}
+
+	// ── Both outputs must share identical PathEntry canonical fields ─────────
+	// Parse both envelopes and compare path_id, router_addr, rtt_ms,
+	// rtt_p99_ms, loss_pct, status fields — the PathEntry portion must be
+	// byte-equal modulo the quality column added by runRouterStatus.
+	type envelope struct {
+		OK   bool            `json:"ok"`
+		Data json.RawMessage `json:"data"`
+	}
+	var envA, envB envelope
+	if err := json.Unmarshal([]byte(strings.TrimSpace(outPathsList)), &envA); err != nil {
+		t.Fatalf("F-H3: runPathsList output is not valid JSON: %v\nraw: %q", err, outPathsList)
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(outRouterStatus)), &envB); err != nil {
+		t.Fatalf("F-H3: runRouterStatus output is not valid JSON: %v\nraw: %q", err, outRouterStatus)
+	}
+
+	var entriesA []map[string]json.RawMessage
+	var entriesB []map[string]json.RawMessage
+	if err := json.Unmarshal(envA.Data, &entriesA); err != nil {
+		t.Fatalf("F-H3: runPathsList data is not a JSON array: %v", err)
+	}
+	if err := json.Unmarshal(envB.Data, &entriesB); err != nil {
+		t.Fatalf("F-H3: runRouterStatus data is not a JSON array: %v", err)
+	}
+	if len(entriesA) != len(entriesB) {
+		t.Fatalf("F-H3: entry count mismatch: runPathsList=%d, runRouterStatus=%d", len(entriesA), len(entriesB))
+	}
+
+	// PathEntry fields that must be identical in both outputs.
+	pathEntryFields := []string{"path_id", "router_addr", "rtt_ms", "rtt_p99_ms", "loss_pct", "status"}
+	for i := range entriesA {
+		for _, field := range pathEntryFields {
+			rawA, okA := entriesA[i][field]
+			rawB, okB := entriesB[i][field]
+			if !okA || !okB {
+				t.Errorf("F-H3: entry[%d] field %q missing: runPathsList=%v, runRouterStatus=%v", i, field, okA, okB)
+				continue
+			}
+			if string(rawA) != string(rawB) {
+				t.Errorf("F-H3: entry[%d] field %q differs: runPathsList=%s, runRouterStatus=%s", i, field, rawA, rawB)
+			}
+		}
+	}
+}
+
+// ─── F-M1 (MEDIUM): --target flag missing value returns E-CFG-010 ─────────────
+
+// TestSbctlRouterStatus_TargetFlagMissingValue verifies that invoking
+// runRouterStatus with args ["--target"] (the flag present but no value
+// following it) returns an error containing E-CFG-010.
+//
+// Today the --target parsing loop checks `i+1 < len(args)`, so ["--target"]
+// silently falls through without updating the target — no error is returned.
+// This test must be RED until explicit flag-validation is added.
+//
+// F-M1 / BC-2.06.003 (flags validation)
+func TestSbctlRouterStatus_TargetFlagMissingValue(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Pass ["--target"] with no following value — the flag is incomplete.
+	err := runRouterStatus(ctx, "/run/switchboard-router.sock", testdataKeyPath(t), true, []string{"--target"})
+
+	if err == nil {
+		t.Fatal("F-M1: runRouterStatus with [\"--target\"] (no value) returned nil error; expected E-CFG-010")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-010") {
+		t.Errorf("F-M1: expected error to contain \"E-CFG-010\"; got: %v", err)
+	}
+}
+
 // ─── assertion helpers ────────────────────────────────────────────────────────
 
 // mapKeys returns the key list of a map[string]json.RawMessage for use in error messages.

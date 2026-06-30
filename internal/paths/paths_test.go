@@ -1295,6 +1295,64 @@ func TestBC_2_06_003_P99HistogramAccuracy(t *testing.T) {
 			maxBucketW:  25.0,
 			wantP99High: 225.0,
 		},
+		{
+			// F-M2 (d): p99 in coarse [200,300) bucket (bucket index 8, width=100ms).
+			// The histogram changes bucket width here: [175,200) is width 25ms but
+			// [200,300) is width 100ms. A sample at 250ms falls in [200,300).
+			// true p99 ≈ 250ms; bucket upper edge = 300ms; bound = 250 + 100 = 350ms.
+			// ARCH-03 v1.6 §p99 RTT Accumulator: p99 ≤ true_p99 + bucket_width.
+			//
+			// This test is RED until the histogram returns the upper edge of the
+			// [200,300) bucket (300ms) — the accumulator must NOT conflate this
+			// coarse bucket with the fine 25ms buckets above it.
+			//
+			// F-M2 / ARCH-03 v1.6 §p99 RTT Accumulator (coarse bucket boundary)
+			name: "p99_in_200_300ms_coarse_bucket",
+			// 10 samples at 10ms (bucket [0,25)), 5 samples at 250ms (bucket [200,300))
+			samples: func() []float64 {
+				s := make([]float64, 15)
+				for i := 0; i < 10; i++ {
+					s[i] = 10.0
+				}
+				for i := 10; i < 15; i++ {
+					s[i] = 250.0
+				}
+				return s
+			}(),
+			// true p99 ≈ 250ms in bucket [200,300); bucket width = 100ms
+			// upper bound = 250 + 100 = 350ms; histogram returns bucket edge = 300ms
+			maxBucketW:  100.0,
+			wantP99High: 350.0,
+		},
+		{
+			// F-M2 (e): p99 in unbounded bucket (≥2000ms, bucket index 15, sentinel edge = 1e18).
+			// Any RTT ≥ 2000ms falls into the last bucket whose upper edge is the
+			// infinity sentinel 1e18. The histogram p99() returns 1e18 for this bucket.
+			// The bound check here is: P99RTTMs > 0 (not pending) and P99RTTMs >= 2000
+			// (correctly identified the unbounded bucket). wantP99High is set to 1e18
+			// (the sentinel), which is the tightest meaningful bound.
+			//
+			// This test is RED until the histogram correctly returns the sentinel edge
+			// for samples falling in the unbounded last bucket.
+			//
+			// F-M2 / ARCH-03 v1.6 §p99 RTT Accumulator (unbounded bucket)
+			name: "p99_in_unbounded_bucket_ge_2000ms",
+			// 10 samples at 10ms (bucket [0,25)), 5 samples at 2500ms (bucket [2000,∞))
+			samples: func() []float64 {
+				s := make([]float64, 15)
+				for i := 0; i < 10; i++ {
+					s[i] = 10.0
+				}
+				for i := 10; i < 15; i++ {
+					s[i] = 2500.0
+				}
+				return s
+			}(),
+			// true p99 ≈ 2500ms in bucket [2000,∞); sentinel upper edge = 1e18
+			// wantP99High = 1e18 (the sentinel value returned by p99())
+			maxBucketW:  1e18,
+			wantP99High: 1e18,
+		},
 	}
 
 	for _, tc := range cases {
