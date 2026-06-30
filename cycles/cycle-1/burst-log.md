@@ -390,3 +390,34 @@ Both S-5.01 and S-6.02 satisfy BC-5.39.001 as of 2026-06-29. Both worktrees are 
 
 **Remaining Wave 5:** S-5.02, S-6.06, S-W5.02 (15 pts). Next: deliver S-5.02 then S-6.06, then S-W5.02 after all dependencies merged. Wave 5 adversarial review follows all merges.
 
+---
+
+## S-6.06 Pass-15 BLOCK + Fix-Burst (2026-06-30)
+
+**Agents dispatched:** adversary (×3 lenses, fresh context), state-manager (recording)
+**Spec commit:** fad33ec on factory-artifacts
+**Impl commit:** 6528f02 on feat/S-6.06-daemon-admin-handlers
+
+### Pass-15 Lens Results
+
+| Lens | Focus | Verdict | Findings |
+|------|-------|---------|----------|
+| 1 | Implementation correctness | BLOCK | F-P15L1-001 MED (default-arm double-stamp) + F-P15L1-002 MED (EC-007 unconditional vs conditional) + F-P15L1-003 LOW (comment phrasing) |
+| 2 | Spec drift | BLOCK | F-P15L2-001 MED (story line citation 257-262 stale→275-280) + F-P15L2-002 LOW (dup of L1-001) |
+| 3 | Sibling propagation + VP harness compilability | PASS | 0 findings — VP-064/065/066/075 compilable; EC-007 propagated; wave-gate scope correct |
+
+**Dup:** F-P15L1-001 and F-P15L2-002 are the same default-arm double-stamp defect seen from two review angles (high signal).
+
+**Overall: BLOCK** — lens-1 BLOCK, lens-2 BLOCK, lens-3 PASS. Clean-pass count: 0/3.
+
+### Fix-Burst Record
+
+| Layer | Commit | Changes |
+|-------|--------|---------|
+| Spec | fad33ec (factory-artifacts) | BC-2.05.004 v1.8→v1.9 (unconditional EC-007 narrative aligned to impl); S-6.06 story v1.13→v1.14 (line citations 257-262→275-280); BC-INDEX v1.4→v1.5; STORY-INDEX v3.3→v3.4 |
+| Impl | 6528f02 (feat/S-6.06-daemon-admin-handlers) | admin_handlers.go: default-arm prefix drop (removes E-RPC-011 double-stamp); comment rewrite for EC-007 conditional vs unconditional clarity; `just test` + `just test-race` both clean |
+
+### Outcome
+
+Fix-burst applied. Clean-pass count reset to 0/3. Pass-16 queued.
+
