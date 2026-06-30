@@ -77,6 +77,19 @@ func qualityFromPathEntry(entry PathEntry) string {
 	return band
 }
 
+// formatP99 converts a PathEntry.P99RTTMs value (float64 or any non-float64,
+// including nil) to its human-readable string for table output.
+//
+// When P99RTTMs is nil or any non-float64 value (e.g. the string "pending"),
+// formatP99 returns "pending" — the AC-004 sentinel per BC-2.06.003 EC-003.
+// When P99RTTMs is a float64 it returns the formatted number (e.g. "22.00").
+func formatP99(p99 any) string {
+	if f, ok := p99.(float64); ok {
+		return fmt.Sprintf("%.2f", f)
+	}
+	return "pending"
+}
+
 // formatPathsTable renders a slice of PathEntryWithQuality as a human-readable
 // tab-separated table to stdout.
 //
@@ -85,9 +98,8 @@ func formatPathsTable(entries []PathEntryWithQuality) {
 	fmt.Printf("%-20s %-22s %10s %10s %10s %-10s %-8s\n",
 		"PATH_ID", "ROUTER_ADDR", "RTT_MS", "P99_MS", "LOSS_PCT", "STATUS", "QUALITY")
 	for _, e := range entries {
-		p99 := fmt.Sprintf("%v", e.P99RTTMs)
 		fmt.Printf("%-20s %-22s %10.2f %10s %10.2f %-10s %-8s\n",
-			e.PathID, e.RouterAddr, e.RTTMs, p99, e.LossPct, e.Status, e.Quality)
+			e.PathID, e.RouterAddr, e.RTTMs, formatP99(e.P99RTTMs), e.LossPct, e.Status, e.Quality)
 	}
 }
 

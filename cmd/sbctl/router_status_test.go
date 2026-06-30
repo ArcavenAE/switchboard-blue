@@ -9,7 +9,7 @@
 //	TestSbctlPathsList_P99Pending_LessThan10Samples    → AC-004, BC-2.06.003 EC-003
 //	TestSbctlMetrics_JSONEnvelope                      → AC-006, BC-2.06.003 PC-4
 //	TestSbctlMetrics_DaemonUnreachable                 → AC-006, BC-2.06.003 PC-5, BC-2.07.003
-//	TestSbctlSessionsStatus_QualityFieldPresent        → AC-007, BC-2.06.001 PC-5
+//	TestFormatP99_NilAndNonFloat64RendersAsPending     → AC-004, BC-2.06.003 EC-003 F-M3
 //
 // Tests use a stub daemon (net.Listener on a temp unix socket) to avoid real
 // daemon dependencies. Each test spins up a minimal listener that responds with
@@ -479,6 +479,43 @@ func TestSbctlMetrics_DaemonUnreachable(t *testing.T) {
 	// and RPC failure (E-RPC-001), and causes main() to exit with code 1.
 	if !strings.Contains(err.Error(), "E-NET-001") {
 		t.Errorf("AC-006 / BC-2.06.003 PC-5 / BC-2.07.003 PC-1: expected error to contain \"E-NET-001\"; got: %v", err)
+	}
+}
+
+// ─── F-M3 / F-H5: formatP99 renders "pending" for nil/non-float64 p99 ────────
+
+// TestFormatP99_NilAndNonFloat64RendersAsPending verifies that formatP99
+// renders the literal string "pending" for all non-float64 p99 values,
+// including nil, the string "pending", and other unexpected types.
+// A float64 value must be formatted as a decimal number.
+//
+// F-H5 / AC-004 / BC-2.06.003 EC-003 F-M3: formatPathsTable must emit
+// "pending" when rtt_p99_ms is absent or non-float64 — not Go's "<nil>".
+func TestFormatP99_NilAndNonFloat64RendersAsPending(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		p99  any
+		want string
+	}{
+		{name: "nil_value", p99: nil, want: "pending"},
+		{name: "string_pending", p99: "pending", want: "pending"},
+		{name: "string_arbitrary", p99: "unknown", want: "pending"},
+		{name: "float64_22ms", p99: 22.0, want: "22.00"},
+		{name: "float64_zero", p99: 0.0, want: "0.00"},
+		{name: "float64_1500ms", p99: 1500.5, want: "1500.50"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := formatP99(tc.p99)
+			if got != tc.want {
+				t.Errorf("formatP99(%v) = %q, want %q", tc.p99, got, tc.want)
+			}
+		})
 	}
 }
 
