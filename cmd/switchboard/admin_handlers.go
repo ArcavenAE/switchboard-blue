@@ -395,6 +395,8 @@ func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string)
 		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm=%s to proceed: %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
+	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
+		return fmt.Errorf("E-ADM-021: bootstrap-key-expire-forbidden: cannot expire the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer

@@ -61,6 +61,11 @@ var ErrRoleMismatch = admission.ErrRoleMismatch
 // the SVTN and must never be removed (E-ADM-020; bootstrap revocability invariant).
 var ErrBootstrapKeyRevokeForbidden = errors.New("bootstrap control key cannot be revoked")
 
+// ErrBootstrapKeyExpireForbidden is returned when ExpireKey is called against the
+// SVTN's permanent trust anchor (bootstrap key). Mirrors ErrBootstrapKeyRevokeForbidden
+// for symmetric management-lockout prevention per BC-2.05.004 EC-007 v1.10.
+var ErrBootstrapKeyExpireForbidden = errors.New("bootstrap key cannot be expired")
+
 // SVTN is a record of a single Software-Defined Virtual Topology Network
 // created and owned by this control node.
 //
@@ -319,6 +324,15 @@ func (m *SVTNManager) ExpireKey(
 ) (KeyOpResult, error) {
 	if ttl <= 0 {
 		return KeyOpResult{}, ErrInvalidDuration
+	}
+
+	// Guard: never allow the bootstrap control key to be expired.
+	// The bootstrap key is the permanent trust anchor for the SVTN — setting a
+	// TTL on it would eventually lock out all control authority (BC-2.05.004
+	// EC-007 v1.10). Constant-time comparison prevents timing oracle (Inv-5).
+	// Mirrors the RevokeKey guard; fires before SVTN existence lookup.
+	if subtle.ConstantTimeCompare([]byte(pubkey), []byte(m.controlPubKey)) == 1 {
+		return KeyOpResult{}, ErrBootstrapKeyExpireForbidden
 	}
 
 	m.mu.RLock()
