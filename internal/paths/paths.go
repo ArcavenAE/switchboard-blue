@@ -214,9 +214,10 @@ func (t *PathTracker) IsDegraded() bool {
 
 // rttHistogramBuckets defines the right edge (exclusive) of each bucket in milliseconds.
 // 16 buckets covering 0–2000 ms (ARCH-03 v1.6 §p99 RTT Accumulator).
-// The last bucket is ∞ (any RTT beyond 2000 ms falls here).
+// Canonical layout: buckets 0–3 are 25ms wide; buckets 4–5 are 50ms wide;
+// coarser buckets above 200ms; last bucket is ∞.
 var rttHistogramBuckets = [16]float64{
-	25, 50, 75, 100, 125, 150, 175, 200, 300, 400, 500, 700, 1000, 1400, 2000, 1e18,
+	25, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000, 1250, 1500, 1750, 2000, 1e18,
 }
 
 // rttHistogram is a fixed-bucket latency histogram for per-path RTT samples.

@@ -1260,9 +1260,9 @@ func TestBC_2_06_003_P99HistogramAccuracy(t *testing.T) {
 			wantP99High: 25.0,
 		},
 		{
-			// (b) samples distributed across 0–25ms and 100–125ms buckets
-			name: "samples_across_0_25ms_and_100_125ms",
-			// 10 samples at 10ms (bucket [0,25)), 5 samples at 110ms (bucket [100,125))
+			// (b) samples distributed across 0–25ms and 100–150ms buckets
+			name: "samples_across_0_25ms_and_100_150ms",
+			// 10 samples at 10ms (bucket [0,25)), 5 samples at 110ms (bucket [100,150))
 			samples: func() []float64 {
 				s := make([]float64, 15)
 				for i := 0; i < 10; i++ {
@@ -1273,12 +1273,13 @@ func TestBC_2_06_003_P99HistogramAccuracy(t *testing.T) {
 				}
 				return s
 			}(),
-			// true p99 of [10x10ms, 5x110ms] ≈ 110ms; bucket [100,125) width = 25ms
-			maxBucketW:  25.0,
-			wantP99High: 135.0,
+			// true p99 of [10x10ms, 5x110ms] ≈ 110ms; bucket [100,150) width = 50ms
+			// ARCH-03 v1.6: bucket 4 = [100,150), width=50ms; upper bound = 110+50 = 160ms
+			maxBucketW:  50.0,
+			wantP99High: 160.0,
 		},
 		{
-			// (c) distribution where the p99 falls in the 150–200ms bucket
+			// (c) distribution where the p99 falls in the [150,200ms) bucket
 			name: "p99_in_150_200ms_bucket",
 			// 12 samples at 15ms, 3 samples at 180ms
 			samples: func() []float64 {
@@ -1291,9 +1292,10 @@ func TestBC_2_06_003_P99HistogramAccuracy(t *testing.T) {
 				}
 				return s
 			}(),
-			// true p99 ≈ 180ms in bucket [175,200); width = 25ms; upper bound = 225ms
-			maxBucketW:  25.0,
-			wantP99High: 225.0,
+			// true p99 ≈ 180ms in bucket [150,200); width = 50ms
+			// ARCH-03 v1.6: bucket 5 = [150,200), width=50ms; upper bound = 180+50 = 230ms
+			maxBucketW:  50.0,
+			wantP99High: 230.0,
 		},
 		{
 			// F-M2 (d): p99 in coarse [200,300) bucket (bucket index 8, width=100ms).
