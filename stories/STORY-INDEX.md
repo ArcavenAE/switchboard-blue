@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.10"
+version: "3.11"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.11 | 2026-06-30 | Pass-25 lens-3 fix: S-6.06 bumped v1.20 → v1.21 — stale VP-076 v1.1 cite in EC-008 body (line 204) bumped to v1.4; stale ARCH-04 v1.10 cite in Architecture Compliance Rules HOLD-001 row (line 263) bumped to v1.13. Closes F-P25L3-001 + lens-1 Obs-2 (7th-recurrence sibling-sweep gap closeout). |
 | 3.10 | 2026-06-30 | Pass-23 lens-3 fix: S-6.06 bumped v1.19 → v1.20 — stale BC-2.05.004 EC-007 v1.10 cites in Error Code Map (line ~180) and Task 12 (line ~245) bumped to v1.12; closes recurring sibling-sweep gap from Pass-22 (4-pass recurrence). Closes F-P23L3-001 + F-P23L3-002. |
 | 3.9 | 2026-06-30 | Pass-22 sibling-fix propagation (F-P22L3-001, 4th-iteration narrowing sweep): S-6.06 bumped v1.18 → v1.19 — VP-076 body table row "unconditionally" narrowed to "for any well-formed request" with E-CFG-001 layering note; mirrors BC-2.05.004 EC-007 v1.12 + VP-076 v1.3. |
 | 3.8 | 2026-06-30 | Pass-21 sibling-fix propagation: S-6.06 bumped v1.17 → v1.18 — EC-008 narrowed from "unconditionally" to "for any well-formed request" per BC-2.05.004 EC-007 v1.12 (Pass-20 Option-B) and VP-076 v1.1; added E-CFG-001 input-validation layering note (F-P21L3-001, F-P21L2-001 HIGH dup-confirmed). v1.17 changelog row-attribution correction folded as parenthetical (fix was in ErrInvalidDuration row, not E-ADM-021 row). |
