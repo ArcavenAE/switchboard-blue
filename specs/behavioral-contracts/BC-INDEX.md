@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:01
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-06-30 | BC-2.05.004 bumped to v1.9 — EC-007 narrative tightened (bootstrap key unconditionally non-revocable, refs F-P15L1-002). |
 | 1.4 | 2026-06-28 | BC-2.07.004 (Daemon management server authenticates all connections via Ed25519 challenge-response) added; network-management count 3→4; total 44→45. |
 | 1.3 | 2026-06-28 | Wave-5 management plane BCs: BC-2.07.002 expanded with OpenSSH key authentication; BC-2.07.003 confirmed active (S-6.03 owner). network-management subsystem updated. |
 | 1.2 | 2026-06-28 | BC-2.09.003 updated to implemented (S-6.01 / PR #28); BC-2.04.007 updated to implemented (S-W3.04 / PR #17); BC-2.05.008 updated to implemented (S-3.04 / PR #9). |

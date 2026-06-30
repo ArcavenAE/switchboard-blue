@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -63,6 +63,12 @@ modified:
       S-6.06 Pass-6 finding F-P6L2-002: Canonical Test Vectors list-keys row
       annotated with wire RPC name (admin.key.list-keys) to match the annotation
       pattern used on other rows in the table.
+  - date: 2026-06-30
+    version: "1.9"
+    actor: product-owner
+    change: >
+      EC-007 narrative tightened: bootstrap key is unconditionally non-revocable
+      (refs F-P15L1-002, lens-1 finding pass-15).
   - date: 2026-06-30
     version: "1.8"
     actor: product-owner
@@ -146,7 +152,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | EC-004 | Key expires while session is active | Same behavior as revocation: session continues until next re-authentication challenge. |
 | EC-005 | Operator-key first-register into fresh SVTN (bootstrap path, F-P4L1-001) | No control key is registered in the target SVTN yet. The calling key is a member of `mgmt.OperatorKeySet`. `admin.key.register` MUST proceed (bootstrap grant). Subsequent register/revoke/expire operations require the caller to be registered as RoleControl in the SVTN admitted set. |
 | EC-006 | Revoked or expired key attempts an admin.key.* operation after successful mgmt authentication (F-P4L1-003) | The key authenticated at the mgmt connection layer but its `revoked=true` or `now >= expiry` in the SVTN admitted set. Handler authority resolution treats the key as unregistered; returns E-ADM-009. This applies to register, revoke, and expire (not list-keys, which is open to all admitted roles). |
-| EC-007 | Operator attempts to revoke the last bootstrap key in a SVTN where no non-bootstrap control key has been registered (bootstrap-revoke-forbidden, F-P3 bootstrap fail-closed) | `SVTNManager.RevokeKey` returns `ErrBootstrapKeyRevokeForbidden`. The `admin.key.revoke` handler maps this sentinel to E-ADM-020: `"bootstrap-key-revoke-forbidden: cannot revoke the last bootstrap key in SVTN <svtn_id>"`. This prevents an operator from accidentally locking out all management authority by removing the only key able to register further control keys. Source: F-P3 bootstrap fail-closed; distinct from E-ADM-018 (control-to-control revocation requires confirmation) and E-ADM-011 (hierarchy violation). Test: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden`; `TestE2E_AdminRevoke_BootstrapForbidden` (if present in e2e suite). |
+| EC-007 | Operator attempts to revoke the bootstrap key (permanent trust anchor). | `ErrBootstrapKeyRevokeForbidden` returned unconditionally — the bootstrap key cannot be revoked at any time, regardless of whether other control keys have been registered. Maps to E-ADM-020. Test: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden`. |
 
 ## Canonical Test Vectors
 

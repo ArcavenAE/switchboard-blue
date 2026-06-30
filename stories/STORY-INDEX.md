@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.3"
+version: "3.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.4 | 2026-06-30 | S-6.06 bumped to v1.14 — EC-008 wording aligned to BC-2.05.004 v1.9 unconditional phrasing; admin_handlers.go ttl-guard line citation corrected (refs F-P15L1-002, F-P15L2-001). |
 | 3.3 | 2026-06-30 | F-T4L3-001: VP coverage updated 67/67 → 75/75 (100%) — VP-068..VP-075 added Wave-5; VP-074 anchored to BC-2.06.001, VP-075 anchored to BC-2.05.004. |
 | 3.2 | 2026-06-30 | Pass-5 lens-3 F-P5-T-001: S-5.02 BC column corrected — drop BC-2.06.001 (no AC traces to it; AC-007 dropped v1.5; PC-5 deferred to S-7.03). BC column now `BC-2.06.003` only. |
 | 3.1 | 2026-06-30 | S-5.02 Pass-4 Ruling 1: mint S-W5.04 (5pts, P1, Wave 5 capacity permitting/else 6, draft) — daemon-side paths.list/router.metrics/router.status RPC handlers and VP-047 integration test deferred from S-5.02. Total stories 42→43; Wave-5 8→9 stories, 43→48 pts; Total points (waves 0–6) 187→192, (incl. maintenance) 197→202. Draft/unscheduled 8→9. E-phase 27→28. Add S-W5.04 serialization note and BC coverage note. BC-2.06.003 v1.5→v1.6: F-LO1 PC-1 wording aligned to ARCH-03 v1.6 ("fixed-bucket histogram, never reset" replaces "rolling sample buffer"). |
