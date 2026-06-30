@@ -94,13 +94,43 @@ time.Now()         // no
 
 **12. Never return internal pointers from a locked accessor**
 
-If a type owns state behind a mutex, its `Get*`/`List*` methods return
-value copies (deep enough — clone nested slices/maps/pointers). Mutation
-goes through methods on that owning type; those methods take the lock
-and mutate in place. A returned `*T` into concurrently-mutated state is
-a bug — the lock protects the map, not the values.
+If a type owns state behind a mutex, its `Get*`/`List*`/`Lookup*` methods
+return value copies (deep enough — clone nested slices/maps/pointers).
+Mutation goes through methods on that owning type; those methods take the
+lock and mutate in place. A returned `*T` into concurrently-mutated state
+is a bug — the lock protects the map, not the values.
+
+For single-item lookups that may not find a result, return `(T, bool)` —
+the idiomatic Go map-lookup pattern. Never return `*T` as a found/not-found
+signal from a locked accessor; the pointer return type falsely implies the
+caller may hold live state, and a nil-check is weaker than a bool-check at
+the call site.
 
 ```go
+// WRONG — returns pointer; nil used as "not found" sentinel; caller could
+// hold a stale pointer into internal state
+func (s *Store) Lookup(key string) *Session {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    sess, ok := s.sessions[key]
+    if !ok {
+        return nil
+    }
+    cp := *sess
+    return &cp // misleading: looks like live state, signals "may be mutated"
+}
+
+// RIGHT — value + present-flag; caller pattern is `sess, ok := ...; if !ok`
+func (s *Store) Lookup(key string) (Session, bool) {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    sess, ok := s.sessions[key]
+    if !ok {
+        return Session{}, false
+    }
+    return cloneSession(sess), true
+}
+
 // WRONG — caller holds a pointer into the store's live object,
 // mutates it after the lock is dropped, other callers see torn writes
 func (s *Store) ListSessions() []*Session {
@@ -135,6 +165,10 @@ func (s *Store) UpdateSession(key string, fn func(*Session) error) error {
     return fn(sess)
 }
 ```
+
+Note: if a struct contains a slice field (e.g., `PublicKey []byte`), a
+value copy of the struct shares the slice's backing array. Deep-clone
+such fields explicitly: `cp.PublicKey = append([]byte(nil), src.PublicKey...)`.
 
 The Kubernetes lister/informer pattern is the canonical example: cached
 reads give immutable snapshots, writes go through the API. `go test -race`
