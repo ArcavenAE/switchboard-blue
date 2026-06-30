@@ -716,7 +716,7 @@ func TestMapAdminError_ErrorWrapping(t *testing.T) {
 		// ErrInvalidDuration is intentionally absent: mapAdminError does not handle it
 		// because the handler-side ttl guards already produce E-CFG-001 with proper
 		// detail before SVTNManager.ExpireKey is called. See mapAdminError doc.
-		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", "k", "", "E-ADM-020", "cannot revoke the last bootstrap key in SVTN s"},
+		{"ErrBootstrapKeyRevokeForbidden", svtnmgmt.ErrBootstrapKeyRevokeForbidden, "s", "k", "", "E-ADM-020", "cannot revoke the bootstrap key in SVTN s (permanent trust anchor)"},
 	}
 	for _, tc := range cases {
 		tc := tc
