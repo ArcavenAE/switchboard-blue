@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.9"
+version: "2.10"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -99,6 +99,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-073 | Console-Mode TCP Bound to Non-Loopback Address Aborts Startup with E-CFG-008 (error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message; Ruling L) | BC-2.07.004 | cmd/switchboard | integration | P0 | draft | VP-073.md |
 | VP-074 | QualityIndicator threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct | BC-2.06.001 | internal/metrics | unit | P1 | draft | VP-074.md |
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-075.md |
+| VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) unconditionally; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-076.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | S-BL.BENCH | deferred | (pending) |
 
 > VP-TBD-ACC is bench-deferred per ARCH-03 v1.6 (F-4, S-5.02 lens-3). The p99 estimate is computed from a rolling sample buffer; exact accuracy bound against a true p99 requires a sustained load benchmark that belongs in a dedicated bench story (S-BL.BENCH). This VP will receive a permanent ID when S-BL.BENCH is scheduled. It is registered here as a placeholder to close the F-4 process gap — the property is known and intentionally deferred, not forgotten. Implementing story: S-BL.BENCH (unscheduled).
@@ -107,9 +108,10 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit | Unit |
 |-----------|---------|------|-------------|-----|-----------|------------|------|
-| 75 | 34 | 4 | 21 | 10 | 2 | 2 | 2 |
+| 76 | 34 | 4 | 22 | 10 | 2 | 2 | 2 |
 
-> Arithmetic check: 34 + 4 + 21 + 10 + 2 + 2 + 2 = 75. Consistent.
+> Arithmetic check: 34 + 4 + 22 + 10 + 2 + 2 + 2 = 76. Consistent.
+> VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.10 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001 lens-1 pass-18). Integration count increased from 21 to 22. Total 75→76. P0 count 53→54.
 > VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 (admin.key.* handler-layer caller-role enforcement; S-6.06 lens-3 F-005 close). Integration count increased from 20 to 21. F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard — BuildAdminHandlers and its handler closures reside in cmd/switchboard/admin_handlers.go.
 > VP-068 (unit) — pure constructor panic-guard (no I/O). VP-074 (unit) — QualityIndicator threshold classification; 14 table-driven cases covering all 6 nominal regions + 8 boundary values.
 > Integration count increased from 15 to 20: VP-069, VP-070, VP-071, VP-072, VP-073 added.
@@ -127,21 +129,22 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Phase | Count |
 |-------|-------|
-| P0 | 53 |
+| P0 | 54 |
 | P1 | 18 |
 | P2 | 4 |
-| **Total** | **75** |
+| **Total** | **76** |
 
-> Phase recounted 2026-06-30: VP-075 (P0, integration) added for BC-2.05.004 handler-layer caller-role enforcement. P0 = 53. P1 = 18. P2 = 4. Total = 75.
+> Phase recounted 2026-06-30: VP-076 (P0, integration) added for BC-2.05.004 EC-007 v1.10 (bootstrap-key non-revocable AND non-expirable invariant). P0 = 54. P1 = 18. P2 = 4. Total = 76.
 
 ## BC Coverage Check
 
-45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-075 added 2026-06-30 for BC-2.05.004 (handler-layer caller-role enforcement; S-6.06 lens-3 F-005). VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation). Zero coverage gaps.
+45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-076 added 2026-06-30 for BC-2.05.004 EC-007 v1.10 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001). VP-075 added 2026-06-30 for BC-2.05.004 (handler-layer caller-role enforcement; S-6.06 lens-3 F-005). VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation). Zero coverage gaps.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.10 | 2026-06-30 | VP-076 minted (integration, P0, cmd/switchboard) — bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention per BC-2.05.004 EC-007 v1.10 (E-ADM-021 symmetric counterpart to E-ADM-020); refs F-P18L1-001 lens-1 pass-18. Total: 75→76. Integration: 21→22. P0: 53→54. |
 | 2.9 | 2026-06-30 | Pass-12 lens-3 (F-P12L3-001/002/003): VP-065 v1.3 (add missing mgmt import, drop dead encoding/json); VP-066 v1.3 (add missing "io" import for fuzz harness io.Copy/io.Discard/io.LimitReader); VP-064 v1.3 (Handler.Fn first param interface{}→context.Context, return (interface{},error)→(any,error)). Imports + Handler.Fn signature alignment — closes Pass-11 partial-fix gap on harness compilability. No VP count changes. |
 | 2.8 | 2026-06-30 | Pass-11 backfill (F-P11L3-003/004): VP-075 v1.3 (F-P8L2-004 Source Contract correction), v1.4 (F-P9L2-001 NewServer 4→5 arg + O-P9L2-002 SVTN registration wiring), v1.5 (F-P10L2-001 net.Pipe→net.Listen + F-P10L2-003 helper citation), v1.6 (F-P11L2-003 consolePub/accessPub redundancy); VP-064/065/066 v1.1 (F-P10L3-001 NewServer arg count); VP-064/065/066 v1.2 (F-P11L3-001 net.Pipe→net.Listen sibling-fix propagation from VP-075 v1.5). No VP count changes. |
 | 2.7 | 2026-06-30 | PO Ruling 3 (S-5.02 Pass-4 scope ruling, decisions/S-5.02-pass4-scope-ruling.md): VP-047 `implementing_story` transferred S-5.02 → S-W5.04 per `vp_index_is_vp_catalog_source_of_truth` policy. No count changes; VP property/invariant content unchanged. VP-047.md bumped to v1.2. |

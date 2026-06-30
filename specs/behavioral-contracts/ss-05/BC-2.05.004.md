@@ -2,10 +2,10 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: product-owner
-timestamp: 2026-06-30T00:00:00
+timestamp: 2026-06-30T00:00:01
 phase: 1a
 bc_id: BC-2.05.004
 subsystem: admission-security
@@ -63,6 +63,15 @@ modified:
       S-6.06 Pass-6 finding F-P6L2-002: Canonical Test Vectors list-keys row
       annotated with wire RPC name (admin.key.list-keys) to match the annotation
       pattern used on other rows in the table.
+  - date: 2026-06-30
+    version: "1.10"
+    actor: product-owner
+    change: >
+      EC-007 extended to cover expire symmetrically; E-ADM-021 minted
+      (refs F-P18L1-001 lens-1 pass-18). EC-007 Description broadened from
+      "revoke" to "revoke OR expire". EC-007 Expected Behavior updated to cite
+      both ErrBootstrapKeyRevokeForbidden (E-ADM-020) and ErrBootstrapKeyExpireForbidden
+      (E-ADM-021). Protection invariant is now symmetric across revoke and expire.
   - date: 2026-06-30
     version: "1.9"
     actor: product-owner
@@ -152,7 +161,7 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | EC-004 | Key expires while session is active | Same behavior as revocation: session continues until next re-authentication challenge. |
 | EC-005 | Operator-key first-register into fresh SVTN (bootstrap path, F-P4L1-001) | No control key is registered in the target SVTN yet. The calling key is a member of `mgmt.OperatorKeySet`. `admin.key.register` MUST proceed (bootstrap grant). Subsequent register/revoke/expire operations require the caller to be registered as RoleControl in the SVTN admitted set. |
 | EC-006 | Revoked or expired key attempts an admin.key.* operation after successful mgmt authentication (F-P4L1-003) | The key authenticated at the mgmt connection layer but its `revoked=true` or `now >= expiry` in the SVTN admitted set. Handler authority resolution treats the key as unregistered; returns E-ADM-009. This applies to register, revoke, and expire (not list-keys, which is open to all admitted roles). |
-| EC-007 | Operator attempts to revoke the bootstrap key (permanent trust anchor). | `ErrBootstrapKeyRevokeForbidden` returned unconditionally — the bootstrap key cannot be revoked at any time, regardless of whether other control keys have been registered. Maps to E-ADM-020. Test: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden`. |
+| EC-007 | Operator attempts to revoke OR expire the bootstrap key (permanent trust anchor). | Both revoke and expire return their respective sentinel unconditionally — the bootstrap key cannot be revoked or expired at any time, regardless of whether other control keys have been registered. `ErrBootstrapKeyRevokeForbidden` → E-ADM-020 for revoke; `ErrBootstrapKeyExpireForbidden` → E-ADM-021 for expire. Tests: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden` and `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyExpireForbidden`. |
 
 ## Canonical Test Vectors
 

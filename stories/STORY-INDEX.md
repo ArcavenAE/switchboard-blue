@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.4"
+version: "3.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -32,7 +32,7 @@ inputDocuments:
 | Backlog | 4 (S-BL.OA, S-BL.ARQ-TX, S-BL.LOOKUP, S-BL.NI) |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
-| VP coverage | 75/75 (100%) — VP-068..VP-075 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075 anchored to BC-2.05.004) |
+| VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
 
 ## Master Story Index
 
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.6 | 2026-06-30 | F-P18L1-001 (MED) + lens-3 LOW version-drift fix: S-6.06 bumped to v1.16 — EC-008 + Error Code Map extended to cover bootstrap-expire-forbidden (E-ADM-021); VP-076 minted; VP coverage updated 75/75 → 76/76. Frontmatter version drift corrected (was "3.4", body showed v3.5; now "3.6" aligned with body changelog). |
 | 3.5 | 2026-06-30 | S-6.06 bumped to v1.15 — Error Code Map ErrBootstrapKeyRevokeForbidden canonical message aligned to error-taxonomy.md v3.7 unconditional phrasing (refs F-P17L2-001, F-P17L2-002, lens-2 pass-17). |
 | 3.4 | 2026-06-30 | S-6.06 bumped to v1.14 — EC-008 wording aligned to BC-2.05.004 v1.9 unconditional phrasing; admin_handlers.go ttl-guard line citation corrected (refs F-P15L1-002, F-P15L2-001). |
 | 3.3 | 2026-06-30 | F-T4L3-001: VP coverage updated 67/67 → 75/75 (100%) — VP-068..VP-075 added Wave-5; VP-074 anchored to BC-2.06.001, VP-075 anchored to BC-2.05.004. |
