@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.1"
+version: "3.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -32,7 +32,7 @@ inputDocuments:
 | Backlog | 4 (S-BL.OA, S-BL.ARQ-TX, S-BL.LOOKUP, S-BL.NI) |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
-| VP coverage | 67/67 (100%) — VP-064, VP-065, VP-066, VP-067 added Wave-5 |
+| VP coverage | 75/75 (100%) — VP-068..VP-075 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075 anchored to BC-2.05.004) |
 
 ## Master Story Index
 
@@ -56,7 +56,7 @@ inputDocuments:
 | S-4.03 | Downstream ARQ with ACK/SACK and TLPKTDROP | E-4 | 4 | BC-2.02.005, BC-2.02.006 | multipath-forwarding | 8 | P0 | E | completed (PR #26, merge 8d9744f) |
 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | E-4 | 4 | BC-2.02.008, BC-2.02.009 (router wiring) | multipath-forwarding | 5 | P0 | E | completed (PR #27, merge 42c51e2) |
 | S-5.01 | Green/yellow/red quality indicator with hysteresis | E-5 | 5 | BC-2.06.001, BC-2.06.002 | quality-observability | 5 | P1 | E | pending |
-| S-5.02 | sbctl paths list / router metrics (canonical) + router status alias + p99 | E-5 | 5 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | pending |
+| S-5.02 | sbctl paths list / router metrics (canonical) + router status alias + p99 | E-5 | 5 | BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | pending |
 | S-5.03 | flag paths as degraded when EWMA RTT > 200ms | E-5 | 5 | BC-2.02.003 | multipath-forwarding | 2 | P1 | E | pending |
 | S-6.01 | Config parsing and validation | E-6 | 4 | BC-2.09.003 | deployment-operations | 3 | P0 | E | completed (PR #28, merge abeba27) |
 | S-6.02 | SVTN lifecycle and key management via sbctl admin | E-6 | 5 | BC-2.05.004, BC-2.07.001 | network-management, admission-security | 8 | P0 | E | pending |
@@ -161,6 +161,8 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.3 | 2026-06-30 | F-T4L3-001: VP coverage updated 67/67 → 75/75 (100%) — VP-068..VP-075 added Wave-5; VP-074 anchored to BC-2.06.001, VP-075 anchored to BC-2.05.004. |
+| 3.2 | 2026-06-30 | Pass-5 lens-3 F-P5-T-001: S-5.02 BC column corrected — drop BC-2.06.001 (no AC traces to it; AC-007 dropped v1.5; PC-5 deferred to S-7.03). BC column now `BC-2.06.003` only. |
 | 3.1 | 2026-06-30 | S-5.02 Pass-4 Ruling 1: mint S-W5.04 (5pts, P1, Wave 5 capacity permitting/else 6, draft) — daemon-side paths.list/router.metrics/router.status RPC handlers and VP-047 integration test deferred from S-5.02. Total stories 42→43; Wave-5 8→9 stories, 43→48 pts; Total points (waves 0–6) 187→192, (incl. maintenance) 197→202. Draft/unscheduled 8→9. E-phase 27→28. Add S-W5.04 serialization note and BC coverage note. BC-2.06.003 v1.5→v1.6: F-LO1 PC-1 wording aligned to ARCH-03 v1.6 ("fixed-bucket histogram, never reset" replaces "rolling sample buffer"). |
 | 3.0 | 2026-06-30 | Pass-2 lens-3 F-T3-002 propagation: S-6.06 BC column corrected — BC-2.07.001 anchor dropped per S-6.06 v1.3 PO ruling (S-6.06 owns admin.key.* only; BC-2.07.001 Inv-3 is scoped to admin.svtn.* operations). BC column now `BC-2.05.004` only. |
 | 2.9 | 2026-06-30 | S-5.02 v1.4→v1.5: propagate Pass-3 PO rulings — drop AC-007 (tautological; sbctl sessions.list quality surfacing deferred to S-7.03 per Ruling 1); add AC-008 (pending-quality sentinel, BC-2.06.003 v1.5 PC-3 + EC-006); BC version pins v1.4→v1.5; §Scope Boundary added. |
