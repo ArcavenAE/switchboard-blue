@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -47,6 +48,22 @@ var ErrNotAdmitted = errors.New("frame from non-admitted source")
 // via errors.Is. Maps to E-ADM-013 per error-taxonomy.md.
 var ErrKeyNotRegistered = errors.New("admission: key not registered for (SVTN, node)")
 
+// ErrRoleMismatch is returned by RevokeKeyIfRoleMatches when the caller-supplied
+// expectedRole does not match the role stored in the registry (E-ADM-019).
+// This prevents the confirm gate from being bypassed by supplying a lower role
+// for a control key. The existing role at match-time is returned alongside this
+// error so callers can branch on the actual role found.
+var ErrRoleMismatch = errors.New("admission: role mismatch: stored role differs from expected role")
+
+// ErrControlRevocationRequiresConfirm is returned by RevokeKeyIfRoleMatches
+// when the stored key has RoleControl and confirmControlRevocation is false
+// (E-ADM-018). The check is performed inside the write lock — after the
+// role-match check passes but before revoked is set — so no revocation occurs
+// on this error path (ARCH-04 Addendum H2; ADR-004).
+var ErrControlRevocationRequiresConfirm = errors.New(
+	"control-to-control revocation requires explicit confirmation",
+)
+
 // KeyRole identifies the authorization role of an admitted key.
 type KeyRole uint8
 
@@ -58,6 +75,27 @@ const (
 	// RoleAccess grants session publishing and Tier 2 session authorization.
 	RoleAccess
 )
+
+// ErrUnknownKeyRole is returned by KeyRoleFromString when the supplied string
+// does not match any known role (E-CFG-001).
+var ErrUnknownKeyRole = errors.New("E-CFG-001: unknown key role")
+
+// KeyRoleFromString converts a canonical role string ("control", "console",
+// "access") to a KeyRole. Returns ErrUnknownKeyRole for any unrecognised value,
+// preventing callers from accidentally mapping unknowns to the RoleControl zero
+// value (SEC-001; PR #34 security review).
+func KeyRoleFromString(s string) (KeyRole, error) {
+	switch s {
+	case "control":
+		return RoleControl, nil
+	case "console":
+		return RoleConsole, nil
+	case "access":
+		return RoleAccess, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrUnknownKeyRole, s)
+	}
+}
 
 // nonceTTL is the maximum age of a used nonce per ARCH-04 §Nonce uniqueness.
 const nonceTTL = 60 * time.Second
@@ -196,6 +234,71 @@ func (s *AdmittedKeySet) RevokeKey(svtnID [16]byte, nodeAddr [8]byte) error {
 	return nil
 }
 
+// RevokeKeyIfRoleMatches atomically checks that the key's stored role matches
+// expectedRole, enforces the control-revocation confirm gate if needed, then
+// marks the key revoked — all under a single write lock critical section
+// (HOLD-001; ARCH-04 v1.10 Addendum H2).
+//
+// The confirm gate is evaluated INSIDE the write lock, after the role-match
+// check passes but BEFORE setting revoked=true. This means no revocation
+// occurs when ErrControlRevocationRequiresConfirm is returned (ARCH-04 H2
+// step ordering: atomic-FIRST, confirm-gate-SECOND, no intermediate state).
+//
+// This prevents the time-of-check/time-of-use race in the non-atomic
+// Lookup → cross-check → RevokeKey sequence: a concurrent RegisterKey with a
+// different role cannot slip between the check and the revoke.
+//
+// Returns:
+//   - (existingRole, nil)                              on success (key revoked)
+//   - (0, ErrKeyNotRegistered)                         if no (SVTN, node) tuple exists (E-ADM-013)
+//   - (existingRole, ErrRoleMismatch)                  if stored role != expectedRole (E-ADM-019)
+//   - (existingRole, ErrControlRevocationRequiresConfirm) if key is RoleControl and confirmControlRevocation=false (E-ADM-018)
+//
+// Traces to HOLD-001 hybrid approach; BC-2.05.004 precondition 1; ADR-004;
+// ARCH-04 Addendum H2 lines 548-563.
+func (s *AdmittedKeySet) RevokeKeyIfRoleMatches(
+	svtnID [16]byte,
+	pubkey ed25519.PublicKey,
+	expectedRole KeyRole,
+	confirmControlRevocation bool,
+) (existingRole KeyRole, err error) {
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	svtnMap, ok := s.keys[svtnID]
+	if !ok {
+		return 0, ErrKeyNotRegistered
+	}
+	entry, ok := svtnMap[nodeAddr]
+	if !ok {
+		return 0, ErrKeyNotRegistered
+	}
+
+	// Capture the role before any mutation so callers can inspect it on error.
+	existingRole = entry.Role
+
+	// Atomic cross-check: if stored role differs from expected, reject.
+	// This prevents a concurrent RegisterKey (LWW) from changing the role
+	// between the caller's check and this revocation.
+	if entry.Role != expectedRole {
+		return existingRole, ErrRoleMismatch
+	}
+
+	// Confirm gate (ARCH-04 H2 step ordering): evaluated AFTER role-match,
+	// BEFORE setting revoked. No revocation occurs on this error path —
+	// the key is unchanged if ErrControlRevocationRequiresConfirm is returned.
+	// Uses existingRole (== expectedRole at this point per the role-match check
+	// above) rather than a second read of entry.Role to make the intent clear.
+	if existingRole == RoleControl && !confirmControlRevocation {
+		return existingRole, ErrControlRevocationRequiresConfirm
+	}
+
+	entry.revoked = true
+	return existingRole, nil
+}
+
 // Lookup returns a copy of the AdmittedKey for (svtnID, nodeAddr), or nil if
 // not found. Returns a value copy — callers do not hold a pointer into internal
 // state (go.md rule 12; finding-032-store-sync-contract-leak).
@@ -220,6 +323,18 @@ func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) *AdmittedKey 
 	// the backing array. Callers must not alias live state (go.md rule 12; M-3).
 	cp.PublicKey = append(ed25519.PublicKey(nil), entry.PublicKey...)
 	return &cp
+}
+
+// LookupByPubkey looks up an admitted key by SVTN ID and Ed25519 public key,
+// deriving the node address internally. Returns nil if the key is not
+// registered or if svtnID does not exist.
+//
+// Convenience wrapper over Lookup for callers that hold the raw public key
+// rather than the derived node address (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
+// Thread-safety and deep-clone guarantees are inherited from Lookup.
+func (s *AdmittedKeySet) LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey) *AdmittedKey {
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+	return s.Lookup(svtnID, nodeAddr)
 }
 
 // IsAdmitted reports whether nodeAddr has completed the challenge-response

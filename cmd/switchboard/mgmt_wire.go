@@ -256,6 +256,11 @@ func startMgmtServer(
 	mode string,
 	daemonPrivKey ed25519.PrivateKey,
 	handlers []mgmt.Handler, //nolint:unparam // always nil today; future router/console/control mode stories will pass mode-specific handler slices
+	// TODO(CR-002): when admin.key.revoke handler is wired, parse args.Role
+	// into admission.KeyRole and pass as currentRole to SVTNManager.RevokeKey.
+	// The role field is already present in the wire format (adminKeyRevokeArgs.Role)
+	// and validated by runAdminKeyRevoke. Daemon-side: unmarshal adminKeyRevokeArgs,
+	// switch on Role to get admission.KeyRole, call mgr.RevokeKey(svtn, pubkey, role, confirm).
 ) (*mgmt.Server, error) {
 	// Parse authorized operator keys from config (PEM → ed25519.PublicKey).
 	// Empty list → bootstrap mode (daemon key is the sole authorized key).

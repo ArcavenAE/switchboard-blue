@@ -626,6 +626,129 @@ func TestRevokeKey_ReturnsErrKeyNotRegistered(t *testing.T) {
 	}
 }
 
+// ── TestAdmittedKeySet_LookupByPubkey ────────────────────────────────────────
+
+// TestAdmittedKeySet_LookupByPubkey verifies that LookupByPubkey returns the
+// registered AdmittedKey for a known key, nil for an unregistered key, and nil
+// when the wrong svtnID is supplied (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
+func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
+	t.Parallel()
+
+	svtnA := mustSVTN(0xA0)
+	svtnB := mustSVTN(0xB0)
+
+	cases := []struct {
+		name      string
+		setupSVTN [16]byte
+		lookupID  [16]byte
+		register  bool // whether to register the key before lookup
+		wantNil   bool
+	}{
+		{
+			name:      "registered_key_returns_match",
+			setupSVTN: svtnA,
+			lookupID:  svtnA,
+			register:  true,
+			wantNil:   false,
+		},
+		{
+			name:      "unregistered_key_returns_nil",
+			setupSVTN: svtnA,
+			lookupID:  svtnA,
+			register:  false,
+			wantNil:   true,
+		},
+		{
+			name:      "wrong_svtn_returns_nil",
+			setupSVTN: svtnA,
+			lookupID:  svtnB,
+			register:  true,
+			wantNil:   true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ks := admission.NewAdmittedKeySet()
+			pub, _, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatalf("GenerateKey: %v", err)
+			}
+
+			if tc.register {
+				ks.RegisterKey(tc.setupSVTN, pub, admission.RoleControl)
+			}
+
+			got := ks.LookupByPubkey(tc.lookupID, pub)
+			if tc.wantNil && got != nil {
+				t.Errorf("LookupByPubkey: want nil; got non-nil %+v", got)
+			}
+			if !tc.wantNil {
+				if got == nil {
+					t.Fatal("LookupByPubkey: want non-nil AdmittedKey; got nil")
+				}
+				// Verify the returned copy's public key matches.
+				if !bytes.Equal(got.PublicKey, pub) {
+					t.Errorf("LookupByPubkey: PublicKey mismatch: got %x; want %x", got.PublicKey, pub)
+				}
+			}
+		})
+	}
+}
+
+// ── SEC-001: TestKeyRoleFromString ───────────────────────────────────────────
+
+// TestKeyRoleFromString verifies KeyRoleFromString for all three valid roles
+// and at least two invalid inputs (SEC-001; PR #34 security review).
+// Guards against callers accidentally mapping unknowns to the RoleControl
+// zero value when wiring admin RPC handlers in S-6.06.
+func TestKeyRoleFromString(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input   string
+		want    admission.KeyRole
+		wantErr bool
+	}{
+		{input: "control", want: admission.RoleControl, wantErr: false},
+		{input: "console", want: admission.RoleConsole, wantErr: false},
+		{input: "access", want: admission.RoleAccess, wantErr: false},
+		{input: "", want: 0, wantErr: true},
+		{input: "unknown", want: 0, wantErr: true},
+		{input: "CONTROL", want: 0, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			got, err := admission.KeyRoleFromString(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("KeyRoleFromString(%q): want error, got nil", tc.input)
+					return
+				}
+				if !errors.Is(err, admission.ErrUnknownKeyRole) {
+					t.Errorf("KeyRoleFromString(%q): want errors.Is(err, ErrUnknownKeyRole), got %v", tc.input, err)
+				}
+				// Zero value must be returned on error — never RoleControl.
+				if got != 0 {
+					t.Errorf("KeyRoleFromString(%q): want zero KeyRole on error, got %v", tc.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("KeyRoleFromString(%q): want nil error, got %v", tc.input, err)
+				return
+			}
+			if got != tc.want {
+				t.Errorf("KeyRoleFromString(%q): want %v, got %v", tc.input, tc.want, got)
+			}
+		})
+	}
+}
+
 // ── Fuzz harness: VP-008 — admission rejects unregistered keys ──────────────
 
 // FuzzAdmitNode_UnregisteredKey is a fuzz target that verifies AdmitNode

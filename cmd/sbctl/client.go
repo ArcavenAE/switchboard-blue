@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -35,6 +36,11 @@ const handshakeTimeout = 10 * time.Second
 // to a small value (e.g. 100ms) and restore it via t.Cleanup so the no-deadline
 // fallback path can be exercised without waiting 30 seconds.
 var rpcResponseFallbackTimeout = 30 * time.Second
+
+// reqIDCounter is a monotonically-increasing request ID counter (CR-012).
+// Using an atomic counter rather than time.Now().UnixNano() ensures uniqueness
+// even when two concurrent dispatches fire within the same nanosecond.
+var reqIDCounter atomic.Uint64
 
 // challengeMsg is the CHALLENGE message received from the daemon (ADR-012 step 2).
 type challengeMsg struct {
@@ -193,7 +199,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 	// Step 1: derive read deadline from context (Ruling 2, CWE-400 slowloris).
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		deadline = time.Now().UTC().Add(handshakeTimeout)
+		deadline = time.Now().Add(handshakeTimeout)
 	}
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return fmt.Errorf("set read deadline: %w", err)
@@ -266,7 +272,7 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 func dispatch(ctx context.Context, conn net.Conn, command string, args any) (json.RawMessage, error) {
 	req := rpcRequestMsg{
 		Type:    "request",
-		ID:      fmt.Sprintf("%x", time.Now().UnixNano()),
+		ID:      fmt.Sprintf("%d", reqIDCounter.Add(1)),
 		Command: command,
 		Args:    args,
 	}
@@ -278,7 +284,7 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 	// Falls back to rpcResponseFallbackTimeout when ctx carries no deadline (CWE-400 slowloris).
 	responseDeadline, ok := ctx.Deadline()
 	if !ok {
-		responseDeadline = time.Now().UTC().Add(rpcResponseFallbackTimeout)
+		responseDeadline = time.Now().Add(rpcResponseFallbackTimeout)
 	}
 	if err := conn.SetReadDeadline(responseDeadline); err != nil {
 		return nil, fmt.Errorf("rpc failed: %s: set read deadline: %w", command, err)
