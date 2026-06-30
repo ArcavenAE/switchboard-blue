@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.7"
+version: "2.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -142,6 +142,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.8 | 2026-06-30 | Pass-11 backfill (F-P11L3-003/004): VP-075 v1.3 (F-P8L2-004 Source Contract correction), v1.4 (F-P9L2-001 NewServer 4→5 arg + O-P9L2-002 SVTN registration wiring), v1.5 (F-P10L2-001 net.Pipe→net.Listen + F-P10L2-003 helper citation), v1.6 (F-P11L2-003 consolePub/accessPub redundancy); VP-064/065/066 v1.1 (F-P10L3-001 NewServer arg count); VP-064/065/066 v1.2 (F-P11L3-001 net.Pipe→net.Listen sibling-fix propagation from VP-075 v1.5). No VP count changes. |
 | 2.7 | 2026-06-30 | PO Ruling 3 (S-5.02 Pass-4 scope ruling, decisions/S-5.02-pass4-scope-ruling.md): VP-047 `implementing_story` transferred S-5.02 → S-W5.04 per `vp_index_is_vp_catalog_source_of_truth` policy. No count changes; VP property/invariant content unchanged. VP-047.md bumped to v1.2. |
 | 2.6 | 2026-06-30 | S-5.02 Pass-3 F-T3-003: VP-062 bumped to v1.1 — pending-quality sentinel coverage added (BC-2.06.003 v1.5 EC-006). Fuzz corpus seed 7 (`rttP99Valid=false`, assert `quality=="pending"`); PropTest case `"pending p99 path"` added; Property 5 added. No VP count change (existing VP, behavioral extension only). |
 | 2.5 | 2026-06-30 | S-6.06 lens-3 F-005 close: VP-075 (integration, P0) minted — admin.key.* handler-layer caller-role enforcement; server-side role lookup; E-ADM-009 rejection for non-control callers; connection kept open. source_bc: BC-2.05.004 (DI-001 / PC-1 admission-control authority). Implementing story: S-6.06. Counts: Total=75, Integration=21, P0=53. F-P7L3-001 (2026-06-30): module col corrected internal/mgmt → cmd/switchboard; per-module rollup: cmd/switchboard +1 (3→4 VPs), internal/mgmt -1 (9→8 VPs). |
