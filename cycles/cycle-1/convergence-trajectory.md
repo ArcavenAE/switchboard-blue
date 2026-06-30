@@ -281,3 +281,38 @@ Audit date: 2026-06-28. Auditor: consistency-validator.
 | S403-COS2: leftover stub docstring | OBS | RESOLVED — PR #29 (7ef43b8) |
 
 **Disposition:** CONDITIONAL PASS — 14 findings, all resolved in cycle-close burst; 0 CRITICAL. Wave gate APPROVED 2026-06-28.
+
+---
+
+## S-6.06 — Daemon-Side Admin RPC Handlers Adversarial Passes
+
+### Finding Progression (Passes 1–19)
+
+| Pass | Date | Lenses | CRIT | HIGH | MED | LOW | Verdict | Clean Count |
+|------|------|--------|------|------|-----|-----|---------|-------------|
+| 1–11 | 2026-06-29/30 | various | see burst-log | see burst-log | see burst-log | see burst-log | FINDINGS_REMAIN | 0/3 |
+| 12 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 0 | CONVERGED (1/3 restart — reset by Pass-10 fix-burst) | reset |
+| 13 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 0 | FINDINGS_REMAIN (regression check) | reset |
+| 14 | 2026-06-30 | correctness/spec/traceability | 0 | 1 | 0 | 0 | BLOCK (F-P14L2-002 HIGH anchor gap) | 0/3 |
+| 15 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 2 | 1 | BLOCK (MEDs after fix) | 0/3 |
+| 16 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 0 | 0 | PASS — CONVERGED (1/3) | 1/3 |
+| 17 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 1 | 1 | BLOCK (F-P17L2-001 MED) | 1/3 |
+| 18 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 2 | 3 | BLOCK (F-P18L1-001/002 MED×2) | 1/3 |
+| 19 | 2026-06-30 | correctness/spec/traceability | 0 | 0 | 3 | 2 | BLOCK (F-P19L*-001 dup×3 MED + 2 more MED) | 1/3 |
+
+### Trajectory Shorthand (Pass 16 onward, clean-pass tracking)
+
+`16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK`
+
+Clean-pass count after Pass-19 fix-burst: **1/3** (baseline = Pass-16). Pass-20 is clean-pass attempt #2.
+
+### Pass-19 Details
+
+**Lens-1:** PASS (6 LOW informational, non-gating) + dup-confirmed F-P19L*-001 MED (BC body VP table missing VP-076).
+**Lens-2:** BLOCK — F-P19L*-001 MED (VP table) + F-P19L2-002 LOW (E-ADM-021 line cite 275-280→279-284).
+**Lens-3:** BLOCK — F-P19L*-001 MED (VP table) + F-P19L3-002 MED (Traceability Stories missing EC-007/S-6.06) + F-P19L3-003 MED (modified-list non-monotonic).
+
+All 5 gating findings (4 MED + 1 LOW) are spec-only, no impl changes needed. Root cause: Pass-18 fix-burst sibling-fix propagation gap — VP-076 minted in BC-2.05.004 v1.10 but three sibling locations within the same document not updated.
+
+**Fix-burst commits:** 13164cb (BC-2.05.004 v1.10→v1.11 + BC-INDEX v1.6→v1.7) + 9843e9a (S-6.06 v1.16→v1.17 + STORY-INDEX v3.6→v3.7).
+**Spec tip after fix:** 9843e9a. **Impl tip:** 6bd9e12 (unchanged).

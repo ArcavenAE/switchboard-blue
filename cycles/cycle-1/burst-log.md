@@ -421,3 +421,103 @@ Both S-5.01 and S-6.02 satisfy BC-5.39.001 as of 2026-06-29. Both worktrees are 
 
 Fix-burst applied. Clean-pass count reset to 0/3. Pass-16 queued.
 
+---
+
+## S-6.06 Pass-16 PASS (2026-06-30)
+
+**Dispatch IDs:** (not recorded — see STATE.md)
+**Spec tip:** fad33ec (factory-artifacts) / **Impl tip:** 6528f02 (feat/S-6.06-daemon-admin-handlers)
+
+### Pass-16 Lens Results
+
+| Lens | Verdict | Findings |
+|------|---------|----------|
+| 1 | PASS | 0 gating |
+| 2 | PASS | 0 gating |
+| 3 | PASS | 0 gating |
+
+**Overall: PASS** — all 3 lenses clean. Clean-pass count: 1/3. Pass-17 queued.
+
+---
+
+## S-6.06 Pass-17 BLOCK + Fix-Burst (2026-06-30)
+
+**Spec tip:** fad33ec / **Impl tip:** 6528f02
+
+### Pass-17 Lens Results
+
+| Lens | Verdict | Findings |
+|------|---------|----------|
+| 1 | PASS | 0 gating |
+| 2 | BLOCK | F-P17L2-001 MED (error-taxonomy.md E-ADM-020 out-of-sync with BC v1.9 unconditional) + F-P17L2-002 LOW ("permanent trust anchor" wire-string alignment) |
+| 3 | PASS | 0 gating |
+
+**Overall: BLOCK** — lens-2 BLOCK. Clean-pass count remains 1/3. Pass-17 NOT counted.
+
+### Fix-Burst Record
+
+| Layer | Commit | Changes |
+|-------|--------|---------|
+| Spec | 5da781a (factory-artifacts) | error-taxonomy.md v3.6→v3.7; S-6.06 story v1.14→v1.15; STORY-INDEX v3.4→v3.5 |
+| Impl | 2390541 (feat/S-6.06-daemon-admin-handlers) | admin_handlers.go:397 + test:719; race-clean |
+
+Pass-17 NOT counted. Clean-pass count: 1/3. Pass-18 queued.
+
+---
+
+## S-6.06 Pass-18 BLOCK + Fix-Burst (2026-06-30)
+
+**Spec tip:** 5da781a / **Impl tip:** 2390541
+
+### Pass-18 Lens Results
+
+| Lens | Verdict | Findings |
+|------|---------|----------|
+| 1 | BLOCK | F-P18L1-001 MED (ExpireKey missing bootstrap-key guard — EC-007/revoke-protection parity); F-P18L1-002 MED (adminKeyEntry.Expiry time.Time omitempty zero-value serialization bug); 3 LOW OBS |
+| 2 | PASS | 0 gating |
+| 3 | PASS | 1 LOW frontmatter drift (piggyback-fixed) |
+
+**Overall: BLOCK** — lens-1 BLOCK (2 MED). Most substantive fix-burst of cycle. Clean-pass count remains 1/3.
+
+### Fix-Burst Record
+
+| Layer | Commit | Changes |
+|-------|--------|---------|
+| Spec | 518a30f (factory-artifacts) | error-taxonomy.md v3.7→v3.8 (E-ADM-021 + ErrBootstrapKeyExpireForbidden); BC-2.05.004 v1.9→v1.10 (EC-007 extended revoke OR expire); S-6.06 story v1.15→v1.16 + EC-008 + VP-076; VP-INDEX v2.9→v2.10; BC-INDEX v1.5→v1.6; STORY-INDEX v3.4→v3.6 |
+| Impl | 9a4cf0b (feat/S-6.06-daemon-admin-handlers) | ExpireKey bootstrap guard + ErrBootstrapKeyExpireForbidden sentinel + tests |
+| Impl | 6bd9e12 (feat/S-6.06-daemon-admin-handlers) | adminKeyEntry.Expiry *time.Time pointer + zero-expiry JSON test; all 17 packages race-clean |
+
+Pass-18 NOT counted. Clean-pass count: 1/3. Pass-19 queued.
+
+---
+
+## S-6.06 Pass-19 BLOCK + Fix-Burst (2026-06-30)
+
+**Dispatch IDs:** lens-1 a3606081aef4844dc / lens-2 abd38d77ab61a5933 / lens-3 a3930ee0f3f10431d
+**Spec tip:** 518a30f (factory-artifacts) / **Impl tip:** 6bd9e12 (feat/S-6.06-daemon-admin-handlers)
+
+### Pass-19 Lens Results
+
+| Lens | Verdict | Findings |
+|------|---------|----------|
+| 1 | PASS | F-P19L*-001 MED (dup-confirmed L2+L3): BC-2.05.004 body VP table missing VP-076 row; 6 LOW informational (non-gating) |
+| 2 | BLOCK | F-P19L*-001 MED (dup of L1+L3): BC-2.05.004 body VP table missing VP-076 row; F-P19L2-002 LOW: S-6.06 Error Code Map E-ADM-021 line cite 275-280→279-284 |
+| 3 | BLOCK | F-P19L*-001 MED (dup of L1+L2): BC-2.05.004 body VP table missing VP-076 row; F-P19L3-002 MED: BC-2.05.004 Traceability Stories row missing EC-007/S-6.06; F-P19L3-003 MED: BC-2.05.004 modified-list non-monotonic |
+
+**Dup:** F-P19L*-001 (BC body VP table missing VP-076 row) confirmed independently by all 3 lenses — high-signal sibling-fix propagation gap from Pass-18 fix-burst.
+
+**Overall: BLOCK** — lens-2 BLOCK, lens-3 BLOCK. Lens-1 PASS (6 LOW informational only). Clean-pass count: 1/3. Pass-19 NOT counted.
+
+**Process-gap codified:** Pass-18 fix-burst minted VP-076 + BC-2.05.004 v1.10 but failed to propagate to (a) BC body VP table, (b) BC Traceability Stories row, (c) monotonic ordering of modified-list. Recurring product-owner sibling-fix discipline gap (similar pattern noted in prior passes). Noted in STATE.md current state log.
+
+### Fix-Burst Record
+
+| Layer | Commit | Changes |
+|-------|--------|---------|
+| Spec | 13164cb (factory-artifacts) | BC-2.05.004 v1.10→v1.11: VP-076 row added to body VP table; EC-007/S-6.06 added to Traceability Stories row; modified-list monotonic ordering corrected; BC-INDEX v1.6→v1.7 |
+| Spec | 9843e9a (factory-artifacts) | S-6.06 story v1.16→v1.17: E-ADM-021 line cite corrected 275-280→279-284; STORY-INDEX v3.6→v3.7 |
+
+**Impl unchanged** — all Pass-19 fixes are spec-only. Impl tip remains 6bd9e12.
+
+Pass-19 NOT counted. Clean-pass count: 1/3. Pass-20 queued (clean-pass attempt #2 of 3 needed).
+
