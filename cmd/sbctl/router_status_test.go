@@ -1032,6 +1032,61 @@ func TestSbctlRouterStatus_TargetFlagEmptyValue(t *testing.T) {
 	}
 }
 
+// ─── F-C4: EC-001 object form passthrough ────────────────────────────────────
+
+// TestSbctlRouterStatus_EC001ObjectFormPassthrough verifies that when the daemon
+// returns an EC-001 object response ({"paths":[],"message":"no active paths"})
+// instead of an array, runRouterStatus passes it through without injecting a
+// quality column and returns success.
+//
+// F-C4 / BC-2.06.003 EC-001
+func TestSbctlRouterStatus_EC001ObjectFormPassthrough(t *testing.T) {
+	sockPath, cleanup := stubDaemonSocket(t)
+	defer cleanup()
+
+	// EC-001 form: daemon returns an object (not an array) when there are no active paths.
+	ec001Response := json.RawMessage(`{"paths":[],"message":"no active paths"}`)
+	_ = startCannedDaemon(t, sockPath, ec001Response)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sio, getOut, _ := newTestIO()
+	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{}, sio)
+	if err != nil {
+		t.Fatalf("F-C4: runRouterStatus with EC-001 object form returned error: %v", err)
+	}
+
+	// The output must be a valid JSON envelope with ok:true.
+	out := getOut()
+	var env struct {
+		OK   bool            `json:"ok"`
+		Data json.RawMessage `json:"data"`
+	}
+	if parseErr := json.Unmarshal([]byte(strings.TrimSpace(out)), &env); parseErr != nil {
+		t.Fatalf("F-C4: stdout is not a valid JSON envelope: %v\nraw: %q", parseErr, out)
+	}
+	if !env.OK {
+		t.Fatal("F-C4: envelope ok must be true for EC-001 passthrough")
+	}
+
+	// The data must contain the EC-001 object fields (paths and message).
+	var obj map[string]json.RawMessage
+	if parseErr := json.Unmarshal(env.Data, &obj); parseErr != nil {
+		t.Fatalf("F-C4: EC-001 data is not a JSON object: %v\nraw: %s", parseErr, env.Data)
+	}
+	if _, hasPaths := obj["paths"]; !hasPaths {
+		t.Errorf("F-C4: EC-001 passthrough data missing 'paths' field; present keys: %v", mapKeys(obj))
+	}
+	if _, hasMsg := obj["message"]; !hasMsg {
+		t.Errorf("F-C4: EC-001 passthrough data missing 'message' field; present keys: %v", mapKeys(obj))
+	}
+	// No 'quality' field must be injected into the object passthrough.
+	if _, hasQuality := obj["quality"]; hasQuality {
+		t.Errorf("F-C4: quality field must NOT be injected into EC-001 object response; found in output")
+	}
+}
+
 // ─── assertion helpers ────────────────────────────────────────────────────────
 
 // mapKeys returns the key list of a map[string]json.RawMessage for use in error messages.
