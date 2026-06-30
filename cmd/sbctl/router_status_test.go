@@ -630,6 +630,18 @@ func TestQualityFromPathEntry_StatelessClassification(t *testing.T) {
 			p99RTTMs: "pending", rttMs: 600.0, lossPct: 25.0,
 			wantBand: "pending",
 		},
+		// F-C2 / BC-2.06.003 v1.5 F-M3: nil (JSON null) p99 → pending.
+		{
+			name:     "nil_p99_json_null_yields_pending",
+			p99RTTMs: nil, rttMs: 30.0, lossPct: 0.0,
+			wantBand: "pending",
+		},
+		// F-C2 / BC-2.06.003 v1.5 F-M3: unexpected string type "unknown" → pending.
+		{
+			name:     "unknown_string_p99_yields_pending",
+			p99RTTMs: "unknown", rttMs: 30.0, lossPct: 0.0,
+			wantBand: "pending",
+		},
 	}
 
 	for _, tc := range cases {
