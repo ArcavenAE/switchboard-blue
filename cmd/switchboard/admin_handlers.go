@@ -396,11 +396,13 @@ func mapAdminError(err error, svtnName, targetPubEncoded, claimedRoleStr string)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the last bootstrap key in SVTN %s: %w", svtnName, err)
 	default:
-		// Default arm is a defense-in-depth: every sentinel SVTNManager can return
-		// should have an explicit case above. If this arm fires in production it is
-		// a programmer error — surfaces as E-RPC-011 to keep the wire contract
-		// intact while signaling the gap to the operator.
-		return fmt.Errorf("E-RPC-011: unmapped admin error: %w", err)
+		// Default arm is defense-in-depth: every sentinel SVTNManager can return
+		// should have an explicit case above. If this arm fires it is a programmer
+		// error. Do NOT stamp E-RPC-011 here — mgmt.go is the sole authority for
+		// stamping that code on the wire envelope. Co-stamping produces a malformed
+		// response: {code:"E-RPC-011", message:"E-RPC-011: unmapped admin error: ..."}.
+		// This arm's only role is to surface inner detail for the operator.
+		return fmt.Errorf("unmapped admin error: %w", err)
 	}
 }
 
