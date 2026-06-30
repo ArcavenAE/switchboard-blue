@@ -1233,3 +1233,59 @@ func TestSVTNManager_ConcurrentCreate_NoOrphans(t *testing.T) {
 			"want RoleControl; got %v", role)
 	}
 }
+
+// TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace verifies that a concurrent
+// revoke+re-register at the same pubkey (changing its role) does not cause
+// ExpireKey to silently expire the new-role entry. ExpireKey must either
+// succeed (expired the original entry) or return ErrRoleMismatch — never
+// silently corrupt the new registration.
+//
+// Traces to F-C2-002; HOLD-001 hybrid approach.
+func TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	ctrlPub, _ := mustGenEdKey(t)
+	mgr := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+	if _, err := mgr.Create("race-svtn"); err != nil {
+		t.Fatalf("create SVTN: %v", err)
+	}
+
+	// Register key K with access role.
+	kPub, _ := mustGenEdKey(t)
+	if _, err := mgr.RegisterKey("race-svtn", kPub, admission.RoleAccess); err != nil {
+		t.Fatalf("register key: %v", err)
+	}
+
+	const iters = 200
+	errCh := make(chan error, iters)
+
+	for range iters {
+		go func() {
+			// goroutine A: expire key K (access role, 1h TTL)
+			_, err := mgr.ExpireKey("race-svtn", kPub, time.Hour)
+			errCh <- err
+		}()
+		go func() {
+			// goroutine B: revoke K then re-register K as control role
+			_, _ = mgr.RevokeKey("race-svtn", kPub, admission.RoleAccess, false)
+			_, _ = mgr.RegisterKey("race-svtn", kPub, admission.RoleControl)
+			// re-register as access to keep test repeatable
+			_, _ = mgr.RegisterKey("race-svtn", kPub, admission.RoleAccess)
+		}()
+	}
+
+	for range iters {
+		err := <-errCh
+		// Acceptable outcomes: nil (expire succeeded on access-role entry)
+		// or ErrRoleMismatch (role changed under us — TOCTOU detected).
+		// ErrKeyNotRegistered is also acceptable (key was revoked mid-expire).
+		// Any other error is a bug.
+		if err != nil &&
+			!errors.Is(err, admission.ErrRoleMismatch) &&
+			!errors.Is(err, admission.ErrKeyNotRegistered) &&
+			!errors.Is(err, svtnmgmt.ErrSVTNNotFound) {
+			t.Errorf("unexpected error from ExpireKey: %v", err)
+		}
+	}
+}

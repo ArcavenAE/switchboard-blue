@@ -331,15 +331,18 @@ func (m *SVTNManager) ExpireKey(
 
 	svtnID := svtn.ID
 
-	// LookupByPubkey derives the node address internally (ARCH-04 v1.10).
+	// Lookup to get the current role (for atomic cross-check below).
+	// TOCTOU note: a concurrent LWW RegisterKey could change the role between
+	// this lookup and SetKeyExpiryIfRoleMatches. SetKeyExpiryIfRoleMatches
+	// detects this via the role cross-check and returns ErrRoleMismatch.
 	lookedUp := m.keySet.LookupByPubkey(svtnID, pubkey)
 	if lookedUp == nil {
 		return KeyOpResult{}, admission.ErrKeyNotRegistered
 	}
+	expectedRole := lookedUp.Role
 
 	expiry := time.Now().UTC().Add(ttl)
-	if err := m.keySet.SetKeyExpiry(svtnID, lookedUp.NodeAddr, expiry); err != nil {
-		// SetKeyExpiry returns ErrKeyNotRegistered if key not present (E-ADM-013).
+	if err := m.keySet.SetKeyExpiryIfRoleMatches(svtnID, pubkey, expectedRole, expiry); err != nil {
 		return KeyOpResult{}, err
 	}
 
