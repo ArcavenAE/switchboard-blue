@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-s501-s602-pass1-reconverge-complete
+phase_step: wave-5-s501-s602-pass2-fixburst-complete
 phase_3_active_wave: 5
 phase_3_active_stories: [S-5.01, S-5.02, S-6.02, S-W5.02]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01]
@@ -162,25 +162,36 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Alpha tag auto-cut: alpha-20260629-165045-d854978 | Gitflow release-CI auto-tagged develop after both PRs merged | 2026-06-29 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-29 (Wave 5 Pass-1 reconverge burst)
+## Session Resume Checkpoint — 2026-06-29 (Wave 5 Pass-2 fix-burst)
 
-**Position:** Phase 3 Wave 5. Pass-1 reconverge burst complete. S-5.01 v1.4, S-6.02 v1.5, S-6.06 v1.1, S-7.03 v1.1 updated. 22 findings closed. S-6.07 + S-BL.LOOKUP minted. STORY-INDEX v2.6. Both worktrees race-clean.
+**Position:** Phase 3 Wave 5. Pass-2 adversarial fix-burst complete. Indices synced (STORY-INDEX v2.7, sprint-state v2.7). Traceability axis F-P2-001..F-P2-005 closed. Sprint-state/STORY-INDEX integrity F-019..F-022 closed. S-6.07 template/VP-048 F-023..F-026 closed. Both worktrees race-clean (not yet PRed).
 
-**Spec versions landed in this burst:**
-- BC-2.07.001 v1.2, BC-2.05.004 v1.2, BC-2.06.001 v1.3, BC-2.06.002 v1.3
-- error-taxonomy v3.0 (E-ADM-018/019), interface-definitions v1.1
-- ARCH-04 v1.10, ARCH-07 v1.4, ARCH-11 v1.7, VP-074 v1.1, VP-048 v1.2
+**Spec versions landed in Pass-2 fix-burst:**
+- STORY-INDEX v2.6 → v2.7
+- sprint-state.yaml v2.6 → v2.7
+- BC-2.06.003 v1.3 → v1.4 (Stories traceability cell filled)
+- interface-definitions v1.1 → v1.2 (sbctl svtn create deprecated)
+- ARCH-04 v1.10 → v1.11 (ErrRoleMismatch sentinel aligned to implementation)
+- S-5.01 v1.4 (landed Pass-1), S-6.02 v1.5 (landed Pass-1), S-6.06 v1.2, S-6.07 v1.1, VP-048 v1.3
 
-**Key code changes (worktrees — not yet PRed):**
-- S-5.01 worktree: metrics.go OR-form doc + Red-over-Yellow + PC-4 cite + invariant-3; genGreenToRedJump + TestProp_BC_2_06_001_GreenToRedSingleStep; TestQualityIndicator_OnMissingFrame_PropertyMonotone; shrinkers; functional oracle in TestQualityIndicator_ConcurrentUpdates.
-- S-6.02 worktree: admission.go RevokeKeyIfRoleMatches atomic primitive (HOLD-001 closed); svtnmgmt.go RevokeKey rewired + Create orphan-key fix + msg softening; cmd/sbctl/admin.go role enum validation; TestSVTNManager_RevokeRaceVsRegister_HOLD001 (200 iter -race); TestSVTNManager_ConcurrentCreate_NoOrphans; TestSbctlAdmin_KeyRegister_InvalidRole; F-CS-001 atomicity test rewritten.
+**Pass-2 findings closed:**
+- F-P2-001×3: S-5.01 vp_traces, S-6.06 error codes, S-6.02 confirm-gate order
+- F-P2-002: BC-2.07.001 PC-2 test in S-6.07
+- F-P2-003: HOLD-001 oracle in S-6.06
+- F-P2-004: interface-definitions retire sbctl svtn create; S-5.02 + S-7.03 bc_traces fixed
+- F-P2-005: ARCH-04 sentinel align + BC-2.06.003 Stories cell
+- F-019/F-020/F-021/F-022: sprint-state + STORY-INDEX integrity (S-6.05 Wave-6 restore, S-6.07 fields, S-BL.LOOKUP bc_traces, total-stories arithmetic)
+- F-023/F-024/F-025/F-026: S-6.07 template compliance + VP-048 four-story trace
+
+**Residual deferrals:**
+- F-005 deferred per spec (DRIFT-F005-LOOKUP-CONVENTION → S-BL.LOOKUP backlog story)
+- F-PG-003 input-hash codification still pending (tracked TODO F-009)
+- DRIFT-SW501-NITPICK, S601-SEC-001/SEC-002, S404-LOW-1 still open
 
 **NEXT ACTION on resume:**
-1. Dispatch per-story adversarial Pass-2 for S-5.01 (v1.4) and S-6.02 (v1.5).
-2. After Pass-2 converges: deliver S-5.01 and S-6.02 via per-story-delivery.md PR flow.
-3. Then: S-5.02, S-6.06, S-W5.02 in dependency order.
-
-**Open deferred items:** DRIFT-SW501-NITPICK, S601-SEC-001/SEC-002, S404-LOW-1, Tasks #19/#21/#32/#46/#54/#59.
+1. Deliver S-5.01 and S-6.02 via per-story-delivery.md PR flow (worktrees race-clean).
+2. Then: S-5.02, S-6.06, S-W5.02 in dependency order.
+3. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

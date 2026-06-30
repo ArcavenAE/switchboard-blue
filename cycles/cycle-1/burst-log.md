@@ -296,3 +296,30 @@ S-6.02 worktree:
 
 **Findings closed:** 22 (S-5.01: 11 lens findings; S-6.02: 11 lens findings across 3 passes)
 
+---
+
+## Pass-2 Fix-Burst (2026-06-29)
+
+**Agents dispatched:** story-writer, implementer, state-manager
+**Files touched:** STORY-INDEX.md (v2.6→v2.7), sprint-state.yaml (v2.6→v2.7), BC-2.06.003.md (v1.3→v1.4), interface-definitions.md (v1.1→v1.2), ARCH-04-admission-security.md (v1.10→v1.11), S-6.06-*.md (v1.1→v1.2), S-6.07-*.md (v1.0→v1.1), VP-048.md (v1.2→v1.3), S-5.01-*.md (v1.3→v1.4), STATE.md
+
+**Summary:** Closed all adversarial Pass-2 findings on the traceability and index axis. No code changes — all changes are spec/index/state artifacts.
+
+| Finding | Severity | Resolution |
+|---------|----------|------------|
+| F-P2-001 (S-5.01 vp_traces) | HIGH | S-5.01 vp_traces populated; landed in story-writer burst |
+| F-P2-001 (S-6.06 error codes) | HIGH | S-6.06 E-ADM-009 error codes reconciled; landed in story-writer burst |
+| F-P2-001 (S-6.02 confirm-gate order) | HIGH | S-6.02 confirm-gate ordering fix; landed in implementer burst |
+| F-P2-002 (BC-2.07.001 PC-2 test in S-6.07) | HIGH | S-6.07 v1.1 — fingerprint canonical + envelope normalized; landed in story-writer burst |
+| F-P2-003 (HOLD-001 oracle in S-6.06) | HIGH | S-6.06 v1.2 — functional oracle added to HOLD-001 test; landed in implementer burst |
+| F-P2-004 (interface-definitions retire sbctl svtn create) | MEDIUM | interface-definitions v1.2 — `sbctl svtn create` marked [DEPRECATED]; S-5.02 + S-7.03 bc_traces corrected in STORY-INDEX + sprint-state |
+| F-P2-005 (ARCH-04 sentinel + BC-2.06.003 stories) | LOW/MEDIUM | ARCH-04 v1.11 — ErrRoleMismatch sentinel string aligned to `admission.go` implementation; BC-2.06.003 v1.4 — Stories cell filled (S-5.02) |
+| F-019 (S-6.05 missing from Wave-6 stories list) | HIGH | sprint-state.yaml — S-6.05 restored to wave-6 stories list; S-6.05 entry added |
+| F-020 (S-BL.LOOKUP bc_traces mismatch) | HIGH | sprint-state.yaml — bc_traces set to [] per story file (authority); STORY-INDEX total-stories arithmetic corrected |
+| F-021 (S-6.07 status/priority wrong) | HIGH | sprint-state.yaml — S-6.07 priority P1→P2, status pending→draft |
+| F-022 (S-6.07 title wrong) | HIGH | sprint-state.yaml — title corrected to "SVTN admin create handler + CLI (sbctl admin svtn create)" |
+| F-023/F-024/F-025/F-026 (S-6.07 template + VP-048 four-story trace) | MEDIUM | S-6.07 v1.1 Behavioral Contracts table added; VP-048 v1.3 four-story trace; tdd_mode + inputDocuments added |
+| F-027 (STORY-INDEX backlog section mixes draft stubs) | MEDIUM | STORY-INDEX v2.7 — Backlog split into "Backlog: 4" + "Draft stubs: 1" |
+
+**Residual deferrals:** F-005 per spec (→ S-BL.LOOKUP); F-PG-003 input-hash (tracked TODO F-009).
+

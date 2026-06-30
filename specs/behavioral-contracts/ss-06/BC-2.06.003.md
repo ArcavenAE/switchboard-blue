@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -107,7 +107,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 | L2 Capability | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — metrics contain no content) |
 | Architecture Module | internal/metrics |
-| Stories | [filled by story-writer] |
+| Stories | S-5.02 |
 | Capability Anchor Justification | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 — this BC specifies the `sbctl` interface for the per-path metrics that CAP-022 defines as available for both node-side and network-operator-side views |
 
 ## Related BCs
@@ -121,4 +121,5 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 |---------|------|--------|--------|
 | 1.1 | 2026-06-23 | product-owner | Initial draft with `sbctl paths list` + `sbctl router metrics` canonical surface |
 | 1.2 | 2026-06-28 | product-owner | Wave-5 reconciliation: canonicalize `sbctl paths list` + `sbctl router metrics --svtn=<id>`; add `sbctl router status --target <router>` as documented alias (F-P8-002 ruling, S-5.02 alignment); strengthen `rtt_p99_ms` field semantics (p99 of rolling sample buffer, "pending" when <10 samples); add EC-005 for alias; fix VP table (VP-047 was listed three times — now distinct VP-047/VP-TBD-A/VP-TBD-B); expand test vectors with alias vector and pending-state vector |
+| 1.4 | 2026-06-29 | state-manager | F-P2-005: fill Stories traceability cell — `[filled by story-writer]` → `S-5.02`. No behavioral change. |
 | 1.3 | 2026-06-28 | architect | Assign VP IDs to placeholders: VP-TBD-A → VP-061 (code-audit, DI-001 content-absence); VP-TBD-B → VP-062 (fuzz, JSON well-formedness). No behavioral change. |

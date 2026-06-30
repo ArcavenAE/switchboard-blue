@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -56,7 +56,7 @@ Global flags:
 Subcommands:
 
 # SVTN Management
-sbctl svtn create [--name=<name>]               # Create a new SVTN
+sbctl svtn create [--name=<name>]               # [DEPRECATED] Superseded by 'sbctl admin svtn create' (S-6.07). Retained as alias until vMINOR+1 deprecation cycle completes.
 sbctl svtn destroy --id=<svtn_id>               # Destroy an SVTN
 sbctl svtn list                                  # List known SVTNs
 sbctl svtn status --id=<svtn_id>                # SVTN status and admitted node count
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.2 changelog note:** F-P2-004: `sbctl svtn create` marked `[DEPRECATED]` — superseded by `sbctl admin svtn create` (S-6.07; Wave 6). Retained as alias until vMINOR+1 deprecation cycle completes.
 
 > **v1.1 changelog note:** `register-key` → `admin key register`; `revoke-key` → `admin key revoke`; `expire` subcommand added (was absent). `--key-fingerprint <fp>` replaced by `--key <hex-pubkey>` throughout. `sbctl admin svtn create --name=<svtn-name>` and `sbctl admin svtn destroy --name=<svtn-name>` added (S-6.07 Wave 6). Per Task 8 reconverge (S-6.02 lens1 F-003, interface-definitions.md CLI spec stale vs implementation).
 

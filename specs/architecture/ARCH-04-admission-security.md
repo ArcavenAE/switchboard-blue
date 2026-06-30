@@ -2,10 +2,14 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.10"
+version: "1.11"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
+# v1.11 (2026-06-29): F-P2-005 — align ErrRoleMismatch sentinel string to implementation:
+#   "revoke: supplied role does not match registered role" →
+#   "admission: role mismatch: stored role differs from expected role"
+#   (implementation is in internal/admission/admission.go, not internal/svtnmgmt/svtnmgmt.go).
 phase: 1b
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -415,14 +419,14 @@ expectation; the server validates it.
 
 ### Sentinel Error Required
 
-Add to `internal/svtnmgmt/svtnmgmt.go`:
+Implemented in `internal/admission/admission.go` (not `internal/svtnmgmt/svtnmgmt.go` — the atomic primitive lives at the admission layer):
 
 ```go
-// ErrRoleMismatch is returned by SVTNManager.RevokeKey when the caller-supplied
+// ErrRoleMismatch is returned by RevokeKeyIfRoleMatches when the caller-supplied
 // currentRole does not match the role stored in the AdmittedKeySet registry
 // (E-ADM-019). This prevents the confirm gate from being bypassed by supplying
 // a lower role for a control key.
-var ErrRoleMismatch = errors.New("revoke: supplied role does not match registered role")
+var ErrRoleMismatch = errors.New("admission: role mismatch: stored role differs from expected role")
 ```
 
 ### Test Validity Assessment

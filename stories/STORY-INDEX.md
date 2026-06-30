@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "2.6"
+version: "2.7"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -19,17 +19,18 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 39 (31 wave stories + S-M.01 + S-M.02 maintenance + S-6.04 + S-6.05 + S-BL.ARQ-TX backlog/draft + S-W5.03 CI gate + S-HRD.01 + S-HRD.02 hardening + S-6.06 + S-6.07) |
+| Total stories | 42 (33 master-table stories + 1 draft stub S-6.04 + 4 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.LOOKUP/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 18 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01) |
 | Pending | 9 |
-| Draft/unscheduled | 10 (S-M.01, S-M.02, S-6.04, S-6.05, S-BL.ARQ-TX, S-W5.01, S-W5.02, S-W5.03, S-6.06, S-6.07) |
+| Draft/unscheduled | 11 (S-M.01, S-M.02, S-6.04, S-6.05, S-W5.01, S-W5.02, S-W5.03, S-6.06, S-6.07, S-HRD.01, S-HRD.02) |
 | E-phase | 27 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07) |
 | PE-phase | 4 (wave 6 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
 | Total points (waves 0–6) | 187 |
 | Total points (incl. S-M.01 + S-M.02) | 197 |
 | Waves | 7 (Wave 0–6) + maintenance sweep (unscheduled) |
-| Backlog | 3 (S-BL.OA, S-BL.ARQ-TX, S-BL.LOOKUP) |
+| Backlog | 4 (S-BL.OA, S-BL.ARQ-TX, S-BL.LOOKUP, S-BL.NI) |
+| Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 67/67 (100%) — VP-064, VP-065, VP-066, VP-067 added Wave-5 |
 
@@ -55,7 +56,7 @@ inputDocuments:
 | S-4.03 | Downstream ARQ with ACK/SACK and TLPKTDROP | E-4 | 4 | BC-2.02.005, BC-2.02.006 | multipath-forwarding | 8 | P0 | E | completed (PR #26, merge 8d9744f) |
 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | E-4 | 4 | BC-2.02.008, BC-2.02.009 (router wiring) | multipath-forwarding | 5 | P0 | E | completed (PR #27, merge 42c51e2) |
 | S-5.01 | Green/yellow/red quality indicator with hysteresis | E-5 | 5 | BC-2.06.001, BC-2.06.002 | quality-observability | 5 | P1 | E | pending |
-| S-5.02 | sbctl paths list / router metrics (canonical) + router status alias + p99 | E-5 | 5 | BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | pending |
+| S-5.02 | sbctl paths list / router metrics (canonical) + router status alias + p99 | E-5 | 5 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | pending |
 | S-5.03 | flag paths as degraded when EWMA RTT > 200ms | E-5 | 5 | BC-2.02.003 | multipath-forwarding | 2 | P1 | E | pending |
 | S-6.01 | Config parsing and validation | E-6 | 4 | BC-2.09.003 | deployment-operations | 3 | P0 | E | completed (PR #28, merge abeba27) |
 | S-6.02 | SVTN lifecycle and key management via sbctl admin | E-6 | 5 | BC-2.05.004, BC-2.07.001 | network-management, admission-security | 8 | P0 | E | pending |
@@ -68,7 +69,7 @@ inputDocuments:
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
-| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 5 | P1 | PE | pending |
+| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 6 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 
 ## Wave Summary
@@ -109,13 +110,20 @@ section, add full ACs/tasks/files/architecture).
 Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
 addresses the "deferred to TBD story" anti-pattern.
 
+**Backlog: 4** (no ACs; unscheduled; awaiting wave-planning promotion)
+
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
-| S-6.04 | SIGHUP config reload with fail-closed safety | draft | S601-DRAFT-STORY (Wave 4 audit) | Wave 6+ |
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup`/`LookupByPubkey` to `(AdmittedKey, bool)` value-return per go.md rule 12 | backlog | DRIFT-F005-LOOKUP-CONVENTION (S-6.02 adversary F-005); depends S-6.02 merge | Wave 6+ |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
+
+**Draft stubs: 1** (has some structure but no full ACs; will be promoted at wave-N planning)
+
+| Story ID | Title | Status | Drift items consumed | Earliest wave |
+|----------|-------|--------|----------------------|---------------|
+| S-6.04 | SIGHUP config reload with fail-closed safety | draft | S601-DRAFT-STORY (Wave 4 audit) | Wave 6+ |
 
 ## Hardening Stories
 
@@ -151,6 +159,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.7 | 2026-06-29 | Pass-2 adversarial fix-burst: F-P2-002 — S-5.02 BC Traces add BC-2.06.001; F-P2-003 — S-7.03 BC Traces add BC-2.06.001 + BC-2.06.002; F-020 — total-stories arithmetic fixed (39→42, enumeration corrected: 33 master + 4 backlog + 1 draft-stub + 2 hardening + 2 maintenance); F-027 — backlog section split into "Backlog: 4 (S-BL.*)" and "Draft stubs: 1 (S-6.04)". Closes F-P2-002, F-P2-003, F-020, F-027. |
 | 2.6 | 2026-06-29 | HUMAN-APPROVED PATH B (product-owner + human): add S-6.07 (3pts, P2, Wave 6, draft) — `admin.svtn.create` handler + `sbctl admin svtn create` CLI, closes S-5.01/S-6.02 Pass-1 adversarial F-003/F-010 (BC-2.07.001 PC-1 had no CLI/RPC reachability). Add S-BL.LOOKUP (1pt, backlog) — closes DRIFT-F005-LOOKUP-CONVENTION ([process-gap] F-006). Wave 6 total: 5→6 stories, 32→35 pts. Grand totals: stories 38→39, pts (wave 0–6) 184→187, (incl. maintenance) 194→197. Draft/unscheduled: 9→10. E-phase stories: 26→27. Backlog: 2→3. |
 | 2.5 | 2026-06-29 | CR-W5-SCOPE-SPLIT ruling (product-owner + human): add S-6.06 (5pts, P1, Wave 5, draft) — daemon-side admin RPC handlers minted per adversary Pass 1 CRITICAL finding F-001. S-6.02 ships CLI-layer only (deferral note added); S-6.06 wires daemon-side mgmt.Handler registration for admin.key.register / revoke / expire / list-keys on control-mode daemon only. S-W5.02 depends_on updated to include S-6.06. Wave 5 total: 7→8 stories, 38→43 pts. Grand totals: stories 37→38, pts (wave 0–6) 179→184, (incl. maintenance) 189→194. Draft/unscheduled: 8→9. E-phase stories: 25→26. |
 | 2.4 | 2026-06-29 | CR-009 ruling (product-owner): add S-6.05 (3pts, P2, Wave 6, draft) — SVTN destroy lifecycle deferred from S-6.02. BC-2.07.001 PC-3 (Destroy) and VP-048 property 2 now owned by S-6.05; PC-1/PC-2 remain S-6.02. Wave 6 total: 4→5 stories, 29→32 pts. Grand totals: stories 36→37, pts (wave 0–6) 176→179, (incl. maintenance) 186→189. Draft/unscheduled: 7→8. BC-2.07.001 Traceability updated with PC split. |
