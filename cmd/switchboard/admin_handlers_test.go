@@ -937,9 +937,10 @@ func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 //     rejected with E-ADM-009 (F-P2L1-001 fail-closed).
 //   - revoked_key_rejected: a key that was registered then revoked is absent from
 //     the SVTN registry; treated as unknown → E-ADM-009.
-//   - expired_key_non_control_rejected: a key with an expiry set and a non-control
-//     role is still in the SVTN registry (expiry is enforced at admission, not at
-//     role lookup); role check fails → E-ADM-009.
+//   - expired_non_control_key_treated_as_inactive: a control-role key is set to
+//     expire in 1ns and then looked up after expiry; CallerKeyRoleActive takes the
+//     expiry branch (svtnmgmt.go:433-435) and returns (0, false) → E-ADM-009
+//     via the inactive-key route (F-P4L1-003).
 //
 // Traces to AC-006; BC-2.05.004 Precondition 1 / DI-001; F-P2L1-001 fail-closed.
 func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
@@ -1021,32 +1022,36 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		}
 	})
 
-	t.Run("expired_key_non_control_rejected", func(t *testing.T) {
+	t.Run("expired_non_control_key_treated_as_inactive", func(t *testing.T) {
 		t.Parallel()
 		m, _ := newManagerWithSVTN(t)
-		// Register an access-role key and set a short TTL in the future. The key
-		// is still active (not yet expired); CallerKeyRoleActive returns RoleAccess.
-		// verifyCallerRole rejects non-control role → E-ADM-009.
+		// Register a control-role key, then immediately expire it with a
+		// 1ns TTL so CallerKeyRoleActive takes the expiry branch
+		// (svtnmgmt.go:433-435) and returns (0, false).
+		// resolveAndVerifyCallerRole treats an inactive key (revoked or expired)
+		// as unregistered → E-ADM-009 (F-P4L1-003).
 		keyPub, _, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
 			t.Fatalf("generate key: %v", err)
 		}
-		if _, err := m.RegisterKey(svtnName, keyPub, admission.RoleAccess); err != nil {
+		if _, err := m.RegisterKey(svtnName, keyPub, admission.RoleControl); err != nil {
 			t.Fatalf("register key: %v", err)
 		}
-		// Set a 1-hour TTL — key is still active (not expired yet).
-		if _, err := m.ExpireKey(svtnName, keyPub, time.Hour); err != nil {
+		// Set a 1ns TTL. The key will expire effectively immediately; sleep 1ms
+		// to guarantee time.Now().UTC() is past the expiry before the lookup.
+		if _, err := m.ExpireKey(svtnName, keyPub, time.Nanosecond); err != nil {
 			t.Fatalf("expire key: %v", err)
 		}
-		// CallerKeyRoleActive returns RoleAccess (not expired). verifyCallerRole
-		// rejects non-control role → E-ADM-009.
+		time.Sleep(time.Millisecond)
+		// CallerKeyRoleActive returns (0, false) via expiry branch →
+		// resolveAndVerifyCallerRole returns E-ADM-009 (inactive-key route).
 		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
 		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
-			t.Fatal("expired non-control key: expected E-ADM-009, got nil")
+			t.Fatal("expired key: expected E-ADM-009, got nil")
 		}
 		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
-			t.Errorf("expired non-control key: expected E-ADM-009 in error, got: %v", gotErr)
+			t.Errorf("expired key: expected E-ADM-009 in error, got: %v", gotErr)
 		}
 	})
 }
