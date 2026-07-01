@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.11"
+version: "3.12"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -20,8 +20,8 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 43 (34 master-table stories + 1 draft stub S-6.04 + 4 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.LOOKUP/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
-| Complete | 18 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01) |
-| Pending | 9 |
+| Complete | 19 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06) |
+| Pending | 8 |
 | Draft/unscheduled | 9 (S-M.01, S-M.02, S-6.04, S-6.05, S-W5.03, S-6.07, S-HRD.01, S-HRD.02, S-W5.04) |
 | E-phase | 28 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04) |
 | PE-phase | 4 (wave 6 PE stories) |
@@ -63,7 +63,7 @@ inputDocuments:
 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON envelope, connection error | E-6 | 5 | BC-2.07.002, BC-2.07.003 | network-management | 5 | P0 | E | pending |
 | S-W5.01 | internal/mgmt server, config E-CFG-008/009, cmd/switchboard wiring (all 4 daemon modes) | E-6 | 5 | BC-2.07.004, BC-2.09.003 | network-management, deployment-operations | 8 | P0 | E | draft |
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | draft |
-| S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | draft |
+| S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 5 | BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.12 | 2026-07-01 | S-6.06 post-merge closeout: status draft → merged (PR #36, 3ee9c38a, 2026-07-01T00:49:34Z); Summary Complete 18→19, Pending 9→8. |
 | 3.11 | 2026-06-30 | Pass-25 lens-3 fix: S-6.06 bumped v1.20 → v1.21 — stale VP-076 v1.1 cite in EC-008 body (line 204) bumped to v1.4; stale ARCH-04 v1.10 cite in Architecture Compliance Rules HOLD-001 row (line 263) bumped to v1.13. Closes F-P25L3-001 + lens-1 Obs-2 (7th-recurrence sibling-sweep gap closeout). |
 | 3.10 | 2026-06-30 | Pass-23 lens-3 fix: S-6.06 bumped v1.19 → v1.20 — stale BC-2.05.004 EC-007 v1.10 cites in Error Code Map (line ~180) and Task 12 (line ~245) bumped to v1.12; closes recurring sibling-sweep gap from Pass-22 (4-pass recurrence). Closes F-P23L3-001 + F-P23L3-002. |
 | 3.9 | 2026-06-30 | Pass-22 sibling-fix propagation (F-P22L3-001, 4th-iteration narrowing sweep): S-6.06 bumped v1.18 → v1.19 — VP-076 body table row "unconditionally" narrowed to "for any well-formed request" with E-CFG-001 layering note; mirrors BC-2.05.004 EC-007 v1.12 + VP-076 v1.3. |

@@ -4,7 +4,7 @@ phase: phase-3-tdd-implementation
 phase_step: wave-5-s501-s602-merged
 phase_3_active_wave: 5
 phase_3_active_stories: [S-5.02, S-W5.02]
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02]
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -62,11 +62,11 @@ wave_4_wavegate_consistency_audit: "CONDITIONAL PASS — 14 findings, all resolv
 wave_4_integration_gate: PASSED
 wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
-develop_head: b36cb9b
+develop_head: 3ee9c38
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T23:59:55Z
-last_update: 2026-06-30
+timestamp: 2026-07-01T00:49:34Z
+last_update: 2026-07-01
 ---
 
 # Switchboard Factory State
@@ -98,7 +98,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-5.02/S-W5.02 pending | 2026-06-30 | W5: S-6.06 CONVERGED BC-5.39.001 (Pass-28 PASS CLEAN; 3/3 CLOSED); S-6.06 at Step 5 demo recording. S-5.02/S-W5.02 next. S-6.06 trajectory: 16:PASS(1/3)→17:BLOCK→18:BLOCK→19:BLOCK→20:BLOCK→21:BLOCK→22:BLOCK→23:BLOCK→24:BLOCK→25:BLOCK→26:PASS(2/3)→27:PASS(3/3-pending)→28:PASS(3/3✓CLOSED) |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-6.06 MERGED PR #36 3ee9c38. S-5.02/S-W5.02 pending | 2026-07-01 | W5: S-6.06 MERGED (PR #36, 3ee9c38a, 2026-07-01). S-5.02/S-W5.02 next. S-6.06 trajectory: 16:PASS(1/3)→17:BLOCK→18:BLOCK→19:BLOCK→20:BLOCK→21:BLOCK→22:BLOCK→23:BLOCK→24:BLOCK→25:BLOCK→26:PASS(2/3)→27:PASS(3/3-pending)→28:PASS(3/3✓CLOSED) |
 
 ## Wave / Story Status
 
@@ -118,6 +118,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 5 | S-6.02 | SVTN lifecycle and key management via sbctl admin | MERGED | #34 | b36cb9b |
 | 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | MERGED | #32 | d854978 |
 | 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | MERGED | #31 | 0d499ac |
+| 5 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | MERGED | #36 | 3ee9c38 |
 | 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | draft | — | — |
 
 ## Open Drift Items
@@ -179,27 +180,26 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Alpha tag auto-cut: alpha-20260629-165045-d854978 | Gitflow release-CI auto-tagged develop after both PRs merged | 2026-06-29 |
 | S-5.01 MERGED (c1c2c3d, PR #35) | Squash-merged to develop 2026-06-30T12:01:28Z; worktree removed, branch deleted | 2026-06-30 |
 | S-6.02 MERGED (b36cb9b, PR #34) | Squash-merged to develop (rebased over S-5.01/c1c2c3d); worktree removed, branch deleted | 2026-06-30 |
+| S-6.06 MERGED (3ee9c38, PR #36) | Squash-merged to develop 2026-07-01T00:49:34Z; worktree removed, branch deleted; all 6 ACs full demo coverage; 3/3 adversary clean (Pass-26/27/28); BCs: BC-2.05.004 (PC-1..PC-4 + EC-007); VPs: VP-046, VP-075, VP-076 | 2026-07-01 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-6.06 Pass-28 PASS CLEAN; BC-5.39.001 CONVERGED)
+## Session Resume Checkpoint — 2026-07-01 (S-6.06 MERGED PR #36; Wave 5 near complete)
 
-**Position:** Phase 3 Wave 5. S-6.06 adversarial convergence CLOSED (BC-5.39.001 satisfied). Pass-28 was the third and final consecutive clean pass. Spec tip: factory-artifacts HEAD (run `git -C .factory log -1 --format='%h %s'`). Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers.
+**Position:** Phase 3 Wave 5. S-6.06 squash-merged to develop (3ee9c38a, PR #36, 2026-07-01T00:49:34Z). Worktree removed, branch deleted. develop HEAD = 3ee9c38a.
 
-**S-6.06 worktree:** feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b.
+**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-W5.02 (draft, 5 pts; gates on S-6.03 + S-W5.01 + S-6.06 — all now merged).
 
-**Wave 5 remaining:** S-5.02 (pending, 5 pts), S-6.06 (CONVERGED — at Step 5 demo recording, 5 pts), S-W5.02 (draft, 5 pts).
+**S-W5.02 UNBLOCKED:** All three S-W5.02 dependencies (S-6.03, S-W5.01, S-6.06) are now merged to develop.
 
-**Open deferred observations:**
-- TaskList #115: lens-1 post-merge polish backlog (7 LOW non-blocking OBS from Passes 25–27, post-merge).
+**Open deferred observations (carry forward):**
+- TaskList #115: S-6.06 lens-1 post-merge polish backlog (7 LOW non-blocking OBS from Passes 25–27).
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity (O-P26L3-001/002).
 
 **NEXT ACTION on resume:**
-1. S-6.06 Step 5 — demo recording per AC (per-story-delivery.md Step 5). Impl tip: d3f186c on feat/S-6.06-daemon-admin-handlers.
-2. S-6.06 Steps 6-9: open PR, PR review, human merge, post-merge cleanup.
-3. S-5.02 (sbctl paths list + router metrics) — can proceed in parallel with S-6.06 Steps 6-9.
-4. S-W5.02 (e2e management plane harness) — gates on S-6.03 + S-W5.01 + S-6.06 all merged.
-5. Wave 5 adversarial review after all Wave 5 stories merged.
-6. S-6.07 (Wave 6) after S-6.02 + S-6.06 both merged.
+1. S-5.02 (sbctl paths list + router metrics) — proceed now; no remaining blockers.
+2. S-W5.02 (e2e management plane harness) — now unblocked; can start once S-5.02 spec is locked or in parallel if scope permits.
+3. Wave 5 adversarial review after all Wave 5 stories merged.
+4. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged).
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

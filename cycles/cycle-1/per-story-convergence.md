@@ -452,7 +452,11 @@ Pass-24 queued. Spec tip: 82721dc. Impl tip: 0be8e97 (unchanged since Pass-21).
 | 27 | PASS CLEAN (7 LOW non-blocking OBS → TaskList #115) | PASS CLEAN (novelty LOW; streak advancement recommended) | PASS CLEAN (novelty ZERO; propagation fully landed) | PASS CLEAN — counter advances 2→3/3-pending | — (no fix required) |
 | 28 | PASS CLEAN (novelty NONE) | PASS CLEAN (novelty ZERO) | PASS CLEAN (novelty ZERO) | PASS CLEAN — **CONVERGENCE-CLOSED** | — (no fix required) |
 
-**Status:** CONVERGED — **BC-5.39.001 satisfied** (3/3 CLOSED: Pass-16 baseline + Pass-26 + Pass-27 + Pass-28). Third consecutive fully-clean pass at Pass-28. Spec tip at convergence: factory-artifacts HEAD (a6cdb88 lineage). Impl tip at convergence: d3f186c.
+**Status:** CONVERGED + MERGED — **BC-5.39.001 satisfied** (3/3 CLOSED: Pass-16 baseline + Pass-26 + Pass-27 + Pass-28). Third consecutive fully-clean pass at Pass-28. Spec tip at convergence: factory-artifacts HEAD (a6cdb88 lineage). Impl tip at convergence: d3f186c.
+
+**Merge record:** PR #36 squash-merged to develop 2026-07-01T00:49:34Z. Merge SHA: 3ee9c38a821a2b289e5dec1406048189aca1d445 (short: 3ee9c38). Worktree removed; branch feat/S-6.06-daemon-admin-handlers deleted locally and on origin.
+
+**ACs coverage at merge:** All 6 ACs had full demo coverage. BCs delivered: BC-2.05.004 (PC-1 through PC-4 + EC-007). VPs delivered: VP-046, VP-075, VP-076.
 
 ---
 

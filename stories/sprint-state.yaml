@@ -76,13 +76,14 @@ wave_status:
     # S-W5.02: 5pts (net-new, e2e harness),
     # S-6.06: 5pts (CR-W5-SCOPE-SPLIT, adversary Pass 1 CRITICAL finding F-001)
     # S-W5.04: 5pts (Pass-4 Ruling 1, daemon-side paths.list/metrics/router.status handlers)
-    stories_merged: [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02]
+    stories_merged: [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06]
     merge_shas:
       S-5.03: 01ae50c  # PR #30
       S-6.03: d854978  # PR #32
       S-W5.01: 0d499ac  # PR #31
       S-5.01: c1c2c3d   # PR #35
       S-6.02: b36cb9b   # PR #34 (rebased over S-5.01)
+      S-6.06: 3ee9c38   # PR #36
     wave_adversary_converged: false
     wavegate_consistency_audit: "fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 tracked TODO"
 
@@ -462,7 +463,7 @@ stories:
     title: "Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys)"
     epic: E-6
     wave: 5
-    status: pending
+    status: merged
     priority: P1
     scope_phase: E
     points: 5
@@ -473,12 +474,15 @@ stories:
     adversarial_convergence: CONVERGED_PASS28_2026-06-30
     adversary_streak: 3
     adversary_converged: true
+    merge_sha: 3ee9c38
+    pr: 36
+    merged_at: "2026-07-01T00:49:34Z"
     # Minted per CR-W5-SCOPE-SPLIT ruling 2026-06-29.
     # Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon never registered
     # admin RPC handlers. TODO(CR-002) at mgmt_wire.go:259 is this story's entry point.
     # BC-5.39.001 satisfied: 3 consecutive clean diverse-lens passes (P26+P27+P28).
-    # Impl tip at convergence: d3f186c on feat/S-6.06-daemon-admin-handlers.
-    # Spec tip at convergence: factory-artifacts HEAD.
+    # All 6 ACs full demo coverage. BCs: BC-2.05.004 PC-1..PC-4 + EC-007. VPs: VP-046, VP-075, VP-076.
+    # Squash-merged PR #36 to develop; worktree removed, branch deleted locally + on origin.
 
   - story_id: S-6.07
     title: "SVTN admin create handler + CLI (sbctl admin svtn create)"
@@ -633,6 +637,11 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.22 (2026-07-01): S-6.06 merged to develop (PR #36, 3ee9c38a, 2026-07-01T00:49:34Z).
+#   - S-6.06: status pending→merged; merge_sha 3ee9c38, pr 36, merged_at 2026-07-01T00:49:34Z.
+#   - wave-5: stories_merged updated [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06].
+#   - merge_shas: S-6.06 3ee9c38 (PR #36) added.
+#   - S-W5.02 now fully unblocked: all three dependencies (S-6.03, S-W5.01, S-6.06) merged.
 # v2.21 (2026-06-30): S-6.06 adversary Pass-28 PASS CLEAN — BC-5.39.001 CONVERGENCE-CLOSED.
 #   - Pass-28 PASS CLEAN (all 3 lenses): novelty NONE across all lenses.
 #   - Lens-1: all 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified,
