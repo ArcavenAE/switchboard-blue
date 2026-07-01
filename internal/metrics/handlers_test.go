@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/metrics"
@@ -366,6 +367,9 @@ func TestDaemonRouterMetrics_HandlerRegistered(t *testing.T) {
 	}
 	if resp.DropCacheHits != want.DropCacheHits {
 		t.Errorf("drop_cache_hits: got %d; want %d", resp.DropCacheHits, want.DropCacheHits)
+	}
+	if !reflect.DeepEqual(resp.PathDistribution, want.PathDistribution) {
+		t.Errorf("path_distribution: got %v, want %v", resp.PathDistribution, want.PathDistribution)
 	}
 }
 
