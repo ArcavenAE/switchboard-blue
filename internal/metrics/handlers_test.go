@@ -1180,6 +1180,114 @@ func TestRTTValue_UnmarshalRejectsInf(t *testing.T) {
 	}
 }
 
+// ── F-P6L2-01: TestOverallQuality_MixedPathsPrecedence ───────────────────────
+
+// TestOverallQuality_MixedPathsPrecedence verifies that overallQuality (exercised
+// via RouterStatus with a multi-path source) applies the precedence rule
+// pending > red > yellow > green regardless of Go map iteration order.
+//
+// Each row seeds two PathSnapshots with distinct quality bands and asserts the
+// returned resp.Quality equals the dominant band. Each row is executed 10 times
+// to exercise map iteration nondeterminism across runs.
+//
+// F-P6L2-01; BC-2.06.003 PC-3; BC-2.06.001 v1.3 PC-4.
+func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
+	t.Parallel()
+
+	// snapForQuality returns a PathSnapshot that will produce the given quality
+	// from QualityFromEntry. The mapping is:
+	//   "green"   → SampleCount=20, P99RTTMs=15ms   (≤100ms)
+	//   "yellow"  → SampleCount=20, P99RTTMs=250ms  (100ms < p99 ≤ 500ms)
+	//   "red"     → SampleCount=20, P99RTTMs=600ms  (>500ms)
+	//   "pending" → SampleCount=5                   (<10 samples)
+	snapForQuality := func(q string) paths.PathSnapshot {
+		switch q {
+		case "green":
+			return paths.PathSnapshot{
+				EWMARTTMs:   15.0,
+				P99RTTMs:    15.0,
+				LossPct:     0.0,
+				Active:      true,
+				Degraded:    false,
+				SampleCount: 20,
+			}
+		case "yellow":
+			return paths.PathSnapshot{
+				EWMARTTMs:   250.0,
+				P99RTTMs:    250.0,
+				LossPct:     0.0,
+				Active:      true,
+				Degraded:    false,
+				SampleCount: 20,
+			}
+		case "red":
+			return paths.PathSnapshot{
+				EWMARTTMs:   600.0,
+				P99RTTMs:    600.0,
+				LossPct:     0.0,
+				Active:      true,
+				Degraded:    false,
+				SampleCount: 20,
+			}
+		case "pending":
+			return paths.PathSnapshot{
+				EWMARTTMs:   10.0,
+				P99RTTMs:    0.0,
+				LossPct:     0.0,
+				Active:      true,
+				Degraded:    false,
+				SampleCount: 5,
+			}
+		default:
+			panic("unknown quality band: " + q)
+		}
+	}
+
+	cases := []struct {
+		name  string
+		pathA string // quality band for path-a
+		pathB string // quality band for path-b
+		want  string // expected overall quality
+	}{
+		{name: "green_yellow_gives_yellow", pathA: "green", pathB: "yellow", want: "yellow"},
+		{name: "green_red_gives_red", pathA: "green", pathB: "red", want: "red"},
+		{name: "yellow_red_gives_red", pathA: "yellow", pathB: "red", want: "red"},
+		{name: "red_pending_gives_pending", pathA: "red", pathB: "pending", want: "pending"},
+		{name: "yellow_pending_gives_pending", pathA: "yellow", pathB: "pending", want: "pending"},
+		{name: "green_green_gives_green", pathA: "green", pathB: "green", want: "green"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Run 10 iterations to exercise map iteration nondeterminism.
+			// Go's map iteration order is randomized per-map-creation, so
+			// multiple calls increase the chance of catching order-dependent bugs.
+			for i := range 10 {
+				src := &fakePathsListSource{
+					snaps: map[string]paths.PathSnapshot{
+						"path-a": snapForQuality(tc.pathA),
+						"path-b": snapForQuality(tc.pathB),
+					},
+				}
+				resp, err := metrics.RouterStatus(context.Background(), nil, src)
+				if err != nil {
+					t.Fatalf("iter %d: RouterStatus error: %v", i, err)
+				}
+				if len(resp.Paths) != 2 {
+					t.Fatalf("iter %d: expected 2 paths; got %d", i, len(resp.Paths))
+				}
+				if resp.Quality != tc.want {
+					t.Errorf("iter %d: quality=%q; want %q (paths: %s+%s, precedence pending>red>yellow>green)",
+						i, resp.Quality, tc.want, tc.pathA, tc.pathB)
+				}
+			}
+		})
+	}
+}
+
 // TestRTTValue_UnmarshalRejectsNegative verifies that UnmarshalJSON returns an error
 // for negative RTT values.
 //
