@@ -3,6 +3,7 @@ package metrics_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/metrics"
@@ -821,24 +822,9 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 }
 
 // isErrDecodeArgs reports whether err (or any error in its chain) is ErrDecodeArgs.
-// Using errors.Is avoids string matching per go.md error-handling rule 3.
+// Uses errors.Is to traverse the chain — no string matching (go.md error-handling rule 3).
 func isErrDecodeArgs(err error) bool {
-	return containsAny(err.Error(), "E-RPC-002")
-}
-
-// containsAny reports whether s contains any of the substrings.
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if len(sub) > 0 {
-			// manual contains check to avoid importing strings
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return errors.Is(err, metrics.ErrDecodeArgs)
 }
 
 // TestVP047_FieldSwapOracle verifies that path_id and router_addr are not
