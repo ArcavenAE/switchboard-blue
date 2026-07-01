@@ -1,11 +1,12 @@
 // admin_handlers.go — daemon-side admin RPC handler builder for cmd/switchboard.
 //
-// BuildAdminHandlers returns the []mgmt.Handler slice for all four admin RPCs:
+// BuildAdminHandlers returns the []mgmt.Handler slice for all admin RPCs:
 //
 //	admin.key.register   (BC-2.05.004 PC-1)
 //	admin.key.revoke     (BC-2.05.004 PC-2; HOLD-001 hybrid; ADR-004)
 //	admin.key.expire     (BC-2.05.004 PC-3; DI-003 defense-in-depth duration validation)
 //	admin.key.list-keys  (BC-2.05.004 PC-1 confirmation surface; any admitted role; F-L2-001/F-L2-003)
+//	admin.svtn.create    (BC-2.07.001 PC-1 + PC-2 + Inv-3; S-6.07)
 //
 // Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion
 // (ARCH-04 disambiguation table); AC-004). Access, console, and router daemons pass nil handlers.
@@ -122,6 +123,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},
 		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m)},
+		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
 	}
 }
 
@@ -526,4 +528,45 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 		return fmt.Errorf("E-CFG-001: invalid caller_role: %q", callerRoleStr)
 	}
 	return verifyCallerRole(cr, cmd, "(unknown)")
+}
+
+// adminSVTNCreateArgs is the wire-format JSON args for admin.svtn.create.
+// The `name` field carries the operator-supplied SVTN label.
+//
+// AC-002 / BC-2.07.001 PC-1 — wire format: {"command":"admin.svtn.create","args":{"name":"<name>"}}.
+type adminSVTNCreateArgs struct {
+	// Name is the human-readable SVTN label provided by the operator.
+	Name string `json:"name"`
+}
+
+// adminSVTNCreateResult is the success data payload for admin.svtn.create.
+// JSON field names match the AC-004 wire contract.
+type adminSVTNCreateResult struct {
+	// SVTNID is the hex-encoded 16-byte SVTN identifier (BC-2.07.001 postcondition 1).
+	SVTNID string `json:"svtn_id"`
+	// BootstrapFingerprint is the "SHA256:<base64>" fingerprint of the bootstrap
+	// control key (BC-2.05.004 PC-4 canonical format; BC-2.07.001 PC-2).
+	// Verbatim from svtnmgmt.keyFingerprint — do NOT re-encode to hex.
+	BootstrapFingerprint string `json:"bootstrap_fingerprint"`
+}
+
+// makeAdminSVTNCreateHandler returns the admin.svtn.create handler function.
+//
+// Authority check (BC-2.07.001 Inv-3 / AC-003): reads the authenticated
+// caller's pubkey from ctx (set by handleConnection after ADR-012 handshake),
+// resolves its role via resolveAndVerifyCallerRole, and rejects non-control-role
+// callers with E-ADM-009 BEFORE invoking m.Create. This follows the S-6.06
+// pattern for admin.key.* handlers exactly.
+//
+// On success (AC-004): returns adminSVTNCreateResult with svtn_id (hex) and
+// bootstrap_fingerprint (SHA256:<base64> verbatim from svtnmgmt.keyFingerprint).
+//
+// On duplicate name (AC-005): propagates ErrSVTNAlreadyExists as
+// "E-SVTN-001: SVTN already exists: <name>" to the RPC response.
+//
+// Traces to BC-2.07.001 PC-1 + PC-2 + Inv-3; AC-001; AC-003; AC-004; AC-005.
+func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		panic("TODO: S-6.07 makeAdminSVTNCreateHandler not yet implemented")
+	}
 }

@@ -1166,3 +1166,197 @@ func TestSubprocessAdmin_ConnectionRefused_Entry(t *testing.T) {
 	}
 	os.Exit(0)
 }
+
+// ── S-6.07: sbctl admin svtn create CLI tests ─────────────────────────────────
+
+// TestSbctlAdmin_SvtnCreate_CLI verifies AC-002 at the CLI layer:
+// `sbctl admin svtn create --name <svtn-name>` dispatches the
+// admin.svtn.create RPC with the correct wire-format payload.
+//
+// BC-2.07.001 PC-1 — admin.svtn.create RPC is dispatched with correct args.
+// AC-002 — sbctl admin svtn create sends {"command":"admin.svtn.create","args":{"name":"<name>"}}.
+func TestSbctlAdmin_SvtnCreate_CLI(t *testing.T) {
+	t.Parallel()
+
+	// AC-002 / BC-2.07.001 PC-1 — sbctl admin svtn create dispatches correct RPC.
+	// runAdminSvtnCreate currently panics → RED.
+	requestCh := make(chan adminRPCRequest, 1)
+	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q; want admin.svtn.create", cmd)
+		}
+		var createArgs adminSVTNCreateArgs
+		if err := json.Unmarshal(args, &createArgs); err != nil {
+			return nil, fmt.Errorf("unmarshal adminSVTNCreateArgs: %w", err)
+		}
+		return map[string]any{
+			"svtn_id":               "aabbccddeeff0011aabbccddeeff0011",
+			"bootstrap_fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	const svtnName = "my-new-network"
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", svtnName,
+	}, defaultIO())
+	if err != nil {
+		t.Logf("AC-002: runAdmin returned error (expected once implemented): %v", err)
+	}
+
+	// Verify the RPC was dispatched with correct payload.
+	select {
+	case req := <-requestCh:
+		if req.Command != "admin.svtn.create" {
+			t.Errorf("AC-002 — dispatched command: got %q; want admin.svtn.create", req.Command)
+		}
+		var args adminSVTNCreateArgs
+		if err := json.Unmarshal(req.Args, &args); err != nil {
+			t.Fatalf("AC-002 — unmarshal args: %v", err)
+		}
+		if args.Name != svtnName {
+			t.Errorf("AC-002 — wire name: got %q; want %q", args.Name, svtnName)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("AC-002: timed out waiting for admin.svtn.create RPC; " +
+			"runAdminSvtnCreate must dispatch the RPC within the context deadline")
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_NonControlDenied verifies AC-003 at the CLI layer:
+// when the daemon returns E-ADM-009 (non-control-role caller), runAdmin
+// returns a non-nil error.
+//
+// BC-2.07.001 Inv-3 — non-control-role caller rejected with E-ADM-009.
+// AC-003 — sbctl surfaces the E-ADM-009 error to the caller.
+func TestSbctlAdmin_SvtnCreate_NonControlDenied(t *testing.T) {
+	t.Parallel()
+
+	// AC-003 / BC-2.07.001 Inv-3 — E-ADM-009 from daemon must surface as error.
+	// runAdminSvtnCreate currently panics → RED.
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q", cmd)
+		}
+		return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key SHA256:test= has role console")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", "forbidden-svtn",
+	}, defaultIO())
+
+	// AC-003: must return non-nil error containing E-ADM-009.
+	if err == nil {
+		t.Fatal("AC-003: expected E-ADM-009 error from daemon; got nil")
+	}
+	_ = err // error logging done by runAdmin; caller sees non-nil
+}
+
+// TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint verifies AC-002
+// and AC-004 at the CLI layer: on success, sbctl admin svtn create prints
+// the svtn_id and bootstrap_fingerprint to stdout.
+//
+// BC-2.07.001 PC-1 + PC-2 — success response carries svtn_id and bootstrap_fingerprint.
+// AC-002 — CLI prints returned svtn_id and bootstrap fingerprint on success.
+// AC-004 — svtn_id (hex) and bootstrap_fingerprint (SHA256:<base64>) in response.
+func TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint(t *testing.T) {
+	t.Parallel()
+
+	// AC-002 / AC-004 — success output must contain svtn_id and bootstrap_fingerprint.
+	// runAdminSvtnCreate currently panics → RED.
+	t.Fatal("TODO: S-6.07 AC-002/AC-004 success output test not yet written")
+}
+
+// TestSbctlAdmin_SvtnCreate_DuplicateName verifies AC-005 at the CLI layer:
+// when the daemon returns SVTN-exists error, runAdmin returns a non-nil error.
+//
+// BC-2.07.001 EC-001 — duplicate SVTN name returns SVTN-exists error.
+// AC-005 — sbctl surfaces the SVTN-exists error to the caller.
+func TestSbctlAdmin_SvtnCreate_DuplicateName(t *testing.T) {
+	t.Parallel()
+
+	// AC-005 / BC-2.07.001 EC-001 — SVTN-exists error from daemon must surface.
+	// runAdminSvtnCreate currently panics → RED.
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q", cmd)
+		}
+		return nil, fmt.Errorf("SVTN already exists: test-svtn")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", "test-svtn",
+	}, defaultIO())
+
+	// AC-005: must return non-nil error.
+	if err == nil {
+		t.Fatal("AC-005: expected SVTN-exists error from daemon; got nil")
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_MissingName verifies that omitting --name returns
+// an error before dispatching any RPC.
+//
+// BC-2.07.001 PC-1 — CLI validates required args before dispatch.
+func TestSbctlAdmin_SvtnCreate_MissingName(t *testing.T) {
+	t.Parallel()
+
+	// BC-2.07.001 PC-1 — missing --name must return non-nil error.
+	// runAdminSvtnCreate currently panics → RED.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, "127.0.0.1:19992", testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		// No --name flag.
+	}, defaultIO())
+
+	if err == nil {
+		t.Error("BC-2.07.001 PC-1: missing --name: expected non-nil error; got nil")
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_JSONRoundTrip verifies that adminSVTNCreateArgs
+// serialises with the correct JSON field name "name" per the AC-002 wire envelope.
+//
+// AC-002 — wire args shape: {"command":"admin.svtn.create","args":{"name":"<name>"}}.
+func TestSbctlAdmin_SvtnCreate_JSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// AC-002 — wire args field name.
+	original := adminSVTNCreateArgs{Name: "round-trip-svtn"}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal(adminSVTNCreateArgs): %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal to map: %v", err)
+	}
+
+	if _, ok := raw["name"]; !ok {
+		t.Error("AC-002: adminSVTNCreateArgs: missing JSON field 'name'")
+	}
+
+	var decoded adminSVTNCreateArgs
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if decoded.Name != original.Name {
+		t.Errorf("name round-trip: got %q; want %q", decoded.Name, original.Name)
+	}
+}

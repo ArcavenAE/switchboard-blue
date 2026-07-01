@@ -1368,3 +1368,231 @@ func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
 		}
 	})
 }
+
+// ── S-6.07: admin.svtn.create handler tests ──────────────────────────────────
+
+// TestBuildAdminHandlers_SVTNCreate_Registered verifies AC-001: BuildAdminHandlers
+// registers the "admin.svtn.create" command so that the handler is reachable via
+// the mgmt dispatch loop (control-mode daemon only).
+//
+// BC-2.07.001 PC-1 — handler is registered.
+// AC-001 — BuildAdminHandlers registers admin.svtn.create.
+func TestBuildAdminHandlers_SVTNCreate_Registered(t *testing.T) {
+	t.Parallel()
+
+	// AC-001 / BC-2.07.001 PC-1 — admin.svtn.create must be registered.
+	// makeAdminSVTNCreateHandler currently panics → RED.
+	t.Fatal("TODO: S-6.07 AC-001 not yet written — verify admin.svtn.create appears in BuildAdminHandlers result")
+}
+
+// TestAdminSVTNCreate_ControlCallerSucceeds verifies AC-006 (first sub-case):
+// a control-role caller can invoke admin.svtn.create and receives a success
+// response with svtn_id and bootstrap_fingerprint fields.
+//
+// BC-2.07.001 PC-1 + PC-2 — create handler dispatches to SVTNManager.Create.
+// AC-004 — success response carries svtn_id (hex) and bootstrap_fingerprint (SHA256:<base64>).
+// AC-006 sub-case: control-role caller succeeds.
+func TestAdminSVTNCreate_ControlCallerSucceeds(t *testing.T) {
+	t.Parallel()
+
+	// AC-006 / AC-004 — control-role caller succeeds; response has correct shape.
+	// makeAdminSVTNCreateHandler currently panics → RED.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+	handlers := BuildAdminHandlers(m, ops)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("AC-001: admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "brand-new-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	result, err := svtnCreateFn(ctx, json.RawMessage(args))
+	if err != nil {
+		t.Fatalf("AC-006 control-caller: expected success; got error: %v", err)
+	}
+
+	// AC-004: verify wire shape.
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var wire adminSVTNCreateResult
+	if err := json.Unmarshal(b, &wire); err != nil {
+		t.Fatalf("unmarshal result to adminSVTNCreateResult: %v", err)
+	}
+	if wire.SVTNID == "" {
+		t.Error("AC-004: svtn_id is empty in response")
+	}
+	if wire.BootstrapFingerprint == "" {
+		t.Error("AC-004: bootstrap_fingerprint is empty in response")
+	}
+	// AC-004: bootstrap_fingerprint must be SHA256:<base64> format (not hex).
+	if !strings.HasPrefix(wire.BootstrapFingerprint, "SHA256:") {
+		t.Errorf("AC-004: bootstrap_fingerprint must start with 'SHA256:'; got %q", wire.BootstrapFingerprint)
+	}
+
+	_ = bootstrapPub
+}
+
+// TestAdminSVTNCreate_NonControlCallerDenied verifies AC-003 and AC-006 (second
+// sub-case): a non-control-role caller receives E-ADM-009, and SVTNManager.Create
+// is NOT called.
+//
+// BC-2.07.001 Inv-3 — authority check fires before dispatch.
+// AC-003 — non-control-role caller → E-ADM-009.
+// AC-006 sub-case: non-control-role caller receives E-ADM-009.
+func TestAdminSVTNCreate_NonControlCallerDenied(t *testing.T) {
+	t.Parallel()
+
+	// AC-003 / BC-2.07.001 Inv-3 — non-control caller must receive E-ADM-009.
+	// makeAdminSVTNCreateHandler currently panics → RED.
+	m, _ := newTestSVTNManagerDetailed(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+	handlers := BuildAdminHandlers(m, ops)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("AC-001: admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	// Generate a console-role caller key not registered in any SVTN.
+	// resolveAndVerifyCallerRole will deny this as "unregistered" → E-ADM-009.
+	consolePub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate console key: %v", err)
+	}
+	ctx := mgmt.WithCallerPubkey(context.Background(), consolePub)
+
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "should-not-be-created"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, err = svtnCreateFn(ctx, json.RawMessage(args))
+	if err == nil {
+		t.Fatal("AC-003 non-control-caller: expected E-ADM-009 error; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-003: expected 'E-ADM-009' in error; got %q", err.Error())
+	}
+}
+
+// TestAdminSVTNCreate_DuplicateNameError verifies AC-005 and AC-006 (third
+// sub-case): a duplicate SVTN name propagates the SVTN-exists error.
+//
+// BC-2.07.001 EC-001 — duplicate name → SVTN-exists error.
+// AC-005 — duplicate-name caller receives SVTN-exists error (E-RPC-011 wrapping).
+// AC-006 sub-case: duplicate-name caller receives SVTN-exists error.
+func TestAdminSVTNCreate_DuplicateNameError(t *testing.T) {
+	t.Parallel()
+
+	// AC-005 / BC-2.07.001 EC-001 — duplicate SVTN name must propagate error.
+	// makeAdminSVTNCreateHandler currently panics → RED.
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+	handlers := BuildAdminHandlers(m, ops)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("AC-001: admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	// "test-svtn" was created in newTestSVTNManagerDetailed — this is the duplicate.
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "test-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, err = svtnCreateFn(ctx, json.RawMessage(args))
+	if err == nil {
+		t.Fatal("AC-005 duplicate-name: expected SVTN-exists error; got nil")
+	}
+	// AC-005: error message must contain "SVTN already exists".
+	if !strings.Contains(err.Error(), "SVTN already exists") {
+		t.Errorf("AC-005: expected 'SVTN already exists' in error; got %q", err.Error())
+	}
+
+	_ = bootstrapPub
+}
+
+// TestAdminSVTNCreate_CallerRoleResolution_FromContext verifies that the handler
+// resolves caller role from the authenticated context pubkey (server-side),
+// NOT from a client-supplied request field (BC-2.07.001 Inv-3 / S-6.06 pattern).
+//
+// AC-003 / BC-2.07.001 Inv-3 — authority check reads from context, not request args.
+func TestAdminSVTNCreate_CallerRoleResolution_FromContext(t *testing.T) {
+	t.Parallel()
+
+	// BC-2.07.001 Inv-3 — caller role must come from ctx pubkey, not args.
+	// makeAdminSVTNCreateHandler currently panics → RED.
+	t.Fatal("TODO: S-6.07 AC-003 caller-role-from-context test not yet written")
+}
+
+// TestAdminSVTNCreateResult_JSONFieldNames verifies that adminSVTNCreateResult
+// serialises with correct JSON field names per AC-004 wire contract.
+//
+// AC-004 — svtn_id (hex) and bootstrap_fingerprint (SHA256:<base64>).
+func TestAdminSVTNCreateResult_JSONFieldNames(t *testing.T) {
+	t.Parallel()
+
+	// AC-004 — wire field names for admin.svtn.create success response.
+	original := adminSVTNCreateResult{
+		SVTNID:               "aabbccddeeff0011aabbccddeeff0011",
+		BootstrapFingerprint: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal to map: %v", err)
+	}
+
+	if _, ok := raw["svtn_id"]; !ok {
+		t.Error("AC-004: missing JSON field 'svtn_id'")
+	}
+	if _, ok := raw["bootstrap_fingerprint"]; !ok {
+		t.Error("AC-004: missing JSON field 'bootstrap_fingerprint'")
+	}
+
+	// Round-trip.
+	var decoded adminSVTNCreateResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal round-trip: %v", err)
+	}
+	if decoded.SVTNID != original.SVTNID {
+		t.Errorf("svtn_id round-trip: got %q; want %q", decoded.SVTNID, original.SVTNID)
+	}
+	if decoded.BootstrapFingerprint != original.BootstrapFingerprint {
+		t.Errorf("bootstrap_fingerprint round-trip: got %q; want %q", decoded.BootstrapFingerprint, original.BootstrapFingerprint)
+	}
+}
