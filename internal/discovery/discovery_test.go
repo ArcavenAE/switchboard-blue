@@ -11,6 +11,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/leanovate/gopter"
+	"github.com/leanovate/gopter/gen"
+	"github.com/leanovate/gopter/prop"
+
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/routing"
@@ -597,9 +601,10 @@ func TestDiscovery_Advertisement_RequiredFields(t *testing.T) {
 			}
 			got := decoded.Sessions[0]
 
-			if got.SessionName == "" {
-				t.Error("session_name must be non-empty in advertisement payload (BC-2.03.003 PC-1)")
-			}
+			// F-P5L2-LOW-01: empty-name check removed — Encode now rejects empty
+			// session names at encoding time (ErrInvalidSessionName); the decoded
+			// value cannot be empty if Encode/Decode succeeded. The equality
+			// assertion below is the correct oracle.
 			if got.SessionName != tc.want.SessionName {
 				t.Errorf("session_name: got %q, want %q", got.SessionName, tc.want.SessionName)
 			}
@@ -982,6 +987,11 @@ func TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN(t *testing.T) {
 	if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
 		t.Fatalf("ReceiveAdvertisement forged-SVTN: got %v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not get ErrSVTNMismatch before HMAC)", forgedErr)
 	}
+	// F-P5L2-MED-02: HMAC-first exclusivity — forged SVTN must never leak
+	// ErrSVTNMismatch; if it does, the ordering invariant is violated.
+	if errors.Is(forgedErr, discovery.ErrSVTNMismatch) {
+		t.Fatal("HMAC-first exclusivity violated per RULING-W6TB-H")
+	}
 }
 
 // TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel verifies that when
@@ -1188,8 +1198,14 @@ func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
 			if len(forgedAdv) >= hmacTagSize+16 {
 				copy(forgedAdv[hmacTagSize:hmacTagSize+16], pair.foreign[:])
 			}
-			if forgedErr := d.ReceiveAdvertisement(ctx, forgedAdv); !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
+			forgedErr := d.ReceiveAdvertisement(ctx, forgedAdv)
+			if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
 				t.Fatalf("VP-045 forged SVTN: err=%v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not receive ErrSVTNMismatch before HMAC fails)", forgedErr)
+			}
+			// F-P5L2-MED-02: HMAC-first exclusivity — forged SVTN must
+			// never leak ErrSVTNMismatch before HMAC verification.
+			if errors.Is(forgedErr, discovery.ErrSVTNMismatch) {
+				t.Fatal("HMAC-first exclusivity violated per RULING-W6TB-H")
 			}
 
 			result, err := d.Enumerate(ctx)
@@ -1213,11 +1229,14 @@ func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
 // VP-055 — property: round-trip stability across many payloads
 // ---------------------------------------------------------------------------
 
-// TestDiscovery_VP055_RoundTripProperty verifies BC-2.03.003 Inv-1:
+// TestPropPresenceAdvertisement_RoundTrip verifies BC-2.03.003 Inv-1:
 // Encode(Decode(b)) == b holds across a wide parameter space covering all
 // QualityIndicator values, both AttachmentStatus values, multiple session
-// counts, and edge cases (empty sessions, long names, Unicode names).
-func TestDiscovery_VP055_RoundTripProperty(t *testing.T) {
+// counts, and edge cases (long names, Unicode names). Session names are
+// restricted to 1..255 valid UTF-8 bytes (F-P5L2-CRIT-01; VP-055 v1.2).
+//
+// Traces: VP-055, BC-2.03.003 Inv-1, RULING-W6TB-J.
+func TestPropPresenceAdvertisement_RoundTrip(t *testing.T) {
 	t.Parallel()
 
 	// roundTrip asserts Encode(Decode(b)) == b (byte stability) and that
@@ -1275,9 +1294,11 @@ func TestDiscovery_VP055_RoundTripProperty(t *testing.T) {
 		discovery.Detached,
 		discovery.Attached,
 	}
+	// F-P5L2-CRIT-01: empty name removed — Encode now rejects empty session
+	// names (ErrInvalidSessionName). Empty-name rejection is exercised by
+	// TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8.
 	sessionNames := []string{
 		"agent-01",
-		"",         // empty name: boundary
 		"日本語セッション", // BC-2.03.003 EC-001: UTF-8 non-ASCII
 		"a",        // minimal
 		"session-with-dashes-and-numbers-123456789", // long ASCII
@@ -1328,191 +1349,378 @@ func TestDiscovery_VP055_RoundTripProperty(t *testing.T) {
 	})
 
 	// ---------------------------------------------------------------------------
-	// M-2 boundary cases: 255-byte session name truncation contract
-	// (BC-2.03.003 EC-001; S-7.02 v1.3).
-	//
-	// The wire format encodes session names with a uint16 length prefix and
-	// the raw name bytes. Names up to 255 bytes must be encoded and decoded
-	// verbatim. Names exceeding 255 bytes must be truncated on a valid UTF-8
-	// rune boundary to fit within 255 encoded bytes, with a UTF-8 ellipsis
-	// ("…", U+2026, 3 bytes) appended — making the maximum encoded length
-	// 255 bytes total (252 content bytes + 3-byte ellipsis).
+	// Gopter property: round-trip identity holds for arbitrary valid UTF-8
+	// names in [1, 255] bytes (VP-055 v1.2; F-P5L2-CRIT-01 — empty removed).
 	// ---------------------------------------------------------------------------
 
-	// 255 ASCII bytes: at the boundary — must be encoded verbatim, decoded verbatim.
-	name255 := strings.Repeat("a", 255)
-	{
-		payload := discovery.AdvertisementPayload{
-			NodeAddr: nodeA1,
-			SVTNID:   svtnA,
-			Sessions: []discovery.SessionPresence{
-				{SessionName: name255, Status: discovery.Attached, Quality: discovery.QualityGreen},
+	properties := gopter.NewProperties(gopter.DefaultTestParameters())
+
+	genName := gen.AnyString().SuchThat(func(s string) bool {
+		b := []byte(s)
+		return len(b) >= 1 && len(b) <= 255 && utf8.Valid(b)
+	})
+	genStatus := gen.OneConstOf(discovery.Detached, discovery.Attached)
+	genQuality := gen.OneConstOf(
+		discovery.QualityUnknown,
+		discovery.QualityGreen,
+		discovery.QualityYellow,
+		discovery.QualityRed,
+	)
+
+	properties.Property(
+		"round-trip: Encode(Decode(Encode(p))) == Encode(p) for valid UTF-8 names 1–255 bytes",
+		prop.ForAll(
+			func(name string, status discovery.AttachmentStatus, quality discovery.QualityIndicator) bool {
+				payload := discovery.AdvertisementPayload{
+					NodeAddr: nodeA1,
+					SVTNID:   svtnA,
+					Sessions: []discovery.SessionPresence{
+						{SessionName: name, Status: status, Quality: quality},
+					},
+				}
+				encoded, err := discovery.Encode(payload)
+				if err != nil {
+					return false
+				}
+				decoded, err := discovery.Decode(encoded)
+				if err != nil {
+					return false
+				}
+				reencoded, err := discovery.Encode(decoded)
+				if err != nil {
+					return false
+				}
+				return bytes.Equal(encoded, reencoded)
 			},
-		}
-		encoded, err := discovery.Encode(payload)
-		if err != nil {
-			t.Fatalf("255-byte name: Encode: %v", err)
-		}
-		decoded, err := discovery.Decode(encoded)
-		if err != nil {
-			t.Fatalf("255-byte name: Decode: %v", err)
-		}
-		if len(decoded.Sessions) != 1 {
-			t.Fatalf("255-byte name: decoded session count = %d, want 1", len(decoded.Sessions))
-		}
-		if got := decoded.Sessions[0].SessionName; got != name255 {
-			t.Errorf("255-byte name: decoded name len=%d, want %d (M-2 at-boundary must encode verbatim)", len(got), len(name255))
-		}
+			genName,
+			genStatus,
+			genQuality,
+		),
+	)
+
+	properties.TestingRun(t)
+}
+
+// ---------------------------------------------------------------------------
+// VP-055 v1.2 property tests (RULING-W6TB-J)
+// ---------------------------------------------------------------------------
+
+// TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8 verifies that
+// Encode returns ErrInvalidSessionName for session names that are empty or
+// contain invalid UTF-8 byte sequences. Oversize (>255 byte) names are
+// truncated, not rejected — only empty and non-UTF-8 inputs are errors.
+//
+// Traces: VP-055 v1.2, BC-2.03.003 PC-2, RULING-W6TB-J, F-P5L2-HIGH-01.
+func TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8(t *testing.T) {
+	t.Parallel()
+
+	// Manual cases: empty, and specific known-invalid UTF-8 byte sequences.
+	manualCases := []struct {
+		name  string
+		input string
+	}{
+		{"empty string", ""},
+		{"bare 0xFF 0xFE", "\xff\xfe"},
+		{"mid-string invalid byte 0x80", "a\x80b"},
+	}
+	for _, tc := range manualCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			payload := discovery.AdvertisementPayload{
+				NodeAddr: nodeA1,
+				SVTNID:   svtnA,
+				Sessions: []discovery.SessionPresence{
+					{SessionName: tc.input, Status: discovery.Attached, Quality: discovery.QualityGreen},
+				},
+			}
+			encoded, err := discovery.Encode(payload)
+			if err == nil {
+				t.Errorf("Encode(%q): got nil error, want ErrInvalidSessionName (VP-055 v1.2)", tc.input)
+			}
+			if err != nil && !errors.Is(err, discovery.ErrInvalidSessionName) {
+				t.Errorf("Encode(%q): err = %v, want errors.Is(err, ErrInvalidSessionName) == true", tc.input, err)
+			}
+			// Output must be zero-value on error.
+			if encoded != nil {
+				t.Errorf("Encode(%q): returned non-nil bytes on error (want zero-value)", tc.input)
+			}
+		})
 	}
 
-	// 256 ASCII bytes: one byte over the boundary — must be truncated.
-	// Expected: 252 bytes of content + "…" (3 bytes) = 255 bytes total.
-	name256 := strings.Repeat("b", 256)
-	{
+	// Gopter-driven: inject a 0xFF byte (never valid UTF-8) into arbitrary
+	// byte sequences. These must all be rejected with ErrInvalidSessionName.
+	params := gopter.DefaultTestParameters()
+	params.MinSuccessfulTests = 200
+	properties := gopter.NewProperties(params)
+
+	// Generate names containing an invalid UTF-8 byte (0xFF suffix).
+	genInvalidUTF8 := gen.SliceOf(gen.UInt8Range(0x00, 0xFE)).Map(func(bs []uint8) string {
+		// Append 0xFF — never valid UTF-8, forcing an invalid sequence.
+		return string(append(bs, 0xFF))
+	})
+
+	properties.Property(
+		"encode rejects names containing invalid UTF-8 with ErrInvalidSessionName",
+		prop.ForAll(
+			func(name string) bool {
+				payload := discovery.AdvertisementPayload{
+					NodeAddr: nodeA1,
+					SVTNID:   svtnA,
+					Sessions: []discovery.SessionPresence{
+						{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
+					},
+				}
+				encoded, err := discovery.Encode(payload)
+				if err == nil {
+					return false // must return an error
+				}
+				if encoded != nil {
+					return false // output must be zero-value
+				}
+				return errors.Is(err, discovery.ErrInvalidSessionName)
+			},
+			genInvalidUTF8,
+		),
+	)
+
+	properties.TestingRun(t)
+}
+
+// TestPropPresenceAdvertisement_TruncatesOversize verifies that Encode
+// truncates session names exceeding 255 bytes to a ≤255-byte valid UTF-8
+// string ending with "…" (U+2026, 3 bytes), returns err == nil, and that
+// the pre-ellipsis prefix is a byte-prefix of the input at a valid rune
+// boundary (utf8.RuneStart holds at the prefix boundary).
+//
+// Traces: VP-055 v1.2, BC-2.03.003 PC-2 + EC-001, RULING-W6TB-J,
+// F-P5L2-HIGH-02, F-P5L2-HIGH-03.
+func TestPropPresenceAdvertisement_TruncatesOversize(t *testing.T) {
+	t.Parallel()
+
+	params := gopter.DefaultTestParameters()
+	params.MinSuccessfulTests = 200
+	properties := gopter.NewProperties(params)
+
+	// Generate valid UTF-8 strings whose byte length is in [256, 2048].
+	// Strategy: start with a valid UTF-8 string and pad with ASCII 'x' until
+	// it exceeds 255 bytes, then cap at 2048.
+	genOversizeName := gen.AnyString().Map(func(s string) string {
+		for !utf8.ValidString(s) || len([]byte(s)) == 0 {
+			s += "x"
+		}
+		for len([]byte(s)) <= 255 {
+			s += "x"
+		}
+		b := []byte(s)
+		if len(b) > 2048 {
+			// Truncate to 2048 at a rune boundary.
+			cut := 2048
+			for cut > 0 && !utf8.RuneStart(b[cut]) {
+				cut--
+			}
+			s = string(b[:cut])
+		}
+		return s
+	}).SuchThat(func(s string) bool {
+		b := []byte(s)
+		return utf8.ValidString(s) && len(b) >= 256 && len(b) <= 2048
+	})
+
+	ellipsis := "…" // U+2026, 3 UTF-8 bytes
+
+	properties.Property(
+		"encode truncates oversize valid UTF-8 names: err==nil, ≤255 bytes, ends with '…', prefix at rune boundary",
+		prop.ForAll(
+			func(name string) bool {
+				payload := discovery.AdvertisementPayload{
+					NodeAddr: nodeA1,
+					SVTNID:   svtnA,
+					Sessions: []discovery.SessionPresence{
+						{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
+					},
+				}
+				encoded, err := discovery.Encode(payload)
+				if err != nil {
+					return false // truncation must not error
+				}
+				decoded, decErr := discovery.Decode(encoded)
+				if decErr != nil {
+					return false
+				}
+				result := decoded.Sessions[0].SessionName
+
+				// Must be within the 255-byte cap.
+				if len([]byte(result)) > 255 {
+					return false
+				}
+				// Must be valid UTF-8.
+				if !utf8.ValidString(result) {
+					return false
+				}
+				// Must end with the ellipsis marker.
+				if !strings.HasSuffix(result, ellipsis) {
+					return false
+				}
+				// Pre-ellipsis prefix must be a byte-prefix of the original
+				// input and must end at a valid rune boundary.
+				prefix := result[:len(result)-len(ellipsis)]
+				if !utf8.ValidString(prefix) {
+					return false
+				}
+				if !strings.HasPrefix(name, prefix) {
+					return false
+				}
+				// Boundary check: the byte immediately after the prefix must
+				// start a new rune (or equal len(input)), confirming no
+				// mid-rune cut (F-P5L2-HIGH-03).
+				prefixLen := len([]byte(prefix))
+				inputBytes := []byte(name)
+				if prefixLen < len(inputBytes) && !utf8.RuneStart(inputBytes[prefixLen]) {
+					return false
+				}
+				// Round-trip stability: re-encoding the decoded payload must
+				// produce the same bytes (truncated form is idempotent).
+				reencoded, reErr := discovery.Encode(decoded)
+				if reErr != nil {
+					return false
+				}
+				return bytes.Equal(encoded, reencoded)
+			},
+			genOversizeName,
+		),
+	)
+
+	properties.TestingRun(t)
+}
+
+// ---------------------------------------------------------------------------
+// AC-004b boundary test (F-P5L2-HIGH-03 content-preservation oracle)
+// ---------------------------------------------------------------------------
+
+// TestDiscovery_Encode_SessionName255ByteCap verifies exact boundary behaviour
+// for the 255-byte session-name cap (BC-2.03.003 PC-2 + EC-001; M-2):
+//
+//   - 255-byte ASCII name: accepted verbatim, Encode err == nil, round-trip
+//     byte-exact (F-P5L2-HIGH-03 at-boundary case).
+//   - 256-byte ASCII name: truncated to exactly "b"×252 + "…" = 255 bytes
+//     (content-preservation oracle, F-P5L2-HIGH-03).
+//   - 512-byte "日"×170 name: truncated to "日"×84 + "…" = 84×3+3 = 255 bytes
+//     (multi-byte rune boundary, F-P5L2-HIGH-03).
+//   - Mid-rune boundary: 250×"a" + 10×"日" (280 bytes) — pre-ellipsis prefix
+//     ends at a valid rune boundary, result is valid UTF-8 (F-L2-001).
+//
+// Traces: VP-055 v1.2, BC-2.03.003 PC-2 + EC-001, AC-004b, RULING-W6TB-J,
+// F-P5L2-HIGH-01, F-P5L2-HIGH-02, F-P5L2-HIGH-03.
+func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
+	t.Parallel()
+
+	encodeDecodeSession := func(t *testing.T, name string) (string, error) {
+		t.Helper()
 		payload := discovery.AdvertisementPayload{
 			NodeAddr: nodeA1,
 			SVTNID:   svtnA,
 			Sessions: []discovery.SessionPresence{
-				{SessionName: name256, Status: discovery.Attached, Quality: discovery.QualityGreen},
+				{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 			},
 		}
 		encoded, err := discovery.Encode(payload)
 		if err != nil {
-			t.Fatalf("256-byte name: Encode: %v", err)
+			return "", err
 		}
 		decoded, err := discovery.Decode(encoded)
 		if err != nil {
-			t.Fatalf("256-byte name: Decode: %v", err)
+			return "", err
 		}
 		if len(decoded.Sessions) != 1 {
-			t.Fatalf("256-byte name: decoded session count = %d, want 1", len(decoded.Sessions))
+			t.Fatalf("decoded session count = %d, want 1", len(decoded.Sessions))
 		}
-		got := decoded.Sessions[0].SessionName
-		// The decoded name must be the truncated form, not the original.
-		if got == name256 {
-			t.Errorf("256-byte name: decoded name is the untruncated original (%d bytes); want truncated form ≤255 bytes (M-2)", len(got))
-		}
-		if len(got) > 255 {
-			t.Errorf("256-byte name: decoded name len=%d, want ≤255 bytes after truncation (M-2)", len(got))
-		}
-		// Truncated form must end with the ellipsis marker.
-		if !strings.HasSuffix(got, "…") {
-			t.Errorf("256-byte name: truncated name %q does not end with ellipsis '…' (M-2 truncation contract)", got)
-		}
-		// Round-trip: Encode(Decode(encoded)) must equal encoded (truncated form is stable).
+		// Verify round-trip stability of the encoded form.
 		reencoded, err := discovery.Encode(decoded)
 		if err != nil {
-			t.Fatalf("256-byte name: re-Encode: %v", err)
+			return "", err
 		}
 		if !bytes.Equal(encoded, reencoded) {
-			t.Errorf("256-byte name: round-trip not stable after truncation: encoded=%d reencoded=%d bytes (M-2 VP-055)", len(encoded), len(reencoded))
+			t.Errorf("round-trip not stable: encoded=%d bytes reencoded=%d bytes (VP-055)", len(encoded), len(reencoded))
 		}
+		return decoded.Sessions[0].SessionName, nil
 	}
 
-	// 512-byte UTF-8-heavy string: multi-byte runes must truncate on a valid
-	// rune boundary so the result is valid UTF-8.
-	// "日" is 3 bytes; 512 bytes = ~170 runes.
-	name512utf8 := strings.Repeat("日", 170) // 510 bytes of UTF-8
-	{
-		payload := discovery.AdvertisementPayload{
-			NodeAddr: nodeA1,
-			SVTNID:   svtnA,
-			Sessions: []discovery.SessionPresence{
-				{SessionName: name512utf8, Status: discovery.Attached, Quality: discovery.QualityGreen},
-			},
-		}
-		encoded, err := discovery.Encode(payload)
+	t.Run("255-byte ASCII at-boundary accept verbatim", func(t *testing.T) {
+		t.Parallel()
+		name255 := strings.Repeat("a", 255)
+		got, err := encodeDecodeSession(t, name255)
 		if err != nil {
-			t.Fatalf("512-byte UTF-8 name: Encode: %v", err)
+			t.Fatalf("Encode: %v (255-byte name must not be rejected)", err)
 		}
-		decoded, err := discovery.Decode(encoded)
-		if err != nil {
-			t.Fatalf("512-byte UTF-8 name: Decode: %v", err)
+		if got != name255 {
+			t.Errorf("255-byte name: got len=%d %q, want verbatim %d bytes (M-2 at-boundary)", len(got), got[:min(len(got), 20)], len(name255))
 		}
-		if len(decoded.Sessions) != 1 {
-			t.Fatalf("512-byte UTF-8 name: decoded session count = %d, want 1", len(decoded.Sessions))
-		}
-		got := decoded.Sessions[0].SessionName
-		if got == name512utf8 {
-			t.Errorf("512-byte UTF-8 name: decoded name is the untruncated original; want truncated form ≤255 bytes (M-2)")
-		}
-		if len(got) > 255 {
-			t.Errorf("512-byte UTF-8 name: decoded name len=%d, want ≤255 bytes after truncation (M-2)", len(got))
-		}
-		if !strings.HasSuffix(got, "…") {
-			t.Errorf("512-byte UTF-8 name: truncated name does not end with '…' (M-2 truncation contract)")
-		}
-		// The truncated result MUST be valid UTF-8 — truncation on a mid-rune
-		// byte boundary would produce an invalid sequence (F-L2-001).
-		if !utf8.ValidString(got) {
-			t.Errorf("512-byte UTF-8 name: truncated result is not valid UTF-8 (F-L2-001 rune-boundary truncation)")
-		}
-		// Round-trip stability after truncation.
-		reencoded, err := discovery.Encode(decoded)
-		if err != nil {
-			t.Fatalf("512-byte UTF-8 name: re-Encode: %v", err)
-		}
-		if !bytes.Equal(encoded, reencoded) {
-			t.Errorf("512-byte UTF-8 name: round-trip not stable after truncation (M-2 VP-055)")
-		}
-	}
+	})
 
-	// ---------------------------------------------------------------------------
-	// F-L2-001 adversarial: boundary byte lands mid-rune.
-	//
-	// "日" encodes as 3 UTF-8 bytes (0xE6 0x97 0xA5).
-	// 250 ASCII bytes + N×"日" bytes: the 252-byte content window (before the
-	// 3-byte ellipsis) falls mid-rune when the Japanese rune sequence starts
-	// at byte 250 — byte 252 lands inside a rune (byte 2 of the 3-byte
-	// sequence). Correct truncation must walk back to the previous rune
-	// boundary so the result is valid UTF-8 AND ends with "…".
-	//
-	// Input: 250×"a" (250 bytes) + 10×"日" (30 bytes) = 280 bytes total.
-	// Byte 252 = byte offset 2 of the first "日" rune → mid-rune boundary.
-	// ---------------------------------------------------------------------------
-	{
+	t.Run("256-byte ASCII content-preservation oracle", func(t *testing.T) {
+		t.Parallel()
+		// F-P5L2-HIGH-03: the pre-ellipsis content must be the byte-exact
+		// prefix of the input at the cut point (252 bytes for ASCII).
+		want := strings.Repeat("b", 252) + "…"
+		got, err := encodeDecodeSession(t, strings.Repeat("b", 256))
+		if err != nil {
+			t.Fatalf("Encode: %v (256-byte name must truncate, not error)", err)
+		}
+		if got != want {
+			t.Errorf("256-byte name: got %q (len=%d), want %q (len=%d) (F-P5L2-HIGH-03 content-preservation oracle)", got, len(got), want, len(want))
+		}
+	})
+
+	t.Run("512-byte UTF-8 日×170 content-preservation oracle", func(t *testing.T) {
+		t.Parallel()
+		// "日" = 3 UTF-8 bytes; 84×3 = 252 content bytes + 3-byte ellipsis = 255.
+		// F-P5L2-HIGH-03: assert exact truncated content.
+		want := strings.Repeat("日", 84) + "…"
+		got, err := encodeDecodeSession(t, strings.Repeat("日", 170))
+		if err != nil {
+			t.Fatalf("Encode: %v (日×170 name must truncate, not error)", err)
+		}
+		if got != want {
+			t.Errorf("日×170 name: got %q (len=%d), want %q (len=%d) (F-P5L2-HIGH-03 content-preservation oracle)", got, len(got), want, len(want))
+		}
+	})
+
+	t.Run("mid-rune boundary: 250×a + 10×日 (280 bytes)", func(t *testing.T) {
+		t.Parallel()
+		// "日" = 0xE6 0x97 0xA5 (3 bytes). The 252-byte content window ends at
+		// byte 252, which lands at byte offset 2 of the second "日" rune
+		// (250 ASCII bytes + 2 bytes of the first "日"). Correct truncation
+		// must walk back to byte 250 (last ASCII byte boundary), so the
+		// result is 250×"a" + "…" = 253 bytes total (F-L2-001).
 		mixedName := strings.Repeat("a", 250) + strings.Repeat("日", 10)
-		// Sanity-check the construction: 280 bytes, byte 252 is mid-"日".
 		if len(mixedName) != 280 {
-			t.Fatalf("adversarial mid-rune: input len=%d, want 280", len(mixedName))
+			t.Fatalf("test input len=%d, want 280", len(mixedName))
 		}
-
-		payload := discovery.AdvertisementPayload{
-			NodeAddr: nodeA1,
-			SVTNID:   svtnA,
-			Sessions: []discovery.SessionPresence{
-				{SessionName: mixedName, Status: discovery.Attached, Quality: discovery.QualityGreen},
-			},
-		}
-		encoded, err := discovery.Encode(payload)
+		got, err := encodeDecodeSession(t, mixedName)
 		if err != nil {
-			t.Fatalf("adversarial mid-rune: Encode: %v", err)
+			t.Fatalf("Encode: %v (mid-rune name must truncate, not error)", err)
 		}
-		decoded, err := discovery.Decode(encoded)
-		if err != nil {
-			t.Fatalf("adversarial mid-rune: Decode: %v", err)
-		}
-		if len(decoded.Sessions) != 1 {
-			t.Fatalf("adversarial mid-rune: decoded session count = %d, want 1", len(decoded.Sessions))
-		}
-		got := decoded.Sessions[0].SessionName
-
-		// Must be truncated (input > 255 bytes).
-		if got == mixedName {
-			t.Errorf("adversarial mid-rune: decoded name is untruncated (%d bytes); want truncated form ≤255 bytes (F-L2-001)", len(got))
-		}
-		// Must be within the 255-byte limit.
 		if len(got) > 255 {
-			t.Errorf("adversarial mid-rune: decoded name len=%d, want ≤255 bytes (F-L2-001)", len(got))
+			t.Errorf("mid-rune: decoded name len=%d, want ≤255 bytes (F-L2-001)", len(got))
 		}
-		// Must end with the ellipsis marker.
 		if !strings.HasSuffix(got, "…") {
-			t.Errorf("adversarial mid-rune: truncated name %q does not end with '…' (F-L2-001 truncation contract)", got)
+			t.Errorf("mid-rune: truncated name %q does not end with '…' (F-L2-001 truncation contract)", got)
 		}
-		// CRITICAL: the result MUST be valid UTF-8 — mid-rune truncation would
-		// leave a broken byte sequence. This is the primary assertion for F-L2-001.
 		if !utf8.ValidString(got) {
-			t.Errorf("adversarial mid-rune: truncated result is not valid UTF-8 — truncation landed mid-rune (F-L2-001)")
+			t.Errorf("mid-rune: truncated result is not valid UTF-8 — truncation landed mid-rune (F-L2-001)")
 		}
-	}
+		// The pre-ellipsis prefix must be a byte-prefix of the input at a
+		// valid rune boundary (utf8.RuneStart check).
+		ellipsis := "…"
+		prefix := got[:len(got)-len(ellipsis)]
+		if !strings.HasPrefix(mixedName, prefix) {
+			t.Errorf("mid-rune: pre-ellipsis prefix %q is not a byte-prefix of input (F-P5L2-HIGH-03)", prefix)
+		}
+		prefixLen := len([]byte(prefix))
+		inputBytes := []byte(mixedName)
+		if prefixLen < len(inputBytes) && !utf8.RuneStart(inputBytes[prefixLen]) {
+			t.Errorf("mid-rune: prefix boundary byte %#x at offset %d is not a rune start (F-P5L2-HIGH-03)", inputBytes[prefixLen], prefixLen)
+		}
+	})
 }
