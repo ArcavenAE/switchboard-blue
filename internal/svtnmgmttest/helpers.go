@@ -21,4 +21,10 @@ func SeedSVTNWithoutBootstrapKey(t *testing.T, m *svtnmgmt.SVTNManager, svtnName
 	if err := m.InsertRawSVTN(svtnName); err != nil {
 		t.Fatalf("SeedSVTNWithoutBootstrapKey: InsertRawSVTN(%q): %v", svtnName, err)
 	}
+	if !m.HasAnySVTN() {
+		t.Fatalf("SeedSVTNWithoutBootstrapKey postcondition: HasAnySVTN() == false")
+	}
+	if m.BootstrapKeyHasControlRole() {
+		t.Fatalf("SeedSVTNWithoutBootstrapKey postcondition: BootstrapKeyHasControlRole() == true")
+	}
 }
