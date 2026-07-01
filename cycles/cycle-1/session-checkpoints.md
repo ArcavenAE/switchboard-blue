@@ -465,3 +465,15 @@ Archived from STATE.md on Pass-28 PASS — checkpoint superseded by convergence-
 Dispatch IDs: lens-1 a68ef99c2850a5ae5 / lens-2 ad7f415313ffdd259 / lens-3 a73b40208a7fef653. Lens-1: 7 LOW non-blocking OBS routed to TaskList #115. Lens-2: novelty LOW. Lens-3: novelty ZERO, Pass-25 propagation fully landed.
 
 S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36cb9b. Spec tip: a6cdb88. Impl tip: d3f186c.
+
+---
+
+## Archived: 2026-07-01 (Wave-6 Tranche B Pass-7 complete — superseded by Pass-9 checkpoint)
+
+**Position:** Phase 3 Wave 6 Tranche B. Pass-6 fix-burst (b3c93b5) closed F-P6L2-01. Pass-7 S-7.01 CLEAN 2/3; S-7.02 reset 0/3 (3 MEDIUM findings); S-BL.ROUTER-ADDR not run. Pass-7 S-7.02 fix-burst in flight (SHA pending).
+
+**Counter state:** S-7.01 2/3, S-7.02 0/3 (reset), S-BL.ROUTER-ADDR 0/3 (post-b3c93b5 fix, pending dispatch).
+
+**develop HEAD:** 446efce. Tranche B stories: S-7.01 v1.4, S-7.02 v1.6, S-7.03 v1.2, S-BL.ROUTER-ADDR v1.4.
+
+**NEXT ACTION (superseded):** Pass-8 dispatch: S-7.01 fresh 3-lens (clean-attempt #3/3); S-7.02 await P7L2 fix-burst then fresh 3-lens; S-BL.ROUTER-ADDR fresh 3-lens (clean-attempt #1/3 after b3c93b5).

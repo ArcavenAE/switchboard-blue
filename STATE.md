@@ -4,7 +4,7 @@ phase: phase-3-tdd-implementation
 phase_step: wave-6-tranche-a-closed
 phase_3_active_wave: 6
 phase_3_active_stories: []
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07]
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -73,23 +73,23 @@ wave_6_points: 33
 wave_6_deferred: "S-7.04 → Wave 7"
 wave_6_tranche_a: "[S-W5.04 PR#40/eac5d0a, S-BL.LOOKUP PR#41/851e164, S-6.07(v1.13) PR#42/446efce — all merged 2026-07-01]"
 wave_6_tranche_a_closed_at: 2026-07-01T19:04:40Z
-wave_6_tranche_b: "[S-7.01, S-7.02, S-7.03] (Tranche A closed; P6: S-7.01 1/3, S-7.02 1/3, S-BL.ROUTER-ADDR 0/3 reset; P7: S-7.01 2/3, S-7.02 0/3 reset, S-BL.ROUTER-ADDR pending)"
+wave_6_tranche_b: "[S-7.01 MERGED PR#43/5c658e7; S-7.02 2/3 HEAD a9bf936; S-BL.ROUTER-ADDR 2/3 HEAD dffc27e — Pass-10 pending convergence-close]"
 wave_6_tranche_b_pass6_fix: "b3c93b5 — F-P6L2-01 stale RED-GATE recover-guard removed from integration_test.go Part B"
 wave_6_tranche_b_p7_findings: "F-P7L2-MED-01 tautological HMAC-first oracle; F-P7L2-MED-02 TruncatesOversize maximality; F-P7L2-MED-03 mid-rune exact-content"
-develop_head: 446efce
+develop_head: 5c658e7
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-07-01T22:00:00Z
-last_update: 2026-07-01
+timestamp: 2026-07-02T00:00:00Z
+last_update: 2026-07-02
 ---
 
 # Switchboard Factory State
 
 ## Current State
 
-Wave 6 Tranche A CLOSED (S-BL.LOOKUP PR#40/eac5d0a, S-W5.04 PR#41/851e164, S-6.07 PR#42/446efce — all merged 2026-07-01). Wave 6 Tranche B (S-7.01, S-7.02, S-BL.ROUTER-ADDR) adversarial convergence in progress. develop HEAD: 446efce. 45 BCs, 76 VPs, 45 stories.
+Wave 6 Tranche A CLOSED. S-7.01 MERGED (PR #43, 5c658e7 — first Tranche B story to converge under BC-5.39.001). S-7.02 and S-BL.ROUTER-ADDR at 2/3 after Pass-9 clean. develop HEAD: 5c658e7. 45 BCs, 76 VPs, 46 stories.
 
-**Tranche B counter state (2026-07-01):** S-7.01 2/3 (Pass-7 all lenses clean), S-7.02 0/3 reset (Pass-7 L2 blocked — 3 novel MEDIUM findings F-P7L2-MED-01/02/03; fix-burst in flight), S-BL.ROUTER-ADDR 0/3 (Pass-6 L2 F-P6L2-01 fixed at b3c93b5; pending fresh dispatch). Pass-8 dispatch is next.
+**Tranche B counter state (Pass-9):** S-7.01 MERGED (5c658e7 PR #43). S-7.02 2/3 (Pass-9 all 3 lenses clean, HEAD a9bf936). S-BL.ROUTER-ADDR 2/3 (Pass-9 all 3 lenses clean, HEAD dffc27e; two LOW non-blocking obs: PathEntryFromSnapshot param redundancy + VP-047 e2e deferred per RULING-W6TB-B). Pass-10 dispatched for convergence-close.
 
 Historical burst detail: `cycles/cycle-1/burst-log.md`.
 
@@ -99,33 +99,22 @@ Historical burst detail: `cycles/cycle-1/burst-log.md`.
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: APPROVED. Wave 5: ALL 8 MERGED. W6-TrA: ALL 3 MERGED (446efce). W6-TrB: P6 S-7.01 1/3 S-7.02 1/3 S-BL.ROUTER-ADDR 0/3; P7 S-7.01 2/3 S-7.02 0/3 reset S-BL.ROUTER-ADDR pending. | 2026-07-01 | W6-TrB: S-7.01→2/3; S-7.02→0/3 (P7L2 3×MED reset); S-BL.ROUTER-ADDR→0/3 (P6L2 F-P6L2-01 fixed b3c93b5). Pass-8 pending. |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: APPROVED. Wave 5: ALL 8 MERGED. W6-TrA: ALL 3 MERGED. W6-TrB: S-7.01 MERGED PR#43/5c658e7; S-7.02 2/3 P9 clean (HEAD a9bf936); S-BL.ROUTER-ADDR 2/3 P9 clean (HEAD dffc27e). Pass-10 dispatched. | 2026-07-02 | W6-TrB: S-7.01 CONVERGED+MERGED; S-7.02→2/3 (P9 all-lens clean); S-BL.ROUTER-ADDR→2/3 (P9 all-lens clean). Pass-10 = convergence-close. |
 
 ## Wave / Story Status
 
 Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cycle-1/closed-stories.md`.
 
-**Wave-5 note:** The table below lists 8 Wave-5 stories. S-W5.04 has been re-scheduled to Wave 6 per F-W5P1-004 ruling (5 pt, unblocked, all depends met); it does not appear here.
+Wave 4 complete: S-4.01 #24/e415d31, S-4.02 #25/95729c7, S-4.03 #26/8d9744f, S-4.04 #27/42c51e2, S-6.01 #28/abeba27, hygiene #29/7ef43b8.
+
+Wave 5 complete: S-5.03 #30/01ae50c, S-5.01 #35/c1c2c3d, S-5.02 #37/98eb8b7, S-6.02 #34/b36cb9b, S-6.03 #32/d854978, S-W5.01 #31/0d499ac, S-6.06 #36/3ee9c38, S-W5.02 #38/d881f99. (S-W5.04 moved to Wave 6 per F-W5P1-004.)
 
 | Wave | Story | Title | Status | PR | SHA |
 |------|-------|-------|--------|----|-----|
-| 4 | S-4.01 | Per-path RTT/loss tracking + dedup/race dispatch | MERGED | #24 | e415d31 |
-| 4 | S-4.02 | Upstream replay (internal/replay) | MERGED | #25 | 95729c7 |
-| 4 | S-4.03 | Downstream ARQ + TLPKTDROP (internal/arq) | MERGED | #26 | 8d9744f |
-| 4 | S-4.04 | Split-horizon loop prevention + drop-cache router wiring | MERGED | #27 | 42c51e2 |
-| 4 | S-6.01 | Config parsing and validation | MERGED | #28 | abeba27 |
-| 4 | hygiene | Doc-hygiene: stale ref + leftover stub docstring fix | MERGED | #29 | 7ef43b8 |
-| 5 | S-5.03 | flag paths degraded when EWMA RTT > 200ms | MERGED | #30 | 01ae50c |
-| 5 | S-5.01 | Green/yellow/red quality indicator with hysteresis | MERGED | #35 | c1c2c3d |
-| 5 | S-5.02 | sbctl paths list / router metrics + alias + p99 | MERGED | [#37](https://github.com/ArcavenAE/switchboard-blue/pull/37) | 98eb8b7 |
-| 5 | S-6.02 | SVTN lifecycle and key management via sbctl admin | MERGED | #34 | b36cb9b |
-| 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | MERGED | #32 | d854978 |
-| 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | MERGED | #31 | 0d499ac |
-| 5 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | MERGED | #36 | 3ee9c38 |
-| 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | MERGED | [#38](https://github.com/ArcavenAE/switchboard-blue/pull/38) | d881f99 |
 | 6 | S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup to value-return form | MERGED | #40 | eac5d0a |
 | 6 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers | MERGED | #41 | 851e164 |
 | 6 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI (v1.13) | MERGED | #42 | 446efce |
+| 6 | S-7.01 | XOR parity FEC for single-loss recovery (BC-5.39.001 converged) | MERGED | #43 | 5c658e7 |
 
 ## Open Drift Items
 
@@ -153,30 +142,16 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | F-009 | LOW | ARCH-INDEX input-hash tooling field-name mismatch (pre-existing, hash tooling does not emit `input_hash` field). | architect/devops | tracked TODO — deferred maintenance |
 | E-CFG-002 | MED | Pre-existing config-key collision (joins tracked E-CFG-006). | product-owner | deferred maintenance |
 | E-CFG-006 | MED | Pre-existing config-key collision (tracked from prior audit). | product-owner | deferred maintenance |
-| PROCESS-GAP-W5A | OBS | [process-gap] S-W5.01 implementer reported "all 4 modes wired" when runRouter/runConsole/runControl still had orphaned listeners (Round-1 HIGH unfixed for 3/4 modes). S-6.03 implementer reported "race-clean" when `go test -race` intermittently failed on package-global homeDirFunc data race under t.Parallel. Orchestrator independent verification (go test -race + reading mgmt_wire.go) caught both false-greens. Candidate mandatory discipline: require `just test-race` evidence-paste in implementer completion contract before green-claim is accepted. | orchestrator | open — candidate codification |
+| PROCESS-GAP-W5A | OBS | [process-gap] Two false-greens caught in Wave 5 (S-W5.01: 3/4 daemon modes still had orphaned listeners; S-6.03: `go test -race` intermittently failed on homeDirFunc race). Candidate discipline: require `just test-race` evidence-paste before green-claim. | orchestrator | open — candidate codification |
 | DRIFT-SW501-NITPICK | LOW | S-W5.01 Pass-3 nitpicks (non-gating, cosmetic): stale "Stub: ... Red Gate" comments in internal/config/config.go ~L236 & ~L244 (functions fully implemented+tested); dead `_ = pub` in internal/mgmt/mgmt.go ~L462. | implementer | cannot-action-without-owner (source-code edit; spec-steward scope is .factory/ only; needs implementer in Wave-6 hygiene story) |
-| PROCESS-GAP-P21 | OBS | [process-gap] Four consecutive passes (19, 20, 21, 22) have exposed BC/VP narrowing not propagating exhaustively. Rule crystallized: when a BC EC is narrowed/widened, story-writer + VP-INDEX + error-taxonomy MUST all be swept in one atomic fix-burst. vsdd-factory issues #361–#364 filed. | orchestrator/story-writer | open — vsdd-factory issues filed |
-| PROCESS-GAP-P23 | OBS | [process-gap] 5th consecutive recurrence (passes 19, 21, 22, 22-stragglers, 23): sibling-sweep gap misses story-body prose narrative (Error Code Map message annotations + Task Refs). Pass-22 grepped for "unconditionally" but NOT for "v1.10" residuals. Refines and extends PROCESS-GAP-P21. Cross-ref vsdd-factory #361 (comment appended noting 5th recurrence). | orchestrator/story-writer | open — additional evidence on #361 |
-| PROCESS-GAP-P24 | OBS | [process-gap] 6th consecutive recurrence. New axis: downstream-doc cite of upstream-doc version (VP-076 Source Contract cited error-taxonomy v3.8 after Pass-22 fix-burst bumped error-taxonomy to v3.9 and VP-076 to v1.3 in the same commit but missed VP-076's back-reference). New surface: impl source comments (svtnmgmt.go + admin_handlers_test.go v1.10 cite residuals). Cross-ref vsdd-factory #361 (6th-recurrence comment appended). | orchestrator/story-writer/implementer | open — additional evidence on #361 |
-| PROCESS-GAP-P25 | OBS | [process-gap] 7th consecutive recurrence. New axis: story body downstream→upstream version cites (story body cites of upstream-artifact versions become stale after upstream version bumps). Pass-24 fix-burst (c5c948c) updated VP-076 v1.3→v1.4 but did NOT sweep stories/ for "VP-076 v1.*" current-state cites. Mechanism mirrors PROCESS-GAP-P21/P23/P24. Upstream-rooted sweep rule: any document citing an artifact must be re-grepped when that artifact's version bumps. Cross-ref vsdd-factory #361 (7th-recurrence comment appended). | orchestrator/story-writer | open — additional evidence on #361 |
+| PROCESS-GAP-P21..P25 | OBS | [process-gap] 7 consecutive recurrences of sibling-sweep gap (BC/VP narrowing, story-body prose, downstream-doc version cites, upstream-rooted sweep). Rule crystallized: any artifact version bump must sweep all downstream cites atomically. vsdd-factory #361–#364 filed; #361 carries all 7 recurrence comments. | orchestrator/story-writer | open — vsdd-factory issues filed |
 | S502-DEFER-1 | MED | S-5.02: runRouterStatus at cmd/sbctl/router_status.go:164-167 lacks auth-timeout wrap (BC-2.06.003 PC-3 / BC-2.07.003 Inv-2 alias-parity gap). | implementer | defer wave-gate |
 | S502-DEFER-2 | MED | S-5.02: writeSuccess at cmd/sbctl/main.go:101 calls os.Exit(3) outside main() — violates go.md rule. | implementer | defer phase-5 |
-| S502-DEFER-3 | MED | S-5.02: BC-2.06.003 PC-3 F-M3 spec-ambiguity — failed+pending precedence unspecified; consider BC spec-tightening cross-story. | product-owner/architect | **CLOSED 2026-06-30**: PO ruling issued — pending takes precedence over failed for quality field; BC-2.06.003 v1.8 + EC-007 + VP-062 v1.3 + S-W5.04 v1.4 AC-005a all updated. |
-| S502-DEFER-4 | LOW | S-5.02: ARCH-11 v1.11 VP total 75 vs actual 76 (VP-076 minted at VP-INDEX v2.10 not propagated); dep-graph.md v1.4 VP total 67 vs actual 76. Arch-doc sweep needed. | architect | defer state-manager arch-doc sweep post-convergence |
-| S502-DEFER-5 | OBS | S-5.02: S-W5.04 §Arch Compliance asymmetric (VP-047 row only; no VP-062 row) — intent-adjudicated, plausibly intentional. | architect | open/deferred |
-| S502-DEFER-6 | LOW | S-5.02: S-5.02 token-budget footnote phrasing about internal/metrics — cosmetic. | story-writer | defer phase-5 |
-| SW502-DEFER-1 | LOW | S-W5.02 CR-002: closingConn.Read conflates server-shutdown ErrClosed with client FIN — intentional design, consider documenting intent in a comment. | implementer | deferred wave-6 |
-| SW502-DEFER-2 | LOW | S-W5.02 CR-005: closingListenerWrapper goroutines not tracked in WaitGroup — drain on Shutdown; consider adding context cancellation for cleaner lifecycle. | implementer | deferred wave-6 |
-| SW502-DEFER-3 | LOW | S-W5.02 CR-006: dialConn t.Cleanup double-close path — benign (net.Conn.Close idempotent); consider sync.Once or clarifying comment. | implementer | deferred wave-6 |
-| SW502-DEFER-4 | LOW | S-W5.02 CR-007: bootstrap variant test missing resp.Data assertion — AC-003 data assertions live in primary 4-daemon test only. | test-writer | deferred phase-5-hardening |
-| SW502-DEFER-5 | LOW | S-W5.02 CR-008: mode-specific handler response payload not shape-asserted — handlers are test stubs; wire-protocol correctness is the assertion target. | test-writer | deferred phase-5-hardening |
-| SW502-DEFER-6 | LOW | S-W5.02 CR-009: closed map in closingListenerWrapper is dead code — can be removed; minor technical debt. | implementer | deferred wave-6 |
-| SW502-DEFER-7 | LOW | S-W5.02 SEC-001: waitForCloseAfter polling busy-wait (CWE-400, test-only) — consider channel-based notification. | implementer | deferred phase-5-hardening |
-| SW502-DEFER-8 | LOW | S-W5.02 SEC-002: nonConstantID() fallback to time.UnixNano (CWE-330, test-only) — consider t.Fatal instead of silent degradation. | implementer | deferred phase-5-hardening |
+| S502-DEFER-4..6 | LOW | S-5.02: ARCH-11/dep-graph VP total stale (75/67 vs 76); S-W5.04 §Arch Compliance asymmetric (VP-047 only); token-budget footnote cosmetic. | architect/story-writer | defer post-convergence arch-doc sweep |
+| SW502-DEFER-1..8 | LOW | S-W5.02 CR-002/005/006/007/008/009 + SEC-001/002: 8 LOW deferrals (intentional design choices, test-only observations, cosmetic). Detail: `cycles/cycle-1/closed-drift.md`. | implementer/test-writer | deferred wave-6 / phase-5-hardening |
 | PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep enforcement at BC/VP version bumps (superset of PROCESS-GAP-P19..25); currently only external vsdd-factory issue #361 comment. | orchestrator | orchestrator-policy-registry-update |
-| DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER | LOW | Closed by S-BL.ROUTER-ADDR v1.1 (VP-047 v1.4, BC-2.06.003 v1.15, wave-rulings v1.11). Merges when S-BL.ROUTER-ADDR PR lands. | implementer/architect | closed-pending-merge |
-| PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP | OBS | [process-gap] When promoting a story between STORY-INDEX sections (backlog→master-table, draft→scheduled), the Summary Total (line ~22), stubs rollup (line ~27), AND section-by-section counts (line ~34) MUST all be swept atomically. Root cause: multi-location aggregate rollups in same document not swept when a table row moves. F-P2L3-M1 exposed this when S-BL.LOOKUP was promoted to Wave 6 master-table in v3.24 without updating Summary. Checklist item should be added to sibling-sweep addendum. | orchestrator/story-writer | open — process rule to codify |
-Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
+| PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP | OBS | [process-gap] STORY-INDEX multi-location aggregate rollups (Summary Total, stubs rollup, section counts) must be swept atomically when a story row moves sections. F-P2L3-M1 exposed this at v3.24. | orchestrator/story-writer | open — process rule to codify |
+Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4, S502-DEFER-3, DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
 
@@ -190,27 +165,25 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-BL.LOOKUP MERGED (eac5d0a, PR #40) | AdmittedKeySet.Lookup value-return migration; Wave-6 Tranche A | 2026-07-01 |
 | S-W5.04 MERGED (851e164, PR #41) | daemon-side paths.list/router.metrics/router.status RPC handlers; BC-2.06.003 PC-1/2; VP-047 | 2026-07-01 |
 | S-6.07 MERGED (446efce, PR #42) | admin.svtn.create handler + sbctl CLI; BC-2.07.001; Wave-6 Tranche A CLOSED | 2026-07-01 |
+| S-7.01 MERGED (5c658e7, PR #43) | XOR parity FEC; BC-2.02.007; first Tranche B story to converge under BC-5.39.001 | 2026-07-02 |
 Older decisions (Waves 1-5 per-story): `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche B Pass-7 complete)
+## Session Resume Checkpoint — 2026-07-02 (Pass-9 aggregate: S-7.01 MERGED, S-7.02 + S-BL.ROUTER-ADDR 2/3)
 
-**Position:** Phase 3 Wave 6 Tranche B. Pass-6 fix-burst (b3c93b5) closed F-P6L2-01. Pass-7 S-7.01 CLEAN 2/3; S-7.02 reset 0/3 (3 MEDIUM findings); S-BL.ROUTER-ADDR not run. Pass-7 S-7.02 fix-burst in flight (SHA pending).
+**Position:** Phase 3 Wave 6 Tranche B. S-7.01 MERGED (PR #43, 5c658e7). Pass-9: S-7.02 CLEAN 2/3 (HEAD a9bf936, all 3 lenses, novelty LOW, no process-gap findings). S-BL.ROUTER-ADDR CLEAN 2/3 (HEAD dffc27e, all 3 lenses; 2 non-blocking LOW obs per RULING-W6TB-B).
 
-**Counter state:** S-7.01 2/3, S-7.02 0/3 (reset), S-BL.ROUTER-ADDR 0/3 (post-b3c93b5 fix, pending dispatch).
+**Counter state:** S-7.01 MERGED, S-7.02 2/3 (HEAD a9bf936), S-BL.ROUTER-ADDR 2/3 (HEAD dffc27e).
 
-**develop HEAD:** 446efce. Tranche B stories: S-7.01 v1.4, S-7.02 v1.6, S-7.03 v1.2, S-BL.ROUTER-ADDR v1.4.
+**develop HEAD:** 5c658e7. Tranche B: S-7.02 v1.6, S-7.03 v1.2, S-BL.ROUTER-ADDR v1.4.
 
-**NEXT ACTION on resume:** Pass-8 dispatch:
-- S-7.01: fresh 3-lens (clean-attempt #3/3 — convergence-close if all clean)
-- S-7.02: await P7L2 fix-burst SHA from test-writer, then fresh 3-lens (clean-attempt #1/3 reset)
-- S-BL.ROUTER-ADDR: fresh 3-lens (clean-attempt #1/3 after b3c93b5)
+**NEXT ACTION on resume:** Pass-10 dispatched for S-7.02 (HEAD a9bf936) + S-BL.ROUTER-ADDR (HEAD dffc27e), both attempt 3/3 for convergence-close. S-7.01 MERGED (PR #43 → 5c658e7). Follow-up issues for S-7.01 CR-001/004/005/006/007 filed in parallel.
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals in Open Drift Items.
 - PROCESS-GAP-W5-SIBLINGSWEEP: vsdd-factory #361-364.
-- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER: closed-pending-merge.
 - PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP: open/codify.
-- TaskList #115: S-6.06 lens-1 post-merge polish. TaskList #118: Phase-5 follow-up.
+- TaskList #115: S-6.06 lens-1 post-merge polish.
+- S-7.01 CR-001/004/005/006/007: follow-up issues filed post-merge.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
@@ -218,8 +191,8 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 | Date | Entry |
 |------|-------|
-| 2026-07-01 | **Pass-6 aggregate:** S-7.01 CLEAN 1/3; S-7.02 CLEAN 1/3; S-BL.ROUTER-ADDR L2 FAILED (F-P6L2-01: stale RED-GATE recover-guard in integration_test.go lines 456-469, S-7.01 partial-fix propagation gap) → reset 0/3. **Pass-6 fix-burst:** b3c93b5 — removed stale recover-guard, replaced with direct `paths.NewPathTrackerWithAddr(stubAddr, 50.0, 0.125)`. F-P6L2-01 CLOSED. |
-| 2026-07-01 | **Pass-7 aggregate:** S-7.01 CLEAN 2/3 (all 3 lenses clean); S-7.02 L1/L3 CLEAN, L2 FAILED (3 novel MEDIUM: F-P7L2-MED-01 tautological HMAC-first oracle, F-P7L2-MED-02 TruncatesOversize maximality, F-P7L2-MED-03 mid-rune exact-content) → reset 0/3. S-BL.ROUTER-ADDR NOT RUN (pending fresh dispatch post-b3c93b5). Pass-7 S-7.02 fix-burst in flight (test-writer; SHA pending). |
+| 2026-07-01 | **Pass-6:** S-7.01 1/3; S-7.02 1/3; S-BL.ROUTER-ADDR 0/3 (F-P6L2-01 fixed b3c93b5). **Pass-7:** S-7.01 2/3; S-7.02 0/3 reset (3 MEDIUM F-P7L2-MED-01/02/03); S-BL.ROUTER-ADDR not run. Fix-burst dispatched. |
+| 2026-07-02 | **Pass-8/9 aggregate:** S-7.01 MERGED (PR #43, 5c658e7). Pass-9: S-7.02 CLEAN 2/3 (HEAD a9bf936, all lenses, novelty LOW). S-BL.ROUTER-ADDR CLEAN 2/3 (HEAD dffc27e, all lenses, 2 non-blocking LOW obs). Pass-10 dispatched for convergence-close (3/3). Follow-up issues CR-001/004/005/006/007 filed for S-7.01. |
 
 ## Historical Content
 

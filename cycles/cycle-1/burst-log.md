@@ -847,3 +847,15 @@ L2 BLOCK resets S-7.02 counter to 0/3.
 **Pass-7 fix-burst:** test-writer dispatched for S-7.02 (F-P7L2-MED-01/02/03). SHA not yet reported — in flight.
 
 **Counter state after Pass-7:** S-7.01 2/3, S-7.02 0/3 (reset), S-BL.ROUTER-ADDR 0/3 (pending fresh dispatch).
+
+---
+
+## Wave-6 Tranche B Pass-8/9 aggregate — 2026-07-01
+
+**S-7.01:** MERGED to develop. PR #43, merge SHA 5c658e7. First Tranche B story to converge under BC-5.39.001. Worktree removed, local branch deleted. Follow-up issues CR-001/004/005/006/007 filed in parallel.
+
+**Pass-8:** S-7.02 and S-BL.ROUTER-ADDR dispatched. S-7.02 pass-8 fix-burst addressed F-P7L2-MED-01/02/03 (test-writer). Impl HEAD at pass-8 close: a9bf936 (S-7.02), dffc27e (S-BL.ROUTER-ADDR).
+
+**Pass-9:** S-7.02 CLEAN 2/3 at HEAD a9bf936. All 3 lenses (L1/L2/L3) clean. Novelty LOW across all lenses. No process-gap findings. S-BL.ROUTER-ADDR CLEAN 2/3 at HEAD dffc27e. All 3 lenses clean. Two LOW observations documented and non-blocking: PathEntryFromSnapshot parameter redundancy (cosmetic) + VP-047 end-to-end non-empty deferred to S-BL.PATH-TRACKER-WIRING per RULING-W6TB-B.
+
+**Counter state after Pass-9:** S-7.01 MERGED (5c658e7 PR #43), S-7.02 2/3 (HEAD a9bf936), S-BL.ROUTER-ADDR 2/3 (HEAD dffc27e). Pass-10 dispatched for convergence-close (3/3 attempt).
