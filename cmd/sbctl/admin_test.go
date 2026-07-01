@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -471,7 +472,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 	// 2. Sends an admin.key.register RPC to the daemon.
 	// 3. The wire payload contains the correct svtn_id, pubkey, and role fields.
 	//
-	// Since runAdmin panics("not implemented"), this test will panic-fail → RED.
+	// Was RED during initial TDD (runAdmin not implemented); now covers positive path.
 
 	requestCh := make(chan adminRPCRequest, 1)
 	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
@@ -492,7 +493,6 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 	defer cancel()
 
 	// AC-002: call runAdmin with the `key register` subcommand args.
-	// runAdmin currently panics — this test is RED by design.
 	const svtnID = "test-svtn-reg"
 	const pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-register-key"
 
@@ -714,14 +714,14 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 				t.Errorf("AC-005 — wire role: got %q; want control", args.Role)
 			}
 		case <-time.After(2 * time.Second):
-			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
+			t.Fatal("AC-005: timed out — CLI did not dispatch RPC within deadline")
 		}
 
 		if err == nil {
 			t.Fatalf("AC-005: without --confirm: expected error containing E-ADM-018 or E-ADM-004; got nil")
 		}
 		if !strings.Contains(err.Error(), "E-ADM-018") && !strings.Contains(err.Error(), "E-ADM-004") {
-			t.Logf("AC-005: without --confirm error: %v (no E-ADM-018/E-ADM-004 code; may be expected in current state)", err)
+			t.Errorf("AC-005: expected E-ADM-018 or E-ADM-004 in err: got %v", err)
 		}
 	})
 
@@ -772,7 +772,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 				t.Errorf("AC-005 — wire role: got %q; want control", args.Role)
 			}
 		case <-time.After(2 * time.Second):
-			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
+			t.Fatal("AC-005: timed out — CLI did not dispatch RPC within deadline")
 		}
 	})
 }
@@ -844,7 +844,10 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	t.Parallel()
 
 	// ADR-012 fail-closed — AUTH_FAIL must cause runAdmin to return non-nil error.
-	rpcDispatched := false
+	// postAuthFailReads counts bytes the server received AFTER sending AUTH_FAIL.
+	// A non-zero count means the client continued sending data (RPC dispatch) after
+	// the auth failure, which violates the fail-closed invariant.
+	var postAuthFailReads atomic.Int64
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -852,7 +855,7 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = ln.Close() })
 
-	// Start a server that always AUTH_FAILs.
+	// Start a server that always AUTH_FAILs, then counts further client writes.
 	go func() {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -883,6 +886,19 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 			"code":    "E-ADM-010",
 			"message": "authentication failed",
 		})
+
+		// Drain any further bytes the client sends after AUTH_FAIL.
+		// Any such bytes indicate the client dispatched an RPC despite the failure.
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := conn.Read(buf)
+			if n > 0 {
+				postAuthFailReads.Add(int64(n))
+			}
+			if readErr != nil {
+				break
+			}
+		}
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -897,9 +913,9 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 		t.Error("ADR-012 fail-closed — runAdmin with AUTH_FAIL server: want non-nil error; got nil")
 	}
 
-	// Sentinel: no RPC must have been dispatched after AUTH_FAIL.
-	if rpcDispatched {
-		t.Error("ADR-012 fail-closed — RPC was dispatched after AUTH_FAIL; must not dispatch without AUTH_OK")
+	// Dispatch observer: no RPC bytes must have been sent after AUTH_FAIL.
+	if n := postAuthFailReads.Load(); n > 0 {
+		t.Errorf("ADR-012 fail-closed — client sent %d bytes after AUTH_FAIL; must not dispatch without AUTH_OK", n)
 	}
 }
 
@@ -946,6 +962,22 @@ func TestSbctlAdmin_OversizedNDJSONLine_DoesNotOOM(t *testing.T) {
 
 	if err == nil {
 		t.Error("ADR-012 §6 — oversized NDJSON line: want non-nil error (bounded read violation); got nil")
+	} else {
+		// Positive-coverage: the error must indicate the read-guard fired.
+		// Accepted substrings (CWE-400 / ADR-012 §6):
+		//   - bufio scanner limit: "token too long"
+		//   - custom inline guard: "message too large", "E-RPC-002"
+		//   - io.LimitReader truncation path: "EOF" / "unexpected EOF"
+		//     (LimitReader stops at maxMessageBytes; the JSON decoder gets EOF
+		//     mid-token, which surfaces as an unexpected EOF on the read path)
+		msg := err.Error()
+		if !strings.Contains(msg, "token too long") &&
+			!strings.Contains(msg, "message too large") &&
+			!strings.Contains(msg, "E-RPC-002") &&
+			!strings.Contains(msg, "EOF") {
+			t.Errorf("ADR-012 §6 — expected read-guard error surface "+
+				"(\"token too long\" / \"message too large\" / \"E-RPC-002\" / \"EOF\"); got: %v", err)
+		}
 	}
 }
 
@@ -983,6 +1015,15 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 
 	if err == nil {
 		t.Error("ADR-012 — malformed JSON response: want non-nil error; got nil")
+	} else {
+		// Positive-coverage: the error must surface a JSON parse failure.
+		msg := err.Error()
+		if !strings.Contains(msg, "json") &&
+			!strings.Contains(msg, "unexpected") &&
+			!strings.Contains(msg, "invalid character") {
+			t.Errorf("ADR-012 — expected JSON parse error surface "+
+				"(\"json\" / \"unexpected\" / \"invalid character\"); got: %v", err)
+		}
 	}
 }
 
@@ -1182,7 +1223,7 @@ func TestSbctlAdmin_SvtnCreate_CLI(t *testing.T) {
 	t.Parallel()
 
 	// AC-002 / BC-2.07.001 PC-1 — sbctl admin svtn create dispatches correct RPC.
-	// runAdminSvtnCreate currently panics → RED.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
 	requestCh := make(chan adminRPCRequest, 1)
 	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
 		if cmd != "admin.svtn.create" {
@@ -1240,7 +1281,7 @@ func TestSbctlAdmin_SvtnCreate_NonControlDenied(t *testing.T) {
 	t.Parallel()
 
 	// AC-003 / BC-2.07.001 Inv-3 — E-ADM-009 from daemon must surface as error.
-	// runAdminSvtnCreate currently panics → RED.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
 	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
 		if cmd != "admin.svtn.create" {
 			return nil, fmt.Errorf("unexpected command: %q", cmd)
@@ -1276,7 +1317,7 @@ func TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint(t *testing.T) 
 	t.Parallel()
 
 	// AC-002 / AC-004 — success output must contain svtn_id and bootstrap_fingerprint.
-	// runAdminSvtnCreate currently panics → RED.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
 	const wantSVTNID = "aabbccddeeff0011aabbccddeeff0011"
 	const wantFingerprint = "SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA="
 
@@ -1326,7 +1367,7 @@ func TestSbctlAdmin_SvtnCreate_DuplicateName(t *testing.T) {
 	t.Parallel()
 
 	// AC-005 / BC-2.07.001 EC-001 — SVTN-exists error from daemon must surface.
-	// runAdminSvtnCreate currently panics → RED.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
 	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
 		if cmd != "admin.svtn.create" {
 			return nil, fmt.Errorf("unexpected command: %q", cmd)
@@ -1359,7 +1400,7 @@ func TestSbctlAdmin_SvtnCreate_MissingName(t *testing.T) {
 	t.Parallel()
 
 	// BC-2.07.001 PC-1 — missing --name must return non-nil error.
-	// runAdminSvtnCreate currently panics → RED.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 

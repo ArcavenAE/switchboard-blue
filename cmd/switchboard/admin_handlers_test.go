@@ -1404,7 +1404,7 @@ func TestBuildAdminHandlers_SVTNCreate_Registered(t *testing.T) {
 
 	// AC-001 / BC-2.07.001 PC-1 — admin.svtn.create must appear in the handler
 	// slice returned by BuildAdminHandlers (control-mode daemon only).
-	// makeAdminSVTNCreateHandler currently panics → RED.
+	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m := newTestSVTNManager(t)
 	handlers := BuildAdminHandlers(m, nil)
 
@@ -1431,7 +1431,7 @@ func TestAdminSVTNCreate_ControlCallerSucceeds(t *testing.T) {
 	t.Parallel()
 
 	// AC-006 / AC-004 — control-role caller succeeds; response has correct shape.
-	// makeAdminSVTNCreateHandler currently panics → RED.
+	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	ops := mgmt.NewOperatorKeySet(nil)
 	handlers := BuildAdminHandlers(m, ops)
@@ -1489,8 +1489,6 @@ func TestAdminSVTNCreate_ControlCallerSucceeds(t *testing.T) {
 	if !strings.HasPrefix(wire.BootstrapFingerprint, "SHA256:") {
 		t.Errorf("AC-004: bootstrap_fingerprint must start with 'SHA256:'; got %q", wire.BootstrapFingerprint)
 	}
-
-	_ = bootstrapPub
 }
 
 // TestAdminSVTNCreate_NonControlCallerDenied verifies AC-003 and AC-006 (second
@@ -1504,7 +1502,7 @@ func TestAdminSVTNCreate_NonControlCallerDenied(t *testing.T) {
 	t.Parallel()
 
 	// AC-003 / BC-2.07.001 Inv-3 — non-control caller must receive E-ADM-009.
-	// makeAdminSVTNCreateHandler currently panics → RED.
+	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m, _ := newTestSVTNManagerDetailed(t)
 	ops := mgmt.NewOperatorKeySet(nil)
 	handlers := BuildAdminHandlers(m, ops)
@@ -1556,7 +1554,7 @@ func TestAdminSVTNCreate_CallerRoleResolution_FromContext(t *testing.T) {
 	t.Parallel()
 
 	// BC-2.07.001 Inv-3 — caller role must come from ctx pubkey, not args.
-	// makeAdminSVTNCreateHandler currently panics → RED.
+	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	ops := mgmt.NewOperatorKeySet(nil)
 	handlers := BuildAdminHandlers(m, ops)
@@ -1605,8 +1603,6 @@ func TestAdminSVTNCreate_CallerRoleResolution_FromContext(t *testing.T) {
 	if result == nil {
 		t.Error("AC-003 ctx-role B: expected non-nil result; got nil")
 	}
-
-	_ = bootstrapPub
 }
 
 // TestAdminSVTNCreate_ArgsValidation_E_CFG_001 verifies that malformed or
