@@ -452,6 +452,14 @@ func TestLookup_ConcurrentRegisterRace(t *testing.T) {
 
 	// Reader goroutines: lookup a mix of keys during concurrent registration.
 	for range numLookers {
+		// F-P11L2-01: one Once per assertion class so each distinct failure fires at
+		// most once instead of up to 320 times (numReaders × iterations), keeping
+		// test output readable when a regression surfaces under -race.
+		var (
+			oncePubKeyLen sync.Once
+			onceNodeAddr  sync.Once
+		)
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -464,10 +472,14 @@ func TestLookup_ConcurrentRegisterRace(t *testing.T) {
 				atomic.AddInt64(&hits, 1)
 				// If ok=true, the returned key must be well-formed.
 				if len(k.PublicKey) != ed25519.PublicKeySize {
-					t.Errorf("concurrent hit: PublicKey len=%d want %d", len(k.PublicKey), ed25519.PublicKeySize)
+					oncePubKeyLen.Do(func() {
+						t.Errorf("concurrent hit: PublicKey len=%d want %d", len(k.PublicKey), ed25519.PublicKeySize)
+					})
 				}
 				if k.NodeAddr != e.nodeAddr {
-					t.Errorf("concurrent hit: NodeAddr mismatch: got %x, want %x", k.NodeAddr, e.nodeAddr)
+					onceNodeAddr.Do(func() {
+						t.Errorf("concurrent hit: NodeAddr mismatch: got %x, want %x", k.NodeAddr, e.nodeAddr)
+					})
 				}
 			}
 		}()
