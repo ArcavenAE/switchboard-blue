@@ -1,0 +1,211 @@
+=== RUN   TestDiscovery_Advertise_OnStateChange
+=== PAUSE TestDiscovery_Advertise_OnStateChange
+=== RUN   TestDiscovery_Advertise_OnStateChange_DetachTriggersAdvert
+=== PAUSE TestDiscovery_Advertise_OnStateChange_DetachTriggersAdvert
+=== RUN   TestDiscovery_Advertise_PeriodicHeartbeat
+=== PAUSE TestDiscovery_Advertise_PeriodicHeartbeat
+=== RUN   TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent
+=== PAUSE TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent
+=== RUN   TestDiscovery_Advertise_PeriodicHeartbeat_ExactN
+=== PAUSE TestDiscovery_Advertise_PeriodicHeartbeat_ExactN
+=== RUN   TestDiscovery_HeartbeatCount_MonotonicallyIncreases
+=== PAUSE TestDiscovery_HeartbeatCount_MonotonicallyIncreases
+=== RUN   TestDiscovery_Enumerate_NoHostnameRequired
+=== PAUSE TestDiscovery_Enumerate_NoHostnameRequired
+=== RUN   TestDiscovery_Enumerate_EmptyWithoutAdvertisements
+=== PAUSE TestDiscovery_Enumerate_EmptyWithoutAdvertisements
+=== RUN   TestDiscovery_Enumerate_SameSessionNameTwoNodes
+=== PAUSE TestDiscovery_Enumerate_SameSessionNameTwoNodes
+=== RUN   TestDiscovery_Advertisement_RequiredFields
+=== PAUSE TestDiscovery_Advertisement_RequiredFields
+=== RUN   TestDiscovery_Advertisement_QualityUnknownOnStartup
+=== PAUSE TestDiscovery_Advertisement_QualityUnknownOnStartup
+=== RUN   TestDiscovery_AdvertisementRoundTrip
+=== PAUSE TestDiscovery_AdvertisementRoundTrip
+=== RUN   TestDiscovery_Advertise_HMACAuthenticated
+=== PAUSE TestDiscovery_Advertise_HMACAuthenticated
+=== RUN   TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload
+=== PAUSE TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload
+=== RUN   TestDiscovery_Advertise_HMACAuthenticated_TagCorruption
+=== PAUSE TestDiscovery_Advertise_HMACAuthenticated_TagCorruption
+=== RUN   TestDiscovery_Enumerate_SVTNIsolation
+=== PAUSE TestDiscovery_Enumerate_SVTNIsolation
+=== RUN   TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN
+=== PAUSE TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN
+=== RUN   TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel
+=== PAUSE TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick
+=== RUN   TestDiscovery_VP045_SVTNIsolation_MultipleScopes
+=== PAUSE TestDiscovery_VP045_SVTNIsolation_MultipleScopes
+=== RUN   TestPropPresenceAdvertisement_RoundTrip
+=== PAUSE TestPropPresenceAdvertisement_RoundTrip
+=== RUN   TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8
+=== PAUSE TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8
+=== RUN   TestPropPresenceAdvertisement_TruncatesOversize
+=== PAUSE TestPropPresenceAdvertisement_TruncatesOversize
+=== RUN   TestDiscovery_Encode_SessionName255ByteCap
+=== PAUSE TestDiscovery_Encode_SessionName255ByteCap
+=== CONT  TestDiscovery_Advertise_OnStateChange_DetachTriggersAdvert
+=== CONT  TestDiscovery_Encode_SessionName255ByteCap
+=== CONT  TestDiscovery_AdvertisementRoundTrip
+--- PASS: TestDiscovery_Advertise_OnStateChange_DetachTriggersAdvert (0.00s)
+=== RUN   TestDiscovery_AdvertisementRoundTrip/two_sessions:_attached-green_and_detached-red
+=== CONT  TestDiscovery_Advertise_HMACAuthenticated
+=== CONT  TestDiscovery_Advertisement_QualityUnknownOnStartup
+=== PAUSE TestDiscovery_AdvertisementRoundTrip/two_sessions:_attached-green_and_detached-red
+=== CONT  TestDiscovery_Enumerate_SameSessionNameTwoNodes
+=== CONT  TestDiscovery_Enumerate_NoHostnameRequired
+=== CONT  TestDiscovery_Advertisement_RequiredFields
+=== CONT  TestDiscovery_Enumerate_EmptyWithoutAdvertisements
+=== RUN   TestDiscovery_Advertisement_RequiredFields/attached_green
+=== CONT  TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel
+=== CONT  TestDiscovery_HeartbeatCount_MonotonicallyIncreases
+=== CONT  TestDiscovery_Advertise_OnStateChange
+--- PASS: TestDiscovery_Advertise_HMACAuthenticated (0.00s)
+=== CONT  TestDiscovery_Advertise_PeriodicHeartbeat
+=== RUN   TestDiscovery_AdvertisementRoundTrip/EC-002:_QualityUnknown_at_startup
+=== CONT  TestPropPresenceAdvertisement_TruncatesOversize
+=== PAUSE TestDiscovery_AdvertisementRoundTrip/EC-002:_QualityUnknown_at_startup
+=== RUN   TestDiscovery_Encode_SessionName255ByteCap/255-byte_ASCII_at-boundary_accept_verbatim
+=== RUN   TestDiscovery_AdvertisementRoundTrip/EC-003:_empty_session_list
+=== PAUSE TestDiscovery_Advertisement_RequiredFields/attached_green
+=== CONT  TestPropPresenceAdvertisement_RoundTrip
+=== PAUSE TestDiscovery_AdvertisementRoundTrip/EC-003:_empty_session_list
+=== PAUSE TestDiscovery_Encode_SessionName255ByteCap/255-byte_ASCII_at-boundary_accept_verbatim
+=== CONT  TestDiscovery_VP045_SVTNIsolation_MultipleScopes
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick
+=== RUN   TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#00
+--- PASS: TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel (0.00s)
+=== RUN   TestDiscovery_Advertisement_RequiredFields/detached_yellow
+--- PASS: TestDiscovery_Advertisement_QualityUnknownOnStartup (0.00s)
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#00
+=== PAUSE TestDiscovery_Advertisement_RequiredFields/detached_yellow
+--- PASS: TestDiscovery_Enumerate_NoHostnameRequired (0.00s)
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#00
+=== RUN   TestDiscovery_Advertisement_RequiredFields/detached_red
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#01
+=== PAUSE TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#00
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#01
+=== RUN   TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#01
+=== RUN   TestDiscovery_Encode_SessionName255ByteCap/256-byte_ASCII_content-preservation_oracle
+=== PAUSE TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#01
+=== PAUSE TestDiscovery_Encode_SessionName255ByteCap/256-byte_ASCII_content-preservation_oracle
+=== RUN   TestDiscovery_AdvertisementRoundTrip/yellow_quality
+=== RUN   TestDiscovery_Encode_SessionName255ByteCap/512-byte_UTF-8_日×170_content-preservation_oracle
+=== PAUSE TestDiscovery_Advertisement_RequiredFields/detached_red
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#02
+--- PASS: TestDiscovery_Enumerate_EmptyWithoutAdvertisements (0.00s)
+--- PASS: TestDiscovery_Enumerate_SameSessionNameTwoNodes (0.00s)
+--- PASS: TestDiscovery_Advertise_OnStateChange (0.00s)
+=== RUN   TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#02
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#02
+=== PAUSE TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#02
+=== CONT  TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#03
+=== RUN   TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#03
+--- PASS: TestDiscovery_HeartbeatCount_MonotonicallyIncreases (0.00s)
+=== PAUSE TestDiscovery_AdvertisementRoundTrip/yellow_quality
+=== PAUSE TestDiscovery_Encode_SessionName255ByteCap/512-byte_UTF-8_日×170_content-preservation_oracle
+=== CONT  TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN
+=== PAUSE TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#03
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#03
+=== RUN   TestDiscovery_Encode_SessionName255ByteCap/mid-rune_boundary:_250×a_+_10×日_(280_bytes)
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#04
+--- PASS: TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN (0.00s)
+=== CONT  TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8
+=== RUN   TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#04
+=== RUN   TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/empty_string
+=== PAUSE TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#04
+=== PAUSE TestDiscovery_Encode_SessionName255ByteCap/mid-rune_boundary:_250×a_+_10×日_(280_bytes)
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#04
+=== CONT  TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload
+=== PAUSE TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/empty_string
+=== CONT  TestDiscovery_Advertise_HMACAuthenticated_TagCorruption
+--- PASS: TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload (0.00s)
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#05
+=== CONT  TestDiscovery_Enumerate_SVTNIsolation
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#05
+--- PASS: TestDiscovery_Advertise_HMACAuthenticated_TagCorruption (0.00s)
+=== RUN   TestDiscovery_VP044_AdvertiseWithinOneTick/#06
+=== CONT  TestDiscovery_Advertise_PeriodicHeartbeat_ExactN
+=== PAUSE TestDiscovery_VP044_AdvertiseWithinOneTick/#06
+=== RUN   TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/bare_0xFF_0xFE
+=== CONT  TestDiscovery_Advertisement_RequiredFields/attached_green
+=== PAUSE TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/bare_0xFF_0xFE
+=== RUN   TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/mid-string_invalid_byte_0x80
+--- PASS: TestDiscovery_Enumerate_SVTNIsolation (0.00s)
+=== CONT  TestDiscovery_Advertisement_RequiredFields/detached_yellow
+--- PASS: TestDiscovery_Advertise_PeriodicHeartbeat_ExactN (0.00s)
+=== CONT  TestDiscovery_AdvertisementRoundTrip/EC-002:_QualityUnknown_at_startup
+=== PAUSE TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/mid-string_invalid_byte_0x80
+=== CONT  TestDiscovery_Advertisement_RequiredFields/detached_red
+=== CONT  TestDiscovery_AdvertisementRoundTrip/EC-003:_empty_session_list
+=== CONT  TestDiscovery_AdvertisementRoundTrip/two_sessions:_attached-green_and_detached-red
+--- PASS: TestDiscovery_Advertisement_RequiredFields (0.00s)
+    --- PASS: TestDiscovery_Advertisement_RequiredFields/attached_green (0.00s)
+    --- PASS: TestDiscovery_Advertisement_RequiredFields/detached_yellow (0.00s)
+    --- PASS: TestDiscovery_Advertisement_RequiredFields/detached_red (0.00s)
+=== CONT  TestDiscovery_AdvertisementRoundTrip/yellow_quality
+=== CONT  TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#02
+=== CONT  TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#00
+=== CONT  TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#01
+=== CONT  TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#03
+=== CONT  TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#04
+=== CONT  TestDiscovery_Encode_SessionName255ByteCap/512-byte_UTF-8_日×170_content-preservation_oracle
+=== CONT  TestDiscovery_Encode_SessionName255ByteCap/255-byte_ASCII_at-boundary_accept_verbatim
+=== CONT  TestDiscovery_Encode_SessionName255ByteCap/256-byte_ASCII_content-preservation_oracle
+=== CONT  TestDiscovery_Encode_SessionName255ByteCap/mid-rune_boundary:_250×a_+_10×日_(280_bytes)
+--- PASS: TestDiscovery_AdvertisementRoundTrip (0.00s)
+    --- PASS: TestDiscovery_AdvertisementRoundTrip/EC-002:_QualityUnknown_at_startup (0.00s)
+    --- PASS: TestDiscovery_AdvertisementRoundTrip/EC-003:_empty_session_list (0.00s)
+    --- PASS: TestDiscovery_AdvertisementRoundTrip/yellow_quality (0.00s)
+    --- PASS: TestDiscovery_AdvertisementRoundTrip/two_sessions:_attached-green_and_detached-red (0.00s)
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#00
+--- PASS: TestDiscovery_VP045_SVTNIsolation_MultipleScopes (0.00s)
+    --- PASS: TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#02 (0.00s)
+    --- PASS: TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#00 (0.00s)
+    --- PASS: TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#01 (0.00s)
+    --- PASS: TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#03 (0.00s)
+    --- PASS: TestDiscovery_VP045_SVTNIsolation_MultipleScopes/#04 (0.00s)
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#06
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#02
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#05
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#01
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#04
+=== CONT  TestDiscovery_VP044_AdvertiseWithinOneTick/#03
+--- PASS: TestDiscovery_Encode_SessionName255ByteCap (0.00s)
+    --- PASS: TestDiscovery_Encode_SessionName255ByteCap/512-byte_UTF-8_日×170_content-preservation_oracle (0.00s)
+    --- PASS: TestDiscovery_Encode_SessionName255ByteCap/255-byte_ASCII_at-boundary_accept_verbatim (0.00s)
+    --- PASS: TestDiscovery_Encode_SessionName255ByteCap/256-byte_ASCII_content-preservation_oracle (0.00s)
+    --- PASS: TestDiscovery_Encode_SessionName255ByteCap/mid-rune_boundary:_250×a_+_10×日_(280_bytes) (0.00s)
+--- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#00 (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#06 (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#02 (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#01 (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#05 (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#03 (0.00s)
+    --- PASS: TestDiscovery_VP044_AdvertiseWithinOneTick/#04 (0.00s)
+--- PASS: TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent (0.02s)
+--- PASS: TestDiscovery_Advertise_PeriodicHeartbeat (0.03s)
++ round-trip: Encode(Decode(Encode(p))) == Encode(p) for valid UTF-8 names
+   1–255 bytes: OK, passed 100 tests.
+Elapsed time: 45.735584ms
+--- PASS: TestPropPresenceAdvertisement_RoundTrip (0.05s)
++ encode rejects names containing invalid UTF-8 with
+   ErrInvalidSessionName: OK, passed 200 tests.
+Elapsed time: 50.579209ms
+=== CONT  TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/bare_0xFF_0xFE
+=== CONT  TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/mid-string_invalid_byte_0x80
+=== CONT  TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/empty_string
+--- PASS: TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8 (0.05s)
+    --- PASS: TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/bare_0xFF_0xFE (0.00s)
+    --- PASS: TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/mid-string_invalid_byte_0x80 (0.00s)
+    --- PASS: TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8/empty_string (0.00s)
++ encode truncates oversize valid UTF-8 names: err==nil, ≤255 bytes,
+   ends with '…', prefix at rune boundary: OK, passed 200 tests.
+Elapsed time: 63.567042ms
+--- PASS: TestPropPresenceAdvertisement_TruncatesOversize (0.06s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/discovery	1.390s
