@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -1862,6 +1862,129 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied(t *testing.T) {
 	})
 }
 
+// TestAdminSVTNCreate_NonBootstrapControlKey_RejectsWithEADM009 verifies that
+// a non-bootstrap key with RoleControl receives E-ADM-009 (insufficient authority)
+// rather than E-SVTN-001 (duplicate name) when calling admin.svtn.create.
+//
+// This is the F-P3L2-02 test: the handler must not fall through to m.Create() for
+// non-bootstrap keys — the bootstrap-only gate must fire first and return E-ADM-009.
+//
+// Ruling-7 / BC-2.07.001 Inv-3 — non-bootstrap control-role key denied (E-ADM-009).
+func TestAdminSVTNCreate_NonBootstrapControlKey_RejectsWithEADM009(t *testing.T) {
+	t.Parallel()
+
+	m, _ := newTestSVTNManagerDetailed(t)
+	handlers := BuildAdminHandlers(m, nil)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	// Generate a key that is NOT the bootstrap key but has RoleControl in "test-svtn".
+	nonBootstrapControlPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate non-bootstrap control key: %v", err)
+	}
+	if _, err := m.RegisterKey("test-svtn", nonBootstrapControlPub, admission.RoleControl); err != nil {
+		t.Fatalf("register non-bootstrap control key: %v", err)
+	}
+
+	// "test-svtn" already exists. If the handler incorrectly bypassed the bootstrap
+	// check and called m.Create("test-svtn"), it would return E-SVTN-001.
+	// The correct behavior is E-ADM-009 from the bootstrap-only gate, which fires
+	// BEFORE m.Create() is ever called.
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "test-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+	ctx := mgmt.WithCallerPubkey(context.Background(), nonBootstrapControlPub)
+	_, gotErr := svtnCreateFn(ctx, json.RawMessage(args))
+	if gotErr == nil {
+		t.Fatal("non-bootstrap RoleControl key: expected E-ADM-009; got nil")
+	}
+	if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+		t.Errorf("non-bootstrap RoleControl key: expected E-ADM-009 (not E-SVTN-001); got: %v", gotErr)
+	}
+	if strings.Contains(gotErr.Error(), "E-SVTN-001") {
+		t.Errorf("non-bootstrap RoleControl key: got E-SVTN-001 (handler fell through to Create); want E-ADM-009")
+	}
+}
+
+// TestAdminSVTNCreate_MutationTest_RoleControlCheckMustFireIndependently is the
+// Ruling-7 mutation test (AC-003 requirement, F-Impl-002). It verifies that the
+// RoleControl check in the handler fires INDEPENDENTLY of IsBootstrapKey — i.e.,
+// when a key passes IsBootstrapKey but has no RoleControl in any existing SVTN,
+// the handler must return E-ADM-009, not allow the create to proceed.
+//
+// Scenario: "demoted bootstrap key" — a key that still satisfies IsBootstrapKey
+// (structural check) but has been removed from its SVTN's keySet as RoleControl
+// (simulating a future key rotation flow). Without the explicit RoleControl check
+// (Ruling-7), the handler would silently allow this caller.
+//
+// The SeedSVTNWithoutBootstrapKeyForTest method is used to construct this state:
+// it creates an SVTN record without registering the bootstrap key, producing the
+// HasAnySVTN()==true / BootstrapKeyHasControlRole()==false condition.
+//
+// Ruling-7 / AC-003 mutation test / BC-2.07.001 Inv-3 defense-in-depth.
+func TestAdminSVTNCreate_MutationTest_RoleControlCheckMustFireIndependently(t *testing.T) {
+	t.Parallel()
+
+	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate bootstrap key: %v", err)
+	}
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+
+	// Seed an SVTN WITHOUT registering the bootstrap key as RoleControl.
+	// This simulates the "demoted bootstrap key" post-rotation state.
+	// After this call: HasAnySVTN() == true AND BootstrapKeyHasControlRole() == false.
+	if err := m.SeedSVTNWithoutBootstrapKeyForTest("demoted-bootstrap-svtn"); err != nil {
+		t.Fatalf("SeedSVTNWithoutBootstrapKeyForTest: %v", err)
+	}
+
+	// Verify the precondition: HasAnySVTN true, BootstrapKeyHasControlRole false.
+	if !m.HasAnySVTN() {
+		t.Fatal("precondition: HasAnySVTN() must be true after seeding")
+	}
+	if m.BootstrapKeyHasControlRole() {
+		t.Fatal("precondition: BootstrapKeyHasControlRole() must be false after SeedSVTNWithoutBootstrapKeyForTest")
+	}
+
+	handlers := BuildAdminHandlers(m, nil)
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "should-not-be-created"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+	// Bootstrap key passes IsBootstrapKey but has no RoleControl — Ruling-7 must fire.
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, gotErr := svtnCreateFn(ctx, json.RawMessage(args))
+	if gotErr == nil {
+		t.Fatal("Ruling-7 mutation: demoted bootstrap key must be denied E-ADM-009; got nil (role check is missing or skipped)")
+	}
+	if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+		t.Errorf("Ruling-7 mutation: expected E-ADM-009; got: %v", gotErr)
+	}
+}
+
 // TestAdminSVTNCreateResult_JSONFieldNames verifies that adminSVTNCreateResult
 // serialises with correct JSON field names per AC-004 wire contract.
 //
@@ -1917,34 +2040,34 @@ func TestAdminSVTNCreateResult_JSONFieldNames(t *testing.T) {
 // path by creating a real SVTNManager and making Create return an error via a
 // duplicate name (ErrSVTNAlreadyExists) — then confirming a non-duplicate path
 // by using a mock that wraps the error. However, SVTNManager.Create only returns
-// ErrSVTNAlreadyExists or a crypto/rand error; we cannot inject a rand failure
-// without an interface. Instead, the test asserts the negative: a fresh unique
-// name succeeds (no E-INT-001), and a separate compile-time assertion confirms
-// the error-stamping code path in makeAdminSVTNCreateHandler covers E-INT-001
-// for the non-ErrSVTNAlreadyExists branch.
-//
-// To produce a true E-INT-001, we create a handler with a synthetic Create path
-// via a local inline factory.
-//
 // F-P2L1-004: non-duplicate Create() errors → E-INT-001.
+//
+// This test drives the real handler through the E-INT-001 branch by injecting a
+// zero-byte io.Reader into SVTNManager via NewSVTNManagerWithRandSource. When
+// Create() calls io.ReadFull on the injected reader, it receives io.ErrUnexpectedEOF
+// (0 bytes read into the 16-byte SVTN ID buffer), causing Create() to return a
+// non-ErrSVTNAlreadyExists error. The handler must stamp E-INT-001.
+//
+// Prior implementation (Pass-2) was vacuous: it constructed a local error string
+// and asserted substring against itself without calling the handler. This test
+// drives the handler end-to-end (F-P3L2-01 remediation).
 func TestAdminSVTNCreate_CryptoRandFailure_E_INT_001(t *testing.T) {
 	t.Parallel()
 
-	// Produce a handler that delegates to a real manager for auth but calls a
-	// synthetic failing Create by constructing a minimal fake inline.
-	//
-	// Because SVTNManager is concrete and not injectable, we test the E-INT-001
-	// path by calling the handler factory with a real manager, then verifying the
-	// branch directly through the error message the handler returns when a
-	// non-ErrSVTNAlreadyExists error would occur. We use a separate manager
-	// preloaded with a name, pass a *different* name to create — this succeeds.
-	// The E-INT-001 stamping code is verified indirectly by confirming:
-	//  (a) success path does not contain E-INT-001
-	//  (b) the code in admin_handlers.go contains the E-INT-001 stamp
-	// A separate inline-factory test below provides the direct assertion.
-	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate bootstrap key: %v", err)
+	}
 
+	ks := admission.NewAdmittedKeySet()
+	// Inject a zero-byte reader: io.ReadFull will return io.ErrUnexpectedEOF
+	// when trying to fill the 16-byte SVTN ID buffer (strings.NewReader("")
+	// returns 0 bytes on first Read). This exercises the rand failure path in
+	// SVTNManager.Create without patching crypto/rand globally.
+	failingRand := strings.NewReader("")
+	m := svtnmgmt.NewSVTNManagerWithRandSource(ks, bootstrapPub, failingRand)
+
+	handlers := BuildAdminHandlers(m, nil)
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.svtn.create" {
@@ -1957,36 +2080,24 @@ func TestAdminSVTNCreate_CryptoRandFailure_E_INT_001(t *testing.T) {
 	}
 
 	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-
-	// Success case: fresh name must not return E-INT-001.
-	args, err := json.Marshal(adminSVTNCreateArgs{Name: "e-int-001-fresh-svtn"})
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "rand-fail-svtn"})
 	if err != nil {
 		t.Fatalf("marshal args: %v", err)
 	}
-	_, gotErr := svtnCreateFn(ctx, json.RawMessage(args))
-	if gotErr != nil {
-		if strings.Contains(gotErr.Error(), "E-INT-001") {
-			t.Errorf("E-INT-001 must not appear on success path; got: %v", gotErr)
-		}
-	}
 
-	// Direct path: construct a minimal handler that injects a synthetic error
-	// (not ErrSVTNAlreadyExists) and verify E-INT-001 is stamped.
-	//
-	// We cannot inject into SVTNManager directly, so we replicate the small
-	// branching logic inline to prove the error-code path is correct.
-	syntheticErr := errors.New("synthetic internal failure")
-	if !errors.Is(syntheticErr, svtnmgmt.ErrSVTNAlreadyExists) {
-		// Simulate the non-duplicate branch: stamp E-INT-001.
-		stamped := fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %v", "test", syntheticErr)
-		if !strings.Contains(stamped.Error(), "E-INT-001") {
-			t.Errorf("E-INT-001 stamp missing from non-duplicate error path; got: %v", stamped)
-		}
-		if !strings.Contains(stamped.Error(), "synthetic internal failure") {
-			t.Errorf("inner cause not preserved in E-INT-001 message; got: %v", stamped)
-		}
-	} else {
-		t.Fatal("synthetic error must NOT satisfy ErrSVTNAlreadyExists for this test to be valid")
+	_, gotErr := svtnCreateFn(ctx, json.RawMessage(args))
+	if gotErr == nil {
+		t.Fatal("expected E-INT-001 error from rand failure; got nil")
+	}
+	if !strings.Contains(gotErr.Error(), "E-INT-001") {
+		t.Errorf("expected E-INT-001 stamp on rand failure path; got: %v", gotErr)
+	}
+	// Verify the inner error is wrapped (go.md rule 4 / F-Impl-003: %w used).
+	// strings.NewReader("") returns io.EOF on the first read (0 bytes read into
+	// a 16-byte buffer); io.ReadFull returns io.EOF when no bytes were read at
+	// all (vs io.ErrUnexpectedEOF when some-but-not-all bytes were read).
+	if !errors.Is(gotErr, io.EOF) {
+		t.Errorf("expected errors.Is(err, io.EOF) == true (error chain preserved via %%w); got: %v", gotErr)
 	}
 }
 
@@ -2021,6 +2132,7 @@ func TestAdminSVTNCreate_ArgsValidation_E_CFG_001_Exhaustive(t *testing.T) {
 	tests := []struct {
 		name    string
 		svtnArg adminSVTNCreateArgs
+		rawJSON []byte // if non-nil, bypasses json.Marshal and sends raw bytes directly
 	}{
 		{
 			name:    "nil_name_empty_string",
@@ -2050,15 +2162,42 @@ func TestAdminSVTNCreate_ArgsValidation_E_CFG_001_Exhaustive(t *testing.T) {
 			name:    "name_exceeds_255_bytes",
 			svtnArg: adminSVTNCreateArgs{Name: longName},
 		},
+		// C1 control: U+0085 NEL (NEXT LINE), encoded as 0xC2 0x85 in UTF-8.
+		// Note: invalid UTF-8 bytes cannot be tested here because json.Unmarshal
+		// silently replaces them with U+FFFD before validateSVTNName runs.
+		// See TestValidateSVTNName for direct function-level coverage of that case.
+		// Valid UTF-8 but unicode.IsControl returns true (category Cc).
+		{
+			name:    "c1_control_nel_u0085",
+			rawJSON: []byte("{\"name\":\"foo\xc2\x85bar\"}"),
+		},
+		// Line separator: U+2028, encoded as 0xE2 0x80 0xA8 in UTF-8.
+		// Valid UTF-8; not caught by unicode.IsControl (Zl, not Cc);
+		// caught by explicit r == '\u2028' check in validateSVTNName (F-Impl-001).
+		{
+			name:    "unicode_line_separator_u2028",
+			rawJSON: []byte("{\"name\":\"foo\xe2\x80\xa8bar\"}"),
+		},
+		// Paragraph separator: U+2029, encoded as 0xE2 0x80 0xA9 in UTF-8.
+		{
+			name:    "unicode_paragraph_separator_u2029",
+			rawJSON: []byte("{\"name\":\"foo\xe2\x80\xa9bar\"}"),
+		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			rawArgs, err := json.Marshal(tc.svtnArg)
-			if err != nil {
-				t.Fatalf("marshal args: %v", err)
+			var rawArgs []byte
+			if tc.rawJSON != nil {
+				rawArgs = tc.rawJSON
+			} else {
+				var err error
+				rawArgs, err = json.Marshal(tc.svtnArg)
+				if err != nil {
+					t.Fatalf("marshal args: %v", err)
+				}
 			}
 			_, gotErr := svtnCreateFn(ctx, json.RawMessage(rawArgs))
 			if gotErr == nil {
@@ -2066,6 +2205,75 @@ func TestAdminSVTNCreate_ArgsValidation_E_CFG_001_Exhaustive(t *testing.T) {
 			}
 			if !strings.Contains(gotErr.Error(), "E-CFG-001") {
 				t.Errorf("expected E-CFG-001 in error for %s; got: %v", tc.name, gotErr)
+			}
+		})
+	}
+}
+
+// TestValidateSVTNName exercises validateSVTNName directly, covering cases that
+// cannot reach it through the handler path because json.Unmarshal sanitises
+// invalid UTF-8 bytes before they reach the validation layer (F-Impl-001).
+func TestValidateSVTNName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errCode string
+	}{
+		// valid inputs
+		{name: "simple_ascii", input: "prod", wantErr: false},
+		{name: "unicode_letters", input: "réseau-α", wantErr: false},
+		{name: "max_length_255_bytes", input: strings.Repeat("a", 255), wantErr: false},
+
+		// empty / whitespace
+		{name: "empty_string", input: "", wantErr: true, errCode: "E-CFG-001"},
+		{name: "whitespace_only", input: "   ", wantErr: true, errCode: "E-CFG-001"},
+
+		// length
+		{name: "exceeds_255_bytes", input: strings.Repeat("a", 256), wantErr: true, errCode: "E-CFG-001"},
+
+		// invalid UTF-8 — tested here directly because json.Unmarshal sanitises
+		// these bytes before validateSVTNName can see them through the handler.
+		{name: "invalid_utf8_lone_byte_0xff", input: "foo\xffbar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "invalid_utf8_lone_byte_0xfe", input: "\xfe", wantErr: true, errCode: "E-CFG-001"},
+		{name: "invalid_utf8_truncated_sequence", input: "foo\xe2\x80", wantErr: true, errCode: "E-CFG-001"},
+
+		// ASCII C0 controls
+		{name: "c0_null_u0000", input: "foo\x00bar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "c0_tab_u0009", input: "foo\x09bar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "c0_lf_u000a", input: "foo\nbar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "c0_cr_u000d", input: "foo\rbar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "c0_del_u007f", input: "foo\x7fbar", wantErr: true, errCode: "E-CFG-001"},
+
+		// C1 controls (U+0080–U+009F, category Cc) — caught by unicode.IsControl
+		{name: "c1_nel_u0085", input: "foo\xc2\x85bar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "c1_u0080", input: "foo\xc2\x80bar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "c1_u009f", input: "foo\xc2\x9fbar", wantErr: true, errCode: "E-CFG-001"},
+
+		// Line/paragraph separators (Zl/Zp categories, NOT caught by unicode.IsControl)
+		// — caught by explicit rune checks (F-Impl-001).
+		{name: "line_sep_u2028", input: "foo\xe2\x80\xa8bar", wantErr: true, errCode: "E-CFG-001"},
+		{name: "para_sep_u2029", input: "foo\xe2\x80\xa9bar", wantErr: true, errCode: "E-CFG-001"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateSVTNName(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("validateSVTNName(%q): expected error containing %q, got nil", tc.input, tc.errCode)
+				}
+				if !strings.Contains(err.Error(), tc.errCode) {
+					t.Errorf("validateSVTNName(%q): expected %q in error, got: %v", tc.input, tc.errCode, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateSVTNName(%q): expected nil, got: %v", tc.input, err)
+				}
 			}
 		})
 	}
@@ -2189,12 +2397,20 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 			}
 		}
 		if listFn != nil {
-			listArgs, _ := json.Marshal(adminListKeysArgs{SVTNName: "existing-svtn"})
-			// Use a bootstrap-key context for the list to confirm existence.
+			listArgs, merr := json.Marshal(adminListKeysArgs{SVTNName: "existing-svtn"})
+			if merr != nil {
+				t.Fatalf("marshal list-keys args: %v", merr)
+			}
+			// list-keys admits any authenticated caller — use crossSVTNControl which
+			// is a registered control key in test-svtn (admitted, active). The SVTN
+			// "existing-svtn" was created in newTestSVTNManagerDetailed.
 			_, listErr := listFn(mgmt.WithCallerPubkey(context.Background(), crossSVTNControl), json.RawMessage(listArgs))
-			// list-keys does not require bootstrap key — any admitted key can call it.
-			// This confirms existing-svtn is present (E-SVTN-003 would indicate absence).
-			_ = listErr // may fail auth; we verify presence via svtn.create returning E-ADM-009 not E-SVTN-001
+			if listErr != nil {
+				// E-SVTN-003 means "existing-svtn" is absent — the test fixture is broken.
+				// Any error here is a setup failure: the positive-control fails and the
+				// subsequent E-ADM-009 assertion on svtn.create is not meaningful (F-P3L2-03).
+				t.Fatalf("vacuity-control: existing-svtn must be present before name-collision test; list-keys returned: %v", listErr)
+			}
 		}
 
 		args, err := json.Marshal(adminSVTNCreateArgs{Name: "existing-svtn"})
@@ -2251,8 +2467,11 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 			if listErr == nil {
 				t.Error("Create-not-called assertion: 'fresh-name-B' SVTN should not exist; list-keys returned success (Create was called)")
 			} else if !strings.Contains(listErr.Error(), "E-SVTN-003") {
-				// Any error other than E-SVTN-003 is unexpected.
-				t.Logf("list-keys on absent 'fresh-name-B' returned unexpected error: %v (E-SVTN-003 expected for absent SVTN)", listErr)
+				// Any error other than E-SVTN-003 is a genuine verification failure:
+				// the absence oracle depends on E-SVTN-003 being returned for an
+				// absent SVTN. An unexpected error code means the test cannot prove
+				// Create was not called (F-P3L2-04).
+				t.Fatalf("list-keys on absent 'fresh-name-B' returned unexpected error: %v (E-SVTN-003 expected for absent SVTN)", listErr)
 			}
 		}
 	})
