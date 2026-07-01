@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.11"
+version: "1.12"
 bc_traces:
   - BC-2.06.001
   - BC-2.06.003
@@ -111,7 +111,7 @@ to `paths.list` response, consistent with the sbctl alias design in S-5.02.
 - **Test:** `TestDaemonRouterStatus_HandlerRegistered` — call handler; assert
   response fields match the paths.list shape plus a `quality` summary field.
 
-  **AC-005a (traces to BC-2.06.003 EC-007 — status/quality independence + pending precedence, S502-DEFER-3):**
+  **AC-005a (traces to BC-2.06.003 EC-007 and BC-2.06.001 quality state machine — status/quality independence + pending precedence, S502-DEFER-3):**
   Status and quality are independent fields with distinct derivations. The status enum is
   `{active, degraded}` in this story; `"failed"` is reserved for a future liveness-signal story
   (S-BL.PATH-FAILED-STATUS) — do not emit it.
@@ -293,6 +293,7 @@ The following items are explicitly deferred out of S-W5.04 scope:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.12 | 2026-07-01 | spec-steward | F-P8L3-002 (MED): AC-005a trace annotation extended — added BC-2.06.001 quality state machine alongside BC-2.06.003 EC-007. AC-005a derives the `quality` field from BC-2.06.001 thresholds (green/yellow/red/pending state machine); EC-007 provides the pending-precedence rule. Both BCs are in scope for this AC. |
 | 1.11 | 2026-07-01 | spec-steward | Pass-6 L3 fix-burst (F-P5L3R-07): BC-2.06.003 Behavioral Contracts row PC-3 annotation corrected — removed retired "failed+pending precedence" phrasing; replaced with accurate "EC-007 quality-pending-when-SampleCount<10 precedence" (per Ruling-4 Wave-6 Wave-6 reserved-status enforcement) |
 | 1.10 | 2026-07-01 | spec-steward | Pass-5 L3 fix-burst — AC-003 re-anchored to BC-2.06.003 v1.13 PC-1 Ruling-9; BC-2.06.001 row narrowed to quality only; duplicate Arch Compliance row deleted |
 | 1.9 | 2026-07-01 | story-writer | Ruling-9 propagation (F-P4L2-07): AC-003 rewritten with explicit status derivation — `"active"` iff `Active==true AND Degraded==false`; `"degraded"` otherwise (including `Active=false, Degraded=false`). `active_false_is_degraded` test row is normative. BC-2.06.003 version pins swept v1.11 → v1.13 at all non-changelog body sites (AC-002, Scope Boundary, EC-006, Token Budget, Task 1, Arch Compliance Rules ×2, Deferred Scope). Arch Compliance Rules status-enum row updated with Ruling-9 derivation formula. |

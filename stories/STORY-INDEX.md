@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.35"
+version: "3.36"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T12:00:00
@@ -173,6 +173,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.36 | 2026-07-01 | Pass-7 Lens-3 Ruling-12 propagations: F-P7L3R2-01 (POL-002 backfill) — S-6.07 row `draft (v1.4)` → `draft (v1.6)` (story was bumped to v1.6 via Ruling-11 wire-envelope hygiene; STORY-INDEX was stale). Add S-BL.POLICY-SCHEMA-VALIDATOR backlog stub (P3, small, network-management epic, Epic E-6, no BC/VP traces; minted per Ruling-12 §6). Summary Total 46→47, Backlog 6→7. |
 | 3.35 | 2026-07-01 | F-P8L3-002 (MED) propagation — S-W5.04 row v1.11→v1.12 (AC-005a trace annotation extended to include BC-2.06.001 quality state machine alongside BC-2.06.003 EC-007; BC-2.06.001 v1.4→v1.5 Stories cell gained S-W5.04 back-link). |
 | 3.34 | 2026-07-01 | (prior state at v3.34 — no S-W5.04 row change) |
 | 3.33 | 2026-07-01 | F-P9L3-02 (POL-002 backfill) — S-BL.LOOKUP status cell `draft` → `draft (v1.3)`: version pin added per POL-002 (status cells for in-flight draft stories must carry current spec version). |
