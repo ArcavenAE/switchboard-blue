@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -91,14 +92,14 @@ func formatP99(p99 any) string {
 }
 
 // formatPathsTable renders a slice of PathEntryWithQuality as a human-readable
-// tab-separated table to stdout.
+// tab-separated table to out.
 //
 // AC-003 / BC-2.06.003 PC-3
-func formatPathsTable(entries []PathEntryWithQuality) {
-	fmt.Printf("%-20s %-22s %10s %10s %10s %-10s %-8s\n",
+func formatPathsTable(out io.Writer, entries []PathEntryWithQuality) {
+	_, _ = fmt.Fprintf(out, "%-20s %-22s %10s %10s %10s %-10s %-8s\n",
 		"PATH_ID", "ROUTER_ADDR", "RTT_MS", "P99_MS", "LOSS_PCT", "STATUS", "QUALITY")
 	for _, e := range entries {
-		fmt.Printf("%-20s %-22s %10.2f %10s %10.2f %-10s %-8s\n",
+		_, _ = fmt.Fprintf(out, "%-20s %-22s %10.2f %10s %10.2f %-10s %-8s\n",
 			e.PathID, e.RouterAddr, e.RTTMs, formatP99(e.P99RTTMs), e.LossPct, e.Status, e.Quality)
 	}
 }
@@ -231,7 +232,7 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 			Quality:   qualityFromPathEntry(entry),
 		}
 	}
-	formatPathsTable(withQuality)
+	formatPathsTable(sio.out, withQuality)
 	return nil
 }
 

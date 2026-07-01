@@ -1109,6 +1109,60 @@ func TestSbctlRouterStatus_EC001ObjectFormPassthrough(t *testing.T) {
 	}
 }
 
+// ─── F-CR-001: formatPathsTable writes to injected writer, not os.Stdout ─────
+
+// TestSbctlRouterStatus_TableFormat verifies that the non-JSON (human-readable
+// table) path of runRouterStatus writes all output to the injected sbctlIO
+// writer and never to os.Stdout directly.
+//
+// This is a regression test for F-CR-001: formatPathsTable previously called
+// fmt.Printf which bypassed sbctlIO and broke the t.Parallel race-safety
+// contract (go.md rule 12).
+//
+// F-CR-001 / AC-003 / BC-2.06.003 PC-3
+func TestSbctlRouterStatus_TableFormat(t *testing.T) {
+	t.Parallel()
+
+	sockPath, cleanup := stubDaemonSocket(t)
+	defer cleanup()
+
+	cannedPaths := json.RawMessage(`[
+		{"path_id":"path-table","router_addr":"192.168.1.1:9000","rtt_ms":42.5,"rtt_p99_ms":88.0,"loss_pct":1.5,"status":"active"}
+	]`)
+	_ = startCannedDaemon(t, sockPath, cannedPaths)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// useJSON=false exercises the formatPathsTable branch.
+	sio, getOut, _ := newTestIO()
+	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), false, []string{}, sio)
+	if err != nil {
+		t.Fatalf("F-CR-001: runRouterStatus (table format) returned unexpected error: %v", err)
+	}
+
+	out := getOut()
+
+	// Output must be non-empty — table header and at least one data row.
+	if len(strings.TrimSpace(out)) == 0 {
+		t.Fatal("F-CR-001: table output written to sbctlIO.out is empty; expected header + data row")
+	}
+
+	// Table must contain the expected column headers.
+	for _, col := range []string{"PATH_ID", "ROUTER_ADDR", "RTT_MS", "P99_MS", "LOSS_PCT", "STATUS", "QUALITY"} {
+		if !strings.Contains(out, col) {
+			t.Errorf("F-CR-001: table output missing expected column header %q;\noutput: %q", col, out)
+		}
+	}
+
+	// Table must contain the path entry values from the canned response.
+	for _, want := range []string{"path-table", "192.168.1.1:9000", "42.50", "88.00", "1.50", "active"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("F-CR-001: table output missing expected value %q;\noutput: %q", want, out)
+		}
+	}
+}
+
 // ─── assertion helpers ────────────────────────────────────────────────────────
 
 // mapKeys returns the key list of a map[string]json.RawMessage for use in error messages.
