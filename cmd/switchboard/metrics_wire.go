@@ -18,10 +18,14 @@ import (
 	"github.com/arcavenae/switchboard/internal/paths"
 )
 
-// ErrSVTNNotFound is the sentinel returned when router.status or router.metrics
-// is invoked for an unknown SVTN. Wraps as E-RPC-011.
-// Tests MUST use errors.Is(err, ErrSVTNNotFound) — no string matching.
-var ErrSVTNNotFound = errors.New("E-RPC-011: SVTN not found")
+// ErrRouterSVTNNotFound is the sentinel returned when router.status or
+// router.metrics is invoked for an unknown SVTN. Wraps as E-RPC-011.
+// Tests MUST use errors.Is(err, ErrRouterSVTNNotFound) — no string matching.
+//
+// Distinct from svtnmgmt.ErrSVTNNotFound; this sentinel is scoped to the
+// router.metrics wire path and stamps E-RPC-011 with the E-SVTN-003 message
+// prefix. (F-P9L1-02)
+var ErrRouterSVTNNotFound = errors.New("E-RPC-011: SVTN not found")
 
 // pathTrackerSource is a PathsListSource backed by a map of
 // pathID → *paths.PathTracker. It is safe for concurrent reads; the map
@@ -72,7 +76,12 @@ func (p *pathTrackerSource) AllSnapshots() map[string]paths.PathSnapshot {
 
 // emptyRouterMetricsSource is a RouterMetricsSource that returns E-RPC-011 for
 // every SVTN lookup. Used until a real forwarding-counter store is wired.
-// Tracked in S-BL.ROUTER-METRICS-STORE.
+//
+// #DEFERRED: S-BL.ROUTER-METRICS-STORE — production forwarding-counter store
+// deferred to a later wave. Handler surface, response types, and adapter
+// interface land in S-W5.04; production population (wiring this to a real
+// counter store) lands in S-BL.ROUTER-METRICS-STORE. Mirrors the
+// pathTrackerSource deferred pattern (see comment above).
 type emptyRouterMetricsSource struct{}
 
 func (emptyRouterMetricsSource) SVTNMetrics(svtnID string) (metrics.RouterMetricsResponse, error) {
@@ -83,7 +92,7 @@ func (emptyRouterMetricsSource) SVTNMetrics(svtnID string) (metrics.RouterMetric
 // (BC-2.06.003 PC-2; AC-004). The mgmt dispatch layer re-wraps this error in the
 // JSON-RPC error envelope (see internal/mgmt mgmt.go dispatch convention).
 //
-// Is implements errors.Is support so callers can do errors.Is(err, ErrSVTNNotFound)
+// Is implements errors.Is support so callers can do errors.Is(err, ErrRouterSVTNNotFound)
 // without string matching (go.md error-handling rule 3; H-1 Pass-8).
 type metricsNotFoundError struct {
 	svtnID string
@@ -93,9 +102,9 @@ func (e *metricsNotFoundError) Error() string {
 	return "E-RPC-011: SVTN not found: " + e.svtnID
 }
 
-// Is reports whether target equals ErrSVTNNotFound, enabling errors.Is matching.
+// Is reports whether target equals ErrRouterSVTNNotFound, enabling errors.Is matching.
 func (e *metricsNotFoundError) Is(target error) bool {
-	return target == ErrSVTNNotFound
+	return target == ErrRouterSVTNNotFound
 }
 
 // wireMetricsHandlers registers the three metrics RPC handlers on srv.
