@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: product-owner
 timestamp: 2026-07-01T12:00:00
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.11 changelog note (2026-07-01):** F-P5L3R-04 (Pass-6 L3): 6-site sweep — `paths.list`, `router.metrics`, `router.status` Registered Verbs row BC pins advanced v1.11 → v1.13; path-list-response intro BC pin advanced v1.11 → v1.13; pending-response intro BC pin advanced v1.11 → v1.13; `sbctl router status` CLI comment BC pin advanced v1.11 → v1.13. No structural or semantic change; BC-2.06.003 is now at v1.13.
 
 > **v1.10 changelog note (2026-07-01):** F-L3-002 (Pass-3 L3): `router.metrics` Registered Verbs row — story trace column updated to include both `S-5.02` and `S-W5.04`; BC pin bumped to `BC-2.06.003 v1.11 PC-2`. F-L3-003 (Pass-3 L3): `router.status` Registered Verbs row — story trace column updated to include both `S-5.02` and `S-W5.04`; BC pin confirmed at `BC-2.06.003 v1.11 PC-3`. `paths.list` BC pin also bumped to v1.11. `sbctl router status` CLI comment BC pin bumped to v1.11.
 

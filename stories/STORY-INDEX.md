@@ -172,6 +172,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.31 | 2026-07-01 | Pass-5 L3 fix-burst — S-W5.04 row 1.7→1.10 (BC Traces expanded); S-6.07 row 1.3→1.4 |
 | 3.30 | 2026-07-01 | Pass-4 L3 fix-burst: F-P4L3-003 — reorder Backlog table rows to S-BL.ROUTER-ADDR → S-BL.PATH-TRACKER-WIRING → S-BL.PATH-FAILED-STATUS (dep chain: PATH-TRACKER-WIRING blocks PATH-FAILED-STATUS per Ruling-6). F-P4L3-004 — S-BL.ROUTER-ADDR status corrected `draft` → `backlog` (story frontmatter carries `status: backlog`; `draft` in this table was wrong). |
 | 3.29 | 2026-07-01 | Ruling-6 propagation + Pass-3 L3 fixes: Add S-BL.PATH-TRACKER-WIRING backlog stub (Wire cmd/switchboard/metrics_wire.go pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time; depends on S-W5.04, S-BL.ROUTER-ADDR; Epic E-6; Wave 7 Backlog). Update S-W5.04 row v1.6→v1.7. Summary Total 45→46, Backlog 5→6. Changelog note: S-BL.PATH-FAILED-STATUS BC pin corrected v1.10→v1.11 in backlog table. |
 | 3.28 | 2026-07-01 | Pass-4 L3 F-L3-Med-01 epic-anchor reconciliation: S-BL.LOOKUP row corrected E-2→E-6. Story depends_on S-6.02 (E-6), was promoted to Wave 6 Tranche A alongside E-6 stories (S-6.07, S-6.05), and story frontmatter carries epic: E-6. STORY-INDEX row was the erroneous artifact. Closes F-L3-Med-01. |

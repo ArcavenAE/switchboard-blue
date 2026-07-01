@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.10"
+version: "1.11"
 bc_traces:
   - BC-2.06.001
   - BC-2.06.003
@@ -167,7 +167,7 @@ should be deleted if present; otherwise skip that step.
 | BC | Title | PCs covered |
 |----|-------|------------|
 | BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | Quality field derivation from p99 RTT and loss thresholds (green/yellow/red/pending state machine) |
-| BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union; PathEntry.status derivation: `"active"` iff `Active==true AND Degraded==false`, `"degraded"` otherwise per Ruling-9), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 failed+pending precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
+| BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union; PathEntry.status derivation: `"active"` iff `Active==true AND Degraded==false`, `"degraded"` otherwise per Ruling-9), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 quality-pending-when-SampleCount<10 precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
 
 ## VP Coverage
 
@@ -293,6 +293,8 @@ The following items are explicitly deferred out of S-W5.04 scope:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.11 | 2026-07-01 | spec-steward | Pass-6 L3 fix-burst (F-P5L3R-07): BC-2.06.003 Behavioral Contracts row PC-3 annotation corrected — removed retired "failed+pending precedence" phrasing; replaced with accurate "EC-007 quality-pending-when-SampleCount<10 precedence" (per Ruling-4 Wave-6 Wave-6 reserved-status enforcement) |
+| 1.10 | 2026-07-01 | spec-steward | Pass-5 L3 fix-burst — AC-003 re-anchored to BC-2.06.003 v1.13 PC-1 Ruling-9; BC-2.06.001 row narrowed to quality only; duplicate Arch Compliance row deleted |
 | 1.9 | 2026-07-01 | story-writer | Ruling-9 propagation (F-P4L2-07): AC-003 rewritten with explicit status derivation — `"active"` iff `Active==true AND Degraded==false`; `"degraded"` otherwise (including `Active=false, Degraded=false`). `active_false_is_degraded` test row is normative. BC-2.06.003 version pins swept v1.11 → v1.13 at all non-changelog body sites (AC-002, Scope Boundary, EC-006, Token Budget, Task 1, Arch Compliance Rules ×2, Deferred Scope). Arch Compliance Rules status-enum row updated with Ruling-9 derivation formula. |
 | 1.8 | 2026-07-01 | spec-steward | F-P4L3-001: Swept all non-changelog BC-2.06.003 version pins from v1.10 → v1.11 (8 sites: AC-002 postcondition cite, AC-003 PC-1 cite, Scope Boundary note, EC-006 EC-007 cite, Token Budget row, Task 1, Arch Compliance Rules EC-003 row, Arch Compliance Rules PC-1/EC-007 row). BC-2.06.003 is at v1.11 (Pass-3 L3 F-L3-001 PC-3 S502-DEFER-3 rewrite + traceability section). |
 | 1.7 | 2026-07-01 | story-writer | Ruling-6 propagation (F-P3L1-002, F-L2-01): AC-006 revised — handler surface, response types, and adapter interface in scope; test-only tracker population permitted; production wiring deferred to S-BL.PATH-TRACKER-WIRING; `#DEFERRED` comment requirement added. Task 15a revised: adapter interface defined + test-populated; production wiring deferred; delete residual empty-source dead code if present. §Deferred Scope section added with explicit cross-reference `#DEFERRED: S-BL.PATH-TRACKER-WIRING`. OBS-2 fix: BC-2.06.001 added to §Behavioral Contracts body table (was in bc_traces frontmatter but missing from body table). Pass-3 L3 fixes: F-L3-001 through F-L3-005 propagated. |
