@@ -811,3 +811,39 @@ No gating findings.
 **Trajectory:** 16:PASS(1/3) → 17:BLOCK → 18:BLOCK → 19:BLOCK → 20:BLOCK → 21:BLOCK → 22:BLOCK → 23:BLOCK → 24:BLOCK → 25:BLOCK → 26:PASS(2/3) → 27:PASS(3/3-pending) → **28:PASS(3/3✓CLOSED)**
 
 **No fix-burst required.** Spec tip at convergence: factory-artifacts HEAD. Impl tip at convergence: d3f186c.
+
+---
+
+## Wave-6 Tranche B Pass-6 — 2026-07-01 (BLOCK — S-BL.ROUTER-ADDR L2 blocked; S-7.01/S-7.02 CLEAN 1/3)
+
+**Dispatch:** 9-lens aggregate (S-7.01 × 3, S-7.02 × 3, S-BL.ROUTER-ADDR × 3). Clean-attempt #1/3 reset for all three stories.
+
+**S-7.02 (all 3 lenses):** CLEAN 1/3. All lens results clean.
+
+**S-7.01 (all 3 lenses):** CLEAN 1/3. All lens results clean.
+
+**S-BL.ROUTER-ADDR:** L1/L2/L3 aggregate — L2 FAILED. Finding F-P6L2-01 STALE RED-GATE: integration_test.go Part B contained a stale RED-GATE recover-guard (lines 456-469) referencing the old `paths.NewPathTracker` 3-arg signature that no longer exists after the S-7.01 partial-fix propagation. L2 finding blocked the story; S-7.01 partial-fix propagation gap exposed. Clean-pass counter reset to 0/3 for S-BL.ROUTER-ADDR.
+
+**Pass-6 fix-burst:** test-writer dispatched for S-BL.ROUTER-ADDR. Fix: removed lines 456-469 (stale RED-GATE guard), replaced with direct `tracker := paths.NewPathTrackerWithAddr(stubAddr, 50.0, 0.125)`. Fix landed at commit **b3c93b5**. F-P6L2-01 CLOSED.
+
+**Counter state after Pass-6:** S-7.01 1/3, S-7.02 1/3, S-BL.ROUTER-ADDR 0/3 (reset).
+
+---
+
+## Wave-6 Tranche B Pass-7 — 2026-07-01 (BLOCK — S-7.02 L2 blocked with 3 novel MEDIUM findings)
+
+**Dispatch:** S-7.01 × 3 lenses (clean-attempt #2/3); S-7.02 × 3 lenses (clean-attempt #2/3); S-BL.ROUTER-ADDR pending fresh dispatch (post-b3c93b5 fix — not run this pass).
+
+**S-7.01 (all 3 lenses):** CLEAN 2/3. All 3 lenses clean. Counter advances to 2/3.
+
+**S-7.02:** L1 CLEAN, L3 CLEAN. L2 FAILED — 3 novel MEDIUM findings:
+- F-P7L2-MED-01: tautological HMAC-first oracle (test structure validates HMAC before content, masking oracle-order sensitivity)
+- F-P7L2-MED-02: TruncatesOversize maximality (boundary test does not verify maximum truncation behavior precisely)
+- F-P7L2-MED-03: mid-rune exact-content (UTF-8 multi-byte boundary not tested for exact-content contract)
+L2 BLOCK resets S-7.02 counter to 0/3.
+
+**S-BL.ROUTER-ADDR:** NOT RUN this pass. Was still at 0/3 pending fresh dispatch after b3c93b5 fix. Awaiting Pass-8 dispatch.
+
+**Pass-7 fix-burst:** test-writer dispatched for S-7.02 (F-P7L2-MED-01/02/03). SHA not yet reported — in flight.
+
+**Counter state after Pass-7:** S-7.01 2/3, S-7.02 0/3 (reset), S-BL.ROUTER-ADDR 0/3 (pending fresh dispatch).

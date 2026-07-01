@@ -18,6 +18,22 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-01) — Wave-6 Tranche B Pass-5 fix-burst complete
+
+**Position:** Phase 3 Wave 6 Tranche A CLOSED. All three Tranche A stories merged to develop. Pass-5 fix-burst (all 7 agents) complete — POL-002 + #401/#404 propagation landed across S-7.01, S-7.02, S-BL.ROUTER-ADDR.
+
+**Pass-5 fix-burst SHAs (factory-artifacts):** 9225923 (S-7.02 v1.6 frontmatter), bded1ec (S-7.01 v1.4 inputDocuments), 1c3f954 (S-BL.ROUTER-ADDR v1.4 RULING-W6TB-K), 0fbb4437 (vp_traces sibling-sweep), 837f606 (S-7.02 spec body), 3489f43 (S-7.01 spec body), 5fce8a8 (S-BL.ROUTER-ADDR spec body).
+
+**Tranche A stories:** S-BL.LOOKUP PR #40 eac5d0a; S-W5.04 PR #41 851e164; S-6.07 (v1.13) PR #42 446efce.
+
+**develop HEAD:** 446efce. Tranche B (S-7.01, S-7.02, S-7.03) fully unblocked.
+
+**Next action (superseded):** Pass-6 fresh 9-lens dispatch (clean-attempt #1/3 reset for all three Tranche B stories).
+
+Archived from STATE.md 2026-07-01 — superseded by Pass-7 checkpoint.
+
+---
+
 ## Session Resume Checkpoint (2026-06-24) — S-1.02 mid-delivery pause
 
 ### State
