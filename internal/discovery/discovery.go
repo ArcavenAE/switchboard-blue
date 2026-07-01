@@ -111,6 +111,10 @@ type Config struct {
 	// HeartbeatInterval overrides the default 30 s heartbeat period.
 	// Zero means use HeartbeatInterval (30 s).
 	HeartbeatInterval time.Duration
+	// HeartbeatObserver, if non-nil, is called once on every ticker fire
+	// inside Run. It provides an observable side-effect for tests that need
+	// to count heartbeat invocations (AC-001b; BC-2.03.001 PC-4 oracle).
+	HeartbeatObserver func()
 }
 
 // registryKey is the composite key for the session registry.
@@ -167,6 +171,9 @@ func (d *Discovery) Run(ctx context.Context) error {
 			// the registry is in-process, so the heartbeat is a no-op at the
 			// data layer — it fires the timer to satisfy the independent-timer
 			// requirement (BC-2.03.001 PC-4).
+			if d.cfg.HeartbeatObserver != nil {
+				d.cfg.HeartbeatObserver()
+			}
 		}
 	}
 }

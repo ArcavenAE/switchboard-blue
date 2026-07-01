@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -168,23 +169,33 @@ func TestDiscovery_Advertise_OnStateChange_DetachTriggersAdvert(t *testing.T) {
 // Run fires the heartbeat unconditionally every HeartbeatInterval regardless
 // of Advertise calls. Uses a shortened interval to stay fast.
 //
-// Strong oracle: Run must complete (or context-cancel) cleanly across at
-// least 3 heartbeat periods, and must not return a non-context error,
-// demonstrating the heartbeat loop is active and independent.
+// Strong oracle: HeartbeatObserver is injected via Config and counted;
+// after the window expires, the count must be within [N-1, N+1] of the
+// expected number of ticks (ticker jitter tolerance).
 func TestDiscovery_Advertise_PeriodicHeartbeat(t *testing.T) {
 	t.Parallel()
 
-	const shortInterval = 50 * time.Millisecond
+	const shortInterval = 5 * time.Millisecond
+	const windowDuration = 30 * time.Millisecond
+	const expectedTicks = int(windowDuration / shortInterval) // ~6
+
+	var count int
+	var mu sync.Mutex
+
 	cfg := discovery.Config{
 		LocalNodeAddr:     nodeA1,
 		LocalSVTNID:       svtnA,
 		Router:            newTestRouter(t),
 		HeartbeatInterval: shortInterval,
+		HeartbeatObserver: func() {
+			mu.Lock()
+			count++
+			mu.Unlock()
+		},
 	}
 	d := discovery.New(cfg)
 
-	// Allow 3 full heartbeat periods + slack.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*shortInterval+30*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), windowDuration)
 	t.Cleanup(cancel)
 
 	runDone := make(chan error, 1)
@@ -196,28 +207,49 @@ func TestDiscovery_Advertise_PeriodicHeartbeat(t *testing.T) {
 	runErr := <-runDone
 
 	// Acceptable terminal states: context cancellation or deadline exceeded.
-	// Any other error means the heartbeat loop failed unexpectedly.
 	if runErr != nil && !errors.Is(runErr, context.DeadlineExceeded) && !errors.Is(runErr, context.Canceled) {
-		t.Fatalf("Run: unexpected error after 3 heartbeat intervals: %v", runErr)
+		t.Fatalf("Run: unexpected error after heartbeat window: %v", runErr)
+	}
+
+	mu.Lock()
+	got := count
+	mu.Unlock()
+
+	// Allow ±1 for ticker jitter.
+	if got < expectedTicks-1 || got > expectedTicks+1 {
+		t.Errorf("HeartbeatObserver called %d times, want ~%d (±1) over %v window (BC-2.03.001 PC-4 oracle)",
+			got, expectedTicks, windowDuration)
 	}
 }
 
 // TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent verifies that the
 // heartbeat fires even when Advertise has never been called.
+//
+// Strong oracle: HeartbeatObserver count must be ≥ 1 after 2 full intervals.
 func TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent(t *testing.T) {
 	t.Parallel()
 
-	const shortInterval = 50 * time.Millisecond
+	const shortInterval = 5 * time.Millisecond
+	const windowDuration = 20 * time.Millisecond
+
+	var count int
+	var mu sync.Mutex
+
 	cfg := discovery.Config{
 		LocalNodeAddr:     nodeA1,
 		LocalSVTNID:       svtnA,
 		Router:            newTestRouter(t),
 		HeartbeatInterval: shortInterval,
+		HeartbeatObserver: func() {
+			mu.Lock()
+			count++
+			mu.Unlock()
+		},
 	}
 	d := discovery.New(cfg)
 
 	// Do NOT call Advertise — heartbeat must fire independently.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*shortInterval+20*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), windowDuration)
 	t.Cleanup(cancel)
 
 	runDone := make(chan error, 1)
@@ -229,6 +261,15 @@ func TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent(t *testing.T) {
 	runErr := <-runDone
 	if runErr != nil && !errors.Is(runErr, context.DeadlineExceeded) && !errors.Is(runErr, context.Canceled) {
 		t.Fatalf("Run (no prior Advertise): unexpected error: %v", runErr)
+	}
+
+	mu.Lock()
+	got := count
+	mu.Unlock()
+
+	if got < 1 {
+		t.Errorf("HeartbeatObserver not called after %v with no prior Advertise; want ≥ 1 (BC-2.03.001 PC-4 independent of state change)",
+			windowDuration)
 	}
 }
 
@@ -568,8 +609,8 @@ func TestDiscovery_Advertise_HMACAuthenticated(t *testing.T) {
 	raw[0] ^= 0xFF // corrupt one byte — simulates tampered HMAC region
 
 	err := d.ReceiveAdvertisement(ctx, raw)
-	if err == nil {
-		t.Fatal("ReceiveAdvertisement: expected error for tampered HMAC, got nil (AC-005 fail-closed)")
+	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
+		t.Fatalf("ReceiveAdvertisement: expected ErrInvalidHMACTag for tampered payload, got %v (AC-005 fail-closed)", err)
 	}
 
 	// Strong oracle: the tampered session must NOT appear in the session list.
@@ -593,8 +634,8 @@ func TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload(t *testing.T) {
 	d := discovery.New(cfg)
 
 	err := d.ReceiveAdvertisement(context.Background(), []byte{})
-	if err == nil {
-		t.Fatal("ReceiveAdvertisement with empty payload: expected error, got nil")
+	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
+		t.Fatalf("ReceiveAdvertisement with empty payload: expected ErrInvalidHMACTag, got %v", err)
 	}
 }
 
@@ -831,7 +872,9 @@ func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
 					{SessionName: "foreign-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
 				},
 			})
-			_ = d.ReceiveAdvertisement(ctx, foreignAdv)
+			if err := d.ReceiveAdvertisement(ctx, foreignAdv); err != nil && !errors.Is(err, discovery.ErrSVTNMismatch) {
+				t.Fatalf("ReceiveAdvertisement foreign SVTN: unexpected error (want nil or ErrSVTNMismatch): %v", err)
+			}
 
 			result, err := d.Enumerate(ctx)
 			if err != nil {
