@@ -580,6 +580,51 @@ func (m *SVTNManager) HasNonBootstrapControlKey(svtnName string) bool {
 	return false
 }
 
+// SVTNByName returns a copy of the SVTN record for name, or (SVTN{}, false)
+// if no SVTN with that name exists. Returns a value copy — callers must not
+// retain a pointer into the store (go.md rule 12).
+// Safe for concurrent use.
+func (m *SVTNManager) SVTNByName(name string) (SVTN, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.svtns[name]
+	return s, ok
+}
+
+// CallerKeyRoleInAny returns the active KeyRole of pubkey in any registered
+// SVTN, and true. Returns (0, false) if pubkey is not found as an active
+// (not revoked, not expired) key in any SVTN, or if no SVTNs exist.
+//
+// This is a diagnostic-only helper used to populate the "has role <role>"
+// field in E-ADM-009 error messages when no specific SVTN name is in scope.
+// Do NOT use this for authority decisions — use CallerKeyRoleActive with an
+// explicit SVTN name.
+// Safe for concurrent use.
+func (m *SVTNManager) CallerKeyRoleInAny(pubkey ed25519.PublicKey) (admission.KeyRole, bool) {
+	m.mu.RLock()
+	svtns := make([]SVTN, 0, len(m.svtns))
+	for _, s := range m.svtns {
+		svtns = append(svtns, s)
+	}
+	m.mu.RUnlock()
+
+	now := time.Now().UTC()
+	for _, s := range svtns {
+		entry := m.keySet.LookupByPubkey(s.ID, pubkey)
+		if entry == nil {
+			continue
+		}
+		if entry.IsRevoked() {
+			continue
+		}
+		if exp := entry.KeyExpiry(); !exp.IsZero() && !now.Before(exp) {
+			continue
+		}
+		return entry.Role, true
+	}
+	return 0, false
+}
+
 // IsRegisteredAnyState reports whether pubkey is registered in the named SVTN
 // in ANY state — active, revoked, or expired. Returns false if svtnName does
 // not exist or the key has never been registered.

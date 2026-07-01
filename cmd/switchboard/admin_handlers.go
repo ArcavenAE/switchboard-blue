@@ -612,10 +612,20 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 		callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
 		if !hasPubkey || !m.IsBootstrapKey(callerPub) {
 			fp := "(unknown)"
+			role := "unknown"
 			if hasPubkey {
 				fp = keyFingerprintAdmin(callerPub)
+				// Diagnostic-only: resolve caller's active role across all registered
+				// SVTNs so the rejection message matches BC-2.07.001 canonical format
+				// "has role <role>". Does NOT affect the authority decision — the
+				// bootstrap-only check above is the authoritative gate (Ruling-5 /
+				// F-Lens1-02). If the key has no active role in any SVTN, "unknown"
+				// is reported per the canonical test vector.
+				if r, found := m.CallerKeyRoleInAny(callerPub); found {
+					role = r.String()
+				}
 			}
-			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s is not the daemon bootstrap key", fp)
+			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s has role %s", fp, role)
 		}
 
 		// Ruling-7 / F-Impl-002: defense-in-depth RoleControl check.
