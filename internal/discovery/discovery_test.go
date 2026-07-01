@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1324,4 +1325,129 @@ func TestDiscovery_VP055_RoundTripProperty(t *testing.T) {
 			{SessionName: "max-ids", Status: discovery.Attached, Quality: discovery.QualityGreen},
 		},
 	})
+
+	// ---------------------------------------------------------------------------
+	// M-2 boundary cases: 255-byte session name truncation contract
+	// (BC-2.03.003 EC-001; S-7.02 v1.3).
+	//
+	// The wire format encodes session names with a uint16 length prefix and
+	// the raw name bytes. Names up to 255 bytes must be encoded and decoded
+	// verbatim. Names exceeding 255 bytes must be truncated on a valid UTF-8
+	// rune boundary to fit within 255 encoded bytes, with a UTF-8 ellipsis
+	// ("…", U+2026, 3 bytes) appended — making the maximum encoded length
+	// 255 bytes total (252 content bytes + 3-byte ellipsis).
+	// ---------------------------------------------------------------------------
+
+	// 255 ASCII bytes: at the boundary — must be encoded verbatim, decoded verbatim.
+	name255 := strings.Repeat("a", 255)
+	{
+		payload := discovery.AdvertisementPayload{
+			NodeAddr: nodeA1,
+			SVTNID:   svtnA,
+			Sessions: []discovery.SessionPresence{
+				{SessionName: name255, Status: discovery.Attached, Quality: discovery.QualityGreen},
+			},
+		}
+		encoded, err := discovery.Encode(payload)
+		if err != nil {
+			t.Fatalf("255-byte name: Encode: %v", err)
+		}
+		decoded, err := discovery.Decode(encoded)
+		if err != nil {
+			t.Fatalf("255-byte name: Decode: %v", err)
+		}
+		if len(decoded.Sessions) != 1 {
+			t.Fatalf("255-byte name: decoded session count = %d, want 1", len(decoded.Sessions))
+		}
+		if got := decoded.Sessions[0].SessionName; got != name255 {
+			t.Errorf("255-byte name: decoded name len=%d, want %d (M-2 at-boundary must encode verbatim)", len(got), len(name255))
+		}
+	}
+
+	// 256 ASCII bytes: one byte over the boundary — must be truncated.
+	// Expected: 252 bytes of content + "…" (3 bytes) = 255 bytes total.
+	name256 := strings.Repeat("b", 256)
+	{
+		payload := discovery.AdvertisementPayload{
+			NodeAddr: nodeA1,
+			SVTNID:   svtnA,
+			Sessions: []discovery.SessionPresence{
+				{SessionName: name256, Status: discovery.Attached, Quality: discovery.QualityGreen},
+			},
+		}
+		encoded, err := discovery.Encode(payload)
+		if err != nil {
+			t.Fatalf("256-byte name: Encode: %v", err)
+		}
+		decoded, err := discovery.Decode(encoded)
+		if err != nil {
+			t.Fatalf("256-byte name: Decode: %v", err)
+		}
+		if len(decoded.Sessions) != 1 {
+			t.Fatalf("256-byte name: decoded session count = %d, want 1", len(decoded.Sessions))
+		}
+		got := decoded.Sessions[0].SessionName
+		// The decoded name must be the truncated form, not the original.
+		if got == name256 {
+			t.Errorf("256-byte name: decoded name is the untruncated original (%d bytes); want truncated form ≤255 bytes (M-2)", len(got))
+		}
+		if len(got) > 255 {
+			t.Errorf("256-byte name: decoded name len=%d, want ≤255 bytes after truncation (M-2)", len(got))
+		}
+		// Truncated form must end with the ellipsis marker.
+		if !strings.HasSuffix(got, "…") {
+			t.Errorf("256-byte name: truncated name %q does not end with ellipsis '…' (M-2 truncation contract)", got)
+		}
+		// Round-trip: Encode(Decode(encoded)) must equal encoded (truncated form is stable).
+		reencoded, err := discovery.Encode(decoded)
+		if err != nil {
+			t.Fatalf("256-byte name: re-Encode: %v", err)
+		}
+		if !bytes.Equal(encoded, reencoded) {
+			t.Errorf("256-byte name: round-trip not stable after truncation: encoded=%d reencoded=%d bytes (M-2 VP-055)", len(encoded), len(reencoded))
+		}
+	}
+
+	// 512-byte UTF-8-heavy string: multi-byte runes must truncate on a valid
+	// rune boundary so the result is valid UTF-8.
+	// "日" is 3 bytes; 512 bytes = ~170 runes.
+	name512utf8 := strings.Repeat("日", 170) // 510 bytes of UTF-8
+	{
+		payload := discovery.AdvertisementPayload{
+			NodeAddr: nodeA1,
+			SVTNID:   svtnA,
+			Sessions: []discovery.SessionPresence{
+				{SessionName: name512utf8, Status: discovery.Attached, Quality: discovery.QualityGreen},
+			},
+		}
+		encoded, err := discovery.Encode(payload)
+		if err != nil {
+			t.Fatalf("512-byte UTF-8 name: Encode: %v", err)
+		}
+		decoded, err := discovery.Decode(encoded)
+		if err != nil {
+			t.Fatalf("512-byte UTF-8 name: Decode: %v", err)
+		}
+		if len(decoded.Sessions) != 1 {
+			t.Fatalf("512-byte UTF-8 name: decoded session count = %d, want 1", len(decoded.Sessions))
+		}
+		got := decoded.Sessions[0].SessionName
+		if got == name512utf8 {
+			t.Errorf("512-byte UTF-8 name: decoded name is the untruncated original; want truncated form ≤255 bytes (M-2)")
+		}
+		if len(got) > 255 {
+			t.Errorf("512-byte UTF-8 name: decoded name len=%d, want ≤255 bytes after truncation (M-2)", len(got))
+		}
+		if !strings.HasSuffix(got, "…") {
+			t.Errorf("512-byte UTF-8 name: truncated name does not end with '…' (M-2 truncation contract)")
+		}
+		// Round-trip stability after truncation.
+		reencoded, err := discovery.Encode(decoded)
+		if err != nil {
+			t.Fatalf("512-byte UTF-8 name: re-Encode: %v", err)
+		}
+		if !bytes.Equal(encoded, reencoded) {
+			t.Errorf("512-byte UTF-8 name: round-trip not stable after truncation (M-2 VP-055)")
+		}
+	}
 }
