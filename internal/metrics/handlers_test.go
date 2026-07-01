@@ -734,21 +734,12 @@ func TestQualityFromEntry_NeverEmitsFailed(t *testing.T) {
 //
 // AC-002 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
 //
-// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). The stub-architect
-// wired snap.RouterAddr through PathsList already (handlers.go line 65), so this
-// test verifies the seam with a fakePathsListSource that directly provides a
-// non-empty RouterAddr in its snapshot. The test will fail at Red Gate because
-// NewPathTrackerWithAddr panics — but the fakePathsListSource bypasses the
-// constructor, so this particular test is GREEN-BY-DESIGN for the handler seam
-// (snap.RouterAddr pass-through). The companion test
-// TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr in paths_test.go covers the
-// failing Red Gate assertion for the constructor itself.
-//
-// Rationale for using fakePathsListSource: PathsList depends on PathsListSource
-// (an interface). The AC-002 seam is "handler reads snap.RouterAddr, not """.
-// A fake that injects the RouterAddr directly into the snapshot is the correct
-// isolation boundary — it tests the handler's pass-through without depending on
-// the as-yet-unimplemented constructor.
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717). This test
+// exercises the PathsList handler seam via fakePathsListSource — an injected
+// PathSnapshot with a synthetic router_addr — independently of the constructor
+// path. It verifies that PathEntryFromSnapshot forwards snap.RouterAddr into
+// PathEntry.RouterAddr (BC-2.06.003 PC-1 field-completeness).
 func TestPathsList_PassesRouterAddr(t *testing.T) {
 	t.Parallel()
 
