@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.24"
+version: "3.25"
 status: draft
 producer: story-writer
 timestamp: 2026-06-30T00:00:00
@@ -19,19 +19,19 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 43 (34 master-table stories + 1 draft stub S-6.04 + 4 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.LOOKUP/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Total stories | 43 (35 master-table stories + 1 draft stub S-6.04 + 3 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 26 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02) |
 | Pending | 3 (S-7.01, S-7.02, S-7.03) |
 | Wave 7 (deferred) | 1 (S-7.04) |
 | Master-table drafts | 4 (S-W5.03, S-W5.04, S-6.05, S-6.07) |
-| Backlog/maintenance/hardening stubs | 5 (S-M.01, S-M.02, S-HRD.01, S-HRD.02, S-BL.LOOKUP) |
+| Backlog/maintenance/hardening stubs | 4 (S-M.01, S-M.02, S-HRD.01, S-HRD.02) |
 | E-phase | 28 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04) |
 | PE-phase | 4 (wave 6–7 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
 | Total points (waves 0–6) | 192 |
 | Total points (incl. S-M.01 + S-M.02) | 202 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 4 (S-BL.OA, S-BL.ARQ-TX, S-BL.LOOKUP, S-BL.NI) |
+| Backlog | 3 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI) |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
@@ -169,6 +169,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.25 | 2026-07-01 | F-P2L3-M1 partial-fix regression closure: S-BL.LOOKUP promoted backlog→master-table in v3.24 but Summary section was not swept. Summary Total corrected (34→35 master-table stories; backlog 4→3, S-BL.LOOKUP removed from backlog list). Backlog/maintenance/hardening stubs row corrected (5→4, S-BL.LOOKUP dropped). Backlog count corrected (4→3). Closes F-P2L3-M1. |
 | 3.24 | 2026-06-30 | Wave-6 scope locked per wave-6-scope-decision.md (PO approved): Wave 6 revised 7 stories / 40pt → 7 stories / 33pt (S-7.04 deferred to Wave 7, S-BL.LOOKUP promoted from backlog). S-7.04 wave 6→7. S-BL.LOOKUP wave unscheduled→6, status backlog→draft. Wave summary: Wave 6 row rewritten (33pt, two-tranche structure); Wave 7 row added (S-7.04, 8pt). Topological sort extended to Wave 7. Wave-6 serialization constraints section added. Summary Pending 4→3, Wave 7 deferred 0→1, Backlog 4→3, Waves 7→8, grand total points 192→200 (waves 0–7). Backlog section: S-BL.LOOKUP removed (promoted to Wave 6). |
 | 3.23 | 2026-06-30 | Wave-5 Pass-1 fixes: F-W5P1-002 (HIGH) — 6 Wave-5 stories status updated to merged in master table (S-5.01 PR #35 c1c2c3d, S-5.02 PR #37 98eb8b7, S-5.03 PR #30 01ae50c, S-6.02 PR #34 b36cb9b, S-6.03 PR #32 d854978, S-W5.02 PR #38 d881f99); Summary Complete 20→26, Pending 9→4, Master-table drafts 5→4. F-W5P1-004 (MED) — S-W5.04 re-scheduled Wave 5→6: Wave 5 now 8 stories/43pt (was 9/48), Wave 6 now 7 stories/40pt (was 6/35); S-W5.04 master-table wave field updated 5→6; serialization note updated. O-W5P1-01 (LOW) — Wave Summary grand total row corrected to 33 wave stories. O-W5P1-02 (LOW) — S-BL.LOOKUP unblocked note added (S-6.02 merged). |
 | 3.22 | 2026-06-30 | Pass-7 L3 fix: Wave Summary total row arithmetic reconciled 187→192 (was missed in v3.1 update) + grand total 197→202 pts + footnote 187→192. Ref F-P7L3-001. |

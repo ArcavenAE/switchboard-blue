@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-6-tranche-a-parallel-dispatch
+phase_step: wave-6-tranche-a-pass-1-active
 phase_3_active_wave: 6
 phase_3_active_stories: [S-W5.04, S-BL.LOOKUP, S-6.07]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
@@ -76,8 +76,8 @@ wave_6_tranche_b: "[S-7.01, S-7.02, S-7.03] (held pending Tranche A wave-adversa
 develop_head: d881f99
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T23:59:00Z
-last_update: 2026-06-30
+timestamp: 2026-07-01T00:00:00Z
+last_update: 2026-07-01
 ---
 
 # Switchboard Factory State
@@ -104,6 +104,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-07-01 — S-5.02 BC-5.39.001 CONVERGENCE-CLOSED. Passes 6–11 required; Pass-9/10/11 all 3-lens clean (3/3 consecutive). Impl tip: 5732902 (F-CR-001 formatPathsTable writer-injection fix, race-clean). Test tip: 8152e20 (F-P8L2-001 AC-008 named test added). Factory-artifacts tip at gate: 35649fa. BC anchor: BC-2.06.003 v1.7. Story: S-5.02 v1.10. Next: per-AC demo recordings (Step 5).
 - 2026-06-30 — S-6.06 Pass-28 PASS CLEAN (all 3 lenses) — **BC-5.39.001 CONVERGENCE-CLOSED**. lens-1 PASS CLEAN novelty NONE (all 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified, no locked-accessor leaks, no init()/panic violations outside main, no tautological tests, comprehensive negative-path coverage, no hidden allocations, no sentinel-vs-wire drift, race/TOCTOU regression tests intact). lens-2 PASS CLEAN novelty ZERO (wire-error verbatim consistency verified; layering claim handler input-validation before bootstrap sentinel verified at admin_handlers.go:279-284 + svtnmgmt.go:325/334/263/268; all version cites coherent VP-076 v1.4, ARCH-04 v1.13, BC-2.05.004 v1.12, error-taxonomy v3.9; VP-INDEX arithmetic 76 total; bidirectional traceability). lens-3 PASS CLEAN novelty ZERO (all five mandatory sweeps clean; Pass-25 sibling-fix propagation fully landed; known phase-5-deferred items TaskList #118 correctly not re-flagged). THIRD consecutive fully-clean pass. Trajectory: P26:PASS(1/3→2/3) P27:PASS(2/3→3/3-pending) P28:PASS(3/3-pending→CONVERGED). No fix-burst required. **S-6.06 adversarial convergence CLOSED per BC-5.39.001.** Next: per-story-delivery.md Step 5 (demo recording per AC), then Steps 6-9.
 - 2026-06-30 — S-W5.02 MERGED PR #38 (d881f99). All 5 ACs delivered. BC-5.39.001 CONVERGED (L1 3/3, L2 3/3, L3 3/3, 10 adversarial passes). VP-049 satisfied. **Wave 5 complete: 8 stories + 1 hygiene PR all merged.** Post-merge deferred: 8 LOW test-infrastructure observations (CR-002/005/006/007/008/009, SEC-001/002).
+- 2026-07-01 — Wave-6 Tranche A Pass-1 dispatched in parallel: S-W5.04 (d435788 red-gate + 83b3180 green, 20 tests, EC-007 enforced), S-BL.LOOKUP fix-burst (68d32b9 tests; story v1.1; ARCH-04 v1.14; S-6.02 v1.7), S-6.07 green (a148119, 5-handler admin dispatch, BootstrapFingerprint, admin.svtn.create RPC). S-BL.LOOKUP Pass-1 NOT COUNTED: lens-2 + lens-3 BLOCK. F-P2L3-M1 STORY-INDEX summary-section partial-fix regression closed (v3.24→v3.25). DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER added. PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP codified.
 
 ## Phase Progress
 
@@ -183,6 +184,8 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | SW502-DEFER-7 | LOW | S-W5.02 SEC-001: waitForCloseAfter polling busy-wait (CWE-400, test-only) — consider channel-based notification. | implementer | deferred phase-5-hardening |
 | SW502-DEFER-8 | LOW | S-W5.02 SEC-002: nonConstantID() fallback to time.UnixNano (CWE-330, test-only) — consider t.Fatal instead of silent degradation. | implementer | deferred phase-5-hardening |
 | PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep enforcement at BC/VP version bumps (superset of PROCESS-GAP-P19..25); currently only external vsdd-factory issue #361 comment. | orchestrator | orchestrator-policy-registry-update |
+| DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER | LOW | PathEntry.router_addr in S-W5.04 impl uses path ID as placeholder because PathSnapshot has no RouterAddr field. Follow-on story required to enrich PathSnapshot metadata with router address. Origin: S-W5.04 impl decision (83b3180). Target: backlog. | implementer/architect | backlog |
+| PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP | OBS | [process-gap] When promoting a story between STORY-INDEX sections (backlog→master-table, draft→scheduled), the Summary Total (line ~22), stubs rollup (line ~27), AND section-by-section counts (line ~34) MUST all be swept atomically. Root cause: multi-location aggregate rollups in same document not swept when a table row moves. F-P2L3-M1 exposed this when S-BL.LOOKUP was promoted to Wave 6 master-table in v3.24 without updating Summary. Checklist item should be added to sibling-sweep addendum. | orchestrator/story-writer | open — process rule to codify |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -222,16 +225,18 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Wave-6 scope decided | 7 stories, 33 pt; S-7.04 deferred to Wave 7; Tranche A: S-W5.04 ∥ S-BL.LOOKUP ∥ S-6.07 → serial S-6.05; Tranche B: S-7.01/S-7.02/S-7.03 held. Scope doc: .factory/planning/wave-6-scope-decision.md. | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (Wave-6 Tranche A dispatch pending)
+## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche A Pass-1 active)
 
-**Position:** Phase 3 Wave 6 kickoff. Wave-5 wave-adversarial gate CONVERGED (6 passes, 2026-06-30). Pre-Wave-6 prep complete: S502-DEFER-3 closed (7ee5b82), hygiene sweep (44376ea), VP-062 v1.3 propagation (3cf96aa), STORY-INDEX v3.24 + dep-graph v1.7 + sprint-state.yaml v1.0 (4aabd7b). Wave-6 scope: 7 stories / 33 pt; S-7.04 deferred to Wave 7. Tranche A: S-W5.04 ∥ S-BL.LOOKUP ∥ S-6.07 (parallel first-slot dispatch); S-6.05 is serial-second and enters phase_3_active_stories only after S-6.07 merges. Tranche B: S-7.01/S-7.02/S-7.03 held pending Tranche A wave-adversarial close.
+**Position:** Phase 3 Wave 6 Tranche A Pass-1 in progress. S-W5.04 green landed (83b3180, 20 tests, EC-007 enforced). S-6.07 green landed (a148119, 5-handler admin dispatch, BootstrapFingerprint, admin.svtn.create RPC). S-BL.LOOKUP Pass-1 NOT COUNTED: lens-2 + lens-3 BLOCK (fix-burst: tests 68d32b9, story v1.1, ARCH-04 v1.14, S-6.02 v1.7). factory-artifacts burst commit: 09c7883 (fix-burst artifacts) + pending index/state commit. STORY-INDEX v3.25 (F-P2L3-M1 summary-section regression closed). ARCH-INDEX v1.2. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER and PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP recorded.
 
-**NEXT ACTION on resume:** Orchestrator kicks off S-W5.04 + S-BL.LOOKUP + S-6.07 in parallel worktrees per per-story-delivery.md.
+**NEXT ACTION on resume:** Orchestrator dispatches S-BL.LOOKUP Pass-2 adversarial review (lens-2 + lens-3 blocked; story v1.1 tip; impl tip 68d32b9). S-W5.04 and S-6.07 continue toward adversarial convergence in parallel.
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
 - SW502-DEFER-1..8: 8 S-W5.02 post-merge LOW deferrals logged in Open Drift Items (CR-002/005/006/007/008/009, SEC-001/002).
 - PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row — vsdd-factory #361-364.
+- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER: PathSnapshot RouterAddr enrichment — backlog.
+- PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP: Summary section sweep discipline — open/codify.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
 
