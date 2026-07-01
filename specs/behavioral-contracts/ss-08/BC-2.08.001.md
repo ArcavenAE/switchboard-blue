@@ -2,7 +2,7 @@
 artifact_id: BC-2.08.001
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,21 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-07-01
+    version: "1.2"
+    actor: spec-steward
+    change: >
+      RULING-W6TB-C (decisions/RULING-W6TB-C-console-transport.md): retract Inv-3
+      "same SVTN channel as regular traffic — no separate out-of-band channel" language.
+      Replace with management-plane Unix-socket transport requirement. Rationale: cmd/sbctl
+      has no ARQ stack; forbidden from importing internal/routing per ARCH-08 §6.6;
+      implementing SVTN-channel transport would require a second control-message protocol
+      inside the SVTN data plane with no CAP/BC grounding. Security intent (no privilege
+      bypass) is satisfied by mgmt-plane authentication (Ed25519 fail-closed per S-6.03 /
+      BC-2.07.004; internal/mgmt.Server authenticates the operator key). Tier-2
+      authorization (Inv-1) enforced by internal/session regardless of transport.
+      S-7.03 v1.2 is the implementing story.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -57,7 +71,7 @@ A console daemon can be controlled remotely via `sbctl`. The controlling operato
 
 1. Remote control does not bypass Tier 2 authorization: the console daemon's key must be authorized for the target session.
 2. The viewing operator at the console sees the same operations as if they ran them locally.
-3. Remote control commands use the same SVTN channel as regular traffic — no separate out-of-band channel.
+3. Remote control commands use the management-plane Unix-socket transport (ADR-006 / ADR-012) — the same authenticated channel used by all `sbctl` commands. No separate data-plane or out-of-band channel is introduced. The operator's key is authenticated by `internal/mgmt.Server` (Ed25519 fail-closed per BC-2.07.004); console Tier-2 authorization (Inv-1) is enforced by the console daemon's session layer (`internal/session`) regardless of transport. Implementing the retracted "same SVTN channel" approach is architecturally forbidden: `cmd/sbctl` must not import `internal/routing`, `internal/arq`, or `internal/multipath` (ARCH-08 §6.6). (Patched v1.2, W6TB-C Ruling, 2026-07-01 — retracted: "same SVTN channel as regular traffic — no separate out-of-band channel".)
 
 ## Trigger
 
@@ -96,7 +110,7 @@ Operator runs `sbctl console attach|detach|switch|navigate`.
 | L2 Capability | CAP-025 ("Remote console control plane") per capabilities.md §CAP-025 |
 | L2 Domain Invariants | DI-010 (session authorization is access-node-enforced — still applies via the console daemon's key) |
 | Architecture Module | internal/session |
-| Stories | [filled by story-writer] |
+| Stories | S-7.03 v1.2 (console remote-control: attach/detach/switch via mgmt-plane Unix-socket transport; W6TB-C ruling) |
 | Capability Anchor Justification | CAP-025 ("Remote console control plane") per capabilities.md §CAP-025 — this BC specifies the remote controllability that CAP-025 defines as "remotely controllable via sbctl: attach, detach, switch session, navigate" |
 
 ## Related BCs
@@ -104,3 +118,11 @@ Operator runs `sbctl console attach|detach|switch|navigate`.
 - BC-2.04.003 — depends on: remote attach invokes the attach flow
 - BC-2.04.004 — depends on: remote detach invokes the detach flow
 - BC-2.07.002 — composes with: sbctl authentication is shared
+- BC-2.07.004 — depends on: mgmt-plane Ed25519 authentication for operator key (Inv-3 v1.2)
+
+## Changelog
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.2 | 2026-07-01 | spec-steward | RULING-W6TB-C (decisions/RULING-W6TB-C-console-transport.md): Inv-3 retracted and replaced. "Same SVTN channel as regular traffic — no separate out-of-band channel" was architecturally incompatible with the established JSON-over-Unix-socket management-plane transport used by all sbctl commands (ADR-006/ADR-012). Inv-3 now correctly states the management-plane transport requirement. Security intent preserved: operator key authentication via internal/mgmt.Server (BC-2.07.004); Tier-2 authorization via internal/session. Forbidden-import constraint (ARCH-08 §6.6) documented explicitly. S-7.03 v1.2 is the implementing story. Update Traceability Stories row to cite S-7.03 v1.2 anchoring. Add BC-2.07.004 to Related BCs. |
+| 1.1 | 2026-06-23 | product-owner | Initial draft — console remote control via sbctl: attach, detach, switch session, navigate. |
