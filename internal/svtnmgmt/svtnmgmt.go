@@ -349,8 +349,8 @@ func (m *SVTNManager) ExpireKey(
 	// TOCTOU note: a concurrent LWW RegisterKey could change the role between
 	// this lookup and SetKeyExpiryIfRoleMatches. SetKeyExpiryIfRoleMatches
 	// detects this via the role cross-check and returns ErrRoleMismatch.
-	lookedUp := m.keySet.LookupByPubkey(svtnID, pubkey)
-	if lookedUp == nil {
+	lookedUp, ok := m.keySet.LookupByPubkey(svtnID, pubkey)
+	if !ok {
 		return KeyOpResult{}, admission.ErrKeyNotRegistered
 	}
 	expectedRole := lookedUp.Role
@@ -401,8 +401,8 @@ func (m *SVTNManager) CallerKeyRole(svtnName string, pubkey ed25519.PublicKey) (
 	if !exists {
 		return 0, false
 	}
-	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
-	if entry == nil {
+	entry, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if !ok {
 		return 0, false
 	}
 	return entry.Role, true
@@ -422,8 +422,8 @@ func (m *SVTNManager) CallerKeyRoleActive(svtnName string, pubkey ed25519.Public
 	if !exists {
 		return 0, false
 	}
-	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
-	if entry == nil {
+	entry, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if !ok {
 		return 0, false
 	}
 	// Deny revoked keys (F-P4L1-003).
@@ -523,7 +523,8 @@ func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.Publi
 	if !exists {
 		return false
 	}
-	return m.keySet.LookupByPubkey(svtn.ID, pubkey) != nil
+	_, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	return ok
 }
 
 // ListKeys returns a snapshot of all registered keys for the named SVTN.
