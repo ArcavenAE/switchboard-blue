@@ -1,5 +1,5 @@
 // metrics_wire.go — wires the metrics RPC handlers onto the daemon management
-// server (BC-2.06.003 v1.10; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-003).
+// server (BC-2.06.003 v1.14; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-003).
 //
 // Purity classification (ARCH-09): boundary — connects the management server
 // to metrics handler closures. No business logic lives here.
@@ -113,7 +113,7 @@ func (e *metricsNotFoundError) Is(target error) bool {
 // Returns an error on registration failure so the main-package caller can
 // log.Fatalf — only main is the allowed exit site (go.md; F-P10L1-04).
 //
-// BC-2.06.003 v1.10; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001.
+// BC-2.06.003 v1.14; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001.
 func wireMetricsHandlers(srv *mgmt.Server) error {
 	if err := mgmt.RegisterMetricsHandlers(srv, newPathTrackerSource(), emptyRouterMetricsSource{}); err != nil {
 		return fmt.Errorf("wireMetricsHandlers: register-before-serve invariant violated: %w", err)

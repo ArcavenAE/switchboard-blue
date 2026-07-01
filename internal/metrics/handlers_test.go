@@ -320,7 +320,6 @@ func TestPathEntry_StatusFromDegraded(t *testing.T) {
 		wantStatus string
 	}{
 		// Active=false maps to "degraded" in Wave 6; "failed" is reserved per Ruling-4.
-		// PO Ruling-9 pending: AC-003 will be updated to reflect impl mapping (Active=false → degraded).
 		{name: "active_false_is_degraded", active: false, degraded: false, wantStatus: "degraded"},
 		{name: "active_degraded_is_degraded", active: true, degraded: true, wantStatus: "degraded"},
 		{name: "active_ok_is_active", active: true, degraded: false, wantStatus: "active"},
