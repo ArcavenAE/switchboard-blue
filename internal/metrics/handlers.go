@@ -61,9 +61,10 @@ func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (Paths
 
 // RouterMetrics is the handler logic for the "router.metrics" RPC.
 // Reads per-SVTN forwarding counters via src and returns a RouterMetricsResponse.
-// Returns an error (E-RPC-011) when the requested SVTN is not found.
+// Returns an E-RPC-* error if the svtn_id field is missing or empty, or if args
+// cannot be decoded. Returns an E-RPC-011 error when the SVTN is not found.
 //
-// BC-2.06.003 v1.8 PC-2; AC-004.
+// BC-2.06.003 v1.9 PC-2; AC-004; Fix 6 (svtn_id required).
 func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSource) (RouterMetricsResponse, error) {
 	var req struct {
 		// svtn_id is the canonical wire key sent by sbctl (cmd/sbctl/router_metrics.go).
@@ -72,8 +73,13 @@ func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSou
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &req); err != nil {
-			return RouterMetricsResponse{}, fmt.Errorf("decode args: %w", err)
+			return RouterMetricsResponse{}, fmt.Errorf("E-RPC-002: decode args: %w", err)
 		}
+	}
+	// svtn_id is required — an empty or missing value cannot identify a router.
+	// This rejects callers that omit the field entirely (Fix 6).
+	if req.SVTN == "" {
+		return RouterMetricsResponse{}, fmt.Errorf("E-RPC-002: router.metrics requires svtn_id string field")
 	}
 	return src.SVTNMetrics(req.SVTN)
 }
@@ -132,11 +138,19 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 	} else if snap.Degraded {
 		status = "degraded"
 	}
+	// Derive RTTValue Kind from SampleCount per BC-2.06.003 v1.9 PC-1:
+	// FloatKind when SampleCount ≥ 10 (p99 is meaningful), PendingKind otherwise.
+	var rttP99 RTTValue
+	if snap.SampleCount >= 10 {
+		rttP99 = RTTValue{Kind: FloatKind, Value: snap.P99RTTMs, SampleCount: snap.SampleCount}
+	} else {
+		rttP99 = RTTValue{Kind: PendingKind, SampleCount: snap.SampleCount}
+	}
 	return PathEntry{
 		PathID:     pathID,
 		RouterAddr: routerAddr,
 		RTTMs:      snap.EWMARTTMs,
-		RTTP99Ms:   RTTValue{ValueMs: snap.P99RTTMs, SampleCount: snap.SampleCount},
+		RTTP99Ms:   rttP99,
 		LossPct:    snap.LossPct,
 		Status:     status,
 	}
@@ -157,7 +171,7 @@ func QualityFromEntry(entry PathEntry) string {
 	if entry.RTTP99Ms.SampleCount < 10 {
 		return "pending"
 	}
-	return Classify(entry.RTTP99Ms.ValueMs, entry.LossPct).String()
+	return Classify(entry.RTTP99Ms.Value, entry.LossPct).String()
 }
 
 // overallQuality derives the worst-case quality across all entries for the

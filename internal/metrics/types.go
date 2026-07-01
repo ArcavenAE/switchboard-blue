@@ -1,5 +1,5 @@
 // Package metrics — response types for daemon-side paths.list, router.metrics,
-// and router.status RPC handlers (BC-2.06.003 v1.8).
+// and router.status RPC handlers (BC-2.06.003 v1.9).
 //
 // All types in this file are pure data + serialization. They perform no I/O.
 // Purity classification (ARCH-09): pure-core.
@@ -10,27 +10,50 @@ import (
 	"fmt"
 )
 
+// RTTKind discriminates the two states of an RTTValue.
+// Using a Kind enum instead of a sentinel SampleCount value avoids the
+// float64(0)-vs-nil ambiguity that sentinel-based decode cannot resolve
+// (F-P2L1-004).
+type RTTKind uint8
+
+const (
+	// PendingKind indicates the p99 RTT is not yet determined (SampleCount < 10).
+	// MarshalJSON emits the JSON string "pending".
+	PendingKind RTTKind = iota
+	// FloatKind indicates the p99 RTT is a valid measured value (SampleCount ≥ 10).
+	// MarshalJSON emits a JSON float64 number.
+	FloatKind
+)
+
 // RTTValue represents the rtt_p99_ms field in PathEntry.
-// It serializes as a float64 when SampleCount ≥ 10 and as the JSON string
-// "pending" when SampleCount < 10 (BC-2.06.003 v1.8 PC-1, EC-003).
+// It serializes as a float64 when Kind == FloatKind and as the JSON string
+// "pending" when Kind == PendingKind (BC-2.06.003 v1.9 PC-1, EC-003).
 //
-// Zero value is pending (SampleCount == 0, ValueMs == 0).
+// Zero value is PendingKind with Value == 0.
+//
+// F-P2L1-004: Kind-based discrimination replaces the sentinel SampleCount
+// approach, which could not distinguish float64(0) from nil on UnmarshalJSON.
 type RTTValue struct {
-	// ValueMs is the p99 RTT in milliseconds. Only meaningful when SampleCount ≥ 10.
-	ValueMs float64
+	// Kind discriminates pending (PendingKind) from valid float (FloatKind).
+	Kind RTTKind
+	// Value is the p99 RTT in milliseconds. Only meaningful when Kind == FloatKind.
+	Value float64
 	// SampleCount is the total histogram sample count. Mirrors PathSnapshot.SampleCount.
-	// When SampleCount < 10, MarshalJSON emits "pending" instead of ValueMs.
+	// Kept for callers (e.g. QualityFromEntry) that derive quality from sample count.
+	// When SampleCount < 10 this field matches Kind == PendingKind.
 	SampleCount uint64
 }
 
 // MarshalJSON implements json.Marshaler for the RTTValue union type.
-// Emits a float64 when SampleCount ≥ 10; emits the string "pending" otherwise.
-// BC-2.06.003 v1.8 PC-1 (pending sentinel), EC-003.
+// Emits a float64 when Kind == FloatKind; emits the string "pending" otherwise.
+// BC-2.06.003 v1.9 PC-1 (pending sentinel), EC-003.
 func (r RTTValue) MarshalJSON() ([]byte, error) {
-	if r.SampleCount < 10 {
+	switch r.Kind {
+	case FloatKind:
+		return json.Marshal(r.Value)
+	default: // PendingKind (zero value)
 		return []byte(`"pending"`), nil
 	}
-	return json.Marshal(r.ValueMs)
 }
 
 // PathEntry is a single path in the paths.list or router.status response.
@@ -76,23 +99,43 @@ type RouterMetricsResponse struct {
 }
 
 // UnmarshalJSON implements json.Unmarshaler for the RTTValue union type.
-// Accepts a float64 JSON number (SampleCount set to 10 to signal valid data)
-// or the JSON string "pending" (SampleCount set to 0 to signal indeterminate).
-// This enables round-trip JSON decode of PathsListResponse.
+// Peeks at the first non-whitespace byte to discriminate:
+//   - '"' → must be the string "pending" → Kind=PendingKind, Value=0, SampleCount=0.
+//   - digit or '-' → JSON float64 number → Kind=FloatKind, Value=v, SampleCount=10.
+//
+// This Kind-based approach can correctly distinguish float64(0) (a valid green-path
+// measurement) from the "pending" string, which the old sentinel approach could not
+// (F-P2L1-004). SampleCount is set to 10 for FloatKind so that callers relying on
+// the SampleCount-based pending check continue to work.
 func (r *RTTValue) UnmarshalJSON(data []byte) error {
-	// Try the string "pending" first.
-	if string(data) == `"pending"` {
-		r.ValueMs = 0
+	// Find first non-whitespace byte.
+	var first byte
+	for _, b := range data {
+		if b != ' ' && b != '\t' && b != '\r' && b != '\n' {
+			first = b
+			break
+		}
+	}
+
+	if first == '"' {
+		// String variant: must be exactly "pending".
+		if string(data) != `"pending"` {
+			return fmt.Errorf("rtt_p99_ms: expected \"pending\" string or float64; got %s", data)
+		}
+		r.Kind = PendingKind
+		r.Value = 0
 		r.SampleCount = 0
 		return nil
 	}
-	// Otherwise expect a float64 number.
+
+	// Numeric variant: decode as float64.
 	var v float64
 	if err := json.Unmarshal(data, &v); err != nil {
 		return fmt.Errorf("rtt_p99_ms: expected float64 or \"pending\": %w", err)
 	}
-	r.ValueMs = v
-	r.SampleCount = 10 // sentinel: ≥10 means valid float
+	r.Kind = FloatKind
+	r.Value = v
+	r.SampleCount = 10 // signal ≥10 so SampleCount-based callers treat this as valid
 	return nil
 }
 
