@@ -14,17 +14,22 @@ package mgmt
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/arcavenae/switchboard/internal/metrics"
 )
 
-// Register appends h to the server's handler table. Safe to call before
-// Server.Serve is called. Not safe for concurrent use after Serve starts
-// (handlers are read without a lock during dispatch).
+// Register appends h to the server's handler table. Returns an error if called
+// after Server.Serve has started — callers MUST register all handlers before
+// calling Serve (register-before-serve invariant; F-P2L1-001).
 //
 // S-W5.04: used to register paths.list, router.metrics, and router.status.
-func (s *Server) Register(h Handler) {
+func (s *Server) Register(h Handler) error {
+	if s.serving.Load() {
+		return fmt.Errorf("mgmt.Register: cannot register handler %q after Serve has started", h.Command)
+	}
 	s.handlers = append(s.handlers, h)
+	return nil
 }
 
 // RegisterMetricsHandlers registers the three metrics RPC handlers on s:
@@ -36,10 +41,15 @@ func (s *Server) Register(h Handler) {
 // routerSrc provides SVTNMetrics() for the router.metrics handler.
 //
 // Called once during daemon startup (cmd/switchboard), before Server.Serve.
-func RegisterMetricsHandlers(s *Server, pathsSrc metrics.PathsListSource, routerSrc metrics.RouterMetricsSource) {
-	s.Register(Handler{Command: "paths.list", Fn: pathsListHandler(pathsSrc)})
-	s.Register(Handler{Command: "router.metrics", Fn: routerMetricsHandler(routerSrc)})
-	s.Register(Handler{Command: "router.status", Fn: routerStatusHandler(pathsSrc)})
+// Returns an error if any handler registration fails (i.e. Serve has already started).
+func RegisterMetricsHandlers(s *Server, pathsSrc metrics.PathsListSource, routerSrc metrics.RouterMetricsSource) error {
+	if err := s.Register(Handler{Command: "paths.list", Fn: pathsListHandler(pathsSrc)}); err != nil {
+		return err
+	}
+	if err := s.Register(Handler{Command: "router.metrics", Fn: routerMetricsHandler(routerSrc)}); err != nil {
+		return err
+	}
+	return s.Register(Handler{Command: "router.status", Fn: routerStatusHandler(pathsSrc)})
 }
 
 // pathsListHandler returns a mgmt.Handler.Fn for the "paths.list" command.

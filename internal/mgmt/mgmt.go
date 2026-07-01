@@ -172,6 +172,11 @@ type Server struct {
 	// it can return nil on intentional shutdown vs. the real error on a fatal
 	// Accept failure (BC-2.07.004 PC-10 / AC-017 / VP-069).
 	shuttingDown atomic.Bool
+	// serving is set to true at the entry of Serve. Register checks this flag
+	// and returns an error if called after Serve has started (register-before-serve
+	// invariant; F-P2L1-001). handlers is not protected by a mutex because the
+	// contract is that all Register calls MUST complete before Serve is called.
+	serving atomic.Bool
 
 	// mu protects the active connection set. Never hold mu while calling conn.Close().
 	mu    sync.Mutex
@@ -264,6 +269,10 @@ func (s *Server) closeAllConns() {
 // daemon lifecycle). Shutdown returns as soon as it has signalled the shutdown
 // (marked shuttingDown, closed listener, force-closed connections).
 func (s *Server) Serve(ctx context.Context) error {
+	// Mark the server as actively serving so Register can detect post-start calls
+	// (register-before-serve invariant; F-P2L1-001).
+	s.serving.Store(true)
+
 	// ctx-watcher goroutine: closes the listener when the context is cancelled so
 	// Accept unblocks. Uses a done channel to ensure this goroutine exits when
 	// Serve returns (preventing a goroutine leak if Shutdown is never called).

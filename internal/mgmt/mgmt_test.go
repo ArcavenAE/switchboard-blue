@@ -3054,3 +3054,65 @@ func TestHandlerReceivesCallerPubkey(t *testing.T) {
 		t.Errorf("handler got pubkey %x; want %x", receivedPubkey, pub)
 	}
 }
+
+// ── Pass-2 L1 race regression: register-before-serve (F-P2L1-001) ────────────
+
+// TestRegister_AfterServeReturnsError verifies the register-before-serve fence:
+// once Serve has started, calls to Register must return an error.
+//
+// This is the defensive fence added by F-P2L1-001. The production wiring in
+// cmd/switchboard calls Register BEFORE Serve; this test verifies the invariant
+// is enforced at the mgmt.Server level as well.
+//
+// F-P2L1-001; S-W5.04 register-before-serve invariant.
+func TestRegister_AfterServeReturnsError(t *testing.T) {
+	t.Parallel()
+
+	pub, priv := mustGenKey(t)
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{pub})
+
+	// Use a real in-process listener to avoid filesystem socket paths.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	srv := mgmt.NewServer(ln, priv, ops, nil, "dev",
+		mgmt.WithHandshakeTimeout(200*time.Millisecond),
+		mgmt.WithRPCIdleTimeout(500*time.Millisecond),
+	)
+
+	// Verify that Register succeeds before Serve starts.
+	if err := srv.Register(mgmt.Handler{Command: "pre.serve", Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+		return "ok", nil
+	}}); err != nil {
+		t.Fatalf("Register before Serve: expected nil error; got %v", err)
+	}
+
+	// Start Serve in a background goroutine.
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	serveStarted := make(chan struct{})
+	go func() {
+		close(serveStarted)
+		_ = srv.Serve(ctx)
+	}()
+	<-serveStarted
+
+	// Give Serve a moment to mark serving=true. The flag is set at the very start
+	// of Serve; a small sleep is sufficient for the test to observe the updated value.
+	runtime.Gosched()
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify that Register returns an error now that Serve has started.
+	regErr := srv.Register(mgmt.Handler{Command: "post.serve", Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+		return "ok", nil
+	}})
+	if regErr == nil {
+		t.Error("Register after Serve started: expected error; got nil — " +
+			"Register must return an error after Serve starts (F-P2L1-001 register-before-serve invariant)")
+	} else {
+		t.Logf("Register after Serve correctly returned error: %v", regErr)
+	}
+}

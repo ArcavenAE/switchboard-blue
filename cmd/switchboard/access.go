@@ -138,27 +138,34 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		return fmt.Errorf("access: generate daemon keypair: %w", err)
 	}
 
-	// Start the management server before opening data-plane connections
+	// Construct the management server before opening data-plane connections
 	// (ARCH-12 §Daemon Mode Startup — the access daemon starts its own
 	// mgmt.Server before any data-plane I/O such as sc.Connect).
-	var mgmtWG sync.WaitGroup
+	//
+	// Register-before-serve ordering (F-P2L1-001 data-race fix):
+	//   Phase (a): newMgmtServer — construct server (no goroutine started).
+	//   Phase (b): wireMetricsHandlers — register RPC handlers before Serve.
+	//   Phase (c): serveMgmtServer — start the Serve goroutine.
+	//
 	// AC-004 (S-6.06): access-mode daemon passes nil admin handlers.
 	// Only the control-mode daemon registers admin handlers via BuildAdminHandlers
 	// (ADR-004 role-exclusion; ARCH-04 disambiguation table). Access daemons correctly return
 	// E-RPC-010 for any admin.key.* command.
-	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {
 		// Ruling J / BC-2.07.004 v1.4 EC-013: ANY mgmt-start failure aborts startup.
 		// No degraded-management mode — a daemon that cannot be administered must not
 		// serve the data plane (SOUL #4 silent-failure).
-		return fmt.Errorf("access: start management server: %w", mgmtErr)
+		return fmt.Errorf("access: construct management server: %w", mgmtErr)
 	}
 
-	// Register metrics RPC handlers on the management server (S-W5.04 AC-001,
-	// AC-004, AC-005; BC-2.06.003 PC-1/PC-2/PC-3; F-P1L1-002).
-	// Must be called before Serve picks up any connections (handlers are
-	// registered before the goroutine loop in the Server, so this is safe).
+	// Phase (b): register metrics RPC handlers BEFORE starting the Serve goroutine
+	// (S-W5.04 AC-001, AC-004, AC-005; BC-2.06.003 PC-1/PC-2/PC-3; F-P2L1-001).
 	wireMetricsHandlers(mgmtSrv)
+
+	// Phase (c): start the Serve goroutine.
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
 	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
 	// Called after mgmt start so the ARCH-12 §Daemon Mode Startup ordering is
