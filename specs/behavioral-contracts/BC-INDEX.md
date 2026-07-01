@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "2.4"
+version: "2.5"
 status: draft
 producer: product-owner
 timestamp: 2026-07-01T12:00:00
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.5 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): BC-2.03.001 v1.3→v1.4 (Stories row adds S-BL.DISCOVERY-WIRE with deferred PC-1/PC-3/PC-4 wire delivery annotation); BC-2.03.002 v1.2→v1.3 (Stories row adds S-BL.DISCOVERY-WIRE with deferred real-socket PC-3 aggregation annotation). BC count unchanged at 45. |
 | 2.4 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): BC-2.03.001 v1.2→v1.3 (Traceability.Stories filled: S-7.02); BC-2.03.002 v1.1→v1.2 (Stories filled: S-7.02; Changelog section added); BC-2.03.003 v1.1→v1.2 (Stories filled: S-7.02; Changelog section added). BC count unchanged at 45. |
 | 2.3 | 2026-07-01 | RULING-W6TB-A + W6TB-C architect rulings (commit 103853b): BC-2.07.001 v1.10→v1.11 (Inv-3 destroy authority clarification: admin.svtn.destroy uses resolveAndVerifyCallerRole general control-role gate, not bootstrap-only; E-ADM-009 at RPC handler layer / E-ADM-011 Variant 2 as Go-API DiD; genesis re-open after last-SVTN destroy is permitted recovery; two new canonical test vectors; Traceability Stories updated to S-6.05 v1.3); BC-2.08.001 v1.1→v1.2 (Inv-3 retracted: "same SVTN channel" replaced with management-plane Unix-socket transport requirement per ADR-006/ADR-012; ARCH-08 §6.6 forbidden-import constraint documented; S-7.03 v1.2 Traceability Stories anchored; Changelog section added). BC count unchanged at 45. |
 | 2.2 | 2026-07-01 | Pass-3 L3 fix-burst: BC-2.06.003 v1.10→v1.11 (PC-3 S502-DEFER-3 rewritten — retract `status: "failed"` reference; `{active, degraded}` normative Wave-6 vocab; Wave-7 forward-looking note for S-BL.PATH-FAILED-STATUS added; Traceability section updated with Wave-7 Backlog Stories). BC count unchanged at 45. |

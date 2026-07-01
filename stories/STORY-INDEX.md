@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.48"
+version: "3.49"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -19,7 +19,7 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 48 (35 master-table stories + 1 draft stub S-6.04 + 8 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Total stories | 49 (35 master-table stories + 1 draft stub S-6.04 + 9 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 29 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07) |
 | Pending | 3 (S-7.01, S-7.02, S-7.03) |
 | Wave 7 (deferred) | 1 (S-7.04) |
@@ -31,7 +31,7 @@ inputDocuments:
 | Total points (waves 0–6) | 192 |
 | Total points (incl. S-M.01 + S-M.02) | 202 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 8 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS) — S-BL.LOOKUP promoted and merged |
+| Backlog | 9 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS, S-BL.DISCOVERY-WIRE) — S-BL.LOOKUP promoted and merged |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
@@ -121,7 +121,7 @@ section, add full ACs/tasks/files/architecture).
 Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
 addresses the "deferred to TBD story" anti-pattern.
 
-**Backlog: 8** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1 (ready-for-red-gate per RULING-W6TB-B); S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C)
+**Backlog: 9** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1 (ready-for-red-gate per RULING-W6TB-B); S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C; S-BL.DISCOVERY-WIRE added per RULING-W6TB-D)
 
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
@@ -133,6 +133,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 | S-BL.POLICY-SCHEMA-VALIDATOR | policies.yaml schema linter — validate that every policy entry conforms to the canonical POL-001 field schema (id, title, severity, scope, rule, rationale, enforcement, examples) | backlog | Ruling-12 §6 (F-P7L3R2-03 POL-002 schema drift); Epic E-6; no BC/VP traces | unscheduled |
 | S-BL.CONSOLE-OBS | Console daemon session-list observability: quality indicator + missCount | backlog | DRIFT-001b (BC-2.06.001 PC-5 console-half) + DRIFT-002 (BC-2.06.002 PC-3 missCount); moved from S-7.03 per RULING-W6TB-C; depends_on S-5.01, S-7.03 | after S-7.03 merges |
+| S-BL.DISCOVERY-WIRE | Discovery wire boundary: UDP multicast I/O, admitted-node HMAC keys, multicast address allocation | backlog (v1.0) | RULING-W6TB-D: real-socket PC-1/PC-3/PC-4 wire delivery deferred from S-7.02; resolves DRIFT-W6TBD-001 (HMAC key derivation); BC-2.03.001 PC-1/PC-3/PC-4 + BC-2.03.002 PC-3; depends_on S-7.02, S-2.02 | Wave 7+ |
 
 **Draft stubs: 1** (has some structure but no full ACs; will be promoted at wave-N planning)
 
@@ -174,6 +175,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.49 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): Add S-BL.DISCOVERY-WIRE backlog stub row (wave=backlog, status=backlog v1.0, bc_traces=[BC-2.03.001, BC-2.03.002], vp_traces=[VP-044, VP-045], depends_on=[S-7.02, S-2.02], subsystem=session-discovery). Summary Total 48→49, Backlog 8→9. BC-2.03.001 v1.3→v1.4 (Stories adds S-BL.DISCOVERY-WIRE deferred wire delivery). BC-2.03.002 v1.2→v1.3 (Stories adds S-BL.DISCOVERY-WIRE deferred real-socket PC-3). BC-INDEX v2.4→v2.5. |
 | 3.48 | 2026-07-01 | S-7.02 LENS-3 traceability backfill per RULING-W6TB-D: S-7.02 row status `ready-for-red-gate (v1.1)` → `ready-for-red-gate (v1.2)`. VP-044/VP-045/VP-055 bumped to v1.1 (implementing_story S-7.02 + Story Trace sections added). BC-2.03.001 v1.2→v1.3 (Stories row filled). BC-2.03.002 v1.1→v1.2 (Stories row filled). BC-2.03.003 v1.1→v1.2 (Stories row filled). |
 | 3.47 | 2026-07-01 | S-7.01 LENS-3 traceability backfill: S-7.01 row status corrected `pending (v1.1)` → `pending (v1.2)` (story file was already at v1.2 per Ruling E; STORY-INDEX row was stale). VP-043 v1.1 and BC-2.02.007 v1.3 traceability backfill (VP-043 implementing_story + Story Trace; BC Stories row S-7.01). |
 | 3.46 | 2026-07-01 | W6TB story-writer follow-ons (Rulings A/B/C): S-6.05 `draft` → `draft (v1.3)` (RULING-W6TB-A general control-role gate refit; acceptance_criteria_count 4→5; handler-gate AC; genesis re-open AC; --confirm flag; error-string canonical form); S-7.03 `pending` → `draft (v1.2)` (RULING-W6TB-C scope reduction; bc_traces removes BC-2.06.001 + BC-2.06.002; AC count 5→3; mgmt-plane transport update; estimated_points 5→3); S-BL.ROUTER-ADDR `backlog` → `ready-for-red-gate (v1.0)` (RULING-W6TB-B unit-scope AC set; 5 ACs; points TBD→2); Add S-BL.CONSOLE-OBS backlog stub (RULING-W6TB-C; BC-2.06.001 + BC-2.06.002; DRIFT-001b + DRIFT-002 moved from S-7.03). Total stories 47→48; Backlog 7→8. |

@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.001
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -99,7 +99,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 | L2 Capability | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 |
 | L2 Domain Invariants | DI-004 (no direct node-to-node), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/discovery |
-| Stories | S-7.02 |
+| Stories | S-7.02, S-BL.DISCOVERY-WIRE (deferred: PC-1/PC-3/PC-4 wire delivery) |
 | Capability Anchor Justification | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 — this BC specifies the advertisement trigger conditions and payload that CAP-011 defines as "state change, periodic heartbeat, and on-demand request" |
 
 ## Related BCs
@@ -111,6 +111,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.4 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): Stories row updated to add S-BL.DISCOVERY-WIRE with deferred PC-1/PC-3/PC-4 wire delivery annotation. |
 | v1.3 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
 | v1.2 | 2026-07-01 | Ruling W6TB-D: scope split annotation added. PC-1 wire transport, PC-4 network dispatch, and admitted-node HMAC key vocabulary (DRIFT-W6TBD-001) deferred to S-BL.DISCOVERY-WIRE. Observability gate added to PC-4: heartbeat timer observable via injected counter. PC-5 key placeholder note added. |
 | v1.1 | 2026-06-23 | Initial behavioral contract creation. |
