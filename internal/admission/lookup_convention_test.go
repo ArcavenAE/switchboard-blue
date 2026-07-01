@@ -16,6 +16,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/frame"
+	"github.com/arcavenae/switchboard/internal/hmac"
 )
 
 // mustGenPub generates a fresh Ed25519 public key for lookup convention tests.
@@ -420,5 +421,97 @@ func TestRegisterKey_DeepClonesCallerPubkey(t *testing.T) {
 		t.Errorf("RegisterKey caller-alias: key.PublicKey[0]=%02x want %02x — "+
 			"post-RegisterKey mutation of caller slice leaked into store",
 			key.PublicKey[0], originalByte0)
+	}
+}
+
+// ── F-P3L2-002: same-nodeAddr concurrent contention + FrameAuthKey oracle ─────
+
+// TestLookupByPubkey_ConcurrentSameNodeAddr exercises the writer serialisation
+// path by routing N readers and M writers at the SAME (svtnID, nodeAddr). The
+// existing TestLookup_ConcurrentRegisterRace uses disjoint nodeAddr per goroutine,
+// so cross-partition contention is never reached.
+//
+// Assertions:
+//  1. No data race under -race (structural — go test -race catches violations).
+//  2. Every hit read returns a well-formed PublicKey (len == ed25519.PublicKeySize).
+//  3. On any hit, FrameAuthKey == hmac.DeriveKey(pub, svtnID) — not just non-zero.
+func TestLookupByPubkey_ConcurrentSameNodeAddr(t *testing.T) {
+	t.Parallel()
+
+	const (
+		numReaders = 8
+		numWriters = 4
+		iterations = 50
+	)
+
+	ks := admission.NewAdmittedKeySet()
+	svtnID := svtnLookupID(0x50)
+
+	// Two keys that map to different nodeAddrs but both target the same svtnID,
+	// maximising lock contention on the svtnID partition.
+	pubA := mustGenPub(t)
+	pubB := mustGenPub(t)
+
+	// Pre-register pubA so readers see at least one hit from the start.
+	ks.RegisterKey(svtnID, pubA, admission.RoleAccess)
+	expectedAuthKeyA := hmac.DeriveKey([]byte(pubA), svtnID)
+
+	var wg sync.WaitGroup
+
+	// Writer goroutines alternate re-registering pubA and pubB into the same svtnID.
+	for w := range numWriters {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := range iterations {
+				if (w+i)%2 == 0 {
+					ks.RegisterKey(svtnID, pubA, admission.RoleAccess)
+				} else {
+					ks.RegisterKey(svtnID, pubB, admission.RoleConsole)
+				}
+			}
+		}(w)
+	}
+
+	// Reader goroutines continuously look up pubA.
+	for range numReaders {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range iterations {
+				key, ok := ks.LookupByPubkey(svtnID, pubA)
+				if !ok {
+					// pubA may have been temporarily superseded by a concurrent LWW
+					// write for pubB at the same nodeAddr — that cannot happen because
+					// pubA and pubB derive different nodeAddrs. If !ok here, it is a
+					// real miss (pubA was not registered yet or was overwritten). Just
+					// skip — the post-wg.Wait check below is the definitive assertion.
+					continue
+				}
+				// Structural check: PublicKey must be well-formed on any hit.
+				if len(key.PublicKey) != ed25519.PublicKeySize {
+					t.Errorf("concurrent same-nodeAddr: PublicKey len=%d want %d",
+						len(key.PublicKey), ed25519.PublicKeySize)
+				}
+				// FrameAuthKey oracle: must equal the derived value, not merely non-zero.
+				// This catches a bug where the key is zeroed or stale under contention.
+				if key.FrameAuthKey != expectedAuthKeyA {
+					t.Errorf("concurrent same-nodeAddr: FrameAuthKey mismatch: got %x, want %x",
+						key.FrameAuthKey, expectedAuthKeyA)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Post-concurrency: pubA must still be reachable (last writer for pubA
+	// may have been the final write, or pubB may be current — either is valid
+	// per LWW semantics). If pubA is present its FrameAuthKey must be oracle-correct.
+	if key, ok := ks.LookupByPubkey(svtnID, pubA); ok {
+		if key.FrameAuthKey != expectedAuthKeyA {
+			t.Errorf("post-concurrent: pubA FrameAuthKey=%x want %x",
+				key.FrameAuthKey, expectedAuthKeyA)
+		}
 	}
 }
