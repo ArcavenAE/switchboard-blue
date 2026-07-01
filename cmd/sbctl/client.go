@@ -208,6 +208,12 @@ func Authenticate(ctx context.Context, conn net.Conn, privKey ed25519.PrivateKey
 	// Step 2: Read CHALLENGE message with bounded read (CWE-400; ADR-012 §6).
 	var challenge challengeMsg
 	if err := json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).Decode(&challenge); err != nil {
+		// io.LimitReader returns io.EOF when the limit is reached; the JSON decoder
+		// promotes mid-token EOF to io.ErrUnexpectedEOF. Stamp E-RPC-002 so the caller
+		// gets a deterministic, size-keyed error surface (ADR-012 §6, CWE-400).
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			return fmt.Errorf("E-RPC-002: message too large: %w", err)
+		}
 		return fmt.Errorf("read challenge: %w", err)
 	}
 

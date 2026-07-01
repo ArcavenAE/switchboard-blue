@@ -680,8 +680,9 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 				return nil, fmt.Errorf("E-CFG-001: role field missing in revoke request")
 			}
 			// Simulate daemon: reject control-to-control without confirm.
+			// AC-005 (BC-2.05.004 PC-2): daemon returns E-ADM-018 canonical code; CLI surfaces it verbatim.
 			if !revokeArgs.Confirm {
-				return nil, fmt.Errorf("E-ADM-004: control-to-control revocation requires --confirm flag (ADR-004)")
+				return nil, fmt.Errorf("E-ADM-018: control revocation requires --confirm")
 			}
 			return map[string]any{"fingerprint": "SHA256:DDDD..."}, nil
 		})
@@ -718,10 +719,11 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 		}
 
 		if err == nil {
-			t.Fatalf("AC-005: without --confirm: expected error containing E-ADM-018 or E-ADM-004; got nil")
+			t.Fatalf("AC-005: without --confirm: expected error containing E-ADM-018; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-ADM-018") && !strings.Contains(err.Error(), "E-ADM-004") {
-			t.Errorf("AC-005: expected E-ADM-018 or E-ADM-004 in err: got %v", err)
+		// AC-005 (BC-2.05.004 PC-2): daemon returns E-ADM-018 canonical code; CLI surfaces it verbatim.
+		if !strings.Contains(err.Error(), "E-ADM-018") {
+			t.Errorf("AC-005: expected E-ADM-018 in err: got %v", err)
 		}
 	})
 
@@ -966,17 +968,16 @@ func TestSbctlAdmin_OversizedNDJSONLine_DoesNotOOM(t *testing.T) {
 		// Positive-coverage: the error must indicate the read-guard fired.
 		// Accepted substrings (CWE-400 / ADR-012 §6):
 		//   - bufio scanner limit: "token too long"
-		//   - custom inline guard: "message too large", "E-RPC-002"
-		//   - io.LimitReader truncation path: "EOF" / "unexpected EOF"
-		//     (LimitReader stops at maxMessageBytes; the JSON decoder gets EOF
-		//     mid-token, which surfaces as an unexpected EOF on the read path)
+		//   - custom inline guard / LimitReader stamp: "message too large", "E-RPC-002"
+		// "EOF" alone is NOT accepted — a bare EOF indicates a network close, not a
+		// size-guard, and would allow the assertion to pass on a completely unrelated
+		// connection failure (ADR-012 §6, CWE-400).
 		msg := err.Error()
 		if !strings.Contains(msg, "token too long") &&
 			!strings.Contains(msg, "message too large") &&
-			!strings.Contains(msg, "E-RPC-002") &&
-			!strings.Contains(msg, "EOF") {
+			!strings.Contains(msg, "E-RPC-002") {
 			t.Errorf("ADR-012 §6 — expected read-guard error surface "+
-				"(\"token too long\" / \"message too large\" / \"E-RPC-002\" / \"EOF\"); got: %v", err)
+				"(\"token too long\" / \"message too large\" / \"E-RPC-002\"); got: %v", err)
 		}
 	}
 }
@@ -1017,12 +1018,13 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 		t.Error("ADR-012 — malformed JSON response: want non-nil error; got nil")
 	} else {
 		// Positive-coverage: the error must surface a JSON parse failure.
+		// "unexpected" alone is NOT accepted — it also matches "unexpected EOF"
+		// which is a network failure, not a JSON parse error.
 		msg := err.Error()
-		if !strings.Contains(msg, "json") &&
-			!strings.Contains(msg, "unexpected") &&
-			!strings.Contains(msg, "invalid character") {
+		if !strings.Contains(msg, "invalid character") &&
+			!strings.Contains(msg, "json") {
 			t.Errorf("ADR-012 — expected JSON parse error surface "+
-				"(\"json\" / \"unexpected\" / \"invalid character\"); got: %v", err)
+				"(\"invalid character\" / \"json\"); got: %v", err)
 		}
 	}
 }
