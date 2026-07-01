@@ -1,0 +1,38 @@
+---
+artifact_id: factory-policies
+document_type: policy-registry
+version: "1.0"
+status: active
+producer: spec-steward
+timestamp: 2026-07-01T00:00:00
+modified:
+  - 2026-07-01T00:00:00 # v1.0 — initial creation (task #21): changelog-completeness policy authored to address recurring process gap where version-frontmatter bumps were committed without a matching changelog row (surfaced by F-P5L3R-01 through F-P5L3R-05 Pass-6 L3 findings).
+
+# Factory Policies
+# Governance rules enforced by spec-steward across all .factory/ artifacts.
+# Each policy has: id, title, severity (HIGH/MED/LOW), scope, rule, and rationale.
+
+policies:
+  - id: POL-001
+    title: changelog-completeness
+    severity: MED
+    scope: all spec artifacts
+    rule: >
+      Every version-frontmatter bump (version: "X.Y.Z" field change) MUST be
+      accompanied by a matching changelog row or modified: entry in the same
+      commit. A commit that increments the version field without a corresponding
+      human-readable changelog entry is a policy violation.
+    rationale: >
+      Pass-6 Lens-3 (F-P5L3R-01 through F-P5L3R-05) found five HIGH findings
+      where spec artifacts had been bumped to a new version but lacked the
+      required changelog row documenting what changed. This creates audit gaps
+      and makes it impossible to reconstruct the traceability chain from version
+      number alone. The policy formalizes the existing convention so spec-steward
+      can flag violations during governance sweeps.
+    enforcement: >
+      spec-steward checks for version field vs. changelog row parity during every
+      governance pass. Violations are reported as HIGH or MED findings (matching
+      this policy's severity) and must be remediated before the next phase gate.
+    examples:
+      violation: "version bumped from 1.4 to 1.5 in frontmatter, but no '| 1.5 | ...' row in the Changelog table"
+      compliant: "version bumped from 1.4 to 1.5 AND '| 1.5 | 2026-07-01 | description of change |' row added in same commit"

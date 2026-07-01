@@ -2,14 +2,16 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.3"
+version: "1.5"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
 updated: 2026-07-01T00:00:00
+modified:
+  - 2026-07-01T00:00:00 # v1.5 — F-P5L3R-09 (Pass-6 L3): Ruling-9 downstream impact table corrected — BC-2.06.003 target version changed from v1.11→v1.12 to v1.11→v1.13 at two sites (Downstream Artifact Impacts table and Summary of Spec Changes table); v1.12 was an interim hop, actual delivered version is v1.13.
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
-closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07]
+closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
 ---
 
 # Wave-6 Tranche A Scope Rulings
@@ -864,7 +866,7 @@ sentence with:
 
 | Artifact | Required Change |
 |----------|----------------|
-| BC-2.06.003 v1.11 → v1.12 | Append Ruling-9 status derivation rule to PC-1 `status` field definition |
+| BC-2.06.003 v1.11 → v1.13 | Append Ruling-9 status derivation rule to PC-1 `status` field definition (note: v1.12 was an interim hop during the fix-burst; actual delivered version is v1.13) |
 | S-W5.04 AC-003 (story line 84–89) | Replace status mapping sentence with `Active=false OR Degraded=true → "degraded"` formulation; add reference to Ruling-9 |
 | S-W5.04 test `TestPathEntry_StatusFromDegraded` | No change required — `active_false_is_degraded` row is already correct and is now normatively anchored |
 | No impl change required | Handler and test already implement the Ruling-9 mapping |
@@ -883,8 +885,95 @@ the fix-burst. No dependency on any other ruling. No new follow-on stories requi
 | BC-2.07.001 v1.6 → v1.7 | Append genesis carve-out paragraph to Inv-3 defense-in-depth note: `HasAnySVTN()==false` path is exempt from keySet role check | F-P4L1-002, O-P4L3-01 |
 | VP-048 v1.4 → v1.5 | Append genesis carve-out scope note to mutation-test invariant: mutation test targets non-genesis path only | F-P4L1-002, O-P4L3-01 |
 | S-6.07 fix-burst impl | Move `SeedSVTNWithoutBootstrapKeyForTest` out of production `svtnmgmt.go` into `_test.go` or `internal/svtnmgmttest` (mandatory) | F-P4L1-001 |
-| BC-2.06.003 v1.11 → v1.12 | Append Ruling-9 status derivation rule to PC-1: `active` iff `Active==true AND Degraded==false`; all other cases map to `"degraded"` | F-P4L2-07 |
+| BC-2.06.003 v1.11 → v1.13 | Append Ruling-9 status derivation rule to PC-1: `active` iff `Active==true AND Degraded==false`; all other cases map to `"degraded"` (note: v1.12 was an interim hop; actual delivered version is v1.13) | F-P4L2-07 |
 | S-W5.04 AC-003 | Replace "otherwise" with explicit `Active==false OR Degraded==true → degraded` formulation; `active_false_is_degraded` test row is now normative | F-P4L2-07 |
+
+---
+
+---
+
+## Ruling 10 — "Production Package" Definition + F-P4L1-004/F-L2-A1-01/F-L2-A1-02/F-L2-A1-03 Closure
+
+### Background
+
+Adversarial Pass-5 (S-6.07) surfaced ambiguity in Ruling-8 F-P4L1-001's phrase
+"the production package MUST NOT export any symbol containing `ForTest`/`test`/`Test`".
+Two interpretations existed: (a) only `internal/svtnmgmt` counts as production;
+(b) `internal/svtnmgmttest` (a test-helper sibling package containing no `_test.go`
+files) also counts.
+
+### Ruling
+
+**1. "Production package" definition.** "Production package" in F-P4L1-001 refers to
+the ORIGINAL OWNER PACKAGE ONLY (`internal/svtnmgmt`). Sibling test-helper packages
+under the `internal/*test/` naming convention (e.g. `svtnmgmttest`) are NOT production
+for this rule, mirroring Go stdlib convention (`httptest`, `iotest`, `fstest`).
+
+**2. `InsertRawSVTN` retention with runtime guard.** `InsertRawSVTN` may remain an
+exported production method on `*SVTNManager` PROVIDED it:
+
+- Adds a runtime guard at method entry (Go 1.21+):
+  ```go
+  if !testing.Testing() {
+      panic("InsertRawSVTN: test-only mutation seam invoked from production")
+  }
+  ```
+- Carries a `// SECURITY:` docstring flagging it as a bootstrap-invariant-bypass
+  seam reachable only from test binaries.
+- Sets `CreatedAt: time.Now().UTC()` on the inserted `SVTN`, achieving parity with
+  `Create()` (closes F-L2-A1-02).
+- Gets a direct unit test `TestInsertRawSVTN_DuplicateName` covering the
+  duplicate-name error branch (closes F-L2-A1-03).
+
+**3. `svtnmgmttest.SeedSVTNWithoutBootstrapKey` postcondition assertions.**
+`svtnmgmttest.SeedSVTNWithoutBootstrapKey` (no `ForTest` suffix; see Task 9a
+update below) gains inline postcondition assertions at the call site:
+`HasAnySVTN()==true`, `!BootstrapKeyHasControlRole()`. These make the helper
+mutation-resistant (closes F-L2-A1-04).
+
+**4. S-6.07 story Task 9a update.** Update Task 9a in S-6.07 to:
+
+- (a) Crystallize option (b) as the ratified location for the relocated symbol
+  (`internal/svtnmgmttest`).
+- (b) Name the post-relocation symbol as `SeedSVTNWithoutBootstrapKey` (drop the
+  `ForTest` suffix — the package name already signals test-only scope).
+- (c) Reference this Ruling-10 for the runtime-guard, `// SECURITY:` docstring, and
+  `CreatedAt: time.Now().UTC()` requirements on `InsertRawSVTN`.
+
+### Version Bumps Triggered
+
+| Artifact | From → To | Purpose |
+|----------|-----------|---------|
+| decisions/wave-6-tranche-a-scope-rulings.md | v1.3 → v1.4 | Ruling-10 appended |
+| stories/S-6.07-svtn-admin-create.md | v1.4 → v1.5 | Task 9a crystallize + Ruling-10 anchor |
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| S-6.07 Task 9a (story v1.4 → v1.5) | Crystallize `internal/svtnmgmttest` as ratified location; rename symbol to `SeedSVTNWithoutBootstrapKey`; reference Ruling-10 for `InsertRawSVTN` requirements |
+| `internal/svtnmgmt/svtnmgmt.go` | Add `testing.Testing()` runtime guard + `// SECURITY:` docstring to `InsertRawSVTN`; set `CreatedAt: time.Now().UTC()` on insert (F-L2-A1-02) |
+| `internal/svtnmgmt/*_test.go` | Add `TestInsertRawSVTN_DuplicateName` table-driven test (F-L2-A1-03) |
+| `internal/svtnmgmttest/helpers.go` | Rename symbol from `SeedSVTNWithoutBootstrapKeyForTest` → `SeedSVTNWithoutBootstrapKey`; add postcondition assertions (F-L2-A1-04) |
+
+### Ordering
+
+All four implementation items above are within the S-6.07 fix-burst scope. No new
+follow-on stories are required. No dependency on any backlog story. The story-writer
+handles story body propagation (bc_array_changes_propagate_to_body_and_acs) after
+this ruling is committed.
+
+---
+
+## Summary of Spec Changes — Ruling 10
+
+| Artifact | Change Summary | Finding(s) Closed |
+|----------|----------------|-------------------|
+| `internal/svtnmgmt/svtnmgmt.go` | Add `testing.Testing()` runtime guard + `// SECURITY:` docstring to `InsertRawSVTN` | F-P4L1-004, F-L2-A1-01 |
+| `internal/svtnmgmt/svtnmgmt.go` | Set `CreatedAt: time.Now().UTC()` on `InsertRawSVTN` insert, matching `Create()` parity | F-L2-A1-02 |
+| `internal/svtnmgmt/*_test.go` | Add `TestInsertRawSVTN_DuplicateName` covering duplicate-name error branch | F-L2-A1-03 |
+| `internal/svtnmgmttest/helpers.go` | Rename to `SeedSVTNWithoutBootstrapKey`; add `HasAnySVTN()==true` + `!BootstrapKeyHasControlRole()` postcondition assertions | F-L2-A1-04 |
+| S-6.07 Task 9a (v1.4 → v1.5) | Crystallize `svtnmgmttest` location; rename symbol; anchor Ruling-10 requirements | — |
 
 ---
 
@@ -896,3 +985,4 @@ the fix-burst. No dependency on any other ruling. No new follow-on stories requi
 | 1.1 | 2026-07-01 | Rulings 3–5 (PathTracker wiring P2, status=failed deferral, bootstrap fast-path fix) |
 | 1.2 | 2026-07-01 | Rulings 6–7 (PathTracker wiring P3 — defer to S-BL; AC-003 defense-in-depth) |
 | 1.3 | 2026-07-01 | Rulings 8–9 (genesis carve-out for DiD role check + SeedSVTNWithoutBootstrapKeyForTest relocation; Active=false status mapping) |
+| 1.4 | 2026-07-01 | Ruling 10 ("production package" definition; InsertRawSVTN runtime guard + CreatedAt parity + DuplicateName test; SeedSVTNWithoutBootstrapKey rename + postcondition assertions; F-L2-A1-02/03/04 closure) |
