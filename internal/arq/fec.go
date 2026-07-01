@@ -1,7 +1,7 @@
 // Package arq — FEC extension.
 //
 // fec.go provides XOR parity FEC for single-loss recovery within an ARQ group
-// (BC-2.02.007 v1.2). The Encoder produces one parity frame per group of N
+// (BC-2.02.007 v1.3). The Encoder produces one parity frame per group of N
 // data frames; the Decoder recovers the single missing frame using XOR across
 // the group + parity.
 //
