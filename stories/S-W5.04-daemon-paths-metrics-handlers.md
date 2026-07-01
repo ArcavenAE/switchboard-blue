@@ -14,7 +14,7 @@ wave: 5
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.2"
+version: "1.3"
 bc_traces:
   - BC-2.06.003
 vp_traces: [VP-047, VP-062]
@@ -133,6 +133,7 @@ This AC is the implementation target for VP-047.
 | VP | Property | Proof Method | AC |
 |----|----------|--------------|----|
 | VP-047 | `sbctl paths list --json` returns paths with required fields present; at least one pending + one green path | integration | AC-006 |
+| VP-062 | JSON output valid for all sbctl metrics CLI input combinations; pending-p99 quality sentinel propagation | fuzz | Phase-6 hardening; no Wave-5 AC anchor — daemon types minted by S-W5.04 AC-001..AC-006 |
 
 ## Scope Boundary
 
@@ -234,6 +235,7 @@ This AC is the implementation target for VP-047.
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.3 | 2026-07-01 | story-writer | F-P8L3-001 (HIGH, frontmatter↔body drift): added VP-062 row to §VP Coverage table. Pass-6 F-P6L3-003 anchor transfer updated vp_traces frontmatter but did not propagate to body table. No semantic change. |
 | 1.2 | 2026-07-01 | story-writer | F-P7L3-002 (HIGH, sibling-propagation): swept 5 stale BC-2.06.003 v1.6 pins in body to v1.7. Pass-6 F-P6L3-001 swept S-5.02 v1.7→v1.8 but same-BC sibling S-W5.04 was not covered. No semantic change (BC v1.7 introduced no behavioral change vs v1.6). Also incorporates VP-062 anchor transfer from S-5.02 per Pass-6 F-P6L3-003 (vp_traces update landed at 7b70af0). |
 | 1.1 | 2026-06-30 | story-writer | Flesh out stub into full story per Pass-4 Ruling 1 (decisions/S-5.02-pass4-scope-ruling.md). Add §Narrative, §AC-001–AC-006 derived from S-5.02 deferred scope, §Architecture Mapping, §Behavioral Contracts, §VP Coverage, §Edge Cases, §Token Budget, §Tasks (1–16), §Previous Story Intelligence, §Architecture Compliance Rules, §Library & Framework Requirements, §File Structure Requirements. VP-047 integration test assigned to AC-006. acceptance_criteria_count set to 6. |
 | 1.0 | 2026-06-30 | product-owner | Stub minted per S-5.02 Pass-4 Ruling 1. ACs/tasks TBD at wave-planning. |

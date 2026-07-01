@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.15"
+version: "3.16"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.16 | 2026-07-01 | Pass-8 fix-burst part 3: F-P8L3-001 (HIGH) added VP-062 row to S-W5.04 §VP Coverage table (S-W5.04 v1.2→v1.3); O-P8L3-001 (LOW) added internal/paths to S-5.02 architecture_modules frontmatter (S-5.02 v1.9→v1.10). |
 | 3.15 | 2026-07-01 | Pass-7 fix-burst part 2: F-P7L3-002 (HIGH) swept 5 stale BC-2.06.003 v1.6 pins in S-W5.04 body to v1.7 (S-W5.04 v1.1→v1.2); O-P7L3-001 (LOW) updated VP-047 and VP-062 rows in dependency-graph.md v1.3→v1.4 from S-5.02→S-W5.04. |
 | 3.14 | 2026-07-01 | Pass-6 fix-burst F-P6L3-003 anchor ruling: VP-062 implementing_story transferred S-5.02→S-W5.04 (daemon-side types deferred; mirrors VP-047 Pass-4 Ruling-3 precedent). S-5.02 vp_traces [VP-061,VP-062]→[VP-061]; vp_traces_deferred [VP-047]→[VP-047,VP-062]. S-W5.04 vp_traces [VP-047]→[VP-047,VP-062]. |
 | 3.13 | 2026-07-01 | S-5.02 v1.7→v1.8: F-P6L2-001 PC-4 description corrected (dropped E-RPC-011 prose); F-P6L3-001 BC-2.06.003 v1.5/v1.6 pins swept to v1.7 in story body. |
