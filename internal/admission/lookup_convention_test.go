@@ -194,6 +194,57 @@ func TestLookup_DeepCloneFence_PublicKeyMutationDoesNotLeak(t *testing.T) {
 	}
 }
 
+// ── F-L2-A2: LookupByPubkey deep-clone regression fence ──────────────────────
+
+// TestLookupByPubkey_DeepCloneFence_PublicKeyMutationDoesNotLeak mirrors the
+// Lookup deep-clone fence for LookupByPubkey. Mutating the PublicKey slice
+// returned by LookupByPubkey must not corrupt subsequent LookupByPubkey results
+// or internal store state.
+//
+// This is the M-3 deep-clone regression fence for the LookupByPubkey path:
+// LookupByPubkey must allocate a fresh backing array for each returned
+// PublicKey. A failure here means the implementation returned a shared backing
+// array, violating go.md rule 12 and ARCH-04 M-3.
+func TestLookupByPubkey_DeepCloneFence_PublicKeyMutationDoesNotLeak(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	svtnID := svtnLookupID(0x10)
+	pub := mustGenPub(t)
+	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	originalByte0 := pub[0]
+
+	k1, ok := ks.LookupByPubkey(svtnID, pub)
+	if !ok {
+		t.Fatal("LookupByPubkey: want ok=true for registered key; got false")
+	}
+
+	// Mutate the caller's copy of PublicKey.
+	k1.PublicKey[0] ^= 0xFF // flip all bits in byte 0
+
+	// A subsequent LookupByPubkey must return the original, unmodified value.
+	k2, ok := ks.LookupByPubkey(svtnID, pub)
+	if !ok {
+		t.Fatal("LookupByPubkey after mutation: want ok=true; got false")
+	}
+	if k2.PublicKey[0] != originalByte0 {
+		t.Errorf("deep-clone fence: k2.PublicKey[0]=%02x want %02x — mutation of k1 leaked into store or k2",
+			k2.PublicKey[0], originalByte0)
+	}
+
+	// The two returned slices must not share a backing array.
+	// Re-fetch k1 with the original value (before mutation) for the pointer check.
+	k1b, _ := ks.LookupByPubkey(svtnID, pub)
+	if len(k1b.PublicKey) > 0 && len(k2.PublicKey) > 0 {
+		p1 := unsafe.Pointer(&k1b.PublicKey[0])
+		p2 := unsafe.Pointer(&k2.PublicKey[0])
+		if p1 == p2 {
+			t.Errorf("deep-clone fence: k1 and k2 PublicKey share the same backing array (%p) — LookupByPubkey must return independent copies", p1)
+		}
+	}
+}
+
 // ── F-P2L2-H2: zero-value miss exhaustive check ───────────────────────────────
 
 // TestLookup_Miss_ReturnsZeroAdmittedKey_AllFields asserts that ALL exported
