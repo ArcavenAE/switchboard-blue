@@ -219,9 +219,30 @@ func (d *Discovery) HeartbeatCount() uint64 {
 // BC-2.03.001 PC-3). The periodic heartbeat is handled internally by Run and
 // is independent of Advertise calls (AC-001b; BC-2.03.001 PC-4).
 //
-// The advertisement payload is HMAC-authenticated via the Router's HMAC
-// surface before transmission (AC-005; BC-2.03.001 PC-5).
+// Session names are validated by the same rules as Encode: empty names and
+// non-UTF-8 names return ErrInvalidSessionName. Names longer than 255 bytes
+// are truncated to 252 bytes + U+2026 at a rune boundary (BC-2.03.003 PC-2).
+//
+// NOTE(S-BL.DISCOVERY-WIRE): HMAC signing and multicast transmission are
+// deferred to S-BL.DISCOVERY-WIRE. This method stores sessions in the
+// in-process registry only; no wire frames are produced here.
 func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) error {
+	// Validate and normalise session names up-front so that the registry
+	// never holds invalid entries (BC-2.03.003 PC-2; AC-004b).
+	type validatedSession struct {
+		name string
+		s    SessionPresence
+	}
+	validated := make([]validatedSession, 0, len(sessions))
+	for _, s := range sessions {
+		encoded, err := encodedSessionName(s.SessionName)
+		if err != nil {
+			return err
+		}
+		s.SessionName = string(encoded)
+		validated = append(validated, validatedSession{name: s.SessionName, s: s})
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -233,11 +254,11 @@ func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) e
 		}
 	}
 
-	for _, s := range sessions {
-		key := registryKey{nodeAddr: d.cfg.LocalNodeAddr, sessionName: s.SessionName}
+	for _, v := range validated {
+		key := registryKey{nodeAddr: d.cfg.LocalNodeAddr, sessionName: v.name}
 		d.registry[key] = SessionEntry{
 			AdvertiserAddr: d.cfg.LocalNodeAddr,
-			Presence:       s,
+			Presence:       v.s,
 		}
 	}
 	return nil
@@ -274,7 +295,7 @@ func (d *Discovery) Enumerate(ctx context.Context) ([]SessionEntry, error) {
 // the distinguishing oracle is closed (BC-2.03.001 PC-5 fail-closed posture).
 func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error {
 	// Minimum: 8-byte HMAC tag + 26-byte body minimum = 34 bytes.
-	if len(raw) < routing.AdvertisementHMACTagSize {
+	if len(raw) < routing.AdvertisementHMACTagSize+26 {
 		return ErrInvalidHMACTag
 	}
 
@@ -359,7 +380,8 @@ func Encode(payload AdvertisementPayload) ([]byte, error) {
 // cannot be verified with the SVTN key embedded in the body, or a wrapped
 // decode error otherwise.
 func Decode(raw []byte) (AdvertisementPayload, error) {
-	if len(raw) < routing.AdvertisementHMACTagSize {
+	// Minimum: 8-byte HMAC tag + 26-byte body minimum = 34 bytes.
+	if len(raw) < routing.AdvertisementHMACTagSize+26 {
 		return AdvertisementPayload{}, ErrInvalidHMACTag
 	}
 
@@ -464,7 +486,12 @@ func encodedSessionName(name string) ([]byte, error) {
 	for cut > 0 && !utf8.RuneStart(b[cut]) {
 		cut--
 	}
-	return append(b[:cut:cut], ellipsis...), nil
+	// Allocate a fresh backing array to avoid aliasing hazards if the
+	// caller retains a reference to the original []byte(name) buffer.
+	result := make([]byte, 0, cut+len(ellipsis))
+	result = append(result, b[:cut]...)
+	result = append(result, ellipsis...)
+	return result, nil
 }
 
 // decodeBody deserialises a body slice (without the HMAC tag prefix).
@@ -478,6 +505,13 @@ func decodeBody(body []byte) (AdvertisementPayload, error) {
 	copy(payload.NodeAddr[:], body[16:24])
 
 	count := binary.BigEndian.Uint16(body[24:26])
+	// Guard against malformed or adversarial large-count payloads.
+	// A single advertisement from one node should not carry more than 1024
+	// sessions; reject anything above this to bound pre-HMAC parse work.
+	const maxSessionsPerAdvertisement = 1024
+	if count > maxSessionsPerAdvertisement {
+		return AdvertisementPayload{}, errors.New("discovery: session count exceeds maximum")
+	}
 	offset := 26
 
 	for i := uint16(0); i < count; i++ {
