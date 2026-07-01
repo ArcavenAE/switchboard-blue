@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.18"
+version: "3.19"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -20,8 +20,8 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 43 (34 master-table stories + 1 draft stub S-6.04 + 4 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.LOOKUP/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
-| Complete | 19 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06) |
-| Pending | 8 |
+| Complete | 20 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01) |
+| Pending | 7 |
 | Draft/unscheduled | 9 (S-M.01, S-M.02, S-6.04, S-6.05, S-W5.03, S-6.07, S-HRD.01, S-HRD.02, S-W5.04) |
 | E-phase | 28 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04) |
 | PE-phase | 4 (wave 6 PE stories) |
@@ -61,7 +61,7 @@ inputDocuments:
 | S-6.01 | Config parsing and validation | E-6 | 4 | BC-2.09.003 | deployment-operations | 3 | P0 | E | completed (PR #28, merge abeba27) |
 | S-6.02 | SVTN lifecycle and key management via sbctl admin | E-6 | 5 | BC-2.05.004, BC-2.07.001 | network-management, admission-security | 8 | P0 | E | pending |
 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON envelope, connection error | E-6 | 5 | BC-2.07.002, BC-2.07.003 | network-management | 5 | P0 | E | pending |
-| S-W5.01 | internal/mgmt server, config E-CFG-008/009, cmd/switchboard wiring (all 4 daemon modes) | E-6 | 5 | BC-2.07.004, BC-2.09.003 | network-management, deployment-operations | 8 | P0 | E | draft |
+| S-W5.01 | internal/mgmt server, config E-CFG-008/009, cmd/switchboard wiring (all 4 daemon modes) | E-6 | 5 | BC-2.07.004, BC-2.09.003 | network-management, deployment-operations | 8 | P0 | E | merged (PR #31, 0d499ac) |
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | draft |
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.19 | 2026-06-30 | S-W5.01 status draft→merged (post-merge closeout, per commit 0d499ac). VP-049 §Story Trace pin S-W5.02 v1.2→v1.3 (sibling propagation). Summary Complete 19→20, Pending 8→7. Ref S-W5.02 F-P4L3-001+F-P4L3-002. |
 | 3.18 | 2026-06-30 | S-W5.02 Pass-2 doc sweep: story bumped v1.2→v1.3 (BC pin sweep + file-location corrections + architecture_modules cleanup). VP-049 v1.1→v1.2 (skeleton API drift corrected). VP-INDEX v2.15→v2.16 (VP-049 version bump + VP-VW6.NN placeholder added). Impl SHA cross-ref: 07ce3db. |
 | 3.17 | 2026-06-30 | S-W5.02 Pass-1 adversarial rulings (Q1-Q6): story bumped v1.1→v1.2. Q1 Option A (narrow VP-049 to mgmt.Server contract; per-daemon runXxx wiring deferred to Wave-6); Q2 Option A (BC pin v1.2→v1.4; AC-003 extended with Rulings M/U/X); Q3 Option A (phantom VP rows 139-140 flagged for spec-steward deletion); Q4 Option A (testenv.NewFull reference removed; in-process approach specified concretely); Q5 Option B (AC-002 distinct-operator-key as primary; bootstrap as variant); Q6 Option A (AC-005 rewritten with server-side closingListenerWrapper). §Adversary Pass-1 Rulings section + Downstream Fix-Burst Punch List added to story. |
 | 3.16 | 2026-07-01 | Pass-8 fix-burst part 3: F-P8L3-001 (HIGH) added VP-062 row to S-W5.04 §VP Coverage table (S-W5.04 v1.2→v1.3); O-P8L3-001 (LOW) added internal/paths to S-5.02 architecture_modules frontmatter (S-5.02 v1.9→v1.10). |

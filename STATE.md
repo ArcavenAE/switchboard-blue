@@ -192,16 +192,16 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-5.02 MERGED (98eb8b7, PR #37) | Squash-merged to develop 2026-06-30; worktree removed, branch deleted; all ACs delivered; BC-5.39.001 satisfied (P9/P10/P11 clean) | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-W5.02 Pass-2 fixes committed; Pass-3 ready)
+## Session Resume Checkpoint — 2026-06-30 (S-W5.02 Pass-4 L3 sibling-propagation fixes committed; Pass-5 L3-only ready)
 
-**Position:** Phase 3 Wave 5. S-W5.02 adversarial convergence in progress. Pass-2 fix-burst committed to factory-artifacts (impl SHA 07ce3db on source branch). Convergence counter reset to 0 (impl mutation in burst). Factory-artifacts tip: see `git -C .factory log -1`.
+**Position:** Phase 3 Wave 5. S-W5.02 adversarial convergence in progress. Impl SHA unchanged: 07ce3db. Factory-artifacts tip: see `git -C .factory log -1`.
 
-**S-W5.02 Pass-2 closed findings:** F-P2L1-001, F-P2L1-002 (bootstrap variant + waitForAnyClose deadlock — L1); F-P2L2-001, F-P2L2-002, F-P2L2-004, F-P2L2-005 (BC pin sweep + file-location + architecture_modules — L2); F-P2L3-001 (VP-049 API drift — L3); LOW/NITPICK cleanups. Story v1.2→v1.3; VP-049 v1.1→v1.2; VP-INDEX v2.15→v2.16; STORY-INDEX v3.17→v3.18.
+**Pass-4 result:** L1 CLEAN (2/3), L2 CLEAN (2/3), L3 BLOCK. Findings F-P4L3-001 (MED — VP-049 §Story Trace pin S-W5.02 v1.2 stale) + F-P4L3-002 (LOW — STORY-INDEX master-table S-W5.01 status draft stale). Doc-only fix. Per impl-anchored counter rule (BC-5.39.001): L3 counter reset to 0/3; L1 and L2 counters carry forward at 2/3.
 
-**Wave 5 remaining:** S-W5.02 (e2e management plane harness, 5 pts; all source dependencies merged).
+**Convergence counters:** L1 2/3, L2 2/3, L3 0/3.
 
 **NEXT ACTION on resume:**
-1. Dispatch S-W5.02 Pass-3 fresh 3-lens adversarial review (spec tip: current factory-artifacts HEAD; impl tip: 07ce3db). Clean-pass counter: 0/3.
+1. Dispatch S-W5.02 Pass-5. Convention options: (a) L3-only fresh lens (fastest — L1/L2 carry their 2/3); (b) full 3-lens with L1/L2 counted from current 2/3 standing. Clarify with orchestrator before dispatch.
 2. Wave 5 adversarial review after S-W5.02 merged (final Wave 5 story).
 3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged).
 
