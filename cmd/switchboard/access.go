@@ -18,10 +18,11 @@
 //     (AC-007; BC-2.04.007 v1.1 PC-2.6/EC-007/Inv-5).
 //
 // Dependency boundary (ARCH-08 §6.5.2; ARCH-01 ADR-011 v1.5 §EC-005):
-//   - internal/config: PERMITTED — wired as of S-6.01/Wave 4 (tickIntervalFor,
+//   - internal/config:  PERMITTED — wired as of S-6.01/Wave 4 (tickIntervalFor,
 //     runAccess config parameter). Import is present and intentional.
 //   - internal/drain:   NOT imported — still deferred; do not add without a story.
-//   - internal/metrics: NOT imported — still deferred; do not add without a story.
+//   - internal/metrics: wired via metrics_wire.go (S-W5.04 AC-001, AC-004, AC-005;
+//     F-P1L1-002). Stub sources used until real PathTracker map is available.
 package main
 
 import (
@@ -152,6 +153,12 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		// serve the data plane (SOUL #4 silent-failure).
 		return fmt.Errorf("access: start management server: %w", mgmtErr)
 	}
+
+	// Register metrics RPC handlers on the management server (S-W5.04 AC-001,
+	// AC-004, AC-005; BC-2.06.003 PC-1/PC-2/PC-3; F-P1L1-002).
+	// Must be called before Serve picks up any connections (handlers are
+	// registered before the goroutine loop in the Server, so this is safe).
+	wireMetricsHandlers(mgmtSrv)
 
 	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
 	// Called after mgmt start so the ARCH-12 §Daemon Mode Startup ordering is
