@@ -27,8 +27,9 @@ inputDocuments:
   - '.factory/decisions/wave-6-tranche-a-scope-rulings.md'
   - '.factory/decisions/RULING-W6TB-B-router-addr-seam.md'
   - '.factory/decisions/RULING-W6TB-F-s-bl-router-addr-vp047.md'
+  - '.factory/decisions/RULING-W6TB-K-s-bl-router-addr-vp062-vptraces.md'
 acceptance_criteria_count: 5
-revision: "1.3-ready-for-red-gate"
+revision: "1.4-ready-for-red-gate"
 changed_by_rulings:
   - RULING-W6TB-B
   - RULING-W6TB-F
@@ -213,6 +214,7 @@ Per RULING-W6TB-B, the following is NOT in scope for this story:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.4-ready-for-red-gate | 2026-07-01 | story-writer | F-P5L3-03: add RULING-W6TB-K to inputDocuments — ruling was listed in changed_by_rulings but absent from inputDocuments (#401 policy violation). No AC, Task, or File Structure changes. |
 | 1.3-ready-for-red-gate | 2026-07-01 | product-owner | RULING-W6TB-K: (F-P4L3-001) VP-062 removed from vp_traces — compositional JSON property holds by construction; S-W5.04 already owns VP-062 fuzz coverage including router_addr seeds. (F-P4L2-02) Concurrent-oracle comment requirement noted for implementer. (F-P4L2-03) Split-red-gate comment requirement noted for test-writer. No AC or Task changes. |
 | 1.2-ready-for-red-gate | 2026-07-01 | story-writer | F-P4L3-002: fix `TestBC2_06_003_PC1_DrftAnnotationRemoved` typo ("Drft"→"Drift"); replace Test-prefixed obligation label with non-Test-prefixed "Obligation: BC-2.06.003.md v1.15 diff review — DRIFT annotation removed" since this is a story-level spec obligation, not a Go test function. |
 | 1.1-ready-for-red-gate | 2026-07-01 | product-owner | RULING-W6TB-F: add VP-047.md MODIFY row to File Structure (spec target for AC-005 oracle flip was missing — F-L3-001). Strengthen TestVP047_FieldSwapOracle seed: routerAddr "abcdefghi" → "127.0.0.1:9000" (valid host:port; non-overlapping oracle preserved — F-LENS2-01). Bump revision. |
