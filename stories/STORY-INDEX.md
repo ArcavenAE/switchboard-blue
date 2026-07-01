@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.14"
+version: "3.15"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
