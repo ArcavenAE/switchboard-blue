@@ -780,6 +780,13 @@ func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
 				if key.NodeAddr != expectedNodeAddr {
 					t.Errorf("%s: NodeAddr got %x, want %x", tc.name, key.NodeAddr, expectedNodeAddr)
 				}
+				// F-L2-A3: FrameAuthKey must match the canonical oracle, not just be non-zero.
+				// A bug returning a different entry with IsRevoked=true would pass a weaker check.
+				expectedRevokedAuthKey := hmac.DeriveKey([]byte(pubRevoked), svtnRegistered)
+				if key.FrameAuthKey != expectedRevokedAuthKey {
+					t.Errorf("%s: FrameAuthKey mismatch: got %x, want oracle %x",
+						tc.name, key.FrameAuthKey, expectedRevokedAuthKey)
+				}
 				return
 			}
 
