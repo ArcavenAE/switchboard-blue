@@ -2,7 +2,7 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.11"
+version: "1.12"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
@@ -15,6 +15,7 @@ modified:
   - 2026-07-01T16:30:00 # v1.9 — §8 (new): BC-2.06.003 v1.14 EC-008 spec-tightening (empty-paths quality:'pending' ratification).
   - 2026-07-01T00:00:00 # v1.10 — Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 as dispatch bucket is intentional; discrimination by message prefix is the spec contract; noted in S-6.07 §Wire Envelope Contract. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST wrap io.ErrUnexpectedEOF with E-RPC-002 per ADR-012 §6 Authenticate parity.
   - 2026-07-01T00:00:00 # v1.11 — spec-steward: Ruling-1 SUPERSEDED-BY annotation added (RULING-W6TB-B + RULING-W6TB-F); VP-047 v1.3→v1.4 oracle flip recorded.
+  - 2026-07-01T00:00:00 # v1.12 — RULING-W6TB-G (S-7.02 H-1): heartbeat oracle split — deterministic ExactN test via Config.TickSource seam; real-ticker test retained as integration sanity at [N/2, 2N] tolerance. RULING-W6TB-H (S-7.02 M-3): HMAC-first ordering in ReceiveAdvertisement; key derived from payload.SVTNID; forged-SVTN distinguishing oracle closed. S-7.02 v1.2→v1.3.
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
 closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
@@ -1444,3 +1445,4 @@ required.
 | 1.9 | 2026-07-01 | §8 (new): BC-2.06.003 v1.14 EC-008 ratified (empty-paths quality:'pending'); anchored in S-W5.04 body via §Edge Cases; no story-scope change beyond spec-tightening |
 | 1.10 | 2026-07-01 | Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 is the intentional sbctl dispatch bucket; operator discrimination is by message prefix per AC-004/AC-005; §Wire Envelope Contract clarification note added to S-6.07. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST add errors.Is(io.ErrUnexpectedEOF) arm wrapping E-RPC-002 per ADR-012 §6 Authenticate parity; test TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002 required. |
 | 1.11 | 2026-07-01 | spec-steward: Ruling-1 SUPERSEDED-BY annotation added (RULING-W6TB-B + RULING-W6TB-F); `""` sentinel-permission clause retracted per VP-047 v1.4 oracle flip. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed pending S-BL.ROUTER-ADDR merge. |
+| 1.12 | 2026-07-01 | RULING-W6TB-G (S-7.02 H-1): heartbeat oracle split — deterministic `ExactN` test via `Config.TickSource` seam satisfies AC-001b exact-N requirement; real-ticker `PeriodicHeartbeat` test retained as integration sanity at `[N/2, 2N]` tolerance. RULING-W6TB-H (S-7.02 M-3): HMAC-first ordering in `ReceiveAdvertisement`; HMAC key derived from `payload.SVTNID` (not `LocalSVTNID`); forged-SVTN distinguishing oracle closed; `ErrSVTNMismatch` preserved for authenticated cross-SVTN frames. S-7.02 v1.2→v1.3. |
