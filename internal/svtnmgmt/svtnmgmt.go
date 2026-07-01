@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -604,10 +605,17 @@ func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.Publi
 // Create() invariant that registers the bootstrap control key; callers are
 // responsible for constructing meaningful state from the resulting record.
 //
+// SECURITY: InsertRawSVTN is a bootstrap-invariant-bypass primitive reachable
+// only from test binaries (guarded by testing.Testing()). Never call from
+// production code.
+//
 // Returns ErrSVTNAlreadyExists if svtnName is already present.
 // The SVTN ID is generated from m.randSource (crypto/rand.Reader in production).
 // Safe for concurrent use.
 func (m *SVTNManager) InsertRawSVTN(svtnName string) error {
+	if !testing.Testing() {
+		panic("svtnmgmt.InsertRawSVTN: test-only mutation seam invoked from production binary")
+	}
 	var id [16]byte
 	if _, err := io.ReadFull(m.randSource, id[:]); err != nil {
 		return fmt.Errorf("generate SVTN ID for raw insert: %w", err)
@@ -617,7 +625,7 @@ func (m *SVTNManager) InsertRawSVTN(svtnName string) error {
 	if _, exists := m.svtns[svtnName]; exists {
 		return ErrSVTNAlreadyExists
 	}
-	m.svtns[svtnName] = SVTN{ID: id, Name: svtnName}
+	m.svtns[svtnName] = SVTN{ID: id, Name: svtnName, CreatedAt: time.Now().UTC()}
 	return nil
 }
 
