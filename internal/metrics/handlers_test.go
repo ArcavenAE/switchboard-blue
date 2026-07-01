@@ -301,12 +301,15 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 // PathEntry.Status from PathSnapshot.Active and PathSnapshot.Degraded per
 // BC-2.06.003 v1.13 PC-1 (status enum retracted to {active, degraded} per Ruling-4):
 //
-//	Active=false → "degraded" (liveness failure maps to "degraded" in Wave 6;
-//	  "failed" is reserved for S-BL.PATH-FAILED-STATUS, Wave-7)
-//	Active=true, Degraded=true → "degraded"
-//	Active=true, Degraded=false → "active"
+//	Row (a): Active=false, Degraded=false → "degraded" (because !Active triggers
+//	  degraded per BC-2.06.003 Ruling-9; "failed" is reserved for Wave-7).
+//	Row (b): Active=true, Degraded=true → "degraded".
+//	Row (c): Active=true, Degraded=false → "active".
 //
-// AC-003; BC-2.06.001; BC-2.06.003 v1.13 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
+// The fourth combination (Active=false, Degraded=true) is covered by
+// TestPathEntry_StatusEnumClosed.
+//
+// AC-003; BC-2.06.001; BC-2.06.003 v1.13 PC-1; Ruling-4; Ruling-9 (wave-6-tranche-a-scope-rulings.md).
 func TestPathEntry_StatusFromDegraded(t *testing.T) {
 	t.Parallel()
 
@@ -698,13 +701,18 @@ func TestQualityFromEntry_NeverEmitsFailed(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			// Derive Kind from sampleCount per the same logic as PathEntryFromSnapshot.
-			kind := metrics.PendingKind
+			// Construct RTTValue through the canonical constructors so the
+			// Kind/SampleCount invariant path (NewRTTValueFloat vs
+			// NewRTTValuePending) is exercised rather than bypassed via
+			// direct struct literals.
+			var rttVal metrics.RTTValue
 			if tc.sampleCount >= 10 {
-				kind = metrics.FloatKind
+				rttVal = metrics.NewRTTValueFloat(tc.p99Ms, tc.sampleCount)
+			} else {
+				rttVal = metrics.NewRTTValuePending(tc.sampleCount)
 			}
 			entry := metrics.PathEntry{
-				RTTP99Ms: metrics.RTTValue{Kind: kind, Value: tc.p99Ms, SampleCount: tc.sampleCount},
+				RTTP99Ms: rttVal,
 				Status:   tc.status,
 			}
 			got := metrics.QualityFromEntry(entry)
@@ -773,7 +781,6 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 		args              json.RawMessage
 		wantErrDecodeArgs bool   // true → expect errors.Is(err, metrics.ErrDecodeArgs) E-RPC-002
 		wantErrInvalid    bool   // true → expect errors.Is(err, metrics.ErrInvalidParams) E-RPC-003
-		wantErrNil        bool   // true → expect nil (lenient decoder; pin behavior)
 		desc              string // what behavior we're pinning
 	}{
 		{
@@ -819,12 +826,6 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := metrics.RouterMetrics(context.Background(), tc.args, src)
-			if tc.wantErrNil {
-				if err != nil {
-					t.Errorf("%s: expected nil error; got %v", tc.desc, err)
-				}
-				return
-			}
 			if err == nil {
 				t.Fatalf("%s: expected error; got nil", tc.desc)
 			}
