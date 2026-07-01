@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.43"
+version: "3.44"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T15:00:00
+timestamp: 2026-07-01T19:04:40
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -20,18 +20,18 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 47 (35 master-table stories + 1 draft stub S-6.04 + 7 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
-| Complete | 26 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02) |
+| Complete | 29 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07) |
 | Pending | 3 (S-7.01, S-7.02, S-7.03) |
 | Wave 7 (deferred) | 1 (S-7.04) |
-| Master-table drafts | 4 (S-W5.03, S-W5.04, S-6.05, S-6.07) |
+| Master-table drafts | 2 (S-W5.03, S-6.05) |
 | Backlog/maintenance/hardening stubs | 4 (S-M.01, S-M.02, S-HRD.01, S-HRD.02) |
-| E-phase | 28 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04) |
+| E-phase | 31 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04 + S-BL.LOOKUP) |
 | PE-phase | 4 (wave 6–7 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
 | Total points (waves 0–6) | 192 |
 | Total points (incl. S-M.01 + S-M.02) | 202 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 7 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR) |
+| Backlog | 7 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR) — S-BL.LOOKUP promoted and merged |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
@@ -67,14 +67,14 @@ inputDocuments:
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | merged (PR #38, d881f99) |
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
-| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.17) |
+| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
-| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.13) |
+| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
-| S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | draft (v1.5) |
+| S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 
 ## Wave Summary
 
@@ -173,6 +173,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.44 | 2026-07-01 | Wave-6 Tranche A closure: S-BL.LOOKUP status `draft (v1.5)` → `merged (PR #40, eac5d0a)`; S-W5.04 status `draft (v1.17)` → `merged (PR #41, 851e164)`; S-6.07 status `draft (v1.13)` → `merged (PR #42, 446efce)`. Summary: Complete 26→29; Master-table drafts 4→2. |
 | 3.43 | 2026-07-01 | S-6.07 v1.12→v1.13 (F-P14L3-01 Ruling-14 §10 downstream propagation: AC-007 added, Task 11 added, File Structure rows for cmd/sbctl/client.go + cmd/sbctl/admin_test.go) |
 | 3.42 | 2026-07-01 | sync S-W5.04 v1.17 (F-P13L3-01+02 BC-2.06.003 sibling pins line 76+257); S-6.07 v1.12 (F-P12L3-01 AC-003 trace-col pin + Ruling-13 §9 + Ruling-14 §10 codified) |
 | 3.41 | 2026-07-01 | sync S-W5.04 v1.16 (F-P12L3-01 BC-2.06.003 pin sweep + F-P12L2-01 spec-vs-test alignment), S-6.07 v1.10 (F-P11L3-001 BC-2.07.001 v1.7→v1.10 pin bump) |

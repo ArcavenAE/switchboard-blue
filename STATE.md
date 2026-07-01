@@ -1,10 +1,10 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-6-tranche-a-pass-2-fix-burst-complete
+phase_step: wave-6-tranche-a-closed
 phase_3_active_wave: 6
-phase_3_active_stories: [S-W5.04, S-BL.LOOKUP, S-6.07]
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
+phase_3_active_stories: []
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -71,12 +71,13 @@ wave_6_scope_decision: 2026-06-30
 wave_6_stories: 7
 wave_6_points: 33
 wave_6_deferred: "S-7.04 → Wave 7"
-wave_6_tranche_a: "[S-W5.04, S-BL.LOOKUP, S-6.07 → S-6.05]"
-wave_6_tranche_b: "[S-7.01, S-7.02, S-7.03] (held pending Tranche A wave-adversarial close)"
-develop_head: d881f99
+wave_6_tranche_a: "[S-W5.04 PR#40/eac5d0a, S-BL.LOOKUP PR#41/851e164, S-6.07(v1.13) PR#42/446efce — all merged 2026-07-01]"
+wave_6_tranche_a_closed_at: 2026-07-01T19:04:40Z
+wave_6_tranche_b: "[S-7.01, S-7.02, S-7.03] (Tranche A closed; Tranche B now unblocked)"
+develop_head: 446efce
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-07-01T12:00:00Z
+timestamp: 2026-07-01T19:04:40Z
 last_update: 2026-07-01
 ---
 
@@ -106,6 +107,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-06-30 — S-W5.02 MERGED PR #38 (d881f99). All 5 ACs delivered. BC-5.39.001 CONVERGED (L1 3/3, L2 3/3, L3 3/3, 10 adversarial passes). VP-049 satisfied. **Wave 5 complete: 8 stories + 1 hygiene PR all merged.** Post-merge deferred: 8 LOW test-infrastructure observations (CR-002/005/006/007/008/009, SEC-001/002).
 - 2026-07-01 — Wave-6 Tranche A Pass-1 dispatched in parallel: S-W5.04 (d435788 red-gate + 83b3180 green, 20 tests, EC-007 enforced), S-BL.LOOKUP fix-burst (68d32b9 tests; story v1.1; ARCH-04 v1.14; S-6.02 v1.7), S-6.07 green (a148119, 5-handler admin dispatch, BootstrapFingerprint, admin.svtn.create RPC). S-BL.LOOKUP Pass-1 NOT COUNTED: lens-2 + lens-3 BLOCK. F-P2L3-M1 STORY-INDEX summary-section partial-fix regression closed (v3.24→v3.25). DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER added. PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP codified.
 - 2026-07-01 — Wave-6 Tranche A Pass-1 fix-burst propagation complete. Production commits: S-W5.04 [9904568, b665a87]; S-6.07 [7929424, 9170fc3, 78b52c1]. Spec propagation: BC-2.06.003 v1.8→v1.9 (PC-1 interim router_addr empty-string), BC-2.07.001 v1.3→v1.4 (Inv-3 bootstrap-only for admin.svtn.create), S-W5.04 v1.4→v1.5, S-6.07 v1.1→v1.2, ARCH-12 v1.8→v1.9 (S-6.07 row added), interface-definitions v1.7→v1.8 (Daemon RPC Surface table), ARCH-11 v1.13→v1.14 (BC-2.06.003 pin v1.8→v1.9), STORY-INDEX v3.25→v3.26 (S-BL.ROUTER-ADDR stub, totals 43→44). Indices: ARCH-INDEX v1.2→v1.3, BC-INDEX v1.9→v2.0. S-BL.LOOKUP test-writer added 4 tests; no new commits yet.
+- 2026-07-01 — **Wave-6 Tranche A CLOSED.** S-BL.LOOKUP (PR #40, eac5d0a), S-W5.04 (PR #41, 851e164), S-6.07 v1.13 (PR #42, 446efce) all merged to develop. Tranche B (S-7.01, S-7.02, S-7.03) now unblocked. Next: Tranche A wave-adversarial review.
 - 2026-07-01 — Wave-6 Tranche A Pass-2 fix-burst complete. PO Rulings 3+4+5 applied (wave-6-tranche-a-scope-rulings.md). Ruling-3 (S-W5.04 F-P2L1-003): wire real PathTracker adapter in production; delete emptyPathsSource/emptyRouterMetricsSource stubs — production commits 6a59020, 50c1825, b9fcc8b, 175eb5f. Ruling-4 (S-W5.04 F-P2L3-006): retract `failed` from BC-2.06.003 PC-1 status enum; reserved for S-BL.PATH-FAILED-STATUS (Wave-7). Ruling-5 (S-6.07 F-P2L1-001): bootstrap-only fast-path fix (IsBootstrapKey guard before resolveAndVerifyCallerRole) — production commits 13777c0, 84bee0f. S-BL.LOOKUP production commits: 14e32da, e614f2f, ca36cc8. Spec siblings bumped: BC-2.06.003 v1.9→v1.10, BC-2.07.001 v1.4→v1.5, interface-definitions v1.8→v1.9, error-taxonomy v3.9→v4.0 (E-INT-001 minted), ARCH-12 v1.9→v1.10, VP-047 v1.2→v1.3, VP-062 v1.3→v1.4, ARCH-INDEX v1.3→v1.4, BC-INDEX v2.0→v2.1. STORY-INDEX v3.26→v3.27 (S-W5.04 v1.6, S-6.07 v1.3, S-BL.PATH-FAILED-STATUS stub added, totals 44→45). All Pass-2 lens results NOT COUNTED — adversarial clean-pass counters RESET for S-W5.04, S-BL.LOOKUP, S-6.07. Next: fresh Pass-3 3-lens per story.
 
 ## Phase Progress
@@ -114,7 +116,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: ALL 8 STORIES MERGED. S-6.03 PR#32, S-W5.01 PR#31, S-5.01 PR#35, S-6.02 PR#34, S-6.06 PR#36, S-5.02 PR#37, S-5.03 PR#30, S-W5.02 PR#38. Wave 5 complete. | 2026-06-30 | W5: S-W5.02 MERGED PR#38 (d881f99). BC-5.39.001 CONVERGED (L1 3/3, L2 3/3, L3 3/3, 10 passes). VP-049 satisfied. Wave 5 complete. |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: ALL 8 STORIES MERGED. Wave 6 Tranche A: ALL 3 STORIES MERGED (S-BL.LOOKUP PR#40/eac5d0a, S-W5.04 PR#41/851e164, S-6.07 PR#42/446efce). Tranche B pending. | 2026-07-01 | W6-TrA: S-BL.LOOKUP/S-W5.04/S-6.07 all merged 2026-07-01. Tranche A CLOSED at 446efce. |
 
 ## Wave / Story Status
 
@@ -138,6 +140,9 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | MERGED | #31 | 0d499ac |
 | 5 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | MERGED | #36 | 3ee9c38 |
 | 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | MERGED | [#38](https://github.com/ArcavenAE/switchboard-blue/pull/38) | d881f99 |
+| 6 | S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup to value-return form | MERGED | #40 | eac5d0a |
+| 6 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers | MERGED | #41 | 851e164 |
+| 6 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI (v1.13) | MERGED | #42 | 446efce |
 
 ## Open Drift Items
 
@@ -225,13 +230,21 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | Pre-Wave-6 prep: VP-062 v1.3 architect propagation | 3cf96aa; ARCH-11 and dependent docs updated. | 2026-06-30 |
 | Pre-Wave-6 prep: STORY-INDEX v3.24 + dep-graph v1.7 + sprint-state.yaml v1.0 | 4aabd7b; story index, dependency graph, and sprint state refreshed for Wave-6 scope. | 2026-06-30 |
 | Wave-6 scope decided | 7 stories, 33 pt; S-7.04 deferred to Wave 7; Tranche A: S-W5.04 ∥ S-BL.LOOKUP ∥ S-6.07 → serial S-6.05; Tranche B: S-7.01/S-7.02/S-7.03 held. Scope doc: .factory/planning/wave-6-scope-decision.md. | 2026-06-30 |
+| S-BL.LOOKUP MERGED (eac5d0a, PR #40) | AdmittedKeySet.Lookup value-return migration; Wave-6 Tranche A | 2026-07-01 |
+| S-W5.04 MERGED (851e164, PR #41) | daemon-side paths.list/router.metrics/router.status RPC handlers; BC-2.06.003 PC-1/2; VP-047; Wave-6 Tranche A | 2026-07-01 |
+| S-6.07 MERGED (446efce, PR #42) | Register admin.svtn.create handler + sbctl admin svtn create CLI; v1.13; BC-2.07.001; Wave-6 Tranche A CLOSED | 2026-07-01 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche A Pass-2 fix-burst complete)
+## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche A CLOSED)
 
-**Position:** Phase 3 Wave 6 Tranche A Pass-2 fix-burst COMPLETE. Rulings 3+4+5 applied. S-W5.04 tip: v1.6 (real PathTracker wiring, `failed` status retracted); production commits 6a59020, 50c1825, b9fcc8b, 175eb5f. S-6.07 tip: v1.3 (bootstrap-only fast-path guard); production commits 13777c0, 84bee0f. S-BL.LOOKUP production commits: 14e32da, e614f2f, ca36cc8. Spec tip: BC-2.06.003 v1.10, BC-2.07.001 v1.5, interface-definitions v1.9, error-taxonomy v4.0, ARCH-12 v1.10, VP-047 v1.3, VP-062 v1.4. Indices: ARCH-INDEX v1.4, BC-INDEX v2.1, STORY-INDEX v3.27. Clean-pass counters RESET for all 3 stories.
+**Position:** Phase 3 Wave 6 Tranche A CLOSED. All three Tranche A stories merged to develop:
+- S-BL.LOOKUP: PR #40, merge eac5d0a
+- S-W5.04: PR #41, merge 851e164
+- S-6.07 (v1.13): PR #42, merge 446efce (2026-07-01T19:04:40Z)
 
-**NEXT ACTION on resume:** Orchestrator dispatches fresh Pass-3 3-lens adversarial review for S-W5.04 (v1.6 tip, impl tips: 175eb5f), S-BL.LOOKUP (v1.1+ tip, impl tip: ca36cc8), and S-6.07 (v1.3 tip, impl tip: 84bee0f) in parallel.
+develop HEAD: 446efce. Tranche B (S-7.01, S-7.02, S-7.03) now fully unblocked.
+
+**NEXT ACTION on resume:** Orchestrator begins Wave-6 Tranche A wave-adversarial review (per wave-6-scope-decision.md gate sequence: Tranche A wave-adversarial → then Tranche B dispatch). Alternatively, dispatch Tranche B stories in parallel if orchestrator chooses not to block on wave-adversarial.
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
