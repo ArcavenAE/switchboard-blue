@@ -717,6 +717,18 @@ func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
 				if !key.IsRevoked() {
 					t.Errorf("%s: want IsRevoked=true; got false", tc.name)
 				}
+				// F-L2-02: assert all populated fields match registration, not just ok+IsRevoked.
+				// A bug that returns a different entry with IsRevoked=true would pass a weaker check.
+				if !bytes.Equal(key.PublicKey, []byte(pubRevoked)) {
+					t.Errorf("%s: PublicKey mismatch: got %x, want %x", tc.name, key.PublicKey, []byte(pubRevoked))
+				}
+				if key.Role != admission.RoleAccess {
+					t.Errorf("%s: Role got %v, want RoleAccess", tc.name, key.Role)
+				}
+				expectedNodeAddr := frame.DeriveNodeAddress(svtnRegistered, []byte(pubRevoked))
+				if key.NodeAddr != expectedNodeAddr {
+					t.Errorf("%s: NodeAddr got %x, want %x", tc.name, key.NodeAddr, expectedNodeAddr)
+				}
 				return
 			}
 
