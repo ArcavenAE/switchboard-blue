@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.21"
+version: "2.22"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -71,7 +71,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-045 | Console session enumeration without hostnames | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
 | VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
-| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
+| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07; Ruling-7 defense-in-depth RoleControl mutation-test: S-6.07) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
 | VP-049 | sbctl unified CLI with OpenSSH auth (implementing_story: S-W5.02) | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
 | VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.22 | 2026-07-01 | VP-048 bumped v1.3→v1.4 (Ruling-7 defense-in-depth, Pass-3 L3 handoff): property (3) and mutation-test invariant added — handler MUST check `caller.role == RoleControl` explicitly after `IsBootstrapKey(caller)`; non-bootstrap-role caller rejected E-ADM-009 before SVTN state consulted; row 5 added to Story Trace (S-6.07); BC-2.07.001 bumped v1.5→v1.6 with Inv-3 defense-in-depth note. No count or method changes; total remains 76. |
 | 2.21 | 2026-07-01 | VP-062 bumped v1.4→v1.5 (F-L3-005 Pass-3 L3): module scope expanded from `cmd/sbctl` to `[internal/metrics, cmd/sbctl]`; catalog row Module column updated; BC-2.06.003 pin updated to v1.11. No count or method changes; total remains 76. |
 | 2.20 | 2026-06-30 | VP-062 version pin bumped v1.2→v1.3 in catalog row description: added "failed+pending precedence ruling (v1.3)" annotation (S502-DEFER-3 closure, commit 7ee5b82). No count or method changes; total remains 76. |
 | 2.19 | 2026-06-30 | Wave-5 merge closure: VP-063 through VP-076 status flipped draft → implemented. All 14 Wave-5 VPs belong to stories merged in Wave 5 (S-5.03 PR#30, S-W5.01 PR#31, S-6.03 PR#32, S-6.02 PR#34, S-5.01 PR#35, S-6.06 PR#36, S-5.02 PR#37, S-W5.02 PR#38). Pre-Wave-6 hygiene sweep. |
