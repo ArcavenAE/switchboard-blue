@@ -1,9 +1,9 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-wave-adversarial-converged
-phase_3_active_wave: 5
-phase_3_active_stories: []
+phase_step: wave-6-tranche-a-parallel-dispatch
+phase_3_active_wave: 6
+phase_3_active_stories: [S-W5.04, S-BL.LOOKUP, S-6.07]
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
 product: switchboard
 mode: greenfield
@@ -67,10 +67,16 @@ wave_5_gate_closed_at: 2026-06-30
 wave_5_gate_disposition: converged-clean
 wave_5_convergence_passes: 6
 wave_5_final_trajectory: "8 BLOCK → 2 BLOCK → 2 BLOCK → 3 CLEAN → 3 CLEAN → 2 CLEAN"
+wave_6_scope_decision: 2026-06-30
+wave_6_stories: 7
+wave_6_points: 33
+wave_6_deferred: "S-7.04 → Wave 7"
+wave_6_tranche_a: "[S-W5.04, S-BL.LOOKUP, S-6.07 → S-6.05]"
+wave_6_tranche_b: "[S-7.01, S-7.02, S-7.03] (held pending Tranche A wave-adversarial close)"
 develop_head: d881f99
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T23:00:00Z
+timestamp: 2026-06-30T23:59:00Z
 last_update: 2026-06-30
 ---
 
@@ -209,16 +215,18 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-5.02 MERGED (98eb8b7, PR #37) | Squash-merged to develop 2026-06-30; worktree removed, branch deleted; all ACs delivered; BC-5.39.001 satisfied (P9/P10/P11 clean) | 2026-06-30 |
 | S-W5.02 MERGED (d881f99, PR #38) | Squash-merged to develop; all 5 ACs; BC-5.39.001 satisfied (10 adversarial passes); VP-049 coverage confirmed; Wave 5 complete (8 stories + 1 hygiene = all merged) | 2026-06-30 |
 | Wave-5 wave-adversarial gate CONVERGED | 6 passes: P1 BLOCK (3H+5M) → P2 BLOCK (2 real) → P3 BLOCK (2 MED) → P4 CLEAN (1/3) → P5 CLEAN (2/3) → P6 CLEAN (3/3). Fix-bursts: 0663599, 4735640/9862391, c3465b4, 1b19d7c. Final trajectory: 8→2→2→3 OBS→3 OBS→2 OBS. vsdd-factory #361-364 filed for process-gap observations. | 2026-06-30 |
+| Pre-Wave-6 prep: S502-DEFER-3 closed | BC-2.06.003 v1.8, 7ee5b82; PO ruling: pending > failed for quality field; EC-007 + VP-062 v1.3 + S-W5.04 v1.4 AC-005a updated. | 2026-06-30 |
+| Pre-Wave-6 prep: hygiene sweep landed | 44376ea; DRIFT-SW501-NITPICK and related LOW deferred items resolved. | 2026-06-30 |
+| Pre-Wave-6 prep: VP-062 v1.3 architect propagation | 3cf96aa; ARCH-11 and dependent docs updated. | 2026-06-30 |
+| Pre-Wave-6 prep: STORY-INDEX v3.24 + dep-graph v1.7 + sprint-state.yaml v1.0 | 4aabd7b; story index, dependency graph, and sprint state refreshed for Wave-6 scope. | 2026-06-30 |
+| Wave-6 scope decided | 7 stories, 33 pt; S-7.04 deferred to Wave 7; Tranche A: S-W5.04 ∥ S-BL.LOOKUP ∥ S-6.07 → serial S-6.05; Tranche B: S-7.01/S-7.02/S-7.03 held. Scope doc: .factory/planning/wave-6-scope-decision.md. | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (Wave-5 wave-adversarial CONVERGED; 3/3 clean passes)
+## Session Resume Checkpoint — 2026-06-30 (Wave-6 Tranche A dispatch pending)
 
-**Position:** Phase 3 Wave 5 wave-adversarial convergence gate CONVERGED. 6 total passes: Pass-1 BLOCK (3H+5M), fix-burst 0663599; Pass-2 BLOCK (2 real findings), fixes 4735640/9862391; Pass-3 BLOCK (2 MED), fix c3465b4; Pass-4 CLEAN (1/3); Pass-5 CLEAN (2/3), proactive hygiene 1b19d7c; Pass-6 CLEAN (3/3). wave_5_gate: CONVERGED.
+**Position:** Phase 3 Wave 6 kickoff. Wave-5 wave-adversarial gate CONVERGED (6 passes, 2026-06-30). Pre-Wave-6 prep complete: S502-DEFER-3 closed (7ee5b82), hygiene sweep (44376ea), VP-062 v1.3 propagation (3cf96aa), STORY-INDEX v3.24 + dep-graph v1.7 + sprint-state.yaml v1.0 (4aabd7b). Wave-6 scope: 7 stories / 33 pt; S-7.04 deferred to Wave 7. Tranche A: S-W5.04 ∥ S-BL.LOOKUP ∥ S-6.07 (parallel first-slot dispatch); S-6.05 is serial-second and enters phase_3_active_stories only after S-6.07 merges. Tranche B: S-7.01/S-7.02/S-7.03 held pending Tranche A wave-adversarial close.
 
-**NEXT ACTION on resume (choose one):**
-1. Phase-4 holdout evaluation (`/vsdd-factory:phase-4-holdout-evaluation`) — Wave 5 stories now gate-cleared
-2. Wave-5 hygiene sweep: DRIFT-SW501-NITPICK, ARCH-11 changelog monotonicity (S502-DEFER-4), VP-INDEX post-merge status flip
-3. Begin Wave 6 story delivery (S-W5.04 first, unblocked; then S-6.07 + S-BL.LOOKUP)
+**NEXT ACTION on resume:** Orchestrator kicks off S-W5.04 + S-BL.LOOKUP + S-6.07 in parallel worktrees per per-story-delivery.md.
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
@@ -226,7 +234,6 @@ Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burs
 - PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row — vsdd-factory #361-364.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
-- Wave-5 adversarial low-obs externalized: vsdd-factory #361-364 (SIBLINGSWEEP + W5A).
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
