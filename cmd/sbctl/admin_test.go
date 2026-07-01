@@ -796,6 +796,17 @@ func TestSbctlAdmin_UnknownSubcommand_ReturnsError(t *testing.T) {
 	err := runAdmin(ctx, "127.0.0.1:19996", testdataKeyPath(t), false, []string{"totally-unknown-cmd"}, defaultIO())
 	if err == nil {
 		t.Error("runAdmin with unknown subcommand: want non-nil error; got nil")
+		return
+	}
+	// Tighten oracle: error must come from arg parsing (mentions "unknown" and/or the
+	// subcommand name), NOT from a network failure. A network-refused error would pass
+	// the weak err != nil check without validating that arg-parsing fires first.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-P8-001 — runAdmin unknown subcommand: got network error %q; want arg-parsing error before any connection attempt", errStr)
+	}
+	if !strings.Contains(errStr, "unknown") && !strings.Contains(errStr, "totally-unknown-cmd") {
+		t.Errorf("F-P8-001 — runAdmin unknown subcommand: error %q does not mention 'unknown' or the subcommand name; want descriptive parse error", errStr)
 	}
 }
 
@@ -808,17 +819,18 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
-		args []string
+		name        string
+		args        []string
+		missingFlag string // the flag name that must appear in the error
 	}{
 		// BC-2.05.004 precondition 2 — malformed key operations must return error.
-		{"register_missing_key", []string{"key", "register", "--svtn", "test-svtn"}},
-		{"register_missing_svtn", []string{"key", "register", "--key", "ssh-ed25519 AAAA..."}},
-		{"revoke_missing_key", []string{"key", "revoke", "--svtn", "test-svtn", "--role", "console"}},
-		{"revoke_missing_svtn", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--role", "console"}},
-		{"revoke_missing_role", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}},
-		{"expire_missing_after", []string{"key", "expire", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}},
-		{"expire_missing_key", []string{"key", "expire", "--svtn", "test-svtn", "--after", "24h"}},
+		{"register_missing_key", []string{"key", "register", "--svtn", "test-svtn"}, "--key"},
+		{"register_missing_svtn", []string{"key", "register", "--key", "ssh-ed25519 AAAA..."}, "--svtn"},
+		{"revoke_missing_key", []string{"key", "revoke", "--svtn", "test-svtn", "--role", "console"}, "--key"},
+		{"revoke_missing_svtn", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--role", "console"}, "--svtn"},
+		{"revoke_missing_role", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}, "--role"},
+		{"expire_missing_after", []string{"key", "expire", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}, "--after"},
+		{"expire_missing_key", []string{"key", "expire", "--svtn", "test-svtn", "--after", "24h"}, "--key"},
 	}
 
 	for _, tc := range cases {
@@ -831,6 +843,20 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 			err := runAdmin(ctx, "127.0.0.1:19995", testdataKeyPath(t), false, tc.args, defaultIO())
 			if err == nil {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): want error for missing required flag; got nil", tc.args)
+				return
+			}
+			// Tighten oracle: error must be a flag-parsing error, not a network error.
+			// A network-refused error (E-NET-001) would pass the weak err != nil oracle
+			// without proving that flag validation fires before any connection attempt.
+			errStr := err.Error()
+			if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): got network error %q; want flag validation error before any connection attempt", tc.args, errStr)
+			}
+			// The missing-flag name must appear in the error to confirm the right
+			// validation path fired (not a generic "required field" catch-all).
+			flagName := tc.missingFlag[2:] // strip "--" for substring match (e.g. "key", "svtn", "role", "after")
+			if !strings.Contains(errStr, flagName) {
+				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): error %q does not mention missing flag %q", tc.args, errStr, tc.missingFlag)
 			}
 		})
 	}
@@ -1070,7 +1096,20 @@ func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 	}, defaultIO())
 
 	if err == nil {
-		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error (E-CFG-001); got nil")
+		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error; got nil")
+		return
+	}
+	// Tighten oracle: client-side validation must fire before any connection
+	// attempt — the error must mention the problematic constraint ("duration"
+	// or "after") and must NOT be a network error (E-NET-001 / connection
+	// refused). The daemon handler would emit E-CFG-001 for zero duration, but
+	// client-side validation is expected to short-circuit before dispatch.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: got network error %q; want client-side validation error before any connection attempt", errStr)
+	}
+	if !strings.Contains(errStr, "duration") && !strings.Contains(errStr, "after") {
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: error %q does not mention 'duration' or 'after'; want field-specific validation message", errStr)
 	}
 }
 

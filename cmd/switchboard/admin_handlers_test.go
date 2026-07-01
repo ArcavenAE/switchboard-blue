@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -126,13 +127,20 @@ func assertAdminKeyResult(t *testing.T, result any) {
 		t.Fatalf("assertAdminKeyResult: unmarshal: %v", err)
 	}
 
-	if wire.KeyFingerprint == "" {
-		t.Error("assertAdminKeyResult: key_fingerprint is empty; expected non-empty SHA256:<base64> string")
-	}
-	// SHA256:<base64> is "SHA256:" (7 chars) + 44-char standard base64 of 32 bytes = 51 chars total.
-	const wantFPLen = 51
-	if len(wire.KeyFingerprint) != wantFPLen {
-		t.Errorf("assertAdminKeyResult: key_fingerprint len=%d, want %d; got %q", len(wire.KeyFingerprint), wantFPLen, wire.KeyFingerprint)
+	// Tighten oracle: key_fingerprint must carry the canonical "SHA256:<base64>"
+	// format. Checking only len==51 accepts any 51-char string (e.g., all-zeros
+	// or a truncated hex digest). Verify the prefix, that the suffix is valid
+	// standard base64, and that the decoded payload is exactly 32 bytes (SHA-256).
+	const fpPrefix = "SHA256:"
+	if !strings.HasPrefix(wire.KeyFingerprint, fpPrefix) {
+		t.Errorf("assertAdminKeyResult: key_fingerprint %q does not start with %q", wire.KeyFingerprint, fpPrefix)
+	} else {
+		decoded, decErr := base64.StdEncoding.DecodeString(strings.TrimPrefix(wire.KeyFingerprint, fpPrefix))
+		if decErr != nil {
+			t.Errorf("assertAdminKeyResult: key_fingerprint suffix is not valid standard base64: %v (got %q)", decErr, wire.KeyFingerprint)
+		} else if len(decoded) != 32 {
+			t.Errorf("assertAdminKeyResult: key_fingerprint decoded length=%d, want 32 (SHA-256 digest); got %q", len(decoded), wire.KeyFingerprint)
+		}
 	}
 
 	if wire.Timestamp.IsZero() {
@@ -328,10 +336,30 @@ func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 	if listResult.Keys == nil {
 		t.Error("list-keys returned nil Keys; expected empty slice (EC-003)")
 	}
-	// "test-svtn" has at least 2 keys: the bootstrap key (from Create) and the
-	// zero key (registered as control in newTestSVTNManagerDetailed).
-	if len(listResult.Keys) < 2 {
-		t.Fatalf("expected at least 2 keys in test-svtn (bootstrap + zero key), got %d", len(listResult.Keys))
+	// "test-svtn" has exactly 2 keys: the bootstrap key (registered by Create)
+	// and the canonical zero key (registered explicitly in newTestSVTNManagerDetailed).
+	// Using `< 2` accepted 3, 4, 5, ... silently; a mutation that double-registers
+	// would not be caught. Assert the exact count.
+	const wantKeyCount = 2
+	if len(listResult.Keys) != wantKeyCount {
+		t.Fatalf("expected exactly %d keys in test-svtn (bootstrap + zero key), got %d", wantKeyCount, len(listResult.Keys))
+	}
+	// Build the expected fingerprints at test time using the same SHA256:<base64>
+	// formula as keyFingerprintAdmin. This confirms both keys are present by identity,
+	// not just by count — a mutation that swaps one key for another would still fail.
+	fingerprintOf := func(pub ed25519.PublicKey) string {
+		h := sha256.Sum256(pub)
+		return "SHA256:" + base64.StdEncoding.EncodeToString(h[:])
+	}
+	zeroKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	wantFPs := map[string]bool{
+		fingerprintOf(bootstrapPub): true,
+		fingerprintOf(zeroKey):      true,
+	}
+	for _, entry := range listResult.Keys {
+		if !wantFPs[entry.Fingerprint] {
+			t.Errorf("list-keys returned unexpected fingerprint %q; expected one of bootstrap or zero key", entry.Fingerprint)
+		}
 	}
 }
 
