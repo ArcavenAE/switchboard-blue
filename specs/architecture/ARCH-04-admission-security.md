@@ -2,10 +2,14 @@
 artifact_id: ARCH-04-admission-security
 document_type: architecture-section
 level: L3
-version: "1.13"
+version: "1.14"
 status: draft
 producer: architect
-timestamp: 2026-06-29T00:00:00
+timestamp: 2026-07-01T00:00:00
+# v1.14 (2026-07-01): Pass-1 lens-3 F-P1L3-004 close — §svtnmgmt Changes step 2 marked superseded by ADR-004
+#   Addendum H2 (RevokeKey uses RevokeKeyIfRoleMatches, not LookupByPubkey); F-005 §Caller Migration updated
+#   to reflect canonical LookupByPubkey callsites (ExpireKey, CallerKeyRole, CallerKeyRoleActive,
+#   IsRegisteredAnyState) — RevokeKey removed from that list.
 # v1.12 (2026-06-29): Pass-3 F-1 close — prose at line 372 swept to match canonical ErrRoleMismatch sentinel
 #   at line 429 (v1.11 fix-burst missed the prose paragraph; partial-fix regression per S-7.01 axis).
 # v1.11 (2026-06-29): F-P2-005 — align ErrRoleMismatch sentinel string to implementation:
@@ -496,7 +500,12 @@ Thread-safety and deep-clone guarantees are inherited from `Lookup`. No mutex lo
 ### svtnmgmt Changes
 
 1. Remove `"github.com/arcavenae/switchboard/internal/frame"` import.
-2. In `RevokeKey` (line 225): replace the two-line derive+lookup with `stored := m.keySet.LookupByPubkey(svtnID, pubkey)`.
+2. ~~In `RevokeKey` (line 225): replace the two-line derive+lookup with `stored := m.keySet.LookupByPubkey(svtnID, pubkey)`.~~
+   **SUPERSEDED by ADR-004 Addendum H2 (below).** `RevokeKey` MUST call
+   `AdmittedKeySet.RevokeKeyIfRoleMatches` instead — the atomic primitive subsumes both
+   the `LookupByPubkey` step and the role cross-check in a single locked operation.
+   Do NOT use `LookupByPubkey` in `RevokeKey`. See §ADR-004 Addendum H2 for the
+   canonical four-step sequence. (F-P1L3-004)
 3. In `ExpireKey` (line 288): replace `nodeAddr := frame.DeriveNodeAddress(...)` with a `LookupByPubkey` call; read `nodeAddr` from the returned `AdmittedKey.NodeAddr` for the subsequent `SetKeyExpiry` call. Return `ErrKeyNotRegistered` if nil.
 
 ### ADR-004 Addendum H2: Atomic Revocation Primitive — `RevokeKeyIfRoleMatches` (HOLD-001 TOCTOU Resolution, F-CS-002)
@@ -670,11 +679,20 @@ are not propagated — was rejected for three reasons:
 
 ### Caller Migration
 
-Current callers (as of 2026-06-29):
+Current callers (as of 2026-07-01, verified against `internal/svtnmgmt/svtnmgmt.go` on `develop`):
 - `AdmittedKeySet.LookupByPubkey` delegates to `Lookup` — both signatures change together.
-- `internal/svtnmgmt.SVTNManager.RevokeKey` and `ExpireKey` (in S-6.02 worktree) call
-  `LookupByPubkey` and currently check `if stored == nil`. These become `stored, ok :=
-  ...; if !ok { return ErrKeyNotRegistered }`.
+- `internal/svtnmgmt.SVTNManager.ExpireKey` (line 352) — calls `LookupByPubkey`; becomes
+  `stored, ok := ...; if !ok { return ErrKeyNotRegistered }`.
+- `internal/svtnmgmt.SVTNManager.CallerKeyRole` (line 404) — calls `LookupByPubkey`;
+  nil-check becomes bool-check.
+- `internal/svtnmgmt.SVTNManager.CallerKeyRoleActive` (line 425) — calls `LookupByPubkey`;
+  nil-check becomes bool-check.
+- `internal/svtnmgmt.SVTNManager.IsRegisteredAnyState` (line 526) — calls `LookupByPubkey`;
+  nil-check becomes bool-check.
+
+Note: `SVTNManager.RevokeKey` is **not** a `LookupByPubkey` callsite. It uses
+`AdmittedKeySet.RevokeKeyIfRoleMatches` (ADR-004 Addendum H2), which performs the
+lookup and role-check atomically under a single Write lock. (F-P1L3-004)
 
 Migration is a **one-line change per call site**: nil-check → bool-check. No logic changes.
 
