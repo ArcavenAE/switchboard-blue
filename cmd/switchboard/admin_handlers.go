@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/mgmt"
@@ -616,6 +618,16 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s is not the daemon bootstrap key", fp)
 		}
 
+		// Ruling-7 / F-Impl-002: defense-in-depth RoleControl check.
+		// BC-2.07.001 Inv-3 mandates the bootstrap key implies RoleControl by
+		// construction, but we verify explicitly so that future key-model changes
+		// (e.g., a rotation flow that retains the is_bootstrap flag on a demoted key)
+		// cannot silently bypass this gate. The check is skipped (allowed) when no
+		// SVTNs exist yet — the first-ever create is the authorized genesis path.
+		if hasExistingSVTNs := m.HasAnySVTN(); hasExistingSVTNs && !m.BootstrapKeyHasControlRole() {
+			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: bootstrap key is not RoleControl")
+		}
+
 		result, err := m.Create(a.Name)
 		if err != nil {
 			// F-P1L2-001: check via errors.Is, not string matching, so that the
@@ -627,10 +639,9 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 				return nil, &svtnAlreadyExistsErr{name: a.Name, cause: err}
 			}
 			// F-P2L1-004: non-duplicate Create failure (e.g. internal rand.Read failure)
-			// stamped with E-INT-001. Use %v (not %w) — the inner error is an internal
-			// failure (crypto/rand or similar) and the chain is not useful to callers;
-			// the message text preserves the cause for operator logs.
-			return nil, fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %v", a.Name, err)
+			// stamped with E-INT-001. Use %w to preserve the error chain for operators
+			// and allow errors.Is/As inspection by callers (go.md rule 4; F-Impl-003).
+			return nil, fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %w", a.Name, err)
 		}
 
 		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from
@@ -643,11 +654,15 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 }
 
 // validateSVTNName checks that the SVTN name satisfies the admission constraints
-// for admin.svtn.create (F-P2L2 exhaustive validation):
+// for admin.svtn.create (F-P2L2 exhaustive validation; F-Impl-001):
 //   - non-empty
 //   - not whitespace-only (strings.TrimSpace must be non-empty)
 //   - at most 255 bytes (operator-readable label budget)
+//   - valid UTF-8 encoding (F-Impl-001)
 //   - no ASCII control characters (U+0000–U+001F, U+007F)
+//   - no C1 controls (U+0080–U+009F) or Unicode Cc category — caught by unicode.IsControl
+//   - no Unicode line separator (U+2028) or paragraph separator (U+2029) — explicit checks
+//     because Go's unicode.IsControl covers only the Cc category, not Zl/Zp (F-Impl-001)
 //
 // Returns E-CFG-001 on any violation.
 func validateSVTNName(name string) error {
@@ -660,8 +675,19 @@ func validateSVTNName(name string) error {
 	if len(name) > 255 {
 		return fmt.Errorf("E-CFG-001: invalid name: name exceeds 255-byte maximum (got %d bytes)", len(name))
 	}
+	// F-Impl-001: reject invalid UTF-8 before iterating runes — range over an
+	// invalid UTF-8 string silently replaces bad bytes with U+FFFD, masking the
+	// violation. utf8.ValidString must be checked first.
+	if !utf8.ValidString(name) {
+		return fmt.Errorf("E-CFG-001: invalid name: name is not valid UTF-8")
+	}
+	// F-Impl-001: reject control characters from Unicode categories Cc (control),
+	// Zl (line separator: U+2028), and Zp (paragraph separator: U+2029).
+	// unicode.IsControl covers Cc (ASCII controls U+0000–U+001F, U+007F, and
+	// C1 controls U+0080–U+009F). U+2028 and U+2029 are NOT in Cc — they are
+	// Zl/Zp — so they must be checked explicitly.
 	for _, r := range name {
-		if r <= 0x1F || r == 0x7F {
+		if unicode.IsControl(r) || r == ' ' || r == ' ' {
 			return fmt.Errorf("E-CFG-001: invalid name: name contains control character U+%04X", r)
 		}
 	}
