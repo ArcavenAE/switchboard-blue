@@ -31,9 +31,12 @@ import (
 // #DEFERRED: S-BL.PATH-TRACKER-WIRING — production tracker enumeration deferred
 // to Wave-7. Handler surface, response types, and adapter interface land in S-W5.04;
 // production population (wiring this map to the routing registry) lands in
-// S-BL.PATH-TRACKER-WIRING. Test-time registration via .register() is the only
-// population path in this wave. See wave-6-tranche-a-scope-rulings.md Ruling-6.
+// S-BL.PATH-TRACKER-WIRING. Test-time registration is done by the internal_test type
+// pathTrackerListSource in integration_test.go; production population lands in
+// S-BL.PATH-TRACKER-WIRING. See wave-6-tranche-a-scope-rulings.md Ruling-6.
 type pathTrackerSource struct {
+	// mu is reserved for Wave-7 writer; no writer exists in this wave (Ruling-6).
+	// AllSnapshots takes an RLock; population only happens at construction time.
 	mu       sync.RWMutex
 	trackers map[string]*paths.PathTracker
 }
@@ -71,7 +74,8 @@ func (emptyRouterMetricsSource) SVTNMetrics(svtnID string) (metrics.RouterMetric
 }
 
 // metricsNotFoundError satisfies the E-RPC-011 contract for unknown SVTNs
-// (BC-2.06.003 PC-2; AC-004). The mgmt layer wraps this in the E-RPC-011 envelope.
+// (BC-2.06.003 PC-2; AC-004). The mgmt dispatch layer re-wraps this error in the
+// JSON-RPC error envelope (see internal/mgmt mgmt.go dispatch convention).
 type metricsNotFoundError struct {
 	svtnID string
 }
