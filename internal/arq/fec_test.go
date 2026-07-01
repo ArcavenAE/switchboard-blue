@@ -524,6 +524,42 @@ func TestBC_2_02_007_Flush_OnCompleteGroupBoundary(t *testing.T) {
 	}
 }
 
+// ─── CR-002: Flush idempotency ────────────────────────────────────────────────
+
+// TestBC_2_02_007_Flush_Idempotent verifies that a second call to Flush after
+// an incomplete group returns (nil, false) — the encoder is reset after the
+// first Flush so duplicate delivery to ARQ cannot occur (CR-002).
+func TestBC_2_02_007_Flush_Idempotent(t *testing.T) {
+	const groupSize = 4
+	enc := arq.NewEncoder(arq.FECConfig{GroupSize: groupSize})
+	payloads := buildPayloads(2, 8) // incomplete group: 2 of 4 frames
+
+	for _, p := range payloads {
+		pp := enc.AddFrame(p)
+		if pp != nil {
+			t.Fatal("AddFrame: unexpected parity from incomplete group")
+		}
+	}
+
+	// First Flush: must return the 2 buffered payloads.
+	first, hasFirst := enc.Flush()
+	if !hasFirst {
+		t.Fatal("Flush (first call): want hasIncomplete=true, got false")
+	}
+	if len(first) != 2 {
+		t.Fatalf("Flush (first call): want 2 payloads, got %d", len(first))
+	}
+
+	// Second Flush: encoder must be reset; expect (nil, false).
+	second, hasSecond := enc.Flush()
+	if hasSecond {
+		t.Errorf("Flush (second call): want hasIncomplete=false (idempotent), got true with %d frames", len(second))
+	}
+	if second != nil {
+		t.Errorf("Flush (second call): want nil payloads, got %v", second)
+	}
+}
+
 // ─── VP-043: property test — single-loss recovery across randomised inputs ───
 
 // TestBC_2_02_007_VP043_SingleLossRecovery_Property is the VP-043 property test:

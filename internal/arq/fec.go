@@ -10,9 +10,9 @@
 // internal/frame and use frame.FrameTypeFec (ARCH-08 position 9: arq→frame
 // import is legal; F-P8-008).
 //
-// ErrTooManyLosses is a package-local sentinel consumed by the ARQ retransmit
-// path (AC-004); it has no operator-visible surface and no E-FEC-* taxonomy
-// slot (AC-003).
+// ErrTooManyLosses is exported for errors.Is inspection within the module's
+// internal/ tree; it has no operator-visible surface and no E-FEC-* taxonomy
+// slot (AC-003, AC-004).
 package arq
 
 import (
@@ -26,13 +26,14 @@ import (
 // Configurable via FECConfig.GroupSize.
 const DefaultFECGroupSize = 4
 
-// ErrTooManyLosses is returned by Decoder.Recover when more than one frame
-// is missing from the group. XOR parity can only recover a single loss; the
-// caller MUST invoke the ARQ SACK/retransmit path on receiving this error
-// (BC-2.02.007 PC-4, VP-043; AC-003, AC-004).
+// ErrTooManyLosses is returned by Recover when more than one data frame in
+// the FEC group is missing. XOR parity can only recover a single loss.
 //
-// This sentinel is package-local: it is consumed internally by the ARQ layer
-// and must not be exposed via RPC or operator messaging (AC-003).
+// This sentinel is exported for errors.Is inspection by callers within this
+// module's internal/ tree (required for the arq_test external test package).
+// It is module-internal by convention and the internal/ path restriction —
+// it is not part of any public API surface and must not be exposed via RPC
+// or operator messaging (AC-003, BC-2.02.007 PC-4).
 var ErrTooManyLosses = errors.New("fec: too many losses in group")
 
 // FECConfig carries construction parameters for NewEncoder and NewDecoder.
@@ -114,6 +115,8 @@ func (e *Encoder) AddFrame(payload []byte) (parityPayload []byte) {
 // GroupSize frames since the last complete group or construction). When true,
 // the caller must pass the buffered frames to ARQ for normal handling and must
 // NOT emit a parity frame (BC-2.02.007 EC-001; AC-005).
+//
+// After Flush returns, the encoder is reset; a second call returns (nil, false).
 func (e *Encoder) Flush() (incomplete [][]byte, hasIncomplete bool) {
 	if len(e.buf) == 0 {
 		return nil, false
@@ -125,6 +128,9 @@ func (e *Encoder) Flush() (incomplete [][]byte, hasIncomplete bool) {
 		copy(cp, p)
 		out[i] = cp
 	}
+	// Reset encoder state so a second call returns (nil, false) — idempotent.
+	e.buf = e.buf[:0]
+	e.parity = nil
 	return out, true
 }
 
