@@ -243,8 +243,12 @@ func (s *AdmittedKeySet) RegisterKey(svtnID [16]byte, pubkey ed25519.PublicKey, 
 
 	// admitted is intentionally zero (false) — the node must complete the
 	// challenge-response handshake before IsAdmitted returns true.
+	//
+	// Deep-clone the caller's pubkey slice so that a subsequent mutation of the
+	// caller's backing array cannot corrupt the stored entry (go.md rule 12; M-3;
+	// F-P3L2-001 RegisterKey caller-alias fence).
 	entry := &AdmittedKey{
-		PublicKey:    pubkey,
+		PublicKey:    append(ed25519.PublicKey(nil), pubkey...),
 		Role:         role,
 		FrameAuthKey: authKey,
 		NodeAddr:     nodeAddr,
