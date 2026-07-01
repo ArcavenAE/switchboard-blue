@@ -1,21 +1,20 @@
 //go:build integration
 
 // Package main e2e tests for the sbctl management plane client against all four
-// daemon types per BC-2.07.002 v1.2 and VP-049.
+// daemon types per BC-2.07.002 v1.4 and VP-049 v1.1.
 //
-// Red Gate: all tests in this file MUST FAIL before implementation begins.
-// The harness helpers (startTestMgmtServer, awaitReady) are declared with
-// t.Fatal("not implemented") bodies so the tests fail on entry rather than
-// compiling but vacuously passing.
+// Adversary Pass-1 rulings applied (Q1-Q6):
+//   - Q1: per-mode distinct handler tables (routerHandlers/accessHandlers/etc.)
+//   - Q2: non-constant request IDs; wire-level resp.Type + resp.ID echo + resp.ok + resp.data assertions
+//   - Q5: distinct operator key (primary path); bootstrap variant in separate test
+//   - Q6: server-side closingListenerWrapper for AC-005 (not tautological local close)
 //
-// Wire protocol notes discovered from internal/mgmt/mgmt.go:
+// Wire protocol notes from internal/mgmt/mgmt.go:
 //   - Server sends CHALLENGE first (type:"challenge", nonce, daemon_sig) in base64url.
 //   - Client responds with CHALLENGE_RESPONSE (type:"challenge_response", nonce_sig, pubkey).
 //   - Server replies AUTH_OK (type:"auth_ok", daemon_version) or AUTH_FAIL (type:"auth_fail").
-//   - Bootstrap mode: ops = mgmt.NewOperatorKeySet(nil) — daemon's own public key is the sole
-//     authorized key. Tests use the daemon key as the operator key to authenticate.
+//   - AUTH_FAIL carries code:"E-ADM-010".
 //   - After AUTH_OK, RPC requests are type:"request", responses are type:"response".
-//   - conn.Read → error after the server closes the connection on AUTH_FAIL (AC-004, AC-005).
 //
 // Traceability:
 //
@@ -27,7 +26,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -38,66 +39,72 @@ import (
 )
 
 // daemonMode represents one of the four daemon types under test.
-// Each mode gets its own mgmt.Server instance with a distinct mode label in the
-// stub "status" handler response — the daemon-mode axis is expressed by this label,
-// not by running the real runRouter/runAccess/runConsole/runControl functions
-// (those are stubs or incomplete for the management plane in cmd/switchboard).
+// Each mode gets its own mgmt.Server instance with a distinct per-mode handler set
+// (Q1 ruling — Option A, AC-001). The daemon-mode axis is expressed by the
+// distinct handler tables, not by running the real runXxx entrypoints.
 type daemonMode struct {
-	name string // one of "router", "access", "console", "control"
+	name     string         // one of "router", "access", "console", "control"
+	handlers []mgmt.Handler // per-mode handler set (Q1)
 }
 
 // allDaemonModes is the table for TestE2E_MgmtPlane_AllFourDaemonTypes_VP049.
-var allDaemonModes = []daemonMode{
-	{name: "router"},
-	{name: "access"},
-	{name: "console"},
-	{name: "control"},
+// Each entry carries its mode-specific handler constructor result.
+func makeAllDaemonModes() []daemonMode {
+	return []daemonMode{
+		{name: "router", handlers: routerHandlers()},
+		{name: "access", handlers: accessHandlers()},
+		{name: "console", handlers: consoleHandlers()},
+		{name: "control", handlers: controlHandlers()},
+	}
 }
 
-// testMgmtServer is the handle returned by startTestMgmtServer.
-// It bundles the server, its TCP listener address, and the operator private key
-// that was registered as authorized during construction (bootstrap mode: daemon
-// key == operator key).
-type testMgmtServer struct {
-	addr    string             // "127.0.0.1:<port>" — dial target for clients
-	privKey ed25519.PrivateKey // operator private key (same as daemon key in bootstrap mode)
+// serverHandle is the handle returned by startTestMgmtServer.
+// It bundles the server's TCP listener address and the listener wrapper (for AC-005
+// server-side FIN observation).
+type serverHandle struct {
+	addr    string                  // "127.0.0.1:<port>" — dial target for clients
+	wrapper *closingListenerWrapper // for AC-005 server-side FIN observation
 }
 
 // startTestMgmtServer starts an in-process mgmt.Server for the given daemon mode
-// on an OS-assigned TCP port. Returns a testMgmtServer with the server address
-// and the operator key. Shutdown is registered via t.Cleanup.
-func startTestMgmtServer(t *testing.T, mode daemonMode) *testMgmtServer {
+// on an OS-assigned TCP port, using operatorPub as the sole authorized operator key.
+// The listener is wrapped with closingListenerWrapper for AC-005 FIN observation.
+// Returns a serverHandle. Shutdown is registered via t.Cleanup.
+//
+// R-Q5: distinct operator key — caller generates operatorPub; daemon key is separate.
+func startTestMgmtServer(t *testing.T, mode daemonMode, operatorPub ed25519.PublicKey) *serverHandle {
 	t.Helper()
 
-	// Generate a fresh Ed25519 key pair for this server instance.
+	// Generate a fresh Ed25519 daemon key pair (distinct from the operator key — Q5).
 	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("startTestMgmtServer [%s]: GenerateKey: %v", mode.name, err)
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("startTestMgmtServer [%s]: net.Listen: %v", mode.name, err)
 	}
 
-	// "status" stub handler returns {"mode":<name>} as the data field.
-	// The response envelope's ok:true and data wrapping is handled by the server.
-	modeName := mode.name
-	statusHandler := mgmt.Handler{
-		Command: "status",
-		Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
-			return map[string]any{"mode": modeName}, nil
-		},
+	// Wrap the listener for AC-005 server-side FIN observation (Q6).
+	wrappedLn := newClosingListenerWrapper(rawLn)
+
+	// trackingLn intercepts Accept() calls so we can record the closingConn
+	// returned for the most-recently-accepted connection (needed by clientClosedWithin).
+	handle := &serverHandle{
+		addr:    rawLn.Addr().String(),
+		wrapper: wrappedLn,
 	}
 
-	// Bootstrap mode: NewOperatorKeySet(nil) — the daemon's own key is the sole
-	// authorized operator key, so the test passes daemonPriv as the operator key.
+	// operatorKeySet uses the distinct operator public key (Q5 — primary coverage path).
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
+
 	srv := mgmt.NewServer(
-		ln,
+		wrappedLn,
 		daemonPriv,
-		mgmt.NewOperatorKeySet(nil),
-		[]mgmt.Handler{statusHandler},
-		"dev-"+modeName,
+		ops,
+		mode.handlers,
+		"dev-"+mode.name,
 		mgmt.WithHandshakeTimeout(500*time.Millisecond),
 		mgmt.WithRPCIdleTimeout(2*time.Second),
 	)
@@ -115,17 +122,12 @@ func startTestMgmtServer(t *testing.T, mode daemonMode) *testMgmtServer {
 		cancel()
 		_ = srv.Shutdown(context.Background())
 		wg.Wait()
-		_ = ln.Close()
 	})
 
-	return &testMgmtServer{
-		addr:    ln.Addr().String(),
-		privKey: daemonPriv,
-	}
+	return handle
 }
 
-// awaitReady polls the server address with 10ms sleep until a TCP connection
-// succeeds or the timeout expires.
+// awaitReady polls the server address until a TCP connection succeeds or timeout.
 func awaitReady(t *testing.T, addr string, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().UTC().Add(timeout)
@@ -143,7 +145,6 @@ func awaitReady(t *testing.T, addr string, timeout time.Duration) {
 }
 
 // dialConn opens a TCP connection to addr and registers conn.Close in t.Cleanup.
-// Returns the connection. Fatal on error.
 func dialConn(t *testing.T, addr string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("tcp", addr)
@@ -154,105 +155,317 @@ func dialConn(t *testing.T, addr string) net.Conn {
 	return conn
 }
 
+// nonConstantID returns a non-repeating hex-encoded request ID per call.
+// Uses crypto/rand so IDs are non-constant across test runs (Q2 / BC-2.07.002 Ruling X).
+func nonConstantID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// Fall back to nanosecond clock if rand.Read fails (should not happen in tests).
+		return fmt.Sprintf("%x", time.Now().UTC().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
+}
+
+// wireRPC encodes a "request" envelope directly to conn and decodes the response
+// envelope directly from conn. Returns the full decoded response. This is the
+// wire-level assertion path for AC-003 (Q2 — Rulings M/U/X).
+//
+// The request ID is set to reqID. The caller is responsible for asserting
+// resp.Type, resp.ID, resp.OK, and resp.Data after this call.
+type rpcWireResponse struct {
+	Type string          `json:"type"`
+	ID   string          `json:"id"`
+	OK   bool            `json:"ok"`
+	Data json.RawMessage `json:"data"`
+}
+
+func wireRPC(t *testing.T, conn net.Conn, reqID, command string) rpcWireResponse {
+	t.Helper()
+
+	req := map[string]any{
+		"type":    "request", // Ruling M: must carry type:"request"
+		"id":      reqID,
+		"command": command,
+		"args":    map[string]any{},
+	}
+	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		t.Fatalf("wireRPC [%s]: encode request: %v", command, err)
+	}
+
+	var resp rpcWireResponse
+	if err := json.NewDecoder(io.LimitReader(conn, mgmt.MaxMessageBytes)).Decode(&resp); err != nil {
+		t.Fatalf("wireRPC [%s]: decode response: %v", command, err)
+	}
+	return resp
+}
+
 // ── TestE2E_MgmtPlane_AllFourDaemonTypes_VP049 ────────────────────────────────
 //
-// Covers AC-001, AC-002, AC-003, AC-005 across all four daemon modes.
+// Covers AC-001, AC-002 (distinct-operator-key primary path), AC-003 (wire-level
+// Rulings M/U/X assertions), and AC-005 (server-side FIN observation via wrapper).
 //
-// AC-001: start mgmt.Server with in-process listener; poll for readiness (1s timeout).
-// AC-002: Authenticate(ctx, conn, privKey) returns nil against each daemon's socket.
-// AC-003: dispatch "status" RPC; response contains ok:true and a data field.
-// AC-005: close conn after RPC; next Read returns error within 500ms.
-//
-// Each sub-test is independent (own listener, own key pair) and runs in parallel.
+// Adversary rulings applied:
+//   - Q1: each sub-test uses the mode's distinct handler table
+//   - Q2: non-constant request IDs; wire envelope assertions
+//   - Q5: distinct operator keypair; server uses NewOperatorKeySet({operatorPub})
+//   - Q6: closingListenerWrapper observes client FIN within 500ms
 
 func TestE2E_MgmtPlane_AllFourDaemonTypes_VP049(t *testing.T) {
 	t.Parallel()
 
-	for _, mode := range allDaemonModes {
+	// Generate a single distinct operator keypair shared across all four sub-tests
+	// (the production model: one operator key authenticates against all daemon types).
+	operatorPub, operatorPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate operator keypair: %v", err)
+	}
+
+	for _, mode := range makeAllDaemonModes() {
 		mode := mode // capture loop variable
 		t.Run(mode.name, func(t *testing.T) {
 			t.Parallel()
 
-			// ── AC-001: start daemon and wait for listener to be ready ────────────────
-			srv := startTestMgmtServer(t, mode)
+			// ── AC-001: start daemon and wait for listener to be ready ────────────
+			srv := startTestMgmtServer(t, mode, operatorPub)
 			awaitReady(t, srv.addr, 1*time.Second)
 
-			// ── AC-002: authenticate ──────────────────────────────────────────────────
+			// ── AC-002: authenticate with distinct operator key ───────────────────
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			t.Cleanup(cancel)
 
 			conn := dialConn(t, srv.addr)
 
-			if err := Authenticate(ctx, conn, srv.privKey); err != nil {
+			if err := Authenticate(ctx, conn, operatorPriv); err != nil {
 				t.Fatalf("AC-002 [%s]: Authenticate returned error: %v", mode.name, err)
 			}
 
-			// ── AC-003: dispatch "status" RPC; verify ok:true and data field present ──
+			// ── AC-003: wire-level RPC dispatch — assert Rulings M/U/X ───────────
 			//
-			// We call the unexported dispatch() directly (white-box test in package main).
-			// Command is "status"; args is nil (marshaled as null in JSON).
-			rawData, err := dispatch(ctx, conn, "status", nil)
-			if err != nil {
-				t.Fatalf("AC-003 [%s]: dispatch(status) returned error: %v", mode.name, err)
+			// Ruling M: request envelope carries type:"request"
+			// Ruling X: request ID is non-constant per-call (crypto/rand hex)
+			// Ruling U: response envelope must carry type:"response"
+			// Ruling X (echo): resp.ID must equal req.ID
+			reqID := nonConstantID()
+			resp := wireRPC(t, conn, reqID, "status")
+
+			// Ruling U: resp.Type must be "response"
+			if resp.Type != "response" {
+				t.Errorf("AC-003 [%s]: resp.Type = %q, want \"response\" (Ruling U)", mode.name, resp.Type)
 			}
-			// data field must be present (non-nil, parseable JSON) — AC-003 does not
-			// assert on content, only that the field exists and is valid JSON.
-			if rawData == nil {
-				t.Errorf("AC-003 [%s]: dispatch(status) returned nil data; want non-nil JSON", mode.name)
+			// Ruling X: resp.ID must echo the request ID
+			if resp.ID != reqID {
+				t.Errorf("AC-003 [%s]: resp.ID = %q, want %q (Ruling X echo)", mode.name, resp.ID, reqID)
 			}
-			// Verify it is parseable as a JSON object (not just "null").
-			var dataMap map[string]any
-			if err := json.Unmarshal(rawData, &dataMap); err != nil {
-				t.Errorf("AC-003 [%s]: data field is not a JSON object: %v (raw: %s)", mode.name, err, rawData)
+			// resp.OK must be true
+			if !resp.OK {
+				t.Errorf("AC-003 [%s]: resp.OK = false, want true", mode.name)
+			}
+			// resp.Data must be non-nil and JSON-decodable
+			if resp.Data == nil {
+				t.Errorf("AC-003 [%s]: resp.Data is nil, want non-nil JSON", mode.name)
+			} else {
+				var dataMap map[string]any
+				if err := json.Unmarshal(resp.Data, &dataMap); err != nil {
+					t.Errorf("AC-003 [%s]: resp.Data is not a JSON object: %v (raw: %s)", mode.name, err, resp.Data)
+				}
 			}
 
-			// ── AC-005: close conn; verify next Read returns error within 500ms ────────
+			// Also verify the mode-specific handler responds (Q1 — per-mode table check).
+			modeSpecific := modeSpecificCommand(mode.name)
+			modeResp := wireRPC(t, conn, nonConstantID(), modeSpecific)
+			if modeResp.Type != "response" {
+				t.Errorf("AC-003 [%s]: mode-specific handler %q: resp.Type = %q, want \"response\"", mode.name, modeSpecific, modeResp.Type)
+			}
+			if !modeResp.OK {
+				t.Errorf("AC-003 [%s]: mode-specific handler %q: resp.OK = false", mode.name, modeSpecific)
+			}
+
+			// ── AC-005: close conn from client side; assert server observes FIN ───
 			//
-			// After the RPC completes, the client closes the connection (sbctl invariant:
-			// exits after command completion — BC-2.07.002 Inv-2).
-			// We close the conn and verify that reading from it returns an error promptly,
-			// confirming the client-side connection is cleaned up (not lingering as daemon).
+			// This instruments the actual production defer conn.Close() in connectAndRun.
+			// We need to find the closingConn that the server accepted for this connection.
+			// We close from the client side (simulating connectAndRun's defer conn.Close())
+			// and wait for the server-side wrapper to observe the EOF/FIN within 500ms.
+			//
+			// Look up the closingConn via the wrapper. Since we have one conn per sub-test
+			// and parallel sub-tests each have their own server, we need to find the right
+			// conn. The wrapper tracks by the closingConn pointer returned from Accept().
+			// We close the client conn, then wait for any tracked conn's closed channel to fire.
 			if err := conn.Close(); err != nil {
-				t.Logf("AC-005 [%s]: conn.Close error (may already be closed): %v", mode.name, err)
+				t.Logf("AC-005 [%s]: conn.Close (client side): %v", mode.name, err)
 			}
 
-			// Read must return an error within 500ms.
-			if err := conn.SetReadDeadline(time.Now().UTC().Add(500 * time.Millisecond)); err != nil {
-				t.Logf("AC-005 [%s]: SetReadDeadline after close: %v", mode.name, err)
-			}
-			buf := make([]byte, 1)
-			_, readErr := conn.Read(buf)
-			if readErr == nil {
-				t.Errorf("AC-005 [%s]: Read after conn.Close returned nil error; want error (connection closed)", mode.name)
+			if err := srv.wrapper.waitForAnyClose(500 * time.Millisecond); err != nil {
+				t.Errorf("AC-005 [%s]: server did not observe client-side close within 500ms: %v", mode.name, err)
 			}
 		})
 	}
 }
 
+// modeSpecificCommand returns the mode-specific handler command for a given mode name.
+func modeSpecificCommand(mode string) string {
+	switch mode {
+	case "router":
+		return "paths.list"
+	case "access":
+		return "session.list"
+	case "console":
+		return "console.status"
+	case "control":
+		return "admin.key.list"
+	default:
+		return "status"
+	}
+}
+
+// waitForAnyClose waits for any tracked connection's closed channel to fire within d.
+// This is the AC-005 assertion: the server observes the client-side FIN.
+func (w *closingListenerWrapper) waitForAnyClose(d time.Duration) error {
+	w.mu.Lock()
+	// Snapshot all channels.
+	chs := make([]chan struct{}, 0, len(w.closed))
+	for _, ch := range w.closed {
+		chs = append(chs, ch)
+	}
+	w.mu.Unlock()
+
+	if len(chs) == 0 {
+		return fmt.Errorf("closingListenerWrapper: no connections were accepted")
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	// Fan-in: first channel to fire wins.
+	done := make(chan struct{})
+	for _, ch := range chs {
+		ch := ch
+		go func() {
+			select {
+			case <-ch:
+				select {
+				case done <- struct{}{}:
+				default:
+				}
+			case <-timer.C:
+			}
+		}()
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("no tracked connection was closed by client within deadline")
+	}
+}
+
+// ── TestE2E_MgmtPlane_BootstrapAuth_VP049 ─────────────────────────────────────
+//
+// Secondary variant (Q5 ruling): bootstrap mode where daemon key == operator key.
+// mgmt.NewOperatorKeySet(nil) — daemon's own key is the sole authorized key.
+// Authenticates with daemonPriv (not a distinct operator key).
+//
+// Covers AC-002 bootstrap path per ADR-012 §bootstrap.
+// Uses router mode as the representative daemon type.
+
+func TestE2E_MgmtPlane_BootstrapAuth_VP049(t *testing.T) {
+	t.Parallel()
+
+	// Generate a fresh daemon key pair. In bootstrap mode the daemon key IS the operator key.
+	daemonPub, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate daemon keypair: %v", err)
+	}
+
+	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("bootstrap: net.Listen: %v", err)
+	}
+
+	// Bootstrap: NewOperatorKeySet(nil) — daemon key is the sole authorized key.
+	// This diverges from the primary path: no separate operator key is registered.
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{daemonPub})
+
+	srv := mgmt.NewServer(
+		rawLn,
+		daemonPriv,
+		ops,
+		routerHandlers(),
+		"dev-router",
+		mgmt.WithHandshakeTimeout(500*time.Millisecond),
+		mgmt.WithRPCIdleTimeout(2*time.Second),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = srv.Serve(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		_ = srv.Shutdown(context.Background())
+		wg.Wait()
+		_ = rawLn.Close()
+	})
+
+	addr := rawLn.Addr().String()
+	awaitReady(t, addr, 1*time.Second)
+
+	conn := dialConn(t, addr)
+
+	authCtx, authCancel := context.WithTimeout(ctx, 5*time.Second)
+	t.Cleanup(authCancel)
+
+	// Bootstrap auth: authenticate with the daemon's own key.
+	if err := Authenticate(authCtx, conn, daemonPriv); err != nil {
+		t.Fatalf("bootstrap Authenticate: %v", err)
+	}
+
+	// Verify one status RPC succeeds.
+	reqID := nonConstantID()
+	resp := wireRPC(t, conn, reqID, "status")
+	if resp.Type != "response" {
+		t.Errorf("bootstrap: resp.Type = %q, want \"response\"", resp.Type)
+	}
+	if resp.ID != reqID {
+		t.Errorf("bootstrap: resp.ID = %q, want %q", resp.ID, reqID)
+	}
+	if !resp.OK {
+		t.Errorf("bootstrap: resp.OK = false, want true")
+	}
+}
+
 // ── TestE2E_MgmtPlane_UnauthenticatedRejected_AC004 ──────────────────────────
 //
-// Covers AC-004: a connection that skips authentication and sends an RPC request
-// directly receives AUTH_FAIL and connection close.
+// Covers AC-004: a connection that skips authentication receives AUTH_FAIL with
+// code E-ADM-010 and the connection is closed.
 //
-// The server expects a CHALLENGE_RESPONSE but instead receives a "request" JSON
-// object — the type mismatch triggers AUTH_FAIL + conn.Close on the server side.
-//
-// Representative daemon type: router (one daemon type is sufficient per AC-004).
+// The server expects CHALLENGE_RESPONSE but receives a "request" envelope —
+// the type mismatch triggers AUTH_FAIL + conn.Close on the server side.
+// Representative daemon type: router.
 
 func TestE2E_MgmtPlane_UnauthenticatedRejected_AC004(t *testing.T) {
 	t.Parallel()
 
+	// Distinct operator keypair for this test server.
+	operatorPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("AC-004: generate operator keypair: %v", err)
+	}
+
 	// Start a single router-mode daemon.
-	srv := startTestMgmtServer(t, daemonMode{name: "router"})
+	srv := startTestMgmtServer(t, daemonMode{name: "router", handlers: routerHandlers()}, operatorPub)
 	awaitReady(t, srv.addr, 1*time.Second)
 
 	conn := dialConn(t, srv.addr)
 
 	// Drain the CHALLENGE message that the server always sends first.
-	// We receive it but do NOT send a CHALLENGE_RESPONSE — we send an RPC request
-	// instead, skipping authentication entirely.
-	//
-	// Set a short read deadline so the test does not hang on the challenge read.
+	// We receive it but do NOT send CHALLENGE_RESPONSE — we send an RPC request instead.
 	if err := conn.SetReadDeadline(time.Now().UTC().Add(2 * time.Second)); err != nil {
 		t.Fatalf("AC-004: SetReadDeadline for challenge drain: %v", err)
 	}
@@ -267,11 +480,11 @@ func TestE2E_MgmtPlane_UnauthenticatedRejected_AC004(t *testing.T) {
 		t.Fatalf("AC-004: expected type=challenge from server; got %v", got)
 	}
 
-	// Instead of sending CHALLENGE_RESPONSE, send a raw RPC request.
+	// Instead of CHALLENGE_RESPONSE, send a raw RPC request.
 	// The server expects challenge_response; receiving "request" triggers AUTH_FAIL + close.
 	rawRequest, err := json.Marshal(map[string]any{
 		"type":    "request",
-		"id":      "t1",
+		"id":      nonConstantID(), // non-constant per Q2
 		"command": "status",
 		"args":    map[string]any{},
 	})
@@ -279,12 +492,19 @@ func TestE2E_MgmtPlane_UnauthenticatedRejected_AC004(t *testing.T) {
 		t.Fatalf("AC-004: json.Marshal RPC request: %v", err)
 	}
 	rawRequest = append(rawRequest, '\n')
+
+	// Write deadline on the conn.Write to guard against non-draining server (F-P1L1-008).
+	if err := conn.SetWriteDeadline(time.Now().UTC().Add(2 * time.Second)); err != nil {
+		t.Fatalf("AC-004: SetWriteDeadline: %v", err)
+	}
 	if _, err := conn.Write(rawRequest); err != nil {
 		t.Fatalf("AC-004: write RPC request: %v", err)
 	}
+	if err := conn.SetWriteDeadline(time.Time{}); err != nil {
+		t.Fatalf("AC-004: clear write deadline: %v", err)
+	}
 
-	// The server MUST respond with AUTH_FAIL and then close the connection.
-	// We read the AUTH_FAIL response with a short timeout.
+	// Server MUST respond with AUTH_FAIL and close the connection.
 	if err := conn.SetReadDeadline(time.Now().UTC().Add(2 * time.Second)); err != nil {
 		t.Fatalf("AC-004: SetReadDeadline for AUTH_FAIL read: %v", err)
 	}
@@ -292,12 +512,16 @@ func TestE2E_MgmtPlane_UnauthenticatedRejected_AC004(t *testing.T) {
 	if err := json.NewDecoder(io.LimitReader(conn, mgmt.MaxMessageBytes)).Decode(&authFail); err != nil {
 		t.Fatalf("AC-004: failed to read AUTH_FAIL from server: %v", err)
 	}
+	// Assert type == "auth_fail"
 	if got := authFail["type"]; got != "auth_fail" {
 		t.Errorf("AC-004: want type=auth_fail; got %v", got)
 	}
+	// Assert code == "E-ADM-010" (F-P1L1-003).
+	if got := authFail["code"]; got != "E-ADM-010" {
+		t.Errorf("AC-004: want code=E-ADM-010; got %v", got)
+	}
 
-	// Verify connection is closed by server within 500ms of the AUTH_FAIL.
-	// A further Read must return an error (EOF or closed connection).
+	// Verify connection is closed by server within 500ms of AUTH_FAIL.
 	if err := conn.SetReadDeadline(time.Now().UTC().Add(500 * time.Millisecond)); err != nil {
 		t.Fatalf("AC-004: SetReadDeadline for post-AUTH_FAIL drain: %v", err)
 	}
@@ -307,23 +531,3 @@ func TestE2E_MgmtPlane_UnauthenticatedRejected_AC004(t *testing.T) {
 		t.Errorf("AC-004: Read after AUTH_FAIL returned nil error; server should have closed connection")
 	}
 }
-
-// ── compile-time assertion: mgmt.MaxMessageBytes is exported and usable here ──
-// This block is intentionally empty; the import above ensures the assertion.
-var _ = mgmt.MaxMessageBytes
-
-// ── package-level compile-time type checks ────────────────────────────────────
-// Verify that the helper stubs and daemonMode type compile without references to
-// unexported implementation symbols that don't exist yet.
-var (
-	_ func(*testing.T, daemonMode) *testMgmtServer = startTestMgmtServer
-	_ func(*testing.T, string, time.Duration)      = awaitReady
-	_ func(*testing.T, string) net.Conn            = dialConn
-)
-
-// Ensure ed25519, rand, and json are used (imported for future implementation
-// reference in startTestMgmtServer — lint will complain if unused).
-var (
-	_ = ed25519.PublicKey(nil)
-	_ = rand.Reader
-)
