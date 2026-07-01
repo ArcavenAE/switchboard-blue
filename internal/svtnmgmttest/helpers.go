@@ -10,6 +10,13 @@ import (
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
 
+// SVTNRecord returns a copy of the SVTN record for name, or false if absent.
+// Test-only.
+func SVTNRecord(t *testing.T, m *svtnmgmt.SVTNManager, name string) (svtnmgmt.SVTN, bool) {
+	t.Helper()
+	return m.SVTNByName(name)
+}
+
 // SeedSVTNWithoutBootstrapKey creates an SVTN record in m without registering
 // the bootstrap key as control. This produces the HasAnySVTN()==true /
 // BootstrapKeyHasControlRole()==false state used by the Ruling-7 mutation test
