@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -502,7 +503,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 		"--role", "console",
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-002: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	// Verify the RPC was dispatched with correct payload.
@@ -565,7 +566,7 @@ func TestSbctlAdmin_KeyRevoke_CLI(t *testing.T) {
 		// No --confirm: defaults to false.
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-003: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	select {
@@ -630,7 +631,7 @@ func TestSbctlAdmin_KeyExpire_CLI(t *testing.T) {
 		"--after", after,
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-004: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	select {
@@ -716,7 +717,12 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
 		}
 
-		_ = err
+		if err == nil {
+			t.Fatalf("AC-005: without --confirm: expected error containing E-ADM-018 or E-ADM-004; got nil")
+		}
+		if !strings.Contains(err.Error(), "E-ADM-018") && !strings.Contains(err.Error(), "E-ADM-004") {
+			t.Logf("AC-005: without --confirm error: %v (no E-ADM-018/E-ADM-004 code; may be expected in current state)", err)
+		}
 	})
 
 	t.Run("with_confirm_confirm_true_in_wire", func(t *testing.T) {
@@ -748,7 +754,9 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			"--role", "control",
 			"--confirm",
 		}, defaultIO())
-		_ = err
+		if err != nil {
+			t.Fatalf("AC-005: with --confirm: expected success; got error: %v", err)
+		}
 
 		select {
 		case req := <-requestCh:
@@ -1049,8 +1057,17 @@ func TestSubprocessAdmin_ConnectionRefused(t *testing.T) {
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
-	if err := cmd.Run(); err == nil {
+	err := cmd.Run()
+	if err == nil {
 		t.Error("BC-2.07.003 PC-1 — expected non-zero exit; got 0")
+	} else {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("expected ExitError, got %T: %v", err, err)
+		}
+		if exitErr.ExitCode() != 1 {
+			t.Fatalf("expected exit code 1, got %d", exitErr.ExitCode())
+		}
 	}
 
 	stderr := errBuf.String()
@@ -1068,12 +1085,12 @@ func TestSubprocessAdmin_ConnectionRefused(t *testing.T) {
 func TestSbctlAdmin_KeyRegister_InvalidRole(t *testing.T) {
 	t.Parallel()
 
+	// Followup: default-console path e2e is tracked separately.
 	cases := []struct {
 		name string
 		role string
 	}{
 		// F-CS-005 — invalid role values must be rejected before dispatch.
-		{"empty_role_placeholder", ""},
 		{"unknown_role", "superadmin"},
 		{"numeric_role", "42"},
 		{"mixed_case_role", "Control"},
@@ -1092,24 +1109,10 @@ func TestSbctlAdmin_KeyRegister_InvalidRole(t *testing.T) {
 				"key", "register",
 				"--key", "ssh-ed25519 AAAA...",
 				"--svtn", "test-svtn",
+				"--role", tc.role,
 			}
-			if tc.role != "" {
-				args = append(args, "--role", tc.role)
-			}
-			// For the empty-role case, omit the flag entirely to test default handling.
-			// The default is "console" (valid), so we use a known-invalid role string
-			// that cannot be mapped to a valid role.
 
 			err := runAdmin(ctx, "127.0.0.1:19993", testdataKeyPath(t), false, args, defaultIO())
-
-			// For non-empty invalid roles: must return error.
-			// For the empty-role case (omit flag): default is "console" which is valid,
-			// so this sub-test name is misleading — skip the assertion for the omit case.
-			if tc.role == "" {
-				// Default "console" is valid; this sub-test verifies the default path.
-				// No assertion needed — this is a passing case.
-				return
-			}
 
 			if err == nil {
 				t.Errorf("F-CS-005 — runAdmin key register --role %q: want non-nil error; got nil", tc.role)
@@ -1205,7 +1208,7 @@ func TestSbctlAdmin_SvtnCreate_CLI(t *testing.T) {
 		"--name", svtnName,
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-002: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	// Verify the RPC was dispatched with correct payload.
@@ -1257,7 +1260,9 @@ func TestSbctlAdmin_SvtnCreate_NonControlDenied(t *testing.T) {
 	if err == nil {
 		t.Fatal("AC-003: expected E-ADM-009 error from daemon; got nil")
 	}
-	_ = err // error logging done by runAdmin; caller sees non-nil
+	if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-003: expected E-ADM-009 in error; got: %v", err)
+	}
 }
 
 // TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint verifies AC-002
@@ -1273,7 +1278,7 @@ func TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint(t *testing.T) 
 	// AC-002 / AC-004 — success output must contain svtn_id and bootstrap_fingerprint.
 	// runAdminSvtnCreate currently panics → RED.
 	const wantSVTNID = "aabbccddeeff0011aabbccddeeff0011"
-	const wantFingerprint = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	const wantFingerprint = "SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA="
 
 	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
 		if cmd != "admin.svtn.create" {
@@ -1326,7 +1331,7 @@ func TestSbctlAdmin_SvtnCreate_DuplicateName(t *testing.T) {
 		if cmd != "admin.svtn.create" {
 			return nil, fmt.Errorf("unexpected command: %q", cmd)
 		}
-		return nil, fmt.Errorf("SVTN already exists: test-svtn")
+		return nil, fmt.Errorf("E-SVTN-001: SVTN already exists: test-svtn")
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1340,6 +1345,9 @@ func TestSbctlAdmin_SvtnCreate_DuplicateName(t *testing.T) {
 	// AC-005: must return non-nil error.
 	if err == nil {
 		t.Fatal("AC-005: expected SVTN-exists error from daemon; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-SVTN-001") {
+		t.Errorf("AC-005: expected E-SVTN-001 in error; got: %v", err)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -326,6 +327,11 @@ func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 	// EC-003: Keys must be an empty array, not nil, when no keys are registered.
 	if listResult.Keys == nil {
 		t.Error("list-keys returned nil Keys; expected empty slice (EC-003)")
+	}
+	// "test-svtn" has at least 2 keys: the bootstrap key (from Create) and the
+	// zero key (registered as control in newTestSVTNManagerDetailed).
+	if len(listResult.Keys) < 2 {
+		t.Fatalf("expected at least 2 keys in test-svtn (bootstrap + zero key), got %d", len(listResult.Keys))
 	}
 }
 
@@ -702,6 +708,11 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	}
 	if listResult.Keys == nil {
 		t.Error("EC-003: list-keys returned nil Keys; must be empty slice not nil")
+	}
+	// "empty-svtn" was created via m.Create() which registers the bootstrap key.
+	// So at minimum 1 key is present; the EC-003 invariant is that Keys != nil.
+	if len(listResult.Keys) == 0 {
+		t.Error("EC-003: expected at least 1 key (bootstrap) in empty-svtn after Create; got 0")
 	}
 }
 
@@ -1080,7 +1091,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		if _, err := m.ExpireKey(svtnName, keyPub, time.Nanosecond); err != nil {
 			t.Fatalf("expire key: %v", err)
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		// CallerKeyRoleActive returns (0, false) via expiry branch →
 		// resolveAndVerifyCallerRole returns E-ADM-009 (inactive-key route).
 		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
@@ -1259,7 +1270,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 			t.Fatalf("expire control key: %v", err)
 		}
 		// Sleep 1ms to ensure now >= expiry.
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		ctx := mgmt.WithCallerPubkey(context.Background(), controlPub)
 		// CallerKeyRoleActive returns (0, false) for past-expiry key → E-ADM-009.
@@ -1458,6 +1469,18 @@ func TestAdminSVTNCreate_ControlCallerSucceeds(t *testing.T) {
 	}
 	if wire.SVTNID == "" {
 		t.Error("AC-004: svtn_id is empty in response")
+	}
+	// AC-004: svtn_id must be valid hex.
+	if _, err := hex.DecodeString(wire.SVTNID); err != nil {
+		t.Fatalf("AC-004: SVTNID not valid hex: %v (got %q)", err, wire.SVTNID)
+	}
+	// AC-004: svtn_id must match the record stored in the manager.
+	svtnRecord, ok := svtnmgmttest.SVTNRecord(t, m, "brand-new-svtn")
+	if !ok {
+		t.Fatal("AC-004: brand-new-svtn not found in manager after successful create")
+	}
+	if wire.SVTNID != hex.EncodeToString(svtnRecord.ID[:]) {
+		t.Errorf("AC-004: svtn_id mismatch: got %q; want %q", wire.SVTNID, hex.EncodeToString(svtnRecord.ID[:]))
 	}
 	if wire.BootstrapFingerprint == "" {
 		t.Error("AC-004: bootstrap_fingerprint is empty in response")

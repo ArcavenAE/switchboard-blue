@@ -443,9 +443,20 @@ func (m *SVTNManager) BootstrapKeyHasControlRole() bool {
 	}
 	m.mu.RUnlock()
 
+	now := time.Now().UTC()
 	for _, s := range svtns {
 		entry := m.keySet.LookupByPubkey(s.ID, m.controlPubKey)
-		if entry != nil && entry.Role == admission.RoleControl {
+		if entry == nil {
+			continue
+		}
+		// Treat revoked or expired bootstrap key as not having RoleControl.
+		if entry.IsRevoked() {
+			continue
+		}
+		if exp := entry.KeyExpiry(); !exp.IsZero() && !now.Before(exp) {
+			continue
+		}
+		if entry.Role == admission.RoleControl {
 			return true
 		}
 	}

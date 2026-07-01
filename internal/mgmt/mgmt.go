@@ -490,11 +490,6 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	}
 
 	// Step 2: Sign the nonce with the daemon's private key to prevent nonce forgery by MITM.
-	pub, ok := s.daemonKey.Public().(ed25519.PublicKey)
-	if !ok {
-		return
-	}
-	_ = pub // public key available for bootstrap comparison below
 	daemonSig := ed25519.Sign(s.daemonKey, nonceBytes[:])
 
 	// Step 3: Send CHALLENGE message immediately before reading any client data (PC-1).
@@ -576,6 +571,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	// Bootstrap mode: daemon's own public key is the sole authorized key (PC-9).
 	var authorized bool
 	if s.ops.IsBootstrap() {
+		// Safe by construction: NewServer validated len(daemonKey)==ed25519.PrivateKeySize.
 		daemonPub := s.daemonKey.Public().(ed25519.PublicKey)
 		// Constant-time comparison for bootstrap check too (Inv-5).
 		authorized = subtle.ConstantTimeCompare([]byte(pubkey), []byte(daemonPub)) == 1

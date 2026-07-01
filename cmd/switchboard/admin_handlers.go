@@ -385,9 +385,9 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 
 	switch {
 	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
-		return fmt.Errorf("E-SVTN-003: SVTN not found: %s: %w", svtnName, err)
+		return &svtnNotFoundErr{name: svtnName, cause: err}
 	case errors.Is(err, admission.ErrKeyNotRegistered):
-		return fmt.Errorf("E-ADM-013: key not found: no key with fingerprint %s registered in SVTN %s: %w", fp, svtnName, err)
+		return &adminKeyNotFoundErr{fingerprint: fp, svtnName: svtnName, cause: err}
 	case errors.Is(err, svtnmgmt.ErrRoleMismatch):
 		// Extract per-call role detail from *admission.RoleMismatchError when available
 		// (returned by RevokeKeyIfRoleMatches / SetKeyExpiryIfRoleMatches). Fall back
@@ -408,7 +408,7 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		// ExpireKey is called, so this arm is unreachable in production (F-L1-B).
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: pass --confirm to proceed (removing SVTN %q): %w", svtnName, err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: pass --confirm to proceed (revoking control key from SVTN %q): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
@@ -553,6 +553,40 @@ func (e *svtnAlreadyExistsErr) Error() string {
 }
 
 func (e *svtnAlreadyExistsErr) Unwrap() error { return e.cause }
+
+// svtnNotFoundErr is returned by mapAdminError when ErrSVTNNotFound is encountered.
+// It implements Unwrap so that errors.Is(err, svtnmgmt.ErrSVTNNotFound) returns true
+// while the Error() message is deduplicated — no stutter from concatenating the
+// sentinel's "SVTN not found" text with the SVTN name again (F-P9L1-04).
+//
+// Message format: "E-SVTN-003: SVTN not found: <name>"
+type svtnNotFoundErr struct {
+	name  string
+	cause error
+}
+
+func (e *svtnNotFoundErr) Error() string {
+	return fmt.Sprintf("E-SVTN-003: SVTN not found: %s", e.name)
+}
+
+func (e *svtnNotFoundErr) Unwrap() error { return e.cause }
+
+// adminKeyNotFoundErr is returned by mapAdminError when ErrKeyNotRegistered is
+// encountered. It implements Unwrap so that errors.Is(err, admission.ErrKeyNotRegistered)
+// returns true while the Error() message is deduplicated (F-P9L1-04).
+//
+// Message format: "E-ADM-013: key not found: fingerprint <fp> not registered in SVTN <name>"
+type adminKeyNotFoundErr struct {
+	fingerprint string
+	svtnName    string
+	cause       error
+}
+
+func (e *adminKeyNotFoundErr) Error() string {
+	return fmt.Sprintf("E-ADM-013: key not found: fingerprint %s not registered in SVTN %s", e.fingerprint, e.svtnName)
+}
+
+func (e *adminKeyNotFoundErr) Unwrap() error { return e.cause }
 
 // adminSVTNCreateArgs is the wire-format JSON args for admin.svtn.create.
 // The `name` field carries the operator-supplied SVTN label.
