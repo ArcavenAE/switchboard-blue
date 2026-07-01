@@ -419,11 +419,10 @@ func encodeBody(payload AdvertisementPayload) []byte {
 
 // encodedSessionName returns the UTF-8 byte representation of name suitable
 // for wire encoding. If the name exceeds 255 bytes when encoded as UTF-8 it is
-// truncated to at most 254 bytes on a rune boundary and suffixed with "…"
-// (U+2026, 3 bytes), yielding a result no longer than 254+3 = 257 bytes but
-// kept within uint16 range. In practice the truncated form is ≤ 257 bytes
-// (well within uint16), and the ellipsis signals lossy truncation to receivers
-// (BC-2.03.003 EC-004).
+// truncated to at most 252 bytes on a rune boundary and suffixed with "…"
+// (U+2026, 3 bytes), yielding a result no longer than 252+3 = 255 bytes,
+// satisfying BC-2.03.003 PC-2 (encoded session name ≤ 255 bytes).
+// The ellipsis signals lossy truncation to receivers (BC-2.03.003 EC-004).
 func encodedSessionName(name string) []byte {
 	b := []byte(name)
 	const maxBytes = 255
@@ -431,8 +430,9 @@ func encodedSessionName(name string) []byte {
 	if len(b) <= maxBytes {
 		return b
 	}
-	// Cut at 254 bytes then walk back to a valid rune boundary.
-	cut := 254
+	// Cut at 252 bytes then walk back to a valid rune boundary so that
+	// appending the 3-byte ellipsis yields at most 255 bytes total.
+	cut := 252
 	for cut > 0 && !utf8.RuneStart(b[cut]) {
 		cut--
 	}
