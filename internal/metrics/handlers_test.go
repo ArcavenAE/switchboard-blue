@@ -126,15 +126,32 @@ func TestPathEntry_RTTValueSerialization(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		sampleCount uint64
-		valueMs     float64
+		rttValue    metrics.RTTValue
 		wantPending bool    // true → JSON must be the string "pending"
 		wantFloat   float64 // only checked when wantPending==false
 	}{
-		{name: "row_a_count_0", sampleCount: 0, valueMs: 0, wantPending: true},
-		{name: "row_b_count_9", sampleCount: 9, valueMs: 42.5, wantPending: true},
-		{name: "row_c_count_10", sampleCount: 10, valueMs: 22.0, wantPending: false, wantFloat: 22.0},
-		{name: "row_d_count_100", sampleCount: 100, valueMs: 68.3, wantPending: false, wantFloat: 68.3},
+		{
+			name:        "row_a_count_0",
+			rttValue:    metrics.RTTValue{Kind: metrics.PendingKind, SampleCount: 0},
+			wantPending: true,
+		},
+		{
+			name:        "row_b_count_9",
+			rttValue:    metrics.RTTValue{Kind: metrics.PendingKind, Value: 42.5, SampleCount: 9},
+			wantPending: true,
+		},
+		{
+			name:        "row_c_count_10",
+			rttValue:    metrics.RTTValue{Kind: metrics.FloatKind, Value: 22.0, SampleCount: 10},
+			wantPending: false,
+			wantFloat:   22.0,
+		},
+		{
+			name:        "row_d_count_100",
+			rttValue:    metrics.RTTValue{Kind: metrics.FloatKind, Value: 68.3, SampleCount: 100},
+			wantPending: false,
+			wantFloat:   68.3,
+		},
 	}
 
 	for _, tc := range cases {
@@ -142,7 +159,7 @@ func TestPathEntry_RTTValueSerialization(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			v := metrics.RTTValue{ValueMs: tc.valueMs, SampleCount: tc.sampleCount}
+			v := tc.rttValue
 			data, err := json.Marshal(v)
 			if err != nil {
 				t.Fatalf("MarshalJSON error: %v", err)
@@ -189,23 +206,24 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 	}{
 		{
 			name:        "pending_count_0",
-			v:           metrics.RTTValue{ValueMs: 0, SampleCount: 0},
+			v:           metrics.RTTValue{Kind: metrics.PendingKind, SampleCount: 0},
 			wantPending: true,
 		},
 		{
-			name:        "pending_count_9_nonzero_value",
-			v:           metrics.RTTValue{ValueMs: 42.5, SampleCount: 9},
+			name: "pending_count_9_nonzero_value",
+			// PendingKind: Value field is irrelevant but preserved.
+			v:           metrics.RTTValue{Kind: metrics.PendingKind, Value: 42.5, SampleCount: 9},
 			wantPending: true,
 		},
 		{
 			name:        "float_count_10",
-			v:           metrics.RTTValue{ValueMs: 22.0, SampleCount: 10},
+			v:           metrics.RTTValue{Kind: metrics.FloatKind, Value: 22.0, SampleCount: 10},
 			wantPending: false,
 			wantFloat:   22.0,
 		},
 		{
 			name:        "float_count_100",
-			v:           metrics.RTTValue{ValueMs: 68.3, SampleCount: 100},
+			v:           metrics.RTTValue{Kind: metrics.FloatKind, Value: 68.3, SampleCount: 100},
 			wantPending: false,
 			wantFloat:   68.3,
 		},
@@ -248,9 +266,12 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 					t.Errorf("pending round-trip: j2=%s; want \"pending\"", j2)
 				}
 			} else {
-				// Float cases: decoded ValueMs must match the input.
-				if decoded.ValueMs != tc.wantFloat {
-					t.Errorf("float round-trip: decoded ValueMs=%v; want %v", decoded.ValueMs, tc.wantFloat)
+				// Float cases: decoded Kind must be FloatKind, Value must match.
+				if decoded.Kind != metrics.FloatKind {
+					t.Errorf("float round-trip: decoded Kind=%v; want FloatKind", decoded.Kind)
+				}
+				if decoded.Value != tc.wantFloat {
+					t.Errorf("float round-trip: decoded Value=%v; want %v", decoded.Value, tc.wantFloat)
 				}
 				// And SampleCount must be ≥ 10 (preserved as valid).
 				if decoded.SampleCount < 10 {
@@ -538,7 +559,7 @@ func TestQualityFromEntry_PendingWhenSampleCountLow(t *testing.T) {
 		PathID:     "p",
 		RouterAddr: "h:9000",
 		RTTMs:      50.0,
-		RTTP99Ms:   metrics.RTTValue{ValueMs: 0, SampleCount: 9},
+		RTTP99Ms:   metrics.RTTValue{Kind: metrics.PendingKind, SampleCount: 9},
 		LossPct:    0.0,
 		Status:     "active",
 	}
@@ -559,7 +580,7 @@ func TestQualityFromEntry_PendingWinsOverFailed(t *testing.T) {
 		PathID:     "p",
 		RouterAddr: "h:9000",
 		RTTMs:      0.0,
-		RTTP99Ms:   metrics.RTTValue{ValueMs: 0, SampleCount: 5},
+		RTTP99Ms:   metrics.RTTValue{Kind: metrics.PendingKind, SampleCount: 5},
 		LossPct:    0.0,
 		Status:     "failed",
 	}
@@ -582,7 +603,7 @@ func TestQualityFromEntry_GreenWithSufficientSamples(t *testing.T) {
 		PathID:     "p",
 		RouterAddr: "h:9000",
 		RTTMs:      15.0,
-		RTTP99Ms:   metrics.RTTValue{ValueMs: 15.0, SampleCount: 20},
+		RTTP99Ms:   metrics.RTTValue{Kind: metrics.FloatKind, Value: 15.0, SampleCount: 20},
 		LossPct:    0.0,
 		Status:     "active",
 	}
@@ -615,13 +636,233 @@ func TestQualityFromEntry_NeverEmitsFailed(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			// Derive Kind from sampleCount per the same logic as PathEntryFromSnapshot.
+			kind := metrics.PendingKind
+			if tc.sampleCount >= 10 {
+				kind = metrics.FloatKind
+			}
 			entry := metrics.PathEntry{
-				RTTP99Ms: metrics.RTTValue{ValueMs: tc.p99Ms, SampleCount: tc.sampleCount},
+				RTTP99Ms: metrics.RTTValue{Kind: kind, Value: tc.p99Ms, SampleCount: tc.sampleCount},
 				Status:   tc.status,
 			}
 			got := metrics.QualityFromEntry(entry)
 			if got == "failed" {
 				t.Errorf("QualityFromEntry returned %q; \"failed\" is not a valid quality enum value", got)
+			}
+		})
+	}
+}
+
+// ── Pass-2 L1/L2 additional tests ─────────────────────────────────────────────
+
+// TestPathsList_DiscriminatingStatusOracle verifies that when Degraded=false and
+// SampleCount≥10 the handler emits status="active" — not any other value.
+// Prevents a dead-code path where the implementation returns hardcoded "active"
+// regardless of input (F-P2L1-005 discriminating oracle).
+//
+// BC-2.06.003 PC-1; AC-003.
+func TestPathsList_DiscriminatingStatusOracle(t *testing.T) {
+	t.Parallel()
+
+	// Row 1: Degraded=false, SampleCount=10 → status must be exactly "active".
+	snap1 := paths.PathSnapshot{
+		EWMARTTMs:   20.0,
+		LossPct:     0.0,
+		Active:      true,
+		Degraded:    false,
+		P99RTTMs:    20.0,
+		SampleCount: 10,
+	}
+	entry1 := metrics.PathEntryFromSnapshot("p1", "", snap1)
+	if entry1.Status != "active" {
+		t.Errorf("Degraded=false, SampleCount=10: status=%q; want \"active\"", entry1.Status)
+	}
+
+	// Row 2: Degraded=true, SampleCount=10 → status must be "degraded" (not "active").
+	// If the implementation hardcodes "active", this row will catch it.
+	snap2 := paths.PathSnapshot{
+		EWMARTTMs:   250.0,
+		LossPct:     0.0,
+		Active:      true,
+		Degraded:    true,
+		P99RTTMs:    250.0,
+		SampleCount: 10,
+	}
+	entry2 := metrics.PathEntryFromSnapshot("p2", "", snap2)
+	if entry2.Status == "active" {
+		t.Errorf("Degraded=true, SampleCount=10: status=%q; must NOT be \"active\" when path is degraded", entry2.Status)
+	}
+	if entry2.Status != "degraded" {
+		t.Errorf("Degraded=true, SampleCount=10: status=%q; want \"degraded\"", entry2.Status)
+	}
+}
+
+// TestRouterMetrics_MalformedArgsDecode verifies that RouterMetrics returns a
+// decode error (not a panic) when given garbage bytes as args.
+//
+// F-P2L2 malformed-args path; BC-2.06.003 PC-2.
+func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
+	t.Parallel()
+
+	src := &fakeRouterMetricsSource{metrics: map[string]metrics.RouterMetricsResponse{}}
+	garbage := json.RawMessage([]byte{0xFF, 0xFE, 0x01, 0x02})
+	_, err := metrics.RouterMetrics(context.Background(), garbage, src)
+	if err == nil {
+		t.Fatal("RouterMetrics with garbage args: expected error; got nil")
+	}
+	// Must not panic; the error should mention decode failure.
+	if !containsAny(err.Error(), "decode", "E-RPC") {
+		t.Errorf("RouterMetrics garbage args: error %q; want decode-related message", err.Error())
+	}
+}
+
+// containsAny reports whether s contains any of the substrings.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if len(sub) > 0 {
+			// manual contains check to avoid importing strings
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// TestVP047_FieldSwapOracle verifies that path_id and router_addr are not
+// swapped in the PathEntry serialization. Seeds two paths with
+// non-overlapping character sets so a field cross-contamination would be
+// detectable.
+//
+// VP-047 field-swap oracle (F-P2L2); AC-006; BC-2.06.003 PC-1.
+func TestVP047_FieldSwapOracle(t *testing.T) {
+	t.Parallel()
+
+	// path_id uses only digits; router_addr uses only alpha chars.
+	// If the fields were swapped, the digit-only string would appear in
+	// router_addr and the alpha-only string in path_id.
+	pathID := "000111222"
+	routerAddr := "abcdefghi"
+
+	snap := paths.PathSnapshot{
+		EWMARTTMs:   10.0,
+		LossPct:     0.0,
+		Active:      true,
+		Degraded:    false,
+		P99RTTMs:    10.0,
+		SampleCount: 10,
+	}
+	entry := metrics.PathEntryFromSnapshot(pathID, routerAddr, snap)
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal PathEntry: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+
+	// path_id must contain only digits.
+	var gotPathID string
+	if err := json.Unmarshal(raw["path_id"], &gotPathID); err != nil {
+		t.Fatalf("unmarshal path_id: %v", err)
+	}
+	if gotPathID != pathID {
+		t.Errorf("path_id: got %q; want %q (possible field swap)", gotPathID, pathID)
+	}
+
+	// router_addr must contain only alpha chars.
+	var gotRouterAddr string
+	if err := json.Unmarshal(raw["router_addr"], &gotRouterAddr); err != nil {
+		t.Fatalf("unmarshal router_addr: %v", err)
+	}
+	if gotRouterAddr != routerAddr {
+		t.Errorf("router_addr: got %q; want %q (possible field swap)", gotRouterAddr, routerAddr)
+	}
+}
+
+// TestEC006_DegradedAndPendingRow verifies EC-006:
+// Degraded=true AND SampleCount<10 → status="degraded" AND rtt_p99_ms="pending"
+// AND quality="pending". This is the composite row test.
+//
+// BC-2.06.003 EC-006; AC-005a.
+func TestEC006_DegradedAndPendingRow(t *testing.T) {
+	t.Parallel()
+
+	snap := paths.PathSnapshot{
+		EWMARTTMs:   300.0,
+		LossPct:     0.0,
+		Active:      true, // liveness ok
+		Degraded:    true, // EWMA RTT > 200ms threshold
+		P99RTTMs:    0.0,
+		SampleCount: 5, // <10 → p99 pending
+	}
+	src := &fakePathsListSource{
+		snaps: map[string]paths.PathSnapshot{"path-ec006": snap},
+	}
+
+	resp, err := metrics.RouterStatus(context.Background(), nil, src)
+	if err != nil {
+		t.Fatalf("RouterStatus error: %v", err)
+	}
+	if len(resp.Paths) != 1 {
+		t.Fatalf("expected 1 path; got %d", len(resp.Paths))
+	}
+
+	entry := resp.Paths[0]
+
+	// EC-006: status must be "degraded".
+	if entry.Status != "degraded" {
+		t.Errorf("EC-006: status=%q; want \"degraded\" (Degraded=true)", entry.Status)
+	}
+
+	// EC-006: rtt_p99_ms must be "pending" (SampleCount<10).
+	p99JSON, err := json.Marshal(entry.RTTP99Ms)
+	if err != nil {
+		t.Fatalf("marshal rtt_p99_ms: %v", err)
+	}
+	if string(p99JSON) != `"pending"` {
+		t.Errorf("EC-006: rtt_p99_ms=%s; want \"pending\" (SampleCount<10)", p99JSON)
+	}
+
+	// EC-006: quality must be "pending" (SampleCount<10 takes precedence, EC-007).
+	if resp.Quality != "pending" {
+		t.Errorf("EC-006: quality=%q; want \"pending\" (EC-007 pending-p99 precedence)", resp.Quality)
+	}
+}
+
+// TestRouterMetrics_MissingRequiredSVTN verifies Fix 6: router.metrics returns
+// an E-RPC-* error when svtn_id is absent or empty.
+//
+// Fix 6; BC-2.06.003 PC-2.
+func TestRouterMetrics_MissingRequiredSVTN(t *testing.T) {
+	t.Parallel()
+
+	src := &fakeRouterMetricsSource{metrics: map[string]metrics.RouterMetricsResponse{}}
+
+	cases := []struct {
+		name string
+		args json.RawMessage
+	}{
+		{name: "nil_args", args: nil},
+		{name: "empty_object", args: json.RawMessage(`{}`)},
+		{name: "empty_svtn_id", args: json.RawMessage(`{"svtn_id":""}`)},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := metrics.RouterMetrics(context.Background(), tc.args, src)
+			if err == nil {
+				t.Fatalf("router.metrics with %s: expected error for missing svtn_id; got nil", tc.name)
+			}
+			if !containsAny(err.Error(), "E-RPC", "svtn_id", "required") {
+				t.Errorf("router.metrics %s: error %q; want E-RPC-* or svtn_id mention", tc.name, err.Error())
 			}
 		})
 	}
