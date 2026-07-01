@@ -252,6 +252,70 @@ func TestLookup_Miss_ReturnsZeroAdmittedKey_AllFields(t *testing.T) {
 	}
 }
 
+// ── F-L2-01: admitted=true roundtrip via IsAdmitted ──────────────────────────
+
+// TestLookup_Hit_AdmittedFieldTrackedAfterAdmit asserts the two-state model for
+// the admitted field (BC-2.05.001 PC4; H-2):
+//  1. RegisterKey → IsAdmitted returns false (not yet handshaked)
+//  2. AdmitNode  → IsAdmitted returns true  (handshake complete)
+//  3. Lookup     → the returned entry is the admitted entry, confirmed by
+//     IsAdmitted post-Lookup
+//
+// Since admitted is unexported and AdmittedKey has no value-side accessor for
+// it, IsAdmitted(svtnID, nodeAddr) is the only public observable. F-L2-01.
+func TestLookup_Hit_AdmittedFieldTrackedAfterAdmit(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	svtnID := svtnLookupID(0x70)
+
+	// Generate a router keypair (needed by GenerateChallenge) and a node keypair.
+	_, routerPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey (router): %v", err)
+	}
+	nodePub, nodePriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey (node): %v", err)
+	}
+
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(nodePub))
+
+	// Pre-Admit: IsAdmitted must return false — the handshake has not happened yet.
+	if ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Error("pre-Admit: IsAdmitted want false (RegisterKey does not set admitted=true); got true")
+	}
+
+	// Perform the challenge-response handshake.
+	ch, err := admission.GenerateChallenge(routerPriv)
+	if err != nil {
+		t.Fatalf("GenerateChallenge: %v", err)
+	}
+	resp := admission.ChallengeResponse{NonceSig: ed25519.Sign(nodePriv, ch.Nonce[:])}
+	if err := admission.AdmitNode(ch, resp, nodePub, svtnID, ks); err != nil {
+		t.Fatalf("AdmitNode: %v", err)
+	}
+
+	// Post-Admit: IsAdmitted must return true.
+	if !ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Error("post-Admit: IsAdmitted want true after successful AdmitNode; got false")
+	}
+
+	// Lookup must succeed and return the admitted entry; confirm via IsAdmitted.
+	key, ok := ks.Lookup(svtnID, nodeAddr)
+	if !ok {
+		t.Fatal("Lookup: want ok=true for admitted key; got false")
+	}
+	if !bytes.Equal(key.PublicKey, []byte(nodePub)) {
+		t.Errorf("Lookup: PublicKey mismatch: got %x, want %x", key.PublicKey, []byte(nodePub))
+	}
+	// Confirm admitted state is still true post-Lookup (Lookup must not mutate state).
+	if !ks.IsAdmitted(svtnID, nodeAddr) {
+		t.Error("post-Lookup: IsAdmitted want true; Lookup must not clear admitted state")
+	}
+}
+
 // ── F-P1L2-005 positive control: all hit fields match ─────────────────────────
 
 // TestLookup_Hit_AllFieldsMatchRegistration extends the basic hit test to assert
