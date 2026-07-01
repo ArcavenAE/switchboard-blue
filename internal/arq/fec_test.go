@@ -1,10 +1,11 @@
-// Package arq_test — FEC strong-oracle tests (S-7.01, BC-2.02.007 v1.2).
+// Package arq_test — FEC strong-oracle tests (S-7.01, BC-2.02.007 v1.3).
 //
 // Test naming convention follows BC-S.SS.NNN_xxx pattern:
 //
 //	TestBC_2_02_007_Encode_ProducesParityFrame        (AC-001)
 //	TestBC_2_02_007_Encode_ParityXORCorrect           (AC-001 parity oracle)
 //	TestBC_2_02_007_Recover_SingleLoss                (AC-002)
+//	TestBC_2_02_007_Recover_ZeroLoss                  (BC-2.02.007 PC-2 zero-loss path)
 //	TestBC_2_02_007_Recover_TwoLossesFail             (AC-003)
 //	TestBC_2_02_007_FallbackToARQ_OnMultiLoss         (AC-004)
 //	TestBC_2_02_007_Encode_IncompleteLastGroup_NoParity (AC-005)
@@ -226,11 +227,58 @@ func TestFEC_Recover_SingleLoss(t *testing.T) {
 	TestBC_2_02_007_Recover_SingleLoss(t)
 }
 
+// ─── BC-2.02.007 PC-2: zero-loss path returns (nil, nil) ─────────────────────
+
+// TestBC_2_02_007_Recover_ZeroLoss verifies BC-2.02.007 postcondition 2:
+// when all frames in the group are present (zero losses), Decoder.Recover
+// returns (nil, nil) — there is nothing to recover (F-P5L2-02).
+//
+// This exercises the branch at fec.go:191-193 (`if losses == 0 { return nil, nil }`),
+// which was previously untested.
+//
+// Table-driven over several group sizes to rule out groupSize-specific regressions.
+func TestBC_2_02_007_Recover_ZeroLoss(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		groupSize int
+		width     int
+	}{
+		{"group2_width8", 2, 8},
+		{"group4_width16", 4, 16},
+		{"group8_width4", 8, 4},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			enc := arq.NewEncoder(arq.FECConfig{GroupSize: tc.groupSize})
+			dec := arq.NewDecoder(arq.FECConfig{GroupSize: tc.groupSize})
+
+			payloads := buildPayloads(tc.groupSize, tc.width)
+			parity := encodeGroup(t, enc, payloads)
+
+			// Full group — no nil entries; zero losses.
+			recovered, err := dec.Recover(payloads, parity)
+			if err != nil {
+				t.Fatalf("Recover zero-loss %s: unexpected error: %v", tc.name, err)
+			}
+			if recovered != nil {
+				t.Errorf("Recover zero-loss %s: want recovered==nil (PC-2), got %v", tc.name, recovered)
+			}
+		})
+	}
+}
+
 // ─── AC-003: two losses return ErrTooManyLosses ───────────────────────────────
 
-// TestBC_2_02_007_Recover_TwoLossesFail verifies AC-003 / BC-2.02.007 precondition
-// and postcondition 4: Recover returns ErrTooManyLosses when more than one entry
+// TestBC_2_02_007_Recover_TwoLossesFail verifies AC-003 / BC-2.02.007
+// postcondition 4: Recover returns ErrTooManyLosses when more than one entry
 // in the group slice is nil. The sentinel must satisfy errors.Is identity.
+// On error, the returned recovered payload must be nil (F-P5L2-03).
 //
 // Table-driven over several 2-loss position pairs.
 func TestBC_2_02_007_Recover_TwoLossesFail(t *testing.T) {
@@ -267,9 +315,13 @@ func TestBC_2_02_007_Recover_TwoLossesFail(t *testing.T) {
 			withTwoGaps[tc.loss0] = nil
 			withTwoGaps[tc.loss1] = nil
 
-			_, err := dec.Recover(withTwoGaps, parity)
+			recovered, err := dec.Recover(withTwoGaps, parity)
 			if !errors.Is(err, arq.ErrTooManyLosses) {
 				t.Errorf("Recover(%s): want errors.Is(err, ErrTooManyLosses), got %v", tc.name, err)
+			}
+			// F-P5L2-03: on error the recovered payload must be nil (BC-2.02.007 PC-4).
+			if recovered != nil {
+				t.Errorf("Recover(%s): want recovered==nil on ErrTooManyLosses, got %v", tc.name, recovered)
 			}
 		})
 	}
@@ -359,12 +411,21 @@ func TestBC_2_02_007_FallbackToARQ_OnMultiLoss(t *testing.T) {
 		}
 	}
 
-	// Negative path: single-loss scenario → handle MUST NOT invoke ARQ (returns nil).
-	// Construct a fresh single-loss group: nil at index 0, all others present.
+	// Negative path (F-P5L2-01): single-loss scenario → Recover MUST succeed and
+	// handle MUST NOT invoke ARQ (returns nil). The recovered payload must be
+	// byte-exact equal to the lost frame (BC-2.02.007 PC-3).
 	singleGap := make([][]byte, groupSize)
 	copy(singleGap, payloads)
 	singleGap[0] = nil
-	_, singleErr := dec.Recover(singleGap, parity)
+	wantSingle := make([]byte, len(payloads[0]))
+	copy(wantSingle, payloads[0])
+
+	singleRecovered, singleErr := dec.Recover(singleGap, parity)
+	if singleErr != nil {
+		t.Fatalf("single-loss path: Recover returned unexpected error: %v", singleErr)
+	}
+	assertBytesEqual(t, "AC-004 single-loss recovered payload", wantSingle, singleRecovered)
+
 	nilGaps := handle(singleErr)
 	if nilGaps != nil {
 		t.Errorf("single-loss path: handle should return nil (no ARQ dispatch), got %v", nilGaps)
@@ -581,3 +642,15 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 func TestFEC_VP043_SingleLossRecovery_Property(t *testing.T) {
 	TestBC_2_02_007_VP043_SingleLossRecovery_Property(t)
 }
+
+// ─── F-P5L2-OBS: variable-width extension paths (deferred) ───────────────────
+//
+// fec.go:87-91 (Encoder.AddFrame parity extension) and fec.go:204-208
+// (Decoder.Recover recovered extension) are exercised indirectly by
+// TestBC_2_02_007_Encode_ParityXORCorrect (mixed-width via xorOracle) and
+// TestBC_2_02_007_VP043_SingleLossRecovery_Property (fixed 16-byte payloads).
+// Dedicated tests for payloads of unequal width within a group are deferred:
+// the BC-2.02.007 v1.3 test vectors specify equal-width payloads and the
+// variable-width branches are internal implementation detail (OBS-scope only).
+// Revisit if BC-2.02.007 adds variable-width test vectors or if a regression
+// surfaces in those branches.
