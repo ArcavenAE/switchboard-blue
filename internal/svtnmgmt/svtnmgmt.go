@@ -370,8 +370,8 @@ func (m *SVTNManager) ExpireKey(
 	// TOCTOU note: a concurrent LWW RegisterKey could change the role between
 	// this lookup and SetKeyExpiryIfRoleMatches. SetKeyExpiryIfRoleMatches
 	// detects this via the role cross-check and returns ErrRoleMismatch.
-	lookedUp := m.keySet.LookupByPubkey(svtnID, pubkey)
-	if lookedUp == nil {
+	lookedUp, ok := m.keySet.LookupByPubkey(svtnID, pubkey)
+	if !ok {
 		return KeyOpResult{}, admission.ErrKeyNotRegistered
 	}
 	expectedRole := lookedUp.Role
@@ -445,8 +445,8 @@ func (m *SVTNManager) BootstrapKeyHasControlRole() bool {
 
 	now := time.Now().UTC()
 	for _, s := range svtns {
-		entry := m.keySet.LookupByPubkey(s.ID, m.controlPubKey)
-		if entry == nil {
+		entry, ok := m.keySet.LookupByPubkey(s.ID, m.controlPubKey)
+		if !ok {
 			continue
 		}
 		// Treat revoked or expired bootstrap key as not having RoleControl.
@@ -486,8 +486,8 @@ func (m *SVTNManager) CallerKeyRole(svtnName string, pubkey ed25519.PublicKey) (
 	if !exists {
 		return 0, false
 	}
-	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
-	if entry == nil {
+	entry, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if !ok {
 		return 0, false
 	}
 	return entry.Role, true
@@ -507,8 +507,8 @@ func (m *SVTNManager) CallerKeyRoleActive(svtnName string, pubkey ed25519.Public
 	if !exists {
 		return 0, false
 	}
-	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
-	if entry == nil {
+	entry, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if !ok {
 		return 0, false
 	}
 	// Deny revoked keys (F-P4L1-003).
@@ -635,8 +635,8 @@ func (m *SVTNManager) CallerKeyRoleInAny(pubkey ed25519.PublicKey) (admission.Ke
 
 	now := time.Now().UTC()
 	for _, s := range svtns {
-		entry := m.keySet.LookupByPubkey(s.ID, pubkey)
-		if entry == nil {
+		entry, ok := m.keySet.LookupByPubkey(s.ID, pubkey)
+		if !ok {
 			continue
 		}
 		if entry.IsRevoked() {
@@ -667,7 +667,8 @@ func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.Publi
 	if !exists {
 		return false
 	}
-	return m.keySet.LookupByPubkey(svtn.ID, pubkey) != nil
+	_, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	return ok
 }
 
 // InsertRawSVTN inserts an SVTN record with a freshly generated ID without
