@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -25,13 +25,14 @@ modified:
   - 2026-06-30T00:00:00 # v1.9 — PO Ruling 3 (S-5.02 Pass-4 scope ruling): VP-047 implementing_story transferred S-5.02 → S-W5.04 per vp_index_is_vp_catalog_source_of_truth policy. No BC→VP row changes; no count changes.
   - 2026-06-30T00:00:00 # v1.8 — Pass-2 lens-3 F-T3-003: VP-075 minted for BC-2.05.004 handler authority (integration, internal/mgmt); BC-2.05.004 row updated VP-046→VP-046+VP-075; internal/mgmt count 8→9; P0 VPs 52→53; totals updated to 75 VPs
   - 2026-06-29T00:00:00 # v1.7 — VP-074 added for BC-2.06.001 threshold classification (unit, internal/metrics); internal/metrics count 4→5; totals updated to 74 VPs
+  - 2026-06-30T00:00:00 # v1.12 — F-W5P1-003: VP-076 propagated (integration, P0, cmd/switchboard) — bootstrap-key non-revocable AND non-expirable invariant per BC-2.05.004 EC-007 v1.12; BC-2.05.004 row VP list updated VP-046+VP-075 → VP-046+VP-075+VP-076; cmd/switchboard count 3→4 (integration 3→4); P0 VPs 53→54; totals updated to 76 VPs.
 ---
 
 # ARCH-11: Verification Coverage Matrix
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 75 (VP-001 through VP-075, per VP-INDEX v2.7).
+> Total VP count: 76 (VP-001 through VP-076, per VP-INDEX v2.18).
 
 ## BC → VP Coverage Table
 
@@ -66,7 +67,7 @@ modified:
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-009 | proptest | P0 |
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
-| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075 | integration | P0 |
+| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075, VP-076 | integration | P0 |
 | BC-2.05.005 | HMAC frame authentication at first router | internal/hmac, internal/admission (PC-3) | VP-004, VP-005, VP-006, VP-059 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
 | BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
@@ -90,14 +91,14 @@ modified:
 | Total BCs | 45 |
 | BCs with ≥1 VP | 45 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 75 |
-| P0 VPs | 53 |
+| Total unique VPs | 76 |
+| P0 VPs | 54 |
 | P1 VPs | 18 |
 | P2+ VPs | 4 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 75 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 76 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -119,10 +120,10 @@ VP counts recounted from VP-INDEX (canonical source of truth, 75 VPs total).
 | internal/drain | 1 | e2e (1) |
 | internal/mgmt | 8 | unit (1), fuzz (1), integration (6) |
 | cmd/sbctl | 5 | integration (2), e2e (2), fuzz (1) |
-| cmd/switchboard | 3 | integration (3) |
-| **Total** | **75** | |
+| cmd/switchboard | 4 | integration (4) |
+| **Total** | **76** | |
 
-Per-module sum = 75 (no off-table VPs).
+Per-module sum = 76 (no off-table VPs).
 VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
 VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) added 2026-06-28 for BC-2.06.003.
 VP-063 (proptest, internal/paths) added 2026-06-28 for BC-2.02.003 PC-5 degraded-flag boolean.
@@ -133,6 +134,7 @@ VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings
   VP-071 (integration, internal/mgmt), VP-072 (integration, internal/mgmt), VP-073 (integration, cmd/switchboard).
 VP-074 (unit, internal/metrics) added 2026-06-29 for BC-2.06.001 threshold classification (L-001 disambiguation; unit test covering all 6 nominal regions + 8 boundary values).
 VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 handler-layer caller-role enforcement (Pass-2 lens-3 F-T3-003). VP-046 anchored internal/svtnmgmt (key store propagation); VP-075 anchored cmd/switchboard (BuildAdminHandlers authority gate). F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard; internal/mgmt 9→8 (integration 7→6), cmd/switchboard 2→3 (integration 2→3).
+VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; E-ADM-020 / E-ADM-021 sentinels for any well-formed request). Propagated from VP-INDEX v2.18 per F-W5P1-003; cmd/switchboard 3→4 (integration 3→4); P0 53→54; total 75→76.
 
 ## Zero-VP BCs Check
 

@@ -4,7 +4,9 @@ document_type: story
 level: ops
 story_id: S-W5.01
 title: "implement internal/mgmt server, config additions (E-CFG-008/009), and cmd/switchboard wiring for all four daemon modes"
-status: draft
+status: merged
+merged_at: 2026-06-30
+merge_commit: 0d499ac
 producer: story-writer
 timestamp: 2026-06-28T00:00:00
 phase: 2
@@ -13,7 +15,7 @@ wave: 5
 priority: P0
 scope_phase: E
 estimated_points: 8
-version: "1.6"
+version: "1.7"
 bc_traces:
   - BC-2.07.004
   - BC-2.09.003
@@ -808,6 +810,7 @@ own default before calling `net.Listen`.
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.7 | 2026-06-30 | state-manager | F-W5P1-001 wave-level status drift fix — status draft→merged, merged_at 2026-06-30, merge_commit 0d499ac (PR #31) |
 | 1.6 | 2026-06-29 | story-writer | Architect Ruling 1 (S-W5.01 mgmt-server convergence): add AC-003 deferral note — BC-2.07.004 PC-3 / EC-004 "logs a security event" requirement explicitly deferred to S-HRD.02 (daemon logging infrastructure / slog seam); this AC covers only fail-closed connection control (AUTH_FAIL + E-ADM-010 + close), fully tested via VP-065. No AC count change. Opens S-HRD.02 as follow-up hardening stub. |
 | 1.5 | 2026-06-29 | story-writer | ARCH-12 Round-5 Rulings: (F3) AC-011 sub-case (a) corrected — empty string = zero-value = absent = accepted, not E-CFG-008; test renamed empty_string_accepted_as_absent. (F4) WithRPCIdleTimeout doc clarified to govern all three RPC-phase deadline sites (read/write/handler); enables AC-018 50ms-override test. (F5) Ruling L prose corrected — config.Validate E-CFG-008 uses ConfigError umbrella E-CFG-001 with embedded message, not a code field. (F6) stale "all four daemon modes" comments to be scrubbed by implementer (access.go + mgmt_wire_test.go). No production logic change for F3/F5/F6; F4 is a 3-line const→field change. |
 | 1.4 | 2026-06-29 | story-writer | BC-2.07.004 v1.5 / ARCH-12 v1.5 Wave-5 Convergence Rulings O–T: (O) AC-019 added — `listenUnixMgmt` pre-bind cleanup: `os.Lstat`+`os.Remove` for `ModeSocket` inodes before `syscall.Bind`; prevents EADDRINUSE restart DoS after non-graceful exit (BC-2.07.004 EC-013 / Ruling O); test `TestListenUnixMgmt_PreBindCleanup_AC019`. (P) AC-017 extended — fatal-accept-error drain: `closeAllConns()` MUST precede `connWG.Wait()` on fatal-accept-error path (ctx live, Shutdown never called); VP-069 v1.2 obligation; test `TestServe_FatalAcceptErrorDrainsQuickly` added (BC-2.07.004 PC-10 / Ruling P). (Q) AC-001 prose corrected — "On deadline expiry the connection is closed with E-ADM-010" → "close-only, no AUTH_FAIL on HandshakeTimeout expiry" (propagation gap from Ruling K); EC-001 table row corrected to "close-only (no AUTH_FAIL on timeout)". (R) AC-020 added — handler execution timeout: `context.WithTimeout(ctx, RPCIdleTimeout)` wraps every handler `Fn` call; blocking handlers cancelled; E-RPC-011 returned; connection not closed (BC-2.07.004 PC-6 / Ruling R); test `TestMgmtServer_HandlerTimeout_AC020`. (T) Ruling T test-quality note added to AC-017 area — `TestServe_ShutdownWindowNoAddAfterWaitPanic` is a race-detector smoke test, not an Add-after-Wait-at-zero discriminator; real DROP property covered by `TestServe_DrainCompletesWithinBudget`. BC version pins updated: BC-2.07.004 v1.5, BC-2.09.003 v1.7. Stale `TestMgmtServer_WriteDeadlineSet_AC018` traceability reference corrected to `TestWriteDeadline_SlowlorisDefense_VP072`. acceptance_criteria_count 18→20. |

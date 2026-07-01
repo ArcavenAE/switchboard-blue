@@ -4,7 +4,9 @@ document_type: story
 level: ops
 story_id: S-W5.02
 title: "e2e management plane integration harness: sbctl authenticate + RPC across all four daemon types"
-status: draft
+status: merged
+merged_at: 2026-06-30
+merge_commit: d881f99
 producer: story-writer
 timestamp: 2026-06-30T00:00:00
 phase: 2
@@ -13,7 +15,7 @@ wave: 5
 priority: P0
 scope_phase: E
 estimated_points: 5
-version: "1.4"
+version: "1.5"
 bc_traces:
   - BC-2.07.002
 vp_traces: [VP-049]
@@ -326,6 +328,7 @@ this story and MUST be dispatched to other agents in a subsequent burst:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.5 | 2026-06-30 | state-manager | F-W5P1-001 wave-level status drift fix — status draft→merged, merged_at 2026-06-30, merge_commit d881f99 (PR #38) |
 | 1.4 | 2026-06-30 | spec-steward | Pass-5 L3 fix: Q2 historical annotation clarified — added trailing parenthetical noting BC pin was subsequently bumped to v1.5 in Pass-2 doc sweep. Ref F-P5L3-005. |
 | 1.3 | 2026-06-30 | story-writer | Pass-2 doc sweep: BC-2.07.002 pin v1.4→v1.5 (5 refs), file location corrected to cmd/sbctl/ (architectural forcing), architecture_modules cleanup (removed cmd/switchboard). |
 | 1.2 | 2026-06-30 | product-owner | Adversary Pass-1 rulings applied (Q1-Q6). Q1: narrow VP-049 to mgmt.Server contract with per-mode handler tables; per-daemon `runXxx` wiring deferred to Wave-6. Q2: BC pin bumped v1.2→v1.4; AC-003 extended with Rulings M/U/X (non-constant request ID, resp.Type assertion, resp.ID echo). Q3: phantom VP rows 139-140 flagged for spec-steward deletion. Q4: `testenv.NewFull` reference removed; in-process approach specified concretely. Q5: AC-002 now has distinct-operator-key as primary sub-test + bootstrap variant. Q6: AC-005 rewritten to use server-side `closingListenerWrapper` observing client FIN within 500ms. §Adversary Pass-1 Rulings section added. Task list updated (Tasks 8-15 replacing 8-12). File structure updated (testhelpers_test.go added). |

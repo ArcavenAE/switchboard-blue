@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-complete-sw502-merged
+phase_step: wave-5-wave-adversarial-in-progress
 phase_3_active_wave: 5
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
@@ -62,10 +62,10 @@ wave_4_wavegate_consistency_audit: "CONDITIONAL PASS — 14 findings, all resolv
 wave_4_integration_gate: PASSED
 wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
-develop_head: 3ee9c38
+develop_head: d881f99
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T08:00:00Z
+timestamp: 2026-06-30T20:00:00Z
 last_update: 2026-06-30
 ---
 
@@ -105,6 +105,8 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 ## Wave / Story Status
 
 Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cycle-1/closed-stories.md`.
+
+**Wave-5 note:** The table below lists 8 Wave-5 stories. S-W5.04 has been re-scheduled to Wave 6 per F-W5P1-004 ruling (5 pt, unblocked, all depends met); it does not appear here.
 
 | Wave | Story | Title | Status | PR | SHA |
 |------|-------|-------|--------|----|-----|
@@ -161,6 +163,15 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | S502-DEFER-4 | LOW | S-5.02: ARCH-11 v1.11 VP total 75 vs actual 76 (VP-076 minted at VP-INDEX v2.10 not propagated); dep-graph.md v1.4 VP total 67 vs actual 76. Arch-doc sweep needed. | architect | defer state-manager arch-doc sweep post-convergence |
 | S502-DEFER-5 | OBS | S-5.02: S-W5.04 §Arch Compliance asymmetric (VP-047 row only; no VP-062 row) — intent-adjudicated, plausibly intentional. | architect | open/deferred |
 | S502-DEFER-6 | LOW | S-5.02: S-5.02 token-budget footnote phrasing about internal/metrics — cosmetic. | story-writer | defer phase-5 |
+| SW502-DEFER-1 | LOW | S-W5.02 CR-002: closingConn.Read conflates server-shutdown ErrClosed with client FIN — intentional design, consider documenting intent in a comment. | implementer | deferred wave-6 |
+| SW502-DEFER-2 | LOW | S-W5.02 CR-005: closingListenerWrapper goroutines not tracked in WaitGroup — drain on Shutdown; consider adding context cancellation for cleaner lifecycle. | implementer | deferred wave-6 |
+| SW502-DEFER-3 | LOW | S-W5.02 CR-006: dialConn t.Cleanup double-close path — benign (net.Conn.Close idempotent); consider sync.Once or clarifying comment. | implementer | deferred wave-6 |
+| SW502-DEFER-4 | LOW | S-W5.02 CR-007: bootstrap variant test missing resp.Data assertion — AC-003 data assertions live in primary 4-daemon test only. | test-writer | deferred phase-5-hardening |
+| SW502-DEFER-5 | LOW | S-W5.02 CR-008: mode-specific handler response payload not shape-asserted — handlers are test stubs; wire-protocol correctness is the assertion target. | test-writer | deferred phase-5-hardening |
+| SW502-DEFER-6 | LOW | S-W5.02 CR-009: closed map in closingListenerWrapper is dead code — can be removed; minor technical debt. | implementer | deferred wave-6 |
+| SW502-DEFER-7 | LOW | S-W5.02 SEC-001: waitForCloseAfter polling busy-wait (CWE-400, test-only) — consider channel-based notification. | implementer | deferred phase-5-hardening |
+| SW502-DEFER-8 | LOW | S-W5.02 SEC-002: nonConstantID() fallback to time.UnixNano (CWE-330, test-only) — consider t.Fatal instead of silent degradation. | implementer | deferred phase-5-hardening |
+| PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep enforcement at BC/VP version bumps (superset of PROCESS-GAP-P19..25); currently only external vsdd-factory issue #361 comment. | orchestrator | orchestrator-policy-registry-update |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
 
 ## Decisions Log
@@ -194,20 +205,21 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-W5.02 MERGED (d881f99, PR #38) | Squash-merged to develop; all 5 ACs; BC-5.39.001 satisfied (10 adversarial passes); VP-049 coverage confirmed; Wave 5 complete (8 stories + 1 hygiene = all merged) | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (Wave 5 complete; S-W5.02 merged PR #38)
+## Session Resume Checkpoint — 2026-06-30 (Wave 5 adversarial Pass-1 BLOCK; fix-burst applied)
 
-**Position:** Phase 3 Wave 5 COMPLETE. All 8 Wave-5 stories merged. S-W5.02 was the final Wave-5 story.
+**Position:** Phase 3 Wave 5 COMPLETE (all 8 stories merged). Wave-adversarial convergence gate (Task #8) in progress. Pass-1 result: BLOCK — 3 HIGH + 5 MED findings; fix-burst applied. Pass-2 pending.
 
 **NEXT ACTION on resume:**
-1. Wave-5 adversarial convergence gate (Task #8) — 3 fresh diverse-lens passes across all Wave-5 stories
+1. Wave-adversarial Pass-2 — 3 fresh diverse-lens passes across all Wave-5 stories (Task #8 continues)
 2. Standalone hygiene commit: DRIFT-SW501-NITPICK (Task #9)
-3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged)
+3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged); hold until wave gate clears
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
+- SW502-DEFER-1..8: 8 S-W5.02 post-merge LOW deferrals logged in Open Drift Items (CR-002/005/006/007/008/009, SEC-001/002).
+- PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row added to Open Drift Items.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
-- S-W5.02 post-merge deferred: 8 LOW test-infrastructure items (see .factory/code-delivery/S-W5.02/review-findings.md).
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
