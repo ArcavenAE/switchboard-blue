@@ -49,10 +49,9 @@ func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (Paths
 	snaps := src.AllSnapshots()
 	entries := make([]PathEntry, 0, len(snaps))
 	for pathID, snap := range snaps {
-		// routerAddr is derived from the pathID: in this release the pathID encodes
-		// the remote router address (host:port) — a follow-on story will introduce a
-		// dedicated RouterAddr field in PathSnapshot when path metadata is enriched.
-		entries = append(entries, PathEntryFromSnapshot(pathID, pathID, snap))
+		// router_addr: "" — interim per BC-2.06.003 v1.9; PathSnapshot enrichment
+		// tracked in S-BL.ROUTER-ADDR (DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER).
+		entries = append(entries, PathEntryFromSnapshot(pathID, "", snap))
 	}
 	if len(entries) == 0 {
 		return PathsListResponse{Paths: entries, Message: "no active paths"}, nil
@@ -67,7 +66,9 @@ func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (Paths
 // BC-2.06.003 v1.8 PC-2; AC-004.
 func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSource) (RouterMetricsResponse, error) {
 	var req struct {
-		SVTN string `json:"svtn"`
+		// svtn_id is the canonical wire key sent by sbctl (cmd/sbctl/router_metrics.go).
+		// F-P1L1-001: changed from json:"svtn" to json:"svtn_id" to match sbctl wire format.
+		SVTN string `json:"svtn_id"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &req); err != nil {

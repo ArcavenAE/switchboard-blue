@@ -153,6 +153,12 @@ func TestPathEntry_RTTValueSerialization(t *testing.T) {
 				if raw != `"pending"` {
 					t.Errorf("MarshalJSON(%+v): got %s; want \"pending\"", v, raw)
 				}
+				// L2 F-C2: discriminating oracle — value must not leak into JSON when pending.
+				// Row_b has valueMs=42.5 with SampleCount=9; confirm 42.5 is suppressed.
+				var f float64
+				if jsonErr := json.Unmarshal(data, &f); jsonErr == nil {
+					t.Errorf("MarshalJSON(%+v): produced float64 %v; pending must suppress ValueMs", v, f)
+				}
 				return
 			}
 			// Expect a numeric JSON value (float64).
@@ -162,6 +168,94 @@ func TestPathEntry_RTTValueSerialization(t *testing.T) {
 			}
 			if got != tc.wantFloat {
 				t.Errorf("MarshalJSON(%+v): got float %v; want %v", v, got, tc.wantFloat)
+			}
+		})
+	}
+}
+
+// TestRTTValue_RoundTrip verifies that Marshal→Unmarshal→Marshal is stable:
+// marshalling an RTTValue, unmarshalling the JSON, then marshalling again
+// produces the same JSON output. This guards against lossy decode.
+//
+// F-P1L1-007; BC-2.06.003 PC-1.
+func TestRTTValue_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		v           metrics.RTTValue
+		wantPending bool
+		wantFloat   float64
+	}{
+		{
+			name:        "pending_count_0",
+			v:           metrics.RTTValue{ValueMs: 0, SampleCount: 0},
+			wantPending: true,
+		},
+		{
+			name:        "pending_count_9_nonzero_value",
+			v:           metrics.RTTValue{ValueMs: 42.5, SampleCount: 9},
+			wantPending: true,
+		},
+		{
+			name:        "float_count_10",
+			v:           metrics.RTTValue{ValueMs: 22.0, SampleCount: 10},
+			wantPending: false,
+			wantFloat:   22.0,
+		},
+		{
+			name:        "float_count_100",
+			v:           metrics.RTTValue{ValueMs: 68.3, SampleCount: 100},
+			wantPending: false,
+			wantFloat:   68.3,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// First marshal.
+			j1, err := json.Marshal(tc.v)
+			if err != nil {
+				t.Fatalf("first Marshal: %v", err)
+			}
+
+			// Unmarshal into a fresh RTTValue.
+			var decoded metrics.RTTValue
+			if err := json.Unmarshal(j1, &decoded); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+
+			// Second marshal.
+			j2, err := json.Marshal(decoded)
+			if err != nil {
+				t.Fatalf("second Marshal: %v", err)
+			}
+
+			// Round-trip stability: both JSON representations must be identical.
+			if string(j1) != string(j2) {
+				t.Errorf("round-trip unstable: first=%s second=%s", j1, j2)
+			}
+
+			// Pending cases: decoded must still be pending (SampleCount < 10).
+			if tc.wantPending {
+				if decoded.SampleCount >= 10 {
+					t.Errorf("pending round-trip: decoded SampleCount=%d; want <10 (still pending)", decoded.SampleCount)
+				}
+				if string(j2) != `"pending"` {
+					t.Errorf("pending round-trip: j2=%s; want \"pending\"", j2)
+				}
+			} else {
+				// Float cases: decoded ValueMs must match the input.
+				if decoded.ValueMs != tc.wantFloat {
+					t.Errorf("float round-trip: decoded ValueMs=%v; want %v", decoded.ValueMs, tc.wantFloat)
+				}
+				// And SampleCount must be ≥ 10 (preserved as valid).
+				if decoded.SampleCount < 10 {
+					t.Errorf("float round-trip: decoded SampleCount=%d; want ≥10 (valid float)", decoded.SampleCount)
+				}
 			}
 		})
 	}
@@ -232,7 +326,8 @@ func TestDaemonRouterMetrics_HandlerRegistered(t *testing.T) {
 		metrics: map[string]metrics.RouterMetricsResponse{"svtn-xyz": want},
 	}
 
-	args, _ := json.Marshal(map[string]string{"svtn": "svtn-xyz"})
+	// F-P1L1-001: use canonical wire key "svtn_id" (matches sbctl/router_metrics.go).
+	args, _ := json.Marshal(map[string]string{"svtn_id": "svtn-xyz"})
 	resp, err := metrics.RouterMetrics(context.Background(), json.RawMessage(args), src)
 	if err != nil {
 		t.Fatalf("RouterMetrics returned unexpected error: %v", err)
@@ -255,10 +350,19 @@ func TestDaemonRouterMetrics_SVTNNotFound(t *testing.T) {
 	t.Parallel()
 
 	src := &fakeRouterMetricsSource{metrics: map[string]metrics.RouterMetricsResponse{}}
-	args, _ := json.Marshal(map[string]string{"svtn": "missing-svtn"})
+	// F-P1L1-001: use canonical wire key "svtn_id".
+	args, _ := json.Marshal(map[string]string{"svtn_id": "missing-svtn"})
 	_, err := metrics.RouterMetrics(context.Background(), json.RawMessage(args), src)
 	if err == nil {
 		t.Fatal("expected error for unknown SVTN; got nil")
+	}
+	// F-P1L1-006: verify the error carries E-RPC-011 code (AC-004; BC-2.06.003 PC-2).
+	rpcErr, ok := err.(*rpcError)
+	if !ok {
+		t.Fatalf("expected *rpcError; got %T: %v", err, err)
+	}
+	if rpcErr.code != "E-RPC-011" {
+		t.Errorf("SVTN-not-found error code: got %q; want \"E-RPC-011\"", rpcErr.code)
 	}
 }
 
@@ -301,16 +405,20 @@ func TestDaemonRouterStatus_HandlerRegistered(t *testing.T) {
 	}
 }
 
-// ── AC-005a: TestDaemonRouterStatus_FailedAndPendingPrecedence ────────────
+// ── AC-005a: TestDaemonRouterStatus_QualityStatusIndependence ────────────
 
-// TestDaemonRouterStatus_FailedAndPendingPrecedence verifies S502-DEFER-3 /
-// BC-2.06.003 v1.8 EC-007: when a path has Degraded==true (liveness failure →
-// status:"failed") AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"),
-// the quality field MUST be "pending" not "failed". Quality enum is
-// {green,yellow,red,pending}; "failed" is not a valid quality value.
+// TestDaemonRouterStatus_QualityStatusIndependence verifies S502-DEFER-3 /
+// BC-2.06.003 v1.8 EC-007: quality and status are ORTHOGONAL fields.
+// When a path has Active==false (liveness failure → status:"failed") AND
+// SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), the quality
+// field MUST be "pending" — independent of the status field.
+// Quality enum is {green,yellow,red,pending}; "failed" is not a valid quality value.
+//
+// F-P1L3-001: renamed from TestDaemonRouterStatus_FailedAndPendingPrecedence
+// to reflect that quality/status orthogonality is the invariant under test.
 //
 // AC-005a; BC-2.06.003 v1.8 EC-007; S502-DEFER-3.
-func TestDaemonRouterStatus_FailedAndPendingPrecedence(t *testing.T) {
+func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -403,6 +511,11 @@ func TestDaemonRouterStatus_FailedAndPendingPrecedence(t *testing.T) {
 				// "failed" is not a valid quality value.
 				if resp.Quality == "failed" {
 					t.Errorf("quality: got %q; \"failed\" is not a valid quality enum value", resp.Quality)
+				}
+				// L2 F-C3: discriminating oracle — p99RTTMs=250ms, loss=0%
+				// classifies as yellow (100ms < 250ms ≤ 500ms). Confirm exactly.
+				if resp.Quality != "yellow" {
+					t.Errorf("quality: got %q; want \"yellow\" (p99=250ms, loss=0%% → yellow band)", resp.Quality)
 				}
 			}
 			if tc.wantQuality == "green" && resp.Quality != "green" {

@@ -103,7 +103,7 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 
 	// ── 1. Generate a daemon Ed25519 keypair. ─────────────────────────────────
 	// Bootstrap mode: daemon key == authorized operator key (no separate operator key).
-	daemonPub, daemonPriv, err := ed25519.GenerateKey(rand.Reader) //nolint:staticcheck // SA4006 false-positive: daemonPub used at handshake step 6b; SA4006 fires because RegisterMetricsHandlers panics (stub) which staticcheck considers terminal
+	daemonPub, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate daemon keypair: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 		t.Fatalf("net.Listen: %v", err)
 	}
 	t.Cleanup(func() { _ = ln.Close() })
-	addr := ln.Addr().String() //nolint:staticcheck // SA4006 false-positive: addr used at DialTimeout step 6; SA4006 fires because RegisterMetricsHandlers panics (stub) which staticcheck considers terminal
+	addr := ln.Addr().String()
 
 	// ── 3. Build the mgmt.Server with no initial handlers. ────────────────────
 	ops := mgmt.NewOperatorKeySet(nil) // bootstrap mode
@@ -272,8 +272,11 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 		if e.PathID == nil || *e.PathID == "" {
 			t.Errorf("path[%d]: missing or empty path_id", i)
 		}
-		if e.RouterAddr == nil || *e.RouterAddr == "" {
-			t.Errorf("path[%d]: missing or empty router_addr", i)
+		// router_addr: "" is accepted per BC-2.06.003 v1.9 Ruling-1 interim.
+		// PathSnapshot enrichment tracked in S-BL.ROUTER-ADDR (DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER).
+		// Field must be present (non-nil) even when empty.
+		if e.RouterAddr == nil {
+			t.Errorf("path[%d]: missing router_addr field", i)
 		}
 		if e.RTTMs == nil {
 			t.Errorf("path[%d]: missing rtt_ms", i)
