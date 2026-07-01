@@ -191,7 +191,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | SW502-DEFER-7 | LOW | S-W5.02 SEC-001: waitForCloseAfter polling busy-wait (CWE-400, test-only) — consider channel-based notification. | implementer | deferred phase-5-hardening |
 | SW502-DEFER-8 | LOW | S-W5.02 SEC-002: nonConstantID() fallback to time.UnixNano (CWE-330, test-only) — consider t.Fatal instead of silent degradation. | implementer | deferred phase-5-hardening |
 | PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep enforcement at BC/VP version bumps (superset of PROCESS-GAP-P19..25); currently only external vsdd-factory issue #361 comment. | orchestrator | orchestrator-policy-registry-update |
-| DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER | LOW | PathEntry.router_addr in S-W5.04 impl uses path ID as placeholder because PathSnapshot has no RouterAddr field. Follow-on story required to enrich PathSnapshot metadata with router address. Origin: S-W5.04 impl decision (83b3180). Target: backlog. Follow-on stub: S-BL.ROUTER-ADDR (STORY-INDEX v3.26). | implementer/architect | backlog |
+| DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER | LOW | Closed by S-BL.ROUTER-ADDR v1.1 (VP-047 v1.4, BC-2.06.003 v1.15, wave-rulings v1.11). Merges when S-BL.ROUTER-ADDR PR lands. | implementer/architect | closed-pending-merge |
 | PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP | OBS | [process-gap] When promoting a story between STORY-INDEX sections (backlog→master-table, draft→scheduled), the Summary Total (line ~22), stubs rollup (line ~27), AND section-by-section counts (line ~34) MUST all be swept atomically. Root cause: multi-location aggregate rollups in same document not swept when a table row moves. F-P2L3-M1 exposed this when S-BL.LOOKUP was promoted to Wave 6 master-table in v3.24 without updating Summary. Checklist item should be added to sibling-sweep addendum. | orchestrator/story-writer | open — process rule to codify |
 Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 deferrals, BC-2.09.003-STALE, S601-NITPICK-A..E, S601-DRAFT-STORY, S403-COS1/2, S404-OBS-G, S401-O3, W5-gate-H1..H3/M1..M4): `cycles/cycle-1/closed-drift.md`
 
@@ -250,12 +250,18 @@ develop HEAD: 446efce. Tranche B (S-7.01, S-7.02, S-7.03) now fully unblocked.
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
 - SW502-DEFER-1..8: 8 S-W5.02 post-merge LOW deferrals logged in Open Drift Items (CR-002/005/006/007/008/009, SEC-001/002).
 - PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row — vsdd-factory #361-364.
-- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER: PathSnapshot RouterAddr enrichment — backlog S-BL.ROUTER-ADDR (must merge before Wave-6 wave-convergence).
+- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER: closed-pending-merge — S-BL.ROUTER-ADDR v1.1 at ready-for-red-gate (VP-047 v1.4, BC-2.06.003 v1.15). Merges when PR lands.
 - PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP: Summary section sweep discipline — open/codify.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+
+## Session Log
+
+| Date | Entry |
+|------|-------|
+| 2026-07-01 | Wave-6 Tranche B Pass-2 fix-burst: DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER swept to closed-pending-merge per S-BL.ROUTER-ADDR v1.1 propagation. |
 
 ## Historical Content
 
