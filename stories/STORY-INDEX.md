@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.45"
+version: "3.46"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -19,7 +19,7 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 47 (35 master-table stories + 1 draft stub S-6.04 + 7 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Total stories | 48 (35 master-table stories + 1 draft stub S-6.04 + 8 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 29 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07) |
 | Pending | 3 (S-7.01, S-7.02, S-7.03) |
 | Wave 7 (deferred) | 1 (S-7.04) |
@@ -31,7 +31,7 @@ inputDocuments:
 | Total points (waves 0–6) | 192 |
 | Total points (incl. S-M.01 + S-M.02) | 202 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 7 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR) — S-BL.LOOKUP promoted and merged |
+| Backlog | 8 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS) — S-BL.LOOKUP promoted and merged |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
@@ -68,11 +68,11 @@ inputDocuments:
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
-| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
+| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.1) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.1) |
-| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
+| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.2) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 
@@ -121,17 +121,18 @@ section, add full ACs/tasks/files/architecture).
 Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
 addresses the "deferred to TBD story" anti-pattern.
 
-**Backlog: 7** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1; S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6)
+**Backlog: 8** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1 (ready-for-red-gate per RULING-W6TB-B); S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C)
 
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | backlog | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1; anchors BC-2.06.003 PC-1 | Wave 6 (must merge before Wave-6 wave-convergence) |
+| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | ready-for-red-gate (v1.0) | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1 + RULING-W6TB-B; anchors BC-2.06.003 PC-1; unit-scope only (end-to-end deferred to S-BL.PATH-TRACKER-WIRING) | Wave 7 |
 | S-BL.PATH-TRACKER-WIRING | Wire `cmd/switchboard/metrics_wire.go` pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time. | backlog | wave-6-tranche-a-scope-rulings Ruling-6; #DEFERRED comment in metrics_wire.go; depends_on S-W5.04, S-BL.ROUTER-ADDR; BC-2.06.003 | Wave 7 Backlog |
 | S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.11 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 | S-BL.POLICY-SCHEMA-VALIDATOR | policies.yaml schema linter — validate that every policy entry conforms to the canonical POL-001 field schema (id, title, severity, scope, rule, rationale, enforcement, examples) | backlog | Ruling-12 §6 (F-P7L3R2-03 POL-002 schema drift); Epic E-6; no BC/VP traces | unscheduled |
+| S-BL.CONSOLE-OBS | Console daemon session-list observability: quality indicator + missCount | backlog | DRIFT-001b (BC-2.06.001 PC-5 console-half) + DRIFT-002 (BC-2.06.002 PC-3 missCount); moved from S-7.03 per RULING-W6TB-C; depends_on S-5.01, S-7.03 | after S-7.03 merges |
 
 **Draft stubs: 1** (has some structure but no full ACs; will be promoted at wave-N planning)
 
@@ -173,6 +174,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.46 | 2026-07-01 | W6TB story-writer follow-ons (Rulings A/B/C): S-6.05 `draft` → `draft (v1.3)` (RULING-W6TB-A general control-role gate refit; acceptance_criteria_count 4→5; handler-gate AC; genesis re-open AC; --confirm flag; error-string canonical form); S-7.03 `pending` → `draft (v1.2)` (RULING-W6TB-C scope reduction; bc_traces removes BC-2.06.001 + BC-2.06.002; AC count 5→3; mgmt-plane transport update; estimated_points 5→3); S-BL.ROUTER-ADDR `backlog` → `ready-for-red-gate (v1.0)` (RULING-W6TB-B unit-scope AC set; 5 ACs; points TBD→2); Add S-BL.CONSOLE-OBS backlog stub (RULING-W6TB-C; BC-2.06.001 + BC-2.06.002; DRIFT-001b + DRIFT-002 moved from S-7.03). Total stories 47→48; Backlog 7→8. |
 | 3.45 | 2026-07-01 | Wave-6 Tranche B red-gate prep: S-7.01 `pending` → `pending (v1.1)` (spec-reviewer gaps resolved: internal/frame cross-dep row added; BC-2.02.007 v1.2 PC-5 wire vocab patched; AC-003 ErrTooManyLosses declared package-local; AC-004 ARQ fallback added; AC-005 incomplete-last-group added; AC count 3→5). S-7.02 `pending` → `ready-for-red-gate (v1.1)` (AC-001 split into AC-001a/001b; AC-005 HMAC auth added; AC-002 oracle strengthened to ≥2 distinct advertisers; AC-006 SVTN cross-scope negative added; ARCH-08 import analysis; AC count 4→7). BC-2.02.007 bumped v1.1→v1.2 (PC-5 wire vocab). |
 | 3.44 | 2026-07-01 | Wave-6 Tranche A closure: S-BL.LOOKUP status `draft (v1.5)` → `merged (PR #40, eac5d0a)`; S-W5.04 status `draft (v1.17)` → `merged (PR #41, 851e164)`; S-6.07 status `draft (v1.13)` → `merged (PR #42, 446efce)`. Summary: Complete 26→29; Master-table drafts 4→2. |
 | 3.43 | 2026-07-01 | S-6.07 v1.12→v1.13 (F-P14L3-01 Ruling-14 §10 downstream propagation: AC-007 added, Task 11 added, File Structure rows for cmd/sbctl/client.go + cmd/sbctl/admin_test.go) |
