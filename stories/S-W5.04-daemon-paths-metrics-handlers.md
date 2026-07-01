@@ -6,7 +6,7 @@ story_id: S-W5.04
 title: "daemon-side paths.list / router.metrics / router.status RPC handlers and response types"
 status: draft
 producer: story-writer
-timestamp: 2026-06-30T00:00:00
+timestamp: 2026-07-01T00:00:00
 phase: 2
 epic: E-5
 wave: 5
@@ -14,7 +14,7 @@ wave: 5
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.1"
+version: "1.2"
 bc_traces:
   - BC-2.06.003
 vp_traces: [VP-047, VP-062]
@@ -72,7 +72,7 @@ BC-2.06.003 PC-1 schema. The `PathEntry` type lives in `internal/metrics`.
 ### AC-002 (traces to BC-2.06.003 postcondition 1, EC-003 — rtt_p99_ms union serialization)
 `PathEntry.rtt_p99_ms` serializes as a float64 when `PathSnapshot.SampleCount ≥ 10`
 and as the JSON string `"pending"` when `SampleCount < 10`, per BC-2.06.003
-v1.6 postcondition 1 (fixed-bucket histogram, counts never reset) and EC-003
+v1.7 postcondition 1 (fixed-bucket histogram, counts never reset) and EC-003
 (pending sentinel). The union serialization is handled by `RTTValue` type in
 `internal/metrics` implementing `json.Marshaler`.
 - **Test:** `TestPathEntry_RTTValueSerialization` — table-driven: row (a) SampleCount=0
@@ -140,7 +140,7 @@ This AC is the implementation target for VP-047.
 - `internal/paths` histogram and `PathSnapshot`: owned by S-5.02. Do NOT change `PathTracker`, `rttHistogram`, or `PathSnapshot` internals.
 - `internal/mgmt` server authentication and transport: owned by S-W5.01. This story calls `mgmt.Server.Register()` to register handlers; it does not modify the server core.
 - Router-side forwarding metric counters (`frame_count`, `hmac_fail_count`, `drop_cache_hits`): confirm availability from existing `internal/routing` state before implementing AC-004; if not available, scope AC-004 to return zeroed counters with a TODO marker and file a follow-on story.
-- BC-2.06.003 v1.6 text: do NOT modify. PO already bumped to v1.6 per Pass-4 Ruling 5.
+- BC-2.06.003 v1.7 text: do NOT modify. PO already bumped to v1.7 per Pass-6 ruling (F-P6L3-001 sibling sweep).
 
 ## Edge Cases
 
@@ -157,7 +157,7 @@ This AC is the implementation target for VP-047.
 | Context Source | Estimated Tokens |
 |---------------|-----------------|
 | This story spec | ~1,800 |
-| BC-2.06.003.md (v1.6) | ~1,200 |
+| BC-2.06.003.md (v1.7) | ~1,200 |
 | ARCH-03 §p99 RTT Accumulator + §PathSnapshot | ~2,500 |
 | ARCH-12 daemon management plane | ~1,500 |
 | interface-definitions (JSON envelope, E-RPC-011) | ~400 |
@@ -172,7 +172,7 @@ This AC is the implementation target for VP-047.
 
 ## Tasks (MANDATORY)
 
-1. [ ] Read BC-2.06.003 v1.6 (full), ARCH-03 v1.6 §p99 RTT Accumulator, ARCH-12, interface-definitions.md
+1. [ ] Read BC-2.06.003 v1.7 (full), ARCH-03 v1.6 §p99 RTT Accumulator, ARCH-12, interface-definitions.md
 2. [ ] Read `internal/mgmt/mgmt.go` — identify `mgmt.Server.Register()` signature and handler interface
 3. [ ] Read `internal/paths/paths.go` — confirm `PathSnapshot` fields: `P99RTTMs float64`, `SampleCount uint64`, `Degraded bool`
 4. [ ] Read `internal/metrics/metrics.go` — identify existing types and query surface
@@ -204,7 +204,7 @@ This AC is the implementation target for VP-047.
 | Handler registration via `mgmt.Server.Register()` only; do NOT open new sockets | ARCH-12 | Code review |
 | `internal/metrics` types (PathEntry, RTTValue, etc.) are pure data + serialization; no I/O | ARCH-03 §Purity | Pure/Effectful classification table |
 | Read PathSnapshots via `Snapshot()`, never via individual field accessors | ARCH-03 §PathSnapshot; go.md rule 12 (no internal pointer leak) | Code review + `TestDaemonPathsList_HandlerRegistered` |
-| `rtt_p99_ms` serializes as float64 when SampleCount ≥ 10, string `"pending"` when < 10 | BC-2.06.003 v1.6 EC-003 | `TestPathEntry_RTTValueSerialization` |
+| `rtt_p99_ms` serializes as float64 when SampleCount ≥ 10, string `"pending"` when < 10 | BC-2.06.003 v1.7 EC-003 | `TestPathEntry_RTTValueSerialization` |
 | `status` field derived from `PathSnapshot.Degraded` only; no re-implementation of quality state machine | BC-2.06.001; ARCH-03 | `TestPathEntry_StatusFromDegraded` |
 | VP-047 integration test requires a real (non-stub) daemon with PathTracker state | VP-047 (transferred from S-5.02) | `TestVP047_SbctlPathsList_EndToEnd` |
 | Do NOT modify cmd/sbctl, internal/paths, or internal/mgmt core transport | S-5.02 scope boundary; S-W5.01 scope boundary | File structure requirements |
@@ -234,5 +234,6 @@ This AC is the implementation target for VP-047.
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.2 | 2026-07-01 | story-writer | F-P7L3-002 (HIGH, sibling-propagation): swept 5 stale BC-2.06.003 v1.6 pins in body to v1.7. Pass-6 F-P6L3-001 swept S-5.02 v1.7→v1.8 but same-BC sibling S-W5.04 was not covered. No semantic change (BC v1.7 introduced no behavioral change vs v1.6). Also incorporates VP-062 anchor transfer from S-5.02 per Pass-6 F-P6L3-003 (vp_traces update landed at 7b70af0). |
 | 1.1 | 2026-06-30 | story-writer | Flesh out stub into full story per Pass-4 Ruling 1 (decisions/S-5.02-pass4-scope-ruling.md). Add §Narrative, §AC-001–AC-006 derived from S-5.02 deferred scope, §Architecture Mapping, §Behavioral Contracts, §VP Coverage, §Edge Cases, §Token Budget, §Tasks (1–16), §Previous Story Intelligence, §Architecture Compliance Rules, §Library & Framework Requirements, §File Structure Requirements. VP-047 integration test assigned to AC-006. acceptance_criteria_count set to 6. |
 | 1.0 | 2026-06-30 | product-owner | Stub minted per S-5.02 Pass-4 Ruling 1. ACs/tasks TBD at wave-planning. |

@@ -2,7 +2,7 @@
 artifact_id: dependency-graph
 document_type: dependency-graph
 level: ops
-version: "1.3"
+version: "1.4"
 status: draft
 producer: story-writer
 timestamp: 2026-06-28T00:00:00
@@ -175,7 +175,7 @@ Manual topological sort confirms no back-edges:
 | VP-044 | S-7.02 | BC-2.03.001, BC-2.03.003 |
 | VP-045 | S-7.02 | BC-2.03.002 |
 | VP-046 | S-6.02 | BC-2.05.004 |
-| VP-047 | S-5.02 | BC-2.06.003 |
+| VP-047 | S-W5.04 | BC-2.06.003 |
 | VP-048 | S-6.02 | BC-2.07.001 |
 | VP-049 | S-W5.02 | BC-2.07.002 (e2e across all four daemon types) |
 | VP-050 | S-7.03 | BC-2.08.001 |
@@ -191,7 +191,7 @@ Manual topological sort confirms no back-edges:
 | VP-059 | S-W3.05 | BC-2.05.005 |
 | VP-060 | S-W3.04 | BC-2.04.007 |
 | VP-061 | S-5.02 | BC-2.06.003 |
-| VP-062 | S-5.02 | BC-2.06.003 |
+| VP-062 | S-W5.04 | BC-2.06.003 |
 | VP-063 | S-5.03 | BC-2.02.003 |
 | VP-064 | S-W5.01 | BC-2.07.004 (server rejects unauthenticated connections) |
 | VP-065 | S-W5.01 | BC-2.07.004 (server rejects replayed nonce within connection) |
@@ -221,6 +221,7 @@ Items F-P8-004 and F-P8-005 (VP-026/VP-027 invariant references) are architect/t
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.4 | 2026-07-01 | story-writer | O-P7L3-001 (LOW): VP-047 and VP-062 rows updated S-5.02→S-W5.04. VP-047 transferred at VP-INDEX v2.7 (Pass-4 Ruling 3); VP-062 transferred at VP-INDEX v2.14 (Pass-6 F-P6L3-003, commit 7b70af0). Both VPs require daemon-side types (metrics.PathEntry, RTTValue, etc.) minted in S-W5.04. |
 | 1.3 | 2026-06-28 | story-writer | Wave-5 management plane net-new: add S-W5.01 (depends S-6.01, blocks S-W5.02; edits internal/mgmt+config+cmd/switchboard; no cmd/sbctl conflict) and S-W5.02 (depends S-6.03+S-W5.01; e2e gate). Update S-6.03 blocks to include S-W5.02. Add BC-2.07.004 matrix row (S-W5.01). Update BC-2.07.002 row (add S-W5.02 for VP-049 e2e). Update BC-2.09.003 row (add S-W5.01 for PC-10/PC-11). VP-049 re-anchored S-6.03 → S-W5.02. Add VP-064 (S-W5.01), VP-065 (S-W5.01), VP-066 (S-W5.01), VP-067 (S-6.03). BC coverage 44→45, VP coverage 63→67. Update serialization section with S-W5.01/S-W5.02 parallel/serial constraints. Update gap register. |
 | 1.2 | 2026-06-28 | story-writer | Consistency audit fixes: F-005 — S-5.01 depends_on now includes S-5.03 (symmetric with S-5.03 blocks:[S-5.01]); F-003 — BC coverage figure corrected 42/42→44/44; add missing BC matrix rows BC-2.04.007 (S-W3.04) and BC-2.05.008 (S-3.04, S-W3.04, S-W3.05); F-004 — VP coverage figure corrected 57/57→63/63; add missing VP matrix rows VP-058 (S-3.04), VP-059 (S-W3.05), VP-060 (S-W3.04), VP-061 (S-5.02), VP-062 (S-5.02), VP-063 (S-5.03); update gap register note |
 | 1.1 | 2026-06-28 | story-writer | Wave-5 planning: add S-5.03 node (depends S-4.01, blocks S-5.01); correct S-6.02 edges (remove S-6.02→S-6.03 blocking edge; add S-6.03→S-6.02 depends edge); update S-5.02 deps note (confirm S-5.01 + S-6.03); update BC-2.02.003 matrix row to add S-5.03 (PC-5); update BC-2.06.003 matrix row to note canonical+alias+p99 scope; add S-5.03 to VP-026 and VP-040 rows; update gap register (44 BCs covered; drift S401-O3 closed); add serialization note to cycle-freeness section. |
