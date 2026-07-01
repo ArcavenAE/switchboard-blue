@@ -722,6 +722,136 @@ func TestQualityFromEntry_NeverEmitsFailed(t *testing.T) {
 	}
 }
 
+// ── AC-002 (S-BL.ROUTER-ADDR): TestPathsList_PassesRouterAddr ─────────────────
+
+// TestPathsList_PassesRouterAddr verifies that PathsList passes snap.RouterAddr
+// (not the literal empty string "") to PathEntryFromSnapshot when the snapshot
+// carries a non-empty RouterAddr.
+//
+// This test exercises the AC-002 seam: the handler must read snap.RouterAddr from
+// the PathSnapshot and forward it, not substitute a hardcoded "".
+//
+// AC-002 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
+//
+// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). The stub-architect
+// wired snap.RouterAddr through PathsList already (handlers.go line 65), so this
+// test verifies the seam with a fakePathsListSource that directly provides a
+// non-empty RouterAddr in its snapshot. The test will fail at Red Gate because
+// NewPathTrackerWithAddr panics — but the fakePathsListSource bypasses the
+// constructor, so this particular test is GREEN-BY-DESIGN for the handler seam
+// (snap.RouterAddr pass-through). The companion test
+// TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr in paths_test.go covers the
+// failing Red Gate assertion for the constructor itself.
+//
+// Rationale for using fakePathsListSource: PathsList depends on PathsListSource
+// (an interface). The AC-002 seam is "handler reads snap.RouterAddr, not """.
+// A fake that injects the RouterAddr directly into the snapshot is the correct
+// isolation boundary — it tests the handler's pass-through without depending on
+// the as-yet-unimplemented constructor.
+func TestPathsList_PassesRouterAddr(t *testing.T) {
+	t.Parallel()
+
+	const wantRouterAddr = "h:9000"
+
+	snap := paths.PathSnapshot{
+		EWMARTTMs:   20.0,
+		LossPct:     0.0,
+		Active:      true,
+		Degraded:    false,
+		P99RTTMs:    20.0,
+		SampleCount: 10,
+		RouterAddr:  wantRouterAddr,
+	}
+	src := &fakePathsListSource{
+		snaps: map[string]paths.PathSnapshot{
+			"path-ra-001": snap,
+		},
+	}
+
+	resp, err := metrics.PathsList(context.Background(), nil, src)
+	if err != nil {
+		t.Fatalf("PathsList error: %v", err)
+	}
+	if len(resp.Paths) != 1 {
+		t.Fatalf("expected 1 path; got %d", len(resp.Paths))
+	}
+
+	entry := resp.Paths[0]
+
+	// AC-002: handler must pass snap.RouterAddr through, not "".
+	if entry.RouterAddr != wantRouterAddr {
+		t.Errorf("PathEntry.RouterAddr: got %q; want %q (snap.RouterAddr must be forwarded, not hardcoded \"\")",
+			entry.RouterAddr, wantRouterAddr)
+	}
+
+	// Verify JSON serialization: "router_addr" key must hold the correct value.
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal PathEntry: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	var gotRouterAddr string
+	if err := json.Unmarshal(raw["router_addr"], &gotRouterAddr); err != nil {
+		t.Fatalf("unmarshal router_addr: %v", err)
+	}
+	if gotRouterAddr != wantRouterAddr {
+		t.Errorf("JSON router_addr: got %q; want %q", gotRouterAddr, wantRouterAddr)
+	}
+}
+
+// TestPathsList_RouterAddrEmptyForAddrLessSnapshot verifies that when a snapshot
+// has RouterAddr=="" (i.e., constructed via the legacy NewPathTracker), the
+// handler emits router_addr=="" in JSON (not nil / missing).
+//
+// AC-002 / BC-2.06.003 PC-1; backward compat with addr-less PathTrackers.
+func TestPathsList_RouterAddrEmptyForAddrLessSnapshot(t *testing.T) {
+	t.Parallel()
+
+	snap := paths.PathSnapshot{
+		EWMARTTMs:   20.0,
+		LossPct:     0.0,
+		Active:      true,
+		Degraded:    false,
+		P99RTTMs:    20.0,
+		SampleCount: 10,
+		RouterAddr:  "", // addr-less
+	}
+	src := &fakePathsListSource{
+		snaps: map[string]paths.PathSnapshot{
+			"path-addrless": snap,
+		},
+	}
+
+	resp, err := metrics.PathsList(context.Background(), nil, src)
+	if err != nil {
+		t.Fatalf("PathsList error: %v", err)
+	}
+	if len(resp.Paths) != 1 {
+		t.Fatalf("expected 1 path; got %d", len(resp.Paths))
+	}
+
+	entry := resp.Paths[0]
+	if entry.RouterAddr != "" {
+		t.Errorf("PathEntry.RouterAddr for addr-less snapshot: got %q; want \"\"", entry.RouterAddr)
+	}
+
+	// router_addr field must be present in JSON even when empty.
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal PathEntry: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	if _, ok := raw["router_addr"]; !ok {
+		t.Error("router_addr key missing from JSON for addr-less snapshot; must be present (empty string)")
+	}
+}
+
 // ── Pass-2 L1/L2 additional tests ─────────────────────────────────────────────
 
 // TestPathsList_DiscriminatingStatusOracle verifies that when Degraded=false and
