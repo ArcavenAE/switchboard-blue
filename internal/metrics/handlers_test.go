@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/metrics"
@@ -995,11 +996,12 @@ func isErrInvalidParams(err error) bool {
 func TestVP047_FieldSwapOracle(t *testing.T) {
 	t.Parallel()
 
-	// path_id uses only digits; router_addr uses only alpha chars.
-	// If the fields were swapped, the digit-only string would appear in
-	// router_addr and the alpha-only string in path_id.
+	// path_id uses only digits; router_addr uses a valid host:port (contains
+	// '.' and ':' characters not present in path_id). If the fields were swapped,
+	// the digit-only string would appear in router_addr and the host:port string
+	// in path_id — both are detectable.
 	pathID := "000111222"
-	routerAddr := "abcdefghi"
+	routerAddr := "127.0.0.1:9000"
 
 	snap := paths.PathSnapshot{
 		EWMARTTMs:   10.0,
@@ -1030,13 +1032,17 @@ func TestVP047_FieldSwapOracle(t *testing.T) {
 		t.Errorf("path_id: got %q; want %q (possible field swap)", gotPathID, pathID)
 	}
 
-	// router_addr must contain only alpha chars.
+	// router_addr must equal the canonical stub host:port (contains '.' and ':').
 	var gotRouterAddr string
 	if err := json.Unmarshal(raw["router_addr"], &gotRouterAddr); err != nil {
 		t.Fatalf("unmarshal router_addr: %v", err)
 	}
 	if gotRouterAddr != routerAddr {
 		t.Errorf("router_addr: got %q; want %q (possible field swap)", gotRouterAddr, routerAddr)
+	}
+	routerAddrPattern := regexp.MustCompile(`^[^:]+:[0-9]+$`)
+	if !routerAddrPattern.MatchString(gotRouterAddr) {
+		t.Errorf("router_addr: %q does not match host:port pattern", gotRouterAddr)
 	}
 }
 
