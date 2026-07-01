@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.10"
+version: "1.11"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -23,6 +23,7 @@ modified:
   - 2026-06-30T18:00:00
   - 2026-06-30T22:00:00
   - 2026-07-01T00:00:00
+  - 2026-07-01T12:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -63,7 +64,9 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
 
    **Pending-p99 quality semantics (F-M3):** When `rtt_p99_ms` is `"pending"` (fewer than 10 samples collected), the `quality` field MUST be emitted as `"pending"` — mirroring the p99 sentinel value. Implementers MUST NOT substitute a default quality value (green/yellow/red) when p99 data is insufficient. `quality: "pending"` is a valid emit value from `cmd/sbctl/router_status.go`. The quality state machine in `internal/metrics` must treat a pending p99 as an indeterminate input, not a green or zero-value input.
 
-   **Failed+pending precedence ruling (S502-DEFER-3):** When `PathSnapshot.Degraded == true` (liveness failure: ≥3 consecutive missed keep-alives → `status: "failed"`) AND `SampleCount < 10` (p99 data indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST still be `"pending"`. Rationale: `quality` is a function of the p99 RTT input; without a valid p99, the quality computation is indeterminate regardless of liveness state. `status` and `quality` are orthogonal output fields serving different diagnostic purposes — `status` reflects keep-alive liveness (always computable) while `quality` reflects latency quality (computable only when p99 is available). Emitting `quality: "failed"` would introduce a fifth value outside the defined `{green, yellow, red, pending}` enum and would conflate two independent signals. A client needing liveness reads `status: "failed"`; a client needing latency quality reads `quality: "pending"` (meaning: cannot assess). This is consistent with BC-2.06.001 v1.4 Red-over-Yellow precedence, which applies only within a complete and valid input set — it does not override the indeterminate-input case.
+   **Pending-precedence ruling (S502-DEFER-3):** When `PathSnapshot.Degraded == true` (→ `status: "degraded"` in Wave 6; see PC-1) AND `SampleCount < 10` (p99 data indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST still be `"pending"`. Rationale: `quality` is a function of the p99 RTT input; without a valid p99, the quality computation is indeterminate regardless of liveness state. `status` and `quality` are orthogonal output fields serving different diagnostic purposes — `status` reflects path health (always computable from `PathSnapshot.Degraded`) while `quality` reflects latency quality (computable only when p99 is available). Emitting `quality: "failed"` would introduce a fifth value outside the defined `{green, yellow, red, pending}` enum and would conflate two independent signals. A client needing health status reads `status: "degraded"`; a client needing latency quality reads `quality: "pending"` (meaning: cannot assess). This is consistent with BC-2.06.001 v1.4 Red-over-Yellow precedence, which applies only within a complete and valid input set — it does not override the indeterminate-input case.
+
+   **Wave-7 forward-looking (S-BL.PATH-FAILED-STATUS):** `status: "failed"` re-introduction is TBD when liveness signals are added to `PathSnapshot`. NOT normative in Wave-6. When `S-BL.PATH-FAILED-STATUS` ships, this precedence rule will be extended to cover `status: "failed"` + `SampleCount < 10` → `quality: "pending"` (same orthogonality principle applies).
 4. Metrics are returned as JSON with `--json` flag; human-readable table by default. Both the canonical form and the alias respect `--json`.
 5. If the daemon is unreachable, sbctl returns E-NET-001 "daemon unreachable" (per BC-2.07.003).
 
@@ -118,6 +121,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — metrics contain no content) |
 | Architecture Module | internal/metrics |
 | Stories | S-5.02 (sbctl client surface: dispatch + JSON envelope passthrough), S-W5.04 (daemon-side RPC handlers + response types: PathsListResponse, PathEntry, RTTValue, RouterMetricsResponse) |
+| Wave-7 Backlog Stories | S-BL.PATH-TRACKER-WIRING (production pathTrackerSource wiring to routing registry; PC-1 data-source completeness), S-BL.PATH-FAILED-STATUS (re-introduce `failed` status enum; PC-1 status vocab), S-BL.ROUTER-ADDR (populate router_addr with real host:port; PC-1 field completeness) |
 | Capability Anchor Justification | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 — this BC specifies the `sbctl` interface for the per-path metrics that CAP-022 defines as available for both node-side and network-operator-side views |
 
 ## Related BCs
@@ -129,6 +133,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.11 | 2026-07-01 | spec-steward | F-L3-001 (Pass-3 L3): PC-3 S502-DEFER-3 rewritten — retract `status: "failed"` reference from `PathSnapshot.Degraded == true` description (not normative in Wave-6). `{active, degraded}` are the normative Wave-6 vocabulary. Forward-looking note added: "Wave-7 forward-looking (S-BL.PATH-FAILED-STATUS): failed status re-introduction TBD; NOT normative in Wave-6." Traceability section updated with Wave-7 Backlog Stories row (S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS, S-BL.ROUTER-ADDR). |
 | 1.10 | 2026-07-01 | spec-steward | Wave-6 Tranche-A Ruling-4 (F-P2L3-006): PC-1 status enum retracted from `{active, degraded, failed}` → `{active, degraded}`. `failed` is RESERVED for follow-on story `S-BL.PATH-FAILED-STATUS` (Wave-7 Backlog). Implementations MUST NOT emit `failed` in this cycle; conformance tests MUST reject it. EC-007 updated to note that `failed` is reserved and to preserve the pending-precedence rule (S502-DEFER-3) for `{active, degraded}` values. |
 | 1.9 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-1: PC-1 `router_addr` field annotated with interim empty-string permission. `router_addr: ""` is a valid sentinel until `PathSnapshot` is enriched with a real host:port. Consumers MUST NOT treat `""` as an error. Cites DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER; resolved by follow-on story S-BL.ROUTER-ADDR. |
 | 1.8 | 2026-06-30 | product-owner | S502-DEFER-3 closure: add failed+pending precedence ruling to PC-3. When PathSnapshot.Degraded==true (liveness failure → status:"failed") AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), quality MUST still be "pending". Rationale: quality is a function of p99 RTT only; "failed" is not a valid quality enum value; status and quality are orthogonal fields. Add EC-007 codifying this behavior. Pre-Wave-6 spec tightening to prevent S-W5.04 adversarial ambiguity (mirrors S-6.06 "unconditionally" convergence risk). |
