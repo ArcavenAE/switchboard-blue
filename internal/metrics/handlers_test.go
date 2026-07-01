@@ -1187,8 +1187,9 @@ func TestRTTValue_UnmarshalRejectsInf(t *testing.T) {
 // pending > red > yellow > green regardless of Go map iteration order.
 //
 // Each row seeds two PathSnapshots with distinct quality bands and asserts the
-// returned resp.Quality equals the dominant band. Each row is executed 10 times
+// returned resp.Quality equals the dominant band. Each row is executed 30 times
 // to exercise map iteration nondeterminism across runs.
+// (Vacuity math: probability both orderings are always seen ≥ 1 - 0.5^30 ≈ 1 - 1e-9.)
 //
 // F-P6L2-01; BC-2.06.003 PC-3; BC-2.06.001 v1.3 PC-4.
 func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
@@ -1255,6 +1256,8 @@ func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
 		{name: "red_pending_gives_pending", pathA: "red", pathB: "pending", want: "pending"},
 		{name: "yellow_pending_gives_pending", pathA: "yellow", pathB: "pending", want: "pending"},
 		{name: "green_green_gives_green", pathA: "green", pathB: "green", want: "green"},
+		{name: "pending_pending_gives_pending", pathA: "pending", pathB: "pending", want: "pending"},
+		{name: "green_pending_gives_pending", pathA: "green", pathB: "pending", want: "pending"},
 	}
 
 	for _, tc := range cases {
@@ -1262,10 +1265,11 @@ func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Run 10 iterations to exercise map iteration nondeterminism.
+			// Run 30 iterations to exercise map iteration nondeterminism.
 			// Go's map iteration order is randomized per-map-creation, so
 			// multiple calls increase the chance of catching order-dependent bugs.
-			for i := range 10 {
+			// Vacuity math: 0.5^30 ≈ 1e-9 probability both orderings are never exercised.
+			for i := range 30 {
 				src := &fakePathsListSource{
 					snaps: map[string]paths.PathSnapshot{
 						"path-a": snapForQuality(tc.pathA),
@@ -1279,6 +1283,36 @@ func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
 				if len(resp.Paths) != 2 {
 					t.Fatalf("iter %d: expected 2 paths; got %d", i, len(resp.Paths))
 				}
+
+				// Verify the set of PathIDs equals {"path-a", "path-b"}.
+				gotIDs := make(map[string]bool, len(resp.Paths))
+				for _, p := range resp.Paths {
+					gotIDs[p.PathID] = true
+				}
+				if !gotIDs["path-a"] || !gotIDs["path-b"] {
+					t.Errorf("iter %d: path ID set = %v; want {path-a, path-b}", i, gotIDs)
+				}
+
+				// Verify per-band quality via QualityFromEntry, keyed by PathID.
+				byID := make(map[string]metrics.PathEntry, len(resp.Paths))
+				for _, p := range resp.Paths {
+					byID[p.PathID] = p
+				}
+				wantPerBand := map[string]string{
+					"path-a": tc.pathA,
+					"path-b": tc.pathB,
+				}
+				for pid, wantBand := range wantPerBand {
+					entry, ok := byID[pid]
+					if !ok {
+						t.Errorf("iter %d: path %q missing from response", i, pid)
+						continue
+					}
+					if got := metrics.QualityFromEntry(entry); got != wantBand {
+						t.Errorf("iter %d: QualityFromEntry(%q)=%q; want %q", i, pid, got, wantBand)
+					}
+				}
+
 				if resp.Quality != tc.want {
 					t.Errorf("iter %d: quality=%q; want %q (paths: %s+%s, precedence pending>red>yellow>green)",
 						i, resp.Quality, tc.want, tc.pathA, tc.pathB)
