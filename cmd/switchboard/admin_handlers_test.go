@@ -1623,6 +1623,244 @@ func TestAdminSVTNCreate_CallerRoleResolution_FromContext(t *testing.T) {
 	_ = bootstrapPub
 }
 
+// TestAdminSVTNCreate_ArgsValidation_E_CFG_001 verifies that malformed or
+// missing-name args return E-CFG-001, consistent with all other admin handlers.
+//
+// F-P1L1-002: non-duplicate failure paths must be code-stamped.
+// BC-2.07.001 PC-1 — handler validates required args before dispatch.
+func TestAdminSVTNCreate_ArgsValidation_E_CFG_001(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	handlers := BuildAdminHandlers(m, nil)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	tests := []struct {
+		name    string
+		rawArgs json.RawMessage
+	}{
+		{
+			name:    "malformed_json",
+			rawArgs: json.RawMessage(`{bad json`),
+		},
+		{
+			name:    "empty_name_field",
+			rawArgs: func() json.RawMessage { b, _ := json.Marshal(adminSVTNCreateArgs{Name: ""}); return b }(),
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := svtnCreateFn(ctx, tc.rawArgs)
+			if err == nil {
+				t.Fatalf("expected E-CFG-001 error for %s, got nil", tc.name)
+			}
+			if !strings.Contains(err.Error(), "E-CFG-001") {
+				t.Errorf("expected E-CFG-001 in error for %s; got: %v", tc.name, err)
+			}
+		})
+	}
+}
+
+// TestAdminSVTNCreate_DuplicateName_E_SVTN_001 verifies that a duplicate SVTN
+// name returns E-SVTN-001 (not E-ADM-004 and not any other code).
+//
+// F-P1L1-003: E-ADM-004 → E-SVTN-001 for duplicate name.
+// BC-2.07.001 EC-001 — duplicate name → E-SVTN-001 "SVTN already exists: <name>".
+func TestAdminSVTNCreate_DuplicateName_E_SVTN_001(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	handlers := BuildAdminHandlers(m, nil)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	// "test-svtn" already exists in newTestSVTNManagerDetailed.
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "test-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, gotErr := svtnCreateFn(ctx, json.RawMessage(args))
+	if gotErr == nil {
+		t.Fatal("expected error for duplicate SVTN name, got nil")
+	}
+	// F-P1L1-003: must stamp E-SVTN-001, not E-ADM-004.
+	if !strings.Contains(gotErr.Error(), "E-SVTN-001") {
+		t.Errorf("expected E-SVTN-001 in error; got: %v", gotErr)
+	}
+	if strings.Contains(gotErr.Error(), "E-ADM-004") {
+		t.Errorf("must not stamp E-ADM-004 (address collision) for duplicate SVTN name; got: %v", gotErr)
+	}
+	// F-P1L2-001: error must be produced via errors.Is check, not string matching.
+	if !errors.Is(gotErr, svtnmgmt.ErrSVTNAlreadyExists) {
+		t.Errorf("errors.Is(err, ErrSVTNAlreadyExists): expected true; got false; err=%v", gotErr)
+	}
+}
+
+// TestAdminSVTNCreate_NoStutterInDuplicateMessage verifies that the duplicate
+// SVTN name error does not repeat "SVTN already exists" more than once.
+//
+// F-P1L1-004: stutter fix — message derived from args.name, not from wrapping
+// err.Error() (which already contains "SVTN already exists").
+// BC-2.07.001 EC-001 — canonical format: "E-SVTN-001: SVTN already exists: <name>".
+func TestAdminSVTNCreate_NoStutterInDuplicateMessage(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	handlers := BuildAdminHandlers(m, nil)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	// "test-svtn" already exists.
+	args, err := json.Marshal(adminSVTNCreateArgs{Name: "test-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, gotErr := svtnCreateFn(ctx, json.RawMessage(args))
+	if gotErr == nil {
+		t.Fatal("expected error for duplicate SVTN name, got nil")
+	}
+
+	// F-P1L1-004: count occurrences of "SVTN already exists" — must be exactly 1.
+	msg := gotErr.Error()
+	const phrase = "SVTN already exists"
+	count := strings.Count(msg, phrase)
+	if count != 1 {
+		t.Errorf("F-P1L1-004 stutter: expected exactly 1 occurrence of %q in error message; got %d; full message: %q", phrase, count, msg)
+	}
+}
+
+// TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied verifies that only the
+// daemon bootstrap key (IsBootstrapKey) may invoke admin.svtn.create. A key
+// registered as control in an existing SVTN (cross-SVTN control key) is NOT
+// authorized and must receive E-ADM-009.
+//
+// F-P1L1-005: bootstrap-only authority model.
+// BC-2.07.001 Inv-3 — admin.svtn.create requires the daemon bootstrap key with
+// RoleControl; cross-SVTN control-role keys are NOT authorized.
+func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	handlers := BuildAdminHandlers(m, nil)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	argsNewSVTN, err := json.Marshal(adminSVTNCreateArgs{Name: "new-svtn-for-bootstrap-test"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	t.Run("bootstrap_key_succeeds", func(t *testing.T) {
+		t.Parallel()
+		ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+		result, err := svtnCreateFn(ctx, json.RawMessage(argsNewSVTN))
+		if err != nil {
+			t.Errorf("bootstrap key with RoleControl: expected success; got: %v", err)
+		}
+		if result == nil {
+			t.Error("bootstrap key: expected non-nil result")
+		}
+	})
+
+	t.Run("cross_svtn_control_key_denied", func(t *testing.T) {
+		t.Parallel()
+		// "test-svtn" has the zero key registered as control in newTestSVTNManagerDetailed.
+		// Inject the zero key (registered as control in test-svtn) as the caller.
+		// This key is a cross-SVTN key — it is NOT the bootstrap key, and the target
+		// SVTN "cross-svtn-target" does not yet exist, so CallerKeyRoleActive returns
+		// (0, false) → resolveAndVerifyCallerRole fails-closed with E-ADM-009.
+		crossSVTNControl, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate cross-svtn key: %v", err)
+		}
+		// Register this key as control in "test-svtn" (an existing SVTN).
+		if _, err := m.RegisterKey("test-svtn", crossSVTNControl, admission.RoleControl); err != nil {
+			t.Fatalf("register cross-SVTN control key: %v", err)
+		}
+
+		// Now try to create a new SVTN using this cross-SVTN control key.
+		argsNewSVTN2, err := json.Marshal(adminSVTNCreateArgs{Name: "cross-svtn-target"})
+		if err != nil {
+			t.Fatalf("marshal args: %v", err)
+		}
+		ctx := mgmt.WithCallerPubkey(context.Background(), crossSVTNControl)
+		_, gotErr := svtnCreateFn(ctx, json.RawMessage(argsNewSVTN2))
+		if gotErr == nil {
+			t.Fatal("cross-SVTN control key: expected E-ADM-009; got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("cross-SVTN control key: expected E-ADM-009; got: %v", gotErr)
+		}
+	})
+
+	t.Run("non_control_role_key_denied", func(t *testing.T) {
+		t.Parallel()
+		// An unregistered key (no role anywhere) must be denied.
+		consolePub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("generate console key: %v", err)
+		}
+		argsNewSVTN3, err := json.Marshal(adminSVTNCreateArgs{Name: "non-control-target"})
+		if err != nil {
+			t.Fatalf("marshal args: %v", err)
+		}
+		ctx := mgmt.WithCallerPubkey(context.Background(), consolePub)
+		_, gotErr := svtnCreateFn(ctx, json.RawMessage(argsNewSVTN3))
+		if gotErr == nil {
+			t.Fatal("non-control-role key: expected E-ADM-009; got nil")
+		}
+		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
+			t.Errorf("non-control-role key: expected E-ADM-009; got: %v", gotErr)
+		}
+	})
+}
+
 // TestAdminSVTNCreateResult_JSONFieldNames verifies that adminSVTNCreateResult
 // serialises with correct JSON field names per AC-004 wire contract.
 //
