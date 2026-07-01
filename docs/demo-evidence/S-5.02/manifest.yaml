@@ -1,0 +1,67 @@
+story_id: S-5.02
+story_title: "expose per-path metrics via sbctl paths list / router metrics (canonical) and router status alias"
+recorded_at: "2026-06-30"
+toolchain: "VHS 0.11.0"
+
+recordings:
+  - ac_id: AC-001
+    description: "sbctl paths list outputs BC-2.06.003 PC-1 schema (rtt_p99_ms float64 when >=10 samples)"
+    tape_path: docs/demo-evidence/S-5.02/AC-001-paths-list-canonical-fields.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-001-paths-list-canonical-fields.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-001-paths-list-canonical-fields.webm
+    coverage_level: FULL
+    notes: "Demonstrates --json output with float64 rtt_p99_ms, all 6 canonical fields present"
+
+  - ac_id: AC-002
+    description: "sbctl router metrics --svtn=<id> outputs BC-2.06.003 PC-2 schema"
+    tape_path: docs/demo-evidence/S-5.02/AC-002-router-metrics-svtn.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-002-router-metrics-svtn.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-002-router-metrics-svtn.webm
+    coverage_level: FULL
+    notes: "Demonstrates all 4 required fields: frame_count, hmac_fail_count, drop_cache_hits, path_distribution"
+
+  - ac_id: AC-003
+    description: "sbctl router status is CLI shim for paths list; adds quality column (green/yellow/red/pending)"
+    tape_path: docs/demo-evidence/S-5.02/AC-003-router-status-alias.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-003-router-status-alias.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-003-router-status-alias.webm
+    coverage_level: FULL
+    notes: "Shows both human-readable table (with QUALITY column) and JSON with quality field; same paths.list RPC dispatch"
+
+  - ac_id: AC-004
+    description: "<10 RTT samples -> rtt_p99_ms is string 'pending' sentinel"
+    tape_path: docs/demo-evidence/S-5.02/AC-004-p99-pending-less-than-10-samples.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-004-p99-pending-less-than-10-samples.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-004-p99-pending-less-than-10-samples.webm
+    coverage_level: FULL
+    notes: "Demonstrates string 'pending' (not null, not 0) in JSON envelope data array"
+
+  - ac_id: AC-005
+    description: "p99 histogram accuracy: P99RTTMs <= true_p99 + max_bucket_width for all distributions"
+    tape_path: docs/demo-evidence/S-5.02/AC-005-p99-histogram-accuracy.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-005-p99-histogram-accuracy.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-005-p99-histogram-accuracy.webm
+    coverage_level: FULL
+    notes: "Runs TestBC_2_06_003_P99HistogramAccuracy (5 sub-cases) live; all PASS shown on screen"
+
+  - ac_id: AC-006
+    description: "--json respected on both commands; daemon unreachable -> E-NET-001 exit code 1"
+    tape_path: docs/demo-evidence/S-5.02/AC-006-json-flag-and-daemon-unreachable.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-006-json-flag-and-daemon-unreachable.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-006-json-flag-and-daemon-unreachable.webm
+    coverage_level: FULL
+    notes: "Success path shows JSON envelope {ok, error:null, data}; error path shows E-NET-001 and exit code 1"
+
+  - ac_id: AC-008
+    description: "sbctl router status emits quality='pending' when rtt_p99_ms=='pending'"
+    tape_path: docs/demo-evidence/S-5.02/AC-008-quality-pending-when-p99-pending.tape
+    gif_path: docs/demo-evidence/S-5.02/AC-008-quality-pending-when-p99-pending.gif
+    webm_path: docs/demo-evidence/S-5.02/AC-008-quality-pending-when-p99-pending.webm
+    coverage_level: FULL
+    notes: "Shows both table (QUALITY=pending) and JSON (quality=pending, rtt_p99_ms=pending) using canned stub daemon"
+
+support_files:
+  - path: docs/demo-evidence/S-5.02/stub_daemon.go
+    purpose: "Minimal stub daemon for VHS demos — ADR-012 handshake, canned JSON responses by mode"
+  - path: docs/demo-evidence/S-5.02/demo-setup.sh
+    purpose: "Builds sbctl and stub_daemon binaries into /tmp/ before recording"

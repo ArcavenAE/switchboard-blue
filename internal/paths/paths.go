@@ -82,6 +82,10 @@ type PathTracker struct {
 	// style) rather than EWMA-blended, so the conservative initial value does
 	// not poison the EWMA for many probe intervals (BC-2.02.003 EC-003).
 	firstProbe bool
+
+	// hist is the fixed-bucket RTT histogram (ARCH-03 v1.6 §p99 RTT Accumulator).
+	// Guarded by mu. Wired in S-5.02.
+	hist rttHistogram
 }
 
 // NewPathTracker constructs a PathTracker with a conservative initial RTT
@@ -114,6 +118,7 @@ func (t *PathTracker) resetRTT(arrivalRTTMS float64) {
 	t.firstProbe = false
 	t.active = true
 	t.updateDegraded(arrivalRTTMS) // BC-2.02.003 PC-5: set degraded from reactivating RTT
+	t.hist.record(arrivalRTTMS)    // S-5.02: feed histogram on first-probe/reactivation
 }
 
 // OnProbe updates the EWMA RTT and loss estimate for the path based on a
@@ -153,6 +158,7 @@ func (t *PathTracker) OnProbe(arrivalRTTMS float64, lossEvent bool) {
 		t.ewmaLossPct = (1 - t.ewmaAlpha) * t.ewmaLossPct
 		t.consecutiveMisses = 0
 		t.updateDegraded(t.ewmaRTTMS) // BC-2.02.003 PC-5: evaluate threshold after EWMA update
+		t.hist.record(arrivalRTTMS)   // S-5.02: feed histogram on successful probe
 	}
 }
 
@@ -206,6 +212,71 @@ func (t *PathTracker) IsDegraded() bool {
 	return t.degraded
 }
 
+// rttHistogramBuckets defines the right edge (exclusive) of each bucket in milliseconds.
+// 16 buckets covering 0–2000 ms (ARCH-03 v1.6 §p99 RTT Accumulator).
+// Canonical layout: buckets 0–3 are 25ms wide; buckets 4–5 are 50ms wide;
+// coarser buckets above 200ms; last bucket is ∞.
+var rttHistogramBuckets = [16]float64{
+	25, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000, 1250, 1500, 1750, 2000, 1e18,
+}
+
+// rttHistogram is a fixed-bucket latency histogram for per-path RTT samples.
+// It lives in PathTracker and is guarded by PathTracker.mu.
+// 16 buckets cover 0–2000+ ms (ARCH-03 v1.6 §p99 RTT Accumulator).
+//
+// Zero value is ready to use.
+type rttHistogram struct {
+	counts [16]uint64
+	total  uint64
+}
+
+// bucketFor returns the bucket index for an RTT sample (arrivalRTTMS >= 0).
+// Caller must hold the PathTracker mu.
+//
+// Iterates rttHistogramBuckets and returns the index of the first bucket whose
+// right edge (exclusive) exceeds arrivalRTTMS. The last bucket catches anything
+// beyond 2000ms via its infinity sentinel (1e18).
+func bucketFor(arrivalRTTMS float64) int {
+	for i, edge := range rttHistogramBuckets {
+		if arrivalRTTMS < edge {
+			return i
+		}
+	}
+	return len(rttHistogramBuckets) - 1
+}
+
+// record adds one RTT sample to the histogram.
+// Caller must hold the PathTracker mu.
+func (h *rttHistogram) record(arrivalRTTMS float64) {
+	h.counts[bucketFor(arrivalRTTMS)]++
+	h.total++
+}
+
+// p99 returns the p99 RTT estimate in milliseconds.
+// Returns 0 when total < 10 (caller should surface as "pending").
+// Approximation: p99() <= true_p99 + max_bucket_width (ARCH-03 p99 RTT Accumulator).
+// Caller must hold the PathTracker mu.
+//
+// Traverses h.counts from the lowest bucket upward, accumulating sample counts
+// until the running sum reaches or exceeds 99% of total samples. The upper edge
+// of that bucket is returned as the p99 estimate.
+func (h *rttHistogram) p99() float64 {
+	if h.total < 10 {
+		return 0
+	}
+	// threshold is the minimum cumulative count needed to claim p99.
+	// Integer arithmetic: ceil(99 * total / 100).
+	threshold := (99*h.total + 99) / 100
+	var cumulative uint64
+	for i, count := range h.counts {
+		cumulative += count
+		if cumulative >= threshold {
+			return rttHistogramBuckets[i]
+		}
+	}
+	return rttHistogramBuckets[len(rttHistogramBuckets)-1]
+}
+
 // PathSnapshot is a consistent point-in-time copy of all PathTracker metrics.
 // It is a value type (go.md rule 12: never return internal pointers from a locked accessor).
 type PathSnapshot struct {
@@ -217,8 +288,12 @@ type PathSnapshot struct {
 	Active bool
 	// Degraded reports whether the path's EWMA RTT exceeds DegradedRTTThresholdMS.
 	Degraded bool
-	// P99RTTMs is the p99 RTT in milliseconds. Wired in S-5.02; placeholder 0 until that story merges.
+	// P99RTTMs is the p99 RTT in milliseconds. 0 when SampleCount < 10 (surface as "pending").
+	// Wired from rttHistogram.p99() in S-5.02.
 	P99RTTMs float64
+	// SampleCount is the total number of RTT samples recorded in the histogram.
+	// Used by callers to determine whether P99RTTMs is valid (≥10) or pending (<10).
+	SampleCount uint64
 }
 
 // Snapshot returns a consistent copy of all PathTracker metrics under a single
@@ -228,11 +303,12 @@ func (t *PathTracker) Snapshot() PathSnapshot {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return PathSnapshot{
-		EWMARTTMs: t.ewmaRTTMS,
-		LossPct:   t.ewmaLossPct,
-		Active:    t.active,
-		Degraded:  t.degraded,
-		P99RTTMs:  0, // placeholder: wired in S-5.02
+		EWMARTTMs:   t.ewmaRTTMS,
+		LossPct:     t.ewmaLossPct,
+		Active:      t.active,
+		Degraded:    t.degraded,
+		P99RTTMs:    t.hist.p99(), // S-5.02: wired from histogram; 0 when SampleCount < 10
+		SampleCount: t.hist.total, // S-5.02: callers check ≥10 before trusting P99RTTMs
 	}
 }
 

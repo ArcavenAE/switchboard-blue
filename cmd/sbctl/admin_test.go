@@ -500,7 +500,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 		"--key", pubkey,
 		"--svtn", svtnID,
 		"--role", "console",
-	})
+	}, defaultIO())
 	if err != nil {
 		t.Logf("AC-002: runAdmin returned error (expected once implemented): %v", err)
 	}
@@ -563,7 +563,7 @@ func TestSbctlAdmin_KeyRevoke_CLI(t *testing.T) {
 		"--svtn", svtnID,
 		"--role", "console",
 		// No --confirm: defaults to false.
-	})
+	}, defaultIO())
 	if err != nil {
 		t.Logf("AC-003: runAdmin returned error (expected once implemented): %v", err)
 	}
@@ -628,7 +628,7 @@ func TestSbctlAdmin_KeyExpire_CLI(t *testing.T) {
 		"--key", pubkey,
 		"--svtn", svtnID,
 		"--after", after,
-	})
+	}, defaultIO())
 	if err != nil {
 		t.Logf("AC-004: runAdmin returned error (expected once implemented): %v", err)
 	}
@@ -696,7 +696,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			"--svtn", "test-svtn",
 			"--role", "control",
 			// No --confirm.
-		})
+		}, defaultIO())
 
 		select {
 		case req := <-requestCh:
@@ -747,7 +747,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			"--svtn", "test-svtn",
 			"--role", "control",
 			"--confirm",
-		})
+		}, defaultIO())
 		_ = err
 
 		select {
@@ -783,7 +783,7 @@ func TestSbctlAdmin_UnknownSubcommand_ReturnsError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	err := runAdmin(ctx, "127.0.0.1:19996", testdataKeyPath(t), false, []string{"totally-unknown-cmd"})
+	err := runAdmin(ctx, "127.0.0.1:19996", testdataKeyPath(t), false, []string{"totally-unknown-cmd"}, defaultIO())
 	if err == nil {
 		t.Error("runAdmin with unknown subcommand: want non-nil error; got nil")
 	}
@@ -818,7 +818,7 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			err := runAdmin(ctx, "127.0.0.1:19995", testdataKeyPath(t), false, tc.args)
+			err := runAdmin(ctx, "127.0.0.1:19995", testdataKeyPath(t), false, tc.args, defaultIO())
 			if err == nil {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): want error for missing required flag; got nil", tc.args)
 			}
@@ -882,7 +882,7 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
 		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
-	})
+	}, defaultIO())
 
 	// ADR-012 fail-closed: must return non-nil error on AUTH_FAIL.
 	if err == nil {
@@ -934,7 +934,7 @@ func TestSbctlAdmin_OversizedNDJSONLine_DoesNotOOM(t *testing.T) {
 	// The client must not OOM — it must return an error within the context deadline.
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
 		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
-	})
+	}, defaultIO())
 
 	if err == nil {
 		t.Error("ADR-012 §6 — oversized NDJSON line: want non-nil error (bounded read violation); got nil")
@@ -971,7 +971,7 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
 		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
-	})
+	}, defaultIO())
 
 	if err == nil {
 		t.Error("ADR-012 — malformed JSON response: want non-nil error; got nil")
@@ -1016,7 +1016,7 @@ func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 		"--key", "ssh-ed25519 AAAA...",
 		"--svtn", "test-svtn",
 		"--after", "0s",
-	})
+	}, defaultIO())
 
 	if err == nil {
 		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error (E-CFG-001); got nil")
@@ -1100,7 +1100,7 @@ func TestSbctlAdmin_KeyRegister_InvalidRole(t *testing.T) {
 			// The default is "console" (valid), so we use a known-invalid role string
 			// that cannot be mapped to a valid role.
 
-			err := runAdmin(ctx, "127.0.0.1:19993", testdataKeyPath(t), false, args)
+			err := runAdmin(ctx, "127.0.0.1:19993", testdataKeyPath(t), false, args, defaultIO())
 
 			// For non-empty invalid roles: must return error.
 			// For the empty-role case (omit flag): default is "console" which is valid,
@@ -1153,14 +1153,15 @@ func TestSubprocessAdmin_ConnectionRefused_Entry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), to)
 	defer cancel()
 
+	sio := defaultIO()
 	err := runAdmin(ctx, target, keyPath, false, []string{
 		"key", "register",
 		"--key", "ssh-ed25519 AAAA...",
 		"--svtn", "test-svtn",
 		"--role", "console",
-	})
+	}, sio)
 	if err != nil {
-		writeError(false, "E-NET-001", err.Error())
+		writeError(false, "E-NET-001", err.Error(), sio)
 		os.Exit(1)
 	}
 	os.Exit(0)

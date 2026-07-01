@@ -331,12 +331,12 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 //   - RPC dispatch failure (post-AUTH_OK): E-RPC-001 "rpc failed: <command>: <reason>"
 //
 //nolint:unparam // cmdArgs is always nil in current stubs; callers will vary after S-6.02/S-5.02
-func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, command string, cmdArgs any) error {
+func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, command string, cmdArgs any, sio sbctlIO) error {
 	// Key load and validation BEFORE any dial (BC-2.07.003 EC-005; Ruling 5).
 	// os.UserHomeDir is the real home-directory lookup; tests inject per-call.
 	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
 	if err != nil {
-		writeError(useJSON, "E-CFG-010", err.Error())
+		writeError(useJSON, "E-CFG-010", err.Error(), sio)
 		return err
 	}
 
@@ -351,7 +351,7 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 	}
 	if err != nil {
 		msg := fmt.Sprintf("daemon unreachable: %s: %s", target, err)
-		writeError(useJSON, "E-NET-001", msg)
+		writeError(useJSON, "E-NET-001", msg, sio)
 		return fmt.Errorf("E-NET-001: %s", msg)
 	}
 	defer func() { _ = conn.Close() }()
@@ -363,19 +363,19 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
 			msg := fmt.Sprintf("daemon unreachable: %s: connection timed out", target)
-			writeError(useJSON, "E-NET-001", msg)
+			writeError(useJSON, "E-NET-001", msg, sio)
 			return fmt.Errorf("E-NET-001: %s", msg)
 		}
-		writeError(useJSON, "E-ADM-010", "authentication failed")
+		writeError(useJSON, "E-ADM-010", "authentication failed", sio)
 		return err
 	}
 
 	data, err := dispatch(ctx, conn, command, cmdArgs)
 	if err != nil {
-		writeError(useJSON, "E-RPC-001", err.Error())
+		writeError(useJSON, "E-RPC-001", err.Error(), sio)
 		return err
 	}
 
-	writeSuccess(useJSON, data)
+	writeSuccess(useJSON, data, sio)
 	return nil
 }

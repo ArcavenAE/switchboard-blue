@@ -890,7 +890,7 @@ func TestSbctl_ConnectAndRun_ReturnsError(t *testing.T) {
 	// test process terminates immediately — the t.Errorf line is never reached
 	// but the whole test binary exits non-zero with no FAIL output (observable
 	// from the go test harness).
-	err := connectAndRun(ctx, target, keyPath, false, "ping", nil)
+	err := connectAndRun(ctx, target, keyPath, false, "ping", nil, defaultIO())
 	if err == nil {
 		t.Error("AC-009 violated: connectAndRun returned nil error on connection failure — expected non-nil error")
 	}
