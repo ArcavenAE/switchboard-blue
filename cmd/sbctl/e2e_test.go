@@ -1,7 +1,7 @@
 //go:build integration
 
 // Package main e2e tests for the sbctl management plane client against all four
-// daemon types per BC-2.07.002 v1.4 and VP-049 v1.1.
+// daemon types per BC-2.07.002 v1.5 and VP-049 v1.1.
 //
 // Adversary Pass-1 rulings applied (Q1-Q6):
 //   - Q1: per-mode distinct handler tables (routerHandlers/accessHandlers/etc.)
@@ -87,10 +87,11 @@ func startTestMgmtServer(t *testing.T, mode daemonMode, operatorPub ed25519.Publ
 	}
 
 	// Wrap the listener for AC-005 server-side FIN observation (Q6).
+	// The wrapper tracks a monotonic close-event counter so the test can snapshot
+	// before the real client dials and wait for that counter to increment — this
+	// ignores any earlier closes (e.g. the awaitReady probe conn).
 	wrappedLn := newClosingListenerWrapper(rawLn)
 
-	// trackingLn intercepts Accept() calls so we can record the closingConn
-	// returned for the most-recently-accepted connection (needed by clientClosedWithin).
 	handle := &serverHandle{
 		addr:    rawLn.Addr().String(),
 		wrapper: wrappedLn,
@@ -128,6 +129,8 @@ func startTestMgmtServer(t *testing.T, mode daemonMode, operatorPub ed25519.Publ
 }
 
 // awaitReady polls the server address until a TCP connection succeeds or timeout.
+// The probe conn is dialed directly (not through the wrapped listener's tracking
+// path) so it does not pre-satisfy the AC-005 close-event counter.
 func awaitReady(t *testing.T, addr string, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().UTC().Add(timeout)
@@ -161,7 +164,7 @@ func nonConstantID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		// Fall back to nanosecond clock if rand.Read fails (should not happen in tests).
-		return fmt.Sprintf("%x", time.Now().UTC().UnixNano())
+		return fmt.Sprintf("%032x", time.Now().UTC().UnixNano())
 	}
 	return hex.EncodeToString(b[:])
 }
@@ -282,20 +285,16 @@ func TestE2E_MgmtPlane_AllFourDaemonTypes_VP049(t *testing.T) {
 
 			// ── AC-005: close conn from client side; assert server observes FIN ───
 			//
-			// This instruments the actual production defer conn.Close() in connectAndRun.
-			// We need to find the closingConn that the server accepted for this connection.
-			// We close from the client side (simulating connectAndRun's defer conn.Close())
-			// and wait for the server-side wrapper to observe the EOF/FIN within 500ms.
-			//
-			// Look up the closingConn via the wrapper. Since we have one conn per sub-test
-			// and parallel sub-tests each have their own server, we need to find the right
-			// conn. The wrapper tracks by the closingConn pointer returned from Accept().
-			// We close the client conn, then wait for any tracked conn's closed channel to fire.
+			// Snapshot the close-event counter BEFORE closing the real client conn.
+			// waitForCloseAfter(baseline, d) blocks until the counter exceeds baseline,
+			// which provably ignores the awaitReady probe conn's earlier close.
+			baseline := srv.wrapper.closeCounter()
+
 			if err := conn.Close(); err != nil {
 				t.Logf("AC-005 [%s]: conn.Close (client side): %v", mode.name, err)
 			}
 
-			if err := srv.wrapper.waitForAnyClose(500 * time.Millisecond); err != nil {
+			if err := srv.wrapper.waitForCloseAfter(baseline, 500*time.Millisecond); err != nil {
 				t.Errorf("AC-005 [%s]: server did not observe client-side close within 500ms: %v", mode.name, err)
 			}
 		})
@@ -318,54 +317,14 @@ func modeSpecificCommand(mode string) string {
 	}
 }
 
-// waitForAnyClose waits for any tracked connection's closed channel to fire within d.
-// This is the AC-005 assertion: the server observes the client-side FIN.
-func (w *closingListenerWrapper) waitForAnyClose(d time.Duration) error {
-	w.mu.Lock()
-	// Snapshot all channels.
-	chs := make([]chan struct{}, 0, len(w.closed))
-	for _, ch := range w.closed {
-		chs = append(chs, ch)
-	}
-	w.mu.Unlock()
-
-	if len(chs) == 0 {
-		return fmt.Errorf("closingListenerWrapper: no connections were accepted")
-	}
-
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-
-	// Fan-in: first channel to fire wins.
-	done := make(chan struct{})
-	for _, ch := range chs {
-		ch := ch
-		go func() {
-			select {
-			case <-ch:
-				select {
-				case done <- struct{}{}:
-				default:
-				}
-			case <-timer.C:
-			}
-		}()
-	}
-
-	select {
-	case <-done:
-		return nil
-	case <-timer.C:
-		return fmt.Errorf("no tracked connection was closed by client within deadline")
-	}
-}
-
 // ── TestE2E_MgmtPlane_BootstrapAuth_VP049 ─────────────────────────────────────
 //
-// Secondary variant (Q5 ruling): bootstrap mode where daemon key == operator key.
-// mgmt.NewOperatorKeySet(nil) — daemon's own key is the sole authorized key.
-// Authenticates with daemonPriv (not a distinct operator key).
+// Secondary variant (Q5 ruling): bootstrap mode where operator keys are nil.
+// Bootstrap mode: operator keys nil, so daemon key is the sole authorized key.
+// Authenticates using daemonPriv via the bootstrap constant-time-compare branch
+// (internal/mgmt/mgmt.go handleConnection, IsBootstrap()==true path).
 //
+// mgmt.NewOperatorKeySet(nil) — daemon's own key is the sole authorized key.
 // Covers AC-002 bootstrap path per ADR-012 §bootstrap.
 // Uses router mode as the representative daemon type.
 
@@ -373,7 +332,7 @@ func TestE2E_MgmtPlane_BootstrapAuth_VP049(t *testing.T) {
 	t.Parallel()
 
 	// Generate a fresh daemon key pair. In bootstrap mode the daemon key IS the operator key.
-	daemonPub, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate daemon keypair: %v", err)
 	}
@@ -383,9 +342,9 @@ func TestE2E_MgmtPlane_BootstrapAuth_VP049(t *testing.T) {
 		t.Fatalf("bootstrap: net.Listen: %v", err)
 	}
 
-	// Bootstrap: NewOperatorKeySet(nil) — daemon key is the sole authorized key.
-	// This diverges from the primary path: no separate operator key is registered.
-	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{daemonPub})
+	// Bootstrap mode: operator keys nil, so daemon key is the sole authorized key.
+	// Authenticates using daemonPriv via the bootstrap constant-time-compare branch.
+	ops := mgmt.NewOperatorKeySet(nil)
 
 	srv := mgmt.NewServer(
 		rawLn,
