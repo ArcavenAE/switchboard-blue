@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -77,7 +77,7 @@ sbctl paths list [--svtn=<id>]                  # Per-path RTT (rtt_ms, rtt_p99_
 sbctl paths ping --router=<addr>                # One-shot RTT probe
 
 # Router Management
-sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.5 PC-3; S-5.02 v1.5 AC-003/AC-008)
+sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.7 PC-3; S-5.02 v1.9 AC-003/AC-008)
 sbctl router metrics --svtn=<id>                # Frame counts, HMAC failures, drop cache hits
 sbctl router reload                             # Reload config (SIGHUP equivalent)
 sbctl router drain                              # Graceful drain (SIGTERM equivalent)
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.7 changelog note (2026-06-30):** S-5.02 Pass-8 F-P8L3-002 sibling-propagation sweep: updated all live-content BC-2.06.003 version pins from v1.5 to v1.7 (line-80 `sbctl router status` comment, §Path list response intro, §pending-response JSON example intro). Also updated S-5.02 story pin on line-80 from v1.5 to v1.9. BC v1.7 introduced no behavioral change vs v1.5 for the cited clauses (PC-1 field schema, PC-3 alias, EC-003/EC-006 pending sentinel). Historical changelog rows citing v1.5 are preserved unchanged.
 
 > **v1.6 changelog note (2026-06-30):** S-6.06 Pass-4 ruling F-L2-007: `sbctl admin key expire` row updated — added wire-field translation note (`--at <RFC3339>` → `after` Go duration string), noted server-side duration validation (positive, ≤100 years), added E-CFG-001 to exit codes.
 
@@ -197,7 +199,7 @@ On error:
 
 ### Path list response (`sbctl paths list --json`)
 
-Fields per BC-2.06.003 v1.5 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC).
+Fields per BC-2.06.003 v1.7 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC).
 
 Example — normal response (≥10 samples):
 
@@ -219,7 +221,7 @@ Example — normal response (≥10 samples):
 }
 ```
 
-Example — pending response (<10 samples; BC-2.06.003 v1.5 EC-003/EC-006). The alias `sbctl router status` also emits `"quality": "pending"` in this case (PC-3):
+Example — pending response (<10 samples; BC-2.06.003 v1.7 EC-003/EC-006). The alias `sbctl router status` also emits `"quality": "pending"` in this case (PC-3):
 
 ```json
 {
