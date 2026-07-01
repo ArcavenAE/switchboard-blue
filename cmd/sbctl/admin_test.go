@@ -1272,7 +1272,44 @@ func TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint(t *testing.T) 
 
 	// AC-002 / AC-004 — success output must contain svtn_id and bootstrap_fingerprint.
 	// runAdminSvtnCreate currently panics → RED.
-	t.Fatal("TODO: S-6.07 AC-002/AC-004 success output test not yet written")
+	const wantSVTNID = "aabbccddeeff0011aabbccddeeff0011"
+	const wantFingerprint = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q; want admin.svtn.create", cmd)
+		}
+		return map[string]any{
+			"svtn_id":               wantSVTNID,
+			"bootstrap_fingerprint": wantFingerprint,
+		}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var outBuf strings.Builder
+	sio := sbctlIO{out: &outBuf, err: io.Discard}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", "success-svtn",
+	}, sio)
+	if err != nil {
+		t.Fatalf("AC-002: runAdmin returned error on success path: %v", err)
+	}
+
+	out := outBuf.String()
+
+	// AC-002 / AC-004: stdout must contain the svtn_id returned by the daemon.
+	if !strings.Contains(out, wantSVTNID) {
+		t.Errorf("AC-002 / AC-004: stdout does not contain svtn_id %q; got: %q", wantSVTNID, out)
+	}
+
+	// AC-002 / AC-004: stdout must contain the bootstrap_fingerprint returned by the daemon.
+	if !strings.Contains(out, wantFingerprint) {
+		t.Errorf("AC-002 / AC-004: stdout does not contain bootstrap_fingerprint %q; got: %q", wantFingerprint, out)
+	}
 }
 
 // TestSbctlAdmin_SvtnCreate_DuplicateName verifies AC-005 at the CLI layer:

@@ -1380,9 +1380,22 @@ func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
 func TestBuildAdminHandlers_SVTNCreate_Registered(t *testing.T) {
 	t.Parallel()
 
-	// AC-001 / BC-2.07.001 PC-1 — admin.svtn.create must be registered.
+	// AC-001 / BC-2.07.001 PC-1 — admin.svtn.create must appear in the handler
+	// slice returned by BuildAdminHandlers (control-mode daemon only).
 	// makeAdminSVTNCreateHandler currently panics → RED.
-	t.Fatal("TODO: S-6.07 AC-001 not yet written — verify admin.svtn.create appears in BuildAdminHandlers result")
+	m := newTestSVTNManager(t)
+	handlers := BuildAdminHandlers(m, nil)
+
+	var found bool
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("AC-001: 'admin.svtn.create' not registered in BuildAdminHandlers result")
+	}
 }
 
 // TestAdminSVTNCreate_ControlCallerSucceeds verifies AC-006 (first sub-case):
@@ -1545,13 +1558,67 @@ func TestAdminSVTNCreate_DuplicateNameError(t *testing.T) {
 // resolves caller role from the authenticated context pubkey (server-side),
 // NOT from a client-supplied request field (BC-2.07.001 Inv-3 / S-6.06 pattern).
 //
+// The test injects a console-role pubkey into ctx WITHOUT any callerRoleStr field
+// in the args (there is no caller_role field in adminSVTNCreateArgs). It then
+// injects a control-role bootstrap pubkey to confirm success. Both code paths go
+// through resolveAndVerifyCallerRole, not a client-supplied field.
+//
 // AC-003 / BC-2.07.001 Inv-3 — authority check reads from context, not request args.
 func TestAdminSVTNCreate_CallerRoleResolution_FromContext(t *testing.T) {
 	t.Parallel()
 
 	// BC-2.07.001 Inv-3 — caller role must come from ctx pubkey, not args.
 	// makeAdminSVTNCreateHandler currently panics → RED.
-	t.Fatal("TODO: S-6.07 AC-003 caller-role-from-context test not yet written")
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	ops := mgmt.NewOperatorKeySet(nil)
+	handlers := BuildAdminHandlers(m, ops)
+
+	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.create" {
+			svtnCreateFn = h.Fn
+			break
+		}
+	}
+	if svtnCreateFn == nil {
+		t.Fatal("AC-001: admin.svtn.create not registered in BuildAdminHandlers")
+	}
+
+	argsJSON, err := json.Marshal(adminSVTNCreateArgs{Name: "ctx-role-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	// Sub-case A: console-role pubkey in ctx (not registered in any SVTN) → E-ADM-009.
+	// No caller_role field in args — the only source of authority is the context pubkey.
+	consolePub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate console key: %v", err)
+	}
+	ctxConsole := mgmt.WithCallerPubkey(context.Background(), consolePub)
+	_, err = svtnCreateFn(ctxConsole, json.RawMessage(argsJSON))
+	if err == nil {
+		t.Error("AC-003 ctx-role A: console-role context pubkey: expected E-ADM-009; got nil")
+	} else if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-003 ctx-role A: expected E-ADM-009 in error; got %q", err.Error())
+	}
+
+	// Sub-case B: bootstrap (control-role) pubkey in ctx → success.
+	// The handler must read the role from ctx, not from an absent request field.
+	argsJSON2, err := json.Marshal(adminSVTNCreateArgs{Name: "ctx-role-svtn-b"})
+	if err != nil {
+		t.Fatalf("marshal args B: %v", err)
+	}
+	ctxControl := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	result, err := svtnCreateFn(ctxControl, json.RawMessage(argsJSON2))
+	if err != nil {
+		t.Errorf("AC-003 ctx-role B: bootstrap context pubkey: expected success; got error: %v", err)
+	}
+	if result == nil {
+		t.Error("AC-003 ctx-role B: expected non-nil result; got nil")
+	}
+
+	_ = bootstrapPub
 }
 
 // TestAdminSVTNCreateResult_JSONFieldNames verifies that adminSVTNCreateResult
