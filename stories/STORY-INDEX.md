@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.37"
+version: "3.38"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T14:00:00
+timestamp: 2026-07-01T15:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -74,7 +74,7 @@ inputDocuments:
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
-| S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup/LookupByPubkey to (AdmittedKey, bool) value-return | E-6 | 6 | (none) | admission-security | 1 | P2 | E | draft (v1.3) |
+| S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup/LookupByPubkey to (AdmittedKey, bool) value-return | E-6 | 6 | (none) | admission-security | 1 | P2 | E | draft (v1.4) |
 
 ## Wave Summary
 
@@ -173,6 +173,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.38 | 2026-07-01 | F-P10L1-001 / F-P10L3-01 (POL-002 propagation catch-up): S-BL.LOOKUP status cell `draft (v1.3)` → `draft (v1.4)` (story bumped to v1.4 for test-hygiene fixes F-P10L2-01/F-P10L2-02; STORY-INDEX was stale at v1.3). |
 | 3.37 | 2026-07-01 | F-P9L3A-01 (attribution cleanup, auto-mode): S-W5.04 row `draft (v1.12)` → `draft (v1.13)`. Story v1.13 corrects semantic mis-anchoring — `pending` state attribution moved from BC-2.06.001 to BC-2.06.003 EC-007 in Behavioral Contracts table and AC-005a body. BC-2.06.001 v1.5→v1.6 (modified-list entry corrected; v1.6 changelog row added). No design change. |
 | 3.36 | 2026-07-01 | Pass-7 Lens-3 Ruling-12 propagations: F-P7L3R2-01 (POL-002 backfill) — S-6.07 row `draft (v1.4)` → `draft (v1.6)` (story was bumped to v1.6 via Ruling-11 wire-envelope hygiene; STORY-INDEX was stale). Add S-BL.POLICY-SCHEMA-VALIDATOR backlog stub (P3, small, network-management epic, Epic E-6, no BC/VP traces; minted per Ruling-12 §6). Summary Total 46→47, Backlog 6→7. |
 | 3.35 | 2026-07-01 | F-P8L3-002 (MED) propagation — S-W5.04 row v1.11→v1.12 (AC-005a trace annotation extended to include BC-2.06.001 quality state machine alongside BC-2.06.003 EC-007; BC-2.06.001 v1.4→v1.5 Stories cell gained S-W5.04 back-link). |

@@ -46,7 +46,7 @@ stories:
   - id: S-BL.LOOKUP
     title: "Migrate AdmittedKeySet.Lookup/LookupByPubkey to (AdmittedKey, bool) value-return per go.md rule 12"
     status: draft
-    spec_version: "1.3"
+    spec_version: "1.4"
     points: 1
     priority: P2
     scope_phase: E
@@ -213,6 +213,7 @@ pre_wave_obligations:
     blocking: false
 
 # Changelog
+# v1.3 (2026-07-01): O-P10L3-01 — S-BL.LOOKUP spec_version corrected 1.3→1.4 (story bumped to v1.4 for test-hygiene fixes F-P10L2-01/F-P10L2-02; sprint-state was stale). Source: STORY-INDEX v3.38.
 # v1.2 (2026-07-01): F-P9L3-01 — S-BL.LOOKUP spec_version corrected 1.1→1.3 (story is at v1.3 per its changelog; sprint-state was stale).
 # v1.1 (2026-07-01): Wave-6 Tranche A Pass-2 fix-burst state sync.
 #   - S-W5.04: spec_version 1.5→1.6, adversarial_pass_counter RESET to 0, impl_tip 175eb5f.
