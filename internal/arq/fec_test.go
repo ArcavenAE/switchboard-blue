@@ -16,6 +16,7 @@ package arq_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -200,7 +201,7 @@ func TestBC_2_02_007_Recover_SingleLoss(t *testing.T) {
 
 	for lossIdx := 0; lossIdx < groupSize; lossIdx++ {
 		lossIdx := lossIdx
-		t.Run("", func(t *testing.T) {
+		t.Run(fmt.Sprintf("lossIdx=%d", lossIdx), func(t *testing.T) {
 			t.Parallel()
 
 			// Build group with nil at lossIdx (simulated loss).
@@ -237,7 +238,6 @@ func TestBC_2_02_007_Recover_TwoLossesFail(t *testing.T) {
 
 	const groupSize = 4
 	enc := arq.NewEncoder(arq.FECConfig{GroupSize: groupSize})
-	dec := arq.NewDecoder(arq.FECConfig{GroupSize: groupSize})
 
 	payloads := buildPayloads(groupSize, 8)
 	parity := encodeGroup(t, enc, payloads)
@@ -257,6 +257,10 @@ func TestBC_2_02_007_Recover_TwoLossesFail(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
+			// Construct decoder fresh per subtest to prevent future per-call state
+			// from causing subtests to pollute each other.
+			dec := arq.NewDecoder(arq.FECConfig{GroupSize: groupSize})
 
 			withTwoGaps := make([][]byte, groupSize)
 			copy(withTwoGaps, payloads)
@@ -316,20 +320,27 @@ func TestBC_2_02_007_FallbackToARQ_OnMultiLoss(t *testing.T) {
 		t.Fatalf("Recover with 2 losses: want ErrTooManyLosses, got %v", err)
 	}
 
-	// Caller receives ErrTooManyLosses — it MUST engage the ARQ retransmit path.
-	// Construct an ARQ sender with all 4 frames in-flight (seq 1..4).
+	// Build the ARQ sender once (all 4 frames in-flight, seq 1..4).
 	sendTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	a := arq.New(arq.Config{DropTimeout: 100 * time.Millisecond})
 	for seq := uint32(1); seq <= groupSize; seq++ {
 		a.EnqueueSend(seq, payloads[seq-1], sendTime)
 	}
 
-	// ackSeq=0, all-zero SACK: no frames acknowledged → all 4 are gaps.
+	// handle models the production caller dispatch: on ErrTooManyLosses, invoke
+	// the ARQ retransmit path; on nil error (single or zero loss), do NOT invoke ARQ.
 	var zeroSACK [arq.SACKBitmapBytes]byte
-	gaps := a.GapsToRetransmit(0, zeroSACK)
+	handle := func(recoverErr error) []uint32 {
+		if errors.Is(recoverErr, arq.ErrTooManyLosses) {
+			return a.GapsToRetransmit(0, zeroSACK)
+		}
+		return nil
+	}
 
+	// Multi-loss path: handle MUST engage ARQ and return a non-empty gap list.
+	gaps := handle(err)
 	if len(gaps) == 0 {
-		t.Fatal("ARQ retransmit fallback: GapsToRetransmit returned empty; caller would silently drop — MUST engage retransmit path (BC-2.02.007 PC-4)")
+		t.Fatal("ARQ retransmit fallback: handle returned empty; caller would silently drop — MUST engage retransmit path (BC-2.02.007 PC-4)")
 	}
 
 	// At minimum, the two lost sequences (lossA+1, lossB+1 in 1-indexed seq) must
@@ -346,6 +357,17 @@ func TestBC_2_02_007_FallbackToARQ_OnMultiLoss(t *testing.T) {
 		if !gapSet[seq] {
 			t.Errorf("ARQ retransmit fallback: lost seq=%d not in gap list %v", seq, gaps)
 		}
+	}
+
+	// Negative path: single-loss scenario → handle MUST NOT invoke ARQ (returns nil).
+	// Construct a fresh single-loss group: nil at index 0, all others present.
+	singleGap := make([][]byte, groupSize)
+	copy(singleGap, payloads)
+	singleGap[0] = nil
+	_, singleErr := dec.Recover(singleGap, parity)
+	nilGaps := handle(singleErr)
+	if nilGaps != nil {
+		t.Errorf("single-loss path: handle should return nil (no ARQ dispatch), got %v", nilGaps)
 	}
 }
 
@@ -447,20 +469,23 @@ func TestBC_2_02_007_Flush_OnCompleteGroupBoundary(t *testing.T) {
 // for all (group_size ∈ [2,8], loss_index ∈ [0, group_size-1], randomised
 // data payloads), Recover reconstructs the lost frame byte-exactly.
 //
-// Coverage: 7 group sizes × (2+3+4+5+6+7+8) loss positions × 1000 payload
-// variants = 175 000 recovery assertions. The payload bytes are generated with
-// a deterministic Knuth MMIX LCG so runs are reproducible.
+// Coverage: 7 group sizes × Σ(2..8)=35 loss positions × 1000 payload
+// variants = 35 000 recovery assertions; 7 × 1000 = 7 000 parity oracle checks;
+// 42 000 total assertions. The payload bytes are generated with a deterministic
+// Knuth MMIX LCG so runs are reproducible.
 func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 	t.Parallel()
 
 	const trials = 1000
 	const payloadWidth = 16
 
+	// Runtime assertion counters. Group-size subtests are sequential (no t.Parallel)
+	// so count_verify at the end sees the final counts without atomics.
+	var totalRecovery, totalParity int64
+
 	for groupSize := 2; groupSize <= 8; groupSize++ {
 		groupSize := groupSize
-		t.Run("", func(t *testing.T) {
-			t.Parallel()
-
+		t.Run(fmt.Sprintf("groupSize=%d", groupSize), func(t *testing.T) {
 			// Knuth MMIX LCG — each subtest gets its own seed derived from
 			// groupSize so runs are deterministic and subtests are independent.
 			seed := uint64(0xFEEDBEEFCAFEBABE) + uint64(groupSize)*0x9E3779B97F4A7C15
@@ -497,6 +522,7 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 							groupSize, trial, k, b, parity[k])
 					}
 				}
+				totalParity++
 
 				// Test single-loss recovery at every loss position.
 				for lossIdx := 0; lossIdx < groupSize; lossIdx++ {
@@ -523,10 +549,27 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 								groupSize, trial, lossIdx, k, want[k], recovered[k])
 						}
 					}
+					totalRecovery++
 				}
 			}
 		})
 	}
+
+	// count_verify runs synchronously after all parallel group-size subtests complete
+	// (t.Run returns only after all subtests spawned within this function finish).
+	// This barrier verifies the exact assertion counts claimed in the doc comment.
+	t.Run("count_verify", func(t *testing.T) {
+		n := totalRecovery
+		p := totalParity
+		t.Logf("VP-043 total recovery assertions: %d (expected 35000)", n)
+		t.Logf("VP-043 total parity oracle checks: %d (expected 7000)", p)
+		if n != 35000 {
+			t.Errorf("VP-043 recovery assertion count: want 35000, got %d", n)
+		}
+		if p != 7000 {
+			t.Errorf("VP-043 parity oracle check count: want 7000, got %d", p)
+		}
+	})
 }
 
 // TestFEC_VP043_SingleLossRecovery_Property is the story-level alias for VP-043.
