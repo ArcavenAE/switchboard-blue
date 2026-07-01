@@ -13,12 +13,12 @@ wave: 5
 priority: P0
 scope_phase: E
 estimated_points: 5
-version: "1.2"
+version: "1.3"
 bc_traces:
   - BC-2.07.002
 vp_traces: [VP-049]
 subsystems: [network-management]
-architecture_modules: [internal/mgmt, cmd/sbctl, cmd/switchboard]
+architecture_modules: [internal/mgmt, cmd/sbctl]
 tdd_mode: strict
 target_module: internal/testenv
 cycle: v1.0.0-greenfield
@@ -61,13 +61,13 @@ be minted (VP-VW6.NN) at that time. VP-049 §Feasibility (pending spec-steward
 burst) will be updated to document this boundary explicitly.
 
 No new production code is introduced beyond the test harness infrastructure in
-`internal/testenv` (or `internal/mgmt/e2e_test.go`).
+`cmd/sbctl/e2e_test.go` and `cmd/sbctl/e2e_helpers_test.go`.
 
 ## Behavioral Contracts
 
 | BC | Version | Title | PCs covered |
 |----|---------|-------|------------|
-| BC-2.07.002 | v1.4 | sbctl Unified CLI for All Four Daemon Types with OpenSSH Key Authentication | PC-1 (connect), PC-2 (auth), PC-3 (execute if authenticated — incl. Rulings M/U/X), Inv-1 (all subcommands authenticated), Inv-2 (sbctl not a daemon) |
+| BC-2.07.002 | v1.5 | sbctl Unified CLI for All Four Daemon Types with OpenSSH Key Authentication | PC-1 (connect), PC-2 (auth), PC-3 (execute if authenticated — incl. Rulings M/U/X), Inv-1 (all subcommands authenticated), Inv-2 (sbctl not a daemon) |
 
 ## Narrative
 
@@ -157,7 +157,7 @@ check.
 
 | Component | Module | Pure/Effectful |
 |-----------|--------|---------------|
-| Test harness / server setup | internal/mgmt (e2e_test.go) | effectful (socket management, goroutines) |
+| Test harness / server setup | cmd/sbctl (e2e_test.go, e2e_helpers_test.go) | effectful (socket management, goroutines) |
 | sbctl client under test | cmd/sbctl/client.go | effectful |
 | mgmt.Server under test | internal/mgmt/mgmt.go | effectful |
 | Per-mode handler tables | internal/mgmt (test-defined) | pure (handler registration) |
@@ -223,7 +223,7 @@ Integration tests run explicitly: `go test -tags=integration ./...`.
 | Context Source | Estimated Tokens |
 |---------------|-----------------|
 | This story spec | ~1,800 |
-| BC-2.07.002.md (v1.4) | ~1,000 |
+| BC-2.07.002.md (v1.5) | ~1,000 |
 | ARCH-12 §Wiring into cmd/switchboard | ~800 |
 | ARCH-05 §Daemon Management Socket | ~400 |
 | VP-049.md (proof harness skeleton) | ~600 |
@@ -239,7 +239,7 @@ Integration tests run explicitly: `go test -tags=integration ./...`.
 ## Tasks (MANDATORY)
 
 1. [ ] Confirm S-6.03, S-W5.01, and S-6.06 are all merged to develop before starting
-2. [ ] Read BC-2.07.002 (v1.4), ARCH-12 §Wiring, ARCH-05 §Daemon Management Socket, VP-049.md
+2. [ ] Read BC-2.07.002 (v1.5), ARCH-12 §Wiring, ARCH-05 §Daemon Management Socket, VP-049.md
 3. [ ] Read `internal/mgmt/mgmt.go` (S-W5.01 implementation) to understand `NewServer` API
 4. [ ] Read `cmd/sbctl/client.go` (S-6.03 implementation) to understand `Authenticate()`, `dispatch()`, and `connectAndRun()` API (confirm `defer conn.Close()` in `connectAndRun`)
 5. [ ] Read `cmd/switchboard/main.go` to confirm `runRouter` / `runConsole` are stubs (expected per Q1 ruling)
@@ -272,8 +272,8 @@ Integration tests run explicitly: `go test -tags=integration ./...`.
 | `Server.Shutdown(ctx)` called in `t.Cleanup` for each daemon server instance | ARCH-01 §Goroutine WaitGroup Contract; no goroutine leak | `t.Cleanup(func() { srv.Shutdown(ctx) })` |
 | Unix socket paths unique per test run | OS socket uniqueness | `t.TempDir()` for socket directory |
 | AC-002 primary case uses DISTINCT operator key (not bootstrap) | Q5 ruling — Option B; VP-049 assertion strength | `mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})` with separate `operatorPriv` |
-| AC-003 request ID is non-constant per-call (not `"t1"`) | BC-2.07.002 v1.4 Ruling X | `id` = hex `time.Now().UnixNano()` or equivalent |
-| AC-003 asserts `resp.Type == "response"` explicitly (not just `resp.Ok`) | BC-2.07.002 v1.4 Ruling U | Assert both fields; wrong-type with `"ok":true` must be caught |
+| AC-003 request ID is non-constant per-call (not `"t1"`) | BC-2.07.002 v1.5 Ruling X | `id` = hex `time.Now().UnixNano()` or equivalent |
+| AC-003 asserts `resp.Type == "response"` explicitly (not just `resp.Ok`) | BC-2.07.002 v1.5 Ruling U | Assert both fields; wrong-type with `"ok":true` must be caught |
 | AC-005 uses server-side listener wrapper to observe FIN; NOT a tautological local Close | Q6 ruling — Option A | `closingListenerWrapper` tracks `io.EOF` on accepted conns after dispatch |
 | Four `mgmt.Server` instances have distinct per-mode handler tables | Q1 ruling — Option A | Each server created with its own `handlerTable`; per §Test Infrastructure Notes |
 | Test does NOT invoke `runRouter` or `runConsole` as the test vehicle | Q1 ruling — daemon-mode axis deferred to Wave-6 | Instantiate `mgmt.NewServer` directly |
@@ -295,8 +295,8 @@ Integration tests run explicitly: `go test -tags=integration ./...`.
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `internal/mgmt/e2e_test.go` | create | `//go:build integration` e2e test: `TestE2E_MgmtPlane_AllFourDaemonTypes_VP049`, `TestE2E_MgmtPlane_BootstrapAuth_VP049`, `TestE2E_MgmtPlane_UnauthenticatedRejected_AC004` |
-| `internal/mgmt/testhelpers_test.go` | create | `closingListenerWrapper`, `routerHandlers()`, `accessHandlers()`, `consoleHandlers()`, `controlHandlers()` helper code used only by the e2e test |
+| `cmd/sbctl/e2e_test.go` | create | `//go:build integration` e2e test: `TestE2E_MgmtPlane_AllFourDaemonTypes_VP049`, `TestE2E_MgmtPlane_BootstrapAuth_VP049`, `TestE2E_MgmtPlane_UnauthenticatedRejected_AC004`. Placement in `cmd/sbctl/` is architecturally forced — the client authentication path uses the unexported `authenticate` function which is only accessible from within the `sbctl` package. |
+| `cmd/sbctl/e2e_helpers_test.go` | create | `closingListenerWrapper`, `routerHandlers()`, `accessHandlers()`, `consoleHandlers()`, `controlHandlers()` helper code used only by the e2e test |
 
 ## Adversary Pass-1 Rulings
 
@@ -326,6 +326,7 @@ this story and MUST be dispatched to other agents in a subsequent burst:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.3 | 2026-06-30 | story-writer | Pass-2 doc sweep: BC-2.07.002 pin v1.4→v1.5 (5 refs), file location corrected to cmd/sbctl/ (architectural forcing), architecture_modules cleanup (removed cmd/switchboard). |
 | 1.2 | 2026-06-30 | product-owner | Adversary Pass-1 rulings applied (Q1-Q6). Q1: narrow VP-049 to mgmt.Server contract with per-mode handler tables; per-daemon `runXxx` wiring deferred to Wave-6. Q2: BC pin bumped v1.2→v1.4; AC-003 extended with Rulings M/U/X (non-constant request ID, resp.Type assertion, resp.ID echo). Q3: phantom VP rows 139-140 flagged for spec-steward deletion. Q4: `testenv.NewFull` reference removed; in-process approach specified concretely. Q5: AC-002 now has distinct-operator-key as primary sub-test + bootstrap variant. Q6: AC-005 rewritten to use server-side `closingListenerWrapper` observing client FIN within 500ms. §Adversary Pass-1 Rulings section added. Task list updated (Tasks 8-15 replacing 8-12). File structure updated (testhelpers_test.go added). |
 | 1.1 | 2026-06-29 | product-owner | Add S-6.06 to `depends_on`. Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) were never wired; `startMgmtServer(..., nil)` at every call site. S-6.06 (minted per CR-W5-SCOPE-SPLIT ruling) closes that gap. S-W5.02 cannot exercise admin RPC paths end-to-end until S-6.06 is merged. |
 | 1.0 | 2026-06-28 | story-writer | Initial creation — Wave-5 net-new story per ARCH-12 product-owner handoff. E2E integration gate for management plane; implements VP-049 across all four daemon types. Depends on S-6.03 + S-W5.01. |

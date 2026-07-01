@@ -65,8 +65,8 @@ wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba2
 develop_head: 3ee9c38
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-07-01T04:00:00Z
-last_update: 2026-07-01
+timestamp: 2026-06-30T08:00:00Z
+last_update: 2026-06-30
 ---
 
 # Switchboard Factory State
@@ -99,7 +99,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-6.06 MERGED PR #36 3ee9c38. S-5.02 MERGED PR #37 98eb8b7. S-W5.02 pending | 2026-07-01 | W5: S-5.02 MERGED (PR #37, 98eb8b7, 2026-06-30). S-W5.02 next. S-5.02 trajectory: P6–P11 (6 passes); P9/P10/P11 PASS (3/3 CLOSED per BC-5.39.001). |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-6.06 MERGED PR #36 3ee9c38. S-5.02 MERGED PR #37 98eb8b7. S-W5.02 adversarial in-progress (Pass-2 fixes committed; Pass-3 queued) | 2026-06-30 | W5: S-W5.02 Pass-2 fix-burst committed (07ce3db). Convergence counter reset=0 (impl mutation). Pass-3 fresh 3-lens pending. |
 
 ## Wave / Story Status
 
@@ -192,23 +192,23 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-5.02 MERGED (98eb8b7, PR #37) | Squash-merged to develop 2026-06-30; worktree removed, branch deleted; all ACs delivered; BC-5.39.001 satisfied (P9/P10/P11 clean) | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-07-01 (S-5.02 MERGED PR #37; S-W5.02 next)
+## Session Resume Checkpoint — 2026-06-30 (S-W5.02 Pass-2 fixes committed; Pass-3 ready)
 
-**Position:** Phase 3 Wave 5. S-5.02 merged to develop (PR #37, squash SHA 98eb8b7, 2026-06-30). Worktree feat/S-5.02-sbctl-metrics-query removed. develop HEAD = 98eb8b7 (post-S-5.02 merge). Factory-artifacts tip: see `git -C .factory log -1`.
+**Position:** Phase 3 Wave 5. S-W5.02 adversarial convergence in progress. Pass-2 fix-burst committed to factory-artifacts (impl SHA 07ce3db on source branch). Convergence counter reset to 0 (impl mutation in burst). Factory-artifacts tip: see `git -C .factory log -1`.
 
-**Wave 5 remaining:** S-W5.02 (e2e management plane harness, 5 pts; all dependencies S-6.03 + S-W5.01 + S-6.06 + S-5.02 merged).
+**S-W5.02 Pass-2 closed findings:** F-P2L1-001, F-P2L1-002 (bootstrap variant + waitForAnyClose deadlock — L1); F-P2L2-001, F-P2L2-002, F-P2L2-004, F-P2L2-005 (BC pin sweep + file-location + architecture_modules — L2); F-P2L3-001 (VP-049 API drift — L3); LOW/NITPICK cleanups. Story v1.2→v1.3; VP-049 v1.1→v1.2; VP-INDEX v2.15→v2.16; STORY-INDEX v3.17→v3.18.
 
-**S-W5.02 UNBLOCKED:** All S-W5.02 dependencies merged. Ready for TDD delivery (per-story-delivery.md Step 1).
-
-**Open deferred observations (carry forward):**
-- S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items above (some may be addressed in S-W5.04 or phase-5).
-- TaskList #115: S-6.06 lens-1 post-merge polish backlog (7 LOW non-blocking OBS from Passes 25–27).
-- TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity (O-P26L3-001/002).
+**Wave 5 remaining:** S-W5.02 (e2e management plane harness, 5 pts; all source dependencies merged).
 
 **NEXT ACTION on resume:**
-1. S-W5.02 — begin TDD delivery (e2e management plane harness; depends S-6.03 + S-W5.01 + S-6.06 + S-5.02 all merged).
+1. Dispatch S-W5.02 Pass-3 fresh 3-lens adversarial review (spec tip: current factory-artifacts HEAD; impl tip: 07ce3db). Clean-pass counter: 0/3.
 2. Wave 5 adversarial review after S-W5.02 merged (final Wave 5 story).
 3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged).
+
+**Open deferred observations (carry forward):**
+- S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items above.
+- TaskList #115: S-6.06 lens-1 post-merge polish backlog.
+- TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

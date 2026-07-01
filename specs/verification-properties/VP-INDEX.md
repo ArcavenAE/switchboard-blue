@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.15"
+version: "2.16"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -101,8 +101,10 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-075.md |
 | VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-076.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | S-BL.BENCH | deferred | (pending) |
+| VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | S-W6.NN (unscheduled) | draft | (pending) |
 
 > VP-TBD-ACC is bench-deferred per ARCH-03 v1.6 (F-4, S-5.02 lens-3). The p99 estimate is computed from a rolling sample buffer; exact accuracy bound against a true p99 requires a sustained load benchmark that belongs in a dedicated bench story (S-BL.BENCH). This VP will receive a permanent ID when S-BL.BENCH is scheduled. It is registered here as a placeholder to close the F-4 process gap — the property is known and intentionally deferred, not forgotten. Implementing story: S-BL.BENCH (unscheduled).
+> VP-VW6.NN is Wave-6 deferred per VP-049 §Feasibility: per-daemon binary entrypoint wiring (goroutine lifecycle, config parsing, signal handling) is out of S-W5.02 scope because runRouter and runConsole remain in "not implemented" stub state. This placeholder will receive a permanent ID when the Wave-6 story is scheduled. Implementing story: S-W6.NN (unscheduled).
 
 ## Counts
 
@@ -144,6 +146,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.16 | 2026-06-30 | S-W5.02 Pass-2 fix F-P2L2-005: VP-049 bumped v1.1→v1.2 — proof harness skeleton API drift corrected (missing "fmt" import, NewServer 5-arg signature with ln+daemonVersion, Serve(ctx) lifecycle, Shutdown wiring, Authenticate cross-package note). VP-VW6.NN Wave-6 placeholder stub registered (draft, unscheduled) per VP-049 §Feasibility. No count changes to active VP tallies. |
 | 2.15 | 2026-06-30 | S-W5.02 Pass-1 fix-burst: VP-049 bumped v1.0→v1.1 — implementing_story updated S-6.03→S-W5.02 per dep-graph v1.3 anchor propagation; proof harness skeleton rewritten to in-process mgmt.NewServer pattern (four daemon instances, distinct handler tables); §Story Trace and §Feasibility added. Row title updated with implementing_story annotation. No count changes. |
 | 2.14 | 2026-06-30 | Pass-6 fix-burst F-P6L3-002/003: VP-062 bumped v1.1→v1.2 — (1) stale BC-2.06.003 v1.5 pin swept to v1.7 at 4 locations (stale-pin only; EC-006 semantics unchanged); (2) implementing_story S-5.02 → S-W5.04 per VP-047 Pass-4 Ruling-3 precedent (daemon-side types deferred from S-5.02 to S-W5.04). No count or catalog-row changes. |
 | 2.13 | 2026-06-30 | Pass-24 lens-3 F-P24L3-001: VP-076 bumped v1.3→v1.4 — Source Contract cite error-taxonomy.md v3.8→v3.9 (stale taxonomy version carryover; v3.9 authoritative since Pass-22 commit 4b42dd5). No count or catalog-row changes. |
