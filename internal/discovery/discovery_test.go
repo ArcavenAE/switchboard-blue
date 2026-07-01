@@ -987,10 +987,12 @@ func TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN(t *testing.T) {
 	if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
 		t.Fatalf("ReceiveAdvertisement forged-SVTN: got %v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not get ErrSVTNMismatch before HMAC)", forgedErr)
 	}
-	// F-P5L2-MED-02: HMAC-first exclusivity — forged SVTN must never leak
-	// ErrSVTNMismatch; if it does, the ordering invariant is violated.
-	if errors.Is(forgedErr, discovery.ErrSVTNMismatch) {
-		t.Fatal("HMAC-first exclusivity violated per RULING-W6TB-H")
+	// F-P7L2-MED-01: HMAC-first exclusivity — strict identity check catches
+	// regressions where impl wraps ErrSVTNMismatch into the returned error
+	// (leaking SVTN validity to attacker). errors.Is on two distinct sentinels
+	// is tautologically false and adds no discrimination power.
+	if forgedErr != discovery.ErrInvalidHMACTag {
+		t.Fatalf("HMAC-first exclusivity: expected err == ErrInvalidHMACTag (identity), got %v (wrapping ErrSVTNMismatch would leak SVTN validity)", forgedErr)
 	}
 }
 
@@ -1202,10 +1204,11 @@ func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
 			if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
 				t.Fatalf("VP-045 forged SVTN: err=%v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not receive ErrSVTNMismatch before HMAC fails)", forgedErr)
 			}
-			// F-P5L2-MED-02: HMAC-first exclusivity — forged SVTN must
-			// never leak ErrSVTNMismatch before HMAC verification.
-			if errors.Is(forgedErr, discovery.ErrSVTNMismatch) {
-				t.Fatal("HMAC-first exclusivity violated per RULING-W6TB-H")
+			// F-P7L2-MED-01: HMAC-first exclusivity — strict identity check
+			// catches regressions where impl wraps ErrSVTNMismatch into the
+			// returned error (leaking SVTN validity to attacker).
+			if forgedErr != discovery.ErrInvalidHMACTag {
+				t.Fatalf("HMAC-first exclusivity: expected err == ErrInvalidHMACTag (identity), got %v (wrapping ErrSVTNMismatch would leak SVTN validity)", forgedErr)
 			}
 
 			result, err := d.Enumerate(ctx)
@@ -1579,6 +1582,19 @@ func TestPropPresenceAdvertisement_TruncatesOversize(t *testing.T) {
 				if prefixLen < len(inputBytes) && !utf8.RuneStart(inputBytes[prefixLen]) {
 					return false
 				}
+				// F-P7L2-MED-02: maximality — the impl cuts at byte 252 then
+				// walks back at most 3 bytes to a rune boundary (max UTF-8
+				// rune width is 4 bytes; walkback consumes at most 3
+				// continuation bytes). So the prefix must be at least 249
+				// bytes long for any oversize input; shorter means the impl
+				// truncated more aggressively than the rune-boundary walkback
+				// justifies and is silently losing content.
+				ellipsisBytes := []byte(ellipsis)
+				resultBytes := []byte(result)
+				prefixBytes := resultBytes[:len(resultBytes)-len(ellipsisBytes)]
+				if len(prefixBytes) < 249 {
+					return false
+				}
 				// Round-trip stability: re-encoding the decoded payload must
 				// produce the same bytes (truncated form is idempotent).
 				reencoded, reErr := discovery.Encode(decoded)
@@ -1700,6 +1716,15 @@ func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
 		got, err := encodeDecodeSession(t, mixedName)
 		if err != nil {
 			t.Fatalf("Encode: %v (mid-rune name must truncate, not error)", err)
+		}
+		// F-P7L2-MED-03: exact-content oracle — the comment documents the
+		// expected output (250×"a"+"…" = 253 bytes) but prior code never
+		// asserted it, weakening F-P5L2-HIGH-03 exactly where the walkback
+		// branch matters most. Assert exact content here, matching the
+		// ASCII sibling subtests' pattern.
+		wantMidRune := strings.Repeat("a", 250) + "…"
+		if got != wantMidRune {
+			t.Errorf("mid-rune boundary: got %q (len=%d), want %q (len=%d) — walkback must land at byte 250 (last rune start before cut=252, closing F-P5L2-HIGH-03)", got, len(got), wantMidRune, len(wantMidRune))
 		}
 		if len(got) > 255 {
 			t.Errorf("mid-rune: decoded name len=%d, want ≤255 bytes (F-L2-001)", len(got))
