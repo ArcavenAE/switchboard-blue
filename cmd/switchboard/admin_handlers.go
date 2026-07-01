@@ -1,11 +1,12 @@
 // admin_handlers.go — daemon-side admin RPC handler builder for cmd/switchboard.
 //
-// BuildAdminHandlers returns the []mgmt.Handler slice for all four admin RPCs:
+// BuildAdminHandlers returns the []mgmt.Handler slice for all admin RPCs:
 //
 //	admin.key.register   (BC-2.05.004 PC-1)
 //	admin.key.revoke     (BC-2.05.004 PC-2; HOLD-001 hybrid; ADR-004)
 //	admin.key.expire     (BC-2.05.004 PC-3; DI-003 defense-in-depth duration validation)
 //	admin.key.list-keys  (BC-2.05.004 PC-1 confirmation surface; any admitted role; F-L2-001/F-L2-003)
+//	admin.svtn.create    (BC-2.07.001 PC-1 + PC-2 + Inv-3; S-6.07)
 //
 // Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion
 // (ARCH-04 disambiguation table); AC-004). Access, console, and router daemons pass nil handlers.
@@ -23,10 +24,14 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/mgmt"
@@ -122,6 +127,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},
 		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m)},
+		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
 	}
 }
 
@@ -379,9 +385,9 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 
 	switch {
 	case errors.Is(err, svtnmgmt.ErrSVTNNotFound):
-		return fmt.Errorf("E-SVTN-003: SVTN not found: %s: %w", svtnName, err)
+		return &svtnNotFoundErr{name: svtnName, cause: err}
 	case errors.Is(err, admission.ErrKeyNotRegistered):
-		return fmt.Errorf("E-ADM-013: key not found: no key with fingerprint %s registered in SVTN %s: %w", fp, svtnName, err)
+		return &adminKeyNotFoundErr{fingerprint: fp, svtnName: svtnName, cause: err}
 	case errors.Is(err, svtnmgmt.ErrRoleMismatch):
 		// Extract per-call role detail from *admission.RoleMismatchError when available
 		// (returned by RevokeKeyIfRoleMatches / SetKeyExpiryIfRoleMatches). Fall back
@@ -402,7 +408,7 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		// ExpireKey is called, so this arm is unreachable in production (F-L1-B).
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm=%s to proceed: %w", svtnName, err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: pass --confirm to proceed (revoking control key from SVTN %q): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
@@ -410,11 +416,12 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer
-		// error. Do NOT stamp E-RPC-011 here — mgmt.go is the sole authority for
-		// stamping that code on the wire envelope. Co-stamping produces a malformed
-		// response: {code:"E-RPC-011", message:"E-RPC-011: unmapped admin error: ..."}.
-		// This arm's only role is to surface inner detail for the operator.
-		return fmt.Errorf("unmapped admin error: %w", err)
+		// error. E-INT-999 is the catch-all programmer-error code (Ruling-12 §1
+		// universality: every error returned from a handler must carry an E-* prefix
+		// so the wire envelope always has a machine-readable code). Do NOT use
+		// E-RPC-011 here — mgmt.go stamps that on the wire envelope; co-stamping
+		// produces a malformed response.
+		return fmt.Errorf("E-INT-999: unmapped admin error: %w", err)
 	}
 }
 
@@ -526,4 +533,216 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 		return fmt.Errorf("E-CFG-001: invalid caller_role: %q", callerRoleStr)
 	}
 	return verifyCallerRole(cr, cmd, "(unknown)")
+}
+
+// svtnAlreadyExistsErr is returned by makeAdminSVTNCreateHandler when
+// SVTNManager.Create returns ErrSVTNAlreadyExists. It implements Unwrap so
+// that errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) returns true while the
+// Error() message is derived from the SVTN name only — no stutter from
+// concatenating the sentinel's own text (F-P1L1-004; F-P1L2-001).
+//
+// Message format: "E-SVTN-001: SVTN already exists: <name>"
+// per BC-2.07.001 EC-001 canonical message and error-taxonomy.md row E-SVTN-001.
+type svtnAlreadyExistsErr struct {
+	name  string
+	cause error
+}
+
+func (e *svtnAlreadyExistsErr) Error() string {
+	return fmt.Sprintf("E-SVTN-001: SVTN already exists: %s", e.name)
+}
+
+func (e *svtnAlreadyExistsErr) Unwrap() error { return e.cause }
+
+// svtnNotFoundErr is returned by mapAdminError when ErrSVTNNotFound is encountered.
+// It implements Unwrap so that errors.Is(err, svtnmgmt.ErrSVTNNotFound) returns true
+// while the Error() message is deduplicated — no stutter from concatenating the
+// sentinel's "SVTN not found" text with the SVTN name again (F-P9L1-04).
+//
+// Message format: "E-SVTN-003: SVTN not found: <name>"
+type svtnNotFoundErr struct {
+	name  string
+	cause error
+}
+
+func (e *svtnNotFoundErr) Error() string {
+	return fmt.Sprintf("E-SVTN-003: SVTN not found: %s", e.name)
+}
+
+func (e *svtnNotFoundErr) Unwrap() error { return e.cause }
+
+// adminKeyNotFoundErr is returned by mapAdminError when ErrKeyNotRegistered is
+// encountered. It implements Unwrap so that errors.Is(err, admission.ErrKeyNotRegistered)
+// returns true while the Error() message is deduplicated (F-P9L1-04).
+//
+// Message format: "E-ADM-013: key not found: fingerprint <fp> not registered in SVTN <name>"
+type adminKeyNotFoundErr struct {
+	fingerprint string
+	svtnName    string
+	cause       error
+}
+
+func (e *adminKeyNotFoundErr) Error() string {
+	return fmt.Sprintf("E-ADM-013: key not found: fingerprint %s not registered in SVTN %s", e.fingerprint, e.svtnName)
+}
+
+func (e *adminKeyNotFoundErr) Unwrap() error { return e.cause }
+
+// adminSVTNCreateArgs is the wire-format JSON args for admin.svtn.create.
+// The `name` field carries the operator-supplied SVTN label.
+//
+// AC-002 / BC-2.07.001 PC-1 — wire format: {"command":"admin.svtn.create","args":{"name":"<name>"}}.
+type adminSVTNCreateArgs struct {
+	// Name is the human-readable SVTN label provided by the operator.
+	Name string `json:"name"`
+}
+
+// adminSVTNCreateResult is the success data payload for admin.svtn.create.
+// JSON field names match the AC-004 wire contract.
+type adminSVTNCreateResult struct {
+	// SVTNID is the hex-encoded 16-byte SVTN identifier (BC-2.07.001 postcondition 1).
+	SVTNID string `json:"svtn_id"`
+	// BootstrapFingerprint is the "SHA256:<base64>" fingerprint of the bootstrap
+	// control key (BC-2.05.004 PC-4 canonical format; BC-2.07.001 PC-2).
+	// Verbatim from svtnmgmt.keyFingerprint — do NOT re-encode to hex.
+	BootstrapFingerprint string `json:"bootstrap_fingerprint"`
+}
+
+// makeAdminSVTNCreateHandler returns the admin.svtn.create handler function.
+//
+// Authority check (BC-2.07.001 Inv-3 / AC-003 / Ruling-5 / F-P2L1-001):
+// admin.svtn.create is bootstrap-only — only the daemon's own bootstrap key
+// (m.IsBootstrapKey) may create SVTNs. Cross-SVTN control-role keys are NOT
+// authorized. The check fires BEFORE m.Create is called; non-bootstrap callers
+// receive E-ADM-009 immediately. resolveAndVerifyCallerRole is NOT called here
+// because the bootstrap-only constraint is stricter than the general control-role
+// check used by admin.key.* handlers.
+//
+// On success (AC-004): returns adminSVTNCreateResult with svtn_id (hex) and
+// bootstrap_fingerprint (SHA256:<base64> verbatim from svtnmgmt.keyFingerprint).
+//
+// On duplicate name (AC-005): propagates ErrSVTNAlreadyExists as
+// "E-SVTN-001: SVTN already exists: <name>" to the RPC response.
+//
+// On non-duplicate Create failure: stamped E-INT-001 (F-P2L1-004).
+//
+// Traces to BC-2.07.001 PC-1 + PC-2 + Inv-3; AC-001; AC-003; AC-004; AC-005;
+// Ruling-5; F-P2L1-001; F-P2L1-004.
+func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		var a adminSVTNCreateArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+
+		// Args validation: name must be non-empty, non-whitespace-only, within
+		// 255 bytes, and free of ASCII control characters (F-P2L2 exhaustive validation).
+		if err := validateSVTNName(a.Name); err != nil {
+			return nil, err
+		}
+
+		// Ruling-5 / F-P2L1-001: bootstrap-only pre-check. Only the daemon's own
+		// bootstrap key may create SVTNs. This is stricter than the general
+		// control-role check — a cross-SVTN control key does not have authority here.
+		callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
+		if !hasPubkey || !m.IsBootstrapKey(callerPub) {
+			fp := "(unknown)"
+			role := "unregistered"
+			if hasPubkey {
+				fp = keyFingerprintAdmin(callerPub)
+				// Diagnostic-only: resolve caller's active role across all registered
+				// SVTNs so the rejection message matches BC-2.07.001 canonical format
+				// "has role <role>". Does NOT affect the authority decision — the
+				// bootstrap-only check above is the authoritative gate (Ruling-5 /
+				// F-Lens1-02). If the key has no active role in any SVTN, "unregistered"
+				// is reported to match the canonical label used by resolveAndVerifyCallerRole
+				// (Ruling-12 §2).
+				if r, found := m.CallerKeyRoleInAny(callerPub); found {
+					role = r.String()
+				}
+			}
+			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s has role %s", fp, role)
+		}
+
+		// Ruling-7 / F-Impl-002: defense-in-depth RoleControl check.
+		// BC-2.07.001 Inv-3 mandates the bootstrap key implies RoleControl by
+		// construction, but we verify explicitly so that future key-model changes
+		// (e.g., a rotation flow that retains the is_bootstrap flag on a demoted key)
+		// cannot silently bypass this gate. The check is skipped (allowed) when no
+		// SVTNs exist yet — the first-ever create is the authorized genesis path.
+		if hasExistingSVTNs := m.HasAnySVTN(); hasExistingSVTNs && !m.BootstrapKeyHasControlRole() {
+			// Resolve actual role for canonical Ruling-12 §2 message shape.
+			// callerPub is the bootstrap key (IsBootstrapKey passed above).
+			bsFP := m.BootstrapFingerprint()
+			bsRole := "unregistered"
+			if r, found := m.CallerKeyRoleInAny(callerPub); found {
+				bsRole = r.String()
+			}
+			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s has role %s", bsFP, bsRole)
+		}
+
+		result, err := m.Create(a.Name)
+		if err != nil {
+			// F-P1L2-001: check via errors.Is, not string matching, so that the
+			// sentinel is correctly identified without depending on the error text.
+			// F-P1L1-003: stamp E-SVTN-001 (not E-ADM-004) for duplicate names.
+			// F-P1L1-004: derive the message from a.Name only — do NOT wrap
+			// err.Error() which already contains "SVTN already exists", causing stutter.
+			if errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) {
+				return nil, &svtnAlreadyExistsErr{name: a.Name, cause: err}
+			}
+			// F-P2L1-004: non-duplicate Create failure (e.g. internal rand.Read failure)
+			// stamped with E-INT-001. Use %w to preserve the error chain for operators
+			// and allow errors.Is/As inspection by callers (go.md rule 4; F-Impl-003).
+			return nil, fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %w", a.Name, err)
+		}
+
+		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from
+		// svtnmgmt.BootstrapFingerprint (SHA256:<base64> canonical format).
+		return adminSVTNCreateResult{
+			SVTNID:               hex.EncodeToString(result.SVTN.ID[:]),
+			BootstrapFingerprint: m.BootstrapFingerprint(),
+		}, nil
+	}
+}
+
+// validateSVTNName checks that the SVTN name satisfies the admission constraints
+// for admin.svtn.create (F-P2L2 exhaustive validation; F-Impl-001):
+//   - non-empty
+//   - not whitespace-only (strings.TrimSpace must be non-empty)
+//   - at most 255 bytes (operator-readable label budget)
+//   - valid UTF-8 encoding (F-Impl-001)
+//   - no ASCII control characters (U+0000–U+001F, U+007F)
+//   - no C1 controls (U+0080–U+009F) or Unicode Cc category — caught by unicode.IsControl
+//   - no Unicode line separator (U+2028) or paragraph separator (U+2029) — explicit checks
+//     because Go's unicode.IsControl covers only the Cc category, not Zl/Zp (F-Impl-001)
+//
+// Returns E-CFG-001 on any violation.
+func validateSVTNName(name string) error {
+	if name == "" {
+		return fmt.Errorf("E-CFG-001: missing required field: name")
+	}
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("E-CFG-001: invalid name: name must not be whitespace-only")
+	}
+	if len(name) > 255 {
+		return fmt.Errorf("E-CFG-001: invalid name: name exceeds 255-byte maximum (got %d bytes)", len(name))
+	}
+	// F-Impl-001: reject invalid UTF-8 before iterating runes — range over an
+	// invalid UTF-8 string silently replaces bad bytes with U+FFFD, masking the
+	// violation. utf8.ValidString must be checked first.
+	if !utf8.ValidString(name) {
+		return fmt.Errorf("E-CFG-001: invalid name: name is not valid UTF-8")
+	}
+	// F-Impl-001: reject control characters from Unicode categories Cc (control),
+	// Zl (line separator: U+2028), and Zp (paragraph separator: U+2029).
+	// unicode.IsControl covers Cc (ASCII controls U+0000–U+001F, U+007F, and
+	// C1 controls U+0080–U+009F). U+2028 and U+2029 are NOT in Cc — they are
+	// Zl/Zp — so they must be checked explicitly.
+	for _, r := range name {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return fmt.Errorf("E-CFG-001: invalid name: name contains control character U+%04X", r)
+		}
+	}
+	return nil
 }

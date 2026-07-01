@@ -19,7 +19,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -113,6 +115,10 @@ type SVTNManager struct {
 	// locally as the first admitted key when a new SVTN is created
 	// (BC-2.07.001 postcondition 1 + 2).
 	controlPubKey ed25519.PublicKey
+	// randSource is the entropy source used to generate SVTN IDs. Defaults to
+	// crypto/rand.Reader in NewSVTNManager. Injectable via NewSVTNManagerWithRandSource
+	// for tests that must exercise the rand.Read failure path (F-P3L2-01).
+	randSource io.Reader
 }
 
 // NewSVTNManager constructs a SVTNManager with the given AdmittedKeySet and
@@ -121,12 +127,25 @@ type SVTNManager struct {
 //
 // No init() functions — all dependencies injected (go.md rule 10).
 func NewSVTNManager(ks *admission.AdmittedKeySet, controlPubKey ed25519.PublicKey) *SVTNManager {
+	return newSVTNManager(ks, controlPubKey, rand.Reader)
+}
+
+// NewSVTNManagerWithRandSource constructs a SVTNManager with an injectable
+// entropy source. Use in tests to exercise the rand.Read failure path
+// (E-INT-001 branch in admin.svtn.create handler; F-P3L2-01).
+// Production code MUST use NewSVTNManager (crypto/rand.Reader).
+func NewSVTNManagerWithRandSource(ks *admission.AdmittedKeySet, controlPubKey ed25519.PublicKey, r io.Reader) *SVTNManager {
+	return newSVTNManager(ks, controlPubKey, r)
+}
+
+func newSVTNManager(ks *admission.AdmittedKeySet, controlPubKey ed25519.PublicKey, r io.Reader) *SVTNManager {
 	// Deep-clone the public key so SVTNManager's copy is independent of the caller's slice.
 	cloned := append(ed25519.PublicKey(nil), controlPubKey...)
 	return &SVTNManager{
 		svtns:         make(map[string]SVTN),
 		keySet:        ks,
 		controlPubKey: cloned,
+		randSource:    r,
 	}
 }
 
@@ -163,8 +182,10 @@ func keyFingerprint(pubkey ed25519.PublicKey) string {
 func (m *SVTNManager) Create(svtnName string) (CreateResult, error) {
 	// Generate SVTN ID before acquiring the lock to keep the critical section
 	// short and avoid holding the mutex during a syscall (CR-005).
+	// Uses m.randSource (crypto/rand.Reader in production; injectable in tests
+	// for E-INT-001 failure path coverage — F-P3L2-01).
 	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
+	if _, err := io.ReadFull(m.randSource, id[:]); err != nil {
 		return CreateResult{}, fmt.Errorf("generate SVTN ID: %w", err)
 	}
 
@@ -386,6 +407,70 @@ func (m *SVTNManager) IsBootstrapKey(pubkey ed25519.PublicKey) bool {
 	return subtle.ConstantTimeCompare([]byte(m.controlPubKey), []byte(pubkey)) == 1
 }
 
+// HasAnySVTN reports whether at least one SVTN has been created in this manager.
+// Used by makeAdminSVTNCreateHandler to skip the BootstrapKeyHasControlRole
+// defense-in-depth check on first-ever SVTN creation (before any SVTN exists,
+// the bootstrap key is not yet registered in any keySet — the check would return
+// false and incorrectly block the genesis create; Ruling-7).
+func (m *SVTNManager) HasAnySVTN() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.svtns) > 0
+}
+
+// BootstrapKeyHasControlRole reports whether the daemon bootstrap key's role is
+// RoleControl in at least one registered SVTN. Returns false if no SVTNs exist
+// (not yet created) or if the bootstrap key is not found in any SVTN's key set.
+//
+// Used by makeAdminSVTNCreateHandler as a defense-in-depth gate (Ruling-7;
+// BC-2.07.001 Inv-3): the bootstrap key is always seeded as RoleControl at SVTN
+// creation time, but this check verifies the invariant explicitly so that any
+// future key-model change that decouples is_bootstrap from RoleControl cannot
+// silently bypass the authorization gate.
+//
+// NOTE: the check fails closed — returns false — when no SVTNs exist yet. The
+// handler MUST call IsBootstrapKey first; if that passes, this check is the
+// secondary verification. On first-ever SVTN creation (zero existing SVTNs),
+// the handler has already verified IsBootstrapKey and this secondary check is
+// skipped (zero SVTNs implies bootstrap key not yet registered anywhere, which
+// is the expected and authorized state). See makeAdminSVTNCreateHandler for
+// the exact gating logic.
+func (m *SVTNManager) BootstrapKeyHasControlRole() bool {
+	m.mu.RLock()
+	svtns := make([]SVTN, 0, len(m.svtns))
+	for _, s := range m.svtns {
+		svtns = append(svtns, s)
+	}
+	m.mu.RUnlock()
+
+	now := time.Now().UTC()
+	for _, s := range svtns {
+		entry, ok := m.keySet.LookupByPubkey(s.ID, m.controlPubKey)
+		if !ok {
+			continue
+		}
+		// Treat revoked or expired bootstrap key as not having RoleControl.
+		if entry.IsRevoked() {
+			continue
+		}
+		if exp := entry.KeyExpiry(); !exp.IsZero() && !now.Before(exp) {
+			continue
+		}
+		if entry.Role == admission.RoleControl {
+			return true
+		}
+	}
+	return false
+}
+
+// BootstrapFingerprint returns the "SHA256:<base64>" fingerprint of the daemon's
+// bootstrap control key (BC-2.05.004 PC-4 canonical format; BC-2.07.001 PC-2).
+// Called by the admin.svtn.create handler to populate the bootstrap_fingerprint
+// field in the success response (AC-004 / S-6.07).
+func (m *SVTNManager) BootstrapFingerprint() string {
+	return keyFingerprint(m.controlPubKey)
+}
+
 // CallerKeyRole returns the KeyRole of pubkey in the named SVTN, and true.
 // Returns (0, false) if svtnName does not exist or the key is not registered.
 // Used by admin handlers to resolve the authenticated caller's role server-side
@@ -506,6 +591,65 @@ func (m *SVTNManager) HasNonBootstrapControlKey(svtnName string) bool {
 	return false
 }
 
+// SVTNByName returns a copy of the SVTN record for name, or (SVTN{}, false)
+// if no SVTN with that name exists. Returns a value copy — callers must not
+// retain a pointer into the store (go.md rule 12).
+// Safe for concurrent use.
+func (m *SVTNManager) SVTNByName(name string) (SVTN, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.svtns[name]
+	return s, ok
+}
+
+// All returns a snapshot of all registered SVTNs as a value-copy slice.
+// Callers must not retain references into the returned slice beyond the
+// current scope (go.md rule 12).
+// Safe for concurrent use.
+func (m *SVTNManager) All() []SVTN {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]SVTN, 0, len(m.svtns))
+	for _, s := range m.svtns {
+		out = append(out, s)
+	}
+	return out
+}
+
+// CallerKeyRoleInAny returns the active KeyRole of pubkey in any registered
+// SVTN, and true. Returns (0, false) if pubkey is not found as an active
+// (not revoked, not expired) key in any SVTN, or if no SVTNs exist.
+//
+// This is a diagnostic-only helper used to populate the "has role <role>"
+// field in E-ADM-009 error messages when no specific SVTN name is in scope.
+// Do NOT use this for authority decisions — use CallerKeyRoleActive with an
+// explicit SVTN name.
+// Safe for concurrent use.
+func (m *SVTNManager) CallerKeyRoleInAny(pubkey ed25519.PublicKey) (admission.KeyRole, bool) {
+	m.mu.RLock()
+	svtns := make([]SVTN, 0, len(m.svtns))
+	for _, s := range m.svtns {
+		svtns = append(svtns, s)
+	}
+	m.mu.RUnlock()
+
+	now := time.Now().UTC()
+	for _, s := range svtns {
+		entry, ok := m.keySet.LookupByPubkey(s.ID, pubkey)
+		if !ok {
+			continue
+		}
+		if entry.IsRevoked() {
+			continue
+		}
+		if exp := entry.KeyExpiry(); !exp.IsZero() && !now.Before(exp) {
+			continue
+		}
+		return entry.Role, true
+	}
+	return 0, false
+}
+
 // IsRegisteredAnyState reports whether pubkey is registered in the named SVTN
 // in ANY state — active, revoked, or expired. Returns false if svtnName does
 // not exist or the key has never been registered.
@@ -525,6 +669,35 @@ func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.Publi
 	}
 	_, ok := m.keySet.LookupByPubkey(svtn.ID, pubkey)
 	return ok
+}
+
+// InsertRawSVTN inserts an SVTN record with a freshly generated ID without
+// registering any keys in the AdmittedKeySet. This intentionally violates the
+// Create() invariant that registers the bootstrap control key; callers are
+// responsible for constructing meaningful state from the resulting record.
+//
+// SECURITY: InsertRawSVTN is a bootstrap-invariant-bypass primitive reachable
+// only from test binaries (guarded by testing.Testing()). Never call from
+// production code.
+//
+// Returns ErrSVTNAlreadyExists if svtnName is already present.
+// The SVTN ID is generated from m.randSource (crypto/rand.Reader in production).
+// Safe for concurrent use.
+func (m *SVTNManager) InsertRawSVTN(svtnName string) error {
+	if !testing.Testing() {
+		panic("svtnmgmt.InsertRawSVTN: test-only mutation seam invoked from production binary")
+	}
+	var id [16]byte
+	if _, err := io.ReadFull(m.randSource, id[:]); err != nil {
+		return fmt.Errorf("generate SVTN ID for raw insert: %w", err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.svtns[svtnName]; exists {
+		return ErrSVTNAlreadyExists
+	}
+	m.svtns[svtnName] = SVTN{ID: id, Name: svtnName, CreatedAt: time.Now().UTC()}
+	return nil
 }
 
 // ListKeys returns a snapshot of all registered keys for the named SVTN.

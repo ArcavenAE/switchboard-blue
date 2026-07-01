@@ -22,12 +22,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -470,7 +472,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 	// 2. Sends an admin.key.register RPC to the daemon.
 	// 3. The wire payload contains the correct svtn_id, pubkey, and role fields.
 	//
-	// Since runAdmin panics("not implemented"), this test will panic-fail → RED.
+	// Was RED during initial TDD (runAdmin not implemented); now covers positive path.
 
 	requestCh := make(chan adminRPCRequest, 1)
 	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
@@ -491,7 +493,6 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 	defer cancel()
 
 	// AC-002: call runAdmin with the `key register` subcommand args.
-	// runAdmin currently panics — this test is RED by design.
 	const svtnID = "test-svtn-reg"
 	const pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-register-key"
 
@@ -502,7 +503,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 		"--role", "console",
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-002: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	// Verify the RPC was dispatched with correct payload.
@@ -565,7 +566,7 @@ func TestSbctlAdmin_KeyRevoke_CLI(t *testing.T) {
 		// No --confirm: defaults to false.
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-003: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	select {
@@ -630,7 +631,7 @@ func TestSbctlAdmin_KeyExpire_CLI(t *testing.T) {
 		"--after", after,
 	}, defaultIO())
 	if err != nil {
-		t.Logf("AC-004: runAdmin returned error (expected once implemented): %v", err)
+		t.Fatalf("runAdmin: %v", err)
 	}
 
 	select {
@@ -679,8 +680,9 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 				return nil, fmt.Errorf("E-CFG-001: role field missing in revoke request")
 			}
 			// Simulate daemon: reject control-to-control without confirm.
+			// AC-005 (BC-2.05.004 PC-2): daemon returns E-ADM-018 canonical code; CLI surfaces it verbatim.
 			if !revokeArgs.Confirm {
-				return nil, fmt.Errorf("E-ADM-004: control-to-control revocation requires --confirm flag (ADR-004)")
+				return nil, fmt.Errorf("E-ADM-018: control revocation requires --confirm")
 			}
 			return map[string]any{"fingerprint": "SHA256:DDDD..."}, nil
 		})
@@ -713,10 +715,16 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 				t.Errorf("AC-005 — wire role: got %q; want control", args.Role)
 			}
 		case <-time.After(2 * time.Second):
-			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
+			t.Fatal("AC-005: timed out — CLI did not dispatch RPC within deadline")
 		}
 
-		_ = err
+		if err == nil {
+			t.Fatalf("AC-005: without --confirm: expected error containing E-ADM-018; got nil")
+		}
+		// AC-005 (BC-2.05.004 PC-2): daemon returns E-ADM-018 canonical code; CLI surfaces it verbatim.
+		if !strings.Contains(err.Error(), "E-ADM-018") {
+			t.Errorf("AC-005: expected E-ADM-018 in err: got %v", err)
+		}
 	})
 
 	t.Run("with_confirm_confirm_true_in_wire", func(t *testing.T) {
@@ -748,7 +756,9 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			"--role", "control",
 			"--confirm",
 		}, defaultIO())
-		_ = err
+		if err != nil {
+			t.Fatalf("AC-005: with --confirm: expected success; got error: %v", err)
+		}
 
 		select {
 		case req := <-requestCh:
@@ -764,7 +774,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 				t.Errorf("AC-005 — wire role: got %q; want control", args.Role)
 			}
 		case <-time.After(2 * time.Second):
-			t.Log("AC-005: timed out (expected before runAdmin is implemented)")
+			t.Fatal("AC-005: timed out — CLI did not dispatch RPC within deadline")
 		}
 	})
 }
@@ -786,6 +796,17 @@ func TestSbctlAdmin_UnknownSubcommand_ReturnsError(t *testing.T) {
 	err := runAdmin(ctx, "127.0.0.1:19996", testdataKeyPath(t), false, []string{"totally-unknown-cmd"}, defaultIO())
 	if err == nil {
 		t.Error("runAdmin with unknown subcommand: want non-nil error; got nil")
+		return
+	}
+	// Tighten oracle: error must come from arg parsing (mentions "unknown" and/or the
+	// subcommand name), NOT from a network failure. A network-refused error would pass
+	// the weak err != nil check without validating that arg-parsing fires first.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-P8-001 — runAdmin unknown subcommand: got network error %q; want arg-parsing error before any connection attempt", errStr)
+	}
+	if !strings.Contains(errStr, "unknown") && !strings.Contains(errStr, "totally-unknown-cmd") {
+		t.Errorf("F-P8-001 — runAdmin unknown subcommand: error %q does not mention 'unknown' or the subcommand name; want descriptive parse error", errStr)
 	}
 }
 
@@ -798,17 +819,18 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
-		args []string
+		name        string
+		args        []string
+		missingFlag string // the flag name that must appear in the error
 	}{
 		// BC-2.05.004 precondition 2 — malformed key operations must return error.
-		{"register_missing_key", []string{"key", "register", "--svtn", "test-svtn"}},
-		{"register_missing_svtn", []string{"key", "register", "--key", "ssh-ed25519 AAAA..."}},
-		{"revoke_missing_key", []string{"key", "revoke", "--svtn", "test-svtn", "--role", "console"}},
-		{"revoke_missing_svtn", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--role", "console"}},
-		{"revoke_missing_role", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}},
-		{"expire_missing_after", []string{"key", "expire", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}},
-		{"expire_missing_key", []string{"key", "expire", "--svtn", "test-svtn", "--after", "24h"}},
+		{"register_missing_key", []string{"key", "register", "--svtn", "test-svtn"}, "--key"},
+		{"register_missing_svtn", []string{"key", "register", "--key", "ssh-ed25519 AAAA..."}, "--svtn"},
+		{"revoke_missing_key", []string{"key", "revoke", "--svtn", "test-svtn", "--role", "console"}, "--key"},
+		{"revoke_missing_svtn", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--role", "console"}, "--svtn"},
+		{"revoke_missing_role", []string{"key", "revoke", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}, "--role"},
+		{"expire_missing_after", []string{"key", "expire", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn"}, "--after"},
+		{"expire_missing_key", []string{"key", "expire", "--svtn", "test-svtn", "--after", "24h"}, "--key"},
 	}
 
 	for _, tc := range cases {
@@ -821,6 +843,20 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 			err := runAdmin(ctx, "127.0.0.1:19995", testdataKeyPath(t), false, tc.args, defaultIO())
 			if err == nil {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): want error for missing required flag; got nil", tc.args)
+				return
+			}
+			// Tighten oracle: error must be a flag-parsing error, not a network error.
+			// A network-refused error (E-NET-001) would pass the weak err != nil oracle
+			// without proving that flag validation fires before any connection attempt.
+			errStr := err.Error()
+			if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): got network error %q; want flag validation error before any connection attempt", tc.args, errStr)
+			}
+			// The missing-flag name must appear in the error to confirm the right
+			// validation path fired (not a generic "required field" catch-all).
+			flagName := tc.missingFlag[2:] // strip "--" for substring match (e.g. "key", "svtn", "role", "after")
+			if !strings.Contains(errStr, flagName) {
+				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): error %q does not mention missing flag %q", tc.args, errStr, tc.missingFlag)
 			}
 		})
 	}
@@ -836,7 +872,16 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	t.Parallel()
 
 	// ADR-012 fail-closed — AUTH_FAIL must cause runAdmin to return non-nil error.
-	rpcDispatched := false
+	// postAuthFailReads counts bytes the server received AFTER sending AUTH_FAIL.
+	// A non-zero count means the client continued sending data (RPC dispatch) after
+	// the auth failure, which violates the fail-closed invariant.
+	var postAuthFailReads atomic.Int64
+
+	// drainDone is closed by the server goroutine after its post-AUTH_FAIL drain
+	// loop exits (Read returns EOF or error). The test waits on this channel before
+	// reading postAuthFailReads to guarantee the counter reflects all client bytes
+	// (F-P13L2-04: explicit synchronization for byte-count race).
+	drainDone := make(chan struct{})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -844,10 +889,11 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = ln.Close() })
 
-	// Start a server that always AUTH_FAILs.
+	// Start a server that always AUTH_FAILs, then counts further client writes.
 	go func() {
 		conn, err := ln.Accept()
 		if err != nil {
+			close(drainDone)
 			return
 		}
 		defer func() { _ = conn.Close() }()
@@ -875,6 +921,20 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 			"code":    "E-ADM-010",
 			"message": "authentication failed",
 		})
+
+		// Drain any further bytes the client sends after AUTH_FAIL.
+		// Any such bytes indicate the client dispatched an RPC despite the failure.
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := conn.Read(buf)
+			if n > 0 {
+				postAuthFailReads.Add(int64(n))
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		close(drainDone)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -889,9 +949,18 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 		t.Error("ADR-012 fail-closed — runAdmin with AUTH_FAIL server: want non-nil error; got nil")
 	}
 
-	// Sentinel: no RPC must have been dispatched after AUTH_FAIL.
-	if rpcDispatched {
-		t.Error("ADR-012 fail-closed — RPC was dispatched after AUTH_FAIL; must not dispatch without AUTH_OK")
+	// Wait for the server's drain goroutine to exit before reading the counter.
+	// This ensures postAuthFailReads reflects all bytes the server observed
+	// (F-P13L2-04: bounded wait prevents the counter from being read mid-drain).
+	select {
+	case <-drainDone:
+	case <-time.After(3 * time.Second):
+		t.Error("ADR-012 fail-closed — server drain goroutine did not exit within 3s")
+	}
+
+	// Dispatch observer: no RPC bytes must have been sent after AUTH_FAIL.
+	if n := postAuthFailReads.Load(); n > 0 {
+		t.Errorf("ADR-012 fail-closed — client sent %d bytes after AUTH_FAIL; must not dispatch without AUTH_OK", n)
 	}
 }
 
@@ -938,6 +1007,21 @@ func TestSbctlAdmin_OversizedNDJSONLine_DoesNotOOM(t *testing.T) {
 
 	if err == nil {
 		t.Error("ADR-012 §6 — oversized NDJSON line: want non-nil error (bounded read violation); got nil")
+	} else {
+		// Positive-coverage: the error must indicate the read-guard fired.
+		// Accepted substrings (CWE-400 / ADR-012 §6):
+		//   - bufio scanner limit: "token too long"
+		//   - custom inline guard / LimitReader stamp: "message too large", "E-RPC-002"
+		// "EOF" alone is NOT accepted — a bare EOF indicates a network close, not a
+		// size-guard, and would allow the assertion to pass on a completely unrelated
+		// connection failure (ADR-012 §6, CWE-400).
+		msg := err.Error()
+		if !strings.Contains(msg, "token too long") &&
+			!strings.Contains(msg, "message too large") &&
+			!strings.Contains(msg, "E-RPC-002") {
+			t.Errorf("ADR-012 §6 — expected read-guard error surface "+
+				"(\"token too long\" / \"message too large\" / \"E-RPC-002\"); got: %v", err)
+		}
 	}
 }
 
@@ -975,6 +1059,16 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 
 	if err == nil {
 		t.Error("ADR-012 — malformed JSON response: want non-nil error; got nil")
+	} else {
+		// Positive-coverage: the error must surface a JSON parse failure.
+		// Require the stdlib "invalid character" prefix — unique to json.SyntaxError
+		// and distinct from "unexpected EOF" (network failure) or bare "json" matches
+		// that would accept unrelated errors.
+		msg := err.Error()
+		if !strings.Contains(msg, "invalid character") {
+			t.Errorf("ADR-012 — expected stdlib JSON parse error surface "+
+				"(\"invalid character\" prefix from json.SyntaxError); got: %v", err)
+		}
 	}
 }
 
@@ -1019,7 +1113,20 @@ func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 	}, defaultIO())
 
 	if err == nil {
-		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error (E-CFG-001); got nil")
+		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error; got nil")
+		return
+	}
+	// Tighten oracle: client-side validation must fire before any connection
+	// attempt — the error must mention the problematic constraint ("duration"
+	// or "after") and must NOT be a network error (E-NET-001 / connection
+	// refused). The daemon handler would emit E-CFG-001 for zero duration, but
+	// client-side validation is expected to short-circuit before dispatch.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: got network error %q; want client-side validation error before any connection attempt", errStr)
+	}
+	if !strings.Contains(errStr, "duration") && !strings.Contains(errStr, "after") {
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: error %q does not mention 'duration' or 'after'; want field-specific validation message", errStr)
 	}
 }
 
@@ -1049,8 +1156,17 @@ func TestSubprocessAdmin_ConnectionRefused(t *testing.T) {
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
-	if err := cmd.Run(); err == nil {
+	err := cmd.Run()
+	if err == nil {
 		t.Error("BC-2.07.003 PC-1 — expected non-zero exit; got 0")
+	} else {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("expected ExitError, got %T: %v", err, err)
+		}
+		if exitErr.ExitCode() != 1 {
+			t.Fatalf("expected exit code 1, got %d", exitErr.ExitCode())
+		}
 	}
 
 	stderr := errBuf.String()
@@ -1068,12 +1184,12 @@ func TestSubprocessAdmin_ConnectionRefused(t *testing.T) {
 func TestSbctlAdmin_KeyRegister_InvalidRole(t *testing.T) {
 	t.Parallel()
 
+	// Followup: default-console path e2e is tracked separately.
 	cases := []struct {
 		name string
 		role string
 	}{
 		// F-CS-005 — invalid role values must be rejected before dispatch.
-		{"empty_role_placeholder", ""},
 		{"unknown_role", "superadmin"},
 		{"numeric_role", "42"},
 		{"mixed_case_role", "Control"},
@@ -1092,24 +1208,10 @@ func TestSbctlAdmin_KeyRegister_InvalidRole(t *testing.T) {
 				"key", "register",
 				"--key", "ssh-ed25519 AAAA...",
 				"--svtn", "test-svtn",
+				"--role", tc.role,
 			}
-			if tc.role != "" {
-				args = append(args, "--role", tc.role)
-			}
-			// For the empty-role case, omit the flag entirely to test default handling.
-			// The default is "console" (valid), so we use a known-invalid role string
-			// that cannot be mapped to a valid role.
 
 			err := runAdmin(ctx, "127.0.0.1:19993", testdataKeyPath(t), false, args, defaultIO())
-
-			// For non-empty invalid roles: must return error.
-			// For the empty-role case (omit flag): default is "console" which is valid,
-			// so this sub-test name is misleading — skip the assertion for the omit case.
-			if tc.role == "" {
-				// Default "console" is valid; this sub-test verifies the default path.
-				// No assertion needed — this is a passing case.
-				return
-			}
 
 			if err == nil {
 				t.Errorf("F-CS-005 — runAdmin key register --role %q: want non-nil error; got nil", tc.role)
@@ -1165,4 +1267,378 @@ func TestSubprocessAdmin_ConnectionRefused_Entry(t *testing.T) {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+// ── S-6.07: sbctl admin svtn create CLI tests ─────────────────────────────────
+
+// TestSbctlAdmin_SvtnCreate_CLI verifies AC-002 at the CLI layer:
+// `sbctl admin svtn create --name <svtn-name>` dispatches the
+// admin.svtn.create RPC with the correct wire-format payload.
+//
+// BC-2.07.001 PC-1 — admin.svtn.create RPC is dispatched with correct args.
+// AC-002 — sbctl admin svtn create sends {"command":"admin.svtn.create","args":{"name":"<name>"}}.
+func TestSbctlAdmin_SvtnCreate_CLI(t *testing.T) {
+	t.Parallel()
+
+	// AC-002 / BC-2.07.001 PC-1 — sbctl admin svtn create dispatches correct RPC.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
+	requestCh := make(chan adminRPCRequest, 1)
+	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q; want admin.svtn.create", cmd)
+		}
+		var createArgs adminSVTNCreateArgs
+		if err := json.Unmarshal(args, &createArgs); err != nil {
+			return nil, fmt.Errorf("unmarshal adminSVTNCreateArgs: %w", err)
+		}
+		return map[string]any{
+			"svtn_id":               "aabbccddeeff0011aabbccddeeff0011",
+			"bootstrap_fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	const svtnName = "my-new-network"
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", svtnName,
+	}, defaultIO())
+	if err != nil {
+		t.Fatalf("runAdmin: %v", err)
+	}
+
+	// Verify the RPC was dispatched with correct payload.
+	select {
+	case req := <-requestCh:
+		if req.Command != "admin.svtn.create" {
+			t.Errorf("AC-002 — dispatched command: got %q; want admin.svtn.create", req.Command)
+		}
+		var args adminSVTNCreateArgs
+		if err := json.Unmarshal(req.Args, &args); err != nil {
+			t.Fatalf("AC-002 — unmarshal args: %v", err)
+		}
+		if args.Name != svtnName {
+			t.Errorf("AC-002 — wire name: got %q; want %q", args.Name, svtnName)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("AC-002: timed out waiting for admin.svtn.create RPC; " +
+			"runAdminSvtnCreate must dispatch the RPC within the context deadline")
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_NonControlDenied verifies AC-003 at the CLI layer:
+// when the daemon returns E-ADM-009 (non-control-role caller), runAdmin
+// returns a non-nil error.
+//
+// BC-2.07.001 Inv-3 — non-control-role caller rejected with E-ADM-009.
+// AC-003 — sbctl surfaces the E-ADM-009 error to the caller.
+func TestSbctlAdmin_SvtnCreate_NonControlDenied(t *testing.T) {
+	t.Parallel()
+
+	// AC-003 / BC-2.07.001 Inv-3 — E-ADM-009 from daemon must surface as error.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q", cmd)
+		}
+		return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key SHA256:test= has role console")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", "forbidden-svtn",
+	}, defaultIO())
+
+	// AC-003: must return non-nil error containing E-ADM-009.
+	if err == nil {
+		t.Fatal("AC-003: expected E-ADM-009 error from daemon; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-003: expected E-ADM-009 in error; got: %v", err)
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint verifies AC-002
+// and AC-004 at the CLI layer: on success, sbctl admin svtn create prints
+// the svtn_id and bootstrap_fingerprint to stdout.
+//
+// BC-2.07.001 PC-1 + PC-2 — success response carries svtn_id and bootstrap_fingerprint.
+// AC-002 — CLI prints returned svtn_id and bootstrap fingerprint on success.
+// AC-004 — svtn_id (hex) and bootstrap_fingerprint (SHA256:<base64>) in response.
+func TestSbctlAdmin_SvtnCreate_SuccessOutputsSVTNIDAndFingerprint(t *testing.T) {
+	t.Parallel()
+
+	// AC-002 / AC-004 — success output must contain svtn_id and bootstrap_fingerprint.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
+	const wantSVTNID = "aabbccddeeff0011aabbccddeeff0011"
+	const wantFingerprint = "SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA="
+
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q; want admin.svtn.create", cmd)
+		}
+		return map[string]any{
+			"svtn_id":               wantSVTNID,
+			"bootstrap_fingerprint": wantFingerprint,
+		}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var outBuf strings.Builder
+	sio := sbctlIO{out: &outBuf, err: io.Discard}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", "success-svtn",
+	}, sio)
+	if err != nil {
+		t.Fatalf("AC-002: runAdmin returned error on success path: %v", err)
+	}
+
+	out := outBuf.String()
+
+	// AC-002 / AC-004: stdout must contain the svtn_id returned by the daemon.
+	if !strings.Contains(out, wantSVTNID) {
+		t.Errorf("AC-002 / AC-004: stdout does not contain svtn_id %q; got: %q", wantSVTNID, out)
+	}
+
+	// AC-002 / AC-004: stdout must contain the bootstrap_fingerprint returned by the daemon.
+	if !strings.Contains(out, wantFingerprint) {
+		t.Errorf("AC-002 / AC-004: stdout does not contain bootstrap_fingerprint %q; got: %q", wantFingerprint, out)
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_DuplicateName verifies AC-005 at the CLI layer:
+// when the daemon returns SVTN-exists error, runAdmin returns a non-nil error.
+//
+// BC-2.07.001 EC-001 — duplicate SVTN name returns SVTN-exists error.
+// AC-005 — sbctl surfaces the SVTN-exists error to the caller.
+func TestSbctlAdmin_SvtnCreate_DuplicateName(t *testing.T) {
+	t.Parallel()
+
+	// AC-005 / BC-2.07.001 EC-001 — SVTN-exists error from daemon must surface.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.create" {
+			return nil, fmt.Errorf("unexpected command: %q", cmd)
+		}
+		return nil, fmt.Errorf("E-SVTN-001: SVTN already exists: test-svtn")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		"--name", "test-svtn",
+	}, defaultIO())
+
+	// AC-005: must return non-nil error.
+	if err == nil {
+		t.Fatal("AC-005: expected SVTN-exists error from daemon; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-SVTN-001") {
+		t.Errorf("AC-005: expected E-SVTN-001 in error; got: %v", err)
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_MissingName verifies that omitting --name returns
+// an error before dispatching any RPC.
+//
+// BC-2.07.001 PC-1 — CLI validates required args before dispatch.
+func TestSbctlAdmin_SvtnCreate_MissingName(t *testing.T) {
+	t.Parallel()
+
+	// BC-2.07.001 PC-1 — missing --name must return non-nil error.
+	// Was RED during initial TDD (runAdminSvtnCreate not implemented); now covers positive path.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, "127.0.0.1:19992", testdataKeyPath(t), false, []string{
+		"svtn", "create",
+		// No --name flag.
+	}, defaultIO())
+
+	if err == nil {
+		t.Error("BC-2.07.001 PC-1: missing --name: expected non-nil error; got nil")
+	} else if !strings.Contains(err.Error(), "--name is required") {
+		// Distinguish flag-validation failure from connection failure: the error
+		// must name the missing flag, not report a network error.
+		t.Errorf("BC-2.07.001 PC-1: expected \"--name is required\" in error; got: %v", err)
+	}
+}
+
+// TestSbctlAdmin_SvtnCreate_JSONRoundTrip verifies that adminSVTNCreateArgs
+// serialises with the correct JSON field name "name" per the AC-002 wire envelope.
+//
+// AC-002 — wire args shape: {"command":"admin.svtn.create","args":{"name":"<name>"}}.
+func TestSbctlAdmin_SvtnCreate_JSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// AC-002 — wire args field name.
+	original := adminSVTNCreateArgs{Name: "round-trip-svtn"}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal(adminSVTNCreateArgs): %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal to map: %v", err)
+	}
+
+	if _, ok := raw["name"]; !ok {
+		t.Error("AC-002: adminSVTNCreateArgs: missing JSON field 'name'")
+	}
+
+	var decoded adminSVTNCreateArgs
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if decoded.Name != original.Name {
+		t.Errorf("name round-trip: got %q; want %q", decoded.Name, original.Name)
+	}
+}
+
+// TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002 verifies Ruling-14 §10:
+// when the daemon sends an oversized RPC response (>64 KiB) after a successful
+// auth handshake, dispatch() must return an error containing "E-RPC-002" — not
+// bare "unexpected EOF" — providing a deterministic, size-keyed error surface
+// symmetric with Authenticate (ADR-012 §6, CWE-400).
+//
+// ADR-012 §6 — 64 KiB bounded reads; CWE-400 slowloris defence.
+// Ruling-14 §10 — dispatch response decode MUST wrap io.ErrUnexpectedEOF with E-RPC-002.
+func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
+	t.Parallel()
+
+	// Ruling-14 §10 — oversized RPC response must stamp E-RPC-002, not bare EOF.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	// Load the testdata key so the CR-008 authorized-key check passes.
+	testPrivKey, loadErr := loadEd25519Key(testdataKeyPath(t), os.UserHomeDir)
+	if loadErr != nil {
+		t.Fatalf("loadEd25519Key: %v", loadErr)
+	}
+	opPub := testPrivKey.Public().(ed25519.PublicKey)
+
+	go func() {
+		conn, acceptErr := ln.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+		enc := json.NewEncoder(conn)
+		dec := json.NewDecoder(io.LimitReader(conn, maxMessageBytes))
+
+		// Step 1: Send CHALLENGE.
+		var nonce [32]byte
+		if _, randErr := rand.Read(nonce[:]); randErr != nil {
+			return
+		}
+		_, daemonPriv, keyErr := ed25519.GenerateKey(rand.Reader)
+		if keyErr != nil {
+			return
+		}
+		daemonSig := ed25519.Sign(daemonPriv, nonce[:])
+		if encErr := enc.Encode(map[string]any{
+			"type":       "challenge",
+			"nonce":      base64.RawURLEncoding.EncodeToString(nonce[:]),
+			"daemon_sig": base64.RawURLEncoding.EncodeToString(daemonSig),
+		}); encErr != nil {
+			return
+		}
+
+		// Step 2: Read CHALLENGE_RESPONSE and verify it carries the authorized key.
+		var cr struct {
+			Type     string `json:"type"`
+			NonceSig string `json:"nonce_sig"`
+			PubKey   string `json:"pubkey"`
+		}
+		if decErr := dec.Decode(&cr); decErr != nil {
+			return
+		}
+		pubBytes, pubErr := base64.RawURLEncoding.DecodeString(cr.PubKey)
+		if pubErr != nil {
+			_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "bad pubkey"})
+			return
+		}
+		sigBytes, sigErr := base64.RawURLEncoding.DecodeString(cr.NonceSig)
+		if sigErr != nil {
+			_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "bad sig"})
+			return
+		}
+		pub := ed25519.PublicKey(pubBytes)
+		if !ed25519.Verify(pub, nonce[:], sigBytes) || !bytes.Equal(pub, opPub) {
+			_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "unauthorized"})
+			return
+		}
+
+		// Step 3: Send AUTH_OK.
+		if encErr := enc.Encode(map[string]any{
+			"type":           "auth_ok",
+			"daemon_version": "test-dev",
+		}); encErr != nil {
+			return
+		}
+
+		// Step 4: Read the RPC request (discard content).
+		var req struct {
+			ID string `json:"id"`
+		}
+		if decErr := dec.Decode(&req); decErr != nil {
+			return
+		}
+
+		// Step 5: Send oversized RPC response (>64 KiB) — triggers E-RPC-002 on client.
+		// Wrap in a valid-looking JSON prefix so the JSON decoder reads past the
+		// opening brace before the LimitReader cuts it off mid-token.
+		oversized := bytes.Repeat([]byte("x"), maxMessageBytes+512)
+		line := append([]byte(`{"type":"response","id":"`+req.ID+`","ok":true,"data":"`), oversized...)
+		line = append(line, '"', '}', '\n')
+		_, _ = conn.Write(line)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
+		"key", "register",
+		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-ruling14-key",
+		"--svtn", "test-svtn",
+		"--role", "console",
+	}, defaultIO())
+
+	// Ruling-14 §10: must return non-nil error.
+	if err == nil {
+		t.Fatal("Ruling-14 §10 — oversized RPC response: want non-nil error; got nil")
+	}
+
+	// The error must contain "E-RPC-002" — not bare "unexpected EOF" without the stamp.
+	msg := err.Error()
+	if !strings.Contains(msg, "E-RPC-002") {
+		t.Errorf("Ruling-14 §10 — oversized RPC response: expected E-RPC-002 in error; got: %v", err)
+	}
+	// Prove the dispatch-response-decode path fired (not Authenticate): dispatch()
+	// at client.go wraps the io.ErrUnexpectedEOF under "rpc failed:" (unique prefix).
+	if !strings.Contains(msg, "rpc failed:") {
+		t.Errorf("Ruling-14 §10 — oversized RPC response: expected \"rpc failed:\" prefix (dispatch path); got: %v", err)
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("Ruling-14 §10 — oversized RPC response: expected errors.Is(err, io.ErrUnexpectedEOF); got: %v", err)
+	}
 }

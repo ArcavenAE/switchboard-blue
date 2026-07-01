@@ -6,6 +6,7 @@
 //	sbctl admin key revoke   --key <pubkey> --svtn <id> [--confirm]
 //	sbctl admin key expire   --key <pubkey> --svtn <id> --after <duration>
 //	sbctl admin list-keys    [--svtn <id>]   (wire: admin.key.list-keys; F-L2-001)
+//	sbctl admin svtn create  --name <svtn-name>   (wire: admin.svtn.create; S-6.07)
 //
 // All subcommands authenticate to the daemon via the management socket
 // (ADR-012 challenge-response) and send RPC requests to the svtnmgmt
@@ -68,6 +69,17 @@ type adminKeyExpireArgs struct {
 	After string `json:"after"`
 }
 
+// adminSVTNCreateArgs is the wire-format arguments sent to the daemon's
+// admin.svtn.create RPC handler (AC-002 / BC-2.07.001 PC-1).
+//
+// Only the name field is sent — no other operator-supplied fields are defined
+// for SVTN creation in this story. The daemon auto-generates the SVTN ID and
+// bootstrap fingerprint (BC-2.07.001 postcondition 1 + 2).
+type adminSVTNCreateArgs struct {
+	// Name is the human-readable SVTN label provided by the operator.
+	Name string `json:"name"`
+}
+
 // runAdmin dispatches `sbctl admin <subcommand>` commands.
 //
 // Subcommand routing:
@@ -76,6 +88,7 @@ type adminKeyExpireArgs struct {
 //	admin key revoke   --key <pubkey> --svtn <id> [--confirm]
 //	admin key expire   --key <pubkey> --svtn <id> --after <dur>
 //	admin list-keys    [--svtn <id>]
+//	admin svtn create  --name <svtn-name>
 //
 // Returns a non-nil error on any failure; only main() maps errors to exit codes
 // (go.md rule: no log.Fatal / os.Exit outside main).
@@ -84,7 +97,7 @@ type adminKeyExpireArgs struct {
 // F-P8-001 CLI surface resolution.
 func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("admin: no subcommand specified; expected 'key' or 'list-keys'")
+		return fmt.Errorf("admin: no subcommand specified; expected 'key', 'list-keys', or 'svtn'")
 	}
 
 	switch args[0] {
@@ -92,9 +105,59 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 		return runAdminKey(ctx, target, keyPath, useJSON, args[1:], sio)
 	case "list-keys":
 		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", nil, sio)
+	case "svtn":
+		return runAdminSvtn(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("admin: unknown subcommand %q; expected 'key' or 'list-keys'", args[0])
+		return fmt.Errorf("admin: unknown subcommand %q; expected 'key', 'list-keys', or 'svtn'", args[0])
 	}
+}
+
+// runAdminSvtn dispatches `sbctl admin svtn <subcommand>` commands.
+//
+// Subcommand routing:
+//
+//	admin svtn create --name <svtn-name>   (wire: admin.svtn.create; AC-002)
+//
+// Returns a non-nil error on any failure.
+//
+// Traces to BC-2.07.001 PC-1 (SVTN create); S-6.07.
+func runAdminSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
+	if len(args) == 0 {
+		return fmt.Errorf("admin svtn: no subcommand specified; expected 'create'")
+	}
+
+	switch args[0] {
+	case "create":
+		return runAdminSvtnCreate(ctx, target, keyPath, useJSON, args[1:], sio)
+	default:
+		return fmt.Errorf("admin svtn: unknown subcommand %q; expected 'create'", args[0])
+	}
+}
+
+// runAdminSvtnCreate implements `sbctl admin svtn create`.
+//
+// Flags:
+//
+//	--name <svtn-name>   Human-readable SVTN label (required)
+//
+// Sends {"command":"admin.svtn.create","args":{"name":"<svtn-name>"}} to the
+// daemon over the mgmt stream (AC-002 / BC-2.07.001 PC-1). On success, prints
+// the returned svtn_id and bootstrap_fingerprint to sio.out (AC-002 / AC-004).
+//
+// Traces to BC-2.07.001 PC-1 + PC-2; AC-002; AC-004; S-6.07.
+func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
+	fs := flag.NewFlagSet("admin svtn create", flag.ContinueOnError)
+	nameFlag := fs.String("name", "", "SVTN name (required)")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin svtn create: %w", err)
+	}
+	if *nameFlag == "" {
+		return fmt.Errorf("admin svtn create: --name is required")
+	}
+
+	rpcArgs := adminSVTNCreateArgs{Name: *nameFlag}
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.create", rpcArgs, sio)
 }
 
 // runAdminKey dispatches `sbctl admin key <subcommand>` commands.

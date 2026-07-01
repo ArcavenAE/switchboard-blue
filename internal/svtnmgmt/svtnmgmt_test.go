@@ -1234,6 +1234,125 @@ func TestSVTNManager_ConcurrentCreate_NoOrphans(t *testing.T) {
 	}
 }
 
+// TestInsertRawSVTN_DuplicateName verifies that InsertRawSVTN returns
+// ErrSVTNAlreadyExists on a second call with the same name, and that the
+// semantic-contract postconditions (HasAnySVTN==true,
+// BootstrapKeyHasControlRole==false) hold after the first successful insert.
+// Also asserts ID uniqueness across two distinct-name inserts (kills the
+// ID-generation mutant, F-L2-01) and that CreatedAt is in UTC (F-L2-02).
+//
+// Ruling-10: InsertRawSVTN duplicate-name contract + semantic lock-in.
+func TestInsertRawSVTN_DuplicateName(t *testing.T) {
+	t.Parallel()
+
+	m := newManager(t)
+
+	// Insert two distinct-named SVTNs first so we can assert ID uniqueness and
+	// UTC timestamps (F-L2-01, F-L2-02) before the duplicate-name check.
+	if err := m.InsertRawSVTN("svtn-a"); err != nil {
+		t.Fatalf("InsertRawSVTN(\"svtn-a\") first call: unexpected error: %v", err)
+	}
+	if err := m.InsertRawSVTN("svtn-b"); err != nil {
+		t.Fatalf("InsertRawSVTN(\"svtn-b\"): unexpected error: %v", err)
+	}
+
+	recA, okA := m.SVTNByName("svtn-a")
+	recB, okB := m.SVTNByName("svtn-b")
+	if !okA {
+		t.Fatal("SVTNByName(\"svtn-a\"): not found after insert")
+	}
+	if !okB {
+		t.Fatal("SVTNByName(\"svtn-b\"): not found after insert")
+	}
+
+	// F-L2-01: IDs must be distinct and non-zero.
+	var zero [16]byte
+	if recA.ID == zero {
+		t.Error("F-L2-01 — svtn-a ID is all-zero; must be a generated unique identifier")
+	}
+	if recB.ID == zero {
+		t.Error("F-L2-01 — svtn-b ID is all-zero; must be a generated unique identifier")
+	}
+	if recA.ID == recB.ID {
+		t.Errorf("F-L2-01 — svtn-a and svtn-b share the same ID %v; IDs must be distinct", recA.ID)
+	}
+
+	// F-L2-02: CreatedAt must be in UTC.
+	if recA.CreatedAt.Location() != time.UTC {
+		t.Errorf("F-L2-02 — svtn-a CreatedAt.Location = %v; want UTC", recA.CreatedAt.Location())
+	}
+
+	// Semantic-contract postconditions after first insert.
+	if !m.HasAnySVTN() {
+		t.Error("HasAnySVTN() == false after InsertRawSVTN; want true")
+	}
+	if m.BootstrapKeyHasControlRole() {
+		t.Error("BootstrapKeyHasControlRole() == true after InsertRawSVTN; want false (no keys registered)")
+	}
+
+	// Second insert with same name must return ErrSVTNAlreadyExists.
+	err := m.InsertRawSVTN("svtn-a")
+	if !errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) {
+		t.Errorf("InsertRawSVTN(\"svtn-a\") second call: want ErrSVTNAlreadyExists; got %v", err)
+	}
+}
+
+// TestInsertRawSVTN_ConcurrentDistinctNames verifies that concurrent InsertRawSVTN
+// calls with distinct names all succeed, each produces a retrievable SVTN record
+// with a unique ID, and the implementation is race-detector clean (F-L2-04).
+//
+// F-L2-04: concurrent inserts of distinct names must not panic and must produce
+// unique IDs per SVTN.
+func TestInsertRawSVTN_ConcurrentDistinctNames(t *testing.T) {
+	// NOT t.Parallel(): race detector focus; goroutine count is sensitive.
+
+	const workers = 10
+	m := newManager(t)
+
+	errs := make(chan error, workers)
+	names := make([]string, workers)
+	for i := range workers {
+		names[i] = fmt.Sprintf("concurrent-raw-%d", i)
+	}
+
+	for _, name := range names {
+		go func(n string) {
+			errs <- m.InsertRawSVTN(n)
+		}(name)
+	}
+
+	for range workers {
+		if err := <-errs; err != nil {
+			t.Errorf("F-L2-04 — concurrent InsertRawSVTN: unexpected error: %v", err)
+		}
+	}
+
+	// HasAnySVTN must be true after all inserts.
+	if !m.HasAnySVTN() {
+		t.Error("F-L2-04 — HasAnySVTN() == false after concurrent inserts; want true")
+	}
+
+	// Each SVTN must be retrievable with a unique ID.
+	seen := make(map[[16]byte]string, workers)
+	for _, name := range names {
+		rec, ok := m.SVTNByName(name)
+		if !ok {
+			t.Errorf("F-L2-04 — SVTNByName(%q): not found after concurrent insert", name)
+			continue
+		}
+		var zero [16]byte
+		if rec.ID == zero {
+			t.Errorf("F-L2-04 — SVTNByName(%q): ID is all-zero; must be generated", name)
+			continue
+		}
+		if prior, dup := seen[rec.ID]; dup {
+			t.Errorf("F-L2-04 — SVTNByName(%q): ID %v already seen for %q; IDs must be unique",
+				name, rec.ID, prior)
+		}
+		seen[rec.ID] = name
+	}
+}
+
 // TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace verifies that a concurrent
 // revoke+re-register at the same pubkey (changing its role) does not cause
 // ExpireKey to silently expire the new-role entry. ExpireKey must either
