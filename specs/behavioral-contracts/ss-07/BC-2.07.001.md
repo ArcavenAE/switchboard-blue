@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -76,6 +76,13 @@ modified:
       registered as RoleControl atomically in genesis Create). Genesis carve-out appended to Inv-3
       defense-in-depth note. Ref: rulings v1.3 Ruling-8.
   - date: 2026-07-01
+    version: "1.8"
+    actor: spec-steward
+    change: >
+      F-P5L3-03 cleanup: backfill missing modified-list entries for v1.1, v1.4, v1.5 (previously absent);
+      reorder modified list chronologically (v1.1 through v1.8). Add genesis-path Canonical Test Vector
+      (F-P5L3-06). No behavioral changes.
+  - date: 2026-07-01
     version: "1.9"
     actor: spec-steward
     change: >
@@ -83,12 +90,11 @@ modified:
       canonical test vectors specify CLI-level message format, not wire-envelope JSON shape. Wire-envelope
       contract formalized in S-6.07 §Wire Envelope Contract. No behavioral changes.
   - date: 2026-07-01
-    version: "1.8"
+    version: "1.10"
     actor: spec-steward
     change: >
-      F-P5L3-03 cleanup: backfill missing modified-list entries for v1.1, v1.4, v1.5 (previously absent);
-      reorder modified list chronologically (v1.1 through v1.8). Add genesis-path Canonical Test Vector
-      (F-P5L3-06). No behavioral changes.
+      Ruling-12 §5 hygiene (F-P7L3R2-02): reorder modified-list entries chronologically ascending
+      (v1.6 → v1.7 → v1.8 → v1.9); v1.8 and v1.9 were previously swapped. No behavioral changes.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -180,6 +186,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.10 | 2026-07-01 | spec-steward | Ruling-12 §5 hygiene (F-P7L3R2-02): reorder modified-list entries chronologically ascending (v1.6 → v1.7 → v1.8 → v1.9); v1.8 and v1.9 were previously swapped in the frontmatter modified: list. No behavioral changes. |
 | 1.9 | 2026-07-01 | spec-steward | Ruling-11 wire-envelope audit (decisions/wave-6-tranche-a-scope-rulings.md v1.6): no changes; canonical test vectors specify CLI-level message format (`E-ADM-009 "insufficient authority..."`, `E-SVTN-001 "SVTN already exists: <name>"`), not wire-envelope JSON shape. Wire-envelope contract formalized in S-6.07 §Wire Envelope Contract; not needed here. No behavioral changes. |
 | 1.8 | 2026-07-01 | spec-steward | F-P5L3-03/F-P5L3-06 cleanup: backfill modified-list entries for v1.1, v1.4, v1.5 (previously absent); reorder modified list chronologically; add genesis-path Canonical Test Vector (HasAnySVTN()==false, caller==bootstrap → Create succeeds, control-role bootstrap key registered atomically, Inv-3 genesis carve-out per Ruling-8). No behavioral changes. |
 | 1.7 | 2026-07-01 | spec-steward | Ruling-8: narrow Inv-3 DiD check to non-genesis path; genesis creation exempt (bootstrap key registered as RoleControl atomically in genesis Create). Ref: rulings v1.3 Ruling-8. |

@@ -2,7 +2,7 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.6"
+version: "1.7"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
@@ -10,6 +10,7 @@ updated: 2026-07-01T00:00:00
 modified:
   - 2026-07-01T00:00:00 # v1.5 — F-P5L3R-09 (Pass-6 L3): Ruling-9 downstream impact table corrected — BC-2.06.003 target version changed from v1.11→v1.12 to v1.11→v1.13 at two sites (Downstream Artifact Impacts table and Summary of Spec Changes table); v1.12 was an interim hop, actual delivered version is v1.13.
   - 2026-07-01T00:00:00 # v1.6 — Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted; POL-002 story-index-row-sync policy flag (spec-steward applies).
+  - 2026-07-01T00:00:00 # v1.7 — Ruling-12: wire-envelope universality note (E-ADM-009/E-SVTN-001/E-CFG-001/E-INT-001 all follow E-RPC-011 pattern); canonical role-label for unresolvable caller unified to "unregistered"; BC-2.07.001 genesis-path vector; POL-002 schema alignment flagged; BC-2.07.001 modified-list reorder; S-BL.POLICY-SCHEMA-VALIDATOR stub flagged.
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
 closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
@@ -1070,6 +1071,135 @@ fix-burst. The `pathTrackerSource.mu` finding is closed with no action.
 
 ---
 
+## Ruling 12 — Wire-Envelope Contract: Universal Handler-Code Coverage + Genesis-Path Role Label
+
+### Background
+
+Pass-7 Lens-1 on S-6.07 surfaced four gaps in Ruling-11's coverage:
+
+1. **F-Impl1-02:** E-INT-001 (crypto/rand failure) handler code not enumerated in AC list.
+2. **O-Impl1-03:** E-CFG-001 (args validation) handler code not enumerated in AC list.
+3. **F-Impl1-05:** Genesis-path E-ADM-009 message resolves role to string literal `"unknown"` — untested.
+4. **F-Impl1-06:** `resolveAndVerifyCallerRole` uses `"unregistered"` while `admin.svtn.create` uses
+   `"unknown"` for the same semantic condition (caller cannot be role-resolved).
+
+### Ruling
+
+**1. Wire-envelope contract is UNIVERSAL for all handler-code errors.**
+
+Every handler-code error — `E-ADM-*`, `E-SVTN-*`, `E-CFG-*`, `E-INT-*`, and any future
+`E-XXX-YYY` family — follows the Ruling-11 envelope pattern:
+
+```
+{ code: "E-RPC-011", message: "E-XXX-YYY: <detail>" }
+```
+
+Only transport-layer codes (`E-RPC-002`, `E-RPC-004`, etc.) surface as the wire envelope
+`code` directly. A §Universality note MUST be added to S-6.07's Wire Envelope Contract
+section explicitly enumerating the following as E-RPC-011-wrapped handler codes:
+
+- E-ADM-009 (insufficient authority)
+- E-SVTN-001 (SVTN already exists)
+- E-CFG-001 (args validation failure)
+- E-INT-001 (crypto/rand internal failure)
+
+E-RPC-002 is the transport-layer exception and is NOT wrapped.
+
+**2. Canonical role-label for "caller cannot be role-resolved" is `"unregistered"`, NOT `"unknown"`.**
+
+Across ALL admin authority paths — bootstrap check, `resolveAndVerifyCallerRole`,
+`CallerKeyRoleInAny` fallback — the E-ADM-009 message MUST use `"unregistered"` when no
+active role is found for the caller key. The current `"unknown"` literal in
+`admin_handlers.go` at lines 615 and 628 is incorrect and must be replaced with
+`"unregistered"`. The canonical message format is:
+
+```
+"insufficient authority for operation admin.svtn.create: key <fp> has role unregistered"
+```
+
+This aligns with `resolveAndVerifyCallerRole`'s existing behaviour and eliminates the
+semantic bifurcation between `"unknown"` and `"unregistered"` for the same condition.
+
+**3. BC-2.07.001 canonical test vector accepts `"unregistered"` on the genesis path.**
+
+An explicit vector row MUST be added to BC-2.07.001's canonical test vectors for the
+genesis-path unauthorized caller case (`HasAnySVTN() == false`, non-bootstrap caller):
+
+| Scenario | Input | Expected wire message |
+|----------|-------|-----------------------|
+| Genesis path, non-bootstrap caller, no role | Bootstrap key absent; non-bootstrap key presented; zero SVTNs | `"insufficient authority for operation admin.svtn.create: key <fp> has role unregistered"` |
+
+**4. Ruling-11 §5 POL-002 schema alignment (spec-steward applies).**
+
+POL-002 as currently drafted in `.factory/policies.yaml` uses `name:` and `description:`
+fields inconsistent with POL-001's `title:` and `rule:` schema. Spec-steward MUST align
+POL-002 to POL-001's canonical schema:
+
+```
+id: POL-002
+title: story-index-row-sync
+severity: MED
+scope: "stories/*.md <-> stories/STORY-INDEX.md"
+rule: >
+  When a story's frontmatter version: is bumped, STORY-INDEX row's status cell
+  (draft (vX.Y)) MUST be updated in the same fix-burst or before the next
+  per-story adversarial pass. Missing sync = MED finding.
+rationale: >
+  Index drift causes adversarial passes to report stale version numbers as
+  findings, wasting a convergence round on a mechanical inconsistency.
+```
+
+Bump `.factory/policies.yaml` v1.1 → v1.2 when applying.
+
+**5. BC-2.07.001 modified-list chronological ordering (spec-steward applies).**
+
+The BC-2.07.001 frontmatter `modified:` list currently has v1.9 listed before v1.8
+(both dated 2026-07-01), which violates the chronologically-ascending convention
+established by Rulings 8 and 9. Spec-steward MUST reorder to:
+`v1.6 → v1.7 → v1.8 → v1.9 → v1.10`.
+
+Note: the changelog table in the BC body MAY retain descending order (most recent on
+top) — that is the project convention. Only the frontmatter `modified:` list must be
+ascending. Bump BC-2.07.001 v1.9 → v1.10 with this hygiene correction.
+
+**6. [Process gap] policies.yaml lacks a schema validator (follow-on stub).**
+
+The schema drift between POL-001 and POL-002 reflects the absence of any automated
+policy-schema enforcement. A stub story `S-BL.POLICY-SCHEMA-VALIDATOR` MUST be added
+to STORY-INDEX (P3, S t-shirt, network-management epic) in the next fix-burst. Scope:
+implement a `golangci-lint` custom rule OR a `just` target that parses
+`.factory/policies.yaml` and rejects policies with divergent schemas (missing required
+fields, wrong field names). This story does NOT block the current S-6.07 fix-burst.
+
+### Version Bumps Triggered
+
+| Artifact | From → To | Purpose |
+|----------|-----------|---------|
+| decisions/wave-6-tranche-a-scope-rulings.md | v1.6 → v1.7 | Ruling-12 appended |
+| stories/S-6.07-svtn-admin-create.md | v1.6 → v1.7 | Wire Envelope §Universality note + AC amendments for E-CFG-001/E-INT-001 |
+| specs/behavioral-contracts/ss-07/BC-2.07.001.md | v1.9 → v1.10 | Genesis-path canonical vector + modified-list chronological reorder |
+| .factory/policies.yaml | v1.1 → v1.2 | POL-002 schema alignment to POL-001 canonical fields |
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| S-6.07 (story v1.6 → v1.7) | Add §Universality note to Wire Envelope Contract; enumerate E-ADM-009/E-SVTN-001/E-CFG-001/E-INT-001 as E-RPC-011-wrapped; E-RPC-002 remains transport-layer exception |
+| `cmd/switchboard/admin_handlers.go` lines 615/628 | Replace `"unknown"` with `"unregistered"` in E-ADM-009 message for unresolvable-role case |
+| BC-2.07.001 (v1.9 → v1.10) | Add genesis-path `"unregistered"` canonical test vector row; reorder `modified:` frontmatter list chronologically ascending |
+| `.factory/policies.yaml` (v1.1 → v1.2) | Align POL-002 to POL-001 schema: replace `name:`/`description:` with `title:`/`rule:`; add missing `severity:`, `scope:`, `rationale:` fields |
+| STORY-INDEX.md | Add `S-BL.POLICY-SCHEMA-VALIDATOR` stub (P3, backlog) |
+
+### Ordering
+
+1. Implementer applies `"unknown"` → `"unregistered"` fix to `admin_handlers.go` (unblocks S-6.07 Pass-7 re-review).
+2. Story-writer applies §Universality note to S-6.07 AC amendments (same fix-burst).
+3. Spec-steward applies BC-2.07.001 v1.10 vector + modified-list reorder, POL-002 schema alignment, and STORY-INDEX stub.
+
+Items 2 and 3 are independent and may proceed in parallel. None block the `admin_handlers.go` fix.
+
+---
+
 ## Changelog
 
 | Version | Date | Change |
@@ -1081,3 +1211,4 @@ fix-burst. The `pathTrackerSource.mu` finding is closed with no action.
 | 1.4 | 2026-07-01 | Ruling 10 ("production package" definition; InsertRawSVTN runtime guard + CreatedAt parity + DuplicateName test; SeedSVTNWithoutBootstrapKey rename + postcondition assertions; F-L2-A1-02/03/04 closure) |
 | 1.5 | 2026-07-01 | F-P5L3R-09 (Pass-6 L3) correction: Ruling-9 downstream impact table — BC-2.06.003 target version corrected from v1.11→v1.12 to v1.11→v1.13 at two sites; v1.12 was an interim hop, actual delivered version is v1.13 |
 | 1.6 | 2026-07-01 | Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted (F-L1-01 closed no-action); POL-002 story-index-row-sync policy flagged for spec-steward |
+| 1.7 | 2026-07-01 | Ruling-12: wire-envelope universality (E-ADM-009/E-SVTN-001/E-CFG-001/E-INT-001 all E-RPC-011-wrapped); canonical role-label unified to "unregistered"; BC-2.07.001 genesis-path vector added; POL-002 schema alignment to POL-001 canonical fields; BC-2.07.001 modified-list chronological reorder; S-BL.POLICY-SCHEMA-VALIDATOR stub flagged |
