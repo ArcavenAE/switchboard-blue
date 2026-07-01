@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.44"
+version: "3.45"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T19:04:40
+timestamp: 2026-07-01T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -70,8 +70,8 @@ inputDocuments:
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
-| S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
-| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
+| S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.1) |
+| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.1) |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
@@ -173,6 +173,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.45 | 2026-07-01 | Wave-6 Tranche B red-gate prep: S-7.01 `pending` → `pending (v1.1)` (spec-reviewer gaps resolved: internal/frame cross-dep row added; BC-2.02.007 v1.2 PC-5 wire vocab patched; AC-003 ErrTooManyLosses declared package-local; AC-004 ARQ fallback added; AC-005 incomplete-last-group added; AC count 3→5). S-7.02 `pending` → `ready-for-red-gate (v1.1)` (AC-001 split into AC-001a/001b; AC-005 HMAC auth added; AC-002 oracle strengthened to ≥2 distinct advertisers; AC-006 SVTN cross-scope negative added; ARCH-08 import analysis; AC count 4→7). BC-2.02.007 bumped v1.1→v1.2 (PC-5 wire vocab). |
 | 3.44 | 2026-07-01 | Wave-6 Tranche A closure: S-BL.LOOKUP status `draft (v1.5)` → `merged (PR #40, eac5d0a)`; S-W5.04 status `draft (v1.17)` → `merged (PR #41, 851e164)`; S-6.07 status `draft (v1.13)` → `merged (PR #42, 446efce)`. Summary: Complete 26→29; Master-table drafts 4→2. |
 | 3.43 | 2026-07-01 | S-6.07 v1.12→v1.13 (F-P14L3-01 Ruling-14 §10 downstream propagation: AC-007 added, Task 11 added, File Structure rows for cmd/sbctl/client.go + cmd/sbctl/admin_test.go) |
 | 3.42 | 2026-07-01 | sync S-W5.04 v1.17 (F-P13L3-01+02 BC-2.06.003 sibling pins line 76+257); S-6.07 v1.12 (F-P12L3-01 AC-003 trace-col pin + Ruling-13 §9 + Ruling-14 §10 codified) |

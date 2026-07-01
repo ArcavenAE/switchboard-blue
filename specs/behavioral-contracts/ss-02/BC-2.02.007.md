@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.007
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,8 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - 2026-07-01T00:00:00 # v1.2 — PC-5 wire vocabulary corrected: FRAME_TYPE=PARITY → frame_type=fec=0x05 (canonical enum value per F-P8-008 Phase 1 drift fix; aligns with S-7.01 AC-001 and story Architecture Compliance Rules)
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -51,7 +52,7 @@ In multi-path topologies (PE router phase), the downstream half-channel optional
 2. If 0 data frames are lost: receiver delivers all N frames normally; parity frame provides redundant verification.
 3. If exactly 1 data frame is lost: receiver reconstructs the missing frame from the parity frame and the other N-1 frames; delivers all N frames in order.
 4. If 2+ data frames are lost in one group: FEC recovery fails; ARQ retransmit is triggered for the missing frames (falls back to BC-2.02.005).
-5. The parity frame carries a channel header flag (FRAME_TYPE=PARITY) so routers and receivers distinguish it from data.
+5. The parity frame carries `frame_type=fec=0x05` in the channel header so routers and receivers distinguish it from data frames (canonical enum value; `FRAME_TYPE=PARITY` is a retired alias — do not use).
 
 ## Invariants
 
