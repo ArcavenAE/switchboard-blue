@@ -2,7 +2,7 @@
 artifact_id: BC-2.02.007
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -19,6 +19,7 @@ lifecycle_status: active
 introduced: v0.1.0
 modified:
   - 2026-07-01T00:00:00 # v1.2 — PC-5 wire vocabulary corrected: FRAME_TYPE=PARITY → frame_type=fec=0x05 (canonical enum value per F-P8-008 Phase 1 drift fix; aligns with S-7.01 AC-001 and story Architecture Compliance Rules)
+  - 2026-07-01T00:00:00 # v1.3 — traceability backfill: Stories row updated from [filled by story-writer] to S-7.01 (S-7.01 LENS-3 governance pass)
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -97,7 +98,7 @@ Nth data frame dispatched on downstream half-channel; parity frame computed and 
 | L2 Capability | CAP-009 ("XOR parity FEC for burst-loss recovery") per capabilities.md §CAP-009 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — FEC operates on encrypted payload) |
 | Architecture Module | internal/arq |
-| Stories | [filled by story-writer] |
+| Stories | S-7.01 |
 | Capability Anchor Justification | CAP-009 ("XOR parity FEC for burst-loss recovery") per capabilities.md §CAP-009 — this BC is the complete behavioral specification of the XOR FEC strategy for single-loss recovery |
 
 ## Related BCs

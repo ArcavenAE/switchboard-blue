@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.23"
+version: "2.26"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -66,9 +66,9 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | internal/multipath | e2e | P1 | draft | VP-040.md |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms | BC-2.01.001 | internal/halfchannel | benchmark | P0 | draft | VP-041.md |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | internal/halfchannel | benchmark | P0 | draft | VP-042.md |
-| VP-043 | XOR FEC: single loss in group recoverable | BC-2.02.007 | internal/arq | proptest | P1 | draft | VP-043.md |
-| VP-044 | Presence advertisement includes required fields | BC-2.03.001, BC-2.03.003 | internal/discovery | integration | P1 | draft | VP-044.md |
-| VP-045 | Console session enumeration without hostnames | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
+| VP-043 | XOR FEC: single loss in group recoverable (implementing_story: S-7.01) | BC-2.02.007 | internal/arq | proptest | P1 | draft | VP-043.md |
+| VP-044 | Presence advertisement includes required fields (implementing_story: S-7.02; coverage partial — in-process registry seam only; multicast wire deferred to S-BL.DISCOVERY-WIRE per RULING-W6TB-D) | BC-2.03.001, BC-2.03.003 | internal/discovery | integration | P1 | draft | VP-044.md |
+| VP-045 | Console session enumeration without hostnames (implementing_story: S-7.02) | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
 | VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
 | VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07; Ruling-7 defense-in-depth RoleControl mutation-test: S-6.07) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
@@ -78,7 +78,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-052 | N consecutive OnMissingFrame calls → indicator downgrade (one level) | BC-2.06.002 | internal/metrics | integration | P1 | draft | VP-052.md |
 | VP-053 | Empty-tick frame sequence: K ticks → K frames with contiguous seq nums | BC-2.01.002 | internal/halfchannel | proptest | P0 | draft | VP-053.md |
 | VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | draft | VP-054.md |
-| VP-055 | Presence advertisement payload round-trip: required fields present and stable | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
+| VP-055 | Presence advertisement payload round-trip: required fields present and stable (implementing_story: S-7.02) | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
 | VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
 | VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | implemented | VP-058.md |
@@ -147,6 +147,8 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.25 | 2026-07-01 | VP-047 bumped v1.3→v1.4 (RULING-W6TB-F §Ruling 1, F-L3-001): Ruling-1 interim clauses retracted — Property Statement updated (router_addr MUST equal PathSnapshot.RouterAddr; "" valid only for addr-less NewPathTracker paths), proof harness struct comment updated, integration test assertion updated. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed (BC-2.06.003 v1.15; S-BL.ROUTER-ADDR). No count or method changes; total remains 76. |
+| 2.24 | 2026-07-01 | VP-043 bumped v1.0→v1.1 (S-7.01 LENS-3 traceability backfill): implementing_story S-7.01 added to frontmatter; Story Trace section added; catalog row title annotated with implementing_story. No count or method changes; total remains 76. |
 | 2.23 | 2026-07-01 | VP-062 bumped v1.5→v1.6 (F-P5L3R-02 Pass-6 L3): BC-2.06.003 body pins corrected v1.10→v1.13 at 7 sites; catalog row BC column annotated v1.13. Prior v1.11 changelog entry was aspirational — body sweep actually completed at v1.6. No count or method changes; total remains 76. |
 | 2.22 | 2026-07-01 | VP-048 bumped v1.3→v1.4 (Ruling-7 defense-in-depth, Pass-3 L3 handoff): property (3) and mutation-test invariant added — handler MUST check `caller.role == RoleControl` explicitly after `IsBootstrapKey(caller)`; non-bootstrap-role caller rejected E-ADM-009 before SVTN state consulted; row 5 added to Story Trace (S-6.07); BC-2.07.001 bumped v1.5→v1.6 with Inv-3 defense-in-depth note. No count or method changes; total remains 76. |
 | 2.21 | 2026-07-01 | VP-062 bumped v1.4→v1.5 (F-L3-005 Pass-3 L3): module scope expanded from `cmd/sbctl` to `[internal/metrics, cmd/sbctl]`; catalog row Module column updated; BC-2.06.003 pin updated to v1.11. No count or method changes; total remains 76. |
