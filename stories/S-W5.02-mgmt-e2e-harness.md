@@ -13,7 +13,7 @@ wave: 5
 priority: P0
 scope_phase: E
 estimated_points: 5
-version: "1.3"
+version: "1.4"
 bc_traces:
   - BC-2.07.002
 vp_traces: [VP-049]
@@ -306,7 +306,7 @@ Integration tests run explicitly: `go test -tags=integration ./...`.
 | Q# | Finding(s) | Option Chosen | Rationale |
 |----|-----------|---------------|-----------|
 | Q1 | L1 F-002, L2 F-003, L3 F-007 — daemon-mode axis stub (`runRouter`/`runConsole` not implemented) | **A — Narrow VP-049** | Wave-5 convergence gate must not slip on undelivered per-daemon entrypoints. VP-049's assertion power is on the mgmt.Server contract (uniform across all four modes per ARCH-12), not on `runXxx` wiring. Per-daemon `runXxx` e2e deferred to Wave-6 (new VP-VW6.NN). Handler-table differentiation per mode preserves meaningful coverage of per-mode registration differences. Spec-steward burst will add §Feasibility paragraph to VP-049. |
-| Q2 | L2 F-001, L3 F-006 — BC v1.2 pin in story does not reflect Rulings U/X from BC v1.4 | **A — Bump pin to v1.4, extend AC-003** | Rulings U and X are cheap to add and close the anchor gap cleanly. AC-003 now asserts `resp.Type`, `resp.ID` echo, and uses non-constant request ID. No rationale to defer. |
+| Q2 | L2 F-001, L3 F-006 — BC v1.2 pin in story does not reflect Rulings U/X from BC v1.4 | **A — Bump pin to v1.4, extend AC-003** | Rulings U and X are cheap to add and close the anchor gap cleanly. AC-003 now asserts `resp.Type`, `resp.ID` echo, and uses non-constant request ID. No rationale to defer. (subsequently bumped to v1.5 in Pass-2 doc sweep — see v1.3 changelog) |
 | Q3 | L3 F-001 — BC-2.07.002 §Verification Properties rows 139-140 labeled VP-049 are phantom rows | **A — Delete phantoms; mint new VP IDs if needed** | Rows 139-140 are pre-VP-063/VP-062 leftovers that create false traceability. Deleting them is correct. New VP-JSON-COVERAGE and VP-SBCTL-NOT-DAEMON can be minted as follow-up if coverage is desired. BC edit is deferred to spec-steward burst. |
 | Q4 | L3 F-005 — VP-049.md has no `implementing_story`, no §Story Trace, references non-existent `testenv.NewFull` | **A — VP-049 v1.0→v1.1 in spec-steward burst; story drops `testenv.NewFull` reference** | Story §Test Infrastructure Notes updated to specify the in-process `mgmt.NewServer` approach concretely. VP-049 update is deferred to spec-steward burst (not this story). |
 | Q5 | L2 F-004 — bootstrap-mode auth simulation (`NewOperatorKeySet(nil)`) may be insufficient coverage | **B — Add distinct-operator-key sub-test as primary; bootstrap stays as variant** | Trivial to add (generates a second key pair in-process). Strengthens VP-049 assertion power. Bootstrap-mode sub-test remains as `TestE2E_MgmtPlane_BootstrapAuth_VP049`; distinct-operator variant is the primary AC-002 case. |
@@ -326,6 +326,7 @@ this story and MUST be dispatched to other agents in a subsequent burst:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.4 | 2026-06-30 | spec-steward | Pass-5 L3 fix: Q2 historical annotation clarified — added trailing parenthetical noting BC pin was subsequently bumped to v1.5 in Pass-2 doc sweep. Ref F-P5L3-005. |
 | 1.3 | 2026-06-30 | story-writer | Pass-2 doc sweep: BC-2.07.002 pin v1.4→v1.5 (5 refs), file location corrected to cmd/sbctl/ (architectural forcing), architecture_modules cleanup (removed cmd/switchboard). |
 | 1.2 | 2026-06-30 | product-owner | Adversary Pass-1 rulings applied (Q1-Q6). Q1: narrow VP-049 to mgmt.Server contract with per-mode handler tables; per-daemon `runXxx` wiring deferred to Wave-6. Q2: BC pin bumped v1.2→v1.4; AC-003 extended with Rulings M/U/X (non-constant request ID, resp.Type assertion, resp.ID echo). Q3: phantom VP rows 139-140 flagged for spec-steward deletion. Q4: `testenv.NewFull` reference removed; in-process approach specified concretely. Q5: AC-002 now has distinct-operator-key as primary sub-test + bootstrap variant. Q6: AC-005 rewritten to use server-side `closingListenerWrapper` observing client FIN within 500ms. §Adversary Pass-1 Rulings section added. Task list updated (Tasks 8-15 replacing 8-12). File structure updated (testhelpers_test.go added). |
 | 1.1 | 2026-06-29 | product-owner | Add S-6.06 to `depends_on`. Adversary Pass 1 on S-6.02 found CRITICAL gap F-001: daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) were never wired; `startMgmtServer(..., nil)` at every call site. S-6.06 (minted per CR-W5-SCOPE-SPLIT ruling) closes that gap. S-W5.02 cannot exercise admin RPC paths end-to-end until S-6.06 is merged. |

@@ -2,7 +2,7 @@
 artifact_id: dependency-graph
 document_type: dependency-graph
 level: ops
-version: "1.5"
+version: "1.6"
 status: draft
 producer: story-writer
 timestamp: 2026-06-28T00:00:00
@@ -52,8 +52,8 @@ Wave 1: S-1.01, S-1.02                   (both depend only on S-0.01 or each oth
 Wave 2: S-2.01, S-2.02                   (depend on Wave 1)
 Wave 3: S-3.01, S-3.02, S-3.03           (depend on Wave 1+2)
 Wave 4: S-4.01, S-4.02, S-4.03, S-4.04, S-6.01  (depend on Wave 1+2; S-6.01 depends only on S-1.01)
-Wave 5: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01  (depend on Wave 4; S-W5.02 also Wave 5 but gates on S-6.03 + S-W5.01)
-         S-W5.02                                           (depends on S-6.03 + S-W5.01, both Wave 5 — placed last in Wave 5)
+Wave 5: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01  (depend on Wave 4; S-W5.02 also Wave 5 but gates on S-6.03 + S-6.06 + S-W5.01)
+         S-W5.02                                           (depends on S-6.03 + S-6.06 + S-W5.01, all Wave 5 — placed last in Wave 5)
 Wave 6: S-7.01, S-7.02, S-7.03, S-7.04  (depend on Wave 3+4+5)
 ```
 
@@ -66,7 +66,7 @@ Manual topological sort confirms no back-edges:
 - S-5.03 depends only on S-4.01 (Wave 4, complete). S-5.03 blocks S-5.01 (compositional: S-5.01 reads Snapshot().Degraded). Wave ordering: S-5.03 is a Wave-5 story (parallel to S-6.03, S-6.02 chain); S-5.01 must follow S-5.03.
 - **S-6.02 and S-5.02 must serialize** (both edit cmd/sbctl/main.go). Recommended order: S-6.03 → {S-6.02, S-5.01+S-5.03} → S-5.02. S-6.02 and S-5.01/S-5.03 may run in parallel since they touch different modules.
 - **S-W5.01** edits `internal/mgmt`, `internal/config`, and `cmd/switchboard` — does NOT touch `cmd/sbctl/main.go`. No serialization conflict with S-6.03, S-6.02, or S-5.02. S-W5.01 can run in parallel with all three on separate branches.
-- **S-W5.02** depends on both S-6.03 and S-W5.01 (needs client + server both merged). S-W5.02 is the Wave-5 management plane convergence gate — it runs last among the management plane stories.
+- **S-W5.02** depends on S-6.03, S-6.06, and S-W5.01 (needs client auth, daemon-side admin.key.* handlers, and mgmt server all merged). S-6.06 is required because S-W5.02 exercises the admin.key.list command through the control-mode handler table; without S-6.06 the handler is absent and the e2e assertion cannot reach the production code path. S-W5.02 is the Wave-5 management plane convergence gate — it runs last among the management plane stories.
 
 **DAG is acyclic. Verified.**
 
@@ -230,6 +230,7 @@ Items F-P8-004 and F-P8-005 (VP-026/VP-027 invariant references) are architect/t
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.6 | 2026-06-30 | spec-steward | Pass-5 L3 fix F-P5L3-007: update Wave-5 topological-sort prose and cycle-freeness narrative to include S-6.06 in S-W5.02 depends description (table row at line 41 was already correct). Rationale added: S-6.06 provides admin.key.* handler-role enforcement required for admin.key.list command in S-W5.02 control-mode handler table. |
 | 1.5 | 2026-06-30 | spec-steward | S-W5.02 Pass-1 fix-burst F-P1L3-003: add S-6.06 to S-W5.02 depends_on column. VP coverage rollup updated 67/67→76/76; add VP-068 through VP-076 rows to VP-to-Stories matrix (VP-INDEX v2.15 source). Gap Register updated to reflect 76 VPs assigned. |
 | 1.4 | 2026-07-01 | story-writer | O-P7L3-001 (LOW): VP-047 and VP-062 rows updated S-5.02→S-W5.04. VP-047 transferred at VP-INDEX v2.7 (Pass-4 Ruling 3); VP-062 transferred at VP-INDEX v2.14 (Pass-6 F-P6L3-003, commit 7b70af0). Both VPs require daemon-side types (metrics.PathEntry, RTTValue, etc.) minted in S-W5.04. |
 | 1.3 | 2026-06-28 | story-writer | Wave-5 management plane net-new: add S-W5.01 (depends S-6.01, blocks S-W5.02; edits internal/mgmt+config+cmd/switchboard; no cmd/sbctl conflict) and S-W5.02 (depends S-6.03+S-W5.01; e2e gate). Update S-6.03 blocks to include S-W5.02. Add BC-2.07.004 matrix row (S-W5.01). Update BC-2.07.002 row (add S-W5.02 for VP-049 e2e). Update BC-2.09.003 row (add S-W5.01 for PC-10/PC-11). VP-049 re-anchored S-6.03 → S-W5.02. Add VP-064 (S-W5.01), VP-065 (S-W5.01), VP-066 (S-W5.01), VP-067 (S-6.03). BC coverage 44→45, VP coverage 63→67. Update serialization section with S-W5.01/S-W5.02 parallel/serial constraints. Update gap register. |

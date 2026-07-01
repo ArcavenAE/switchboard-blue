@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.19"
+version: "3.20"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.20 | 2026-06-30 | Pass-5 L3 doc polish: S-W5.02 v1.3→v1.4 (Q2 historical annotation clarified). VP-INDEX v2.16→v2.17 (placeholder-row Phase column normalized). VP-049 v1.2→v1.3 (§Story Trace pin v1.3→v1.4 sibling propagation). dep-graph v1.5→v1.6 (dep narrative prose updated). Ref F-P5L3-001/004/005/007. |
 | 3.19 | 2026-06-30 | S-W5.01 status draft→merged (post-merge closeout, per commit 0d499ac). VP-049 §Story Trace pin S-W5.02 v1.2→v1.3 (sibling propagation). Summary Complete 19→20, Pending 8→7. Ref S-W5.02 F-P4L3-001+F-P4L3-002. |
 | 3.18 | 2026-06-30 | S-W5.02 Pass-2 doc sweep: story bumped v1.2→v1.3 (BC pin sweep + file-location corrections + architecture_modules cleanup). VP-049 v1.1→v1.2 (skeleton API drift corrected). VP-INDEX v2.15→v2.16 (VP-049 version bump + VP-VW6.NN placeholder added). Impl SHA cross-ref: 07ce3db. |
 | 3.17 | 2026-06-30 | S-W5.02 Pass-1 adversarial rulings (Q1-Q6): story bumped v1.1→v1.2. Q1 Option A (narrow VP-049 to mgmt.Server contract; per-daemon runXxx wiring deferred to Wave-6); Q2 Option A (BC pin v1.2→v1.4; AC-003 extended with Rulings M/U/X); Q3 Option A (phantom VP rows 139-140 flagged for spec-steward deletion); Q4 Option A (testenv.NewFull reference removed; in-process approach specified concretely); Q5 Option B (AC-002 distinct-operator-key as primary; bootstrap as variant); Q6 Option A (AC-005 rewritten with server-side closingListenerWrapper). §Adversary Pass-1 Rulings section + Downstream Fix-Burst Punch List added to story. |
