@@ -696,6 +696,13 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 			if err != nil {
 				// PC-12 (Ruling C / Ruling R): handler error or timeout → E-RPC-011;
 				// connection stays OPEN.
+				//
+				// E-RPC-011 double-wrap convention: this dispatch wraps ALL handler
+				// errors as E-RPC-011. A handler may already embed a structured error
+				// code (e.g. E-CFG-001, E-INT-001) in the err.Error() string. Test
+				// helpers (e.g. sendAdminRPC in mgmt_test.go) that need the inner code
+				// must extract it from the message field via prefix-lift. This is the
+				// accepted project-wide convention — do NOT unwrap here (F-P3L1-003).
 				resp.OK = false
 				resp.Error = &rpcError{Code: "E-RPC-011", Message: err.Error()}
 				resp.Data = nil

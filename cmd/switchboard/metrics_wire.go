@@ -1,5 +1,5 @@
 // metrics_wire.go — wires the metrics RPC handlers onto the daemon management
-// server (BC-2.06.003 v1.9; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-003).
+// server (BC-2.06.003 v1.10; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-003).
 //
 // Purity classification (ARCH-09): boundary — connects the management server
 // to metrics handler closures. No business logic lives here.
@@ -27,6 +27,12 @@ import (
 // {"paths":[],"message":"no active paths"} when AllSnapshots returns empty.
 //
 // F-P2L1-003 (Ruling-3 Option A): replaces emptyPathsSource stub.
+//
+// #DEFERRED: S-BL.PATH-TRACKER-WIRING — production tracker enumeration deferred
+// to Wave-7. Handler surface, response types, and adapter interface land in S-W5.04;
+// production population (wiring this map to the routing registry) lands in
+// S-BL.PATH-TRACKER-WIRING. Test-time registration via .register() is the only
+// population path in this wave. See wave-6-tranche-a-scope-rulings.md Ruling-6.
 type pathTrackerSource struct {
 	mu       sync.RWMutex
 	trackers map[string]*paths.PathTracker
@@ -80,7 +86,7 @@ func (e *metricsNotFoundError) Error() string {
 // Panics on error because a failure here indicates a programming invariant
 // violation (register-before-serve not respected).
 //
-// BC-2.06.003 v1.9; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001.
+// BC-2.06.003 v1.10; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001.
 func wireMetricsHandlers(srv *mgmt.Server) {
 	if err := mgmt.RegisterMetricsHandlers(srv, newPathTrackerSource(), emptyRouterMetricsSource{}); err != nil {
 		panic("wireMetricsHandlers: register-before-serve invariant violated: " + err.Error())
