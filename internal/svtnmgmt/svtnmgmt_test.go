@@ -1234,6 +1234,37 @@ func TestSVTNManager_ConcurrentCreate_NoOrphans(t *testing.T) {
 	}
 }
 
+// TestInsertRawSVTN_DuplicateName verifies that InsertRawSVTN returns
+// ErrSVTNAlreadyExists on a second call with the same name, and that the
+// semantic-contract postconditions (HasAnySVTN==true,
+// BootstrapKeyHasControlRole==false) hold after the first successful insert.
+//
+// Ruling-10: InsertRawSVTN duplicate-name contract + semantic lock-in.
+func TestInsertRawSVTN_DuplicateName(t *testing.T) {
+	t.Parallel()
+
+	m := newManager(t)
+
+	// First insert must succeed.
+	if err := m.InsertRawSVTN("svtn-a"); err != nil {
+		t.Fatalf("InsertRawSVTN(\"svtn-a\") first call: unexpected error: %v", err)
+	}
+
+	// Semantic-contract postconditions after first insert.
+	if !m.HasAnySVTN() {
+		t.Error("HasAnySVTN() == false after InsertRawSVTN; want true")
+	}
+	if m.BootstrapKeyHasControlRole() {
+		t.Error("BootstrapKeyHasControlRole() == true after InsertRawSVTN; want false (no keys registered)")
+	}
+
+	// Second insert with same name must return ErrSVTNAlreadyExists.
+	err := m.InsertRawSVTN("svtn-a")
+	if !errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) {
+		t.Errorf("InsertRawSVTN(\"svtn-a\") second call: want ErrSVTNAlreadyExists; got %v", err)
+	}
+}
+
 // TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace verifies that a concurrent
 // revoke+re-register at the same pubkey (changing its role) does not cause
 // ExpireKey to silently expire the new-role entry. ExpireKey must either
