@@ -271,35 +271,13 @@ func TestLookup_Miss_ReturnsZeroAdmittedKey_AllFields(t *testing.T) {
 		t.Fatalf("Lookup miss: want ok=false; got true with key=%+v", key)
 	}
 
-	// Reflection pass: assert every exported field is its type's zero value.
-	// This future-proofs the check — adding a new exported field to AdmittedKey
-	// without zeroing it on miss will cause this test to fail automatically.
-	//
-	// reflect.Value.Equal panics on non-comparable kinds (e.g. slice), so we
-	// use reflect.DeepEqual(fv.Interface(), zero.Interface()) which handles all
-	// kinds safely.
-	rv := reflect.ValueOf(key)
-	rt := rv.Type()
-	for i := range rv.NumField() {
-		f := rt.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		fv := rv.Field(i)
-		zero := reflect.Zero(f.Type)
-		if !reflect.DeepEqual(fv.Interface(), zero.Interface()) {
-			t.Errorf("miss: exported field %s want zero value %v, got %v", f.Name, zero, fv)
-		}
-	}
-
-	// Accessor checks for unexported fields surfaced via methods.
-	// KeyExpiry() surfaces the unexported expiry field.
-	if !key.KeyExpiry().IsZero() {
-		t.Errorf("miss: KeyExpiry want zero Time, got %v", key.KeyExpiry())
-	}
-	// IsRevoked() surfaces the unexported revoked field.
-	if key.IsRevoked() {
-		t.Errorf("miss: IsRevoked want false, got true")
+	// DeepEqual covers all fields — exported and unexported alike — so a broken
+	// Lookup that returns any non-zero field on a miss will be caught without
+	// enumerating individual fields. This is the same pattern used by
+	// assertMissZero (F-L2-02) and removes the asymmetry between the Lookup and
+	// LookupByPubkey miss-side checks.
+	if !reflect.DeepEqual(key, admission.AdmittedKey{}) {
+		t.Errorf("miss: want zero AdmittedKey; got non-zero value (exported or unexported fields populated): %+v", key)
 	}
 }
 
@@ -648,6 +626,11 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 					t.Errorf("concurrent same-entry: FrameAuthKey mismatch: got %x, want %x",
 						key.FrameAuthKey, expectedAuthKey)
 				}
+				// Role oracle: must equal RoleAccess on every concurrent hit.
+				// This catches a torn-write where Role is zeroed under contention.
+				if key.Role != admission.RoleAccess {
+					t.Errorf("concurrent same-entry: Role=%v want RoleAccess", key.Role)
+				}
 			}
 		}()
 	}
@@ -692,8 +675,8 @@ func assertMissZero(t *testing.T, label string, key admission.AdmittedKey, ok bo
 	}
 }
 
-// TestLookupByPubkey_ExhaustiveMissTable exercises every structurally distinct
-// miss scenario for LookupByPubkey. Each case hits a different code path:
+// TestLookupByPubkey_ExhaustiveLookupOutcomeTable exercises every structurally
+// distinct outcome for LookupByPubkey. Each case hits a different code path:
 //
 //	(a) svtnID exists in store, but pubkey is not registered → inner-map miss
 //	(b) svtnID does not exist in store at all → outer-map miss
@@ -701,13 +684,14 @@ func assertMissZero(t *testing.T, label string, key admission.AdmittedKey, ok bo
 //	    svtnID" both reach the same outer-map miss branch. They are merged here
 //	    because the code path is identical — a distinct case would add no coverage
 //	    value. F-L2-03.
-//	(c) revoked pubkey — LookupByPubkey returns the entry with IsRevoked()==true
-//	    (revocation is enforced at admission time, not at lookup time).
+//	(c) revoked pubkey — LookupByPubkey returns (entry, true) with IsRevoked()==true;
+//	    this is a hit, not a miss: revocation is enforced at admission time, not at
+//	    lookup time.
 //
-// Each true-miss row asserts (AdmittedKey{}, false) with all-zero fields via
+// True-miss rows (a) and (b) assert (AdmittedKey{}, false) with all-zero fields via
 // reflect.DeepEqual (F-L2-02), future-proofing against new field additions.
 // F-P3L2-005.
-func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
+func TestLookupByPubkey_ExhaustiveLookupOutcomeTable(t *testing.T) {
 	t.Parallel()
 
 	ks := admission.NewAdmittedKeySet()
