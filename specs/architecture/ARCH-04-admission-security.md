@@ -35,9 +35,9 @@ modified:
   - 2026-06-25T00:00:00 # v1.4 — ADR-009: HMAC enforcement at RouteFrame boundary (S-3.04 wire-up); declares fail-fast ordering and forbidden bypass paths
   - 2026-06-25T00:00:00 # v1.5 — ADR-009: fix three contradictions (spec-reviewer C-2/C-3): correct verifyFrameHMAC signature (bool not error, value args not pointers), correct auth key location (forwardingTable not admitted_key_set), clarify ordering vs. single-lock-acquisition (sequential checks, shared RLock)
   - 2026-06-25T00:00:00 # v1.6 — ADR-009: amended to permit lock-free HMAC verify; RLock released after [32]byte key copy; HMAC runs lock-free; admitted check re-locks internally; sequential ordering preserved by line order not lock holding (Wave-3 pass-1 M-1)
-  - 2026-06-30T00:00:00 # v1.13 — Pass-2 lens-3 F-T3-002 propagation: Inv-3 Disambiguation table — correct S-6.06→S-6.05 in BC-2.07.001 Inv-3 anchor; add BC-2.05.004 PC-1/DI-001 (S-6.06 admin.key.*) anchor. Rewrite §BC-2.07.001 Inv-3 prose: S-6.06 is admin.key.* (not SVTN destroy); authority gate anchored on BC-2.05.004 PC-1/VP-075.
   - 2026-06-29T00:00:00 # v1.9 — F-005 ruling: Lookup/LookupByPubkey return-type convention — Option A chosen ((AdmittedKey, bool) value + present-flag); migration deferred to DRIFT-F005-LOOKUP-CONVENTION follow-on story
   - 2026-06-29T00:00:00 # v1.10 — Lens1 F-004: rename `readonly` → `access` in role-hierarchy prose (RoleAccess canonical); Lens2 F-CS-002: ADR-004 Addendum H2 — atomic RevokeKeyIfRoleMatches primitive added; error codes updated to E-ADM-018 (confirm-gate) and E-ADM-019 (role-mismatch); BC-2.07.001 v1.2 PC-2 cross-link; Task 6 note distinguishing daemon-mode exclusion vs caller-key-role (BC-5.39.001)
+  - 2026-06-30T00:00:00 # v1.13 — Pass-2 lens-3 F-T3-002 propagation: Inv-3 Disambiguation table — correct S-6.06→S-6.05 in BC-2.07.001 Inv-3 anchor; add BC-2.05.004 PC-1/DI-001 (S-6.06 admin.key.*) anchor. Rewrite §BC-2.07.001 Inv-3 prose: S-6.06 is admin.key.* (not SVTN destroy); authority gate anchored on BC-2.05.004 PC-1/VP-075.
 ---
 
 # ARCH-04: Admission & Security

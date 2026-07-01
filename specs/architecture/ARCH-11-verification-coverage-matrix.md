@@ -13,19 +13,19 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
-  - 2026-06-23T00:00:00
-  - 2026-06-26T12:00:00 # v1.1 — WG3-H-001: Update totals to 43 BCs / 58 VPs; add missing BC-2.05.008 → VP-058 trace row; update internal/routing VP count from 4 to 5 (add code-audit)
-  - 2026-06-27T00:00:00 # v1.2 — Wave 3 gate F-2 adjudication: add VP-059 (FailureCounter threshold proptest, internal/admission); update totals to 59 VPs; update internal/admission VP count from 5 to 6
-  - 2026-06-27T00:00:00 # v1.3 — BC-2.04.007 registration: add VP-060 (daemon lifecycle integration, cmd/switchboard); update totals to 60 VPs; add cmd/switchboard row (0→1 VP); update BC coverage 43→44 BCs
-  - 2026-06-28T00:00:00 # v1.4 — VP-id assignment: add VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) for BC-2.06.003; update totals to 62 VPs
-  - 2026-06-28T00:00:00 # v1.5 — F-002 + F-007: mint VP-063 (proptest, internal/paths) for BC-2.02.003 PC-5 degraded-flag boolean; fix stale "60 VPs total" prose to 63; update totals to 63 VPs
-  - 2026-06-29T00:00:00 # v1.6 — BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E VP assignment: VP-068–VP-073 added; BC-2.07.004 row updated with full VP set; per-module counts updated; totals updated to 73 VPs
+  - 2026-06-30T00:00:00 # v1.12 — F-W5P1-003: VP-076 propagated (integration, P0, cmd/switchboard) — bootstrap-key non-revocable AND non-expirable invariant per BC-2.05.004 EC-007 v1.12; BC-2.05.004 row VP list updated VP-046+VP-075 → VP-046+VP-075+VP-076; cmd/switchboard count 3→4 (integration 3→4); P0 VPs 53→54; totals updated to 76 VPs.
   - 2026-06-30T00:00:00 # v1.11 — F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard; BC-2.05.004 row modules cell updated; internal/mgmt count 9→8 (integration 7→6), cmd/switchboard count 2→3 (integration 2→3). Per-module sum unchanged at 75.
   - 2026-06-30T00:00:00 # v1.10 — F-T3-301: VP-074 (P1, BC-2.06.001 threshold classification) added; P1 VPs 17→18.
   - 2026-06-30T00:00:00 # v1.9 — PO Ruling 3 (S-5.02 Pass-4 scope ruling): VP-047 implementing_story transferred S-5.02 → S-W5.04 per vp_index_is_vp_catalog_source_of_truth policy. No BC→VP row changes; no count changes.
   - 2026-06-30T00:00:00 # v1.8 — Pass-2 lens-3 F-T3-003: VP-075 minted for BC-2.05.004 handler authority (integration, internal/mgmt); BC-2.05.004 row updated VP-046→VP-046+VP-075; internal/mgmt count 8→9; P0 VPs 52→53; totals updated to 75 VPs
   - 2026-06-29T00:00:00 # v1.7 — VP-074 added for BC-2.06.001 threshold classification (unit, internal/metrics); internal/metrics count 4→5; totals updated to 74 VPs
-  - 2026-06-30T00:00:00 # v1.12 — F-W5P1-003: VP-076 propagated (integration, P0, cmd/switchboard) — bootstrap-key non-revocable AND non-expirable invariant per BC-2.05.004 EC-007 v1.12; BC-2.05.004 row VP list updated VP-046+VP-075 → VP-046+VP-075+VP-076; cmd/switchboard count 3→4 (integration 3→4); P0 VPs 53→54; totals updated to 76 VPs.
+  - 2026-06-29T00:00:00 # v1.6 — BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E VP assignment: VP-068–VP-073 added; BC-2.07.004 row updated with full VP set; per-module counts updated; totals updated to 73 VPs
+  - 2026-06-28T00:00:00 # v1.5 — F-002 + F-007: mint VP-063 (proptest, internal/paths) for BC-2.02.003 PC-5 degraded-flag boolean; fix stale "60 VPs total" prose to 63; update totals to 63 VPs
+  - 2026-06-28T00:00:00 # v1.4 — VP-id assignment: add VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) for BC-2.06.003; update totals to 62 VPs
+  - 2026-06-27T00:00:00 # v1.3 — BC-2.04.007 registration: add VP-060 (daemon lifecycle integration, cmd/switchboard); update totals to 60 VPs; add cmd/switchboard row (0→1 VP); update BC coverage 43→44 BCs
+  - 2026-06-27T00:00:00 # v1.2 — Wave 3 gate F-2 adjudication: add VP-059 (FailureCounter threshold proptest, internal/admission); update totals to 59 VPs; update internal/admission VP count from 5 to 6
+  - 2026-06-26T12:00:00 # v1.1 — WG3-H-001: Update totals to 43 BCs / 58 VPs; add missing BC-2.05.008 → VP-058 trace row; update internal/routing VP count from 4 to 5 (add code-audit)
+  - 2026-06-23T00:00:00
 ---
 
 # ARCH-11: Verification Coverage Matrix

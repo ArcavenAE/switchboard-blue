@@ -13,15 +13,15 @@ modified:
   - 2026-06-29T00:00:00 # v2.8 — ARCH-12 v1.5 Wave-5 Convergence Ruling Y: E-NET-001 scope extended — now explicitly covers two cases: (a) net.Dial/net.DialContext failure (unchanged); (b) handshake read-deadline timeout (treated as unreachable per BC-2.07.003 Inv-2); message format for case (b) is "daemon unreachable: <address>: connection timed out"; reconciles prior Inv-2 vs Inv-4 conflict in BC-2.07.003
   - 2026-06-29T00:00:00 # v2.9 — S-6.05 PO ruling: E-ADM-011 extended with Variant 2 (destroy authorization); ErrDestroyUnauthorized sentinel maps to E-ADM-011; no new code slot allocated
   - 2026-06-29T00:00:00 # v3.0 — Task 7 reconverge (S-5.01 + S-6.02 Pass-1 adversarial, lens1 F-001): E-ADM-004 KEPT as "address collision" (BC-2.01.006 predates ARCH-04 addendum); E-ADM-014 KEPT as "bootstrap key mismatch" (ADR-004 recover). New slots: E-ADM-018 ("control-to-control revocation requires explicit confirmation", S-6.02 + ARCH-04 HOLD-001); E-ADM-019 ("role mismatch: claimed role does not match registered key role", HOLD-001 cross-check). NOTE: E-ADM-015 (key expired) and E-ADM-016 (wire HMAC mismatch) are occupied — new entries use next free slots E-ADM-018 and E-ADM-019.
-  - 2026-06-30T00:00:00 # v3.9 — Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 + E-ADM-021 descriptions narrowed from "unconditionally" to "for any well-formed request"; BC citation updated from v1.10 to v1.12; E-CFG-001 handler-layer layering note added to both rows
-  - 2026-06-30T00:00:00 # v3.8 — F-P18L1-001 (MED): E-ADM-021 minted — bootstrap-key-expire-forbidden symmetric counterpart to E-ADM-020 (refs F-P18L1-001 lens-1 pass-18)
-  - 2026-06-30T00:00:00 # v3.7 — F-P17L2-001 (MED) + F-P17L2-002 (LOW): E-ADM-020 description + canonical message aligned to BC-2.05.004 v1.9 unconditional phrasing (lens-2 pass-17)
-  - 2026-06-30T00:00:00 # v3.6 — F-P14L2-001 (LOW): backfill v3.4 changelog table row (frontmatter had the entry; human-readable Changelog table was missing it)
-  - 2026-06-30T00:00:00 # v3.5 — F-P11L2-002 (MED): E-ADM-018 message — stripped backticks from --confirm=<svtn-id> for byte-identical canonical text
-  - 2026-06-30T00:00:00 # v3.4 — F-P10L2-004 (MED): E-ADM-018 message format — <svtn-short-id> → <svtn-id> (matches impl and all other ADM messages that take svtn parameter; full svtnName used in impl, not abbreviated form)
-  - 2026-06-30T00:00:00 # v3.3 — F-P8L2-003: E-ADM-020 added (bootstrap-key-revoke-forbidden); emitted by admin.key.revoke handler when svtnmgmt.ErrBootstrapKeyRevokeForbidden; source BC-2.05.004 EC-007
-  - 2026-06-30T00:00:00 # v3.2 — S-6.06 Pass-6 rulings F-P6L3-001: E-SVTN-003 added (SVTN not found); closes missing code referenced in S-6.06 Error Code Map
   - 2026-06-30T00:00:00 # v3.1 — S-6.06 Pass-4 ruling F-L2-002: E-ADM-011 scope disambiguated — it is returned by SVTNManager.RevokeKey at the Go API layer (unit-test path) for a revocation-hierarchy violation. It is NOT reachable via the mgmt RPC path when the handler-layer authority gate (E-ADM-009) is wired: the gate fires first and rejects non-control callers before SVTNManager.RevokeKey is ever invoked.
+  - 2026-06-30T00:00:00 # v3.2 — S-6.06 Pass-6 rulings F-P6L3-001: E-SVTN-003 added (SVTN not found); closes missing code referenced in S-6.06 Error Code Map
+  - 2026-06-30T00:00:00 # v3.3 — F-P8L2-003: E-ADM-020 added (bootstrap-key-revoke-forbidden); emitted by admin.key.revoke handler when svtnmgmt.ErrBootstrapKeyRevokeForbidden; source BC-2.05.004 EC-007
+  - 2026-06-30T00:00:00 # v3.4 — F-P10L2-004 (MED): E-ADM-018 message format — <svtn-short-id> → <svtn-id> (matches impl and all other ADM messages that take svtn parameter; full svtnName used in impl, not abbreviated form)
+  - 2026-06-30T00:00:00 # v3.5 — F-P11L2-002 (MED): E-ADM-018 message — stripped backticks from --confirm=<svtn-id> for byte-identical canonical text
+  - 2026-06-30T00:00:00 # v3.6 — F-P14L2-001 (LOW): backfill v3.4 changelog table row (frontmatter had the entry; human-readable Changelog table was missing it)
+  - 2026-06-30T00:00:00 # v3.7 — F-P17L2-001 (MED) + F-P17L2-002 (LOW): E-ADM-020 description + canonical message aligned to BC-2.05.004 v1.9 unconditional phrasing (lens-2 pass-17)
+  - 2026-06-30T00:00:00 # v3.8 — F-P18L1-001 (MED): E-ADM-021 minted — bootstrap-key-expire-forbidden symmetric counterpart to E-ADM-020 (refs F-P18L1-001 lens-1 pass-18)
+  - 2026-06-30T00:00:00 # v3.9 — Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 + E-ADM-021 descriptions narrowed from "unconditionally" to "for any well-formed request"; BC citation updated from v1.10 to v1.12; E-CFG-001 handler-layer layering note added to both rows
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'

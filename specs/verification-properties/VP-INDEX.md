@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.18"
+version: "2.19"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -86,20 +86,20 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | draft | VP-060.md |
 | VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | draft | VP-061.md |
 | VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias); pending-p99 quality sentinel propagation (v1.1) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
-| VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | draft | VP-063.md |
-| VP-064 | Management server rejects unauthenticated connections (no CHALLENGE_RESPONSE, wrong key, or bad signature) → AUTH_FAIL + close; no RPC dispatched | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-064.md |
-| VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | draft | VP-065.md |
-| VP-066 | Management server enforces bounded read: message > 64 KiB → error + close, no OOM (CWE-400) | BC-2.07.004 | internal/mgmt | unit+fuzz | P0 | draft | VP-066.md |
-| VP-067 | sbctl Authenticate() is fail-closed — returns nil only on verified AUTH_OK; all other outcomes return non-nil error | BC-2.07.002 | cmd/sbctl | integration | P0 | draft | VP-067.md |
-| VP-068 | mgmt.NewServer panics at construction if len(daemonKey) != ed25519.PrivateKeySize | BC-2.07.004 | internal/mgmt | unit | P0 | draft | VP-068.md |
-| VP-069 | mgmt.Server.Serve Returns nil on Intentional Shutdown or Context Cancellation; Non-nil on Unexpected Listener Failure | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-069.md |
-| VP-070 | Unregistered RPC command → E-RPC-010 in-band response ok:false; connection NOT closed | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-070.md |
-| VP-071 | Handler execution error → E-RPC-011 in-band response ok:false with verbatim error message; connection NOT closed | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-071.md |
-| VP-072 | mgmt.Server sets write deadline before every sendJSON (HandshakeTimeout for handshake sends, RPCIdleTimeout for RPC responses); clears after each send — closes CWE-400 write-side slowloris | BC-2.07.004 | internal/mgmt | integration | P0 | draft | VP-072.md |
-| VP-073 | Console-Mode TCP Bound to Non-Loopback Address Aborts Startup with E-CFG-008 (error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message; Ruling L) | BC-2.07.004 | cmd/switchboard | integration | P0 | draft | VP-073.md |
-| VP-074 | QualityIndicator threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct | BC-2.06.001 | internal/metrics | unit | P1 | draft | VP-074.md |
-| VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-075.md |
-| VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-076.md |
+| VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | implemented | VP-063.md |
+| VP-064 | Management server rejects unauthenticated connections (no CHALLENGE_RESPONSE, wrong key, or bad signature) → AUTH_FAIL + close; no RPC dispatched | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-064.md |
+| VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | implemented | VP-065.md |
+| VP-066 | Management server enforces bounded read: message > 64 KiB → error + close, no OOM (CWE-400) | BC-2.07.004 | internal/mgmt | unit+fuzz | P0 | implemented | VP-066.md |
+| VP-067 | sbctl Authenticate() is fail-closed — returns nil only on verified AUTH_OK; all other outcomes return non-nil error | BC-2.07.002 | cmd/sbctl | integration | P0 | implemented | VP-067.md |
+| VP-068 | mgmt.NewServer panics at construction if len(daemonKey) != ed25519.PrivateKeySize | BC-2.07.004 | internal/mgmt | unit | P0 | implemented | VP-068.md |
+| VP-069 | mgmt.Server.Serve Returns nil on Intentional Shutdown or Context Cancellation; Non-nil on Unexpected Listener Failure | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-069.md |
+| VP-070 | Unregistered RPC command → E-RPC-010 in-band response ok:false; connection NOT closed | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-070.md |
+| VP-071 | Handler execution error → E-RPC-011 in-band response ok:false with verbatim error message; connection NOT closed | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-071.md |
+| VP-072 | mgmt.Server sets write deadline before every sendJSON (HandshakeTimeout for handshake sends, RPCIdleTimeout for RPC responses); clears after each send — closes CWE-400 write-side slowloris | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-072.md |
+| VP-073 | Console-Mode TCP Bound to Non-Loopback Address Aborts Startup with E-CFG-008 (error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message; Ruling L) | BC-2.07.004 | cmd/switchboard | integration | P0 | implemented | VP-073.md |
+| VP-074 | QualityIndicator threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct | BC-2.06.001 | internal/metrics | unit | P1 | implemented | VP-074.md |
+| VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-075.md |
+| VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-076.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | deferred | deferred | (pending) [implementing story: S-BL.BENCH — unscheduled] |
 | VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | deferred | deferred | (pending) [implementing story: S-W6.NN — unscheduled] |
 
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.19 | 2026-06-30 | Wave-5 merge closure: VP-063 through VP-076 status flipped draft → implemented. All 14 Wave-5 VPs belong to stories merged in Wave 5 (S-5.03 PR#30, S-W5.01 PR#31, S-6.03 PR#32, S-6.02 PR#34, S-5.01 PR#35, S-6.06 PR#36, S-5.02 PR#37, S-W5.02 PR#38). Pre-Wave-6 hygiene sweep. |
 | 2.18 | 2026-06-30 | Pass-6 L3 fix F-P6L3-001: normalize placeholder-row Status column — VP-VW6.NN Status changed from "draft" to "deferred" (both placeholders now Phase=deferred, Status=deferred). Added footnote above placeholder footers explaining placeholder-row conventions. Ref F-P6L3-001. |
 | 2.17 | 2026-06-30 | Pass-5 L3 fix F-P5L3-004: normalize placeholder-row Phase column — VP-TBD-ACC and VP-VW6.NN Phase column changed from story-ID strings to "deferred"; implementing-story identifiers moved to Notes column. No count changes to active VP tallies. VP-049 §Story Trace pin bumped v1.3→v1.4 (F-P5L3-001 sibling propagation after story v1.3→v1.4). |
 | 2.16 | 2026-06-30 | S-W5.02 Pass-2 fix F-P2L2-005: VP-049 bumped v1.1→v1.2 — proof harness skeleton API drift corrected (missing "fmt" import, NewServer 5-arg signature with ln+daemonVersion, Serve(ctx) lifecycle, Shutdown wiring, Authenticate cross-package note). VP-VW6.NN Wave-6 placeholder stub registered (draft, unscheduled) per VP-049 §Feasibility. No count changes to active VP tallies. |
