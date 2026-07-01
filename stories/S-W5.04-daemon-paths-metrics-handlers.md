@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.3"
+version: "1.4"
 bc_traces:
   - BC-2.06.003
 vp_traces: [VP-047, VP-062]
@@ -102,6 +102,16 @@ to `paths.list` response, consistent with the sbctl alias design in S-5.02.
 - **Test:** `TestDaemonRouterStatus_HandlerRegistered` — call handler; assert
   response fields match the paths.list shape plus a `quality` summary field.
 
+  **AC-005a (traces to BC-2.06.003 EC-007 — failed+pending precedence, S502-DEFER-3):**
+  When a path has `PathSnapshot.Degraded == true` (liveness failure → `status: "failed"`)
+  AND `SampleCount < 10` (p99 indeterminate → `rtt_p99_ms: "pending"`), the `quality`
+  field MUST be `"pending"`, NOT `"failed"`. The quality enum is `{green, yellow, red, pending}`;
+  `"failed"` is not a valid quality value. The `status` and `quality` fields are independent.
+  - **Test:** `TestDaemonRouterStatus_FailedAndPendingPrecedence` — table-driven: row (a)
+    Degraded=true + SampleCount=5 → quality `"pending"` and status `"failed"`;
+    row (b) Degraded=true + SampleCount=10 → quality derived from p99 (not pending);
+    row (c) Degraded=false + SampleCount=5 → quality `"pending"` and status `"active"`.
+
 ### AC-006 (traces to BC-2.06.003 postcondition 1 — VP-047 integration: end-to-end field presence)
 `sbctl paths list --json` against a real (non-stub) daemon returns paths with all
 required fields present and non-null: `path_id`, `router_addr`, `rtt_ms`,
@@ -126,7 +136,7 @@ This AC is the implementation target for VP-047.
 
 | BC | Title | PCs covered |
 |----|-------|------------|
-| BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union), PC-2 (RouterMetricsResponse), PC-3 (router.status handler), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
+| BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 failed+pending precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
 
 ## VP Coverage
 
@@ -141,7 +151,7 @@ This AC is the implementation target for VP-047.
 - `internal/paths` histogram and `PathSnapshot`: owned by S-5.02. Do NOT change `PathTracker`, `rttHistogram`, or `PathSnapshot` internals.
 - `internal/mgmt` server authentication and transport: owned by S-W5.01. This story calls `mgmt.Server.Register()` to register handlers; it does not modify the server core.
 - Router-side forwarding metric counters (`frame_count`, `hmac_fail_count`, `drop_cache_hits`): confirm availability from existing `internal/routing` state before implementing AC-004; if not available, scope AC-004 to return zeroed counters with a TODO marker and file a follow-on story.
-- BC-2.06.003 v1.7 text: do NOT modify. PO already bumped to v1.7 per Pass-6 ruling (F-P6L3-001 sibling sweep).
+- BC-2.06.003 v1.8 text: do NOT modify. PO bumped to v1.8 per S502-DEFER-3 closure (failed+pending precedence ruling + EC-007).
 
 ## Edge Cases
 
@@ -152,6 +162,7 @@ This AC is the implementation target for VP-047.
 | EC-003 | Mixed pending + green paths | Pending entries have `rtt_p99_ms: "pending"`; green entries have float64 |
 | EC-004 | SVTN not found for router.metrics | E-RPC-011 error envelope; client receives structured error |
 | EC-005 | Degraded path in paths.list response | `PathEntry.status: "degraded"` when `PathSnapshot.Degraded == true` |
+| EC-006 | router.status on a path with Degraded=true AND SampleCount<10 | `status: "failed"` AND `rtt_p99_ms: "pending"` AND `quality: "pending"`. See BC-2.06.003 EC-007 and S502-DEFER-3 ruling. |
 
 ## Token Budget Estimate (MANDATORY)
 
@@ -173,7 +184,7 @@ This AC is the implementation target for VP-047.
 
 ## Tasks (MANDATORY)
 
-1. [ ] Read BC-2.06.003 v1.7 (full), ARCH-03 v1.6 §p99 RTT Accumulator, ARCH-12, interface-definitions.md
+1. [ ] Read BC-2.06.003 v1.8 (full), ARCH-03 v1.6 §p99 RTT Accumulator, ARCH-12, interface-definitions.md
 2. [ ] Read `internal/mgmt/mgmt.go` — identify `mgmt.Server.Register()` signature and handler interface
 3. [ ] Read `internal/paths/paths.go` — confirm `PathSnapshot` fields: `P99RTTMs float64`, `SampleCount uint64`, `Degraded bool`
 4. [ ] Read `internal/metrics/metrics.go` — identify existing types and query surface
@@ -207,6 +218,7 @@ This AC is the implementation target for VP-047.
 | Read PathSnapshots via `Snapshot()`, never via individual field accessors | ARCH-03 §PathSnapshot; go.md rule 12 (no internal pointer leak) | Code review + `TestDaemonPathsList_HandlerRegistered` |
 | `rtt_p99_ms` serializes as float64 when SampleCount ≥ 10, string `"pending"` when < 10 | BC-2.06.003 v1.7 EC-003 | `TestPathEntry_RTTValueSerialization` |
 | `status` field derived from `PathSnapshot.Degraded` only; no re-implementation of quality state machine | BC-2.06.001; ARCH-03 | `TestPathEntry_StatusFromDegraded` |
+| When Degraded=true AND SampleCount<10, `quality` MUST be `"pending"` (not `"failed"`); `status` and `quality` are independent fields | BC-2.06.003 v1.8 EC-007; S502-DEFER-3 ruling | `TestDaemonRouterStatus_FailedAndPendingPrecedence` |
 | VP-047 integration test requires a real (non-stub) daemon with PathTracker state | VP-047 (transferred from S-5.02) | `TestVP047_SbctlPathsList_EndToEnd` |
 | Do NOT modify cmd/sbctl, internal/paths, or internal/mgmt core transport | S-5.02 scope boundary; S-W5.01 scope boundary | File structure requirements |
 
@@ -235,6 +247,7 @@ This AC is the implementation target for VP-047.
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.4 | 2026-06-30 | product-owner | S502-DEFER-3 closure: extend AC-005 with AC-005a (failed+pending precedence per BC-2.06.003 v1.8 EC-007); add EC-006 to Edge Cases table; add Architecture Compliance Rules row for the precedence ruling; update BC table PC-3 annotation. Bump BC-2.06.003 pin from v1.7 to v1.8. |
 | 1.3 | 2026-07-01 | story-writer | F-P8L3-001 (HIGH, frontmatter↔body drift): added VP-062 row to §VP Coverage table. Pass-6 F-P6L3-003 anchor transfer updated vp_traces frontmatter but did not propagate to body table. No semantic change. |
 | 1.2 | 2026-07-01 | story-writer | F-P7L3-002 (HIGH, sibling-propagation): swept 5 stale BC-2.06.003 v1.6 pins in body to v1.7. Pass-6 F-P6L3-001 swept S-5.02 v1.7→v1.8 but same-BC sibling S-W5.04 was not covered. No semantic change (BC v1.7 introduced no behavioral change vs v1.6). Also incorporates VP-062 anchor transfer from S-5.02 per Pass-6 F-P6L3-003 (vp_traces update landed at 7b70af0). |
 | 1.1 | 2026-06-30 | story-writer | Flesh out stub into full story per Pass-4 Ruling 1 (decisions/S-5.02-pass4-scope-ruling.md). Add §Narrative, §AC-001–AC-006 derived from S-5.02 deferred scope, §Architecture Mapping, §Behavioral Contracts, §VP Coverage, §Edge Cases, §Token Budget, §Tasks (1–16), §Previous Story Intelligence, §Architecture Compliance Rules, §Library & Framework Requirements, §File Structure Requirements. VP-047 integration test assigned to AC-006. acceptance_criteria_count set to 6. |

@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -21,6 +21,7 @@ modified:
   - 2026-06-28T00:00:00
   - 2026-06-30T00:00:00
   - 2026-06-30T18:00:00
+  - 2026-06-30T22:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -60,6 +61,8 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
 3. **[ALIAS]** `sbctl router status --target <router>` is a convenience alias for `sbctl paths list`. It produces an equivalent per-path listing (same JSON schema as PC-1) with an additional `quality` column (green/yellow/red quality indicator derived from the status + rtt_p99_ms fields). Both commands route through the same underlying query path in `internal/metrics`; there are no divergent code paths. The `--target <router>` flag overrides the default daemon address, equivalent to `sbctl --target <router> paths list`. The alias exists to match the command surface introduced by S-5.02 (F-P8-002 ruling).
 
    **Pending-p99 quality semantics (F-M3):** When `rtt_p99_ms` is `"pending"` (fewer than 10 samples collected), the `quality` field MUST be emitted as `"pending"` — mirroring the p99 sentinel value. Implementers MUST NOT substitute a default quality value (green/yellow/red) when p99 data is insufficient. `quality: "pending"` is a valid emit value from `cmd/sbctl/router_status.go`. The quality state machine in `internal/metrics` must treat a pending p99 as an indeterminate input, not a green or zero-value input.
+
+   **Failed+pending precedence ruling (S502-DEFER-3):** When `PathSnapshot.Degraded == true` (liveness failure: ≥3 consecutive missed keep-alives → `status: "failed"`) AND `SampleCount < 10` (p99 data indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST still be `"pending"`. Rationale: `quality` is a function of the p99 RTT input; without a valid p99, the quality computation is indeterminate regardless of liveness state. `status` and `quality` are orthogonal output fields serving different diagnostic purposes — `status` reflects keep-alive liveness (always computable) while `quality` reflects latency quality (computable only when p99 is available). Emitting `quality: "failed"` would introduce a fifth value outside the defined `{green, yellow, red, pending}` enum and would conflate two independent signals. A client needing liveness reads `status: "failed"`; a client needing latency quality reads `quality: "pending"` (meaning: cannot assess). This is consistent with BC-2.06.001 v1.4 Red-over-Yellow precedence, which applies only within a complete and valid input set — it does not override the indeterminate-input case.
 4. Metrics are returned as JSON with `--json` flag; human-readable table by default. Both the canonical form and the alias respect `--json`.
 5. If the daemon is unreachable, sbctl returns E-NET-001 "daemon unreachable" (per BC-2.07.003).
 
@@ -83,6 +86,7 @@ Operator runs `sbctl paths list` (canonical), `sbctl router metrics --svtn=<id>`
 | EC-004 | Operator requests historical metrics (trend data) | Out of scope for E router phase. Current implementation returns point-in-time metrics only. |
 | EC-005 | Operator uses alias `sbctl router status --target <router>` | Output is identical to `sbctl paths list` plus a `quality` column (green/yellow/red). Exit code, JSON schema, and error handling are identical to the canonical command. There is exactly one code path in `internal/metrics` serving both invocations — the alias is a CLI dispatch shim only. |
 | EC-006 | `sbctl router status --target <router>` on a path with fewer than 10 RTT samples | `rtt_p99_ms` is `"pending"` (string) AND `quality` is `"pending"` (string). The quality column MUST NOT be green/yellow/red when p99 is pending; the p99 sentinel propagates to the quality output. |
+| EC-007 | `sbctl router status --target <router>` on a path with ≥3 consecutive missed keep-alives (liveness failure) AND fewer than 10 RTT samples collected | `status` is `"failed"` (liveness failure) AND `rtt_p99_ms` is `"pending"` AND `quality` is `"pending"`. The `quality` field MUST NOT be `"failed"` — quality is a function of the p99 RTT input only; `"failed"` is not a valid quality enum value. Clients requiring liveness information read `status`; clients requiring latency quality read `quality`. S502-DEFER-3 precedence ruling: pending-p99 takes precedence for the quality field even when liveness has failed. |
 
 ## Canonical Test Vectors
 
@@ -124,6 +128,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.8 | 2026-06-30 | product-owner | S502-DEFER-3 closure: add failed+pending precedence ruling to PC-3. When PathSnapshot.Degraded==true (liveness failure → status:"failed") AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), quality MUST still be "pending". Rationale: quality is a function of p99 RTT only; "failed" is not a valid quality enum value; status and quality are orthogonal fields. Add EC-007 codifying this behavior. Pre-Wave-6 spec tightening to prevent S-W5.04 adversarial ambiguity (mirrors S-6.06 "unconditionally" convergence risk). |
 | 1.7 | 2026-06-30 | spec-steward | F-P5-T-002 (Pass-5 lens-3): add S-W5.04 to Stories traceability cell per Pass-4 Ruling 1 split — S-5.02 owns client surface (PC-1/PC-2/PC-3 client-side serialization, PC-4 envelope, PC-5 unreachable behavior on client side); S-W5.04 owns daemon-side RPC handlers + response types (PathsListResponse, PathEntry, RTTValue union, RouterMetricsResponse). No behavioral change. |
 | 1.6 | 2026-06-30 | product-owner | F-LO1 (Pass-4 Ruling 5): align PC-1 `rtt_p99_ms` description with ARCH-03 v1.6 canonical semantics — replace "rolling sample buffer" with "fixed-bucket histogram (counts never reset; approximation error ≤ bucket width for the bucket containing the true p99)". No behavioral change; EC-003 pending sentinel unchanged. |
 | 1.5 | 2026-06-30 | spec-steward | F-M3: add explicit pending-p99 quality semantics to PC-3 — when `rtt_p99_ms` is `"pending"`, `quality` MUST also be `"pending"` (not green/yellow/red); the quality state machine must treat pending p99 as indeterminate. Add EC-006 documenting this behavior. Note for implementers: `quality: "pending"` is now a valid emit value from `cmd/sbctl/router_status.go`. |
