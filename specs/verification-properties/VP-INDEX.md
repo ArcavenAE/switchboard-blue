@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.26"
+version: "2.27"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.27 | 2026-07-01 | VP-045 bumped v1.1→v1.2 (Pass-3 L3 F-P3L3-H1 sibling propagation per RULING-W6TB-D): partial-coverage note added (BC-2.03.002 PC-1/PC-2/PC-4/PC-5 in-process verified; real-socket PC-3 deferred to S-BL.DISCOVERY-WIRE). No count or method changes; total remains 76. |
 | 2.26 | 2026-07-01 | VP-044 bumped v1.0→v1.1, VP-045 bumped v1.0→v1.1, VP-055 bumped v1.0→v1.1 (S-7.02 LENS-3 traceability backfill per RULING-W6TB-D): implementing_story S-7.02 added to frontmatter of all three; Story Trace sections added; catalog row titles annotated. VP-044 partial-coverage note: in-process registry seam only; multicast wire deferred to S-BL.DISCOVERY-WIRE. No count or method changes; total remains 76. |
 | 2.25 | 2026-07-01 | VP-047 bumped v1.3→v1.4 (RULING-W6TB-F §Ruling 1, F-L3-001): Ruling-1 interim clauses retracted — Property Statement updated (router_addr MUST equal PathSnapshot.RouterAddr; "" valid only for addr-less NewPathTracker paths), proof harness struct comment updated, integration test assertion updated. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed (BC-2.06.003 v1.15; S-BL.ROUTER-ADDR). No count or method changes; total remains 76. |
 | 2.24 | 2026-07-01 | VP-043 bumped v1.0→v1.1 (S-7.01 LENS-3 traceability backfill): implementing_story S-7.01 added to frontmatter; Story Trace section added; catalog row title annotated with implementing_story. No count or method changes; total remains 76. |

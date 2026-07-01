@@ -109,6 +109,7 @@ stories:
   - id: S-7.01
     title: "XOR parity FEC for single-loss recovery"
     status: pending
+    spec_version: "1.2"
     points: 8
     priority: P1
     scope_phase: PE
@@ -126,7 +127,7 @@ stories:
 
   - id: S-7.02
     title: "SVTN-scoped multicast session discovery"
-    status: pending
+    status: ready-for-red-gate
     points: 8
     priority: P1
     scope_phase: PE
@@ -147,6 +148,7 @@ stories:
   - id: S-7.03
     title: "Console remote control via sbctl attach/detach/switch"
     status: pending
+    spec_version: "1.2"
     points: 5
     priority: P1
     scope_phase: PE
@@ -214,6 +216,7 @@ pre_wave_obligations:
     blocking: false
 
 # Changelog
+# v1.10 (2026-07-01): POL-002 sibling propagation — S-7.01/S-7.03 spec_version pins added ("1.2"); S-7.02 status pending→ready-for-red-gate (matches STORY-INDEX v3.49 row 74); Pass-3 L3 fix-burst.
 # v1.9 (2026-07-01): Pass-2 L3 fix-burst (F-P2L3-M1) — S-7.02 spec_version field added: "1.2" (RULING-W6TB-D propagation pin; story is at v1.2 per RULING-W6TB-D; sprint-state had no spec_version for this story). Source: STORY-INDEX v3.49.
 # v1.8 (2026-07-01): F-P15L3-01/02 sync — S-6.07 spec_version 1.12→1.13 (Ruling-14 §10 downstream propagation: AC-007, Task 11, File Structure rows). Source: STORY-INDEX v3.43.
 # v1.7 (2026-07-01): Pass-14/13/12 fix-burst applied. S-BL.LOOKUP CLEAN streak 2/3. S-W5.04+S-6.07 counters reset. Impl: S-6.07 1e5d6d2 (L2 oracle tightening) + c3f3528 (Ruling-14 E-RPC-002 dispatch wrap). Specs: Rulings v1.10 (Ruling-13/14 minted), S-6.07 v1.12, S-W5.04 v1.17.

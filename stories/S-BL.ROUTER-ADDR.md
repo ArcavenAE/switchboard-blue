@@ -26,10 +26,12 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.003.md'
   - '.factory/decisions/wave-6-tranche-a-scope-rulings.md'
   - '.factory/decisions/RULING-W6TB-B-router-addr-seam.md'
+  - '.factory/decisions/RULING-W6TB-F-s-bl-router-addr-vp047.md'
 acceptance_criteria_count: 5
-revision: "1.0-ready-for-red-gate"
+revision: "1.1-ready-for-red-gate"
 changed_by_rulings:
   - RULING-W6TB-B
+  - RULING-W6TB-F
 backlog_origin:
   source: wave-6-tranche-a-scope-rulings Ruling-1 + DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER
   ruling: Ruling-1
@@ -193,6 +195,7 @@ Per RULING-W6TB-B, the following is NOT in scope for this story:
 | internal/metrics/handlers.go | MODIFY | Lines 65–67: replace `""` with `snap.RouterAddr`; remove DRIFT comment |
 | internal/metrics/handlers_test.go | MODIFY | Add AC-002 `TestPathsList_PassesRouterAddr` |
 | internal/metrics/integration_test.go | MODIFY | Flip VP-047 AC-006 oracle (AC-005) |
+| .factory/specs/verification-properties/VP-047.md | MODIFY | v1.3→v1.4: retract Ruling-1 interim clauses; property statement says router_addr MUST equal PathSnapshot.RouterAddr; "" valid only for addr-less NewPathTracker; DRIFT closed (Ruling RULING-W6TB-F §Ruling 1) |
 | .factory/specs/behavioral-contracts/ss-06/BC-2.06.003.md | MODIFY | Bump v1.14→v1.15; remove DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER annotation from PC-1 (AC-004) |
 
 ## Architecture Compliance Rules (MANDATORY)
@@ -209,5 +212,6 @@ Per RULING-W6TB-B, the following is NOT in scope for this story:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.1-ready-for-red-gate | 2026-07-01 | product-owner | RULING-W6TB-F: add VP-047.md MODIFY row to File Structure (spec target for AC-005 oracle flip was missing — F-L3-001). Strengthen TestVP047_FieldSwapOracle seed: routerAddr "abcdefghi" → "127.0.0.1:9000" (valid host:port; non-overlapping oracle preserved — F-LENS2-01). Bump revision. |
 | 1.0-ready-for-red-gate | 2026-07-01 | story-writer | RULING-W6TB-B AC set: promote backlog stub to ready-for-red-gate. Add 5 concrete ACs (RouterAddr field, PathsList pass-through, NewPathTrackerWithAddr constructor, BC-2.06.003 annotation cleanup, DRIFT closure + oracle flip). Points TBD→2. File Structure rows: internal/paths/paths.go MODIFY, internal/metrics/handlers.go MODIFY, internal/paths/paths_test.go MODIFY, internal/metrics/handlers_test.go + integration_test.go MODIFY, BC-2.06.003.md MODIFY. Red-first task list. Scope boundary: unit-scope only; end-to-end deferred to S-BL.PATH-TRACKER-WIRING (Wave-7). Add changed_by_rulings: RULING-W6TB-B. |
 | 0.1-backlog-stub | 2026-07-01 | product-owner | Initial backlog stub per wave-6-tranche-a-scope-rulings Ruling-1 + DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER. |
