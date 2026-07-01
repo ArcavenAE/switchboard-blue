@@ -259,25 +259,25 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 				t.Errorf("round-trip unstable: first=%s second=%s", j1, j2)
 			}
 
-			// Pending cases: decoded must still be pending (SampleCount < 10).
+			// Pending cases: decoded must still be PendingKind.
+			// SampleCount is not recoverable from the bare "pending" string (H-2 Pass-8:
+			// wire shape is float64|"pending" per BC-2.06.003 v1.13 PC-1; Kind is authoritative).
 			if tc.wantPending {
-				if decoded.SampleCount >= 10 {
-					t.Errorf("pending round-trip: decoded SampleCount=%d; want <10 (still pending)", decoded.SampleCount)
+				if decoded.Kind != metrics.PendingKind {
+					t.Errorf("pending round-trip: decoded Kind=%v; want PendingKind", decoded.Kind)
 				}
 				if string(j2) != `"pending"` {
 					t.Errorf("pending round-trip: j2=%s; want \"pending\"", j2)
 				}
 			} else {
 				// Float cases: decoded Kind must be FloatKind, Value must match.
+				// SampleCount is not preserved through the bare float64 wire shape;
+				// callers use Kind for the pending check (H-2 Pass-8).
 				if decoded.Kind != metrics.FloatKind {
 					t.Errorf("float round-trip: decoded Kind=%v; want FloatKind", decoded.Kind)
 				}
 				if decoded.Value != tc.wantFloat {
 					t.Errorf("float round-trip: decoded Value=%v; want %v", decoded.Value, tc.wantFloat)
-				}
-				// And SampleCount must be ≥ 10 (preserved as valid).
-				if decoded.SampleCount < 10 {
-					t.Errorf("float round-trip: decoded SampleCount=%d; want ≥10 (valid float)", decoded.SampleCount)
 				}
 			}
 		})
@@ -1319,6 +1319,48 @@ func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ── M-2 (Pass-8): TestRouterStatus_EmptyPaths_QualityIsPending ───────────────
+
+// TestRouterStatus_EmptyPaths_QualityIsPending verifies that RouterStatus with an
+// empty path source returns Quality=="pending", Message=="no active paths", and an
+// empty Paths slice. An empty router has indeterminate quality — no data means pending.
+//
+// M-2 Pass-8; BC-2.06.003 PC-3; EC-001; F-P8L2-01.
+func TestRouterStatus_EmptyPaths_QualityIsPending(t *testing.T) {
+	t.Parallel()
+
+	src := &fakePathsListSource{snaps: map[string]paths.PathSnapshot{}}
+	resp, err := metrics.RouterStatus(context.Background(), nil, src)
+	if err != nil {
+		t.Fatalf("RouterStatus returned unexpected error: %v", err)
+	}
+	if len(resp.Paths) != 0 {
+		t.Errorf("empty-router: expected 0 paths; got %d", len(resp.Paths))
+	}
+	if resp.Quality != "pending" {
+		t.Errorf("empty-router: quality=%q; want \"pending\" (no paths → indeterminate)", resp.Quality)
+	}
+	if resp.Message != "no active paths" {
+		t.Errorf("empty-router: message=%q; want \"no active paths\" (EC-001)", resp.Message)
+	}
+}
+
+// ── M-3 (Pass-8): TestRTTValue_UnmarshalJSON_NullRejected ────────────────────
+
+// TestRTTValue_UnmarshalJSON_NullRejected verifies that UnmarshalJSON rejects JSON
+// null rather than silently treating it as float64(0) (green-band misclassification).
+//
+// M-3 Pass-8; F-P2L1-004 null-vs-zero ambiguity guard.
+func TestRTTValue_UnmarshalJSON_NullRejected(t *testing.T) {
+	t.Parallel()
+
+	var v metrics.RTTValue
+	err := json.Unmarshal([]byte("null"), &v)
+	if err == nil {
+		t.Error("UnmarshalJSON(null): expected error; got nil (null must not decode as float64(0) green-band)")
 	}
 }
 

@@ -164,18 +164,22 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 }
 
 // QualityFromEntry derives the quality string for a single PathEntry.
-// Returns "pending" when RTTP99Ms.SampleCount < 10 (BC-2.06.003 EC-006, EC-007).
+// Returns "pending" when RTTP99Ms.Kind == PendingKind (BC-2.06.003 EC-006, EC-007).
 // Returns green/yellow/red derived from rtt_p99_ms and status otherwise.
 //
+// Uses Kind (not SampleCount) for the pending check: SampleCount on RTTValue
+// cannot be preserved through the wire format (bare float64 or "pending" string —
+// BC-2.06.003 v1.13 PC-1), so Kind is the authoritative discriminator (H-2 Pass-8).
+//
 // The degraded+pending precedence ruling (S502-DEFER-3, BC-2.06.003 v1.13 EC-007):
-// when status=="degraded" AND SampleCount < 10, quality MUST still be "pending".
+// when status=="degraded" AND Kind==PendingKind, quality MUST still be "pending".
 // status and quality are orthogonal fields.
 //
 // BC-2.06.003 v1.13 PC-3; AC-005, AC-005a.
 func QualityFromEntry(entry PathEntry) string {
 	// EC-007, EC-006, F-M3: pending p99 always yields pending quality.
 	// This holds regardless of status value (status and quality are orthogonal per EC-007).
-	if entry.RTTP99Ms.SampleCount < 10 {
+	if entry.RTTP99Ms.Kind == PendingKind {
 		return "pending"
 	}
 	return Classify(entry.RTTP99Ms.Value, entry.LossPct).String()
