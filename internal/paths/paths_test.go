@@ -33,6 +33,7 @@ package paths_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1353,8 +1354,17 @@ func TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			defer func() {
-				if r := recover(); r == nil {
+				r := recover()
+				if r == nil {
 					t.Errorf("NewPathTrackerWithAddr(addr, 10, %v): want panic (alpha outside (0,1]); got no panic", alpha)
+					return
+				}
+				// Strengthen the oracle: the panic message must mention "alpha"
+				// (case-insensitive) so we can distinguish a real alpha-validation
+				// panic from an unrelated stub panic (F-P4L2-01).
+				msg := fmt.Sprintf("%v", r)
+				if !strings.Contains(strings.ToLower(msg), "alpha") {
+					t.Errorf("NewPathTrackerWithAddr(addr, 10, %v): expected alpha-validation panic; got %v (F-P4L2-01)", alpha, r)
 				}
 			}()
 			paths.NewPathTrackerWithAddr("h:9000", 10.0, alpha)
