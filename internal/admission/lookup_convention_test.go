@@ -434,18 +434,28 @@ func TestRegisterKey_DeepClonesCallerPubkey(t *testing.T) {
 	}
 }
 
-// ── F-P3L2-002: same-nodeAddr concurrent contention + FrameAuthKey oracle ─────
+// ── F-P3L2-002: same-entry concurrent registration contention + FrameAuthKey oracle ──
 
-// TestLookupByPubkey_ConcurrentSameNodeAddr exercises the writer serialisation
-// path by routing N readers and M writers at the SAME (svtnID, nodeAddr). The
-// existing TestLookup_ConcurrentRegisterRace uses disjoint nodeAddr per goroutine,
-// so cross-partition contention is never reached.
+// TestLookupByPubkey_ConcurrentSameEntryRegistration exercises the writer
+// serialisation path by routing N readers and M writers all operating on the
+// SAME (svtnID, pubkey) pair. The existing TestLookup_ConcurrentRegisterRace
+// uses disjoint nodeAddr per goroutine, so single-entry lock contention is
+// never reached by that test.
+//
+// Design note: in this admission model, nodeAddr is deterministically derived
+// from (svtnID, pubkey) via frame.DeriveNodeAddress. Two distinct public keys
+// always map to distinct nodeAddrs — there is no code path where two different
+// pubkeys share a nodeAddr ("same-nodeAddr LWW"). The meaningful concurrent
+// contention to test is therefore N goroutines concurrently re-registering the
+// SAME (pubkey, nodeAddr) pair, exercising the write-lock critical section and
+// the idempotent LWW overwrite path under the race detector.
 //
 // Assertions:
 //  1. No data race under -race (structural — go test -race catches violations).
 //  2. Every hit read returns a well-formed PublicKey (len == ed25519.PublicKeySize).
 //  3. On any hit, FrameAuthKey == hmac.DeriveKey(pub, svtnID) — not just non-zero.
-func TestLookupByPubkey_ConcurrentSameNodeAddr(t *testing.T) {
+//  4. Post-concurrency: the entry is always present and oracle-correct.
+func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -457,57 +467,52 @@ func TestLookupByPubkey_ConcurrentSameNodeAddr(t *testing.T) {
 	ks := admission.NewAdmittedKeySet()
 	svtnID := svtnLookupID(0x50)
 
-	// Two keys that map to different nodeAddrs but both target the same svtnID,
-	// maximising lock contention on the svtnID partition.
-	pubA := mustGenPub(t)
-	pubB := mustGenPub(t)
+	// Single shared key — all writers register the SAME (pubkey, nodeAddr) pair,
+	// exercising write-lock contention on a single map slot.
+	pub := mustGenPub(t)
+	expectedAuthKey := hmac.DeriveKey([]byte(pub), svtnID)
 
-	// Pre-register pubA so readers see at least one hit from the start.
-	ks.RegisterKey(svtnID, pubA, admission.RoleAccess)
-	expectedAuthKeyA := hmac.DeriveKey([]byte(pubA), svtnID)
+	// Pre-register so readers see at least one hit from the start.
+	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
 
 	var wg sync.WaitGroup
 
-	// Writer goroutines alternate re-registering pubA and pubB into the same svtnID.
-	for w := range numWriters {
+	// Writer goroutines all re-register the same (pubkey, nodeAddr) pair.
+	// Each call is an idempotent LWW overwrite; the entry must remain
+	// consistent throughout.
+	for range numWriters {
 		wg.Add(1)
-		go func(w int) {
+		go func() {
 			defer wg.Done()
-			for i := range iterations {
-				if (w+i)%2 == 0 {
-					ks.RegisterKey(svtnID, pubA, admission.RoleAccess)
-				} else {
-					ks.RegisterKey(svtnID, pubB, admission.RoleConsole)
-				}
+			for range iterations {
+				ks.RegisterKey(svtnID, pub, admission.RoleAccess)
 			}
-		}(w)
+		}()
 	}
 
-	// Reader goroutines continuously look up pubA.
+	// Reader goroutines continuously look up the same pubkey under concurrent writes.
 	for range numReaders {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for range iterations {
-				key, ok := ks.LookupByPubkey(svtnID, pubA)
+				key, ok := ks.LookupByPubkey(svtnID, pub)
 				if !ok {
-					// pubA may have been temporarily superseded by a concurrent LWW
-					// write for pubB at the same nodeAddr — that cannot happen because
-					// pubA and pubB derive different nodeAddrs. If !ok here, it is a
-					// real miss (pubA was not registered yet or was overwritten). Just
-					// skip — the post-wg.Wait check below is the definitive assertion.
+					// Concurrent writers are always writing the same entry; !ok here
+					// should not be reachable, but skip rather than Fatal to avoid
+					// masking a race-detector report.
 					continue
 				}
 				// Structural check: PublicKey must be well-formed on any hit.
 				if len(key.PublicKey) != ed25519.PublicKeySize {
-					t.Errorf("concurrent same-nodeAddr: PublicKey len=%d want %d",
+					t.Errorf("concurrent same-entry: PublicKey len=%d want %d",
 						len(key.PublicKey), ed25519.PublicKeySize)
 				}
 				// FrameAuthKey oracle: must equal the derived value, not merely non-zero.
 				// This catches a bug where the key is zeroed or stale under contention.
-				if key.FrameAuthKey != expectedAuthKeyA {
-					t.Errorf("concurrent same-nodeAddr: FrameAuthKey mismatch: got %x, want %x",
-						key.FrameAuthKey, expectedAuthKeyA)
+				if key.FrameAuthKey != expectedAuthKey {
+					t.Errorf("concurrent same-entry: FrameAuthKey mismatch: got %x, want %x",
+						key.FrameAuthKey, expectedAuthKey)
 				}
 			}
 		}()
@@ -515,60 +520,61 @@ func TestLookupByPubkey_ConcurrentSameNodeAddr(t *testing.T) {
 
 	wg.Wait()
 
-	// Post-concurrency: pubA must still be reachable (last writer for pubA
-	// may have been the final write, or pubB may be current — either is valid
-	// per LWW semantics). If pubA is present its FrameAuthKey must be oracle-correct.
-	if key, ok := ks.LookupByPubkey(svtnID, pubA); ok {
-		if key.FrameAuthKey != expectedAuthKeyA {
-			t.Errorf("post-concurrent: pubA FrameAuthKey=%x want %x",
-				key.FrameAuthKey, expectedAuthKeyA)
-		}
+	// Post-concurrency: entry must be present and oracle-correct after all
+	// concurrent registrations complete.
+	key, ok := ks.LookupByPubkey(svtnID, pub)
+	if !ok {
+		t.Fatal("post-concurrent: entry not found after all concurrent registrations")
+	}
+	if key.FrameAuthKey != expectedAuthKey {
+		t.Errorf("post-concurrent: FrameAuthKey=%x want %x", key.FrameAuthKey, expectedAuthKey)
+	}
+	if !bytes.Equal(key.PublicKey, []byte(pub)) {
+		t.Errorf("post-concurrent: PublicKey mismatch: got %x, want %x", key.PublicKey, []byte(pub))
 	}
 }
 
 // ── F-P3L2-005: exhaustive miss table ─────────────────────────────────────────
 
 // assertMissZero is a test helper that verifies LookupByPubkey returned a miss
-// and that the returned AdmittedKey is entirely zero-valued (reflection + accessors).
+// and that the returned AdmittedKey is entirely zero-valued.
+//
+// Uses reflect.DeepEqual(key, admission.AdmittedKey{}) rather than a
+// field-by-field loop filtered by IsExported(). The DeepEqual form covers ALL
+// fields — exported and unexported alike — so a broken LookupByPubkey that
+// returns a non-zero unexported field (e.g. revoked=true or expiry set) on a
+// miss will be caught without any changes to this helper. F-L2-02.
 func assertMissZero(t *testing.T, label string, key admission.AdmittedKey, ok bool) {
 	t.Helper()
 	if ok {
 		t.Errorf("%s: want ok=false (miss), got ok=true with key=%+v", label, key)
 		return
 	}
-	rv := reflect.ValueOf(key)
-	rt := rv.Type()
-	for i := range rv.NumField() {
-		f := rt.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		fv := rv.Field(i)
-		zero := reflect.Zero(f.Type)
-		if !reflect.DeepEqual(fv.Interface(), zero.Interface()) {
-			t.Errorf("%s: exported field %s want zero value, got %v", label, f.Name, fv)
-		}
-	}
-	if !key.KeyExpiry().IsZero() {
-		t.Errorf("%s: KeyExpiry want zero Time, got %v", label, key.KeyExpiry())
-	}
-	if key.IsRevoked() {
-		t.Errorf("%s: IsRevoked want false, got true", label)
+	if !reflect.DeepEqual(key, admission.AdmittedKey{}) {
+		t.Errorf("%s: want zero AdmittedKey on miss; got non-zero value (exported or unexported fields populated)", label)
 	}
 }
 
-// TestLookupByPubkey_ExhaustiveMissTable exercises every semantic miss scenario:
-// (a) unknown pubkey, (b) known pubkey + wrong svtnID, (c) known pubkey +
-// wrong nodeAddr (via wrong svtnID derivation), (d) revoked pubkey.
+// TestLookupByPubkey_ExhaustiveMissTable exercises every structurally distinct
+// miss scenario for LookupByPubkey. Each case hits a different code path:
 //
-// Each row asserts (AdmittedKey{}, false) with all-zero fields via reflection,
-// future-proofing against new AdmittedKey field additions. F-P3L2-005.
+//	(a) svtnID exists in store, but pubkey is not registered → inner-map miss
+//	(b) svtnID does not exist in store at all → outer-map miss
+//	    Note: "known pubkey in wrong svtnID" and "known pubkey in never-registered
+//	    svtnID" both reach the same outer-map miss branch. They are merged here
+//	    because the code path is identical — a distinct case would add no coverage
+//	    value. F-L2-03.
+//	(c) revoked pubkey — LookupByPubkey returns the entry with IsRevoked()==true
+//	    (revocation is enforced at admission time, not at lookup time).
+//
+// Each true-miss row asserts (AdmittedKey{}, false) with all-zero fields via
+// reflect.DeepEqual (F-L2-02), future-proofing against new field additions.
+// F-P3L2-005.
 func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
 	t.Parallel()
 
 	ks := admission.NewAdmittedKeySet()
 	svtnRegistered := svtnLookupID(0x60)
-	svtnOther := svtnLookupID(0x61)
 
 	pub := mustGenPub(t)
 	pubUnknown := mustGenPub(t)
@@ -582,29 +588,32 @@ func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		svtnID [16]byte
-		pub    ed25519.PublicKey
+		name    string
+		svtnID  [16]byte
+		pub     ed25519.PublicKey
+		wantHit bool // true for case (c) which is a hit with IsRevoked=true
 	}{
 		{
+			// (a) inner-map miss: svtnID is registered but pubkey is not
 			name:   "(a) unknown pubkey in registered svtnID",
 			svtnID: svtnRegistered,
 			pub:    pubUnknown,
 		},
 		{
-			name:   "(b) known pubkey in wrong (unregistered) svtnID",
-			svtnID: svtnOther,
+			// (b) outer-map miss: svtnID has never been registered in the store.
+			// "Known pubkey in wrong svtnID" and "known pubkey in never-registered
+			// svtnID" are the same code path — merged into one case. F-L2-03.
+			name:   "(b) known pubkey in svtnID not present in store",
+			svtnID: svtnLookupID(0x61),
 			pub:    pub,
 		},
 		{
-			name:   "(c) known pubkey in empty store svtnID",
-			svtnID: svtnLookupID(0x62),
-			pub:    pub,
-		},
-		{
-			name:   "(d) revoked pubkey — LookupByPubkey does not filter revoked, but entry is present",
-			svtnID: svtnRegistered,
-			pub:    pubRevoked,
+			// (c) revoked pubkey: entry IS in the store; LookupByPubkey returns
+			// (entry, true) — revocation is checked at admission time, not here.
+			name:    "(c) revoked pubkey — returns hit with IsRevoked=true",
+			svtnID:  svtnRegistered,
+			pub:     pubRevoked,
+			wantHit: true,
 		},
 	}
 
@@ -612,12 +621,10 @@ func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Case (d): a revoked key IS still in the store; LookupByPubkey returns
-			// it with ok=true (revocation is checked at admission time, not lookup
-			// time). Skip the all-zero assertion for this case — it is a hit whose
-			// IsRevoked()==true; the other cases are true misses.
-			if tc.name == "(d) revoked pubkey — LookupByPubkey does not filter revoked, but entry is present" {
-				key, ok := ks.LookupByPubkey(tc.svtnID, tc.pub)
+			key, ok := ks.LookupByPubkey(tc.svtnID, tc.pub)
+
+			if tc.wantHit {
+				// Case (c): revoked key is in the store; must return ok=true with IsRevoked.
 				if !ok {
 					t.Fatalf("%s: want ok=true for revoked-but-registered key; got false", tc.name)
 				}
@@ -627,7 +634,6 @@ func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
 				return
 			}
 
-			key, ok := ks.LookupByPubkey(tc.svtnID, tc.pub)
 			assertMissZero(t, tc.name, key, ok)
 		})
 	}
