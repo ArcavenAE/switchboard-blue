@@ -2,7 +2,7 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.10"
+version: "1.11"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
@@ -14,6 +14,7 @@ modified:
   - 2026-07-01T00:00:00 # v1.8 — Ruling-12 §1 amended: E-INT-999 added to enumerated handler-code list as catch-all default sentinel; Ruling-12 §7 (new): process policy requiring synchronized three-part update when introducing a new handler-code family.
   - 2026-07-01T16:30:00 # v1.9 — §8 (new): BC-2.06.003 v1.14 EC-008 spec-tightening (empty-paths quality:'pending' ratification).
   - 2026-07-01T00:00:00 # v1.10 — Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 as dispatch bucket is intentional; discrimination by message prefix is the spec contract; noted in S-6.07 §Wire Envelope Contract. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST wrap io.ErrUnexpectedEOF with E-RPC-002 per ADR-012 §6 Authenticate parity.
+  - 2026-07-01T00:00:00 # v1.11 — spec-steward: Ruling-1 SUPERSEDED-BY annotation added (RULING-W6TB-B + RULING-W6TB-F); VP-047 v1.3→v1.4 oracle flip recorded.
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
 closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
@@ -115,6 +116,21 @@ address; update `PathEntryFromSnapshot` to pass `snap.RouterAddr`; remove the
 DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER drift entry; remove the interim-state note
 from BC-2.06.003 PC-1 and VP-047; update AC-006 to assert a non-empty
 `router_addr`. MUST merge before the Wave-6 wave-adversarial pass.
+
+### Ruling-1 Status (post-S-BL.ROUTER-ADDR)
+
+SUPERSEDED IN PART by RULING-W6TB-B (2026-07-01) and RULING-W6TB-F (2026-07-01).
+
+- The `""` sentinel-permission clause is retracted. BC-2.06.003 v1.15 removed the
+  interim annotation. VP-047 v1.4 removes the Ruling-1 note.
+- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER is closed. STATE.md updated.
+- Ruling-1's scope-A decision (ship empty string as interim) and follow-on story
+  stub (S-BL.ROUTER-ADDR) were the correct outcome; that story is now
+  ready-for-red-gate and owns both the field enrichment and the VP oracle flip.
+- The integration observability deferral (non-empty router_addr from live daemon
+  deferred to S-BL.PATH-TRACKER-WIRING) remains active per RULING-W6TB-B.
+
+SUPERSEDED-BY: RULING-W6TB-B (seam decision), RULING-W6TB-F (VP oracle + seed).
 
 ---
 
@@ -1427,3 +1443,4 @@ required.
 | 1.7 | 2026-07-01 | Ruling-12: wire-envelope universality (E-ADM-009/E-SVTN-001/E-CFG-001/E-INT-001 all E-RPC-011-wrapped); canonical role-label unified to "unregistered"; BC-2.07.001 genesis-path vector added; POL-002 schema alignment to POL-001 canonical fields; BC-2.07.001 modified-list chronological reorder; S-BL.POLICY-SCHEMA-VALIDATOR stub flagged |
 | 1.9 | 2026-07-01 | §8 (new): BC-2.06.003 v1.14 EC-008 ratified (empty-paths quality:'pending'); anchored in S-W5.04 body via §Edge Cases; no story-scope change beyond spec-tightening |
 | 1.10 | 2026-07-01 | Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 is the intentional sbctl dispatch bucket; operator discrimination is by message prefix per AC-004/AC-005; §Wire Envelope Contract clarification note added to S-6.07. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST add errors.Is(io.ErrUnexpectedEOF) arm wrapping E-RPC-002 per ADR-012 §6 Authenticate parity; test TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002 required. |
+| 1.11 | 2026-07-01 | spec-steward: Ruling-1 SUPERSEDED-BY annotation added (RULING-W6TB-B + RULING-W6TB-F); `""` sentinel-permission clause retracted per VP-047 v1.4 oracle flip. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed pending S-BL.ROUTER-ADDR merge. |

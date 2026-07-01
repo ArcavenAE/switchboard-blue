@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.26 | 2026-07-01 | VP-044 bumped v1.0→v1.1, VP-045 bumped v1.0→v1.1, VP-055 bumped v1.0→v1.1 (S-7.02 LENS-3 traceability backfill per RULING-W6TB-D): implementing_story S-7.02 added to frontmatter of all three; Story Trace sections added; catalog row titles annotated. VP-044 partial-coverage note: in-process registry seam only; multicast wire deferred to S-BL.DISCOVERY-WIRE. No count or method changes; total remains 76. |
 | 2.25 | 2026-07-01 | VP-047 bumped v1.3→v1.4 (RULING-W6TB-F §Ruling 1, F-L3-001): Ruling-1 interim clauses retracted — Property Statement updated (router_addr MUST equal PathSnapshot.RouterAddr; "" valid only for addr-less NewPathTracker paths), proof harness struct comment updated, integration test assertion updated. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed (BC-2.06.003 v1.15; S-BL.ROUTER-ADDR). No count or method changes; total remains 76. |
 | 2.24 | 2026-07-01 | VP-043 bumped v1.0→v1.1 (S-7.01 LENS-3 traceability backfill): implementing_story S-7.01 added to frontmatter; Story Trace section added; catalog row title annotated with implementing_story. No count or method changes; total remains 76. |
 | 2.23 | 2026-07-01 | VP-062 bumped v1.5→v1.6 (F-P5L3R-02 Pass-6 L3): BC-2.06.003 body pins corrected v1.10→v1.13 at 7 sites; catalog row BC column annotated v1.13. Prior v1.11 changelog entry was aspirational — body sweep actually completed at v1.6. No count or method changes; total remains 76. |
