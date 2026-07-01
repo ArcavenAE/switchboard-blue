@@ -1,5 +1,6 @@
 // Package discovery implements SVTN-scoped multicast session presence
-// advertisement and enumeration (BC-2.03.001, BC-2.03.002, BC-2.03.003).
+// advertisement and enumeration (BC-2.03.001 v1.4, BC-2.03.002 v1.3,
+// BC-2.03.003 v1.3).
 //
 // An access node broadcasts its session presence to all nodes on the same
 // SVTN via SVTN-scoped multicast. Advertisement frames are authenticated
@@ -20,7 +21,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/arcavenae/switchboard/internal/routing"
 )
@@ -115,6 +118,11 @@ type Config struct {
 	// inside Run. It provides an observable side-effect for tests that need
 	// to count heartbeat invocations (AC-001b; BC-2.03.001 PC-4 oracle).
 	HeartbeatObserver func()
+	// TickSource, if non-nil, is used instead of time.NewTicker for the
+	// heartbeat timer. Injected in tests to provide deterministic tick delivery.
+	// Production callers MUST leave this nil.
+	// (RULING-W6TB-G)
+	TickSource <-chan time.Time
 }
 
 // registryKey is the composite key for the session registry.
@@ -131,9 +139,10 @@ type registryKey struct {
 //  2. Enumerator — aggregates inbound advertisements into a local session
 //     registry and returns SVTN-scoped results on demand.
 type Discovery struct {
-	cfg      Config
-	mu       sync.RWMutex
-	registry map[registryKey]SessionEntry
+	cfg            Config
+	mu             sync.RWMutex
+	registry       map[registryKey]SessionEntry
+	heartbeatCount atomic.Uint64
 }
 
 // New constructs a Discovery instance from cfg.
@@ -160,22 +169,41 @@ func (d *Discovery) heartbeatInterval() time.Duration {
 // It blocks until ctx is cancelled. The caller is responsible for
 // cancelling ctx to stop background goroutines cleanly.
 func (d *Discovery) Run(ctx context.Context) error {
-	ticker := time.NewTicker(d.heartbeatInterval())
-	defer ticker.Stop()
+	var tickCh <-chan time.Time
+	var ticker *time.Ticker
+	if d.cfg.TickSource != nil {
+		// Test-injected deterministic tick source (RULING-W6TB-G).
+		tickCh = d.cfg.TickSource
+	} else {
+		ticker = time.NewTicker(d.heartbeatInterval())
+		defer ticker.Stop()
+		tickCh = ticker.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
+		case <-tickCh:
 			// Heartbeat: re-broadcast current presence. In this implementation
 			// the registry is in-process, so the heartbeat is a no-op at the
 			// data layer — it fires the timer to satisfy the independent-timer
 			// requirement (BC-2.03.001 PC-4).
+			//
+			// Increment atomic counter unconditionally before calling the
+			// optional observer so HeartbeatCount() is always accurate
+			// regardless of whether an observer is wired (M-1).
+			d.heartbeatCount.Add(1)
 			if d.cfg.HeartbeatObserver != nil {
 				d.cfg.HeartbeatObserver()
 			}
 		}
 	}
+}
+
+// HeartbeatCount returns the total number of heartbeat ticks processed since
+// Run started. It is safe to call concurrently with Run (M-1; AC-001b).
+func (d *Discovery) HeartbeatCount() uint64 {
+	return d.heartbeatCount.Load()
 }
 
 // Advertise stores the supplied session presence list under the local node
@@ -233,9 +261,11 @@ func (d *Discovery) Enumerate(ctx context.Context) ([]SessionEntry, error) {
 // rejects payloads from a foreign SVTN (AC-006). Valid payloads are merged
 // into the local session registry.
 //
-// Ordering: SVTN check runs before HMAC verification so that cross-scope
-// advertisements return ErrSVTNMismatch rather than ErrInvalidHMACTag
-// (BC-2.03.002 Inv-1 sentinel; AC-006 test oracle).
+// Ordering (RULING-W6TB-H): HMAC verification runs before the SVTN cross-scope
+// check. The body is decoded first only to extract the declared SVTN ID for key
+// derivation; the decoded content is not trusted until HMAC passes. An
+// unauthenticated attacker who forges SVTN bytes receives ErrInvalidHMACTag —
+// the distinguishing oracle is closed (BC-2.03.001 PC-5 fail-closed posture).
 func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error {
 	// Minimum: 8-byte HMAC tag + 26-byte body minimum = 34 bytes.
 	if len(raw) < routing.AdvertisementHMACTagSize {
@@ -247,27 +277,28 @@ func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error 
 	copy(wireTag[:], raw[:routing.AdvertisementHMACTagSize])
 	body := raw[routing.AdvertisementHMACTagSize:]
 
-	// Decode body first (without HMAC) to read the SVTN ID.
-	// This allows us to return ErrSVTNMismatch for cross-scope advertisements
-	// before attempting HMAC verification with the wrong key.
+	// Decode body to read the declared SVTN ID for HMAC key derivation.
+	// The decoded content is untrusted until HMAC verification passes below.
 	payload, err := decodeBody(body)
 	if err != nil {
 		return ErrInvalidHMACTag
 	}
 
-	// SVTN cross-scope isolation check BEFORE HMAC (BC-2.03.002 Inv-1; AC-006).
-	// Return the sentinel error so callers can distinguish cross-scope
-	// rejections from authentication failures.
-	if payload.SVTNID != d.cfg.LocalSVTNID {
-		return ErrSVTNMismatch
-	}
-
-	// Verify HMAC using the SVTN-scoped key. Only nodes on the same SVTN
-	// share this key, so cross-SVTN payloads would also fail here — but we
-	// already returned ErrSVTNMismatch above.
-	hmacKey := advertisementKey(d.cfg.LocalSVTNID)
+	// HMAC-first (RULING-W6TB-H): verify authentication before any security
+	// decision. Key is derived from the declared payload.SVTNID so that
+	// admitted nodes on other SVTNs can authenticate with their own key and
+	// are then correctly rejected by the SVTN check below.
+	hmacKey := advertisementKey(payload.SVTNID)
 	if !routing.VerifyAdvertisementHMAC(hmacKey[:], body, wireTag) {
 		return ErrInvalidHMACTag
+	}
+
+	// SVTN cross-scope check (RULING-W6TB-H): payload is authenticated; verify
+	// it belongs to our SVTN. Admitted nodes on other SVTNs pass HMAC (their own
+	// key) but fail here — ErrSVTNMismatch is returned for legitimate cross-scope
+	// rejection, not as a pre-authentication oracle.
+	if payload.SVTNID != d.cfg.LocalSVTNID {
+		return ErrSVTNMismatch
 	}
 
 	// Store sessions in the registry, keyed by (nodeAddr, sessionName).
@@ -357,11 +388,15 @@ func advertisementKey(svtnID [16]byte) [16]byte {
 //
 // Format: [16]SVTNID | [8]NodeAddr | uint16 count | sessions...
 // Per session: uint16 name_len | name_bytes | uint8 status | uint8 quality
+//
+// Session names longer than 255 bytes are truncated to at most 254 UTF-8-safe
+// bytes and suffixed with "…" (U+2026, 3 bytes) so the encoded name fits in
+// one uint16-length field and still signals truncation (BC-2.03.003 EC-004; M-2).
 func encodeBody(payload AdvertisementPayload) []byte {
 	// Calculate size up front for a single allocation.
 	size := 16 + 8 + 2
 	for _, s := range payload.Sessions {
-		size += 2 + len(s.SessionName) + 1 + 1
+		size += 2 + len(encodedSessionName(s.SessionName)) + 1 + 1
 	}
 	buf := make([]byte, 0, size)
 
@@ -372,13 +407,36 @@ func encodeBody(payload AdvertisementPayload) []byte {
 	buf = binary.BigEndian.AppendUint16(buf, count)
 
 	for _, s := range payload.Sessions {
-		nameLen := uint16(len(s.SessionName))
+		name := encodedSessionName(s.SessionName)
+		nameLen := uint16(len(name))
 		buf = binary.BigEndian.AppendUint16(buf, nameLen)
-		buf = append(buf, s.SessionName...)
+		buf = append(buf, name...)
 		buf = append(buf, byte(s.Status))
 		buf = append(buf, byte(s.Quality))
 	}
 	return buf
+}
+
+// encodedSessionName returns the UTF-8 byte representation of name suitable
+// for wire encoding. If the name exceeds 255 bytes when encoded as UTF-8 it is
+// truncated to at most 254 bytes on a rune boundary and suffixed with "…"
+// (U+2026, 3 bytes), yielding a result no longer than 254+3 = 257 bytes but
+// kept within uint16 range. In practice the truncated form is ≤ 257 bytes
+// (well within uint16), and the ellipsis signals lossy truncation to receivers
+// (BC-2.03.003 EC-004).
+func encodedSessionName(name string) []byte {
+	b := []byte(name)
+	const maxBytes = 255
+	const ellipsis = "…" // U+2026, 3 bytes
+	if len(b) <= maxBytes {
+		return b
+	}
+	// Cut at 254 bytes then walk back to a valid rune boundary.
+	cut := 254
+	for cut > 0 && !utf8.RuneStart(b[cut]) {
+		cut--
+	}
+	return append(b[:cut], ellipsis...)
 }
 
 // decodeBody deserialises a body slice (without the HMAC tag prefix).

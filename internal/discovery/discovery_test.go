@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -165,17 +166,18 @@ func TestDiscovery_Advertise_OnStateChange_DetachTriggersAdvert(t *testing.T) {
 // AC-001b — BC-2.03.001 PC-4: periodic heartbeat independent of state change
 // ---------------------------------------------------------------------------
 
-// TestDiscovery_Advertise_PeriodicHeartbeat verifies BC-2.03.001 PC-4:
-// Run fires the heartbeat unconditionally every HeartbeatInterval regardless
-// of Advertise calls. Uses a shortened interval to stay fast.
+// TestDiscovery_Advertise_PeriodicHeartbeat is an integration sanity test for
+// the real time.Ticker code path — verifies observability under real scheduler
+// jitter, NOT for oracle exact-N discrimination (see
+// TestDiscovery_Advertise_PeriodicHeartbeat_ExactN for that).
 //
-// Purpose: assert the observer fires at all — i.e., the ticker is wired up
-// and running. Tight-mutant rate-oracle is delegated to the
-// _IsIndependent sibling test which uses a looser "≥1" bound.
+// Wide tolerance [expectedTicks/2, expectedTicks*2] is intentional:
+// wall-clock jitter prevents exact counting. This test detects catastrophic
+// failures only (heartbeat never fires, always fires 0 times). The
+// exact-N oracle that can catch a removed ticker body is in _ExactN
+// (RULING-W6TB-G).
 //
-// Tolerance is [expectedTicks/2, expectedTicks*2] to survive CI scheduler
-// jitter: Go ticker first-tick latency and ctx.Done races can easily
-// consume 1–2 ticks at the margins on a loaded runner.
+// BC-2.03.001 PC-4; AC-001b (S-7.02 v1.3).
 func TestDiscovery_Advertise_PeriodicHeartbeat(t *testing.T) {
 	t.Parallel()
 
@@ -277,6 +279,138 @@ func TestDiscovery_Advertise_PeriodicHeartbeat_IsIndependent(t *testing.T) {
 	if got < 1 {
 		t.Errorf("HeartbeatObserver not called after %v with no prior Advertise; want ≥ 1 (BC-2.03.001 PC-4 independent of state change)",
 			windowDuration)
+	}
+}
+
+// TestDiscovery_Advertise_PeriodicHeartbeat_ExactN verifies AC-001b exactly:
+// N injected ticks produce exactly N HeartbeatObserver calls AND
+// HeartbeatCount() == N.
+//
+// Uses Config.TickSource for deterministic tick delivery — no wall-clock
+// sensitivity. A removed ticker body causes count == 0 and test failure
+// (RULING-W6TB-G: the no-op-removal oracle).
+//
+// BC-2.03.001 PC-4; AC-001b (S-7.02 v1.3).
+func TestDiscovery_Advertise_PeriodicHeartbeat_ExactN(t *testing.T) {
+	t.Parallel()
+
+	const N = 5
+	var count int
+	var mu sync.Mutex
+
+	tickCh := make(chan time.Time, N)
+	cfg := discovery.Config{
+		LocalNodeAddr:     nodeA1,
+		LocalSVTNID:       svtnA,
+		Router:            newTestRouter(t),
+		HeartbeatInterval: time.Second, // irrelevant; TickSource overrides
+		HeartbeatObserver: func() {
+			mu.Lock()
+			count++
+			mu.Unlock()
+		},
+		TickSource: tickCh,
+	}
+	d := discovery.New(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- d.Run(ctx)
+	}()
+
+	// Send exactly N ticks and verify each one fires the observer.
+	now := time.Now().UTC()
+	for i := range N {
+		tickCh <- now
+		// Poll with a short deadline to detect a stuck observer.
+		deadline := time.Now().Add(100 * time.Millisecond)
+		for {
+			mu.Lock()
+			got := count
+			mu.Unlock()
+			if got == i+1 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("tick %d: HeartbeatObserver not called within 100ms (got %d, want %d)", i+1, got, i+1)
+			}
+			runtime.Gosched()
+		}
+	}
+
+	cancel()
+	if err := <-runDone; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run: unexpected error: %v", err)
+	}
+
+	mu.Lock()
+	got := count
+	mu.Unlock()
+	if got != N {
+		t.Errorf("HeartbeatObserver called %d times after %d ticks, want exactly %d (BC-2.03.001 PC-4 exact-N observer oracle)", got, N, N)
+	}
+
+	// HeartbeatCount() must also equal N — atomic counter is independent of
+	// the optional observer (M-1).
+	if hc := d.HeartbeatCount(); hc != N {
+		t.Errorf("HeartbeatCount() = %d after %d ticks, want exactly %d (BC-2.03.001 PC-4 exact-N count oracle)", hc, N, N)
+	}
+}
+
+// TestDiscovery_HeartbeatCount_MonotonicallyIncreases verifies that
+// HeartbeatCount() increases by exactly 1 for each injected tick and never
+// decrements. Companion to ExactN test (M-1; BC-2.03.001 PC-4).
+func TestDiscovery_HeartbeatCount_MonotonicallyIncreases(t *testing.T) {
+	t.Parallel()
+
+	const N = 4
+	tickCh := make(chan time.Time, N)
+	cfg := discovery.Config{
+		LocalNodeAddr:     nodeA1,
+		LocalSVTNID:       svtnA,
+		Router:            newTestRouter(t),
+		HeartbeatInterval: time.Second,
+		TickSource:        tickCh,
+	}
+	d := discovery.New(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- d.Run(ctx)
+	}()
+
+	now := time.Now().UTC()
+	var prev uint64
+	for i := range N {
+		tickCh <- now
+		// Poll until HeartbeatCount advances.
+		deadline := time.Now().Add(100 * time.Millisecond)
+		for {
+			cur := d.HeartbeatCount()
+			if cur > prev {
+				// Strictly increasing: each tick adds exactly 1.
+				if cur != uint64(i+1) {
+					t.Errorf("tick %d: HeartbeatCount() = %d, want %d (monotonic increase by 1)", i+1, cur, i+1)
+				}
+				prev = cur
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("tick %d: HeartbeatCount() did not advance within 100ms (stuck at %d)", i+1, prev)
+			}
+			runtime.Gosched()
+		}
+	}
+
+	cancel()
+	if err := <-runDone; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run: unexpected error: %v", err)
 	}
 }
 
@@ -727,6 +861,11 @@ func TestDiscovery_Advertise_HMACAuthenticated_TagCorruption(t *testing.T) {
 // result for a Discovery instance on SVTN-A.
 //
 // Oracle: len(sessionsFromNodes(svtnAResult, svtnBNode)) == 0
+//
+// RULING-W6TB-H: With HMAC-first ordering, a legitimate foreign-SVTN
+// advertisement (signed with the foreign SVTN's key) passes HMAC verification
+// but is rejected by the SVTN cross-scope check — returning ErrSVTNMismatch.
+// This is the expected sentinel for admitted nodes on other SVTNs.
 func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 	t.Parallel()
 
@@ -746,7 +885,10 @@ func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 		t.Fatalf("ReceiveAdvertisement SVTN-A: %v", err)
 	}
 
-	// Inject a SVTN-B advertisement — must be rejected or silently filtered.
+	// Inject a legitimate foreign-SVTN advertisement: node on SVTN-B encoded
+	// with SVTN-B's HMAC key (encodeOrFail uses payload.SVTNID as the key).
+	// RULING-W6TB-H: HMAC passes (foreign key matches foreign SVTN), then the
+	// SVTN cross-scope check fires → ErrSVTNMismatch.
 	nodeB := [8]byte{0xBB}
 	advB := encodeOrFail(t, discovery.AdvertisementPayload{
 		NodeAddr: nodeB,
@@ -760,7 +902,7 @@ func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 	// contract must be enforced so callers can observe the rejection.
 	svtnBErr := d.ReceiveAdvertisement(ctx, advB)
 	if svtnBErr == nil || !errors.Is(svtnBErr, discovery.ErrSVTNMismatch) {
-		t.Fatalf("ReceiveAdvertisement SVTN-B: got %v, want ErrSVTNMismatch (AC-006 sentinel required)", svtnBErr)
+		t.Fatalf("ReceiveAdvertisement SVTN-B (legitimate foreign): got %v, want ErrSVTNMismatch (AC-006 sentinel required, RULING-W6TB-H)", svtnBErr)
 	}
 
 	result, err := d.Enumerate(ctx)
@@ -784,9 +926,71 @@ func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 	}
 }
 
+// TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN verifies RULING-W6TB-H:
+// an attacker who forges the SVTN field (sets foreign SVTN bytes) but cannot
+// produce a valid HMAC must receive ErrInvalidHMACTag — NOT ErrSVTNMismatch.
+//
+// With HMAC-first ordering, the SVTN field is authenticated before the
+// cross-scope check, so the attacker's distinguishing oracle is closed.
+// The forged advertisement here uses a raw payload with foreign SVTN bytes
+// whose HMAC was computed under the local SVTN key (i.e., the "wrong key"
+// from the forger's perspective), causing HMAC verification to fail.
+func TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN(t *testing.T) {
+	t.Parallel()
+
+	cfg := newTestConfig(t, svtnA, nodeA1)
+	d := discovery.New(cfg)
+	ctx := context.Background()
+
+	// Build an advertisement carrying svtnB bytes but signed with svtnA's
+	// key — this simulates an attacker who writes a foreign SVTN ID but
+	// does not know the foreign SVTN's key (so they sign with the local
+	// key or a random key instead).
+	//
+	// We construct this by encoding with svtnA (so the HMAC is valid for
+	// svtnA's key) and then flipping the SVTN ID bytes in the body to svtnB.
+	// The HMAC now covers the wrong SVTN bytes, so verification fails.
+	validLocalAdv, err := discovery.Encode(discovery.AdvertisementPayload{
+		NodeAddr: nodeA2,
+		SVTNID:   svtnA, // encode with local SVTN → correct HMAC for svtnA key
+		Sessions: []discovery.SessionPresence{
+			{SessionName: "forged-svtn-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	// Flip the SVTN ID bytes in the body (bytes [8:24] after the 8-byte HMAC
+	// tag prefix) to svtnB — the HMAC tag now covers body bytes that claim
+	// svtnB but were signed as svtnA, so the HMAC is invalid.
+	const hmacTagSize = 8 // routing.AdvertisementHMACTagSize
+	if len(validLocalAdv) < hmacTagSize+16 {
+		t.Fatalf("encoded advertisement too short to flip SVTN bytes")
+	}
+	forged := make([]byte, len(validLocalAdv))
+	copy(forged, validLocalAdv)
+	copy(forged[hmacTagSize:hmacTagSize+16], svtnB[:])
+
+	// RULING-W6TB-H: HMAC-first ordering means the receiver derives the key
+	// from the (now-forged) declared SVTN ID (svtnB). Since the body was
+	// signed with svtnA's key but the declared SVTN is svtnB, HMAC
+	// verification fails → ErrInvalidHMACTag before the SVTN check fires.
+	forgedErr := d.ReceiveAdvertisement(ctx, forged)
+	if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
+		t.Fatalf("ReceiveAdvertisement forged-SVTN: got %v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not get ErrSVTNMismatch before HMAC)", forgedErr)
+	}
+}
+
 // TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel verifies that when
-// ReceiveAdvertisement returns an error for a cross-scope advertisement, it
-// wraps or is ErrSVTNMismatch (BC-2.03.002 Inv-1 sentinel).
+// ReceiveAdvertisement receives a legitimate cross-scope advertisement
+// (HMAC signed with the foreign SVTN's own key), it returns ErrSVTNMismatch —
+// not nil and not ErrInvalidHMACTag (BC-2.03.002 Inv-1 sentinel).
+//
+// RULING-W6TB-H: encodeOrFail signs with payload.SVTNID (the foreign key),
+// so HMAC verification passes under HMAC-first ordering; the SVTN cross-scope
+// check then fires and returns ErrSVTNMismatch. This is the correct sentinel
+// for legitimate admitted nodes on other SVTNs.
 func TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel(t *testing.T) {
 	t.Parallel()
 
@@ -794,6 +998,8 @@ func TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel(t *testing.T) {
 	d := discovery.New(cfg)
 
 	nodeB := [8]byte{0xCC}
+	// encodeOrFail uses payload.SVTNID as the HMAC key — legitimate foreign
+	// node signs with its own SVTN's key.
 	advB := encodeOrFail(t, discovery.AdvertisementPayload{
 		NodeAddr: nodeB,
 		SVTNID:   svtnB,
@@ -807,7 +1013,7 @@ func TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel(t *testing.T) {
 		t.Fatal("ReceiveAdvertisement cross-SVTN: expected ErrSVTNMismatch (or wrapping it), got nil")
 	}
 	if !errors.Is(err, discovery.ErrSVTNMismatch) {
-		t.Errorf("ReceiveAdvertisement cross-SVTN: err = %v, want errors.Is(err, ErrSVTNMismatch) == true", err)
+		t.Errorf("ReceiveAdvertisement cross-SVTN (legitimate foreign): err = %v, want errors.Is(err, ErrSVTNMismatch) == true (RULING-W6TB-H)", err)
 	}
 }
 
@@ -942,9 +1148,11 @@ func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
 				t.Fatalf("ReceiveAdvertisement local SVTN: %v", err)
 			}
 
-			// Inject a foreign SVTN advertisement — must be blocked with
-			// ErrSVTNMismatch. VP-045: sentinel contract must be enforced;
-			// silent drop (err==nil) is not acceptable.
+			// Legitimate foreign-SVTN case (RULING-W6TB-H): advertisement
+			// encoded with the foreign SVTN's own key (encodeOrFail uses
+			// payload.SVTNID). HMAC-first: authentication passes (foreign
+			// key is used to verify), then SVTN cross-scope check fires →
+			// ErrSVTNMismatch. Silent drop (err==nil) is not acceptable.
 			foreignAdv := encodeOrFail(t, discovery.AdvertisementPayload{
 				NodeAddr: foreignNode,
 				SVTNID:   pair.foreign,
@@ -953,7 +1161,33 @@ func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
 				},
 			})
 			if foreignErr := d.ReceiveAdvertisement(ctx, foreignAdv); foreignErr == nil || !errors.Is(foreignErr, discovery.ErrSVTNMismatch) {
-				t.Fatalf("VP-045 foreign SVTN accepted: err=%v, expected ErrSVTNMismatch", foreignErr)
+				t.Fatalf("VP-045 foreign SVTN (legitimate): err=%v, expected ErrSVTNMismatch (RULING-W6TB-H)", foreignErr)
+			}
+
+			// Forged-SVTN case (RULING-W6TB-H): attacker writes foreign SVTN
+			// bytes but cannot produce a valid HMAC for that foreign SVTN's
+			// key. Simulate by encoding with the local key then flipping
+			// the SVTN bytes in the wire body — HMAC now covers wrong bytes.
+			// HMAC-first: receiver derives key from declared (forged) SVTN →
+			// verification fails → must return ErrInvalidHMACTag.
+			forgedAdv, encErr := discovery.Encode(discovery.AdvertisementPayload{
+				NodeAddr: foreignNode,
+				SVTNID:   pair.local, // sign with local key
+				Sessions: []discovery.SessionPresence{
+					{SessionName: "forged-svtn-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
+				},
+			})
+			if encErr != nil {
+				t.Fatalf("Encode forged adv: %v", encErr)
+			}
+			// Flip the SVTN ID bytes in the body to pair.foreign so that the
+			// HMAC tag no longer matches the body content.
+			const hmacTagSize = 8 // routing.AdvertisementHMACTagSize
+			if len(forgedAdv) >= hmacTagSize+16 {
+				copy(forgedAdv[hmacTagSize:hmacTagSize+16], pair.foreign[:])
+			}
+			if forgedErr := d.ReceiveAdvertisement(ctx, forgedAdv); !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
+				t.Fatalf("VP-045 forged SVTN: err=%v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not receive ErrSVTNMismatch before HMAC fails)", forgedErr)
 			}
 
 			result, err := d.Enumerate(ctx)
