@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.20"
+version: "3.21"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -21,8 +21,9 @@ inputDocuments:
 |--------|-------|
 | Total stories | 43 (34 master-table stories + 1 draft stub S-6.04 + 4 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.LOOKUP/S-BL.NI + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 20 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01) |
-| Pending | 7 |
-| Draft/unscheduled | 9 (S-M.01, S-M.02, S-6.04, S-6.05, S-W5.03, S-6.07, S-HRD.01, S-HRD.02, S-W5.04) |
+| Pending | 9 (S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-7.01, S-7.02, S-7.03, S-7.04) |
+| Master-table drafts | 5 (S-W5.02, S-W5.03, S-W5.04, S-6.05, S-6.07) |
+| Backlog/maintenance/hardening stubs | 4 (S-M.01, S-M.02, S-HRD.01, S-HRD.02) |
 | E-phase | 28 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04) |
 | PE-phase | 4 (wave 6 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
@@ -161,6 +162,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.21 | 2026-06-30 | Pass-6 L3 fix: Pending count corrected 7→9 (master-table grep: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-7.01, S-7.02, S-7.03, S-7.04); Draft/unscheduled row restructured — master-table drafts (S-W5.02, S-W5.03, S-W5.04, S-6.05, S-6.07 = 5) separated from backlog/maintenance/hardening stubs (S-M.01, S-M.02, S-HRD.01, S-HRD.02 = 4); S-W5.02 correctly counted in master-table drafts; S-6.04 removed from draft/unscheduled rollup (already captured in Draft stubs: 1). Ref F-P6L3-002. |
 | 3.20 | 2026-06-30 | Pass-5 L3 doc polish: S-W5.02 v1.3→v1.4 (Q2 historical annotation clarified). VP-INDEX v2.16→v2.17 (placeholder-row Phase column normalized). VP-049 v1.2→v1.3 (§Story Trace pin v1.3→v1.4 sibling propagation). dep-graph v1.5→v1.6 (dep narrative prose updated). Ref F-P5L3-001/004/005/007. |
 | 3.19 | 2026-06-30 | S-W5.01 status draft→merged (post-merge closeout, per commit 0d499ac). VP-049 §Story Trace pin S-W5.02 v1.2→v1.3 (sibling propagation). Summary Complete 19→20, Pending 8→7. Ref S-W5.02 F-P4L3-001+F-P4L3-002. |
 | 3.18 | 2026-06-30 | S-W5.02 Pass-2 doc sweep: story bumped v1.2→v1.3 (BC pin sweep + file-location corrections + architecture_modules cleanup). VP-049 v1.1→v1.2 (skeleton API drift corrected). VP-INDEX v2.15→v2.16 (VP-049 version bump + VP-VW6.NN placeholder added). Impl SHA cross-ref: 07ce3db. |

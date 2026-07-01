@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.17"
+version: "2.18"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -101,8 +101,9 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-075.md |
 | VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | draft | VP-076.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | deferred | deferred | (pending) [implementing story: S-BL.BENCH — unscheduled] |
-| VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | deferred | draft | (pending) [implementing story: S-W6.NN — unscheduled] |
+| VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | deferred | deferred | (pending) [implementing story: S-W6.NN — unscheduled] |
 
+> Placeholder rows (VP-TBD-* / VP-V*.NN) use Phase=deferred and Status=deferred until scheduled; the tracking story is recorded in the Notes/File column.
 > VP-TBD-ACC is bench-deferred per ARCH-03 v1.6 (F-4, S-5.02 lens-3). The p99 estimate is computed from a rolling sample buffer; exact accuracy bound against a true p99 requires a sustained load benchmark that belongs in a dedicated bench story (S-BL.BENCH). This VP will receive a permanent ID when S-BL.BENCH is scheduled. It is registered here as a placeholder to close the F-4 process gap — the property is known and intentionally deferred, not forgotten. Implementing story: S-BL.BENCH (unscheduled).
 > VP-VW6.NN is Wave-6 deferred per VP-049 §Feasibility: per-daemon binary entrypoint wiring (goroutine lifecycle, config parsing, signal handling) is out of S-W5.02 scope because runRouter and runConsole remain in "not implemented" stub state. This placeholder will receive a permanent ID when the Wave-6 story is scheduled. Implementing story: S-W6.NN (unscheduled).
 
@@ -146,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.18 | 2026-06-30 | Pass-6 L3 fix F-P6L3-001: normalize placeholder-row Status column — VP-VW6.NN Status changed from "draft" to "deferred" (both placeholders now Phase=deferred, Status=deferred). Added footnote above placeholder footers explaining placeholder-row conventions. Ref F-P6L3-001. |
 | 2.17 | 2026-06-30 | Pass-5 L3 fix F-P5L3-004: normalize placeholder-row Phase column — VP-TBD-ACC and VP-VW6.NN Phase column changed from story-ID strings to "deferred"; implementing-story identifiers moved to Notes column. No count changes to active VP tallies. VP-049 §Story Trace pin bumped v1.3→v1.4 (F-P5L3-001 sibling propagation after story v1.3→v1.4). |
 | 2.16 | 2026-06-30 | S-W5.02 Pass-2 fix F-P2L2-005: VP-049 bumped v1.1→v1.2 — proof harness skeleton API drift corrected (missing "fmt" import, NewServer 5-arg signature with ln+daemonVersion, Serve(ctx) lifecycle, Shutdown wiring, Authenticate cross-package note). VP-VW6.NN Wave-6 placeholder stub registered (draft, unscheduled) per VP-049 §Feasibility. No count changes to active VP tallies. |
 | 2.15 | 2026-06-30 | S-W5.02 Pass-1 fix-burst: VP-049 bumped v1.0→v1.1 — implementing_story updated S-6.03→S-W5.02 per dep-graph v1.3 anchor propagation; proof harness skeleton rewritten to in-process mgmt.NewServer pattern (four daemon instances, distinct handler tables); §Story Trace and §Feasibility added. Row title updated with implementing_story annotation. No count changes. |
