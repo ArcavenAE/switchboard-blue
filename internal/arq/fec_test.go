@@ -485,6 +485,11 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 
 	for groupSize := 2; groupSize <= 8; groupSize++ {
 		groupSize := groupSize
+		// DO NOT add t.Parallel() to this subtest. count_verify at the end of the
+		// outer test relies on sequential execution of groupSize subtests so that
+		// totalRecovery/totalParity int64 accumulators can be read without atomics
+		// (see subtest at count_verify — memory visibility is guaranteed by
+		// t.Run's happens-before when subtests are sequential).
 		t.Run(fmt.Sprintf("groupSize=%d", groupSize), func(t *testing.T) {
 			// Knuth MMIX LCG — each subtest gets its own seed derived from
 			// groupSize so runs are deterministic and subtests are independent.
