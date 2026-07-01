@@ -348,16 +348,17 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 
 // TestVP047_RouterAddrNonEmpty is structured as two parts (RULING-W6TB-K F-P4L2-03):
 //
-// Part A (GREEN-BY-DESIGN at Red Gate): exercises the handler seam integration
-// using pathTrackerListSource (the real list-source wiring). Part A uses a
-// fakePathsListSource stub so it passes before the constructor is implemented.
-// Its value is verifying that the handler correctly passes router_addr from the
-// PathEntry to the JSON response — a seam that TestPathsList_PassesRouterAddr
-// does not cover because that test uses pre-built stub PathEntry values rather
-// than wiring through pathTrackerListSource.
+// Part A (GREEN-BY-DESIGN): exercises the handler seam using fakePathsListSource
+// with an injected PathSnapshot carrying a non-empty RouterAddr. It verifies that
+// PathsList forwards RouterAddr through to the JSON response. Part A exists
+// separately from TestPathsList_PassesRouterAddr (handlers_test.go) because it
+// adds a second oracle: the host:port regex assertion (^[^:]+:[0-9]+$) that
+// TestPathsList_PassesRouterAddr does not include. Both tests use fakePathsListSource
+// with an injected PathSnapshot; Part A is not redundant because the regex check
+// is an additional structural constraint required by VP-047. Both parts MUST remain
+// collocated under the VP-047 oracle name per RULING-W6TB-K F-P4L2-03.
 //
-// Part B (FAILS at Red Gate): exercises NewPathTrackerWithAddr → Snapshot() →
-// router_addr. This is the Red Gate assertion that drives the implementation.
+// Part B: exercises NewPathTrackerWithAddr → Snapshot() → router_addr end-to-end.
 //
 // Both parts MUST remain in this test. Together they constitute the AC-005 oracle
 // for VP-047 router_addr traceability.
@@ -445,7 +446,8 @@ func TestVP047_RouterAddrNonEmpty(t *testing.T) {
 	// This part constructs a real PathTracker via NewPathTrackerWithAddr and asserts
 	// that Snapshot().RouterAddr is non-empty and matches the host:port pattern.
 	//
-	// RED GATE: this sub-test MUST FAIL because NewPathTrackerWithAddr panics.
+	// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+	// Now GREEN: implemented in paths.go (commit 27d7717).
 	t.Run("constructor_through_snapshot", func(t *testing.T) {
 		t.Parallel()
 

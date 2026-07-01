@@ -1193,25 +1193,15 @@ func TestNewPathTracker_RejectsInvalidAlpha(t *testing.T) {
 //	TestBC_2_06_003_RouterAddr_ConcurrentSnapshot          → AC-003 + CI safety
 
 // mustNewPathTrackerWithAddr is a test helper that wraps NewPathTrackerWithAddr
-// and converts a stub panic (BC-5.38.001) into a test failure via t.Fatal,
-// so that Red Gate panics are reported as test failures rather than binary aborts.
+// with a fixed alpha=0.125 (the canonical EWMA smoothing factor for these tests).
 //
-// Uses a fixed alpha=0.125 (the canonical EWMA smoothing factor for these tests).
-// At Red Gate: t.Fatal is called with the panic message → test fails cleanly.
-// Post-implementation: returns the constructed *PathTracker normally.
+// Previously contained a recover guard for the BC-5.38.001 stub panic; that
+// scaffolding was removed once NewPathTrackerWithAddr was implemented in
+// paths.go (commit 27d7717).
 func mustNewPathTrackerWithAddr(t *testing.T, addr string, initialRTTMS float64) *paths.PathTracker {
 	t.Helper()
 	const alpha = 0.125
-	var tracker *paths.PathTracker
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Fatalf("NewPathTrackerWithAddr(%q, %v, %v) panicked (Red Gate — stub not yet implemented): %v", addr, initialRTTMS, alpha, r)
-			}
-		}()
-		tracker = paths.NewPathTrackerWithAddr(addr, initialRTTMS, alpha)
-	}()
-	return tracker
+	return paths.NewPathTrackerWithAddr(addr, initialRTTMS, alpha)
 }
 
 // TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr verifies that after constructing
@@ -1220,8 +1210,8 @@ func mustNewPathTrackerWithAddr(t *testing.T, addr string, initialRTTMS float64)
 //
 // AC-003 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B §3.
 //
-// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). This test MUST fail
-// until the constructor is implemented.
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
 func TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr(t *testing.T) {
 	t.Parallel()
 
@@ -1255,8 +1245,8 @@ func TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr(t *testing.T) {
 //
 // AC-001 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B §3.
 //
-// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). This test MUST fail
-// until the constructor is implemented.
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
 func TestBC_2_06_003_Snapshot_RouterAddr_Propagates(t *testing.T) {
 	t.Parallel()
 
@@ -1336,14 +1326,12 @@ func TestBC_2_06_003_NewPathTracker_Unchanged(t *testing.T) {
 //
 // AC-003 / BC-2.06.003 PC-1 precondition carried over to new constructor.
 //
-// RED GATE: NewPathTrackerWithAddr panics unconditionally (BC-5.38.001 stub),
-// so this test will pass trivially during the Red Gate phase. The real alpha
-// validation guard is tested post-implementation; this test is included to
-// document the invariant and prevent regression.
-//
-// Implementation note: use a sub-check to distinguish "panicked due to stub"
-// vs "panicked due to invalid alpha" once the constructor is real. During Red
-// Gate, any panic satisfies the deferred func.
+// RED GATE (originally at commit 4a4efed): stub panicked unconditionally per
+// BC-5.38.001, so this test passed trivially. Now GREEN: the constructor is
+// implemented (paths.go:128-132, commit 27d7717) and the alpha guard is real.
+// The oracle was strengthened post-implementation to require "alpha" in the panic
+// message (F-P4L2-01) to distinguish a real alpha-validation panic from an
+// unrelated stub panic.
 func TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha(t *testing.T) {
 	t.Parallel()
 
@@ -1379,8 +1367,8 @@ func TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha(t *testing.T) {
 //
 // RULING-W6TB-B §3 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR).
 //
-// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). This test MUST fail
-// until the constructor is implemented.
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
 func TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction(t *testing.T) {
 	t.Parallel()
 
@@ -1420,8 +1408,8 @@ func TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction(t *testing.T) {
 //
 // AC-003 / RULING-W6TB-B §3 (immutability + concurrent safety).
 //
-// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). This test MUST fail
-// until the constructor is implemented.
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
 func TestBC_2_06_003_RouterAddr_ConcurrentSnapshot(t *testing.T) {
 	// Not parallel at outer level — inner goroutines provide the concurrency.
 
