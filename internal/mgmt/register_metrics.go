@@ -1,6 +1,4 @@
-// register_metrics.go adds the Register method to Server and wires the
-// paths.list, router.metrics, and router.status RPC handlers (ARCH-12;
-// S-W5.04 AC-001, AC-004, AC-005).
+// Registration of metrics RPC handlers on the mgmt.Server (ARCH-12; S-W5.04 AC-001, AC-004, AC-005).
 //
 // Register extends the handler table after construction — necessary because
 // daemon components like the metrics handlers are wired after NewServer returns.
@@ -10,6 +8,7 @@
 //
 // Purity classification (ARCH-09): boundary — wires effectful handlers into the
 // management server; no business logic lives here.
+
 package mgmt
 
 import (
@@ -25,7 +24,7 @@ import (
 //
 // S-W5.04: used to register paths.list, router.metrics, and router.status.
 func (s *Server) Register(h Handler) {
-	panic("TODO: S-W5.04 Server.Register not yet implemented")
+	s.handlers = append(s.handlers, h)
 }
 
 // RegisterMetricsHandlers registers the three metrics RPC handlers on s:
@@ -38,23 +37,31 @@ func (s *Server) Register(h Handler) {
 //
 // Called once during daemon startup (cmd/switchboard), before Server.Serve.
 func RegisterMetricsHandlers(s *Server, pathsSrc metrics.PathsListSource, routerSrc metrics.RouterMetricsSource) {
-	panic("TODO: S-W5.04 RegisterMetricsHandlers not yet implemented")
+	s.Register(Handler{Command: "paths.list", Fn: pathsListHandler(pathsSrc)})
+	s.Register(Handler{Command: "router.metrics", Fn: routerMetricsHandler(routerSrc)})
+	s.Register(Handler{Command: "router.status", Fn: routerStatusHandler(pathsSrc)})
 }
 
 // pathsListHandler returns a mgmt.Handler.Fn for the "paths.list" command.
 // The returned function closes over src and delegates to metrics.PathsList.
 func pathsListHandler(src metrics.PathsListSource) func(ctx context.Context, args json.RawMessage) (any, error) {
-	panic("TODO: S-W5.04 pathsListHandler not yet implemented")
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		return metrics.PathsList(ctx, args, src)
+	}
 }
 
 // routerMetricsHandler returns a mgmt.Handler.Fn for the "router.metrics" command.
 // The returned function closes over src and delegates to metrics.RouterMetrics.
 func routerMetricsHandler(src metrics.RouterMetricsSource) func(ctx context.Context, args json.RawMessage) (any, error) {
-	panic("TODO: S-W5.04 routerMetricsHandler not yet implemented")
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		return metrics.RouterMetrics(ctx, args, src)
+	}
 }
 
 // routerStatusHandler returns a mgmt.Handler.Fn for the "router.status" command.
 // The returned function closes over src and delegates to metrics.RouterStatus.
 func routerStatusHandler(src metrics.PathsListSource) func(ctx context.Context, args json.RawMessage) (any, error) {
-	panic("TODO: S-W5.04 routerStatusHandler not yet implemented")
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		return metrics.RouterStatus(ctx, args, src)
+	}
 }

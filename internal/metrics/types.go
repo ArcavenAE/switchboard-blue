@@ -5,7 +5,10 @@
 // Purity classification (ARCH-09): pure-core.
 package metrics
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // RTTValue represents the rtt_p99_ms field in PathEntry.
 // It serializes as a float64 when SampleCount ≥ 10 and as the JSON string
@@ -24,7 +27,10 @@ type RTTValue struct {
 // Emits a float64 when SampleCount ≥ 10; emits the string "pending" otherwise.
 // BC-2.06.003 v1.8 PC-1 (pending sentinel), EC-003.
 func (r RTTValue) MarshalJSON() ([]byte, error) {
-	panic("TODO: S-W5.04 RTTValue.MarshalJSON not yet implemented")
+	if r.SampleCount < 10 {
+		return []byte(`"pending"`), nil
+	}
+	return json.Marshal(r.ValueMs)
 }
 
 // PathEntry is a single path in the paths.list or router.status response.
@@ -69,5 +75,29 @@ type RouterMetricsResponse struct {
 	PathDistribution map[string]uint64 `json:"path_distribution"`
 }
 
-// Ensure RTTValue implements json.Marshaler at compile time.
-var _ json.Marshaler = RTTValue{}
+// UnmarshalJSON implements json.Unmarshaler for the RTTValue union type.
+// Accepts a float64 JSON number (SampleCount set to 10 to signal valid data)
+// or the JSON string "pending" (SampleCount set to 0 to signal indeterminate).
+// This enables round-trip JSON decode of PathsListResponse.
+func (r *RTTValue) UnmarshalJSON(data []byte) error {
+	// Try the string "pending" first.
+	if string(data) == `"pending"` {
+		r.ValueMs = 0
+		r.SampleCount = 0
+		return nil
+	}
+	// Otherwise expect a float64 number.
+	var v float64
+	if err := json.Unmarshal(data, &v); err != nil {
+		return fmt.Errorf("rtt_p99_ms: expected float64 or \"pending\": %w", err)
+	}
+	r.ValueMs = v
+	r.SampleCount = 10 // sentinel: ≥10 means valid float
+	return nil
+}
+
+// Ensure RTTValue implements json.Marshaler and json.Unmarshaler at compile time.
+var (
+	_ json.Marshaler   = RTTValue{}
+	_ json.Unmarshaler = &RTTValue{}
+)

@@ -1,5 +1,5 @@
-// handlers.go implements the daemon-side RPC handler logic for paths.list,
-// router.metrics, and router.status (BC-2.06.003 v1.8 PC-1, PC-2, PC-3).
+// Daemon-side RPC handler logic for paths.list, router.metrics, and router.status
+// (BC-2.06.003 v1.8 PC-1, PC-2, PC-3).
 //
 // Purity classification (ARCH-09): effectful — reads PathTracker state via
 // PathSnapshot. I/O ownership stays in internal/mgmt; these functions are the
@@ -8,11 +8,13 @@
 // Package DAG: internal/metrics imports internal/paths for PathSnapshot.
 // internal/mgmt imports internal/metrics for the handler functions.
 // internal/mgmt MUST NOT import internal/paths directly (ARCH-12).
+
 package metrics
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/arcavenae/switchboard/internal/paths"
 )
@@ -43,8 +45,19 @@ type RouterMetricsSource interface {
 // args is the raw JSON args (unused for paths.list; may be nil or empty object).
 //
 // BC-2.06.003 v1.8 PC-1; AC-001.
-func PathsList(ctx context.Context, args json.RawMessage, src PathsListSource) (PathsListResponse, error) {
-	panic("TODO: S-W5.04 PathsList not yet implemented")
+func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (PathsListResponse, error) {
+	snaps := src.AllSnapshots()
+	entries := make([]PathEntry, 0, len(snaps))
+	for pathID, snap := range snaps {
+		// routerAddr is derived from the pathID: in this release the pathID encodes
+		// the remote router address (host:port) — a follow-on story will introduce a
+		// dedicated RouterAddr field in PathSnapshot when path metadata is enriched.
+		entries = append(entries, PathEntryFromSnapshot(pathID, pathID, snap))
+	}
+	if len(entries) == 0 {
+		return PathsListResponse{Paths: entries, Message: "no active paths"}, nil
+	}
+	return PathsListResponse{Paths: entries}, nil
 }
 
 // RouterMetrics is the handler logic for the "router.metrics" RPC.
@@ -52,8 +65,16 @@ func PathsList(ctx context.Context, args json.RawMessage, src PathsListSource) (
 // Returns an error (E-RPC-011) when the requested SVTN is not found.
 //
 // BC-2.06.003 v1.8 PC-2; AC-004.
-func RouterMetrics(ctx context.Context, args json.RawMessage, src RouterMetricsSource) (RouterMetricsResponse, error) {
-	panic("TODO: S-W5.04 RouterMetrics not yet implemented")
+func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSource) (RouterMetricsResponse, error) {
+	var req struct {
+		SVTN string `json:"svtn"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &req); err != nil {
+			return RouterMetricsResponse{}, fmt.Errorf("decode args: %w", err)
+		}
+	}
+	return src.SVTNMetrics(req.SVTN)
 }
 
 // RouterStatus is the handler logic for the "router.status" RPC alias.
@@ -66,7 +87,21 @@ func RouterMetrics(ctx context.Context, args json.RawMessage, src RouterMetricsS
 //
 // BC-2.06.003 v1.8 PC-3; AC-005, AC-005a.
 func RouterStatus(ctx context.Context, args json.RawMessage, src PathsListSource) (RouterStatusResponse, error) {
-	panic("TODO: S-W5.04 RouterStatus not yet implemented")
+	pathsResp, err := PathsList(ctx, args, src)
+	if err != nil {
+		return RouterStatusResponse{}, err
+	}
+
+	// Derive overall quality from the worst quality across all paths.
+	// pending < green < yellow < red in severity for the summary field.
+	// When any path is pending, the summary is pending (indeterminate).
+	quality := overallQuality(pathsResp.Paths)
+
+	return RouterStatusResponse{
+		Paths:   pathsResp.Paths,
+		Message: pathsResp.Message,
+		Quality: quality,
+	}, nil
 }
 
 // RouterStatusResponse is the response envelope for the router.status RPC.
@@ -90,7 +125,20 @@ type RouterStatusResponse struct {
 //
 // BC-2.06.003 PC-1; BC-2.06.001; AC-003.
 func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) PathEntry {
-	panic("TODO: S-W5.04 PathEntryFromSnapshot not yet implemented")
+	status := "active"
+	if !snap.Active {
+		status = "failed"
+	} else if snap.Degraded {
+		status = "degraded"
+	}
+	return PathEntry{
+		PathID:     pathID,
+		RouterAddr: routerAddr,
+		RTTMs:      snap.EWMARTTMs,
+		RTTP99Ms:   RTTValue{ValueMs: snap.P99RTTMs, SampleCount: snap.SampleCount},
+		LossPct:    snap.LossPct,
+		Status:     status,
+	}
 }
 
 // QualityFromEntry derives the quality string for a single PathEntry.
@@ -103,5 +151,32 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 //
 // BC-2.06.003 PC-3; AC-005, AC-005a.
 func QualityFromEntry(entry PathEntry) string {
-	panic("TODO: S-W5.04 QualityFromEntry not yet implemented")
+	// EC-007, EC-006, F-M3: pending p99 always yields pending quality.
+	// This holds even when status=="failed" (S502-DEFER-3).
+	if entry.RTTP99Ms.SampleCount < 10 {
+		return "pending"
+	}
+	return Classify(entry.RTTP99Ms.ValueMs, entry.LossPct).String()
+}
+
+// overallQuality derives the worst-case quality across all entries for the
+// router.status summary field. Precedence: pending > red > yellow > green.
+// An empty path list returns "pending" (indeterminate — no data).
+func overallQuality(entries []PathEntry) string {
+	if len(entries) == 0 {
+		return "pending"
+	}
+	worst := "green"
+	for _, e := range entries {
+		q := QualityFromEntry(e)
+		switch {
+		case q == "pending":
+			return "pending" // pending is immediately dominant
+		case q == "red" && worst != "pending":
+			worst = "red"
+		case q == "yellow" && worst == "green":
+			worst = "yellow"
+		}
+	}
+	return worst
 }
