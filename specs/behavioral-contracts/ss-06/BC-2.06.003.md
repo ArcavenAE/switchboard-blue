@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.14"
+version: "1.15"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -26,6 +26,7 @@ modified:
   - 2026-07-01T12:00:00
   - 2026-07-01T14:00:00
   - 2026-07-01T16:00:00
+  - 2026-07-01T18:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -56,7 +57,7 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
 
 1. **[CANONICAL]** `sbctl paths list` returns a list of all active paths for the node, each with the following fields:
    - `path_id` — opaque path identifier (string)
-   - `router_addr` — remote router address (host:port). **Interim wire-shape (DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER):** Until `PathSnapshot` is enriched with a real resolved host:port (tracked in follow-on story `S-BL.ROUTER-ADDR`), `router_addr` MAY be emitted as `""` (empty string). Consumers MUST treat `""` as a valid sentinel meaning "address not yet resolved" rather than an error. When `S-BL.ROUTER-ADDR` ships, `router_addr` will always be a non-empty `host:port` string.
+   - `router_addr` — remote router address (host:port). Populated from `PathSnapshot.RouterAddr`, which is set at `PathTracker` construction time via `NewPathTrackerWithAddr`. A `PathTracker` constructed via `NewPathTracker` (addr-less) yields `router_addr: ""`. End-to-end observability (non-empty `router_addr` from a live daemon) requires production `PathTracker` instances to be wired via `NewPathTrackerWithAddr`; this is deferred to `S-BL.PATH-TRACKER-WIRING`. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed by `S-BL.ROUTER-ADDR`.
    - `rtt_ms` — most-recent EWMA RTT sample in milliseconds (float64)
    - `rtt_p99_ms` — p99 of per-path RTT samples (float64); computed from the fixed-bucket histogram maintained by the PathTracker (histogram counts are never reset; approximation error ≤ bucket width for the bucket containing the true p99); "pending" (string) if fewer than 10 samples have been collected
    - `loss_pct` — packet loss rate as a percentage (float64, 0.0–100.0)
@@ -140,6 +141,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.15 | 2026-07-01 | stub-architect | S-BL.ROUTER-ADDR (RULING-W6TB-B): PC-1 `router_addr` DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER annotation removed. `""` sentinel-permission clause retracted. Replaced with permanent note: `router_addr` is populated from `PathSnapshot.RouterAddr` (set at construction via `NewPathTrackerWithAddr`). DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed. |
 | 1.14 | 2026-07-01 | product-owner | EC-008 added: `router.status` on empty-paths node (`len(paths)==0`) emits `quality:"pending"` (indeterminate). Distinguishable from EC-003/EC-006 (SampleCount<10 per-path cases) by absence of any path entries in the response. Not an error; exit code 0. Closes quality-on-empty-paths spec gap. |
 | 1.13 | 2026-07-01 | spec-steward | Ruling-9: normative status derivation rule added to PC-1 — `status == "active"` iff `Active==true AND Degraded==false`; all other combinations map to `"degraded"`. Operator semantics: "active" means currently forwarding AND healthy; provisioned-but-not-live is "degraded". Ref: rulings v1.3 Ruling-9. |
 | 1.12 | 2026-07-01 | spec-steward | OBS-P4L3-1: §Traceability split Wave-7 Backlog Stories row into Wave-6 and Wave-7 rows. S-BL.ROUTER-ADDR moved to a dedicated Wave-6 Backlog Stories row with schedule annotation "Wave-6 — must merge before Wave-6 convergence per Ruling-1". S-BL.PATH-TRACKER-WIRING and S-BL.PATH-FAILED-STATUS remain Wave-7 Backlog. No normative content change. |
