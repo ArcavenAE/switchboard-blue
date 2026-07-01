@@ -77,7 +77,7 @@ wave_6_tranche_b: "[S-7.01, S-7.02, S-7.03] (Tranche A closed; Tranche B now unb
 develop_head: 446efce
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-07-01T19:04:40Z
+timestamp: 2026-07-01T20:00:00Z
 last_update: 2026-07-01
 ---
 
@@ -235,22 +235,26 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.07 MERGED (446efce, PR #42) | Register admin.svtn.create handler + sbctl admin svtn create CLI; v1.13; BC-2.07.001; Wave-6 Tranche A CLOSED | 2026-07-01 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche A CLOSED)
+## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche B Pass-5 fix-burst complete)
 
-**Position:** Phase 3 Wave 6 Tranche A CLOSED. All three Tranche A stories merged to develop:
+**Position:** Phase 3 Wave 6 Tranche A CLOSED. All three Tranche A stories merged to develop. Pass-5 fix-burst (all 7 agents) complete — POL-002 + #401/#404 propagation landed across S-7.01, S-7.02, S-BL.ROUTER-ADDR.
+
+**Pass-5 fix-burst SHAs (factory-artifacts):** 9225923 (S-7.02 v1.6 frontmatter), bded1ec (S-7.01 v1.4 inputDocuments), 1c3f954 (S-BL.ROUTER-ADDR v1.4 RULING-W6TB-K), 0fbb4437 (vp_traces sibling-sweep), 837f606 (S-7.02 spec body), 3489f43 (S-7.01 spec body), 5fce8a8 (S-BL.ROUTER-ADDR spec body).
+
+**Tranche A stories:**
 - S-BL.LOOKUP: PR #40, merge eac5d0a
 - S-W5.04: PR #41, merge 851e164
-- S-6.07 (v1.13): PR #42, merge 446efce (2026-07-01T19:04:40Z)
+- S-6.07 (v1.13): PR #42, merge 446efce
 
-develop HEAD: 446efce. Tranche B (S-7.01, S-7.02, S-7.03) now fully unblocked.
+**develop HEAD:** 446efce. Tranche B (S-7.01, S-7.02, S-7.03) fully unblocked.
 
-**NEXT ACTION on resume:** Orchestrator begins Wave-6 Tranche A wave-adversarial review (per wave-6-scope-decision.md gate sequence: Tranche A wave-adversarial → then Tranche B dispatch). Alternatively, dispatch Tranche B stories in parallel if orchestrator chooses not to block on wave-adversarial.
+**NEXT ACTION on resume:** Pass-6 fresh 9-lens dispatch (clean-attempt #1/3 reset for all three Tranche B stories: S-7.01 v1.4, S-7.02 v1.6, S-7.03 v1.2).
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
 - SW502-DEFER-1..8: 8 S-W5.02 post-merge LOW deferrals logged in Open Drift Items (CR-002/005/006/007/008/009, SEC-001/002).
 - PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row — vsdd-factory #361-364.
-- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER: closed-pending-merge — S-BL.ROUTER-ADDR v1.1 at ready-for-red-gate (VP-047 v1.4, BC-2.06.003 v1.15). Merges when PR lands.
+- DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER: closed-pending-merge — S-BL.ROUTER-ADDR v1.4 at ready-for-red-gate (VP-047, BC-2.06.003). Merges when PR lands.
 - PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP: Summary section sweep discipline — open/codify.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
@@ -261,6 +265,7 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 | Date | Entry |
 |------|-------|
+| 2026-07-01 | Pass-5 fix-burst complete (all 7 agents). POL-002 + #401/#404 propagation: S-7.02 v1.5→v1.6 (RULING-W6TB-I); S-7.01 v1.3→v1.4 (RULING-W6TB-E); S-BL.ROUTER-ADDR v1.2→v1.4 (RULING-W6TB-K, vp_traces [VP-047,VP-062]→[VP-047]). SHAs: 9225923, bded1ec, 1c3f954, 0fbb4437, 837f606, 3489f43, 5fce8a8. STORY-INDEX v3.52→v3.54. sprint-state.yaml (canonical) v1.12→v1.13. stories/sprint-state.yaml v2.29→v2.30 (vp_traces sibling-sweep added for S-7.01/S-7.02/S-7.03/S-BL.ROUTER-ADDR). Next: Pass-6 fresh 9-lens dispatch (clean-attempt #1/3 for all three Tranche B stories). |
 | 2026-07-01 | Wave-6 Tranche B Pass-2 fix-burst: DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER swept to closed-pending-merge per S-BL.ROUTER-ADDR v1.1 propagation. |
 
 ## Historical Content

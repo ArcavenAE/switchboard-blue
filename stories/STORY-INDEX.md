@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.52"
+version: "3.54"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -71,8 +71,8 @@ inputDocuments:
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
-| S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.3) |
-| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.5) |
+| S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.4) |
+| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.6) |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.2) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
@@ -128,7 +128,7 @@ addresses the "deferred to TBD story" anti-pattern.
 |----------|-------|--------|----------------------|---------------|
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | ready-for-red-gate (v1.2) | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1 + RULING-W6TB-B; anchors BC-2.06.003 PC-1; unit-scope only (end-to-end deferred to S-BL.PATH-TRACKER-WIRING) | Wave 7 |
+| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | ready-for-red-gate (v1.4) | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1 + RULING-W6TB-B + RULING-W6TB-K; anchors BC-2.06.003 PC-1; unit-scope only (end-to-end deferred to S-BL.PATH-TRACKER-WIRING) | Wave 7 |
 | S-BL.PATH-TRACKER-WIRING | Wire `cmd/switchboard/metrics_wire.go` pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time. | backlog | wave-6-tranche-a-scope-rulings Ruling-6; #DEFERRED comment in metrics_wire.go; depends_on S-W5.04, S-BL.ROUTER-ADDR; BC-2.06.003 | Wave 7 Backlog |
 | S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.11 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
@@ -176,6 +176,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.54 | 2026-07-01 | Pass-5 fix-burst POL-002 + #401/#404 sync sweep: S-7.02 v1.5→v1.6 (RULING-W6TB-I added to changed_by_rulings + inputDocuments); S-7.01 v1.3→v1.4 (RULING-W6TB-E added to inputDocuments); S-BL.ROUTER-ADDR v1.2→v1.4 (RULING-W6TB-K added to inputDocuments; vp_traces corrected [VP-047,VP-062]→[VP-047]). F-P5L3-01 (S-BL.ROUTER-ADDR VP trace correction), F-P5L3-02 (vp_traces sibling-sweep across S-7.01/S-7.02), F-P5L3-03 (S-7.01 spec propagation). |
 | 3.53 | 2026-07-01 | RULING-W6TB-J propagation: S-7.02 v1.4→v1.5 — AC-004b updated with VP-055 v1.2 property names (RejectsInvalidName retired; RejectsEmptyOrInvalidUTF8 + TruncatesOversize added); RULING-W6TB-J added to changed_by_rulings; v1.5 changelog erratum added. VP-055 bumped v1.1→v1.2. VP-INDEX v2.27→v2.28. S-7.02 row status cell v1.4→v1.5. |
 | 3.52 | 2026-07-01 | Pass-4 mechanical fix-burst: S-7.02 v1.3→v1.4 (RULING-W6TB-D added to inputDocuments; DRIFT-S702-INPUT-HASH-DEFERRED drift entry added). S-7.01 v1.2→v1.3 (AC-002 anchor PC-2→PC-3; AC-003 anchor precondition-1→postcondition-4; input-hash tbd-v1.1→tbd-v1.2). S-BL.DISCOVERY-WIRE v1.0→v1.1 (RULING-W6TB-H added to changed_by_rulings; Scope Constraints section added). S-BL.ROUTER-ADDR revision 1.1→1.2 (DrftAnnotation typo fixed; Test-prefix obligation label corrected). |
 | 3.51 | 2026-07-01 | S-7.02 v1.2 → v1.3: RULING-W6TB-G (AC-001b exact-N oracle split + Config.TickSource + HeartbeatCount() accessor) + RULING-W6TB-H (AC-005 HMAC-first ordering, key from payload.SVTNID, forged-SVTN oracle closed) + Pass-3 L1 M-1 (nil-observer policy, HeartbeatCount unconditional) + Pass-3 L1 M-2 (AC-004b 255-byte session name cap + VP-055 boundary cases). S-7.02 row status cell v1.2 → v1.3. |
