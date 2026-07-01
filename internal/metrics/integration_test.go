@@ -453,20 +453,7 @@ func TestVP047_RouterAddrNonEmpty(t *testing.T) {
 
 		const stubAddr = "h:9000"
 
-		// mustNewTrackerWithAddr wraps NewPathTrackerWithAddr and converts the stub
-		// panic (BC-5.38.001) into a t.Fatal so the test fails cleanly at Red Gate.
-		var tracker *paths.PathTracker
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Fatalf("NewPathTrackerWithAddr(%q, 50, 0.125) panicked (Red Gate — stub not yet implemented): %v", stubAddr, r)
-				}
-			}()
-			tracker = paths.NewPathTrackerWithAddr(stubAddr, 50.0, 0.125)
-		}()
-		if tracker == nil {
-			return // t.Fatal already called above
-		}
+		tracker := paths.NewPathTrackerWithAddr(stubAddr, 50.0, 0.125)
 		for i := 0; i < 10; i++ {
 			tracker.OnProbe(22.0, false)
 		}
