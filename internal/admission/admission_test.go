@@ -628,9 +628,10 @@ func TestRevokeKey_ReturnsErrKeyNotRegistered(t *testing.T) {
 
 // ── TestAdmittedKeySet_LookupByPubkey ────────────────────────────────────────
 
-// TestAdmittedKeySet_LookupByPubkey verifies that LookupByPubkey returns the
-// registered AdmittedKey for a known key, nil for an unregistered key, and nil
-// when the wrong svtnID is supplied (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
+// TestAdmittedKeySet_LookupByPubkey verifies that LookupByPubkey returns
+// (AdmittedKey, true) for a registered key, (AdmittedKey{}, false) for an
+// unregistered key, and (AdmittedKey{}, false) when the wrong svtnID is
+// supplied (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
 func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
 	t.Parallel()
 
@@ -642,28 +643,28 @@ func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
 		setupSVTN [16]byte
 		lookupID  [16]byte
 		register  bool // whether to register the key before lookup
-		wantNil   bool
+		wantMiss  bool
 	}{
 		{
 			name:      "registered_key_returns_match",
 			setupSVTN: svtnA,
 			lookupID:  svtnA,
 			register:  true,
-			wantNil:   false,
+			wantMiss:  false,
 		},
 		{
 			name:      "unregistered_key_returns_nil",
 			setupSVTN: svtnA,
 			lookupID:  svtnA,
 			register:  false,
-			wantNil:   true,
+			wantMiss:  true,
 		},
 		{
 			name:      "wrong_svtn_returns_nil",
 			setupSVTN: svtnA,
 			lookupID:  svtnB,
 			register:  true,
-			wantNil:   true,
+			wantMiss:  true,
 		},
 	}
 
@@ -682,10 +683,10 @@ func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
 			}
 
 			got, gotOK := ks.LookupByPubkey(tc.lookupID, pub)
-			if tc.wantNil && gotOK {
+			if tc.wantMiss && gotOK {
 				t.Errorf("LookupByPubkey: want not-found; got entry %+v", got)
 			}
-			if !tc.wantNil {
+			if !tc.wantMiss {
 				if !gotOK {
 					t.Fatal("LookupByPubkey: want found AdmittedKey; got not-found")
 				}
