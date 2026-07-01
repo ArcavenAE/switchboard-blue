@@ -877,6 +877,12 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	// the auth failure, which violates the fail-closed invariant.
 	var postAuthFailReads atomic.Int64
 
+	// drainDone is closed by the server goroutine after its post-AUTH_FAIL drain
+	// loop exits (Read returns EOF or error). The test waits on this channel before
+	// reading postAuthFailReads to guarantee the counter reflects all client bytes
+	// (F-P13L2-04: explicit synchronization for byte-count race).
+	drainDone := make(chan struct{})
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
@@ -887,6 +893,7 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	go func() {
 		conn, err := ln.Accept()
 		if err != nil {
+			close(drainDone)
 			return
 		}
 		defer func() { _ = conn.Close() }()
@@ -927,6 +934,7 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 				break
 			}
 		}
+		close(drainDone)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -939,6 +947,15 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	// ADR-012 fail-closed: must return non-nil error on AUTH_FAIL.
 	if err == nil {
 		t.Error("ADR-012 fail-closed — runAdmin with AUTH_FAIL server: want non-nil error; got nil")
+	}
+
+	// Wait for the server's drain goroutine to exit before reading the counter.
+	// This ensures postAuthFailReads reflects all bytes the server observed
+	// (F-P13L2-04: bounded wait prevents the counter from being read mid-drain).
+	select {
+	case <-drainDone:
+	case <-time.After(3 * time.Second):
+		t.Error("ADR-012 fail-closed — server drain goroutine did not exit within 3s")
 	}
 
 	// Dispatch observer: no RPC bytes must have been sent after AUTH_FAIL.
@@ -1044,13 +1061,13 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 		t.Error("ADR-012 — malformed JSON response: want non-nil error; got nil")
 	} else {
 		// Positive-coverage: the error must surface a JSON parse failure.
-		// "unexpected" alone is NOT accepted — it also matches "unexpected EOF"
-		// which is a network failure, not a JSON parse error.
+		// Require the stdlib "invalid character" prefix — unique to json.SyntaxError
+		// and distinct from "unexpected EOF" (network failure) or bare "json" matches
+		// that would accept unrelated errors.
 		msg := err.Error()
-		if !strings.Contains(msg, "invalid character") &&
-			!strings.Contains(msg, "json") {
-			t.Errorf("ADR-012 — expected JSON parse error surface "+
-				"(\"invalid character\" / \"json\"); got: %v", err)
+		if !strings.Contains(msg, "invalid character") {
+			t.Errorf("ADR-012 — expected stdlib JSON parse error surface "+
+				"(\"invalid character\" prefix from json.SyntaxError); got: %v", err)
 		}
 	}
 }
@@ -1615,5 +1632,13 @@ func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
 	msg := err.Error()
 	if !strings.Contains(msg, "E-RPC-002") {
 		t.Errorf("Ruling-14 §10 — oversized RPC response: expected E-RPC-002 in error; got: %v", err)
+	}
+	// Prove the dispatch-response-decode path fired (not Authenticate): dispatch()
+	// at client.go wraps the io.ErrUnexpectedEOF under "rpc failed:" (unique prefix).
+	if !strings.Contains(msg, "rpc failed:") {
+		t.Errorf("Ruling-14 §10 — oversized RPC response: expected \"rpc failed:\" prefix (dispatch path); got: %v", err)
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("Ruling-14 §10 — oversized RPC response: expected errors.Is(err, io.ErrUnexpectedEOF); got: %v", err)
 	}
 }

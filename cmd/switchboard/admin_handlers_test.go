@@ -402,6 +402,9 @@ func TestBuildAdminHandlers_KeyRegister_ErrorMapping(t *testing.T) {
 	if !strings.Contains(handlerErr.Error(), "E-SVTN-003") {
 		t.Errorf("expected E-SVTN-003 in error, got: %v", handlerErr)
 	}
+	if !errors.Is(handlerErr, svtnmgmt.ErrSVTNNotFound) {
+		t.Errorf("errors.Is(ErrSVTNNotFound): expected true for E-SVTN-003; err=%v", handlerErr)
+	}
 }
 
 // TestBuildAdminHandlers_KeyRevoke_ErrorMapping asserts that
@@ -412,9 +415,10 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		args        adminKeyRevokeArgs
-		wantErrCode string
+		name         string
+		args         adminKeyRevokeArgs
+		wantErrCode  string
+		wantSentinel error
 	}{
 		{
 			name: "key not registered yields E-ADM-013",
@@ -424,7 +428,8 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 				Role:      "control",
 				Confirm:   true,
 			},
-			wantErrCode: "E-ADM-013",
+			wantErrCode:  "E-ADM-013",
+			wantSentinel: admission.ErrKeyNotRegistered,
 		},
 		{
 			name: "role mismatch yields E-ADM-019",
@@ -438,7 +443,8 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 				Role:      "console", // claimed console; key registered as control
 				Confirm:   false,
 			},
-			wantErrCode: "E-ADM-019",
+			wantErrCode:  "E-ADM-019",
+			wantSentinel: admission.ErrRoleMismatch,
 		},
 	}
 
@@ -476,6 +482,9 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 			}
 			if !strings.Contains(handlerErr.Error(), tc.wantErrCode) {
 				t.Errorf("expected %s in error, got: %v", tc.wantErrCode, handlerErr)
+			}
+			if !errors.Is(handlerErr, tc.wantSentinel) {
+				t.Errorf("errors.Is(%T): expected true for %s; err=%v", tc.wantSentinel, tc.wantErrCode, handlerErr)
 			}
 		})
 	}
@@ -863,6 +872,9 @@ func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
 	if !strings.Contains(handlerErr.Error(), "E-ADM-020") {
 		t.Errorf("expected E-ADM-020, got: %v", handlerErr)
 	}
+	if !errors.Is(handlerErr, svtnmgmt.ErrBootstrapKeyRevokeForbidden) {
+		t.Errorf("errors.Is(ErrBootstrapKeyRevokeForbidden): expected true for E-ADM-020; err=%v", handlerErr)
+	}
 }
 
 // TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden asserts that setting a
@@ -1001,6 +1013,9 @@ func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 	}
 	if !strings.Contains(handlerErr.Error(), "E-ADM-018") {
 		t.Errorf("expected E-ADM-018, got: %v", handlerErr)
+	}
+	if !errors.Is(handlerErr, svtnmgmt.ErrControlRevocationRequiresConfirm) {
+		t.Errorf("errors.Is(ErrControlRevocationRequiresConfirm): expected true for E-ADM-018; err=%v", handlerErr)
 	}
 }
 
