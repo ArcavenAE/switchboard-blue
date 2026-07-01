@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.40"
+version: "3.41"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T15:00:00
@@ -67,9 +67,9 @@ inputDocuments:
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | merged (PR #38, d881f99) |
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
-| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.15) |
+| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.16) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
-| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.9) |
+| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.10) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
@@ -173,6 +173,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.41 | 2026-07-01 | sync S-W5.04 v1.16 (F-P12L3-01 BC-2.06.003 pin sweep + F-P12L2-01 spec-vs-test alignment), S-6.07 v1.10 (F-P11L3-001 BC-2.07.001 v1.7→v1.10 pin bump) |
 | 3.40 | 2026-07-01 | sync S-W5.04 v1.15 (F-P11L3-01 EC-008 body propagation), S-BL.LOOKUP v1.5 (F-P12L3-01 H1 title expansion) |
 | 3.39 | 2026-07-01 | Spec-bump propagation: S-6.07 row `draft (v1.8)` → `draft (v1.9)` (§Universality E-INT-999 row added, input_hash_ruling12 → v1.8); S-W5.04 row `draft (v1.13)` → `draft (v1.14)` (v1.12 changelog rewrite, BC-2.06.003 pin v1.14). S-BL.LOOKUP unchanged at v1.4. Sibling bumps: error-taxonomy.md v4.0→v4.1, decisions/wave-6-tranche-a-scope-rulings.md v1.7→v1.8, BC-2.06.003.md v1.13→v1.14 (new EC-008), BC-2.06.001.md unchanged at v1.6. |
 | 3.38 | 2026-07-01 | F-P10L1-001 / F-P10L3-01 (POL-002 propagation catch-up): S-BL.LOOKUP status cell `draft (v1.3)` → `draft (v1.4)` (story bumped to v1.4 for test-hygiene fixes F-P10L2-01/F-P10L2-02; STORY-INDEX was stale at v1.3). |
