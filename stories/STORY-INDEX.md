@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.28"
+version: "3.29"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -19,7 +19,7 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 45 (35 master-table stories + 1 draft stub S-6.04 + 5 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Total stories | 46 (35 master-table stories + 1 draft stub S-6.04 + 6 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 26 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02) |
 | Pending | 3 (S-7.01, S-7.02, S-7.03) |
 | Wave 7 (deferred) | 1 (S-7.04) |
@@ -31,7 +31,7 @@ inputDocuments:
 | Total points (waves 0–6) | 192 |
 | Total points (incl. S-M.01 + S-M.02) | 202 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 5 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS) |
+| Backlog | 6 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING) |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
@@ -67,7 +67,7 @@ inputDocuments:
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | merged (PR #38, d881f99) |
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
-| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.6) |
+| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.7) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
@@ -121,14 +121,15 @@ section, add full ACs/tasks/files/architecture).
 Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
 addresses the "deferred to TBD story" anti-pattern.
 
-**Backlog: 5** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1; S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4)
+**Backlog: 6** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1; S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6)
 
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
 | S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | draft | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1; anchors BC-2.06.003 PC-1 | Wave 6 (must merge before Wave-6 wave-convergence) |
-| S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.10 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
+| S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.11 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
+| S-BL.PATH-TRACKER-WIRING | Wire `cmd/switchboard/metrics_wire.go` pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time. | backlog | wave-6-tranche-a-scope-rulings Ruling-6; #DEFERRED comment in metrics_wire.go; depends_on S-W5.04, S-BL.ROUTER-ADDR; BC-2.06.003 | Wave 7 Backlog |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 
 **Draft stubs: 1** (has some structure but no full ACs; will be promoted at wave-N planning)
@@ -171,6 +172,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.29 | 2026-07-01 | Ruling-6 propagation + Pass-3 L3 fixes: Add S-BL.PATH-TRACKER-WIRING backlog stub (Wire cmd/switchboard/metrics_wire.go pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time; depends on S-W5.04, S-BL.ROUTER-ADDR; Epic E-6; Wave 7 Backlog). Update S-W5.04 row v1.6→v1.7. Summary Total 45→46, Backlog 5→6. Changelog note: S-BL.PATH-FAILED-STATUS BC pin corrected v1.10→v1.11 in backlog table. |
 | 3.28 | 2026-07-01 | Pass-4 L3 F-L3-Med-01 epic-anchor reconciliation: S-BL.LOOKUP row corrected E-2→E-6. Story depends_on S-6.02 (E-6), was promoted to Wave 6 Tranche A alongside E-6 stories (S-6.07, S-6.05), and story frontmatter carries epic: E-6. STORY-INDEX row was the erroneous artifact. Closes F-L3-Med-01. |
 | 3.27 | 2026-07-01 | Wave-6 Tranche A Pass-2 fix-burst: S-W5.04 v1.5→v1.6 (Ruling-3: real PathTracker wiring; Ruling-4: retract `failed` from status enum). S-6.07 v1.2→v1.3 (Ruling-5: bootstrap-only fast-path fix). Spec siblings: BC-2.06.003 v1.9→v1.10, BC-2.07.001 v1.4→v1.5, interface-definitions v1.8→v1.9, error-taxonomy v3.9→v4.0 (E-INT-001 minted), ARCH-12 v1.9→v1.10, VP-047 v1.2→v1.3, VP-062 v1.3→v1.4, ARCH-INDEX v1.3→v1.4, BC-INDEX v2.0→v2.1. Add S-BL.PATH-FAILED-STATUS backlog stub (Wave-7; depends_on S-W5.04; anchors BC-2.06.003 "failed" status enum future work per Ruling-4). All Pass-2 lens results NOT COUNTED — clean-pass counter reset; fresh Pass-3 3-lens per story queued. Summary: Total 44→45, Backlog 4→5. |
 | 3.26 | 2026-07-01 | Wave-6 Tranche-A BC rulings: mint S-BL.ROUTER-ADDR stub row (PathSnapshot RouterAddr enrichment; anchors BC-2.06.003 PC-1; DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1; must merge before Wave-6 wave-convergence). Summary: Total 43→44, Backlog 3→4. |
