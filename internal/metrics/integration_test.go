@@ -44,29 +44,47 @@ import (
 	"github.com/arcavenae/switchboard/internal/paths"
 )
 
-// synthPathsListSource is a PathsListSource backed by two static snapshots:
-// one pending path (SampleCount<10) and one green path (SampleCount≥10).
+// pathTrackerListSource is a PathsListSource backed by a map of
+// pathID → *paths.PathTracker. It calls PathTracker.Snapshot() to produce
+// consistent value copies per go.md rule 12.
 //
-// VP-047 requires "at least one pending + one green path".
-type synthPathsListSource struct{}
+// F-P2L1-003: exercises the production wiring path (real PathTracker state)
+// rather than injecting a synthetic snapshot map directly.
+type pathTrackerListSource struct {
+	trackers map[string]*paths.PathTracker
+}
 
-func (s *synthPathsListSource) AllSnapshots() map[string]paths.PathSnapshot {
-	return map[string]paths.PathSnapshot{
-		"pending-path": {
-			EWMARTTMs:   12.0,
-			LossPct:     0.0,
-			Active:      true,
-			Degraded:    false,
-			P99RTTMs:    0.0,
-			SampleCount: 5, // <10 → rtt_p99_ms: "pending"
-		},
-		"green-path": {
-			EWMARTTMs:   22.0,
-			LossPct:     0.1,
-			Active:      true,
-			Degraded:    false,
-			P99RTTMs:    22.0,
-			SampleCount: 15, // ≥10 → rtt_p99_ms: float64
+func (p *pathTrackerListSource) AllSnapshots() map[string]paths.PathSnapshot {
+	out := make(map[string]paths.PathSnapshot, len(p.trackers))
+	for id, t := range p.trackers {
+		out[id] = t.Snapshot()
+	}
+	return out
+}
+
+// newTestPathTrackerSource creates a pathTrackerListSource seeded with:
+//   - "pending-path": 5 OnProbe calls → SampleCount < 10 → rtt_p99_ms:"pending"
+//   - "green-path": 15 OnProbe calls → SampleCount ≥ 10 → rtt_p99_ms:float64
+//
+// VP-047 requires "at least one pending + one green path". Using real PathTracker
+// objects exercises the production Snapshot() method (F-P2L1-003 Ruling-3 Option A).
+func newTestPathTrackerSource(t *testing.T) *pathTrackerListSource {
+	t.Helper()
+
+	pending := paths.NewPathTracker(50.0, 0.125)
+	for i := 0; i < 5; i++ { // SampleCount = 5 < 10
+		pending.OnProbe(12.0, false)
+	}
+
+	green := paths.NewPathTracker(50.0, 0.125)
+	for i := 0; i < 15; i++ { // SampleCount = 15 ≥ 10
+		green.OnProbe(22.0, false)
+	}
+
+	return &pathTrackerListSource{
+		trackers: map[string]*paths.PathTracker{
+			"pending-path": pending,
+			"green-path":   green,
 		},
 	}
 }
@@ -127,9 +145,14 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 	)
 
 	// ── 4. Register paths.list via RegisterMetricsHandlers (production path). ─
-	pathsSrc := &synthPathsListSource{}
+	// Use real PathTracker-backed source per F-P2L1-003 (Ruling-3 Option A).
+	// This exercises the production Snapshot() read path rather than injecting
+	// a static snapshot map.
+	pathsSrc := newTestPathTrackerSource(t)
 	routerSrc := &fakeRouterMetricsSource{metrics: map[string]metrics.RouterMetricsResponse{}}
-	mgmt.RegisterMetricsHandlers(srv, pathsSrc, routerSrc)
+	if err := mgmt.RegisterMetricsHandlers(srv, pathsSrc, routerSrc); err != nil {
+		t.Fatalf("RegisterMetricsHandlers: %v", err)
+	}
 
 	// ── 5. Start Serve in a background goroutine. ─────────────────────────────
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
