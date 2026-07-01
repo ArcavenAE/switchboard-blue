@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.19"
+version: "2.20"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -85,7 +85,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | draft | VP-059.md |
 | VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | draft | VP-060.md |
 | VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | draft | VP-061.md |
-| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias); pending-p99 quality sentinel propagation (v1.1) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
+| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias); pending-p99 quality sentinel propagation (v1.1); failed+pending precedence ruling (v1.3) | BC-2.06.003 | cmd/sbctl | fuzz | P1 | draft | VP-062.md |
 | VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | implemented | VP-063.md |
 | VP-064 | Management server rejects unauthenticated connections (no CHALLENGE_RESPONSE, wrong key, or bad signature) → AUTH_FAIL + close; no RPC dispatched | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-064.md |
 | VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | implemented | VP-065.md |
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.20 | 2026-06-30 | VP-062 version pin bumped v1.2→v1.3 in catalog row description: added "failed+pending precedence ruling (v1.3)" annotation (S502-DEFER-3 closure, commit 7ee5b82). No count or method changes; total remains 76. |
 | 2.19 | 2026-06-30 | Wave-5 merge closure: VP-063 through VP-076 status flipped draft → implemented. All 14 Wave-5 VPs belong to stories merged in Wave 5 (S-5.03 PR#30, S-W5.01 PR#31, S-6.03 PR#32, S-6.02 PR#34, S-5.01 PR#35, S-6.06 PR#36, S-5.02 PR#37, S-W5.02 PR#38). Pre-Wave-6 hygiene sweep. |
 | 2.18 | 2026-06-30 | Pass-6 L3 fix F-P6L3-001: normalize placeholder-row Status column — VP-VW6.NN Status changed from "draft" to "deferred" (both placeholders now Phase=deferred, Status=deferred). Added footnote above placeholder footers explaining placeholder-row conventions. Ref F-P6L3-001. |
 | 2.17 | 2026-06-30 | Pass-5 L3 fix F-P5L3-004: normalize placeholder-row Phase column — VP-TBD-ACC and VP-VW6.NN Phase column changed from story-ID strings to "deferred"; implementing-story identifiers moved to Notes column. No count changes to active VP tallies. VP-049 §Story Trace pin bumped v1.3→v1.4 (F-P5L3-001 sibling propagation after story v1.3→v1.4). |

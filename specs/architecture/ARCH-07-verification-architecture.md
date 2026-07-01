@@ -2,7 +2,7 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -18,6 +18,7 @@ kos_anchors:
   - elem-ssh-end-to-end-encryption
   - elem-asymmetric-half-channels
 modified:
+  - 2026-06-30T00:00:00 # v1.8 — S502-DEFER-3 handoff (commit 7ee5b82): VP-062 bumped v1.2→v1.3 (Property 5a: failed+pending precedence ruling per BC-2.06.003 v1.8 EC-007); VP catalog total corrected 75→76; footnote updated.
   - 2026-06-30T00:00:00 # v1.7 — F-P8L3-001: VP catalog total updated from 74 to 75 (VP-075 was minted in Pass-6/7 but total not incremented)
   - 2026-06-30T00:00:00 # v1.6 — F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard in Phase 1c-refinement integration table
   - 2026-06-30T00:00:00 # v1.5 — F-T3-302 (S-6.06 Pass-3 lens-3): add VP-075 to Phase 1c-refinement integration table (admin.key.* handler caller-role check, internal/mgmt)
@@ -95,7 +96,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
 
-> VP catalog total = 75; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> VP catalog total = 76; full BC→VP coverage in ARCH-11. VP-043 through VP-057
 > were added in Phase 1c-refinement to close coverage gaps. VP-059 added 2026-06-27
 > for BC-2.05.005 PC-3 (Wave 3 gate F-2 remediation — FailureCounter threshold proptest).
 > VP-058 added at Wave 3 for BC-2.05.008 (RouteFrame HMAC code-audit).
@@ -114,6 +115,9 @@ See ARCH-09 for the complete per-package classification.
 > VP-073 updated to v1.1 (ARCH-12 v1.4 Ruling L): source-contract extended to cite
 > error-taxonomy.md E-CFG-008 Variant 2 / buildMgmtListener canonical message prefix;
 > test assertion guidance requires strings.Contains(err.Error(), "E-CFG-008").
+> VP-062 updated to v1.3 2026-06-30 (S502-DEFER-3 closure, commit 7ee5b82): Property 5a added
+> (failed+pending precedence: Degraded=true AND rttP99Valid=false → quality="pending"; EC-007);
+> fuzz corpus seed 8 added; BC pin swept v1.7→v1.8. No count changes.
 
 ### Phase 1c-refinement: Pure-Core Additions
 

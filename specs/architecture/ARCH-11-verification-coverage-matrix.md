@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.12"
+version: "1.13"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-06-30T00:00:00 # v1.13 — S502-DEFER-3 handoff (commit 7ee5b82): VP-062 bumped v1.2→v1.3 (Property 5a: failed+pending precedence per BC-2.06.003 v1.8 EC-007); prose footnote updated. No row or count changes; total remains 76.
   - 2026-06-30T00:00:00 # v1.12 — F-W5P1-003: VP-076 propagated (integration, P0, cmd/switchboard) — bootstrap-key non-revocable AND non-expirable invariant per BC-2.05.004 EC-007 v1.12; BC-2.05.004 row VP list updated VP-046+VP-075 → VP-046+VP-075+VP-076; cmd/switchboard count 3→4 (integration 3→4); P0 VPs 53→54; totals updated to 76 VPs.
   - 2026-06-30T00:00:00 # v1.11 — F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard; BC-2.05.004 row modules cell updated; internal/mgmt count 9→8 (integration 7→6), cmd/switchboard count 2→3 (integration 2→3). Per-module sum unchanged at 75.
   - 2026-06-30T00:00:00 # v1.10 — F-T3-301: VP-074 (P1, BC-2.06.001 threshold classification) added; P1 VPs 17→18.
@@ -126,6 +127,7 @@ VP counts recounted from VP-INDEX (canonical source of truth, 76 VPs total).
 Per-module sum = 76 (no off-table VPs).
 VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
 VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) added 2026-06-28 for BC-2.06.003.
+VP-062 bumped to v1.3 2026-06-30 (S502-DEFER-3 closure, commit 7ee5b82): Property 5a added (failed+pending precedence: Degraded=true AND rttP99Valid=false → quality="pending"; BC-2.06.003 v1.8 EC-007). No count change.
 VP-063 (proptest, internal/paths) added 2026-06-28 for BC-2.02.003 PC-5 degraded-flag boolean.
 VP-064 (integration, internal/mgmt), VP-065 (integration, internal/mgmt), VP-066 (fuzz, internal/mgmt) added 2026-06-28 for BC-2.07.004 Wave-5.
 VP-067 (integration, cmd/sbctl) added 2026-06-28 for BC-2.07.002 Wave-5.
