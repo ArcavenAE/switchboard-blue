@@ -37,7 +37,8 @@ inputDocuments:
 | S-6.01 | S-1.01 | S-6.02, S-6.03 | 4 | config imports nothing internal; needed before daemon management |
 | S-6.02 | S-2.02, S-6.01, S-6.03 | S-5.02 | 5 | svtnmgmt imports admission+config; adds cmd/sbctl/admin.go into scaffold from S-6.03; key lifecycle before metrics CLI |
 | S-6.03 | S-6.01 | S-5.02, S-6.02, S-W5.02 | 5 | sbctl client auth scaffold (main.go + client.go); must exist before admin.go (S-6.02), paths_list.go (S-5.02), and e2e harness (S-W5.02) |
-| S-W5.01 | S-6.01 | S-W5.02 | 5 | internal/mgmt server + config E-CFG-008/009 + cmd/switchboard wiring; edits internal/mgmt, internal/config, cmd/switchboard — no conflict with cmd/sbctl stories; can run in parallel with S-6.03, S-6.02, S-5.02 |
+| S-W5.01 | S-6.01 | S-W5.02, S-6.06 | 5 | internal/mgmt server + config E-CFG-008/009 + cmd/switchboard wiring; edits internal/mgmt, internal/config, cmd/switchboard — no conflict with cmd/sbctl stories; can run in parallel with S-6.03, S-6.02, S-5.02 |
+| S-6.06 | S-6.02, S-W5.01 | S-W5.02 | 5 | daemon-side admin.key.* handler registration on control-mode daemon; BC-2.05.004 caller-role enforcement (VP-075) + bootstrap non-revocable/non-expirable invariant (VP-076); minted via CR-W5-SCOPE-SPLIT (adversary Pass-1) |
 | S-W5.02 | S-6.03, S-6.06, S-W5.01 | (none) | 5 | e2e integration harness: requires sbctl client (S-6.03), admin.key.* handler-role enforcement (S-6.06), AND mgmt server (S-W5.01) all merged; Wave-5 management plane gate |
 | S-7.01 | S-4.03 | (none) | 6 | FEC extends arq (from S-4.03) |
 | S-7.02 | S-2.02, S-3.02 | (none) | 6 | discovery imports routing (S-2.02) and session presence state (S-3.02) |
@@ -52,7 +53,8 @@ Wave 1: S-1.01, S-1.02                   (both depend only on S-0.01 or each oth
 Wave 2: S-2.01, S-2.02                   (depend on Wave 1)
 Wave 3: S-3.01, S-3.02, S-3.03           (depend on Wave 1+2)
 Wave 4: S-4.01, S-4.02, S-4.03, S-4.04, S-6.01  (depend on Wave 1+2; S-6.01 depends only on S-1.01)
-Wave 5: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01  (depend on Wave 4; S-W5.02 also Wave 5 but gates on S-6.03 + S-6.06 + S-W5.01)
+Wave 5: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01  (depend on Wave 4)
+         S-6.06                                            (depends on S-6.02 + S-W5.01 — intra-Wave-5 mgmt-plane handler wiring)
          S-W5.02                                           (depends on S-6.03 + S-6.06 + S-W5.01, all Wave 5 — placed last in Wave 5)
 Wave 6: S-7.01, S-7.02, S-7.03, S-7.04  (depend on Wave 3+4+5)
 ```

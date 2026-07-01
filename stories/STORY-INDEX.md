@@ -95,7 +95,7 @@ inputDocuments:
 - S-5.03 (internal/paths only) depends only on S-4.01; **must merge before S-5.01** (S-5.01 depends_on now includes S-5.03 — F-005 fix; S-5.01 reads Snapshot().Degraded which S-5.03 adds).
 - S-5.01 (internal/metrics only — no cmd/sbctl edits) depends on S-4.01, S-4.03, and S-5.03; can start once all three are merged.
 - **S-W5.01** (internal/mgmt + internal/config + cmd/switchboard) edits **no** cmd/sbctl files — can run **in parallel with S-6.03, S-6.02, S-5.02** on separate branches. No cmd/sbctl conflict.
-- **S-6.06** (daemon admin handler wiring) depends on S-6.02; can start once S-6.02 merges. Owns the `TODO(CR-002)` at `mgmt_wire.go:259` — minted per CR-W5-SCOPE-SPLIT adversary Pass 1 ruling.
+- **S-6.06** (daemon admin handler wiring) depends on S-6.02 AND S-W5.01; can start once both merge (S-W5.01 provides the internal/mgmt handler registration surface into which S-6.06 wires admin.key.* handlers). Owns the `TODO(CR-002)` at `mgmt_wire.go:259` — minted per CR-W5-SCOPE-SPLIT adversary Pass 1 ruling.
 - **S-W5.02** (e2e harness) depends on **S-6.03, S-W5.01, and S-6.06**; must be the last Wave-5 management-plane story. Gate story for the management plane.
 - **S-W5.04** (daemon-side paths.list / metrics handlers) depends on **S-5.02 and S-W5.01**; can start once both are merged. Owns VP-047 integration test. No cmd/sbctl conflict — writes only to `internal/metrics` and `internal/mgmt`. **Re-scheduled to Wave 6 per F-W5P1-004** — Wave 5 declared complete at 8 stories (all merged); S-W5.04 dependencies are now both merged so it is unblocked for Wave 6 pickup.
 
