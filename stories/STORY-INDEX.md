@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.16"
+version: "3.17"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.17 | 2026-06-30 | S-W5.02 Pass-1 adversarial rulings (Q1-Q6): story bumped v1.1→v1.2. Q1 Option A (narrow VP-049 to mgmt.Server contract; per-daemon runXxx wiring deferred to Wave-6); Q2 Option A (BC pin v1.2→v1.4; AC-003 extended with Rulings M/U/X); Q3 Option A (phantom VP rows 139-140 flagged for spec-steward deletion); Q4 Option A (testenv.NewFull reference removed; in-process approach specified concretely); Q5 Option B (AC-002 distinct-operator-key as primary; bootstrap as variant); Q6 Option A (AC-005 rewritten with server-side closingListenerWrapper). §Adversary Pass-1 Rulings section + Downstream Fix-Burst Punch List added to story. |
 | 3.16 | 2026-07-01 | Pass-8 fix-burst part 3: F-P8L3-001 (HIGH) added VP-062 row to S-W5.04 §VP Coverage table (S-W5.04 v1.2→v1.3); O-P8L3-001 (LOW) added internal/paths to S-5.02 architecture_modules frontmatter (S-5.02 v1.9→v1.10). |
 | 3.15 | 2026-07-01 | Pass-7 fix-burst part 2: F-P7L3-002 (HIGH) swept 5 stale BC-2.06.003 v1.6 pins in S-W5.04 body to v1.7 (S-W5.04 v1.1→v1.2); O-P7L3-001 (LOW) updated VP-047 and VP-062 rows in dependency-graph.md v1.3→v1.4 from S-5.02→S-W5.04. |
 | 3.14 | 2026-07-01 | Pass-6 fix-burst F-P6L3-003 anchor ruling: VP-062 implementing_story transferred S-5.02→S-W5.04 (daemon-side types deferred; mirrors VP-047 Pass-4 Ruling-3 precedent). S-5.02 vp_traces [VP-061,VP-062]→[VP-061]; vp_traces_deferred [VP-047]→[VP-047,VP-062]. S-W5.04 vp_traces [VP-047]→[VP-047,VP-062]. |
