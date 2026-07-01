@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"unsafe"
 
@@ -336,6 +337,12 @@ func TestLookup_ConcurrentRegisterRace(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
+	// hits counts reader iterations that observed ok=true. After wg.Wait() we
+	// assert hits > 0: if every reader iteration misses, the test is vacuously
+	// passing and cannot detect a broken RLock or an always-miss regression
+	// (F-P5L2-02). The continue-on-!ok per-iteration behaviour is preserved so
+	// a single miss does not mask race-detector output.
+	var hits int64
 
 	// Writer goroutines: register all keys.
 	for w := range numRegisterers {
@@ -361,6 +368,7 @@ func TestLookup_ConcurrentRegisterRace(t *testing.T) {
 					// Key may not yet be registered — that is fine.
 					continue
 				}
+				atomic.AddInt64(&hits, 1)
 				// If ok=true, the returned key must be well-formed.
 				if len(k.PublicKey) != ed25519.PublicKeySize {
 					t.Errorf("concurrent hit: PublicKey len=%d want %d", len(k.PublicKey), ed25519.PublicKeySize)
@@ -373,6 +381,9 @@ func TestLookup_ConcurrentRegisterRace(t *testing.T) {
 	}
 
 	wg.Wait()
+	if atomic.LoadInt64(&hits) == 0 {
+		t.Errorf("no reader observed a hit during concurrent registration; readers may be silently missing")
+	}
 
 	// After all writers finish, every key must be present and well-formed.
 	for _, e := range entries {
@@ -406,19 +417,17 @@ func TestRegisterKey_DeepClonesCallerPubkey(t *testing.T) {
 	svtnID := svtnLookupID(0x40)
 	pub := mustGenPub(t)
 
-	// Record the original byte 0 before any mutation.
-	originalByte0 := pub[0]
+	// Snapshot the original public key bytes BEFORE any mutation so that the
+	// oracle does not depend on which byte was flipped (F-P5L2-01).
+	originalPub := append(ed25519.PublicKey(nil), pub...)
 
 	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
 
 	// Mutate the caller's slice after RegisterKey returns.
 	pub[0] ^= 0xFF
 
-	// Derive the nodeAddr using the ORIGINAL (pre-mutation) key, which is what
+	// Derive the nodeAddr from the pre-mutation snapshot — matching what
 	// RegisterKey used internally.
-	originalPub := make(ed25519.PublicKey, len(pub))
-	copy(originalPub, pub)
-	originalPub[0] = originalByte0
 	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(originalPub))
 
 	key, ok := ks.Lookup(svtnID, nodeAddr)
@@ -426,11 +435,13 @@ func TestRegisterKey_DeepClonesCallerPubkey(t *testing.T) {
 		t.Fatal("Lookup: want ok=true after RegisterKey; got false")
 	}
 
-	// The returned PublicKey must reflect the ORIGINAL bytes, not the mutated ones.
-	if key.PublicKey[0] != originalByte0 {
-		t.Errorf("RegisterKey caller-alias: key.PublicKey[0]=%02x want %02x — "+
+	// The returned PublicKey must be byte-equal to the original snapshot, not the
+	// mutated slice. Comparing the full key (not just byte 0) ensures the oracle
+	// is not silently broken by mutations at other offsets (F-P5L2-01).
+	if !bytes.Equal(key.PublicKey, []byte(originalPub)) {
+		t.Errorf("RegisterKey caller-alias: key.PublicKey=%x want %x — "+
 			"post-RegisterKey mutation of caller slice leaked into store",
-			key.PublicKey[0], originalByte0)
+			key.PublicKey, []byte(originalPub))
 	}
 }
 
@@ -476,6 +487,11 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
 
 	var wg sync.WaitGroup
+	// hits counts reader iterations that observed ok=true. After wg.Wait() we
+	// assert hits > 0 to prevent a vacuous-pass: if every reader iteration
+	// returns !ok the test passes silently even when LookupByPubkey is broken
+	// (F-P5L2-03).
+	var hits int64
 
 	// Writer goroutines all re-register the same (pubkey, nodeAddr) pair.
 	// Each call is an idempotent LWW overwrite; the entry must remain
@@ -491,6 +507,9 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 	}
 
 	// Reader goroutines continuously look up the same pubkey under concurrent writes.
+	// The entry is pre-registered above so !ok is always a regression, not a
+	// timing window. t.Errorf (non-fatal) is used instead of t.Fatal so the loop
+	// keeps running and the race detector continues to observe concurrent accesses.
 	for range numReaders {
 		wg.Add(1)
 		go func() {
@@ -498,11 +517,11 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 			for range iterations {
 				key, ok := ks.LookupByPubkey(svtnID, pub)
 				if !ok {
-					// Concurrent writers are always writing the same entry; !ok here
-					// should not be reachable, but skip rather than Fatal to avoid
-					// masking a race-detector report.
+					// Entry was pre-registered; every iteration must find it.
+					t.Errorf("concurrent same-entry: LookupByPubkey returned ok=false for pre-registered key")
 					continue
 				}
+				atomic.AddInt64(&hits, 1)
 				// Structural check: PublicKey must be well-formed on any hit.
 				if len(key.PublicKey) != ed25519.PublicKeySize {
 					t.Errorf("concurrent same-entry: PublicKey len=%d want %d",
@@ -519,6 +538,9 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 	}
 
 	wg.Wait()
+	if atomic.LoadInt64(&hits) == 0 {
+		t.Errorf("no reader observed a hit during concurrent same-entry registration; readers may be silently missing")
+	}
 
 	// Post-concurrency: entry must be present and oracle-correct after all
 	// concurrent registrations complete.
