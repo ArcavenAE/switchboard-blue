@@ -1362,6 +1362,10 @@ func TestSbctlAdmin_SvtnCreate_MissingName(t *testing.T) {
 
 	if err == nil {
 		t.Error("BC-2.07.001 PC-1: missing --name: expected non-nil error; got nil")
+	} else if !strings.Contains(err.Error(), "--name is required") {
+		// Distinguish flag-validation failure from connection failure: the error
+		// must name the missing flag, not report a network error.
+		t.Errorf("BC-2.07.001 PC-1: expected \"--name is required\" in error; got: %v", err)
 	}
 }
 

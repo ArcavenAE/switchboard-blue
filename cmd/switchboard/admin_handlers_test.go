@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -651,6 +650,13 @@ func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
 			t.Errorf("expected handler %q not found in BuildAdminHandlers result", cmd)
 		}
 	}
+	// Reverse-direction check: reject any handler command not in the expected set.
+	// This catches accidental registration of extra handlers (F-P8L2-08).
+	for _, h := range handlers {
+		if _, ok := want[h.Command]; !ok {
+			t.Errorf("unexpected handler command %q registered in BuildAdminHandlers result", h.Command)
+		}
+	}
 	if len(handlers) != 5 {
 		t.Errorf("expected 5 handlers, got %d", len(handlers))
 	}
@@ -747,7 +753,8 @@ func TestMapAdminError_ErrorWrapping(t *testing.T) {
 //   - preserves the inner sentinel via %w (errors.Is true)
 //   - message contains "unmapped admin error"
 //   - message does NOT contain "E-RPC-011" (mgmt.go is sole authority for that code)
-//   - message does NOT start with "E-" (no error code stamped)
+//   - message starts with "E-INT-999:" (Ruling-12 §1 universality: catch-all
+//     programmer-error code ensures the wire envelope always has a machine-readable prefix)
 //
 // Traces to mapAdminError default-arm doc comment (admin_handlers.go).
 func TestMapAdminError_DefaultArm(t *testing.T) {
@@ -763,8 +770,8 @@ func TestMapAdminError_DefaultArm(t *testing.T) {
 	if strings.Contains(result.Error(), "E-RPC-011") {
 		t.Errorf("default arm must not stamp E-RPC-011; got: %v", result)
 	}
-	if strings.HasPrefix(result.Error(), "E-") {
-		t.Errorf("default arm must not stamp any E-* code; got: %v", result)
+	if !strings.HasPrefix(result.Error(), "E-INT-999:") {
+		t.Errorf("default arm must start with E-INT-999: (Ruling-12 §1 universality); got: %v", result)
 	}
 }
 
@@ -1512,52 +1519,6 @@ func TestAdminSVTNCreate_NonControlCallerDenied(t *testing.T) {
 	}
 }
 
-// TestAdminSVTNCreate_DuplicateNameError verifies AC-005 and AC-006 (third
-// sub-case): a duplicate SVTN name propagates the SVTN-exists error.
-//
-// BC-2.07.001 EC-001 — duplicate name → SVTN-exists error.
-// AC-005 — duplicate-name caller receives SVTN-exists error (E-RPC-011 wrapping).
-// AC-006 sub-case: duplicate-name caller receives SVTN-exists error.
-func TestAdminSVTNCreate_DuplicateNameError(t *testing.T) {
-	t.Parallel()
-
-	// AC-005 / BC-2.07.001 EC-001 — duplicate SVTN name must propagate error.
-	// makeAdminSVTNCreateHandler currently panics → RED.
-	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops)
-
-	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
-	for _, h := range handlers {
-		if h.Command == "admin.svtn.create" {
-			svtnCreateFn = h.Fn
-			break
-		}
-	}
-	if svtnCreateFn == nil {
-		t.Fatal("AC-001: admin.svtn.create not registered in BuildAdminHandlers")
-	}
-
-	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-
-	// "test-svtn" was created in newTestSVTNManagerDetailed — this is the duplicate.
-	args, err := json.Marshal(adminSVTNCreateArgs{Name: "test-svtn"})
-	if err != nil {
-		t.Fatalf("marshal args: %v", err)
-	}
-
-	_, err = svtnCreateFn(ctx, json.RawMessage(args))
-	if err == nil {
-		t.Fatal("AC-005 duplicate-name: expected SVTN-exists error; got nil")
-	}
-	// AC-005: error message must contain "SVTN already exists".
-	if !strings.Contains(err.Error(), "SVTN already exists") {
-		t.Errorf("AC-005: expected 'SVTN already exists' in error; got %q", err.Error())
-	}
-
-	_ = bootstrapPub
-}
-
 // TestAdminSVTNCreate_CallerRoleResolution_FromContext verifies that the handler
 // resolves caller role from the authenticated context pubkey (server-side),
 // NOT from a client-supplied request field (BC-2.07.001 Inv-3 / S-6.06 pattern).
@@ -1976,6 +1937,24 @@ func TestAdminSVTNCreate_MutationTest_RoleControlCheckMustFireIndependently(t *t
 	if !strings.Contains(gotErr.Error(), "E-ADM-009") {
 		t.Errorf("Ruling-7 mutation: expected E-ADM-009; got: %v", gotErr)
 	}
+	// Ruling-12 §2 canonical format oracle: message must contain the bootstrap
+	// fingerprint AND the actual role ("unregistered" because bootstrap key is not
+	// registered in the seeded SVTN). Mutation detection: a future mutant that
+	// returns a static message without the fingerprint or role will fail here.
+	wantFP := keyFingerprintAdmin(bootstrapPub)
+	if !strings.Contains(gotErr.Error(), wantFP) {
+		t.Errorf("Ruling-12 §2: expected fingerprint %q in error; got: %v", wantFP, gotErr)
+	}
+	// F-P8L2-06 dual-oracle: assert both "has role" (the role-check phrase) AND the
+	// specific non-control role string ("unregistered"). Mutation-kill signal: removing
+	// the bootstrap check silences the fingerprint assertion; removing the role check
+	// silences the role assertion; removing both leaves only the E-ADM-009 assertion.
+	if !strings.Contains(gotErr.Error(), "has role") {
+		t.Errorf("F-P8L2-06: expected \"has role\" phrase in error (role check absent or message format changed); got: %v", gotErr)
+	}
+	if !strings.Contains(gotErr.Error(), "unregistered") {
+		t.Errorf("F-P8L2-06: expected role \"unregistered\" in error (bootstrap key not registered in seeded SVTN); got: %v", gotErr)
+	}
 }
 
 // TestAdminSVTNCreateResult_JSONFieldNames verifies that adminSVTNCreateResult
@@ -2023,23 +2002,28 @@ func TestAdminSVTNCreateResult_JSONFieldNames(t *testing.T) {
 
 // ── Pass-2 tests ──────────────────────────────────────────────────────────────
 
+// errFailingReader is a test-owned sentinel returned by failingReader.Read.
+// Using a distinct sentinel (rather than io.EOF or io.ErrUnexpectedEOF) lets the
+// test assert errors.Is chains the exact injected error through to the caller
+// rather than accidentally matching a different io error (F-P8L2-05).
+var errFailingReader = errors.New("failingReader: synthetic read failure")
+
+// failingReader is an io.Reader whose Read always returns the configured error.
+// It is used to exercise the rand-failure path in SVTNManager.Create without
+// patching crypto/rand globally.
+type failingReader struct{ err error }
+
+func (r failingReader) Read(_ []byte) (int, error) { return 0, r.err }
+
 // TestAdminSVTNCreate_CryptoRandFailure_E_INT_001 verifies that a non-duplicate
 // Create() failure (e.g. internal rand.Read failure) is stamped E-INT-001 and
 // does NOT fall through to E-RPC-011 (F-P2L1-004).
 //
-// The test uses a thin svtnmgmt.SVTNManager wrapper via a local erroring Create
-// stub injected through a fake manager that returns a synthetic error. Because
-// SVTNManager is a concrete struct without an interface, we verify the E-INT-001
-// path by creating a real SVTNManager and making Create return an error via a
-// duplicate name (ErrSVTNAlreadyExists) — then confirming a non-duplicate path
-// by using a mock that wraps the error. However, SVTNManager.Create only returns
-// F-P2L1-004: non-duplicate Create() errors → E-INT-001.
-//
-// This test drives the real handler through the E-INT-001 branch by injecting a
-// zero-byte io.Reader into SVTNManager via NewSVTNManagerWithRandSource. When
-// Create() calls io.ReadFull on the injected reader, it receives io.ErrUnexpectedEOF
-// (0 bytes read into the 16-byte SVTN ID buffer), causing Create() to return a
-// non-ErrSVTNAlreadyExists error. The handler must stamp E-INT-001.
+// The test drives the real handler through the E-INT-001 branch by injecting a
+// purpose-built failingReader into SVTNManager via NewSVTNManagerWithRandSource.
+// When Create() calls io.ReadFull on the injected reader it receives errFailingReader,
+// causing Create() to return a non-ErrSVTNAlreadyExists error. The handler must
+// stamp E-INT-001 and preserve the inner error via %w.
 //
 // Prior implementation (Pass-2) was vacuous: it constructed a local error string
 // and asserted substring against itself without calling the handler. This test
@@ -2053,12 +2037,10 @@ func TestAdminSVTNCreate_CryptoRandFailure_E_INT_001(t *testing.T) {
 	}
 
 	ks := admission.NewAdmittedKeySet()
-	// Inject a zero-byte reader: io.ReadFull will return io.ErrUnexpectedEOF
-	// when trying to fill the 16-byte SVTN ID buffer (strings.NewReader("")
-	// returns 0 bytes on first Read). This exercises the rand failure path in
-	// SVTNManager.Create without patching crypto/rand globally.
-	failingRand := strings.NewReader("")
-	m := svtnmgmt.NewSVTNManagerWithRandSource(ks, bootstrapPub, failingRand)
+	// Inject a failingReader that always returns errFailingReader. io.ReadFull
+	// propagates the error unchanged when the reader returns 0 bytes and a
+	// non-nil error, so the full error chain reaches the handler.
+	m := svtnmgmt.NewSVTNManagerWithRandSource(ks, bootstrapPub, failingReader{err: errFailingReader})
 
 	handlers := BuildAdminHandlers(m, nil)
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -2085,12 +2067,10 @@ func TestAdminSVTNCreate_CryptoRandFailure_E_INT_001(t *testing.T) {
 	if !strings.Contains(gotErr.Error(), "E-INT-001") {
 		t.Errorf("expected E-INT-001 stamp on rand failure path; got: %v", gotErr)
 	}
-	// Verify the inner error is wrapped (go.md rule 4 / F-Impl-003: %w used).
-	// strings.NewReader("") returns io.EOF on the first read (0 bytes read into
-	// a 16-byte buffer); io.ReadFull returns io.EOF when no bytes were read at
-	// all (vs io.ErrUnexpectedEOF when some-but-not-all bytes were read).
-	if !errors.Is(gotErr, io.EOF) {
-		t.Errorf("expected errors.Is(err, io.EOF) == true (error chain preserved via %%w); got: %v", gotErr)
+	// Verify the inner sentinel is wrapped (go.md rule 4 / F-Impl-003: %w used).
+	// If the handler uses %w, errors.Is will find errFailingReader in the chain.
+	if !errors.Is(gotErr, errFailingReader) {
+		t.Errorf("expected errors.Is(err, errFailingReader) == true (error chain preserved via %%w); got: %v", gotErr)
 	}
 }
 
@@ -2278,6 +2258,11 @@ func TestValidateSVTNName(t *testing.T) {
 // triggering the duplicate-create. Without this, the test would pass vacuously
 // if the seed had silently failed.
 //
+// This test subsumes the earlier TestAdminSVTNCreate_DuplicateNameError variant
+// (F-P8L2-04): it covers the same duplicate-name error path with the added
+// vacuity-control pre-condition that prevents the test from passing silently
+// when the seed fixture fails. The earlier variant has been removed.
+//
 // F-P2 vacuity control — pre-condition: seed SVTN must be present.
 // BC-2.07.001 EC-001 — duplicate name → E-SVTN-001.
 func TestAdminSVTNCreate_DuplicateName_E_SVTN_001_VacuityControl(t *testing.T) {
@@ -2363,7 +2348,8 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 	ctx := mgmt.WithCallerPubkey(context.Background(), crossSVTNControl)
 
 	t.Run("name_collision_e_adm_009_before_create", func(t *testing.T) {
-		t.Parallel()
+		// No t.Parallel(): sub-tests share the parent m and crossSVTNControl;
+		// parallel execution risks cross-test attribution failure (F-P8L2-07).
 		// "existing-svtn" already exists. Even with a name collision, the bootstrap
 		// pre-check must fire E-ADM-009 BEFORE any Create attempt (Ruling-5 / Inv-3).
 		// Positive-control: verify "existing-svtn" is present via SVTNRecord — this
@@ -2391,7 +2377,8 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 	})
 
 	t.Run("cross_svtn_control_key_distinct_name_create_not_called", func(t *testing.T) {
-		t.Parallel()
+		// No t.Parallel(): sub-tests share the parent m and crossSVTNControl;
+		// parallel execution risks cross-test attribution failure (F-P8L2-07).
 		// Cross-SVTN control key with a fresh name (B). E-ADM-009 must fire.
 		// Create-not-called is proven by the E-ADM-009 return (if Create ran,
 		// it would return success or E-SVTN-001, not E-ADM-009).

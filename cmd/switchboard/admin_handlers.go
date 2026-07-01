@@ -408,7 +408,7 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		// ExpireKey is called, so this arm is unreachable in production (F-L1-B).
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm=%s to proceed: %w", svtnName, err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: pass --confirm to proceed (removing SVTN %q): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
@@ -416,11 +416,12 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer
-		// error. Do NOT stamp E-RPC-011 here — mgmt.go is the sole authority for
-		// stamping that code on the wire envelope. Co-stamping produces a malformed
-		// response: {code:"E-RPC-011", message:"E-RPC-011: unmapped admin error: ..."}.
-		// This arm's only role is to surface inner detail for the operator.
-		return fmt.Errorf("unmapped admin error: %w", err)
+		// error. E-INT-999 is the catch-all programmer-error code (Ruling-12 §1
+		// universality: every error returned from a handler must carry an E-* prefix
+		// so the wire envelope always has a machine-readable code). Do NOT use
+		// E-RPC-011 here — mgmt.go stamps that on the wire envelope; co-stamping
+		// produces a malformed response.
+		return fmt.Errorf("E-INT-999: unmapped admin error: %w", err)
 	}
 }
 
@@ -636,7 +637,14 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 		// cannot silently bypass this gate. The check is skipped (allowed) when no
 		// SVTNs exist yet — the first-ever create is the authorized genesis path.
 		if hasExistingSVTNs := m.HasAnySVTN(); hasExistingSVTNs && !m.BootstrapKeyHasControlRole() {
-			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: bootstrap key is not RoleControl")
+			// Resolve actual role for canonical Ruling-12 §2 message shape.
+			// callerPub is the bootstrap key (IsBootstrapKey passed above).
+			bsFP := m.BootstrapFingerprint()
+			bsRole := "unregistered"
+			if r, found := m.CallerKeyRoleInAny(callerPub); found {
+				bsRole = r.String()
+			}
+			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s has role %s", bsFP, bsRole)
 		}
 
 		result, err := m.Create(a.Name)
