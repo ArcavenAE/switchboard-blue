@@ -386,6 +386,14 @@ func (m *SVTNManager) IsBootstrapKey(pubkey ed25519.PublicKey) bool {
 	return subtle.ConstantTimeCompare([]byte(m.controlPubKey), []byte(pubkey)) == 1
 }
 
+// BootstrapFingerprint returns the "SHA256:<base64>" fingerprint of the daemon's
+// bootstrap control key (BC-2.05.004 PC-4 canonical format; BC-2.07.001 PC-2).
+// Called by the admin.svtn.create handler to populate the bootstrap_fingerprint
+// field in the success response (AC-004 / S-6.07).
+func (m *SVTNManager) BootstrapFingerprint() string {
+	return keyFingerprint(m.controlPubKey)
+}
+
 // CallerKeyRole returns the KeyRole of pubkey in the named SVTN, and true.
 // Returns (0, false) if svtnName does not exist or the key is not registered.
 // Used by admin handlers to resolve the authenticated caller's role server-side

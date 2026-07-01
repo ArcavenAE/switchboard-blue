@@ -24,6 +24,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -567,6 +568,36 @@ type adminSVTNCreateResult struct {
 // Traces to BC-2.07.001 PC-1 + PC-2 + Inv-3; AC-001; AC-003; AC-004; AC-005.
 func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
-		panic("TODO: S-6.07 makeAdminSVTNCreateHandler not yet implemented")
+		var a adminSVTNCreateArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-ADM-004: invalid request args: %w", err)
+		}
+		if a.Name == "" {
+			return nil, fmt.Errorf("E-ADM-004: missing required field: name")
+		}
+
+		// BC-2.07.001 Inv-3 / AC-003: authority check BEFORE dispatch.
+		// Pass empty svtnName for the role lookup: the target SVTN doesn't exist
+		// yet, so CallerKeyRoleActive will return (0, false). The only allowed
+		// paths are IsBootstrapKey (daemon's own key) and the operator-key grant.
+		// Non-control callers receive E-ADM-009 before m.Create is called.
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.Name, "", "admin.svtn.create"); err != nil {
+			return nil, err
+		}
+
+		result, err := m.Create(a.Name)
+		if err != nil {
+			if errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) {
+				return nil, fmt.Errorf("SVTN already exists: %s: %w", a.Name, err)
+			}
+			return nil, fmt.Errorf("admin.svtn.create: %w", err)
+		}
+
+		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from
+		// svtnmgmt.BootstrapFingerprint (SHA256:<base64> canonical format).
+		return adminSVTNCreateResult{
+			SVTNID:               hex.EncodeToString(result.SVTN.ID[:]),
+			BootstrapFingerprint: m.BootstrapFingerprint(),
+		}, nil
 	}
 }

@@ -625,10 +625,11 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 	}
 }
 
-// TestBuildAdminHandlers_FourHandlers asserts that BuildAdminHandlers returns
-// exactly four handlers with the correct command names.
-// Traces to AC-001; BC-2.05.004 PC-1..PC-3.
-func TestBuildAdminHandlers_FourHandlers(t *testing.T) {
+// TestBuildAdminHandlers_FiveHandlers asserts that BuildAdminHandlers returns
+// exactly five handlers with the correct command names.
+// S-6.07 added admin.svtn.create as the fifth handler (AC-001).
+// Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1.
+func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
 	t.Parallel()
 	m := newTestSVTNManager(t)
 	handlers := BuildAdminHandlers(m, nil)
@@ -638,6 +639,7 @@ func TestBuildAdminHandlers_FourHandlers(t *testing.T) {
 		"admin.key.revoke":    false,
 		"admin.key.expire":    false,
 		"admin.key.list-keys": false,
+		"admin.svtn.create":   false,
 	}
 	for _, h := range handlers {
 		want[h.Command] = true
@@ -647,8 +649,8 @@ func TestBuildAdminHandlers_FourHandlers(t *testing.T) {
 			t.Errorf("expected handler %q not found in BuildAdminHandlers result", cmd)
 		}
 	}
-	if len(handlers) != 4 {
-		t.Errorf("expected 4 handlers, got %d", len(handlers))
+	if len(handlers) != 5 {
+		t.Errorf("expected 5 handlers, got %d", len(handlers))
 	}
 }
 

@@ -146,7 +146,18 @@ func runAdminSvtn(ctx context.Context, target, keyPath string, useJSON bool, arg
 //
 // Traces to BC-2.07.001 PC-1 + PC-2; AC-002; AC-004; S-6.07.
 func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
-	panic("TODO: S-6.07 runAdminSvtnCreate not yet implemented")
+	fs := flag.NewFlagSet("admin svtn create", flag.ContinueOnError)
+	nameFlag := fs.String("name", "", "SVTN name (required)")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin svtn create: %w", err)
+	}
+	if *nameFlag == "" {
+		return fmt.Errorf("admin svtn create: --name is required")
+	}
+
+	rpcArgs := adminSVTNCreateArgs{Name: *nameFlag}
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.create", rpcArgs, sio)
 }
 
 // runAdminKey dispatches `sbctl admin key <subcommand>` commands.

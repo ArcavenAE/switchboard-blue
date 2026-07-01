@@ -1,10 +1,10 @@
-// handlers_admin.go — admin RPC handler types and helpers for the management
-// plane (internal/mgmt package).
+// Package mgmt implements the management plane server and admin RPC handler
+// types for the internal/mgmt boundary.
 //
-// This file defines the SVTNCreator interface and AdminSVTNCreateResult type
-// so that the management plane can dispatch admin.svtn.create RPCs without
-// importing internal/svtnmgmt directly (ARCH-08 §6.6 / ARCH-12 §Package DAG
-// Constraints: internal/mgmt MUST NOT import internal/svtnmgmt).
+// handlers_admin.go defines the SVTNCreator interface and admin SVTN create
+// handler types so that the management plane can dispatch admin.svtn.create
+// RPCs without importing internal/svtnmgmt directly (ARCH-08 §6.6 / ARCH-12
+// §Package DAG Constraints: internal/mgmt MUST NOT import internal/svtnmgmt).
 //
 // The concrete wiring — binding *svtnmgmt.SVTNManager to the interface and
 // registering the handler in BuildAdminHandlers — lives in
@@ -19,6 +19,7 @@ package mgmt
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 )
 
 // SVTNCreator is the interface through which admin.svtn.create dispatches SVTN
@@ -97,6 +98,24 @@ func MakeAdminSVTNCreateHandler(
 	roleChecker func(ctx context.Context, name string) error,
 ) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
-		panic("TODO: S-6.07 MakeAdminSVTNCreateHandler not yet implemented")
+		var a adminSVTNCreateArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-ADM-004: invalid request args: %w", err)
+		}
+		if a.Name == "" {
+			return nil, fmt.Errorf("E-ADM-004: missing required field: name")
+		}
+
+		// BC-2.07.001 Inv-3 / AC-003: authority check BEFORE dispatch.
+		if err := roleChecker(ctx, a.Name); err != nil {
+			return nil, err
+		}
+
+		result, err := creator.Create(a.Name)
+		if err != nil {
+			return nil, fmt.Errorf("SVTN already exists: %s: %w", a.Name, err)
+		}
+
+		return adminSVTNCreateResponse(result), nil
 	}
 }
