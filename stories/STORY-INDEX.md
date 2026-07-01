@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.29"
+version: "3.30"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -127,9 +127,9 @@ addresses the "deferred to TBD story" anti-pattern.
 |----------|-------|--------|----------------------|---------------|
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | draft | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1; anchors BC-2.06.003 PC-1 | Wave 6 (must merge before Wave-6 wave-convergence) |
-| S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.11 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
+| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | backlog | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1; anchors BC-2.06.003 PC-1 | Wave 6 (must merge before Wave-6 wave-convergence) |
 | S-BL.PATH-TRACKER-WIRING | Wire `cmd/switchboard/metrics_wire.go` pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time. | backlog | wave-6-tranche-a-scope-rulings Ruling-6; #DEFERRED comment in metrics_wire.go; depends_on S-W5.04, S-BL.ROUTER-ADDR; BC-2.06.003 | Wave 7 Backlog |
+| S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.11 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
 
 **Draft stubs: 1** (has some structure but no full ACs; will be promoted at wave-N planning)
@@ -172,6 +172,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.30 | 2026-07-01 | Pass-4 L3 fix-burst: F-P4L3-003 — reorder Backlog table rows to S-BL.ROUTER-ADDR → S-BL.PATH-TRACKER-WIRING → S-BL.PATH-FAILED-STATUS (dep chain: PATH-TRACKER-WIRING blocks PATH-FAILED-STATUS per Ruling-6). F-P4L3-004 — S-BL.ROUTER-ADDR status corrected `draft` → `backlog` (story frontmatter carries `status: backlog`; `draft` in this table was wrong). |
 | 3.29 | 2026-07-01 | Ruling-6 propagation + Pass-3 L3 fixes: Add S-BL.PATH-TRACKER-WIRING backlog stub (Wire cmd/switchboard/metrics_wire.go pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time; depends on S-W5.04, S-BL.ROUTER-ADDR; Epic E-6; Wave 7 Backlog). Update S-W5.04 row v1.6→v1.7. Summary Total 45→46, Backlog 5→6. Changelog note: S-BL.PATH-FAILED-STATUS BC pin corrected v1.10→v1.11 in backlog table. |
 | 3.28 | 2026-07-01 | Pass-4 L3 F-L3-Med-01 epic-anchor reconciliation: S-BL.LOOKUP row corrected E-2→E-6. Story depends_on S-6.02 (E-6), was promoted to Wave 6 Tranche A alongside E-6 stories (S-6.07, S-6.05), and story frontmatter carries epic: E-6. STORY-INDEX row was the erroneous artifact. Closes F-L3-Med-01. |
 | 3.27 | 2026-07-01 | Wave-6 Tranche A Pass-2 fix-burst: S-W5.04 v1.5→v1.6 (Ruling-3: real PathTracker wiring; Ruling-4: retract `failed` from status enum). S-6.07 v1.2→v1.3 (Ruling-5: bootstrap-only fast-path fix). Spec siblings: BC-2.06.003 v1.9→v1.10, BC-2.07.001 v1.4→v1.5, interface-definitions v1.8→v1.9, error-taxonomy v3.9→v4.0 (E-INT-001 minted), ARCH-12 v1.9→v1.10, VP-047 v1.2→v1.3, VP-062 v1.3→v1.4, ARCH-INDEX v1.3→v1.4, BC-INDEX v2.0→v2.1. Add S-BL.PATH-FAILED-STATUS backlog stub (Wave-7; depends_on S-W5.04; anchors BC-2.06.003 "failed" status enum future work per Ruling-4). All Pass-2 lens results NOT COUNTED — clean-pass counter reset; fresh Pass-3 3-lens per story queued. Summary: Total 44→45, Backlog 4→5. |

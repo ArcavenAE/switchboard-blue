@@ -2,7 +2,7 @@
 artifact_id: ARCH-12-daemon-management-plane
 document_type: architecture-section
 level: L3
-version: "1.10"
+version: "1.11"
 status: draft
 producer: architect
 timestamp: 2026-06-28T00:00:00
@@ -28,9 +28,9 @@ modified:
   - 2026-06-30T00:00:00 # v1.6 — S-W5.02 Pass-1 fix-burst: stale §Story 3 prose replaced ("e2e VP deferred") with "e2e VP: VP-049 (pre-assigned via VP-INDEX v2.6)"; Story 3 summary table row updated to VP-049 and S-6.06 added to depends column; dep-graph v1.5 S-W5.02 row reflects S-6.06 dependency (F-P1L3-003)
   - 2026-06-30T00:00:00 # v1.7 — F-W5P1-008: S-6.06 row added to Story Summary table — daemon-side admin.key.* handler registration on control-mode daemon (VP-075 + VP-076, BC-2.05.004 / BC-2.07.002, depends S-W5.01)
   - 2026-06-30T00:00:00 # v1.8 — F-W5P2-003: S-6.06 Story Summary row BC list corrected from "BC-2.05.004, BC-2.07.002" to "BC-2.05.004" — S-6.06 does not contribute PCs to BC-2.07.002 (STORY-INDEX + dep-graph confirm BC-2.05.004 only); ARCH-12 was aspirationally overclaiming scope
-  - 2026-07-01T00:00:00 # v1.10 — F-P2L3-003 (S-W5.04): S-W5.04 row added to Story Summary table — daemon-side paths.list/router.metrics/router.status RPC handlers + PathTracker wiring; BC-2.06.003 (PC-1..PC-4) + BC-2.06.001; VP-047 + VP-062; Wave 6; depends S-5.02 + S-W5.01
   - 2026-07-01T00:00:00 # v1.9 — F-P1L3-001: S-6.07 row added to Story Summary table — admin.svtn.create handler registration on control-mode daemon; BC-2.07.001 caller-role enforcement (VP-048); Wave 6
-  - 2026-07-01T00:00:00 # v1.10 — F-P2L3-003: S-W5.04 row added to Story Summary table
+  - 2026-07-01T00:00:00 # v1.10 — F-P2L3-003 (S-W5.04): S-W5.04 row added to Story Summary table — daemon-side paths.list/router.metrics/router.status RPC handlers + PathTracker wiring; BC-2.06.003 (PC-1..PC-4) + BC-2.06.001; VP-047 + VP-062; Wave 6; depends S-5.02 + S-W5.01
+  - 2026-07-01T00:00:00 # v1.11 — F-P4L3-002 (doc-polish): deduplicated v1.10 changelog entries (duplicate v1.10 line removed; a stale duplicate entry had both v1.9 and v1.10 mislabeled at the same position); restored correct reverse-chronological order in modified list
   - 2026-06-29T00:00:00 # v1.5 — Wave-5 convergence round-4 rulings O–W: (O) stale Unix socket pre-bind unlink; fix-now in listenUnixMgmt; (P) fatal-accept-error drain gap: closeAllConns missing before connWG.Wait on unexpected-close path; fix-now; (Q) AC-001/EC-001 story propagation gap for Ruling K; story-writer fix only; (R) per-handler execution timeout: fix-now with context.WithTimeout wrapper; (S) version sentinel CI gate: follow-up story targeting CI epic; (T) TestServe_ShutdownWindowNoAddAfterWaitPanic non-discriminating: test-writer fix only; (U) dispatch() response type never validated: fix-now, add rejection + test; (V) dispatch() missing read deadline: fix-now, reconcile ARCH-12 residual-concern note, amend BC-2.07.003; (W-test) t.Fatalf from goroutines in client_test.go: test-writer fix only; (X) hardcoded id "1" + no resp.ID echo check: fix-now; (Y) Inv-2 vs Inv-4 spec conflict on auth-handshake-timeout: fix-now, amend BC-2.07.003 Inv-4
 ---
 

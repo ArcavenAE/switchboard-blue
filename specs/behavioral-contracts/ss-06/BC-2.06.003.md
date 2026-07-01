@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -121,7 +121,8 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — metrics contain no content) |
 | Architecture Module | internal/metrics |
 | Stories | S-5.02 (sbctl client surface: dispatch + JSON envelope passthrough), S-W5.04 (daemon-side RPC handlers + response types: PathsListResponse, PathEntry, RTTValue, RouterMetricsResponse) |
-| Wave-7 Backlog Stories | S-BL.PATH-TRACKER-WIRING (production pathTrackerSource wiring to routing registry; PC-1 data-source completeness), S-BL.PATH-FAILED-STATUS (re-introduce `failed` status enum; PC-1 status vocab), S-BL.ROUTER-ADDR (populate router_addr with real host:port; PC-1 field completeness) |
+| Wave-7 Backlog Stories | S-BL.PATH-TRACKER-WIRING (production pathTrackerSource wiring to routing registry; PC-1 data-source completeness; Wave-7 Backlog), S-BL.PATH-FAILED-STATUS (re-introduce `failed` status enum; PC-1 status vocab; Wave-7 Backlog) |
+| Wave-6 Backlog Stories | S-BL.ROUTER-ADDR (Wave-6 — must merge before Wave-6 convergence per Ruling-1; populate router_addr with real host:port; PC-1 field completeness) |
 | Capability Anchor Justification | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022 — this BC specifies the `sbctl` interface for the per-path metrics that CAP-022 defines as available for both node-side and network-operator-side views |
 
 ## Related BCs
@@ -133,6 +134,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.12 | 2026-07-01 | spec-steward | OBS-P4L3-1: §Traceability split Wave-7 Backlog Stories row into Wave-6 and Wave-7 rows. S-BL.ROUTER-ADDR moved to a dedicated Wave-6 Backlog Stories row with schedule annotation "Wave-6 — must merge before Wave-6 convergence per Ruling-1". S-BL.PATH-TRACKER-WIRING and S-BL.PATH-FAILED-STATUS remain Wave-7 Backlog. No normative content change. |
 | 1.11 | 2026-07-01 | spec-steward | F-L3-001 (Pass-3 L3): PC-3 S502-DEFER-3 rewritten — retract `status: "failed"` reference from `PathSnapshot.Degraded == true` description (not normative in Wave-6). `{active, degraded}` are the normative Wave-6 vocabulary. Forward-looking note added: "Wave-7 forward-looking (S-BL.PATH-FAILED-STATUS): failed status re-introduction TBD; NOT normative in Wave-6." Traceability section updated with Wave-7 Backlog Stories row (S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS, S-BL.ROUTER-ADDR). |
 | 1.10 | 2026-07-01 | spec-steward | Wave-6 Tranche-A Ruling-4 (F-P2L3-006): PC-1 status enum retracted from `{active, degraded, failed}` → `{active, degraded}`. `failed` is RESERVED for follow-on story `S-BL.PATH-FAILED-STATUS` (Wave-7 Backlog). Implementations MUST NOT emit `failed` in this cycle; conformance tests MUST reject it. EC-007 updated to note that `failed` is reserved and to preserve the pending-precedence rule (S502-DEFER-3) for `{active, degraded}` values. |
 | 1.9 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-1: PC-1 `router_addr` field annotated with interim empty-string permission. `router_addr: ""` is a valid sentinel until `PathSnapshot` is enriched with a real host:port. Consumers MUST NOT treat `""` as an error. Cites DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER; resolved by follow-on story S-BL.ROUTER-ADDR. |
