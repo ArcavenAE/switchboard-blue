@@ -108,7 +108,7 @@ stories:
 
   - id: S-7.01
     title: "XOR parity FEC for single-loss recovery"
-    status: pending
+    status: merged
     spec_version: "1.4"
     points: 8
     priority: P1
@@ -121,9 +121,9 @@ stories:
     vp_traces: [VP-043]
     touches: [internal/arq]
     cmd_sbctl_conflict: false
-    branch: null
-    pr: null
-    merge_sha: null
+    branch: feat/S-7.01-xor-fec
+    pr: 43
+    merge_sha: 5c658e7040f088bea931ae6245c4080bb3057edc
 
   - id: S-7.02
     title: "SVTN-scoped multicast session discovery"
