@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.13"
+version: "2.14"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -144,6 +144,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.14 | 2026-06-30 | Pass-6 fix-burst F-P6L3-002/003: VP-062 bumped v1.1→v1.2 — (1) stale BC-2.06.003 v1.5 pin swept to v1.7 at 4 locations (stale-pin only; EC-006 semantics unchanged); (2) implementing_story S-5.02 → S-W5.04 per VP-047 Pass-4 Ruling-3 precedent (daemon-side types deferred from S-5.02 to S-W5.04). No count or catalog-row changes. |
 | 2.13 | 2026-06-30 | Pass-24 lens-3 F-P24L3-001: VP-076 bumped v1.3→v1.4 — Source Contract cite error-taxonomy.md v3.8→v3.9 (stale taxonomy version carryover; v3.9 authoritative since Pass-22 commit 4b42dd5). No count or catalog-row changes. |
 | 2.12 | 2026-06-30 | Pass-22 F-P22L3-003 + F-P22L3-004 sibling-fix propagation (4th-iteration narrowing sweep): VP-076 bumped v1.2→v1.3 — Properties #1 and #2 "unconditionally" narrowed to "for any well-formed request that reaches SVTNManager"; proof-harness comment narrowed to "sentinel for any well-formed bootstrap-key request". No count or catalog-row changes (row description already correct from v2.11). |
 | 2.11 | 2026-06-30 | Pass-21 F-P21L2-002 sibling-fix: VP-076 row description narrowed from "unconditionally" to "for any well-formed request" to mirror BC-2.05.004 EC-007 v1.12 + VP-076 v1.2; all v1.10 BC citation annotations updated to v1.12. No count changes. |

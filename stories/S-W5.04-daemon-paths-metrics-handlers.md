@@ -17,7 +17,10 @@ estimated_points: 5
 version: "1.1"
 bc_traces:
   - BC-2.06.003
-vp_traces: [VP-047]
+vp_traces: [VP-047, VP-062]
+# VP-062 transferred from S-5.02 per Pass-6 Ruling (F-P6L3-003): fuzz harness requires
+# daemon-side types (metrics.PathEntry, metrics.PathsListResponse, metrics.RTTValue,
+# metrics.RouterMetricsResponse) which are minted in this story. Mirrors VP-047 Pass-4 Ruling-3 precedent.
 subsystems: [quality-observability, network-management]
 architecture_modules: [internal/metrics, internal/mgmt]
 tdd_mode: strict

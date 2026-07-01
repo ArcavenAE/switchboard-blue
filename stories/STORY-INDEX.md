@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.12"
+version: "3.14"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -161,6 +161,8 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.14 | 2026-07-01 | Pass-6 fix-burst F-P6L3-003 anchor ruling: VP-062 implementing_story transferred S-5.02→S-W5.04 (daemon-side types deferred; mirrors VP-047 Pass-4 Ruling-3 precedent). S-5.02 vp_traces [VP-061,VP-062]→[VP-061]; vp_traces_deferred [VP-047]→[VP-047,VP-062]. S-W5.04 vp_traces [VP-047]→[VP-047,VP-062]. |
+| 3.13 | 2026-07-01 | S-5.02 v1.7→v1.8: F-P6L2-001 PC-4 description corrected (dropped E-RPC-011 prose); F-P6L3-001 BC-2.06.003 v1.5/v1.6 pins swept to v1.7 in story body. |
 | 3.12 | 2026-07-01 | S-6.06 post-merge closeout: status draft → merged (PR #36, 3ee9c38a, 2026-07-01T00:49:34Z); Summary Complete 18→19, Pending 9→8. |
 | 3.11 | 2026-06-30 | Pass-25 lens-3 fix: S-6.06 bumped v1.20 → v1.21 — stale VP-076 v1.1 cite in EC-008 body (line 204) bumped to v1.4; stale ARCH-04 v1.10 cite in Architecture Compliance Rules HOLD-001 row (line 263) bumped to v1.13. Closes F-P25L3-001 + lens-1 Obs-2 (7th-recurrence sibling-sweep gap closeout). |
 | 3.10 | 2026-06-30 | Pass-23 lens-3 fix: S-6.06 bumped v1.19 → v1.20 — stale BC-2.05.004 EC-007 v1.10 cites in Error Code Map (line ~180) and Task 12 (line ~245) bumped to v1.12; closes recurring sibling-sweep gap from Pass-22 (4-pass recurrence). Closes F-P23L3-001 + F-P23L3-002. |
