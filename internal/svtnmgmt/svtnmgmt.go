@@ -459,28 +459,6 @@ func (m *SVTNManager) BootstrapFingerprint() string {
 	return keyFingerprint(m.controlPubKey)
 }
 
-// SeedSVTNWithoutBootstrapKeyForTest seeds an SVTN record without registering
-// the bootstrap key as control. This is a test-only method used to construct
-// the "demoted bootstrap key" state for the Ruling-7 mutation test
-// (admin.svtn.create must check RoleControl independently of IsBootstrapKey).
-//
-// DO NOT call this from production code. It intentionally violates the
-// Create() invariant that the bootstrap key is always registered as RoleControl.
-func (m *SVTNManager) SeedSVTNWithoutBootstrapKeyForTest(svtnName string) error {
-	var id [16]byte
-	if _, err := io.ReadFull(m.randSource, id[:]); err != nil {
-		return fmt.Errorf("generate SVTN ID for test seed: %w", err)
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, exists := m.svtns[svtnName]; exists {
-		return ErrSVTNAlreadyExists
-	}
-	m.svtns[svtnName] = SVTN{ID: id, Name: svtnName}
-	// Intentionally does NOT call m.keySet.RegisterKey — bootstrap key is absent.
-	return nil
-}
-
 // CallerKeyRole returns the KeyRole of pubkey in the named SVTN, and true.
 // Returns (0, false) if svtnName does not exist or the key is not registered.
 // Used by admin handlers to resolve the authenticated caller's role server-side
