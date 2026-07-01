@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -77,7 +77,7 @@ sbctl paths list [--svtn=<id>]                  # Per-path RTT (rtt_ms, rtt_p99_
 sbctl paths ping --router=<addr>                # One-shot RTT probe
 
 # Router Management
-sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.7 PC-3; S-5.02 v1.9 AC-003/AC-008)
+sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.10 PC-3; S-5.02 v1.9 AC-003/AC-008)
 sbctl router metrics --svtn=<id>                # Frame counts, HMAC failures, drop cache hits
 sbctl router reload                             # Reload config (SIGHUP equivalent)
 sbctl router drain                              # Graceful drain (SIGTERM equivalent)
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.9 changelog note (2026-07-01):** Wave-6 Tranche A Ruling-4 pin-sweep: BC-2.06.003 pins updated v1.7→v1.10 at four locations (§Path list response intro, pending-response intro, `sbctl router status` CLI comment, `paths.list`/`router.status` Registered Verbs rows). Added `failed`-reserved note to paths.list row and path-list-response section. F-P2L3-001 admin.key.* re-anchoring: `admin.key.register` owning BC changed `BC-2.07.001` → `BC-2.05.004 PC-1`; `admin.key.revoke` changed → `BC-2.05.004 PC-2`; `admin.key.role` changed → `BC-2.05.004 PC-1`. `paths.list` row also updated to add S-W5.04 story trace.
 
 > **v1.8 changelog note (2026-07-01):** F-P1L3-003: `## Daemon RPC Surface` section expanded from prose-only into an enumerated verb table listing `paths.list`, `router.metrics`, `router.status`, `admin.key.register`, `admin.key.revoke`, `admin.key.role`, and `admin.svtn.create` — each row specifies owning BC/PC, authority requirement, request/response shape, and story trace. Authority note and error-code summary added.
 
@@ -201,7 +203,7 @@ On error:
 
 ### Path list response (`sbctl paths list --json`)
 
-Fields per BC-2.06.003 v1.7 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC).
+Fields per BC-2.06.003 v1.10 PC-1. `rtt_p99_ms` is a float64 when ≥10 RTT samples have been collected; it is the string `"pending"` when fewer than 10 samples exist (EC-003). `last_probe_at` is NOT part of the schema (removed per BC-2.06.003 PC-1; was never defined in the canonical BC). Note: `status` is `active` or `degraded`; `failed` is reserved for `S-BL.PATH-FAILED-STATUS` (Wave-7) and MUST NOT appear in Wave-6 responses.
 
 Example — normal response (≥10 samples):
 
@@ -223,7 +225,7 @@ Example — normal response (≥10 samples):
 }
 ```
 
-Example — pending response (<10 samples; BC-2.06.003 v1.7 EC-003/EC-006). The alias `sbctl router status` also emits `"quality": "pending"` in this case (PC-3):
+Example — pending response (<10 samples; BC-2.06.003 v1.10 EC-003/EC-006). The alias `sbctl router status` also emits `"quality": "pending"` in this case (PC-3):
 
 ```json
 {
@@ -352,12 +354,12 @@ All RPC endpoints require authentication: the caller presents its OpenSSH key si
 
 | Verb | Owning BC / PC | Authority Required | Request Args | Response Data | Story Trace |
 |------|----------------|--------------------|--------------|---------------|-------------|
-| `paths.list` | BC-2.06.003 PC-1 | Any admitted key (bootstrap or control-role) | `{"svtn_id": "<hex>"}` (optional; omit for all paths) | `{"paths": [{path_id, router_addr, rtt_ms, rtt_p99_ms, loss_pct, status}]}` (`rtt_p99_ms` is float64 or `"pending"` per EC-003) | S-5.02 |
+| `paths.list` | BC-2.06.003 v1.10 PC-1 | Any admitted key (bootstrap or control-role) | `{"svtn_id": "<hex>"}` (optional; omit for all paths) | `{"paths": [{path_id, router_addr, rtt_ms, rtt_p99_ms, loss_pct, status}]}` (`rtt_p99_ms` is float64 or `"pending"` per EC-003; `status` is `active` or `degraded`; `failed` reserved for Wave-7) | S-5.02, S-W5.04 |
 | `router.metrics` | BC-2.06.003 PC-2 | Any admitted key | `{"svtn_id": "<hex>"}` (required) | `{"svtn_id", "frame_count", "hmac_fail_count", "drop_cache_hits", "path_distribution"}` | S-5.02 |
-| `router.status` | BC-2.06.003 PC-3 | Any admitted key | `{"target": "<router-addr>"}` | Alias for `paths.list` response + `quality` field; `"quality": "pending"` when p99 not yet available (EC-006) | S-5.02 |
-| `admin.key.register` | BC-2.07.001 | Control-role key + `--confirm` token | `{"svtn_id", "pubkey_hex", "role": "control\|console\|access"}` | `{"ok": true}` | S-6.06 |
-| `admin.key.revoke` | BC-2.07.001 | Control-role key + `--confirm` token; console-role keys may not revoke control-role keys (ADR-004 Inv-3) | `{"svtn_id", "pubkey_hex"}` | `{"ok": true}` | S-6.06 |
-| `admin.key.role` | BC-2.07.001 | Control-role key | `{"svtn_id", "pubkey_hex"}` | `{"role": "control\|console\|access"}` | S-6.06 |
+| `router.status` | BC-2.06.003 v1.10 PC-3 | Any admitted key | `{"target": "<router-addr>"}` | Alias for `paths.list` response + `quality` field; `"quality": "pending"` when p99 not yet available (EC-006) | S-5.02 |
+| `admin.key.register` | BC-2.05.004 PC-1 | Control-role key + `--confirm` token (or operator-set bootstrap grant for first-register into fresh SVTN per BC-2.05.004 EC-005) | `{"svtn_id", "pubkey_hex", "role": "control\|console\|access"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.revoke` | BC-2.05.004 PC-2 | Control-role key + `--confirm` token; console-role keys may not revoke control-role keys (ADR-004 Inv-3) | `{"svtn_id", "pubkey_hex"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.role` | BC-2.05.004 PC-1 | Control-role key (read-only lookup; any admitted role per BC-2.05.004 F-L2-003) | `{"svtn_id", "pubkey_hex"}` | `{"role": "control\|console\|access"}` | S-6.06 |
 | `admin.svtn.create` | BC-2.07.001 PC-1, Inv-3 | Bootstrap-only: authenticated caller MUST be the daemon bootstrap key with `RoleControl`; cross-SVTN control-role keys are not authorized | `{"name": "<svtn-name>"}` | `{"svtn_id": "<hex>", "bootstrap_fingerprint": "SHA256:<base64>"}` | S-6.07 |
 
 > **Authority note:** "bootstrap-only" verbs (`admin.svtn.create`) require that the authenticated caller's public key matches the daemon bootstrap key AND that the key's role is `RoleControl`. Regular cross-SVTN control-role keys are explicitly rejected (BC-2.07.001 Inv-3 / S-6.07 AC-003). "Control-role" verbs require any key with `RoleControl` in the target SVTN's `AdmittedKeySet`.

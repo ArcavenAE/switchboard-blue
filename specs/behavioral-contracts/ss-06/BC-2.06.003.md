@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -22,6 +22,7 @@ modified:
   - 2026-06-30T00:00:00
   - 2026-06-30T18:00:00
   - 2026-06-30T22:00:00
+  - 2026-07-01T00:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -56,7 +57,7 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
    - `rtt_ms` — most-recent EWMA RTT sample in milliseconds (float64)
    - `rtt_p99_ms` — p99 of per-path RTT samples (float64); computed from the fixed-bucket histogram maintained by the PathTracker (histogram counts are never reset; approximation error ≤ bucket width for the bucket containing the true p99); "pending" (string) if fewer than 10 samples have been collected
    - `loss_pct` — packet loss rate as a percentage (float64, 0.0–100.0)
-   - `status` — one of: `active`, `degraded` (RTT > 200ms sustained), `failed` (≥ 3 consecutive missed keep-alives)
+   - `status` — path health classification: `active` | `degraded` (RTT > 200ms sustained). The value `failed` is RESERVED for a future liveness-signal story (`S-BL.PATH-FAILED-STATUS`, Wave-7 Backlog). Implementations MUST NOT emit `failed` until that story lands. Conformance tests MUST reject `failed` in the status field during Wave 6.
 2. **[CANONICAL]** `sbctl router metrics --svtn=<id>` returns per-SVTN forwarding metrics: frame count, HMAC failure count, drop cache hit count, per-path frame distribution.
 3. **[ALIAS]** `sbctl router status --target <router>` is a convenience alias for `sbctl paths list`. It produces an equivalent per-path listing (same JSON schema as PC-1) with an additional `quality` column (green/yellow/red quality indicator derived from the status + rtt_p99_ms fields). Both commands route through the same underlying query path in `internal/metrics`; there are no divergent code paths. The `--target <router>` flag overrides the default daemon address, equivalent to `sbctl --target <router> paths list`. The alias exists to match the command surface introduced by S-5.02 (F-P8-002 ruling).
 
@@ -86,7 +87,7 @@ Operator runs `sbctl paths list` (canonical), `sbctl router metrics --svtn=<id>`
 | EC-004 | Operator requests historical metrics (trend data) | Out of scope for E router phase. Current implementation returns point-in-time metrics only. |
 | EC-005 | Operator uses alias `sbctl router status --target <router>` | Output is identical to `sbctl paths list` plus a `quality` column (green/yellow/red). Exit code, JSON schema, and error handling are identical to the canonical command. There is exactly one code path in `internal/metrics` serving both invocations — the alias is a CLI dispatch shim only. |
 | EC-006 | `sbctl router status --target <router>` on a path with fewer than 10 RTT samples | `rtt_p99_ms` is `"pending"` (string) AND `quality` is `"pending"` (string). The quality column MUST NOT be green/yellow/red when p99 is pending; the p99 sentinel propagates to the quality output. |
-| EC-007 | `sbctl router status --target <router>` on a path with ≥3 consecutive missed keep-alives (liveness failure) AND fewer than 10 RTT samples collected | `status` is `"failed"` (liveness failure) AND `rtt_p99_ms` is `"pending"` AND `quality` is `"pending"`. The `quality` field MUST NOT be `"failed"` — quality is a function of the p99 RTT input only; `"failed"` is not a valid quality enum value. Clients requiring liveness information read `status`; clients requiring latency quality read `quality`. S502-DEFER-3 precedence ruling: pending-p99 takes precedence for the quality field even when liveness has failed. |
+| EC-007 | `sbctl router status --target <router>` on a path with ≥3 consecutive missed keep-alives (liveness failure) AND fewer than 10 RTT samples collected | **Ruling-4 (Wave-6 Tranche A):** `status: "failed"` is RESERVED and MUST NOT be emitted in this wave (see PC-1). For the pending-precedence rule: when liveness failure would otherwise trigger `status: "failed"` AND `SampleCount < 10` (`rtt_p99_ms: "pending"`), the `quality` field MUST still be `"pending"`. The `quality` field MUST NOT be `"failed"` — `"failed"` is not a valid quality enum value. `status` and `quality` remain orthogonal output fields. S502-DEFER-3 precedence ruling remains active for `{active, degraded}` status values: pending-p99 takes precedence for the quality field. This edge case is fully specified for when `S-BL.PATH-FAILED-STATUS` ships. |
 
 ## Canonical Test Vectors
 
@@ -128,6 +129,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.10 | 2026-07-01 | spec-steward | Wave-6 Tranche-A Ruling-4 (F-P2L3-006): PC-1 status enum retracted from `{active, degraded, failed}` → `{active, degraded}`. `failed` is RESERVED for follow-on story `S-BL.PATH-FAILED-STATUS` (Wave-7 Backlog). Implementations MUST NOT emit `failed` in this cycle; conformance tests MUST reject it. EC-007 updated to note that `failed` is reserved and to preserve the pending-precedence rule (S502-DEFER-3) for `{active, degraded}` values. |
 | 1.9 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-1: PC-1 `router_addr` field annotated with interim empty-string permission. `router_addr: ""` is a valid sentinel until `PathSnapshot` is enriched with a real host:port. Consumers MUST NOT treat `""` as an error. Cites DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER; resolved by follow-on story S-BL.ROUTER-ADDR. |
 | 1.8 | 2026-06-30 | product-owner | S502-DEFER-3 closure: add failed+pending precedence ruling to PC-3. When PathSnapshot.Degraded==true (liveness failure → status:"failed") AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), quality MUST still be "pending". Rationale: quality is a function of p99 RTT only; "failed" is not a valid quality enum value; status and quality are orthogonal fields. Add EC-007 codifying this behavior. Pre-Wave-6 spec tightening to prevent S-W5.04 adversarial ambiguity (mirrors S-6.06 "unconditionally" convergence risk). |
 | 1.7 | 2026-06-30 | spec-steward | F-P5-T-002 (Pass-5 lens-3): add S-W5.04 to Stories traceability cell per Pass-4 Ruling 1 split — S-5.02 owns client surface (PC-1/PC-2/PC-3 client-side serialization, PC-4 envelope, PC-5 unreachable behavior on client side); S-W5.04 owns daemon-side RPC handlers + response types (PathsListResponse, PathEntry, RTTValue union, RouterMetricsResponse). No behavioral change. |

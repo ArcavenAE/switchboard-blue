@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "3.9"
+version: "4.0"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -22,6 +22,7 @@ modified:
   - 2026-06-30T00:00:00 # v3.7 — F-P17L2-001 (MED) + F-P17L2-002 (LOW): E-ADM-020 description + canonical message aligned to BC-2.05.004 v1.9 unconditional phrasing (lens-2 pass-17)
   - 2026-06-30T00:00:00 # v3.8 — F-P18L1-001 (MED): E-ADM-021 minted — bootstrap-key-expire-forbidden symmetric counterpart to E-ADM-020 (refs F-P18L1-001 lens-1 pass-18)
   - 2026-06-30T00:00:00 # v3.9 — Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 + E-ADM-021 descriptions narrowed from "unconditionally" to "for any well-formed request"; BC citation updated from v1.10 to v1.12; E-CFG-001 handler-layer layering note added to both rows
+  - 2026-07-01T00:00:00 # v4.0 — Wave-6 Tranche A Ruling-4 sibling-propagation (S-6.07 F-P2L3-002): E-ADM-009 FM/DEC Source extended with BC-2.07.001 Inv-3; E-INT-001 minted (internal handler error for non-duplicate admin.svtn.create failure, BC-2.07.001 PC-1); INT category added to category table
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -49,6 +50,7 @@ traces_to: '.factory/specs/prd.md'
 | SVTN | SVTN Management | SVTN create, destroy, lifecycle errors |
 | SYS | System | OS-level errors: PTY unavailable, file descriptor limit |
 | RPC | Remote Procedure Call | Post-auth RPC dispatch failures: server error after AUTH_OK |
+| INT | Internal | Unexpected internal errors surfaced to the operator from handler or service layer |
 
 ## Severity Definitions
 
@@ -76,7 +78,7 @@ traces_to: '.factory/specs/prd.md'
 | E-ADM-007 | ADM | degraded | 0 (continues) | "upstream rejected: read-only access for console <key_fingerprint> on session <session_name>" | BC-2.04.005 |
 | _(layering note)_ | | | | **internal/session layer:** same layering applies as E-ADM-006 — `ConsoleKey` serves as `<key_fingerprint>`; `<node_addr>` is omitted at this layer and supplied by the transport/admission boundary caller when re-surfacing. **Static sentinel + caller-wrapping pattern (Wave-3 audit F-1.3):** `ErrUpstreamReadOnly` (internal/session/auth.go:50) is a static `errors.New` sentinel — `"session: upstream rejected: read-only access (E-ADM-007)"` — intentionally omitting `<key_fingerprint>` and `<session_name>` because those values are not available at sentinel-declaration time. The caller (`SessionAuth.Allow`, auth.go:146) adds parametric context via `fmt.Errorf("upstream rejected: read-only access for console %s on session %s: %w", key, sessionName, ErrUpstreamReadOnly)`, producing the full canonical message format above. `errors.Is` identity is preserved via `%w`-wrapping. The sentinel's `"session:"` prefix and `"(E-ADM-007)"` suffix are implementation artifacts not present in the operator-visible canonical format; grep patterns targeting E-ADM-007 should match on the `"(E-ADM-007)"` literal in the sentinel OR on `"read-only access for console"` in wrapped messages. | |
 | E-ADM-008 | ADM | broken | 1 | "nonce replay: challenge nonce already consumed for <node_addr>" | BC-2.05.001 |
-| E-ADM-009 | ADM | broken | 1 | "insufficient authority for operation <operation>: key <key_fingerprint> has role <role>" | BC-2.05.004, BC-2.07.002 |
+| E-ADM-009 | ADM | broken | 1 | "insufficient authority for operation <operation>: key <key_fingerprint> has role <role>" | BC-2.05.004, BC-2.07.002, BC-2.07.001 Inv-3 |
 | E-ADM-010 | ADM | broken | 1 | "authentication failed: key <key_fingerprint> not authorized for daemon at <address>" | BC-2.07.002 (client-side: operator CLI auth failure); BC-2.07.004 (server-side: wire format `{"type":"auth_fail","code":"E-ADM-010","message":"authentication failed"}` — response is identical for unrecognized key and wrong signature to prevent oracle; no key_fingerprint in wire message to prevent enumeration). E-ADM-010 is the **canonical operator-auth-failure code** for both sbctl (client) and internal/mgmt (server). Distinct from E-ADM-001 (SVTN node admission failure). |
 | E-ADM-011 | ADM | broken | 1 | E-ADM-011 has two message variants depending on the operation being denied. **Variant 1 (revocation hierarchy — existing):** `"permission denied: <role> key cannot revoke <target_role> key (control > console > readonly)"` — emitted by `SVTNManager.RevokeKey` when the caller's key role is insufficient to revoke the target key's role (e.g., console attempting to revoke a control key). **Variant 2 (destroy authorization — S-6.05):** `"permission denied: <role> key cannot destroy SVTN <svtn_name>"` — emitted by `SVTNManager.Destroy` when the caller's key is not a control-role key (BC-2.07.001 Invariant 3). Both variants use the Go sentinel `ErrRoleMismatch` (existing, Variant 1) or the new `ErrDestroyUnauthorized` (Variant 2, S-6.05) and share the E-ADM-011 code because both represent the same class of error: insufficient privilege for an admission-plane operation requiring control authority. `errors.Is` identity uses the respective sentinel for each path. **Scope disambiguation (S-6.06 Pass-4 F-L2-002):** E-ADM-011 is a Go API-layer code returned by `SVTNManager.RevokeKey` or `SVTNManager.Destroy` directly. It is NOT reachable via the `admin.key.*` mgmt RPC path when the handler-layer authority gate is correctly wired — the gate returns E-ADM-009 to non-control callers before `SVTNManager.RevokeKey` is ever invoked. E-ADM-011 is reachable only via direct Go API calls (unit-test path). | BC-2.05.004 (Variant 1); BC-2.07.001 Inv-3 (Variant 2, S-6.05) |
 | E-ADM-012 | ADM | broken | 1 | "key already registered: pubkey <key_fingerprint> already exists for SVTN <svtn_id>" | BC-2.05.004 (register-key) |
@@ -184,6 +186,12 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | E-RPC-010 | RPC | broken | — (in-band response) | "unknown command: \<command\>" | BC-2.07.004 PC-11 (Wave-5 Convergence Ruling C); **SERVER-SIDE** — emitted by `internal/mgmt` server in the JSON response envelope (`"ok":false,"error":{"code":"E-RPC-010","message":"unknown command: <cmd>"}`) when an authenticated RPC request names a command that is not registered in the handler slice. The connection is NOT closed after this response. `<command>` is the unregistered command name from the request. Distinct from client-side E-RPC-001 (sbctl stderr) and server-side E-RPC-011 (handler error). The undefined `E-RPC-002` is forbidden — any occurrence in `internal/mgmt` is a defect. |
 | E-RPC-011 | RPC | broken | — (in-band response) | "\<handler error message\>" | BC-2.07.004 PC-12 (Wave-5 Convergence Ruling C); **SERVER-SIDE** — emitted by `internal/mgmt` server in the JSON response envelope (`"ok":false,"error":{"code":"E-RPC-011","message":"<err>"}`) when a registered handler's `Fn` returns a non-nil error. The message is the handler's error string verbatim (not wrapped further by `internal/mgmt`). The connection is NOT closed after this response. Distinct from E-RPC-001 (client-side sbctl code) and E-RPC-010 (server unknown command). |
 
+### INT — Internal
+
+| Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
+|-----------|----------|----------|-----------|----------------|---------------|
+| E-INT-001 | INT | broken | 1 | `"internal error: <operation>: <cause>"` | BC-2.07.001 PC-1; emitted by the `admin.svtn.create` handler (and other admin handlers) in `cmd/switchboard/admin_handlers.go` when `SVTNManager.Create()` or another internal operation returns a non-duplicate, non-authorization error that does not map to a defined E-ADM-* or E-SVTN-* code. `<operation>` is the RPC operation name (e.g. `"admin.svtn.create"`). `<cause>` is the wrapped error string. Distinct from E-SVTN-001 (SVTN already exists), E-ADM-009 (insufficient authority), and E-RPC-011 (generic server handler error). Use this code for unexpected internal failures to avoid masking them behind E-RPC-011. Registered per S-6.07 v1.3 non-duplicate Create() failure code-stamp (Ruling-5 amendment). |
+
 ## Failure Mode to Error Code Mapping
 
 | FM-NNN | Failure Mode | Relevant Error Codes |
@@ -211,6 +219,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v4.0 | 2026-07-01 | Wave-6 Tranche A Ruling-4 sibling-propagation (S-6.07 F-P2L3-002): E-ADM-009 FM/DEC Source appended with `, BC-2.07.001 Inv-3` (cross-SVTN control-role key → E-ADM-009 for admin.svtn.create). E-INT-001 minted — `"internal error: <operation>: <cause>"`; source BC-2.07.001 PC-1; registered for non-duplicate Create() failure code-stamp per S-6.07 v1.3 Ruling-5 amendment. INT category added to category table. |
 | v3.9 | 2026-06-30 | Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 description — BC citation updated v1.10→v1.12; "unconditionally non-revocable at any time" narrowed to "non-revocable for any well-formed request"; E-CFG-001 handler-layer gate note added. E-ADM-021 description — same pattern: v1.10→v1.12; "unconditionally non-expirable at any time" narrowed to "non-expirable for any well-formed request"; E-CFG-001 handler-layer gate note added. Source-of-truth: BC-2.05.004 EC-007 v1.12 (Pass-20 Option-B). |
 | v3.8 | 2026-06-30 | E-ADM-021 minted: bootstrap-key-expire-forbidden symmetric counterpart to E-ADM-020 (refs F-P18L1-001 lens-1 pass-18). Sentinel: `svtnmgmt.ErrBootstrapKeyExpireForbidden`. Emitted by `admin.key.expire` handler (mapAdminError arm) when the bootstrap pubkey is targeted. Mirrors revoke protection (EC-004: expire = same lockout effect as revoke). E-ADM-020 description updated to cite BC-2.05.004 EC-007 v1.10 (was v1.9). |
 | v3.7 | 2026-06-30 | F-P17L2-001 (MED) + F-P17L2-002 (LOW): E-ADM-020 description rewritten to unconditional phrasing per BC-2.05.004 EC-007 v1.9 ("unconditionally non-revocable at any time, regardless of whether other control keys have been registered"). Canonical message updated from "cannot revoke the last bootstrap key in SVTN <svtn_id>" to "cannot revoke the bootstrap key in SVTN <svtn_id> (permanent trust anchor)". Eliminates false conditionality in both description and message format. |

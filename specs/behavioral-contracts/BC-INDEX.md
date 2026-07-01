@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "2.0"
+version: "2.1"
 status: draft
 producer: product-owner
-timestamp: 2026-07-01T00:00:00
+timestamp: 2026-07-01T12:00:00
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.1 | 2026-07-01 | Wave-6 Tranche A Ruling-4 sibling-propagation sweep: BC-2.06.003 v1.9→v1.10 (status enum retracted from `{active,degraded,failed}` → `{active,degraded}`; `failed` reserved for S-BL.PATH-FAILED-STATUS Wave-7; EC-007 updated); BC-2.07.001 v1.4→v1.5 (cross-SVTN control-role key test vector added per F-P2L3-003). BC count unchanged at 45. |
 | 2.0 | 2026-07-01 | Wave-6 Tranche A Pass-1 fix-burst: BC-2.06.003 v1.8→v1.9 (PC-1 interim router_addr empty-string allowance); BC-2.07.001 v1.3→v1.4 (Inv-3 tightened: admin.svtn.create bootstrap-only). BC count unchanged at 45. |
 | 1.9 | 2026-06-30 | BC-2.06.003 bumped v1.7→v1.8 — S502-DEFER-3 closure: failed+pending precedence ruling added to PC-3; EC-007 added. BC title unchanged. |
 | 1.8 | 2026-06-30 | BC-2.05.004 bumped v1.11→v1.12 — Pass-20 lens-3 F-P20L3-001 (MEDIUM) Option B ruling: EC-007 narrowed; "unconditionally" claim removed; handler-layer input-validation ordering clarified; VP-076 property #3 narrowed in parallel. |

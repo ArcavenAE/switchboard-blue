@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -100,6 +100,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 | `sbctl admin svtn create --name=mynet` (already exists) | E-SVTN-001 "SVTN already exists: mynet" | error |
 | Bootstrap: first control key added locally | Control key in admitted set with `admitted=false`; control node completes challenge-response to flip `admitted=true`; SVTN ready for additional key registrations | happy-path |
 | Non-control-role key attempts `sbctl admin svtn create` | E-ADM-009 "insufficient authority for operation admin.svtn.create: key <fp> has role <role>" | error |
+| Cross-SVTN control-role key (admitted to an existing SVTN, role=control) attempts `sbctl admin svtn create` targeting a new SVTN name | E-ADM-009 "insufficient authority for operation admin.svtn.create: key <fp> has role control" — handler returns E-ADM-009 before consulting SVTN state; bootstrap-only check fires first; no existence oracle leak (Ruling-5, S-6.07 F-P2L3-003) | error |
 
 ## Verification Properties
 
@@ -128,6 +129,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.5 | 2026-07-01 | spec-steward | S-6.07 F-P2L3-003 test-vector gap closure: added Canonical Test Vector for cross-SVTN control-role key attempting `admin.svtn.create` — expects E-ADM-009 (not existence oracle) per Ruling-5 bootstrap-only guard. Handler MUST fire `IsBootstrapKey` check before `resolveAndVerifyCallerRole` to prevent SVTN existence leak. |
 | 1.4 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-2: Inv-3 tightened to codify bootstrap-only caller restriction for `admin.svtn.create`. Cross-SVTN control-role keys are NOT authorized for `admin.svtn.create`. Only the daemon bootstrap key (seeded via PC-2 local operation) may invoke SVTN creation. Removes ambiguity flagged in S-6.07 F-P1L1-005. |
 | 1.3 | 2026-06-30 | product-owner | S-6.06 lens-3 F-003 ruling (Inv-3 scope): Inv-3 scoped to `admin.svtn.*` only; does not extend to `admin.key.*`; S-6.06 removed from cite path; story-writer to drop BC-2.07.001 from S-6.06 bc_traces. |
 | 1.2 | 2026-06-29 | product-owner | Task 2 reconverge (S-5.01 + S-6.02 Pass-1 adversarial): Trigger updated to `sbctl admin svtn create/destroy`; test vectors updated; Stories cell updated with PC split; PC-2 trust-anchor addendum added. |
