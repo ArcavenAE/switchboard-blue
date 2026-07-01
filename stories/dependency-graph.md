@@ -2,10 +2,10 @@
 artifact_id: dependency-graph
 document_type: dependency-graph
 level: ops
-version: "1.6"
+version: "1.7"
 status: draft
 producer: story-writer
-timestamp: 2026-06-28T00:00:00
+timestamp: 2026-06-30T00:00:00
 phase: 2
 inputDocuments:
   - '.factory/stories/STORY-INDEX.md'
@@ -40,10 +40,14 @@ inputDocuments:
 | S-W5.01 | S-6.01 | S-W5.02, S-6.06 | 5 | internal/mgmt server + config E-CFG-008/009 + cmd/switchboard wiring; edits internal/mgmt, internal/config, cmd/switchboard — no conflict with cmd/sbctl stories; can run in parallel with S-6.03, S-6.02, S-5.02 |
 | S-6.06 | S-6.02, S-W5.01 | S-W5.02 | 5 | daemon-side admin.key.* handler registration on control-mode daemon; BC-2.05.004 caller-role enforcement (VP-075) + bootstrap non-revocable/non-expirable invariant (VP-076); minted via CR-W5-SCOPE-SPLIT (adversary Pass-1) |
 | S-W5.02 | S-6.03, S-6.06, S-W5.01 | (none) | 5 | e2e integration harness: requires sbctl client (S-6.03), admin.key.* handler-role enforcement (S-6.06), AND mgmt server (S-W5.01) all merged; Wave-5 management plane gate |
+| S-W5.04 | S-5.02, S-W5.01 | (none) | 6 | daemon-side RPC handlers extend metrics (S-5.02) and mgmt server (S-W5.01); no cmd/sbctl conflict |
+| S-BL.LOOKUP | S-6.02 | (none) | 6 | Lookup convention refactor in internal/admission; depends on AdmittedKeySet from S-6.02 |
+| S-6.07 | S-6.02, S-6.06 | S-6.05 | 6 | admin.svtn.create handler extends mgmt registration (S-6.06); adds cmd/sbctl/admin.go svtn create; blocks S-6.05 (serialization on admin.go) |
+| S-6.05 | S-6.02, S-6.07 | (none) | 6 | admin.svtn.destroy lifecycle extends SVTN from S-6.02; extends cmd/sbctl/admin.go after S-6.07; serialize: S-6.07 must merge first |
 | S-7.01 | S-4.03 | (none) | 6 | FEC extends arq (from S-4.03) |
 | S-7.02 | S-2.02, S-3.02 | (none) | 6 | discovery imports routing (S-2.02) and session presence state (S-3.02) |
 | S-7.03 | S-3.02, S-6.03 | (none) | 6 | console remote control uses session (S-3.02) and sbctl CLI (S-6.03) |
-| S-7.04 | S-6.01, S-4.04 | (none) | 6 | PE graduation extends config (S-6.01); drain imports routing (S-4.04) |
+| S-7.04 | S-6.01, S-4.04 | (none) | 7 | PE graduation extends config (S-6.01); drain imports routing (S-4.04); deferred from Wave 6 per wave-6-scope-decision.md |
 
 ## Topological Sort (Root → Leaf)
 
@@ -56,7 +60,16 @@ Wave 4: S-4.01, S-4.02, S-4.03, S-4.04, S-6.01  (depend on Wave 1+2; S-6.01 depe
 Wave 5: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01  (depend on Wave 4)
          S-6.06                                            (depends on S-6.02 + S-W5.01 — intra-Wave-5 mgmt-plane handler wiring)
          S-W5.02                                           (depends on S-6.03 + S-6.06 + S-W5.01, all Wave 5 — placed last in Wave 5)
-Wave 6: S-7.01, S-7.02, S-7.03, S-7.04  (depend on Wave 3+4+5)
+Wave 6: [Tranche A — run first]
+         S-W5.04                          (depends S-5.02 + S-W5.01; internal/metrics + internal/mgmt; no cmd/sbctl conflict)
+         S-BL.LOOKUP                      (depends S-6.02; internal/admission only; no file conflicts)
+         S-6.07                           (depends S-6.02 + S-6.06; extends cmd/sbctl/admin.go — serialize with S-6.05)
+         S-6.05                           (depends S-6.02 + S-6.07; extends cmd/sbctl/admin.go — must follow S-6.07 merge)
+         [Tranche B — after Tranche A]
+         S-7.01                           (depends S-4.03; internal/arq; no conflict)
+         S-7.02                           (depends S-2.02 + S-3.02; internal/discovery [new package]; no conflict)
+         S-7.03                           (depends S-3.02 + S-6.03; internal/session + new top-level cmd/sbctl commands)
+Wave 7: S-7.04                            (depends S-6.01 + S-4.04; deferred from Wave 6 per wave-6-scope-decision.md)
 ```
 
 ## Cycle-Freeness Verification
@@ -70,7 +83,38 @@ Manual topological sort confirms no back-edges:
 - **S-W5.01** edits `internal/mgmt`, `internal/config`, and `cmd/switchboard` — does NOT touch `cmd/sbctl/main.go`. No serialization conflict with S-6.03, S-6.02, or S-5.02. S-W5.01 can run in parallel with all three on separate branches.
 - **S-W5.02** depends on S-6.03, S-6.06, and S-W5.01 (needs client auth, daemon-side admin.key.* handlers, and mgmt server all merged). S-6.06 is required because S-W5.02 exercises the admin.key.list command through the control-mode handler table; without S-6.06 the handler is absent and the e2e assertion cannot reach the production code path. S-W5.02 is the Wave-5 management plane convergence gate — it runs last among the management plane stories.
 
+**Wave-6 S-6.05/S-6.07 intra-wave serialization:** S-6.07 `blocks` S-6.05 (both touch `cmd/sbctl/admin.go`). This is a deliberate serialization edge within Wave 6 Tranche A — not a cycle. S-6.05 depends on S-6.07 (must merge first), reflecting the admin.go file ownership constraint. Both are Wave-6 stories, so no cross-wave back-edge is introduced.
+
+**S-W5.04 and S-BL.LOOKUP (Wave 6 Tranche A):** Both have all dependencies in Wave 5 or earlier (all merged). No intra-wave dependency between them or with S-6.05/S-6.07 beyond the file-serialization constraint on cmd/sbctl/admin.go (which they do not touch).
+
+**S-7.04 deferred to Wave 7:** No story in Wave 7 depends on a Wave 6 story in a blocking direction that would create a cycle. S-7.04's dependencies (S-6.01, S-4.04) are both in Wave 4 (merged). Wave 7 placement is purely scheduling — no DAG issue.
+
 **DAG is acyclic. Verified.**
+
+## Wave-6 Serialization Contract
+
+**S-6.07 → S-6.05 (cmd/sbctl/admin.go serial chain)**
+
+Both stories add new subcommands to `cmd/sbctl/admin.go`. They MUST NOT run in parallel:
+
+| Story | File Extended | Subcommand Added | Must Follow |
+|-------|--------------|------------------|-------------|
+| S-6.07 | cmd/sbctl/admin.go | `sbctl admin svtn create` | (first — depends only on S-6.02 + S-6.06, both merged) |
+| S-6.05 | cmd/sbctl/admin.go | `sbctl admin svtn destroy` | S-6.07 merged to develop |
+
+Enforcement options (orchestrator's choice):
+1. One-branch sequential: dispatch S-6.07; after PR merge, dispatch S-6.05 branching off updated develop.
+2. Single-branch sequential: assign both to one worktree; implementer delivers S-6.07 ACs then S-6.05 ACs in sequence without an intermediate merge.
+
+**S-W5.04 and S-BL.LOOKUP are conflict-free within Tranche A:**
+- S-W5.04 writes to `internal/metrics` and `internal/mgmt` only. No cmd/sbctl changes.
+- S-BL.LOOKUP writes to `internal/admission` only. No cmd/sbctl changes.
+- Both can run concurrently on separate branches alongside S-6.07 and S-6.05.
+
+**Tranche B stories (S-7.01, S-7.02, S-7.03) are fully parallel:**
+- S-7.01: `internal/arq` only.
+- S-7.02: `internal/discovery` (new package, no existing files to conflict).
+- S-7.03: `internal/session` + new top-level `cmd/sbctl` commands (attach/detach/switch). If S-7.03 and any open Tranche-A story both edit `cmd/sbctl/main.go` registration, they must coordinate (rebase obligation). Safe default: Tranche A fully merged before Tranche B starts.
 
 ## Traceability Matrices
 
@@ -232,6 +276,7 @@ Items F-P8-004 and F-P8-005 (VP-026/VP-027 invariant references) are architect/t
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.7 | 2026-06-30 | story-writer | Wave-6 scope locked per wave-6-scope-decision.md: add S-W5.04, S-BL.LOOKUP, S-6.07, S-6.05 rows to dependency table (Tranche A); S-6.07 blocks S-6.05 (cmd/sbctl/admin.go serialization constraint). S-7.04 wave 6→7 (deferred). Topological sort expanded to show Wave 6 Tranche A / Tranche B split and Wave 7 (S-7.04). Cycle-freeness section updated with S-6.05/S-6.07 intra-wave serialization note and S-7.04 wave-7 placement note. Wave-6 Serialization Contract section added (S-6.07→S-6.05 serial chain, file ownership table, enforcement options). DAG verified acyclic. |
 | 1.6 | 2026-06-30 | spec-steward | Pass-5 L3 fix F-P5L3-007: update Wave-5 topological-sort prose and cycle-freeness narrative to include S-6.06 in S-W5.02 depends description (table row at line 41 was already correct). Rationale added: S-6.06 provides admin.key.* handler-role enforcement required for admin.key.list command in S-W5.02 control-mode handler table. |
 | 1.5 | 2026-06-30 | spec-steward | S-W5.02 Pass-1 fix-burst F-P1L3-003: add S-6.06 to S-W5.02 depends_on column. VP coverage rollup updated 67/67→76/76; add VP-068 through VP-076 rows to VP-to-Stories matrix (VP-INDEX v2.15 source). Gap Register updated to reflect 76 VPs assigned. |
 | 1.4 | 2026-07-01 | story-writer | O-P7L3-001 (LOW): VP-047 and VP-062 rows updated S-5.02→S-W5.04. VP-047 transferred at VP-INDEX v2.7 (Pass-4 Ruling 3); VP-062 transferred at VP-INDEX v2.14 (Pass-6 F-P6L3-003, commit 7b70af0). Both VPs require daemon-side types (metrics.PathEntry, RTTValue, etc.) minted in S-W5.04. |
