@@ -136,18 +136,26 @@ func (r *RTTValue) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &v); err != nil {
 		return fmt.Errorf("rtt_p99_ms: expected float64 or \"pending\": %w", err)
 	}
-	// Reject non-finite and negative values — they cannot represent a measured RTT.
-	// NaN and ±Inf are technically representable as JSON tokens in some encoders but
-	// are not valid per RFC 8259. Negative RTT has no physical meaning.
+	if err := validateRTTFloat(v); err != nil {
+		return err
+	}
+	r.Kind = FloatKind
+	r.Value = v
+	r.SampleCount = 10 // signal ≥10 so SampleCount-based callers treat this as valid
+	return nil
+}
+
+// validateRTTFloat rejects NaN, ±Inf, and negative values.
+// Package-private; the guard is applied inside UnmarshalJSON but factored out
+// so tests can exercise the numeric-validation path directly via the helper,
+// independent of the JSON string-token branch (F-P5L2-02).
+func validateRTTFloat(v float64) error {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return errors.New("rtt: NaN or Inf not permitted")
 	}
 	if v < 0 {
 		return errors.New("rtt: negative not permitted")
 	}
-	r.Kind = FloatKind
-	r.Value = v
-	r.SampleCount = 10 // signal ≥10 so SampleCount-based callers treat this as valid
 	return nil
 }
 
