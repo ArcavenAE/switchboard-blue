@@ -126,7 +126,9 @@ func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
 //
 // BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
 func NewPathTrackerWithAddr(addr string, initialRTTMS float64, alpha float64) *PathTracker {
-	panic("paths: NewPathTrackerWithAddr not yet implemented (S-BL.ROUTER-ADDR stub — BC-5.38.001)")
+	t := NewPathTracker(initialRTTMS, alpha)
+	t.routerAddr = addr
+	return t
 }
 
 // resetRTT sets the RTT outright from a measured sample, clearing loss and
