@@ -1,5 +1,5 @@
 // Daemon-side RPC handler logic for paths.list, router.metrics, and router.status
-// (BC-2.06.003 v1.8 PC-1, PC-2, PC-3).
+// (BC-2.06.003 v1.10 PC-1, PC-2, PC-3).
 //
 // Purity classification (ARCH-09): effectful — reads PathTracker state via
 // PathSnapshot. I/O ownership stays in internal/mgmt; these functions are the
@@ -44,7 +44,7 @@ type RouterMetricsSource interface {
 // ctx is the authenticated handler context supplied by mgmt.Server.
 // args is the raw JSON args (unused for paths.list; may be nil or empty object).
 //
-// BC-2.06.003 v1.8 PC-1; AC-001.
+// BC-2.06.003 v1.10 PC-1; AC-001.
 func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (PathsListResponse, error) {
 	snaps := src.AllSnapshots()
 	entries := make([]PathEntry, 0, len(snaps))
@@ -64,7 +64,7 @@ func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (Paths
 // Returns an E-RPC-* error if the svtn_id field is missing or empty, or if args
 // cannot be decoded. Returns an E-RPC-011 error when the SVTN is not found.
 //
-// BC-2.06.003 v1.9 PC-2; AC-004; Fix 6 (svtn_id required).
+// BC-2.06.003 v1.10 PC-2; AC-004; Fix 6 (svtn_id required).
 func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSource) (RouterMetricsResponse, error) {
 	var req struct {
 		// svtn_id is the canonical wire key sent by sbctl (cmd/sbctl/router_metrics.go).
@@ -86,13 +86,13 @@ func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSou
 
 // RouterStatus is the handler logic for the "router.status" RPC alias.
 // Structurally identical to paths.list but with an additional "quality" summary
-// field derived from status + rtt_p99_ms (BC-2.06.003 v1.8 PC-3, EC-007).
+// field derived from status + rtt_p99_ms (BC-2.06.003 v1.10 PC-3, EC-007).
 //
 // When rtt_p99_ms is "pending" (SampleCount < 10), quality MUST be "pending"
-// regardless of liveness state (S502-DEFER-3 failed+pending precedence ruling;
-// BC-2.06.003 v1.8 EC-007; AC-005a).
+// regardless of liveness state (S502-DEFER-3 degraded+pending precedence ruling;
+// BC-2.06.003 v1.10 EC-007; AC-005a).
 //
-// BC-2.06.003 v1.8 PC-3; AC-005, AC-005a.
+// BC-2.06.003 v1.10 PC-3; AC-005, AC-005a.
 func RouterStatus(ctx context.Context, args json.RawMessage, src PathsListSource) (RouterStatusResponse, error) {
 	pathsResp, err := PathsList(ctx, args, src)
 	if err != nil {
@@ -126,19 +126,20 @@ type RouterStatusResponse struct {
 
 // PathEntryFromSnapshot converts a PathSnapshot to a PathEntry.
 // Derives PathEntry.Status from PathSnapshot.Degraded and PathSnapshot.Active:
-//   - Active=false → "failed" (≥3 consecutive missed keepalives)
 //   - Degraded=true → "degraded" (EWMA RTT > 200ms sustained)
+//   - Active=false → "degraded" (liveness failure maps to "degraded" in Wave 6;
+//     "failed" is reserved for S-BL.PATH-FAILED-STATUS per Ruling-4 and
+//     BC-2.06.003 v1.10 PC-1 — implementations MUST NOT emit "failed" until
+//     that story lands)
 //   - otherwise → "active"
 //
-// BC-2.06.003 PC-1; BC-2.06.001; AC-003.
+// BC-2.06.003 v1.10 PC-1; BC-2.06.001; AC-003.
 func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) PathEntry {
 	status := "active"
-	if !snap.Active {
-		status = "failed"
-	} else if snap.Degraded {
+	if snap.Degraded || !snap.Active {
 		status = "degraded"
 	}
-	// Derive RTTValue Kind from SampleCount per BC-2.06.003 v1.9 PC-1:
+	// Derive RTTValue Kind from SampleCount per BC-2.06.003 v1.10 PC-1:
 	// FloatKind when SampleCount ≥ 10 (p99 is meaningful), PendingKind otherwise.
 	var rttP99 RTTValue
 	if snap.SampleCount >= 10 {
@@ -160,11 +161,11 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 // Returns "pending" when RTTP99Ms.SampleCount < 10 (BC-2.06.003 EC-006, EC-007).
 // Returns green/yellow/red derived from rtt_p99_ms and status otherwise.
 //
-// The failed+pending precedence ruling (S502-DEFER-3, BC-2.06.003 v1.8 EC-007):
-// when status=="failed" AND SampleCount < 10, quality MUST still be "pending".
+// The degraded+pending precedence ruling (S502-DEFER-3, BC-2.06.003 v1.10 EC-007):
+// when status=="degraded" AND SampleCount < 10, quality MUST still be "pending".
 // status and quality are orthogonal fields.
 //
-// BC-2.06.003 PC-3; AC-005, AC-005a.
+// BC-2.06.003 v1.10 PC-3; AC-005, AC-005a.
 func QualityFromEntry(entry PathEntry) string {
 	// EC-007, EC-006, F-M3: pending p99 always yields pending quality.
 	// This holds even when status=="failed" (S502-DEFER-3).
