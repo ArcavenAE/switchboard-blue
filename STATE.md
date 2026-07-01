@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-wave-adversarial-in-progress
+phase_step: wave-5-wave-adversarial-converged
 phase_3_active_wave: 5
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
@@ -62,10 +62,15 @@ wave_4_wavegate_consistency_audit: "CONDITIONAL PASS — 14 findings, all resolv
 wave_4_integration_gate: PASSED
 wave_4_integration_gate_date: 2026-06-28
 wave_4_integration_evidence: "build clean; race 13/13 ok; lint 0 issues @ abeba27"
+wave_5_gate: CONVERGED
+wave_5_gate_closed_at: 2026-06-30
+wave_5_gate_disposition: converged-clean
+wave_5_convergence_passes: 6
+wave_5_final_trajectory: "8 BLOCK → 2 BLOCK → 2 BLOCK → 3 CLEAN → 3 CLEAN → 2 CLEAN"
 develop_head: d881f99
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-06-30T20:00:00Z
+timestamp: 2026-06-30T23:00:00Z
 last_update: 2026-06-30
 ---
 
@@ -203,23 +208,25 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-5.02 BC-5.39.001 CONVERGED | Pass-9/10/11 all 3-lens clean (3/3 consecutive, 6 total passes P6–P11); impl tip 5732902 (F-CR-001 writer-injection fix); test tip 8152e20 (AC-008 named test); BC-2.06.003 v1.7; S-5.02 v1.10; 6 non-blocking deferrals logged S502-DEFER-1..6 | 2026-07-01 |
 | S-5.02 MERGED (98eb8b7, PR #37) | Squash-merged to develop 2026-06-30; worktree removed, branch deleted; all ACs delivered; BC-5.39.001 satisfied (P9/P10/P11 clean) | 2026-06-30 |
 | S-W5.02 MERGED (d881f99, PR #38) | Squash-merged to develop; all 5 ACs; BC-5.39.001 satisfied (10 adversarial passes); VP-049 coverage confirmed; Wave 5 complete (8 stories + 1 hygiene = all merged) | 2026-06-30 |
+| Wave-5 wave-adversarial gate CONVERGED | 6 passes: P1 BLOCK (3H+5M) → P2 BLOCK (2 real) → P3 BLOCK (2 MED) → P4 CLEAN (1/3) → P5 CLEAN (2/3) → P6 CLEAN (3/3). Fix-bursts: 0663599, 4735640/9862391, c3465b4, 1b19d7c. Final trajectory: 8→2→2→3 OBS→3 OBS→2 OBS. vsdd-factory #361-364 filed for process-gap observations. | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (Wave 5 adversarial Pass-1 BLOCK; fix-burst applied)
+## Session Resume Checkpoint — 2026-06-30 (Wave-5 wave-adversarial CONVERGED; 3/3 clean passes)
 
-**Position:** Phase 3 Wave 5 COMPLETE (all 8 stories merged). Wave-adversarial convergence gate (Task #8) in progress. Pass-1 result: BLOCK — 3 HIGH + 5 MED findings; fix-burst applied. Pass-2 pending.
+**Position:** Phase 3 Wave 5 wave-adversarial convergence gate CONVERGED. 6 total passes: Pass-1 BLOCK (3H+5M), fix-burst 0663599; Pass-2 BLOCK (2 real findings), fixes 4735640/9862391; Pass-3 BLOCK (2 MED), fix c3465b4; Pass-4 CLEAN (1/3); Pass-5 CLEAN (2/3), proactive hygiene 1b19d7c; Pass-6 CLEAN (3/3). wave_5_gate: CONVERGED.
 
-**NEXT ACTION on resume:**
-1. Wave-adversarial Pass-2 — 3 fresh diverse-lens passes across all Wave-5 stories (Task #8 continues)
-2. Standalone hygiene commit: DRIFT-SW501-NITPICK (Task #9)
-3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged); hold until wave gate clears
+**NEXT ACTION on resume (choose one):**
+1. Phase-4 holdout evaluation (`/vsdd-factory:phase-4-holdout-evaluation`) — Wave 5 stories now gate-cleared
+2. Wave-5 hygiene sweep: DRIFT-SW501-NITPICK, ARCH-11 changelog monotonicity (S502-DEFER-4), VP-INDEX post-merge status flip
+3. Begin Wave 6 story delivery (S-W5.04 first, unblocked; then S-6.07 + S-BL.LOOKUP)
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
 - SW502-DEFER-1..8: 8 S-W5.02 post-merge LOW deferrals logged in Open Drift Items (CR-002/005/006/007/008/009, SEC-001/002).
-- PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row added to Open Drift Items.
+- PROCESS-GAP-W5-SIBLINGSWEEP: upstream-rooted sibling-sweep enforcement row — vsdd-factory #361-364.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
+- Wave-5 adversarial low-obs externalized: vsdd-factory #361-364 (SIBLINGSWEEP + W5A).
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
