@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.002
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -48,6 +48,12 @@ modified:
       per-call non-constant request id (not always "1"); after decoding the response,
       dispatch() verifies resp.ID echoes req.ID; mismatch treated as protocol error
       (E-RPC-001); per ADR-012 §3 step 6.
+  - date: 2026-06-30
+    version: "1.5"
+    change: >
+      Delete BC §VP table phantom rows 139-140 (both mis-labeled VP-049; per S-W5.02
+      Pass-1 L3 F-P1L3-001 PO Q3 ruling). Follow-up minting VP-JSON-COVERAGE +
+      VP-SBCTL-NOT-DAEMON tracked as Wave-6 backlog.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -136,8 +142,6 @@ Operator runs any `sbctl <subcommand>` command.
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
 | VP-049 | All subcommands require authentication — e2e across all four daemon types (router, access, console, control) | e2e |
-| VP-049 | `--json` flag produces valid JSON for all subcommands | fuzz |
-| VP-049 | sbctl exits after command completion (not a daemon) | unit |
 | VP-067 | `Authenticate()` is fail-closed — returns nil only on verified AUTH_OK; all other outcomes (AUTH_FAIL, truncated stream, malformed message, connection error) return non-nil error | unit |
 
 ## Traceability
@@ -159,6 +163,7 @@ Operator runs any `sbctl <subcommand>` command.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-06-30 | Delete §VP table phantom rows 139-140 (both mis-labeled VP-049: `--json` fuzz row and `not-a-daemon` unit row). Per S-W5.02 Pass-1 L3 F-P1L3-001 PO Q3 ruling — these rows were never formally minted VP IDs; they are copy-paste leftovers predating the VP-062/VP-063 splits. Follow-up VPs VP-JSON-COVERAGE and VP-SBCTL-NOT-DAEMON tracked as Wave-6 backlog. |
 | 1.4 | 2026-06-29 | ARCH-12 v1.5 Wave-5 Convergence Rulings U and X: (U) PC-3 extended — `dispatch()` MUST verify `resp.Type == "response"` after decoding; any other value is protocol error returned as E-RPC-001; wrong-type response with `"ok":true` must not be silently accepted. (X) PC-3 extended — `dispatch()` generates a non-constant per-call request `id`; after decoding, verifies `resp.ID == req.ID`; mismatch = E-RPC-001; per ADR-012 §3 step 6. |
 | 1.3 | 2026-06-29 | ARCH-12 v1.4 Wave-5 Convergence Ruling M: PC-3 annotated with RPC wire-type precision note — `"type":"request"` is the only valid client RPC envelope type per ADR-012 §3 step 6; server responds with `"type":"response"`; any other type causes silent connection close. Frontmatter version/modified updated. |
 | 1.2 | 2026-06-28 | Wave-5 management plane cross-reference: added BC-2.07.004 (server-side counterpart) to Related BCs. Verification Properties table extended with VP-067 (Authenticate() fail-closed, unit). Traceability Stories row updated: S-6.03 (client auth + VP-067 + VP-030), S-W5.02 (e2e VP-049 across all four daemon types). VP-049 description clarified to reflect e2e scope across all four daemon types (implementing story: S-W5.02). |

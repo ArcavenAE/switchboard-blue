@@ -2,7 +2,7 @@
 artifact_id: ARCH-12-daemon-management-plane
 document_type: architecture-section
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: architect
 timestamp: 2026-06-28T00:00:00
@@ -25,6 +25,7 @@ modified:
   - 2026-06-28T00:00:00 # v1.2 — adversarial review rulings: (1) concrete read deadlines added to ADR-012; (2) Authenticate() context-first signature ruled; (3) connection-cap semaphore added; (4) Unix socket permissions 0600 required; (5) E-NET-001 overload resolved with E-CFG-010/E-RPC-001; (6) daemonVersion param added to NewServer; (7) PC-3 replay-nonce resolved as structural post-auth guard
   - 2026-06-29T00:00:00 # v1.3 — Wave-5 convergence round-2 rulings A–F: (A) ephemeral daemon keypair for access daemon; NewServer nil-key guard; (B) Serve graceful-shutdown returns nil via shuttingDown atomic; (C) server-side RPC error codes E-RPC-010/E-RPC-011 distinct from client E-RPC-001; (D) console TCP loopback validation placement in buildMgmtListener; (E) write deadline on server sends; (F) client single-ctx-timeout model clarified vs. server per-RPC re-arm
   - 2026-06-29T00:00:00 # v1.4 — Wave-5 convergence round-3 rulings G–N: (G) Serve accept-error predicate: && ctx.Err() != nil conjunct missing; unexpected-close must return non-nil; new VP/test obligation; (H) dead case <-done: branches: bless as-built ctx-cancel design via done-channel ctx-watcher; amend Ruling B; (I) connWG.Add/Wait race + track-after-spawn drain gap; ordering fix + new VP/test obligation; (J) mgmt-server start failure policy: config-class errors fatal; (K) EC-001 silent-stall: amend BC to close-only for timeout path; (L) E-CFG-008 canonical message string: single placement ruling; (M) RPC wire-type mismatch: "request"/"response" canonical; new S-6.03 AC; (N) vp_traces forward-link gap in S-W5.01
+  - 2026-06-30T00:00:00 # v1.6 — S-W5.02 Pass-1 fix-burst: stale §Story 3 prose replaced ("e2e VP deferred") with "e2e VP: VP-049 (pre-assigned via VP-INDEX v2.6)"; Story 3 summary table row updated to VP-049 and S-6.06 added to depends column; dep-graph v1.5 S-W5.02 row reflects S-6.06 dependency (F-P1L3-003)
   - 2026-06-29T00:00:00 # v1.5 — Wave-5 convergence round-4 rulings O–W: (O) stale Unix socket pre-bind unlink; fix-now in listenUnixMgmt; (P) fatal-accept-error drain gap: closeAllConns missing before connWG.Wait on unexpected-close path; fix-now; (Q) AC-001/EC-001 story propagation gap for Ruling K; story-writer fix only; (R) per-handler execution timeout: fix-now with context.WithTimeout wrapper; (S) version sentinel CI gate: follow-up story targeting CI epic; (T) TestServe_ShutdownWindowNoAddAfterWaitPanic non-discriminating: test-writer fix only; (U) dispatch() response type never validated: fix-now, add rejection + test; (V) dispatch() missing read deadline: fix-now, reconcile ARCH-12 residual-concern note, amend BC-2.07.003; (W-test) t.Fatalf from goroutines in client_test.go: test-writer fix only; (X) hardcoded id "1" + no resp.ID echo check: fix-now; (Y) Inv-2 vs Inv-4 spec conflict on auth-handshake-timeout: fix-now, amend BC-2.07.003 Inv-4
 ---
 
@@ -799,8 +800,7 @@ tests require both.
   and exercises the full sbctl connect → auth → RPC → disconnect cycle
 - Covers e2e management plane validation across all four daemon types
 - This is the holdout / convergence-gate story for the management plane
-- Note: the e2e VP for this story is deferred to the integration harness and will
-  receive a VP number during story decomposition (not pre-assigned in this ARCH wave)
+- e2e VP: VP-049 (pre-assigned via VP-INDEX v2.6)
 
 **Dependencies:** S-6.03 AND S-W5.01 must both be merged before this story can begin.
 
@@ -812,7 +812,7 @@ tests require both.
 |-------|-------|------|-----------|
 | S-6.03 (re-scoped) | sbctl client auth + connection error | 5pt | ADR-012 (unlocked) |
 | S-W5.01 (new) | internal/mgmt server + config + wiring | 8pt | ADR-012 |
-| S-W5.02 (new) | E2E integration harness (e2e VP deferred) | 5pt | S-6.03 + S-W5.01 |
+| S-W5.02 (new) | E2E integration harness (VP-049) | 5pt | S-6.03 + S-6.06 + S-W5.01 |
 
 ---
 

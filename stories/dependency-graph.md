@@ -2,7 +2,7 @@
 artifact_id: dependency-graph
 document_type: dependency-graph
 level: ops
-version: "1.4"
+version: "1.5"
 status: draft
 producer: story-writer
 timestamp: 2026-06-28T00:00:00
@@ -38,7 +38,7 @@ inputDocuments:
 | S-6.02 | S-2.02, S-6.01, S-6.03 | S-5.02 | 5 | svtnmgmt imports admission+config; adds cmd/sbctl/admin.go into scaffold from S-6.03; key lifecycle before metrics CLI |
 | S-6.03 | S-6.01 | S-5.02, S-6.02, S-W5.02 | 5 | sbctl client auth scaffold (main.go + client.go); must exist before admin.go (S-6.02), paths_list.go (S-5.02), and e2e harness (S-W5.02) |
 | S-W5.01 | S-6.01 | S-W5.02 | 5 | internal/mgmt server + config E-CFG-008/009 + cmd/switchboard wiring; edits internal/mgmt, internal/config, cmd/switchboard — no conflict with cmd/sbctl stories; can run in parallel with S-6.03, S-6.02, S-5.02 |
-| S-W5.02 | S-6.03, S-W5.01 | (none) | 5 | e2e integration harness: requires sbctl client (S-6.03) AND mgmt server (S-W5.01) both merged; Wave-5 management plane gate |
+| S-W5.02 | S-6.03, S-6.06, S-W5.01 | (none) | 5 | e2e integration harness: requires sbctl client (S-6.03), admin.key.* handler-role enforcement (S-6.06), AND mgmt server (S-W5.01) all merged; Wave-5 management plane gate |
 | S-7.01 | S-4.03 | (none) | 6 | FEC extends arq (from S-4.03) |
 | S-7.02 | S-2.02, S-3.02 | (none) | 6 | discovery imports routing (S-2.02) and session presence state (S-3.02) |
 | S-7.03 | S-3.02, S-6.03 | (none) | 6 | console remote control uses session (S-3.02) and sbctl CLI (S-6.03) |
@@ -196,12 +196,21 @@ Manual topological sort confirms no back-edges:
 | VP-064 | S-W5.01 | BC-2.07.004 (server rejects unauthenticated connections) |
 | VP-065 | S-W5.01 | BC-2.07.004 (server rejects replayed nonce within connection) |
 | VP-066 | S-W5.01 | BC-2.07.004 (server enforces bounded read CWE-400, 64 KiB) |
+| VP-068 | S-W5.01 | BC-2.07.004 (NewServer panics if daemonKey invalid size) |
+| VP-069 | S-W5.01 | BC-2.07.004 (Serve returns nil on shutdown, non-nil on unexpected listener failure) |
+| VP-070 | S-W5.01 | BC-2.07.004 (unregistered RPC command → E-RPC-010 in-band, connection kept open) |
+| VP-071 | S-W5.01 | BC-2.07.004 (handler execution error → E-RPC-011 in-band, connection kept open) |
+| VP-072 | S-W5.01 | BC-2.07.004 (write deadline before every sendJSON — CWE-400 write-side slowloris) |
+| VP-073 | S-W5.01 | BC-2.07.004 (console-mode TCP non-loopback aborts startup E-CFG-008) |
+| VP-074 | S-5.01 | BC-2.06.001 (QualityIndicator threshold classification; 8 boundary values) |
+| VP-075 | S-6.06 | BC-2.05.004 (admin.key.* handlers reject non-control callers with E-ADM-009) |
+| VP-076 | S-6.06 | BC-2.05.004 (bootstrap key non-revocable AND non-expirable; E-ADM-020/E-ADM-021) |
 
-**VP Coverage: 67/67 (100%)** — VP-064, VP-065, VP-066, VP-067 added Wave-5 management plane; VP-049 re-anchored from S-6.03 to S-W5.02
+**VP Coverage: 76/76 (100%)** — VP-064 through VP-076 added Wave-5 management plane; VP-049 re-anchored from S-6.03 to S-W5.02
 
 ## Gap Register
 
-No gaps identified. All 45 BCs are covered by at least one story. All 67 VPs are assigned to stories. BC-2.02.003 PC-5 coverage gap (drift S401-O3) closed by S-5.03. VP-060 (BC-2.04.007 daemon lifecycle) is assigned to S-W3.04 (implementing_story: null in VP file — assigned here by traceability from BC-2.04.007 coverage; architect should update VP-060.md implementing_story field). Wave-5 additions: BC-2.07.004 (45th BC) covered by S-W5.01; BC-2.09.003 PC-10/PC-11 covered by S-W5.01 (extends S-6.01 BC-2.09.003 coverage). VP-064/065/066/067 covered by S-W5.01 (first three) and S-6.03 (VP-067). VP-049 re-anchored from S-6.03 to S-W5.02 (e2e scope moved to gate story).
+No gaps identified. All 45 BCs are covered by at least one story. All 76 VPs are assigned to stories. BC-2.02.003 PC-5 coverage gap (drift S401-O3) closed by S-5.03. VP-060 (BC-2.04.007 daemon lifecycle) is assigned to S-W3.04 (implementing_story: null in VP file — assigned here by traceability from BC-2.04.007 coverage; architect should update VP-060.md implementing_story field). Wave-5 additions: BC-2.07.004 (45th BC) covered by S-W5.01; BC-2.09.003 PC-10/PC-11 covered by S-W5.01 (extends S-6.01 BC-2.09.003 coverage). VP-064/065/066/067 covered by S-W5.01 (first three) and S-6.03 (VP-067). VP-049 re-anchored from S-6.03 to S-W5.02 (e2e scope moved to gate story).
 
 ## Phase 1 Drift Items Addressed in Stories
 
@@ -221,6 +230,7 @@ Items F-P8-004 and F-P8-005 (VP-026/VP-027 invariant references) are architect/t
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.5 | 2026-06-30 | spec-steward | S-W5.02 Pass-1 fix-burst F-P1L3-003: add S-6.06 to S-W5.02 depends_on column. VP coverage rollup updated 67/67→76/76; add VP-068 through VP-076 rows to VP-to-Stories matrix (VP-INDEX v2.15 source). Gap Register updated to reflect 76 VPs assigned. |
 | 1.4 | 2026-07-01 | story-writer | O-P7L3-001 (LOW): VP-047 and VP-062 rows updated S-5.02→S-W5.04. VP-047 transferred at VP-INDEX v2.7 (Pass-4 Ruling 3); VP-062 transferred at VP-INDEX v2.14 (Pass-6 F-P6L3-003, commit 7b70af0). Both VPs require daemon-side types (metrics.PathEntry, RTTValue, etc.) minted in S-W5.04. |
 | 1.3 | 2026-06-28 | story-writer | Wave-5 management plane net-new: add S-W5.01 (depends S-6.01, blocks S-W5.02; edits internal/mgmt+config+cmd/switchboard; no cmd/sbctl conflict) and S-W5.02 (depends S-6.03+S-W5.01; e2e gate). Update S-6.03 blocks to include S-W5.02. Add BC-2.07.004 matrix row (S-W5.01). Update BC-2.07.002 row (add S-W5.02 for VP-049 e2e). Update BC-2.09.003 row (add S-W5.01 for PC-10/PC-11). VP-049 re-anchored S-6.03 → S-W5.02. Add VP-064 (S-W5.01), VP-065 (S-W5.01), VP-066 (S-W5.01), VP-067 (S-6.03). BC coverage 44→45, VP coverage 63→67. Update serialization section with S-W5.01/S-W5.02 parallel/serial constraints. Update gap register. |
 | 1.2 | 2026-06-28 | story-writer | Consistency audit fixes: F-005 — S-5.01 depends_on now includes S-5.03 (symmetric with S-5.03 blocks:[S-5.01]); F-003 — BC coverage figure corrected 42/42→44/44; add missing BC matrix rows BC-2.04.007 (S-W3.04) and BC-2.05.008 (S-3.04, S-W3.04, S-W3.05); F-004 — VP coverage figure corrected 57/57→63/63; add missing VP matrix rows VP-058 (S-3.04), VP-059 (S-W3.05), VP-060 (S-W3.04), VP-061 (S-5.02), VP-062 (S-5.02), VP-063 (S-5.03); update gap register note |

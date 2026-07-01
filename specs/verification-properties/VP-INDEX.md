@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.14"
+version: "2.15"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -72,7 +72,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
 | VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
 | VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07) | BC-2.07.001 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
-| VP-049 | sbctl unified CLI with OpenSSH auth | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
+| VP-049 | sbctl unified CLI with OpenSSH auth (implementing_story: S-W5.02) | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
 | VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
 | VP-052 | N consecutive OnMissingFrame calls → indicator downgrade (one level) | BC-2.06.002 | internal/metrics | integration | P1 | draft | VP-052.md |
@@ -144,6 +144,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.15 | 2026-06-30 | S-W5.02 Pass-1 fix-burst: VP-049 bumped v1.0→v1.1 — implementing_story updated S-6.03→S-W5.02 per dep-graph v1.3 anchor propagation; proof harness skeleton rewritten to in-process mgmt.NewServer pattern (four daemon instances, distinct handler tables); §Story Trace and §Feasibility added. Row title updated with implementing_story annotation. No count changes. |
 | 2.14 | 2026-06-30 | Pass-6 fix-burst F-P6L3-002/003: VP-062 bumped v1.1→v1.2 — (1) stale BC-2.06.003 v1.5 pin swept to v1.7 at 4 locations (stale-pin only; EC-006 semantics unchanged); (2) implementing_story S-5.02 → S-W5.04 per VP-047 Pass-4 Ruling-3 precedent (daemon-side types deferred from S-5.02 to S-W5.04). No count or catalog-row changes. |
 | 2.13 | 2026-06-30 | Pass-24 lens-3 F-P24L3-001: VP-076 bumped v1.3→v1.4 — Source Contract cite error-taxonomy.md v3.8→v3.9 (stale taxonomy version carryover; v3.9 authoritative since Pass-22 commit 4b42dd5). No count or catalog-row changes. |
 | 2.12 | 2026-06-30 | Pass-22 F-P22L3-003 + F-P22L3-004 sibling-fix propagation (4th-iteration narrowing sweep): VP-076 bumped v1.2→v1.3 — Properties #1 and #2 "unconditionally" narrowed to "for any well-formed request that reaches SVTNManager"; proof-harness comment narrowed to "sentinel for any well-formed bootstrap-key request". No count or catalog-row changes (row description already correct from v2.11). |
