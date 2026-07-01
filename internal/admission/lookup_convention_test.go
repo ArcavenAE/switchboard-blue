@@ -3,7 +3,7 @@
 // These tests assert that Lookup and LookupByPubkey return (AdmittedKey, bool)
 // per go.md rule 12 (locked-accessor convention) and the DRIFT-F005-LOOKUP-CONVENTION
 // tech-debt ruling. They will fail to compile until the migration lands, enforcing
-// the Red Gate (BC-5.38.001).
+// the Red Gate (DRIFT-F005-LOOKUP-CONVENTION; ARCH-04 §F-005 Ruling).
 package admission_test
 
 import (
