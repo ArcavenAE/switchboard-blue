@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.27"
+version: "3.28"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -74,7 +74,7 @@ inputDocuments:
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | pending |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001, BC-2.06.001, BC-2.06.002 | console-operations, network-management | 5 | P1 | PE | pending |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
-| S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup/LookupByPubkey to (AdmittedKey, bool) value-return | E-2 | 6 | (none) | admission-security | 1 | P2 | E | draft |
+| S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup/LookupByPubkey to (AdmittedKey, bool) value-return | E-6 | 6 | (none) | admission-security | 1 | P2 | E | draft |
 
 ## Wave Summary
 
@@ -171,6 +171,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.28 | 2026-07-01 | Pass-4 L3 F-L3-Med-01 epic-anchor reconciliation: S-BL.LOOKUP row corrected E-2→E-6. Story depends_on S-6.02 (E-6), was promoted to Wave 6 Tranche A alongside E-6 stories (S-6.07, S-6.05), and story frontmatter carries epic: E-6. STORY-INDEX row was the erroneous artifact. Closes F-L3-Med-01. |
 | 3.27 | 2026-07-01 | Wave-6 Tranche A Pass-2 fix-burst: S-W5.04 v1.5→v1.6 (Ruling-3: real PathTracker wiring; Ruling-4: retract `failed` from status enum). S-6.07 v1.2→v1.3 (Ruling-5: bootstrap-only fast-path fix). Spec siblings: BC-2.06.003 v1.9→v1.10, BC-2.07.001 v1.4→v1.5, interface-definitions v1.8→v1.9, error-taxonomy v3.9→v4.0 (E-INT-001 minted), ARCH-12 v1.9→v1.10, VP-047 v1.2→v1.3, VP-062 v1.3→v1.4, ARCH-INDEX v1.3→v1.4, BC-INDEX v2.0→v2.1. Add S-BL.PATH-FAILED-STATUS backlog stub (Wave-7; depends_on S-W5.04; anchors BC-2.06.003 "failed" status enum future work per Ruling-4). All Pass-2 lens results NOT COUNTED — clean-pass counter reset; fresh Pass-3 3-lens per story queued. Summary: Total 44→45, Backlog 4→5. |
 | 3.26 | 2026-07-01 | Wave-6 Tranche-A BC rulings: mint S-BL.ROUTER-ADDR stub row (PathSnapshot RouterAddr enrichment; anchors BC-2.06.003 PC-1; DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1; must merge before Wave-6 wave-convergence). Summary: Total 43→44, Backlog 3→4. |
 | 3.25 | 2026-07-01 | F-P2L3-M1 partial-fix regression closure: S-BL.LOOKUP promoted backlog→master-table in v3.24 but Summary section was not swept. Summary Total corrected (34→35 master-table stories; backlog 4→3, S-BL.LOOKUP removed from backlog list). Backlog/maintenance/hardening stubs row corrected (5→4, S-BL.LOOKUP dropped). Backlog count corrected (4→3). Closes F-P2L3-M1. |

@@ -2,7 +2,7 @@
 artifact_id: S-BL.LOOKUP
 document_type: story
 level: ops
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
@@ -54,5 +54,6 @@ Wave 6+ (unblocked after S-6.02 merges to develop).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-01 | Pass-4 L3 F-L3-Med-01 governance: epic frontmatter confirmed E-6 (story depends_on S-6.02, Wave 6 Tranche A alongside S-6.07/S-6.05; STORY-INDEX row was the erroneous artifact and has been corrected to E-6). No AC or scope change. Closes F-L3-Med-01. |
 | 1.1 | 2026-07-01 | Pass-1 lens-3 fix-burst: F-P1L3-001 — AC-1 signature corrected to `Lookup(svtnID [16]byte, nodeAddr [8]byte)` and `LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey)`; F-P1L3-002 — frontmatter `status: backlog→draft`, `wave: unscheduled→6` per sprint-state.yaml lines 41-58 and STORY-INDEX line 77; F-P1L3-003 — callsite list refreshed vs develop head post-S-6.06: RevokeKey superseded by RevokeKeyIfRoleMatches (ADR-004 H2), 4 actual callsites enumerated (ExpireKey, CallerKeyRole, CallerKeyRoleActive, IsRegisteredAnyState); F-P1L3-006 — stub parenthetical "(To be filled by story-writer...)" removed. |
 | 1.0 | 2026-06-29 | Minted per S-6.02 lens3 F-006 ([process-gap]): DRIFT-F005-LOOKUP-CONVENTION has no draft story stub. Closes task #66. |
