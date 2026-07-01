@@ -338,9 +338,9 @@ func TestDuplicateKeyRegistration_LastWriteWins(t *testing.T) {
 
 	// Lookup must return the second (console) role.
 	addr := nodeAddrForTest(svtnID, nodePub)
-	entry := ks.Lookup(svtnID, addr)
-	if entry == nil {
-		t.Fatal("Lookup after duplicate register: want entry, got nil")
+	entry, ok := ks.Lookup(svtnID, addr)
+	if !ok {
+		t.Fatal("Lookup after duplicate register: want entry, got not-found")
 	}
 	if entry.Role != admission.RoleConsole {
 		t.Errorf("last-write-wins: want RoleConsole, got %v", entry.Role)
@@ -681,13 +681,13 @@ func TestAdmittedKeySet_LookupByPubkey(t *testing.T) {
 				ks.RegisterKey(tc.setupSVTN, pub, admission.RoleControl)
 			}
 
-			got := ks.LookupByPubkey(tc.lookupID, pub)
-			if tc.wantNil && got != nil {
-				t.Errorf("LookupByPubkey: want nil; got non-nil %+v", got)
+			got, gotOK := ks.LookupByPubkey(tc.lookupID, pub)
+			if tc.wantNil && gotOK {
+				t.Errorf("LookupByPubkey: want not-found; got entry %+v", got)
 			}
 			if !tc.wantNil {
-				if got == nil {
-					t.Fatal("LookupByPubkey: want non-nil AdmittedKey; got nil")
+				if !gotOK {
+					t.Fatal("LookupByPubkey: want found AdmittedKey; got not-found")
 				}
 				// Verify the returned copy's public key matches.
 				if !bytes.Equal(got.PublicKey, pub) {

@@ -349,40 +349,41 @@ func (s *AdmittedKeySet) RevokeKeyIfRoleMatches(
 	return existingRole, nil
 }
 
-// Lookup returns a copy of the AdmittedKey for (svtnID, nodeAddr), or nil if
-// not found. Returns a value copy — callers do not hold a pointer into internal
-// state (go.md rule 12; finding-032-store-sync-contract-leak).
+// Lookup returns a copy of the AdmittedKey for (svtnID, nodeAddr) and true,
+// or the zero AdmittedKey and false if not found. Returns a value copy —
+// callers do not hold a pointer into internal state (go.md rule 12;
+// finding-032-store-sync-contract-leak).
 //
 // PublicKey is deep-cloned so the returned copy's backing array is independent
 // of the live map entry (M-3).
-func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) *AdmittedKey {
+func (s *AdmittedKeySet) Lookup(svtnID [16]byte, nodeAddr [8]byte) (AdmittedKey, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	svtnMap, ok := s.keys[svtnID]
 	if !ok {
-		return nil
+		return AdmittedKey{}, false
 	}
 	entry, ok := svtnMap[nodeAddr]
 	if !ok {
-		return nil
+		return AdmittedKey{}, false
 	}
 	// Return a value copy so callers cannot mutate internal state.
 	cp := *entry
 	// Deep-clone PublicKey: ed25519.PublicKey is []byte; shallow copy shares
 	// the backing array. Callers must not alias live state (go.md rule 12; M-3).
 	cp.PublicKey = append(ed25519.PublicKey(nil), entry.PublicKey...)
-	return &cp
+	return cp, true
 }
 
 // LookupByPubkey looks up an admitted key by SVTN ID and Ed25519 public key,
-// deriving the node address internally. Returns nil if the key is not
-// registered or if svtnID does not exist.
+// deriving the node address internally. Returns the zero AdmittedKey and false
+// if the key is not registered or if svtnID does not exist.
 //
 // Convenience wrapper over Lookup for callers that hold the raw public key
 // rather than the derived node address (ARCH-04 v1.8, ARCH-08 §6.6 position 15).
 // Thread-safety and deep-clone guarantees are inherited from Lookup.
-func (s *AdmittedKeySet) LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey) *AdmittedKey {
+func (s *AdmittedKeySet) LookupByPubkey(svtnID [16]byte, pubkey ed25519.PublicKey) (AdmittedKey, bool) {
 	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
 	return s.Lookup(svtnID, nodeAddr)
 }
