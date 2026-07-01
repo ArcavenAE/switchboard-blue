@@ -1408,3 +1408,67 @@ func TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace(t *testing.T) {
 		}
 	}
 }
+
+// ── F-P1L2-005: LookupByPubkey miss semantics at svtnmgmt callsites ──────────
+
+// TestSVTNManager_LookupMigration_MissReturnsKeyNotRegistered verifies that
+// svtnmgmt operations that call LookupByPubkey internally return
+// ErrKeyNotRegistered — not ErrRoleMismatch — when the supplied pubkey is not
+// registered in the SVTN. This distinguishes "no such key" from "wrong role" at
+// the callsites identified in F-P1L2-005 (ExpireKey line 352, CallerKeyRole
+// line 404, CallerKeyRoleActive line 425, IsRegisteredAnyState line 526).
+//
+// Tested callsites:
+//   - ExpireKey: must return ErrKeyNotRegistered (not ErrRoleMismatch) on miss.
+//   - CallerKeyRole: must return (0, false) on miss (no sentinel, but not panicking
+//     or returning a role for an absent key).
+//   - CallerKeyRoleActive: must return (0, false) on miss.
+//   - IsRegisteredAnyState: must return false on miss.
+//
+// BC-2.05.004 postcondition 3 (key must be registered to set expiry).
+// admission.ErrKeyNotRegistered (E-ADM-013).
+func TestSVTNManager_LookupMigration_MissReturnsKeyNotRegistered(t *testing.T) {
+	t.Parallel()
+
+	mgr := newManager(t)
+	svtnResult, err := mgr.Create("miss-semantics-svtn")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	unregisteredPub, _ := mustGenEdKey(t)
+
+	// ExpireKey on an unregistered key must return ErrKeyNotRegistered, not ErrRoleMismatch.
+	// If LookupByPubkey were to return a spurious non-zero AdmittedKey with ok=false,
+	// downstream code might interpret the role field and return ErrRoleMismatch instead.
+	_, expireErr := mgr.ExpireKey(svtnResult.SVTN.Name, unregisteredPub, time.Hour)
+	if !errors.Is(expireErr, admission.ErrKeyNotRegistered) {
+		t.Errorf("ExpireKey with unregistered pubkey: want admission.ErrKeyNotRegistered (E-ADM-013); got %v", expireErr)
+	}
+	if errors.Is(expireErr, admission.ErrRoleMismatch) {
+		t.Errorf("ExpireKey with unregistered pubkey: got ErrRoleMismatch; must NOT return ErrRoleMismatch for absent key")
+	}
+
+	// CallerKeyRole on a miss must return (0, false) — not a stale role for a phantom key.
+	role, found := mgr.CallerKeyRole(svtnResult.SVTN.Name, unregisteredPub)
+	if found {
+		t.Errorf("CallerKeyRole with unregistered pubkey: want found=false; got found=true with role=%v", role)
+	}
+	if role != 0 {
+		t.Errorf("CallerKeyRole with unregistered pubkey: want role=0; got %v", role)
+	}
+
+	// CallerKeyRoleActive on a miss must return (0, false).
+	roleActive, foundActive := mgr.CallerKeyRoleActive(svtnResult.SVTN.Name, unregisteredPub)
+	if foundActive {
+		t.Errorf("CallerKeyRoleActive with unregistered pubkey: want found=false; got found=true with role=%v", roleActive)
+	}
+	if roleActive != 0 {
+		t.Errorf("CallerKeyRoleActive with unregistered pubkey: want role=0; got %v", roleActive)
+	}
+
+	// IsRegisteredAnyState on a miss must return false.
+	if mgr.IsRegisteredAnyState(svtnResult.SVTN.Name, unregisteredPub) {
+		t.Error("IsRegisteredAnyState with unregistered pubkey: want false; got true")
+	}
+}
