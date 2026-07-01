@@ -6,7 +6,7 @@ story_id: S-W5.04
 title: "daemon-side paths.list / router.metrics / router.status RPC handlers and response types"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T12:00:00
+timestamp: 2026-07-01T14:00:00
 phase: 2
 epic: E-5
 wave: 6
@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.12"
+version: "1.13"
 bc_traces:
   - BC-2.06.001
   - BC-2.06.003
@@ -116,7 +116,7 @@ to `paths.list` response, consistent with the sbctl alias design in S-5.02.
   `{active, degraded}` in this story; `"failed"` is reserved for a future liveness-signal story
   (S-BL.PATH-FAILED-STATUS) — do not emit it.
   - `PathSnapshot.Degraded == true` maps to `status: "degraded"` per BC-2.06.003 v1.13 PC-1 (Ruling-9).
-  - When `SampleCount < 10` (p99 indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST be `"pending"` regardless of `status`. The quality enum is `{green, yellow, red, pending}`; `"failed"` is not a valid quality value.
+  - When `SampleCount < 10` (p99 indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST be `"pending"` regardless of `status`. The quality enum is `{green, yellow, red, pending}`; `"failed"` is not a valid quality value. The `green`, `yellow`, and `red` values derive from the BC-2.06.001 ternary state machine (p99 RTT and loss thresholds); the `pending` value derives from BC-2.06.003 EC-007 (SampleCount<10 precedence rule) and is not part of BC-2.06.001's state machine.
   - The EC-007 precedence rule: quality="pending" when SampleCount<10, regardless of status value.
   - **Test:** `TestDaemonRouterStatus_QualityStatusIndependence` — table-driven:
     row (b) Degraded=true (→ status `"degraded"`) + SampleCount=10 → quality derived from p99 (not pending);
@@ -166,7 +166,7 @@ should be deleted if present; otherwise skip that step.
 
 | BC | Title | PCs covered |
 |----|-------|------------|
-| BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | Quality field derivation from p99 RTT and loss thresholds (green/yellow/red/pending state machine) |
+| BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | Quality field derivation from p99 RTT and loss thresholds (green/yellow/red state machine over p99 RTT and loss thresholds; pending precedence per BC-2.06.003 EC-007) |
 | BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union; PathEntry.status derivation: `"active"` iff `Active==true AND Degraded==false`, `"degraded"` otherwise per Ruling-9), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 quality-pending-when-SampleCount<10 precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
 
 ## VP Coverage
@@ -293,6 +293,7 @@ The following items are explicitly deferred out of S-W5.04 scope:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.13 | 2026-07-01 | product-owner | F-P9L3A-01 (attribution cleanup): Corrected semantic mis-anchoring introduced in v1.12. BC-2.06.001 defines only the ternary green/yellow/red state machine over p99 RTT and loss thresholds; the `pending` fourth state derives exclusively from BC-2.06.003 EC-007 (SampleCount<10 precedence rule). Behavioral Contracts body row for BC-2.06.001 updated to "(green/yellow/red state machine over p99 RTT and loss thresholds; pending precedence per BC-2.06.003 EC-007)". AC-005a body clarified: green/yellow/red derive from BC-2.06.001 ternary state machine; pending derives from BC-2.06.003 EC-007. No design change. |
 | 1.12 | 2026-07-01 | spec-steward | F-P8L3-002 (MED): AC-005a trace annotation extended — added BC-2.06.001 quality state machine alongside BC-2.06.003 EC-007. AC-005a derives the `quality` field from BC-2.06.001 thresholds (green/yellow/red/pending state machine); EC-007 provides the pending-precedence rule. Both BCs are in scope for this AC. |
 | 1.11 | 2026-07-01 | spec-steward | Pass-6 L3 fix-burst (F-P5L3R-07): BC-2.06.003 Behavioral Contracts row PC-3 annotation corrected — removed retired "failed+pending precedence" phrasing; replaced with accurate "EC-007 quality-pending-when-SampleCount<10 precedence" (per Ruling-4 Wave-6 Wave-6 reserved-status enforcement) |
 | 1.10 | 2026-07-01 | spec-steward | Pass-5 L3 fix-burst — AC-003 re-anchored to BC-2.06.003 v1.13 PC-1 Ruling-9; BC-2.06.001 row narrowed to quality only; duplicate Arch Compliance row deleted |

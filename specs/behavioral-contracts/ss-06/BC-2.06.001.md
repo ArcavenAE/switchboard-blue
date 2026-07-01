@@ -2,10 +2,10 @@
 artifact_id: BC-2.06.001
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
-timestamp: 2026-06-29T00:00:00
+timestamp: 2026-07-01T00:00:00
 phase: 1a
 bc_id: BC-2.06.001
 subsystem: quality-observability
@@ -47,9 +47,19 @@ modified:
     actor: spec-steward
     change: >
       F-P8L3-002 (MED): Traceability Stories cell extended — added S-W5.04 (quality
-      serialization on wire for router.status). S-W5.04 AC-005a derives the `quality`
-      field using the BC-2.06.001 green/yellow/red/pending state machine; this BC
-      is now a first-class trace target for that story alongside BC-2.06.003 EC-007.
+      serialization on wire for router.status). S-W5.04 AC-005a references BC-2.06.001
+      for the green/yellow/red state machine over p99 RTT and loss thresholds. The
+      `pending` fourth state referenced by AC-005a derives from BC-2.06.003 EC-007
+      (SampleCount<10 precedence rule), NOT from BC-2.06.001.
+  - date: 2026-07-01
+    version: "1.6"
+    actor: product-owner
+    change: >
+      F-P9L3A-01 (attribution cleanup): Corrected v1.5 modified-list entry to remove
+      semantic mis-anchoring. BC-2.06.001 defines only the ternary green/yellow/red
+      state machine; the `pending` state (SampleCount<10 precedence rule) belongs
+      exclusively to BC-2.06.003 EC-007. The v1.5 phrasing "green/yellow/red/pending
+      state machine" implied BC-2.06.001 governs pending — it does not.
 deprecated: null
 deprecated_by: null
 replacement: null
