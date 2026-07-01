@@ -288,14 +288,14 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 
 // TestPathEntry_StatusFromDegraded verifies that PathEntryFromSnapshot derives
 // PathEntry.Status from PathSnapshot.Active and PathSnapshot.Degraded per
-// BC-2.06.003 v1.10 PC-1 (status enum retracted to {active, degraded} per Ruling-4):
+// BC-2.06.003 v1.13 PC-1 (status enum retracted to {active, degraded} per Ruling-4):
 //
 //	Active=false → "degraded" (liveness failure maps to "degraded" in Wave 6;
 //	  "failed" is reserved for S-BL.PATH-FAILED-STATUS, Wave-7)
 //	Active=true, Degraded=true → "degraded"
 //	Active=true, Degraded=false → "active"
 //
-// AC-003; BC-2.06.001; BC-2.06.003 v1.10 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
+// AC-003; BC-2.06.001; BC-2.06.003 v1.13 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
 func TestPathEntry_StatusFromDegraded(t *testing.T) {
 	t.Parallel()
 
@@ -475,7 +475,7 @@ func TestDaemonRouterStatus_RedBand(t *testing.T) {
 // ── AC-005a: TestDaemonRouterStatus_QualityStatusIndependence ────────────
 
 // TestDaemonRouterStatus_QualityStatusIndependence verifies S502-DEFER-3 /
-// BC-2.06.003 v1.10 EC-007: quality and status are ORTHOGONAL fields.
+// BC-2.06.003 v1.13 EC-007: quality and status are ORTHOGONAL fields.
 // When a path has Active==false (liveness failure → status:"degraded" per Ruling-4)
 // AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), the quality
 // field MUST be "pending" — independent of the status field.
@@ -485,7 +485,7 @@ func TestDaemonRouterStatus_RedBand(t *testing.T) {
 // F-P1L3-001: renamed from TestDaemonRouterStatus_FailedAndPendingPrecedence
 // to reflect that quality/status orthogonality is the invariant under test.
 //
-// AC-005a; BC-2.06.003 v1.10 EC-007; S502-DEFER-3; Ruling-4.
+// AC-005a; BC-2.06.003 v1.13 EC-007; S502-DEFER-3; Ruling-4.
 func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 	t.Parallel()
 
@@ -620,10 +620,10 @@ func TestQualityFromEntry_PendingWhenSampleCountLow(t *testing.T) {
 // when status indicates a non-healthy path AND SampleCount<10, quality MUST be "pending".
 //
 // Note: in Wave 6, PathEntryFromSnapshot never emits status="failed" (Ruling-4;
-// BC-2.06.003 v1.10 PC-1). This test exercises QualityFromEntry robustness for
+// BC-2.06.003 v1.13 PC-1). This test exercises QualityFromEntry robustness for
 // any non-active status value passed to it directly.
 //
-// BC-2.06.003 v1.10 EC-007; S502-DEFER-3; Ruling-4.
+// BC-2.06.003 v1.13 EC-007; S502-DEFER-3; Ruling-4.
 func TestQualityFromEntry_PendingWinsOverDegraded(t *testing.T) {
 	t.Parallel()
 
@@ -751,7 +751,7 @@ func TestPathsList_DiscriminatingStatusOracle(t *testing.T) {
 // TestRouterMetrics_MalformedArgsDecode verifies that RouterMetrics returns a
 // decode error carrying E-RPC-002 (not a panic) when given malformed args.
 //
-// F-P2L2 malformed-args path; F-P4L2-05 expanded oracle; BC-2.06.003 v1.10 PC-2.
+// F-P2L2 malformed-args path; F-P4L2-05 expanded oracle; BC-2.06.003 v1.13 PC-2.
 func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 	t.Parallel()
 
@@ -1029,9 +1029,9 @@ func TestEC002_AllPathsPending(t *testing.T) {
 
 // TestPathEntry_StatusEnumClosed verifies that PathEntryFromSnapshot never emits
 // a status value outside {active, degraded} for any combination of inputs.
-// "failed" MUST NOT appear per BC-2.06.003 v1.10 PC-1 Ruling-4.
+// "failed" MUST NOT appear per BC-2.06.003 v1.13 PC-1 Ruling-4.
 //
-// BC-2.06.003 v1.10 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
+// BC-2.06.003 v1.13 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
 func TestPathEntry_StatusEnumClosed(t *testing.T) {
 	t.Parallel()
 
@@ -1063,7 +1063,7 @@ func TestPathEntry_StatusEnumClosed(t *testing.T) {
 			}
 			entry := metrics.PathEntryFromSnapshot("p", "", snap)
 			if !validStatuses[entry.Status] {
-				t.Errorf("status enum violation: got %q; valid values are {active, degraded} only (BC-2.06.003 v1.10 PC-1, Ruling-4)", entry.Status)
+				t.Errorf("status enum violation: got %q; valid values are {active, degraded} only (BC-2.06.003 v1.13 PC-1, Ruling-4)", entry.Status)
 			}
 			// Per-row exact assertion — set-membership above is not enough to kill the
 			// active↔degraded swap mutant (F-P4L2-01).
@@ -1079,7 +1079,7 @@ func TestPathEntry_StatusEnumClosed(t *testing.T) {
 // This guards against encoding drift where the shape changes but .Value() still works.
 //
 // Pass-3 L2 finding: RTTValue round-trip tightening.
-// BC-2.06.003 v1.10 PC-1, EC-003.
+// BC-2.06.003 v1.13 PC-1, EC-003.
 func TestRTTValue_JSONShapeExact(t *testing.T) {
 	t.Parallel()
 
@@ -1119,7 +1119,7 @@ func TestRTTValue_JSONShapeExact(t *testing.T) {
 				t.Fatalf("Marshal: %v", err)
 			}
 			if string(data) != tc.wantShape {
-				t.Errorf("JSON shape: got %s; want %s (exact wire shape required by BC-2.06.003 v1.10 PC-1)", data, tc.wantShape)
+				t.Errorf("JSON shape: got %s; want %s (exact wire shape required by BC-2.06.003 v1.13 PC-1)", data, tc.wantShape)
 			}
 		})
 	}

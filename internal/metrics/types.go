@@ -1,5 +1,5 @@
 // Package metrics — response types for daemon-side paths.list, router.metrics,
-// and router.status RPC handlers (BC-2.06.003 v1.10).
+// and router.status RPC handlers (BC-2.06.003 v1.13).
 //
 // All types in this file are pure data + serialization. They perform no I/O.
 // Purity classification (ARCH-09): pure-core.
@@ -29,7 +29,7 @@ const (
 
 // RTTValue represents the rtt_p99_ms field in PathEntry.
 // It serializes as a float64 when Kind == FloatKind and as the JSON string
-// "pending" when Kind == PendingKind (BC-2.06.003 v1.10 PC-1, EC-003).
+// "pending" when Kind == PendingKind (BC-2.06.003 v1.13 PC-1, EC-003).
 //
 // Zero value is PendingKind with Value == 0.
 //
@@ -48,7 +48,7 @@ type RTTValue struct {
 
 // MarshalJSON implements json.Marshaler for the RTTValue union type.
 // Emits a float64 when Kind == FloatKind; emits the string "pending" otherwise.
-// BC-2.06.003 v1.10 PC-1 (pending sentinel), EC-003.
+// BC-2.06.003 v1.13 PC-1 (pending sentinel), EC-003.
 func (r RTTValue) MarshalJSON() ([]byte, error) {
 	switch r.Kind {
 	case FloatKind:
@@ -72,7 +72,7 @@ type PathEntry struct {
 	RTTP99Ms RTTValue `json:"rtt_p99_ms"`
 	// LossPct is the packet loss rate as a percentage (float64, 0.0–100.0).
 	LossPct float64 `json:"loss_pct"`
-	// Status is one of: "active", "degraded" (BC-2.06.003 v1.10 PC-1).
+	// Status is one of: "active", "degraded" (BC-2.06.003 v1.13 PC-1).
 	// "failed" is reserved for S-BL.PATH-FAILED-STATUS (Wave-7) and MUST NOT be emitted.
 	// Derived from PathSnapshot.Degraded and PathSnapshot.Active (BC-2.06.001).
 	Status string `json:"status"`
