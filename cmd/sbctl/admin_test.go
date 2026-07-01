@@ -1491,3 +1491,129 @@ func TestSbctlAdmin_SvtnCreate_JSONRoundTrip(t *testing.T) {
 		t.Errorf("name round-trip: got %q; want %q", decoded.Name, original.Name)
 	}
 }
+
+// TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002 verifies Ruling-14 §10:
+// when the daemon sends an oversized RPC response (>64 KiB) after a successful
+// auth handshake, dispatch() must return an error containing "E-RPC-002" — not
+// bare "unexpected EOF" — providing a deterministic, size-keyed error surface
+// symmetric with Authenticate (ADR-012 §6, CWE-400).
+//
+// ADR-012 §6 — 64 KiB bounded reads; CWE-400 slowloris defence.
+// Ruling-14 §10 — dispatch response decode MUST wrap io.ErrUnexpectedEOF with E-RPC-002.
+func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
+	t.Parallel()
+
+	// Ruling-14 §10 — oversized RPC response must stamp E-RPC-002, not bare EOF.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	// Load the testdata key so the CR-008 authorized-key check passes.
+	testPrivKey, loadErr := loadEd25519Key(testdataKeyPath(t), os.UserHomeDir)
+	if loadErr != nil {
+		t.Fatalf("loadEd25519Key: %v", loadErr)
+	}
+	opPub := testPrivKey.Public().(ed25519.PublicKey)
+
+	go func() {
+		conn, acceptErr := ln.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+		enc := json.NewEncoder(conn)
+		dec := json.NewDecoder(io.LimitReader(conn, maxMessageBytes))
+
+		// Step 1: Send CHALLENGE.
+		var nonce [32]byte
+		if _, randErr := rand.Read(nonce[:]); randErr != nil {
+			return
+		}
+		_, daemonPriv, keyErr := ed25519.GenerateKey(rand.Reader)
+		if keyErr != nil {
+			return
+		}
+		daemonSig := ed25519.Sign(daemonPriv, nonce[:])
+		if encErr := enc.Encode(map[string]any{
+			"type":       "challenge",
+			"nonce":      base64.RawURLEncoding.EncodeToString(nonce[:]),
+			"daemon_sig": base64.RawURLEncoding.EncodeToString(daemonSig),
+		}); encErr != nil {
+			return
+		}
+
+		// Step 2: Read CHALLENGE_RESPONSE and verify it carries the authorized key.
+		var cr struct {
+			Type     string `json:"type"`
+			NonceSig string `json:"nonce_sig"`
+			PubKey   string `json:"pubkey"`
+		}
+		if decErr := dec.Decode(&cr); decErr != nil {
+			return
+		}
+		pubBytes, pubErr := base64.RawURLEncoding.DecodeString(cr.PubKey)
+		if pubErr != nil {
+			_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "bad pubkey"})
+			return
+		}
+		sigBytes, sigErr := base64.RawURLEncoding.DecodeString(cr.NonceSig)
+		if sigErr != nil {
+			_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "bad sig"})
+			return
+		}
+		pub := ed25519.PublicKey(pubBytes)
+		if !ed25519.Verify(pub, nonce[:], sigBytes) || !bytes.Equal(pub, opPub) {
+			_ = enc.Encode(map[string]any{"type": "auth_fail", "code": "E-ADM-010", "message": "unauthorized"})
+			return
+		}
+
+		// Step 3: Send AUTH_OK.
+		if encErr := enc.Encode(map[string]any{
+			"type":           "auth_ok",
+			"daemon_version": "test-dev",
+		}); encErr != nil {
+			return
+		}
+
+		// Step 4: Read the RPC request (discard content).
+		var req struct {
+			ID string `json:"id"`
+		}
+		if decErr := dec.Decode(&req); decErr != nil {
+			return
+		}
+
+		// Step 5: Send oversized RPC response (>64 KiB) — triggers E-RPC-002 on client.
+		// Wrap in a valid-looking JSON prefix so the JSON decoder reads past the
+		// opening brace before the LimitReader cuts it off mid-token.
+		oversized := bytes.Repeat([]byte("x"), maxMessageBytes+512)
+		line := append([]byte(`{"type":"response","id":"`+req.ID+`","ok":true,"data":"`), oversized...)
+		line = append(line, '"', '}', '\n')
+		_, _ = conn.Write(line)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
+		"key", "register",
+		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-ruling14-key",
+		"--svtn", "test-svtn",
+		"--role", "console",
+	}, defaultIO())
+
+	// Ruling-14 §10: must return non-nil error.
+	if err == nil {
+		t.Fatal("Ruling-14 §10 — oversized RPC response: want non-nil error; got nil")
+	}
+
+	// The error must contain "E-RPC-002" — not bare "unexpected EOF" without the stamp.
+	msg := err.Error()
+	if !strings.Contains(msg, "E-RPC-002") {
+		t.Errorf("Ruling-14 §10 — oversized RPC response: expected E-RPC-002 in error; got: %v", err)
+	}
+}

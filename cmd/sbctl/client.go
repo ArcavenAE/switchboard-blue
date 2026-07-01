@@ -299,6 +299,12 @@ func dispatch(ctx context.Context, conn net.Conn, command string, args any) (jso
 
 	var resp rpcResponseMsg
 	if err := json.NewDecoder(io.LimitReader(conn, maxMessageBytes)).Decode(&resp); err != nil {
+		// io.LimitReader returns io.EOF when the limit is reached; the JSON decoder
+		// promotes mid-token EOF to io.ErrUnexpectedEOF. Stamp E-RPC-002 for
+		// symmetric error surface with Authenticate (ADR-012 §6, CWE-400, Ruling-14).
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, fmt.Errorf("rpc failed: %s: E-RPC-002: message too large: %w", command, err)
+		}
 		return nil, fmt.Errorf("rpc failed: %s: decode response: %w", command, err)
 	}
 
