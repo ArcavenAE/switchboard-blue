@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.12"
+version: "1.13"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -24,6 +24,7 @@ modified:
   - 2026-06-30T22:00:00
   - 2026-07-01T00:00:00
   - 2026-07-01T12:00:00
+  - 2026-07-01T14:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -59,6 +60,9 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
    - `rtt_p99_ms` — p99 of per-path RTT samples (float64); computed from the fixed-bucket histogram maintained by the PathTracker (histogram counts are never reset; approximation error ≤ bucket width for the bucket containing the true p99); "pending" (string) if fewer than 10 samples have been collected
    - `loss_pct` — packet loss rate as a percentage (float64, 0.0–100.0)
    - `status` — path health classification: `active` | `degraded` (RTT > 200ms sustained). The value `failed` is RESERVED for a future liveness-signal story (`S-BL.PATH-FAILED-STATUS`, Wave-7 Backlog). Implementations MUST NOT emit `failed` until that story lands. Conformance tests MUST reject `failed` in the status field during Wave 6.
+
+   **Status derivation (Ruling-9, 2026-07-01):** `status == "active"` iff `PathSnapshot.Active == true AND PathSnapshot.Degraded == false`. All other combinations (Active=false OR Degraded=true) map to `"degraded"`. Operator semantics: `"active"` means "currently forwarding traffic AND healthy"; a provisioned-but-not-live path is reported as `"degraded"`.
+
 2. **[CANONICAL]** `sbctl router metrics --svtn=<id>` returns per-SVTN forwarding metrics: frame count, HMAC failure count, drop cache hit count, per-path frame distribution.
 3. **[ALIAS]** `sbctl router status --target <router>` is a convenience alias for `sbctl paths list`. It produces an equivalent per-path listing (same JSON schema as PC-1) with an additional `quality` column (green/yellow/red quality indicator derived from the status + rtt_p99_ms fields). Both commands route through the same underlying query path in `internal/metrics`; there are no divergent code paths. The `--target <router>` flag overrides the default daemon address, equivalent to `sbctl --target <router> paths list`. The alias exists to match the command surface introduced by S-5.02 (F-P8-002 ruling).
 
@@ -134,6 +138,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.13 | 2026-07-01 | spec-steward | Ruling-9: normative status derivation rule added to PC-1 — `status == "active"` iff `Active==true AND Degraded==false`; all other combinations map to `"degraded"`. Operator semantics: "active" means currently forwarding AND healthy; provisioned-but-not-live is "degraded". Ref: rulings v1.3 Ruling-9. |
 | 1.12 | 2026-07-01 | spec-steward | OBS-P4L3-1: §Traceability split Wave-7 Backlog Stories row into Wave-6 and Wave-7 rows. S-BL.ROUTER-ADDR moved to a dedicated Wave-6 Backlog Stories row with schedule annotation "Wave-6 — must merge before Wave-6 convergence per Ruling-1". S-BL.PATH-TRACKER-WIRING and S-BL.PATH-FAILED-STATUS remain Wave-7 Backlog. No normative content change. |
 | 1.11 | 2026-07-01 | spec-steward | F-L3-001 (Pass-3 L3): PC-3 S502-DEFER-3 rewritten — retract `status: "failed"` reference from `PathSnapshot.Degraded == true` description (not normative in Wave-6). `{active, degraded}` are the normative Wave-6 vocabulary. Forward-looking note added: "Wave-7 forward-looking (S-BL.PATH-FAILED-STATUS): failed status re-introduction TBD; NOT normative in Wave-6." Traceability section updated with Wave-7 Backlog Stories row (S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS, S-BL.ROUTER-ADDR). |
 | 1.10 | 2026-07-01 | spec-steward | Wave-6 Tranche-A Ruling-4 (F-P2L3-006): PC-1 status enum retracted from `{active, degraded, failed}` → `{active, degraded}`. `failed` is RESERVED for follow-on story `S-BL.PATH-FAILED-STATUS` (Wave-7 Backlog). Implementations MUST NOT emit `failed` in this cycle; conformance tests MUST reject it. EC-007 updated to note that `failed` is reserved and to preserve the pending-precedence rule (S502-DEFER-3) for `{active, degraded}` values. |
