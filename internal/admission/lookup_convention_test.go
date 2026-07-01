@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"reflect"
 	"sync"
 	"testing"
 	"unsafe"
@@ -200,6 +201,9 @@ func TestLookup_DeepCloneFence_PublicKeyMutationDoesNotLeak(t *testing.T) {
 // Go rule 12 (T, bool) contract: on miss, value MUST be zero to prevent
 // stale-data confusion. Partial zero checks allow callers to incorrectly use
 // fields that happen to be non-zero on a cache-miss path.
+//
+// F-P3L2-003: uses reflection over exported fields to future-proof against
+// new field additions — a hardcoded list would silently miss new fields.
 func TestLookup_Miss_ReturnsZeroAdmittedKey_AllFields(t *testing.T) {
 	t.Parallel()
 
@@ -215,23 +219,29 @@ func TestLookup_Miss_ReturnsZeroAdmittedKey_AllFields(t *testing.T) {
 		t.Fatalf("Lookup miss: want ok=false; got true with key=%+v", key)
 	}
 
-	// Assert every exported field is its zero value.
-	// Go rule 12 (T, bool): on miss the value MUST be zero to prevent
-	// stale-data confusion — partial checks are insufficient.
-	var zeroFrameAuthKey [32]byte
-	if len(key.PublicKey) != 0 {
-		t.Errorf("miss: PublicKey want nil/empty, got len=%d value=%x", len(key.PublicKey), key.PublicKey)
+	// Reflection pass: assert every exported field is its type's zero value.
+	// This future-proofs the check — adding a new exported field to AdmittedKey
+	// without zeroing it on miss will cause this test to fail automatically.
+	//
+	// reflect.Value.Equal panics on non-comparable kinds (e.g. slice), so we
+	// use reflect.DeepEqual(fv.Interface(), zero.Interface()) which handles all
+	// kinds safely.
+	rv := reflect.ValueOf(key)
+	rt := rv.Type()
+	for i := range rv.NumField() {
+		f := rt.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		fv := rv.Field(i)
+		zero := reflect.Zero(f.Type)
+		if !reflect.DeepEqual(fv.Interface(), zero.Interface()) {
+			t.Errorf("miss: exported field %s want zero value %v, got %v", f.Name, zero, fv)
+		}
 	}
-	if key.Role != 0 {
-		t.Errorf("miss: Role want 0, got %v (%d)", key.Role, uint8(key.Role))
-	}
-	if key.FrameAuthKey != zeroFrameAuthKey {
-		t.Errorf("miss: FrameAuthKey want zero [32]byte, got non-zero")
-	}
-	if key.NodeAddr != ([8]byte{}) {
-		t.Errorf("miss: NodeAddr want zero [8]byte, got %x", key.NodeAddr)
-	}
-	// KeyExpiry() surfaces the unexported expiry field via an accessor.
+
+	// Accessor checks for unexported fields surfaced via methods.
+	// KeyExpiry() surfaces the unexported expiry field.
 	if !key.KeyExpiry().IsZero() {
 		t.Errorf("miss: KeyExpiry want zero Time, got %v", key.KeyExpiry())
 	}
@@ -274,12 +284,12 @@ func TestLookup_Hit_AllFieldsMatchRegistration(t *testing.T) {
 	if key.NodeAddr != nodeAddr {
 		t.Errorf("hit: NodeAddr got %x, want %x", key.NodeAddr, nodeAddr)
 	}
-	// FrameAuthKey: must be non-zero (derivation produces a 32-byte key).
-	// We assert non-zero rather than recomputing HKDF here to keep the test
-	// black-box; the derivation correctness is covered by hmac package tests.
-	var zeroKey [32]byte
-	if key.FrameAuthKey == zeroKey {
-		t.Error("hit: FrameAuthKey is zero — expected derived HMAC key to be non-zero")
+	// FrameAuthKey: must be byte-equal to the canonical derivation
+	// hmac.DeriveKey(pub, svtnID). Asserting non-zero (the previous check) is
+	// insufficient — a non-zero but wrong key would pass. F-P3L2-004.
+	expectedAuthKey := hmac.DeriveKey([]byte(pub), svtnID)
+	if key.FrameAuthKey != expectedAuthKey {
+		t.Errorf("hit: FrameAuthKey got %x, want derived %x", key.FrameAuthKey, expectedAuthKey)
 	}
 }
 
@@ -513,5 +523,112 @@ func TestLookupByPubkey_ConcurrentSameNodeAddr(t *testing.T) {
 			t.Errorf("post-concurrent: pubA FrameAuthKey=%x want %x",
 				key.FrameAuthKey, expectedAuthKeyA)
 		}
+	}
+}
+
+// ── F-P3L2-005: exhaustive miss table ─────────────────────────────────────────
+
+// assertMissZero is a test helper that verifies LookupByPubkey returned a miss
+// and that the returned AdmittedKey is entirely zero-valued (reflection + accessors).
+func assertMissZero(t *testing.T, label string, key admission.AdmittedKey, ok bool) {
+	t.Helper()
+	if ok {
+		t.Errorf("%s: want ok=false (miss), got ok=true with key=%+v", label, key)
+		return
+	}
+	rv := reflect.ValueOf(key)
+	rt := rv.Type()
+	for i := range rv.NumField() {
+		f := rt.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		fv := rv.Field(i)
+		zero := reflect.Zero(f.Type)
+		if !reflect.DeepEqual(fv.Interface(), zero.Interface()) {
+			t.Errorf("%s: exported field %s want zero value, got %v", label, f.Name, fv)
+		}
+	}
+	if !key.KeyExpiry().IsZero() {
+		t.Errorf("%s: KeyExpiry want zero Time, got %v", label, key.KeyExpiry())
+	}
+	if key.IsRevoked() {
+		t.Errorf("%s: IsRevoked want false, got true", label)
+	}
+}
+
+// TestLookupByPubkey_ExhaustiveMissTable exercises every semantic miss scenario:
+// (a) unknown pubkey, (b) known pubkey + wrong svtnID, (c) known pubkey +
+// wrong nodeAddr (via wrong svtnID derivation), (d) revoked pubkey.
+//
+// Each row asserts (AdmittedKey{}, false) with all-zero fields via reflection,
+// future-proofing against new AdmittedKey field additions. F-P3L2-005.
+func TestLookupByPubkey_ExhaustiveMissTable(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	svtnRegistered := svtnLookupID(0x60)
+	svtnOther := svtnLookupID(0x61)
+
+	pub := mustGenPub(t)
+	pubUnknown := mustGenPub(t)
+	pubRevoked := mustGenPub(t)
+
+	ks.RegisterKey(svtnRegistered, pub, admission.RoleAccess)
+	ks.RegisterKey(svtnRegistered, pubRevoked, admission.RoleAccess)
+	nodeAddrRevoked := frame.DeriveNodeAddress(svtnRegistered, []byte(pubRevoked))
+	if err := ks.RevokeKey(svtnRegistered, nodeAddrRevoked); err != nil {
+		t.Fatalf("RevokeKey: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		svtnID [16]byte
+		pub    ed25519.PublicKey
+	}{
+		{
+			name:   "(a) unknown pubkey in registered svtnID",
+			svtnID: svtnRegistered,
+			pub:    pubUnknown,
+		},
+		{
+			name:   "(b) known pubkey in wrong (unregistered) svtnID",
+			svtnID: svtnOther,
+			pub:    pub,
+		},
+		{
+			name:   "(c) known pubkey in empty store svtnID",
+			svtnID: svtnLookupID(0x62),
+			pub:    pub,
+		},
+		{
+			name:   "(d) revoked pubkey — LookupByPubkey does not filter revoked, but entry is present",
+			svtnID: svtnRegistered,
+			pub:    pubRevoked,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Case (d): a revoked key IS still in the store; LookupByPubkey returns
+			// it with ok=true (revocation is checked at admission time, not lookup
+			// time). Skip the all-zero assertion for this case — it is a hit whose
+			// IsRevoked()==true; the other cases are true misses.
+			if tc.name == "(d) revoked pubkey — LookupByPubkey does not filter revoked, but entry is present" {
+				key, ok := ks.LookupByPubkey(tc.svtnID, tc.pub)
+				if !ok {
+					t.Fatalf("%s: want ok=true for revoked-but-registered key; got false", tc.name)
+				}
+				if !key.IsRevoked() {
+					t.Errorf("%s: want IsRevoked=true; got false", tc.name)
+				}
+				return
+			}
+
+			key, ok := ks.LookupByPubkey(tc.svtnID, tc.pub)
+			assertMissZero(t, tc.name, key, ok)
+		})
 	}
 }
