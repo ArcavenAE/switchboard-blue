@@ -1,0 +1,122 @@
+// metrics_wire.go — wires the metrics RPC handlers onto the daemon management
+// server (BC-2.06.003 v1.14; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-003).
+//
+// Purity classification (ARCH-09): boundary — connects the management server
+// to metrics handler closures. No business logic lives here.
+//
+// Package DAG note (ARCH-12): cmd/switchboard imports internal/mgmt, internal/metrics,
+// and internal/paths via this file. pathTrackerSource adapts the PathTracker registry
+// into the PathsListSource interface consumed by the metrics handlers.
+package main
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/arcavenae/switchboard/internal/metrics"
+	"github.com/arcavenae/switchboard/internal/mgmt"
+	"github.com/arcavenae/switchboard/internal/paths"
+)
+
+// ErrRouterSVTNNotFound is the sentinel returned when router.status or
+// router.metrics is invoked for an unknown SVTN. Wraps as E-RPC-011.
+// Tests MUST use errors.Is(err, ErrRouterSVTNNotFound) — no string matching.
+//
+// Distinct from svtnmgmt.ErrSVTNNotFound; this sentinel is scoped to the
+// router.metrics wire path and stamps E-RPC-011 with the E-SVTN-003 message
+// prefix. (F-P9L1-02)
+var ErrRouterSVTNNotFound = errors.New("E-RPC-011: SVTN not found")
+
+// pathTrackerSource is a PathsListSource backed by a map of
+// pathID → *paths.PathTracker. It is safe for concurrent reads; the map
+// is populated before the server starts and is read-only thereafter.
+// Calling AllSnapshots() calls PathTracker.Snapshot() on each tracker,
+// which takes the tracker's own mutex (go.md rule 12 — no internal pointer leak).
+//
+// The empty map (no tracked paths) satisfies EC-001: paths.list returns
+// {"paths":[],"message":"no active paths"} when AllSnapshots returns empty.
+//
+// F-P2L1-003 (Ruling-3 Option A): replaces emptyPathsSource stub.
+//
+// #DEFERRED: S-BL.PATH-TRACKER-WIRING — production tracker enumeration deferred
+// to Wave-7. Handler surface, response types, and adapter interface land in S-W5.04;
+// production population (wiring this map to the routing registry) lands in
+// S-BL.PATH-TRACKER-WIRING. Test-time registration is done by the internal_test type
+// pathTrackerListSource in integration_test.go; production population lands in
+// S-BL.PATH-TRACKER-WIRING. See wave-6-tranche-a-scope-rulings.md Ruling-6.
+//
+// #DEFERRED: S-BL.PATH-TRACKER-WRITER — the sync.RWMutex for concurrent-write
+// protection is not included here; the current wave has no writer path. It will
+// be re-introduced when the writer story lands (F-P10L1-06).
+type pathTrackerSource struct {
+	trackers map[string]*paths.PathTracker
+}
+
+// newPathTrackerSource constructs a pathTrackerSource. The initial tracker map
+// may be nil or empty — in that case AllSnapshots returns an empty map and
+// paths.list returns EC-001 "no active paths". The map is populated at
+// construction time; no dynamic registration after Serve starts.
+func newPathTrackerSource() *pathTrackerSource {
+	return &pathTrackerSource{
+		trackers: make(map[string]*paths.PathTracker),
+	}
+}
+
+// AllSnapshots implements metrics.PathsListSource. It calls PathTracker.Snapshot()
+// on each registered tracker, returning a fully decoupled copy (go.md rule 12).
+// The map is read-only after construction (no concurrent writer in this wave);
+// the RWMutex is deferred to S-BL.PATH-TRACKER-WRITER (F-P10L1-06).
+func (p *pathTrackerSource) AllSnapshots() map[string]paths.PathSnapshot {
+	out := make(map[string]paths.PathSnapshot, len(p.trackers))
+	for id, t := range p.trackers {
+		out[id] = t.Snapshot()
+	}
+	return out
+}
+
+// emptyRouterMetricsSource is a RouterMetricsSource that returns E-RPC-011 for
+// every SVTN lookup. Used until a real forwarding-counter store is wired.
+//
+// #DEFERRED: S-BL.ROUTER-METRICS-STORE — production forwarding-counter store
+// deferred to a later wave. Handler surface, response types, and adapter
+// interface land in S-W5.04; production population (wiring this to a real
+// counter store) lands in S-BL.ROUTER-METRICS-STORE. Mirrors the
+// pathTrackerSource deferred pattern (see comment above).
+type emptyRouterMetricsSource struct{}
+
+func (emptyRouterMetricsSource) SVTNMetrics(svtnID string) (metrics.RouterMetricsResponse, error) {
+	return metrics.RouterMetricsResponse{}, &metricsNotFoundError{svtnID: svtnID}
+}
+
+// metricsNotFoundError satisfies the E-RPC-011 contract for unknown SVTNs
+// (BC-2.06.003 PC-2; AC-004). The mgmt dispatch layer re-wraps this error in the
+// JSON-RPC error envelope (see internal/mgmt mgmt.go dispatch convention).
+//
+// Is implements errors.Is support so callers can do errors.Is(err, ErrRouterSVTNNotFound)
+// without string matching (go.md error-handling rule 3; H-1 Pass-8).
+type metricsNotFoundError struct {
+	svtnID string
+}
+
+func (e *metricsNotFoundError) Error() string {
+	return "E-RPC-011: SVTN not found: " + e.svtnID
+}
+
+// Is reports whether target equals ErrRouterSVTNNotFound, enabling errors.Is matching.
+func (e *metricsNotFoundError) Is(target error) bool {
+	return target == ErrRouterSVTNNotFound
+}
+
+// wireMetricsHandlers registers the three metrics RPC handlers on srv.
+// MUST be called before serveMgmtServer starts the Serve goroutine —
+// Register returns an error if called after Serve has started (F-P2L1-001).
+// Returns an error on registration failure so the main-package caller can
+// log.Fatalf — only main is the allowed exit site (go.md; F-P10L1-04).
+//
+// BC-2.06.003 v1.14; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001.
+func wireMetricsHandlers(srv *mgmt.Server) error {
+	if err := mgmt.RegisterMetricsHandlers(srv, newPathTrackerSource(), emptyRouterMetricsSource{}); err != nil {
+		return fmt.Errorf("wireMetricsHandlers: register-before-serve invariant violated: %w", err)
+	}
+	return nil
+}

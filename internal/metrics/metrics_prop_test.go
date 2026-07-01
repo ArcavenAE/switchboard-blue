@@ -263,12 +263,6 @@ func TestProp_BC_2_06_001_GreenToRedSingleStep(t *testing.T) {
 			for i := 0; i < metrics.HysteresisCount; i++ {
 				qi.Update(pair.green.rttMs, pair.green.lossPct)
 			}
-			if qi.Current() != metrics.Green {
-				// Generator produced a value that did not land in Green —
-				// treat as vacuously true (generator invariant not met).
-				return true
-			}
-
 			// Single Red-range measurement.
 			qi.Update(pair.red.rttMs, pair.red.lossPct)
 			cur := qi.Current()

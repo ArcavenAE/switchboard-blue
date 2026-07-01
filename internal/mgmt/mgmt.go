@@ -172,6 +172,11 @@ type Server struct {
 	// it can return nil on intentional shutdown vs. the real error on a fatal
 	// Accept failure (BC-2.07.004 PC-10 / AC-017 / VP-069).
 	shuttingDown atomic.Bool
+	// serving is set to true at the entry of Serve. Register checks this flag
+	// and returns an error if called after Serve has started (register-before-serve
+	// invariant; F-P2L1-001). handlers is not protected by a mutex because the
+	// contract is that all Register calls MUST complete before Serve is called.
+	serving atomic.Bool
 
 	// mu protects the active connection set. Never hold mu while calling conn.Close().
 	mu    sync.Mutex
@@ -264,6 +269,10 @@ func (s *Server) closeAllConns() {
 // daemon lifecycle). Shutdown returns as soon as it has signalled the shutdown
 // (marked shuttingDown, closed listener, force-closed connections).
 func (s *Server) Serve(ctx context.Context) error {
+	// Mark the server as actively serving so Register can detect post-start calls
+	// (register-before-serve invariant; F-P2L1-001).
+	s.serving.Store(true)
+
 	// ctx-watcher goroutine: closes the listener when the context is cancelled so
 	// Accept unblocks. Uses a done channel to ensure this goroutine exits when
 	// Serve returns (preventing a goroutine leak if Shutdown is never called).
@@ -687,6 +696,13 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 			if err != nil {
 				// PC-12 (Ruling C / Ruling R): handler error or timeout → E-RPC-011;
 				// connection stays OPEN.
+				//
+				// E-RPC-011 double-wrap convention: this dispatch wraps ALL handler
+				// errors as E-RPC-011. A handler may already embed a structured error
+				// code (e.g. E-CFG-001, E-INT-001) in the err.Error() string. Test
+				// helpers (e.g. sendAdminRPC in mgmt_test.go) that need the inner code
+				// must extract it from the message field via prefix-lift. This is the
+				// accepted project-wide convention — do NOT unwrap here (F-P3L1-003).
 				resp.OK = false
 				resp.Error = &rpcError{Code: "E-RPC-011", Message: err.Error()}
 				resp.Data = nil

@@ -243,19 +243,15 @@ func parsePEMOperatorKeys(pemKeys []string) []ed25519.PublicKey {
 	return out
 }
 
-// startMgmtServer starts the management server goroutine for the given daemon mode.
-// It applies the mode-specific socket default if ManagementSocket is empty in cfg,
-// constructs the mgmt.Server, and adds a wg-tracked goroutine per ARCH-01
-// §Goroutine WaitGroup Contract.
+// newMgmtServer constructs a management server for the given daemon mode but does
+// NOT start the Serve goroutine. Callers MUST register all handlers via
+// wireMetricsHandlers (or equivalent) before calling serveMgmtServer, to satisfy
+// the register-before-serve invariant (F-P2L1-001 data-race fix).
 //
 // The daemonVersion is sourced from the package-level `version` variable injected
 // by ldflags at build time (or "dev" for untagged builds). This satisfies ADR-012
 // §Ruling 6 / BC-2.07.004 PC-7 / AC-007.
-//
-// Returns the *mgmt.Server so the caller can call Shutdown on graceful exit.
-func startMgmtServer(
-	ctx context.Context,
-	wg *sync.WaitGroup,
+func newMgmtServer(
 	cfg *config.Config,
 	mode string,
 	daemonPrivKey ed25519.PrivateKey,
@@ -278,7 +274,7 @@ func startMgmtServer(
 	// Open the management listener.
 	ln, err := buildMgmtListener(cfg, mode)
 	if err != nil {
-		return nil, fmt.Errorf("startMgmtServer: %w", err)
+		return nil, fmt.Errorf("newMgmtServer: %w", err)
 	}
 
 	// Construct the management server. daemonVersion comes from the package-level
@@ -292,7 +288,7 @@ func startMgmtServer(
 		defer func() {
 			if r := recover(); r != nil {
 				_ = ln.Close()
-				newServerErr = fmt.Errorf("startMgmtServer: NewServer: %v", r)
+				newServerErr = fmt.Errorf("newMgmtServer: NewServer: %v", r)
 			}
 		}()
 		srv = mgmt.NewServer(ln, daemonPrivKey, operatorKeys, handlers, version)
@@ -301,14 +297,51 @@ func startMgmtServer(
 		return nil, newServerErr
 	}
 
+	return srv, nil
+}
+
+// serveMgmtServer starts the management server's Serve goroutine under the given
+// WaitGroup. All handlers MUST have been registered via Register (or
+// wireMetricsHandlers) before this call — Serve reads s.handlers without a lock.
+//
+// Returns the *mgmt.Server so the caller can call Shutdown on graceful exit.
+// This is a separate step from newMgmtServer to enforce the register-before-serve
+// ordering (F-P2L1-001 data-race fix).
+func serveMgmtServer(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	srv *mgmt.Server,
+) *mgmt.Server {
 	// WaitGroup-tracked goroutine per ARCH-01 §Goroutine WaitGroup Contract.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		_ = srv.Serve(ctx)
 	}()
+	return srv
+}
 
-	return srv, nil
+// startMgmtServer is a convenience wrapper combining newMgmtServer and
+// serveMgmtServer for callers that do not need to register additional handlers
+// between construction and serve. It is used by tests and by daemon modes that
+// pass all handlers via the initial handlers slice.
+//
+// Production daemon modes (runAccess, runControl) use the explicit two-phase
+// newMgmtServer → wireMetricsHandlers → serveMgmtServer sequence to satisfy
+// the register-before-serve ordering (F-P2L1-001).
+func startMgmtServer(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	cfg *config.Config,
+	mode string,
+	daemonPrivKey ed25519.PrivateKey,
+	handlers []mgmt.Handler, //nolint:unparam // nil in tests; non-nil when BuildAdminHandlers is passed
+) (*mgmt.Server, error) {
+	srv, err := newMgmtServer(cfg, mode, daemonPrivKey, handlers)
+	if err != nil {
+		return nil, err
+	}
+	return serveMgmtServer(ctx, wg, srv), nil
 }
 
 // runRouter is the router-mode daemon entry point.
@@ -344,6 +377,12 @@ func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
 //
 // Only the control-mode daemon registers admin handlers (ADR-004 role-exclusion;
 // ARCH-04 disambiguation table; AC-004). Access, console, and router daemons pass nil.
+//
+// Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
+//  1. newMgmtServer — construct server (no goroutine)
+//  2. BuildAdminHandlers passed via NewServer initial handlers (already registered)
+//  3. wireMetricsHandlers — register metrics RPC handlers before Serve
+//  4. serveMgmtServer — start Serve goroutine
 func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
@@ -356,14 +395,24 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	ks := admission.NewAdmittedKeySet()
 	m := svtnmgmt.NewSVTNManager(ks, daemonPub)
 
-	var mgmtWG sync.WaitGroup
 	// Bootstrap mode: nil OperatorKeySet (no pre-configured operator keys).
 	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
 	ops := mgmt.NewOperatorKeySet(nil)
-	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "control", daemonPriv, BuildAdminHandlers(m, ops))
+
+	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops))
 	if mgmtErr != nil {
-		return fmt.Errorf("runControl: start management server: %w", mgmtErr)
+		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}
+
+	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
+	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+		return fmt.Errorf("runControl: wire metrics handlers: %w", err)
+	}
+
+	// Phase (c): start the Serve goroutine.
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
 	// Block until context is cancelled (ARCH-01 lifecycle contract).
 	<-ctx.Done()
