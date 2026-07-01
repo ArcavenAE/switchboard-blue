@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -96,10 +96,17 @@ Operator runs `sbctl sessions list` or console refreshes its session list view.
 | L2 Capability | CAP-012 ("Console session enumeration across SVTN") per capabilities.md §CAP-012 |
 | L2 Domain Invariants | DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/discovery |
-| Stories | [filled by story-writer] |
+| Stories | S-7.02 |
 | Capability Anchor Justification | CAP-012 ("Console session enumeration across SVTN") per capabilities.md §CAP-012 — this BC specifies the console-side discovery that CAP-012 defines as "discovers all available sessions across all access nodes on its SVTN without specifying IP addresses" |
 
 ## Related BCs
 
 - BC-2.03.001 — depends on: advertisements from access nodes are the data source
 - BC-2.04.003 — composes with: session selection from this list feeds into attach flow
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| v1.2 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
+| v1.1 | 2026-06-23 | Initial behavioral contract creation. |

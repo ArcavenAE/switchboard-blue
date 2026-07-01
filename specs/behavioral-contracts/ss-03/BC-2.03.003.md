@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.003
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -95,10 +95,17 @@ Advertisement assembly at the access node before multicast dispatch.
 | L2 Capability | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011; CAP-012 ("Console session enumeration across SVTN") per capabilities.md §CAP-012 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — advertisement contains no session content) |
 | Architecture Module | internal/discovery |
-| Stories | [filled by story-writer] |
+| Stories | S-7.02 |
 | Capability Anchor Justification | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 — this BC specifies the advertisement payload contents that CAP-011 defines as "attachment status and quality indicators"; also CAP-012 which requires "session name, attachment status, and quality indicator" per capabilities.md §CAP-012 |
 
 ## Related BCs
 
 - BC-2.03.001 — depends on: this BC defines the payload that BC-2.03.001 broadcasts
 - BC-2.06.001 — related to: quality indicator in advertisements is derived from this subsystem
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| v1.2 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
+| v1.1 | 2026-06-23 | Initial behavioral contract creation. |

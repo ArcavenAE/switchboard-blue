@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.47"
+version: "3.48"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
@@ -71,7 +71,7 @@ inputDocuments:
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.2) |
-| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.1) |
+| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.2) |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.2) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
@@ -174,6 +174,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.48 | 2026-07-01 | S-7.02 LENS-3 traceability backfill per RULING-W6TB-D: S-7.02 row status `ready-for-red-gate (v1.1)` → `ready-for-red-gate (v1.2)`. VP-044/VP-045/VP-055 bumped to v1.1 (implementing_story S-7.02 + Story Trace sections added). BC-2.03.001 v1.2→v1.3 (Stories row filled). BC-2.03.002 v1.1→v1.2 (Stories row filled). BC-2.03.003 v1.1→v1.2 (Stories row filled). |
 | 3.47 | 2026-07-01 | S-7.01 LENS-3 traceability backfill: S-7.01 row status corrected `pending (v1.1)` → `pending (v1.2)` (story file was already at v1.2 per Ruling E; STORY-INDEX row was stale). VP-043 v1.1 and BC-2.02.007 v1.3 traceability backfill (VP-043 implementing_story + Story Trace; BC Stories row S-7.01). |
 | 3.46 | 2026-07-01 | W6TB story-writer follow-ons (Rulings A/B/C): S-6.05 `draft` → `draft (v1.3)` (RULING-W6TB-A general control-role gate refit; acceptance_criteria_count 4→5; handler-gate AC; genesis re-open AC; --confirm flag; error-string canonical form); S-7.03 `pending` → `draft (v1.2)` (RULING-W6TB-C scope reduction; bc_traces removes BC-2.06.001 + BC-2.06.002; AC count 5→3; mgmt-plane transport update; estimated_points 5→3); S-BL.ROUTER-ADDR `backlog` → `ready-for-red-gate (v1.0)` (RULING-W6TB-B unit-scope AC set; 5 ACs; points TBD→2); Add S-BL.CONSOLE-OBS backlog stub (RULING-W6TB-C; BC-2.06.001 + BC-2.06.002; DRIFT-001b + DRIFT-002 moved from S-7.03). Total stories 47→48; Backlog 7→8. |
 | 3.45 | 2026-07-01 | Wave-6 Tranche B red-gate prep: S-7.01 `pending` → `pending (v1.1)` (spec-reviewer gaps resolved: internal/frame cross-dep row added; BC-2.02.007 v1.2 PC-5 wire vocab patched; AC-003 ErrTooManyLosses declared package-local; AC-004 ARQ fallback added; AC-005 incomplete-last-group added; AC count 3→5). S-7.02 `pending` → `ready-for-red-gate (v1.1)` (AC-001 split into AC-001a/001b; AC-005 HMAC auth added; AC-002 oracle strengthened to ≥2 distinct advertisers; AC-006 SVTN cross-scope negative added; ARCH-08 import analysis; AC count 4→7). BC-2.02.007 bumped v1.1→v1.2 (PC-5 wire vocab). |

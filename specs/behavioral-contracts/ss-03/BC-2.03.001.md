@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.001
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -40,6 +40,8 @@ kos_anchors:
 
 An access node broadcasts its presence and the state of its published sessions to all nodes on the SVTN via an SVTN-scoped multicast address. Advertisements are triggered by: (1) session state changes (new session, session closed, attachment status change), (2) periodic heartbeat (configurable interval, default 30 seconds), and (3) on-demand when a console sends a presence request. This enables consoles to discover sessions without hostnames or IP addresses.
 
+**Implementation scope note (Ruling W6TB-D):** BC-2.03.001 covers the advertisement trigger model and payload semantics. The wire transport (UDP multicast socket, SVTN-scoped multicast address allocation, admitted-node HMAC key derivation) is split to S-BL.DISCOVERY-WIRE. The implementing story S-7.02 delivers the in-process registry model; PC-1 (multicast to all admitted nodes), PC-3 (1-tick network delivery), and PC-4 (network heartbeat broadcast) are fully verified only after S-BL.DISCOVERY-WIRE ships.
+
 ## Preconditions
 
 1. The access node is admitted to an SVTN (Tier 1 admission complete).
@@ -51,8 +53,8 @@ An access node broadcasts its presence and the state of its published sessions t
 1. The advertisement is multicast to all admitted nodes on the SVTN.
 2. Each advertisement includes: access node address, list of session names, per-session attachment status, per-session quality indicator.
 3. On state change (session added/removed/attached/detached): advertisement sent within 1 tick interval.
-4. On periodic heartbeat: advertisement sent every 30 seconds regardless of state change.
-5. Advertisement is authenticated (HMAC in outer header) so receivers can verify it is from an admitted node.
+4. On periodic heartbeat: advertisement sent every 30 seconds regardless of state change. **Observability gate (Ruling W6TB-D):** in the registry model (S-7.02), the periodic heartbeat timer fires an observable side effect verifiable by injecting a tick and asserting a heartbeat counter increments. Network dispatch to wire is deferred to S-BL.DISCOVERY-WIRE.
+5. Advertisement is authenticated (HMAC in outer header) so receivers can verify it is from an admitted node. **Key placeholder (Ruling W6TB-D / DRIFT-W6TBD-001):** in S-7.02, the HMAC key is `svtnID` (the SVTN identifier itself). This is a scoping placeholder — the SVTN ID is not admitted-node-scoped secret material. S-BL.DISCOVERY-WIRE must specify admitted-node HMAC key derivation before multicast deployment. The fail-closed rejection behavior (ErrInvalidHMACTag on wrong tag) is fully verified in S-7.02.
 
 ## Invariants
 
@@ -97,10 +99,18 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 | L2 Capability | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 |
 | L2 Domain Invariants | DI-004 (no direct node-to-node), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/discovery |
-| Stories | [filled by story-writer] |
+| Stories | S-7.02 |
 | Capability Anchor Justification | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 — this BC specifies the advertisement trigger conditions and payload that CAP-011 defines as "state change, periodic heartbeat, and on-demand request" |
 
 ## Related BCs
 
 - BC-2.03.002 — composes with: console discovery depends on these advertisements
 - BC-2.03.003 — composes with: advertisement payload structure defined in BC-2.03.003
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| v1.3 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
+| v1.2 | 2026-07-01 | Ruling W6TB-D: scope split annotation added. PC-1 wire transport, PC-4 network dispatch, and admitted-node HMAC key vocabulary (DRIFT-W6TBD-001) deferred to S-BL.DISCOVERY-WIRE. Observability gate added to PC-4: heartbeat timer observable via injected counter. PC-5 key placeholder note added. |
+| v1.1 | 2026-06-23 | Initial behavioral contract creation. |
