@@ -285,13 +285,15 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 // ── AC-003: TestPathEntry_StatusFromDegraded ──────────────────────────────
 
 // TestPathEntry_StatusFromDegraded verifies that PathEntryFromSnapshot derives
-// PathEntry.Status from PathSnapshot.Active and PathSnapshot.Degraded:
+// PathEntry.Status from PathSnapshot.Active and PathSnapshot.Degraded per
+// BC-2.06.003 v1.10 PC-1 (status enum retracted to {active, degraded} per Ruling-4):
 //
-//	Active=false → "failed"
+//	Active=false → "degraded" (liveness failure maps to "degraded" in Wave 6;
+//	  "failed" is reserved for S-BL.PATH-FAILED-STATUS, Wave-7)
 //	Active=true, Degraded=true → "degraded"
 //	Active=true, Degraded=false → "active"
 //
-// AC-003; BC-2.06.001; BC-2.06.003 PC-1.
+// AC-003; BC-2.06.001; BC-2.06.003 v1.10 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
 func TestPathEntry_StatusFromDegraded(t *testing.T) {
 	t.Parallel()
 
@@ -301,7 +303,8 @@ func TestPathEntry_StatusFromDegraded(t *testing.T) {
 		degraded   bool
 		wantStatus string
 	}{
-		{name: "active_false_is_failed", active: false, degraded: false, wantStatus: "failed"},
+		// Active=false maps to "degraded" in Wave 6; "failed" is reserved per Ruling-4.
+		{name: "active_false_is_degraded", active: false, degraded: false, wantStatus: "degraded"},
 		{name: "active_degraded_is_degraded", active: true, degraded: true, wantStatus: "degraded"},
 		{name: "active_ok_is_active", active: true, degraded: false, wantStatus: "active"},
 	}
@@ -416,29 +419,28 @@ func TestDaemonRouterStatus_HandlerRegistered(t *testing.T) {
 	if len(resp.Paths) != 1 {
 		t.Errorf("expected 1 path; got %d", len(resp.Paths))
 	}
-	validQualities := map[string]bool{"green": true, "yellow": true, "red": true, "pending": true}
-	if !validQualities[resp.Quality] {
-		t.Errorf("quality %q is not a valid enum value (green|yellow|red|pending)", resp.Quality)
-	}
-	// Quality field must be present and non-empty (structural requirement).
-	if resp.Quality == "" {
-		t.Error("quality field must not be empty")
+	// L2 finding: sharpen from "any valid quality" to exact expected value.
+	// Input: SampleCount=20 (≥10), P99RTTMs=15ms, loss=0.0 → Classify → green.
+	// An implementation that returns any other value for this input is wrong.
+	if resp.Quality != "green" {
+		t.Errorf("quality: got %q; want \"green\" (SampleCount=20, p99=15ms, loss=0 → green band)", resp.Quality)
 	}
 }
 
 // ── AC-005a: TestDaemonRouterStatus_QualityStatusIndependence ────────────
 
 // TestDaemonRouterStatus_QualityStatusIndependence verifies S502-DEFER-3 /
-// BC-2.06.003 v1.8 EC-007: quality and status are ORTHOGONAL fields.
-// When a path has Active==false (liveness failure → status:"failed") AND
-// SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), the quality
+// BC-2.06.003 v1.10 EC-007: quality and status are ORTHOGONAL fields.
+// When a path has Active==false (liveness failure → status:"degraded" per Ruling-4)
+// AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), the quality
 // field MUST be "pending" — independent of the status field.
-// Quality enum is {green,yellow,red,pending}; "failed" is not a valid quality value.
+// Quality enum is {green,yellow,red,pending}; status enum is {active,degraded}.
+// "failed" MUST NOT appear in either field in Wave 6 (Ruling-4; S-BL.PATH-FAILED-STATUS).
 //
 // F-P1L3-001: renamed from TestDaemonRouterStatus_FailedAndPendingPrecedence
 // to reflect that quality/status orthogonality is the invariant under test.
 //
-// AC-005a; BC-2.06.003 v1.8 EC-007; S502-DEFER-3.
+// AC-005a; BC-2.06.003 v1.10 EC-007; S502-DEFER-3; Ruling-4.
 func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 	t.Parallel()
 
@@ -454,20 +456,20 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 		{
 			name:        "row_a_degraded_and_pending",
 			degraded:    true,
-			active:      false, // ≥3 missed keepalives → "failed"
+			active:      false, // liveness failure → "degraded" per Ruling-4 (not "failed")
 			sampleCount: 5,     // <10 → p99 pending
 			p99RTTMs:    0,
 			wantQuality: "pending",
-			wantStatus:  "failed",
+			wantStatus:  "degraded",
 		},
 		{
 			name:        "row_b_degraded_and_sufficient_samples",
 			degraded:    true,
-			active:      false, // failed
+			active:      false, // liveness failure → "degraded" per Ruling-4
 			sampleCount: 10,    // ≥10 → quality derived from p99
 			p99RTTMs:    250.0, // 250ms → yellow or red depending on classify
 			wantQuality: "",    // not "pending" — verified via != "pending" check
-			wantStatus:  "failed",
+			wantStatus:  "degraded",
 		},
 		{
 			name:        "row_c_healthy_pending",
@@ -525,11 +527,11 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 				t.Errorf("quality: got %q; want %q (pending-p99 must win over liveness state)", resp.Quality, "pending")
 			}
 			if tc.name == "row_b_degraded_and_sufficient_samples" {
-				// When samples ≥ 10 and degraded+failed, quality is NOT pending.
+				// When samples ≥ 10 and degraded, quality is NOT pending.
 				if resp.Quality == "pending" {
-					t.Errorf("quality: got %q; want non-pending (sufficient samples, liveness failed)", resp.Quality)
+					t.Errorf("quality: got %q; want non-pending (sufficient samples, liveness degraded)", resp.Quality)
 				}
-				// "failed" is not a valid quality value.
+				// "failed" is not a valid quality value (Ruling-4; status enum is {active,degraded}).
 				if resp.Quality == "failed" {
 					t.Errorf("quality: got %q; \"failed\" is not a valid quality enum value", resp.Quality)
 				}
@@ -569,11 +571,15 @@ func TestQualityFromEntry_PendingWhenSampleCountLow(t *testing.T) {
 	}
 }
 
-// TestQualityFromEntry_PendingWinsOverFailed verifies EC-007 directly:
-// when Status=="failed" AND SampleCount<10, quality MUST be "pending".
+// TestQualityFromEntry_PendingWinsOverDegraded verifies EC-007 directly:
+// when status indicates a non-healthy path AND SampleCount<10, quality MUST be "pending".
 //
-// BC-2.06.003 v1.8 EC-007; S502-DEFER-3.
-func TestQualityFromEntry_PendingWinsOverFailed(t *testing.T) {
+// Note: in Wave 6, PathEntryFromSnapshot never emits status="failed" (Ruling-4;
+// BC-2.06.003 v1.10 PC-1). This test exercises QualityFromEntry robustness for
+// any non-active status value passed to it directly.
+//
+// BC-2.06.003 v1.10 EC-007; S502-DEFER-3; Ruling-4.
+func TestQualityFromEntry_PendingWinsOverDegraded(t *testing.T) {
 	t.Parallel()
 
 	entry := metrics.PathEntry{
@@ -582,11 +588,11 @@ func TestQualityFromEntry_PendingWinsOverFailed(t *testing.T) {
 		RTTMs:      0.0,
 		RTTP99Ms:   metrics.RTTValue{Kind: metrics.PendingKind, SampleCount: 5},
 		LossPct:    0.0,
-		Status:     "failed",
+		Status:     "degraded",
 	}
 	got := metrics.QualityFromEntry(entry)
 	if got != "pending" {
-		t.Errorf("QualityFromEntry(status=failed, SampleCount=5): got %q; want \"pending\" (EC-007 precedence)", got)
+		t.Errorf("QualityFromEntry(status=degraded, SampleCount=5): got %q; want \"pending\" (EC-007 precedence)", got)
 	}
 	if got == "failed" {
 		t.Errorf("quality %q is not a valid enum value; \"failed\" must never appear in the quality field", got)
@@ -698,9 +704,9 @@ func TestPathsList_DiscriminatingStatusOracle(t *testing.T) {
 }
 
 // TestRouterMetrics_MalformedArgsDecode verifies that RouterMetrics returns a
-// decode error (not a panic) when given garbage bytes as args.
+// decode error carrying E-RPC-002 (not a panic) when given garbage bytes as args.
 //
-// F-P2L2 malformed-args path; BC-2.06.003 PC-2.
+// F-P2L2 malformed-args path; BC-2.06.003 v1.10 PC-2.
 func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 	t.Parallel()
 
@@ -710,9 +716,10 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 	if err == nil {
 		t.Fatal("RouterMetrics with garbage args: expected error; got nil")
 	}
-	// Must not panic; the error should mention decode failure.
-	if !containsAny(err.Error(), "decode", "E-RPC") {
-		t.Errorf("RouterMetrics garbage args: error %q; want decode-related message", err.Error())
+	// Sharpen oracle: error MUST carry E-RPC-002 (malformed args error code per BC-2.06.003 PC-2).
+	// An implementation that panics or returns a non-E-RPC-002 error fails this oracle.
+	if !containsAny(err.Error(), "E-RPC-002") {
+		t.Errorf("RouterMetrics garbage args: error %q; want E-RPC-002 prefix (BC-2.06.003 PC-2 malformed-args)", err.Error())
 	}
 }
 
@@ -863,6 +870,137 @@ func TestRouterMetrics_MissingRequiredSVTN(t *testing.T) {
 			}
 			if !containsAny(err.Error(), "E-RPC", "svtn_id", "required") {
 				t.Errorf("router.metrics %s: error %q; want E-RPC-* or svtn_id mention", tc.name, err.Error())
+			}
+		})
+	}
+}
+
+// ── EC-002: All paths pending ─────────────────────────────────────────────────
+
+// TestEC002_AllPathsPending verifies EC-002: when all paths have SampleCount<10,
+// every PathEntry.rtt_p99_ms value MUST be the string "pending" in JSON.
+//
+// BC-2.06.003 EC-002; AC-002.
+func TestEC002_AllPathsPending(t *testing.T) {
+	t.Parallel()
+
+	// Three paths, all with SampleCount<10 → all rtt_p99_ms must be "pending".
+	snaps := map[string]paths.PathSnapshot{
+		"path-p1": {EWMARTTMs: 10.0, LossPct: 0.0, Active: true, Degraded: false, P99RTTMs: 0.0, SampleCount: 0},
+		"path-p2": {EWMARTTMs: 20.0, LossPct: 0.0, Active: true, Degraded: false, P99RTTMs: 0.0, SampleCount: 5},
+		"path-p3": {EWMARTTMs: 15.0, LossPct: 0.1, Active: true, Degraded: false, P99RTTMs: 0.0, SampleCount: 9},
+	}
+	src := &fakePathsListSource{snaps: snaps}
+
+	resp, err := metrics.PathsList(context.Background(), nil, src)
+	if err != nil {
+		t.Fatalf("PathsList error: %v", err)
+	}
+	if len(resp.Paths) != 3 {
+		t.Fatalf("expected 3 paths; got %d", len(resp.Paths))
+	}
+
+	for _, entry := range resp.Paths {
+		p99JSON, err := json.Marshal(entry.RTTP99Ms)
+		if err != nil {
+			t.Fatalf("marshal rtt_p99_ms for %s: %v", entry.PathID, err)
+		}
+		// EC-002: EVERY entry with SampleCount<10 must emit "pending".
+		if string(p99JSON) != `"pending"` {
+			t.Errorf("EC-002: path %s rtt_p99_ms=%s; want \"pending\" (SampleCount<10)", entry.PathID, p99JSON)
+		}
+	}
+}
+
+// ── Status enum closure ───────────────────────────────────────────────────────
+
+// TestPathEntry_StatusEnumClosed verifies that PathEntryFromSnapshot never emits
+// a status value outside {active, degraded} for any combination of inputs.
+// "failed" MUST NOT appear per BC-2.06.003 v1.10 PC-1 Ruling-4.
+//
+// BC-2.06.003 v1.10 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
+func TestPathEntry_StatusEnumClosed(t *testing.T) {
+	t.Parallel()
+
+	validStatuses := map[string]bool{"active": true, "degraded": true}
+
+	cases := []struct {
+		name     string
+		active   bool
+		degraded bool
+	}{
+		{"active_true_degraded_false", true, false},
+		{"active_true_degraded_true", true, true},
+		{"active_false_degraded_false", false, false},
+		{"active_false_degraded_true", false, true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			snap := paths.PathSnapshot{
+				EWMARTTMs:   10.0,
+				LossPct:     0.0,
+				Active:      tc.active,
+				Degraded:    tc.degraded,
+				P99RTTMs:    10.0,
+				SampleCount: 20,
+			}
+			entry := metrics.PathEntryFromSnapshot("p", "", snap)
+			if !validStatuses[entry.Status] {
+				t.Errorf("status enum violation: got %q; valid values are {active, degraded} only (BC-2.06.003 v1.10 PC-1, Ruling-4)", entry.Status)
+			}
+		})
+	}
+}
+
+// TestRTTValue_JSONShapeExact verifies the exact JSON wire shape of RTTValue.
+// Pending → `"pending"` (JSON string); float → bare float64 (no wrapper object).
+// This guards against encoding drift where the shape changes but .Value() still works.
+//
+// Pass-3 L2 finding: RTTValue round-trip tightening.
+// BC-2.06.003 v1.10 PC-1, EC-003.
+func TestRTTValue_JSONShapeExact(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		v         metrics.RTTValue
+		wantShape string // exact JSON bytes
+	}{
+		{
+			name:      "pending_kind_zero_value",
+			v:         metrics.RTTValue{Kind: metrics.PendingKind, Value: 0, SampleCount: 0},
+			wantShape: `"pending"`,
+		},
+		{
+			name:      "pending_kind_nonzero_value_suppressed",
+			v:         metrics.RTTValue{Kind: metrics.PendingKind, Value: 99.9, SampleCount: 9},
+			wantShape: `"pending"`, // value MUST be suppressed when Kind==PendingKind
+		},
+		{
+			name:      "float_kind_integer_ms",
+			v:         metrics.RTTValue{Kind: metrics.FloatKind, Value: 42, SampleCount: 10},
+			wantShape: `42`, // JSON number, no quotes, no object wrapper
+		},
+		{
+			name:      "float_kind_fractional_ms",
+			v:         metrics.RTTValue{Kind: metrics.FloatKind, Value: 68.3, SampleCount: 100},
+			wantShape: `68.3`,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := json.Marshal(tc.v)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			if string(data) != tc.wantShape {
+				t.Errorf("JSON shape: got %s; want %s (exact wire shape required by BC-2.06.003 v1.10 PC-1)", data, tc.wantShape)
 			}
 		})
 	}

@@ -3093,17 +3093,29 @@ func TestRegister_AfterServeReturnsError(t *testing.T) {
 	// Start Serve in a background goroutine.
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	serveStarted := make(chan struct{})
 	go func() {
-		close(serveStarted)
 		_ = srv.Serve(ctx)
 	}()
-	<-serveStarted
 
-	// Give Serve a moment to mark serving=true. The flag is set at the very start
-	// of Serve; a small sleep is sufficient for the test to observe the updated value.
-	runtime.Gosched()
-	time.Sleep(10 * time.Millisecond)
+	// Sync barrier: dial the listener address until the server accepts.
+	// Once a dial succeeds, s.serving.Store(true) has definitely been called
+	// (Serve marks serving before entering the accept loop).
+	// This replaces the racy time.Sleep+Gosched approach (Pass-3 L2 race finding).
+	addr := ln.Addr().String()
+	const maxAttempts = 50
+	var dialConn net.Conn
+	for i := 0; i < maxAttempts; i++ {
+		c, dialErr := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if dialErr == nil {
+			dialConn = c
+			break
+		}
+	}
+	if dialConn != nil {
+		t.Cleanup(func() { _ = dialConn.Close() })
+	} else {
+		t.Log("could not dial server within max attempts; test may be flaky")
+	}
 
 	// Verify that Register returns an error now that Serve has started.
 	regErr := srv.Register(mgmt.Handler{Command: "post.serve", Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
