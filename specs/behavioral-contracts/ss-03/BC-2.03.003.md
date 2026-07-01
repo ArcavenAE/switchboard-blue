@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.003
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -66,7 +66,7 @@ Advertisement assembly at the access node before multicast dispatch.
 
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
-| EC-001 | Session name contains non-ASCII characters (e.g., Japanese) | UTF-8 encoded; max 255 bytes enforced. If tmux session name exceeds 255 bytes (unusual), it is truncated with "…" indicator. |
+| EC-001 | Session name contains non-ASCII characters (e.g., Japanese) | UTF-8 encoded; max 255 bytes enforced. If tmux session name exceeds 255 bytes, `Encode` truncates to a valid UTF-8 rune boundary at or before byte 252, then appends "…" (U+2026, 3 UTF-8 bytes), yielding a total of ≤255 bytes of valid UTF-8. If byte 252 falls mid-codepoint, the truncation walks back to the preceding rune start. `Decode` does not truncate. |
 | EC-002 | Session quality indicator not yet computed (first advertisement) | Quality defaults to green (optimistic start); updates on first keep-alive measurement. |
 | EC-003 | Session has only read-only observers, no full-access console | attached=false. Read-only observers are subscribers but not "attached" in the session-management sense. |
 | EC-004 | Access node loses tmux control mode (FM-004) | Quality indicator moves to yellow or red; attachment status becomes unknown (advertised as "unknown" or last known value). |
@@ -78,7 +78,8 @@ Advertisement assembly at the access node before multicast dispatch.
 | Session "agent-01", full-access console attached, path RTT=15ms | {name:"agent-01", attached:true, quality:green} | happy-path |
 | Session "agent-02", no console, path RTT=180ms | {name:"agent-02", attached:false, quality:yellow} | happy-path |
 | Session name "日本語セッション" (19 UTF-8 bytes) | {name:"日本語セッション", attached:false, quality:green} | edge-case |
-| Session name 256 bytes long | {name: first 252 chars + "…", attached:false, quality:green} | edge-case |
+| Session name 256 bytes of ASCII (e.g., 256 × "x") | {name: first 252 bytes + "…" = 255 bytes total, attached:false, quality:green} | edge-case |
+| Session name with multi-byte codepoints totalling 260 bytes; byte 252 falls mid-codepoint | {name: truncated at last rune boundary ≤252 bytes + "…" = ≤255 bytes valid UTF-8, attached:false, quality:green} | edge-case |
 
 ## Verification Properties
 
@@ -107,5 +108,6 @@ Advertisement assembly at the access node before multicast dispatch.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.3 | 2026-07-01 | product-owner: RULING-W6TB-I (F-P4L3-04): EC-001 and canonical test vector corrected from "252 chars" to "252 bytes on a valid UTF-8 rune boundary". Aligns BC with S-7.02 AC-004b byte-precise semantics. Two edge-case test vector rows replace the single ambiguous row. |
 | v1.2 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
 | v1.1 | 2026-06-23 | Initial behavioral contract creation. |

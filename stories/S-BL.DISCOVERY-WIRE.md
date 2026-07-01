@@ -3,7 +3,7 @@ artifact_id: S-BL.DISCOVERY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.DISCOVERY-WIRE
-version: "1.0"
+version: "1.1"
 title: "Discovery wire boundary: UDP multicast I/O, admitted-node HMAC keys, multicast address allocation"
 status: backlog
 producer: product-owner
@@ -25,7 +25,7 @@ tdd_mode: strict
 cycle: v1.0.0-greenfield
 depends_on: [S-7.02, S-2.02]
 blocks: []
-changed_by_rulings: [RULING-W6TB-D]
+changed_by_rulings: [RULING-W6TB-D, RULING-W6TB-H]
 acceptance_criteria_count: 0
 ---
 
@@ -80,6 +80,14 @@ An ADR or ARCH-03 amendment is required before implementation.
 6. Verify BC-2.03.001 PC-1 (advertisement reaches all admitted nodes on
    SVTN) and PC-3 (1-tick network delivery) with integration harness.
 
+## Scope Constraints (RULING-W6TB-H)
+
+When replacing in-process `ReceiveAdvertisement` with UDP multicast dispatch in scope item 3:
+
+- **HMAC-first ordering MUST be preserved per RULING-W6TB-H.** The HMAC verification step MUST occur before the SVTN cross-scope check in any new network-layer receive path.
+- **Key derivation MUST use `payload.SVTNID`** (the declared SVTN ID from the wire payload), NOT `LocalSVTNID`. This applies even after admitted-node key vocabulary lands from the Tier-1 admission layer (scope item 1 above), unless a new ruling explicitly retracts RULING-W6TB-H.
+- The fail-closed sentinel ordering (ErrInvalidHMACTag before ErrSVTNMismatch) established in S-7.02 is a wire-security contract and must be maintained across any refactor of the receive path.
+
 ## Estimated Points
 
 5–8 (TBD pending admitted-node key vocabulary complexity).
@@ -88,4 +96,5 @@ An ADR or ARCH-03 amendment is required before implementation.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.1 | 2026-07-01 | F-P4L3-03: add RULING-W6TB-H to changed_by_rulings; add Scope Constraints section specifying HMAC-first ordering preservation, `payload.SVTNID`-based key derivation, and sentinel ordering requirements when replacing in-process paths with UDP dispatch. |
 | v1.0 | 2026-07-01 | Backlog stub created per Ruling W6TB-D. Full decomposition deferred to Wave-7 planning. |

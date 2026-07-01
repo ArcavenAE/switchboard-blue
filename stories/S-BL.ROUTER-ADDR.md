@@ -15,7 +15,7 @@ scope_phase: E
 estimated_points: 2
 bc_traces:
   - BC-2.06.003
-vp_traces: [VP-047, VP-062]
+vp_traces: [VP-047]
 subsystems: [quality-observability, multipath-forwarding]
 architecture_modules: [internal/metrics, internal/paths, cmd/sbctl]
 tdd_mode: strict
@@ -28,10 +28,11 @@ inputDocuments:
   - '.factory/decisions/RULING-W6TB-B-router-addr-seam.md'
   - '.factory/decisions/RULING-W6TB-F-s-bl-router-addr-vp047.md'
 acceptance_criteria_count: 5
-revision: "1.1-ready-for-red-gate"
+revision: "1.3-ready-for-red-gate"
 changed_by_rulings:
   - RULING-W6TB-B
   - RULING-W6TB-F
+  - RULING-W6TB-K
 backlog_origin:
   source: wave-6-tranche-a-scope-rulings Ruling-1 + DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER
   ruling: Ruling-1
@@ -115,7 +116,7 @@ BC-2.06.003 PC-1 DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER annotation is updated:
   (set at construction via `NewPathTrackerWithAddr`)
 - Bump BC-2.06.003 to v1.15; add changelog entry citing RULING-W6TB-B
 - DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER is closed by this story
-- **Test:** `TestBC2_06_003_PC1_DrftAnnotationRemoved` (spec validator — not a Go test;
+- **Obligation:** BC-2.06.003.md v1.15 diff review — DRIFT annotation removed (spec validator — not a Go test;
   this is a story-level obligation, not a runtime test)
 
 ### AC-005 (traces to BC-2.06.003 PC-1 — drift closure)
@@ -212,6 +213,8 @@ Per RULING-W6TB-B, the following is NOT in scope for this story:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.3-ready-for-red-gate | 2026-07-01 | product-owner | RULING-W6TB-K: (F-P4L3-001) VP-062 removed from vp_traces — compositional JSON property holds by construction; S-W5.04 already owns VP-062 fuzz coverage including router_addr seeds. (F-P4L2-02) Concurrent-oracle comment requirement noted for implementer. (F-P4L2-03) Split-red-gate comment requirement noted for test-writer. No AC or Task changes. |
+| 1.2-ready-for-red-gate | 2026-07-01 | story-writer | F-P4L3-002: fix `TestBC2_06_003_PC1_DrftAnnotationRemoved` typo ("Drft"→"Drift"); replace Test-prefixed obligation label with non-Test-prefixed "Obligation: BC-2.06.003.md v1.15 diff review — DRIFT annotation removed" since this is a story-level spec obligation, not a Go test function. |
 | 1.1-ready-for-red-gate | 2026-07-01 | product-owner | RULING-W6TB-F: add VP-047.md MODIFY row to File Structure (spec target for AC-005 oracle flip was missing — F-L3-001). Strengthen TestVP047_FieldSwapOracle seed: routerAddr "abcdefghi" → "127.0.0.1:9000" (valid host:port; non-overlapping oracle preserved — F-LENS2-01). Bump revision. |
 | 1.0-ready-for-red-gate | 2026-07-01 | story-writer | RULING-W6TB-B AC set: promote backlog stub to ready-for-red-gate. Add 5 concrete ACs (RouterAddr field, PathsList pass-through, NewPathTrackerWithAddr constructor, BC-2.06.003 annotation cleanup, DRIFT closure + oracle flip). Points TBD→2. File Structure rows: internal/paths/paths.go MODIFY, internal/metrics/handlers.go MODIFY, internal/paths/paths_test.go MODIFY, internal/metrics/handlers_test.go + integration_test.go MODIFY, BC-2.06.003.md MODIFY. Red-first task list. Scope boundary: unit-scope only; end-to-end deferred to S-BL.PATH-TRACKER-WIRING (Wave-7). Add changed_by_rulings: RULING-W6TB-B. |
 | 0.1-backlog-stub | 2026-07-01 | product-owner | Initial backlog stub per wave-6-tranche-a-scope-rulings Ruling-1 + DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER. |
