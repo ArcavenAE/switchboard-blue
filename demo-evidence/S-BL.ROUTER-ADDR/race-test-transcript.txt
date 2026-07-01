@@ -1,0 +1,911 @@
+=== RUN   TestProp_IsDegraded_TracksEWMAThreshold
++ IsDegraded tracks EWMA vs DegradedRTTThresholdMS: OK, passed 100 tests.
+Elapsed time: 8.06125ms
+--- PASS: TestProp_IsDegraded_TracksEWMAThreshold (0.01s)
+=== RUN   TestProp_IsDegraded_RecoveryClears
++ IsDegraded sets during drive phase and clears after recovery: OK, passed
+   100 tests.
+Elapsed time: 4.330416ms
+--- PASS: TestProp_IsDegraded_RecoveryClears (0.00s)
+=== RUN   TestProp_P99_SampleCountMonotone
++ SampleCount increments by exactly 1 per successful probe: OK, passed
+   1000 tests.
+Elapsed time: 105.211041ms
+--- PASS: TestProp_P99_SampleCountMonotone (0.11s)
+=== RUN   TestProp_P99_BucketBoundaryIntegrity
++ P99RTTMs ≤ bucket upper bound for single-bucket distributions: OK,
+   passed 1000 tests.
+Elapsed time: 66.422667ms
+--- PASS: TestProp_P99_BucketBoundaryIntegrity (0.07s)
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== RUN   TestBC_2_02_003_PathScore_Transitive
+=== PAUSE TestBC_2_02_003_PathScore_Transitive
+=== RUN   TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== PAUSE TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== RUN   TestBC_2_02_003_PathScore_Formula
+=== PAUSE TestBC_2_02_003_PathScore_Formula
+=== RUN   TestBC_2_02_003_PathTracker_NewInitialRTT
+=== PAUSE TestBC_2_02_003_PathTracker_NewInitialRTT
+=== RUN   TestBC_2_02_003_PathTracker_EWMAConvergence
+=== PAUSE TestBC_2_02_003_PathTracker_EWMAConvergence
+=== RUN   TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== PAUSE TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== RUN   TestBC_2_02_003_PathTracker_LossUpdatesEWMA
+=== PAUSE TestBC_2_02_003_PathTracker_LossUpdatesEWMA
+=== RUN   TestBC_2_02_003_PathTracker_InactiveAfterMisses
+=== PAUSE TestBC_2_02_003_PathTracker_InactiveAfterMisses
+=== RUN   TestBC_2_02_003_PathTracker_ResetMissesOnSuccess
+=== PAUSE TestBC_2_02_003_PathTracker_ResetMissesOnSuccess
+=== RUN   TestBC_2_02_003_PathTracker_Reactivation
+=== PAUSE TestBC_2_02_003_PathTracker_Reactivation
+=== RUN   TestBC_2_02_003_PathTracker_FirstProbeRTTOverride
+=== PAUSE TestBC_2_02_003_PathTracker_FirstProbeRTTOverride
+=== RUN   TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore
+--- PASS: TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore (0.00s)
+=== RUN   TestBC_2_02_003_PathTracker_ScoreDelegates
+=== PAUSE TestBC_2_02_003_PathTracker_ScoreDelegates
+=== RUN   TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors
+=== PAUSE TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors
+=== RUN   TestBC_2_02_003_Rank_OrderedByScore
+=== PAUSE TestBC_2_02_003_Rank_OrderedByScore
+=== RUN   TestBC_2_02_003_Rank_ExcludesInactivePaths
+=== PAUSE TestBC_2_02_003_Rank_ExcludesInactivePaths
+=== RUN   TestBC_2_02_003_Rank_ErrNoActivePaths
+=== PAUSE TestBC_2_02_003_Rank_ErrNoActivePaths
+=== RUN   TestBC_2_02_003_Rank_TiebreakByID
+=== PAUSE TestBC_2_02_003_Rank_TiebreakByID
+=== RUN   TestBC_2_02_003_Rank_SinglePath
+=== PAUSE TestBC_2_02_003_Rank_SinglePath
+=== RUN   TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== PAUSE TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_Race
+--- PASS: TestBC_2_02_003_PathTracker_IsDegraded_Race (0.00s)
+=== RUN   TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded
+=== PAUSE TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr
+=== RUN   TestBC_2_06_003_Snapshot_RouterAddr_Propagates
+=== PAUSE TestBC_2_06_003_Snapshot_RouterAddr_Propagates
+=== RUN   TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess
+=== PAUSE TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess
+=== RUN   TestBC_2_06_003_NewPathTracker_Unchanged
+=== PAUSE TestBC_2_06_003_NewPathTracker_Unchanged
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha
+=== RUN   TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction
+=== PAUSE TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction
+=== RUN   TestBC_2_06_003_RouterAddr_ConcurrentSnapshot
+--- PASS: TestBC_2_06_003_RouterAddr_ConcurrentSnapshot (0.00s)
+=== RUN   TestBC_2_06_003_P99_PendingLessThan10Samples
+=== PAUSE TestBC_2_06_003_P99_PendingLessThan10Samples
+=== RUN   TestBC_2_06_003_P99_ValidAfter10Samples
+=== PAUSE TestBC_2_06_003_P99_ValidAfter10Samples
+=== RUN   TestBC_2_06_003_P99HistogramAccuracy
+=== PAUSE TestBC_2_06_003_P99HistogramAccuracy
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== CONT  TestBC_2_06_003_NewPathTracker_Unchanged
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss
+=== CONT  TestBC_2_06_003_P99HistogramAccuracy
+=== CONT  TestBC_2_06_003_P99_ValidAfter10Samples
+=== CONT  TestBC_2_06_003_P99_PendingLessThan10Samples
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha
+=== CONT  TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#00
+=== CONT  TestBC_2_02_003_Rank_ErrNoActivePaths
+=== CONT  TestBC_2_02_003_PathTracker_ResetMissesOnSuccess
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#00
+=== CONT  TestBC_2_02_003_PathTracker_InactiveAfterMisses
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss
+=== CONT  TestBC_2_02_003_Rank_OrderedByScore
+=== RUN   TestBC_2_06_003_P99HistogramAccuracy/all_samples_in_0_25ms_bucket
+=== CONT  TestBC_2_02_003_Rank_ExcludesInactivePaths
+=== RUN   TestBC_2_02_003_Rank_OrderedByScore/three_paths_ascending_RTT
+=== PAUSE TestBC_2_06_003_P99HistogramAccuracy/all_samples_in_0_25ms_bucket
+=== RUN   TestBC_2_06_003_P99HistogramAccuracy/samples_across_0_25ms_and_100_150ms
+=== CONT  TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== CONT  TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT
+=== PAUSE TestBC_2_06_003_P99HistogramAccuracy/samples_across_0_25ms_and_100_150ms
+=== CONT  TestBC_2_02_003_PathTracker_Reactivation
+=== RUN   TestBC_2_06_003_P99HistogramAccuracy/p99_in_150_200ms_bucket
+=== PAUSE TestBC_2_06_003_P99HistogramAccuracy/p99_in_150_200ms_bucket
+=== CONT  TestBC_2_02_003_PathTracker_ScoreDelegates
+=== RUN   TestBC_2_06_003_P99HistogramAccuracy/p99_in_200_300ms_coarse_bucket
+=== CONT  TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors
+=== CONT  TestBC_2_02_003_Rank_TiebreakByID
+--- PASS: TestBC_2_06_003_NewPathTracker_Unchanged (0.00s)
+--- PASS: TestBC_2_02_003_Rank_TiebreakByID (0.00s)
+--- PASS: TestBC_2_06_003_P99_PendingLessThan10Samples (0.00s)
+--- PASS: TestBC_2_06_003_P99_ValidAfter10Samples (0.00s)
+=== CONT  TestBC_2_02_003_PathScore_Transitive
+=== RUN   TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C
+=== CONT  TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded
+=== PAUSE TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#01
+=== RUN   TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#01
+=== PAUSE TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#02
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss
+=== PAUSE TestBC_2_02_003_Rank_OrderedByScore/three_paths_ascending_RTT
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss
+--- PASS: TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction (0.00s)
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold
+=== RUN   TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#02
+=== PAUSE TestBC_2_06_003_P99HistogramAccuracy/p99_in_200_300ms_coarse_bucket
+=== RUN   TestBC_2_02_003_Rank_OrderedByScore/two_paths
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#03
+=== RUN   TestBC_2_06_003_P99HistogramAccuracy/p99_in_unbounded_bucket_ge_2000ms
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#03
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT
+=== PAUSE TestBC_2_06_003_P99HistogramAccuracy/p99_in_unbounded_bucket_ge_2000ms
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT
+=== PAUSE TestBC_2_02_003_Rank_OrderedByScore/two_paths
+=== CONT  TestBC_2_02_003_PathTracker_FirstProbeRTTOverride
+=== CONT  TestBC_2_02_003_PathTracker_LossUpdatesEWMA
+=== CONT  TestBC_2_02_003_PathTracker_NewInitialRTT
+--- PASS: TestBC_2_02_003_PathTracker_ResetMissesOnSuccess (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_LossUpdatesEWMA (0.00s)
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss
+=== PAUSE TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#04
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT
+=== CONT  TestBC_2_02_003_PathTracker_EWMAConvergence
+=== CONT  TestBC_2_02_003_PathScore_Formula
+--- PASS: TestBC_2_02_003_PathTracker_InactiveAfterMisses (0.00s)
+--- PASS: TestBC_2_02_003_Rank_ErrNoActivePaths (0.00s)
+--- PASS: TestBC_2_02_003_Rank_ExcludesInactivePaths (0.00s)
+=== RUN   TestBC_2_02_003_PathScore_Formula/#00
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation
+=== CONT  TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#04
+=== CONT  TestBC_2_06_003_Snapshot_RouterAddr_Propagates
+=== CONT  TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold
+=== CONT  TestBC_2_02_003_Rank_SinglePath
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha
+=== CONT  TestBC_2_06_003_P99HistogramAccuracy/all_samples_in_0_25ms_bucket
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#00
+=== CONT  TestBC_2_06_003_P99HistogramAccuracy/p99_in_unbounded_bucket_ge_2000ms
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers
+=== CONT  TestBC_2_06_003_P99HistogramAccuracy/p99_in_150_200ms_bucket
+--- PASS: TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes (0.00s)
+=== CONT  TestBC_2_06_003_P99HistogramAccuracy/samples_across_0_25ms_and_100_150ms
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#00
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true
+=== RUN   TestBC_2_02_003_PathScore_Formula/#01
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#01
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true
+=== RUN   TestBC_2_02_003_PathScore_Formula/#02
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#00
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false
+=== CONT  TestBC_2_06_003_P99HistogramAccuracy/p99_in_200_300ms_coarse_bucket
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold
+--- PASS: TestBC_2_02_003_PathScore_ZeroLossPureRTT (0.00s)
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold
+=== CONT  TestBC_2_02_003_Rank_OrderedByScore/two_paths
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/ipv4_with_port
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#01
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/ipv4_with_port
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#02
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#01
+=== RUN   TestBC_2_02_003_PathScore_Formula/#03
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#03
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false
+=== CONT  TestBC_2_02_003_Rank_OrderedByScore/three_paths_ascending_RTT
+--- PASS: TestBC_2_02_003_PathTracker_Reactivation (0.00s)
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/localhost_with_port
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#02
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/localhost_with_port
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#02
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded
+--- PASS: TestBC_2_02_003_PathTracker_ScoreDelegates (0.00s)
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded
+=== CONT  TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss
+=== RUN   TestBC_2_02_003_PathScore_Formula/#04
+=== CONT  TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/hostname_with_port
+=== CONT  TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C
+--- PASS: TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_FirstProbeRTTOverride (0.00s)
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#03
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#04
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#04
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/hostname_with_port
+--- PASS: TestBC_2_02_003_PathTracker_EWMAConvergence (0.00s)
+=== RUN   TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true
+=== RUN   TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/h_colon_9000
+--- PASS: TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess (0.00s)
+=== PAUSE TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/h_colon_9000
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#03
+=== RUN   TestBC_2_02_003_PathScore_Formula/#05
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#05
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#00
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#01
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#03
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers
+=== PAUSE TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery
+--- PASS: TestBC_2_06_003_Snapshot_RouterAddr_Propagates (0.00s)
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#02
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#04
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/ipv4_with_port
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/hostname_with_port
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded
+=== CONT  TestBC_2_02_003_PathScore_Formula/#01
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold
+--- PASS: TestBC_2_02_003_Snapshot_DegradedMirrorsIsDegraded (0.00s)
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/localhost_with_port
+=== CONT  TestBC_2_02_003_PathScore_Formula/#02
+--- PASS: TestBC_2_02_003_Rank_SinglePath (0.00s)
+=== CONT  TestBC_2_02_003_PathScore_Formula/#00
+=== CONT  TestBC_2_02_003_PathScore_Formula/#05
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded
+=== CONT  TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/h_colon_9000
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true
+--- PASS: TestBC_2_02_003_PathTracker_NewInitialRTT (0.00s)
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false
+=== CONT  TestBC_2_02_003_PathScore_Formula/#03
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#04
+=== CONT  TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true
+=== CONT  TestBC_2_02_003_PathScore_Formula/#04
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#05
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#05
+--- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss (0.00s)
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha/#06
+--- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT (0.00s)
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha/#06
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#00
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#02
+--- PASS: TestBC_2_02_003_PathTracker_IsDegraded (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/transitions_above_then_recovers (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/sustained_degradation_then_sustained_recovery (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/always_below_threshold (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/always_above_threshold (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/boundary_exactly_at_threshold (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded/loss_event_does_not_change_degraded (0.00s)
+--- PASS: TestBC_2_06_003_P99HistogramAccuracy (0.00s)
+    --- PASS: TestBC_2_06_003_P99HistogramAccuracy/all_samples_in_0_25ms_bucket (0.00s)
+    --- PASS: TestBC_2_06_003_P99HistogramAccuracy/p99_in_unbounded_bucket_ge_2000ms (0.00s)
+    --- PASS: TestBC_2_06_003_P99HistogramAccuracy/p99_in_150_200ms_bucket (0.00s)
+    --- PASS: TestBC_2_06_003_P99HistogramAccuracy/samples_across_0_25ms_and_100_150ms (0.00s)
+    --- PASS: TestBC_2_06_003_P99HistogramAccuracy/p99_in_200_300ms_coarse_bucket (0.00s)
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#03
+--- PASS: TestBC_2_02_003_Rank_OrderedByScore (0.00s)
+    --- PASS: TestBC_2_02_003_Rank_OrderedByScore/two_paths (0.00s)
+    --- PASS: TestBC_2_02_003_Rank_OrderedByScore/three_paths_ascending_RTT (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_Transitive (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C (0.00s)
+--- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/ipv4_with_port (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/hostname_with_port (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/localhost_with_port (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr/h_colon_9000 (0.00s)
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#01
+--- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#04 (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#01 (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#00 (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#03 (0.00s)
+    --- PASS: TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha/#02 (0.00s)
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#04
+--- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200ms_boundary_not_degraded (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_250ms_degraded_true (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_150ms_degraded_false (0.00s)
+    --- PASS: TestBC_2_02_003_PathTracker_IsDegraded_OnReactivation/reactivation_at_200_1ms_degraded_true (0.00s)
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#06
+=== CONT  TestNewPathTracker_RejectsInvalidAlpha/#05
+--- PASS: TestBC_2_02_003_PathScore_Formula (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#01 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#02 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#00 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#05 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#03 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#04 (0.00s)
+--- PASS: TestNewPathTracker_RejectsInvalidAlpha (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#02 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#00 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#03 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#01 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#04 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#06 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#05 (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_PropertyTransitive_Manual (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/paths	1.476s
+=== RUN   TestValidateRTTFloat_RejectsNaN
+=== PAUSE TestValidateRTTFloat_RejectsNaN
+=== RUN   TestValidateRTTFloat_RejectsPosInf
+=== PAUSE TestValidateRTTFloat_RejectsPosInf
+=== RUN   TestValidateRTTFloat_RejectsNegInf
+=== PAUSE TestValidateRTTFloat_RejectsNegInf
+=== RUN   TestValidateRTTFloat_RejectsNegative
+=== PAUSE TestValidateRTTFloat_RejectsNegative
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive
+=== RUN   TestDaemonPathsList_HandlerRegistered
+=== PAUSE TestDaemonPathsList_HandlerRegistered
+=== RUN   TestDaemonPathsList_EmptySource
+=== PAUSE TestDaemonPathsList_EmptySource
+=== RUN   TestPathEntry_RTTValueSerialization
+=== PAUSE TestPathEntry_RTTValueSerialization
+=== RUN   TestRTTValue_RoundTrip
+=== PAUSE TestRTTValue_RoundTrip
+=== RUN   TestPathEntry_StatusFromDegraded
+=== PAUSE TestPathEntry_StatusFromDegraded
+=== RUN   TestDaemonRouterMetrics_HandlerRegistered
+=== PAUSE TestDaemonRouterMetrics_HandlerRegistered
+=== RUN   TestDaemonRouterMetrics_SVTNNotFound
+=== PAUSE TestDaemonRouterMetrics_SVTNNotFound
+=== RUN   TestDaemonRouterStatus_HandlerRegistered
+=== PAUSE TestDaemonRouterStatus_HandlerRegistered
+=== RUN   TestDaemonRouterStatus_RedBand
+=== PAUSE TestDaemonRouterStatus_RedBand
+=== RUN   TestDaemonRouterStatus_QualityStatusIndependence
+=== PAUSE TestDaemonRouterStatus_QualityStatusIndependence
+=== RUN   TestQualityFromEntry_PendingWhenSampleCountLow
+=== PAUSE TestQualityFromEntry_PendingWhenSampleCountLow
+=== RUN   TestQualityFromEntry_PendingWinsOverDegraded
+=== PAUSE TestQualityFromEntry_PendingWinsOverDegraded
+=== RUN   TestQualityFromEntry_GreenWithSufficientSamples
+=== PAUSE TestQualityFromEntry_GreenWithSufficientSamples
+=== RUN   TestQualityFromEntry_NeverEmitsFailed
+=== PAUSE TestQualityFromEntry_NeverEmitsFailed
+=== RUN   TestPathsList_PassesRouterAddr
+=== PAUSE TestPathsList_PassesRouterAddr
+=== RUN   TestPathsList_RouterAddrEmptyForAddrLessSnapshot
+=== PAUSE TestPathsList_RouterAddrEmptyForAddrLessSnapshot
+=== RUN   TestPathsList_DiscriminatingStatusOracle
+=== PAUSE TestPathsList_DiscriminatingStatusOracle
+=== RUN   TestRouterMetrics_MalformedArgsDecode
+=== PAUSE TestRouterMetrics_MalformedArgsDecode
+=== RUN   TestVP047_FieldSwapOracle
+=== PAUSE TestVP047_FieldSwapOracle
+=== RUN   TestEC006_DegradedAndPendingRow
+=== PAUSE TestEC006_DegradedAndPendingRow
+=== RUN   TestRouterMetrics_MissingRequiredSVTN
+=== PAUSE TestRouterMetrics_MissingRequiredSVTN
+=== RUN   TestEC002_AllPathsPending
+=== PAUSE TestEC002_AllPathsPending
+=== RUN   TestPathEntry_StatusEnumClosed
+=== PAUSE TestPathEntry_StatusEnumClosed
+=== RUN   TestRTTValue_JSONShapeExact
+=== PAUSE TestRTTValue_JSONShapeExact
+=== RUN   TestRTTValue_UnmarshalRejectsNonPendingStringTokens_NaN
+=== PAUSE TestRTTValue_UnmarshalRejectsNonPendingStringTokens_NaN
+=== RUN   TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf
+=== PAUSE TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf
+=== RUN   TestOverallQuality_MixedPathsPrecedence
+=== PAUSE TestOverallQuality_MixedPathsPrecedence
+=== RUN   TestRouterStatus_EmptyPaths_QualityIsPending
+=== PAUSE TestRouterStatus_EmptyPaths_QualityIsPending
+=== RUN   TestRTTValue_UnmarshalJSON_NullRejected
+=== PAUSE TestRTTValue_UnmarshalJSON_NullRejected
+=== RUN   TestRTTValue_UnmarshalRejectsNegative
+=== PAUSE TestRTTValue_UnmarshalRejectsNegative
+=== RUN   TestVP047_SbctlPathsList_EndToEnd
+=== PAUSE TestVP047_SbctlPathsList_EndToEnd
+=== RUN   TestVP047_RouterAddrNonEmpty
+=== PAUSE TestVP047_RouterAddrNonEmpty
+=== RUN   TestProp_BC_2_06_001_NoSkipTransitionDuringDegradation
++ no Green→Red skip during monotone degradation: OK, passed 1000 tests.
+Elapsed time: 229.213083ms
+--- PASS: TestProp_BC_2_06_001_NoSkipTransitionDuringDegradation (0.23s)
+=== RUN   TestProp_BC_2_06_001_NoRedToGreenSkipDuringRecovery
++ no Red→Green skip during monotone recovery: OK, passed 1000 tests.
+Elapsed time: 230.882958ms
+--- PASS: TestProp_BC_2_06_001_NoRedToGreenSkipDuringRecovery (0.23s)
+=== RUN   TestProp_BC_2_06_001_QualityIsAlwaysValidEnum
++ Current() always returns a valid Quality enum value: OK, passed 1000
+   tests.
+Elapsed time: 231.242666ms
+--- PASS: TestProp_BC_2_06_001_QualityIsAlwaysValidEnum (0.23s)
+=== RUN   TestProp_BC_2_06_001_GreenToRedSingleStep
++ single Green→Red jump does not skip Yellow: OK, passed 1000 tests.
+Elapsed time: 14.952791ms
+--- PASS: TestProp_BC_2_06_001_GreenToRedSingleStep (0.02s)
+=== RUN   TestProp_BC_2_06_002_MissingFrameNeverSkipsLevel
++ OnMissingFrame never skips a degradation level: OK, passed 1000 tests.
+Elapsed time: 71.390541ms
+--- PASS: TestProp_BC_2_06_002_MissingFrameNeverSkipsLevel (0.07s)
+=== RUN   TestQualityIndicator_OnMissingFrame_PropertyMonotone
++ each OnMissingFrame call degrades at most one level: OK, passed 1000
+   tests.
+Elapsed time: 256.084ms
+--- PASS: TestQualityIndicator_OnMissingFrame_PropertyMonotone (0.26s)
+=== RUN   TestQualityIndicator_ThresholdClassification
+=== PAUSE TestQualityIndicator_ThresholdClassification
+=== RUN   TestQualityIndicator_ThresholdBoundary
+=== PAUSE TestQualityIndicator_ThresholdBoundary
+=== RUN   TestQualityIndicator_HysteresisUpgrade
+=== PAUSE TestQualityIndicator_HysteresisUpgrade
+=== RUN   TestQualityIndicator_RedToGreenViaSixMeasurements
+=== PAUSE TestQualityIndicator_RedToGreenViaSixMeasurements
+=== RUN   TestQualityIndicator_SingleGoodMeasurementNoUpgrade
+=== PAUSE TestQualityIndicator_SingleGoodMeasurementNoUpgrade
+=== RUN   TestQualityIndicator_HysteresisResetOnBadMeasurement
+=== PAUSE TestQualityIndicator_HysteresisResetOnBadMeasurement
+=== RUN   TestQualityIndicator_MissingFrameDowngradeGreenToYellow
+=== PAUSE TestQualityIndicator_MissingFrameDowngradeGreenToYellow
+=== RUN   TestQualityIndicator_MissingFrameDowngradeYellowToRed
+=== PAUSE TestQualityIndicator_MissingFrameDowngradeYellowToRed
+=== RUN   TestQualityIndicator_MissingFrameSubthresholdNoDowngrade
+=== PAUSE TestQualityIndicator_MissingFrameSubthresholdNoDowngrade
+=== RUN   TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate
+=== PAUSE TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate
+=== RUN   TestQualityIndicator_MissingFrameCounterResetByYellowUpdate
+=== PAUSE TestQualityIndicator_MissingFrameCounterResetByYellowUpdate
+=== RUN   TestQualityIndicator_DegradationNeverSkipsLevel
+=== PAUSE TestQualityIndicator_DegradationNeverSkipsLevel
+=== RUN   TestQualityIndicator_RecoveryNeverSkipsLevel
+=== PAUSE TestQualityIndicator_RecoveryNeverSkipsLevel
+=== RUN   TestQualityIndicator_DowngradeIsImmediate
+=== PAUSE TestQualityIndicator_DowngradeIsImmediate
+=== RUN   TestQualityIndicator_MissingFrameRecoveryAfterDowngrade
+=== PAUSE TestQualityIndicator_MissingFrameRecoveryAfterDowngrade
+=== RUN   TestQualityIndicator_String
+=== PAUSE TestQualityIndicator_String
+=== RUN   TestQualityIndicator_ConcurrentUpdates
+=== PAUSE TestQualityIndicator_ConcurrentUpdates
+=== CONT  TestValidateRTTFloat_RejectsNegInf
+=== CONT  TestPathEntry_StatusEnumClosed
+=== CONT  TestQualityIndicator_MissingFrameRecoveryAfterDowngrade
+=== CONT  TestRouterMetrics_MissingRequiredSVTN
+--- PASS: TestValidateRTTFloat_RejectsNegInf (0.00s)
+=== CONT  TestDaemonPathsList_EmptySource
+=== CONT  TestDaemonRouterStatus_RedBand
+=== CONT  TestDaemonRouterMetrics_HandlerRegistered
+--- PASS: TestDaemonRouterStatus_RedBand (0.00s)
+=== CONT  TestDaemonPathsList_HandlerRegistered
+--- PASS: TestQualityIndicator_MissingFrameRecoveryAfterDowngrade (0.00s)
+=== CONT  TestDaemonRouterStatus_QualityStatusIndependence
+=== RUN   TestDaemonRouterStatus_QualityStatusIndependence/row_a_degraded_and_pending
+=== CONT  TestPathEntry_RTTValueSerialization
+=== RUN   TestPathEntry_RTTValueSerialization/row_a_count_0
+=== RUN   TestPathEntry_StatusEnumClosed/active_true_degraded_false
+=== PAUSE TestDaemonRouterStatus_QualityStatusIndependence/row_a_degraded_and_pending
+=== PAUSE TestPathEntry_StatusEnumClosed/active_true_degraded_false
+=== RUN   TestDaemonRouterStatus_QualityStatusIndependence/row_b_degraded_and_sufficient_samples
+=== RUN   TestRouterMetrics_MissingRequiredSVTN/nil_args
+=== CONT  TestPathsList_DiscriminatingStatusOracle
+--- PASS: TestDaemonPathsList_HandlerRegistered (0.00s)
+--- PASS: TestDaemonPathsList_EmptySource (0.00s)
+--- PASS: TestDaemonRouterMetrics_HandlerRegistered (0.00s)
+=== CONT  TestValidateRTTFloat_RejectsNegative
+=== CONT  TestQualityIndicator_RedToGreenViaSixMeasurements
+=== CONT  TestQualityIndicator_String
+=== PAUSE TestPathEntry_RTTValueSerialization/row_a_count_0
+=== RUN   TestPathEntry_RTTValueSerialization/row_b_count_9
+=== CONT  TestRouterStatus_EmptyPaths_QualityIsPending
+=== CONT  TestValidateRTTFloat_RejectsNaN
+=== RUN   TestPathEntry_StatusEnumClosed/active_true_degraded_true
+=== PAUSE TestDaemonRouterStatus_QualityStatusIndependence/row_b_degraded_and_sufficient_samples
+=== CONT  TestDaemonRouterStatus_HandlerRegistered
+=== RUN   TestDaemonRouterStatus_QualityStatusIndependence/row_c_healthy_pending
+=== PAUSE TestRouterMetrics_MissingRequiredSVTN/nil_args
+=== PAUSE TestDaemonRouterStatus_QualityStatusIndependence/row_c_healthy_pending
+=== CONT  TestValidateRTTFloat_RejectsPosInf
+=== CONT  TestEC002_AllPathsPending
+=== RUN   TestRouterMetrics_MissingRequiredSVTN/empty_object
+=== PAUSE TestPathEntry_RTTValueSerialization/row_b_count_9
+=== RUN   TestPathEntry_RTTValueSerialization/row_c_count_10
+=== CONT  TestRouterMetrics_MalformedArgsDecode
+=== PAUSE TestPathEntry_RTTValueSerialization/row_c_count_10
+=== CONT  TestQualityIndicator_ConcurrentUpdates
+=== RUN   TestPathEntry_RTTValueSerialization/row_d_count_100
+=== CONT  TestDaemonRouterMetrics_SVTNNotFound
+=== PAUSE TestPathEntry_RTTValueSerialization/row_d_count_100
+=== CONT  TestQualityIndicator_MissingFrameDowngradeYellowToRed
+=== CONT  TestVP047_SbctlPathsList_EndToEnd
+=== CONT  TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate
+=== PAUSE TestPathEntry_StatusEnumClosed/active_true_degraded_true
+=== CONT  TestRTTValue_UnmarshalRejectsNegative
+=== RUN   TestRTTValue_UnmarshalRejectsNegative/negative_one
+=== PAUSE TestRTTValue_UnmarshalRejectsNegative/negative_one
+=== RUN   TestRTTValue_UnmarshalRejectsNegative/negative_small
+=== RUN   TestDaemonRouterStatus_QualityStatusIndependence/row_d_green_sufficient_samples
+=== PAUSE TestDaemonRouterStatus_QualityStatusIndependence/row_d_green_sufficient_samples
+=== CONT  TestQualityIndicator_RecoveryNeverSkipsLevel
+=== RUN   TestPathEntry_StatusEnumClosed/active_false_degraded_false
+=== PAUSE TestPathEntry_StatusEnumClosed/active_false_degraded_false
+=== RUN   TestPathEntry_StatusEnumClosed/active_false_degraded_true
+=== PAUSE TestRTTValue_UnmarshalRejectsNegative/negative_small
+--- PASS: TestPathsList_DiscriminatingStatusOracle (0.00s)
+=== RUN   TestRTTValue_UnmarshalRejectsNegative/negative_large
+--- PASS: TestValidateRTTFloat_RejectsNegative (0.00s)
+=== PAUSE TestRouterMetrics_MissingRequiredSVTN/empty_object
+=== RUN   TestRouterMetrics_MalformedArgsDecode/garbage_bytes
+=== CONT  TestQualityIndicator_ThresholdClassification
+=== RUN   TestRouterMetrics_MissingRequiredSVTN/empty_svtn_id
+=== CONT  TestVP047_FieldSwapOracle
+=== PAUSE TestPathEntry_StatusEnumClosed/active_false_degraded_true
+--- PASS: TestQualityIndicator_String (0.00s)
+=== PAUSE TestRTTValue_UnmarshalRejectsNegative/negative_large
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_well_inside_budget
+=== PAUSE TestRouterMetrics_MalformedArgsDecode/garbage_bytes
+=== RUN   TestRTTValue_UnmarshalRejectsNegative/negative_zero
+=== RUN   TestRouterMetrics_MalformedArgsDecode/wrong_type_svtn_id_int
+--- PASS: TestQualityIndicator_RedToGreenViaSixMeasurements (0.00s)
+--- PASS: TestVP047_FieldSwapOracle (0.00s)
+=== CONT  TestQualityFromEntry_NeverEmitsFailed
+=== CONT  TestPathsList_PassesRouterAddr
+=== PAUSE TestRouterMetrics_MissingRequiredSVTN/empty_svtn_id
+=== RUN   TestQualityFromEntry_NeverEmitsFailed/active_low_samples
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_well_inside_budget
+=== PAUSE TestRTTValue_UnmarshalRejectsNegative/negative_zero
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms
+=== PAUSE TestRouterMetrics_MalformedArgsDecode/wrong_type_svtn_id_int
+--- PASS: TestValidateRTTFloat_RejectsNaN (0.00s)
+=== CONT  TestRTTValue_RoundTrip
+--- PASS: TestDaemonRouterStatus_HandlerRegistered (0.00s)
+=== RUN   TestRTTValue_RoundTrip/pending_count_0
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5%
+=== CONT  TestPathEntry_StatusFromDegraded
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5%
+=== PAUSE TestRTTValue_RoundTrip/pending_count_0
+=== RUN   TestPathEntry_StatusFromDegraded/active_false_is_degraded
+=== PAUSE TestQualityFromEntry_NeverEmitsFailed/active_low_samples
+--- PASS: TestValidateRTTFloat_RejectsPosInf (0.00s)
+--- PASS: TestEC002_AllPathsPending (0.00s)
+=== RUN   TestRouterMetrics_MalformedArgsDecode/truncated_json
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive/#00
+=== RUN   TestRTTValue_RoundTrip/pending_count_9_nonzero_value
+=== PAUSE TestPathEntry_StatusFromDegraded/active_false_is_degraded
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive/#00
+=== RUN   TestQualityIndicator_ThresholdClassification/green:_both_at_boundary
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive/#01
+=== PAUSE TestQualityIndicator_ThresholdClassification/green:_both_at_boundary
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive/#01
+--- PASS: TestDaemonRouterMetrics_SVTNNotFound (0.00s)
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms)
+=== RUN   TestPathEntry_StatusFromDegraded/active_degraded_is_degraded
+=== RUN   TestQualityFromEntry_NeverEmitsFailed/active_high_samples_green
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms)
+=== PAUSE TestRTTValue_RoundTrip/pending_count_9_nonzero_value
+=== PAUSE TestRouterMetrics_MalformedArgsDecode/truncated_json
+=== PAUSE TestQualityFromEntry_NeverEmitsFailed/active_high_samples_green
+=== RUN   TestRTTValue_RoundTrip/float_count_10
+--- PASS: TestQualityIndicator_MissingFrameDowngradeYellowToRed (0.00s)
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive/#02
+=== PAUSE TestPathEntry_StatusFromDegraded/active_degraded_is_degraded
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms)
+=== RUN   TestRouterMetrics_MalformedArgsDecode/null_svtn_id
+=== RUN   TestPathEntry_StatusFromDegraded/active_ok_is_active
+=== RUN   TestQualityFromEntry_NeverEmitsFailed/degraded_low_samples
+=== PAUSE TestRTTValue_RoundTrip/float_count_10
+=== PAUSE TestQualityFromEntry_NeverEmitsFailed/degraded_low_samples
+--- PASS: TestQualityIndicator_MissingFrameCounterResetOnGoodUpdate (0.00s)
+--- PASS: TestQualityIndicator_RecoveryNeverSkipsLevel (0.00s)
+=== RUN   TestRTTValue_RoundTrip/float_count_100
+--- PASS: TestRouterStatus_EmptyPaths_QualityIsPending (0.00s)
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms)
+--- PASS: TestPathsList_PassesRouterAddr (0.00s)
+=== PAUSE TestRouterMetrics_MalformedArgsDecode/null_svtn_id
+=== PAUSE TestPathEntry_StatusFromDegraded/active_ok_is_active
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive/#02
+=== RUN   TestQualityFromEntry_NeverEmitsFailed/failed_low_samples
+=== RUN   TestRouterMetrics_MalformedArgsDecode/extra_fields_no_svtn_id
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive/#03
+=== PAUSE TestRTTValue_RoundTrip/float_count_100
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%)
+=== PAUSE TestRouterMetrics_MalformedArgsDecode/extra_fields_no_svtn_id
+=== RUN   TestRTTValue_RoundTrip/float_integer_precision
+=== PAUSE TestQualityFromEntry_NeverEmitsFailed/failed_low_samples
+=== CONT  TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive/#03
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%)
+=== CONT  TestEC006_DegradedAndPendingRow
+=== RUN   TestQualityFromEntry_NeverEmitsFailed/failed_high_samples
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%)
+=== RUN   TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_inf_string
+=== PAUSE TestRTTValue_RoundTrip/float_integer_precision
+--- PASS: TestEC006_DegradedAndPendingRow (0.00s)
+=== CONT  TestOverallQuality_MixedPathsPrecedence
+=== RUN   TestOverallQuality_MixedPathsPrecedence/green_yellow_gives_yellow
+=== CONT  TestRTTValue_UnmarshalRejectsNonPendingStringTokens_NaN
+=== PAUSE TestQualityFromEntry_NeverEmitsFailed/failed_high_samples
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%)
+=== PAUSE TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_inf_string
+=== RUN   TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/minus_inf_string
+=== CONT  TestVP047_RouterAddrNonEmpty
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/green_yellow_gives_yellow
+=== RUN   TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range
+=== RUN   TestVP047_RouterAddrNonEmpty/handler_seam_non_empty
+=== RUN   TestOverallQuality_MixedPathsPrecedence/green_red_gives_red
+=== PAUSE TestVP047_RouterAddrNonEmpty/handler_seam_non_empty
+--- PASS: TestRTTValue_UnmarshalRejectsNonPendingStringTokens_NaN (0.00s)
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/green_red_gives_red
+=== CONT  TestQualityIndicator_DowngradeIsImmediate
+=== RUN   TestVP047_RouterAddrNonEmpty/constructor_through_snapshot
+=== PAUSE TestVP047_RouterAddrNonEmpty/constructor_through_snapshot
+=== CONT  TestRTTValue_JSONShapeExact
+--- PASS: TestQualityIndicator_DowngradeIsImmediate (0.00s)
+=== CONT  TestQualityIndicator_DegradationNeverSkipsLevel
+=== PAUSE TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/minus_inf_string
+=== RUN   TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_infinity_string
+=== PAUSE TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range
+=== RUN   TestOverallQuality_MixedPathsPrecedence/yellow_red_gives_red
+=== PAUSE TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_infinity_string
+=== CONT  TestQualityIndicator_MissingFrameCounterResetByYellowUpdate
+=== CONT  TestQualityIndicator_MissingFrameSubthresholdNoDowngrade
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms)
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/yellow_red_gives_red
+=== CONT  TestQualityIndicator_HysteresisUpgrade
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive/#04
+=== RUN   TestRTTValue_JSONShapeExact/pending_kind_zero_value
+=== PAUSE TestRTTValue_JSONShapeExact/pending_kind_zero_value
+=== CONT  TestQualityIndicator_HysteresisResetOnBadMeasurement
+=== RUN   TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade
+=== CONT  TestPathsList_RouterAddrEmptyForAddrLessSnapshot
+=== RUN   TestOverallQuality_MixedPathsPrecedence/red_pending_gives_pending
+=== RUN   TestRTTValue_JSONShapeExact/pending_kind_nonzero_value_suppressed
+--- PASS: TestQualityIndicator_DegradationNeverSkipsLevel (0.00s)
+=== PAUSE TestRTTValue_JSONShapeExact/pending_kind_nonzero_value_suppressed
+=== CONT  TestQualityIndicator_SingleGoodMeasurementNoUpgrade
+=== CONT  TestQualityIndicator_MissingFrameDowngradeGreenToYellow
+=== RUN   TestRTTValue_JSONShapeExact/float_kind_integer_ms
+=== PAUSE TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade
+=== CONT  TestQualityIndicator_ThresholdBoundary
+=== CONT  TestQualityFromEntry_PendingWinsOverDegraded
+=== RUN   TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade
+=== PAUSE TestRTTValue_JSONShapeExact/float_kind_integer_ms
+=== RUN   TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0%
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms)
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive/#04
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/red_pending_gives_pending
+--- PASS: TestQualityIndicator_ConcurrentUpdates (0.00s)
+=== CONT  TestQualityFromEntry_PendingWhenSampleCountLow
+--- PASS: TestQualityIndicator_MissingFrameCounterResetByYellowUpdate (0.00s)
+--- PASS: TestQualityIndicator_MissingFrameSubthresholdNoDowngrade (0.00s)
+=== RUN   TestRTTValue_JSONShapeExact/float_kind_fractional_ms
+=== PAUSE TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade
+=== PAUSE TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0%
+=== CONT  TestQualityFromEntry_GreenWithSufficientSamples
+--- PASS: TestQualityIndicator_HysteresisResetOnBadMeasurement (0.00s)
+=== PAUSE TestRTTValue_JSONShapeExact/float_kind_fractional_ms
+=== RUN   TestOverallQuality_MixedPathsPrecedence/yellow_pending_gives_pending
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/yellow_pending_gives_pending
+=== RUN   TestValidateRTTFloat_AcceptsZeroAndPositive/#05
+=== RUN   TestOverallQuality_MixedPathsPrecedence/green_green_gives_green
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/green_green_gives_green
+=== PAUSE TestValidateRTTFloat_AcceptsZeroAndPositive/#05
+=== RUN   TestOverallQuality_MixedPathsPrecedence/pending_pending_gives_pending
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/pending_pending_gives_pending
+=== CONT  TestRTTValue_UnmarshalJSON_NullRejected
+=== CONT  TestPathEntry_RTTValueSerialization/row_a_count_0
+=== CONT  TestPathEntry_RTTValueSerialization/row_b_count_9
+=== CONT  TestDaemonRouterStatus_QualityStatusIndependence/row_a_degraded_and_pending
+=== CONT  TestDaemonRouterStatus_QualityStatusIndependence/row_d_green_sufficient_samples
+=== RUN   TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3%
+--- PASS: TestPathsList_RouterAddrEmptyForAddrLessSnapshot (0.00s)
+=== PAUSE TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3%
+--- PASS: TestQualityIndicator_SingleGoodMeasurementNoUpgrade (0.00s)
+--- PASS: TestQualityIndicator_MissingFrameDowngradeGreenToYellow (0.00s)
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%)
+=== CONT  TestPathEntry_RTTValueSerialization/row_c_count_10
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%)
+=== CONT  TestPathEntry_StatusEnumClosed/active_false_degraded_true
+=== CONT  TestPathEntry_StatusEnumClosed/active_true_degraded_true
+=== RUN   TestOverallQuality_MixedPathsPrecedence/green_pending_gives_pending
+=== CONT  TestDaemonRouterStatus_QualityStatusIndependence/row_b_degraded_and_sufficient_samples
+=== PAUSE TestOverallQuality_MixedPathsPrecedence/green_pending_gives_pending
+=== CONT  TestRouterMetrics_MissingRequiredSVTN/empty_svtn_id
+=== CONT  TestRouterMetrics_MissingRequiredSVTN/empty_object
+=== CONT  TestRouterMetrics_MissingRequiredSVTN/nil_args
+=== CONT  TestDaemonRouterStatus_QualityStatusIndependence/row_c_healthy_pending
+=== CONT  TestRTTValue_UnmarshalRejectsNegative/negative_small
+=== CONT  TestRTTValue_UnmarshalRejectsNegative/negative_one
+=== CONT  TestPathEntry_StatusFromDegraded/active_ok_is_active
+=== CONT  TestPathEntry_RTTValueSerialization/row_d_count_100
+=== CONT  TestPathEntry_StatusEnumClosed/active_true_degraded_false
+=== CONT  TestPathEntry_StatusFromDegraded/active_false_is_degraded
+=== CONT  TestRouterMetrics_MalformedArgsDecode/garbage_bytes
+--- PASS: TestQualityFromEntry_PendingWinsOverDegraded (0.00s)
+=== CONT  TestRouterMetrics_MalformedArgsDecode/null_svtn_id
+--- PASS: TestQualityFromEntry_PendingWhenSampleCountLow (0.00s)
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_both_above_yellow
+--- PASS: TestQualityFromEntry_GreenWithSufficientSamples (0.00s)
+=== CONT  TestPathEntry_StatusEnumClosed/active_false_degraded_false
+=== CONT  TestRTTValue_UnmarshalRejectsNegative/negative_large
+=== CONT  TestRouterMetrics_MalformedArgsDecode/truncated_json
+=== CONT  TestRTTValue_UnmarshalRejectsNegative/negative_zero
+=== CONT  TestPathEntry_StatusFromDegraded/active_degraded_is_degraded
+=== CONT  TestRouterMetrics_MalformedArgsDecode/extra_fields_no_svtn_id
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_both_above_yellow
+=== CONT  TestRouterMetrics_MalformedArgsDecode/wrong_type_svtn_id_int
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_extreme_RTT
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_extreme_RTT
+--- PASS: TestRTTValue_UnmarshalJSON_NullRejected (0.00s)
+=== CONT  TestQualityFromEntry_NeverEmitsFailed/active_high_samples_green
+=== CONT  TestRTTValue_RoundTrip/pending_count_9_nonzero_value
+=== CONT  TestRTTValue_RoundTrip/pending_count_0
+=== CONT  TestQualityFromEntry_NeverEmitsFailed/active_low_samples
+=== CONT  TestQualityFromEntry_NeverEmitsFailed/failed_high_samples
+=== CONT  TestRTTValue_RoundTrip/float_count_10
+=== CONT  TestQualityFromEntry_NeverEmitsFailed/degraded_low_samples
+=== RUN   TestQualityIndicator_ThresholdClassification/red:_extreme_loss
+--- PASS: TestRouterMetrics_MissingRequiredSVTN (0.00s)
+    --- PASS: TestRouterMetrics_MissingRequiredSVTN/empty_svtn_id (0.00s)
+    --- PASS: TestRouterMetrics_MissingRequiredSVTN/empty_object (0.00s)
+    --- PASS: TestRouterMetrics_MissingRequiredSVTN/nil_args (0.00s)
+--- PASS: TestPathEntry_RTTValueSerialization (0.00s)
+    --- PASS: TestPathEntry_RTTValueSerialization/row_b_count_9 (0.00s)
+    --- PASS: TestPathEntry_RTTValueSerialization/row_a_count_0 (0.00s)
+    --- PASS: TestPathEntry_RTTValueSerialization/row_c_count_10 (0.00s)
+    --- PASS: TestPathEntry_RTTValueSerialization/row_d_count_100 (0.00s)
+=== CONT  TestRTTValue_RoundTrip/float_integer_precision
+=== CONT  TestRTTValue_RoundTrip/float_count_100
+=== CONT  TestQualityFromEntry_NeverEmitsFailed/failed_low_samples
+=== CONT  TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_inf_string
+=== CONT  TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade
+=== CONT  TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/minus_inf_string
+=== CONT  TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade
+=== CONT  TestVP047_RouterAddrNonEmpty/handler_seam_non_empty
+--- PASS: TestPathEntry_StatusEnumClosed (0.00s)
+    --- PASS: TestPathEntry_StatusEnumClosed/active_false_degraded_true (0.00s)
+    --- PASS: TestPathEntry_StatusEnumClosed/active_true_degraded_true (0.00s)
+    --- PASS: TestPathEntry_StatusEnumClosed/active_true_degraded_false (0.00s)
+    --- PASS: TestPathEntry_StatusEnumClosed/active_false_degraded_false (0.00s)
+=== CONT  TestVP047_RouterAddrNonEmpty/constructor_through_snapshot
+=== CONT  TestRTTValue_JSONShapeExact/pending_kind_zero_value
+=== CONT  TestRTTValue_JSONShapeExact/float_kind_fractional_ms
+=== CONT  TestRTTValue_JSONShapeExact/pending_kind_nonzero_value_suppressed
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive/#00
+=== CONT  TestRTTValue_JSONShapeExact/float_kind_integer_ms
+--- PASS: TestPathEntry_StatusFromDegraded (0.00s)
+    --- PASS: TestPathEntry_StatusFromDegraded/active_ok_is_active (0.00s)
+    --- PASS: TestPathEntry_StatusFromDegraded/active_false_is_degraded (0.00s)
+    --- PASS: TestPathEntry_StatusFromDegraded/active_degraded_is_degraded (0.00s)
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive/#03
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive/#05
+=== CONT  TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_infinity_string
+=== CONT  TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0%
+=== CONT  TestOverallQuality_MixedPathsPrecedence/green_yellow_gives_yellow
+--- PASS: TestDaemonRouterStatus_QualityStatusIndependence (0.00s)
+    --- PASS: TestDaemonRouterStatus_QualityStatusIndependence/row_a_degraded_and_pending (0.00s)
+    --- PASS: TestDaemonRouterStatus_QualityStatusIndependence/row_d_green_sufficient_samples (0.00s)
+    --- PASS: TestDaemonRouterStatus_QualityStatusIndependence/row_b_degraded_and_sufficient_samples (0.00s)
+    --- PASS: TestDaemonRouterStatus_QualityStatusIndependence/row_c_healthy_pending (0.00s)
+=== PAUSE TestQualityIndicator_ThresholdClassification/red:_extreme_loss
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive/#02
+--- PASS: TestQualityFromEntry_NeverEmitsFailed (0.00s)
+    --- PASS: TestQualityFromEntry_NeverEmitsFailed/active_high_samples_green (0.00s)
+    --- PASS: TestQualityFromEntry_NeverEmitsFailed/active_low_samples (0.00s)
+    --- PASS: TestQualityFromEntry_NeverEmitsFailed/failed_high_samples (0.00s)
+    --- PASS: TestQualityFromEntry_NeverEmitsFailed/degraded_low_samples (0.00s)
+    --- PASS: TestQualityFromEntry_NeverEmitsFailed/failed_low_samples (0.00s)
+=== CONT  TestOverallQuality_MixedPathsPrecedence/green_green_gives_green
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive/#04
+=== CONT  TestOverallQuality_MixedPathsPrecedence/green_pending_gives_pending
+=== CONT  TestValidateRTTFloat_AcceptsZeroAndPositive/#01
+=== CONT  TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3%
+=== CONT  TestOverallQuality_MixedPathsPrecedence/yellow_red_gives_red
+=== CONT  TestOverallQuality_MixedPathsPrecedence/yellow_pending_gives_pending
+--- PASS: TestRTTValue_UnmarshalRejectsNegative (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNegative/negative_small (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNegative/negative_one (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNegative/negative_large (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNegative/negative_zero (0.00s)
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%)
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_extreme_RTT
+=== CONT  TestOverallQuality_MixedPathsPrecedence/pending_pending_gives_pending
+--- PASS: TestRTTValue_RoundTrip (0.00s)
+    --- PASS: TestRTTValue_RoundTrip/pending_count_9_nonzero_value (0.00s)
+    --- PASS: TestRTTValue_RoundTrip/pending_count_0 (0.00s)
+    --- PASS: TestRTTValue_RoundTrip/float_integer_precision (0.00s)
+    --- PASS: TestRTTValue_RoundTrip/float_count_100 (0.00s)
+    --- PASS: TestRTTValue_RoundTrip/float_count_10 (0.00s)
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_both_at_boundary
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%)
+--- PASS: TestQualityIndicator_HysteresisUpgrade (0.00s)
+    --- PASS: TestQualityIndicator_HysteresisUpgrade/Red_requires_n_consecutive_Yellow-range_measurements_to_upgrade (0.00s)
+    --- PASS: TestQualityIndicator_HysteresisUpgrade/Yellow_requires_n_consecutive_Green-range_measurements_to_upgrade (0.00s)
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5%
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_extreme_loss
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms)
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms)
+=== CONT  TestQualityIndicator_ThresholdClassification/red:_both_above_yellow
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range
+=== CONT  TestOverallQuality_MixedPathsPrecedence/green_red_gives_red
+=== CONT  TestOverallQuality_MixedPathsPrecedence/red_pending_gives_pending
+--- PASS: TestRouterMetrics_MalformedArgsDecode (0.00s)
+    --- PASS: TestRouterMetrics_MalformedArgsDecode/garbage_bytes (0.00s)
+    --- PASS: TestRouterMetrics_MalformedArgsDecode/null_svtn_id (0.00s)
+    --- PASS: TestRouterMetrics_MalformedArgsDecode/truncated_json (0.00s)
+    --- PASS: TestRouterMetrics_MalformedArgsDecode/extra_fields_no_svtn_id (0.00s)
+    --- PASS: TestRouterMetrics_MalformedArgsDecode/wrong_type_svtn_id_int (0.00s)
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%)
+=== CONT  TestQualityIndicator_ThresholdClassification/green:_well_inside_budget
+=== CONT  TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms)
+--- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive (0.00s)
+    --- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive/#00 (0.00s)
+    --- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive/#03 (0.00s)
+    --- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive/#05 (0.00s)
+    --- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive/#02 (0.00s)
+    --- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive/#01 (0.00s)
+    --- PASS: TestValidateRTTFloat_AcceptsZeroAndPositive/#04 (0.00s)
+--- PASS: TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/minus_inf_string (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_inf_string (0.00s)
+    --- PASS: TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf/plus_infinity_string (0.00s)
+--- PASS: TestRTTValue_JSONShapeExact (0.00s)
+    --- PASS: TestRTTValue_JSONShapeExact/pending_kind_zero_value (0.00s)
+    --- PASS: TestRTTValue_JSONShapeExact/pending_kind_nonzero_value_suppressed (0.00s)
+    --- PASS: TestRTTValue_JSONShapeExact/float_kind_fractional_ms (0.00s)
+    --- PASS: TestRTTValue_JSONShapeExact/float_kind_integer_ms (0.00s)
+--- PASS: TestVP047_RouterAddrNonEmpty (0.00s)
+    --- PASS: TestVP047_RouterAddrNonEmpty/constructor_through_snapshot (0.00s)
+    --- PASS: TestVP047_RouterAddrNonEmpty/handler_seam_non_empty (0.00s)
+--- PASS: TestQualityIndicator_ThresholdBoundary (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdBoundary/canonical:_RTT=15ms_loss=0% (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdBoundary/canonical:_RTT=150ms_loss=3% (0.00s)
+--- PASS: TestOverallQuality_MixedPathsPrecedence (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/green_yellow_gives_yellow (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/green_green_gives_green (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/green_pending_gives_pending (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/yellow_red_gives_red (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/yellow_pending_gives_pending (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/pending_pending_gives_pending (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/green_red_gives_red (0.00s)
+    --- PASS: TestOverallQuality_MixedPathsPrecedence/red_pending_gives_pending (0.00s)
+--- PASS: TestQualityIndicator_ThresholdClassification (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_loss_at_yellow_boundary_(20%) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_extreme_RTT (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_RTT_at_boundary_100ms (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_both_at_boundary (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_loss_just_above_yellow_(21%) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_loss_at_boundary_5% (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_RTT_just_above_yellow_(501ms) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_RTT_just_above_green_(101ms) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_extreme_loss (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/red:_both_above_yellow (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_RTT_in_middle_of_yellow_range (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/green:_well_inside_budget (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_RTT_at_yellow_boundary_(500ms) (0.00s)
+    --- PASS: TestQualityIndicator_ThresholdClassification/yellow:_loss_just_above_green_(6%) (0.00s)
+--- PASS: TestVP047_SbctlPathsList_EndToEnd (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/metrics	2.562s
