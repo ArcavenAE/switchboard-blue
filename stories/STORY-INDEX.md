@@ -72,7 +72,7 @@ inputDocuments:
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.3) |
-| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.4) |
+| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.5) |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.2) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
@@ -176,6 +176,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.53 | 2026-07-01 | RULING-W6TB-J propagation: S-7.02 v1.4→v1.5 — AC-004b updated with VP-055 v1.2 property names (RejectsInvalidName retired; RejectsEmptyOrInvalidUTF8 + TruncatesOversize added); RULING-W6TB-J added to changed_by_rulings; v1.5 changelog erratum added. VP-055 bumped v1.1→v1.2. VP-INDEX v2.27→v2.28. S-7.02 row status cell v1.4→v1.5. |
 | 3.52 | 2026-07-01 | Pass-4 mechanical fix-burst: S-7.02 v1.3→v1.4 (RULING-W6TB-D added to inputDocuments; DRIFT-S702-INPUT-HASH-DEFERRED drift entry added). S-7.01 v1.2→v1.3 (AC-002 anchor PC-2→PC-3; AC-003 anchor precondition-1→postcondition-4; input-hash tbd-v1.1→tbd-v1.2). S-BL.DISCOVERY-WIRE v1.0→v1.1 (RULING-W6TB-H added to changed_by_rulings; Scope Constraints section added). S-BL.ROUTER-ADDR revision 1.1→1.2 (DrftAnnotation typo fixed; Test-prefix obligation label corrected). |
 | 3.51 | 2026-07-01 | S-7.02 v1.2 → v1.3: RULING-W6TB-G (AC-001b exact-N oracle split + Config.TickSource + HeartbeatCount() accessor) + RULING-W6TB-H (AC-005 HMAC-first ordering, key from payload.SVTNID, forged-SVTN oracle closed) + Pass-3 L1 M-1 (nil-observer policy, HeartbeatCount unconditional) + Pass-3 L1 M-2 (AC-004b 255-byte session name cap + VP-055 boundary cases). S-7.02 row status cell v1.2 → v1.3. |
 | 3.50 | 2026-07-01 | POL-002 sibling-sweep for Wave-6 Tranche B Pass-3 L3: S-7.02 Summary row split Pending 3→2 + Ready-for-red-gate 1 (S-7.02); S-BL.ROUTER-ADDR backlog row status `ready-for-red-gate (v1.0)` → `ready-for-red-gate (v1.1)` (story spec bumped to v1.1 per sibling propagation). |

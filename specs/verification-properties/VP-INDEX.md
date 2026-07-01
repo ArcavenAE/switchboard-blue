@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.27"
+version: "2.28"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -78,7 +78,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-052 | N consecutive OnMissingFrame calls → indicator downgrade (one level) | BC-2.06.002 | internal/metrics | integration | P1 | draft | VP-052.md |
 | VP-053 | Empty-tick frame sequence: K ticks → K frames with contiguous seq nums | BC-2.01.002 | internal/halfchannel | proptest | P0 | draft | VP-053.md |
 | VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | draft | VP-054.md |
-| VP-055 | Presence advertisement payload round-trip: required fields present and stable (implementing_story: S-7.02) | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
+| VP-055 | Presence advertisement payload round-trip: required fields present and stable (implementing_story: S-7.02; v1.2: RejectsInvalidName retired → RejectsEmptyOrInvalidUTF8 + TruncatesOversize per RULING-W6TB-J) | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
 | VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
 | VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | implemented | VP-058.md |
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.28 | 2026-07-01 | VP-055 bumped v1.1→v1.2 (RULING-W6TB-J, O-P4L3-01): retire TestPropPresenceAdvertisement_RejectsInvalidName; add TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8 (empty and invalid-UTF-8 inputs → error) and TestPropPresenceAdvertisement_TruncatesOversize (>255-byte valid UTF-8 → truncated ≤255 bytes with "…" suffix, err == nil). Aligns with S-7.02 AC-004b and BC-2.03.003 v1.3 EC-001. Round-trip property unchanged. No count or method changes; total remains 76. |
 | 2.27 | 2026-07-01 | VP-045 bumped v1.1→v1.2 (Pass-3 L3 F-P3L3-H1 sibling propagation per RULING-W6TB-D): partial-coverage note added (BC-2.03.002 PC-1/PC-2/PC-4/PC-5 in-process verified; real-socket PC-3 deferred to S-BL.DISCOVERY-WIRE). No count or method changes; total remains 76. |
 | 2.26 | 2026-07-01 | VP-044 bumped v1.0→v1.1, VP-045 bumped v1.0→v1.1, VP-055 bumped v1.0→v1.1 (S-7.02 LENS-3 traceability backfill per RULING-W6TB-D): implementing_story S-7.02 added to frontmatter of all three; Story Trace sections added; catalog row titles annotated. VP-044 partial-coverage note: in-process registry seam only; multicast wire deferred to S-BL.DISCOVERY-WIRE. No count or method changes; total remains 76. |
 | 2.25 | 2026-07-01 | VP-047 bumped v1.3→v1.4 (RULING-W6TB-F §Ruling 1, F-L3-001): Ruling-1 interim clauses retracted — Property Statement updated (router_addr MUST equal PathSnapshot.RouterAddr; "" valid only for addr-less NewPathTracker paths), proof harness struct comment updated, integration test assertion updated. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed (BC-2.06.003 v1.15; S-BL.ROUTER-ADDR). No count or method changes; total remains 76. |
