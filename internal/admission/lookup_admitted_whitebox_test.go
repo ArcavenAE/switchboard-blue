@@ -5,7 +5,7 @@
 // reflects the internal admitted state without requiring the IsAdmitted
 // observable (which AND-gates on the store, not the returned value).
 //
-// F-L2-A1: TestLookup_Hit_AdmittedFieldTrackedAfterAdmit.
+// F-L2-A1: TestLookup_Hit_AdmittedFieldTrackedAfterAdmit_Whitebox.
 package admission
 
 import (
@@ -16,9 +16,9 @@ import (
 	"github.com/arcavenae/switchboard/internal/frame"
 )
 
-// TestLookup_Hit_AdmittedFieldTrackedAfterAdmit asserts that the admitted field
-// on the AdmittedKey returned by Lookup reflects the internal admitted state:
-// false before AdmitNode, true after.
+// TestLookup_Hit_AdmittedFieldTrackedAfterAdmit_Whitebox asserts that the
+// admitted field on the AdmittedKey returned by Lookup reflects the internal
+// admitted state: false before AdmitNode, true after.
 //
 // The external IsAdmitted observable AND-gates on the store state, not the
 // returned value — this white-box test verifies the field directly so a
@@ -26,7 +26,7 @@ import (
 // AdmitNode) is caught at the source, not just via observable side-effects.
 //
 // F-L2-A1: admitted-field tracking in Lookup return value.
-func TestLookup_Hit_AdmittedFieldTrackedAfterAdmit(t *testing.T) {
+func TestLookup_Hit_AdmittedFieldTrackedAfterAdmit_Whitebox(t *testing.T) {
 	t.Parallel()
 
 	var svtnID [16]byte
