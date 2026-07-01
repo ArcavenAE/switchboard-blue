@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.13"
+version: "1.14"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -25,6 +25,7 @@ modified:
   - 2026-07-01T00:00:00
   - 2026-07-01T12:00:00
   - 2026-07-01T14:00:00
+  - 2026-07-01T16:00:00
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -95,6 +96,7 @@ Operator runs `sbctl paths list` (canonical), `sbctl router metrics --svtn=<id>`
 | EC-005 | Operator uses alias `sbctl router status --target <router>` | Output is identical to `sbctl paths list` plus a `quality` column (green/yellow/red). Exit code, JSON schema, and error handling are identical to the canonical command. There is exactly one code path in `internal/metrics` serving both invocations — the alias is a CLI dispatch shim only. |
 | EC-006 | `sbctl router status --target <router>` on a path with fewer than 10 RTT samples | `rtt_p99_ms` is `"pending"` (string) AND `quality` is `"pending"` (string). The quality column MUST NOT be green/yellow/red when p99 is pending; the p99 sentinel propagates to the quality output. |
 | EC-007 | `sbctl router status --target <router>` on a path with ≥3 consecutive missed keep-alives (liveness failure) AND fewer than 10 RTT samples collected | **Ruling-4 (Wave-6 Tranche A):** `status: "failed"` is RESERVED and MUST NOT be emitted in this wave (see PC-1). For the pending-precedence rule: when liveness failure would otherwise trigger `status: "failed"` AND `SampleCount < 10` (`rtt_p99_ms: "pending"`), the `quality` field MUST still be `"pending"`. The `quality` field MUST NOT be `"failed"` — `"failed"` is not a valid quality enum value. `status` and `quality` remain orthogonal output fields. S502-DEFER-3 precedence ruling remains active for `{active, degraded}` status values: pending-p99 takes precedence for the quality field. This edge case is fully specified for when `S-BL.PATH-FAILED-STATUS` ships. |
+| EC-008 | `router.status` (PC-3 alias) on a node where `len(paths) == 0` (no paths registered) | `quality` MUST be emitted as `"pending"` (indeterminate), NOT as any of `{green, yellow, red}`. An empty-paths node has no RTT or loss inputs to score; emitting a quality value would be fabricated. The `"pending"` value is distinguishable from EC-003 / EC-006 (SampleCount < 10 per path) because `len(paths) == 0` — no path entries appear in the response at all. This is not an error; exit code is 0. |
 
 ## Canonical Test Vectors
 
@@ -138,6 +140,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.14 | 2026-07-01 | product-owner | EC-008 added: `router.status` on empty-paths node (`len(paths)==0`) emits `quality:"pending"` (indeterminate). Distinguishable from EC-003/EC-006 (SampleCount<10 per-path cases) by absence of any path entries in the response. Not an error; exit code 0. Closes quality-on-empty-paths spec gap. |
 | 1.13 | 2026-07-01 | spec-steward | Ruling-9: normative status derivation rule added to PC-1 — `status == "active"` iff `Active==true AND Degraded==false`; all other combinations map to `"degraded"`. Operator semantics: "active" means currently forwarding AND healthy; provisioned-but-not-live is "degraded". Ref: rulings v1.3 Ruling-9. |
 | 1.12 | 2026-07-01 | spec-steward | OBS-P4L3-1: §Traceability split Wave-7 Backlog Stories row into Wave-6 and Wave-7 rows. S-BL.ROUTER-ADDR moved to a dedicated Wave-6 Backlog Stories row with schedule annotation "Wave-6 — must merge before Wave-6 convergence per Ruling-1". S-BL.PATH-TRACKER-WIRING and S-BL.PATH-FAILED-STATUS remain Wave-7 Backlog. No normative content change. |
 | 1.11 | 2026-07-01 | spec-steward | F-L3-001 (Pass-3 L3): PC-3 S502-DEFER-3 rewritten — retract `status: "failed"` reference from `PathSnapshot.Degraded == true` description (not normative in Wave-6). `{active, degraded}` are the normative Wave-6 vocabulary. Forward-looking note added: "Wave-7 forward-looking (S-BL.PATH-FAILED-STATUS): failed status re-introduction TBD; NOT normative in Wave-6." Traceability section updated with Wave-7 Backlog Stories row (S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS, S-BL.ROUTER-ADDR). |

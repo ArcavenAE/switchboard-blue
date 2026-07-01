@@ -2,7 +2,7 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.7"
+version: "1.10"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
@@ -11,6 +11,9 @@ modified:
   - 2026-07-01T00:00:00 # v1.5 — F-P5L3R-09 (Pass-6 L3): Ruling-9 downstream impact table corrected — BC-2.06.003 target version changed from v1.11→v1.12 to v1.11→v1.13 at two sites (Downstream Artifact Impacts table and Summary of Spec Changes table); v1.12 was an interim hop, actual delivered version is v1.13.
   - 2026-07-01T00:00:00 # v1.6 — Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted; POL-002 story-index-row-sync policy flag (spec-steward applies).
   - 2026-07-01T00:00:00 # v1.7 — Ruling-12: wire-envelope universality note (E-ADM-009/E-SVTN-001/E-CFG-001/E-INT-001 all follow E-RPC-011 pattern); canonical role-label for unresolvable caller unified to "unregistered"; BC-2.07.001 genesis-path vector; POL-002 schema alignment flagged; BC-2.07.001 modified-list reorder; S-BL.POLICY-SCHEMA-VALIDATOR stub flagged.
+  - 2026-07-01T00:00:00 # v1.8 — Ruling-12 §1 amended: E-INT-999 added to enumerated handler-code list as catch-all default sentinel; Ruling-12 §7 (new): process policy requiring synchronized three-part update when introducing a new handler-code family.
+  - 2026-07-01T16:30:00 # v1.9 — §8 (new): BC-2.06.003 v1.14 EC-008 spec-tightening (empty-paths quality:'pending' ratification).
+  - 2026-07-01T00:00:00 # v1.10 — Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 as dispatch bucket is intentional; discrimination by message prefix is the spec contract; noted in S-6.07 §Wire Envelope Contract. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST wrap io.ErrUnexpectedEOF with E-RPC-002 per ADR-012 §6 Authenticate parity.
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
 closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
@@ -1102,6 +1105,7 @@ section explicitly enumerating the following as E-RPC-011-wrapped handler codes:
 - E-SVTN-001 (SVTN already exists)
 - E-CFG-001 (args validation failure)
 - E-INT-001 (crypto/rand internal failure)
+- E-INT-999 (unmapped internal condition — catch-all default arm of `mapAdminError`; v1.8 amendment)
 
 E-RPC-002 is the transport-layer exception and is NOT wrapped.
 
@@ -1162,6 +1166,24 @@ Note: the changelog table in the BC body MAY retain descending order (most recen
 top) — that is the project convention. Only the frontmatter `modified:` list must be
 ascending. Bump BC-2.07.001 v1.9 → v1.10 with this hygiene correction.
 
+**7. [Process policy] Introducing a new handler-code family requires a synchronized three-part update.**
+
+When any implementer, product-owner, or spec-steward introduces a new handler-code family
+(e.g., a new `E-FOO-*` prefix with its own sentinel set), the following three artifacts MUST
+be updated in the same fix-burst:
+
+1. **error-taxonomy.md** — add at least one row for the new family under a correctly labeled
+   section header.
+2. **Anchor story spec §Universality** — add the new code to the §Universality enumeration
+   in the Wire Envelope Contract section of any story that exercises the handler.
+3. **Ruling-12 §1 enumeration (this document)** — append the new code to the bullet list in
+   §1 above.
+
+Omitting any one of the three is a MED-severity POL-001 compliance gap. E-INT-999
+(catch-all default arm) is the reference example: it was added simultaneously to
+error-taxonomy.md §INT, to the §1 bullet list above, and to this §7 definition — all in
+v1.8 of this document.
+
 **6. [Process gap] policies.yaml lacks a schema validator (follow-on stub).**
 
 The schema drift between POL-001 and POL-002 reflects the absence of any automated
@@ -1200,6 +1222,196 @@ Items 2 and 3 are independent and may proceed in parallel. None block the `admin
 
 ---
 
+## §8 — Spec-Tightening Record: BC-2.06.003 v1.14 EC-008 Ratification
+
+**Date:** 2026-07-01T16:30:00
+
+**What was ratified:** BC-2.06.003 v1.14 adds EC-008 (edge case: empty-paths
+response quality field). When the daemon has no paths to report, the paths list
+is empty (`[]`) and the `quality` field is set to `"pending"` rather than a
+computed numeric value. This is a spec-tightening, not a behavioral change.
+
+**Scope of change:**
+- BC-2.06.003 bumped to v1.14 — EC-008 added defining the `quality: "pending"`
+  value for empty-paths responses.
+- S-W5.04 body updated under §Edge Cases to anchor EC-008 (cross-reference only;
+  no story-scope change).
+
+**Story-scope impact:** none. EC-008 ratification is a spec-tightening that
+clarifies already-implemented behavior. No new implementation work is required
+in S-W5.04 or any other in-scope story. No STORY-INDEX changes. No sprint-state
+changes.
+
+**Downstream artifact note:** story-writer handles body propagation under
+`bc_array_changes_propagate_to_body_and_acs` after this ruling is committed.
+
+---
+
+## §9 — Ruling-13: F-P12L1-02 — E-RPC-001 as CLI Dispatch Bucket (BY DESIGN)
+
+**Date:** 2026-07-01
+**Finding:** F-P12L1-02 (MED, pending intent)
+**Scope:** S-6.07 `cmd/sbctl/client.go:379-383`
+
+### Finding Summary
+
+`connectAndRun` collapses all `dispatch()` failures to `E-RPC-001` in the operator-visible
+CLI JSON output. When the daemon returns an envelope `{code: "E-RPC-011", message: "E-SVTN-001:
+SVTN already exists: foo"}`, the CLI surfaces `{ok: false, error: {code: "E-RPC-001",
+message: "rpc failed: admin.svtn.create: E-SVTN-001: ..."}}`. The top-level `error.code`
+visible to the operator is `E-RPC-001`, not `E-SVTN-001` (nor the envelope `E-RPC-011`).
+Discrimination requires message-prefix parsing.
+
+### Options Considered
+
+- **(A) BY DESIGN — document as Ruling-13, no code change:** the CLI top-level `error.code`
+  is intentionally a stable dispatch-bucket (`E-RPC-001` = "dispatched RPC failed"). Downstream
+  tooling MUST parse the message prefix for handler-code discrimination, consistent with the
+  existing AC-004/AC-005 §Wire Envelope Contract language. Add a clarifying note to S-6.07
+  §Wire Envelope Contract. No code change.
+
+- **(B) IN SCOPE — surface daemon envelope code:** refactor `dispatch()` to return a structured
+  `(code, message)` error; refactor `connectAndRun` to write the daemon-emitted envelope code
+  as the CLI's top-level `error.code`. Larger change; potentially breaking for tooling that
+  currently matches on `E-RPC-001`.
+
+- **(C) DEFER — new story S-BL.CLI-ENVELOPE-CODE-SURFACING.**
+
+### Ruling: Option (A) — BY DESIGN
+
+**Rationale:** AC-004/AC-005 §Wire Envelope Contract already specifies: "clients that need
+to discriminate handler-specific failure modes MUST parse the message prefix." This phrasing
+is normative — it is the project's explicit decision that message-prefix parsing is the
+discrimination channel, not code promotion.
+
+The two-tier code scheme (`E-RPC-001` at CLI surface, handler codes in message) is consistent
+with Ruling-11's formalization of the wire envelope contract. The daemon layer uses `E-RPC-011`
+as the envelope bucket; the CLI layer uses `E-RPC-001` as the dispatch bucket. Handler codes
+(`E-SVTN-001`, `E-ADM-009`, etc.) are always in the message, never in the top-level `code`
+at either layer. This is a coherent layered design.
+
+Option (B) is rejected: promoting the daemon envelope code (`E-RPC-011`) or handler codes
+(`E-SVTN-001`) to the CLI's top-level `error.code` would break any tooling already parsing
+`E-RPC-001` for dispatch-level failures. The refactor also creates a new surface (structured
+error return from `dispatch()`) that requires its own BC coverage and adversarial pass.
+Option (C) is rejected: there is nothing to defer — the design is intentional and correct.
+
+### Required Action (no code change)
+
+**S-6.07 §Wire Envelope Contract** — add an operator-surface clarification note:
+
+> "**Operator-surface top-level `error.code` (Ruling-13, 2026-07-01):** When `sbctl` invokes
+> an admin RPC and the dispatch fails, the CLI JSON output uses `E-RPC-001` as the top-level
+> `error.code` regardless of the daemon envelope code (`E-RPC-011`) or handler-specific code
+> (`E-SVTN-001`, `E-ADM-009`, etc.). This is intentional: `E-RPC-001` is the sbctl
+> dispatch-level bucket. Tooling that needs to discriminate handler-specific failure modes
+> MUST parse the `error.message` prefix (per AC-004/AC-005 §Wire Envelope Contract). No
+> layer surfaces a handler code as the top-level CLI `error.code`."
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| S-6.07 §Wire Envelope Contract (story v1.10+) | Add Ruling-13 operator-surface clarification note (see above) |
+| No code change | `connectAndRun` behavior is correct as designed |
+| No BC change | AC-004/AC-005 §Wire Envelope Contract already contains the "MUST parse message prefix" norm |
+
+### Ordering
+
+Story-writer applies the §Wire Envelope Contract note to S-6.07 in the next fix-burst.
+No implementation work. No dependency on any other ruling.
+
+---
+
+## §10 — Ruling-14: F-P12L1-01 — dispatch() Response Decode MUST Wrap io.ErrUnexpectedEOF (IN SCOPE)
+
+**Date:** 2026-07-01
+**Finding:** F-P12L1-01 (MED)
+**Scope:** S-6.07 `cmd/sbctl/client.go:300-303`
+
+### Finding Summary
+
+`dispatch()` decodes the RPC response body behind an `io.LimitReader` (64 KiB bound).
+When the server sends a response larger than the limit, `json.NewDecoder(io.LimitReader(...))`
+returns `io.ErrUnexpectedEOF` because the JSON stream is truncated at the limit. The
+decode-error branch at lines 300-303 returns the raw error without stamping the
+`E-RPC-002: message too large` prefix.
+
+By contrast, `Authenticate()` at lines 210-218 uses the same `io.LimitReader` pattern and
+its decode-error branch DOES wrap `io.ErrUnexpectedEOF` with `E-RPC-002: message too large: %w`.
+
+ADR-012 §6 states the bounded-read guard applies to "all reads." The asymmetry between
+the oversized-challenge path (correctly stamped `E-RPC-002`) and the oversized-RPC-response
+path (bare `unexpected EOF`) violates ADR-012 §6 uniformity.
+
+### Options Considered
+
+- **(A) IN SCOPE — add symmetric io.ErrUnexpectedEOF arm to dispatch():** in `dispatch()`'s
+  decode-error branch, add an `errors.Is(err, io.ErrUnexpectedEOF)` check that wraps the error
+  as `fmt.Errorf("E-RPC-002: message too large: %w", err)`. Add a symmetric test
+  `TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002`.
+
+- **(B) DEFER — new story S-BL.CLI-BOUNDED-READ-SYMMETRY** — drift record + follow-on story stub.
+
+### Ruling: Option (A) — IN SCOPE
+
+**Rationale:** ADR-012 §6 uniformity is a hard invariant, not a recommendation. The bounded-read
+guard is documented to apply to "all reads." The `Authenticate()` → `dispatch()` asymmetry means
+an oversized server response to any admin RPC surfaces as a cryptic `unexpected EOF` while an
+oversized challenge is correctly diagnosed as `E-RPC-002`. This is operator-hostile: the two
+conditions are caused by the same mechanism (LimitReader truncation) and should produce the same
+error code.
+
+The fix is narrow: two lines of code (`errors.Is` arm + `fmt.Errorf` wrap) and one test. It
+does not touch the bounded-read limit value, the LimitReader construction, or any shared helper.
+Option (B) is rejected: deferring a two-line ADR uniformity fix accumulates a known
+inconsistency and generates a finding in every subsequent adversarial pass until it lands.
+
+### Required Changes
+
+**`cmd/sbctl/client.go` — `dispatch()` decode-error branch (~line 300-303):**
+
+In the `if err != nil` block after `json.NewDecoder(io.LimitReader(...)).Decode(...)`, add:
+
+```go
+if errors.Is(err, io.ErrUnexpectedEOF) {
+    return fmt.Errorf("E-RPC-002: message too large: %w", err)
+}
+```
+
+This arm MUST appear BEFORE any generic error return in the same decode-error block.
+The `errors` and `fmt` packages are already imported. The pattern is identical to
+`Authenticate()`'s existing wrap at lines 210-218.
+
+**Test — `TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002`:**
+
+Add a test that:
+1. Spins a test HTTP server returning a response body that exceeds 64 KiB (e.g., 65 KiB of
+   valid-JSON-prefix bytes followed by truncation).
+2. Calls `dispatch()` against it.
+3. Asserts the returned error contains the prefix `"E-RPC-002: message too large"`.
+4. Asserts `errors.Is(err, io.ErrUnexpectedEOF)` via the wrapped chain.
+
+The test MUST be symmetric with any existing `TestSbctlAuth_OversizedChallenge_*` test that
+covers the `Authenticate()` path.
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| `cmd/sbctl/client.go` (~line 300-303) | Add `errors.Is(err, io.ErrUnexpectedEOF)` arm wrapping `E-RPC-002: message too large` |
+| `cmd/sbctl/client_test.go` (or equivalent) | Add `TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002` |
+| S-6.07 story spec (AC or implementation notes) | Add implementation note: dispatch() decode-error branch MUST wrap io.ErrUnexpectedEOF with E-RPC-002 per ADR-012 §6; cite Authenticate() parity and Ruling-14 |
+| No BC change | E-RPC-002 is already defined in error-taxonomy.md; the fix applies the existing code to a missing branch |
+
+### Ordering
+
+The `dispatch()` fix and test are within the S-6.07 fix-burst scope. No dependency on any
+other ruling. The story-writer adds the implementation note to S-6.07. No new follow-on stories
+required.
+
+---
+
 ## Changelog
 
 | Version | Date | Change |
@@ -1211,4 +1423,7 @@ Items 2 and 3 are independent and may proceed in parallel. None block the `admin
 | 1.4 | 2026-07-01 | Ruling 10 ("production package" definition; InsertRawSVTN runtime guard + CreatedAt parity + DuplicateName test; SeedSVTNWithoutBootstrapKey rename + postcondition assertions; F-L2-A1-02/03/04 closure) |
 | 1.5 | 2026-07-01 | F-P5L3R-09 (Pass-6 L3) correction: Ruling-9 downstream impact table — BC-2.06.003 target version corrected from v1.11→v1.12 to v1.11→v1.13 at two sites; v1.12 was an interim hop, actual delivered version is v1.13 |
 | 1.6 | 2026-07-01 | Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted (F-L1-01 closed no-action); POL-002 story-index-row-sync policy flagged for spec-steward |
+| 1.8 | 2026-07-01 | Ruling-12 §1 amended: E-INT-999 added to enumerated handler-code list as catch-all default-arm sentinel for `mapAdminError`. Ruling-12 §7 (new): process policy — introducing a new handler-code family requires (a) error-taxonomy row, (b) §Universality anchor story amendment, (c) §1 enumeration update — all in the same fix-burst. error-taxonomy.md bumped v4.0 → v4.1 (E-INT-999 row added to INT section). |
 | 1.7 | 2026-07-01 | Ruling-12: wire-envelope universality (E-ADM-009/E-SVTN-001/E-CFG-001/E-INT-001 all E-RPC-011-wrapped); canonical role-label unified to "unregistered"; BC-2.07.001 genesis-path vector added; POL-002 schema alignment to POL-001 canonical fields; BC-2.07.001 modified-list chronological reorder; S-BL.POLICY-SCHEMA-VALIDATOR stub flagged |
+| 1.9 | 2026-07-01 | §8 (new): BC-2.06.003 v1.14 EC-008 ratified (empty-paths quality:'pending'); anchored in S-W5.04 body via §Edge Cases; no story-scope change beyond spec-tightening |
+| 1.10 | 2026-07-01 | Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 is the intentional sbctl dispatch bucket; operator discrimination is by message prefix per AC-004/AC-005; §Wire Envelope Contract clarification note added to S-6.07. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST add errors.Is(io.ErrUnexpectedEOF) arm wrapping E-RPC-002 per ADR-012 §6 Authenticate parity; test TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002 required. |

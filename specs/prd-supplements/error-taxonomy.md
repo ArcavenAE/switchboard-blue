@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "4.0"
+version: "4.1"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -23,6 +23,7 @@ modified:
   - 2026-06-30T00:00:00 # v3.8 — F-P18L1-001 (MED): E-ADM-021 minted — bootstrap-key-expire-forbidden symmetric counterpart to E-ADM-020 (refs F-P18L1-001 lens-1 pass-18)
   - 2026-06-30T00:00:00 # v3.9 — Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 + E-ADM-021 descriptions narrowed from "unconditionally" to "for any well-formed request"; BC citation updated from v1.10 to v1.12; E-CFG-001 handler-layer layering note added to both rows
   - 2026-07-01T00:00:00 # v4.0 — Wave-6 Tranche A Ruling-4 sibling-propagation (S-6.07 F-P2L3-002): E-ADM-009 FM/DEC Source extended with BC-2.07.001 Inv-3; E-INT-001 minted (internal handler error for non-duplicate admin.svtn.create failure, BC-2.07.001 PC-1); INT category added to category table
+  - 2026-07-01T00:00:00 # v4.1 — Ruling-12 §1 universality follow-through: E-INT-999 minted as catch-all sentinel for unmapped internal conditions (default arm of mapAdminError or equivalent); wire envelope follows E-RPC-011 pattern; Ruling-12 §7 process policy added to rulings doc
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -191,6 +192,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 | Error Code | Category | Severity | Exit Code | Message Format | FM/DEC Source |
 |-----------|----------|----------|-----------|----------------|---------------|
 | E-INT-001 | INT | broken | 1 | `"internal error: <operation>: <cause>"` | BC-2.07.001 PC-1; emitted by the `admin.svtn.create` handler (and other admin handlers) in `cmd/switchboard/admin_handlers.go` when `SVTNManager.Create()` or another internal operation returns a non-duplicate, non-authorization error that does not map to a defined E-ADM-* or E-SVTN-* code. `<operation>` is the RPC operation name (e.g. `"admin.svtn.create"`). `<cause>` is the wrapped error string. Distinct from E-SVTN-001 (SVTN already exists), E-ADM-009 (insufficient authority), and E-RPC-011 (generic server handler error). Use this code for unexpected internal failures to avoid masking them behind E-RPC-011. Registered per S-6.07 v1.3 non-duplicate Create() failure code-stamp (Ruling-5 amendment). |
+| E-INT-999 | INT | broken | 1 | `"unmapped internal condition, programmer error, please report"` | Ruling-12 §1 universality catch-all sentinel (v4.1). Emitted by the **default arm** of `mapAdminError` (or any equivalent handler-side taxonomy fallback) when a returned error does not match any named sentinel in the INT, ADM, SVTN, CFG, or other family. Existence of this code in production logs is a programmer error — every reachable error path SHOULD map to a named code. Wire envelope follows the standard E-RPC-011 pattern: `{code: "E-RPC-011", message: "E-INT-999: unmapped internal condition, programmer error, please report: <wrapped>"}`. `<wrapped>` is `err.Error()` verbatim. Distinct from E-INT-001 (named internal handler error with operation context). Introducing a new handler that can reach the default arm without first defining a specific code is a defect — see Ruling-12 §7 for the required three-part update process. |
 
 ## Failure Mode to Error Code Mapping
 
@@ -219,6 +221,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v4.1 | 2026-07-01 | Ruling-12 §1 universality follow-through: E-INT-999 minted as catch-all default-arm sentinel for `mapAdminError` and equivalent handler-side taxonomy fallbacks. Canonical message: `"unmapped internal condition, programmer error, please report"`. Wire envelope: `{code: "E-RPC-011", message: "E-INT-999: unmapped internal condition, programmer error, please report: <wrapped>"}`. Ruling-12 §7 process policy added to wave-6-tranche-a-scope-rulings.md v1.8: introducing a new handler-code family requires (a) new error-taxonomy row, (b) §Universality row in anchor story spec, (c) amendment to Ruling-12 §1 enumeration — all in the same fix-burst. |
 | v4.0 | 2026-07-01 | Wave-6 Tranche A Ruling-4 sibling-propagation (S-6.07 F-P2L3-002): E-ADM-009 FM/DEC Source appended with `, BC-2.07.001 Inv-3` (cross-SVTN control-role key → E-ADM-009 for admin.svtn.create). E-INT-001 minted — `"internal error: <operation>: <cause>"`; source BC-2.07.001 PC-1; registered for non-duplicate Create() failure code-stamp per S-6.07 v1.3 Ruling-5 amendment. INT category added to category table. |
 | v3.9 | 2026-06-30 | Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 description — BC citation updated v1.10→v1.12; "unconditionally non-revocable at any time" narrowed to "non-revocable for any well-formed request"; E-CFG-001 handler-layer gate note added. E-ADM-021 description — same pattern: v1.10→v1.12; "unconditionally non-expirable at any time" narrowed to "non-expirable for any well-formed request"; E-CFG-001 handler-layer gate note added. Source-of-truth: BC-2.05.004 EC-007 v1.12 (Pass-20 Option-B). |
 | v3.8 | 2026-06-30 | E-ADM-021 minted: bootstrap-key-expire-forbidden symmetric counterpart to E-ADM-020 (refs F-P18L1-001 lens-1 pass-18). Sentinel: `svtnmgmt.ErrBootstrapKeyExpireForbidden`. Emitted by `admin.key.expire` handler (mapAdminError arm) when the bootstrap pubkey is targeted. Mirrors revoke protection (EC-004: expire = same lockout effect as revoke). E-ADM-020 description updated to cite BC-2.05.004 EC-007 v1.10 (was v1.9). |

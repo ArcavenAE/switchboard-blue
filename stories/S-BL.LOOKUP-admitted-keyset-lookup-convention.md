@@ -2,7 +2,7 @@
 artifact_id: S-BL.LOOKUP
 document_type: story
 level: ops
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
@@ -20,7 +20,7 @@ subsystems: [admission-security]
 closes_drift: [DRIFT-F005-LOOKUP-CONVENTION]
 ---
 
-# S-BL.LOOKUP: Migrate `AdmittedKeySet.LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form
+# S-BL.LOOKUP: Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form
 
 ## Summary
 
@@ -54,6 +54,7 @@ Wave 6+ (unblocked after S-6.02 merges to develop).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-07-01 | F-P12L3-01: H1 title expanded to name both `Lookup` and `LookupByPubkey`; aligns with ARCH-04 v1.14 §F-005 heading, STORY-INDEX row, and sprint-state title. |
 | 1.4 | 2026-07-01 | F-P9L3-03: ARCH-04 pin in §Context corrected v1.13→v1.14 (ARCH-04 was bumped to v1.14 by S-6.06 Pass-25 sibling sweep; prior pin was stale). No AC or scope change. |
 | 1.3 | 2026-07-01 | F-P5L3-01: §Summary prose updated — replaced stale "Backlog stub. Blocked until S-6.02 merges" with "Draft story (Wave 6 Tranche A). Migrates admitted-keyset lookup to the shared convention. Was blocked on S-6.02 (merged PR #34)." No AC or scope change. |
 | 1.2 | 2026-07-01 | Pass-4 L3 F-L3-Med-01 governance: epic frontmatter confirmed E-6 (story depends_on S-6.02, Wave 6 Tranche A alongside S-6.07/S-6.05; STORY-INDEX row was the erroneous artifact and has been corrected to E-6). No AC or scope change. Closes F-L3-Med-01. |
