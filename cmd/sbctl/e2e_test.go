@@ -357,7 +357,6 @@ func TestE2E_MgmtPlane_BootstrapAuth_VP049(t *testing.T) {
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(cancel)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -369,7 +368,6 @@ func TestE2E_MgmtPlane_BootstrapAuth_VP049(t *testing.T) {
 		cancel()
 		_ = srv.Shutdown(context.Background())
 		wg.Wait()
-		_ = rawLn.Close()
 	})
 
 	addr := rawLn.Addr().String()
