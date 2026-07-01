@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.31"
+version: "3.32"
 status: draft
 producer: story-writer
 timestamp: 2026-07-01T12:00:00
@@ -67,7 +67,7 @@ inputDocuments:
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | merged (PR #38, d881f99) |
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
-| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.10) |
+| S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | draft (v1.11) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.4) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending |
@@ -172,6 +172,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.32 | 2026-07-01 | Pass-7 L3 sync — S-W5.04 row v1.10→v1.11 (F-P5L3R-07 propagation catch-up per POL-001) |
 | 3.31 | 2026-07-01 | Pass-5 L3 fix-burst — S-W5.04 row 1.7→1.10 (BC Traces expanded); S-6.07 row 1.3→1.4 |
 | 3.30 | 2026-07-01 | Pass-4 L3 fix-burst: F-P4L3-003 — reorder Backlog table rows to S-BL.ROUTER-ADDR → S-BL.PATH-TRACKER-WIRING → S-BL.PATH-FAILED-STATUS (dep chain: PATH-TRACKER-WIRING blocks PATH-FAILED-STATUS per Ruling-6). F-P4L3-004 — S-BL.ROUTER-ADDR status corrected `draft` → `backlog` (story frontmatter carries `status: backlog`; `draft` in this table was wrong). |
 | 3.29 | 2026-07-01 | Ruling-6 propagation + Pass-3 L3 fixes: Add S-BL.PATH-TRACKER-WIRING backlog stub (Wire cmd/switchboard/metrics_wire.go pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time; depends on S-W5.04, S-BL.ROUTER-ADDR; Epic E-6; Wave 7 Backlog). Update S-W5.04 row v1.6→v1.7. Summary Total 45→46, Backlog 5→6. Changelog note: S-BL.PATH-FAILED-STATUS BC pin corrected v1.10→v1.11 in backlog table. |

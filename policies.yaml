@@ -1,12 +1,13 @@
 ---
 artifact_id: factory-policies
 document_type: policy-registry
-version: "1.0"
+version: "1.1"
 status: active
 producer: spec-steward
 timestamp: 2026-07-01T00:00:00
 modified:
   - 2026-07-01T00:00:00 # v1.0 — initial creation (task #21): changelog-completeness policy authored to address recurring process gap where version-frontmatter bumps were committed without a matching changelog row (surfaced by F-P5L3R-01 through F-P5L3R-05 Pass-6 L3 findings).
+  - 2026-07-01T00:00:00 # v1.1 — add POL-002 story-index-row-sync (Ruling-11): STORY-INDEX status-cell drift discovered in S-W5.04 Pass-7 Lens-3 (F-P6L3-IMPORTANT-01); policy formalizes obligation to sync STORY-INDEX row in same fix-burst as story frontmatter bump.
 
 # Factory Policies
 # Governance rules enforced by spec-steward across all .factory/ artifacts.
@@ -36,3 +37,9 @@ policies:
     examples:
       violation: "version bumped from 1.4 to 1.5 in frontmatter, but no '| 1.5 | ...' row in the Changelog table"
       compliant: "version bumped from 1.4 to 1.5 AND '| 1.5 | 2026-07-01 | description of change |' row added in same commit"
+
+  - id: POL-002
+    name: story-index-row-sync
+    description: When a story's frontmatter version: is bumped, the STORY-INDEX row's status cell (draft (vX.Y)) MUST be updated in the same fix-burst or before the next per-story adversarial pass. Missing sync = MED finding.
+    scope: stories/*.md ↔ stories/STORY-INDEX.md
+    severity: MED
