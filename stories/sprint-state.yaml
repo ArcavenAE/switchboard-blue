@@ -334,12 +334,24 @@ stories:
     title: "sbctl paths list / router metrics (canonical) + router status alias + p99"
     epic: E-5
     wave: 5
-    status: pending
+    status: converged
     priority: P1
     scope_phase: E
     points: 5
     # repointed 3→5 (p99 scope + canonical surface reconciliation per BC-2.06.003 v1.2)
     bc_traces: [BC-2.06.003]
+    adversarial_convergence: CONVERGED_PASS11_2026-07-01
+    adversary_streak: 3
+    adversary_converged: true
+    adversary_pass_count: 6
+    adversary_clean_pass_count: 3
+    impl_tip: 5732902
+    test_tip: 8152e20
+    factory_tip: 35649fa
+    # BC anchor: BC-2.06.003 v1.7; story v1.10
+    # 3/3 consecutive clean passes: Pass-9, Pass-10, Pass-11 (6 total passes P6–P11)
+    # Non-blocking deferrals: S502-DEFER-1..6 (alias-parity, os.Exit, spec-ambiguity, arch-doc sweep, arch-asymmetry, cosmetic)
+    # Next: per-story-delivery.md Step 5 (demo recordings per AC), then Steps 6-9
 
   - story_id: S-5.03
     title: "flag paths as degraded when EWMA RTT exceeds 200ms threshold"
@@ -637,6 +649,14 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.23 (2026-07-01): S-5.02 BC-5.39.001 CONVERGENCE-CLOSED.
+#   - S-5.02: status pending→converged; adversarial_convergence CONVERGED_PASS11_2026-07-01.
+#   - adversary_pass_count 6 (P6–P11); adversary_clean_pass_count 3 (P9/P10/P11); adversary_streak 3.
+#   - impl_tip 5732902 (F-CR-001 formatPathsTable writer-injection fix, race-clean).
+#   - test_tip 8152e20 (F-P8L2-001 AC-008 named test added).
+#   - factory_tip 35649fa. BC anchor: BC-2.06.003 v1.7. Story: S-5.02 v1.10.
+#   - 6 non-blocking deferrals recorded: S502-DEFER-1..6 (see STATE.md Open Drift Items).
+#   - Next: per-story-delivery.md Step 5 (demo recordings per AC), then Steps 6-9.
 # v2.22 (2026-07-01): S-6.06 merged to develop (PR #36, 3ee9c38a, 2026-07-01T00:49:34Z).
 #   - S-6.06: status pending→merged; merge_sha 3ee9c38, pr 36, merged_at 2026-07-01T00:49:34Z.
 #   - wave-5: stories_merged updated [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06].
