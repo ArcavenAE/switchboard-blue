@@ -7,11 +7,13 @@
 package admission_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/frame"
 )
 
 // mustGenPub generates a fresh Ed25519 public key for lookup convention tests.
@@ -34,7 +36,8 @@ func svtnLookupID(b byte) [16]byte {
 // ── Lookup ────────────────────────────────────────────────────────────────────
 
 // TestLookup_ReturnsBoolTrueOnHit asserts that Lookup returns (AdmittedKey, true)
-// when the (svtnID, nodeAddr) tuple is registered.
+// when the (svtnID, nodeAddr) tuple is registered, and that the returned value
+// fields are byte-equal to the registered values.
 //
 // Compile failure before migration: Lookup currently returns *AdmittedKey (single
 // value), so `key, ok := ks.Lookup(...)` will not compile until the signature is
@@ -48,22 +51,25 @@ func TestLookup_ReturnsBoolTrueOnHit(t *testing.T) {
 
 	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
 
-	// Derive the node address the same way RegisterKey does — via frame.DeriveNodeAddress.
-	// We look up by pubkey to avoid importing internal/frame directly.
-	// Use LookupByPubkey to resolve nodeAddr, then verify Lookup via that addr.
-	// The compile-time assertion is: Lookup must return two values (AdmittedKey, bool).
-	nodeAddr := deriveAddrForTest(t, svtnID, pub)
+	// Derive the node address using the same function production code uses.
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pub))
 	key, ok := ks.Lookup(svtnID, nodeAddr) // S-BL.LOOKUP: compile fails until (AdmittedKey, bool)
 	if !ok {
 		t.Fatal("Lookup: want ok=true for registered key; got false")
 	}
-	if len(key.PublicKey) == 0 {
-		t.Error("Lookup: returned AdmittedKey has empty PublicKey")
+	// F-P1L2-001: assert byte-equal PublicKey and exact NodeAddr — not just non-emptiness.
+	// A bug returning arbitrary non-zero bytes would still pass a len!=0 check.
+	if !bytes.Equal(key.PublicKey, []byte(pub)) {
+		t.Errorf("Lookup: PublicKey mismatch: got %x, want %x", key.PublicKey, []byte(pub))
+	}
+	if key.NodeAddr != nodeAddr {
+		t.Errorf("Lookup: NodeAddr mismatch: got %x, want %x", key.NodeAddr, nodeAddr)
 	}
 }
 
 // TestLookup_ReturnsBoolFalseOnMiss asserts that Lookup returns (AdmittedKey{}, false)
-// when the (svtnID, nodeAddr) tuple is not registered.
+// when the (svtnID, nodeAddr) tuple is not registered. The returned AdmittedKey must
+// be the zero value — a non-zero AdmittedKey paired with false is a contract violation.
 func TestLookup_ReturnsBoolFalseOnMiss(t *testing.T) {
 	t.Parallel()
 
@@ -77,12 +83,17 @@ func TestLookup_ReturnsBoolFalseOnMiss(t *testing.T) {
 	if ok {
 		t.Fatalf("Lookup: want ok=false for unregistered nodeAddr; got true with key=%+v", key)
 	}
+	// F-P1L2-002: on miss the returned AdmittedKey must be zero-valued.
+	if len(key.PublicKey) != 0 || key.NodeAddr != ([8]byte{}) {
+		t.Errorf("Lookup miss: returned non-zero AdmittedKey: %+v; want zero value", key)
+	}
 }
 
 // ── LookupByPubkey ────────────────────────────────────────────────────────────
 
 // TestLookupByPubkey_ReturnsBoolTrueOnHit asserts that LookupByPubkey returns
-// (AdmittedKey, true) when the public key is registered for the given SVTN.
+// (AdmittedKey, true) when the public key is registered for the given SVTN, and
+// that the returned value fields are byte-equal to the registered values.
 func TestLookupByPubkey_ReturnsBoolTrueOnHit(t *testing.T) {
 	t.Parallel()
 
@@ -92,17 +103,23 @@ func TestLookupByPubkey_ReturnsBoolTrueOnHit(t *testing.T) {
 
 	ks.RegisterKey(svtnID, pub, admission.RoleControl)
 
+	expectedNodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pub))
 	key, ok := ks.LookupByPubkey(svtnID, pub) // S-BL.LOOKUP: compile fails until (AdmittedKey, bool)
 	if !ok {
 		t.Fatal("LookupByPubkey: want ok=true for registered key; got false")
 	}
-	if len(key.PublicKey) == 0 {
-		t.Error("LookupByPubkey: returned AdmittedKey has empty PublicKey")
+	// F-P1L2-001: assert byte-equal PublicKey and exact NodeAddr — not just non-emptiness.
+	if !bytes.Equal(key.PublicKey, []byte(pub)) {
+		t.Errorf("LookupByPubkey: PublicKey mismatch: got %x, want %x", key.PublicKey, []byte(pub))
+	}
+	if key.NodeAddr != expectedNodeAddr {
+		t.Errorf("LookupByPubkey: NodeAddr mismatch: got %x, want %x", key.NodeAddr, expectedNodeAddr)
 	}
 }
 
 // TestLookupByPubkey_ReturnsBoolFalseOnMiss asserts that LookupByPubkey returns
 // (AdmittedKey{}, false) when the public key is not registered for the given SVTN.
+// The returned AdmittedKey must be the zero value.
 func TestLookupByPubkey_ReturnsBoolFalseOnMiss(t *testing.T) {
 	t.Parallel()
 
@@ -115,24 +132,8 @@ func TestLookupByPubkey_ReturnsBoolFalseOnMiss(t *testing.T) {
 	if ok {
 		t.Fatalf("LookupByPubkey: want ok=false for unregistered key; got true with key=%+v", key)
 	}
-}
-
-// ── compile-time helpers ──────────────────────────────────────────────────────
-
-// deriveAddrForTest derives the node address via the package's own lookup path
-// rather than importing internal/frame. We call LookupByPubkey (which internally
-// derives the address) and, once the migration lands, use the returned value's
-// NodeAddr field to feed back into Lookup.
-//
-// Before migration, LookupByPubkey still returns *AdmittedKey so this helper
-// itself will also fail to compile — reinforcing the Red Gate.
-func deriveAddrForTest(t *testing.T, svtnID [16]byte, pub ed25519.PublicKey) [8]byte {
-	t.Helper()
-	ks := admission.NewAdmittedKeySet()
-	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
-	got, ok := ks.LookupByPubkey(svtnID, pub) // compile fails until (AdmittedKey, bool)
-	if !ok {
-		t.Fatal("deriveAddrForTest: LookupByPubkey returned ok=false after RegisterKey")
+	// F-P1L2-002: on miss the returned AdmittedKey must be zero-valued.
+	if len(key.PublicKey) != 0 || key.NodeAddr != ([8]byte{}) {
+		t.Errorf("LookupByPubkey miss: returned non-zero AdmittedKey: %+v; want zero value", key)
 	}
-	return got.NodeAddr
 }
