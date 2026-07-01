@@ -54,9 +54,15 @@ func PathScore(rttMS float64, lossPct float64) Score {
 // PathTracker maintains the EWMA RTT and loss estimate for a single path.
 // It is safe for concurrent use.
 //
-// Zero value is not usable; construct via NewPathTracker.
+// Zero value is not usable; construct via NewPathTracker or NewPathTrackerWithAddr.
 type PathTracker struct {
 	mu sync.Mutex
+
+	// routerAddr is the resolved remote router address (host:port) supplied at
+	// construction time. Immutable after construction; set only by
+	// NewPathTrackerWithAddr. Empty string when constructed via NewPathTracker.
+	// (BC-2.06.003 PC-1, S-BL.ROUTER-ADDR; RULING-W6TB-B §3)
+	routerAddr string
 
 	// ewmaAlpha is the smoothing factor for the EWMA update (0 < alpha ≤ 1).
 	ewmaAlpha float64
@@ -94,6 +100,9 @@ type PathTracker struct {
 //
 // BC-2.02.003 precondition 3: metrics are initialized with a high-RTT default
 // on first connection.
+//
+// The resulting PathTracker has routerAddr == "" (no resolved address). Use
+// NewPathTrackerWithAddr when the router address is known at construction time.
 func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
 	if alpha <= 0 || alpha > 1 {
 		panic("paths: NewPathTracker alpha must satisfy 0 < alpha <= 1")
@@ -105,6 +114,19 @@ func NewPathTracker(initialRTTMS float64, alpha float64) *PathTracker {
 		active:      true,
 		firstProbe:  true,
 	}
+}
+
+// NewPathTrackerWithAddr constructs a PathTracker identical to NewPathTracker
+// but also stores a resolved router address (host:port) that will be surfaced
+// through PathSnapshot.RouterAddr on every Snapshot() call.
+//
+// addr is immutable after construction (RULING-W6TB-B §3: "RouterAddr is set
+// once at construction and never mutated"). Callers that do not yet have an
+// addr should use NewPathTracker; PathSnapshot.RouterAddr will then be "".
+//
+// BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
+func NewPathTrackerWithAddr(addr string, initialRTTMS float64, alpha float64) *PathTracker {
+	panic("paths: NewPathTrackerWithAddr not yet implemented (S-BL.ROUTER-ADDR stub — BC-5.38.001)")
 }
 
 // resetRTT sets the RTT outright from a measured sample, clearing loss and
@@ -294,6 +316,11 @@ type PathSnapshot struct {
 	// SampleCount is the total number of RTT samples recorded in the histogram.
 	// Used by callers to determine whether P99RTTMs is valid (≥10) or pending (<10).
 	SampleCount uint64
+	// RouterAddr is the resolved remote router address (host:port) as supplied to
+	// NewPathTrackerWithAddr at construction. Empty string ("") when the PathTracker
+	// was constructed via NewPathTracker (addr-less).
+	// BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
+	RouterAddr string
 }
 
 // Snapshot returns a consistent copy of all PathTracker metrics under a single
@@ -309,6 +336,7 @@ func (t *PathTracker) Snapshot() PathSnapshot {
 		Degraded:    t.degraded,
 		P99RTTMs:    t.hist.p99(), // S-5.02: wired from histogram; 0 when SampleCount < 10
 		SampleCount: t.hist.total, // S-5.02: callers check ≥10 before trusting P99RTTMs
+		RouterAddr:  t.routerAddr, // S-BL.ROUTER-ADDR: verbatim copy; "" when addr-less
 	}
 }
 

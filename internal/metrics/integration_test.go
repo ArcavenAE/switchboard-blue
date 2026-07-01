@@ -295,9 +295,12 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 		if e.PathID == nil || *e.PathID == "" {
 			t.Errorf("path[%d]: missing or empty path_id", i)
 		}
-		// router_addr: "" is accepted per BC-2.06.003 v1.9 Ruling-1 interim.
-		// PathSnapshot enrichment tracked in S-BL.ROUTER-ADDR (DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER).
-		// Field must be present (non-nil) even when empty.
+		// router_addr: field must be present. Non-empty for PathTrackers constructed
+		// via NewPathTrackerWithAddr; "" for addr-less PathTrackers (NewPathTracker).
+		// DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed by S-BL.ROUTER-ADDR (BC-2.06.003 v1.15).
+		// The integration paths here use NewPathTracker (addr-less) so "" is expected;
+		// non-empty oracle requires production wiring via S-BL.PATH-TRACKER-WIRING.
+		// AC-005 / VP-047 / BC-2.06.003 v1.15 PC-1.
 		if e.RouterAddr == nil {
 			t.Errorf("path[%d]: missing router_addr field", i)
 		}
