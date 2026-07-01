@@ -818,25 +818,32 @@ func TestSVTNManager_VP048_BootstrappedKeyIsControlRole(t *testing.T) {
 		t.Fatalf("Create (mgr2): %v", err2)
 	}
 
-	// RevokeKey(controlPub2, RoleControl, confirm=true): if the bootstrapped role
-	// is indeed RoleControl, this must succeed. ErrRoleMismatch means wrong role.
-	_, revokeErr := mgr2.RevokeKey(svtnResult2.SVTN.Name, controlPub2, admission.RoleControl, true)
-	if revokeErr != nil {
-		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — RevokeKey(controlPub, RoleControl, confirm=true) "+
-			"on bootstrapped key: want success (confirming bootstrap role is RoleControl); got: %v", revokeErr)
+	// Verify bootstrap key role via CallerKeyRole (not RevokeKey — the bootstrap
+	// guard now prevents revoking the control key directly; TODO(BC-2.07.001):
+	// spec clarification pending for E-ADM-020 bootstrap-key-revoke-forbidden).
+	// CallerKeyRole is the correct verification surface for role introspection.
+	role2, found2 := mgr2.CallerKeyRole(svtnResult2.SVTN.Name, controlPub2)
+	if !found2 {
+		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — CallerKeyRole(controlPub): " +
+			"key not found; bootstrap key must be present")
+	} else if role2 != admission.RoleControl {
+		t.Errorf("VP-048 / BC-2.07.001 invariant 3 — CallerKeyRole(controlPub): "+
+			"want RoleControl; got %v", role2)
 	}
 
-	// Also verify that after the LWW overwrite to RoleConsole, RevokeKey with
-	// RoleControl returns ErrRoleMismatch (key is now RoleConsole).
+	// Also verify that after the LWW overwrite to RoleConsole, CallerKeyRole
+	// returns RoleConsole (key is now RoleConsole after LWW).
 	_, err = mgr.RegisterKey(svtnResult.SVTN.Name, controlPub, admission.RoleConsole)
 	if err != nil {
 		t.Errorf("VP-048 — RegisterKey(controlPub, RoleConsole) after Create: "+
 			"want success (LWW overwrite of bootstrapped control key); got: %v", err)
 	}
-	_, err = mgr.RevokeKey(svtnResult.SVTN.Name, controlPub, admission.RoleControl, true)
-	if !errors.Is(err, svtnmgmt.ErrRoleMismatch) {
-		t.Errorf("VP-048 — RevokeKey(controlPub, RoleControl) after LWW overwrite to RoleConsole: "+
-			"want ErrRoleMismatch (key is now RoleConsole); got: %v", err)
+	roleAfterLWW, foundAfterLWW := mgr.CallerKeyRole(svtnResult.SVTN.Name, controlPub)
+	if !foundAfterLWW {
+		t.Errorf("VP-048 — CallerKeyRole after LWW overwrite: key not found")
+	} else if roleAfterLWW != admission.RoleConsole {
+		t.Errorf("VP-048 — CallerKeyRole after LWW overwrite to RoleConsole: "+
+			"want RoleConsole; got %v", roleAfterLWW)
 	}
 }
 
@@ -1032,16 +1039,17 @@ func TestSVTNManager_CreateBootstrapAtomicity_RaceDetector(t *testing.T) {
 		// Since SVTNManager does not expose a Lookup(svtnName) accessor, we
 		// verify via the manager's own RevokeKey with the expected role. If
 		// the bootstrap key was overwritten by an attacker (different role),
-		// RevokeKey returns ErrRoleMismatch — the test fails appropriately.
-		// If it was never registered, it returns ErrKeyNotRegistered.
-		// Only RoleControl + confirm=true succeeds.
-		//
-		// IMPORTANT: no RegisterKey(controlPub) before this call — that is
-		// the tautology fix. The probe exercises raw post-race state.
-		_, err := mgr.RevokeKey(name, controlPub, admission.RoleControl, true)
-		if err != nil {
-			t.Errorf("F-003 atomicity — RevokeKey(%s, controlPub, RoleControl): "+
-				"want success (bootstrap key must be present and role=RoleControl); got %v", name, err)
+		// Verify via CallerKeyRole that the bootstrap key is present and RoleControl.
+		// (RevokeKey is no longer the verification surface — the bootstrap guard
+		// prevents revoking the control key; TODO(BC-2.07.001): spec clarification
+		// pending for E-ADM-020 bootstrap-key-revoke-forbidden.)
+		role, found := mgr.CallerKeyRole(name, controlPub)
+		if !found {
+			t.Errorf("F-003 atomicity — CallerKeyRole(%s, controlPub): "+
+				"bootstrap key not found; must be present after Create", name)
+		} else if role != admission.RoleControl {
+			t.Errorf("F-003 atomicity — CallerKeyRole(%s, controlPub): "+
+				"want RoleControl; got %v", name, role)
 		}
 	}
 }
@@ -1214,9 +1222,70 @@ func TestSVTNManager_ConcurrentCreate_NoOrphans(t *testing.T) {
 	// unreachable through the manager's public surface.
 	//
 	// Primary verification: the bootstrap key is present and has RoleControl.
-	_, err := mgr.RevokeKey("foo", controlPub, admission.RoleControl, true)
-	if err != nil {
-		t.Errorf("F-CS-003 — post-concurrent RevokeKey(foo, controlPub, RoleControl): "+
-			"want success (bootstrap key must be present); got %v", err)
+	// Using CallerKeyRole (not RevokeKey — the bootstrap guard prevents revoking
+	// the control key; TODO(BC-2.07.001): spec clarification pending for E-ADM-020).
+	role, found := mgr.CallerKeyRole("foo", controlPub)
+	if !found {
+		t.Errorf("F-CS-003 — post-concurrent CallerKeyRole(foo, controlPub): " +
+			"bootstrap key not found; must be present after Create")
+	} else if role != admission.RoleControl {
+		t.Errorf("F-CS-003 — post-concurrent CallerKeyRole(foo, controlPub): "+
+			"want RoleControl; got %v", role)
+	}
+}
+
+// TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace verifies that a concurrent
+// revoke+re-register at the same pubkey (changing its role) does not cause
+// ExpireKey to silently expire the new-role entry. ExpireKey must either
+// succeed (expired the original entry) or return ErrRoleMismatch — never
+// silently corrupt the new registration.
+//
+// Traces to F-C2-002; HOLD-001 hybrid approach.
+func TestSVTNManager_ExpireKey_TOCTOU_RoleChangeRace(t *testing.T) {
+	t.Parallel()
+
+	ks := admission.NewAdmittedKeySet()
+	ctrlPub, _ := mustGenEdKey(t)
+	mgr := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+	if _, err := mgr.Create("race-svtn"); err != nil {
+		t.Fatalf("create SVTN: %v", err)
+	}
+
+	// Register key K with access role.
+	kPub, _ := mustGenEdKey(t)
+	if _, err := mgr.RegisterKey("race-svtn", kPub, admission.RoleAccess); err != nil {
+		t.Fatalf("register key: %v", err)
+	}
+
+	const iters = 200
+	errCh := make(chan error, iters)
+
+	for range iters {
+		go func() {
+			// goroutine A: expire key K (access role, 1h TTL)
+			_, err := mgr.ExpireKey("race-svtn", kPub, time.Hour)
+			errCh <- err
+		}()
+		go func() {
+			// goroutine B: revoke K then re-register K as control role
+			_, _ = mgr.RevokeKey("race-svtn", kPub, admission.RoleAccess, false)
+			_, _ = mgr.RegisterKey("race-svtn", kPub, admission.RoleControl)
+			// re-register as access to keep test repeatable
+			_, _ = mgr.RegisterKey("race-svtn", kPub, admission.RoleAccess)
+		}()
+	}
+
+	for range iters {
+		err := <-errCh
+		// Acceptable outcomes: nil (expire succeeded on access-role entry)
+		// or ErrRoleMismatch (role changed under us — TOCTOU detected).
+		// ErrKeyNotRegistered is also acceptable (key was revoked mid-expire).
+		// Any other error is a bug.
+		if err != nil &&
+			!errors.Is(err, admission.ErrRoleMismatch) &&
+			!errors.Is(err, admission.ErrKeyNotRegistered) &&
+			!errors.Is(err, svtnmgmt.ErrSVTNNotFound) {
+			t.Errorf("unexpected error from ExpireKey: %v", err)
+		}
 	}
 }

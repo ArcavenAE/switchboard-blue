@@ -15,6 +15,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -54,6 +55,16 @@ var ErrControlRevocationRequiresConfirm = admission.ErrControlRevocationRequires
 // use errors.Is(err, admission.ErrRoleMismatch) or errors.Is(err, svtnmgmt.ErrRoleMismatch)
 // — both are the same value.
 var ErrRoleMismatch = admission.ErrRoleMismatch
+
+// ErrBootstrapKeyRevokeForbidden is returned when an attempt is made to revoke
+// the daemon bootstrap control key. The bootstrap key is the trust anchor for
+// the SVTN and must never be removed (E-ADM-020; bootstrap revocability invariant).
+var ErrBootstrapKeyRevokeForbidden = errors.New("bootstrap control key cannot be revoked")
+
+// ErrBootstrapKeyExpireForbidden is returned when ExpireKey is called against the
+// SVTN's permanent trust anchor (bootstrap key). Mirrors ErrBootstrapKeyRevokeForbidden
+// for symmetric management-lockout prevention per BC-2.05.004 EC-007 v1.12.
+var ErrBootstrapKeyExpireForbidden = errors.New("bootstrap key cannot be expired")
 
 // SVTN is a record of a single Software-Defined Virtual Topology Network
 // created and owned by this control node.
@@ -238,13 +249,21 @@ func (m *SVTNManager) RegisterKey(
 // Returns admission.ErrRoleMismatch (E-ADM-019) if currentRole does not match
 // the stored role — prevents bypassing the confirm gate by supplying a lower role.
 //
-// Traces to BC-2.05.004 postcondition 2; HOLD-001; ARCH-04 v1.10.
+// Traces to BC-2.05.004 postcondition 2; HOLD-001; ARCH-04 v1.13.
 func (m *SVTNManager) RevokeKey(
 	svtnName string,
 	pubkey ed25519.PublicKey,
 	currentRole admission.KeyRole,
 	confirm bool,
 ) (KeyOpResult, error) {
+	// Guard: never allow the bootstrap control key to be revoked.
+	// The bootstrap key is the trust anchor for the SVTN — removing it would
+	// leave the SVTN without a control authority (E-ADM-020; bootstrap revocability
+	// invariant). Constant-time comparison prevents timing oracle (Inv-5).
+	if subtle.ConstantTimeCompare([]byte(pubkey), []byte(m.controlPubKey)) == 1 {
+		return KeyOpResult{}, ErrBootstrapKeyRevokeForbidden
+	}
+
 	// Step 1: validate SVTN exists.
 	m.mu.RLock()
 	svtn, exists := m.svtns[svtnName]
@@ -257,7 +276,7 @@ func (m *SVTNManager) RevokeKey(
 	svtnID := svtn.ID
 
 	// Step 2: atomic role cross-check + confirm-gate + revocation under a single
-	// write lock (HOLD-001; ARCH-04 v1.10 Addendum H2). RevokeKeyIfRoleMatches
+	// write lock (HOLD-001; ARCH-04 v1.13 Addendum H2). RevokeKeyIfRoleMatches
 	// atomically:
 	//   (a) looks up the key by pubkey
 	//   (b) compares stored role to currentRole; returns ErrRoleMismatch (E-ADM-019)
@@ -307,6 +326,15 @@ func (m *SVTNManager) ExpireKey(
 		return KeyOpResult{}, ErrInvalidDuration
 	}
 
+	// Guard: never allow the bootstrap control key to be expired.
+	// The bootstrap key is the permanent trust anchor for the SVTN — setting a
+	// TTL on it would eventually lock out all control authority (BC-2.05.004
+	// EC-007 v1.12). Constant-time comparison prevents timing oracle (Inv-5).
+	// Mirrors the RevokeKey guard; fires before SVTN existence lookup.
+	if subtle.ConstantTimeCompare([]byte(pubkey), []byte(m.controlPubKey)) == 1 {
+		return KeyOpResult{}, ErrBootstrapKeyExpireForbidden
+	}
+
 	m.mu.RLock()
 	svtn, exists := m.svtns[svtnName]
 	m.mu.RUnlock()
@@ -317,15 +345,18 @@ func (m *SVTNManager) ExpireKey(
 
 	svtnID := svtn.ID
 
-	// LookupByPubkey derives the node address internally (ARCH-04 v1.10).
+	// Lookup to get the current role (for atomic cross-check below).
+	// TOCTOU note: a concurrent LWW RegisterKey could change the role between
+	// this lookup and SetKeyExpiryIfRoleMatches. SetKeyExpiryIfRoleMatches
+	// detects this via the role cross-check and returns ErrRoleMismatch.
 	lookedUp := m.keySet.LookupByPubkey(svtnID, pubkey)
 	if lookedUp == nil {
 		return KeyOpResult{}, admission.ErrKeyNotRegistered
 	}
+	expectedRole := lookedUp.Role
 
 	expiry := time.Now().UTC().Add(ttl)
-	if err := m.keySet.SetKeyExpiry(svtnID, lookedUp.NodeAddr, expiry); err != nil {
-		// SetKeyExpiry returns ErrKeyNotRegistered if key not present (E-ADM-013).
+	if err := m.keySet.SetKeyExpiryIfRoleMatches(svtnID, pubkey, expectedRole, expiry); err != nil {
 		return KeyOpResult{}, err
 	}
 
@@ -333,4 +364,191 @@ func (m *SVTNManager) ExpireKey(
 		Fingerprint: keyFingerprint(pubkey),
 		At:          time.Now().UTC(),
 	}, nil
+}
+
+// KeySummary is an element in the list returned by ListKeys.
+// It carries only the public portion of the key entry — no private material
+// is included (DI-002; BC-2.05.004 PC-4).
+type KeySummary struct {
+	// Fingerprint is the SHA-256 fingerprint of the key in "SHA256:<base64>" form.
+	Fingerprint string
+	// Role is the authorization role of this key on the SVTN.
+	Role admission.KeyRole
+	// Expiry is the optional expiry time (zero means no expiry is set).
+	Expiry time.Time
+}
+
+// IsBootstrapKey reports whether pubkey byte-equals the daemon's bootstrap
+// control key (the trust anchor registered at SVTN creation time).
+// Uses constant-time comparison to prevent timing oracle (BC-2.07.001 Inv-3;
+// Inv-5; AC-006 / F-P2L1-001).
+func (m *SVTNManager) IsBootstrapKey(pubkey ed25519.PublicKey) bool {
+	return subtle.ConstantTimeCompare([]byte(m.controlPubKey), []byte(pubkey)) == 1
+}
+
+// CallerKeyRole returns the KeyRole of pubkey in the named SVTN, and true.
+// Returns (0, false) if svtnName does not exist or the key is not registered.
+// Used by admin handlers to resolve the authenticated caller's role server-side
+// without trusting the client-supplied caller_role field (F-001b / BC-2.07.001 Inv-3).
+// Safe for concurrent use.
+//
+// NOTE: CallerKeyRole does not check revoked or expiry state. Use CallerKeyRoleActive
+// for authority checks that must deny revoked/expired keys (F-P4L1-003).
+func (m *SVTNManager) CallerKeyRole(svtnName string, pubkey ed25519.PublicKey) (admission.KeyRole, bool) {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return 0, false
+	}
+	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if entry == nil {
+		return 0, false
+	}
+	return entry.Role, true
+}
+
+// CallerKeyRoleActive returns the KeyRole of pubkey in the named SVTN only if
+// the key is currently active (not revoked and not expired). Returns (0, false)
+// if svtnName does not exist, the key is not registered, revoked==true, or
+// now >= expiry (F-P4L1-003 / BC-2.05.004 PC-1).
+//
+// Use this instead of CallerKeyRole for handler authority checks.
+// Safe for concurrent use.
+func (m *SVTNManager) CallerKeyRoleActive(svtnName string, pubkey ed25519.PublicKey) (admission.KeyRole, bool) {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return 0, false
+	}
+	entry := m.keySet.LookupByPubkey(svtn.ID, pubkey)
+	if entry == nil {
+		return 0, false
+	}
+	// Deny revoked keys (F-P4L1-003).
+	if entry.IsRevoked() {
+		return 0, false
+	}
+	// Deny expired keys (F-P4L1-003): expiry zero means no expiry set.
+	if exp := entry.KeyExpiry(); !exp.IsZero() && !time.Now().UTC().Before(exp) {
+		return 0, false
+	}
+	return entry.Role, true
+}
+
+// HasControlKey reports whether the named SVTN has at least one active
+// (not revoked, not expired) control-role key registered (including the
+// daemon's own bootstrap key). Returns false if svtnName does not exist or
+// no qualifying key is found.
+// Safe for concurrent use.
+func (m *SVTNManager) HasControlKey(svtnName string) bool {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return false
+	}
+	entries := m.keySet.ListBySVTN(svtn.ID)
+	now := time.Now().UTC()
+	for _, e := range entries {
+		if e.Role != admission.RoleControl {
+			continue
+		}
+		if e.IsRevoked() {
+			continue
+		}
+		if exp := e.KeyExpiry(); !exp.IsZero() && !now.Before(exp) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// HasNonBootstrapControlKey reports whether the named SVTN has at least one
+// active (not revoked, not expired) control-role key OTHER than the daemon's
+// own bootstrap key. Returns false if svtnName does not exist or no qualifying
+// non-bootstrap control key is found.
+//
+// Used by the operator-key bootstrap grant in resolveAndVerifyCallerRole
+// (F-P4L1-001): allows an operator-set member to register the first external
+// control key into a SVTN that was just created (contains only the daemon's own
+// bootstrap key). Once any non-bootstrap control key is registered, the grant
+// no longer applies and all subsequent registrations require the caller to be
+// a registered control key (fail-closed).
+// Safe for concurrent use.
+func (m *SVTNManager) HasNonBootstrapControlKey(svtnName string) bool {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return false
+	}
+	entries := m.keySet.ListBySVTN(svtn.ID)
+	now := time.Now().UTC()
+	for _, e := range entries {
+		if e.Role != admission.RoleControl {
+			continue
+		}
+		if e.IsRevoked() {
+			continue
+		}
+		if exp := e.KeyExpiry(); !exp.IsZero() && !now.Before(exp) {
+			continue
+		}
+		// Exclude the daemon's own bootstrap key.
+		if m.IsBootstrapKey(e.PublicKey) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// IsRegisteredAnyState reports whether pubkey is registered in the named SVTN
+// in ANY state — active, revoked, or expired. Returns false if svtnName does
+// not exist or the key has never been registered.
+//
+// Use this to distinguish "key never registered" from "key registered but
+// revoked/expired" when CallerKeyRoleActive returns (0, false). Revoked or
+// expired keys that ARE registered must be denied immediately (fail-closed,
+// F-P5L1-001 / BC-2.05.004 EC-006); only truly unregistered keys fall through
+// to the bootstrap-grant path.
+// Safe for concurrent use.
+func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.PublicKey) bool {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+	if !exists {
+		return false
+	}
+	return m.keySet.LookupByPubkey(svtn.ID, pubkey) != nil
+}
+
+// ListKeys returns a snapshot of all registered keys for the named SVTN.
+// Returns ErrSVTNNotFound if svtnName does not exist.
+// An empty slice (not nil) is returned when no keys are registered (EC-003).
+//
+// Traces to BC-2.05.004 postcondition 1 (key remains admitted until revoked
+// or expired; listing reflects current state).
+func (m *SVTNManager) ListKeys(svtnName string) ([]KeySummary, error) {
+	m.mu.RLock()
+	svtn, exists := m.svtns[svtnName]
+	m.mu.RUnlock()
+
+	if !exists {
+		return nil, ErrSVTNNotFound
+	}
+
+	entries := m.keySet.ListBySVTN(svtn.ID)
+	out := make([]KeySummary, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, KeySummary{
+			Fingerprint: keyFingerprint(e.PublicKey),
+			Role:        e.Role,
+			Expiry:      e.KeyExpiry(),
+		})
+	}
+	return out, nil
 }

@@ -141,6 +141,10 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	// (ARCH-12 §Daemon Mode Startup — the access daemon starts its own
 	// mgmt.Server before any data-plane I/O such as sc.Connect).
 	var mgmtWG sync.WaitGroup
+	// AC-004 (S-6.06): access-mode daemon passes nil admin handlers.
+	// Only the control-mode daemon registers admin handlers via BuildAdminHandlers
+	// (ADR-004 role-exclusion; ARCH-04 disambiguation table). Access daemons correctly return
+	// E-RPC-010 for any admin.key.* command.
 	mgmtSrv, mgmtErr := startMgmtServer(ctx, &mgmtWG, cfg, "access", daemonPriv, nil)
 	if mgmtErr != nil {
 		// Ruling J / BC-2.07.004 v1.4 EC-013: ANY mgmt-start failure aborts startup.

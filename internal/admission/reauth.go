@@ -16,6 +16,8 @@ import (
 	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/arcavenae/switchboard/internal/frame"
 )
 
 // ErrKeyExpired is returned by ReAuthenticate when the node's key has an
@@ -100,6 +102,45 @@ func (s *AdmittedKeySet) SetKeyExpiry(svtnID [16]byte, nodeAddr [8]byte, expiry 
 	entry, ok := svtnMap[nodeAddr]
 	if !ok {
 		return ErrKeyNotRegistered
+	}
+	entry.expiry = expiry
+	return nil
+}
+
+// SetKeyExpiryIfRoleMatches atomically checks that the key's stored role
+// matches expectedRole then sets the expiry — all under a single write lock.
+// This closes the TOCTOU window between LookupByPubkey and SetKeyExpiry.
+//
+// Returns:
+//   - nil                          on success (expiry set)
+//   - ErrKeyNotRegistered          if no (SVTN, nodeAddr) tuple exists (E-ADM-013)
+//   - ErrRoleMismatch              if stored role != expectedRole (E-ADM-019)
+//
+// Traces to F-C2-002 TOCTOU fix; HOLD-001 hybrid approach.
+func (s *AdmittedKeySet) SetKeyExpiryIfRoleMatches(
+	svtnID [16]byte,
+	pubkey ed25519.PublicKey,
+	expectedRole KeyRole,
+	expiry time.Time,
+) error {
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	svtnMap, ok := s.keys[svtnID]
+	if !ok {
+		return ErrKeyNotRegistered
+	}
+	entry, ok := svtnMap[nodeAddr]
+	if !ok {
+		return ErrKeyNotRegistered
+	}
+	if entry.Role != expectedRole {
+		return &RoleMismatchError{
+			ClaimedRole:    expectedRole,
+			RegisteredRole: entry.Role,
+		}
 	}
 	entry.expiry = expiry
 	return nil

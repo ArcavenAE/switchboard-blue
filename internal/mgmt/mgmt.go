@@ -87,6 +87,41 @@ type Handler struct {
 	Fn      func(ctx context.Context, args json.RawMessage) (any, error)
 }
 
+// callerPubkeyKey is the unexported context key for the authenticated caller identity.
+// Using an unexported type prevents key collision with other packages.
+type callerPubkeyKey struct{}
+
+// CallerIdentity is the authenticated caller identity attached to the handler
+// context after a successful management-plane challenge-response handshake.
+// Authenticated=false is the zero value — unauthenticated contexts carry no identity.
+type CallerIdentity struct {
+	// Pubkey is the Ed25519 public key authenticated during the handshake.
+	Pubkey ed25519.PublicKey
+	// Authenticated is true only when the identity was set by a successful
+	// mgmt handshake. A zero-value CallerIdentity (Authenticated=false) means
+	// no handshake was performed (e.g., unit test context.Background()).
+	Authenticated bool
+}
+
+// WithCallerPubkey returns a context with an authenticated CallerIdentity
+// attached. Called by handleConnection after successful challenge-response.
+// Exported so cmd/switchboard unit tests can inject identity without a real
+// handshake (F-001 / ADR-012 §3 step 9 / AC-006).
+func WithCallerPubkey(ctx context.Context, pubkey ed25519.PublicKey) context.Context {
+	id := CallerIdentity{Pubkey: pubkey, Authenticated: true}
+	return context.WithValue(ctx, callerPubkeyKey{}, id)
+}
+
+// CallerPubkey extracts the authenticated caller Ed25519 public key from ctx.
+// Returns (nil, false) if no authenticated identity was attached.
+func CallerPubkey(ctx context.Context) (ed25519.PublicKey, bool) {
+	id, ok := ctx.Value(callerPubkeyKey{}).(CallerIdentity)
+	if !ok || !id.Authenticated {
+		return nil, false
+	}
+	return id.Pubkey, true
+}
+
 // OperatorKeySet holds the set of authorized operator public keys for this daemon.
 // IsAuthorized is safe for concurrent use.
 type OperatorKeySet struct {
@@ -573,6 +608,11 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 	// Connection is now authenticated.
 	authenticated := true
+
+	// Attach the authenticated caller pubkey to ctx so handlers can resolve
+	// caller identity server-side (F-001 / ADR-012 §3 step 9 / AC-006).
+	// callCtx derived via context.WithTimeout(ctx, ...) propagates the value.
+	ctx = WithCallerPubkey(ctx, pubkey)
 
 	// Step 11: Apply s.rpcIdleTimeout before reading the first RPC.
 	if err := conn.SetReadDeadline(time.Now().Add(s.rpcIdleTimeout)); err != nil {

@@ -2941,3 +2941,116 @@ func TestMgmtServer_UnauthorizedKeyRejected_AuthorizedSetCheck(t *testing.T) {
 		t.Errorf("want code=E-ADM-010; got %v", resp["code"])
 	}
 }
+
+// TestCallerPubkeyContext verifies that WithCallerPubkey/CallerPubkey round-trip
+// correctly, and that CallerPubkey returns false on an empty context.
+// Traces to F-001 (CallerPubkey context plumbing).
+func TestCallerPubkeyContext(t *testing.T) {
+	t.Parallel()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	// Happy path: pubkey survives context round-trip.
+	ctx := mgmt.WithCallerPubkey(context.Background(), pub)
+	got, ok := mgmt.CallerPubkey(ctx)
+	if !ok {
+		t.Fatal("CallerPubkey: expected ok=true")
+	}
+	if !bytes.Equal(got, pub) {
+		t.Errorf("CallerPubkey: got %x, want %x", got, pub)
+	}
+
+	// Empty context returns false.
+	_, ok2 := mgmt.CallerPubkey(context.Background())
+	if ok2 {
+		t.Error("CallerPubkey on empty ctx: expected ok=false")
+	}
+}
+
+// TestHandlerReceivesCallerPubkey verifies that the handler fn receives the
+// authenticated caller pubkey via ctx when a real connection completes the
+// challenge-response handshake. Traces to F-001 (ADR-012 §3 / AC-006).
+func TestHandlerReceivesCallerPubkey(t *testing.T) {
+	t.Parallel()
+
+	pub, priv := mustGenKey(t)
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{pub})
+
+	var receivedPubkey ed25519.PublicKey
+	callerDone := make(chan struct{})
+	handlers := []mgmt.Handler{
+		{
+			Command: "test.pubkey",
+			Fn: func(ctx context.Context, _ json.RawMessage) (any, error) {
+				pk, ok := mgmt.CallerPubkey(ctx)
+				if ok {
+					receivedPubkey = pk
+				}
+				select {
+				case <-callerDone:
+				default:
+					close(callerDone)
+				}
+				return "ok", nil
+			},
+		},
+	}
+
+	// Use startServerOnPipe to get a client conn.
+	// startServerOnPipe uses the first return of mustGenKey as the daemon key —
+	// but we need ops to contain pub. Use a custom setup so ops is non-bootstrap.
+	_, daemonPriv := mustGenKey(t)
+	serverConn, clientConn := net.Pipe()
+	t.Cleanup(func() {
+		_ = serverConn.Close()
+		_ = clientConn.Close()
+	})
+
+	ln := newSingleConnListener(serverConn)
+	srv := mgmt.NewServer(ln, daemonPriv, ops, handlers, "dev",
+		mgmt.WithHandshakeTimeout(2*time.Second),
+		mgmt.WithRPCIdleTimeout(5*time.Second),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = srv.Serve(ctx) }() //nolint:errcheck // test goroutine
+
+	// Set deadline so test doesn't hang.
+	if err := clientConn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("SetDeadline: %v", err)
+	}
+
+	if err := doHandshake(t, clientConn, priv); err != nil {
+		t.Fatalf("handshake: %v", err)
+	}
+
+	// Send an RPC.
+	rpcMsg, err := json.Marshal(map[string]any{
+		"type":    "request",
+		"id":      "req-1",
+		"command": "test.pubkey",
+		"args":    nil,
+	})
+	if err != nil {
+		t.Fatalf("marshal rpc: %v", err)
+	}
+	rpcMsg = append(rpcMsg, '\n')
+	if _, err := clientConn.Write(rpcMsg); err != nil {
+		t.Fatalf("write rpc: %v", err)
+	}
+
+	// Read response (discard content — just drain so handler runs to completion).
+	_ = readMsg(t, clientConn)
+
+	select {
+	case <-callerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler never called within 2s")
+	}
+
+	if !bytes.Equal(receivedPubkey, pub) {
+		t.Errorf("handler got pubkey %x; want %x", receivedPubkey, pub)
+	}
+}
