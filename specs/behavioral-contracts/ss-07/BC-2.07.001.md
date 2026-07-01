@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -18,6 +18,11 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-06-28
+    version: "1.1"
+    actor: product-owner
+    change: >
+      Initial draft — SVTN lifecycle create/destroy + bootstrap first control key.
   - date: 2026-06-29
     version: "1.2"
     actor: product-owner
@@ -27,21 +32,6 @@ modified:
       `sbctl admin svtn create --name=mynet`; (3) Stories cell updated with PC split
       (PC-1: S-6.02 + S-6.07; PC-2: S-6.02; PC-3: S-6.05); (4) PC-2 "trust anchor"
       addendum added clarifying admitted=false bootstrap semantics.
-  - date: 2026-07-01
-    version: "1.7"
-    actor: spec-steward
-    change: >
-      Ruling-8: narrow Inv-3 DiD check to non-genesis path; genesis creation exempt (bootstrap key
-      registered as RoleControl atomically in genesis Create). Genesis carve-out appended to Inv-3
-      defense-in-depth note. Ref: rulings v1.3 Ruling-8.
-  - date: 2026-07-01
-    version: "1.6"
-    actor: spec-steward
-    change: >
-      Ruling-7 defense-in-depth (Pass-3 L3 handoff): added note to Invariant 3 — implementations
-      MUST check `caller.role == RoleControl` explicitly after `IsBootstrapKey(caller)`. Defense-in-depth
-      against future bootstrap-key rotation or provisioning refactors that might inadvertently relax the
-      role assignment. VP-048 updated to v1.4 referencing this note.
   - date: 2026-06-30
     version: "1.3"
     actor: product-owner
@@ -54,6 +44,44 @@ modified:
       dropped from BC-2.07.001's cite path; story-writer must remove BC-2.07.001
       from S-6.06 bc_traces frontmatter and BC table under
       bc_array_changes_propagate_to_body_and_acs policy.
+  - date: 2026-07-01
+    version: "1.4"
+    actor: product-owner
+    change: >
+      Wave-6 Tranche-A Ruling-2: Inv-3 tightened to codify bootstrap-only caller restriction for
+      `admin.svtn.create`. Cross-SVTN control-role keys are NOT authorized for `admin.svtn.create`.
+      Only the daemon bootstrap key (seeded via PC-2 local operation) may invoke SVTN creation.
+      Removes ambiguity flagged in S-6.07 F-P1L1-005.
+  - date: 2026-07-01
+    version: "1.5"
+    actor: spec-steward
+    change: >
+      S-6.07 F-P2L3-003 test-vector gap closure: added Canonical Test Vector for cross-SVTN
+      control-role key attempting `admin.svtn.create` — expects E-ADM-009 (not existence oracle)
+      per Ruling-5 bootstrap-only guard. Handler MUST fire `IsBootstrapKey` check before
+      `resolveAndVerifyCallerRole` to prevent SVTN existence leak.
+  - date: 2026-07-01
+    version: "1.6"
+    actor: spec-steward
+    change: >
+      Ruling-7 defense-in-depth (Pass-3 L3 handoff): added note to Invariant 3 — implementations
+      MUST check `caller.role == RoleControl` explicitly after `IsBootstrapKey(caller)`. Defense-in-depth
+      against future bootstrap-key rotation or provisioning refactors that might inadvertently relax the
+      role assignment. VP-048 updated to v1.4 referencing this note.
+  - date: 2026-07-01
+    version: "1.7"
+    actor: spec-steward
+    change: >
+      Ruling-8: narrow Inv-3 DiD check to non-genesis path; genesis creation exempt (bootstrap key
+      registered as RoleControl atomically in genesis Create). Genesis carve-out appended to Inv-3
+      defense-in-depth note. Ref: rulings v1.3 Ruling-8.
+  - date: 2026-07-01
+    version: "1.8"
+    actor: spec-steward
+    change: >
+      F-P5L3-03 cleanup: backfill missing modified-list entries for v1.1, v1.4, v1.5 (previously absent);
+      reorder modified list chronologically (v1.1 through v1.8). Add genesis-path Canonical Test Vector
+      (F-P5L3-06). No behavioral changes.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -116,6 +144,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 | Bootstrap: first control key added locally | Control key in admitted set with `admitted=false`; control node completes challenge-response to flip `admitted=true`; SVTN ready for additional key registrations | happy-path |
 | Non-control-role key attempts `sbctl admin svtn create` | E-ADM-009 "insufficient authority for operation admin.svtn.create: key <fp> has role <role>" | error |
 | Cross-SVTN control-role key (admitted to an existing SVTN, role=control) attempts `sbctl admin svtn create` targeting a new SVTN name | E-ADM-009 "insufficient authority for operation admin.svtn.create: key <fp> has role control" — handler returns E-ADM-009 before consulting SVTN state; bootstrap-only check fires first; no existence oracle leak (Ruling-5, S-6.07 F-P2L3-003) | error |
+| Genesis SVTN create: `HasAnySVTN()==false`, caller==bootstrap key | Create succeeds; SVTN ID returned; control-role bootstrap key registered atomically in admitted set (`admitted=false`, flipped to `admitted=true` via challenge-response); Inv-3 genesis carve-out applies — `role == RoleControl` keySet lookup correctly skipped on genesis path (Ruling-8). Reference: decisions/wave-6-tranche-a-scope-rulings.md Ruling-8. | happy-path |
 
 ## Verification Properties
 
@@ -144,6 +173,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.8 | 2026-07-01 | spec-steward | F-P5L3-03/F-P5L3-06 cleanup: backfill modified-list entries for v1.1, v1.4, v1.5 (previously absent); reorder modified list chronologically; add genesis-path Canonical Test Vector (HasAnySVTN()==false, caller==bootstrap → Create succeeds, control-role bootstrap key registered atomically, Inv-3 genesis carve-out per Ruling-8). No behavioral changes. |
 | 1.7 | 2026-07-01 | spec-steward | Ruling-8: narrow Inv-3 DiD check to non-genesis path; genesis creation exempt (bootstrap key registered as RoleControl atomically in genesis Create). Ref: rulings v1.3 Ruling-8. |
 | 1.6 | 2026-07-01 | spec-steward | Ruling-7 defense-in-depth (Pass-3 L3 handoff): Inv-3 extended with explicit `caller.role == RoleControl` check obligation after `IsBootstrapKey(caller)`. Defense-in-depth against bootstrap-key rotation refactors. Callers passing bootstrap-key check with `role != RoleControl` MUST be rejected E-ADM-009 before SVTN state consulted (existence oracle closed). VP-048 updated to v1.4. |
 | 1.5 | 2026-07-01 | spec-steward | S-6.07 F-P2L3-003 test-vector gap closure: added Canonical Test Vector for cross-SVTN control-role key attempting `admin.svtn.create` — expects E-ADM-009 (not existence oracle) per Ruling-5 bootstrap-only guard. Handler MUST fire `IsBootstrapKey` check before `resolveAndVerifyCallerRole` to prevent SVTN existence leak. |
