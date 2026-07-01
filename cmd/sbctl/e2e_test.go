@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,46 +66,92 @@ type testMgmtServer struct {
 // startTestMgmtServer starts an in-process mgmt.Server for the given daemon mode
 // on an OS-assigned TCP port. Returns a testMgmtServer with the server address
 // and the operator key. Shutdown is registered via t.Cleanup.
-//
-// IMPLEMENTER: replace the t.Fatal stub with a real implementation:
-//  1. Generate Ed25519 key pair in-process (ed25519.GenerateKey(rand.Reader)).
-//  2. net.Listen("tcp", "127.0.0.1:0") to get an OS-assigned port.
-//  3. Register a "status" stub handler returning {"ok":true,"data":{"mode":<name>}}.
-//  4. mgmt.NewServer(ln, daemonPriv, mgmt.NewOperatorKeySet(nil), handlers, "dev",
-//     mgmt.WithHandshakeTimeout(500*time.Millisecond), mgmt.WithRPCIdleTimeout(2*time.Second))
-//     — bootstrap mode: nil ops means the daemon's own key is the sole authorized key.
-//     Therefore the operator key == daemon key.
-//  5. Launch srv.Serve(ctx) in a goroutine tracked by t.Cleanup(srv.Shutdown).
-//  6. Return &testMgmtServer{addr: ln.Addr().String(), privKey: daemonPriv}.
 func startTestMgmtServer(t *testing.T, mode daemonMode) *testMgmtServer {
 	t.Helper()
-	t.Fatal("not implemented: startTestMgmtServer — implementer fills this in Step 3")
-	return nil // unreachable; satisfies compiler
+
+	// Generate a fresh Ed25519 key pair for this server instance.
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("startTestMgmtServer [%s]: GenerateKey: %v", mode.name, err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("startTestMgmtServer [%s]: net.Listen: %v", mode.name, err)
+	}
+
+	// "status" stub handler returns {"mode":<name>} as the data field.
+	// The response envelope's ok:true and data wrapping is handled by the server.
+	modeName := mode.name
+	statusHandler := mgmt.Handler{
+		Command: "status",
+		Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+			return map[string]any{"mode": modeName}, nil
+		},
+	}
+
+	// Bootstrap mode: NewOperatorKeySet(nil) — the daemon's own key is the sole
+	// authorized operator key, so the test passes daemonPriv as the operator key.
+	srv := mgmt.NewServer(
+		ln,
+		daemonPriv,
+		mgmt.NewOperatorKeySet(nil),
+		[]mgmt.Handler{statusHandler},
+		"dev-"+modeName,
+		mgmt.WithHandshakeTimeout(500*time.Millisecond),
+		mgmt.WithRPCIdleTimeout(2*time.Second),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = srv.Serve(ctx)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		_ = srv.Shutdown(context.Background())
+		wg.Wait()
+		_ = ln.Close()
+	})
+
+	return &testMgmtServer{
+		addr:    ln.Addr().String(),
+		privKey: daemonPriv,
+	}
 }
 
 // awaitReady polls the server address with 10ms sleep until a TCP connection
-// succeeds or the timeout (1s) expires.
-//
-// IMPLEMENTER: replace the t.Fatal stub with a real implementation:
-//  1. Loop: net.DialTimeout("tcp", addr, 50ms).
-//  2. If Dial succeeds, close conn and return.
-//  3. If total elapsed > timeout, t.Fatalf with descriptive message.
+// succeeds or the timeout expires.
 func awaitReady(t *testing.T, addr string, timeout time.Duration) {
 	t.Helper()
-	t.Fatal("not implemented: awaitReady — implementer fills this in Step 3")
+	deadline := time.Now().UTC().Add(timeout)
+	for {
+		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		if time.Now().UTC().After(deadline) {
+			t.Fatalf("awaitReady: server at %s did not become ready within %s: %v", addr, timeout, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // dialConn opens a TCP connection to addr and registers conn.Close in t.Cleanup.
 // Returns the connection. Fatal on error.
-//
-// IMPLEMENTER: replace the t.Fatal stub with a real implementation:
-//  1. net.Dial("tcp", addr).
-//  2. t.Cleanup(func() { _ = conn.Close() }).
-//  3. return conn.
 func dialConn(t *testing.T, addr string) net.Conn {
 	t.Helper()
-	t.Fatal("not implemented: dialConn — implementer fills this in Step 3")
-	return nil // unreachable
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dialConn: net.Dial %s: %v", addr, err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
 }
 
 // ── TestE2E_MgmtPlane_AllFourDaemonTypes_VP049 ────────────────────────────────
