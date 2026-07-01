@@ -586,6 +586,16 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 	// (F-P5L2-03).
 	var hits int64
 
+	// F-P10L2-02: one Once per assertion class so each distinct failure fires at
+	// most once instead of up to 400 times (numReaders × iterations), keeping
+	// test output readable when a regression surfaces under -race.
+	var (
+		onceOkFalse   sync.Once
+		oncePubKeyLen sync.Once
+		onceFrameAuth sync.Once
+		onceRole      sync.Once
+	)
+
 	// Writer goroutines all re-register the same (pubkey, nodeAddr) pair.
 	// Each call is an idempotent LWW overwrite; the entry must remain
 	// consistent throughout.
@@ -611,25 +621,37 @@ func TestLookupByPubkey_ConcurrentSameEntryRegistration(t *testing.T) {
 				key, ok := ks.LookupByPubkey(svtnID, pub)
 				if !ok {
 					// Entry was pre-registered; every iteration must find it.
-					t.Errorf("concurrent same-entry: LookupByPubkey returned ok=false for pre-registered key")
+					// F-P10L2-02: fire at most once to bound diagnostic output.
+					onceOkFalse.Do(func() {
+						t.Errorf("concurrent same-entry: LookupByPubkey returned ok=false for pre-registered key")
+					})
 					continue
 				}
 				atomic.AddInt64(&hits, 1)
 				// Structural check: PublicKey must be well-formed on any hit.
+				// F-P10L2-02: fire at most once to bound diagnostic output.
 				if len(key.PublicKey) != ed25519.PublicKeySize {
-					t.Errorf("concurrent same-entry: PublicKey len=%d want %d",
-						len(key.PublicKey), ed25519.PublicKeySize)
+					oncePubKeyLen.Do(func() {
+						t.Errorf("concurrent same-entry: PublicKey len=%d want %d",
+							len(key.PublicKey), ed25519.PublicKeySize)
+					})
 				}
 				// FrameAuthKey oracle: must equal the derived value, not merely non-zero.
 				// This catches a bug where the key is zeroed or stale under contention.
+				// F-P10L2-02: fire at most once to bound diagnostic output.
 				if key.FrameAuthKey != expectedAuthKey {
-					t.Errorf("concurrent same-entry: FrameAuthKey mismatch: got %x, want %x",
-						key.FrameAuthKey, expectedAuthKey)
+					onceFrameAuth.Do(func() {
+						t.Errorf("concurrent same-entry: FrameAuthKey mismatch: got %x, want %x",
+							key.FrameAuthKey, expectedAuthKey)
+					})
 				}
 				// Role oracle: must equal RoleAccess on every concurrent hit.
 				// This catches a torn-write where Role is zeroed under contention.
+				// F-P10L2-02: fire at most once to bound diagnostic output.
 				if key.Role != admission.RoleAccess {
-					t.Errorf("concurrent same-entry: Role=%v want RoleAccess", key.Role)
+					onceRole.Do(func() {
+						t.Errorf("concurrent same-entry: Role=%v want RoleAccess", key.Role)
+					})
 				}
 			}
 		}()
@@ -671,7 +693,7 @@ func assertMissZero(t *testing.T, label string, key admission.AdmittedKey, ok bo
 		return
 	}
 	if !reflect.DeepEqual(key, admission.AdmittedKey{}) {
-		t.Errorf("%s: want zero AdmittedKey on miss; got non-zero value (exported or unexported fields populated)", label)
+		t.Errorf("%s: want zero AdmittedKey on miss; got non-zero value (exported or unexported fields populated): %+v", label, key)
 	}
 }
 
