@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.6"
+version: "1.7"
 bc_traces:
   - BC-2.06.001
   - BC-2.06.003
@@ -128,12 +128,23 @@ in this interim state pending `PathSnapshot.RouterAddr` enrichment
 Ruling-1 (Option A) and follow-on story S-BL.ROUTER-ADDR, which will land a real
 `host:port` value before Wave-6 wave-convergence.
 This AC is the implementation target for VP-047.
-- **Test:** `TestVP047_SbctlPathsList_EndToEnd` — integration test spinning up a
-  daemon with a live PathTracker seeded with two snapshots (pending + green), running
-  `sbctl paths list --json`, asserting required fields per VP-047; `router_addr` key
-  presence asserted, `""` accepted. The test MUST exercise the production wiring path
-  (real PathTracker via PathsListSource adapter); it MUST NOT inject `synthPathsListSource`
-  directly.
+
+**Handler surface, response types, and adapter interface are in scope for S-W5.04.**
+The `pathTrackerSource` adapter interface is defined and the integration test populates
+it with synthetic `PathTracker` instances (test-only population). **Production
+`pathTrackerSource` population from the routing subsystem registry is DEFERRED to
+`S-BL.PATH-TRACKER-WIRING`.** See wave-6-tranche-a-scope-rulings.md Ruling-6 (Option B).
+Any residual empty-source dead code (e.g., a fully empty stub with no register method)
+should be deleted if present; otherwise skip that step.
+
+- **Test:** `TestVP047_SbctlPathsList_EndToEnd` — integration test that populates
+  `pathTrackerSource` with at least one synthetic `PathTracker` instance and asserts
+  that `GET /paths` returns that entry. `router_addr` key presence asserted, `""` accepted.
+  The test MUST exercise the full handler→source→response code path; direct response
+  fabrication or bypassing the source interface is not permitted.
+  Production population of `pathTrackerSource` from the routing subsystem is deferred
+  to `S-BL.PATH-TRACKER-WIRING`. `// #DEFERRED: S-BL.PATH-TRACKER-WIRING` comment
+  MUST be present on the `pathTrackerSource` field or initialization site.
 
 ## Architecture Mapping
 
@@ -149,6 +160,7 @@ This AC is the implementation target for VP-047.
 
 | BC | Title | PCs covered |
 |----|-------|------------|
+| BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | Quality state machine: `PathSnapshot.Degraded == true` → `status: "degraded"`; quality field derived from p99 RTT when available |
 | BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 failed+pending precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
 
 ## VP Coverage
@@ -214,7 +226,7 @@ This AC is the implementation target for VP-047.
 13. [ ] Implement `router.status` handler: reuse paths.list logic; add quality summary field
 14. [ ] Register all three handlers via `mgmt.Server.Register()` in the appropriate daemon init path
 15. [ ] Integration test (VP-047): spin up daemon with live PathTracker seeded with two snapshots, run `sbctl paths list --json`, assert required fields for AC-006
-15a. [ ] Wire real PathTracker → PathsListSource adapter in production `runControl` and `runAccess` paths; delete `emptyPathsSource` and `emptyRouterMetricsSource` stubs from `cmd/switchboard/metrics_wire.go`
+15a. [ ] Define `pathTrackerSource` adapter interface in `cmd/switchboard/metrics_wire.go`; add `// #DEFERRED: production population from routing registry deferred to S-BL.PATH-TRACKER-WIRING. Test-time registration via .register() is the only population path in this wave.` comment at the field/initialization site. Adapter interface defined + test-populated; production wiring deferred. Delete any residual empty-source dead code (a stub with no register method) if present; otherwise skip.
 16. [ ] `just fmt && just lint` pass
 
 ## Previous Story Intelligence (MANDATORY)
@@ -260,10 +272,23 @@ This AC is the implementation target for VP-047.
 > Do NOT create or modify: `cmd/sbctl/` (S-5.02 scope), `internal/paths/` (S-5.02 scope),
 > `internal/mgmt/server.go` or transport core (S-W5.01 scope).
 
+## Deferred Scope
+
+The following items are explicitly deferred out of S-W5.04 scope:
+
+| Item | Deferred To | Reference |
+|------|------------|-----------|
+| Production `pathTrackerSource` population from routing subsystem registry (enumerate (SVTN, endpoint) → PathTracker at handler-serve time) | S-BL.PATH-TRACKER-WIRING | Ruling-6 (wave-6-tranche-a-scope-rulings.md); `// #DEFERRED: S-BL.PATH-TRACKER-WIRING` comment in metrics_wire.go |
+| `status: "failed"` emission (requires liveness signal in PathSnapshot) | S-BL.PATH-FAILED-STATUS | Ruling-4 (wave-6-tranche-a-scope-rulings.md); BC-2.06.003 v1.11 PC-1 reserved enum |
+| `router_addr` real host:port (requires PathSnapshot.RouterAddr enrichment) | S-BL.ROUTER-ADDR | Ruling-1 (wave-6-tranche-a-scope-rulings.md); DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER |
+
+> **#DEFERRED: S-BL.PATH-TRACKER-WIRING** — Production tracker population is deferred. This story delivers the handler surface, response types, and adapter interface; test-only population via `.register()` is the only population path in this wave.
+
 ## Changelog
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.7 | 2026-07-01 | story-writer | Ruling-6 propagation (F-P3L1-002, F-L2-01): AC-006 revised — handler surface, response types, and adapter interface in scope; test-only tracker population permitted; production wiring deferred to S-BL.PATH-TRACKER-WIRING; `#DEFERRED` comment requirement added. Task 15a revised: adapter interface defined + test-populated; production wiring deferred; delete residual empty-source dead code if present. §Deferred Scope section added with explicit cross-reference `#DEFERRED: S-BL.PATH-TRACKER-WIRING`. OBS-2 fix: BC-2.06.001 added to §Behavioral Contracts body table (was in bc_traces frontmatter but missing from body table). Pass-3 L3 fixes: F-L3-001 through F-L3-005 propagated. |
 | 1.6 | 2026-07-01 | story-writer | Ruling-3 (F-P2L1-003): task step 15a added — wire real PathTracker → PathsListSource adapter in production runControl/runAccess; delete emptyPathsSource/emptyRouterMetricsSource stubs from cmd/switchboard/metrics_wire.go; AC-006 test updated to require production wiring path (MUST NOT inject synthPathsListSource directly). Ruling-4 (F-P2L3-006): status enum retracted to `{active, degraded}` throughout — `"failed"` reserved for S-BL.PATH-FAILED-STATUS; AC-005a rewritten; row (a) status="failed" removed from AC-005a table; EC-006 parenthetical removed; Arch Compliance Rules status-enum row updated; BC-2.06.003 pin bumped v1.9 → v1.10 in Token Budget, AC-002, Tasks step 1, all Arch Compliance rule rows, Scope Boundary. F-P2L3-002: BC-2.06.001 added to bc_traces frontmatter (body already cites BC-2.06.001 in AC-003, AC-005a, Arch Compliance Rules). F-P2L1-004: task step 7a added — fix RTTValue.UnmarshalJSON to use Kind enum (PendingKind, FloatKind) instead of sentinel; Arch Compliance Rules row added for RTTValue round-trip invariant. Expanded negative-test task list at step 5a: data-race regression, status oracle, malformed-args decode, VP-047 field-swap oracle, EC-006 row test. |
 | 1.5 | 2026-07-01 | story-writer | F-P1L1-003 router_addr Ruling-1: empty string interim per wave-6-tranche-a-scope-rulings.md Option A; AC-006 narrowed to assert key presence + accept `""`, S-BL.ROUTER-ADDR cross-ref added. F-P1L3-001 AC-005a Degraded==failed mis-anchor corrected: Degraded==true → `"degraded"` (not `"failed"`); `"failed"` is distinct liveness state; EC-006 corrected accordingly; test renamed TestDaemonRouterStatus_QualityStatusIndependence. F-P1L3-002 AC-003 `"ok"`→`"active"` per BC-2.06.003 v1.9 status enum `{active,degraded,failed}`. Sweep BC-2.06.003 pin v1.7→v1.9 in Token Budget, all Arch Compliance rule rows, AC-002, Tasks step 1, Scope Boundary note. |
 | 1.4 | 2026-06-30 | product-owner | S502-DEFER-3 closure: extend AC-005 with AC-005a (failed+pending precedence per BC-2.06.003 v1.8 EC-007); add EC-006 to Edge Cases table; add Architecture Compliance Rules row for the precedence ruling; update BC table PC-3 annotation. Bump BC-2.06.003 pin from v1.7 to v1.8. |
