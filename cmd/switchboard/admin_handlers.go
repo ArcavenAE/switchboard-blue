@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -572,11 +573,13 @@ type adminSVTNCreateResult struct {
 
 // makeAdminSVTNCreateHandler returns the admin.svtn.create handler function.
 //
-// Authority check (BC-2.07.001 Inv-3 / AC-003): reads the authenticated
-// caller's pubkey from ctx (set by handleConnection after ADR-012 handshake),
-// resolves its role via resolveAndVerifyCallerRole, and rejects non-control-role
-// callers with E-ADM-009 BEFORE invoking m.Create. This follows the S-6.06
-// pattern for admin.key.* handlers exactly.
+// Authority check (BC-2.07.001 Inv-3 / AC-003 / Ruling-5 / F-P2L1-001):
+// admin.svtn.create is bootstrap-only — only the daemon's own bootstrap key
+// (m.IsBootstrapKey) may create SVTNs. Cross-SVTN control-role keys are NOT
+// authorized. The check fires BEFORE m.Create is called; non-bootstrap callers
+// receive E-ADM-009 immediately. resolveAndVerifyCallerRole is NOT called here
+// because the bootstrap-only constraint is stricter than the general control-role
+// check used by admin.key.* handlers.
 //
 // On success (AC-004): returns adminSVTNCreateResult with svtn_id (hex) and
 // bootstrap_fingerprint (SHA256:<base64> verbatim from svtnmgmt.keyFingerprint).
@@ -584,24 +587,33 @@ type adminSVTNCreateResult struct {
 // On duplicate name (AC-005): propagates ErrSVTNAlreadyExists as
 // "E-SVTN-001: SVTN already exists: <name>" to the RPC response.
 //
-// Traces to BC-2.07.001 PC-1 + PC-2 + Inv-3; AC-001; AC-003; AC-004; AC-005.
-func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// On non-duplicate Create failure: stamped E-INT-001 (F-P2L1-004).
+//
+// Traces to BC-2.07.001 PC-1 + PC-2 + Inv-3; AC-001; AC-003; AC-004; AC-005;
+// Ruling-5; F-P2L1-001; F-P2L1-004.
+func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminSVTNCreateArgs
 		if err := json.Unmarshal(args, &a); err != nil {
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
-		if a.Name == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: name")
+
+		// Args validation: name must be non-empty, non-whitespace-only, within
+		// 255 bytes, and free of ASCII control characters (F-P2L2 exhaustive validation).
+		if err := validateSVTNName(a.Name); err != nil {
+			return nil, err
 		}
 
-		// BC-2.07.001 Inv-3 / AC-003: authority check BEFORE dispatch.
-		// Pass empty svtnName for the role lookup: the target SVTN doesn't exist
-		// yet, so CallerKeyRoleActive will return (0, false). The only allowed
-		// paths are IsBootstrapKey (daemon's own key) and the operator-key grant.
-		// Non-control callers receive E-ADM-009 before m.Create is called.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.Name, "", "admin.svtn.create"); err != nil {
-			return nil, err
+		// Ruling-5 / F-P2L1-001: bootstrap-only pre-check. Only the daemon's own
+		// bootstrap key may create SVTNs. This is stricter than the general
+		// control-role check — a cross-SVTN control key does not have authority here.
+		callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
+		if !hasPubkey || !m.IsBootstrapKey(callerPub) {
+			fp := "(unknown)"
+			if hasPubkey {
+				fp = keyFingerprintAdmin(callerPub)
+			}
+			return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.create: key %s is not the daemon bootstrap key", fp)
 		}
 
 		result, err := m.Create(a.Name)
@@ -614,9 +626,11 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySe
 			if errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) {
 				return nil, &svtnAlreadyExistsErr{name: a.Name, cause: err}
 			}
-			// Non-duplicate Create failure (e.g. internal rand.Read failure).
-			// No specific taxonomy code applies; wrap with context for operator visibility.
-			return nil, fmt.Errorf("admin.svtn.create: create SVTN %s: %w", a.Name, err)
+			// F-P2L1-004: non-duplicate Create failure (e.g. internal rand.Read failure)
+			// stamped with E-INT-001. Use %v (not %w) — the inner error is an internal
+			// failure (crypto/rand or similar) and the chain is not useful to callers;
+			// the message text preserves the cause for operator logs.
+			return nil, fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %v", a.Name, err)
 		}
 
 		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from
@@ -626,4 +640,30 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySe
 			BootstrapFingerprint: m.BootstrapFingerprint(),
 		}, nil
 	}
+}
+
+// validateSVTNName checks that the SVTN name satisfies the admission constraints
+// for admin.svtn.create (F-P2L2 exhaustive validation):
+//   - non-empty
+//   - not whitespace-only (strings.TrimSpace must be non-empty)
+//   - at most 255 bytes (operator-readable label budget)
+//   - no ASCII control characters (U+0000–U+001F, U+007F)
+//
+// Returns E-CFG-001 on any violation.
+func validateSVTNName(name string) error {
+	if name == "" {
+		return fmt.Errorf("E-CFG-001: missing required field: name")
+	}
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("E-CFG-001: invalid name: name must not be whitespace-only")
+	}
+	if len(name) > 255 {
+		return fmt.Errorf("E-CFG-001: invalid name: name exceeds 255-byte maximum (got %d bytes)", len(name))
+	}
+	for _, r := range name {
+		if r <= 0x1F || r == 0x7F {
+			return fmt.Errorf("E-CFG-001: invalid name: name contains control character U+%04X", r)
+		}
+	}
+	return nil
 }
