@@ -531,6 +531,25 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 	return verifyCallerRole(cr, cmd, "(unknown)")
 }
 
+// svtnAlreadyExistsErr is returned by makeAdminSVTNCreateHandler when
+// SVTNManager.Create returns ErrSVTNAlreadyExists. It implements Unwrap so
+// that errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) returns true while the
+// Error() message is derived from the SVTN name only — no stutter from
+// concatenating the sentinel's own text (F-P1L1-004; F-P1L2-001).
+//
+// Message format: "E-SVTN-001: SVTN already exists: <name>"
+// per BC-2.07.001 EC-001 canonical message and error-taxonomy.md row E-SVTN-001.
+type svtnAlreadyExistsErr struct {
+	name  string
+	cause error
+}
+
+func (e *svtnAlreadyExistsErr) Error() string {
+	return fmt.Sprintf("E-SVTN-001: SVTN already exists: %s", e.name)
+}
+
+func (e *svtnAlreadyExistsErr) Unwrap() error { return e.cause }
+
 // adminSVTNCreateArgs is the wire-format JSON args for admin.svtn.create.
 // The `name` field carries the operator-supplied SVTN label.
 //
@@ -570,10 +589,10 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySe
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminSVTNCreateArgs
 		if err := json.Unmarshal(args, &a); err != nil {
-			return nil, fmt.Errorf("E-ADM-004: invalid request args: %w", err)
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
 		if a.Name == "" {
-			return nil, fmt.Errorf("E-ADM-004: missing required field: name")
+			return nil, fmt.Errorf("E-CFG-001: missing required field: name")
 		}
 
 		// BC-2.07.001 Inv-3 / AC-003: authority check BEFORE dispatch.
@@ -587,10 +606,17 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySe
 
 		result, err := m.Create(a.Name)
 		if err != nil {
+			// F-P1L2-001: check via errors.Is, not string matching, so that the
+			// sentinel is correctly identified without depending on the error text.
+			// F-P1L1-003: stamp E-SVTN-001 (not E-ADM-004) for duplicate names.
+			// F-P1L1-004: derive the message from a.Name only — do NOT wrap
+			// err.Error() which already contains "SVTN already exists", causing stutter.
 			if errors.Is(err, svtnmgmt.ErrSVTNAlreadyExists) {
-				return nil, fmt.Errorf("SVTN already exists: %s: %w", a.Name, err)
+				return nil, &svtnAlreadyExistsErr{name: a.Name, cause: err}
 			}
-			return nil, fmt.Errorf("admin.svtn.create: %w", err)
+			// Non-duplicate Create failure (e.g. internal rand.Read failure).
+			// No specific taxonomy code applies; wrap with context for operator visibility.
+			return nil, fmt.Errorf("admin.svtn.create: create SVTN %s: %w", a.Name, err)
 		}
 
 		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from
