@@ -192,16 +192,16 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-5.02 MERGED (98eb8b7, PR #37) | Squash-merged to develop 2026-06-30; worktree removed, branch deleted; all ACs delivered; BC-5.39.001 satisfied (P9/P10/P11 clean) | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-W5.02 Pass-6 L3 fix-burst committed; Pass-7 L3-only clean-pass 1/3 pending)
+## Session Resume Checkpoint — 2026-06-30 (S-W5.02 Pass-7 L3 fix-burst committed; Pass-8 L3-only clean-pass 1/3 pending)
 
 **Position:** Phase 3 Wave 5. S-W5.02 adversarial convergence in progress. Impl SHA unchanged: 07ce3db. Factory-artifacts tip: see `git -C .factory log -1`.
 
-**Pass-6 result:** L3 BLOCK. Findings F-P6L3-001 (MED — VP-INDEX placeholder-row VP-VW6.NN Status column "draft" should be "deferred"; normalize both placeholders to Status=deferred) + F-P6L3-002 (MED — STORY-INDEX Summary Pending count 7 vs actual 9; Draft/unscheduled row mixes master-table drafts with external stubs; S-W5.02 missing from draft count). Doc-only fixes. VP-INDEX v2.17→v2.18. STORY-INDEX v3.20→v3.21. Per impl-anchored counter rule (BC-5.39.001): L3 counter remains at 0/3 (Pass-6 was BLOCK); L1 and L2 counters LOCKED at 3/3.
+**Pass-7 result:** L3 BLOCK on 1 MED. Finding F-P7L3-001 (MED — STORY-INDEX Wave Summary total row showed 187 pts / "197 pts" grand total; correct values are 192 / 202 matching v3.1 +5pt S-W5.04 update that was missed in this row and footnote). Doc-only fix. STORY-INDEX v3.21→v3.22. Per impl-anchored counter rule (BC-5.39.001): L3 counter remains at 0/3 (Pass-7 was BLOCK); L1 and L2 counters LOCKED at 3/3.
 
-**Convergence counters:** L1 3/3 LOCKED, L2 3/3 LOCKED, L3 0/3 (still — Pass-6 blocked so no advance).
+**Convergence counters:** L1 3/3 LOCKED, L2 3/3 LOCKED, L3 0/3 (still — Pass-7 blocked so no advance).
 
 **NEXT ACTION on resume:**
-1. Dispatch S-W5.02 Pass-7 — L3-only fresh lens (L1/L2 both LOCKED at 3/3; only L3 needs 3 clean passes now). This is clean-pass attempt 1/3.
+1. Dispatch S-W5.02 Pass-8 — L3-only fresh lens (L1/L2 both LOCKED at 3/3; only L3 needs 3 clean passes now). This is clean-pass attempt 1/3.
 2. Wave 5 adversarial review after S-W5.02 merged (final Wave 5 story).
 3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged).
 

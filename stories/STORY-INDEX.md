@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.21"
+version: "3.22"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -85,9 +85,9 @@ inputDocuments:
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config — **CLOSED 2026-06-28 (all 5 merged: PR #24–#28)** |
 | 5 | S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01, S-W5.02, S-6.06, S-W5.04 | 48 | Observability + CLI + Management Plane (S-W5.04 5pts added Pass-4 Ruling 1 — daemon-side paths.list/metrics handlers) |
 | 6 | S-6.05, S-6.07, S-7.01, S-7.02, S-7.03, S-7.04 | 35 | SVTN lifecycle (create+destroy) + PE-phase features |
-| **Total** | **32** (wave stories) | **187** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 34 stories / 197 pts) |
+| **Total** | **32** (wave stories) | **192** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 34 stories / 202 pts) |
 
-> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 9 stories, 48 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts [re-scoped v2.0], S-W5.01: 8pts [net-new], S-W5.02: 5pts [net-new], S-6.06: 5pts [CR-W5-SCOPE-SPLIT adversary Pass 1], S-W5.04: 5pts [Pass-4 Ruling 1 — daemon-side metrics handlers]). Wave 6 total: 6 stories, 35 pts (S-6.05: 3pts [deferred from S-6.02, CR-009 ruling]; S-6.07: 3pts [net-new, HUMAN-APPROVED PATH B — admin.svtn.create handler + CLI]; S-7.01: 8pts, S-7.02: 8pts, S-7.03: 5pts, S-7.04: 8pts). Total points including Wave 0: 187. Per-wave counts above use story points from individual story files.
+> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 9 stories, 48 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts [re-scoped v2.0], S-W5.01: 8pts [net-new], S-W5.02: 5pts [net-new], S-6.06: 5pts [CR-W5-SCOPE-SPLIT adversary Pass 1], S-W5.04: 5pts [Pass-4 Ruling 1 — daemon-side metrics handlers]). Wave 6 total: 6 stories, 35 pts (S-6.05: 3pts [deferred from S-6.02, CR-009 ruling]; S-6.07: 3pts [net-new, HUMAN-APPROVED PATH B — admin.svtn.create handler + CLI]; S-7.01: 8pts, S-7.02: 8pts, S-7.03: 5pts, S-7.04: 8pts). Total points including Wave 0: 192. Per-wave counts above use story points from individual story files.
 
 **Wave-5 Serialization Constraints:**
 - S-6.03 (creates `cmd/sbctl` scaffold — `main.go`, `client.go`) must merge **before** S-6.02 (adds `cmd/sbctl/admin.go`) and before S-5.02 (adds paths_list.go, router_metrics.go, router_status.go) — same file registration in `cmd/sbctl/main.go`.
@@ -162,6 +162,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.22 | 2026-06-30 | Pass-7 L3 fix: Wave Summary total row arithmetic reconciled 187→192 (was missed in v3.1 update) + grand total 197→202 pts + footnote 187→192. Ref F-P7L3-001. |
 | 3.21 | 2026-06-30 | Pass-6 L3 fix: Pending count corrected 7→9 (master-table grep: S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-7.01, S-7.02, S-7.03, S-7.04); Draft/unscheduled row restructured — master-table drafts (S-W5.02, S-W5.03, S-W5.04, S-6.05, S-6.07 = 5) separated from backlog/maintenance/hardening stubs (S-M.01, S-M.02, S-HRD.01, S-HRD.02 = 4); S-W5.02 correctly counted in master-table drafts; S-6.04 removed from draft/unscheduled rollup (already captured in Draft stubs: 1). Ref F-P6L3-002. |
 | 3.20 | 2026-06-30 | Pass-5 L3 doc polish: S-W5.02 v1.3→v1.4 (Q2 historical annotation clarified). VP-INDEX v2.16→v2.17 (placeholder-row Phase column normalized). VP-049 v1.2→v1.3 (§Story Trace pin v1.3→v1.4 sibling propagation). dep-graph v1.5→v1.6 (dep narrative prose updated). Ref F-P5L3-001/004/005/007. |
 | 3.19 | 2026-06-30 | S-W5.01 status draft→merged (post-merge closeout, per commit 0d499ac). VP-049 §Story Trace pin S-W5.02 v1.2→v1.3 (sibling propagation). Summary Complete 19→20, Pending 8→7. Ref S-W5.02 F-P4L3-001+F-P4L3-002. |
