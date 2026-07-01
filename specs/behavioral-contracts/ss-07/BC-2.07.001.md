@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -76,7 +76,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 
 1. **DI-012**: The control node manages SVTN lifecycle as a participant in the user/data plane. It does not have privileged access to router internals.
 2. **DI-005**: SVTN IDs must be globally unique within the router's scope; duplicate SVTN IDs are rejected.
-3. Only control-role keys may create or destroy SVTNs. **Scope:** this invariant governs `admin.svtn.*` operations only. Authority enforcement for `admin.key.*` operations is governed by BC-2.05.004 PC-1 / DI-001, not this contract.
+3. Only control-role keys may create or destroy SVTNs. **Scope:** this invariant governs `admin.svtn.*` operations only. Authority enforcement for `admin.key.*` operations is governed by BC-2.05.004 PC-1 / DI-001, not this contract. **Bootstrap-only restriction for `admin.svtn.create` (S-6.07 F-P1L1-005 closure):** `admin.svtn.create` requires the daemon bootstrap key as the authorized caller. Cross-SVTN control-role keys (i.e., control keys admitted through the standard challenge-response path on a different SVTN) are NOT authorized to invoke `admin.svtn.create`. Only the bootstrap key — seeded via the local-operation path (PC-2) — may trigger SVTN creation. This removes the ambiguity in which any control-role key might be assumed to have `admin.svtn.create` authority. Post-create, additional control keys may be registered via `admin.key.register`, but they cannot themselves create further SVTNs on this daemon.
 
 ## Trigger
 
@@ -123,3 +123,12 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 - BC-2.05.001 — depends on: SVTN must exist before admission is possible
 - BC-2.07.002 — composes with: sbctl is the operator interface for SVTN management
+
+## Changelog
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.4 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-2: Inv-3 tightened to codify bootstrap-only caller restriction for `admin.svtn.create`. Cross-SVTN control-role keys are NOT authorized for `admin.svtn.create`. Only the daemon bootstrap key (seeded via PC-2 local operation) may invoke SVTN creation. Removes ambiguity flagged in S-6.07 F-P1L1-005. |
+| 1.3 | 2026-06-30 | product-owner | S-6.06 lens-3 F-003 ruling (Inv-3 scope): Inv-3 scoped to `admin.svtn.*` only; does not extend to `admin.key.*`; S-6.06 removed from cite path; story-writer to drop BC-2.07.001 from S-6.06 bc_traces. |
+| 1.2 | 2026-06-29 | product-owner | Task 2 reconverge (S-5.01 + S-6.02 Pass-1 adversarial): Trigger updated to `sbctl admin svtn create/destroy`; test vectors updated; Stories cell updated with PC split; PC-2 trust-anchor addendum added. |
+| 1.1 | 2026-06-28 | product-owner | Initial draft — SVTN lifecycle create/destroy + bootstrap first control key. |

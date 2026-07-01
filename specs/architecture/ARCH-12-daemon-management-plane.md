@@ -2,7 +2,7 @@
 artifact_id: ARCH-12-daemon-management-plane
 document_type: architecture-section
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: architect
 timestamp: 2026-06-28T00:00:00
@@ -28,6 +28,7 @@ modified:
   - 2026-06-30T00:00:00 # v1.6 — S-W5.02 Pass-1 fix-burst: stale §Story 3 prose replaced ("e2e VP deferred") with "e2e VP: VP-049 (pre-assigned via VP-INDEX v2.6)"; Story 3 summary table row updated to VP-049 and S-6.06 added to depends column; dep-graph v1.5 S-W5.02 row reflects S-6.06 dependency (F-P1L3-003)
   - 2026-06-30T00:00:00 # v1.7 — F-W5P1-008: S-6.06 row added to Story Summary table — daemon-side admin.key.* handler registration on control-mode daemon (VP-075 + VP-076, BC-2.05.004 / BC-2.07.002, depends S-W5.01)
   - 2026-06-30T00:00:00 # v1.8 — F-W5P2-003: S-6.06 Story Summary row BC list corrected from "BC-2.05.004, BC-2.07.002" to "BC-2.05.004" — S-6.06 does not contribute PCs to BC-2.07.002 (STORY-INDEX + dep-graph confirm BC-2.05.004 only); ARCH-12 was aspirationally overclaiming scope
+  - 2026-07-01T00:00:00 # v1.9 — F-P1L3-001: S-6.07 row added to Story Summary table — admin.svtn.create handler registration on control-mode daemon; BC-2.07.001 caller-role enforcement (VP-048); Wave 6
   - 2026-06-29T00:00:00 # v1.5 — Wave-5 convergence round-4 rulings O–W: (O) stale Unix socket pre-bind unlink; fix-now in listenUnixMgmt; (P) fatal-accept-error drain gap: closeAllConns missing before connWG.Wait on unexpected-close path; fix-now; (Q) AC-001/EC-001 story propagation gap for Ruling K; story-writer fix only; (R) per-handler execution timeout: fix-now with context.WithTimeout wrapper; (S) version sentinel CI gate: follow-up story targeting CI epic; (T) TestServe_ShutdownWindowNoAddAfterWaitPanic non-discriminating: test-writer fix only; (U) dispatch() response type never validated: fix-now, add rejection + test; (V) dispatch() missing read deadline: fix-now, reconcile ARCH-12 residual-concern note, amend BC-2.07.003; (W-test) t.Fatalf from goroutines in client_test.go: test-writer fix only; (X) hardcoded id "1" + no resp.ID echo check: fix-now; (Y) Inv-2 vs Inv-4 spec conflict on auth-handshake-timeout: fix-now, amend BC-2.07.003 Inv-4
 ---
 
@@ -815,6 +816,7 @@ tests require both.
 | S-6.03 (re-scoped) | sbctl client auth + connection error | 5pt | ADR-012 (unlocked) |
 | S-W5.01 (new) | internal/mgmt server + config + wiring | 8pt | ADR-012 |
 | S-6.06 (new) | daemon-side admin.key.* handler registration on control-mode daemon; BC-2.05.004 caller-role enforcement (VP-075) + bootstrap non-revocable/non-expirable invariant (VP-076); BCs: BC-2.05.004 | 5pt | S-W5.01 |
+| S-6.07 (new) | Register admin.svtn.create handler in BuildAdminHandlers (control-mode daemon only) + sbctl admin svtn create CLI subcommand; bootstrap-key+RoleControl authority check; BCs: BC-2.07.001 (PC-1, PC-2, Inv-3); VPs: VP-048; Wave 6 | 3pt | S-6.06 |
 | S-W5.02 (new) | E2E integration harness (VP-049) | 5pt | S-6.03 + S-6.06 + S-W5.01 |
 
 ---

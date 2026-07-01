@@ -2,10 +2,10 @@
 artifact_id: ARCH-INDEX
 document_type: architecture-index
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: architect
-timestamp: 2026-06-23T00:00:00
+timestamp: 2026-07-01T00:00:00
 phase: 1b
 inputDocuments:
   - '.factory/specs/prd.md'
@@ -33,6 +33,7 @@ input-hash: "TODO: compute-input-hash requires inputs: field; ARCH-INDEX uses in
 modified:
   - 2026-06-23T00:00:00
   - 2026-06-28T00:00:00 # v1.1 — ARCH-12 daemon management plane + ADR-012 added
+  - 2026-07-01T00:00:00 # v1.3 — Wave-6 Tranche A Pass-1 fix-burst: ARCH-11 v1.14, ARCH-12 v1.9, interface-definitions v1.8
 ---
 
 # Architecture Index: Switchboard
@@ -134,6 +135,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 | 2026-06-28 | architect | ARCH-03 v1.5–1.6: Wave 5 design notes. (1) Degraded-path flag (S-5.03, BC-2.02.003 PC-5): `IsDegraded()` accessor, `degraded bool` field under existing `mu`, `DegradedRTTThresholdMS=200`, `PathSnapshot` value type for consistent multi-field reads (go.md rule 12), `internal/metrics` consumes via `Snapshot().Degraded`. (2) p99 RTT accumulator (S-5.02, BC-2.06.003 rtt_p99_ms): 16-bucket fixed-histogram owned by PathTracker, 128 bytes per path, O(1) update and query, `P99RTTMs` carried in `PathSnapshot`, accuracy VP deferred to S-BL.BENCH. BC-2.06.003 added to ARCH-03 inputDocuments. |
 | 2026-06-29 | architect | ARCH-04 v1.8: CR-001 ruling — `internal/svtnmgmt` must not import `internal/frame` (ARCH-08 §6.5 position 15 violation). Resolution: add `AdmittedKeySet.LookupByPubkey(svtnID, pubkey)` to `internal/admission`; svtnmgmt replaces direct `frame.DeriveNodeAddress` calls with this method. HOLD-001 implementation invariant step 2 updated to reference `LookupByPubkey`. |
 | 2026-07-01 | architect | ARCH-04 v1.14: Wave-6 Tranche A Pass-1 fix-burst. Closes F-P1L3-004 self-contradiction — svtnmgmt Changes step 2 (RevokeKey direct Lookup call) superseded by ADR-004 Addendum H2 (RevokeKeyIfRoleMatches atomic primitive). §F-005 Caller Migration list updated: ExpireKey, CallerKeyRole, CallerKeyRoleActive, IsRegisteredAnyState are the value-return callsites; RevokeKey delegates to RevokeKeyIfRoleMatches. ARCH-INDEX bumped to v1.2. |
+| 2026-07-01 | architect | ARCH-11 v1.14: BC-2.06.003 pin updated v1.8→v1.9 (PC-1 interim router_addr empty-string allowance). ARCH-12 v1.9: S-6.07 row added to story coverage table. interface-definitions v1.8: Daemon RPC Surface table updated with admin.svtn.create verb. ARCH-INDEX bumped to v1.3. |
 | 2026-06-28 | architect | ARCH-12 v1.0 added: Daemon Management Plane — closes the Wave 5 management-plane gap. ADR-012 specifies NDJSON framing, Ed25519 challenge-response handshake (6-step sequence), operator key set (config-sourced, distinct from SVTN AdmittedKeySet), bounded-read contract (MaxMessageBytes=64KiB, CWE-400). Specifies internal/mgmt package (Server, NewServer, OperatorKeySet, Handler registry), config additions (ManagementSocket, AuthorizedOperatorKeys), cmd/sbctl Authenticate() fail-closed contract, golang.org/x/crypto dependency. Recommends BC-2.07.004 (server-side auth), VP-058 through VP-062, stories S-6.03/S-W5.01/S-W5.02. Flags S-6.03 EC-002 bug (E-ADM-001 should be E-ADM-010). ARCH-05 bumped to v1.1. ARCH-INDEX bumped to v1.1. |
 
 ## Open Frontier Questions (for KoS process)

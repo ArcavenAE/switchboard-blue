@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.003
 document_type: behavioral-contract
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -52,7 +52,7 @@ Operators can query per-path latency and loss metrics via `sbctl` from both the 
 
 1. **[CANONICAL]** `sbctl paths list` returns a list of all active paths for the node, each with the following fields:
    - `path_id` — opaque path identifier (string)
-   - `router_addr` — remote router address (host:port)
+   - `router_addr` — remote router address (host:port). **Interim wire-shape (DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER):** Until `PathSnapshot` is enriched with a real resolved host:port (tracked in follow-on story `S-BL.ROUTER-ADDR`), `router_addr` MAY be emitted as `""` (empty string). Consumers MUST treat `""` as a valid sentinel meaning "address not yet resolved" rather than an error. When `S-BL.ROUTER-ADDR` ships, `router_addr` will always be a non-empty `host:port` string.
    - `rtt_ms` — most-recent EWMA RTT sample in milliseconds (float64)
    - `rtt_p99_ms` — p99 of per-path RTT samples (float64); computed from the fixed-bucket histogram maintained by the PathTracker (histogram counts are never reset; approximation error ≤ bucket width for the bucket containing the true p99); "pending" (string) if fewer than 10 samples have been collected
    - `loss_pct` — packet loss rate as a percentage (float64, 0.0–100.0)
@@ -128,6 +128,7 @@ Note: VP-047 is the confirmed integration VP for per-path field presence (see `s
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.9 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-1: PC-1 `router_addr` field annotated with interim empty-string permission. `router_addr: ""` is a valid sentinel until `PathSnapshot` is enriched with a real host:port. Consumers MUST NOT treat `""` as an error. Cites DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER; resolved by follow-on story S-BL.ROUTER-ADDR. |
 | 1.8 | 2026-06-30 | product-owner | S502-DEFER-3 closure: add failed+pending precedence ruling to PC-3. When PathSnapshot.Degraded==true (liveness failure → status:"failed") AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), quality MUST still be "pending". Rationale: quality is a function of p99 RTT only; "failed" is not a valid quality enum value; status and quality are orthogonal fields. Add EC-007 codifying this behavior. Pre-Wave-6 spec tightening to prevent S-W5.04 adversarial ambiguity (mirrors S-6.06 "unconditionally" convergence risk). |
 | 1.7 | 2026-06-30 | spec-steward | F-P5-T-002 (Pass-5 lens-3): add S-W5.04 to Stories traceability cell per Pass-4 Ruling 1 split — S-5.02 owns client surface (PC-1/PC-2/PC-3 client-side serialization, PC-4 envelope, PC-5 unreachable behavior on client side); S-W5.04 owns daemon-side RPC handlers + response types (PathsListResponse, PathEntry, RTTValue union, RouterMetricsResponse). No behavioral change. |
 | 1.6 | 2026-06-30 | product-owner | F-LO1 (Pass-4 Ruling 5): align PC-1 `rtt_p99_ms` description with ARCH-03 v1.6 canonical semantics — replace "rolling sample buffer" with "fixed-bucket histogram (counts never reset; approximation error ≤ bucket width for the bucket containing the true p99)". No behavioral change; EC-003 pending sentinel unchanged. |

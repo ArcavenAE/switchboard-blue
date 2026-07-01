@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.8 changelog note (2026-07-01):** F-P1L3-003: `## Daemon RPC Surface` section expanded from prose-only into an enumerated verb table listing `paths.list`, `router.metrics`, `router.status`, `admin.key.register`, `admin.key.revoke`, `admin.key.role`, and `admin.svtn.create` — each row specifies owning BC/PC, authority requirement, request/response shape, and story trace. Authority note and error-code summary added.
 
 > **v1.7 changelog note (2026-06-30):** S-5.02 Pass-8 F-P8L3-002 sibling-propagation sweep: updated all live-content BC-2.06.003 version pins from v1.5 to v1.7 (line-80 `sbctl router status` comment, §Path list response intro, §pending-response JSON example intro). Also updated S-5.02 story pin on line-80 from v1.5 to v1.9. BC v1.7 introduced no behavioral change vs v1.5 for the cited clauses (PC-1 field schema, PC-3 alias, EC-003/EC-006 pending sentinel). Historical changelog rows citing v1.5 are preserved unchanged.
 
@@ -345,6 +347,22 @@ log_level: "info"
 Daemons expose a local management API that sbctl connects to. RPC protocol is JSON-over-Unix-socket per ADR-006 (see `.factory/specs/architecture/ARCH-05-cli-and-api.md`). TCP fallback engaged when `--target=host:port` is specified.
 
 All RPC endpoints require authentication: the caller presents its OpenSSH key signature (same mechanism as SVTN admission). Unauthenticated calls are rejected before processing.
+
+### Registered Verbs
+
+| Verb | Owning BC / PC | Authority Required | Request Args | Response Data | Story Trace |
+|------|----------------|--------------------|--------------|---------------|-------------|
+| `paths.list` | BC-2.06.003 PC-1 | Any admitted key (bootstrap or control-role) | `{"svtn_id": "<hex>"}` (optional; omit for all paths) | `{"paths": [{path_id, router_addr, rtt_ms, rtt_p99_ms, loss_pct, status}]}` (`rtt_p99_ms` is float64 or `"pending"` per EC-003) | S-5.02 |
+| `router.metrics` | BC-2.06.003 PC-2 | Any admitted key | `{"svtn_id": "<hex>"}` (required) | `{"svtn_id", "frame_count", "hmac_fail_count", "drop_cache_hits", "path_distribution"}` | S-5.02 |
+| `router.status` | BC-2.06.003 PC-3 | Any admitted key | `{"target": "<router-addr>"}` | Alias for `paths.list` response + `quality` field; `"quality": "pending"` when p99 not yet available (EC-006) | S-5.02 |
+| `admin.key.register` | BC-2.07.001 | Control-role key + `--confirm` token | `{"svtn_id", "pubkey_hex", "role": "control\|console\|access"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.revoke` | BC-2.07.001 | Control-role key + `--confirm` token; console-role keys may not revoke control-role keys (ADR-004 Inv-3) | `{"svtn_id", "pubkey_hex"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.role` | BC-2.07.001 | Control-role key | `{"svtn_id", "pubkey_hex"}` | `{"role": "control\|console\|access"}` | S-6.06 |
+| `admin.svtn.create` | BC-2.07.001 PC-1, Inv-3 | Bootstrap-only: authenticated caller MUST be the daemon bootstrap key with `RoleControl`; cross-SVTN control-role keys are not authorized | `{"name": "<svtn-name>"}` | `{"svtn_id": "<hex>", "bootstrap_fingerprint": "SHA256:<base64>"}` | S-6.07 |
+
+> **Authority note:** "bootstrap-only" verbs (`admin.svtn.create`) require that the authenticated caller's public key matches the daemon bootstrap key AND that the key's role is `RoleControl`. Regular cross-SVTN control-role keys are explicitly rejected (BC-2.07.001 Inv-3 / S-6.07 AC-003). "Control-role" verbs require any key with `RoleControl` in the target SVTN's `AdmittedKeySet`.
+
+> **Error codes:** Insufficient authority → `E-ADM-009`. Key already registered → `E-ADM-012`. Hierarchy violation (e.g. console revokes control) → `E-ADM-011`. Key not found → `E-ADM-013`. SVTN already exists → `E-SVTN-001`. Unregistered command → `E-RPC-010` (server-side, in-band). Handler error → `E-RPC-011` (server-side, in-band). See `error-taxonomy.md` for full table.
 
 ## Library Exports (Go Package Boundaries)
 

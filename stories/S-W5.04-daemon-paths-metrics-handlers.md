@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.4"
+version: "1.5"
 bc_traces:
   - BC-2.06.003
 vp_traces: [VP-047, VP-062]
@@ -72,7 +72,7 @@ BC-2.06.003 PC-1 schema. The `PathEntry` type lives in `internal/metrics`.
 ### AC-002 (traces to BC-2.06.003 postcondition 1, EC-003 — rtt_p99_ms union serialization)
 `PathEntry.rtt_p99_ms` serializes as a float64 when `PathSnapshot.SampleCount ≥ 10`
 and as the JSON string `"pending"` when `SampleCount < 10`, per BC-2.06.003
-v1.7 postcondition 1 (fixed-bucket histogram, counts never reset) and EC-003
+v1.9 postcondition 1 (fixed-bucket histogram, counts never reset) and EC-003
 (pending sentinel). The union serialization is handled by `RTTValue` type in
 `internal/metrics` implementing `json.Marshaler`.
 - **Test:** `TestPathEntry_RTTValueSerialization` — table-driven: row (a) SampleCount=0
@@ -81,9 +81,10 @@ v1.7 postcondition 1 (fixed-bucket histogram, counts never reset) and EC-003
 
 ### AC-003 (traces to BC-2.06.001 postcondition — PathEntry.status from Degraded)
 `PathEntry.status` is set to `"degraded"` when `PathSnapshot.Degraded == true`
-and to `"ok"` otherwise, reflecting the quality state machine from BC-2.06.001.
+and to `"active"` otherwise, reflecting the quality state machine from BC-2.06.001.
+The valid status enum is `{active, degraded, failed}` per BC-2.06.003 v1.9 PC-1.
 - **Test:** `TestPathEntry_StatusFromDegraded` — assert `status: "degraded"` when
-  snapshot has `Degraded: true`, `status: "ok"` when `Degraded: false`.
+  snapshot has `Degraded: true`, `status: "active"` when `Degraded: false`.
 
 ### AC-004 (traces to BC-2.06.003 postcondition 2 — router.metrics handler)
 The `router.metrics` RPC handler is registered in `internal/mgmt` dispatch.
@@ -102,25 +103,32 @@ to `paths.list` response, consistent with the sbctl alias design in S-5.02.
 - **Test:** `TestDaemonRouterStatus_HandlerRegistered` — call handler; assert
   response fields match the paths.list shape plus a `quality` summary field.
 
-  **AC-005a (traces to BC-2.06.003 EC-007 — failed+pending precedence, S502-DEFER-3):**
-  When a path has `PathSnapshot.Degraded == true` (liveness failure → `status: "failed"`)
-  AND `SampleCount < 10` (p99 indeterminate → `rtt_p99_ms: "pending"`), the `quality`
-  field MUST be `"pending"`, NOT `"failed"`. The quality enum is `{green, yellow, red, pending}`;
-  `"failed"` is not a valid quality value. The `status` and `quality` fields are independent.
-  - **Test:** `TestDaemonRouterStatus_FailedAndPendingPrecedence` — table-driven: row (a)
-    Degraded=true + SampleCount=5 → quality `"pending"` and status `"failed"`;
-    row (b) Degraded=true + SampleCount=10 → quality derived from p99 (not pending);
-    row (c) Degraded=false + SampleCount=5 → quality `"pending"` and status `"active"`.
+  **AC-005a (traces to BC-2.06.003 EC-007 — status/quality independence + pending precedence, S502-DEFER-3):**
+  Status and quality are independent fields with distinct derivations:
+  - `PathSnapshot.Degraded == true` maps to `status: "degraded"` per BC-2.06.001 quality state machine.
+  - A separate liveness signal (path down) maps to `status: "failed"`. `"failed"` is NOT a synonym for Degraded.
+  - When `SampleCount < 10` (p99 indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST be `"pending"` regardless of `status`. The quality enum is `{green, yellow, red, pending}`; `"failed"` is not a valid quality value.
+  - The EC-007 precedence rule: quality="pending" when SampleCount<10, regardless of status value.
+  - **Test:** `TestDaemonRouterStatus_QualityStatusIndependence` — table-driven:
+    row (a) status=`"failed"` (liveness down) + SampleCount=5 → quality `"pending"`;
+    row (b) Degraded=true (→ status `"degraded"`) + SampleCount=10 → quality derived from p99 (not pending);
+    row (c) status=`"active"` + SampleCount=5 → quality `"pending"`.
 
 ### AC-006 (traces to BC-2.06.003 postcondition 1 — VP-047 integration: end-to-end field presence)
 `sbctl paths list --json` against a real (non-stub) daemon returns paths with all
-required fields present and non-null: `path_id`, `router_addr`, `rtt_ms`,
+required fields present and non-null: `path_id`, `rtt_ms`,
 `rtt_p99_ms` (float64 or `"pending"`), `loss_pct`, `status`. Covers at least one
 path in pending state (`SampleCount < 10`) and one in green state (`SampleCount ≥ 10`).
+`router_addr` MUST be present in the JSON output; its value is `""` (empty string)
+in this interim state pending `PathSnapshot.RouterAddr` enrichment
+(DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER). The AC-006 integration test MUST assert
+`router_addr` key presence and accept `""` as a valid value. See wave-6-tranche-a-scope-rulings.md
+Ruling-1 (Option A) and follow-on story S-BL.ROUTER-ADDR, which will land a real
+`host:port` value before Wave-6 wave-convergence.
 This AC is the implementation target for VP-047.
 - **Test:** `TestVP047_SbctlPathsList_EndToEnd` — integration test spinning up a
   daemon with two synthetic paths (pending + green), running `sbctl paths list --json`,
-  asserting required fields per VP-047.
+  asserting required fields per VP-047; `router_addr` key presence asserted, `""` accepted.
 
 ## Architecture Mapping
 
@@ -151,7 +159,7 @@ This AC is the implementation target for VP-047.
 - `internal/paths` histogram and `PathSnapshot`: owned by S-5.02. Do NOT change `PathTracker`, `rttHistogram`, or `PathSnapshot` internals.
 - `internal/mgmt` server authentication and transport: owned by S-W5.01. This story calls `mgmt.Server.Register()` to register handlers; it does not modify the server core.
 - Router-side forwarding metric counters (`frame_count`, `hmac_fail_count`, `drop_cache_hits`): confirm availability from existing `internal/routing` state before implementing AC-004; if not available, scope AC-004 to return zeroed counters with a TODO marker and file a follow-on story.
-- BC-2.06.003 v1.8 text: do NOT modify. PO bumped to v1.8 per S502-DEFER-3 closure (failed+pending precedence ruling + EC-007).
+- BC-2.06.003 v1.9 text: do NOT modify. PO bumped to v1.9 per wave-6-tranche-a-scope-rulings.md Ruling-1 (router_addr interim-state note) and S502-DEFER-3 closure (EC-007 + failed+pending precedence).
 
 ## Edge Cases
 
@@ -162,14 +170,14 @@ This AC is the implementation target for VP-047.
 | EC-003 | Mixed pending + green paths | Pending entries have `rtt_p99_ms: "pending"`; green entries have float64 |
 | EC-004 | SVTN not found for router.metrics | E-RPC-011 error envelope; client receives structured error |
 | EC-005 | Degraded path in paths.list response | `PathEntry.status: "degraded"` when `PathSnapshot.Degraded == true` |
-| EC-006 | router.status on a path with Degraded=true AND SampleCount<10 | `status: "failed"` AND `rtt_p99_ms: "pending"` AND `quality: "pending"`. See BC-2.06.003 EC-007 and S502-DEFER-3 ruling. |
+| EC-006 | router.status on a path with Degraded=true AND SampleCount<10 | `status: "degraded"` AND `rtt_p99_ms: "pending"` AND `quality: "pending"`. Degraded==true → status `"degraded"` (not `"failed"`); quality="pending" takes precedence when SampleCount<10. See BC-2.06.003 v1.9 EC-007 and S502-DEFER-3 ruling. |
 
 ## Token Budget Estimate (MANDATORY)
 
 | Context Source | Estimated Tokens |
 |---------------|-----------------|
 | This story spec | ~1,800 |
-| BC-2.06.003.md (v1.7) | ~1,200 |
+| BC-2.06.003.md (v1.9) | ~1,200 |
 | ARCH-03 §p99 RTT Accumulator + §PathSnapshot | ~2,500 |
 | ARCH-12 daemon management plane | ~1,500 |
 | interface-definitions (JSON envelope, E-RPC-011) | ~400 |
@@ -184,7 +192,7 @@ This AC is the implementation target for VP-047.
 
 ## Tasks (MANDATORY)
 
-1. [ ] Read BC-2.06.003 v1.8 (full), ARCH-03 v1.6 §p99 RTT Accumulator, ARCH-12, interface-definitions.md
+1. [ ] Read BC-2.06.003 v1.9 (full), ARCH-03 v1.6 §p99 RTT Accumulator, ARCH-12, interface-definitions.md
 2. [ ] Read `internal/mgmt/mgmt.go` — identify `mgmt.Server.Register()` signature and handler interface
 3. [ ] Read `internal/paths/paths.go` — confirm `PathSnapshot` fields: `P99RTTMs float64`, `SampleCount uint64`, `Degraded bool`
 4. [ ] Read `internal/metrics/metrics.go` — identify existing types and query surface
@@ -216,9 +224,9 @@ This AC is the implementation target for VP-047.
 | Handler registration via `mgmt.Server.Register()` only; do NOT open new sockets | ARCH-12 | Code review |
 | `internal/metrics` types (PathEntry, RTTValue, etc.) are pure data + serialization; no I/O | ARCH-03 §Purity | Pure/Effectful classification table |
 | Read PathSnapshots via `Snapshot()`, never via individual field accessors | ARCH-03 §PathSnapshot; go.md rule 12 (no internal pointer leak) | Code review + `TestDaemonPathsList_HandlerRegistered` |
-| `rtt_p99_ms` serializes as float64 when SampleCount ≥ 10, string `"pending"` when < 10 | BC-2.06.003 v1.7 EC-003 | `TestPathEntry_RTTValueSerialization` |
+| `rtt_p99_ms` serializes as float64 when SampleCount ≥ 10, string `"pending"` when < 10 | BC-2.06.003 v1.9 EC-003 | `TestPathEntry_RTTValueSerialization` |
 | `status` field derived from `PathSnapshot.Degraded` only; no re-implementation of quality state machine | BC-2.06.001; ARCH-03 | `TestPathEntry_StatusFromDegraded` |
-| When Degraded=true AND SampleCount<10, `quality` MUST be `"pending"` (not `"failed"`); `status` and `quality` are independent fields | BC-2.06.003 v1.8 EC-007; S502-DEFER-3 ruling | `TestDaemonRouterStatus_FailedAndPendingPrecedence` |
+| `status` enum is `{active, degraded, failed}`; Degraded==true → `"degraded"`, liveness-down → `"failed"`, otherwise `"active"`. When SampleCount<10, `quality` MUST be `"pending"` regardless of `status`; `status` and `quality` are independent fields. | BC-2.06.003 v1.9 PC-1, EC-007; S502-DEFER-3 ruling | `TestDaemonRouterStatus_QualityStatusIndependence` |
 | VP-047 integration test requires a real (non-stub) daemon with PathTracker state | VP-047 (transferred from S-5.02) | `TestVP047_SbctlPathsList_EndToEnd` |
 | Do NOT modify cmd/sbctl, internal/paths, or internal/mgmt core transport | S-5.02 scope boundary; S-W5.01 scope boundary | File structure requirements |
 
@@ -247,6 +255,7 @@ This AC is the implementation target for VP-047.
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.5 | 2026-07-01 | story-writer | F-P1L1-003 router_addr Ruling-1: empty string interim per wave-6-tranche-a-scope-rulings.md Option A; AC-006 narrowed to assert key presence + accept `""`, S-BL.ROUTER-ADDR cross-ref added. F-P1L3-001 AC-005a Degraded==failed mis-anchor corrected: Degraded==true → `"degraded"` (not `"failed"`); `"failed"` is distinct liveness state; EC-006 corrected accordingly; test renamed TestDaemonRouterStatus_QualityStatusIndependence. F-P1L3-002 AC-003 `"ok"`→`"active"` per BC-2.06.003 v1.9 status enum `{active,degraded,failed}`. Sweep BC-2.06.003 pin v1.7→v1.9 in Token Budget, all Arch Compliance rule rows, AC-002, Tasks step 1, Scope Boundary note. |
 | 1.4 | 2026-06-30 | product-owner | S502-DEFER-3 closure: extend AC-005 with AC-005a (failed+pending precedence per BC-2.06.003 v1.8 EC-007); add EC-006 to Edge Cases table; add Architecture Compliance Rules row for the precedence ruling; update BC table PC-3 annotation. Bump BC-2.06.003 pin from v1.7 to v1.8. |
 | 1.3 | 2026-07-01 | story-writer | F-P8L3-001 (HIGH, frontmatter↔body drift): added VP-062 row to §VP Coverage table. Pass-6 F-P6L3-003 anchor transfer updated vp_traces frontmatter but did not propagate to body table. No semantic change. |
 | 1.2 | 2026-07-01 | story-writer | F-P7L3-002 (HIGH, sibling-propagation): swept 5 stale BC-2.06.003 v1.6 pins in body to v1.7. Pass-6 F-P6L3-001 swept S-5.02 v1.7→v1.8 but same-BC sibling S-W5.04 was not covered. No semantic change (BC v1.7 introduced no behavioral change vs v1.6). Also incorporates VP-062 anchor transfer from S-5.02 per Pass-6 F-P6L3-003 (vp_traces update landed at 7b70af0). |
