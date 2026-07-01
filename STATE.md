@@ -1,10 +1,10 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-5-s501-s602-merged
+phase_step: wave-5-complete-sw502-merged
 phase_3_active_wave: 5
-phase_3_active_stories: [S-W5.02]
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02]
+phase_3_active_stories: []
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -92,6 +92,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 - 2026-06-30 — S-6.06 Pass-27 PASS CLEAN (all 3 lenses): lens-1 (a68ef99c2850a5ae5) PASS CLEAN novelty LOW (7 LOW non-blocking OBS: O-1 keyFingerprintAdmin nil latent footgun in list-keys; O-2 decodePublicKey Ed25519 point not validated; O-3 RoleMismatchError typed-detail path missing from TestMapAdminError_ErrorWrapping; O-4 E-ADM-018 fingerprint omission intentional per AC-005; O-5 dead privHex in VP046 DI-002 test; O-6 goroutine accounting in TOCTOU race test; O-7 ConstantTimeCompare doc-comment accuracy). All 7 adjudicated non-blocking refinements, reference TaskList #115 for post-merge polish. lens-2 (ad7f415313ffdd259) PASS CLEAN novelty LOW (wire-error strings byte-aligned; version cites coherent; layering corroborated; Lens-2 streak counter recommended for advancement). lens-3 (a73b40208a7fef653) PASS CLEAN novelty ZERO (Pass-25 sibling-fix propagation fully landed; Phase-5 deferred items TaskList #118 correctly NOT re-flagged). No fix-burst required. Clean-pass count advances: **3/3 pending** (second consecutive fully-clean pass). Pass-28 = final convergence-close attempt (#3 of 3).
 - 2026-07-01 — S-5.02 BC-5.39.001 CONVERGENCE-CLOSED. Passes 6–11 required; Pass-9/10/11 all 3-lens clean (3/3 consecutive). Impl tip: 5732902 (F-CR-001 formatPathsTable writer-injection fix, race-clean). Test tip: 8152e20 (F-P8L2-001 AC-008 named test added). Factory-artifacts tip at gate: 35649fa. BC anchor: BC-2.06.003 v1.7. Story: S-5.02 v1.10. Next: per-AC demo recordings (Step 5).
 - 2026-06-30 — S-6.06 Pass-28 PASS CLEAN (all 3 lenses) — **BC-5.39.001 CONVERGENCE-CLOSED**. lens-1 PASS CLEAN novelty NONE (all 7 sentinel arms covered, default arm covered, %w wrapping verified, UTC discipline verified, no locked-accessor leaks, no init()/panic violations outside main, no tautological tests, comprehensive negative-path coverage, no hidden allocations, no sentinel-vs-wire drift, race/TOCTOU regression tests intact). lens-2 PASS CLEAN novelty ZERO (wire-error verbatim consistency verified; layering claim handler input-validation before bootstrap sentinel verified at admin_handlers.go:279-284 + svtnmgmt.go:325/334/263/268; all version cites coherent VP-076 v1.4, ARCH-04 v1.13, BC-2.05.004 v1.12, error-taxonomy v3.9; VP-INDEX arithmetic 76 total; bidirectional traceability). lens-3 PASS CLEAN novelty ZERO (all five mandatory sweeps clean; Pass-25 sibling-fix propagation fully landed; known phase-5-deferred items TaskList #118 correctly not re-flagged). THIRD consecutive fully-clean pass. Trajectory: P26:PASS(1/3→2/3) P27:PASS(2/3→3/3-pending) P28:PASS(3/3-pending→CONVERGED). No fix-burst required. **S-6.06 adversarial convergence CLOSED per BC-5.39.001.** Next: per-story-delivery.md Step 5 (demo recording per AC), then Steps 6-9.
+- 2026-06-30 — S-W5.02 MERGED PR #38 (d881f99). All 5 ACs delivered. BC-5.39.001 CONVERGED (L1 3/3, L2 3/3, L3 3/3, 10 adversarial passes). VP-049 satisfied. **Wave 5 complete: 8 stories + 1 hygiene PR all merged.** Post-merge deferred: 8 LOW test-infrastructure observations (CR-002/005/006/007/008/009, SEC-001/002).
 
 ## Phase Progress
 
@@ -99,7 +100,7 @@ S-5.01 Pass-1 F-002/F-003/F-004 closed (cad96f7); S-6.02 Pass-1 F-001 split→S-
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: S-6.03 + S-W5.01 MERGED (PRs #32/#31). S-5.01 MERGED PR #35 c1c2c3d. S-6.02 MERGED PR #34 b36cb9b. S-6.06 MERGED PR #36 3ee9c38. S-5.02 MERGED PR #37 98eb8b7. S-W5.02 adversarial in-progress (Pass-2 fixes committed; Pass-3 queued) | 2026-06-30 | W5: S-W5.02 Pass-2 fix-burst committed (07ce3db). Convergence counter reset=0 (impl mutation). Pass-3 fresh 3-lens pending. |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: GATE CLOSED/APPROVED. Wave 5: ALL 8 STORIES MERGED. S-6.03 PR#32, S-W5.01 PR#31, S-5.01 PR#35, S-6.02 PR#34, S-6.06 PR#36, S-5.02 PR#37, S-5.03 PR#30, S-W5.02 PR#38. Wave 5 complete. | 2026-06-30 | W5: S-W5.02 MERGED PR#38 (d881f99). BC-5.39.001 CONVERGED (L1 3/3, L2 3/3, L3 3/3, 10 passes). VP-049 satisfied. Wave 5 complete. |
 
 ## Wave / Story Status
 
@@ -120,7 +121,7 @@ Waves 1–3 complete (11 stories + 3 fix PRs, PRs #1–#20). Detail: `cycles/cyc
 | 5 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON, error | MERGED | #32 | d854978 |
 | 5 | S-W5.01 | internal/mgmt server + E-CFG-008/009 + cmd/switchboard wiring (4 modes) | MERGED | #31 | 0d499ac |
 | 5 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | MERGED | #36 | 3ee9c38 |
-| 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | draft | — | — |
+| 5 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across 4 daemon types | MERGED | [#38](https://github.com/ArcavenAE/switchboard-blue/pull/38) | d881f99 |
 
 ## Open Drift Items
 
@@ -190,25 +191,23 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-6.06 MERGED (3ee9c38, PR #36) | Squash-merged to develop 2026-07-01T00:49:34Z; worktree removed, branch deleted; all 6 ACs full demo coverage; 3/3 adversary clean (Pass-26/27/28); BCs: BC-2.05.004 (PC-1..PC-4 + EC-007); VPs: VP-046, VP-075, VP-076 | 2026-07-01 |
 | S-5.02 BC-5.39.001 CONVERGED | Pass-9/10/11 all 3-lens clean (3/3 consecutive, 6 total passes P6–P11); impl tip 5732902 (F-CR-001 writer-injection fix); test tip 8152e20 (AC-008 named test); BC-2.06.003 v1.7; S-5.02 v1.10; 6 non-blocking deferrals logged S502-DEFER-1..6 | 2026-07-01 |
 | S-5.02 MERGED (98eb8b7, PR #37) | Squash-merged to develop 2026-06-30; worktree removed, branch deleted; all ACs delivered; BC-5.39.001 satisfied (P9/P10/P11 clean) | 2026-06-30 |
+| S-W5.02 MERGED (d881f99, PR #38) | Squash-merged to develop; all 5 ACs; BC-5.39.001 satisfied (10 adversarial passes); VP-049 coverage confirmed; Wave 5 complete (8 stories + 1 hygiene = all merged) | 2026-06-30 |
 Older decisions (Wave 3 per-story, S-4.01..S-4.03 rulings): `cycles/cycle-1/burst-log.md` (archived 2026-06-28).
 
-## Session Resume Checkpoint — 2026-06-30 (S-W5.02 Pass-7 L3 fix-burst committed; Pass-8 L3-only clean-pass 1/3 pending)
+## Session Resume Checkpoint — 2026-06-30 (Wave 5 complete; S-W5.02 merged PR #38)
 
-**Position:** Phase 3 Wave 5. S-W5.02 adversarial convergence in progress. Impl SHA unchanged: 07ce3db. Factory-artifacts tip: see `git -C .factory log -1`.
-
-**Pass-7 result:** L3 BLOCK on 1 MED. Finding F-P7L3-001 (MED — STORY-INDEX Wave Summary total row showed 187 pts / "197 pts" grand total; correct values are 192 / 202 matching v3.1 +5pt S-W5.04 update that was missed in this row and footnote). Doc-only fix. STORY-INDEX v3.21→v3.22. Per impl-anchored counter rule (BC-5.39.001): L3 counter remains at 0/3 (Pass-7 was BLOCK); L1 and L2 counters LOCKED at 3/3.
-
-**Convergence counters:** L1 3/3 LOCKED, L2 3/3 LOCKED, L3 0/3 (still — Pass-7 blocked so no advance).
+**Position:** Phase 3 Wave 5 COMPLETE. All 8 Wave-5 stories merged. S-W5.02 was the final Wave-5 story.
 
 **NEXT ACTION on resume:**
-1. Dispatch S-W5.02 Pass-8 — L3-only fresh lens (L1/L2 both LOCKED at 3/3; only L3 needs 3 clean passes now). This is clean-pass attempt 1/3.
-2. Wave 5 adversarial review after S-W5.02 merged (final Wave 5 story).
-3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged).
+1. Wave-5 adversarial convergence gate (Task #8) — 3 fresh diverse-lens passes across all Wave-5 stories
+2. Standalone hygiene commit: DRIFT-SW501-NITPICK (Task #9)
+3. S-6.07 (Wave 6) — already unblocked (depends S-6.02 + S-6.06, both merged)
 
 **Open deferred observations (carry forward):**
-- S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items above.
+- S502-DEFER-1..6: 6 S-5.02 non-blocking deferrals logged in Open Drift Items.
 - TaskList #115: S-6.06 lens-1 post-merge polish backlog.
 - TaskList #118: Phase-5 follow-up — ARCH-04 + error-taxonomy modified-list monotonicity.
+- S-W5.02 post-merge deferred: 8 LOW test-infrastructure items (see .factory/code-delivery/S-W5.02/review-findings.md).
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
