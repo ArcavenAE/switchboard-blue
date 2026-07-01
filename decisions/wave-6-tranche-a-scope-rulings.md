@@ -2,13 +2,14 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.0"
+version: "1.2"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
+updated: 2026-07-01T00:00:00
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
-closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter]
+closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002]
 ---
 
 # Wave-6 Tranche A Scope Rulings
@@ -438,3 +439,210 @@ S-6.07 fix-burst scope.
 | S-6.07 v1.2→v1.3 | Add bootstrap-only guard in `makeAdminSVTNCreateHandler` before `resolveAndVerifyCallerRole` | F-P2L1-001 |
 | S-6.07 AC-006(b) | Add adversarial test: `RoleControl` key for existing SVTN must get `E-ADM-009`, not existence oracle | F-P2L1-001 |
 | STORY-INDEX.md | Add `S-BL.PATH-FAILED-STATUS` stub (Wave-7 Backlog; depends on S-W5.04) | — |
+
+---
+
+## Ruling 6 — S-W5.04 F-P3L1-002 / F-L2-01: Real PathTracker Wiring — Wave-6 vs. Wave-7 Backlog
+
+**Finding summary (Pass-3 Lens-1 BLOCK + Lens-2 BLOCK):** Pass-2 Ruling-3 (this
+document) required wiring a real `PathTracker → PathsListSource` adapter in
+`cmd/switchboard/metrics_wire.go` and deleting `emptyPathsSource` /
+`emptyRouterMetricsSource`. The implementer's Pass-2 fix (50c1825) renamed
+`emptyRouterMetricsSource` → `pathTrackerSource` but left the tracker map
+**permanently empty in production**: the map is populated only in tests (via
+`pathTrackerSource.register`). Pass-3 Lens-1 (F-P3L1-002) and Lens-2 (F-L2-01)
+both ruled BLOCK on this basis. The production daemon still returns an empty
+`PathsListResponse` for any live running daemon — the cosmetic rename did not
+satisfy the intent of Ruling-3's "real (non-stub)" requirement.
+
+**Options considered:**
+
+- **(A) In-scope (require real wiring in S-W5.04):** the routing subsystem must
+  expose a registry of `(SVTN, endpoint) → PathTracker` instances that
+  `metrics_wire.go` can enumerate at handler-serve time. `pathTrackerSource`
+  (and any lingering empty-stub variant) is populated from that registry in the
+  `runControl` / `runAccess` daemon entry points. AC-006 integration test is
+  updated to spin a daemon with a live `PathTracker` and assert non-empty
+  `PathsListResponse`. This may require changes to the routing package (S-5.02
+  scope, already merged) to expose a tracker-enumeration surface.
+
+- **(B) Defer to Wave-7 backlog:** accept that Wave-6 S-W5.04 delivers the
+  metrics handler surface, response types, and a test-only populated map.
+  Mint `S-BL.PATH-TRACKER-WIRING` in STORY-INDEX Backlog. Revise S-W5.04
+  AC-006 to explicitly say "handler surface only; production tracker population
+  deferred to S-BL.PATH-TRACKER-WIRING". Add a `// #DEFERRED: see
+  S-BL.PATH-TRACKER-WIRING` comment on the `pathTrackerSource` field.
+
+**Ruling: Option (B) — defer.**
+
+Ruling-3 (this document) intended real wiring, and the implementer's rename was
+insufficient. However, the adversarial context now clarifies that "real wiring"
+requires touching the routing subsystem to expose a `PathTracker` registry — a
+cross-package, cross-story-boundary change into S-5.02's already-merged and
+convergence-clean package. Reopening S-5.02 in a Wave-6 fix-burst risks
+destabilizing three clean adversarial passes of routing code. The metrics handler
+surface (types, JSON shape, handler wiring, per-test-instance population) has
+genuine value and is independently shippable. Landing "handler surface only" is
+an honest, scoped delivery; the drift entry documents the gap clearly.
+
+Ruling-3 Option (A) is hereby superseded by this Ruling-6 Option (B) for the
+specific sub-question of production tracker population. The handler surface
+requirement from Ruling-3 (delete true empty stubs, establish the `pathTrackerSource`
+adapter shape) remains in force — only the production population step is deferred.
+
+### Story-Spec Impacts (S-W5.04 fix-burst)
+
+**S-W5.04 AC-006** — revise the fixture requirement to permit test-only population:
+
+> _Replace:_ "AC-006 integration test spins a daemon with a real `PathTracker`
+> instance populated with at least one synthetic path entry."
+>
+> _With:_ "AC-006 integration test populates `pathTrackerSource` with at least
+> one synthetic `PathTracker` instance and asserts that `GET /paths` returns
+> that entry. Production population of `pathTrackerSource` from the routing
+> subsystem is deferred to `S-BL.PATH-TRACKER-WIRING`. The test MUST exercise
+> the full handler→source→response code path; direct response fabrication or
+> bypassing the source interface is not permitted."
+
+**S-W5.04 `cmd/switchboard/metrics_wire.go`** — add `#DEFERRED` comment:
+
+> On the `pathTrackerSource` field (or its initialization site), add:
+> `// #DEFERRED: production population from routing registry deferred to
+> S-BL.PATH-TRACKER-WIRING. Test-time registration via .register() is
+> the only population path in this wave.`
+
+**BC-2.06.003** — no change required. The response-shape and field-semantics
+postconditions are unaffected; only the production data-source is deferred.
+
+### Follow-on Stories
+
+One new story stub must be added to STORY-INDEX.md in the fix-burst:
+
+| Story ID | Title | Depends on | Wave target | Owner |
+|----------|-------|-----------|-------------|-------|
+| S-BL.PATH-TRACKER-WIRING | Wire `pathTrackerSource` to routing registry for live-daemon PathTracker enumeration | S-W5.04 (merged), S-BL.ROUTER-ADDR | Wave-7 Backlog | implementer + story-writer |
+
+Story `S-BL.PATH-TRACKER-WIRING` scope: add a tracker-enumeration surface to the
+routing subsystem (e.g., `func (r *Router) PathTrackers() map[string]paths.PathTracker`
+or equivalent); populate `pathTrackerSource` from that registry in
+`cmd/switchboard/metrics_wire.go`; update AC-006 to assert live-daemon non-empty
+`PathsListResponse`; remove the `#DEFERRED` comment; remove the interim-state note
+from S-W5.04 AC-006. MUST depend on `S-BL.ROUTER-ADDR` (routing address must be
+populated before tracker wiring is tested end-to-end).
+
+### Ordering
+
+`S-BL.ROUTER-ADDR` → `S-BL.PATH-TRACKER-WIRING` → `S-BL.PATH-FAILED-STATUS`.
+All three are Wave-7 Backlog. None block Wave-6 wave-convergence.
+
+---
+
+## Ruling 7 — S-6.07 F-Impl-002: AC-003 "AND RoleControl" — Descriptive or Defense-in-Depth?
+
+**Finding summary (Pass-3 Lens-1 BLOCK):** AC-003 states the handler MUST verify
+the caller is the bootstrap key AND that the caller's role is `RoleControl`. The
+implementation at `cmd/switchboard/admin_handlers.go` (approximately line 610)
+performs only `IsBootstrapKey(callerPub)`. It relies on the structural invariant
+that `SVTNManager.Create` seeds the bootstrap key as `RoleControl`, and that
+`ErrBootstrapKeyRevokeForbidden` / `ErrBootstrapKeyExpireForbidden` prevent role
+transitions — so bootstrap ⟹ RoleControl by construction. Pass-3 Lens-1 flagged
+this as BLOCK: AC-003's "AND RoleControl" wording is normative, and the
+implementation satisfies only half of it.
+
+**Options considered:**
+
+- **(A) Reword AC-003 to match impl:** update AC-003 to read "handler verifies
+  caller is bootstrap key (which by BC-2.07.001 Inv-3 implies RoleControl)."
+  No handler code change. Add a code comment at the `IsBootstrapKey` call site
+  in `admin_handlers.go` documenting the invariant that makes the role check
+  redundant. The normative test assertion is narrowed to bootstrap-key presence.
+
+- **(B) Defense-in-depth — add explicit role check:** add a two-line role check
+  after the bootstrap check: fetch caller role via `keySet.Role(callerPub)`,
+  return `E-ADM-009` if not `RoleControl`. Add a mutation test that exercises the
+  role-check independently (i.e., a test that would fail if the role check were
+  removed). AC-003 wording is unchanged.
+
+**Ruling: Option (B) — defense-in-depth.**
+
+AC-003's "AND RoleControl" phrasing is normative and was written intentionally.
+Weakening it to "implies RoleControl" via an invariant argument is a spec retreat
+that buys nothing — the explicit role check is two lines of code and one mutation
+test. The deeper reason to prefer Option (B) is forward safety: any future change
+that admits a non-control bootstrap key (e.g., a bootstrap-key rotation flow where
+the outgoing bootstrap key retains its `is_bootstrap` flag but has been demoted)
+would silently break the invariant and the bootstrap-only check would pass without
+the role gate triggering. The invariant argument is sound today; it is not a
+durable architectural guarantee. Defense-in-depth costs nothing and future-proofs
+the gate.
+
+Option (A) is rejected. Rewriting a normative AC to match an incomplete
+implementation sets a bad precedent and removes a real safety property.
+
+### Story-Spec Impacts (S-6.07 fix-burst)
+
+**S-6.07 `cmd/switchboard/admin_handlers.go` (~line 610)** — add role check after
+bootstrap-key verification:
+
+> After `IsBootstrapKey(callerPub)` returns true, add:
+>
+> ```go
+> // Defense-in-depth: BC-2.07.001 Inv-3 mandates bootstrap key implies
+> // RoleControl, but verify explicitly so future key-model changes cannot
+> // silently bypass this gate.
+> if keySet.Role(callerPub) != auth.RoleControl {
+>     return adminErrorResponse(E_ADM_009, "caller is not RoleControl"), nil
+> }
+> ```
+>
+> The `keySet.Role` call MUST occur inside the existing auth-verified scope (after
+> signature verification, before business logic). The error code is `E-ADM-009`
+> (unauthorized), consistent with the bootstrap-key failure path.
+
+**S-6.07 AC-003** — add mutation-test requirement:
+
+> After the existing assertion text, add: "A mutation test MUST be added that
+> removes the `RoleControl` check independently of the bootstrap-key check and
+> asserts the test fails. This verifies the role gate is independently effective
+> and cannot be silently removed."
+
+**BC-2.07.001 Inv-3** — add defense-in-depth note (no semantic change):
+
+> After the existing tightened text (from Ruling 2 of this document), add:
+> "Implementations MUST check `RoleControl` explicitly in addition to
+> `IsBootstrapKey`; relying solely on the structural invariant that bootstrap ⟹
+> RoleControl is insufficient — the role MUST be verified independently as
+> defense-in-depth."
+
+### Follow-on Stories
+
+No new stories are required. The fix is entirely within the S-6.07 fix-burst scope.
+
+### Ordering
+
+Ruling 7 fix (role check + mutation test) is independent of all other S-6.07
+fix-burst items. It may be applied in any order within the fix-burst. No
+dependency on S-W5.04 or any backlog story.
+
+---
+
+## Summary of Spec Changes — Rulings 6–7
+
+| File | Change Summary | Finding(s) Closed |
+|------|----------------|-------------------|
+| S-W5.04 AC-006 | Revise fixture: permit test-only `pathTrackerSource` population; add `#DEFERRED` prose; prohibit direct response fabrication | F-P3L1-002, F-L2-01 |
+| S-W5.04 `metrics_wire.go` | Add `// #DEFERRED: S-BL.PATH-TRACKER-WIRING` comment at `pathTrackerSource` init | F-P3L1-002, F-L2-01 |
+| STORY-INDEX.md | Add `S-BL.PATH-TRACKER-WIRING` stub (Wave-7 Backlog; depends on S-W5.04 + S-BL.ROUTER-ADDR) | — |
+| S-6.07 `admin_handlers.go` (~line 610) | Add explicit `keySet.Role(callerPub) != RoleControl` check after `IsBootstrapKey`; return `E-ADM-009` on failure | F-Impl-002 |
+| S-6.07 AC-003 | Add mutation-test requirement: test must fail if role check is removed independently | F-Impl-002 |
+| BC-2.07.001 Inv-3 | Add defense-in-depth note: implementations MUST check `RoleControl` explicitly, not rely solely on structural invariant | F-Impl-002 |
+
+---
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0 | 2026-07-01 | Initial: Rulings 1–2 (router_addr wire shape, authority model) |
+| 1.1 | 2026-07-01 | Rulings 3–5 (PathTracker wiring P2, status=failed deferral, bootstrap fast-path fix) |
+| 1.2 | 2026-07-01 | Rulings 6–7 (PathTracker wiring P3 — defer to S-BL; AC-003 defense-in-depth) |

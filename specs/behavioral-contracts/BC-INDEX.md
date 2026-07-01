@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "2.1"
+version: "2.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-01T12:00:00
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.2 | 2026-07-01 | Pass-3 L3 fix-burst: BC-2.06.003 v1.10→v1.11 (PC-3 S502-DEFER-3 rewritten — retract `status: "failed"` reference; `{active, degraded}` normative Wave-6 vocab; Wave-7 forward-looking note for S-BL.PATH-FAILED-STATUS added; Traceability section updated with Wave-7 Backlog Stories). BC count unchanged at 45. |
 | 2.1 | 2026-07-01 | Wave-6 Tranche A Ruling-4 sibling-propagation sweep: BC-2.06.003 v1.9→v1.10 (status enum retracted from `{active,degraded,failed}` → `{active,degraded}`; `failed` reserved for S-BL.PATH-FAILED-STATUS Wave-7; EC-007 updated); BC-2.07.001 v1.4→v1.5 (cross-SVTN control-role key test vector added per F-P2L3-003). BC count unchanged at 45. |
 | 2.0 | 2026-07-01 | Wave-6 Tranche A Pass-1 fix-burst: BC-2.06.003 v1.8→v1.9 (PC-1 interim router_addr empty-string allowance); BC-2.07.001 v1.3→v1.4 (Inv-3 tightened: admin.svtn.create bootstrap-only). BC count unchanged at 45. |
 | 1.9 | 2026-06-30 | BC-2.06.003 bumped v1.7→v1.8 — S502-DEFER-3 closure: failed+pending precedence ruling added to PC-3; EC-007 added. BC title unchanged. |
