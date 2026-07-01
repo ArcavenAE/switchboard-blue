@@ -229,6 +229,15 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 			wantPending: false,
 			wantFloat:   68.3,
 		},
+		{
+			// Integer-precision preservation: Value==42.0 must marshal as `42` (not `42.0`),
+			// and the second marshal of the decoded value must produce identical bytes.
+			// Guards against lossy decode that would turn 42.0 → 42.000000001 (F-P9L2-A2).
+			name:        "float_integer_precision",
+			v:           metrics.RTTValue{Kind: metrics.FloatKind, Value: 42.0, SampleCount: 10},
+			wantPending: false,
+			wantFloat:   42.0,
+		},
 	}
 
 	for _, tc := range cases {
@@ -254,7 +263,9 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 				t.Fatalf("second Marshal: %v", err)
 			}
 
-			// Round-trip stability: both JSON representations must be identical.
+			// Round-trip stability: both JSON representations must be identical bytes.
+			// This is stronger than checking decoded.Value alone: a lossless decode
+			// must produce the same wire representation (F-P9L2-A2).
 			if string(j1) != string(j2) {
 				t.Errorf("round-trip unstable: first=%s second=%s", j1, j2)
 			}
@@ -270,7 +281,7 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 					t.Errorf("pending round-trip: j2=%s; want \"pending\"", j2)
 				}
 			} else {
-				// Float cases: decoded Kind must be FloatKind, Value must match.
+				// Float cases: decoded Kind must be FloatKind, Value must match exactly.
 				// SampleCount is not preserved through the bare float64 wire shape;
 				// callers use Kind for the pending check (H-2 Pass-8).
 				if decoded.Kind != metrics.FloatKind {
@@ -1352,8 +1363,11 @@ func TestRouterStatus_EmptyPaths_QualityIsPending(t *testing.T) {
 
 // TestRTTValue_UnmarshalJSON_NullRejected verifies that UnmarshalJSON rejects JSON
 // null rather than silently treating it as float64(0) (green-band misclassification).
+// After the error, the receiver must remain at its zero value (PendingKind, Value==0,
+// SampleCount==0) — a partial-write would leave the struct in an inconsistent state
+// (F-P9L2-A6).
 //
-// M-3 Pass-8; F-P2L1-004 null-vs-zero ambiguity guard.
+// M-3 Pass-8; F-P2L1-004 null-vs-zero ambiguity guard; F-P9L2-A6.
 func TestRTTValue_UnmarshalJSON_NullRejected(t *testing.T) {
 	t.Parallel()
 
@@ -1362,12 +1376,22 @@ func TestRTTValue_UnmarshalJSON_NullRejected(t *testing.T) {
 	if err == nil {
 		t.Error("UnmarshalJSON(null): expected error; got nil (null must not decode as float64(0) green-band)")
 	}
+	// Receiver must be untouched on error — no partial-write (F-P9L2-A6).
+	if v.Kind != metrics.PendingKind {
+		t.Errorf("UnmarshalJSON(null): receiver.Kind=%v after error; want PendingKind (zero value, no partial write)", v.Kind)
+	}
+	if v.Value != 0 {
+		t.Errorf("UnmarshalJSON(null): receiver.Value=%v after error; want 0 (no partial write)", v.Value)
+	}
+	if v.SampleCount != 0 {
+		t.Errorf("UnmarshalJSON(null): receiver.SampleCount=%d after error; want 0 (no partial write)", v.SampleCount)
+	}
 }
 
 // TestRTTValue_UnmarshalRejectsNegative verifies that UnmarshalJSON returns an error
-// for negative RTT values.
+// for negative RTT values, including IEEE 754 negative zero.
 //
-// F-P4L2-02; RTT cannot be physically negative.
+// F-P4L2-02; F-P9L1-03; RTT cannot be physically negative.
 func TestRTTValue_UnmarshalRejectsNegative(t *testing.T) {
 	t.Parallel()
 
@@ -1378,6 +1402,11 @@ func TestRTTValue_UnmarshalRejectsNegative(t *testing.T) {
 		{"negative_one", []byte(`-1`)},
 		{"negative_small", []byte(`-0.001`)},
 		{"negative_large", []byte(`-9999`)},
+		// -0.0: IEEE 754 negative zero. JSON encodes this as -0 or -0.0.
+		// Go's json.Marshal emits "-0" for math.Copysign(0, -1).
+		// UnmarshalJSON must reject it — negative-zero RTT has no physical meaning
+		// and could bypass the < 0 guard if only a sign-ignorant check is used (F-P9L1-03).
+		{"negative_zero", []byte(`-0`)},
 	}
 	for _, tc := range cases {
 		tc := tc

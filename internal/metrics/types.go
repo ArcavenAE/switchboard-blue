@@ -153,15 +153,19 @@ func (r *RTTValue) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// validateRTTFloat rejects NaN, ±Inf, and negative values.
+// validateRTTFloat rejects NaN, ±Inf, negative values, and negative zero.
 // Package-private; the guard is applied inside UnmarshalJSON but factored out
 // so tests can exercise the numeric-validation path directly via the helper,
 // independent of the JSON string-token branch (F-P5L2-02).
+//
+// Negative-zero rejection: IEEE 754 defines -0.0 as a distinct bit pattern.
+// math.Signbit(-0.0) is true; the additional v <= 0 guard ensures +0.0
+// (a valid measured RTT) is accepted while -0.0 is rejected (F-P9L1-03).
 func validateRTTFloat(v float64) error {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return errors.New("rtt: NaN or Inf not permitted")
 	}
-	if v < 0 {
+	if v < 0 || (math.Signbit(v) && v <= 0) {
 		return errors.New("rtt: negative not permitted")
 	}
 	return nil
