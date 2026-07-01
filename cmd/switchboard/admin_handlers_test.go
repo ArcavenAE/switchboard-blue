@@ -15,6 +15,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
+	"github.com/arcavenae/switchboard/internal/svtnmgmttest"
 )
 
 // newTestSVTNManagerDetailed returns a SVTNManager pre-populated with the SVTNs
@@ -1928,7 +1929,7 @@ func TestAdminSVTNCreate_NonBootstrapControlKey_RejectsWithEADM009(t *testing.T)
 // (simulating a future key rotation flow). Without the explicit RoleControl check
 // (Ruling-7), the handler would silently allow this caller.
 //
-// The SeedSVTNWithoutBootstrapKeyForTest method is used to construct this state:
+// svtnmgmttest.SeedSVTNWithoutBootstrapKey is used to construct this state:
 // it creates an SVTN record without registering the bootstrap key, producing the
 // HasAnySVTN()==true / BootstrapKeyHasControlRole()==false condition.
 //
@@ -1946,16 +1947,14 @@ func TestAdminSVTNCreate_MutationTest_RoleControlCheckMustFireIndependently(t *t
 	// Seed an SVTN WITHOUT registering the bootstrap key as RoleControl.
 	// This simulates the "demoted bootstrap key" post-rotation state.
 	// After this call: HasAnySVTN() == true AND BootstrapKeyHasControlRole() == false.
-	if err := m.SeedSVTNWithoutBootstrapKeyForTest("demoted-bootstrap-svtn"); err != nil {
-		t.Fatalf("SeedSVTNWithoutBootstrapKeyForTest: %v", err)
-	}
+	svtnmgmttest.SeedSVTNWithoutBootstrapKey(t, m, "demoted-bootstrap-svtn")
 
 	// Verify the precondition: HasAnySVTN true, BootstrapKeyHasControlRole false.
 	if !m.HasAnySVTN() {
 		t.Fatal("precondition: HasAnySVTN() must be true after seeding")
 	}
 	if m.BootstrapKeyHasControlRole() {
-		t.Fatal("precondition: BootstrapKeyHasControlRole() must be false after SeedSVTNWithoutBootstrapKeyForTest")
+		t.Fatal("precondition: BootstrapKeyHasControlRole() must be false after SeedSVTNWithoutBootstrapKey")
 	}
 
 	handlers := BuildAdminHandlers(m, nil)

@@ -599,6 +599,28 @@ func (m *SVTNManager) IsRegisteredAnyState(svtnName string, pubkey ed25519.Publi
 	return m.keySet.LookupByPubkey(svtn.ID, pubkey) != nil
 }
 
+// InsertRawSVTN inserts an SVTN record with a freshly generated ID without
+// registering any keys in the AdmittedKeySet. This intentionally violates the
+// Create() invariant that registers the bootstrap control key; callers are
+// responsible for constructing meaningful state from the resulting record.
+//
+// Returns ErrSVTNAlreadyExists if svtnName is already present.
+// The SVTN ID is generated from m.randSource (crypto/rand.Reader in production).
+// Safe for concurrent use.
+func (m *SVTNManager) InsertRawSVTN(svtnName string) error {
+	var id [16]byte
+	if _, err := io.ReadFull(m.randSource, id[:]); err != nil {
+		return fmt.Errorf("generate SVTN ID for raw insert: %w", err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.svtns[svtnName]; exists {
+		return ErrSVTNAlreadyExists
+	}
+	m.svtns[svtnName] = SVTN{ID: id, Name: svtnName}
+	return nil
+}
+
 // ListKeys returns a snapshot of all registered keys for the named SVTN.
 // Returns ErrSVTNNotFound if svtnName does not exist.
 // An empty slice (not nil) is returned when no keys are registered (EC-003).
