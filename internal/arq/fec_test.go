@@ -453,14 +453,6 @@ func TestBC_2_02_007_Flush_OnCompleteGroupBoundary(t *testing.T) {
 func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 	t.Parallel()
 
-	// Knuth MMIX LCG for deterministic pseudo-random payload generation.
-	seed := uint64(0xFEEDBEEFCAFEBABE)
-	lcgNext := func() uint64 {
-		seed = seed*6364136223846793005 + 1442695040888963407
-		return seed
-	}
-	randByte := func() byte { return byte(lcgNext() >> 56) }
-
 	const trials = 1000
 	const payloadWidth = 16
 
@@ -468,6 +460,15 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 		groupSize := groupSize
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
+
+			// Knuth MMIX LCG — each subtest gets its own seed derived from
+			// groupSize so runs are deterministic and subtests are independent.
+			seed := uint64(0xFEEDBEEFCAFEBABE) + uint64(groupSize)*0x9E3779B97F4A7C15
+			lcgNext := func() uint64 {
+				seed = seed*6364136223846793005 + 1442695040888963407
+				return seed
+			}
+			randByte := func() byte { return byte(lcgNext() >> 56) }
 
 			for trial := 0; trial < trials; trial++ {
 				// Build fresh payloads for this trial using the LCG.
