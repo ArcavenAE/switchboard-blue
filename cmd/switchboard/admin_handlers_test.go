@@ -1948,14 +1948,8 @@ func TestAdminSVTNCreate_MutationTest_RoleControlCheckMustFireIndependently(t *t
 	// This simulates the "demoted bootstrap key" post-rotation state.
 	// After this call: HasAnySVTN() == true AND BootstrapKeyHasControlRole() == false.
 	svtnmgmttest.SeedSVTNWithoutBootstrapKey(t, m, "demoted-bootstrap-svtn")
-
-	// Verify the precondition: HasAnySVTN true, BootstrapKeyHasControlRole false.
-	if !m.HasAnySVTN() {
-		t.Fatal("precondition: HasAnySVTN() must be true after seeding")
-	}
-	if m.BootstrapKeyHasControlRole() {
-		t.Fatal("precondition: BootstrapKeyHasControlRole() must be false after SeedSVTNWithoutBootstrapKey")
-	}
+	// SeedSVTNWithoutBootstrapKey already asserts HasAnySVTN==true and
+	// BootstrapKeyHasControlRole==false via t.Fatalf — no duplicate checks needed.
 
 	handlers := BuildAdminHandlers(m, nil)
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
@@ -2306,25 +2300,10 @@ func TestAdminSVTNCreate_DuplicateName_E_SVTN_001_VacuityControl(t *testing.T) {
 	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
 
 	// Positive-control assertion: "test-svtn" must exist before we attempt the
-	// duplicate create. list-keys on "test-svtn" succeeds iff the SVTN is present.
-	// If the SVTN were absent, list-keys would return E-SVTN-003, not an empty list.
-	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
-	for _, h := range handlers {
-		if h.Command == "admin.key.list-keys" {
-			listFn = h.Fn
-			break
-		}
-	}
-	if listFn == nil {
-		t.Fatal("admin.key.list-keys handler not found")
-	}
-	listArgs, err := json.Marshal(adminListKeysArgs{SVTNName: "test-svtn"})
-	if err != nil {
-		t.Fatalf("marshal list-keys args: %v", err)
-	}
-	_, listErr := listFn(ctx, json.RawMessage(listArgs))
-	if listErr != nil {
-		t.Fatalf("vacuity-control: test-svtn must already exist before duplicate-create test; list-keys returned: %v", listErr)
+	// duplicate create. SVTNRecord probes the manager directly, independent of
+	// list-keys correctness.
+	if _, ok := svtnmgmttest.SVTNRecord(t, m, "test-svtn"); !ok {
+		t.Fatal("vacuity-control: test-svtn must already exist before duplicate-create test")
 	}
 
 	// Now confirm that attempting to create "test-svtn" again returns E-SVTN-001.
@@ -2357,7 +2336,7 @@ func TestAdminSVTNCreate_DuplicateName_E_SVTN_001_VacuityControl(t *testing.T) {
 func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *testing.T) {
 	t.Parallel()
 
-	m, _ := newTestSVTNManagerDetailed(t)
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	// "existing-svtn" was created in newTestSVTNManagerDetailed.
 
 	// Generate a cross-SVTN control key and register it in "test-svtn".
@@ -2387,29 +2366,10 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 		t.Parallel()
 		// "existing-svtn" already exists. Even with a name collision, the bootstrap
 		// pre-check must fire E-ADM-009 BEFORE any Create attempt (Ruling-5 / Inv-3).
-		// Positive-control: verify "existing-svtn" is present first.
-		var listFn func(ctx context.Context, args json.RawMessage) (any, error)
-		for _, h := range handlers {
-			if h.Command == "admin.key.list-keys" {
-				listFn = h.Fn
-				break
-			}
-		}
-		if listFn != nil {
-			listArgs, merr := json.Marshal(adminListKeysArgs{SVTNName: "existing-svtn"})
-			if merr != nil {
-				t.Fatalf("marshal list-keys args: %v", merr)
-			}
-			// list-keys admits any authenticated caller — use crossSVTNControl which
-			// is a registered control key in test-svtn (admitted, active). The SVTN
-			// "existing-svtn" was created in newTestSVTNManagerDetailed.
-			_, listErr := listFn(mgmt.WithCallerPubkey(context.Background(), crossSVTNControl), json.RawMessage(listArgs))
-			if listErr != nil {
-				// E-SVTN-003 means "existing-svtn" is absent — the test fixture is broken.
-				// Any error here is a setup failure: the positive-control fails and the
-				// subsequent E-ADM-009 assertion on svtn.create is not meaningful (F-P3L2-03).
-				t.Fatalf("vacuity-control: existing-svtn must be present before name-collision test; list-keys returned: %v", listErr)
-			}
+		// Positive-control: verify "existing-svtn" is present via SVTNRecord — this
+		// is independent of list-keys correctness (F-P7L2-01).
+		if _, ok := svtnmgmttest.SVTNRecord(t, m, "existing-svtn"); !ok {
+			t.Fatal("vacuity-control: existing-svtn must be present before name-collision test")
 		}
 
 		args, err := json.Marshal(adminSVTNCreateArgs{Name: "existing-svtn"})
@@ -2435,6 +2395,19 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 		// Cross-SVTN control key with a fresh name (B). E-ADM-009 must fire.
 		// Create-not-called is proven by the E-ADM-009 return (if Create ran,
 		// it would return success or E-SVTN-001, not E-ADM-009).
+
+		// Defense-in-depth: bootstrap key must be recognized by the manager so that
+		// the E-ADM-009 denial is provably key-specific (not a global fixture failure).
+		// F-Impl1-10: tests that use the bootstrap key must assert IsBootstrapKey holds.
+		if !m.IsBootstrapKey(bootstrapPub) {
+			t.Fatal("defense-in-depth: bootstrap key not recognized by manager (fixture broken)")
+		}
+
+		// Pre-call snapshot: record the number of registered SVTNs before the
+		// denied call. A direct count change provides a Create-not-called signal
+		// independent of list-keys (F-P7L2-02).
+		countBefore := len(m.All())
+
 		args, err := json.Marshal(adminSVTNCreateArgs{Name: "fresh-name-B"})
 		if err != nil {
 			t.Fatalf("marshal args: %v", err)
@@ -2446,32 +2419,14 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 		if !strings.Contains(gotErr.Error(), "E-ADM-009") {
 			t.Errorf("cross-SVTN control key: expected E-ADM-009; got: %v", gotErr)
 		}
-		// Verify "fresh-name-B" was NOT created. We use list-keys on a non-existent
-		// SVTN to infer absence. If Create had run, listing keys on "fresh-name-B"
-		// would succeed (returning an empty slice); it must return E-SVTN-003 instead.
-		var listFn func(ctx context.Context, args json.RawMessage) (any, error)
-		for _, h := range handlers {
-			if h.Command == "admin.key.list-keys" {
-				listFn = h.Fn
-				break
-			}
+
+		// Direct Create-not-called assertion: SVTN count must be unchanged.
+		if countAfter := len(m.All()); countAfter != countBefore {
+			t.Errorf("Create-not-called: SVTN count changed from %d to %d after E-ADM-009 denial", countBefore, countAfter)
 		}
-		if listFn != nil {
-			// Use a bootstrap context for the Lookup so auth passes.
-			// We don't have bootstrapPub here — use a new manager check instead.
-			// Actually, list-keys does not call resolveAndVerifyCallerRole, so any
-			// caller pubkey in ctx is irrelevant for auth on list-keys handler.
-			listArgs, _ := json.Marshal(adminListKeysArgs{SVTNName: "fresh-name-B"})
-			_, listErr := listFn(ctx, json.RawMessage(listArgs))
-			if listErr == nil {
-				t.Error("Create-not-called assertion: 'fresh-name-B' SVTN should not exist; list-keys returned success (Create was called)")
-			} else if !strings.Contains(listErr.Error(), "E-SVTN-003") {
-				// Any error other than E-SVTN-003 is a genuine verification failure:
-				// the absence oracle depends on E-SVTN-003 being returned for an
-				// absent SVTN. An unexpected error code means the test cannot prove
-				// Create was not called (F-P3L2-04).
-				t.Fatalf("list-keys on absent 'fresh-name-B' returned unexpected error: %v (E-SVTN-003 expected for absent SVTN)", listErr)
-			}
+		// SVTNRecord confirms "fresh-name-B" is absent — no inference through list-keys.
+		if _, ok := svtnmgmttest.SVTNRecord(t, m, "fresh-name-B"); ok {
+			t.Error("Create-not-called assertion: 'fresh-name-B' must not exist after E-ADM-009 denial")
 		}
 	})
 }

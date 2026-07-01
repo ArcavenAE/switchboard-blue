@@ -591,6 +591,20 @@ func (m *SVTNManager) SVTNByName(name string) (SVTN, bool) {
 	return s, ok
 }
 
+// All returns a snapshot of all registered SVTNs as a value-copy slice.
+// Callers must not retain references into the returned slice beyond the
+// current scope (go.md rule 12).
+// Safe for concurrent use.
+func (m *SVTNManager) All() []SVTN {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]SVTN, 0, len(m.svtns))
+	for _, s := range m.svtns {
+		out = append(out, s)
+	}
+	return out
+}
+
 // CallerKeyRoleInAny returns the active KeyRole of pubkey in any registered
 // SVTN, and true. Returns (0, false) if pubkey is not found as an active
 // (not revoked, not expired) key in any SVTN, or if no SVTNs exist.

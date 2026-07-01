@@ -612,15 +612,16 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 		callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
 		if !hasPubkey || !m.IsBootstrapKey(callerPub) {
 			fp := "(unknown)"
-			role := "unknown"
+			role := "unregistered"
 			if hasPubkey {
 				fp = keyFingerprintAdmin(callerPub)
 				// Diagnostic-only: resolve caller's active role across all registered
 				// SVTNs so the rejection message matches BC-2.07.001 canonical format
 				// "has role <role>". Does NOT affect the authority decision — the
 				// bootstrap-only check above is the authoritative gate (Ruling-5 /
-				// F-Lens1-02). If the key has no active role in any SVTN, "unknown"
-				// is reported per the canonical test vector.
+				// F-Lens1-02). If the key has no active role in any SVTN, "unregistered"
+				// is reported to match the canonical label used by resolveAndVerifyCallerRole
+				// (Ruling-12 §2).
 				if r, found := m.CallerKeyRoleInAny(callerPub); found {
 					role = r.String()
 				}
@@ -697,7 +698,7 @@ func validateSVTNName(name string) error {
 	// C1 controls U+0080–U+009F). U+2028 and U+2029 are NOT in Cc — they are
 	// Zl/Zp — so they must be checked explicitly.
 	for _, r := range name {
-		if unicode.IsControl(r) || r == ' ' || r == ' ' {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
 			return fmt.Errorf("E-CFG-001: invalid name: name contains control character U+%04X", r)
 		}
 	}
