@@ -2,14 +2,14 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.2"
+version: "1.3"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
 updated: 2026-07-01T00:00:00
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
-closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002]
+closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07]
 ---
 
 # Wave-6 Tranche A Scope Rulings
@@ -639,6 +639,255 @@ dependency on S-W5.04 or any backlog story.
 
 ---
 
+## Ruling 8 — S-6.07 Genesis Carve-Out for Defense-in-Depth Role Check (F-P4L1-002 + O-P4L3-01)
+
+### Background
+
+BC-2.07.001 v1.6 Inv-3 and VP-048 v1.4 property (3) — both landed by Ruling-7 —
+require: "Implementations MUST check `caller.role == RoleControl` explicitly after
+`IsBootstrapKey(caller)` returns true. A caller passing the bootstrap-key check with
+`role != RoleControl` MUST be rejected with E-ADM-009 **before any SVTN state is
+consulted** (existence oracle closed)."
+
+Pass-4 adversarial review (F-P4L1-002, O-P4L3-01) flags that the implementation at
+`admin_handlers.go:627` short-circuits as:
+
+```go
+if hasExistingSVTNs := m.HasAnySVTN(); hasExistingSVTNs && !m.BootstrapKeyHasControlRole() {
+    // ... reject
+}
+```
+
+On genesis (zero SVTNs), `HasAnySVTN()` returns false and the whole expression
+short-circuits — the `BootstrapKeyHasControlRole()` check is **skipped**. On the
+non-genesis path, both sides of the `&&` are evaluated. The finding asks: does the
+genesis skip violate Inv-3 / VP-048 property (3)?
+
+**Root cause of the skip:** at genesis, no keySet entry yet exists for the bootstrap
+key (SVTNs haven't been created yet, so no key registration has occurred). Calling
+`BootstrapKeyHasControlRole()` in this state would return false by construction —
+blocking the genesis create, which is the very operation the bootstrap key exists to
+perform.
+
+### Options Considered
+
+- **(A) Spec-side narrow:** update BC-2.07.001 Inv-3 and VP-048 property (3) to
+  explicitly acknowledge the genesis carve-out. The spec reads: "...except on the
+  first-ever SVTN creation (`HasAnySVTN() == false`), when no keySet entry yet exists
+  to check; on that path the `IsBootstrapKey` check alone suffices, and the bootstrap
+  key is registered as `RoleControl` by the immediately-following `Create()` call as
+  part of the genesis atomic operation." Implementation unchanged. Mutation test scope
+  is limited to the non-genesis path.
+
+- **(B) Impl-side keyset-free check:** add a `bootstrapRole admission.KeyRole` field to
+  `SVTNManager`, seeded to `RoleControl` at `NewSVTNManager` construction.
+  `BootstrapKeyHasControlRole()` returns `m.bootstrapRole == RoleControl` (pure struct
+  predicate, never consults keySet). Remove the `HasAnySVTN()` gate. The DiD check
+  becomes unconditional.
+
+- **(C) Hybrid:** ship Option A now (spec narrow) + open `S-BL.BOOTSTRAP-ROLE-DID` as
+  a Wave-7 backlog stub to implement Option B later.
+
+### Ruling: Option A (spec-side narrow) + mandatory test-scope fix for F-P4L1-001
+
+**Genesis carve-out:** the genesis path is authentically special. At the moment of
+the first `admin.svtn.create` call, the manager IS the authoritative source for the
+bootstrap key's role — it holds that role as a constructor invariant — and no keySet
+entry exists yet to verify against. The manager's constructor guarantees `RoleControl`;
+no external corruption path exists between construction and the first create call.
+Layering a second in-memory predicate (`bootstrapRole` field) that mirrors the
+constructor argument (Option B) provides defense in shape only: a bug in the constructor
+propagates identically to both fields, so the check adds no independent failure signal.
+The real defensive value of Ruling-7's explicit role check is on **non-genesis paths**
+where key rotation or provisioning refactors could demote the bootstrap key mid-lifetime
+— those paths have a live keySet to check against, and the check is unconditional there.
+
+Option B is not wrong but is not urgent: the constructor-seeded field and the keySet
+are both under the same package's control, and a rotation refactor would need to update
+both consistently anyway. The Wave-7 backlog stub (Option C) is a reasonable hedge if
+the team wants to carry the Option B work forward; however, it is not required for
+convergence and is left to the implementer's discretion.
+
+**BC-2.07.001 Inv-3 addendum (genesis carve-out):** after the existing defense-in-depth
+note (Ruling-7), add:
+
+> "**Genesis carve-out (Ruling-8, 2026-07-01):** On the first-ever SVTN creation
+> (`HasAnySVTN() == false`), no keySet entry yet exists for the bootstrap key (the key
+> is registered by the `Create()` call itself as part of the genesis atomic operation).
+> On this path, `IsBootstrapKey(caller)` alone is sufficient authorization; the
+> `caller.role == RoleControl` keySet lookup is skipped because the keySet is empty.
+> The genesis carve-out is not a privilege bypass — the bootstrap role is guaranteed by
+> the manager constructor. The explicit `RoleControl` check applies unconditionally on
+> all non-genesis paths (i.e., when at least one SVTN already exists)."
+
+**VP-048 property (3) addendum:** mirror the genesis carve-out in the mutation-test
+scope note:
+
+> "The mutation test for the `caller.role == RoleControl` guard targets the
+> **non-genesis path only** (`HasAnySVTN() == true`). The genesis path
+> (`HasAnySVTN() == false`) is exempt per the genesis carve-out; a mutation test
+> on the genesis path would falsely pass because the keySet is empty and the role
+> lookup returns false by construction regardless of the guard."
+
+### Mandatory Action Item: F-P4L1-001 — Test Helper Must Move to Test Scope
+
+`SeedSVTNWithoutBootstrapKeyForTest` is currently exported from
+`internal/svtnmgmt/svtnmgmt.go` (a production file). Exporting test-helper functions
+from production packages is a security-surface hygiene violation: it enlarges the
+production binary's exported surface, signals to callers that deliberately constructing
+a bootstrap-key-absent SVTN is a supported operation, and makes security audits harder
+because the distinction between "real" and "test-only" APIs is lost.
+
+**Ruling: this function MUST be moved** to a `_test.go` file within
+`internal/svtnmgmt` (if only used in that package's tests) **or** to a dedicated
+`internal/svtnmgmttest` helper package (if used by tests in other packages). There is
+no negotiation on this point. The fix-burst for S-6.07 MUST include this relocation.
+
+If the function is referenced by tests in packages outside `internal/svtnmgmt`:
+- Create `internal/svtnmgmttest/helpers.go` containing `SeedSVTNWithoutBootstrapKeyForTest`
+  and any other test-only construction helpers.
+- Remove the export from the production file.
+- Update all import sites.
+
+If the function is only used within `internal/svtnmgmt` tests:
+- Move the body to `internal/svtnmgmt/svtnmgmt_test.go` (or a new `*_test.go` file
+  in the same package).
+- Remove the export from the production file.
+
+The production package MUST NOT export any symbol containing `ForTest`, `test`, or
+`Test` in its name after the fix-burst.
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| BC-2.07.001 v1.6 → v1.7 | Append genesis carve-out paragraph to Inv-3 defense-in-depth note |
+| VP-048 v1.4 → v1.5 | Append genesis carve-out scope note to mutation-test invariant (property 3) |
+| S-6.07 fix-burst impl | Move `SeedSVTNWithoutBootstrapKeyForTest` out of production file (mandatory — F-P4L1-001) |
+| S-6.07 story spec | Add implementation note: genesis carve-out is spec-authorized; no handler code change needed for the genesis path; test relocation is a mandatory action item |
+
+### Ordering
+
+BC-2.07.001 and VP-048 spec edits may be applied in any order within the fix-burst.
+The `SeedSVTNWithoutBootstrapKeyForTest` relocation is a mandatory prerequisite for
+S-6.07 pass-5 adversarial; it is not sequenced after any other Ruling-8 item.
+
+---
+
+## Ruling 9 — S-W5.04 AC-003 Status Enum Mapping for `Active=false` (F-P4L2-07)
+
+### Background
+
+AC-003 (story line 84–89) currently reads: "status: `"degraded"` when
+`PathSnapshot.Degraded == true` and to `"active"` otherwise."
+
+Under a strict reading of "otherwise," the mapping is:
+
+| `Active` | `Degraded` | AC-003 strict output |
+|----------|-----------|----------------------|
+| true     | false     | `"active"`           |
+| true     | true      | `"degraded"`         |
+| false    | false     | `"active"` ← ambiguous |
+| false    | true      | `"degraded"`         |
+
+The implementation in `PathEntryFromSnapshot` (`handlers.go:139`) uses:
+`Active=false OR Degraded=true → "degraded"`, and the test
+`TestPathEntry_StatusFromDegraded` includes a row `active_false_is_degraded` that
+asserts `Active=false, Degraded=false → "degraded"`. The impl and test agree; the
+spec is silent on the `Active=false, Degraded=false` case.
+
+BC-2.06.003 v1.11 PC-1 defines the status enum as `{active, degraded}` where
+`"degraded"` covers "RTT-degraded liveness." It does not explicitly address the
+`Active=false` case.
+
+### Question
+
+Does `Active=false, Degraded=false` (path provisioned but not yet carrying traffic)
+map to `"active"` (the strict "otherwise" reading) or to `"degraded"` (the impl)?
+
+### Options Considered
+
+- **(A) Impl-preserving (update spec to match impl):** update AC-003 to: "status:
+  `"degraded"` when `PathSnapshot.Active == false OR PathSnapshot.Degraded == true`;
+  `"active"` when both `Active == true AND Degraded == false`." Also update
+  BC-2.06.003 PC-1 to include this mapping normatively.
+
+- **(B) Spec-preserving (update impl to match strict AC-003 reading):** update impl
+  so `Active=false, Degraded=false → "active"`. Update the `active_false_is_degraded`
+  test row. Rationale: an inactive-but-not-degraded path could reasonably be reported
+  as `"active"` if operators interpret "active" as "provisioned and healthy" rather
+  than "carrying traffic right now."
+
+### Ruling: Option A (impl-preserving)
+
+For operator-facing metrics, "active" MUST mean "carrying traffic AND healthy."
+`Active=false` means the path is provisioned but not currently forwarding traffic —
+operationally, this is a non-functional path from the operator's perspective.
+Reporting it as `"active"` would mislead operators: they would see a path in the
+list with status "active" that is not actually passing any frames. The resulting
+diagnostic confusion (an "active" path that shows zero throughput) is worse than
+the minor semantic stretch of calling a not-yet-live path "degraded."
+
+Additionally: the `Active` flag in `PathSnapshot` represents whether the PathTracker
+considers the path live at this instant. A path where `Active=false` has had its
+liveness signal absent — whether because it was never started or because it stopped.
+From an observability standpoint, this is indistinguishable from a degraded path: the
+operator needs to take action in both cases. Collapsing the two into `"degraded"` is
+the correct operator ergonomic.
+
+Option B is rejected because the `"active"` label for a path with `Active=false`
+creates a semantic inconsistency: the word "active" would mean "not degraded by
+latency" rather than "currently active." This is a terminology trap — the existing
+field name `Active` in `PathSnapshot` already carries the meaning of "currently
+passing traffic," and reversing it in the output JSON status would require downstream
+tooling to understand a non-obvious inversion.
+
+**Spec update required (BC-2.06.003 PC-1):** add the following after the `status`
+field definition:
+
+> "**Status derivation rule (Ruling-9, 2026-07-01):** `status` is `"active"` if and
+> only if `PathSnapshot.Active == true AND PathSnapshot.Degraded == false`. In all
+> other cases — including `Active=false, Degraded=false` (path provisioned but not
+> carrying traffic) — `status` is `"degraded"`. Rationale: `"active"` MUST reflect
+> that the path is currently forwarding traffic; a path where `Active=false` is
+> operationally non-functional regardless of its degradation flag."
+
+**AC-003 update required (S-W5.04 story):** replace the current AC-003 status mapping
+sentence with:
+
+> "status: `"degraded"` when `PathSnapshot.Active == false OR PathSnapshot.Degraded == true`;
+> `"active"` when `Active == true AND Degraded == false`. The `active_false_is_degraded`
+> test row in `TestPathEntry_StatusFromDegraded` is normative. The strict
+> `Degraded==false → active` reading that ignores `Active` is superseded by this ruling."
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| BC-2.06.003 v1.11 → v1.12 | Append Ruling-9 status derivation rule to PC-1 `status` field definition |
+| S-W5.04 AC-003 (story line 84–89) | Replace status mapping sentence with `Active=false OR Degraded=true → "degraded"` formulation; add reference to Ruling-9 |
+| S-W5.04 test `TestPathEntry_StatusFromDegraded` | No change required — `active_false_is_degraded` row is already correct and is now normatively anchored |
+| No impl change required | Handler and test already implement the Ruling-9 mapping |
+
+### Ordering
+
+BC-2.06.003 and AC-003 edits are independent and may be applied in any order within
+the fix-burst. No dependency on any other ruling. No new follow-on stories required.
+
+---
+
+## Summary of Spec Changes — Rulings 8–9
+
+| Artifact | Change Summary | Finding(s) Closed |
+|----------|----------------|-------------------|
+| BC-2.07.001 v1.6 → v1.7 | Append genesis carve-out paragraph to Inv-3 defense-in-depth note: `HasAnySVTN()==false` path is exempt from keySet role check | F-P4L1-002, O-P4L3-01 |
+| VP-048 v1.4 → v1.5 | Append genesis carve-out scope note to mutation-test invariant: mutation test targets non-genesis path only | F-P4L1-002, O-P4L3-01 |
+| S-6.07 fix-burst impl | Move `SeedSVTNWithoutBootstrapKeyForTest` out of production `svtnmgmt.go` into `_test.go` or `internal/svtnmgmttest` (mandatory) | F-P4L1-001 |
+| BC-2.06.003 v1.11 → v1.12 | Append Ruling-9 status derivation rule to PC-1: `active` iff `Active==true AND Degraded==false`; all other cases map to `"degraded"` | F-P4L2-07 |
+| S-W5.04 AC-003 | Replace "otherwise" with explicit `Active==false OR Degraded==true → degraded` formulation; `active_false_is_degraded` test row is now normative | F-P4L2-07 |
+
+---
+
 ## Changelog
 
 | Version | Date | Change |
@@ -646,3 +895,4 @@ dependency on S-W5.04 or any backlog story.
 | 1.0 | 2026-07-01 | Initial: Rulings 1–2 (router_addr wire shape, authority model) |
 | 1.1 | 2026-07-01 | Rulings 3–5 (PathTracker wiring P2, status=failed deferral, bootstrap fast-path fix) |
 | 1.2 | 2026-07-01 | Rulings 6–7 (PathTracker wiring P3 — defer to S-BL; AC-003 defense-in-depth) |
+| 1.3 | 2026-07-01 | Rulings 8–9 (genesis carve-out for DiD role check + SeedSVTNWithoutBootstrapKeyForTest relocation; Active=false status mapping) |

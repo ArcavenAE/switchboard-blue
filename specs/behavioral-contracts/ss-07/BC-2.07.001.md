@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -27,6 +27,13 @@ modified:
       `sbctl admin svtn create --name=mynet`; (3) Stories cell updated with PC split
       (PC-1: S-6.02 + S-6.07; PC-2: S-6.02; PC-3: S-6.05); (4) PC-2 "trust anchor"
       addendum added clarifying admitted=false bootstrap semantics.
+  - date: 2026-07-01
+    version: "1.7"
+    actor: spec-steward
+    change: >
+      Ruling-8: narrow Inv-3 DiD check to non-genesis path; genesis creation exempt (bootstrap key
+      registered as RoleControl atomically in genesis Create). Genesis carve-out appended to Inv-3
+      defense-in-depth note. Ref: rulings v1.3 Ruling-8.
   - date: 2026-07-01
     version: "1.6"
     actor: spec-steward
@@ -84,7 +91,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 
 1. **DI-012**: The control node manages SVTN lifecycle as a participant in the user/data plane. It does not have privileged access to router internals.
 2. **DI-005**: SVTN IDs must be globally unique within the router's scope; duplicate SVTN IDs are rejected.
-3. Only control-role keys may create or destroy SVTNs. **Scope:** this invariant governs `admin.svtn.*` operations only. Authority enforcement for `admin.key.*` operations is governed by BC-2.05.004 PC-1 / DI-001, not this contract. **Bootstrap-only restriction for `admin.svtn.create` (S-6.07 F-P1L1-005 closure):** `admin.svtn.create` requires the daemon bootstrap key as the authorized caller. Cross-SVTN control-role keys (i.e., control keys admitted through the standard challenge-response path on a different SVTN) are NOT authorized to invoke `admin.svtn.create`. Only the bootstrap key — seeded via the local-operation path (PC-2) — may trigger SVTN creation. This removes the ambiguity in which any control-role key might be assumed to have `admin.svtn.create` authority. Post-create, additional control keys may be registered via `admin.key.register`, but they cannot themselves create further SVTNs on this daemon. **Defense-in-depth note (Ruling-7, 2026-07-01):** Implementations MUST check `caller.role == RoleControl` explicitly after `IsBootstrapKey(caller)` returns true. Even though the bootstrap key is provisioned with `RoleControl` by construction, an explicit role check is required as defense-in-depth against future bootstrap-key rotation or provisioning refactors that might inadvertently relax the role assignment. A caller passing the bootstrap-key check with `role != RoleControl` MUST be rejected with E-ADM-009 before any SVTN state is consulted (existence oracle closed).
+3. Only control-role keys may create or destroy SVTNs. **Scope:** this invariant governs `admin.svtn.*` operations only. Authority enforcement for `admin.key.*` operations is governed by BC-2.05.004 PC-1 / DI-001, not this contract. **Bootstrap-only restriction for `admin.svtn.create` (S-6.07 F-P1L1-005 closure):** `admin.svtn.create` requires the daemon bootstrap key as the authorized caller. Cross-SVTN control-role keys (i.e., control keys admitted through the standard challenge-response path on a different SVTN) are NOT authorized to invoke `admin.svtn.create`. Only the bootstrap key — seeded via the local-operation path (PC-2) — may trigger SVTN creation. This removes the ambiguity in which any control-role key might be assumed to have `admin.svtn.create` authority. Post-create, additional control keys may be registered via `admin.key.register`, but they cannot themselves create further SVTNs on this daemon. **Defense-in-depth note (Ruling-7, 2026-07-01):** Implementations MUST check `caller.role == RoleControl` explicitly after `IsBootstrapKey(caller)` returns true. Even though the bootstrap key is provisioned with `RoleControl` by construction, an explicit role check is required as defense-in-depth against future bootstrap-key rotation or provisioning refactors that might inadvertently relax the role assignment. A caller passing the bootstrap-key check with `role != RoleControl` MUST be rejected with E-ADM-009 before any SVTN state is consulted (existence oracle closed). **Genesis Carve-Out (Ruling-8, 2026-07-01):** On the first-ever SVTN creation (when `HasAnySVTN() == false`), no keySet entry yet exists for the bootstrap key. On that path the `IsBootstrapKey(caller)` check alone suffices, and the bootstrap key is registered as `RoleControl` by the `Create()` call as part of the genesis atomic operation. The `role == RoleControl` explicit check applies only when SVTN state exists (non-genesis path).
 
 ## Trigger
 
@@ -137,6 +144,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.7 | 2026-07-01 | spec-steward | Ruling-8: narrow Inv-3 DiD check to non-genesis path; genesis creation exempt (bootstrap key registered as RoleControl atomically in genesis Create). Ref: rulings v1.3 Ruling-8. |
 | 1.6 | 2026-07-01 | spec-steward | Ruling-7 defense-in-depth (Pass-3 L3 handoff): Inv-3 extended with explicit `caller.role == RoleControl` check obligation after `IsBootstrapKey(caller)`. Defense-in-depth against bootstrap-key rotation refactors. Callers passing bootstrap-key check with `role != RoleControl` MUST be rejected E-ADM-009 before SVTN state consulted (existence oracle closed). VP-048 updated to v1.4. |
 | 1.5 | 2026-07-01 | spec-steward | S-6.07 F-P2L3-003 test-vector gap closure: added Canonical Test Vector for cross-SVTN control-role key attempting `admin.svtn.create` — expects E-ADM-009 (not existence oracle) per Ruling-5 bootstrap-only guard. Handler MUST fire `IsBootstrapKey` check before `resolveAndVerifyCallerRole` to prevent SVTN existence leak. |
 | 1.4 | 2026-07-01 | product-owner | Wave-6 Tranche-A Ruling-2: Inv-3 tightened to codify bootstrap-only caller restriction for `admin.svtn.create`. Cross-SVTN control-role keys are NOT authorized for `admin.svtn.create`. Only the daemon bootstrap key (seeded via PC-2 local operation) may invoke SVTN creation. Removes ambiguity flagged in S-6.07 F-P1L1-005. |
