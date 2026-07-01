@@ -6,7 +6,7 @@ story_id: S-W5.04
 title: "daemon-side paths.list / router.metrics / router.status RPC handlers and response types"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T00:00:00
+timestamp: 2026-07-01T12:00:00
 phase: 2
 epic: E-5
 wave: 6
@@ -14,7 +14,7 @@ wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 5
-version: "1.9"
+version: "1.10"
 bc_traces:
   - BC-2.06.001
   - BC-2.06.003
@@ -80,7 +80,7 @@ v1.13 postcondition 1 (fixed-bucket histogram, counts never reset) and EC-003
   → `"pending"`, row (b) SampleCount=9 → `"pending"`, row (c) SampleCount=10 →
   float64, row (d) SampleCount=100 → float64.
 
-### AC-003 (traces to BC-2.06.001 postcondition — PathEntry.status derivation, Ruling-9)
+### AC-003 (traces to BC-2.06.003 v1.13 PC-1 — PathEntry.status derivation, Ruling-9)
 `PathEntry.status` is `"degraded"` when `PathSnapshot.Active == false OR PathSnapshot.Degraded == true`;
 `"active"` when `Active == true AND Degraded == false`. Operator semantics: `"active"` MUST reflect
 that the path is currently forwarding traffic AND healthy. A path where `Active=false` (provisioned
@@ -115,7 +115,7 @@ to `paths.list` response, consistent with the sbctl alias design in S-5.02.
   Status and quality are independent fields with distinct derivations. The status enum is
   `{active, degraded}` in this story; `"failed"` is reserved for a future liveness-signal story
   (S-BL.PATH-FAILED-STATUS) — do not emit it.
-  - `PathSnapshot.Degraded == true` maps to `status: "degraded"` per BC-2.06.001 quality state machine.
+  - `PathSnapshot.Degraded == true` maps to `status: "degraded"` per BC-2.06.003 v1.13 PC-1 (Ruling-9).
   - When `SampleCount < 10` (p99 indeterminate → `rtt_p99_ms: "pending"`), the `quality` field MUST be `"pending"` regardless of `status`. The quality enum is `{green, yellow, red, pending}`; `"failed"` is not a valid quality value.
   - The EC-007 precedence rule: quality="pending" when SampleCount<10, regardless of status value.
   - **Test:** `TestDaemonRouterStatus_QualityStatusIndependence` — table-driven:
@@ -166,8 +166,8 @@ should be deleted if present; otherwise skip that step.
 
 | BC | Title | PCs covered |
 |----|-------|------------|
-| BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | Quality state machine: `PathSnapshot.Degraded == true` → `status: "degraded"`; quality field derived from p99 RTT when available |
-| BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 failed+pending precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
+| BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | Quality field derivation from p99 RTT and loss thresholds (green/yellow/red/pending state machine) |
+| BC-2.06.003 | Per-Path RTT and Loss Metrics Queryable via sbctl | PC-1 (PathsListResponse + PathEntry + rtt_p99_ms union; PathEntry.status derivation: `"active"` iff `Active==true AND Degraded==false`, `"degraded"` otherwise per Ruling-9), PC-2 (RouterMetricsResponse), PC-3 (router.status handler + EC-007 failed+pending precedence), PC-4 (--json), PC-5 (daemon unreachable — inherited from S-5.02 client) |
 
 ## VP Coverage
 
@@ -251,8 +251,7 @@ should be deleted if present; otherwise skip that step.
 | `internal/metrics` types (PathEntry, RTTValue, etc.) are pure data + serialization; no I/O | ARCH-03 §Purity | Pure/Effectful classification table |
 | Read PathSnapshots via `Snapshot()`, never via individual field accessors | ARCH-03 §PathSnapshot; go.md rule 12 (no internal pointer leak) | Code review + `TestDaemonPathsList_HandlerRegistered` |
 | `rtt_p99_ms` serializes as float64 when SampleCount ≥ 10, string `"pending"` when < 10 | BC-2.06.003 v1.13 EC-003 | `TestPathEntry_RTTValueSerialization` |
-| `status` field derived from `PathSnapshot.Degraded` only; no re-implementation of quality state machine | BC-2.06.001; ARCH-03 | `TestPathEntry_StatusFromDegraded` |
-| `status` enum is `{active, degraded}` in this story; derivation: `"active"` iff `Active==true AND Degraded==false`; `"degraded"` otherwise (per Ruling-9). `"failed"` is reserved (S-BL.PATH-FAILED-STATUS) and MUST NOT be emitted. When SampleCount<10, `quality` MUST be `"pending"` regardless of `status`; `status` and `quality` are independent fields. | BC-2.06.003 v1.13 PC-1, EC-007; Ruling-4 + Ruling-9 (wave-6-tranche-a-scope-rulings.md) | `TestDaemonRouterStatus_QualityStatusIndependence`, `TestPathEntry_StatusFromDegraded` |
+| `status` enum is `{active, degraded}` in this story; derivation: `"active"` iff `Active==true AND Degraded==false`; `"degraded"` otherwise (Active=false OR Degraded=true, per Ruling-9). `"failed"` is reserved (S-BL.PATH-FAILED-STATUS) and MUST NOT be emitted. When SampleCount<10, `quality` MUST be `"pending"` regardless of `status`; `status` and `quality` are independent fields. | BC-2.06.003 v1.13 PC-1, EC-007; Ruling-4 + Ruling-9 (wave-6-tranche-a-scope-rulings.md) | `TestDaemonRouterStatus_QualityStatusIndependence`, `TestPathEntry_StatusFromDegraded` |
 | `RTTValue` round-trips: `MarshalJSON(UnmarshalJSON(x)) == x` for both pending and float variants; use `Kind` enum (`PendingKind`, `FloatKind`) not sentinel-based discrimination | F-P2L1-004 | `TestRTTValue_RoundTrip` |
 | VP-047 integration test requires the production wiring path (real PathTracker via PathsListSource adapter); MUST NOT inject `synthPathsListSource` directly | VP-047 (transferred from S-5.02); Ruling-3 (wave-6-tranche-a-scope-rulings.md) | `TestVP047_SbctlPathsList_EndToEnd` |
 | Do NOT modify cmd/sbctl, internal/paths, or internal/mgmt core transport | S-5.02 scope boundary; S-W5.01 scope boundary | File structure requirements |

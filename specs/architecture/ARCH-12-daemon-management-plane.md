@@ -2,10 +2,10 @@
 artifact_id: ARCH-12-daemon-management-plane
 document_type: architecture-section
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: architect
-timestamp: 2026-06-28T00:00:00
+timestamp: 2026-07-01T12:00:00
 phase: wave-5
 traces_to: ARCH-INDEX.md
 inputDocuments:
@@ -819,7 +819,7 @@ tests require both.
 | S-W5.01 (new) | internal/mgmt server + config + wiring | 8pt | ADR-012 |
 | S-6.06 (new) | daemon-side admin.key.* handler registration on control-mode daemon; BC-2.05.004 caller-role enforcement (VP-075) + bootstrap non-revocable/non-expirable invariant (VP-076); BCs: BC-2.05.004 | 5pt | S-W5.01 |
 | S-6.07 (new) | Register admin.svtn.create handler in BuildAdminHandlers (control-mode daemon only) + sbctl admin svtn create CLI subcommand; bootstrap-key+RoleControl authority check; BCs: BC-2.07.001 (PC-1, PC-2, Inv-3); VPs: VP-048; Wave 6 | 3pt | S-6.06 |
-| S-W5.04 (new) | Daemon-side paths.list / router.metrics / router.status RPC handlers + real PathTracker wiring in runControl/runAccess; PathsListSource adapter over PathTracker.Snapshot(); delete emptyPathsSource / emptyRouterMetricsSource stubs; BCs: BC-2.06.003 (PC-1–PC-4) + BC-2.06.001; VPs: VP-047 + VP-062; Wave 6 | 5pt | S-5.02 + S-W5.01 |
+| S-W5.04 (new) | Daemon-side paths.list / router.metrics / router.status RPC handlers + `pathTrackerSource` adapter shape (production population deferred to S-BL.PATH-TRACKER-WIRING per Ruling-6); BCs: BC-2.06.003 (PC-1–PC-4) + BC-2.06.001; VPs: VP-047 + VP-062; Wave 6 | 5pt | S-5.02 + S-W5.01 |
 | S-W5.02 (new) | E2E integration harness (VP-049) | 5pt | S-6.03 + S-6.06 + S-W5.01 |
 
 ---
