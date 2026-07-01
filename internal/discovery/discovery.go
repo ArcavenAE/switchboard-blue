@@ -96,6 +96,12 @@ type SessionEntry struct {
 // BC-2.03.001 PC-5 fail-closed).
 var ErrInvalidHMACTag = errors.New("discovery: advertisement rejected: invalid HMAC tag")
 
+// ErrInvalidSessionName is returned by Encode when a session entry carries a
+// session name that is structurally invalid: either empty (len == 0) or not
+// valid UTF-8. Oversize names (len > 255) are truncated, not rejected
+// (BC-2.03.003 PC-2, EC-001; RULING-W6TB-J).
+var ErrInvalidSessionName = errors.New("discovery: session name is empty or contains invalid UTF-8")
+
 // ErrSVTNMismatch is returned when an inbound advertisement carries a
 // SVTN ID that does not match the local node's SVTN (AC-006;
 // BC-2.03.002 Inv-1 cross-scope isolation).
@@ -334,7 +340,10 @@ func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error 
 // The encoding is stable: Encode(Decode(b)) == b for any valid advertisement
 // byte slice b (AC-004; BC-2.03.003 Inv-1 round-trip).
 func Encode(payload AdvertisementPayload) ([]byte, error) {
-	body := encodeBody(payload)
+	body, err := encodeBody(payload)
+	if err != nil {
+		return nil, err
+	}
 	hmacKey := advertisementKey(payload.SVTNID)
 	tag := routing.ComputeAdvertisementHMAC(hmacKey[:], body)
 
@@ -389,14 +398,26 @@ func advertisementKey(svtnID [16]byte) [16]byte {
 // Format: [16]SVTNID | [8]NodeAddr | uint16 count | sessions...
 // Per session: uint16 name_len | name_bytes | uint8 status | uint8 quality
 //
-// Session names longer than 255 bytes are truncated to at most 254 UTF-8-safe
+// Session names longer than 255 bytes are truncated to at most 252 UTF-8-safe
 // bytes and suffixed with "…" (U+2026, 3 bytes) so the encoded name fits in
-// one uint16-length field and still signals truncation (BC-2.03.003 EC-004; M-2).
-func encodeBody(payload AdvertisementPayload) []byte {
+// one uint16-length field and still signals truncation (BC-2.03.003 EC-001; M-2).
+// Empty names or non-UTF-8 names are rejected with ErrInvalidSessionName.
+func encodeBody(payload AdvertisementPayload) ([]byte, error) {
+	// Validate and encode session names first so we can fail fast before
+	// allocating the output buffer.
+	encodedNames := make([][]byte, len(payload.Sessions))
+	for i, s := range payload.Sessions {
+		name, err := encodedSessionName(s.SessionName)
+		if err != nil {
+			return nil, err
+		}
+		encodedNames[i] = name
+	}
+
 	// Calculate size up front for a single allocation.
 	size := 16 + 8 + 2
-	for _, s := range payload.Sessions {
-		size += 2 + len(encodedSessionName(s.SessionName)) + 1 + 1
+	for _, name := range encodedNames {
+		size += 2 + len(name) + 1 + 1
 	}
 	buf := make([]byte, 0, size)
 
@@ -406,29 +427,36 @@ func encodeBody(payload AdvertisementPayload) []byte {
 	count := uint16(len(payload.Sessions))
 	buf = binary.BigEndian.AppendUint16(buf, count)
 
-	for _, s := range payload.Sessions {
-		name := encodedSessionName(s.SessionName)
+	for i, s := range payload.Sessions {
+		name := encodedNames[i]
 		nameLen := uint16(len(name))
 		buf = binary.BigEndian.AppendUint16(buf, nameLen)
 		buf = append(buf, name...)
 		buf = append(buf, byte(s.Status))
 		buf = append(buf, byte(s.Quality))
 	}
-	return buf
+	return buf, nil
 }
 
 // encodedSessionName returns the UTF-8 byte representation of name suitable
-// for wire encoding. If the name exceeds 255 bytes when encoded as UTF-8 it is
-// truncated to at most 252 bytes on a rune boundary and suffixed with "…"
-// (U+2026, 3 bytes), yielding a result no longer than 252+3 = 255 bytes,
+// for wire encoding. Empty names and non-UTF-8 names are rejected with
+// ErrInvalidSessionName (BC-2.03.003 PC-2; RULING-W6TB-J). If the name exceeds
+// 255 bytes it is truncated to at most 252 bytes on a rune boundary and suffixed
+// with "…" (U+2026, 3 bytes), yielding a result no longer than 252+3 = 255 bytes,
 // satisfying BC-2.03.003 PC-2 (encoded session name ≤ 255 bytes).
-// The ellipsis signals lossy truncation to receivers (BC-2.03.003 EC-004).
-func encodedSessionName(name string) []byte {
+// The ellipsis signals lossy truncation to receivers (BC-2.03.003 EC-001).
+func encodedSessionName(name string) ([]byte, error) {
+	if len(name) == 0 {
+		return nil, ErrInvalidSessionName
+	}
+	if !utf8.ValidString(name) {
+		return nil, ErrInvalidSessionName
+	}
 	b := []byte(name)
 	const maxBytes = 255
 	const ellipsis = "…" // U+2026, 3 bytes
 	if len(b) <= maxBytes {
-		return b
+		return b, nil
 	}
 	// Cut at 252 bytes then walk back to a valid rune boundary so that
 	// appending the 3-byte ellipsis yields at most 255 bytes total.
@@ -436,7 +464,7 @@ func encodedSessionName(name string) []byte {
 	for cut > 0 && !utf8.RuneStart(b[cut]) {
 		cut--
 	}
-	return append(b[:cut], ellipsis...)
+	return append(b[:cut:cut], ellipsis...), nil
 }
 
 // decodeBody deserialises a body slice (without the HMAC tag prefix).
