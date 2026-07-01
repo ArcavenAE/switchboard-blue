@@ -9,8 +9,8 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 phase: 2
 epic: E-5
-wave: 5
-# Wave 5 capacity permitting; otherwise Wave 6.
+wave: 6
+# Re-scheduled Wave 5 → Wave 6 per F-W5P1-004 (Wave-5 wave-adversarial Pass-1) — Wave 5 declared complete at 8 stories; depends on S-5.02 + S-W5.01 (both merged, unblocked).
 priority: P1
 scope_phase: E
 estimated_points: 5

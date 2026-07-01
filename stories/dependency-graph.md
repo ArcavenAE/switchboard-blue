@@ -105,7 +105,7 @@ Manual topological sort confirms no back-edges:
 | BC-2.05.001 | S-2.02 | yes |
 | BC-2.05.002 | S-2.02 | yes |
 | BC-2.05.003 | S-3.03 | yes |
-| BC-2.05.004 | S-6.02 | yes |
+| BC-2.05.004 | S-6.02, S-6.06 | yes |
 | BC-2.05.005 | S-2.01 | yes |
 | BC-2.05.006 | S-2.02 | yes |
 | BC-2.05.007 | S-2.02 | yes |

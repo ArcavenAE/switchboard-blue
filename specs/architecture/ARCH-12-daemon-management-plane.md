@@ -814,7 +814,7 @@ tests require both.
 |-------|-------|------|-----------|
 | S-6.03 (re-scoped) | sbctl client auth + connection error | 5pt | ADR-012 (unlocked) |
 | S-W5.01 (new) | internal/mgmt server + config + wiring | 8pt | ADR-012 |
-| S-6.06 (new) | daemon-side admin.key.* handler registration on control-mode daemon; BC-2.05.004 caller-role enforcement (VP-075) + bootstrap non-revocable/non-expirable invariant (VP-076); BCs: BC-2.05.004 | 3pt | S-W5.01 |
+| S-6.06 (new) | daemon-side admin.key.* handler registration on control-mode daemon; BC-2.05.004 caller-role enforcement (VP-075) + bootstrap non-revocable/non-expirable invariant (VP-076); BCs: BC-2.05.004 | 5pt | S-W5.01 |
 | S-W5.02 (new) | E2E integration harness (VP-049) | 5pt | S-6.03 + S-6.06 + S-W5.01 |
 
 ---
