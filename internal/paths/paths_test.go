@@ -1405,9 +1405,18 @@ func TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction(t *testing.T) {
 	}
 }
 
-// TestBC_2_06_003_RouterAddr_ConcurrentSnapshot verifies that concurrent calls to
-// Snapshot() on a NewPathTrackerWithAddr-constructed tracker always observe the
-// correct RouterAddr under the Go race detector (-race).
+// TestBC_2_06_003_RouterAddr_ConcurrentSnapshot exercises the concurrent
+// Snapshot()+OnProbe() path under the Go race detector.
+//
+// routerAddr is immutable after construction, so it serves as a stable oracle
+// whose value is known without locking. The test's actual target is the
+// Snapshot()/OnProbe() mutex path: OnProbe writes EWMA/histogram fields that
+// Snapshot reads under the same mutex. routerAddr consistency is the assertion
+// vehicle, not the property under test.
+//
+// RULING-W6TB-K F-P4L2-02: this test is intentionally retained (not merged into
+// TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction, which is
+// single-threaded and does not exercise concurrent Snapshot/OnProbe).
 //
 // AC-003 / RULING-W6TB-B §3 (immutability + concurrent safety).
 //

@@ -346,9 +346,21 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 	}
 }
 
-// TestVP047_RouterAddrNonEmpty verifies that when a PathTracker is constructed via
-// NewPathTrackerWithAddr, the paths.list JSON response carries a non-empty
-// router_addr matching the ^[^:]+:[0-9]+$ pattern.
+// TestVP047_RouterAddrNonEmpty is structured as two parts (RULING-W6TB-K F-P4L2-03):
+//
+// Part A (GREEN-BY-DESIGN at Red Gate): exercises the handler seam integration
+// using pathTrackerListSource (the real list-source wiring). Part A uses a
+// fakePathsListSource stub so it passes before the constructor is implemented.
+// Its value is verifying that the handler correctly passes router_addr from the
+// PathEntry to the JSON response — a seam that TestPathsList_PassesRouterAddr
+// does not cover because that test uses pre-built stub PathEntry values rather
+// than wiring through pathTrackerListSource.
+//
+// Part B (FAILS at Red Gate): exercises NewPathTrackerWithAddr → Snapshot() →
+// router_addr. This is the Red Gate assertion that drives the implementation.
+//
+// Both parts MUST remain in this test. Together they constitute the AC-005 oracle
+// for VP-047 router_addr traceability.
 //
 // This test exercises the VP-047 AC-006 oracle flip from AC-005:
 //   - The original integration test (TestVP047_SbctlPathsList_EndToEnd) constructs
@@ -356,16 +368,10 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 //   - This test constructs a tracker via NewPathTrackerWithAddr and asserts that
 //     router_addr is non-empty and structurally valid (host:port pattern).
 //
-// Only the handler seam is exercised here (via fakePathsListSource) because
-// end-to-end observability through a running daemon is deferred to
+// End-to-end observability through a running daemon is deferred to
 // S-BL.PATH-TRACKER-WIRING per RULING-W6TB-B.
 //
 // AC-005 / VP-047 / BC-2.06.003 v1.15 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
-//
-// RED GATE: NewPathTrackerWithAddr panics (BC-5.38.001 stub). The fakeSource path
-// bypasses the constructor so the handler seam test is effectively GREEN-BY-DESIGN.
-// The path-through-constructor variant below uses NewPathTrackerWithAddr directly
-// and will fail until the constructor is implemented.
 func TestVP047_RouterAddrNonEmpty(t *testing.T) {
 	t.Parallel()
 
