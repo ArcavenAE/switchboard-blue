@@ -1163,6 +1163,96 @@ func TestSbctlRouterStatus_TableFormat(t *testing.T) {
 	}
 }
 
+// ─── AC-008: router status emits quality="pending" when rtt_p99_ms="pending" ──
+
+// TestSbctlRouterStatus_QualityPending_WhenP99Pending verifies that when the
+// daemon returns a path with rtt_p99_ms == "pending" (the BC-2.06.003 EC-003
+// sentinel for < 10 RTT samples), the JSON envelope emitted by runRouterStatus
+// contains both rtt_p99_ms: "pending" (string) AND quality: "pending" (string).
+//
+// This is pure client-side field derivation — qualityFromPathEntry in
+// cmd/sbctl/router_status.go — verified against startCannedDaemon.
+//
+// AC-008 / BC-2.06.003 v1.7 PC-3 F-M3 + EC-006
+func TestSbctlRouterStatus_QualityPending_WhenP99Pending(t *testing.T) {
+	t.Parallel()
+
+	sockPath, cleanup := stubDaemonSocket(t)
+	defer cleanup()
+
+	// Daemon returns a path with the string sentinel "pending" for rtt_p99_ms
+	// (< 10 RTT samples — BC-2.06.003 EC-003). The client must derive
+	// quality: "pending" from this sentinel (BC-2.06.003 v1.7 PC-3 + EC-006).
+	cannedPending := json.RawMessage(`[
+		{"path_id":"path-pending","router_addr":"10.0.0.1:9000","rtt_ms":12.0,"rtt_p99_ms":"pending","loss_pct":0.0,"status":"active"}
+	]`)
+	_ = startCannedDaemon(t, sockPath, cannedPending)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sio, getOut, _ := newTestIO()
+	err := runRouterStatus(ctx, sockPath, testdataKeyPath(t), true, []string{}, sio)
+	if err != nil {
+		t.Fatalf("AC-008: runRouterStatus with pending p99 returned unexpected error: %v", err)
+	}
+	out := getOut()
+
+	// Parse the outer JSON envelope.
+	var env struct {
+		OK   bool            `json:"ok"`
+		Data json.RawMessage `json:"data"`
+	}
+	if parseErr := json.Unmarshal([]byte(strings.TrimSpace(out)), &env); parseErr != nil {
+		t.Fatalf("AC-008: stdout is not a valid JSON envelope: %v\nraw: %q", parseErr, out)
+	}
+	if !env.OK {
+		t.Fatal("AC-008: envelope ok must be true for a successful call")
+	}
+
+	var entries []map[string]json.RawMessage
+	if parseErr := json.Unmarshal(env.Data, &entries); parseErr != nil {
+		t.Fatalf("AC-008: envelope data is not a JSON array: %v\nraw: %s", parseErr, env.Data)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("AC-008: expected 1 path entry, got %d", len(entries))
+	}
+	entry := entries[0]
+
+	// rtt_p99_ms must be the string "pending" (BC-2.06.003 EC-003 passthrough).
+	rawP99, hasP99 := entry["rtt_p99_ms"]
+	if !hasP99 {
+		t.Fatal("AC-008: path entry missing rtt_p99_ms field")
+	}
+	var p99Val interface{}
+	if parseErr := json.Unmarshal(rawP99, &p99Val); parseErr != nil {
+		t.Fatalf("AC-008: cannot unmarshal rtt_p99_ms: %v", parseErr)
+	}
+	p99Str, isStr := p99Val.(string)
+	if !isStr {
+		t.Errorf("AC-008 / BC-2.06.003 EC-003: rtt_p99_ms must be the string \"pending\"; got type %T value %v", p99Val, p99Val)
+	} else if p99Str != "pending" {
+		t.Errorf("AC-008 / BC-2.06.003 EC-003: rtt_p99_ms must equal \"pending\"; got %q", p99Str)
+	}
+
+	// quality must be the string "pending" — client-side derivation per
+	// BC-2.06.003 v1.7 PC-3 F-M3 + EC-006.
+	rawQuality, hasQuality := entry["quality"]
+	if !hasQuality {
+		t.Fatal("AC-008 / BC-2.06.003 v1.7 PC-3: path entry missing quality field")
+	}
+	var qualityVal interface{}
+	if parseErr := json.Unmarshal(rawQuality, &qualityVal); parseErr != nil {
+		t.Fatalf("AC-008: cannot unmarshal quality: %v", parseErr)
+	}
+	qualityStr, isQStr := qualityVal.(string)
+	if !isQStr {
+		t.Errorf("AC-008 / BC-2.06.003 v1.7 EC-006: quality must be the string \"pending\" when rtt_p99_ms is pending; got type %T value %v", qualityVal, qualityVal)
+	} else if qualityStr != "pending" {
+		t.Errorf("AC-008 / BC-2.06.003 v1.7 EC-006: quality must equal \"pending\" when rtt_p99_ms is pending; got %q", qualityStr)
+	}
+}
+
 // ─── assertion helpers ────────────────────────────────────────────────────────
 
 // mapKeys returns the key list of a map[string]json.RawMessage for use in error messages.
