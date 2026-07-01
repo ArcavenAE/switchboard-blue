@@ -76,7 +76,7 @@ wave_status:
     # S-W5.02: 5pts (net-new, e2e harness),
     # S-6.06: 5pts (CR-W5-SCOPE-SPLIT, adversary Pass 1 CRITICAL finding F-001)
     # S-W5.04: 5pts (Pass-4 Ruling 1, daemon-side paths.list/metrics/router.status handlers)
-    stories_merged: [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06]
+    stories_merged: [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02]
     merge_shas:
       S-5.03: 01ae50c  # PR #30
       S-6.03: d854978  # PR #32
@@ -84,6 +84,7 @@ wave_status:
       S-5.01: c1c2c3d   # PR #35
       S-6.02: b36cb9b   # PR #34 (rebased over S-5.01)
       S-6.06: 3ee9c38   # PR #36
+      S-5.02: 98eb8b7   # PR #37
     wave_adversary_converged: false
     wavegate_consistency_audit: "fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 tracked TODO"
 
@@ -334,7 +335,7 @@ stories:
     title: "sbctl paths list / router metrics (canonical) + router status alias + p99"
     epic: E-5
     wave: 5
-    status: converged
+    status: merged
     priority: P1
     scope_phase: E
     points: 5
@@ -348,10 +349,13 @@ stories:
     impl_tip: 5732902
     test_tip: 8152e20
     factory_tip: 35649fa
+    merge_sha: 98eb8b7
+    pr_number: 37
+    merged_at: "2026-06-30"
     # BC anchor: BC-2.06.003 v1.7; story v1.10
     # 3/3 consecutive clean passes: Pass-9, Pass-10, Pass-11 (6 total passes P6–P11)
     # Non-blocking deferrals: S502-DEFER-1..6 (alias-parity, os.Exit, spec-ambiguity, arch-doc sweep, arch-asymmetry, cosmetic)
-    # Next: per-story-delivery.md Step 5 (demo recordings per AC), then Steps 6-9
+    # Squash-merged to develop; worktree feat/S-5.02-sbctl-metrics-query removed
 
   - story_id: S-5.03
     title: "flag paths as degraded when EWMA RTT exceeds 200ms threshold"
@@ -649,6 +653,10 @@ stories:
     # milestone-gated: SIGNING_ENABLED stays OFF until functional-product milestone
 
 # Changelog
+# v2.24 (2026-06-30): S-5.02 merged to develop (PR #37, squash SHA 98eb8b7, 2026-06-30).
+#   - S-5.02: status converged→merged; merge_sha 98eb8b7, pr_number 37, merged_at 2026-06-30.
+#   - wave-5: stories_merged updated to include S-5.02; merge_shas: S-5.02 98eb8b7 (PR #37) added.
+#   - Remote branch feat/S-5.02-sbctl-metrics-query deleted; worktree .worktrees/S-5.02 removed.
 # v2.23 (2026-07-01): S-5.02 BC-5.39.001 CONVERGENCE-CLOSED.
 #   - S-5.02: status pending→converged; adversarial_convergence CONVERGED_PASS11_2026-07-01.
 #   - adversary_pass_count 6 (P6–P11); adversary_clean_pass_count 3 (P9/P10/P11); adversary_streak 3.
