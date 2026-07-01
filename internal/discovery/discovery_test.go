@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/discovery"
@@ -1441,6 +1442,11 @@ func TestDiscovery_VP055_RoundTripProperty(t *testing.T) {
 		if !strings.HasSuffix(got, "…") {
 			t.Errorf("512-byte UTF-8 name: truncated name does not end with '…' (M-2 truncation contract)")
 		}
+		// The truncated result MUST be valid UTF-8 — truncation on a mid-rune
+		// byte boundary would produce an invalid sequence (F-L2-001).
+		if !utf8.ValidString(got) {
+			t.Errorf("512-byte UTF-8 name: truncated result is not valid UTF-8 (F-L2-001 rune-boundary truncation)")
+		}
 		// Round-trip stability after truncation.
 		reencoded, err := discovery.Encode(decoded)
 		if err != nil {
@@ -1448,6 +1454,65 @@ func TestDiscovery_VP055_RoundTripProperty(t *testing.T) {
 		}
 		if !bytes.Equal(encoded, reencoded) {
 			t.Errorf("512-byte UTF-8 name: round-trip not stable after truncation (M-2 VP-055)")
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// F-L2-001 adversarial: boundary byte lands mid-rune.
+	//
+	// "日" encodes as 3 UTF-8 bytes (0xE6 0x97 0xA5).
+	// 250 ASCII bytes + N×"日" bytes: the 252-byte content window (before the
+	// 3-byte ellipsis) falls mid-rune when the Japanese rune sequence starts
+	// at byte 250 — byte 252 lands inside a rune (byte 2 of the 3-byte
+	// sequence). Correct truncation must walk back to the previous rune
+	// boundary so the result is valid UTF-8 AND ends with "…".
+	//
+	// Input: 250×"a" (250 bytes) + 10×"日" (30 bytes) = 280 bytes total.
+	// Byte 252 = byte offset 2 of the first "日" rune → mid-rune boundary.
+	// ---------------------------------------------------------------------------
+	{
+		mixedName := strings.Repeat("a", 250) + strings.Repeat("日", 10)
+		// Sanity-check the construction: 280 bytes, byte 252 is mid-"日".
+		if len(mixedName) != 280 {
+			t.Fatalf("adversarial mid-rune: input len=%d, want 280", len(mixedName))
+		}
+
+		payload := discovery.AdvertisementPayload{
+			NodeAddr: nodeA1,
+			SVTNID:   svtnA,
+			Sessions: []discovery.SessionPresence{
+				{SessionName: mixedName, Status: discovery.Attached, Quality: discovery.QualityGreen},
+			},
+		}
+		encoded, err := discovery.Encode(payload)
+		if err != nil {
+			t.Fatalf("adversarial mid-rune: Encode: %v", err)
+		}
+		decoded, err := discovery.Decode(encoded)
+		if err != nil {
+			t.Fatalf("adversarial mid-rune: Decode: %v", err)
+		}
+		if len(decoded.Sessions) != 1 {
+			t.Fatalf("adversarial mid-rune: decoded session count = %d, want 1", len(decoded.Sessions))
+		}
+		got := decoded.Sessions[0].SessionName
+
+		// Must be truncated (input > 255 bytes).
+		if got == mixedName {
+			t.Errorf("adversarial mid-rune: decoded name is untruncated (%d bytes); want truncated form ≤255 bytes (F-L2-001)", len(got))
+		}
+		// Must be within the 255-byte limit.
+		if len(got) > 255 {
+			t.Errorf("adversarial mid-rune: decoded name len=%d, want ≤255 bytes (F-L2-001)", len(got))
+		}
+		// Must end with the ellipsis marker.
+		if !strings.HasSuffix(got, "…") {
+			t.Errorf("adversarial mid-rune: truncated name %q does not end with '…' (F-L2-001 truncation contract)", got)
+		}
+		// CRITICAL: the result MUST be valid UTF-8 — mid-rune truncation would
+		// leave a broken byte sequence. This is the primary assertion for F-L2-001.
+		if !utf8.ValidString(got) {
+			t.Errorf("adversarial mid-rune: truncated result is not valid UTF-8 — truncation landed mid-rune (F-L2-001)")
 		}
 	}
 }
