@@ -6,6 +6,7 @@
 package metrics
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -118,6 +119,13 @@ func (r *RTTValue) UnmarshalJSON(data []byte) error {
 			first = b
 			break
 		}
+	}
+
+	// Explicit null rejection: JSON null would decode as float64(0), which is a
+	// valid green-band measurement. Null must be rejected to avoid silent misclassification
+	// (M-3 Pass-8; F-P2L1-004 Kind-based discrimination).
+	if bytes.Equal(data, []byte("null")) {
+		return fmt.Errorf("rtt_p99_ms: expected float64 or \"pending\": got null")
 	}
 
 	if first == '"' {
