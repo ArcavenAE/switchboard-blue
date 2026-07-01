@@ -10,12 +10,18 @@
 package main
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/arcavenae/switchboard/internal/metrics"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/paths"
 )
+
+// ErrSVTNNotFound is the sentinel returned when router.status or router.metrics
+// is invoked for an unknown SVTN. Wraps as E-RPC-011.
+// Tests MUST use errors.Is(err, ErrSVTNNotFound) — no string matching.
+var ErrSVTNNotFound = errors.New("E-RPC-011: SVTN not found")
 
 // pathTrackerSource is a PathsListSource backed by a map of
 // pathID → *paths.PathTracker. It is safe for concurrent reads; the map
@@ -76,12 +82,20 @@ func (emptyRouterMetricsSource) SVTNMetrics(svtnID string) (metrics.RouterMetric
 // metricsNotFoundError satisfies the E-RPC-011 contract for unknown SVTNs
 // (BC-2.06.003 PC-2; AC-004). The mgmt dispatch layer re-wraps this error in the
 // JSON-RPC error envelope (see internal/mgmt mgmt.go dispatch convention).
+//
+// Is implements errors.Is support so callers can do errors.Is(err, ErrSVTNNotFound)
+// without string matching (go.md error-handling rule 3; H-1 Pass-8).
 type metricsNotFoundError struct {
 	svtnID string
 }
 
 func (e *metricsNotFoundError) Error() string {
 	return "E-RPC-011: SVTN not found: " + e.svtnID
+}
+
+// Is reports whether target equals ErrSVTNNotFound, enabling errors.Is matching.
+func (e *metricsNotFoundError) Is(target error) bool {
+	return target == ErrSVTNNotFound
 }
 
 // wireMetricsHandlers registers the three metrics RPC handlers on srv.
