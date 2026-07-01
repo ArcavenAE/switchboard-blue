@@ -7,7 +7,9 @@ package metrics
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 )
 
 // RTTKind discriminates the two states of an RTTValue.
@@ -133,6 +135,15 @@ func (r *RTTValue) UnmarshalJSON(data []byte) error {
 	var v float64
 	if err := json.Unmarshal(data, &v); err != nil {
 		return fmt.Errorf("rtt_p99_ms: expected float64 or \"pending\": %w", err)
+	}
+	// Reject non-finite and negative values — they cannot represent a measured RTT.
+	// NaN and ±Inf are technically representable as JSON tokens in some encoders but
+	// are not valid per RFC 8259. Negative RTT has no physical meaning.
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return errors.New("rtt: NaN or Inf not permitted")
+	}
+	if v < 0 {
+		return errors.New("rtt: negative not permitted")
 	}
 	r.Kind = FloatKind
 	r.Value = v

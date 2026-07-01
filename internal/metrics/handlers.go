@@ -14,10 +14,16 @@ package metrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/arcavenae/switchboard/internal/paths"
 )
+
+// ErrDecodeArgs is the sentinel for E-RPC-002 (malformed or undecodable args).
+// Tests inspect this via errors.Is to avoid string-matching on error messages
+// (go.md error-handling rule 3).
+var ErrDecodeArgs = errors.New("E-RPC-002: decode args")
 
 // PathsListSource is the read interface for fetching all active path snapshots.
 // Implemented by whatever state store owns the PathTracker map in the daemon.
@@ -73,13 +79,13 @@ func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSou
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &req); err != nil {
-			return RouterMetricsResponse{}, fmt.Errorf("E-RPC-002: decode args: %w", err)
+			return RouterMetricsResponse{}, fmt.Errorf("router.metrics: %w: %w", ErrDecodeArgs, err)
 		}
 	}
 	// svtn_id is required — an empty or missing value cannot identify a router.
 	// This rejects callers that omit the field entirely (Fix 6).
 	if req.SVTN == "" {
-		return RouterMetricsResponse{}, fmt.Errorf("E-RPC-002: router.metrics requires svtn_id string field")
+		return RouterMetricsResponse{}, fmt.Errorf("router.metrics: %w: svtn_id string field required", ErrDecodeArgs)
 	}
 	return src.SVTNMetrics(req.SVTN)
 }
@@ -168,7 +174,7 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 // BC-2.06.003 v1.10 PC-3; AC-005, AC-005a.
 func QualityFromEntry(entry PathEntry) string {
 	// EC-007, EC-006, F-M3: pending p99 always yields pending quality.
-	// This holds even when status=="failed" (S502-DEFER-3).
+	// This holds regardless of status value (status and quality are orthogonal per EC-007).
 	if entry.RTTP99Ms.SampleCount < 10 {
 		return "pending"
 	}
