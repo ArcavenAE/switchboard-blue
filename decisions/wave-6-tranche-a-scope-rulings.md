@@ -2,13 +2,14 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.5"
+version: "1.6"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
 updated: 2026-07-01T00:00:00
 modified:
   - 2026-07-01T00:00:00 # v1.5 — F-P5L3R-09 (Pass-6 L3): Ruling-9 downstream impact table corrected — BC-2.06.003 target version changed from v1.11→v1.12 to v1.11→v1.13 at two sites (Downstream Artifact Impacts table and Summary of Spec Changes table); v1.12 was an interim hop, actual delivered version is v1.13.
+  - 2026-07-01T00:00:00 # v1.6 — Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted; POL-002 story-index-row-sync policy flag (spec-steward applies).
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
 closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
@@ -977,6 +978,98 @@ this ruling is committed.
 
 ---
 
+## Ruling 11 — Mgmt-Layer Wire Envelope Contract Formalization + Ruling-6 Preemption Acceptance
+
+### Background
+
+Pass-6 Lens-1 on S-6.07 surfaced that the mgmt-layer RPC envelope stamps
+`error.code = "E-RPC-011"` for all handler failures, while S-6.07's AC-005 as
+written required `error.code: "E-SVTN-001"`. The mgmt-layer stamping predates
+S-6.07 and is documented as "mgmt.go is the sole authority for stamping E-RPC-011
+on the wire envelope" (`admin_handlers.go:417-422`). This is the intentional
+wire-envelope contract — handler-specific codes are carried as `error.message`
+prefix, not as `error.code`.
+
+### Ruling
+
+**1. Wire envelope contract (formalized as project convention):**
+
+- `resp.Error.Code` = envelope-level code (always `E-RPC-011` for handler
+  failures; other codes for transport/decode failures such as `E-RPC-002`).
+- `resp.Error.Message` = handler-specific error, formatted as
+  `"<HANDLER-CODE>: <message>"` (e.g., `"E-SVTN-001: SVTN already exists: mynet"`).
+- Handler-specific codes (`E-SVTN-*`, `E-ADM-*`, `E-CFG-*`) are extracted by
+  parsing the message prefix; they are NOT wire-envelope codes.
+- sbctl and any other RPC client MUST parse `resp.Error.Message` for
+  handler-code discrimination.
+
+**2. S-6.07 AC amendments (story-writer applies):**
+
+- AC-003: change "returns E-ADM-009" → "returns wire envelope
+  `{error: {code: 'E-RPC-011', message: 'E-ADM-009: insufficient authority for
+  operation admin.svtn.create: key <fp> has role <role>'}}`".
+- AC-004: same amendment pattern for `E-RPC-002` transport errors (which DO
+  surface as wire `code`).
+- AC-005: change to "returns wire envelope
+  `{error: {code: 'E-RPC-011', message: 'E-SVTN-001: SVTN already exists: <name>'}}`".
+
+**3. F-Lens1-02 message-format reconcile (implementer applies):**
+
+The E-ADM-009 message when `IsBootstrapKey==false` currently reads
+`"key <fp> is not the daemon bootstrap key"`. BC-2.07.001 canonical test vector
+requires `"key <fp> has role <role>"`. Fix: in the E-ADM-009 rejection branch,
+when `IsBootstrapKey` returns false, resolve the caller's actual role via
+`m.CallerKeyRoleActive(callerPub)` for diagnostic message ONLY (does NOT change
+authority decision — still rejects). If role lookup returns not-found, use
+literal string `"unknown"`. Message format becomes:
+`"insufficient authority for operation admin.svtn.create: key <fp> has role <role>"`
+matching BC canonical vector.
+
+**4. Accept Ruling-6 pre-emption on `pathTrackerSource.mu` (F-L1-01):**
+
+The `sync.RWMutex` field on `cmd/switchboard/metrics_wire.go:40` is pre-landed
+for `S-BL.PATH-TRACKER-WIRING` per Ruling-6 defer scope. Doc comment already
+explains ("reserved for Wave-7 writer"). NOT a defect. No action.
+
+**5. POL-002 story-index-row-sync process-gap policy (spec-steward applies):**
+
+The following policy is flagged for spec-steward to add to
+`.factory/policies.yaml`:
+
+- **ID:** POL-002
+- **Name:** `story-index-row-sync`
+- **Description:** When a story's frontmatter `version:` is bumped, STORY-INDEX
+  row's status cell (`draft (vX.Y)`) MUST be updated in the same fix-burst or
+  before the next per-story adversarial pass. Missing sync = MED finding.
+- **Scope:** `stories/*.md` ↔ `stories/STORY-INDEX.md`
+- **Severity:** MED
+
+### Version Bumps Triggered
+
+| Artifact | From → To | Purpose |
+|----------|-----------|---------|
+| decisions/wave-6-tranche-a-scope-rulings.md | v1.5 → v1.6 | Ruling-11 appended |
+| stories/S-6.07-svtn-admin-create.md | v1.5 → v1.6 | AC-003/AC-004/AC-005 amendments |
+
+### Downstream Artifact Impacts
+
+| Artifact | Required Change |
+|----------|----------------|
+| S-6.07 AC-003 (story v1.5 → v1.6) | Change "returns E-ADM-009" to wire-envelope form: `{error: {code: 'E-RPC-011', message: 'E-ADM-009: insufficient authority for operation admin.svtn.create: key <fp> has role <role>'}}` |
+| S-6.07 AC-004 (story v1.5 → v1.6) | Same amendment pattern for E-RPC-002 transport errors |
+| S-6.07 AC-005 (story v1.5 → v1.6) | Change to wire-envelope form: `{error: {code: 'E-RPC-011', message: 'E-SVTN-001: SVTN already exists: <name>'}}` |
+| `cmd/switchboard/admin_handlers.go` | Fix E-ADM-009 rejection branch message: call `m.CallerKeyRoleActive(callerPub)` for diagnostic role resolution; format as `"insufficient authority for operation admin.svtn.create: key <fp> has role <role>"`; fall back to `"unknown"` if role lookup returns not-found |
+| `.factory/policies.yaml` | Add POL-002 `story-index-row-sync` policy (spec-steward applies) |
+
+### Ordering
+
+S-6.07 story spec edits (AC-003/AC-004/AC-005) are applied by story-writer in the
+same fix-burst. The E-ADM-009 message-format fix is applied by the implementer.
+POL-002 is applied by spec-steward independently and does not block the S-6.07
+fix-burst. The `pathTrackerSource.mu` finding is closed with no action.
+
+---
+
 ## Changelog
 
 | Version | Date | Change |
@@ -986,3 +1079,5 @@ this ruling is committed.
 | 1.2 | 2026-07-01 | Rulings 6–7 (PathTracker wiring P3 — defer to S-BL; AC-003 defense-in-depth) |
 | 1.3 | 2026-07-01 | Rulings 8–9 (genesis carve-out for DiD role check + SeedSVTNWithoutBootstrapKeyForTest relocation; Active=false status mapping) |
 | 1.4 | 2026-07-01 | Ruling 10 ("production package" definition; InsertRawSVTN runtime guard + CreatedAt parity + DuplicateName test; SeedSVTNWithoutBootstrapKey rename + postcondition assertions; F-L2-A1-02/03/04 closure) |
+| 1.5 | 2026-07-01 | F-P5L3R-09 (Pass-6 L3) correction: Ruling-9 downstream impact table — BC-2.06.003 target version corrected from v1.11→v1.12 to v1.11→v1.13 at two sites; v1.12 was an interim hop, actual delivered version is v1.13 |
+| 1.6 | 2026-07-01 | Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted (F-L1-01 closed no-action); POL-002 story-index-row-sync policy flagged for spec-steward |
