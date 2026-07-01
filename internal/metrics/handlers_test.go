@@ -769,46 +769,48 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 	src := &fakeRouterMetricsSource{metrics: map[string]metrics.RouterMetricsResponse{}}
 
 	cases := []struct {
-		name       string
-		args       json.RawMessage
-		wantErrIs  bool   // true → expect errors.Is(err, metrics.ErrDecodeArgs)
-		wantErrNil bool   // true → expect nil (lenient decoder; pin behavior)
-		desc       string // what behavior we're pinning
+		name              string
+		args              json.RawMessage
+		wantErrDecodeArgs bool   // true → expect errors.Is(err, metrics.ErrDecodeArgs) E-RPC-002
+		wantErrInvalid    bool   // true → expect errors.Is(err, metrics.ErrInvalidParams) E-RPC-003
+		wantErrNil        bool   // true → expect nil (lenient decoder; pin behavior)
+		desc              string // what behavior we're pinning
 	}{
 		{
-			name:      "garbage_bytes",
-			args:      json.RawMessage([]byte{0xFF, 0xFE, 0x01, 0x02}),
-			wantErrIs: true,
-			desc:      "non-UTF-8 garbage → E-RPC-002",
+			name:              "garbage_bytes",
+			args:              json.RawMessage([]byte{0xFF, 0xFE, 0x01, 0x02}),
+			wantErrDecodeArgs: true,
+			desc:              "non-UTF-8 garbage → E-RPC-002 (malformed JSON)",
 		},
 		{
-			name:      "wrong_type_svtn_id_int",
-			args:      json.RawMessage(`{"svtn_id": 42}`),
-			wantErrIs: true,
-			desc:      "svtn_id is int not string → E-RPC-002 (type error)",
+			name:              "wrong_type_svtn_id_int",
+			args:              json.RawMessage(`{"svtn_id": 42}`),
+			wantErrDecodeArgs: true,
+			desc:              "svtn_id is int not string → E-RPC-002 (type error, decode fails)",
 		},
 		{
-			name:      "truncated_json",
-			args:      json.RawMessage(`{"svtn_id": "abc`),
-			wantErrIs: true,
-			desc:      "truncated JSON → E-RPC-002",
+			name:              "truncated_json",
+			args:              json.RawMessage(`{"svtn_id": "abc`),
+			wantErrDecodeArgs: true,
+			desc:              "truncated JSON → E-RPC-002 (malformed JSON)",
 		},
 		{
 			// null svtn_id: Go's json.Unmarshal sets SVTN to "" for null string.
-			// RouterMetrics then rejects "" as missing (Fix 6). Pin that behavior.
-			name:      "null_svtn_id",
-			args:      json.RawMessage(`{"svtn_id": null}`),
-			wantErrIs: true,
-			desc:      "null svtn_id decoded as empty → E-RPC-002 (svtn_id required)",
+			// RouterMetrics then rejects "" as a missing required parameter.
+			// Decode succeeds; semantic validation fails → E-RPC-003 (F-P10L1-05).
+			name:           "null_svtn_id",
+			args:           json.RawMessage(`{"svtn_id": null}`),
+			wantErrInvalid: true,
+			desc:           "null svtn_id decoded as empty → E-RPC-003 (svtn_id required, decode succeeded)",
 		},
 		{
 			// Extra fields: Go's decoder is lenient and ignores unknown fields.
 			// An implementation that rejects extra fields would fail this case.
-			// Pin the lenient behavior (no error from extra fields alone; fails on missing svtn_id).
-			name:      "extra_fields_no_svtn_id",
-			args:      json.RawMessage(`{"extra": "y"}`),
-			wantErrIs: true,
-			desc:      "extra fields + missing svtn_id → E-RPC-002 (missing svtn_id)",
+			// Decode succeeds; svtn_id absent → E-RPC-003 (F-P10L1-05).
+			name:           "extra_fields_no_svtn_id",
+			args:           json.RawMessage(`{"extra": "y"}`),
+			wantErrInvalid: true,
+			desc:           "extra fields + missing svtn_id → E-RPC-003 (svtn_id required, decode succeeded)",
 		},
 	}
 
@@ -826,10 +828,16 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s: expected error; got nil", tc.desc)
 			}
-			if tc.wantErrIs {
+			if tc.wantErrDecodeArgs {
 				// Use errors.Is — no string matching (go.md error-handling rule 3).
 				if !isErrDecodeArgs(err) {
 					t.Errorf("%s: errors.Is(err, ErrDecodeArgs) false; got %v", tc.desc, err)
+				}
+			}
+			if tc.wantErrInvalid {
+				// Use errors.Is — no string matching (go.md error-handling rule 3).
+				if !isErrInvalidParams(err) {
+					t.Errorf("%s: errors.Is(err, ErrInvalidParams) false; got %v", tc.desc, err)
 				}
 			}
 		})
@@ -840,6 +848,12 @@ func TestRouterMetrics_MalformedArgsDecode(t *testing.T) {
 // Uses errors.Is to traverse the chain — no string matching (go.md error-handling rule 3).
 func isErrDecodeArgs(err error) bool {
 	return errors.Is(err, metrics.ErrDecodeArgs)
+}
+
+// isErrInvalidParams reports whether err (or any error in its chain) is ErrInvalidParams.
+// Uses errors.Is to traverse the chain — no string matching (go.md error-handling rule 3).
+func isErrInvalidParams(err error) bool {
+	return errors.Is(err, metrics.ErrInvalidParams)
 }
 
 // TestVP047_FieldSwapOracle verifies that path_id and router_addr are not
@@ -947,9 +961,9 @@ func TestEC006_DegradedAndPendingRow(t *testing.T) {
 }
 
 // TestRouterMetrics_MissingRequiredSVTN verifies Fix 6: router.metrics returns
-// an E-RPC-* error when svtn_id is absent or empty.
-//
-// Fix 6; BC-2.06.003 PC-2.
+// E-RPC-003 (ErrInvalidParams) when svtn_id is absent or empty after a successful
+// decode. These cases all reach the semantic-validation check, not the JSON decode
+// step (F-P10L1-05; Fix 6; BC-2.06.003 PC-2).
 func TestRouterMetrics_MissingRequiredSVTN(t *testing.T) {
 	t.Parallel()
 
@@ -972,9 +986,10 @@ func TestRouterMetrics_MissingRequiredSVTN(t *testing.T) {
 			if err == nil {
 				t.Fatalf("router.metrics with %s: expected error for missing svtn_id; got nil", tc.name)
 			}
-			// Use errors.Is on the sentinel to avoid string matching (go.md rule 3).
-			if !isErrDecodeArgs(err) {
-				t.Errorf("router.metrics %s: errors.Is(err, ErrDecodeArgs) false; got %v", tc.name, err)
+			// E-RPC-003: decode succeeded but required parameter is absent.
+			// Use errors.Is on the sentinel to avoid string matching (go.md rule 3; F-P10L1-05).
+			if !isErrInvalidParams(err) {
+				t.Errorf("router.metrics %s: errors.Is(err, ErrInvalidParams) false; got %v (want E-RPC-003)", tc.name, err)
 			}
 		})
 	}
@@ -1138,37 +1153,45 @@ func TestRTTValue_JSONShapeExact(t *testing.T) {
 
 // ── RTTValue input validation tests ──────────────────────────────────────────
 
-// TestRTTValue_UnmarshalRejectsNaN verifies that UnmarshalJSON returns an error
-// when the JSON value is NaN.
+// TestRTTValue_UnmarshalRejectsNonPendingStringTokens_NaN verifies that
+// UnmarshalJSON returns an error when the JSON value is the string "NaN".
 //
-// F-P4L2-02; defense-in-depth validation.
-func TestRTTValue_UnmarshalRejectsNaN(t *testing.T) {
+// This test exercises the string-token branch of UnmarshalJSON: the input is a
+// quoted string token, NOT a numeric token. The string "NaN" is rejected because
+// only "pending" is a valid string token. This does NOT exercise validateRTTFloat
+// (the numeric-validation guard); that path is covered in types_test.go
+// (TestValidateRTTFloat_RejectsNaN) (F-P10L2-01; F-P4L2-02).
+func TestRTTValue_UnmarshalRejectsNonPendingStringTokens_NaN(t *testing.T) {
 	t.Parallel()
 
-	// Note: standard JSON (RFC 8259) does not support NaN. Go's json.Decoder also
-	// rejects NaN. The test uses a custom token that would be parsed as a Go float
-	// via a non-standard path to verify the validation guard in UnmarshalJSON.
-	// In practice, a well-formed JSON stream cannot contain NaN per RFC 8259, so
-	// we test via a custom RTTValue where the guard would matter if the decoder were
-	// more permissive in future Go versions.
-	//
-	// Verify the marshal path guards against float64 NaN (defense-in-depth).
 	var v metrics.RTTValue
-	// We cannot inject NaN via standard JSON decode (RFC 8259 forbids it),
-	// so we test via the unmarshal path with a crafted invalid token.
-	// The error should surface regardless of which path triggers it.
 	err := json.Unmarshal([]byte(`"NaN"`), &v)
 	// "NaN" as a quoted string should be rejected (not the pending sentinel "pending").
 	if err == nil {
 		t.Error("UnmarshalJSON accepted \"NaN\" string; expected error (only \"pending\" is a valid string token)")
 	}
+	// Receiver must be untouched on error — no partial-write (F-P10L2-02; F-P9L2-A6).
+	if v.Kind != metrics.PendingKind {
+		t.Errorf("UnmarshalJSON(\"NaN\"): receiver.Kind=%v after error; want PendingKind (no partial write)", v.Kind)
+	}
+	if v.Value != 0 {
+		t.Errorf("UnmarshalJSON(\"NaN\"): receiver.Value=%v after error; want 0 (no partial write)", v.Value)
+	}
+	if v.SampleCount != 0 {
+		t.Errorf("UnmarshalJSON(\"NaN\"): receiver.SampleCount=%d after error; want 0 (no partial write)", v.SampleCount)
+	}
 }
 
-// TestRTTValue_UnmarshalRejectsInf verifies that UnmarshalJSON returns an error
-// for +Inf or -Inf.
+// TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf verifies that
+// UnmarshalJSON returns an error for string tokens resembling infinity values.
 //
-// F-P4L2-02.
-func TestRTTValue_UnmarshalRejectsInf(t *testing.T) {
+// This test exercises the string-token branch of UnmarshalJSON: the inputs are
+// quoted string tokens ("Inf", "-Inf", "+Infinity"), NOT numeric tokens. They are
+// rejected because only "pending" is a valid string token. This does NOT exercise
+// validateRTTFloat (the numeric-validation guard); that path is covered in
+// types_test.go (TestValidateRTTFloat_RejectsPosInf, TestValidateRTTFloat_RejectsNegInf)
+// (F-P10L2-01; F-P4L2-02).
+func TestRTTValue_UnmarshalRejectsNonPendingStringTokens_Inf(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -1187,6 +1210,16 @@ func TestRTTValue_UnmarshalRejectsInf(t *testing.T) {
 			if err := json.Unmarshal(tc.input, &v); err == nil {
 				t.Errorf("UnmarshalJSON(%s): expected error; got nil (only \"pending\" is a valid string token)", tc.input)
 			}
+			// Receiver must be untouched on error — no partial-write (F-P10L2-02; F-P9L2-A6).
+			if v.Kind != metrics.PendingKind {
+				t.Errorf("UnmarshalJSON(%s): receiver.Kind=%v after error; want PendingKind (no partial write)", tc.input, v.Kind)
+			}
+			if v.Value != 0 {
+				t.Errorf("UnmarshalJSON(%s): receiver.Value=%v after error; want 0 (no partial write)", tc.input, v.Value)
+			}
+			if v.SampleCount != 0 {
+				t.Errorf("UnmarshalJSON(%s): receiver.SampleCount=%d after error; want 0 (no partial write)", tc.input, v.SampleCount)
+			}
 		})
 	}
 }
@@ -1199,8 +1232,7 @@ func TestRTTValue_UnmarshalRejectsInf(t *testing.T) {
 //
 // Each row seeds two PathSnapshots with distinct quality bands and asserts the
 // returned resp.Quality equals the dominant band. Each row is executed 30 times
-// to exercise map iteration nondeterminism across runs.
-// (Vacuity math: probability both orderings are always seen ≥ 1 - 0.5^30 ≈ 1 - 1e-9.)
+// to exercise Go map-iteration order randomization.
 //
 // F-P6L2-01; BC-2.06.003 PC-3; BC-2.06.001 v1.3 PC-4.
 func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
@@ -1276,10 +1308,7 @@ func TestOverallQuality_MixedPathsPrecedence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Run 30 iterations to exercise map iteration nondeterminism.
-			// Go's map iteration order is randomized per-map-creation, so
-			// multiple calls increase the chance of catching order-dependent bugs.
-			// Vacuity math: 0.5^30 ≈ 1e-9 probability both orderings are never exercised.
+			// iterate 30x to exercise Go map-iteration order randomization.
 			for i := range 30 {
 				src := &fakePathsListSource{
 					snaps: map[string]paths.PathSnapshot{
@@ -1416,6 +1445,16 @@ func TestRTTValue_UnmarshalRejectsNegative(t *testing.T) {
 			err := json.Unmarshal(tc.input, &v)
 			if err == nil {
 				t.Errorf("UnmarshalJSON(%s): expected error for negative RTT; got nil", tc.input)
+			}
+			// Receiver must be untouched on error — no partial-write (F-P10L2-02; F-P9L2-A6).
+			if v.Kind != metrics.PendingKind {
+				t.Errorf("UnmarshalJSON(%s): receiver.Kind=%v after error; want PendingKind (no partial write)", tc.input, v.Kind)
+			}
+			if v.Value != 0 {
+				t.Errorf("UnmarshalJSON(%s): receiver.Value=%v after error; want 0 (no partial write)", tc.input, v.Value)
+			}
+			if v.SampleCount != 0 {
+				t.Errorf("UnmarshalJSON(%s): receiver.SampleCount=%d after error; want 0 (no partial write)", tc.input, v.SampleCount)
 			}
 		})
 	}

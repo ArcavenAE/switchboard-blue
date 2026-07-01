@@ -59,7 +59,9 @@ func TestMetricsWire_PathsListRegistered(t *testing.T) {
 
 	// ── 4. Register metrics handlers via production wiring function. ──────────
 	// This is exactly what runAccess calls (F-P1L1-002 production code path).
-	wireMetricsHandlers(srv)
+	if err := wireMetricsHandlers(srv); err != nil {
+		t.Fatalf("wireMetricsHandlers: %v", err)
+	}
 
 	// ── 5. Start Serve. ───────────────────────────────────────────────────────
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

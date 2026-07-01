@@ -161,7 +161,9 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 
 	// Phase (b): register metrics RPC handlers BEFORE starting the Serve goroutine
 	// (S-W5.04 AC-001, AC-004, AC-005; BC-2.06.003 PC-1/PC-2/PC-3; F-P2L1-001).
-	wireMetricsHandlers(mgmtSrv)
+	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+		return fmt.Errorf("access: wire metrics handlers: %w", err)
+	}
 
 	// Phase (c): start the Serve goroutine.
 	var mgmtWG sync.WaitGroup

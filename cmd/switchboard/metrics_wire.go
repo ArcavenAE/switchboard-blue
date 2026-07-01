@@ -11,7 +11,7 @@ package main
 
 import (
 	"errors"
-	"sync"
+	"fmt"
 
 	"github.com/arcavenae/switchboard/internal/metrics"
 	"github.com/arcavenae/switchboard/internal/mgmt"
@@ -44,10 +44,11 @@ var ErrRouterSVTNNotFound = errors.New("E-RPC-011: SVTN not found")
 // S-BL.PATH-TRACKER-WIRING. Test-time registration is done by the internal_test type
 // pathTrackerListSource in integration_test.go; production population lands in
 // S-BL.PATH-TRACKER-WIRING. See wave-6-tranche-a-scope-rulings.md Ruling-6.
+//
+// #DEFERRED: S-BL.PATH-TRACKER-WRITER — the sync.RWMutex for concurrent-write
+// protection is not included here; the current wave has no writer path. It will
+// be re-introduced when the writer story lands (F-P10L1-06).
 type pathTrackerSource struct {
-	// mu is reserved for Wave-7 writer; no writer exists in this wave (Ruling-6).
-	// AllSnapshots takes an RLock; population only happens at construction time.
-	mu       sync.RWMutex
 	trackers map[string]*paths.PathTracker
 }
 
@@ -62,11 +63,10 @@ func newPathTrackerSource() *pathTrackerSource {
 }
 
 // AllSnapshots implements metrics.PathsListSource. It calls PathTracker.Snapshot()
-// on each registered tracker under the tracker's own mutex, returning a fully
-// decoupled copy (go.md rule 12).
+// on each registered tracker, returning a fully decoupled copy (go.md rule 12).
+// The map is read-only after construction (no concurrent writer in this wave);
+// the RWMutex is deferred to S-BL.PATH-TRACKER-WRITER (F-P10L1-06).
 func (p *pathTrackerSource) AllSnapshots() map[string]paths.PathSnapshot {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
 	out := make(map[string]paths.PathSnapshot, len(p.trackers))
 	for id, t := range p.trackers {
 		out[id] = t.Snapshot()
@@ -110,12 +110,13 @@ func (e *metricsNotFoundError) Is(target error) bool {
 // wireMetricsHandlers registers the three metrics RPC handlers on srv.
 // MUST be called before serveMgmtServer starts the Serve goroutine —
 // Register returns an error if called after Serve has started (F-P2L1-001).
-// Panics on error because a failure here indicates a programming invariant
-// violation (register-before-serve not respected).
+// Returns an error on registration failure so the main-package caller can
+// log.Fatalf — only main is the allowed exit site (go.md; F-P10L1-04).
 //
 // BC-2.06.003 v1.10; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001.
-func wireMetricsHandlers(srv *mgmt.Server) {
+func wireMetricsHandlers(srv *mgmt.Server) error {
 	if err := mgmt.RegisterMetricsHandlers(srv, newPathTrackerSource(), emptyRouterMetricsSource{}); err != nil {
-		panic("wireMetricsHandlers: register-before-serve invariant violated: " + err.Error())
+		return fmt.Errorf("wireMetricsHandlers: register-before-serve invariant violated: %w", err)
 	}
+	return nil
 }

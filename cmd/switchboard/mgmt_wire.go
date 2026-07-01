@@ -406,7 +406,9 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	}
 
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
-	wireMetricsHandlers(mgmtSrv)
+	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+		return fmt.Errorf("runControl: wire metrics handlers: %w", err)
+	}
 
 	// Phase (c): start the Serve goroutine.
 	var mgmtWG sync.WaitGroup

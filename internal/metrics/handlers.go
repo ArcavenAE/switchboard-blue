@@ -25,6 +25,13 @@ import (
 // (go.md error-handling rule 3).
 var ErrDecodeArgs = errors.New("E-RPC-002: decode args")
 
+// ErrInvalidParams is the sentinel for E-RPC-003 (required parameter missing or
+// invalid after successful decode). Distinct from ErrDecodeArgs (E-RPC-002) which
+// covers malformed JSON — ErrInvalidParams covers structurally valid JSON that
+// fails semantic validation (e.g. a required field is empty).
+// Tests inspect this via errors.Is (F-P10L1-05).
+var ErrInvalidParams = errors.New("E-RPC-003: invalid params")
+
 // PathsListSource is the read interface for fetching all active path snapshots.
 // Implemented by whatever state store owns the PathTracker map in the daemon.
 // Injected into the handler closure by internal/mgmt/register_metrics.go.
@@ -78,14 +85,17 @@ func RouterMetrics(_ context.Context, args json.RawMessage, src RouterMetricsSou
 		SVTN string `json:"svtn_id"`
 	}
 	if len(args) > 0 {
+		// E-RPC-002: JSON is malformed or structurally undecodable.
 		if err := json.Unmarshal(args, &req); err != nil {
 			return RouterMetricsResponse{}, fmt.Errorf("router.metrics: %w: %w", ErrDecodeArgs, err)
 		}
 	}
 	// svtn_id is required — an empty or missing value cannot identify a router.
 	// This rejects callers that omit the field entirely (Fix 6).
+	// E-RPC-003 (not E-RPC-002): the JSON decoded successfully but a required
+	// semantic parameter is absent (F-P10L1-05).
 	if req.SVTN == "" {
-		return RouterMetricsResponse{}, fmt.Errorf("router.metrics: %w: svtn_id string field required", ErrDecodeArgs)
+		return RouterMetricsResponse{}, fmt.Errorf("router.metrics: %w: svtn_id string field required", ErrInvalidParams)
 	}
 	return src.SVTNMetrics(req.SVTN)
 }
@@ -117,19 +127,6 @@ func RouterStatus(ctx context.Context, args json.RawMessage, src PathsListSource
 	}, nil
 }
 
-// RouterStatusResponse is the response envelope for the router.status RPC.
-// Structurally identical to PathsListResponse plus a quality summary field
-// (BC-2.06.003 PC-3).
-type RouterStatusResponse struct {
-	// Paths is the per-path listing (same schema as PathsListResponse.Paths).
-	Paths []PathEntry `json:"paths"`
-	// Message is a human-readable note; omitted when empty.
-	Message string `json:"message,omitempty"`
-	// Quality is the overall path quality summary: "green", "yellow", "red", or "pending".
-	// "pending" when any path has SampleCount < 10 (BC-2.06.003 PC-3, EC-006, EC-007).
-	Quality string `json:"quality"`
-}
-
 // PathEntryFromSnapshot converts a PathSnapshot to a PathEntry.
 // Derives PathEntry.Status from PathSnapshot.Degraded and PathSnapshot.Active:
 //   - Degraded=true → "degraded" (EWMA RTT > 200ms sustained)
@@ -145,13 +142,20 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 	if snap.Degraded || !snap.Active {
 		status = "degraded"
 	}
+	// Defensive invariant: only "active" and "degraded" are valid in this wave.
+	// "failed" is reserved for S-BL.PATH-FAILED-STATUS (Wave-7); any regression
+	// that reintroduces it before that story lands is caught here (F-P10L1-07).
+	if status != "active" && status != "degraded" {
+		panic("BUG: PathEntryFromSnapshot: invalid status " + status + " — only active/degraded are valid until S-BL.PATH-FAILED-STATUS")
+	}
 	// Derive RTTValue Kind from SampleCount per BC-2.06.003 v1.13 PC-1:
 	// FloatKind when SampleCount ≥ 10 (p99 is meaningful), PendingKind otherwise.
+	// Use constructors to enforce the Kind/SampleCount invariant by construction (F-P10L1-08).
 	var rttP99 RTTValue
 	if snap.SampleCount >= 10 {
-		rttP99 = RTTValue{Kind: FloatKind, Value: snap.P99RTTMs, SampleCount: snap.SampleCount}
+		rttP99 = NewRTTValueFloat(snap.P99RTTMs, snap.SampleCount)
 	} else {
-		rttP99 = RTTValue{Kind: PendingKind, SampleCount: snap.SampleCount}
+		rttP99 = NewRTTValuePending(snap.SampleCount)
 	}
 	return PathEntry{
 		PathID:     pathID,
@@ -188,8 +192,12 @@ func QualityFromEntry(entry PathEntry) string {
 // overallQuality derives the worst-case quality across all entries for the
 // router.status summary field. Precedence: pending > red > yellow > green.
 // An empty path list returns "pending" (indeterminate — no data).
+//
+// empty-paths → quality:"pending" is ratified by BC-2.06.003 EC-008 (v1.14)
+// (F-P10L1-02).
 func overallQuality(entries []PathEntry) string {
 	if len(entries) == 0 {
+		// empty-paths → pending is ratified by BC-2.06.003 EC-008 (v1.14) (F-P10L1-02).
 		return "pending"
 	}
 	worst := "green"

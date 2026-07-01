@@ -36,6 +36,9 @@ const (
 //
 // F-P2L1-004: Kind-based discrimination replaces the sentinel SampleCount
 // approach, which could not distinguish float64(0) from nil on UnmarshalJSON.
+//
+// Prefer NewRTTValueFloat and NewRTTValuePending over direct struct literals
+// to ensure the Kind/SampleCount invariant holds by construction (F-P10L1-08).
 type RTTValue struct {
 	// Kind discriminates pending (PendingKind) from valid float (FloatKind).
 	Kind RTTKind
@@ -44,6 +47,12 @@ type RTTValue struct {
 	// SampleCount is the total histogram sample count. Mirrors PathSnapshot.SampleCount.
 	// Kept for callers (e.g. QualityFromEntry) that derive quality from sample count.
 	// When SampleCount < 10 this field matches Kind == PendingKind.
+	//
+	// PRODUCER-SIDE ONLY: this field is populated by PathEntryFromSnapshot at
+	// construction time. Decoders (UnmarshalJSON) MUST NOT rely on this field
+	// after a round-trip through the wire format — the JSON encoding (bare float64
+	// or the string "pending") carries no sample count, so UnmarshalJSON leaves
+	// SampleCount at zero (F-P10L1-01). Use Kind for all pending/float discrimination.
 	SampleCount uint64
 }
 
@@ -105,12 +114,16 @@ type RouterMetricsResponse struct {
 // UnmarshalJSON implements json.Unmarshaler for the RTTValue union type.
 // Peeks at the first non-whitespace byte to discriminate:
 //   - '"' → must be the string "pending" → Kind=PendingKind, Value=0, SampleCount=0.
-//   - digit or '-' → JSON float64 number → Kind=FloatKind, Value=v, SampleCount=10.
+//   - digit or '-' → JSON float64 number → Kind=FloatKind, Value=v, SampleCount=0.
 //
 // This Kind-based approach can correctly distinguish float64(0) (a valid green-path
 // measurement) from the "pending" string, which the old sentinel approach could not
-// (F-P2L1-004). SampleCount is set to 10 for FloatKind so that callers relying on
-// the SampleCount-based pending check continue to work.
+// (F-P2L1-004).
+//
+// SampleCount is left at zero after decode — the wire format (bare float64 or the
+// string "pending") carries no sample count. Callers that need sample count must
+// operate on the original PathSnapshot, not a decoded RTTValue (F-P10L1-01).
+// Use Kind for all pending/float discrimination after a JSON round-trip.
 func (r *RTTValue) UnmarshalJSON(data []byte) error {
 	// Find first non-whitespace byte.
 	var first byte
@@ -149,7 +162,8 @@ func (r *RTTValue) UnmarshalJSON(data []byte) error {
 	}
 	r.Kind = FloatKind
 	r.Value = v
-	r.SampleCount = 10 // signal ≥10 so SampleCount-based callers treat this as valid
+	// SampleCount intentionally left at zero — the wire format carries no sample
+	// count. Use Kind for pending/float discrimination (F-P10L1-01).
 	return nil
 }
 
@@ -176,3 +190,35 @@ var (
 	_ json.Marshaler   = RTTValue{}
 	_ json.Unmarshaler = &RTTValue{}
 )
+
+// NewRTTValueFloat constructs an RTTValue with Kind==FloatKind and the given
+// measured p99 RTT in milliseconds. sampleCount is the producer-side histogram
+// sample count (must be ≥ 10 for FloatKind by invariant).
+//
+// Prefer this constructor over a struct literal to keep the Kind/SampleCount
+// invariant explicit at construction sites (F-P10L1-08).
+func NewRTTValueFloat(v float64, sampleCount uint64) RTTValue {
+	return RTTValue{Kind: FloatKind, Value: v, SampleCount: sampleCount}
+}
+
+// NewRTTValuePending constructs an RTTValue with Kind==PendingKind. sampleCount
+// is the producer-side histogram sample count (must be < 10 for PendingKind).
+//
+// Prefer this constructor over a struct literal to keep the Kind/SampleCount
+// invariant explicit at construction sites (F-P10L1-08).
+func NewRTTValuePending(sampleCount uint64) RTTValue {
+	return RTTValue{Kind: PendingKind, SampleCount: sampleCount}
+}
+
+// RouterStatusResponse is the response envelope for the router.status RPC.
+// Structurally identical to PathsListResponse plus a quality summary field
+// (BC-2.06.003 PC-3).
+type RouterStatusResponse struct {
+	// Paths is the per-path listing (same schema as PathsListResponse.Paths).
+	Paths []PathEntry `json:"paths"`
+	// Message is a human-readable note; omitted when empty.
+	Message string `json:"message,omitempty"`
+	// Quality is the overall path quality summary: "green", "yellow", "red", or "pending".
+	// "pending" when any path has SampleCount < 10 (BC-2.06.003 PC-3, EC-006, EC-007).
+	Quality string `json:"quality"`
+}
