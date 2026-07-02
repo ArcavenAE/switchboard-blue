@@ -1,0 +1,24 @@
+# AC-002-destroy-json — plain-text transcript
+# Command: go test -count=1 -v -run TestSbctlAdmin_SVTNDestroy_HappyPath_JSON ./cmd/sbctl/...
+# Worktree: .worktrees/S-6.05/ (HEAD d0b4923)
+# F-P7L1-MED-1 closure: --json mode single-envelope integrity
+
+--- JSON ENVELOPE INTEGRITY ---
+
+=== RUN   TestSbctlAdmin_SVTNDestroy_HappyPath_JSON
+=== PAUSE TestSbctlAdmin_SVTNDestroy_HappyPath_JSON
+=== CONT  TestSbctlAdmin_SVTNDestroy_HappyPath_JSON
+--- PASS: TestSbctlAdmin_SVTNDestroy_HappyPath_JSON (0.01s)
+PASS
+ok      github.com/arcavenae/switchboard/cmd/sbctl      0.339s
+
+--- NOTES ---
+The JSON mode test verifies F-P7L1-MED-1 closure (interface-definitions.md §164):
+  - First json.Decoder.Decode returns valid envelope: {"ok":true,"error":null,"data":{"status":"destroyed"}}
+  - Second json.Decoder.Decode returns io.EOF — exactly ONE envelope on stdout
+  - env.OK == true
+  - env.Error == nil
+  - env.Data contains "status":"destroyed"
+Before d0b4923, runAdminSvtnDestroy unconditionally printed "destroyed SVTN: <name>"
+after connectAndRun, producing a trailing plain-text line that corrupted the --json
+envelope. The fix (d0b4923) wraps the Fprintf in `if !useJSON { ... }`.

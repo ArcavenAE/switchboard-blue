@@ -1,0 +1,32 @@
+# AC-001-destroy-text — plain-text transcript
+# Command: go test -count=1 -v -run TestSbctlAdmin_SVTNDestroy_HappyPath ./cmd/sbctl/...
+# Command: go test -count=1 -v -run TestSbctlAdmin_SVTNDestroy_NotFound ./cmd/sbctl/...
+# Worktree: .worktrees/S-6.05/ (HEAD d0b4923)
+
+--- HAPPY PATH ---
+
+=== RUN   TestSbctlAdmin_SVTNDestroy_HappyPath
+=== PAUSE TestSbctlAdmin_SVTNDestroy_HappyPath
+=== CONT  TestSbctlAdmin_SVTNDestroy_HappyPath
+--- PASS: TestSbctlAdmin_SVTNDestroy_HappyPath (0.01s)
+PASS
+ok      github.com/arcavenae/switchboard/cmd/sbctl      0.430s
+
+--- ERROR PATH (E-SVTN-003: SVTN not found) ---
+
+=== RUN   TestSbctlAdmin_SVTNDestroy_NotFound
+=== PAUSE TestSbctlAdmin_SVTNDestroy_NotFound
+=== CONT  TestSbctlAdmin_SVTNDestroy_NotFound
+E-RPC-001 rpc failed: admin.svtn.destroy: E-SVTN-003: SVTN not found: ghost-svtn
+--- PASS: TestSbctlAdmin_SVTNDestroy_NotFound (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/cmd/sbctl      0.293s
+
+--- NOTES ---
+The happy path test uses startFakeServer in-process fake (ADR-012 challenge-response
+over Unix socket). Verifies:
+  - RPC command: "admin.svtn.destroy"
+  - Wire name field matches --name argument
+  - stdout contains SVTN name ("destroyed SVTN: destroy-happy-svtn")
+  - No trailing plain-text in text mode (complement of AC-002 JSON contract)
+The not-found path verifies E-SVTN-003 surfaces in error output with non-zero exit.

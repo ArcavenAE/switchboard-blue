@@ -1,0 +1,52 @@
+# AC-003-confirm-gate — plain-text transcript
+# Command: go test -count=1 -v -run TestSbctlAdmin_SVTNDestroy_ConfirmGate ./cmd/sbctl/...
+# Worktree: .worktrees/S-6.05/ (HEAD d0b4923)
+# Covers: interface-definitions.md §125/§127/§129 + ADR-004 confirm-gate
+
+--- FIVE-PATH CONFIRM GATE (7 subtests) ---
+
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate
+=== PAUSE TestSbctlAdmin_SVTNDestroy_ConfirmGate
+=== CONT  TestSbctlAdmin_SVTNDestroy_ConfirmGate
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path1_valid_confirm_flag
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path1_invalid_confirm_flag
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path2_tty_matching_input
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path2_tty_invalid_shape_input
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path3_non_tty_no_confirm
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path4_yes_alone_bypasses
+=== RUN   TestSbctlAdmin_SVTNDestroy_ConfirmGate/path5_yes_plus_confirm_is_usage_error
+--- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate (0.01s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path1_valid_confirm_flag (0.00s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path1_invalid_confirm_flag (0.00s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path2_tty_matching_input (0.00s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path2_tty_invalid_shape_input (0.00s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path3_non_tty_no_confirm (0.00s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path4_yes_alone_bypasses (0.00s)
+    --- PASS: TestSbctlAdmin_SVTNDestroy_ConfirmGate/path5_yes_plus_confirm_is_usage_error (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/cmd/sbctl      0.271s
+
+--- PATH DESCRIPTIONS ---
+path1_valid_confirm_flag:
+  --confirm=SVTN-aabbccdd passes static SVTN-<8hex> shape check; RPC dispatched.
+
+path1_invalid_confirm_flag:
+  --confirm=SVTN-xxxx1111-wrong fails shape check; no RPC; error contains "invalid --confirm".
+
+path2_tty_matching_input:
+  --confirm omitted, stdin is TTY, user types "SVTN-aabbccdd\n";
+  interactive prompt "Type SVTN-<short-id> to confirm:" displayed; match → RPC dispatched.
+
+path2_tty_invalid_shape_input:
+  --confirm omitted, stdin is TTY, user types "not-an-svtn-id\n";
+  error contains "interactive confirmation failed"; no RPC.
+
+path3_non_tty_no_confirm:
+  --confirm omitted, stdin is non-TTY (piped);
+  error contains "non-interactive session"; no RPC (hostile-scripting guard).
+
+path4_yes_alone_bypasses:
+  --yes alone: RPC dispatched; stderr contains "WARNING: --yes bypasses confirmation".
+
+path5_yes_plus_confirm_is_usage_error:
+  --yes + --confirm combined: error contains "E-CFG-006" (mutually exclusive); exit 2; no RPC.
