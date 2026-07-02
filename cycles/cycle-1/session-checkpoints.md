@@ -477,3 +477,17 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 **develop HEAD:** 446efce. Tranche B stories: S-7.01 v1.4, S-7.02 v1.6, S-7.03 v1.2, S-BL.ROUTER-ADDR v1.4.
 
 **NEXT ACTION (superseded):** Pass-8 dispatch: S-7.01 fresh 3-lens (clean-attempt #3/3); S-7.02 await P7L2 fix-burst then fresh 3-lens; S-BL.ROUTER-ADDR fresh 3-lens (clean-attempt #1/3 after b3c93b5).
+
+---
+
+## Archived: 2026-07-01 (Wave-6 Tranche C planning — superseded by Tranche C fix-burst checkpoint)
+
+**Position:** Phase 3 Wave 6 Tranche B wave-level CONVERGED (BC-5.39.001 satisfied). 3/3 clean fresh-context 3-lens passes (Pass-2, Pass-3, Pass-4) against all merged Tranche B stories. FEC sentinel hygiene PR #58 merged. Demo tape paths hygiene PR #59 merged. develop HEAD: cdb2b66.
+
+**BC-5.39.001 status:** Wave-level CONVERGED — 3 consecutive clean fresh-context passes achieved.
+
+**Follow-up issues filed this cycle:** switchboard-blue #44–54, #57; drbothen/vsdd-factory #407, #408, #418.
+
+**NEXT ACTION (superseded):** Wave-6 Tranche C in-flight: S-6.05 v1.3 + S-7.03 v1.2 dispatched.
+
+**Open observations carrying forward:** S502-DEFER-1..6 / SW502-DEFER-1..8; PROCESS-GAP-W5-SIBLINGSWEEP; PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP; Tranche B post-merge issues #44–#54, #57; PROCESS-GAP-DEMO-TAPE-PATHS drbothen/vsdd-factory#418.
