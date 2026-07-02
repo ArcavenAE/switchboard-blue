@@ -177,18 +177,22 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 // Flags:
 //
 //	--name <svtn-name>           Human-readable SVTN label to destroy (required)
-//	--confirm <svtn-short-id>    Short-ID confirmation gate (optional; interactive prompt if omitted)
+//	--confirm <svtn-short-id>    Short-ID confirmation gate (required)
 //
-// The --confirm flag implements the destructive-operation confirmation gate per
-// interface-definitions.md v1.1 §117 and ADR-004. When omitted, the command
-// enters interactive mode and prompts "Type SVTN-<short-id> to confirm:" on
-// sio.out before proceeding.
+// The operator MUST provide --confirm=SVTN-<8-hex> (the first 8 hex chars of the
+// target SVTN's ID printed at create time). On missing --confirm the command
+// aborts with an error before any RPC dispatch; there is no interactive prompt.
+//
+// The confirm gate is a human-in-loop typing ceremony (see story S-6.05
+// §Confirm-Gate Semantics), NOT a server-side identity match. Server-side
+// identity-match enforcement is tracked as DRIFT-S605-CONFIRM-IDENTITY.
 //
 // Sends {"command":"admin.svtn.destroy","args":{"name":"<svtn-name>"}} to the
 // daemon over the mgmt stream (AC-003 / BC-2.07.001 PC-3). On success, prints
 // confirmation to sio.out. Exits with non-zero on E-SVTN-003 (SVTN not found).
 //
 // Traces to BC-2.07.001 PC-3; AC-003; interface-definitions.md v1.1 §117; ADR-004; S-6.05.
+
 // confirmSVTNShortIDValid returns true if s matches the "SVTN-<8hexchars>"
 // pattern required by the destroy confirmation gate (ADR-004;
 // interface-definitions.md v1.1 §125).

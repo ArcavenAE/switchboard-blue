@@ -12,7 +12,6 @@
 package svtnmgmt
 
 import (
-	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -69,14 +68,15 @@ var ErrBootstrapKeyRevokeForbidden = errors.New("bootstrap control key cannot be
 // for symmetric management-lockout prevention per BC-2.05.004 EC-007 v1.12.
 var ErrBootstrapKeyExpireForbidden = errors.New("bootstrap key cannot be expired")
 
-// ErrDestroyUnauthorized is returned by SVTNManager.Destroy when the caller is
-// not a control-role key (E-ADM-011 Variant 2; BC-2.07.001 Inv-3; RULING-W6TB-A §3).
+// ErrDestroyUnauthorized is a symbol-only sentinel reserved for future
+// defense-in-depth per RULING-W6TB-A §3.
 //
-// This is a defense-in-depth sentinel at the Go-API layer. The primary authority
-// gate for the admin.svtn.destroy RPC is the handler-layer resolveAndVerifyCallerRole
-// call (which returns E-RPC-011 wrapping E-ADM-009 for non-control callers).
-// ErrDestroyUnauthorized is only surfaced in unit tests that call SVTNManager.Destroy
-// directly without going through the handler layer.
+// Runtime authorization enforcement lives at the handler layer via
+// resolveAndVerifyCallerRole (see cmd/switchboard/admin_handlers.go).
+// SVTNManager.Destroy takes no caller-identity parameter and never returns
+// this sentinel at runtime.
+//
+// E-ADM-011 Variant 2; BC-2.07.001 Inv-3; RULING-W6TB-A §3.
 var ErrDestroyUnauthorized = errors.New("destroy: caller is not a control-role key")
 
 // SVTN is a record of a single Software-Defined Virtual Topology Network
@@ -738,41 +738,36 @@ func (m *SVTNManager) ListKeys(svtnName string) ([]KeySummary, error) {
 	return out, nil
 }
 
-// Destroy removes the named SVTN and all its admitted keys from the registry.
-// It terminates all active sessions before freeing the SVTN ID.
+// Destroy removes the named SVTN and all its admitted keys from the registry
+// atomically under the manager's write lock. Runtime authorization enforcement
+// lives at the handler layer via resolveAndVerifyCallerRole
+// (see cmd/switchboard/admin_handlers.go).
 //
-// Design note on ctx (S-6.05 divergence from other SVTNManager methods):
-// Unlike Create, RegisterKey, RevokeKey, and ExpireKey — which do NOT take a
-// context.Context — Destroy requires ctx as its first parameter because session
-// termination is potentially asynchronous and must be cancellable. This is the
-// only SVTNManager method that takes a context; callers should pass a context
-// with an appropriate deadline to bound the session-drain window.
+// ErrDestroyUnauthorized is a symbol-only sentinel reserved for future
+// defense-in-depth per RULING-W6TB-A §3; Destroy never returns it at runtime.
 //
 // svtnName is the registry name key (the SVTN registry is keyed by name, not by
 // [16]byte ID; consistent with all other SVTNManager methods).
 //
 // Postconditions on success:
 //   - All admitted keys for the SVTN are removed from the AdmittedKeySet.
-//   - All active sessions receive a session-terminated signal.
 //   - The SVTN ID is freed from the registry (HasAnySVTN() may return false if
 //     this was the last SVTN — re-opening the genesis carve-out per RULING-W6TB-A §4).
 //
 // Returns ErrSVTNNotFound (E-SVTN-003) if the SVTN does not exist.
-// Returns ErrDestroyUnauthorized (E-ADM-011 Variant 2) as a defense-in-depth check
-// at the Go-API layer when the caller is not a control-role key. The primary gate
-// is the handler-layer resolveAndVerifyCallerRole call; this is an additional
-// safeguard for callers that invoke SVTNManager.Destroy directly.
 //
 // Key removal precedes SVTN ID free (ARCH-04 admission ordering invariant).
 //
-// Traces to BC-2.07.001 postcondition 3; AC-001; AC-002; AC-004; AC-005;
-// RULING-W6TB-A; VP-048 properties 2+3.
-func (m *SVTNManager) Destroy(ctx context.Context, svtnName string) error {
+// Session-terminated notification for active sessions is deferred to S-BL.SESSION-DRAIN
+// (AC-002 out-of-scope per story S-6.05 v1.4).
+//
+// Traces to BC-2.07.001 postcondition 3; AC-001; RULING-W6TB-A; VP-048 properties 2+3.
+func (m *SVTNManager) Destroy(svtnName string) error {
 	m.mu.Lock()
 	svtn, exists := m.svtns[svtnName]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("SVTN not found: %s: %w", svtnName, ErrSVTNNotFound)
+		return fmt.Errorf("%w: %s", ErrSVTNNotFound, svtnName)
 	}
 	svtnID := svtn.ID
 	// ARCH-04 ordering: key removal precedes SVTN ID free.

@@ -1520,7 +1520,7 @@ func TestSVTNManager_Destroy_RemovesAllKeys(t *testing.T) {
 	}
 
 	// Destroy.
-	if err := mgr.Destroy(t.Context(), "destroy-test-svtn"); err != nil {
+	if err := mgr.Destroy("destroy-test-svtn"); err != nil {
 		t.Fatalf("Destroy: %v", err)
 	}
 
@@ -1576,7 +1576,7 @@ func TestSVTNManager_Destroy_NotFound(t *testing.T) {
 
 	mgr := newManager(t)
 
-	err := mgr.Destroy(t.Context(), "nonexistent-svtn")
+	err := mgr.Destroy("nonexistent-svtn")
 
 	// Must return non-nil error.
 	if err == nil {
@@ -1594,24 +1594,23 @@ func TestSVTNManager_Destroy_NotFound(t *testing.T) {
 	}
 }
 
-// TestSVTNManager_Destroy_WithActiveSessions verifies AC-002:
-// SVTNManager.Destroy(ctx, svtnName) terminates all active sessions before
-// destroying the SVTN. Because internal/session is a forbidden import in
-// internal/svtnmgmt (ARCH-08 position 15), we verify the observable
-// postconditions: after Destroy the SVTN is absent and its keys are removed,
-// meaning any subsequent admission attempt for admitted nodes would fail.
+// TestSVTNManager_Destroy_KeyPurgeUnderConcurrentAdmission verifies the in-scope
+// portion of AC-002 (story S-6.05 v1.4): after Destroy the SVTN is absent and
+// all its keys are purged, so any subsequent admission attempt for formerly
+// admitted nodes is blocked. Because internal/session is a forbidden import in
+// internal/svtnmgmt (ARCH-08 position 15), session-terminated signals cannot be
+// observed directly — this test verifies the admission-blocking postcondition
+// (VP-048 property 2 precursor) which is the session-layer-observable consequence.
 //
-// This test cannot directly observe session-terminated signals without the
-// data-plane packages (forbidden in svtnmgmt). It verifies the admission-
-// blocking postcondition (VP-048 property 2 precursor) that is the
-// session-layer-observable consequence.
+// Session-terminated notification is deferred to S-BL.SESSION-DRAIN and is
+// explicitly out of scope for story S-6.05 v1.4.
 //
 // BC-self-check (BC-5.38.005 invariant 1): a stub that panics fails on the
 // Destroy call; a stub that returns nil without removing keys fails the
 // CallerKeyRole assertion.
 //
-// Traces to BC-2.07.001 postcondition 3 + EC-002; AC-002.
-func TestSVTNManager_Destroy_WithActiveSessions(t *testing.T) {
+// Traces to BC-2.07.001 postcondition 3; AC-002 (in-scope portion per S-6.05 v1.4).
+func TestSVTNManager_Destroy_KeyPurgeUnderConcurrentAdmission(t *testing.T) {
 	t.Parallel()
 
 	mgr, controlPub := newManagerWithKS(t)
@@ -1636,10 +1635,11 @@ func TestSVTNManager_Destroy_WithActiveSessions(t *testing.T) {
 		t.Fatal("pre-condition: node1 should be an active key before Destroy")
 	}
 
-	// Destroy with a context that carries a deadline (AC-002: ctx bounds the
-	// session-drain window). t.Context() is cancelled when the test completes.
-	if err := mgr.Destroy(t.Context(), "session-svtn"); err != nil {
-		t.Fatalf("AC-002 — Destroy with active sessions: %v", err)
+	// Destroy the SVTN. Session-terminated notification is deferred to
+	// S-BL.SESSION-DRAIN (AC-002 out-of-scope per story S-6.05 v1.4);
+	// this test verifies the admission-blocking postcondition only.
+	if err := mgr.Destroy("session-svtn"); err != nil {
+		t.Fatalf("Destroy with active sessions: %v", err)
 	}
 
 	// After Destroy: SVTN absent.
@@ -1660,35 +1660,24 @@ func TestSVTNManager_Destroy_WithActiveSessions(t *testing.T) {
 	}
 }
 
-// TestSVTNManager_Destroy_ErrDestroyUnauthorized verifies AC-004 (Go-API path):
-// The ErrDestroyUnauthorized sentinel is exported, its Error() string matches
-// the canonical form "destroy: caller is not a control-role key" (Ruling-11/12;
-// E-ADM-011 Variant 2), and it participates in the errors.Is chain.
+// TestSVTNManager_ErrDestroyUnauthorized_SentinelContract validates that
+// ErrDestroyUnauthorized exists as a symbol with the canonical message,
+// unwraps via errors.Is, and is distinct from ErrSVTNNotFound. This is a
+// sentinel-contract test only; per RULING-W6TB-A §3, SVTNManager.Destroy
+// takes no caller identity and never returns this sentinel at runtime.
+// Runtime authorization enforcement lives at the handler layer
+// (see TestSbctlAdmin_SVTNDestroy_RequiresControlRole and VP-048 P3).
 //
-// Design note (RULING-W6TB-A §3): this is the defense-in-depth check at the
-// Go-API layer. The primary authority gate for the RPC path is the handler-layer
-// resolveAndVerifyCallerRole call (tested in TestSbctlAdmin_SVTNDestroy_RequiresControlRole).
-// SVTNManager.Destroy itself does not take a caller pubkey parameter — the
-// defense-in-depth check re-validates role at the Go-API boundary for callers
-// that somehow bypass the handler gate.
-//
-// This test verifies the SENTINEL CONTRACT, not the Destroy method behavior:
+// Verified properties:
 //   - ErrDestroyUnauthorized is exported from package svtnmgmt.
 //   - Its Error() string == "destroy: caller is not a control-role key".
 //   - errors.Is(ErrDestroyUnauthorized, ErrDestroyUnauthorized) is true.
 //   - errors.Is(fmt.Errorf("wrap: %w", ErrDestroyUnauthorized), ErrDestroyUnauthorized)
 //     is true (wrapping round-trip).
-//
-// BC-self-check (BC-5.38.005 invariant 1): if someone renames the error or
-// changes its string, the assertions below will fail. A stub that simply
-// exports the sentinel with the correct string will pass this test — that is
-// correct: the sentinel IS the contract, and the stub already declares it.
-// The test is not trivially passable without implementer work because the stub
-// panics on Destroy invocation; this test exercises only the sentinel, which
-// the stub has pre-declared per the story file structure requirements.
+//   - ErrDestroyUnauthorized is distinct from ErrSVTNNotFound.
 //
 // Traces to BC-2.07.001 Inv-3; AC-004 (Go-API path); RULING-W6TB-A §3.
-func TestSVTNManager_Destroy_ErrDestroyUnauthorized(t *testing.T) {
+func TestSVTNManager_ErrDestroyUnauthorized_SentinelContract(t *testing.T) {
 	t.Parallel()
 
 	// The sentinel must be exported and non-nil.
@@ -1749,7 +1738,7 @@ func TestSVTNManager_Destroy_GenesisReopened(t *testing.T) {
 	}
 
 	// Destroy the last SVTN.
-	if err := mgr.Destroy(t.Context(), "genesis-svtn"); err != nil {
+	if err := mgr.Destroy("genesis-svtn"); err != nil {
 		t.Fatalf("AC-005 — Destroy genesis-svtn: %v", err)
 	}
 

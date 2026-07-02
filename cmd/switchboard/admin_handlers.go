@@ -753,7 +753,7 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 			return nil, err
 		}
 
-		if err := m.Destroy(ctx, a.Name); err != nil {
+		if err := m.Destroy(a.Name); err != nil {
 			return nil, mapAdminError(err, a.Name, nil, "")
 		}
 
