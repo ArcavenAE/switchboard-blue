@@ -33,10 +33,10 @@ wave_6_tranche_b_wavelevel_converged_at: 2026-07-01
 wave_6_tranche_b_wavelevel_convergence_passes: 3
 wave_6_tranche_c_closed_at: 2026-07-02T10:05:23Z
 wave_6_tranche_c_stories_merged: [S-7.03 (PR #60, 7142146), S-6.05 (PR #61, 7fe3e29)]
-wave_6_tranche_c_wavelevel_pass_counter: 3
-wave_6_tranche_c_wavelevel_attempts_counter: 6
-wave_6_tranche_c_wavelevel_streak: 2
-wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT (Pass 2 + Pass 3 both CONVERGENT; streak 2/3)
+wave_6_tranche_c_wavelevel_pass_counter: 4
+wave_6_tranche_c_wavelevel_attempts_counter: 7
+wave_6_tranche_c_wavelevel_streak: 3
+wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT_PASS_4_2026-07-02 (streak 3/3 — CONVERGED)
 wave_6_tranche_c_test_race_attested: true
 develop_head: 7fe3e29
 open_prs: 0
@@ -58,13 +58,14 @@ Wave 6 Tranche C CLOSED — both stories merged to develop (BC-5.39.001 3/3 each
 S-7.03 PR#60/7142146, S-6.05 PR#61/7fe3e29.
 develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
 
-### W-6.C wave-level convergence — Pass 2 + Pass 3 CONVERGENT (streak 2/3)
+### W-6.C wave-level convergence — CONVERGED (BC-5.39.001 3/3 SATISFIED)
 
-- Pass 2 (split-adversary, 2026-07-02): Adv-A L1 CONVERGENT_L1 0/0/0/0 + 3 obs; Adv-B L2/L3 CONVERGENT_L2L3 0/0/0/0 + 2 obs. Combined: **CONVERGENT**.
-- Pass 3 (split-adversary, 2026-07-02): Adv-A L1 CONVERGENT_L1 0/0/0/0 + 3 obs; Adv-B L2/L3 CONVERGENT_L2L3 0/0/0/0 + 2 obs. Combined: **CONVERGENT**.
-- Pass 4 (closing) pending dispatch — must return CONVERGENT to satisfy BC-5.39.001 3/3.
-- Streak: 2/3. `test_race_attested: true`. develop tip `7fe3e29`.
-- Sidecar audit: `pass-2-Adv-A.md`, `pass-2-Adv-B.md`, `pass-3-Adv-A.md`, `pass-3-Adv-B.md` in `.factory/cycles/cycle-1/adversarial-reviews/`.
+- Pass 2 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs).
+- Pass 3 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs).
+- Pass 4 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 0 obs) — closing pass.
+- **Streak: 3/3. Converged: 2026-07-02.** `test_race_attested: true`. develop tip `7fe3e29`.
+- Sidecar audit: 6 files in `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
+- **NEXT ACTION:** Task #22 Wave-6 wave-gate integration (previously blocked on #21 wave-level convergence — NOW UNBLOCKED).
 
 ## Phase Progress
 
@@ -142,18 +143,19 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave-6 Tranche C wave-level Pass 1 attempt 1 BLOCKED | dispatch-integrity: local develop was cdb2b66, not merged 7fe3e29; CRIT-1/2/3 remediated | 2026-07-02 |
 | Wave-6 Tranche C wave-level Pass 1 attempt 4 BLOCKING | split-adversary: Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3 (0/0/2/0); 2 MED remediated; Pass 2 pending | 2026-07-02 |
 | Wave-6 Tranche C wave-level Pass 2 + Pass 3 both CONVERGENT | streak 0→2/3; BC-5.39.001 requires 3/3; Pass 4 (closing) dispatch pending | 2026-07-02 |
+| Wave-6 Tranche C wave-level CONVERGED | Pass 4 CONVERGENT (Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+0obs); BC-5.39.001 3/3 SATISFIED; streak 3/3; converged_at 2026-07-02; Task #22 UNBLOCKED | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C wave-level review, streak 2/3)
+## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C CONVERGED)
 
-**Position:** Phase 3 Wave 6 Tranche C. Both stories MERGED to develop.
+**Position:** Phase 3 Wave 6 Tranche C wave-level CONVERGED. Both stories MERGED to develop.
 S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
 develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 
-**Wave-level status:** Pass 2 CONVERGENT + Pass 3 CONVERGENT. Streak: 2/3. Attempts: 6 (1=BLOCKING, 2=WATCHDOG_KILL, 3=WATCHDOG_KILL, 4=BLOCKING+remediated, 5=Pass2-CONVERGENT, 6=Pass3-CONVERGENT). BC-5.39.001 requires 3/3 consecutive CONVERGENT passes.
+**Wave-level status:** Pass 2 CONVERGENT + Pass 3 CONVERGENT + Pass 4 CONVERGENT. Streak: 3/3 — CONVERGED. Attempts: 7. BC-5.39.001 SATISFIED. wavelevel_converged_at: 2026-07-02.
 
-**NEXT ACTION on resume:** Dispatch Wave-6 Tranche C wave-level adversary **Pass 4** (closing) with worktree-identity tuple: `(worktree=/Users/skippy/work/aae-orc/run/switchboard-blue, wave-tip=7fe3e29, wave-id=W-6.C)`. Use split-adversary pattern (Adv-A L1 + Adv-B L2/L3). If CONVERGENT, streak reaches 3/3 → BC-5.39.001 satisfied → wave-level gate CLOSED.
+**NEXT ACTION on resume:** Task #22 — Wave-6 wave-gate integration (previously blocked on #21 wave-level convergence — NOW UNBLOCKED). Proceed to wave-gate execution.
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.

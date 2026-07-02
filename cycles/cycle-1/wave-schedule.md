@@ -200,9 +200,12 @@ for W-6.C; full boundary coverage will land with `S-BL.SESSION-DRAIN`.
   - attempt 2: STREAM_WATCHDOG_KILL (600s; no verdict; infrastructure failure)
   - attempt 3: STREAM_WATCHDOG_KILL (600s; no verdict; infrastructure failure)
   - attempt 4: BLOCKING (split-adversary; Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3; 0/0/2/0)
+  - Pass 2: CONVERGENT (0/0/0/0 + 5 obs) — split-adversary (Adv-A L1 + Adv-B L2/L3)
+  - Pass 3: CONVERGENT (0/0/0/0 + 5 obs) — split-adversary; Adv-B Obs-1 self-resolving parallel-dispatch race
+  - Pass 4: CONVERGENT (0/0/0/0 + 2 obs) — closing pass — BC-5.39.001 3/3 SATISFIED, wave CONVERGED
 
-**Closure target:** wave_6_tranche_c_wavelevel_converged_at TBD (requires 3/3
-clean wave-level passes per BC-5.39.001).
+**Closure target:** wave_6_tranche_c_wavelevel_converged_at 2026-07-02 (BC-5.39.001 3/3 consecutive
+clean passes satisfied across Pass 2 + Pass 3 + Pass 4).
 
 **Wave 6 gate criteria (combined):**
 - VP-043: XOR FEC: single loss in group recoverable
