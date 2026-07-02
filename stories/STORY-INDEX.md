@@ -176,6 +176,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.58 | 2026-07-02 | F-P3L3-O-4 (POL-002): S-6.05 row status cell `draft (v1.5)` → `draft (v1.6)` (story v1.5→v1.6: depends_on [S-6.02]→[S-6.02, S-6.07] per cmd/sbctl/admin.go serialization contract; S-6.07 was already merged before S-6.05 branch cut). No behavioral changes. |
 | 3.57 | 2026-07-02 | F-P2L3-03 (POL-002): S-7.03 row status cell `draft (v1.2)` → `draft (v1.3)` (story bumped to v1.3: BC-2.08.001 traceability row wording cleaned up — retraction has landed as v1.2 final). |
 | 3.56 | 2026-07-02 | S-6.05 v1.4→v1.5 spec-side regression revert (Pass-2 F-H1): story row updated `draft (v1.3)` → `draft (v1.5)`. Story v1.4 mis-attributed a symbol-only reading to RULING-W6TB-A §3 and rescoped AC-004 to sentinel-contract, directly contradicting BC-2.07.001 Inv-3 and Ruling §3 runtime text. v1.5 restores `Destroy(caller admission.AdmittedKey, svtnName string) error` signature and Go-API defense-in-depth check. RULING-W6TB-A v1.0 and BC-2.07.001 v1.11 are unchanged. |
 | 3.55 | 2026-07-01 | POL-002 Tranche B merged-story sync (F-P1L3-MED-01 + F-P1L3-MED-02): S-7.01 status pending→merged (PR #43, 5c658e7); S-7.02 status ready-for-red-gate→merged (PR #55, c54a8ad); S-BL.ROUTER-ADDR promoted from backlog to Master Story Index as merged (PR #56, 91d5675, wave backlog→6). Summary: Complete 29→32, Pending 2→1, Ready-for-red-gate 1→0, Backlog 9→8, master-table 35→36, E-phase 31→32. |

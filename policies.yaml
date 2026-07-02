@@ -54,3 +54,12 @@ policies:
     enforcement: >
       Adversary Lens-3 checks row-cell match; missing sync = MED finding.
     examples:
+
+# --- Candidate policies (awaiting user ratification) ---
+# POL-003 (BC/VP-story-row-version-sync): When a story frontmatter version:
+#   is bumped, both the STORY-INDEX row cell AND any BC/VP Traceability
+#   Stories row / Story Trace row that references that story must be
+#   updated in the same fix-burst. Severity: MED. Scope: BCs, VPs.
+#   Origin: S-6.05 Pass-3 Lens-3 O-3 (process-gap); F-P3L3-M-05
+#   observed narrative-parity break: BC-2.07.001 v1.11 changelog
+#   pinned "S-6.05 v1.3" while Stories row later became v1.5.

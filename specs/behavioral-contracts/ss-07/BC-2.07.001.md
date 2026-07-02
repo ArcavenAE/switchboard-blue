@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.11"
+version: "1.12"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -108,6 +108,14 @@ modified:
       destroy authority. Add PC/EC entries citing destroy authority and genesis-recreate
       carve-out. Update Traceability Stories row to reflect S-6.05 v1.3 anchoring. No
       behavioral changes — clarification only.
+  - date: 2026-07-02
+    version: "1.12"
+    actor: spec-steward
+    change: >
+      F-P3L3-M-05: Sync Stories-row narrative — S-6.05 anchor updated v1.3 → v1.5
+      (v1.4 was a reverted spec regression against RULING-W6TB-A; v1.5 restores
+      Destroy(caller admission.AdmittedKey, svtnName string) signature and Go-API
+      defense-in-depth check). No behavioral changes.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -189,7 +197,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 | L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 |
 | L2 Domain Invariants | DI-012 (control node is a network participant, not a router manager), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/svtnmgmt |
-| Stories | PC-1 (Create): S-6.02 (SVTNManager Go method), S-6.07 (CLI + handler, RPC reachability); PC-2 (Bootstrap): S-6.02 (local side-effect of Create); PC-3 (Destroy): S-6.05 v1.3 (CLI + handler — Wave 6, depends_on S-6.02; CR-009 ruling 2026-06-29; W6TB-A destroy authority model) |
+| Stories | PC-1 (Create): S-6.02 (SVTNManager Go method), S-6.07 (CLI + handler, RPC reachability); PC-2 (Bootstrap): S-6.02 (local side-effect of Create); PC-3 (Destroy): S-6.05 v1.5 (CLI + handler — Wave 6, depends_on [S-6.02, S-6.07]; CR-009 ruling 2026-06-29; W6TB-A destroy authority model) |
 | Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — this BC specifies the create/destroy lifecycle that CAP-023 defines as the prerequisite for all other operations |
 
 ## Related BCs
@@ -201,6 +209,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.12 | 2026-07-02 | spec-steward | F-P3L3-M-05: Sync Stories-row narrative — S-6.05 anchor updated v1.3 → v1.5 (v1.4 was reverted spec regression against RULING-W6TB-A; v1.5 restores Destroy(caller admission.AdmittedKey, svtnName string) signature and Go-API defense-in-depth check). No behavioral changes. |
 | 1.11 | 2026-07-01 | spec-steward | RULING-W6TB-A (decisions/RULING-W6TB-A-svtn-destroy-authority.md): add destroy authority clarification to Inv-3 — admin.svtn.destroy uses resolveAndVerifyCallerRole general control-role gate (not bootstrap-only); E-ADM-009 at RPC handler layer wrapped in E-RPC-011; ErrDestroyUnauthorized / E-ADM-011 Variant 2 is Go-API-layer defense-in-depth only. Genesis re-open after last-SVTN destroy is permitted recovery semantics. Add two canonical test vectors for destroy authority (non-bootstrap control-role happy-path; non-control error path). Update Traceability Stories row to cite S-6.05 v1.3 anchoring. No behavioral changes — clarification and explicit scoping only. |
 | 1.10 | 2026-07-01 | spec-steward | Ruling-12 §5 hygiene (F-P7L3R2-02): reorder modified-list entries chronologically ascending (v1.6 → v1.7 → v1.8 → v1.9); v1.8 and v1.9 were previously swapped in the frontmatter modified: list. No behavioral changes. |
 | 1.9 | 2026-07-01 | spec-steward | Ruling-11 wire-envelope audit (decisions/wave-6-tranche-a-scope-rulings.md v1.6): no changes; canonical test vectors specify CLI-level message format (`E-ADM-009 "insufficient authority..."`, `E-SVTN-001 "SVTN already exists: <name>"`), not wire-envelope JSON shape. Wire-envelope contract formalized in S-6.07 §Wire Envelope Contract; not needed here. No behavioral changes. |
