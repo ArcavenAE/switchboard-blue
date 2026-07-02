@@ -1770,7 +1770,7 @@ func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
 // TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies all five paths of the AC-003
 // confirm gate per interface-definitions.md v1.1 §125/§127/§129 and ADR-004.
 //
-// RETRACTION (<THIS_COMMIT>): The Pass-4 attestation "static flag-value check —
+// RETRACTION (ba735c9): The Pass-4 attestation "static flag-value check —
 // NO interactive TTY prompt" (F-P4L2-MED-1) is retracted as invalid.  The
 // canonical spec §125/§129 mandates interactive mode when --confirm is omitted
 // and stdin is a TTY.  This test was brought into compliance during the

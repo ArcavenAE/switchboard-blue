@@ -11,4 +11,4 @@ require github.com/leanovate/gopter v0.2.9
 
 require golang.org/x/crypto v0.53.0
 
-require golang.org/x/term v0.44.0 // indirect
+require golang.org/x/term v0.44.0
