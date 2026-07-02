@@ -915,3 +915,84 @@ This is an own-dogfood observation: vsdd-factory#408 was filed, and `gh pr updat
 | S-BL.ROUTER-ADDR | SATISFIED | #56 | 91d5675 | P6(RESET b3c93b5)→P7(skip)→P8(1/3)→P9(2/3)→P10(3/3) |
 
 develop HEAD after Tranche B close: **91d5675**.
+
+---
+
+## Extracted from STATE.md on 2026-07-02
+
+---
+
+## Wave-6 Tranche C Per-Story Convergence (2026-07-02)
+
+**Burst type:** Per-story adversarial convergence (S-6.05 + S-7.03 in parallel), then Tranche C CLOSED.
+
+### S-6.05 and S-7.03 Fix-Burst Record
+
+- S-6.05 Pass-3 L1+L3 clean (cc78688 + a77c32b); S-7.03 Pass-2 L2+L3 clean (804e1f9 + f1f6873); L1 impl completed.
+- S-7.03 PR #60 merged (SHA 7142146); S-6.05 PR #61 merged (SHA 7fe3e29).
+- Per-story BC-5.39.001: 3/3 satisfied for both stories.
+- develop HEAD: 7fe3e29.
+
+### Tranche C CLOSED — Decision Row Extractions from Decisions Log
+
+| Decision | Outcome | Date |
+|----------|---------|------|
+| Wave 6 Tranche C fix-bursts landed | S-6.05 Pass-3 L1+L3 clean (cc78688 + a77c32b); S-7.03 Pass-2 L2+L3 clean (804e1f9 + f1f6873); L1 impl in flight | 2026-07-02 |
+| Wave 6 Tranche C CLOSED | S-7.03 PR#60/7142146 + S-6.05 PR#61/7fe3e29 merged; per-story 3/3 each | 2026-07-02 |
+| Wave-6 Tranche C wave-level Pass 1 attempt 1 BLOCKED | dispatch-integrity: local develop was cdb2b66, not merged 7fe3e29; CRIT-1/2/3 remediated | 2026-07-02 |
+| Wave-6 Tranche C wave-level Pass 1 attempt 4 BLOCKING | split-adversary: Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3 (0/0/2/0); 2 MED remediated; Pass 2 pending | 2026-07-02 |
+| Wave-6 Tranche C wave-level Pass 2 + Pass 3 both CONVERGENT | streak 0→2/3; BC-5.39.001 requires 3/3; Pass 4 (closing) dispatch pending | 2026-07-02 |
+| Wave-6 Tranche C wave-level CONVERGED | Pass 4 CONVERGENT (Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+0obs); BC-5.39.001 3/3 SATISFIED; streak 3/3; converged_at 2026-07-02; Task #22 UNBLOCKED | 2026-07-02 |
+
+---
+
+## W-6 Combined Wave-Gate Adversarial Review (2026-07-02)
+
+**Burst type:** Wave-gate integration adversarial review (full 8-story surface, combined W-6). Per-pass detail in `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3,4,5,6}-Adv-{A,B}.md`.
+
+### Per-Pass Decision Row Extractions from Decisions Log
+
+| Decision | Outcome | Date |
+|----------|---------|------|
+| W-6 combined wave-gate Pass 1 CONVERGENT | Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+3obs; full 8-story surface clean on develop@7fe3e29; streak 1/3 | 2026-07-02 |
+| W-6 combined wave-gate Pass 2 CONVERGENT | Adv-A L1 0/0/0/0+3obs; Adv-B L2L3 0/0/0/0+2obs (1 process-gap on BC-2.08.001 v1.3); streak 2/3 | 2026-07-02 |
+| W-6 combined wave-gate Pass 3 MEDIUM | Adv-A L1 clean 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 1 MEDIUM F1 (gov-leaf annotation gap) + O-2 [process-gap]; streak reset 2→0; F1 remediated at BC-2.08.001 v1.5 | 2026-07-02 |
+| W-6 combined wave-gate Pass 4 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+3obs; O-1 grandfather-adjudicated (POL-003 going-forward only; BC-2.07.001 v1.8/v1.9/v1.10/v1.12 not retro-annotated by design); streak 0→1/3 | 2026-07-02 |
+| W-6 combined wave-gate Pass 5 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+2obs; two hygiene observations logged as LOW drift items (DRIFT-POL003-NAMING, DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH); neither blocks BC-5.39.001 3/3 closure; streak 1→2/3 | 2026-07-02 |
+| W-6 combined wave-gate Pass 6 CLEAN (closing pass) | BC-5.39.001 CONVERGED: streak 2→3/3. Adv-A CONVERGENT_L1 0/0/0/0+2obs; Adv-B CONVERGENT_L2L3 0/0/0/0+3obs. Adv-B Obs-3 process-gap logged as DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with justified deferral (drbothen/vsdd-factory POL-003 tooling backlog). Task #22 CLOSED. | 2026-07-02 |
+
+---
+
+## Phase 4 — HS-006 Holdout Evaluation (2026-07-02)
+
+**Verdict: PASS_AT_THRESHOLD**
+
+**Agents dispatched:** holdout-evaluator (fresh-context, public-API-only)
+**Files touched:** `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`
+**Report:** `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`
+
+### Summary
+
+Phase 4 holdout evaluation against HS-006 (Wave-6 combined scope: XOR FEC, session discovery, console remote control, PE graduation + drain). Satisfaction 0.85 exactly at threshold.
+
+### Metrics
+
+| Metric | Value | Gate | Result |
+|--------|-------|------|--------|
+| Overall satisfaction | 0.85 | ≥ 0.85 | PASS (exactly at threshold) |
+| Must-pass | PASS | ≥ 0.60 | PASS |
+| Functional correctness | 0.45/0.50 | — | 90% |
+| Edge case handling | 0.20/0.20 | — | 100% |
+| Error quality | 0.05/0.10 | — | 50% |
+| Performance | 0.15/0.20 | — | 75% |
+
+### Details
+
+| Agent | Task | Output |
+|-------|------|--------|
+| holdout-evaluator | XOR FEC (steps 1–3) | ALL PASS. Single-loss recovery 14–32µs, two-loss returns `arq.ErrTooManyLosses` verified via `errors.Is`. |
+| holdout-evaluator | Session Discovery (steps 4–6) | ALL PASS. `Discovery.Enumerate(ctx)` API takes NO hostname param — BC-2.03.002 satisfied at signature level. |
+| holdout-evaluator | Console Remote Control (steps 7–8) | ALL PASS. `HandleConsoleAttach`/`HandleConsoleSwitch` transition atomically; failed switch returns `E-SES-001` and preserves prior state. |
+| holdout-evaluator | PE Graduation + Drain (steps 9–10) | PARTIAL PASS. Config-side of PE graduation verified; runtime-side stubbed — see DRIFT-HS006-ROUTER-DAEMON-STUB. |
+
+**Task #71 CLOSED.** Advancing to Phase 5 adversarial implementation refinement.

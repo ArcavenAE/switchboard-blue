@@ -1,10 +1,7 @@
 ---
 pipeline: IN_PROGRESS
-phase: phase-3-tdd-implementation
-phase_step: wave-6-wavegate-integration
-phase_3_active_wave: 6
-phase_3_active_stories: []
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR]
+phase: phase-5-adversarial-refinement
+phase_step: pending-dispatch
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -27,29 +24,10 @@ wave_2_gate: PASS_WITH_OBSERVATIONS
 wave_3_gate: APPROVED
 wave_4_gate: APPROVED
 wave_5_gate: CONVERGED
-wave_6_tranche_a_closed_at: 2026-07-01T19:04:40Z
-wave_6_tranche_b_closed_at: 2026-07-01
-wave_6_tranche_b_wavelevel_converged_at: 2026-07-01
-wave_6_tranche_b_wavelevel_convergence_passes: 3
-wave_6_tranche_c_closed_at: 2026-07-02T10:05:23Z
-wave_6_tranche_c_stories_merged: [S-7.03 (PR #60, 7142146), S-6.05 (PR #61, 7fe3e29)]
-wave_6_tranche_c_wavelevel_pass_counter: 4
-wave_6_tranche_c_wavelevel_attempts_counter: 7
-wave_6_tranche_c_wavelevel_streak: 3
-wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT_PASS_4_2026-07-02 (streak 3/3 — CONVERGED)
-wave_6_tranche_c_test_race_attested: true
-wave_6_wavegate_pass_counter: 6
-wave_6_wavegate_attempts_counter: 6
-wave_6_wavegate_streak: 3
-wave_6_wavegate_last_verdict: CONVERGED_PASS_6_2026-07-02
-wave_6_wavegate_status: CONVERGED_3_OF_3
-wave_6_wavegate_converged_at: 2026-07-02
+wave_6_gate: CONVERGED_3_OF_3
+phase_4_gate: PASS_AT_THRESHOLD
 develop_head: 7fe3e29
 open_prs: 0
-wave_6_hygiene_fec_sentinel_pr: 58
-wave_6_hygiene_fec_sentinel_sha: 6544ff8
-wave_6_hygiene_demo_tape_paths_pr: 59
-wave_6_hygiene_demo_tape_paths_sha: cdb2b66
 alpha_release_tag: alpha-20260629-165045-d854978
 historical_cycles: []
 timestamp: 2026-07-02T00:00:00Z
@@ -60,26 +38,12 @@ last_update: 2026-07-02
 
 ## Current State
 
-Wave 6 Tranche C CLOSED — both stories merged to develop (BC-5.39.001 3/3 each):
-S-7.03 PR#60/7142146, S-6.05 PR#61/7fe3e29.
+Wave 6 CONVERGED (3/3 clean wave-gate passes). Phase 4 HS-006 holdout: PASS_AT_THRESHOLD (0.85).
 develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
+Wave-6 stories merged: S-BL.LOOKUP, S-W5.04, S-6.07 (Tr-A); S-7.01, S-7.02, S-BL.ROUTER-ADDR (Tr-B); S-7.03, S-6.05 (Tr-C).
 
-### W-6.C wave-level convergence — CONVERGED (BC-5.39.001 3/3 SATISFIED)
-
-Pass 2/3/4 all CONVERGENT (Adv-A + Adv-B both 0/0/0/0). Converged 2026-07-02.
-Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
-
-### W-6 combined wave-gate — CONVERGED (BC-5.39.001 3/3 SATISFIED)
-
-- Pass 1 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 3 obs). Streak 1/3.
-- Pass 2 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs — 1 process-gap LOW). Streak 2/3.
-- Pass 3 (2026-07-02): **MEDIUM finding** — Adv-A L1 CONVERGENT_L1 clean; Adv-B L2/L3 F1 MEDIUM (BC-2.08.001 v1.3 governance_leaf gap). Streak reset 2→0. F1 remediated at BC-2.08.001 v1.5.
-- Pass 4 (2026-07-02): **CLEAN** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 3 obs; O-1 grandfather-adjudicated). **Streak 0 → 1/3.**
-- Pass 5 (2026-07-02): **CLEAN** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 2 obs; hygiene: POL-003 naming drift + BC-2.07.001 v1.13 body/changelog mismatch). **Streak 1 → 2/3.**
-- Pass 6 (2026-07-02): **CLEAN (CLOSING PASS)** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 3 obs; obs-3 process-gap logged as DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN, deferred). **Streak 2 → 3/3.**
-- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3,4,5,6}-Adv-{A,B}.md`.
-
-**BC-5.39.001 CONVERGENCE ACHIEVED** — Task #22 Wave-6 combined wave-gate integration adversarial review CONVERGED on 2026-07-02 after 3 consecutive clean fresh-context passes (Pass 4 + Pass 5 + Pass 6, all post-F1-remediation). Perimeter-3 wave-gate is closed.
+Sidecar reviews: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1-6}-Adv-{A,B}.md`.
+Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`.
 
 ## Phase Progress
 
@@ -87,7 +51,9 @@ Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary
 |-------|--------|-------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift (2026-06-24) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
-| Phase 3 — TDD Implementation | IN_PROGRESS | W6 Tranche B CLOSED + CONVERGED (2026-07-01); Tranche C planning begun; Waves 1–5 all merged; W6-TrA CLOSED |
+| Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
+| Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
+| Phase 5 — Adversarial Refinement | PENDING | — |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -101,6 +67,8 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | S-7.01 | XOR parity FEC for single-loss recovery | B | #43 | 5c658e7 |
 | S-7.02 | SVTN-scoped multicast session discovery | B | #55 | c54a8ad |
 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr (BC-2.06.003 PC-1) | B | #56 | 91d5675 |
+| S-7.03 | (Tranche C) | C | #60 | 7142146 |
+| S-6.05 | (Tranche C) | C | #61 | 7fe3e29 |
 
 Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 
@@ -135,16 +103,15 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | PROCESS-GAP-FORCE-PUSH | HIGH | [process-gap] pr-manager reached for rebase+force-push over gh pr update-branch. vsdd-factory#408 + switchboard-blue#57 filed. | orchestrator/pr-manager | playbook fix upstream |
 | PROCESS-GAP-DEMO-TAPE-PATHS | OBS | [process-gap] demo-recorder emits `.tape` files with hardcoded absolute worktree paths; local fix applied (25 files, PR #59/cdb2b66); upstream drbothen/vsdd-factory#418 filed for template fix. | orchestrator/demo-recorder | upstream fix pending |
 | WAVE-GATE-DISPATCH-INTEGRITY | HIGH | [process-gap] Perimeter-2 (wave-gate) adversary dispatch lacks HEAD-SHA verification tuple; adversary caught mismatch opportunistically; silent-false-green risk if less-thorough pass proceeds. drbothen/vsdd-factory issue drafted in .vsdd-factory-issues-pending.md. | orchestrator | target: pipeline-hardening cycle |
-| DRIFT-BC-2-08-001-V1-3-GOV-LEAF | RESOLVED | Retro-annotated at BC-2.08.001 v1.5 (2026-07-02) — Pass 3 F1 remediation. | spec-steward | closed 2026-07-02 |
 | DRIFT-POL003-GOV-LEAF-ENFORCE | LOW | [process-gap] No structural enforcement of `governance_leaf` annotation on BC changelog rows declaring "No behavioral changes"/"governance-only". Two occurrences (BC-2.07.001 v1.13, BC-2.08.001 v1.3) — pattern recurred. Suggest pre-commit or CI check. | orchestrator / spec-steward | open — file drbothen/vsdd-factory follow-on |
 | DRIFT-POL003-NAMING | LOW | POL-003 Exception A annotation reference wording drift: BC-2.07.001 v1.13 cites `drbothen/vsdd-factory#429 draft policy`; BC-2.08.001 v1.3/v1.5 cite `POL-003 Exception A`. Substance identical, naming inconsistent. Converge on `POL-003 Exception A` for future rows. Deferred — not blocking wave-gate. | spec-steward | open |
 | DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH | LOW | BC-2.07.001 v1.13 changelog description states `Stories row cite S-6.05 v1.5 → v1.7` but body Traceability Stories row (line 206) reads `S-6.05 v1.8`. STORY-INDEX row 3.60 shows a subsequent v1.7 → v1.8 bump on the same day. Body updated to v1.8 without accompanying changelog row. Per POL-003 Exception A the lag is permitted, but the self-inconsistency warrants a follow-up governance-only v1.14 changelog row to reconcile. Deferred — not blocking. | spec-steward | open |
 | DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses `BC-2.07.001 v1.12` (with version suffix); VP-050 uses `BC-2.08.001` (no suffix). Tools auditing "does the downstream cite the current BC version?" cannot mechanically answer for VPs whose `source_bc:` omits the version pin. Substance is anchored via Story Trace tables — no correctness defect — but shape drift weakens auditability. Per Cycle-Closing Checklist (S-7.02) process-gap findings require either a follow-up story or justified deferral. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling — require uniform `source_bc: BC-N.NN.NNN v<M.N>` frontmatter shape on all VPs for machine-checkable governance. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |
-| DRIFT-HS006-ROUTER-DAEMON-STUB | MEDIUM | 2026-07-02 | Router daemon subcommand `./bin/switchboard router` prints `runRouter: not implemented` and exits 1. Steps 9 & 10 of HS-006 (live PE-mode config reload; connected nodes migrate on drain) cannot be exercised through operator surface. Config-side of PE graduation fully verified; only daemon runtime is stubbed. Deferred to follow-on router-daemon-runtime story (candidate scope: expose router runtime via sbctl router-mode command; not in Wave-6 scope). |
+| DRIFT-HS006-ROUTER-DAEMON-STUB | MEDIUM | 2026-07-02 | Router daemon subcommand `./bin/switchboard router` prints `runRouter: not implemented` and exits 1. Steps 9 & 10 of HS-006 (live PE-mode config reload; connected nodes migrate on drain) cannot be exercised through operator surface. Config-side of PE graduation fully verified; only daemon runtime is stubbed. Deferred to follow-on router-daemon-runtime story. |
 | DRIFT-HS006-DRAIN-CLI-MISSING | LOW | 2026-07-02 | No `sbctl router drain` / `sbctl admin drain` subcommand. Drain only reachable via SIGTERM signal handling. Control and console daemons SIGTERM→clean exit in 4–32ms (well within 2s BC-2.09.002 budget). Operator-surface convenience gap, not a behavior gap. Deferred to future operator-UX story. |
 | DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | 2026-07-02 | Drain-timeout forced-exit-with-log clause (BC-2.09.002 evidence question) not observable through public API with router daemon stubbed. Evidence-gap, not necessarily behavior-gap — requires live router with connected nodes and induced hang. Re-evaluate when DRIFT-HS006-ROUTER-DAEMON-STUB is closed. |
 
-Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
+Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
 ## Decisions Log
 
@@ -158,56 +125,30 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave 6 Tranche A CLOSED | S-BL.LOOKUP #40, S-W5.04 #41, S-6.07 #42 | 2026-07-01 |
 | Wave 6 Tranche B CLOSED | S-7.01 #43, S-7.02 #55, S-BL.ROUTER-ADDR #56 all merged with BC-5.39.001 3/3 | 2026-07-01 |
 | Force-push introspection | vsdd-factory#408 + switchboard-blue#57 filed; `gh pr update-branch` adopted as standard | 2026-07-01 |
-| Wave 6 Tranche B wave-level CONVERGED | 3/3 clean fresh-context passes (P2/P3/P4); FEC hygiene PR #58 merged; develop@6544ff8 | 2026-07-01 |
-| PR #59 merged (cdb2b66) | 25 .tape files fixed (hardcoded absolute worktree paths); upstream fix filed as drbothen/vsdd-factory#418 | 2026-07-01 |
-| Wave 6 Tranche C fix-bursts landed | S-6.05 Pass-3 L1+L3 clean (cc78688 + a77c32b); S-7.03 Pass-2 L2+L3 clean (804e1f9 + f1f6873); L1 impl in flight | 2026-07-02 |
-| Wave 6 Tranche C CLOSED | S-7.03 PR#60/7142146 + S-6.05 PR#61/7fe3e29 merged; per-story 3/3 each | 2026-07-02 |
-| Wave-6 Tranche C wave-level Pass 1 attempt 1 BLOCKED | dispatch-integrity: local develop was cdb2b66, not merged 7fe3e29; CRIT-1/2/3 remediated | 2026-07-02 |
-| Wave-6 Tranche C wave-level Pass 1 attempt 4 BLOCKING | split-adversary: Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3 (0/0/2/0); 2 MED remediated; Pass 2 pending | 2026-07-02 |
-| Wave-6 Tranche C wave-level Pass 2 + Pass 3 both CONVERGENT | streak 0→2/3; BC-5.39.001 requires 3/3; Pass 4 (closing) dispatch pending | 2026-07-02 |
-| Wave-6 Tranche C wave-level CONVERGED | Pass 4 CONVERGENT (Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+0obs); BC-5.39.001 3/3 SATISFIED; streak 3/3; converged_at 2026-07-02; Task #22 UNBLOCKED | 2026-07-02 |
-| W-6 combined wave-gate Pass 1 CONVERGENT | Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+3obs; full 8-story surface clean on develop@7fe3e29; streak 1/3 | 2026-07-02 |
-| W-6 combined wave-gate Pass 2 CONVERGENT | Adv-A L1 0/0/0/0+3obs; Adv-B L2L3 0/0/0/0+2obs (1 process-gap on BC-2.08.001 v1.3); streak 2/3 | 2026-07-02 |
-| W-6 combined wave-gate Pass 3 MEDIUM | Adv-A L1 clean 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 1 MEDIUM F1 (gov-leaf annotation gap) + O-2 [process-gap]; streak reset 2→0; F1 remediated at BC-2.08.001 v1.5 | 2026-07-02 |
-| W-6 combined wave-gate Pass 4 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+3obs; O-1 grandfather-adjudicated (POL-003 going-forward only; BC-2.07.001 v1.8/v1.9/v1.10/v1.12 not retro-annotated by design); streak 0→1/3 | 2026-07-02 |
-| W-6 combined wave-gate Pass 5 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+2obs; two hygiene observations logged as LOW drift items (DRIFT-POL003-NAMING, DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH); neither blocks BC-5.39.001 3/3 closure; streak 1→2/3 | 2026-07-02 |
-| W-6 combined wave-gate Pass 6 CLEAN (closing pass); streak 2→3/3. **BC-5.39.001 CONVERGED** for Task #22 Wave-6 combined wave-gate integration. Three fresh-context passes (Pass 4/5/6) all clean post-F1-remediation. Adv-B Obs-3 process-gap logged as DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with justified deferral (drbothen/vsdd-factory POL-003 tooling backlog). Cycle-Closing Checklist S-7.02 satisfied. Task #22 CLOSED. Advancing to Phase 4 holdout evaluation (HS-006). | Adv-A CONVERGENT_L1 0/0/0/0+2obs; Adv-B CONVERGENT_L2L3 0/0/0/0+3obs | 2026-07-02 |
+| Wave 6 Tranche B wave-level CONVERGED | 3/3 clean fresh-context passes (P2/P3/P4); FEC hygiene PR #58 merged; demo-tape-paths PR #59 merged; develop@cdb2b66 | 2026-07-01 |
+| Wave 6 Tranche C CLOSED + wave-level CONVERGED | S-7.03 PR#60/7142146 + S-6.05 PR#61/7fe3e29 merged; per-story 3/3 each; W-6.C wave-level CONVERGED 3/3 | 2026-07-02 |
+| W-6 combined wave-gate CONVERGED (BC-5.39.001) | 6 passes; streak 3/3 (Pass 4/5/6 clean post-F1 remediation); Task #22 CLOSED | 2026-07-02 |
+| Phase 4 HS-006 PASS_AT_THRESHOLD | Satisfaction 0.85 (at threshold); Task #71 CLOSED | 2026-07-02 |
 
-Older decisions: `cycles/cycle-1/burst-log.md`.
+Per-pass wave-gate detail: `cycles/cycle-1/burst-log.md`.
 
-## Phase 4 Wave-6 HS-006 Holdout Evaluation (2026-07-02)
+## Historical Content
 
-**Verdict: PASS_AT_THRESHOLD**
+Burst logs, adversary pass details, session checkpoints, and lessons
+have been extracted to cycle files:
 
-| Metric | Value | Gate | Result |
-|--------|-------|------|--------|
-| Overall satisfaction | 0.85 | ≥ 0.85 | PASS (exactly at threshold) |
-| Must-pass | PASS | ≥ 0.60 | PASS |
-| Functional correctness | 0.45/0.50 | — | 90% |
-| Edge case handling | 0.20/0.20 | — | 100% |
-| Error quality | 0.05/0.10 | — | 50% |
-| Performance | 0.15/0.20 | — | 75% |
-
-- **XOR FEC (steps 1–3):** ALL PASS. Single-loss recovery 14–32µs, two-loss returns `arq.ErrTooManyLosses` verified via `errors.Is`.
-- **Session Discovery (steps 4–6):** ALL PASS. `Discovery.Enumerate(ctx)` API takes NO hostname param — BC-2.03.002 satisfied at signature level.
-- **Console Remote Control (steps 7–8):** ALL PASS. `HandleConsoleAttach`/`HandleConsoleSwitch` transition atomically; failed switch returns `E-SES-001` and preserves prior state.
-- **PE Graduation + Drain (steps 9–10):** PARTIAL PASS. Config-side of PE graduation verified; runtime-side stubbed (see drift items).
-
-Report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`
+- Burst history: `cycles/cycle-1/burst-log.md`
+- Convergence trajectory: `cycles/cycle-1/convergence-trajectory.md`
+- Session checkpoints: `cycles/cycle-1/session-checkpoints.md`
+- Lessons learned: `cycles/cycle-1/lessons.md`
+- Resolved blockers: `cycles/cycle-1/blocking-issues-resolved.md`
 
 ## Session Resume Checkpoint (2026-07-02)
 
 - **Task #22 CLOSED** — BC-5.39.001 Wave-6 wave-gate 3/3 CONVERGED on 2026-07-02.
 - **Task #71 CLOSED** — Phase 4 HS-006 holdout evaluation PASS_AT_THRESHOLD (satisfaction 0.85).
 - **Task #72 pending** — File drbothen/vsdd-factory issue: POL-003 VP `source_bc:` machine-checkable version pin refinement.
-- **NEW: Task #73 pending** — File drbothen/vsdd-factory or switchboard-blue candidate follow-on story for router-daemon-runtime (DRIFT-HS006-ROUTER-DAEMON-STUB); scope out sbctl router-mode operator surface.
+- **Task #73 pending** — File drbothen/vsdd-factory or switchboard-blue candidate follow-on story for router-daemon-runtime (DRIFT-HS006-ROUTER-DAEMON-STUB); scope out sbctl router-mode operator surface.
 - **NEXT ACTION:** Phase 5 adversarial implementation refinement — orchestrator to plan Phase 5 dispatch shape (implementation-level adversary vs Phase 3 wave-gate-level; finding-decay-to-zero criterion).
-- **State health warning:** STATE.md is now >200 lines. Recommend `/vsdd-factory:compact-state` at natural break before Phase 5 dispatch.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
-
-## Historical Content
-
-Burst logs, adversary passes, session checkpoints, closed-stories, closed-drift, lessons:
-`cycles/cycle-1/` (burst-log.md, convergence-trajectory.md, session-checkpoints.md,
-closed-stories.md, closed-drift.md, lessons.md).
