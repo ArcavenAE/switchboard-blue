@@ -68,15 +68,14 @@ var ErrBootstrapKeyRevokeForbidden = errors.New("bootstrap control key cannot be
 // for symmetric management-lockout prevention per BC-2.05.004 EC-007 v1.12.
 var ErrBootstrapKeyExpireForbidden = errors.New("bootstrap key cannot be expired")
 
-// ErrDestroyUnauthorized is a symbol-only sentinel reserved for future
-// defense-in-depth per RULING-W6TB-A §3.
+// ErrDestroyUnauthorized is returned by SVTNManager.Destroy when the caller
+// does not hold a control-role key (E-ADM-011 Variant 2; BC-2.07.001 Inv-3;
+// RULING-W6TB-A §3).
 //
-// Runtime authorization enforcement lives at the handler layer via
-// resolveAndVerifyCallerRole (see cmd/switchboard/admin_handlers.go).
-// SVTNManager.Destroy takes no caller-identity parameter and never returns
-// this sentinel at runtime.
-//
-// E-ADM-011 Variant 2; BC-2.07.001 Inv-3; RULING-W6TB-A §3.
+// This is a defense-in-depth Go-API check: the handler layer already gates on
+// resolveAndVerifyCallerRole (cmd/switchboard/admin_handlers.go), so this inner
+// guard protects against callers that bypass the handler gate (unit-test path,
+// direct API invocation, or future refactors that inadvertently strip the gate).
 var ErrDestroyUnauthorized = errors.New("destroy: caller is not a control-role key")
 
 // SVTN is a record of a single Software-Defined Virtual Topology Network
@@ -739,12 +738,15 @@ func (m *SVTNManager) ListKeys(svtnName string) ([]KeySummary, error) {
 }
 
 // Destroy removes the named SVTN and all its admitted keys from the registry
-// atomically under the manager's write lock. Runtime authorization enforcement
-// lives at the handler layer via resolveAndVerifyCallerRole
-// (see cmd/switchboard/admin_handlers.go).
+// atomically under the manager's write lock.
 //
-// ErrDestroyUnauthorized is a symbol-only sentinel reserved for future
-// defense-in-depth per RULING-W6TB-A §3; Destroy never returns it at runtime.
+// The caller parameter carries the identity of the requesting caller and is used
+// for a defense-in-depth authorization check (RULING-W6TB-A §3; BC-2.07.001
+// Inv-3; AC-004). When caller.Role != RoleControl, Destroy returns
+// ErrDestroyUnauthorized (E-ADM-011 Variant 2) before any state is consulted.
+// This inner guard protects direct Go-API callers and future refactors that may
+// inadvertently bypass the handler-layer gate (resolveAndVerifyCallerRole in
+// cmd/switchboard/admin_handlers.go is the outer gate; this is the inner layer).
 //
 // svtnName is the registry name key (the SVTN registry is keyed by name, not by
 // [16]byte ID; consistent with all other SVTNManager methods).
@@ -754,15 +756,30 @@ func (m *SVTNManager) ListKeys(svtnName string) ([]KeySummary, error) {
 //   - The SVTN ID is freed from the registry (HasAnySVTN() may return false if
 //     this was the last SVTN — re-opening the genesis carve-out per RULING-W6TB-A §4).
 //
+// Returns ErrDestroyUnauthorized (E-ADM-011 Variant 2) if caller.Role != RoleControl.
 // Returns ErrSVTNNotFound (E-SVTN-003) if the SVTN does not exist.
 //
-// Key removal precedes SVTN ID free (ARCH-04 admission ordering invariant).
+// Lock-ordering invariant: Destroy acquires m.mu (write), then calls
+// m.keySet.RemoveSVTN which acquires keySet.mu internally. The ordering is
+// always m.mu → keySet.mu — never the reverse. Do NOT restructure to hold
+// m.mu across an operation that acquires keySet.mu in a different order, as that
+// would create a deadlock risk with any code path that acquires keySet.mu before
+// m.mu. The explicit m.mu.Unlock() calls (rather than defer) ensure m.mu is
+// released before returning, avoiding holding m.mu longer than necessary.
 //
 // Session-terminated notification for active sessions is deferred to S-BL.SESSION-DRAIN
-// (AC-002 out-of-scope per story S-6.05 v1.4).
+// (AC-002 out-of-scope per story S-6.05 v1.5).
 //
-// Traces to BC-2.07.001 postcondition 3; AC-001; RULING-W6TB-A; VP-048 properties 2+3.
-func (m *SVTNManager) Destroy(svtnName string) error {
+// Traces to BC-2.07.001 postcondition 3; AC-001; AC-004; RULING-W6TB-A; VP-048 properties 2+3.
+func (m *SVTNManager) Destroy(caller admission.AdmittedKey, svtnName string) error {
+	// Defense-in-depth: reject non-control callers before any state mutation.
+	// The handler layer (resolveAndVerifyCallerRole) is the outer gate; this is
+	// the inner guard for direct API callers and future refactors (RULING-W6TB-A §3;
+	// BC-2.07.001 Inv-3; AC-004).
+	if caller.Role != admission.RoleControl {
+		return ErrDestroyUnauthorized
+	}
+
 	m.mu.Lock()
 	svtn, exists := m.svtns[svtnName]
 	if !exists {
@@ -770,7 +787,8 @@ func (m *SVTNManager) Destroy(svtnName string) error {
 		return fmt.Errorf("%w: %s", ErrSVTNNotFound, svtnName)
 	}
 	svtnID := svtn.ID
-	// ARCH-04 ordering: key removal precedes SVTN ID free.
+	// ARCH-04 ordering: key removal precedes SVTN ID free (lock-ordering
+	// invariant: m.mu is held here; RemoveSVTN acquires keySet.mu internally).
 	m.keySet.RemoveSVTN(svtnID)
 	delete(m.svtns, svtnName)
 	m.mu.Unlock()

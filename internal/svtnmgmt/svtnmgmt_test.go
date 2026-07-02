@@ -27,6 +27,16 @@ import (
 
 // ── test helpers ─────────────────────────────────────────────────────────────
 
+// controlCallerKey returns an admission.AdmittedKey with RoleControl set,
+// used to satisfy SVTNManager.Destroy's defense-in-depth caller parameter in
+// tests that exercise the happy-path (authorized) branch.
+func controlCallerKey(pub ed25519.PublicKey) admission.AdmittedKey {
+	return admission.AdmittedKey{
+		PublicKey: pub,
+		Role:      admission.RoleControl,
+	}
+}
+
 // mustGenEdKey generates an Ed25519 key pair or fatals the test.
 func mustGenEdKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 	t.Helper()
@@ -1477,7 +1487,7 @@ func TestSVTNManager_LookupMigration_MissReturnsKeyNotRegistered(t *testing.T) {
 // ── S-6.05: SVTNManager.Destroy ───────────────────────────────────────────────
 
 // TestSVTNManager_Destroy_RemovesAllKeys verifies AC-001:
-// SVTNManager.Destroy(ctx, svtnName) removes all admitted keys for the SVTN
+// SVTNManager.Destroy(caller, svtnName) removes all admitted keys for the SVTN
 // from the router's key set and frees the SVTN ID.
 //
 // ARCH-04 admission ordering verified: ListKeys (key removal) is asserted
@@ -1519,8 +1529,8 @@ func TestSVTNManager_Destroy_RemovesAllKeys(t *testing.T) {
 		t.Fatalf("expected ≥3 keys before Destroy (bootstrap + 2 extras); got %d", len(keysBefore))
 	}
 
-	// Destroy.
-	if err := mgr.Destroy("destroy-test-svtn"); err != nil {
+	// Destroy. Pass control-role caller (defense-in-depth authorized path; AC-004).
+	if err := mgr.Destroy(controlCallerKey(controlPub), "destroy-test-svtn"); err != nil {
 		t.Fatalf("Destroy: %v", err)
 	}
 
@@ -1575,8 +1585,11 @@ func TestSVTNManager_Destroy_NotFound(t *testing.T) {
 	t.Parallel()
 
 	mgr := newManager(t)
+	// Pass a control-role caller (authorized); the not-found check fires after
+	// the authorization check, so we need to pass a valid control caller here.
+	caller := admission.AdmittedKey{Role: admission.RoleControl}
 
-	err := mgr.Destroy("nonexistent-svtn")
+	err := mgr.Destroy(caller, "nonexistent-svtn")
 
 	// Must return non-nil error.
 	if err == nil {
@@ -1636,9 +1649,9 @@ func TestSVTNManager_Destroy_KeyPurgeUnderConcurrentAdmission(t *testing.T) {
 	}
 
 	// Destroy the SVTN. Session-terminated notification is deferred to
-	// S-BL.SESSION-DRAIN (AC-002 out-of-scope per story S-6.05 v1.4);
+	// S-BL.SESSION-DRAIN (AC-002 out-of-scope per story S-6.05 v1.5);
 	// this test verifies the admission-blocking postcondition only.
-	if err := mgr.Destroy("session-svtn"); err != nil {
+	if err := mgr.Destroy(controlCallerKey(controlPub), "session-svtn"); err != nil {
 		t.Fatalf("Destroy with active sessions: %v", err)
 	}
 
@@ -1660,52 +1673,86 @@ func TestSVTNManager_Destroy_KeyPurgeUnderConcurrentAdmission(t *testing.T) {
 	}
 }
 
-// TestSVTNManager_ErrDestroyUnauthorized_SentinelContract validates that
-// ErrDestroyUnauthorized exists as a symbol with the canonical message,
-// unwraps via errors.Is, and is distinct from ErrSVTNNotFound. This is a
-// sentinel-contract test only; per RULING-W6TB-A §3, SVTNManager.Destroy
-// takes no caller identity and never returns this sentinel at runtime.
-// Runtime authorization enforcement lives at the handler layer
-// (see TestSbctlAdmin_SVTNDestroy_RequiresControlRole and VP-048 P3).
+// TestSVTNManager_Destroy_ErrDestroyUnauthorized verifies AC-004 (Go-API
+// defense-in-depth per RULING-W6TB-A §3 and BC-2.07.001 Inv-3):
+// Calling SVTNManager.Destroy with a non-control caller returns
+// ErrDestroyUnauthorized (E-ADM-011 Variant 2) before any SVTN state is
+// consulted. Calling with a control-role caller succeeds (SVTN is removed).
 //
-// Verified properties:
-//   - ErrDestroyUnauthorized is exported from package svtnmgmt.
-//   - Its Error() string == "destroy: caller is not a control-role key".
-//   - errors.Is(ErrDestroyUnauthorized, ErrDestroyUnauthorized) is true.
-//   - errors.Is(fmt.Errorf("wrap: %w", ErrDestroyUnauthorized), ErrDestroyUnauthorized)
-//     is true (wrapping round-trip).
-//   - ErrDestroyUnauthorized is distinct from ErrSVTNNotFound.
+// This is the inner defense-in-depth check — the outer gate is
+// resolveAndVerifyCallerRole in the handler layer. The inner check guards
+// against direct Go-API callers and future refactors that might inadvertently
+// strip the handler gate.
 //
-// Traces to BC-2.07.001 Inv-3; AC-004 (Go-API path); RULING-W6TB-A §3.
-func TestSVTNManager_ErrDestroyUnauthorized_SentinelContract(t *testing.T) {
+// Traces to BC-2.07.001 Inv-3; AC-004 (Go-API defense-in-depth); RULING-W6TB-A §3.
+func TestSVTNManager_Destroy_ErrDestroyUnauthorized(t *testing.T) {
 	t.Parallel()
 
-	// The sentinel must be exported and non-nil.
-	if svtnmgmt.ErrDestroyUnauthorized == nil {
-		t.Fatal("AC-004 — ErrDestroyUnauthorized is nil; must be an exported non-nil error")
+	cases := []struct {
+		name        string
+		role        admission.KeyRole
+		wantErr     error
+		description string
+	}{
+		{
+			name:        "console_caller_returns_unauthorized",
+			role:        admission.RoleConsole,
+			wantErr:     svtnmgmt.ErrDestroyUnauthorized,
+			description: "console-role caller must be rejected before any state mutation",
+		},
+		{
+			name:        "access_caller_returns_unauthorized",
+			role:        admission.RoleAccess,
+			wantErr:     svtnmgmt.ErrDestroyUnauthorized,
+			description: "access-role caller must be rejected before any state mutation",
+		},
 	}
 
-	// Canonical error string (Ruling-11/12; E-ADM-011 Variant 2).
-	const want = "destroy: caller is not a control-role key"
-	if got := svtnmgmt.ErrDestroyUnauthorized.Error(); got != want {
-		t.Errorf("AC-004 — ErrDestroyUnauthorized.Error() = %q; want %q", got, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			mgr := newManager(t)
+			_, err := mgr.Create("svtn-A")
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+
+			nonControlCaller := admission.AdmittedKey{Role: tc.role}
+			err = mgr.Destroy(nonControlCaller, "svtn-A")
+
+			if !errors.Is(err, svtnmgmt.ErrDestroyUnauthorized) {
+				t.Errorf("AC-004 %s — Destroy with role %v: want ErrDestroyUnauthorized; got %v",
+					tc.description, tc.role, err)
+			}
+
+			// SVTN must still exist (no state was mutated).
+			if _, found := mgr.SVTNByName("svtn-A"); !found {
+				t.Error("AC-004 — SVTN was destroyed despite non-control caller; expected SVTN to remain intact")
+			}
+		})
 	}
 
-	// errors.Is identity check.
-	if !errors.Is(svtnmgmt.ErrDestroyUnauthorized, svtnmgmt.ErrDestroyUnauthorized) {
-		t.Error("AC-004 — errors.Is(ErrDestroyUnauthorized, ErrDestroyUnauthorized) = false")
-	}
+	// Positive control: control-role caller succeeds.
+	t.Run("control_caller_succeeds", func(t *testing.T) {
+		t.Parallel()
 
-	// Wrapping round-trip: fmt.Errorf("%w") must preserve the chain.
-	wrapped := fmt.Errorf("handler gate bypassed: %w", svtnmgmt.ErrDestroyUnauthorized)
-	if !errors.Is(wrapped, svtnmgmt.ErrDestroyUnauthorized) {
-		t.Errorf("AC-004 — errors.Is(wrapped, ErrDestroyUnauthorized) = false; wrapped = %v", wrapped)
-	}
+		mgr := newManager(t)
+		_, err := mgr.Create("svtn-B")
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
 
-	// ErrDestroyUnauthorized must NOT satisfy ErrSVTNNotFound (sentinels are distinct).
-	if errors.Is(svtnmgmt.ErrDestroyUnauthorized, svtnmgmt.ErrSVTNNotFound) {
-		t.Error("AC-004 — ErrDestroyUnauthorized must NOT satisfy ErrSVTNNotFound")
-	}
+		controlCaller := admission.AdmittedKey{Role: admission.RoleControl}
+		if err := mgr.Destroy(controlCaller, "svtn-B"); err != nil {
+			t.Errorf("AC-004 — Destroy with control-role caller: unexpected error: %v", err)
+		}
+
+		// SVTN must be absent after successful destroy.
+		if _, found := mgr.SVTNByName("svtn-B"); found {
+			t.Error("AC-004 — SVTN still present after control-role destroy; expected absent")
+		}
+	})
 }
 
 // TestSVTNManager_Destroy_GenesisReopened verifies AC-005:
@@ -1737,8 +1784,9 @@ func TestSVTNManager_Destroy_GenesisReopened(t *testing.T) {
 		t.Fatal("AC-005 pre-condition: HasAnySVTN() should be true after Create")
 	}
 
-	// Destroy the last SVTN.
-	if err := mgr.Destroy("genesis-svtn"); err != nil {
+	// Destroy the last SVTN. Use control-role caller (defense-in-depth authorized path).
+	caller := admission.AdmittedKey{Role: admission.RoleControl}
+	if err := mgr.Destroy(caller, "genesis-svtn"); err != nil {
 		t.Fatalf("AC-005 — Destroy genesis-svtn: %v", err)
 	}
 

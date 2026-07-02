@@ -753,7 +753,17 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 			return nil, err
 		}
 
-		if err := m.Destroy(a.Name); err != nil {
+		// Build the caller identity for the SVTNManager.Destroy defense-in-depth
+		// check (RULING-W6TB-A §3; BC-2.07.001 Inv-3; AC-004). resolveAndVerifyCallerRole
+		// above already confirmed the caller is a control-role key; we pass that
+		// confirmed identity into Destroy so the inner guard (defense-in-depth
+		// against future refactors that might strip the outer gate) is satisfied.
+		callerKey := admission.AdmittedKey{Role: admission.RoleControl}
+		if callerPub, hasPub := mgmt.CallerPubkey(ctx); hasPub {
+			callerKey.PublicKey = callerPub
+		}
+
+		if err := m.Destroy(callerKey, a.Name); err != nil {
 			return nil, mapAdminError(err, a.Name, nil, "")
 		}
 
