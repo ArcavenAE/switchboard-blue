@@ -9,7 +9,10 @@
 //	AC-003      — HandleConsoleSwitch (switch)
 //	VP-050      — Console remote control end-to-end verification
 //
-// Red Gate: all tests MUST fail before implementation (handlers panic).
+// Unit-level tests: each test constructs a per-test ConsoleServer with an
+// isolated ConsoleState (L2-T1: no shared package-level state; no parallel
+// data race). End-to-end verification through a real mgmt.Server lives in
+// cmd/switchboard/console_handlers_e2e_test.go (VP-050; L2-T5).
 package session_test
 
 import (
@@ -20,67 +23,117 @@ import (
 	"github.com/arcavenae/switchboard/internal/session"
 )
 
-// TestConsoleRemote_E2E_VP050 is the integration test for VP-050:
-// console remote control end-to-end verification covering the full
-// AC-001/AC-002/AC-003 scenarios through HandleConsoleAttach,
-// HandleConsoleDetach, and HandleConsoleSwitch.
-//
-// VP-050 — console remotely controllable via mgmt-plane Unix socket.
-// BC-2.08.001 PC-1/PC-2/PC-3.
-//
-// The test exercises the full attach→detach→switch cycle:
-// - AC-001: HandleConsoleAttach returns ConsoleAttachResponse.
-// - AC-002: HandleConsoleDetach returns ConsoleDetachResponse.
-// - AC-003: HandleConsoleSwitch returns ConsoleSwitchResponse.
-// Failures surface through handler panics (Red Gate) until implementation lands.
-func TestConsoleRemote_E2E_VP050(t *testing.T) {
+// stubRegistry is a minimal SessionRegistry that returns true for a fixed set
+// of session names. Used by unit tests to avoid a live Publisher dependency.
+type stubRegistry struct {
+	known map[string]struct{}
+}
+
+func newStubRegistry(names ...string) *stubRegistry {
+	m := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		m[n] = struct{}{}
+	}
+	return &stubRegistry{known: m}
+}
+
+func (s *stubRegistry) Exists(name string) bool {
+	_, ok := s.known[name]
+	return ok
+}
+
+// newTestConsoleServer returns a ConsoleServer + ConsoleState pair for a single
+// test. The state is reset on t.Cleanup (L2-T1: per-test isolation, no race).
+func newTestConsoleServer(t *testing.T, reg session.SessionRegistry) *session.ConsoleServer {
+	t.Helper()
+	state := session.NewConsoleState()
+	t.Cleanup(func() {
+		// State is per-test; nothing to reset — GC handles it.
+	})
+	return session.NewConsoleServer(reg, state)
+}
+
+// TestHandleConsoleAttach_Success verifies that HandleConsoleAttach returns the
+// correct ConsoleAttachResponse for a known session (BC-2.08.001 PC-1; AC-001).
+func TestHandleConsoleAttach_Success(t *testing.T) {
 	t.Parallel()
 
+	reg := newStubRegistry("agent-01", "agent-02")
+	cs := newTestConsoleServer(t, reg)
 	ctx := context.Background()
 
-	// AC-001: HandleConsoleAttach — attach to a session.
-	// BC-2.08.001 PC-1.
-	attachResp, err := session.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{
-		SessionName: "agent-01",
-	})
+	resp, err := cs.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{SessionName: "agent-01"})
 	if err != nil {
-		t.Fatalf("VP-050 AC-001 — HandleConsoleAttach: %v", err)
+		t.Fatalf("BC-2.08.001 PC-1 — HandleConsoleAttach: unexpected error: %v", err)
 	}
-	if attachResp.SessionName != "agent-01" {
-		t.Errorf("VP-050 AC-001 — ConsoleAttachResponse.SessionName: got %q; want %q",
-			attachResp.SessionName, "agent-01")
+	if resp.SessionName != "agent-01" {
+		t.Errorf("BC-2.08.001 PC-1 — ConsoleAttachResponse.SessionName: got %q; want %q",
+			resp.SessionName, "agent-01")
+	}
+}
+
+// TestHandleConsoleDetach_Success verifies that HandleConsoleDetach returns the
+// correct ConsoleDetachResponse after a successful attach (BC-2.08.001 PC-2; AC-002).
+func TestHandleConsoleDetach_Success(t *testing.T) {
+	t.Parallel()
+
+	reg := newStubRegistry("agent-01")
+	cs := newTestConsoleServer(t, reg)
+	ctx := context.Background()
+
+	// Set up: attach first.
+	if _, err := cs.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{SessionName: "agent-01"}); err != nil {
+		t.Fatalf("BC-2.08.001 PC-2 setup — HandleConsoleAttach: %v", err)
 	}
 
-	// AC-002: HandleConsoleDetach — detach from the attached session.
-	// BC-2.08.001 PC-2.
-	detachResp, err := session.HandleConsoleDetach(ctx, session.ConsoleDetachRequest{})
+	// Detach.
+	resp, err := cs.HandleConsoleDetach(ctx, session.ConsoleDetachRequest{})
 	if err != nil {
-		t.Fatalf("VP-050 AC-002 — HandleConsoleDetach: %v", err)
+		t.Fatalf("BC-2.08.001 PC-2 — HandleConsoleDetach: unexpected error: %v", err)
 	}
-	if detachResp.SessionName == "" {
-		t.Error("VP-050 AC-002 — ConsoleDetachResponse.SessionName must be non-empty")
+	if resp.SessionName != "agent-01" {
+		t.Errorf("BC-2.08.001 PC-2 — ConsoleDetachResponse.SessionName: got %q; want %q",
+			resp.SessionName, "agent-01")
+	}
+}
+
+// TestHandleConsoleSwitch_Success verifies that HandleConsoleSwitch correctly
+// transitions to the target session (BC-2.08.001 PC-3; AC-003; L1-C3).
+//
+// L1-C3 assertion: after a successful switch, ConsoleServer internal state
+// tracks the new session name (verified by a subsequent detach returning the
+// new name rather than "").
+func TestHandleConsoleSwitch_Success(t *testing.T) {
+	t.Parallel()
+
+	reg := newStubRegistry("agent-01", "agent-02")
+	cs := newTestConsoleServer(t, reg)
+	ctx := context.Background()
+
+	// Set up: attach to agent-01.
+	if _, err := cs.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{SessionName: "agent-01"}); err != nil {
+		t.Fatalf("BC-2.08.001 PC-3 setup — HandleConsoleAttach: %v", err)
 	}
 
-	// AC-003: HandleConsoleSwitch — re-attach to another session atomically.
-	// BC-2.08.001 PC-3.
-	// Note: This calls switch after detach, so the detach leg will encounter
-	// ErrConsoleNotAttached unless the implementation tracks state correctly.
-	// For VP-050 e2e, we first attach again and then switch.
-	_, err = session.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{
-		SessionName: "agent-01",
-	})
+	// Switch to agent-02.
+	switchResp, err := cs.HandleConsoleSwitch(ctx, session.ConsoleSwitchRequest{SessionName: "agent-02"})
 	if err != nil {
-		t.Fatalf("VP-050 AC-003 setup — HandleConsoleAttach: %v", err)
-	}
-	switchResp, err := session.HandleConsoleSwitch(ctx, session.ConsoleSwitchRequest{
-		SessionName: "agent-02",
-	})
-	if err != nil {
-		t.Fatalf("VP-050 AC-003 — HandleConsoleSwitch: %v", err)
+		t.Fatalf("BC-2.08.001 PC-3 — HandleConsoleSwitch: unexpected error: %v", err)
 	}
 	if switchResp.SessionName != "agent-02" {
-		t.Errorf("VP-050 AC-003 — ConsoleSwitchResponse.SessionName: got %q; want %q",
+		t.Errorf("BC-2.08.001 PC-3 — ConsoleSwitchResponse.SessionName: got %q; want %q",
 			switchResp.SessionName, "agent-02")
+	}
+
+	// L1-C3 assertion: state must now track agent-02 (not "").
+	// A subsequent detach must return agent-02, proving state was set to agent-02.
+	detachResp, err := cs.HandleConsoleDetach(ctx, session.ConsoleDetachRequest{})
+	if err != nil {
+		t.Fatalf("BC-2.08.001 PC-3 L1-C3 — post-switch detach: unexpected error: %v", err)
+	}
+	if detachResp.SessionName != "agent-02" {
+		t.Errorf("BC-2.08.001 PC-3 L1-C3 — post-switch detach.SessionName: got %q; want %q (L1-C3: state must track new session)",
+			detachResp.SessionName, "agent-02")
 	}
 }
 
@@ -91,10 +144,11 @@ func TestConsoleRemote_E2E_VP050(t *testing.T) {
 func TestHandleConsoleAttach_UnknownSession(t *testing.T) {
 	t.Parallel()
 
-	// BC-2.08.001 PC-1 / EC-001 — unknown session must return ErrSessionNotFound.
+	reg := newStubRegistry("agent-01") // does-not-exist is not registered
+	cs := newTestConsoleServer(t, reg)
 	ctx := context.Background()
 
-	_, err := session.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{
+	_, err := cs.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{
 		SessionName: "does-not-exist",
 	})
 
@@ -114,10 +168,11 @@ func TestHandleConsoleAttach_UnknownSession(t *testing.T) {
 func TestHandleConsoleDetach_NotAttached(t *testing.T) {
 	t.Parallel()
 
-	// BC-2.08.001 PC-2 / EC-002 — not attached must return ErrConsoleNotAttached.
+	reg := newStubRegistry("agent-01")
+	cs := newTestConsoleServer(t, reg)
 	ctx := context.Background()
 
-	_, err := session.HandleConsoleDetach(ctx, session.ConsoleDetachRequest{})
+	_, err := cs.HandleConsoleDetach(ctx, session.ConsoleDetachRequest{})
 
 	if err == nil {
 		t.Fatal("BC-2.08.001 PC-2 EC-002 — HandleConsoleDetach not attached: want non-nil error; got nil")
@@ -135,10 +190,11 @@ func TestHandleConsoleDetach_NotAttached(t *testing.T) {
 func TestHandleConsoleSwitch_UnknownSession(t *testing.T) {
 	t.Parallel()
 
-	// BC-2.08.001 PC-3 / EC-001 — unknown target session must return ErrSessionNotFound.
+	reg := newStubRegistry("agent-01")
+	cs := newTestConsoleServer(t, reg)
 	ctx := context.Background()
 
-	_, err := session.HandleConsoleSwitch(ctx, session.ConsoleSwitchRequest{
+	_, err := cs.HandleConsoleSwitch(ctx, session.ConsoleSwitchRequest{
 		SessionName: "does-not-exist",
 	})
 
@@ -148,5 +204,31 @@ func TestHandleConsoleSwitch_UnknownSession(t *testing.T) {
 	if !errors.Is(err, session.ErrSessionNotFound) {
 		t.Errorf("BC-2.08.001 PC-3 EC-001 — HandleConsoleSwitch unknown session: "+
 			"want errors.Is(err, ErrSessionNotFound); got: %v", err)
+	}
+}
+
+// TestHandleConsoleSwitch_NotAttached verifies that HandleConsoleSwitch
+// returns ErrConsoleNotAttached (E-SES-004) when no session is currently attached,
+// even when the target session is known.
+//
+// BC-2.08.001 PC-3; AC-003; EC-002.
+func TestHandleConsoleSwitch_NotAttached(t *testing.T) {
+	t.Parallel()
+
+	reg := newStubRegistry("agent-01", "agent-02")
+	cs := newTestConsoleServer(t, reg)
+	ctx := context.Background()
+
+	// No attach first — switch must fail with ErrConsoleNotAttached.
+	_, err := cs.HandleConsoleSwitch(ctx, session.ConsoleSwitchRequest{
+		SessionName: "agent-02",
+	})
+
+	if err == nil {
+		t.Fatal("BC-2.08.001 PC-3 EC-002 — HandleConsoleSwitch not attached: want non-nil error; got nil")
+	}
+	if !errors.Is(err, session.ErrConsoleNotAttached) {
+		t.Errorf("BC-2.08.001 PC-3 EC-002 — HandleConsoleSwitch not attached: "+
+			"want errors.Is(err, ErrConsoleNotAttached); got: %v", err)
 	}
 }

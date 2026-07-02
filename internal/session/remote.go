@@ -26,7 +26,7 @@ import (
 
 // ErrConsoleNotAttached is returned by HandleConsoleDetach and HandleConsoleSwitch
 // when no console is currently attached (E-SES-004; BC-2.08.001 PC-2/PC-3).
-var ErrConsoleNotAttached = errors.New("session: no console attached for command (E-SES-004)")
+var ErrConsoleNotAttached = errors.New("E-SES-004: no console attached for command")
 
 // ConsoleAttachRequest is the wire-format request payload for the console.attach
 // RPC command (BC-2.08.001 PC-1; AC-001).
@@ -65,28 +65,43 @@ type ConsoleSwitchResponse struct {
 	SessionName string `json:"session_name"`
 }
 
-// consoleMu guards the package-level remote-control attachment state.
-// Owned by the console daemon session layer (BC-2.08.001 arch: boundary).
-var consoleMu sync.Mutex
+// SessionRegistry is the interface the ConsoleServer uses to validate whether a
+// named session exists before attaching or switching to it (L1-C2; BC-2.08.001
+// PC-1/PC-3). In production this is wired to *Publisher; in tests it can be a
+// stub.
+//
+// Allowed imports: no dependency on internal/mgmt; pure interface (ARCH-08 §6.6).
+type SessionRegistry interface {
+	// Exists reports whether the named session is currently published.
+	Exists(name string) bool
+}
 
-// consoleState holds the remote-control attachment state for the console daemon.
-// currentSession is empty when no session is attached.
-// It is exported so that tests in the same package can reset it between parallel
-// subtests. The external test package (session_test) relies on the run-order
-// established by VP-050: E2E test drives attach→detach cycle, leaving state clean;
-// the not-attached test verifies the clean state.
-var consoleState = struct {
-	current string
-}{}
+// ConsoleState holds the remote-control attachment state for the console daemon.
+// It replaces the previous package-level vars to eliminate the parallel-test data
+// race (L2-T1). Construct with NewConsoleState; the zero value is not usable.
+//
+// ConsoleState is safe for concurrent use.
+type ConsoleState struct {
+	mu      sync.Mutex
+	current string // empty when no session is attached
+}
 
-// knownSessions is the set of sessions eligible for remote attach/switch.
-// In production this is wired to the Publisher; the package pre-seeds the
-// canonical BC-2.08.001 test-vector names ("agent-01", "agent-02") so that the
-// pure-function handler API (no Publisher injection at this story level) satisfies
-// the test suite. A follow-on story will inject a Publisher reference here.
-var knownSessions = map[string]struct{}{
-	"agent-01": {},
-	"agent-02": {},
+// NewConsoleState returns a ConsoleState with no session attached.
+func NewConsoleState() *ConsoleState {
+	return &ConsoleState{}
+}
+
+// ConsoleServer groups a SessionRegistry and a *ConsoleState for handler dispatch
+// (L1-C2). Construct with NewConsoleServer.
+type ConsoleServer struct {
+	reg   SessionRegistry
+	state *ConsoleState
+}
+
+// NewConsoleServer returns a ConsoleServer wired to the given registry and state.
+// Both reg and state must be non-nil.
+func NewConsoleServer(reg SessionRegistry, state *ConsoleState) *ConsoleServer {
+	return &ConsoleServer{reg: reg, state: state}
 }
 
 // HandleConsoleAttach is the mgmt-plane RPC handler for the console.attach
@@ -95,15 +110,15 @@ var knownSessions = map[string]struct{}{
 // On success, marks the console as attached to the named session and returns
 // ConsoleAttachResponse. Error sentinels:
 //   - ErrSessionNotFound: session name unknown (E-SES-001)
-func HandleConsoleAttach(_ context.Context, req ConsoleAttachRequest) (ConsoleAttachResponse, error) {
-	consoleMu.Lock()
-	defer consoleMu.Unlock()
-
-	if _, ok := knownSessions[req.SessionName]; !ok {
+func (cs *ConsoleServer) HandleConsoleAttach(_ context.Context, req ConsoleAttachRequest) (ConsoleAttachResponse, error) {
+	if !cs.reg.Exists(req.SessionName) {
 		return ConsoleAttachResponse{}, fmt.Errorf("E-SES-001: session not found: %s: %w", req.SessionName, ErrSessionNotFound)
 	}
 
-	consoleState.current = req.SessionName
+	cs.state.mu.Lock()
+	defer cs.state.mu.Unlock()
+
+	cs.state.current = req.SessionName
 	return ConsoleAttachResponse(req), nil
 }
 
@@ -113,16 +128,16 @@ func HandleConsoleAttach(_ context.Context, req ConsoleAttachRequest) (ConsoleAt
 // Detaches the console daemon from its current session without closing it.
 // Error sentinels:
 //   - ErrConsoleNotAttached: no session currently attached (E-SES-004)
-func HandleConsoleDetach(_ context.Context, _ ConsoleDetachRequest) (ConsoleDetachResponse, error) {
-	consoleMu.Lock()
-	defer consoleMu.Unlock()
+func (cs *ConsoleServer) HandleConsoleDetach(_ context.Context, _ ConsoleDetachRequest) (ConsoleDetachResponse, error) {
+	cs.state.mu.Lock()
+	defer cs.state.mu.Unlock()
 
-	if consoleState.current == "" {
+	if cs.state.current == "" {
 		return ConsoleDetachResponse{}, ErrConsoleNotAttached
 	}
 
-	name := consoleState.current
-	consoleState.current = ""
+	name := cs.state.current
+	cs.state.current = ""
 	return ConsoleDetachResponse{SessionName: name}, nil
 }
 
@@ -132,28 +147,26 @@ func HandleConsoleDetach(_ context.Context, _ ConsoleDetachRequest) (ConsoleDeta
 // Atomically detaches from the current session and attaches to the named
 // session. Validates the target session before modifying state so that the
 // operation is atomic from the remote operator's perspective (BC-2.08.001 PC-3).
-// After switching, clears the tracked attachment: the operator's remote-control
-// session is considered complete; subsequent detach or switch requires a new
-// attach. Error sentinels:
+// After switching, the tracked attachment is updated to the new session name
+// (L1-C3 fix: previously incorrectly cleared to ""). Error sentinels:
 //   - ErrSessionNotFound: target session name unknown (E-SES-001)
 //   - ErrConsoleNotAttached: no session currently attached (E-SES-004)
-func HandleConsoleSwitch(_ context.Context, req ConsoleSwitchRequest) (ConsoleSwitchResponse, error) {
-	consoleMu.Lock()
-	defer consoleMu.Unlock()
-
+func (cs *ConsoleServer) HandleConsoleSwitch(_ context.Context, req ConsoleSwitchRequest) (ConsoleSwitchResponse, error) {
 	// Validate target session first — state is only modified if the operation
 	// can complete (atomic from caller's perspective; BC-2.08.001 PC-3).
-	if _, ok := knownSessions[req.SessionName]; !ok {
+	if !cs.reg.Exists(req.SessionName) {
 		return ConsoleSwitchResponse{}, fmt.Errorf("E-SES-001: session not found: %s: %w", req.SessionName, ErrSessionNotFound)
 	}
 
+	cs.state.mu.Lock()
+	defer cs.state.mu.Unlock()
+
 	// Detach leg: must be currently attached (E-SES-004 on detach failure).
-	if consoleState.current == "" {
+	if cs.state.current == "" {
 		return ConsoleSwitchResponse{}, ErrConsoleNotAttached
 	}
 
-	// Attach leg: switch to new session and clear tracked attachment to allow
-	// subsequent not-attached checks to behave correctly.
-	consoleState.current = ""
+	// Attach leg: switch to new session (L1-C3: set to req.SessionName, not "").
+	cs.state.current = req.SessionName
 	return ConsoleSwitchResponse(req), nil
 }

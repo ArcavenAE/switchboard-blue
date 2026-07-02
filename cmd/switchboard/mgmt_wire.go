@@ -38,6 +38,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/mgmt"
+	"github.com/arcavenae/switchboard/internal/session"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
 
@@ -357,17 +358,63 @@ func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
 	return errors.New("runRouter: not implemented")
 }
 
-// runConsole is the console-mode daemon entry point.
-// The console daemon body (and its management server wiring) ships in its
-// owning story; until then this mode is not implemented. It deliberately
-// does NOT open a management listener — starting one for a daemon that
-// does not run would leak a bound socket and an untracked goroutine.
+// runConsole is the console-mode daemon entry point (S-7.03).
 //
-// AC-004 (S-6.06): when console mode is implemented, startMgmtServer MUST pass
-// nil (or an empty slice) for admin handlers — console daemons must NOT register
-// admin.key.* handlers (ADR-004 role-exclusion; ARCH-04 disambiguation table).
-func runConsole(_ context.Context, _ io.Writer, _ *config.Config) error {
-	return errors.New("runConsole: not implemented")
+// It generates an ephemeral Ed25519 keypair, constructs a session.Publisher and
+// session.ConsoleState, starts the management server with BuildConsoleHandlers
+// registered, and blocks until ctx is cancelled (ARCH-01 §Goroutine WaitGroup
+// Contract).
+//
+// AC-004 (S-6.06): console mode does NOT register admin.key.* handlers —
+// console daemons must NOT register admin handlers (ADR-004 role-exclusion;
+// ARCH-04 disambiguation table).
+//
+// Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
+//  1. newMgmtServer — construct server (no goroutine)
+//  2. BuildConsoleHandlers passed via NewServer initial handlers (already registered)
+//  3. wireMetricsHandlers — register metrics RPC handlers before Serve
+//  4. serveMgmtServer — start Serve goroutine
+func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
+	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("runConsole: generate daemon keypair: %w", err)
+	}
+
+	// Build console session infrastructure.
+	ks := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(ks)
+	consoleState := session.NewConsoleState()
+	consoleSrv := session.NewConsoleServer(pub, consoleState)
+
+	// Console daemon uses no OperatorKeySet (nil = bootstrap mode; daemon key is the
+	// sole bootstrap authority). Admin handlers are NOT registered (AC-004).
+	ops := mgmt.NewOperatorKeySet(nil)
+
+	// Phase (a): construct server with console handlers pre-registered (no goroutine).
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "console", daemonPriv, BuildConsoleHandlers(consoleSrv, ks))
+	if mgmtErr != nil {
+		return fmt.Errorf("runConsole: construct management server: %w", mgmtErr)
+	}
+	_ = ops // ops is unused for console mode but wired for future extension
+
+	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
+	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+		return fmt.Errorf("runConsole: wire metrics handlers: %w", err)
+	}
+
+	// Phase (c): start the Serve goroutine.
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
+
+	// Block until context is cancelled (ARCH-01 lifecycle contract).
+	<-ctx.Done()
+
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutCancel()
+	_ = mgmtSrv.Shutdown(shutCtx)
+	mgmtWG.Wait()
+	return nil
 }
 
 // runControl is the control-mode daemon entry point (F-002 / S-6.06 AC-004).
