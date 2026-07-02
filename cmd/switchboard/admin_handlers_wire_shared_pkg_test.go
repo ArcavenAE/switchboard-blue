@@ -1,14 +1,17 @@
-// admin_handlers_wire_shared_pkg_test.go — RED tests for Phase 5 Pass 4 remediation.
+// admin_handlers_wire_shared_pkg_test.go — wire-tag shape tests for the
+// daemon-side admin argument structs (cmd/switchboard package main).
 //
-// Covers the proposed internal/adminwire shared-types package.
+// These tests verify that the four daemon arg structs (adminKeyRegisterArgs,
+// adminKeyRevokeArgs, adminKeyExpireArgs, adminListKeysArgs) serialise with
+// json:"svtn_id" as the SVTN identifier key.  The structs are defined inline
+// in cmd/switchboard; a future refactor may extract them to internal/adminwire
+// (tracked as a separate story) but that extraction is not required for these
+// tests to pass.
 //
-// This test asserts that the package internal/adminwire exists and exports the
-// canonical argument structs with json:"svtn_id" tags.  It MUST FAIL until
-// the package is extracted from cmd/switchboard and cmd/sbctl.
-//
-// Once internal/adminwire is created, the round-trip tests below will validate
-// that both sides (sbctl and daemon) import from the same source, making
-// struct-tag drift impossible by construction.
+// Note: the test body for TestNewInBurst19_SharedPkg_AdminwireTypes_RoundTrip
+// checks that daemonArgs.SVTNName receives the value marshaled as "svtn_id",
+// which only holds once both the canonical struct and the daemon struct use
+// json:"svtn_id".
 //
 // IMPORTANT: DO NOT touch implementation code. This file is tests only.
 package main
@@ -19,18 +22,11 @@ import (
 )
 
 // TestNewInBurst19_SharedPkg_AdminwireTypes_RoundTrip verifies that a JSON
-// payload produced from the canonical shared arg structs is preserved
-// through a marshal→unmarshal cycle with the daemon's local structs.
+// payload produced from the canonical shared arg structs is preserved through
+// a marshal→unmarshal cycle with the daemon's local structs.
 //
-// Since internal/adminwire does not yet exist, this test validates the
-// EQUIVALENT property using the daemon's current structs — and deliberately
-// expects the round-trip to fail because the daemon structs use json:"svtn"
-// rather than json:"svtn_id".
-//
-// Once internal/adminwire is extracted and both sides import from it,
-// this test will pass because both marshal and unmarshal will use json:"svtn_id".
-//
-// MUST FAIL with current code (daemon structs use json:"svtn").
+// Both the canonical struct and the daemon struct use json:"svtn_id" so the
+// round-trip must succeed: daemonArgs.SVTNName must equal canonical.SVTNID.
 func TestNewInBurst19_SharedPkg_AdminwireTypes_RoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -59,10 +55,9 @@ func TestNewInBurst19_SharedPkg_AdminwireTypes_RoundTrip(t *testing.T) {
 		t.Fatalf("unmarshal into daemon args: %v", err)
 	}
 
-	// FAILS: daemon uses json:"svtn" but canonical uses json:"svtn_id".
+	// Both sides use json:"svtn_id"; the round-trip must preserve the value.
 	if daemonArgs.SVTNName != canonical.SVTNID {
 		t.Errorf("shared-pkg round-trip failed: daemon.SVTNName=%q, want %q\n"+
-			"  This will pass once internal/adminwire is extracted and daemon imports from it.\n"+
 			"  payload: %s",
 			daemonArgs.SVTNName, canonical.SVTNID, payload)
 	}
@@ -71,8 +66,6 @@ func TestNewInBurst19_SharedPkg_AdminwireTypes_RoundTrip(t *testing.T) {
 // TestNewInBurst19_SharedPkg_AdminwireTypes_AllFourStructs verifies that all
 // four daemon arg structs (register, revoke, expire, list-keys) use json:"svtn_id"
 // by asserting that marshaling each produces a JSON object with key "svtn_id".
-//
-// MUST FAIL with current code (all four use json:"svtn").
 func TestNewInBurst19_SharedPkg_AdminwireTypes_AllFourStructs(t *testing.T) {
 	t.Parallel()
 
@@ -121,7 +114,7 @@ func TestNewInBurst19_SharedPkg_AdminwireTypes_AllFourStructs(t *testing.T) {
 				t.Fatalf("unmarshal to map: %v", err)
 			}
 
-			// Must have "svtn_id" key — FAILS with current "svtn" tag.
+			// Must have "svtn_id" key.
 			if _, ok := m["svtn_id"]; !ok {
 				t.Errorf("%s: marshaled JSON must contain key \"svtn_id\"; got keys %v\n  payload: %s",
 					tc.name, mapKeys(m), b)

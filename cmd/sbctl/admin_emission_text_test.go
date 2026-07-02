@@ -22,6 +22,25 @@ import (
 	"testing"
 )
 
+// assertErrorPrefix verifies that err is non-nil and that err.Error() has the
+// given prefix.  If err is nil or the prefix does not match, a test failure is
+// recorded via t.Errorf.
+//
+// Using HasPrefix rather than Contains ensures the error code appears at the
+// start of the message — a code embedded mid-message would pass a Contains
+// check but violate the canonical emission requirement (taxonomy v4.4).
+func assertErrorPrefix(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("expected non-nil error with prefix %q; got nil", want)
+		return
+	}
+	got := err.Error()
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("error %q does not have prefix %q", got, want)
+	}
+}
+
 // TestNewInBurst19_ECFG012_PickOne verifies that when --yes and --confirm are
 // both supplied, the error message says "pick one" (canonical taxonomy v4.4).
 //
@@ -37,12 +56,10 @@ func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 		t.Fatal("runDestroyConfirmGate(confirm+yes): expected E-CFG-012 error, got nil")
 	}
 
-	msg := err.Error()
+	// Must have E-CFG-012 as the exact prefix of the error message (taxonomy v4.4).
+	assertErrorPrefix(t, err, "E-CFG-012: ")
 
-	// Must contain E-CFG-012 stamp.
-	if !strings.Contains(msg, "E-CFG-012") {
-		t.Errorf("E-CFG-012: stamp missing; got: %q", msg)
-	}
+	msg := err.Error()
 
 	// Must say "pick one" — FAILS with current "provide one or the other".
 	if !strings.Contains(msg, "pick one") {
@@ -103,10 +120,10 @@ func TestNewInBurst19_ECFG012_PickOne_ViaRunAdminSvtnDestroy(t *testing.T) {
 		t.Fatal("runAdminSvtnDestroy(--yes + --confirm): expected E-CFG-012, got nil")
 	}
 
+	// Must have E-CFG-012 as the exact prefix (taxonomy v4.4).
+	assertErrorPrefix(t, err, "E-CFG-012: ")
+
 	msg := err.Error()
-	if !strings.Contains(msg, "E-CFG-012") {
-		t.Errorf("E-CFG-012 via runAdminSvtnDestroy: stamp missing; got: %q", msg)
-	}
 	if !strings.Contains(msg, "pick one") {
 		t.Errorf("E-CFG-012 via runAdminSvtnDestroy: must contain \"pick one\"; got: %q", msg)
 	}

@@ -2083,6 +2083,67 @@ func TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012(t *testing.T) {
 	}
 }
 
+// TestNewInBurst19_SbctlWire_SvtnIDField verifies that all sbctl-side admin arg
+// structs serialize "svtn_id" (not "svtn") as the JSON key for the SVTN identifier.
+//
+// This is the sbctl-side mirror of the daemon-side wire-tag tests in
+// cmd/switchboard/admin_handlers_wire_shared_pkg_test.go.  Both sides must
+// agree on json:"svtn_id" or the RPC round-trip will silently drop the field.
+//
+// Traces to F-P6B-001; interface-definitions.md §JSON Output Schema.
+func TestNewInBurst19_SbctlWire_SvtnIDField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload func() ([]byte, error)
+	}{
+		{
+			name: "adminKeyRegisterArgs",
+			payload: func() ([]byte, error) {
+				return json.Marshal(adminKeyRegisterArgs{SVTNID: "x", Pubkey: "k", Role: "control"})
+			},
+		},
+		{
+			name: "adminKeyRevokeArgs",
+			payload: func() ([]byte, error) {
+				return json.Marshal(adminKeyRevokeArgs{SVTNID: "x", Pubkey: "k", Role: "control"})
+			},
+		},
+		{
+			name: "adminKeyExpireArgs",
+			payload: func() ([]byte, error) {
+				return json.Marshal(adminKeyExpireArgs{SVTNID: "x", Pubkey: "k", After: "24h"})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b, err := tc.payload()
+			if err != nil {
+				t.Fatalf("marshal %s: %v", tc.name, err)
+			}
+
+			got := string(b)
+
+			// Must contain "svtn_id" as a JSON key.
+			if !strings.Contains(got, `"svtn_id"`) {
+				t.Errorf("%s: marshaled JSON must contain key \"svtn_id\"; got: %s", tc.name, got)
+			}
+			// Must NOT contain the bare "svtn" key (without the _id suffix).
+			// Use exact key match: `"svtn":` with colon to avoid substring collision
+			// with "svtn_id".
+			if strings.Contains(got, `"svtn":`) {
+				t.Errorf("%s: marshaled JSON must NOT contain stale key \"svtn\"; got: %s", tc.name, got)
+			}
+		})
+	}
+}
+
 // TestSbctlAdmin_SVTNDestroy_RequiresControlRole verifies AC-004 (RPC path):
 // A non-control caller (console or readonly role) attempting destroy via the
 // mgmt RPC receives an error response with code E-RPC-011 and message

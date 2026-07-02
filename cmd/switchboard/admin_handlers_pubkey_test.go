@@ -116,7 +116,7 @@ func TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes(t *testing.T) 
 // MUST FAIL with current code because the error message won't say "must be
 // ed25519" — it will say "not valid base64".
 func TestNewInBurst19_DecodePublicKey_OpenSSH_WrongKeyType_RejectsWithTypeError(t *testing.T) {
-	t.Helper()
+	t.Parallel()
 	// Generate a real RSA key so ssh.ParseAuthorizedKey succeeds and the
 	// ed25519-type-check branch (admin_handlers.go:154-156) is actually reached.
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -185,7 +185,7 @@ func TestNewInBurst19_DecodePublicKey_Empty_ReturnsECFG001(t *testing.T) {
 // that a genuinely valid ECDSA-P256 OpenSSH key is parsed successfully by
 // ssh.ParseAuthorizedKey but then rejected by the ed25519-type-check branch.
 func TestNewInBurst19_DecodePublicKey_OpenSSH_ECDSAKey_RejectsWithTypeError(t *testing.T) {
-	t.Helper()
+	t.Parallel()
 	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("generate ECDSA key: %v", err)

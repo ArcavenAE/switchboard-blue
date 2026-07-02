@@ -27,6 +27,25 @@ import (
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
 
+// assertErrorPrefix verifies that err is non-nil and that err.Error() has the
+// given prefix.  If err is nil or the prefix does not match, a test failure is
+// recorded via t.Errorf.
+//
+// Using HasPrefix rather than Contains ensures the error code appears at the
+// start of the message — a code embedded mid-message would pass a Contains
+// check but violate the canonical emission requirement (taxonomy v4.4).
+func assertErrorPrefix(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("expected non-nil error with prefix %q; got nil", want)
+		return
+	}
+	got := err.Error()
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("error %q does not have prefix %q", got, want)
+	}
+}
+
 // TestNewInBurst19_EADM018_NoParenthetical verifies that E-ADM-018 does NOT
 // include the parenthetical suffix "(revoking control key from SVTN %q)".
 //
@@ -46,12 +65,10 @@ func TestNewInBurst19_EADM018_NoParenthetical(t *testing.T) {
 		t.Fatal("mapAdminError(ErrControlRevocationRequiresConfirm): expected non-nil error")
 	}
 
-	msg := err.Error()
+	// Must have E-ADM-018 as the exact prefix of the error message (taxonomy v4.4).
+	assertErrorPrefix(t, err, "E-ADM-018: ")
 
-	// Must contain E-ADM-018 stamp.
-	if !strings.Contains(msg, "E-ADM-018") {
-		t.Errorf("E-ADM-018: stamp missing; got: %q", msg)
-	}
+	msg := err.Error()
 
 	// Must NOT contain the parenthetical.
 	// FAILS with current code which appends "(revoking control key from SVTN "test-svtn")".
@@ -130,10 +147,10 @@ func TestNewInBurst19_EADM018_NoParenthetical_ThroughHandler(t *testing.T) {
 		t.Fatal("expected E-ADM-018 for control-to-control without confirm; got nil")
 	}
 
+	// Must have E-ADM-018 as the exact prefix of the error message (taxonomy v4.4).
+	assertErrorPrefix(t, gotErr, "E-ADM-018: ")
+
 	msg := gotErr.Error()
-	if !strings.Contains(msg, "E-ADM-018") {
-		t.Errorf("E-ADM-018 through handler: stamp missing; got: %q", msg)
-	}
 	// FAILS: current code includes the parenthetical.
 	if strings.Contains(msg, "(revoking control key") {
 		t.Errorf("E-ADM-018 through handler: must NOT contain parenthetical; got: %q", msg)
@@ -167,12 +184,10 @@ func TestNewInBurst19_EADM013_NoKeyWith(t *testing.T) {
 		t.Fatal("mapAdminError(ErrKeyNotRegistered): expected non-nil error")
 	}
 
-	msg := mappedErr.Error()
+	// Must have E-ADM-013 as the exact prefix of the error message (taxonomy v4.4).
+	assertErrorPrefix(t, mappedErr, "E-ADM-013: ")
 
-	// Must contain E-ADM-013 stamp.
-	if !strings.Contains(msg, "E-ADM-013") {
-		t.Errorf("E-ADM-013: stamp missing; got: %q", msg)
-	}
+	msg := mappedErr.Error()
 
 	// Must contain "no key with" — FAILS with current code.
 	if !strings.Contains(msg, "no key with") {
@@ -222,6 +237,9 @@ func TestNewInBurst19_EADM013_CanonicalMessageFormat(t *testing.T) {
 			if mappedErr == nil {
 				t.Fatal("expected non-nil error")
 			}
+
+			// Must have E-ADM-013 as the exact prefix (taxonomy v4.4).
+			assertErrorPrefix(t, mappedErr, "E-ADM-013: ")
 
 			msg := mappedErr.Error()
 
