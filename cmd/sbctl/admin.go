@@ -265,7 +265,14 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 
 	// Print SVTN name so the operator can confirm which SVTN was destroyed
 	// (test: outBuf must contain svtnName — client-side print, not from server response).
-	_, _ = fmt.Fprintf(sio.out, "destroyed SVTN: %s\n", *nameFlag)
+	// Gated on !useJSON: in --json mode, writeSuccess (main.go) emits the canonical
+	// envelope to sio.out; a trailing plain-text line would corrupt the envelope and
+	// violate interface-definitions.md:164 (universal --json envelope contract).
+	// F-P7L1-MED-1 fix; peer admin commands (svtn create, key register, key revoke,
+	// key expire) all return connectAndRun directly with no post-print.
+	if !useJSON {
+		_, _ = fmt.Fprintf(sio.out, "destroyed SVTN: %s\n", *nameFlag)
+	}
 	return nil
 }
 

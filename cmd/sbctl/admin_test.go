@@ -1767,6 +1767,81 @@ func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
 	}
 }
 
+// TestSbctlAdmin_SVTNDestroy_HappyPath_JSON verifies that `sbctl admin svtn destroy
+// --json` emits exactly one JSON envelope to stdout with no trailing plain-text line.
+//
+// F-P7L1-MED-1 (interface-definitions.md:164 universal --json envelope contract):
+// runAdminSvtnDestroy previously appended "destroyed SVTN: <name>\n" unconditionally
+// after connectAndRun returned, corrupting the envelope in --json mode. This test
+// asserts that outBuf parses as exactly one envelope (a second json.Decoder.Decode
+// call must return io.EOF) and that a trailing plain-text line is absent.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-003; interface-definitions.md:164.
+func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
+	t.Parallel()
+
+	const svtnName = "destroy-json-svtn"
+	const fakeSVTNIDHex = "aabbccddeeff0011aabbccddeeff0011"
+	_ = fakeSVTNIDHex // derivation: confirmShortID = "SVTN-" + fakeSVTNIDHex[:8]
+	const confirmShortID = "SVTN-aabbccdd"
+
+	addr := startFakeServer(t, nil, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("AC-003 JSON: unexpected command %q; want admin.svtn.destroy", cmd)
+		}
+		var destroyArgs adminSVTNDestroyArgs
+		if err := json.Unmarshal(args, &destroyArgs); err != nil {
+			return nil, fmt.Errorf("AC-003 JSON: unmarshal adminSVTNDestroyArgs: %w", err)
+		}
+		if destroyArgs.Name != svtnName {
+			return nil, fmt.Errorf("AC-003 JSON: wire name %q; want %q", destroyArgs.Name, svtnName)
+		}
+		return map[string]string{"status": "destroyed"}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var outBuf bytes.Buffer
+	sio := sbctlIO{out: &outBuf, err: io.Discard}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), true, []string{
+		"svtn", "destroy",
+		"--name", svtnName,
+		"--confirm", confirmShortID,
+	}, sio)
+	if err != nil {
+		t.Fatalf("AC-003 JSON happy path — runAdmin returned error: %v", err)
+	}
+
+	// Assert outBuf parses as exactly one JSON envelope.
+	// A second Decode call must return io.EOF; if the buffer has a trailing
+	// plain-text line the second Decode will return a non-EOF error (F-P7L1-MED-1).
+	dec := json.NewDecoder(&outBuf)
+	var env jsonEnvelope
+	if err := dec.Decode(&env); err != nil {
+		t.Fatalf("AC-003 JSON — first Decode: expected valid JSON envelope; got: %v", err)
+	}
+	var dummy any
+	if err := dec.Decode(&dummy); err != io.EOF {
+		t.Errorf("AC-003 JSON — expected exactly one JSON envelope (second Decode must return io.EOF); got: %v", err)
+	}
+
+	// Assert envelope fields.
+	if !env.OK {
+		t.Errorf("AC-003 JSON — env.OK: got false; want true")
+	}
+	if env.Error != nil {
+		t.Errorf("AC-003 JSON — env.Error: got %+v; want nil", env.Error)
+	}
+	if !strings.Contains(string(env.Data), `"status"`) {
+		t.Errorf("AC-003 JSON — env.Data must contain status field; got: %s", env.Data)
+	}
+	if !strings.Contains(string(env.Data), "destroyed") {
+		t.Errorf("AC-003 JSON — env.Data must contain \"destroyed\" status; got: %s", env.Data)
+	}
+}
+
 // TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies all five paths of the AC-003
 // confirm gate per interface-definitions.md v1.1 §125/§127/§129 and ADR-004.
 //
