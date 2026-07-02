@@ -53,7 +53,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_1_REMEDIATED — PASS_2_PENDING | P1: 3H/3M/1L/4obs → REM(annotate 4) → P2: pending (2026-07-02) |
+| Phase 5 — Adversarial Refinement | PASS_2_REMEDIATED — PASS_3_PENDING | P1: 3H/3M/1L/4obs → REM(annotate 4+mint stubs deferred) → P2: 0H/3M/2L/7obs → REM(annotate 2 + reconcile 1 + mint 2 stubs) → P3: pending (2026-07-02) |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -61,11 +61,11 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-02 | Phase 5 Pass 1 Adv-A dispatched (public-surface lens, opus, ≤6min) | COMPLETED | HAS_FINDINGS 2H/1M/0L/2obs |
-| 2026-07-02 | Phase 5 Pass 1 Adv-B dispatched (test-rigor + traceability lens) | COMPLETED | HAS_FINDINGS 1H/2M/1L/2obs |
-| 2026-07-02 | Burst 7 persist Phase 5 Pass 1 sidecars + DRIFT items | COMPLETED | DRIFT items persisted to STATE.md |
 | 2026-07-02 | Burst 8 product-owner annotate BC-2.07.002/BC-2.03.002/error-taxonomy E-NET-006 | COMPLETED | HEAD 4659cb88; BC-2.07.002 v1.6, BC-2.03.002 v1.4, error-taxonomy v4.2 |
 | 2026-07-02 | Phase 5 Pass 1 remediation applied — 4 findings closed by annotation | COMPLETED | Closes F-P5P1-A-001, F-P5P1-A-002, F-P5-Adv-B-H-001, F-P5-Adv-B-L-001. Streak 0/3 — Pass 2 pending. |
+| 2026-07-02 | Phase 5 Pass 2 Adv-A dispatched (public-surface lens, opus, ≤6min) | COMPLETED | HAS_FINDINGS 0H/2M/1L/3obs |
+| 2026-07-02 | Phase 5 Pass 2 Adv-B dispatched (test-rigor + traceability lens, opus, ≤6min) | COMPLETED | HAS_FINDINGS 0H/1M/1L/4obs |
+| 2026-07-02 | Phase 5 Pass 2 remediated — 2 BCs annotated, 2 backlog stubs minted, 1 DEFERRED row reconciled | COMPLETED | BC-2.07.002 v1.7 (EC-004+EC-005), BC-2.09.003 v1.8 (listen_addr row), S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE stubs, HEAD dc51b06 → burst-12. Closes F-P5P2-A-001, A-002, B-002. Streak remains 0/3 — Pass 3 next. |
 
 ## Wave 6 Story Status
 
@@ -122,10 +122,12 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | 2026-07-02 | Drain-timeout forced-exit-with-log clause (BC-2.09.002 evidence question) not observable through public API with router daemon stubbed. Evidence-gap, not necessarily behavior-gap — requires live router with connected nodes and induced hang. Re-evaluate when DRIFT-HS006-ROUTER-DAEMON-STUB is closed. |
 | DRIFT-P5P1-A001-SVTN-LIST-ORPHAN | HIGH | 2026-07-02 | sbctl svtn list wire cmd svtn.list has zero daemon handler; contradicts BC-2.07.002 canonical test vector happy-path (`.factory/specs/behavioral-contracts/ss-07/BC-2.07.002.md:135`). Wave-6 merged with this gap; internal-code adversary chain missed it because gap is only visible cross-cutting sbctl main.go vs daemon Command: literals. Remediation: PENDING-<S-BL.SVTN-LIST-WIRE> annotation on BC canonical test vector (Task #77) + file backlog story (Task #78). | closed-by-annotation-2026-07-02 (BC-2.07.002 v1.6, Burst 8, HEAD 4659cb88) |
 | DRIFT-P5P1-A002-SESSIONS-LIST-ORPHAN | HIGH | 2026-07-02 | sbctl sessions list wire cmd sessions.list has zero daemon handler; contradicts BC-2.03.002 PC-1 "core operator experience" claim (`.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md:50`). S-7.02 (merged PR #55) implements Discovery.Enumerate() internally but no wire boundary. S-BL.DISCOVERY-WIRE exists in backlog. Remediation: PENDING-S-BL.DISCOVERY-WIRE annotation on BC PC-1 (Task #77). | closed-by-annotation-2026-07-02 (BC-2.03.002 v1.4, Burst 8, HEAD 4659cb88) |
-| DRIFT-P5P1-A003-PING-VERSION-ORPHAN | MEDIUM | 2026-07-02 | sbctl ping / sbctl version dispatch to wire commands ping / version with zero daemon handlers; return E-RPC-010 masking as "unknown command" from a live daemon. No BC anchor — CLI-declared promise only. Remediation: either register no-op handlers or trim sbctl subcommands; deferred to future operator-UX story. |
+| DRIFT-P5P1-A003-PING-VERSION-ORPHAN | MEDIUM | 2026-07-02 | sbctl ping / sbctl version dispatch to wire commands ping / version with zero daemon handlers; return E-RPC-010 masking as "unknown command" from a live daemon. No BC anchor — CLI-declared promise only. Remediation: either register no-op handlers or trim sbctl subcommands; deferred to future operator-UX story. | closed-by-annotation-2026-07-02 (BC-2.07.002 v1.7 EC-004+EC-005 + S-BL.PING-VERSION-WIRE stub minted, Burst 11) |
 | DRIFT-P5P1-B-H001-ENET006-TAXONOMY-ORPHAN | HIGH | 2026-07-02 | error-taxonomy.md:119 E-NET-006 declares operator-facing error message ("router draining; connect to alternate router at <alternates_list>") with zero emission site in cmd/ or internal/. BC-2.09.002 anchor. S-7.04 pending. Remediation: PENDING-S-7.04 annotation on E-NET-006 row mimicking E-CFG-002 line 99 "defensive:" shape (Task #77). Closes F-P5-Adv-B-L-001 (annotation-shape inconsistency). | closed-by-annotation-2026-07-02 (error-taxonomy v4.2, Burst 8, HEAD 4659cb88). F-P5-Adv-B-L-001 also closed as side-effect of this edit. |
 | DRIFT-P5P1-B-M002-BC209003-DEFERRED-UNTRACKED | MEDIUM | 2026-07-02 | BC-2.09.003 PC-7/PC-8/PC-9 have DEFERRED-APPLICATION obligation tied to S-7.04 (status: pending) via S-7.04 AC-005/AC-006/AC-007. No mechanism ensures these become release-gate blockers if S-7.04 deprioritizes. This drift row itself provides tracking; deprioritize-alarm remains a follow-on process gap. |
 | DRIFT-P5P1-B-M001-POL003-QUANTIFICATION | LOW | 2026-07-02 | Expansion of DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with quantification: 1/76 VPs (VP-048 only) carry source_bc version-pin suffix. POL-003 as written cannot be a lint gate — no canonical shape to check against. Task #72 (upstream drbothen/vsdd-factory filing) subsumes this. |
+| DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | 2026-07-02 | `cmd/sbctl/e2e_helpers_test.go:191` registers mock for `admin.key.list` where shipped surface is `admin.key.list-keys`. One-line fix, deferred to future test-writer follow-up. Refs F-P5P2-A-003. Status: open. |
+| DRIFT-P5P2-B-O003-ECFG-COLLISION-MAINTENANCE | LOW | 2026-07-02 | E-CFG-002 + E-CFG-006 codespace collisions across two BC-2.09.003 minor bumps acknowledged but no maintenance-pass story scheduled. Refs O-P5P2-B-003. Status: open, awaiting maintenance-pass story. |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
@@ -162,24 +164,27 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-02T00:00:00Z
-**Post-burst:** Burst 9 (state-manager: Phase 5 Pass 1 remediation loop closure)
-**Pipeline state:** Phase 5 Pass 1 REMEDIATED — Pass 2 pending fresh-context dispatch
+**Post-burst:** Burst 12 (state-manager: Phase 5 Pass 2 loop closure)
+**Pipeline state:** Phase 5 Pass 2 REMEDIATED — Pass 3 pending fresh-context dispatch
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h'`)
 **Develop HEAD:** 7fe3e29e4358df16e4e2f1de65a4e0d972540b4a (unchanged)
 
-**Task ledger:**
-- Task #45 (PENDING) — Batch 27 wording-sweep enumeration same-paragraph sharpening
-- Task #60 (PENDING) — companion tidy sweep (S-6.05 v1.11 line-numbers + S-7.03 stale-nomenclature)
-- Task #62 (PENDING) — file drbothen HIGH-1 + B28-2 + B28-3 (batchable)
-- Task #72 (PENDING) — file drbothen POL-003 machine-checkable VP source_bc version-pin (quantified 1/76)
-- Task #73 (PENDING) — router daemon runtime follow-on story (DRIFT-HS006-ROUTER-DAEMON-STUB)
-- Task #77 (COMPLETED) — Phase 5 Pass 1 remediation applied Burst 8
-- Task #78 (PENDING) — file S-BL.SVTN-LIST-WIRE backlog story
-- Task #79 (NEW, PENDING) — file S-BL.DISCOVERY-WIRE backlog story (add alongside #78 in Burst 10)
-- Task #80 (NEW, PENDING) — Phase 5 Pass 2 dispatch (fresh-context split-adversary against annotated state)
+**Task ledger (most recent first):**
+- Task #81 (COMPLETED) — Burst 11 Pass 2 remediation applied
+- Task #82 (NEW, PENDING) — Phase 5 Pass 3 dispatch (fresh-context split-adversary against Burst 11-annotated state)
+- Task #78 (COMPLETED, superseded by Burst 11) — S-BL.SVTN-LIST-WIRE minted
+- Task #79 (COMPLETED, superseded by Burst 11) — S-BL.DISCOVERY-WIRE already existed pre-Burst-8; verified live reference
+- Task #45, #60, #62, #72, #73 (PENDING) — outstanding backlog
 
-**Next action:** Burst 10 — Phase 5 Pass 2 split-adversary dispatch (Adv-A public-surface + Adv-B test-rigor/traceability, opus, prior_passes_read: false). Streak target 1/3 (finding-decay-to-zero criterion). Pass 2 must not re-surface F-P5P1-A-001/A-002/B-H-001/B-L-001 as findings (they should now read as annotated deferrals, not gaps). If Pass 2 clean, streak becomes 1; two more clean passes for CONVERGED.
+**Next action:** Burst 13 — Phase 5 Pass 3 split-adversary dispatch (opus, ≤6min, ≤6 reads, prior_passes_read: false, both lenses). Streak target 1/3 (from 0/3). If Pass 3 clean/clean, streak advances.
 
-**Auto Mode:** active. Continue advancing pipeline without pausing at each burst boundary.
+**Pass 2 findings disposition:**
+- F-P5P2-A-001 (version orphan): CLOSED BC-2.07.002 v1.7 EC-004
+- F-P5P2-A-002 (ping orphan): CLOSED BC-2.07.002 v1.7 EC-005
+- F-P5P2-A-003 (test-helper typo): DRIFT-P5P2-A003 open, test-writer follow-up
+- F-P5P2-B-001 (POL-003 2/76): upstream drbothen (Task #72)
+- F-P5P2-B-002 (listen_addr row): CLOSED BC-2.09.003 v1.8
+
+**Auto Mode:** active.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
