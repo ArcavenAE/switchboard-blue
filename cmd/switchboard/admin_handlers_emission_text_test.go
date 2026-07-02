@@ -1,4 +1,4 @@
-// admin_handlers_emission_text_test.go — RED tests for Phase 5 Pass 4 remediation.
+// admin_handlers_emission_text_test.go — Green regression guards for Phase 5 Pass 4 remediation.
 //
 // Covers:
 //   - F-A-004 (HIGH): E-ADM-018 has parenthetical suffix "(revoking control key from SVTN %q)"
@@ -6,8 +6,6 @@
 //     explicit confirmation: use --confirm to proceed: <wrapped sentinel>"
 //   - F-A-007 (MED): E-ADM-013 missing "no key with" in message.
 //     Canonical: "E-ADM-013: key not found: no key with fingerprint <fp> registered in SVTN <name>"
-//
-// These tests MUST FAIL until admin_handlers.go is updated.
 //
 // IMPORTANT: DO NOT touch implementation code. This file is tests only.
 package main
@@ -53,9 +51,7 @@ func assertErrorPrefix(t *testing.T, err error, want string) {
 //
 //	"E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed: <wrapped sentinel>"
 //
-// MUST FAIL with current code at admin_handlers.go:413 which appends:
-//
-//	"(revoking control key from SVTN %q): %w"
+// Green regression guard for F-A-004 — parenthetical suffix stripped from E-ADM-018.
 func TestNewInBurst19_EADM018_NoParenthetical(t *testing.T) {
 	t.Parallel()
 
@@ -71,7 +67,6 @@ func TestNewInBurst19_EADM018_NoParenthetical(t *testing.T) {
 	msg := err.Error()
 
 	// Must NOT contain the parenthetical.
-	// FAILS with current code which appends "(revoking control key from SVTN "test-svtn")".
 	if strings.Contains(msg, "(revoking control key") {
 		t.Errorf("E-ADM-018: must NOT contain parenthetical suffix \"(revoking control key...\"; got: %q", msg)
 	}
@@ -98,7 +93,7 @@ func TestNewInBurst19_EADM018_NoParenthetical(t *testing.T) {
 // through the full revoke handler path to confirm the parenthetical is absent
 // end-to-end (not just in mapAdminError in isolation).
 //
-// MUST FAIL with current code.
+// Green regression guard for F-A-004 — end-to-end parenthetical absence through handler.
 func TestNewInBurst19_EADM018_NoParenthetical_ThroughHandler(t *testing.T) {
 	t.Parallel()
 
@@ -151,7 +146,6 @@ func TestNewInBurst19_EADM018_NoParenthetical_ThroughHandler(t *testing.T) {
 	assertErrorPrefix(t, gotErr, "E-ADM-018: ")
 
 	msg := gotErr.Error()
-	// FAILS: current code includes the parenthetical.
 	if strings.Contains(msg, "(revoking control key") {
 		t.Errorf("E-ADM-018 through handler: must NOT contain parenthetical; got: %q", msg)
 	}
@@ -164,12 +158,7 @@ func TestNewInBurst19_EADM018_NoParenthetical_ThroughHandler(t *testing.T) {
 //
 //	"E-ADM-013: key not found: no key with fingerprint <fp> registered in SVTN <name>"
 //
-// Current code at admin_handlers.go:602:
-//
-//	"E-ADM-013: key not found: fingerprint %s not registered in SVTN %s"
-//	(missing "no key with")
-//
-// MUST FAIL with current code.
+// Green regression guard for F-A-007 — "no key with" phrase present in E-ADM-013.
 func TestNewInBurst19_EADM013_NoKeyWith(t *testing.T) {
 	t.Parallel()
 
@@ -189,7 +178,7 @@ func TestNewInBurst19_EADM013_NoKeyWith(t *testing.T) {
 
 	msg := mappedErr.Error()
 
-	// Must contain "no key with" — FAILS with current code.
+	// Must contain "no key with".
 	if !strings.Contains(msg, "no key with") {
 		t.Errorf("E-ADM-013: must contain \"no key with\"; got: %q", msg)
 	}
@@ -211,7 +200,7 @@ func TestNewInBurst19_EADM013_NoKeyWith(t *testing.T) {
 // TestNewInBurst19_EADM013_CanonicalMessageFormat verifies the full canonical
 // E-ADM-013 format including "no key with".
 //
-// MUST FAIL with current code.
+// Green regression guard for F-A-007 — full canonical E-ADM-013 format.
 func TestNewInBurst19_EADM013_CanonicalMessageFormat(t *testing.T) {
 	t.Parallel()
 

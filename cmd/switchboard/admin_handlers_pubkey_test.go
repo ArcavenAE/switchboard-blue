@@ -205,3 +205,39 @@ func TestNewInBurst19_DecodePublicKey_OpenSSH_ECDSAKey_RejectsWithTypeError(t *t
 		t.Errorf("expected error about unsupported type, got: %v", decErr)
 	}
 }
+
+// TestNewInBurst19_DecodePublicKey_CorruptOpenSSH_RejectsWithParseError verifies
+// that a string with the "ssh-ed25519" prefix but garbage key material (not
+// valid base64) causes decodePublicKey to return a non-nil error from
+// ssh.ParseAuthorizedKey failing.
+//
+// Green regression guard for F-7B-M-001 — ssh.ParseAuthorizedKey error path.
+func TestNewInBurst19_DecodePublicKey_CorruptOpenSSH_RejectsWithParseError(t *testing.T) {
+	t.Parallel()
+
+	// The "ssh-ed25519" prefix makes the OpenSSH branch fire, but "!@#$%
+	// this is not valid base64 garbage" causes ssh.ParseAuthorizedKey to fail.
+	corrupt := "ssh-ed25519 !@#$% this is not valid base64 garbage"
+
+	got, err := decodePublicKey(corrupt)
+	if err == nil {
+		t.Fatalf("decodePublicKey(corrupt OpenSSH): expected error, got nil (key bytes: %v)", got)
+	}
+}
+
+// TestNewInBurst19_DecodePublicKey_Base64WrongLength_RejectsWithLengthError
+// verifies that a valid base64 string that decodes to 31 bytes (not the
+// required 32 bytes for ed25519.PublicKeySize) is rejected with a non-nil error.
+//
+// Green regression guard for F-7B-M-001 — ed25519.PublicKeySize length check.
+func TestNewInBurst19_DecodePublicKey_Base64WrongLength_RejectsWithLengthError(t *testing.T) {
+	t.Parallel()
+
+	// 31 bytes encodes to valid base64 but fails the ed25519.PublicKeySize (32) check.
+	shortKey := base64.StdEncoding.EncodeToString(make([]byte, 31))
+
+	got, err := decodePublicKey(shortKey)
+	if err == nil {
+		t.Fatalf("decodePublicKey(31-byte base64): expected length error, got nil (key bytes: %v)", got)
+	}
+}

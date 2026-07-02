@@ -38,7 +38,9 @@ import (
 // (no literal "<short-id>" placeholder).  It does not test actual short-id
 // substitution, which is deferred (DRIFT-P5P4-PROMPT-SHORTID).
 func TestNewInBurst19_InteractivePrompt_NoLiteralPlaceholder(t *testing.T) {
-	t.Parallel()
+	// NOTE: t.Parallel() is intentionally absent. This test writes to package-level
+	// seam variables stdinIsTTY and stdinReader. Running in parallel with
+	// TestNewInBurst19_InteractivePrompt_ContainsSVTNPrefix would cause a data race.
 
 	// Capture stderr to inspect the prompt.
 	var errBuf bytes.Buffer
@@ -92,7 +94,9 @@ func TestNewInBurst19_InteractivePrompt_NoLiteralPlaceholder(t *testing.T) {
 // This is a companion assertion to the NoLiteralPlaceholder test, confirming
 // the prompt includes a SVTN-prefixed example even in the static format.
 func TestNewInBurst19_InteractivePrompt_ContainsSVTNPrefix(t *testing.T) {
-	t.Parallel()
+	// NOTE: t.Parallel() is intentionally absent. This test writes to package-level
+	// seam variables stdinIsTTY and stdinReader. Running in parallel with
+	// TestNewInBurst19_InteractivePrompt_NoLiteralPlaceholder would cause a data race.
 
 	var errBuf bytes.Buffer
 	sio := sbctlIO{out: io.Discard, err: &errBuf}

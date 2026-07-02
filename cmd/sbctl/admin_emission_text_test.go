@@ -1,16 +1,10 @@
-// admin_emission_text_test.go — RED tests for Phase 5 Pass 4 remediation.
+// admin_emission_text_test.go — Green regression guards for Phase 5 Pass 4 remediation.
 //
 // Covers F-A-003 / F-B-001 (HIGH): E-CFG-012 emission text mismatch.
 //
 // Canonical (taxonomy v4.4):
 //
 //	"E-CFG-012: --yes cannot be combined with --confirm; pick one"
-//
-// Current code at admin.go:306:
-//
-//	"E-CFG-012: --yes cannot be combined with --confirm; provide one or the other"
-//
-// These tests MUST FAIL until admin.go:306 is updated to say "pick one".
 //
 // IMPORTANT: DO NOT touch implementation code. This file is tests only.
 package main
@@ -44,7 +38,7 @@ func assertErrorPrefix(t *testing.T, err error, want string) {
 // TestNewInBurst19_ECFG012_PickOne verifies that when --yes and --confirm are
 // both supplied, the error message says "pick one" (canonical taxonomy v4.4).
 //
-// MUST FAIL with current code which says "provide one or the other".
+// Green regression guard for F-A-003/F-B-001 — "pick one" phrase in E-CFG-012.
 func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 	t.Parallel()
 
@@ -61,7 +55,7 @@ func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 
 	msg := err.Error()
 
-	// Must say "pick one" — FAILS with current "provide one or the other".
+	// Must say "pick one".
 	if !strings.Contains(msg, "pick one") {
 		t.Errorf("E-CFG-012: must contain \"pick one\"; got: %q", msg)
 	}
@@ -75,7 +69,7 @@ func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 // TestNewInBurst19_ECFG012_PickOne_CanonicalExact verifies the exact canonical
 // substring (excluding the %w suffix) is present.
 //
-// MUST FAIL with current code.
+// Green regression guard for F-A-003/F-B-001 — exact canonical E-CFG-012 substring.
 func TestNewInBurst19_ECFG012_PickOne_CanonicalExact(t *testing.T) {
 	t.Parallel()
 
@@ -99,7 +93,7 @@ func TestNewInBurst19_ECFG012_PickOne_CanonicalExact(t *testing.T) {
 // Since runAdminSvtnDestroy dials out, we use the --name flag but rely on the
 // confirm gate returning before any dial attempt (E-CFG-012 fires synchronously).
 //
-// MUST FAIL with current code.
+// Green regression guard for F-A-003/F-B-001 — E-CFG-012 propagation through dispatch.
 func TestNewInBurst19_ECFG012_PickOne_ViaRunAdminSvtnDestroy(t *testing.T) {
 	t.Parallel()
 
