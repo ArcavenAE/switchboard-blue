@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.31"
+version: "2.32"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -71,7 +71,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-045 | Console session enumeration without hostnames (implementing_story: S-7.02) | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
 | VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
-| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07; Ruling-7 defense-in-depth RoleControl mutation-test: S-6.07) (v1.7: source_bc pin synced to BC-2.07.001 v1.11) | BC-2.07.001 v1.11 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
+| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07; Ruling-7 defense-in-depth RoleControl mutation-test: S-6.07) (v1.8: source_bc pin synced to BC-2.07.001 v1.12) | BC-2.07.001 v1.12 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
 | VP-049 | sbctl unified CLI with OpenSSH auth (implementing_story: S-W5.02) | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
 | VP-050 | Console remotely controllable via sbctl (implementing_story: S-7.03) | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
 | VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.32 | 2026-07-02 | VP-048 bumped v1.7→v1.8 (F-P4L3-MED-1, POL-003): source_bc pin sync BC-2.07.001 v1.11→v1.12. Property text unchanged. Governance-only. No count or method changes; total remains 76. |
 | 2.31 | 2026-07-02 | VP-050 bumped v1.1→v1.2 (F-P3L3-MED-001): bump Story trace row S-7.03 v1.2→v1.3 (POL-003 candidate sync). No count or method changes; total remains 76. |
 | 2.30 | 2026-07-02 | VP-050 bumped v1.0→v1.1 (F-P2L3-06/07): implementing_story S-7.03 added to frontmatter; Story Trace section added; phantom testenv.NewFull replaced with in-process mgmt.NewServer + net.Listen skeleton (no testenv package in codebase; pattern from cmd/sbctl/e2e_test.go S-W5.02); catalog row title annotated with implementing_story. No count or method changes; total remains 76. |
 | 2.29 | 2026-07-02 | VP-048 bumped v1.6→v1.7 (F-P3L3-M-03): source_bc pin corrected v1.7→v1.11 (BC-2.07.001 Inv-3 destroy-authority clarification per RULING-W6TB-A). No property text changes; no count or method changes; total remains 76. |

@@ -109,7 +109,7 @@ stories:
   - id: S-6.05
     title: "SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy"
     status: draft
-    spec_version: "1.6"
+    spec_version: "1.7"
     points: 3
     priority: P2
     scope_phase: E
@@ -125,7 +125,7 @@ stories:
     branch: null
     pr: null
     merge_sha: null
-    adversarial_pass_counter: 0  # Pass-3 attempt-1 had findings (F-P3L1-001..004/F-L2-01/02/03); all addressed in fix-burst cc78688; Pass-4 queued
+    adversarial_pass_counter: 0  # Pass-4 attempt-2 had spec/governance findings (F-P4L3-HIGH-1, F-P4L2-HIGH-1, F-P4L3-MED-1, F-P4L3-MED-2); addressed in fix-burst; Pass-5 queued
     impl_tip: cc78688
 
   - id: S-7.01
@@ -184,7 +184,7 @@ stories:
     cmd_sbctl_conflict: false  # top-level subcommands, not admin subcommands
     rebase_obligation: "if Tranche A stories with cmd/sbctl/main.go edits are still open, S-7.03 must coordinate on main.go registration commit"
     adversarial_pass_counter: 0  # Pass-2 attempt-1 had findings (F-P2L2-001..004/007, F-P2L3-01/02/03/06/07, F-P2L1-001/002/003); L2+L3 addressed (804e1f9+f1f6873); L1 impl in flight; Pass-3 queued
-    impl_tip: 804e1f9  # will move once L1 impl commits land
+    impl_tip: ce96e58  # synced from 804e1f9; impl worktree tip advanced
     branch: null
     pr: null
     merge_sha: null
@@ -240,6 +240,18 @@ pre_wave_obligations:
     blocking: false
 
 # Changelog
+# v1.20 (2026-07-02): S-6.05 Pass-4 fix-burst — POL-002/003 sync + AC-002 anchor retraction.
+#   S-6.05: spec_version "1.6" → "1.7" (story v1.7: BC-2.07.001 v1.11 cites → v1.12 at 4
+#     sites; AC-002 test-name anchor corrected to actual impl symbols
+#     TestSVTNManager_Destroy_KeyPurgePostcondition + TestSVTNManager_Destroy_ConcurrentAdmissionIsRaceFree;
+#     v1.5 RETRACTION added for false "corrected to match implementation" attestation;
+#     Architecture Compliance Rules + File Structure updated to match).
+#     adversarial_pass_counter stays at 0 (per BC-5.39.001; story content changed → streak reset).
+#   S-7.03: impl_tip synced 804e1f9 → ce96e58 (deferred from prior burst; worktree tip advanced).
+#   BC-2.07.001: v1.12 → v1.13 (Stories row S-6.05 v1.5 → v1.7). BC-INDEX: v2.8 → v2.9.
+#   VP-048: v1.7 → v1.8 (source_bc pin v1.11 → v1.12). VP-INDEX: v2.31 → v2.32.
+#   STORY-INDEX: v3.58 → v3.59 (S-6.05 row v1.6 → v1.7).
+#   Adversarial report persisted: cycles/cycle-1/adversarial-reviews/S-6.05-adversary-pass-4.md.
 # v1.19 (2026-07-02): S-7.03 Pass-3 L3 fix-burst (F-P3L3-MED-001, POL-003 candidate sync).
 #   BC-2.08.001: v1.2→v1.3 (Stories row cell reference S-7.03 v1.2→v1.3; stale pointer from
 #     Pass-2 fix-burst which only updated wording, not version numeral). BC-INDEX: v2.7→v2.8.
