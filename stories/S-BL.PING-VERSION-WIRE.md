@@ -3,9 +3,16 @@ artifact_id: S-BL.PING-VERSION-WIRE
 document_type: story
 level: ops
 story_id: S-BL.PING-VERSION-WIRE
-version: "1.0"
+version: "1.1"
 title: "Ping + version wire handlers: connectivity smoke-test and version info RPC"
-status: backlog
+status: wont-fix
+retired: 2026-07-02
+retired_reason: >
+  Wire orphan surface removed from BC-2.07.002 v1.8 (Phase 5 Pass 3 Path B
+  remediation). The sbctl version and ping case-arm deletion is pending Burst 17
+  code-side fix-PR on develop. Story is won't-fix because there is nothing to
+  wire up — the operator surface has been withdrawn from spec rather than
+  implemented.
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
 modified: 2026-07-02T00:00:00
@@ -24,9 +31,9 @@ acceptance_criteria_count: 0
 
 # S-BL.PING-VERSION-WIRE: Ping + Version Wire Handlers — Connectivity Smoke-Test and Version Info RPC
 
-> **Status:** Backlog stub. Full story decomposition required at scheduling time.
-> Product-owner decision required at delivery: implement ping handler or remove the
-> sbctl case arm.
+> **Status:** Won't-fix. Wire orphan surface withdrawn from BC-2.07.002 v1.8 (Phase 5
+> Pass 3 Path B remediation). Code-side case-arm deletion pending Burst 17 fix-PR on
+> develop. There is nothing to wire up — the operator surface has been removed from spec.
 
 ## Context
 
@@ -35,54 +42,36 @@ acceptance_criteria_count: 0
 - **`version`** (main.go line 80): `sbctl` dispatches `version` to retrieve daemon
   build info and compares it against the sbctl build version, printing a warning on
   mismatch. As of develop@7fe3e29e, no daemon registers a `version` handler; the call
-  returns `E-RPC-010: unknown command: version`. BC-2.07.002 EC-004 anchors the
-  intended behavior ("Daemon returns version info; sbctl prints warning if version
-  differs; command may still succeed if protocol is compatible.").
+  returns `E-RPC-010: unknown command: version`. BC-2.07.002 EC-004 previously anchored
+  the intended behavior.
 
 - **`ping`** (main.go line 82): `sbctl` dispatches `ping` as a connectivity
   smoke-test. As of develop@7fe3e29e, no daemon registers a `ping` handler; the call
-  returns `E-RPC-010: unknown command: ping`. There is no BC anchor for `ping`
-  today (EC-005 in BC-2.07.002 v1.7 documents the gap).
+  returns `E-RPC-010: unknown command: ping`. BC-2.07.002 EC-005 previously documented
+  the gap.
 
-## Obligations
+## Why Won't-Fix
 
-### version handler (anchored by BC-2.07.002 EC-004)
+Phase 5 Pass 3 fresh-context adversarial review (Adv-A) rejected the annotate-and-track
+pattern for shipping public-surface defects of this class. Path B was selected: withdraw
+the surface from spec rather than implement it. BC-2.07.002 v1.8 removes EC-004 (sbctl
+version) and EC-005 (sbctl ping) rows from the spec. Burst 17 will delete the
+corresponding case-arms from `cmd/sbctl/main.go` on a feature branch.
 
-Register a `version` handler in the daemon that returns structured build info
-(e.g., `{"version": "v0.3.1", "commit": "7fe3e29e", "built": "2026-07-01T00:00:00Z"}`
-or equivalent). The sbctl side already knows how to compare versions and print a
-warning on mismatch — the daemon side is the missing half.
-
-### ping handler (product-owner decision required)
-
-At delivery time, the implementer must choose one of:
-
-1. **Implement**: register a trivial `ping` handler that returns `{"pong": true}` (or
-   equivalent). This is the smallest possible connectivity smoke-test surface and has
-   zero behavioral complexity.
-2. **Remove**: delete the `ping` case arm from `cmd/sbctl/main.go`. Ping was
-   never part of any BC; if no use case is identified, removing the dead code is
-   cleaner than implementing a handler for it.
-
-The product-owner makes this decision at scheduling time. Until then, both paths
-are in scope.
-
-## Deliverables
-
-1. `version` daemon handler registration returning build info; sbctl version-compare
-   path exercised end-to-end.
-2. Either `ping` daemon handler (`{"pong": true}`) OR removal of the `ping`
-   case arm from sbctl, depending on product-owner decision.
-3. Integration test: verify `sbctl version` no longer returns `E-RPC-010`.
+This story has no remaining obligation — the surface it was minted to wire up no longer
+exists in spec.
 
 ## Refs
 
-- Phase 5 Pass 2 Adv-A F-P5P2-A-001 (`version` wire orphan finding)
-- Phase 5 Pass 2 Adv-A F-P5P2-A-002 (`ping` wire orphan finding)
-- BC-2.07.002 v1.7 EC-004 (version annotation), EC-005 (ping annotation)
+- Phase 5 Pass 2 Adv-A F-P5P2-A-001 (version wire orphan finding)
+- Phase 5 Pass 2 Adv-A F-P5P2-A-002 (ping wire orphan finding)
+- Phase 5 Pass 3 Adv-A F-P5P3-A-002 (wire-orphan rejection of annotate-and-track)
+- BC-2.07.002 v1.8 (EC-004 + EC-005 rows removed)
+- DRIFT-P5P3-A002-PING-VERSION-WIRE-ORPHAN (spec-side resolved; code-side pending Burst 17)
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-07-02 | Retired won't-fix. Wire orphan surface removed from BC-2.07.002 v1.8 (Phase 5 Pass 3 Path B remediation). Case-arm deletion pending Burst 17 code-side fix-PR on develop. Story won't-fix because there is nothing to wire up — operator surface withdrawn from spec. Closes DRIFT-P5P3-A002-PING-VERSION-WIRE-ORPHAN (spec-side). Refs F-P5P3-A-001, F-P5P3-A-002. |
 | 1.0 | 2026-07-02 | Backlog stub created. Bundles version + ping wire handler obligations. Refs Phase 5 Pass 2 F-P5P2-A-001, F-P5P2-A-002. |

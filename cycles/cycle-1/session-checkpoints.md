@@ -517,3 +517,21 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 - F-P5P2-A-003 (test-helper typo): DRIFT-P5P2-A003 open, test-writer follow-up
 - F-P5P2-B-001 (POL-003 2/76): upstream drbothen (Task #72)
 - F-P5P2-B-002 (listen_addr row): CLOSED BC-2.09.003 v1.8
+
+---
+
+## Checkpoint: Post-Burst 14a (archived from STATE.md at Burst 16)
+
+**Timestamp:** 2026-07-02T00:00:00Z
+**Post-burst:** Burst 14a (state-manager: Pass 3 sidecar persistence + DRIFTs)
+**Pipeline state:** Phase 5 Pass 3 HAS_FINDINGS — remediation shape pending human decision
+**Factory HEAD:** 30aa1de
+**Develop HEAD:** 7fe3e29e4358df16e4e2f1de65a4e0d972540b4a (unchanged)
+
+**Findings summary (Pass 3):**
+- Adv-A (public-surface): 3H/4M/2L/3obs — 3 code-side canonical-message drift (F-A-003/A-005/A-006), 2 wire-orphan case-arms (F-A-001/A-002), 1 CLI silent-discard (F-A-004), 1 collision reconciliation (F-A-007), 2 minor spec/UX (F-A-008/A-009)
+- Adv-B (test-rigor): 0H/1M/2L/3obs — VP-043 method drift (F-B-001), 2 POL-003 pin gaps (F-B-002/B-003)
+
+**Trajectory:** P1 4H/3M/1L → P2 0H/3M/2L → P3 3H/4M/2L. Not converging on annotate-and-track shape for shipping public-surface defects.
+
+**Decision needed:** Human decision on wire-orphan shape (register vs delete), code-side message drift fix approach, spec-side wins approval.

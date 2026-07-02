@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -18,6 +18,15 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-02
+    version: "1.9"
+    change: >
+      Phase 5 Pass 3 remediation Path B follow-up: error-taxonomy v4.3 reconciled
+      E-CFG-002 and E-CFG-006 collisions (private-key-export → E-CFG-011; sbctl
+      --yes → E-CFG-012). Collision-flag annotation row in the Error Codes table
+      removed — the pre-existing inconsistency has been resolved in error-taxonomy
+      v4.3, so the flag no longer applies. Closes DRIFT-P5P3-A007-ECFG-COLLISION
+      (BC-2.09.003 side). Refs F-P5P3-A-007.
   - date: 2026-07-02
     version: "1.8"
     change: >
@@ -214,7 +223,6 @@ Daemon startup config parsing failure; config reload with invalid config.
 |------|-----------|----------|-----------|-----------------|
 | E-CFG-001 | Required field missing or generic validation failure | broken | 1 | `"config error: <field>: <problem>. Fix: <suggestion>"` |
 | E-CFG-002 | `listen_addr` is not a valid `host:port` | broken | 1 | `"config error: listen_addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '0.0.0.0:9090'"` |
-| _(collision flag)_ | | | | **KNOWN INCONSISTENCY (F-003):** error-taxonomy.md defines E-CFG-002 as "private key export not supported" (BC-2.05.007 defensive code). This BC (v1.2) assigned E-CFG-002 to `listen_addr` invalid host:port validation — a different failure mode. This is a pre-existing collision that predates Wave 5. Reconciliation is needed in a maintenance pass: either (a) this BC's listen_addr code should be renumbered (e.g., to E-CFG-010), or (b) the taxonomy E-CFG-002 (private-key export) should be renumbered. No renumbering in this pass. | BC-2.09.003 v1.2 vs. error-taxonomy.md v2.3 |
 | E-CFG-003 | `upstream_routers[N].addr` is not a valid `host:port` | broken | 1 | `"config error: upstream_routers[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'"` |
 | E-CFG-004 | Config file not found at the supplied path | broken | 1 | `"config file not found: <path>"` |
 | E-CFG-005 | Config file present but malformed YAML (syntax error) | broken | 1 | `"config parse error: invalid YAML at line <N>: <detail>"` |
@@ -308,6 +316,7 @@ VP-028, VP-029 (existing; cover all postconditions including v1.2 additions).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.9 | 2026-07-02 | Phase 5 Pass 3 remediation Path B follow-up: error-taxonomy v4.3 reconciled E-CFG-002 (private-key-export → E-CFG-011) and E-CFG-006 (sbctl --yes → E-CFG-012). Collision-flag annotation row removed from Error Codes table — pre-existing inconsistency resolved. Closes DRIFT-P5P3-A007-ECFG-COLLISION (BC-2.09.003 side). Refs F-P5P3-A-007. |
 | 1.8 | 2026-07-02 | Reconcile listen_addr DEFERRED-APPLICATION row — previously said "No current owner story" contradicting STORY-INDEX line 135 which lists S-BL.NI as the owner. Row now correctly names S-BL.NI. Closes Phase 5 Pass 2 F-P5P2-B-002. |
 | 1.7 | 2026-06-28 | Traceability refresh (Wave-5 consistency audit F-002/F-003): Stories field updated — S-W5.01 added for PC-10/PC-11 (AC-011: management_socket, AC-012: authorized_operator_keys); S-6.01 retains AC-001..AC-009. Story Anchor updated to include S-W5.01. E-CFG-002 collision flag added to Error Codes table: error-taxonomy.md E-CFG-002 = "private key export not supported" (BC-2.05.007); BC-2.09.003 v1.2 E-CFG-002 = listen_addr invalid host:port — pre-existing inconsistency, flagged for maintenance-pass resolution. |
 | 1.6 | 2026-06-28 | Wave-5 management plane config additions (ARCH-12): PC-10 (management_socket: non-empty when present; E-CFG-008) and PC-11 (authorized_operator_keys: valid PEM Ed25519 PUBLIC KEY per entry; E-CFG-009) added. Error codes E-CFG-008 and E-CFG-009 added to Error Codes table. Edge cases EC-011 through EC-014 added. Canonical test vectors for both new fields added. VP coverage rows added to Verification Properties table. Config-schema impact note in PC-11: interface-definitions.md §Config Schema requires update for management_socket and authorized_operator_keys fields (S-W5.01 responsibility). Pre-existing E-CFG-006 collision flagged (error-taxonomy.md E-CFG-006 = sbctl admin flag conflict; BC-2.09.003 v1.4 E-CFG-006 = drain_timeout negative) — reconciliation deferred to maintenance pass. New codes E-CFG-008/E-CFG-009 are free in both documents. |

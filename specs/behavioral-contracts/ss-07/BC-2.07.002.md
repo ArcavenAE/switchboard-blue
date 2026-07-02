@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.002
 document_type: behavioral-contract
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -54,6 +54,16 @@ modified:
       Delete BC §VP table phantom rows 139-140 (both mis-labeled VP-049; per S-W5.02
       Pass-1 L3 F-P1L3-001 PO Q3 ruling). Follow-up minting VP-JSON-COVERAGE +
       VP-SBCTL-NOT-DAEMON tracked as Wave-6 backlog.
+  - date: 2026-07-02
+    version: "1.8"
+    change: >
+      F-P5P3-A-001/A-002/A-004/A-008 (Phase 5 Pass 3 remediation, Path B): remove
+      `sbctl svtn list` canonical test vector happy-path row (case-arm being deleted
+      from cmd/sbctl/main.go); remove EC-004 (sbctl version wire handler gap); remove
+      EC-005 (sbctl ping wire handler gap); retire PENDING-S-BL.SVTN-LIST-WIRE and
+      PENDING-S-BL.PING-VERSION-WIRE annotations (surface removed rather than
+      implemented). Backlog stories S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE
+      become won't-fix; state-manager retires in next burst.
   - date: 2026-07-02
     version: "1.7"
     change: >
@@ -141,19 +151,14 @@ Operator runs any `sbctl <subcommand>` command.
 | EC-001 | Operator's key not authorized for the requested operation | E-ADM-010 "authentication failed" OR E-ADM-009 "insufficient authority for operation" depending on whether the key is recognized at all. |
 | EC-002 | Multiple daemon types running on the same machine | sbctl targets by address and port; `--target=<addr>` or config file specifies which daemon. |
 | EC-003 | sbctl run without any subcommand | Prints help text and exits 0. |
-| EC-004 | sbctl version mismatch with daemon | Daemon returns version info; sbctl prints warning if version differs; command may still succeed if protocol is compatible. **PENDING-S-BL.PING-VERSION-WIRE:** as of develop@7fe3e29e, wire command `version` has no daemon-side handler — `sbctl version` returns `E-RPC-010: unknown command: version`. Tracked in backlog story S-BL.PING-VERSION-WIRE. |
-| EC-005 | sbctl ping smoke-test | Wire command `ping` has no daemon-side handler as of develop@7fe3e29e; returns `E-RPC-010: unknown command: ping`. **PENDING-S-BL.PING-VERSION-WIRE:** tracked in backlog story S-BL.PING-VERSION-WIRE. Product-owner decision at delivery: implement trivial handler returning `{"pong":true}`, or remove the sbctl case-arm. |
 
 ## Canonical Test Vectors
 
 | Input | Expected Output | Category |
 |-------|----------------|----------|
-| `sbctl svtn list` with registered key | List of SVTNs returned | happy-path |
 | `sbctl svtn list` with unregistered key | E-ADM-010 "authentication failed"; exit 1 | error |
 | `sbctl --help` | Help text printed; exit 0 | happy-path |
 | `sbctl router status --json` | JSON object with router status fields | happy-path |
-
-> **PENDING-S-BL.SVTN-LIST-WIRE:** As of develop@7fe3e29e, the canonical `sbctl svtn list` happy-path test vector is not directly executable — the sbctl subcommand dispatches to wire command `svtn.list`, for which no daemon (control / router / access / console) currently registers a handler. Invocation returns `E-RPC-010: unknown command: svtn.list` regardless of authentication state, so both test vectors (happy and error) reach the wire boundary but the happy-path row's postcondition ("List of SVTNs returned") is unreachable through the shipped operator surface. The `admin.svtn.list` handler (see also Observation: no admin-scoped listing surface today — `cmd/switchboard/admin_handlers.go` registers `admin.svtn.create` and `admin.svtn.destroy` but not `admin.svtn.list`) is expected to land via backlog story `S-BL.SVTN-LIST-WIRE`. Until then, this test vector documents intended behavior, not shipped behavior.
 
 ## Verification Properties
 
@@ -181,6 +186,7 @@ Operator runs any `sbctl <subcommand>` command.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.8 | 2026-07-02 | F-P5P3-A-001/A-002/A-004/A-008 (Phase 5 Pass 3 remediation, Path B): remove `sbctl svtn list` canonical test vector row (case-arm being deleted from cmd/sbctl/main.go); remove EC-004 (sbctl version handler); remove EC-005 (sbctl ping handler); retire PENDING-S-BL.SVTN-LIST-WIRE + PENDING-S-BL.PING-VERSION-WIRE annotations (surface removed rather than implemented). Backlog stories S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE become won't-fix; state-manager retires in next burst. |
 | 1.7 | 2026-07-02 | Annotate EC-004 with PENDING-S-BL.PING-VERSION-WIRE for version wire handler gap; add EC-005 for ping wire handler gap (also PENDING-S-BL.PING-VERSION-WIRE). Closes Phase 5 Pass 2 F-P5P2-A-001, F-P5P2-A-002. Also notes DRIFT-P5P2-A003: e2e_helpers_test.go:191 uses stale wire name `admin.key.list` for a mock handler where the shipped surface is `admin.key.list-keys` — deferred to test-writer follow-up. |
 | 1.6 | 2026-07-02 | Add PENDING-S-BL.SVTN-LIST-WIRE annotation to Canonical Test Vectors — happy-path row unreachable through shipped operator surface as of develop@7fe3e29e; wire handler tracked in backlog story S-BL.SVTN-LIST-WIRE. Closes DRIFT-P5P1-A001-SVTN-LIST-ORPHAN. Refs Phase 5 Pass 1 Adv-A F-P5P1-A-001. |
 | 1.5 | 2026-06-30 | Delete §VP table phantom rows 139-140 (both mis-labeled VP-049: `--json` fuzz row and `not-a-daemon` unit row). Per S-W5.02 Pass-1 L3 F-P1L3-001 PO Q3 ruling — these rows were never formally minted VP IDs; they are copy-paste leftovers predating the VP-062/VP-063 splits. Follow-up VPs VP-JSON-COVERAGE and VP-SBCTL-NOT-DAEMON tracked as Wave-6 backlog. |

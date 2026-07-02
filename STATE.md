@@ -53,7 +53,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_3_HAS_FINDINGS — REMEDIATION_PENDING | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L/6obs (Adv-A: 3H/4M/2L/3obs code-drift+wire-orphans; Adv-B: 0H/1M/2L/3obs VP-043 method drift+POL-003 pins). Streak 0/3. |
+| Phase 5 — Adversarial Refinement | PASS_3_REMEDIATION_IN_PROGRESS_SPEC_LANDED_CODE_PENDING | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L/6obs (Adv-A: 3H/4M/2L/3obs code-drift+wire-orphans; Adv-B: 0H/1M/2L/3obs VP-043 method drift+POL-003 pins). Streak 0/3. → Path B spec-side landed Burst 16 (5 spec files + 2 stories retired) |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -67,6 +67,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-02 | Phase 5 Pass 2 Adv-B dispatched (test-rigor + traceability lens, opus, ≤6min) | COMPLETED | HAS_FINDINGS 0H/1M/1L/4obs |
 | 2026-07-02 | Phase 5 Pass 2 remediated — 2 BCs annotated, 2 backlog stubs minted, 1 DEFERRED row reconciled | COMPLETED | BC-2.07.002 v1.7 (EC-004+EC-005), BC-2.09.003 v1.8 (listen_addr row), S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE stubs, HEAD dc51b06 → burst-12. Closes F-P5P2-A-001, A-002, B-002. Streak remains 0/3 — Pass 3 next. |
 | 2026-07-02 | Phase 5 Pass 3 HAS_FINDINGS both lenses (fresh-context adversary rejects annotate-and-track for wire-orphans; 3 code-side canonical-message drift findings) | COMPLETED | Adv-A 3H/4M/2L/3obs, Adv-B 0H/1M/2L/3obs. 12 DRIFTs opened, streak reset 0/3. Awaiting human decision on wire-orphan register-vs-delete; code-side drift needs fix-burst. |
+| 2026-07-02 | Phase 5 Pass 3 Path B remediation spec-side complete (Burst 16); code-side fix-PR pending (Burst 17 feature branch off develop) | COMPLETED | 5 spec files edited (BC-2.07.002 v1.8, error-taxonomy v4.3, VP-043 v1.2, VP-062 v1.7, VP-INDEX v2.35) + BC-2.09.003 v1.9 (collision-flag cleanup); 2 backlog stories retired wont-fix; 7 DRIFTs closed spec-side; 6 DRIFTs remain code-side (5 message-drift/UX + 1 case-arm-deletion). POL-003 conformance 2/76 → 3/76. | Agents: product-owner + spec-steward + state-manager |
 
 ## Wave 6 Story Status
 
@@ -129,18 +130,20 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P1-B-M001-POL003-QUANTIFICATION | LOW | 2026-07-02 | Expansion of DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with quantification: 1/76 VPs (VP-048 only) carry source_bc version-pin suffix. POL-003 as written cannot be a lint gate — no canonical shape to check against. Task #72 (upstream drbothen/vsdd-factory filing) subsumes this. |
 | DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | 2026-07-02 | `cmd/sbctl/e2e_helpers_test.go:191` registers mock for `admin.key.list` where shipped surface is `admin.key.list-keys`. One-line fix, deferred to future test-writer follow-up. Refs F-P5P2-A-003. Status: open. |
 | DRIFT-P5P2-B-O003-ECFG-COLLISION-MAINTENANCE | LOW | 2026-07-02 | E-CFG-002 + E-CFG-006 codespace collisions across two BC-2.09.003 minor bumps acknowledged but no maintenance-pass story scheduled. Refs O-P5P2-B-003. Status: open, awaiting maintenance-pass story. |
-| DRIFT-P5P3-A001-SVTN-LIST-WIRE-ORPHAN | HIGH | 2026-07-02 | case-arm ships pointing at non-existent svtn.list handler; BC-2.07.002 canonical test vector happy-path unreachable. Refs F-P5P3-A-001. Decision: register-handler vs delete-case-arm — AWAITING HUMAN DECISION. |
-| DRIFT-P5P3-A002-PING-VERSION-WIRE-ORPHAN | HIGH | 2026-07-02 | version + ping case-arms ship pointing at non-existent handlers; E-RPC-010 masquerades as wire fault. Refs F-P5P3-A-002. Decision: trivial handlers vs delete-case-arms — AWAITING HUMAN DECISION. |
+| DRIFT-P5P3-A001-SVTN-LIST-WIRE-ORPHAN | HIGH | 2026-07-02 | RESOLVED spec-side (Burst 16): BC-2.07.002 v1.8 removes svtn list canonical row; S-BL.SVTN-LIST-WIRE retired won't-fix. Code-side case-arm deletion pending Burst 17 feature branch. Refs F-P5P3-A-001. |
+| DRIFT-P5P3-A002-PING-VERSION-WIRE-ORPHAN | HIGH | 2026-07-02 | RESOLVED spec-side (Burst 16): BC-2.07.002 v1.8 removes EC-004 sbctl version + EC-005 sbctl ping rows; S-BL.PING-VERSION-WIRE retired won't-fix. Code-side case-arm deletion pending Burst 17 feature branch. Refs F-P5P3-A-002. |
 | DRIFT-P5P3-A003-EADM018-CODE-DRIFT | HIGH | 2026-07-02 | admin_handlers.go:413 emits `"pass --confirm"` where taxonomy canonical is `"use --confirm=<svtn-id> to proceed"`. Code-fix required. Refs F-P5P3-A-003. |
 | DRIFT-P5P3-A004-SBCTL-SVTN-SILENT-DISCARD | MED | 2026-07-02 | sbctl svtn silently discards trailing args and dispatches to svtn.list; `sbctl svtn destroy foo` becomes a stealth list. Code-fix required. Refs F-P5P3-A-004. |
 | DRIFT-P5P3-A005-EINT999-CODE-DRIFT | MED | 2026-07-02 | admin_handlers.go:428 emits "unmapped admin error" vs canonical "unmapped internal condition, programmer error, please report". Code-fix required. Refs F-P5P3-A-005. |
 | DRIFT-P5P3-A006-EADM011-CODE-DRIFT | MED | 2026-07-02 | admin_handlers.go:419 drops role + svtn_name discriminators in E-ADM-011 Variant 2. Code-fix required. Refs F-P5P3-A-006. |
-| DRIFT-P5P3-A007-ECFG-COLLISION | MED | 2026-07-02 | E-CFG-002 + E-CFG-006 collision reconciliation pending (overlaps DRIFT-P5P2-B-O003). Spec-side fix. Refs F-P5P3-A-007. |
-| DRIFT-P5P3-A008-EC004-NOT-SHIPPING | LOW | 2026-07-02 | BC-2.07.002 EC-004 describes non-shipping version-mismatch warning behavior. Spec-side: convert to DEFERRED annotation. Refs F-P5P3-A-008. |
+| DRIFT-P5P3-A007-ECFG-COLLISION | MED | 2026-07-02 | RESOLVED spec-side (Burst 16): error-taxonomy v4.3 reconciles E-CFG-002 (private-key-export → E-CFG-011) and E-CFG-006 (sbctl --yes → E-CFG-012). BC-2.09.003 v1.9 removes collision-flag row. Emission-site updates (E-CFG-011/012) pending Burst 17 feature branch. Refs F-P5P3-A-007. |
+| DRIFT-P5P3-A008-EC004-NOT-SHIPPING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): BC-2.07.002 v1.8 removes EC-004 row entirely (surface withdrawn, not annotated). Refs F-P5P3-A-008. |
 | DRIFT-P5P3-A009-UNKNOWN-SUBCOMMAND-NO-HINT | LOW | 2026-07-02 | sbctl unknown-subcommand error gives no discovery path ("run 'sbctl' for usage" missing). Trivial code-fix. Refs F-P5P3-A-009. |
-| DRIFT-P5P3-B001-VP043-METHOD-BUCKET-MISLABEL | MED | 2026-07-02 | VP-043 declares proptest+gopter; actual test uses hand-rolled LCG. VP-INDEX Proptest bucket arithmetic mislabels (34 vs 33). Spec-side reclassification or test migration. Refs F-P5P3-B-001. |
-| DRIFT-P5P3-B002-VP043-POL003-PIN-MISSING | LOW | 2026-07-02 | VP-043 source_bc missing v1.3 pin. POL-003 gap. Spec-side frontmatter fix. Refs F-P5P3-B-002. |
-| DRIFT-P5P3-B003-VP062-POL003-PIN-MISSING | LOW | 2026-07-02 | VP-062 source_bc missing v1.13 pin (VP-INDEX row claims it but frontmatter doesn't assert it). Spec-side sync. Refs F-P5P3-B-003. |
+| DRIFT-P5P3-B001-VP043-METHOD-BUCKET-MISLABEL | MED | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-043 v1.2 reclassifies proof_method proptest → strong-oracle; removes gopter harness skeleton. VP-INDEX v2.35 reclassifies row 69 Proptest→Unit; arithmetic 33+4+22+10+2+2+3=76. Refs F-P5P3-B-001. |
+| DRIFT-P5P3-B002-VP043-POL003-PIN-MISSING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-043 v1.2 frontmatter adds source_bc: BC-2.02.007 v1.3 pin. POL-003 conformance 2/76 → 3/76. Refs F-P5P3-B-002. |
+| DRIFT-P5P3-B003-VP062-POL003-PIN-MISSING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-062 v1.7 frontmatter adds source_bc: BC-2.06.003 v1.13 pin. Refs F-P5P3-B-003. |
+
+| DRIFT-P5P3-B17-CASE-ARM-DELETION | HIGH | 2026-07-02 | code-fix-required: delete case "svtn" / "version" / "ping" case-arms from cmd/sbctl/main.go per BC-2.07.002 v1.8 (surface withdrawn from spec). Feature branch off develop; fix-PR via Burst 17. Refs F-P5P3-A-001, F-P5P3-A-002. |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
@@ -177,22 +180,37 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-02T00:00:00Z
-**Post-burst:** Burst 14a (state-manager: Pass 3 sidecar persistence + DRIFTs)
-**Pipeline state:** Phase 5 Pass 3 HAS_FINDINGS — remediation shape pending human decision
-**Factory HEAD:** (see `git -C .factory log -1 --format='%h'`)
+**Post-burst:** Burst 16 (state-manager: Pass 3 Path B spec-side commit + backlog retire + DRIFT closure)
+**Pipeline state:** Phase 5 Pass 3 spec-side remediation landed; code-side fix-PR pending
+**Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
 **Develop HEAD:** 7fe3e29e4358df16e4e2f1de65a4e0d972540b4a (unchanged)
 
-**Findings summary (Pass 3):**
-- Adv-A (public-surface): 3H/4M/2L/3obs — 3 code-side canonical-message drift (F-A-003/A-005/A-006), 2 wire-orphan case-arms (F-A-001/A-002), 1 CLI silent-discard (F-A-004), 1 collision reconciliation (F-A-007), 2 minor spec/UX (F-A-008/A-009)
-- Adv-B (test-rigor): 0H/1M/2L/3obs — VP-043 method drift (F-B-001), 2 POL-003 pin gaps (F-B-002/B-003)
+**Spec-side deltas (Burst 15 + 16):**
+- BC-2.07.002 v1.7 → v1.8: EC-004, EC-005, sbctl svtn list canonical row removed
+- error-taxonomy v4.2 → v4.3: E-CFG-002/006 collisions reconciled onto E-CFG-011/012
+- VP-043 v1.1 → v1.2: proof_method proptest → strong-oracle (matches shipped LCG test); gopter harness skeleton removed; source_bc BC-2.02.007 v1.3 pin
+- VP-062 v1.6 → v1.7: source_bc BC-2.06.003 v1.13 pin
+- VP-INDEX v2.34 → v2.35: row 69 Proptest→Unit reclass; POL-003 count 2/76→3/76; arithmetic 33+4+22+10+2+2+3=76
+- BC-2.09.003 v1.8 → v1.9: collision-flag annotation row removed (reconciled by error-taxonomy v4.3)
+- S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE → wont-fix (v1.1)
 
-**Trajectory:** P1 4H/3M/1L → P2 0H/3M/2L → P3 3H/4M/2L. Not converging on annotate-and-track shape for shipping public-surface defects.
+**DRIFTs remaining code-side (6):**
+- DRIFT-P5P3-B17-CASE-ARM-DELETION: cmd/sbctl/main.go svtn/version/ping case-arms (Burst 17)
+- DRIFT-P5P3-A003-EADM018-CODE-DRIFT: admin_handlers.go:413 canonical message drift
+- DRIFT-P5P3-A005-EINT999-CODE-DRIFT: admin_handlers.go:428 canonical message drift
+- DRIFT-P5P3-A006-EADM011-CODE-DRIFT: admin_handlers.go:419 V2 discriminators drop
+- DRIFT-P5P3-A004-SBCTL-SVTN-SILENT-DISCARD: sbctl svtn silent-discard (main.go)
+- DRIFT-P5P3-A009-UNKNOWN-SUBCOMMAND-NO-HINT: sbctl unknown-subcommand no-hint (main.go)
 
-**Next action:** Human decision needed:
-1. Wire-orphan case-arms (F-P5P3-A-001, F-P5P3-A-002): register minimal daemon handlers OR delete case-arms from main.go?
-2. Code-side canonical-message drift (F-P5P3-A-003/A-005/A-006): fix-burst on develop OR file per-story-delivery?
-3. Spec-side wins ready to burst immediately (F-P5P3-B-001/B-002/B-003, F-P5P3-A-007/A-008/A-009): approve for immediate remediation?
+**Next action:** Burst 17 — open feature branch off develop tip 7fe3e29e for code-side fix-PR:
+1. Delete case "svtn" / "version" / "ping" arms from cmd/sbctl/main.go
+2. Fix 3 canonical-message emission sites in admin_handlers.go (typed-error emitters)
+3. Fix sbctl unknown-subcommand hint
+4. Fix sbctl svtn arg-discard
+5. Emission-site updates for E-CFG-011 + E-CFG-012 to sync with taxonomy v4.3
 
-**Auto Mode:** paused-for-decision.
+Pipeline via test-writer → implementer → pr-manager. After merge, Burst 18 Pass 4 fresh-context split-adversary.
+
+**Auto Mode:** active (Path B, human approved).
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

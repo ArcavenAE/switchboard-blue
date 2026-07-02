@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.34"
+version: "2.35"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -66,7 +66,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | internal/multipath | e2e | P1 | draft | VP-040.md |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms | BC-2.01.001 | internal/halfchannel | benchmark | P0 | draft | VP-041.md |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | internal/halfchannel | benchmark | P0 | draft | VP-042.md |
-| VP-043 | XOR FEC: single loss in group recoverable (implementing_story: S-7.01) | BC-2.02.007 | internal/arq | proptest | P1 | draft | VP-043.md |
+| VP-043 | XOR FEC: single loss in group recoverable (implementing_story: S-7.01) | BC-2.02.007 v1.3 | internal/arq | strong-oracle | P1 | draft | VP-043.md |
 | VP-044 | Presence advertisement includes required fields (implementing_story: S-7.02; coverage partial — in-process registry seam only; multicast wire deferred to S-BL.DISCOVERY-WIRE per RULING-W6TB-D) | BC-2.03.001, BC-2.03.003 | internal/discovery | integration | P1 | draft | VP-044.md |
 | VP-045 | Console session enumeration without hostnames (implementing_story: S-7.02) | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
@@ -111,12 +111,12 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit | Unit |
 |-----------|---------|------|-------------|-----|-----------|------------|------|
-| 76 | 34 | 4 | 22 | 10 | 2 | 2 | 2 |
+| 76 | 33 | 4 | 22 | 10 | 2 | 2 | 3 |
 
-> Arithmetic check: 34 + 4 + 22 + 10 + 2 + 2 + 2 = 76. Consistent.
+> Arithmetic check: 33 + 4 + 22 + 10 + 2 + 2 + 3 = 76. Consistent.
 > VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001 lens-1 pass-18). Integration count increased from 21 to 22. Total 75→76. P0 count 53→54.
 > VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 (admin.key.* handler-layer caller-role enforcement; S-6.06 lens-3 F-005 close). Integration count increased from 20 to 21. F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard — BuildAdminHandlers and its handler closures reside in cmd/switchboard/admin_handlers.go.
-> VP-068 (unit) — pure constructor panic-guard (no I/O). VP-074 (unit) — QualityIndicator threshold classification; 14 table-driven cases covering all 6 nominal regions + 8 boundary values.
+> VP-068 (unit) — pure constructor panic-guard (no I/O). VP-074 (unit) — QualityIndicator threshold classification; 14 table-driven cases covering all 6 nominal regions + 8 boundary values. VP-043 (strong-oracle, counted in Unit bucket) — reclassified 2026-07-02 from Proptest (F-P5P3-B-001): shipped test uses hand-rolled MMIX LCG loop + independent xorOracle() reference, not gopter. Proptest 34→33; Unit 2→3.
 > Integration count increased from 15 to 20: VP-069, VP-070, VP-071, VP-072, VP-073 added.
 > VP-060 added 2026-06-27 for BC-2.04.007 (daemon startup/shutdown lifecycle; integration/subprocess).
 > VP-061 added 2026-06-28 for BC-2.06.003 (metrics content-absence code-audit; DI-001 enforcement).
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.35 | 2026-07-02 | F-P5P3-B-001/B-002/B-003 (Phase 5 Pass 3 remediation, Path B): reclassify VP-043 row from Proptest bucket to Unit bucket; BC column pin BC-2.02.007 → BC-2.02.007 v1.3 (POL-003 candidate); VP-062 source_bc pin already correct in catalog row (BC-2.06.003 v1.13) — confirmed aligned with VP-062 v1.7 frontmatter. Arithmetic footer resynced (Proptest 34→33, Unit 2→3; total 76 unchanged). POL-003 conformance 2/76 → 3/76 (VP-043 pin added). |
 | 2.34 | 2026-07-02 | VP-050 bumped v1.2→v1.3 (F-P4L3-MED-002 propagation): Story Trace row transport clause updated — "mgmt-plane Unix socket" → "mgmt-plane transport (BC-2.07.004 EC-013)"; Story row bumped S-7.03 v1.3 → v1.4. Governance-only. No count or method changes; total remains 76. |
 | 2.33 | 2026-07-02 | VP-048 bumped v1.8→v1.9 (F-P5L3-LOW-1): Story Trace P3 sub-test name corrected — "destroy absent from list and blocks admission" → "TestAdminSVTNDestroy_E2E_VP048Property3" (top-level test in admin_handlers_e2e_test.go:1170). Governance-only; no property text change. No count or method changes; total remains 76. |
 | 2.32 | 2026-07-02 | VP-048 bumped v1.7→v1.8 (F-P4L3-MED-1, POL-003): source_bc pin sync BC-2.07.001 v1.11→v1.12. Property text unchanged. Governance-only. No count or method changes; total remains 76. |
