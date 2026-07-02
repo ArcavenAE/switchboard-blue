@@ -669,11 +669,12 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 	}
 }
 
-// TestBuildAdminHandlers_FiveHandlers asserts that BuildAdminHandlers returns
-// exactly five handlers with the correct command names.
+// TestBuildAdminHandlers_SixHandlers asserts that BuildAdminHandlers returns
+// exactly six handlers with the correct command names.
 // S-6.07 added admin.svtn.create as the fifth handler (AC-001).
-// Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1.
-func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
+// S-6.05 added admin.svtn.destroy as the sixth handler (AC-001; BC-2.07.001 PC-3).
+// Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1 + PC-3.
+func TestBuildAdminHandlers_SixHandlers(t *testing.T) {
 	t.Parallel()
 	m := newTestSVTNManager(t)
 	handlers := BuildAdminHandlers(m, nil)
@@ -684,6 +685,7 @@ func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
 		"admin.key.expire":    false,
 		"admin.key.list-keys": false,
 		"admin.svtn.create":   false,
+		"admin.svtn.destroy":  false,
 	}
 	for _, h := range handlers {
 		want[h.Command] = true
@@ -700,8 +702,8 @@ func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
 			t.Errorf("unexpected handler command %q registered in BuildAdminHandlers result", h.Command)
 		}
 	}
-	if len(handlers) != 5 {
-		t.Errorf("expected 5 handlers, got %d", len(handlers))
+	if len(handlers) != 6 {
+		t.Errorf("expected 6 handlers, got %d", len(handlers))
 	}
 }
 

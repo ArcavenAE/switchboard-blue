@@ -24,7 +24,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // adminKeyRegisterArgs is the wire-format arguments sent to the daemon's
@@ -80,6 +82,13 @@ type adminSVTNCreateArgs struct {
 	Name string `json:"name"`
 }
 
+// adminSVTNDestroyArgs is the wire-format arguments sent to the daemon's
+// admin.svtn.destroy RPC handler (AC-003 / BC-2.07.001 PC-3; S-6.05).
+type adminSVTNDestroyArgs struct {
+	// Name is the human-readable SVTN label to destroy.
+	Name string `json:"name"`
+}
+
 // runAdmin dispatches `sbctl admin <subcommand>` commands.
 //
 // Subcommand routing:
@@ -116,21 +125,24 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 //
 // Subcommand routing:
 //
-//	admin svtn create --name <svtn-name>   (wire: admin.svtn.create; AC-002)
+//	admin svtn create  --name <svtn-name>             (wire: admin.svtn.create; AC-002)
+//	admin svtn destroy --name <svtn-name> [--confirm] (wire: admin.svtn.destroy; AC-003; S-6.05)
 //
 // Returns a non-nil error on any failure.
 //
-// Traces to BC-2.07.001 PC-1 (SVTN create); S-6.07.
+// Traces to BC-2.07.001 PC-1 (SVTN create); BC-2.07.001 PC-3 (SVTN destroy); S-6.07; S-6.05.
 func runAdminSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("admin svtn: no subcommand specified; expected 'create'")
+		return fmt.Errorf("admin svtn: no subcommand specified; expected 'create' or 'destroy'")
 	}
 
 	switch args[0] {
 	case "create":
 		return runAdminSvtnCreate(ctx, target, keyPath, useJSON, args[1:], sio)
+	case "destroy":
+		return runAdminSvtnDestroy(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("admin svtn: unknown subcommand %q; expected 'create'", args[0])
+		return fmt.Errorf("admin svtn: unknown subcommand %q; expected 'create' or 'destroy'", args[0])
 	}
 }
 
@@ -158,6 +170,78 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 
 	rpcArgs := adminSVTNCreateArgs{Name: *nameFlag}
 	return connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.create", rpcArgs, sio)
+}
+
+// runAdminSvtnDestroy implements `sbctl admin svtn destroy`.
+//
+// Flags:
+//
+//	--name <svtn-name>           Human-readable SVTN label to destroy (required)
+//	--confirm <svtn-short-id>    Short-ID confirmation gate (optional; interactive prompt if omitted)
+//
+// The --confirm flag implements the destructive-operation confirmation gate per
+// interface-definitions.md v1.1 §117 and ADR-004. When omitted, the command
+// enters interactive mode and prompts "Type SVTN-<short-id> to confirm:" on
+// sio.out before proceeding.
+//
+// Sends {"command":"admin.svtn.destroy","args":{"name":"<svtn-name>"}} to the
+// daemon over the mgmt stream (AC-003 / BC-2.07.001 PC-3). On success, prints
+// confirmation to sio.out. Exits with non-zero on E-SVTN-003 (SVTN not found).
+//
+// Traces to BC-2.07.001 PC-3; AC-003; interface-definitions.md v1.1 §117; ADR-004; S-6.05.
+// confirmSVTNShortIDValid returns true if s matches the "SVTN-<8hexchars>"
+// pattern required by the destroy confirmation gate (ADR-004;
+// interface-definitions.md v1.1 §125).
+func confirmSVTNShortIDValid(s string) bool {
+	const prefix = "SVTN-"
+	if !strings.HasPrefix(s, prefix) {
+		return false
+	}
+	hex := s[len(prefix):]
+	if len(hex) != 8 {
+		return false
+	}
+	for _, r := range hex {
+		if !unicode.Is(unicode.ASCII_Hex_Digit, r) || unicode.IsUpper(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
+	fs := flag.NewFlagSet("admin svtn destroy", flag.ContinueOnError)
+	nameFlag := fs.String("name", "", "SVTN name to destroy (required)")
+	confirmFlag := fs.String("confirm", "", "Confirmation short-ID: SVTN-<first-8-hex-chars> (required)")
+
+	// F-STORY-001: argument parsing MUST precede dispatch.
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin svtn destroy: %w", err)
+	}
+	if *nameFlag == "" {
+		return fmt.Errorf("admin svtn destroy: --name is required")
+	}
+
+	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125).
+	// --confirm is required; absent or malformed values abort before any RPC.
+	if *confirmFlag == "" {
+		return fmt.Errorf("admin svtn destroy: --confirm is required; " +
+			"provide the SVTN-<short-id> printed when the SVTN was created")
+	}
+	if !confirmSVTNShortIDValid(*confirmFlag) {
+		return fmt.Errorf("admin svtn destroy: invalid --confirm %q; "+
+			"expected SVTN-<8 lowercase hex characters>", *confirmFlag)
+	}
+
+	rpcArgs := adminSVTNDestroyArgs{Name: *nameFlag}
+	if err := connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.destroy", rpcArgs, sio); err != nil {
+		return err
+	}
+
+	// Print SVTN name so the operator can confirm which SVTN was destroyed
+	// (test: outBuf must contain svtnName — client-side print, not from server response).
+	_, _ = fmt.Fprintf(sio.out, "destroyed SVTN: %s\n", *nameFlag)
+	return nil
 }
 
 // runAdminKey dispatches `sbctl admin key <subcommand>` commands.

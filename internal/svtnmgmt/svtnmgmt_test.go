@@ -16,6 +16,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1470,5 +1471,309 @@ func TestSVTNManager_LookupMigration_MissReturnsKeyNotRegistered(t *testing.T) {
 	// IsRegisteredAnyState on a miss must return false.
 	if mgr.IsRegisteredAnyState(svtnResult.SVTN.Name, unregisteredPub) {
 		t.Error("IsRegisteredAnyState with unregistered pubkey: want false; got true")
+	}
+}
+
+// ── S-6.05: SVTNManager.Destroy ───────────────────────────────────────────────
+
+// TestSVTNManager_Destroy_RemovesAllKeys verifies AC-001:
+// SVTNManager.Destroy(ctx, svtnName) removes all admitted keys for the SVTN
+// from the router's key set and frees the SVTN ID.
+//
+// ARCH-04 admission ordering verified: ListKeys (key removal) is asserted
+// before SVTNByName/All (SVTN ID free), confirming keys are gone before
+// the SVTN registry entry is gone.
+//
+// BC-self-check (BC-5.38.005 invariant 1): the stub panics; a complete
+// implementation that returns nil without removing keys or the SVTN would fail
+// the ListKeys and SVTNByName assertions below.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-001; VP-048 property 2.
+func TestSVTNManager_Destroy_RemovesAllKeys(t *testing.T) {
+	t.Parallel()
+
+	mgr, controlPub := newManagerWithKS(t)
+
+	// Create an SVTN and register two extra keys.
+	_, err := mgr.Create("destroy-test-svtn")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	extraPub1, _ := mustGenEdKey(t)
+	extraPub2, _ := mustGenEdKey(t)
+
+	if _, err := mgr.RegisterKey("destroy-test-svtn", extraPub1, admission.RoleConsole); err != nil {
+		t.Fatalf("RegisterKey extra1: %v", err)
+	}
+	if _, err := mgr.RegisterKey("destroy-test-svtn", extraPub2, admission.RoleAccess); err != nil {
+		t.Fatalf("RegisterKey extra2: %v", err)
+	}
+
+	// Pre-condition: SVTN exists and has keys (bootstrap + 2 extras).
+	keysBefore, err := mgr.ListKeys("destroy-test-svtn")
+	if err != nil {
+		t.Fatalf("ListKeys before Destroy: %v", err)
+	}
+	if len(keysBefore) < 3 {
+		t.Fatalf("expected ≥3 keys before Destroy (bootstrap + 2 extras); got %d", len(keysBefore))
+	}
+
+	// Destroy.
+	if err := mgr.Destroy(t.Context(), "destroy-test-svtn"); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+
+	// ARCH-04 ordering: assert keys removed first.
+	// ListKeys must return ErrSVTNNotFound (SVTN freed) OR an empty slice (keys
+	// purged before registry entry removed). Either is consistent with ARCH-04:
+	// if the implementation removes keys before the SVTN registry entry, ListKeys
+	// would briefly return an empty slice; after the entry is also removed it
+	// returns ErrSVTNNotFound. We assert both possibilities are correct outcomes.
+	keysAfter, listErr := mgr.ListKeys("destroy-test-svtn")
+	if listErr != nil {
+		if !errors.Is(listErr, svtnmgmt.ErrSVTNNotFound) {
+			t.Errorf("AC-001 — ListKeys after Destroy: expected ErrSVTNNotFound or empty slice; got error: %v", listErr)
+		}
+		// ErrSVTNNotFound from ListKeys confirms SVTN was freed (expected postcondition).
+	} else if len(keysAfter) != 0 {
+		// Slice returned without error must be empty (keys removed).
+		t.Errorf("AC-001 — ListKeys after Destroy: expected 0 keys; got %d", len(keysAfter))
+	}
+
+	// SVTN must be absent from the registry.
+	if _, found := mgr.SVTNByName("destroy-test-svtn"); found {
+		t.Error("AC-001 — SVTNByName after Destroy: SVTN still present in registry; expected absent")
+	}
+
+	// All() must not contain the destroyed SVTN.
+	for _, s := range mgr.All() {
+		if s.Name == "destroy-test-svtn" {
+			t.Error("AC-001 — All() after Destroy: destroyed SVTN still appears in list")
+		}
+	}
+
+	// Bootstrap key must no longer appear in any key set for this SVTN.
+	// CallerKeyRole returns (0, false) when SVTN is absent — confirming keys freed.
+	role, found := mgr.CallerKeyRole("destroy-test-svtn", controlPub)
+	if found {
+		t.Errorf("AC-001 — CallerKeyRole after Destroy: bootstrap key still registered with role=%v", role)
+	}
+}
+
+// TestSVTNManager_Destroy_NotFound verifies EC-001:
+// Destroy on a non-existent SVTN returns ErrSVTNNotFound (E-SVTN-003).
+// The error string must contain the SVTN name per canonical form
+// "SVTN not found: <name>" (Ruling-11/12; S-6.05 Error Code Table).
+//
+// BC-self-check (BC-5.38.005 invariant 1): a stub that returns nil fails the
+// non-nil error check; a stub that returns a generic error fails the
+// errors.Is(err, ErrSVTNNotFound) check.
+//
+// Traces to BC-2.07.001 EC-001; E-SVTN-003; AC-001.
+func TestSVTNManager_Destroy_NotFound(t *testing.T) {
+	t.Parallel()
+
+	mgr := newManager(t)
+
+	err := mgr.Destroy(t.Context(), "nonexistent-svtn")
+
+	// Must return non-nil error.
+	if err == nil {
+		t.Fatal("EC-001 — Destroy on non-existent SVTN: expected ErrSVTNNotFound; got nil")
+	}
+
+	// errors.Is chain must include ErrSVTNNotFound.
+	if !errors.Is(err, svtnmgmt.ErrSVTNNotFound) {
+		t.Errorf("EC-001 — Destroy on non-existent SVTN: errors.Is(err, ErrSVTNNotFound) = false; got: %v", err)
+	}
+
+	// Canonical error string must contain the SVTN name (Ruling-11/12).
+	if !strings.Contains(err.Error(), "nonexistent-svtn") {
+		t.Errorf("EC-001 — Destroy error string must contain the SVTN name %q; got: %q", "nonexistent-svtn", err.Error())
+	}
+}
+
+// TestSVTNManager_Destroy_WithActiveSessions verifies AC-002:
+// SVTNManager.Destroy(ctx, svtnName) terminates all active sessions before
+// destroying the SVTN. Because internal/session is a forbidden import in
+// internal/svtnmgmt (ARCH-08 position 15), we verify the observable
+// postconditions: after Destroy the SVTN is absent and its keys are removed,
+// meaning any subsequent admission attempt for admitted nodes would fail.
+//
+// This test cannot directly observe session-terminated signals without the
+// data-plane packages (forbidden in svtnmgmt). It verifies the admission-
+// blocking postcondition (VP-048 property 2 precursor) that is the
+// session-layer-observable consequence.
+//
+// BC-self-check (BC-5.38.005 invariant 1): a stub that panics fails on the
+// Destroy call; a stub that returns nil without removing keys fails the
+// CallerKeyRole assertion.
+//
+// Traces to BC-2.07.001 postcondition 3 + EC-002; AC-002.
+func TestSVTNManager_Destroy_WithActiveSessions(t *testing.T) {
+	t.Parallel()
+
+	mgr, controlPub := newManagerWithKS(t)
+
+	if _, err := mgr.Create("session-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Register several keys to simulate an active multi-node topology.
+	nodePub1, _ := mustGenEdKey(t)
+	nodePub2, _ := mustGenEdKey(t)
+
+	if _, err := mgr.RegisterKey("session-svtn", nodePub1, admission.RoleConsole); err != nil {
+		t.Fatalf("RegisterKey node1: %v", err)
+	}
+	if _, err := mgr.RegisterKey("session-svtn", nodePub2, admission.RoleAccess); err != nil {
+		t.Fatalf("RegisterKey node2: %v", err)
+	}
+
+	// Pre-condition: keys registered and active.
+	if _, found := mgr.CallerKeyRoleActive("session-svtn", nodePub1); !found {
+		t.Fatal("pre-condition: node1 should be an active key before Destroy")
+	}
+
+	// Destroy with a context that carries a deadline (AC-002: ctx bounds the
+	// session-drain window). t.Context() is cancelled when the test completes.
+	if err := mgr.Destroy(t.Context(), "session-svtn"); err != nil {
+		t.Fatalf("AC-002 — Destroy with active sessions: %v", err)
+	}
+
+	// After Destroy: SVTN absent.
+	if _, found := mgr.SVTNByName("session-svtn"); found {
+		t.Error("AC-002 — SVTNByName after Destroy: SVTN still present")
+	}
+
+	// After Destroy: no keys survive (admission of former nodes is now blocked).
+	// CallerKeyRole returns (0, false) when SVTN is absent.
+	if _, found := mgr.CallerKeyRole("session-svtn", controlPub); found {
+		t.Error("AC-002 — control key still registered after Destroy; sessions cannot terminate")
+	}
+	if _, found := mgr.CallerKeyRole("session-svtn", nodePub1); found {
+		t.Error("AC-002 — node1 key still registered after Destroy; sessions cannot terminate")
+	}
+	if _, found := mgr.CallerKeyRole("session-svtn", nodePub2); found {
+		t.Error("AC-002 — node2 key still registered after Destroy; sessions cannot terminate")
+	}
+}
+
+// TestSVTNManager_Destroy_ErrDestroyUnauthorized verifies AC-004 (Go-API path):
+// The ErrDestroyUnauthorized sentinel is exported, its Error() string matches
+// the canonical form "destroy: caller is not a control-role key" (Ruling-11/12;
+// E-ADM-011 Variant 2), and it participates in the errors.Is chain.
+//
+// Design note (RULING-W6TB-A §3): this is the defense-in-depth check at the
+// Go-API layer. The primary authority gate for the RPC path is the handler-layer
+// resolveAndVerifyCallerRole call (tested in TestSbctlAdmin_SVTNDestroy_RequiresControlRole).
+// SVTNManager.Destroy itself does not take a caller pubkey parameter — the
+// defense-in-depth check re-validates role at the Go-API boundary for callers
+// that somehow bypass the handler gate.
+//
+// This test verifies the SENTINEL CONTRACT, not the Destroy method behavior:
+//   - ErrDestroyUnauthorized is exported from package svtnmgmt.
+//   - Its Error() string == "destroy: caller is not a control-role key".
+//   - errors.Is(ErrDestroyUnauthorized, ErrDestroyUnauthorized) is true.
+//   - errors.Is(fmt.Errorf("wrap: %w", ErrDestroyUnauthorized), ErrDestroyUnauthorized)
+//     is true (wrapping round-trip).
+//
+// BC-self-check (BC-5.38.005 invariant 1): if someone renames the error or
+// changes its string, the assertions below will fail. A stub that simply
+// exports the sentinel with the correct string will pass this test — that is
+// correct: the sentinel IS the contract, and the stub already declares it.
+// The test is not trivially passable without implementer work because the stub
+// panics on Destroy invocation; this test exercises only the sentinel, which
+// the stub has pre-declared per the story file structure requirements.
+//
+// Traces to BC-2.07.001 Inv-3; AC-004 (Go-API path); RULING-W6TB-A §3.
+func TestSVTNManager_Destroy_ErrDestroyUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	// The sentinel must be exported and non-nil.
+	if svtnmgmt.ErrDestroyUnauthorized == nil {
+		t.Fatal("AC-004 — ErrDestroyUnauthorized is nil; must be an exported non-nil error")
+	}
+
+	// Canonical error string (Ruling-11/12; E-ADM-011 Variant 2).
+	const want = "destroy: caller is not a control-role key"
+	if got := svtnmgmt.ErrDestroyUnauthorized.Error(); got != want {
+		t.Errorf("AC-004 — ErrDestroyUnauthorized.Error() = %q; want %q", got, want)
+	}
+
+	// errors.Is identity check.
+	if !errors.Is(svtnmgmt.ErrDestroyUnauthorized, svtnmgmt.ErrDestroyUnauthorized) {
+		t.Error("AC-004 — errors.Is(ErrDestroyUnauthorized, ErrDestroyUnauthorized) = false")
+	}
+
+	// Wrapping round-trip: fmt.Errorf("%w") must preserve the chain.
+	wrapped := fmt.Errorf("handler gate bypassed: %w", svtnmgmt.ErrDestroyUnauthorized)
+	if !errors.Is(wrapped, svtnmgmt.ErrDestroyUnauthorized) {
+		t.Errorf("AC-004 — errors.Is(wrapped, ErrDestroyUnauthorized) = false; wrapped = %v", wrapped)
+	}
+
+	// ErrDestroyUnauthorized must NOT satisfy ErrSVTNNotFound (sentinels are distinct).
+	if errors.Is(svtnmgmt.ErrDestroyUnauthorized, svtnmgmt.ErrSVTNNotFound) {
+		t.Error("AC-004 — ErrDestroyUnauthorized must NOT satisfy ErrSVTNNotFound")
+	}
+}
+
+// TestSVTNManager_Destroy_GenesisReopened verifies AC-005:
+// Destroying the last SVTN (such that HasAnySVTN() returns false) re-opens the
+// genesis carve-out for a subsequent Create with the bootstrap key.
+// A subsequent Create with the bootstrap key must succeed exactly as on first
+// initialization (RULING-W6TB-A §4 recovery semantics).
+//
+// BC-self-check (BC-5.38.005 invariant 1): a stub that panics fails on the
+// first Destroy call; a stub that returns nil without removing the SVTN from
+// the registry leaves HasAnySVTN() == true, causing the subsequent Create to
+// fail with ErrSVTNAlreadyExists (or the "already exists" gate to still block
+// genesis semantics). The test is only passable with a working Destroy.
+//
+// Traces to BC-2.07.001 Inv-3; AC-005; RULING-W6TB-A §4.
+func TestSVTNManager_Destroy_GenesisReopened(t *testing.T) {
+	t.Parallel()
+
+	mgr, _ := newManagerWithKS(t)
+
+	// Create the first (and only) SVTN.
+	_, err := mgr.Create("genesis-svtn")
+	if err != nil {
+		t.Fatalf("Create genesis-svtn: %v", err)
+	}
+
+	// Pre-condition: HasAnySVTN must be true after creation.
+	if !mgr.HasAnySVTN() {
+		t.Fatal("AC-005 pre-condition: HasAnySVTN() should be true after Create")
+	}
+
+	// Destroy the last SVTN.
+	if err := mgr.Destroy(t.Context(), "genesis-svtn"); err != nil {
+		t.Fatalf("AC-005 — Destroy genesis-svtn: %v", err)
+	}
+
+	// Post-condition: HasAnySVTN() must be false (genesis carve-out re-opened).
+	if mgr.HasAnySVTN() {
+		t.Error("AC-005 — HasAnySVTN() should be false after destroying the last SVTN; genesis carve-out not re-opened")
+	}
+
+	// Recovery semantics: Create with the same name must succeed via the genesis
+	// carve-out (the name is now free and the registry is empty).
+	result, err := mgr.Create("genesis-svtn")
+	if err != nil {
+		t.Fatalf("AC-005 — RULING-W6TB-A §4: Create after last-SVTN destroy must succeed via genesis carve-out; got: %v", err)
+	}
+	var zero [16]byte
+	if result.SVTN.ID == zero {
+		t.Error("AC-005 — Create after genesis re-open: SVTN.ID is all-zero; expected a new generated ID")
+	}
+	if result.SVTN.Name != "genesis-svtn" {
+		t.Errorf("AC-005 — Create after genesis re-open: SVTN.Name = %q; want %q", result.SVTN.Name, "genesis-svtn")
+	}
+
+	// Verify the registry is now populated again.
+	if !mgr.HasAnySVTN() {
+		t.Error("AC-005 — HasAnySVTN() should be true after second Create")
 	}
 }

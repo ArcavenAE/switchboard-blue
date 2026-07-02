@@ -1070,6 +1070,156 @@ func TestE2E_AdminListKeys_AnyRole(t *testing.T) {
 	}
 }
 
+// ── S-6.05: VP-048 properties 2+3 — end-to-end through real mgmt.Server ─────
+
+// TestAdminSVTNDestroy_E2E_VP048Property2 verifies VP-048 property 2:
+// "svtn destroy → SVTN no longer appears in list ∧ nodes cannot admit to
+// the destroyed SVTN".
+//
+// This test exercises the full admin.svtn.destroy RPC path end-to-end through
+// a real mgmt.Server with admin handlers registered (the same wiring used in
+// production). After destroy:
+//  1. admin.key.list-keys for the destroyed SVTN returns E-SVTN-003 (SVTN absent from list).
+//  2. CallerKeyRole on the destroyed SVTN returns (0, false) (keys purged, admission blocked).
+//
+// Red Gate: makeAdminSVTNDestroyHandler is a stub that panics when invoked.
+// The panic kills the handler goroutine (mgmt.Server has no recover), the connection
+// is closed, and sendAdminRPC fails with t.Fatalf("sendAdminRPC: read response: …").
+// This causes the test to fail before reaching the ok:true assertion — expected
+// Red Gate behavior.
+//
+// Traces to VP-048 property 2; BC-2.07.001 postcondition 3; AC-001; S-6.05.
+func TestAdminSVTNDestroy_E2E_VP048Property2(t *testing.T) {
+	t.Parallel()
+
+	ctrlPub, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control key: %v", err)
+	}
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+
+	if _, err := m.Create("vp048p2-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Register an extra key to simulate a multi-key topology.
+	extraPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate extra key: %v", err)
+	}
+	if _, err := m.RegisterKey("vp048p2-svtn", extraPub, admission.RoleConsole); err != nil {
+		t.Fatalf("RegisterKey extra: %v", err)
+	}
+
+	handlers := BuildAdminHandlers(m, nil)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
+
+	// sendAdminRPC will authenticate as the daemon key (ctrlPriv), which is the
+	// sole control-authority key in bootstrap mode (BC-2.07.004 PC-9).
+	resp := sendAdminRPC(t, es.socketPath, ctrlPriv, "admin.svtn.destroy", map[string]any{
+		"name": "vp048p2-svtn",
+	})
+
+	// VP-048 P2: destroy must succeed (ok:true).
+	if ok, _ := resp["ok"].(bool); !ok {
+		errObj, _ := resp["error"].(map[string]any)
+		t.Fatalf("VP-048 P2 — admin.svtn.destroy returned error (stub not yet replaced): %v", errObj)
+	}
+
+	// VP-048 P2a: SVTN no longer appears in the list.
+	listResp := sendAdminRPC(t, es.socketPath, ctrlPriv, "admin.key.list-keys", map[string]any{
+		"svtn": "vp048p2-svtn",
+	})
+	if ok, _ := listResp["ok"].(bool); ok {
+		t.Error("VP-048 P2a — list-keys for destroyed SVTN returned ok:true; expected E-SVTN-003")
+	}
+	if errObj, _ := listResp["error"].(map[string]any); errObj != nil {
+		code, _ := errObj["code"].(string)
+		if code != "E-SVTN-003" {
+			t.Errorf("VP-048 P2a — list-keys error code: got %q; want E-SVTN-003", code)
+		}
+	}
+
+	// VP-048 P2b: keys for the destroyed SVTN are no longer accessible.
+	// CallerKeyRole returns (0, false) when SVTN is absent (keys purged).
+	if _, found := m.CallerKeyRole("vp048p2-svtn", extraPub); found {
+		t.Error("VP-048 P2b — extra key still accessible after destroy; admission not blocked")
+	}
+	if _, found := m.CallerKeyRole("vp048p2-svtn", ctrlPub); found {
+		t.Error("VP-048 P2b — control key still accessible after destroy; admission not blocked")
+	}
+}
+
+// TestAdminSVTNDestroy_E2E_VP048Property3 verifies VP-048 property 3:
+// "non-control key cannot destroy SVTN".
+//
+// This test exercises the resolveAndVerifyCallerRole handler gate (RULING-W6TB-A)
+// through a real mgmt.Server. A console-role caller attempting admin.svtn.destroy
+// must receive an error containing E-ADM-009. The SVTN must remain intact after
+// the rejected destroy attempt.
+//
+// Red Gate: makeAdminSVTNDestroyHandler is a stub that panics when invoked.
+// The panic kills the handler goroutine (mgmt.Server has no recover), the connection
+// is closed, and sendAdminRPCAsKey fails with t.Fatalf("sendAdminRPCAsKey: read response: …").
+// This causes the test to fail before reaching the ok:false / E-ADM-009 assertions —
+// expected Red Gate behavior. Once implemented, resolveAndVerifyCallerRole will return
+// E-ADM-009 before Destroy runs, and the E-ADM-009 assertion will pass.
+//
+// Traces to VP-048 property 3; BC-2.07.001 Inv-3; AC-004; RULING-W6TB-A; S-6.05.
+func TestAdminSVTNDestroy_E2E_VP048Property3(t *testing.T) {
+	t.Parallel()
+
+	ctrlPub, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control key: %v", err)
+	}
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+
+	if _, err := m.Create("vp048p3-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Register a console-role caller in both the SVTNManager and OperatorKeySet.
+	consolePub, consolePrv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate console key: %v", err)
+	}
+	if _, err := m.RegisterKey("vp048p3-svtn", consolePub, admission.RoleConsole); err != nil {
+		t.Fatalf("RegisterKey console: %v", err)
+	}
+
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{consolePub})
+	handlers := BuildAdminHandlers(m, nil)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
+
+	// Authenticate as the console-role caller via sendAdminRPCAsKey.
+	resp := sendAdminRPCAsKey(t, es.socketPath, consolePub, consolePrv, "admin.svtn.destroy", map[string]any{
+		"name": "vp048p3-svtn",
+	})
+
+	// VP-048 P3: non-control caller must be rejected (ok:false).
+	if ok, _ := resp["ok"].(bool); ok {
+		t.Fatal("VP-048 P3 — non-control caller received ok:true; resolveAndVerifyCallerRole gate did not fire")
+	}
+
+	// The error must contain E-ADM-009 (handler gate code per RULING-W6TB-A).
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil {
+		t.Fatal("VP-048 P3 — expected error in response; got nil error object")
+	}
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "E-ADM-009") {
+		t.Errorf("VP-048 P3 — expected E-ADM-009 in error message (RULING-W6TB-A gate); got: %v", errObj)
+	}
+
+	// SVTN must still exist (handler gate prevented Destroy from running).
+	if _, found := m.SVTNByName("vp048p3-svtn"); !found {
+		t.Error("VP-048 P3 — SVTN was destroyed by non-control caller; resolveAndVerifyCallerRole gate failed")
+	}
+}
+
 // Compile-time assertions that imports are used in this file.
 var (
 	_ net.Conn

@@ -1642,3 +1642,259 @@ func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
 		t.Errorf("Ruling-14 §10 — oversized RPC response: expected errors.Is(err, io.ErrUnexpectedEOF); got: %v", err)
 	}
 }
+
+// ── S-6.05: sbctl admin svtn destroy ─────────────────────────────────────────
+
+// TestSbctlAdmin_SVTNDestroy_HappyPath verifies AC-003 happy path:
+// `sbctl admin svtn destroy --name <name> --confirm <svtn-short-id>` sends
+// {"command":"admin.svtn.destroy","args":{"name":"<name>"}} to the daemon and
+// prints confirmation to stdout on success (ADR-012; ADR-006).
+//
+// The --confirm value must equal "SVTN-<first-8-hex-chars-of-svtn_id>"
+// (interface-definitions.md v1.1 §125; ADR-004). The CLI computes the expected
+// short-ID from the SVTN ID returned by the daemon — this test bypasses that
+// by supplying the correct confirmation directly, verifying that the RPC is
+// dispatched and the success output is printed.
+//
+// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a nil
+// return from a stub that doesn't dispatch would fail the request-channel check.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-003.
+func TestSbctlAdmin_SVTNDestroy_HappyPath(t *testing.T) {
+	t.Parallel()
+
+	const svtnName = "destroy-happy-svtn"
+
+	// The fake server returns the SVTN-ID that the CLI would have stored
+	// after admin.svtn.create. The --confirm short-id is the first 8 hex
+	// chars of the SVTN ID returned by the create operation. Here we supply
+	// the confirmation value directly in the CLI args.
+	// fakeSVTNIDHex is the full simulated SVTN-ID; confirmShortID is derived from
+	// its first 8 hex chars. _ = fakeSVTNIDHex documents the derivation.
+	const fakeSVTNIDHex = "aabbccddeeff0011aabbccddeeff0011"
+	_ = fakeSVTNIDHex // derivation: confirmShortID = "SVTN-" + fakeSVTNIDHex[:8]
+	const confirmShortID = "SVTN-aabbccdd"
+
+	requestCh := make(chan adminRPCRequest, 1)
+	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("AC-003: unexpected command %q; want admin.svtn.destroy", cmd)
+		}
+		var destroyArgs adminSVTNDestroyArgs
+		if err := json.Unmarshal(args, &destroyArgs); err != nil {
+			return nil, fmt.Errorf("AC-003: unmarshal adminSVTNDestroyArgs: %w", err)
+		}
+		if destroyArgs.Name != svtnName {
+			return nil, fmt.Errorf("AC-003: wire name %q; want %q", destroyArgs.Name, svtnName)
+		}
+		// Return a successful destroy response.
+		return map[string]string{"status": "destroyed"}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var outBuf strings.Builder
+	sio := sbctlIO{out: &outBuf, err: io.Discard}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "destroy",
+		"--name", svtnName,
+		"--confirm", confirmShortID,
+	}, sio)
+	if err != nil {
+		t.Fatalf("AC-003 happy path — runAdmin returned error: %v", err)
+	}
+
+	// Verify the RPC was dispatched with the correct command and name.
+	select {
+	case req := <-requestCh:
+		if req.Command != "admin.svtn.destroy" {
+			t.Errorf("AC-003 — dispatched command: got %q; want admin.svtn.destroy", req.Command)
+		}
+		var args adminSVTNDestroyArgs
+		if err := json.Unmarshal(req.Args, &args); err != nil {
+			t.Fatalf("AC-003 — unmarshal request args: %v", err)
+		}
+		if args.Name != svtnName {
+			t.Errorf("AC-003 — wire name: got %q; want %q", args.Name, svtnName)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("AC-003: timed out waiting for admin.svtn.destroy RPC; " +
+			"runAdminSvtnDestroy must dispatch the RPC within the context deadline")
+	}
+
+	// Success output must contain the SVTN name so the operator can confirm.
+	if out := outBuf.String(); !strings.Contains(out, svtnName) {
+		t.Errorf("AC-003 — success output must contain SVTN name %q; got: %q", svtnName, out)
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_NotFound verifies AC-003 not-found path:
+// `sbctl admin svtn destroy --name <nonexistent> --confirm SVTN-aabbccdd` exits
+// with non-zero on E-SVTN-003 (SVTN not found: <name>).
+//
+// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a stub
+// that returns nil fails the non-nil error assertion.
+//
+// Traces to BC-2.07.001 EC-001 / E-SVTN-003; AC-003.
+func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// The fake server returns E-SVTN-003 for the unknown SVTN name.
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("unexpected command %q", cmd)
+		}
+		return nil, fmt.Errorf("E-SVTN-003: SVTN not found: ghost-svtn")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "destroy",
+		"--name", "ghost-svtn",
+		"--confirm", "SVTN-deadbeef",
+	}, defaultIO())
+
+	// Must return non-nil error.
+	if err == nil {
+		t.Fatal("AC-003 not-found — runAdmin returned nil; expected E-SVTN-003 error")
+	}
+
+	// Error must surface E-SVTN-003 (the daemon's not-found code).
+	if !strings.Contains(err.Error(), "E-SVTN-003") {
+		t.Errorf("AC-003 not-found — expected E-SVTN-003 in error; got: %v", err)
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies AC-003 confirm gate:
+// The --confirm flag is required per interface-definitions.md v1.1 §125 and
+// ADR-004. When omitted the command enters interactive mode prompting
+// "Type SVTN-<short-id> to confirm:" before proceeding (non-interactive test:
+// stdin is empty, so the prompt receives no input and must abort with error).
+//
+// Additionally, when --confirm is provided but the value does not match the
+// expected "SVTN-<short-id>" pattern the command must abort without dispatching
+// any RPC.
+//
+// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a stub
+// that returns nil trivially would fail the nil-error assertion for the
+// missing-confirm path. The RPC-not-dispatched check would also fail if the
+// stub blindly dispatched.
+//
+// Traces to interface-definitions.md v1.1 §125; ADR-004; AC-003.
+func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing_confirm_aborts_without_rpc", func(t *testing.T) {
+		t.Parallel()
+
+		// The fake server records any RPC that reaches it — we assert none do.
+		rpcReceived := atomic.Bool{}
+		addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+			rpcReceived.Store(true)
+			return nil, fmt.Errorf("should not have been called")
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		// Omit --confirm: interactive path. With empty stdin, the command must
+		// abort with an error (cannot confirm without user input).
+		err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+			"svtn", "destroy",
+			"--name", "some-svtn",
+			// No --confirm flag.
+		}, defaultIO())
+
+		// Must return non-nil error (missing/cancelled confirmation).
+		if err == nil {
+			t.Error("ADR-004 confirm gate: missing --confirm must return non-nil error; got nil")
+		}
+
+		// No RPC must be dispatched before confirmation.
+		// Give the server goroutine a brief window to process any stray request.
+		if rpcReceived.Load() {
+			t.Error("ADR-004 confirm gate: admin.svtn.destroy RPC was dispatched without --confirm; must abort before dispatch")
+		}
+	})
+
+	t.Run("wrong_confirm_value_aborts", func(t *testing.T) {
+		t.Parallel()
+
+		// The RPC should never reach the server.
+		rpcReceived := atomic.Bool{}
+		addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+			rpcReceived.Store(true)
+			return nil, fmt.Errorf("should not have been called")
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		// Supply an incorrect confirmation token (wrong prefix).
+		err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+			"svtn", "destroy",
+			"--name", "some-svtn",
+			"--confirm", "wrongvalue",
+		}, defaultIO())
+
+		// Must return non-nil error (wrong confirmation token).
+		if err == nil {
+			t.Error("ADR-004 confirm gate: wrong --confirm must return non-nil error; got nil")
+		}
+
+		if rpcReceived.Load() {
+			t.Error("ADR-004 confirm gate: admin.svtn.destroy RPC dispatched despite wrong --confirm; must abort before dispatch")
+		}
+	})
+}
+
+// TestSbctlAdmin_SVTNDestroy_RequiresControlRole verifies AC-004 (RPC path):
+// A non-control caller (console or readonly role) attempting destroy via the
+// mgmt RPC receives an error response with code E-RPC-011 and message
+// containing "E-ADM-009" (the handler gate fires; the SVTN is not destroyed).
+//
+// RULING-W6TB-A: admin.svtn.destroy uses resolveAndVerifyCallerRole, NOT the
+// bootstrap-only gate. The handler returns E-RPC-011 wrapping E-ADM-009 for
+// non-control callers before SVTNManager.Destroy is ever invoked.
+//
+// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a
+// stub that returns nil fails the non-nil error assertion.
+//
+// Traces to BC-2.07.001 Inv-3; AC-004 (RPC path); RULING-W6TB-A.
+func TestSbctlAdmin_SVTNDestroy_RequiresControlRole(t *testing.T) {
+	t.Parallel()
+
+	// The fake server simulates the daemon returning E-RPC-011 wrapping E-ADM-009
+	// — the observable wire outcome when resolveAndVerifyCallerRole rejects a
+	// non-control caller (RULING-W6TB-A §3; error-code table).
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("unexpected command %q", cmd)
+		}
+		// Simulate resolveAndVerifyCallerRole firing for a console-role caller.
+		return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.destroy: key SHA256:console= has role console")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "destroy",
+		"--name", "restricted-svtn",
+		"--confirm", "SVTN-aabbccdd",
+	}, defaultIO())
+
+	// Must return non-nil error.
+	if err == nil {
+		t.Fatal("AC-004 RPC path — runAdmin returned nil; expected E-RPC-011/E-ADM-009 error")
+	}
+
+	// Error must surface E-ADM-009 (the handler gate code).
+	if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-004 RPC path — expected E-ADM-009 in error (RULING-W6TB-A handler gate); got: %v", err)
+	}
+}

@@ -7,6 +7,7 @@
 //	admin.key.expire     (BC-2.05.004 PC-3; DI-003 defense-in-depth duration validation)
 //	admin.key.list-keys  (BC-2.05.004 PC-1 confirmation surface; any admitted role; F-L2-001/F-L2-003)
 //	admin.svtn.create    (BC-2.07.001 PC-1 + PC-2 + Inv-3; S-6.07)
+//	admin.svtn.destroy   (BC-2.07.001 PC-3; RULING-W6TB-A; S-6.05)
 //
 // Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion
 // (ARCH-04 disambiguation table); AC-004). Access, console, and router daemons pass nil handlers.
@@ -128,6 +129,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m)},
 		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
+		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops)},
 	}
 }
 
@@ -703,6 +705,61 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 			SVTNID:               hex.EncodeToString(result.SVTN.ID[:]),
 			BootstrapFingerprint: m.BootstrapFingerprint(),
 		}, nil
+	}
+}
+
+// adminSVTNDestroyArgs is the wire-format JSON args for admin.svtn.destroy.
+// The `name` field carries the operator-supplied SVTN name to destroy.
+//
+// AC-003 / BC-2.07.001 PC-3 — wire format: {"command":"admin.svtn.destroy","args":{"name":"<name>"}}.
+type adminSVTNDestroyArgs struct {
+	// Name is the human-readable SVTN label to destroy.
+	Name string `json:"name"`
+}
+
+// makeAdminSVTNDestroyHandler returns the admin.svtn.destroy handler function.
+//
+// Authority check (BC-2.07.001 Inv-3 / RULING-W6TB-A):
+// admin.svtn.destroy uses the general control-role gate (resolveAndVerifyCallerRole),
+// NOT the bootstrap-only gate used by admin.svtn.create. This is explicitly
+// required by RULING-W6TB-A: any control-role key may destroy a SVTN, whereas
+// only the bootstrap key may create one.
+//
+// See makeAdminSVTNCreateHandler for the bootstrap-only create handler that
+// uses a stricter gate. The comment there notes: "resolveAndVerifyCallerRole is
+// NOT called here [create] because the bootstrap-only constraint is stricter."
+// The inverse applies here — Destroy MUST call resolveAndVerifyCallerRole.
+//
+// A non-control caller receives E-RPC-011 wrapping E-ADM-009 (the error code
+// lifted from the E-ADM-009 message prefix by the wire-level code extractor in
+// sendAdminRPC / sendAdminRPCAsKey). The SVTN is not destroyed.
+//
+// Traces to BC-2.07.001 PC-3; AC-001; AC-002; AC-003; AC-004; RULING-W6TB-A;
+// VP-048 properties 2+3.
+func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		var a adminSVTNDestroyArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+		if a.Name == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: name")
+		}
+
+		// RULING-W6TB-A: admin.svtn.destroy uses the general control-role gate,
+		// NOT the bootstrap-only gate used by admin.svtn.create. Any active
+		// control-role key may destroy a SVTN.
+		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.Name, "", "admin.svtn.destroy"); err != nil {
+			return nil, err
+		}
+
+		if err := m.Destroy(ctx, a.Name); err != nil {
+			return nil, mapAdminError(err, a.Name, nil, "")
+		}
+
+		return struct {
+			Status string `json:"status"`
+		}{Status: "destroyed"}, nil
 	}
 }
 
