@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.65"
+version: "3.66"
 status: draft
-producer: story-writer
+producer: pr-manager
 timestamp: 2026-07-02T00:00:00
-modified: 2026-07-02T02:45:00
+modified: 2026-07-02T10:05:23
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -21,11 +21,11 @@ inputDocuments:
 | Metric | Value |
 |--------|-------|
 | Total stories | 49 (36 master-table stories + 1 draft stub S-6.04 + 8 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
-| Complete | 32 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR) |
-| Pending | 1 (S-7.03) |
+| Complete | 34 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR, S-7.03, S-6.05) |
+| Pending | 0 |
 | Ready-for-red-gate | 0 |
 | Wave 7 (deferred) | 1 (S-7.04) |
-| Master-table drafts | 2 (S-W5.03, S-6.05) |
+| Master-table drafts | 1 (S-W5.03) |
 | Backlog/maintenance/hardening stubs | 4 (S-M.01, S-M.02, S-HRD.01, S-HRD.02) |
 | E-phase | 32 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04 + S-BL.LOOKUP + S-BL.ROUTER-ADDR) |
 | PE-phase | 4 (wave 6–7 PE stories) |
@@ -70,11 +70,11 @@ inputDocuments:
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
-| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.11, impl_tip: d0b4923) |
+| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #61, 7fe3e29) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
-| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.6) |
+| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | merged (PR #60, 7142146) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1) | E-6 | 6 | BC-2.06.003 | quality-observability, multipath-forwarding | 2 | P1 | E | merged (PR #56, 91d5675) |
@@ -177,6 +177,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.66 | 2026-07-02 | Wave-6 Tranche A + B closure: S-7.03 `draft (v1.6)` → `merged (PR #60, 7142146)`; S-6.05 `draft (v1.11, impl_tip: d0b4923)` → `merged (PR #61, 7fe3e29)`. Summary: Complete 32→34; Pending 1→0; Master-table drafts 2→1 (S-W5.03 remains). |
 | 3.65 | 2026-07-02 | S-6.05 v1.10 → v1.11 (impl_tip 3f54b3e → d0b4923; F-P7L1-MED-1 closure via gated print + envelope-integrity test). |
 | 3.64 | 2026-07-02 | S-6.05 v1.9→v1.10 (F-P6L3-HIGH-1 + F-P6L1-LOW-1 closure; impl_tip refresh): S-6.05 row bumped `draft (v1.9, impl_tip: ba735c9)` → `draft (v1.10, impl_tip: 3f54b3e)`. Impl advanced by one commit (docstring placeholder substitution + `go mod tidy`). |
 | 3.63 | 2026-07-02 | S-7.03 v1.5→v1.6 (F-P5L3-HIGH-1-2 closure): S-7.03 row bumped `draft (v1.5)` → `draft (v1.6)` after Pass-5 attempt-2 HIGH-1-2 micro-burst. Scope Note line 51 `Inv-3 v1.3 now correctly states` → `Inv-3 v1.4 now correctly states`. Impl_tip unchanged (spec-only edit). |
