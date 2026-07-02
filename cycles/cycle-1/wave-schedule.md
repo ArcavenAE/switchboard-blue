@@ -171,19 +171,35 @@ merge conflicts on the dispatch table; per-tranche serialization prevents that.
 | S-7.03 Console remote control | v1.6 | BC-2.08.001 v1.4 | VP-050 v1.3 | #60 | 7142146 |
 | S-6.05 SVTN destroy lifecycle | v1.11 | BC-2.07.001 v1.13 | VP-048 v1.9 | #61 | 7fe3e29 |
 
-**Cross-story integration surface:**
-- SVTN destroy MUST cascade-detach any active console sessions attached to
-  sessions inside the destroyed SVTN. (See holdout `holdout-scenarios/wave-scenarios/wave-6.md`
-  for the boundary scenario.)
-- `--json` envelope contract (interface-definitions §162/§164) must be consistent
-  across both `sbctl admin svtn destroy` and `sbctl console {attach,detach,switch}`.
-- Error taxonomy (E-SVTN-*, E-SES-*, E-ADM-*, E-CFG-*) must be non-overlapping
-  across both story surfaces.
+**Cross-story integration surface (W-6.C):**
+
+Two surfaces verified in Tranche C:
+
+1. **Shared `--json` envelope.** Both `admin svtn destroy` (S-6.05) and
+   `console {attach,detach,switch}` (S-7.03) route through the same
+   `writeSuccess`/`writeError` path in `cmd/sbctl/main.go`; envelope shape is
+   provably identical. Verified by wave-adversary attempt-4 Adv-A Q2.
+
+2. **Shared error-taxonomy namespaces.** S-6.05 emits `E-SVTN-*`,
+   `E-ADM-011`, `E-CFG-006`; S-7.03 emits `E-SES-*`, `E-ADM-006`. No code
+   collides between the two story surfaces. Verified by Adv-A Q4.
+
+**Deferred cross-story behavior (out-of-scope for W-6.C).** Destroy-with-
+active-console-attach cascade (SVTN destruction propagating a detach to
+active console attaches on sessions inside the destroyed SVTN) is deferred
+to `S-BL.SESSION-DRAIN` per S-6.05 v1.5 AC-002 out-of-scope note and the
+in-code deferral marker at `internal/svtnmgmt/svtnmgmt.go:770-771`.
+Wave-6 holdout HS-006 does not exercise this cascade. Manual-eval-only
+for W-6.C; full boundary coverage will land with `S-BL.SESSION-DRAIN`.
 
 **Convergence status:**
 - S-7.03 per-story: 3/3 CONVERGED at 2213780 (factory-artifacts).
 - S-6.05 per-story: 3/3 CONVERGED at 26ce8f0 (factory-artifacts).
-- Wave-level: Pass 1 attempt 1 BLOCKED (dispatch-integrity); attempt 2 pending.
+- Wave-level: Pass 1 progression:
+  - attempt 1: BLOCKING (dispatch-integrity; 3 CRIT / 3 HIGH; remediated at c9789b6)
+  - attempt 2: STREAM_WATCHDOG_KILL (600s; no verdict; infrastructure failure)
+  - attempt 3: STREAM_WATCHDOG_KILL (600s; no verdict; infrastructure failure)
+  - attempt 4: BLOCKING (split-adversary; Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3; 0/0/2/0)
 
 **Closure target:** wave_6_tranche_c_wavelevel_converged_at TBD (requires 3/3
 clean wave-level passes per BC-5.39.001).

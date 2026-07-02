@@ -34,8 +34,10 @@ wave_6_tranche_b_wavelevel_convergence_passes: 3
 wave_6_tranche_c_closed_at: 2026-07-02T10:05:23Z
 wave_6_tranche_c_stories_merged: [S-7.03 (PR #60, 7142146), S-6.05 (PR #61, 7fe3e29)]
 wave_6_tranche_c_wavelevel_pass_counter: 1
+wave_6_tranche_c_wavelevel_attempts_counter: 4
 wave_6_tranche_c_wavelevel_streak: 0
-wave_6_tranche_c_wavelevel_last_verdict: BLOCKING_ATTEMPT_1_2026-07-02
+wave_6_tranche_c_wavelevel_last_verdict: BLOCKING (Adv-A CONVERGENT_L1 + Adv-B BLOCKING_L2L3, 0/0/2/0)
+wave_6_tranche_c_test_race_attested: true
 develop_head: 7fe3e29
 open_prs: 0
 wave_6_hygiene_fec_sentinel_pr: 58
@@ -55,7 +57,7 @@ last_update: 2026-07-02
 Wave 6 Tranche C CLOSED — both stories merged to develop (BC-5.39.001 3/3 each):
 S-7.03 PR#60/7142146, S-6.05 PR#61/7fe3e29.
 develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
-Wave-level adversarial review in flight: Pass 1 attempt 1 BLOCKED (dispatch-integrity; local develop was at cdb2b66, not merged tip 7fe3e29). CRIT-1/2/3 remediated; Pass 1 attempt 2 pending with worktree-identity tuple.
+Wave-level review: Pass 1 attempt 4 dispatched as split-adversary (Adv-A L1 + Adv-B L2/L3) to defeat 600s watchdog. Adv-A CONVERGENT_L1 (0 findings). Adv-B BLOCKING_L2L3 (2 MED). Both MEDs remediated: wave-schedule cascade-detach language softened to reflect S-BL.SESSION-DRAIN deferral; test-race attestation (PASS, 18 pkgs, 0 races, 13.344s on 7fe3e29) appended to both closure sidecars. Pass 2 pending. Streak: 0/3.
 
 ## Phase Progress
 
@@ -131,18 +133,22 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave 6 Tranche C fix-bursts landed | S-6.05 Pass-3 L1+L3 clean (cc78688 + a77c32b); S-7.03 Pass-2 L2+L3 clean (804e1f9 + f1f6873); L1 impl in flight | 2026-07-02 |
 | Wave 6 Tranche C CLOSED | S-7.03 PR#60/7142146 + S-6.05 PR#61/7fe3e29 merged; per-story 3/3 each | 2026-07-02 |
 | Wave-6 Tranche C wave-level Pass 1 attempt 1 BLOCKED | dispatch-integrity: local develop was cdb2b66, not merged 7fe3e29; CRIT-1/2/3 remediated | 2026-07-02 |
+| Wave-6 Tranche C wave-level Pass 1 attempt 4 BLOCKING | split-adversary: Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3 (0/0/2/0); 2 MED remediated; Pass 2 pending | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C wave-level review)
+## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C wave-level review, attempt 4 remediation)
 
 **Position:** Phase 3 Wave 6 Tranche C. Both stories MERGED to develop.
 S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
-develop HEAD: 7fe3e29. factory-artifacts tip: c4895e8.
+develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 
-**Wave-level status:** Pass 1 attempt 1 BLOCKED (dispatch-integrity: local develop was at cdb2b66, not merged tip 7fe3e29). Three CRITICAL findings (CRIT-1/2/3) remediated in this state-manager burst. HIGH-1 [process-gap] filed upstream. Streak: 0/3.
+**Wave-level status:** Pass 1 attempt 4 BLOCKING — split-adversary result: Adv-A CONVERGENT_L1 (0 findings), Adv-B BLOCKING_L2L3 (2 MED). Both MEDs remediated:
+- F-P4L2-MED-1: wave-schedule Tranche C cascade-detach language softened (was "MUST cascade" citing HS-006 which doesn't contain that scenario; now correctly marks cascade as deferred to S-BL.SESSION-DRAIN).
+- F-P4L2-MED-2: `just test-race` PASS attestation (18 packages, 0 races, 13.344s on 7fe3e29) appended to both S-6.05 and S-7.03 closure sidecars.
+Streak: 0/3. Attempts: 4 (1=BLOCKING, 2=WATCHDOG_KILL, 3=WATCHDOG_KILL, 4=BLOCKING+remediated).
 
-**NEXT ACTION on resume:** Dispatch Wave-6 Tranche C wave-level adversary Pass 1 **attempt 2** with worktree-identity tuple: `(worktree=/Users/skippy/work/aae-orc/run/switchboard-blue, wave-tip=7fe3e29, wave-id=W-6.C)`. Adversary must read `wave-6.md` holdout scenarios before L1/L2/L3 review (HIGH-3). Verify `git rev-parse HEAD == 7fe3e29` before reading any code artifact.
+**NEXT ACTION on resume:** Dispatch Wave-6 Tranche C wave-level adversary Pass 1 **Pass 2** with worktree-identity tuple: `(worktree=/Users/skippy/work/aae-orc/run/switchboard-blue, wave-tip=7fe3e29, wave-id=W-6.C)`. Use split-adversary pattern (Adv-A L1 + Adv-B L2/L3) to stay within 600s watchdog budget. Verify `git rev-parse HEAD == 7fe3e29` before reading any code artifact.
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.
@@ -151,6 +157,7 @@ develop HEAD: 7fe3e29. factory-artifacts tip: c4895e8.
 - Tranche B post-merge issues #44–#54, #57.
 - PROCESS-GAP-DEMO-TAPE-PATHS: drbothen/vsdd-factory#418 pending upstream fix.
 - WAVE-GATE-DISPATCH-INTEGRITY: HIGH-1 [process-gap] drbothen/vsdd-factory upstream issue drafted.
+- B28-2 [process-gap]: stream-watchdog kills large-scope reviews; split-adversary pattern codification needed. Logged in .vsdd-factory-issues-pending.md.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
