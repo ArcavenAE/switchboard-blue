@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.59"
+version: "3.60"
 status: draft
 producer: story-writer
 timestamp: 2026-07-02T00:00:00
@@ -69,11 +69,11 @@ inputDocuments:
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
-| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.7) |
+| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.8) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
-| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.3) |
+| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.4) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1) | E-6 | 6 | BC-2.06.003 | quality-observability, multipath-forwarding | 2 | P1 | E | merged (PR #56, 91d5675) |
@@ -176,6 +176,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.60 | 2026-07-02 | S-6.05 P5 + S-7.03 P4 combined fix-burst (POL-002): S-6.05 row `draft (v1.7)` → `draft (v1.8)` (Confirm-Gate Semantics rewritten to §125 interactive-mode fallback; governance_leaf exception applied; VP-048 Story Trace P3 sub-test name corrected). S-7.03 row `draft (v1.3)` → `draft (v1.4)` (BC-anchor transport clause updated to BC-2.07.004 EC-013; BC-2.08.001 v1.3→v1.4). |
 | 3.59 | 2026-07-02 | F-P4L3-HIGH-1 + F-P4L2-HIGH-1 (POL-002): S-6.05 row status cell `draft (v1.6)` → `draft (v1.7)` (story v1.6→v1.7: BC-2.07.001 v1.11 cites → v1.12; AC-002 test-name anchor corrected to actual impl symbols; v1.5 RETRACTION added). No behavioral changes. |
 | 3.58 | 2026-07-02 | F-P3L3-O-4 (POL-002): S-6.05 row status cell `draft (v1.5)` → `draft (v1.6)` (story v1.5→v1.6: depends_on [S-6.02]→[S-6.02, S-6.07] per cmd/sbctl/admin.go serialization contract; S-6.07 was already merged before S-6.05 branch cut). No behavioral changes. |
 | 3.57 | 2026-07-02 | F-P2L3-03 (POL-002): S-7.03 row status cell `draft (v1.2)` → `draft (v1.3)` (story bumped to v1.3: BC-2.08.001 traceability row wording cleaned up — retraction has landed as v1.2 final). |

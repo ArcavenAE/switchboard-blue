@@ -232,3 +232,7 @@ Scope (TBD at scheduling time):
 | Date | Actor | Entry |
 |------|-------|-------|
 | 2026-07-01 | architect | Initial ruling: mgmt-plane Unix-socket transport (S-6.03 pattern). BC-2.08.001 Inv-3 must be patched to v1.2. AC-004 and AC-005 removed from S-7.03 and assigned to new S-BL.CONSOLE-OBS backlog story. Rationale: SVTN-channel transport is architecturally incompatible with all established sbctl patterns and would require forbidden imports in cmd/sbctl. Inv-3 "same channel" language is an anachronism predating Wave-5 management-plane establishment. AC-004/AC-005 reference non-existent surfaces (console session-list view, QualityIndicator.MissCount()) requiring independent design. |
+
+## Retrospective Note (2026-07-02)
+
+F-P4L3-MED-002: original ruling wording and BC-2.08.001 v1.2 Inv-3 patch extrapolated "Unix-socket" from S-6.03 access-mode pattern without noting BC-2.07.004 EC-013 authorizes TCP loopback for console mode. Implementation (`cmd/switchboard/mgmt_wire.go:143,153-158`) unconditionally emits `"tcp"` + `"127.0.0.1:9091"` for console mode per BC-2.07.004 EC-013 / AC-014 Ruling D — this is correct behavior. BC-2.08.001 v1.4 rewording clarifies Inv-3 to defer per-mode transport type to BC-2.07.004 EC-013. Ruling intent (mgmt-plane authenticated channel, no data-plane bypass) is preserved by loopback TCP; transport-type wording only was the defect. This retrospective note is informational — the ruling itself is not revised (historical audit trail). The BC-2.08.001 v1.4 amendment is the operative correction.

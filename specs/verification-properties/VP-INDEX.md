@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.32"
+version: "2.34"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -147,6 +147,8 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.34 | 2026-07-02 | VP-050 bumped v1.2→v1.3 (F-P4L3-MED-002 propagation): Story Trace row transport clause updated — "mgmt-plane Unix socket" → "mgmt-plane transport (BC-2.07.004 EC-013)"; Story row bumped S-7.03 v1.3 → v1.4. Governance-only. No count or method changes; total remains 76. |
+| 2.33 | 2026-07-02 | VP-048 bumped v1.8→v1.9 (F-P5L3-LOW-1): Story Trace P3 sub-test name corrected — "destroy absent from list and blocks admission" → "TestAdminSVTNDestroy_E2E_VP048Property3" (top-level test in admin_handlers_e2e_test.go:1170). Governance-only; no property text change. No count or method changes; total remains 76. |
 | 2.32 | 2026-07-02 | VP-048 bumped v1.7→v1.8 (F-P4L3-MED-1, POL-003): source_bc pin sync BC-2.07.001 v1.11→v1.12. Property text unchanged. Governance-only. No count or method changes; total remains 76. |
 | 2.31 | 2026-07-02 | VP-050 bumped v1.1→v1.2 (F-P3L3-MED-001): bump Story trace row S-7.03 v1.2→v1.3 (POL-003 candidate sync). No count or method changes; total remains 76. |
 | 2.30 | 2026-07-02 | VP-050 bumped v1.0→v1.1 (F-P2L3-06/07): implementing_story S-7.03 added to frontmatter; Story Trace section added; phantom testenv.NewFull replaced with in-process mgmt.NewServer + net.Listen skeleton (no testenv package in codebase; pattern from cmd/sbctl/e2e_test.go S-W5.02); catalog row title annotated with implementing_story. No count or method changes; total remains 76. |
