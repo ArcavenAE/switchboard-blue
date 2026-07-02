@@ -179,8 +179,9 @@ func NewDecoder(cfg FECConfig) *Decoder {
 // group silently on ErrTooManyLosses; it MUST invoke the ARQ SACK/retransmit
 // path (AC-003, AC-004; BC-2.02.007 PC-4).
 //
-// The parity frame type constant is frame.FrameTypeFec (=0x05); this reference
-// ensures the import is live and the canonical value is used throughout.
+// The parity frame type constant is frame.FrameTypeFec (=0x05); the import is
+// anchored at package scope (see var _ = frame.FrameTypeFec above) — callers
+// must use frame.FrameTypeFec rather than a local literal.
 func (d *Decoder) Recover(group [][]byte, parityPayload []byte) ([]byte, error) {
 	// Count losses (nil entries in group) and locate the single missing index.
 	losses := 0
