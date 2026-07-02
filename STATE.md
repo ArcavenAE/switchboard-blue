@@ -1,10 +1,10 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-6-tranche-a-closed
+phase_step: wave-6-tranche-b-closed
 phase_3_active_wave: 6
 phase_3_active_stories: []
-phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01]
+phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR]
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -73,23 +73,24 @@ wave_6_points: 33
 wave_6_deferred: "S-7.04 → Wave 7"
 wave_6_tranche_a: "[S-W5.04 PR#40/eac5d0a, S-BL.LOOKUP PR#41/851e164, S-6.07(v1.13) PR#42/446efce — all merged 2026-07-01]"
 wave_6_tranche_a_closed_at: 2026-07-01T19:04:40Z
-wave_6_tranche_b: "[S-7.01 MERGED PR#43/5c658e7; S-7.02 2/3 HEAD a9bf936; S-BL.ROUTER-ADDR 2/3 HEAD dffc27e — Pass-10 pending convergence-close]"
+wave_6_tranche_b: "[S-7.01 MERGED PR#43/5c658e7; S-7.02 MERGED PR#55/c54a8ad; S-BL.ROUTER-ADDR MERGED PR#56/91d5675 — Tranche B CLOSED]"
+wave_6_tranche_b_closed_at: 2026-07-01
 wave_6_tranche_b_pass6_fix: "b3c93b5 — F-P6L2-01 stale RED-GATE recover-guard removed from integration_test.go Part B"
 wave_6_tranche_b_p7_findings: "F-P7L2-MED-01 tautological HMAC-first oracle; F-P7L2-MED-02 TruncatesOversize maximality; F-P7L2-MED-03 mid-rune exact-content"
-develop_head: 5c658e7
+develop_head: 91d5675
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-timestamp: 2026-07-02T00:00:00Z
-last_update: 2026-07-02
+timestamp: 2026-07-01T00:00:00Z
+last_update: 2026-07-01
 ---
 
 # Switchboard Factory State
 
 ## Current State
 
-Wave 6 Tranche A CLOSED. S-7.01 MERGED (PR #43, 5c658e7 — first Tranche B story to converge under BC-5.39.001). S-7.02 and S-BL.ROUTER-ADDR at 2/3 after Pass-9 clean. develop HEAD: 5c658e7. 45 BCs, 76 VPs, 46 stories.
+Wave 6 Tranche B CLOSED. All 3 Tranche B stories merged (BC-5.39.001 3/3 each). S-7.01 PR#43/5c658e7, S-7.02 PR#55/c54a8ad, S-BL.ROUTER-ADDR PR#56/91d5675. develop HEAD: 91d5675. 45 BCs, 76 VPs, 48 stories.
 
-**Tranche B counter state (Pass-9):** S-7.01 MERGED (5c658e7 PR #43). S-7.02 2/3 (Pass-9 all 3 lenses clean, HEAD a9bf936). S-BL.ROUTER-ADDR 2/3 (Pass-9 all 3 lenses clean, HEAD dffc27e; two LOW non-blocking obs: PathEntryFromSnapshot param redundancy + VP-047 e2e deferred per RULING-W6TB-B). Pass-10 dispatched for convergence-close.
+**Tranche B CLOSED:** S-7.01 MERGED (5c658e7 PR#43). S-7.02 MERGED (c54a8ad PR#55; Pass-10 CLEAN 3/3). S-BL.ROUTER-ADDR MERGED (91d5675 PR#56; Pass-10 CLEAN 3/3; gh pr update-branch used for base catch-up; force-push introspection filed as vsdd-factory#408 + switchboard-blue#57).
 
 Historical burst detail: `cycles/cycle-1/burst-log.md`.
 
@@ -99,7 +100,7 @@ Historical burst detail: `cycles/cycle-1/burst-log.md`.
 |-------|--------|------|------|---------------------|
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift | 2026-06-24 | 27→18→17→21→17→14→7→9 (8 passes) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 | 2026-06-24 | — |
-| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: APPROVED. Wave 5: ALL 8 MERGED. W6-TrA: ALL 3 MERGED. W6-TrB: S-7.01 MERGED PR#43/5c658e7; S-7.02 2/3 P9 clean (HEAD a9bf936); S-BL.ROUTER-ADDR 2/3 P9 clean (HEAD dffc27e). Pass-10 dispatched. | 2026-07-02 | W6-TrB: S-7.01 CONVERGED+MERGED; S-7.02→2/3 (P9 all-lens clean); S-BL.ROUTER-ADDR→2/3 (P9 all-lens clean). Pass-10 = convergence-close. |
+| Phase 3 — TDD Implementation | IN_PROGRESS | Wave 4: APPROVED. Wave 5: ALL 8 MERGED. W6-TrA: ALL 3 MERGED. W6-TrB CLOSED: S-7.01 MERGED PR#43/5c658e7; S-7.02 MERGED PR#55/c54a8ad; S-BL.ROUTER-ADDR MERGED PR#56/91d5675. | 2026-07-01 | W6-TrB CLOSED: all 3 merged (BC-5.39.001 3/3 each). develop HEAD 91d5675. |
 
 ## Wave / Story Status
 
@@ -114,7 +115,9 @@ Wave 5 complete: S-5.03 #30/01ae50c, S-5.01 #35/c1c2c3d, S-5.02 #37/98eb8b7, S-6
 | 6 | S-BL.LOOKUP | Migrate AdmittedKeySet.Lookup to value-return form | MERGED | #40 | eac5d0a |
 | 6 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers | MERGED | #41 | 851e164 |
 | 6 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI (v1.13) | MERGED | #42 | 446efce |
-| 6 | S-7.01 | XOR parity FEC for single-loss recovery (BC-5.39.001 converged) | MERGED | #43 | 5c658e7 |
+| 6 | S-7.01 | XOR parity FEC for single-loss recovery | MERGED | #43 | 5c658e7 |
+| 6 | S-7.02 | SVTN-scoped multicast session discovery | MERGED | #55 | c54a8ad |
+| 6 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr (BC-2.06.003 PC-1) | MERGED | #56 | 91d5675 |
 
 ## Open Drift Items
 
@@ -166,17 +169,21 @@ Resolved items (C-1/OBS-3, T2, SW305-M1..M8, HF3, S402-F006, S403-O1, Phase-6 de
 | S-W5.04 MERGED (851e164, PR #41) | daemon-side paths.list/router.metrics/router.status RPC handlers; BC-2.06.003 PC-1/2; VP-047 | 2026-07-01 |
 | S-6.07 MERGED (446efce, PR #42) | admin.svtn.create handler + sbctl CLI; BC-2.07.001; Wave-6 Tranche A CLOSED | 2026-07-01 |
 | S-7.01 MERGED (5c658e7, PR #43) | XOR parity FEC; BC-2.02.007; first Tranche B story to converge under BC-5.39.001 | 2026-07-02 |
+| S-7.02 MERGED (c54a8ad, PR #55) | SVTN-scoped multicast session discovery; BC-2.03.001/002/003; VP-044/045/055; Pass-10 3/3 CLEAN | 2026-07-01 |
+| S-BL.ROUTER-ADDR MERGED (91d5675, PR #56) | PathSnapshot.RouterAddr BC-2.06.003 PC-1; VP-047; Pass-10 3/3 CLEAN; Wave-6 Tranche B CLOSED | 2026-07-01 |
 Older decisions (Waves 1-5 per-story): `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-02 (Pass-9 aggregate: S-7.01 MERGED, S-7.02 + S-BL.ROUTER-ADDR 2/3)
+## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche B CLOSED)
 
-**Position:** Phase 3 Wave 6 Tranche B. S-7.01 MERGED (PR #43, 5c658e7). Pass-9: S-7.02 CLEAN 2/3 (HEAD a9bf936, all 3 lenses, novelty LOW, no process-gap findings). S-BL.ROUTER-ADDR CLEAN 2/3 (HEAD dffc27e, all 3 lenses; 2 non-blocking LOW obs per RULING-W6TB-B).
+**Position:** Phase 3 Wave 6 Tranche B CLOSED. All 3 stories merged: S-7.01 PR#43/5c658e7, S-7.02 PR#55/c54a8ad, S-BL.ROUTER-ADDR PR#56/91d5675. develop HEAD: 91d5675. Worktree + branch for S-BL.ROUTER-ADDR removed.
 
-**Counter state:** S-7.01 MERGED, S-7.02 2/3 (HEAD a9bf936), S-BL.ROUTER-ADDR 2/3 (HEAD dffc27e).
+**BC-5.39.001 status:** All 3 Tranche B stories — SATISFIED (3/3 clean diverse-lens passes each).
 
-**develop HEAD:** 5c658e7. Tranche B: S-7.02 v1.6, S-7.03 v1.2, S-BL.ROUTER-ADDR v1.4.
+**Force-push introspection:** During S-BL.ROUTER-ADDR PR #56 base catch-up, pr-manager reached for rebase+force-push when `gh pr update-branch` was the correct non-destructive tool. Auto-mode classifier blocked the force-push. `gh pr update-branch` used successfully on second attempt. Issues filed: drbothen/vsdd-factory#408 (pr-manager playbook) + ArcavenAE/switchboard-blue#57 (merge-serialization hazard under "require branches up to date").
 
-**NEXT ACTION on resume:** Pass-10 dispatched for S-7.02 (HEAD a9bf936) + S-BL.ROUTER-ADDR (HEAD dffc27e), both attempt 3/3 for convergence-close. S-7.01 MERGED (PR #43 → 5c658e7). Follow-up issues for S-7.01 CR-001/004/005/006/007 filed in parallel.
+**Follow-up issues filed this cycle:** switchboard-blue #44-54, #57; drbothen/vsdd-factory #407, #408.
+
+**NEXT ACTION on resume:** Wave-6 Tranche B wave-level adversarial convergence (BC-5.39.001 wave-level, 3 clean fresh-context passes required against all 3 merged stories), OR proceed to Tranche C planning (S-6.05, S-7.03).
 
 **Open deferred observations (carry forward):**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals in Open Drift Items.
@@ -191,8 +198,8 @@ Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
 | Date | Entry |
 |------|-------|
-| 2026-07-01 | **Pass-6:** S-7.01 1/3; S-7.02 1/3; S-BL.ROUTER-ADDR 0/3 (F-P6L2-01 fixed b3c93b5). **Pass-7:** S-7.01 2/3; S-7.02 0/3 reset (3 MEDIUM F-P7L2-MED-01/02/03); S-BL.ROUTER-ADDR not run. Fix-burst dispatched. |
-| 2026-07-02 | **Pass-8/9 aggregate:** S-7.01 MERGED (PR #43, 5c658e7). Pass-9: S-7.02 CLEAN 2/3 (HEAD a9bf936, all lenses, novelty LOW). S-BL.ROUTER-ADDR CLEAN 2/3 (HEAD dffc27e, all lenses, 2 non-blocking LOW obs). Pass-10 dispatched for convergence-close (3/3). Follow-up issues CR-001/004/005/006/007 filed for S-7.01. |
+| 2026-07-02 | **Pass-8/9:** S-7.01 MERGED PR#43/5c658e7. S-7.02 CLEAN 2/3 (HEAD a9bf936). S-BL.ROUTER-ADDR CLEAN 2/3 (HEAD dffc27e). Pass-10 dispatched. |
+| 2026-07-01 | **Pass-10 + Tranche B CLOSE:** S-7.02 MERGED PR#55/c54a8ad (3/3). S-BL.ROUTER-ADDR MERGED PR#56/91d5675 (3/3; gh pr update-branch; vsdd-factory#408+#57 filed). Cleanup done. |
 
 ## Historical Content
 

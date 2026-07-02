@@ -127,7 +127,7 @@ stories:
 
   - id: S-7.02
     title: "SVTN-scoped multicast session discovery"
-    status: ready-for-red-gate
+    status: merged
     points: 8
     priority: P1
     scope_phase: PE
@@ -141,9 +141,9 @@ stories:
     touches: [internal/discovery]  # new package
     cmd_sbctl_conflict: false
     risk_note: "RISK-W6-002: greenfield package, 3 BCs — recommend pre-implementation spec-clarification burst on BC-2.03.* before dispatch"
-    branch: null
-    pr: null
-    merge_sha: null
+    branch: feat/S-7.02-session-discovery
+    pr: 55
+    merge_sha: c54a8ad06f3f0d253180645a7eeb4ac6216dc004
 
   - id: S-7.03
     title: "Console remote control via sbctl attach/detach/switch"
@@ -216,6 +216,9 @@ pre_wave_obligations:
     blocking: false
 
 # Changelog
+# v1.14 (2026-07-01): S-7.02 status ready-for-red-gate → merged. PR #55 squash-merged to develop.
+#   merge_sha: c54a8ad06f3f0d253180645a7eeb4ac6216dc004. branch: feat/S-7.02-session-discovery (deleted).
+#   BC-5.39.001 convergence: Pass-8/9/10 clean. Security: 0 CRITICAL/HIGH. CI: all checks PASS.
 # v1.13 (2026-07-01): Pass-5 fix-burst sync — POL-002 + #401/#404 propagation (F-P5L3-01, F-P5L3-02, F-P5L3-03).
 #   - S-7.02: spec_version "1.5" → "1.6" (RULING-W6TB-I added to changed_by_rulings + inputDocuments).
 #   - S-7.01: spec_version "1.2" → "1.4" (RULING-W6TB-E added to inputDocuments; v1.3→v1.4 subsumed).

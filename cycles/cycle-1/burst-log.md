@@ -859,3 +859,59 @@ L2 BLOCK resets S-7.02 counter to 0/3.
 **Pass-9:** S-7.02 CLEAN 2/3 at HEAD a9bf936. All 3 lenses (L1/L2/L3) clean. Novelty LOW across all lenses. No process-gap findings. S-BL.ROUTER-ADDR CLEAN 2/3 at HEAD dffc27e. All 3 lenses clean. Two LOW observations documented and non-blocking: PathEntryFromSnapshot parameter redundancy (cosmetic) + VP-047 end-to-end non-empty deferred to S-BL.PATH-TRACKER-WIRING per RULING-W6TB-B.
 
 **Counter state after Pass-9:** S-7.01 MERGED (5c658e7 PR #43), S-7.02 2/3 (HEAD a9bf936), S-BL.ROUTER-ADDR 2/3 (HEAD dffc27e). Pass-10 dispatched for convergence-close (3/3 attempt).
+
+---
+
+## Wave-6 Tranche B Pass-10 + CLOSURE — 2026-07-01
+
+**Agents dispatched:** adversary (S-7.02 × 3 lenses, S-BL.ROUTER-ADDR × 3 lenses), pr-manager (×2), devops-engineer (cleanup), state-manager (recording)
+
+### Pass-10 Aggregate — CONVERGENCE-CLOSED (3/3 both stories)
+
+**S-7.02 (HEAD a9bf936):** All 3 lenses CLEAN. Novelty ZERO/LOW. No gating findings. Third consecutive fully-clean pass — BC-5.39.001 SATISFIED.
+
+**S-BL.ROUTER-ADDR (HEAD dffc27e):** All 3 lenses CLEAN. Novelty ZERO/LOW. No gating findings. Third consecutive fully-clean pass — BC-5.39.001 SATISFIED. Non-blocking LOW obs (PathEntryFromSnapshot parameter redundancy; VP-047 end-to-end deferred per RULING-W6TB-B) reclassified as out-of-perimeter and not re-flagged per BC-5.39.002 PC2.
+
+### Merge Chain — Tranche B
+
+| Story | PR | Merge SHA | Merge Time | Notes |
+|-------|-----|-----------|------------|-------|
+| S-7.01 | #43 | 5c658e7 | 2026-07-02 | Squash-merged (first to converge) |
+| S-7.02 | #55 | c54a8ad | 2026-07-01 | Squash-merged |
+| S-BL.ROUTER-ADDR | #56 | 91d5675 | 2026-07-01 | Squash-merged; required gh pr update-branch base catch-up |
+
+### Force-Push Introspection
+
+During S-BL.ROUTER-ADDR PR #56 delivery, after S-7.02 PR #55 merged, the repository's "require branches up to date" protection rule rejected PR #56's merge attempt (base SHA had advanced). The pr-manager agent reached for `git rebase` + `git push --force-with-lease` — the common fallback — but that is the wrong tool for this situation. The correct non-destructive tool is `gh pr update-branch`, which performs a base-commit-merge without rewriting history.
+
+Auto-mode classifier correctly blocked the force-push attempt. The error was caught in real time. `gh pr update-branch` was invoked successfully on the second attempt, and PR #56 merged cleanly.
+
+Two issues filed as a result:
+
+- **drbothen/vsdd-factory#408** (HIGH): `pr-manager: prefer gh pr update-branch over rebase+force-push when PR base advances during convergence`. Affects the pr-manager playbook and per-story-delivery skill.
+- **ArcavenAE/switchboard-blue#57** (LOW): `Tranche/parallel-worktree delivery hits merge-serialization hazard under "require branches up to date"`. Governance observation; Option A (accept gh pr update-branch as standard) adopted.
+
+This is an own-dogfood observation: vsdd-factory#408 was filed, and `gh pr update-branch` was immediately used as the documented fix on the same delivery that surfaced the gap.
+
+### Post-Merge Cleanup
+
+- Worktree `.worktrees/S-BL.ROUTER-ADDR` removed (was clean before removal)
+- Local branch `feat/S-BL.ROUTER-ADDR` deleted (was `122a927`)
+- Remote branch `feat/S-BL.ROUTER-ADDR` deleted (via `gh pr merge --delete-branch` at merge time)
+- S-7.02 worktree and branch: removed and deleted in earlier burst (per prior session)
+
+### Follow-Up Issues Filed This Cycle
+
+**switchboard-blue issues (filed directly):** #44–#54 (code-level LOW/nit observations from Pass-10), #57 (merge-serialization hazard governance).
+
+**drbothen/vsdd-factory issues:** #407 (POL-001 scope unclear for INDEX artifacts; LOW), #408 (pr-manager force-push vs update-branch; HIGH).
+
+### Tranche B Summary
+
+| Story | BC-5.39.001 | PR | Merge SHA | Adversary Passes |
+|-------|-------------|-----|-----------|-----------------|
+| S-7.01 | SATISFIED | #43 | 5c658e7 | P6(1/3)→P7(2/3)→P8/9(CONV) |
+| S-7.02 | SATISFIED | #55 | c54a8ad | P6(1/3)→P7(RESET)→P8(0/3)→P9(2/3)→P10(3/3) |
+| S-BL.ROUTER-ADDR | SATISFIED | #56 | 91d5675 | P6(RESET b3c93b5)→P7(skip)→P8(1/3)→P9(2/3)→P10(3/3) |
+
+develop HEAD after Tranche B close: **91d5675**.
