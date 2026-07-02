@@ -218,8 +218,9 @@ BC-5.39.001 on the full wave integration surface.
 
 **Progress:**
 - Pass 1 (2026-07-02): CONVERGENT — Adv-A L1 0/0/0/0 + 2 obs, Adv-B L2/L3 0/0/0/0 + 3 obs. Streak 1/3.
+- Pass 2 (2026-07-02): CONVERGENT — Adv-A L1 0/0/0/0 + 3 obs, Adv-B L2/L3 0/0/0/0 + 2 obs (1 process-gap LOW: BC-2.08.001 v1.3 governance_leaf annotation gap). Streak 2/3.
 
-**Next:** Pass 2 fresh-context adversary (in flight).
+**Next:** Pass 3 fresh-context adversary — closing pass (in flight).
 
 ---
 
