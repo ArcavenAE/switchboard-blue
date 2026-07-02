@@ -145,3 +145,13 @@ func (p *Publisher) Get(sessionName string) (Info, error) {
 func (p *Publisher) AdmittedKeySet() *admission.AdmittedKeySet {
 	return p.keys
 }
+
+// Exists reports whether sessionName is currently in the live published set.
+// Satisfies the SessionRegistry interface used by ConsoleServer (S-7.03;
+// BC-2.08.001 PC-1/PC-3 — production wiring of SessionRegistry to Publisher).
+func (p *Publisher) Exists(sessionName string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	_, ok := p.sessions[sessionName]
+	return ok
+}

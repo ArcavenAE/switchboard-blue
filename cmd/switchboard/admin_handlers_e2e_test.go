@@ -1,5 +1,3 @@
-//go:build integration
-
 package main
 
 import (
@@ -122,7 +120,7 @@ func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 // sole unconditionally-allowed key after the fail-closed fix).
 //
 // ed25519.GenerateKey returns (PublicKey, PrivateKey, error).
-func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) (*svtnmgmt.SVTNManager, string, ed25519.PrivateKey) {
+func newE2ESVTNManager(t *testing.T, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) (*svtnmgmt.SVTNManager, string, ed25519.PrivateKey) { //nolint:unparam // svtnName could vary; hardcoding would reduce test readability
 	t.Helper()
 	ks := admission.NewAdmittedKeySet()
 	// ed25519.GenerateKey: first return is PublicKey, second is PrivateKey.
