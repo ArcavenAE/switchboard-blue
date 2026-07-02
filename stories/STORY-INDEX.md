@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.62"
+version: "3.63"
 status: draft
 producer: story-writer
 timestamp: 2026-07-02T00:00:00
@@ -73,7 +73,7 @@ inputDocuments:
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
-| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.5) |
+| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.6) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1) | E-6 | 6 | BC-2.06.003 | quality-observability, multipath-forwarding | 2 | P1 | E | merged (PR #56, 91d5675) |
@@ -176,6 +176,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.63 | 2026-07-02 | S-7.03 v1.5→v1.6 (F-P5L3-HIGH-1-2 closure): S-7.03 row bumped `draft (v1.5)` → `draft (v1.6)` after Pass-5 attempt-2 HIGH-1-2 micro-burst. Scope Note line 51 `Inv-3 v1.3 now correctly states` → `Inv-3 v1.4 now correctly states`. Impl_tip unchanged (spec-only edit). |
 | 3.62 | 2026-07-02 | S-6.05 v1.8 → v1.9 impl reconciliation (ba735c9): S-6.05 row `draft (v1.8)` → `draft (v1.9, impl_tip: ba735c9)`. SPEC-IMPL DRIFT block retired; Task 11 FULFILLED; Confirm-Gate Semantics section preserved unchanged. impl_tip ba735c9 recorded in sprint-state. DRIFT-S605-CONFIRM-IDENTITY deferral preserved. BC-INDEX and VP-INDEX unchanged — no BC/VP content changed. |
 | 3.61 | 2026-07-02 | S-7.03 Pass-5 micro-burst (F-P5L3-HIGH-1 + F-P5L3-MED-1): S-7.03 row `draft (v1.4)` → `draft (v1.5)` — BC table row v1.3→v1.4 (HIGH-1 closed); Scope Note "patched to v1.3"→"patched to v1.4" (MED-1 closed); MED-2 + LOWs deferred. Novel within-burst re-sweep instance of #428/#429/#430 class. |
 | 3.60 | 2026-07-02 | S-6.05 P5 + S-7.03 P4 combined fix-burst (POL-002): S-6.05 row `draft (v1.7)` → `draft (v1.8)` (Confirm-Gate Semantics rewritten to §125 interactive-mode fallback; governance_leaf exception applied; VP-048 Story Trace P3 sub-test name corrected). S-7.03 row `draft (v1.3)` → `draft (v1.4)` (BC-anchor transport clause updated to BC-2.07.004 EC-013; BC-2.08.001 v1.3→v1.4). |
