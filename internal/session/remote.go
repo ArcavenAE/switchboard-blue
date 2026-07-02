@@ -119,6 +119,22 @@ func NewConsoleServer(reg SessionRegistry, state *ConsoleState) *ConsoleServer {
 // On success, marks the console as attached to the named session and returns
 // ConsoleAttachResponse. Error sentinels:
 //   - ErrSessionNotFound: session name unknown (E-SES-001)
+//
+// Design: state-only, no ConsoleSet.Add (F-P2L1-002 intentional).
+// The console daemon is a SINGLE physical console; it has one ConsoleState
+// tracking which session it is "tuned to." ConsoleSet.Add wires a channel pair
+// for frame fanout — that is the job of the actual console rendering process
+// (S-3.02), not of this remote-control RPC. The remote-control RPC records the
+// operator's intent (which session to follow); the rendering path acts on it.
+//
+// TOCTOU acknowledgment (F-P2L1-003): cs.reg.Exists is called without holding
+// cs.state.mu. Between the check and the lock acquisition, the session could be
+// unpublished. The consequence is harmless: cs.state.current is set to a name
+// string, not to a live pointer. Any subsequent operation that uses this name
+// (e.g., the rendering path) will re-validate against the live registry at that
+// time, at which point the session's absence will be detected. Adding an atomic
+// "attach-if-exists" operation to SessionRegistry would couple session and
+// ConsoleState synchronization unnecessarily for this benefit; accepted.
 func (cs *ConsoleServer) HandleConsoleAttach(_ context.Context, req ConsoleAttachRequest) (ConsoleAttachResponse, error) {
 	if !cs.reg.Exists(req.SessionName) {
 		return ConsoleAttachResponse{}, fmt.Errorf("E-SES-001: session not found: %s: %w", req.SessionName, ErrSessionNotFound)
@@ -160,6 +176,8 @@ func (cs *ConsoleServer) HandleConsoleDetach(_ context.Context, _ ConsoleDetachR
 // (L1-C3 fix: previously incorrectly cleared to ""). Error sentinels:
 //   - ErrSessionNotFound: target session name unknown (E-SES-001)
 //   - ErrConsoleNotAttached: no session currently attached (E-SES-004)
+//
+// State-only design and TOCTOU: see HandleConsoleAttach godoc (F-P2L1-002/003).
 func (cs *ConsoleServer) HandleConsoleSwitch(_ context.Context, req ConsoleSwitchRequest) (ConsoleSwitchResponse, error) {
 	// Validate target session first — state is only modified if the operation
 	// can complete (atomic from caller's perspective; BC-2.08.001 PC-3).
