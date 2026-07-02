@@ -14,7 +14,7 @@ Set Padding 20
 Set TypingSpeed 60ms
 
 Hide
-Type "cd /Users/skippy/work/switchboard-blue/.worktrees/S-W5.04 && clear"
+Type "clear"
 Enter
 Sleep 300ms
 Show
