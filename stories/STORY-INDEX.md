@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.54"
+version: "3.55"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T00:00:00
+timestamp: 2026-07-01T19:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -19,20 +19,20 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 49 (35 master-table stories + 1 draft stub S-6.04 + 9 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.ROUTER-ADDR/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
-| Complete | 29 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07) |
-| Pending | 2 (S-7.01, S-7.03) |
-| Ready-for-red-gate | 1 (S-7.02) |
+| Total stories | 49 (36 master-table stories + 1 draft stub S-6.04 + 8 backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Complete | 32 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR) |
+| Pending | 1 (S-7.03) |
+| Ready-for-red-gate | 0 |
 | Wave 7 (deferred) | 1 (S-7.04) |
 | Master-table drafts | 2 (S-W5.03, S-6.05) |
 | Backlog/maintenance/hardening stubs | 4 (S-M.01, S-M.02, S-HRD.01, S-HRD.02) |
-| E-phase | 31 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04 + S-BL.LOOKUP) |
+| E-phase | 32 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04 + S-BL.LOOKUP + S-BL.ROUTER-ADDR) |
 | PE-phase | 4 (wave 6–7 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
 | Total points (waves 0–6) | 192 |
 | Total points (incl. S-M.01 + S-M.02) | 202 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 9 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.ROUTER-ADDR, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS, S-BL.DISCOVERY-WIRE) — S-BL.LOOKUP promoted and merged |
+| Backlog | 8 (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS, S-BL.DISCOVERY-WIRE) — S-BL.LOOKUP promoted and merged; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B and merged PR #56 |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
@@ -71,11 +71,12 @@ inputDocuments:
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
-| S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | pending (v1.4) |
-| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | ready-for-red-gate (v1.6) |
+| S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
+| S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.2) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
+| S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1) | E-6 | 6 | BC-2.06.003 | quality-observability, multipath-forwarding | 2 | P1 | E | merged (PR #56, 91d5675) |
 
 ## Wave Summary
 
@@ -122,13 +123,12 @@ section, add full ACs/tasks/files/architecture).
 Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
 addresses the "deferred to TBD story" anti-pattern.
 
-**Backlog: 9** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md; S-BL.ROUTER-ADDR added Wave-6 Tranche-A per wave-6-tranche-a-scope-rulings Ruling-1 (ready-for-red-gate per RULING-W6TB-B); S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C; S-BL.DISCOVERY-WIRE added per RULING-W6TB-D)
+**Backlog: 8** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md and merged PR #40; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B per RULING-W6TB-B and merged PR #56 — see Master Story Index; S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C; S-BL.DISCOVERY-WIRE added per RULING-W6TB-D)
 
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.ARQ-TX | wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3) | backlog | S403-H1-DEFER (Wave 4 audit); depends S-4.03 | Wave 5+ |
 | S-BL.OA | outer-assembler — compose ChannelFrame + OuterHeader into wire frames | backlog | wave-adv F-001 (spec closed) / F-003 / F-004 | Wave 3+ |
-| S-BL.ROUTER-ADDR | PathSnapshot RouterAddr enrichment (interim → real host:port) | ready-for-red-gate (v1.4) | DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER + wave-6-tranche-a-scope-rulings Ruling-1 + RULING-W6TB-B + RULING-W6TB-K; anchors BC-2.06.003 PC-1; unit-scope only (end-to-end deferred to S-BL.PATH-TRACKER-WIRING) | Wave 7 |
 | S-BL.PATH-TRACKER-WIRING | Wire `cmd/switchboard/metrics_wire.go` pathTrackerSource to real routing subsystem registry; enumerate (SVTN, endpoint) → PathTracker at handler-serve time. | backlog | wave-6-tranche-a-scope-rulings Ruling-6; #DEFERRED comment in metrics_wire.go; depends_on S-W5.04, S-BL.ROUTER-ADDR; BC-2.06.003 | Wave 7 Backlog |
 | S-BL.PATH-FAILED-STATUS | Add liveness signal to `PathSnapshot` and derive `status="failed"` in `PathEntry` | backlog | wave-6-tranche-a-scope-rulings Ruling-4; BC-2.06.003 v1.11 "failed" status enum deferred; depends_on S-W5.04 (merged) | Wave 7 Backlog |
 | S-BL.NI | network-ingress: implement network-ingress listener (bind/accept inbound network frames, feed to RouteFrame). `routing.WithFailureCounter(fc)` alongside `routing.WithLogger(rl)` is ALREADY WIRED in `buildRouter` (C-1 RESOLVED, PR #20, ARCH-08 v2.3 §6.5.1). No counter-wiring obligation remains for this story. Remaining obligation: wire a live-data-path ingress listener so real frames from the network traverse `RouteFrame`; include an integration test asserting E-ADM-017 fires through that live data path (frames triggering RouteFrame → FailureCounter → alert), not merely from constructed-but-idle router. **Also owns cfg.ListenAddr application** — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story). | draft | C-1-W3P1-defer (network-ingress listener; FailureCounter wiring COMPLETED PR #20; ARCH-08 §6.5.1 v2.3 TRACKED-DEFER; BC-2.05.005 PC-3, S-W3.05 AC-009); BC-2.09.003 PC-9 listen_addr deferral (S-6.01 v1.4 SP-004) | Wave 4+ |
@@ -176,6 +176,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.55 | 2026-07-01 | POL-002 Tranche B merged-story sync (F-P1L3-MED-01 + F-P1L3-MED-02): S-7.01 status pending→merged (PR #43, 5c658e7); S-7.02 status ready-for-red-gate→merged (PR #55, c54a8ad); S-BL.ROUTER-ADDR promoted from backlog to Master Story Index as merged (PR #56, 91d5675, wave backlog→6). Summary: Complete 29→32, Pending 2→1, Ready-for-red-gate 1→0, Backlog 9→8, master-table 35→36, E-phase 31→32. |
 | 3.54 | 2026-07-01 | Pass-5 fix-burst POL-002 + #401/#404 sync sweep: S-7.02 v1.5→v1.6 (RULING-W6TB-I added to changed_by_rulings + inputDocuments); S-7.01 v1.3→v1.4 (RULING-W6TB-E added to inputDocuments); S-BL.ROUTER-ADDR v1.2→v1.4 (RULING-W6TB-K added to inputDocuments; vp_traces corrected [VP-047,VP-062]→[VP-047]). F-P5L3-01 (S-BL.ROUTER-ADDR VP trace correction), F-P5L3-02 (vp_traces sibling-sweep across S-7.01/S-7.02), F-P5L3-03 (S-7.01 spec propagation). |
 | 3.53 | 2026-07-01 | RULING-W6TB-J propagation: S-7.02 v1.4→v1.5 — AC-004b updated with VP-055 v1.2 property names (RejectsInvalidName retired; RejectsEmptyOrInvalidUTF8 + TruncatesOversize added); RULING-W6TB-J added to changed_by_rulings; v1.5 changelog erratum added. VP-055 bumped v1.1→v1.2. VP-INDEX v2.27→v2.28. S-7.02 row status cell v1.4→v1.5. |
 | 3.52 | 2026-07-01 | Pass-4 mechanical fix-burst: S-7.02 v1.3→v1.4 (RULING-W6TB-D added to inputDocuments; DRIFT-S702-INPUT-HASH-DEFERRED drift entry added). S-7.01 v1.2→v1.3 (AC-002 anchor PC-2→PC-3; AC-003 anchor precondition-1→postcondition-4; input-hash tbd-v1.1→tbd-v1.2). S-BL.DISCOVERY-WIRE v1.0→v1.1 (RULING-W6TB-H added to changed_by_rulings; Scope Constraints section added). S-BL.ROUTER-ADDR revision 1.1→1.2 (DrftAnnotation typo fixed; Test-prefix obligation label corrected). |

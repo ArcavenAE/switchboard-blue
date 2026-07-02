@@ -4,12 +4,14 @@ document_type: story
 level: ops
 story_id: S-BL.ROUTER-ADDR
 title: "populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1)"
-status: ready-for-red-gate
+status: merged
+merged_at: 2026-07-01
+merge_commit: 91d5675
 producer: product-owner
 timestamp: 2026-07-01T12:00:00
 phase: 2
 epic: E-6
-wave: backlog
+wave: 6
 priority: P1
 scope_phase: E
 estimated_points: 2
@@ -29,7 +31,7 @@ inputDocuments:
   - '.factory/decisions/RULING-W6TB-F-s-bl-router-addr-vp047.md'
   - '.factory/decisions/RULING-W6TB-K-s-bl-router-addr-vp062-vptraces.md'
 acceptance_criteria_count: 5
-revision: "1.4-ready-for-red-gate"
+revision: "1.5-merged"
 changed_by_rulings:
   - RULING-W6TB-B
   - RULING-W6TB-F
@@ -214,6 +216,7 @@ Per RULING-W6TB-B, the following is NOT in scope for this story:
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.5-merged | 2026-07-01 | state-manager | POL-002 propagation: status ready-for-red-gate→merged; wave backlog→6; merged_at 2026-07-01, merge_commit 91d5675 (PR #56). |
 | 1.4-ready-for-red-gate | 2026-07-01 | story-writer | F-P5L3-03: add RULING-W6TB-K to inputDocuments — ruling was listed in changed_by_rulings but absent from inputDocuments (#401 policy violation). No AC, Task, or File Structure changes. |
 | 1.3-ready-for-red-gate | 2026-07-01 | product-owner | RULING-W6TB-K: (F-P4L3-001) VP-062 removed from vp_traces — compositional JSON property holds by construction; S-W5.04 already owns VP-062 fuzz coverage including router_addr seeds. (F-P4L2-02) Concurrent-oracle comment requirement noted for implementer. (F-P4L2-03) Split-red-gate comment requirement noted for test-writer. No AC or Task changes. |
 | 1.2-ready-for-red-gate | 2026-07-01 | story-writer | F-P4L3-002: fix `TestBC2_06_003_PC1_DrftAnnotationRemoved` typo ("Drft"→"Drift"); replace Test-prefixed obligation label with non-Test-prefixed "Obligation: BC-2.06.003.md v1.15 diff review — DRIFT annotation removed" since this is a story-level spec obligation, not a Go test function. |
