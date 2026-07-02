@@ -1769,13 +1769,12 @@ func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
 
 // TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies AC-003 confirm gate:
 // The --confirm flag is required per interface-definitions.md v1.1 §125 and
-// ADR-004. When omitted the command enters interactive mode prompting
-// "Type SVTN-<short-id> to confirm:" before proceeding (non-interactive test:
-// stdin is empty, so the prompt receives no input and must abort with error).
-//
-// Additionally, when --confirm is provided but the value does not match the
-// expected "SVTN-<short-id>" pattern the command must abort without dispatching
-// any RPC.
+// ADR-004. The confirm gate is a static flag-value check — there is NO
+// interactive TTY prompt. When --confirm is absent the command aborts
+// immediately with a static error and exits non-zero before dispatching any
+// RPC. When --confirm is present but the value does not match the required
+// "SVTN-<8-hex-chars>" pattern the command likewise aborts with a static
+// error before any RPC is dispatched.
 //
 // self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
 //
