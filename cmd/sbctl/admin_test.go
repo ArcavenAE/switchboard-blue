@@ -2030,7 +2030,9 @@ func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 //
 // Traces to F-P5P3-A-007 (E-CFG-012 mutual-exclusion code for flag conflicts).
 func TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012(t *testing.T) {
-	t.Parallel()
+	// Not parallel: mutates package-level seams stdinIsTTY / stdinReader which are
+	// also written by TestSbctlAdmin_SVTNDestroy_ConfirmGate subtests; running
+	// concurrently causes a data race under -race.
 
 	// setTTYSeam is a local copy of the helper in TestSbctlAdmin_SVTNDestroy_ConfirmGate.
 	// Seam mutation is not parallel-safe; each caller must restore originals.

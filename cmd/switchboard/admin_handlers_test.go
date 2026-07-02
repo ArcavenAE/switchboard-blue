@@ -857,13 +857,14 @@ func TestMapAdminError_CanonicalMessageText(t *testing.T) {
 		wantWraps       error  // sentinel must be preserved via errors.Is
 	}{
 		{
-			// F-P5P3-A-003: E-ADM-018 must say "use --confirm=<svtn-id>" not "pass --confirm".
+			// F-P5P3-A-003: E-ADM-018 must say "use --confirm to proceed" (bool flag on
+			// admin.key.revoke; --confirm=<svtn-id> is destroy syntax, not revoke syntax).
 			name:            "E-ADM-018_confirm_phrasing",
 			sentinel:        svtnmgmt.ErrControlRevocationRequiresConfirm,
 			svtnName:        "prod-svtn",
 			pub:             nil,
 			claimedRole:     "",
-			wantMsgContains: "use --confirm=<svtn-id> to proceed",
+			wantMsgContains: "use --confirm to proceed",
 			wantWraps:       svtnmgmt.ErrControlRevocationRequiresConfirm,
 		},
 		{

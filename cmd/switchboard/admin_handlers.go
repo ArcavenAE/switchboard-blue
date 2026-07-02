@@ -410,7 +410,7 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		// ExpireKey is called, so this arm is unreachable in production (F-L1-B).
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm=<svtn-id> to proceed (revoking control key from SVTN %q): %w", svtnName, err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed (revoking control key from SVTN %q): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
@@ -776,7 +776,7 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 		}
 
 		if err := m.Destroy(callerKey, a.Name); err != nil {
-			return nil, mapAdminError(err, a.Name, nil, "")
+			return nil, mapAdminError(err, a.Name, nil, roleToString(callerKey.Role))
 		}
 
 		return struct {
