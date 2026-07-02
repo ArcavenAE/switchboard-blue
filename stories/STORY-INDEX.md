@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.64"
+version: "3.65"
 status: draft
 producer: story-writer
 timestamp: 2026-07-02T00:00:00
-modified: 2026-07-02T01:30:00
+modified: 2026-07-02T02:45:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -70,7 +70,7 @@ inputDocuments:
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
-| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.10, impl_tip: 3f54b3e) |
+| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.11, impl_tip: d0b4923) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
@@ -177,6 +177,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.65 | 2026-07-02 | S-6.05 v1.10 → v1.11 (impl_tip 3f54b3e → d0b4923; F-P7L1-MED-1 closure via gated print + envelope-integrity test). |
 | 3.64 | 2026-07-02 | S-6.05 v1.9→v1.10 (F-P6L3-HIGH-1 + F-P6L1-LOW-1 closure; impl_tip refresh): S-6.05 row bumped `draft (v1.9, impl_tip: ba735c9)` → `draft (v1.10, impl_tip: 3f54b3e)`. Impl advanced by one commit (docstring placeholder substitution + `go mod tidy`). |
 | 3.63 | 2026-07-02 | S-7.03 v1.5→v1.6 (F-P5L3-HIGH-1-2 closure): S-7.03 row bumped `draft (v1.5)` → `draft (v1.6)` after Pass-5 attempt-2 HIGH-1-2 micro-burst. Scope Note line 51 `Inv-3 v1.3 now correctly states` → `Inv-3 v1.4 now correctly states`. Impl_tip unchanged (spec-only edit). |
 | 3.62 | 2026-07-02 | S-6.05 v1.8 → v1.9 impl reconciliation (ba735c9): S-6.05 row `draft (v1.8)` → `draft (v1.9, impl_tip: ba735c9)`. SPEC-IMPL DRIFT block retired; Task 11 FULFILLED; Confirm-Gate Semantics section preserved unchanged. impl_tip ba735c9 recorded in sprint-state. DRIFT-S605-CONFIRM-IDENTITY deferral preserved. BC-INDEX and VP-INDEX unchanged — no BC/VP content changed. |
