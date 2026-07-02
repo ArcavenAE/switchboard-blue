@@ -15,8 +15,13 @@ priority: must-pass
 behavioral_contracts: [BC-2.02.007, BC-2.03.001, BC-2.03.002, BC-2.03.003, BC-2.08.001, BC-2.09.001, BC-2.09.002]
 lifecycle_status: active
 introduced: v1.0.0-greenfield
-last_evaluated: null
-staleness_check: null
+last_evaluated: 2026-07-02
+evaluation_verdict: PASS_AT_THRESHOLD
+evaluation_satisfaction: 0.85
+evaluation_must_pass: PASS
+evaluation_mean_gate: PASS_AT_THRESHOLD
+evaluation_report: .factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md
+staleness_check: fresh
 stale_reason: null
 retired: null
 ---
