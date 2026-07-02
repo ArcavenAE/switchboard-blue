@@ -520,6 +520,25 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 
 ---
 
+## Checkpoint: Burst 16 / Pass 3 Path B spec-side complete (archived from STATE.md at Burst 18b)
+
+**Timestamp:** 2026-07-02T00:00:00Z
+**Post-burst:** Burst 16 (state-manager: Pass 3 Path B spec-side commit + backlog retire + DRIFT closure)
+**Pipeline state:** Phase 5 Pass 3 spec-side remediation landed; code-side fix-PR pending
+
+**Spec-side deltas (Burst 15 + 16):**
+- BC-2.07.002 v1.7 → v1.8: EC-004, EC-005, sbctl svtn list canonical row removed
+- error-taxonomy v4.2 → v4.3: E-CFG-002/006 collisions reconciled onto E-CFG-011/012
+- VP-043 v1.1 → v1.2: proof_method proptest → strong-oracle; gopter harness skeleton removed; source_bc BC-2.02.007 v1.3 pin
+- VP-062 v1.6 → v1.7: source_bc BC-2.06.003 v1.13 pin
+- VP-INDEX v2.34 → v2.35: row 69 Proptest→Unit reclass; POL-003 count 2/76→3/76
+- BC-2.09.003 v1.8 → v1.9: collision-flag annotation row removed
+- S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE → wont-fix (v1.1)
+
+**Next action (superseded by Burst 17+18):** Burst 17 — open feature branch off develop tip 7fe3e29 for code-side fix-PR; Burst 18 — taxonomy v4.4 + state close-out after PR #62 merged.
+
+---
+
 ## Checkpoint: Post-Burst 14a (archived from STATE.md at Burst 16)
 
 **Timestamp:** 2026-07-02T00:00:00Z

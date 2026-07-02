@@ -996,3 +996,43 @@ Phase 4 holdout evaluation against HS-006 (Wave-6 combined scope: XOR FEC, sessi
 | holdout-evaluator | PE Graduation + Drain (steps 9–10) | PARTIAL PASS. Config-side of PE graduation verified; runtime-side stubbed — see DRIFT-HS006-ROUTER-DAEMON-STUB. |
 
 **Task #71 CLOSED.** Advancing to Phase 5 adversarial implementation refinement.
+
+---
+
+## Phase 5 — Burst 8 / Pass 1 Remediation / Pass 2 Adv-A (archived from STATE.md at Burst 18)
+
+**Step: Burst 8 product-owner annotate BC-2.07.002/BC-2.03.002/error-taxonomy E-NET-006**
+- Date: 2026-07-02 | Status: COMPLETED
+- HEAD 4659cb88; BC-2.07.002 v1.6, BC-2.03.002 v1.4, error-taxonomy v4.2
+
+**Step: Phase 5 Pass 1 remediation applied — 4 findings closed by annotation**
+- Date: 2026-07-02 | Status: COMPLETED
+- Closes F-P5P1-A-001, F-P5P1-A-002, F-P5-Adv-B-H-001, F-P5-Adv-B-L-001. Streak 0/3 — Pass 2 pending.
+
+**Step: Phase 5 Pass 2 Adv-A dispatched (public-surface lens, opus, ≤6min)**
+- Date: 2026-07-02 | Status: COMPLETED
+- HAS_FINDINGS 0H/2M/1L/3obs
+
+---
+
+## Phase 5 — Burst 18b State Close-out (2026-07-02)
+
+**Agents dispatched:** spec-steward (Burst 18a), state-manager (Burst 18b)
+**Files touched:** error-taxonomy.md (v4.3→v4.4), S-6.06-daemon-admin-handlers.md (v1.22→v1.23), STATE.md, sprint-state.yaml
+
+**Summary:** Phase 5 Pass 3 remediation arc complete. Burst 18a (spec-steward) corrected E-ADM-018 canonical text in taxonomy (bool-flag form: `use --confirm to proceed`; was value-flag form `use --confirm=<svtn-id> to proceed`) and updated S-6.06 error-mapping table row. Burst 18b (state-manager) closes all 6 code-side DRIFTs (PR #62 c76a8d5 merged by Burst 17 implementer), updates STATE.md Phase 5 row to PASS_3_REMEDIATION_COMPLETE, advances develop_head to c76a8d5, and sets sprint-state.yaml pending_pass: 4.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| spec-steward (18a) | error-taxonomy v4.4 + S-6.06 v1.23 | E-ADM-018 canonical text corrected; S-6.06 error-mapping row corrected |
+| state-manager (18b) | STATE.md + sprint-state.yaml | PASS_3_REMEDIATION_COMPLETE; 6 code-side DRIFTs closed; Pass 4 ready |
+
+**DRIFTs closed this burst (code-side, PR #62 c76a8d5):**
+- DRIFT-P5P3-A003 (HIGH): E-ADM-018 emission corrected (`use --confirm to proceed`)
+- DRIFT-P5P3-A004 (MED): sbctl svtn silent-discard fixed
+- DRIFT-P5P3-A005 (MED): E-INT-999 canonical message corrected
+- DRIFT-P5P3-A006 (MED): E-ADM-011 V2 discriminators restored
+- DRIFT-P5P3-A009 (LOW): sbctl unknown-subcommand hint added
+- DRIFT-P5P3-B17 (HIGH): case arms svtn/version/ping deleted from cmd/sbctl/main.go
+
+**7 total DRIFTs closed (spec+code): 1 spec-side (taxonomy v4.4 E-ADM-018) + 6 code-side (PR #62)**
