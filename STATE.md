@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-6-tranche-c-in-flight
+phase_step: wave-6-tranche-c-wavelevel-review
 phase_3_active_wave: 6
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR]
@@ -31,7 +31,12 @@ wave_6_tranche_a_closed_at: 2026-07-01T19:04:40Z
 wave_6_tranche_b_closed_at: 2026-07-01
 wave_6_tranche_b_wavelevel_converged_at: 2026-07-01
 wave_6_tranche_b_wavelevel_convergence_passes: 3
-develop_head: cdb2b66
+wave_6_tranche_c_closed_at: 2026-07-02T10:05:23Z
+wave_6_tranche_c_stories_merged: [S-7.03 (PR #60, 7142146), S-6.05 (PR #61, 7fe3e29)]
+wave_6_tranche_c_wavelevel_pass_counter: 1
+wave_6_tranche_c_wavelevel_streak: 0
+wave_6_tranche_c_wavelevel_last_verdict: BLOCKING_ATTEMPT_1_2026-07-02
+develop_head: 7fe3e29
 open_prs: 0
 wave_6_hygiene_fec_sentinel_pr: 58
 wave_6_hygiene_fec_sentinel_sha: 6544ff8
@@ -39,19 +44,18 @@ wave_6_hygiene_demo_tape_paths_pr: 59
 wave_6_hygiene_demo_tape_paths_sha: cdb2b66
 alpha_release_tag: alpha-20260629-165045-d854978
 historical_cycles: []
-timestamp: 2026-07-01T00:00:00Z
-last_update: 2026-07-01
+timestamp: 2026-07-02T00:00:00Z
+last_update: 2026-07-02
 ---
 
 # Switchboard Factory State
 
 ## Current State
 
-Wave 6 Tranche B CLOSED — all 3 stories merged (BC-5.39.001 3/3 each):
-S-7.01 PR#43/5c658e7, S-7.02 PR#55/c54a8ad, S-BL.ROUTER-ADDR PR#56/91d5675.
-Wave-6 hygiene PR#58/6544ff8 merged (F-P1L1-LOW-01: dead FEC sentinel removed).
-Wave-6 hygiene PR#59/cdb2b66 merged (fix(demo): 25 .tape files fixed; upstream drbothen/vsdd-factory#418 filed).
-develop HEAD: cdb2b66 (was 6544ff8). 45 BCs, 76 VPs, 49 stories, 18 internal packages. Tranche C in flight: S-6.05 Pass-3 fix-burst complete (worktree HEAD cc78688; awaiting Pass-4 adversary); S-7.03 Pass-2 fix-burst in flight (L1 impl dispatched; L2+L3 complete).
+Wave 6 Tranche C CLOSED — both stories merged to develop (BC-5.39.001 3/3 each):
+S-7.03 PR#60/7142146, S-6.05 PR#61/7fe3e29.
+develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
+Wave-level adversarial review in flight: Pass 1 attempt 1 BLOCKED (dispatch-integrity; local develop was at cdb2b66, not merged tip 7fe3e29). CRIT-1/2/3 remediated; Pass 1 attempt 2 pending with worktree-identity tuple.
 
 ## Phase Progress
 
@@ -106,6 +110,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | PROCESS-GAP-POL-001-INDEX | OBS | [process-gap] POL-001 scope unclear for INDEX artifacts. vsdd-factory#407 filed. | orchestrator | codify |
 | PROCESS-GAP-FORCE-PUSH | HIGH | [process-gap] pr-manager reached for rebase+force-push over gh pr update-branch. vsdd-factory#408 + switchboard-blue#57 filed. | orchestrator/pr-manager | playbook fix upstream |
 | PROCESS-GAP-DEMO-TAPE-PATHS | OBS | [process-gap] demo-recorder emits `.tape` files with hardcoded absolute worktree paths; local fix applied (25 files, PR #59/cdb2b66); upstream drbothen/vsdd-factory#418 filed for template fix. | orchestrator/demo-recorder | upstream fix pending |
+| WAVE-GATE-DISPATCH-INTEGRITY | HIGH | [process-gap] Perimeter-2 (wave-gate) adversary dispatch lacks HEAD-SHA verification tuple; adversary caught mismatch opportunistically; silent-false-green risk if less-thorough pass proceeds. drbothen/vsdd-factory issue drafted in .vsdd-factory-issues-pending.md. | orchestrator | target: pipeline-hardening cycle |
 
 Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 
@@ -124,18 +129,20 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave 6 Tranche B wave-level CONVERGED | 3/3 clean fresh-context passes (P2/P3/P4); FEC hygiene PR #58 merged; develop@6544ff8 | 2026-07-01 |
 | PR #59 merged (cdb2b66) | 25 .tape files fixed (hardcoded absolute worktree paths); upstream fix filed as drbothen/vsdd-factory#418 | 2026-07-01 |
 | Wave 6 Tranche C fix-bursts landed | S-6.05 Pass-3 L1+L3 clean (cc78688 + a77c32b); S-7.03 Pass-2 L2+L3 clean (804e1f9 + f1f6873); L1 impl in flight | 2026-07-02 |
+| Wave 6 Tranche C CLOSED | S-7.03 PR#60/7142146 + S-6.05 PR#61/7fe3e29 merged; per-story 3/3 each | 2026-07-02 |
+| Wave-6 Tranche C wave-level Pass 1 attempt 1 BLOCKED | dispatch-integrity: local develop was cdb2b66, not merged 7fe3e29; CRIT-1/2/3 remediated | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C fix-bursts in flight)
+## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C wave-level review)
 
-**Position:** Phase 3 Wave 6 Tranche C. S-6.05 Pass-3 fix-burst COMPLETE (impl cc78688, spec a77c32b on factory-artifacts). S-7.03 Pass-2 fix-burst PARTIALLY COMPLETE (L2 804e1f9 + L3 f1f6873; L1 impl dispatched, in flight). develop HEAD: cdb2b66.
+**Position:** Phase 3 Wave 6 Tranche C. Both stories MERGED to develop.
+S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
+develop HEAD: 7fe3e29. factory-artifacts tip: c4895e8.
 
-**S-6.05 status:** Pass-3 attempt-1 findings F-P3L1-001..004/F-L2-01/02/03 all addressed. adversarial_pass_counter = 0 (Pass-3 had findings; Pass-4 queued as fresh-context attempt). Spec v1.6 (a77c32b). Impl tip cc78688.
+**Wave-level status:** Pass 1 attempt 1 BLOCKED (dispatch-integrity: local develop was at cdb2b66, not merged tip 7fe3e29). Three CRITICAL findings (CRIT-1/2/3) remediated in this state-manager burst. HIGH-1 [process-gap] filed upstream. Streak: 0/3.
 
-**S-7.03 status:** Pass-2 L2+L3 CLEAN (804e1f9 + f1f6873). L1 impl burst in flight (F-P2L1-001/002/003). adversarial_pass_counter = 0 (Pass-2 had findings; Pass-3 queued after L1 lands). Spec v1.3. Impl tip 804e1f9 (will move once L1 commits land).
-
-**NEXT ACTION on resume:** S-6.05 adversary Pass-4 (fresh context); S-7.03 adversary Pass-3 (fresh context, after L1 impl burst completes); parallel dispatch.
+**NEXT ACTION on resume:** Dispatch Wave-6 Tranche C wave-level adversary Pass 1 **attempt 2** with worktree-identity tuple: `(worktree=/Users/skippy/work/aae-orc/run/switchboard-blue, wave-tip=7fe3e29, wave-id=W-6.C)`. Adversary must read `wave-6.md` holdout scenarios before L1/L2/L3 review (HIGH-3). Verify `git rev-parse HEAD == 7fe3e29` before reading any code artifact.
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.
@@ -143,6 +150,7 @@ Older decisions: `cycles/cycle-1/burst-log.md`.
 - PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP: open/codify.
 - Tranche B post-merge issues #44–#54, #57.
 - PROCESS-GAP-DEMO-TAPE-PATHS: drbothen/vsdd-factory#418 pending upstream fix.
+- WAVE-GATE-DISPATCH-INTEGRITY: HIGH-1 [process-gap] drbothen/vsdd-factory upstream issue drafted.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

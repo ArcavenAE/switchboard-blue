@@ -129,19 +129,70 @@ traces_to: '.factory/stories/STORY-INDEX.md'
 
 ### Wave 6 — PE-Phase Features
 
-| Story | Title | Points | Deps | Priority |
-|-------|-------|--------|------|---------|
-| S-7.01 | XOR parity FEC for single-loss recovery | 8 | S-4.03 | P1 |
-| S-7.02 | SVTN-scoped multicast session discovery | 8 | S-2.02, S-3.02 | P1 |
-| S-7.03 | Console remote control via sbctl | 5 | S-3.02, S-6.03 | P1 |
-| S-7.04 | E-to-PE graduation and graceful drain | 8 | S-6.01, S-4.04 | P2 |
+Wave 6 was implemented in three tranches. Tranches A and B are CLOSED AND CONVERGED.
+Tranche C wave-level review is in progress.
 
-**Wave 6 total points:** 29
-**Gate criteria:**
+#### Wave 6 — Tranche A (CLOSED)
+
+| Story | Title | Points | PR | Merge SHA |
+|-------|-------|--------|----|-----------|
+| S-BL.LOOKUP | AdmittedKeySet.Lookup value-return migration | 1 | #40 | eac5d0a |
+| S-W5.04 | daemon paths.list/router.metrics/router.status handlers | 5 | #41 | 851e164 |
+| S-6.07 | admin.svtn.create handler + sbctl admin svtn create | 3 | #42 | 446efce |
+
+**Tranche A wave-level:** CONVERGED (BC-5.39.001 3/3 clean passes) — see Tranche B wave-level gate below (combined pass covered Tranche A + B integration).
+
+---
+
+#### Wave 6 — Tranche B (CLOSED)
+
+| Story | Title | Points | PR | Merge SHA |
+|-------|-------|--------|----|-----------|
+| S-7.01 | XOR parity FEC for single-loss recovery | 8 | #43 | 5c658e7 |
+| S-7.02 | SVTN-scoped multicast session discovery | 8 | #55 | c54a8ad |
+| S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr (BC-2.06.003 PC-1) | 2 | #56 | 91d5675 |
+
+**Tranche B wave-level:** CONVERGED (BC-5.39.001 3/3 clean passes) at 2026-07-01.
+
+---
+
+#### Wave 6 — Tranche C
+
+**Composition rationale:** S-6.05 (SVTN destroy) and S-7.03 (Console remote
+control) were paired into Tranche C because both stories serialize on
+`cmd/sbctl/admin.go` and `cmd/sbctl/main.go` command-dispatch surface (per
+RULING-W6TB-A serialization principle). Parallel implementation would produce
+merge conflicts on the dispatch table; per-tranche serialization prevents that.
+
+**Stories:**
+
+| Story | Spec version | Primary BC | Primary VP | Merged PR | Merge SHA |
+|-------|-------------|------------|-----------|-----------|-----------|
+| S-7.03 Console remote control | v1.6 | BC-2.08.001 v1.4 | VP-050 v1.3 | #60 | 7142146 |
+| S-6.05 SVTN destroy lifecycle | v1.11 | BC-2.07.001 v1.13 | VP-048 v1.9 | #61 | 7fe3e29 |
+
+**Cross-story integration surface:**
+- SVTN destroy MUST cascade-detach any active console sessions attached to
+  sessions inside the destroyed SVTN. (See holdout `holdout-scenarios/wave-scenarios/wave-6.md`
+  for the boundary scenario.)
+- `--json` envelope contract (interface-definitions §162/§164) must be consistent
+  across both `sbctl admin svtn destroy` and `sbctl console {attach,detach,switch}`.
+- Error taxonomy (E-SVTN-*, E-SES-*, E-ADM-*, E-CFG-*) must be non-overlapping
+  across both story surfaces.
+
+**Convergence status:**
+- S-7.03 per-story: 3/3 CONVERGED at 2213780 (factory-artifacts).
+- S-6.05 per-story: 3/3 CONVERGED at 26ce8f0 (factory-artifacts).
+- Wave-level: Pass 1 attempt 1 BLOCKED (dispatch-integrity); attempt 2 pending.
+
+**Closure target:** wave_6_tranche_c_wavelevel_converged_at TBD (requires 3/3
+clean wave-level passes per BC-5.39.001).
+
+**Wave 6 gate criteria (combined):**
 - VP-043: XOR FEC: single loss in group recoverable
 - VP-044: Presence advertisement includes required fields
 - VP-050: Console remotely controllable via sbctl
-- VP-037: Router drain: nodes migrate within 2s
+- VP-037: Router drain: nodes migrate within 2s (S-7.04 deferred to Wave 7)
 - Holdout: see wave-scenarios/wave-6.md
 
 ---
