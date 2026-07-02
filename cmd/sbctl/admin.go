@@ -105,6 +105,35 @@ type adminSVTNDestroyArgs struct {
 	Name string `json:"name"`
 }
 
+// boolStringFlag is a flag.Value implementation for a flag that can be passed
+// as a bare boolean flag (--confirm) or with an explicit value (--confirm=true,
+// --confirm=false, --confirm=some-token). Implementing IsBoolFlag() makes the
+// flag package accept the bare form without requiring an argument.
+//
+// Used for `admin key revoke --confirm` to achieve symmetry with
+// `admin svtn destroy --confirm=<token>` (String flag; F-A-009).
+type boolStringFlag struct {
+	val string
+	set bool
+}
+
+func (f *boolStringFlag) String() string { return f.val }
+
+func (f *boolStringFlag) Set(v string) error {
+	f.val = v
+	f.set = true
+	return nil
+}
+
+// IsBoolFlag tells the flag package that bare --confirm (no =value) is valid
+// and equivalent to --confirm=true.
+func (f *boolStringFlag) IsBoolFlag() bool { return true }
+
+// isTrue returns true if the flag was set and the value is not "false" or "0".
+func (f *boolStringFlag) isTrue() bool {
+	return f.set && f.val != "false" && f.val != "0"
+}
+
 // runAdmin dispatches `sbctl admin <subcommand>` commands.
 //
 // Subcommand routing:
@@ -303,7 +332,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
 	// Path 5: --yes combined with --confirm is a usage error (E-CFG-012; §127).
 	if yes && confirmVal != "" {
-		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; provide one or the other")
+		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; pick one")
 	}
 
 	// Path 4: --yes alone bypasses the check (§127).
@@ -332,7 +361,7 @@ func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
 	// Path 2: interactive mode — prompt on stderr and read from stdinReader.
 	// The operator must type the SVTN short-ID exactly as printed at create time.
 	// Shape-only validation; identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
-	_, _ = fmt.Fprint(sio.err, "Type SVTN-<short-id> to confirm: ")
+	_, _ = fmt.Fprint(sio.err, "Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: ")
 	line, err := bufio.NewReader(stdinReader).ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("interactive confirmation: read error: %w", err)
@@ -415,7 +444,8 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
 	roleFlag := fs.String("role", "", "authorization role of the key: control, console, access (required)")
-	confirmFlag := fs.Bool("confirm", false, "confirm control-to-control revocation (ADR-004)")
+	confirmFlag := &boolStringFlag{}
+	fs.Var(confirmFlag, "confirm", "confirm control-to-control revocation; bare --confirm or --confirm=true (ADR-004)")
 
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("admin key revoke: %w", err)
@@ -441,7 +471,7 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 		SVTNID:  *svtnFlag,
 		Pubkey:  *keyFlag,
 		Role:    *roleFlag,
-		Confirm: *confirmFlag,
+		Confirm: confirmFlag.isTrue(),
 	}
 	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.revoke", rpcArgs, sio)
 }

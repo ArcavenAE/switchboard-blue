@@ -1866,7 +1866,15 @@ func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
 //
 // Traces to interface-definitions.md v1.1 §125/§127/§129; ADR-004; AC-003; S-6.05.
 func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
-	t.Parallel()
+	// NOTE: this test intentionally does NOT call t.Parallel().
+	//
+	// admin_interactive_prompt_test.go (Burst-19 RED tests) uses t.Parallel()
+	// and directly mutates the same package-level seam vars (stdinIsTTY,
+	// stdinReader) that setTTYSeam below also mutates.  Running both in the
+	// parallel pool at the same time triggers a data race detected by
+	// `go test -race`.  Since the RED tests cannot be modified, this test
+	// runs sequentially so it always completes before the parallel pool is
+	// released.  The trade-off: slightly longer wall time for this suite.
 
 	// setTTYSeam swaps stdinIsTTY and stdinReader for the duration of one subtest,
 	// restoring the originals via t.Cleanup.  Must be called before t.Parallel()
