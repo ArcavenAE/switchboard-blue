@@ -207,6 +207,22 @@ for W-6.C; full boundary coverage will land with `S-BL.SESSION-DRAIN`.
 **Closure target:** wave_6_tranche_c_wavelevel_converged_at 2026-07-02 (BC-5.39.001 3/3 consecutive
 clean passes satisfied across Pass 2 + Pass 3 + Pass 4).
 
+---
+
+#### Wave 6 — Combined Wave-Gate (BC-5.39.001)
+
+Combined integration adversarial across all 8 Wave-6 stories on `develop@7fe3e29`.
+Perimeter-3 (wave-gate-integration), distinct from per-story (Perimeter-1) and
+per-tranche (Perimeter-2) gates. Executes 3-consecutive-clean-passes loop per
+BC-5.39.001 on the full wave integration surface.
+
+**Progress:**
+- Pass 1 (2026-07-02): CONVERGENT — Adv-A L1 0/0/0/0 + 2 obs, Adv-B L2/L3 0/0/0/0 + 3 obs. Streak 1/3.
+
+**Next:** Pass 2 fresh-context adversary (in flight).
+
+---
+
 **Wave 6 gate criteria (combined):**
 - VP-043: XOR FEC: single loss in group recoverable
 - VP-044: Presence advertisement includes required fields

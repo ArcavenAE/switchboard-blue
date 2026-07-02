@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-6-tranche-c-wavelevel-review
+phase_step: wave-6-wavegate-integration
 phase_3_active_wave: 6
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR]
@@ -38,6 +38,10 @@ wave_6_tranche_c_wavelevel_attempts_counter: 7
 wave_6_tranche_c_wavelevel_streak: 3
 wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT_PASS_4_2026-07-02 (streak 3/3 — CONVERGED)
 wave_6_tranche_c_test_race_attested: true
+wave_6_wavegate_pass_counter: 1
+wave_6_wavegate_attempts_counter: 1
+wave_6_wavegate_streak: 1
+wave_6_wavegate_last_verdict: CONVERGENT_PASS_1_2026-07-02
 develop_head: 7fe3e29
 open_prs: 0
 wave_6_hygiene_fec_sentinel_pr: 58
@@ -60,12 +64,15 @@ develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
 
 ### W-6.C wave-level convergence — CONVERGED (BC-5.39.001 3/3 SATISFIED)
 
-- Pass 2 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs).
-- Pass 3 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs).
-- Pass 4 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 0 obs) — closing pass.
-- **Streak: 3/3. Converged: 2026-07-02.** `test_race_attested: true`. develop tip `7fe3e29`.
-- Sidecar audit: 6 files in `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
-- **NEXT ACTION:** Task #22 Wave-6 wave-gate integration (previously blocked on #21 wave-level convergence — NOW UNBLOCKED).
+Pass 2/3/4 all CONVERGENT (Adv-A + Adv-B both 0/0/0/0). Converged 2026-07-02.
+Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
+
+### W-6 combined wave-gate — CONVERGING (BC-5.39.001 1/3)
+
+- Pass 1 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 3 obs). Full 8-story integration surface clean on develop@7fe3e29.
+- **Streak: 1/3.** Two more clean fresh-context passes needed for BC-5.39.001.
+- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-1-Adv-{A,B}.md`.
+- **NEXT ACTION:** Pass 2 fresh-context adversary (already dispatched in parallel with this persistence burst).
 
 ## Phase Progress
 
@@ -144,6 +151,7 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave-6 Tranche C wave-level Pass 1 attempt 4 BLOCKING | split-adversary: Adv-A CONVERGENT_L1, Adv-B BLOCKING_L2L3 (0/0/2/0); 2 MED remediated; Pass 2 pending | 2026-07-02 |
 | Wave-6 Tranche C wave-level Pass 2 + Pass 3 both CONVERGENT | streak 0→2/3; BC-5.39.001 requires 3/3; Pass 4 (closing) dispatch pending | 2026-07-02 |
 | Wave-6 Tranche C wave-level CONVERGED | Pass 4 CONVERGENT (Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+0obs); BC-5.39.001 3/3 SATISFIED; streak 3/3; converged_at 2026-07-02; Task #22 UNBLOCKED | 2026-07-02 |
+| W-6 combined wave-gate Pass 1 CONVERGENT | Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+3obs; full 8-story surface clean on develop@7fe3e29; streak 1/3 | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
@@ -153,9 +161,9 @@ Older decisions: `cycles/cycle-1/burst-log.md`.
 S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
 develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 
-**Wave-level status:** Pass 2 CONVERGENT + Pass 3 CONVERGENT + Pass 4 CONVERGENT. Streak: 3/3 — CONVERGED. Attempts: 7. BC-5.39.001 SATISFIED. wavelevel_converged_at: 2026-07-02.
+**Wave-level status:** Tranche-C streak: 3/3 CONVERGED. Wave-gate streak: 1/3 (Pass 1 CONVERGENT 2026-07-02).
 
-**NEXT ACTION on resume:** Task #22 — Wave-6 wave-gate integration (previously blocked on #21 wave-level convergence — NOW UNBLOCKED). Proceed to wave-gate execution.
+**NEXT ACTION on resume:** Wave-6 combined wave-gate Pass 2 fresh-context adversary (streak 1/3 → 2/3). Two more clean passes needed for BC-5.39.001.
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.
