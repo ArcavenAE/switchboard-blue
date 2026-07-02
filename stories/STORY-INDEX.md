@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.68"
+version: "3.69"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-02T00:00:00
-modified: 2026-07-02T10:05:23
+modified: 2026-07-02T12:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -179,6 +179,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.69 | 2026-07-02 | Pass-4 wire-contract remediation (Burst 19 Phase 2b): S-6.06 v1.23→v1.24 (pubkey_openssh canonical wire field; svtn_id confirmed; E-ADM-018 byte-identical requirement per taxonomy v4.5); S-6.05 v1.11→v1.12 (svtn_id alignment per interface-definitions v1.13). POL-002 compliance: story file versions match index rows. |
 | 3.68 | 2026-07-02 | Retire S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE to wont-fix (Phase 5 Pass 3 Path B remediation). Wire orphan surfaces withdrawn from BC-2.07.002 v1.8 — nothing left to implement. Active backlog 10→8; 2 won't-fix added. Refs: F-P5P3-A-001, F-P5P3-A-002. Closes DRIFT-P5P3-A001 + DRIFT-P5P3-A002 (spec-side). |
 | 3.67 | 2026-07-02 | Add S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE backlog stubs (Phase 5 Pass 1+Pass 2 remediation). Backlog 8→10, Total 49→51. Refs: F-P5P1-A-001, F-P5P2-A-001, F-P5P2-A-002. |
 | 3.66 | 2026-07-02 | Wave-6 Tranche A + B closure: S-7.03 `draft (v1.6)` → `merged (PR #60, 7142146)`; S-6.05 `draft (v1.11, impl_tip: d0b4923)` → `merged (PR #61, 7fe3e29)`. Summary: Complete 32→34; Pending 1→0; Master-table drafts 2→1 (S-W5.03 remains). |

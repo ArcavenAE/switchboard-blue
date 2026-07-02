@@ -2,10 +2,10 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.12"
+version: "1.13"
 status: draft
 producer: product-owner
-timestamp: 2026-07-01T12:00:00
+timestamp: 2026-07-02T12:00:00
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -107,7 +107,7 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 | `sbctl admin key expire --svtn <id> --key <hex-pubkey> --at <RFC3339-timestamp>` | Set automatic expiry on an admission key. CLI translates `--at <RFC3339-timestamp>` to a Go duration string (`after` wire field) before sending: `after = timestamp - time.Now()`. Server validates `after` is positive and ≤100 years. | Requires existing control-role key; no `--confirm` required (non-destructive scheduling) | 0=ok, E-ADM-013 (key not found), E-CFG-001 (invalid `after` duration: zero, negative, or >100 years) |
 | `sbctl admin list-keys --svtn <id>` | List all admission keys with role, fingerprint, expiry | Any admitted role | 0=ok |
 
-`--key <hex-pubkey>` — Replaces the former `--key-fingerprint <fp>` flag. Accepts the full hex-encoded public key (not a fingerprint). This matches the wire format used by `internal/svtnmgmt`.
+`--key <openssh-pubkey>` — Replaces the former `--key-fingerprint <fp>` flag. Accepts an OpenSSH-format public key string (e.g. `ssh-ed25519 AAAA... comment`). The CLI marshals this as the `pubkey_openssh` wire field sent to `internal/svtnmgmt`. Previously accepted a raw hex-encoded public key (`pubkey_hex`); `pubkey_openssh` is the canonical wire field name as of interface-definitions v1.13.
 
 #### SVTN lifecycle (`sbctl admin svtn`)
 
@@ -127,6 +127,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-006, exit 2).
+
+> **v1.13 changelog note (2026-07-02):** Pass-4 wire-contract remediation (Burst 19 Phase 2b): renamed `pubkey_hex` → `pubkey_openssh` in all admin.key.* Registered Verbs request schemas (wire field now carries OpenSSH format string, e.g. `ssh-ed25519 AAAA... comment`); wire field name `svtn_id` confirmed throughout (no bare `svtn` field present). Formally added `admin.key.expire`, `admin.key.list-keys`, and `admin.svtn.destroy` to Registered Verbs table; retired `admin.key.role` row (read-only role-lookup verb superseded by `admin.key.list-keys`; no BC postcondition owned exclusively by `admin.key.role`). Cross-package integration test added code-side (no spec change needed). Refs: Burst 19 Phase 2b adjudicated remediation shape.
 
 > **v1.11 changelog note (2026-07-01):** F-P5L3R-04 (Pass-6 L3): 6-site sweep — `paths.list`, `router.metrics`, `router.status` Registered Verbs row BC pins advanced v1.11 → v1.13; path-list-response intro BC pin advanced v1.11 → v1.13; pending-response intro BC pin advanced v1.11 → v1.13; `sbctl router status` CLI comment BC pin advanced v1.11 → v1.13. No structural or semantic change; BC-2.06.003 is now at v1.13.
 
@@ -361,10 +363,12 @@ All RPC endpoints require authentication: the caller presents its OpenSSH key si
 | `paths.list` | BC-2.06.003 v1.13 PC-1 | Any admitted key (bootstrap or control-role) | `{"svtn_id": "<hex>"}` (optional; omit for all paths) | `{"paths": [{path_id, router_addr, rtt_ms, rtt_p99_ms, loss_pct, status}]}` (`rtt_p99_ms` is float64 or `"pending"` per EC-003; `status` is `active` or `degraded`; `failed` reserved for Wave-7 S-BL.PATH-FAILED-STATUS) | S-5.02, S-W5.04 |
 | `router.metrics` | BC-2.06.003 v1.13 PC-2 | Any admitted key | `{"svtn_id": "<hex>"}` (required) | `{"svtn_id", "frame_count", "hmac_fail_count", "drop_cache_hits", "path_distribution"}` | S-5.02, S-W5.04 |
 | `router.status` | BC-2.06.003 v1.13 PC-3 | Any admitted key | `{"target": "<router-addr>"}` | Alias for `paths.list` response + `quality` field; `"quality": "pending"` when p99 not yet available (EC-006) | S-5.02, S-W5.04 |
-| `admin.key.register` | BC-2.05.004 PC-1 | Control-role key + `--confirm` token (or operator-set bootstrap grant for first-register into fresh SVTN per BC-2.05.004 EC-005) | `{"svtn_id", "pubkey_hex", "role": "control\|console\|access"}` | `{"ok": true}` | S-6.06 |
-| `admin.key.revoke` | BC-2.05.004 PC-2 | Control-role key + `--confirm` token; console-role keys may not revoke control-role keys (ADR-004 Inv-3) | `{"svtn_id", "pubkey_hex"}` | `{"ok": true}` | S-6.06 |
-| `admin.key.role` | BC-2.05.004 PC-1 | Control-role key (read-only lookup; any admitted role per BC-2.05.004 F-L2-003) | `{"svtn_id", "pubkey_hex"}` | `{"role": "control\|console\|access"}` | S-6.06 |
+| `admin.key.register` | BC-2.05.004 PC-1 | Control-role key + `--confirm` token (or operator-set bootstrap grant for first-register into fresh SVTN per BC-2.05.004 EC-005) | `{"svtn_id": "<hex>", "pubkey_openssh": "<OpenSSH-format string, e.g. ssh-ed25519 AAAA... comment>", "role": "control\|console\|access"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.revoke` | BC-2.05.004 PC-2 | Control-role key + `--confirm` token; console-role keys may not revoke control-role keys (ADR-004 Inv-3) | `{"svtn_id": "<hex>", "pubkey_openssh": "<OpenSSH-format string>"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.expire` | BC-2.05.004 PC-3 | Control-role key; no `--confirm` required (non-destructive scheduling) | `{"svtn_id": "<hex>", "pubkey_openssh": "<OpenSSH-format string>", "after": "<Go duration string>"}` | `{"ok": true}` | S-6.06 |
+| `admin.key.list-keys` | BC-2.05.004 Precondition 1 | Any admitted role | `{"svtn_id": "<hex>"}` | `{"keys": [{fingerprint, role, expiry}]}` | S-6.06 |
 | `admin.svtn.create` | BC-2.07.001 PC-1, Inv-3 | Bootstrap-only: authenticated caller MUST be the daemon bootstrap key with `RoleControl`; cross-SVTN control-role keys are not authorized | `{"name": "<svtn-name>"}` | `{"svtn_id": "<hex>", "bootstrap_fingerprint": "SHA256:<base64>"}` | S-6.07 |
+| `admin.svtn.destroy` | BC-2.07.001 PC-3 | Control-role key via `resolveAndVerifyCallerRole` gate (general control-role, NOT bootstrap-only) + `--confirm` token | `{"svtn_id": "<hex>"}` | `{"ok": true, "status": "destroyed"}` | S-6.05 |
 
 > **Authority note:** "bootstrap-only" verbs (`admin.svtn.create`) require that the authenticated caller's public key matches the daemon bootstrap key AND that the key's role is `RoleControl`. Regular cross-SVTN control-role keys are explicitly rejected (BC-2.07.001 Inv-3 / S-6.07 AC-003). "Control-role" verbs require any key with `RoleControl` in the target SVTN's `AdmittedKeySet`.
 
