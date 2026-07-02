@@ -38,10 +38,12 @@ wave_6_tranche_c_wavelevel_attempts_counter: 7
 wave_6_tranche_c_wavelevel_streak: 3
 wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT_PASS_4_2026-07-02 (streak 3/3 — CONVERGED)
 wave_6_tranche_c_test_race_attested: true
-wave_6_wavegate_pass_counter: 5
-wave_6_wavegate_attempts_counter: 5
-wave_6_wavegate_streak: 2
-wave_6_wavegate_last_verdict: CONVERGENT_PASS_5_2026-07-02
+wave_6_wavegate_pass_counter: 6
+wave_6_wavegate_attempts_counter: 6
+wave_6_wavegate_streak: 3
+wave_6_wavegate_last_verdict: CONVERGED_PASS_6_2026-07-02
+wave_6_wavegate_status: CONVERGED_3_OF_3
+wave_6_wavegate_converged_at: 2026-07-02
 develop_head: 7fe3e29
 open_prs: 0
 wave_6_hygiene_fec_sentinel_pr: 58
@@ -67,15 +69,17 @@ develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
 Pass 2/3/4 all CONVERGENT (Adv-A + Adv-B both 0/0/0/0). Converged 2026-07-02.
 Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
 
-### W-6 combined wave-gate — POST-REMEDIATION CLEAN (BC-5.39.001 2/3, streak advancing)
+### W-6 combined wave-gate — CONVERGED (BC-5.39.001 3/3 SATISFIED)
 
 - Pass 1 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 3 obs). Streak 1/3.
 - Pass 2 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs — 1 process-gap LOW). Streak 2/3.
 - Pass 3 (2026-07-02): **MEDIUM finding** — Adv-A L1 CONVERGENT_L1 clean; Adv-B L2/L3 F1 MEDIUM (BC-2.08.001 v1.3 governance_leaf gap). Streak reset 2→0. F1 remediated at BC-2.08.001 v1.5.
 - Pass 4 (2026-07-02): **CLEAN** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 3 obs; O-1 grandfather-adjudicated). **Streak 0 → 1/3.**
 - Pass 5 (2026-07-02): **CLEAN** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 2 obs; hygiene: POL-003 naming drift + BC-2.07.001 v1.13 body/changelog mismatch). **Streak 1 → 2/3.**
-- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3,4,5}-Adv-{A,B}.md`.
-- **NEXT ACTION:** Pass 6 fresh-context adversary (streak 2/3 → 3/3, closing pass).
+- Pass 6 (2026-07-02): **CLEAN (CLOSING PASS)** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 3 obs; obs-3 process-gap logged as DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN, deferred). **Streak 2 → 3/3.**
+- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3,4,5,6}-Adv-{A,B}.md`.
+
+**BC-5.39.001 CONVERGENCE ACHIEVED** — Task #22 Wave-6 combined wave-gate integration adversarial review CONVERGED on 2026-07-02 after 3 consecutive clean fresh-context passes (Pass 4 + Pass 5 + Pass 6, all post-F1-remediation). Perimeter-3 wave-gate is closed.
 
 ## Phase Progress
 
@@ -135,6 +139,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-POL003-GOV-LEAF-ENFORCE | LOW | [process-gap] No structural enforcement of `governance_leaf` annotation on BC changelog rows declaring "No behavioral changes"/"governance-only". Two occurrences (BC-2.07.001 v1.13, BC-2.08.001 v1.3) — pattern recurred. Suggest pre-commit or CI check. | orchestrator / spec-steward | open — file drbothen/vsdd-factory follow-on |
 | DRIFT-POL003-NAMING | LOW | POL-003 Exception A annotation reference wording drift: BC-2.07.001 v1.13 cites `drbothen/vsdd-factory#429 draft policy`; BC-2.08.001 v1.3/v1.5 cite `POL-003 Exception A`. Substance identical, naming inconsistent. Converge on `POL-003 Exception A` for future rows. Deferred — not blocking wave-gate. | spec-steward | open |
 | DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH | LOW | BC-2.07.001 v1.13 changelog description states `Stories row cite S-6.05 v1.5 → v1.7` but body Traceability Stories row (line 206) reads `S-6.05 v1.8`. STORY-INDEX row 3.60 shows a subsequent v1.7 → v1.8 bump on the same day. Body updated to v1.8 without accompanying changelog row. Per POL-003 Exception A the lag is permitted, but the self-inconsistency warrants a follow-up governance-only v1.14 changelog row to reconcile. Deferred — not blocking. | spec-steward | open |
+| DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses `BC-2.07.001 v1.12` (with version suffix); VP-050 uses `BC-2.08.001` (no suffix). Tools auditing "does the downstream cite the current BC version?" cannot mechanically answer for VPs whose `source_bc:` omits the version pin. Substance is anchored via Story Trace tables — no correctness defect — but shape drift weakens auditability. Per Cycle-Closing Checklist (S-7.02) process-gap findings require either a follow-up story or justified deferral. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling — require uniform `source_bc: BC-N.NN.NNN v<M.N>` frontmatter shape on all VPs for machine-checkable governance. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |
 
 Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 
@@ -163,18 +168,16 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | W-6 combined wave-gate Pass 3 MEDIUM | Adv-A L1 clean 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 1 MEDIUM F1 (gov-leaf annotation gap) + O-2 [process-gap]; streak reset 2→0; F1 remediated at BC-2.08.001 v1.5 | 2026-07-02 |
 | W-6 combined wave-gate Pass 4 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+3obs; O-1 grandfather-adjudicated (POL-003 going-forward only; BC-2.07.001 v1.8/v1.9/v1.10/v1.12 not retro-annotated by design); streak 0→1/3 | 2026-07-02 |
 | W-6 combined wave-gate Pass 5 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+2obs; two hygiene observations logged as LOW drift items (DRIFT-POL003-NAMING, DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH); neither blocks BC-5.39.001 3/3 closure; streak 1→2/3 | 2026-07-02 |
+| W-6 combined wave-gate Pass 6 CLEAN (closing pass); streak 2→3/3. **BC-5.39.001 CONVERGED** for Task #22 Wave-6 combined wave-gate integration. Three fresh-context passes (Pass 4/5/6) all clean post-F1-remediation. Adv-B Obs-3 process-gap logged as DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with justified deferral (drbothen/vsdd-factory POL-003 tooling backlog). Cycle-Closing Checklist S-7.02 satisfied. Task #22 CLOSED. Advancing to Phase 4 holdout evaluation (HS-006). | Adv-A CONVERGENT_L1 0/0/0/0+2obs; Adv-B CONVERGENT_L2L3 0/0/0/0+3obs | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-02 (Wave-6 combined wave-gate streak 2/3)
+## Session Resume Checkpoint — 2026-07-02 (Wave-6 combined wave-gate CONVERGED 3/3)
 
-**Position:** Phase 3 Wave 6 Tranche C wave-level CONVERGED. Both stories MERGED to develop.
-S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
+**Position:** Phase 3 Wave 6 ALL CONVERGED. Wave-gate streak: 3/3 CONVERGED. Task #22 CLOSED 2026-07-02.
 develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 
-**Wave-level status:** Tranche-C streak: 3/3 CONVERGED. Wave-gate streak: 2/3 (Pass 4 + Pass 5 clean post-F1-remediation; one more clean pass needed for BC-5.39.001).
-
-**NEXT ACTION on resume:** Wave-6 combined wave-gate Pass 6 fresh-context adversary (closing pass; streak 2/3 → 3/3 target).
+**NEXT ACTION on resume:** Phase 4 holdout evaluation (HS-006 dispatch to holdout-evaluator).
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.
@@ -187,6 +190,7 @@ develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 - DRIFT-POL003-GOV-LEAF-ENFORCE: LOW open — O-1 grandfather-adjudicated this session; structural enforcement of going-forward annotation rule still an upstream ask.
 - DRIFT-POL003-NAMING: LOW — annotation reference wording drift (BC-2.07.001 cites issue number vs BC-2.08.001 cites POL-003 label). Converge on `POL-003 Exception A` for future rows. Not blocking.
 - DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH: LOW — BC-2.07.001 v1.13 changelog says `→ v1.7` but body reads `S-6.05 v1.8`. Governance-only follow-up v1.14 row warranted. Not blocking.
+- DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN: LOW [process-gap] — VP frontmatter `source_bc:` shape asymmetry; deferred to drbothen/vsdd-factory POL-003 tooling backlog.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 

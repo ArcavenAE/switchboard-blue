@@ -227,7 +227,7 @@ BC-5.39.001 on the full wave integration surface.
 
 - Pass 5 attempt 1 (2026-07-02): CLEAN. Adv-A CONVERGENT_L1 0/0/0/0 + 2 obs. Adv-B CONVERGENT_L2L3 0/0/0/0 + 2 obs (hygiene: POL-003 naming drift — BC-2.07.001 v1.13 cites issue number vs BC-2.08.001 v1.3/v1.5 cites `POL-003 Exception A`; BC-2.07.001 v1.13 body/changelog mismatch — changelog says `→ v1.7`, body reads `S-6.05 v1.8`). Streak 1 → 2/3.
 
-**Next:** Pass 6 fresh-context adversary (closing pass; streak 2/3 → 3/3 target).
+- Pass 6 attempt 1 (2026-07-02, CLOSING PASS): CLEAN. Adv-A CONVERGENT_L1 0/0/0/0 + 2 obs. Adv-B CONVERGENT_L2L3 0/0/0/0 + 3 obs (obs-3 process-gap logged as DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN, deferred). Streak 2 → 3/3. **BC-5.39.001 CONVERGENCE ACHIEVED — Task #22 CLOSED.** Perimeter-3 wave-gate integration adversarial review complete for Wave-6 combined tranche on develop@7fe3e29.
 
 ---
 
