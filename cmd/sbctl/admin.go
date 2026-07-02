@@ -206,7 +206,7 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 //   - Path 3 (flag omitted, stdin is NOT a TTY): non-interactive scripting signal;
 //     aborts with a clear error pointing to --confirm or --yes.
 //   - Path 4 (--yes only): bypasses the confirm gate; emits a warning to stderr.
-//   - Path 5 (--yes + --confirm): E-CFG-006 usage error, exit 2.
+//   - Path 5 (--yes + --confirm): E-CFG-012 usage error, exit 2.
 //
 // The confirm gate is a human-in-loop typing ceremony (§125), NOT a server-side
 // identity match.  Server-side identity-match enforcement is deferred to
@@ -297,13 +297,13 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 //
 // Path 4 — --yes alone: emit stderr warning, return nil (bypass).
 //
-// Path 5 — --yes + --confirm: E-CFG-006 usage error, return non-nil.
+// Path 5 — --yes + --confirm: E-CFG-012 usage error, return non-nil.
 //
 // stdinIsTTY and stdinReader are package-level vars so tests can inject fakes.
 func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
-	// Path 5: --yes combined with --confirm is a usage error (E-CFG-006; §127).
+	// Path 5: --yes combined with --confirm is a usage error (E-CFG-012; §127).
 	if yes && confirmVal != "" {
-		return fmt.Errorf("E-CFG-006: --yes cannot be combined with --confirm; provide one or the other")
+		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; provide one or the other")
 	}
 
 	// Path 4: --yes alone bypasses the check (§127).

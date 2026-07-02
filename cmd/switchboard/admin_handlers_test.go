@@ -819,14 +819,100 @@ func TestMapAdminError_DefaultArm(t *testing.T) {
 	if !errors.Is(result, sentinel) {
 		t.Errorf("errors.Is(result, sentinel): expected true, got false; result=%v", result)
 	}
-	if !strings.Contains(result.Error(), "unmapped admin error") {
-		t.Errorf("expected \"unmapped admin error\" in result, got: %v", result)
+	if !strings.Contains(result.Error(), "unmapped internal condition, programmer error, please report") {
+		t.Errorf("expected \"unmapped internal condition, programmer error, please report\" in result, got: %v", result)
 	}
 	if strings.Contains(result.Error(), "E-RPC-011") {
 		t.Errorf("default arm must not stamp E-RPC-011; got: %v", result)
 	}
 	if !strings.HasPrefix(result.Error(), "E-INT-999:") {
 		t.Errorf("default arm must start with E-INT-999: (Ruling-12 §1 universality); got: %v", result)
+	}
+}
+
+// TestMapAdminError_CanonicalMessageText verifies that mapAdminError produces
+// the canonical error messages required by the spec.  These tests are RED
+// because the current implementation uses wrong message text:
+//
+//   - E-ADM-018 says "pass --confirm to proceed" instead of
+//     "use --confirm=<svtn-id> to proceed"  (F-P5P3-A-003)
+//   - E-INT-999 says "unmapped admin error" instead of
+//     "unmapped internal condition, programmer error, please report"  (F-P5P3-A-005)
+//   - E-ADM-011 wraps ErrDestroyUnauthorized without embedding the caller role
+//     or SVTN name as discriminators in the message  (F-P5P3-A-006)
+//
+// RED: all three subtests must fail against the current code at commit 7fe3e29e.
+//
+// Traces to F-P5P3-A-003, F-P5P3-A-005, F-P5P3-A-006.
+func TestMapAdminError_CanonicalMessageText(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name            string
+		sentinel        error
+		svtnName        string
+		pub             ed25519.PublicKey
+		claimedRole     string
+		wantMsgContains string // substring that MUST appear in the error message
+		wantWraps       error  // sentinel must be preserved via errors.Is
+	}{
+		{
+			// F-P5P3-A-003: E-ADM-018 must say "use --confirm=<svtn-id>" not "pass --confirm".
+			name:            "E-ADM-018_confirm_phrasing",
+			sentinel:        svtnmgmt.ErrControlRevocationRequiresConfirm,
+			svtnName:        "prod-svtn",
+			pub:             nil,
+			claimedRole:     "",
+			wantMsgContains: "use --confirm=<svtn-id> to proceed",
+			wantWraps:       svtnmgmt.ErrControlRevocationRequiresConfirm,
+		},
+		{
+			// F-P5P3-A-005: E-INT-999 default arm must say "unmapped internal condition, programmer error, please report".
+			name:            "E-INT-999_default_arm_canonical_text",
+			sentinel:        errors.New("synthetic-for-canonical-text-check"),
+			svtnName:        "s",
+			pub:             nil,
+			claimedRole:     "",
+			wantMsgContains: "unmapped internal condition, programmer error, please report",
+			wantWraps:       nil, // sentinel is unique; skip errors.Is check for this case
+		},
+		{
+			// F-P5P3-A-006: E-ADM-011 must embed the caller role and the SVTN name as
+			// discriminators so operators can distinguish unauthorised destroys.
+			name:            "E-ADM-011_includes_role_and_svtn_name",
+			sentinel:        svtnmgmt.ErrDestroyUnauthorized,
+			svtnName:        "prod-svtn",
+			pub:             nil,
+			claimedRole:     "router",
+			wantMsgContains: "router", // role discriminator
+			wantWraps:       svtnmgmt.ErrDestroyUnauthorized,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := mapAdminError(tc.sentinel, tc.svtnName, tc.pub, tc.claimedRole)
+
+			if !strings.Contains(got.Error(), tc.wantMsgContains) {
+				t.Errorf("F-P5P3: expected message to contain %q; got: %v",
+					tc.wantMsgContains, got)
+			}
+
+			// For E-ADM-011, also assert the SVTN name appears in the message.
+			if tc.name == "E-ADM-011_includes_role_and_svtn_name" {
+				if !strings.Contains(got.Error(), tc.svtnName) {
+					t.Errorf("F-P5P3-A-006: expected message to contain svtn_name %q; got: %v",
+						tc.svtnName, got)
+				}
+			}
+
+			if tc.wantWraps != nil && !errors.Is(got, tc.wantWraps) {
+				t.Errorf("errors.Is(got, sentinel): expected true, got false; got=%v", got)
+			}
+		})
 	}
 }
 
