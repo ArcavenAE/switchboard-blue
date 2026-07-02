@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.002
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,14 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-07-02
+    version: "1.4"
+    change: >
+      Add PENDING-S-BL.DISCOVERY-WIRE annotation to PC-1 — `sbctl sessions list` CLI
+      form not executable end-to-end on develop@7fe3e29e; internal Go API
+      (discovery.Enumerate) satisfies "or equivalent API call" clause. Closes
+      DRIFT-P5P1-A002-SESSIONS-LIST-ORPHAN. Refs Phase 5 Pass 1 Adv-A F-P5P1-A-002.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -48,6 +55,9 @@ A console can list all available sessions across all access nodes on its SVTN by
 ## Postconditions
 
 1. `sbctl sessions list` (or equivalent API call) returns a list of all sessions currently known to the console from SVTN presence advertisements.
+
+   > **PENDING-S-BL.DISCOVERY-WIRE:** As of develop@7fe3e29e, the `sbctl sessions list` CLI form is not executable end-to-end — the sbctl subcommand dispatches to wire command `sessions.list`, for which no daemon registers a handler; invocation returns `E-RPC-010: unknown command: sessions.list`. The internal Go API (`discovery.Enumerate()`, implemented under S-7.02 and merged in PR #55) satisfies the "or equivalent API call" clause today. Wire boundary exposure of `Enumerate()` as `sessions.list` is expected to land via backlog story `S-BL.DISCOVERY-WIRE`.
+
 2. Each session entry includes: session name, access node address, attachment status, quality indicator.
 3. Sessions are listed regardless of which access node they live on — the console has a unified view.
 4. The list reflects the most recent state known (eventual consistency from heartbeat cycle).
@@ -108,6 +118,7 @@ Operator runs `sbctl sessions list` or console refreshes its session list view.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.4 | 2026-07-02 | Add PENDING-S-BL.DISCOVERY-WIRE annotation to PC-1 — `sbctl sessions list` CLI form not executable end-to-end on develop@7fe3e29e; internal Go API (discovery.Enumerate) satisfies "or equivalent API call" clause. Closes DRIFT-P5P1-A002-SESSIONS-LIST-ORPHAN. Refs Phase 5 Pass 1 Adv-A F-P5P1-A-002. |
 | v1.3 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): Stories row updated to add S-BL.DISCOVERY-WIRE with deferred real-socket PC-3 aggregation annotation. |
 | v1.2 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
 | v1.1 | 2026-06-23 | Initial behavioral contract creation. |

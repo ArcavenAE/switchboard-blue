@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.002
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -54,6 +54,13 @@ modified:
       Delete BC §VP table phantom rows 139-140 (both mis-labeled VP-049; per S-W5.02
       Pass-1 L3 F-P1L3-001 PO Q3 ruling). Follow-up minting VP-JSON-COVERAGE +
       VP-SBCTL-NOT-DAEMON tracked as Wave-6 backlog.
+  - date: 2026-07-02
+    version: "1.6"
+    change: >
+      Add PENDING-S-BL.SVTN-LIST-WIRE annotation to Canonical Test Vectors — happy-path
+      row unreachable through shipped operator surface as of develop@7fe3e29e; wire
+      handler tracked in backlog story S-BL.SVTN-LIST-WIRE. Closes
+      DRIFT-P5P1-A001-SVTN-LIST-ORPHAN. Refs Phase 5 Pass 1 Adv-A F-P5P1-A-001.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -137,6 +144,8 @@ Operator runs any `sbctl <subcommand>` command.
 | `sbctl --help` | Help text printed; exit 0 | happy-path |
 | `sbctl router status --json` | JSON object with router status fields | happy-path |
 
+> **PENDING-S-BL.SVTN-LIST-WIRE:** As of develop@7fe3e29e, the canonical `sbctl svtn list` happy-path test vector is not directly executable — the sbctl subcommand dispatches to wire command `svtn.list`, for which no daemon (control / router / access / console) currently registers a handler. Invocation returns `E-RPC-010: unknown command: svtn.list` regardless of authentication state, so both test vectors (happy and error) reach the wire boundary but the happy-path row's postcondition ("List of SVTNs returned") is unreachable through the shipped operator surface. The `admin.svtn.list` handler (see also Observation: no admin-scoped listing surface today — `cmd/switchboard/admin_handlers.go` registers `admin.svtn.create` and `admin.svtn.destroy` but not `admin.svtn.list`) is expected to land via backlog story `S-BL.SVTN-LIST-WIRE`. Until then, this test vector documents intended behavior, not shipped behavior.
+
 ## Verification Properties
 
 | VP-NNN | Property | Proof Method |
@@ -163,6 +172,7 @@ Operator runs any `sbctl <subcommand>` command.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.6 | 2026-07-02 | Add PENDING-S-BL.SVTN-LIST-WIRE annotation to Canonical Test Vectors — happy-path row unreachable through shipped operator surface as of develop@7fe3e29e; wire handler tracked in backlog story S-BL.SVTN-LIST-WIRE. Closes DRIFT-P5P1-A001-SVTN-LIST-ORPHAN. Refs Phase 5 Pass 1 Adv-A F-P5P1-A-001. |
 | 1.5 | 2026-06-30 | Delete §VP table phantom rows 139-140 (both mis-labeled VP-049: `--json` fuzz row and `not-a-daemon` unit row). Per S-W5.02 Pass-1 L3 F-P1L3-001 PO Q3 ruling — these rows were never formally minted VP IDs; they are copy-paste leftovers predating the VP-062/VP-063 splits. Follow-up VPs VP-JSON-COVERAGE and VP-SBCTL-NOT-DAEMON tracked as Wave-6 backlog. |
 | 1.4 | 2026-06-29 | ARCH-12 v1.5 Wave-5 Convergence Rulings U and X: (U) PC-3 extended — `dispatch()` MUST verify `resp.Type == "response"` after decoding; any other value is protocol error returned as E-RPC-001; wrong-type response with `"ok":true` must not be silently accepted. (X) PC-3 extended — `dispatch()` generates a non-constant per-call request `id`; after decoding, verifies `resp.ID == req.ID`; mismatch = E-RPC-001; per ADR-012 §3 step 6. |
 | 1.3 | 2026-06-29 | ARCH-12 v1.4 Wave-5 Convergence Ruling M: PC-3 annotated with RPC wire-type precision note — `"type":"request"` is the only valid client RPC envelope type per ADR-012 §3 step 6; server responds with `"type":"response"`; any other type causes silent connection close. Frontmatter version/modified updated. |

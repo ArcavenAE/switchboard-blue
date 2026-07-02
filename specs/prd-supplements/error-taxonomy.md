@@ -2,7 +2,7 @@
 artifact_id: error-taxonomy
 document_type: prd-supplement-error-taxonomy
 level: L3
-version: "4.1"
+version: "4.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-29T00:00:00
@@ -24,6 +24,7 @@ modified:
   - 2026-06-30T00:00:00 # v3.9 — Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 + E-ADM-021 descriptions narrowed from "unconditionally" to "for any well-formed request"; BC citation updated from v1.10 to v1.12; E-CFG-001 handler-layer layering note added to both rows
   - 2026-07-01T00:00:00 # v4.0 — Wave-6 Tranche A Ruling-4 sibling-propagation (S-6.07 F-P2L3-002): E-ADM-009 FM/DEC Source extended with BC-2.07.001 Inv-3; E-INT-001 minted (internal handler error for non-duplicate admin.svtn.create failure, BC-2.07.001 PC-1); INT category added to category table
   - 2026-07-01T00:00:00 # v4.1 — Ruling-12 §1 universality follow-through: E-INT-999 minted as catch-all sentinel for unmapped internal conditions (default arm of mapAdminError or equivalent); wire envelope follows E-RPC-011 pattern; Ruling-12 §7 process policy added to rulings doc
+  - 2026-07-02T00:00:00 # v4.2 — Phase 5 Pass 1 remediation: E-NET-006 BC-anchor annotated with PENDING-S-7.04 (emission site absent from cmd/internal, router drain runtime stubbed); closes DRIFT-P5P1-B-H001-ENET006-TAXONOMY-ORPHAN + DRIFT-P5P1-B-L001
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -116,7 +117,7 @@ traces_to: '.factory/specs/prd.md'
 | E-NET-003 | NET | degraded | 0 | "router unreachable after IP change: <router_addr>; retrying" | DEC-001, BC-2.01.007 |
 | E-NET-004 | NET | degraded | 0 | "path failed: <router_addr>: 3 consecutive keep-alives missed; removing from active set" | BC-2.02.003 |
 | E-NET-005 | NET | broken | 1 | "access node unreachable: <node_addr> for session <session_name>" | BC-2.04.003 |
-| E-NET-006 | NET | broken | 1 | "router draining; connect to alternate router at <alternates_list>" | BC-2.09.002 |
+| E-NET-006 | NET | broken | 1 | "router draining; connect to alternate router at <alternates_list>" | BC-2.09.002 (PENDING-S-7.04: emission site not yet present in `cmd/` or `internal/` as of develop@7fe3e29e — router drain runtime is stubbed pending S-7.04 delivery; taxonomy row documents intended operator-facing message shape.) |
 
 ### PRT — Protocol
 
@@ -221,6 +222,7 @@ This note added per drbothen/vsdd-factory#260 rollback (holdout-discovered, 2026
 
 | Version | Date | Change |
 |---------|------|--------|
+| v4.2 | 2026-07-02 | Add PENDING-S-7.04 annotation to E-NET-006 row mimicking E-CFG-002 defensive-annotation shape. Documents that emission site is not yet present in `cmd/` or `internal/`; router drain runtime stubbed pending S-7.04. Closes DRIFT-P5P1-B-H001-ENET006-TAXONOMY-ORPHAN, DRIFT-P5P1-B-L001 (annotation-shape inconsistency). Refs Phase 5 Pass 1 Adv-B F-P5-Adv-B-H-001, F-P5-Adv-B-L-001. |
 | v4.1 | 2026-07-01 | Ruling-12 §1 universality follow-through: E-INT-999 minted as catch-all default-arm sentinel for `mapAdminError` and equivalent handler-side taxonomy fallbacks. Canonical message: `"unmapped internal condition, programmer error, please report"`. Wire envelope: `{code: "E-RPC-011", message: "E-INT-999: unmapped internal condition, programmer error, please report: <wrapped>"}`. Ruling-12 §7 process policy added to wave-6-tranche-a-scope-rulings.md v1.8: introducing a new handler-code family requires (a) new error-taxonomy row, (b) §Universality row in anchor story spec, (c) amendment to Ruling-12 §1 enumeration — all in the same fix-burst. |
 | v4.0 | 2026-07-01 | Wave-6 Tranche A Ruling-4 sibling-propagation (S-6.07 F-P2L3-002): E-ADM-009 FM/DEC Source appended with `, BC-2.07.001 Inv-3` (cross-SVTN control-role key → E-ADM-009 for admin.svtn.create). E-INT-001 minted — `"internal error: <operation>: <cause>"`; source BC-2.07.001 PC-1; registered for non-duplicate Create() failure code-stamp per S-6.07 v1.3 Ruling-5 amendment. INT category added to category table. |
 | v3.9 | 2026-06-30 | Pass-22 F-P22L3-002 sibling-fix (4th-iteration narrowing sweep): E-ADM-020 description — BC citation updated v1.10→v1.12; "unconditionally non-revocable at any time" narrowed to "non-revocable for any well-formed request"; E-CFG-001 handler-layer gate note added. E-ADM-021 description — same pattern: v1.10→v1.12; "unconditionally non-expirable at any time" narrowed to "non-expirable for any well-formed request"; E-CFG-001 handler-layer gate note added. Source-of-truth: BC-2.05.004 EC-007 v1.12 (Pass-20 Option-B). |
