@@ -491,3 +491,29 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 **NEXT ACTION (superseded):** Wave-6 Tranche C in-flight: S-6.05 v1.3 + S-7.03 v1.2 dispatched.
 
 **Open observations carrying forward:** S502-DEFER-1..6 / SW502-DEFER-1..8; PROCESS-GAP-W5-SIBLINGSWEEP; PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP; Tranche B post-merge issues #44–#54, #57; PROCESS-GAP-DEMO-TAPE-PATHS drbothen/vsdd-factory#418.
+
+---
+
+## Checkpoint: Burst 12 (archived 2026-07-02)
+
+**Timestamp:** 2026-07-02T00:00:00Z
+**Post-burst:** Burst 12 (state-manager: Phase 5 Pass 2 loop closure)
+**Pipeline state:** Phase 5 Pass 2 REMEDIATED — Pass 3 pending fresh-context dispatch
+**Factory HEAD:** (see `git -C .factory log -1 --format='%h'`)
+**Develop HEAD:** 7fe3e29e4358df16e4e2f1de65a4e0d972540b4a (unchanged)
+
+**Task ledger (most recent first):**
+- Task #81 (COMPLETED) — Burst 11 Pass 2 remediation applied
+- Task #82 (NEW, PENDING) — Phase 5 Pass 3 dispatch (fresh-context split-adversary against Burst 11-annotated state)
+- Task #78 (COMPLETED, superseded by Burst 11) — S-BL.SVTN-LIST-WIRE minted
+- Task #79 (COMPLETED, superseded by Burst 11) — S-BL.DISCOVERY-WIRE already existed pre-Burst-8; verified live reference
+- Task #45, #60, #62, #72, #73 (PENDING) — outstanding backlog
+
+**Next action (superseded):** Burst 13 — Phase 5 Pass 3 split-adversary dispatch (opus, ≤6min, ≤6 reads, prior_passes_read: false, both lenses). Streak target 1/3 (from 0/3). If Pass 3 clean/clean, streak advances.
+
+**Pass 2 findings disposition:**
+- F-P5P2-A-001 (version orphan): CLOSED BC-2.07.002 v1.7 EC-004
+- F-P5P2-A-002 (ping orphan): CLOSED BC-2.07.002 v1.7 EC-005
+- F-P5P2-A-003 (test-helper typo): DRIFT-P5P2-A003 open, test-writer follow-up
+- F-P5P2-B-001 (POL-003 2/76): upstream drbothen (Task #72)
+- F-P5P2-B-002 (listen_addr row): CLOSED BC-2.09.003 v1.8
