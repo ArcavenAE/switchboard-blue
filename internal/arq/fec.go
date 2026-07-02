@@ -36,6 +36,13 @@ const DefaultFECGroupSize = 4
 // or operator messaging (AC-003, BC-2.02.007 PC-4).
 var ErrTooManyLosses = errors.New("fec: too many losses in group")
 
+// _ anchors the frame import at package scope (ARCH-08; F-P8-008).
+// Parity frames carry frame_type=frame.FrameTypeFec=0x05 in their outer
+// header; the constant is referenced in Encoder.AddFrame and Decoder.Recover
+// doc comments and callers must use it — keeping the import live here makes
+// the dependency explicit without polluting the hot path.
+var _ = frame.FrameTypeFec
+
 // FECConfig carries construction parameters for NewEncoder and NewDecoder.
 type FECConfig struct {
 	// GroupSize is the number of data frames per FEC group. Defaults to
@@ -175,10 +182,6 @@ func NewDecoder(cfg FECConfig) *Decoder {
 // The parity frame type constant is frame.FrameTypeFec (=0x05); this reference
 // ensures the import is live and the canonical value is used throughout.
 func (d *Decoder) Recover(group [][]byte, parityPayload []byte) ([]byte, error) {
-	// Reference frame.FrameTypeFec to satisfy the import requirement (ARCH-08;
-	// F-P8-008): the parity frame outer header carries this frame type.
-	_ = frame.FrameTypeFec
-
 	// Count losses (nil entries in group) and locate the single missing index.
 	losses := 0
 	lossIdx := -1
