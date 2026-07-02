@@ -225,7 +225,9 @@ BC-5.39.001 on the full wave integration surface.
 
 - Pass 4 (2026-07-02): CLEAN. Adv-A CONVERGENT_L1 0/0/0/0 + 2 obs. Adv-B CONVERGENT_L2L3 0/0/0/0 + 3 obs (O-1 grandfather-adjudicated: POL-003 going-forward annotation convention; BC-2.07.001 historical rows not retro-annotated by design). Streak 0 → 1/3.
 
-**Next:** Pass 5 fresh-context adversary (streak 1/3 → 2/3 target).
+- Pass 5 attempt 1 (2026-07-02): CLEAN. Adv-A CONVERGENT_L1 0/0/0/0 + 2 obs. Adv-B CONVERGENT_L2L3 0/0/0/0 + 2 obs (hygiene: POL-003 naming drift — BC-2.07.001 v1.13 cites issue number vs BC-2.08.001 v1.3/v1.5 cites `POL-003 Exception A`; BC-2.07.001 v1.13 body/changelog mismatch — changelog says `→ v1.7`, body reads `S-6.05 v1.8`). Streak 1 → 2/3.
+
+**Next:** Pass 6 fresh-context adversary (closing pass; streak 2/3 → 3/3 target).
 
 ---
 
