@@ -73,7 +73,7 @@ func main() {
 			os.Exit(2)
 		}
 	case "console":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "console.attach", nil, sio)
+		err = runConsole(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "admin":
 		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "version":
