@@ -23,7 +23,7 @@ Set Framerate 30
 Set TypingSpeed 30ms
 
 Hide
-Type "cd /Users/skippy/work/switchboard-blue/.worktrees/S-BL.LOOKUP && clear"
+Type "clear"
 Enter
 Sleep 1s
 Show
