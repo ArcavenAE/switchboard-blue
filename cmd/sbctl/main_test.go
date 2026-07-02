@@ -424,6 +424,145 @@ func TestSbctl_HelpFlag_ExitsZeroStdout(t *testing.T) {
 	}
 }
 
+// TestSubprocessMain_UnknownSubcommand is the subprocess hook for
+// TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand.
+// When SBCTL_TEST_UNKNOWN_SUBCMD is set to a subcommand string, it resets
+// flag.CommandLine and os.Args so that main() sees that subcommand, then calls
+// main(). main() calls os.Exit — this function never returns normally in the
+// subprocess.  In the parent process (env var absent), t.Skip fires immediately.
+//
+// F-P5P3-A-001 (svtn orphan), F-P5P3-A-002 (version/ping orphans), F-P5P3-A-009 (discovery hint).
+func TestSubprocessMain_UnknownSubcommand(t *testing.T) {
+	subcmd := os.Getenv("SBCTL_TEST_UNKNOWN_SUBCMD")
+	if subcmd == "" {
+		t.Skip("subprocess hook — skip in parent process")
+	}
+	// Reset flag parsing state so main()'s flag.Parse() works cleanly.
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	// Construct os.Args: binary + required flags + the subcommand (plus optional
+	// trailing args carried via SBCTL_TEST_UNKNOWN_TRAILING).
+	trailing := os.Getenv("SBCTL_TEST_UNKNOWN_TRAILING")
+	args := []string{os.Args[0], "--target", "127.0.0.1:19999", "--key", "/dev/null", subcmd}
+	if trailing != "" {
+		args = append(args, trailing)
+	}
+	os.Args = args
+	main()
+	// main() calls os.Exit; reaching here is unexpected.
+	t.Fatal("main() returned without calling os.Exit — unexpected")
+}
+
+// TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand verifies that the
+// orphan case arms ("svtn", "version", "ping") that Path B deletes fall through
+// to the default: arm and exit 2 with "unknown subcommand".  Also verifies that
+// an arbitrary unknown subcommand exits 2 with a discovery hint.
+//
+// RED: current main.go has explicit case arms for "svtn", "version", and "ping"
+// so those invocations exit 0 (or fail with a connection error), NOT with
+// "unknown subcommand".  Tests must fail before the orphan arms are deleted.
+//
+// F-P5P3-A-001 (svtn orphan), F-P5P3-A-002 (version/ping orphans),
+// F-P5P3-A-009 (discovery hint for arbitrary unknown).
+func TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name             string
+		subcmd           string
+		trailing         string // optional extra arg after the subcommand
+		wantExitCode     int
+		wantStderrSubstr string // must appear in stderr
+		wantHint         bool   // if true, stderr must contain a discovery hint
+	}{
+		{
+			name:             "svtn_alone_exits_two",
+			subcmd:           "svtn",
+			trailing:         "",
+			wantExitCode:     2,
+			wantStderrSubstr: "unknown subcommand",
+		},
+		{
+			name:             "svtn_list_exits_two",
+			subcmd:           "svtn",
+			trailing:         "list",
+			wantExitCode:     2,
+			wantStderrSubstr: "unknown subcommand",
+		},
+		{
+			name:             "version_exits_two",
+			subcmd:           "version",
+			trailing:         "",
+			wantExitCode:     2,
+			wantStderrSubstr: "unknown subcommand",
+		},
+		{
+			name:             "ping_exits_two",
+			subcmd:           "ping",
+			trailing:         "",
+			wantExitCode:     2,
+			wantStderrSubstr: "unknown subcommand",
+		},
+		{
+			name:         "arbitrary_unknown_has_discovery_hint",
+			subcmd:       "foo-bar-quux",
+			trailing:     "",
+			wantExitCode: 2,
+			wantHint:     true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cmd := exec.Command(os.Args[0], "-test.run=TestSubprocessMain_UnknownSubcommand")
+			cmd.Env = append(os.Environ(),
+				"SBCTL_TEST_UNKNOWN_SUBCMD="+tc.subcmd,
+				"SBCTL_TEST_UNKNOWN_TRAILING="+tc.trailing,
+			)
+
+			var outBuf, errBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			cmd.Stderr = &errBuf
+
+			err := cmd.Run()
+			stdout := outBuf.String()
+			stderr := errBuf.String()
+
+			exitCode := 0
+			if err != nil {
+				exitErr, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatalf("subprocess execution failed with non-exit error: %v", err)
+				}
+				exitCode = exitErr.ExitCode()
+			}
+
+			if exitCode != tc.wantExitCode {
+				t.Errorf("F-P5P3-A-001/002/009: expected exit code %d, got %d\nstdout: %q\nstderr: %q",
+					tc.wantExitCode, exitCode, stdout, stderr)
+			}
+			if tc.wantStderrSubstr != "" && !strings.Contains(stderr, tc.wantStderrSubstr) {
+				t.Errorf("F-P5P3-A-001/002/009: expected stderr to contain %q; got: %q",
+					tc.wantStderrSubstr, stderr)
+			}
+			if tc.wantHint {
+				// Discovery hint must reference the binary name and include "help" or "usage".
+				if !strings.Contains(stderr, "sbctl") {
+					t.Errorf("F-P5P3-A-009: discovery hint must reference \"sbctl\"; got stderr: %q", stderr)
+				}
+				hasHelp := strings.Contains(strings.ToLower(stderr), "help") ||
+					strings.Contains(strings.ToLower(stderr), "usage") ||
+					strings.Contains(strings.ToLower(stderr), "no args")
+				if !hasHelp {
+					t.Errorf("F-P5P3-A-009: discovery hint must contain \"help\", \"usage\", or \"no args\"; got stderr: %q", stderr)
+				}
+			}
+		})
+	}
+}
+
 // TestSbctl_ConnectionTimeout verifies BC-2.07.003 Inv-2 and AC-007:
 // sbctl does not hang indefinitely. After --timeout expires, it exits with
 // E-NET-001. The elapsed wall time must be >= the configured timeout, which

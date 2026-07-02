@@ -46,8 +46,6 @@ func main() {
 
 	var err error
 	switch subcommand {
-	case "svtn":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "svtn.list", nil, sio)
 	case "sessions":
 		err = connectAndRun(ctx, *target, *key, *jsonOut, "sessions.list", nil, sio)
 	case "paths":
@@ -76,12 +74,8 @@ func main() {
 		err = runConsole(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "admin":
 		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:], sio)
-	case "version":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "version", nil, sio)
-	case "ping":
-		err = connectAndRun(ctx, *target, *key, *jsonOut, "ping", nil, sio)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", subcommand)
+		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\nrun 'sbctl' with no args for usage\n", subcommand)
 		os.Exit(2)
 	}
 

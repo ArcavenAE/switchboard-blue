@@ -410,13 +410,13 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		// ExpireKey is called, so this arm is unreachable in production (F-L1-B).
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: pass --confirm to proceed (revoking control key from SVTN %q): %w", svtnName, err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed (revoking control key from SVTN %q): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
 		return fmt.Errorf("E-ADM-021: bootstrap-key-expire-forbidden: cannot expire the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrDestroyUnauthorized):
-		return fmt.Errorf("E-ADM-011: destroy unauthorized: %w", err)
+		return fmt.Errorf("E-ADM-011: destroy unauthorized: role=%s svtn_name=%s: %w", claimedRoleStr, svtnName, err)
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer
@@ -425,7 +425,7 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		// so the wire envelope always has a machine-readable code). Do NOT use
 		// E-RPC-011 here — mgmt.go stamps that on the wire envelope; co-stamping
 		// produces a malformed response.
-		return fmt.Errorf("E-INT-999: unmapped admin error: %w", err)
+		return fmt.Errorf("E-INT-999: unmapped internal condition, programmer error, please report: %w", err)
 	}
 }
 
@@ -776,7 +776,7 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 		}
 
 		if err := m.Destroy(callerKey, a.Name); err != nil {
-			return nil, mapAdminError(err, a.Name, nil, "")
+			return nil, mapAdminError(err, a.Name, nil, roleToString(callerKey.Role))
 		}
 
 		return struct {

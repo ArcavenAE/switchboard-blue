@@ -1860,7 +1860,7 @@ func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
 //	Path 2 (omitted + TTY mismatch)  → interactive prompt, mismatch → no RPC
 //	Path 3 (omitted, non-TTY)        → hostile-scripting error, no RPC
 //	Path 4 (--yes alone)             → bypass with stderr warning, RPC dispatched
-//	Path 5 (--yes + --confirm)       → E-CFG-006 usage error (exit 2), no RPC
+//	Path 5 (--yes + --confirm)       → E-CFG-012 usage error (exit 2), no RPC
 //
 // stdinIsTTY and stdinReader are package-level seams swapped per-subtest.
 //
@@ -1954,7 +1954,7 @@ func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 			isTTY:           false,
 			wantErr:         true,
 			wantNoRPC:       true,
-			wantErrContains: "E-CFG-006",
+			wantErrContains: "E-CFG-012",
 		},
 	}
 
@@ -2015,6 +2015,63 @@ func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012 verifies that combining
+// --yes and --confirm is classified as E-CFG-012 (flag mutual-exclusion violation),
+// NOT E-CFG-006.
+//
+// RED: current admin.go line 306 emits "E-CFG-006: --yes cannot be combined with
+// --confirm" which makes the existing path5 in TestSbctlAdmin_SVTNDestroy_ConfirmGate
+// pass.  That code must change to E-CFG-012.  This new test locks in the correct
+// code so that both the emission-site change and the old assertion failing are
+// visible simultaneously.
+//
+// Traces to F-P5P3-A-007 (E-CFG-012 mutual-exclusion code for flag conflicts).
+func TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012(t *testing.T) {
+	// Not parallel: mutates package-level seams stdinIsTTY / stdinReader which are
+	// also written by TestSbctlAdmin_SVTNDestroy_ConfirmGate subtests; running
+	// concurrently causes a data race under -race.
+
+	// setTTYSeam is a local copy of the helper in TestSbctlAdmin_SVTNDestroy_ConfirmGate.
+	// Seam mutation is not parallel-safe; each caller must restore originals.
+	origIsTTY := stdinIsTTY
+	origReader := stdinReader
+	stdinIsTTY = func() bool { return false }
+	stdinReader = strings.NewReader("")
+	t.Cleanup(func() {
+		stdinIsTTY = origIsTTY
+		stdinReader = origReader
+	})
+
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		return nil, fmt.Errorf("unexpected RPC %q: --yes+--confirm must be rejected before RPC dispatch", cmd)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	t.Cleanup(cancel)
+
+	var errBuf strings.Builder
+	sio := sbctlIO{out: io.Discard, err: &errBuf}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false,
+		[]string{"svtn", "destroy", "--name", "some-svtn", "--yes", "--confirm", "SVTN-aabbccdd"},
+		sio)
+
+	// Must return a non-nil error (pre-RPC gate fires).
+	if err == nil {
+		t.Fatal("F-P5P3-A-007: expected non-nil error for --yes + --confirm; got nil")
+	}
+
+	// MUST contain E-CFG-012 (the correct mutual-exclusion code).
+	if !strings.Contains(err.Error(), "E-CFG-012") {
+		t.Errorf("F-P5P3-A-007: error must contain \"E-CFG-012\"; got: %v", err)
+	}
+
+	// MUST NOT contain E-CFG-006 (the wrong code that the current code emits).
+	if strings.Contains(err.Error(), "E-CFG-006") {
+		t.Errorf("F-P5P3-A-007: error must NOT contain \"E-CFG-006\" (wrong code); got: %v", err)
 	}
 }
 
