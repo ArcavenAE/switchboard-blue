@@ -383,20 +383,43 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 
 	// Build console session infrastructure.
 	ks := admission.NewAdmittedKeySet()
+
+	// Register configured operator keys into ks with RoleConsole so that
+	// verifyConsoleCallerRole (in BuildConsoleHandlers) admits them for console RPCs
+	// (BC-2.08.001 Inv-1; L1-C4; F-P2L1-001).
+	//
+	// Two-layer authorization for console RPCs:
+	//   Layer 1 (Tier-1, mgmt-plane): mgmt.Server authenticates the caller via
+	//           Ed25519 challenge-response against the OperatorKeySet. Only keys in
+	//           OperatorKeySet reach the handler (BC-2.07.004).
+	//   Layer 2 (Tier-2, session-plane): verifyConsoleCallerRole checks the caller's
+	//           key against ks (AdmittedKeySet). Keys absent from ks receive E-ADM-006
+	//           even if they passed Layer 1.
+	//
+	// Both layers use cfg.AuthorizedOperatorKeys as the source of trusted keys.
+	// The zero svtnID ([16]byte{}) is the console-daemon's global partition — console
+	// keys are not SVTN-scoped (ARCH-04 §Console Key Scope; ADR-006).
+	var zeroSVTN [16]byte
+	for _, pub := range parsePEMOperatorKeys(func() []string {
+		if cfg != nil {
+			return cfg.AuthorizedOperatorKeys
+		}
+		return nil
+	}()) {
+		ks.RegisterKey(zeroSVTN, pub, admission.RoleConsole)
+	}
+
 	pub := session.NewPublisher(ks)
 	consoleState := session.NewConsoleState()
 	consoleSrv := session.NewConsoleServer(pub, consoleState)
 
-	// Console daemon uses no OperatorKeySet (nil = bootstrap mode; daemon key is the
-	// sole bootstrap authority). Admin handlers are NOT registered (AC-004).
-	ops := mgmt.NewOperatorKeySet(nil)
-
 	// Phase (a): construct server with console handlers pre-registered (no goroutine).
+	// newMgmtServer also parses cfg.AuthorizedOperatorKeys for the OperatorKeySet
+	// (Layer 1); ks above handles Layer 2 (Tier-2 admission).
 	mgmtSrv, mgmtErr := newMgmtServer(cfg, "console", daemonPriv, BuildConsoleHandlers(consoleSrv, ks))
 	if mgmtErr != nil {
 		return fmt.Errorf("runConsole: construct management server: %w", mgmtErr)
 	}
-	_ = ops // ops is unused for console mode but wired for future extension
 
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
 	if err := wireMetricsHandlers(mgmtSrv); err != nil {
