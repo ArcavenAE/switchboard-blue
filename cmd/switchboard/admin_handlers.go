@@ -7,6 +7,7 @@
 //	admin.key.expire     (BC-2.05.004 PC-3; DI-003 defense-in-depth duration validation)
 //	admin.key.list-keys  (BC-2.05.004 PC-1 confirmation surface; any admitted role; F-L2-001/F-L2-003)
 //	admin.svtn.create    (BC-2.07.001 PC-1 + PC-2 + Inv-3; S-6.07)
+//	admin.svtn.destroy   (BC-2.07.001 PC-3; RULING-W6TB-A; S-6.05)
 //
 // Only the control-mode daemon calls BuildAdminHandlers (ADR-004 role-exclusion
 // (ARCH-04 disambiguation table); AC-004). Access, console, and router daemons pass nil handlers.
@@ -128,6 +129,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m)},
 		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
+		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops)},
 	}
 }
 
@@ -167,7 +169,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
 		// (F-001b / BC-2.05.004 Precondition 1 / DI-001). Falls back to CallerRole arg in unit tests.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.register"); err != nil {
+		if _, err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.register"); err != nil {
 			return nil, err
 		}
 
@@ -209,7 +211,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
 		// (F-001b / BC-2.05.004 Precondition 1 / DI-001). Falls back to CallerRole arg in unit tests.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.revoke"); err != nil {
+		if _, err := resolveAndVerifyCallerRole(ctx, m, ops, a.SVTNName, a.CallerRole, "admin.key.revoke"); err != nil {
 			return nil, err
 		}
 
@@ -261,7 +263,7 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 		// Auth fires before input validation so BC-2.05.004 Precondition 1 "handler
 		// gate fires BEFORE dispatch" is uniform across all admin handlers.
 		// No CallerRole field in expire args — purely server-resolved.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.expire"); err != nil {
+		if _, err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.expire"); err != nil {
 			return nil, err
 		}
 
@@ -413,6 +415,8 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
 		return fmt.Errorf("E-ADM-021: bootstrap-key-expire-forbidden: cannot expire the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
+	case errors.Is(err, svtnmgmt.ErrDestroyUnauthorized):
+		return fmt.Errorf("E-ADM-011: destroy unauthorized: %w", err)
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer
@@ -462,6 +466,11 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 // resolveAndVerifyCallerRole resolves the authenticated caller's key role via
 // the server-side context (preferred) and enforces that it is control-role.
 //
+// On success it returns the caller's real AdmittedKey (Role + PublicKey populated
+// from server-side resolution). Callers that need the resolved identity (e.g.
+// makeAdminSVTNDestroyHandler) pass it directly to SVTNManager methods, preserving
+// the defense-in-depth invariant even if the handler gate is later removed (F-P3L1-001).
+//
 // Server-resolved path (F-001b / BC-2.05.004 Precondition 1 / DI-001 / AC-006):
 //  1. Look up pubkey via CallerKeyRoleActive (F-P4L1-003): only active (not
 //     revoked, not expired) entries yield a role. Revoked or expired keys are
@@ -486,7 +495,7 @@ func keyFingerprintAdmin(pub ed25519.PublicKey) string {
 //   - If ctx has no caller pubkey and callerRoleStr is empty, the caller's
 //     role cannot be confirmed → reject with E-ADM-009 (fail-closed,
 //     BC-2.05.004 Precondition 1 / DI-001).
-func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, svtnName, callerRoleStr, cmd string) error {
+func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, svtnName, callerRoleStr, cmd string) (admission.AdmittedKey, error) {
 	if ops == nil {
 		ops = mgmt.NewOperatorKeySet(nil)
 	}
@@ -496,7 +505,10 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 		role, found := m.CallerKeyRoleActive(svtnName, callerPub)
 		if found {
 			fp := keyFingerprintAdmin(callerPub)
-			return verifyCallerRole(role, cmd, fp)
+			if err := verifyCallerRole(role, cmd, fp); err != nil {
+				return admission.AdmittedKey{}, err
+			}
+			return admission.AdmittedKey{Role: role, PublicKey: callerPub}, nil
 		}
 
 		// CallerKeyRoleActive returned (0, false). The key is either:
@@ -505,34 +517,38 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 		fp := keyFingerprintAdmin(callerPub)
 		if m.IsRegisteredAnyState(svtnName, callerPub) {
 			// Registered but inactive (revoked or expired) — fail-closed, no bypass.
-			return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
+			return admission.AdmittedKey{}, fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
 		}
 
 		// Key is genuinely not registered. Check bootstrap and operator-key paths.
-		// Bootstrap key (daemon's own trust anchor) is always allowed.
+		// Bootstrap key (daemon's own trust anchor) is always allowed; carries RoleControl.
 		if m.IsBootstrapKey(callerPub) {
-			return nil
+			return admission.AdmittedKey{Role: admission.RoleControl, PublicKey: callerPub}, nil
 		}
 		// F-P4L1-001: operator-key bootstrap grant for admin.key.register only.
 		// The condition is: SVTN has no active non-bootstrap control key (no other
-		// human-registered control key exists).
+		// human-registered control key exists). Operator keys are implicitly control-role.
 		if cmd == "admin.key.register" && ops.IsAuthorized(callerPub) && !m.HasNonBootstrapControlKey(svtnName) {
-			return nil
+			return admission.AdmittedKey{Role: admission.RoleControl, PublicKey: callerPub}, nil
 		}
-		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
+		return admission.AdmittedKey{}, fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
 	}
 
 	// No pubkey in ctx — fallback when no handshake context is present.
 	if callerRoleStr == "" {
 		// Cannot confirm caller role: fail closed (BC-2.05.004 Precondition 1 / DI-001).
 		// DEFER(S-HRD.02): structured-log admin auth rejection — see S-HRD.02 (daemon logging infrastructure).
-		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key (unknown) has role unregistered", cmd)
+		return admission.AdmittedKey{}, fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key (unknown) has role unregistered", cmd)
 	}
 	cr, err := admission.KeyRoleFromString(callerRoleStr)
 	if err != nil {
-		return fmt.Errorf("E-CFG-001: invalid caller_role: %q", callerRoleStr)
+		return admission.AdmittedKey{}, fmt.Errorf("E-CFG-001: invalid caller_role: %q", callerRoleStr)
 	}
-	return verifyCallerRole(cr, cmd, "(unknown)")
+	if err := verifyCallerRole(cr, cmd, "(unknown)"); err != nil {
+		return admission.AdmittedKey{}, err
+	}
+	// Fallback path: no pubkey available; Role is the resolved role from callerRoleStr.
+	return admission.AdmittedKey{Role: cr}, nil
 }
 
 // svtnAlreadyExistsErr is returned by makeAdminSVTNCreateHandler when
@@ -703,6 +719,69 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 			SVTNID:               hex.EncodeToString(result.SVTN.ID[:]),
 			BootstrapFingerprint: m.BootstrapFingerprint(),
 		}, nil
+	}
+}
+
+// adminSVTNDestroyArgs is the wire-format JSON args for admin.svtn.destroy.
+// The `name` field carries the operator-supplied SVTN name to destroy.
+//
+// AC-003 / BC-2.07.001 PC-3 — wire format: {"command":"admin.svtn.destroy","args":{"name":"<name>"}}.
+type adminSVTNDestroyArgs struct {
+	// Name is the human-readable SVTN label to destroy.
+	Name string `json:"name"`
+}
+
+// makeAdminSVTNDestroyHandler returns the admin.svtn.destroy handler function.
+//
+// Authority check (BC-2.07.001 Inv-3 / RULING-W6TB-A):
+// admin.svtn.destroy uses the general control-role gate (resolveAndVerifyCallerRole),
+// NOT the bootstrap-only gate used by admin.svtn.create. This is explicitly
+// required by RULING-W6TB-A: any control-role key may destroy a SVTN, whereas
+// only the bootstrap key may create one.
+//
+// See makeAdminSVTNCreateHandler for the bootstrap-only create handler that
+// uses a stricter gate. The comment there notes: "resolveAndVerifyCallerRole is
+// NOT called here [create] because the bootstrap-only constraint is stricter."
+// The inverse applies here — Destroy MUST call resolveAndVerifyCallerRole.
+//
+// A non-control caller receives E-RPC-011 wrapping E-ADM-009 (the error code
+// lifted from the E-ADM-009 message prefix by the wire-level code extractor in
+// sendAdminRPC / sendAdminRPCAsKey). The SVTN is not destroyed.
+//
+// Traces to BC-2.07.001 PC-3; AC-001; AC-002; AC-003; AC-004; RULING-W6TB-A;
+// VP-048 properties 2+3.
+func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		var a adminSVTNDestroyArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+		if a.Name == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: name")
+		}
+
+		// RULING-W6TB-A: admin.svtn.destroy uses the general control-role gate,
+		// NOT the bootstrap-only gate used by admin.svtn.create. Any active
+		// control-role key may destroy a SVTN.
+		//
+		// resolveAndVerifyCallerRole returns the caller's real AdmittedKey (with the
+		// server-resolved Role field). Propagating it into Destroy ensures the inner
+		// defense-in-depth check (BC-2.07.001 Inv-3; RULING-W6TB-A §3) reflects the
+		// caller's actual role rather than a synthesized RoleControl constant —
+		// preserving the guard's integrity even if the outer gate is later removed
+		// (F-P3L1-001).
+		callerKey, err := resolveAndVerifyCallerRole(ctx, m, ops, a.Name, "", "admin.svtn.destroy")
+		if err != nil {
+			return nil, err
+		}
+
+		if err := m.Destroy(callerKey, a.Name); err != nil {
+			return nil, mapAdminError(err, a.Name, nil, "")
+		}
+
+		return struct {
+			Status string `json:"status"`
+		}{Status: "destroyed"}, nil
 	}
 }
 

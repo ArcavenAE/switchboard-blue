@@ -525,6 +525,21 @@ func AdmitNode(
 	return nil
 }
 
+// RemoveSVTN deletes all registered keys for svtnID from the key set.
+// After this call, ListBySVTN(svtnID) returns an empty slice and
+// LookupByPubkey / IsAdmitted return (zero, false) for all former entries.
+//
+// This is the bulk-removal primitive used by SVTNManager.Destroy (S-6.05;
+// BC-2.07.001 postcondition 3; ARCH-04 admission ordering invariant: key
+// removal precedes SVTN ID free).
+//
+// Safe for concurrent use.
+func (s *AdmittedKeySet) RemoveSVTN(svtnID [16]byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.keys, svtnID)
+}
+
 // ListBySVTN returns a snapshot of all admitted key entries for the given SVTN.
 // Returns an empty (non-nil) slice when no keys are registered for svtnID.
 // Each returned AdmittedKey is a deep copy — PublicKey backing array is independent

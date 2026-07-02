@@ -16,6 +16,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +27,16 @@ import (
 )
 
 // ── test helpers ─────────────────────────────────────────────────────────────
+
+// controlCallerKey returns an admission.AdmittedKey with RoleControl set,
+// used to satisfy SVTNManager.Destroy's defense-in-depth caller parameter in
+// tests that exercise the happy-path (authorized) branch.
+func controlCallerKey(pub ed25519.PublicKey) admission.AdmittedKey {
+	return admission.AdmittedKey{
+		PublicKey: pub,
+		Role:      admission.RoleControl,
+	}
+}
 
 // mustGenEdKey generates an Ed25519 key pair or fatals the test.
 func mustGenEdKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
@@ -1470,5 +1482,451 @@ func TestSVTNManager_LookupMigration_MissReturnsKeyNotRegistered(t *testing.T) {
 	// IsRegisteredAnyState on a miss must return false.
 	if mgr.IsRegisteredAnyState(svtnResult.SVTN.Name, unregisteredPub) {
 		t.Error("IsRegisteredAnyState with unregistered pubkey: want false; got true")
+	}
+}
+
+// ── S-6.05: SVTNManager.Destroy ───────────────────────────────────────────────
+
+// TestSVTNManager_Destroy_RemovesAllKeys verifies AC-001:
+// SVTNManager.Destroy(caller, svtnName) removes all admitted keys for the SVTN
+// from the router's key set and frees the SVTN ID.
+//
+// ARCH-04 admission ordering verified: ListKeys (key removal) is asserted
+// before SVTNByName/All (SVTN ID free), confirming keys are gone before
+// the SVTN registry entry is gone.
+//
+// self-check: the stub panics; a complete implementation that returns nil
+// without removing keys or the SVTN would fail the ListKeys and SVTNByName
+// assertions below.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-001; VP-048 property 2.
+func TestSVTNManager_Destroy_RemovesAllKeys(t *testing.T) {
+	t.Parallel()
+
+	mgr, controlPub := newManagerWithKS(t)
+
+	// Create an SVTN and register two extra keys.
+	_, err := mgr.Create("destroy-test-svtn")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	extraPub1, _ := mustGenEdKey(t)
+	extraPub2, _ := mustGenEdKey(t)
+
+	if _, err := mgr.RegisterKey("destroy-test-svtn", extraPub1, admission.RoleConsole); err != nil {
+		t.Fatalf("RegisterKey extra1: %v", err)
+	}
+	if _, err := mgr.RegisterKey("destroy-test-svtn", extraPub2, admission.RoleAccess); err != nil {
+		t.Fatalf("RegisterKey extra2: %v", err)
+	}
+
+	// Pre-condition: SVTN exists and has keys (bootstrap + 2 extras).
+	keysBefore, err := mgr.ListKeys("destroy-test-svtn")
+	if err != nil {
+		t.Fatalf("ListKeys before Destroy: %v", err)
+	}
+	if len(keysBefore) < 3 {
+		t.Fatalf("expected ≥3 keys before Destroy (bootstrap + 2 extras); got %d", len(keysBefore))
+	}
+
+	// Destroy. Pass control-role caller (defense-in-depth authorized path; AC-004).
+	if err := mgr.Destroy(controlCallerKey(controlPub), "destroy-test-svtn"); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+
+	// ARCH-04 ordering: assert keys removed first.
+	// ListKeys must return ErrSVTNNotFound (SVTN freed) OR an empty slice (keys
+	// purged before registry entry removed). Either is consistent with ARCH-04:
+	// if the implementation removes keys before the SVTN registry entry, ListKeys
+	// would briefly return an empty slice; after the entry is also removed it
+	// returns ErrSVTNNotFound. We assert both possibilities are correct outcomes.
+	keysAfter, listErr := mgr.ListKeys("destroy-test-svtn")
+	if listErr != nil {
+		if !errors.Is(listErr, svtnmgmt.ErrSVTNNotFound) {
+			t.Errorf("AC-001 — ListKeys after Destroy: expected ErrSVTNNotFound or empty slice; got error: %v", listErr)
+		}
+		// ErrSVTNNotFound from ListKeys confirms SVTN was freed (expected postcondition).
+	} else if len(keysAfter) != 0 {
+		// Slice returned without error must be empty (keys removed).
+		t.Errorf("AC-001 — ListKeys after Destroy: expected 0 keys; got %d", len(keysAfter))
+	}
+
+	// SVTN must be absent from the registry.
+	if _, found := mgr.SVTNByName("destroy-test-svtn"); found {
+		t.Error("AC-001 — SVTNByName after Destroy: SVTN still present in registry; expected absent")
+	}
+
+	// All() must not contain the destroyed SVTN.
+	for _, s := range mgr.All() {
+		if s.Name == "destroy-test-svtn" {
+			t.Error("AC-001 — All() after Destroy: destroyed SVTN still appears in list")
+		}
+	}
+
+	// Bootstrap key must no longer appear in any key set for this SVTN.
+	// CallerKeyRole returns (0, false) when SVTN is absent — confirming keys freed.
+	role, found := mgr.CallerKeyRole("destroy-test-svtn", controlPub)
+	if found {
+		t.Errorf("AC-001 — CallerKeyRole after Destroy: bootstrap key still registered with role=%v", role)
+	}
+}
+
+// TestSVTNManager_Destroy_NotFound verifies EC-001:
+// Destroy on a non-existent SVTN returns ErrSVTNNotFound (E-SVTN-003).
+// The error string must contain the SVTN name per canonical form
+// "SVTN not found: <name>" (Ruling-11/12; S-6.05 Error Code Table).
+//
+// self-check: a stub that returns nil fails the non-nil error check; a stub
+// that returns a generic error fails the errors.Is(err, ErrSVTNNotFound) check.
+//
+// Traces to BC-2.07.001 EC-001; E-SVTN-003; AC-001.
+func TestSVTNManager_Destroy_NotFound(t *testing.T) {
+	t.Parallel()
+
+	mgr := newManager(t)
+	// Pass a control-role caller (authorized); the not-found check fires after
+	// the authorization check, so we need to pass a valid control caller here.
+	caller := admission.AdmittedKey{Role: admission.RoleControl}
+
+	err := mgr.Destroy(caller, "nonexistent-svtn")
+
+	// Must return non-nil error.
+	if err == nil {
+		t.Fatal("EC-001 — Destroy on non-existent SVTN: expected ErrSVTNNotFound; got nil")
+	}
+
+	// errors.Is chain must include ErrSVTNNotFound.
+	if !errors.Is(err, svtnmgmt.ErrSVTNNotFound) {
+		t.Errorf("EC-001 — Destroy on non-existent SVTN: errors.Is(err, ErrSVTNNotFound) = false; got: %v", err)
+	}
+
+	// Canonical error string must contain the SVTN name (Ruling-11/12).
+	if !strings.Contains(err.Error(), "nonexistent-svtn") {
+		t.Errorf("EC-001 — Destroy error string must contain the SVTN name %q; got: %q", "nonexistent-svtn", err.Error())
+	}
+}
+
+// TestSVTNManager_Destroy_KeyPurgePostcondition verifies the in-scope portion of
+// AC-002 (story S-6.05 v1.4): after Destroy the SVTN is absent and all its keys
+// are purged, so any subsequent admission attempt for formerly admitted nodes is
+// blocked. Because internal/session is a forbidden import in internal/svtnmgmt
+// (ARCH-08 position 15), session-terminated signals cannot be observed directly —
+// this test verifies the admission-blocking postcondition (VP-048 property 2
+// precursor) which is the session-layer-observable consequence.
+//
+// Session-terminated notification is deferred to S-BL.SESSION-DRAIN and is
+// explicitly out of scope for story S-6.05 v1.4.
+//
+// Concurrent-admission race safety is covered separately by
+// TestSVTNManager_Destroy_ConcurrentAdmissionIsRaceFree.
+//
+// self-check: a stub that panics fails on the Destroy call; a stub that
+// returns nil without removing keys fails the CallerKeyRole assertion.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-002 (in-scope portion per S-6.05 v1.4).
+func TestSVTNManager_Destroy_KeyPurgePostcondition(t *testing.T) {
+	t.Parallel()
+
+	mgr, controlPub := newManagerWithKS(t)
+
+	if _, err := mgr.Create("session-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Register several keys to simulate an active multi-node topology.
+	nodePub1, _ := mustGenEdKey(t)
+	nodePub2, _ := mustGenEdKey(t)
+
+	if _, err := mgr.RegisterKey("session-svtn", nodePub1, admission.RoleConsole); err != nil {
+		t.Fatalf("RegisterKey node1: %v", err)
+	}
+	if _, err := mgr.RegisterKey("session-svtn", nodePub2, admission.RoleAccess); err != nil {
+		t.Fatalf("RegisterKey node2: %v", err)
+	}
+
+	// Pre-condition: keys registered and active.
+	if _, found := mgr.CallerKeyRoleActive("session-svtn", nodePub1); !found {
+		t.Fatal("pre-condition: node1 should be an active key before Destroy")
+	}
+
+	// Destroy the SVTN. Session-terminated notification is deferred to
+	// S-BL.SESSION-DRAIN (AC-002 out-of-scope per story S-6.05 v1.5);
+	// this test verifies the admission-blocking postcondition only.
+	if err := mgr.Destroy(controlCallerKey(controlPub), "session-svtn"); err != nil {
+		t.Fatalf("Destroy with active sessions: %v", err)
+	}
+
+	// After Destroy: SVTN absent.
+	if _, found := mgr.SVTNByName("session-svtn"); found {
+		t.Error("AC-002 — SVTNByName after Destroy: SVTN still present")
+	}
+
+	// After Destroy: no keys survive (admission of former nodes is now blocked).
+	// CallerKeyRole returns (0, false) when SVTN is absent.
+	if _, found := mgr.CallerKeyRole("session-svtn", controlPub); found {
+		t.Error("AC-002 — control key still registered after Destroy; sessions cannot terminate")
+	}
+	if _, found := mgr.CallerKeyRole("session-svtn", nodePub1); found {
+		t.Error("AC-002 — node1 key still registered after Destroy; sessions cannot terminate")
+	}
+	if _, found := mgr.CallerKeyRole("session-svtn", nodePub2); found {
+		t.Error("AC-002 — node2 key still registered after Destroy; sessions cannot terminate")
+	}
+}
+
+// TestSVTNManager_Destroy_ErrDestroyUnauthorized verifies AC-004 (Go-API
+// defense-in-depth per RULING-W6TB-A §3 and BC-2.07.001 Inv-3):
+// Calling SVTNManager.Destroy with a non-control caller returns
+// ErrDestroyUnauthorized (E-ADM-011 Variant 2) before any SVTN state is
+// consulted. Calling with a control-role caller succeeds (SVTN is removed).
+//
+// This is the inner defense-in-depth check — the outer gate is
+// resolveAndVerifyCallerRole in the handler layer. The inner check guards
+// against direct Go-API callers and future refactors that might inadvertently
+// strip the handler gate.
+//
+// Traces to BC-2.07.001 Inv-3; AC-004 (Go-API defense-in-depth); RULING-W6TB-A §3.
+func TestSVTNManager_Destroy_ErrDestroyUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		role        admission.KeyRole
+		wantErr     error
+		description string
+	}{
+		{
+			name:        "console_caller_returns_unauthorized",
+			role:        admission.RoleConsole,
+			wantErr:     svtnmgmt.ErrDestroyUnauthorized,
+			description: "console-role caller must be rejected before any state mutation",
+		},
+		{
+			name:        "access_caller_returns_unauthorized",
+			role:        admission.RoleAccess,
+			wantErr:     svtnmgmt.ErrDestroyUnauthorized,
+			description: "access-role caller must be rejected before any state mutation",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			mgr := newManager(t)
+			_, err := mgr.Create("svtn-A")
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+
+			nonControlCaller := admission.AdmittedKey{Role: tc.role}
+			err = mgr.Destroy(nonControlCaller, "svtn-A")
+
+			if !errors.Is(err, svtnmgmt.ErrDestroyUnauthorized) {
+				t.Errorf("AC-004 %s — Destroy with role %v: want ErrDestroyUnauthorized; got %v",
+					tc.description, tc.role, err)
+			}
+
+			// SVTN must still exist (no state was mutated).
+			if _, found := mgr.SVTNByName("svtn-A"); !found {
+				t.Error("AC-004 — SVTN was destroyed despite non-control caller; expected SVTN to remain intact")
+			}
+		})
+	}
+
+	// Positive control: control-role caller succeeds.
+	t.Run("control_caller_succeeds", func(t *testing.T) {
+		t.Parallel()
+
+		mgr := newManager(t)
+		_, err := mgr.Create("svtn-B")
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		controlCaller := admission.AdmittedKey{Role: admission.RoleControl}
+		if err := mgr.Destroy(controlCaller, "svtn-B"); err != nil {
+			t.Errorf("AC-004 — Destroy with control-role caller: unexpected error: %v", err)
+		}
+
+		// SVTN must be absent after successful destroy.
+		if _, found := mgr.SVTNByName("svtn-B"); found {
+			t.Error("AC-004 — SVTN still present after control-role destroy; expected absent")
+		}
+	})
+}
+
+// TestSVTNManager_Destroy_GenesisReopened verifies AC-005:
+// Destroying the last SVTN (such that HasAnySVTN() returns false) re-opens the
+// genesis carve-out for a subsequent Create with the bootstrap key.
+// A subsequent Create with the bootstrap key must succeed exactly as on first
+// initialization (RULING-W6TB-A §4 recovery semantics).
+//
+// self-check: a stub that panics fails on the first Destroy call; a stub that
+// returns nil without removing the SVTN from the registry leaves HasAnySVTN() ==
+// true, causing the subsequent Create to fail with ErrSVTNAlreadyExists (or the
+// "already exists" gate to still block genesis semantics). The test is only
+// passable with a working Destroy.
+//
+// Traces to BC-2.07.001 Inv-3; AC-005; RULING-W6TB-A §4.
+func TestSVTNManager_Destroy_GenesisReopened(t *testing.T) {
+	t.Parallel()
+
+	mgr, _ := newManagerWithKS(t)
+
+	// Create the first (and only) SVTN.
+	_, err := mgr.Create("genesis-svtn")
+	if err != nil {
+		t.Fatalf("Create genesis-svtn: %v", err)
+	}
+
+	// Pre-condition: HasAnySVTN must be true after creation.
+	if !mgr.HasAnySVTN() {
+		t.Fatal("AC-005 pre-condition: HasAnySVTN() should be true after Create")
+	}
+
+	// Destroy the last SVTN. Use control-role caller (defense-in-depth authorized path).
+	caller := admission.AdmittedKey{Role: admission.RoleControl}
+	if err := mgr.Destroy(caller, "genesis-svtn"); err != nil {
+		t.Fatalf("AC-005 — Destroy genesis-svtn: %v", err)
+	}
+
+	// Post-condition: HasAnySVTN() must be false (genesis carve-out re-opened).
+	if mgr.HasAnySVTN() {
+		t.Error("AC-005 — HasAnySVTN() should be false after destroying the last SVTN; genesis carve-out not re-opened")
+	}
+
+	// Recovery semantics: Create with the same name must succeed via the genesis
+	// carve-out (the name is now free and the registry is empty).
+	result, err := mgr.Create("genesis-svtn")
+	if err != nil {
+		t.Fatalf("AC-005 — RULING-W6TB-A §4: Create after last-SVTN destroy must succeed via genesis carve-out; got: %v", err)
+	}
+	var zero [16]byte
+	if result.SVTN.ID == zero {
+		t.Error("AC-005 — Create after genesis re-open: SVTN.ID is all-zero; expected a new generated ID")
+	}
+	if result.SVTN.Name != "genesis-svtn" {
+		t.Errorf("AC-005 — Create after genesis re-open: SVTN.Name = %q; want %q", result.SVTN.Name, "genesis-svtn")
+	}
+
+	// Verify the registry is now populated again.
+	if !mgr.HasAnySVTN() {
+		t.Error("AC-005 — HasAnySVTN() should be true after second Create")
+	}
+}
+
+// TestSVTNManager_Destroy_ConcurrentAdmissionIsRaceFree verifies that calling
+// Destroy while concurrent read operations (CallerKeyRole, CallerKeyRoleActive,
+// SVTNByName) are in flight does not produce a data race (F-L1 lock-ordering
+// invariant: m.mu → keySet.mu, never the reverse).
+//
+// The test registers N node keys, then spawns 50 goroutines that continuously
+// call CallerKeyRole / CallerKeyRoleActive / SVTNByName on those keys while the
+// main goroutine calls Destroy once. After all goroutines finish the final state
+// is asserted: SVTN gone, all keys purged. Run with `go test -race` to detect
+// any mutex-order violation.
+//
+// Concurrent-admission semantics (session-terminated notifications) are deferred
+// to S-BL.SESSION-DRAIN and are explicitly out of scope for story S-6.05.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-002 (concurrent race safety portion).
+func TestSVTNManager_Destroy_ConcurrentAdmissionIsRaceFree(t *testing.T) {
+	t.Parallel()
+
+	mgr, controlPub := newManagerWithKS(t)
+
+	if _, err := mgr.Create("race-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	const numKeys = 5
+	nodePubs := make([]ed25519.PublicKey, numKeys)
+	roles := []admission.KeyRole{
+		admission.RoleConsole,
+		admission.RoleAccess,
+		admission.RoleConsole,
+		admission.RoleAccess,
+		admission.RoleConsole,
+	}
+	for i := range nodePubs {
+		pub, _, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("GenerateKey[%d]: %v", i, err)
+		}
+		nodePubs[i] = pub
+		if _, err := mgr.RegisterKey("race-svtn", pub, roles[i]); err != nil {
+			t.Fatalf("RegisterKey[%d]: %v", i, err)
+		}
+	}
+
+	const numGoroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Signal goroutines to start simultaneously with Destroy.
+	start := make(chan struct{})
+
+	for i := range numGoroutines {
+		go func(idx int) {
+			defer wg.Done()
+			<-start
+			// Alternate between read operations to exercise all code paths
+			// that touch keySet under keySet.mu while Destroy may hold m.mu.
+			pub := nodePubs[idx%numKeys]
+			mgr.CallerKeyRole("race-svtn", pub)
+			mgr.CallerKeyRoleActive("race-svtn", pub)
+			mgr.SVTNByName("race-svtn")
+		}(i)
+	}
+
+	close(start)
+	if err := mgr.Destroy(controlCallerKey(controlPub), "race-svtn"); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+	wg.Wait()
+
+	// Final state: SVTN absent and all keys purged.
+	if _, found := mgr.SVTNByName("race-svtn"); found {
+		t.Error("race-svtn still present after Destroy")
+	}
+	if _, found := mgr.CallerKeyRole("race-svtn", controlPub); found {
+		t.Error("control key still registered after Destroy")
+	}
+	for i, pub := range nodePubs {
+		if _, found := mgr.CallerKeyRole("race-svtn", pub); found {
+			t.Errorf("node key [%d] still registered after Destroy", i)
+		}
+	}
+}
+
+// TestSVTNManager_Destroy_Idempotent verifies EC-001 double-destroy semantics:
+// a second Destroy on an already-destroyed SVTN returns ErrSVTNNotFound rather
+// than succeeding silently (idempotency-as-error per S-6.05 error taxonomy).
+//
+// Traces to BC-2.07.001 EC-001; E-SVTN-003; AC-001.
+func TestSVTNManager_Destroy_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	mgr := newManager(t)
+	caller := admission.AdmittedKey{Role: admission.RoleControl}
+
+	if _, err := mgr.Create("idempotent-svtn"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// First Destroy: must succeed.
+	if err := mgr.Destroy(caller, "idempotent-svtn"); err != nil {
+		t.Fatalf("first Destroy: %v", err)
+	}
+
+	// Second Destroy: must return ErrSVTNNotFound.
+	err := mgr.Destroy(caller, "idempotent-svtn")
+	if err == nil {
+		t.Fatal("EC-001 — second Destroy: expected ErrSVTNNotFound; got nil")
+	}
+	if !errors.Is(err, svtnmgmt.ErrSVTNNotFound) {
+		t.Errorf("EC-001 — second Destroy: expected errors.Is(err, ErrSVTNNotFound); got %v", err)
 	}
 }

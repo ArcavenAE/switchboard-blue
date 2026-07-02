@@ -21,11 +21,29 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"time"
+	"unicode"
+
+	"golang.org/x/term"
 )
+
+// stdinIsTTY reports whether os.Stdin is connected to a terminal.
+// Package-level var so tests can swap it out without a real TTY.
+// Production value uses golang.org/x/term.IsTerminal.
+var stdinIsTTY = func() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// stdinReader is the reader used for interactive confirm prompts.
+// Package-level var so tests can inject a pipe reader without a real TTY.
+var stdinReader io.Reader = os.Stdin
 
 // adminKeyRegisterArgs is the wire-format arguments sent to the daemon's
 // admin.key.register RPC handler (interface-definitions.md §JSON Output Schema).
@@ -80,6 +98,13 @@ type adminSVTNCreateArgs struct {
 	Name string `json:"name"`
 }
 
+// adminSVTNDestroyArgs is the wire-format arguments sent to the daemon's
+// admin.svtn.destroy RPC handler (AC-003 / BC-2.07.001 PC-3; S-6.05).
+type adminSVTNDestroyArgs struct {
+	// Name is the human-readable SVTN label to destroy.
+	Name string `json:"name"`
+}
+
 // runAdmin dispatches `sbctl admin <subcommand>` commands.
 //
 // Subcommand routing:
@@ -116,21 +141,24 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 //
 // Subcommand routing:
 //
-//	admin svtn create --name <svtn-name>   (wire: admin.svtn.create; AC-002)
+//	admin svtn create  --name <svtn-name>             (wire: admin.svtn.create; AC-002)
+//	admin svtn destroy --name <svtn-name> [--confirm] (wire: admin.svtn.destroy; AC-003; S-6.05)
 //
 // Returns a non-nil error on any failure.
 //
-// Traces to BC-2.07.001 PC-1 (SVTN create); S-6.07.
+// Traces to BC-2.07.001 PC-1 (SVTN create); BC-2.07.001 PC-3 (SVTN destroy); S-6.07; S-6.05.
 func runAdminSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("admin svtn: no subcommand specified; expected 'create'")
+		return fmt.Errorf("admin svtn: no subcommand specified; expected 'create' or 'destroy'")
 	}
 
 	switch args[0] {
 	case "create":
 		return runAdminSvtnCreate(ctx, target, keyPath, useJSON, args[1:], sio)
+	case "destroy":
+		return runAdminSvtnDestroy(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("admin svtn: unknown subcommand %q; expected 'create'", args[0])
+		return fmt.Errorf("admin svtn: unknown subcommand %q; expected 'create' or 'destroy'", args[0])
 	}
 }
 
@@ -158,6 +186,162 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 
 	rpcArgs := adminSVTNCreateArgs{Name: *nameFlag}
 	return connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.create", rpcArgs, sio)
+}
+
+// runAdminSvtnDestroy implements `sbctl admin svtn destroy`.
+//
+// Flags:
+//
+//	--name <svtn-name>              Human-readable SVTN label to destroy (required)
+//	--confirm <svtn-short-id>       Non-interactive confirmation: SVTN-<first-8-hex-chars>
+//	--yes                           Bypass the confirm gate for scripted use (stderr warning emitted)
+//
+// Confirm-gate behaviour per interface-definitions.md v1.1 §125/§127/§129 and ADR-004:
+//
+//   - Path 1 (flag supplied): --confirm=SVTN-<8-hex> satisfies the check
+//     non-interactively.  The CLI validates the shape; a mismatch aborts before RPC.
+//   - Path 2 (flag omitted, stdin is a TTY): interactive prompt on stderr:
+//     "Type SVTN-<short-id> to confirm: ".  A matching response dispatches the RPC;
+//     any mismatch aborts.
+//   - Path 3 (flag omitted, stdin is NOT a TTY): non-interactive scripting signal;
+//     aborts with a clear error pointing to --confirm or --yes.
+//   - Path 4 (--yes only): bypasses the confirm gate; emits a warning to stderr.
+//   - Path 5 (--yes + --confirm): E-CFG-006 usage error, exit 2.
+//
+// The confirm gate is a human-in-loop typing ceremony (§125), NOT a server-side
+// identity match.  Server-side identity-match enforcement is deferred to
+// DRIFT-S605-CONFIRM-IDENTITY.
+//
+// Sends {"command":"admin.svtn.destroy","args":{"name":"<svtn-name>"}} to the
+// daemon over the mgmt stream (AC-003 / BC-2.07.001 PC-3).  On success, prints
+// confirmation to sio.out.  Exits with non-zero on E-SVTN-003 (SVTN not found).
+//
+// Traces to BC-2.07.001 PC-3; AC-003; interface-definitions.md v1.1 §117/§125/§127/§129;
+// ADR-004; S-6.05.
+
+// confirmSVTNShortIDValid returns true if s matches the "SVTN-<8hexchars>"
+// pattern required by the destroy confirmation gate (ADR-004;
+// interface-definitions.md v1.1 §125).
+func confirmSVTNShortIDValid(s string) bool {
+	const prefix = "SVTN-"
+	if !strings.HasPrefix(s, prefix) {
+		return false
+	}
+	hex := s[len(prefix):]
+	if len(hex) != 8 {
+		return false
+	}
+	for _, r := range hex {
+		if !unicode.Is(unicode.ASCII_Hex_Digit, r) || unicode.IsUpper(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
+	fs := flag.NewFlagSet("admin svtn destroy", flag.ContinueOnError)
+	nameFlag := fs.String("name", "", "SVTN name to destroy (required)")
+	confirmFlag := fs.String("confirm", "", "Confirmation short-ID: SVTN-<first-8-hex-chars>")
+	yesFlag := fs.Bool("yes", false, "bypass the confirm gate for scripted use (stderr warning emitted)")
+
+	// F-STORY-001: argument parsing MUST precede dispatch.
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("admin svtn destroy: %w", err)
+	}
+	if *nameFlag == "" {
+		return fmt.Errorf("admin svtn destroy: --name is required")
+	}
+
+	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125/§127/§129).
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, sio); err != nil {
+		return err
+	}
+
+	rpcArgs := adminSVTNDestroyArgs{Name: *nameFlag}
+	if err := connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.destroy", rpcArgs, sio); err != nil {
+		return err
+	}
+
+	// Print SVTN name so the operator can confirm which SVTN was destroyed
+	// (test: outBuf must contain svtnName — client-side print, not from server response).
+	// Gated on !useJSON: in --json mode, writeSuccess (main.go) emits the canonical
+	// envelope to sio.out; a trailing plain-text line would corrupt the envelope and
+	// violate interface-definitions.md:164 (universal --json envelope contract).
+	// F-P7L1-MED-1 fix; peer admin commands (svtn create, key register, key revoke,
+	// key expire) all return connectAndRun directly with no post-print.
+	if !useJSON {
+		_, _ = fmt.Fprintf(sio.out, "destroyed SVTN: %s\n", *nameFlag)
+	}
+	return nil
+}
+
+// runDestroyConfirmGate implements the five-path confirm gate for destructive
+// admin operations (interface-definitions.md v1.1 §125/§127/§129; ADR-004).
+//
+// confirmVal: value of --confirm flag (empty string when flag is absent or --confirm=)
+// yes:        value of --yes flag
+// sio:        output sinks for the warning and the interactive prompt
+//
+// Path 1 — --confirm=SVTN-<8-hex> supplied: static shape-check only.
+//   - Valid shape → return nil (proceed). Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
+//   - Empty value (--confirm= with no value) → treat as absent → fall through to path 2/3.
+//   - Invalid shape → error, no RPC.
+//
+// Path 2 — --confirm absent AND stdin is a TTY: interactive prompt on stderr.
+//
+//	Prompts "Type SVTN-<short-id> to confirm: " and validates the response shape.
+//	Identity-match (verifying the token names this specific SVTN) is deferred.
+//
+// Path 3 — --confirm absent AND stdin is NOT a TTY: error pointing to --confirm or --yes.
+//
+// Path 4 — --yes alone: emit stderr warning, return nil (bypass).
+//
+// Path 5 — --yes + --confirm: E-CFG-006 usage error, return non-nil.
+//
+// stdinIsTTY and stdinReader are package-level vars so tests can inject fakes.
+func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
+	// Path 5: --yes combined with --confirm is a usage error (E-CFG-006; §127).
+	if yes && confirmVal != "" {
+		return fmt.Errorf("E-CFG-006: --yes cannot be combined with --confirm; provide one or the other")
+	}
+
+	// Path 4: --yes alone bypasses the check (§127).
+	if yes {
+		_, _ = fmt.Fprintln(sio.err, "WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting")
+		return nil
+	}
+
+	// Path 1: --confirm supplied with a non-empty value — static shape check.
+	if confirmVal != "" {
+		if !confirmSVTNShortIDValid(confirmVal) {
+			return fmt.Errorf("admin svtn destroy: invalid --confirm %q; "+
+				"expected SVTN-<8 lowercase hex characters>", confirmVal)
+		}
+		// Shape is valid; proceed. Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
+		return nil
+	}
+
+	// --confirm absent (empty string).  Check whether stdin is a TTY.
+	if !stdinIsTTY() {
+		// Path 3: non-interactive session.
+		return fmt.Errorf("no confirmation available in non-interactive session; " +
+			"provide --confirm=SVTN-<short-id> or --yes")
+	}
+
+	// Path 2: interactive mode — prompt on stderr and read from stdinReader.
+	// The operator must type the SVTN short-ID exactly as printed at create time.
+	// Shape-only validation; identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
+	_, _ = fmt.Fprint(sio.err, "Type SVTN-<short-id> to confirm: ")
+	line, err := bufio.NewReader(stdinReader).ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("interactive confirmation: read error: %w", err)
+	}
+	line = strings.TrimRight(line, "\r\n ")
+	if !confirmSVTNShortIDValid(line) {
+		return fmt.Errorf("interactive confirmation failed: expected SVTN-<8 lowercase hex characters>, got: %q", line)
+	}
+	return nil
 }
 
 // runAdminKey dispatches `sbctl admin key <subcommand>` commands.

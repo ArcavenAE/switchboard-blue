@@ -669,11 +669,17 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 	}
 }
 
-// TestBuildAdminHandlers_FiveHandlers asserts that BuildAdminHandlers returns
-// exactly five handlers with the correct command names.
-// S-6.07 added admin.svtn.create as the fifth handler (AC-001).
-// Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1.
-func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
+// TestBuildAdminHandlers_SixHandlers asserts that BuildAdminHandlers returns
+// exactly six handlers with the correct command names:
+//   - admin.key.register
+//   - admin.key.revoke
+//   - admin.key.expire
+//   - admin.key.list-keys
+//   - admin.svtn.create  (S-6.07, AC-001)
+//   - admin.svtn.destroy (S-6.05, AC-001; BC-2.07.001 PC-3)
+//
+// Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1 + PC-3.
+func TestBuildAdminHandlers_SixHandlers(t *testing.T) {
 	t.Parallel()
 	m := newTestSVTNManager(t)
 	handlers := BuildAdminHandlers(m, nil)
@@ -684,6 +690,7 @@ func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
 		"admin.key.expire":    false,
 		"admin.key.list-keys": false,
 		"admin.svtn.create":   false,
+		"admin.svtn.destroy":  false,
 	}
 	for _, h := range handlers {
 		want[h.Command] = true
@@ -700,8 +707,8 @@ func TestBuildAdminHandlers_FiveHandlers(t *testing.T) {
 			t.Errorf("unexpected handler command %q registered in BuildAdminHandlers result", h.Command)
 		}
 	}
-	if len(handlers) != 5 {
-		t.Errorf("expected 5 handlers, got %d", len(handlers))
+	if len(handlers) != 6 {
+		t.Errorf("expected 6 handlers, got %d", len(handlers))
 	}
 }
 
@@ -1062,7 +1069,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		m, bootstrapPub := newManagerWithSVTN(t)
 		// ctx carries the bootstrap key — must be allowed unconditionally.
 		ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-		err := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, err := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if err != nil {
 			t.Errorf("bootstrap key: expected nil, got: %v", err)
 		}
@@ -1079,7 +1086,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 			t.Fatalf("generate unknown key: %v", err)
 		}
 		ctx := mgmt.WithCallerPubkey(context.Background(), unknownPub)
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
 			t.Fatal("unknown key: expected E-ADM-009, got nil")
 		}
@@ -1105,7 +1112,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		}
 		// Key is revoked — CallerKeyRoleActive returns (0, false) → E-ADM-009.
 		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
 			t.Fatal("revoked key: expected E-ADM-009, got nil")
 		}
@@ -1138,7 +1145,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		// CallerKeyRoleActive returns (0, false) via expiry branch →
 		// resolveAndVerifyCallerRole returns E-ADM-009 (inactive-key route).
 		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
 			t.Fatal("expired key: expected E-ADM-009, got nil")
 		}
@@ -1190,9 +1197,9 @@ func TestResolveAndVerifyCallerRole_OperatorKeyBootstrapGrant(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// admin.key.register + operator-set member + no active control key → allow (F-P4L1-001).
-		err = resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
-		if err != nil {
-			t.Errorf("operator bootstrap register: expected nil, got: %v", err)
+		_, authErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		if authErr != nil {
+			t.Errorf("operator bootstrap register: expected nil, got: %v", authErr)
 		}
 	})
 
@@ -1214,7 +1221,7 @@ func TestResolveAndVerifyCallerRole_OperatorKeyBootstrapGrant(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// Control key exists → bootstrap grant does NOT apply → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("operator with existing control key: expected E-ADM-009, got nil")
 		}
@@ -1233,7 +1240,7 @@ func TestResolveAndVerifyCallerRole_OperatorKeyBootstrapGrant(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// admin.key.revoke: bootstrap grant is register-only → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.revoke")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.revoke")
 		if gotErr == nil {
 			t.Fatal("operator on admin.key.revoke: expected E-ADM-009, got nil")
 		}
@@ -1288,7 +1295,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 		}
 		ctx := mgmt.WithCallerPubkey(context.Background(), controlPub)
 		// CallerKeyRoleActive returns (0, false) for revoked key → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("revoked control key: expected E-ADM-009, got nil")
 		}
@@ -1317,7 +1324,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 
 		ctx := mgmt.WithCallerPubkey(context.Background(), controlPub)
 		// CallerKeyRoleActive returns (0, false) for past-expiry key → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("past-expiry control key: expected E-ADM-009, got nil")
 		}
@@ -1352,7 +1359,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{dualPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), dualPub)
 		// Must be denied — registered-but-revoked beats operator-set membership.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("revoked key in operator set: expected E-ADM-009, got nil")
 		}
@@ -1401,7 +1408,7 @@ func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// Operator key + no non-bootstrap control key → bootstrap grant applies.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register"); err != nil {
+		if _, err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register"); err != nil {
 			t.Errorf("EC-006 phase 1: expected nil, got: %v", err)
 		}
 	})
@@ -1424,7 +1431,7 @@ func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// Non-bootstrap control key now exists → bootstrap grant no longer applies → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("EC-006 phase 2: expected E-ADM-009, got nil")
 		}
@@ -2478,4 +2485,192 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 			t.Error("Create-not-called assertion: 'fresh-name-B' must not exist after E-ADM-009 denial")
 		}
 	})
+}
+
+// destroyHandlerFn extracts the admin.svtn.destroy handler from BuildAdminHandlers.
+// Fails the test if the handler is not registered.
+func destroyHandlerFn(t *testing.T, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	t.Helper()
+	handlers := BuildAdminHandlers(m, ops)
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.destroy" {
+			return h.Fn
+		}
+	}
+	t.Fatal("admin.svtn.destroy not registered in BuildAdminHandlers")
+	return nil
+}
+
+// TestAdminSVTNDestroy_ArgsValidation_E_CFG_001 verifies that malformed or
+// missing-name args return E-CFG-001, mirroring the equivalent create-handler
+// coverage for the arg-parse gate.
+//
+// Traces to BC-2.07.001 PC-3; F-L2-02.
+func TestAdminSVTNDestroy_ArgsValidation_E_CFG_001(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	destroyFn := destroyHandlerFn(t, m, mgmt.NewOperatorKeySet(nil))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	tests := []struct {
+		name    string
+		rawArgs json.RawMessage
+	}{
+		{
+			name:    "malformed_json",
+			rawArgs: json.RawMessage(`{bad json`),
+		},
+		{
+			name: "empty_name_field",
+			rawArgs: func() json.RawMessage {
+				b, _ := json.Marshal(adminSVTNDestroyArgs{Name: ""})
+				return b
+			}(),
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := destroyFn(ctx, tc.rawArgs)
+			if err == nil {
+				t.Fatalf("expected E-CFG-001 error for %s; got nil", tc.name)
+			}
+			if !strings.Contains(err.Error(), "E-CFG-001") {
+				t.Errorf("expected E-CFG-001 in error for %s; got: %v", tc.name, err)
+			}
+		})
+	}
+}
+
+// TestAdminSVTNDestroy_ControlRoleSucceeds verifies the happy path:
+// a control-role caller (bootstrap key injected into ctx) destroys an existing
+// SVTN and receives status "destroyed".
+//
+// Traces to BC-2.07.001 PC-3; AC-001; RULING-W6TB-A; F-L2-02.
+func TestAdminSVTNDestroy_ControlRoleSucceeds(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	destroyFn := destroyHandlerFn(t, m, mgmt.NewOperatorKeySet(nil))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	args, err := json.Marshal(adminSVTNDestroyArgs{Name: "test-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	result, err := destroyFn(ctx, json.RawMessage(args))
+	if err != nil {
+		t.Fatalf("AC-001 control-caller: expected success; got error: %v", err)
+	}
+
+	// Verify wire shape: status == "destroyed".
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var wire struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(b, &wire); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if wire.Status != "destroyed" {
+		t.Errorf("AC-001: expected status=%q; got %q", "destroyed", wire.Status)
+	}
+
+	// SVTN must no longer exist.
+	if _, found := m.SVTNByName("test-svtn"); found {
+		t.Error("AC-001: test-svtn still exists after successful destroy")
+	}
+}
+
+// TestAdminSVTNDestroy_NonControlCallerReturnsEADM009 verifies BC-2.07.001 Inv-3:
+// a non-control-role caller receives E-ADM-009 and the SVTN is not destroyed.
+//
+// Traces to BC-2.07.001 Inv-3; AC-003; RULING-W6TB-A; F-L2-02.
+func TestAdminSVTNDestroy_NonControlCallerReturnsEADM009(t *testing.T) {
+	t.Parallel()
+
+	m, _ := newTestSVTNManagerDetailed(t)
+	destroyFn := destroyHandlerFn(t, m, mgmt.NewOperatorKeySet(nil))
+
+	// Generate an unregistered key — resolveAndVerifyCallerRole will deny it as
+	// "unregistered" → E-ADM-009.
+	consolePub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate console key: %v", err)
+	}
+	ctx := mgmt.WithCallerPubkey(context.Background(), consolePub)
+
+	args, err := json.Marshal(adminSVTNDestroyArgs{Name: "test-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, err = destroyFn(ctx, json.RawMessage(args))
+	if err == nil {
+		t.Fatal("AC-003 non-control-caller: expected E-ADM-009; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-003: expected 'E-ADM-009' in error; got %q", err.Error())
+	}
+
+	// SVTN must still exist (handler gate prevented Destroy from running).
+	if _, found := m.SVTNByName("test-svtn"); !found {
+		t.Error("AC-003: test-svtn was destroyed by non-control caller")
+	}
+}
+
+// TestAdminSVTNDestroy_UnknownSVTN verifies EC-001:
+// destroying a non-existent SVTN name returns E-SVTN-003.
+//
+// Traces to BC-2.07.001 EC-001; E-SVTN-003; F-L2-02.
+func TestAdminSVTNDestroy_UnknownSVTN(t *testing.T) {
+	t.Parallel()
+
+	m, bootstrapPub := newTestSVTNManagerDetailed(t)
+	destroyFn := destroyHandlerFn(t, m, mgmt.NewOperatorKeySet(nil))
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	args, err := json.Marshal(adminSVTNDestroyArgs{Name: "nonexistent-svtn"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	_, err = destroyFn(ctx, json.RawMessage(args))
+	if err == nil {
+		t.Fatal("EC-001 — expected E-SVTN-003 error for unknown SVTN; got nil")
+	}
+	if !errors.Is(err, svtnmgmt.ErrSVTNNotFound) {
+		t.Errorf("EC-001: expected errors.Is(err, ErrSVTNNotFound); got %v", err)
+	}
+}
+
+// TestAdminSVTNDestroy_ErrDestroyUnauthorizedMapsToEADM011 verifies that when
+// SVTNManager.Destroy returns ErrDestroyUnauthorized (the Go-API defense-in-depth
+// check), mapAdminError maps it to E-ADM-011 (F-P3L1-002).
+//
+// This path is not reachable through the normal handler flow (the outer
+// resolveAndVerifyCallerRole gate prevents non-control callers from reaching
+// Destroy). The test exercises mapAdminError directly to confirm the mapping.
+//
+// Traces to BC-2.07.001 Inv-3; E-ADM-011; F-L2-02; F-P3L1-002.
+func TestAdminSVTNDestroy_ErrDestroyUnauthorizedMapsToEADM011(t *testing.T) {
+	t.Parallel()
+
+	// Call mapAdminError directly with ErrDestroyUnauthorized to verify the mapping.
+	err := mapAdminError(svtnmgmt.ErrDestroyUnauthorized, "test-svtn", nil, "")
+	if err == nil {
+		t.Fatal("mapAdminError(ErrDestroyUnauthorized): expected non-nil error")
+	}
+	if !strings.Contains(err.Error(), "E-ADM-011") {
+		t.Errorf("expected 'E-ADM-011' in mapped error; got %q", err.Error())
+	}
+	if !errors.Is(err, svtnmgmt.ErrDestroyUnauthorized) {
+		t.Errorf("expected errors.Is(err, ErrDestroyUnauthorized) via %%w wrapping; got %v", err)
+	}
 }

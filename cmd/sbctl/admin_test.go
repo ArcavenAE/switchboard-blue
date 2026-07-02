@@ -1642,3 +1642,424 @@ func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
 		t.Errorf("Ruling-14 §10 — oversized RPC response: expected errors.Is(err, io.ErrUnexpectedEOF); got: %v", err)
 	}
 }
+
+// ── S-6.05: sbctl admin svtn destroy ─────────────────────────────────────────
+
+// TestSbctlAdmin_SVTNDestroy_HappyPath verifies AC-003 happy path:
+// `sbctl admin svtn destroy --name <name> --confirm <svtn-short-id>` sends
+// {"command":"admin.svtn.destroy","args":{"name":"<name>"}} to the daemon and
+// prints confirmation to stdout on success (ADR-012; ADR-006).
+//
+// The --confirm value must equal "SVTN-<first-8-hex-chars-of-svtn_id>"
+// (interface-definitions.md v1.1 §125; ADR-004). The CLI computes the expected
+// short-ID from the SVTN ID returned by the daemon — this test bypasses that
+// by supplying the correct confirmation directly, verifying that the RPC is
+// dispatched and the success output is printed.
+//
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-003.
+func TestSbctlAdmin_SVTNDestroy_HappyPath(t *testing.T) {
+	t.Parallel()
+
+	const svtnName = "destroy-happy-svtn"
+
+	// The fake server returns the SVTN-ID that the CLI would have stored
+	// after admin.svtn.create. The --confirm short-id is the first 8 hex
+	// chars of the SVTN ID returned by the create operation. Here we supply
+	// the confirmation value directly in the CLI args.
+	// fakeSVTNIDHex is the full simulated SVTN-ID; confirmShortID is derived from
+	// its first 8 hex chars. _ = fakeSVTNIDHex documents the derivation.
+	const fakeSVTNIDHex = "aabbccddeeff0011aabbccddeeff0011"
+	_ = fakeSVTNIDHex // derivation: confirmShortID = "SVTN-" + fakeSVTNIDHex[:8]
+	const confirmShortID = "SVTN-aabbccdd"
+
+	requestCh := make(chan adminRPCRequest, 1)
+	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("AC-003: unexpected command %q; want admin.svtn.destroy", cmd)
+		}
+		var destroyArgs adminSVTNDestroyArgs
+		if err := json.Unmarshal(args, &destroyArgs); err != nil {
+			return nil, fmt.Errorf("AC-003: unmarshal adminSVTNDestroyArgs: %w", err)
+		}
+		if destroyArgs.Name != svtnName {
+			return nil, fmt.Errorf("AC-003: wire name %q; want %q", destroyArgs.Name, svtnName)
+		}
+		// Return a successful destroy response.
+		return map[string]string{"status": "destroyed"}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var outBuf strings.Builder
+	sio := sbctlIO{out: &outBuf, err: io.Discard}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "destroy",
+		"--name", svtnName,
+		"--confirm", confirmShortID,
+	}, sio)
+	if err != nil {
+		t.Fatalf("AC-003 happy path — runAdmin returned error: %v", err)
+	}
+
+	// Verify the RPC was dispatched with the correct command and name.
+	select {
+	case req := <-requestCh:
+		if req.Command != "admin.svtn.destroy" {
+			t.Errorf("AC-003 — dispatched command: got %q; want admin.svtn.destroy", req.Command)
+		}
+		var args adminSVTNDestroyArgs
+		if err := json.Unmarshal(req.Args, &args); err != nil {
+			t.Fatalf("AC-003 — unmarshal request args: %v", err)
+		}
+		if args.Name != svtnName {
+			t.Errorf("AC-003 — wire name: got %q; want %q", args.Name, svtnName)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("AC-003: timed out waiting for admin.svtn.destroy RPC; " +
+			"runAdminSvtnDestroy must dispatch the RPC within the context deadline")
+	}
+
+	// Success output must contain the SVTN name so the operator can confirm.
+	if out := outBuf.String(); !strings.Contains(out, svtnName) {
+		t.Errorf("AC-003 — success output must contain SVTN name %q; got: %q", svtnName, out)
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_NotFound verifies AC-003 not-found path:
+// `sbctl admin svtn destroy --name <nonexistent> --confirm SVTN-aabbccdd` exits
+// with non-zero on E-SVTN-003 (SVTN not found: <name>).
+//
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
+//
+// Traces to BC-2.07.001 EC-001 / E-SVTN-003; AC-003.
+func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// The fake server returns E-SVTN-003 for the unknown SVTN name.
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("unexpected command %q", cmd)
+		}
+		return nil, fmt.Errorf("E-SVTN-003: SVTN not found: ghost-svtn")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "destroy",
+		"--name", "ghost-svtn",
+		"--confirm", "SVTN-deadbeef",
+	}, defaultIO())
+
+	// Must return non-nil error.
+	if err == nil {
+		t.Fatal("AC-003 not-found — runAdmin returned nil; expected E-SVTN-003 error")
+	}
+
+	// Error must surface E-SVTN-003 (the daemon's not-found code).
+	if !strings.Contains(err.Error(), "E-SVTN-003") {
+		t.Errorf("AC-003 not-found — expected E-SVTN-003 in error; got: %v", err)
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_HappyPath_JSON verifies that `sbctl admin svtn destroy
+// --json` emits exactly one JSON envelope to stdout with no trailing plain-text line.
+//
+// F-P7L1-MED-1 (interface-definitions.md:164 universal --json envelope contract):
+// runAdminSvtnDestroy previously appended "destroyed SVTN: <name>\n" unconditionally
+// after connectAndRun returned, corrupting the envelope in --json mode. This test
+// asserts that outBuf parses as exactly one envelope (a second json.Decoder.Decode
+// call must return io.EOF) and that a trailing plain-text line is absent.
+//
+// Traces to BC-2.07.001 postcondition 3; AC-003; interface-definitions.md:164.
+func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
+	t.Parallel()
+
+	const svtnName = "destroy-json-svtn"
+	const fakeSVTNIDHex = "aabbccddeeff0011aabbccddeeff0011"
+	_ = fakeSVTNIDHex // derivation: confirmShortID = "SVTN-" + fakeSVTNIDHex[:8]
+	const confirmShortID = "SVTN-aabbccdd"
+
+	addr := startFakeServer(t, nil, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("AC-003 JSON: unexpected command %q; want admin.svtn.destroy", cmd)
+		}
+		var destroyArgs adminSVTNDestroyArgs
+		if err := json.Unmarshal(args, &destroyArgs); err != nil {
+			return nil, fmt.Errorf("AC-003 JSON: unmarshal adminSVTNDestroyArgs: %w", err)
+		}
+		if destroyArgs.Name != svtnName {
+			return nil, fmt.Errorf("AC-003 JSON: wire name %q; want %q", destroyArgs.Name, svtnName)
+		}
+		return map[string]string{"status": "destroyed"}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var outBuf bytes.Buffer
+	sio := sbctlIO{out: &outBuf, err: io.Discard}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), true, []string{
+		"svtn", "destroy",
+		"--name", svtnName,
+		"--confirm", confirmShortID,
+	}, sio)
+	if err != nil {
+		t.Fatalf("AC-003 JSON happy path — runAdmin returned error: %v", err)
+	}
+
+	// Assert outBuf parses as exactly one JSON envelope.
+	// A second Decode call must return io.EOF; if the buffer has a trailing
+	// plain-text line the second Decode will return a non-EOF error (F-P7L1-MED-1).
+	dec := json.NewDecoder(&outBuf)
+	var env jsonEnvelope
+	if err := dec.Decode(&env); err != nil {
+		t.Fatalf("AC-003 JSON — first Decode: expected valid JSON envelope; got: %v", err)
+	}
+	var dummy any
+	if err := dec.Decode(&dummy); err != io.EOF {
+		t.Errorf("AC-003 JSON — expected exactly one JSON envelope (second Decode must return io.EOF); got: %v", err)
+	}
+
+	// Assert envelope fields.
+	if !env.OK {
+		t.Errorf("AC-003 JSON — env.OK: got false; want true")
+	}
+	if env.Error != nil {
+		t.Errorf("AC-003 JSON — env.Error: got %+v; want nil", env.Error)
+	}
+	if !strings.Contains(string(env.Data), `"status"`) {
+		t.Errorf("AC-003 JSON — env.Data must contain status field; got: %s", env.Data)
+	}
+	if !strings.Contains(string(env.Data), "destroyed") {
+		t.Errorf("AC-003 JSON — env.Data must contain \"destroyed\" status; got: %s", env.Data)
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies all five paths of the AC-003
+// confirm gate per interface-definitions.md v1.1 §125/§127/§129 and ADR-004.
+//
+// RETRACTION (ba735c9): The Pass-4 attestation "static flag-value check —
+// NO interactive TTY prompt" (F-P4L2-MED-1) is retracted as invalid.  The
+// canonical spec §125/§129 mandates interactive mode when --confirm is omitted
+// and stdin is a TTY.  This test was brought into compliance during the
+// spec-impl drift fix-burst (S-6.05 v1.8 SPEC-IMPL DRIFT block; Task 11
+// UNFULFILLED obligation; drbothen/vsdd-factory#430).
+//
+// Five paths tested:
+//
+//	Path 1 (flag supplied, valid)    → static shape-check passes, RPC dispatched
+//	Path 1 (flag supplied, invalid)  → static shape-check fails, no RPC
+//	Path 2 (omitted + TTY match)     → interactive prompt, match → RPC dispatched
+//	Path 2 (omitted + TTY mismatch)  → interactive prompt, mismatch → no RPC
+//	Path 3 (omitted, non-TTY)        → hostile-scripting error, no RPC
+//	Path 4 (--yes alone)             → bypass with stderr warning, RPC dispatched
+//	Path 5 (--yes + --confirm)       → E-CFG-006 usage error (exit 2), no RPC
+//
+// stdinIsTTY and stdinReader are package-level seams swapped per-subtest.
+//
+// Traces to interface-definitions.md v1.1 §125/§127/§129; ADR-004; AC-003; S-6.05.
+func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
+	t.Parallel()
+
+	// setTTYSeam swaps stdinIsTTY and stdinReader for the duration of one subtest,
+	// restoring the originals via t.Cleanup.  Must be called before t.Parallel()
+	// in each subtest because package-level var mutations are not parallel-safe.
+	setTTYSeam := func(t *testing.T, isTTY bool, input string) {
+		t.Helper()
+		origIsTTY := stdinIsTTY
+		origReader := stdinReader
+		stdinIsTTY = func() bool { return isTTY }
+		stdinReader = strings.NewReader(input)
+		t.Cleanup(func() {
+			stdinIsTTY = origIsTTY
+			stdinReader = origReader
+		})
+	}
+
+	type tc struct {
+		name            string
+		args            []string // args after "svtn", "destroy", "--name", "some-svtn"
+		isTTY           bool
+		stdinInput      string
+		wantErr         bool
+		wantNoRPC       bool
+		wantErrContains string
+		wantErrStderr   string // substring expected in stderr output (for --yes warning)
+	}
+
+	// svtnShortID matches the value the interactive prompt expects.
+	// In production the short-ID comes from the SVTN ID returned at create time.
+	// For these tests we use a fixed value.
+	const svtnShortID = "SVTN-aabbccdd"
+
+	tests := []tc{
+		{
+			name:      "path1_valid_confirm_flag",
+			args:      []string{"--confirm", svtnShortID},
+			isTTY:     false,
+			wantErr:   false,
+			wantNoRPC: false,
+		},
+		{
+			name:            "path1_invalid_confirm_flag",
+			args:            []string{"--confirm", "SVTN-xxxx1111-wrong"},
+			isTTY:           false,
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "invalid --confirm",
+		},
+		{
+			name:       "path2_tty_matching_input",
+			args:       nil, // --confirm omitted
+			isTTY:      true,
+			stdinInput: svtnShortID + "\n",
+			wantErr:    false,
+			wantNoRPC:  false,
+		},
+		{
+			name:            "path2_tty_invalid_shape_input",
+			args:            nil,
+			isTTY:           true,
+			stdinInput:      "not-an-svtn-id\n",
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "interactive confirmation failed",
+		},
+		{
+			name:            "path3_non_tty_no_confirm",
+			args:            nil,
+			isTTY:           false,
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "non-interactive session",
+		},
+		{
+			name:          "path4_yes_alone_bypasses",
+			args:          []string{"--yes"},
+			isTTY:         false,
+			wantErr:       false,
+			wantNoRPC:     false,
+			wantErrStderr: "WARNING: --yes bypasses confirmation",
+		},
+		{
+			name:            "path5_yes_plus_confirm_is_usage_error",
+			args:            []string{"--yes", "--confirm", svtnShortID},
+			isTTY:           false,
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "E-CFG-006",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			// Seam mutation is not parallel-safe; run sequentially within the
+			// parent parallel group.
+			setTTYSeam(t, tt.isTTY, tt.stdinInput)
+
+			rpcReceived := atomic.Bool{}
+			addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+				if cmd == "admin.svtn.destroy" {
+					rpcReceived.Store(true)
+					return map[string]string{"status": "destroyed"}, nil
+				}
+				return nil, fmt.Errorf("unexpected command %q", cmd)
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			t.Cleanup(cancel)
+
+			baseArgs := []string{"svtn", "destroy", "--name", "some-svtn"}
+			var errBuf strings.Builder
+			sio := sbctlIO{out: io.Discard, err: &errBuf}
+
+			err := runAdmin(ctx, addr, testdataKeyPath(t), false,
+				append(baseArgs, tt.args...), sio)
+
+			if tt.wantErr && err == nil {
+				t.Errorf("expected non-nil error; got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected nil error; got: %v", err)
+			}
+			if tt.wantErrContains != "" && err != nil {
+				if !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Errorf("error must contain %q; got: %v", tt.wantErrContains, err)
+				}
+			}
+			if tt.wantNoRPC && rpcReceived.Load() {
+				t.Error("RPC must not be dispatched before confirmation succeeds")
+			}
+			if !tt.wantNoRPC && !tt.wantErr {
+				// Successful paths must have dispatched the RPC.
+				// Give the server a short window to process.
+				deadline := time.Now().Add(500 * time.Millisecond)
+				for !rpcReceived.Load() && time.Now().Before(deadline) {
+					time.Sleep(5 * time.Millisecond)
+				}
+				if !rpcReceived.Load() {
+					t.Error("expected RPC to be dispatched; none received within deadline")
+				}
+			}
+			if tt.wantErrStderr != "" {
+				if !strings.Contains(errBuf.String(), tt.wantErrStderr) {
+					t.Errorf("stderr must contain %q; got: %q", tt.wantErrStderr, errBuf.String())
+				}
+			}
+		})
+	}
+}
+
+// TestSbctlAdmin_SVTNDestroy_RequiresControlRole verifies AC-004 (RPC path):
+// A non-control caller (console or readonly role) attempting destroy via the
+// mgmt RPC receives an error response with code E-RPC-011 and message
+// containing "E-ADM-009" (the handler gate fires; the SVTN is not destroyed).
+//
+// RULING-W6TB-A: admin.svtn.destroy uses resolveAndVerifyCallerRole, NOT the
+// bootstrap-only gate. The handler returns E-RPC-011 wrapping E-ADM-009 for
+// non-control callers before SVTNManager.Destroy is ever invoked.
+//
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
+//
+// Traces to BC-2.07.001 Inv-3; AC-004 (RPC path); RULING-W6TB-A.
+func TestSbctlAdmin_SVTNDestroy_RequiresControlRole(t *testing.T) {
+	t.Parallel()
+
+	// The fake server simulates the daemon returning E-RPC-011 wrapping E-ADM-009
+	// — the observable wire outcome when resolveAndVerifyCallerRole rejects a
+	// non-control caller (RULING-W6TB-A §3; error-code table).
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		if cmd != "admin.svtn.destroy" {
+			return nil, fmt.Errorf("unexpected command %q", cmd)
+		}
+		// Simulate resolveAndVerifyCallerRole firing for a console-role caller.
+		return nil, fmt.Errorf("E-ADM-009: insufficient authority for operation admin.svtn.destroy: key SHA256:console= has role console")
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"svtn", "destroy",
+		"--name", "restricted-svtn",
+		"--confirm", "SVTN-aabbccdd",
+	}, defaultIO())
+
+	// Must return non-nil error.
+	if err == nil {
+		t.Fatal("AC-004 RPC path — runAdmin returned nil; expected E-RPC-011/E-ADM-009 error")
+	}
+
+	// Error must surface E-ADM-009 (the handler gate code).
+	if !strings.Contains(err.Error(), "E-ADM-009") {
+		t.Errorf("AC-004 RPC path — expected E-ADM-009 in error (RULING-W6TB-A handler gate); got: %v", err)
+	}
+}
