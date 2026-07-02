@@ -1204,14 +1204,14 @@ func TestAdminSVTNDestroy_E2E_VP048Property3(t *testing.T) {
 		t.Fatal("VP-048 P3 — non-control caller received ok:true; resolveAndVerifyCallerRole gate did not fire")
 	}
 
-	// The error must contain E-ADM-009 (handler gate code per RULING-W6TB-A).
+	// The error code must be E-ADM-009 (handler gate code per RULING-W6TB-A).
 	errObj, _ := resp["error"].(map[string]any)
 	if errObj == nil {
 		t.Fatal("VP-048 P3 — expected error in response; got nil error object")
 	}
-	msg, _ := errObj["message"].(string)
-	if !strings.Contains(msg, "E-ADM-009") {
-		t.Errorf("VP-048 P3 — expected E-ADM-009 in error message (RULING-W6TB-A gate); got: %v", errObj)
+	code, _ := errObj["code"].(string)
+	if code != "E-ADM-009" {
+		t.Errorf("VP-048 P3 — expected code=%q (RULING-W6TB-A gate); got code=%q, errObj=%v", "E-ADM-009", code, errObj)
 	}
 
 	// SVTN must still exist (handler gate prevented Destroy from running).
