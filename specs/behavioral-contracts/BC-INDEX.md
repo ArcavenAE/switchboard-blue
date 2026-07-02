@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "2.7"
+version: "2.8"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.8 | 2026-07-02 | F-P3L3-MED-001 fix-burst: BC-2.08.001 v1.2→v1.3 (Stories row cell reference bumped S-7.03 v1.2→v1.3; POL-003 candidate sync). BC count unchanged at 45. |
 | 2.7 | 2026-07-02 | F-P3L3-M-05 narrative-parity fix: BC-2.07.001 v1.11→v1.12 (Stories-row PC-3 S-6.05 anchor v1.3→v1.5; v1.4 was reverted spec regression against RULING-W6TB-A; v1.5 restores correct Destroy signature and Go-API defense-in-depth check). No behavioral changes. BC count unchanged at 45. |
 | 2.6 | 2026-07-02 | F-P2L3-02 reverse-trace retirement (RULING-W6TB-C §2): BC-2.06.001 v1.6→v1.7 (Stories cell: S-7.03→S-BL.CONSOLE-OBS; PC-5 console-half anchor moved per DRIFT-001b); BC-2.06.002 v1.3→v1.4 (Stories cell: S-7.03→S-BL.CONSOLE-OBS; PC-3 missCount anchor moved per DRIFT-002). BC count unchanged at 45. |
 | 2.5 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): BC-2.03.001 v1.3→v1.4 (Stories row adds S-BL.DISCOVERY-WIRE with deferred PC-1/PC-3/PC-4 wire delivery annotation); BC-2.03.002 v1.2→v1.3 (Stories row adds S-BL.DISCOVERY-WIRE with deferred real-socket PC-3 aggregation annotation). BC count unchanged at 45. |

@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.30"
+version: "2.31"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -147,6 +147,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.31 | 2026-07-02 | VP-050 bumped v1.1→v1.2 (F-P3L3-MED-001): bump Story trace row S-7.03 v1.2→v1.3 (POL-003 candidate sync). No count or method changes; total remains 76. |
 | 2.30 | 2026-07-02 | VP-050 bumped v1.0→v1.1 (F-P2L3-06/07): implementing_story S-7.03 added to frontmatter; Story Trace section added; phantom testenv.NewFull replaced with in-process mgmt.NewServer + net.Listen skeleton (no testenv package in codebase; pattern from cmd/sbctl/e2e_test.go S-W5.02); catalog row title annotated with implementing_story. No count or method changes; total remains 76. |
 | 2.29 | 2026-07-02 | VP-048 bumped v1.6→v1.7 (F-P3L3-M-03): source_bc pin corrected v1.7→v1.11 (BC-2.07.001 Inv-3 destroy-authority clarification per RULING-W6TB-A). No property text changes; no count or method changes; total remains 76. |
 | 2.28 | 2026-07-01 | VP-055 bumped v1.1→v1.2 (RULING-W6TB-J, O-P4L3-01): retire TestPropPresenceAdvertisement_RejectsInvalidName; add TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8 (empty and invalid-UTF-8 inputs → error) and TestPropPresenceAdvertisement_TruncatesOversize (>255-byte valid UTF-8 → truncated ≤255 bytes with "…" suffix, err == nil). Aligns with S-7.02 AC-004b and BC-2.03.003 v1.3 EC-001. Round-trip property unchanged. No count or method changes; total remains 76. |
