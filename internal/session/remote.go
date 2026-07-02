@@ -91,6 +91,15 @@ func NewConsoleState() *ConsoleState {
 	return &ConsoleState{}
 }
 
+// Current returns the name of the currently-attached session, or "" if no
+// session is attached. Safe for concurrent use (go.md rule 12: value copy
+// returned under lock).
+func (cs *ConsoleState) Current() string {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.current
+}
+
 // ConsoleServer groups a SessionRegistry and a *ConsoleState for handler dispatch
 // (L1-C2). Construct with NewConsoleServer.
 type ConsoleServer struct {

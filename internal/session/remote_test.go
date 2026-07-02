@@ -18,6 +18,9 @@ package session_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/session"
@@ -230,5 +233,74 @@ func TestHandleConsoleSwitch_NotAttached(t *testing.T) {
 	if !errors.Is(err, session.ErrConsoleNotAttached) {
 		t.Errorf("BC-2.08.001 PC-3 EC-002 — HandleConsoleSwitch not attached: "+
 			"want errors.Is(err, ErrConsoleNotAttached); got: %v", err)
+	}
+}
+
+// TestConsoleState_ConcurrentAttachDetachSwitchIsRaceFree exercises ConsoleState
+// under concurrent Attach, Detach, and Switch calls to verify there are no data
+// races on the internal mutex-protected state (F-P2L2-001; L2-T1).
+//
+// The test spawns N=100 goroutines. Each goroutine performs a randomised sequence
+// of operations against a shared ConsoleState. No assertion on intermediate values
+// is made — races are the target, detected by `go test -race`. The only value
+// assertion is at the end: ConsoleState.Current() must return either "" or one of
+// the known session names (not a torn write).
+//
+// Run via: just test-race (go test -race ./...)
+func TestConsoleState_ConcurrentAttachDetachSwitchIsRaceFree(t *testing.T) {
+	t.Parallel()
+
+	const goroutines = 100
+
+	// Build N session names and a registry that knows all of them.
+	sessionNames := make([]string, goroutines)
+	for i := range goroutines {
+		sessionNames[i] = fmt.Sprintf("sess-%d", i)
+	}
+	reg := newStubRegistry(sessionNames...)
+
+	state := session.NewConsoleState()
+	srv := session.NewConsoleServer(reg, state)
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := range goroutines {
+		go func(idx int) {
+			defer wg.Done()
+
+			// Use a per-goroutine random source so goroutines don't share state.
+			//nolint:gosec // not used for cryptography; local test entropy only
+			r := rand.New(rand.NewSource(int64(idx)))
+
+			for range 30 {
+				switch r.Intn(3) {
+				case 0: // Attach
+					name := sessionNames[r.Intn(len(sessionNames))]
+					_, _ = srv.HandleConsoleAttach(ctx, session.ConsoleAttachRequest{SessionName: name})
+				case 1: // Detach
+					_, _ = srv.HandleConsoleDetach(ctx, session.ConsoleDetachRequest{})
+				case 2: // Switch
+					name := sessionNames[r.Intn(len(sessionNames))]
+					_, _ = srv.HandleConsoleSwitch(ctx, session.ConsoleSwitchRequest{SessionName: name})
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Post-condition: Current() must return "" or a known session name — no torn write.
+	got := state.Current()
+	if got == "" {
+		return // valid: no session attached after all operations
+	}
+	known := make(map[string]struct{}, len(sessionNames))
+	for _, n := range sessionNames {
+		known[n] = struct{}{}
+	}
+	if _, ok := known[got]; !ok {
+		t.Errorf("ConsoleState.Current() returned unknown session %q after concurrent operations (torn write?)", got)
 	}
 }

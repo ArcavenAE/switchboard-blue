@@ -105,8 +105,10 @@ func TestSbctlConsole_Attach(t *testing.T) {
 		if err == nil {
 			t.Fatal("AC-001 / EC-001 — expected E-SES-001 error; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-SES-001") {
-			t.Errorf("AC-001 / EC-001 — expected E-SES-001 in error; got: %v", err)
+		// F-P2L2-007: assert "E-SES-001:" (colon suffix) — stricter than Contains("E-SES-001")
+		// so a hypothetical E-SES-0010 would not spuriously match.
+		if !strings.Contains(err.Error(), "E-SES-001:") {
+			t.Errorf("AC-001 / EC-001 — expected E-SES-001: in error; got: %v", err)
 		}
 	})
 
@@ -131,8 +133,9 @@ func TestSbctlConsole_Attach(t *testing.T) {
 		if err == nil {
 			t.Fatal("AC-001 / EC-003 — expected E-ADM-006 error; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-ADM-006") {
-			t.Errorf("AC-001 / EC-003 — expected E-ADM-006 in error; got: %v", err)
+		// F-P2L2-007: assert "E-ADM-006:" (colon suffix) — stricter than Contains("E-ADM-006").
+		if !strings.Contains(err.Error(), "E-ADM-006:") {
+			t.Errorf("AC-001 / EC-003 — expected E-ADM-006: in error; got: %v", err)
 		}
 	})
 }
@@ -199,8 +202,9 @@ func TestSbctlConsole_Detach(t *testing.T) {
 		if err == nil {
 			t.Fatal("AC-002 / EC-002 — expected E-SES-004 error; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-SES-004") {
-			t.Errorf("AC-002 / EC-002 — expected E-SES-004 in error; got: %v", err)
+		// F-P2L2-007: assert "E-SES-004:" (colon suffix) — stricter than Contains("E-SES-004").
+		if !strings.Contains(err.Error(), "E-SES-004:") {
+			t.Errorf("AC-002 / EC-002 — expected E-SES-004: in error; got: %v", err)
 		}
 	})
 }
@@ -289,8 +293,9 @@ func TestSbctlConsole_Switch(t *testing.T) {
 		if err == nil {
 			t.Fatal("AC-003 / EC-001 — expected E-SES-001 error; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-SES-001") {
-			t.Errorf("AC-003 / EC-001 — expected E-SES-001 in error; got: %v", err)
+		// F-P2L2-007: assert "E-SES-001:" (colon suffix) — stricter than Contains("E-SES-001").
+		if !strings.Contains(err.Error(), "E-SES-001:") {
+			t.Errorf("AC-003 / EC-001 — expected E-SES-001: in error; got: %v", err)
 		}
 	})
 
@@ -315,8 +320,9 @@ func TestSbctlConsole_Switch(t *testing.T) {
 		if err == nil {
 			t.Fatal("AC-003 / EC-002 — expected E-SES-004 error; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-SES-004") {
-			t.Errorf("AC-003 / EC-002 — expected E-SES-004 in error; got: %v", err)
+		// F-P2L2-007: assert "E-SES-004:" (colon suffix) — stricter than Contains("E-SES-004").
+		if !strings.Contains(err.Error(), "E-SES-004:") {
+			t.Errorf("AC-003 / EC-002 — expected E-SES-004: in error; got: %v", err)
 		}
 	})
 
@@ -341,8 +347,9 @@ func TestSbctlConsole_Switch(t *testing.T) {
 		if err == nil {
 			t.Fatal("AC-003 / EC-003 — expected E-ADM-006 error; got nil")
 		}
-		if !strings.Contains(err.Error(), "E-ADM-006") {
-			t.Errorf("AC-003 / EC-003 — expected E-ADM-006 in error; got: %v", err)
+		// F-P2L2-007: assert "E-ADM-006:" (colon suffix) — stricter than Contains("E-ADM-006").
+		if !strings.Contains(err.Error(), "E-ADM-006:") {
+			t.Errorf("AC-003 / EC-003 — expected E-ADM-006: in error; got: %v", err)
 		}
 	})
 }
