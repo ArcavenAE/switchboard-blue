@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-3-tdd-implementation
-phase_step: wave-6-tranche-b-closed
+phase_step: wave-6-tranche-b-wavelevel-converged
 phase_3_active_wave: 6
 phase_3_active_stories: []
 phase_3_completed_stories: [S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR]
@@ -29,8 +29,12 @@ wave_4_gate: APPROVED
 wave_5_gate: CONVERGED
 wave_6_tranche_a_closed_at: 2026-07-01T19:04:40Z
 wave_6_tranche_b_closed_at: 2026-07-01
-develop_head: 91d5675
+wave_6_tranche_b_wavelevel_converged_at: 2026-07-01
+wave_6_tranche_b_wavelevel_convergence_passes: 3
+develop_head: 6544ff8
 open_prs: 0
+wave_6_hygiene_fec_sentinel_pr: 58
+wave_6_hygiene_fec_sentinel_sha: 6544ff8
 alpha_release_tag: alpha-20260629-165045-d854978
 historical_cycles: []
 timestamp: 2026-07-01T00:00:00Z
@@ -43,7 +47,8 @@ last_update: 2026-07-01
 
 Wave 6 Tranche B CLOSED — all 3 stories merged (BC-5.39.001 3/3 each):
 S-7.01 PR#43/5c658e7, S-7.02 PR#55/c54a8ad, S-BL.ROUTER-ADDR PR#56/91d5675.
-develop HEAD: 91d5675. 45 BCs, 76 VPs, 48 stories, 18 internal packages.
+Wave-6 hygiene PR#58/6544ff8 merged (F-P1L1-LOW-01: dead FEC sentinel removed).
+develop HEAD: 6544ff8. 45 BCs, 76 VPs, 48 stories, 18 internal packages.
 
 ## Phase Progress
 
@@ -112,26 +117,24 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave 6 Tranche A CLOSED | S-BL.LOOKUP #40, S-W5.04 #41, S-6.07 #42 | 2026-07-01 |
 | Wave 6 Tranche B CLOSED | S-7.01 #43, S-7.02 #55, S-BL.ROUTER-ADDR #56 all merged with BC-5.39.001 3/3 | 2026-07-01 |
 | Force-push introspection | vsdd-factory#408 + switchboard-blue#57 filed; `gh pr update-branch` adopted as standard | 2026-07-01 |
+| Wave 6 Tranche B wave-level CONVERGED | 3/3 clean fresh-context passes (P2/P3/P4); FEC hygiene PR #58 merged; develop@6544ff8 | 2026-07-01 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche B CLOSED)
+## Session Resume Checkpoint — 2026-07-01 (Wave-6 Tranche B wave-level CONVERGED)
 
-**Position:** Phase 3 Wave 6 Tranche B CLOSED. All 3 stories merged: S-7.01 PR#43/5c658e7, S-7.02 PR#55/c54a8ad, S-BL.ROUTER-ADDR PR#56/91d5675. develop HEAD: 91d5675. Worktrees + branches cleaned.
+**Position:** Phase 3 Wave 6 Tranche B wave-level CONVERGED (BC-5.39.001 satisfied). 3/3 clean fresh-context 3-lens passes (Pass-2, Pass-3, Pass-4) against all merged Tranche B stories. FEC sentinel hygiene PR #58 merged. develop HEAD: 6544ff8.
 
-**BC-5.39.001 status:** All 3 Tranche B stories — SATISFIED (3/3 clean diverse-lens passes each).
-
-**Force-push introspection (this cycle):** During S-BL.ROUTER-ADDR PR #56 base catch-up, pr-manager reached for rebase+force-push when `gh pr update-branch` was the correct non-destructive tool. Classifier blocked the force-push. `gh pr update-branch` used successfully on second attempt. Issues filed: drbothen/vsdd-factory#408 (pr-manager playbook) + ArcavenAE/switchboard-blue#57 (merge-serialization hazard). Self-dogfooded within same delivery.
+**BC-5.39.001 status:** Wave-level CONVERGED — 3 consecutive clean fresh-context passes achieved.
 
 **Follow-up issues filed this cycle:** switchboard-blue #44–54, #57; drbothen/vsdd-factory #407, #408.
 
-**NEXT ACTION on resume:** Wave-6 Tranche B wave-level adversarial convergence (BC-5.39.001 wave-level, 3 clean fresh-context passes required against all 3 merged stories), OR proceed to Tranche C planning (S-6.05, S-7.03).
+**NEXT ACTION on resume:** Wave-6 Tranche C planning (S-6.05 v1.3, S-7.03 v1.2).
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.
 - PROCESS-GAP-W5-SIBLINGSWEEP: vsdd-factory #361–#364.
 - PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP: open/codify.
-- TaskList #115: S-6.06 lens-1 post-merge polish.
 - Tranche B post-merge issues #44–#54, #57.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
