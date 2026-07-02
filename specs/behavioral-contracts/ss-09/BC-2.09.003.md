@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "1.7"
+version: "1.8"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -18,6 +18,14 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-02
+    version: "1.8"
+    change: >
+      Reconcile listen_addr DEFERRED-APPLICATION row — previously said "No current
+      owner story — a network-listener introduction story is needed (flagged for
+      STORY-INDEX)" contradicting STORY-INDEX line 135 which already lists S-BL.NI
+      as the owner. Row now correctly names S-BL.NI. Closes Phase 5 Pass 2
+      F-P5P2-B-002.
   - date: 2026-06-28
     version: "1.7"
     change: >
@@ -181,7 +189,7 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
 
    | Field | Reason for Deferral | Owning Story / Flag |
    |-------|---------------------|---------------------|
-   | `listen_addr` | No TCP listener (`net.Listen` / `.Accept`) exists anywhere in the codebase; the daemon is a PTY/tmux relay with no network-ingress listener today. | **No current owner story — a network-listener introduction story is needed (flagged for STORY-INDEX).** The listener story must create `internal/listener` (or equivalent) and wire `cfg.ListenAddr` at that time. |
+   | `listen_addr` | No TCP listener (`net.Listen` / `.Accept`) exists anywhere in the codebase; the daemon is a PTY/tmux relay with no network-ingress listener today. | **S-BL.NI (backlog, network-ingress listener).** S-BL.NI is the owning story per STORY-INDEX Backlog table row for `S-BL.NI`: "Also owns cfg.ListenAddr application — must wire `cfg.ListenAddr` to `net.Listen`/`.Accept` at this story's implementation time (BC-2.09.003 PC-9 DEFERRED-APPLICATION; S-6.01 v1.4 deferred listen_addr binding depends on this story)." The application point is `net.Listen(cfg.ListenAddr)` inside the new `internal/listener` (or equivalent) subsystem this story introduces. |
    | `drain_timeout` | `internal/drain` does not exist on develop. | S-7.04 (Wave 7, PE graduation and graceful drain). **S-7.04 obligation (L-5):** Must wire `cfg.DrainTimeout` into the graceful-drain coordinator (the `internal/drain` package it introduces), replacing any hardcoded drain-timeout constant. The application point is the drain sequence initiated on graceful shutdown / PE graduation, specifically the deadline passed to the drain context or equivalent timeout mechanism. Default: 10s per ARCH-06 §Graceful Drain when field is zero/absent. |
    | `upstream_routers` | PE-mode upstream connection logic is owned by the PE graduation work; `internal/drain` does not exist. | S-7.04 (Wave 7). **S-7.04 obligation (L-5):** Must wire `cfg.UpstreamRouters` (slice of `{addr string}`) into the PE-mode upstream connector, replacing any hardcoded upstream address list. The application point is the upstream connection pool / peer-list initialization in the PE graduation path. |
    | `keepalive_interval` | The `sweepDeadline` constant (60s, console eviction window) is architecturally distinct from the node reconnect keepalive interval described by FM-009 ("after `keepalive_interval`, default 1s, nodes attempt reconnect"). Wiring `cfg.KeepaliveInterval` to `sweepDeadline` would misrepresent their semantics. The correct keepalive mechanism is part of the drain/node-keepalive subsystem work. | S-7.04 (Wave 7). **S-7.04 obligation (L-5):** Must wire `cfg.KeepaliveInterval` into the node-reconnect keepalive ticker (the mechanism described by FM-009), replacing any hardcoded 1s constant or equivalent. The application point is the keepalive goroutine / ticker that fires reconnect attempts from a drained or disconnected PE node. Default: 1s per ARCH-06 §Graceful Drain (FM-009) when field is zero/absent. MUST NOT wire to `sweepDeadline` (console eviction window — semantically unrelated). |
@@ -300,6 +308,7 @@ VP-028, VP-029 (existing; cover all postconditions including v1.2 additions).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.8 | 2026-07-02 | Reconcile listen_addr DEFERRED-APPLICATION row — previously said "No current owner story" contradicting STORY-INDEX line 135 which lists S-BL.NI as the owner. Row now correctly names S-BL.NI. Closes Phase 5 Pass 2 F-P5P2-B-002. |
 | 1.7 | 2026-06-28 | Traceability refresh (Wave-5 consistency audit F-002/F-003): Stories field updated — S-W5.01 added for PC-10/PC-11 (AC-011: management_socket, AC-012: authorized_operator_keys); S-6.01 retains AC-001..AC-009. Story Anchor updated to include S-W5.01. E-CFG-002 collision flag added to Error Codes table: error-taxonomy.md E-CFG-002 = "private key export not supported" (BC-2.05.007); BC-2.09.003 v1.2 E-CFG-002 = listen_addr invalid host:port — pre-existing inconsistency, flagged for maintenance-pass resolution. |
 | 1.6 | 2026-06-28 | Wave-5 management plane config additions (ARCH-12): PC-10 (management_socket: non-empty when present; E-CFG-008) and PC-11 (authorized_operator_keys: valid PEM Ed25519 PUBLIC KEY per entry; E-CFG-009) added. Error codes E-CFG-008 and E-CFG-009 added to Error Codes table. Edge cases EC-011 through EC-014 added. Canonical test vectors for both new fields added. VP coverage rows added to Verification Properties table. Config-schema impact note in PC-11: interface-definitions.md §Config Schema requires update for management_socket and authorized_operator_keys fields (S-W5.01 responsibility). Pre-existing E-CFG-006 collision flagged (error-taxonomy.md E-CFG-006 = sbctl admin flag conflict; BC-2.09.003 v1.4 E-CFG-006 = drain_timeout negative) — reconciliation deferred to maintenance pass. New codes E-CFG-008/E-CFG-009 are free in both documents. |
 | 1.5 | 2026-06-28 | Traceability refresh (KNOWN-STALE / Wave 4 audit): Stories row and Story Anchor updated from "AC-001 through AC-006" to "AC-001 through AC-009". S-6.01 gained AC-007 (drain_timeout negative rejection, PC-7), AC-008 (keepalive_interval negative rejection, PC-8), and AC-009 (tick_interval config application, PC-9) via SP-003/SP-004/SP-005 — the BC's postconditions PC-5..PC-9 were already fully defined; only the human-readable anchor summary was stale. Canonical EC numbering reaffirmed: BC EC-NNN is authoritative (VSDD policy); story-writer must reconcile S-6.01 EC IDs to BC EC IDs per S601-NITPICK-B: story EC-009 → BC EC-008 (drain_timeout:0s accepted), story EC-010 → BC EC-009 (drain_timeout:-5s → E-CFG-006, already correct in BC), story EC-011 → new (keepalive_interval:0s accepted — not yet in BC; story-writer to add BC EC-011 for symmetry if desired), story EC-012 → BC EC-009 (keepalive_interval:-1s → E-CFG-007), story EC-013 → BC EC-010 (valid config/daemon start). |
