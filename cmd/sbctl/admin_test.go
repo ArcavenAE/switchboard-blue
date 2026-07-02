@@ -1656,8 +1656,7 @@ func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
 // by supplying the correct confirmation directly, verifying that the RPC is
 // dispatched and the success output is printed.
 //
-// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a nil
-// return from a stub that doesn't dispatch would fail the request-channel check.
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
 //
 // Traces to BC-2.07.001 postcondition 3; AC-003.
 func TestSbctlAdmin_SVTNDestroy_HappyPath(t *testing.T) {
@@ -1734,8 +1733,7 @@ func TestSbctlAdmin_SVTNDestroy_HappyPath(t *testing.T) {
 // `sbctl admin svtn destroy --name <nonexistent> --confirm SVTN-aabbccdd` exits
 // with non-zero on E-SVTN-003 (SVTN not found: <name>).
 //
-// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a stub
-// that returns nil fails the non-nil error assertion.
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
 //
 // Traces to BC-2.07.001 EC-001 / E-SVTN-003; AC-003.
 func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
@@ -1779,10 +1777,7 @@ func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
 // expected "SVTN-<short-id>" pattern the command must abort without dispatching
 // any RPC.
 //
-// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a stub
-// that returns nil trivially would fail the nil-error assertion for the
-// missing-confirm path. The RPC-not-dispatched check would also fail if the
-// stub blindly dispatched.
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
 //
 // Traces to interface-definitions.md v1.1 §125; ADR-004; AC-003.
 func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
@@ -1861,8 +1856,7 @@ func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 // bootstrap-only gate. The handler returns E-RPC-011 wrapping E-ADM-009 for
 // non-control callers before SVTNManager.Destroy is ever invoked.
 //
-// BC-self-check (BC-5.38.005 invariant 1): runAdminSvtnDestroy panics; a
-// stub that returns nil fails the non-nil error assertion.
+// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
 //
 // Traces to BC-2.07.001 Inv-3; AC-004 (RPC path); RULING-W6TB-A.
 func TestSbctlAdmin_SVTNDestroy_RequiresControlRole(t *testing.T) {

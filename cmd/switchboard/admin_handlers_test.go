@@ -670,9 +670,14 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 }
 
 // TestBuildAdminHandlers_SixHandlers asserts that BuildAdminHandlers returns
-// exactly six handlers with the correct command names.
-// S-6.07 added admin.svtn.create as the fifth handler (AC-001).
-// S-6.05 added admin.svtn.destroy as the sixth handler (AC-001; BC-2.07.001 PC-3).
+// exactly six handlers with the correct command names:
+//   - admin.key.register
+//   - admin.key.revoke
+//   - admin.key.expire
+//   - admin.key.list-keys
+//   - admin.svtn.create  (S-6.07, AC-001)
+//   - admin.svtn.destroy (S-6.05, AC-001; BC-2.07.001 PC-3)
+//
 // Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1 + PC-3.
 func TestBuildAdminHandlers_SixHandlers(t *testing.T) {
 	t.Parallel()
