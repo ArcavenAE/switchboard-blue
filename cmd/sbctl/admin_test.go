@@ -1767,83 +1767,180 @@ func TestSbctlAdmin_SVTNDestroy_NotFound(t *testing.T) {
 	}
 }
 
-// TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies AC-003 confirm gate:
-// The --confirm flag is required per interface-definitions.md v1.1 §125 and
-// ADR-004. The confirm gate is a static flag-value check — there is NO
-// interactive TTY prompt. When --confirm is absent the command aborts
-// immediately with a static error and exits non-zero before dispatching any
-// RPC. When --confirm is present but the value does not match the required
-// "SVTN-<8-hex-chars>" pattern the command likewise aborts with a static
-// error before any RPC is dispatched.
+// TestSbctlAdmin_SVTNDestroy_ConfirmGate verifies all five paths of the AC-003
+// confirm gate per interface-definitions.md v1.1 §125/§127/§129 and ADR-004.
 //
-// self-check: runAdminSvtnDestroy panics; a nil stub would leak into subsequent tests.
+// RETRACTION (<THIS_COMMIT>): The Pass-4 attestation "static flag-value check —
+// NO interactive TTY prompt" (F-P4L2-MED-1) is retracted as invalid.  The
+// canonical spec §125/§129 mandates interactive mode when --confirm is omitted
+// and stdin is a TTY.  This test was brought into compliance during the
+// spec-impl drift fix-burst (S-6.05 v1.8 SPEC-IMPL DRIFT block; Task 11
+// UNFULFILLED obligation; drbothen/vsdd-factory#430).
 //
-// Traces to interface-definitions.md v1.1 §125; ADR-004; AC-003.
+// Five paths tested:
+//
+//	Path 1 (flag supplied, valid)    → static shape-check passes, RPC dispatched
+//	Path 1 (flag supplied, invalid)  → static shape-check fails, no RPC
+//	Path 2 (omitted + TTY match)     → interactive prompt, match → RPC dispatched
+//	Path 2 (omitted + TTY mismatch)  → interactive prompt, mismatch → no RPC
+//	Path 3 (omitted, non-TTY)        → hostile-scripting error, no RPC
+//	Path 4 (--yes alone)             → bypass with stderr warning, RPC dispatched
+//	Path 5 (--yes + --confirm)       → E-CFG-006 usage error (exit 2), no RPC
+//
+// stdinIsTTY and stdinReader are package-level seams swapped per-subtest.
+//
+// Traces to interface-definitions.md v1.1 §125/§127/§129; ADR-004; AC-003; S-6.05.
 func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 	t.Parallel()
 
-	t.Run("missing_confirm_aborts_without_rpc", func(t *testing.T) {
-		t.Parallel()
-
-		// The fake server records any RPC that reaches it — we assert none do.
-		rpcReceived := atomic.Bool{}
-		addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
-			rpcReceived.Store(true)
-			return nil, fmt.Errorf("should not have been called")
+	// setTTYSeam swaps stdinIsTTY and stdinReader for the duration of one subtest,
+	// restoring the originals via t.Cleanup.  Must be called before t.Parallel()
+	// in each subtest because package-level var mutations are not parallel-safe.
+	setTTYSeam := func(t *testing.T, isTTY bool, input string) {
+		t.Helper()
+		origIsTTY := stdinIsTTY
+		origReader := stdinReader
+		stdinIsTTY = func() bool { return isTTY }
+		stdinReader = strings.NewReader(input)
+		t.Cleanup(func() {
+			stdinIsTTY = origIsTTY
+			stdinReader = origReader
 		})
+	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
+	type tc struct {
+		name            string
+		args            []string // args after "svtn", "destroy", "--name", "some-svtn"
+		isTTY           bool
+		stdinInput      string
+		wantErr         bool
+		wantNoRPC       bool
+		wantErrContains string
+		wantErrStderr   string // substring expected in stderr output (for --yes warning)
+	}
 
-		// Omit --confirm: interactive path. With empty stdin, the command must
-		// abort with an error (cannot confirm without user input).
-		err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
-			"svtn", "destroy",
-			"--name", "some-svtn",
-			// No --confirm flag.
-		}, defaultIO())
+	// svtnShortID matches the value the interactive prompt expects.
+	// In production the short-ID comes from the SVTN ID returned at create time.
+	// For these tests we use a fixed value.
+	const svtnShortID = "SVTN-aabbccdd"
 
-		// Must return non-nil error (missing/cancelled confirmation).
-		if err == nil {
-			t.Error("ADR-004 confirm gate: missing --confirm must return non-nil error; got nil")
-		}
+	tests := []tc{
+		{
+			name:      "path1_valid_confirm_flag",
+			args:      []string{"--confirm", svtnShortID},
+			isTTY:     false,
+			wantErr:   false,
+			wantNoRPC: false,
+		},
+		{
+			name:            "path1_invalid_confirm_flag",
+			args:            []string{"--confirm", "SVTN-xxxx1111-wrong"},
+			isTTY:           false,
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "invalid --confirm",
+		},
+		{
+			name:       "path2_tty_matching_input",
+			args:       nil, // --confirm omitted
+			isTTY:      true,
+			stdinInput: svtnShortID + "\n",
+			wantErr:    false,
+			wantNoRPC:  false,
+		},
+		{
+			name:            "path2_tty_invalid_shape_input",
+			args:            nil,
+			isTTY:           true,
+			stdinInput:      "not-an-svtn-id\n",
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "interactive confirmation failed",
+		},
+		{
+			name:            "path3_non_tty_no_confirm",
+			args:            nil,
+			isTTY:           false,
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "non-interactive session",
+		},
+		{
+			name:          "path4_yes_alone_bypasses",
+			args:          []string{"--yes"},
+			isTTY:         false,
+			wantErr:       false,
+			wantNoRPC:     false,
+			wantErrStderr: "WARNING: --yes bypasses confirmation",
+		},
+		{
+			name:            "path5_yes_plus_confirm_is_usage_error",
+			args:            []string{"--yes", "--confirm", svtnShortID},
+			isTTY:           false,
+			wantErr:         true,
+			wantNoRPC:       true,
+			wantErrContains: "E-CFG-006",
+		},
+	}
 
-		// No RPC must be dispatched before confirmation.
-		// Give the server goroutine a brief window to process any stray request.
-		if rpcReceived.Load() {
-			t.Error("ADR-004 confirm gate: admin.svtn.destroy RPC was dispatched without --confirm; must abort before dispatch")
-		}
-	})
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			// Seam mutation is not parallel-safe; run sequentially within the
+			// parent parallel group.
+			setTTYSeam(t, tt.isTTY, tt.stdinInput)
 
-	t.Run("wrong_confirm_value_aborts", func(t *testing.T) {
-		t.Parallel()
+			rpcReceived := atomic.Bool{}
+			addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+				if cmd == "admin.svtn.destroy" {
+					rpcReceived.Store(true)
+					return map[string]string{"status": "destroyed"}, nil
+				}
+				return nil, fmt.Errorf("unexpected command %q", cmd)
+			})
 
-		// The RPC should never reach the server.
-		rpcReceived := atomic.Bool{}
-		addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
-			rpcReceived.Store(true)
-			return nil, fmt.Errorf("should not have been called")
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			t.Cleanup(cancel)
+
+			baseArgs := []string{"svtn", "destroy", "--name", "some-svtn"}
+			var errBuf strings.Builder
+			sio := sbctlIO{out: io.Discard, err: &errBuf}
+
+			err := runAdmin(ctx, addr, testdataKeyPath(t), false,
+				append(baseArgs, tt.args...), sio)
+
+			if tt.wantErr && err == nil {
+				t.Errorf("expected non-nil error; got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected nil error; got: %v", err)
+			}
+			if tt.wantErrContains != "" && err != nil {
+				if !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Errorf("error must contain %q; got: %v", tt.wantErrContains, err)
+				}
+			}
+			if tt.wantNoRPC && rpcReceived.Load() {
+				t.Error("RPC must not be dispatched before confirmation succeeds")
+			}
+			if !tt.wantNoRPC && !tt.wantErr {
+				// Successful paths must have dispatched the RPC.
+				// Give the server a short window to process.
+				deadline := time.Now().Add(500 * time.Millisecond)
+				for !rpcReceived.Load() && time.Now().Before(deadline) {
+					time.Sleep(5 * time.Millisecond)
+				}
+				if !rpcReceived.Load() {
+					t.Error("expected RPC to be dispatched; none received within deadline")
+				}
+			}
+			if tt.wantErrStderr != "" {
+				if !strings.Contains(errBuf.String(), tt.wantErrStderr) {
+					t.Errorf("stderr must contain %q; got: %q", tt.wantErrStderr, errBuf.String())
+				}
+			}
 		})
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		// Supply an incorrect confirmation token (wrong prefix).
-		err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
-			"svtn", "destroy",
-			"--name", "some-svtn",
-			"--confirm", "wrongvalue",
-		}, defaultIO())
-
-		// Must return non-nil error (wrong confirmation token).
-		if err == nil {
-			t.Error("ADR-004 confirm gate: wrong --confirm must return non-nil error; got nil")
-		}
-
-		if rpcReceived.Load() {
-			t.Error("ADR-004 confirm gate: admin.svtn.destroy RPC dispatched despite wrong --confirm; must abort before dispatch")
-		}
-	})
+	}
 }
 
 // TestSbctlAdmin_SVTNDestroy_RequiresControlRole verifies AC-004 (RPC path):

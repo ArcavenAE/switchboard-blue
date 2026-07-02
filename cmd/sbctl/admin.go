@@ -21,13 +21,29 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 	"unicode"
+
+	"golang.org/x/term"
 )
+
+// stdinIsTTY reports whether os.Stdin is connected to a terminal.
+// Package-level var so tests can swap it out without a real TTY.
+// Production value uses golang.org/x/term.IsTerminal.
+var stdinIsTTY = func() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// stdinReader is the reader used for interactive confirm prompts.
+// Package-level var so tests can inject a pipe reader without a real TTY.
+var stdinReader io.Reader = os.Stdin
 
 // adminKeyRegisterArgs is the wire-format arguments sent to the daemon's
 // admin.key.register RPC handler (interface-definitions.md §JSON Output Schema).
@@ -176,22 +192,32 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 //
 // Flags:
 //
-//	--name <svtn-name>           Human-readable SVTN label to destroy (required)
-//	--confirm <svtn-short-id>    Short-ID confirmation gate (required)
+//	--name <svtn-name>              Human-readable SVTN label to destroy (required)
+//	--confirm <svtn-short-id>       Non-interactive confirmation: SVTN-<first-8-hex-chars>
+//	--yes                           Bypass the confirm gate for scripted use (stderr warning emitted)
 //
-// The operator MUST provide --confirm=SVTN-<8-hex> (the first 8 hex chars of the
-// target SVTN's ID printed at create time). On missing --confirm the command
-// aborts with an error before any RPC dispatch; there is no interactive prompt.
+// Confirm-gate behaviour per interface-definitions.md v1.1 §125/§127/§129 and ADR-004:
 //
-// The confirm gate is a human-in-loop typing ceremony (see story S-6.05
-// §Confirm-Gate Semantics), NOT a server-side identity match. Server-side
-// identity-match enforcement is tracked as DRIFT-S605-CONFIRM-IDENTITY.
+//   - Path 1 (flag supplied): --confirm=SVTN-<8-hex> satisfies the check
+//     non-interactively.  The CLI validates the shape; a mismatch aborts before RPC.
+//   - Path 2 (flag omitted, stdin is a TTY): interactive prompt on stderr:
+//     "Type SVTN-<short-id> to confirm: ".  A matching response dispatches the RPC;
+//     any mismatch aborts.
+//   - Path 3 (flag omitted, stdin is NOT a TTY): non-interactive scripting signal;
+//     aborts with a clear error pointing to --confirm or --yes.
+//   - Path 4 (--yes only): bypasses the confirm gate; emits a warning to stderr.
+//   - Path 5 (--yes + --confirm): E-CFG-006 usage error, exit 2.
+//
+// The confirm gate is a human-in-loop typing ceremony (§125), NOT a server-side
+// identity match.  Server-side identity-match enforcement is deferred to
+// DRIFT-S605-CONFIRM-IDENTITY.
 //
 // Sends {"command":"admin.svtn.destroy","args":{"name":"<svtn-name>"}} to the
-// daemon over the mgmt stream (AC-003 / BC-2.07.001 PC-3). On success, prints
-// confirmation to sio.out. Exits with non-zero on E-SVTN-003 (SVTN not found).
+// daemon over the mgmt stream (AC-003 / BC-2.07.001 PC-3).  On success, prints
+// confirmation to sio.out.  Exits with non-zero on E-SVTN-003 (SVTN not found).
 //
-// Traces to BC-2.07.001 PC-3; AC-003; interface-definitions.md v1.1 §117; ADR-004; S-6.05.
+// Traces to BC-2.07.001 PC-3; AC-003; interface-definitions.md v1.1 §117/§125/§127/§129;
+// ADR-004; S-6.05.
 
 // confirmSVTNShortIDValid returns true if s matches the "SVTN-<8hexchars>"
 // pattern required by the destroy confirmation gate (ADR-004;
@@ -216,7 +242,8 @@ func confirmSVTNShortIDValid(s string) bool {
 func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("admin svtn destroy", flag.ContinueOnError)
 	nameFlag := fs.String("name", "", "SVTN name to destroy (required)")
-	confirmFlag := fs.String("confirm", "", "Confirmation short-ID: SVTN-<first-8-hex-chars> (required)")
+	confirmFlag := fs.String("confirm", "", "Confirmation short-ID: SVTN-<first-8-hex-chars>")
+	yesFlag := fs.Bool("yes", false, "bypass the confirm gate for scripted use (stderr warning emitted)")
 
 	// F-STORY-001: argument parsing MUST precede dispatch.
 	if err := fs.Parse(args); err != nil {
@@ -226,15 +253,9 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 		return fmt.Errorf("admin svtn destroy: --name is required")
 	}
 
-	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125).
-	// --confirm is required; absent or malformed values abort before any RPC.
-	if *confirmFlag == "" {
-		return fmt.Errorf("admin svtn destroy: --confirm is required; " +
-			"provide the SVTN-<short-id> printed when the SVTN was created")
-	}
-	if !confirmSVTNShortIDValid(*confirmFlag) {
-		return fmt.Errorf("admin svtn destroy: invalid --confirm %q; "+
-			"expected SVTN-<8 lowercase hex characters>", *confirmFlag)
+	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125/§127/§129).
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, sio); err != nil {
+		return err
 	}
 
 	rpcArgs := adminSVTNDestroyArgs{Name: *nameFlag}
@@ -245,6 +266,74 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 	// Print SVTN name so the operator can confirm which SVTN was destroyed
 	// (test: outBuf must contain svtnName — client-side print, not from server response).
 	_, _ = fmt.Fprintf(sio.out, "destroyed SVTN: %s\n", *nameFlag)
+	return nil
+}
+
+// runDestroyConfirmGate implements the five-path confirm gate for destructive
+// admin operations (interface-definitions.md v1.1 §125/§127/§129; ADR-004).
+//
+// confirmVal: value of --confirm flag (empty string when flag is absent or --confirm=)
+// yes:        value of --yes flag
+// sio:        output sinks for the warning and the interactive prompt
+//
+// Path 1 — --confirm=SVTN-<8-hex> supplied: static shape-check only.
+//   - Valid shape → return nil (proceed). Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
+//   - Empty value (--confirm= with no value) → treat as absent → fall through to path 2/3.
+//   - Invalid shape → error, no RPC.
+//
+// Path 2 — --confirm absent AND stdin is a TTY: interactive prompt on stderr.
+//
+//	Prompts "Type SVTN-<short-id> to confirm: " and validates the response shape.
+//	Identity-match (verifying the token names this specific SVTN) is deferred.
+//
+// Path 3 — --confirm absent AND stdin is NOT a TTY: error pointing to --confirm or --yes.
+//
+// Path 4 — --yes alone: emit stderr warning, return nil (bypass).
+//
+// Path 5 — --yes + --confirm: E-CFG-006 usage error, return non-nil.
+//
+// stdinIsTTY and stdinReader are package-level vars so tests can inject fakes.
+func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
+	// Path 5: --yes combined with --confirm is a usage error (E-CFG-006; §127).
+	if yes && confirmVal != "" {
+		return fmt.Errorf("E-CFG-006: --yes cannot be combined with --confirm; provide one or the other")
+	}
+
+	// Path 4: --yes alone bypasses the check (§127).
+	if yes {
+		_, _ = fmt.Fprintln(sio.err, "WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting")
+		return nil
+	}
+
+	// Path 1: --confirm supplied with a non-empty value — static shape check.
+	if confirmVal != "" {
+		if !confirmSVTNShortIDValid(confirmVal) {
+			return fmt.Errorf("admin svtn destroy: invalid --confirm %q; "+
+				"expected SVTN-<8 lowercase hex characters>", confirmVal)
+		}
+		// Shape is valid; proceed. Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
+		return nil
+	}
+
+	// --confirm absent (empty string).  Check whether stdin is a TTY.
+	if !stdinIsTTY() {
+		// Path 3: non-interactive session.
+		return fmt.Errorf("no confirmation available in non-interactive session; " +
+			"provide --confirm=SVTN-<short-id> or --yes")
+	}
+
+	// Path 2: interactive mode — prompt on stderr and read from stdinReader.
+	// The operator must type the SVTN short-ID exactly as printed at create time.
+	// Shape-only validation; identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
+	_, _ = fmt.Fprint(sio.err, "Type SVTN-<short-id> to confirm: ")
+	line, err := bufio.NewReader(stdinReader).ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("interactive confirmation: read error: %w", err)
+	}
+	line = strings.TrimRight(line, "\r\n ")
+	if !confirmSVTNShortIDValid(line) {
+		return fmt.Errorf("interactive confirmation failed: expected SVTN-<8 lowercase hex characters>, got: %q", line)
+	}
 	return nil
 }
 
