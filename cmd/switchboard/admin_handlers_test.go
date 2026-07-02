@@ -1069,7 +1069,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		m, bootstrapPub := newManagerWithSVTN(t)
 		// ctx carries the bootstrap key — must be allowed unconditionally.
 		ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
-		err := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, err := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if err != nil {
 			t.Errorf("bootstrap key: expected nil, got: %v", err)
 		}
@@ -1086,7 +1086,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 			t.Fatalf("generate unknown key: %v", err)
 		}
 		ctx := mgmt.WithCallerPubkey(context.Background(), unknownPub)
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
 			t.Fatal("unknown key: expected E-ADM-009, got nil")
 		}
@@ -1112,7 +1112,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		}
 		// Key is revoked — CallerKeyRoleActive returns (0, false) → E-ADM-009.
 		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
 			t.Fatal("revoked key: expected E-ADM-009, got nil")
 		}
@@ -1145,7 +1145,7 @@ func TestResolveAndVerifyCallerRole_ServerSidePath(t *testing.T) {
 		// CallerKeyRoleActive returns (0, false) via expiry branch →
 		// resolveAndVerifyCallerRole returns E-ADM-009 (inactive-key route).
 		ctx := mgmt.WithCallerPubkey(context.Background(), keyPub)
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", cmd)
 		if gotErr == nil {
 			t.Fatal("expired key: expected E-ADM-009, got nil")
 		}
@@ -1197,9 +1197,9 @@ func TestResolveAndVerifyCallerRole_OperatorKeyBootstrapGrant(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// admin.key.register + operator-set member + no active control key → allow (F-P4L1-001).
-		err = resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
-		if err != nil {
-			t.Errorf("operator bootstrap register: expected nil, got: %v", err)
+		_, authErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		if authErr != nil {
+			t.Errorf("operator bootstrap register: expected nil, got: %v", authErr)
 		}
 	})
 
@@ -1221,7 +1221,7 @@ func TestResolveAndVerifyCallerRole_OperatorKeyBootstrapGrant(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// Control key exists → bootstrap grant does NOT apply → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("operator with existing control key: expected E-ADM-009, got nil")
 		}
@@ -1240,7 +1240,7 @@ func TestResolveAndVerifyCallerRole_OperatorKeyBootstrapGrant(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// admin.key.revoke: bootstrap grant is register-only → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.revoke")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.revoke")
 		if gotErr == nil {
 			t.Fatal("operator on admin.key.revoke: expected E-ADM-009, got nil")
 		}
@@ -1295,7 +1295,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 		}
 		ctx := mgmt.WithCallerPubkey(context.Background(), controlPub)
 		// CallerKeyRoleActive returns (0, false) for revoked key → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("revoked control key: expected E-ADM-009, got nil")
 		}
@@ -1324,7 +1324,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 
 		ctx := mgmt.WithCallerPubkey(context.Background(), controlPub)
 		// CallerKeyRoleActive returns (0, false) for past-expiry key → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, nil, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("past-expiry control key: expected E-ADM-009, got nil")
 		}
@@ -1359,7 +1359,7 @@ func TestResolveAndVerifyCallerRole_RevokedExpiredDenial(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{dualPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), dualPub)
 		// Must be denied — registered-but-revoked beats operator-set membership.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("revoked key in operator set: expected E-ADM-009, got nil")
 		}
@@ -1408,7 +1408,7 @@ func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// Operator key + no non-bootstrap control key → bootstrap grant applies.
-		if err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register"); err != nil {
+		if _, err := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register"); err != nil {
 			t.Errorf("EC-006 phase 1: expected nil, got: %v", err)
 		}
 	})
@@ -1431,7 +1431,7 @@ func TestResolveAndVerifyCallerRole_EC006_BootstrapAC(t *testing.T) {
 		ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
 		ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
 		// Non-bootstrap control key now exists → bootstrap grant no longer applies → E-ADM-009.
-		gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
+		_, gotErr := resolveAndVerifyCallerRole(ctx, m, ops, svtnName, "", "admin.key.register")
 		if gotErr == nil {
 			t.Fatal("EC-006 phase 2: expected E-ADM-009, got nil")
 		}
