@@ -35,6 +35,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -43,6 +44,11 @@ import (
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/paths"
 )
+
+// routerAddrPattern is the strong structural oracle for the router_addr field:
+// must be a non-empty host:port string matching ^[^:]+:[0-9]+$.
+// Used by TestVP047_RouterAddrNonEmpty (AC-005 / VP-047 / BC-2.06.003 v1.15 PC-1).
+var routerAddrPattern = regexp.MustCompile(`^[^:]+:[0-9]+$`)
 
 // pathTrackerListSource is a PathsListSource backed by a map of
 // pathID → *paths.PathTracker. It calls PathTracker.Snapshot() to produce
@@ -295,9 +301,12 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 		if e.PathID == nil || *e.PathID == "" {
 			t.Errorf("path[%d]: missing or empty path_id", i)
 		}
-		// router_addr: "" is accepted per BC-2.06.003 v1.9 Ruling-1 interim.
-		// PathSnapshot enrichment tracked in S-BL.ROUTER-ADDR (DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER).
-		// Field must be present (non-nil) even when empty.
+		// router_addr: field must be present. Non-empty for PathTrackers constructed
+		// via NewPathTrackerWithAddr; "" for addr-less PathTrackers (NewPathTracker).
+		// DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed by S-BL.ROUTER-ADDR (BC-2.06.003 v1.15).
+		// The integration paths here use NewPathTracker (addr-less) so "" is expected;
+		// non-empty oracle requires production wiring via S-BL.PATH-TRACKER-WIRING.
+		// AC-005 / VP-047 / BC-2.06.003 v1.15 PC-1.
 		if e.RouterAddr == nil {
 			t.Errorf("path[%d]: missing router_addr field", i)
 		}
@@ -335,4 +344,156 @@ func TestVP047_SbctlPathsList_EndToEnd(t *testing.T) {
 	if greenCount == 0 {
 		t.Errorf("VP-047: expected ≥1 green path (rtt_p99_ms==float64); got 0")
 	}
+}
+
+// TestVP047_RouterAddrNonEmpty is structured as two parts (RULING-W6TB-K F-P4L2-03):
+//
+// Part A (GREEN-BY-DESIGN): exercises the handler seam using fakePathsListSource
+// with an injected PathSnapshot carrying a non-empty RouterAddr. It verifies that
+// PathsList forwards RouterAddr through to the JSON response. Part A exists
+// separately from TestPathsList_PassesRouterAddr (handlers_test.go) because it
+// adds a second oracle: the host:port regex assertion (^[^:]+:[0-9]+$) that
+// TestPathsList_PassesRouterAddr does not include. Both tests use fakePathsListSource
+// with an injected PathSnapshot; Part A is not redundant because the regex check
+// is an additional structural constraint required by VP-047. Both parts MUST remain
+// collocated under the VP-047 oracle name per RULING-W6TB-K F-P4L2-03.
+//
+// Part B: exercises NewPathTrackerWithAddr → Snapshot() → router_addr end-to-end.
+//
+// Both parts MUST remain in this test. Together they constitute the AC-005 oracle
+// for VP-047 router_addr traceability.
+//
+// This test exercises the VP-047 AC-006 oracle flip from AC-005:
+//   - The original integration test (TestVP047_SbctlPathsList_EndToEnd) constructs
+//     trackers via NewPathTracker (addr-less) and therefore expects router_addr=="".
+//   - This test constructs a tracker via NewPathTrackerWithAddr and asserts that
+//     router_addr is non-empty and structurally valid (host:port pattern).
+//
+// End-to-end observability through a running daemon is deferred to
+// S-BL.PATH-TRACKER-WIRING per RULING-W6TB-B.
+//
+// AC-005 / VP-047 / BC-2.06.003 v1.15 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B.
+func TestVP047_RouterAddrNonEmpty(t *testing.T) {
+	t.Parallel()
+
+	// ── Part A: handler seam — fakePathsListSource with non-empty RouterAddr ──────
+	// This part verifies that PathsList forwards a non-empty RouterAddr through to
+	// the JSON response. It bypasses the PathTracker constructor so it is
+	// GREEN-BY-DESIGN at Red Gate (tests the handler, not the constructor).
+	t.Run("handler_seam_non_empty", func(t *testing.T) {
+		t.Parallel()
+
+		const stubAddr = "10.0.0.1:9000"
+		snap := paths.PathSnapshot{
+			EWMARTTMs:   20.0,
+			LossPct:     0.0,
+			Active:      true,
+			Degraded:    false,
+			P99RTTMs:    20.0,
+			SampleCount: 10,
+			RouterAddr:  stubAddr,
+		}
+		src := &fakePathsListSource{
+			snaps: map[string]paths.PathSnapshot{
+				"path-with-addr": snap,
+			},
+		}
+
+		resp, err := metrics.PathsList(context.Background(), nil, src)
+		if err != nil {
+			t.Fatalf("PathsList error: %v", err)
+		}
+		if len(resp.Paths) != 1 {
+			t.Fatalf("expected 1 path; got %d", len(resp.Paths))
+		}
+
+		entry := resp.Paths[0]
+
+		// Oracle: router_addr must be non-empty.
+		if entry.RouterAddr == "" {
+			t.Errorf("PathEntry.RouterAddr: got \"\"; want non-empty (snap.RouterAddr=%q must be forwarded)", stubAddr)
+		}
+
+		// Oracle: router_addr must match host:port pattern ^[^:]+:[0-9]+$.
+		if !routerAddrPattern.MatchString(entry.RouterAddr) {
+			t.Errorf("PathEntry.RouterAddr=%q: does not match ^[^:]+:[0-9]+$ (invalid host:port format)", entry.RouterAddr)
+		}
+
+		// Oracle: router_addr must equal the stub addr exactly (no truncation/mutation).
+		if entry.RouterAddr != stubAddr {
+			t.Errorf("PathEntry.RouterAddr: got %q; want %q", entry.RouterAddr, stubAddr)
+		}
+
+		// Verify via JSON deserialization as well.
+		data, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatalf("marshal PathEntry: %v", err)
+		}
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			t.Fatalf("unmarshal raw: %v", err)
+		}
+		var gotRouterAddr string
+		if err := json.Unmarshal(raw["router_addr"], &gotRouterAddr); err != nil {
+			t.Fatalf("unmarshal router_addr from JSON: %v", err)
+		}
+		if !routerAddrPattern.MatchString(gotRouterAddr) {
+			t.Errorf("JSON router_addr=%q: does not match ^[^:]+:[0-9]+$ pattern", gotRouterAddr)
+		}
+	})
+
+	// ── Part B: constructor-through-Snapshot — NewPathTrackerWithAddr path ────────
+	// This part constructs a real PathTracker via NewPathTrackerWithAddr and asserts
+	// that Snapshot().RouterAddr is non-empty and matches the host:port pattern.
+	//
+	// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+	// Now GREEN: implemented in paths.go (commit 27d7717).
+	t.Run("constructor_through_snapshot", func(t *testing.T) {
+		t.Parallel()
+
+		const stubAddr = "h:9000"
+
+		tracker := paths.NewPathTrackerWithAddr(stubAddr, 50.0, 0.125)
+		for i := 0; i < 10; i++ {
+			tracker.OnProbe(22.0, false)
+		}
+
+		snap := tracker.Snapshot()
+
+		// Oracle: RouterAddr must be non-empty.
+		if snap.RouterAddr == "" {
+			t.Errorf("Snapshot().RouterAddr: got \"\"; want non-empty (constructed with addr=%q)", stubAddr)
+		}
+
+		// Oracle: RouterAddr must match ^[^:]+:[0-9]+$ (strong structural oracle).
+		if !routerAddrPattern.MatchString(snap.RouterAddr) {
+			t.Errorf("Snapshot().RouterAddr=%q: does not match ^[^:]+:[0-9]+$ (invalid host:port format)", snap.RouterAddr)
+		}
+
+		// Oracle: value must equal the constructor arg exactly.
+		if snap.RouterAddr != stubAddr {
+			t.Errorf("Snapshot().RouterAddr: got %q; want %q (constructor arg must be preserved verbatim)", snap.RouterAddr, stubAddr)
+		}
+
+		// Verify PathsList forwards it through to JSON.
+		src := &pathTrackerListSource{
+			trackers: map[string]*paths.PathTracker{
+				"path-with-addr": tracker,
+			},
+		}
+		resp, err := metrics.PathsList(context.Background(), nil, src)
+		if err != nil {
+			t.Fatalf("PathsList error: %v", err)
+		}
+		if len(resp.Paths) != 1 {
+			t.Fatalf("expected 1 path; got %d", len(resp.Paths))
+		}
+		entry := resp.Paths[0]
+		if !routerAddrPattern.MatchString(entry.RouterAddr) {
+			t.Errorf("PathsList entry RouterAddr=%q: does not match ^[^:]+:[0-9]+$ pattern", entry.RouterAddr)
+		}
+		if entry.RouterAddr != stubAddr {
+			t.Errorf("PathsList entry RouterAddr: got %q; want %q", entry.RouterAddr, stubAddr)
+		}
+	})
 }

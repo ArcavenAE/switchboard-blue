@@ -33,6 +33,7 @@ package paths_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1177,6 +1178,268 @@ func TestNewPathTracker_RejectsInvalidAlpha(t *testing.T) {
 			paths.NewPathTracker(10.0, alpha)
 		})
 	}
+}
+
+// ─── S-BL.ROUTER-ADDR: RouterAddr field tests (BC-2.06.003 PC-1) ─────────────
+//
+// BC/AC coverage:
+//
+//	TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr      → AC-003 (constructor variant)
+//	TestBC_2_06_003_Snapshot_RouterAddr_Propagates         → AC-001 (Snapshot().RouterAddr propagated)
+//	TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess   → AC-001 (NewPathTracker yields "")
+//	TestBC_2_06_003_NewPathTracker_Unchanged               → AC-003 (backward compat)
+//	TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha → AC-003 (precondition carried over)
+//	TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction  → RULING-W6TB-B §3 (immutability invariant)
+//	TestBC_2_06_003_RouterAddr_ConcurrentSnapshot          → AC-003 + CI safety
+
+// mustNewPathTrackerWithAddr is a test helper that wraps NewPathTrackerWithAddr
+// with a fixed alpha=0.125 (the canonical EWMA smoothing factor for these tests).
+//
+// Previously contained a recover guard for the BC-5.38.001 stub panic; that
+// scaffolding was removed once NewPathTrackerWithAddr was implemented in
+// paths.go (commit 27d7717).
+func mustNewPathTrackerWithAddr(t *testing.T, addr string, initialRTTMS float64) *paths.PathTracker {
+	t.Helper()
+	const alpha = 0.125
+	return paths.NewPathTrackerWithAddr(addr, initialRTTMS, alpha)
+}
+
+// TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr verifies that after constructing
+// a PathTracker via NewPathTrackerWithAddr("10.0.0.1:9000", ...), Snapshot().RouterAddr
+// equals the supplied addr exactly.
+//
+// AC-003 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B §3.
+//
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
+func TestBC_2_06_003_NewPathTrackerWithAddr_StoresAddr(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		addr string
+	}{
+		{"ipv4_with_port", "10.0.0.1:9000"},
+		{"localhost_with_port", "127.0.0.1:9000"},
+		{"hostname_with_port", "router.example.com:4321"},
+		{"h_colon_9000", "h:9000"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tracker := mustNewPathTrackerWithAddr(t, tc.addr, 50.0)
+			snap := tracker.Snapshot()
+			if snap.RouterAddr != tc.addr {
+				t.Errorf("Snapshot().RouterAddr: got %q; want %q", snap.RouterAddr, tc.addr)
+			}
+		})
+	}
+}
+
+// TestBC_2_06_003_Snapshot_RouterAddr_Propagates verifies that every call to
+// Snapshot() on a NewPathTrackerWithAddr-constructed tracker returns the stored
+// addr verbatim — including after probe operations that update EWMA state.
+//
+// AC-001 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B §3.
+//
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
+func TestBC_2_06_003_Snapshot_RouterAddr_Propagates(t *testing.T) {
+	t.Parallel()
+
+	const wantAddr = "10.0.0.1:9000"
+	tracker := mustNewPathTrackerWithAddr(t, wantAddr, 100.0)
+
+	// Snapshot before any probes.
+	snap0 := tracker.Snapshot()
+	if snap0.RouterAddr != wantAddr {
+		t.Errorf("before probes: Snapshot().RouterAddr=%q; want %q", snap0.RouterAddr, wantAddr)
+	}
+
+	// Probe the tracker — EWMA state changes but RouterAddr must be immutable.
+	for i := 0; i < 10; i++ {
+		tracker.OnProbe(20.0, false)
+	}
+
+	snap1 := tracker.Snapshot()
+	if snap1.RouterAddr != wantAddr {
+		t.Errorf("after 10 probes: Snapshot().RouterAddr=%q; want %q", snap1.RouterAddr, wantAddr)
+	}
+
+	// Loss events must not change RouterAddr either.
+	for i := 0; i < 2; i++ {
+		tracker.OnProbe(0, true)
+	}
+	snap2 := tracker.Snapshot()
+	if snap2.RouterAddr != wantAddr {
+		t.Errorf("after loss events: Snapshot().RouterAddr=%q; want %q", snap2.RouterAddr, wantAddr)
+	}
+}
+
+// TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess verifies that a PathTracker
+// constructed via the legacy NewPathTracker constructor (no addr) has
+// Snapshot().RouterAddr == "" — the addr-less sentinel.
+//
+// AC-001 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR); RULING-W6TB-B §3.
+func TestBC_2_06_003_Snapshot_RouterAddr_EmptyForAddrLess(t *testing.T) {
+	t.Parallel()
+
+	tracker := paths.NewPathTracker(50.0, 0.125)
+	snap := tracker.Snapshot()
+	if snap.RouterAddr != "" {
+		t.Errorf("NewPathTracker Snapshot().RouterAddr=%q; want \"\" (addr-less sentinel)", snap.RouterAddr)
+	}
+}
+
+// TestBC_2_06_003_NewPathTracker_Unchanged verifies that the existing NewPathTracker
+// constructor remains unchanged after AC-003 implementation: it still produces a
+// PathTracker with RouterAddr=="" and otherwise identical behavior to the pre-story state.
+//
+// AC-003 / BC-2.06.003 PC-1 (backward compat); RULING-W6TB-B.
+func TestBC_2_06_003_NewPathTracker_Unchanged(t *testing.T) {
+	t.Parallel()
+
+	const initRTT = 999.0
+	tracker := paths.NewPathTracker(initRTT, 0.125)
+
+	if !tracker.IsActive() {
+		t.Error("NewPathTracker: must start as active")
+	}
+	if tracker.RTT() != initRTT {
+		t.Errorf("NewPathTracker: initial RTT=%v; want %v", tracker.RTT(), initRTT)
+	}
+	if tracker.LossPct() != 0.0 {
+		t.Errorf("NewPathTracker: initial LossPct=%v; want 0.0", tracker.LossPct())
+	}
+	snap := tracker.Snapshot()
+	if snap.RouterAddr != "" {
+		t.Errorf("NewPathTracker: Snapshot().RouterAddr=%q; want \"\" (addr-less)", snap.RouterAddr)
+	}
+}
+
+// TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha verifies that
+// NewPathTrackerWithAddr panics when alpha is outside (0, 1], mirroring the
+// same guard already present in NewPathTracker.
+//
+// AC-003 / BC-2.06.003 PC-1 precondition carried over to new constructor.
+//
+// RED GATE (originally at commit 4a4efed): stub panicked unconditionally per
+// BC-5.38.001, so this test passed trivially. Now GREEN: the constructor is
+// implemented (paths.go:128-132, commit 27d7717) and the alpha guard is real.
+// The oracle was strengthened post-implementation to require "alpha" in the panic
+// message (F-P4L2-01) to distinguish a real alpha-validation panic from an
+// unrelated stub panic.
+func TestBC_2_06_003_NewPathTrackerWithAddr_RejectsInvalidAlpha(t *testing.T) {
+	t.Parallel()
+
+	invalidAlphas := []float64{0, -0.001, -1, 1.0001, 2}
+
+	for _, alpha := range invalidAlphas {
+		alpha := alpha
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Errorf("NewPathTrackerWithAddr(addr, 10, %v): want panic (alpha outside (0,1]); got no panic", alpha)
+					return
+				}
+				// Strengthen the oracle: the panic message must mention "alpha"
+				// (case-insensitive) so we can distinguish a real alpha-validation
+				// panic from an unrelated stub panic (F-P4L2-01).
+				msg := fmt.Sprintf("%v", r)
+				if !strings.Contains(strings.ToLower(msg), "alpha") {
+					t.Errorf("NewPathTrackerWithAddr(addr, 10, %v): expected alpha-validation panic; got %v (F-P4L2-01)", alpha, r)
+				}
+			}()
+			paths.NewPathTrackerWithAddr("h:9000", 10.0, alpha)
+		})
+	}
+}
+
+// TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction verifies the immutability
+// invariant from RULING-W6TB-B §3: RouterAddr is set once at construction and
+// never mutated. Two trackers constructed with different addrs must return their
+// respective addrs and never cross-contaminate.
+//
+// RULING-W6TB-B §3 / BC-2.06.003 PC-1 (S-BL.ROUTER-ADDR).
+//
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
+func TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction(t *testing.T) {
+	t.Parallel()
+
+	const addrA = "10.0.0.1:9000"
+	const addrB = "10.0.0.2:9001"
+
+	trackerA := mustNewPathTrackerWithAddr(t, addrA, 50.0)
+	trackerB := mustNewPathTrackerWithAddr(t, addrB, 100.0)
+
+	// Probe both to mutate their EWMA state.
+	for i := 0; i < 5; i++ {
+		trackerA.OnProbe(20.0, false)
+		trackerB.OnProbe(80.0, false)
+	}
+
+	// RouterAddr must not have changed and must not be cross-contaminated.
+	if snapA := trackerA.Snapshot(); snapA.RouterAddr != addrA {
+		t.Errorf("trackerA: RouterAddr=%q after probes; want %q", snapA.RouterAddr, addrA)
+	}
+	if snapB := trackerB.Snapshot(); snapB.RouterAddr != addrB {
+		t.Errorf("trackerB: RouterAddr=%q after probes; want %q", snapB.RouterAddr, addrB)
+	}
+}
+
+// TestBC_2_06_003_RouterAddr_ConcurrentSnapshot exercises the concurrent
+// Snapshot()+OnProbe() path under the Go race detector.
+//
+// routerAddr is immutable after construction, so it serves as a stable oracle
+// whose value is known without locking. The test's actual target is the
+// Snapshot()/OnProbe() mutex path: OnProbe writes EWMA/histogram fields that
+// Snapshot reads under the same mutex. routerAddr consistency is the assertion
+// vehicle, not the property under test.
+//
+// RULING-W6TB-K F-P4L2-02: this test is intentionally retained (not merged into
+// TestBC_2_06_003_RouterAddr_ImmutableAfterConstruction, which is
+// single-threaded and does not exercise concurrent Snapshot/OnProbe).
+//
+// AC-003 / RULING-W6TB-B §3 (immutability + concurrent safety).
+//
+// RED GATE (originally at commit 4a4efed): stub panicked per BC-5.38.001.
+// Now GREEN: implemented in paths.go:128-132 (commit 27d7717).
+func TestBC_2_06_003_RouterAddr_ConcurrentSnapshot(t *testing.T) {
+	// Not parallel at outer level — inner goroutines provide the concurrency.
+
+	const wantAddr = "10.0.0.1:9000"
+	const goroutines = 8
+	const itersPerGoroutine = 50
+
+	tracker := mustNewPathTrackerWithAddr(t, wantAddr, 50.0)
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := range goroutines {
+		g := g
+		go func() {
+			defer wg.Done()
+			for i := range itersPerGoroutine {
+				// Mix probe writes with snapshot reads.
+				if (g+i)%3 == 0 {
+					tracker.OnProbe(float64(10+i%50), (g+i)%7 == 0)
+				}
+				snap := tracker.Snapshot()
+				if snap.RouterAddr != wantAddr {
+					// t.Errorf is goroutine-safe.
+					t.Errorf("goroutine %d iter %d: Snapshot().RouterAddr=%q; want %q (race or mutation)", g, i, snap.RouterAddr, wantAddr)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // ─── P99 histogram tests (S-5.02, AC-004, AC-005) ──────────────────────────
