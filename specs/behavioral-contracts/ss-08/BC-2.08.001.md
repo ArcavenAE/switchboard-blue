@@ -2,7 +2,7 @@
 artifact_id: BC-2.08.001
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -138,7 +138,8 @@ Operator runs `sbctl console attach|detach|switch|navigate`.
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.5 | 2026-07-02 | spec-steward | F1 remediation from W-6 wave-gate Pass-3 Adv-B: retro-annotate v1.3 changelog row with `governance_leaf: true` per POL-003 Exception A audit-tool compatibility. Shape now matches BC-2.07.001 v1.13. No behavioral changes. [governance_leaf: true — annotation-shape correction, downstream VP/story pins DO NOT need to re-sync per POL-003 Exception A] |
 | 1.4 | 2026-07-02 | spec-steward | F-P4L3-MED-002 (spec-vs-impl mis-anchor): Inv-3 v1.3 wording pinned Unix-socket unconditionally; console mode uses TCP loopback per BC-2.07.004 EC-013 / AC-014 Ruling D. Inv-3 rewording defers per-mode transport type to BC-2.07.004 EC-013; ADR-012 remains canonical mgmt-plane ADR; ADR-006 defers to BC-2.07.004 EC-013 for per-mode socket type. Stories row bumped S-7.03 v1.3 → v1.4. |
-| 1.3 | 2026-07-02 | spec-steward | F-P3L3-MED-001: bump Stories row cell reference to S-7.03 v1.3 (POL-003 candidate sync — story v1.2→v1.3 landed 2026-07-02, this row was stale). No behavioral changes. |
+| 1.3 | 2026-07-02 | spec-steward | F-P3L3-MED-001: bump Stories row cell reference to S-7.03 v1.3 (POL-003 candidate sync — story v1.2→v1.3 landed 2026-07-02, this row was stale). No behavioral changes. [governance_leaf: true — Stories-row pin sync, downstream VP/story pins DO NOT need to re-sync per POL-003 Exception A] |
 | 1.2 | 2026-07-01 | spec-steward | RULING-W6TB-C (decisions/RULING-W6TB-C-console-transport.md): Inv-3 retracted and replaced. "Same SVTN channel as regular traffic — no separate out-of-band channel" was architecturally incompatible with the established JSON-over-Unix-socket management-plane transport used by all sbctl commands (ADR-006/ADR-012). Inv-3 now correctly states the management-plane transport requirement. Security intent preserved: operator key authentication via internal/mgmt.Server (BC-2.07.004); Tier-2 authorization via internal/session. Forbidden-import constraint (ARCH-08 §6.6) documented explicitly. S-7.03 v1.2 is the implementing story. Update Traceability Stories row to cite S-7.03 v1.2 anchoring. Add BC-2.07.004 to Related BCs. |
 | 1.1 | 2026-06-23 | product-owner | Initial draft — console remote control via sbctl: attach, detach, switch session, navigate. |

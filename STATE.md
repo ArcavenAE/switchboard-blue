@@ -38,10 +38,10 @@ wave_6_tranche_c_wavelevel_attempts_counter: 7
 wave_6_tranche_c_wavelevel_streak: 3
 wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT_PASS_4_2026-07-02 (streak 3/3 — CONVERGED)
 wave_6_tranche_c_test_race_attested: true
-wave_6_wavegate_pass_counter: 2
-wave_6_wavegate_attempts_counter: 2
-wave_6_wavegate_streak: 2
-wave_6_wavegate_last_verdict: CONVERGENT_PASS_2_2026-07-02
+wave_6_wavegate_pass_counter: 3
+wave_6_wavegate_attempts_counter: 3
+wave_6_wavegate_streak: 0
+wave_6_wavegate_last_verdict: PASS_3_MEDIUM_STREAK_RESET_2026-07-02
 develop_head: 7fe3e29
 open_prs: 0
 wave_6_hygiene_fec_sentinel_pr: 58
@@ -67,13 +67,14 @@ develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
 Pass 2/3/4 all CONVERGENT (Adv-A + Adv-B both 0/0/0/0). Converged 2026-07-02.
 Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
 
-### W-6 combined wave-gate — CONVERGING (BC-5.39.001 1/3)
+### W-6 combined wave-gate — REMEDIATING (BC-5.39.001 0/3 after streak reset)
 
-- Pass 1 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 3 obs). Full 8-story integration surface clean on develop@7fe3e29.
-- Pass 2 (2026-07-02): CONVERGENT (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs — 1 process-gap LOW on BC-2.08.001 v1.3 governance_leaf annotation gap).
-- **Streak: 2/3.** One more clean fresh-context pass needed for BC-5.39.001.
-- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2}-Adv-{A,B}.md`.
-- **NEXT ACTION:** Pass 3 fresh-context adversary — closing pass (already dispatched in parallel with this persistence burst).
+- Pass 1 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 3 obs). Streak 1/3.
+- Pass 2 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs — 1 process-gap LOW). Streak 2/3.
+- Pass 3 (2026-07-02): **MEDIUM finding** — Adv-A L1 CONVERGENT_L1 clean (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 with **F1 MEDIUM** on BC-2.08.001 v1.3 `governance_leaf` annotation gap + O-2 [process-gap]. Under strict BC-5.39.001 clean-pass criterion, MEDIUM breaks streak.
+- **Streak reset: 2 → 0.** F1 remediated at BC-2.08.001 v1.5 (retro-annotate v1.3 as governance_leaf). Three fresh clean passes now required.
+- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3}-Adv-{A,B}.md`.
+- **NEXT ACTION:** Pass 4 fresh-context adversary post-remediation (dispatched separately).
 
 ## Phase Progress
 
@@ -129,7 +130,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | PROCESS-GAP-FORCE-PUSH | HIGH | [process-gap] pr-manager reached for rebase+force-push over gh pr update-branch. vsdd-factory#408 + switchboard-blue#57 filed. | orchestrator/pr-manager | playbook fix upstream |
 | PROCESS-GAP-DEMO-TAPE-PATHS | OBS | [process-gap] demo-recorder emits `.tape` files with hardcoded absolute worktree paths; local fix applied (25 files, PR #59/cdb2b66); upstream drbothen/vsdd-factory#418 filed for template fix. | orchestrator/demo-recorder | upstream fix pending |
 | WAVE-GATE-DISPATCH-INTEGRITY | HIGH | [process-gap] Perimeter-2 (wave-gate) adversary dispatch lacks HEAD-SHA verification tuple; adversary caught mismatch opportunistically; silent-false-green risk if less-thorough pass proceeds. drbothen/vsdd-factory issue drafted in .vsdd-factory-issues-pending.md. | orchestrator | target: pipeline-hardening cycle |
-| DRIFT-BC-2-08-001-V1-3-GOV-LEAF | LOW | [process-gap] BC-2.08.001 v1.3 governance-only bump lacks `governance_leaf: true` annotation vs BC-2.07.001 v1.13 shape. Retro-annotate for POL-003 Exception A audit-tool compatibility. | spec-steward | open — target retro-annotation sweep |
+| DRIFT-BC-2-08-001-V1-3-GOV-LEAF | RESOLVED | Retro-annotated at BC-2.08.001 v1.5 (2026-07-02) — Pass 3 F1 remediation. | spec-steward | closed 2026-07-02 |
+| DRIFT-POL003-GOV-LEAF-ENFORCE | LOW | [process-gap] No structural enforcement of `governance_leaf` annotation on BC changelog rows declaring "No behavioral changes"/"governance-only". Two occurrences (BC-2.07.001 v1.13, BC-2.08.001 v1.3) — pattern recurred. Suggest pre-commit or CI check. | orchestrator / spec-steward | open — file drbothen/vsdd-factory follow-on |
 
 Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 
@@ -155,6 +157,7 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | Wave-6 Tranche C wave-level CONVERGED | Pass 4 CONVERGENT (Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+0obs); BC-5.39.001 3/3 SATISFIED; streak 3/3; converged_at 2026-07-02; Task #22 UNBLOCKED | 2026-07-02 |
 | W-6 combined wave-gate Pass 1 CONVERGENT | Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+3obs; full 8-story surface clean on develop@7fe3e29; streak 1/3 | 2026-07-02 |
 | W-6 combined wave-gate Pass 2 CONVERGENT | Adv-A L1 0/0/0/0+3obs; Adv-B L2L3 0/0/0/0+2obs (1 process-gap on BC-2.08.001 v1.3); streak 2/3 | 2026-07-02 |
+| W-6 combined wave-gate Pass 3 MEDIUM | Adv-A L1 clean 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 1 MEDIUM F1 (gov-leaf annotation gap) + O-2 [process-gap]; streak reset 2→0; F1 remediated at BC-2.08.001 v1.5 | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
@@ -164,9 +167,9 @@ Older decisions: `cycles/cycle-1/burst-log.md`.
 S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
 develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 
-**Wave-level status:** Tranche-C streak: 3/3 CONVERGED. Wave-gate streak: 2/3 (Pass 1+2 both CONVERGENT 2026-07-02).
+**Wave-level status:** Tranche-C streak: 3/3 CONVERGED. Wave-gate streak: 0/3 (Pass 1+2 clean, Pass 3 MEDIUM broke streak; F1 remediated at BC-2.08.001 v1.5).
 
-**NEXT ACTION on resume:** Wave-6 combined wave-gate Pass 3 fresh-context adversary — closing pass (streak 2/3 → 3/3). One more clean pass needed for BC-5.39.001.
+**NEXT ACTION on resume:** Wave-6 combined wave-gate Pass 4 fresh-context adversary post-F1-remediation (streak 0/3 → target 3/3). Three consecutive clean passes needed for BC-5.39.001.
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.

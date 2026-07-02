@@ -217,10 +217,13 @@ per-tranche (Perimeter-2) gates. Executes 3-consecutive-clean-passes loop per
 BC-5.39.001 on the full wave integration surface.
 
 **Progress:**
-- Pass 1 (2026-07-02): CONVERGENT — Adv-A L1 0/0/0/0 + 2 obs, Adv-B L2/L3 0/0/0/0 + 3 obs. Streak 1/3.
-- Pass 2 (2026-07-02): CONVERGENT — Adv-A L1 0/0/0/0 + 3 obs, Adv-B L2/L3 0/0/0/0 + 2 obs (1 process-gap LOW: BC-2.08.001 v1.3 governance_leaf annotation gap). Streak 2/3.
+- Pass 1 (2026-07-02): CONVERGENT clean — Adv-A L1 0/0/0/0 + 2 obs, Adv-B L2/L3 0/0/0/0 + 3 obs. Streak 1/3.
+- Pass 2 (2026-07-02): CONVERGENT clean — Adv-A L1 0/0/0/0 + 3 obs, Adv-B L2/L3 0/0/0/0 + 2 obs (1 process-gap LOW). Streak 2/3.
+- Pass 3 (2026-07-02): **MEDIUM finding** — Adv-A L1 CONVERGENT_L1 clean (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 with F1 MEDIUM on BC-2.08.001 v1.3 governance_leaf annotation gap + O-2 [process-gap]. Streak reset 2→0.
 
-**Next:** Pass 3 fresh-context adversary — closing pass (in flight).
+**Remediation:** BC-2.08.001 → v1.5 retro-annotates v1.3 as `governance_leaf: true` (annotation-shape correction, no behavioral change).
+
+**Next:** Pass 4 fresh-context adversary post-remediation (streak 0→1 target, then Pass 5 → 2, Pass 6 → 3).
 
 ---
 
