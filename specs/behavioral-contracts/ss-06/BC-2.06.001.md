@@ -2,10 +2,10 @@
 artifact_id: BC-2.06.001
 document_type: behavioral-contract
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
-timestamp: 2026-07-01T00:00:00
+timestamp: 2026-07-02T00:00:00
 phase: 1a
 bc_id: BC-2.06.001
 subsystem: quality-observability
@@ -60,6 +60,14 @@ modified:
       state machine; the `pending` state (SampleCount<10 precedence rule) belongs
       exclusively to BC-2.06.003 EC-007. The v1.5 phrasing "green/yellow/red/pending
       state machine" implied BC-2.06.001 governs pending — it does not.
+  - date: 2026-07-02
+    version: "1.7"
+    actor: spec-steward
+    change: >
+      F-P2L3-02: Retract S-7.03 reverse-trace from Stories cell per RULING-W6TB-C
+      §2 DRIFT-001b. PC-5 console-half surfacing moved from S-7.03 to S-BL.CONSOLE-OBS.
+      Stories cell updated: S-7.03 reference replaced with S-BL.CONSOLE-OBS (future
+      owner; anchor move authorized by ruling).
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -142,7 +150,7 @@ Keep-alive metric update; empty-tick frame liveness probe result; TLPKTDROP even
 | L2 Capability | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 |
 | L2 Domain Invariants | DI-008 (timeslice clock fires — empty ticks are liveness probes) |
 | Architecture Module | internal/metrics |
-| Stories | S-5.01 (QualityIndicator internal/metrics implementation), S-7.03 (console + sbctl PC-5 surfacing — both halves deferred per S-5.02 Pass-3 Ruling 1; previously S-5.02 v1.3 AC-007 for sbctl half, now consolidated to S-7.03 alongside console half per DRIFT-001), S-W5.04 (quality serialization on wire for router.status) |
+| Stories | S-5.01 (QualityIndicator internal/metrics implementation), S-BL.CONSOLE-OBS (console + sbctl PC-5 surfacing — deferred per RULING-W6TB-C §2 DRIFT-001b; previously anchored to S-7.03 per DRIFT-001, moved to S-BL.CONSOLE-OBS at S-7.03 v1.2), S-W5.04 (quality serialization on wire for router.status) |
 | Capability Anchor Justification | CAP-021 ("Per-session quality indicator (green/yellow/red)") per capabilities.md §CAP-021 — this BC specifies the computation that CAP-021 defines as "derived from measured path latency and loss" |
 
 ## Related BCs

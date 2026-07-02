@@ -109,6 +109,7 @@ stories:
   - id: S-6.05
     title: "SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy"
     status: draft
+    spec_version: "1.5"
     points: 3
     priority: P2
     scope_phase: E
@@ -124,6 +125,7 @@ stories:
     branch: null
     pr: null
     merge_sha: null
+    adversarial_pass_counter: 0  # RESET — spec changed v1.4→v1.5 (Pass-2 F-H1 revert); fresh pass required
 
   - id: S-7.01
     title: "XOR parity FEC for single-loss recovery"
@@ -166,20 +168,21 @@ stories:
 
   - id: S-7.03
     title: "Console remote control via sbctl attach/detach/switch"
-    status: pending
+    status: draft-with-po-refit
     spec_version: "1.2"
-    points: 5
+    points: 3
     priority: P1
     scope_phase: PE
     tranche: B
     tranche_slot: parallel
     depends_on: [S-3.02, S-6.03]
     blocks: []
-    bc_traces: [BC-2.08.001, BC-2.06.001, BC-2.06.002]
+    bc_traces: [BC-2.08.001]
     vp_traces: [VP-050]
     touches: [internal/session, cmd/sbctl]  # new top-level subcommands (attach/detach/switch)
     cmd_sbctl_conflict: false  # top-level subcommands, not admin subcommands
     rebase_obligation: "if Tranche A stories with cmd/sbctl/main.go edits are still open, S-7.03 must coordinate on main.go registration commit"
+    adversarial_pass_counter: 0
     branch: null
     pr: null
     merge_sha: null
@@ -235,6 +238,16 @@ pre_wave_obligations:
     blocking: false
 
 # Changelog
+# v1.17 (2026-07-02): S-7.03 stanza sync to story v1.2 (RULING-W6TB-C refit).
+#   status pending→draft-with-po-refit; points 5→3; bc_traces trimmed to
+#   [BC-2.08.001] (BC-2.06.001+002 moved to S-BL.CONSOLE-OBS per RULING-W6TB-C
+#   §2 DRIFT-001b/002); adversarial_pass_counter: 0 added. F-P2L3-01 fix.
+# v1.16 (2026-07-02): S-6.05 spec_version "1.5" + adversarial_pass_counter reset to 0.
+#   Story v1.4 was a spec-side regression against RULING-W6TB-A v1.0 and BC-2.07.001 v1.11
+#   (both unchanged); v1.5 reverts to conform. Pass-2 F-H1 revert: restored
+#   Destroy(caller admission.AdmittedKey, svtnName string) signature and Go-API
+#   defense-in-depth check. adversarial_pass_counter reset per BC-5.39.001 streak rules
+#   (spec changed → fresh convergence required). Source: STORY-INDEX v3.56.
 # v1.15 (2026-07-01): POL-002 Tranche B merged-story sync (F-P1L3-MED-01 + F-P1L3-MED-02).
 #   - S-7.01: no change (already status: merged with full merge_sha).
 #   - S-7.02: no change (already status: merged with full merge_sha).

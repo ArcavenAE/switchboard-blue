@@ -2,10 +2,10 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.55"
+version: "3.58"
 status: draft
 producer: story-writer
-timestamp: 2026-07-01T19:00:00
+timestamp: 2026-07-02T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -69,11 +69,11 @@ inputDocuments:
 | S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
-| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.3) |
+| S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | draft (v1.6) |
 | S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
-| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.2) |
+| S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | draft (v1.3) |
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1) | E-6 | 6 | BC-2.06.003 | quality-observability, multipath-forwarding | 2 | P1 | E | merged (PR #56, 91d5675) |
@@ -176,6 +176,8 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.57 | 2026-07-02 | F-P2L3-03 (POL-002): S-7.03 row status cell `draft (v1.2)` → `draft (v1.3)` (story bumped to v1.3: BC-2.08.001 traceability row wording cleaned up — retraction has landed as v1.2 final). |
+| 3.56 | 2026-07-02 | S-6.05 v1.4→v1.5 spec-side regression revert (Pass-2 F-H1): story row updated `draft (v1.3)` → `draft (v1.5)`. Story v1.4 mis-attributed a symbol-only reading to RULING-W6TB-A §3 and rescoped AC-004 to sentinel-contract, directly contradicting BC-2.07.001 Inv-3 and Ruling §3 runtime text. v1.5 restores `Destroy(caller admission.AdmittedKey, svtnName string) error` signature and Go-API defense-in-depth check. RULING-W6TB-A v1.0 and BC-2.07.001 v1.11 are unchanged. |
 | 3.55 | 2026-07-01 | POL-002 Tranche B merged-story sync (F-P1L3-MED-01 + F-P1L3-MED-02): S-7.01 status pending→merged (PR #43, 5c658e7); S-7.02 status ready-for-red-gate→merged (PR #55, c54a8ad); S-BL.ROUTER-ADDR promoted from backlog to Master Story Index as merged (PR #56, 91d5675, wave backlog→6). Summary: Complete 29→32, Pending 2→1, Ready-for-red-gate 1→0, Backlog 9→8, master-table 35→36, E-phase 31→32. |
 | 3.54 | 2026-07-01 | Pass-5 fix-burst POL-002 + #401/#404 sync sweep: S-7.02 v1.5→v1.6 (RULING-W6TB-I added to changed_by_rulings + inputDocuments); S-7.01 v1.3→v1.4 (RULING-W6TB-E added to inputDocuments); S-BL.ROUTER-ADDR v1.2→v1.4 (RULING-W6TB-K added to inputDocuments; vp_traces corrected [VP-047,VP-062]→[VP-047]). F-P5L3-01 (S-BL.ROUTER-ADDR VP trace correction), F-P5L3-02 (vp_traces sibling-sweep across S-7.01/S-7.02), F-P5L3-03 (S-7.01 spec propagation). |
 | 3.53 | 2026-07-01 | RULING-W6TB-J propagation: S-7.02 v1.4→v1.5 — AC-004b updated with VP-055 v1.2 property names (RejectsInvalidName retired; RejectsEmptyOrInvalidUTF8 + TruncatesOversize added); RULING-W6TB-J added to changed_by_rulings; v1.5 changelog erratum added. VP-055 bumped v1.1→v1.2. VP-INDEX v2.27→v2.28. S-7.02 row status cell v1.4→v1.5. |
