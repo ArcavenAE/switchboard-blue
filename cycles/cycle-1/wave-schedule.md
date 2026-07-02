@@ -223,7 +223,9 @@ BC-5.39.001 on the full wave integration surface.
 
 **Remediation:** BC-2.08.001 → v1.5 retro-annotates v1.3 as `governance_leaf: true` (annotation-shape correction, no behavioral change).
 
-**Next:** Pass 4 fresh-context adversary post-remediation (streak 0→1 target, then Pass 5 → 2, Pass 6 → 3).
+- Pass 4 (2026-07-02): CLEAN. Adv-A CONVERGENT_L1 0/0/0/0 + 2 obs. Adv-B CONVERGENT_L2L3 0/0/0/0 + 3 obs (O-1 grandfather-adjudicated: POL-003 going-forward annotation convention; BC-2.07.001 historical rows not retro-annotated by design). Streak 0 → 1/3.
+
+**Next:** Pass 5 fresh-context adversary (streak 1/3 → 2/3 target).
 
 ---
 

@@ -38,10 +38,10 @@ wave_6_tranche_c_wavelevel_attempts_counter: 7
 wave_6_tranche_c_wavelevel_streak: 3
 wave_6_tranche_c_wavelevel_last_verdict: CONVERGENT_PASS_4_2026-07-02 (streak 3/3 — CONVERGED)
 wave_6_tranche_c_test_race_attested: true
-wave_6_wavegate_pass_counter: 3
-wave_6_wavegate_attempts_counter: 3
-wave_6_wavegate_streak: 0
-wave_6_wavegate_last_verdict: PASS_3_MEDIUM_STREAK_RESET_2026-07-02
+wave_6_wavegate_pass_counter: 4
+wave_6_wavegate_attempts_counter: 4
+wave_6_wavegate_streak: 1
+wave_6_wavegate_last_verdict: CONVERGENT_PASS_4_2026-07-02
 develop_head: 7fe3e29
 open_prs: 0
 wave_6_hygiene_fec_sentinel_pr: 58
@@ -67,14 +67,14 @@ develop HEAD: 7fe3e29. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
 Pass 2/3/4 all CONVERGENT (Adv-A + Adv-B both 0/0/0/0). Converged 2026-07-02.
 Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6.C-wave-adversary-pass-{2,3,4}-Adv-{A,B}.md`.
 
-### W-6 combined wave-gate — REMEDIATING (BC-5.39.001 0/3 after streak reset)
+### W-6 combined wave-gate — POST-REMEDIATION CLEAN (BC-5.39.001 1/3, streak advancing)
 
 - Pass 1 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 2 obs; Adv-B L2/L3 0/0/0/0 + 3 obs). Streak 1/3.
 - Pass 2 (2026-07-02): CONVERGENT clean (Adv-A L1 0/0/0/0 + 3 obs; Adv-B L2/L3 0/0/0/0 + 2 obs — 1 process-gap LOW). Streak 2/3.
-- Pass 3 (2026-07-02): **MEDIUM finding** — Adv-A L1 CONVERGENT_L1 clean (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 with **F1 MEDIUM** on BC-2.08.001 v1.3 `governance_leaf` annotation gap + O-2 [process-gap]. Under strict BC-5.39.001 clean-pass criterion, MEDIUM breaks streak.
-- **Streak reset: 2 → 0.** F1 remediated at BC-2.08.001 v1.5 (retro-annotate v1.3 as governance_leaf). Three fresh clean passes now required.
-- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3}-Adv-{A,B}.md`.
-- **NEXT ACTION:** Pass 4 fresh-context adversary post-remediation (dispatched separately).
+- Pass 3 (2026-07-02): **MEDIUM finding** — Adv-A L1 CONVERGENT_L1 clean; Adv-B L2/L3 F1 MEDIUM (BC-2.08.001 v1.3 governance_leaf gap). Streak reset 2→0. F1 remediated at BC-2.08.001 v1.5.
+- Pass 4 (2026-07-02): **CLEAN** — Adv-A L1 CONVERGENT_L1 (0/0/0/0 + 2 obs); Adv-B L2/L3 CONVERGENT_L2L3 (0/0/0/0 + 3 obs; O-1 grandfather-adjudicated). **Streak 0 → 1/3.**
+- Sidecar audit: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1,2,3,4}-Adv-{A,B}.md`.
+- **NEXT ACTION:** Pass 5 fresh-context adversary (streak 1/3 → 2/3 target).
 
 ## Phase Progress
 
@@ -158,18 +158,19 @@ Resolved items (Waves 1–5 + Tranche A): `cycles/cycle-1/closed-drift.md`.
 | W-6 combined wave-gate Pass 1 CONVERGENT | Adv-A L1 0/0/0/0+2obs; Adv-B L2L3 0/0/0/0+3obs; full 8-story surface clean on develop@7fe3e29; streak 1/3 | 2026-07-02 |
 | W-6 combined wave-gate Pass 2 CONVERGENT | Adv-A L1 0/0/0/0+3obs; Adv-B L2L3 0/0/0/0+2obs (1 process-gap on BC-2.08.001 v1.3); streak 2/3 | 2026-07-02 |
 | W-6 combined wave-gate Pass 3 MEDIUM | Adv-A L1 clean 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 1 MEDIUM F1 (gov-leaf annotation gap) + O-2 [process-gap]; streak reset 2→0; F1 remediated at BC-2.08.001 v1.5 | 2026-07-02 |
+| W-6 combined wave-gate Pass 4 CLEAN | Adv-A L1 CONVERGENT_L1 0/0/0/0+2obs; Adv-B L2L3 CONVERGENT_L2L3 0/0/0/0+3obs; O-1 grandfather-adjudicated (POL-003 going-forward only; BC-2.07.001 v1.8/v1.9/v1.10/v1.12 not retro-annotated by design); streak 0→1/3 | 2026-07-02 |
 
 Older decisions: `cycles/cycle-1/burst-log.md`.
 
-## Session Resume Checkpoint — 2026-07-02 (Wave-6 Tranche C CONVERGED)
+## Session Resume Checkpoint — 2026-07-02 (Wave-6 combined wave-gate streak 1/3)
 
 **Position:** Phase 3 Wave 6 Tranche C wave-level CONVERGED. Both stories MERGED to develop.
 S-7.03 PR#60/7142146 (per-story 3/3 CONVERGED). S-6.05 PR#61/7fe3e29 (per-story 3/3 CONVERGED).
 develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 
-**Wave-level status:** Tranche-C streak: 3/3 CONVERGED. Wave-gate streak: 0/3 (Pass 1+2 clean, Pass 3 MEDIUM broke streak; F1 remediated at BC-2.08.001 v1.5).
+**Wave-level status:** Tranche-C streak: 3/3 CONVERGED. Wave-gate streak: 1/3 (Pass 4 clean post-F1-remediation; two more clean passes needed for BC-5.39.001).
 
-**NEXT ACTION on resume:** Wave-6 combined wave-gate Pass 4 fresh-context adversary post-F1-remediation (streak 0/3 → target 3/3). Three consecutive clean passes needed for BC-5.39.001.
+**NEXT ACTION on resume:** Wave-6 combined wave-gate Pass 5 fresh-context adversary (streak 1/3 → 2/3 target).
 
 **Open observations carrying forward:**
 - S502-DEFER-1..6 / SW502-DEFER-1..8: S-5.02 + S-W5.02 LOW deferrals.
@@ -179,6 +180,7 @@ develop HEAD: 7fe3e29. factory-artifacts: see `git -C .factory log -1`.
 - PROCESS-GAP-DEMO-TAPE-PATHS: drbothen/vsdd-factory#418 pending upstream fix.
 - WAVE-GATE-DISPATCH-INTEGRITY: HIGH-1 [process-gap] drbothen/vsdd-factory upstream issue drafted.
 - B28-2 [process-gap]: stream-watchdog kills large-scope reviews; split-adversary pattern codification needed. Logged in .vsdd-factory-issues-pending.md.
+- DRIFT-POL003-GOV-LEAF-ENFORCE: LOW open — O-1 grandfather-adjudicated this session; structural enforcement of going-forward annotation rule still an upstream ask.
 
 Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
 
