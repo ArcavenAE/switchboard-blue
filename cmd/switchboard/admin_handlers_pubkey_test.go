@@ -10,8 +10,11 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -113,22 +116,29 @@ func TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes(t *testing.T) 
 // MUST FAIL with current code because the error message won't say "must be
 // ed25519" — it will say "not valid base64".
 func TestNewInBurst19_DecodePublicKey_OpenSSH_WrongKeyType_RejectsWithTypeError(t *testing.T) {
-	t.Parallel()
-
-	// Construct a fake "ssh-rsa" prefixed string to simulate wrong key type.
-	// We don't need a real RSA key — any non-ed25519 type prefix is sufficient.
-	fakeRSA := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC3 test@host"
-
-	_, err := decodePublicKey(fakeRSA)
-	if err == nil {
-		t.Fatal("decodePublicKey(ssh-rsa key): expected error for wrong key type, got nil")
+	t.Helper()
+	// Generate a real RSA key so ssh.ParseAuthorizedKey succeeds and the
+	// ed25519-type-check branch (admin_handlers.go:154-156) is actually reached.
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %v", err)
 	}
-	// The error must not say "not valid base64" once OpenSSH parsing is in place.
-	// Instead it should say something about key type or ed25519.
-	// Until then (current code), this test fails because the code DOES say "not valid base64".
-	if strings.Contains(err.Error(), "not valid base64") {
-		t.Errorf("decodePublicKey(ssh-rsa key): error message says 'not valid base64' — "+
-			"once OpenSSH parsing is added, wrong-type keys must return a type-specific error; got: %v", err)
+	sshPub, err := ssh.NewPublicKey(&rsaKey.PublicKey)
+	if err != nil {
+		t.Fatalf("wrap RSA key as ssh.PublicKey: %v", err)
+	}
+	// Encode as authorized_keys line: "ssh-rsa <base64> test@host"
+	authorizedLine := string(ssh.MarshalAuthorizedKey(sshPub))
+	authorizedLine = strings.TrimRight(authorizedLine, "\n")
+
+	got, decErr := decodePublicKey(authorizedLine)
+	if decErr == nil {
+		t.Fatalf("expected error for RSA key, got nil (key bytes: %v)", got)
+	}
+	// The type-check branch fires AFTER successful parse; error must reference the
+	// rejection of non-ed25519 types.
+	if !strings.Contains(decErr.Error(), "not supported") && !strings.Contains(decErr.Error(), "must be ed25519") {
+		t.Errorf("expected error about unsupported type, got: %v", decErr)
 	}
 }
 
@@ -168,5 +178,30 @@ func TestNewInBurst19_DecodePublicKey_Empty_ReturnsECFG001(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E-CFG-001") {
 		t.Errorf("decodePublicKey(empty): expected E-CFG-001 in error; got: %v", err)
+	}
+}
+
+// TestNewInBurst19_DecodePublicKey_OpenSSH_ECDSAKey_RejectsWithTypeError verifies
+// that a genuinely valid ECDSA-P256 OpenSSH key is parsed successfully by
+// ssh.ParseAuthorizedKey but then rejected by the ed25519-type-check branch.
+func TestNewInBurst19_DecodePublicKey_OpenSSH_ECDSAKey_RejectsWithTypeError(t *testing.T) {
+	t.Helper()
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ECDSA key: %v", err)
+	}
+	sshPub, err := ssh.NewPublicKey(&ecKey.PublicKey)
+	if err != nil {
+		t.Fatalf("wrap ECDSA key as ssh.PublicKey: %v", err)
+	}
+	authorizedLine := string(ssh.MarshalAuthorizedKey(sshPub))
+	authorizedLine = strings.TrimRight(authorizedLine, "\n")
+
+	got, decErr := decodePublicKey(authorizedLine)
+	if decErr == nil {
+		t.Fatalf("expected error for ECDSA key, got nil (key bytes: %v)", got)
+	}
+	if !strings.Contains(decErr.Error(), "not supported") && !strings.Contains(decErr.Error(), "must be ed25519") {
+		t.Errorf("expected error about unsupported type, got: %v", decErr)
 	}
 }

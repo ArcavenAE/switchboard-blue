@@ -74,8 +74,8 @@ func TestAdminKeyRegisterArgs_JSONRoundTrip(t *testing.T) {
 	if _, ok := raw["svtn_id"]; !ok {
 		t.Error("adminKeyRegisterArgs: missing JSON field 'svtn_id'")
 	}
-	if _, ok := raw["pubkey"]; !ok {
-		t.Error("adminKeyRegisterArgs: missing JSON field 'pubkey'")
+	if _, ok := raw["pubkey_openssh"]; !ok {
+		t.Error("adminKeyRegisterArgs: missing JSON field 'pubkey_openssh'")
 	}
 	if _, ok := raw["role"]; !ok {
 		t.Error("adminKeyRegisterArgs: missing JSON field 'role'")
@@ -141,8 +141,8 @@ func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 			if _, ok := raw["svtn_id"]; !ok {
 				t.Error("adminKeyRevokeArgs: missing JSON field 'svtn_id'")
 			}
-			if _, ok := raw["pubkey"]; !ok {
-				t.Error("adminKeyRevokeArgs: missing JSON field 'pubkey'")
+			if _, ok := raw["pubkey_openssh"]; !ok {
+				t.Error("adminKeyRevokeArgs: missing JSON field 'pubkey_openssh'")
 			}
 			if _, ok := raw["role"]; !ok {
 				t.Error("adminKeyRevokeArgs: missing JSON field 'role'")
@@ -198,8 +198,8 @@ func TestAdminKeyExpireArgs_JSONRoundTrip(t *testing.T) {
 	if _, ok := raw["svtn_id"]; !ok {
 		t.Error("adminKeyExpireArgs: missing JSON field 'svtn_id'")
 	}
-	if _, ok := raw["pubkey"]; !ok {
-		t.Error("adminKeyExpireArgs: missing JSON field 'pubkey'")
+	if _, ok := raw["pubkey_openssh"]; !ok {
+		t.Error("adminKeyExpireArgs: missing JSON field 'pubkey_openssh'")
 	}
 	if _, ok := raw["after"]; !ok {
 		t.Error("adminKeyExpireArgs: missing JSON field 'after'")

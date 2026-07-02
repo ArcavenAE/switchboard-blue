@@ -53,7 +53,7 @@ type adminKeyRegisterArgs struct {
 	// SVTNID is the SVTN identifier to register the key for.
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key (authorized_keys format).
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	// Role is the authorization role: "control", "console", or "access".
 	Role string `json:"role"`
 }
@@ -64,7 +64,7 @@ type adminKeyRevokeArgs struct {
 	// SVTNID is the SVTN identifier to revoke the key from.
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key to revoke.
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	// Role is the authorization role of the key being revoked: "control",
 	// "console", or "access". The daemon cross-checks this against the stored
 	// role to prevent bypassing the confirm gate (HOLD-001 hybrid; E-ADM-019).
@@ -80,7 +80,7 @@ type adminKeyExpireArgs struct {
 	// SVTNID is the SVTN identifier that owns the key.
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key to expire.
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	// After is the human-parseable duration string (e.g. "24h") representing
 	// the TTL. Zero or negative durations are rejected with E-CFG-001 by the
 	// daemon (BC-2.05.004 postcondition 3; S-6.02 EC-003).
@@ -158,7 +158,19 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 	case "key":
 		return runAdminKey(ctx, target, keyPath, useJSON, args[1:], sio)
 	case "list-keys":
-		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", nil, sio)
+		fs := flag.NewFlagSet("admin list-keys", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		svtnID := fs.String("svtn", "", "SVTN ID")
+		if err := fs.Parse(args[1:]); err != nil {
+			return fmt.Errorf("admin list-keys: %w", err)
+		}
+		if *svtnID == "" {
+			return fmt.Errorf("admin list-keys: --svtn <id> is required")
+		}
+		type listKeysArgs struct {
+			SVTNID string `json:"svtn_id"`
+		}
+		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", listKeysArgs{SVTNID: *svtnID}, sio)
 	case "svtn":
 		return runAdminSvtn(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:

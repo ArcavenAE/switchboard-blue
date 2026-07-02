@@ -48,7 +48,7 @@ const maxKeyTTL = 100 * 365 * 24 * time.Hour
 // The `role` field uses the canonical JSON key per interface-definitions.md v1.1.
 type adminKeyRegisterArgs struct {
 	SVTNName   string `json:"svtn_id"`
-	PublicKey  string `json:"pubkey"` // base64-encoded Ed25519 public key
+	PublicKey  string `json:"pubkey_openssh"` // OpenSSH-format Ed25519 public key (e.g. ssh-ed25519 AAAA... comment)
 	Role       string `json:"role"`
 	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
@@ -57,8 +57,8 @@ type adminKeyRegisterArgs struct {
 // The `role` field is the canonical JSON key (F-002 ruling; HOLD-001 hybrid).
 type adminKeyRevokeArgs struct {
 	SVTNName   string `json:"svtn_id"`
-	PublicKey  string `json:"pubkey"` // base64-encoded Ed25519 public key
-	Role       string `json:"role"`   // caller-supplied current role for cross-check
+	PublicKey  string `json:"pubkey_openssh"` // OpenSSH-format Ed25519 public key (e.g. ssh-ed25519 AAAA... comment)
+	Role       string `json:"role"`           // caller-supplied current role for cross-check
 	Confirm    bool   `json:"confirm"`
 	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
@@ -66,8 +66,8 @@ type adminKeyRevokeArgs struct {
 // adminKeyExpireArgs is the wire JSON args for admin.key.expire.
 type adminKeyExpireArgs struct {
 	SVTNName  string `json:"svtn_id"`
-	PublicKey string `json:"pubkey"` // base64-encoded Ed25519 public key
-	After     string `json:"after"`  // duration string e.g. "24h"
+	PublicKey string `json:"pubkey_openssh"` // OpenSSH-format Ed25519 public key (e.g. ssh-ed25519 AAAA... comment)
+	After     string `json:"after"`          // duration string e.g. "24h"
 }
 
 // adminListKeysArgs is the wire JSON args for admin.key.list-keys.
@@ -140,7 +140,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 // decode to exactly 32 bytes (ed25519.PublicKeySize).
 func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 	if encoded == "" {
-		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey")
+		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey_openssh")
 	}
 
 	// Detect OpenSSH authorized_keys format by the presence of a key-type prefix.
@@ -316,9 +316,9 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 		}
 
 		var pubkeyStr string
-		if v, ok := raw["pubkey"]; ok {
+		if v, ok := raw["pubkey_openssh"]; ok {
 			if err := json.Unmarshal(v, &pubkeyStr); err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid pubkey field: %w", err)
+				return nil, fmt.Errorf("E-CFG-001: invalid pubkey_openssh field: %w", err)
 			}
 		}
 		pubkey, err := decodePublicKey(pubkeyStr)
@@ -426,8 +426,8 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 			)
 		}
 		return fmt.Errorf(
-			"E-ADM-019: role mismatch: claimed role %s does not match registered key role for key %s: %w",
-			claimedRoleStr, fp, err,
+			"E-ADM-019: role mismatch: claimed role %s does not match registered key role %s for key %s: %w",
+			claimedRoleStr, "unknown", fp, err,
 		)
 	case errors.Is(err, svtnmgmt.ErrInvalidDuration):
 		// Defense-in-depth: handler-side duration guards already fire before
@@ -440,7 +440,7 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
 		return fmt.Errorf("E-ADM-021: bootstrap-key-expire-forbidden: cannot expire the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrDestroyUnauthorized):
-		return fmt.Errorf("E-ADM-011: destroy unauthorized: role=%s svtn_name=%s: %w", claimedRoleStr, svtnName, err)
+		return fmt.Errorf("E-ADM-011: permission denied: %s key cannot destroy SVTN %s: %w", claimedRoleStr, svtnName, err)
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer
@@ -734,7 +734,7 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 			// F-P2L1-004: non-duplicate Create failure (e.g. internal rand.Read failure)
 			// stamped with E-INT-001. Use %w to preserve the error chain for operators
 			// and allow errors.Is/As inspection by callers (go.md rule 4; F-Impl-003).
-			return nil, fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %w", a.Name, err)
+			return nil, fmt.Errorf("E-INT-001: internal error: admin.svtn.create: %w", err)
 		}
 
 		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from

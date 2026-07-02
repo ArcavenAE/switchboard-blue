@@ -17,7 +17,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -25,14 +27,14 @@ import (
 // json:"svtn_id". This is the correct, spec-truth shape.
 type sbctlSideKeyRegisterArgs struct {
 	SVTNID string `json:"svtn_id"`
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	Role   string `json:"role"`
 }
 
 // sbctlSideKeyRevokeArgs mirrors the sbctl revoke struct.
 type sbctlSideKeyRevokeArgs struct {
 	SVTNID  string `json:"svtn_id"`
-	Pubkey  string `json:"pubkey"`
+	Pubkey  string `json:"pubkey_openssh"`
 	Role    string `json:"role"`
 	Confirm bool   `json:"confirm"`
 }
@@ -40,7 +42,7 @@ type sbctlSideKeyRevokeArgs struct {
 // sbctlSideKeyExpireArgs mirrors the sbctl expire struct.
 type sbctlSideKeyExpireArgs struct {
 	SVTNID string `json:"svtn_id"`
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	After  string `json:"after"`
 }
 
@@ -305,4 +307,27 @@ func mapKeys(m map[string]any) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// TestNewInBurst19_WireField_StaleField_SvtnRejected verifies that a payload
+// using the pre-v1.13 stale field name "svtn" (not "svtn_id") is rejected
+// with E-CFG-001 by the daemon handler, confirming the field name contract
+// is enforced on the inbound wire path (no silent compat shim).
+func TestNewInBurst19_WireField_StaleField_SvtnRejected(t *testing.T) {
+	t.Parallel()
+	m := newTestSVTNManager(t)
+	handler := makeRegisterHandler(m, nil)
+
+	// Build a payload that uses the old "svtn" field name instead of "svtn_id".
+	stalePayload := `{"svtn":"test-svtn-id","pubkey_openssh":"ssh-ed25519 AAAA test","role":"control"}`
+	_, err := handler(context.Background(), json.RawMessage(stalePayload))
+	if err == nil {
+		t.Fatal("expected error for stale 'svtn' field, got nil")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-001") {
+		t.Errorf("expected E-CFG-001 for missing svtn_id, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "svtn_id") {
+		t.Errorf("expected error to mention svtn_id, got: %v", err)
+	}
 }

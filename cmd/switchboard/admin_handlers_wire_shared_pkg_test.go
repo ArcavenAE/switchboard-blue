@@ -38,7 +38,7 @@ func TestNewInBurst19_SharedPkg_AdminwireTypes_RoundTrip(t *testing.T) {
 	// This is the spec-truth struct with json:"svtn_id".
 	type canonicalKeyRegisterArgs struct {
 		SVTNID    string `json:"svtn_id"`
-		PublicKey string `json:"pubkey"`
+		PublicKey string `json:"pubkey_openssh"`
 		Role      string `json:"role"`
 	}
 
