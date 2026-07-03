@@ -2277,10 +2277,9 @@ func TestSbctlAdmin_ListKeys_MissingFlag_ReturnsError(t *testing.T) {
 // the production struct's tag from json:"svtn_id" back to json:"svtn", this test
 // fails red while the mirror test remains green.
 //
-// NOTE: intentionally not parallel — this test uses startFakeServer which
-// accepts exactly one connection; no seam mutation needed, but the test is
-// kept sequential to match the pattern of other single-connection server tests
-// in this file.
+// Parallel-safe: startFakeServer creates an isolated TCP listener per call so
+// concurrent test instances do not share state.  No package-level seam vars
+// (stdinIsTTY / stdinReader) are mutated, so no race risk.
 //
 // F-P8-006 (list-keys is `sbctl admin list-keys --svtn <id>`; wire: admin.key.list-keys).
 // interface-definitions.md §JSON Output Schema (json:"svtn_id" not json:"svtn").
