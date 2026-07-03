@@ -303,7 +303,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125/§127/§129).
-	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, "--name", sio); err != nil {
+	if err := runDestroyConfirmGate("admin svtn destroy", *confirmFlag, *yesFlag, "--name", sio); err != nil {
 		return err
 	}
 
@@ -327,6 +327,11 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 
 // runDestroyConfirmGate implements the five-path confirm gate for destructive
 // admin operations (interface-definitions.md v1.1 §125/§127/§129; ADR-004).
+//
+// cmdName:     the invoking subcommand name for error messages (e.g. "admin svtn destroy"
+//
+//	for runAdminSvtnDestroy, "admin key register" for runAdminKeyRegister).
+//	Used in Path 1 invalid-confirm error so the error names the correct command.
 //
 // confirmVal:  value of --confirm flag (empty string when flag is absent or --confirm=)
 // yes:         value of --yes flag
@@ -354,7 +359,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 // Path 5 — --yes + --confirm: E-CFG-012 usage error, return non-nil.
 //
 // stdinIsTTY and stdinReader are package-level vars so tests can inject fakes.
-func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio sbctlIO) error {
+func runDestroyConfirmGate(cmdName, confirmVal string, yes bool, targetFlag string, sio sbctlIO) error {
 	// Path 5: --yes combined with --confirm is a usage error (E-CFG-012; §127).
 	if yes && confirmVal != "" {
 		return usageErrf("E-CFG-012: --yes cannot be combined with --confirm; pick one")
@@ -369,8 +374,8 @@ func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio s
 	// Path 1: --confirm supplied with a non-empty value — static shape check.
 	if confirmVal != "" {
 		if !confirmSVTNShortIDValid(confirmVal) {
-			return usageErrf("admin svtn destroy: invalid --confirm %q; "+
-				"expected SVTN-<8 lowercase hex characters>", confirmVal)
+			return usageErrf("%s: invalid --confirm %q; "+
+				"expected SVTN-<8 lowercase hex characters>", cmdName, confirmVal)
 		}
 		// Shape is valid; proceed. Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
 		return nil
@@ -455,7 +460,7 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §105/§125; Fix F-11A-1).
-	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, "--svtn", sio); err != nil {
+	if err := runDestroyConfirmGate("admin key register", *confirmFlag, *yesFlag, "--svtn", sio); err != nil {
 		return err
 	}
 

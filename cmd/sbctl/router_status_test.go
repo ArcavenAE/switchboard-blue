@@ -73,15 +73,50 @@ func startCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessa
 			if err != nil {
 				return // listener closed; exit goroutine
 			}
-			go serveCannedConn(conn, responseData)
+			go serveCannedConnCore(conn, responseData, "", nil)
 		}
 	}()
 	return ln
 }
 
-// serveCannedConn performs one full ADR-012 handshake then responds to the
-// first RPC request with responseData. The connection is closed when done.
-func serveCannedConn(conn net.Conn, responseData json.RawMessage) {
+// startCannedDaemonAssertCmd is like startCannedDaemon but also captures the
+// RPC command sent by the client into gotCmdCh (buffered, capacity >= 1).
+//
+// F-P5P8-B-002: adds cmd capture to assert dispatch identity (not just response shape).
+// The three consumer tests that claim dispatch identity — paths.list (AC-001),
+// router.metrics (AC-002), and router.status alias (AC-003) — must use this
+// variant and assert the expected command.
+func startCannedDaemonAssertCmd(t *testing.T, sockPath string, responseData json.RawMessage, expectedCmd string, gotCmdCh chan<- string) net.Listener { //nolint:unparam
+	t.Helper()
+
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("startCannedDaemonAssertCmd: listen on %s: %v", sockPath, err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go serveCannedConnCore(conn, responseData, expectedCmd, gotCmdCh)
+		}
+	}()
+	return ln
+}
+
+// serveCannedConnCore is the implementation used by startCannedDaemonAssertCmd.
+//
+//   - expectedCmd: if non-empty, the received req["cmd"] is checked to equal it.
+//     Mismatches cause the RPC to respond with an error envelope (the test then
+//     fails at the caller's assertion site).
+//   - gotCmdCh: if non-nil, the received command string is sent to the channel
+//     (non-blocking; the channel must have capacity >= 1).
+//
+// F-P5P8-B-002: adds req["cmd"] inspection so callers can assert dispatch identity.
+func serveCannedConnCore(conn net.Conn, responseData json.RawMessage, expectedCmd string, gotCmdCh chan<- string) {
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 
@@ -109,12 +144,42 @@ func serveCannedConn(conn net.Conn, responseData json.RawMessage) {
 		return
 	}
 
-	// Step 4: read RPC request and extract the ID for echo.
+	// Step 4: read RPC request and extract the ID and cmd for echo + assertion.
+	// F-P5P8-B-002: previously req["command"] was extracted but discarded.  Now it
+	// is forwarded to gotCmdCh and checked against expectedCmd when provided.
+	// Note: the wire field is "command" (confirmed by startRecordingDaemon above),
+	// NOT "cmd" — using the wrong key extracts "" and always triggers the mismatch.
 	var req map[string]interface{}
 	if err := json.NewDecoder(conn).Decode(&req); err != nil {
 		return
 	}
 	reqID, _ := req["id"].(string)
+	gotCmd, _ := req["command"].(string)
+
+	// Forward cmd to the assertion channel (non-blocking; capacity must be >= 1).
+	if gotCmdCh != nil {
+		select {
+		case gotCmdCh <- gotCmd:
+		default:
+		}
+	}
+
+	// Check cmd identity if an expected value was supplied.
+	// The error envelope must use the errorDetail shape ({"code":"...","message":"..."})
+	// so the client can unmarshal it without a type error.
+	if expectedCmd != "" && gotCmd != expectedCmd {
+		errResp := map[string]interface{}{
+			"type": "response",
+			"id":   reqID,
+			"ok":   false,
+			"error": map[string]string{
+				"code":    "E-TEST-001",
+				"message": "unexpected command: got " + gotCmd + "; want " + expectedCmd,
+			},
+		}
+		_ = json.NewEncoder(conn).Encode(errResp)
+		return
+	}
 
 	// Step 5: send RPC response with the canned data.
 	rpcResp := map[string]interface{}{
@@ -154,7 +219,9 @@ func TestSbctlPathsList_OutputsCanonicalFields(t *testing.T) {
 		{"path_id":"path-1","router_addr":"10.0.0.1:9000","rtt_ms":15.0,"rtt_p99_ms":22.0,"loss_pct":0.1,"status":"active"},
 		{"path_id":"path-2","router_addr":"10.0.0.2:9000","rtt_ms":45.0,"rtt_p99_ms":68.0,"loss_pct":0.0,"status":"active"}
 	]`)
-	_ = startCannedDaemon(t, sockPath, cannedPaths)
+	// F-P5P8-B-002: assert dispatch identity — runPathsList must send "paths.list".
+	gotCmdCh := make(chan string, 1)
+	_ = startCannedDaemonAssertCmd(t, sockPath, cannedPaths, "paths.list", gotCmdCh)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -165,6 +232,16 @@ func TestSbctlPathsList_OutputsCanonicalFields(t *testing.T) {
 		t.Fatalf("runPathsList: unexpected error: %v", err)
 	}
 	out := getOut()
+
+	// F-P5P8-B-002: assert that the daemon received the correct RPC command.
+	select {
+	case gotCmd := <-gotCmdCh:
+		if gotCmd != "paths.list" {
+			t.Errorf("F-P5P8-B-002 / AC-001: runPathsList sent RPC command %q; want %q", gotCmd, "paths.list")
+		}
+	default:
+		t.Error("F-P5P8-B-002 / AC-001: no RPC command received by canned daemon — channel empty")
+	}
 
 	// Parse the outer JSON envelope (BC-2.06.003 PC-4: {"ok":true,"error":null,"data":[...]}).
 	var env struct {
@@ -221,7 +298,9 @@ func TestSbctlRouterMetrics_OutputsSVTNMetrics(t *testing.T) {
 		"drop_cache_hits":7,
 		"path_distribution":{"path-1":9000,"path-2":3345}
 	}`)
-	_ = startCannedDaemon(t, sockPath, cannedMetrics)
+	// F-P5P8-B-002: assert dispatch identity — runRouterMetrics must send "router.metrics".
+	gotCmdCh := make(chan string, 1)
+	_ = startCannedDaemonAssertCmd(t, sockPath, cannedMetrics, "router.metrics", gotCmdCh)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -232,6 +311,16 @@ func TestSbctlRouterMetrics_OutputsSVTNMetrics(t *testing.T) {
 		t.Fatalf("runRouterMetrics: unexpected error: %v", err)
 	}
 	out := getOut()
+
+	// F-P5P8-B-002: assert that the daemon received the correct RPC command.
+	select {
+	case gotCmd := <-gotCmdCh:
+		if gotCmd != "router.metrics" {
+			t.Errorf("F-P5P8-B-002 / AC-002: runRouterMetrics sent RPC command %q; want %q", gotCmd, "router.metrics")
+		}
+	default:
+		t.Error("F-P5P8-B-002 / AC-002: no RPC command received by canned daemon — channel empty")
+	}
 
 	// Parse the outer JSON envelope.
 	var env struct {
@@ -274,7 +363,10 @@ func TestSbctlRouterStatus_IsAliasForPathsList(t *testing.T) {
 	cannedPaths := json.RawMessage(`[
 		{"path_id":"path-1","router_addr":"10.0.0.1:9000","rtt_ms":15.0,"rtt_p99_ms":22.0,"loss_pct":0.1,"status":"active"}
 	]`)
-	_ = startCannedDaemon(t, sockPath, cannedPaths)
+	// F-P5P8-B-002: assert dispatch identity — router status must send "paths.list" (the alias
+	// contract: BC-2.06.003 PC-3 + EC-005 require single code path, not just shape parity).
+	gotCmdCh := make(chan string, 1)
+	_ = startCannedDaemonAssertCmd(t, sockPath, cannedPaths, "paths.list", gotCmdCh)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -285,6 +377,17 @@ func TestSbctlRouterStatus_IsAliasForPathsList(t *testing.T) {
 		t.Fatalf("runRouterStatus: unexpected error: %v", err)
 	}
 	out := getOut()
+
+	// F-P5P8-B-002: assert that router status dispatches "paths.list" — not a separate command.
+	// This proves the alias is a real code-path alias, not just shape identity.
+	select {
+	case gotCmd := <-gotCmdCh:
+		if gotCmd != "paths.list" {
+			t.Errorf("F-P5P8-B-002 / AC-003: router status sent RPC command %q; want %q (alias must invoke paths.list)", gotCmd, "paths.list")
+		}
+	default:
+		t.Error("F-P5P8-B-002 / AC-003: no RPC command received by canned daemon — channel empty")
+	}
 
 	// Parse the outer JSON envelope.
 	var env struct {
