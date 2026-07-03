@@ -53,7 +53,7 @@ type adminKeyRegisterArgs struct {
 	// SVTNID is the SVTN identifier to register the key for.
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key (authorized_keys format).
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	// Role is the authorization role: "control", "console", or "access".
 	Role string `json:"role"`
 }
@@ -64,7 +64,7 @@ type adminKeyRevokeArgs struct {
 	// SVTNID is the SVTN identifier to revoke the key from.
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key to revoke.
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	// Role is the authorization role of the key being revoked: "control",
 	// "console", or "access". The daemon cross-checks this against the stored
 	// role to prevent bypassing the confirm gate (HOLD-001 hybrid; E-ADM-019).
@@ -80,7 +80,7 @@ type adminKeyExpireArgs struct {
 	// SVTNID is the SVTN identifier that owns the key.
 	SVTNID string `json:"svtn_id"`
 	// Pubkey is the OpenSSH-format Ed25519 public key to expire.
-	Pubkey string `json:"pubkey"`
+	Pubkey string `json:"pubkey_openssh"`
 	// After is the human-parseable duration string (e.g. "24h") representing
 	// the TTL. Zero or negative durations are rejected with E-CFG-001 by the
 	// daemon (BC-2.05.004 postcondition 3; S-6.02 EC-003).
@@ -103,6 +103,35 @@ type adminSVTNCreateArgs struct {
 type adminSVTNDestroyArgs struct {
 	// Name is the human-readable SVTN label to destroy.
 	Name string `json:"name"`
+}
+
+// boolStringFlag is a flag.Value implementation for a flag that can be passed
+// as a bare boolean flag (--confirm) or with an explicit value (--confirm=true,
+// --confirm=false, --confirm=some-token). Implementing IsBoolFlag() makes the
+// flag package accept the bare form without requiring an argument.
+//
+// Used for `admin key revoke --confirm` to achieve symmetry with
+// `admin svtn destroy --confirm=<token>` (String flag; F-A-009).
+type boolStringFlag struct {
+	val string
+	set bool
+}
+
+func (f *boolStringFlag) String() string { return f.val }
+
+func (f *boolStringFlag) Set(v string) error {
+	f.val = v
+	f.set = true
+	return nil
+}
+
+// IsBoolFlag tells the flag package that bare --confirm (no =value) is valid
+// and equivalent to --confirm=true.
+func (f *boolStringFlag) IsBoolFlag() bool { return true }
+
+// isTrue returns true if the flag was set and the value is not "false" or "0".
+func (f *boolStringFlag) isTrue() bool {
+	return f.set && f.val != "false" && f.val != "0"
 }
 
 // runAdmin dispatches `sbctl admin <subcommand>` commands.
@@ -129,7 +158,19 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 	case "key":
 		return runAdminKey(ctx, target, keyPath, useJSON, args[1:], sio)
 	case "list-keys":
-		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", nil, sio)
+		fs := flag.NewFlagSet("admin list-keys", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		svtnID := fs.String("svtn", "", "SVTN ID")
+		if err := fs.Parse(args[1:]); err != nil {
+			return fmt.Errorf("admin list-keys: %w", err)
+		}
+		if *svtnID == "" {
+			return fmt.Errorf("admin list-keys: --svtn <id> is required")
+		}
+		type listKeysArgs struct {
+			SVTNID string `json:"svtn_id"`
+		}
+		return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.list-keys", listKeysArgs{SVTNID: *svtnID}, sio)
 	case "svtn":
 		return runAdminSvtn(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
@@ -222,8 +263,15 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 // confirmSVTNShortIDValid returns true if s matches the "SVTN-<8hexchars>"
 // pattern required by the destroy confirmation gate (ADR-004;
 // interface-definitions.md v1.1 §125).
+//
+// Normalizes s to lowercase before validation so that "SVTN-AABBCCDD" is
+// accepted alongside "SVTN-aabbccdd" (Fix F-11A-5).
 func confirmSVTNShortIDValid(s string) bool {
-	const prefix = "SVTN-"
+	// Normalize to lowercase so that "SVTN-AABBCCDD" is accepted alongside
+	// "SVTN-aabbccdd" without weakening the shape assertion (Fix F-11A-5).
+	s = strings.ToLower(s)
+	// After ToLower the prefix is "svtn-"; "SVTN-" would never match.
+	const prefix = "svtn-"
 	if !strings.HasPrefix(s, prefix) {
 		return false
 	}
@@ -232,7 +280,8 @@ func confirmSVTNShortIDValid(s string) bool {
 		return false
 	}
 	for _, r := range hex {
-		if !unicode.Is(unicode.ASCII_Hex_Digit, r) || unicode.IsUpper(r) {
+		// After ToLower, no rune can be uppercase; ASCII_Hex_Digit covers a-f and 0-9.
+		if !unicode.Is(unicode.ASCII_Hex_Digit, r) {
 			return false
 		}
 	}
@@ -254,7 +303,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125/§127/§129).
-	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, sio); err != nil {
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, "--name", sio); err != nil {
 		return err
 	}
 
@@ -279,9 +328,14 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 // runDestroyConfirmGate implements the five-path confirm gate for destructive
 // admin operations (interface-definitions.md v1.1 §125/§127/§129; ADR-004).
 //
-// confirmVal: value of --confirm flag (empty string when flag is absent or --confirm=)
-// yes:        value of --yes flag
-// sio:        output sinks for the warning and the interactive prompt
+// confirmVal:  value of --confirm flag (empty string when flag is absent or --confirm=)
+// yes:         value of --yes flag
+// targetFlag:  the flag name that identifies the target resource (e.g. "--name" for
+//
+//	admin svtn destroy, "--svtn" for admin key register); used in the Path 4
+//	--yes warning so operators know which flag to double-check.
+//
+// sio:         output sinks for the warning and the interactive prompt
 //
 // Path 1 — --confirm=SVTN-<8-hex> supplied: static shape-check only.
 //   - Valid shape → return nil (proceed). Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
@@ -300,15 +354,15 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 // Path 5 — --yes + --confirm: E-CFG-012 usage error, return non-nil.
 //
 // stdinIsTTY and stdinReader are package-level vars so tests can inject fakes.
-func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
+func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio sbctlIO) error {
 	// Path 5: --yes combined with --confirm is a usage error (E-CFG-012; §127).
 	if yes && confirmVal != "" {
-		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; provide one or the other")
+		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; pick one")
 	}
 
 	// Path 4: --yes alone bypasses the check (§127).
 	if yes {
-		_, _ = fmt.Fprintln(sio.err, "WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting")
+		_, _ = fmt.Fprintf(sio.err, "WARNING: --yes bypasses confirmation; ensure correct %s target before scripting\n", targetFlag)
 		return nil
 	}
 
@@ -324,15 +378,14 @@ func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
 
 	// --confirm absent (empty string).  Check whether stdin is a TTY.
 	if !stdinIsTTY() {
-		// Path 3: non-interactive session.
-		return fmt.Errorf("no confirmation available in non-interactive session; " +
-			"provide --confirm=SVTN-<short-id> or --yes")
+		// Path 3: non-interactive session (E-CFG-013).
+		return fmt.Errorf("E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes")
 	}
 
 	// Path 2: interactive mode — prompt on stderr and read from stdinReader.
 	// The operator must type the SVTN short-ID exactly as printed at create time.
 	// Shape-only validation; identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
-	_, _ = fmt.Fprint(sio.err, "Type SVTN-<short-id> to confirm: ")
+	_, _ = fmt.Fprint(sio.err, "Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: ")
 	line, err := bufio.NewReader(stdinReader).ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("interactive confirmation: read error: %w", err)
@@ -366,14 +419,21 @@ func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args
 //
 // Flags:
 //
-//	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
-//	--svtn <id>      SVTN identifier (required)
-//	--role <role>    authorization role: control, console, access (default: console)
+//	--key <pubkey>              OpenSSH-format Ed25519 public key (required)
+//	--svtn <id>                 SVTN identifier (required)
+//	--role <role>               authorization role: control, console, access (default: console)
+//	--confirm <svtn-short-id>   Non-interactive confirmation: SVTN-<first-8-hex-chars>
+//	--yes                       Bypass the confirm gate for scripted use (stderr warning emitted)
+//
+// Confirm-gate behaviour mirrors `admin svtn destroy` (interface-definitions.md v1.1 §105/§125;
+// ADR-004; Fix F-11A-1).
 func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("admin key register", flag.ContinueOnError)
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
 	roleFlag := fs.String("role", "console", "authorization role: control, console, access")
+	confirmFlag := fs.String("confirm", "", "Confirmation short-ID: SVTN-<first-8-hex-chars>")
+	yesFlag := fs.Bool("yes", false, "bypass the confirm gate for scripted use (stderr warning emitted)")
 
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("admin key register: %w", err)
@@ -386,12 +446,17 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 		return fmt.Errorf("admin key register: --svtn is required")
 	}
 	// F-CS-005: validate --role enum before dispatching the RPC.
-	// Mirrors the validation in runAdminKeyRevoke (lines ~178-183).
+	// Mirrors the validation in runAdminKeyRevoke.
 	switch *roleFlag {
 	case "control", "console", "access":
 		// valid
 	default:
 		return fmt.Errorf("admin key register: --role must be control, console, or access; got %q", *roleFlag)
+	}
+
+	// Confirm gate (ADR-004; interface-definitions.md v1.1 §105/§125; Fix F-11A-1).
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, "--svtn", sio); err != nil {
+		return err
 	}
 
 	rpcArgs := adminKeyRegisterArgs{
@@ -415,7 +480,8 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
 	roleFlag := fs.String("role", "", "authorization role of the key: control, console, access (required)")
-	confirmFlag := fs.Bool("confirm", false, "confirm control-to-control revocation (ADR-004)")
+	confirmFlag := &boolStringFlag{}
+	fs.Var(confirmFlag, "confirm", "confirm control-to-control revocation; bare --confirm or --confirm=true (ADR-004)")
 
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("admin key revoke: %w", err)
@@ -441,7 +507,7 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 		SVTNID:  *svtnFlag,
 		Pubkey:  *keyFlag,
 		Role:    *roleFlag,
-		Confirm: *confirmFlag,
+		Confirm: confirmFlag.isTrue(),
 	}
 	return connectAndRun(ctx, target, keyPath, useJSON, "admin.key.revoke", rpcArgs, sio)
 }

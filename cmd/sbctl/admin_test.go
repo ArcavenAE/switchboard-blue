@@ -74,8 +74,8 @@ func TestAdminKeyRegisterArgs_JSONRoundTrip(t *testing.T) {
 	if _, ok := raw["svtn_id"]; !ok {
 		t.Error("adminKeyRegisterArgs: missing JSON field 'svtn_id'")
 	}
-	if _, ok := raw["pubkey"]; !ok {
-		t.Error("adminKeyRegisterArgs: missing JSON field 'pubkey'")
+	if _, ok := raw["pubkey_openssh"]; !ok {
+		t.Error("adminKeyRegisterArgs: missing JSON field 'pubkey_openssh'")
 	}
 	if _, ok := raw["role"]; !ok {
 		t.Error("adminKeyRegisterArgs: missing JSON field 'role'")
@@ -141,8 +141,8 @@ func TestAdminKeyRevokeArgs_JSONRoundTrip(t *testing.T) {
 			if _, ok := raw["svtn_id"]; !ok {
 				t.Error("adminKeyRevokeArgs: missing JSON field 'svtn_id'")
 			}
-			if _, ok := raw["pubkey"]; !ok {
-				t.Error("adminKeyRevokeArgs: missing JSON field 'pubkey'")
+			if _, ok := raw["pubkey_openssh"]; !ok {
+				t.Error("adminKeyRevokeArgs: missing JSON field 'pubkey_openssh'")
 			}
 			if _, ok := raw["role"]; !ok {
 				t.Error("adminKeyRevokeArgs: missing JSON field 'role'")
@@ -198,8 +198,8 @@ func TestAdminKeyExpireArgs_JSONRoundTrip(t *testing.T) {
 	if _, ok := raw["svtn_id"]; !ok {
 		t.Error("adminKeyExpireArgs: missing JSON field 'svtn_id'")
 	}
-	if _, ok := raw["pubkey"]; !ok {
-		t.Error("adminKeyExpireArgs: missing JSON field 'pubkey'")
+	if _, ok := raw["pubkey_openssh"]; !ok {
+		t.Error("adminKeyExpireArgs: missing JSON field 'pubkey_openssh'")
 	}
 	if _, ok := raw["after"]; !ok {
 		t.Error("adminKeyExpireArgs: missing JSON field 'after'")
@@ -235,8 +235,6 @@ func TestAdminKeyExpireArgs_JSONRoundTrip(t *testing.T) {
 type fakeMgmtServer struct {
 	// opPub is the authorized operator public key (must sign the challenge).
 	opPub ed25519.PublicKey
-	// opPriv is the authorized operator private key (test uses it to sign).
-	opPriv ed25519.PrivateKey
 	// handler is called after authentication succeeds, receives the RPC command
 	// and returns the response data (or an error to send as ok:false).
 	handler func(command string, args json.RawMessage) (any, error)
@@ -420,12 +418,6 @@ func startFakeServer(
 	}
 	opPub := testPrivKey.Public().(ed25519.PublicKey)
 
-	// Generate a fresh daemon key for signing challenges (separate from opPub).
-	_, daemonPrivKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
-	}
-
 	wrappedHandler := func(cmd string, args json.RawMessage) (any, error) {
 		if obs != nil {
 			select {
@@ -441,7 +433,6 @@ func startFakeServer(
 
 	fake := &fakeMgmtServer{
 		opPub:   opPub,
-		opPriv:  daemonPrivKey,
 		handler: wrappedHandler,
 	}
 
@@ -493,6 +484,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 	defer cancel()
 
 	// AC-002: call runAdmin with the `key register` subcommand args.
+	// --yes bypasses the confirm gate so this test focuses on RPC dispatch (Fix F-11A-1).
 	const svtnID = "test-svtn-reg"
 	const pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-register-key"
 
@@ -501,6 +493,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 		"--key", pubkey,
 		"--svtn", svtnID,
 		"--role", "console",
+		"--yes",
 	}, defaultIO())
 	if err != nil {
 		t.Fatalf("runAdmin: %v", err)
@@ -682,7 +675,7 @@ func TestSbctlAdmin_ControlRevocation_RequiresConfirm_CLI(t *testing.T) {
 			// Simulate daemon: reject control-to-control without confirm.
 			// AC-005 (BC-2.05.004 PC-2): daemon returns E-ADM-018 canonical code; CLI surfaces it verbatim.
 			if !revokeArgs.Confirm {
-				return nil, fmt.Errorf("E-ADM-018: control revocation requires --confirm")
+				return nil, fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed")
 			}
 			return map[string]any{"fingerprint": "SHA256:DDDD..."}, nil
 		})
@@ -852,10 +845,12 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 			if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): got network error %q; want flag validation error before any connection attempt", tc.args, errStr)
 			}
-			// The missing-flag name must appear in the error to confirm the right
+			// The missing flag name must appear in the error to confirm the right
 			// validation path fired (not a generic "required field" catch-all).
-			flagName := tc.missingFlag[2:] // strip "--" for substring match (e.g. "key", "svtn", "role", "after")
-			if !strings.Contains(errStr, flagName) {
+			// We match the full "--<flag>" form (e.g. "--key", "--svtn") to avoid
+			// false-passes when the bare token "key" appears in unrelated error text
+			// (e.g. key-file load errors, decoded-key messages, keyPath errors).
+			if !strings.Contains(errStr, tc.missingFlag) {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): error %q does not mention missing flag %q", tc.args, errStr, tc.missingFlag)
 			}
 		})
@@ -941,7 +936,7 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	defer cancel()
 
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
-		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
+		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn", "--yes",
 	}, defaultIO())
 
 	// ADR-012 fail-closed: must return non-nil error on AUTH_FAIL.
@@ -1001,8 +996,9 @@ func TestSbctlAdmin_OversizedNDJSONLine_DoesNotOOM(t *testing.T) {
 	defer cancel()
 
 	// The client must not OOM — it must return an error within the context deadline.
+	// --yes bypasses the confirm gate so the test can reach the network/read-guard path (Fix F-11A-1).
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
-		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
+		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn", "--yes",
 	}, defaultIO())
 
 	if err == nil {
@@ -1053,8 +1049,9 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	// --yes bypasses the confirm gate so the test can reach the JSON decode path (Fix F-11A-1).
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
-		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
+		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn", "--yes",
 	}, defaultIO())
 
 	if err == nil {
@@ -1082,30 +1079,17 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 	t.Parallel()
 
-	// S-6.02 EC-003 — zero duration must cause runAdmin to return non-nil error.
-	// Daemon handler simulates E-CFG-001 for zero duration.
-	addr := startFakeServer(t, nil, func(cmd string, args json.RawMessage) (any, error) {
-		if cmd != "admin.key.expire" {
-			return nil, fmt.Errorf("unexpected command: %q", cmd)
-		}
-		var expireArgs adminKeyExpireArgs
-		if err := json.Unmarshal(args, &expireArgs); err != nil {
-			return nil, err
-		}
-		d, err := time.ParseDuration(expireArgs.After)
-		if err != nil {
-			return nil, fmt.Errorf("E-CFG-001: invalid duration %q: %w", expireArgs.After, err)
-		}
-		if d <= 0 {
-			return nil, fmt.Errorf("E-CFG-001: invalid duration: must be positive")
-		}
-		return map[string]string{"fingerprint": "SHA256:ok"}, nil
-	})
-
+	// S-6.02 EC-003 — zero duration must be rejected client-side without dialing.
+	//
+	// The oracle uses an unreachable target address (127.0.0.1:1) so that any
+	// regression that skips the client-side check and attempts to dial produces
+	// E-NET-001 / "connection refused" — which the negative assertion below
+	// catches.  A reachable fake-server oracle cannot distinguish client-side from
+	// daemon-side rejection when both paths produce an error mentioning "duration".
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+	err := runAdmin(ctx, "127.0.0.1:1", testdataKeyPath(t), false, []string{
 		"key", "expire",
 		"--key", "ssh-ed25519 AAAA...",
 		"--svtn", "test-svtn",
@@ -1116,17 +1100,17 @@ func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error; got nil")
 		return
 	}
-	// Tighten oracle: client-side validation must fire before any connection
-	// attempt — the error must mention the problematic constraint ("duration"
-	// or "after") and must NOT be a network error (E-NET-001 / connection
-	// refused). The daemon handler would emit E-CFG-001 for zero duration, but
-	// client-side validation is expected to short-circuit before dispatch.
 	errStr := err.Error()
+	// Network errors prove client-side validation did NOT short-circuit.
 	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
-		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: got network error %q; want client-side validation error before any connection attempt", errStr)
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: got network error %q; "+
+			"want client-side validation error before any connection attempt "+
+			"(fix: ensure runAdminKeyExpire rejects d<=0 before connectAndRun)", errStr)
 	}
-	if !strings.Contains(errStr, "duration") && !strings.Contains(errStr, "after") {
-		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: error %q does not mention 'duration' or 'after'; want field-specific validation message", errStr)
+	// The error must mention the problematic flag.
+	if !strings.Contains(errStr, "duration") && !strings.Contains(errStr, "--after") {
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: error %q does not mention "+
+			"'duration' or '--after'; want field-specific validation message", errStr)
 	}
 }
 
@@ -1255,12 +1239,14 @@ func TestSubprocessAdmin_ConnectionRefused_Entry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), to)
 	defer cancel()
 
+	// --yes bypasses the confirm gate so the subprocess reaches the network path (Fix F-11A-1).
 	sio := defaultIO()
 	err := runAdmin(ctx, target, keyPath, false, []string{
 		"key", "register",
 		"--key", "ssh-ed25519 AAAA...",
 		"--svtn", "test-svtn",
 		"--role", "console",
+		"--yes",
 	}, sio)
 	if err != nil {
 		writeError(false, "E-NET-001", err.Error(), sio)
@@ -1616,11 +1602,13 @@ func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	// --yes bypasses the confirm gate so the test reaches the RPC response path (Fix F-11A-1).
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
 		"key", "register",
 		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-ruling14-key",
 		"--svtn", "test-svtn",
 		"--role", "console",
+		"--yes",
 	}, defaultIO())
 
 	// Ruling-14 §10: must return non-nil error.
@@ -1866,7 +1854,30 @@ func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
 //
 // Traces to interface-definitions.md v1.1 §125/§127/§129; ADR-004; AC-003; S-6.05.
 func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
-	t.Parallel()
+	// NOTE: this test intentionally does NOT call t.Parallel().
+	//
+	// Multiple tests across this file, admin_emission_text_test.go, and
+	// admin_interactive_prompt_test.go directly mutate the same package-level
+	// seam vars (stdinIsTTY, stdinReader).  All seam-mutating tests are
+	// sequential (none call t.Parallel()); the invariant is that they MUST
+	// stay that way.  Running any of them in the parallel pool would trigger
+	// a data race under `go test -race`.
+	//
+	// Current seam-mutating tests (update this list when adding new ones):
+	//   admin_test.go:
+	//     TestSbctlAdmin_SVTNDestroy_ConfirmGate             (this test)
+	//     TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012
+	//     TestNewInBurst19_KeyRegister_ConfirmGate_NonTTY_ReturnsECFG013
+	//     TestNewInBurst19_KeyRegister_ConfirmGate_YesFlag_Proceeds
+	//   admin_emission_text_test.go:
+	//     TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage
+	//     TestNewInBurst19_YesWarning_TargetFlag_Destroy
+	//     TestNewInBurst19_YesWarning_TargetFlag_KeyRegister
+	//   admin_interactive_prompt_test.go:
+	//     TestNewInBurst19_InteractivePrompt_NoLiteralPlaceholder
+	//     TestNewInBurst19_InteractivePrompt_ContainsSVTNPrefix
+	//
+	// Trade-off: slightly longer wall time for this suite.
 
 	// setTTYSeam swaps stdinIsTTY and stdinReader for the duration of one subtest,
 	// restoring the originals via t.Cleanup.  Must be called before t.Parallel()
@@ -1938,7 +1949,7 @@ func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 			isTTY:           false,
 			wantErr:         true,
 			wantNoRPC:       true,
-			wantErrContains: "non-interactive session",
+			wantErrContains: "--confirm is required for scripted use",
 		},
 		{
 			name:          "path4_yes_alone_bypasses",
@@ -2075,6 +2086,67 @@ func TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012(t *testing.T) {
 	}
 }
 
+// TestNewInBurst19_SbctlWire_SvtnIDField verifies that all sbctl-side admin arg
+// structs serialize "svtn_id" (not "svtn") as the JSON key for the SVTN identifier.
+//
+// This is the sbctl-side mirror of the daemon-side wire-tag tests in
+// cmd/switchboard/admin_handlers_wire_shared_pkg_test.go.  Both sides must
+// agree on json:"svtn_id" or the RPC round-trip will silently drop the field.
+//
+// Traces to F-P6B-001; interface-definitions.md §JSON Output Schema.
+func TestNewInBurst19_SbctlWire_SvtnIDField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload func() ([]byte, error)
+	}{
+		{
+			name: "adminKeyRegisterArgs",
+			payload: func() ([]byte, error) {
+				return json.Marshal(adminKeyRegisterArgs{SVTNID: "x", Pubkey: "k", Role: "control"})
+			},
+		},
+		{
+			name: "adminKeyRevokeArgs",
+			payload: func() ([]byte, error) {
+				return json.Marshal(adminKeyRevokeArgs{SVTNID: "x", Pubkey: "k", Role: "control"})
+			},
+		},
+		{
+			name: "adminKeyExpireArgs",
+			payload: func() ([]byte, error) {
+				return json.Marshal(adminKeyExpireArgs{SVTNID: "x", Pubkey: "k", After: "24h"})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b, err := tc.payload()
+			if err != nil {
+				t.Fatalf("marshal %s: %v", tc.name, err)
+			}
+
+			got := string(b)
+
+			// Must contain "svtn_id" as a JSON key.
+			if !strings.Contains(got, `"svtn_id"`) {
+				t.Errorf("%s: marshaled JSON must contain key \"svtn_id\"; got: %s", tc.name, got)
+			}
+			// Must NOT contain the bare "svtn" key (without the _id suffix).
+			// Use exact key match: `"svtn":` with colon to avoid substring collision
+			// with "svtn_id".
+			if strings.Contains(got, `"svtn":`) {
+				t.Errorf("%s: marshaled JSON must NOT contain stale key \"svtn\"; got: %s", tc.name, got)
+			}
+		})
+	}
+}
+
 // TestSbctlAdmin_SVTNDestroy_RequiresControlRole verifies AC-004 (RPC path):
 // A non-control caller (console or readonly role) attempting destroy via the
 // mgmt RPC receives an error response with code E-RPC-011 and message
@@ -2118,5 +2190,363 @@ func TestSbctlAdmin_SVTNDestroy_RequiresControlRole(t *testing.T) {
 	// Error must surface E-ADM-009 (the handler gate code).
 	if !strings.Contains(err.Error(), "E-ADM-009") {
 		t.Errorf("AC-004 RPC path — expected E-ADM-009 in error (RULING-W6TB-A handler gate); got: %v", err)
+	}
+}
+
+// TestNewInBurst19_SbctlListKeys_WireTag_SvtnID verifies that the sbctl-side
+// list-keys args struct (inline anonymous struct inside runAdmin) serializes the
+// SVTN identifier as json:"svtn_id", not the stale json:"svtn".
+//
+// Because the struct is anonymous and inline (defined locally inside runAdmin),
+// it is not directly accessible from tests.  This test uses a mirror struct with
+// the same field layout and asserts:
+//   - the JSON output contains "svtn_id"
+//   - the JSON output does NOT contain the stale key "svtn:" (colon-terminated to
+//     avoid a false match against the "svtn_id" substring)
+//
+// Traces to F-P8-006; interface-definitions.md §JSON Output Schema.
+func TestNewInBurst19_SbctlListKeys_WireTag_SvtnID(t *testing.T) {
+	t.Parallel()
+
+	// Mirror of the inline anonymous struct used in runAdmin's list-keys case.
+	type listKeysArgsTest struct {
+		SVTNID string `json:"svtn_id"`
+	}
+
+	payload, err := json.Marshal(listKeysArgsTest{SVTNID: "my-svtn"})
+	if err != nil {
+		t.Fatalf("marshal listKeysArgsTest: %v", err)
+	}
+
+	got := string(payload)
+
+	// Must contain "svtn_id" as a JSON key.
+	if !strings.Contains(got, `"svtn_id"`) {
+		t.Errorf("list-keys wire args: marshaled JSON must contain key \"svtn_id\"; got: %s", got)
+	}
+	// Must NOT contain the stale bare "svtn" key.
+	// Use "svtn": (with colon) to distinguish from "svtn_id".
+	if strings.Contains(got, `"svtn":`) {
+		t.Errorf("list-keys wire args: marshaled JSON must NOT contain stale key \"svtn\"; got: %s", got)
+	}
+}
+
+// TestSbctlAdmin_ListKeys_MissingFlag_ReturnsError verifies that omitting the
+// required --svtn flag on `sbctl admin list-keys` returns a non-nil error
+// before dispatching any RPC.
+//
+// F-P8-006 (list-keys is `sbctl admin list-keys --svtn <id>`; --svtn is required).
+// BC-2.05.004 precondition 2 (key operations must be well-formed).
+func TestSbctlAdmin_ListKeys_MissingFlag_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	// F-P8-006 — missing --svtn must return non-nil error, not a network error.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, "127.0.0.1:19991", testdataKeyPath(t), false, []string{
+		"list-keys",
+		// No --svtn flag.
+	}, defaultIO())
+
+	if err == nil {
+		t.Error("F-P8-006 — list-keys missing --svtn: expected non-nil error; got nil")
+		return
+	}
+
+	// Tighten oracle: must be a CLI validation error, not a network error.
+	// If --svtn validation fires before any connection attempt, no E-NET-001.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-P8-006 — list-keys missing --svtn: got network error %q; want flag validation error before any connection attempt", errStr)
+	}
+	// The error must mention "--svtn" or "svtn" to confirm the right validation path.
+	if !strings.Contains(errStr, "svtn") {
+		t.Errorf("F-P8-006 — list-keys missing --svtn: error %q does not mention 'svtn'; want flag-specific validation message", errStr)
+	}
+}
+
+// TestSbctlAdmin_ListKeys_CLI verifies F-P8-006 at the CLI integration layer:
+// `sbctl admin list-keys --svtn <id>` dispatches the admin.key.list-keys RPC
+// with the correct wire-format payload — specifically that the SVTN identifier
+// is sent as json:"svtn_id" (not the stale json:"svtn") from the production
+// inline anonymous struct inside runAdmin's list-keys case.
+//
+// This test catches tag regressions that the tautological mirror-struct test
+// TestNewInBurst19_SbctlListKeys_WireTag_SvtnID cannot: if a maintainer changes
+// the production struct's tag from json:"svtn_id" back to json:"svtn", this test
+// fails red while the mirror test remains green.
+//
+// Parallel-safe: startFakeServer creates an isolated TCP listener per call so
+// concurrent test instances do not share state.  No package-level seam vars
+// (stdinIsTTY / stdinReader) are mutated, so no race risk.
+//
+// F-P8-006 (list-keys is `sbctl admin list-keys --svtn <id>`; wire: admin.key.list-keys).
+// interface-definitions.md §JSON Output Schema (json:"svtn_id" not json:"svtn").
+func TestSbctlAdmin_ListKeys_CLI(t *testing.T) {
+	t.Parallel()
+
+	// F-P8-006 — list-keys dispatches admin.key.list-keys with correct wire payload.
+	// The fake server captures the raw RPC args so we can verify the JSON tag.
+	const svtnName = "test-list-keys-svtn"
+
+	requestCh := make(chan adminRPCRequest, 1)
+	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.key.list-keys" {
+			return nil, fmt.Errorf("unexpected command: %q; want admin.key.list-keys", cmd)
+		}
+		// Return a plausible empty key list so runAdmin can complete successfully.
+		_ = args
+		return []any{}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"list-keys",
+		"--svtn", svtnName,
+	}, defaultIO())
+	if err != nil {
+		t.Fatalf("runAdmin list-keys: %v", err)
+	}
+
+	// Receive the captured RPC request and assert wire-level correctness.
+	select {
+	case req := <-requestCh:
+		// F-P8-006: command must be admin.key.list-keys.
+		if req.Command != "admin.key.list-keys" {
+			t.Errorf("F-P8-006 — dispatched command: got %q; want admin.key.list-keys", req.Command)
+		}
+
+		// Unmarshal to a raw map so we can inspect actual JSON key names, not
+		// Go field names.  This is what makes this test non-tautological: it
+		// reads the keys that were actually serialized by the production struct.
+		var raw map[string]any
+		if err := json.Unmarshal(req.Args, &raw); err != nil {
+			t.Fatalf("F-P8-006 — unmarshal list-keys args: %v", err)
+		}
+
+		// The SVTN identifier must be sent under the "svtn_id" key.
+		svtnIDVal, ok := raw["svtn_id"]
+		if !ok {
+			t.Errorf("F-P8-006 — wire args missing key \"svtn_id\"; got: %s", req.Args)
+		} else if svtnIDVal != svtnName {
+			t.Errorf("F-P8-006 — wire svtn_id: got %q; want %q", svtnIDVal, svtnName)
+		}
+
+		// The stale "svtn" key (without _id suffix) must be absent.
+		if _, stale := raw["svtn"]; stale {
+			t.Errorf("F-P8-006 — wire args must NOT contain stale key \"svtn\"; got: %s", req.Args)
+		}
+
+	case <-time.After(2 * time.Second):
+		t.Error("F-P8-006: timed out waiting for admin.key.list-keys RPC; " +
+			"runAdmin must dispatch the RPC within the context deadline")
+	}
+}
+
+// TestSubprocessAdmin_YesPlusConfirmExitCode2 verifies that combining --yes and
+// --confirm on `sbctl admin svtn destroy` causes the process to exit with code 2
+// (usage error), not code 1 (runtime error).
+//
+// F-Adv-B-002: E-CFG-012 is a flag mutual-exclusion violation; per error-taxonomy.md
+// the correct OS exit code for usage errors is 2.  In-process tests (e.g.
+// TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012) verify the error TEXT;
+// this test verifies the OS-level exit code.
+//
+// The subprocess entry point (TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry)
+// maps E-CFG-012 errors to os.Exit(2) and all other errors to os.Exit(1), mirroring
+// the mapping that a properly wired main() would provide for this error class.
+func TestSubprocessAdmin_YesPlusConfirmExitCode2(t *testing.T) {
+	t.Parallel()
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry")
+	cmd.Env = append(
+		os.Environ(),
+		"SBCTL_ADMIN_SUBPROCESS_ECFG012=1",
+		"SBCTL_TEST_KEY="+testdataKeyPath(t),
+	)
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("F-Adv-B-002: expected non-zero exit; --yes+--confirm must be rejected as a usage error")
+	}
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("F-Adv-B-002: expected ExitError, got %T: %v", err, err)
+	}
+	if exitErr.ExitCode() != 2 {
+		t.Fatalf("F-Adv-B-002: expected exit code 2 (usage error) for E-CFG-012; got %d\nstderr: %s",
+			exitErr.ExitCode(), errBuf.String())
+	}
+}
+
+// TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry is the subprocess entry point
+// for TestSubprocessAdmin_YesPlusConfirmExitCode2.  It invokes runAdmin with
+// --yes + --confirm (the E-CFG-012 trigger) and maps the result to an exit code:
+// E-CFG-012 → os.Exit(2), any other error → os.Exit(1), success → os.Exit(0).
+func TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry(t *testing.T) {
+	if os.Getenv("SBCTL_ADMIN_SUBPROCESS_ECFG012") != "1" {
+		t.Skip("subprocess entry — skip in parent process")
+	}
+
+	keyPath := os.Getenv("SBCTL_TEST_KEY")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	sio := defaultIO()
+	err := runAdmin(ctx, "127.0.0.1:19992", keyPath, false, []string{
+		"svtn", "destroy",
+		"--name", "some-svtn",
+		"--yes",
+		"--confirm", "SVTN-aabbccdd",
+	}, sio)
+
+	if err == nil {
+		os.Exit(0)
+	}
+	// Map E-CFG-012 (flag mutual-exclusion usage error) to exit code 2.
+	if strings.Contains(err.Error(), "E-CFG-012") {
+		os.Exit(2)
+	}
+	os.Exit(1)
+}
+
+// ── Burst-19 confirm-gate tests for key register (F-11A-1) ───────────────────
+
+// TestNewInBurst19_KeyRegister_ConfirmGate_NonTTY_ReturnsECFG013 verifies that
+// `sbctl admin key register` in a non-TTY environment without --confirm or --yes
+// returns E-CFG-013 (non-interactive session error) before attempting any network
+// connection.
+//
+// Fix F-11A-1 wired runAdminKeyRegister to runDestroyConfirmGate; this test proves
+// Path 3 (non-TTY + no --confirm) fires on the key-register path just as it does on
+// svtn-destroy.
+//
+// Traces to ADR-004; interface-definitions.md v1.1 §129; Fix F-11A-1/F-11A-4.
+func TestNewInBurst19_KeyRegister_ConfirmGate_NonTTY_ReturnsECFG013(t *testing.T) {
+	// NOT parallel: mutates package-level seams stdinIsTTY / stdinReader.
+	// See the seam-safety note in TestSbctlAdmin_SVTNDestroy_ConfirmGate.
+	origIsTTY := stdinIsTTY
+	origReader := stdinReader
+	stdinIsTTY = func() bool { return false }
+	stdinReader = strings.NewReader("")
+	t.Cleanup(func() {
+		stdinIsTTY = origIsTTY
+		stdinReader = origReader
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// No --confirm, no --yes: Path 3 must fire before any dial attempt.
+	err := runAdmin(ctx, "127.0.0.1:19989", testdataKeyPath(t), false, []string{
+		"key", "register",
+		"--svtn", "test-svtn",
+		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key",
+		"--role", "control",
+	}, defaultIO())
+
+	if err == nil {
+		t.Fatal("F-11A-1/F-11A-4: expected E-CFG-013 in non-TTY session without --confirm; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-013") {
+		t.Errorf("F-11A-1/F-11A-4: expected E-CFG-013 in error; got: %v", err)
+	}
+	// Must NOT be a network error — the confirm gate fires before any dial attempt.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-11A-1: confirm gate must fire before any dial; got network error: %v", err)
+	}
+}
+
+// TestNewInBurst19_KeyRegister_ConfirmGate_YesFlag_Proceeds verifies that
+// `sbctl admin key register --yes` bypasses the confirm gate and attempts to
+// reach the daemon — proved by the resulting network failure, not a gate error.
+//
+// Fix F-11A-1 added --yes to runAdminKeyRegister; --yes must bypass
+// runDestroyConfirmGate and hand control to connectAndRun.
+//
+// Traces to ADR-004; interface-definitions.md v1.1 §127; Fix F-11A-1.
+func TestNewInBurst19_KeyRegister_ConfirmGate_YesFlag_Proceeds(t *testing.T) {
+	// NOT parallel: mutates package-level seams stdinIsTTY / stdinReader.
+	// See the seam-safety note in TestSbctlAdmin_SVTNDestroy_ConfirmGate.
+	origIsTTY := stdinIsTTY
+	origReader := stdinReader
+	stdinIsTTY = func() bool { return false }
+	stdinReader = strings.NewReader("")
+	t.Cleanup(func() {
+		stdinIsTTY = origIsTTY
+		stdinReader = origReader
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// --yes bypasses the confirm gate; the dial to the unreachable address must
+	// produce E-NET-001, proving connectAndRun was reached.
+	err := runAdmin(ctx, "127.0.0.1:19988", testdataKeyPath(t), false, []string{
+		"key", "register",
+		"--svtn", "test-svtn",
+		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key",
+		"--role", "control",
+		"--yes",
+	}, defaultIO())
+
+	// Must fail — daemon is unreachable.
+	if err == nil {
+		t.Fatal("F-11A-1: expected network error (daemon unreachable after gate bypass); got nil")
+	}
+	// Error must be a network error, proving the confirm gate did not block dispatch.
+	errStr := err.Error()
+	if !strings.Contains(errStr, "E-NET-001") && !strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-11A-1: expected E-NET-001 or connection refused (gate bypassed, dial attempted); got: %v", err)
+	}
+	// Must NOT be E-CFG-013 — the gate must not have fired.
+	if strings.Contains(errStr, "E-CFG-013") {
+		t.Errorf("F-11A-1: E-CFG-013 must not appear when --yes is supplied; got: %v", err)
+	}
+}
+
+// TestNewInBurst19_ConfirmNormalize_UppercaseHex_Accepted verifies Fix F-11A-5:
+// confirmSVTNShortIDValid accepts uppercase, lowercase, and mixed-case hex tokens
+// because the function normalizes input to lowercase before validation.
+//
+// Traces to F-11A-5; ADR-004; interface-definitions.md v1.1 §125.
+func TestNewInBurst19_ConfirmNormalize_UppercaseHex_Accepted(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		// F-11A-5: uppercase hex must be accepted after normalization.
+		{"uppercase_hex", "SVTN-AABBCCDD", true},
+		// Baseline: lowercase is the canonical form and must be accepted.
+		{"lowercase_hex", "SVTN-aabbccdd", true},
+		// F-11A-5: mixed case must also be accepted.
+		{"mixed_case_hex", "SVTN-AaBbCcDd", true},
+		// Negative: malformed token must still be rejected.
+		{"invalid_too_short", "SVTN-aabbcc", false},
+		{"invalid_no_prefix", "aabbccdd", false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := confirmSVTNShortIDValid(tc.input)
+			if got != tc.want {
+				t.Errorf("F-11A-5: confirmSVTNShortIDValid(%q) = %v; want %v", tc.input, got, tc.want)
+			}
+		})
 	}
 }

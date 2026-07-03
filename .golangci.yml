@@ -28,6 +28,14 @@ linters:
     - unparam        # unused function parameters
 
   settings:
+    errcheck:
+      # io.Pipe{Reader,Writer}.Close never returns an error in practice
+      # (it always returns nil). Excluding them suppresses noise in test
+      # cleanup teardowns where the caller can do nothing useful with the
+      # return value.
+      exclude-functions:
+        - (*io.PipeReader).Close
+        - (*io.PipeWriter).Close
     staticcheck:
       # ST1005: error strings should not end with punctuation or newlines.
       # We enforce this — keeps `fmt.Errorf("...: %w", err)` uniform.

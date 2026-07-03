@@ -37,6 +37,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
+	"golang.org/x/crypto/ssh"
 )
 
 // maxKeyTTL is the server-side upper bound for admin.key.expire TTL values.
@@ -46,8 +47,8 @@ const maxKeyTTL = 100 * 365 * 24 * time.Hour
 // adminKeyRegisterArgs is the wire JSON args for admin.key.register.
 // The `role` field uses the canonical JSON key per interface-definitions.md v1.1.
 type adminKeyRegisterArgs struct {
-	SVTNName   string `json:"svtn"`
-	PublicKey  string `json:"pubkey"` // base64-encoded Ed25519 public key
+	SVTNName   string `json:"svtn_id"`
+	PublicKey  string `json:"pubkey_openssh"` // OpenSSH-format Ed25519 public key (e.g. ssh-ed25519 AAAA... comment)
 	Role       string `json:"role"`
 	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
@@ -55,25 +56,25 @@ type adminKeyRegisterArgs struct {
 // adminKeyRevokeArgs is the wire JSON args for admin.key.revoke.
 // The `role` field is the canonical JSON key (F-002 ruling; HOLD-001 hybrid).
 type adminKeyRevokeArgs struct {
-	SVTNName   string `json:"svtn"`
-	PublicKey  string `json:"pubkey"` // base64-encoded Ed25519 public key
-	Role       string `json:"role"`   // caller-supplied current role for cross-check
+	SVTNName   string `json:"svtn_id"`
+	PublicKey  string `json:"pubkey_openssh"` // OpenSSH-format Ed25519 public key (e.g. ssh-ed25519 AAAA... comment)
+	Role       string `json:"role"`           // caller-supplied current role for cross-check
 	Confirm    bool   `json:"confirm"`
 	CallerRole string `json:"caller_role"` // optional; enforced by verifyCallerRole (AC-006)
 }
 
 // adminKeyExpireArgs is the wire JSON args for admin.key.expire.
 type adminKeyExpireArgs struct {
-	SVTNName  string `json:"svtn"`
-	PublicKey string `json:"pubkey"` // base64-encoded Ed25519 public key
-	After     string `json:"after"`  // duration string e.g. "24h"
+	SVTNName  string `json:"svtn_id"`
+	PublicKey string `json:"pubkey_openssh"` // OpenSSH-format Ed25519 public key (e.g. ssh-ed25519 AAAA... comment)
+	After     string `json:"after"`          // duration string e.g. "24h"
 }
 
 // adminListKeysArgs is the wire JSON args for admin.key.list-keys.
 // admin.key.list-keys is read-only and admits any role (F-L2-003); CallerRole
 // is accepted for fallback compatibility but not used for authority gating.
 type adminListKeysArgs struct {
-	SVTNName   string `json:"svtn"`
+	SVTNName   string `json:"svtn_id"`
 	CallerRole string `json:"caller_role"` // optional; NOT gated — admin.key.list-keys is any-role (F-L2-003)
 }
 
@@ -133,15 +134,38 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 	}
 }
 
-// decodePublicKey decodes a base64-encoded (standard or raw URL) Ed25519 public key.
-// Returns E-CFG-001 if the value is missing or does not decode to exactly 32 bytes
-// (ed25519.PublicKeySize). The raw-string fallback was removed (F-005): all keys
-// must be valid base64 and decode to exactly 32 bytes.
+// decodePublicKey decodes an Ed25519 public key from either OpenSSH authorized_keys
+// format ("ssh-ed25519 <base64> [comment]") or raw base64-encoded bytes.
+// Returns E-CFG-001 if the value is missing, has the wrong key type, or does not
+// decode to exactly 32 bytes (ed25519.PublicKeySize).
 func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 	if encoded == "" {
-		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey")
+		return nil, fmt.Errorf("E-CFG-001: missing required field: pubkey_openssh")
 	}
-	// Try standard encoding first, then raw URL encoding.
+
+	// Detect OpenSSH authorized_keys format by the presence of a key-type prefix.
+	// ssh.ParseAuthorizedKey handles "ssh-ed25519 <base64> [comment]" and similar.
+	if strings.HasPrefix(encoded, "ssh-") || strings.HasPrefix(encoded, "ecdsa-") || strings.HasPrefix(encoded, "sk-") {
+		sshPubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(encoded))
+		if err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid pubkey: cannot parse OpenSSH format: %w", err)
+		}
+		// Only ed25519 keys are accepted.
+		if sshPubKey.Type() != "ssh-ed25519" {
+			return nil, fmt.Errorf("E-CFG-001: invalid pubkey: key type %q is not supported; must be ed25519", sshPubKey.Type())
+		}
+		cryptoPub, ok := sshPubKey.(ssh.CryptoPublicKey)
+		if !ok {
+			return nil, fmt.Errorf("E-CFG-001: invalid pubkey: cannot extract crypto public key from ssh.PublicKey")
+		}
+		ed25519Pub, ok := cryptoPub.CryptoPublicKey().(ed25519.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("E-CFG-001: invalid pubkey: ssh-ed25519 key did not yield ed25519.PublicKey")
+		}
+		return ed25519Pub, nil
+	}
+
+	// Fall back to raw base64 (standard or raw URL encoding) for backward compatibility.
 	raw, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		raw, err = base64.RawURLEncoding.DecodeString(encoded)
@@ -164,7 +188,7 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
 		if a.SVTNName == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn_id")
 		}
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
@@ -206,7 +230,7 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
 		if a.SVTNName == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn_id")
 		}
 
 		// AC-006: resolve caller role server-side from authenticated pubkey in ctx
@@ -250,13 +274,13 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 		}
 
 		var svtnName string
-		if v, ok := raw["svtn"]; ok {
+		if v, ok := raw["svtn_id"]; ok {
 			if err := json.Unmarshal(v, &svtnName); err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid svtn field: %w", err)
+				return nil, fmt.Errorf("E-CFG-001: invalid svtn_id field: %w", err)
 			}
 		}
 		if svtnName == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn_id")
 		}
 
 		// AC-006: enforce caller authority server-side (F-006; F-001b).
@@ -292,9 +316,9 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 		}
 
 		var pubkeyStr string
-		if v, ok := raw["pubkey"]; ok {
+		if v, ok := raw["pubkey_openssh"]; ok {
 			if err := json.Unmarshal(v, &pubkeyStr); err != nil {
-				return nil, fmt.Errorf("E-CFG-001: invalid pubkey field: %w", err)
+				return nil, fmt.Errorf("E-CFG-001: invalid pubkey_openssh field: %w", err)
 			}
 		}
 		pubkey, err := decodePublicKey(pubkeyStr)
@@ -328,7 +352,7 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
 		if a.SVTNName == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn")
+			return nil, fmt.Errorf("E-CFG-001: missing required field: svtn_id")
 		}
 
 		// F-L2-003: admin.key.list-keys is read-only; any admitted role may call it.
@@ -402,21 +426,21 @@ func mapAdminError(err error, svtnName string, targetPub ed25519.PublicKey, clai
 			)
 		}
 		return fmt.Errorf(
-			"E-ADM-019: role mismatch: claimed role %s does not match registered key role for key %s: %w",
-			claimedRoleStr, fp, err,
+			"E-ADM-019: role mismatch: claimed role %s does not match registered key role %s for key %s: %w",
+			claimedRoleStr, "unknown", fp, err,
 		)
 	case errors.Is(err, svtnmgmt.ErrInvalidDuration):
 		// Defense-in-depth: handler-side duration guards already fire before
 		// ExpireKey is called, so this arm is unreachable in production (F-L1-B).
 		return fmt.Errorf("E-CFG-001: invalid duration: %w", err)
 	case errors.Is(err, svtnmgmt.ErrControlRevocationRequiresConfirm):
-		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed (revoking control key from SVTN %q): %w", svtnName, err)
+		return fmt.Errorf("E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed: %w", err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyRevokeForbidden):
 		return fmt.Errorf("E-ADM-020: bootstrap-key-revoke-forbidden: cannot revoke the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrBootstrapKeyExpireForbidden):
 		return fmt.Errorf("E-ADM-021: bootstrap-key-expire-forbidden: cannot expire the bootstrap key in SVTN %s (permanent trust anchor): %w", svtnName, err)
 	case errors.Is(err, svtnmgmt.ErrDestroyUnauthorized):
-		return fmt.Errorf("E-ADM-011: destroy unauthorized: role=%s svtn_name=%s: %w", claimedRoleStr, svtnName, err)
+		return fmt.Errorf("E-ADM-011: permission denied: %s key cannot destroy SVTN %s: %w", claimedRoleStr, svtnName, err)
 	default:
 		// Default arm is defense-in-depth: every sentinel SVTNManager can return
 		// should have an explicit case above. If this arm fires it is a programmer
@@ -599,7 +623,7 @@ type adminKeyNotFoundErr struct {
 }
 
 func (e *adminKeyNotFoundErr) Error() string {
-	return fmt.Sprintf("E-ADM-013: key not found: fingerprint %s not registered in SVTN %s", e.fingerprint, e.svtnName)
+	return fmt.Sprintf("E-ADM-013: key not found: no key with fingerprint %s registered in SVTN %s", e.fingerprint, e.svtnName)
 }
 
 func (e *adminKeyNotFoundErr) Unwrap() error { return e.cause }
@@ -710,7 +734,7 @@ func makeAdminSVTNCreateHandler(m *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet)
 			// F-P2L1-004: non-duplicate Create failure (e.g. internal rand.Read failure)
 			// stamped with E-INT-001. Use %w to preserve the error chain for operators
 			// and allow errors.Is/As inspection by callers (go.md rule 4; F-Impl-003).
-			return nil, fmt.Errorf("E-INT-001: admin.svtn.create: create SVTN %s: %w", a.Name, err)
+			return nil, fmt.Errorf("E-INT-001: internal error: admin.svtn.create: %w", err)
 		}
 
 		// AC-004: svtn_id as hex string; bootstrap_fingerprint verbatim from

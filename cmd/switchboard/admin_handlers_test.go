@@ -554,10 +554,10 @@ func TestBuildAdminHandlers_KeyRevoke_UnknownRole(t *testing.T) {
 
 	// Unknown role string (EC-002): must reject with E-CFG-001.
 	args, err := json.Marshal(map[string]any{
-		"svtn":    "test-svtn",
-		"pubkey":  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-		"role":    "superadmin", // unrecognised role
-		"confirm": false,
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"role":           "superadmin", // unrecognised role
+		"confirm":        false,
 	})
 	if err != nil {
 		t.Fatalf("marshal args: %v", err)
@@ -596,8 +596,8 @@ func TestBuildAdminHandlers_KeyExpire_MissingAfterField(t *testing.T) {
 
 	// Missing `after` field (EC-005): must reject with E-CFG-001 "missing required field: after".
 	args, err := json.Marshal(map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 		// "after" is intentionally absent
 	})
 	if err != nil {

@@ -482,10 +482,10 @@ func TestE2E_AdminRevoke_RoleMismatch(t *testing.T) {
 	}
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
-		"svtn":    "test-svtn",
-		"pubkey":  encodedPubkey,
-		"role":    "console", // mismatch: key is registered as control
-		"confirm": false,
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedPubkey,
+		"role":           "console", // mismatch: key is registered as control
+		"confirm":        false,
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -519,10 +519,10 @@ func TestE2E_AdminRevoke_ControlWithoutConfirm(t *testing.T) {
 	}
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
-		"svtn":    "test-svtn",
-		"pubkey":  encodedPubkey,
-		"role":    "control",
-		"confirm": false, // intentionally false — should trigger E-ADM-018
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedPubkey,
+		"role":           "control",
+		"confirm":        false, // intentionally false — should trigger E-ADM-018
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -555,10 +555,10 @@ func TestE2E_AdminRevoke_ControlWithConfirm(t *testing.T) {
 	}
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.revoke", map[string]any{
-		"svtn":    "test-svtn",
-		"pubkey":  encodedPubkey,
-		"role":    "control",
-		"confirm": true,
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedPubkey,
+		"role":           "control",
+		"confirm":        true,
 	})
 
 	if ok, _ := resp["ok"].(bool); !ok {
@@ -597,9 +597,9 @@ func TestE2E_AdminRegister_HappyPath(t *testing.T) {
 	encodedPubkey := base64.RawURLEncoding.EncodeToString([]byte(regPub))
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": encodedPubkey,
-		"role":   "access",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedPubkey,
+		"role":           "access",
 	})
 
 	if ok, _ := resp["ok"].(bool); !ok {
@@ -627,9 +627,9 @@ func TestE2E_AdminExpire_HappyPath(t *testing.T) {
 	}
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": encodedPubkey,
-		"after":  "24h",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedPubkey,
+		"after":          "24h",
 	})
 
 	if ok, _ := resp["ok"].(bool); !ok {
@@ -669,7 +669,7 @@ func TestE2E_AdminListKeys_HappyPath(t *testing.T) {
 	}
 
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.list-keys", map[string]any{
-		"svtn": "test-svtn",
+		"svtn_id": "test-svtn",
 	})
 
 	data, _ := resp["data"].(map[string]any)
@@ -699,9 +699,9 @@ func TestAccessMode_AdminHandlersNotRegistered(t *testing.T) {
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
-		"svtn":   "any-svtn",
-		"pubkey": "placeholder",
-		"role":   "access",
+		"svtn_id":        "any-svtn",
+		"pubkey_openssh": "placeholder",
+		"role":           "access",
 	})
 
 	// Access-mode daemon MUST return E-RPC-010 for any admin.key.* command.
@@ -734,9 +734,9 @@ func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.register", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
-		"role":   "access",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": "placeholder",
+		"role":           "access",
 	})
 
 	// Must NOT be E-RPC-010 "unknown command".
@@ -826,9 +826,9 @@ func TestAC004_NonControlRoleRejected(t *testing.T) {
 			// sets callerPub in the handler context.
 			resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv,
 				"admin.key.register", map[string]any{
-					"svtn":   "test-svtn",
-					"pubkey": encodedTarget,
-					"role":   "access",
+					"svtn_id":        "test-svtn",
+					"pubkey_openssh": encodedTarget,
+					"role":           "access",
 				})
 
 			errObj, _ := resp["error"].(map[string]any)
@@ -860,9 +860,9 @@ func TestE2E_AdminExpire_ServerRejectsTTLNegative(t *testing.T) {
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
-		"after":  "-1h",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": "placeholder",
+		"after":          "-1h",
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -892,9 +892,9 @@ func TestE2E_AdminExpire_ServerRejectsTTLZero(t *testing.T) {
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
-		"after":  "0s",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": "placeholder",
+		"after":          "0s",
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -925,9 +925,9 @@ func TestE2E_AdminExpire_ServerRejectsTTLTooLong(t *testing.T) {
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
 	// 876001h > 100 years (100 * 365 * 24 = 876000h)
 	resp := sendAdminRPC(t, es.socketPath, callerPriv, "admin.key.expire", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": "placeholder",
-		"after":  "876001h",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": "placeholder",
+		"after":          "876001h",
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -971,9 +971,9 @@ func TestE2E_AdminKeyRegister_RoleInsufficient(t *testing.T) {
 
 	// Authenticate as the console-role caller.
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.register", map[string]any{
-		"svtn":   "test-svtn",
-		"pubkey": encodedTarget,
-		"role":   "access",
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedTarget,
+		"role":           "access",
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -1017,10 +1017,10 @@ func TestE2E_AdminKeyRevoke_RoleInsufficient(t *testing.T) {
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.revoke", map[string]any{
-		"svtn":    "test-svtn",
-		"pubkey":  encodedTarget,
-		"role":    "control",
-		"confirm": false,
+		"svtn_id":        "test-svtn",
+		"pubkey_openssh": encodedTarget,
+		"role":           "control",
+		"confirm":        false,
 	})
 
 	errObj, _ := resp["error"].(map[string]any)
@@ -1057,7 +1057,7 @@ func TestE2E_AdminListKeys_AnyRole(t *testing.T) {
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.list-keys", map[string]any{
-		"svtn": "test-svtn",
+		"svtn_id": "test-svtn",
 	})
 
 	// F-L2-003: console-role caller MUST succeed (ok:true), not receive E-ADM-009.
@@ -1127,7 +1127,7 @@ func TestAdminSVTNDestroy_E2E_VP048Property2(t *testing.T) {
 
 	// VP-048 P2a: SVTN no longer appears in the list.
 	listResp := sendAdminRPC(t, es.socketPath, ctrlPriv, "admin.key.list-keys", map[string]any{
-		"svtn": "vp048p2-svtn",
+		"svtn_id": "vp048p2-svtn",
 	})
 	if ok, _ := listResp["ok"].(bool); ok {
 		t.Error("VP-048 P2a — list-keys for destroyed SVTN returned ok:true; expected E-SVTN-003")
