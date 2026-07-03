@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.26"
+version: "1.27"
 status: draft
 producer: product-owner
 timestamp: 2026-07-03T00:00:00
@@ -140,6 +140,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 Confirmation flow summary (applies to the `runDestroyConfirmGate` family: svtn destroy, key register, recover pending): interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-012, exit 2). In a non-interactive session (no TTY) where neither `--confirm` nor `--yes` is supplied, the command exits with E-CFG-013 (exit 2) — use `--confirm=<svtn-short-id>` or `--yes` for scripted invocations. **`sbctl admin key revoke` is not part of this family** — see `key revoke` carve-out note under §131.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
 
+> **v1.27 changelog note (2026-07-03):** POL-001. Remove undocumented `$schema` field from JSON envelope success example; correct "share a common envelope" prose to reflect that sbctl emits a schemaless envelope. Normalizes spec to observable sbctl behavior at `cmd/sbctl/client.go:97-101` (jsonEnvelope struct has no Schema field) and `cmd/sbctl/main.go:104-113` (constructors never populate one). Addresses F-P5P16-A-001. No production domain exists to host the referenced schema URL.
+
 > **v1.26 changelog note (2026-07-03):** Phase 5 Pass 15 adversarial remediation (F-P5P15-A-001 [MED]). Registered Verbs Response Data column corrections: (1) `admin.key.register` row: `{"ok": true}` → `{"key_fingerprint": "SHA256:<base64>", "timestamp": "<RFC3339>"}` — wire response is `adminKeyResult{Fingerprint, At}` per `cmd/switchboard/admin_handlers.go:84-87` (struct) and return sites at `:215-218`; (2) `admin.key.revoke` row: same correction, return site `:257-260`; (3) `admin.key.expire` row: same correction, return site `:336-339`; (4) `admin.svtn.destroy` row: `{"ok": true, "status": "destroyed"}` → `{"status": "destroyed"}` — outer envelope `ok/error` is documented in the response envelope section and does not belong in the Response Data column; wire return is `struct{Status string \`json:"status"\`}{Status: "destroyed"}` per `admin_handlers.go:866-868`. All corrections verified against BC-2.05.004 PC-4 (fingerprint + timestamp postcondition for key lifecycle operations) and develop tip `6deda15`. Refs: F-P5P15-A-001.
 
 > **v1.25 changelog note (2026-07-03):** Phase 5 Pass 13 sharpening (F-L2-003 admission gate distinction). BC-2.05.004:155 sharpened: F-L2-003 removes the CONTROL-only AUTHORITY gate but NOT the ADMISSION gate; cross-SVTN callers denied with E-ADM-009 (CWE-862 defense against cross-SVTN roster enumeration). BC-2.05.004 EC-008 added: enumerates the three reachable list-keys admission failure modes — (1) missing CallerPubkey / no ambient bootstrap identity → E-ADM-009; (2) CallerPubkey present but not registered on target SVTN AND not in operator-set AND not bootstrap → E-ADM-009; (3) CallerPubkey present, registered on target SVTN, but revoked/expired (registered-any-state true, active false) → E-ADM-009. VP-075:114 Scope exclusion paragraph expanded: F-L2-003 scope exclusion clarified — authority gate only, not admission gate; BC-2.05.004:155 and EC-008 cross-referenced; CWE-862 cited. §111 auth column sharpened from "Any admitted role" to enumerate the full admission requirement (any active role OR operator-set OR bootstrap key) with explicit note that AUTHORITY gate is bypassed but ADMISSION gate is not. BC-2.05.004 bumped v1.12 → v1.13; VP-075 bumped v1.6 → v1.7. Ref: PR #69 (merged squash 03ce8e7).
@@ -201,11 +203,10 @@ Confirmation flow summary (applies to the `runDestroyConfirmGate` family: svtn d
 
 ## JSON Output Schema
 
-JSON output is produced when `--json` flag is present on any sbctl command. All JSON responses share a common envelope:
+JSON output is produced when `--json` flag is present on any sbctl command. All JSON responses share the same envelope shape (`ok`, `error`, `data` — no top-level schema field is emitted):
 
 ```json
 {
-  "$schema": "https://switchboard.example/schemas/v1/response.json",
   "ok": true,
   "error": null,
   "data": { ... }
