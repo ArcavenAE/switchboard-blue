@@ -223,6 +223,18 @@ func TestNewInBurst19_DecodePublicKey_CorruptOpenSSH_RejectsWithParseError(t *te
 	if err == nil {
 		t.Fatalf("decodePublicKey(corrupt OpenSSH): expected error, got nil (key bytes: %v)", got)
 	}
+	// The error must describe a parse failure, NOT the missing-pubkey sentinel.
+	// E-CFG-001 is shared by all decodePublicKey paths; the discriminating text
+	// for the ssh.ParseAuthorizedKey failure path is "cannot parse OpenSSH format".
+	errStr := err.Error()
+	if !strings.Contains(errStr, "cannot parse OpenSSH format") {
+		t.Errorf("decodePublicKey(corrupt OpenSSH): expected parse-failure error containing "+
+			"\"cannot parse OpenSSH format\"; got: %v", err)
+	}
+	// Must NOT be the empty-input sentinel.
+	if strings.Contains(errStr, "missing required field: pubkey_openssh") {
+		t.Errorf("decodePublicKey(corrupt OpenSSH): got missing-pubkey error; expected parse error: %v", err)
+	}
 }
 
 // TestNewInBurst19_DecodePublicKey_Base64WrongLength_RejectsWithLengthError
@@ -239,5 +251,17 @@ func TestNewInBurst19_DecodePublicKey_Base64WrongLength_RejectsWithLengthError(t
 	got, err := decodePublicKey(shortKey)
 	if err == nil {
 		t.Fatalf("decodePublicKey(31-byte base64): expected length error, got nil (key bytes: %v)", got)
+	}
+	// The error must mention the key size requirement.
+	// decodePublicKey returns "must be 32-byte Ed25519 public key (got N bytes)"
+	// for the length-check path.
+	errStr := err.Error()
+	if !strings.Contains(errStr, "32") {
+		t.Errorf("decodePublicKey(31-byte base64): expected length error mentioning \"32\"; got: %v", err)
+	}
+	// Must NOT look like the corrupt-OpenSSH parse-failure error path.
+	if strings.Contains(errStr, "cannot parse OpenSSH format") {
+		t.Errorf("decodePublicKey(31-byte base64): got OpenSSH parse error (wrong path); "+
+			"expected base64 length error: %v", err)
 	}
 }
