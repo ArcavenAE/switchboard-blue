@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.73"
+version: "3.74"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-03T00:00:00
@@ -36,7 +36,7 @@ inputDocuments:
 | Backlog | 10 active (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS, S-BL.DISCOVERY-WIRE, S-BL.ADMIN-RECOVER-WIRE, S-BL.CLI-SURFACE-COMPLETION) + 2 won't-fix (S-BL.SVTN-LIST-WIRE, S-BL.PING-VERSION-WIRE) — S-BL.LOOKUP promoted and merged; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B and merged PR #56 |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
-| VP coverage | 76/76 (100%) — VP-068..VP-076 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076 anchored to BC-2.05.004) |
+| VP coverage | 77/77 (100%) — VP-068..VP-077 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076/VP-077 anchored to BC-2.05.004) |
 
 ## Master Story Index
 
@@ -181,6 +181,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.74 | 2026-07-03 | Pass 18 remediation (POL-001+POL-002): (a) Summary VP-coverage counter refreshed 76/76 → 77/77; narrative gloss VP-068..VP-076 → VP-068..VP-077 (VP-077 anchored to BC-2.05.004; closes F-P5P14-B-003 aggregate-freshness leg) (F-P5P18-B-001). (b) Systematic story-frontmatter status sync — 8 stories bumped to canonical `status: merged` (S-6.05, S-6.07, S-7.03, S-1.02, S-1.03, S-2.02, S-W3.04, S-W3.05) matching precedent set by S-BL.ROUTER-ADDR / S-7.01 / S-5.02 / S-6.06. Master-table status-cell vocabulary (mixed `completed`/`merged` for Wave-0..4 vs later waves) intentionally preserved to bound diff scope (F-P5P18-A-001). No BC/VP/AC changes; develop untouched. |
 | 3.73 | 2026-07-03 | F-P5P14-B-002 body-prose sync: S-6.06 v1.24→v1.25 — AC-006 "Scope exclusion (F-L2-003)" paragraph rewritten to reflect admission-gate impl (resolveCallerAdmissionAnyRole at admin_handlers.go:363); VP-077 added to vp_traces; TestE2E_AdminListKeys_AnyRole test note updated. Master-table S-6.06 status cell updated to v1.25. |
 | 3.72 | 2026-07-03 | Burst 27 Pass 8 remediation (citation sync): S-BL.CLI-SURFACE-COMPLETION master-table row updated interface-definitions v1.19→v1.20 (spec-side correction carries PENDING-S-BL.CLI-SURFACE-COMPLETION annotation forward; no story-status change). |
 | 3.71 | 2026-07-03 | Burst 23 Pass 6 remediation: add S-BL.CLI-SURFACE-COMPLETION backlog stub (draft v1.0; F-P5P6-A-005 adjudication annotate-and-defer; BC-2.09.001/BC-2.09.002/BC-2.07.001; provenance interface-definitions v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION; two NO-GOVERNING-BC design obligations: paths ping + svtn status). Total 52→53; active backlog 9→10. S-6.03 master-table status cell updated to v2.8. |
