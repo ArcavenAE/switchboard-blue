@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-12-remediation-complete
+phase_step: phase-5-pass-13-remediation-complete
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -27,10 +27,10 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 66e9ddc
+develop_head: 03ce8e7
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-13-dispatch
+awaiting: phase-5-pass-14-dispatch
 historical_cycles: []
 timestamp: 2026-07-03T00:00:00Z
 last_update: 2026-07-03
@@ -56,7 +56,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_12_REMEDIATION_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11: Adv-A 1H/1M/3obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 33: spec-only v1.23, revoke confirm carve-out + §109 --role syntax) → P12: Adv-A 0H/2M/2obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 35: spec-only v1.24, §111 list-keys exit codes + --svtn <svtn-name> placeholder class sweep incl. §130 recover + §108/§120 confirm-family symmetry) → P13 dispatch next |
+| Phase 5 — Adversarial Refinement | PASS_13_REMEDIATION_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11: Adv-A 1H/1M/3obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 33: spec-only v1.23, revoke confirm carve-out + §109 --role syntax) → P12: Adv-A 0H/2M/2obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 35: spec-only v1.24, §111 list-keys exit codes + --svtn <svtn-name> placeholder class sweep incl. §130 recover + §108/§120 confirm-family symmetry) → P13: Adv-A 1H/1M/2obs + Adv-B 0H/0M/1L/2obs HAS_FINDINGS → REM (Burst 37: PR #69 03ce8e7 admission gate + E-CFG-001 token + stub name; Burst 38: spec v1.25) → P14 dispatch next |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -71,6 +71,8 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 | 2026-07-03 | Phase 5 Pass 11 remediation (Burst 33, SPEC-ONLY) | COMPLETED | interface-definitions v1.23: §131 revoke carve-out from runDestroyConfirmGate family (taxonomy v4.4 + E-ADM-018 daemon-side enforcement); §137 scoped to svtn destroy + key register + admin recover; §109 --role REQUIRED with no-default annotation. Zero code changes; develop stays 66e9ddc. Streak 0/3; Pass 12 next. |
 | 2026-07-03 | Phase 5 Pass 12 split-adversary vs 66e9ddc + v1.23 | COMPLETED | Adv-A HAS_FINDINGS 0H/2M/2obs (F-P5P12-A-001 §111 list-keys exit-code column omits E-SVTN-003 via makeListKeysHandler→mapAdminError + E-CFG-001 client-side exit 2; F-P5P12-A-002 §108/§109/§110 --svtn <id> implies hex identifier while daemon lookup is name-keyed — SVTNName Go field, svtnmgmt.go:254/300/370). Adv-B CLEAN 0/0/0+3obs (raw line-number citations ×4; DecodePublicKey multi-case oracle gap; inert compile-time assertion blocks). Third consecutive zero-code-defect pass (P10/P11/P12). Streak 0/3 (Adv-A HAS_FINDINGS reset). |
 | 2026-07-03 | Phase 5 Pass 12 remediation (Burst 35, SPEC-ONLY) | COMPLETED | interface-definitions v1.24: §111 exit-code column extended (E-SVTN-003 + E-CFG-001); --svtn <id> → <svtn-name> placeholder sweep across §108/§109/§110/§130 recover; OBS-A-002 consistency touch adding confirm-family flags to §108/§120. Zero code changes; develop stays 66e9ddc. Streak 0/3; Pass 13 next. |
+| 2026-07-03 | Phase 5 Pass 13 split-adversary vs 66e9ddc + v1.24 | COMPLETED | Adv-A HAS_FINDINGS 1H/1M/2obs: F-P5P13-A-001 [HIGH] list-keys admission gate removed along with authority gate (CWE-862 cross-SVTN enumeration), F-P5P13-A-002 [MED] E-CFG-001 token absent from list-keys missing-svtn usageErrf; Adv-B HAS_FINDINGS 0H/0M/1L/2obs: F-P5P13-B-001 [LOW] e2e stub registers admin.key.list not admin.key.list-keys. Streak 0/3. |
+| 2026-07-03 | Phase 5 Pass 13 remediation (Bursts 37+38) | COMPLETED | Code track (PR #69 03ce8e7): admission gate restored (F-P5P13-A-001 HIGH); E-CFG-001 token added to list-keys usageErrf (F-P5P13-A-002 MED); stub name corrected (F-P5P13-B-001 LOW). Spec track (Burst 38): interface-definitions v1.25 — §111 auth sharpened; BC-2.05.004 v1.13 — PC-1 F-L2-003 sharpened + EC-008; VP-075 v1.7 — scope exclusion expanded + CWE-862 cross-ref. Streak 0/3; Pass 14 next. |
 
 ## Wave 6 Story Status
 
@@ -168,7 +170,9 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | Phase 5 Pass 11 HAS_FINDINGS | Adv-A 1H/1M/3obs (§131/§137 revoke listed in runDestroyConfirmGate family but impl uses boolStringFlag — spec never received carve-out; §109 syntax missing required --role); Adv-B CLEAN 0/0/0+3obs; both adjudicated spec-side; streak 0/3; Burst 33 spec-only remediation pending | 2026-07-03 |
 | Phase 5 Pass 11 REMEDIATION COMPLETE | Burst 33: interface-definitions v1.23 spec-only — §131 revoke carve-out from runDestroyConfirmGate family (taxonomy v4.4 + E-ADM-018 already ruled bool-confirm shape); §137 scoped to svtn destroy + key register + admin recover; §109 --role REQUIRED with no-default annotation; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 12 next | 2026-07-03 |
 | Phase 5 Pass 12 HAS_FINDINGS | Adv-A 0H/2M/2obs (§111 list-keys exit codes missing E-SVTN-003 + E-CFG-001; §108/§109/§110 --svtn <id> placeholder class — daemon is name-keyed); Adv-B CLEAN 0/0/0+3obs; third consecutive zero-code-defect pass; streak 0/3; Burst 35 spec-only remediation pending | 2026-07-03 |
-| Phase 5 Pass 12 REMEDIATION COMPLETE | Burst 35: interface-definitions v1.24 spec-only — §111 exit-code column extended (E-SVTN-003 + E-CFG-001), --svtn <svtn-name> placeholder sweep (§108/§109/§110/§130), §108/§120 confirm-family flag consistency touch; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 13 next | 2026-07-03 |
+| Phase 5 Pass 12 REMEDIATION COMPLETE | Burst 35: interface-definitions v1.24 spec-only — §111 exit-code column extended (E-SVTN-003 + E-CFG-001), --svtn <svtn-name> placeholder sweep (§108/§109/§110/§130), §108/§120 confirm-family flag consistency touch; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 13 next |
+| Phase 5 Pass 13 HAS_FINDINGS | Adv-A 1H/1M/2obs (list-keys admission gate removed with authority gate — CWE-862; E-CFG-001 token absent from list-keys usageErrf); Adv-B 0H/0M/1L/2obs (e2e stub name admin.key.list vs admin.key.list-keys); streak 0/3; Bursts 37+38 remediation |
+| Phase 5 Pass 13 REMEDIATION COMPLETE | Burst 37: PR #69 03ce8e7 (admission gate restored; E-CFG-001 token; stub name fix). Burst 38: spec-only — interface-definitions v1.25 (§111 auth sharpened; BC-2.05.004 v1.13 PC-1 F-L2-003 + EC-008; VP-075 v1.7 scope exclusion + CWE-862); streak 0/3; Pass 14 next | 2026-07-03 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -185,13 +189,13 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Timestamp:** 2026-07-03T00:00:00Z
-**Post-burst:** Burst 35 (Phase 5 Pass 12 remediation)
-**Pipeline state:** Phase 5 Pass 12 REMEDIATION COMPLETE; streak 0/3; Pass 13 dispatch next
+**Timestamp:** 2026-07-03T22:08:00Z
+**Post-burst:** Burst 38 (Phase 5 Pass 13 spec-track reconciliation)
+**Pipeline state:** Phase 5 Pass 13 REMEDIATION COMPLETE; streak 0/3; Pass 14 dispatch next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** 66e9ddc (unchanged — spec-only burst, no code merged)
+**Develop HEAD:** 03ce8e7 (PR #69 merged 2026-07-03T22:08Z)
 
-**Burst 35 deltas:** Phase 5 Pass 12 split-adversary (Burst 34) + remediation (Burst 35, spec-only). Burst 34: Adv-A HAS_FINDINGS 0H/2M/2obs — F-P5P12-A-001 [MED]: §111 `sbctl admin list-keys` exit-code column omits reachable E-SVTN-003 (`makeListKeysHandler`→`mapAdminError:413-414`→`svtnNotFoundErr`, exit 1) and E-CFG-001 (missing `--svtn`, client-side, exit 2); adjudicated spec-side (list-keys was outside the register/revoke/expire audit umbrella). F-P5P12-A-002 [MED]: §108/§109/§110 CLI syntax cells use `--svtn <id>` placeholder implying hex machine identifier, while daemon lookup is name-keyed (`SVTNName` Go field, `m.svtns[svtnName]` at `svtnmgmt.go:254,300,370`); orchestrator independently verified name-keying at `internal/svtnmgmt/svtnmgmt.go`; adjudicated spec-side (placeholder class error, not a code defect). Adv-B CLEAN 0/0/3obs: OBS-B-001 raw line-number citations ×4 (tidy sweep); OBS-B-002 DecodePublicKey multi-case oracle gap (alignment-sweep candidate); OBS-B-003 inert compile-time assertion blocks (tidy sweep). Third consecutive zero-code-defect pass (P10/P11/P12). Burst 35 spec track: interface-definitions v1.23 → v1.24 — §111 exit-code column extended (E-SVTN-003 + E-CFG-001); `--svtn <id>` → `--svtn <svtn-name>` placeholder sweep across §108/§109/§110/§130 (admin recover); OBS-A-002 consistency touch adding confirm-family flags `[--yes] [--confirm]` to §108 register and §120 destroy syntax cells. Zero code changes; develop HEAD unchanged at 66e9ddc.
+**Burst 38 deltas:** Phase 5 Pass 13 remediation complete. Code track (Burst 37, PR #69 03ce8e7): F-P5P13-A-001 [HIGH] admission gate restored in `makeListKeysHandler` (cross-SVTN callers denied E-ADM-009, CWE-862 defense); F-P5P13-A-002 [MED] E-CFG-001 token added to list-keys missing-`--svtn` `usageErrf` at `cmd/sbctl/admin.go:168`; F-P5P13-B-001 [LOW] e2e stub mock corrected from `admin.key.list` to `admin.key.list-keys`. Spec track (Burst 38): interface-definitions v1.24 → v1.25 — §111 auth column sharpened from "Any admitted role" to enumerate full admission requirement (any active role OR operator-set OR bootstrap key, with explicit note that AUTHORITY gate is bypassed but ADMISSION gate is not); BC-2.05.004 v1.12 → v1.13 — Precondition 1 F-L2-003 sentence sharpened (admission gate distinction + CWE-862 citation) + EC-008 added (trilogy of list-keys admission failure modes); VP-075 v1.6 → v1.7 — scope exclusion paragraph expanded (F-L2-003 scope clarified, BC-2.05.004:155 + EC-008 + CWE-862 cross-referenced). Pass 13 sidecars persisted. Streak 0/3; Pass 14 next.
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11: Adv-A 1H/1M/3obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 33: spec-only v1.23, revoke confirm carve-out + §109 --role syntax) → P12: Adv-A 0H/2M/2obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 35: spec-only v1.24, §111 list-keys exit codes + --svtn <svtn-name> placeholder class sweep incl. §130 recover + §108/§120 confirm-family symmetry) → P13 dispatch next
-**Next action:** Phase 5 Pass 13 fresh-context split-adversary dispatch. Streak 0/3; P13 targets 0→1. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11: Adv-A 1H/1M/3obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 33: spec-only v1.23, revoke confirm carve-out + §109 --role syntax) → P12: Adv-A 0H/2M/2obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 35: spec-only v1.24, §111 list-keys exit codes + --svtn <svtn-name> placeholder class sweep incl. §130 recover + §108/§120 confirm-family symmetry) → P13: Adv-A 1H/1M/2obs + Adv-B 1L/2obs HAS_FINDINGS → REM (Burst 37: PR #69 03ce8e7 code; Burst 38: spec v1.25) → P14 dispatch next
+**Next action:** Phase 5 Pass 14 fresh-context split-adversary dispatch. Streak 0/3; P14 targets 0→1. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

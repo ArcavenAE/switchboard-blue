@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.12"
+version: "1.13"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:01
@@ -121,6 +121,26 @@ modified:
       never called for either bootstrap+well-formed or any+malformed request, so
       the key store cannot be mutated in either case. EC-007 Expected Behavior and
       Tests citation updated accordingly. VP-076 property #3 narrowed in parallel.
+  - date: 2026-07-03
+    version: "1.13"
+    actor: product-owner
+    change: >
+      Phase 5 Pass 13 spec-track sharpening (Burst 38, post-merge PR #69 03ce8e7).
+      F-P5P13-A-001 [HIGH] admission gate distinction: Precondition 1 list-keys
+      authority sentence (F-L2-003) sharpened — appended clarification that the
+      ADMISSION gate still applies (callers must be admitted to the target SVTN in
+      ANY active role, or be an operator-set member, or be the daemon bootstrap key);
+      cross-SVTN callers denied with E-ADM-009 (CWE-862 defense). F-L2-003 removes
+      the control-only AUTHORITY gate only, not the ADMISSION gate. EC-006 reference
+      updated to note the list-keys admission-gate distinction. EC-008 added —
+      enumerates the three reachable list-keys admission failure modes: (1) missing
+      CallerPubkey / no ambient bootstrap identity; (2) CallerPubkey present but not
+      registered on target SVTN AND not in operator-set AND not bootstrap key
+      (cross-SVTN roster enumeration denial, CWE-862); (3) CallerPubkey present,
+      registered on target SVTN, but revoked or expired (registered-any-state
+      insufficient, active admission required). Refs: F-P5P13-A-001 [HIGH],
+      interface-definitions v1.25. Errata pointer: interface-definitions.md v1.25
+      changelog is the authoritative reconciliation record.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -152,7 +172,7 @@ Control nodes can manage the public key registry for an SVTN: registering new ke
 
    **Bootstrap exception (F-P4L1-001):** For `admin.key.register` only — if the calling key is a member of `mgmt.OperatorKeySet` AND no control key is yet registered in the target SVTN, the handler MUST allow the operation (operator-set membership grants register authority for the initial bootstrap). For all other operations (revoke, expire), operator-set membership alone is insufficient; the key must be registered as `RoleControl` in the SVTN.
 
-   **list-keys authority (F-L2-003):** `admin.key.list-keys` is a read-only operation and may be called by any admitted role (control, console, access) or operator-set member. It is NOT subject to the control-only authority gate.
+   **list-keys authority (F-L2-003):** `admin.key.list-keys` is a read-only operation and may be called by any admitted role (control, console, access) or operator-set member. It is NOT subject to the control-only authority gate. The admission requirement itself still applies — callers must be admitted to the target SVTN in ANY active role, or be a member of the operator-set, or be the daemon bootstrap key. Callers whose only relationship to the daemon is a valid operator-key handshake against a DIFFERENT SVTN are denied with E-ADM-009 (CWE-862 defense against cross-SVTN roster enumeration). F-L2-003 removes the control-only AUTHORITY gate; it does NOT remove the ADMISSION gate.
 2. The key operation is well-formed: a valid OpenSSH public key in authorized_keys format.
 3. The router's distributed key store is reachable.
 
@@ -184,7 +204,8 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 | EC-003 (DEC-007) | Same public key registered twice with different roles | Per **ADR-003** (last-write-wins for duplicate key registration): the most recent registration supersedes earlier registrations for the same `(node_pubkey, svtn_id)` pair. The operation returns "updated" with the new role; no conflict; no manual reconciliation required. |
 | EC-004 | Key expires while session is active | Same behavior as revocation: session continues until next re-authentication challenge. |
 | EC-005 | Operator-key first-register into fresh SVTN (bootstrap path, F-P4L1-001) | No control key is registered in the target SVTN yet. The calling key is a member of `mgmt.OperatorKeySet`. `admin.key.register` MUST proceed (bootstrap grant). Subsequent register/revoke/expire operations require the caller to be registered as RoleControl in the SVTN admitted set. |
-| EC-006 | Revoked or expired key attempts an admin.key.* operation after successful mgmt authentication (F-P4L1-003) | The key authenticated at the mgmt connection layer but its `revoked=true` or `now >= expiry` in the SVTN admitted set. Handler authority resolution treats the key as unregistered; returns E-ADM-009. This applies to register, revoke, and expire (not list-keys, which is open to all admitted roles). |
+| EC-006 | Revoked or expired key attempts an admin.key.* operation after successful mgmt authentication (F-P4L1-003) | The key authenticated at the mgmt connection layer but its `revoked=true` or `now >= expiry` in the SVTN admitted set. Handler authority resolution treats the key as unregistered; returns E-ADM-009. This applies to register, revoke, and expire (not list-keys, which is open to all admitted roles per F-L2-003 authority rule — the admission gate still applies; see EC-008). |
+| EC-008 | Caller attempts `admin.key.list-keys` but fails the ADMISSION gate | Three reachable failure modes: (1) Missing CallerPubkey in context AND no ambient bootstrap identity — handler cannot resolve caller identity, returns E-ADM-009. (2) CallerPubkey present but not registered on the target SVTN AND not in operator-set AND not the daemon bootstrap key — caller is not admitted to the SVTN in any role, returns E-ADM-009 (CWE-862 defense: cross-SVTN callers must not enumerate another SVTN's admitted roster). (3) CallerPubkey present and registered on the target SVTN but revoked (`revoked=true`) or expired (`now >= expiry`) — registered-any-state is insufficient; only an active admission qualifies, returns E-ADM-009. The AUTHORITY gate (F-L2-003) is bypassed for list-keys so any role suffices; the ADMISSION gate is not bypassed. |
 | EC-007 | Operator attempts to revoke OR expire the bootstrap key (permanent trust anchor) with a well-formed request. | For any well-formed request (valid duration, all required fields present) targeting the bootstrap key: revoke returns `ErrBootstrapKeyRevokeForbidden` → E-ADM-020; expire returns `ErrBootstrapKeyExpireForbidden` → E-ADM-021. The bootstrap key cannot be revoked or expired at any time, regardless of whether other control keys have been registered. **Layering note (F-P20L3-001):** Handler input-validation (duration bounds check, required-field validation) fires BEFORE the bootstrap sentinel is consulted. A malformed request targeting the bootstrap key (e.g., `after:"-1h"`, `after:"0s"`, `after:">100y"`, missing `after` field) is rejected by the handler with E-CFG-001 before `SVTNManager.ExpireKey` is called. The mutation-prevention invariant is fully preserved in both paths: `SVTNManager` is never called for well-formed bootstrap-key requests (bootstrap guard fires) OR for any malformed-input requests (input-validation fires), so the key store cannot be mutated in either case. Tests: `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyRevokeForbidden` (revoke sentinel); `TestMapAdminError_ErrorWrapping/ErrBootstrapKeyExpireForbidden` (expire sentinel). |
 
 ## Canonical Test Vectors
