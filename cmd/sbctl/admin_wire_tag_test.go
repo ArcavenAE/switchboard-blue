@@ -19,7 +19,8 @@
 // (cmd/switchboard/admin_handlers_wire_shared_pkg_test.go) covers the
 // adminListKeysArgs daemon struct.  The sbctl inline struct uses json:"svtn_id"
 // at the declaration site (admin.go:171); any regression there would be caught
-// by compilation (unexported local type, change visible in the same file).
+// by integration failure at the daemon side — the daemon expects "svtn_id", and
+// the round-trip test in admin_handlers_wire_shared_pkg_test.go is the guard.
 //
 // IMPORTANT: DO NOT touch implementation code.  This file is tests only.
 package main
