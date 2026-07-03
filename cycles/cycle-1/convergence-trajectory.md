@@ -573,3 +573,21 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 **Verdict:** PASS CLEAN — THIRD consecutive fully-clean pass. **BC-5.39.001 CONVERGENCE-CLOSED.**
 
 **No fix-burst required.** Spec tip at convergence: factory-artifacts HEAD. Impl tip at convergence: d3f186c.
+
+---
+
+## Phase 5 — Adversarial Refinement Passes
+
+### Finding Progression
+
+| Pass | Date | Adv-A | Adv-B | Streak | develop_tip |
+|------|------|-------|-------|--------|-------------|
+| 1 | 2026-07-02 | HAS_FINDINGS (2H/1M/0L/2obs) | HAS_FINDINGS (1H/2M/1L/2obs) | 0/3 | 4659cb8 (annotated) |
+| 2 | 2026-07-02 | HAS_FINDINGS (1M/2L) | HAS_FINDINGS (2M) | 0/3 | dc51b06 (annotated) |
+| 3 | 2026-07-02 | HAS_FINDINGS (3H/4M/2L/3obs) | HAS_FINDINGS (0H/1M/2L/3obs) | 0/3 | c76a8d5 (rem) |
+| 4 | 2026-07-03 | HAS_FINDINGS (3H/5M/2L) | HAS_FINDINGS (2H/2M) | 3/3 SATISFIED (passes 17/18/19) | cbd0272 |
+| 5 | 2026-07-03 | HAS_FINDINGS (0H/2M/2L/1obs) | HAS_FINDINGS (0H/2M/1L/1obs) | 0/3 (streak reset) | cbd0272 |
+
+**Pass 5 notes:** Adv-B self-reported files_read 7 vs read_cap 6 (overage disclosed). BC-5.39.001 streak reset to 0/3. Pass 5 remediation pending (Burst 21).
+
+**Integrity note (Pass 5 Adv-B):** files_read 7 vs read_cap 6 — overage self-disclosed by adversary for admin_interactive_prompt_test.go io.Pipe seam; rationalized in report.
