@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.71"
+version: "3.73"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-03T00:00:00
@@ -67,7 +67,7 @@ inputDocuments:
 | S-6.03 | sbctl client auth (Authenticate() fail-closed), flag parsing, JSON envelope, connection error | E-6 | 5 | BC-2.07.002, BC-2.07.003 | network-management | 5 | P0 | E | merged (PR #32, d854978) (v2.8) |
 | S-W5.01 | internal/mgmt server, config E-CFG-008/009, cmd/switchboard wiring (all 4 daemon modes) | E-6 | 5 | BC-2.07.004, BC-2.09.003 | network-management, deployment-operations | 8 | P0 | E | merged (PR #31, 0d499ac) |
 | S-W5.02 | e2e management plane harness: sbctl auth + RPC across all 4 daemon types (VP-049) | E-6 | 5 | BC-2.07.002 | network-management | 5 | P0 | E | merged (PR #38, d881f99) |
-| S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) |
+| S-6.06 | Daemon-side admin RPC handlers (admin.key.register / revoke / expire / list-keys) | E-6 | 5 | BC-2.05.004 | network-management, admission-security | 5 | P1 | E | merged (PR #36, 3ee9c38) (v1.25) |
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #61, 7fe3e29) |
@@ -181,6 +181,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.73 | 2026-07-03 | F-P5P14-B-002 body-prose sync: S-6.06 v1.24→v1.25 — AC-006 "Scope exclusion (F-L2-003)" paragraph rewritten to reflect admission-gate impl (resolveCallerAdmissionAnyRole at admin_handlers.go:363); VP-077 added to vp_traces; TestE2E_AdminListKeys_AnyRole test note updated. Master-table S-6.06 status cell updated to v1.25. |
 | 3.72 | 2026-07-03 | Burst 27 Pass 8 remediation (citation sync): S-BL.CLI-SURFACE-COMPLETION master-table row updated interface-definitions v1.19→v1.20 (spec-side correction carries PENDING-S-BL.CLI-SURFACE-COMPLETION annotation forward; no story-status change). |
 | 3.71 | 2026-07-03 | Burst 23 Pass 6 remediation: add S-BL.CLI-SURFACE-COMPLETION backlog stub (draft v1.0; F-P5P6-A-005 adjudication annotate-and-defer; BC-2.09.001/BC-2.09.002/BC-2.07.001; provenance interface-definitions v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION; two NO-GOVERNING-BC design obligations: paths ping + svtn status). Total 52→53; active backlog 9→10. S-6.03 master-table status cell updated to v2.8. |
 | 3.70 | 2026-07-03 | Burst 21 Pass 5 remediation: add S-BL.ADMIN-RECOVER-WIRE backlog stub (draft v1.0; F-P5P5-A-002 adjudication annotate-and-defer; BC-2.07.001 + BC-2.05.004; provenance interface-definitions v1.18 §119-125 PENDING annotation). Total 51→52; active backlog 8→9. |
