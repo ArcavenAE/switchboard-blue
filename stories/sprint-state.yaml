@@ -925,14 +925,14 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_15_HAS_FINDINGS
-  phase_step: phase-5-pass-15-concluded-has-findings
-  pass_counter: 15
-  attempts_counter: 15
+  status: PASS_16_HAS_FINDINGS
+  phase_step: phase-5-pass-16-concluded-has-findings
+  pass_counter: 16
+  attempts_counter: 16
   consecutive_clean_passes: 0
-  last_reset_reason: pass-14-has-findings
+  last_reset_reason: pass-16-has-findings
   streak: 0
-  last_verdict: HAS_FINDINGS_2026-07-03_BOTH_LENSES
+  last_verdict: HAS_FINDINGS_2026-07-03_ADV_A
   criterion: finding-decay-to-zero-3-fresh-context-passes
   scope_lens: public-surface-operator-ux + test-rigor-traceability
   pass_1_adv_a_findings: "2H/1M/0L/2obs"
@@ -1002,4 +1002,15 @@ phase5:
     findings_deferred: []
     follow_on_nits:
       - "VP-077 Proof Method Coverage cell reads 'Three sub-cases' — steward flagged; not preemptively rev'd (companion tidy sweep candidate)"
+    streak_after_pass: 0/3
+  pass_16:
+    date: 2026-07-03
+    target_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    adversaries: [adv-a, adv-b]
+    verdicts: {adv-a: HAS_FINDINGS, adv-b: CLEAN}
+    findings_shipped:
+      - F-P5P16-A-001 (interface-definitions v1.27 @ .factory 041ea2f — $schema line removed from envelope success example, "share a common envelope" prose corrected; spec path b)
+    findings_deferred: []
+    follow_on_nits:
+      - "VP-077 Proof Method Coverage cell reads 'Three sub-cases' — deferred to Task #60 companion tidy sweep (in-flight, not raised by Adv-B per orchestrator brief)"
     streak_after_pass: 0/3
