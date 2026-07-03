@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-10-complete-has-findings
+phase_step: phase-5-pass-10-remediation-complete
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -27,10 +27,10 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 32ea461
+develop_head: 66e9ddc
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-10-remediation
+awaiting: phase-5-pass-11-dispatch
 historical_cycles: []
 timestamp: 2026-07-03T00:00:00Z
 last_update: 2026-07-03
@@ -56,7 +56,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_10_COMPLETE_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → rem pending |
+| Phase 5 — Adversarial Refinement | PASS_10_REMEDIATION_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11 dispatch next |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -75,6 +75,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-03 | Phase 5 Pass 9 split-adversary vs 32ea461 + v1.20 | COMPLETED | Adv-A HAS_FINDINGS 1H/2M/3L+3obs (F-P5P9-A-001..006 — ALL SPEC-SIDE: §94-95 version/ping unannotated [missed by F-P5P6-A-005 sweep], --target default undocumented, §110 expire exit codes unaudited [E-ADM-021/E-ADM-009/E-SVTN-003 reachable], §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes warning footnote). Adv-B CLEAN 0/0/0+3obs (all Pass 8 fixes verified correctly implemented; OBS-B-001 stale reconciliation comment — orchestrator verified by grep: NO live contradiction, ExitsZero test no longer exists, comment-only fix rides next code PR). ZERO code defects this pass — remediation is single spec burst v1.21. Both read-cap overages self-disclosed. |
 | 2026-07-03 | Phase 5 Pass 9 remediation (Burst 29, SPEC-ONLY) | COMPLETED | interface-definitions v1.21 — six Adv-A findings fixed, all documentation-side: §94-95 PENDING annotations (F-A-001 HIGH), --target default documented (F-A-002), §110 expire exit-code audit w/ negative verification on confirm-gate codes (F-A-003), §120 E-SVTN-003 (F-A-004), §48 synopsis parity (F-A-005), §128 interpolation footnote (F-A-006). Zero code changes; develop stays 32ea461. Code clean both lenses as of Pass 9. |
 | 2026-07-03 | Phase 5 Pass 10 split-adversary vs 32ea461 + v1.21 | COMPLETED | Adv-A HAS_FINDINGS 1H/1M (F-P5P10-A-001 §110 documents --at RFC3339 flag that does not exist [impl: --after duration] — survived 9 passes, prior §110 audits were exit-code-column-scoped; F-P5P10-A-002 E-CFG-001 token fragmentation on expire zero/negative branch). Adv-B HAS_FINDINGS 0H/0M/1L+2obs (F-B-001 test name↔assertion inversion BoolFlagRejectsNonBoolValue; OBS-B-001 NoArgs oracle meta-word disjunct; OBS-B-002 U+2028 arm-pinning). Burst 31: small code track (E-CFG-001 prefix + test fixes + DRIFT-P5P9 comment rider) + spec track (§110 --at→--after adjudication default spec-side per F-A-004 precedent). |
+| 2026-07-03 | Phase 5 Pass 10 remediation (Burst 31) | COMPLETED | Code track: PR #68 66e9ddc merged (E-CFG-001 token on expire zero/negative F-A-002 [one-line]; test rename F-B-001; NoArgs oracle tightened OBS-B-001; U+2028 arm-pinning OBS-B-002 [passed immediately — arm-selection verified correct]; DRIFT-P5P9 comment RESOLVED). Spec track: interface-definitions v1.22 — §110 phantom --at→--after (F-A-001 HIGH, adjudicated spec-side per F-A-004 precedent; v1.6 changelog preserved as history), E-CFG-001 exit-class split + §186 alignment (>100y daemon arm verified real). Reviewer non-blocking obs: parse-error sibling admin.go:552 without E-CFG-001 — defensible per taxonomy scope, not tracked. Streak 0/3; Pass 11 targets 0→1. |
 
 ## Wave 6 Story Status
 
@@ -144,7 +145,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P6-ANNOTATION-EXITCODE | MED | 2026-07-03 | RESOLVED (Burst 23): PR #65 4d7d9e0. |
 | DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | 2026-07-03 | router status --target= (empty value) path converted but lacks dedicated test case; 3 fs.Parse paths likewise; PR #66 review O-1. Follow-on micro-addition to the production_exit_code_test.go table. |
 | DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | 2026-07-03 | admin.go:395 interactive-confirm mismatch returns plain fmt.Errorf while --confirm sibling uses usageErrf; needs adjudication whether interactive-mismatch is usage-class (spec §129/§130) before converting; PR #66 review O-4. |
-| DRIFT-P5P9-STALE-RECONCILIATION-COMMENT | LOW | 2026-07-03 | production_exit_code_test.go:404-407 comment references TestSbctl_NoSubcommand_ExitsZero which was renamed ExitsTwoAfterP6 in Burst 23; comment-only fix, fold into next code-touching PR. Also OBS-P5P9-B-003 suggests U+2028 hexdump comment in phase5_pass8_destroy_test.go — same rider. Orchestrator-verified: no live contradiction (ExitsZero test no longer exists). |
+| DRIFT-P5P9-STALE-RECONCILIATION-COMMENT | LOW | 2026-07-03 | RESOLVED (Burst 31): PR #68 66e9ddc — stale comment fixed; U+2028 hexdump comment rider applied. |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
@@ -168,6 +169,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | Phase 5 Pass 9 HAS_FINDINGS | Adv-A 1H/2M/3L (all spec-side: §94-95 version/ping unannotated, --target default undocumented, §110 expire exit codes incomplete, §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes footnote); Adv-B CLEAN 0/0/0+3obs; ZERO code defects this pass; streak 0/3; v1.21 spec-only remediation next | 2026-07-03 |
 | Phase 5 Pass 9 REMEDIATION COMPLETE | Burst 29: interface-definitions v1.21 (spec-only — six Adv-A findings, all documentation-side); ARCH-INDEX v1.7; zero code changes; develop stays 32ea461; streak 0/3; Pass 10 next | 2026-07-03 |
 | Phase 5 Pass 10 HAS_FINDINGS | Adv-A 1H/1M (§110 phantom --at flag survived 9 passes [column-scoped attention]; E-CFG-001 token fragmentation zero/negative vs >100y); Adv-B 1L+2obs (test name↔assertion inversion; NoArgs meta-word disjunct; U+2028 arm-pinning); streak 0/3; Burst 31 remediation pending | 2026-07-03 |
+| Phase 5 Pass 10 REMEDIATION COMPLETE | Burst 31: PR #68 66e9ddc (code track: E-CFG-001 prefix zero/negative F-A-002, test rename F-B-001, NoArgs tightened OBS-B-001, U+2028 arm-pinning OBS-B-002, DRIFT-P5P9 comment resolved); interface-definitions v1.22 (spec track: §110 --at→--after F-A-001 HIGH adjudicated spec-side, E-CFG-001 exit-class split + §186); streak 0/3; Pass 11 next | 2026-07-03 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -185,12 +187,12 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-03T00:00:00Z
-**Post-burst:** Burst 30 (Phase 5 Pass 10 split-adversary)
-**Pipeline state:** Phase 5 Pass 10 COMPLETE HAS_FINDINGS; streak 0/3; Burst 31 remediation next
+**Post-burst:** Burst 31 (Phase 5 Pass 10 remediation)
+**Pipeline state:** Phase 5 Pass 10 REMEDIATION COMPLETE; streak 0/3; Pass 11 dispatch next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** 32ea461 (no code change this burst)
+**Develop HEAD:** 66e9ddc (PR #68 merged)
 
-**Burst 30 deltas:** Phase 5 Pass 10 split-adversary complete. Adv-A: HAS_FINDINGS 1H/1M — F-P5P10-A-001 [HIGH] §110 documents operator-facing `--at <RFC3339-timestamp>` flag; impl registers `--after <duration>` with `time.ParseDuration`, no RFC3339 parsing — phantom flag survived 9 passes because prior §110 audits were exit-code-column-scoped, not syntax-column-scoped; F-P5P10-A-002 [MED] E-CFG-001 token fragmented: zero/negative branch emits plain prose via usageErrf (exit 2, no token) while >100y branch emits E-CFG-001 via daemon (exit 1). Adv-B: HAS_FINDINGS 0H/0M/1L+2obs — F-P5P10-B-001 [LOW] BoolFlagRejectsNonBoolValue test name contradicts body (body verifies acceptance); OBS-B-001 NoArgs oracle meta-word disjunct; OBS-B-002 U+2028 arm-pinning gap. Column-scoped attention lesson: three prior §110 audits read the exit-code column; the syntax column carried the phantom flag undisturbed.
+**Burst 31 deltas:** Phase 5 Pass 10 remediation complete. Code track: PR #68 66e9ddc merged — E-CFG-001 token on zero/negative expire branch (F-A-002 one-line fix); BoolFlagRejectsNonBoolValue test rename (F-B-001); NoArgs oracle tightened to reject meta-word "subcommand" (OBS-B-001); U+2028 arm-pinning assertion added (OBS-B-002 — passed immediately, arm-selection verified correct); DRIFT-P5P9 stale reconciliation comment fixed. Spec track: interface-definitions v1.22 — §110 phantom --at corrected to --after (F-A-001 HIGH, adjudicated spec-side per F-A-004 precedent; v1.6 changelog line preserved as history record); E-CFG-001 exit-class split documented (zero/negative → usageErrf exit 2 [client]; >100y → daemon mapAdminError exit 1 [E-CFG-001] — maxKeyTTL verified real at admin_handlers.go:43); §186 exit-2 row added. Column-scoped attention lesson confirmed: nine-pass phantom survived because all prior §110 audits were exit-code-column-scoped.
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → rem pending
-**Next action:** Burst 31 remediation — small code track (E-CFG-001 prefix on zero/negative branch + test name fix + DRIFT-P5P9 stale comment rider) + spec track (§110 --at→--after adjudication, per F-A-004 precedent default spec-side). Streak 0/3; P11 targets 1→2. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11 dispatch next
+**Next action:** Phase 5 Pass 11 fresh-context split-adversary dispatch. Streak 0/3; P11 targets 0→1. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

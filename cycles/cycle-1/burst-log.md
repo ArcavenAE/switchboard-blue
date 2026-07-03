@@ -1328,3 +1328,32 @@ All six claims file:line-verified against 32ea461 before committing.
 **Column-scoped attention lesson:** Three prior §110 audits (Burst 29 most recently — added E-ADM-021/E-ADM-009/E-SVTN-003 to the exit-code column) read that row's exit-code column. The syntax column declaring `--at <RFC3339-timestamp>` sat adjacent and undisturbed. This is the inverse of a sibling-sweep gap: the sweep happened on the same row but on a different column axis. Mitigation for Burst 31 adjudication: default to spec-side fix (rename `--at` → `--after` in §110) consistent with F-A-004 precedent (spec bends to impl when impl is more complete and consistent with the wire contract).
 
 **BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 31 remediation pending: small code track (E-CFG-001 prefix on zero/negative branch + test name fix F-P5P10-B-001 + DRIFT-P5P9-STALE-RECONCILIATION-COMMENT comment rider) + spec track (§110 --at→--after adjudication).
+
+---
+
+## Phase 5 — Burst 31 / Pass 10 Remediation (2026-07-03)
+
+**Agents dispatched:** implementer (code track), product-owner (spec track), state-manager
+**Dispatch tuple:** develop tip 32ea461 → 66e9ddc; interface-definitions v1.21 → v1.22
+**RED commits:** 7879dc3, 20a61d5 (test stubs for F-A-002 + F-B-001)
+**GREEN commit:** 4a2400f (all tests passing)
+**PR #68:** 66e9ddc (merged)
+
+**Summary:** Phase 5 Pass 10 remediation complete in two tracks. Code track was the smallest of the Phase 5 arc — one-line E-CFG-001 prefix addition, test rename, two oracle tightenings, and the long-deferred DRIFT-P5P9 comment rider, all verified GREEN in PR #68. Spec track corrected the nine-pass phantom: the never-implemented `--at <RFC3339-timestamp>` flag (introduced in the v1.6 changelog as a design intent that was superseded before implementation) was corrected to `--after <duration>` with the v1.6 changelog line preserved as history. The E-CFG-001 exit-class split made explicit what the code already did: zero/negative duration is caught client-side by usageErrf (exit 2, no E-CFG-001 token); >100 years is caught daemon-side by mapAdminError (exit 1, E-CFG-001 token emitted). maxKeyTTL verified real at admin_handlers.go:43.
+
+**Column-scoped attention payoff:** The phantom --at flag that survived nine passes was corrected fifteen versions after the v1.6 design intent that introduced it. The v1.6 changelog documents the original intent; v1.22 documents what was actually built. The gap between intent and implementation was never noticed because all nine prior §110 audits were exit-code-column-scoped; the syntax column carried the undisturbed phantom. Burst 31 is the audit that read the syntax column.
+
+| Track | Agent | Task | Output |
+|-------|-------|------|--------|
+| Code | implementer | E-CFG-001 prefix on zero/negative branch (F-A-002) | `usageErrf("E-CFG-001: ...")` one-line in admin.go expire path |
+| Code | test-writer | BoolFlagRejectsNonBoolValue rename (F-B-001) | Test renamed `BoolFlagAcceptsNonBoolValue` to match body intent |
+| Code | test-writer | NoArgs oracle tighten (OBS-B-001) | Meta-word "subcommand" removed from acceptable oracle disjuncts |
+| Code | test-writer | U+2028 arm-pinning (OBS-B-002) | E-CFG-001 string asserted in U+2028 destroy test; passed immediately — arm-selection verified correct |
+| Code | test-writer | DRIFT-P5P9 comment rider | Stale ExitsZero reference replaced; U+2028 hexdump label added |
+| Spec | product-owner | §110 --at→--after (F-A-001 HIGH) | Syntax column corrected to `--after <duration>`; v1.6 changelog line preserved as historical record of never-implemented design; adjudicated spec-side per F-A-004 precedent (impl more complete and consistent) |
+| Spec | product-owner | E-CFG-001 exit-class split (F-A-002) | §186 exit-2 row added; prose documents the two-arm divergence; admin_handlers.go:43 maxKeyTTL cited as boundary |
+| State | state-manager | STATE.md + ARCH-INDEX.md + burst-log.md | This entry |
+
+**Reviewer observation (non-blocking):** parse-error sibling at admin.go:552 without E-CFG-001 token. Defensible per taxonomy scope (parse-error class is not a configuration-validation error); not tracked.
+
+**BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged (remediation burst does not increment streak). Pass 11 dispatch next; targets streak 0→1.
