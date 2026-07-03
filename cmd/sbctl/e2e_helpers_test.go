@@ -188,7 +188,7 @@ func consoleHandlers() []mgmt.Handler {
 func controlHandlers() []mgmt.Handler {
 	return []mgmt.Handler{
 		{
-			Command: "admin.key.list",
+			Command: "admin.key.list-keys",
 			Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
 				return map[string]any{"keys": []any{}}, nil
 			},

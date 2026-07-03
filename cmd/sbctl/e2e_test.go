@@ -311,7 +311,7 @@ func modeSpecificCommand(mode string) string {
 	case "console":
 		return "console.status"
 	case "control":
-		return "admin.key.list"
+		return "admin.key.list-keys"
 	default:
 		return "status"
 	}
