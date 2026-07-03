@@ -1417,3 +1417,51 @@ The following rows were present in STATE.md Current Phase Steps before compact-s
 | State | state-manager | STATE.md + burst-log.md + convergence-trajectory.md | This entry |
 
 **BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged (remediation burst does not increment streak). Pass 12 dispatch next; targets streak 0→1.
+
+---
+
+## Phase 5 — Burst 34 / Pass 12 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** adversary (Adv-A: public-surface/operator-UX lens), adversary (Adv-B: test-rigor/traceability lens)
+**Dispatch tuple:** develop tip 66e9ddc; interface-definitions v1.23
+
+**Summary:** Phase 5 Pass 12 split-adversary complete. Adv-A HAS_FINDINGS 0H/2M/2obs. Adv-B CLEAN 0/0/0+3obs. Third consecutive zero-code-defect pass (P10/P11/P12). Streak reset to 0/3 (Adv-A HAS_FINDINGS).
+
+Both Adv-A findings adjudicated spec-side. F-P5P12-A-001 [MED]: §111 `sbctl admin list-keys` exit-code column documents "0=ok" only; but `makeListKeysHandler` (admin_handlers.go:361) calls `m.ListKeys(a.SVTNName)` — when the SVTN does not exist, `ErrSVTNNotFound` propagates through `mapAdminError:413-414` as `svtnNotFoundErr` → wire `"E-SVTN-003: SVTN not found: <name>"` on exit 1. Additionally, E-CFG-001 is reachable client-side at admin.go:167-169 (missing `--svtn`, exit 2). The v1.20–v1.22 "register/revoke/expire error surfaces reachability-audited" umbrella covers only three verbs; `list-keys` was outside that adjudication. F-P5P12-A-002 [MED]: §108/§109/§110 CLI syntax cells use `--svtn <id>` placeholder, implying a hex machine identifier. The daemon's SVTN lookup (`m.svtns[svtnName]` at `internal/svtnmgmt/svtnmgmt.go:254,300,370`) is name-keyed — the `SVTNName` Go field carries the human-readable label passed to `admin svtn create --name=<svtn-name>`. The `svtn_id` field in a create response carries a 16-byte hex identifier; the same-named field in key-lifecycle requests carries a name — a confusing overloading. Orchestrator independently verified name-keying before adjudicating spec-side. Failure scenario: operator pastes hex from create response into `--svtn` → `E-SVTN-003: SVTN not found: <hex>` on exit 1. OBS-A-001: admin.go:5-9 doc header brackets `[--svtn <id>]` as optional, but code is required (admin.go:167-169 rejects empty). OBS-A-002: §109 revoke syntax shows `[--confirm]` but §108 register and §120 destroy syntax cells omit `[--yes] [--confirm]` despite those commands being in the `runDestroyConfirmGate` family (admin.go:306, admin.go:463). Adv-B CLEAN: test suites deemed sound. OBS-B-001 four new raw line-number citations (tidy sweep); OBS-B-002 `DecodePublicKey` multi-case iteration oracle gap (alignment-sweep candidate); OBS-B-003 inert compile-time assertion blocks (tidy sweep).
+
+| Lens | Verdict | Findings | Obs | Develop tip |
+|------|---------|----------|-----|-------------|
+| Adv-A (public-surface/operator-UX) | HAS_FINDINGS | 0H / 2M / 0L | 2 | 66e9ddc |
+| Adv-B (test-rigor/traceability) | CLEAN | 0H / 0M / 0L | 3 | 66e9ddc |
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS resets streak. Burst 35 spec-only remediation next.
+
+---
+
+## Phase 5 — Burst 35 / Pass 12 Spec-Only Remediation (2026-07-03)
+
+**Agents dispatched:** product-owner (spec track), state-manager
+**Dispatch tuple:** develop tip 66e9ddc; interface-definitions v1.23 → v1.24
+
+**Summary:** Phase 5 Pass 12 remediation complete (spec-only). Both Burst 34 findings adjudicated spec-side; no code changes required.
+
+F-P5P12-A-001 [MED] — §111 exit-code column extended: `0=ok, E-SVTN-003 (SVTN not found — reachable via admin_handlers.go:361 → mapAdminError:413-414) and E-CFG-001 (missing --svtn, client-side, exit 2 — cmd/sbctl/admin.go:167-169)`. Symmetry note added: E-CFG-001 is the client-side guard, E-SVTN-003 is the daemon-side lookup path. This was outside the register/revoke/expire audit umbrella used in v1.20–v1.22; list-keys is a read verb but still carries a reachable daemon error surface.
+
+F-P5P12-A-002 [MED] — `--svtn <id>` placeholder class corrected to `--svtn <svtn-name>` across §108 (`admin key register`), §109 (`admin key revoke`), §110 (`admin key expire`), and §130 (`admin recover`). Rationale: the daemon's SVTN lookup is name-keyed; operators passing the hex identifier from a create response would receive E-SVTN-003. The `svtn_id` JSON tag carries a name in key-lifecycle requests, not the hex from create responses — the placeholder `<id>` was an inherited misnomer from before the v1.14 Registered Verbs correction.
+
+OBS-A-001 — admin.go:5-9 doc header bracket drift: flagged for a tidy sweep; doc comment is internal-only, not user-facing help text. No spec change; deferred to tidy sweep.
+
+OBS-A-002 — consistency touch: §108 register syntax cell updated to include `[--yes] [--confirm]`; §120 destroy syntax cell updated to include `[--yes] [--confirm]`. Both commands are in the `runDestroyConfirmGate` family per §131/§135/§137; the syntax cells now surface the optional flags matching §109 revoke's `[--confirm]` display. No behavioral contract changes; purely cosmetic consistency.
+
+OBS-B-001/B-003 — tidy sweeps (raw line-number citations + inert compile-time blocks): acknowledged; deferred to a tidy sweep burst.
+
+OBS-B-002 — `DecodePublicKey` multi-case oracle gap: acknowledged as alignment-sweep candidate; no test changes in this burst.
+
+| Track | Agent | Task | Output |
+|-------|-------|------|--------|
+| Spec | product-owner | §111 exit-code column (F-A-001 MED) | Extended with E-SVTN-003 + E-CFG-001 reachability notes |
+| Spec | product-owner | §108/§109/§110/§130 --svtn placeholder (F-A-002 MED) | `<id>` → `<svtn-name>` sweep |
+| Spec | product-owner | §108/§120 confirm-family flags (OBS-A-002) | `[--yes] [--confirm]` added to register + destroy syntax cells |
+| State | state-manager | STATE.md + burst-log.md + convergence-trajectory.md | This entry |
+
+**BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged. Pass 13 dispatch next; targets streak 0→1.
