@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-16-concluded-has-findings
+phase_step: phase-5-pass-17-concluded-has-findings
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -30,9 +30,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 6deda15
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-17-dispatch
+awaiting: phase-5-pass-18-dispatch
 historical_cycles: []
-timestamp: 2026-07-03T23:15Z
+timestamp: 2026-07-03T23:45Z
 last_update: 2026-07-03
 ---
 
@@ -56,7 +56,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_16_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11: Adv-A 1H/1M/3obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 33: spec-only v1.23, revoke confirm carve-out + §109 --role syntax) → P12: Adv-A 0H/2M/2obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 35: spec-only v1.24, §111 list-keys exit codes + --svtn <svtn-name> placeholder class sweep incl. §130 recover + §108/§120 confirm-family symmetry) → P13: Adv-A 1H/1M/2obs + Adv-B 1L/2obs HAS_FINDINGS → REM (Burst 37: PR #69 03ce8e7 code; Burst 38: spec v1.25) → P14: Adv-B-v2 0H/0M/5F HAS_FINDINGS (B-001 DEFERRED, B-002..B-005 SHIPPED) → REM (Burst 40a/b: S-6.06 v1.25 + BC-2.05.004 v1.14 + VP-077 + PR #70 6deda15) → P15: Adv-A 0H/1M + Adv-B 0H/1M HAS_FINDINGS (A-001 interface-definitions v1.26 SHIPPED 5e42768; B-001 VP-077 v1.1 SHIPPED 5120c9e) → REM → P16: Adv-A 0H/1M HAS_FINDINGS (F-P5P16-A-001 $schema envelope drift SHIPPED 041ea2f v1.27); Adv-B CLEAN → Streak 0/3; P17 next |
+| Phase 5 — Adversarial Refinement | PASS_17_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → REM (Burst 31: PR #68 66e9ddc + v1.22) → P11: Adv-A 1H/1M/3obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 33: spec-only v1.23, revoke confirm carve-out + §109 --role syntax) → P12: Adv-A 0H/2M/2obs HAS_FINDINGS + Adv-B CLEAN(3obs) → REM (Burst 35: spec-only v1.24, §111 list-keys exit codes + --svtn <svtn-name> placeholder class sweep incl. §130 recover + §108/§120 confirm-family symmetry) → P13: Adv-A 1H/1M/2obs + Adv-B 1L/2obs HAS_FINDINGS → REM (Burst 37: PR #69 03ce8e7 code; Burst 38: spec v1.25) → P14: Adv-B-v2 0H/0M/5F HAS_FINDINGS (B-001 DEFERRED, B-002..B-005 SHIPPED) → REM (Burst 40a/b: S-6.06 v1.25 + BC-2.05.004 v1.14 + VP-077 + PR #70 6deda15) → P15: Adv-A 0H/1M + Adv-B 0H/1M HAS_FINDINGS (A-001 interface-definitions v1.26 SHIPPED 5e42768; B-001 VP-077 v1.1 SHIPPED 5120c9e) → REM → P16: Adv-A 0H/1M HAS_FINDINGS (F-P5P16-A-001 $schema envelope drift SHIPPED 041ea2f v1.27); Adv-B CLEAN → REM → P17: Adv-A 0H/2M HAS_FINDINGS (F-P5P17-A-001 svtn_id phantom + F-P5P17-A-002 path_distribution ratio→count SHIPPED 2be16e5 v1.28); Adv-B CLEAN → Streak 0/3; P18 next |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -66,11 +66,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-03 | Phase 5 Pass 13 remediation (Bursts 37+38) | COMPLETED | Code track (PR #69 03ce8e7): admission gate restored (F-P5P13-A-001 HIGH); E-CFG-001 token added to list-keys usageErrf (F-P5P13-A-002 MED); stub name corrected (F-P5P13-B-001 LOW). Spec track (Burst 38): interface-definitions v1.25 — §111 auth sharpened; BC-2.05.004 v1.13 — PC-1 F-L2-003 sharpened + EC-008; VP-075 v1.7 — scope exclusion expanded + CWE-862 cross-ref. Streak 0/3; Pass 14 next. |
-| 2026-07-03 | phase-5-pass-14-adversary | Pass 14 concluded HAS_FINDINGS | Adv-B-v2: 5 findings (B-001 MED VP source_bc version-pin DEFERRED pending POL-003 ratification; B-002 MED S-6.06 v1.25 AC-006 body-prose sync SHIPPED via 3994fda; B-003 MED BC-2.05.004 v1.14 + VP-077 SHIPPED via 426e0fa; B-004 LOW dead callerPub SHIPPED via PR #70; B-005 LOW operator-set×missing-SVTN diagonal SHIPPED via PR #70). Adv-A-v3 stood down (harness idle-loop, 3rd instance). Streak reset 0/3. Pass 15 next. |
 | 2026-07-03 | phase-5-pass-15-concluded-has-findings | Pass 15 concluded HAS_FINDINGS | Adv-A: F-P5P15-A-001 [MED] interface-definitions.md Response Data drift (4 rows: admin.key.register/revoke/expire + admin.svtn.destroy) SHIPPED 5e42768 (v1.26); Adv-B: F-P5P15-B-001 [MED] VP-077 Test Evidence broken test-name prefixes + line-number drift + coverage under-citation SHIPPED 5120c9e (v1.1); streak 0/3; Pass 16 next |
 | 2026-07-03 | phase-5-pass-16-remediation (Burst 44a, SPEC-ONLY) | COMPLETED | F-P5P16-A-001 [MED] $schema envelope drift: interface-definitions.md v1.26→v1.27 via .factory 041ea2f — removed $schema line from envelope success example, corrected "share a common envelope" prose to reflect schemaless envelope. Spec path (b). Zero code changes; develop stays 6deda15. |
 | 2026-07-03 | phase-5-pass-16-concluded-has-findings | Pass 16 concluded HAS_FINDINGS | Adv-A F-P5P16-A-001 [MED] $schema envelope drift SHIPPED @ .factory 041ea2f (interface-definitions.md v1.26→v1.27, $schema removed); Adv-B CLEAN. Streak 0/3, last_reset_reason: pass-16-has-findings. Awaiting: Pass 17 dispatch. |
+| 2026-07-03 | phase-5-pass-17-remediation (Burst 46a, SPEC-ONLY) | COMPLETED | F-P5P17-A-001 [MED] svtn_id phantom field + F-P5P17-A-002 [MED] path_distribution ratio→count: interface-definitions.md v1.27→v1.28 via .factory 2be16e5 — router.metrics envelope example svtn_id line removed, Registered Verbs table Response Data column corrected, path_distribution example values corrected from fractional ratios (0.52, 0.48) to integer frame counts (900000, 334567). Spec path (b). Zero code changes; develop stays 6deda15. |
+| 2026-07-03 | phase-5-pass-17-concluded-has-findings | Pass 17 concluded HAS_FINDINGS | Adv-A F-P5P17-A-001 + F-P5P17-A-002 SHIPPED @ .factory 2be16e5 (interface-definitions.md v1.27→v1.28, svtn_id phantom removed + path_distribution ratio→count fix); Adv-B CLEAN. Streak 0/3, last_reset_reason: pass-17-has-findings. Awaiting: Pass 18 dispatch. |
 
 ## Wave 6 Story Status
 
@@ -188,16 +188,16 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Timestamp:** 2026-07-03T23:15Z
-**Post-burst:** Burst 44b (Phase 5 Pass 16 state persistence)
-**Pipeline state:** Phase 5 Pass 16 CONCLUDED HAS_FINDINGS; streak 0/3; Pass 17 dispatch next
+**Timestamp:** 2026-07-03T23:45Z
+**Post-burst:** Burst 46b (Phase 5 Pass 17 state persistence)
+**Pipeline state:** Phase 5 Pass 17 CONCLUDED HAS_FINDINGS; streak 0/3; Pass 18 dispatch next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — Pass 16 finding was spec-track only)
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — Pass 17 findings were spec-track only)
 
-**Pass 16 deltas:** Adv-A (public-surface + operator-UX lens) HAS_FINDINGS — F-P5P16-A-001 [MED]: interface-definitions.md documented a `$schema` envelope field (`"$schema": "https://switchboard.example/schemas/v1/response.json"`) in the success envelope example that sbctl never emits on any code path. Secondary: spec-internal inconsistency (success example included `$schema`, error example omitted it; "share a common envelope" prose contradicted). Remediated via spec path (b) in Burst 44a / .factory commit `041ea2f`: v1.26→v1.27, `$schema` line removed from envelope success example, "share a common envelope" prose corrected. Zero code changes. Adv-B (test-rigor + traceability lens) CLEAN — all 10 VP-077 v1.1 test citations and all 4 interface-definitions.md v1.26 return-site anchors verified end-to-end. Streak stays 0/3; `last_reset_reason` updated to `pass-16-has-findings`.
+**Pass 17 deltas:** Adv-A (public-surface + operator-UX lens) HAS_FINDINGS — two MED findings both on interface-definitions.md: F-P5P17-A-001: `router.metrics` response envelope documented a `svtn_id` echo field that the daemon never emits (impl: `RouterMetricsResponse` has 4 fields, no svtn_id; BC-2.06.003.md:109 canonical vector omits it). F-P5P17-A-002: `path_distribution` example values shown as fractional ratios (0.52, 0.48) contradicting the `map[string]uint64` wire type (BC PC-2: per-path frame count; handlers_test.go uses integers 600/400). Both remediated in single spec-track commit .factory `2be16e5`: interface-definitions.md v1.27→v1.28, svtn_id line removed from envelope example :299 and Registered Verbs table :403, path_distribution example values replaced with integer frame counts (900000, 334567). Adv-B (test-rigor + traceability lens) CLEAN — 6 substantive anti-findings: VP-077 v1.1 all 10 test-anchor line numbers exact at develop tip; BC-2.05.004 EC-008 ↔ VP-077 ↔ AC-006 ↔ tests traceability triangle bidirectional complete; VP-077/POL-001/POL-002 all satisfied; VP-INDEX arithmetic self-consistent. Streak stays 0/3; `last_reset_reason` updated to `pass-17-has-findings`.
 
-**Sidecar paths:** `.factory/cycles/cycle-1/adversarial-reviews/P5-pass-16-Adv-A.md` / `P5-pass-16-Adv-B.md`
-**Remediation commit:** `041ea2f` (interface-definitions v1.27)
+**Sidecar paths:** `.factory/cycles/cycle-1/adversarial-reviews/P5-pass-17-Adv-A.md` / `P5-pass-17-Adv-B.md`
+**Remediation commit:** `2be16e5` (interface-definitions v1.28)
 
-**Phase 5 trajectory:** P1→P15 (see session-checkpoints.md) → P16: Adv-A 0H/1M HAS_FINDINGS (F-P5P16-A-001 $schema drift SHIPPED 041ea2f); Adv-B CLEAN → Streak 0/3; P17 next
-**Next action:** Phase 5 Pass 17 fresh-context split-adversary dispatch against develop@6deda15. Streak 0→1 target. VP-077 Coverage cell "Three sub-cases" companion tidy still deferred to Task #60. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Phase 5 trajectory:** P1→P16 (see session-checkpoints.md) → P17: Adv-A 0H/2M HAS_FINDINGS (F-P5P17-A-001 svtn_id phantom + F-P5P17-A-002 path_distribution ratio→count SHIPPED 2be16e5); Adv-B CLEAN → Streak 0/3; P18 next
+**Next action:** Phase 5 Pass 18 fresh-context split-adversary dispatch against develop@6deda15. Streak 0→1 target. VP-077 Coverage cell "Three sub-cases" companion tidy still deferred to Task #60. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

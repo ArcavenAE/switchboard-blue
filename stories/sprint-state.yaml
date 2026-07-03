@@ -925,12 +925,12 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_16_HAS_FINDINGS
-  phase_step: phase-5-pass-16-concluded-has-findings
-  pass_counter: 16
-  attempts_counter: 16
+  status: PASS_17_HAS_FINDINGS
+  phase_step: phase-5-pass-17-concluded-has-findings
+  pass_counter: 17
+  attempts_counter: 17
   consecutive_clean_passes: 0
-  last_reset_reason: pass-16-has-findings
+  last_reset_reason: pass-17-has-findings
   streak: 0
   last_verdict: HAS_FINDINGS_2026-07-03_ADV_A
   criterion: finding-decay-to-zero-3-fresh-context-passes
@@ -1011,6 +1011,24 @@ phase5:
     findings_shipped:
       - F-P5P16-A-001 (interface-definitions v1.27 @ .factory 041ea2f — $schema line removed from envelope success example, "share a common envelope" prose corrected; spec path b)
     findings_deferred: []
+    follow_on_nits:
+      - "VP-077 Proof Method Coverage cell reads 'Three sub-cases' — deferred to Task #60 companion tidy sweep (in-flight, not raised by Adv-B per orchestrator brief)"
+    streak_after_pass: 0/3
+  pass_17:
+    date: 2026-07-03
+    target_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    adversaries: [adv-a, adv-b]
+    verdicts: {adv-a: HAS_FINDINGS, adv-b: CLEAN}
+    adv_a_lens: public-surface + operator-UX drift
+    adv_b_lens: test-rigor + traceability
+    findings_shipped:
+      - F-P5P17-A-001 (interface-definitions v1.28 @ .factory 2be16e5 — router.metrics envelope example svtn_id phantom field removed from :299 + Registered Verbs table :403; spec-only; BC-2.06.003.md:109 canonical vector authority)
+      - F-P5P17-A-002 (interface-definitions v1.28 @ .factory 2be16e5 — path_distribution example values corrected from fractional ratios 0.52/0.48 to integer frame counts 900000/334567, consistent with map[string]uint64 wire type and BC PC-2 per-path frame count semantics)
+    findings_deferred: []
+    remediation_commit: 2be16e5
+    remediation_shape: spec-only (single commit, both findings in one POL-001 changelog entry)
+    adv_b_anti_findings: 6
+    adv_b_af_summary: "VP-077 v1.1 all 10 test-anchor line numbers exact; BC-2.05.004 EC-008↔VP-077↔AC-006↔tests triangle bidirectional complete; VP-077/POL-001/POL-002 satisfied; VP-INDEX arithmetic self-consistent"
     follow_on_nits:
       - "VP-077 Proof Method Coverage cell reads 'Three sub-cases' — deferred to Task #60 companion tidy sweep (in-flight, not raised by Adv-B per orchestrator brief)"
     streak_after_pass: 0/3
