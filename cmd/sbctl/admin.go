@@ -280,7 +280,8 @@ func confirmSVTNShortIDValid(s string) bool {
 		return false
 	}
 	for _, r := range hex {
-		if !unicode.Is(unicode.ASCII_Hex_Digit, r) || unicode.IsUpper(r) {
+		// After ToLower, no rune can be uppercase; ASCII_Hex_Digit covers a-f and 0-9.
+		if !unicode.Is(unicode.ASCII_Hex_Digit, r) {
 			return false
 		}
 	}
@@ -302,7 +303,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125/§127/§129).
-	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, sio); err != nil {
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, "--name", sio); err != nil {
 		return err
 	}
 
@@ -327,9 +328,14 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 // runDestroyConfirmGate implements the five-path confirm gate for destructive
 // admin operations (interface-definitions.md v1.1 §125/§127/§129; ADR-004).
 //
-// confirmVal: value of --confirm flag (empty string when flag is absent or --confirm=)
-// yes:        value of --yes flag
-// sio:        output sinks for the warning and the interactive prompt
+// confirmVal:  value of --confirm flag (empty string when flag is absent or --confirm=)
+// yes:         value of --yes flag
+// targetFlag:  the flag name that identifies the target resource (e.g. "--name" for
+//
+//	admin svtn destroy, "--svtn" for admin key register); used in the Path 4
+//	--yes warning so operators know which flag to double-check.
+//
+// sio:         output sinks for the warning and the interactive prompt
 //
 // Path 1 — --confirm=SVTN-<8-hex> supplied: static shape-check only.
 //   - Valid shape → return nil (proceed). Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
@@ -348,7 +354,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 // Path 5 — --yes + --confirm: E-CFG-012 usage error, return non-nil.
 //
 // stdinIsTTY and stdinReader are package-level vars so tests can inject fakes.
-func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
+func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio sbctlIO) error {
 	// Path 5: --yes combined with --confirm is a usage error (E-CFG-012; §127).
 	if yes && confirmVal != "" {
 		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; pick one")
@@ -356,7 +362,7 @@ func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
 
 	// Path 4: --yes alone bypasses the check (§127).
 	if yes {
-		_, _ = fmt.Fprintln(sio.err, "WARNING: --yes bypasses confirmation; ensure correct --name target before scripting")
+		_, _ = fmt.Fprintf(sio.err, "WARNING: --yes bypasses confirmation; ensure correct %s target before scripting\n", targetFlag)
 		return nil
 	}
 
@@ -449,7 +455,7 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §105/§125; Fix F-11A-1).
-	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, sio); err != nil {
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, "--svtn", sio); err != nil {
 		return err
 	}
 

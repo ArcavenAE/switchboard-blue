@@ -62,39 +62,38 @@ func TestNewInBurst19_ConfirmSymmetry_BoolFlagAcceptsValueForm(t *testing.T) {
 	// layer accepts the value-form syntax without error.  The connection
 	// attempt will fail but that's after flag parsing succeeds.
 
+	// wantConfirm is deliberately absent: runAdminKeyRevoke uses an unreachable
+	// target address, so the wire payload is never transmitted. The confirm-gate
+	// flag-parse acceptance is the only property verifiable without a fake server.
+	// Wire-value round-trip is covered by TestNewInBurst19_ConfirmSymmetry_WirePayload_ConfirmTrue.
 	tests := []struct {
 		name        string
 		args        []string
 		wantParseOK bool // if false, we expect a parse error
-		wantConfirm bool // expected Confirm value after parsing
 	}{
 		{
 			name: "bare_confirm_flag",
-			// --confirm with no = is the bare bool form; expect Confirm=true.
+			// --confirm with no = is the bare bool form; accepted without parse error.
 			args:        []string{"--key", "AAAA", "--svtn", "test-svtn", "--role", "control", "--confirm"},
 			wantParseOK: true,
-			wantConfirm: true,
 		},
 		{
 			name: "confirm_equals_true",
-			// --confirm=true must be accepted and yield Confirm=true.
+			// --confirm=true must be accepted without parse error.
 			args:        []string{"--key", "AAAA", "--svtn", "test-svtn", "--role", "control", "--confirm=true"},
 			wantParseOK: true,
-			wantConfirm: true,
 		},
 		{
 			name: "confirm_equals_false",
-			// --confirm=false must be accepted and yield Confirm=false.
+			// --confirm=false must be accepted without parse error.
 			args:        []string{"--key", "AAAA", "--svtn", "test-svtn", "--role", "control", "--confirm=false"},
 			wantParseOK: true,
-			wantConfirm: false,
 		},
 		{
 			name: "no_confirm_flag",
-			// --confirm absent yields Confirm=false.
+			// --confirm absent is accepted without parse error.
 			args:        []string{"--key", "AAAA", "--svtn", "test-svtn", "--role", "control"},
 			wantParseOK: true,
-			wantConfirm: false,
 		},
 	}
 

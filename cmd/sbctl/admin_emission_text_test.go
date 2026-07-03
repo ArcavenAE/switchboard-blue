@@ -45,7 +45,7 @@ func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 
 	// Both --yes=true and --confirm="SVTN-abcd1234" supplied → E-CFG-012.
-	err := runDestroyConfirmGate("SVTN-abcd1234", true, sio)
+	err := runDestroyConfirmGate("SVTN-abcd1234", true, "--name", sio)
 	if err == nil {
 		t.Fatal("runDestroyConfirmGate(confirm+yes): expected E-CFG-012 error, got nil")
 	}
@@ -74,7 +74,7 @@ func TestNewInBurst19_ECFG012_PickOne_CanonicalExact(t *testing.T) {
 	t.Parallel()
 
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
-	err := runDestroyConfirmGate("SVTN-abcd1234", true, sio)
+	err := runDestroyConfirmGate("SVTN-abcd1234", true, "--name", sio)
 	if err == nil {
 		t.Fatal("expected E-CFG-012 error, got nil")
 	}
@@ -106,7 +106,7 @@ func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 
 	// confirmVal = "" (no --confirm), yes = false → Path 3 (non-TTY + no --confirm).
-	err := runDestroyConfirmGate("", false, sio)
+	err := runDestroyConfirmGate("", false, "--name", sio)
 
 	// Must have E-CFG-013 as the exact prefix (canonical taxonomy v4.4).
 	assertErrorPrefix(t, err, "E-CFG-013: ")
@@ -115,6 +115,70 @@ func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.
 	const canonicalE013 = "E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes"
 	if !strings.Contains(err.Error(), canonicalE013) {
 		t.Errorf("E-CFG-013 body mismatch:\n got: %q\nwant substring: %q", err.Error(), canonicalE013)
+	}
+}
+
+// TestNewInBurst19_YesWarning_TargetFlag_Destroy verifies that the Path 4 --yes
+// warning for admin svtn destroy mentions "--name" (the target flag for that
+// subcommand), not "--svtn".
+//
+// Fix F-14A-1: runDestroyConfirmGate now accepts a targetFlag argument so each
+// caller emits a contextually correct warning.  Destroy calls with "--name";
+// key register calls with "--svtn".
+//
+// NOTE: NOT parallel — mutates package-level seam stdinIsTTY.
+func TestNewInBurst19_YesWarning_TargetFlag_Destroy(t *testing.T) {
+	// NOT parallel: mutates package-level seam stdinIsTTY.
+	origIsTTY := stdinIsTTY
+	stdinIsTTY = func() bool { return false }
+	t.Cleanup(func() { stdinIsTTY = origIsTTY })
+
+	var errBuf bytes.Buffer
+	sio := sbctlIO{out: &bytes.Buffer{}, err: &errBuf}
+
+	// Path 4: yes=true, confirmVal="" → emit warning, return nil.
+	err := runDestroyConfirmGate("", true, "--name", sio)
+	if err != nil {
+		t.Fatalf("Path 4 (--yes, destroy): expected nil error; got %v", err)
+	}
+
+	warning := errBuf.String()
+	if !strings.Contains(warning, "--name") {
+		t.Errorf("Path 4 destroy warning must mention \"--name\"; got: %q", warning)
+	}
+	if strings.Contains(warning, "--svtn") {
+		t.Errorf("Path 4 destroy warning must NOT mention \"--svtn\" (wrong target flag); got: %q", warning)
+	}
+}
+
+// TestNewInBurst19_YesWarning_TargetFlag_KeyRegister verifies that the Path 4
+// --yes warning for admin key register mentions "--svtn" (the target flag for
+// that subcommand), not "--name".
+//
+// Fix F-14A-1: symmetric companion to TestNewInBurst19_YesWarning_TargetFlag_Destroy.
+//
+// NOTE: NOT parallel — mutates package-level seam stdinIsTTY.
+func TestNewInBurst19_YesWarning_TargetFlag_KeyRegister(t *testing.T) {
+	// NOT parallel: mutates package-level seam stdinIsTTY.
+	origIsTTY := stdinIsTTY
+	stdinIsTTY = func() bool { return false }
+	t.Cleanup(func() { stdinIsTTY = origIsTTY })
+
+	var errBuf bytes.Buffer
+	sio := sbctlIO{out: &bytes.Buffer{}, err: &errBuf}
+
+	// Path 4: yes=true, confirmVal="" → emit warning, return nil.
+	err := runDestroyConfirmGate("", true, "--svtn", sio)
+	if err != nil {
+		t.Fatalf("Path 4 (--yes, key register): expected nil error; got %v", err)
+	}
+
+	warning := errBuf.String()
+	if !strings.Contains(warning, "--svtn") {
+		t.Errorf("Path 4 key register warning must mention \"--svtn\"; got: %q", warning)
+	}
+	if strings.Contains(warning, "--name") {
+		t.Errorf("Path 4 key register warning must NOT mention \"--name\" (wrong target flag); got: %q", warning)
 	}
 }
 

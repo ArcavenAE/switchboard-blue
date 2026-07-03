@@ -70,7 +70,7 @@ func TestNewInBurst19_InteractivePrompt_NoLiteralPlaceholder(t *testing.T) {
 	}()
 
 	// Invoke with no --confirm value, --yes=false: exercises Path 2.
-	err := runDestroyConfirmGate("", false, sio)
+	err := runDestroyConfirmGate("", false, "--name", sio)
 
 	<-done
 
@@ -120,7 +120,7 @@ func TestNewInBurst19_InteractivePrompt_ContainsSVTNPrefix(t *testing.T) {
 		_, _ = pw.Write([]byte("SVTN-abcd1234\n"))
 	}()
 
-	_ = runDestroyConfirmGate("", false, sio)
+	_ = runDestroyConfirmGate("", false, "--name", sio)
 	<-done
 
 	prompt := errBuf.String()
