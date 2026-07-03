@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.27"
+version: "1.28"
 status: draft
 producer: product-owner
 timestamp: 2026-07-03T00:00:00
@@ -139,6 +139,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 Confirmation flow summary (applies to the `runDestroyConfirmGate` family: svtn destroy, key register, recover pending): interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-012, exit 2). In a non-interactive session (no TTY) where neither `--confirm` nor `--yes` is supplied, the command exits with E-CFG-013 (exit 2) — use `--confirm=<svtn-short-id>` or `--yes` for scripted invocations. **`sbctl admin key revoke` is not part of this family** — see `key revoke` carve-out note under §131.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
+
+> **v1.28 changelog note (2026-07-03):** POL-001. Phase 5 Pass 17 adversarial remediation. (a) Remove `svtn_id` phantom field from `router.metrics` response — envelope example at §Router-metrics-response and Registered Verbs table Response Data column both listed a `svtn_id` echo field the daemon never emits. Wire response type is `RouterMetricsResponse{FrameCount, HMACFailCount, DropCacheHits, PathDistribution}` per `internal/metrics/types.go:101-112`; CLI decode struct matches at `cmd/sbctl/router_metrics.go:25-30`; canonical BC-2.06.003 test vector at `.factory/specs/behavioral-contracts/ss-06/BC-2.06.003.md:109` omits svtn_id. Request payload correctly retains `svtn_id` (unchanged). (b) Correct `path_distribution` example values from fractional ratios (0.52, 0.48) to integer frame counts (900000, 334567) — wire type is `map[string]uint64` per `types.go:110-111` and `router_metrics.go:29`; BC-2.06.003 PC-2 documents per-path frame distribution as count, not ratio; demo-evidence `stub_daemon.go` emits integer counts. Ratio example would not deserialize into the actual wire type under any typed consumer. Addresses DRIFT-P5P17-A-001 (svtn_id phantom field) + DRIFT-P5P17-A-002 (fractional path_distribution ratios). Refs: F-P5P17-A-001, F-P5P17-A-002.
 
 > **v1.27 changelog note (2026-07-03):** POL-001. Remove undocumented `$schema` field from JSON envelope success example; correct "share a common envelope" prose to reflect that sbctl emits a schemaless envelope. Normalizes spec to observable sbctl behavior at `cmd/sbctl/client.go:97-101` (jsonEnvelope struct has no Schema field) and `cmd/sbctl/main.go:104-113` (constructors never populate one). Addresses F-P5P16-A-001. No production domain exists to host the referenced schema URL.
 
@@ -296,13 +298,12 @@ Example — pending response (<10 samples; BC-2.06.003 v1.13 EC-003/EC-006). The
 {
   "ok": true,
   "data": {
-    "svtn_id": "...",
     "frame_count": 1234567,
     "hmac_fail_count": 3,
     "drop_cache_hits": 12,
     "path_distribution": {
-      "path-001": 0.52,
-      "path-002": 0.48
+      "path-001": 900000,
+      "path-002": 334567
     }
   }
 }
@@ -400,7 +401,7 @@ All RPC endpoints require authentication: the caller presents its OpenSSH key si
 | Verb | Owning BC / PC | Authority Required | Request Args | Response Data | Story Trace |
 |------|----------------|--------------------|--------------|---------------|-------------|
 | `paths.list` | BC-2.06.003 v1.13 PC-1 | Any admitted key (bootstrap or control-role) | `{"svtn_id": "<hex>"}` (optional; omit for all paths) | `{"paths": [{path_id, router_addr, rtt_ms, rtt_p99_ms, loss_pct, status}]}` (`rtt_p99_ms` is float64 or `"pending"` per EC-003; `status` is `active` or `degraded`; `failed` reserved for Wave-7 S-BL.PATH-FAILED-STATUS) | S-5.02, S-W5.04 |
-| `router.metrics` | BC-2.06.003 v1.13 PC-2 | Any admitted key | `{"svtn_id": "<hex>"}` (required) | `{"svtn_id", "frame_count", "hmac_fail_count", "drop_cache_hits", "path_distribution"}` | S-5.02, S-W5.04 |
+| `router.metrics` | BC-2.06.003 v1.13 PC-2 | Any admitted key | `{"svtn_id": "<hex>"}` (required) | `{"frame_count", "hmac_fail_count", "drop_cache_hits", "path_distribution"}` | S-5.02, S-W5.04 |
 | `router.status` | BC-2.06.003 v1.13 PC-3 | Any admitted key | `{"target": "<router-addr>"}` | Alias for `paths.list` response + `quality` field; `"quality": "pending"` when p99 not yet available (EC-006) | S-5.02, S-W5.04 |
 | `admin.key.register` | BC-2.05.004 PC-1 | Control-role key + `--confirm` token (or operator-set bootstrap grant for first-register into fresh SVTN per BC-2.05.004 EC-005) | `{"svtn_id": "<svtn-name>", "pubkey_openssh": "<OpenSSH-format string, e.g. ssh-ed25519 AAAA... comment>", "role": "control\|console\|access"}` | `{"key_fingerprint": "SHA256:<base64>", "timestamp": "<RFC3339>"}` | S-6.06 |
 | `admin.key.revoke` | BC-2.05.004 PC-2 | Control-role key + `--confirm` token; console-role keys may not revoke control-role keys (ADR-004 Inv-3) | `{"svtn_id": "<svtn-name>", "pubkey_openssh": "<OpenSSH-format string>", "role": "<role>", "confirm": <bool>}` — `role`: the target key's role (e.g. `"control"`, `"console"`, `"access"`); passed to RevokeKey for the HOLD-001 E-ADM-019 cross-check that validates the caller's registered role matches the claimed role for the key being revoked; NOT the caller's authorization role (which is resolved independently by `resolveAndVerifyCallerRole` from the authenticated pubkey); `confirm`: boolean, required `true` when revoking a control-role key (BC-2.05.004 PC-2 control-revocation gate); `false` or absent is equivalent to `false` | `{"key_fingerprint": "SHA256:<base64>", "timestamp": "<RFC3339>"}` | S-6.06 |
