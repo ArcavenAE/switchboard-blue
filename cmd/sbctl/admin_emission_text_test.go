@@ -110,6 +110,12 @@ func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.
 
 	// Must have E-CFG-013 as the exact prefix (canonical taxonomy v4.4).
 	assertErrorPrefix(t, err, "E-CFG-013: ")
+
+	// Must contain the full canonical body substring (taxonomy v4.4).
+	const canonicalE013 = "E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes"
+	if !strings.Contains(err.Error(), canonicalE013) {
+		t.Errorf("E-CFG-013 body mismatch:\n got: %q\nwant substring: %q", err.Error(), canonicalE013)
+	}
 }
 
 // TestNewInBurst19_ECFG012_PickOne_ViaRunAdminSvtnDestroy exercises E-CFG-012

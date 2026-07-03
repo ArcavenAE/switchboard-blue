@@ -1953,7 +1953,7 @@ func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 			isTTY:           false,
 			wantErr:         true,
 			wantNoRPC:       true,
-			wantErrContains: "non-interactive session",
+			wantErrContains: "--confirm is required for scripted use",
 		},
 		{
 			name:          "path4_yes_alone_bypasses",
