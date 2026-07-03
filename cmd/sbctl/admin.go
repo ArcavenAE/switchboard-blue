@@ -151,7 +151,7 @@ func (f *boolStringFlag) isTrue() bool {
 // F-P8-001 CLI surface resolution.
 func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("admin: no subcommand specified; expected 'key', 'list-keys', or 'svtn'")
+		return usageErrf("admin: no subcommand specified; expected 'key', 'list-keys', or 'svtn'")
 	}
 
 	switch args[0] {
@@ -162,10 +162,10 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 		fs.SetOutput(io.Discard)
 		svtnID := fs.String("svtn", "", "SVTN ID")
 		if err := fs.Parse(args[1:]); err != nil {
-			return fmt.Errorf("admin list-keys: %w", err)
+			return usageErrf("admin list-keys: %w", err)
 		}
 		if *svtnID == "" {
-			return fmt.Errorf("admin list-keys: --svtn <id> is required")
+			return usageErrf("admin list-keys: --svtn <id> is required")
 		}
 		type listKeysArgs struct {
 			SVTNID string `json:"svtn_id"`
@@ -174,7 +174,7 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 	case "svtn":
 		return runAdminSvtn(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("admin: unknown subcommand %q; expected 'key', 'list-keys', or 'svtn'", args[0])
+		return usageErrf("admin: unknown subcommand %q; expected 'key', 'list-keys', or 'svtn'", args[0])
 	}
 }
 
@@ -190,7 +190,7 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 // Traces to BC-2.07.001 PC-1 (SVTN create); BC-2.07.001 PC-3 (SVTN destroy); S-6.07; S-6.05.
 func runAdminSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("admin svtn: no subcommand specified; expected 'create' or 'destroy'")
+		return usageErrf("admin svtn: no subcommand specified; expected 'create' or 'destroy'")
 	}
 
 	switch args[0] {
@@ -199,7 +199,7 @@ func runAdminSvtn(ctx context.Context, target, keyPath string, useJSON bool, arg
 	case "destroy":
 		return runAdminSvtnDestroy(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("admin svtn: unknown subcommand %q; expected 'create' or 'destroy'", args[0])
+		return usageErrf("admin svtn: unknown subcommand %q; expected 'create' or 'destroy'", args[0])
 	}
 }
 
@@ -219,10 +219,10 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 	nameFlag := fs.String("name", "", "SVTN name (required)")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("admin svtn create: %w", err)
+		return usageErrf("admin svtn create: %w", err)
 	}
 	if *nameFlag == "" {
-		return fmt.Errorf("admin svtn create: --name is required")
+		return usageErrf("admin svtn create: --name is required")
 	}
 
 	rpcArgs := adminSVTNCreateArgs{Name: *nameFlag}
@@ -296,10 +296,10 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 
 	// F-STORY-001: argument parsing MUST precede dispatch.
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("admin svtn destroy: %w", err)
+		return usageErrf("admin svtn destroy: %w", err)
 	}
 	if *nameFlag == "" {
-		return fmt.Errorf("admin svtn destroy: --name is required")
+		return usageErrf("admin svtn destroy: --name is required")
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §125/§127/§129).
@@ -357,7 +357,7 @@ func runAdminSvtnDestroy(ctx context.Context, target, keyPath string, useJSON bo
 func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio sbctlIO) error {
 	// Path 5: --yes combined with --confirm is a usage error (E-CFG-012; §127).
 	if yes && confirmVal != "" {
-		return fmt.Errorf("E-CFG-012: --yes cannot be combined with --confirm; pick one")
+		return usageErrf("E-CFG-012: --yes cannot be combined with --confirm; pick one")
 	}
 
 	// Path 4: --yes alone bypasses the check (§127).
@@ -369,7 +369,7 @@ func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio s
 	// Path 1: --confirm supplied with a non-empty value — static shape check.
 	if confirmVal != "" {
 		if !confirmSVTNShortIDValid(confirmVal) {
-			return fmt.Errorf("admin svtn destroy: invalid --confirm %q; "+
+			return usageErrf("admin svtn destroy: invalid --confirm %q; "+
 				"expected SVTN-<8 lowercase hex characters>", confirmVal)
 		}
 		// Shape is valid; proceed. Identity-match deferred to DRIFT-S605-CONFIRM-IDENTITY.
@@ -379,7 +379,7 @@ func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio s
 	// --confirm absent (empty string).  Check whether stdin is a TTY.
 	if !stdinIsTTY() {
 		// Path 3: non-interactive session (E-CFG-013).
-		return fmt.Errorf("E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes")
+		return usageErrf("E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes")
 	}
 
 	// Path 2: interactive mode — prompt on stderr and read from stdinReader.
@@ -400,7 +400,7 @@ func runDestroyConfirmGate(confirmVal string, yes bool, targetFlag string, sio s
 // runAdminKey dispatches `sbctl admin key <subcommand>` commands.
 func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("admin key: no subcommand specified; expected 'register', 'revoke', or 'expire'")
+		return usageErrf("admin key: no subcommand specified; expected 'register', 'revoke', or 'expire'")
 	}
 
 	switch args[0] {
@@ -411,7 +411,7 @@ func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args
 	case "expire":
 		return runAdminKeyExpire(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("admin key: unknown subcommand %q; expected 'register', 'revoke', or 'expire'", args[0])
+		return usageErrf("admin key: unknown subcommand %q; expected 'register', 'revoke', or 'expire'", args[0])
 	}
 }
 
@@ -436,14 +436,14 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 	yesFlag := fs.Bool("yes", false, "bypass the confirm gate for scripted use (stderr warning emitted)")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("admin key register: %w", err)
+		return usageErrf("admin key register: %w", err)
 	}
 
 	if *keyFlag == "" {
-		return fmt.Errorf("admin key register: --key is required")
+		return usageErrf("admin key register: --key is required")
 	}
 	if *svtnFlag == "" {
-		return fmt.Errorf("admin key register: --svtn is required")
+		return usageErrf("admin key register: --svtn is required")
 	}
 	// F-CS-005: validate --role enum before dispatching the RPC.
 	// Mirrors the validation in runAdminKeyRevoke.
@@ -451,7 +451,7 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 	case "control", "console", "access":
 		// valid
 	default:
-		return fmt.Errorf("admin key register: --role must be control, console, or access; got %q", *roleFlag)
+		return usageErrf("admin key register: --role must be control, console, or access; got %q", *roleFlag)
 	}
 
 	// Confirm gate (ADR-004; interface-definitions.md v1.1 §105/§125; Fix F-11A-1).
@@ -484,23 +484,23 @@ func runAdminKeyRevoke(ctx context.Context, target, keyPath string, useJSON bool
 	fs.Var(confirmFlag, "confirm", "confirm control-to-control revocation; bare --confirm or --confirm=true (ADR-004)")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("admin key revoke: %w", err)
+		return usageErrf("admin key revoke: %w", err)
 	}
 
 	if *keyFlag == "" {
-		return fmt.Errorf("admin key revoke: --key is required")
+		return usageErrf("admin key revoke: --key is required")
 	}
 	if *svtnFlag == "" {
-		return fmt.Errorf("admin key revoke: --svtn is required")
+		return usageErrf("admin key revoke: --svtn is required")
 	}
 	if *roleFlag == "" {
-		return fmt.Errorf("admin key revoke: --role is required")
+		return usageErrf("admin key revoke: --role is required")
 	}
 	switch *roleFlag {
 	case "control", "console", "access":
 		// valid
 	default:
-		return fmt.Errorf("admin key revoke: --role must be control, console, or access; got %q", *roleFlag)
+		return usageErrf("admin key revoke: --role must be control, console, or access; got %q", *roleFlag)
 	}
 
 	rpcArgs := adminKeyRevokeArgs{
@@ -526,17 +526,17 @@ func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool
 	afterFlag := fs.String("after", "", "TTL duration (required; e.g. \"24h\")")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("admin key expire: %w", err)
+		return usageErrf("admin key expire: %w", err)
 	}
 
 	if *keyFlag == "" {
-		return fmt.Errorf("admin key expire: --key is required")
+		return usageErrf("admin key expire: --key is required")
 	}
 	if *svtnFlag == "" {
-		return fmt.Errorf("admin key expire: --svtn is required")
+		return usageErrf("admin key expire: --svtn is required")
 	}
 	if *afterFlag == "" {
-		return fmt.Errorf("admin key expire: --after is required")
+		return usageErrf("admin key expire: --after is required")
 	}
 
 	// Client-side validation: parse duration to catch zero/negative early
@@ -544,10 +544,10 @@ func runAdminKeyExpire(ctx context.Context, target, keyPath string, useJSON bool
 	// without dialing — avoids a round-trip for an invalid request.
 	d, err := time.ParseDuration(*afterFlag)
 	if err != nil {
-		return fmt.Errorf("admin key expire: invalid --after duration %q: %w", *afterFlag, err)
+		return usageErrf("admin key expire: invalid --after duration %q: %w", *afterFlag, err)
 	}
 	if d <= 0 {
-		return fmt.Errorf("admin key expire: --after duration must be positive, got %q", *afterFlag)
+		return usageErrf("admin key expire: --after duration must be positive, got %q", *afterFlag)
 	}
 
 	rpcArgs := adminKeyExpireArgs{
