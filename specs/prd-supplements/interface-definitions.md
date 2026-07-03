@@ -2,10 +2,10 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.18"
+version: "1.19"
 status: draft
 producer: product-owner
-timestamp: 2026-07-02T12:00:00
+timestamp: 2026-07-03T00:00:00
 phase: 1a
 inputs:
   - '.factory/specs/prd.md'
@@ -57,35 +57,38 @@ Subcommands:
 
 # SVTN Management
 sbctl svtn create [--name=<name>]               # [REMOVED] Alias removed as of Phase 5 Pass 3 Path B remediation (PR #62). Was deprecated in v1.2 (S-6.07). Migration target: 'sbctl admin svtn create'. Invoking today returns exit 2 (unknown subcommand: svtn).
-sbctl svtn destroy --id=<svtn_id>               # Destroy an SVTN
-sbctl svtn list                                  # List known SVTNs
-sbctl svtn status --id=<svtn_id>                # SVTN status and admitted node count
+sbctl svtn destroy --id=<svtn_id>               # [PENDING-S-BL.CLI-SURFACE-COMPLETION: no svtn case arm; returns unknown-subcommand usage error, exit 2 (verified post-#65)]
+sbctl svtn list                                  # [PENDING: won't-fix (S-BL.SVTN-LIST-WIRE, surface removed); returns unknown-subcommand usage error, exit 2 (verified post-#65)]
+sbctl svtn status --id=<svtn_id>                # [PENDING-S-BL.CLI-SURFACE-COMPLETION: no svtn case arm; returns unknown-subcommand usage error, exit 2 (verified post-#65)]
 
 # Key Management (read-only; destructive ops exclusively via sbctl admin)
-sbctl svtn keys list [--svtn=<id>]
+sbctl svtn keys list [--svtn=<id>]              # [SUPERSEDED by §108 sbctl admin list-keys + §384 admin.key.list-keys (S-6.06, implemented); no svtn case arm today, exit 2 (verified post-#65)]
 # NOTE: Destructive key operations (register/revoke/expire) are exclusively via
 # `sbctl admin` (operator-only with --confirm gating). See `sbctl admin` table below.
 
 # Session Operations
-sbctl sessions list [--svtn=<id>]               # List all SVTN sessions
-sbctl sessions attach <session-name> [--svtn=<id>]
-sbctl sessions detach [--session=<name>] [--svtn=<id>]
-sbctl sessions status [--session=<name>]        # Quality indicator + path metrics
+sbctl sessions list [--svtn=<id>]               # List all SVTN sessions (bare `sbctl sessions` also dispatches sessions.list RPC; verified post-#65)
+sbctl sessions attach <session-name> [--svtn=<id>]  # [PENDING-S-BL.DISCOVERY-WIRE: not-implemented usage error, exit 2 (verified post-#65)]
+sbctl sessions detach [--session=<name>] [--svtn=<id>]  # [PENDING-S-BL.DISCOVERY-WIRE: not-implemented usage error, exit 2 (verified post-#65)]
+sbctl sessions status [--session=<name>]        # [PENDING-S-BL.DISCOVERY-WIRE: not-implemented usage error, exit 2 (verified post-#65)]
 
 # Path / Quality Metrics
-sbctl paths list [--svtn=<id>]                  # Per-path RTT (rtt_ms, rtt_p99_ms), loss, status
-sbctl paths ping --router=<addr>                # One-shot RTT probe
+sbctl paths list [--svtn=<id>]                  # Per-path RTT (rtt_ms, rtt_p99_ms), loss, status (implemented, S-5.02)
+sbctl paths ping --router=<addr>                # [PENDING-S-BL.CLI-SURFACE-COMPLETION: paths case arm only dispatches 'list'; 'ping' returns usage error, exit 2 (verified post-#65)]
 
 # Router Management
-sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.13 PC-3; S-5.02 v1.9 AC-003/AC-008)
-sbctl router metrics --svtn=<id>                # Frame counts, HMAC failures, drop cache hits
-sbctl router reload                             # Reload config (SIGHUP equivalent)
-sbctl router drain                              # Graceful drain (SIGTERM equivalent)
+sbctl router status --target <router>            # Alias for sbctl paths list + quality column (BC-2.06.003 v1.13 PC-3; S-5.02 v1.9 AC-003/AC-008) — implemented
+sbctl router metrics --svtn=<id>                # Frame counts, HMAC failures, drop cache hits — implemented (S-5.02)
+sbctl router reload                             # [PENDING-S-BL.CLI-SURFACE-COMPLETION: router case arm dispatches only 'metrics'/'status'; 'reload' returns unknown-subcommand usage error, exit 2 (verified post-#65)]
+sbctl router drain                              # [PENDING-S-BL.CLI-SURFACE-COMPLETION: router case arm dispatches only 'metrics'/'status'; 'drain' returns unknown-subcommand usage error, exit 2 (verified post-#65)]
 
 # Console Control (remote)
-sbctl console attach --session=<name> --console=<addr> [--svtn=<id>]
-sbctl console detach --console=<addr>
-sbctl console switch --session=<name> --console=<addr>
+# NOTE (F-P5P6-A-004 adjudication, verified against cmd/sbctl/console.go post-#65):
+# The converged S-7.03 implementation registers only --session; --console and --svtn flags are NOT present.
+# Spec amended below to match the converged flag set (authority: F-P5P6-A-004 + S-7.03 convergence record 3/3 clean passes).
+sbctl console attach --session=<name>           # Attach to named tmux session (wire: console.attach; BC-2.08.001 PC-1; S-7.03 AC-001)
+sbctl console detach                             # Detach from current session (wire: console.detach; BC-2.08.001 PC-2; S-7.03 AC-002)
+sbctl console switch --session=<name>           # Atomically detach + attach to named session (wire: console.switch; BC-2.08.001 PC-3; S-7.03 AC-003)
 
 # Diagnostics
 sbctl version                                   # Print daemon version
@@ -118,7 +121,7 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 #### Emergency recovery
 
-> **PENDING-S-BL.ADMIN-RECOVER-WIRE:** Spec-complete; implementation deferred to backlog story `S-BL.ADMIN-RECOVER-WIRE`. Neither `cmd/sbctl` nor the daemon dispatch `admin recover` today — the `runAdmin` switch covers only `key | list-keys | svtn`; the default arm returns `admin: unknown subcommand %q`. Operators invoking `sbctl admin recover` on current builds receive exit 2 (unknown-subcommand).
+> **PENDING-S-BL.ADMIN-RECOVER-WIRE:** Spec-complete; implementation deferred to backlog story `S-BL.ADMIN-RECOVER-WIRE`. Neither `cmd/sbctl` nor the daemon dispatch `admin recover` today — the `runAdmin` switch covers only `key | list-keys | svtn`; the default arm returns `admin: unknown subcommand %q`. Operators invoking `sbctl admin recover` on current builds receive exit 2 (usage error, verified against PR #65 — `runAdmin` default arm returns `usageErrf`, main.go maps `*usageError` → `os.Exit(2)` via `errors.As`).
 
 | Subcommand | Purpose | Auth | Exit codes |
 |-----------|---------|------|-----------|
@@ -132,6 +135,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-012, exit 2). In a non-interactive session (no TTY) where neither `--confirm` nor `--yes` is supplied, the command exits with E-CFG-013 (exit 2) — use `--confirm=<svtn-short-id>` or `--yes` for scripted invocations.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
+
+> **v1.19 changelog note (2026-07-03):** Phase 5 Pass 6 spec-side remediation (Burst 23). F-P5P6-A-002: §121 PENDING-S-BL.ADMIN-RECOVER-WIRE exit-2 claim verified against merged main.go/admin.go (PR #65) — `runAdmin` default arm returns `usageErrf`, main() discriminates via `errors.As(err, &*usageError)` → `os.Exit(2)`; annotation updated to "verified against PR #65". F-P5P6-A-005: seven unimplemented CLI verbs annotated with PENDING markers and verified current behavior (exit 2, usage error, post-#65): §77 `paths ping`, §82 `router reload`, §83 `router drain`, §60 `svtn destroy`, §62 `svtn status` (collective marker PENDING-S-BL.CLI-SURFACE-COMPLETION); §61 `svtn list` (won't-fix S-BL.SVTN-LIST-WIRE); §70-73 `sessions attach/detach/status` (PENDING-S-BL.DISCOVERY-WIRE, matching existing backlog story). F-P5P6-A-005 secondary: §65 `sbctl svtn keys list` annotated as superseded by §108 `sbctl admin list-keys` (canonical, implemented S-6.06) and §384 `admin.key.list-keys` Registered Verbs row. F-P5P6-A-001/A-006 spec side: §174 exit-code table — exit-2 row extended to name bare invocation (no subcommand) explicitly; `--help`/`-h` added to exit-0 row. F-P5P6-A-004 adjudication (spec-side amendment): §86-88 `console attach/detach/switch` amended — prior spec mandated `--console=<addr>` and `--svtn` flags not present in the converged S-7.03 implementation; amended to the real flag set (`--session` only for attach/switch; no flags for detach), with changelog note citing F-P5P6-A-004 + S-7.03 convergence record 3/3 clean passes as authority (verified against `cmd/sbctl/console.go` runConsoleAttach/Detach/Switch post-#65).
 
 > **v1.18 changelog note (2026-07-03):** Phase 5 Pass 5 adversarial remediation (Burst 21). F-P5P5-A-001: §116 authority cell corrected from "Requires control-role key on control-mode daemon" to bootstrap-only language aligned with impl (`admin_handlers.go:686-705`), Registered Verbs §380, and BC-2.07.001 Inv-3/Ruling-5. F-P5P5-A-002: §119-123 Emergency recovery section annotated with `PENDING-S-BL.ADMIN-RECOVER-WIRE` (spec-complete, implementation deferred; operators get exit 2 unknown-subcommand today); §125 confirm-gate mention carries sibling annotation. F-P5P5-A-003: §116 exit-codes column extended with E-CFG-001 (five `validateSVTNName` validation arms) and E-INT-001 (non-duplicate Create failure wrap); §117 exit-codes column extended with E-CFG-001 for caller-supplied-name validation path. F-P5P5-A-004: §59 `sbctl svtn create` alias status changed from DEPRECATED/retained to REMOVED as of Phase 5 Pass 3 Path B remediation (PR #62); migration target and exit-2 behaviour noted.
 
@@ -171,9 +176,9 @@ Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id>
 
 | Code | Meaning | When |
 |------|---------|------|
-| 0 | Success | Command completed normally |
+| 0 | Success | Command completed normally; `--help` / `-h` |
 | 1 | Operational error | Admission denied, session not found, daemon unreachable, config error |
-| 2 | Usage error | Invalid subcommand, missing required flags, type constraint violation |
+| 2 | Usage error | No subcommand supplied (bare `sbctl`); invalid subcommand; missing required flags; type constraint violation; E-CFG-012; E-CFG-013 (verified against merged main.go/admin.go post-#65) |
 | 3 | Internal error | Unexpected panic or unrecoverable internal state (should be rare) |
 
 ## JSON Output Schema

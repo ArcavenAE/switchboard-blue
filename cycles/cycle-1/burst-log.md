@@ -1081,3 +1081,60 @@ Phase 4 holdout evaluation against HS-006 (Wave-6 combined scope: XOR FEC, sessi
 **Adv-A read-cap note:** 8 files read vs cap 6 (self-disclosed in report). Overage concentrated on the six top-level sbctl subcommand dispatch shims required to walk the full command surface against spec §§60-88. Justified by scope; no skimming to conceal. Preserved as-is in the report.
 
 **BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS resets/holds at 0. Burst 23 remediation pending.
+
+---
+
+## Phase 5 — Burst 23 / Pass 6 Remediation (2026-07-03)
+
+**Agents dispatched:** implementer (code track), product-owner (spec track), spec-steward (BC + story track), state-manager (persistence)
+**Dispatch tuple:** develop tip d012dbfc92d15cc5f5113f63c79052f00f274861 + interface-definitions v1.18 → remediate F-P5P6-A-001..006
+**Files touched (code track):** cmd/sbctl/main.go (usageError type, sessions dispatch, bare-sbctl exit 2), cmd/sbctl/main_test.go (new coverage)
+**Files touched (spec track):** specs/prd-supplements/interface-definitions.md (v1.18→v1.19), specs/behavioral-contracts/ss-07/BC-2.07.002.md (v1.8→v1.9), stories/S-6.03-sbctl-cli-connection-error.md (v2.7→v2.8), stories/S-BL.CLI-SURFACE-COMPLETION.md (new), stories/STORY-INDEX.md (v3.70→v3.71), STATE.md, cycles/cycle-1/burst-log.md
+
+**Summary:** Full remediation of Phase 5 Pass 6 Adv-A findings. Code track resolves the three behavioral findings (exit-code collapse, sessions misdispatch, bare-sbctl exit 0). Spec track closes F-A-002 via verified annotation, adjudicates F-A-004 spec-side, and collectively defers F-A-005 with a new backlog stub. Adv-B observations (OBS-B-001/OBS-B-002) are non-blocking and carried forward.
+
+### Code Track — PR #65 (4d7d9e0)
+
+**TDD cycle:** RED 8692237 → GREEN e83c69e → triage 4540180 → PR #65 merged 4d7d9e0
+
+| Finding | Fix | Result |
+|---------|-----|--------|
+| F-P5P6-A-001 [HIGH] exit-code collapse: all errors → exit 1 | Introduce `usageError` type; main() maps `usageError` → exit 2, all others → exit 1. Mirrors pattern in test-only subprocess entry already present. | RESOLVED — exit 2 now wired in main() for usage-error class |
+| F-P5P6-A-003 [MED] sessions misdispatch: all sub-verbs → sessions.list | Add sub-verb dispatch switch in sessions case arm; route attach/detach/status to respective handlers | RESOLVED — sub-verb routing correct post-merge |
+| F-P5P6-A-006 [LOW] bare sbctl exits 0 | Bare invocation path hits default arm returning usageError → exit 2 | RESOLVED — §174 honored |
+
+**Reviewer triage (6 LOWs):** 4 applied (dead-code removal, docstring corrections, test label cleanup, error message wording); 2 deferred to maintenance (mock naming OBS-B-001, test citation floor DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR).
+
+### Spec Track
+
+**F-P5P6-A-002 [MED] — §121 PENDING annotation false promise:**
+Closed via verify-then-claim: PR #65 makes exit-2-for-unknown-subcommand true; interface-definitions v1.19 §121 annotation re-verified against merged tree before updating. This is the verify-then-claim discipline instance — Burst 21 sourced from §174's promise, not verified behavior (per DRIFT-P5P6-ANNOTATION-EXITCODE root cause). DRIFT-P5P6-ANNOTATION-EXITCODE RESOLVED.
+
+**F-P5P6-A-004 [MED] — console attach/detach/switch missing --console and --svtn flags:**
+Adjudicated spec-side: S-7.03 (merged PR #60 7142146) is the authoritative implementation of `sbctl sessions attach/detach/switch`. The converged implementation shape determines the canonical flag signature. interface-definitions.md §86-88 amended in v1.19 to reflect the S-7.03 converged shape. No code change required — the flags ship with the sessions verb family.
+
+**F-P5P6-A-005 [MED] — 7 unannotated spec verbs:**
+Five verbs collectively annotated PENDING-S-BL.CLI-SURFACE-COMPLETION in v1.19: `paths ping` (§77), `router reload` (§82), `router drain` (§83), `sbctl svtn destroy` (§60), `sbctl svtn status` (§62). Two verbs resolved differently: `sbctl svtn list` → won't-fix (surface removed, BC-2.07.002 v1.8); `sbctl svtn keys list` → covered under admin.key.list-keys (already wired). `S-BL.CLI-SURFACE-COMPLETION` stub minted, STORY-INDEX v3.71 (52→53, active backlog 9→10).
+
+**Interface-definitions v1.19 changes:**
+- §121: re-verified exit-2 claim (DRIFT-P5P6-ANNOTATION-EXITCODE closure annotation updated to RESOLVED)
+- §65: superseded-by-§108 cross-reference added
+- §174: bare-invocation row added (exit 2); `--help` exit-0 row clarified
+- §86-88: console flag amendment per F-A-004 adjudication (S-7.03 converged shape)
+- §60/§62/§77/§82/§83: PENDING-S-BL.CLI-SURFACE-COMPLETION annotations added
+
+**BC-2.07.002 v1.9 change:**
+- EC-003: bare invocation exit code 0 → 2 (aligns with §174 promise and PR #65 wired behavior)
+
+**S-6.03 v2.8 change:**
+- AC-012: bare invocation exit 2 acceptance criterion added; BC pin bumped to v1.9
+
+**NO-GOVERNING-BC design obligations flagged:**
+- `paths ping` (§77): no BC specifies wire verb, response schema, or error codes. BC-2.06.003 covers continuous metrics; §77 describes a discrete operator-triggered RTT probe — different surface. Architect ruling or new BC required before scheduling.
+- `svtn status` (§62): no BC specifies read-only SVTN status response fields, wire verb, authority requirements, or error codes. BC-2.07.001 covers lifecycle create/destroy only. Architect ruling or new BC required before scheduling.
+
+### F-A-004 Adjudication Rationale
+
+The VSDD process principle is that converged implementation (merged code + passing tests + adversary-verified) is the highest-confidence source of truth for interface shapes. S-7.03 merged at PR #60 (7142146) after a multi-pass adversarial convergence cycle that specifically examined the console flag surface (attach/detach/switch --console --svtn). That converged shape is authoritative. Amending interface-definitions to match converged implementation is not drift — it is the spec catching up to verified behavior. Amending implementation to match an unconverged spec fragment would be regression.
+
+**BC-5.39.001 streak:** 0/3 — Pass 7 targets 0→1. Dispatch against develop tip 4d7d9e0 + interface-definitions v1.19.
