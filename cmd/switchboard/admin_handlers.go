@@ -776,12 +776,22 @@ type adminSVTNDestroyArgs struct {
 // VP-048 properties 2+3.
 func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		// F-Impl-001 / F-P5P8-A-004: reject invalid UTF-8 in the raw JSON bytes
+		// before json.Unmarshal silently replaces bad bytes with U+FFFD.
+		// This mirrors the create handler's invariant: name must be valid UTF-8.
+		if !utf8.Valid(args) {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: request body is not valid UTF-8")
+		}
+
 		var a adminSVTNDestroyArgs
 		if err := json.Unmarshal(args, &a); err != nil {
 			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
 		}
-		if a.Name == "" {
-			return nil, fmt.Errorf("E-CFG-001: missing required field: name")
+
+		// F-P5P8-A-004: validate name exhaustively (same arms as create) before
+		// dispatching to Destroy. E-CFG-001 fires before any E-SVTN-003 lookup.
+		if err := validateSVTNName(a.Name); err != nil {
+			return nil, err
 		}
 
 		// RULING-W6TB-A: admin.svtn.destroy uses the general control-role gate,
