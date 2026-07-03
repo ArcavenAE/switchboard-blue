@@ -290,7 +290,7 @@ func TestSubprocessMain_NoArgs(t *testing.T) {
 	t.Fatal("main() returned without calling os.Exit — unexpected")
 }
 
-// TestSbctl_NoSubcommand_ExitsZero verifies the no-subcommand behavior.
+// TestSbctl_NoSubcommand_ExitsTwoAfterP6 verifies the no-subcommand behavior.
 //
 // CONTRACT CHANGE (F-P5P6-A-006, Burst 23 — S-6.03 / BC-2.07.002 EC-003):
 // The old AC-012 contract required exit 0 + usage on stdout.
