@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-9-remediation-complete
+phase_step: phase-5-pass-10-complete-has-findings
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -30,7 +30,7 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 32ea461
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-10-dispatch
+awaiting: phase-5-pass-10-remediation
 historical_cycles: []
 timestamp: 2026-07-03T00:00:00Z
 last_update: 2026-07-03
@@ -40,7 +40,7 @@ last_update: 2026-07-03
 
 ## Current State
 
-Phase 5 Pass 9 remediation COMPLETE (Burst 29, SPEC-ONLY). interface-definitions v1.21 — six Adv-A findings fixed, all documentation-side: §94-95 PENDING-S-BL.PING-VERSION-WIRE annotations (F-A-001 HIGH), --target default /run/switchboard-router.sock documented + E-NET-001 consequence + §370 row (F-A-002), §110 expire exit-code audit with negative verification on confirm-gate codes E-CFG-012/013 (F-A-003), §120 E-SVTN-003 (F-A-004), §48 synopsis reflowed to main.go:54 verbatim (F-A-005), §128 --yes command-specific footnote (F-A-006). Zero code changes; develop stays 32ea461. Code clean both lenses as of Pass 9. BC-5.39.001 streak 0/3; Pass 10 targets 0→1.
+Phase 5 Pass 10 split-adversary COMPLETE (Burst 30). Adv-A HAS_FINDINGS 1H/1M: F-P5P10-A-001 [HIGH] §110 documents --at RFC3339-timestamp flag that does not exist in impl (impl: --after duration; no RFC3339 parsing); F-P5P10-A-002 [MED] E-CFG-001 token fragmentation — zero/negative duration branch emits plain prose via usageErrf (exit 2, no E-CFG-001 token) while >100 years branch emits E-CFG-001 via daemon (exit 1). Adv-B HAS_FINDINGS 0H/0M/1L+2obs: F-P5P10-B-001 [LOW] test name BoolFlagRejectsNonBoolValue contradicts body (body verifies acceptance, not rejection); OBS-B-001 NoArgs oracle meta-word disjunct; OBS-B-002 U+2028 arm-pinning. BC-5.39.001 streak 0/3. Burst 31: small code track (E-CFG-001 prefix + test fixes + DRIFT-P5P9 comment rider) + spec track (§110 --at→--after adjudication per F-A-004 precedent).
 develop HEAD: 32ea461. 45 BCs, 76 VPs, 53 stories (backlog +1 S-BL.CLI-SURFACE-COMPLETION), 18 internal packages.
 
 NO-GOVERNING-BC obligations: `paths ping` (§77) + `svtn status` (§62) — architect ruling or new BC required before S-BL.CLI-SURFACE-COMPLETION scheduling.
@@ -56,7 +56,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_9_COMPLETE_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10 dispatch next |
+| Phase 5 — Adversarial Refinement | PASS_10_COMPLETE_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → rem pending |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -74,6 +74,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-03 | Phase 5 Pass 8 remediation (Burst 27) | COMPLETED | Code track: PR #67 32ea461 merged (confirm-gate cmdName parameterization F-A-001; destroy validateSVTNName + raw-bytes utf8.Valid pre-check F-A-004; paths verb message F-A-006; per-case finding attribution F-B-001; canned-daemon command-dispatch assertion F-B-002 [wire field verified as 'command' per ADR-012, not 'cmd']; E-NET-001 fingerprint OBS-B-001; lint fix ef9f52f). Spec track: interface-definitions v1.20 — §108/§109 error surfaces corrected to verified reachability, openssh-pubkey placeholders, --role documented default (F-A-003 adjudicated spec-side), §395 authority note swept. All spec claims file:line-verified. |
 | 2026-07-03 | Phase 5 Pass 9 split-adversary vs 32ea461 + v1.20 | COMPLETED | Adv-A HAS_FINDINGS 1H/2M/3L+3obs (F-P5P9-A-001..006 — ALL SPEC-SIDE: §94-95 version/ping unannotated [missed by F-P5P6-A-005 sweep], --target default undocumented, §110 expire exit codes unaudited [E-ADM-021/E-ADM-009/E-SVTN-003 reachable], §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes warning footnote). Adv-B CLEAN 0/0/0+3obs (all Pass 8 fixes verified correctly implemented; OBS-B-001 stale reconciliation comment — orchestrator verified by grep: NO live contradiction, ExitsZero test no longer exists, comment-only fix rides next code PR). ZERO code defects this pass — remediation is single spec burst v1.21. Both read-cap overages self-disclosed. |
 | 2026-07-03 | Phase 5 Pass 9 remediation (Burst 29, SPEC-ONLY) | COMPLETED | interface-definitions v1.21 — six Adv-A findings fixed, all documentation-side: §94-95 PENDING annotations (F-A-001 HIGH), --target default documented (F-A-002), §110 expire exit-code audit w/ negative verification on confirm-gate codes (F-A-003), §120 E-SVTN-003 (F-A-004), §48 synopsis parity (F-A-005), §128 interpolation footnote (F-A-006). Zero code changes; develop stays 32ea461. Code clean both lenses as of Pass 9. |
+| 2026-07-03 | Phase 5 Pass 10 split-adversary vs 32ea461 + v1.21 | COMPLETED | Adv-A HAS_FINDINGS 1H/1M (F-P5P10-A-001 §110 documents --at RFC3339 flag that does not exist [impl: --after duration] — survived 9 passes, prior §110 audits were exit-code-column-scoped; F-P5P10-A-002 E-CFG-001 token fragmentation on expire zero/negative branch). Adv-B HAS_FINDINGS 0H/0M/1L+2obs (F-B-001 test name↔assertion inversion BoolFlagRejectsNonBoolValue; OBS-B-001 NoArgs oracle meta-word disjunct; OBS-B-002 U+2028 arm-pinning). Burst 31: small code track (E-CFG-001 prefix + test fixes + DRIFT-P5P9 comment rider) + spec track (§110 --at→--after adjudication default spec-side per F-A-004 precedent). |
 
 ## Wave 6 Story Status
 
@@ -136,24 +137,11 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P1-B-M001-POL003-QUANTIFICATION | LOW | 2026-07-02 | Expansion of DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with quantification: 1/76 VPs (VP-048 only) carry source_bc version-pin suffix. POL-003 as written cannot be a lint gate — no canonical shape to check against. Task #72 (upstream drbothen/vsdd-factory filing) subsumes this. |
 | DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | 2026-07-02 | `cmd/sbctl/e2e_helpers_test.go:191` registers mock for `admin.key.list` where shipped surface is `admin.key.list-keys`. One-line fix, deferred to future test-writer follow-up. Refs F-P5P2-A-003. Status: open. |
 | DRIFT-P5P2-B-O003-ECFG-COLLISION-MAINTENANCE | LOW | 2026-07-02 | E-CFG-002 + E-CFG-006 codespace collisions across two BC-2.09.003 minor bumps acknowledged but no maintenance-pass story scheduled. Refs O-P5P2-B-003. Status: open, awaiting maintenance-pass story. |
-| DRIFT-P5P3-A001-SVTN-LIST-WIRE-ORPHAN | HIGH | 2026-07-02 | RESOLVED spec+code (Burst 16+17): BC-2.07.002 v1.8 removes svtn list row; case-arm deleted PR #62 c76a8d5. Refs F-P5P3-A-001. |
-| DRIFT-P5P3-A002-PING-VERSION-WIRE-ORPHAN | HIGH | 2026-07-02 | RESOLVED spec+code (Burst 16+17): BC-2.07.002 v1.8 removes EC-004/EC-005 rows; version/ping case-arms deleted PR #62 c76a8d5. Refs F-P5P3-A-002. |
-| DRIFT-P5P3-A003-EADM018-CODE-DRIFT | HIGH | 2026-07-02 | RESOLVED code+spec (Burst 17+18): admin_handlers.go:413 corrected; taxonomy v4.4 corrects canonical to `"use --confirm to proceed"` (bool-flag form). PR #62 c76a8d5. Refs F-P5P3-A-003. |
-| DRIFT-P5P3-A004-SBCTL-SVTN-SILENT-DISCARD | MED | 2026-07-02 | RESOLVED code (Burst 17): sbctl svtn trailing-arg discard fixed. PR #62 c76a8d5. Refs F-P5P3-A-004. |
-| DRIFT-P5P3-A005-EINT999-CODE-DRIFT | MED | 2026-07-02 | RESOLVED code (Burst 17): admin_handlers.go:428 corrected to canonical message. PR #62 c76a8d5. Refs F-P5P3-A-005. |
-| DRIFT-P5P3-A006-EADM011-CODE-DRIFT | MED | 2026-07-02 | RESOLVED code (Burst 17): admin_handlers.go:419 E-ADM-011 V2 discriminators restored. PR #62 c76a8d5. Refs F-P5P3-A-006. |
-| DRIFT-P5P3-A007-ECFG-COLLISION | MED | 2026-07-02 | RESOLVED spec-side (Burst 16): error-taxonomy v4.3 reconciles E-CFG-002 (private-key-export → E-CFG-011) and E-CFG-006 (sbctl --yes → E-CFG-012). BC-2.09.003 v1.9 removes collision-flag row. Emission-site updates (E-CFG-011/012) pending Burst 17 feature branch. Refs F-P5P3-A-007. |
-| DRIFT-P5P3-A008-EC004-NOT-SHIPPING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): BC-2.07.002 v1.8 removes EC-004 row entirely (surface withdrawn, not annotated). Refs F-P5P3-A-008. |
-| DRIFT-P5P3-A009-UNKNOWN-SUBCOMMAND-NO-HINT | LOW | 2026-07-02 | RESOLVED code (Burst 17): sbctl unknown-subcommand hint added. PR #62 c76a8d5. Refs F-P5P3-A-009. |
-| DRIFT-P5P3-B001-VP043-METHOD-BUCKET-MISLABEL | MED | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-043 v1.2 reclassifies proof_method proptest → strong-oracle; removes gopter harness skeleton. VP-INDEX v2.35 reclassifies row 69 Proptest→Unit; arithmetic 33+4+22+10+2+2+3=76. Refs F-P5P3-B-001. |
-| DRIFT-P5P3-B002-VP043-POL003-PIN-MISSING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-043 v1.2 frontmatter adds source_bc: BC-2.02.007 v1.3 pin. POL-003 conformance 2/76 → 3/76. Refs F-P5P3-B-002. |
-| DRIFT-P5P3-B003-VP062-POL003-PIN-MISSING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-062 v1.7 frontmatter adds source_bc: BC-2.06.003 v1.13 pin. Refs F-P5P3-B-003. |
-
-| DRIFT-P5P3-B17-CASE-ARM-DELETION | HIGH | 2026-07-02 | RESOLVED code (Burst 17): case "svtn" / "version" / "ping" arms deleted from cmd/sbctl/main.go. PR #62 c76a8d5. Refs F-P5P3-A-001, F-P5P3-A-002. |
-| DRIFT-P5P4-PROMPT-SHORTID | MED | 2026-07-03 | RESOLVED code (Burst 19): Interactive `sbctl admin svtn destroy` prompt now substitutes actual SVTN short-id from operation context; literal `<short-id>` placeholder retired. PR #63 cbd0272. Refs F-A-009. interface-definitions.md §125/§129 interim-rendering annotation now superseded. |
-| DRIFT-P5P4-ADMINWIRE-EXTRACTION | LOW | 2026-07-03 | DEFERRED: Wire arg struct types (`KeyRegisterArgs`, `KeyRevokeArgs`, `SVTNDestroyArgs`) currently defined inline in `cmd/switchboard/admin_handlers.go`. Both sbctl-side and switchboard-side tests cross-assert the wire contract (see `admin_handlers_wire_shared_pkg_test.go` + `admin_test.go:2093`). A future refactor may extract to `internal/adminwire` shared package — see code comment in `admin_handlers_wire_shared_pkg_test.go:7,33`. No behavior gap; deferred to maintenance cycle or Wave-7+. |
-| DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR | LOW | 2026-07-03 | [process-gap] No rule enforces that tests asserting a code minted in taxonomy vX.Y cite ≥ vX.Y. Source: F-P5P5-B-001 (E-CFG-013 anchored to v4.4 in test docstrings, but E-CFG-013 was minted in v4.6 — historically impossible citation). Deferred to upstream: vsdd-factory issue draft pending (Batch 30 tracker). Target: next maintenance cycle. |
-| DRIFT-P5P6-ANNOTATION-EXITCODE | MED | 2026-07-03 | RESOLVED (Burst 23): PR #65 4d7d9e0 — exit 2 for unknown-subcommand wired; v1.19 §121 re-verified against merged tree. Verify-then-claim discipline applied. |
+| DRIFT-P5P3-A001..A009/B001..B003/B17 | HIGH..LOW | 2026-07-02 | ALL RESOLVED (Bursts 16–18): PR #62 c76a8d5 (code), taxonomy v4.3/v4.4 (spec). Detail: `cycles/cycle-1/closed-drift.md`. |
+| DRIFT-P5P4-PROMPT-SHORTID | MED | 2026-07-03 | RESOLVED (Burst 19): PR #63 cbd0272. |
+| DRIFT-P5P4-ADMINWIRE-EXTRACTION | LOW | 2026-07-03 | DEFERRED: inline wire arg structs; future maintenance cycle or Wave-7+. |
+| DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR | LOW | 2026-07-03 | [process-gap] No version-floor rule on test taxonomy citations. vsdd-factory issue pending. |
+| DRIFT-P5P6-ANNOTATION-EXITCODE | MED | 2026-07-03 | RESOLVED (Burst 23): PR #65 4d7d9e0. |
 | DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | 2026-07-03 | router status --target= (empty value) path converted but lacks dedicated test case; 3 fs.Parse paths likewise; PR #66 review O-1. Follow-on micro-addition to the production_exit_code_test.go table. |
 | DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | 2026-07-03 | admin.go:395 interactive-confirm mismatch returns plain fmt.Errorf while --confirm sibling uses usageErrf; needs adjudication whether interactive-mismatch is usage-class (spec §129/§130) before converting; PR #66 review O-4. |
 | DRIFT-P5P9-STALE-RECONCILIATION-COMMENT | LOW | 2026-07-03 | production_exit_code_test.go:404-407 comment references TestSbctl_NoSubcommand_ExitsZero which was renamed ExitsTwoAfterP6 in Burst 23; comment-only fix, fold into next code-touching PR. Also OBS-P5P9-B-003 suggests U+2028 hexdump comment in phase5_pass8_destroy_test.go — same rider. Orchestrator-verified: no live contradiction (ExitsZero test no longer exists). |
@@ -179,6 +167,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | Phase 5 Pass 8 REMEDIATION COMPLETE | Burst 27: PR #67 32ea461 (code track: 6 findings resolved); interface-definitions v1.20 (spec track: §108/§109 error surfaces, openssh-pubkey, --role default, §395 sweep); streak 0/3; Pass 9 next | 2026-07-03 |
 | Phase 5 Pass 9 HAS_FINDINGS | Adv-A 1H/2M/3L (all spec-side: §94-95 version/ping unannotated, --target default undocumented, §110 expire exit codes incomplete, §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes footnote); Adv-B CLEAN 0/0/0+3obs; ZERO code defects this pass; streak 0/3; v1.21 spec-only remediation next | 2026-07-03 |
 | Phase 5 Pass 9 REMEDIATION COMPLETE | Burst 29: interface-definitions v1.21 (spec-only — six Adv-A findings, all documentation-side); ARCH-INDEX v1.7; zero code changes; develop stays 32ea461; streak 0/3; Pass 10 next | 2026-07-03 |
+| Phase 5 Pass 10 HAS_FINDINGS | Adv-A 1H/1M (§110 phantom --at flag survived 9 passes [column-scoped attention]; E-CFG-001 token fragmentation zero/negative vs >100y); Adv-B 1L+2obs (test name↔assertion inversion; NoArgs meta-word disjunct; U+2028 arm-pinning); streak 0/3; Burst 31 remediation pending | 2026-07-03 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -196,12 +185,12 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-03T00:00:00Z
-**Post-burst:** Burst 29 (Phase 5 Pass 9 remediation: spec-only, interface-definitions v1.21)
-**Pipeline state:** Phase 5 Pass 9 REMEDIATION COMPLETE; streak 0/3; Pass 10 dispatch next
+**Post-burst:** Burst 30 (Phase 5 Pass 10 split-adversary)
+**Pipeline state:** Phase 5 Pass 10 COMPLETE HAS_FINDINGS; streak 0/3; Burst 31 remediation next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** 32ea461 (PR #67 squash-merge — no code change this burst)
+**Develop HEAD:** 32ea461 (no code change this burst)
 
-**Burst 29 deltas:** Phase 5 Pass 9 spec-only remediation complete. interface-definitions v1.20→v1.21: (1) §94-95 version/ping rows annotated PENDING-S-BL.PING-VERSION-WIRE (F-A-001 HIGH — missed by F-P5P6-A-005 sweep); (2) --target documented with default /run/switchboard-router.sock, E-NET-001 consequence noted, §370 Registered Verbs row verified (F-A-002 MED); (3) §110 expire exit-code table extended with E-ADM-021/E-ADM-009/E-SVTN-003 — negative verification performed on E-CFG-012/013 (confirm-gate codes — expire has no confirm gate, verified admin.go:527-563; deliberately excluded) (F-A-003 MED); (4) §120 destroy exit-code table extended with E-SVTN-003 (F-A-004 LOW); (5) §48 synopsis reflowed to match main.go:54 verbatim (F-A-005 LOW); (6) §128 --yes flag adds command-specific footnote clarifying --svtn-name usage on register vs --name on destroy (F-A-006 LOW). All six claims file:line-verified against 32ea461. Zero code changes. DRIFT-P5P9-STALE-RECONCILIATION-COMMENT remains open, riding next code PR.
+**Burst 30 deltas:** Phase 5 Pass 10 split-adversary complete. Adv-A: HAS_FINDINGS 1H/1M — F-P5P10-A-001 [HIGH] §110 documents operator-facing `--at <RFC3339-timestamp>` flag; impl registers `--after <duration>` with `time.ParseDuration`, no RFC3339 parsing — phantom flag survived 9 passes because prior §110 audits were exit-code-column-scoped, not syntax-column-scoped; F-P5P10-A-002 [MED] E-CFG-001 token fragmented: zero/negative branch emits plain prose via usageErrf (exit 2, no token) while >100y branch emits E-CFG-001 via daemon (exit 1). Adv-B: HAS_FINDINGS 0H/0M/1L+2obs — F-P5P10-B-001 [LOW] BoolFlagRejectsNonBoolValue test name contradicts body (body verifies acceptance); OBS-B-001 NoArgs oracle meta-word disjunct; OBS-B-002 U+2028 arm-pinning gap. Column-scoped attention lesson: three prior §110 audits read the exit-code column; the syntax column carried the phantom flag undisturbed.
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10 dispatch next
-**Next action:** Phase 5 Pass 10 — fresh-context split-adversary dispatch against develop tip 32ea461 + interface-definitions v1.21. Streak 0/3; P10 targets 0→1. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → REM (Burst 29: v1.21 spec-only) → P10: Adv-A 1H/1M + Adv-B 1L(2obs) → rem pending
+**Next action:** Burst 31 remediation — small code track (E-CFG-001 prefix on zero/negative branch + test name fix + DRIFT-P5P9 stale comment rider) + spec track (§110 --at→--after adjudication, per F-A-004 precedent default spec-side). Streak 0/3; P11 targets 1→2. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

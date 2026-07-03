@@ -1306,3 +1306,25 @@ All six claims file:line-verified against 32ea461 before committing.
 **BC-5.39.001 streak:** 0/3 — streak held at 0 (Adv-A HAS_FINDINGS in Pass 9). Pass 10 dispatch is next; targets streak 0→1. Code clean both lenses.
 
 **BC-5.39.001 streak:** 0/3 — remediation complete, streak counter reset unchanged (remediation burst does not increment streak). Pass 9 targets 0→1.
+
+---
+
+## Phase 5 — Burst 30 / Pass 10 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** Adv-A (public-surface-and-operator-ux), Adv-B (test-rigor+traceability)
+**Dispatch tuple:** develop tip 32ea461 + interface-definitions v1.21
+
+**Summary:** Phase 5 Pass 10 fresh-context split-adversary complete. Adv-A surfaced a HIGH finding that survived nine prior passes: §110 documents an operator-facing `--at <RFC3339-timestamp>` flag that does not exist in the implementation (impl registers `--after <duration>`). The finding persisted because prior §110 audits were exit-code-column-scoped — the Burst 29 Pass-9 audit extended the exit-code column without reading the syntax column. Column-scoped attention is the named lesson: three audits of the same row while the phantom flag sat in the syntax column undisturbed. Adv-B found a LOW test-naming inversion (BoolFlagRejectsNonBoolValue body verifies acceptance) and two observations. Streak holds at 0/3; idle-without-report 2/2 again.
+
+| Agent | Verdict | Finding summary |
+|-------|---------|-----------------|
+| Adv-A (public-surface-and-operator-ux) | HAS_FINDINGS 1H/1M | F-P5P10-A-001 [HIGH] §110 syntax column: `--at <RFC3339-timestamp>` operator flag documented; impl registers `--after <duration>` with `time.ParseDuration`, no RFC3339 parsing. Any `--at` invocation → exit 2 "flag provided but not defined: -at". Survived nine passes because prior §110 audits read the exit-code column only. F-P5P10-A-002 [MED] E-CFG-001 token fragmentation: zero/negative branch → usageErrf (exit 2, no E-CFG-001 token in stderr); >100y branch → daemon mapAdminError (exit 1, E-CFG-001 token). Same spec-documented code, two different exit codes and two different stderr shapes depending on the sign of the duration typo. |
+| Adv-B (test-rigor+traceability) | HAS_FINDINGS 0H/0M/1L+2obs | F-P5P10-B-001 [LOW] `TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue` (admin_confirm_symmetry_test.go:162): name reads rejection contract; body verifies acceptance (t.Errorf fires when flag rejects, not when it accepts). Intent clear in docstring but identifier misdirects future maintainers. OBS-P5P10-B-001: production_exit_code_test.go:451-458 NoArgs oracle disjunction admits the meta-word "subcommand" as satisfaction — distinct from OBS-P5P9-B-002 (common-English-word breadth). OBS-P5P10-B-002: U+2028 destroy test case asserts E-CFG-001/no-E-SVTN-003 but does not pin "U+2028" in error string to confirm the Zl/Zp arm fired — distinct from OBS-P5P9-B-003 (hexdump label readability). |
+
+**Read-cap disclosures:**
+- Adv-A: 3 files read, within 6-file cap.
+- Adv-B: 8 files read (2 over cap, self-disclosed).
+
+**Column-scoped attention lesson:** Three prior §110 audits (Burst 29 most recently — added E-ADM-021/E-ADM-009/E-SVTN-003 to the exit-code column) read that row's exit-code column. The syntax column declaring `--at <RFC3339-timestamp>` sat adjacent and undisturbed. This is the inverse of a sibling-sweep gap: the sweep happened on the same row but on a different column axis. Mitigation for Burst 31 adjudication: default to spec-side fix (rename `--at` → `--after` in §110) consistent with F-A-004 precedent (spec bends to impl when impl is more complete and consistent with the wire contract).
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 31 remediation pending: small code track (E-CFG-001 prefix on zero/negative branch + test name fix F-P5P10-B-001 + DRIFT-P5P9-STALE-RECONCILIATION-COMMENT comment rider) + spec track (§110 --at→--after adjudication).
