@@ -18,6 +18,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -313,21 +315,83 @@ func mapKeys(m map[string]any) []string {
 // using the pre-v1.13 stale field name "svtn" (not "svtn_id") is rejected
 // with E-CFG-001 by the daemon handler, confirming the field name contract
 // is enforced on the inbound wire path (no silent compat shim).
+//
+// The test uses a two-case discriminating oracle to prove the assertion is not
+// vacuously true (i.e., it would not pass for an empty payload):
+//
+//	case A: {"svtn":"stale-name"}                → must fail with E-CFG-001
+//	        and the parsed SVTNName must be empty (the stale field was ignored)
+//	case B: {"svtn_id":"actual-name",...}         → must succeed
+//	        (proves the correct field name is accepted by the same handler path)
+//
+// Without case B the test cannot distinguish "stale field silently dropped AND
+// handler correctly rejects empty SVTNName" from "handler always errors".
 func TestNewInBurst19_WireField_StaleField_SvtnRejected(t *testing.T) {
 	t.Parallel()
-	m := newTestSVTNManager(t)
-	handler := makeRegisterHandler(m, nil)
 
-	// Build a payload that uses the old "svtn" field name instead of "svtn_id".
-	stalePayload := `{"svtn":"test-svtn-id","pubkey_openssh":"ssh-ed25519 AAAA test","role":"control"}`
-	_, err := handler(context.Background(), json.RawMessage(stalePayload))
-	if err == nil {
-		t.Fatal("expected error for stale 'svtn' field, got nil")
-	}
-	if !strings.Contains(err.Error(), "E-CFG-001") {
-		t.Errorf("expected E-CFG-001 for missing svtn_id, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "svtn_id") {
-		t.Errorf("expected error to mention svtn_id, got: %v", err)
-	}
+	t.Run("stale_svtn_field_rejected", func(t *testing.T) {
+		t.Parallel()
+		m := newTestSVTNManager(t)
+		handler := makeRegisterHandler(m, nil)
+
+		// Payload uses the stale "svtn" key — json.Unmarshal silently ignores it,
+		// leaving SVTNName empty; the handler must return E-CFG-001 for missing svtn_id.
+		stalePayload := `{"svtn":"test-svtn-id","pubkey_openssh":"ssh-ed25519 AAAA test","role":"control"}`
+		_, err := handler(context.Background(), json.RawMessage(stalePayload))
+		if err == nil {
+			t.Fatal("expected error for stale 'svtn' field, got nil")
+		}
+		if !strings.Contains(err.Error(), "E-CFG-001") {
+			t.Errorf("expected E-CFG-001 for missing svtn_id, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "svtn_id") {
+			t.Errorf("expected error to mention svtn_id, got: %v", err)
+		}
+
+		// Additional assertion: confirm the stale "svtn" value was NOT silently
+		// accepted by unmarshaling it and checking SVTNName is empty.
+		var parsed adminKeyRegisterArgs
+		if jsonErr := json.Unmarshal(json.RawMessage(stalePayload), &parsed); jsonErr != nil {
+			t.Fatalf("unmarshal stale payload: %v", jsonErr)
+		}
+		if parsed.SVTNName != "" {
+			t.Errorf("stale 'svtn' field must NOT populate SVTNName; got %q (silent acceptance)", parsed.SVTNName)
+		}
+	})
+
+	t.Run("canonical_svtn_id_field_accepted", func(t *testing.T) {
+		t.Parallel()
+		m := newTestSVTNManager(t)
+		handler := makeRegisterHandler(m, nil)
+
+		// Generate a fresh 32-byte Ed25519 public key (raw bytes) so it is
+		// guaranteed not to collide with the zero key already registered on
+		// test-svtn by newTestSVTNManager.  Encode as raw base64 — decodePublicKey
+		// accepts raw base64 directly (see admin_handlers.go decodePublicKey).
+		var rawKey [32]byte
+		if _, randErr := rand.Read(rawKey[:]); randErr != nil {
+			t.Fatalf("generate fresh pubkey: %v", randErr)
+		}
+		freshKey := base64.StdEncoding.EncodeToString(rawKey[:])
+
+		// Build the canonical payload using json.Marshal so escaping is correct.
+		canonicalArgs := map[string]any{
+			"svtn_id":        "test-svtn",
+			"pubkey_openssh": freshKey,
+			"role":           "console",
+			"caller_role":    "control",
+		}
+		canonicalPayload, marshalErr := json.Marshal(canonicalArgs)
+		if marshalErr != nil {
+			t.Fatalf("marshal canonical payload: %v", marshalErr)
+		}
+
+		// The canonical "svtn_id" key must be accepted by the handler.
+		// CallerRole "control" satisfies resolveAndVerifyCallerRole's fallback
+		// path in unit tests (no pubkey in context).
+		_, err := handler(context.Background(), json.RawMessage(canonicalPayload))
+		if err != nil {
+			t.Errorf("canonical svtn_id field must be accepted; got error: %v", err)
+		}
+	})
 }

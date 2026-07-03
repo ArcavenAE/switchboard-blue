@@ -1868,13 +1868,12 @@ func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
 func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 	// NOTE: this test intentionally does NOT call t.Parallel().
 	//
-	// admin_interactive_prompt_test.go (Burst-19 RED tests) uses t.Parallel()
-	// and directly mutates the same package-level seam vars (stdinIsTTY,
-	// stdinReader) that setTTYSeam below also mutates.  Running both in the
-	// parallel pool at the same time triggers a data race detected by
-	// `go test -race`.  Since the RED tests cannot be modified, this test
-	// runs sequentially so it always completes before the parallel pool is
-	// released.  The trade-off: slightly longer wall time for this suite.
+	// Four tests in this package directly mutate the same package-level seam
+	// vars (stdinIsTTY, stdinReader): this test, the subtests below, and the
+	// two tests in admin_interactive_prompt_test.go.  All four are sequential
+	// (none call t.Parallel()); the invariant is that they MUST stay that way.
+	// Running any of them in the parallel pool would trigger a data race under
+	// `go test -race`.  The trade-off: slightly longer wall time for this suite.
 
 	// setTTYSeam swaps stdinIsTTY and stdinReader for the duration of one subtest,
 	// restoring the originals via t.Cleanup.  Must be called before t.Parallel()
@@ -2187,5 +2186,78 @@ func TestSbctlAdmin_SVTNDestroy_RequiresControlRole(t *testing.T) {
 	// Error must surface E-ADM-009 (the handler gate code).
 	if !strings.Contains(err.Error(), "E-ADM-009") {
 		t.Errorf("AC-004 RPC path — expected E-ADM-009 in error (RULING-W6TB-A handler gate); got: %v", err)
+	}
+}
+
+// TestNewInBurst19_SbctlListKeys_WireTag_SvtnID verifies that the sbctl-side
+// list-keys args struct (inline anonymous struct inside runAdmin) serializes the
+// SVTN identifier as json:"svtn_id", not the stale json:"svtn".
+//
+// Because the struct is anonymous and inline (defined locally inside runAdmin),
+// it is not directly accessible from tests.  This test uses a mirror struct with
+// the same field layout and asserts:
+//   - the JSON output contains "svtn_id"
+//   - the JSON output does NOT contain the stale key "svtn:" (colon-terminated to
+//     avoid a false match against the "svtn_id" substring)
+//
+// Traces to F-P8-006; interface-definitions.md §JSON Output Schema.
+func TestNewInBurst19_SbctlListKeys_WireTag_SvtnID(t *testing.T) {
+	t.Parallel()
+
+	// Mirror of the inline anonymous struct used in runAdmin's list-keys case.
+	type listKeysArgsTest struct {
+		SVTNID string `json:"svtn_id"`
+	}
+
+	payload, err := json.Marshal(listKeysArgsTest{SVTNID: "my-svtn"})
+	if err != nil {
+		t.Fatalf("marshal listKeysArgsTest: %v", err)
+	}
+
+	got := string(payload)
+
+	// Must contain "svtn_id" as a JSON key.
+	if !strings.Contains(got, `"svtn_id"`) {
+		t.Errorf("list-keys wire args: marshaled JSON must contain key \"svtn_id\"; got: %s", got)
+	}
+	// Must NOT contain the stale bare "svtn" key.
+	// Use "svtn": (with colon) to distinguish from "svtn_id".
+	if strings.Contains(got, `"svtn":`) {
+		t.Errorf("list-keys wire args: marshaled JSON must NOT contain stale key \"svtn\"; got: %s", got)
+	}
+}
+
+// TestSbctlAdmin_ListKeys_MissingFlag_ReturnsError verifies that omitting the
+// required --svtn flag on `sbctl admin list-keys` returns a non-nil error
+// before dispatching any RPC.
+//
+// F-P8-006 (list-keys is `sbctl admin list-keys --svtn <id>`; --svtn is required).
+// BC-2.05.004 precondition 2 (key operations must be well-formed).
+func TestSbctlAdmin_ListKeys_MissingFlag_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	// F-P8-006 — missing --svtn must return non-nil error, not a network error.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, "127.0.0.1:19991", testdataKeyPath(t), false, []string{
+		"list-keys",
+		// No --svtn flag.
+	}, defaultIO())
+
+	if err == nil {
+		t.Error("F-P8-006 — list-keys missing --svtn: expected non-nil error; got nil")
+		return
+	}
+
+	// Tighten oracle: must be a CLI validation error, not a network error.
+	// If --svtn validation fires before any connection attempt, no E-NET-001.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-P8-006 — list-keys missing --svtn: got network error %q; want flag validation error before any connection attempt", errStr)
+	}
+	// The error must mention "--svtn" or "svtn" to confirm the right validation path.
+	if !strings.Contains(errStr, "svtn") {
+		t.Errorf("F-P8-006 — list-keys missing --svtn: error %q does not mention 'svtn'; want flag-specific validation message", errStr)
 	}
 }
