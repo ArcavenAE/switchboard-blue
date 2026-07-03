@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.20"
+version: "1.21"
 status: draft
 producer: product-owner
 timestamp: 2026-07-03T00:00:00
@@ -45,10 +45,10 @@ Global flags:
 ### sbctl operator CLI
 
 ```
-sbctl [--target=<addr>] [--key=<path>] [--json] <subcommand>
+sbctl [--target=<addr>] [--key=<path>] [--json] [--timeout=<dur>] <subcommand> [args...]
 
 Global flags:
-  --target=<addr>   Daemon address (host:port or unix socket path)
+  --target=<addr>   Daemon address (host:port or unix socket path) (default: /run/switchboard-router.sock); when the default socket is absent and --target is not specified, sbctl exits with E-NET-001 (exit 1)
   --key=<path>      Path to operator private key file (default: ~/.ssh/id_ed25519)
   --json            Machine-readable JSON output
   --timeout=<dur>   Connection timeout (default: 5s)
@@ -91,8 +91,8 @@ sbctl console detach                             # Detach from current session (
 sbctl console switch --session=<name>           # Atomically detach + attach to named session (wire: console.switch; BC-2.08.001 PC-3; S-7.03 AC-003)
 
 # Diagnostics
-sbctl version                                   # Print daemon version
-sbctl ping                                      # Connectivity check to daemon
+sbctl version                                   # [PENDING-S-BL.PING-VERSION-WIRE: no 'version' case arm in main.go switch; returns unknown-subcommand usage error, exit 2 (verified post-#65)]
+sbctl ping                                      # [PENDING-S-BL.PING-VERSION-WIRE: no 'ping' case arm in main.go switch; returns unknown-subcommand usage error, exit 2 (verified post-#65)]
 ```
 
 ### `sbctl admin`
@@ -107,7 +107,7 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 |-----------|---------|------|-----------|
 | `sbctl admin key register --svtn <id> --key <openssh-pubkey> [--role <control\|console\|access>]` | Register a new admission key; duplicate registration is last-write-wins role update per ADR-003 (no error) | Requires existing control-role key + interactive `--confirm` token | 0=ok, E-CFG-001 (invalid/missing inputs: missing pubkey, pubkey decode failure, invalid role enum, missing svtn_id), E-ADM-009 (insufficient authority), E-CFG-012 (--yes + --confirm combined), E-CFG-013 (non-interactive session with neither --confirm nor --yes), E-SVTN-003 (SVTN not found) |
 | `sbctl admin key revoke --svtn <id> --key <openssh-pubkey>` | Revoke admission key | Requires existing control-role key + `--confirm`; per ADR-004 console cannot revoke control | 0=ok, E-ADM-019 (role mismatch: claimed role does not match stored role — `"E-ADM-019: role mismatch: claimed role <role> does not match registered key role <role> for key <fp>"`), E-ADM-018 (control-to-control revocation requires confirmation — `"E-ADM-018: control-to-control revocation requires explicit confirmation: use --confirm to proceed"`), E-ADM-013 (not found) |
-| `sbctl admin key expire --svtn <id> --key <openssh-pubkey> --at <RFC3339-timestamp>` | Set automatic expiry on an admission key. CLI translates `--at <RFC3339-timestamp>` to a Go duration string (`after` wire field) before sending: `after = timestamp - time.Now()`. Server validates `after` is positive and ≤100 years. | Requires existing control-role key; no `--confirm` required (non-destructive scheduling) | 0=ok, E-ADM-013 (key not found), E-CFG-001 (invalid `after` duration: zero, negative, or >100 years) |
+| `sbctl admin key expire --svtn <id> --key <openssh-pubkey> --at <RFC3339-timestamp>` | Set automatic expiry on an admission key. CLI translates `--at <RFC3339-timestamp>` to a Go duration string (`after` wire field) before sending: `after = timestamp - time.Now()`. Server validates `after` is positive and ≤100 years. | Requires existing control-role key; no `--confirm` required (non-destructive scheduling) | 0=ok, E-ADM-013 (key not found), E-CFG-001 (invalid `after` duration: zero, negative, or >100 years), E-ADM-021 (bootstrap-key-expire-forbidden — `mapAdminError` arm for `ErrBootstrapKeyExpireForbidden`, `admin_handlers.go:440-441`; the bootstrap key is a permanent trust anchor and cannot be expired), E-ADM-009 (insufficient authority — `resolveAndVerifyCallerRole`, `admin_handlers.go:290`; caller key not active in SVTN's admitted key set), E-SVTN-003 (SVTN not found — `mapAdminError` arm for `ErrSVTNNotFound`, `admin_handlers.go:413-414`; SVTN does not exist in registry) |
 | `sbctl admin list-keys --svtn <id>` | List all admission keys with role, fingerprint, expiry | Any admitted role | 0=ok |
 
 `--key <openssh-pubkey>` — Replaces the former `--key-fingerprint <fp>` flag. Accepts an OpenSSH-format public key string (e.g. `ssh-ed25519 AAAA... comment`). The CLI marshals this as the `pubkey_openssh` wire field sent to `internal/svtnmgmt`. Previously accepted a raw hex-encoded public key (`pubkey_hex`); `pubkey_openssh` is the canonical wire field name as of interface-definitions v1.13. The daemon-side `decodePublicKey()` accepts both OpenSSH format (primary path, via `ssh.ParseAuthorizedKey`) and raw base64-encoded 32-byte Ed25519 key material (fallback, for backward compatibility with clients that have not yet migrated to OpenSSH format). New clients MUST send OpenSSH format; the base64 fallback is deprecated and may be removed in a future version.
@@ -117,7 +117,7 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 | Subcommand | Purpose | Auth | Exit codes |
 |-----------|---------|------|-----------|
 | `sbctl admin svtn create --name=<svtn-name>` | Create a new SVTN; returns `svtn_id` and bootstrap fingerprint | Bootstrap-only: caller MUST authenticate with the daemon bootstrap key (RoleControl); cross-SVTN control-role keys are not accepted. See §380 and BC-2.07.001 Inv-3. | 0=ok, E-SVTN-001 (already exists), E-ADM-009 (insufficient authority: bootstrap key required), E-CFG-001 (invalid SVTN name: empty / whitespace-only / >255 bytes / invalid UTF-8 / control chars), E-INT-001 (internal error wrap on non-duplicate Create failure) |
-| `sbctl admin svtn destroy --name=<svtn-name>` | Destroy an SVTN and all admitted keys; terminates active sessions | Requires control-role key + `--confirm` | 0=ok, E-ADM-011 (unauthorized), E-ADM-009 (insufficient role), E-CFG-001 (invalid SVTN name: empty / whitespace-only / >255 bytes / invalid UTF-8 / control chars) |
+| `sbctl admin svtn destroy --name=<svtn-name>` | Destroy an SVTN and all admitted keys; terminates active sessions | Requires control-role key + `--confirm` | 0=ok, E-ADM-011 (unauthorized), E-ADM-009 (insufficient role), E-CFG-001 (invalid SVTN name: empty / whitespace-only / >255 bytes / invalid UTF-8 / control chars), E-SVTN-003 (SVTN not found — `mapAdminError` arm for `ErrSVTNNotFound` via `resolveAndVerifyCallerRole` → `m.Destroy` path, `admin_handlers.go:807-813`) |
 
 #### Emergency recovery
 
@@ -132,9 +132,12 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
 
 **`--yes`** — Bypasses the `--confirm` interactive prompt for scripted use. Emits a warning to stderr: `"WARNING: --yes bypasses confirmation; ensure correct --name target before scripting"`. Cannot be combined with `--confirm` (usage error, exit 2).
+> **Note (F-P5P9-A-006):** The flag name interpolated in the `--yes` warning is command-specific: `sbctl admin svtn destroy` emits `--name` (`runDestroyConfirmGate` called with `targetFlag="--name"`, `admin.go:306`); `sbctl admin key register` emits `--svtn` (`runDestroyConfirmGate` called with `targetFlag="--svtn"`, `admin.go:463`). The impl-quoted string above (`--name`) is the destroy form and MUST NOT be changed; register's `--svtn` form is distinct.
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-012, exit 2). In a non-interactive session (no TTY) where neither `--confirm` nor `--yes` is supplied, the command exits with E-CFG-013 (exit 2) — use `--confirm=<svtn-short-id>` or `--yes` for scripted invocations.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
+
+> **v1.21 changelog note (2026-07-03):** Phase 5 Pass 9 spec-side remediation (Burst 29). F-P5P9-A-001 [HIGH]: §94-95 `sbctl version` + `sbctl ping` annotated PENDING-S-BL.PING-VERSION-WIRE — neither has a case arm in the `main.go` switch (`cmd/sbctl/main.go:68-101`); both route to the `default` arm and return unknown-subcommand `usageErrf`, exit 2 (verified post-#65). F-P5P9-A-002 [MED]: `--target` flag entry §51 extended with default value `/run/switchboard-router.sock` (`cmd/sbctl/main.go:21`) and E-NET-001 (exit 1) consequence when the default socket is absent; §370 flag-interactions table row for `--target` updated to match. F-P5P9-A-003 [MED]: §110 expire exit-code column extended with E-ADM-021 (bootstrap-key-expire-forbidden — `mapAdminError` arm for `ErrBootstrapKeyExpireForbidden`, `admin_handlers.go:440-441`), E-ADM-009 (insufficient authority — `resolveAndVerifyCallerRole`, `admin_handlers.go:290`), E-SVTN-003 (SVTN not found — `mapAdminError` arm for `ErrSVTNNotFound`, `admin_handlers.go:413-414`); E-CFG-012/E-CFG-013 NOT added (expire has no confirm gate — `runAdminKeyExpire` never calls `runDestroyConfirmGate`; confirmed `cmd/sbctl/admin.go:527-563`). F-P5P9-A-004 [LOW]: §120 destroy exit-code column extended with E-SVTN-003 (reachable via `mapAdminError` after `resolveAndVerifyCallerRole` → `m.Destroy` path, `admin_handlers.go:807-813`). F-P5P9-A-005 [LOW]: §48 synopsis reflowed to match impl usage line `main.go:54` verbatim: added `[--timeout=<dur>]` and `[args...]`. F-P5P9-A-006 [LOW]: §128 `--yes` warning text carries `--name` (destroy form); footnote added clarifying flag-name interpolation is command-specific — destroy uses `--name` (`admin.go:306`), register uses `--svtn` (`admin.go:463`); impl-quoted destroy string unchanged.
 
 > **v1.20 changelog note (2026-07-03):** Phase 5 Pass 8 spec-side remediation (Burst 27). F-P5P8-A-002 [HIGH]: §108 register exit-code column replaced — E-ADM-012 (no such sentinel on the register path; `RegisterKey` is unconditional last-write-wins per ADR-003, `internal/svtnmgmt/svtnmgmt.go:238-267`) and E-ADM-018 (belongs only on the revoke path; `ErrControlRevocationRequiresConfirm` is returned by `RevokeKeyIfRoleMatches`, not `RegisterKey`) removed; actual register errors documented (E-CFG-001 for invalid/missing inputs including pubkey decode failure at `admin_handlers.go:141-180`, E-ADM-009 for insufficient authority, E-CFG-012/E-CFG-013 for confirm-gate misuse, E-SVTN-003 for missing SVTN); LWW note added per ADR-003. F-P5P8-A-005 [MED]: §109 revoke hierarchy error corrected from E-ADM-011 to E-ADM-019 (`mapAdminError` maps `ErrRoleMismatch` → E-ADM-019 at `admin_handlers.go:417-431`); emission text added verbatim; E-ADM-011 maps only from `ErrDestroyUnauthorized` on the destroy path (`admin_handlers.go:442-443`); E-ADM-018 added to §109 enumeration (control-to-control revocation gate, reachable via `RevokeKeyIfRoleMatches` per `svtnmgmt.go:325-330`, emission text added verbatim). F-P5P8-A-007 [LOW]: `<hex-pubkey>` placeholders in §108 and §109 row headers corrected to `<openssh-pubkey>` (impl primary path is `ssh.ParseAuthorizedKey` per `admin_handlers.go:148-165`; §113 already uses openssh). F-P5P8-A-003 [MED] (adjudicated spec-side): §108 syntax corrected from implied-required `--role` to optional `[--role <control|console|access>]` with explicit note "defaults to `console` when omitted" (verified: `cmd/sbctl/admin.go:439` `fs.String("role", "console", ...)`). Authority note §395 corrected: E-ADM-012 removed (no-error LWW noted), E-ADM-011 scope qualified (destroy path only, not revoke), E-ADM-019 added for revoke hierarchy violation, E-ADM-018 corrected scope to revoke confirm gate. PR #67 reference.
 
@@ -367,7 +370,7 @@ log_level: "info"
 | Flag A | Flag B | Interaction | Resolution |
 |--------|--------|-------------|------------|
 | `--json` | `--log-format=text` | No conflict; --json affects sbctl output, --log-format affects daemon log output | Both apply independently |
-| `--target=<addr>` | config `daemon.address` | `--target` overrides config value | `--target` wins |
+| `--target=<addr>` | config `daemon.address` | `--target` overrides config value; default is `/run/switchboard-router.sock` (cmd/sbctl/main.go:21); when `--target` is absent and the default socket is absent, sbctl exits E-NET-001 (exit 1) | `--target` wins |
 | `--key=<path>` | SSH agent | If --key specified, file key used; SSH agent ignored | `--key` wins |
 | `upstream_routers: []` | `upstream_routers: [...]` | Empty list = E router; any entry = PE router | Presence of entries determines mode |
 | `--log-level=debug` | `log_level: info` in config | CLI flag overrides config | `--log-level` flag wins |

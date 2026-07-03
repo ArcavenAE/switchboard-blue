@@ -2,10 +2,10 @@
 artifact_id: ARCH-INDEX
 document_type: architecture-index
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: architect
-timestamp: 2026-07-01T00:00:00
+timestamp: 2026-07-03T00:00:00
 phase: 1b
 inputDocuments:
   - '.factory/specs/prd.md'
@@ -34,6 +34,7 @@ modified:
   - 2026-06-23T00:00:00
   - 2026-06-28T00:00:00 # v1.1 — ARCH-12 daemon management plane + ADR-012 added
   - 2026-07-01T00:00:00 # v1.4 — Wave-6 Tranche A Ruling-4 sibling-propagation sweep: ARCH-12 v1.9→v1.10 (S-W5.04 row added to Story Summary table); interface-definitions v1.8→v1.9 (admin.key.* BC re-anchored to BC-2.05.004, BC-2.06.003 pins swept to v1.10)
+  - 2026-07-03T00:00:00 # v1.7 — Phase 5 Pass 9 remediation (Burst 29): interface-definitions v1.20→v1.21 (six Adv-A spec-only findings — §94-95 PENDING annotations, --target default, §110 expire exit-code audit, §120 E-SVTN-003, §48 synopsis, §128 interpolation footnote)
   - 2026-07-01T12:00:00 # v1.6 — Pass-5/6 L3 fix-burst index sync: ARCH-12 v1.11→v1.12 (v1.12 modified entry added — Ruling-6 deferred production wiring note); interface-definitions v1.11→v1.12 (6-site BC-2.06.003 pin sweep v1.11→v1.13 + changelog note added); BC-2.06.003 v1.10→v1.11→v1.12→v1.13 (Ruling-9 status derivation, subsequent fix-burst passes); VP-062 v1.5→v1.6 (BC body pins corrected v1.10→v1.13 at 7 sites); VP-048 v1.4→v1.5 (genesis carve-out scope note added per Ruling-8); ARCH-11 footnote corrected v1.9→v1.13 (BC-2.06.003 pin in VP-062 note); wave-6-tranche-a-scope-rulings Ruling-9 target version corrected v1.11→v1.13; policies.yaml created (changelog-completeness policy)
   - 2026-07-01T12:00:00 # v1.5 — Pass-3 L3 fix-burst index sync: interface-definitions v1.9→v1.10 (router.metrics/status trace columns + BC-2.06.003 pin→v1.11); VP-062 v1.4→v1.5 (module scope expanded to [internal/metrics, cmd/sbctl]); BC-2.06.003 v1.10→v1.11 (S502-DEFER-3 rewrite + Wave-7 Backlog Stories traceability); S-W5.04 v1.6→v1.7 (Ruling-6 PathTracker wiring deferred); three Wave-7 backlog stubs added (S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS, S-BL.ROUTER-ADDR)
   - 2026-07-01T00:00:00 # v1.3 — Wave-6 Tranche A Pass-1 fix-burst: ARCH-11 v1.14, ARCH-12 v1.9, interface-definitions v1.8
@@ -138,6 +139,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 | 2026-06-28 | architect | ARCH-03 v1.5–1.6: Wave 5 design notes. (1) Degraded-path flag (S-5.03, BC-2.02.003 PC-5): `IsDegraded()` accessor, `degraded bool` field under existing `mu`, `DegradedRTTThresholdMS=200`, `PathSnapshot` value type for consistent multi-field reads (go.md rule 12), `internal/metrics` consumes via `Snapshot().Degraded`. (2) p99 RTT accumulator (S-5.02, BC-2.06.003 rtt_p99_ms): 16-bucket fixed-histogram owned by PathTracker, 128 bytes per path, O(1) update and query, `P99RTTMs` carried in `PathSnapshot`, accuracy VP deferred to S-BL.BENCH. BC-2.06.003 added to ARCH-03 inputDocuments. |
 | 2026-06-29 | architect | ARCH-04 v1.8: CR-001 ruling — `internal/svtnmgmt` must not import `internal/frame` (ARCH-08 §6.5 position 15 violation). Resolution: add `AdmittedKeySet.LookupByPubkey(svtnID, pubkey)` to `internal/admission`; svtnmgmt replaces direct `frame.DeriveNodeAddress` calls with this method. HOLD-001 implementation invariant step 2 updated to reference `LookupByPubkey`. |
 | 2026-07-01 | architect | ARCH-04 v1.14: Wave-6 Tranche A Pass-1 fix-burst. Closes F-P1L3-004 self-contradiction — svtnmgmt Changes step 2 (RevokeKey direct Lookup call) superseded by ADR-004 Addendum H2 (RevokeKeyIfRoleMatches atomic primitive). §F-005 Caller Migration list updated: ExpireKey, CallerKeyRole, CallerKeyRoleActive, IsRegisteredAnyState are the value-return callsites; RevokeKey delegates to RevokeKeyIfRoleMatches. ARCH-INDEX bumped to v1.2. |
+| 2026-07-03 | product-owner | Phase 5 Pass 9 remediation (Burst 29, spec-only): interface-definitions v1.20→v1.21 — six Adv-A findings fixed: §94-95 PENDING-S-BL.PING-VERSION-WIRE annotations (F-A-001 HIGH); --target default /run/switchboard-router.sock + E-NET-001 consequence + §370 row (F-A-002); §110 expire exit-code audit with negative verification on E-CFG-012/013 confirm-gate codes (F-A-003); §120 E-SVTN-003 (F-A-004); §48 synopsis reflowed to main.go:54 verbatim (F-A-005); §128 --yes command-specific footnote (F-A-006). Zero code changes; develop stays 32ea461. ARCH-INDEX bumped to v1.7. |
 | 2026-07-01 | spec-steward | Pass-5/6 L3 fix-burst (F-P5L3R-01 through F-P5L3R-09): ARCH-12 v1.12 modified entry added; interface-definitions v1.11→v1.12 (6-site BC-2.06.003 v1.11→v1.13 sweep); VP-062 v1.5→v1.6 (BC body pins corrected v1.10→v1.13); VP-INDEX v2.22→v2.23; ARCH-11 VP-062 footnote pin corrected v1.9→v1.13; wave-6-tranche-a-scope-rulings Ruling-9 targets corrected to v1.13; policies.yaml created (changelog-completeness). ARCH-INDEX bumped to v1.6. |
 | 2026-07-01 | spec-steward | Pass-3 L3 fix-burst index sync: interface-definitions bumped v1.9→v1.10 (router.metrics/status BC pin→v1.11, story trace columns updated; F-L3-002, F-L3-003); VP-062 bumped v1.4→v1.5 (module scope [internal/metrics, cmd/sbctl]; F-L3-005); BC-2.06.003 bumped v1.10→v1.11 (S502-DEFER-3 rewrite, Wave-7 Backlog Stories row; F-L3-001); S-W5.04 bumped v1.6→v1.7 (Ruling-6 PathTracker wiring deferred to S-BL.PATH-TRACKER-WIRING); three Wave-7 backlog stubs added. ARCH-INDEX bumped to v1.5. |
 | 2026-07-01 | spec-steward | Wave-6 Tranche A Ruling-4 sibling-propagation sweep: ARCH-12 bumped v1.9→v1.10 (S-W5.04 story row added to Story Summary table; F-P2L3-003). interface-definitions bumped v1.8→v1.9 (admin.key.* BC re-anchored from BC-2.07.001 to BC-2.05.004 PC-1/PC-2; BC-2.06.003 pins swept v1.7→v1.10 at 4 locations). ARCH-INDEX bumped to v1.4. |

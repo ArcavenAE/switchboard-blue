@@ -1280,4 +1280,29 @@ All five spec changes verified file:line against merged tree (32ea461) before co
 
 **BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 29 spec-only remediation (v1.21) pending: annotate §94-95, document --target default, audit §110/§120 exit-code tables, fix §48 synopsis, add §128 footnote.
 
+---
+
+## Phase 5 — Burst 29 / Pass 9 Spec-Only Remediation (2026-07-03)
+
+**Agents dispatched:** product-owner (spec-only)
+**Dispatch tuple:** develop tip 32ea461 + interface-definitions v1.20 → v1.21
+**Profile:** SPEC-ONLY — zero code changes, zero PRs, develop stays 32ea461
+
+**Summary:** Phase 5 Pass 9 spec-only remediation complete. All six Adv-A findings from Burst 28 were documentation gaps in interface-definitions.md; none required implementation changes. This is the first burst in the Phase 5 arc that is pure spec — a convergence signal that the codebase has stabilised under both adversary lenses while documentation catch-up work continues. The negative-verification exemplar on §110 (deliberate exclusion of E-CFG-012/013 because expire has no confirm gate, verified at admin.go:527-563) establishes a new pattern: when an exit-code audit explicitly excludes codes, the exclusion rationale must be documented alongside the additions.
+
+DRIFT-P5P9-STALE-RECONCILIATION-COMMENT (LOW) remains open — production_exit_code_test.go:404-407 references TestSbctl_NoSubcommand_ExitsZero (renamed ExitsTwoAfterP6 in Burst 23). Comment-only fix; ride next code PR.
+
+| Finding | Resolution |
+|---------|------------|
+| F-P5P9-A-001 [HIGH] §94-95 version/ping unannotated | Both sbctl version and sbctl ping rows in §94-95 annotated `PENDING-S-BL.PING-VERSION-WIRE` (matching the shape established by F-P5P6-A-005 sweep for other unimplemented commands). |
+| F-P5P9-A-002 [MED] --target default undocumented | §48-54 flags table: --target row updated with default value `/run/switchboard-router.sock` and E-NET-001 path consequence. §370 Registered Verbs table row verified against 32ea461. |
+| F-P5P9-A-003 [MED] §110 expire exit-codes incomplete | §110 expire exit-code table extended with E-ADM-021 (bootstrap-key-expire-forbidden), E-ADM-009 (insufficient authority), E-SVTN-003 (SVTN not found). Negative verification: E-CFG-012 and E-CFG-013 deliberately excluded — expire has no `--confirm` gate (verified admin.go:527-563 — no `runDestroyConfirmGate` call in expire path). Exclusion documented inline. |
+| F-P5P9-A-004 [LOW] §120 destroy exit-codes missing E-SVTN-003 | §120 destroy exit-code table extended with E-SVTN-003. |
+| F-P5P9-A-005 [LOW] §48 synopsis missing --timeout | §48 synopsis reflowed to match main.go:54 verbatim, including `[--timeout=<dur>]`. |
+| F-P5P9-A-006 [LOW] §128 --yes footnote destroy-parochial | §128 --yes flag description adds command-specific footnote: on `admin svtn register` the warning uses `--svtn-name`; on `admin svtn destroy` it uses `--name`. Both behaviors correct in impl; spec template was silent. |
+
+All six claims file:line-verified against 32ea461 before committing.
+
+**BC-5.39.001 streak:** 0/3 — streak held at 0 (Adv-A HAS_FINDINGS in Pass 9). Pass 10 dispatch is next; targets streak 0→1. Code clean both lenses.
+
 **BC-5.39.001 streak:** 0/3 — remediation complete, streak counter reset unchanged (remediation burst does not increment streak). Pass 9 targets 0→1.
