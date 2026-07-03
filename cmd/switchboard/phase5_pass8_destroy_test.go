@@ -55,6 +55,9 @@ func TestAdminSVTNDestroyHandler_NameValidation_E_CFG_001(t *testing.T) {
 		// wantErrCode is the exact error-code prefix the response error must contain.
 		// All cases must be E-CFG-001 (not E-SVTN-003).
 		wantErrCode string
+		// wantErrDetail is an optional substring that must also appear in the error,
+		// used to pin which validation arm fired (empty = no additional assertion).
+		wantErrDetail string
 	}{
 		{
 			// Case 1: empty name — already validated by current code (guard).
@@ -105,9 +108,17 @@ func TestAdminSVTNDestroyHandler_NameValidation_E_CFG_001(t *testing.T) {
 			// Zl/Zp categories).
 			// Current code: falls through to m.Destroy → E-SVTN-003 (not found).
 			// Expected after fix: E-CFG-001.
-			name:        "unicode_line_separator_U2028",
-			svtnArg:     "valid name",
-			wantErrCode: "E-CFG-001",
+			//
+			// OBS-P5P10-B-002: wantErrDetail pins the specific arm: the control-char
+			// arm formats "control character U+%04X" (admin_handlers.go validateSVTNName),
+			// so "U+2028" must appear in the error.
+			//
+			// Note: the separator between "valid" and "name" is U+2028 — verify
+			// with `hexdump -C`; do not normalize (text editors may render it as space).
+			name:          "unicode_line_separator_U2028",
+			svtnArg:       "valid name",
+			wantErrCode:   "E-CFG-001",
+			wantErrDetail: "U+2028",
 		},
 	}
 
@@ -161,6 +172,14 @@ func TestAdminSVTNDestroyHandler_NameValidation_E_CFG_001(t *testing.T) {
 			if strings.Contains(err.Error(), "E-SVTN-003") {
 				t.Errorf("F-P5P8-A-004: %s: handler fell through to Destroy and returned E-SVTN-003; "+
 					"name validation (E-CFG-001) must fire first", tc.name)
+			}
+
+			// OBS-P5P10-B-002: if wantErrDetail is set, assert that specific arm
+			// detail appears in the error message to pin which validation arm fired.
+			if tc.wantErrDetail != "" && !strings.Contains(err.Error(), tc.wantErrDetail) {
+				t.Errorf("F-P5P8-A-004 (OBS-P5P10-B-002): %s: expected error to contain arm-detail %q; got: %v\n"+
+					"(the control-char arm must emit 'U+2028' via 'control character U+%%04X' format)",
+					tc.name, tc.wantErrDetail, err)
 			}
 		})
 	}
