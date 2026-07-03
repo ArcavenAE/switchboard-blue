@@ -2358,6 +2358,14 @@ func TestSbctlAdmin_ListKeys_CLI(t *testing.T) {
 // The subprocess entry point (TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry)
 // maps E-CFG-012 errors to os.Exit(2) and all other errors to os.Exit(1), mirroring
 // the mapping that a properly wired main() would provide for this error class.
+//
+// SUPERSEDED NOTE (F-P5P6-A-001, Burst 23): the entry point below re-implements the
+// E-CFG-012→exit-2 mapping in test-only code rather than exercising production main().
+// TestProductionMain_UsageErrors_ExitTwo/destroy_yes_plus_confirm_E-CFG-012
+// (production_exit_code_test.go) covers the same case through production main(), which
+// is the authoritative test once the implementer wires the usage-error exit mapping.
+// The implementer should reconcile this test (e.g. remove or mark superseded) when
+// production_exit_code_test.go's E-CFG-012 case turns green.
 func TestSubprocessAdmin_YesPlusConfirmExitCode2(t *testing.T) {
 	t.Parallel()
 
