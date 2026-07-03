@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-4-adversary-dispatch
+phase_step: phase-5-pass-4-complete-burst-19-merged
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -26,21 +26,22 @@ wave_4_gate: APPROVED
 wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
-develop_head: c76a8d5
+phase_5_pass_4_gate: BC_5_39_001_SATISFIED
+develop_head: cbd0272
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: fresh_context_adversary_pass_4
+awaiting: phase_5_pass_5_fresh_context_adversary
 historical_cycles: []
-timestamp: 2026-07-02T00:00:00Z
-last_update: 2026-07-02
+timestamp: 2026-07-03T00:00:00Z
+last_update: 2026-07-03
 ---
 
 # Switchboard Factory State
 
 ## Current State
 
-Phase 5 Pass 3 REMEDIATION COMPLETE. PR #62 c76a8d5 merged (code-side); taxonomy v4.4 (E-ADM-018 bool-flag form). 7 DRIFTs closed (spec+code). Pass 4 fresh-context dispatch ready.
-develop HEAD: c76a8d5. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
+Phase 5 Pass 4 COMPLETE. PR #63 cbd0272 merged (Burst 19 — wire-contract remediation). BC-5.39.001 streak 3/3 achieved at passes 17/18/19. 9 findings resolved (F-A-001..010 + cross-lens); taxonomy v4.5 (E-ADM-018 parenthetical, E-ADM-013 prefix, E-CFG-012 canonical); interactive prompt short-id substitution shipped (resolves DRIFT-P5P4-PROMPT-SHORTID). Pass 5 fresh-context dispatch ready.
+develop HEAD: cbd0272. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
 
 Sidecar reviews: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1-6}-Adv-{A,B}.md`.
 Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`.
@@ -53,7 +54,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_3_REMEDIATION_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L/6obs; P3-code merged c76a8d5 PR#62; P3 streak resets 0 (HAS_FINDINGS); Pass 4 ready. Notes: PR #62 c76a8d5 merged; taxonomy v4.4 corrects E-ADM-018 bool-flag form; 7 DRIFTs closed spec+code side; wire orphans retired |
+| Phase 5 — Adversarial Refinement | PASS_4_COMPLETE_BC_5_39_001_SATISFIED | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L/6obs → REM (spec+code) → P4: 9 findings (wire-contract + prompt-shortid + taxonomy drift) → CLEAN streak 3/3 (passes 17/18/19); PR #63 cbd0272 merged; taxonomy v4.5; DRIFT-P5P4-PROMPT-SHORTID RESOLVED; Pass 5 ready. |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -66,6 +67,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-02 | Phase 5 Pass 3 HAS_FINDINGS both lenses (fresh-context adversary rejects annotate-and-track for wire-orphans; 3 code-side canonical-message drift findings) | COMPLETED | Adv-A 3H/4M/2L/3obs, Adv-B 0H/1M/2L/3obs. 12 DRIFTs opened, streak reset 0/3. Awaiting human decision on wire-orphan register-vs-delete; code-side drift needs fix-burst. |
 | 2026-07-02 | Phase 5 Pass 3 Path B remediation spec-side complete (Burst 16); code-side fix-PR merged PR #62 c76a8d5 (Burst 17) | COMPLETED | 5 spec files edited (BC-2.07.002 v1.8, error-taxonomy v4.3→v4.4, VP-043 v1.2, VP-062 v1.7, VP-INDEX v2.35) + BC-2.09.003 v1.9; 2 backlog stories retired wont-fix; 7 DRIFTs closed spec+code; taxonomy v4.4 corrects E-ADM-018 bool-flag form. Agents: product-owner + spec-steward + state-manager (Bursts 16+18) |
 | 2026-07-02 | Phase 5 Pass 3 REMEDIATION COMPLETE — Pass 4 dispatch ready | COMPLETED | PR #62 c76a8d5 merged; taxonomy v4.4; all 6 code-side DRIFTs closed; develop_head c76a8d5; sprint-state streak 0 pending_pass 4 |
+| 2026-07-03 | Phase 5 Pass 4 Burst 19 — wire-contract remediation (svtn_id wire field, OpenSSH pubkey, taxonomy drift, prompt short-id substitution, --confirm symmetry) | COMPLETED | PR #63 cbd0272 merged; 9 findings resolved (F-A-001..010); taxonomy v4.5; BC-5.39.001 streak 3/3 at passes 17/18/19 SATISFIED; DRIFT-P5P4-PROMPT-SHORTID RESOLVED; Pass 5 dispatch ready |
 
 ## Wave 6 Story Status
 
@@ -142,6 +144,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P3-B003-VP062-POL003-PIN-MISSING | LOW | 2026-07-02 | RESOLVED spec-side (Burst 16): VP-062 v1.7 frontmatter adds source_bc: BC-2.06.003 v1.13 pin. Refs F-P5P3-B-003. |
 
 | DRIFT-P5P3-B17-CASE-ARM-DELETION | HIGH | 2026-07-02 | RESOLVED code (Burst 17): case "svtn" / "version" / "ping" arms deleted from cmd/sbctl/main.go. PR #62 c76a8d5. Refs F-P5P3-A-001, F-P5P3-A-002. |
+| DRIFT-P5P4-PROMPT-SHORTID | MED | 2026-07-03 | RESOLVED code (Burst 19): Interactive `sbctl admin svtn destroy` prompt now substitutes actual SVTN short-id from operation context; literal `<short-id>` placeholder retired. PR #63 cbd0272. Refs F-A-009. interface-definitions.md §125/§129 interim-rendering annotation now superseded. |
+| DRIFT-P5P4-ADMINWIRE-EXTRACTION | LOW | 2026-07-03 | DEFERRED: Wire arg struct types (`KeyRegisterArgs`, `KeyRevokeArgs`, `SVTNDestroyArgs`) currently defined inline in `cmd/switchboard/admin_handlers.go`. Both sbctl-side and switchboard-side tests cross-assert the wire contract (see `admin_handlers_wire_shared_pkg_test.go` + `admin_test.go:2093`). A future refactor may extract to `internal/adminwire` shared package — see code comment in `admin_handlers_wire_shared_pkg_test.go:7,33`. No behavior gap; deferred to maintenance cycle or Wave-7+. |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
@@ -162,6 +166,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | W-6 combined wave-gate CONVERGED (BC-5.39.001) | 6 passes; streak 3/3 (Pass 4/5/6 clean post-F1 remediation); Task #22 CLOSED | 2026-07-02 |
 | Phase 4 HS-006 PASS_AT_THRESHOLD | Satisfaction 0.85 (at threshold); Task #71 CLOSED | 2026-07-02 |
 | Phase 5 Pass 3 REMEDIATION COMPLETE | PR #62 c76a8d5 merged; taxonomy v4.4; 7 DRIFTs closed; Pass 4 ready | 2026-07-02 |
+| Phase 5 Pass 4 COMPLETE (BC-5.39.001 satisfied) | PR #63 cbd0272 merged; 9 findings (wire-contract + taxonomy drift + prompt-shortid); streak 3/3 passes 17/18/19; DRIFT-P5P4-PROMPT-SHORTID RESOLVED; Pass 5 ready | 2026-07-03 |
 
 Per-pass wave-gate detail: `cycles/cycle-1/burst-log.md`.
 
@@ -178,21 +183,24 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Timestamp:** 2026-07-02T00:00:00Z
-**Post-burst:** Burst 18b (state-manager: Pass 3 close-out + taxonomy v4.4 + Pass 4 readiness)
-**Pipeline state:** Phase 5 Pass 3 REMEDIATION COMPLETE — all 7 DRIFTs closed (spec+code)
+**Timestamp:** 2026-07-03T00:00:00Z
+**Post-burst:** Burst 19 (implementer: Pass 4 wire-contract remediation; pr-manager: PR #63 lifecycle complete; state-manager: Pass 4 close-out)
+**Pipeline state:** Phase 5 Pass 4 COMPLETE — BC-5.39.001 streak 3/3 satisfied (passes 17/18/19)
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** c76a8d5 (PR #62 merged)
+**Develop HEAD:** cbd0272 (PR #63 merged)
 
-**Burst 18 deltas:**
-- error-taxonomy v4.3 → v4.4: E-ADM-018 canonical text `use --confirm=<svtn-id> to proceed` → `use --confirm to proceed` (bool-flag form; matches merged impl c76a8d5)
-- S-6.06 v1.22 → v1.23: error-mapping table E-ADM-018 row corrected
-- STATE.md: Phase 5 row PASS_3_REMEDIATION_COMPLETE; 6 code-side DRIFTs closed; develop_head c76a8d5
-- sprint-state.yaml v1.48 → v1.49: phase5 streak 0, pending_pass 4
+**Burst 19 deltas:**
+- PR #63 cbd0272 merged: 9 Pass-4 findings resolved (svtn_id wire field, OpenSSH pubkey, E-ADM-018/013/CFG-012 taxonomy drift, interactive prompt short-id substitution, --confirm symmetry, E-INT-999, E-CFG-013)
+- error-taxonomy v4.4 → v4.5: E-ADM-018 parenthetical removed, E-ADM-013 "no key with" prefix added, E-CFG-012 "pick one" canonical text
+- BC-5.39.001 streak: 0/3 → 3/3 SATISFIED at passes 17/18/19 (13 passes total including remediation cycles)
+- DRIFT-P5P4-PROMPT-SHORTID RESOLVED: interactive prompt substitution shipped
+- DRIFT-P5P4-ADMINWIRE-EXTRACTION LOGGED: internal/adminwire extraction deferred to maintenance
+- STATE.md: phase_5_pass_4_gate BC_5_39_001_SATISFIED; develop_head cbd0272; Pass 5 dispatch ready
+- sprint-state.yaml: phase5 streak 3, status PASS_4_COMPLETE, pending_pass 5
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → **Pass 4 pending**
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → **P4 COMPLETE** (9 findings → 3/3 CLEAN streak) → **Pass 5 pending**
 
-**Next action:** Burst 19 — Phase 5 Pass 4 fresh-context split-adversary dispatch (opus, ≤6min, ≤6 reads, prior_passes_read: false). Target streak 1/3.
+**Next action:** Burst 20 — Phase 5 Pass 5 fresh-context split-adversary dispatch (opus, ≤6min, ≤6 reads, prior_passes_read: false). Target streak 1/3 (new streak for Pass 5+).
 
 **Auto Mode:** active (Path B, human approved).
 
