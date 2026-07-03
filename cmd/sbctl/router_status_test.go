@@ -82,8 +82,7 @@ func startCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessa
 // startCannedDaemonAssertCmd is like startCannedDaemon but also captures the
 // RPC command sent by the client into gotCmdCh (buffered, capacity >= 1).
 //
-// F-P5P8-B-002: serveCannedConn previously discarded req["cmd"]; adding cmd
-// capture lets callers assert dispatch identity (not just response shape).
+// F-P5P8-B-002: adds cmd capture to assert dispatch identity (not just response shape).
 // The three consumer tests that claim dispatch identity — paths.list (AC-001),
 // router.metrics (AC-002), and router.status alias (AC-003) — must use this
 // variant and assert the expected command.
@@ -108,14 +107,7 @@ func startCannedDaemonAssertCmd(t *testing.T, sockPath string, responseData json
 	return ln
 }
 
-// serveCannedConn performs one full ADR-012 handshake then responds to the
-// first RPC request with responseData. The connection is closed when done.
-func serveCannedConn(conn net.Conn, responseData json.RawMessage) {
-	serveCannedConnCore(conn, responseData, "", nil)
-}
-
-// serveCannedConnCore is the implementation used by both serveCannedConn and
-// startCannedDaemonAssertCmd.
+// serveCannedConnCore is the implementation used by startCannedDaemonAssertCmd.
 //
 //   - expectedCmd: if non-empty, the received req["cmd"] is checked to equal it.
 //     Mismatches cause the RPC to respond with an error envelope (the test then
