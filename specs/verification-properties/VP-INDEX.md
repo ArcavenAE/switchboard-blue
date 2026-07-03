@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.35"
+version: "2.36"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -100,6 +100,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-074 | QualityIndicator threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct | BC-2.06.001 | internal/metrics | unit | P1 | implemented | VP-074.md |
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-075.md |
 | VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-076.md |
+| VP-077 | Admin list-keys admission-gate — any-role OR operator-set OR bootstrap-key; else E-ADM-009 (EC-008 three admission-failure modes; implementing_story: S-6.06) | BC-2.05.004 v1.14 | cmd/switchboard | integration | P0 | draft | VP-077.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | deferred | deferred | (pending) [implementing story: S-BL.BENCH — unscheduled] |
 | VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | deferred | deferred | (pending) [implementing story: S-W6.NN — unscheduled] |
 
@@ -111,9 +112,10 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit | Unit |
 |-----------|---------|------|-------------|-----|-----------|------------|------|
-| 76 | 33 | 4 | 22 | 10 | 2 | 2 | 3 |
+| 77 | 33 | 4 | 23 | 10 | 2 | 2 | 3 |
 
-> Arithmetic check: 33 + 4 + 22 + 10 + 2 + 2 + 3 = 76. Consistent.
+> Arithmetic check: 33 + 4 + 23 + 10 + 2 + 2 + 3 = 77. Consistent.
+> VP-077 (integration, P0, cmd/switchboard) added 2026-07-03 for BC-2.05.004 EC-008 (list-keys admission-gate — any-role OR operator-set OR bootstrap-key; F-P5P14-B-003 traceability gap close). Integration count increased from 22 to 23. Total 76→77. P0 count 54→55.
 > VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001 lens-1 pass-18). Integration count increased from 21 to 22. Total 75→76. P0 count 53→54.
 > VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 (admin.key.* handler-layer caller-role enforcement; S-6.06 lens-3 F-005 close). Integration count increased from 20 to 21. F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard — BuildAdminHandlers and its handler closures reside in cmd/switchboard/admin_handlers.go.
 > VP-068 (unit) — pure constructor panic-guard (no I/O). VP-074 (unit) — QualityIndicator threshold classification; 14 table-driven cases covering all 6 nominal regions + 8 boundary values. VP-043 (strong-oracle, counted in Unit bucket) — reclassified 2026-07-02 from Proptest (F-P5P3-B-001): shipped test uses hand-rolled MMIX LCG loop + independent xorOracle() reference, not gopter. Proptest 34→33; Unit 2→3.
@@ -132,21 +134,23 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Phase | Count |
 |-------|-------|
-| P0 | 54 |
+| P0 | 55 |
 | P1 | 18 |
 | P2 | 4 |
-| **Total** | **76** |
+| **Total** | **77** |
 
+> Phase recounted 2026-07-03: VP-077 (P0, integration) added for BC-2.05.004 EC-008 (list-keys admission-gate; F-P5P14-B-003). P0 = 55. P1 = 18. P2 = 4. Total = 77.
 > Phase recounted 2026-06-30: VP-076 (P0, integration) added for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant). P0 = 54. P1 = 18. P2 = 4. Total = 76.
 
 ## BC Coverage Check
 
-45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-076 added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001). VP-075 added 2026-06-30 for BC-2.05.004 (handler-layer caller-role enforcement; S-6.06 lens-3 F-005). VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation). Zero coverage gaps.
+45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-077 added 2026-07-03 for BC-2.05.004 EC-008 (list-keys admission-gate; F-P5P14-B-003 close). VP-076 added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001). VP-075 added 2026-06-30 for BC-2.05.004 (handler-layer caller-role enforcement; S-6.06 lens-3 F-005). VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation). Zero coverage gaps.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.36 | 2026-07-03 | F-P5P14-B-003 traceability close: VP-077 minted (integration, P0, cmd/switchboard) — admin.key.list-keys admission-gate property (any-role OR operator-set OR bootstrap-key; else E-ADM-009); covers BC-2.05.004 v1.14 EC-008 three failure modes. Complementary to VP-075 (write-authority scope exclusion). Total 76→77. Integration 22→23. P0 54→55. BC-2.05.004 Verification Properties table extended with VP-077 row. |
 | 2.35 | 2026-07-02 | F-P5P3-B-001/B-002/B-003 (Phase 5 Pass 3 remediation, Path B): reclassify VP-043 row from Proptest bucket to Unit bucket; BC column pin BC-2.02.007 → BC-2.02.007 v1.3 (POL-003 candidate); VP-062 source_bc pin already correct in catalog row (BC-2.06.003 v1.13) — confirmed aligned with VP-062 v1.7 frontmatter. Arithmetic footer resynced (Proptest 34→33, Unit 2→3; total 76 unchanged). POL-003 conformance 2/76 → 3/76 (VP-043 pin added). |
 | 2.34 | 2026-07-02 | VP-050 bumped v1.2→v1.3 (F-P4L3-MED-002 propagation): Story Trace row transport clause updated — "mgmt-plane Unix socket" → "mgmt-plane transport (BC-2.07.004 EC-013)"; Story row bumped S-7.03 v1.3 → v1.4. Governance-only. No count or method changes; total remains 76. |
 | 2.33 | 2026-07-02 | VP-048 bumped v1.8→v1.9 (F-P5L3-LOW-1): Story Trace P3 sub-test name corrected — "destroy absent from list and blocks admission" → "TestAdminSVTNDestroy_E2E_VP048Property3" (top-level test in admin_handlers_e2e_test.go:1170). Governance-only; no property text change. No count or method changes; total remains 76. |
