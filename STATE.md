@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-8-remediation-complete
+phase_step: phase-5-pass-9-complete-has-findings
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -30,7 +30,7 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 32ea461
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-9-dispatch
+awaiting: phase-5-pass-9-remediation
 historical_cycles: []
 timestamp: 2026-07-03T00:00:00Z
 last_update: 2026-07-03
@@ -40,7 +40,7 @@ last_update: 2026-07-03
 
 ## Current State
 
-Phase 5 Pass 8 remediation COMPLETE (Burst 27). Code track: PR #67 32ea461 merged (confirm-gate cmdName parameterization F-A-001; destroy validateSVTNName + raw-bytes utf8.Valid pre-check F-A-004; paths verb message F-A-006; per-case finding attribution F-B-001; canned-daemon command-dispatch assertion F-B-002 [wire field verified as 'command' per ADR-012, not 'cmd']; E-NET-001 fingerprint OBS-B-001; lint fix ef9f52f). Spec track: interface-definitions v1.20 — §108/§109 error surfaces corrected to verified reachability, openssh-pubkey placeholders, --role documented default (F-A-003 adjudicated spec-side), §395 authority note swept. BC-5.39.001 streak 0/3. Pass 9 dispatch next.
+Phase 5 Pass 9 split-adversary COMPLETE (Burst 28). Adv-A HAS_FINDINGS 1H/2M/3L+3obs — ALL SPEC-SIDE: §94-95 version/ping unannotated (missed by F-P5P6-A-005 sweep), --target default undocumented, §110 expire exit codes unaudited (E-ADM-021/E-ADM-009/E-SVTN-003 reachable), §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes warning footnote. Adv-B CLEAN 0/0/0+3obs — all Pass 8 fixes verified correctly implemented; OBS-B-001 stale reconciliation comment (orchestrator-verified: NO live contradiction — ExitsZero test no longer exists; comment-only fix rides next code PR). ZERO code defects this pass — remediation is single spec burst v1.21. BC-5.39.001 streak 0/3.
 develop HEAD: 32ea461. 45 BCs, 76 VPs, 53 stories (backlog +1 S-BL.CLI-SURFACE-COMPLETION), 18 internal packages.
 
 NO-GOVERNING-BC obligations: `paths ping` (§77) + `svtn status` (§62) — architect ruling or new BC required before S-BL.CLI-SURFACE-COMPLETION scheduling.
@@ -56,7 +56,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_8_REMEDIATION_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9 dispatch next |
+| Phase 5 — Adversarial Refinement | PASS_9_COMPLETE_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → v1.21 rem pending |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -72,6 +72,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-03 | Phase 5 Pass 7 remediation (Burst 25, code-only) | COMPLETED | PR #66 b4ccd06 merged: 10 usage-error sites converted to usageErrf (console.go ×7, router_metrics.go ×1, router_status.go ×2); production_exit_code_test.go table extended to 12 cases (6 console/router RED-first); completeness grep audit: no residual usage-error-class fmt.Errorf in cmd/sbctl. Reviewer: no blockers, MINOR count-cosmetic + 2 follow-ons. OBS-B-003/004 comment fixes included. |
 | 2026-07-03 | Phase 5 Pass 8 split-adversary vs b4ccd06 + v1.19 | COMPLETED | Adv-A HAS_FINDINGS 2H/4M/1L (F-P5P8-A-001..007 — admin-key surface: confirm-gate wrong-command prefix, §108 unreachable error codes, --role silent default, destroy name-validation gap, §109 E-ADM-011 vs E-ADM-019, paths verb message, hex-pubkey placeholders); Adv-B HAS_FINDINGS 0H/2M+1obs (F-P5P8-B-001 finding-ID misattribution in test failure arm [process-gap], F-P5P8-B-002 canned-daemon cmd-dispatch oracle vacuous [process-gap]). Both read-cap overages self-disclosed (A: 7 reads, B: 9 touches). Burst 27 remediation: code track (A-001/004/006 + B-001/002 + OBS-B-001) then spec track (A-002/003/005/007). |
 | 2026-07-03 | Phase 5 Pass 8 remediation (Burst 27) | COMPLETED | Code track: PR #67 32ea461 merged (confirm-gate cmdName parameterization F-A-001; destroy validateSVTNName + raw-bytes utf8.Valid pre-check F-A-004; paths verb message F-A-006; per-case finding attribution F-B-001; canned-daemon command-dispatch assertion F-B-002 [wire field verified as 'command' per ADR-012, not 'cmd']; E-NET-001 fingerprint OBS-B-001; lint fix ef9f52f). Spec track: interface-definitions v1.20 — §108/§109 error surfaces corrected to verified reachability, openssh-pubkey placeholders, --role documented default (F-A-003 adjudicated spec-side), §395 authority note swept. All spec claims file:line-verified. |
+| 2026-07-03 | Phase 5 Pass 9 split-adversary vs 32ea461 + v1.20 | COMPLETED | Adv-A HAS_FINDINGS 1H/2M/3L+3obs (F-P5P9-A-001..006 — ALL SPEC-SIDE: §94-95 version/ping unannotated [missed by F-P5P6-A-005 sweep], --target default undocumented, §110 expire exit codes unaudited [E-ADM-021/E-ADM-009/E-SVTN-003 reachable], §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes warning footnote). Adv-B CLEAN 0/0/0+3obs (all Pass 8 fixes verified correctly implemented; OBS-B-001 stale reconciliation comment — orchestrator verified by grep: NO live contradiction, ExitsZero test no longer exists, comment-only fix rides next code PR). ZERO code defects this pass — remediation is single spec burst v1.21. Both read-cap overages self-disclosed. |
 
 ## Wave 6 Story Status
 
@@ -154,6 +155,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P6-ANNOTATION-EXITCODE | MED | 2026-07-03 | RESOLVED (Burst 23): PR #65 4d7d9e0 — exit 2 for unknown-subcommand wired; v1.19 §121 re-verified against merged tree. Verify-then-claim discipline applied. |
 | DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | 2026-07-03 | router status --target= (empty value) path converted but lacks dedicated test case; 3 fs.Parse paths likewise; PR #66 review O-1. Follow-on micro-addition to the production_exit_code_test.go table. |
 | DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | 2026-07-03 | admin.go:395 interactive-confirm mismatch returns plain fmt.Errorf while --confirm sibling uses usageErrf; needs adjudication whether interactive-mismatch is usage-class (spec §129/§130) before converting; PR #66 review O-4. |
+| DRIFT-P5P9-STALE-RECONCILIATION-COMMENT | LOW | 2026-07-03 | production_exit_code_test.go:404-407 comment references TestSbctl_NoSubcommand_ExitsZero which was renamed ExitsTwoAfterP6 in Burst 23; comment-only fix, fold into next code-touching PR. Also OBS-P5P9-B-003 suggests U+2028 hexdump comment in phase5_pass8_destroy_test.go — same rider. Orchestrator-verified: no live contradiction (ExitsZero test no longer exists). |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
@@ -174,6 +176,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | Phase 5 Pass 7 REMEDIATION COMPLETE | Burst 25: PR #66 b4ccd06 (usageErrf sweep: console.go ×7, router_metrics.go ×1, router_status.go ×2; production_exit_code_test.go +12 cases); completeness grep clean; streak 0/3; Pass 8 next | 2026-07-03 |
 | Phase 5 Pass 8 HAS_FINDINGS | Adv-A 2H/4M/1L (admin-key surface: confirm-gate wrong-command prefix, §108 unreachable exit codes, --role silent default, destroy name-validation gap, §109 E-ADM-011 vs E-ADM-019, paths verb message, hex-pubkey placeholders); Adv-B 0H/2M+1obs (test misattribution + vacuous cmd-dispatch oracle); streak 0/3; Burst 27 remediation pending | 2026-07-03 |
 | Phase 5 Pass 8 REMEDIATION COMPLETE | Burst 27: PR #67 32ea461 (code track: 6 findings resolved); interface-definitions v1.20 (spec track: §108/§109 error surfaces, openssh-pubkey, --role default, §395 sweep); streak 0/3; Pass 9 next | 2026-07-03 |
+| Phase 5 Pass 9 HAS_FINDINGS | Adv-A 1H/2M/3L (all spec-side: §94-95 version/ping unannotated, --target default undocumented, §110 expire exit codes incomplete, §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes footnote); Adv-B CLEAN 0/0/0+3obs; ZERO code defects this pass; streak 0/3; v1.21 spec-only remediation next | 2026-07-03 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -191,12 +194,12 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-03T00:00:00Z
-**Post-burst:** Burst 27 (Phase 5 Pass 8 remediation: PR #67 32ea461 + interface-definitions v1.20)
-**Pipeline state:** Phase 5 Pass 8 REMEDIATION COMPLETE; streak 0/3; Pass 9 dispatch next
+**Post-burst:** Burst 28 (Phase 5 Pass 9 split-adversary: Adv-A HAS_FINDINGS 1H/2M/3L + Adv-B CLEAN)
+**Pipeline state:** Phase 5 Pass 9 COMPLETE HAS_FINDINGS; streak 0/3; Pass 9 remediation (v1.21 spec-only) next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
 **Develop HEAD:** 32ea461 (PR #67 squash-merge)
 
-**Burst 27 deltas:** Code track — PR #67 32ea461 merged: confirm-gate parameterized (cmdName arg, F-A-001); destroy validates via validateSVTNName + utf8.Valid raw-bytes pre-check (F-A-004); paths unknown-verb message aligned to router pattern (F-A-006); production_exit_code_test.go failure arm per-case attribution corrected F-P5P6→F-P5P7 for Cases 7-12 (F-B-001); serveCannedConn now asserts req["cmd"] (not req["cmd"]) per ADR-012 wire field 'command' (F-B-002, verified via grep before patching); bare_sessions test asserts E-NET-001 fingerprint (OBS-B-001); lint fix ef9f52f. Spec track — interface-definitions v1.20: §108 removes E-ADM-012 (unreachable — LWW no dup-key) + E-ADM-018 (unreachable — revoke-only) and documents actual error surface with LWW note per ADR-003; §109 corrects E-ADM-011→E-ADM-019 with verbatim emissions; <hex-pubkey>→<openssh-pubkey> at three §108/§109/§110 row headers; --role documented as optional with console default; §395 authority note swept. All spec claims file:line-verified against 32ea461.
+**Burst 28 deltas:** Phase 5 Pass 9 split-adversary complete. Adv-A (public-surface-and-operator-ux lens): 1H/2M/3L+3obs — F-P5P9-A-001 [HIGH] §94-95 version/ping unannotated (missed by F-P5P6-A-005 sweep); F-P5P9-A-002 [MED] --target default /run/switchboard-router.sock undocumented in spec (--key/--timeout document theirs); F-P5P9-A-003 [MED] §110 expire exit-codes omit E-ADM-021/E-ADM-009/E-SVTN-003 (all reachable via admin_handlers.go); F-P5P9-A-004 [LOW] §120 destroy exit-codes omit E-SVTN-003; F-P5P9-A-005 [LOW] §48 synopsis missing --timeout vs impl usage line; F-P5P9-A-006 [LOW] §128 --yes warning uses --name template but register emits --svtn-flavored warning. Adv-B (test-rigor+traceability lens): 0H/0M/0L+3obs — all Pass-8 A/B fixes verified correctly implemented across all 6 perimeter points (confirm-gate prefix, destroy validateSVTNName, paths verb, per-case attribution, wire-protocol assertCmd, E-NET-001 fingerprint). OBS-B-001 stale reconciliation comment orchestrator-verified: ExitsZero test no longer exists, no live contradiction. Zero code defects this pass — remediation is spec-only burst v1.21. Both read-cap overages self-disclosed (Adv-A: 5 files, within cap; Adv-B: 7 files, +1 overage).
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9 dispatch next
-**Next action:** Burst 28 — Pass 9 fresh-context split-adversary dispatch. Streak 0/3; Pass 9 targets 0→1. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8: Adv-A 2H/4M/1L + Adv-B 0H/2M+1obs → REM (Burst 27: PR #67 32ea461 + v1.20) → P9: Adv-A 1H/2M/3L (all spec-side) + Adv-B CLEAN(3obs) → v1.21 rem pending
+**Next action:** Burst 29 — Pass 9 spec-only remediation (v1.21). All six Adv-A findings are spec-side; no code changes required. Streak 0/3. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

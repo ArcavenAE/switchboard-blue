@@ -1256,4 +1256,28 @@ The VSDD process principle is that converged implementation (merged code + passi
 
 All five spec changes verified file:line against merged tree (32ea461) before committing. Verify-then-claim pattern maintained throughout.
 
+---
+
+## Phase 5 — Burst 28 / Pass 9 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** Adv-A (public-surface-and-operator-ux), Adv-B (test-rigor+traceability)
+**Dispatch tuple:** develop tip 32ea461 + interface-definitions v1.20
+
+**Summary:** Phase 5 Pass 9 fresh-context split-adversary complete. First pass where both adversaries converge on ZERO code defects — the entire Adv-A finding set is spec-side documentation gaps, not implementation errors. Adv-B verified all six Pass-8 remediation points (confirm-gate prefix, destroy validateSVTNName, paths verb message, per-case finding attribution, wire-protocol cmd-dispatch assertion, E-NET-001 fingerprint) and found no new issues. This is a convergence signal: the implementation surface is clean under both lenses; the remaining debt is documentation completeness in interface-definitions.md. Remediation is a single spec-only burst (v1.21) with no code PR required.
+
+**Convergence signal:** Code-clean both lenses for the first time. Adv-A's six findings are all of the form "spec says X but doesn't document Y" (missing annotations, undocumented defaults, incomplete exit-code tables, synopsis drift). None require implementation changes. OBS-B-001 (stale reconciliation comment referencing TestSbctl_NoSubcommand_ExitsZero) was orchestrator-verified before this close: the named test no longer exists (renamed ExitsTwoAfterP6 in Burst 23); comment-only fix, no live contradiction.
+
+| Agent | Verdict | Finding summary |
+|-------|---------|-----------------|
+| Adv-A (public-surface-and-operator-ux) | HAS_FINDINGS 1H/2M/3L+3obs | F-P5P9-A-001 [HIGH] §94-95 version/ping listed without PENDING annotation — both dispatch to exit-2 unknown-subcommand per main.go:100-101 (F-P5P6-A-005 sweep missed these two). F-P5P9-A-002 [MED] --target default /run/switchboard-router.sock undocumented in §48-54 flags table — only flag without documented default; creates mysterious E-NET-001 path. F-P5P9-A-003 [MED] §110 expire exit-code column omits E-ADM-021 (bootstrap-key-expire-forbidden), E-ADM-009 (insufficient authority), E-SVTN-003 (SVTN not found) — all three reachable via admin_handlers.go. F-P5P9-A-004 [LOW] §120 destroy exit-code column omits E-SVTN-003. F-P5P9-A-005 [LOW] §48 synopsis missing [--timeout=<dur>] — impl usage line is more complete than spec. F-P5P9-A-006 [LOW] §128 --yes warning template uses --name but register path emits --svtn-flavored warning (correct behavior; spec template is destroy-parochial without footnote). |
+| Adv-B (test-rigor+traceability) | CLEAN 0/0/0+3obs | All 6 Pass-8 fix perimeters verified: (1) confirm-gate prefix two-sided oracle locks register vs destroy; (2) destroy validateSVTNName 6-case table covers all five arms incl. U+2028 (bytes e2 80 a8 present); (3) paths unknown-verb 3-case table drives through production main(); (4) per-case findingID attribution correct for all 12 cases; (5) startCannedDaemonAssertCmd asserts req["command"] per ADR-012; (6) bare_sessions asserts E-NET-001 fingerprint. OBS-B-001 reconciliation comment (production_exit_code_test.go:404-407) orchestrator-verified — no live contradiction. OBS-B-002 "status" oracle weakness in paths_unknown_verb_status case. OBS-B-003 U+2028 hexdump comment suggestion in phase5_pass8_destroy_test.go. |
+
+**Read-cap disclosures:**
+- Adv-A: 5 files read, within 6-file cap. No overage.
+- Adv-B: 7 full-file reads (1 over cap, disclosed) + 2 partial windows on admin_handlers.go.
+
+**DRIFT item filed:** DRIFT-P5P9-STALE-RECONCILIATION-COMMENT (LOW) — production_exit_code_test.go:404-407 references renamed test; comment-only fix; ride next code PR. Also includes OBS-P5P9-B-003 U+2028 hexdump comment as same rider.
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 29 spec-only remediation (v1.21) pending: annotate §94-95, document --target default, audit §110/§120 exit-code tables, fix §48 synopsis, add §128 footnote.
+
 **BC-5.39.001 streak:** 0/3 — remediation complete, streak counter reset unchanged (remediation burst does not increment streak). Pass 9 targets 0→1.
