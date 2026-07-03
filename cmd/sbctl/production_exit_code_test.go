@@ -187,6 +187,10 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 		args             []string // full argument list passed to main() after the binary name
 		wantExitCode     int
 		wantStderrSubstr string // must appear in stderr
+		// findingID is the canonical finding tag for failure messages.
+		// F-P5P8-B-001: cases 1-6 trace to F-P5P6-A-001; cases 7-12 trace to
+		// F-P5P7-A-001/002/003.  A shared hardcoded tag misattributes failures.
+		findingID string
 	}{
 		{
 			// Case 1: E-CFG-012 — --yes + --confirm combined on destroy.
@@ -203,6 +207,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "E-CFG-012",
+			findingID:        "F-P5P6-A-001",
 		},
 		{
 			// Case 2: E-CFG-013 — non-TTY session, no --confirm, no --yes on destroy.
@@ -218,6 +223,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "E-CFG-013",
+			findingID:        "F-P5P6-A-001",
 		},
 		{
 			// Case 3: missing required --name flag on destroy.
@@ -229,6 +235,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "--name",
+			findingID:        "F-P5P6-A-001",
 		},
 		{
 			// Case 4: unknown admin subcommand.
@@ -240,6 +247,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "bogus",
+			findingID:        "F-P5P6-A-001",
 		},
 		{
 			// Case 5: admin key register — missing required --key flag.
@@ -252,6 +260,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "--key",
+			findingID:        "F-P5P6-A-001",
 		},
 		{
 			// Case 6: unknown top-level subcommand.
@@ -266,6 +275,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "bogus",
+			findingID:        "F-P5P6-A-001",
 		},
 		// ── Cases 7-12: F-P5P7-A-001/002/003 — console/router usage errors ──
 		// console.go and router_*.go currently return plain fmt.Errorf for all
@@ -284,6 +294,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "attach",
+			findingID:        "F-P5P7-A-001",
 		},
 		{
 			// Case 8: `sbctl console bogus` — unknown sub-verb.
@@ -297,6 +308,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "bogus",
+			findingID:        "F-P5P7-A-001",
 		},
 		{
 			// Case 9: `sbctl console attach` without --session.
@@ -310,6 +322,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "--session",
+			findingID:        "F-P5P7-A-001",
 		},
 		{
 			// Case 10: `sbctl console switch` without --session.
@@ -323,6 +336,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "--session",
+			findingID:        "F-P5P7-A-001",
 		},
 		{
 			// Case 11: `sbctl router metrics` without --svtn.
@@ -338,6 +352,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "E-CFG-010",
+			findingID:        "F-P5P7-A-002",
 		},
 		{
 			// Case 12: `sbctl router status --target` with no trailing value.
@@ -352,6 +367,7 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "E-CFG-010",
+			findingID:        "F-P5P7-A-003",
 		},
 	}
 
@@ -363,12 +379,12 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			exitCode, stdout, stderr := runProductionMain(t, tc.args...)
 
 			if exitCode != tc.wantExitCode {
-				t.Errorf("F-P5P6-A-001: expected exit code %d, got %d\nstdout: %q\nstderr: %q",
-					tc.wantExitCode, exitCode, stdout, stderr)
+				t.Errorf("%s: expected exit code %d, got %d\nstdout: %q\nstderr: %q",
+					tc.findingID, tc.wantExitCode, exitCode, stdout, stderr)
 			}
 			if tc.wantStderrSubstr != "" && !strings.Contains(stderr, tc.wantStderrSubstr) {
-				t.Errorf("F-P5P6-A-001: expected stderr to contain %q; got: %q",
-					tc.wantStderrSubstr, stderr)
+				t.Errorf("%s: expected stderr to contain %q; got: %q",
+					tc.findingID, tc.wantStderrSubstr, stderr)
 			}
 		})
 	}
@@ -538,12 +554,18 @@ func TestProductionMain_Sessions_SubVerbValidation(t *testing.T) {
 		t.Parallel()
 
 		args := []string{"--target", target, "--key", keyPath, "sessions"}
-		exitCode, _, _ := runSessionsMain(t, args...)
+		exitCode, _, stderr := runSessionsMain(t, args...)
 		// exit 1 means runSessions dispatched to sessions.list and got a network error
 		// (no daemon at the dummy target).  exit 2 means it hit a usage-error branch
 		// before the network call — the default-to-list fallback is broken.
 		if exitCode != 1 {
 			t.Errorf("F-P5P6-A-003: bare 'sbctl sessions' should default to sessions.list (exit 1 on E-NET-001), got exit %d", exitCode)
+		}
+		// OBS-P5P8-B-001: guard that the sessions.list network-error path emits
+		// E-NET-001 on stderr.  If this fails the dispatch reached sessions.list
+		// but the error-formatting path changed.
+		if !strings.Contains(stderr, "E-NET-001") {
+			t.Errorf("OBS-P5P8-B-001: bare 'sbctl sessions' expected stderr to contain E-NET-001; got: %q", stderr)
 		}
 	})
 }
