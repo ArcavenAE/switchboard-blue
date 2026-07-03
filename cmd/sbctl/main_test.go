@@ -268,13 +268,15 @@ func TestSbctl_NoStdoutOnConnectionFailure(t *testing.T) {
 	}
 }
 
-// TestSubprocessMain_NoArgs is the subprocess hook for TestSbctl_NoSubcommand_ExitsZero.
+// TestSubprocessMain_NoArgs is the subprocess hook for TestSbctl_NoSubcommand_ExitsTwoAfterP6.
 // When SBCTL_TEST_MAIN_NOARGS=1 is set, it resets flag.CommandLine and os.Args so
 // that main() sees an invocation with no subcommand arguments, then calls main().
 // main() calls os.Exit — this test function never returns normally in the subprocess.
 // In the parent process (env var absent), t.Skip skips it immediately.
 //
-// AC-012 (BC-2.07.002 EC-003): no-subcommand → stdout + exit 0.
+// CONTRACT CHANGE (F-P5P6-A-006, Burst 23): no-subcommand → stderr + exit 2.
+// Old contract was AC-012 (BC-2.07.002 EC-003): stdout + exit 0.
+// Spec amendment pending in the Burst 23 spec-steward pass.
 func TestSubprocessMain_NoArgs(t *testing.T) {
 	if os.Getenv("SBCTL_TEST_MAIN_NOARGS") != "1" {
 		t.Skip("subprocess hook — skip in parent process")
@@ -301,7 +303,7 @@ func TestSubprocessMain_NoArgs(t *testing.T) {
 // Story trace: AC-012 was defined in S-6.03 (BC-2.07.002 EC-003).
 // The spec-steward must update BC-2.07.002 EC-003 to reflect exit 2 and
 // stderr output in a follow-on spec-side pass.
-func TestSbctl_NoSubcommand_ExitsZero(t *testing.T) {
+func TestSbctl_NoSubcommand_ExitsTwoAfterP6(t *testing.T) {
 	t.Parallel()
 
 	// Re-exec this test binary, landing in TestSubprocessMain_NoArgs.

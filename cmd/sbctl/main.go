@@ -71,32 +71,30 @@ func main() {
 	case "paths":
 		// `sbctl paths list` — canonical per-path metrics command (BC-2.06.003 PC-1).
 		if len(args) < 2 || args[1] != "list" {
-			fmt.Fprintf(os.Stderr, "usage: sbctl paths list\n")
-			os.Exit(2)
+			err = usageErrf("usage: sbctl paths list")
+		} else {
+			err = runPathsList(ctx, *target, *key, *jsonOut, sio)
 		}
-		err = runPathsList(ctx, *target, *key, *jsonOut, sio)
 	case "router":
 		// `sbctl router metrics --svtn=<id>` or `sbctl router status --target <router>`.
 		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "usage: sbctl router <metrics|status> [flags]\n")
-			os.Exit(2)
-		}
-		switch args[1] {
-		case "metrics":
-			err = runRouterMetrics(ctx, *target, *key, *jsonOut, args[2:], sio)
-		case "status":
-			err = runRouterStatus(ctx, *target, *key, *jsonOut, args[2:], sio)
-		default:
-			fmt.Fprintf(os.Stderr, "unknown router subcommand: %s\n", args[1])
-			os.Exit(2)
+			err = usageErrf("usage: sbctl router <metrics|status> [flags]")
+		} else {
+			switch args[1] {
+			case "metrics":
+				err = runRouterMetrics(ctx, *target, *key, *jsonOut, args[2:], sio)
+			case "status":
+				err = runRouterStatus(ctx, *target, *key, *jsonOut, args[2:], sio)
+			default:
+				err = usageErrf("router: unknown subcommand %q; expected 'metrics' or 'status'", args[1])
+			}
 		}
 	case "console":
 		err = runConsole(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "admin":
 		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:], sio)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\nrun 'sbctl' with no args for usage\n", subcommand)
-		os.Exit(2)
+		err = usageErrf("unknown subcommand: %s\nrun 'sbctl' with no args for usage", subcommand)
 	}
 
 	if err != nil {

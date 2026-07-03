@@ -388,6 +388,20 @@ func TestProductionMain_Sessions_SubVerbValidation(t *testing.T) {
 			wantStderrSubstr: "attach",
 		},
 		{
+			// detach → not-implemented, exit 2, stderr names the verb
+			name:             "detach_not_implemented",
+			subVerb:          "detach",
+			wantExitCode:     2,
+			wantStderrSubstr: "detach",
+		},
+		{
+			// status → not-implemented, exit 2, stderr names the verb
+			name:             "status_not_implemented",
+			subVerb:          "status",
+			wantExitCode:     2,
+			wantStderrSubstr: "status",
+		},
+		{
 			// bogus → unknown sub-verb, exit 2, stderr names "bogus"
 			name:             "bogus_unknown_subverb",
 			subVerb:          "bogus",
@@ -418,4 +432,21 @@ func TestProductionMain_Sessions_SubVerbValidation(t *testing.T) {
 			}
 		})
 	}
+
+	// Bare `sbctl sessions` (no sub-verb) defaults to sessions.list.  With no
+	// daemon listening it exits 1 (E-NET-001), not 2.  This guards the subVerb
+	// default in runSessions() — if the default were removed or inverted the
+	// test would see exit 2 (usage-error) instead of exit 1 (connection error).
+	t.Run("bare_sessions_defaults_to_list", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--target", target, "--key", keyPath, "sessions"}
+		exitCode, _, _ := runSessionsMain(t, args...)
+		// exit 1 means runSessions dispatched to sessions.list and got a network error
+		// (no daemon at the dummy target).  exit 2 means it hit a usage-error branch
+		// before the network call — the default-to-list fallback is broken.
+		if exitCode != 1 {
+			t.Errorf("F-P5P6-A-003: bare 'sbctl sessions' should default to sessions.list (exit 1 on E-NET-001), got exit %d", exitCode)
+		}
+	})
 }
