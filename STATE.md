@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-7-complete-has-findings
+phase_step: phase-5-pass-7-remediation-complete
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -27,10 +27,10 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 4d7d9e0
+develop_head: b4ccd06
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-7-remediation
+awaiting: phase-5-pass-8-dispatch
 historical_cycles: []
 timestamp: 2026-07-03T00:00:00Z
 last_update: 2026-07-03
@@ -40,8 +40,8 @@ last_update: 2026-07-03
 
 ## Current State
 
-Phase 5 Pass 7 split-adversary COMPLETE (Burst 24). Adv-A HAS_FINDINGS 0H/3M/0L+1obs (F-P5P7-A-001..003 — console/router usage errors still plain fmt.Errorf → exit 1; same class as F-P5P6-A-001, console/router trees missed by Burst 23 sweep; OBS-A-001: production_exit_code_test.go covers zero console/router cases — RED enumeration was the effective contract). Adv-B CLEAN 0/0/0+5obs (exit-code discriminator coverage adequate on covered branches; OBS-B-003 stale docstring, OBS-B-004 comment drift, others cosmetic). Adv-A read overage 8/6 self-disclosed. Burst 25 remediation pending (code-only, no spec changes — §174 correct, impl stale). BC-5.39.001 streak 0/3.
-develop HEAD: 4d7d9e0. 45 BCs, 76 VPs, 53 stories (backlog +1 S-BL.CLI-SURFACE-COMPLETION), 18 internal packages.
+Phase 5 Pass 7 remediation COMPLETE (Burst 25). PR #66 b4ccd06 merged: 10 usage-error sites converted to usageErrf (console.go ×7, router_metrics.go ×1, router_status.go ×2); production_exit_code_test.go table extended to 12 cases (6 console/router RED-first); completeness grep audit: no residual usage-error-class fmt.Errorf in cmd/sbctl. Reviewer: no blockers, MINOR count-cosmetic + 2 follow-ons (O-1 router status --target= empty-value path lacks dedicated test; O-4 admin.go:395 interactive-confirm mismatch adjudication pending). OBS-B-003/004 comment fixes included. BC-5.39.001 streak 0/3; Pass 8 targets 0→1.
+develop HEAD: b4ccd06. 45 BCs, 76 VPs, 53 stories (backlog +1 S-BL.CLI-SURFACE-COMPLETION), 18 internal packages.
 
 NO-GOVERNING-BC obligations: `paths ping` (§77) + `svtn status` (§62) — architect ruling or new BC required before S-BL.CLI-SURFACE-COMPLETION scheduling.
 
@@ -56,7 +56,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_7_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → rem pending |
+| Phase 5 — Adversarial Refinement | PASS_7_REMEDIATION_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 4d7d9e0 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8 dispatch next |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -69,6 +69,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-03 | Phase 5 Pass 6 split-adversary vs d012dbf + interface-definitions v1.18 | COMPLETED | Adv-A HAS_FINDINGS 1H/4M/1L (F-P5P6-A-001..006); Adv-B CLEAN 0/0/0+2obs. Burst 23 remediation pending. |
 | 2026-07-03 | Phase 5 Pass 6 remediation (Burst 23) | COMPLETED | Code track: PR #65 4d7d9e0 merged (usageError exit-code discrimination, sessions sub-verb routing, bare-sbctl exit 2; RED 8692237 → GREEN e83c69e → triage 4540180; reviewer APPROVED 6 LOW, 4 applied 2 deferred). Spec track: interface-definitions v1.19 + BC-2.07.002 v1.9 (EC-003 0→2) + S-6.03 v2.8 (AC-012) — all claims file:line-verified against merged tree. Stub S-BL.CLI-SURFACE-COMPLETION minted (paths ping + svtn status flagged NO-GOVERNING-BC design obligations). F-A-004 adjudicated spec-side (S-7.03 converged shape authoritative). |
 | 2026-07-03 | Phase 5 Pass 7 split-adversary vs 4d7d9e0 + v1.19 | COMPLETED | Adv-A HAS_FINDINGS 0H/3M/0L+1obs (F-P5P7-A-001..003 — console/router usage errors still plain fmt.Errorf → exit 1; same class as F-P5P6-A-001, console/router trees missed by Burst 23 sweep; OBS-A-001: production_exit_code_test.go covers zero console/router cases — RED enumeration was the effective contract). Adv-B CLEAN 0/0/0+5obs (exit-code discriminator coverage adequate on covered branches; OBS-B-003 stale docstring, OBS-B-004 comment drift, others cosmetic). Adv-A read overage 8/6 self-disclosed. Burst 25 remediation pending (code-only, no spec changes — §174 correct, impl stale). |
+| 2026-07-03 | Phase 5 Pass 7 remediation (Burst 25, code-only) | COMPLETED | PR #66 b4ccd06 merged: 10 usage-error sites converted to usageErrf (console.go ×7, router_metrics.go ×1, router_status.go ×2); production_exit_code_test.go table extended to 12 cases (6 console/router RED-first); completeness grep audit: no residual usage-error-class fmt.Errorf in cmd/sbctl. Reviewer: no blockers, MINOR count-cosmetic + 2 follow-ons. OBS-B-003/004 comment fixes included. |
 
 ## Wave 6 Story Status
 
@@ -149,6 +150,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P4-ADMINWIRE-EXTRACTION | LOW | 2026-07-03 | DEFERRED: Wire arg struct types (`KeyRegisterArgs`, `KeyRevokeArgs`, `SVTNDestroyArgs`) currently defined inline in `cmd/switchboard/admin_handlers.go`. Both sbctl-side and switchboard-side tests cross-assert the wire contract (see `admin_handlers_wire_shared_pkg_test.go` + `admin_test.go:2093`). A future refactor may extract to `internal/adminwire` shared package — see code comment in `admin_handlers_wire_shared_pkg_test.go:7,33`. No behavior gap; deferred to maintenance cycle or Wave-7+. |
 | DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR | LOW | 2026-07-03 | [process-gap] No rule enforces that tests asserting a code minted in taxonomy vX.Y cite ≥ vX.Y. Source: F-P5P5-B-001 (E-CFG-013 anchored to v4.4 in test docstrings, but E-CFG-013 was minted in v4.6 — historically impossible citation). Deferred to upstream: vsdd-factory issue draft pending (Batch 30 tracker). Target: next maintenance cycle. |
 | DRIFT-P5P6-ANNOTATION-EXITCODE | MED | 2026-07-03 | RESOLVED (Burst 23): PR #65 4d7d9e0 — exit 2 for unknown-subcommand wired; v1.19 §121 re-verified against merged tree. Verify-then-claim discipline applied. |
+| DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | 2026-07-03 | router status --target= (empty value) path converted but lacks dedicated test case; 3 fs.Parse paths likewise; PR #66 review O-1. Follow-on micro-addition to the production_exit_code_test.go table. |
+| DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | 2026-07-03 | admin.go:395 interactive-confirm mismatch returns plain fmt.Errorf while --confirm sibling uses usageErrf; needs adjudication whether interactive-mismatch is usage-class (spec §129/§130) before converting; PR #66 review O-4. |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
@@ -166,6 +169,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | Phase 5 Pass 6 HAS_FINDINGS | Adv-A 1H/4M/1L (CLI dispatch layer); Adv-B CLEAN 0/0/0+2obs; streak holds 0/3; Burst 23 remediation pending | 2026-07-03 |
 | Phase 5 Pass 6 REMEDIATION COMPLETE | Burst 23: PR #65 4d7d9e0 (exit-code discrimination, sessions dispatch, bare-sbctl exit 2); interface-definitions v1.19; BC-2.07.002 v1.9 (EC-003 0→2); S-6.03 v2.8 (AC-012); S-BL.CLI-SURFACE-COMPLETION stub; F-A-004 adjudicated spec-side; streak 0/3; Pass 7 next | 2026-07-03 |
 | Phase 5 Pass 7 HAS_FINDINGS | Adv-A 0H/3M/0L (console/router usageErrf gap — same class as P6 A-001, Burst 23 sweep missed these trees); Adv-B CLEAN 0/0/0+5obs; streak holds 0/3; Burst 25 remediation pending (code-only) | 2026-07-03 |
+| Phase 5 Pass 7 REMEDIATION COMPLETE | Burst 25: PR #66 b4ccd06 (usageErrf sweep: console.go ×7, router_metrics.go ×1, router_status.go ×2; production_exit_code_test.go +12 cases); completeness grep clean; streak 0/3; Pass 8 next | 2026-07-03 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -183,18 +187,13 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-03T00:00:00Z
-**Post-burst:** Burst 24 (Phase 5 Pass 7 split-adversary: Adv-A HAS_FINDINGS 0H/3M + Adv-B CLEAN)
-**Pipeline state:** Phase 5 Pass 7 COMPLETE; streak 0/3; Burst 25 remediation pending
+**Post-burst:** Burst 25 (Phase 5 Pass 7 remediation: code-only usageErrf sweep, PR #66 merged)
+**Pipeline state:** Phase 5 Pass 7 REMEDIATION COMPLETE; streak 0/3; Pass 8 dispatch next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** 4d7d9e0 (PR #65 squash-merge — unchanged)
+**Develop HEAD:** b4ccd06 (PR #66 squash-merge)
 
-**Burst 24 deltas:**
-- Adv-A (public-surface + operator-UX): HAS_FINDINGS 0H/3M/0L+1obs. F-P5P7-A-001/002/003 — console/router verb families use plain fmt.Errorf throughout; same defect class as F-P5P6-A-001 (exit-code collapse). Burst 23 usageErrf sweep covered admin+sessions only; console.go + router_metrics.go + router_status.go were missed. OBS-A-001: production_exit_code_test.go has zero console/router cases — the RED-gate enumeration was the effective contract for what Burst 23 fixed.
-- Adv-B (test-rigor + traceability): CLEAN 0/0/0+5obs. Discriminator coverage adequate for covered branches (admin+sessions). Five cosmetic observations (vestigial field, narrow oracle, stale docstring, comment drift, intentional redundancy).
-- Read overages: Adv-A 8/6 self-disclosed; Adv-B within cap.
-- Idle-without-report count this pass: 2/2 (both adversaries required explicit SendMessage ping to retrieve reports — consistent with prior pass pattern).
-- BC-5.39.001 streak: 0/3.
+**Burst 25 deltas:** RED ecd833f → GREEN aabc62b → PR #66 → merge b4ccd06. 10 usageErrf conversions (console.go ×7, router_metrics.go ×1, router_status.go ×2); production_exit_code_test.go +12 cases (6 console/router RED-first); completeness grep clean. No spec changes (§174 already correct). Reviewer: no blockers, MINOR cosmetic + follow-ons O-1/O-4 tracked as DRIFT-P5P7-O1/O4. BC-5.39.001 streak: 0/3.
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → rem pending
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM Burst 21) → P6: Adv-A 1H/4M/1L + Adv-B CLEAN(2obs) → REM (Burst 23: PR #65 + v1.19/BC v1.9/S-6.03 v2.8) → P7: Adv-A 0H/3M/0L + Adv-B CLEAN(5obs) → REM (Burst 25: PR #66 b4ccd06, usageErrf sweep complete) → P8 dispatch next
 
-**Next action:** Burst 25 — code-only remediation of F-P5P7-A-001/002/003. Scope: wrap plain fmt.Errorf calls in console.go (7 sites), router_metrics.go (1 site), router_status.go (2 sites) with usageErrf; extend production_exit_code_test.go with console+router fixture cases. No spec changes — §174 correct, impl stale. Auto Mode: active (Path B). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Next action:** Burst 26 — Phase 5 Pass 8 fresh-context split-adversary dispatch against develop tip b4ccd06. BC-5.39.001 streak 0/3; Pass 8 targets 0→1. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

@@ -1165,3 +1165,32 @@ The VSDD process principle is that converged implementation (merged code + passi
 **Lesson (NOT a new drift item — recorded here for future dispatch hardening):** TDD-sweep lesson — when remediating a defect class across multiple code paths, the RED enumeration MUST carry the full class sweep. Listing paths in the implementer brief without corresponding RED fixture rows creates a silent gap: minimum-code-to-green makes the fixture table the contract, not the brief. Future defect-class remediations: RED enumeration in production_exit_code_test.go (or equivalent gate test) must enumerate EVERY instance of the defect class before the implementer receives the green target.
 
 **BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds at 0. Burst 25 remediation pending (code-only; no spec changes — §174 correct, impl stale).
+
+---
+
+## Phase 5 — Burst 25 / Pass 7 Remediation (2026-07-03)
+
+**Agents dispatched:** implementer (code track), pr-manager, state-manager
+**Dispatch basis:** F-P5P7-A-001/002/003 — usageErrf class missing in console.go (7 sites), router_metrics.go (1 site), router_status.go (2 sites)
+**Develop HEAD before:** 4d7d9e0. **Develop HEAD after:** b4ccd06 (PR #66 squash-merge)
+**Spec changes:** none — §174 was already correct; impl was stale
+
+**Summary:** Code-only remediation. TDD cycle: RED ecd833f → GREEN aabc62b → PR #66 → merge b4ccd06. 10 usage-error sites converted to usageErrf; production_exit_code_test.go extended to 12 cases (6 new console/router RED-first). Completeness grep audit — no residual usage-error-class fmt.Errorf in cmd/sbctl — applied before green-claim. The Burst 23 miss-class (RED enumeration as effective contract for scope) did not recur: the RED gate this time explicitly enumerated console + router paths. Reviewer approved with no blockers; follow-ons O-1/O-4 tracked as DRIFT items.
+
+| Commit | Description |
+|--------|-------------|
+| ecd833f | RED: production_exit_code_test.go — 6 console/router fixture rows (all expected exit 2, all failing) |
+| aabc62b | GREEN: console.go ×7 + router_metrics.go ×1 + router_status.go ×2 converted to usageErrf; completeness grep clean |
+| PR #66 | Squash-merged → b4ccd06; CI green; OBS-B-003/OBS-B-004 comment fixes included in merge |
+
+**Reviewer findings triage:**
+
+| Item | Class | Disposition |
+|------|-------|-------------|
+| MINOR: test-count comment cosmetic | cosmetic | deferred maintenance |
+| O-1: router status --target= empty-value path lacks dedicated test | LOW | DRIFT-P5P7-O1-TARGET-EMPTY-TEST filed |
+| O-4: admin.go:395 interactive-confirm mismatch — plain fmt.Errorf vs usageErrf | LOW | DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY filed; needs spec adjudication (§129/§130) before converting |
+
+**Ops near-miss note:** During merge post-processing, the orchestrator shell's cwd-persistence briefly switched the .factory worktree onto develop. No loss occurred — factory-artifacts was fully committed and pushed at 8ee08c6 before the cwd switch, and all worktrees were restored and verified. Class: nested-worktree hazard, upstream #342-adjacent. No drift items filed (one-off; state was clean at all times).
+
+**BC-5.39.001 streak:** 0/3 — Pass 8 targets 0→1. Dispatch against b4ccd06 + interface-definitions v1.19.
