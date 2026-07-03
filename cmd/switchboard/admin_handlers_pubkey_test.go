@@ -1,10 +1,9 @@
-// admin_handlers_pubkey_test.go — RED tests for Phase 5 Pass 4 remediation.
+// admin_handlers_pubkey_test.go — regression guards for OpenSSH pubkey parsing.
 //
-// Covers F-A-010 (HIGH): decodePublicKey only accepts base64; must also accept
-// OpenSSH authorized_keys format ("ssh-ed25519 AAAA... comment").
-//
-// These tests MUST FAIL until decodePublicKey is updated to parse OpenSSH
-// format via golang.org/x/crypto/ssh.ParseAuthorizedKey.
+// Guards the F-A-010 fix: decodePublicKey accepts OpenSSH authorized_keys
+// format ("ssh-ed25519 AAAA... comment") in addition to raw base64.
+// A regression that removes the ssh.ParseAuthorizedKey branch from
+// decodePublicKey (admin_handlers.go) would cause these assertions to fail.
 //
 // IMPORTANT: DO NOT touch implementation code. This file is tests only.
 package main
@@ -42,10 +41,10 @@ func generateOpenSSHPubkey(t *testing.T, comment string) (ed25519.PublicKey, str
 	return pub, openssh
 }
 
-// TestNewInBurst19_DecodePublicKey_AcceptsOpenSSH verifies that decodePublicKey
+// TestNewInBurst19_DecodePublicKey_AcceptsOpenSSH guards that decodePublicKey
 // accepts the OpenSSH authorized_keys format used by real ssh key files.
-//
-// MUST FAIL with current base64-only decodePublicKey implementation.
+// A regression that removes the ssh.ParseAuthorizedKey branch from
+// decodePublicKey would cause these cases to fail with a base64-decode error.
 func TestNewInBurst19_DecodePublicKey_AcceptsOpenSSH(t *testing.T) {
 	t.Parallel()
 
@@ -70,11 +69,12 @@ func TestNewInBurst19_DecodePublicKey_AcceptsOpenSSH(t *testing.T) {
 				t.Fatalf("generateOpenSSHPubkey produced unexpected format: %q", openssh)
 			}
 
-			// This call FAILS with current code because decodePublicKey only accepts
-			// raw base64, not the "ssh-ed25519 <b64> <comment>" format.
+			// Regression guard: decodePublicKey must accept the OpenSSH format.
+			// A regression removing the ssh.ParseAuthorizedKey branch would produce
+			// an error here on the "ssh-ed25519 <b64> <comment>" input.
 			got, err := decodePublicKey(openssh)
 			if err != nil {
-				t.Fatalf("decodePublicKey(OpenSSH format) returned error: %v\n  input: %q\n  (decodePublicKey must accept OpenSSH format; currently only accepts raw base64)", err, openssh)
+				t.Fatalf("decodePublicKey(OpenSSH format) returned error: %v\n  input: %q\n  (regression: OpenSSH branch removed from decodePublicKey)", err, openssh)
 			}
 			if len(got) != ed25519.PublicKeySize {
 				t.Errorf("decodePublicKey returned key of length %d; want %d", len(got), ed25519.PublicKeySize)
@@ -83,11 +83,10 @@ func TestNewInBurst19_DecodePublicKey_AcceptsOpenSSH(t *testing.T) {
 	}
 }
 
-// TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes verifies that
+// TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes guards that
 // the ed25519.PublicKey returned by decodePublicKey for an OpenSSH-format input
-// equals the original public key bytes.
-//
-// MUST FAIL with current code.
+// equals the original public key bytes.  A regression removing the OpenSSH
+// parsing branch would cause the call to error before this byte-equality check.
 func TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes(t *testing.T) {
 	t.Parallel()
 
@@ -95,7 +94,7 @@ func TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes(t *testing.T) 
 
 	got, err := decodePublicKey(openssh)
 	if err != nil {
-		t.Fatalf("decodePublicKey(OpenSSH format) returned error: %v\n  (must accept OpenSSH format)", err)
+		t.Fatalf("decodePublicKey(OpenSSH format) returned error: %v\n  (regression: OpenSSH branch removed)", err)
 	}
 
 	// The returned key bytes must match the original ed25519 public key.
@@ -104,17 +103,14 @@ func TestNewInBurst19_DecodePublicKey_OpenSSH_ReturnsCorrectBytes(t *testing.T) 
 	}
 }
 
-// TestNewInBurst19_DecodePublicKey_OpenSSH_WrongKeyType verifies that a
-// non-ed25519 OpenSSH key (e.g. rsa or ecdsa prefix) is rejected.
+// TestNewInBurst19_DecodePublicKey_OpenSSH_WrongKeyType guards that a
+// non-ed25519 OpenSSH key (e.g. rsa or ecdsa prefix) is rejected with a
+// type-specific error, not silently accepted.
 //
-// This is a negative test to ensure that OpenSSH parsing does NOT silently
-// accept unsupported key types. SHOULD FAIL until the parser is in place
-// (because currently ANY non-base64 string returns an error rather than a
-// type-specific error, so this may pass vacuously — but once the OpenSSH
-// parser is added, the type check must be tested explicitly).
-//
-// MUST FAIL with current code because the error message won't say "must be
-// ed25519" — it will say "not valid base64".
+// This test exercises the ed25519-type-check branch that fires AFTER
+// ssh.ParseAuthorizedKey succeeds.  A regression removing the type check
+// would allow non-ed25519 keys through; a regression removing the OpenSSH
+// parser entirely would change the error from a type error to a base64 error.
 func TestNewInBurst19_DecodePublicKey_OpenSSH_WrongKeyType_RejectsWithTypeError(t *testing.T) {
 	t.Parallel()
 	// Generate a real RSA key so ssh.ParseAuthorizedKey succeeds and the

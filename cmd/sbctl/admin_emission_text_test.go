@@ -2,7 +2,7 @@
 //
 // Covers F-A-003 / F-B-001 (HIGH): E-CFG-012 emission text mismatch.
 //
-// Canonical (taxonomy v4.4):
+// Canonical (taxonomy v4.6):
 //
 //	"E-CFG-012: --yes cannot be combined with --confirm; pick one"
 //
@@ -22,7 +22,7 @@ import (
 //
 // Using HasPrefix rather than Contains ensures the error code appears at the
 // start of the message — a code embedded mid-message would pass a Contains
-// check but violate the canonical emission requirement (taxonomy v4.4).
+// check but violate the canonical emission requirement (taxonomy v4.6).
 func assertErrorPrefix(t *testing.T, err error, want string) {
 	t.Helper()
 	if err == nil {
@@ -36,7 +36,7 @@ func assertErrorPrefix(t *testing.T, err error, want string) {
 }
 
 // TestNewInBurst19_ECFG012_PickOne verifies that when --yes and --confirm are
-// both supplied, the error message says "pick one" (canonical taxonomy v4.4).
+// both supplied, the error message says "pick one" (canonical taxonomy v4.6).
 //
 // Green regression guard for F-A-003/F-B-001 — "pick one" phrase in E-CFG-012.
 func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
@@ -50,7 +50,7 @@ func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 		t.Fatal("runDestroyConfirmGate(confirm+yes): expected E-CFG-012 error, got nil")
 	}
 
-	// Must have E-CFG-012 as the exact prefix of the error message (taxonomy v4.4).
+	// Must have E-CFG-012 as the exact prefix of the error message (taxonomy v4.6).
 	assertErrorPrefix(t, err, "E-CFG-012: ")
 
 	msg := err.Error()
@@ -96,7 +96,7 @@ func TestNewInBurst19_ECFG012_PickOne_CanonicalExact(t *testing.T) {
 //
 // NOTE: NOT parallel — mutates package-level seam stdinIsTTY.
 //
-// Traces to Fix F-11A-4; ADR-004; interface-definitions.md v1.1 §129.
+// Traces to Fix F-11A-4; ADR-004; interface-definitions.md v1.17 §129/§130.
 func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.T) {
 	// NOT parallel: mutates package-level seam stdinIsTTY.
 	origIsTTY := stdinIsTTY
@@ -108,10 +108,10 @@ func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.
 	// confirmVal = "" (no --confirm), yes = false → Path 3 (non-TTY + no --confirm).
 	err := runDestroyConfirmGate("", false, "--name", sio)
 
-	// Must have E-CFG-013 as the exact prefix (canonical taxonomy v4.4).
+	// Must have E-CFG-013 as the exact prefix (canonical taxonomy v4.6).
 	assertErrorPrefix(t, err, "E-CFG-013: ")
 
-	// Must contain the full canonical body substring (taxonomy v4.4).
+	// Must contain the full canonical body substring (taxonomy v4.6).
 	const canonicalE013 = "E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes"
 	if !strings.Contains(err.Error(), canonicalE013) {
 		t.Errorf("E-CFG-013 body mismatch:\n got: %q\nwant substring: %q", err.Error(), canonicalE013)
@@ -210,7 +210,7 @@ func TestNewInBurst19_ECFG012_PickOne_ViaRunAdminSvtnDestroy(t *testing.T) {
 		t.Fatal("runAdminSvtnDestroy(--yes + --confirm): expected E-CFG-012, got nil")
 	}
 
-	// Must have E-CFG-012 as the exact prefix (taxonomy v4.4).
+	// Must have E-CFG-012 as the exact prefix (taxonomy v4.6).
 	assertErrorPrefix(t, err, "E-CFG-012: ")
 
 	msg := err.Error()

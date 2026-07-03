@@ -31,7 +31,7 @@ import (
 //
 // Using HasPrefix rather than Contains ensures the error code appears at the
 // start of the message — a code embedded mid-message would pass a Contains
-// check but violate the canonical emission requirement (taxonomy v4.4).
+// check but violate the canonical emission requirement (taxonomy v4.6).
 func assertErrorPrefix(t *testing.T, err error, want string) {
 	t.Helper()
 	if err == nil {
@@ -61,7 +61,7 @@ func TestNewInBurst19_EADM018_NoParenthetical(t *testing.T) {
 		t.Fatal("mapAdminError(ErrControlRevocationRequiresConfirm): expected non-nil error")
 	}
 
-	// Must have E-ADM-018 as the exact prefix of the error message (taxonomy v4.4).
+	// Must have E-ADM-018 as the exact prefix of the error message (taxonomy v4.6).
 	assertErrorPrefix(t, err, "E-ADM-018: ")
 
 	msg := err.Error()
@@ -142,7 +142,7 @@ func TestNewInBurst19_EADM018_NoParenthetical_ThroughHandler(t *testing.T) {
 		t.Fatal("expected E-ADM-018 for control-to-control without confirm; got nil")
 	}
 
-	// Must have E-ADM-018 as the exact prefix of the error message (taxonomy v4.4).
+	// Must have E-ADM-018 as the exact prefix of the error message (taxonomy v4.6).
 	assertErrorPrefix(t, gotErr, "E-ADM-018: ")
 
 	msg := gotErr.Error()
@@ -173,7 +173,7 @@ func TestNewInBurst19_EADM013_NoKeyWith(t *testing.T) {
 		t.Fatal("mapAdminError(ErrKeyNotRegistered): expected non-nil error")
 	}
 
-	// Must have E-ADM-013 as the exact prefix of the error message (taxonomy v4.4).
+	// Must have E-ADM-013 as the exact prefix of the error message (taxonomy v4.6).
 	assertErrorPrefix(t, mappedErr, "E-ADM-013: ")
 
 	msg := mappedErr.Error()
@@ -227,7 +227,7 @@ func TestNewInBurst19_EADM013_CanonicalMessageFormat(t *testing.T) {
 				t.Fatal("expected non-nil error")
 			}
 
-			// Must have E-ADM-013 as the exact prefix (taxonomy v4.4).
+			// Must have E-ADM-013 as the exact prefix (taxonomy v4.6).
 			assertErrorPrefix(t, mappedErr, "E-ADM-013: ")
 
 			msg := mappedErr.Error()

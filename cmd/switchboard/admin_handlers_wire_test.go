@@ -1,17 +1,15 @@
-// admin_handlers_wire_test.go — RED tests for Phase 5 Pass 4 remediation.
+// admin_handlers_wire_test.go — regression guards for daemon-side svtn_id wire-tag contract.
 //
-// Covers F-A-001 / F-A-002 (HIGH): wire field name drift.
-// sbctl structs use json:"svtn_id" but daemon structs use json:"svtn".
-// A JSON round-trip through the wire MUST populate the daemon SVTNName field.
-// These tests MUST FAIL until the daemon structs are updated to json:"svtn_id".
+// Guards the daemon-side svtn→svtn_id migration (F-A-001 / F-A-002, HIGH).
+// A regression in any of the four daemon arg structs (adminKeyRegisterArgs,
+// adminKeyRevokeArgs, adminKeyExpireArgs, adminListKeysArgs) from json:"svtn_id"
+// back to json:"svtn" would immediately fail these assertions.
 //
 // Test naming follows BC-based convention per VSDD factory test-writer rules.
-// Each function is named TestNewInBurst19_<subject> so that the Red Gate
-// command `go test ./cmd/... -run TestNewInBurst19` selects all new tests.
+// Each function is named TestNewInBurst19_<subject>.
 //
-// BC-2.05.004 / BC-2.07.001 — wire field names must be consistent.
-// F-A-001 (HIGH): all four daemon key/SVTN arg structs use json:"svtn" (wrong).
-// F-A-002 (HIGH): sbctl already uses json:"svtn_id" (correct spec-truth).
+// Spec anchors: BC-2.05.004 v1.12, BC-2.07.001 v1.13,
+// interface-definitions v1.17 §125 wire contract.
 //
 // IMPORTANT: DO NOT touch implementation code. This file is tests only.
 package main
@@ -56,12 +54,13 @@ type sbctlSideListKeysArgs struct {
 	CallerRole string `json:"caller_role"`
 }
 
-// TestNewInBurst19_WireField_KeyRegister_SvtnID verifies that JSON marshaled
-// by sbctl (using svtn_id) is correctly unmarshaled by the daemon's
-// adminKeyRegisterArgs struct.
+// TestNewInBurst19_WireField_KeyRegister_SvtnID guards the daemon-side
+// svtn→svtn_id migration for adminKeyRegisterArgs.  A regression from
+// json:"svtn_id" back to json:"svtn" would cause the round-trip assertion to
+// fail: sbctl encodes "svtn_id" but the daemon would read an empty SVTNName.
 //
-// MUST FAIL until daemon's adminKeyRegisterArgs is updated to json:"svtn_id".
-// Covers F-A-001 / F-A-002 (HIGH) for admin.key.register.
+// Covers F-A-001 / F-A-002 (HIGH) for admin.key.register; addresses
+// BC-2.05.004 v1.12, interface-definitions v1.17 §125 wire contract.
 func TestNewInBurst19_WireField_KeyRegister_SvtnID(t *testing.T) {
 	t.Parallel()
 
@@ -106,17 +105,16 @@ func TestNewInBurst19_WireField_KeyRegister_SvtnID(t *testing.T) {
 				t.Fatalf("marshal sbctl args: %v", err)
 			}
 
-			// Unmarshal into the daemon's struct. If the daemon uses json:"svtn"
-			// (current broken state), SVTNName will be empty after unmarshal.
+			// Unmarshal into the daemon's struct.  A regression from json:"svtn_id"
+			// back to json:"svtn" would leave SVTNName empty here.
 			var daemonArgs adminKeyRegisterArgs
 			if err := json.Unmarshal(payload, &daemonArgs); err != nil {
 				t.Fatalf("unmarshal into daemon adminKeyRegisterArgs: %v", err)
 			}
 
-			// This assertion FAILS with current code because daemon uses json:"svtn"
-			// but payload contains "svtn_id".
+			// Regression guard: SVTNName must be populated from the "svtn_id" key.
 			if daemonArgs.SVTNName != tc.wantSVTN {
-				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload was: %s\n  (daemon struct uses json:\"svtn\" — must be json:\"svtn_id\")",
+				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload was: %s\n  (regression: daemon struct reverted to json:\"svtn\")",
 					daemonArgs.SVTNName, tc.wantSVTN, payload)
 			}
 			if daemonArgs.PublicKey != tc.wantPubkey {
@@ -129,10 +127,10 @@ func TestNewInBurst19_WireField_KeyRegister_SvtnID(t *testing.T) {
 	}
 }
 
-// TestNewInBurst19_WireField_KeyRevoke_SvtnID verifies the same round-trip for
-// adminKeyRevokeArgs.
+// TestNewInBurst19_WireField_KeyRevoke_SvtnID guards the daemon-side
+// svtn→svtn_id migration for adminKeyRevokeArgs.  A regression to json:"svtn"
+// would leave SVTNName empty after round-trip, failing this assertion.
 //
-// MUST FAIL until daemon's adminKeyRevokeArgs is updated to json:"svtn_id".
 // Covers F-A-001 / F-A-002 (HIGH) for admin.key.revoke.
 func TestNewInBurst19_WireField_KeyRevoke_SvtnID(t *testing.T) {
 	t.Parallel()
@@ -170,17 +168,17 @@ func TestNewInBurst19_WireField_KeyRevoke_SvtnID(t *testing.T) {
 			}
 
 			if daemonArgs.SVTNName != tc.wantSVTN {
-				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload: %s\n  (daemon uses json:\"svtn\" — must be json:\"svtn_id\")",
+				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload: %s\n  (regression: daemon struct reverted to json:\"svtn\")",
 					daemonArgs.SVTNName, tc.wantSVTN, payload)
 			}
 		})
 	}
 }
 
-// TestNewInBurst19_WireField_KeyExpire_SvtnID verifies the same round-trip for
-// adminKeyExpireArgs.
+// TestNewInBurst19_WireField_KeyExpire_SvtnID guards the daemon-side
+// svtn→svtn_id migration for adminKeyExpireArgs.  A regression to json:"svtn"
+// would leave SVTNName empty after round-trip, failing this assertion.
 //
-// MUST FAIL until daemon's adminKeyExpireArgs is updated to json:"svtn_id".
 // Covers F-A-001 / F-A-002 (HIGH) for admin.key.expire.
 func TestNewInBurst19_WireField_KeyExpire_SvtnID(t *testing.T) {
 	t.Parallel()
@@ -218,17 +216,17 @@ func TestNewInBurst19_WireField_KeyExpire_SvtnID(t *testing.T) {
 			}
 
 			if daemonArgs.SVTNName != tc.wantSVTN {
-				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload: %s\n  (daemon uses json:\"svtn\" — must be json:\"svtn_id\")",
+				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload: %s\n  (regression: daemon struct reverted to json:\"svtn\")",
 					daemonArgs.SVTNName, tc.wantSVTN, payload)
 			}
 		})
 	}
 }
 
-// TestNewInBurst19_WireField_ListKeys_SvtnID verifies the same round-trip for
-// adminListKeysArgs.
+// TestNewInBurst19_WireField_ListKeys_SvtnID guards the daemon-side
+// svtn→svtn_id migration for adminListKeysArgs.  A regression to json:"svtn"
+// would leave SVTNName empty after round-trip, failing this assertion.
 //
-// MUST FAIL until daemon's adminListKeysArgs is updated to json:"svtn_id".
 // Covers F-A-001 / F-A-002 (HIGH) for admin.key.list-keys.
 func TestNewInBurst19_WireField_ListKeys_SvtnID(t *testing.T) {
 	t.Parallel()
@@ -266,18 +264,17 @@ func TestNewInBurst19_WireField_ListKeys_SvtnID(t *testing.T) {
 			}
 
 			if daemonArgs.SVTNName != tc.wantSVTN {
-				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload: %s\n  (daemon uses json:\"svtn\" — must be json:\"svtn_id\")",
+				t.Errorf("SVTNName round-trip: got %q, want %q\n  payload: %s\n  (regression: daemon struct reverted to json:\"svtn\")",
 					daemonArgs.SVTNName, tc.wantSVTN, payload)
 			}
 		})
 	}
 }
 
-// TestNewInBurst19_WireField_KeyRegister_MarshaledJSONContainsSvtnID verifies
-// that JSON marshaled from daemon args also uses "svtn_id" as the key
-// (regression guard: ensures both decode AND encode use svtn_id).
-//
-// MUST FAIL until daemon's adminKeyRegisterArgs is updated to json:"svtn_id".
+// TestNewInBurst19_WireField_KeyRegister_MarshaledJSONContainsSvtnID guards
+// that JSON marshaled from daemon adminKeyRegisterArgs uses "svtn_id" as the key.
+// A regression to json:"svtn" would make the "svtn_id" key absent and "svtn"
+// present, failing both assertions below.
 func TestNewInBurst19_WireField_KeyRegister_MarshaledJSONContainsSvtnID(t *testing.T) {
 	t.Parallel()
 
@@ -288,7 +285,7 @@ func TestNewInBurst19_WireField_KeyRegister_MarshaledJSONContainsSvtnID(t *testi
 	}
 
 	// The marshaled JSON must contain "svtn_id", not "svtn".
-	// This FAILS with current code because the tag is json:"svtn".
+	// A regression to json:"svtn" would invert both assertions below.
 	var decoded map[string]any
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("unmarshal to map: %v", err)
