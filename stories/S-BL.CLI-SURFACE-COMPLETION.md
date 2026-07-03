@@ -24,7 +24,7 @@ blocks: []
 acceptance_criteria_count: 0
 provenance:
   finding: F-P5P6-A-005
-  spec_annotation: interface-definitions.md v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION
+  spec_annotation: interface-definitions.md v1.20 PENDING-S-BL.CLI-SURFACE-COMPLETION
   adjudication: annotate-and-defer
 ---
 
@@ -35,7 +35,7 @@ provenance:
 
 ## Context
 
-Five `sbctl` verbs are specified in `interface-definitions.md` v1.19 but have no CLI
+Five `sbctl` verbs are specified in `interface-definitions.md` v1.20 but have no CLI
 dispatch case arm — they return unknown-subcommand usage errors (exit 2) on current builds
 (verified post-PR #65):
 
@@ -48,7 +48,8 @@ dispatch case arm — they return unknown-subcommand usage errors (exit 2) on cu
 | `sbctl svtn status --id=<svtn_id>` | §62 | Same — no `svtn` top-level case arm, exit 2 |
 
 These verbs were annotated collectively as `PENDING-S-BL.CLI-SURFACE-COMPLETION` in the
-v1.19 spec-side remediation during Burst 23, per F-P5P6-A-005.
+v1.19 spec-side remediation during Burst 23, per F-P5P6-A-005. The annotation carries
+forward in v1.20 (Burst 27 spec track).
 
 **Explicitly out of scope for this story:**
 
@@ -149,9 +150,10 @@ must be confirmed (candidates: `router.reload`, `router.drain`) against the daem
   router reload, router drain, svtn destroy, svtn status); two others resolved separately
   (svtn list → won't-fix S-BL.SVTN-LIST-WIRE; sessions attach/detach/status →
   S-BL.DISCOVERY-WIRE).
-- **Spec annotation:** interface-definitions.md v1.19 §60, §62, §77, §82, §83
-  PENDING-S-BL.CLI-SURFACE-COMPLETION annotation added as part of Burst 23 spec-side
-  remediation.
+- **Spec annotation:** interface-definitions.md v1.20 §60, §62, §77, §82, §83
+  PENDING-S-BL.CLI-SURFACE-COMPLETION annotation carries forward from Burst 23 (v1.19)
+  through Burst 27 (v1.20 — §108/§109 error-surface corrections, openssh-pubkey
+  placeholders, --role default documented, §395 authority note swept).
 - **Adjudication:** annotate-and-defer — consistent with S-BL.ADMIN-RECOVER-WIRE
   and prior wire-gap deferrals. Two of the five verbs (paths ping, svtn status) have
   no governing BC and require design work before implementation can begin.

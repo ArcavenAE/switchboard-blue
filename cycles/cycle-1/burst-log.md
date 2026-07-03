@@ -1219,3 +1219,41 @@ The VSDD process principle is that converged implementation (merged code + passi
 **Finding-class analysis:** Two distinct defect classes surfaced this pass. Adv-A findings A-001 through A-007 are all admin-key public-surface defects (spec-vs-impl divergence on the operator-facing command layer). Adv-B findings B-001 and B-002 are both [process-gap] test-infrastructure defects — not product behavior gaps, but oracles that fail to enforce what they claim to enforce. The process-gap tag indicates these are candidates for upstream vsdd-factory tooling improvements (test attribution enforcement, cmd-dispatch oracle pattern).
 
 **BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 27 remediation pending: code track (A-001/004/006 + B-001/002 + OBS-B-001) then spec track (A-002/003/005/007).
+
+---
+
+## Phase 5 — Burst 27 / Pass 8 Remediation (2026-07-03)
+
+**Scope:** Code track (F-A-001/004/006 + F-B-001/002 + OBS-B-001) then spec track (F-A-002/003/005/007).
+**Develop arc:** RED a258149 → GREEN 4128452 → lint ef9f52f → PR #67 merged → HEAD 32ea461.
+
+**Summary:** Pass 8 remediation complete across both tracks. Code track addressed all five product findings and the observation from Burst 26; spec track corrected four spec-vs-impl divergences in interface-definitions, bumping it to v1.20. BC-5.39.001 streak 0/3; Pass 9 dispatch is next.
+
+**Code track — PR #67 (32ea461):**
+
+| Finding | Resolution |
+|---------|------------|
+| F-A-001 [HIGH] confirm-gate wrong-command prefix | `runDestroyConfirmGate` refactored to accept `cmdName` parameter; all callers (register, revoke, expire, destroy) pass their own verb string. Confirm-gate message now accurately identifies the invoking command. |
+| F-A-004 [MED] destroy name-validation gap | `runAdminSvtnDestroy` calls `validateSVTNName` (existing function) before dispatching; additionally adds `utf8.Valid([]byte(name))` raw-bytes pre-check before the string-length check — catches invalid-UTF-8 sequences that `utf8.RuneCountInString` would process ambiguously. |
+| F-A-006 [MED] paths unknown-verb message | `paths` case error string aligned to router pattern: `"paths: unknown subcommand %q; expected list"` replacing bare `"usage: sbctl paths list"`. |
+| F-B-001 [MED] per-case finding attribution | `production_exit_code_test.go` failure arm split: Cases 1-6 cite F-P5P6-A-001 (their originating finding), Cases 7-12 cite F-P5P7-A-001/002/003 correctly. |
+| F-B-002 [MED] canned-daemon cmd-dispatch oracle vacuous | `serveCannedConn` in `router_status_test.go` now reads and asserts `req["command"]` (per ADR-012 NDJSON wire field name — confirmed `"command"` not `"cmd"` via grep of `internal/mgmt/server.go` before patching). |
+| OBS-B-001 bare_sessions exit-code-only oracle | `bare_sessions_defaults_to_list` test extended to assert E-NET-001 fingerprint in stderr, not exit-code only. |
+
+**Noteworthy subtlety — utf8.Valid before Unmarshal:** The destroy name-validation fix applies `utf8.Valid` on the raw `[]byte` before calling `utf8.RuneCountInString`. This ordering matters: `RuneCountInString` on a string containing invalid UTF-8 sequences will count replacement characters (U+FFFD) rather than erroring, potentially allowing overlong or malformed sequences to slip past the length gate. The pre-check closes this ordering gap at zero cost.
+
+**Noteworthy catch — req["command"] not req["cmd"]:** F-B-002 required asserting the wire field name used by `serveCannedConn`. ADR-012 §Wire Protocol specifies the NDJSON request field as `"command"`, which a grep of `internal/mgmt/server.go` confirmed. The patched assertion uses `req["command"]`. This verify-before-patch discipline prevented a fix that would have used `req["cmd"]` (matching the variable name in the test but not the wire contract) — a silent vacuous oracle of a different kind.
+
+**Spec track — interface-definitions v1.20:**
+
+| Finding | Resolution |
+|---------|------------|
+| F-A-002 [HIGH] §108 unreachable E-ADM-012 + E-ADM-018 | Both rows removed from §108 error table. LWW semantics (no dup-key possible in register) documented inline. E-ADM-018 noted as revoke-only per ADR-003. Actual register error surface documented: E-ADM-010 (auth), E-CFG-001 (malformed key), E-INT-001 (internal). |
+| F-A-003 [MED] --role silent default | §108 syntax block updated: `--role` marked optional with `[console]` default explicitly documented. Adjudicated spec-side (impl behavior is correct; spec was incomplete). |
+| F-A-005 [MED] §109 E-ADM-011 vs impl E-ADM-019 | §109 error row corrected: E-ADM-011 → E-ADM-019 with verbatim emission string `"key role mismatch: cannot revoke <role> key with <role> credentials"`. |
+| F-A-007 [LOW] <hex-pubkey> placeholders | Row headers in §108, §109, §110 updated: `<hex-pubkey>` → `<openssh-pubkey>` (three occurrences). §113 prose already correct; headers now match. |
+| PO §395 sweep | Authority note in §395 Registered Verbs table swept for consistency per PO verify-then-claim pass. |
+
+All five spec changes verified file:line against merged tree (32ea461) before committing. Verify-then-claim pattern maintained throughout.
+
+**BC-5.39.001 streak:** 0/3 — remediation complete, streak counter reset unchanged (remediation burst does not increment streak). Pass 9 targets 0→1.
