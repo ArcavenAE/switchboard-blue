@@ -2261,3 +2261,84 @@ func TestSbctlAdmin_ListKeys_MissingFlag_ReturnsError(t *testing.T) {
 		t.Errorf("F-P8-006 — list-keys missing --svtn: error %q does not mention 'svtn'; want flag-specific validation message", errStr)
 	}
 }
+
+// TestSbctlAdmin_ListKeys_CLI verifies F-P8-006 at the CLI integration layer:
+// `sbctl admin list-keys --svtn <id>` dispatches the admin.key.list-keys RPC
+// with the correct wire-format payload — specifically that the SVTN identifier
+// is sent as json:"svtn_id" (not the stale json:"svtn") from the production
+// inline anonymous struct inside runAdmin's list-keys case.
+//
+// This test catches tag regressions that the tautological mirror-struct test
+// TestNewInBurst19_SbctlListKeys_WireTag_SvtnID cannot: if a maintainer changes
+// the production struct's tag from json:"svtn_id" back to json:"svtn", this test
+// fails red while the mirror test remains green.
+//
+// NOTE: intentionally not parallel — this test uses startFakeServer which
+// accepts exactly one connection; no seam mutation needed, but the test is
+// kept sequential to match the pattern of other single-connection server tests
+// in this file.
+//
+// F-P8-006 (list-keys is `sbctl admin list-keys --svtn <id>`; wire: admin.key.list-keys).
+// interface-definitions.md §JSON Output Schema (json:"svtn_id" not json:"svtn").
+func TestSbctlAdmin_ListKeys_CLI(t *testing.T) {
+	t.Parallel()
+
+	// F-P8-006 — list-keys dispatches admin.key.list-keys with correct wire payload.
+	// The fake server captures the raw RPC args so we can verify the JSON tag.
+	const svtnName = "test-list-keys-svtn"
+
+	requestCh := make(chan adminRPCRequest, 1)
+	addr := startFakeServer(t, requestCh, func(cmd string, args json.RawMessage) (any, error) {
+		if cmd != "admin.key.list-keys" {
+			return nil, fmt.Errorf("unexpected command: %q; want admin.key.list-keys", cmd)
+		}
+		// Return a plausible empty key list so runAdmin can complete successfully.
+		_ = args
+		return []any{}, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+		"list-keys",
+		"--svtn", svtnName,
+	}, defaultIO())
+	if err != nil {
+		t.Fatalf("runAdmin list-keys: %v", err)
+	}
+
+	// Receive the captured RPC request and assert wire-level correctness.
+	select {
+	case req := <-requestCh:
+		// F-P8-006: command must be admin.key.list-keys.
+		if req.Command != "admin.key.list-keys" {
+			t.Errorf("F-P8-006 — dispatched command: got %q; want admin.key.list-keys", req.Command)
+		}
+
+		// Unmarshal to a raw map so we can inspect actual JSON key names, not
+		// Go field names.  This is what makes this test non-tautological: it
+		// reads the keys that were actually serialized by the production struct.
+		var raw map[string]any
+		if err := json.Unmarshal(req.Args, &raw); err != nil {
+			t.Fatalf("F-P8-006 — unmarshal list-keys args: %v", err)
+		}
+
+		// The SVTN identifier must be sent under the "svtn_id" key.
+		svtnIDVal, ok := raw["svtn_id"]
+		if !ok {
+			t.Errorf("F-P8-006 — wire args missing key \"svtn_id\"; got: %s", req.Args)
+		} else if svtnIDVal != svtnName {
+			t.Errorf("F-P8-006 — wire svtn_id: got %q; want %q", svtnIDVal, svtnName)
+		}
+
+		// The stale "svtn" key (without _id suffix) must be absent.
+		if _, stale := raw["svtn"]; stale {
+			t.Errorf("F-P8-006 — wire args must NOT contain stale key \"svtn\"; got: %s", req.Args)
+		}
+
+	case <-time.After(2 * time.Second):
+		t.Error("F-P8-006: timed out waiting for admin.key.list-keys RPC; " +
+			"runAdmin must dispatch the RPC within the context deadline")
+	}
+}
