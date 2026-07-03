@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-5-adversarial-refinement
-phase_step: phase-5-pass-5-complete-has-findings
+phase_step: phase-5-pass-5-remediation-complete
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -27,10 +27,10 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: cbd0272
+develop_head: d012dbf
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-5-pass-5-remediation
+awaiting: phase-5-pass-6-dispatch
 historical_cycles: []
 timestamp: 2026-07-03T00:00:00Z
 last_update: 2026-07-03
@@ -40,8 +40,8 @@ last_update: 2026-07-03
 
 ## Current State
 
-Phase 5 Pass 5 COMPLETE (HAS_FINDINGS). Adv-A: 0H/2M/2L/1obs; Adv-B: 0H/2M/1L/1obs. Total: 0H/4M/3L/2obs. BC-5.39.001 streak reset to 0/3. Pass 5 remediation pending.
-develop HEAD: cbd0272. 45 BCs, 76 VPs, 49 stories, 18 internal packages.
+Phase 5 Pass 5 REMEDIATION COMPLETE. Burst 21: spec v1.18 + PR #64 d012dbf merged. BC-5.39.001 streak 0/3 — Pass 6 fresh-context dispatch next.
+develop HEAD: d012dbf. 45 BCs, 76 VPs, 52 stories (backlog +1 S-BL.ADMIN-RECOVER-WIRE), 18 internal packages.
 
 Sidecar reviews: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1-6}-Adv-{A,B}.md`.
 Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`.
@@ -54,7 +54,7 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 5 — Adversarial Refinement | PASS_5_COMPLETE_HAS_FINDINGS | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → rem pending |
+| Phase 5 — Adversarial Refinement | PASS_5_REM_COMPLETE | P1: 3H/3M/1L → REM → P2: 0H/3M/2L → REM → P3: 3H/4M/2L+6obs → Path B rem spec+code → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5: 0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf) → P6 dispatch next |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -69,6 +69,7 @@ Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-st
 | 2026-07-02 | Phase 5 Pass 3 REMEDIATION COMPLETE — Pass 4 dispatch ready | COMPLETED | PR #62 c76a8d5 merged; taxonomy v4.4; all 6 code-side DRIFTs closed; develop_head c76a8d5; sprint-state streak 0 pending_pass 4 |
 | 2026-07-03 | Phase 5 Pass 4 Burst 19 — wire-contract remediation (svtn_id wire field, OpenSSH pubkey, taxonomy drift, prompt short-id substitution, --confirm symmetry) | COMPLETED | PR #63 cbd0272 merged; 9 findings resolved (F-A-001..010); taxonomy v4.5; BC-5.39.001 streak 3/3 at passes 17/18/19 SATISFIED; DRIFT-P5P4-PROMPT-SHORTID RESOLVED; Pass 5 dispatch ready |
 | 2026-07-03 | Phase 5 Pass 5 split-adversary — Adv-A (public-surface/operator-UX) + Adv-B (test-rigor/traceability) | COMPLETED | HAS_FINDINGS: Adv-A 0H/2M/2L/1obs (F-P5P5-A-001..004 + OBS-P5P5-A-001); Adv-B 0H/2M/1L/1obs (F-P5P5-B-001..003 + OBS-1); streak reset 0/3; Adv-B files_read 7 vs read_cap 6 (overage self-disclosed). Burst 21 remediation pending. |
+| 2026-07-03 | Phase 5 Pass 5 remediation — Burst 21 (Track 1: product-owner interface-definitions v1.18; Track 1b: story-writer S-BL.ADMIN-RECOVER-WIRE stub; Track 2: test-writer + pr-manager PR #64 merged d012dbf) | COMPLETED | 4 A-findings remediated (F-P5P5-A-001..004); 3 B-findings remediated in PR #64 (F-P5P5-B-001..003); interface-definitions v1.18; S-BL.ADMIN-RECOVER-WIRE v1.0 stub minted; STORY-INDEX v3.70 (backlog 8→9, total 51→52); adjudication: F-P5P5-A-002 annotate-and-defer; tw citations unchanged (historical provenance); stub records 2 open design obligations. Streak 0/3. Pass 6 next. |
 
 ## Wave 6 Story Status
 
@@ -161,6 +162,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1): `cycles/cycle-1/closed-dri
 | Phase 5 Pass 3 REMEDIATION COMPLETE | PR #62 c76a8d5; taxonomy v4.4; 7 DRIFTs closed | 2026-07-02 |
 | Phase 5 Pass 4 COMPLETE (BC-5.39.001) | PR #63 cbd0272; 9 findings; streak 3/3 (passes 17/18/19) | 2026-07-03 |
 | Phase 5 Pass 5 HAS_FINDINGS | 0H/4M/3L/2obs; streak reset 0/3; remediation pending | 2026-07-03 |
+| Phase 5 Pass 5 REMEDIATION COMPLETE | Burst 21: interface-definitions v1.18, S-BL.ADMIN-RECOVER-WIRE stub, PR #64 d012dbf; streak 0/3; Pass 6 next | 2026-07-03 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -178,21 +180,18 @@ have been extracted to cycle files:
 ## Session Resume Checkpoint
 
 **Timestamp:** 2026-07-03T00:00:00Z
-**Post-burst:** Burst 20 (adversary: Pass 5 split-adversary complete; state-manager: Pass 5 close-out + Pass 4 backfill)
-**Pipeline state:** Phase 5 Pass 5 COMPLETE — HAS_FINDINGS (0H/4M/3L/2obs); streak reset 0/3
+**Post-burst:** Burst 21 (Track 1: product-owner interface-definitions v1.18; Track 1b: story-writer S-BL.ADMIN-RECOVER-WIRE stub; Track 2: test-writer + pr-manager PR #64 merged d012dbf)
+**Pipeline state:** Phase 5 Pass 5 REMEDIATION COMPLETE; streak 0/3; Pass 6 fresh-context dispatch next
 **Factory HEAD:** (see `git -C .factory log -1 --format='%h %s'`)
-**Develop HEAD:** cbd0272 (unchanged — no impl changes in Pass 5 yet)
+**Develop HEAD:** d012dbf (PR #64 squash-merge)
 
-**Burst 20 deltas:**
-- Pass 5 split-adversary dispatched: Adv-A (public-surface/operator-UX) + Adv-B (test-rigor/traceability), develop_tip cbd0272
-- Adv-A HAS_FINDINGS: 0H/2M/2L/1obs — F-P5P5-A-001 (§116 authority misstates control-role vs bootstrap-only), F-P5P5-A-002 (sbctl admin recover unimplemented, no PENDING annotation), F-P5P5-A-003 (§116/§117 exit-code column incomplete), F-P5P5-A-004 (§59 deprecated alias unimplemented), OBS-P5P5-A-001 (§58-94 broader than either binary)
-- Adv-B HAS_FINDINGS: 0H/2M/1L/1obs — F-P5P5-B-001 (stale taxonomy v4.4 version stamps in test docstrings; E-CFG-013 anchored to v4.4 but minted in v4.6 — historically impossible), F-P5P5-B-002 (wire-contract coverage gap sbctl side — real sbctl arg structs unverified for svtn_id tag), F-P5P5-B-003 (RED-phase stale "MUST FAIL" comments now GREEN), OBS-1 (ConfirmSymmetry wantParseOK:false branch unreachable)
-- Integrity note: Adv-B self-reported files_read 7 vs read_cap 6 (overage disclosed for admin_interactive_prompt_test.go io.Pipe seam)
-- BC-5.39.001 streak: 3/3 (Pass 4) → 0/3 reset (Pass 5 HAS_FINDINGS)
-- DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR logged (process-gap; vsdd-factory issue draft pending Batch 30 tracker)
-- Pass 4 standalone reports backfilled: P5-pass-4-Adv-A.md + P5-pass-4-Adv-B.md (reconstructed from sprint-state.yaml + STATE.md Burst 19 deltas)
-- sprint-state.yaml: pass_5 complete, verdict HAS_FINDINGS, remediation pending
+**Burst 21 deltas:**
+- Track 1 (product-owner): interface-definitions v1.17→v1.18 — F-P5P5-A-001 (§116 authority→bootstrap-only), F-P5P5-A-002 (§119-125 PENDING-S-BL.ADMIN-RECOVER-WIRE annotation), F-P5P5-A-003 (§116/§117 exit-code enumeration E-CFG-001/E-INT-001), F-P5P5-A-004 (§59 alias REMOVED record)
+- Track 1b (story-writer): S-BL.ADMIN-RECOVER-WIRE v1.0 stub minted; STORY-INDEX v3.69→v3.70 (backlog 8→9, total 51→52); adjudication annotate-and-defer; stub records 2 open design obligations (recovery semantics; --svtn id-vs-name ambiguity)
+- Track 2 (test-writer + pr-manager): PR #64 squash-merged d012dbf (commits fa824c6/a1e1466/f638032) — wire-tag guards, version stamps, GREEN docstrings; CI all green; pr-reviewer APPROVED; LOW-5 fixed in f638032; NIT-6 waived; F-P5P5-B-001..003 resolved
+- Adjudications: (a) F-P5P5-A-002 annotate-and-defer consistent with five prior wire deferrals; (b) tw "v1.1 §" citations in admin_test.go lines 1642/1834/1855/2433/2477/2522 left unchanged — historical provenance comments, not assertion anchors; documented in PR #64 body; (c) stub records two open design obligations
+- BC-5.39.001 streak: 0/3 (Pass 6 is the next fresh-context attempt)
 
-**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → **P5 (0H/4M/3L+2obs → rem pending)**
+**Phase 5 trajectory:** P1 (3H/3M/1L → REM) → P2 (0H/3M/2L → REM) → P3 (3H/4M/2L+6obs → Path B rem spec+code) → P4 COMPLETE (9 findings → 3/3 CLEAN streak) → P5 (0H/4M/3L+2obs → REM (Burst 21: spec v1.18 + PR #64 d012dbf))
 
-**Next action:** Burst 21 — Phase 5 Pass 5 remediation (spec-steward: §116 authority correction + §119-125 PENDING annotation + §116/§117 exit-code completion + §59 alias annotation; test-writer: taxonomy version stamp updates + sbctl-side wire-contract test coverage + RED→GREEN comment conversion). Auto Mode: active (Path B). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Next action:** Phase 5 Pass 6 — fresh-context split-adversary dispatch (streak 0/3; target 0→1). Auto Mode: active (Path B). Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.

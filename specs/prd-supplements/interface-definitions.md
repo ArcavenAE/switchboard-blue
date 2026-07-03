@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.17"
+version: "1.18"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T12:00:00
@@ -56,7 +56,7 @@ Global flags:
 Subcommands:
 
 # SVTN Management
-sbctl svtn create [--name=<name>]               # [DEPRECATED] Superseded by 'sbctl admin svtn create' (S-6.07). Retained as alias until vMINOR+1 deprecation cycle completes.
+sbctl svtn create [--name=<name>]               # [REMOVED] Alias removed as of Phase 5 Pass 3 Path B remediation (PR #62). Was deprecated in v1.2 (S-6.07). Migration target: 'sbctl admin svtn create'. Invoking today returns exit 2 (unknown subcommand: svtn).
 sbctl svtn destroy --id=<svtn_id>               # Destroy an SVTN
 sbctl svtn list                                  # List known SVTNs
 sbctl svtn status --id=<svtn_id>                # SVTN status and admitted node count
@@ -113,14 +113,17 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 | Subcommand | Purpose | Auth | Exit codes |
 |-----------|---------|------|-----------|
-| `sbctl admin svtn create --name=<svtn-name>` | Create a new SVTN; returns `svtn_id` and bootstrap fingerprint | Requires control-role key on control-mode daemon | 0=ok, E-SVTN-001 (already exists), E-ADM-009 (insufficient role) |
-| `sbctl admin svtn destroy --name=<svtn-name>` | Destroy an SVTN and all admitted keys; terminates active sessions | Requires control-role key + `--confirm` | 0=ok, E-ADM-011 (unauthorized), E-ADM-009 (insufficient role) |
+| `sbctl admin svtn create --name=<svtn-name>` | Create a new SVTN; returns `svtn_id` and bootstrap fingerprint | Bootstrap-only: caller MUST authenticate with the daemon bootstrap key (RoleControl); cross-SVTN control-role keys are not accepted. See §380 and BC-2.07.001 Inv-3. | 0=ok, E-SVTN-001 (already exists), E-ADM-009 (insufficient authority: bootstrap key required), E-CFG-001 (invalid SVTN name: empty / whitespace-only / >255 bytes / invalid UTF-8 / control chars), E-INT-001 (internal error wrap on non-duplicate Create failure) |
+| `sbctl admin svtn destroy --name=<svtn-name>` | Destroy an SVTN and all admitted keys; terminates active sessions | Requires control-role key + `--confirm` | 0=ok, E-ADM-011 (unauthorized), E-ADM-009 (insufficient role), E-CFG-001 (invalid SVTN name: empty / whitespace-only / >255 bytes / invalid UTF-8 / control chars) |
 
 #### Emergency recovery
+
+> **PENDING-S-BL.ADMIN-RECOVER-WIRE:** Spec-complete; implementation deferred to backlog story `S-BL.ADMIN-RECOVER-WIRE`. Neither `cmd/sbctl` nor the daemon dispatch `admin recover` today — the `runAdmin` switch covers only `key | list-keys | svtn`; the default arm returns `admin: unknown subcommand %q`. Operators invoking `sbctl admin recover` on current builds receive exit 2 (unknown-subcommand).
 
 | Subcommand | Purpose | Auth | Exit codes |
 |-----------|---------|------|-----------|
 | `sbctl admin recover --svtn <id> --bootstrap-key <path> --confirm <svtn-short-id>\|--yes` | Emergency recovery when all control keys are lost | Requires bootstrap key (set at SVTN creation per BC-2.07.001) + interactive `--confirm` token | 0=ok, E-ADM-014 (bootstrap mismatch) |
+> **PENDING-S-BL.ADMIN-RECOVER-WIRE:** Row above is spec-complete; CLI and daemon dispatch not yet implemented. See annotation above.
 
 **`--confirm=<svtn-short-id>`** — Required on all destructive admin operations (key register, key revoke, svtn destroy, recover). Accepts the SVTN short ID (the first 8 hex characters of the SVTN ID, formatted as `SVTN-<short-id>`) as the confirmation token. Prevents accidental mass-revocation by requiring the operator to name the target SVTN explicitly. When the flag is omitted, the command enters interactive mode and prompts `Type SVTN-<short-id> to confirm:` before proceeding. Per ADR-004 split-brain mitigation.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
@@ -129,6 +132,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 Confirmation flow summary: interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-012, exit 2). In a non-interactive session (no TTY) where neither `--confirm` nor `--yes` is supplied, the command exits with E-CFG-013 (exit 2) — use `--confirm=<svtn-short-id>` or `--yes` for scripted invocations.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
+
+> **v1.18 changelog note (2026-07-03):** Phase 5 Pass 5 adversarial remediation (Burst 21). F-P5P5-A-001: §116 authority cell corrected from "Requires control-role key on control-mode daemon" to bootstrap-only language aligned with impl (`admin_handlers.go:686-705`), Registered Verbs §380, and BC-2.07.001 Inv-3/Ruling-5. F-P5P5-A-002: §119-123 Emergency recovery section annotated with `PENDING-S-BL.ADMIN-RECOVER-WIRE` (spec-complete, implementation deferred; operators get exit 2 unknown-subcommand today); §125 confirm-gate mention carries sibling annotation. F-P5P5-A-003: §116 exit-codes column extended with E-CFG-001 (five `validateSVTNName` validation arms) and E-INT-001 (non-duplicate Create failure wrap); §117 exit-codes column extended with E-CFG-001 for caller-supplied-name validation path. F-P5P5-A-004: §59 `sbctl svtn create` alias status changed from DEPRECATED/retained to REMOVED as of Phase 5 Pass 3 Path B remediation (PR #62); migration target and exit-2 behaviour noted.
 
 > **v1.17 changelog note (2026-07-02):** Pass-11 adversarial corrections: §375/v1.15 changelog corrects role field description (target-key role for HOLD-001 E-ADM-019 cross-check, not caller authorization); §128 --yes warning corrects --svtn→--name (destroy uses --name); §129/§130 add E-CFG-013 reference for non-interactive scripting guard. Refs: F-11A-2/3/4.
 

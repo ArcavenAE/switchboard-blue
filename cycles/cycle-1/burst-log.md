@@ -1036,3 +1036,27 @@ Phase 4 holdout evaluation against HS-006 (Wave-6 combined scope: XOR FEC, sessi
 - DRIFT-P5P3-B17 (HIGH): case arms svtn/version/ping deleted from cmd/sbctl/main.go
 
 **7 total DRIFTs closed (spec+code): 1 spec-side (taxonomy v4.4 E-ADM-018) + 6 code-side (PR #62)**
+
+---
+
+## Phase 5 — Burst 21 / Pass 5 Remediation (2026-07-03)
+
+**Agents dispatched:** product-owner (Track 1), story-writer (Track 1b), test-writer + pr-manager (Track 2)
+**Files touched:** interface-definitions.md (v1.17→v1.18), stories/S-BL.ADMIN-RECOVER-WIRE.md (new v1.0), stories/STORY-INDEX.md (v3.69→v3.70), STATE.md, cycles/cycle-1/burst-log.md
+**Develop HEAD:** d012dbf (PR #64 squash-merge; commits fa824c6/a1e1466/f638032)
+
+**Summary:** Phase 5 Pass 5 remediation complete across two tracks. Track 1 (product-owner) corrected four Adv-A spec findings in interface-definitions v1.18. Track 1b (story-writer) minted the S-BL.ADMIN-RECOVER-WIRE backlog stub. Track 2 (test-writer + pr-manager) delivered PR #64, resolving three Adv-B test-rigor findings. All seven Pass 5 findings resolved; streak remains 0/3; Pass 6 fresh-context dispatch is next.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| product-owner (Track 1) | interface-definitions v1.18 | F-P5P5-A-001: §116 authority cell corrected (bootstrap-only, not control-role); F-P5P5-A-002: §119-125 PENDING-S-BL.ADMIN-RECOVER-WIRE annotation added; F-P5P5-A-003: §116/§117 exit-code column enumerated E-CFG-001/E-INT-001; F-P5P5-A-004: §59 deprecated alias flagged REMOVED. Single v1.18 changelog entry. |
+| story-writer (Track 1b) | S-BL.ADMIN-RECOVER-WIRE v1.0 + STORY-INDEX v3.70 | Backlog stub minted per F-P5P5-A-002 adjudication (annotate-and-defer, consistent with five prior wire deferrals). BC anchors: BC-2.07.001 (bootstrap authority), BC-2.05.004 (confirm gate). Two open design obligations: (1) recovery semantics undefined; (2) --svtn id-vs-name ambiguity. STORY-INDEX total 51→52, active backlog 8→9. |
+| test-writer (Track 2a) | Wire-tag guards + version stamps + GREEN docstrings | PR #64 commits fa824c6 (wire-tag guards: svtn_id tag assertions on all sbctl admin arg structs), a1e1466 (version stamps: taxonomy v4.4→v4.6 in E-CFG-013 docstrings; interface-definitions v1.1→v1.17 §129 citation), f638032 (GREEN docstrings: remove "MUST FAIL" residuals; LOW-5 fix). |
+| pr-manager (Track 2b) | PR #64 lifecycle | Squash-merged d012dbf; CI all green; pr-reviewer APPROVED; LOW-5 fixed in f638032; NIT-6 (ConfirmSymmetry unreachable branch) waived. |
+
+**Adjudications recorded for Pass 6 adversary:**
+- F-P5P5-A-002: annotate-and-defer — same pattern as S-BL.SVTN-LIST-WIRE, S-BL.PING-VERSION-WIRE, S-BL.DISCOVERY-WIRE, S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS. This surface is NOT being withdrawn (unlike prior won't-fix cases) — emergency recovery is a required operator capability.
+- tw left `cmd/sbctl/admin_test.go` "v1.1 §" citations at lines 1642/1834/1855/2433/2477/2522 unchanged — these are historical provenance comments explaining the genesis of test design, not assertion anchors. No test assertion pins to v1.1. Documented in PR #64 body for Pass 6 adversary visibility.
+- DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR (process-gap) recorded in STATE.md open-drift table; vsdd-factory issue draft pending Batch 30 tracker.
+
+**BC-5.39.001 streak:** 0/3 — Pass 6 is next fresh-context attempt.
