@@ -128,7 +128,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops)},
 		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},
 		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
-		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m)},
+		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m, ops)},
 		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
 		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops)},
 	}
@@ -342,10 +342,11 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 
 // makeListKeysHandler returns the admin.key.list-keys handler function.
 // admin.key.list-keys is a read-only operation accessible to any admitted role
-// (F-L2-003 / interface-definitions.md); no E-ADM-009 gate is applied.
+// (F-L2-003 / interface-definitions.md); the control-only authority gate does NOT
+// apply, but admission is still required (CWE-862 defense; BC-2.05.004).
 // The Keys field in the response is always an array, never JSON null (EC-003).
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003.
-func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
+func makeListKeysHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminListKeysArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -356,7 +357,12 @@ func makeListKeysHandler(m *svtnmgmt.SVTNManager) func(ctx context.Context, args
 		}
 
 		// F-L2-003: admin.key.list-keys is read-only; any admitted role may call it.
-		// No resolveAndVerifyCallerRole call here — the authority gate does NOT apply.
+		// Admission (SVTN membership OR operator-set OR bootstrap) is REQUIRED —
+		// the control-only authority gate is what F-L2-003 removes, NOT the
+		// admission gate. See BC-2.05.004:155 and sec-triage report P5-pass-13.
+		if err := resolveCallerAdmissionAnyRole(ctx, m, ops, a.SVTNName, "admin.key.list-keys"); err != nil {
+			return nil, err
+		}
 
 		summaries, err := m.ListKeys(a.SVTNName)
 		if err != nil {
@@ -573,6 +579,50 @@ func resolveAndVerifyCallerRole(ctx context.Context, m *svtnmgmt.SVTNManager, op
 	}
 	// Fallback path: no pubkey available; Role is the resolved role from callerRoleStr.
 	return admission.AdmittedKey{Role: cr}, nil
+}
+
+// resolveCallerAdmissionAnyRole verifies the caller is admitted to `svtnName` in
+// ANY role (control, console, or access), or is an OperatorKeySet member, or is
+// the bootstrap key. Used for read-only ops (e.g. admin.key.list-keys) where the
+// control-only authority gate does NOT apply per BC-2.05.004 F-L2-003, but the
+// admission requirement still holds (CWE-862 defense: prevent cross-SVTN
+// enumeration by any caller holding a valid operator handshake).
+//
+// Returns E-ADM-009 when the caller cannot be resolved or is not admitted.
+func resolveCallerAdmissionAnyRole(ctx context.Context, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, svtnName, cmd string) error {
+	if ops == nil {
+		ops = mgmt.NewOperatorKeySet(nil)
+	}
+	callerPub, hasPubkey := mgmt.CallerPubkey(ctx)
+	if !hasPubkey {
+		// No pubkey in ctx — fail closed (BC-2.05.004 Precondition 1 / DI-001).
+		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key (unknown) has role unregistered", cmd)
+	}
+
+	// Bootstrap key is the unconditional trust anchor.
+	if m.IsBootstrapKey(callerPub) {
+		return nil
+	}
+
+	// F-L2-003: operator-set member may call any read-only admin op unconditionally.
+	if ops.IsAuthorized(callerPub) {
+		return nil
+	}
+
+	// F-P4L1-003: use CallerKeyRoleActive — only active keys return a role.
+	_, found := m.CallerKeyRoleActive(svtnName, callerPub)
+	if found {
+		return nil
+	}
+
+	fp := keyFingerprintAdmin(callerPub)
+	// Registered but inactive (revoked or expired) — fail-closed, no bypass (F-P5L1-001).
+	if m.IsRegisteredAnyState(svtnName, callerPub) {
+		return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
+	}
+
+	// Key is not admitted to this SVTN and is not bootstrap/operator.
+	return fmt.Errorf("E-ADM-009: insufficient authority for operation %s: key %s has role unregistered", cmd, fp)
 }
 
 // svtnAlreadyExistsErr is returned by makeAdminSVTNCreateHandler when
