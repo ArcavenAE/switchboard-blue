@@ -1060,3 +1060,24 @@ Phase 4 holdout evaluation against HS-006 (Wave-6 combined scope: XOR FEC, sessi
 - DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR (process-gap) recorded in STATE.md open-drift table; vsdd-factory issue draft pending Batch 30 tracker.
 
 **BC-5.39.001 streak:** 0/3 — Pass 6 is next fresh-context attempt.
+
+---
+
+## Phase 5 — Burst 22 / Pass 6 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** adversary-A (public-surface/operator-UX lens, opus-4-7), adversary-B (test-rigor/traceability lens, opus-4-7)
+**Dispatch tuple:** develop tip d012dbfc92d15cc5f5113f63c79052f00f274861 + interface-definitions v1.18
+**Files touched:** cycles/cycle-1/adversarial-reviews/P5-pass-6-Adv-A.md (new), cycles/cycle-1/adversarial-reviews/P5-pass-6-Adv-B.md (new), STATE.md, cycles/cycle-1/burst-log.md
+
+**Summary:** Phase 5 Pass 6 fresh-context split-adversary complete. Adv-A found a load-bearing cluster of CLI dispatch layer defects (exit-code taxonomy not wired into main(), sessions sub-verb collapse, console flags missing, unannotated spec verbs). Adv-B reviewed the test tier and found it disciplined — no findings, two naming/provenance observations. BC-5.39.001 streak holds at 0/3.
+
+**Delivery note (process observation):** Both adversaries required explicit SendMessage pings to retrieve their reports after completion, despite an explicit report-contract line in dispatch prompts ("deliver your full report as a final message"). This is the 2/2 pattern for this pass and 6/6 across recent bursts — idle-without-report on every dispatch. Not a correctness gap, but a consistent friction point worth noting for future dispatch prompt hardening.
+
+| Agent | Verdict | Finding summary |
+|-------|---------|-----------------|
+| Adv-A (public-surface) | HAS_FINDINGS 1H/4M/1L | F-P5P6-A-001 [HIGH] exit-code taxonomy: main() collapses all errors to exit 1; spec §133/§174 promises exit 2 for usage-error class; test-only subprocess entry point at admin_test.go:2359-2419 re-implements what main() omits (smoking-gun self-disclosure). F-P5P6-A-002 [MED] §121 PENDING annotation false promise (exit 1 actual, exit 2 stated). F-P5P6-A-003 [MED] sessions dispatch collapses all sub-verbs to sessions.list with nil params, drops positional args. F-P5P6-A-004 [MED] console attach/detach/switch missing required --console flag and --svtn flag. F-P5P6-A-005 [MED] 7 unannotated spec verbs (paths ping, router reload/drain, svtn destroy/list/status, svtn keys list) presented as functional with no PENDING marker. F-P5P6-A-006 [LOW] bare sbctl exits 0 (spec §174: exit 2 for missing/invalid subcommand). |
+| Adv-B (test-rigor) | CLEAN 0/0/0+2obs | Wire-tag guards, emission-text guards (assertErrorPrefix HasPrefix not Contains), confirm-gate coverage all disciplined. OBS-B-001: sbctlSideListKeysArgs mock name misleading (has CallerRole field; sbctl side is a local inline struct without it; adjudicated deferral covers this, naming confusion only). OBS-B-002 [process-gap]: v1.17 spec provenance citations in Burst 19/21 test files parallel the adjudicated admin_test.go v1.1 pattern — extend the same adjudication consistently. |
+
+**Adv-A read-cap note:** 8 files read vs cap 6 (self-disclosed in report). Overage concentrated on the six top-level sbctl subcommand dispatch shims required to walk the full command surface against spec §§60-88. Justified by scope; no skimming to conceal. Preserved as-is in the report.
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS resets/holds at 0. Burst 23 remediation pending.
