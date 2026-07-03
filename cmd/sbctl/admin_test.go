@@ -235,8 +235,6 @@ func TestAdminKeyExpireArgs_JSONRoundTrip(t *testing.T) {
 type fakeMgmtServer struct {
 	// opPub is the authorized operator public key (must sign the challenge).
 	opPub ed25519.PublicKey
-	// opPriv is the authorized operator private key (test uses it to sign).
-	opPriv ed25519.PrivateKey
 	// handler is called after authentication succeeds, receives the RPC command
 	// and returns the response data (or an error to send as ok:false).
 	handler func(command string, args json.RawMessage) (any, error)
@@ -420,12 +418,6 @@ func startFakeServer(
 	}
 	opPub := testPrivKey.Public().(ed25519.PublicKey)
 
-	// Generate a fresh daemon key for signing challenges (separate from opPub).
-	_, daemonPrivKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
-	}
-
 	wrappedHandler := func(cmd string, args json.RawMessage) (any, error) {
 		if obs != nil {
 			select {
@@ -441,7 +433,6 @@ func startFakeServer(
 
 	fake := &fakeMgmtServer{
 		opPub:   opPub,
-		opPriv:  daemonPrivKey,
 		handler: wrappedHandler,
 	}
 
@@ -854,10 +845,12 @@ func TestSbctlAdmin_MissingRequiredFlags_ReturnsError(t *testing.T) {
 			if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): got network error %q; want flag validation error before any connection attempt", tc.args, errStr)
 			}
-			// The missing-flag name must appear in the error to confirm the right
+			// The missing flag name must appear in the error to confirm the right
 			// validation path fired (not a generic "required field" catch-all).
-			flagName := tc.missingFlag[2:] // strip "--" for substring match (e.g. "key", "svtn", "role", "after")
-			if !strings.Contains(errStr, flagName) {
+			// We match the full "--<flag>" form (e.g. "--key", "--svtn") to avoid
+			// false-passes when the bare token "key" appears in unrelated error text
+			// (e.g. key-file load errors, decoded-key messages, keyPath errors).
+			if !strings.Contains(errStr, tc.missingFlag) {
 				t.Errorf("BC-2.05.004 precondition 2 — runAdmin(%v): error %q does not mention missing flag %q", tc.args, errStr, tc.missingFlag)
 			}
 		})
@@ -1876,12 +1869,28 @@ func TestSbctlAdmin_SVTNDestroy_HappyPath_JSON(t *testing.T) {
 func TestSbctlAdmin_SVTNDestroy_ConfirmGate(t *testing.T) {
 	// NOTE: this test intentionally does NOT call t.Parallel().
 	//
-	// Four tests in this package directly mutate the same package-level seam
-	// vars (stdinIsTTY, stdinReader): this test, the subtests below, and the
-	// two tests in admin_interactive_prompt_test.go.  All four are sequential
-	// (none call t.Parallel()); the invariant is that they MUST stay that way.
-	// Running any of them in the parallel pool would trigger a data race under
-	// `go test -race`.  The trade-off: slightly longer wall time for this suite.
+	// Multiple tests across this file, admin_emission_text_test.go, and
+	// admin_interactive_prompt_test.go directly mutate the same package-level
+	// seam vars (stdinIsTTY, stdinReader).  All seam-mutating tests are
+	// sequential (none call t.Parallel()); the invariant is that they MUST
+	// stay that way.  Running any of them in the parallel pool would trigger
+	// a data race under `go test -race`.
+	//
+	// Current seam-mutating tests (update this list when adding new ones):
+	//   admin_test.go:
+	//     TestSbctlAdmin_SVTNDestroy_ConfirmGate             (this test)
+	//     TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012
+	//     TestNewInBurst19_KeyRegister_ConfirmGate_NonTTY_ReturnsECFG013
+	//     TestNewInBurst19_KeyRegister_ConfirmGate_YesFlag_Proceeds
+	//   admin_emission_text_test.go:
+	//     TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage
+	//     TestNewInBurst19_YesWarning_TargetFlag_Destroy
+	//     TestNewInBurst19_YesWarning_TargetFlag_KeyRegister
+	//   admin_interactive_prompt_test.go:
+	//     TestNewInBurst19_InteractivePrompt_NoLiteralPlaceholder
+	//     TestNewInBurst19_InteractivePrompt_ContainsSVTNPrefix
+	//
+	// Trade-off: slightly longer wall time for this suite.
 
 	// setTTYSeam swaps stdinIsTTY and stdinReader for the duration of one subtest,
 	// restoring the originals via t.Cleanup.  Must be called before t.Parallel()

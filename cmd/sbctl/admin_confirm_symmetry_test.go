@@ -147,6 +147,13 @@ func TestNewInBurst19_ConfirmSymmetry_BoolFlagAcceptsValueForm(t *testing.T) {
 // test FAILS because it asserts the rejection must NOT happen.
 //
 // MUST FAIL with current Bool flag because Bool rejects "some-confirmation-token".
+//
+// Oracle scope note: this test uses a negative-only oracle — it asserts that
+// the Bool parse error does NOT occur.  It cannot assert the wire-side Confirm
+// value when an arbitrary-string token is passed because the Bool parse error
+// fires synchronously, returning before any wire payload is built.  Wire-value
+// round-trips for the accepted forms (true / false / bare) are covered by
+// TestNewInBurst19_ConfirmSymmetry_WirePayload_ConfirmTrue (json.Marshal path).
 func TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue(t *testing.T) {
 	t.Parallel()
 
