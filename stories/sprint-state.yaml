@@ -925,11 +925,14 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_3_REMEDIATION_IN_PROGRESS_SPEC_LANDED_CODE_PENDING
-  pass_counter: 3
-  attempts_counter: 3
+  status: PASS_15_HAS_FINDINGS
+  phase_step: phase-5-pass-15-concluded-has-findings
+  pass_counter: 15
+  attempts_counter: 15
+  consecutive_clean_passes: 0
+  last_reset_reason: pass-14-has-findings
   streak: 0
-  last_verdict: HAS_FINDINGS_2026-07-02_BOTH_LENSES
+  last_verdict: HAS_FINDINGS_2026-07-03_BOTH_LENSES
   criterion: finding-decay-to-zero-3-fresh-context-passes
   scope_lens: public-surface-operator-ux + test-rigor-traceability
   pass_1_adv_a_findings: "2H/1M/0L/2obs"
@@ -988,3 +991,15 @@ phase5:
   pass_3_remediation:
     dispatch_ready: false
     awaiting: human-decision-on-wire-orphan-shape
+  pass_15:
+    date: 2026-07-03
+    target_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    adversaries: [adv-a, adv-b]
+    verdicts: {adv-a: HAS_FINDINGS, adv-b: HAS_FINDINGS}
+    findings_shipped:
+      - F-P5P15-A-001 (interface-definitions v1.26 @ .factory 5e42768)
+      - F-P5P15-B-001 (VP-077 v1.1 @ .factory 5120c9e)
+    findings_deferred: []
+    follow_on_nits:
+      - "VP-077 Proof Method Coverage cell reads 'Three sub-cases' — steward flagged; not preemptively rev'd (companion tidy sweep candidate)"
+    streak_after_pass: 0/3
