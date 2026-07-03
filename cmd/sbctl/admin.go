@@ -263,8 +263,15 @@ func runAdminSvtnCreate(ctx context.Context, target, keyPath string, useJSON boo
 // confirmSVTNShortIDValid returns true if s matches the "SVTN-<8hexchars>"
 // pattern required by the destroy confirmation gate (ADR-004;
 // interface-definitions.md v1.1 §125).
+//
+// Normalizes s to lowercase before validation so that "SVTN-AABBCCDD" is
+// accepted alongside "SVTN-aabbccdd" (Fix F-11A-5).
 func confirmSVTNShortIDValid(s string) bool {
-	const prefix = "SVTN-"
+	// Normalize to lowercase so that "SVTN-AABBCCDD" is accepted alongside
+	// "SVTN-aabbccdd" without weakening the shape assertion (Fix F-11A-5).
+	s = strings.ToLower(s)
+	// After ToLower the prefix is "svtn-"; "SVTN-" would never match.
+	const prefix = "svtn-"
 	if !strings.HasPrefix(s, prefix) {
 		return false
 	}
@@ -349,7 +356,7 @@ func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
 
 	// Path 4: --yes alone bypasses the check (§127).
 	if yes {
-		_, _ = fmt.Fprintln(sio.err, "WARNING: --yes bypasses confirmation; ensure correct --svtn target before scripting")
+		_, _ = fmt.Fprintln(sio.err, "WARNING: --yes bypasses confirmation; ensure correct --name target before scripting")
 		return nil
 	}
 
@@ -365,9 +372,8 @@ func runDestroyConfirmGate(confirmVal string, yes bool, sio sbctlIO) error {
 
 	// --confirm absent (empty string).  Check whether stdin is a TTY.
 	if !stdinIsTTY() {
-		// Path 3: non-interactive session.
-		return fmt.Errorf("no confirmation available in non-interactive session; " +
-			"provide --confirm=SVTN-<short-id> or --yes")
+		// Path 3: non-interactive session (E-CFG-013).
+		return fmt.Errorf("E-CFG-013: non-interactive session: --confirm is required for scripted use; use --confirm=<svtn-short-id> or --yes")
 	}
 
 	// Path 2: interactive mode — prompt on stderr and read from stdinReader.
@@ -407,14 +413,21 @@ func runAdminKey(ctx context.Context, target, keyPath string, useJSON bool, args
 //
 // Flags:
 //
-//	--key <pubkey>   OpenSSH-format Ed25519 public key (required)
-//	--svtn <id>      SVTN identifier (required)
-//	--role <role>    authorization role: control, console, access (default: console)
+//	--key <pubkey>              OpenSSH-format Ed25519 public key (required)
+//	--svtn <id>                 SVTN identifier (required)
+//	--role <role>               authorization role: control, console, access (default: console)
+//	--confirm <svtn-short-id>   Non-interactive confirmation: SVTN-<first-8-hex-chars>
+//	--yes                       Bypass the confirm gate for scripted use (stderr warning emitted)
+//
+// Confirm-gate behaviour mirrors `admin svtn destroy` (interface-definitions.md v1.1 §105/§125;
+// ADR-004; Fix F-11A-1).
 func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("admin key register", flag.ContinueOnError)
 	keyFlag := fs.String("key", "", "Ed25519 public key in OpenSSH format (required)")
 	svtnFlag := fs.String("svtn", "", "SVTN identifier (required)")
 	roleFlag := fs.String("role", "console", "authorization role: control, console, access")
+	confirmFlag := fs.String("confirm", "", "Confirmation short-ID: SVTN-<first-8-hex-chars>")
+	yesFlag := fs.Bool("yes", false, "bypass the confirm gate for scripted use (stderr warning emitted)")
 
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("admin key register: %w", err)
@@ -427,12 +440,17 @@ func runAdminKeyRegister(ctx context.Context, target, keyPath string, useJSON bo
 		return fmt.Errorf("admin key register: --svtn is required")
 	}
 	// F-CS-005: validate --role enum before dispatching the RPC.
-	// Mirrors the validation in runAdminKeyRevoke (lines ~178-183).
+	// Mirrors the validation in runAdminKeyRevoke.
 	switch *roleFlag {
 	case "control", "console", "access":
 		// valid
 	default:
 		return fmt.Errorf("admin key register: --role must be control, console, or access; got %q", *roleFlag)
+	}
+
+	// Confirm gate (ADR-004; interface-definitions.md v1.1 §105/§125; Fix F-11A-1).
+	if err := runDestroyConfirmGate(*confirmFlag, *yesFlag, sio); err != nil {
+		return err
 	}
 
 	rpcArgs := adminKeyRegisterArgs{

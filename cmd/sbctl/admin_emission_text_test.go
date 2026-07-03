@@ -86,6 +86,32 @@ func TestNewInBurst19_ECFG012_PickOne_CanonicalExact(t *testing.T) {
 	}
 }
 
+// TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage verifies that
+// runDestroyConfirmGate with a non-TTY seam and no --confirm value emits an error
+// whose prefix is exactly "E-CFG-013: " (canonical taxonomy code for non-interactive
+// session errors; Fix F-11A-4).
+//
+// Uses stdinIsTTY seam directly — no full CLI dispatch needed because the gate
+// function is the unit under test.
+//
+// NOTE: NOT parallel — mutates package-level seam stdinIsTTY.
+//
+// Traces to Fix F-11A-4; ADR-004; interface-definitions.md v1.1 §129.
+func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.T) {
+	// NOT parallel: mutates package-level seam stdinIsTTY.
+	origIsTTY := stdinIsTTY
+	stdinIsTTY = func() bool { return false }
+	t.Cleanup(func() { stdinIsTTY = origIsTTY })
+
+	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
+
+	// confirmVal = "" (no --confirm), yes = false → Path 3 (non-TTY + no --confirm).
+	err := runDestroyConfirmGate("", false, sio)
+
+	// Must have E-CFG-013 as the exact prefix (canonical taxonomy v4.4).
+	assertErrorPrefix(t, err, "E-CFG-013: ")
+}
+
 // TestNewInBurst19_ECFG012_PickOne_ViaRunAdminSvtnDestroy exercises E-CFG-012
 // through the full runAdminSvtnDestroy path (not just runDestroyConfirmGate).
 // This ensures the canonical error text propagates through the CLI dispatch layer.

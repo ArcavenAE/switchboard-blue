@@ -493,6 +493,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 	defer cancel()
 
 	// AC-002: call runAdmin with the `key register` subcommand args.
+	// --yes bypasses the confirm gate so this test focuses on RPC dispatch (Fix F-11A-1).
 	const svtnID = "test-svtn-reg"
 	const pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-register-key"
 
@@ -501,6 +502,7 @@ func TestSbctlAdmin_KeyRegister_CLI(t *testing.T) {
 		"--key", pubkey,
 		"--svtn", svtnID,
 		"--role", "console",
+		"--yes",
 	}, defaultIO())
 	if err != nil {
 		t.Fatalf("runAdmin: %v", err)
@@ -941,7 +943,7 @@ func TestSbctlAdmin_UnauthenticatedClient_FailsClosed(t *testing.T) {
 	defer cancel()
 
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
-		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
+		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn", "--yes",
 	}, defaultIO())
 
 	// ADR-012 fail-closed: must return non-nil error on AUTH_FAIL.
@@ -1001,8 +1003,9 @@ func TestSbctlAdmin_OversizedNDJSONLine_DoesNotOOM(t *testing.T) {
 	defer cancel()
 
 	// The client must not OOM — it must return an error within the context deadline.
+	// --yes bypasses the confirm gate so the test can reach the network/read-guard path (Fix F-11A-1).
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
-		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
+		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn", "--yes",
 	}, defaultIO())
 
 	if err == nil {
@@ -1053,8 +1056,9 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	// --yes bypasses the confirm gate so the test can reach the JSON decode path (Fix F-11A-1).
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
-		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn",
+		"key", "register", "--key", "ssh-ed25519 AAAA...", "--svtn", "test-svtn", "--yes",
 	}, defaultIO())
 
 	if err == nil {
@@ -1255,12 +1259,14 @@ func TestSubprocessAdmin_ConnectionRefused_Entry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), to)
 	defer cancel()
 
+	// --yes bypasses the confirm gate so the subprocess reaches the network path (Fix F-11A-1).
 	sio := defaultIO()
 	err := runAdmin(ctx, target, keyPath, false, []string{
 		"key", "register",
 		"--key", "ssh-ed25519 AAAA...",
 		"--svtn", "test-svtn",
 		"--role", "console",
+		"--yes",
 	}, sio)
 	if err != nil {
 		writeError(false, "E-NET-001", err.Error(), sio)
@@ -1616,11 +1622,13 @@ func TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	// --yes bypasses the confirm gate so the test reaches the RPC response path (Fix F-11A-1).
 	err = runAdmin(ctx, ln.Addr().String(), testdataKeyPath(t), false, []string{
 		"key", "register",
 		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-ruling14-key",
 		"--svtn", "test-svtn",
 		"--role", "console",
+		"--yes",
 	}, defaultIO())
 
 	// Ruling-14 §10: must return non-nil error.
@@ -2414,4 +2422,136 @@ func TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry(t *testing.T) {
 		os.Exit(2)
 	}
 	os.Exit(1)
+}
+
+// ── Burst-19 confirm-gate tests for key register (F-11A-1) ───────────────────
+
+// TestNewInBurst19_KeyRegister_ConfirmGate_NonTTY_ReturnsECFG013 verifies that
+// `sbctl admin key register` in a non-TTY environment without --confirm or --yes
+// returns E-CFG-013 (non-interactive session error) before attempting any network
+// connection.
+//
+// Fix F-11A-1 wired runAdminKeyRegister to runDestroyConfirmGate; this test proves
+// Path 3 (non-TTY + no --confirm) fires on the key-register path just as it does on
+// svtn-destroy.
+//
+// Traces to ADR-004; interface-definitions.md v1.1 §129; Fix F-11A-1/F-11A-4.
+func TestNewInBurst19_KeyRegister_ConfirmGate_NonTTY_ReturnsECFG013(t *testing.T) {
+	// NOT parallel: mutates package-level seams stdinIsTTY / stdinReader.
+	// See the seam-safety note in TestSbctlAdmin_SVTNDestroy_ConfirmGate.
+	origIsTTY := stdinIsTTY
+	origReader := stdinReader
+	stdinIsTTY = func() bool { return false }
+	stdinReader = strings.NewReader("")
+	t.Cleanup(func() {
+		stdinIsTTY = origIsTTY
+		stdinReader = origReader
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// No --confirm, no --yes: Path 3 must fire before any dial attempt.
+	err := runAdmin(ctx, "127.0.0.1:19989", testdataKeyPath(t), false, []string{
+		"key", "register",
+		"--svtn", "test-svtn",
+		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key",
+		"--role", "control",
+	}, defaultIO())
+
+	if err == nil {
+		t.Fatal("F-11A-1/F-11A-4: expected E-CFG-013 in non-TTY session without --confirm; got nil")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-013") {
+		t.Errorf("F-11A-1/F-11A-4: expected E-CFG-013 in error; got: %v", err)
+	}
+	// Must NOT be a network error — the confirm gate fires before any dial attempt.
+	errStr := err.Error()
+	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-11A-1: confirm gate must fire before any dial; got network error: %v", err)
+	}
+}
+
+// TestNewInBurst19_KeyRegister_ConfirmGate_YesFlag_Proceeds verifies that
+// `sbctl admin key register --yes` bypasses the confirm gate and attempts to
+// reach the daemon — proved by the resulting network failure, not a gate error.
+//
+// Fix F-11A-1 added --yes to runAdminKeyRegister; --yes must bypass
+// runDestroyConfirmGate and hand control to connectAndRun.
+//
+// Traces to ADR-004; interface-definitions.md v1.1 §127; Fix F-11A-1.
+func TestNewInBurst19_KeyRegister_ConfirmGate_YesFlag_Proceeds(t *testing.T) {
+	// NOT parallel: mutates package-level seams stdinIsTTY / stdinReader.
+	// See the seam-safety note in TestSbctlAdmin_SVTNDestroy_ConfirmGate.
+	origIsTTY := stdinIsTTY
+	origReader := stdinReader
+	stdinIsTTY = func() bool { return false }
+	stdinReader = strings.NewReader("")
+	t.Cleanup(func() {
+		stdinIsTTY = origIsTTY
+		stdinReader = origReader
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// --yes bypasses the confirm gate; the dial to the unreachable address must
+	// produce E-NET-001, proving connectAndRun was reached.
+	err := runAdmin(ctx, "127.0.0.1:19988", testdataKeyPath(t), false, []string{
+		"key", "register",
+		"--svtn", "test-svtn",
+		"--key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key",
+		"--role", "control",
+		"--yes",
+	}, defaultIO())
+
+	// Must fail — daemon is unreachable.
+	if err == nil {
+		t.Fatal("F-11A-1: expected network error (daemon unreachable after gate bypass); got nil")
+	}
+	// Error must be a network error, proving the confirm gate did not block dispatch.
+	errStr := err.Error()
+	if !strings.Contains(errStr, "E-NET-001") && !strings.Contains(errStr, "connection refused") {
+		t.Errorf("F-11A-1: expected E-NET-001 or connection refused (gate bypassed, dial attempted); got: %v", err)
+	}
+	// Must NOT be E-CFG-013 — the gate must not have fired.
+	if strings.Contains(errStr, "E-CFG-013") {
+		t.Errorf("F-11A-1: E-CFG-013 must not appear when --yes is supplied; got: %v", err)
+	}
+}
+
+// TestNewInBurst19_ConfirmNormalize_UppercaseHex_Accepted verifies Fix F-11A-5:
+// confirmSVTNShortIDValid accepts uppercase, lowercase, and mixed-case hex tokens
+// because the function normalizes input to lowercase before validation.
+//
+// Traces to F-11A-5; ADR-004; interface-definitions.md v1.1 §125.
+func TestNewInBurst19_ConfirmNormalize_UppercaseHex_Accepted(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		// F-11A-5: uppercase hex must be accepted after normalization.
+		{"uppercase_hex", "SVTN-AABBCCDD", true},
+		// Baseline: lowercase is the canonical form and must be accepted.
+		{"lowercase_hex", "SVTN-aabbccdd", true},
+		// F-11A-5: mixed case must also be accepted.
+		{"mixed_case_hex", "SVTN-AaBbCcDd", true},
+		// Negative: malformed token must still be rejected.
+		{"invalid_too_short", "SVTN-aabbcc", false},
+		{"invalid_no_prefix", "aabbccdd", false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := confirmSVTNShortIDValid(tc.input)
+			if got != tc.want {
+				t.Errorf("F-11A-5: confirmSVTNShortIDValid(%q) = %v; want %v", tc.input, got, tc.want)
+			}
+		})
+	}
 }
