@@ -45,7 +45,7 @@ func TestNewInBurst19_ECFG012_PickOne(t *testing.T) {
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 
 	// Both --yes=true and --confirm="SVTN-abcd1234" supplied → E-CFG-012.
-	err := runDestroyConfirmGate("SVTN-abcd1234", true, "--name", sio)
+	err := runDestroyConfirmGate("admin svtn destroy", "SVTN-abcd1234", true, "--name", sio)
 	if err == nil {
 		t.Fatal("runDestroyConfirmGate(confirm+yes): expected E-CFG-012 error, got nil")
 	}
@@ -74,7 +74,7 @@ func TestNewInBurst19_ECFG012_PickOne_CanonicalExact(t *testing.T) {
 	t.Parallel()
 
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
-	err := runDestroyConfirmGate("SVTN-abcd1234", true, "--name", sio)
+	err := runDestroyConfirmGate("admin svtn destroy", "SVTN-abcd1234", true, "--name", sio)
 	if err == nil {
 		t.Fatal("expected E-CFG-012 error, got nil")
 	}
@@ -106,7 +106,7 @@ func TestNewInBurst19_ECFG013_NonInteractiveSession_CanonicalMessage(t *testing.
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 
 	// confirmVal = "" (no --confirm), yes = false → Path 3 (non-TTY + no --confirm).
-	err := runDestroyConfirmGate("", false, "--name", sio)
+	err := runDestroyConfirmGate("admin svtn destroy", "", false, "--name", sio)
 
 	// Must have E-CFG-013 as the exact prefix (canonical taxonomy v4.6).
 	assertErrorPrefix(t, err, "E-CFG-013: ")
@@ -137,7 +137,7 @@ func TestNewInBurst19_YesWarning_TargetFlag_Destroy(t *testing.T) {
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &errBuf}
 
 	// Path 4: yes=true, confirmVal="" → emit warning, return nil.
-	err := runDestroyConfirmGate("", true, "--name", sio)
+	err := runDestroyConfirmGate("admin svtn destroy", "", true, "--name", sio)
 	if err != nil {
 		t.Fatalf("Path 4 (--yes, destroy): expected nil error; got %v", err)
 	}
@@ -168,7 +168,7 @@ func TestNewInBurst19_YesWarning_TargetFlag_KeyRegister(t *testing.T) {
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &errBuf}
 
 	// Path 4: yes=true, confirmVal="" → emit warning, return nil.
-	err := runDestroyConfirmGate("", true, "--svtn", sio)
+	err := runDestroyConfirmGate("admin key register", "", true, "--svtn", sio)
 	if err != nil {
 		t.Fatalf("Path 4 (--yes, key register): expected nil error; got %v", err)
 	}
