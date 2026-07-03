@@ -165,7 +165,7 @@ func runAdmin(ctx context.Context, target, keyPath string, useJSON bool, args []
 			return usageErrf("admin list-keys: %w", err)
 		}
 		if *svtnID == "" {
-			return usageErrf("admin list-keys: --svtn <id> is required")
+			return usageErrf("E-CFG-001: admin list-keys: --svtn is required")
 		}
 		type listKeysArgs struct {
 			SVTNID string `json:"svtn_id"`
