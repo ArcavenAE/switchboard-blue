@@ -136,8 +136,8 @@ func TestNewInBurst19_ConfirmSymmetry_BoolFlagAcceptsValueForm(t *testing.T) {
 	}
 }
 
-// TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue is a green
-// regression guard that verifies `admin key revoke --confirm=<arbitrary-token>`
+// TestNewInBurst19_ConfirmSymmetry_BoolStringFlag_AcceptsNonBoolToken_GreenGuard is a
+// green regression guard that verifies `admin key revoke --confirm=<arbitrary-token>`
 // does NOT produce a Bool parse error.
 //
 // Background: prior to the boolStringFlag refactor (admin.go boolStringFlag
@@ -159,7 +159,7 @@ func TestNewInBurst19_ConfirmSymmetry_BoolFlagAcceptsValueForm(t *testing.T) {
 // arbitrary-string token is not observable here.  Wire-value round-trips for the
 // accepted bool forms (true / false / bare) are covered by
 // TestNewInBurst19_ConfirmSymmetry_WirePayload_ConfirmTrue (json.Marshal path).
-func TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue(t *testing.T) {
+func TestNewInBurst19_ConfirmSymmetry_BoolStringFlag_AcceptsNonBoolToken_GreenGuard(t *testing.T) {
 	t.Parallel()
 
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}

@@ -401,11 +401,11 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 // Spec authority: interface-definitions.md v1.18 §174.
 // Finding: F-P5P6-A-006.
 //
-// NOTE: this is a NEW requirement. The existing TestSbctl_NoSubcommand_ExitsZero
-// (main_test.go) was written against the old AC-012 spec that required exit 0.
-// The Phase 5 Pass 6 adversarial review found that exit 0 violates §174.
-// The implementer must reconcile TestSbctl_NoSubcommand_ExitsZero once the
-// no-args behavior is corrected.
+// Historical note (DRIFT-P5P9, reconciled in Burst 23): the test
+// TestSbctl_NoSubcommand_ExitsZero that is referenced above no longer exists by
+// that name — it was renamed TestSbctl_NoSubcommand_ExitsTwoAfterP6 in Burst 23
+// when the no-args exit-code behavior was corrected from 0 to 2 per §174.
+// TestSbctl_NoSubcommand_ExitsTwoAfterP6 is now a green guard for exit 2.
 func TestProductionMain_NoArgs_ExitTwo(t *testing.T) {
 	t.Parallel()
 
@@ -445,15 +445,18 @@ func TestProductionMain_NoArgs_ExitTwo(t *testing.T) {
 			exitCode, stdout, stderr)
 	}
 
-	// Usage output must enumerate available subcommands so the operator
-	// knows what to type next.
+	// Usage output must enumerate at least two concrete verb names so the operator
+	// knows what to type next.  Requiring two specific verbs guards against a
+	// single-word match being satisfied by incidental output.
+	// OBS-P5P10-B-001: dropped the || "subcommand" disjunct (too permissive) and
+	// require both "sessions" AND "admin" to appear.
 	combined := stdout + stderr
-	hasSubcmds := strings.Contains(combined, "sessions") ||
-		strings.Contains(combined, "admin") ||
-		strings.Contains(combined, "paths") ||
-		strings.Contains(combined, "subcommand")
-	if !hasSubcmds {
-		t.Errorf("F-P5P6-A-006: expected usage output to enumerate subcommands; got stdout=%q stderr=%q",
+	if !strings.Contains(combined, "sessions") {
+		t.Errorf("F-P5P6-A-006: expected usage output to contain verb \"sessions\"; got stdout=%q stderr=%q",
+			stdout, stderr)
+	}
+	if !strings.Contains(combined, "admin") {
+		t.Errorf("F-P5P6-A-006: expected usage output to contain verb \"admin\"; got stdout=%q stderr=%q",
 			stdout, stderr)
 	}
 }
