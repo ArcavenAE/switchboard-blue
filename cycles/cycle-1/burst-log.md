@@ -1138,3 +1138,30 @@ Five verbs collectively annotated PENDING-S-BL.CLI-SURFACE-COMPLETION in v1.19: 
 The VSDD process principle is that converged implementation (merged code + passing tests + adversary-verified) is the highest-confidence source of truth for interface shapes. S-7.03 merged at PR #60 (7142146) after a multi-pass adversarial convergence cycle that specifically examined the console flag surface (attach/detach/switch --console --svtn). That converged shape is authoritative. Amending interface-definitions to match converged implementation is not drift — it is the spec catching up to verified behavior. Amending implementation to match an unconverged spec fragment would be regression.
 
 **BC-5.39.001 streak:** 0/3 — Pass 7 targets 0→1. Dispatch against develop tip 4d7d9e0 + interface-definitions v1.19.
+
+---
+
+## Phase 5 — Burst 24 / Pass 7 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** adversary-A (public-surface/operator-UX lens, opus-4-7), adversary-B (test-rigor/traceability lens, opus-4-7)
+**Dispatch tuple:** develop tip 4d7d9e0a702228b6dca02970cb4c6290b32311be + interface-definitions v1.19
+**Files touched:** cycles/cycle-1/adversarial-reviews/P5-pass-7-Adv-A.md (new), cycles/cycle-1/adversarial-reviews/P5-pass-7-Adv-B.md (new), STATE.md, cycles/cycle-1/burst-log.md
+
+**Summary:** Phase 5 Pass 7 fresh-context split-adversary complete. Adv-A discovered the same defect class (plain fmt.Errorf instead of usageErrf) in the console and router verb trees — the identical class F-P5P6-A-001 fixed in Burst 23 for admin/sessions, but the Burst 23 sweep missed these two trees entirely. Adv-B reviewed the test tier and found it clean for the admin/sessions surface that was actually repaired; five cosmetic observations only. BC-5.39.001 streak holds at 0/3.
+
+**Idle-without-report count this pass:** 2/2 — both adversaries required explicit SendMessage ping to retrieve reports after completion (consistent with P6 pattern; 6/6 across recent bursts).
+
+| Agent | Verdict | Finding summary |
+|-------|---------|-----------------|
+| Adv-A (public-surface) | HAS_FINDINGS 0H/3M/0L+1obs | F-P5P7-A-001 [MED] console.go: 7 usage-error return sites use plain fmt.Errorf → exit 1 (no-subcommand, unknown-subcommand, flag.Parse wraps, missing --session on attach+switch). F-P5P7-A-002 [MED] router_metrics.go:46-48: missing --svtn returns fmt.Errorf → exit 1 despite correct E-CFG-010 JSON envelope. F-P5P7-A-003 [MED] router_status.go:125,137: missing --target value returns fmt.Errorf → exit 1 at both missing-value-in-loop and empty-after-loop sites. OBS-P5P7-A-001: production_exit_code_test.go has zero console/router fixture cases — the RED-gate enumeration was the effective contract for what Burst 23 fixed. |
+| Adv-B (test-rigor) | CLEAN 0/0/0+5obs | Exit-code discriminator coverage adequate for the admin+sessions surface that was repaired. OBS-B-001: vestigial wantParseOK field (all cases true, else-branch dead). OBS-B-002: SvtnDestroyConfirmIsString negative-only oracle narrower than name implies. OBS-B-003: stale docstring after Burst 23 rename. OBS-B-004: Case 6 comment describes pre-refactor path (comment drift, assertion still correct). OBS-B-005: intentional test redundancy between admin_test.go:2349 and production_exit_code_test.go:185. |
+
+**Read-cap disclosures:**
+- Adv-A: 8 files read vs cap 6 (overage self-disclosed; 2 extra Reads required to walk console.go + router_metrics.go trees). Documented in report frontmatter.
+- Adv-B: within cap (partial reads of main_test.go + admin_test.go + admin_interactive_prompt_test.go counted against full-file reads).
+
+**Root cause of Burst 23 miss:** Burst 23's usageErrf remediation for F-P5P6-A-001 was driven by a TDD RED-gate enumeration in production_exit_code_test.go. That RED gate enumerated admin and sessions sub-verb paths as the stimulus corpus — and the minimum-code-to-green principle made the test table the effective specification of what "exit-code class" meant. console.go and the router_metrics/router_status files were named in the implementer brief's "wrap list" but were not given RED test cases, so no green signal required their correction and they slipped through.
+
+**Lesson (NOT a new drift item — recorded here for future dispatch hardening):** TDD-sweep lesson — when remediating a defect class across multiple code paths, the RED enumeration MUST carry the full class sweep. Listing paths in the implementer brief without corresponding RED fixture rows creates a silent gap: minimum-code-to-green makes the fixture table the contract, not the brief. Future defect-class remediations: RED enumeration in production_exit_code_test.go (or equivalent gate test) must enumerate EVERY instance of the defect class before the implementer receives the green target.
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds at 0. Burst 25 remediation pending (code-only; no spec changes — §174 correct, impl stale).
