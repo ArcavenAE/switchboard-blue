@@ -587,7 +587,25 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 | 3 | 2026-07-02 | HAS_FINDINGS (3H/4M/2L/3obs) | HAS_FINDINGS (0H/1M/2L/3obs) | 0/3 | c76a8d5 (rem) |
 | 4 | 2026-07-03 | HAS_FINDINGS (3H/5M/2L) | HAS_FINDINGS (2H/2M) | 3/3 SATISFIED (passes 17/18/19) | cbd0272 |
 | 5 | 2026-07-03 | HAS_FINDINGS (0H/2M/2L/1obs) | HAS_FINDINGS (0H/2M/1L/1obs) | 0/3 (streak reset) | cbd0272 |
+| 6 | 2026-07-03 | HAS_FINDINGS (1H/4M/1L) | CLEAN (0/0/0+2obs) | 0/3 | d012dbf |
+| 7 | 2026-07-03 | HAS_FINDINGS (0H/3M/0L+1obs) | CLEAN (0/0/0+5obs) | 0/3 | 4d7d9e0 |
+| 8 | 2026-07-03 | HAS_FINDINGS (2H/4M/1L) | HAS_FINDINGS (0H/2M+1obs) | 0/3 | 4d7d9e0 |
+| 9 | 2026-07-03 | HAS_FINDINGS (1H/2M/3L+3obs) | CLEAN (0/0/0+3obs) | 0/3 | 32ea461 |
+| 10 | 2026-07-03 | HAS_FINDINGS (1H/1M) | HAS_FINDINGS (0H/0M/1L+2obs) | 0/3 | 32ea461 |
+| 11 | 2026-07-03 | HAS_FINDINGS (1H/1M/3obs) | CLEAN (0/0/0+3obs) | 0/3 | 66e9ddc |
 
 **Pass 5 notes:** Adv-B self-reported files_read 7 vs read_cap 6 (overage disclosed). BC-5.39.001 streak reset to 0/3. Pass 5 remediation pending (Burst 21).
 
 **Integrity note (Pass 5 Adv-B):** files_read 7 vs read_cap 6 — overage self-disclosed by adversary for admin_interactive_prompt_test.go io.Pipe seam; rationalized in report.
+
+**Pass 6 notes:** Burst 23 code+spec remediation (PR #65 4d7d9e0; interface-definitions v1.19; BC-2.07.002 v1.9; S-6.03 v2.8). Streak 0/3.
+
+**Pass 7 notes:** Burst 25 code-only remediation (PR #66 b4ccd06; usageErrf sweep). Streak 0/3.
+
+**Pass 8 notes:** Burst 27 code+spec remediation (PR #67 32ea461; interface-definitions v1.20). Streak 0/3.
+
+**Pass 9 notes:** Burst 29 spec-only remediation (interface-definitions v1.21; all findings documentation-side; zero code changes). Streak 0/3.
+
+**Pass 10 notes:** Burst 31 code+spec remediation (PR #68 66e9ddc; interface-definitions v1.22; phantom --at→--after corrected; E-CFG-001 exit-class split). Streak 0/3.
+
+**Pass 11 notes:** Burst 33 spec-only remediation (interface-definitions v1.23; §131 revoke carve-out from runDestroyConfirmGate family; §137 scoping to svtn destroy + key register + admin recover; §109 --role REQUIRED syntax). Both adversaries disclosed read-cap overages (A: 7/6, B: 8/6). Both findings adjudicated spec-side (taxonomy v4.4 + E-ADM-018 already ruled the bool-confirm shape; §109 syntax row was simply missing the flag). Zero code changes. Streak 0/3; Pass 12 next.

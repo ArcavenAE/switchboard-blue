@@ -1357,3 +1357,63 @@ All six claims file:line-verified against 32ea461 before committing.
 **Reviewer observation (non-blocking):** parse-error sibling at admin.go:552 without E-CFG-001 token. Defensible per taxonomy scope (parse-error class is not a configuration-validation error); not tracked.
 
 **BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged (remediation burst does not increment streak). Pass 11 dispatch next; targets streak 0→1.
+
+---
+
+## Current Phase Steps — Compact Routing Archive (rows rotated out 2026-07-03)
+
+The following rows were present in STATE.md Current Phase Steps before compact-state routing trimmed the table to 5 rows. Full detail is in the burst sections above.
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-07-02 | Phase 5 Passes 2+3 (adversary + remediation) | COMPLETED | P2: HAS_FINDINGS 0H/1M/1L; REM: BC-2.07.002 v1.7, BC-2.09.003 v1.8, stubs SVTN-LIST-WIRE+PING-VERSION-WIRE. P3: 3H/4M/2L+6obs; REM (Bursts 16-18): PR #62 c76a8d5, taxonomy v4.4, 7 DRIFTs closed. |
+| 2026-07-03 | Phase 5 Pass 4 (Burst 19) + Pass 5 (Burst 20+21) | COMPLETED | P4 REM: PR #63 cbd0272, 9 findings, taxonomy v4.5, streak 3/3 SATISFIED then reset. P5: Adv-A 0H/2M/2L+Adv-B 0H/2M/1L → REM (Burst 21: v1.18, S-BL.ADMIN-RECOVER-WIRE, PR #64 d012dbf). Streak 0/3. |
+| 2026-07-03 | Phase 5 Pass 6 split-adversary vs d012dbf + interface-definitions v1.18 | COMPLETED | Adv-A HAS_FINDINGS 1H/4M/1L (F-P5P6-A-001..006); Adv-B CLEAN 0/0/0+2obs. Burst 23 remediation pending. |
+| 2026-07-03 | Phase 5 Pass 6 remediation (Burst 23) | COMPLETED | Code track: PR #65 4d7d9e0 merged (usageError exit-code discrimination, sessions sub-verb routing, bare-sbctl exit 2; RED 8692237 → GREEN e83c69e → triage 4540180; reviewer APPROVED 6 LOW, 4 applied 2 deferred). Spec track: interface-definitions v1.19 + BC-2.07.002 v1.9 (EC-003 0→2) + S-6.03 v2.8 (AC-012) — all claims file:line-verified against merged tree. Stub S-BL.CLI-SURFACE-COMPLETION minted (paths ping + svtn status flagged NO-GOVERNING-BC design obligations). F-A-004 adjudicated spec-side (S-7.03 converged shape authoritative). |
+| 2026-07-03 | Phase 5 Pass 7 split-adversary vs 4d7d9e0 + v1.19 | COMPLETED | Adv-A HAS_FINDINGS 0H/3M/0L+1obs (F-P5P7-A-001..003 — console/router usage errors still plain fmt.Errorf → exit 1; same class as F-P5P6-A-001, console/router trees missed by Burst 23 sweep; OBS-A-001: production_exit_code_test.go covers zero console/router cases — RED enumeration was the effective contract). Adv-B CLEAN 0/0/0+5obs (exit-code discriminator coverage adequate on covered branches; OBS-B-003 stale docstring, OBS-B-004 comment drift, others cosmetic). Adv-A read overage 8/6 self-disclosed. Burst 25 remediation pending (code-only, no spec changes — §174 correct, impl stale). |
+| 2026-07-03 | Phase 5 Pass 7 remediation (Burst 25, code-only) | COMPLETED | PR #66 b4ccd06 merged: 10 usage-error sites converted to usageErrf (console.go ×7, router_metrics.go ×1, router_status.go ×2); production_exit_code_test.go table extended to 12 cases (6 console/router RED-first); completeness grep audit: no residual usage-error-class fmt.Errorf in cmd/sbctl. Reviewer: no blockers, MINOR count-cosmetic + 2 follow-ons. OBS-B-003/004 comment fixes included. |
+| 2026-07-03 | Phase 5 Pass 8 split-adversary vs b4ccd06 + v1.19 | COMPLETED | Adv-A HAS_FINDINGS 2H/4M/1L (F-P5P8-A-001..007 — admin-key surface: confirm-gate wrong-command prefix, §108 unreachable error codes, --role silent default, destroy name-validation gap, §109 E-ADM-011 vs E-ADM-019, paths verb message, hex-pubkey placeholders); Adv-B HAS_FINDINGS 0H/2M+1obs (F-P5P8-B-001 finding-ID misattribution in test failure arm [process-gap], F-P5P8-B-002 canned-daemon cmd-dispatch oracle vacuous [process-gap]). Both read-cap overages self-disclosed (A: 7 reads, B: 9 touches). Burst 27 remediation: code track (A-001/004/006 + B-001/002 + OBS-B-001) then spec track (A-002/003/005/007). |
+| 2026-07-03 | Phase 5 Pass 8 remediation (Burst 27) | COMPLETED | Code track: PR #67 32ea461 merged (confirm-gate cmdName parameterization F-A-001; destroy validateSVTNName + raw-bytes utf8.Valid pre-check F-A-004; paths verb message F-A-006; per-case finding attribution F-B-001; canned-daemon command-dispatch assertion F-B-002 [wire field verified as 'command' per ADR-012, not 'cmd']; E-NET-001 fingerprint OBS-B-001; lint fix ef9f52f). Spec track: interface-definitions v1.20 — §108/§109 error surfaces corrected to verified reachability, openssh-pubkey placeholders, --role documented default (F-A-003 adjudicated spec-side), §395 authority note swept. All spec claims file:line-verified. |
+| 2026-07-03 | Phase 5 Pass 9 split-adversary vs 32ea461 + v1.20 | COMPLETED | Adv-A HAS_FINDINGS 1H/2M/3L+3obs (F-P5P9-A-001..006 — ALL SPEC-SIDE: §94-95 version/ping unannotated [missed by F-P5P6-A-005 sweep], --target default undocumented, §110 expire exit codes unaudited [E-ADM-021/E-ADM-009/E-SVTN-003 reachable], §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes warning footnote). Adv-B CLEAN 0/0/0+3obs (all Pass 8 fixes verified correctly implemented; OBS-B-001 stale reconciliation comment — orchestrator verified by grep: NO live contradiction, ExitsZero test no longer exists, comment-only fix rides next code PR). ZERO code defects this pass — remediation is single spec burst v1.21. Both read-cap overages self-disclosed. |
+
+---
+
+## Phase 5 — Burst 32 / Pass 11 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** Adv-A (public-surface/operator-UX), Adv-B (test-rigor/traceability)
+**Dispatch tuple:** develop tip 66e9ddc + interface-definitions v1.22
+
+**Summary:** Phase 5 Pass 11 fresh-context split-adversary complete. Adv-A surfaced a HIGH finding that escaped all prior passes: §131/§137 list `admin key revoke` as a member of the `runDestroyConfirmGate` interactive-confirm family, but the impl registers `--confirm` as a plain `boolStringFlag` (admin.go:488-489, `isTrue()` admin.go:132-135) — no interactive prompt, no `--yes` flag, no E-CFG-012/E-CFG-013 exits. The spec never documented this carve-out; taxonomy v4.4 already ruled that revoke's bool-confirm shape is intentional (E-ADM-018 daemon-side conditional handles control-role enforcement without `--confirm`). Adv-A also surfaced a MED: §109 CLI syntax for `admin key revoke` shows only `--svtn` and `--key` — `--role` is required in the impl with no default and no mention in the syntax cell (contrast §108 where `--role` is documented as optional with `console` default). Adv-B was CLEAN with 3 non-blocking observations: loose oracle breadth on 4 production-exit cases (OBS-B-001); raw line-number citation in admin_wire_tag_test (OBS-B-002); under-length daemon_sig mock constant (OBS-B-003). Both adversaries self-disclosed read-cap overages (A: 7/6; B: 8/6). Streak holds at 0/3; Burst 33 spec-only remediation next.
+
+| Agent | Verdict | Finding summary |
+|-------|---------|-----------------|
+| Adv-A (public-surface/operator-UX) | HAS_FINDINGS 1H/1M/3obs | F-P5P11-A-001 [HIGH] admin key revoke confirm surface: spec §131/§137 lists revoke in runDestroyConfirmGate family; impl registers boolStringFlag (not shape-validated, no interactive prompt, no --yes, no E-CFG-012/E-CFG-013). F-P5P11-A-002 [MED] §109 CLI syntax omits required --role flag (register has optional-with-default; revoke requires it with no default). OBS-A-001: sub-verb vs subcommand error label inconsistency. OBS-A-002: admin.go package doc omits svtn destroy. OBS-A-003: admin.go:552 parse-error arm lacks E-CFG-001 token. |
+| Adv-B (test-rigor/traceability) | CLEAN 0/0/0+3obs | OBS-B-001: loose oracle breadth on 4 production_exit_code_test.go cases (cases 3-6 use bare substring oracles vs cases 1/2/11/12 which use E-CFG-* code tokens). OBS-B-002: admin_wire_tag_test.go:39 raw line-number citation drifts on admin.go reorder. OBS-B-003: router_status_test.go:129 daemon_sig stub is 85 chars (Ed25519 = 86 unpadded); latent mock hazard if future spec requires signature-length validation. |
+
+**Read-cap disclosures:**
+- Adv-A: 7 reads (6-file cap, +1 for console.go §86-91 flag verify; self-disclosed).
+- Adv-B: 8 reads (7 full + 1 partial vs cap 6; +2 over cap; self-disclosed).
+
+**Adjudication:** Both F-P5P11-A-001 and F-P5P11-A-002 adjudicated spec-side:
+- F-A-001: taxonomy v4.4 already ruled the bool-confirm shape at design time; revoke intentionally differs from the runDestroyConfirmGate family (no SVTN short-ID required, no interactive mode, no --yes bypass — E-ADM-018 daemon-side handles control-role guard without --confirm). §131/§137 never received the carve-out annotation. Remediation: annotate §131 to carve out revoke; narrow §137 scoping to svtn destroy + key register + admin recover.
+- F-A-002: §109 syntax cell never added --role. Remediation: add `--role <control|console|access>` (REQUIRED, no default) to §109 revoke syntax.
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 33 spec-only remediation pending.
+
+---
+
+## Phase 5 — Burst 33 / Pass 11 Remediation (2026-07-03)
+
+**Agents dispatched:** product-owner (spec track), state-manager
+**Dispatch tuple:** develop tip 66e9ddc; interface-definitions v1.22 → v1.23
+
+**Summary:** Phase 5 Pass 11 remediation complete (spec-only). Both Burst 32 findings adjudicated spec-side; no code changes required. F-P5P11-A-001 [HIGH]: §131 revoke carve-out annotation added (revoke registers a `boolStringFlag` for `--confirm`; the interactive-flow / SVTN-short-ID shape-validation / E-CFG-012 / E-CFG-013 family does NOT apply); §137 scoped to `admin svtn destroy`, `admin key register`, and `admin recover` only. Rationale: taxonomy v4.4 ruled the bool-confirm shape at design time; E-ADM-018 (daemon-side exit 1 for control-role revoke without `--confirm`) is the enforcement mechanism; the CLI-side confirm surface for revoke is intentionally a wire boolean, not an interactive gate. F-P5P11-A-002 [MED]: §109 `admin key revoke` syntax row updated — `--role <control|console|access>` added as REQUIRED with explicit "no default" annotation (contrast §108 where `--role` defaults to `console`). No changes to behavioral contracts, error taxonomy, or implementation. Streak 0/3; Pass 12 dispatch next.
+
+| Track | Agent | Task | Output |
+|-------|-------|------|--------|
+| Spec | product-owner | §131 revoke carve-out (F-A-001 HIGH) | Annotation added: revoke uses boolStringFlag; interactive-flow / SVTN-shape-validation / E-CFG-012 / E-CFG-013 do NOT apply; rationale: taxonomy v4.4 + E-ADM-018 daemon-side enforcement |
+| Spec | product-owner | §137 scoping (F-A-001 HIGH) | Family narrowed to: svtn destroy, key register, admin recover; revoke explicitly excluded |
+| Spec | product-owner | §109 revoke syntax (F-A-002 MED) | `--role <control|console|access>` added as REQUIRED, no default; parenthetical "no default — required" annotation matching §394 prose |
+| State | state-manager | STATE.md + burst-log.md + convergence-trajectory.md | This entry |
+
+**BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged (remediation burst does not increment streak). Pass 12 dispatch next; targets streak 0→1.
