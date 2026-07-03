@@ -1079,30 +1079,17 @@ func TestSbctlAdmin_MalformedJSONResponse_ReturnsError(t *testing.T) {
 func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 	t.Parallel()
 
-	// S-6.02 EC-003 — zero duration must cause runAdmin to return non-nil error.
-	// Daemon handler simulates E-CFG-001 for zero duration.
-	addr := startFakeServer(t, nil, func(cmd string, args json.RawMessage) (any, error) {
-		if cmd != "admin.key.expire" {
-			return nil, fmt.Errorf("unexpected command: %q", cmd)
-		}
-		var expireArgs adminKeyExpireArgs
-		if err := json.Unmarshal(args, &expireArgs); err != nil {
-			return nil, err
-		}
-		d, err := time.ParseDuration(expireArgs.After)
-		if err != nil {
-			return nil, fmt.Errorf("E-CFG-001: invalid duration %q: %w", expireArgs.After, err)
-		}
-		if d <= 0 {
-			return nil, fmt.Errorf("E-CFG-001: invalid duration: must be positive")
-		}
-		return map[string]string{"fingerprint": "SHA256:ok"}, nil
-	})
-
+	// S-6.02 EC-003 — zero duration must be rejected client-side without dialing.
+	//
+	// The oracle uses an unreachable target address (127.0.0.1:1) so that any
+	// regression that skips the client-side check and attempts to dial produces
+	// E-NET-001 / "connection refused" — which the negative assertion below
+	// catches.  A reachable fake-server oracle cannot distinguish client-side from
+	// daemon-side rejection when both paths produce an error mentioning "duration".
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := runAdmin(ctx, addr, testdataKeyPath(t), false, []string{
+	err := runAdmin(ctx, "127.0.0.1:1", testdataKeyPath(t), false, []string{
 		"key", "expire",
 		"--key", "ssh-ed25519 AAAA...",
 		"--svtn", "test-svtn",
@@ -1113,17 +1100,17 @@ func TestSbctlAdmin_KeyExpire_ZeroDurationAfterFlag(t *testing.T) {
 		t.Error("S-6.02 EC-003 — runAdmin key expire --after 0s: want non-nil error; got nil")
 		return
 	}
-	// Tighten oracle: client-side validation must fire before any connection
-	// attempt — the error must mention the problematic constraint ("duration"
-	// or "after") and must NOT be a network error (E-NET-001 / connection
-	// refused). The daemon handler would emit E-CFG-001 for zero duration, but
-	// client-side validation is expected to short-circuit before dispatch.
 	errStr := err.Error()
+	// Network errors prove client-side validation did NOT short-circuit.
 	if strings.Contains(errStr, "E-NET-001") || strings.Contains(errStr, "connection refused") {
-		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: got network error %q; want client-side validation error before any connection attempt", errStr)
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: got network error %q; "+
+			"want client-side validation error before any connection attempt "+
+			"(fix: ensure runAdminKeyExpire rejects d<=0 before connectAndRun)", errStr)
 	}
-	if !strings.Contains(errStr, "duration") && !strings.Contains(errStr, "after") {
-		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: error %q does not mention 'duration' or 'after'; want field-specific validation message", errStr)
+	// The error must mention the problematic flag.
+	if !strings.Contains(errStr, "duration") && !strings.Contains(errStr, "--after") {
+		t.Errorf("S-6.02 EC-003 — runAdmin key expire --after 0s: error %q does not mention "+
+			"'duration' or '--after'; want field-specific validation message", errStr)
 	}
 }
 

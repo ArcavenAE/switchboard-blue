@@ -136,32 +136,37 @@ func TestNewInBurst19_ConfirmSymmetry_BoolFlagAcceptsValueForm(t *testing.T) {
 	}
 }
 
-// TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue verifies that
-// the current Bool confirm flag on `admin key revoke` REJECTS a non-bool value
-// like "--confirm=some-token" while `admin svtn destroy --confirm` (String flag)
-// accepts arbitrary tokens.
+// TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue is a green
+// regression guard that verifies `admin key revoke --confirm=<arbitrary-token>`
+// does NOT produce a Bool parse error.
 //
-// This documents the asymmetry (F-A-009). Once --confirm on key revoke
-// becomes a String flag, the non-bool token will be accepted (not rejected)
-// and this test will need updating. Until then: the flag IS rejected and this
-// test FAILS because it asserts the rejection must NOT happen.
+// Background: prior to the boolStringFlag refactor (admin.go boolStringFlag
+// type), the --confirm flag was declared via `fs.Bool("confirm", ...)`, which
+// rejects non-bool tokens like "--confirm=some-confirmation-token" with an
+// "invalid boolean" parse error.  The boolStringFlag custom type implements
+// IsBoolFlag() (so bare `--confirm` is accepted as true) but also accepts
+// arbitrary string values via Set().
 //
-// MUST FAIL with current Bool flag because Bool rejects "some-confirmation-token".
+// Current state: with boolStringFlag, the token is accepted at the flag-parse
+// layer — no parse error fires — and the call proceeds to the connection
+// attempt (which fails with a network error because 127.0.0.1:1 is
+// unreachable).  If someone regresses the flag back to `fs.Bool`, this test
+// fails with the Bool parse error, alerting the author.
 //
-// Oracle scope note: this test uses a negative-only oracle — it asserts that
-// the Bool parse error does NOT occur.  It cannot assert the wire-side Confirm
-// value when an arbitrary-string token is passed because the Bool parse error
-// fires synchronously, returning before any wire payload is built.  Wire-value
-// round-trips for the accepted forms (true / false / bare) are covered by
+// Oracle scope note: this test uses a negative-only oracle — it asserts that a
+// Bool parse error does NOT occur.  The call always errors at the network layer
+// for the unreachable address, so the wire-side Confirm value for an
+// arbitrary-string token is not observable here.  Wire-value round-trips for the
+// accepted bool forms (true / false / bare) are covered by
 // TestNewInBurst19_ConfirmSymmetry_WirePayload_ConfirmTrue (json.Marshal path).
 func TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue(t *testing.T) {
 	t.Parallel()
 
 	sio := sbctlIO{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 
-	// Attempt to pass a non-bool token value to --confirm on key revoke.
-	// This should work once --confirm is a String flag (symmetry with svtn destroy).
-	// Currently it will fail with a Bool parse error.
+	// Pass a non-bool token value to --confirm on key revoke.
+	// With boolStringFlag this is accepted at the flag-parse layer; the call
+	// then errors at the network layer (127.0.0.1:1 unreachable).
 	err := runAdminKeyRevoke(
 		context.Background(),
 		"127.0.0.1:1", // unreachable
@@ -171,21 +176,17 @@ func TestNewInBurst19_ConfirmSymmetry_BoolFlagRejectsNonBoolValue(t *testing.T) 
 			"--key", "AAAA",
 			"--svtn", "test-svtn",
 			"--role", "control",
-			"--confirm=some-confirmation-token", // non-bool — Bool flag rejects this
+			"--confirm=some-confirmation-token", // accepted by boolStringFlag
 		},
 		sio,
 	)
 
-	// FAILS: with a Bool flag, "--confirm=some-confirmation-token" causes a parse
-	// error. Once the flag is changed to String, this will get a connection error
-	// (not a parse error) and this assertion must invert.
-	//
-	// We assert that err must NOT be a Bool parse error.
-	// With current code it IS a parse error → test FAILS.
+	// Regression guard: a Bool parse error indicates the flag was regressed from
+	// boolStringFlag back to fs.Bool.  That is the regression this test guards against.
 	if err != nil && (strings.Contains(err.Error(), "invalid boolean") ||
 		strings.Contains(err.Error(), "invalid value")) {
-		t.Errorf("key revoke --confirm must accept non-bool token value for symmetry with svtn destroy; "+
-			"got Bool parse error: %v\n  (fix: change --confirm flag from Bool to String)", err)
+		t.Errorf("key revoke --confirm must accept non-bool token value (boolStringFlag); "+
+			"got Bool parse error: %v\n  (fix: ensure --confirm uses boolStringFlag, not fs.Bool)", err)
 	}
 }
 
