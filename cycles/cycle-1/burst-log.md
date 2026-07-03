@@ -1194,3 +1194,28 @@ The VSDD process principle is that converged implementation (merged code + passi
 **Ops near-miss note:** During merge post-processing, the orchestrator shell's cwd-persistence briefly switched the .factory worktree onto develop. No loss occurred — factory-artifacts was fully committed and pushed at 8ee08c6 before the cwd switch, and all worktrees were restored and verified. Class: nested-worktree hazard, upstream #342-adjacent. No drift items filed (one-off; state was clean at all times).
 
 **BC-5.39.001 streak:** 0/3 — Pass 8 targets 0→1. Dispatch against b4ccd06 + interface-definitions v1.19.
+
+---
+
+## Phase 5 — Burst 26 / Pass 8 Split-Adversary (2026-07-03)
+
+**Agents dispatched:** Adv-A (public-surface-and-operator-ux), Adv-B (test-rigor+traceability)
+**Dispatch tuple:** develop tip b4ccd06 + interface-definitions v1.19
+**Lens escalation:** Adv-A escalated to error-code reachability analysis (grep-level cross-checking of spec-declared exit codes against impl emission sites); surfaced two HIGH findings via reachability gap, not textual drift.
+
+**Summary:** Phase 5 Pass 8 fresh-context split-adversary complete. Adv-A focused on the admin key register/revoke/expire surface and discovered two HIGH findings (confirm-gate emits wrong-command prefix; §108 documents two unreachable exit codes) plus four MED/LOW findings across the admin-key and paths surfaces. Adv-B focused on the test tier and found two [process-gap] MED findings: misattributed finding IDs in the shared failure assertion arm (Cases 7-12 all blame F-P5P6-A-001 though they were minted by F-P5P7 findings), and a vacuous cmd-dispatch oracle in router_status_test.go (serveCannedConn never inspects req["cmd"]). Both adversaries self-disclosed read-cap overages. BC-5.39.001 streak 0/3.
+
+**Idle-without-report count this pass:** 2/2 — both adversaries required explicit ping to retrieve reports (consistent with P6/P7 pattern; 6/6 across three most recent bursts).
+
+| Agent | Verdict | Finding summary |
+|-------|---------|-----------------|
+| Adv-A (public-surface-and-operator-ux) | HAS_FINDINGS 2H/4M/1L | F-P5P8-A-001 [HIGH] admin key register confirm-gate emits "admin svtn destroy:" prefix — runDestroyConfirmGate hardcodes wrong-verb string, invoked from register path. F-P5P8-A-002 [HIGH] §108 documents E-ADM-012 (already-registered) + E-ADM-018 (control-revoke-confirm) as register exit codes; neither reachable — LWW semantics means no dup-key error, E-ADM-018 is revoke-only. F-P5P8-A-003 [MED] --role silently defaults to "console" while §108 syntax implies required. F-P5P8-A-004 [MED] destroy handler validates only Name=="" not full validateSVTNName(); whitespace-only name dispatches to not-found rather than E-CFG-001. F-P5P8-A-005 [MED] §109 names E-ADM-011 for revoke hierarchy violation; impl emits E-ADM-019 (role mismatch) via mapAdminError. F-P5P8-A-006 [MED] paths unknown-verb emits bare "usage: sbctl paths list" vs router's "router: unknown subcommand %q; expected..." pattern. F-P5P8-A-007 [LOW] §108/109/110 row headers use <hex-pubkey> but decodePublicKey accepts OpenSSH (primary) or base64; §113 prose corrects this but headers do not. |
+| Adv-B (test-rigor+traceability) | HAS_FINDINGS 0H/2M+1obs | F-P5P8-B-001 [MED] production_exit_code_test.go:366-370 shared failure arm reports all 12 cases as "F-P5P6-A-001" — Cases 7-12 were minted by F-P5P7-A-001/002/003; misattribution routes remediation to wrong prior artifact [process-gap]. F-P5P8-B-002 [MED] router_status_test.go serveCannedConn never inspects req["cmd"]; TestSbctlRouterStatus_IsAliasForPathsList claims to verify single-code-path aliasing but oracle is response-shape identity only — cmd dispatch unobserved [process-gap]. OBS-P5P8-B-001: bare_sessions_defaults_to_list uses exit-code-only oracle (exitCode != 1); natural stderr sentinel is E-NET-001 but not asserted. |
+
+**Read-cap disclosures:**
+- Adv-A: 7 files read vs cap 6 (overage self-disclosed; 1 extra Read for internal/svtnmgmt/svtnmgmt.go partial to verify LWW semantics underlying A-002). Documented in report frontmatter.
+- Adv-B: 9 file touches vs cap 6 (7 full-file + 2 partial Reads; overage self-disclosed). Documented in report frontmatter.
+
+**Finding-class analysis:** Two distinct defect classes surfaced this pass. Adv-A findings A-001 through A-007 are all admin-key public-surface defects (spec-vs-impl divergence on the operator-facing command layer). Adv-B findings B-001 and B-002 are both [process-gap] test-infrastructure defects — not product behavior gaps, but oracles that fail to enforce what they claim to enforce. The process-gap tag indicates these are candidates for upstream vsdd-factory tooling improvements (test attribution enforcement, cmd-dispatch oracle pattern).
+
+**BC-5.39.001 streak:** 0/3 — Adv-A HAS_FINDINGS holds streak at 0. Burst 27 remediation pending: code track (A-001/004/006 + B-001/002 + OBS-B-001) then spec track (A-002/003/005/007).
