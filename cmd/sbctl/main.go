@@ -70,8 +70,12 @@ func main() {
 		err = runSessions(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "paths":
 		// `sbctl paths list` — canonical per-path metrics command (BC-2.06.003 PC-1).
-		if len(args) < 2 || args[1] != "list" {
+		// F-P5P8-A-006: distinguish no sub-verb (generic usage hint) from an unknown
+		// sub-verb (router-style error naming the typed verb, exit 2).
+		if len(args) < 2 {
 			err = usageErrf("usage: sbctl paths list")
+		} else if args[1] != "list" {
+			err = usageErrf("paths: unknown sub-verb %q; expected 'list'", args[1])
 		} else {
 			err = runPathsList(ctx, *target, *key, *jsonOut, sio)
 		}
