@@ -4,7 +4,7 @@ document_type: story
 level: ops
 story_id: S-W3.04
 title: "full daemon assembly — wire all Wave-3 subsystems in cmd/switchboard"
-status: ready
+status: merged
 producer: story-writer
 timestamp: 2026-06-27T00:00:00Z
 phase: 2

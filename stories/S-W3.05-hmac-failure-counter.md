@@ -4,7 +4,7 @@ document_type: story
 level: ops
 story_id: S-W3.05
 title: "per-source HMAC failure counter and admission alert (BC-2.05.005 PC-3)"
-status: ready
+status: merged
 producer: story-writer
 timestamp: 2026-06-27T00:00:00Z
 phase: 2
