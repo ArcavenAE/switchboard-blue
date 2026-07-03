@@ -210,13 +210,6 @@ func TestListKeys_RevokedExpiredRole_DeniedEADM009(t *testing.T) {
 
 		m, _ := newListKeysAdmissionManager(t)
 
-		callerPub, _, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			t.Fatalf("generate caller key: %v", err)
-		}
-		if _, err := m.RegisterKey("svtn-a", callerPub, admission.RoleControl); err != nil {
-			t.Fatalf("register key: %v", err)
-		}
 		// Revoke without confirm (console-role revoke; control requires confirm=true).
 		// Use a console key so we can revoke it without the confirm gate.
 		consolePub, _, err := ed25519.GenerateKey(rand.Reader)
@@ -313,6 +306,52 @@ func TestListKeys_OperatorSetMember_AllowedUnconditionally(t *testing.T) {
 	}
 	if _, ok := result.(adminListKeysResult); !ok {
 		t.Fatalf("F-P5P13-A-001 case 5: expected adminListKeysResult; got %T", result)
+	}
+}
+
+// TestListKeys_OperatorSetMember_MissingSVTN_ReturnsESVTN003 verifies that an
+// operator-set caller requesting a nonexistent SVTN receives E-SVTN-003, NOT
+// E-ADM-009.  This is the operator-set × missing-SVTN diagonal: the SVTN-existence
+// check must run regardless of whether the caller cleared the admission gate.
+//
+// If a mutation reorders the admission gate before the SVTN-existence check for
+// operator-set callers, the caller (who passes admission) would receive E-SVTN-003
+// from the list call.  If the SVTN-existence check were skipped entirely for
+// admitted callers, it would return success (or a different error).  This test
+// closes that detection gap.
+//
+// Spec anchor: F-L2-003 operator-set carve-out; mapAdminError ErrSVTNNotFound → E-SVTN-003.
+// RED status: GREEN (current handler returns E-SVTN-003 for any missing SVTN).
+func TestListKeys_OperatorSetMember_MissingSVTN_ReturnsESVTN003(t *testing.T) {
+	t.Parallel()
+
+	m, _ := newListKeysAdmissionManager(t)
+
+	// Register an operator key — NOT admitted to any SVTN.
+	operatorPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate operator key: %v", err)
+	}
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
+	handlers := BuildAdminHandlers(m, ops)
+	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
+	for _, h := range handlers {
+		if h.Command == "admin.key.list-keys" {
+			listFn = h.Fn
+			break
+		}
+	}
+	if listFn == nil {
+		t.Fatal("admin.key.list-keys handler not found")
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), operatorPub)
+	_, handlerErr := listFn(ctx, marshalListKeysArgs(t, "svtn-does-not-exist"))
+	if handlerErr == nil {
+		t.Fatal("F-P5P14-B-005: operator-set caller + missing SVTN: expected E-SVTN-003; got nil")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-SVTN-003") {
+		t.Errorf("F-P5P14-B-005: expected E-SVTN-003 in error; got: %v", handlerErr)
 	}
 }
 
