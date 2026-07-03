@@ -153,14 +153,25 @@ func runProductionHook(t *testing.T, testName, envKey, envVal string) (exitCode 
 // ── F-P5P6-A-001 (HIGH): production main() usage-error exit codes ─────────────
 
 // TestProductionMain_UsageErrors_ExitTwo verifies that PRODUCTION main()
-// exits 2 — not 1 — for the six usage-error cases identified in the
-// Phase 5 Pass 6 adversarial review finding F-P5P6-A-001.
+// exits 2 — not 1 — for all usage-error cases identified across
+// Phase 5 Pass 6 (F-P5P6-A-001) and Phase 5 Pass 7 adversarial findings
+// F-P5P7-A-001 (console tree), F-P5P7-A-002 (router metrics --svtn),
+// and F-P5P7-A-003 (router status --target).
 //
-// RED: current main.go:82-84 collapses ALL errors from the dispatch switch
-// to os.Exit(1), so every case below will observe exit code 1 instead of 2.
+// RED (Pass 6 cases 1-6): current main.go:82-84 collapses ALL errors from
+// the dispatch switch to os.Exit(1), so every case below will observe exit
+// code 1 instead of 2.
 //
-// Spec authority: interface-definitions.md v1.18 §133, §174.
-// Finding: F-P5P6-A-001.
+// RED (Pass 7 cases 7-12): console.go and router_metrics.go / router_status.go
+// return plain fmt.Errorf for usage errors — the errors.As discriminator in
+// main() cannot detect them as usageError, so they exit 1 instead of 2.
+// Every usage path in cases 7-12 fires BEFORE connectAndRun is reached
+// (daemon-free: no network I/O is attempted).
+//
+// Spec authority: interface-definitions.md v1.19 §174 (exit-code table),
+// §86-88 (console --session required on attach/switch), §78-81 (router flags).
+// Findings: F-P5P6-A-001, F-P5P7-A-001 (OBS-P5P7-A-001 site inventory),
+// F-P5P7-A-002 (router metrics --svtn), F-P5P7-A-003 (router status --target).
 func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 	t.Parallel()
 
@@ -244,10 +255,10 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 		},
 		{
 			// Case 6: unknown top-level subcommand.
-			// main.go default arm already calls os.Exit(2) — this case
-			// verifies it stays correct when the error-propagation path is
-			// refactored.  It is included so the full exit-2 contract is
-			// visible in one test.
+			// Post-#65 the default arm returns usageErrf; exit 2 is mapped by
+			// the errors.As discriminator in main(), not by a direct os.Exit(2).
+			// This case verifies the discriminator path stays correct when the
+			// dispatch logic is refactored.
 			name: "top_level_unknown_subcommand",
 			args: []string{
 				"--target", target, "--key", keyPath,
@@ -255,6 +266,92 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			},
 			wantExitCode:     2,
 			wantStderrSubstr: "bogus",
+		},
+		// ── Cases 7-12: F-P5P7-A-001/002/003 — console/router usage errors ──
+		// console.go and router_*.go currently return plain fmt.Errorf for all
+		// of these usage errors.  The errors.As discriminator in main() cannot
+		// match them as *usageError, so each exits 1 (operational) instead of 2
+		// (usage).  All six paths fire before connectAndRun — daemon-free.
+		{
+			// Case 7: bare `sbctl console` (no sub-verb).
+			// F-P5P7-A-001 site 1; interface-definitions.md v1.19 §86.
+			// runConsole() returns fmt.Errorf — must become usageErrf.
+			// Stderr must name the available sub-verbs (attach/detach/switch).
+			name: "console_bare_no_subverb",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"console",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "attach",
+		},
+		{
+			// Case 8: `sbctl console bogus` — unknown sub-verb.
+			// F-P5P7-A-001 site 2; interface-definitions.md v1.19 §86.
+			// runConsole() default arm returns fmt.Errorf — must become usageErrf.
+			// Stderr must contain the unknown verb name.
+			name: "console_unknown_subverb",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"console", "bogus",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "bogus",
+		},
+		{
+			// Case 9: `sbctl console attach` without --session.
+			// F-P5P7-A-001 sites 3-4; interface-definitions.md v1.19 §87.
+			// runConsoleAttach() returns fmt.Errorf — must become usageErrf.
+			// Usage validation fires before connectAndRun; daemon-free.
+			name: "console_attach_missing_session",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"console", "attach",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "--session",
+		},
+		{
+			// Case 10: `sbctl console switch` without --session.
+			// F-P5P7-A-001 sites 5-6; interface-definitions.md v1.19 §88.
+			// runConsoleSwitch() returns fmt.Errorf — must become usageErrf.
+			// Usage validation fires before connectAndRun; daemon-free.
+			name: "console_switch_missing_session",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"console", "switch",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "--session",
+		},
+		{
+			// Case 11: `sbctl router metrics` without --svtn.
+			// F-P5P7-A-002; interface-definitions.md v1.19 §78-79.
+			// runRouterMetrics() calls writeError then returns plain fmt.Errorf —
+			// must return usageErrf so main() maps it to exit 2.
+			// Usage validation fires before connectAndRun; daemon-free.
+			// Stderr must contain "--svtn" or the E-CFG-010 code.
+			name: "router_metrics_missing_svtn",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"router", "metrics",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "E-CFG-010",
+		},
+		{
+			// Case 12: `sbctl router status --target` with no trailing value.
+			// F-P5P7-A-003 site 1; interface-definitions.md v1.19 §80-81.
+			// runRouterStatus() returns plain fmt.Errorf — must become usageErrf.
+			// Usage validation fires before the net.Dial call; daemon-free.
+			// Stderr must contain "--target" or E-CFG-010.
+			name: "router_status_target_missing_value",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"router", "status", "--target",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "E-CFG-010",
 		},
 	}
 

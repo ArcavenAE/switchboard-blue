@@ -17,7 +17,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"strings"
 )
 
@@ -44,7 +43,7 @@ func runRouterMetrics(ctx context.Context, target, keyPath string, useJSON bool,
 	}
 	if svtnID == "" {
 		writeError(useJSON, "E-CFG-010", "router metrics: --svtn=<id> is required", sio)
-		return fmt.Errorf("router metrics: --svtn flag is required")
+		return usageErrf("router metrics: --svtn flag is required")
 	}
 	return connectAndRun(ctx, target, keyPath, useJSON, "router.metrics", map[string]string{"svtn_id": svtnID}, sio)
 }

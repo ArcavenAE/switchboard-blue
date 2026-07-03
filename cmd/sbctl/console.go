@@ -22,7 +22,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 )
 
 // consoleAttachArgs is the wire-format arguments sent to the console daemon's
@@ -58,7 +57,7 @@ type consoleSwitchArgs struct {
 // Transport: mgmt-plane Unix socket (ADR-006/ADR-012; RULING-W6TB-C).
 func runConsole(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	if len(args) == 0 {
-		return fmt.Errorf("console: no subcommand specified; expected 'attach', 'detach', or 'switch'")
+		return usageErrf("console: no subcommand specified; expected 'attach', 'detach', or 'switch'")
 	}
 
 	switch args[0] {
@@ -69,7 +68,7 @@ func runConsole(ctx context.Context, target, keyPath string, useJSON bool, args 
 	case "switch":
 		return runConsoleSwitch(ctx, target, keyPath, useJSON, args[1:], sio)
 	default:
-		return fmt.Errorf("console: unknown subcommand %q; expected 'attach', 'detach', or 'switch'", args[0])
+		return usageErrf("console: unknown subcommand %q; expected 'attach', 'detach', or 'switch'", args[0])
 	}
 }
 
@@ -92,10 +91,10 @@ func runConsoleAttach(ctx context.Context, target, keyPath string, useJSON bool,
 	sessionFlag := fs.String("session", "", "tmux session name to attach to (required)")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("console attach: %w", err)
+		return usageErrf("console attach: %w", err)
 	}
 	if *sessionFlag == "" {
-		return fmt.Errorf("console attach: --session is required")
+		return usageErrf("console attach: --session is required")
 	}
 
 	rpcArgs := consoleAttachArgs{SessionName: *sessionFlag}
@@ -114,7 +113,7 @@ func runConsoleAttach(ctx context.Context, target, keyPath string, useJSON bool,
 func runConsoleDetach(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	fs := flag.NewFlagSet("console detach", flag.ContinueOnError)
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("console detach: %w", err)
+		return usageErrf("console detach: %w", err)
 	}
 
 	return connectAndRun(ctx, target, keyPath, useJSON, "console.detach", nil, sio)
@@ -141,10 +140,10 @@ func runConsoleSwitch(ctx context.Context, target, keyPath string, useJSON bool,
 	sessionFlag := fs.String("session", "", "tmux session name to switch to (required)")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("console switch: %w", err)
+		return usageErrf("console switch: %w", err)
 	}
 	if *sessionFlag == "" {
-		return fmt.Errorf("console switch: --session is required")
+		return usageErrf("console switch: --session is required")
 	}
 
 	rpcArgs := consoleSwitchArgs{SessionName: *sessionFlag}
