@@ -122,9 +122,8 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	for i, arg := range args {
 		if arg == "--target" {
 			if i+1 >= len(args) {
-				err := fmt.Errorf("E-CFG-010: router status: --target requires a value")
 				writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
-				return err
+				return usageErrf("E-CFG-010: router status: --target requires a value")
 			}
 			target = args[i+1]
 		} else if strings.HasPrefix(arg, "--target=") {
@@ -134,9 +133,8 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 
 	// F-C3: --target= (empty value after equals) is a configuration error (E-CFG-010).
 	if target == "" {
-		err := fmt.Errorf("E-CFG-010: router status: --target requires a value")
 		writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
-		return err
+		return usageErrf("E-CFG-010: router status: --target requires a value")
 	}
 
 	// Dial and authenticate, then dispatch "paths.list" — same RPC as runPathsList.
