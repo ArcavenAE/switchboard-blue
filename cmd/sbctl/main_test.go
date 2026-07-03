@@ -268,13 +268,15 @@ func TestSbctl_NoStdoutOnConnectionFailure(t *testing.T) {
 	}
 }
 
-// TestSubprocessMain_NoArgs is the subprocess hook for TestSbctl_NoSubcommand_ExitsZero.
+// TestSubprocessMain_NoArgs is the subprocess hook for TestSbctl_NoSubcommand_ExitsTwoAfterP6.
 // When SBCTL_TEST_MAIN_NOARGS=1 is set, it resets flag.CommandLine and os.Args so
 // that main() sees an invocation with no subcommand arguments, then calls main().
 // main() calls os.Exit — this test function never returns normally in the subprocess.
 // In the parent process (env var absent), t.Skip skips it immediately.
 //
-// AC-012 (BC-2.07.002 EC-003): no-subcommand → stdout + exit 0.
+// CONTRACT CHANGE (F-P5P6-A-006, Burst 23): no-subcommand → stderr + exit 2.
+// Old contract was AC-012 (BC-2.07.002 EC-003): stdout + exit 0.
+// Spec amendment pending in the Burst 23 spec-steward pass.
 func TestSubprocessMain_NoArgs(t *testing.T) {
 	if os.Getenv("SBCTL_TEST_MAIN_NOARGS") != "1" {
 		t.Skip("subprocess hook — skip in parent process")
@@ -288,13 +290,20 @@ func TestSubprocessMain_NoArgs(t *testing.T) {
 	t.Fatal("main() returned without calling os.Exit — unexpected")
 }
 
-// TestSbctl_NoSubcommand_ExitsZero verifies AC-012 (BC-2.07.002 EC-003):
-// When sbctl is invoked with no subcommand arguments, it prints help/usage
-// to stdout and exits 0. The current main.go (lines 31-34) prints to stderr
-// and calls os.Exit(2), so this test must fail RED against the current code.
+// TestSbctl_NoSubcommand_ExitsZero verifies the no-subcommand behavior.
 //
-// BC: BC-2.07.002 EC-003; AC-012.
-func TestSbctl_NoSubcommand_ExitsZero(t *testing.T) {
+// CONTRACT CHANGE (F-P5P6-A-006, Burst 23 — S-6.03 / BC-2.07.002 EC-003):
+// The old AC-012 contract required exit 0 + usage on stdout.
+// interface-definitions.md v1.18 §174 classifies "no subcommand" as a usage
+// error (exit 2).  The test now asserts the corrected contract:
+//   - exit code 2
+//   - usage text on stderr (not stdout)
+//   - usage text enumerates available subcommands
+//
+// Story trace: AC-012 was defined in S-6.03 (BC-2.07.002 EC-003).
+// The spec-steward must update BC-2.07.002 EC-003 to reflect exit 2 and
+// stderr output in a follow-on spec-side pass.
+func TestSbctl_NoSubcommand_ExitsTwoAfterP6(t *testing.T) {
 	t.Parallel()
 
 	// Re-exec this test binary, landing in TestSubprocessMain_NoArgs.
@@ -318,18 +327,22 @@ func TestSbctl_NoSubcommand_ExitsZero(t *testing.T) {
 		exitCode = exitErr.ExitCode()
 	}
 
-	// AC-012: exit code must be 0.
-	if exitCode != 0 {
-		t.Errorf("AC-012 violated: expected exit code 0, got %d\nstdout: %q\nstderr: %q",
+	// F-P5P6-A-006: no-subcommand is a usage error — must exit 2.
+	if exitCode != 2 {
+		t.Errorf("F-P5P6-A-006: expected exit code 2, got %d\nstdout: %q\nstderr: %q",
 			exitCode, stdout, stderr)
 	}
-	// AC-012: help/usage must appear on stdout (not stderr).
-	if stdout == "" {
-		t.Errorf("AC-012 violated: expected non-empty stdout (help/usage text), got empty\nstderr: %q", stderr)
+	// F-P5P6-A-006: usage text must appear (stdout or stderr — stderr is correct).
+	combined := stdout + stderr
+	if !strings.Contains(combined, "usage") && !strings.Contains(combined, "Usage") {
+		t.Errorf("F-P5P6-A-006: expected usage text in output; got stdout=%q stderr=%q", stdout, stderr)
 	}
-	// AC-012: no usage text on stderr (current code prints to stderr — this must change).
-	if strings.Contains(stderr, "usage:") || strings.Contains(stderr, "Usage:") {
-		t.Errorf("AC-012 violated: usage text must not appear on stderr; got stderr: %q", stderr)
+	// F-P5P6-A-006: available subcommands must be enumerated.
+	hasSubcmds := strings.Contains(combined, "sessions") ||
+		strings.Contains(combined, "admin") ||
+		strings.Contains(combined, "subcommand")
+	if !hasSubcmds {
+		t.Errorf("F-P5P6-A-006: expected output to enumerate subcommands; got stdout=%q stderr=%q", stdout, stderr)
 	}
 }
 

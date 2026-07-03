@@ -2353,70 +2353,33 @@ func TestSbctlAdmin_ListKeys_CLI(t *testing.T) {
 // F-Adv-B-002: E-CFG-012 is a flag mutual-exclusion violation; per error-taxonomy.md
 // the correct OS exit code for usage errors is 2.  In-process tests (e.g.
 // TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012) verify the error TEXT;
-// this test verifies the OS-level exit code.
+// this test verifies the OS-level exit code through PRODUCTION main().
 //
-// The subprocess entry point (TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry)
-// maps E-CFG-012 errors to os.Exit(2) and all other errors to os.Exit(1), mirroring
-// the mapping that a properly wired main() would provide for this error class.
+// Reconciled (F-P5P6-A-001, Burst 23): the previous version re-implemented the
+// E-CFG-012→exit-2 mapping in test-only code via a private entry point.  Now that
+// production main() carries usageError discrimination, this test routes through
+// runProductionMain (the TestSubprocessMain_ProductionExitCode hook) so the mapping
+// under test is the same code path exercised in production.  The private entry
+// point (TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry) has been retired.
 func TestSubprocessAdmin_YesPlusConfirmExitCode2(t *testing.T) {
 	t.Parallel()
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry")
-	cmd.Env = append(
-		os.Environ(),
-		"SBCTL_ADMIN_SUBPROCESS_ECFG012=1",
-		"SBCTL_TEST_KEY="+testdataKeyPath(t),
-	)
-
-	var outBuf, errBuf bytes.Buffer
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-
-	err := cmd.Run()
-	if err == nil {
-		t.Fatal("F-Adv-B-002: expected non-zero exit; --yes+--confirm must be rejected as a usage error")
-	}
-
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
-		t.Fatalf("F-Adv-B-002: expected ExitError, got %T: %v", err, err)
-	}
-	if exitErr.ExitCode() != 2 {
-		t.Fatalf("F-Adv-B-002: expected exit code 2 (usage error) for E-CFG-012; got %d\nstderr: %s",
-			exitErr.ExitCode(), errBuf.String())
-	}
-}
-
-// TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry is the subprocess entry point
-// for TestSubprocessAdmin_YesPlusConfirmExitCode2.  It invokes runAdmin with
-// --yes + --confirm (the E-CFG-012 trigger) and maps the result to an exit code:
-// E-CFG-012 → os.Exit(2), any other error → os.Exit(1), success → os.Exit(0).
-func TestSubprocessAdmin_YesPlusConfirmExitCode2_Entry(t *testing.T) {
-	if os.Getenv("SBCTL_ADMIN_SUBPROCESS_ECFG012") != "1" {
-		t.Skip("subprocess entry — skip in parent process")
-	}
-
-	keyPath := os.Getenv("SBCTL_TEST_KEY")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	sio := defaultIO()
-	err := runAdmin(ctx, "127.0.0.1:19992", keyPath, false, []string{
-		"svtn", "destroy",
+	keyPath := testdataKeyPath(t)
+	exitCode, stdout, stderr := runProductionMain(t,
+		"--target", "127.0.0.1:19992", "--key", keyPath,
+		"admin", "svtn", "destroy",
 		"--name", "some-svtn",
 		"--yes",
 		"--confirm", "SVTN-aabbccdd",
-	}, sio)
+	)
 
-	if err == nil {
-		os.Exit(0)
+	if exitCode != 2 {
+		t.Fatalf("F-Adv-B-002: expected exit code 2 (usage error) for E-CFG-012; got %d\nstdout: %q\nstderr: %q",
+			exitCode, stdout, stderr)
 	}
-	// Map E-CFG-012 (flag mutual-exclusion usage error) to exit code 2.
-	if strings.Contains(err.Error(), "E-CFG-012") {
-		os.Exit(2)
+	if !strings.Contains(stderr, "E-CFG-012") {
+		t.Errorf("F-Adv-B-002: expected stderr to contain \"E-CFG-012\"; got: %q", stderr)
 	}
-	os.Exit(1)
 }
 
 // ── Burst-19 confirm-gate tests for key register (F-11A-1) ───────────────────
