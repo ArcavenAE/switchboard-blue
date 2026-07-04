@@ -6,7 +6,7 @@
 # total_stories = 54 (per STORY-INDEX v3.79 — see that doc for authoritative enumeration of all active backlog, hardening, maintenance, draft, and won't-fix entries)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.52
+# version: 1.53
 
 cycle: cycle-1
 phase: 5
@@ -92,7 +92,7 @@ wave_status:
     # S-W5.02: 5pts (net-new, e2e harness),
     # S-6.06: 5pts (CR-W5-SCOPE-SPLIT, adversary Pass 1 CRITICAL finding F-001)
     # S-W5.04: 5pts (Pass-4 Ruling 1, daemon-side paths.list/metrics/router.status handlers)
-    stories_merged: [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02]
+    stories_merged: [S-5.03, S-6.03, S-W5.01, S-5.01, S-6.02, S-6.06, S-5.02, S-W5.02]
     merge_shas:
       S-5.03: 01ae50c  # PR #30
       S-6.03: d854978  # PR #32
@@ -101,7 +101,8 @@ wave_status:
       S-6.02: b36cb9b   # PR #34 (rebased over S-5.01)
       S-6.06: 3ee9c38   # PR #36
       S-5.02: 98eb8b7   # PR #37
-    wave_adversary_converged: false
+      S-W5.02: d881f99  # PR #38
+    wave_adversary_converged: true
     wavegate_consistency_audit: "fresh-context gate audit C=0 H=3 M=4 L=3 — all H/M resolved; F-009 tracked TODO"
 
 stories:
@@ -871,6 +872,11 @@ stories:
     bc_traces: [BC-2.07.002]
 
 # Changelog
+# v1.53 — 2026-07-03: Pass 27 HAS_FINDINGS Adv-A remediation
+#   F-P5P27-A-001 [HIGH POL-002]: Wave-5 stories_merged + merge_shas append S-W5.02: d881f99 (PR #38). Now 8/8 matches STORY-INDEX v3.79 wave-summary "8/8 merged".
+#   F-P5P27-A-003 [MED POL-002]: Wave-5 wave_adversary_converged false→true reconciles with sibling gate_disposition CONVERGED + STATE.md wave_5_gate CONVERGED.
+#   F-P5P27-A-004 [LOW pending intent]: adjudicated as by-design. Wave-6 was tranched (Tranche A/B/C in sequence), Wave-5 was not — `tranche-c-closed` vs `closed` terminology reflects the underlying lifecycle difference. No change.
+#
 # v1.52 — 2026-07-03: Pass 26 HAS_FINDINGS persistence
 #   Adv-A + Adv-B both HAS_FINDINGS. Adv-A remediated Burst 68a (c10d6ba, sprint-state v1.50→v1.51 6-axis sibling-sweep).
 #   Adv-B remediated Burst 68b (cf135b9, ARCH-11 v1.19→v1.20 + proactive full-file 77-VP reverse-trace sweep —
