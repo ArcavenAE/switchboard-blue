@@ -1465,3 +1465,47 @@ OBS-B-002 — `DecodePublicKey` multi-case oracle gap: acknowledged as alignment
 | State | state-manager | STATE.md + burst-log.md + convergence-trajectory.md | This entry |
 
 **BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged. Pass 13 dispatch next; targets streak 0→1.
+
+---
+
+## Extracted from STATE.md on 2026-07-04 (compact-state post-BC-5.39.001-convergence)
+
+### Current State Narrative (archived from STATE.md lines 39-50)
+
+Phase 5 adversarial refinement completed. Closed passes:
+
+- **Pass 30:** Adv-A 2H+2M+1L HAS_FINDINGS all POL-002 class — SIXTH-CONSECUTIVE Adv-A POL-002 regression, first occurring INSIDE Burst 76 itself (recursive-inside-codification #1); Adv-B NO_FINDINGS; Lane-B advances 2/3 lane-only; remediated Burst 77.
+- **Pass 31:** Adv-A 2H HAS_FINDINGS F-P5P31-A-001/002 both POL-002 both inside Burst 77 own files (recursive-inside-codification #2); Adv-B 0H/1M/0L HAS_FINDINGS F-P5P31-B-001 NEW sibling surface root sprint-state — freeze-with-banner adjudication; Lane-B streak resets 2/3→0/3; remediated Burst 78.
+- **Pass 32:** BOTH LANES CLEAN — first two-lane NO_FINDINGS pass since Wave-5 phase-5 opened. Adv-A first clean since Pass 21 (ten-pass Adv-A HAS_FINDINGS streak broken). Adv-B lane-B streak 0/3→1/3; Streak advances 0/3→1/3.
+- **Pass 33:** BOTH LANES CLEAN — second consecutive two-lane NO_FINDINGS pass. Adv-A NO_FINDINGS (full public-surface sweep receipts complete). Adv-B 0 findings + 1 OBS (Obs-1 ARCH-11 v1.22 modified-log Method-column stale claim proactively swept this burst → ARCH-11 v1.23 governance-only). Streak advances 1/3 → 2/3. One more consecutive clean pass needed for BC-5.39.001 convergence.
+- **Pass 34:** Adv-A HAS_FINDINGS (2 HIGH taxonomy-orphan defects on operator surface, E-RPC-002 + E-RPC-003 emitted but not cataloged); Adv-B NO_FINDINGS (8 anti-findings, NIL novelty). Ruling-14 §10 (2026-07-01) governance premise 'E-RPC-002 already defined' factually wrong — fresh-context Adv-A caught 3 days later. Novelty HIGH — 34 passes to catch. Streak resets 2/3 → 0/3. Burst 82 dispatched to spec-steward for taxonomy row minting.
+
+Burst 82 taxonomy remediation complete — E-RPC-002 + E-RPC-003 catalog rows minted (error-taxonomy.md v4.7); E-RPC-010 forbidden clause scope-narrowed; interface-definitions.md v1.29 §JSON Output Schema error.code closed-set enumeration added. All changes landed in factory tip 3402cd2 alongside Burst 81 state-manager artifacts due to parallel-dispatch shared-worktree race (both bursts targeted `.factory/` concurrently; state-manager's stage step swept in spec-steward's uncommitted edits). Commit body notes Burst 82 files as "unstaged"; git show --stat proves they ARE in the commit. Functionally clean; commit-message drift is cosmetic. Pass 35 fresh-context split-adversary was then unblocked.
+
+NO-GOVERNING-BC obligations: `paths ping` (§77) + `svtn status` (§62) — architect ruling or new BC required before S-BL.CLI-SURFACE-COMPLETION scheduling.
+
+Sidecar reviews: `.factory/cycles/cycle-1/adversarial-reviews/W-6-wavegate-pass-{1-6}-Adv-{A,B}.md`.
+Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-07-02.md`.
+
+### Decisions Log Rows (archived from STATE.md — Passes 5-13 detail)
+
+| Decision | Outcome | Date |
+|----------|---------|------|
+| Phase 5 Pass 5 HAS_FINDINGS | 0H/4M/3L/2obs; streak reset 0/3; remediation pending | 2026-07-03 |
+| Phase 5 Pass 5 REMEDIATION COMPLETE | Burst 21: interface-definitions v1.18, S-BL.ADMIN-RECOVER-WIRE stub, PR #64 d012dbf; streak 0/3; Pass 6 next | 2026-07-03 |
+| Phase 5 Pass 6 HAS_FINDINGS | Adv-A 1H/4M/1L (CLI dispatch layer); Adv-B CLEAN 0/0/0+2obs; streak holds 0/3; Burst 23 remediation pending | 2026-07-03 |
+| Phase 5 Pass 6 REMEDIATION COMPLETE | Burst 23: PR #65 4d7d9e0 (exit-code discrimination, sessions dispatch, bare-sbctl exit 2); interface-definitions v1.19; BC-2.07.002 v1.9 (EC-003 0→2); S-6.03 v2.8 (AC-012); S-BL.CLI-SURFACE-COMPLETION stub; F-A-004 adjudicated spec-side; streak 0/3; Pass 7 next | 2026-07-03 |
+| Phase 5 Pass 7 HAS_FINDINGS | Adv-A 0H/3M/0L (console/router usageErrf gap — same class as P6 A-001, Burst 23 sweep missed these trees); Adv-B CLEAN 0/0/0+5obs; streak holds 0/3; Burst 25 remediation pending (code-only) | 2026-07-03 |
+| Phase 5 Pass 7 REMEDIATION COMPLETE | Burst 25: PR #66 b4ccd06 (usageErrf sweep: console.go ×7, router_metrics.go ×1, router_status.go ×2; production_exit_code_test.go +12 cases); completeness grep clean; streak 0/3; Pass 8 next | 2026-07-03 |
+| Phase 5 Pass 8 HAS_FINDINGS | Adv-A 2H/4M/1L (admin-key surface: confirm-gate wrong-command prefix, §108 unreachable exit codes, --role silent default, destroy name-validation gap, §109 E-ADM-011 vs E-ADM-019, paths verb message, hex-pubkey placeholders); Adv-B 0H/2M+1obs (test misattribution + vacuous cmd-dispatch oracle); streak 0/3; Burst 27 remediation pending | 2026-07-03 |
+| Phase 5 Pass 8 REMEDIATION COMPLETE | Burst 27: PR #67 32ea461 (code track: 6 findings resolved); interface-definitions v1.20 (spec track: §108/§109 error surfaces, openssh-pubkey, --role default, §395 sweep); streak 0/3; Pass 9 next | 2026-07-03 |
+| Phase 5 Pass 9 HAS_FINDINGS | Adv-A 1H/2M/3L (all spec-side: §94-95 version/ping unannotated, --target default undocumented, §110 expire exit codes incomplete, §120 E-SVTN-003, §48 synopsis --timeout, §128 --yes footnote); Adv-B CLEAN 0/0/0+3obs; ZERO code defects this pass; streak 0/3; v1.21 spec-only remediation next | 2026-07-03 |
+| Phase 5 Pass 9 REMEDIATION COMPLETE | Burst 29: interface-definitions v1.21 (spec-only — six Adv-A findings, all documentation-side); ARCH-INDEX v1.7; zero code changes; develop stays 32ea461; streak 0/3; Pass 10 next | 2026-07-03 |
+| Phase 5 Pass 10 HAS_FINDINGS | Adv-A 1H/1M (§110 phantom --at flag survived 9 passes [column-scoped attention]; E-CFG-001 token fragmentation zero/negative vs >100y); Adv-B 1L+2obs (test name↔assertion inversion; NoArgs meta-word disjunct; U+2028 arm-pinning); streak 0/3; Burst 31 remediation pending | 2026-07-03 |
+| Phase 5 Pass 10 REMEDIATION COMPLETE | Burst 31: PR #68 66e9ddc (code track: E-CFG-001 prefix zero/negative F-A-002, test rename F-B-001, NoArgs tightened OBS-B-001, U+2028 arm-pinning OBS-B-002, DRIFT-P5P9 comment resolved); interface-definitions v1.22 (spec track: §110 --at→--after F-A-001 HIGH adjudicated spec-side, E-CFG-001 exit-class split + §186); streak 0/3; Pass 11 next | 2026-07-03 |
+| Phase 5 Pass 11 HAS_FINDINGS | Adv-A 1H/1M/3obs (§131/§137 revoke listed in runDestroyConfirmGate family but impl uses boolStringFlag — spec never received carve-out; §109 syntax missing required --role); Adv-B CLEAN 0/0/0+3obs; both adjudicated spec-side; streak 0/3; Burst 33 spec-only remediation pending | 2026-07-03 |
+| Phase 5 Pass 11 REMEDIATION COMPLETE | Burst 33: interface-definitions v1.23 spec-only — §131 revoke carve-out from runDestroyConfirmGate family (taxonomy v4.4 + E-ADM-018 already ruled bool-confirm shape); §137 scoped to svtn destroy + key register + admin recover; §109 --role REQUIRED with no-default annotation; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 12 next | 2026-07-03 |
+| Phase 5 Pass 12 HAS_FINDINGS | Adv-A 0H/2M/2obs (§111 list-keys exit codes missing E-SVTN-003 + E-CFG-001; §108/§109/§110 --svtn <id> placeholder class — daemon is name-keyed); Adv-B CLEAN 0/0/0+3obs; third consecutive zero-code-defect pass; streak 0/3; Burst 35 spec-only remediation pending | 2026-07-03 |
+| Phase 5 Pass 12 REMEDIATION COMPLETE | Burst 35: interface-definitions v1.24 spec-only — §111 exit-code column extended (E-SVTN-003 + E-CFG-001), --svtn <svtn-name> placeholder sweep (§108/§109/§110/§130), §108/§120 confirm-family flag consistency touch; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 13 next |
+| Phase 5 Pass 13 HAS_FINDINGS | Adv-A 1H/1M/2obs (list-keys admission gate removed with authority gate — CWE-862; E-CFG-001 token absent from list-keys usageErrf); Adv-B 0H/0M/1L/2obs (e2e stub name admin.key.list vs admin.key.list-keys); streak 0/3; Bursts 37+38 remediation |
+| Phase 5 Pass 13 REMEDIATION COMPLETE | Burst 37: PR #69 03ce8e7 (admission gate restored; E-CFG-001 token; stub name fix). Burst 38: spec-only — interface-definitions v1.25 (§111 auth sharpened; BC-2.05.004 v1.13 PC-1 F-L2-003 + EC-008; VP-075 v1.7 scope exclusion + CWE-862); streak 0/3; Pass 14 next | 2026-07-03 |
