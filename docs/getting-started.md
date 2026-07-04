@@ -17,11 +17,11 @@ about to install, see [docs/architecture.md](architecture.md).
 
 You need:
 
-- **Go 1.25+** to build from source. Homebrew installs will be published
-  from tagged releases when this milestone stabilizes; for now, build from
-  the tag.
-- **[just](https://github.com/casey/just)** — the task runner used by
-  the build. `brew install just` on macOS.
+- **A `switchboard` binary** — install via Homebrew (alpha channel) or
+  build from source. See "1. Install" below.
+- **[just](https://github.com/casey/just)** — the task runner, required
+  only for the from-source build. `brew install just` on macOS.
+- **Go 1.25+** — required only for the from-source build.
 - **tmux** on the machine that will host the session.
 - **An Ed25519 SSH key pair** for each participant (operator, access
   node, console). `ssh-keygen -t ed25519` produces one.
@@ -31,13 +31,31 @@ one machine with two terminals if that's what you have.
 
 ---
 
-## 1. Build
+## 1. Install
 
-Clone and build:
+### Option A — Homebrew alpha channel (recommended for evaluation)
+
+Alpha builds are cut from every push to `develop`, signed + notarized
+on macOS, and published to the shared arcaven tap:
 
 ```bash
-git clone https://github.com/arcavenae/switchboard.git
-cd switchboard
+brew tap ArcavenAE/tap
+brew install ArcavenAE/tap/switchboard-a
+switchboard-a --version
+```
+
+The binary is installed as `switchboard-a` — not `switchboard` — so it
+can live side-by-side with the canonical `switchboard` formula on the
+same tap. **Substitute `switchboard-a` for `switchboard`** in every
+command in the rest of this tutorial if you install this way. The
+`sbctl` operator CLI is not yet published via Homebrew; use the
+from-source build below to get `sbctl`.
+
+### Option B — Build from source
+
+```bash
+git clone https://github.com/ArcavenAE/switchboard-blue.git
+cd switchboard-blue
 just build
 ```
 

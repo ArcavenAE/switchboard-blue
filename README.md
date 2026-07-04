@@ -42,11 +42,35 @@ user experience before tackling multi-hop networking.
 
 ## Install
 
-Build from source (Go 1.25+ and [just](https://github.com/casey/just) required):
+### Alpha channel (Homebrew, macOS + Linux)
+
+Alpha builds are cut from every push to `develop`, signed + notarized (macOS),
+and published to the shared arcaven tap as `switchboard-a`:
 
 ```bash
-git clone https://github.com/arcavenae/switchboard.git
-cd switchboard
+brew tap ArcavenAE/tap
+brew install ArcavenAE/tap/switchboard-a
+switchboard-a --version
+```
+
+The binary is installed as `switchboard-a` so it does not collide with the
+canonical `switchboard` formula on the same tap. Substitute `switchboard-a`
+for `switchboard` in the commands throughout [docs/getting-started.md](docs/getting-started.md)
+and [docs/sbctl.md](docs/sbctl.md) if you install this way. (The `sbctl` operator CLI is not yet
+published — see the source build below.)
+
+> `switchboard-blue` is the legion / spike clone of the canonical
+> `ArcavenAE/switchboard` project. The `-a` suffix marks the alpha
+> channel; the shared tap slot for canonical stable is reserved as
+> `switchboard`.
+
+### Build from source
+
+Go 1.25+ and [just](https://github.com/casey/just) required:
+
+```bash
+git clone https://github.com/ArcavenAE/switchboard-blue.git
+cd switchboard-blue
 just build
 sudo install bin/switchboard bin/sbctl /usr/local/bin/
 switchboard --version

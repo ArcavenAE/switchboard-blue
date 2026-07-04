@@ -1,6 +1,9 @@
 # CI + Alpha Release
 # Triggers: push to develop (alpha releases), pull requests to develop or main
-# Builds binaries for all platforms, signs/notarizes, creates pre-release, updates homebrew-tap
+# Builds binaries for all platforms, signs/notarizes, creates pre-release,
+# and publishes Formula/switchboard-a.rb to ArcavenAE/homebrew-tap.
+# Never touches Formula/switchboard.rb — that slot is reserved for the
+# canonical ArcavenAE/switchboard project.
 name: CI
 
 on:
@@ -380,3 +383,75 @@ jobs:
               echo "Deleting old alpha release: $tag"
               gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
             done
+
+  update-homebrew:
+    name: Update Homebrew Tap (switchboard-a)
+    needs: [build-binaries, sign-and-notarize, alpha-release]
+    if: |
+      needs.alpha-release.result == 'success' &&
+      needs.sign-and-notarize.result == 'success'
+    permissions:
+      contents: write
+    environment: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Download signed darwin binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-binaries
+          path: dist/
+
+      - name: Download linux binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: binaries
+          path: unsigned/
+
+      - name: Collect linux binaries
+        run: |
+          cp unsigned/switchboard-a-linux-* dist/
+          rm -rf unsigned
+          ls -la dist/
+
+      - name: Update switchboard-a formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG="${{ needs.build-binaries.outputs.tag }}"
+          VERSION="${{ needs.build-binaries.outputs.version }}"
+
+          SHA256_DARWIN_ARM64=$(shasum -a 256 dist/switchboard-a-darwin-arm64 | cut -d' ' -f1)
+          SHA256_DARWIN_AMD64=$(shasum -a 256 dist/switchboard-a-darwin-amd64 | cut -d' ' -f1)
+          SHA256_LINUX_AMD64=$(shasum -a 256 dist/switchboard-a-linux-amd64 | cut -d' ' -f1)
+          SHA256_LINUX_ARM64=$(shasum -a 256 dist/switchboard-a-linux-arm64 | cut -d' ' -f1)
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/ArcavenAE/homebrew-tap.git" homebrew-tap-repo
+          cd homebrew-tap-repo
+
+          # IMPORTANT: publish ONLY Formula/switchboard-a.rb.
+          # Never touch Formula/switchboard.rb — that slot is reserved for
+          # the canonical ArcavenAE/switchboard project.
+          mkdir -p Formula
+          cp ../Formula/switchboard-a.rb Formula/switchboard-a.rb
+
+          sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/switchboard-a.rb
+          sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SHA256_DARWIN_ARM64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_DARWIN_AMD64_PLACEHOLDER/$SHA256_DARWIN_AMD64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_LINUX_AMD64_PLACEHOLDER/$SHA256_LINUX_AMD64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_LINUX_ARM64_PLACEHOLDER/$SHA256_LINUX_ARM64/g" Formula/switchboard-a.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/switchboard-a.rb
+          git diff --cached --quiet || git commit -m "Update switchboard-a to $TAG"
+          git push
