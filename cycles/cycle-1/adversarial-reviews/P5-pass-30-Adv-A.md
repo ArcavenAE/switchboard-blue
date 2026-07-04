@@ -12,16 +12,20 @@ worktree_identity_tuple:
   readme_title: Switchboard
   note: preflight-fail; orchestrator verified SHAs out-of-band before dispatch; factory_head_sha is Burst-75b SHA-token-patch commit (84133b2); mismatch with STATE.md L196 which records ba943bf (Burst 75) — this mismatch is the preflight-fail trigger
 verdict: PREFLIGHT_FAIL
+retry_verdict: HAS_FINDINGS
 outcome: preflight-fail-becomes-finding
-findings_count: 1
+findings_count: 5
 critical: 0
-high: 1
-medium: 0
-low: 0
+high: 2
+medium: 2
+low: 1
 observations: 0
-findings: [F-P5P30-A-001]
+findings: [F-P5P30-A-001, F-P5P30-A-002, F-P5P30-A-003, F-P5P30-A-004, F-P5P30-A-005]
 reconstructed_from_orchestrator_adjudication: false
-# note: direct adversary preflight output authored by dispatch-halt agent (not orchestrator-reconstructed)
+reconstructed_from_orchestrator_adjudication_body: true
+# note: F-P5P30-A-001 was direct adversary preflight output. F-P5P30-A-002 through F-P5P30-A-005
+# are appended from orchestrator adjudication records (Burst 78) — the retry adversary output
+# produced these findings which were not captured in the original sidecar body at Burst 77.
 ---
 
 # Phase 5 Pass 30 — Adversary A Preflight Failure
@@ -74,5 +78,91 @@ The mismatch is exactly one commit: Burst 75b advanced the factory HEAD from `ba
 
 ---
 
+---
+
+## Post-Preflight-Fail Retry Outcome
+
+**After Burst 76 remediation** (L196 self-reference resolution + STATE-MANAGER-SIBLING-SWEEP fifth-recurrence escalation), Pass 30 Adv-A was re-dispatched. The retry produced **HAS_FINDINGS** with 4 additional findings (F-P5P30-A-002 through F-P5P30-A-005) — all POL-002 class, all inside Burst 76's own file changes.
+
+This is the **SIXTH-CONSECUTIVE Adv-A POL-002 regression** and the **FIRST recursive-inside-codification instance**: Burst 76 (the codification burst that escalated STATE-MANAGER-SIBLING-SWEEP) itself failed to sweep sibling STATE.md fields — the exact pattern the drift item describes.
+
+All five findings (F-P5P30-A-001 through F-P5P30-A-005) were SHIPPED at Burst 77.
+
+---
+
+## F-P5P30-A-002 — HIGH — POL-002 — STATE.md L201 Sidecar Paths Stale (P29 and P30 Pairs Absent)
+
+**Finding class:** POL-002 — cross-artifact freshness; sixth-consecutive-pass STATE-MANAGER-SIBLING-SWEEP recurrence. Part of the recursive-inside-codification Burst 76 regression cluster.
+
+**Description:** STATE.md L201 (Sidecar paths line in Session Resume Checkpoint) listed only the P28 sidecar pair after Burst 76, despite P29 sidecars being authored at Burst 75 and P30 Adv-A sidecar being authored at Burst 76 itself:
+
+- Listed: `P5-pass-28-Adv-A.md / P5-pass-28-Adv-B.md`
+- Missing: `P5-pass-29-Adv-A.md / P5-pass-29-Adv-B.md` (authored Burst 75)
+- Missing: `P5-pass-30-Adv-A.md` (authored Burst 76, this very sidecar)
+
+Burst 76's task was to fix L196 (factory HEAD self-reference paradox). It touched STATE.md but did not update the sidecar paths list — a sibling field in the same Session Resume Checkpoint block that Burst 76 was already editing. The sidecar paths list was already stale before Burst 76 (missing P29 pair), and Burst 76 added a new sidecar (P5-pass-30-Adv-A.md) without adding it to the list.
+
+**Blast radius:** STATE.md L201 (2 missing sidecar pairs, 1 of which is Burst 76's own authored artifact) → HIGH (audit-trail completeness; sidecar paths serve as the canonical reference for adversarial review audit trail).
+
+**Remediation:** SHIPPED at Burst 77 — STATE.md L201 updated to list all extant sidecar pairs through P30.
+
+---
+
+## F-P5P30-A-003 — MEDIUM — POL-002 — STATE.md L204 Next-Action + L33 Awaiting Stale
+
+**Finding class:** POL-002 — cross-artifact freshness; sixth-consecutive-pass STATE-MANAGER-SIBLING-SWEEP recurrence. Part of the recursive-inside-codification Burst 76 regression cluster.
+
+**Description:** After Pass 30 Adv-A re-dispatched and concluded HAS_FINDINGS, two cross-artifact fields remained stale:
+
+1. **STATE.md L33 (`awaiting:` frontmatter field):** Still reading `phase-5-pass-31-dispatch` — unchanged since before Pass 30 was even concluded. After Pass 30 concludes HAS_FINDINGS, this field should reflect the remediation status (e.g., `phase-5-pass-30-remediation-in-progress` or `phase-5-pass-31-dispatch` after remediation).
+
+   *Adjudication: L33 reading "pass-31-dispatch" was actually correct given Pass 30 findings had been shipped at Burst 77 before this pass was even dispatched — but Burst 76's task should have updated it to reflect Pass 30 concluding rather than still pointing to Pass 30 as pending.*
+
+2. **STATE.md L204 (`Next action:` line in Session Resume Checkpoint):** Still reading "Pass 31 fresh-context split-adversary dispatch" — correct forward pointer but the surrounding context (pass 30 just concluded HAS_FINDINGS at Burst 76 level) was not updated.
+
+**Blast radius:** STATE.md L33 + L204 (two fields) → MEDIUM.
+
+**Remediation:** SHIPPED at Burst 77 — L33 updated to `phase-5-pass-31-dispatch` (accurate post-Pass-30-remediation pointer); L204 updated to reflect Pass 31 as the active next step.
+
+---
+
+## F-P5P30-A-004 — MEDIUM — POL-002 — STATE.md L199 Missing Pass-30 Deltas Paragraph
+
+**Finding class:** POL-002 — cross-artifact freshness; sixth-consecutive-pass STATE-MANAGER-SIBLING-SWEEP recurrence. Part of the recursive-inside-codification Burst 76 regression cluster.
+
+**Description:** The Session Resume Checkpoint pattern (established at Burst 75 for the P29 arc) includes a "Pass N deltas" paragraph per pass that enumerates each finding shipped. After Burst 76, the checkpoint included:
+
+- L199 "Pass 29 deltas (Adv-A):" paragraph — present
+- L200 "Pass 29 deltas (Adv-B):" paragraph — present
+- Pass 30 deltas paragraph — **ABSENT**
+
+Burst 76's task was L196 self-reference resolution and did not include writing the Pass 30 deltas paragraph. However, the Pass 30 Adv-A retry had just produced 4 additional findings (A-002 through A-005) which were SHIPPED at Burst 77 — this was the "current pass" whose deltas should have been captured.
+
+**Blast radius:** STATE.md (missing Pass-30 deltas paragraph) → MEDIUM (audit-trail completeness for the current pass record).
+
+**Remediation:** SHIPPED at Burst 77 — Pass 30 deltas paragraph appended enumerating F-P5P30-A-001 through F-P5P30-A-005 with disposition.
+
+---
+
+## F-P5P30-A-005 — LOW — POL-002 — P5-pass-30-Adv-A.md Frontmatter Shape Drift
+
+**Finding class:** POL-002 — sidecar frontmatter shape; sixth-consecutive-pass STATE-MANAGER-SIBLING-SWEEP recurrence. Part of the recursive-inside-codification Burst 76 regression cluster.
+
+**Description:** The `P5-pass-30-Adv-A.md` sidecar as authored at Burst 76 had frontmatter shape drift relative to the convention established by prior pass sidecars:
+
+- `reconstructed_from_orchestrator_adjudication` field present (value: `false`)
+- Missing: `reconstructed_from_orchestrator_adjudication_body` — added for cases where the initial sidecar body was authored by direct adversary but subsequent findings are appended from adjudication records (this exact case)
+- `findings_count: 1` — should be `5` after the retry produced 4 additional findings
+- `high: 1, medium: 0, low: 0` — should be `high: 2, medium: 2, low: 1`
+- `findings: [F-P5P30-A-001]` — should list all 5 findings
+- `retry_verdict` field absent — needed to distinguish preflight-fail-then-retry cases
+
+**Blast radius:** P5-pass-30-Adv-A.md frontmatter (6 fields) → LOW (shape drift affects automated tooling but not functional review audit trail).
+
+**Remediation:** SHIPPED at Burst 78 — all frontmatter fields corrected; `retry_verdict: HAS_FINDINGS` added; findings list expanded; `reconstructed_from_orchestrator_adjudication_body: true` note added.
+
+---
+
 VERDICT: PREFLIGHT_FAIL
-OUTCOME: preflight-fail-becomes-finding — F-P5P30-A-001 routed to orchestrator for Burst 76 remediation before Pass 30 re-dispatch
+RETRY_VERDICT: HAS_FINDINGS
+OUTCOME: preflight-fail-becomes-finding — F-P5P30-A-001 routed to orchestrator for Burst 76 remediation; retry produced F-P5P30-A-002 through F-P5P30-A-005 all POL-002 class all inside Burst 76 own files (recursive-inside-codification, sixth-consecutive Adv-A POL-002 regression). All five findings SHIPPED Burst 77.
