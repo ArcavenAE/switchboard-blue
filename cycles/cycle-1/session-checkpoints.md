@@ -18,6 +18,32 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 90 — Pass 38 close-out
+
+**Timestamp:** 2026-07-04T20:00:00Z
+**Post-burst:** Burst 90 (state-manager — Pass 38 close-out)
+**factory_head_pre_burst_90:** 1ca13b4
+**factory_head_post_burst_90:** TBD (consult `git -C .factory log --oneline -1` after commit)
+**phase_step_pre:** phase-5-pass-37-concluded-clean-both-lanes
+**phase_step_post:** phase-5-pass-38-concluded-clean-both-lanes
+**awaiting:** phase-5-pass-39-dispatch
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged)
+**streak:** 2/3
+
+**Burst 90 summary:**
+- Pass 38 Adv-A: NO_FINDINGS + 1 obs (O-P5P38-A-001, persistence re-confirmation of O-P5P37-A-001 combined-footnote structural coupling — non-defective, no novelty, upstream-filing candidate still deferred per standing directive).
+- Pass 38 Adv-B: NO_FINDINGS + 1 obs (O-P5P38-B-001 state-only-burst shape witness, informational) + 15 anti-findings (12 baseline + 3 Burst-89-transition-specific).
+- BC-5.39.001 3-of-3 clean streak advances 1/3 → 2/3. One more consecutive clean pass required for convergence.
+- O-P5P38-META-001: Adv-B sidecar frontmatter recorded factory_head_pre_review=1092121 (pre-Burst-89 SHA) rather than actual post-Burst-89 SHA 1ca13b4. Adv-A correctly recorded 1ca13b4. Metadata-only discrepancy — evidence citations reflect actual post-Burst-89 tree; no stale-tree evidence, no streak impact. Captured in sprint-state.yaml pass_38.metadata_notes for future audit.
+- Persisted: P5-pass-38-Adv-A.md + P5-pass-38-Adv-B.md; STATE.md; sprint-state.yaml v1.67→v1.68; session-checkpoints.md.
+
+**Phase 5 trajectory:** P1→P31 (see earlier archived checkpoints) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → P37 BOTH LANES CLEAN → streak 0/3→1/3 → P38 BOTH LANES CLEAN → streak 1/3→2/3
+
+**Next action:** Dispatch Pass 39 (fresh-context split-adversary; streak advance attempt 2/3 → 3/3 → BC-5.39.001 convergence).
+**Preflight tuple:** develop_head=6deda15, factory_head=`git -C .factory log --oneline -1`
+
+---
+
 ## Session Resume Checkpoint (2026-07-04) — Burst 89 — Pass 37 close-out
 
 **Timestamp:** 2026-07-04T18:00:00Z
