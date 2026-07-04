@@ -18,6 +18,38 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 91 — Phase 5 terminal close-out; BC-5.39.001 CONVERGED
+
+**Timestamp:** 2026-07-04T22:00:00Z
+**Post-burst:** Burst 91 (state-manager — terminal Phase 5 close-out; BC-5.39.001 CONVERGED)
+**factory_head_pre_burst_91:** e51d4aa
+**factory_head_post_burst_91:** (consult `git -C .factory log --oneline -1`)
+**phase_step_pre:** phase-5-pass-38-concluded-clean-both-lanes
+**phase_step_post:** phase-5-CONVERGED-bc-5.39.001-satisfied
+**awaiting:** phase-6-dispatch
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged)
+**streak:** **3/3 — BC-5.39.001 CONVERGED**
+
+**Burst 91 summary:**
+- Terminal Phase 5 close-out burst. Both Pass 39 lanes NO_FINDINGS verified under fresh context.
+- **BC-5.39.001 CONVERGED — three consecutive clean passes achieved:**
+  - P37: Adv-A NO_FINDINGS + 1 obs; Adv-B NO_FINDINGS + 2 obs + 12 AF → streak 0/3 → 1/3
+  - P38: Adv-A NO_FINDINGS + 1 obs; Adv-B NO_FINDINGS + 1 obs + 15 AF → streak 1/3 → 2/3
+  - P39: Adv-A NO_FINDINGS + 1 obs (O-P5P39-A-001); Adv-B NO_FINDINGS + 2 obs (O-P5P39-B-001/002) + 16 AF → streak 2/3 → **3/3 CONVERGED**
+- **Twelve-pass Adv-B clean-streak: P28 → P39** (all NO_FINDINGS).
+- **Three-pass Adv-A clean-streak: P37 → P39** (all NO_FINDINGS).
+- O-P5P38-META-001 remediation (git-ref preflight pattern) confirmed effective — reconciliation successful on first attempt in Pass 39.
+- Observations captured: O-P5P39-A-001 (combined-footnote persistence, deferred, LOW), O-P5P39-B-001 (metadata_notes disposition confirmation, LOW), O-P5P39-B-002 (Current Phase Steps rolling-window annotation benign, LOW). All non-blocking, no remediation required.
+- Files persisted: P5-pass-39-Adv-A.md, P5-pass-39-Adv-B.md, STATE.md, sprint-state.yaml v1.68→v1.69, session-checkpoints.md.
+- **Phase 5 exits → Phase 6 (formal hardening).**
+- STATE.md line count post-commit: if > 220, next burst should invoke `/vsdd-factory:compact-state` before Phase 6 dispatch.
+
+**Phase 5 trajectory:** P1→P31 (see earlier archived checkpoints) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → P37 BOTH LANES CLEAN → streak 0/3→1/3 → P38 BOTH LANES CLEAN → streak 1/3→2/3 → **P39 BOTH LANES CLEAN → streak 2/3→3/3 → BC-5.39.001 CONVERGED**
+
+**Next action:** Phase 6 (formal hardening) dispatch — formal-verifier for VP proofs, fuzzing, mutation testing, security scanning.
+
+---
+
 ## Session Resume Checkpoint (2026-07-04) — Burst 90 — Pass 38 close-out
 
 **Timestamp:** 2026-07-04T20:00:00Z
