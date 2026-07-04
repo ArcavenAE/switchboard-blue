@@ -925,12 +925,12 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_19_HAS_FINDINGS
-  phase_step: phase-5-pass-19-concluded-has-findings
-  pass_counter: 19
-  attempts_counter: 19
+  status: PASS_20_HAS_FINDINGS
+  phase_step: phase-5-pass-20-concluded-has-findings
+  pass_counter: 20
+  attempts_counter: 20
   consecutive_clean_passes: 0
-  last_reset_reason: pass-19-has-findings
+  last_reset_reason: pass-20-has-findings
   streak: 0
   last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_AND_B
   criterion: finding-decay-to-zero-3-fresh-context-passes
@@ -1074,3 +1074,31 @@ phase5:
       - 1a55096 (ARCH-07 v1.9 VP-catalog total + admin-authority triplet footnote)
       - e50f96d (VP-077 v1.2 source_bc pin syntax normalization)
     streak_after_pass: 0/3
+  pass_20:
+    date: "2026-07-03"
+    verdict: HAS_FINDINGS
+    adversaries:
+      adv_a:
+        findings_count: 1
+        anti_findings_count: 5
+      adv_b:
+        findings_count: 1
+        anti_findings_count: 7
+    findings_shipped:
+      - id: F-P5P20-A-001
+        severity: MED
+        class: aggregate-drift / POL-002 sibling-sweep
+        remediation_commit: 5fcf305
+        summary: "STORY-INDEX v3.75→v3.76 Wave-6 aggregate sweep restoring S-BL.ROUTER-ADDR (2pts, PR #56); v3.55 promotion never propagated to Wave Summary. F-P5P19-A-001 was necessary-but-incomplete."
+      - id: F-P5P20-B-001
+        severity: HIGH
+        class: POL-002 sibling-sweep + VP-INDEX↔ARCH coherence
+        remediation_commit: 1e9fbff
+        summary: "ARCH-11 v1.16→v1.17 + ARCH-07 v1.9→v1.10 VP-043 method column propagation from VP-INDEX v2.35 (F-P5P3-B-001 close). ARCH-11 proptest sum 34→33, unit sum 2→3."
+    streak_before_pass: 0/3
+    streak_after_pass: 0/3
+    notes: |
+      F-P5P19-A-001 (STORY-INDEX v3.75 S-7.03 rescope sweep) confirmed as necessary-but-incomplete
+      by F-P5P20-A-001 — the same pass should have caught the v3.55 S-BL.ROUTER-ADDR promotion
+      sibling gap simultaneously. Adjudicated-deferrals list expands with both P20 findings SHIPPED
+      for Pass 21 fresh-context dispatch.
