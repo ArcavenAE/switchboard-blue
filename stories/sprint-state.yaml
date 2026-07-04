@@ -6,7 +6,7 @@
 # total_stories = 54 (per STORY-INDEX v3.79 — see that doc for authoritative enumeration of all active backlog, hardening, maintenance, draft, and won't-fix entries)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.54
+# version: 1.55
 
 cycle: cycle-1
 phase: 5
@@ -872,6 +872,10 @@ stories:
     bc_traces: [BC-2.07.002]
 
 # Changelog
+# v1.55 — 2026-07-03: Burst 73 placeholder SHA patch
+#   Burst 73a landed at `0b3f55f`, Burst 73b at `49032a3`. Patched `<73a-sha>` and `<73b-sha>` placeholder tokens
+#   throughout the phase5: stanza, pass_28: block, and remediation_commits list. No semantic change; token-substitution only.
+#
 # v1.54 — 2026-07-03: Pass 28 HAS_FINDINGS Adv-A remediation + Pass 27 pass-block backfill
 #   F-P5P28-A-001 [HIGH POL-002 partial-fix regression from Burst 71a]: phase5: structured stanza bumped Pass-26→Pass-28
 #     (status, phase_step, pass_counter, attempts_counter, last_reset_reason, last_verdict). Root cause: v1.53 landed
@@ -1105,7 +1109,7 @@ phase5:
   pass_counter: 28
   attempts_counter: 28
   consecutive_clean_passes: 0
-  last_reset_reason: pass-28-has-findings-F-P5P28-A-001-A-002-A-003-F-P5P28-B-001-B-002-shipped-<73a-sha>-<73b-sha>
+  last_reset_reason: pass-28-has-findings-F-P5P28-A-001-A-002-A-003-F-P5P28-B-001-B-002-shipped-0b3f55f-49032a3
   streak: 0
   last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_HAS_B_HAS
   criterion: finding-decay-to-zero-3-fresh-context-passes
@@ -1547,15 +1551,15 @@ phase5:
     adv_a_findings: "1H/2M/0L"
     adv_b_findings: "0H/2M/0L"
     findings_shipped:
-      - F-P5P28-A-001 HIGH POL-002 sprint-state phase5: stanza still at Pass-26 (partial-fix regression from Burst 71a) SHIPPED <73a-sha> v1.54
-      - F-P5P28-A-002 MED STATE.md Phase-5 Status column PASS_19 stale 8+ passes SHIPPED <73a-sha>
-      - F-P5P28-A-003 MED sprint-state L4 header comment stale "Pass 26 concluded" SHIPPED <73a-sha> v1.54
-      - F-P5P28-B-001 MED POL-006 ARCH-11 L83 BC-2.05.008 module cell missing internal/admission (VP-059 sixth-consecutive Lane-B recurrence — first module-column instance) SHIPPED <73b-sha> v1.22
-      - F-P5P28-B-002 MED POL-006 ARCH-11 L57 BC-2.02.001 module cell missing internal/halfchannel (VP-042) SHIPPED <73b-sha> v1.22
+      - F-P5P28-A-001 HIGH POL-002 sprint-state phase5: stanza still at Pass-26 (partial-fix regression from Burst 71a) SHIPPED 0b3f55f v1.54
+      - F-P5P28-A-002 MED STATE.md Phase-5 Status column PASS_19 stale 8+ passes SHIPPED 0b3f55f
+      - F-P5P28-A-003 MED sprint-state L4 header comment stale "Pass 26 concluded" SHIPPED 0b3f55f v1.54
+      - F-P5P28-B-001 MED POL-006 ARCH-11 L83 BC-2.05.008 module cell missing internal/admission (VP-059 sixth-consecutive Lane-B recurrence — first module-column instance) SHIPPED 49032a3 v1.22
+      - F-P5P28-B-002 MED POL-006 ARCH-11 L57 BC-2.02.001 module cell missing internal/halfchannel (VP-042) SHIPPED 49032a3 v1.22
       - process_gap POL-006 module-column subclass codified as sixth-consecutive Lane-B recurrence — sweep protocol must expand from single-column-per-pass to all 4 dual-anchor-derived columns (VP-list + Method + Phase + Module)
     remediation_commits:
-      - <73a-sha>  # Burst 73a: sprint-state v1.54 + STATE.md status column + Pass 28 persistence
-      - <73b-sha>  # Burst 73b: ARCH-11 v1.22 module-column + proactive full-file module-column sweep
+      - 0b3f55f  # Burst 73a: sprint-state v1.54 + STATE.md status column + Pass 28 persistence
+      - 49032a3  # Burst 73b: ARCH-11 v1.22 module-column + proactive full-file module-column sweep
     streak_after: 0
     process_gap: true
     process_gap_reason: sixth-consecutive-Lane-B-POL-006-propagation-gap-recurrence-module-column-subclass-emerging-after-VP-list-then-Phase-column-classes
