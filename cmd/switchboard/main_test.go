@@ -1644,6 +1644,93 @@ func TestVersionNonEmpty(t *testing.T) {
 	}
 }
 
+// TestRun_HelpFlag_ExitsCleanly verifies BC-2.07.002 EC-003 Ruling A for the
+// switchboard binary:
+//   - --help / -h must return nil (no error propagated to main()),
+//   - usage text must be written to the provided stdout writer.
+//
+// The existing behavior (flag.ContinueOnError) causes fs.Parse to return
+// flag.ErrHelp on --help; the fix is to detect ErrHelp and return nil so main()
+// does NOT print "switchboard: flag: help requested" to stderr and exit 1.
+//
+// RED reason: current run() returns err on any Parse error, so this test
+// currently receives flag.ErrHelp from run() and fails on the nil check.
+func TestRun_HelpFlag_ExitsCleanly(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"double-dash-help", []string{"switchboard", "--help"}},
+		{"short-h", []string{"switchboard", "-h"}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			err := run(&buf, tc.args)
+			if err != nil {
+				t.Fatalf("run(--help) returned error, expected nil: %v", err)
+			}
+			// Usage text should be on the stdout writer (fs.SetOutput(stdout)).
+			// The flag package's default usage prints "Usage of <name>:" as
+			// the first line; assert we got a non-empty usage-shaped payload.
+			got := buf.String()
+			if got == "" {
+				t.Errorf("expected non-empty usage on stdout, got empty")
+			}
+			// Guard against the leaked "help requested" diagnostic being
+			// smuggled into the stdout writer.
+			if strings.Contains(got, "help requested") {
+				t.Errorf("stdout must not contain 'help requested' diagnostic; got: %q", got)
+			}
+		})
+	}
+}
+
+// TestRun_VersionFlag_UsesBasename verifies O1 (report §Ancillary observations):
+// the --version banner must reflect the invoked basename (filepath.Base(args[0])),
+// not a hardcoded "switchboard" string. This lets the alpha channel binary
+// (installed as "switchboard-a") report its actual name so bug reports and
+// pastes identify the channel correctly.
+//
+// RED reason: current run() hardcodes "switchboard %s\n"; passing
+// "/opt/homebrew/bin/switchboard-a" produces "switchboard <version>", missing
+// the "-a" suffix.
+func TestRun_VersionFlag_UsesBasename(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		arg0    string
+		wantSub string
+	}{
+		{"alpha-channel", "/opt/homebrew/bin/switchboard-a", "switchboard-a"},
+		{"canonical", "/usr/local/bin/switchboard", "switchboard"},
+		{"bare-basename", "switchboard-a", "switchboard-a"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			if err := run(&buf, []string{tc.arg0, "--version"}); err != nil {
+				t.Fatalf("run(--version) unexpected error: %v", err)
+			}
+			got := buf.String()
+			if !strings.Contains(got, tc.wantSub) {
+				t.Errorf("--version output %q does not contain basename %q", got, tc.wantSub)
+			}
+		})
+	}
+}
+
 type failWriter struct{}
 
 func (failWriter) Write([]byte) (int, error) {
