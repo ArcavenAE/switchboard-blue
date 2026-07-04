@@ -925,14 +925,14 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_23_HAS_FINDINGS_STREAK_HELD_AT_ZERO
-  phase_step: phase-5-pass-23-concluded-has-findings
-  pass_counter: 23
-  attempts_counter: 23
+  status: PASS_24_HAS_FINDINGS_STREAK_HELD_AT_ZERO
+  phase_step: phase-5-pass-24-concluded-has-findings
+  pass_counter: 24
+  attempts_counter: 24
   consecutive_clean_passes: 0
-  last_reset_reason: pass-23-has-findings-F-P5P23-A-001-shipped-2256ba6
+  last_reset_reason: pass-24-has-findings-F-P5P24-A-001-F-P5P24-B-001-B-002-B-003-shipped-ffb028b
   streak: 0
-  last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_HAS_B_CLEAN
+  last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_HAS_B_HAS
   criterion: finding-decay-to-zero-3-fresh-context-passes
   scope_lens: public-surface-operator-ux + test-rigor-traceability
   pass_1_adv_a_findings: "2H/1M/0L/2obs"
@@ -1210,3 +1210,55 @@ phase5:
       POL-003-candidate cosmetic). 12 anti-findings verified across VP-INDEX
       v2.36, ARCH-11 v1.17, STORY-INDEX v3.77 arithmetic triangle.
       Three clean passes still needed for BC-5.39.001 convergence.
+  pass_24:
+    timestamp: 2026-07-03T00:00:00
+    verdict: HAS_FINDINGS
+    worktree_head_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    factory_head_sha_at_dispatch: 89fef775acab150dbb2672feb34ef496f189f1c2
+    remediation_commit_sha: ffb028be9d65a2a9ac9a923a19d1503cb6c0b1b1
+    adv_a:
+      verdict: HAS_FINDINGS
+      findings:
+        - id: F-P5P24-A-001
+          severity: HIGH
+          policy: "POL-002 + POL-001"
+          class: "story-mint-sibling-sweep-gap (novel sub-category)"
+          artifact: STORY-INDEX.md
+          blast_radius: 4
+          summary: "S-BL.ADMINWIRE-EXTRACTION story file existed at v1.0 but STORY-INDEX omitted it in 4 places (Summary L23, Summary L36, Backlog table, v3.78 changelog)"
+          status: SHIPPED
+    adv_b:
+      verdict: HAS_FINDINGS
+      findings:
+        - id: F-P5P24-B-001
+          severity: MEDIUM
+          policy: POL-006
+          class: "arch-11-reverse-trace-propagation-gap (novel axis)"
+          artifact: "ARCH-11 L53 BC-2.02.001 row"
+          summary: "Missing VP-042 reverse-trace; VP-INDEX L68 anchors VP-042 to both BC-2.01.001 and BC-2.02.001"
+          status: SHIPPED
+        - id: F-P5P24-B-002
+          severity: MEDIUM
+          policy: POL-006
+          class: "arch-11-reverse-trace-propagation-gap"
+          artifact: "ARCH-11 L72 BC-2.05.001 row"
+          summary: "Missing VP-008 reverse-trace; VP-INDEX L34 anchors VP-008 to both BC-2.05.001 and BC-2.05.002"
+          status: SHIPPED
+        - id: F-P5P24-B-003
+          severity: MEDIUM
+          policy: POL-006
+          class: "arch-11-reverse-trace-propagation-gap"
+          artifact: "ARCH-11 L67 BC-2.04.003 row"
+          summary: "Missing VP-012 reverse-trace; VP-INDEX L38 anchors VP-012 to both BC-2.05.003 and BC-2.04.003"
+          status: SHIPPED
+      observations:
+        - id: O-P5P24-B-001
+          class: method-column-cosmetic
+          summary: "BC-2.01.001 method labeled proptest but VPs include VP-041/VP-042 benchmarks"
+          status: "SHIPPED (opportunistic sweep in Burst 61)"
+        - id: O-P5P24-B-002
+          class: cross-lens-vp-status-draft
+          summary: "VP-043/044/045/050/055 status:draft while implementing stories S-7.01/S-7.02/S-7.03 merged; Wave-6 Tranche B equivalent of Wave-5 v2.19 sweep never ran"
+          status: "DEFERRED (cross-lens, borderline Adv-A perimeter — S-7.03 still draft; may address separately)"
+    overall_verdict: HAS_FINDINGS
+    streak_delta: "held-at-0/3"
