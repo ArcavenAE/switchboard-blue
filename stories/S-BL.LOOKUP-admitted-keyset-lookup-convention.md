@@ -3,9 +3,10 @@ artifact_id: S-BL.LOOKUP
 document_type: story
 level: ops
 version: "1.5"
-status: draft
+status: merged
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
+last_modified: 2026-07-03T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 epic: E-6

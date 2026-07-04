@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.77"
+version: "3.78"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-03T00:00:00
@@ -181,6 +181,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.78 | 2026-07-03 | F-P5P23-A-001 remediation (POL-002 sibling-sweep recurrence): Bumped S-W5.04 and S-BL.LOOKUP story-file frontmatter `status:` from stale pre-merge value (`draft`) to canonical `merged` matching their STORY-INDEX Master Table rows (S-W5.04 row 72 asserts `merged (PR #41, 851e164)`; S-BL.LOOKUP row 79 asserts `merged (PR #40, eac5d0a)`). Completes the Wave-6 Tranche-A trio propagation begun at v3.44 (S-6.07 was propagated then; S-W5.04 and S-BL.LOOKUP were missed). Class: partial-fix regression per S-7.01. No BC/VP/AC changes; develop untouched. |
 | 3.77 | 2026-07-03 | F-P5P22-A-001 remediation (POL-002 sibling-sweep gap): Bumped S-1.01 and S-2.01 story-file frontmatter `status:` from stale pre-merge values (`ready` / `pending`) to canonical `completed` matching their STORY-INDEX Master Table rows. Brings S-1.01 + S-2.01 into row/header agreement per the completed-vocabulary preservation ruling from F-P5P18-A-001. No BC/VP/AC changes; develop untouched. |
 | 3.76 | 2026-07-03 | POL-002 sibling-sweep completion — Wave-6 aggregate reconciled to include S-BL.ROUTER-ADDR (2pts, PR #56, merged per v3.55 promotion). Wave 6: 31→33 pts / 7→8 stories; Wave Summary Total: 34→35 wave stories / 191→193 pts; grand total: 36→37 stories / 201→203 pts; waves 0-6 subtotal 183→185; incl. maintenance 193→195; narrative gloss line 96 arithmetic extended. Closes F-P5P20-A-001. |
 | 3.75 | 2026-07-03 | Wave-6 aggregate arithmetic sweep — cascade of S-7.03 5→3 rescope from v3.46 not previously propagated to Summary rollups (F-P5P19-A-001 remediation; POL-002 aggregate-freshness). Corrected: Wave 6 33→31 pts; Total points (waves 0–6) 192→183; Total points (incl. maintenance) 202→193; Wave Summary grand total 200→191 (waves 0–7); narrative gloss extended to note S-7.03 rescope per RULING-W6TB-C. TRACEABILITY: F-P5P19-A-001; cascades from v3.46; corrected values: Wave 6 33→31, waves 0-6 total 192→183, incl. maintenance 202→193, grand total 200→191. No BC/VP/AC changes; develop untouched. |

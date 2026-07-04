@@ -4,9 +4,10 @@ document_type: story
 level: ops
 story_id: S-W5.04
 title: "daemon-side paths.list / router.metrics / router.status RPC handlers and response types"
-status: draft
+status: merged
 producer: story-writer
 timestamp: 2026-07-01T15:00:00
+last_modified: 2026-07-03T00:00:00
 phase: 2
 epic: E-5
 wave: 6
