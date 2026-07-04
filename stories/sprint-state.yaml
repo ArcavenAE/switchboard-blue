@@ -925,14 +925,14 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_17_HAS_FINDINGS
-  phase_step: phase-5-pass-17-concluded-has-findings
-  pass_counter: 17
-  attempts_counter: 17
+  status: PASS_18_HAS_FINDINGS
+  phase_step: phase-5-pass-18-concluded-has-findings
+  pass_counter: 18
+  attempts_counter: 18
   consecutive_clean_passes: 0
-  last_reset_reason: pass-17-has-findings
+  last_reset_reason: pass-18-has-findings
   streak: 0
-  last_verdict: HAS_FINDINGS_2026-07-03_ADV_A
+  last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_AND_B
   criterion: finding-decay-to-zero-3-fresh-context-passes
   scope_lens: public-surface-operator-ux + test-rigor-traceability
   pass_1_adv_a_findings: "2H/1M/0L/2obs"
@@ -1031,4 +1031,22 @@ phase5:
     adv_b_af_summary: "VP-077 v1.1 all 10 test-anchor line numbers exact; BC-2.05.004 EC-008↔VP-077↔AC-006↔tests triangle bidirectional complete; VP-077/POL-001/POL-002 satisfied; VP-INDEX arithmetic self-consistent"
     follow_on_nits:
       - "VP-077 Proof Method Coverage cell reads 'Three sub-cases' — deferred to Task #60 companion tidy sweep (in-flight, not raised by Adv-B per orchestrator brief)"
+    streak_after_pass: 0/3
+  pass_18:
+    date: 2026-07-03
+    target_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    adversaries: [adv-a, adv-b]
+    verdicts: {adv-a: HAS_FINDINGS, adv-b: HAS_FINDINGS}
+    adv_a_lens: public-surface + operator-UX drift
+    adv_b_lens: test-rigor + traceability
+    findings_shipped:
+      - F-P5P18-A-001 (8-story frontmatter status sweep @ .factory f8b2d7e — S-6.05, S-6.07, S-7.03, S-1.02, S-1.03, S-2.02, S-W3.04, S-W3.05 → canonical `status: merged`; STORY-INDEX v3.74 changelog row)
+      - F-P5P18-B-001 (STORY-INDEX v3.74 VP-coverage refresh @ .factory bc79621 — Summary 76/76→77/77 (100%); narrative gloss VP-068..VP-077; closes F-P5P14-B-003 aggregate-freshness leg)
+    findings_deferred: []
+    adv_a_anti_findings: 6
+    adv_b_anti_findings: 7
+    remediation_shape: spec-only (two commits, both findings factory-artifacts-only, no code changes)
+    remediation_commits:
+      - f8b2d7e (8-story status sweep)
+      - bc79621 (STORY-INDEX v3.74 VP-coverage)
     streak_after_pass: 0/3
