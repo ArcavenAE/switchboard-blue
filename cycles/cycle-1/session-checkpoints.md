@@ -18,6 +18,30 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 86 — Pass 36 close-out
+
+**Timestamp:** 2026-07-04T12:00:00Z
+**Post-burst:** Burst 86 (state-manager solo — Pass 36 close-out)
+**phase_step:** phase-5-pass-36-concluded-has-findings
+**awaiting:** phase-5-pass-36-remediation-dispatch
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — no code changes in Bursts 81–86 scope)
+**Factory HEAD pre-Burst-86:** d666607 (Burst 85 tip)
+
+**Pass 36 adjudication:**
+- Adv-A HAS_FINDINGS (1H + 1M + 2 OBS). F-P5P36-A-001 HIGH: phantom E-RPC-004 citation — code never existed in catalog at any point; cited in Ruling-12 §1 and S-6.07 L78. F-P5P36-A-002 MED: sibling authorship-premise drift in Rulings-11/12 — 4 sites unswept by Burst 85. Novelty HIGH (first-seen phantom-code-citation class).
+- Adv-B NO_FINDINGS (9 anti-findings, 2 obs, NIL novelty). Fourth consecutive Adv-B-clean pass.
+- Streak: 0/3 (reset — Adv-A HAS_FINDINGS).
+- STATE-MANAGER-SIBLING-SWEEP CLOSED: 4-Adv-B-clean-consecutive threshold met at P33+P34+P35+P36.
+- 2 new DRIFT items opened: DRIFT-P5P36-PHANTOM-ERPC-004 (HIGH) + DRIFT-P5P36-RULING-11-12-AUTHORSHIP-PREMISE-SIBLINGS (MED).
+
+**Phase 5 trajectory:** ... → P34: Adv-A 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation → P35: Adv-A 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 F-P5P35-A-001 REMEDIATED → P36: Adv-A 1H+1M (phantom E-RPC-004 + sibling authorship-premise) + Adv-B NO_FINDINGS → streak HOLDS 0/3
+
+**Next action:** Dispatch Burst 87 (spec-steward) for governance-doc remediation. Targets: wave-6-tranche-a-scope-rulings.md (F-P5P36-A-001 + F-P5P36-A-002) and S-6.07-svtn-admin-create.md (F-P5P36-A-001 site L78). Recommended adjudication: F-P5P36-A-001 → option (c) redirect to E-RPC-010; F-P5P36-A-002 → dated audit-trail footnote pattern.
+
+**Sidecar paths (Pass 36):** `cycles/cycle-1/adversarial-reviews/P5-pass-36-Adv-A.md` | `cycles/cycle-1/adversarial-reviews/P5-pass-36-Adv-B.md`
+
+---
+
 ## Session Resume Checkpoint (2026-07-04) — Burst 84 — Pass 35 close-out
 
 **Timestamp:** 2026-07-04T12:00:00Z
