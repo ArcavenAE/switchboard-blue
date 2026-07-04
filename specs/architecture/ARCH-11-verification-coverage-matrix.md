@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.16"
+version: "1.17"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-07-03T00:00:00 # v1.17 — F-P5P20-B-001: VP-043 method column sibling-propagation from VP-INDEX v2.35 (F-P5P3-B-001 close 2026-07-02). BC-2.02.007 row (~L58) Method: proptest → strong-oracle. arq module row (~L112) Method: proptest (4) → proptest (3), unit (1). Reconciles ARCH-11 proptest column sum 34→33 and unit column sum 2→3 against canonical VP-INDEX v2.35.
   - 2026-07-03T00:00:00 # v1.16 — F-P5P19-B-001: VP-077 propagated (integration, P0, cmd/switchboard) — list-keys admission-gate any-role OR operator-set OR bootstrap-key per BC-2.05.004 EC-008; BC-2.05.004 row VP list updated VP-046+VP-075+VP-076 → VP-046+VP-075+VP-076+VP-077; cmd/switchboard count 4→5 (integration 4→5); P0 VPs 54→55; totals updated to 77 VPs. Narrative header updated 76→77, VP-076→VP-077, v2.18→v2.36. Per-module recount narrative updated 76→77.
   - 2026-07-01T00:00:00 # v1.15 — F-P5L3R-08: VP-062 footnote BC-2.06.003 pin corrected v1.9→v1.13 (actual current version); VP-062 v1.6 note added (body pin sweep v1.10→v1.13 at 7 sites). No row or count changes.
   - 2026-07-01T00:00:00 # v1.14 — F-P1L3-003 BC-2.06.003 version pin sweep: footnote updated v1.8→v1.9 (BC-2.06.003 now at v1.9); no row or count changes.
@@ -55,7 +56,7 @@ modified:
 | BC-2.02.004 | Upstream idempotent replay window | internal/replay | VP-022, VP-023 | proptest | P0 |
 | BC-2.02.005 | Downstream ARQ with piggybacked ACK/SACK | internal/arq | VP-019, VP-020 | proptest | P0 |
 | BC-2.02.006 | TLPKTDROP terminates overdue downstream frames | internal/arq | VP-021 | proptest | P0 |
-| BC-2.02.007 | XOR parity FEC, single loss recoverable | internal/arq | VP-043 | proptest | P1/PE |
+| BC-2.02.007 | XOR parity FEC, single loss recoverable | internal/arq | VP-043 | strong-oracle | P1/PE |
 | BC-2.02.008 | Split-horizon: no forward back toward arrival | internal/routing | VP-011 | proptest | P0 |
 | BC-2.02.009 | Bounded drop cache suppresses looping duplicates | internal/multipath | VP-025 | proptest | P0 |
 | BC-2.03.001 | Access node presence advertisement | internal/discovery | VP-044 | integration | P1/PE |
@@ -109,7 +110,7 @@ VP counts recounted from VP-INDEX (canonical source of truth, 77 VPs total).
 | internal/frame | 4 | proptest (4) |
 | internal/hmac | 3 | proptest (2), fuzz (1) |
 | internal/halfchannel | 7 | proptest (5), benchmark (2) |
-| internal/arq | 4 | proptest (4) |
+| internal/arq | 4 | proptest (3), unit (1) |
 | internal/replay | 2 | proptest (2) |
 | internal/multipath | 4 | proptest (2), e2e (1), integration (1) |
 | internal/paths | 2 | proptest (2) |

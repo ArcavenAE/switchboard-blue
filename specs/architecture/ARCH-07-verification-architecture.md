@@ -2,7 +2,7 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -18,6 +18,7 @@ kos_anchors:
   - elem-ssh-end-to-end-encryption
   - elem-asymmetric-half-channels
 modified:
+  - 2026-07-03T00:00:00 # v1.10 — F-P5P20-B-001: VP-043 method column sibling-propagation from VP-INDEX v2.35 (F-P5P3-B-001 close 2026-07-02). Phase-1c-refinement Test-Sufficient table VP-043 row (~L183) Method: proptest → strong-oracle.
   - 2026-07-03T00:00:00 # v1.9 — F-P5P19-B-002: VP catalog total refreshed 76→77 (VP-INDEX v2.36); added footnote block covering VP-075/VP-076/VP-077 (Wave-5 admin-authority triplet for BC-2.05.004); sibling propagation partner of ARCH-11 v1.16 (F-P5P19-B-001).
   - 2026-06-30T00:00:00 # v1.8 — S502-DEFER-3 handoff (commit 7ee5b82): VP-062 bumped v1.2→v1.3 (Property 5a: failed+pending precedence ruling per BC-2.06.003 v1.8 EC-007); VP catalog total corrected 75→76; footnote updated.
   - 2026-06-30T00:00:00 # v1.7 — F-P8L3-001: VP catalog total updated from 74 to 75 (VP-075 was minted in Pass-6/7 but total not incremented)
@@ -180,7 +181,7 @@ VP-027 (proptest) covers transition ordering under sustained degradation. VP-074
 
 | VP ID | Property | Module | Method |
 |-------|----------|--------|--------|
-| VP-043 | XOR FEC: single loss in group recoverable | internal/arq | proptest |
+| VP-043 | XOR FEC: single loss in group recoverable | internal/arq | strong-oracle |
 | VP-044 | Presence advertisement includes required fields | internal/discovery | integration |
 | VP-045 | Console session enumeration without hostnames | internal/discovery | e2e |
 | VP-046 | Key lifecycle: register/revoke/expire | internal/svtnmgmt | integration |
