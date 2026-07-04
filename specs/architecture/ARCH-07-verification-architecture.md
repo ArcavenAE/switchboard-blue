@@ -2,7 +2,7 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.8"
+version: "1.9"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -18,6 +18,7 @@ kos_anchors:
   - elem-ssh-end-to-end-encryption
   - elem-asymmetric-half-channels
 modified:
+  - 2026-07-03T00:00:00 # v1.9 — F-P5P19-B-002: VP catalog total refreshed 76→77 (VP-INDEX v2.36); added footnote block covering VP-075/VP-076/VP-077 (Wave-5 admin-authority triplet for BC-2.05.004); sibling propagation partner of ARCH-11 v1.16 (F-P5P19-B-001).
   - 2026-06-30T00:00:00 # v1.8 — S502-DEFER-3 handoff (commit 7ee5b82): VP-062 bumped v1.2→v1.3 (Property 5a: failed+pending precedence ruling per BC-2.06.003 v1.8 EC-007); VP catalog total corrected 75→76; footnote updated.
   - 2026-06-30T00:00:00 # v1.7 — F-P8L3-001: VP catalog total updated from 74 to 75 (VP-075 was minted in Pass-6/7 but total not incremented)
   - 2026-06-30T00:00:00 # v1.6 — F-P7L3-001: VP-075 module corrected from internal/mgmt to cmd/switchboard in Phase 1c-refinement integration table
@@ -96,7 +97,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
 
-> VP catalog total = 76; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> VP catalog total = 77; full BC→VP coverage in ARCH-11. VP-043 through VP-057
 > were added in Phase 1c-refinement to close coverage gaps. VP-059 added 2026-06-27
 > for BC-2.05.005 PC-3 (Wave 3 gate F-2 remediation — FailureCounter threshold proptest).
 > VP-058 added at Wave 3 for BC-2.05.008 (RouteFrame HMAC code-audit).
@@ -118,6 +119,16 @@ See ARCH-09 for the complete per-package classification.
 > VP-062 updated to v1.3 2026-06-30 (S502-DEFER-3 closure, commit 7ee5b82): Property 5a added
 > (failed+pending precedence: Degraded=true AND rttP99Valid=false → quality="pending"; EC-007);
 > fuzz corpus seed 8 added; BC pin swept v1.7→v1.8. No count changes.
+> VP-075 (integration, cmd/switchboard, P0) added 2026-06-30: admin.key.* (register/revoke/expire)
+> handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation.
+> Handler admission-authority write path. Covers BC-2.05.004 caller-role enforcement gate.
+> VP-076 (integration, cmd/switchboard, P0) added 2026-06-30: bootstrap-key non-revocable AND
+> non-expirable symmetric lockout invariant per BC-2.05.004 EC-007 v1.12. E-ADM-020 / E-ADM-021
+> sentinels for any well-formed request on the bootstrap key.
+> VP-077 (integration, cmd/switchboard, P0) added 2026-07-03: list-keys admission-gate three-way
+> disjunction — any-role OR operator-set OR bootstrap-key; else E-ADM-009. Covers BC-2.05.004
+> EC-008 (three admission failure modes for admin.key.list-keys). Closes BC↔VP↔AC triangle for
+> BC-2.05.004 EC-008. Orthogonal to VP-075 (write-authority gate on mutating operations).
 
 ### Phase 1c-refinement: Pure-Core Additions
 
@@ -174,6 +185,8 @@ VP-027 (proptest) covers transition ordering under sustained degradation. VP-074
 | VP-045 | Console session enumeration without hostnames | internal/discovery | e2e |
 | VP-046 | Key lifecycle: register/revoke/expire | internal/svtnmgmt | integration |
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | cmd/switchboard | integration |
+| VP-076 | bootstrap-key non-revocable AND non-expirable symmetric management-lockout prevention (E-ADM-020 / E-ADM-021 for any well-formed request on bootstrap key) per BC-2.05.004 EC-007 | cmd/switchboard | integration |
+| VP-077 | admin.key.list-keys admission gate: IsAdmittedAnyRole OR OperatorKeySet OR BootstrapKey; else E-ADM-009 (three failure modes: no caller, cross-SVTN, revoked/expired); SVTN-existence check precedes gate (EC-008) | cmd/switchboard | integration |
 | VP-047 | Per-path metrics queryable via sbctl | internal/metrics | integration |
 | VP-048 | Control node creates/destroys SVTNs | internal/svtnmgmt | integration |
 | VP-049 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | e2e |
