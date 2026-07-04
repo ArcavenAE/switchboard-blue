@@ -86,6 +86,10 @@ Write `switchboard-router.yaml`:
 listen_addr: "0.0.0.0:9090"
 management_socket: "/run/switchboard-router.sock"
 
+# Timeslice tick — required. Allowed range: [5ms, 50ms].
+# 10ms is a good starting value for interactive sessions.
+tick_interval: 10ms
+
 # E-mode: no upstream routers
 upstream_routers: []
 ```
@@ -304,6 +308,9 @@ script can pass `--yes` instead, but never both — see
 - **`E-CFG-008` on console-mode startup** — a console-mode management
   socket bound to a non-loopback TCP address. Use a Unix socket or a
   loopback bind (`127.0.0.1:<port>`).
+- **`E-CFG-001: tick_interval: value 0s is outside allowed range [5ms, 50ms]`** —
+  the `tick_interval` field is required and was omitted (or set to zero).
+  Add `tick_interval: 10ms` to the router config (see §2 above).
 
 Every error carries a stable taxonomy code — see [docs/errors.md](errors.md)
 for the full catalog and their handling recommendations.
