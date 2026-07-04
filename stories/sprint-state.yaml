@@ -925,12 +925,12 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_18_HAS_FINDINGS
-  phase_step: phase-5-pass-18-concluded-has-findings
-  pass_counter: 18
-  attempts_counter: 18
+  status: PASS_19_HAS_FINDINGS
+  phase_step: phase-5-pass-19-concluded-has-findings
+  pass_counter: 19
+  attempts_counter: 19
   consecutive_clean_passes: 0
-  last_reset_reason: pass-18-has-findings
+  last_reset_reason: pass-19-has-findings
   streak: 0
   last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_AND_B
   criterion: finding-decay-to-zero-3-fresh-context-passes
@@ -1049,4 +1049,28 @@ phase5:
     remediation_commits:
       - f8b2d7e (8-story status sweep)
       - bc79621 (STORY-INDEX v3.74 VP-coverage)
+    streak_after_pass: 0/3
+  pass_19:
+    date: 2026-07-03
+    target_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    adversaries: [adv-a, adv-b]
+    verdicts: {adv-a: HAS_FINDINGS, adv-b: HAS_FINDINGS}
+    adv_a_lens: public-surface + operator-UX drift lens
+    adv_b_lens: test-rigor + traceability
+    adv_a_findings: "0H/1M/0L/6af"
+    adv_b_findings: "2H/0M/1L/8af"
+    findings_shipped:
+      - F-P5P19-A-001 (MED — STORY-INDEX Wave-6 aggregate arithmetic stale after S-7.03 5→3 rescope v3.46 cascade; systematic +2 offset: Wave 6 33→31, waves 0-6 192→183, incl. maint. 202→193, grand total 200→191. SHIPPED @ .factory e65e429 — STORY-INDEX v3.74→v3.75)
+      - F-P5P19-B-001 (HIGH — ARCH-11 verification-coverage-matrix stale at Total=76 across 6 sites; BC-2.05.004 row missing VP-077; structural traceability gap for EC-008. SHIPPED @ .factory dd97736 — ARCH-11 v1.15→v1.16)
+      - F-P5P19-B-002 (HIGH — ARCH-07 verification-architecture stale at "VP catalog total = 76" post-VP-077 mint; missing admin-authority triplet VP-075/076/077 footnote. Sibling propagation partner of B-001. SHIPPED @ .factory 1a55096 — ARCH-07 v1.8→v1.9)
+      - F-P5P19-B-003 (LOW — VP-077 source_bc pin syntax BC-2.05.004@v14 diverged from sibling POL-003-pinned VPs bare-space v1.14 form; ambiguous major-version. SHIPPED @ .factory e50f96d — VP-077 v1.1→v1.2; POL-003 conformance 3/77→4/77)
+    findings_deferred: []
+    adv_a_anti_findings: 6
+    adv_b_anti_findings: 8
+    remediation_shape: spec-only (four commits, one per finding for audit granularity, factory-artifacts-only, no code changes)
+    remediation_commits:
+      - e65e429 (STORY-INDEX v3.75 Wave-6 arithmetic sweep)
+      - dd97736 (ARCH-11 v1.16 VP-077 6-site propagation)
+      - 1a55096 (ARCH-07 v1.9 VP-catalog total + admin-authority triplet footnote)
+      - e50f96d (VP-077 v1.2 source_bc pin syntax normalization)
     streak_after_pass: 0/3
