@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.20"
+version: "1.21"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-07-03T00:00:00 # v1.21 — F-P5P27-B-001 + F-P5P27-B-002 remediations + proactive Phase-column full-file sweep. F-P5P27-B-001 [HIGH POL-008 phase-column drift class, sibling propagation gap from P26 F-P5P26-B-001]: 4 session-access rows corrected Phase column per VP-phase-union convention — L68 BC-2.04.001 P0→P1 (VP-031 P1 sole anchor per VP-INDEX v2.36 L57); L70 BC-2.04.003 P0→P0/P1 (VP-012 P0 + VP-033 P1); L71 BC-2.04.004 P0→P1 (VP-033 P1 + VP-056 P1); L72 BC-2.04.005 P0→P0/P1 (VP-013 P0 + VP-035 P1). F-P5P27-B-002 [LOW POL-008 stale method annotation]: L81 BC-2.05.007 method column proptest + audit → proptest (no VP anchors an audit method for this BC; unlike BC-2.01.005 fuzz + audit which is justified in Infeasible Properties L169-174 as CI grep gate). Proactive full-file Phase-column sweep found 2 additional drift gaps beyond the 4 known rows — L78 BC-2.05.004 P0→P0/P1 (VP-046 P1 + VP-075/VP-076/VP-077 P0; union is P0/P1); L89 BC-2.07.004 P0→P0/P1 (VP-065 P1 + VP-064/VP-066/VP-068–VP-073 P0; union is P0/P1). Total: 6 Phase-column fixes, 1 method-column fix. No BC or VP count changes — column-correction only; Coverage Summary counts unchanged; Per-Module counts unchanged.
   - 2026-07-03T00:00:00 # v1.20 — F-P5P26-B-001 + F-P5P26-B-002 reverse-trace additions (fourth+fifth instance of F-P5P24-B-*** POL-006 propagation gap class; fifth consecutive Lane-B recurrence; F-P5P26-B-002 is first dual-anchor VP instance): BC-2.01.003 row (L50) VP list VP-017,VP-051 → VP-016,VP-017,VP-051 (VP-016 dual-anchor to BC-2.01.001+BC-2.01.003 per VP-INDEX v2.36 L42; correctly present at BC-2.01.001 row L48; systematically dropped from BC-2.01.003 row); BC-2.02.003 row (L57) VP list VP-026,VP-063 → VP-026,VP-040,VP-063, module cell internal/paths → internal/paths, internal/multipath, method column proptest → proptest + e2e, phase column P0 → P0/P1 (VP-040 anchored solely to BC-2.02.003 per VP-INDEX v2.36 L66; e2e/P1/internal/multipath). Proactive full-file reverse-trace sweep also executed — no additional gaps found (sweep found only the 2 known gaps — no additional POL-006 axes). No BC or VP count changes — reverse-trace only; VP-INDEX remains source of truth for VP existence; Coverage Summary counts unchanged; Per-Module counts unchanged (VP-040 already counted in internal/multipath row).
   - 2026-07-03T00:00:00 # v1.19 — F-P5P25-B-001: BC-2.07.002 row (L85) reverse-trace VP-067 added (VP-049 → VP-049, VP-067; method e2e → e2e + integration; phase P2 → P0/P2). VP-067 is integration P0 per VP-INDEX v2.36 L93; narrative L139 already documented VP-067 (integration, cmd/sbctl) but row was never updated. Third instance of F-P5P24-B-*** reverse-trace propagation gap pattern class. No BC or VP count changes — reverse-trace only; Coverage Summary counts unchanged (VP-067 already counted in P0=55; P2+ VPs remain 4 because VP-049 is P2 only, VP-067 is P0 only per VP-INDEX); VP-INDEX remains source of truth for VP existence.
   - 2026-07-03T00:00:00 # v1.18 — F-P5P24-B-001/002/003 reverse-trace additions + O-P5P24-B-001 cosmetic sweep: BC-2.02.001 VP-042 added + method proptest→proptest+benchmark; BC-2.04.003 VP-012 added + method e2e→e2e+proptest; BC-2.05.001 VP-008 added (method unchanged proptest). O-P5P24-B-001: BC-2.01.001 method proptest→proptest+benchmark (VP-041/VP-042 are benchmark per VP-INDEX). No BC or VP count changes — reverse-trace additions only; VP-INDEX is source of truth for VP existence.
@@ -65,20 +66,20 @@ modified:
 | BC-2.03.001 | Access node presence advertisement | internal/discovery | VP-044 | integration | P1/PE |
 | BC-2.03.002 | Console session enumeration without hostnames | internal/discovery | VP-045 | e2e | P1/PE |
 | BC-2.03.003 | Presence includes name, status, quality | internal/discovery | VP-044, VP-055 | integration + proptest | P1/PE |
-| BC-2.04.001 | Access node connects to tmux control mode | internal/tmux | VP-031 | integration | P0 |
+| BC-2.04.001 | Access node connects to tmux control mode | internal/tmux | VP-031 | integration | P1 |
 | BC-2.04.002 | PTY fallback when control mode unavailable | internal/tmux | VP-032 | integration | P0 |
-| BC-2.04.003 | Console attach by name | internal/session | VP-012, VP-033 | e2e + proptest | P0 |
-| BC-2.04.004 | Console detach without closing session | internal/session | VP-033, VP-056 | e2e + integration | P0 |
-| BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-013, VP-035 | proptest + integration | P0 |
+| BC-2.04.003 | Console attach by name | internal/session | VP-012, VP-033 | e2e + proptest | P0/P1 |
+| BC-2.04.004 | Console detach without closing session | internal/session | VP-033, VP-056 | e2e + integration | P1 |
+| BC-2.04.005 | Read-only console rejects upstream keystrokes | internal/session | VP-013, VP-035 | proptest + integration | P0/P1 |
 | BC-2.04.006 | Multi-console fan-out | internal/session | VP-034 | e2e | P0 |
 | BC-2.04.007 | Daemon startup exits non-zero on connect failure; SIGTERM/SIGINT triggers clean shutdown | cmd/switchboard | VP-060 | integration | P0 |
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-008, VP-009 | proptest | P0 |
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
-| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075, VP-076, VP-077 | integration | P0 |
+| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075, VP-076, VP-077 | integration | P0/P1 |
 | BC-2.05.005 | HMAC frame authentication at first router | internal/hmac, internal/admission (PC-3) | VP-004, VP-005, VP-006, VP-059 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
-| BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
+| BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest | P0 |
 | BC-2.05.008 | RouteFrame HMAC enforcement | internal/routing | VP-058, VP-059 | code-audit + proptest | P0 |
 | BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027, VP-074 | proptest + unit | P1 |
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
@@ -86,7 +87,7 @@ modified:
 | BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
 | BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049, VP-067 | e2e + integration | P0/P2 |
 | BC-2.07.003 | sbctl reports clear error when daemon unreachable | cmd/sbctl | VP-030 | integration | P0 |
-| BC-2.07.004 | Daemon management server authenticates all connections via Ed25519 challenge-response (fail-closed) | internal/mgmt, cmd/switchboard | VP-064, VP-065, VP-066, VP-068, VP-069, VP-070, VP-071, VP-072, VP-073 | integration + unit + fuzz | P0 |
+| BC-2.07.004 | Daemon management server authenticates all connections via Ed25519 challenge-response (fail-closed) | internal/mgmt, cmd/switchboard | VP-064, VP-065, VP-066, VP-068, VP-069, VP-070, VP-071, VP-072, VP-073 | integration + unit + fuzz | P0/P1 |
 | BC-2.08.001 | Console remotely controllable via sbctl | cmd/sbctl | VP-050 | e2e | P1/PE |
 | BC-2.09.001 | E→PE graduation by config change | internal/config | VP-038 | e2e | P2/PE |
 | BC-2.09.002 | Router sends drain signal before shutdown | internal/drain | VP-037 | e2e | P2/PE |
