@@ -6,7 +6,7 @@
 # total_stories = 54 (per STORY-INDEX v3.79 — see that doc for authoritative enumeration of all active backlog, hardening, maintenance, draft, and won't-fix entries)
 # total_points  = 192 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; excludes S-BL.LOOKUP 1pt backlog; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.49
+# version: 1.50
 
 cycle: cycle-1
 phase: 5
@@ -1033,6 +1033,17 @@ stories:
 #   - S-BL.LOOKUP: bc_traces set to [] per story file (story file is authority; closes F-020).
 #   - total_stories 39→42, source-of-truth annotation updated to v2.7.
 
+# v1.50 (2026-07-03): Burst 66 Phase 5 Pass 25 HAS_FINDINGS state persistence.
+#   - phase5.status PASS_24_HAS_FINDINGS_STREAK_HELD_AT_ZERO → PASS_25_HAS_FINDINGS_STREAK_STAYS_ZERO
+#   - phase5.phase_step phase-5-pass-24-concluded-has-findings → phase-5-pass-25-concluded-has-findings
+#   - phase5.pass_counter 24 → 25; phase5.attempts_counter 24 → 25; phase5.consecutive_clean_passes 0 (unchanged)
+#   - phase5.pass_25 block added: adv_a 3 findings (1H+2M, all SHIPPED dfa4d33); adv_b 2 findings (2M, all SHIPPED 99f1356)
+#   - F-P5P25-A-001 HIGH POL-002: sprint-state systemic staleness 5+ axes
+#   - F-P5P25-A-002 MED POL-002: STATE.md/sprint-state wave_6_gate cross-artifact consistency
+#   - F-P5P25-A-003 MED POL-002: sprint-state header phase/total_stories drift
+#   - F-P5P25-B-001 MED POL-006: ARCH-11 L85 BC-2.07.002 row missing VP-067 (third F-P5P24-B-*** instance)
+#   - F-P5P25-B-002 MED POL-005: BC-2.07.002 L180 VP table method unit vs canonical integration
+#   - Streak stays 0/3. Pass 26 next.
 # v1.49 (2026-07-03): Burst 65a F-P5P25-A-001/002/003 systemic staleness remediation.
 #   - L4 phase narrative updated to Pass-25 HAS_FINDINGS state
 #   - L5 source-of-truth pointer v3.54 → v3.79 (25 versions stale)
@@ -1054,12 +1065,12 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_24_HAS_FINDINGS_STREAK_HELD_AT_ZERO
-  phase_step: phase-5-pass-24-concluded-has-findings
-  pass_counter: 24
-  attempts_counter: 24
+  status: PASS_25_HAS_FINDINGS_STREAK_STAYS_ZERO
+  phase_step: phase-5-pass-25-concluded-has-findings
+  pass_counter: 25
+  attempts_counter: 25
   consecutive_clean_passes: 0
-  last_reset_reason: pass-24-has-findings-F-P5P24-A-001-F-P5P24-B-001-B-002-B-003-shipped-ffb028b
+  last_reset_reason: pass-25-has-findings-F-P5P25-A-001-A-002-A-003-F-P5P25-B-001-B-002-shipped-dfa4d33-99f1356
   streak: 0
   last_verdict: HAS_FINDINGS_2026-07-03_ADV_A_HAS_B_HAS
   criterion: finding-decay-to-zero-3-fresh-context-passes
@@ -1391,3 +1402,69 @@ phase5:
           status: "DEFERRED (cross-lens, borderline Adv-A perimeter — S-7.03 still draft; may address separately)"
     overall_verdict: HAS_FINDINGS
     streak_delta: "held-at-0/3"
+  pass_25:
+    timestamp: 2026-07-03T00:00:00Z
+    dispatched_from_sha: 6deda15def9326f28e96f133e237aff5ecb74d7b
+    verdict: HAS_FINDINGS
+    adv_a_findings: 3
+    adv_b_findings: 2
+    adv_a:
+      verdict: HAS_FINDINGS
+      findings:
+        - id: F-P5P25-A-001
+          severity: HIGH
+          policy: POL-002
+          class: "sprint-state-systemic-staleness (5+ axes)"
+          artifact: sprint-state.yaml
+          blast_radius: 5
+          summary: "sprint-state.yaml 5+ axes stale vs STORY-INDEX v3.79: source-of-truth pointer 25 versions stale; S-W5.02/S-6.05/S-7.03 status drift; S-BL.LOOKUP epic E-2 vs E-6; S-7.04 wave 6 vs 7; Wave-6 stories list missing S-BL.ROUTER-ADDR; 9 backlog stubs missing"
+          status: SHIPPED
+          remediation_commit: dfa4d33eb8aff4d7aad5894c1f4188fbf56e9fab
+        - id: F-P5P25-A-002
+          severity: MEDIUM
+          policy: POL-002
+          class: "cross-artifact consistency — STATE.md vs sprint-state wave_6_gate"
+          artifact: "STATE.md + sprint-state.yaml"
+          blast_radius: 2
+          summary: "STATE.md L27 wave_6_gate: CONVERGED_3_OF_3 vs sprint-state wave_status[wave 6].gate_disposition: pending"
+          status: SHIPPED
+          remediation_commit: dfa4d33eb8aff4d7aad5894c1f4188fbf56e9fab
+        - id: F-P5P25-A-003
+          severity: MEDIUM
+          policy: POL-002
+          class: "sprint-state header structured-YAML drift"
+          artifact: sprint-state.yaml
+          blast_radius: 2
+          summary: "sprint-state.yaml L12 phase: 3; L13 total_stories: 43 — both stale vs Phase 5 / 54 stories"
+          status: SHIPPED
+          remediation_commit: dfa4d33eb8aff4d7aad5894c1f4188fbf56e9fab
+    adv_b:
+      verdict: HAS_FINDINGS
+      findings:
+        - id: F-P5P25-B-001
+          severity: MEDIUM
+          policy: POL-006
+          class: "arch-11-reverse-trace-propagation-gap (third instance of F-P5P24-B-*** pattern class)"
+          artifact: "ARCH-11 L85 BC-2.07.002 row"
+          blast_radius: 1
+          summary: "ARCH-11 L85 BC-2.07.002 row missing VP-067 reverse-trace; VP-INDEX anchors VP-067 to BC-2.07.002 as secondary anchor. Pattern: F-P5P24-B-001 (VP-042/BC-2.02.001), F-P5P24-B-002 (VP-008/BC-2.05.001), F-P5P24-B-003 (VP-012/BC-2.04.003) all same class."
+          status: SHIPPED
+          remediation_commit: 99f1356
+        - id: F-P5P25-B-002
+          severity: MEDIUM
+          policy: POL-005
+          class: "bc-vp-table-method-column-inconsistency"
+          artifact: "BC-2.07.002 L180"
+          blast_radius: 1
+          summary: "BC-2.07.002 L180 VP table Method column reads 'unit'; canonical value per VP-INDEX v1.7 F-006 correction is 'integration'"
+          status: SHIPPED
+          remediation_commit: 99f1356
+    remediation_shas:
+      - dfa4d33eb8aff4d7aad5894c1f4188fbf56e9fab
+      - 99f1356
+    overall_verdict: HAS_FINDINGS
+    streak_delta: "stays-at-0/3"
+    notes: |
+      Adv-A escalated POL-002 sibling-sweep to 5+ axes systemic staleness.
+      Adv-B third instance of F-P5P24-B-*** reverse-trace pattern class (VP-067 on BC-2.07.002).
+      Streak stays 0/3.
