@@ -1,6 +1,9 @@
 # Stable Release
 # Triggers: tag push matching v*
-# Builds binaries, signs/notarizes, creates GitHub release, updates homebrew-tap
+# Builds binaries, signs/notarizes, creates GitHub release.
+# Does NOT publish to homebrew-tap: legion-clone stable releases stay
+# out of the shared tap; alpha channel is published as `switchboard-a`
+# by ci.yml on push to develop.
 name: Release
 
 on:
