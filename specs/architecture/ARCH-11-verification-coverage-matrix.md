@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.15"
+version: "1.16"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-07-03T00:00:00 # v1.16 — F-P5P19-B-001: VP-077 propagated (integration, P0, cmd/switchboard) — list-keys admission-gate any-role OR operator-set OR bootstrap-key per BC-2.05.004 EC-008; BC-2.05.004 row VP list updated VP-046+VP-075+VP-076 → VP-046+VP-075+VP-076+VP-077; cmd/switchboard count 4→5 (integration 4→5); P0 VPs 54→55; totals updated to 77 VPs. Narrative header updated 76→77, VP-076→VP-077, v2.18→v2.36. Per-module recount narrative updated 76→77.
   - 2026-07-01T00:00:00 # v1.15 — F-P5L3R-08: VP-062 footnote BC-2.06.003 pin corrected v1.9→v1.13 (actual current version); VP-062 v1.6 note added (body pin sweep v1.10→v1.13 at 7 sites). No row or count changes.
   - 2026-07-01T00:00:00 # v1.14 — F-P1L3-003 BC-2.06.003 version pin sweep: footnote updated v1.8→v1.9 (BC-2.06.003 now at v1.9); no row or count changes.
   - 2026-06-30T00:00:00 # v1.13 — S502-DEFER-3 handoff (commit 7ee5b82): VP-062 bumped v1.2→v1.3 (Property 5a: failed+pending precedence per BC-2.06.003 v1.8 EC-007); prose footnote updated. No row or count changes; total remains 76.
@@ -35,7 +36,7 @@ modified:
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 76 (VP-001 through VP-076, per VP-INDEX v2.18).
+> Total VP count: 77 (VP-001 through VP-077, per VP-INDEX v2.36).
 
 ## BC → VP Coverage Table
 
@@ -70,7 +71,7 @@ modified:
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | internal/admission | VP-007, VP-009 | proptest | P0 |
 | BC-2.05.002 | Router rejects non-admitted nodes — fail-closed | internal/admission | VP-008 | proptest | P0 |
 | BC-2.05.003 | Tier 2 authorization enforced by access node | internal/session | VP-012, VP-013 | proptest | P0 |
-| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075, VP-076 | integration | P0 |
+| BC-2.05.004 | Key lifecycle: register, revoke, expire | internal/svtnmgmt, cmd/switchboard | VP-046, VP-075, VP-076, VP-077 | integration | P0 |
 | BC-2.05.005 | HMAC frame authentication at first router | internal/hmac, internal/admission (PC-3) | VP-004, VP-005, VP-006, VP-059 | proptest + fuzz | P0 |
 | BC-2.05.006 | SVTN cryptographic isolation | internal/routing | VP-010, VP-039 | proptest + e2e | P0 |
 | BC-2.05.007 | Private keys never transit the network | internal/admission | VP-007, VP-057 | proptest + audit | P0 |
@@ -94,14 +95,14 @@ modified:
 | Total BCs | 45 |
 | BCs with ≥1 VP | 45 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 76 |
-| P0 VPs | 54 |
+| Total unique VPs | 77 |
+| P0 VPs | 55 |
 | P1 VPs | 18 |
 | P2+ VPs | 4 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 76 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 77 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -123,10 +124,10 @@ VP counts recounted from VP-INDEX (canonical source of truth, 76 VPs total).
 | internal/drain | 1 | e2e (1) |
 | internal/mgmt | 8 | unit (1), fuzz (1), integration (6) |
 | cmd/sbctl | 5 | integration (2), e2e (2), fuzz (1) |
-| cmd/switchboard | 4 | integration (4) |
-| **Total** | **76** | |
+| cmd/switchboard | 5 | integration (5) |
+| **Total** | **77** | |
 
-Per-module sum = 76 (no off-table VPs).
+Per-module sum = 77 (no off-table VPs).
 VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
 VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) added 2026-06-28 for BC-2.06.003.
 VP-062 bumped to v1.3 2026-06-30 (S502-DEFER-3 closure, commit 7ee5b82): Property 5a added (failed+pending precedence: Degraded=true AND rttP99Valid=false → quality="pending"; BC-2.06.003 v1.13 EC-007). No count change.
@@ -140,6 +141,7 @@ VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings
 VP-074 (unit, internal/metrics) added 2026-06-29 for BC-2.06.001 threshold classification (L-001 disambiguation; unit test covering all 6 nominal regions + 8 boundary values).
 VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 handler-layer caller-role enforcement (Pass-2 lens-3 F-T3-003). VP-046 anchored internal/svtnmgmt (key store propagation); VP-075 anchored cmd/switchboard (BuildAdminHandlers authority gate). F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard; internal/mgmt 9→8 (integration 7→6), cmd/switchboard 2→3 (integration 2→3).
 VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; E-ADM-020 / E-ADM-021 sentinels for any well-formed request). Propagated from VP-INDEX v2.18 per F-W5P1-003; cmd/switchboard 3→4 (integration 3→4); P0 53→54; total 75→76.
+VP-077 (integration, P0, cmd/switchboard) added 2026-07-03 for BC-2.05.004 EC-008 v1.14 (list-keys admission-gate: any-role OR operator-set OR bootstrap-key; else E-ADM-009). Propagated from VP-INDEX v2.36 per F-P5P19-B-001; cmd/switchboard 4→5 (integration 4→5); P0 54→55; total 76→77. Closes BC↔VP↔AC triangle for BC-2.05.004 EC-008.
 
 ## Zero-VP BCs Check
 
