@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.19"
+version: "1.20"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-07-03T00:00:00 # v1.20 — F-P5P26-B-001 + F-P5P26-B-002 reverse-trace additions (fourth+fifth instance of F-P5P24-B-*** POL-006 propagation gap class; fifth consecutive Lane-B recurrence; F-P5P26-B-002 is first dual-anchor VP instance): BC-2.01.003 row (L50) VP list VP-017,VP-051 → VP-016,VP-017,VP-051 (VP-016 dual-anchor to BC-2.01.001+BC-2.01.003 per VP-INDEX v2.36 L42; correctly present at BC-2.01.001 row L48; systematically dropped from BC-2.01.003 row); BC-2.02.003 row (L57) VP list VP-026,VP-063 → VP-026,VP-040,VP-063, module cell internal/paths → internal/paths, internal/multipath, method column proptest → proptest + e2e, phase column P0 → P0/P1 (VP-040 anchored solely to BC-2.02.003 per VP-INDEX v2.36 L66; e2e/P1/internal/multipath). Proactive full-file reverse-trace sweep also executed — no additional gaps found (sweep found only the 2 known gaps — no additional POL-006 axes). No BC or VP count changes — reverse-trace only; VP-INDEX remains source of truth for VP existence; Coverage Summary counts unchanged; Per-Module counts unchanged (VP-040 already counted in internal/multipath row).
   - 2026-07-03T00:00:00 # v1.19 — F-P5P25-B-001: BC-2.07.002 row (L85) reverse-trace VP-067 added (VP-049 → VP-049, VP-067; method e2e → e2e + integration; phase P2 → P0/P2). VP-067 is integration P0 per VP-INDEX v2.36 L93; narrative L139 already documented VP-067 (integration, cmd/sbctl) but row was never updated. Third instance of F-P5P24-B-*** reverse-trace propagation gap pattern class. No BC or VP count changes — reverse-trace only; Coverage Summary counts unchanged (VP-067 already counted in P0=55; P2+ VPs remain 4 because VP-049 is P2 only, VP-067 is P0 only per VP-INDEX); VP-INDEX remains source of truth for VP existence.
   - 2026-07-03T00:00:00 # v1.18 — F-P5P24-B-001/002/003 reverse-trace additions + O-P5P24-B-001 cosmetic sweep: BC-2.02.001 VP-042 added + method proptest→proptest+benchmark; BC-2.04.003 VP-012 added + method e2e→e2e+proptest; BC-2.05.001 VP-008 added (method unchanged proptest). O-P5P24-B-001: BC-2.01.001 method proptest→proptest+benchmark (VP-041/VP-042 are benchmark per VP-INDEX). No BC or VP count changes — reverse-trace additions only; VP-INDEX is source of truth for VP existence.
   - 2026-07-03T00:00:00 # v1.17 — F-P5P20-B-001: VP-043 method column sibling-propagation from VP-INDEX v2.35 (F-P5P3-B-001 close 2026-07-02). BC-2.02.007 row (~L58) Method: proptest → strong-oracle. arq module row (~L112) Method: proptest (4) → proptest (3), unit (1). Reconciles ARCH-11 proptest column sum 34→33 and unit column sum 2→3 against canonical VP-INDEX v2.35.
@@ -47,14 +48,14 @@ modified:
 |-------|---------------------|--------|-------|--------|-------|
 | BC-2.01.001 | Timeslice clock fires on every tick | internal/halfchannel | VP-016, VP-018, VP-041, VP-042 | proptest + benchmark | P0 |
 | BC-2.01.002 | Empty-tick frame is a valid liveness signal | internal/halfchannel | VP-018, VP-053 | proptest | P0 |
-| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-017, VP-051 | proptest | P0 |
+| BC-2.01.003 | Independent upstream/downstream half-channels | internal/halfchannel | VP-016, VP-017, VP-051 | proptest | P0 |
 | BC-2.01.004 | 44-byte outer header encoding and decoding | internal/frame | VP-001, VP-002, VP-003 | proptest | P0 |
 | BC-2.01.005 | Channel header opaque to routers | internal/routing | VP-015 | fuzz + audit | P0 |
 | BC-2.01.006 | Session identity cryptographic derivation | internal/frame | VP-014 | proptest | P0 |
 | BC-2.01.007 | Session continuity across IP change | internal/admission | VP-036 | e2e | P0 |
 | BC-2.02.001 | Duplicate-and-race: same frame on two paths | internal/multipath | VP-024, VP-042 | proptest + benchmark | P0 |
 | BC-2.02.002 | First-arriving copy delivered, duplicates discarded | internal/multipath | VP-024, VP-054 | proptest + integration | P0 |
-| BC-2.02.003 | Per-path RTT/loss tracked, paths ranked | internal/paths | VP-026, VP-063 | proptest | P0 |
+| BC-2.02.003 | Per-path RTT/loss tracked, paths ranked | internal/paths, internal/multipath | VP-026, VP-040, VP-063 | proptest + e2e | P0/P1 |
 | BC-2.02.004 | Upstream idempotent replay window | internal/replay | VP-022, VP-023 | proptest | P0 |
 | BC-2.02.005 | Downstream ARQ with piggybacked ACK/SACK | internal/arq | VP-019, VP-020 | proptest | P0 |
 | BC-2.02.006 | TLPKTDROP terminates overdue downstream frames | internal/arq | VP-021 | proptest | P0 |
