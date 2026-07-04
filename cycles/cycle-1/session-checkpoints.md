@@ -18,6 +18,27 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 83 — Pass 34 taxonomy remediation close-out
+
+**Timestamp:** 2026-07-04T06:00:00Z
+**Post-burst:** Burst 83 (Burst 82 taxonomy remediation close-out + parallel-dispatch commit-attribution anomaly documented)
+**Pipeline state:** Burst 82 taxonomy remediation COMPLETE. DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 REMEDIATED (error-taxonomy.md v4.7 E-RPC-002 + E-RPC-003 rows minted; E-RPC-010 forbidden clause scope-narrowed; interface-definitions.md v1.29 §JSON Output Schema error.code closed-set enumeration added). All remediation work landed in factory commit 3402cd2 (Burst 81+82 parallel-dispatch shared-worktree race — spec-steward edits swept into state-manager commit; functionally clean, commit-message drift cosmetic; B31-3 candidate filed in tracker). Pass 35 fresh-context split-adversary is now unblocked to restart BC-5.39.001 streak from 0/3 → 1/3.
+**Factory HEAD:** See `git -C .factory log --oneline -3` at archive time.
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — no code changes in Bursts 81–83)
+
+**Pass 33 deltas (Adv-A):** NO_FINDINGS CLEAN. Second consecutive clean Adv-A pass. **Pass 33 deltas (Adv-B):** 0 findings + 1 OBS (ARCH-11 v1.22 modified-log swept → v1.23 governance-only). Streak 1/3→2/3.
+
+**Pass 34 deltas (Adv-A):** HAS_FINDINGS — 2 HIGH (F-P5P34-A-001 E-RPC-002 orphan; F-P5P34-A-002 E-RPC-003 orphan). Ruling-14 §10 governance premise factually wrong. Novelty HIGH. **Pass 34 deltas (Adv-B):** NO_FINDINGS 8 anti-findings NIL novelty. Streak RESET 2/3→0/3.
+
+**Sidecar paths:** P5-pass-33-Adv-A.md / P5-pass-33-Adv-B.md (Burst 80) | P5-pass-34-Adv-A.md / P5-pass-34-Adv-B.md (Burst 81)
+
+**Phase 5 trajectory (at archive):** P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2 HIGH + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation COMPLETE → Pass 35 unblocked
+**Next action (superseded):** Dispatch Pass 35.
+
+Archived from STATE.md by Burst 84 — superseded by Pass 35 close-out checkpoint.
+
+---
+
 ## Session Resume Checkpoint (2026-07-01) — Wave-6 Tranche B Pass-5 fix-burst complete
 
 **Position:** Phase 3 Wave 6 Tranche A CLOSED. All three Tranche A stories merged to develop. Pass-5 fix-burst (all 7 agents) complete — POL-002 + #401/#404 propagation landed across S-7.01, S-7.02, S-BL.ROUTER-ADDR.
