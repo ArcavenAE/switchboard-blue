@@ -6,7 +6,7 @@
 # total_stories = 54 (per STORY-INDEX v3.79 — see that doc for authoritative enumeration of all active backlog, hardening, maintenance, draft, and won't-fix entries)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.63
+# version: 1.64
 
 cycle: cycle-1
 phase: 5
@@ -872,6 +872,11 @@ stories:
     bc_traces: [BC-2.07.002]
 
 # Changelog
+# v1.64 — 2026-07-04: Burst 85 — Pass 35 remediation COMPLETE. wave-6-tranche-a-scope-rulings.md v1.12→v1.13: §10 (Ruling-14) Impact Assessment retroactive annotation + changelog row. False "E-RPC-002 already defined" premise corrected — row was minted Burst 82, three days after Ruling-14 authorship. No BC or runtime change. DRIFT-P5P35-RULING-14-GOVERNANCE-PREMISE-STALE CLOSED. Awaiting Pass 36.
+#   phase5.status: PASS_35_REMEDIATION_COMPLETE_AWAITING_PASS_36. phase5.phase_step: phase-5-pass-35-remediation-complete.
+#   artifacts_touched: wave-6-tranche-a-scope-rulings.md v1.13 (governance-only, §10 annotation + changelog row).
+#   drift_closed: DRIFT-P5P35-RULING-14-GOVERNANCE-PREMISE-STALE. findings_closed: F-P5P35-A-001.
+#
 # v1.63 — 2026-07-04: Burst 84 — Pass 35 close-out HAS_FINDINGS Adv-A 1 MEDIUM governance-premise; Adv-B NO_FINDINGS; streak HOLDS 0/3; Burst 85 dispatched for spec-steward remediation.
 #   Pass 35 Adv-A: HAS_FINDINGS — 1 MEDIUM. F-P5P35-A-001 MEDIUM: Ruling-14 §10 Impact Assessment row asserts "E-RPC-002 is already defined in error-taxonomy.md" as false factual premise at ruling authorship date 2026-07-01; E-RPC-002 catalog row was minted 2026-07-04 (Burst 82 error-taxonomy.md v4.7). Governance-text-vs-taxonomy drift class — first Phase-5 instance. 2 OBS non-blocking (OBS-P5P35-A-001 test comments deferred Adv-B; OBS-P5P35-A-002 closed-set enumeration latent-drift).
 #   DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 CLOSED: Pass 35 Adv-A confirmed all E-RPC-002/003 catalog rows present, E-RPC-010 forbidden clause correct, interface-definitions.md v1.29 closed-set enumeration correct.
@@ -1190,15 +1195,15 @@ stories:
 # Header phase updated: 3 → 5. Timestamp updated.
 
 phase5:
-  status: PASS_35_HAS_FINDINGS_ADV_A_1MEDIUM_GOVERNANCE_PREMISE_STREAK_HOLD_0OF3
-  phase_step: phase-5-pass-35-concluded-has-findings
+  status: PASS_35_REMEDIATION_COMPLETE_AWAITING_PASS_36
+  phase_step: phase-5-pass-35-remediation-complete
   pass_counter: 35
   attempts_counter: 36
   consecutive_clean_passes: 0
   last_reset_reason: pass-34-has-findings-adv-a-2H-taxonomy-orphan-E-RPC-002-E-RPC-003-no-catalog-rows-Ruling-14-10-governance-premise-factually-wrong
   streak: 0
   last_updated: 2026-07-04T12:00:00Z
-  last_verdict: HAS_FINDINGS_2026-07-04_ADV_A_1_MEDIUM_GOVERNANCE_PREMISE_ADV_B_NO_FINDINGS
+  last_verdict: PASS_35_REMEDIATION_COMPLETE_2026-07-04_BURST85_wave-6-tranche-a-scope-rulings-v1.13
   criterion: finding-decay-to-zero-3-fresh-context-passes
   scope_lens: public-surface-operator-ux + test-rigor-traceability
   pass_1_adv_a_findings: "2H/1M/0L/2obs"
@@ -1828,3 +1833,14 @@ phase5:
     streak_after: 0
     lane_b_streak_after: 0
     process_gap: false
+  pass_35_remediation:
+    burst: 85
+    concluded: 2026-07-04
+    shape: spec-document-only
+    artifacts_touched:
+      - wave-6-tranche-a-scope-rulings.md v1.12 → v1.13
+    description: "§10 (Ruling-14) Impact Assessment retroactive taxonomy-alignment annotation — false 'E-RPC-002 already defined at authorship' premise corrected with inline footnote + v1.13 changelog row citing DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 and F-P5P35-A-001. No BC or runtime change."
+    findings_closed:
+      - F-P5P35-A-001 (MEDIUM governance-text-vs-taxonomy)
+    drift_closed:
+      - DRIFT-P5P35-RULING-14-GOVERNANCE-PREMISE-STALE

@@ -18,6 +18,25 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 84 — Pass 35 close-out
+
+**Timestamp:** 2026-07-04T12:00:00Z
+**Post-burst:** Burst 84 (Pass 35 close-out — Adv-A HAS_FINDINGS F-P5P35-A-001 MEDIUM, Adv-B NO_FINDINGS)
+**Pipeline state:** Pass 35 CONCLUDED. Adv-A HAS_FINDINGS — 1 MEDIUM finding (F-P5P35-A-001: Ruling-14 §10 Impact Assessment row preserves false claim "E-RPC-002 is already defined" at authorship date 2026-07-01; taxonomy row minted 2026-07-04). DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 CLOSED by Pass 35 Adv-A verification. New drift filed: DRIFT-P5P35-RULING-14-GOVERNANCE-PREMISE-STALE (MEDIUM, spec-steward). Streak HOLDS at 0/3. Burst 85 = spec-steward remediation.
+**Factory HEAD:** ca5de01 at archive time.
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged)
+
+**Pass 35 deltas (Adv-A):** HAS_FINDINGS — 1 MEDIUM. F-P5P35-A-001 MEDIUM: Ruling-14 §10 Impact Assessment table "E-RPC-002 already defined" false at authorship 2026-07-01; taxonomy row minted 2026-07-04. 2 OBS non-blocking. Novelty: MEDIUM — first governance-text-vs-taxonomy class instance. **Pass 35 deltas (Adv-B):** NO_FINDINGS — 8 anti-findings, 2 OBS (O-1 strong-oracle vocab, O-2 PE phase-qualifier). NIL novelty. Streak HOLDS 0/3.
+
+**Sidecar paths:** P5-pass-33-Adv-A.md / P5-pass-33-Adv-B.md (Burst 80) | P5-pass-34-Adv-A.md / P5-pass-34-Adv-B.md (Burst 81) | P5-pass-35-Adv-A.md / P5-pass-35-Adv-B.md (Burst 84)
+
+**Phase 5 trajectory (at archive):** P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2 HIGH taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation COMPLETE → P35 Adv-A HAS_FINDINGS 1 MEDIUM governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3
+**Next action (superseded):** Dispatch Burst 85 spec-steward to remediate F-P5P35-A-001.
+
+Archived from STATE.md by Burst 85 — superseded by Pass 35 remediation-complete checkpoint.
+
+---
+
 ## Session Resume Checkpoint (2026-07-04) — Burst 83 — Pass 34 taxonomy remediation close-out
 
 **Timestamp:** 2026-07-04T06:00:00Z

@@ -2,11 +2,11 @@
 artifact_id: wave-6-tranche-a-scope-rulings
 document_type: decision
 level: ops
-version: "1.12"
+version: "1.13"
 status: final
 producer: product-owner
 timestamp: 2026-07-01T00:00:00
-updated: 2026-07-01T00:00:00
+updated: 2026-07-04T12:00:00
 modified:
   - 2026-07-01T00:00:00 # v1.5 — F-P5L3R-09 (Pass-6 L3): Ruling-9 downstream impact table corrected — BC-2.06.003 target version changed from v1.11→v1.12 to v1.11→v1.13 at two sites (Downstream Artifact Impacts table and Summary of Spec Changes table); v1.12 was an interim hop, actual delivered version is v1.13.
   - 2026-07-01T00:00:00 # v1.6 — Ruling-11: mgmt-layer wire envelope contract formalized; S-6.07 AC-003/AC-004/AC-005 wire-envelope amendments; E-ADM-009 message-format fix (F-Lens1-02); Ruling-6 pre-emption on pathTrackerSource.mu accepted; POL-002 story-index-row-sync policy flag (spec-steward applies).
@@ -16,6 +16,7 @@ modified:
   - 2026-07-01T00:00:00 # v1.10 — Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 as dispatch bucket is intentional; discrimination by message prefix is the spec contract; noted in S-6.07 §Wire Envelope Contract. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST wrap io.ErrUnexpectedEOF with E-RPC-002 per ADR-012 §6 Authenticate parity.
   - 2026-07-01T00:00:00 # v1.11 — spec-steward: Ruling-1 SUPERSEDED-BY annotation added (RULING-W6TB-B + RULING-W6TB-F); VP-047 v1.3→v1.4 oracle flip recorded.
   - 2026-07-01T00:00:00 # v1.12 — RULING-W6TB-G (S-7.02 H-1): heartbeat oracle split — deterministic ExactN test via Config.TickSource seam; real-ticker test retained as integration sanity at [N/2, 2N] tolerance. RULING-W6TB-H (S-7.02 M-3): HMAC-first ordering in ReceiveAdvertisement; key derived from payload.SVTNID; forged-SVTN distinguishing oracle closed. S-7.02 v1.2→v1.3.
+  - 2026-07-04T12:00:00 # v1.13 — spec-steward: §10 (Ruling-14) Impact Assessment retroactive taxonomy-alignment annotation — at ruling authorship (2026-07-01) E-RPC-002 was NOT yet catalog-defined; the catalog row was minted in Burst 82 (error-taxonomy.md v4.7, 2026-07-04) subsequent to Ruling-14 taking effect; see DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 and F-P5P35-A-001. Governance-only; no BC or runtime change.
 cycle: v1.0.0-greenfield
 stories_in_scope: [S-W5.04, S-6.07]
 closes_findings: [F-P1L1-003, F-P1L1-004, F-P1L1-005, F-P1L1-003-stutter, F-P3L1-002, F-L2-01, F-Impl-002, F-P4L1-001, F-P4L1-002, O-P4L3-01, F-P4L2-07, F-L2-A1-02, F-L2-A1-03, F-L2-A1-04]
@@ -1419,7 +1420,7 @@ covers the `Authenticate()` path.
 | `cmd/sbctl/client.go` (~line 300-303) | Add `errors.Is(err, io.ErrUnexpectedEOF)` arm wrapping `E-RPC-002: message too large` |
 | `cmd/sbctl/client_test.go` (or equivalent) | Add `TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002` |
 | S-6.07 story spec (AC or implementation notes) | Add implementation note: dispatch() decode-error branch MUST wrap io.ErrUnexpectedEOF with E-RPC-002 per ADR-012 §6; cite Authenticate() parity and Ruling-14 |
-| No BC change | E-RPC-002 is already defined in error-taxonomy.md; the fix applies the existing code to a missing branch |
+| No BC change | E-RPC-002 is already defined in error-taxonomy.md; the fix applies the existing code to a missing branch _(Amended 2026-07-04: at ruling authorship (2026-07-01) E-RPC-002 was NOT catalog-defined; the catalog row was minted in Burst 82 — error-taxonomy.md v4.7 — subsequent to Ruling-14 taking effect. The ruling's application of E-RPC-002 to the missing dispatch branch preceded the catalog row by three days. See DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 and F-P5P35-A-001.)_ |
 
 ### Ordering
 
@@ -1446,3 +1447,4 @@ required.
 | 1.10 | 2026-07-01 | Ruling-13 (§9): F-P12L1-02 ruled BY DESIGN — E-RPC-001 is the intentional sbctl dispatch bucket; operator discrimination is by message prefix per AC-004/AC-005; §Wire Envelope Contract clarification note added to S-6.07. Ruling-14 (§10): F-P12L1-01 ruled IN SCOPE — dispatch() response decode MUST add errors.Is(io.ErrUnexpectedEOF) arm wrapping E-RPC-002 per ADR-012 §6 Authenticate parity; test TestSbctlAdmin_OversizedRPCResponse_ReturnsE_RPC_002 required. |
 | 1.11 | 2026-07-01 | spec-steward: Ruling-1 SUPERSEDED-BY annotation added (RULING-W6TB-B + RULING-W6TB-F); `""` sentinel-permission clause retracted per VP-047 v1.4 oracle flip. DRIFT-SW504-ROUTER_ADDR-PLACEHOLDER closed pending S-BL.ROUTER-ADDR merge. |
 | 1.12 | 2026-07-01 | RULING-W6TB-G (S-7.02 H-1): heartbeat oracle split — deterministic `ExactN` test via `Config.TickSource` seam satisfies AC-001b exact-N requirement; real-ticker `PeriodicHeartbeat` test retained as integration sanity at `[N/2, 2N]` tolerance. RULING-W6TB-H (S-7.02 M-3): HMAC-first ordering in `ReceiveAdvertisement`; HMAC key derived from `payload.SVTNID` (not `LocalSVTNID`); forged-SVTN distinguishing oracle closed; `ErrSVTNMismatch` preserved for authenticated cross-SVTN frames. S-7.02 v1.2→v1.3. |
+| 1.13 | 2026-07-04 | spec-steward: §10 (Ruling-14) Impact Assessment retroactive taxonomy-alignment annotation. At ruling authorship (2026-07-01) E-RPC-002 was NOT catalog-defined; the catalog row was minted in Burst 82 (error-taxonomy.md v4.7, 2026-07-04) subsequent to Ruling-14 taking effect. The ruling's application of E-RPC-002 to the missing dispatch branch preceded the catalog row by three days — see DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 and F-P5P35-A-001. Governance-only; no BC or runtime change. (F-P5P35-A-001 remediation.) |
