@@ -23,7 +23,7 @@ traces_to: STATE.md
 **Timestamp:** 2026-07-04T22:00:00Z
 **Post-burst:** Burst 91 (state-manager — terminal Phase 5 close-out; BC-5.39.001 CONVERGED)
 **factory_head_pre_burst_91:** e51d4aa
-**factory_head_post_burst_91:** (consult `git -C .factory log --oneline -1`)
+**factory_head_post_burst_91:** 0779c43
 **phase_step_pre:** phase-5-pass-38-concluded-clean-both-lanes
 **phase_step_post:** phase-5-CONVERGED-bc-5.39.001-satisfied
 **awaiting:** phase-6-dispatch
