@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.18"
+version: "1.19"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-07-03T00:00:00 # v1.19 — F-P5P25-B-001: BC-2.07.002 row (L85) reverse-trace VP-067 added (VP-049 → VP-049, VP-067; method e2e → e2e + integration; phase P2 → P0/P2). VP-067 is integration P0 per VP-INDEX v2.36 L93; narrative L139 already documented VP-067 (integration, cmd/sbctl) but row was never updated. Third instance of F-P5P24-B-*** reverse-trace propagation gap pattern class. No BC or VP count changes — reverse-trace only; Coverage Summary counts unchanged (VP-067 already counted in P0=55; P2+ VPs remain 4 because VP-049 is P2 only, VP-067 is P0 only per VP-INDEX); VP-INDEX remains source of truth for VP existence.
   - 2026-07-03T00:00:00 # v1.18 — F-P5P24-B-001/002/003 reverse-trace additions + O-P5P24-B-001 cosmetic sweep: BC-2.02.001 VP-042 added + method proptest→proptest+benchmark; BC-2.04.003 VP-012 added + method e2e→e2e+proptest; BC-2.05.001 VP-008 added (method unchanged proptest). O-P5P24-B-001: BC-2.01.001 method proptest→proptest+benchmark (VP-041/VP-042 are benchmark per VP-INDEX). No BC or VP count changes — reverse-trace additions only; VP-INDEX is source of truth for VP existence.
   - 2026-07-03T00:00:00 # v1.17 — F-P5P20-B-001: VP-043 method column sibling-propagation from VP-INDEX v2.35 (F-P5P3-B-001 close 2026-07-02). BC-2.02.007 row (~L58) Method: proptest → strong-oracle. arq module row (~L112) Method: proptest (4) → proptest (3), unit (1). Reconciles ARCH-11 proptest column sum 34→33 and unit column sum 2→3 against canonical VP-INDEX v2.35.
   - 2026-07-03T00:00:00 # v1.16 — F-P5P19-B-001: VP-077 propagated (integration, P0, cmd/switchboard) — list-keys admission-gate any-role OR operator-set OR bootstrap-key per BC-2.05.004 EC-008; BC-2.05.004 row VP list updated VP-046+VP-075+VP-076 → VP-046+VP-075+VP-076+VP-077; cmd/switchboard count 4→5 (integration 4→5); P0 VPs 54→55; totals updated to 77 VPs. Narrative header updated 76→77, VP-076→VP-077, v2.18→v2.36. Per-module recount narrative updated 76→77.
@@ -82,7 +83,7 @@ modified:
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
 | BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics, cmd/sbctl | VP-047, VP-061, VP-062 | integration + code-audit + fuzz | P1 |
 | BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
-| BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049 | e2e | P2 |
+| BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049, VP-067 | e2e + integration | P0/P2 |
 | BC-2.07.003 | sbctl reports clear error when daemon unreachable | cmd/sbctl | VP-030 | integration | P0 |
 | BC-2.07.004 | Daemon management server authenticates all connections via Ed25519 challenge-response (fail-closed) | internal/mgmt, cmd/switchboard | VP-064, VP-065, VP-066, VP-068, VP-069, VP-070, VP-071, VP-072, VP-073 | integration + unit + fuzz | P0 |
 | BC-2.08.001 | Console remotely controllable via sbctl | cmd/sbctl | VP-050 | e2e | P1/PE |

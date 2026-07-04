@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.002
 document_type: behavioral-contract
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: product-owner
 timestamp: 2026-07-03T00:00:00
@@ -18,6 +18,14 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-03
+    version: "1.10"
+    change: >
+      F-P5P25-B-002 (Phase 5 Pass 25 spec-side remediation, Burst 65b): §VP table L180
+      method column corrected unit → integration for VP-067. Sibling-propagation of
+      VP-INDEX v1.7 F-006 (2026-06-28) that had already updated the canonical VP-067
+      method to integration in VP-INDEX; body-prose was stale. POL-005 body-prose ↔
+      impl-anchor sync class. No BC PC or AC change.
   - date: 2026-06-28
     version: "1.2"
     change: >
@@ -177,7 +185,7 @@ Operator runs any `sbctl <subcommand>` command.
 | VP-NNN | Property | Proof Method |
 |--------|----------|-------------|
 | VP-049 | All subcommands require authentication — e2e across all four daemon types (router, access, console, control) | e2e |
-| VP-067 | `Authenticate()` is fail-closed — returns nil only on verified AUTH_OK; all other outcomes (AUTH_FAIL, truncated stream, malformed message, connection error) return non-nil error | unit |
+| VP-067 | `Authenticate()` is fail-closed — returns nil only on verified AUTH_OK; all other outcomes (AUTH_FAIL, truncated stream, malformed message, connection error) return non-nil error | integration |
 
 ## Traceability
 
@@ -198,6 +206,7 @@ Operator runs any `sbctl <subcommand>` command.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.10 | 2026-07-03 | F-P5P25-B-002 (Phase 5 Pass 25 spec-side remediation, Burst 65b): §VP table L180 method column corrected unit → integration — sibling-propagation of VP-INDEX v1.7 F-006 (2026-06-28) that had already updated the canonical VP-067 method; body-prose was stale. POL-005 body-prose ↔ impl-anchor sync. No BC PC or AC change. |
 | 1.9 | 2026-07-03 | F-P5P6-A-006 (Phase 5 Pass 6 spec-side remediation, Burst 23): amend EC-003 bare-invocation contract from exit 0 + stdout to exit 2 + stderr. Verified against merged main.go PR #65: `len(args)==0` arm calls `fmt.Fprintf(os.Stderr, ...)` + `os.Exit(2)` directly; guarded by `TestSbctl_NoSubcommand_ExitsTwoAfterP6`. `--help`/`-h` path unchanged (exit 0, stdout, Ruling A). |
 | 1.8 | 2026-07-02 | F-P5P3-A-001/A-002/A-004/A-008 (Phase 5 Pass 3 remediation, Path B): remove `sbctl svtn list` canonical test vector row (case-arm being deleted from cmd/sbctl/main.go); remove EC-004 (sbctl version handler); remove EC-005 (sbctl ping handler); retire PENDING-S-BL.SVTN-LIST-WIRE + PENDING-S-BL.PING-VERSION-WIRE annotations (surface removed rather than implemented). Backlog stories S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE become won't-fix; state-manager retires in next burst. |
 | 1.7 | 2026-07-02 | Annotate EC-004 with PENDING-S-BL.PING-VERSION-WIRE for version wire handler gap; add EC-005 for ping wire handler gap (also PENDING-S-BL.PING-VERSION-WIRE). Closes Phase 5 Pass 2 F-P5P2-A-001, F-P5P2-A-002. Also notes DRIFT-P5P2-A003: e2e_helpers_test.go:191 uses stale wire name `admin.key.list` for a mock handler where the shipped surface is `admin.key.list-keys` — deferred to test-writer follow-up. |
