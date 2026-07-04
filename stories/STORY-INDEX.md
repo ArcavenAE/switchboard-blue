@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.78"
+version: "3.79"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-03T00:00:00
@@ -20,7 +20,7 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 53 (36 master-table stories + 1 draft stub S-6.04 + 10 active backlog S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE/S-BL.ADMIN-RECOVER-WIRE/S-BL.CLI-SURFACE-COMPLETION + 2 won't-fix S-BL.SVTN-LIST-WIRE/S-BL.PING-VERSION-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Total stories | 54 (36 master-table stories + 1 draft stub S-6.04 + 11 active backlog S-BL.ADMINWIRE-EXTRACTION/S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE/S-BL.ADMIN-RECOVER-WIRE/S-BL.CLI-SURFACE-COMPLETION + 2 won't-fix S-BL.SVTN-LIST-WIRE/S-BL.PING-VERSION-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
 | Complete | 34 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR, S-7.03, S-6.05) |
 | Pending | 0 |
 | Ready-for-red-gate | 0 |
@@ -33,7 +33,7 @@ inputDocuments:
 | Total points (waves 0–6) | 185 |
 | Total points (incl. S-M.01 + S-M.02) | 195 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
-| Backlog | 10 active (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS, S-BL.DISCOVERY-WIRE, S-BL.ADMIN-RECOVER-WIRE, S-BL.CLI-SURFACE-COMPLETION) + 2 won't-fix (S-BL.SVTN-LIST-WIRE, S-BL.PING-VERSION-WIRE) — S-BL.LOOKUP promoted and merged; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B and merged PR #56 |
+| Backlog | 11 active (S-BL.OA, S-BL.ARQ-TX, S-BL.NI, S-BL.PATH-FAILED-STATUS, S-BL.PATH-TRACKER-WIRING, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.CONSOLE-OBS, S-BL.DISCOVERY-WIRE, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION) + 2 won't-fix (S-BL.SVTN-LIST-WIRE, S-BL.PING-VERSION-WIRE) — S-BL.LOOKUP promoted and merged; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B and merged PR #56 |
 | Draft stubs | 1 (S-6.04) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 77/77 (100%) — VP-068..VP-077 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076/VP-077 anchored to BC-2.05.004) |
@@ -124,7 +124,7 @@ section, add full ACs/tasks/files/architecture).
 Backlog convention introduced 2026-06-24 per drbothen/vsdd-factory#260 rollback —
 addresses the "deferred to TBD story" anti-pattern.
 
-**Backlog: 10 active + 2 won't-fix** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md and merged PR #40; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B per RULING-W6TB-B and merged PR #56 — see Master Story Index; S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C; S-BL.DISCOVERY-WIRE added per RULING-W6TB-D; S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE added Phase 5 Pass 1+2 remediation then retired won't-fix Phase 5 Pass 3 Path B; S-BL.ADMIN-RECOVER-WIRE added Phase 5 Pass 5 remediation Burst 21 per F-P5P5-A-002; S-BL.CLI-SURFACE-COMPLETION added Phase 5 Pass 6 remediation Burst 23 per F-P5P6-A-005)
+**Backlog: 11 active + 2 won't-fix** (no ACs; unscheduled; awaiting wave-planning promotion — S-BL.LOOKUP promoted to Wave 6 per wave-6-scope-decision.md and merged PR #40; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B per RULING-W6TB-B and merged PR #56 — see Master Story Index; S-BL.PATH-FAILED-STATUS added Wave-6 Tranche-A Pass-2 per Ruling-4; S-BL.PATH-TRACKER-WIRING added Wave-6 Tranche-A Pass-3 per Ruling-6; S-BL.POLICY-SCHEMA-VALIDATOR added Ruling-12 §6; S-BL.CONSOLE-OBS added per RULING-W6TB-C; S-BL.DISCOVERY-WIRE added per RULING-W6TB-D; S-BL.SVTN-LIST-WIRE + S-BL.PING-VERSION-WIRE added Phase 5 Pass 1+2 remediation then retired won't-fix Phase 5 Pass 3 Path B; S-BL.ADMIN-RECOVER-WIRE added Phase 5 Pass 5 remediation Burst 21 per F-P5P5-A-002; S-BL.CLI-SURFACE-COMPLETION added Phase 5 Pass 6 remediation Burst 23 per F-P5P6-A-005; S-BL.ADMINWIRE-EXTRACTION added Phase 5 Pass 24 remediation per F-P5P24-A-001 DRIFT-P5P4-ADMINWIRE-EXTRACTION)
 
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
@@ -137,6 +137,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | S-BL.CONSOLE-OBS | Console daemon session-list observability: quality indicator + missCount | backlog | DRIFT-001b (BC-2.06.001 PC-5 console-half) + DRIFT-002 (BC-2.06.002 PC-3 missCount); moved from S-7.03 per RULING-W6TB-C; depends_on S-5.01, S-7.03 | after S-7.03 merges |
 | S-BL.DISCOVERY-WIRE | Discovery wire boundary: UDP multicast I/O, admitted-node HMAC keys, multicast address allocation | backlog (v1.1) | RULING-W6TB-D: real-socket PC-1/PC-3/PC-4 wire delivery deferred from S-7.02; resolves DRIFT-W6TBD-001 (HMAC key derivation); BC-2.03.001 PC-1/PC-3/PC-4 + BC-2.03.002 PC-3; depends_on S-7.02, S-2.02 | Wave 7+ |
 | S-BL.ADMIN-RECOVER-WIRE | admin recover wire: sbctl admin recover dispatch + daemon handler registration | draft (v1.0) | F-P5P5-A-002 (Phase 5 Pass 5 Adv-A); interface-definitions v1.18 §119-125 PENDING-S-BL.ADMIN-RECOVER-WIRE; BC-2.07.001 (bootstrap authority), BC-2.05.004 (confirm gate); two open design obligations (recovery semantics; --svtn id-vs-name ambiguity) | Wave 7+ |
+| S-BL.ADMINWIRE-EXTRACTION | Extract admin wire arg structs to internal/adminwire shared package | backlog (v1.0) | DRIFT-P5P4-ADMINWIRE-EXTRACTION (Phase 5 Pass 24 remediation F-P5P24-A-001); cmd/switchboard, cmd/sbctl, internal/adminwire; no BC/VP traces; E-6 | unscheduled |
 | S-BL.CLI-SURFACE-COMPLETION | CLI surface completion: dispatch + wire for paths ping, router reload/drain, svtn destroy/status | draft (v1.0) | F-P5P6-A-005 (Phase 5 Pass 6 Adv-A); interface-definitions v1.20 §60/§62/§77/§82/§83 PENDING-S-BL.CLI-SURFACE-COMPLETION; BC-2.09.001 (router reload), BC-2.09.002 (router drain), BC-2.07.001 (svtn destroy); two verbs (paths ping, svtn status) have no governing BC — open design obligations | Wave 7+ |
 | S-BL.SVTN-LIST-WIRE | SVTN list wire boundary: sbctl svtn list + admin.svtn.list handler | wont-fix (v1.1) | Wire orphan surface removed from BC-2.07.002 v1.8 (Phase 5 Pass 3 Path B); case-arm deletion pending Burst 17; refs F-P5P1-A-001, F-P5P3-A-001 | N/A — won't-fix |
 | S-BL.PING-VERSION-WIRE | Ping + version wire handlers: connectivity smoke-test and version info RPC | wont-fix (v1.1) | Wire orphan surface removed from BC-2.07.002 v1.8 (Phase 5 Pass 3 Path B); case-arm deletion pending Burst 17; refs F-P5P2-A-001, F-P5P2-A-002, F-P5P3-A-002 | N/A — won't-fix |
@@ -181,6 +182,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.79 | 2026-07-03 | F-P5P24-A-001 remediation (POL-002 + POL-001 story-mint gap): add S-BL.ADMINWIRE-EXTRACTION backlog stub (backlog v1.0; DRIFT-P5P4-ADMINWIRE-EXTRACTION; Epic E-6; P3; 2 pts; subsystems: network-management; modules: cmd/switchboard, cmd/sbctl, internal/adminwire; no BC/VP traces). Total 53→54; active backlog 10→11. |
 | 3.78 | 2026-07-03 | F-P5P23-A-001 remediation (POL-002 sibling-sweep recurrence): Bumped S-W5.04 and S-BL.LOOKUP story-file frontmatter `status:` from stale pre-merge value (`draft`) to canonical `merged` matching their STORY-INDEX Master Table rows (S-W5.04 row 72 asserts `merged (PR #41, 851e164)`; S-BL.LOOKUP row 79 asserts `merged (PR #40, eac5d0a)`). Completes the Wave-6 Tranche-A trio propagation begun at v3.44 (S-6.07 was propagated then; S-W5.04 and S-BL.LOOKUP were missed). Class: partial-fix regression per S-7.01. No BC/VP/AC changes; develop untouched. |
 | 3.77 | 2026-07-03 | F-P5P22-A-001 remediation (POL-002 sibling-sweep gap): Bumped S-1.01 and S-2.01 story-file frontmatter `status:` from stale pre-merge values (`ready` / `pending`) to canonical `completed` matching their STORY-INDEX Master Table rows. Brings S-1.01 + S-2.01 into row/header agreement per the completed-vocabulary preservation ruling from F-P5P18-A-001. No BC/VP/AC changes; develop untouched. |
 | 3.76 | 2026-07-03 | POL-002 sibling-sweep completion — Wave-6 aggregate reconciled to include S-BL.ROUTER-ADDR (2pts, PR #56, merged per v3.55 promotion). Wave 6: 31→33 pts / 7→8 stories; Wave Summary Total: 34→35 wave stories / 191→193 pts; grand total: 36→37 stories / 201→203 pts; waves 0-6 subtotal 183→185; incl. maintenance 193→195; narrative gloss line 96 arithmetic extended. Closes F-P5P20-A-001. |
