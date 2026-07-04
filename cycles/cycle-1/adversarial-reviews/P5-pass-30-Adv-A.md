@@ -20,6 +20,8 @@ medium: 0
 low: 0
 observations: 0
 findings: [F-P5P30-A-001]
+reconstructed_from_orchestrator_adjudication: false
+# note: direct adversary preflight output authored by dispatch-halt agent (not orchestrator-reconstructed)
 ---
 
 # Phase 5 Pass 30 — Adversary A Preflight Failure
