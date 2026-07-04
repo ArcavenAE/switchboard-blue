@@ -11,7 +11,7 @@ Five interactive workflows facilitating creative and strategic processes through
 
 ## Workflow Overview
 
-### [Brainstorming](./brainstorming)
+### [Brainstorming](../../core/workflows/brainstorming)
 
 **Purpose:** Interactive ideation using 36 techniques across 7 categories
 

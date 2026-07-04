@@ -1,0 +1,94 @@
+$ go test ./internal/paths/... \
+    -run 'TestBC_2_02_003_PathScore_Transitive|TestBC_2_02_003_PathScore_PropertyTransitive_Manual|TestBC_2_02_003_PathScore_LowerRTTLowerScore|TestBC_2_02_003_PathScore_HigherLossRaisesScore|TestBC_2_02_003_PathScore_ZeroLossPureRTT|TestBC_2_02_003_PathScore_Formula|TestBC_2_02_003_PathTracker_ScoreDelegates' \
+    -v
+
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== RUN   TestBC_2_02_003_PathScore_Transitive
+=== PAUSE TestBC_2_02_003_PathScore_Transitive
+=== RUN   TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== PAUSE TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== RUN   TestBC_2_02_003_PathScore_Formula
+=== PAUSE TestBC_2_02_003_PathScore_Formula
+=== RUN   TestBC_2_02_003_PathTracker_ScoreDelegates
+=== PAUSE TestBC_2_02_003_PathTracker_ScoreDelegates
+=== RUN   TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== PAUSE TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== CONT  TestBC_2_02_003_PathScore_Formula
+=== CONT  TestBC_2_02_003_PathTracker_ScoreDelegates
+--- PASS: TestBC_2_02_003_PathTracker_ScoreDelegates (0.00s)
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss
+=== CONT  TestBC_2_02_003_PathScore_ZeroLossPureRTT
+--- PASS: TestBC_2_02_003_PathScore_ZeroLossPureRTT (0.00s)
+=== CONT  TestBC_2_02_003_PathScore_Transitive
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== CONT  TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== RUN   TestBC_2_02_003_PathScore_Formula/#00
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#00
+=== RUN   TestBC_2_02_003_PathScore_Formula/#01
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#01
+=== RUN   TestBC_2_02_003_PathScore_Formula/#02
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#02
+=== RUN   TestBC_2_02_003_PathScore_Formula/#03
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#03
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss
+=== RUN   TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C
+=== PAUSE TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C
+=== RUN   TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C
+=== PAUSE TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C
+=== RUN   TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C
+=== PAUSE TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C
+=== CONT  TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C
+=== CONT  TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C
+=== CONT  TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C
+--- PASS: TestBC_2_02_003_PathScore_Transitive (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C (0.00s)
+=== CONT  TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss
+--- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss (0.00s)
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT
+=== RUN   TestBC_2_02_003_PathScore_Formula/#04
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#04
+=== RUN   TestBC_2_02_003_PathScore_Formula/#05
+=== PAUSE TestBC_2_02_003_PathScore_Formula/#05
+=== CONT  TestBC_2_02_003_PathScore_Formula/#00
+=== CONT  TestBC_2_02_003_PathScore_Formula/#03
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT
+=== CONT  TestBC_2_02_003_PathScore_Formula/#02
+=== CONT  TestBC_2_02_003_PathScore_Formula/#01
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT
+=== CONT  TestBC_2_02_003_PathScore_Formula/#05
+=== CONT  TestBC_2_02_003_PathScore_Formula/#04
+--- PASS: TestBC_2_02_003_PathScore_Formula (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#00 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#03 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#02 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#01 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#05 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#04 (0.00s)
+=== CONT  TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT
+--- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_PropertyTransitive_Manual (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/paths 0.413s

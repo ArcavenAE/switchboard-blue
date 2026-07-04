@@ -7,7 +7,7 @@ author: "BMad"
 parent_workflow: "{project-root}/_bmad/bmm/workflows/document-project/workflow.yaml"
 
 # Critical variables inherited from parent
-config_source: "{project-root}/_bmad/bmb/config.yaml"
+config_source: "{project-root}/_bmad/bmm/config.yaml"
 project_knowledge: "{config_source}:project_knowledge"
 user_name: "{config_source}:user_name"
 date: system-generated

@@ -1,0 +1,30 @@
+=== RUN   TestE2E_MgmtPlane_AllFourDaemonTypes_VP049
+=== PAUSE TestE2E_MgmtPlane_AllFourDaemonTypes_VP049
+=== RUN   TestE2E_MgmtPlane_BootstrapAuth_VP049
+=== PAUSE TestE2E_MgmtPlane_BootstrapAuth_VP049
+=== RUN   TestE2E_MgmtPlane_UnauthenticatedRejected_AC004
+=== PAUSE TestE2E_MgmtPlane_UnauthenticatedRejected_AC004
+=== CONT  TestE2E_MgmtPlane_BootstrapAuth_VP049
+=== CONT  TestE2E_MgmtPlane_UnauthenticatedRejected_AC004
+=== CONT  TestE2E_MgmtPlane_AllFourDaemonTypes_VP049
+=== RUN   TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/router
+=== PAUSE TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/router
+=== RUN   TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/access
+=== PAUSE TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/access
+=== RUN   TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/console
+=== PAUSE TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/console
+=== RUN   TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/control
+=== PAUSE TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/control
+=== CONT  TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/access
+=== CONT  TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/console
+=== CONT  TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/router
+=== CONT  TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/control
+--- PASS: TestE2E_MgmtPlane_UnauthenticatedRejected_AC004 (0.01s)
+--- PASS: TestE2E_MgmtPlane_BootstrapAuth_VP049 (0.01s)
+--- PASS: TestE2E_MgmtPlane_AllFourDaemonTypes_VP049 (0.01s)
+    --- PASS: TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/control (0.01s)
+    --- PASS: TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/access (0.01s)
+    --- PASS: TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/router (0.01s)
+    --- PASS: TestE2E_MgmtPlane_AllFourDaemonTypes_VP049/console (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/sbctl	1.291s

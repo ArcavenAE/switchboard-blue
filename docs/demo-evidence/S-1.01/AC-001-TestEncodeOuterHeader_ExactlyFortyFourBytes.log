@@ -1,0 +1,6 @@
+=== RUN   TestEncodeOuterHeader_ExactlyFortyFourBytes
+=== PAUSE TestEncodeOuterHeader_ExactlyFortyFourBytes
+=== CONT  TestEncodeOuterHeader_ExactlyFortyFourBytes
+--- PASS: TestEncodeOuterHeader_ExactlyFortyFourBytes (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.265s

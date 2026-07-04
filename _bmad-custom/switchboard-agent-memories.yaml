@@ -1,0 +1,22 @@
+# Switchboard Agent Memories — Single Source of Truth
+#
+# These memories are injected into standard BMAD agents by the
+# post-install script to give them project-specific context.
+#
+# Agents receiving memories:
+#   bmm-architect — needs protocol and network architecture context
+#   bmm-dev       — needs wire format, Go/Rust, and latency constraints
+#
+# Custom agent:
+#   Rio (Protocol Engineer) — has own memory at _bmad-custom/memories/
+
+architect_memories:
+  - "Switchboard protocol context at _bmad-custom/memories/protocol-engineer/switchboard-context.md"
+  - "Rio (Protocol Engineer) custom agent lives at _bmad-custom/agents/rio-protocol-engineer.md"
+  - "PRD at _bmad-output/planning-artifacts/prd.md — 63 FRs, 30 NFRs, wire protocol spec, SVTN architecture"
+
+dev_memories:
+  - "Switchboard protocol context at _bmad-custom/memories/protocol-engineer/switchboard-context.md"
+  - "Go project, may need Rust for hot path — see PRD Q2 probe"
+  - "Zero per-frame allocation requirement — buffer pooling, efficient IP types, GC tuning"
+  - "44-byte outer header + ~22-byte channel header — every byte earns its place"

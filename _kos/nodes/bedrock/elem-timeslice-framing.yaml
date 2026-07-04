@@ -1,0 +1,35 @@
+id: elem-timeslice-framing
+type: element
+confidence: bedrock
+title: "timeslice framing — the bus leaves on time, full or not"
+content: |
+  Switchboard frames traffic on a fixed clock: each tick, whatever
+  bytes are ready get bundled into a frame and forwarded. The frame
+  goes out empty rather than waiting for bytes to fill it.
+
+  This is the architectural commitment. Why:
+  - **Predictable latency.** A keystroke that arrives 1μs after the
+    tick waits 1 tick interval, full stop. No "wait a bit more for a
+    bigger frame" heuristic to tune.
+  - **Each direction has its own clock.** Upstream (keystrokes, tiny,
+    loss-intolerant) and downstream (terminal output, bursty, state-
+    syncable) tick independently per
+    `elem-asymmetric-half-channels`.
+  - **Bus model.** Frames carry whatever bytes are ready when the
+    tick fires. Pipeline starvation is fine; queue buildup is the
+    enemy.
+
+  `question-timeslice-framing` remains open: does this deliver
+  acceptable latency for interactive tmux sessions in practice? The
+  *model* is bedrock; the *tick rates* are tuning parameters that
+  need real measurement.
+edges:
+  - target: elem-asymmetric-half-channels
+    type: related
+  - target: question-timeslice-framing
+    type: leaves-open
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md design principles

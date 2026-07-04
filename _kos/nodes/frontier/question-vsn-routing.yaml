@@ -1,0 +1,35 @@
+id: question-vsn-routing
+type: question
+confidence: frontier
+title: "What is the VSN overlay routing model and how do nodes/routers compose?"
+content: |
+  Switchboard establishes virtual switched networks (VSNs) over overlay
+  routers. Three node types: access node (publishes tmux sessions), console
+  (connects to remote sessions), control (manages VSN configuration). Routers
+  are blind relays forwarding SSH-encrypted traffic without seeing content.
+
+  Three router deployment modes: E (edge-local, same-LAN), PE (provider edge,
+  production), P (provider core, router-to-router only — theoretical).
+
+  MVP scope: nodes + E router on single LAN. Multi-hop networking is future.
+
+  Key unknowns: How does VSN admission work? How do nodes discover routers?
+  What's the configuration model — declarative or imperative? How does this
+  map to marvel's Host resource type for multi-host scheduling?
+edges:
+  - target: question-edge-protocol
+    type: derives
+    note: "Edge protocol is the first concrete implementation of the routing model"
+  - target: question-marvel-integration
+    type: derives
+    note: "Marvel uses switchboard for multi-host scheduling"
+  - target: elem-node-router-architecture
+    type: derives
+  - target: elem-single-binary-three-modes
+    type: related
+  - target: elem-dual-fastest-path-forwarding
+    type: related
+provenance:
+  created_by: human
+  session: session-014
+  created_at: "2026-04-11"

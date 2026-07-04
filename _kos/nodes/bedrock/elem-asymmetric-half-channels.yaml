@@ -1,0 +1,33 @@
+id: elem-asymmetric-half-channels
+type: element
+confidence: bedrock
+title: "upstream and downstream are independent half-channels with different properties"
+content: |
+  Switchboard treats keystroke flow and terminal-output flow as two
+  separate channels, each tuned to its own traffic shape:
+
+  - **Upstream (keystrokes):** tiny payloads, ordered, loss-intolerant.
+    Latency-sensitive — a dropped keystroke is a user-visible defect.
+  - **Downstream (terminal output):** bursty, state-syncable. Loss can
+    be reconstructed from later state (a redraw, a refresh). Throughput-
+    sensitive.
+
+  These have different clocks (`elem-timeslice-framing`), different
+  framing parameters, different routing preferences, different
+  retransmission strategies. The architecture acknowledges this
+  asymmetry rather than papering over it with a single bidirectional
+  abstraction.
+
+  `question-asymmetric-channels` remains open: precisely how should the
+  two half-channels differ in implementation? The *separation* is
+  bedrock; the parameters are tuning.
+edges:
+  - target: elem-timeslice-framing
+    type: related
+  - target: question-asymmetric-channels
+    type: leaves-open
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md design principles

@@ -1,0 +1,18 @@
+=== RUN   TestParseOuterHeader_VersionMismatch
+=== PAUSE TestParseOuterHeader_VersionMismatch
+=== CONT  TestParseOuterHeader_VersionMismatch
+=== RUN   TestParseOuterHeader_VersionMismatch/major=1_(0x10)_returns_ErrVersionMismatch
+=== PAUSE TestParseOuterHeader_VersionMismatch/major=1_(0x10)_returns_ErrVersionMismatch
+=== RUN   TestParseOuterHeader_VersionMismatch/major=15_(0xF0)_returns_ErrVersionMismatch
+=== PAUSE TestParseOuterHeader_VersionMismatch/major=15_(0xF0)_returns_ErrVersionMismatch
+=== RUN   TestParseOuterHeader_VersionMismatch/major=0_minor=5_(0x05)_does_NOT_return_ErrVersionMismatch
+=== PAUSE TestParseOuterHeader_VersionMismatch/major=0_minor=5_(0x05)_does_NOT_return_ErrVersionMismatch
+=== CONT  TestParseOuterHeader_VersionMismatch/major=1_(0x10)_returns_ErrVersionMismatch
+=== CONT  TestParseOuterHeader_VersionMismatch/major=15_(0xF0)_returns_ErrVersionMismatch
+=== CONT  TestParseOuterHeader_VersionMismatch/major=0_minor=5_(0x05)_does_NOT_return_ErrVersionMismatch
+--- PASS: TestParseOuterHeader_VersionMismatch (0.00s)
+    --- PASS: TestParseOuterHeader_VersionMismatch/major=1_(0x10)_returns_ErrVersionMismatch (0.00s)
+    --- PASS: TestParseOuterHeader_VersionMismatch/major=15_(0xF0)_returns_ErrVersionMismatch (0.00s)
+    --- PASS: TestParseOuterHeader_VersionMismatch/major=0_minor=5_(0x05)_does_NOT_return_ErrVersionMismatch (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.273s

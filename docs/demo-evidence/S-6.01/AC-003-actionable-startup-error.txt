@@ -1,0 +1,18 @@
+=== RUN   TestRouterStartup_ExitsWithActionableError
+=== PAUSE TestRouterStartup_ExitsWithActionableError
+=== CONT  TestRouterStartup_ExitsWithActionableError
+=== RUN   TestRouterStartup_ExitsWithActionableError/invalid_tick_interval_has_suggestion
+=== PAUSE TestRouterStartup_ExitsWithActionableError/invalid_tick_interval_has_suggestion
+=== RUN   TestRouterStartup_ExitsWithActionableError/missing_listen_addr_has_suggestion
+=== PAUSE TestRouterStartup_ExitsWithActionableError/missing_listen_addr_has_suggestion
+=== CONT  TestRouterStartup_ExitsWithActionableError/missing_listen_addr_has_suggestion
+=== CONT  TestRouterStartup_ExitsWithActionableError/invalid_tick_interval_has_suggestion
+--- PASS: TestRouterStartup_ExitsWithActionableError (0.00s)
+    --- PASS: TestRouterStartup_ExitsWithActionableError/missing_listen_addr_has_suggestion (0.00s)
+    --- PASS: TestRouterStartup_ExitsWithActionableError/invalid_tick_interval_has_suggestion (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.266s
+=== RUN   TestRouterStartup_ExitsWithActionableError
+--- PASS: TestRouterStartup_ExitsWithActionableError (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.465s

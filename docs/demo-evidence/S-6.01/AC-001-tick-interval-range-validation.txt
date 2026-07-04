@@ -1,0 +1,30 @@
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval/below_minimum_3ms
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval/below_minimum_3ms
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval/above_maximum_100ms
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval/above_maximum_100ms
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval/zero_tick_interval
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval/zero_tick_interval
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval/negative_tick_interval
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval/negative_tick_interval
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval/just_below_minimum_4ms999us
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval/just_below_minimum_4ms999us
+=== RUN   TestConfigValidate_RejectsOutOfRangeTickInterval/just_above_maximum_50ms001us
+=== PAUSE TestConfigValidate_RejectsOutOfRangeTickInterval/just_above_maximum_50ms001us
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval/below_minimum_3ms
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval/above_maximum_100ms
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval/just_below_minimum_4ms999us
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval/zero_tick_interval
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval/just_above_maximum_50ms001us
+=== CONT  TestConfigValidate_RejectsOutOfRangeTickInterval/negative_tick_interval
+--- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval (0.00s)
+    --- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval/below_minimum_3ms (0.00s)
+    --- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval/above_maximum_100ms (0.00s)
+    --- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval/just_below_minimum_4ms999us (0.00s)
+    --- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval/just_above_maximum_50ms001us (0.00s)
+    --- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval/zero_tick_interval (0.00s)
+    --- PASS: TestConfigValidate_RejectsOutOfRangeTickInterval/negative_tick_interval (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.444s

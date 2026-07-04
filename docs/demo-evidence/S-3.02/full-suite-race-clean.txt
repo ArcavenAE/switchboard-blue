@@ -1,0 +1,116 @@
+$ go test -race -v ./internal/session/
+=== RUN   TestConsoleSet_Add_ReturnsChannels
+=== PAUSE TestConsoleSet_Add_ReturnsChannels
+=== RUN   TestConsoleSet_Add_DuplicateKey
+=== PAUSE TestConsoleSet_Add_DuplicateKey
+=== RUN   TestConsoleSet_Remove_ClosesDownstream
+=== PAUSE TestConsoleSet_Remove_ClosesDownstream
+=== RUN   TestConsoleSet_Remove_NotFound
+=== PAUSE TestConsoleSet_Remove_NotFound
+=== RUN   TestConsoleSet_Deliver_FanOutAllConsoles
+=== PAUSE TestConsoleSet_Deliver_FanOutAllConsoles
+=== RUN   TestConsoleSet_Deliver_SkipsRemovedConsole
+=== PAUSE TestConsoleSet_Deliver_SkipsRemovedConsole
+=== RUN   TestConsoleSet_EvictStale_RemovesStaleConsoles
+=== PAUSE TestConsoleSet_EvictStale_RemovesStaleConsoles
+=== RUN   TestConsoleSet_Deliver_DropsFramesWhenBufferFull
+=== PAUSE TestConsoleSet_Deliver_DropsFramesWhenBufferFull
+=== RUN   TestConsoleSet_Deliver_StalledConsoleDoesNotBlockOthers
+=== PAUSE TestConsoleSet_Deliver_StalledConsoleDoesNotBlockOthers
+=== RUN   TestConsoleSet_Snapshot_ReturnsValueCopy
+=== PAUSE TestConsoleSet_Snapshot_ReturnsValueCopy
+=== RUN   TestPublisher_Publish_AddsSessionToLiveSet
+=== PAUSE TestPublisher_Publish_AddsSessionToLiveSet
+=== RUN   TestPublisher_Unpublish_RemovesFromLiveSet
+=== PAUSE TestPublisher_Unpublish_RemovesFromLiveSet
+=== RUN   TestPublisher_Unpublish_ErrSessionNotFound
+=== PAUSE TestPublisher_Unpublish_ErrSessionNotFound
+=== RUN   TestPublisher_Publish_DuplicateReturnsAlreadyPublished
+=== PAUSE TestPublisher_Publish_DuplicateReturnsAlreadyPublished
+=== RUN   TestPublisher_ListSessions_ReturnsSnapshot
+=== PAUSE TestPublisher_ListSessions_ReturnsSnapshot
+=== RUN   TestPublisher_EmptyOnStartup
+=== PAUSE TestPublisher_EmptyOnStartup
+=== RUN   TestSession_Attach_EstablishesBidirectionalChannel
+=== PAUSE TestSession_Attach_EstablishesBidirectionalChannel
+=== RUN   TestSession_Attach_UpstreamKeystrokesForwarded
+=== PAUSE TestSession_Attach_UpstreamKeystrokesForwarded
+=== RUN   TestSession_Attach_NonexistentSession_ErrSesOne
+=== PAUSE TestSession_Attach_NonexistentSession_ErrSesOne
+=== RUN   TestSession_Detach_SessionContinues
+=== PAUSE TestSession_Detach_SessionContinues
+=== RUN   TestSession_SendKeystroke_AfterDetach_ReturnsErrConsoleNotFound
+=== PAUSE TestSession_SendKeystroke_AfterDetach_ReturnsErrConsoleNotFound
+=== RUN   TestSession_SendKeystroke_WrongSession_ReturnsErrSessionMismatch
+=== PAUSE TestSession_SendKeystroke_WrongSession_ReturnsErrSessionMismatch
+=== RUN   TestSession_Detach_ReadOnlyObserversUnaffected
+=== PAUSE TestSession_Detach_ReadOnlyObserversUnaffected
+=== RUN   TestSession_MultiConsoleFanOut_AllReceiveFrames
+=== PAUSE TestSession_MultiConsoleFanOut_AllReceiveFrames
+=== RUN   TestSession_ConcurrentKeystrokes_Serialized
+=== PAUSE TestSession_ConcurrentKeystrokes_Serialized
+=== RUN   TestSession_CrashDetach_EvictsFromFanOut
+=== PAUSE TestSession_CrashDetach_EvictsFromFanOut
+=== RUN   TestAccessNode_SendKeystroke_NoSink_ReturnsError
+=== PAUSE TestAccessNode_SendKeystroke_NoSink_ReturnsError
+=== CONT  TestConsoleSet_Add_ReturnsChannels
+=== CONT  TestPublisher_Publish_DuplicateReturnsAlreadyPublished
+=== CONT  TestConsoleSet_EvictStale_RemovesStaleConsoles
+=== CONT  TestPublisher_Unpublish_ErrSessionNotFound
+=== CONT  TestPublisher_ListSessions_ReturnsSnapshot
+=== CONT  TestPublisher_Publish_AddsSessionToLiveSet
+=== CONT  TestConsoleSet_Snapshot_ReturnsValueCopy
+=== CONT  TestConsoleSet_Deliver_StalledConsoleDoesNotBlockOthers
+=== CONT  TestSession_ConcurrentKeystrokes_Serialized
+=== CONT  TestPublisher_Unpublish_RemovesFromLiveSet
+--- PASS: TestConsoleSet_Add_ReturnsChannels (0.00s)
+=== CONT  TestConsoleSet_Deliver_FanOutAllConsoles
+--- PASS: TestPublisher_Unpublish_RemovesFromLiveSet (0.00s)
+=== CONT  TestSession_MultiConsoleFanOut_AllReceiveFrames
+=== CONT  TestSession_SendKeystroke_AfterDetach_ReturnsErrConsoleNotFound
+=== CONT  TestConsoleSet_Add_DuplicateKey
+=== CONT  TestConsoleSet_Deliver_DropsFramesWhenBufferFull
+=== CONT  TestAccessNode_SendKeystroke_NoSink_ReturnsError
+=== CONT  TestSession_Detach_ReadOnlyObserversUnaffected
+=== CONT  TestConsoleSet_Remove_ClosesDownstream
+=== CONT  TestSession_CrashDetach_EvictsFromFanOut
+--- PASS: TestPublisher_Publish_DuplicateReturnsAlreadyPublished (0.00s)
+=== CONT  TestSession_SendKeystroke_WrongSession_ReturnsErrSessionMismatch
+=== CONT  TestConsoleSet_Deliver_SkipsRemovedConsole
+=== CONT  TestSession_Detach_SessionContinues
+=== CONT  TestPublisher_EmptyOnStartup
+--- PASS: TestPublisher_ListSessions_ReturnsSnapshot (0.00s)
+=== CONT  TestSession_Attach_NonexistentSession_ErrSesOne
+--- PASS: TestPublisher_Unpublish_ErrSessionNotFound (0.00s)
+--- PASS: TestConsoleSet_EvictStale_RemovesStaleConsoles (0.00s)
+--- PASS: TestPublisher_Publish_AddsSessionToLiveSet (0.00s)
+--- PASS: TestConsoleSet_Snapshot_ReturnsValueCopy (0.00s)
+=== CONT  TestSession_Attach_UpstreamKeystrokesForwarded
+=== CONT  TestSession_Attach_EstablishesBidirectionalChannel
+=== CONT  TestConsoleSet_Remove_NotFound
+--- PASS: TestConsoleSet_Deliver_FanOutAllConsoles (0.00s)
+--- PASS: TestSession_MultiConsoleFanOut_AllReceiveFrames (0.00s)
+--- PASS: TestConsoleSet_Deliver_StalledConsoleDoesNotBlockOthers (0.00s)
+--- PASS: TestConsoleSet_Add_DuplicateKey (0.00s)
+--- PASS: TestSession_SendKeystroke_AfterDetach_ReturnsErrConsoleNotFound (0.00s)
+--- PASS: TestSession_Detach_ReadOnlyObserversUnaffected (0.00s)
+--- PASS: TestConsoleSet_Deliver_DropsFramesWhenBufferFull (0.00s)
+--- PASS: TestAccessNode_SendKeystroke_NoSink_ReturnsError (0.00s)
+--- PASS: TestConsoleSet_Remove_ClosesDownstream (0.00s)
+--- PASS: TestSession_SendKeystroke_WrongSession_ReturnsErrSessionMismatch (0.00s)
+--- PASS: TestSession_CrashDetach_EvictsFromFanOut (0.00s)
+--- PASS: TestConsoleSet_Deliver_SkipsRemovedConsole (0.00s)
+--- PASS: TestSession_Detach_SessionContinues (0.00s)
+--- PASS: TestPublisher_EmptyOnStartup (0.00s)
+--- PASS: TestSession_Attach_NonexistentSession_ErrSesOne (0.00s)
+--- PASS: TestSession_Attach_UpstreamKeystrokesForwarded (0.00s)
+--- PASS: TestSession_Attach_EstablishesBidirectionalChannel (0.00s)
+--- PASS: TestConsoleSet_Remove_NotFound (0.00s)
+--- PASS: TestSession_ConcurrentKeystrokes_Serialized (0.00s)
+=== RUN   ExamplePublisher_publishUnpublish
+--- PASS: ExamplePublisher_publishUnpublish (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.277s
+
+27 tests + 1 example: ALL PASS
+Race detector: CLEAN — no data races detected across entire package

@@ -1,0 +1,35 @@
+# dependabot.yml for Go projects
+# Copy to .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "type.deps"
+      - "agent.bot"
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: daily
+    labels:
+      - "type.deps"
+      - "agent.bot"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 5
+      include:
+          - '*'

@@ -1,0 +1,26 @@
+=== RUN   TestDeriveNodeAddress_Deterministic
+=== PAUSE TestDeriveNodeAddress_Deterministic
+=== CONT  TestDeriveNodeAddress_Deterministic
+=== RUN   TestDeriveNodeAddress_Deterministic/ed25519_test_key_A_on_svtn-1
+=== PAUSE TestDeriveNodeAddress_Deterministic/ed25519_test_key_A_on_svtn-1
+=== RUN   TestDeriveNodeAddress_Deterministic/ed25519_test_key_B_on_svtn-1_(different_key,_same_svtn_→_different_address)
+=== PAUSE TestDeriveNodeAddress_Deterministic/ed25519_test_key_B_on_svtn-1_(different_key,_same_svtn_→_different_address)
+=== RUN   TestDeriveNodeAddress_Deterministic/same_key_A_on_svtn-2_(same_key,_different_svtn_→_different_address,_EC-003)
+=== PAUSE TestDeriveNodeAddress_Deterministic/same_key_A_on_svtn-2_(same_key,_different_svtn_→_different_address,_EC-003)
+=== RUN   TestDeriveNodeAddress_Deterministic/short_public_key_(8_bytes)
+=== PAUSE TestDeriveNodeAddress_Deterministic/short_public_key_(8_bytes)
+=== RUN   TestDeriveNodeAddress_Deterministic/all-zero_svtn_id_(EC-002_canonical_—_valid_encoding_per_wire_format)
+=== PAUSE TestDeriveNodeAddress_Deterministic/all-zero_svtn_id_(EC-002_canonical_—_valid_encoding_per_wire_format)
+=== CONT  TestDeriveNodeAddress_Deterministic/ed25519_test_key_A_on_svtn-1
+=== CONT  TestDeriveNodeAddress_Deterministic/short_public_key_(8_bytes)
+=== CONT  TestDeriveNodeAddress_Deterministic/ed25519_test_key_B_on_svtn-1_(different_key,_same_svtn_→_different_address)
+=== CONT  TestDeriveNodeAddress_Deterministic/all-zero_svtn_id_(EC-002_canonical_—_valid_encoding_per_wire_format)
+=== CONT  TestDeriveNodeAddress_Deterministic/same_key_A_on_svtn-2_(same_key,_different_svtn_→_different_address,_EC-003)
+--- PASS: TestDeriveNodeAddress_Deterministic (0.00s)
+    --- PASS: TestDeriveNodeAddress_Deterministic/ed25519_test_key_A_on_svtn-1 (0.00s)
+    --- PASS: TestDeriveNodeAddress_Deterministic/short_public_key_(8_bytes) (0.00s)
+    --- PASS: TestDeriveNodeAddress_Deterministic/ed25519_test_key_B_on_svtn-1_(different_key,_same_svtn_→_different_address) (0.00s)
+    --- PASS: TestDeriveNodeAddress_Deterministic/all-zero_svtn_id_(EC-002_canonical_—_valid_encoding_per_wire_format) (0.00s)
+    --- PASS: TestDeriveNodeAddress_Deterministic/same_key_A_on_svtn-2_(same_key,_different_svtn_→_different_address,_EC-003) (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	0.260s

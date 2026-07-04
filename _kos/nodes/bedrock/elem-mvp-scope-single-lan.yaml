@@ -1,0 +1,36 @@
+id: elem-mvp-scope-single-lan
+type: element
+confidence: bedrock
+title: "MVP scope is nodes + E router on a single LAN — prove the edge first"
+content: |
+  The current scope is deliberately narrow: nodes + E router on a
+  single LAN, between two machines. Prove the edge protocol
+  (`question-edge-protocol`) and user experience before tackling
+  multi-hop networking.
+
+  Out of MVP scope, by design:
+  - PE (Provider Edge) router — designed but not built.
+  - P (Provider Core) router — theoretical.
+  - Multi-router VSN topologies.
+  - Cross-LAN deployments.
+
+  Why this commitment matters:
+  - Routing-protocol design without a real edge protocol is speculation.
+  - The edge protocol forces hard decisions (session discovery, framing
+    parameters, handshake, error semantics) that propagate up the stack.
+  - User experience at the edge is the success criterion; nothing
+    matters if console-to-tmux-session doesn't feel right.
+
+  Promotion path: when MVP is operationally satisfying for 2-machine
+  setups, the deferred scope (multi-hop, PE/P routers, VSN overlay)
+  reopens. The MVP scope itself is bedrock; the *next* scope is open.
+edges:
+  - target: question-edge-protocol
+    type: related
+  - target: question-vsn-routing
+    type: leaves-open
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md Status section

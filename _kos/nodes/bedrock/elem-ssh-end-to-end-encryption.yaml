@@ -1,0 +1,32 @@
+id: elem-ssh-end-to-end-encryption
+type: element
+confidence: bedrock
+title: "nodes communicate end-to-end via SSH; switchboard adds routing, not encryption"
+content: |
+  End-to-end encryption between nodes is SSH. Switchboard is *routing
+  and admission* — not a crypto layer. Routers see SSH frames; they
+  forward without inspecting payload.
+
+  Why this is bedrock:
+  - SSH is mature, audited, well-known. Reinventing crypto in a routing
+    project is the path to CVEs.
+  - The blind-relay router property (`elem-node-router-architecture`)
+    falls out of this for free: a router *cannot* see content even if
+    compromised, because it doesn't have the keys.
+  - Operational composability — existing SSH key infrastructure works.
+
+  `question-encryption-model` remains open: is SSH alone sufficient, or
+  does switchboard need its own additional crypto layer (e.g., for the
+  routing-control plane, or to defend against compromised endpoints)?
+  The default *commitment* is SSH-as-baseline; the question is whether
+  more is needed on top.
+edges:
+  - target: question-encryption-model
+    type: leaves-open
+  - target: elem-node-router-architecture
+    type: related
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md architecture summary

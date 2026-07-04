@@ -1,0 +1,152 @@
+story_id: S-6.06
+story_title: "Daemon-Side Admin RPC Handlers (admin.key.register / revoke / expire / list-keys)"
+recorded_at: "2026-06-30"
+worktree_head: 660b91a
+vhs_version: "0.11.0"
+font: Menlo
+theme: Catppuccin Mocha
+known_issues:
+  - id: DEMO-ISSUE-001
+    ac: AC-005
+    severity: medium
+    status: CLOSED
+    closed_at: "2026-06-30"
+    closed_by: "660b91a"
+    description: |
+      CLOSED. Fix landed at commit 660b91a: the three TestE2E_AdminExpire_ServerRejectsTTL*
+      tests now pass ctrlPriv from newE2ESVTNManager to startE2EServerWithOps so the daemon
+      authenticates as the SVTNManager bootstrap key. The AC-005 TTL bounds check (E-CFG-001)
+      now fires correctly instead of the AC-006 authority gate (E-ADM-009).
+      AC-005 re-recorded with full e2e coverage on 2026-06-30.
+
+artifacts:
+  - ac: AC-001
+    description: "BuildAdminHandlers unit tests — 4 handlers, happy paths, error mapping"
+    artifacts:
+      - path: docs/demo-evidence/S-6.06/AC-001-build-admin-handlers-unit.gif
+        sha256: 358e01b7fa25d593c4a9f7d519059f4bc5a3da17bdab99793dd0de07b138c355
+        size_bytes: 302057
+        format: gif
+      - path: docs/demo-evidence/S-6.06/AC-001-build-admin-handlers-unit.webm
+        sha256: 9fbc7f3b5cce8e4f5ac0571df34e792fabd8866e2135953c023f0fec9bea6927
+        size_bytes: 348952
+        format: webm
+    tape: docs/demo-evidence/S-6.06/AC-001-build-admin-handlers-unit.tape
+    test_coverage:
+      happy_path:
+        - TestBuildAdminHandlers_KeyRegister_HappyPath
+        - TestBuildAdminHandlers_KeyRevoke_HappyPath
+        - TestBuildAdminHandlers_KeyExpire_HappyPath
+        - TestBuildAdminHandlers_ListKeys_HappyPath
+        - TestBuildAdminHandlers_FourHandlers
+      error_path:
+        - TestBuildAdminHandlers_KeyRegister_ErrorMapping
+        - TestBuildAdminHandlers_KeyRevoke_ErrorMapping
+        - TestBuildAdminHandlers_NilManager
+    status: PASS
+
+  - ac: AC-002
+    description: "admin.key.revoke e2e — role mismatch (E-ADM-019), no-confirm (E-ADM-018), with-confirm success"
+    artifacts:
+      - path: docs/demo-evidence/S-6.06/AC-002-revoke-handler-e2e.gif
+        sha256: dae8de6841db666b02395cececa8022ba8b7f4d0ff0a9c4ce98ca72b6dd9e029
+        size_bytes: 140195
+        format: gif
+      - path: docs/demo-evidence/S-6.06/AC-002-revoke-handler-e2e.webm
+        sha256: a794fabc2fa57797a3439f4af86856aae36c493493234f92369a22ae5c7c356f
+        size_bytes: 138669
+        format: webm
+    tape: docs/demo-evidence/S-6.06/AC-002-revoke-handler-e2e.tape
+    test_coverage:
+      happy_path:
+        - TestE2E_AdminRevoke_ControlWithConfirm
+      error_path:
+        - TestE2E_AdminRevoke_RoleMismatch
+        - TestE2E_AdminRevoke_ControlWithoutConfirm
+    status: PASS
+
+  - ac: AC-003
+    description: "admin.key.register + expire + list-keys e2e — register appears in list; expire sets TTL"
+    artifacts:
+      - path: docs/demo-evidence/S-6.06/AC-003-register-expire-list-e2e.gif
+        sha256: 3e14d5238770ab9b36a3c43d65a91714afc1a8cacd45a75e971558b81faecfcd
+        size_bytes: 95253
+        format: gif
+      - path: docs/demo-evidence/S-6.06/AC-003-register-expire-list-e2e.webm
+        sha256: a4d7a319d38ba78ef7e1b5acd19e1ed4085bf9a90029481d4cbf9c5c6683980d
+        size_bytes: 94544
+        format: webm
+    tape: docs/demo-evidence/S-6.06/AC-003-register-expire-list-e2e.tape
+    test_coverage:
+      happy_path:
+        - TestE2E_AdminRegister_HappyPath
+        - TestE2E_AdminExpire_HappyPath
+        - TestE2E_AdminListKeys_HappyPath
+    status: PASS
+
+  - ac: AC-004
+    description: "per-daemon-mode handler registration — control-mode dispatches; access-mode returns E-RPC-010"
+    artifacts:
+      - path: docs/demo-evidence/S-6.06/AC-004-per-mode-handler-registration.gif
+        sha256: 1c74a1f1ff49abfc4b7f7543dd20f5706434917375a2ef09d180785f2056e337
+        size_bytes: 187063
+        format: gif
+      - path: docs/demo-evidence/S-6.06/AC-004-per-mode-handler-registration.webm
+        sha256: 6bbfaed8b4ca2e46eb73a591697eec3f1586fabd7347d336ff11fba7552b721a
+        size_bytes: 167193
+        format: webm
+    tape: docs/demo-evidence/S-6.06/AC-004-per-mode-handler-registration.tape
+    test_coverage:
+      happy_path:
+        - TestControlMode_AdminHandlersRegistered
+      error_path:
+        - TestAccessMode_AdminHandlersNotRegistered
+        - TestAC004_NonControlRoleRejected
+    status: PASS
+
+  - ac: AC-005
+    description: "server-side TTL validation — valid TTL accepted; <=0 and >100y rejected with E-CFG-001 (unit + e2e)"
+    note: >
+      Full coverage: unit tests plus e2e tests (integration tag). DEMO-ISSUE-001 closed
+      at commit 660b91a — e2e tests now authenticate as SVTNManager bootstrap key so
+      E-CFG-001 fires from TTL bounds check, not E-ADM-009 from authority gate.
+    artifacts:
+      - path: docs/demo-evidence/S-6.06/AC-005-server-side-ttl-validation.gif
+        sha256: 8b76f092f72c1ace3d401ac140f0cff0c6511bb56660cae68b4800c404d32a19
+        size_bytes: 248015
+        format: gif
+      - path: docs/demo-evidence/S-6.06/AC-005-server-side-ttl-validation.webm
+        sha256: 3e20e9ac5d9702838b736ec198ab66660a5beb9e86ca994ba384324922d3cae1
+        size_bytes: 398457
+        format: webm
+    tape: docs/demo-evidence/S-6.06/AC-005-server-side-ttl-validation.tape
+    test_coverage:
+      happy_path:
+        - TestBuildAdminHandlers_KeyExpire_HappyPath
+      error_path:
+        - TestBuildAdminHandlers_KeyExpire_NegativeTTL
+        - TestBuildAdminHandlers_KeyExpire_MissingAfterField
+        - TestE2E_AdminExpire_ServerRejectsTTLNegative
+        - TestE2E_AdminExpire_ServerRejectsTTLZero
+        - TestE2E_AdminExpire_ServerRejectsTTLTooLong
+    status: FULL
+
+  - ac: AC-006
+    description: "caller-role authority gate — non-control returns E-ADM-009; list-keys any-role returns ok"
+    artifacts:
+      - path: docs/demo-evidence/S-6.06/AC-006-caller-role-authority-gate.gif
+        sha256: 72a064b9bba92ce7f1a7c9e621128e443afcc315e8488d38eea89f904c3db9b7
+        size_bytes: 141748
+        format: gif
+      - path: docs/demo-evidence/S-6.06/AC-006-caller-role-authority-gate.webm
+        sha256: 40f8a408eb572408bff4875f6f9561b85fb83d2240995fce66135d151a993748
+        size_bytes: 152334
+        format: webm
+    tape: docs/demo-evidence/S-6.06/AC-006-caller-role-authority-gate.tape
+    test_coverage:
+      happy_path:
+        - TestE2E_AdminListKeys_AnyRole
+      error_path:
+        - TestE2E_AdminKeyRegister_RoleInsufficient
+        - TestE2E_AdminKeyRevoke_RoleInsufficient
+    status: PASS

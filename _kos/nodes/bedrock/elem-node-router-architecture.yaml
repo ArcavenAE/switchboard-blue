@@ -1,0 +1,34 @@
+id: elem-node-router-architecture
+type: element
+confidence: bedrock
+title: "node-router architecture — all traffic flows through routers, no direct node-to-node"
+content: |
+  Switchboard is a two-tier network. **Nodes** connect to tmux sessions
+  (access node publishes, console connects, control manages). **Routers**
+  relay encrypted frames between them.
+
+  Traffic never flows directly between nodes; it always passes through
+  at least one router. Routers are blind relays — they forward SSH-
+  encrypted traffic without seeing its content (see
+  `elem-ssh-end-to-end-encryption`).
+
+  Why this matters:
+  - Admission control happens at routers, not at nodes. A node doesn't
+    decide who it talks to; the network does.
+  - Multi-hop topologies become natural — routers peer with other
+    routers, nodes don't need to know the path.
+  - Trust boundary is clear: nodes trust their router; routers trust
+    other routers within the VSN; nothing else.
+
+  Three deployment modes from one binary — see
+  `elem-single-binary-three-modes`.
+edges:
+  - target: elem-ssh-end-to-end-encryption
+    type: related
+  - target: elem-single-binary-three-modes
+    type: related
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md architecture section

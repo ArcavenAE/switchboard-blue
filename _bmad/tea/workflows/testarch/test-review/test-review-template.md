@@ -262,10 +262,10 @@ This review consulted the following knowledge base fragments:
 - **[network-first.md](../../../testarch/knowledge/network-first.md)** - Route intercept before navigate (race condition prevention)
 - **[data-factories.md](../../../testarch/knowledge/data-factories.md)** - Factory functions with overrides, API-first setup
 - **[test-levels-framework.md](../../../testarch/knowledge/test-levels-framework.md)** - E2E vs API vs Component vs Unit appropriateness
-- **[tdd-cycles.md](../../../testarch/knowledge/tdd-cycles.md)** - Red-Green-Refactor patterns
+- **[component-tdd.md](../../../testarch/knowledge/component-tdd.md)** - Red-Green-Refactor patterns
 - **[selective-testing.md](../../../testarch/knowledge/selective-testing.md)** - Duplicate coverage detection
 - **[ci-burn-in.md](../../../testarch/knowledge/ci-burn-in.md)** - Flakiness detection patterns (10-iteration loop)
-- **[test-priorities.md](../../../testarch/knowledge/test-priorities.md)** - P0/P1/P2/P3 classification framework
+- **[test-priorities.md](../../../testarch/knowledge/test-priorities-matrix.md)** - P0/P1/P2/P3 classification framework
 
 For coverage mapping, consult `trace` workflow outputs.
 

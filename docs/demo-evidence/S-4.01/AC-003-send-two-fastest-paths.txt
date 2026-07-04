@@ -1,0 +1,26 @@
+$ go test ./internal/multipath/... \
+    -run 'TestBC_2_02_001_Send_TwoFastestPaths|TestBC_2_02_001_Send_ThreePathsSelectLowest|TestBC_2_02_001_Send_SinglePathFallback|TestBC_2_02_001_Send_AtMostTwoPaths|TestBC_2_02_001_Send_IdenticalBytesOnBothPaths' \
+    -v
+
+=== RUN   TestBC_2_02_001_Send_TwoFastestPaths
+=== PAUSE TestBC_2_02_001_Send_TwoFastestPaths
+=== RUN   TestBC_2_02_001_Send_ThreePathsSelectLowest
+=== PAUSE TestBC_2_02_001_Send_ThreePathsSelectLowest
+=== RUN   TestBC_2_02_001_Send_SinglePathFallback
+=== PAUSE TestBC_2_02_001_Send_SinglePathFallback
+=== RUN   TestBC_2_02_001_Send_AtMostTwoPaths
+=== PAUSE TestBC_2_02_001_Send_AtMostTwoPaths
+=== RUN   TestBC_2_02_001_Send_IdenticalBytesOnBothPaths
+=== PAUSE TestBC_2_02_001_Send_IdenticalBytesOnBothPaths
+=== CONT  TestBC_2_02_001_Send_TwoFastestPaths
+=== CONT  TestBC_2_02_001_Send_AtMostTwoPaths
+=== CONT  TestBC_2_02_001_Send_IdenticalBytesOnBothPaths
+=== CONT  TestBC_2_02_001_Send_SinglePathFallback
+--- PASS: TestBC_2_02_001_Send_TwoFastestPaths (0.00s)
+=== CONT  TestBC_2_02_001_Send_ThreePathsSelectLowest
+--- PASS: TestBC_2_02_001_Send_AtMostTwoPaths (0.00s)
+--- PASS: TestBC_2_02_001_Send_IdenticalBytesOnBothPaths (0.00s)
+--- PASS: TestBC_2_02_001_Send_ThreePathsSelectLowest (0.00s)
+--- PASS: TestBC_2_02_001_Send_SinglePathFallback (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/multipath     0.263s

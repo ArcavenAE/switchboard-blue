@@ -1,0 +1,13 @@
+$ go test -race -v -run "TestSession_Attach_EstablishesBidirectionalChannel|TestSession_Attach_UpstreamKeystrokesForwarded" ./internal/session/
+=== RUN   TestSession_Attach_EstablishesBidirectionalChannel
+=== PAUSE TestSession_Attach_EstablishesBidirectionalChannel
+=== RUN   TestSession_Attach_UpstreamKeystrokesForwarded
+=== PAUSE TestSession_Attach_UpstreamKeystrokesForwarded
+=== CONT  TestSession_Attach_EstablishesBidirectionalChannel
+=== CONT  TestSession_Attach_UpstreamKeystrokesForwarded
+--- PASS: TestSession_Attach_EstablishesBidirectionalChannel (0.00s)
+--- PASS: TestSession_Attach_UpstreamKeystrokesForwarded (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/session	1.434s
+
+Race detector: CLEAN (no data races detected)

@@ -1,0 +1,32 @@
+id: elem-dual-fastest-path-forwarding
+type: element
+confidence: bedrock
+title: "dual fastest-path forwarding with latency-based path selection"
+content: |
+  When a frame can take more than one path through the router mesh,
+  switchboard forwards on the two fastest paths simultaneously. The
+  receiver keeps whichever arrives first; the duplicate is discarded.
+  Path selection is latency-based, not hop-count or bandwidth-based.
+
+  Why this is bedrock:
+  - **Interactive workloads care about p99 latency, not p50.** Average-
+    case multi-path is rarely the bottleneck; tail latency from one
+    path going slow is.
+  - **Cheap when bandwidth is abundant.** Keystroke and terminal-output
+    flows are tiny relative to typical link capacity; duplicating doubles
+    a small number.
+  - **Resilience for free.** A path failure becomes a latency increase,
+    not a stall.
+
+  Open: the path-selection algorithm itself — how is "fastest" measured
+  (RTT? jitter-adjusted? Recent vs current?), how often is the choice
+  re-evaluated, what's the behavior when only one path exists. Likely
+  evolves through `question-vsn-routing`.
+edges:
+  - target: question-vsn-routing
+    type: leaves-open
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md design principles

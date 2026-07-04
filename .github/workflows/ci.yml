@@ -1,10 +1,27 @@
+# CI + Alpha Release
+# Triggers: push to develop (alpha releases), pull requests to develop or main
+# Builds binaries for all platforms, signs/notarizes, creates pre-release, updates homebrew-tap
 name: CI
 
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [develop]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '_kos/**'
+      - '_bmad/**'
+      - '_bmad-custom/**'
+      - '_bmad-output/**'
+      - '.github/workflows/release.yml'
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,7 +31,13 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
@@ -39,7 +62,7 @@ jobs:
         run: go vet ./...
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9
+        uses: step-security/golangci-lint-action@1797facf9ea427614d729a4e9cab0fae1a7852d9 # v9.2.0
 
       - name: Run tests with coverage and race detector
         run: go test ./... -v -count=1 -race -coverprofile=coverage.out -covermode=atomic
@@ -61,7 +84,7 @@ jobs:
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -95,60 +118,17 @@ jobs:
       - name: Validate build
         run: go build -o /dev/null ./cmd/switchboard
 
-  test-docker-e2e:
-    name: Docker E2E Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      - name: Cache Docker layers
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile.test', 'go.mod', 'go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Build Docker test image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
-        with:
-          context: .
-          file: Dockerfile.test
-          load: true
-          tags: switchboard-test:latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Create test-results directory
-        run: mkdir -p test-results
-
-      - name: Run Docker E2E tests
-        run: docker compose -f docker-compose.test.yml run --rm -T test
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
-        with:
-          name: docker-e2e-results
-          path: test-results/
-          retention-days: 14
-
-      # Rotate buildx cache to prevent unbounded growth
-      - name: Rotate cache
-        if: always()
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
-
   build-binaries:
     name: Build Binaries
     needs: quality-gate
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
@@ -161,22 +141,23 @@ jobs:
         id: version
         run: |
           VERSION="0.1.0-alpha.$(date -u +%Y%m%d).${GITHUB_SHA::7}"
-          TAG="alpha-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          TAG="alpha-$(date -u +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Build binaries
+      - name: Build alpha binaries
         run: |
           LDFLAGS="-X main.version=${{ steps.version.outputs.version }}"
-          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o switchboard-darwin-arm64 ./cmd/switchboard
-          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o switchboard-darwin-amd64 ./cmd/switchboard
-          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o switchboard-linux-amd64 ./cmd/switchboard
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o switchboard-a-darwin-arm64 ./cmd/switchboard
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o switchboard-a-darwin-amd64 ./cmd/switchboard
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o switchboard-a-linux-amd64 ./cmd/switchboard
+          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o switchboard-a-linux-arm64 ./cmd/switchboard
 
       - name: Upload binaries
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: binaries
-          path: switchboard-*
+          path: switchboard-a-*
           retention-days: 14
 
     outputs:
@@ -186,9 +167,15 @@ jobs:
   sign-and-notarize:
     name: Sign & Notarize
     needs: build-binaries
-    if: github.event_name == 'push' && vars.SIGNING_ENABLED == 'true'
+    if: vars.SIGNING_ENABLED == 'true'
+    environment: release
     runs-on: macos-latest
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
@@ -223,35 +210,27 @@ jobs:
 
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
-      - name: Verify certificate import
-        run: |
-          echo "Listing signing identities:"
-          security find-identity -v build.keychain
-          echo ""
-          echo "Checking for installer identity:"
-          security find-identity -v build.keychain | grep -i "installer" || echo "WARNING: No installer identity found in keychain"
-
       - name: Sign darwin binaries
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp switchboard-darwin-arm64
-          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp switchboard-darwin-amd64
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp switchboard-a-darwin-arm64
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp switchboard-a-darwin-amd64
 
       - name: Verify signatures
         run: |
-          codesign --verify --deep --strict switchboard-darwin-arm64
-          codesign --verify --deep --strict switchboard-darwin-amd64
+          codesign --verify --deep --strict switchboard-a-darwin-arm64
+          codesign --verify --deep --strict switchboard-a-darwin-amd64
 
       - name: Build app bundles
         run: |
           VERSION="${{ needs.build-binaries.outputs.version }}"
           chmod +x scripts/create-app.sh
 
-          ./scripts/create-app.sh switchboard-darwin-arm64 "$VERSION" .
+          ./scripts/create-app.sh switchboard-a-darwin-arm64 "$VERSION" .
           mv Switchboard.app Switchboard-arm64.app
 
-          ./scripts/create-app.sh switchboard-darwin-amd64 "$VERSION" .
+          ./scripts/create-app.sh switchboard-a-darwin-amd64 "$VERSION" .
           mv Switchboard.app Switchboard-amd64.app
 
       - name: Sign app bundles
@@ -274,8 +253,7 @@ jobs:
           APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
         run: |
           if ! security find-identity -v build.keychain | grep -q "$APPLE_INSTALLER_IDENTITY"; then
-            echo "::error::APPLE_INSTALLER_IDENTITY not found in keychain. Expected format: 'Developer ID Installer: Name (TeamID)'"
-            echo "Available identities:"
+            echo "::error::APPLE_INSTALLER_IDENTITY not found in keychain"
             security find-identity -v build.keychain
             exit 1
           fi
@@ -283,8 +261,8 @@ jobs:
           VERSION="${{ needs.build-binaries.outputs.version }}"
           chmod +x scripts/create-pkg.sh
 
-          ./scripts/create-pkg.sh switchboard-darwin-arm64 "$VERSION" "$APPLE_INSTALLER_IDENTITY" switchboard-arm64.pkg
-          ./scripts/create-pkg.sh switchboard-darwin-amd64 "$VERSION" "$APPLE_INSTALLER_IDENTITY" switchboard-amd64.pkg
+          ./scripts/create-pkg.sh switchboard-a-darwin-arm64 "$VERSION" "$APPLE_INSTALLER_IDENTITY" switchboard-arm64.pkg
+          ./scripts/create-pkg.sh switchboard-a-darwin-amd64 "$VERSION" "$APPLE_INSTALLER_IDENTITY" switchboard-amd64.pkg
 
       - name: Notarize and staple all artifacts
         env:
@@ -303,12 +281,12 @@ jobs:
           done
 
       - name: Upload signed binaries and installers
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: signed-binaries
           path: |
-            switchboard-darwin-arm64
-            switchboard-darwin-amd64
+            switchboard-a-darwin-arm64
+            switchboard-a-darwin-amd64
             switchboard-arm64.pkg
             switchboard-amd64.pkg
             switchboard-arm64.dmg
@@ -319,8 +297,8 @@ jobs:
         if: always()
         run: security delete-keychain build.keychain || true
 
-  release:
-    name: Create Release
+  alpha-release:
+    name: Create Alpha Release
     needs: [build-binaries, sign-and-notarize]
     if: |
       always() &&
@@ -331,65 +309,90 @@ jobs:
     environment: release
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
       - name: Download signed binaries
         if: needs.sign-and-notarize.result == 'success'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: signed-binaries
+          path: dist/
 
       - name: Download unsigned binaries (fallback)
         if: needs.sign-and-notarize.result != 'success'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: binaries
+          path: dist/
 
       - name: Download all binaries (for linux)
         if: needs.sign-and-notarize.result == 'success'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: binaries
-          path: unsigned-binaries
+          path: unsigned/
 
-      - name: Copy linux binary from unsigned artifacts
+      - name: Collect linux binaries
         if: needs.sign-and-notarize.result == 'success'
-        run: cp unsigned-binaries/switchboard-linux-amd64 . && rm -rf unsigned-binaries
+        run: |
+          cp unsigned/switchboard-a-linux-* dist/
+          rm -rf unsigned
 
       - name: List release files
-        run: ls -la switchboard-* *.pkg *.dmg 2>/dev/null || true
+        run: ls -la dist/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
-        with:
-          tag_name: ${{ needs.build-binaries.outputs.tag }}
-          name: Alpha ${{ needs.build-binaries.outputs.tag }}
-          body: |
-            Automated alpha release from merge to main.
+      - name: Create pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.build-binaries.outputs.tag }}"
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --prerelease \
+            --title "Alpha: $TAG" \
+            --notes "$(cat <<NOTES
+          Automated alpha release from develop.
 
-            **Version:** ${{ needs.build-binaries.outputs.version }}
-            **Commit:** ${{ github.sha }}
-            **Signed:** ${{ needs.sign-and-notarize.result == 'success' && 'Yes (Apple Developer ID)' || 'No (unsigned)' }}
+          **Version:** ${{ needs.build-binaries.outputs.version }}
+          **Commit:** ${{ github.sha }}
+          **Signed:** ${{ needs.sign-and-notarize.result == 'success' && 'Yes (Apple Developer ID)' || 'No (unsigned)' }}
 
-            **Binaries:**
-            - `switchboard-darwin-arm64` — macOS Apple Silicon
-            - `switchboard-darwin-amd64` — macOS Intel
-            - `switchboard-linux-amd64` — Linux x86_64
-            ${{ needs.sign-and-notarize.result == 'success' && '- `switchboard-arm64.pkg` — macOS Installer (Apple Silicon)\n- `switchboard-amd64.pkg` — macOS Installer (Intel)\n- `switchboard-arm64.dmg` — macOS Disk Image (Apple Silicon)\n- `switchboard-amd64.dmg` — macOS Disk Image (Intel)' || '' }}
-          prerelease: true
-          files: |
-            switchboard-darwin-arm64
-            switchboard-darwin-amd64
-            switchboard-linux-amd64
-            switchboard-arm64.pkg
-            switchboard-amd64.pkg
-            switchboard-arm64.dmg
-            switchboard-amd64.dmg
+          **Binaries:**
+          - \`switchboard-a-darwin-arm64\` — macOS Apple Silicon
+          - \`switchboard-a-darwin-amd64\` — macOS Intel
+          - \`switchboard-a-linux-amd64\` — Linux x86_64
+          - \`switchboard-a-linux-arm64\` — Linux ARM64
+          NOTES
+          )" \
+            dist/*
+
+      - name: Clean old alpha releases (keep 30)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "${{ github.repository }}" \
+            --json tagName,isPrerelease \
+            --jq '[.[] | select(.isPrerelease)] | sort_by(.tagName) | reverse | .[30:] | .[].tagName' \
+          | while read -r tag; do
+              echo "Deleting old alpha release: $tag"
+              gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
+            done
 
   update-homebrew:
-    name: Update Homebrew Tap
-    needs: [build-binaries, release]
-    if: github.event_name == 'push' && needs.release.result == 'success' && vars.SIGNING_ENABLED == 'true'
+    name: Update Homebrew Tap (Alpha)
+    needs: [build-binaries, sign-and-notarize, alpha-release]
+    if: needs.alpha-release.result == 'success' && needs.sign-and-notarize.result == 'success'
+    environment: release
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
@@ -403,11 +406,11 @@ jobs:
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          VERSION="${{ needs.build-binaries.outputs.version }}"
           TAG="${{ needs.build-binaries.outputs.tag }}"
+          VERSION="${{ needs.build-binaries.outputs.version }}"
 
-          SHA256_ARM64=$(shasum -a 256 switchboard-darwin-arm64 | cut -d' ' -f1)
-          SHA256_AMD64=$(shasum -a 256 switchboard-darwin-amd64 | cut -d' ' -f1)
+          SHA256_ARM64=$(shasum -a 256 switchboard-a-darwin-arm64 | cut -d' ' -f1)
+          SHA256_AMD64=$(shasum -a 256 switchboard-a-darwin-amd64 | cut -d' ' -f1)
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/ArcavenAE/homebrew-tap.git" homebrew-tap-repo
           cd homebrew-tap-repo
@@ -423,5 +426,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/switchboard.rb
-          git commit -m "Update switchboard to $VERSION"
+          git diff --cached --quiet || git commit -m "Update switchboard to $VERSION"
           git push

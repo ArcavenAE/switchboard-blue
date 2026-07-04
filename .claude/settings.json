@@ -1,0 +1,10 @@
+{
+  "enabledPlugins": {
+    "vsdd-factory@claude-mp": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(gh pr merge:*)"
+    ]
+  }
+}

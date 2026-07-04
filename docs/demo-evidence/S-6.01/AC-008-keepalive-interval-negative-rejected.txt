@@ -1,0 +1,22 @@
+=== RUN   TestConfigValidate_RejectsNegativeKeepaliveInterval
+=== PAUSE TestConfigValidate_RejectsNegativeKeepaliveInterval
+=== CONT  TestConfigValidate_RejectsNegativeKeepaliveInterval
+=== RUN   TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1s
+=== PAUSE TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1s
+=== RUN   TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1ns
+=== PAUSE TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1ns
+=== RUN   TestConfigValidate_RejectsNegativeKeepaliveInterval/zero_keepalive_interval_accepted
+=== PAUSE TestConfigValidate_RejectsNegativeKeepaliveInterval/zero_keepalive_interval_accepted
+=== RUN   TestConfigValidate_RejectsNegativeKeepaliveInterval/positive_keepalive_passes
+=== PAUSE TestConfigValidate_RejectsNegativeKeepaliveInterval/positive_keepalive_passes
+=== CONT  TestConfigValidate_RejectsNegativeKeepaliveInterval/positive_keepalive_passes
+=== CONT  TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1ns
+=== CONT  TestConfigValidate_RejectsNegativeKeepaliveInterval/zero_keepalive_interval_accepted
+=== CONT  TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1s
+--- PASS: TestConfigValidate_RejectsNegativeKeepaliveInterval (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeKeepaliveInterval/positive_keepalive_passes (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1ns (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeKeepaliveInterval/zero_keepalive_interval_accepted (0.00s)
+    --- PASS: TestConfigValidate_RejectsNegativeKeepaliveInterval/negative_1s (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/config	1.294s

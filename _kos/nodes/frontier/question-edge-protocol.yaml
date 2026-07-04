@@ -1,0 +1,26 @@
+id: question-edge-protocol
+type: question
+confidence: frontier
+title: "What is the edge protocol between nodes and E routers on a single LAN?"
+content: |
+  The MVP scope is nodes + E router on a single LAN — proving the edge
+  protocol and user experience before tackling multi-hop networking.
+
+  The E router runs alongside a node for same-LAN setup between two
+  machines. This is the simplest deployment: two machines, one router,
+  one or more tmux sessions published.
+
+  Key unknowns: wire format, session discovery/announcement, connection
+  handshake, timeslice tick rate, frame structure. How does a console
+  find and connect to a published tmux session through the E router?
+edges:
+  - target: elem-mvp-scope-single-lan
+    type: derives
+  - target: elem-timeslice-framing
+    type: related
+  - target: elem-asymmetric-half-channels
+    type: related
+provenance:
+  created_by: human
+  session: session-014
+  created_at: "2026-04-11"

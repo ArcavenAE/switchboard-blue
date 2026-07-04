@@ -1,0 +1,33 @@
+id: elem-single-binary-three-modes
+type: element
+confidence: bedrock
+title: "single switchboard binary supports three router deployment modes (E / PE / P)"
+content: |
+  One binary, three operational modes selected at runtime:
+
+  | Mode | Role |
+  |------|------|
+  | **E** (Edge-local) | Runs alongside a node for same-LAN setup |
+  | **PE** (Provider Edge) | Production router: connects nodes + peers |
+  | **P** (Provider Core) | Router-to-router only (theoretical, not built) |
+
+  Why one binary:
+  - Operational simplicity — one artifact to build, distribute, sign,
+    update. Saves N copies of toolchain integration.
+  - Forces shared internals — code that would otherwise diverge between
+    "edge daemon" and "core router" projects stays unified.
+  - Tradeoffs are explicit — when an option only makes sense for E, the
+    flag is gated and ignored elsewhere, visible to readers.
+
+  Current MVP scope: nodes + E router on a single LAN
+  (`elem-mvp-scope-single-lan`). PE and P are designed but not built.
+edges:
+  - target: elem-node-router-architecture
+    type: related
+  - target: elem-mvp-scope-single-lan
+    type: related
+provenance:
+  created_by: human
+  session: session-049
+  created_at: "2026-05-13"
+  extracted_from: README.md architecture table

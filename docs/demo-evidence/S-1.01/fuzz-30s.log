@@ -1,0 +1,15 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/12 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 12/12 completed, now fuzzing with 8 workers
+fuzz: elapsed: 3s, execs: 1001462 (333792/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 6s, execs: 2023208 (340537/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 9s, execs: 3025536 (334151/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 12s, execs: 4027895 (334139/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 15s, execs: 5049859 (340554/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 18s, execs: 6066890 (339051/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 21s, execs: 7096039 (343105/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 24s, execs: 8096108 (333342/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 27s, execs: 9116193 (339999/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 30s, execs: 10140671 (341532/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 30s, execs: 10140671 (0/sec), new interesting: 0 (total: 12)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/frame	30.396s

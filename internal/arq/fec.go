@@ -1,0 +1,224 @@
+// Package arq — FEC extension.
+//
+// fec.go provides XOR parity FEC for single-loss recovery within an ARQ group
+// (BC-2.02.007 v1.3). The Encoder produces one parity frame per group of N
+// data frames; the Decoder recovers the single missing frame using XOR across
+// the group + parity.
+//
+// The parity frame carries frame_type=fec=0x05 (internal/frame.FrameTypeFec)
+// in its outer header. Do NOT redefine the constant locally — import
+// internal/frame and use frame.FrameTypeFec (ARCH-08 position 9: arq→frame
+// import is legal; F-P8-008).
+//
+// ErrTooManyLosses is exported for errors.Is inspection within the module's
+// internal/ tree; it has no operator-visible surface and no E-FEC-* taxonomy
+// slot (AC-003, AC-004).
+package arq
+
+import (
+	"errors"
+
+	"github.com/arcavenae/switchboard/internal/frame"
+)
+
+// DefaultFECGroupSize is the default number of data frames per FEC group
+// (ADR-002). One parity frame is emitted per complete group of this size.
+// Configurable via FECConfig.GroupSize.
+const DefaultFECGroupSize = 4
+
+// ErrTooManyLosses is returned by Recover when more than one data frame in
+// the FEC group is missing. XOR parity can only recover a single loss.
+//
+// This sentinel is exported for errors.Is inspection by callers within this
+// module's internal/ tree (required for the arq_test external test package).
+// It is module-internal by convention and the internal/ path restriction —
+// it is not part of any public API surface and must not be exposed via RPC
+// or operator messaging (AC-003, BC-2.02.007 PC-4).
+var ErrTooManyLosses = errors.New("fec: too many losses in group")
+
+// _ anchors the frame import at package scope (ARCH-08; F-P8-008).
+// Parity frames carry frame_type=frame.FrameTypeFec=0x05 in their outer
+// header; the constant is referenced in Encoder.AddFrame and Decoder.Recover
+// doc comments and callers must use it — keeping the import live here makes
+// the dependency explicit without polluting the hot path.
+var _ = frame.FrameTypeFec
+
+// FECConfig carries construction parameters for NewEncoder and NewDecoder.
+type FECConfig struct {
+	// GroupSize is the number of data frames per FEC group. Defaults to
+	// DefaultFECGroupSize (4) when zero (ADR-002).
+	GroupSize int
+}
+
+// Encoder accumulates data frame payloads and emits a parity frame for each
+// complete group of GroupSize frames. Incomplete last groups (fewer than
+// GroupSize frames at session close) do not produce a parity frame
+// (BC-2.02.007 EC-001; AC-005).
+//
+// Zero value is not usable; construct via NewEncoder.
+type Encoder struct {
+	groupSize int
+	// buf holds the payloads added to the current incomplete group.
+	buf [][]byte
+	// parity accumulates the XOR of all payloads added so far in this group.
+	// Length matches the longest payload seen; shorter payloads are padded
+	// with 0x00 (standard XOR parity convention, BC-2.02.007 invariant 1).
+	parity []byte
+}
+
+// NewEncoder constructs an Encoder with the given configuration.
+func NewEncoder(cfg FECConfig) *Encoder {
+	gs := cfg.GroupSize
+	if gs <= 0 {
+		gs = DefaultFECGroupSize
+	}
+	return &Encoder{
+		groupSize: gs,
+		buf:       make([][]byte, 0, gs),
+	}
+}
+
+// AddFrame appends a data frame payload to the current group. When the group
+// reaches GroupSize frames it is complete: AddFrame returns the XOR parity
+// payload (to be wrapped in a parity frame with
+// frame_type=frame.FrameTypeFec=0x05) and resets the internal buffer for the
+// next group. When the group is not yet complete, parityPayload is nil.
+//
+// Callers must set the outer header FrameType to frame.FrameTypeFec when
+// transmitting the returned parity payload (AC-001).
+//
+// EC-001 / AC-005: if the session ends before a full group is collected, the
+// caller should discard any partial group; no parity is emitted. The caller
+// uses Flush to detect and discard an incomplete group.
+func (e *Encoder) AddFrame(payload []byte) (parityPayload []byte) {
+	// Grow the running XOR parity to accommodate this payload's length.
+	if len(payload) > len(e.parity) {
+		extended := make([]byte, len(payload))
+		copy(extended, e.parity)
+		e.parity = extended
+	}
+	for i, b := range payload {
+		e.parity[i] ^= b
+	}
+
+	// Store a copy of the payload in the current-group buffer.
+	p := make([]byte, len(payload))
+	copy(p, payload)
+	e.buf = append(e.buf, p)
+
+	if len(e.buf) < e.groupSize {
+		// Group not yet complete — no parity emitted.
+		return nil
+	}
+
+	// Group complete: return parity and reset for the next group.
+	result := e.parity
+	e.parity = nil
+	e.buf = e.buf[:0]
+	return result
+}
+
+// Flush reports whether the Encoder holds an incomplete last group (fewer than
+// GroupSize frames since the last complete group or construction). When true,
+// the caller must pass the buffered frames to ARQ for normal handling and must
+// NOT emit a parity frame (BC-2.02.007 EC-001; AC-005).
+//
+// After Flush returns, the encoder is reset; a second call returns (nil, false).
+func (e *Encoder) Flush() (incomplete [][]byte, hasIncomplete bool) {
+	if len(e.buf) == 0 {
+		return nil, false
+	}
+	// Return copies of the buffered partial-group payloads so the caller owns them.
+	out := make([][]byte, len(e.buf))
+	for i, p := range e.buf {
+		cp := make([]byte, len(p))
+		copy(cp, p)
+		out[i] = cp
+	}
+	// Reset encoder state so a second call returns (nil, false) — idempotent.
+	e.buf = e.buf[:0]
+	e.parity = nil
+	return out, true
+}
+
+// GroupSize returns the configured FEC group size.
+func (e *Encoder) GroupSize() int {
+	return e.groupSize
+}
+
+// Decoder recovers a missing data frame from a complete FEC group.
+//
+// Zero value is not usable; construct via NewDecoder.
+type Decoder struct {
+	groupSize int
+}
+
+// NewDecoder constructs a Decoder with the given configuration.
+func NewDecoder(cfg FECConfig) *Decoder {
+	gs := cfg.GroupSize
+	if gs <= 0 {
+		gs = DefaultFECGroupSize
+	}
+	return &Decoder{
+		groupSize: gs,
+	}
+}
+
+// Recover reconstructs the single missing data frame from a group using XOR
+// parity.
+//
+// group contains the data frame payloads received; missing positions are
+// represented by nil entries. parityPayload is the parity frame payload
+// extracted from the frame with frame_type=frame.FrameTypeFec=0x05.
+//
+// Returns the recovered payload when exactly one entry in group is nil
+// (AC-002).
+//
+// Returns ErrTooManyLosses when more than one entry in group is nil — XOR
+// parity cannot recover multiple losses. The caller MUST NOT drop the frame
+// group silently on ErrTooManyLosses; it MUST invoke the ARQ SACK/retransmit
+// path (AC-003, AC-004; BC-2.02.007 PC-4).
+//
+// The parity frame type constant is frame.FrameTypeFec (=0x05); the import is
+// anchored at package scope (see var _ = frame.FrameTypeFec above) — callers
+// must use frame.FrameTypeFec rather than a local literal.
+func (d *Decoder) Recover(group [][]byte, parityPayload []byte) ([]byte, error) {
+	// Count losses (nil entries in group) and locate the single missing index.
+	losses := 0
+	lossIdx := -1
+	for i, p := range group {
+		if p == nil {
+			losses++
+			lossIdx = i
+		}
+	}
+
+	if losses > 1 {
+		return nil, ErrTooManyLosses
+	}
+
+	// No loss: nothing to recover.
+	if losses == 0 {
+		return nil, nil
+	}
+
+	// Exactly one loss: recovered = parityPayload XOR (XOR of all non-nil payloads).
+	// Start with a copy of parityPayload, then XOR out every received (non-nil) payload.
+	recovered := make([]byte, len(parityPayload))
+	copy(recovered, parityPayload)
+	for i, p := range group {
+		if i == lossIdx || p == nil {
+			continue
+		}
+		// XOR this payload into recovered; extend if needed.
+		if len(p) > len(recovered) {
+			extended := make([]byte, len(p))
+			copy(extended, recovered)
+			recovered = extended
+		}
+		for j, b := range p {
+			recovered[j] ^= b
+		}
+	}
+	return recovered, nil
+}

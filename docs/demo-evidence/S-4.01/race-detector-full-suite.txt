@@ -1,0 +1,190 @@
+$ go test -race ./internal/paths/... ./internal/multipath/... -v
+
+=== RUN   TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== PAUSE TestBC_2_02_003_PathScore_LowerRTTLowerScore
+=== RUN   TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== PAUSE TestBC_2_02_003_PathScore_HigherLossRaisesScore
+=== RUN   TestBC_2_02_003_PathScore_Transitive
+=== PAUSE TestBC_2_02_003_PathScore_Transitive
+=== RUN   TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== PAUSE TestBC_2_02_003_PathScore_ZeroLossPureRTT
+=== RUN   TestBC_2_02_003_PathScore_Formula
+=== PAUSE TestBC_2_02_003_PathScore_Formula
+=== RUN   TestBC_2_02_003_PathTracker_NewInitialRTT
+=== PAUSE TestBC_2_02_003_PathTracker_NewInitialRTT
+=== RUN   TestBC_2_02_003_PathTracker_EWMAConvergence
+=== PAUSE TestBC_2_02_003_PathTracker_EWMAConvergence
+=== RUN   TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== PAUSE TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes
+=== RUN   TestBC_2_02_003_PathTracker_LossUpdatesEWMA
+=== PAUSE TestBC_2_02_003_PathTracker_LossUpdatesEWMA
+=== RUN   TestBC_2_02_003_PathTracker_InactiveAfterMisses
+=== PAUSE TestBC_2_02_003_PathTracker_InactiveAfterMisses
+=== RUN   TestBC_2_02_003_PathTracker_ResetMissesOnSuccess
+=== PAUSE TestBC_2_02_003_PathTracker_ResetMissesOnSuccess
+=== RUN   TestBC_2_02_003_PathTracker_Reactivation
+=== PAUSE TestBC_2_02_003_PathTracker_Reactivation
+=== RUN   TestBC_2_02_003_PathTracker_FirstProbeRTTOverride
+=== PAUSE TestBC_2_02_003_PathTracker_FirstProbeRTTOverride
+=== RUN   TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore
+--- PASS: TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore (0.00s)
+=== RUN   TestBC_2_02_003_PathTracker_ScoreDelegates
+=== PAUSE TestBC_2_02_003_PathTracker_ScoreDelegates
+=== RUN   TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors
+=== PAUSE TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors
+=== RUN   TestBC_2_02_003_Rank_OrderedByScore
+=== PAUSE TestBC_2_02_003_Rank_OrderedByScore
+=== RUN   TestBC_2_02_003_Rank_ExcludesInactivePaths
+=== PAUSE TestBC_2_02_003_Rank_ExcludesInactivePaths
+=== RUN   TestBC_2_02_003_Rank_ErrNoActivePaths
+=== PAUSE TestBC_2_02_003_Rank_ErrNoActivePaths
+=== RUN   TestBC_2_02_003_Rank_TiebreakByID
+=== PAUSE TestBC_2_02_003_Rank_TiebreakByID
+=== RUN   TestBC_2_02_003_Rank_SinglePath
+=== PAUSE TestBC_2_02_003_Rank_SinglePath
+=== RUN   TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== PAUSE TestBC_2_02_003_PathScore_PropertyTransitive_Manual
+=== RUN   TestNewPathTracker_RejectsInvalidAlpha
+=== PAUSE TestNewPathTracker_RejectsInvalidAlpha
+--- PASS: TestBC_2_02_003_PathTracker_ScoreDelegates (0.00s)
+--- PASS: TestBC_2_02_003_Rank_SinglePath (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_LossUpdatesEWMA (0.00s)
+--- PASS: TestBC_2_02_003_Rank_ExcludesInactivePaths (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_InactiveAfterMisses (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_EWMAConvergence_ThreeProbes (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_EWMAConvergence (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_ZeroLossPureRTT (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_NewInitialRTT (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_ResetMissesOnSuccess (0.00s)
+--- PASS: TestBC_2_02_003_Rank_ErrNoActivePaths (0.00s)
+--- PASS: TestBC_2_02_003_Rank_TiebreakByID (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_FirstProbeRTTOverride (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_Reactivation (0.00s)
+--- PASS: TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors (0.00s)
+--- PASS: TestBC_2_02_003_Rank_OrderedByScore (0.00s)
+    --- PASS: TestBC_2_02_003_Rank_OrderedByScore/three_paths_ascending_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_Rank_OrderedByScore/two_paths (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_Transitive (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/ascending_RTT_no_loss:_A<B<C (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/mixed_RTT_and_loss:_A<B<C (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Transitive/ascending_loss_same_RTT:_A<B<C (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_25ms,_0%_loss (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/10ms_vs_50ms,_5%_loss (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_LowerRTTLowerScore/1ms_vs_1000ms,_10%_loss (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_10%_loss,_20ms_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/0%_vs_50%_loss,_50ms_RTT (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_HigherLossRaisesScore/1%_vs_100%_loss,_100ms_RTT (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_Formula (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#00 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#03 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#02 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#01 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#05 (0.00s)
+    --- PASS: TestBC_2_02_003_PathScore_Formula/#04 (0.00s)
+--- PASS: TestNewPathTracker_RejectsInvalidAlpha (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#05 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#06 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#00 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#02 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#03 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#01 (0.00s)
+    --- PASS: TestNewPathTracker_RejectsInvalidAlpha/#04 (0.00s)
+--- PASS: TestBC_2_02_003_PathScore_PropertyTransitive_Manual (0.02s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/paths (cached)
+=== RUN   TestBC_2_02_009_DropCache_HitCounterIncremented
+=== PAUSE TestBC_2_02_009_DropCache_HitCounterIncremented
+=== RUN   TestBC_2_02_009_DropCache_HitCounterConcurrent
+--- PASS: TestBC_2_02_009_DropCache_HitCounterConcurrent (0.00s)
+=== RUN   TestBC_2_02_001_Send_TwoFastestPaths
+=== PAUSE TestBC_2_02_001_Send_TwoFastestPaths
+=== RUN   TestBC_2_02_001_Send_ThreePathsSelectLowest
+=== PAUSE TestBC_2_02_001_Send_ThreePathsSelectLowest
+=== RUN   TestBC_2_02_001_Send_SinglePathFallback
+=== PAUSE TestBC_2_02_001_Send_SinglePathFallback
+=== RUN   TestBC_2_02_001_Send_NoPathsReturnsError
+=== PAUSE TestBC_2_02_001_Send_NoPathsReturnsError
+=== RUN   TestBC_2_02_001_Send_AtMostTwoPaths
+=== PAUSE TestBC_2_02_001_Send_AtMostTwoPaths
+=== RUN   TestBC_2_02_001_Send_SnapshotsRankAtDispatch
+=== PAUSE TestBC_2_02_001_Send_SnapshotsRankAtDispatch
+=== RUN   TestBC_2_02_001_Send_IdenticalBytesOnBothPaths
+=== PAUSE TestBC_2_02_001_Send_IdenticalBytesOnBothPaths
+=== RUN   TestBC_2_02_002_Receive_FirstCopyDelivered
+=== PAUSE TestBC_2_02_002_Receive_FirstCopyDelivered
+=== RUN   TestBC_2_02_002_Receive_DuplicateReturnsErr
+=== PAUSE TestBC_2_02_002_Receive_DuplicateReturnsErr
+=== RUN   TestBC_2_02_002_Receive_DuplicateDiscardSilent
+=== PAUSE TestBC_2_02_002_Receive_DuplicateDiscardSilent
+=== RUN   TestBC_2_02_002_Receive_MultipleArrivalsSameFrame
+=== PAUSE TestBC_2_02_002_Receive_MultipleArrivalsSameFrame
+=== RUN   TestBC_2_02_002_Receive_DistinctFramesNotSuppressed
+=== PAUSE TestBC_2_02_002_Receive_DistinctFramesNotSuppressed
+=== RUN   TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed
+=== PAUSE TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed
+=== RUN   TestBC_2_02_002_Receive_ConcurrentFirstArrivalWins
+--- PASS: TestBC_2_02_002_Receive_ConcurrentFirstArrivalWins (0.00s)
+=== RUN   TestBC_2_02_009_DropCache_MissForwards
+=== PAUSE TestBC_2_02_009_DropCache_MissForwards
+=== RUN   TestBC_2_02_009_DropCache_HitSuppresses
+=== PAUSE TestBC_2_02_009_DropCache_HitSuppresses
+=== RUN   TestBC_2_02_009_DropCache_CompoundKey
+=== PAUSE TestBC_2_02_009_DropCache_CompoundKey
+=== RUN   TestBC_2_02_009_DropCache_BoundedCapacity
+=== PAUSE TestBC_2_02_009_DropCache_BoundedCapacity
+=== RUN   TestBC_2_02_009_DropCache_LRUEvictsOldest
+=== PAUSE TestBC_2_02_009_DropCache_LRUEvictsOldest
+=== RUN   TestBC_2_02_009_DropCache_Len
+=== PAUSE TestBC_2_02_009_DropCache_Len
+=== RUN   TestBC_2_02_009_DropCache_KeyedOnChecksumAndInterface
+=== PAUSE TestBC_2_02_009_DropCache_KeyedOnChecksumAndInterface
+=== RUN   TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep
+=== PAUSE TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep
+=== RUN   TestBC_2_02_009_DropCache_ConcurrentAddContains
+--- PASS: TestBC_2_02_009_DropCache_ConcurrentAddContains (0.01s)
+=== RUN   TestBC_2_02_001_Send_ConcurrentWithUpdatePaths
+--- PASS: TestBC_2_02_001_Send_ConcurrentWithUpdatePaths (0.00s)
+=== RUN   TestBC_2_02_001_Send_ErrorPaths
+=== PAUSE TestBC_2_02_001_Send_ErrorPaths
+=== RUN   TestNewDropCache_RejectsInvalidCapacity
+=== PAUSE TestNewDropCache_RejectsInvalidCapacity
+--- PASS: TestBC_2_02_009_DropCache_LRUEvictsOldest (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_MissForwards (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_BoundedCapacity (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_HitSuppresses (0.00s)
+--- PASS: TestBC_2_02_001_Send_ThreePathsSelectLowest (0.00s)
+--- PASS: TestBC_2_02_002_Receive_DuplicateDiscardSilent (0.00s)
+--- PASS: TestBC_2_02_002_Receive_DistinctFramesNotSuppressed (0.00s)
+--- PASS: TestBC_2_02_001_Send_SinglePathFallback (0.00s)
+--- PASS: TestBC_2_02_001_Send_NoPathsReturnsError (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_KeyedOnChecksumAndInterface (0.00s)
+--- PASS: TestBC_2_02_002_Receive_DuplicateReturnsErr (0.00s)
+--- PASS: TestBC_2_02_001_Send_AtMostTwoPaths (0.00s)
+--- PASS: TestBC_2_02_002_Receive_MultipleArrivalsSameFrame (0.00s)
+--- PASS: TestBC_2_02_001_Send_SnapshotsRankAtDispatch (0.00s)
+--- PASS: TestBC_2_02_001_Send_IdenticalBytesOnBothPaths (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_CompoundKey (0.00s)
+--- PASS: TestBC_2_02_001_Send_TwoFastestPaths (0.00s)
+--- PASS: TestBC_2_02_002_Receive_FirstCopyDelivered (0.00s)
+--- PASS: TestBC_2_02_002_Receive_CrossInterfaceDuplicateSuppressed (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_HitCounterIncremented (0.00s)
+--- PASS: TestNewDropCache_RejectsInvalidCapacity (0.00s)
+    --- PASS: TestNewDropCache_RejectsInvalidCapacity/#02 (0.00s)
+    --- PASS: TestNewDropCache_RejectsInvalidCapacity/#00 (0.00s)
+    --- PASS: TestNewDropCache_RejectsInvalidCapacity/#01 (0.00s)
+--- PASS: TestBC_2_02_001_Send_ErrorPaths (0.00s)
+    --- PASS: TestBC_2_02_001_Send_ErrorPaths/partial_failure_one_of_two (0.00s)
+    --- PASS: TestBC_2_02_001_Send_ErrorPaths/all_paths_fail (0.00s)
+    --- PASS: TestBC_2_02_001_Send_ErrorPaths/single_path_fails (0.00s)
+--- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#04 (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#00 (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#01 (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#03 (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#06 (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#05 (0.00s)
+    --- PASS: TestBC_2_02_009_DropCache_BoundedCapacity_PropertySweep/#02 (0.00s)
+PASS
+ok      github.com/arcavenae/switchboard/internal/multipath     1.307s
