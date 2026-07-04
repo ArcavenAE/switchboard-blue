@@ -554,3 +554,17 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 **Trajectory:** P1 4H/3M/1L → P2 0H/3M/2L → P3 3H/4M/2L. Not converging on annotate-and-track shape for shipping public-surface defects.
 
 **Decision needed:** Human decision on wire-orphan shape (register vs delete), code-side message drift fix approach, spec-side wins approval.
+
+---
+
+## Checkpoint: Post-Burst 81 (archived from STATE.md at Burst 83)
+
+**Timestamp:** 2026-07-04T00:00:00Z
+**Post-burst:** Burst 81 (Pass 34 close-out — P5-pass-34-Adv-A.md HAS_FINDINGS 2 HIGH taxonomy-orphan (E-RPC-002 + E-RPC-003); P5-pass-34-Adv-B.md NO_FINDINGS 8 anti-findings; DRIFT-P5P34-TAXONOMY-ORPHAN-ERPC-002-003 HIGH drift item added; sprint-state v1.61→v1.62 pass_34 block; streak RESET 2/3→0/3)
+**Pipeline state:** Phase 5 Pass 34 CONCLUDED HAS_FINDINGS ADV-A (2 HIGH); ADV-B NO_FINDINGS. Streak RESET 2/3 → 0/3. Novel finding class: taxonomy-orphan. Ruling-14 §10 governance premise factually wrong. Burst 82 dispatched for taxonomy remediation.
+**Factory HEAD:** 3402cd2 (Burst 81+82 parallel-dispatch)
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged)
+
+**Pass 34 deltas (Adv-A):** HAS_FINDINGS — 2 HIGH. F-P5P34-A-001 HIGH: E-RPC-002 emitted from 3 production sites (cmd/sbctl/client.go:215, :306, internal/metrics/handlers.go:26 sentinel) with NO error-taxonomy.md v4.6 catalog row. E-RPC-010 "undefined and forbidden" clause directly contradicts the emission. Ruling-14 §10 (2026-07-01) authorized emission on the false premise "E-RPC-002 is already defined." F-P5P34-A-002 HIGH: E-RPC-003 emitted from internal/metrics/handlers.go:33 (ErrInvalidParams sentinel) with ZERO references in taxonomy v4.6. Novelty HIGH — genuinely novel taxonomy-orphan class; governance-premise-verification gap identified. **Pass 34 deltas (Adv-B):** NO_FINDINGS — 8 anti-findings. NIL novelty. Overall streak RESETS 2/3 → 0/3.
+
+**Next action (superseded by Burst 82+83):** Burst 82 spec-steward taxonomy remediation; then Pass 35 fresh-context split-adversary.
