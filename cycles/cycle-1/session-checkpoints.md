@@ -18,6 +18,31 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 89 — Pass 37 close-out
+
+**Timestamp:** 2026-07-04T18:00:00Z
+**Post-burst:** Burst 89 (state-manager — Pass 37 close-out)
+**factory_head_pre_burst_89:** 1092121
+**factory_head_post_burst_89:** TBD (consult `git -C .factory log --oneline -1` after commit)
+**phase_step_pre:** phase-5-pass-36-remediation-complete
+**phase_step_post:** phase-5-pass-37-concluded-clean-both-lanes
+**awaiting:** phase-5-pass-38-dispatch
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged)
+**streak:** 1/3
+
+**Burst 89 summary:**
+- Pass 37 Adv-A: NO_FINDINGS + 1 obs (O-P5P37-A-001 combined-footnote structural coupling at Ruling-12 §1 L1120 — upstream-filing candidate, deferred per standing directive).
+- Pass 37 Adv-B: NO_FINDINGS + 2 obs (O-P5P37-B-001 convergent with Adv-A; O-P5P37-B-002 self-adjudicated S-6.07 asymmetry by design) + 12 anti-findings.
+- BC-5.39.001 3-of-3 clean streak advances 0/3 → 1/3. Two more consecutive clean passes needed.
+- Persisted: P5-pass-37-Adv-A.md + P5-pass-37-Adv-B.md; STATE.md; sprint-state.yaml v1.66→v1.67; session-checkpoints.md.
+
+**Phase 5 trajectory:** P1→P31 (see earlier archived checkpoints) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → P37 BOTH LANES CLEAN → streak 0/3→1/3
+
+**Next action:** Dispatch Pass 38 (fresh-context split-adversary; streak advance attempt 1/3 → 2/3).
+**Preflight tuple:** develop_head=6deda15, factory_head=`git -C .factory log --oneline -1`
+
+---
+
 ## Session Resume Checkpoint (2026-07-04) — Burst 88 — Pass 36 remediation close-out
 
 **Timestamp:** 2026-07-04T14:00:00Z
