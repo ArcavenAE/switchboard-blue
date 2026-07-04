@@ -437,6 +437,104 @@ func TestSbctl_HelpFlag_ExitsZeroStdout(t *testing.T) {
 	}
 }
 
+// TestSubprocessMain_VersionFlag is the subprocess hook for
+// TestSbctl_VersionFlag_PrintsBasenameAndExitsZero.
+//
+// When SBCTL_TEST_VERSION_FLAG is set (any non-empty value), it optionally
+// rewrites os.Args[0] to SBCTL_TEST_VERSION_ARG0 (so tests can force a specific
+// invoked basename), resets flag.CommandLine so main() sees a clean state, sets
+// os.Args to [arg0, "--version"], then calls main(). main() must call
+// os.Exit(0) after printing the banner — this function never returns normally
+// in the subprocess.
+//
+// O3 (per tutorial-smoke-report-2026-07-04.md): sbctl must accept --version
+// and print "<basename> <version>" to stdout with exit 0.
+func TestSubprocessMain_VersionFlag(t *testing.T) {
+	if os.Getenv("SBCTL_TEST_VERSION_FLAG") == "" {
+		t.Skip("subprocess hook — skip in parent process")
+	}
+	// Reset flag parsing state so main()'s flag.Parse() works cleanly.
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	arg0 := os.Getenv("SBCTL_TEST_VERSION_ARG0")
+	if arg0 == "" {
+		arg0 = os.Args[0]
+	}
+	os.Args = []string{arg0, "--version"}
+	main()
+	// main() must call os.Exit(0) via the --version path; reaching here is
+	// unexpected.
+	t.Fatal("main() returned without calling os.Exit — unexpected")
+}
+
+// TestSbctl_VersionFlag_PrintsBasenameAndExitsZero verifies O3:
+//   - `sbctl --version` exits 0,
+//   - prints "<basename> <version>" to stdout,
+//   - stdout basename reflects filepath.Base(os.Args[0]) — so an alpha binary
+//     invoked as "sbctl-a" prints "sbctl-a <version>",
+//   - stderr is empty.
+//
+// RED reason: current main.go does not register a --version flag; flag.Parse
+// with flag.ExitOnError exits 2 with "flag provided but not defined: -version"
+// on stderr and empty stdout.
+func TestSbctl_VersionFlag_PrintsBasenameAndExitsZero(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		arg0    string
+		wantSub string
+	}{
+		{"default_basename", "", ""},                              // whatever the test binary is called; assert non-empty
+		{"alpha_channel", "/opt/homebrew/bin/sbctl-a", "sbctl-a"}, // O3-motivating case
+		{"canonical", "/usr/local/bin/sbctl", "sbctl"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cmd := exec.Command(os.Args[0], "-test.run=TestSubprocessMain_VersionFlag")
+			env := append(os.Environ(), "SBCTL_TEST_VERSION_FLAG=1")
+			if tc.arg0 != "" {
+				env = append(env, "SBCTL_TEST_VERSION_ARG0="+tc.arg0)
+			}
+			cmd.Env = env
+
+			var outBuf, errBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			cmd.Stderr = &errBuf
+
+			err := cmd.Run()
+			stdout := outBuf.String()
+			stderr := errBuf.String()
+
+			exitCode := 0
+			if err != nil {
+				exitErr, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatalf("subprocess execution failed with non-exit error: %v", err)
+				}
+				exitCode = exitErr.ExitCode()
+			}
+
+			if exitCode != 0 {
+				t.Errorf("O3 violated: expected exit code 0, got %d\nstdout: %q\nstderr: %q",
+					exitCode, stdout, stderr)
+			}
+			if len(stdout) == 0 {
+				t.Errorf("O3 violated: expected non-empty stdout (version banner), got empty\nstderr: %q", stderr)
+			}
+			if len(stderr) != 0 {
+				t.Errorf("O3 violated: expected empty stderr, got %d bytes: %q", len(stderr), stderr)
+			}
+			if tc.wantSub != "" && !strings.Contains(stdout, tc.wantSub) {
+				t.Errorf("O3 violated: --version stdout %q missing basename %q", stdout, tc.wantSub)
+			}
+		})
+	}
+}
+
 // TestSubprocessMain_UnknownSubcommand is the subprocess hook for
 // TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand.
 // When SBCTL_TEST_UNKNOWN_SUBCMD is set to a subcommand string, it resets

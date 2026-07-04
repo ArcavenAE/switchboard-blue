@@ -7,8 +7,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
+
+// version is overridable at build time via `-ldflags -X main.version=...`.
+// Same pattern as cmd/switchboard/main.go so operators can disambiguate
+// canonical vs alpha channel builds. Default "dev" identifies unset builds.
+var version = "dev"
 
 // defaultKeyPath is the default operator private key path (ARCH-05, interface-definitions.md).
 const defaultKeyPath = "~/.ssh/id_ed25519"
@@ -42,10 +48,19 @@ func main() {
 	key := flag.String("key", defaultKeyPath, "path to operator private key file")
 	jsonOut := flag.Bool("json", false, "machine-readable JSON output")
 	timeout := flag.Duration("timeout", defaultTimeout, "connection timeout")
+	// --version: first-touch operator ergonomics. Prints "<basename> <version>"
+	// to stdout and exits 0 (BC-2.07.002 EC-003 Ruling A analog for --version).
+	// Basename lets alpha channel builds identify themselves (e.g. "sbctl-a").
+	showVersion := flag.Bool("version", false, "print version and exit")
 	// Redirect flag usage output to stdout so --help/-h text goes to stdout
 	// and the process exits 0, per AC-012 / BC-2.07.002 EC-003 (Ruling A).
 	flag.CommandLine.SetOutput(os.Stdout)
 	flag.Parse()
+
+	if *showVersion {
+		_, _ = fmt.Fprintf(os.Stdout, "%s %s\n", filepath.Base(os.Args[0]), version)
+		os.Exit(0)
+	}
 
 	args := flag.Args()
 	if len(args) == 0 {

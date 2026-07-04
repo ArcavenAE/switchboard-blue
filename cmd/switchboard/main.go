@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/arcavenae/switchboard/internal/config"
@@ -24,16 +26,23 @@ var version = "dev"
 // The run(stdout, args) signature is established by the wave-0 stub and MUST be
 // preserved (ARCH-01 §cmd/switchboard Package Layout).
 func run(stdout io.Writer, args []string) error {
+	progName := filepath.Base(args[0])
+
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	showVersion := fs.Bool("version", false, "print version and exit")
 
 	if err := fs.Parse(args[1:]); err != nil {
+		// --help / -h: usage was already printed to stdout by fs.Parse; treat as success.
+		// BC-2.07.002 EC-003 Ruling A: --help exits 0 with no diagnostic accompaniment.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 
 	if *showVersion || fs.NArg() == 0 {
-		if _, err := fmt.Fprintf(stdout, "switchboard %s\n", version); err != nil {
+		if _, err := fmt.Fprintf(stdout, "%s %s\n", progName, version); err != nil {
 			return fmt.Errorf("write version: %w", err)
 		}
 		return nil
@@ -42,7 +51,7 @@ func run(stdout io.Writer, args []string) error {
 	subcommand := fs.Arg(0)
 	switch subcommand {
 	case "version":
-		if _, err := fmt.Fprintf(stdout, "switchboard %s\n", version); err != nil {
+		if _, err := fmt.Fprintf(stdout, "%s %s\n", progName, version); err != nil {
 			return fmt.Errorf("write version: %w", err)
 		}
 		return nil
@@ -53,6 +62,9 @@ func run(stdout io.Writer, args []string) error {
 		accessFS.SetOutput(stdout)
 		configPath := accessFS.String("config", "", "path to YAML config file")
 		if err := accessFS.Parse(fs.Args()[1:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
 			return err
 		}
 
@@ -85,6 +97,9 @@ func run(stdout io.Writer, args []string) error {
 		routerFS.SetOutput(stdout)
 		configPath := routerFS.String("config", "", "path to YAML config file")
 		if err := routerFS.Parse(fs.Args()[1:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
 			return err
 		}
 
@@ -109,6 +124,9 @@ func run(stdout io.Writer, args []string) error {
 		consoleFS.SetOutput(stdout)
 		configPath := consoleFS.String("config", "", "path to YAML config file")
 		if err := consoleFS.Parse(fs.Args()[1:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
 			return err
 		}
 
@@ -133,6 +151,9 @@ func run(stdout io.Writer, args []string) error {
 		controlFS.SetOutput(stdout)
 		configPath := controlFS.String("config", "", "path to YAML config file")
 		if err := controlFS.Parse(fs.Args()[1:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
 			return err
 		}
 
