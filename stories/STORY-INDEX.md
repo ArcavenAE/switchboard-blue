@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.79"
+version: "3.80"
 status: draft
 producer: pr-manager
-timestamp: 2026-07-03T00:00:00
-modified: 2026-07-03T00:00:00
+timestamp: 2026-07-04T00:00:00
+modified: 2026-07-04T00:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -71,7 +71,7 @@ inputDocuments:
 | S-W5.03 | Release CI version gate — assert release binary version is semver not "dev" | E-9 | unscheduled | BC-2.07.004 | deployment-operations | 2 | P1 | E | draft |
 | S-W5.04 | daemon-side paths.list / router.metrics / router.status RPC handlers and response types | E-5 | 6 | BC-2.06.001, BC-2.06.003 | quality-observability, network-management | 5 | P1 | E | merged (PR #41, 851e164) |
 | S-6.05 | SVTN destroy lifecycle: SVTNManager.Destroy + sbctl admin svtn destroy | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #61, 7fe3e29) |
-| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.13) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
+| S-6.07 | Register admin.svtn.create handler + sbctl admin svtn create CLI subcommand (v1.14) | E-6 | 6 | BC-2.07.001 | network-management | 3 | P2 | E | merged (PR #42, 446efce) |
 | S-7.01 | XOR parity FEC for single-loss recovery | E-7 | 6 | BC-2.02.007 | multipath-forwarding | 8 | P1 | PE | merged (PR #43, 5c658e7) |
 | S-7.02 | SVTN-scoped multicast session discovery | E-7 | 6 | BC-2.03.001, BC-2.03.002, BC-2.03.003 | session-discovery | 8 | P1 | PE | merged (PR #55, c54a8ad) |
 | S-7.03 | Console remote control via sbctl | E-7 | 6 | BC-2.08.001 | console-operations, network-management | 3 | P1 | PE | merged (PR #60, 7142146) |
@@ -182,6 +182,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.80 | 2026-07-04 | F-P5P36-A-001 + F-P5P36-A-002 remediation (POL-002 discipline deferred from Burst 87 spec-steward): S-6.07 row synced to v1.14 / 2026-07-04. Governance-text-only amendment to wave-6-tranche-a-scope-rulings.md + S-6.07-svtn-admin-create.md. Aggregate totals unchanged: 54 stories / 185 pts / BC 45/45 / VP 77/77. |
 | 3.79 | 2026-07-03 | F-P5P24-A-001 remediation (POL-002 + POL-001 story-mint gap): add S-BL.ADMINWIRE-EXTRACTION backlog stub (backlog v1.0; DRIFT-P5P4-ADMINWIRE-EXTRACTION; Epic E-6; P3; 2 pts; subsystems: network-management; modules: cmd/switchboard, cmd/sbctl, internal/adminwire; no BC/VP traces). Total 53→54; active backlog 10→11. |
 | 3.78 | 2026-07-03 | F-P5P23-A-001 remediation (POL-002 sibling-sweep recurrence): Bumped S-W5.04 and S-BL.LOOKUP story-file frontmatter `status:` from stale pre-merge value (`draft`) to canonical `merged` matching their STORY-INDEX Master Table rows (S-W5.04 row 72 asserts `merged (PR #41, 851e164)`; S-BL.LOOKUP row 79 asserts `merged (PR #40, eac5d0a)`). Completes the Wave-6 Tranche-A trio propagation begun at v3.44 (S-6.07 was propagated then; S-W5.04 and S-BL.LOOKUP were missed). Class: partial-fix regression per S-7.01. No BC/VP/AC changes; develop untouched. |
 | 3.77 | 2026-07-03 | F-P5P22-A-001 remediation (POL-002 sibling-sweep gap): Bumped S-1.01 and S-2.01 story-file frontmatter `status:` from stale pre-merge values (`ready` / `pending`) to canonical `completed` matching their STORY-INDEX Master Table rows. Brings S-1.01 + S-2.01 into row/header agreement per the completed-vocabulary preservation ruling from F-P5P18-A-001. No BC/VP/AC changes; develop untouched. |

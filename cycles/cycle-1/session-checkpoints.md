@@ -18,6 +18,34 @@ traces_to: STATE.md
 
 ---
 
+## Session Resume Checkpoint (2026-07-04) — Burst 88 — Pass 36 remediation close-out
+
+**Timestamp:** 2026-07-04T14:00:00Z
+**Post-burst:** Burst 88 (state-manager — P36 remediation close-out + STORY-INDEX POL-002 row-sync)
+**phase_step:** phase-5-pass-36-remediation-complete
+**awaiting:** phase-5-pass-37-dispatch
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — no code changes in Bursts 81–88 scope)
+**Factory HEAD:** consult `git -C .factory log --oneline -1`
+
+**Burst 87+88 remediation summary:**
+- Burst 87 (spec-steward): wave-6-tranche-a-scope-rulings.md v1.13→v1.14 — Ruling-12 §1 E-RPC-004→E-RPC-010 redirect (option c) at L1118; Ruling-11 §1 dated audit-trail footnotes at L1021+L1035; Ruling-12 §1+transport-exception dated audit-trail footnotes at L1120+L1129. S-6.07-svtn-admin-create.md v1.13→v1.14 — §Universality text E-RPC-004→E-RPC-010 redirect + amendment footnote. Governance-only; no BC or runtime change.
+- Burst 88 (state-manager): STORY-INDEX v3.79→v3.80 POL-002 row-sync (S-6.07 v1.13→v1.14 / 2026-07-04, deferred from Burst 87). Both DRIFT items CLOSED. sprint-state.yaml v1.65→v1.66 with pass_36_remediation block.
+
+**DRIFT items closed:**
+- DRIFT-P5P36-PHANTOM-ERPC-004 (HIGH) CLOSED — 2 sites redirected from phantom E-RPC-004 to catalog-anchored E-RPC-010.
+- DRIFT-P5P36-RULING-11-12-AUTHORSHIP-PREMISE-SIBLINGS (MED) CLOSED — 4 dated audit-trail footnotes added.
+
+**Aggregate totals (unchanged):** 54 stories / 185 pts (waves 0–6) / BC 45/45 / VP 77/77
+
+**Streak:** 0/3 (Pass 36 HAS_FINDINGS remediated; Pass 37 dispatches next as restart attempt)
+
+**Phase 5 trajectory:** P1→P31 (see earlier archived checkpoints) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 taxonomy remediation → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → Pass 37 next
+
+**Next action:** Dispatch Pass 37 (fresh-context split-adversary; streak restart attempt 0/3→1/3).
+**Preflight tuple:** develop_head=6deda15, factory_head=`git -C .factory log --oneline -1`
+
+---
+
 ## Session Resume Checkpoint (2026-07-04) — Burst 86 — Pass 36 close-out
 
 **Timestamp:** 2026-07-04T12:00:00Z
