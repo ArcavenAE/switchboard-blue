@@ -6,7 +6,7 @@
 # total_stories = 54 (per STORY-INDEX v3.79 — see that doc for authoritative enumeration of all active backlog, hardening, maintenance, draft, and won't-fix entries)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.56
+# version: 1.57
 
 cycle: cycle-1
 phase: 5
@@ -872,6 +872,18 @@ stories:
     bc_traces: [BC-2.07.002]
 
 # Changelog
+# v1.57 — 2026-07-03: Burst 76 — L196 self-reference resolution + STATE-MANAGER-SIBLING-SWEEP fifth-recurrence escalation
+#   Pass 30 PREFLIGHT_FAIL (Adv-A): F-P5P30-A-001 [HIGH POL-002] STATE.md L196 records stale ba943bf vs actual HEAD 84133b2.
+#     Root cause: Burst 75b SHA-patch advanced factory HEAD to 84133b2 without updating L196; self-reference paradox — any
+#     commit that touches L196 creates a new HEAD making the SHA unknowable at authorship time.
+#   Resolution: L196 switched from tip-SHA pattern to burst-arc-name pattern. New format references what the burst DID and
+#     instructs readers to consult `git log --oneline -3` for current tip. No follow-on SHA-token patch burst needed.
+#   STATE-MANAGER-SIBLING-SWEEP escalated to fifth instance (upgraded HIGH + severity_escalation + proposed_upstream_fix notes).
+#     Fifth-instance is first recurrence WITHIN the codification burst itself (Burst 75b recurred the pattern it was fixing).
+#     Upstream vsdd-factory issue status: READY FOR FILING (.vsdd-factory-issues-pending.md).
+#   P5-pass-30-Adv-A.md sidecar authored (PREFLIGHT_FAIL verdict; F-P5P30-A-001).
+#   No sprint-state stanza changes; checkpoint + drift-item escalation only.
+#
 # v1.56 — 2026-07-03: Pass 29 HAS_FINDINGS (Adv-A only) + [process-gap] STATE-MANAGER-SIBLING-SWEEP codified + POL-006-SWEEP-EXPAND closed
 #   F-P5P29-A-001 [HIGH POL-002 audit-trail-layer partial-fix regression]: P5-pass-27-Adv-B.md + P5-pass-28-Adv-B.md sidecars authored
 #     (Adv-B reconstructions from orchestrator adjudication records). Both fill audit-trail gap where Adv-A sidecars were created in
