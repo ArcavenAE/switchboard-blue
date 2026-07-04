@@ -1589,7 +1589,7 @@ phase5:
       - adv_b_NO_FINDINGS Method column CLEAN across 12 dual-anchor VPs + 33 single-anchor VPs = 45 BCs consistent with VP-INDEX v2.36 (closes POL-006-SWEEP-EXPAND drift item — all 4 dual-anchor-derived columns now verified clean)
       - process_gap STATE-MANAGER-SIBLING-SWEEP codified as three-consecutive-pass systemic pattern; recommendation filed on vsdd-factory tracker (.vsdd-factory-issues-pending.md)
     remediation_commits:
-      - Burst-75-sha  # Burst 75: 2 Adv-B sidecars authored + STATE.md checkpoint refresh + sprint-state v1.56 pass_29: block + STATE-MANAGER-SIBLING-SWEEP drift item + POL-006-SWEEP-EXPAND closure
+      - ba943bf  # Burst 75: 2 Adv-B sidecars authored + STATE.md checkpoint refresh + sprint-state v1.56 pass_29: block + STATE-MANAGER-SIBLING-SWEEP drift item + POL-006-SWEEP-EXPAND closure
     streak_after: 0
     lane_b_streak_after: 1
     process_gap: true
