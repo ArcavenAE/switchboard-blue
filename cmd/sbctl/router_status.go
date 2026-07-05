@@ -23,6 +23,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -162,6 +163,16 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	defer func() { _ = netConn.Close() }()
 
 	if err = Authenticate(ctx, netConn, privKey); err != nil {
+		// S502-DEFER-1: BC-2.07.003 Inv-2 — a timeout during auth is "unreachable"
+		// (E-NET-001), not an auth failure.  Mirror connectAndRun's discrimination
+		// (client.go:377-381) so `router status` behaves identically to `paths list`
+		// at the alias boundary (BC-2.06.003 PC-3 + EC-005: one code path).
+		// AUTH_FAIL from the daemon still maps to E-ADM-010 (BC-2.07.002 PC-4).
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			msg := fmt.Sprintf("daemon unreachable: %s: connection timed out", target)
+			return writeError(useJSON, "E-NET-001", msg, sio)
+		}
 		_ = writeError(useJSON, "E-ADM-010", "authentication failed", sio)
 		return reported(err)
 	}

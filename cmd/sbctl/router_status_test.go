@@ -866,6 +866,110 @@ func TestSbctlRouterStatus_DaemonUnreachable(t *testing.T) {
 	}
 }
 
+// ─── S502-DEFER-1 (MED): runRouterStatus auth-timeout → E-NET-001 (parity with connectAndRun) ──
+
+// TestSbctlRouterStatus_AuthTimeoutReportsENET001 verifies that when the daemon
+// accepts the TCP connection but stalls during Authenticate() until the caller's
+// context deadline fires, runRouterStatus reports E-NET-001 (transport timeout —
+// treated as "unreachable" per BC-2.07.003 Inv-2), NOT E-ADM-010 (authentication
+// failed).
+//
+// connectAndRun already discriminates net.Error.Timeout() → E-NET-001 at
+// client.go:377-381; runPathsList inherits that behaviour.  runRouterStatus
+// inlines its own dial+auth+dispatch and previously mapped any Authenticate
+// error unconditionally to E-ADM-010, misclassifying auth-window timeouts as
+// authentication failures and diverging from the paths.list alias contract
+// (BC-2.06.003 PC-3 + EC-005: "one code path in the underlying query layer").
+//
+// RED (S502-DEFER-1): current code emits E-ADM-010 on this stall path.
+// Test must pass once the discrimination is mirrored from connectAndRun.
+//
+// Traces to S502-DEFER-1; BC-2.07.003 Inv-2; BC-2.06.003 PC-3.
+func TestSbctlRouterStatus_AuthTimeoutReportsENET001(t *testing.T) {
+	t.Parallel()
+
+	// TCP listener that accepts but never writes the AUTH challenge —
+	// forces Authenticate() to hit its SetReadDeadline (derived from ctx).
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	// Accept and hold; no read/write so the client is stuck at first Decode.
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				// Block until listener is closed (test cleanup) — no I/O.
+				select {}
+			}(conn)
+		}
+	}()
+
+	// Short context deadline: must fire during Authenticate's read.
+	const authBudget = 200 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), authBudget)
+	defer cancel()
+
+	sio, _, getErr := newTestIO()
+
+	start := time.Now()
+	err = runRouterStatus(ctx, ln.Addr().String(), testdataKeyPath(t), true,
+		[]string{}, sio)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("S502-DEFER-1: runRouterStatus returned nil on stalled auth; expected non-nil error")
+	}
+
+	// Must classify the timeout as unreachable (E-NET-001), matching connectAndRun.
+	stderr := getErr()
+	if strings.Contains(stderr, "E-ADM-010") {
+		t.Errorf("S502-DEFER-1: stderr must NOT contain \"E-ADM-010\" for a network "+
+			"timeout during Authenticate — this is the alias-parity gap with "+
+			"connectAndRun (client.go:377-381).\nstderr: %q\nerr: %v",
+			stderr, err)
+	}
+	if !strings.Contains(stderr, "E-NET-001") {
+		t.Errorf("S502-DEFER-1: stderr must contain \"E-NET-001\" for an auth-window "+
+			"timeout (BC-2.07.003 Inv-2 + connectAndRun parity).\nstderr: %q\nerr: %v",
+			stderr, err)
+	}
+
+	// The JSON envelope must be parseable, single-print contract preserved.
+	if trimmed := strings.TrimSpace(stderr); len(trimmed) > 0 {
+		var env struct {
+			OK    bool `json:"ok"`
+			Error *struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if parseErr := json.Unmarshal([]byte(trimmed), &env); parseErr != nil {
+			t.Errorf("S502-DEFER-1: stderr must be valid JSON (S-6.05 single-print): "+
+				"%v\nraw: %q", parseErr, stderr)
+		} else if env.Error == nil || env.Error.Code != "E-NET-001" {
+			t.Errorf("S502-DEFER-1: stderr JSON error.code must be \"E-NET-001\"; "+
+				"got %+v", env.Error)
+		}
+	}
+
+	// Elapsed must be within a small multiple of the budget — proves the client
+	// actually waited on the network and did not fail earlier at key load.
+	if elapsed < authBudget-50*time.Millisecond {
+		t.Errorf("S502-DEFER-1: elapsed %v < budget %v — timeout did not fire on the "+
+			"network read (auth actually attempted?)", elapsed, authBudget)
+	}
+	if elapsed > authBudget+2*time.Second {
+		t.Errorf("S502-DEFER-1: elapsed %v exceeds budget %v by more than 2s — "+
+			"single-timeout-budget contract violated", elapsed, authBudget)
+	}
+}
+
 // ─── F-H3 (HIGH): both commands invoke paths.list RPC, identical PathEntry payload ──
 
 // startRecordingDaemon starts a stub daemon that records the RPC method name
