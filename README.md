@@ -64,6 +64,38 @@ published — see the source build below.)
 > channel; the shared tap slot for canonical stable is reserved as
 > `switchboard`.
 
+### Install with mise
+
+[mise](https://mise.jdx.dev/) is a polyglot version manager. It reads a per-project `mise.toml`, pulls the exact signed binary from GitHub Releases, and verifies GitHub Artifact Attestations natively — no Homebrew tap required.
+
+`switchboard-blue` is a legion / spike clone; **all published channels are alpha** (the canonical stable slot is reserved for `ArcavenAE/switchboard`). A stable-shape release candidate (`v0.1.0-rc.1`) also exists on this repo for internal reference; installing `@latest` today will resolve to it.
+
+**Stable-shape release candidate** — internal reference build, binary installs as `switchboard`:
+
+```bash
+mise use github:ArcavenAE/switchboard-blue@latest
+switchboard --version
+```
+
+**Alpha channel** (prereleases from `develop`) — pin a specific `alpha-*` tag and set `prerelease = true`. The alpha release ships both the `switchboard-a` daemon and the `sbctl-a` operator CLI, but mise picks a single asset per install (alphabetically first — `sbctl-a-*` wins over `switchboard-a-*`), so the shim mise creates is `sbctl-a`. Users who want the daemon binary via mise should install it via the Homebrew alpha channel above; mise-only installers get the operator CLI.
+
+```toml
+# mise.toml — pin a specific alpha tag (see GitHub Releases for the latest)
+[tools]
+"github:ArcavenAE/switchboard-blue" = { version = "alpha-YYYYMMDD-HHMMSS-<sha>", prerelease = true }
+```
+
+```bash
+mise install
+sbctl-a --version
+```
+
+**macOS troubleshooting** — mise downloads over HTTP libraries that do not set `com.apple.quarantine`, so notarized binaries launch without a Gatekeeper prompt in the common case. If a quarantine-aware host propagates the xattr into the mise install, clear it once:
+
+```bash
+xattr -d com.apple.quarantine "$(mise which sbctl-a)"
+```
+
 ### Build from source
 
 Go 1.25+ and [just](https://github.com/casey/just) required:
