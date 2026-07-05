@@ -55,8 +55,66 @@ This project is part of the [Arcaven Agentic Engineering](https://github.com/Arc
    just fmt
    just lint
    just test
+   just smoke-quick
    ```
-4. Create a PR using the PR template
+4. Create a PR using the PR template — fill in the **Blast Radius** block (see below).
+
+### Blast radius
+
+Every PR body carries a `## Blast Radius` section with three answers. A
+CI check (`Blast Radius / Declaration present`) fails the PR if the
+section is missing or every answer is empty. Copy the template from
+[`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
+
+**Why this exists.** On 2026-07-04 a tutorial-walk smoke caught four
+operator-boundary regressions (`--help` printing a diagnostic to stderr,
+`sbctl --version` flag missing, version banner hard-coded to a literal,
+sbctl-a packaged with ldflags unwired) in a single afternoon. Each had
+shipped through the quality gate; each was a "one-line change" that
+looked mechanical in review. The sentinel smoke gate
+([`test/smoke/invariants.sh`](test/smoke/invariants.sh)) now guards the
+specific defect classes we know about. This block guards the class of
+regressions we don't yet know about.
+
+**The three prompts, and how to answer each:**
+
+1. **Operator-visible surfaces touched.** Anything a user, operator, or
+   downstream automation reads by name — CLI flags, subcommand output,
+   `--help`/`--version` banners, config-file schemas, wire frame layouts,
+   error taxonomy strings, log format, path metric emissions,
+   `docs/getting-started.md` steps. Answer "none" only if this is a
+   truly internal refactor with no reachable behaviour change.
+
+2. **Silent-failure risk.** Could this ship a defect the current test
+   suite does NOT catch? Cite the classes of regression that would slip
+   through — e.g. *"banner reads 'dev' in packaged binary because
+   ldflags not wired to the release recipe"*, *"help prints to stderr
+   with exit 1 instead of stdout with exit 0"*, *"`sbctl <sub> --help`
+   opens a socket before parsing"*. Answer "none" only if every
+   reachable defect class is unit-covered.
+
+3. **Smoke gate touched.** Does this PR add, change, or need a NEW
+   sentinel in `test/smoke/invariants.sh`? If yes, cite the `INV-*` id
+   and confirm the paired `docs/architecture.md §Smoke invariants` row
+   is included in this diff. If no, say "no."
+
+**What good answers look like.** "This changes `sbctl paths list` output
+to add an `rtt_p95_ms` column. Silent-failure risk: existing tests
+cover the column names but not the emission format for pending metrics
+(BC-2.06.003 EC-003 sentinel `pending`). Adds INV-9 covering `sbctl
+paths list --format=json` shape; paired docs row included." — three
+sentences, three specific answers, no theatre.
+
+**What bad answers look like.** "*TBD*." "*none*" across all three
+prompts on a PR that changes a wire frame. "*just a small refactor*"
+followed by 400 lines of diff touching admission code. The reviewer
+will ask you to redo the block. The bot will ask you to redo the block.
+
+**When "none" is the right answer.** Renaming an internal-only helper.
+Rearranging test setup. Bumping a dev-only dependency. Editing a
+comment. Adding a `_kos/` node or `_bmad-output/` artifact. If the code
+you're touching cannot be reached by an operator command or a wire
+peer, "none" is honest.
 
 ### Commit Message Format
 
