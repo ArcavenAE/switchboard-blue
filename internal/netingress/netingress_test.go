@@ -267,7 +267,7 @@ func TestServeConn_DispatchesFramesUntilEOF(t *testing.T) {
 	t.Parallel()
 	// Simulate a conn by using net.Pipe.
 	client, server := net.Pipe()
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	rec := &recorder{}
 	logger := &captureLogger{}
@@ -292,7 +292,7 @@ func TestServeConn_DispatchesFramesUntilEOF(t *testing.T) {
 	waitFor(t, 2*time.Second, func() bool { return rec.count() == 3 }, "three frames dispatched")
 
 	// Close client → server side sees EOF → ServeConn returns nil.
-	client.Close()
+	_ = client.Close()
 
 	select {
 	case err := <-done:
@@ -329,7 +329,7 @@ func TestServeConn_CtxCancelReturns(t *testing.T) {
 func TestServeConn_RouteErrorDoesNotDropConnection(t *testing.T) {
 	t.Parallel()
 	client, server := net.Pipe()
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	rec := &recorder{errOn: 1} // first frame returns error
 	done := make(chan error, 1)
@@ -348,7 +348,7 @@ func TestServeConn_RouteErrorDoesNotDropConnection(t *testing.T) {
 
 	waitFor(t, 2*time.Second, func() bool { return rec.count() == 2 }, "both frames dispatched despite route error")
 
-	client.Close()
+	_ = client.Close()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -359,7 +359,7 @@ func TestServeConn_RouteErrorDoesNotDropConnection(t *testing.T) {
 func TestServeConn_MalformedFrameDropsConnection(t *testing.T) {
 	t.Parallel()
 	client, server := net.Pipe()
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	rec := &recorder{}
 	logger := &captureLogger{}
@@ -413,10 +413,10 @@ func TestServe_AcceptsMultipleConnectionsAndJoinsOnCtxCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	var routed atomic.Int64
-	route := func(frame.OuterHeader, []byte) error {
+	route := func(frame.OuterHeader, []byte) error { //nolint:unparam // matches RouteFn signature; test route never fails
 		routed.Add(1)
 		return nil
 	}
@@ -449,8 +449,8 @@ func TestServe_AcceptsMultipleConnectionsAndJoinsOnCtxCancel(t *testing.T) {
 
 	waitFor(t, 2*time.Second, func() bool { return routed.Load() == 2 }, "two frames routed")
 
-	c1.Close()
-	c2.Close()
+	_ = c1.Close()
+	_ = c2.Close()
 
 	cancel()
 

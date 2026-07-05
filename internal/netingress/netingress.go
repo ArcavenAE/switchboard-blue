@@ -199,7 +199,7 @@ func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger) e
 		go func(c net.Conn) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 			_ = ServeConn(ctx, c, route, logger)
 		}(conn)
 	}

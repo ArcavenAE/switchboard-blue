@@ -120,7 +120,7 @@ func TestIntegration_EADM017_FiresThroughLiveIngress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	// Send five frames from the same source. No forwarding entry exists →
 	// every frame drops via ErrHMACVerificationFailed PATH-A → counter++.
@@ -165,7 +165,7 @@ func TestIntegration_EADM017_FiresThroughLiveIngress(t *testing.T) {
 	}
 
 	// Shutdown.
-	c.Close()
+	_ = c.Close()
 	cancel()
 
 	select {
@@ -249,7 +249,7 @@ func TestIntegration_ConcurrentRegisterAndRouteRaceClean(t *testing.T) {
 			if err != nil {
 				return // shutdown race is OK
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			for i := 0; ; i++ {
 				select {
 				case <-stop:
