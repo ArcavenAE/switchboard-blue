@@ -369,6 +369,25 @@ func TestProductionMain_UsageErrors_ExitTwo(t *testing.T) {
 			wantStderrSubstr: "E-CFG-010",
 			findingID:        "F-P5P7-A-003",
 		},
+		{
+			// Case 13: `sbctl router status --target=` (empty value after equals).
+			// DRIFT-P5P7-O1; interface-definitions.md v1.19 §80-81.
+			// The manual --target scanner in router_status.go handles the
+			// `--target <value>` form (case 12) via a slice bounds check; the
+			// `--target=<value>` form is handled via strings.TrimPrefix which
+			// yields the empty string when the operator writes `--target=`.
+			// SPEC-3 covers this at the binary level; this Go-level case pins
+			// the exact scanner path so future refactors of the manual scan
+			// don't regress it.  Daemon-free (usage validation fires pre-dial).
+			name: "router_status_target_empty_after_equals",
+			args: []string{
+				"--target", target, "--key", keyPath,
+				"router", "status", "--target=",
+			},
+			wantExitCode:     2,
+			wantStderrSubstr: "E-CFG-010",
+			findingID:        "DRIFT-P5P7-O1",
+		},
 	}
 
 	for _, tc := range cases {
