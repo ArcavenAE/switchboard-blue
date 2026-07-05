@@ -7,12 +7,14 @@
 # tutorial's example router config omitted tick_interval and shipped
 # broken.
 #
-# NOTE — this tier is EXPECTED TO FAIL until task #144 (router mode
-# implementation) lands. Section 2 of the tutorial invokes
-# `switchboard router --config …`; runRouter currently returns
-# "runRouter: not implemented". This script distinguishes "known #144
-# failure" (exit 3) from "real regression" (exit 1) so CI and reviewers
-# can tell the difference.
+# S-BL.ROUTER-RUNTIME (task #144 successor) landed: runRouter now starts
+# a real management server + data-plane listener. This harness therefore
+# runs the router invocation for real, but rewrites both `management_socket`
+# and `listen_addr` in the extracted YAML to tmpdir- and ephemeral-port-
+# scoped values so that the tutorial's literal `/run/…` and `0.0.0.0:9090`
+# don't require root or clash with common local listeners (Prometheus,
+# OrbStack, etc.). The substitutions preserve the tutorial's config *shape*
+# — the property under test — while making the harness portable.
 #
 # Assertion style (per task #176 spec):
 #   - exit codes only where the tutorial states them
@@ -24,7 +26,7 @@
 #   0 — every extractable block ran and every assertion passed
 #   1 — an unexpected failure occurred (regression — investigate)
 #   2 — harness broken (binaries missing, doc missing)
-#   3 — known task #144 failure at Section 2 (expected until #144 lands)
+#   3 — reserved for a re-emergent known expected-fail; currently unused
 
 set -euo pipefail
 
@@ -118,12 +120,23 @@ if [[ ! -s "${ROUTER_YAML}" ]]; then
 else
   emit T3-2-extract PASS "extracted router yaml ($(wc -c <"${ROUTER_YAML}" | tr -d ' ') bytes)"
 
-  # Rewrite management_socket to a tmpdir path so we don't need root.
-  # The tutorial ships "/run/switchboard-router.sock" which is
-  # unwritable in test environments; a substitution here is legitimate
-  # because we're testing the config *shape*, not the deployment path.
+  # Rewrite management_socket to a tmpdir path so we don't need root, and
+  # rewrite listen_addr to a loopback ephemeral port so the harness doesn't
+  # clash with anything already bound on the local 9090 (Prometheus,
+  # OrbStack, etc.). The tutorial ships "/run/switchboard-router.sock" and
+  # "0.0.0.0:9090" verbatim; both substitutions are legitimate because
+  # we're testing the config *shape*, not the deployment path.
+  #
+  # Pick a random high port in the 40000-49999 range for listen_addr —
+  # cfg.Validate accepts any valid host:port, so the port number is not
+  # under test. A pre-bind/close probe would be tighter but bash without
+  # netcat is not portable enough for smoke; the random range keeps
+  # collision probability negligible.
   ROUTER_YAML_FIXED="${SMOKE_TMPDIR}/router-fixed.yaml"
-  sed 's|"/run/switchboard-router.sock"|"'"${SMOKE_TMPDIR}"'/tut-router.sock"|' \
+  LISTEN_PORT="$(( 40000 + RANDOM % 10000 ))"
+  sed \
+    -e 's|"/run/switchboard-router.sock"|"'"${SMOKE_TMPDIR}"'/tut-router.sock"|' \
+    -e 's|"0.0.0.0:9090"|"127.0.0.1:'"${LISTEN_PORT}"'"|' \
     "${ROUTER_YAML}" >"${ROUTER_YAML_FIXED}"
 
   set +e
@@ -149,8 +162,9 @@ else
     emit T3-2-config UNEXPECTED "tutorial router config leaked E-CFG-*: '${t3_log:0:200}'"
   fi
 
-  # Now attempt the actual `switchboard router` invocation. This is the
-  # "expected fail until #144" gate.
+  # Now attempt the actual `switchboard router` invocation. Since
+  # S-BL.ROUTER-RUNTIME landed (task #144 successor), this MUST bind and
+  # exit cleanly (0 or 143) — a "not implemented" return is a regression.
   set +e
   "${BIN_SWITCHBOARD}" router --config "${ROUTER_YAML_FIXED}" >"${SMOKE_TMPDIR}/t3-2-router.log" 2>&1 &
   t3r_pid=$!
@@ -168,10 +182,11 @@ else
   t3r_log="$(cat "${SMOKE_TMPDIR}/t3-2-router.log" 2>/dev/null || true)"
 
   if [[ "${t3r_log}" == *"runRouter: not implemented"* || "${t3r_log}" == *"not implemented"* ]]; then
-    emit T3-2-router EXPECTED_FAIL "task #144 gate: runRouter returned 'not implemented' (exit=${t3r_exit})"
+    # If this fires it means someone reverted the router runtime — real
+    # regression, not an expected-fail.
+    emit T3-2-router UNEXPECTED "runRouter regressed to 'not implemented' (exit=${t3r_exit}); S-BL.ROUTER-RUNTIME landing was reverted?"
   elif [[ "${t3r_exit}" -eq 0 || "${t3r_exit}" -eq 143 ]]; then
-    # Router became implemented and shut down cleanly.
-    emit T3-2-router PASS "router started and shut down cleanly (exit=${t3r_exit}); task #144 appears to have landed — remove the expected-fail once verified"
+    emit T3-2-router PASS "router started and shut down cleanly (exit=${t3r_exit})"
   else
     emit T3-2-router UNEXPECTED "router exited with unexpected shape: exit=${t3r_exit} log='${t3r_log:0:200}'"
   fi
@@ -205,8 +220,8 @@ printf 'Report artifact: %s\n' "${REPORT}"
 # Exit-code contract per task #176:
 #   0 — clean pass (every extractable block passed, no expected-fails)
 #   1 — real regression (an UNEXPECTED failure)
-#   3 — known task #144 failure at Section 2 (expected — CI should
-#       currently expect exit 3)
+#   3 — reserved for a future re-emergent known expected-fail; currently unused
+#       (S-BL.ROUTER-RUNTIME landed, so T3-2-router is no longer expected to fail)
 if [[ "${UNEXPECTED_FAIL}" -gt 0 ]]; then
   printf '\nUnexpected failures:\n'
   for id in "${UNEXPECTED_IDS[@]}"; do
@@ -215,8 +230,7 @@ if [[ "${UNEXPECTED_FAIL}" -gt 0 ]]; then
   exit 1
 fi
 if [[ "${EXPECTED_FAIL}" -gt 0 ]]; then
-  printf '\nExpected failures present — exit 3 to signal known task #144 gap.\n'
-  printf 'When #144 lands, T3-2-router should flip to PASS and this exits 0.\n'
+  printf '\nExpected failures present — exit 3.\n'
   exit 3
 fi
 exit 0

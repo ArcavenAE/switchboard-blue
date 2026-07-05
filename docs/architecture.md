@@ -235,7 +235,7 @@ Tier 1 <10s, Tier 2 ~30s, Tier 3 ~10s.
 |---|---|---|---|---|
 | 1 | `just smoke-quick` | Every PR (Quality Gate job) | `test/smoke/invariants.sh` | <10s |
 | 2 | `just smoke` | Nightly + on-demand | `test/smoke/tier2-daemon.sh` | ~30s |
-| 3 | `just smoke-tutorial` | Nightly (expected-fail until #144) | `test/smoke/tier3-tutorial.sh` | ~10s |
+| 3 | `just smoke-tutorial` | Nightly + on-demand | `test/smoke/tier3-tutorial.sh` | ~10s |
 
 Tier 1 is the sentinel gate (INV-1..INV-10) — cheap enough to run on
 every PR, catches operator-boundary regressions before they merge.
@@ -265,10 +265,9 @@ blocks — regression harness for the drift class caught in task #171.
    missing, tmpdir unwritable). CI distinguishes "smoke found a bug"
    from "smoke can't run."
 6. **Exit codes (Tier 3).** `0` = clean pass, no expected-fails. `1` =
-   unexpected regression. `2` = harness broken. `3` = known task #144
-   gap present (expected-fail on `runRouter: not implemented`). CI
-   currently expects Tier 3 to exit 3; when #144 lands the expected
-   exit becomes 0.
+   unexpected regression. `2` = harness broken. `3` = reserved for a
+   future re-emergent expected-fail; currently unused, since
+   S-BL.ROUTER-RUNTIME landed and no known Tier-3 gates remain open.
 7. **Degrade explicitly.** When a probe cannot be established, tiers
    emit `TIER<N>-SKIP` with a reason string rather than inventing a
    fake pass or a bare `sleep 1`. SKIPs are visible in the JSONL
@@ -320,7 +319,7 @@ asserts the shared main.go signal-handling and config-load path.
 |---|---|---|
 | T3-2-extract | Router yaml block is extractable from §2 by literal awk pattern | Documentation-format regression — someone edits the tutorial to use a code fence variant awk can't find |
 | T3-2-config | Extracted tutorial router config parse+validates cleanly (no `E-CFG-*` on stderr) | task #171 drift class at the *tutorial* boundary — the config in the doc must actually work, not just look like it works |
-| T3-2-router | `switchboard router --config <tutorial-config>` runs to shutdown, OR reports "not implemented" (**expected-fail until task #144 lands**) | Router implementation regression once #144 ships; today an expected fail, so the sentinel signal doesn't drown |
+| T3-2-router | `switchboard router --config <tutorial-config>` binds mgmt socket + data listener and shuts down cleanly on SIGTERM (S-BL.ROUTER-RUNTIME). A regression to "not implemented" now fails the tier | Router runtime regression — the story replaced the "not implemented" stub with a real mgmt-plane + data-listener wiring; the tier guards against a revert |
 | T3-4-taxonomy | `sbctl` with no target/auth exits non-zero with a taxonomy message, no Go panic | The "Common pitfalls" section's promise that every error carries a stable code |
 
 Summary line format: `Tier 3: <N> passed, <M> expected-failed, <K> unexpected-failed`.
@@ -345,8 +344,9 @@ behavioral only, never cosmetic.
 Expected-fail entries carry `expected_fail: "<issue> — <reason>"`. A
 failing expected-fail reports XFAIL and does not fail the run; a
 *passing* expected-fail reports XPASS and FAILS the run — the fixing
-PR must remove the annotation (same discipline as Tier 3's #144
-gate). SPEC-2/SPEC-4 are expected-fail on issue #89 (error-path
+PR must remove the annotation (same discipline that closed the
+Tier 3 #144 gate once S-BL.ROUTER-RUNTIME landed). SPEC-2/SPEC-4 are
+expected-fail on issue #89 (error-path
 double-print breaks whole-stream JSON parse) — found by this
 harness's first run, which is the validation the pattern needed.
 
