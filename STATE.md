@@ -27,13 +27,13 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 6deda15
+develop_head: b4507d6
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: phase-6-dispatch
 historical_cycles: []
-timestamp: 2026-07-04T22:00:00Z
-last_update: 2026-07-04
+timestamp: 2026-07-05T19:30:00Z
+last_update: 2026-07-05
 ---
 
 # Switchboard Factory State
@@ -101,9 +101,9 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | SW502-DEFER-1..8 | LOW | S-W5.02 CR-002/005-009 + SEC-001/002. Detail: `cycles/cycle-1/closed-drift.md`. | implementer/test-writer | deferred wave-6 / phase-5 |
 | PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep at BC/VP bumps. | orchestrator | policy-registry-update |
 | PROCESS-GAP-STORY-INDEX-SUMMARY-SWEEP | OBS | [process-gap] STORY-INDEX aggregate rollups must sweep atomically on section moves (F-P2L3-M1). | orchestrator/story-writer | codify |
-| S-7.01 CR-001/004/005/006/007 | LOW/nit | Post-merge deferrals filed as switchboard-blue #44–#48. | implementer | issues filed |
-| S-7.02 Pass-10 O-1/O-2/O-3/nit | LOW/nit | Advertise() no-validate; nameLen==0 asymmetry; uint16 truncation; HMAC-tag comment. Issues #49–#52. | implementer | issues filed |
-| S-BL.ROUTER-ADDR L-1/L-2 | LOW | PathEntryFromSnapshot param redundancy; sbctl PathEntry drift. Issues #53–#54. | implementer | issues filed |
+| S-7.01 CR-001/004/005/006/007 | LOW/nit | CLOSED 2026-07-05 — issues #44–#48 fixed+merged PR #85 (2c3b60d): ErrMissingParity nil-parity guard, ParityFrameType functional constant, encodeGroup guard, t.Cleanup removal, atomic.Int64 counters. | implementer | CLOSED |
+| S-7.02 Pass-10 O-1/O-2/O-3/nit | LOW/nit | CLOSED 2026-07-05 — issues #49–#52 fixed+merged PR #86 (248ebb1): Advertise validation confirmed pre-existing + regression-locked; nameLen==0 fail-closed; ErrTooManySessions overflow guard; HMAC comment corrected. | implementer | CLOSED |
+| S-BL.ROUTER-ADDR L-1/L-2 | LOW | CLOSED 2026-07-05 — issues #53–#54 fixed+merged PR #87 (ecf91f0): routerAddr param dropped (snap.RouterAddr authoritative); sbctl PathEntry unified on metrics.RTTValue. | implementer | CLOSED |
 | PROCESS-GAP-POL-001-INDEX | OBS | [process-gap] POL-001 scope unclear for INDEX artifacts. vsdd-factory#407 filed. | orchestrator | codify |
 | PROCESS-GAP-FORCE-PUSH | HIGH | [process-gap] pr-manager reached for rebase+force-push over gh pr update-branch. vsdd-factory#408 + switchboard-blue#57 filed. | orchestrator/pr-manager | playbook fix upstream |
 | PROCESS-GAP-DEMO-TAPE-PATHS | OBS | [process-gap] demo-recorder emits `.tape` files with hardcoded absolute worktree paths; local fix applied (25 files, PR #59/cdb2b66); upstream drbothen/vsdd-factory#418 filed for template fix. | orchestrator/demo-recorder | upstream fix pending |
