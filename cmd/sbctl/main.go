@@ -67,6 +67,30 @@ func reported(err error) error {
 	return &reportedError{err: err}
 }
 
+// internalError wraps an error that signals an unrecoverable CLI internal
+// failure — currently the sole trigger is a json.Marshal failure on the
+// success envelope itself (writeSuccess).  main() maps *internalError →
+// os.Exit(3), preserving the exit-3 contract that previously lived inline
+// in writeSuccess before S502-DEFER-2 relocated it (go.md: "no os.Exit
+// outside main()").
+//
+// The stderr diagnostic is emitted at the point of failure by the caller;
+// this wrapper only carries the exit-code intent through the return path.
+type internalError struct {
+	err error
+}
+
+func (e *internalError) Error() string { return e.err.Error() }
+func (e *internalError) Unwrap() error { return e.err }
+
+// internal wraps err as an unrecoverable internal failure.
+func internal(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &internalError{err: err}
+}
+
 func main() {
 	// Global flags per interface-definitions.md §sbctl operator CLI and AC-006/AC-007.
 	target := flag.String("target", defaultTarget, "daemon address (host:port or unix socket path)")
@@ -146,9 +170,18 @@ func main() {
 		// error was already reported to stderr at the call site. This is
 		// the single-print contract — stderr on the error path is
 		// exactly one envelope (--json) or one taxonomy line (plain).
+		// *internalError also carries its own diagnostic (writeSuccess
+		// emits "marshal error: ..." before returning), so we skip the
+		// re-print for both wrappers.
 		var re *reportedError
-		if !errors.As(err, &re) {
+		var ie *internalError
+		if !errors.As(err, &re) && !errors.As(err, &ie) {
 			fmt.Fprintf(os.Stderr, "%s\n", err)
+		}
+		// Exit-code precedence: internalError (3) > usageError (2) > default (1).
+		// S502-DEFER-2: exit-3 mapping moved out of writeSuccess (go.md).
+		if errors.As(err, &ie) {
+			os.Exit(3)
 		}
 		var ue *usageError
 		if errors.As(err, &ue) {
@@ -183,18 +216,26 @@ func runSessions(ctx context.Context, target, keyPath string, useJSON bool, args
 
 // writeSuccess writes a success JSON envelope to sio.out when --json is set,
 // or the raw data bytes otherwise.
-func writeSuccess(useJSON bool, data json.RawMessage, sio sbctlIO) {
+//
+// Returns nil on success.  On json.Marshal failure (only reachable via a
+// malformed json.RawMessage from upstream), writes a diagnostic to sio.err
+// and returns an *internalError sentinel — main() maps this to exit 3.
+//
+// S502-DEFER-2: previously called os.Exit(3) inline, violating go.md rule
+// "no os.Exit outside main()".  Exit-3 semantics preserved via the sentinel.
+func writeSuccess(useJSON bool, data json.RawMessage, sio sbctlIO) error {
 	if useJSON {
 		env := newSuccessEnvelope(data)
 		out, err := json.Marshal(env)
 		if err != nil {
 			_, _ = fmt.Fprintf(sio.err, "marshal error: %s\n", err)
-			os.Exit(3)
+			return internal(fmt.Errorf("marshal success envelope: %w", err))
 		}
 		_, _ = fmt.Fprintln(sio.out, string(out))
-		return
+		return nil
 	}
 	_, _ = fmt.Fprintln(sio.out, string(data))
+	return nil
 }
 
 // writeError writes a failure JSON envelope to sio.err when --json is set,

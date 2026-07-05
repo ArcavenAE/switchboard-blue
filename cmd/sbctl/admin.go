@@ -397,7 +397,12 @@ func runDestroyConfirmGate(cmdName, confirmVal string, yes bool, targetFlag stri
 	}
 	line = strings.TrimRight(line, "\r\n ")
 	if !confirmSVTNShortIDValid(line) {
-		return fmt.Errorf("interactive confirmation failed: expected SVTN-<8 lowercase hex characters>, got: %q", line)
+		// DRIFT-P5P7-O4: classify as *usageError (exit 2) — same class as the
+		// Path 1 --confirm shape mismatch above.  Both paths validate an
+		// operator-supplied value against confirmSVTNShortIDValid; classifying
+		// only one as usage-class was drift.  interface-definitions.md v1.18
+		// §174 lists "type constraint violation" as an exit-2 reason.
+		return usageErrf("interactive confirmation failed: expected SVTN-<8 lowercase hex characters>, got: %q", line)
 	}
 	return nil
 }

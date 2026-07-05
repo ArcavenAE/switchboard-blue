@@ -392,6 +392,5 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 		return reported(err)
 	}
 
-	writeSuccess(useJSON, data, sio)
-	return nil
+	return writeSuccess(useJSON, data, sio)
 }
