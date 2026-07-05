@@ -1,14 +1,15 @@
 ---
 artifact_id: factory-policies
 document_type: policy-registry
-version: "1.2"
+version: "1.3"
 status: active
 producer: spec-steward
-timestamp: 2026-07-01T00:00:00
+timestamp: 2026-07-04T00:00:00
 modified:
   - 2026-07-01T00:00:00 # v1.0 — initial creation (task #21): changelog-completeness policy authored to address recurring process gap where version-frontmatter bumps were committed without a matching changelog row (surfaced by F-P5L3R-01 through F-P5L3R-05 Pass-6 L3 findings).
   - 2026-07-01T00:00:00 # v1.1 — add POL-002 story-index-row-sync (Ruling-11): STORY-INDEX status-cell drift discovered in S-W5.04 Pass-7 Lens-3 (F-P6L3-IMPORTANT-01); policy formalizes obligation to sync STORY-INDEX row in same fix-burst as story frontmatter bump.
   - 2026-07-01T00:00:00 # v1.2 — restructure POL-002 to canonical field schema (Ruling-12 §4, F-P7L3R2-03): align POL-002 fields to POL-001 schema (id, title, severity, scope, rule, rationale, enforcement, examples); remove non-standard `name:` and `description:` fields.
+  - 2026-07-04T00:00:00 # v1.3 — add POL-004 no-binary-demo-artifacts (advisory): vsdd-factory:demo-recorder hardcodes VHS→GIF/WebM output with no built-in disable knob; 62 tracked binaries (~12.3 MB) accumulated under docs/demo-evidence/ across Wave-6 and Phase-3 backfill. Project convention: .tape scripts + evidence-report.md only; rendered binaries gitignored. See docs/DEMO-EVIDENCE-POLICY.md. Upstream defect (drbothen/vsdd-factory) requesting a `demo_artifact_format` project-manifest knob pending. POL-003 slot reserved for the candidate BC/VP-story-row-version-sync policy (not yet ratified).
 
 # Factory Policies
 # Governance rules enforced by spec-steward across all .factory/ artifacts.
@@ -54,6 +55,36 @@ policies:
     enforcement: >
       Adversary Lens-3 checks row-cell match; missing sync = MED finding.
     examples:
+
+  - id: POL-004
+    title: no-binary-demo-artifacts
+    severity: MED
+    scope: docs/demo-evidence/**
+    rule: >
+      Rendered VHS or screenshot binaries (.gif, .webm, .mp4, .png, .jpg, .jpeg)
+      MUST NOT be committed under docs/demo-evidence/. The authoritative source
+      of truth for a demo is the .tape script plus evidence-report.md; the
+      rendered artifact is a build product regenerable on demand via
+      `vhs docs/demo-evidence/<STORY-ID>/AC-NNN.tape`.
+    rationale: >
+      62 tracked binaries (~12.3 MB) accumulated across Wave-6 and Phase-3
+      demo-recorder backfill despite the demos providing no diff-review value —
+      reviewers cannot tell what changed between two GIFs; a modified .tape
+      script tells them exactly. The vsdd-factory:demo-recorder agent's default
+      renders both .gif and .webm hardcoded (agents/demo-recorder.md L54-55,
+      L97, L109); no environment variable, project-manifest field, or policy
+      surface disables it. Project convention overrides the plugin default.
+    enforcement: >
+      .gitignore excludes docs/demo-evidence/**/*.{gif,webm,mp4,png,jpg,jpeg}
+      so accidental commits are prevented at the mechanical layer. Orchestrators
+      dispatching demo-recorder MUST include the verbatim instruction from
+      docs/DEMO-EVIDENCE-POLICY.md ("Repo policy: do not render or commit
+      .gif/.webm/.mp4/.png. Commit .tape scripts and evidence-report.md only.")
+      in the task prompt. Spec-steward flags any diff that introduces binaries
+      under docs/demo-evidence/ as a MED finding.
+    examples:
+      violation: "docs/demo-evidence/S-5.02/AC-001-*.gif committed alongside .tape script"
+      compliant: "docs/demo-evidence/S-5.02/AC-001-*.tape + evidence-report.md committed; rendered .gif/.webm ignored by git"
 
 # --- Candidate policies (awaiting user ratification) ---
 # POL-003 (BC/VP-story-row-version-sync): When a story frontmatter version:
