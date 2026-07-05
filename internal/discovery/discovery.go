@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -415,6 +416,12 @@ func advertisementKey(svtnID [16]byte) [16]byte {
 	return svtnID
 }
 
+// ErrTooManySessions is returned by Encode when the payload carries more
+// sessions than the wire format's uint16 count field can address. The wire
+// format bounds one advertisement to 65535 sessions; the decoder additionally
+// enforces a stricter runtime cap (see decodeBody).
+var ErrTooManySessions = errors.New("discovery: session count exceeds encoding maximum 65535")
+
 // encodeBody serialises the payload fields (without the HMAC tag prefix).
 //
 // Format: [16]SVTNID | [8]NodeAddr | uint16 count | sessions...
@@ -424,7 +431,17 @@ func advertisementKey(svtnID [16]byte) [16]byte {
 // bytes and suffixed with "…" (U+2026, 3 bytes) so the encoded name fits in
 // one uint16-length field and still signals truncation (BC-2.03.003 EC-001; M-2).
 // Empty names or non-UTF-8 names are rejected with ErrInvalidSessionName.
+// Session counts exceeding 65535 are rejected with ErrTooManySessions rather
+// than silently truncated by the uint16 count cast.
 func encodeBody(payload AdvertisementPayload) ([]byte, error) {
+	// Explicit guard against uint16 truncation on the session count field.
+	// Without this the cast below would silently wrap and produce a wire
+	// frame whose count undercounts the sessions actually appended.
+	const maxSessions = 65535
+	if len(payload.Sessions) > maxSessions {
+		return nil, fmt.Errorf("%w: got %d", ErrTooManySessions, len(payload.Sessions))
+	}
+
 	// Validate and encode session names first so we can fail fast before
 	// allocating the output buffer.
 	encodedNames := make([][]byte, len(payload.Sessions))
@@ -520,6 +537,16 @@ func decodeBody(body []byte) (AdvertisementPayload, error) {
 		}
 		nameLen := int(binary.BigEndian.Uint16(body[offset : offset+2]))
 		offset += 2
+
+		// Reject nameLen == 0. Encode never produces zero-length names
+		// (encodedSessionName returns ErrInvalidSessionName for empty
+		// input), so a peer emitting a zero-length name is either
+		// malformed or adversarial. Fail closed so the decoded struct
+		// remains re-encodable and BC-2.03.003 Inv-1 (Encode/Decode
+		// round-trip) holds without asymmetric zero-length names.
+		if nameLen == 0 {
+			return AdvertisementPayload{}, errors.New("discovery: session name is empty")
+		}
 
 		if offset+nameLen+2 > len(body) {
 			return AdvertisementPayload{}, errors.New("discovery: truncated session entry")
