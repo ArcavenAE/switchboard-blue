@@ -299,31 +299,43 @@ func TestRTTValue_RoundTrip(t *testing.T) {
 // ── AC-003: TestPathEntry_StatusFromDegraded ──────────────────────────────
 
 // TestPathEntry_StatusFromDegraded verifies that PathEntryFromSnapshot derives
-// PathEntry.Status from PathSnapshot.Active and PathSnapshot.Degraded per
-// BC-2.06.003 v1.13 PC-1 (status enum retracted to {active, degraded} per Ruling-4):
+// PathEntry.Status from PathSnapshot.{Failed, Degraded, Active} per BC-2.06.003
+// v1.15 PC-1 (status enum widened to {active, degraded, failed} by
+// S-BL.PATH-FAILED-STATUS, lifting the Wave-6 Ruling-4 reservation):
 //
-//	Row (a): Active=false, Degraded=false → "degraded" (because !Active triggers
-//	  degraded per BC-2.06.003 Ruling-9; "failed" is reserved for Wave-7).
-//	Row (b): Active=true, Degraded=true → "degraded".
-//	Row (c): Active=true, Degraded=false → "active".
+//	Precedence: Failed > Degraded > Active.
+//	Row (a): Failed=false, Active=false, Degraded=false → "degraded"
+//	         (BC-2.06.003 Ruling-9 preserved as fall-through: liveness failure
+//	         with no Failed signal — e.g. a never-alive path — still emits "degraded").
+//	Row (b): Failed=false, Active=true, Degraded=true → "degraded".
+//	Row (c): Failed=false, Active=true, Degraded=false → "active".
+//	Row (d): Failed=true, Active=false, Degraded=false → "failed"
+//	         (S-BL.PATH-FAILED-STATUS: previously-alive path deactivated).
+//	Row (e): Failed=true, Active=false, Degraded=true → "failed"
+//	         (Failed dominates Degraded in the precedence chain).
 //
-// The fourth combination (Active=false, Degraded=true) is covered by
-// TestPathEntry_StatusEnumClosed.
+// The fourth Wave-6 combination (Active=false, Degraded=true, Failed=false)
+// is covered by TestPathEntry_StatusEnumClosed.
 //
-// AC-003; BC-2.06.001; BC-2.06.003 v1.13 PC-1; Ruling-4; Ruling-9 (wave-6-tranche-a-scope-rulings.md).
+// AC-003; BC-2.06.001; BC-2.06.003 v1.15 PC-1; S-BL.PATH-FAILED-STATUS; Ruling-9
+// (wave-6-tranche-a-scope-rulings.md, preserved beneath the new failed branch).
 func TestPathEntry_StatusFromDegraded(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
 		name       string
+		failed     bool
 		active     bool
 		degraded   bool
 		wantStatus string
 	}{
-		// Active=false maps to "degraded" in Wave 6; "failed" is reserved per Ruling-4.
-		{name: "active_false_is_degraded", active: false, degraded: false, wantStatus: "degraded"},
-		{name: "active_degraded_is_degraded", active: true, degraded: true, wantStatus: "degraded"},
-		{name: "active_ok_is_active", active: true, degraded: false, wantStatus: "active"},
+		// Wave-6 rows (Failed=false): existing Ruling-9 semantics preserved.
+		{name: "active_false_is_degraded", failed: false, active: false, degraded: false, wantStatus: "degraded"},
+		{name: "active_degraded_is_degraded", failed: false, active: true, degraded: true, wantStatus: "degraded"},
+		{name: "active_ok_is_active", failed: false, active: true, degraded: false, wantStatus: "active"},
+		// Wave-7 rows (Failed=true): S-BL.PATH-FAILED-STATUS admits "failed".
+		{name: "failed_dominates_when_not_degraded", failed: true, active: false, degraded: false, wantStatus: "failed"},
+		{name: "failed_dominates_over_degraded", failed: true, active: false, degraded: true, wantStatus: "failed"},
 	}
 
 	for _, tc := range cases {
@@ -336,14 +348,15 @@ func TestPathEntry_StatusFromDegraded(t *testing.T) {
 				LossPct:     0.0,
 				Active:      tc.active,
 				Degraded:    tc.degraded,
+				Failed:      tc.failed,
 				P99RTTMs:    10.0,
 				SampleCount: 20,
 				RouterAddr:  "host:9000",
 			}
 			entry := metrics.PathEntryFromSnapshot("pid", snap)
 			if entry.Status != tc.wantStatus {
-				t.Errorf("status: got %q; want %q (active=%v degraded=%v)",
-					entry.Status, tc.wantStatus, tc.active, tc.degraded)
+				t.Errorf("status: got %q; want %q (failed=%v active=%v degraded=%v)",
+					entry.Status, tc.wantStatus, tc.failed, tc.active, tc.degraded)
 			}
 		})
 	}
@@ -490,22 +503,25 @@ func TestDaemonRouterStatus_RedBand(t *testing.T) {
 // ── AC-005a: TestDaemonRouterStatus_QualityStatusIndependence ────────────
 
 // TestDaemonRouterStatus_QualityStatusIndependence verifies S502-DEFER-3 /
-// BC-2.06.003 v1.13 EC-007: quality and status are ORTHOGONAL fields.
-// When a path has Active==false (liveness failure → status:"degraded" per Ruling-4)
-// AND SampleCount<10 (p99 indeterminate → rtt_p99_ms:"pending"), the quality
-// field MUST be "pending" — independent of the status field.
-// Quality enum is {green,yellow,red,pending}; status enum is {active,degraded}.
-// "failed" MUST NOT appear in either field in Wave 6 (Ruling-4; S-BL.PATH-FAILED-STATUS).
+// BC-2.06.003 v1.15 EC-007: quality and status are ORTHOGONAL fields. Quality
+// enum is {green,yellow,red,pending}; status enum (post-S-BL.PATH-FAILED-STATUS)
+// is {active,degraded,failed}. "failed" is a valid STATUS value but MUST NEVER
+// appear in the QUALITY field.
+//
+// When a path is failed+pending (previously-alive path deactivated, insufficient
+// p99 samples), quality MUST be "pending" — the p99-pending signal dominates
+// the liveness signal in the quality band per EC-007.
 //
 // F-P1L3-001: renamed from TestDaemonRouterStatus_FailedAndPendingPrecedence
 // to reflect that quality/status orthogonality is the invariant under test.
 //
-// AC-005a; BC-2.06.003 v1.13 EC-007; S502-DEFER-3; Ruling-4.
+// AC-005a; BC-2.06.003 v1.15 EC-007; S502-DEFER-3; S-BL.PATH-FAILED-STATUS.
 func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
 		name        string
+		failed      bool
 		degraded    bool
 		active      bool
 		sampleCount uint64
@@ -515,8 +531,9 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 	}{
 		{
 			name:        "row_a_degraded_and_pending",
+			failed:      false,
 			degraded:    true,
-			active:      false, // liveness failure → "degraded" per Ruling-4 (not "failed")
+			active:      false, // liveness failure with Failed=false → "degraded" (Ruling-9 fall-through)
 			sampleCount: 5,     // <10 → p99 pending
 			p99RTTMs:    0,
 			wantQuality: "pending",
@@ -524,8 +541,9 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 		},
 		{
 			name:        "row_b_degraded_and_sufficient_samples",
+			failed:      false,
 			degraded:    true,
-			active:      false, // liveness failure → "degraded" per Ruling-4
+			active:      false, // liveness failure with Failed=false → "degraded"
 			sampleCount: 10,    // ≥10 → quality derived from p99
 			p99RTTMs:    250.0, // 250ms → yellow or red depending on classify
 			wantQuality: "",    // not "pending" — verified via != "pending" check
@@ -533,6 +551,7 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 		},
 		{
 			name:        "row_c_healthy_pending",
+			failed:      false,
 			degraded:    false,
 			active:      true,
 			sampleCount: 5, // <10 → pending
@@ -542,12 +561,26 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 		},
 		{
 			name:        "row_d_green_sufficient_samples",
+			failed:      false,
 			degraded:    false,
 			active:      true,
 			sampleCount: 15,
 			p99RTTMs:    15.0, // 15ms → green
 			wantQuality: "green",
 			wantStatus:  "active",
+		},
+		{
+			// Wave-7 row: previously-alive path now failed + insufficient samples.
+			// EC-007: quality="pending" (p99 indeterminate) alongside status="failed"
+			// (liveness dead). "failed" appears in status, NEVER in quality.
+			name:        "row_e_failed_and_pending",
+			failed:      true,
+			degraded:    false,
+			active:      false,
+			sampleCount: 5, // <10 → p99 pending
+			p99RTTMs:    0,
+			wantQuality: "pending",
+			wantStatus:  "failed",
 		},
 	}
 
@@ -561,6 +594,7 @@ func TestDaemonRouterStatus_QualityStatusIndependence(t *testing.T) {
 				LossPct:     0.0,
 				Active:      tc.active,
 				Degraded:    tc.degraded,
+				Failed:      tc.failed,
 				P99RTTMs:    tc.p99RTTMs,
 				SampleCount: tc.sampleCount,
 			}
@@ -634,11 +668,12 @@ func TestQualityFromEntry_PendingWhenSampleCountLow(t *testing.T) {
 // TestQualityFromEntry_PendingWinsOverDegraded verifies EC-007 directly:
 // when status indicates a non-healthy path AND SampleCount<10, quality MUST be "pending".
 //
-// Note: in Wave 6, PathEntryFromSnapshot never emits status="failed" (Ruling-4;
-// BC-2.06.003 v1.13 PC-1). This test exercises QualityFromEntry robustness for
-// any non-active status value passed to it directly.
+// Post-S-BL.PATH-FAILED-STATUS the status enum admits "failed" (BC-2.06.003
+// v1.15 PC-1); the orthogonality rule holds identically — status="failed" is
+// a valid input to QualityFromEntry and quality must still be "pending" when
+// p99 is pending. "failed" MUST NEVER appear as a quality enum value.
 //
-// BC-2.06.003 v1.13 EC-007; S502-DEFER-3; Ruling-4.
+// BC-2.06.003 v1.15 EC-007; S502-DEFER-3; S-BL.PATH-FAILED-STATUS.
 func TestQualityFromEntry_PendingWinsOverDegraded(t *testing.T) {
 	t.Parallel()
 
@@ -1183,25 +1218,33 @@ func TestEC002_AllPathsPending(t *testing.T) {
 // ── Status enum closure ───────────────────────────────────────────────────────
 
 // TestPathEntry_StatusEnumClosed verifies that PathEntryFromSnapshot never emits
-// a status value outside {active, degraded} for any combination of inputs.
-// "failed" MUST NOT appear per BC-2.06.003 v1.13 PC-1 Ruling-4.
+// a status value outside {active, degraded, failed} for any combination of
+// inputs. BC-2.06.003 v1.15 PC-1 widened the enum from Wave-6's {active, degraded}
+// to add "failed" (S-BL.PATH-FAILED-STATUS lifts the Ruling-4 reservation).
+// Any value outside this set is a regression.
 //
-// BC-2.06.003 v1.13 PC-1; Ruling-4 (wave-6-tranche-a-scope-rulings.md).
+// BC-2.06.003 v1.15 PC-1; S-BL.PATH-FAILED-STATUS (admits "failed"); Ruling-4
+// (superseded — the reservation is lifted by this story).
 func TestPathEntry_StatusEnumClosed(t *testing.T) {
 	t.Parallel()
 
-	validStatuses := map[string]bool{"active": true, "degraded": true}
+	validStatuses := map[string]bool{"active": true, "degraded": true, "failed": true}
 
 	cases := []struct {
 		name       string
+		failed     bool
 		active     bool
 		degraded   bool
-		wantStatus string // exact expected value — kills active↔degraded swap mutant
+		wantStatus string // exact expected value — kills active↔degraded↔failed swap mutants
 	}{
-		{"active_true_degraded_false", true, false, "active"},
-		{"active_true_degraded_true", true, true, "degraded"},
-		{"active_false_degraded_false", false, false, "degraded"},
-		{"active_false_degraded_true", false, true, "degraded"},
+		// Wave-6 rows (Failed=false): existing coverage preserved.
+		{"active_true_degraded_false", false, true, false, "active"},
+		{"active_true_degraded_true", false, true, true, "degraded"},
+		{"active_false_degraded_false", false, false, false, "degraded"},
+		{"active_false_degraded_true", false, false, true, "degraded"},
+		// Wave-7 rows (Failed=true): S-BL.PATH-FAILED-STATUS.
+		{"failed_true_active_false_degraded_false", true, false, false, "failed"},
+		{"failed_true_active_false_degraded_true", true, false, true, "failed"},
 	}
 
 	for _, tc := range cases {
@@ -1213,17 +1256,18 @@ func TestPathEntry_StatusEnumClosed(t *testing.T) {
 				LossPct:     0.0,
 				Active:      tc.active,
 				Degraded:    tc.degraded,
+				Failed:      tc.failed,
 				P99RTTMs:    10.0,
 				SampleCount: 20,
 			}
 			entry := metrics.PathEntryFromSnapshot("p", snap)
 			if !validStatuses[entry.Status] {
-				t.Errorf("status enum violation: got %q; valid values are {active, degraded} only (BC-2.06.003 v1.13 PC-1, Ruling-4)", entry.Status)
+				t.Errorf("status enum violation: got %q; valid values are {active, degraded, failed} only (BC-2.06.003 v1.15 PC-1)", entry.Status)
 			}
-			// Per-row exact assertion — set-membership above is not enough to kill the
-			// active↔degraded swap mutant (F-P4L2-01).
+			// Per-row exact assertion — set-membership above is not enough to kill
+			// active↔degraded↔failed swap mutants (F-P4L2-01).
 			if entry.Status != tc.wantStatus {
-				t.Errorf("status: got %q; want %q (active=%v degraded=%v)", entry.Status, tc.wantStatus, tc.active, tc.degraded)
+				t.Errorf("status: got %q; want %q (failed=%v active=%v degraded=%v)", entry.Status, tc.wantStatus, tc.failed, tc.active, tc.degraded)
 			}
 		})
 	}

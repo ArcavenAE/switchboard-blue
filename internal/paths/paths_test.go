@@ -28,6 +28,10 @@
 //	TestBC_2_02_003_PathTracker_RTTAndLossPctAccessors            → API surface
 //	TestBC_2_02_003_PathScore_PropertyTransitive_Manual           → VP-026 (stdlib property sweep)
 //	TestBC_2_02_003_PathTracker_ConcurrentOnProbeScore            → F-004, BC-2.02.003 (concurrent safety)
+//	TestBC_2_06_003_PathTracker_Failed_TransitionsOnConsecutiveMisses → S-BL.PATH-FAILED-STATUS AC-1, BC-2.06.003 v1.15 PC-1
+//	TestBC_2_06_003_PathTracker_Failed_NotSetOnFirstProbePath     → S-BL.PATH-FAILED-STATUS AC-2 (never-alive paths cannot fail)
+//	TestBC_2_06_003_PathTracker_Failed_ClearsOnReactivation       → S-BL.PATH-FAILED-STATUS AC-3
+//	TestBC_2_06_003_PathSnapshot_FailedField_SurfacesFromTracker  → S-BL.PATH-FAILED-STATUS AC-4 (Snapshot consistency oracle)
 package paths_test
 
 import (
@@ -1636,6 +1640,227 @@ func TestBC_2_06_003_P99HistogramAccuracy(t *testing.T) {
 			}
 			if snap.P99RTTMs > tc.wantP99High {
 				t.Errorf("p99 approximation bound violated: got P99RTTMs=%v, want ≤ %v (true_p99 + max_bucket_width)", snap.P99RTTMs, tc.wantP99High)
+			}
+		})
+	}
+}
+
+// ─── S-BL.PATH-FAILED-STATUS: liveness signal on PathSnapshot ───────────────
+//
+// The tests below cover the new Failed field on PathSnapshot and the tracker
+// state that drives it. Story anchors: S-BL.PATH-FAILED-STATUS AC-1..AC-4;
+// BC-2.06.003 v1.15 PC-1 (status enum widened to {active, degraded, failed});
+// Ruling-4 (the Wave-6 reservation this story lifts).
+//
+// Trigger rule under test:
+//
+//	After the first successful probe (firstProbe == false), if the tracker
+//	accumulates consecutiveMissThreshold consecutive missed keep-alives,
+//	Snapshot().Failed becomes true. A tracker that has never seen a
+//	successful probe (firstProbe == true) MUST NOT be marked Failed on the
+//	same miss count — never-alive paths cannot "die." resetRTT clears the
+//	Failed flag alongside Active on the reactivation path.
+
+// TestBC_2_06_003_PathTracker_Failed_TransitionsOnConsecutiveMisses verifies
+// that a tracker that has been ACTIVE (at least one successful probe) is
+// marked Failed=true in its snapshot once it accumulates the threshold
+// consecutive misses. Uses the five-phase lifecycle shape of
+// TestBC_2_02_003_PathTracker_Reactivation.
+//
+// S-BL.PATH-FAILED-STATUS AC-1; BC-2.06.003 v1.15 PC-1.
+func TestBC_2_06_003_PathTracker_Failed_TransitionsOnConsecutiveMisses(t *testing.T) {
+	t.Parallel()
+
+	tracker := paths.NewPathTracker(50.0, 0.125)
+
+	// ── Phase 1: baseline (fresh tracker, never probed) ───────────────────────
+	if !tracker.IsActive() {
+		t.Fatal("precondition: new tracker must be active")
+	}
+	if snap := tracker.Snapshot(); snap.Failed {
+		t.Errorf("fresh tracker: Failed=true; want false (never-alive path cannot be failed)")
+	}
+
+	// ── Phase 2: one successful probe clears firstProbe ──────────────────────
+	tracker.OnProbe(20.0, false)
+	if snap := tracker.Snapshot(); snap.Failed {
+		t.Errorf("after first successful probe: Failed=true; want false")
+	}
+
+	// ── Phase 3: 3 consecutive misses → Failed ────────────────────────────────
+	const consecutiveMissThreshold = 3
+	for i := 0; i < consecutiveMissThreshold; i++ {
+		tracker.OnProbe(0, true)
+	}
+	if tracker.IsActive() {
+		t.Fatal("after 3 consecutive misses: path still active; want inactive")
+	}
+	snap := tracker.Snapshot()
+	if !snap.Failed {
+		t.Errorf("after 3 consecutive misses on a previously-alive path: Failed=false; want true (S-BL.PATH-FAILED-STATUS AC-1)")
+	}
+	if snap.Active {
+		t.Errorf("after 3 consecutive misses: Snapshot().Active=true; want false")
+	}
+}
+
+// TestBC_2_06_003_PathTracker_Failed_NotSetOnFirstProbePath verifies that a
+// tracker that has NEVER received a successful probe (firstProbe==true) is
+// NOT marked Failed when it accumulates the miss threshold. Never-alive paths
+// cannot fail — the failure signal means "was up, went down," not "never came up."
+//
+// S-BL.PATH-FAILED-STATUS AC-2 (never-alive paths cannot fail); BC-2.06.003 v1.15 PC-1.
+func TestBC_2_06_003_PathTracker_Failed_NotSetOnFirstProbePath(t *testing.T) {
+	t.Parallel()
+
+	tracker := paths.NewPathTracker(50.0, 0.125)
+
+	// No successful probe: tracker.firstProbe is still true.
+	// Drive the miss threshold directly.
+	const consecutiveMissThreshold = 3
+	for i := 0; i < consecutiveMissThreshold; i++ {
+		tracker.OnProbe(0, true)
+	}
+	if tracker.IsActive() {
+		t.Fatal("after 3 consecutive misses: path still active; want inactive (BC-2.02.003 PC-6)")
+	}
+	snap := tracker.Snapshot()
+	if snap.Failed {
+		t.Errorf("never-alive tracker (firstProbe=true) after 3 misses: Failed=true; want false (S-BL.PATH-FAILED-STATUS AC-2: only previously-alive paths can fail)")
+	}
+	if snap.Active {
+		t.Errorf("never-alive tracker after 3 misses: Snapshot().Active=true; want false")
+	}
+}
+
+// TestBC_2_06_003_PathTracker_Failed_ClearsOnReactivation verifies that a
+// tracker that transitioned ACTIVE → FAILED clears its Failed flag when a
+// successful probe reactivates it. Mirrors the lifecycle in
+// TestBC_2_02_003_PathTracker_Reactivation but focuses on the new field.
+//
+// S-BL.PATH-FAILED-STATUS AC-3; BC-2.06.003 v1.15 PC-1; BC-2.02.003 PC-6 v1.2.
+func TestBC_2_06_003_PathTracker_Failed_ClearsOnReactivation(t *testing.T) {
+	t.Parallel()
+
+	tracker := paths.NewPathTracker(50.0, 0.125)
+
+	// ── Phase 1: bring the tracker alive ─────────────────────────────────────
+	tracker.OnProbe(20.0, false)
+
+	// ── Phase 2: 3 consecutive misses → FAILED ────────────────────────────────
+	for i := 0; i < 3; i++ {
+		tracker.OnProbe(0, true)
+	}
+	if snap := tracker.Snapshot(); !snap.Failed {
+		t.Fatalf("precondition: after 3 consecutive misses on alive path, expected Failed=true; got %+v", snap)
+	}
+
+	// ── Phase 3: reactivating probe clears both Active and Failed ─────────────
+	const reactivationRTT = 75.0
+	tracker.OnProbe(reactivationRTT, false)
+
+	if !tracker.IsActive() {
+		t.Fatal("after reactivating probe: Active=false; want true")
+	}
+	snap := tracker.Snapshot()
+	if snap.Failed {
+		t.Errorf("after reactivating probe: Failed=true; want false (resetRTT MUST clear Failed alongside Active — S-BL.PATH-FAILED-STATUS AC-3)")
+	}
+	if snap.EWMARTTMs != reactivationRTT {
+		t.Errorf("after reactivating probe: EWMARTTMs=%v; want %v (RTT reset per BC-2.02.003 PC-6 v1.2)", snap.EWMARTTMs, reactivationRTT)
+	}
+}
+
+// TestBC_2_06_003_PathSnapshot_FailedField_SurfacesFromTracker verifies that
+// PathSnapshot.Failed faithfully mirrors the tracker's internal state at the
+// moment of Snapshot(). This is the consistency oracle for the new field:
+// every observable state of the tracker (fresh, alive, failed, reactivated)
+// must round-trip cleanly through Snapshot().
+//
+// S-BL.PATH-FAILED-STATUS AC-4; BC-2.06.003 v1.15 PC-1; go.md rule 12 (Snapshot
+// returns a decoupled value copy).
+func TestBC_2_06_003_PathSnapshot_FailedField_SurfacesFromTracker(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		drive        func(*paths.PathTracker)
+		wantActive   bool
+		wantFailed   bool
+		wantMinRTTMs float64
+	}{
+		{
+			name:       "fresh_tracker_not_failed",
+			drive:      func(_ *paths.PathTracker) {},
+			wantActive: true,
+			wantFailed: false,
+		},
+		{
+			name: "single_success_not_failed",
+			drive: func(tr *paths.PathTracker) {
+				tr.OnProbe(20.0, false)
+			},
+			wantActive:   true,
+			wantFailed:   false,
+			wantMinRTTMs: 20.0,
+		},
+		{
+			name: "previously_alive_three_misses_failed",
+			drive: func(tr *paths.PathTracker) {
+				tr.OnProbe(20.0, false)
+				for i := 0; i < 3; i++ {
+					tr.OnProbe(0, true)
+				}
+			},
+			wantActive: false,
+			wantFailed: true,
+		},
+		{
+			name: "never_alive_three_misses_not_failed",
+			drive: func(tr *paths.PathTracker) {
+				for i := 0; i < 3; i++ {
+					tr.OnProbe(0, true)
+				}
+			},
+			wantActive: false,
+			wantFailed: false,
+		},
+		{
+			name: "reactivated_clears_failed",
+			drive: func(tr *paths.PathTracker) {
+				tr.OnProbe(20.0, false)
+				for i := 0; i < 3; i++ {
+					tr.OnProbe(0, true)
+				}
+				tr.OnProbe(30.0, false)
+			},
+			wantActive:   true,
+			wantFailed:   false,
+			wantMinRTTMs: 30.0,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tracker := paths.NewPathTracker(50.0, 0.125)
+			tc.drive(tracker)
+
+			snap := tracker.Snapshot()
+			if snap.Active != tc.wantActive {
+				t.Errorf("Snapshot().Active: got %v; want %v", snap.Active, tc.wantActive)
+			}
+			if snap.Failed != tc.wantFailed {
+				t.Errorf("Snapshot().Failed: got %v; want %v", snap.Failed, tc.wantFailed)
+			}
+			// Sanity: IsActive() and Snapshot().Active must agree (single lock).
+			if got := tracker.IsActive(); got != snap.Active {
+				t.Errorf("IsActive() and Snapshot().Active disagree: IsActive=%v Snapshot.Active=%v", got, snap.Active)
+			}
+			if tc.wantMinRTTMs > 0 && snap.EWMARTTMs < tc.wantMinRTTMs {
+				t.Errorf("Snapshot().EWMARTTMs: got %v; want ≥ %v", snap.EWMARTTMs, tc.wantMinRTTMs)
 			}
 		})
 	}
