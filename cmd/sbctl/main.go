@@ -42,6 +42,31 @@ func usageErrf(format string, args ...any) error {
 	return &usageError{err: fmt.Errorf(format, args...)}
 }
 
+// reportedError wraps an error whose taxonomy envelope (or plain-text
+// taxonomy line) has already been emitted to stderr by writeError. main()'s
+// final handler skips its own fmt.Fprintf when it sees this wrapper so the
+// stderr stream stays exactly one envelope (or one taxonomy line) —
+// preserving whole-stream JSON parseability required by S-6.05
+// json-envelope-integrity + BC-2.06.003 AC-006. The wrap preserves the
+// errors.As unwrap chain so *usageError still discriminates exit 2 vs 1.
+// Spec authority: BC-2.06.003 AC-006 (S-5.02), S-6.05. Issue: #89.
+type reportedError struct {
+	err error
+}
+
+func (e *reportedError) Error() string { return e.err.Error() }
+func (e *reportedError) Unwrap() error { return e.err }
+
+// reported wraps err as already-reported. Callers use this when they need to
+// pair writeError with a return that has a specific structural type (e.g.
+// wrapping usageErrf) so the emission and the wrap happen atomically.
+func reported(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &reportedError{err: err}
+}
+
 func main() {
 	// Global flags per interface-definitions.md §sbctl operator CLI and AC-006/AC-007.
 	target := flag.String("target", defaultTarget, "daemon address (host:port or unix socket path)")
@@ -117,7 +142,14 @@ func main() {
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		// #89 / S-6.05 json-envelope-integrity: skip the re-print if the
+		// error was already reported to stderr at the call site. This is
+		// the single-print contract — stderr on the error path is
+		// exactly one envelope (--json) or one taxonomy line (plain).
+		var re *reportedError
+		if !errors.As(err, &re) {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+		}
 		var ue *usageError
 		if errors.As(err, &ue) {
 			os.Exit(2)
@@ -166,17 +198,22 @@ func writeSuccess(useJSON bool, data json.RawMessage, sio sbctlIO) {
 }
 
 // writeError writes a failure JSON envelope to sio.err when --json is set,
-// or a plain text error otherwise.
-func writeError(useJSON bool, code, message string, sio sbctlIO) {
+// or a plain text error otherwise, and returns a reportedError wrapping the
+// same code+message so callers can `return writeError(...)` in one line.
+// main() sees the reportedError wrapper and skips re-printing, keeping
+// stderr to exactly one envelope / taxonomy line (#89 / S-6.05
+// json-envelope-integrity).
+func writeError(useJSON bool, code, message string, sio sbctlIO) error {
 	if useJSON {
 		env := newErrorEnvelope(code, message)
 		out, err := json.Marshal(env)
 		if err != nil {
 			_, _ = fmt.Fprintf(sio.err, "marshal error: %s\n", err)
-			return
+			return reported(fmt.Errorf("%s: marshal envelope: %w", code, err))
 		}
 		_, _ = fmt.Fprintln(sio.err, string(out))
-		return
+	} else {
+		_, _ = fmt.Fprintf(sio.err, "%s %s\n", code, message)
 	}
-	_, _ = fmt.Fprintf(sio.err, "%s %s\n", code, message)
+	return reported(fmt.Errorf("%s: %s", code, message))
 }

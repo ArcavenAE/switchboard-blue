@@ -345,17 +345,19 @@ Expected-fail entries carry `expected_fail: "<issue> — <reason>"`. A
 failing expected-fail reports XFAIL and does not fail the run; a
 *passing* expected-fail reports XPASS and FAILS the run — the fixing
 PR must remove the annotation (same discipline that closed the
-Tier 3 #144 gate once S-BL.ROUTER-RUNTIME landed). SPEC-2/SPEC-4 are
-expected-fail on issue #89 (error-path
-double-print breaks whole-stream JSON parse) — found by this
-harness's first run, which is the validation the pattern needed.
+Tier 3 #144 gate once S-BL.ROUTER-RUNTIME landed). SPEC-2 and
+SPEC-4 were expected-fail on issue #89 (error-path double-print
+broke whole-stream JSON parse) — found by this harness's first
+run, which was the validation the pattern needed. The single-print
+contract was landed and the annotations were removed; both entries
+are now required-pass.
 
 | ID | Anchor | Claim |
 |---|---|---|
 | SPEC-1 | BC-2.06.003 AC-006 / BC-2.07.003 | daemon-unreachable exits 1 with `E-NET-001` on stderr, stdout clean |
-| SPEC-2 | BC-2.06.003 AC-006 / S-6.05 envelope | `--json` unreachable error is one machine-parseable envelope (`.ok==false`, `.error.code=="E-NET-001"`) — **expected-fail #89** |
+| SPEC-2 | BC-2.06.003 AC-006 / S-6.05 envelope | `--json` unreachable error is one machine-parseable envelope (`.ok==false`, `.error.code=="E-NET-001"`) |
 | SPEC-3 | S-5.02 F-M1 / E-CFG-010 | `router status --target=` exits 2 with `E-CFG-010` on stderr |
-| SPEC-4 | S-5.02 F-M1 / S-6.05 envelope | `--json` usage error still emits the envelope — **expected-fail #89** |
+| SPEC-4 | S-5.02 F-M1 / S-6.05 envelope | `--json` usage error still emits the envelope |
 | SPEC-5 | BC-2.09.003 E-CFG-004 | nonexistent `--config` exits 1 with `E-CFG-004` + offending path on stderr |
 
 ### Adding a new invariant
