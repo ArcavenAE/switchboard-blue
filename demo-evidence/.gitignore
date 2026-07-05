@@ -1,0 +1,8 @@
+# POL-004 (policies.yaml v1.3): rendered demo binaries are never committed —
+# .tape sources are the committable artifact; render on demand.
+*.gif
+*.webm
+*.mp4
+*.png
+*.jpg
+*.jpeg
