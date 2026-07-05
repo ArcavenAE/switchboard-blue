@@ -1,0 +1,102 @@
+# Blast Radius Check
+# Fails PRs whose body is missing the required "## Blast Radius" section
+# or leaves all three declaration slots empty.
+# See CONTRIBUTING.md §Blast radius and docs/architecture.md §Smoke invariants.
+name: Blast Radius
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [develop, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: blast-radius-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Declaration present
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - name: Verify blast-radius block
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+
+            // Rule 1: the header must be present. Case-insensitive on the
+            // words; strict on the "## " prefix so a mention in prose
+            // ("we discussed blast radius elsewhere") doesn't count.
+            const hasHeader = /^##\s+blast radius\b/im.test(body);
+            if (!hasHeader) {
+              core.setFailed([
+                'Missing "## Blast Radius" section in PR body.',
+                '',
+                'This section is required. It answers three questions —',
+                'operator-visible surfaces touched, silent-failure risk,',
+                'and whether the smoke gate needs a new sentinel.',
+                '',
+                'See CONTRIBUTING.md §Blast radius for the template.',
+              ].join('\n'));
+              return;
+            }
+
+            // Rule 2: at least one of the three labelled answers must be
+            // non-empty. We match the bold-labelled prompts from the
+            // template and require substantive text after each. "TBD",
+            // "n/a", empty, or comment-only content fails.
+            //
+            // We deliberately do NOT require all three to be filled —
+            // "none" is a valid answer for surfaces or silent-failure
+            // risk on a truly internal refactor. But at least one has to
+            // carry substance, otherwise the block is decorative.
+            const prompts = [
+              /\*\*1\.\s+Operator-visible surfaces touched:\*\*\s*([\s\S]*?)(?=\*\*2\.|##\s+|$)/i,
+              /\*\*2\.\s+Silent-failure risk:\*\*\s*([\s\S]*?)(?=\*\*3\.|##\s+|$)/i,
+              /\*\*3\.\s+Smoke gate touched:\*\*\s*([\s\S]*?)(?=\*\*\d\.|##\s+|$)/i,
+            ];
+            const answers = prompts.map(re => {
+              const m = body.match(re);
+              if (!m) return '';
+              // Strip HTML comments and whitespace.
+              return m[1]
+                .replace(/<!--[\s\S]*?-->/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            });
+
+            const filled = answers.filter(a => {
+              if (!a) return false;
+              const lower = a.toLowerCase();
+              if (['tbd', 'todo', 'n/a', 'na', '?', 'your answer'].includes(lower)) return false;
+              // Minimum substance: at least 8 chars after normalisation.
+              return a.length >= 8;
+            });
+
+            if (filled.length === 0) {
+              core.setFailed([
+                'Blast Radius section is present but empty.',
+                '',
+                'At least one of the three prompts must carry a substantive',
+                'answer. "TBD", "n/a", "?", or the placeholder text are not',
+                'accepted. If the PR is a truly internal refactor, say so',
+                'explicitly ("Operator-visible surfaces touched: none.")',
+                '',
+                `Prompt 1 (surfaces): "${answers[0] || '(empty)'}"`,
+                `Prompt 2 (risk):     "${answers[1] || '(empty)'}"`,
+                `Prompt 3 (smoke):    "${answers[2] || '(empty)'}"`,
+              ].join('\n'));
+              return;
+            }
+
+            core.info(`Blast Radius check passed — ${filled.length}/3 prompts have substantive answers.`);
