@@ -54,8 +54,9 @@ test-docker:
 #
 #   smoke-quick     Tier 1 (INV-1..INV-10). <10s. Runs on every PR.
 #   smoke           Tier 2 daemon lifecycle. ~30s. Nightly + on-demand.
-#   smoke-tutorial  Tier 3 tutorial walk. ~10s. Nightly, expected-fail
-#                   until task #144 (router runtime) lands.
+#   smoke-tutorial  Tier 3 tutorial walk. ~10s. Nightly + on-demand.
+#                   (S-BL.ROUTER-RUNTIME landed — the T3-2-router
+#                    expected-fail is gone; tier 3 is a clean pass gate now.)
 #
 # See test/smoke/invariants.sh, tier2-daemon.sh, tier3-tutorial.sh and
 # docs/architecture.md §Smoke Invariants for the assertion catalog.
@@ -91,11 +92,8 @@ smoke: smoke-quick
 
 # Tutorial smoke (Tier 3): extract fenced bash blocks from
 # docs/getting-started.md and assert exit codes + substring presence.
-# Currently exits 3 (known task #144 gap — router mode not implemented).
-# When #144 lands, T3-2-router flips to PASS and exit becomes 0.
-#
-# NOT wired into `smoke` because expected-fail today would poison the
-# nightly signal. Enable in CI once #144 lands.
+# S-BL.ROUTER-RUNTIME landed — T3-2-router now passes; exit 0 is the
+# steady-state result. Safe to wire into nightly CI.
 smoke-tutorial: smoke-quick
     ./test/smoke/tier3-tutorial.sh
 
