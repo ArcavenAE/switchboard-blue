@@ -2464,12 +2464,22 @@ func TestServe_DrainCompletesWithinBudget_RulingI(t *testing.T) {
 	// net.Pipe is synchronous → write blocks until we read. Calling Read here
 	// with a 200 ms deadline: if we get bytes, the server sent CHALLENGE →
 	// shutdown-window check is missing → RED.
-	if err := clientConn2.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
-		t.Fatalf("SetReadDeadline: %v", err)
-	}
 	buf := make([]byte, 512)
-	n, _ := clientConn2.Read(buf)
-	_ = clientConn2.SetReadDeadline(time.Time{}) // clear deadline
+	var n int
+	if err := clientConn2.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		if !errors.Is(err, io.ErrClosedPipe) {
+			t.Fatalf("SetReadDeadline: %v", err)
+		}
+		// The server already closed conn2 (shutdown-window drop) BEFORE we
+		// armed the read deadline. net.Pipe's SetReadDeadline returns
+		// io.ErrClosedPipe when either end is closed, and pipe writes are
+		// synchronous — a closed pipe with no completed read means zero bytes
+		// were ever delivered. This is the Ruling I PASS condition observed
+		// early; leave n == 0 and fall through to the assertion.
+	} else {
+		n, _ = clientConn2.Read(buf)
+		_ = clientConn2.SetReadDeadline(time.Time{}) // clear deadline
+	}
 
 	if n > 0 {
 		// Server sent data to conn2 — conn2 entered handleConnection.
@@ -3101,8 +3111,15 @@ func TestRegister_AfterServeReturnsError(t *testing.T) {
 	// Once a dial succeeds, s.serving.Store(true) has definitely been called
 	// (Serve marks serving before entering the accept loop).
 	// This replaces the racy time.Sleep+Gosched approach (Pass-3 L2 race finding).
+	//
+	// A connection-refused dial returns in microseconds, so a bare retry loop
+	// can exhaust every attempt before the Serve goroutine is ever scheduled
+	// (observed on shared CI runners under -race). Sleep between failed
+	// attempts to yield to the scheduler, and fail loudly if the barrier never
+	// establishes — asserting the invariant against a server that never
+	// started would report a false F-P2L1-001 violation.
 	addr := ln.Addr().String()
-	const maxAttempts = 50
+	const maxAttempts = 100
 	var dialConn net.Conn
 	for i := 0; i < maxAttempts; i++ {
 		c, dialErr := net.DialTimeout("tcp", addr, 50*time.Millisecond)
@@ -3110,12 +3127,13 @@ func TestRegister_AfterServeReturnsError(t *testing.T) {
 			dialConn = c
 			break
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	if dialConn != nil {
-		t.Cleanup(func() { _ = dialConn.Close() })
-	} else {
-		t.Log("could not dial server within max attempts; test may be flaky")
+	if dialConn == nil {
+		t.Fatalf("sync barrier: could not dial %s within %d attempts — Serve never started; "+
+			"cannot assert the register-after-serve invariant", addr, maxAttempts)
 	}
+	t.Cleanup(func() { _ = dialConn.Close() })
 
 	// Verify that Register returns an error now that Serve has started.
 	regErr := srv.Register(mgmt.Handler{Command: "post.serve", Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
