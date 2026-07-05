@@ -4,12 +4,13 @@ document_type: story
 level: ops
 story_id: S-BL.PATH-FAILED-STATUS
 title: "re-introduce status: failed for PathSnapshot liveness failures (BC-2.06.003 PC-1)"
-status: backlog
+status: merged
 producer: product-owner
 timestamp: 2026-07-01T12:00:00
+modified: 2026-07-05T22:45:00
 phase: 2
 epic: E-6
-wave: backlog
+wave: 7
 priority: P1
 scope_phase: E
 estimated_points: TBD
