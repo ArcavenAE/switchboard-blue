@@ -29,6 +29,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/arcavenae/switchboard/internal/metrics"
 )
 
 // ─── Stub daemon helpers ─────────────────────────────────────────────────────
@@ -585,29 +587,33 @@ func TestSbctlMetrics_DaemonUnreachable(t *testing.T) {
 	}
 }
 
-// ─── F-M3 / F-H5: formatP99 renders "pending" for nil/non-float64 p99 ────────
+// ─── F-M3 / F-H5: formatP99 renders "pending" for PendingKind, float otherwise ─
 
-// TestFormatP99_NilAndNonFloat64RendersAsPending verifies that formatP99
-// renders the literal string "pending" for all non-float64 p99 values,
-// including nil, the string "pending", and other unexpected types.
-// A float64 value must be formatted as a decimal number.
+// TestFormatP99_PendingAndFloat verifies that formatP99 renders the literal
+// string "pending" when RTTValue.Kind == PendingKind, and formats a decimal
+// number when Kind == FloatKind.
 //
-// F-H5 / AC-004 / BC-2.06.003 EC-003 F-M3: formatPathsTable must emit
-// "pending" when rtt_p99_ms is absent or non-float64 — not Go's "<nil>".
-func TestFormatP99_NilAndNonFloat64RendersAsPending(t *testing.T) {
+// Post-#54 the field type is metrics.RTTValue, not any — the pre-#54 cases
+// (nil, arbitrary string) are now type-impossible at compile time. That is
+// a strengthening of the contract: RTTValue.UnmarshalJSON rejects JSON null
+// (F-P2L1-004) and non-"pending" strings (M-3 Pass-8), so a decoded PathEntry
+// cannot carry those shapes. The remaining test cases exercise every reachable
+// input to formatP99.
+//
+// F-H5 / AC-004 / BC-2.06.003 EC-003 F-M3.
+func TestFormatP99_PendingAndFloat(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
 		name string
-		p99  any
+		p99  metrics.RTTValue
 		want string
 	}{
-		{name: "nil_value", p99: nil, want: "pending"},
-		{name: "string_pending", p99: "pending", want: "pending"},
-		{name: "string_arbitrary", p99: "unknown", want: "pending"},
-		{name: "float64_22ms", p99: 22.0, want: "22.00"},
-		{name: "float64_zero", p99: 0.0, want: "0.00"},
-		{name: "float64_1500ms", p99: 1500.5, want: "1500.50"},
+		{name: "pending_zero_value", p99: metrics.RTTValue{}, want: "pending"},
+		{name: "pending_constructed", p99: metrics.NewRTTValuePending(3), want: "pending"},
+		{name: "float64_22ms", p99: metrics.NewRTTValueFloat(22.0, 10), want: "22.00"},
+		{name: "float64_zero", p99: metrics.NewRTTValueFloat(0.0, 10), want: "0.00"},
+		{name: "float64_1500ms", p99: metrics.NewRTTValueFloat(1500.5, 42), want: "1500.50"},
 	}
 
 	for _, tc := range cases {
@@ -636,9 +642,14 @@ func TestFormatP99_NilAndNonFloat64RendersAsPending(t *testing.T) {
 //
 // F-C1 / BC-2.06.003 PC-1 / metrics.classify thresholds
 func TestQualityFromPathEntry_StatelessClassification(t *testing.T) {
+	// Post-#54 rtt_p99_ms is metrics.RTTValue. The pre-#54 nil / "unknown"
+	// string cases are now type-impossible: RTTValue.UnmarshalJSON rejects
+	// JSON null (F-P2L1-004) and non-"pending" strings (M-3 Pass-8), and the
+	// field cannot hold anything else at compile time. The retained cases
+	// exercise every reachable Kind and band.
 	cases := []struct {
 		name     string
-		p99RTTMs any     // float64 or "pending"
+		p99RTTMs metrics.RTTValue
 		rttMs    float64 // fallback when p99 is pending
 		lossPct  float64
 		wantBand string
@@ -646,23 +657,23 @@ func TestQualityFromPathEntry_StatelessClassification(t *testing.T) {
 		// Green band: p99 ≤ 100ms AND loss ≤ 5%
 		{
 			name:     "green_low_rtt_zero_loss",
-			p99RTTMs: 22.0, rttMs: 15.0, lossPct: 0.0,
+			p99RTTMs: metrics.NewRTTValueFloat(22.0, 10), rttMs: 15.0, lossPct: 0.0,
 			wantBand: "green",
 		},
 		{
 			name:     "green_boundary_rtt_100ms_loss_5pct",
-			p99RTTMs: 100.0, rttMs: 80.0, lossPct: 5.0,
+			p99RTTMs: metrics.NewRTTValueFloat(100.0, 10), rttMs: 80.0, lossPct: 5.0,
 			wantBand: "green",
 		},
 		// Yellow band: p99 in (100ms,500ms] OR loss in (5%,20%] (and not Red)
 		{
 			name:     "yellow_rtt_200ms_zero_loss",
-			p99RTTMs: 200.0, rttMs: 150.0, lossPct: 0.0,
+			p99RTTMs: metrics.NewRTTValueFloat(200.0, 10), rttMs: 150.0, lossPct: 0.0,
 			wantBand: "yellow",
 		},
 		{
 			name:     "yellow_low_rtt_loss_10pct",
-			p99RTTMs: 50.0, rttMs: 40.0, lossPct: 10.0,
+			p99RTTMs: metrics.NewRTTValueFloat(50.0, 10), rttMs: 40.0, lossPct: 10.0,
 			wantBand: "yellow",
 		},
 		// Red band: p99 > 500ms OR loss > 20%
@@ -670,41 +681,36 @@ func TestQualityFromPathEntry_StatelessClassification(t *testing.T) {
 		// because a fresh indicator at Green only moves one step per Update().
 		{
 			name:     "red_rtt_600ms_loss_25pct",
-			p99RTTMs: 600.0, rttMs: 600.0, lossPct: 25.0,
+			p99RTTMs: metrics.NewRTTValueFloat(600.0, 10), rttMs: 600.0, lossPct: 25.0,
 			wantBand: "red",
 		},
 		{
 			name:     "red_rtt_501ms_zero_loss",
-			p99RTTMs: 501.0, rttMs: 501.0, lossPct: 0.0,
+			p99RTTMs: metrics.NewRTTValueFloat(501.0, 10), rttMs: 501.0, lossPct: 0.0,
 			wantBand: "red",
 		},
 		{
 			name:     "red_zero_rtt_loss_21pct",
-			p99RTTMs: 10.0, rttMs: 10.0, lossPct: 21.0,
+			p99RTTMs: metrics.NewRTTValueFloat(10.0, 10), rttMs: 10.0, lossPct: 21.0,
 			wantBand: "red",
 		},
 		// Pending p99: BC-2.06.003 v1.5 EC-003 sentinel — return "pending" regardless
 		// of rtt_ms value.  Supersedes the pre-v1.5 fallback-to-rtt_ms behaviour.
 		{
 			name:     "pending_p99_sentinel_green_metrics",
-			p99RTTMs: "pending", rttMs: 30.0, lossPct: 0.0,
+			p99RTTMs: metrics.NewRTTValuePending(3), rttMs: 30.0, lossPct: 0.0,
 			wantBand: "pending",
 		},
 		{
 			name:     "pending_p99_sentinel_red_metrics",
-			p99RTTMs: "pending", rttMs: 600.0, lossPct: 25.0,
+			p99RTTMs: metrics.NewRTTValuePending(3), rttMs: 600.0, lossPct: 25.0,
 			wantBand: "pending",
 		},
-		// F-C2 / BC-2.06.003 v1.5 F-M3: nil (JSON null) p99 → pending.
+		// Zero-value RTTValue is PendingKind by definition (types.go: PendingKind == 0).
+		// This subsumes the pre-#54 "nil_p99_json_null_yields_pending" case.
 		{
-			name:     "nil_p99_json_null_yields_pending",
-			p99RTTMs: nil, rttMs: 30.0, lossPct: 0.0,
-			wantBand: "pending",
-		},
-		// F-C2 / BC-2.06.003 v1.5 F-M3: unexpected string type "unknown" → pending.
-		{
-			name:     "unknown_string_p99_yields_pending",
-			p99RTTMs: "unknown", rttMs: 30.0, lossPct: 0.0,
+			name:     "zero_value_rttvalue_yields_pending",
+			p99RTTMs: metrics.RTTValue{}, rttMs: 30.0, lossPct: 0.0,
 			wantBand: "pending",
 		},
 	}
@@ -783,7 +789,7 @@ func TestQualityFromPathEntry_StatusOverride(t *testing.T) {
 				PathID:     "test-path",
 				RouterAddr: "10.0.0.1:9000",
 				RTTMs:      tc.p99RTTMs,
-				P99RTTMs:   tc.p99RTTMs,
+				P99RTTMs:   metrics.NewRTTValueFloat(tc.p99RTTMs, 10),
 				LossPct:    tc.lossPct,
 				Status:     tc.status,
 			}

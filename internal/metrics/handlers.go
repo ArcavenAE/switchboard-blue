@@ -62,7 +62,7 @@ func PathsList(_ context.Context, _ json.RawMessage, src PathsListSource) (Paths
 	snaps := src.AllSnapshots()
 	entries := make([]PathEntry, 0, len(snaps))
 	for pathID, snap := range snaps {
-		entries = append(entries, PathEntryFromSnapshot(pathID, snap.RouterAddr, snap))
+		entries = append(entries, PathEntryFromSnapshot(pathID, snap))
 	}
 	if len(entries) == 0 {
 		return PathsListResponse{Paths: entries, Message: "no active paths"}, nil
@@ -134,8 +134,13 @@ func RouterStatus(ctx context.Context, args json.RawMessage, src PathsListSource
 //     that story lands)
 //   - otherwise → "active"
 //
-// BC-2.06.003 v1.15 PC-1; BC-2.06.001; AC-003.
-func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) PathEntry {
+// RouterAddr is read from snap.RouterAddr — the sole source of truth per
+// S-BL.ROUTER-ADDR / RULING-W6TB-B §3 (immutability invariant). Callers MUST
+// populate snap.RouterAddr; a diverging out-of-band parameter would risk
+// PathEntry.RouterAddr disagreeing with the snapshot it was derived from.
+//
+// BC-2.06.003 v1.15 PC-1; BC-2.06.001; AC-002; AC-003.
+func PathEntryFromSnapshot(pathID string, snap paths.PathSnapshot) PathEntry {
 	status := "active"
 	if snap.Degraded || !snap.Active {
 		status = "degraded"
@@ -157,7 +162,7 @@ func PathEntryFromSnapshot(pathID, routerAddr string, snap paths.PathSnapshot) P
 	}
 	return PathEntry{
 		PathID:     pathID,
-		RouterAddr: routerAddr,
+		RouterAddr: snap.RouterAddr,
 		RTTMs:      snap.EWMARTTMs,
 		RTTP99Ms:   rttP99,
 		LossPct:    snap.LossPct,

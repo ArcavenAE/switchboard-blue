@@ -44,8 +44,8 @@ type PathEntryWithQuality struct {
 // qualityFromPathEntry computes the green/yellow/red/pending quality label for a path entry.
 //
 // Evaluation order (BC-2.06.003 PC-1, EC-003):
-//  1. If rtt_p99_ms is nil (JSON null) or any non-float64 value (including "pending"),
-//     return "pending" immediately — fewer than 10 samples or indeterminate state.
+//  1. If rtt_p99_ms.Kind == PendingKind, return "pending" immediately — fewer
+//     than 10 samples or indeterminate state.
 //  2. If status == "failed", return "red".
 //  3. If status == "degraded", return max("yellow", band-classified quality).
 //  4. Otherwise, classify by p99 RTT + loss using stateless metrics.Classify.
@@ -53,12 +53,15 @@ type PathEntryWithQuality struct {
 // Per BC-2.06.003 v1.5 F-M3: pending p99 must yield pending quality; the pre-v1.5
 // fallback-to-rtt_ms behaviour is removed.
 //
+// Kind is authoritative post-#54: RTTValue.UnmarshalJSON populates Kind from
+// the wire form (float → FloatKind, "pending" → PendingKind, null → decode
+// error) and rejects legacy null shapes (F-P2L1-004).
+//
 // AC-003 / BC-2.06.003 PC-1, PC-3
 func qualityFromPathEntry(entry PathEntry) string {
-	// Step 1: any non-float64 p99 (nil, "pending", or unexpected type) → pending.
-	// BC-2.06.003 v1.5 F-M3: pending p99 must yield pending quality regardless of rtt_ms.
-	rttMs, ok := entry.P99RTTMs.(float64)
-	if !ok {
+	// Step 1: pending p99 → pending (regardless of status).
+	// BC-2.06.003 v1.5 F-M3 + degraded+pending precedence (S502-DEFER-3).
+	if entry.P99RTTMs.Kind == metrics.PendingKind {
 		return "pending"
 	}
 
@@ -68,7 +71,7 @@ func qualityFromPathEntry(entry PathEntry) string {
 	}
 
 	// Step 3: stateless band classification (no hysteresis in CLI one-shot; F-C1).
-	band := metrics.Classify(rttMs, entry.LossPct).String()
+	band := metrics.Classify(entry.P99RTTMs.Value, entry.LossPct).String()
 
 	// Step 4: degraded status applies a yellow floor (max of yellow, band-derived; F-H1).
 	if entry.Status == "degraded" && band == "green" {
@@ -78,17 +81,17 @@ func qualityFromPathEntry(entry PathEntry) string {
 	return band
 }
 
-// formatP99 converts a PathEntry.P99RTTMs value (float64 or any non-float64,
-// including nil) to its human-readable string for table output.
+// formatP99 converts a PathEntry.P99RTTMs value to its human-readable string
+// for table output.
 //
-// When P99RTTMs is nil or any non-float64 value (e.g. the string "pending"),
-// formatP99 returns "pending" — the AC-004 sentinel per BC-2.06.003 EC-003.
-// When P99RTTMs is a float64 it returns the formatted number (e.g. "22.00").
-func formatP99(p99 any) string {
-	if f, ok := p99.(float64); ok {
-		return fmt.Sprintf("%.2f", f)
+// When p99.Kind == PendingKind, formatP99 returns "pending" — the AC-004
+// sentinel per BC-2.06.003 EC-003. When p99.Kind == FloatKind it returns the
+// formatted number (e.g. "22.00").
+func formatP99(p99 metrics.RTTValue) string {
+	if p99.Kind == metrics.PendingKind {
+		return "pending"
 	}
-	return "pending"
+	return fmt.Sprintf("%.2f", p99.Value)
 }
 
 // formatPathsTable renders a slice of PathEntryWithQuality as a human-readable
