@@ -81,8 +81,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
-| W3-R2-M2 | MED | Route-time LWW snapshot: concurrent RegisterForwardingEntry not atomic with HMAC verify. | architect/implementer | open |
-| SW305-M4 | MED | W4-TEST-001: RouteFrame fire-once E-ADM-017 integration test (real FailureCounter + WithNow). | test-writer | DEFER-WAVE-4 |
+| W3-R2-M2 | MED | CLOSED 2026-07-05 — BENIGN-ADJUDICATED via PR #93 (a55be96): two-lookup interleaving defensible under ADR-003 LWW; FrameAuthKey value-copied before RUnlock (no torn key); verify-then-lookup preserved per ADR-009 v1.6. Witness tests `lww_concurrent_test.go` (race-provoking + no-forgery) are the durable audit trail; RegisterForwardingEntry doc comment carries the contract. | architect/implementer | CLOSED (adjudicated-accepted) |
+| SW305-M4 | MED | CLOSED 2026-07-05 — PR #93 (a55be96): `routing_hmac_fire_once_test.go` wires real FailureCounter + WithNow through RouteFrame; pins fire-once-at-crossing, no-refire-in-window (EC-011), drain-only re-arm (PC-3). | test-writer | CLOSED |
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001); candidate self-improvement story. | orchestrator | open/deferred |
 | W3-DEFER-1..6 | MED/OBS | Worktree tuple codification; M-1 relay busy-spin; fired-source LRU eviction; M-2 unbounded E-ADM-016 log; EC-005 import-boundary lint; real-connector PTY-EOF integration. Detail: `cycles/cycle-1/closed-drift.md`. | various | deferred |
 | S402-F007 | LOW | S-4.02: ARCH-03 N=3 vs BC-2.02.004 N=5 — reconcile ARCH-03. | architect | open |
