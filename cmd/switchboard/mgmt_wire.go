@@ -36,7 +36,10 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/mgmt"
+	"github.com/arcavenae/switchboard/internal/netingress"
+	"github.com/arcavenae/switchboard/internal/routing"
 	"github.com/arcavenae/switchboard/internal/session"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
 )
@@ -352,15 +355,19 @@ func startMgmtServer(
 // binds a data-plane TCP listener on cfg.ListenAddr, and blocks until ctx is
 // cancelled (ARCH-01 §Goroutine WaitGroup Contract).
 //
-// Real frame transport is out of scope for this story (deferred to S-BL.NI /
-// S-BL.OA). The data-plane listener performs accept-and-immediately-close so
-// that the bind itself is observable to smoke harnesses and integration tests
-// but no framing or session handling is attempted.
+// The data-plane listener reads self-delimiting framed messages from each
+// accepted connection and dispatches them to routing.RouteFrame via the
+// internal/netingress package (S-BL.NI). RouteFrame enforces the fail-closed
+// HMAC-then-admission ordering (ADR-009; BC-2.05.008) and records per-source
+// HMAC failures against the FailureCounter for E-ADM-017 (BC-2.05.005 PC-3).
 //
 // Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
 //  1. newMgmtServer — construct server (no goroutine)
 //  2. wireMetricsHandlers — register metrics RPC handlers before Serve
-//  3. serveMgmtServer — start Serve goroutine
+//  3. buildRouter — construct routing.Router + FailureCounter
+//  4. bind data-plane listener (cfg.ListenAddr — BC-2.09.003 PC-9 application)
+//  5. serveMgmtServer — start Serve goroutine
+//  6. netingress.Serve — start data-plane accept loop
 //
 // Ruling J: any mgmt-start failure aborts daemon startup — no degraded-management
 // mode. A data-plane bind failure similarly aborts (the router is useless
@@ -371,8 +378,12 @@ func startMgmtServer(
 // production; tests may pass nil (in which case the messages are suppressed).
 //
 // #DEFERRED — E→PE mode graduation, SIGHUP config reload, DRAIN-signal-to-nodes
-// protocol (S-7.04 Wave 7), and the real frame transport (S-BL.NI / S-BL.OA)
-// all ship in later stories.
+// protocol (S-7.04 Wave 7), and outer-header session bootstrap (S-BL.OA)
+// still ship in later stories. Router-to-node forwarding-table registration
+// (real admission handshake feeding RegisterForwardingEntry) is also deferred
+// until admission plumbing lands; in this story the router accepts frames and
+// drops them fail-closed when auth keys are unavailable, exercising the live
+// RouteFrame path.
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
@@ -401,34 +412,46 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 		return fmt.Errorf("runRouter: wire metrics handlers: %w", err)
 	}
 
-	// Phase (c): bind the data-plane TCP listener on cfg.ListenAddr.
-	// Real frame transport is deferred; we accept-and-close so the bind is
-	// observable and any accept-loop errors surface promptly on shutdown.
+	// Phase (c): build the Router with a live FailureCounter.
+	// buildRouter (defined in access.go) constructs a routing.Router with the
+	// stdLogger wrapping w (nil-safe) and a FailureCounter at threshold=5,
+	// window=60s per BC-2.05.005 PC-3. The FailureCounter now drives a live
+	// E-ADM-017 path — no longer dormant.
+	routerLogger := newStdLogger(w)
+	router := buildRouter(admission.NewAdmittedKeySet(), routerLogger)
+
+	// Phase (d): bind the data-plane TCP listener on cfg.ListenAddr
+	// (BC-2.09.003 PC-9 application point — the deferred listen_addr binding
+	// now applies at ingress-listener construction time).
 	dataLn, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("runRouter: bind data-plane listener %q: %w", cfg.ListenAddr, err)
 	}
 
-	// Phase (d): start the mgmt Serve goroutine.
+	// Phase (e): start the mgmt Serve goroutine.
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
-	// Data-plane accept loop — accept-and-close only. When ctx is cancelled
-	// we Close the listener; the accept call unblocks with an error and the
-	// goroutine exits.
+	// Phase (f): start the netingress data-plane accept loop.
+	// Each accepted connection runs ServeConn: read a framed message, dispatch
+	// to routing.RouteFrame, repeat until EOF or ctx cancel. RouteFrame handles
+	// fail-closed drop when no forwarding entry exists (auth key unavailable)
+	// or when HMAC verification fails — both paths already log E-ADM-016 and
+	// record E-ADM-017 counter increments per BC-2.05.008 PC-4 / PC-5.
+	ingressCtx, ingressCancel := context.WithCancel(ctx)
+	defer ingressCancel()
+	route := func(hdr frame.OuterHeader, payload []byte) error {
+		return routing.RouteFrame(hdr, payload, router)
+	}
 	var dataWG sync.WaitGroup
 	dataWG.Add(1)
 	go func() {
 		defer dataWG.Done()
-		for {
-			conn, aerr := dataLn.Accept()
-			if aerr != nil {
-				// Listener closed (expected on ctx cancel) or terminal accept
-				// error; either way we exit the loop.
-				return
-			}
-			// Real framing is deferred (S-BL.NI / S-BL.OA). Close immediately.
-			_ = conn.Close()
+		// Serve returns nil on ctx cancel or a wrapped Accept error on
+		// terminal listener failure; we log and drop either way — the ctx
+		// cancel path is the graceful shutdown.
+		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger); serr != nil && ingressCtx.Err() == nil {
+			routerLogger.Log(fmt.Sprintf("runRouter: netingress.Serve exited: %v", serr))
 		}
 	}()
 
@@ -443,9 +466,10 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 	// Block until context is cancelled (ARCH-01 lifecycle contract).
 	<-ctx.Done()
 
-	// Graceful shutdown: close the data-plane listener first so the accept
-	// loop unblocks, then shut down mgmt with a bounded budget.
-	_ = dataLn.Close()
+	// Graceful shutdown: cancel ingress ctx so netingress.Serve closes the
+	// listener and joins its per-conn goroutines, then shut down mgmt with a
+	// bounded budget.
+	ingressCancel()
 	dataWG.Wait()
 
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)

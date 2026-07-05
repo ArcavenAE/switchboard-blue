@@ -412,9 +412,10 @@ func TestRunRouter_StartsWithMgmt(t *testing.T) {
 // process must succeed while runRouter is in its blocking select. Once bound,
 // we cancel the ctx and assert runRouter returns cleanly.
 //
-// Real frame transport is out of scope for this story (deferred to S-BL.NI /
-// S-BL.OA); the listener performs accept-and-immediately-close for now, but
-// the bind itself is the observable.
+// Real frame transport is now live via S-BL.NI (netingress → RouteFrame).
+// This test still asserts the bind itself as its observable; frame-dispatch
+// coverage lives in internal/netingress/*_test.go. Outer-header session
+// bootstrap (S-BL.OA) remains deferred.
 //
 // Traces: S-BL.ROUTER-RUNTIME AC-002.
 func TestRunRouter_DataListenerBinds(t *testing.T) {

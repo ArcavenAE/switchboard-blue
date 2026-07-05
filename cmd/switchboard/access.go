@@ -100,10 +100,10 @@ type connectorIface interface {
 // --config supplied) or cfg.TickInterval is zero, defaultTickInterval (10ms) is
 // returned.
 //
-// Note: listen_addr, drain_timeout, upstream_routers, and keepalive_interval
-// application is explicitly deferred — listen_addr to S-BL.NI (network-ingress
-// listener story, no current owner), drain_timeout/upstream_routers/
-// keepalive_interval to S-7.04 (Wave 7). Those fields are validated at startup
+// Note: drain_timeout, upstream_routers, and keepalive_interval application
+// is explicitly deferred to S-7.04 (Wave 7). listen_addr is applied by
+// S-BL.NI at the netingress listener bind (see runRouter in mgmt_wire.go —
+// BC-2.09.003 PC-9). Those remaining fields are validated at startup
 // (AC-005 through AC-008) but NOT applied here.
 func tickIntervalFor(cfg *config.Config) time.Duration {
 	if cfg != nil && cfg.TickInterval > 0 {
@@ -224,7 +224,8 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 // tick_interval is applied in runAccess (via tickIntervalFor) before the
 // half-channel is constructed and before this function is called. Further
 // deferred config fields (drain_timeout, upstream_routers, keepalive_interval)
-// are owned by S-7.04 (Wave 7). listen_addr binding is owned by S-BL.NI.
+// are owned by S-7.04 (Wave 7). listen_addr binding is owned by S-BL.NI and
+// applied at netingress listener bind in runRouter.
 //
 // On ctx already done: returns E-SYS-002 error immediately without starting
 // goroutines (BC-2.04.007 PC-1 / AC-007).
@@ -390,15 +391,26 @@ type stdLogger struct{ l *log.Logger }
 
 func (s stdLogger) Log(msg string) { s.l.Print(msg) }
 
+// newStdLogger returns a stdLogger writing to w. If w is nil, output is
+// discarded — matches the nil-writer suppression contract used by runRouter
+// for test injection.
+func newStdLogger(w io.Writer) stdLogger {
+	if w == nil {
+		w = io.Discard
+	}
+	return stdLogger{log.New(w, "", 0)}
+}
+
 // buildRouter constructs the routing.Router with the provided routing.Logger
 // and a FailureCounter injected (obligation 1 — AC-001; BC-2.05.008 PC-2/PC-5;
 // FIX 2 injectable logger; C-1 wire-up).
 //
-// The FailureCounter (threshold=5, window=60s per BC-2.05.005 PC-3) is now wired
+// The FailureCounter (threshold=5, window=60s per BC-2.05.005 PC-3) is wired
 // and will emit E-ADM-017 after ≥5 HMAC failures from the same source within the
-// window. The counter is dormant-but-present in Wave 3 because the live
-// network-ingress listener (which feeds RouteFrame from the network) is deferred
-// to story S-BL.NI — the counter itself is not deferred.
+// window. As of S-BL.NI the network-ingress listener that feeds RouteFrame is
+// live (runRouter → netingress.Serve → routing.RouteFrame); the counter is no
+// longer dormant when routers run — the live path is exercised by
+// TestIntegration_EADM017_FiresThroughLiveIngress in internal/netingress.
 //
 // The logger is supplied by the caller (runAccess passes stdLogger wrapping the
 // injected stderr writer; tests may pass a captureLogger for assertion).
