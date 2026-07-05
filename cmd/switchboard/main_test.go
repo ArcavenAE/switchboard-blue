@@ -1385,10 +1385,12 @@ func TestBC_2_09_003_InvalidConfig_DoesNotEnterRunAccess(t *testing.T) {
 // Scope note (Deferred Application — BC-2.09.003 v1.3 DEFERRED-APPLICATION):
 // This test covers ONLY tick_interval application. The following fields are
 // validated at startup (AC-005 through AC-008) but their application is deferred:
-//   - listen_addr binding → S-BL.NI (network-ingress listener, no current owner)
+//   - listen_addr binding → applied by S-BL.NI at netingress listener bind
+//     in runRouter; asserted by TestRunRouter_DataListenerBinds and the
+//     E-ADM-017 live-path integration test in internal/netingress.
 //   - drain_timeout / upstream_routers / keepalive_interval → S-7.04 (Wave 7)
 //
-// Those deferred fields are intentionally NOT asserted here.
+// Those still-deferred fields are intentionally NOT asserted here.
 //
 // Traces: BC-2.09.003 PC-9, Inv-5; AC-009; S-6.01 v1.4 EC-011.
 func TestConfigTickIntervalApplied(t *testing.T) {
