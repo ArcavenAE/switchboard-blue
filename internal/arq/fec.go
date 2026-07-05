@@ -36,12 +36,22 @@ const DefaultFECGroupSize = 4
 // or operator messaging (AC-003, BC-2.02.007 PC-4).
 var ErrTooManyLosses = errors.New("fec: too many losses in group")
 
-// _ anchors the frame import at package scope (ARCH-08; F-P8-008).
-// Parity frames carry frame_type=frame.FrameTypeFec=0x05 in their outer
-// header; the constant is referenced in Encoder.AddFrame and Decoder.Recover
-// doc comments and callers must use it — keeping the import live here makes
-// the dependency explicit without polluting the hot path.
-var _ = frame.FrameTypeFec
+// ErrMissingParity is returned by Recover when exactly one data frame in the
+// group is missing but parityPayload is nil — recovery is impossible without
+// the parity frame. Callers MUST treat this like ErrTooManyLosses and invoke
+// the ARQ SACK/retransmit path (AC-003, AC-004; BC-2.02.007 PC-4).
+//
+// Module-internal by the same convention as ErrTooManyLosses (issue #45 / CR-004).
+var ErrMissingParity = errors.New("fec: missing parity payload for group with loss")
+
+// ParityFrameType is the outer-header frame type for FEC parity frames
+// (frame.FrameTypeFec = 0x05). Callers wrapping a parity payload returned by
+// Encoder.AddFrame MUST set the outer header FrameType to this constant
+// (AC-001; ARCH-08 position 9: arq→frame import is legal; F-P8-008).
+//
+// This replaces the former blank-discard import anchor (`var _ =
+// frame.FrameTypeFec`) with a functional use (issue #44 / CR-001).
+const ParityFrameType = frame.FrameTypeFec
 
 // FECConfig carries construction parameters for NewEncoder and NewDecoder.
 type FECConfig struct {
@@ -179,9 +189,8 @@ func NewDecoder(cfg FECConfig) *Decoder {
 // group silently on ErrTooManyLosses; it MUST invoke the ARQ SACK/retransmit
 // path (AC-003, AC-004; BC-2.02.007 PC-4).
 //
-// The parity frame type constant is frame.FrameTypeFec (=0x05); the import is
-// anchored at package scope (see var _ = frame.FrameTypeFec above) — callers
-// must use frame.FrameTypeFec rather than a local literal.
+// The parity frame type constant is ParityFrameType (= frame.FrameTypeFec =
+// 0x05); callers must use it rather than a local literal.
 func (d *Decoder) Recover(group [][]byte, parityPayload []byte) ([]byte, error) {
 	// Count losses (nil entries in group) and locate the single missing index.
 	losses := 0
@@ -200,6 +209,13 @@ func (d *Decoder) Recover(group [][]byte, parityPayload []byte) ([]byte, error) 
 	// No loss: nothing to recover.
 	if losses == 0 {
 		return nil, nil
+	}
+
+	// Exactly one loss but no parity frame: recovery is impossible. Without
+	// this guard, XOR-ing against a nil parity base silently yields a
+	// zero-length "recovered" payload (issue #45 / CR-004).
+	if parityPayload == nil {
+		return nil, ErrMissingParity
 	}
 
 	// Exactly one loss: recovered = parityPayload XOR (XOR of all non-nil payloads).
