@@ -325,14 +325,50 @@ asserts the shared main.go signal-handling and config-load path.
 
 Summary line format: `Tier 3: <N> passed, <M> expected-failed, <K> unexpected-failed`.
 
+### Spec assertions (Plan D)
+
+`test/smoke/spec-runner.sh` executes `test/smoke/spec-assertions.json`
+— a machine-readable catalog projecting spec acceptance criteria into
+behavioral assertions. Where Tier 1 sentinels are hand-written bash
+guarding *shipped fixes*, spec assertions are data guarding *spec
+claims*: each entry cites its BC/AC anchor, restates the claim in
+prose, and declares the expected behavior (exit code, stream
+emptiness, substring presence, or a `jq` predicate over JSON output).
+Adding spec coverage = adding a JSON entry; no new shell. Runs on
+every PR alongside Tier 1 (`just smoke-spec`; <5s).
+
+Assertion vocabulary: `exit`, `stdout_empty`, `stderr_empty`,
+`stdout_contains`, `stderr_contains`, `stderr_contains_2`,
+`stdout_jq`, `stderr_jq`. Same contract rules as the tiers —
+behavioral only, never cosmetic.
+
+Expected-fail entries carry `expected_fail: "<issue> — <reason>"`. A
+failing expected-fail reports XFAIL and does not fail the run; a
+*passing* expected-fail reports XPASS and FAILS the run — the fixing
+PR must remove the annotation (same discipline as Tier 3's #144
+gate). SPEC-2/SPEC-4 are expected-fail on issue #89 (error-path
+double-print breaks whole-stream JSON parse) — found by this
+harness's first run, which is the validation the pattern needed.
+
+| ID | Anchor | Claim |
+|---|---|---|
+| SPEC-1 | BC-2.06.003 AC-006 / BC-2.07.003 | daemon-unreachable exits 1 with `E-NET-001` on stderr, stdout clean |
+| SPEC-2 | BC-2.06.003 AC-006 / S-6.05 envelope | `--json` unreachable error is one machine-parseable envelope (`.ok==false`, `.error.code=="E-NET-001"`) — **expected-fail #89** |
+| SPEC-3 | S-5.02 F-M1 / E-CFG-010 | `router status --target=` exits 2 with `E-CFG-010` on stderr |
+| SPEC-4 | S-5.02 F-M1 / S-6.05 envelope | `--json` usage error still emits the envelope — **expected-fail #89** |
+| SPEC-5 | BC-2.09.003 E-CFG-004 | nonexistent `--config` exits 1 with `E-CFG-004` + offending path on stderr |
+
 ### Adding a new invariant
 
 1. Confirm the assertion is behavioral, not cosmetic.
 2. Pick the right tier by cost and cadence. Tier 1 for cheap
    binary-boundary checks; Tier 2 for anything requiring a live
-   daemon; Tier 3 for tutorial-derived assertions.
+   daemon; Tier 3 for tutorial-derived assertions. If the assertion
+   restates a spec AC's claim verbatim, prefer a spec-assertions.json
+   entry over a bespoke sentinel.
 3. Add the check to the appropriate script following its existing
-   pattern (`run_capture` → conditional → `emit`).
+   pattern (`run_capture` → conditional → `emit`) — or, for spec
+   assertions, add the JSON entry with its BC/AC anchor.
 4. Add a row to the table above with the guarded-against defect class.
 5. If the invariant guards a specific PR-shipped fix, cite the PR
    number in the script comment.

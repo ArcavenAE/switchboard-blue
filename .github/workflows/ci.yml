@@ -140,6 +140,12 @@ jobs:
           go build -ldflags "-X main.version=${STAMP}" -o bin/sbctl ./cmd/sbctl
           VERSION="${STAMP}" bash test/smoke/invariants.sh
 
+      # Spec assertions (Plan D, task #178) — data-driven projection of spec
+      # ACs into behavioral assertions. Catalog: test/smoke/spec-assertions.json.
+      # Reuses the binaries built by the Tier 1 step above. <5s.
+      - name: Spec assertions (Plan D)
+        run: bash test/smoke/spec-runner.sh
+
       - name: Upload smoke report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -1,0 +1,55 @@
+{
+  "_comment": "Plan D spec-as-test catalog (task #178). Each entry is a machine-readable projection of a spec acceptance criterion: the `anchor` cites the BC/AC (or story AC) that owns the claim, `claim` restates it in prose, and the `want` block is the behavioral assertion. Rules follow the Tier 1 contract (docs/architecture.md §Smoke invariants): behavioral only — exit codes, stream direction, substring presence, JSON field values. NEVER byte-exact goldens. Adding an assertion requires no bash — the runner (spec-runner.sh) is generic. Available in `cmd`: $BIN_SWITCHBOARD, $BIN_SBCTL, $SMOKE_KEY (ephemeral valid ed25519 private key), $SMOKE_TMPDIR.",
+  "assertions": [
+    {
+      "id": "SPEC-1",
+      "anchor": "BC-2.06.003 AC-006 (S-5.02) / BC-2.07.003",
+      "claim": "sbctl paths list with unreachable daemon exits 1 with E-NET-001 on stderr",
+      "cmd": "$BIN_SBCTL --target=127.0.0.1:39999 --key=$SMOKE_KEY paths list",
+      "want": { "exit": 1, "stderr_contains": "E-NET-001", "stdout_empty": true }
+    },
+    {
+      "id": "SPEC-2",
+      "anchor": "BC-2.06.003 AC-006 (S-5.02) / S-6.05 json-envelope-integrity",
+      "claim": "sbctl --json daemon-unreachable error is a machine-parseable envelope: ok=false, error.code=E-NET-001, nothing on stdout",
+      "expected_fail": "#89 — error path double-prints to stderr; envelope line followed by plain-text line breaks whole-stream JSON parse",
+      "cmd": "$BIN_SBCTL --json --target=127.0.0.1:39999 --key=$SMOKE_KEY paths list",
+      "want": {
+        "exit": 1,
+        "stdout_empty": true,
+        "stderr_jq": ".ok == false and .error.code == \"E-NET-001\""
+      }
+    },
+    {
+      "id": "SPEC-3",
+      "anchor": "S-5.02 F-M1 / E-CFG-010 (BC-2.09.003 taxonomy)",
+      "claim": "sbctl router status with --target= (empty value) is a usage error: exit 2 with E-CFG-010 on stderr",
+      "cmd": "$BIN_SBCTL router status --target=",
+      "want": { "exit": 2, "stderr_contains": "E-CFG-010", "stdout_empty": true }
+    },
+    {
+      "id": "SPEC-4",
+      "anchor": "S-5.02 F-M1 / S-6.05 json-envelope-integrity",
+      "claim": "sbctl --json usage error still emits the JSON envelope (ok=false, code E-CFG-010) and keeps stdout clean",
+      "expected_fail": "#89 — error path double-prints to stderr; envelope line followed by plain-text line breaks whole-stream JSON parse",
+      "cmd": "$BIN_SBCTL --json router status --target=",
+      "want": {
+        "exit": 2,
+        "stdout_empty": true,
+        "stderr_jq": ".ok == false and .error.code == \"E-CFG-010\""
+      }
+    },
+    {
+      "id": "SPEC-5",
+      "anchor": "BC-2.09.003 AC (E-CFG-004 config-not-found)",
+      "claim": "switchboard control with a nonexistent config path exits 1 with E-CFG-004 and the offending path on stderr",
+      "cmd": "$BIN_SWITCHBOARD control --config $SMOKE_TMPDIR/does-not-exist.toml",
+      "want": {
+        "exit": 1,
+        "stderr_contains": "E-CFG-004",
+        "stderr_contains_2": "does-not-exist.toml",
+        "stdout_empty": true
+      }
+    }
+  ]
+}
