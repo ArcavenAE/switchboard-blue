@@ -478,6 +478,43 @@ func (a *ARQ) InFlightContains(seq uint32) bool {
 	return ok
 }
 
+// PayloadForInFlight returns a defensive copy of the payload for the frame
+// enqueued at seq, or nil when seq is not in the retransmit queue.
+//
+// The boundary-layer sender (internal/arqsend) uses this to fetch the
+// original content for a retransmit under a new sequence number (QUIC
+// retransmit model, BC-2.02.005 PC-5): the caller composes a new wire
+// frame with the returned bytes, then calls RemoveInFlight(oldSeq) to
+// release the superseded queue entry after EnqueueSend(newSeq, ...) has
+// taken ownership of the content.
+//
+// The returned slice is a fully-owned copy; the caller may mutate it
+// without affecting ARQ state (go.md rule 12).
+//
+// Concurrency: single-writer contract (see package doc).
+func (a *ARQ) PayloadForInFlight(seq uint32) []byte {
+	f, ok := a.inFlight[seq]
+	if !ok {
+		return nil
+	}
+	p := make([]byte, len(f.payload))
+	copy(p, f.payload)
+	return p
+}
+
+// RemoveInFlight deletes the retransmit-queue entry for seq. Idempotent:
+// calling RemoveInFlight for an absent seq is a no-op (no error, no panic).
+//
+// The boundary-layer sender calls this after a retransmit under a new
+// sequence number has been dispatched and enqueued so subsequent
+// GapsToRetransmit calls do not re-emit the old seq as a gap
+// (BC-2.02.005 PC-5 — retransmit content moves to the new seq).
+//
+// Concurrency: single-writer contract (see package doc).
+func (a *ARQ) RemoveInFlight(seq uint32) {
+	delete(a.inFlight, seq)
+}
+
 // bitmapToUint64 converts the 8-byte big-endian SACK bitmap to a uint64.
 func bitmapToUint64(b [SACKBitmapBytes]byte) uint64 {
 	return uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 |
