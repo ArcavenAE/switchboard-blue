@@ -27,8 +27,8 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: b8ed015
-open_prs: 1
+develop_head: 7a974f6
+open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: phase-6-dispatch
 historical_cycles: []
@@ -88,7 +88,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | S402-F007 | LOW | S-4.02: ARCH-03 N=3 vs BC-2.02.004 N=5 — reconcile ARCH-03. | architect | open |
 | S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame; PC-3 retransmit anchored S-BL.ARQ-TX; ADR-005 resync wire-mechanics re-anchored S-BL.OA (S-BL.NI delivered PR #94 ingress-only — resync/inner-frame composition explicitly out of scope per PR #94 scope boundary). | product-owner/architect | anchored |
 | S404-OBS-F / S404-LOW-1 | OBS/LOW | S-4.04 E-FWD-001 rate-limit LATENT; 3 LOW + NITPICK (SEC-001 CRC32 accepted). | architect/implementer | re-confirm on production wiring |
-| S601-SEC-001..002 | LOW | S-6.01 CWE-117 sanitize --config; CWE-400 explicit slice cap. | implementer | deferred cycle-close |
+| S601-SEC-001..002 | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): CWE-117 `--config` path stripped of Unicode control chars before E-CFG-004/E-CFG-005 Detail interpolation; CWE-400 Validate() caps per-entry upstream_routers failures at UpstreamRoutersFailureCap=100 with truncation marker (internal/config/security_hardening_test.go). | implementer | CLOSED |
 | OBS-VP-BENCH | OBS | VP-041/VP-042 unverified pending S-BL.BENCH story. | orchestrator | deferred S-BL.BENCH |
 | PROCESS-GAP-W4 | OBS | CLOSED 2026-07-05 — S-BL.NI merged PR #94 (b8ed015) carries `TestIntegration_ConcurrentRegisterAndRouteRaceClean` (4 register writers × 4 ingress dialers under -race, cross-component netingress+routing). | orchestrator/architect | CLOSED |
 | F-009 | LOW | ARCH-INDEX input-hash tooling field-name mismatch. | architect/devops | deferred maintenance |
@@ -96,7 +96,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | PROCESS-GAP-W5A | OBS | [process-gap] Two false-greens in Wave 5; candidate: require `just test-race` evidence-paste before green-claim. | orchestrator | open — candidate codification |
 | DRIFT-SW501-NITPICK | LOW | S-W5.01 Pass-3 nitpicks (stale RED-GATE comments, dead `_ = pub`). | implementer | Wave-6 hygiene story |
 | PROCESS-GAP-P21..P25 | OBS | [process-gap] Sibling-sweep gap crystallized; vsdd-factory #361–#364 filed. | orchestrator/story-writer | open — issues filed |
-| S502-DEFER-1..2 | MED | S-5.02 runRouterStatus auth-timeout gap; writeSuccess os.Exit(3) outside main(). | implementer | defer wave-gate/phase-5 |
+| S502-DEFER-1..2 | MED | CLOSED 2026-07-05 — PR #95 (7a974f6): DEFER-1 runRouterStatus auth-path `net.Error.Timeout()` → E-NET-001 (BC-2.07.003 Inv-2 parity with connectAndRun); DEFER-2 writeSuccess os.Exit(3) refactored to `*internalError` sentinel mapped in main() (extends PR #91 reportedError pattern; go.md exit-site discipline). | implementer | CLOSED |
 | S502-DEFER-4..6 | LOW | S-5.02 ARCH-11/dep-graph VP totals; §Arch Compliance asymmetric; token-budget footnote. | architect/story-writer | defer post-conv sweep |
 | SW502-DEFER-1..8 | LOW | S-W5.02 CR-002/005-009 + SEC-001/002. Detail: `cycles/cycle-1/closed-drift.md`. | implementer/test-writer | deferred wave-6 / phase-5 |
 | PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep at BC/VP bumps. | orchestrator | policy-registry-update |
@@ -117,15 +117,14 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | S-BL.NI landed real connections (PR #94, b8ed015) — ingress conns now exist to hold a drain open, but drain-timeout forced-exit remains unevidenced: needs a test holding a live ingress conn past drain_timeout. Re-anchored: S-7.04 (owns drain_timeout application per BC-2.09.003 PC-7/PC-8). | orchestrator | open — re-anchored S-7.04 |
 | DRIFT-P5P1-B-M002-BC209003-DEFERRED-UNTRACKED | MEDIUM | BC-2.09.003 PC-7/PC-8/PC-9 have DEFERRED-APPLICATION obligation tied to S-7.04 (status: pending). No mechanism ensures these become release-gate blockers if S-7.04 deprioritizes. | product-owner | open |
 | DRIFT-P5P1-B-M001-POL003-QUANTIFICATION | LOW | Expansion of DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with quantification: 1/76 VPs (VP-048 only) carry source_bc version-pin suffix. Task #72 (upstream drbothen/vsdd-factory filing) subsumes this. | orchestrator | open |
-| DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | `cmd/sbctl/e2e_helpers_test.go:191` registers mock for `admin.key.list` where shipped surface is `admin.key.list-keys`. Refs F-P5P2-A-003. | implementer | open |
+| DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | CLOSED 2026-07-05 — verified during PR #95 sweep: already fixed by PR #69 (03ce8e7); e2e_helpers_test.go:191 registers `admin.key.list-keys`. Stale row. | implementer | CLOSED |
 | DRIFT-P5P2-B-O003-ECFG-COLLISION-MAINTENANCE | LOW | E-CFG-002 + E-CFG-006 codespace collisions across two BC-2.09.003 minor bumps acknowledged but no maintenance-pass story scheduled. Refs O-P5P2-B-003. | orchestrator | open, awaiting maintenance-pass story |
 | DRIFT-P5P4-ADMINWIRE-EXTRACTION | LOW | Inline wire arg structs; future maintenance cycle or Wave-7+. | architect | DEFERRED |
 | DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR | LOW | [process-gap] No version-floor rule on test taxonomy citations. vsdd-factory issue pending. | orchestrator | open |
-| DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | router status --target= (empty value) path lacks dedicated test case; 3 fs.Parse paths likewise. Follow-on micro-addition to production_exit_code_test.go. | implementer | open |
-| DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | admin.go:395 interactive-confirm mismatch returns plain fmt.Errorf while --confirm sibling uses usageErrf; needs adjudication whether interactive-mismatch is usage-class before converting. | implementer | open |
+| DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): Go-level test pins router status `--target=` → exit 2 (router_status_test.go); covered-at-two-levels with SPEC-3 binary assertion. | implementer | CLOSED |
+| DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): adjudicated usage-class — interactive-confirm mismatch converted to `usageErrf` (exit 2), parity with --confirm sibling call sites (admin.go:400). | implementer | CLOSED |
 | DRIFT-P5P14-B-001-VP-SOURCE-BC-VERSION-PIN | MED | DEFERRED — POL-003 candidate (VP source_bc version-pin) not ratified. Sweep scope: 77 VP frontmatters. Target release: post-POL-003 ratification. See P5-pass-14-Adv-B.md finding F-P5P14-B-001. | spec-steward | DEFERRED |
 | POL-006-DEFERRED-LINT | OBS | POL-006 reverse-trace class recurred in 5 consecutive Lane-B passes (P22-obs, P24×3, P25×1, P26×2). Machine-checkable via ARCH-11↔VP-INDEX bidirectional lint. Burst 68b established clean baseline. Deferred to post-Phase-5 upstream issue filing. | orchestrator | deferred-upstream |
-| S502-DEFER-1..2 | MED | S-5.02 runRouterStatus auth-timeout gap; writeSuccess os.Exit(3) outside main(). | implementer | defer wave-gate/phase-5 |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
