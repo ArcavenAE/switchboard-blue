@@ -24,7 +24,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -345,17 +344,106 @@ func startMgmtServer(
 	return serveMgmtServer(ctx, wg, srv), nil
 }
 
-// runRouter is the router-mode daemon entry point.
-// The router daemon body (and its management server wiring) ships in its
-// owning story; until then this mode is not implemented. It deliberately
-// does NOT open a management listener — starting one for a daemon that
-// does not run would leak a bound socket and an untracked goroutine.
+// runRouter is the router-mode daemon entry point (S-BL.ROUTER-RUNTIME).
 //
-// AC-004 (S-6.06): when router mode is implemented, startMgmtServer MUST pass
-// nil (or an empty slice) for admin handlers — router daemons must NOT register
-// admin.key.* handlers (ADR-004 role-exclusion; ARCH-04 disambiguation table).
-func runRouter(_ context.Context, _ io.Writer, _ *config.Config) error {
-	return errors.New("runRouter: not implemented")
+// It generates an ephemeral Ed25519 keypair, starts the management server
+// with a nil admin-handler set (ADR-004 role-exclusion; ARCH-04 disambiguation
+// table; AC-004 — router daemons MUST NOT register admin.key.* handlers),
+// binds a data-plane TCP listener on cfg.ListenAddr, and blocks until ctx is
+// cancelled (ARCH-01 §Goroutine WaitGroup Contract).
+//
+// Real frame transport is out of scope for this story (deferred to S-BL.NI /
+// S-BL.OA). The data-plane listener performs accept-and-immediately-close so
+// that the bind itself is observable to smoke harnesses and integration tests
+// but no framing or session handling is attempted.
+//
+// Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
+//  1. newMgmtServer — construct server (no goroutine)
+//  2. wireMetricsHandlers — register metrics RPC handlers before Serve
+//  3. serveMgmtServer — start Serve goroutine
+//
+// Ruling J: any mgmt-start failure aborts daemon startup — no degraded-management
+// mode. A data-plane bind failure similarly aborts (the router is useless
+// without a listen address).
+//
+// Logging: the injected writer receives the listen address and management
+// socket path on successful startup. Callers (main.go) pass os.Stderr in
+// production; tests may pass nil (in which case the messages are suppressed).
+//
+// #DEFERRED — E→PE mode graduation, SIGHUP config reload, DRAIN-signal-to-nodes
+// protocol (S-7.04 Wave 7), and the real frame transport (S-BL.NI / S-BL.OA)
+// all ship in later stories.
+func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
+	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("runRouter: generate daemon keypair: %w", err)
+	}
+
+	// Phase (a): construct mgmt server with NIL admin handlers.
+	// AC-004 / ADR-004: router MUST NOT register admin.key.* handlers.
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "router", daemonPriv, nil)
+	if mgmtErr != nil {
+		return fmt.Errorf("runRouter: construct management server: %w", mgmtErr)
+	}
+
+	// Phase (b): register metrics handlers before Serve starts.
+	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+		return fmt.Errorf("runRouter: wire metrics handlers: %w", err)
+	}
+
+	// Phase (c): bind the data-plane TCP listener on cfg.ListenAddr.
+	// Real frame transport is deferred; we accept-and-close so the bind is
+	// observable and any accept-loop errors surface promptly on shutdown.
+	dataLn, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		return fmt.Errorf("runRouter: bind data-plane listener %q: %w", cfg.ListenAddr, err)
+	}
+
+	// Phase (d): start the mgmt Serve goroutine.
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
+
+	// Data-plane accept loop — accept-and-close only. When ctx is cancelled
+	// we Close the listener; the accept call unblocks with an error and the
+	// goroutine exits.
+	var dataWG sync.WaitGroup
+	dataWG.Add(1)
+	go func() {
+		defer dataWG.Done()
+		for {
+			conn, aerr := dataLn.Accept()
+			if aerr != nil {
+				// Listener closed (expected on ctx cancel) or terminal accept
+				// error; either way we exit the loop.
+				return
+			}
+			// Real framing is deferred (S-BL.NI / S-BL.OA). Close immediately.
+			_ = conn.Close()
+		}
+	}()
+
+	// Log resolved listen address + mgmt socket path.
+	// The writer is os.Stderr in production (main.go); the tutorial doc says
+	// "stdout" — this is a known documentation drift called out in the PR body.
+	if w != nil {
+		_, _ = fmt.Fprintf(w, "switchboard router: data plane listening on %s\n", dataLn.Addr().String())
+		_, _ = fmt.Fprintf(w, "switchboard router: management socket at %s\n", resolveManagementSocket(cfg, "router"))
+	}
+
+	// Block until context is cancelled (ARCH-01 lifecycle contract).
+	<-ctx.Done()
+
+	// Graceful shutdown: close the data-plane listener first so the accept
+	// loop unblocks, then shut down mgmt with a bounded budget.
+	_ = dataLn.Close()
+	dataWG.Wait()
+
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutCancel()
+	_ = mgmtSrv.Shutdown(shutCtx)
+	mgmtWG.Wait()
+	return nil
 }
 
 // runConsole is the console-mode daemon entry point (S-7.03).
