@@ -25,6 +25,19 @@ import (
 // accidental --config /dev/zero or a mispointed path to a large file (CWE-400).
 const maxConfigFileSize = 1 << 20 // 1 MiB
 
+// UpstreamRoutersFailureCap bounds the number of per-entry upstream_routers
+// failure lines Validate collects before appending a truncation marker and
+// halting further per-entry iteration for that field.
+//
+// Rationale (S601-SEC-002 / CWE-400): the file-level guard maxConfigFileSize
+// implicitly bounds slice length via YAML representation size (~64 bytes per
+// entry → ~16 K entries at the 1 MiB cap), but that's still far more failure
+// strings than any operator can act on and produces a wall of duplicated
+// error text.  An explicit, human-scale cap emits a clean truncation signal
+// so operators see the first 100 problems and fix them; if 100 aren't enough,
+// the config itself is broken beyond an interactive-diagnosis window.
+const UpstreamRoutersFailureCap = 100
+
 // ErrValidation (E-CFG-001) is returned when one or more config fields fail validation
 // (range violation, constraint violation, or a required field is missing).
 var ErrValidation = &ConfigError{Code: "E-CFG-001"}
@@ -203,12 +216,33 @@ func (c *Config) Validate() error {
 	}
 
 	// AC-006 / PC-6 / E-CFG-003: each upstream_routers[N].addr must be host:port.
+	//
+	// S601-SEC-002 / CWE-400: cap per-entry failure collection at
+	// UpstreamRoutersFailureCap.  Once the cap is hit, we stop generating
+	// per-entry lines and append a single truncation marker naming the
+	// remaining count so the operator sees WHY the list stopped rather than
+	// wondering if their 500th malformed entry passed silently.
+	upstreamFailures := 0
 	for i, r := range c.UpstreamRouters {
 		if err := validateHostPort(r.Addr); err != nil {
+			if upstreamFailures >= UpstreamRoutersFailureCap {
+				remaining := 0
+				for j := i; j < len(c.UpstreamRouters); j++ {
+					if validateHostPort(c.UpstreamRouters[j].Addr) != nil {
+						remaining++
+					}
+				}
+				failures = append(failures, fmt.Sprintf(
+					"config error: upstream_routers: %d additional upstream_routers entries failed validation; output truncated at %d failures. Fix: correct the reported entries first, then re-run to see the rest",
+					remaining, UpstreamRoutersFailureCap,
+				))
+				break
+			}
 			failures = append(failures, fmt.Sprintf(
 				"config error: upstream_routers[%d].addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'",
 				i, sanitizeAddrForError(r.Addr),
 			))
+			upstreamFailures++
 		}
 	}
 
@@ -327,17 +361,26 @@ func LoadFile(path string) (*Config, error) {
 	// path-based os.Stat and the subsequent os.ReadFile the file could be swapped
 	// for an unbounded one (e.g. /dev/zero). Using the handle for both the check
 	// and the read prevents that race.
+	// S601-SEC-001 / CWE-117: the --config path is operator-controlled input
+	// that we interpolate into error strings emitted to stderr.  Strip Unicode
+	// control characters before interpolation so a hostile path (e.g. one
+	// containing "\r\n\x1b[31m[FAKE]") cannot forge log lines or repaint the
+	// terminal.  Parity with the sanitizeAddrForError treatment F-SEC-002 gave
+	// to addr fields.  System calls still receive the original path — only the
+	// error-string projection is sanitized.
+	safePath := stripControlChars(path)
+
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, &ConfigError{
 				Code:   "E-CFG-004",
-				Detail: fmt.Sprintf("config file not found: %s", path),
+				Detail: fmt.Sprintf("config file not found: %s", safePath),
 			}
 		}
 		return nil, &ConfigError{
 			Code:   "E-CFG-004",
-			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
+			Detail: fmt.Sprintf("config file not found: %s: %v", safePath, err),
 		}
 	}
 	// Close is deferred; errors on a read-only handle are informational only
@@ -349,13 +392,13 @@ func LoadFile(path string) (*Config, error) {
 	if err != nil {
 		return nil, &ConfigError{
 			Code:   "E-CFG-004",
-			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
+			Detail: fmt.Sprintf("config file not found: %s: %v", safePath, err),
 		}
 	}
 	if !fi.Mode().IsRegular() {
 		return nil, &ConfigError{
 			Code:   "E-CFG-005",
-			Detail: fmt.Sprintf("config parse error: %s is not a regular file", path),
+			Detail: fmt.Sprintf("config parse error: %s is not a regular file", safePath),
 		}
 	}
 
@@ -367,7 +410,7 @@ func LoadFile(path string) (*Config, error) {
 	if err != nil {
 		return nil, &ConfigError{
 			Code:   "E-CFG-004",
-			Detail: fmt.Sprintf("config file not found: %s: %v", path, err),
+			Detail: fmt.Sprintf("config file not found: %s: %v", safePath, err),
 		}
 	}
 	if int64(len(data)) > maxConfigFileSize {
