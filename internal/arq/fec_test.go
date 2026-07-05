@@ -18,6 +18,7 @@ package arq_test
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -68,8 +69,17 @@ func xorOracle(payloads [][]byte) []byte {
 
 // encodeGroup drives enc.AddFrame for all payloads and returns the parity
 // payload emitted at the last frame. Fails the test if no parity is emitted.
+//
+// Guard (issue #46 / CR-005): payloads must be exactly ONE group. Passing a
+// multiple of the group size would emit parity mid-slice and trip the
+// mid-group assertion with a misleading message; fail fast with the real
+// reason instead.
 func encodeGroup(t *testing.T, enc *arq.Encoder, payloads [][]byte) []byte {
 	t.Helper()
+	if len(payloads) != enc.GroupSize() {
+		t.Fatalf("encodeGroup: got %d payloads; want exactly one group of %d — "+
+			"drive multi-group scenarios with explicit AddFrame loops", len(payloads), enc.GroupSize())
+	}
 	var parity []byte
 	for i, p := range payloads {
 		pp := enc.AddFrame(p)
@@ -332,6 +342,46 @@ func TestFEC_Recover_TwoLossesFail(t *testing.T) {
 	TestBC_2_02_007_Recover_TwoLossesFail(t)
 }
 
+// TestBC_2_02_007_Recover_SingleLossNilParity verifies the guard added for
+// issue #45 (CR-004): Recover with exactly one loss but a nil parityPayload
+// must return ErrMissingParity — not a silent zero-length "recovered" payload.
+// Recovery without the parity frame is impossible; the caller must fall back
+// to the ARQ SACK/retransmit path exactly as for ErrTooManyLosses
+// (AC-003, AC-004; BC-2.02.007 PC-4).
+func TestBC_2_02_007_Recover_SingleLossNilParity(t *testing.T) {
+	t.Parallel()
+
+	const groupSize = 4
+	enc := arq.NewEncoder(arq.FECConfig{GroupSize: groupSize})
+	dec := arq.NewDecoder(arq.FECConfig{GroupSize: groupSize})
+
+	payloads := buildPayloads(groupSize, 8)
+	// Drive the encoder to completeness for realism, but discard the parity —
+	// the scenario under test is "parity frame lost alongside one data frame".
+	_ = encodeGroup(t, enc, payloads)
+
+	withGap := make([][]byte, groupSize)
+	copy(withGap, payloads)
+	withGap[1] = nil
+
+	recovered, err := dec.Recover(withGap, nil)
+	if !errors.Is(err, arq.ErrMissingParity) {
+		t.Errorf("Recover(single loss, nil parity): want errors.Is(err, ErrMissingParity), got %v", err)
+	}
+	if recovered != nil {
+		t.Errorf("Recover(single loss, nil parity): want recovered==nil on error, got %v", recovered)
+	}
+
+	// Zero-loss + nil parity remains fine: nothing to recover, parity unused.
+	recovered, err = dec.Recover(payloads, nil)
+	if err != nil {
+		t.Fatalf("Recover(zero loss, nil parity): unexpected error: %v", err)
+	}
+	if recovered != nil {
+		t.Errorf("Recover(zero loss, nil parity): want recovered==nil, got %v", recovered)
+	}
+}
+
 // ─── AC-004: ErrTooManyLosses triggers ARQ retransmit fallback ───────────────
 
 // TestBC_2_02_007_FallbackToARQ_OnMultiLoss verifies AC-004 / BC-2.02.007
@@ -465,9 +515,6 @@ func TestBC_2_02_007_Encode_IncompleteLastGroup_NoParity(t *testing.T) {
 			t.Parallel()
 
 			enc := arq.NewEncoder(arq.FECConfig{GroupSize: groupSize})
-			t.Cleanup(func() {
-				// no-op resource cleanup hook; present for t.Cleanup pattern compliance
-			})
 
 			payloads := buildPayloads(tc.frameCount, 4)
 
@@ -578,15 +625,13 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 
 	// Runtime assertion counters. Group-size subtests are sequential (no t.Parallel)
 	// so count_verify at the end sees the final counts without atomics.
-	var totalRecovery, totalParity int64
+	// atomic.Int64 counters (issue #48 / CR-007): the groupSize subtests are
+	// sequential today, but atomics make the accumulators correct regardless of
+	// future parallelisation instead of relying on a comment-guard.
+	var totalRecovery, totalParity atomic.Int64
 
 	for groupSize := 2; groupSize <= 8; groupSize++ {
 		groupSize := groupSize
-		// DO NOT add t.Parallel() to this subtest. count_verify at the end of the
-		// outer test relies on sequential execution of groupSize subtests so that
-		// totalRecovery/totalParity int64 accumulators can be read without atomics
-		// (see subtest at count_verify — memory visibility is guaranteed by
-		// t.Run's happens-before when subtests are sequential).
 		t.Run(fmt.Sprintf("groupSize=%d", groupSize), func(t *testing.T) {
 			// Knuth MMIX LCG — each subtest gets its own seed derived from
 			// groupSize so runs are deterministic and subtests are independent.
@@ -624,7 +669,7 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 							groupSize, trial, k, b, parity[k])
 					}
 				}
-				totalParity++
+				totalParity.Add(1)
 
 				// Test single-loss recovery at every loss position.
 				for lossIdx := 0; lossIdx < groupSize; lossIdx++ {
@@ -651,7 +696,7 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 								groupSize, trial, lossIdx, k, want[k], recovered[k])
 						}
 					}
-					totalRecovery++
+					totalRecovery.Add(1)
 				}
 			}
 		})
@@ -661,8 +706,8 @@ func TestBC_2_02_007_VP043_SingleLossRecovery_Property(t *testing.T) {
 	// (t.Run returns only after all subtests spawned within this function finish).
 	// This barrier verifies the exact assertion counts claimed in the doc comment.
 	t.Run("count_verify", func(t *testing.T) {
-		n := totalRecovery
-		p := totalParity
+		n := totalRecovery.Load()
+		p := totalParity.Load()
 		t.Logf("VP-043 total recovery assertions: %d (expected 35000)", n)
 		t.Logf("VP-043 total parity oracle checks: %d (expected 7000)", p)
 		if n != 35000 {
