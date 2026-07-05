@@ -135,6 +135,27 @@ func NewRouter(ks *admission.AdmittedKeySet, opts ...RouterOption) *Router {
 // RegisterForwardingEntry adds or replaces a forwarding table entry for
 // (svtnID, nodeAddr). Last-write-wins semantics consistent with ADR-003.
 //
+// # Concurrency contract (W3-R2-M2 adjudicated 2026-07-05)
+//
+// RouteFrame snapshots the src-authkey under one RLock (step 1) and
+// SVTNRoute takes a separate RLock for the dst-entry lookup later.
+// A concurrent RegisterForwardingEntry between those two lookups is
+// acceptable under LWW: the sender is authenticated at the moment of
+// the step-1 snapshot; the delivery target is selected at whatever
+// snapshot SVTNRoute observes. Both are defensible outcomes of a
+// mutable table. FrameAuthKey is a [hmac.KeySize]byte value type and
+// is copied out of the table before RouteFrame's RUnlock, so the HMAC
+// computation never observes a torn key.
+//
+// Callers who need atomic verify-and-forward against a single snapshot
+// must serialize registrations against routing externally; this Router
+// intentionally does NOT hold the RLock across CPU-bound HMAC
+// verification (ADR-009 v1.6 §"Ordering specification").
+//
+// Regression witness: TestRouteFrame_ConcurrentRegisterForwardingEntry_*
+// in lww_concurrent_test.go — provokes the interleaving and asserts
+// (a) race-detector clean, (b) no forgery admission under LWW.
+//
 // Traces to BC-2.05.006 postcondition 2: the forwarding engine is partitioned
 // by SVTN ID — SVTN-A frames are forwarded only to SVTN-A admitted nodes.
 func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, authKey [hmac.KeySize]byte) {
