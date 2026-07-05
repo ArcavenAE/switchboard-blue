@@ -390,6 +390,16 @@ type stdLogger struct{ l *log.Logger }
 
 func (s stdLogger) Log(msg string) { s.l.Print(msg) }
 
+// newStdLogger returns a stdLogger writing to w. If w is nil, output is
+// discarded — matches the nil-writer suppression contract used by runRouter
+// for test injection.
+func newStdLogger(w io.Writer) stdLogger {
+	if w == nil {
+		w = io.Discard
+	}
+	return stdLogger{log.New(w, "", 0)}
+}
+
 // buildRouter constructs the routing.Router with the provided routing.Logger
 // and a FailureCounter injected (obligation 1 — AC-001; BC-2.05.008 PC-2/PC-5;
 // FIX 2 injectable logger; C-1 wire-up).
