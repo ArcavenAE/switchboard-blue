@@ -374,6 +374,15 @@ func startMgmtServer(
 // protocol (S-7.04 Wave 7), and the real frame transport (S-BL.NI / S-BL.OA)
 // all ship in later stories.
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
+	// Router mode requires a loaded config to bind the data-plane listener.
+	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
+	// would then nil-deref on cfg.ListenAddr and panic — a violation of the
+	// no-Go-panic operator taxonomy asserted by T2-4 / T3-4. Guard explicitly
+	// so the failure surfaces as a taxonomy-shaped error instead.
+	if cfg == nil {
+		return fmt.Errorf("runRouter: E-CFG-004: --config is required for router mode (no config loaded)")
+	}
+
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

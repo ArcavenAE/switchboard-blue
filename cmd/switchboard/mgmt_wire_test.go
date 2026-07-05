@@ -642,6 +642,41 @@ func TestRunRouter_SIGTERMLifecycle(t *testing.T) {
 	}
 }
 
+// TestRunRouter_NilConfigCleanError verifies that invoking runRouter with a
+// nil *config.Config returns a clean taxonomy-shaped error rather than
+// panicking on a cfg.ListenAddr nil-dereference.
+//
+// Root cause: main.go leaves cfg nil when --config is omitted; `switchboard
+// router` bare (the tutorial's exact shape) would nil-deref inside runRouter's
+// `net.Listen("tcp", cfg.ListenAddr)` call. On macOS the mgmt-socket bind to
+// /run/switchboard-router.sock fails first with a clean error (permission
+// denied), masking the bug. On Linux as root — the tutorial's exact
+// `sudo switchboard router` shape — the mgmt bind SUCCEEDS and the nil deref
+// panics, violating the no-Go-panic operator taxonomy asserted by T2-4
+// (sbctl error taxonomy) and T3-4-taxonomy (tier-3 smoke).
+//
+// This test uses a pre-cancelled context so it proves the guard fires before
+// any I/O attempt — no dependency on mgmt socket bind ordering.
+//
+// Traces: S-BL.ROUTER-RUNTIME AC-004; T2-4 / T3-4-taxonomy (no-Go-panic).
+func TestRunRouter_NilConfigCleanError(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancelled — proves guard fires before any I/O
+
+	err := runRouter(ctx, nil, nil)
+	if err == nil {
+		t.Fatal("runRouter(nil cfg): expected non-nil error, got nil")
+	}
+	if !strings.Contains(err.Error(), "E-CFG-004") {
+		t.Errorf("runRouter(nil cfg): error must contain E-CFG-004 taxonomy code; got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "--config") {
+		t.Errorf("runRouter(nil cfg): error should mention --config to guide the operator; got: %v", err)
+	}
+}
+
 // TestRunConsole_StartsWithMgmt verifies that runConsole calls startMgmtServer
 // (using TCP at 127.0.0.1:9091 per ARCH-05) and propagates "not implemented".
 //
