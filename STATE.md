@@ -27,7 +27,7 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: c098827
+develop_head: cff4935
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: phase-6-dispatch
