@@ -50,9 +50,18 @@ test-docker:
 
 # ─── Smoke ────────────────────────────────────────────────────
 
-# Sentinel invariants: build both binaries with a stamped VERSION token,
-# then run the operator-boundary smoke gate (see test/smoke/invariants.sh
-# and docs/architecture.md §Smoke Invariants). Runs in <5 seconds.
+# Plan B stratified smoke harness (task #176). Three tiers:
+#
+#   smoke-quick     Tier 1 (INV-1..INV-10). <10s. Runs on every PR.
+#   smoke           Tier 2 daemon lifecycle. ~30s. Nightly + on-demand.
+#   smoke-tutorial  Tier 3 tutorial walk. ~10s. Nightly, expected-fail
+#                   until task #144 (router runtime) lands.
+#
+# See test/smoke/invariants.sh, tier2-daemon.sh, tier3-tutorial.sh and
+# docs/architecture.md §Smoke Invariants for the assertion catalog.
+
+# Sentinel invariants (Tier 1): build both binaries with a stamped VERSION
+# token, then run the operator-boundary smoke gate. Runs in <10 seconds.
 #
 # VERSION token is deliberately time-stamped so INV-8 (ldflags wiring)
 # asserts the injected value flows through both banners. Local devs
@@ -69,6 +78,26 @@ smoke-quick:
     go build -ldflags "-X main.version=${STAMP}" -o bin/switchboard ./cmd/switchboard
     go build -ldflags "-X main.version=${STAMP}" -o bin/sbctl ./cmd/sbctl
     VERSION="${STAMP}" ./test/smoke/invariants.sh
+
+# Daemon lifecycle (Tier 2): start/SIGTERM/restart/error-taxonomy against a
+# live daemon. Slower than Tier 1 (~30s) — do not gate PRs; nightly CI job.
+#
+# Uses `switchboard control` mode (Unix socket) because access mode
+# requires a PTY unavailable on hosted CI runners. Both modes share the
+# same signal-handling and config-load path, so this still exercises the
+# daemon skeleton.
+smoke: smoke-quick
+    ./test/smoke/tier2-daemon.sh
+
+# Tutorial smoke (Tier 3): extract fenced bash blocks from
+# docs/getting-started.md and assert exit codes + substring presence.
+# Currently exits 3 (known task #144 gap — router mode not implemented).
+# When #144 lands, T3-2-router flips to PASS and exit becomes 0.
+#
+# NOT wired into `smoke` because expected-fail today would poison the
+# nightly signal. Enable in CI once #144 lands.
+smoke-tutorial: smoke-quick
+    ./test/smoke/tier3-tutorial.sh
 
 # ─── Cross-compile ────────────────────────────────────────────
 

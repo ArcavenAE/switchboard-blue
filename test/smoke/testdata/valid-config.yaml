@@ -1,0 +1,16 @@
+# Valid daemon config for INV-9 (config-taxonomy sentinel).
+#
+# Used by test/smoke/invariants.sh to assert that a well-formed config parses
+# and validates without emitting any E-CFG-* code on stderr. The daemon may
+# still fail on a downstream concern (e.g. socket bind, PTY availability) —
+# that failure is out of scope for this sentinel; the assertion is
+# "no config-taxonomy error before bind attempt."
+#
+# Kept in test/smoke/testdata/ rather than reusing internal/config/testdata/
+# so the smoke harness is not coupled to internal test fixtures whose shape
+# is owned by unit tests.
+listen_addr: "127.0.0.1:0"
+tick_interval: 10ms
+upstream_routers: []
+drain_timeout: 10s
+keepalive_interval: 1s

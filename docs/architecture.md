@@ -224,9 +224,26 @@ are spec-defined but not yet wired.
 
 ## Smoke invariants
 
-Sentinel invariants that MUST hold on every merge. Executable at
-`test/smoke/invariants.sh`, run automatically in CI (Quality Gate job)
-and locally via `just smoke-quick`. Total wall-clock: under 5 seconds.
+Stratified smoke harness. Three tiers cover different failure classes
+at different cadences; each tier is independently runnable and reports
+to its own timestamped `.smoke/<UTC>/report.jsonl`. Total wall-clock:
+Tier 1 <10s, Tier 2 ~30s, Tier 3 ~10s.
+
+### Tiers
+
+| Tier | Recipe | Cadence | Script | Budget |
+|---|---|---|---|---|
+| 1 | `just smoke-quick` | Every PR (Quality Gate job) | `test/smoke/invariants.sh` | <10s |
+| 2 | `just smoke` | Nightly + on-demand | `test/smoke/tier2-daemon.sh` | ~30s |
+| 3 | `just smoke-tutorial` | Nightly (expected-fail until #144) | `test/smoke/tier3-tutorial.sh` | ~10s |
+
+Tier 1 is the sentinel gate (INV-1..INV-10) — cheap enough to run on
+every PR, catches operator-boundary regressions before they merge.
+Tier 2 exercises daemon lifecycle against a live process — too slow
+for per-PR, but the class of regressions it catches (SIGTERM hangs,
+stale-socket restart, sbctl auth-taxonomy) matters enough for a
+nightly cadence. Tier 3 replays the getting-started tutorial's bash
+blocks — regression harness for the drift class caught in task #171.
 
 ### Contract rules
 
@@ -237,18 +254,27 @@ and locally via `just smoke-quick`. Total wall-clock: under 5 seconds.
 2. **Paired docs.** New invariants require a paired update to this
    section. An invariant without a documented rationale is a phantom
    assertion.
-3. **Fail loud, fail fast.** A failure blocks merge. On failure, CI
-   uploads the JSONL report as an artifact (`smoke-report`, 7-day
+3. **Fail loud, fail fast.** A Tier 1 failure blocks merge. On failure,
+   CI uploads the JSONL report as an artifact (`smoke-report`, 7-day
    retention) for post-mortem.
-4. **Isolated.** The harness runs in a fresh `mktemp -d` tmpdir with
-   `trap` cleanup. It does not touch `~/.switchboard`, `~/.sbctl`, or
+4. **Isolated.** Each tier runs in a fresh `mktemp -d` tmpdir with
+   `trap` cleanup. Nothing touches `~/.switchboard`, `~/.sbctl`, or
    any user state.
-5. **Exit codes.** `0` = all-pass. `1` = regression (one or more
-   invariants failed). `2` = harness itself is broken (binary missing,
-   tmpdir unwritable). CI distinguishes "smoke found a bug" from
-   "smoke can't run."
+5. **Exit codes (Tier 1 & 2).** `0` = all-pass. `1` = regression (one
+   or more assertions failed). `2` = harness itself is broken (binary
+   missing, tmpdir unwritable). CI distinguishes "smoke found a bug"
+   from "smoke can't run."
+6. **Exit codes (Tier 3).** `0` = clean pass, no expected-fails. `1` =
+   unexpected regression. `2` = harness broken. `3` = known task #144
+   gap present (expected-fail on `runRouter: not implemented`). CI
+   currently expects Tier 3 to exit 3; when #144 lands the expected
+   exit becomes 0.
+7. **Degrade explicitly.** When a probe cannot be established, tiers
+   emit `TIER<N>-SKIP` with a reason string rather than inventing a
+   fake pass or a bare `sleep 1`. SKIPs are visible in the JSONL
+   report.
 
-### The current set
+### Tier 1 sentinels
 
 | ID | Behavior asserted | Guards against |
 |---|---|---|
@@ -260,18 +286,54 @@ and locally via `just smoke-quick`. Total wall-clock: under 5 seconds.
 | INV-6 | `sbctl <unknown-subcommand>` exits 2, stderr contains `unknown subcommand` | interface-definitions.md §174 unknown-subcommand contract |
 | INV-7 | For each of `access | router | console | control`: `switchboard <sub> --help` exits 0 with non-empty stdout, short-circuiting before any I/O | Subcommand-scoped help regressions — daemon subcommands that try to open sockets before parsing `--help` |
 | INV-8 | Both `--version` banners contain the CI-injected `${VERSION}` substring | Missing `-ldflags "-X main.version=..."` wiring — the task #163 sbctl-a packaging defect at pre-merge time |
+| INV-9 | `switchboard control --config <valid>` emits no `E-CFG-*` code on stderr before termination | Config parser regressions that reject well-formed configs — the false-positive side of the taxonomy contract |
+| INV-10 | `switchboard control --config <missing-tick_interval>` exits non-zero with stderr containing both `E-CFG-001` and `tick_interval` | task #171 drift class: getting-started §2 shipped without `tick_interval` and only the daemon's error text told the operator what was wrong. Asserts the *locate-the-defect* signal survives |
 
 INV-8 is SKIPPED if `VERSION` is not exported (local-dev contract).
 `just smoke-quick` stamps a timestamped `VERSION` automatically; CI
 stamps `smoke-ci-${GITHUB_SHA::7}`.
 
+INV-9 and INV-10 use fixtures at `test/smoke/testdata/` rather than
+`internal/config/testdata/`. The smoke harness is deliberately not
+coupled to internal test fixtures owned by unit tests — the smoke
+contract is between the operator and the built binary.
+
+### Tier 2 assertions
+
+`test/smoke/tier2-daemon.sh` runs the daemon in `control` mode (Unix
+socket; access mode requires a PTY unavailable in most CI hosts) and
+asserts the shared main.go signal-handling and config-load path.
+
+| ID | Behavior asserted | Guards against |
+|---|---|---|
+| T2-1 | Daemon starts with valid config; socket file appears within 5s | Startup regressions — daemon hangs before bind, or exits during config validation for a config that unit tests say is valid |
+| T2-2 | SIGTERM produces exit 0 (clean shutdown via `signal.NotifyContext`) or 143 within 3s of send | Signal-handling regression — daemon ignores SIGTERM, or drain loop hangs past its budget |
+| T2-3 | Second daemon on the same socket path becomes ready within 5s, or refuses with a taxonomy code (no panic, no hang) | Stale-socket restart hazard — Go's `net` package doesn't unlink on close; a daemon that neither unlinks-before-bind nor refuses-cleanly is a foot-gun |
+| T2-4 | `sbctl --target=<sock> sessions list` against a running daemon returns a taxonomy code (`E-ADM-*`/`E-CFG-*`/`E-NET-*`), NOT a Go panic or bare "connection refused" | interface-definitions.md §174 error-taxonomy contract on the sbctl side — guarantees operators see a stable code, not a stack trace |
+
+### Tier 3 assertions
+
+`test/smoke/tier3-tutorial.sh` extracts fenced blocks from
+`docs/getting-started.md` via awk and asserts against them.
+
+| ID | Behavior asserted | Guards against |
+|---|---|---|
+| T3-2-extract | Router yaml block is extractable from §2 by literal awk pattern | Documentation-format regression — someone edits the tutorial to use a code fence variant awk can't find |
+| T3-2-config | Extracted tutorial router config parse+validates cleanly (no `E-CFG-*` on stderr) | task #171 drift class at the *tutorial* boundary — the config in the doc must actually work, not just look like it works |
+| T3-2-router | `switchboard router --config <tutorial-config>` runs to shutdown, OR reports "not implemented" (**expected-fail until task #144 lands**) | Router implementation regression once #144 ships; today an expected fail, so the sentinel signal doesn't drown |
+| T3-4-taxonomy | `sbctl` with no target/auth exits non-zero with a taxonomy message, no Go panic | The "Common pitfalls" section's promise that every error carries a stable code |
+
+Summary line format: `Tier 3: <N> passed, <M> expected-failed, <K> unexpected-failed`.
+
 ### Adding a new invariant
 
 1. Confirm the assertion is behavioral, not cosmetic.
-2. Add the check to `test/smoke/invariants.sh` following the existing
+2. Pick the right tier by cost and cadence. Tier 1 for cheap
+   binary-boundary checks; Tier 2 for anything requiring a live
+   daemon; Tier 3 for tutorial-derived assertions.
+3. Add the check to the appropriate script following its existing
    pattern (`run_capture` → conditional → `emit`).
-3. Add a row to the table above with the guarded-against defect class.
-4. Increment the count in the summary line if you add new IDs.
+4. Add a row to the table above with the guarded-against defect class.
 5. If the invariant guards a specific PR-shipped fix, cite the PR
    number in the script comment.
 
@@ -280,11 +342,16 @@ No speculative sentinels.
 
 ### Historical context
 
-The initial eight invariants were designed by a BMAD party-mode
-session on 2026-07-04 in response to four operator-boundary
-regressions caught by tutorial-walk smoke on the same day (S1/S3/O1/O3
-in `.factory/STATE.md` drift register). The sentinels would have
-blocked all three fixes shipping without a pre-merge gate.
+Plan A (INV-1..INV-8, task #175, PR merged 2026-07-04) was designed
+by a BMAD party-mode session in response to four operator-boundary
+regressions caught by manual tutorial-walk smoke on the same day
+(S1/S3/O1/O3 in `.factory/STATE.md` drift register). The sentinels
+would have blocked all three fixes shipping without a pre-merge gate.
+
+Plan B (this section — INV-9/INV-10 Tier 1 extension + Tier 2 daemon
+lifecycle + Tier 3 tutorial walk, task #176) stratifies by cost and
+cadence so nightly-only assertions don't block PRs and cheap
+sentinels don't wait on daemon startup.
 
 ---
 
