@@ -3,12 +3,12 @@ artifact_id: S-BL.ROUTER-RUNTIME
 document_type: story
 level: ops
 story_id: S-BL.ROUTER-RUNTIME
-version: "1.0"
+version: "1.1"
 title: "router daemon runtime — mgmt plane + data listener bind (retires runRouter stub)"
-status: in-review
+status: merged
 producer: implementer
 timestamp: 2026-07-05T00:00:00
-modified: 2026-07-05T00:00:00
+modified: 2026-07-05T12:00:00
 phase: 2
 epic: E-6
 wave: 7

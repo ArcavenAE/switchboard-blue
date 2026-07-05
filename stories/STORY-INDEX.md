@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.80"
+version: "3.81"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-04T00:00:00
-modified: 2026-07-04T00:00:00
+modified: 2026-07-05T12:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -20,14 +20,14 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 54 (36 master-table stories + 1 draft stub S-6.04 + 11 active backlog S-BL.ADMINWIRE-EXTRACTION/S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE/S-BL.ADMIN-RECOVER-WIRE/S-BL.CLI-SURFACE-COMPLETION + 2 won't-fix S-BL.SVTN-LIST-WIRE/S-BL.PING-VERSION-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
-| Complete | 34 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR, S-7.03, S-6.05) |
+| Total stories | 55 (37 master-table stories + 1 draft stub S-6.04 + 11 active backlog S-BL.ADMINWIRE-EXTRACTION/S-BL.ARQ-TX/S-BL.OA/S-BL.NI/S-BL.PATH-FAILED-STATUS/S-BL.PATH-TRACKER-WIRING/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.CONSOLE-OBS/S-BL.DISCOVERY-WIRE/S-BL.ADMIN-RECOVER-WIRE/S-BL.CLI-SURFACE-COMPLETION + 2 won't-fix S-BL.SVTN-LIST-WIRE/S-BL.PING-VERSION-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) |
+| Complete | 35 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR, S-7.03, S-6.05, S-BL.ROUTER-RUNTIME) |
 | Pending | 0 |
 | Ready-for-red-gate | 0 |
 | Wave 7 (deferred) | 1 (S-7.04) |
 | Master-table drafts | 1 (S-W5.03) |
 | Backlog/maintenance/hardening stubs | 4 (S-M.01, S-M.02, S-HRD.01, S-HRD.02) |
-| E-phase | 32 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04 + S-BL.LOOKUP + S-BL.ROUTER-ADDR) |
+| E-phase | 33 (waves 0–5 + Wave 3 fix-now additions + Wave-5 net-new + S-6.07 + S-W5.04 + S-BL.LOOKUP + S-BL.ROUTER-ADDR + S-BL.ROUTER-RUNTIME) |
 | PE-phase | 4 (wave 6–7 PE stories) |
 | Maintenance (draft/unscheduled) | 2 (S-M.01, S-M.02) |
 | Total points (waves 0–6) | 185 |
@@ -78,6 +78,7 @@ inputDocuments:
 | S-7.04 | E-to-PE router graduation and graceful drain | E-7 | 7 | BC-2.09.001, BC-2.09.002 | deployment-operations | 8 | P2 | PE | pending |
 | S-BL.LOOKUP | Migrate `AdmittedKeySet.Lookup` / `LookupByPubkey` to `(AdmittedKey, bool)` Value-Return Form | E-6 | 6 | (none) | admission-security | 1 | P2 | E | merged (PR #40, eac5d0a) |
 | S-BL.ROUTER-ADDR | populate PathSnapshot.RouterAddr with real resolved host:port (BC-2.06.003 PC-1) | E-6 | 6 | BC-2.06.003 | quality-observability, multipath-forwarding | 2 | P1 | E | merged (PR #56, 91d5675) |
+| S-BL.ROUTER-RUNTIME | router daemon runtime — mgmt plane + data listener bind (retires runRouter stub; DRIFT-HS006-ROUTER-DAEMON-STUB) | E-6 | 7 | BC-2.06.001, BC-2.06.002, BC-2.09.003 | network-management, transport-layer | 2 | P1 | E | merged (PR #92, 14fe0c2) |
 
 ## Wave Summary
 
@@ -90,10 +91,10 @@ inputDocuments:
 | 4 | S-4.01, S-4.02, S-4.03, S-4.04, S-6.01 | 29 | Reliability layer + config — **CLOSED 2026-06-28 (all 5 merged: PR #24–#28)** |
 | 5 | S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.01, S-W5.02, S-6.06 | 43 | Observability + CLI + Management Plane — **COMPLETE** (8/8 merged; S-W5.04 re-scheduled to Wave 6 per F-W5P1-004) |
 | 6 | S-W5.04, S-BL.LOOKUP, S-6.07, S-6.05, S-7.01, S-7.02, S-7.03, S-BL.ROUTER-ADDR | 33 | Management-plane closure (Tranche A: daemon handlers + SVTN lifecycle + go.md rule-12 refactor) + PE-phase network features (Tranche B: FEC + discovery + console remote) |
-| 7 | S-7.04 | 8 | PE graduation: E-to-PE router drain with node migration (deferred from Wave 6 per wave-6-scope-decision.md) |
-| **Total** | **35** (wave stories) | **193** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 37 stories / 203 pts when maintenance included) |
+| 7 | S-7.04, S-BL.ROUTER-RUNTIME | 10 | PE graduation: E-to-PE router drain with node migration (deferred from Wave 6 per wave-6-scope-decision.md) + steady-state router runtime skeleton (S-BL.ROUTER-RUNTIME, 2pts, merged PR #92) |
+| **Total** | **36** (wave stories) | **195** | (+ S-M.01 + S-M.02 maintenance, 10 pts, unscheduled — grand total 38 stories / 205 pts when maintenance included) |
 
-> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 8 stories, 43 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts [re-scoped v2.0], S-W5.01: 8pts [net-new], S-W5.02: 5pts [net-new], S-6.06: 5pts [CR-W5-SCOPE-SPLIT adversary Pass 1]); all 8 stories MERGED. S-W5.04 (5pts) re-scheduled to Wave 6 per F-W5P1-004: Wave 5 declared complete at 8 stories; S-W5.04 depends_on S-5.02 + S-W5.01 (both merged, so unblocked). Wave 6 total: 7 stories, 31 pts per wave-6-scope-decision.md (PO approved 2026-06-30; S-7.03 re-scoped 5→3 per RULING-W6TB-C v3.46): Tranche A — S-W5.04 (5pts, re-scheduled from Wave 5), S-BL.LOOKUP (1pt, promoted from backlog), S-6.07 (3pts), S-6.05 (3pts, S-6.07 → S-6.05 serialize on cmd/sbctl/admin.go); Tranche B — S-7.01 (8pts), S-7.02 (8pts), S-7.03 (3pts, re-scoped 5→3 per RULING-W6TB-C v3.46). S-7.04 (8pts) deferred to Wave 7 (P2, internal/drain complexity; would add 3rd complex story to Tranche B). Wave 6 was originally 7 stories / 40 pts (S-7.04 8pt + S-6.05 3pt + S-6.06 5pt + S-6.07 3pt + S-7.01 8pt + S-7.02 8pt + S-7.03 5pt); net delta: S-7.04 removed (−8pts), S-BL.LOOKUP added (+1pt), S-7.03 re-scoped 5→3 per RULING-W6TB-C v3.46 (−2pts), S-BL.ROUTER-ADDR promoted from backlog (+2pts, PR #56, 91d5675, per v3.55) = 33 pts, 8 stories. Wave 7 total: 1 story, 8 pts (S-7.04). Total points including Wave 0: 193 (waves 0–7). Per-wave counts above use story points from individual story files.
+> Note: Wave 2 includes S-1.03 (depends on S-1.01 + S-2.02). Wave 3 includes S-3.04 (HMAC wire-up into RouteFrame, E-2 epic, P0) and the split of original S-3.01 into S-3.01a (tmux control mode, 8pts) + S-3.01b (PTY fallback, 5pts); S-3.03 repointed 5→8pts. Wave 3 also included two FIX-NOW gate blockers: S-W3.04 (daemon assembly, 8pts, E-3, F-1; merged PR #17 aeb442d) and S-W3.05 (HMAC failure counter, 8pts, E-2, F-2; repointed 5→8 per PO adjudication; merged PR #16 fa6345e). Wave 3 total: 7 stories, 48 pts, all MERGED. Wave 4 total: 5 stories, 29 pts, all MERGED (S-4.01 PR #24 e415d31, S-4.02 PR #25 95729c7, S-4.03 PR #26 8d9744f, S-4.04 PR #27 42c51e2, S-6.01 PR #28 abeba27; closed 2026-06-28). Wave 5 total: 8 stories, 43 pts (S-5.01: 5pts, S-5.02: 5pts, S-5.03: 2pts, S-6.02: 8pts, S-6.03: 5pts [re-scoped v2.0], S-W5.01: 8pts [net-new], S-W5.02: 5pts [net-new], S-6.06: 5pts [CR-W5-SCOPE-SPLIT adversary Pass 1]); all 8 stories MERGED. S-W5.04 (5pts) re-scheduled to Wave 6 per F-W5P1-004: Wave 5 declared complete at 8 stories; S-W5.04 depends_on S-5.02 + S-W5.01 (both merged, so unblocked). Wave 6 total: 7 stories, 31 pts per wave-6-scope-decision.md (PO approved 2026-06-30; S-7.03 re-scoped 5→3 per RULING-W6TB-C v3.46): Tranche A — S-W5.04 (5pts, re-scheduled from Wave 5), S-BL.LOOKUP (1pt, promoted from backlog), S-6.07 (3pts), S-6.05 (3pts, S-6.07 → S-6.05 serialize on cmd/sbctl/admin.go); Tranche B — S-7.01 (8pts), S-7.02 (8pts), S-7.03 (3pts, re-scoped 5→3 per RULING-W6TB-C v3.46). S-7.04 (8pts) deferred to Wave 7 (P2, internal/drain complexity; would add 3rd complex story to Tranche B). Wave 6 was originally 7 stories / 40 pts (S-7.04 8pt + S-6.05 3pt + S-6.06 5pt + S-6.07 3pt + S-7.01 8pt + S-7.02 8pt + S-7.03 5pt); net delta: S-7.04 removed (−8pts), S-BL.LOOKUP added (+1pt), S-7.03 re-scoped 5→3 per RULING-W6TB-C v3.46 (−2pts), S-BL.ROUTER-ADDR promoted from backlog (+2pts, PR #56, 91d5675, per v3.55) = 33 pts, 8 stories. Wave 7 total: 2 stories, 10 pts (S-7.04 8pts pending; S-BL.ROUTER-RUNTIME 2pts, steady-state net-new per DRIFT-HS006-ROUTER-DAEMON-STUB, merged PR #92 14fe0c2). Total points including Wave 0: 195 (waves 0–7). Per-wave counts above use story points from individual story files.
 
 **Wave-6 Serialization Constraints (per wave-6-scope-decision.md):**
 - **Tranche A (run first):** S-W5.04, S-BL.LOOKUP, S-6.07, S-6.05. S-W5.04 (internal/metrics + internal/mgmt) and S-BL.LOOKUP (internal/admission) have zero file conflict — both can run concurrently on separate branches. S-6.07 and S-6.05 **MUST serialize on cmd/sbctl/admin.go** — S-6.07 adds `sbctl admin svtn create`, S-6.05 adds `sbctl admin svtn destroy`; recommend S-6.07 first (Create is natural predecessor to Destroy in the SVTN lifecycle). S-6.07 and S-6.05 may run concurrently with S-W5.04 and S-BL.LOOKUP.
@@ -182,6 +183,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.81 | 2026-07-05 | S-BL.ROUTER-RUNTIME registered in master table (steady-state net-new story, DRIFT-HS006-ROUTER-DAEMON-STUB successor to task #144; story file committed a7abb70 with "STORY-INDEX row in follow-up burst" note — this is that burst). Row: E-6 / wave 7 / BC-2.06.001+BC-2.06.002+BC-2.09.003 / 2pts / P1 / E / merged (PR #92, 14fe0c2). Wave 7: 1→2 stories, 8→10 pts. Summary: Total 54→55, Complete 34→35, E-phase 32→33. Wave Summary Total: 35→36 wave stories / 193→195 pts; grand total incl. maintenance 37→38 stories / 203→205 pts. Story-file frontmatter bumped v1.0→v1.1, status in-review→merged (POL-002 sibling-sweep done same burst). No BC/VP/AC changes. |
 | 3.80 | 2026-07-04 | F-P5P36-A-001 + F-P5P36-A-002 remediation (POL-002 discipline deferred from Burst 87 spec-steward): S-6.07 row synced to v1.14 / 2026-07-04. Governance-text-only amendment to wave-6-tranche-a-scope-rulings.md + S-6.07-svtn-admin-create.md. Aggregate totals unchanged: 54 stories / 185 pts / BC 45/45 / VP 77/77. |
 | 3.79 | 2026-07-03 | F-P5P24-A-001 remediation (POL-002 + POL-001 story-mint gap): add S-BL.ADMINWIRE-EXTRACTION backlog stub (backlog v1.0; DRIFT-P5P4-ADMINWIRE-EXTRACTION; Epic E-6; P3; 2 pts; subsystems: network-management; modules: cmd/switchboard, cmd/sbctl, internal/adminwire; no BC/VP traces). Total 53→54; active backlog 10→11. |
 | 3.78 | 2026-07-03 | F-P5P23-A-001 remediation (POL-002 sibling-sweep recurrence): Bumped S-W5.04 and S-BL.LOOKUP story-file frontmatter `status:` from stale pre-merge value (`draft`) to canonical `merged` matching their STORY-INDEX Master Table rows (S-W5.04 row 72 asserts `merged (PR #41, 851e164)`; S-BL.LOOKUP row 79 asserts `merged (PR #40, eac5d0a)`). Completes the Wave-6 Tranche-A trio propagation begun at v3.44 (S-6.07 was propagated then; S-W5.04 and S-BL.LOOKUP were missed). Class: partial-fix regression per S-7.01. No BC/VP/AC changes; develop untouched. |
