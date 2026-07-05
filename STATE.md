@@ -27,7 +27,7 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 5e625f1
+develop_head: b75a2f2
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: phase-6-dispatch
@@ -86,7 +86,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001); candidate self-improvement story. | orchestrator | open/deferred |
 | W3-DEFER-1..6 | MED/OBS | Worktree tuple codification; M-1 relay busy-spin; fired-source LRU eviction; M-2 unbounded E-ADM-016 log; EC-005 import-boundary lint; real-connector PTY-EOF integration. Detail: `cycles/cycle-1/closed-drift.md`. | various | deferred |
 | S402-F007 | LOW | S-4.02: ARCH-03 N=3 vs BC-2.02.004 N=5 — reconcile ARCH-03. | architect | open |
-| S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame; PC-3 retransmit anchored S-BL.ARQ-TX; ADR-005 wire-format primitive SHIPPED in S-BL.OA (PR #96, e520e04 — channel-header codec + composed assembler verified against routing.RouteFrame); ADR-005 RESYNC control-frame protocol + reconnect state machine still anchored to follow-on S-BL.RESYNC-FRAME (backlog stub added STORY-INDEX v3.83). | product-owner/architect | anchored (narrowed) |
+| S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame (remains, anchor: caller of TLPKTDROP); S403-H1-DEFER PC-3 retransmit SHIPPED in S-BL.ARQ-TX (PR #98, b75a2f2 — internal/arqsend Retransmitter: gap-walk → PayloadForInFlight → Assemble w/ new ChanSeq per PC-5 → Dispatch; no-orphan-state on dispatch error; composed round-trip routes through netingress+routing); ADR-005 wire-format primitive SHIPPED in S-BL.OA (PR #96, e520e04); ADR-005 RESYNC protocol still anchored S-BL.RESYNC-FRAME. Remaining in this row: DegradationEvent per-frame observation only. | product-owner/architect | anchored (narrowed ×2) |
 | S404-OBS-F / S404-LOW-1 | OBS/LOW | S-4.04 E-FWD-001 rate-limit LATENT; 3 LOW + NITPICK (SEC-001 CRC32 accepted). | architect/implementer | re-confirm on production wiring |
 | S601-SEC-001..002 | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): CWE-117 `--config` path stripped of Unicode control chars before E-CFG-004/E-CFG-005 Detail interpolation; CWE-400 Validate() caps per-entry upstream_routers failures at UpstreamRoutersFailureCap=100 with truncation marker (internal/config/security_hardening_test.go). | implementer | CLOSED |
 | OBS-VP-BENCH | OBS | VP-041/VP-042 unverified pending S-BL.BENCH story. | orchestrator | deferred S-BL.BENCH |
