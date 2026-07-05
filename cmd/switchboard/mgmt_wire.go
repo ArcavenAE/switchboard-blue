@@ -407,18 +407,23 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 		return fmt.Errorf("runRouter: construct management server: %w", mgmtErr)
 	}
 
-	// Phase (b): register metrics handlers before Serve starts.
-	if err := wireMetricsHandlers(mgmtSrv); err != nil {
-		return fmt.Errorf("runRouter: wire metrics handlers: %w", err)
-	}
-
-	// Phase (c): build the Router with a live FailureCounter.
+	// Phase (b): build the Router with a live FailureCounter.
 	// buildRouter (defined in access.go) constructs a routing.Router with the
 	// stdLogger wrapping w (nil-safe) and a FailureCounter at threshold=5,
 	// window=60s per BC-2.05.005 PC-3. The FailureCounter now drives a live
 	// E-ADM-017 path — no longer dormant.
+	// Reordered above wireMetricsHandlers so the router is available to the
+	// metrics wiring (S-BL.PATH-TRACKER-WIRING) as the source-of-PathTracker
+	// registrations for paths.list.
 	routerLogger := newStdLogger(w)
 	router := buildRouter(admission.NewAdmittedKeySet(), routerLogger)
+
+	// Phase (c): register metrics handlers before Serve starts. Passing the
+	// live router installs a forwarding-entry hook that populates the paths.list
+	// source on RegisterForwardingEntry (S-BL.PATH-TRACKER-WIRING).
+	if err := wireMetricsHandlers(mgmtSrv, router); err != nil {
+		return fmt.Errorf("runRouter: wire metrics handlers: %w", err)
+	}
 
 	// Phase (d): bind the data-plane TCP listener on cfg.ListenAddr
 	// (BC-2.09.003 PC-9 application point — the deferred listen_addr binding
@@ -543,7 +548,10 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	}
 
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
-	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+	// Console mode has no routing subsystem — pass nil router; the paths.list
+	// source is an empty registry, and BC-2.06.003 EC-001 "no active paths"
+	// applies (S-BL.PATH-TRACKER-WIRING).
+	if err := wireMetricsHandlers(mgmtSrv, nil); err != nil {
 		return fmt.Errorf("runConsole: wire metrics handlers: %w", err)
 	}
 
@@ -597,7 +605,10 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	}
 
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
-	if err := wireMetricsHandlers(mgmtSrv); err != nil {
+	// Control mode has no routing subsystem — pass nil router; the paths.list
+	// source is an empty registry, and BC-2.06.003 EC-001 "no active paths"
+	// applies (S-BL.PATH-TRACKER-WIRING).
+	if err := wireMetricsHandlers(mgmtSrv, nil); err != nil {
 		return fmt.Errorf("runControl: wire metrics handlers: %w", err)
 	}
 

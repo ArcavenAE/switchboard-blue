@@ -83,6 +83,15 @@ type PathTracker struct {
 	// (BC-2.02.003 postcondition 5). Written only under mu.
 	degraded bool
 
+	// failed is true when a previously-alive path has been deactivated by
+	// consecutiveMissThreshold consecutive missed keep-alives. Distinct from
+	// !active because a fresh, never-alive tracker is !active-adjacent only in
+	// the "never-been-alive" sense — failed reserves the meaning "was up, went
+	// down." Cleared by resetRTT on reactivation. Written only under mu.
+	//
+	// S-BL.PATH-FAILED-STATUS; BC-2.06.003 v1.15 PC-1.
+	failed bool
+
 	// firstProbe is true until the first successful probe has been received.
 	// On first arrival the RTT estimate is replaced outright (TCP RFC 6298
 	// style) rather than EWMA-blended, so the conservative initial value does
@@ -135,12 +144,17 @@ func NewPathTrackerWithAddr(addr string, initialRTTMS float64, alpha float64) *P
 // miss counters and marking the path active. Called on first-probe arrival and
 // on reactivation after consecutive misses (BC-2.02.003 EC-003 / postcondition 6
 // v1.2). Caller must hold t.mu.
+//
+// Also clears the failed flag alongside active: a path that transitioned
+// ACTIVE → FAILED and back to ACTIVE via a fresh probe is no longer failed
+// (S-BL.PATH-FAILED-STATUS AC-3).
 func (t *PathTracker) resetRTT(arrivalRTTMS float64) {
 	t.ewmaRTTMS = arrivalRTTMS
 	t.ewmaLossPct = 0
 	t.consecutiveMisses = 0
 	t.firstProbe = false
 	t.active = true
+	t.failed = false               // S-BL.PATH-FAILED-STATUS: reactivation clears failed
 	t.updateDegraded(arrivalRTTMS) // BC-2.02.003 PC-5: set degraded from reactivating RTT
 	t.hist.record(arrivalRTTMS)    // S-5.02: feed histogram on first-probe/reactivation
 }
@@ -165,6 +179,13 @@ func (t *PathTracker) OnProbe(arrivalRTTMS float64, lossEvent bool) {
 		t.consecutiveMisses++
 		if t.consecutiveMisses >= consecutiveMissThreshold {
 			t.active = false
+			// Failed applies only to previously-alive paths (firstProbe==false).
+			// A never-alive tracker that misses its first N keep-alives is
+			// !active but not failed — it never came up in the first place
+			// (S-BL.PATH-FAILED-STATUS AC-2; BC-2.06.003 v1.15 PC-1).
+			if !t.firstProbe {
+				t.failed = true
+			}
 		}
 	} else {
 		// Successful probe: update RTT EWMA, zero out loss sample, reset misses.
@@ -312,6 +333,12 @@ type PathSnapshot struct {
 	Active bool
 	// Degraded reports whether the path's EWMA RTT exceeds DegradedRTTThresholdMS.
 	Degraded bool
+	// Failed reports whether the path was previously alive (at least one
+	// successful probe) and has since been deactivated by consecutiveMissThreshold
+	// consecutive missed keep-alives. Distinct from !Active: never-alive paths
+	// are !Active but not Failed. Cleared on reactivation.
+	// S-BL.PATH-FAILED-STATUS; BC-2.06.003 v1.15 PC-1.
+	Failed bool
 	// P99RTTMs is the p99 RTT in milliseconds. 0 when SampleCount < 10 (surface as "pending").
 	// Wired from rttHistogram.p99() in S-5.02.
 	P99RTTMs float64
@@ -336,6 +363,7 @@ func (t *PathTracker) Snapshot() PathSnapshot {
 		LossPct:     t.ewmaLossPct,
 		Active:      t.active,
 		Degraded:    t.degraded,
+		Failed:      t.failed,     // S-BL.PATH-FAILED-STATUS: previously-alive + threshold-missed
 		P99RTTMs:    t.hist.p99(), // S-5.02: wired from histogram; 0 when SampleCount < 10
 		SampleCount: t.hist.total, // S-5.02: callers check ≥10 before trusting P99RTTMs
 		RouterAddr:  t.routerAddr, // S-BL.ROUTER-ADDR: verbatim copy; "" when addr-less

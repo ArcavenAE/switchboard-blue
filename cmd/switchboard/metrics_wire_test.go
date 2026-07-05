@@ -59,7 +59,11 @@ func TestMetricsWire_PathsListRegistered(t *testing.T) {
 
 	// ── 4. Register metrics handlers via production wiring function. ──────────
 	// This is exactly what runAccess calls (F-P1L1-002 production code path).
-	if err := wireMetricsHandlers(srv); err != nil {
+	// Pass nil router — this test exercises the RPC handler wiring, not the
+	// forwarding-entry hook. With router=nil the pathTrackerSource is an empty
+	// registry and paths.list returns EC-001 "no active paths", which is
+	// exactly what the assertion below relies on (S-BL.PATH-TRACKER-WIRING).
+	if err := wireMetricsHandlers(srv, nil); err != nil {
 		t.Fatalf("wireMetricsHandlers: %v", err)
 	}
 
