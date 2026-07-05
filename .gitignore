@@ -50,3 +50,14 @@ Thumbs.db
 .factory
 .factory/
 .worktrees/
+
+# Demo evidence: keep .tape scripts, evidence-report.md, manifests
+# (human-readable + diff-friendly). Never commit rendered binaries.
+# vsdd-factory demo-recorder hardcodes .gif/.webm output; project policy is
+# tape-only. See docs/DEMO-EVIDENCE-POLICY.md.
+docs/demo-evidence/**/*.gif
+docs/demo-evidence/**/*.webm
+docs/demo-evidence/**/*.mp4
+docs/demo-evidence/**/*.png
+docs/demo-evidence/**/*.jpg
+docs/demo-evidence/**/*.jpeg
