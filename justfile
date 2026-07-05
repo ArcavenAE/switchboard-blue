@@ -99,6 +99,19 @@ smoke: smoke-quick
 smoke-tutorial: smoke-quick
     ./test/smoke/tier3-tutorial.sh
 
+# Spec assertions (Plan D, task #178): data-driven projection of spec ACs
+# into behavioral assertions. Catalog: test/smoke/spec-assertions.json;
+# generic runner: test/smoke/spec-runner.sh. Adding spec coverage = adding
+# a JSON entry, no new bash. Expected-fail entries reference an open issue
+# and flip to required-pass (XPASS fails the run) when the defect is fixed.
+# Runs on every PR alongside Tier 1 (<5s).
+smoke-spec:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    go build -o bin/switchboard ./cmd/switchboard
+    go build -o bin/sbctl ./cmd/sbctl
+    ./test/smoke/spec-runner.sh
+
 # ─── Cross-compile ────────────────────────────────────────────
 
 # Build for all release targets
