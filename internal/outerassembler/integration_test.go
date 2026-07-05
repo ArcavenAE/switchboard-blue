@@ -330,4 +330,3 @@ func TestIntegration_Truncation_FailsParse(t *testing.T) {
 		})
 	}
 }
-
