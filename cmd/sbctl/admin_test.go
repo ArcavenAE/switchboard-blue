@@ -2086,6 +2086,74 @@ func TestSbctlAdmin_SVTNDestroy_YesPlusConfirmEmitsECFG012(t *testing.T) {
 	}
 }
 
+// TestSbctlAdmin_SVTNDestroy_InteractiveMismatchIsUsageClass verifies that when
+// runDestroyConfirmGate takes Path 2 (interactive TTY prompt) and the operator
+// types a value that fails shape validation, the returned error is classified
+// as *usageError — the same class as the Path 1 --confirm shape mismatch
+// (admin.go:377 `usageErrf("...invalid --confirm %q...")`) so main() maps both
+// to exit 2.
+//
+// Rationale (DRIFT-P5P7-O4): both paths validate an operator-supplied value
+// against the same SVTN-<8-hex> shape rule (confirmSVTNShortIDValid).  The
+// current admin.go:400 returns a plain fmt.Errorf which main() classifies as
+// exit 1 (operational).  Interface-definitions.md v1.18 §174 (exit-code table)
+// lists "type constraint violation" as an exit-2 reason and error-taxonomy
+// treats confirm-shape failures as usage class (E-CFG-012 / E-CFG-013 both
+// exit 2).  The interactive-mismatch is semantically identical: user-supplied
+// value failing shape validation before RPC dispatch.
+//
+// RED (DRIFT-P5P7-O4): admin.go:400 currently returns fmt.Errorf; the
+// errors.As check below must fail at develop tip.  It will pass once the
+// site is converted to usageErrf.
+//
+// Note: the sibling read-error path at admin.go:396 is I/O failure, not user
+// input validation — it remains fmt.Errorf (exit 1, operational).  This test
+// pins only the shape-mismatch path.
+//
+// Traces to DRIFT-P5P7-O4; interface-definitions.md v1.18 §174.
+func TestSbctlAdmin_SVTNDestroy_InteractiveMismatchIsUsageClass(t *testing.T) {
+	// Not parallel: mutates stdinIsTTY / stdinReader.
+	origIsTTY := stdinIsTTY
+	origReader := stdinReader
+	stdinIsTTY = func() bool { return true }
+	stdinReader = strings.NewReader("not-an-svtn-id\n")
+	t.Cleanup(func() {
+		stdinIsTTY = origIsTTY
+		stdinReader = origReader
+	})
+
+	addr := startFakeServer(t, nil, func(cmd string, _ json.RawMessage) (any, error) {
+		return nil, fmt.Errorf("unexpected RPC %q: interactive mismatch must be rejected before dispatch", cmd)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	t.Cleanup(cancel)
+
+	var errBuf strings.Builder
+	sio := sbctlIO{out: io.Discard, err: &errBuf}
+
+	err := runAdmin(ctx, addr, testdataKeyPath(t), false,
+		[]string{"svtn", "destroy", "--name", "some-svtn"}, sio)
+
+	if err == nil {
+		t.Fatal("DRIFT-P5P7-O4: expected non-nil error for interactive-mismatch; got nil")
+	}
+
+	// Must be classified as *usageError so main() → exit 2.
+	var ue *usageError
+	if !errors.As(err, &ue) {
+		t.Errorf("DRIFT-P5P7-O4: interactive-mismatch must be classified as "+
+			"*usageError (exit 2); got %T: %v",
+			err, err)
+	}
+
+	// Preserve the recognisable diagnostic prefix so operators aren't surprised.
+	if !strings.Contains(err.Error(), "interactive confirmation failed") {
+		t.Errorf("DRIFT-P5P7-O4: error must still contain "+
+			"\"interactive confirmation failed\" prefix; got: %v", err)
+	}
+}
+
 // TestNewInBurst19_SbctlWire_SvtnIDField verifies that all sbctl-side admin arg
 // structs serialize "svtn_id" (not "svtn") as the JSON key for the SVTN identifier.
 //
