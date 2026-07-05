@@ -188,8 +188,7 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	// Pass object responses through directly — no quality column to inject.
 	trimmed := strings.TrimLeft(string(data), " \t\r\n")
 	if len(trimmed) > 0 && trimmed[0] == '{' {
-		writeSuccess(useJSON, data, sio)
-		return nil
+		return writeSuccess(useJSON, data, sio)
 	}
 
 	// Decode paths.list response as a slice of raw JSON objects.
@@ -226,8 +225,7 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 			_ = writeError(useJSON, "E-RPC-001", fmt.Sprintf("marshal quality entries: %s", err), sio)
 			return reported(fmt.Errorf("marshal quality entries: %w", err))
 		}
-		writeSuccess(useJSON, qData, sio)
-		return nil
+		return writeSuccess(useJSON, qData, sio)
 	}
 
 	// Human-readable: decode into typed entries for tabular formatting.
