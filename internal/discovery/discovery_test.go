@@ -3,6 +3,7 @@ package discovery_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"runtime"
 	"strings"
@@ -837,7 +838,11 @@ func TestDiscovery_Advertise_HMACAuthenticated_TagCorruption(t *testing.T) {
 	if len(raw) < 4 {
 		t.Fatalf("encoded payload too short (%d bytes) for tag corruption test", len(raw))
 	}
-	// Corrupt the last 4 bytes — the trailing end of the HMAC tag region.
+	// Corrupt the last 4 bytes — trailing bytes of the encoded body (payload
+	// region). The HMAC tag itself is at raw[0:8]; the body follows. Flipping
+	// bytes at the tail alters body content that was signed by the sender, so
+	// the receiver's HMAC verification over the (now-tampered) body fails to
+	// match the untouched tag at the head and returns ErrInvalidHMACTag.
 	for i := len(raw) - 4; i < len(raw); i++ {
 		raw[i] ^= 0xFF
 	}
@@ -1748,4 +1753,239 @@ func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
 			t.Errorf("mid-rune: prefix boundary byte %#x at offset %d is not a rune start (F-P5L2-HIGH-03)", inputBytes[prefixLen], prefixLen)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Post-merge deferrals — issues #49 (Advertise validation), #50 (nameLen==0
+// decode rejection), #51 (uint16 session-count guard).
+// ---------------------------------------------------------------------------
+
+// TestDiscovery_Advertise_RejectsInvalidSessionName is the regression test
+// for issue #49: Advertise must validate each session name against the same
+// rules Encode uses (BC-2.03.003 PC-2), returning ErrInvalidSessionName and
+// leaving the local registry untouched. This guards against a future refactor
+// that would let invalid entries leak into the wire path once Advertise is
+// wired to real transmit.
+func TestDiscovery_Advertise_RejectsInvalidSessionName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+	}{
+		{"empty session name", ""},
+		{"invalid UTF-8 (0xFF suffix)", "agent\xff"},
+		{"mid-string invalid byte 0x80", "a\x80b"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := newTestConfig(t, svtnA, nodeA1)
+			d := discovery.New(cfg)
+			ctx := context.Background()
+
+			err := d.Advertise(ctx, []discovery.SessionPresence{
+				{SessionName: tc.input, Status: discovery.Attached, Quality: discovery.QualityGreen},
+			})
+			if !errors.Is(err, discovery.ErrInvalidSessionName) {
+				t.Fatalf("Advertise(%q): got %v, want ErrInvalidSessionName (issue #49; BC-2.03.003 PC-2)", tc.input, err)
+			}
+
+			// Strong oracle: the invalid entry must NOT appear in the local
+			// registry. Advertise validates up-front and never stores partial
+			// state, so Enumerate stays empty.
+			entries, enumErr := d.Enumerate(ctx)
+			if enumErr != nil {
+				t.Fatalf("Enumerate after rejected Advertise: %v", enumErr)
+			}
+			if len(entries) != 0 {
+				t.Errorf("Advertise(%q): registry contains %d entries after rejection, want 0 (fail-closed)", tc.input, len(entries))
+			}
+		})
+	}
+}
+
+// TestDiscovery_Advertise_RejectsInvalidSessionName_DoesNotPurgePriorEntries
+// verifies that a rejected Advertise call leaves any previously-stored valid
+// entries intact (the pre-purge in Advertise runs only after validation).
+func TestDiscovery_Advertise_RejectsInvalidSessionName_DoesNotPurgePriorEntries(t *testing.T) {
+	t.Parallel()
+
+	cfg := newTestConfig(t, svtnA, nodeA1)
+	d := discovery.New(cfg)
+	ctx := context.Background()
+
+	if err := d.Advertise(ctx, []discovery.SessionPresence{
+		{SessionName: "valid", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	}); err != nil {
+		t.Fatalf("initial Advertise: %v", err)
+	}
+
+	// A second Advertise with an invalid entry must return the sentinel and
+	// leave the earlier valid entry in place.
+	err := d.Advertise(ctx, []discovery.SessionPresence{
+		{SessionName: "", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	})
+	if !errors.Is(err, discovery.ErrInvalidSessionName) {
+		t.Fatalf("second Advertise (empty name): got %v, want ErrInvalidSessionName", err)
+	}
+
+	entries, err := d.Enumerate(ctx)
+	if err != nil {
+		t.Fatalf("Enumerate: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Presence.SessionName == "valid" && e.AdvertiserAddr == nodeA1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("prior valid entry 'valid' missing after a rejected Advertise (must not purge on validation failure)")
+	}
+}
+
+// buildAdvertisementWithZeroLengthName constructs an authenticated wire frame
+// carrying a single session whose name-length field is zero. The frame is
+// signed with the correct SVTN key so HMAC verification passes and the
+// zero-length check in decodeBody is exercised (rather than short-circuited
+// by the HMAC path). Used by TestDiscovery_Decode_RejectsZeroLengthName.
+func buildAdvertisementWithZeroLengthName(t *testing.T, svtnID [16]byte, nodeAddr [8]byte) []byte {
+	t.Helper()
+
+	// Body layout: [16]SVTNID | [8]NodeAddr | uint16 count | per-session:
+	// uint16 name_len | name_bytes | uint8 status | uint8 quality.
+	body := make([]byte, 0, 16+8+2+2+0+1+1)
+	body = append(body, svtnID[:]...)
+	body = append(body, nodeAddr[:]...)
+	body = binary.BigEndian.AppendUint16(body, 1) // count = 1
+	body = binary.BigEndian.AppendUint16(body, 0) // name_len = 0 (asymmetric)
+	body = append(body, byte(discovery.Detached), byte(discovery.QualityGreen))
+
+	// The HMAC key derivation mirrors discovery.advertisementKey (SVTN ID
+	// used verbatim as the key material). Signing with the same key the
+	// receiver will derive means HMAC verifies and the decoder proceeds to
+	// the nameLen==0 branch.
+	tag := routing.ComputeAdvertisementHMAC(svtnID[:], body)
+
+	raw := make([]byte, 0, len(tag)+len(body))
+	raw = append(raw, tag[:]...)
+	raw = append(raw, body...)
+	return raw
+}
+
+// TestDiscovery_Decode_RejectsZeroLengthName is the regression test for
+// issue #50: decodeBody must reject frames carrying nameLen==0. Encode never
+// produces such frames (encodedSessionName rejects empty input), so any peer
+// emitting one is malformed or adversarial. Rejecting closes the round-trip
+// asymmetry (decoded struct with SessionName="" cannot be re-Encoded).
+func TestDiscovery_Decode_RejectsZeroLengthName(t *testing.T) {
+	t.Parallel()
+
+	raw := buildAdvertisementWithZeroLengthName(t, svtnA, nodeA1)
+
+	// Public Decode surface: must return an error. Decode wraps decodeBody
+	// failures as ErrInvalidHMACTag (parser detail is not leaked to
+	// unauthenticated peers). The strong oracle is that the frame is not
+	// accepted; the sentinel identity confirms the wrapping contract.
+	if _, err := discovery.Decode(raw); !errors.Is(err, discovery.ErrInvalidHMACTag) {
+		t.Fatalf("Decode(zero-length name frame): got %v, want ErrInvalidHMACTag (issue #50; pre-HMAC decode failures are wrapped)", err)
+	}
+
+	// ReceiveAdvertisement path — decodeBody runs before HMAC verification
+	// (the body is decoded to extract the SVTN ID for key derivation). A
+	// zero-length name must cause the frame to be rejected here too; the
+	// receiver returns ErrInvalidHMACTag because the pre-HMAC decode error is
+	// deliberately not distinguished from a bad tag.
+	cfg := newTestConfig(t, svtnA, nodeA1)
+	d := discovery.New(cfg)
+	err := d.ReceiveAdvertisement(context.Background(), raw)
+	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
+		t.Fatalf("ReceiveAdvertisement(zero-length name frame): got %v, want ErrInvalidHMACTag (pre-HMAC decode failures are wrapped)", err)
+	}
+
+	entries, enumErr := d.Enumerate(context.Background())
+	if enumErr != nil {
+		t.Fatalf("Enumerate: %v", enumErr)
+	}
+	if len(entries) != 0 {
+		t.Errorf("registry contains %d entries after rejecting zero-length-name frame, want 0", len(entries))
+	}
+}
+
+// TestDiscovery_Encode_RejectsMoreThan65535Sessions is the regression test
+// for issue #51: encodeBody must reject payloads whose session count would
+// overflow the uint16 wire count field, rather than silently truncating.
+// The failure mode without a guard is a wire frame whose count undercounts
+// the sessions actually appended, producing a decode error on the receiver.
+func TestDiscovery_Encode_RejectsMoreThan65535Sessions(t *testing.T) {
+	t.Parallel()
+
+	// 65536 = uint16 overflow boundary. Names are single-byte to keep the
+	// slice-allocation cost bounded; the guard fires before any encoding
+	// work, so this test completes in well under a second.
+	const overflowCount = 65536
+	sessions := make([]discovery.SessionPresence, overflowCount)
+	for i := range sessions {
+		sessions[i] = discovery.SessionPresence{
+			SessionName: "s",
+			Status:      discovery.Detached,
+			Quality:     discovery.QualityGreen,
+		}
+	}
+
+	encoded, err := discovery.Encode(discovery.AdvertisementPayload{
+		NodeAddr: nodeA1,
+		SVTNID:   svtnA,
+		Sessions: sessions,
+	})
+	if !errors.Is(err, discovery.ErrTooManySessions) {
+		t.Fatalf("Encode(%d sessions): got %v, want ErrTooManySessions (issue #51)", overflowCount, err)
+	}
+	if encoded != nil {
+		t.Errorf("Encode(%d sessions): returned non-nil bytes on error (want zero-value)", overflowCount)
+	}
+}
+
+// TestDiscovery_Encode_Accepts65535Sessions verifies the boundary case: the
+// maximum encodable session count (uint16 max) is accepted, distinguishing
+// the overflow guard from an off-by-one that would reject 65535 too. We
+// inspect the wire count field directly rather than round-tripping through
+// Decode, which enforces a stricter runtime cap for pre-HMAC parse-work
+// bounding (see decodeBody's maxSessionsPerAdvertisement).
+func TestDiscovery_Encode_Accepts65535Sessions(t *testing.T) {
+	t.Parallel()
+
+	const maxCount = 65535
+	sessions := make([]discovery.SessionPresence, maxCount)
+	for i := range sessions {
+		sessions[i] = discovery.SessionPresence{
+			SessionName: "s",
+			Status:      discovery.Detached,
+			Quality:     discovery.QualityGreen,
+		}
+	}
+
+	encoded, err := discovery.Encode(discovery.AdvertisementPayload{
+		NodeAddr: nodeA1,
+		SVTNID:   svtnA,
+		Sessions: sessions,
+	})
+	if err != nil {
+		t.Fatalf("Encode(%d sessions): got %v, want nil (65535 is the max, not overflow)", maxCount, err)
+	}
+	// Wire layout: 8-byte HMAC tag | 16-byte SVTNID | 8-byte NodeAddr |
+	// uint16 count. The count lives at offset 32.
+	const countOffset = routing.AdvertisementHMACTagSize + 16 + 8
+	if len(encoded) < countOffset+2 {
+		t.Fatalf("Encode returned %d bytes, too short to inspect count field", len(encoded))
+	}
+	gotCount := binary.BigEndian.Uint16(encoded[countOffset : countOffset+2])
+	if gotCount != maxCount {
+		t.Errorf("wire count field = %d, want %d (guard must not fire at exactly the uint16 max)", gotCount, maxCount)
+	}
 }
