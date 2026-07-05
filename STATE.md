@@ -27,8 +27,8 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: b4507d6
-open_prs: 0
+develop_head: b8ed015
+open_prs: 1
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: phase-6-dispatch
 historical_cycles: []
@@ -86,11 +86,11 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001); candidate self-improvement story. | orchestrator | open/deferred |
 | W3-DEFER-1..6 | MED/OBS | Worktree tuple codification; M-1 relay busy-spin; fired-source LRU eviction; M-2 unbounded E-ADM-016 log; EC-005 import-boundary lint; real-connector PTY-EOF integration. Detail: `cycles/cycle-1/closed-drift.md`. | various | deferred |
 | S402-F007 | LOW | S-4.02: ARCH-03 N=3 vs BC-2.02.004 N=5 — reconcile ARCH-03. | architect | open |
-| S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame; PC-3 retransmit anchored S-BL.ARQ-TX; ADR-005 resync wire-mechanics anchored S-BL.NI. | product-owner/architect | anchored |
+| S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame; PC-3 retransmit anchored S-BL.ARQ-TX; ADR-005 resync wire-mechanics re-anchored S-BL.OA (S-BL.NI delivered PR #94 ingress-only — resync/inner-frame composition explicitly out of scope per PR #94 scope boundary). | product-owner/architect | anchored |
 | S404-OBS-F / S404-LOW-1 | OBS/LOW | S-4.04 E-FWD-001 rate-limit LATENT; 3 LOW + NITPICK (SEC-001 CRC32 accepted). | architect/implementer | re-confirm on production wiring |
 | S601-SEC-001..002 | LOW | S-6.01 CWE-117 sanitize --config; CWE-400 explicit slice cap. | implementer | deferred cycle-close |
 | OBS-VP-BENCH | OBS | VP-041/VP-042 unverified pending S-BL.BENCH story. | orchestrator | deferred S-BL.BENCH |
-| PROCESS-GAP-W4 | OBS | [process-gap] S-BL.NI wave must carry cross-component lock-ordering integration -race test. | orchestrator/architect | target S-BL.NI wave planning |
+| PROCESS-GAP-W4 | OBS | CLOSED 2026-07-05 — S-BL.NI merged PR #94 (b8ed015) carries `TestIntegration_ConcurrentRegisterAndRouteRaceClean` (4 register writers × 4 ingress dialers under -race, cross-component netingress+routing). | orchestrator/architect | CLOSED |
 | F-009 | LOW | ARCH-INDEX input-hash tooling field-name mismatch. | architect/devops | deferred maintenance |
 | E-CFG-002 / E-CFG-006 | MED | Pre-existing config-key collision (joined tracking). | product-owner | deferred maintenance |
 | PROCESS-GAP-W5A | OBS | [process-gap] Two false-greens in Wave 5; candidate: require `just test-race` evidence-paste before green-claim. | orchestrator | open — candidate codification |
@@ -114,7 +114,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses version suffix; VP-050 omits it. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |
 | DRIFT-HS006-ROUTER-DAEMON-STUB | MEDIUM | CLOSED 2026-07-05 — S-BL.ROUTER-RUNTIME merged PR #92 (14fe0c2): mgmt plane (nil admin handlers per ADR-004) + data-plane TCP bind + startup logging + graceful drain + nil-cfg taxonomy guard. Tier-3 tutorial smoke flipped exit 3 → exit 0 (4/4 pass). Real frame transport stays with S-BL.NI/S-BL.OA; reload/drain-protocol stays with S-7.04. | orchestrator | CLOSED |
 | DRIFT-HS006-DRAIN-CLI-MISSING | LOW | No `sbctl router drain` / `sbctl admin drain` subcommand. Drain only reachable via SIGTERM signal handling. Deferred to future operator-UX story. | orchestrator | open |
-| DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | Router daemon now runs (PR #92) but drain-timeout forced-exit still requires connected nodes holding a drain open — unobservable until S-BL.NI lands real connections. Re-anchored: re-evaluate at S-BL.NI. | orchestrator | open — re-anchored S-BL.NI |
+| DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | S-BL.NI landed real connections (PR #94, b8ed015) — ingress conns now exist to hold a drain open, but drain-timeout forced-exit remains unevidenced: needs a test holding a live ingress conn past drain_timeout. Re-anchored: S-7.04 (owns drain_timeout application per BC-2.09.003 PC-7/PC-8). | orchestrator | open — re-anchored S-7.04 |
 | DRIFT-P5P1-B-M002-BC209003-DEFERRED-UNTRACKED | MEDIUM | BC-2.09.003 PC-7/PC-8/PC-9 have DEFERRED-APPLICATION obligation tied to S-7.04 (status: pending). No mechanism ensures these become release-gate blockers if S-7.04 deprioritizes. | product-owner | open |
 | DRIFT-P5P1-B-M001-POL003-QUANTIFICATION | LOW | Expansion of DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN with quantification: 1/76 VPs (VP-048 only) carry source_bc version-pin suffix. Task #72 (upstream drbothen/vsdd-factory filing) subsumes this. | orchestrator | open |
 | DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | `cmd/sbctl/e2e_helpers_test.go:191` registers mock for `admin.key.list` where shipped surface is `admin.key.list-keys`. Refs F-P5P2-A-003. | implementer | open |
