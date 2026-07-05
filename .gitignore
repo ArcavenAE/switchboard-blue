@@ -43,6 +43,9 @@ Thumbs.db
 /switchboard
 .beads
 
+# Smoke gate reports (test/smoke/invariants.sh writes JSONL under .smoke/)
+.smoke/
+
 # Factory worktree and feature worktrees (never commit these as tracked files or gitlinks)
 .factory
 .factory/

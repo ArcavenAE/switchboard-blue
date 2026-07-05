@@ -6,9 +6,16 @@ VERSION := env("VERSION", "dev")
 
 # ─── Core recipes ─────────────────────────────────────────────
 
-# Build the binary
+# Build the switchboard binary
 build:
     go build -ldflags "-X main.version={{VERSION}}" -o bin/switchboard ./cmd/switchboard
+
+# Build the sbctl binary
+build-sbctl:
+    go build -ldflags "-X main.version={{VERSION}}" -o bin/sbctl ./cmd/sbctl
+
+# Build both binaries (switchboard + sbctl)
+build-both: build build-sbctl
 
 # Build and run
 run: build
@@ -40,6 +47,28 @@ test-docker:
     @docker info >/dev/null 2>&1 || { echo "Error: Docker daemon is not running."; exit 1; }
     @mkdir -p test-results
     docker compose -f docker-compose.test.yml run --rm test
+
+# ─── Smoke ────────────────────────────────────────────────────
+
+# Sentinel invariants: build both binaries with a stamped VERSION token,
+# then run the operator-boundary smoke gate (see test/smoke/invariants.sh
+# and docs/architecture.md §Smoke Invariants). Runs in <5 seconds.
+#
+# VERSION token is deliberately time-stamped so INV-8 (ldflags wiring)
+# asserts the injected value flows through both banners. Local devs
+# running `test/smoke/invariants.sh` bareback (without VERSION set) get
+# INV-8 SKIP; this recipe forces the assertion so CI and pre-push checks
+# behave identically.
+#
+# Builds are inlined (not a `build-both` dependency) so the shell-computed
+# STAMP flows into both ldflags invocations under a single env.
+smoke-quick:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    STAMP="smoke-$(date -u +%Y%m%dT%H%M%SZ)"
+    go build -ldflags "-X main.version=${STAMP}" -o bin/switchboard ./cmd/switchboard
+    go build -ldflags "-X main.version=${STAMP}" -o bin/sbctl ./cmd/sbctl
+    VERSION="${STAMP}" ./test/smoke/invariants.sh
 
 # ─── Cross-compile ────────────────────────────────────────────
 

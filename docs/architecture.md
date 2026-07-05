@@ -222,6 +222,72 @@ are spec-defined but not yet wired.
 
 ---
 
+## Smoke invariants
+
+Sentinel invariants that MUST hold on every merge. Executable at
+`test/smoke/invariants.sh`, run automatically in CI (Quality Gate job)
+and locally via `just smoke-quick`. Total wall-clock: under 5 seconds.
+
+### Contract rules
+
+1. **Behavioral only.** Every assertion checks exit code, stream
+   direction (stdout vs stderr), or substring presence. Cosmetic diffs
+   — exact whitespace, exact ordering, colour codes, timestamp format
+   — are forbidden. Reviewers reject cosmetic sentinels in PR review.
+2. **Paired docs.** New invariants require a paired update to this
+   section. An invariant without a documented rationale is a phantom
+   assertion.
+3. **Fail loud, fail fast.** A failure blocks merge. On failure, CI
+   uploads the JSONL report as an artifact (`smoke-report`, 7-day
+   retention) for post-mortem.
+4. **Isolated.** The harness runs in a fresh `mktemp -d` tmpdir with
+   `trap` cleanup. It does not touch `~/.switchboard`, `~/.sbctl`, or
+   any user state.
+5. **Exit codes.** `0` = all-pass. `1` = regression (one or more
+   invariants failed). `2` = harness itself is broken (binary missing,
+   tmpdir unwritable). CI distinguishes "smoke found a bug" from
+   "smoke can't run."
+
+### The current set
+
+| ID | Behavior asserted | Guards against |
+|---|---|---|
+| INV-1 | `switchboard --help` exits 0, stdout non-empty, stderr empty | BC-2.07.002 EC-003 Ruling A regression: `--help` printed a diagnostic to stderr and exited 1 pre-PR #77 |
+| INV-2 | `switchboard --version` exits 0, stdout starts with `switchboard ` | S3-class regression: version banner is a hardcoded literal instead of `args[0]`-derived basename |
+| INV-3 | `sbctl --help` exits 0, stdout non-empty, stderr empty | Same class as INV-1 for sbctl |
+| INV-4 | `sbctl --version` exits 0, stdout starts with `sbctl ` | O3-class regression: `sbctl --version` flag was missing entirely pre-PR #77 |
+| INV-5 | `sbctl` (no args) exits 2, stderr contains `available subcommands:` | interface-definitions.md §174 usage-error contract |
+| INV-6 | `sbctl <unknown-subcommand>` exits 2, stderr contains `unknown subcommand` | interface-definitions.md §174 unknown-subcommand contract |
+| INV-7 | For each of `access | router | console | control`: `switchboard <sub> --help` exits 0 with non-empty stdout, short-circuiting before any I/O | Subcommand-scoped help regressions — daemon subcommands that try to open sockets before parsing `--help` |
+| INV-8 | Both `--version` banners contain the CI-injected `${VERSION}` substring | Missing `-ldflags "-X main.version=..."` wiring — the task #163 sbctl-a packaging defect at pre-merge time |
+
+INV-8 is SKIPPED if `VERSION` is not exported (local-dev contract).
+`just smoke-quick` stamps a timestamped `VERSION` automatically; CI
+stamps `smoke-ci-${GITHUB_SHA::7}`.
+
+### Adding a new invariant
+
+1. Confirm the assertion is behavioral, not cosmetic.
+2. Add the check to `test/smoke/invariants.sh` following the existing
+   pattern (`run_capture` → conditional → `emit`).
+3. Add a row to the table above with the guarded-against defect class.
+4. Increment the count in the summary line if you add new IDs.
+5. If the invariant guards a specific PR-shipped fix, cite the PR
+   number in the script comment.
+
+Every invariant must trace back to a concrete regression it prevents.
+No speculative sentinels.
+
+### Historical context
+
+The initial eight invariants were designed by a BMAD party-mode
+session on 2026-07-04 in response to four operator-boundary
+regressions caught by tutorial-walk smoke on the same day (S1/S3/O1/O3
+in `.factory/STATE.md` drift register). The sentinels would have
+blocked all three fixes shipping without a pre-merge gate.
+
+---
+
 ## Further reading
 
 - [docs/getting-started.md](getting-started.md) — spin up an SVTN and connect.
