@@ -1,0 +1,13 @@
+schema_version: 1
+tier: legion
+kind: legion
+source_repo: switchboard
+source_remote: git@github.com:ArcavenAE/switchboard.git
+factory: vsdd-factory
+parent: null
+lifecycle: ephemeral
+created_by: skippy
+created_at: 2026-06-23
+question: >
+  Can vsdd-factory drive a full VSDD cycle end-to-end on a public Go mirror
+  of switchboard without contaminating the canon repo?
