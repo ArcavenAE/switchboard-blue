@@ -100,8 +100,8 @@ Start the daemon:
 sudo switchboard router --config switchboard-router.yaml
 ```
 
-The router logs its listen address and management socket path on stdout.
-Leave it running.
+The router logs its listen address and management socket path on stderr
+(stdout is reserved for structured output). Leave it running.
 
 ---
 
