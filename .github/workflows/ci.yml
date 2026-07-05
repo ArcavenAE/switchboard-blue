@@ -21,6 +21,11 @@ on:
       - '.github/workflows/release.yml'
   pull_request:
     branches: [develop, main]
+  schedule:
+    # Nightly Tier 2 daemon lifecycle smoke (task #176). Cheap tier is on
+    # every PR via `quality-gate`; Tier 2 runs against a live daemon so
+    # doesn't gate PRs. 07:00 UTC = midnight PT / 03:00 ET — quietest window.
+    - cron: '0 7 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -123,12 +128,12 @@ jobs:
           go build -o /dev/null ./cmd/switchboard
           go build -o /dev/null ./cmd/sbctl
 
-      # Sentinel invariants — operator-boundary smoke gate.
+      # Sentinel invariants (Plan B Tier 1) — operator-boundary smoke gate.
       # See test/smoke/invariants.sh and docs/architecture.md §Smoke Invariants.
-      # Runs in <5 seconds; assertions are behavioral only (Murat's RISK-1).
+      # Runs in <10 seconds; assertions are behavioral only (Murat's RISK-1).
       # VERSION is stamped from the CI run so INV-8 (ldflags wiring) asserts
       # the injected value flows through both banners.
-      - name: Sentinel invariants (smoke gate)
+      - name: Sentinel invariants (Tier 1 smoke gate)
         run: |
           STAMP="smoke-ci-${GITHUB_SHA::7}"
           go build -ldflags "-X main.version=${STAMP}" -o bin/switchboard ./cmd/switchboard
@@ -142,6 +147,69 @@ jobs:
           name: smoke-report
           path: .smoke/
           retention-days: 7
+
+  # Nightly Tier 2 daemon lifecycle smoke (task #176).
+  # Not on every PR because it runs a live daemon (~30s wall). Cheap tier
+  # gates PRs in `quality-gate`; this catches SIGTERM-drain regressions,
+  # stale-socket restart hazards, and sbctl error-taxonomy regressions
+  # that only surface against a live process.
+  nightly-tier2:
+    name: Nightly Tier 2 (daemon lifecycle)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build binaries
+        run: |
+          STAMP="smoke-nightly-${GITHUB_SHA::7}"
+          go build -ldflags "-X main.version=${STAMP}" -o bin/switchboard ./cmd/switchboard
+          go build -ldflags "-X main.version=${STAMP}" -o bin/sbctl ./cmd/sbctl
+          echo "VERSION=${STAMP}" >> "$GITHUB_ENV"
+
+      - name: Tier 1 sentinels
+        run: bash test/smoke/invariants.sh
+
+      - name: Tier 2 daemon lifecycle
+        run: bash test/smoke/tier2-daemon.sh
+
+      # Tier 3 tutorial smoke: EXPECTED-TO-FAIL with exit 3 until task
+      # #144 (router daemon runtime) lands. Wiring it here today would
+      # poison the nightly signal — commented out with an explicit TODO
+      # so the intent is preserved. When #144 ships, T3-2-router flips
+      # to PASS and the script's exit contract becomes 0 = clean pass.
+      #
+      # TODO(#144): uncomment the following two steps once router mode
+      # is implemented and T3-2-router flips to PASS.
+      # - name: Tier 3 tutorial smoke
+      #   run: bash test/smoke/tier3-tutorial.sh
+      # - name: Upload Tier 3 report on unexpected failure
+      #   if: failure()
+      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      #   with:
+      #     name: smoke-report-tier3
+      #     path: .smoke/
+      #     retention-days: 7
+
+      - name: Upload smoke reports on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: smoke-report-nightly
+          path: .smoke/
+          retention-days: 14
 
   build-binaries:
     name: Build Binaries
