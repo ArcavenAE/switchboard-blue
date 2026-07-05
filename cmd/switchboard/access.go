@@ -159,19 +159,10 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		return fmt.Errorf("access: construct management server: %w", mgmtErr)
 	}
 
-	// Phase (b): register metrics RPC handlers BEFORE starting the Serve goroutine
-	// (S-W5.04 AC-001, AC-004, AC-005; BC-2.06.003 PC-1/PC-2/PC-3; F-P2L1-001).
-	if err := wireMetricsHandlers(mgmtSrv); err != nil {
-		return fmt.Errorf("access: wire metrics handlers: %w", err)
-	}
-
-	// Phase (c): start the Serve goroutine.
-	var mgmtWG sync.WaitGroup
-	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
-
 	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
-	// Called after mgmt start so the ARCH-12 §Daemon Mode Startup ordering is
-	// preserved for the common case; the tickIntervalFor seam (AC-009) fires here.
+	// Moved above Phase (b) so the Router is available to wireMetricsHandlers as
+	// the source-of-PathTracker registrations (S-BL.PATH-TRACKER-WIRING).
+	// The tickIntervalFor seam (AC-009) still fires here.
 	ds := newHalfChannel(1, halfchannel.Downstream, tickIntervalFor(cfg))
 
 	// keys and pub are constructed once and shared with BOTH the AccessNode
@@ -196,6 +187,19 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	// (non-tautological — shared keyset). buildAccessComponents signature is
 	// UNCHANGED per ARCH-01 ADR-011 v1.5 §HIGH-B.
 	an, router := buildAccessComponents(keys, pub, sc, routerLogger)
+
+	// Phase (b): register metrics RPC handlers BEFORE starting the Serve goroutine
+	// (S-W5.04 AC-001, AC-004, AC-005; BC-2.06.003 PC-1/PC-2/PC-3; F-P2L1-001).
+	// Pass the live router so wireMetricsHandlers installs a forwarding-entry hook
+	// that populates the paths.list source on RegisterForwardingEntry
+	// (S-BL.PATH-TRACKER-WIRING).
+	if err := wireMetricsHandlers(mgmtSrv, router); err != nil {
+		return fmt.Errorf("access: wire metrics handlers: %w", err)
+	}
+
+	// Phase (c): start the Serve goroutine.
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
 	runErr := runAccessWithConnector(ctx, stderr, sc, an, router)
 

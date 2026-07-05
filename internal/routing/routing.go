@@ -61,6 +61,45 @@ func WithFailureCounter(fc hmacFailureRecorder) RouterOption {
 	}
 }
 
+// ForwardingEntryHook is called once per RegisterForwardingEntry with the
+// (svtnID, nodeAddr) pair the caller supplied. It fires while the Router
+// holds its write lock; hook implementations MUST NOT re-enter Router (any
+// exported Router method would deadlock).
+//
+// The hook exists so that cmd/switchboard can maintain a per-forwarding-entry
+// PathTracker registry (S-BL.PATH-TRACKER-WIRING) without violating ARCH-08 §6
+// (internal/routing MUST NOT import internal/paths — routing is DAG position 5,
+// paths is 8). Router is unaware of PathTracker; it only fires a notification.
+type ForwardingEntryHook func(svtnID [16]byte, nodeAddr [8]byte)
+
+// WithForwardingEntryHook installs a ForwardingEntryHook on the Router.
+// The hook fires exactly once per RegisterForwardingEntry call (including
+// LWW replacement — the registry side deduplicates if needed).
+//
+// S-BL.PATH-TRACKER-WIRING; BC-2.06.003 PC-1.
+func WithForwardingEntryHook(hook ForwardingEntryHook) RouterOption {
+	return func(r *Router) {
+		r.forwardingEntryHook = hook
+	}
+}
+
+// SetForwardingEntryHook installs (or replaces) the forwarding-entry hook on
+// r at runtime. Takes r.mu.Lock briefly to swap the field so it composes
+// safely with concurrent RegisterForwardingEntry callers — no torn read of
+// the hook function pointer, no lost registration.
+//
+// Prefer WithForwardingEntryHook at construction; this method exists for
+// wiring paths where the source-of-hook (e.g. pathTrackerSource) is only
+// constructible after the Router (see cmd/switchboard.newPathTrackerSourceFromRouter).
+// Passing nil disables the hook.
+//
+// S-BL.PATH-TRACKER-WIRING.
+func (r *Router) SetForwardingEntryHook(hook ForwardingEntryHook) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.forwardingEntryHook = hook
+}
+
 // nopLogger is the default logger. Log events are silently discarded.
 // Production callers that want operator-visible log records should inject
 // a real logger via WithLogger.
@@ -109,11 +148,12 @@ type ForwardingEntry struct {
 //
 // All exported methods are safe for concurrent use.
 type Router struct {
-	mu              sync.RWMutex
-	admittedKeySet  *admission.AdmittedKeySet
-	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry
-	logger          Logger
-	failureCounter  hmacFailureRecorder // nil = no counter; set via WithFailureCounter
+	mu                  sync.RWMutex
+	admittedKeySet      *admission.AdmittedKeySet
+	forwardingTable     map[[16]byte]map[[8]byte]*ForwardingEntry
+	logger              Logger
+	failureCounter      hmacFailureRecorder // nil = no counter; set via WithFailureCounter
+	forwardingEntryHook ForwardingEntryHook // nil = no hook; set via WithForwardingEntryHook (S-BL.PATH-TRACKER-WIRING)
 }
 
 // NewRouter returns an empty Router using ks as its admitted key set.
@@ -172,6 +212,16 @@ func (r *Router) RegisterForwardingEntry(svtnID [16]byte, nodeAddr [8]byte, auth
 		r.forwardingTable[svtnID] = make(map[[8]byte]*ForwardingEntry)
 	}
 	r.forwardingTable[svtnID][nodeAddr] = entry
+
+	// Fire the forwarding-entry hook (S-BL.PATH-TRACKER-WIRING). Held under
+	// r.mu.Lock so the hook and the forwarding-table write are one atomic
+	// unit — no observer can see the entry present but the hook not fired.
+	// Hook implementations MUST NOT re-enter Router (see ForwardingEntryHook
+	// docstring); the hook must complete quickly to keep the write lock
+	// critical section small.
+	if r.forwardingEntryHook != nil {
+		r.forwardingEntryHook(svtnID, nodeAddr)
+	}
 }
 
 // RouteFrame checks the frame's wire HMAC tag first, then checks whether the
