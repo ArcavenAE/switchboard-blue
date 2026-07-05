@@ -173,16 +173,24 @@ jobs:
       - name: Build alpha binaries
         run: |
           LDFLAGS="-X main.version=${{ steps.version.outputs.version }}"
+          # switchboard daemon binary
           GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o switchboard-a-darwin-arm64 ./cmd/switchboard
           GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o switchboard-a-darwin-amd64 ./cmd/switchboard
           GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o switchboard-a-linux-amd64 ./cmd/switchboard
           GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o switchboard-a-linux-arm64 ./cmd/switchboard
+          # sbctl operator CLI (task #163 — packaged alongside switchboard-a)
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sbctl-a-darwin-arm64 ./cmd/sbctl
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sbctl-a-darwin-amd64 ./cmd/sbctl
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sbctl-a-linux-amd64 ./cmd/sbctl
+          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sbctl-a-linux-arm64 ./cmd/sbctl
 
       - name: Upload binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: binaries
-          path: switchboard-a-*
+          path: |
+            switchboard-a-*
+            sbctl-a-*
           retention-days: 14
 
     outputs:
@@ -241,11 +249,15 @@ jobs:
         run: |
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp switchboard-a-darwin-arm64
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp switchboard-a-darwin-amd64
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp sbctl-a-darwin-arm64
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp sbctl-a-darwin-amd64
 
       - name: Verify signatures
         run: |
           codesign --verify --deep --strict switchboard-a-darwin-arm64
           codesign --verify --deep --strict switchboard-a-darwin-amd64
+          codesign --verify --deep --strict sbctl-a-darwin-arm64
+          codesign --verify --deep --strict sbctl-a-darwin-amd64
 
       - name: Build app bundles
         run: |
@@ -312,6 +324,8 @@ jobs:
           path: |
             switchboard-a-darwin-arm64
             switchboard-a-darwin-amd64
+            sbctl-a-darwin-arm64
+            sbctl-a-darwin-amd64
             switchboard-arm64.pkg
             switchboard-amd64.pkg
             switchboard-arm64.dmg
@@ -364,6 +378,7 @@ jobs:
         if: needs.sign-and-notarize.result == 'success'
         run: |
           cp unsigned/switchboard-a-linux-* dist/
+          cp unsigned/sbctl-a-linux-* dist/
           rm -rf unsigned
 
       - name: List release files
@@ -385,11 +400,17 @@ jobs:
           **Commit:** ${{ github.sha }}
           **Signed:** ${{ needs.sign-and-notarize.result == 'success' && 'Yes (Apple Developer ID)' || 'No (unsigned)' }}
 
-          **Binaries:**
+          **Daemon binaries:**
           - \`switchboard-a-darwin-arm64\` — macOS Apple Silicon
           - \`switchboard-a-darwin-amd64\` — macOS Intel
           - \`switchboard-a-linux-amd64\` — Linux x86_64
           - \`switchboard-a-linux-arm64\` — Linux ARM64
+
+          **Operator CLI (sbctl):**
+          - \`sbctl-a-darwin-arm64\` — macOS Apple Silicon
+          - \`sbctl-a-darwin-amd64\` — macOS Intel
+          - \`sbctl-a-linux-amd64\` — Linux x86_64
+          - \`sbctl-a-linux-arm64\` — Linux ARM64
           NOTES
           )" \
             dist/*
@@ -441,39 +462,57 @@ jobs:
       - name: Collect linux binaries
         run: |
           cp unsigned/switchboard-a-linux-* dist/
+          cp unsigned/sbctl-a-linux-* dist/
           rm -rf unsigned
           ls -la dist/
 
-      - name: Update switchboard-a formula
+      - name: Update switchboard-a and sbctl-a formulas
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           TAG="${{ needs.build-binaries.outputs.tag }}"
           VERSION="${{ needs.build-binaries.outputs.version }}"
 
-          SHA256_DARWIN_ARM64=$(shasum -a 256 dist/switchboard-a-darwin-arm64 | cut -d' ' -f1)
-          SHA256_DARWIN_AMD64=$(shasum -a 256 dist/switchboard-a-darwin-amd64 | cut -d' ' -f1)
-          SHA256_LINUX_AMD64=$(shasum -a 256 dist/switchboard-a-linux-amd64 | cut -d' ' -f1)
-          SHA256_LINUX_ARM64=$(shasum -a 256 dist/switchboard-a-linux-arm64 | cut -d' ' -f1)
+          # switchboard-a shas
+          SB_SHA256_DARWIN_ARM64=$(shasum -a 256 dist/switchboard-a-darwin-arm64 | cut -d' ' -f1)
+          SB_SHA256_DARWIN_AMD64=$(shasum -a 256 dist/switchboard-a-darwin-amd64 | cut -d' ' -f1)
+          SB_SHA256_LINUX_AMD64=$(shasum -a 256 dist/switchboard-a-linux-amd64 | cut -d' ' -f1)
+          SB_SHA256_LINUX_ARM64=$(shasum -a 256 dist/switchboard-a-linux-arm64 | cut -d' ' -f1)
+
+          # sbctl-a shas (task #163)
+          CTL_SHA256_DARWIN_ARM64=$(shasum -a 256 dist/sbctl-a-darwin-arm64 | cut -d' ' -f1)
+          CTL_SHA256_DARWIN_AMD64=$(shasum -a 256 dist/sbctl-a-darwin-amd64 | cut -d' ' -f1)
+          CTL_SHA256_LINUX_AMD64=$(shasum -a 256 dist/sbctl-a-linux-amd64 | cut -d' ' -f1)
+          CTL_SHA256_LINUX_ARM64=$(shasum -a 256 dist/sbctl-a-linux-arm64 | cut -d' ' -f1)
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/ArcavenAE/homebrew-tap.git" homebrew-tap-repo
           cd homebrew-tap-repo
 
-          # IMPORTANT: publish ONLY Formula/switchboard-a.rb.
-          # Never touch Formula/switchboard.rb — that slot is reserved for
-          # the canonical ArcavenAE/switchboard project.
+          # IMPORTANT: publish ONLY Formula/switchboard-a.rb and Formula/sbctl-a.rb.
+          # Never touch Formula/switchboard.rb or Formula/sbctl.rb — those slots
+          # are reserved for the canonical ArcavenAE/switchboard project.
           mkdir -p Formula
           cp ../Formula/switchboard-a.rb Formula/switchboard-a.rb
+          cp ../Formula/sbctl-a.rb Formula/sbctl-a.rb
 
+          # switchboard-a substitutions
           sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/switchboard-a.rb
           sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/switchboard-a.rb
-          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SHA256_DARWIN_ARM64/g" Formula/switchboard-a.rb
-          sed -i "s/SHA256_DARWIN_AMD64_PLACEHOLDER/$SHA256_DARWIN_AMD64/g" Formula/switchboard-a.rb
-          sed -i "s/SHA256_LINUX_AMD64_PLACEHOLDER/$SHA256_LINUX_AMD64/g" Formula/switchboard-a.rb
-          sed -i "s/SHA256_LINUX_ARM64_PLACEHOLDER/$SHA256_LINUX_ARM64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SB_SHA256_DARWIN_ARM64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_DARWIN_AMD64_PLACEHOLDER/$SB_SHA256_DARWIN_AMD64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_LINUX_AMD64_PLACEHOLDER/$SB_SHA256_LINUX_AMD64/g" Formula/switchboard-a.rb
+          sed -i "s/SHA256_LINUX_ARM64_PLACEHOLDER/$SB_SHA256_LINUX_ARM64/g" Formula/switchboard-a.rb
+
+          # sbctl-a substitutions
+          sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/sbctl-a.rb
+          sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/sbctl-a.rb
+          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$CTL_SHA256_DARWIN_ARM64/g" Formula/sbctl-a.rb
+          sed -i "s/SHA256_DARWIN_AMD64_PLACEHOLDER/$CTL_SHA256_DARWIN_AMD64/g" Formula/sbctl-a.rb
+          sed -i "s/SHA256_LINUX_AMD64_PLACEHOLDER/$CTL_SHA256_LINUX_AMD64/g" Formula/sbctl-a.rb
+          sed -i "s/SHA256_LINUX_ARM64_PLACEHOLDER/$CTL_SHA256_LINUX_ARM64/g" Formula/sbctl-a.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/switchboard-a.rb
-          git diff --cached --quiet || git commit -m "Update switchboard-a to $TAG"
+          git add Formula/switchboard-a.rb Formula/sbctl-a.rb
+          git diff --cached --quiet || git commit -m "Update switchboard-a and sbctl-a to $TAG"
           git push
