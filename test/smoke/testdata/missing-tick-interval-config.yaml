@@ -1,0 +1,16 @@
+# Invalid daemon config for INV-10 (config-taxonomy sentinel).
+#
+# Omits tick_interval — Config.Validate MUST reject with E-CFG-001 per
+# BC-2.09.003 PC-9 and ARCH-06. This is the exact drift class
+# docs/getting-started.md §2 shipped without in task #171: the tutorial's
+# example router config forgot tick_interval, and the daemon's error message
+# was the only signal an operator got that the tutorial was broken.
+#
+# The sentinel asserts:
+#   - exit code is non-zero (config validation failed)
+#   - stderr contains the token "E-CFG-001"
+#   - stderr contains the field name "tick_interval" (locate-the-defect signal)
+listen_addr: "127.0.0.1:0"
+upstream_routers: []
+drain_timeout: 10s
+keepalive_interval: 1s
