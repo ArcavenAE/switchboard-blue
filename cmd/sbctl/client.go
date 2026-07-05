@@ -348,8 +348,11 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 	// os.UserHomeDir is the real home-directory lookup; tests inject per-call.
 	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
 	if err != nil {
-		writeError(useJSON, "E-CFG-010", err.Error(), sio)
-		return err
+		// Preserve the original err message on the wire (existing tests
+		// assert on the key-load path text); wrap as reported so main()
+		// does not re-print. #89 / S-6.05 single-print contract.
+		_ = writeError(useJSON, "E-CFG-010", err.Error(), sio)
+		return reported(err)
 	}
 
 	// Single timeout budget: context carries the deadline, threading through
@@ -363,8 +366,7 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 	}
 	if err != nil {
 		msg := fmt.Sprintf("daemon unreachable: %s: %s", target, err)
-		writeError(useJSON, "E-NET-001", msg, sio)
-		return fmt.Errorf("E-NET-001: %s", msg)
+		return writeError(useJSON, "E-NET-001", msg, sio)
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -375,17 +377,19 @@ func connectAndRun(ctx context.Context, target, keyPath string, useJSON bool, co
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
 			msg := fmt.Sprintf("daemon unreachable: %s: connection timed out", target)
-			writeError(useJSON, "E-NET-001", msg, sio)
-			return fmt.Errorf("E-NET-001: %s", msg)
+			return writeError(useJSON, "E-NET-001", msg, sio)
 		}
-		writeError(useJSON, "E-ADM-010", "authentication failed", sio)
-		return err
+		// Preserve the underlying auth error (existing tests assert on
+		// the AUTH_FAIL message shape via err.Error()).
+		_ = writeError(useJSON, "E-ADM-010", "authentication failed", sio)
+		return reported(err)
 	}
 
 	data, err := dispatch(ctx, conn, command, cmdArgs)
 	if err != nil {
-		writeError(useJSON, "E-RPC-001", err.Error(), sio)
-		return err
+		// Preserve the dispatch error text (existing tests assert on it).
+		_ = writeError(useJSON, "E-RPC-001", err.Error(), sio)
+		return reported(err)
 	}
 
 	writeSuccess(useJSON, data, sio)

@@ -1249,7 +1249,7 @@ func TestSubprocessAdmin_ConnectionRefused_Entry(t *testing.T) {
 		"--yes",
 	}, sio)
 	if err != nil {
-		writeError(false, "E-NET-001", err.Error(), sio)
+		_ = writeError(false, "E-NET-001", err.Error(), sio)
 		os.Exit(1)
 	}
 	os.Exit(0)

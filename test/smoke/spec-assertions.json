@@ -12,7 +12,6 @@
       "id": "SPEC-2",
       "anchor": "BC-2.06.003 AC-006 (S-5.02) / S-6.05 json-envelope-integrity",
       "claim": "sbctl --json daemon-unreachable error is a machine-parseable envelope: ok=false, error.code=E-NET-001, nothing on stdout",
-      "expected_fail": "#89 — error path double-prints to stderr; envelope line followed by plain-text line breaks whole-stream JSON parse",
       "cmd": "$BIN_SBCTL --json --target=127.0.0.1:39999 --key=$SMOKE_KEY paths list",
       "want": {
         "exit": 1,
@@ -31,7 +30,6 @@
       "id": "SPEC-4",
       "anchor": "S-5.02 F-M1 / S-6.05 json-envelope-integrity",
       "claim": "sbctl --json usage error still emits the JSON envelope (ok=false, code E-CFG-010) and keeps stdout clean",
-      "expected_fail": "#89 — error path double-prints to stderr; envelope line followed by plain-text line breaks whole-stream JSON parse",
       "cmd": "$BIN_SBCTL --json router status --target=",
       "want": {
         "exit": 2,
