@@ -338,8 +338,9 @@ func TestPathEntry_StatusFromDegraded(t *testing.T) {
 				Degraded:    tc.degraded,
 				P99RTTMs:    10.0,
 				SampleCount: 20,
+				RouterAddr:  "host:9000",
 			}
-			entry := metrics.PathEntryFromSnapshot("pid", "host:9000", snap)
+			entry := metrics.PathEntryFromSnapshot("pid", snap)
 			if entry.Status != tc.wantStatus {
 				t.Errorf("status: got %q; want %q (active=%v degraded=%v)",
 					entry.Status, tc.wantStatus, tc.active, tc.degraded)
@@ -864,7 +865,7 @@ func TestPathsList_DiscriminatingStatusOracle(t *testing.T) {
 		P99RTTMs:    20.0,
 		SampleCount: 10,
 	}
-	entry1 := metrics.PathEntryFromSnapshot("p1", "", snap1)
+	entry1 := metrics.PathEntryFromSnapshot("p1", snap1)
 	if entry1.Status != "active" {
 		t.Errorf("Degraded=false, SampleCount=10: status=%q; want \"active\"", entry1.Status)
 	}
@@ -879,7 +880,7 @@ func TestPathsList_DiscriminatingStatusOracle(t *testing.T) {
 		P99RTTMs:    250.0,
 		SampleCount: 10,
 	}
-	entry2 := metrics.PathEntryFromSnapshot("p2", "", snap2)
+	entry2 := metrics.PathEntryFromSnapshot("p2", snap2)
 	if entry2.Status == "active" {
 		t.Errorf("Degraded=true, SampleCount=10: status=%q; must NOT be \"active\" when path is degraded", entry2.Status)
 	}
@@ -1001,8 +1002,9 @@ func TestVP047_FieldSwapOracle(t *testing.T) {
 		Degraded:    false,
 		P99RTTMs:    10.0,
 		SampleCount: 10,
+		RouterAddr:  routerAddr,
 	}
-	entry := metrics.PathEntryFromSnapshot(pathID, routerAddr, snap)
+	entry := metrics.PathEntryFromSnapshot(pathID, snap)
 
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -1214,7 +1216,7 @@ func TestPathEntry_StatusEnumClosed(t *testing.T) {
 				P99RTTMs:    10.0,
 				SampleCount: 20,
 			}
-			entry := metrics.PathEntryFromSnapshot("p", "", snap)
+			entry := metrics.PathEntryFromSnapshot("p", snap)
 			if !validStatuses[entry.Status] {
 				t.Errorf("status enum violation: got %q; valid values are {active, degraded} only (BC-2.06.003 v1.13 PC-1, Ruling-4)", entry.Status)
 			}
