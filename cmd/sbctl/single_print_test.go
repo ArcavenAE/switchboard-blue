@@ -13,14 +13,15 @@
 // tests through injected sio never see os.Stderr direct writes.
 //
 // Assertion shape (per case):
-//   --json usage:   exit 2 · stdout empty · whole stderr is one JSON envelope
-//                   with ok=false and error.code == "E-CFG-010"
-//   --json network: exit 1 · stdout empty · whole stderr is one JSON envelope
-//                   with ok=false and error.code == "E-NET-001"
-//   plain usage:    exit 2 · stdout empty · stderr is exactly one line
-//                   containing "E-CFG-010"
-//   plain network:  exit 1 · stdout empty · stderr is exactly one line
-//                   containing "E-NET-001"
+//
+//	--json usage:   exit 2 · stdout empty · whole stderr is one JSON envelope
+//	                with ok=false and error.code == "E-CFG-010"
+//	--json network: exit 1 · stdout empty · whole stderr is one JSON envelope
+//	                with ok=false and error.code == "E-NET-001"
+//	plain usage:    exit 2 · stdout empty · stderr is exactly one line
+//	                containing "E-CFG-010"
+//	plain network:  exit 1 · stdout empty · stderr is exactly one line
+//	                containing "E-NET-001"
 //
 // Spec authority: BC-2.06.003 AC-006 (S-5.02), S-6.05 json-envelope-integrity.
 // Issue: ArcavenAE/switchboard-blue#89.
@@ -54,11 +55,11 @@ func TestProductionMain_ErrorPath_SinglePrint(t *testing.T) {
 	const unreachable = "127.0.0.1:19982"
 
 	cases := []struct {
-		name         string
-		args         []string
-		wantExit     int
-		wantJSON     bool   // if true, whole stderr must parse as a JSON envelope
-		wantCode     string // taxonomy code that must appear in the envelope / plain line
+		name     string
+		args     []string
+		wantExit int
+		wantJSON bool   // if true, whole stderr must parse as a JSON envelope
+		wantCode string // taxonomy code that must appear in the envelope / plain line
 	}{
 		{
 			name: "json_usage_E-CFG-010",

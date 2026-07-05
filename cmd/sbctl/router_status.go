@@ -125,8 +125,8 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	for i, arg := range args {
 		if arg == "--target" {
 			if i+1 >= len(args) {
-				writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
-				return usageErrf("E-CFG-010: router status: --target requires a value")
+				_ = writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
+				return reported(usageErrf("E-CFG-010: router status: --target requires a value"))
 			}
 			target = args[i+1]
 		} else if strings.HasPrefix(arg, "--target=") {
@@ -136,16 +136,16 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 
 	// F-C3: --target= (empty value after equals) is a configuration error (E-CFG-010).
 	if target == "" {
-		writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
-		return usageErrf("E-CFG-010: router status: --target requires a value")
+		_ = writeError(useJSON, "E-CFG-010", "router status: --target requires a value", sio)
+		return reported(usageErrf("E-CFG-010: router status: --target requires a value"))
 	}
 
 	// Dial and authenticate, then dispatch "paths.list" — same RPC as runPathsList.
 	// We handle the response ourselves to inject the quality field.
 	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
 	if err != nil {
-		writeError(useJSON, "E-CFG-010", err.Error(), sio)
-		return err
+		_ = writeError(useJSON, "E-CFG-010", err.Error(), sio)
+		return reported(err)
 	}
 
 	// F-L1: single net.Conn variable (no redundant dual-interface vars).
@@ -157,20 +157,19 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	}
 	if err != nil {
 		msg := fmt.Sprintf("daemon unreachable: %s: %s", target, err)
-		writeError(useJSON, "E-NET-001", msg, sio)
-		return fmt.Errorf("E-NET-001: %s", msg)
+		return writeError(useJSON, "E-NET-001", msg, sio)
 	}
 	defer func() { _ = netConn.Close() }()
 
 	if err = Authenticate(ctx, netConn, privKey); err != nil {
-		writeError(useJSON, "E-ADM-010", "authentication failed", sio)
-		return err
+		_ = writeError(useJSON, "E-ADM-010", "authentication failed", sio)
+		return reported(err)
 	}
 
 	data, err := dispatch(ctx, netConn, "paths.list", nil)
 	if err != nil {
-		writeError(useJSON, "E-RPC-001", err.Error(), sio)
-		return err
+		_ = writeError(useJSON, "E-RPC-001", err.Error(), sio)
+		return reported(err)
 	}
 
 	// F-C4: sniff the first non-whitespace byte to detect EC-001 object form.
@@ -187,8 +186,8 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	// float values like 20.0 remain 20.0 rather than being re-encoded as 20.
 	var rawEntries []json.RawMessage
 	if err = json.Unmarshal(data, &rawEntries); err != nil {
-		writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode paths: %s", err), sio)
-		return fmt.Errorf("decode paths: %w", err)
+		_ = writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode paths: %s", err), sio)
+		return reported(fmt.Errorf("decode paths: %w", err))
 	}
 
 	if useJSON {
@@ -198,23 +197,23 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 			// Decode only enough to compute quality; the raw bytes are preserved.
 			var entry PathEntry
 			if err = json.Unmarshal(raw, &entry); err != nil {
-				writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err), sio)
-				return fmt.Errorf("decode entry %d: %w", i, err)
+				_ = writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err), sio)
+				return reported(fmt.Errorf("decode entry %d: %w", i, err))
 			}
 			quality := qualityFromPathEntry(entry)
 			// Inject quality field into the raw JSON object by stripping the trailing
 			// "}" and appending the new field.
 			injected, injectErr := injectJSONField(raw, "quality", quality)
 			if injectErr != nil {
-				writeError(useJSON, "E-RPC-001", fmt.Sprintf("inject quality entry %d: %s", i, injectErr), sio)
-				return fmt.Errorf("inject quality entry %d: %w", i, injectErr)
+				_ = writeError(useJSON, "E-RPC-001", fmt.Sprintf("inject quality entry %d: %s", i, injectErr), sio)
+				return reported(fmt.Errorf("inject quality entry %d: %w", i, injectErr))
 			}
 			annotated[i] = injected
 		}
 		qData, err := json.Marshal(annotated)
 		if err != nil {
-			writeError(useJSON, "E-RPC-001", fmt.Sprintf("marshal quality entries: %s", err), sio)
-			return fmt.Errorf("marshal quality entries: %w", err)
+			_ = writeError(useJSON, "E-RPC-001", fmt.Sprintf("marshal quality entries: %s", err), sio)
+			return reported(fmt.Errorf("marshal quality entries: %w", err))
 		}
 		writeSuccess(useJSON, qData, sio)
 		return nil
@@ -225,8 +224,8 @@ func runRouterStatus(ctx context.Context, target, keyPath string, useJSON bool, 
 	for i, raw := range rawEntries {
 		var entry PathEntry
 		if err = json.Unmarshal(raw, &entry); err != nil {
-			writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err), sio)
-			return fmt.Errorf("decode entry %d: %w", i, err)
+			_ = writeError(useJSON, "E-RPC-001", fmt.Sprintf("decode entry %d: %s", i, err), sio)
+			return reported(fmt.Errorf("decode entry %d: %w", i, err))
 		}
 		withQuality[i] = PathEntryWithQuality{
 			PathEntry: entry,

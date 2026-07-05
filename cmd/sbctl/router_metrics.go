@@ -42,8 +42,10 @@ func runRouterMetrics(ctx context.Context, target, keyPath string, useJSON bool,
 		}
 	}
 	if svtnID == "" {
-		writeError(useJSON, "E-CFG-010", "router metrics: --svtn=<id> is required", sio)
-		return usageErrf("router metrics: --svtn flag is required")
+		_ = writeError(useJSON, "E-CFG-010", "router metrics: --svtn=<id> is required", sio)
+		// Wrap usageErrf so main() maps to exit 2 via *usageError chain
+		// AND skips re-print via *reportedError chain (#89 single-print).
+		return reported(usageErrf("router metrics: --svtn flag is required"))
 	}
 	return connectAndRun(ctx, target, keyPath, useJSON, "router.metrics", map[string]string{"svtn_id": svtnID}, sio)
 }
