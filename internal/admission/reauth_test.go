@@ -538,10 +538,10 @@ func TestReAuthenticate_NoRace(t *testing.T) {
 //	VP-036 (session_id unchanged before/after IP change)
 //	BC-2.01.007 invariant 3 (session identity = channel_id + node_addr, not IP)
 func TestProperty_VP036_SessionContinuity(t *testing.T) {
-	t.Skip(
-		"VP-036 full e2e proof deferred: requires internal/testenv.ConnectWithSourceIP " +
-			"(VP-036.md proof harness). This test is a discoverable placeholder. " +
-			"Unit-scope coverage of the node-address-stability invariant is in " +
-			"TestSessionContinuity_NodeAddressStableAfterReauth (AC-003).",
-	)
+	// VP-036 e2e proof is now provided by TestE2E_Session_ContinuityAcrossIPChange
+	// in internal/admission/vp036_e2e_test.go (//go:build integration).
+	// Unit-scope coverage of the node-address-stability invariant (BC-2.01.007
+	// invariant 3) is in TestSessionContinuity_NodeAddressStableAfterReauth (AC-003).
+	// This stub is kept for grep-discoverability and is no longer a deferred skip.
+	t.Log("VP-036 unit-scope stub: e2e proof is in vp036_e2e_test.go (integration tag)")
 }
