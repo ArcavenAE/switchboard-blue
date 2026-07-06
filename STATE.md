@@ -1,7 +1,7 @@
 ---
-pipeline: IN_PROGRESS
-phase: phase-7-convergence
-phase_step: phase-7-remediation-complete-awaiting-converged-declaration
+pipeline: STEADY_STATE
+phase: steady-state-post-cycle-1
+phase_step: cycle-1-CONVERGED-closed-2026-07-06
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,7 +32,7 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 0516f3a
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-7-lanes-in-flight
+awaiting: none — steady-state; next work from backlog (11 active) or maintenance sweep
 historical_cycles: []
 timestamp: 2026-07-05T19:30:00Z
 last_update: 2026-07-05
@@ -48,7 +48,7 @@ last_update: 2026-07-05
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 7 — Convergence | **REMEDIATION COMPLETE** — all 11 findings dispositioned: F-011 docs PR #107 merged 2e0f926; F-004/F-005/F-006 ARCH b088e54; F-002 no-action-convention; F-001/F-003/F-007/F-008/F-009/F-010 this sweep. Awaiting CONVERGED declaration (human gate). | audit perimeter: develop 0516f3a + factory a2ef767 |
+| Phase 7 — Convergence | **CONVERGED** 2026-07-06 (human-approved with remediation) — fresh-context audit CONVERGENCE-CLEAN (0 critical, 11 findings ALL remediated: docs PR #107 2e0f926, ARCH b088e54, stubs ef16ed5, sweep 677380f); census zero cycle-blocking, all process-gaps dispositioned; 63/77 VPs proven + 14 justified-deferred with story anchors (S-BL.TESTENV covers 10, S-BL.BENCH 2, S-BL.DISCOVERY-WIRE 2). **CYCLE-1 CLOSED.** | evidence: cycles/cycle-1/phase-7/ |
 | Phase 6 — Formal Hardening | **COMPLETE** 2026-07-06 — gate satisfied: 63/77 VPs PROVEN (locks + cited evidence), 14 justified-deferred (6 infra-partial + 8 blocked: testenv ×6, S-BL.BENCH ×2 — per-VP justifications in changelogs); fuzzers clean (5 targets, 53M+ combined execs, 0 crashes); security scan clean (CWE-triaged); mutation sampling 11/15 + 2 gaps closed + 1 proven-dead-code. Bursts: #105 f09fe73, #106 0516f3a. | evidence: cycles/cycle-1/phase-6/ |
 | Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** |
 
@@ -138,6 +138,7 @@ Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36): `cycles/cyc
 
 | Decision | Outcome | Date |
 |----------|---------|------|
+| **Cycle-1 convergence (Phase 7)** | CONVERGED — human gate approved-with-remediation; 11 audit findings remediated same-day; pipeline → STEADY_STATE | 2026-07-06 |
 | Architecture (HMAC/FEC/LWW/HKDF) | ADR-001..004; ARCH-02/03/04 | 2026-06-23 |
 | Waves 3–5 + Phase 4 gate | All APPROVED/CONVERGED; HS-006 PASS_AT_THRESHOLD 0.85 | 2026-06-27–07-02 |
 | Wave 6 all tranches + wave-gate | 7 stories merged (PRs #40–#43,#55–#56,#60–#61); W-6 CONVERGED 3/3 | 2026-07-01–07-02 |
