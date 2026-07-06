@@ -78,7 +78,14 @@ type QualityIndicator struct {
 	candidate Quality
 
 	// missingFrameCount counts consecutive missing-frame events (BC-2.06.002).
+	// Resets on Update (PC-4) and after threshold-triggered downgrades. Drives
+	// the hysteresis state machine only — NOT operator-visible.
 	missingFrameCount int
+
+	// missCount is the LIFETIME cumulative count of OnMissingFrame invocations.
+	// It never resets — surfaced via MissCount() for operator export through
+	// `sbctl sessions status` (BC-2.06.002 v1.4 PC-3; DRIFT-002; S-BL.CONSOLE-OBS).
+	missCount uint64
 }
 
 // NewQualityIndicator returns a QualityIndicator initialised to Green.
@@ -171,11 +178,18 @@ func (qi *QualityIndicator) Update(rttMs float64, lossPct float64) {
 // one level (green→yellow or yellow→red, never skips; BC-2.06.002 postcondition 2;
 // AC-003, AC-004).
 //
-// Receiving a frame resets the missing-frame counter; call Update to record a
-// successful measurement.
+// Receiving a frame resets the CONSECUTIVE missing-frame counter; call Update to
+// record a successful measurement. The LIFETIME counter (see MissCount) is
+// unaffected by Update — every OnMissingFrame call increments it exactly once,
+// regardless of downgrade events (BC-2.06.002 v1.4 PC-3; DRIFT-002).
 func (qi *QualityIndicator) OnMissingFrame() {
 	qi.mu.Lock()
 	defer qi.mu.Unlock()
+
+	// Lifetime counter: every OnMissingFrame invocation is counted exactly
+	// once, regardless of downgrade events or Update calls (BC-2.06.002 PC-3;
+	// DRIFT-002; S-BL.CONSOLE-OBS).
+	qi.missCount++
 
 	qi.missingFrameCount++
 	if qi.missingFrameCount >= HysteresisCount {
@@ -187,6 +201,19 @@ func (qi *QualityIndicator) OnMissingFrame() {
 			qi.consecutiveCount = 0
 		}
 	}
+}
+
+// MissCount returns the LIFETIME cumulative count of OnMissingFrame invocations
+// on this indicator. The counter starts at zero and never resets — Update calls
+// and threshold-triggered downgrades leave it untouched. Distinct from the
+// internal consecutive-gap counter that drives hysteresis.
+//
+// Surfaced via `sbctl sessions status` per BC-2.06.002 v1.4 PC-3 (operator-visible
+// path-metric record of gap events; DRIFT-002 closure; S-BL.CONSOLE-OBS).
+func (qi *QualityIndicator) MissCount() uint64 {
+	qi.mu.Lock()
+	defer qi.mu.Unlock()
+	return qi.missCount
 }
 
 // Classify returns the raw Quality level for (rttMs, lossPct) without applying

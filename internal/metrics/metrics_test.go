@@ -644,6 +644,178 @@ func TestQualityIndicator_String(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
+// S-BL.CONSOLE-OBS — MissCount() accessor (DRIFT-002 / BC-2.06.002 PC-3)
+// -----------------------------------------------------------------------
+//
+// MissCount() reports the LIFETIME (cumulative) count of OnMissingFrame calls
+// for operator export via `sbctl sessions status`. It is distinct from the
+// internal consecutive-gap counter that drives hysteresis (missingFrameCount):
+// the consecutive counter resets on Update and after threshold-triggered
+// downgrades; the lifetime counter never resets.
+//
+// BC-2.06.002 v1.4 PC-3 — "This counter IS the path-metric record of the gap
+// event.  Export to an operator-visible surface, e.g. sbctl sessions status,
+// is deferred to the observability story per DRIFT-001."
+
+// TestQualityIndicator_MissCount_ZeroOnConstruct verifies that a freshly
+// constructed indicator reports MissCount() == 0 before any missing-frame
+// event has been recorded.
+//
+// BC-2.06.002 PC-3 — lifetime counter starts at zero
+func TestQualityIndicator_MissCount_ZeroOnConstruct(t *testing.T) {
+	t.Parallel()
+	qi := metrics.NewQualityIndicator()
+
+	if got := qi.MissCount(); got != 0 {
+		t.Errorf("fresh indicator: MissCount() = %d, want 0", got)
+	}
+}
+
+// TestQualityIndicator_MissCount_IncrementsPerCall verifies that every
+// OnMissingFrame call increments the lifetime counter by exactly one,
+// including after threshold-triggered downgrades (which reset the internal
+// consecutive counter but MUST NOT reset the lifetime counter).
+//
+// BC-2.06.002 PC-3 — cumulative counter; never resets
+func TestQualityIndicator_MissCount_IncrementsPerCall(t *testing.T) {
+	t.Parallel()
+	qi := metrics.NewQualityIndicator()
+
+	// Feed enough OnMissingFrame calls to cross the hysteresis threshold
+	// multiple times.  If MissCount is implemented via the consecutive
+	// counter it will reset at each threshold crossing; the test fails.
+	const calls = 3 * metrics.HysteresisCount // e.g. 9 with n=3
+	for i := 0; i < calls; i++ {
+		qi.OnMissingFrame()
+	}
+
+	if got := qi.MissCount(); got != uint64(calls) {
+		t.Errorf("MissCount() after %d OnMissingFrame calls: got %d, want %d "+
+			"(counter must be cumulative, not consecutive; DRIFT-002)",
+			calls, got, calls)
+	}
+}
+
+// TestQualityIndicator_MissCount_NotResetByUpdate verifies that a successful
+// Update — which resets the internal consecutive missing-frame counter per
+// BC-2.06.002 PC-4 — does NOT reset the lifetime MissCount.
+//
+// BC-2.06.002 PC-3 — lifetime counter; distinct from consecutive counter
+// BC-2.06.002 PC-4 — consecutive counter resets on Update (unchanged)
+func TestQualityIndicator_MissCount_NotResetByUpdate(t *testing.T) {
+	t.Parallel()
+	qi := metrics.NewQualityIndicator()
+
+	// Accumulate misses below the downgrade threshold so we can prove the
+	// consecutive-vs-lifetime distinction independent of a downgrade event.
+	const misses = 2 // < HysteresisCount(3)
+	for i := 0; i < misses; i++ {
+		qi.OnMissingFrame()
+	}
+	if got := qi.MissCount(); got != uint64(misses) {
+		t.Fatalf("MissCount() after %d misses: got %d, want %d",
+			misses, got, misses)
+	}
+
+	// A green-range Update resets the internal consecutive counter.
+	// Lifetime MissCount MUST remain at `misses`.
+	qi.Update(50, 1)
+	if got := qi.MissCount(); got != uint64(misses) {
+		t.Errorf("MissCount() after Update: got %d, want %d "+
+			"(Update must not reset the lifetime counter; DRIFT-002)",
+			got, misses)
+	}
+
+	// Another miss: lifetime counter must advance to misses+1.
+	qi.OnMissingFrame()
+	if got := qi.MissCount(); got != uint64(misses+1) {
+		t.Errorf("MissCount() after post-Update miss: got %d, want %d",
+			got, misses+1)
+	}
+}
+
+// TestQualityIndicator_MissCount_MonotonicAcrossFullRun verifies that under
+// a mixed Update / OnMissingFrame workload the lifetime counter matches the
+// exact number of OnMissingFrame invocations regardless of interleaved
+// Update calls or state-machine transitions (Green → Yellow → Red).
+//
+// BC-2.06.002 PC-3 — cumulative counter; correct under mixed workloads
+func TestQualityIndicator_MissCount_MonotonicAcrossFullRun(t *testing.T) {
+	t.Parallel()
+	qi := metrics.NewQualityIndicator()
+
+	// Sequence:
+	//   3 misses (crosses threshold → Green→Yellow downgrade; consecutive
+	//     counter resets internally)
+	//   1 good Update (consecutive counter also reset by Update)
+	//   3 misses (Yellow→Red downgrade)
+	//   1 good Update
+	//   2 misses (below threshold)
+	// Expected MissCount == 8.
+	for i := 0; i < 3; i++ {
+		qi.OnMissingFrame()
+	}
+	qi.Update(50, 1)
+	for i := 0; i < 3; i++ {
+		qi.OnMissingFrame()
+	}
+	qi.Update(50, 1)
+	for i := 0; i < 2; i++ {
+		qi.OnMissingFrame()
+	}
+
+	const wantMisses uint64 = 8
+	if got := qi.MissCount(); got != wantMisses {
+		t.Errorf("MissCount() after mixed workload: got %d, want %d",
+			got, wantMisses)
+	}
+}
+
+// TestQualityIndicator_MissCount_ConcurrentSafe exercises OnMissingFrame and
+// MissCount concurrently to expose data races under -race and asserts the
+// final count is exactly the number of OnMissingFrame goroutine invocations.
+//
+// The oracle is dual: (1) the race detector, (2) exact-count equality —
+// MissCount is a serialisable event counter, so the total must equal the
+// sum of invocations regardless of goroutine scheduling.
+func TestQualityIndicator_MissCount_ConcurrentSafe(t *testing.T) {
+	t.Parallel()
+	qi := metrics.NewQualityIndicator()
+
+	const goroutines = 10
+	const missesEach = 100
+
+	var wg sync.WaitGroup
+	// goroutines writers + goroutines readers
+	wg.Add(goroutines * 2)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < missesEach; j++ {
+				qi.OnMissingFrame()
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for j := 0; j < missesEach; j++ {
+				_ = qi.MissCount()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	const want uint64 = goroutines * missesEach
+	if got := qi.MissCount(); got != want {
+		t.Errorf("MissCount() after concurrent workload: got %d, want %d "+
+			"(counter must be exact — every OnMissingFrame counted once, "+
+			"no lost or double increments)",
+			got, want)
+	}
+}
+
+// -----------------------------------------------------------------------
 // Concurrent access — race-detector coverage
 // -----------------------------------------------------------------------
 
