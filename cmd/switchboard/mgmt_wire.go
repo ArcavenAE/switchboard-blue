@@ -36,6 +36,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/drain"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/netingress"
@@ -377,13 +378,25 @@ func startMgmtServer(
 // socket path on successful startup. Callers (main.go) pass os.Stderr in
 // production; tests may pass nil (in which case the messages are suppressed).
 //
-// #DEFERRED — E→PE mode graduation, SIGHUP config reload, DRAIN-signal-to-nodes
-// protocol (S-7.04 Wave 7), and outer-header session bootstrap (S-BL.OA)
-// still ship in later stories. Router-to-node forwarding-table registration
-// (real admission handshake feeding RegisterForwardingEntry) is also deferred
-// until admission plumbing lands; in this story the router accepts frames and
-// drops them fail-closed when auth keys are unavailable, exercising the live
-// RouteFrame path.
+// S-7.04 application closures (BC-2.09.003 DEFERRED-APPLICATION table):
+//   - drain_timeout      → drainTimeoutFor(cfg) drives the drain coordinator
+//     (BC-2.09.003 PC-7; drain.New; shutdown-time Signal/Wait)
+//   - keepalive_interval → keepaliveIntervalFor(cfg) resolves and is emitted
+//     at the observability seam; the reconnect-side keepalive ticker itself
+//     ships when node-connection plumbing lands (BC-2.09.003 PC-8; FM-009).
+//     MUST NOT be routed into sweepDeadline (console eviction — different
+//     semantic; BC-2.09.003 PC-8 normative note).
+//   - upstream_routers   → upstreamRoutersFor(cfg) resolves and is emitted
+//     at the observability seam; a non-empty list signals PE-mode graduation
+//     eligibility (BC-2.09.001 PC-1). Live upstream connection establishment
+//     ships once the outer-header session-bootstrap protocol lands.
+//
+// #DEFERRED — SIGHUP config reload (BC-2.09.001 PC-1 Signal-of-graduation),
+// live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1), and the actual
+// PE-mode upstream connector still ship in a follow-on story once admission
+// plumbing and node-facing SVTN channels are wired. In this story the drain
+// coordinator seam and the three DEFERRED-APPLICATION closures are in place;
+// the wire protocol connects to them without further daemon-level refactor.
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
@@ -460,24 +473,69 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 		}
 	}()
 
+	// Resolve the three BC-2.09.003 DEFERRED-APPLICATION values. Each helper
+	// applies the zero-value default per PC-7/PC-8/PC-9 semantics.
+	drainWindow := drainTimeoutFor(cfg)
+	keepaliveInterval := keepaliveIntervalFor(cfg)
+	upstreamRouters := upstreamRoutersFor(cfg)
+
+	// Construct the graceful-drain coordinator (BC-2.09.002). No observers
+	// are registered in this story — the DRAIN-over-SVTN wire protocol that
+	// broadcasts to connected nodes is a follow-on story. The coordinator
+	// is nevertheless load-bearing: it holds the drain_timeout at the seam
+	// where the follow-on wiring plugs in, and it emits the resolved window
+	// at the observability seam below so operators can confirm the config
+	// value flowed through.
+	drainCoord := drain.New(drainWindow)
+
 	// Log resolved listen address + mgmt socket path.
 	// The writer is os.Stderr in production (main.go); the tutorial doc says
 	// "stdout" — this is a known documentation drift called out in the PR body.
 	if w != nil {
 		_, _ = fmt.Fprintf(w, "switchboard router: data plane listening on %s\n", dataLn.Addr().String())
 		_, _ = fmt.Fprintf(w, "switchboard router: management socket at %s\n", resolveManagementSocket(cfg, "router"))
+		// BC-2.09.003 PC-7 application: drain_timeout emitted at startup so
+		// operators can confirm the resolved value (config or default).
+		_, _ = fmt.Fprintf(w, "switchboard router: drain_timeout=%s\n", drainCoord.Timeout())
+		// BC-2.09.003 PC-8 application: keepalive_interval emitted at startup.
+		// The reconnect-side keepalive ticker itself ships with the node
+		// protocol; the resolved value is captured here so the config-to-
+		// application flow is auditable.
+		_, _ = fmt.Fprintf(w, "switchboard router: keepalive_interval=%s\n", keepaliveInterval)
+		// BC-2.09.003 PC-9 / BC-2.09.001 PC-1 application: upstream_routers
+		// emitted at startup. Empty list = E mode; non-empty list = PE-mode
+		// graduation eligibility.
+		if len(upstreamRouters) == 0 {
+			_, _ = fmt.Fprintf(w, "switchboard router: mode=E (no upstream_routers configured)\n")
+		} else {
+			_, _ = fmt.Fprintf(w, "switchboard router: mode=PE upstream_routers=%v\n", upstreamRouters)
+		}
 	}
 
 	// Block until context is cancelled (ARCH-01 lifecycle contract).
 	<-ctx.Done()
 
-	// Graceful shutdown: cancel ingress ctx so netingress.Serve closes the
-	// listener and joins its per-conn goroutines, then shut down mgmt with a
-	// bounded budget.
+	// Graceful shutdown (BC-2.09.002):
+	//   1. Signal drain — observers (when the wire protocol lands) broadcast
+	//      DRAIN to their connected nodes and wait for ACKs.
+	//   2. Wait, bounded by drain_timeout. On timeout we proceed with
+	//      disconnect anyway (BC-2.09.002 EC-003).
+	//   3. Cancel ingress ctx so netingress.Serve closes the listener and
+	//      joins its per-conn goroutines.
+	//   4. Shut down mgmt with a budget derived from the same drain window
+	//      (previously hardcoded 5s — now driven by cfg.DrainTimeout so
+	//      operators have a single lever for shutdown budget tuning).
+	drainCtx, drainCtxCancel := context.WithTimeout(context.Background(), drainCoord.Timeout())
+	drainCoord.Signal(drainCtx)
+	if derr := drainCoord.Wait(drainCtx); derr != nil {
+		routerLogger.Log(fmt.Sprintf("runRouter: drain: %v (proceeding with disconnect per BC-2.09.002 EC-003)", derr))
+	}
+	drainCtxCancel()
+
 	ingressCancel()
 	dataWG.Wait()
 
-	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), drainCoord.Timeout())
 	defer shutCancel()
 	_ = mgmtSrv.Shutdown(shutCtx)
 	mgmtWG.Wait()
