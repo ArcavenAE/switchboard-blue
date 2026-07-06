@@ -51,8 +51,8 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-025 | DropCache never exceeds configured capacity | BC-2.02.009 | internal/multipath | proptest | P0 | draft | VP-025.md |
 | VP-026 | PathScore ranking is transitive | BC-2.02.003 | internal/paths | proptest | P0 | draft | VP-026.md |
 | VP-027 | QualityIndicator transitions: degradation only goes down | BC-2.06.001, BC-2.06.002 | internal/metrics | proptest | P1 | draft | VP-027.md |
-| VP-028 | Config.Validate rejects out-of-range tick_interval | BC-2.09.003 | internal/config | proptest | P0 | draft | VP-028.md |
-| VP-029 | Config.Validate rejects missing required fields | BC-2.09.003 | internal/config | proptest | P0 | draft | VP-029.md |
+| VP-028 | Config.Validate rejects out-of-range tick_interval | BC-2.09.003 | internal/config | table-driven | P0 | draft | VP-028.md |
+| VP-029 | Config.Validate rejects missing required fields | BC-2.09.003 | internal/config | table-driven | P0 | draft | VP-029.md |
 | VP-030 | sbctl exits 1 with E-NET-001 on connection refused | BC-2.07.003 | cmd/sbctl | integration | P0 | draft | VP-030.md |
 | VP-031 | tmux control mode: 99% output event completeness | BC-2.04.001 | internal/tmux | integration | P1 | draft | VP-031.md |
 | VP-032 | PTY fallback activates on control mode failure | BC-2.04.002 | internal/tmux | integration | P0 | draft | VP-032.md |
