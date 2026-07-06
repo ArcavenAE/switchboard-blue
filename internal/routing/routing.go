@@ -267,8 +267,10 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 	if entry == nil {
 		// PATH-A: no forwarding-table entry → auth key unavailable → frame unverifiable.
 		// Log E-ADM-016 so operators see every dropped frame (BC-2.05.008 PC-4).
+		// path=verify-key-missing discriminates PATH-A from PATH-B for operator triage
+		// (DRIFT-P6-ROUTING-LOG-DISCRIMINATOR; E-ADM-016 taxonomy code present in both).
 		r.logger.Log(fmt.Sprintf(
-			"wire HMAC verification failed at RouteFrame: auth key unavailable for SVTN %x from src %x (E-ADM-016)",
+			"wire HMAC verification failed at RouteFrame: auth key unavailable for SVTN %x from src %x (E-ADM-016) path=verify-key-missing",
 			hdr.SVTNID, hdr.SrcAddr,
 		))
 		// Record per-source failure count for E-ADM-017 alert (BC-2.05.008 invariant 5; BC-2.05.005 PC-3).
@@ -282,8 +284,10 @@ func RouteFrame(hdr frame.OuterHeader, payload []byte, r *Router) error {
 	// E-ADM-016: wire HMAC verification failed at RouteFrame (BC-2.05.008 PC-2).
 	if !verifyFrameHMAC(hdr, payload, authKey) {
 		// PATH-B: tag mismatch — log before return per BC-2.05.008 PC-2.
+		// path=tag-mismatch discriminates PATH-B from PATH-A for operator triage
+		// (DRIFT-P6-ROUTING-LOG-DISCRIMINATOR; E-ADM-016 taxonomy code present in both).
 		r.logger.Log(fmt.Sprintf(
-			"wire HMAC verification failed at RouteFrame: tag mismatch for SVTN %x from src %x (E-ADM-016)",
+			"wire HMAC verification failed at RouteFrame: tag mismatch for SVTN %x from src %x (E-ADM-016) path=tag-mismatch",
 			hdr.SVTNID, hdr.SrcAddr,
 		))
 		// Record per-source failure count for E-ADM-017 alert (BC-2.05.008 PC-5; BC-2.05.005 PC-3).
