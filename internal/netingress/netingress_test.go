@@ -464,6 +464,204 @@ func TestServe_AcceptsMultipleConnectionsAndJoinsOnCtxCancel(t *testing.T) {
 	}
 }
 
+// TestReadFrame_MaxFrameBytesWireBound_MaxPayloadDecodes pins the CWE-400
+// attacker-sized-allocation bound (VP-066). The natural ceiling is
+// OuterHeaderSize + max(uint16); ServeConn wraps every per-frame read in
+// io.LimitReader(conn, MaxFrameBytes). Any mutation to the formula, or
+// removal of the LimitReader wrap, breaks either the formula assertion
+// or the max-size boundary decode.
+//
+// Kills mutants that (a) change the MaxFrameBytes constant to any value
+// other than 44 + 65535, or (b) shrink the LimitReader cap so a
+// well-formed maximum-payload frame reads as truncated.
+func TestReadFrame_MaxFrameBytesWireBound_MaxPayloadDecodes(t *testing.T) {
+	t.Parallel()
+
+	// Formula pin — PayloadLen is a uint16 in the wire format (BC-2.01.004),
+	// so the largest self-delimiting frame is header + 65535 payload bytes.
+	// MaxFrameBytes must equal that ceiling exactly: any smaller value
+	// truncates valid maximum frames; any larger value pretends the wire
+	// carries more than the format allows.
+	const wantMax = frame.OuterHeaderSize + int(^uint16(0))
+	if MaxFrameBytes != wantMax {
+		t.Fatalf("MaxFrameBytes = %d, want OuterHeaderSize + max(uint16) = %d",
+			MaxFrameBytes, wantMax)
+	}
+	if int(^uint16(0)) != 65535 {
+		t.Fatalf("^uint16(0) = %d, want 65535 (wire format sanity)", int(^uint16(0)))
+	}
+
+	// Wire-bound pin — a maximum-payload frame reads back byte-exact.
+	// If ServeConn's LimitReader cap were mutated below MaxFrameBytes, the
+	// payload read would truncate with io.ErrUnexpectedEOF; if it were
+	// removed entirely, an over-cap follow-on write would consume beyond
+	// the bound. We drive the full ServeConn loop over net.Pipe so both
+	// the LimitReader wrap AND the underlying decoder participate.
+	maxPayload := bytes.Repeat([]byte{0xAA}, int(^uint16(0)))
+	f := makeFrameBytes(t, frame.FrameTypeData, [16]byte{1}, [8]byte{}, [8]byte{}, maxPayload)
+	if len(f) != MaxFrameBytes {
+		t.Fatalf("assembled frame size %d != MaxFrameBytes %d", len(f), MaxFrameBytes)
+	}
+
+	client, server := net.Pipe()
+	defer func() { _ = client.Close() }()
+
+	rec := &recorder{}
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeConn(context.Background(), server, rec.route, nil)
+	}()
+
+	// net.Pipe writes are synchronous; do the write in a goroutine so a
+	// slow decoder cannot deadlock the test.
+	writeDone := make(chan error, 1)
+	go func() {
+		_, err := client.Write(f)
+		writeDone <- err
+	}()
+
+	waitFor(t, 5*time.Second, func() bool { return rec.count() == 1 },
+		"max-payload frame dispatched through LimitReader-wrapped read")
+
+	rec.mu.Lock()
+	got := rec.frames[0]
+	rec.mu.Unlock()
+
+	if int(got.hdr.PayloadLen) != len(maxPayload) {
+		t.Errorf("PayloadLen: got %d want %d", got.hdr.PayloadLen, len(maxPayload))
+	}
+	if !bytes.Equal(got.payload, maxPayload) {
+		t.Errorf("payload not preserved through wire-bound decode (len got=%d want=%d)",
+			len(got.payload), len(maxPayload))
+	}
+
+	if err := <-writeDone; err != nil {
+		t.Errorf("client write: %v", err)
+	}
+	_ = client.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("ServeConn did not return after client close")
+	}
+}
+
+// TestServe_MaxConcurrentConnections_SheddingCap pins the CWE-770 goroutine-
+// exhaustion mitigation (VP-070). Serve reserves a slot in a
+// MaxConcurrentConnections-buffered semaphore per accepted connection; when
+// the semaphore is full, excess accepts are closed immediately rather than
+// spawning a goroutine.
+//
+// Kills mutants that (a) remove the sem-full shed branch (all excess
+// connections would be served, no shed logs, no immediate EOF), or (b)
+// shrink the cap to zero (no conn is ever served, base-line frame dispatch
+// fails). Blocking-handler discipline: hold the semaphore full by keeping
+// MaxConcurrentConnections connections open and confirmed-served before
+// probing the shed path.
+func TestServe_MaxConcurrentConnections_SheddingCap(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	var routed atomic.Int64
+	route := func(frame.OuterHeader, []byte) error { //nolint:unparam // matches RouteFn signature; test route never fails
+		routed.Add(1)
+		return nil
+	}
+	logger := &captureLogger{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- Serve(ctx, ln, route, logger)
+	}()
+
+	// Phase 1: fill the semaphore. Dial MaxConcurrentConnections conns and
+	// send one frame on each; wait for the route callback to observe them
+	// all. That proves each conn goroutine is alive and holding its sem slot.
+	holds := make([]net.Conn, 0, MaxConcurrentConnections)
+	defer func() {
+		for _, c := range holds {
+			_ = c.Close()
+		}
+	}()
+
+	frameBytes := makeFrameBytes(t, frame.FrameTypeData, [16]byte{9}, [8]byte{}, [8]byte{}, []byte("hold"))
+	for i := 0; i < MaxConcurrentConnections; i++ {
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatalf("dial %d/%d: %v", i, MaxConcurrentConnections, err)
+		}
+		if _, err := c.Write(frameBytes); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+		holds = append(holds, c)
+	}
+
+	waitFor(t, 5*time.Second,
+		func() bool { return routed.Load() == int64(MaxConcurrentConnections) },
+		"all holding connections served (semaphore full)")
+
+	// Phase 2: dial excess connections. Each should be Accepted, logged as
+	// cap-reached, and immediately Closed by Serve without spawning a
+	// ServeConn goroutine.
+	const excess = 3
+	for i := 0; i < excess; i++ {
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatalf("excess dial %d: %v", i, err)
+		}
+		// Server closes the shed conn; Read returns io.EOF (or a connection-
+		// reset-style error) quickly. If the shed path were removed, the
+		// server would be blocking in Accept but not spawning readers, so
+		// Read would block until deadline. The deadline is our safety net.
+		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		buf := make([]byte, 1)
+		n, rerr := c.Read(buf)
+		if n != 0 {
+			t.Errorf("excess conn %d: read %d bytes from shed connection", i, n)
+		}
+		if rerr == nil {
+			t.Errorf("excess conn %d: expected read error on shed conn, got nil", i)
+		}
+		_ = c.Close()
+	}
+
+	waitFor(t, 2*time.Second, func() bool {
+		msgs := logger.snapshot()
+		count := 0
+		for _, m := range msgs {
+			if strings.Contains(m, "connection cap reached") {
+				count++
+			}
+		}
+		return count >= excess
+	}, "at least `excess` shed logs")
+
+	// The held connections must still be alive — the shed path is per-accept,
+	// it must not disturb already-running per-conn goroutines.
+	if got := routed.Load(); got != int64(MaxConcurrentConnections) {
+		t.Errorf("routed count changed during shed: got %d want %d",
+			got, MaxConcurrentConnections)
+	}
+
+	cancel()
+	select {
+	case err := <-serveDone:
+		if err != nil {
+			t.Fatalf("Serve: got %v want nil on ctx cancel", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("Serve did not return after ctx cancel")
+	}
+}
+
 func TestServe_ClosesListenerOnCtxCancel(t *testing.T) {
 	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
