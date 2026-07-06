@@ -41,6 +41,30 @@ test:
 test-race:
     go test -race ./... -v
 
+# Run VP-041 and VP-042 benchmark harnesses (S-BL.BENCH).
+# These are DIAGNOSTIC only — not wired to required CI per ADR-007.
+# Results constitute formal verification evidence for VP-041 / VP-042.
+#
+# VP-041: BenchmarkHalfChannelTickJitter — tick p99 jitter ≤ 2ms (NFR-009)
+# VP-042: BenchmarkKeystrokeEcho_P99 — keystroke-echo p99 ≤ 100ms (NFR-001)
+#
+# Run 3× and compare jitter_p99_ms / p99_rtt_ms across runs.
+# Hardware used for evidence: record sysctl -n machdep.cpu.brand_string + nproc.
+bench:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Hardware ==="
+    sysctl -n machdep.cpu.brand_string 2>/dev/null || grep "model name" /proc/cpuinfo | head -1
+    echo "CPUs: $(nproc 2>/dev/null || sysctl -n hw.logicalcpu)"
+    echo ""
+    echo "=== VP-041: BenchmarkHalfChannelTickJitter (1000 ticks) ==="
+    go test -bench=BenchmarkHalfChannelTickJitter -benchtime=1000x \
+        -count=1 ./internal/halfchannel/
+    echo ""
+    echo "=== VP-042: BenchmarkKeystrokeEcho_P99 (500 samples) ==="
+    go test -bench=BenchmarkKeystrokeEcho_P99 -benchtime=1x \
+        -count=1 ./internal/bench/
+
 # Run tests in Docker
 test-docker:
     @command -v docker >/dev/null 2>&1 || { echo "Error: Docker is required but not found."; exit 1; }
