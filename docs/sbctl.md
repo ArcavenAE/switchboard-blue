@@ -408,6 +408,43 @@ Response shape:
 
 ---
 
+### `sbctl sessions status`
+
+Report per-session quality and gap-event observability for published
+sessions (console-mode daemon). Delivered by S-BL.CONSOLE-OBS
+(BC-2.06.001 PC-5; BC-2.06.002 PC-3).
+
+**Syntax:**
+```
+sbctl sessions status [<session-name>]
+```
+
+A positional session name selects one session; omitted selects all.
+
+**Auth:** Any admitted role (Tier-2 role-gate parity with `sessions list`).
+
+Response shape:
+
+```json
+{
+  "sessions": [
+    {
+      "name": "work",
+      "published_at": "2026-07-06T01:00:00Z",
+      "quality": "green",
+      "miss_count": 0
+    }
+  ]
+}
+```
+
+`quality` is one of `green` | `yellow` | `red` | `pending`;
+`miss_count` is the lifetime-cumulative missing-frame counter (never
+resets; distinct from the rolling hysteresis window that drives
+`quality`). Unreachable daemon exits 1 with `E-NET-001`.
+
+---
+
 ### `sbctl console attach`
 
 Attach an interactive terminal to a remote tmux session.
@@ -493,7 +530,6 @@ usage error until the corresponding backlog story ships.
 | `sbctl router drain` | `S-BL.CLI-SURFACE-COMPLETION` |
 | `sbctl sessions attach` | `S-BL.DISCOVERY-WIRE` |
 | `sbctl sessions detach` | `S-BL.DISCOVERY-WIRE` |
-| `sbctl sessions status` | `S-BL.DISCOVERY-WIRE` |
 | `sbctl version` | `S-BL.PING-VERSION-WIRE` |
 | `sbctl ping` | `S-BL.PING-VERSION-WIRE` |
 | `sbctl admin recover` | `S-BL.ADMIN-RECOVER-WIRE` |
