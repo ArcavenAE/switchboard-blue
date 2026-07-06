@@ -29,29 +29,39 @@ import (
 	"github.com/arcavenae/switchboard/internal/session"
 )
 
-// newSessionsE2EStack constructs an AdmittedKeySet + Publisher pair with the
-// requested session names pre-published. Returns the Publisher so the caller
-// can drive per-session observations (OnSessionMeasurement /
-// OnSessionMissingFrame) before starting the server.
-func newSessionsE2EStack(t *testing.T, sessionNames ...string) (*admission.AdmittedKeySet, *session.Publisher) {
+// newSessionsE2EStack constructs an AdmittedKeySet + sessionQualitySource
+// pair with the requested session names pre-published on an internal
+// Publisher that fires the source's OnPublished hook. Only ks + src are
+// returned because the tests drive observations exclusively through src per
+// the ARCH-08 §6.6-preserving hook wiring; Publisher is a private seeding
+// mechanism, not part of the sessions.status handler surface.
+func newSessionsE2EStack(t *testing.T, sessionNames ...string) (
+	*admission.AdmittedKeySet, *sessionQualitySource,
+) {
 	t.Helper()
 	ks := admission.NewAdmittedKeySet()
 	pub := session.NewPublisher(ks)
+	src := newSessionQualitySourceFromPublisher(pub)
 	for _, name := range sessionNames {
 		if err := pub.Publish(name); err != nil {
 			t.Fatalf("newSessionsE2EStack: Publish %q: %v", name, err)
 		}
 	}
-	return ks, pub
+	return ks, src
 }
 
 // startSessionsE2EServer starts a real mgmt.Server with BuildSessionsHandlers
 // registered. callerPubs is added to the OperatorKeySet so mgmt.Server admits
 // the caller during the Ed25519 challenge-response handshake.
+//
+// BuildSessionsHandlers reads through src (the boundary registry), not
+// through the Publisher — Publisher only feeds the source via hook callbacks
+// installed in newSessionQualitySourceFromPublisher. This matches the
+// runConsole wiring in mgmt_wire.go.
 func startSessionsE2EServer(
 	t *testing.T,
 	ks *admission.AdmittedKeySet,
-	pub *session.Publisher,
+	src *sessionQualitySource,
 	callerPubs ...ed25519.PublicKey,
 ) *e2eServer {
 	t.Helper()
@@ -61,7 +71,7 @@ func startSessionsE2EServer(
 		t.Fatalf("startSessionsE2EServer: generate daemon keypair: %v", err)
 	}
 	ops := mgmt.NewOperatorKeySet(callerPubs)
-	es := startE2EServerWithOps(t, BuildSessionsHandlers(pub, ks), daemonPriv, ops)
+	es := startE2EServerWithOps(t, BuildSessionsHandlers(src, ks), daemonPriv, ops)
 	time.Sleep(10 * time.Millisecond)
 	return es
 }
@@ -82,16 +92,16 @@ func startSessionsE2EServer(
 // DRIFT-001b + DRIFT-002; RULING-W6TB-C AC-004 + AC-005; L1-C4.
 func TestSessionsStatus_E2E_AllSessions_QualityAndMissCount(t *testing.T) {
 	// Two sessions: agent-01 (will get observations) + agent-02 (stays pending).
-	ks, pub := newSessionsE2EStack(t, "agent-01", "agent-02")
+	ks, src := newSessionsE2EStack(t, "agent-01", "agent-02")
 
-	// Drive observations on agent-01:
+	// Drive observations on agent-01 through the boundary source:
 	//   1) One green measurement (moves out of pending, MissCount stays 0)
 	//   2) Three consecutive misses (green ⇒ yellow; MissCount ⇒ 3)
-	if err := pub.OnSessionMeasurement("agent-01", 50, 1); err != nil {
+	if err := src.OnSessionMeasurement("agent-01", 50, 1); err != nil {
 		t.Fatalf("seed: OnSessionMeasurement: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		if err := pub.OnSessionMissingFrame("agent-01"); err != nil {
+		if err := src.OnSessionMissingFrame("agent-01"); err != nil {
 			t.Fatalf("seed: OnSessionMissingFrame %d: %v", i, err)
 		}
 	}
@@ -103,7 +113,7 @@ func TestSessionsStatus_E2E_AllSessions_QualityAndMissCount(t *testing.T) {
 	// L1-C4: register with RoleConsole so verifyConsoleCallerRole admits us.
 	ks.RegisterKey(zeroSVTN, callerPub, admission.RoleConsole)
 
-	es := startSessionsE2EServer(t, ks, pub, callerPub)
+	es := startSessionsE2EServer(t, ks, src, callerPub)
 
 	// Empty args ⇒ "all sessions" query.
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv,
@@ -161,7 +171,7 @@ func TestSessionsStatus_E2E_AllSessions_QualityAndMissCount(t *testing.T) {
 // TestSessionsStatus_E2E_SingleSession_ByName exercises the "by name" query
 // shape returning exactly one entry for the requested session.
 func TestSessionsStatus_E2E_SingleSession_ByName(t *testing.T) {
-	ks, pub := newSessionsE2EStack(t, "agent-01", "agent-02")
+	ks, src := newSessionsE2EStack(t, "agent-01", "agent-02")
 
 	callerPub, callerPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -169,7 +179,7 @@ func TestSessionsStatus_E2E_SingleSession_ByName(t *testing.T) {
 	}
 	ks.RegisterKey(zeroSVTN, callerPub, admission.RoleConsole)
 
-	es := startSessionsE2EServer(t, ks, pub, callerPub)
+	es := startSessionsE2EServer(t, ks, src, callerPub)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv,
 		"sessions.status", map[string]any{"session_name": "agent-02"})
@@ -192,7 +202,7 @@ func TestSessionsStatus_E2E_SingleSession_ByName(t *testing.T) {
 // for an unknown session returns an E-SES-001 error envelope on the wire —
 // not a silent empty list.
 func TestSessionsStatus_E2E_UnknownSession_ESES001(t *testing.T) {
-	ks, pub := newSessionsE2EStack(t, "agent-01")
+	ks, src := newSessionsE2EStack(t, "agent-01")
 
 	callerPub, callerPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -200,7 +210,7 @@ func TestSessionsStatus_E2E_UnknownSession_ESES001(t *testing.T) {
 	}
 	ks.RegisterKey(zeroSVTN, callerPub, admission.RoleConsole)
 
-	es := startSessionsE2EServer(t, ks, pub, callerPub)
+	es := startSessionsE2EServer(t, ks, src, callerPub)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv,
 		"sessions.status", map[string]any{"session_name": "does-not-exist"})
@@ -227,7 +237,7 @@ func TestSessionsStatus_E2E_UnknownSession_ESES001(t *testing.T) {
 // caller; Layer 2 admits only RoleControl/RoleConsole). The handler MUST reach
 // Layer 2 check before reading the session state.
 func TestSessionsStatus_E2E_AdmissionDenied_E_ADM_006(t *testing.T) {
-	ks, pub := newSessionsE2EStack(t, "agent-01")
+	ks, src := newSessionsE2EStack(t, "agent-01")
 
 	callerPub, callerPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -237,7 +247,7 @@ func TestSessionsStatus_E2E_AdmissionDenied_E_ADM_006(t *testing.T) {
 	// The mgmt.Server handshake will still succeed because callerPub is in
 	// the OperatorKeySet (Layer 1) passed to startSessionsE2EServer.
 
-	es := startSessionsE2EServer(t, ks, pub, callerPub)
+	es := startSessionsE2EServer(t, ks, src, callerPub)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv,
 		"sessions.status", nil)

@@ -9,7 +9,11 @@
 // Allowed internal imports: {frame, admission} per ARCH-08 §6.6.
 // Current code imports only admission; frame is permitted but unused
 // (FrameTypeData re-export was deleted when no consumer materialised).
-// Forbidden: internal/routing, internal/tmux (circular).
+// Forbidden: internal/routing, internal/tmux (circular), internal/metrics
+// (topological inversion — internal/metrics is DAG position 12, downstream
+// of session; boundary composition happens in cmd/switchboard via typed
+// SessionHook callbacks, mirroring routing.ForwardingEntryHook for
+// pathTrackerSource in S-BL.PATH-TRACKER-WIRING).
 package session
 
 import (
@@ -40,6 +44,24 @@ type Info struct {
 	PublishedAt time.Time
 }
 
+// SessionHook is called once per Publish / Unpublish with the session name
+// and its PublishedAt timestamp. It fires while the Publisher holds its
+// write lock; hook implementations MUST NOT re-enter Publisher (any
+// exported Publisher method that acquires p.mu would deadlock).
+//
+// The hook exists so that cmd/switchboard can maintain a per-session
+// QualityIndicator registry (S-BL.CONSOLE-OBS) without violating
+// ARCH-08 §6.6: internal/session (DAG position 6) MUST NOT import
+// internal/metrics (DAG position 12; inverting the topological order
+// would cascade through internal/tmux at position 7). Publisher is
+// unaware of QualityIndicator; it only fires a notification. Mirrors
+// routing.ForwardingEntryHook (S-BL.PATH-TRACKER-WIRING).
+//
+// For Unpublish, publishedAt is the original PublishedAt from Publish
+// so observers can log an accurate session lifetime without re-fetching
+// state that has already been removed.
+type SessionHook func(sessionName string, publishedAt time.Time)
+
 // Publisher manages the set of published tmux sessions (BC-2.04.001 PC-2;
 // ARCH-08 §6.6 position 6). It holds a reference to the admission key set
 // exposed to internal/tmux via AdmittedKeySet(). Tier-2 SessionAuth keys
@@ -53,31 +75,65 @@ type Publisher struct {
 	mu       sync.RWMutex
 	sessions map[string]Info
 	keys     *admission.AdmittedKeySet
-	// qualities holds one per-session QualityIndicator wrapper keyed by
-	// sessionName. Created on Publish, dropped on Unpublish, in lockstep with
-	// the sessions map. Surfaced via SessionSnapshots for `sbctl sessions
-	// status` (BC-2.06.001 v1.7 PC-5; BC-2.06.002 v1.4 PC-3; DRIFT-001b +
-	// DRIFT-002; S-BL.CONSOLE-OBS). Definition + methods live in
-	// session_quality.go.
-	qualities map[string]*sessionQuality
+	// publishHook / unpublishHook are optional SessionHook callbacks fired
+	// under p.mu.Lock after the sessions map has been mutated. Nil-safe:
+	// both fields default to nil and Publish / Unpublish check before
+	// firing. Attach via SetPublishHook / SetUnpublishHook (S-BL.CONSOLE-OBS).
+	publishHook   SessionHook
+	unpublishHook SessionHook
 }
 
 // NewPublisher constructs a Publisher seeded with an admission key set.
 // The key set is consumed only by AdmittedKeySet() for internal/tmux;
 // Tier-2 SessionAuth keys are registered independently (BC-2.05.003 DI-011).
 // keys must not be nil.
+//
+// Both SessionHook fields default to nil. Consumers that need
+// per-session observability wiring (S-BL.CONSOLE-OBS) attach hooks via
+// SetPublishHook / SetUnpublishHook after construction — the wiring path
+// where the source-of-hook is only constructible after the Publisher
+// (see cmd/switchboard.newSessionQualitySourceFromPublisher). Mirrors
+// routing.SetForwardingEntryHook.
 func NewPublisher(keys *admission.AdmittedKeySet) *Publisher {
 	return &Publisher{
-		sessions:  make(map[string]Info),
-		keys:      keys,
-		qualities: make(map[string]*sessionQuality),
+		sessions: make(map[string]Info),
+		keys:     keys,
 	}
+}
+
+// SetPublishHook installs (or replaces) the SessionHook fired inside
+// Publish after the sessions map is mutated. Takes p.mu.Lock briefly to
+// swap the field so it composes safely with concurrent Publish callers —
+// no torn read of the hook function pointer, no lost registration.
+//
+// Passing nil disables the hook. The hook MUST NOT re-enter Publisher.
+//
+// S-BL.CONSOLE-OBS.
+func (p *Publisher) SetPublishHook(hook SessionHook) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.publishHook = hook
+}
+
+// SetUnpublishHook installs (or replaces) the SessionHook fired inside
+// Unpublish after the sessions map is mutated. Same concurrency
+// discipline as SetPublishHook. Passing nil disables the hook. The hook
+// MUST NOT re-enter Publisher.
+//
+// S-BL.CONSOLE-OBS.
+func (p *Publisher) SetUnpublishHook(hook SessionHook) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.unpublishHook = hook
 }
 
 // Publish adds sessionName to the live set with the current UTC timestamp
 // (BC-2.04.001 PC-2; PC-3).
 //
 // Returns ErrSessionAlreadyPublished if name is already present.
+//
+// When a publishHook is installed, it fires exactly once under p.mu.Lock
+// after the sessions-map write, carrying (sessionName, PublishedAt).
 func (p *Publisher) Publish(sessionName string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -86,15 +142,14 @@ func (p *Publisher) Publish(sessionName string) error {
 		return ErrSessionAlreadyPublished
 	}
 
-	p.sessions[sessionName] = Info{
+	info := Info{
 		Name:        sessionName,
 		PublishedAt: time.Now().UTC(),
 	}
-	// Sessions and qualities maps are maintained in lockstep so that
-	// SessionSnapshots' iteration invariants hold (BC-2.06.001 v1.7 PC-5;
-	// S-BL.CONSOLE-OBS). A fresh indicator starts pending — no observation
-	// has been recorded yet.
-	p.qualities[sessionName] = newSessionQuality()
+	p.sessions[sessionName] = info
+	if p.publishHook != nil {
+		p.publishHook(sessionName, info.PublishedAt)
+	}
 
 	return nil
 }
@@ -102,18 +157,24 @@ func (p *Publisher) Publish(sessionName string) error {
 // Unpublish removes sessionName from the live set (BC-2.04.001 PC-4).
 //
 // Returns ErrSessionNotFound if the session is not in the live set.
+//
+// When an unpublishHook is installed, it fires exactly once under p.mu.Lock
+// after the sessions-map delete, carrying (sessionName, PublishedAt) where
+// PublishedAt is the timestamp from the original Publish (so observers can
+// log accurate session lifetimes without needing a separate Get call).
 func (p *Publisher) Unpublish(sessionName string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if _, ok := p.sessions[sessionName]; !ok {
+	info, ok := p.sessions[sessionName]
+	if !ok {
 		return ErrSessionNotFound
 	}
 
 	delete(p.sessions, sessionName)
-	// Drop the per-session QualityIndicator in lockstep so a re-publish gets
-	// a fresh (pending, 0-miss) indicator (S-BL.CONSOLE-OBS).
-	delete(p.qualities, sessionName)
+	if p.unpublishHook != nil {
+		p.unpublishHook(sessionName, info.PublishedAt)
+	}
 
 	return nil
 }
