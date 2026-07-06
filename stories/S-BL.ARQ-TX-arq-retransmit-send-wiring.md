@@ -4,7 +4,7 @@ document_type: story
 level: ops
 story_id: S-BL.ARQ-TX
 title: "wire ARQ retransmit-SEND path into router/multipath dispatch (BC-2.02.005 PC-3)"
-status: backlog
+status: merged
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
 phase: 2

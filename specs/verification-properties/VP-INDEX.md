@@ -2,10 +2,10 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.36"
+version: "2.37"
 status: draft
 producer: product-owner
-timestamp: 2026-07-02T00:00:00
+timestamp: 2026-07-06T00:00:00
 phase: 1b
 inputDocuments:
   - '.factory/specs/behavioral-contracts/BC-INDEX.md'
@@ -24,41 +24,41 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | VP ID | Title | BC(s) | Module | Method | Phase | Status | File |
 |-------|-------|-------|--------|--------|-------|--------|------|
-| VP-001 | ParseOuterHeader / EncodeOuterHeader round-trip | BC-2.01.004 | internal/frame | proptest | P0 | draft | VP-001.md |
-| VP-002 | ParseOuterHeader rejects version mismatch | BC-2.01.004 | internal/frame | proptest | P0 | draft | VP-002.md |
-| VP-003 | EncodeOuterHeader produces exactly 44 bytes | BC-2.01.004 | internal/frame | proptest | P0 | draft | VP-003.md |
-| VP-004 | ComputeHMAC / VerifyHMAC consistency | BC-2.05.005 | internal/hmac | proptest | P0 | draft | VP-004.md |
-| VP-005 | VerifyHMAC rejects single-bit flips | BC-2.05.005 | internal/hmac | fuzz | P0 | draft | VP-005.md |
-| VP-006 | VerifyHMAC rejects wrong key | BC-2.05.005 | internal/hmac | proptest | P0 | draft | VP-006.md |
+| VP-001 | ParseOuterHeader / EncodeOuterHeader round-trip | BC-2.01.004 | internal/frame | proptest | P0 | implemented | VP-001.md |
+| VP-002 | ParseOuterHeader rejects version mismatch | BC-2.01.004 | internal/frame | proptest | P0 | implemented | VP-002.md |
+| VP-003 | EncodeOuterHeader produces exactly 44 bytes | BC-2.01.004 | internal/frame | proptest | P0 | implemented | VP-003.md |
+| VP-004 | ComputeHMAC / VerifyHMAC consistency | BC-2.05.005 | internal/hmac | proptest | P0 | implemented | VP-004.md |
+| VP-005 | VerifyHMAC rejects single-bit flips | BC-2.05.005 | internal/hmac | fuzz | P0 | implemented | VP-005.md |
+| VP-006 | VerifyHMAC rejects wrong key | BC-2.05.005 | internal/hmac | proptest | P0 | implemented | VP-006.md |
 | VP-007 | Admission: private key never in wire structs | BC-2.05.001, BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-007.md |
 | VP-008 | Admission fails for unregistered key | BC-2.05.001, BC-2.05.002 | internal/admission | proptest | P0 | implemented | VP-008.md |
 | VP-009 | Admission rejects replayed nonce | BC-2.05.001 | internal/admission | proptest | P0 | implemented | VP-009.md |
 | VP-010 | SVTNRoute never delivers to wrong SVTN | BC-2.05.006 | internal/routing | proptest | P0 | implemented | VP-010.md |
-| VP-011 | Split-horizon: no forward toward arrival interface | BC-2.02.008 | internal/routing | proptest | P0 | draft | VP-011.md |
-| VP-012 | SessionAuth rejects unauthorized console key | BC-2.05.003, BC-2.04.003 | internal/session | proptest | P0 | draft | VP-012.md |
-| VP-013 | SessionAuth rejects upstream from read-only key | BC-2.04.005, BC-2.05.003 | internal/session | proptest | P0 | draft | VP-013.md |
-| VP-014 | DeriveNodeAddress is deterministic | BC-2.01.006 | internal/frame | proptest | P0 | draft | VP-014.md |
-| VP-015 | Router code never parses channel header payload | BC-2.01.005 | internal/routing | fuzz | P0 | draft | VP-015.md |
-| VP-016 | HalfChannel.Tick emits exactly one frame per tick | BC-2.01.001, BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-016.md |
-| VP-017 | HalfChannel sequence increments by exactly 1 | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-017.md |
-| VP-018 | HalfChannel emits empty frame when no payload | BC-2.01.001, BC-2.01.002 | internal/halfchannel | proptest | P0 | draft | VP-018.md |
-| VP-019 | ARQ.OnAck never delivers a frame twice | BC-2.02.005 | internal/arq | proptest | P0 | draft | VP-019.md |
-| VP-020 | ARQ delivers frames in-order | BC-2.02.005 | internal/arq | proptest | P0 | draft | VP-020.md |
-| VP-021 | ARQ.TLPKTDROP triggers only when frame overdue | BC-2.02.006 | internal/arq | proptest | P0 | draft | VP-021.md |
-| VP-022 | Replay.OnUpstream never delivers same seq twice | BC-2.02.004 | internal/replay | proptest | P0 | draft | VP-022.md |
-| VP-023 | Replay delivers keystrokes in sequence order | BC-2.02.004 | internal/replay | proptest | P0 | draft | VP-023.md |
-| VP-024 | Multipath delivers first copy, discards duplicates | BC-2.02.001, BC-2.02.002 | internal/multipath | proptest | P0 | draft | VP-024.md |
-| VP-025 | DropCache never exceeds configured capacity | BC-2.02.009 | internal/multipath | proptest | P0 | draft | VP-025.md |
-| VP-026 | PathScore ranking is transitive | BC-2.02.003 | internal/paths | proptest | P0 | draft | VP-026.md |
-| VP-027 | QualityIndicator transitions: degradation only goes down | BC-2.06.001, BC-2.06.002 | internal/metrics | proptest | P1 | draft | VP-027.md |
-| VP-028 | Config.Validate rejects out-of-range tick_interval | BC-2.09.003 | internal/config | table-driven | P0 | draft | VP-028.md |
-| VP-029 | Config.Validate rejects missing required fields | BC-2.09.003 | internal/config | table-driven | P0 | draft | VP-029.md |
-| VP-030 | sbctl exits 1 with E-NET-001 on connection refused | BC-2.07.003 | cmd/sbctl | integration | P0 | draft | VP-030.md |
+| VP-011 | Split-horizon: no forward toward arrival interface | BC-2.02.008 | internal/routing | proptest | P0 | implemented | VP-011.md |
+| VP-012 | SessionAuth rejects unauthorized console key | BC-2.05.003, BC-2.04.003 | internal/session | proptest | P0 | implemented | VP-012.md |
+| VP-013 | SessionAuth rejects upstream from read-only key | BC-2.04.005, BC-2.05.003 | internal/session | proptest | P0 | implemented | VP-013.md |
+| VP-014 | DeriveNodeAddress is deterministic | BC-2.01.006 | internal/frame | proptest | P0 | implemented | VP-014.md |
+| VP-015 | Router code never parses channel header payload | BC-2.01.005 | internal/routing | fuzz | P0 | implemented | VP-015.md |
+| VP-016 | HalfChannel.Tick emits exactly one frame per tick | BC-2.01.001, BC-2.01.003 | internal/halfchannel | proptest | P0 | implemented | VP-016.md |
+| VP-017 | HalfChannel sequence increments by exactly 1 | BC-2.01.003 | internal/halfchannel | proptest | P0 | implemented | VP-017.md |
+| VP-018 | HalfChannel emits empty frame when no payload | BC-2.01.001, BC-2.01.002 | internal/halfchannel | proptest | P0 | implemented | VP-018.md |
+| VP-019 | ARQ.OnAck never delivers a frame twice | BC-2.02.005 | internal/arq | proptest | P0 | implemented | VP-019.md |
+| VP-020 | ARQ delivers frames in-order | BC-2.02.005 | internal/arq | proptest | P0 | implemented | VP-020.md |
+| VP-021 | ARQ.TLPKTDROP triggers only when frame overdue | BC-2.02.006 | internal/arq | proptest | P0 | implemented | VP-021.md |
+| VP-022 | Replay.OnUpstream never delivers same seq twice | BC-2.02.004 | internal/replay | proptest | P0 | implemented | VP-022.md |
+| VP-023 | Replay delivers keystrokes in sequence order | BC-2.02.004 | internal/replay | proptest | P0 | implemented | VP-023.md |
+| VP-024 | Multipath delivers first copy, discards duplicates | BC-2.02.001, BC-2.02.002 | internal/multipath | proptest | P0 | implemented | VP-024.md |
+| VP-025 | DropCache never exceeds configured capacity | BC-2.02.009 | internal/multipath | proptest | P0 | implemented | VP-025.md |
+| VP-026 | PathScore ranking is transitive | BC-2.02.003 | internal/paths | proptest | P0 | implemented | VP-026.md |
+| VP-027 | QualityIndicator transitions: degradation only goes down | BC-2.06.001, BC-2.06.002 | internal/metrics | proptest | P1 | implemented | VP-027.md |
+| VP-028 | Config.Validate rejects out-of-range tick_interval | BC-2.09.003 | internal/config | table-driven | P0 | implemented | VP-028.md |
+| VP-029 | Config.Validate rejects missing required fields | BC-2.09.003 | internal/config | table-driven | P0 | implemented | VP-029.md |
+| VP-030 | sbctl exits 1 with E-NET-001 on connection refused | BC-2.07.003 | cmd/sbctl | integration | P0 | implemented | VP-030.md |
 | VP-031 | tmux control mode: 99% output event completeness | BC-2.04.001 | internal/tmux | integration | P1 | draft | VP-031.md |
 | VP-032 | PTY fallback activates on control mode failure | BC-2.04.002 | internal/tmux | integration | P0 | draft | VP-032.md |
 | VP-033 | Console attach/detach lifecycle | BC-2.04.003, BC-2.04.004 | internal/session | e2e | P1 | draft | VP-033.md |
 | VP-034 | Multi-console fan-out: both consoles receive all frames | BC-2.04.006 | internal/session | e2e | P0 | draft | VP-034.md |
-| VP-035 | Read-only console: upstream rejected by access node | BC-2.04.005 | internal/session | integration | P1 | draft | VP-035.md |
+| VP-035 | Read-only console: upstream rejected by access node | BC-2.04.005 | internal/session | integration | P1 | implemented | VP-035.md |
 | VP-036 | Session continuity across IP address change | BC-2.01.007 | internal/admission | e2e | P0 | deferred | VP-036.md |
 | VP-037 | Router drain: nodes migrate within 2s | BC-2.09.002 | internal/drain | e2e | P2 | draft | VP-037.md |
 | VP-038 | E→PE graduation: config change only | BC-2.09.001 | internal/config | e2e | P2 | draft | VP-038.md |
@@ -66,26 +66,26 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-040 | Multipath failover: recovery < 2s | BC-2.02.003 | internal/multipath | e2e | P1 | draft | VP-040.md |
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms | BC-2.01.001 | internal/halfchannel | benchmark | P0 | draft | VP-041.md |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms | BC-2.01.001, BC-2.02.001 | internal/halfchannel | benchmark | P0 | draft | VP-042.md |
-| VP-043 | XOR FEC: single loss in group recoverable (implementing_story: S-7.01) | BC-2.02.007 v1.3 | internal/arq | strong-oracle | P1 | draft | VP-043.md |
+| VP-043 | XOR FEC: single loss in group recoverable (implementing_story: S-7.01) | BC-2.02.007 v1.3 | internal/arq | strong-oracle | P1 | implemented | VP-043.md |
 | VP-044 | Presence advertisement includes required fields (implementing_story: S-7.02; coverage partial — in-process registry seam only; multicast wire deferred to S-BL.DISCOVERY-WIRE per RULING-W6TB-D) | BC-2.03.001, BC-2.03.003 | internal/discovery | integration | P1 | draft | VP-044.md |
 | VP-045 | Console session enumeration without hostnames (implementing_story: S-7.02) | BC-2.03.002 | internal/discovery | e2e | P1 | draft | VP-045.md |
 | VP-046 | Key lifecycle: register/revoke/expire | BC-2.05.004 | internal/svtnmgmt | integration | P1 | draft | VP-046.md |
-| VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | draft | VP-047.md |
-| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07; Ruling-7 defense-in-depth RoleControl mutation-test: S-6.07) (v1.8: source_bc pin synced to BC-2.07.001 v1.12) | BC-2.07.001 v1.12 | internal/svtnmgmt | integration | P2 | draft | VP-048.md |
-| VP-049 | sbctl unified CLI with OpenSSH auth (implementing_story: S-W5.02) | BC-2.07.002 | cmd/sbctl | e2e | P2 | draft | VP-049.md |
-| VP-050 | Console remotely controllable via sbctl (implementing_story: S-7.03) | BC-2.08.001 | cmd/sbctl | e2e | P1 | draft | VP-050.md |
-| VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | draft | VP-051.md |
-| VP-052 | N consecutive OnMissingFrame calls → indicator downgrade (one level) | BC-2.06.002 | internal/metrics | integration | P1 | draft | VP-052.md |
-| VP-053 | Empty-tick frame sequence: K ticks → K frames with contiguous seq nums | BC-2.01.002 | internal/halfchannel | proptest | P0 | draft | VP-053.md |
-| VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | draft | VP-054.md |
-| VP-055 | Presence advertisement payload round-trip: required fields present and stable (implementing_story: S-7.02; v1.2: RejectsInvalidName retired → RejectsEmptyOrInvalidUTF8 + TruncatesOversize per RULING-W6TB-J) | BC-2.03.003 | internal/discovery | proptest | P1 | draft | VP-055.md |
-| VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | draft | VP-056.md |
+| VP-047 | Per-path metrics queryable via sbctl | BC-2.06.003 | internal/metrics | integration | P1 | implemented | VP-047.md |
+| VP-048 | Control node creates/destroys SVTNs (PC-1 create + PC-2 bootstrap: S-6.02; PC-3 destroy: S-6.05; handler+CLI RPC-reachable: S-6.07; Ruling-7 defense-in-depth RoleControl mutation-test: S-6.07) (v1.8: source_bc pin synced to BC-2.07.001 v1.12) | BC-2.07.001 v1.12 | internal/svtnmgmt | integration | P2 | implemented | VP-048.md |
+| VP-049 | sbctl unified CLI with OpenSSH auth (implementing_story: S-W5.02) | BC-2.07.002 | cmd/sbctl | e2e | P2 | implemented | VP-049.md |
+| VP-050 | Console remotely controllable via sbctl (implementing_story: S-7.03) | BC-2.08.001 | cmd/sbctl | e2e | P1 | implemented | VP-050.md |
+| VP-051 | HalfChannel independence: B unaffected by A's frame production | BC-2.01.003 | internal/halfchannel | proptest | P0 | implemented | VP-051.md |
+| VP-052 | N consecutive OnMissingFrame calls → indicator downgrade (one level) | BC-2.06.002 | internal/metrics | integration | P1 | implemented | VP-052.md |
+| VP-053 | Empty-tick frame sequence: K ticks → K frames with contiguous seq nums | BC-2.01.002 | internal/halfchannel | proptest | P0 | implemented | VP-053.md |
+| VP-054 | Receiver dedup: first-arriving copy delivered, duplicate discarded silently | BC-2.02.002 | internal/multipath | integration | P0 | implemented | VP-054.md |
+| VP-055 | Presence advertisement payload round-trip: required fields present and stable (implementing_story: S-7.02; v1.2: RejectsInvalidName retired → RejectsEmptyOrInvalidUTF8 + TruncatesOversize per RULING-W6TB-J) | BC-2.03.003 | internal/discovery | proptest | P1 | implemented | VP-055.md |
+| VP-056 | Console detach releases session without closing it; observers unaffected | BC-2.04.004 | internal/session | integration | P1 | implemented | VP-056.md |
 | VP-057 | Node private key bytes absent from all emitted frame types (sampling + HKDF sketch) | BC-2.05.007 | internal/admission | proptest | P0 | implemented | VP-057.md |
 | VP-058 | RouteFrame calls verifyFrameHMAC before IsAdmitted and SVTNRoute | BC-2.05.008 | internal/routing | code-audit | P0 | implemented | VP-058.md |
-| VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | draft | VP-059.md |
-| VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | draft | VP-060.md |
-| VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | draft | VP-061.md |
-| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias); pending-p99 quality sentinel propagation (v1.1); failed+pending precedence ruling (v1.3); module scope expanded to [internal/metrics, cmd/sbctl] (v1.5); BC-2.06.003 body pins corrected v1.10→v1.13 (v1.6) | BC-2.06.003 v1.13 | [internal/metrics, cmd/sbctl] | fuzz | P1 | draft | VP-062.md |
+| VP-059 | FailureCounter.RecordHMACFailure fires E-ADM-017 at threshold (≥5 in 60s) and not before | BC-2.05.005, BC-2.05.008 | internal/admission | proptest | P0 | implemented | VP-059.md |
+| VP-060 | Daemon lifecycle: connect-failure exits non-zero (E-SYS-002, no relay goroutines); SIGTERM/SIGINT triggers clean shutdown (all goroutines drain, exit 0, no leak, no panic) | BC-2.04.007 | cmd/switchboard | integration | P0 | implemented | VP-060.md |
+| VP-061 | Metrics output contains no session content or keystroke data (DI-001 enforcement) | BC-2.06.003 | internal/metrics | code-audit | P1 | implemented | VP-061.md |
+| VP-062 | JSON output is valid JSON for all sbctl metrics CLI input combinations (paths list, router metrics, router status alias); pending-p99 quality sentinel propagation (v1.1); failed+pending precedence ruling (v1.3); module scope expanded to [internal/metrics, cmd/sbctl] (v1.5); BC-2.06.003 body pins corrected v1.10→v1.13 (v1.6) | BC-2.06.003 v1.13 | [internal/metrics, cmd/sbctl] | fuzz | P1 | implemented | VP-062.md |
 | VP-063 | PathTracker.IsDegraded() is true iff EWMA-smoothed RTT exceeds DegradedRTTThresholdMS (200.0 ms); recovery below threshold clears the flag | BC-2.02.003 | internal/paths | proptest | P0 | implemented | VP-063.md |
 | VP-064 | Management server rejects unauthenticated connections (no CHALLENGE_RESPONSE, wrong key, or bad signature) → AUTH_FAIL + close; no RPC dispatched | BC-2.07.004 | internal/mgmt | integration | P0 | implemented | VP-064.md |
 | VP-065 | Management server rejects replayed challenge nonce within a connection | BC-2.07.004 | internal/mgmt | integration | P1 | implemented | VP-065.md |
@@ -100,7 +100,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-074 | QualityIndicator threshold classification maps (RTT, loss) → {Green, Yellow, Red} correctly; enum cardinality = 3; all 8 boundary values correct | BC-2.06.001 | internal/metrics | unit | P1 | implemented | VP-074.md |
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-075.md |
 | VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-076.md |
-| VP-077 | Admin list-keys admission-gate — any-role OR operator-set OR bootstrap-key; else E-ADM-009 (EC-008 three admission-failure modes; implementing_story: S-6.06) | BC-2.05.004 v1.14 | cmd/switchboard | integration | P0 | draft | VP-077.md |
+| VP-077 | Admin list-keys admission-gate — any-role OR operator-set OR bootstrap-key; else E-ADM-009 (EC-008 three admission-failure modes; implementing_story: S-6.06) | BC-2.05.004 v1.14 | cmd/switchboard | integration | P0 | implemented | VP-077.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | deferred | deferred | (pending) [implementing story: S-BL.BENCH — unscheduled] |
 | VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | deferred | deferred | (pending) [implementing story: S-W6.NN — unscheduled] |
 
@@ -150,6 +150,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.37 | 2026-07-06 | Phase-7 audit F-010: sweep all VP rows whose file carries `verification_lock: true` to `status: implemented`. Machine-derived from grep across 77 VP files; 43 rows updated (VP-001–006, VP-011–030, VP-035, VP-043, VP-047–056, VP-059–062, VP-077). Remaining 14 unlocked VPs (VP-031–035 partial, VP-036–042, VP-044–046 partial) untouched per directive. |
 | 2.36 | 2026-07-03 | F-P5P14-B-003 traceability close: VP-077 minted (integration, P0, cmd/switchboard) — admin.key.list-keys admission-gate property (any-role OR operator-set OR bootstrap-key; else E-ADM-009); covers BC-2.05.004 v1.14 EC-008 three failure modes. Complementary to VP-075 (write-authority scope exclusion). Total 76→77. Integration 22→23. P0 54→55. BC-2.05.004 Verification Properties table extended with VP-077 row. |
 | 2.35 | 2026-07-02 | F-P5P3-B-001/B-002/B-003 (Phase 5 Pass 3 remediation, Path B): reclassify VP-043 row from Proptest bucket to Unit bucket; BC column pin BC-2.02.007 → BC-2.02.007 v1.3 (POL-003 candidate); VP-062 source_bc pin already correct in catalog row (BC-2.06.003 v1.13) — confirmed aligned with VP-062 v1.7 frontmatter. Arithmetic footer resynced (Proptest 34→33, Unit 2→3; total 76 unchanged). POL-003 conformance 2/76 → 3/76 (VP-043 pin added). |
 | 2.34 | 2026-07-02 | VP-050 bumped v1.2→v1.3 (F-P4L3-MED-002 propagation): Story Trace row transport clause updated — "mgmt-plane Unix socket" → "mgmt-plane transport (BC-2.07.004 EC-013)"; Story row bumped S-7.03 v1.3 → v1.4. Governance-only. No count or method changes; total remains 76. |

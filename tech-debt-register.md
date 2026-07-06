@@ -1,10 +1,17 @@
 ---
 artifact_id: tech-debt-register
 document_type: tech-debt-register
-version: "1.2"
+version: "1.3"
 status: active
-last_updated: 2026-06-29T00:00:00
+last_updated: 2026-07-06T00:00:00
 ---
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.3 | 2026-07-06 | DRIFT-F005-LOOKUP-CONVENTION → CLOSED: S-BL.LOOKUP merged PR #40 (eac5d0a); AdmittedKeySet.Lookup and LookupByPubkey both return (AdmittedKey, bool) — confirmed at internal/admission/admission.go:363/390. Phase-7 audit F-009. |
+| 1.2 | 2026-06-29 | Initial register. |
 
 # Technical Debt Register: Switchboard
 
@@ -24,7 +31,7 @@ last_updated: 2026-06-29T00:00:00
 | DRIFT-001a | LOW | consistency-validator (H-003/M-002/L-003) — **CLOSED** by S-5.02 v1.3 AC-007 | BC-2.06.001 PC-5 sbctl half: `sbctl sessions status` surfacing is owned by S-5.02 AC-007 (added v1.3). Closed: S-5.02 v1.3 AC-007 owns this half. | S-5.02 (completed — AC-007) | closed |
 | DRIFT-001b | LOW | consistency-validator (H-003/M-002/L-003) | CLOSED 2026-07-06 — S-BL.CONSOLE-OBS merged PR #104 (18fd2fe): BC-2.06.001 PC-5 console-half shipped — console-mode daemon serves `sessions.status` mgmt verb; per-session quality {green,yellow,red,pending} surfaced via sbctl sessions status; Tier-2 role-gate parity locked. Anchor S-7.03→S-BL.CONSOLE-OBS per RULING-W6TB-C §2. | S-BL.CONSOLE-OBS (PR #104) | CLOSED |
 | DRIFT-002 | LOW | S-5.01 adversarial convergence Pass 1 (F-001) | BC-2.06.002 PC-3 gap-event observability surface: the missCount counter increment is the internal path-metric record (disposition 1, BC-2.06.002 v1.2). The operator-visible export of that counter (e.g. via `sbctl sessions status` or console session-list) is deferred. Re-anchored to S-7.03, then S-BL.CONSOLE-OBS per RULING-W6TB-C §2. CLOSED 2026-07-06 — S-BL.CONSOLE-OBS merged PR #104 (18fd2fe): operator-visible export shipped as `miss_count` (lifetime-cumulative, new metrics.MissCount accessor distinct from rolling hysteresis counter) in the sessions.status response consumed by sbctl sessions status. | S-BL.CONSOLE-OBS (PR #104) | CLOSED |
-| DRIFT-F005-LOOKUP-CONVENTION | MEDIUM | S-6.02 adversary pass 1 F-005 / architect ruling ARCH-04 v1.9 | `AdmittedKeySet.Lookup` and `AdmittedKeySet.LookupByPubkey` return `*AdmittedKey` but the project-wide locked-accessor convention (go.md rule 12; every other locked accessor in the codebase returns values) mandates value returns. Ruling: change both signatures to `(AdmittedKey, bool)` — value + present-flag. Body logic unchanged; deep-clone of `PublicKey` backing array still required (M-3: ed25519.PublicKey is []byte; struct copy shares backing array). Callers per ARCH-04 v1.14 §F-005 Caller Migration list: (1) `LookupByPubkey` delegates to `Lookup` — both change together; (2) `internal/svtnmgmt.SVTNManager.ExpireKey` and `CallerKeyRole` / `CallerKeyRoleActive` / `IsRegisteredAnyState` — all change `if stored == nil` to `stored, ok := ...; if !ok`. Note: `RevokeKey` now uses the `RevokeKeyIfRoleMatches` atomic primitive (per ADR-004 Addendum H2, ARCH-04 v1.14) rather than a direct `Lookup` call. One-line change per call site, no logic change. Migration blocked until S-6.02 lands to avoid mid-flight collision. See ARCH-04 §F-005 Ruling for canonical post-migration signatures and full invariant. | Wave 6 follow-on story (S-BL.LOOKUP, 1 pt, unblocked — S-6.02 merged) | open |
+| DRIFT-F005-LOOKUP-CONVENTION | MEDIUM | S-6.02 adversary pass 1 F-005 / architect ruling ARCH-04 v1.9 | **CLOSED 2026-07-06** — S-BL.LOOKUP merged PR #40 (eac5d0a): AdmittedKeySet.Lookup and LookupByPubkey both return (AdmittedKey, bool) — verified at internal/admission/admission.go:363/390. Deep-clone of PublicKey backing array preserved. All caller sites migrated per ARCH-04 §F-005 Caller Migration list. Phase-7 audit F-009. | S-BL.LOOKUP (PR #40, eac5d0a) | CLOSED |
 
 ## Resolved Items
 

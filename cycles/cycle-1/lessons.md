@@ -1,7 +1,7 @@
 ---
 document_type: lessons-learned
 level: ops
-version: "1.0"
+version: "1.1"
 status: in-progress
 producer: state-manager
 timestamp: 2026-06-27T00:00:00Z
@@ -34,6 +34,28 @@ traces_to: STATE.md
 **O-P26L3-002:** error-taxonomy.md lines 9-23 modified-list mixed ascending/descending ordering.
 
 **Action:** Phase-5 adversarial refinement should sweep ARCH-04 and error-taxonomy modified-list ordering as part of the spec consistency pass. Both documents have accumulated version entries out of order through successive narrowing fix-bursts. Recommend architect agent sorts modified-list entries by version number ascending in both files during the next spec-evolution burst.
+
+---
+
+## Phase-7 Lessons (2026-07-06)
+
+2. **Mutation sampling must run in an isolated worktree/clone, never a shared checkout.** [codified] Running cargo-mutants against a shared checkout risks cross-contaminating the working tree, breaking concurrent test runs, and producing misleading survivor counts from uncommitted mutations being visible to other processes. Codified in `cycles/cycle-1/phase-6/secscan-lane-report.md` §Incident.
+
+3. **Adjudication-style burst reports must be machine-derived from committed artifacts, not memory.** [codified] Three instances this cycle where a burst report asserted aggregate counts (VP coverage, green-claim status, arch-lane idle) that contradicted the actual artifact state at commit time. Root cause in each: the reporting agent synthesized from working-memory rather than re-running the grep/count at the committed SHA. Filed upstream as comment on drbothen/vsdd-factory#513. Going forward: every aggregate in a burst report must cite the command and commit SHA used to derive it.
+
+4. **VP `proof_method` and API citations need a spec-steward review pass before Phase 6.** Skeleton-vs-shipped-API drift is a Phase-6 blocker: VP-028/VP-029 referenced a phantom `Config.Validate()` API shape; VP-056/VP-062 referenced phantom helpers. Discovery during formal hardening forces unplanned spec-side bursts that break Phase-6 timing. A targeted spec-steward sweep of all VP `proof_method` fields and any API symbol referenced in a VP against the actual codebase at Phase-5-exit HEAD would surface these cheaply.
+
+5. **Declared-divergence protocol works — first post-CONSOLE-OBS instance confirmed.** [codified] The Phase-6 fuzz-lane two-commit deviation was declared rather than silently absorbed into a single commit message. The protocol held without coordinator intervention. Codified upstream as drbothen/vsdd-factory#521.
+
+6. **Drift rows citing "issue pending" go stale silently.** Two instances this cycle: WAVE-GATE-DISPATCH-INTEGRITY cited "drafted" for months before it was actually filed as drbothen/vsdd-factory#448; DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR was marked "pending" before filing as drbothen/vsdd-factory#471. Pattern: the row author knows the filing is imminent and uses "pending" or "drafted" as a placeholder; the filing then happens in a different burst; the row is never updated. Fix: at row creation time, either file the issue immediately (preferred) or mark the row explicitly as `upstream-filing-pending` with a follow-up obligation in the current burst's checklist.
+
+| Lesson | Proposed Policy | Scope | Status |
+|--------|----------------|-------|--------|
+| 2 | Mutation sampling must use isolated worktree/clone | Phase-6 pre-flight checklist | proposed |
+| 3 | Aggregate counts in burst reports must be machine-derived with SHA citation | Per-burst report discipline | proposed |
+| 4 | Spec-steward VP API-symbol sweep before Phase-6 dispatch | Phase-5-exit gate | proposed |
+| 5 | Declared-divergence protocol is validated; document as mandatory | Phase-6 multi-commit policy | codified |
+| 6 | Drift rows must not use "pending"/"drafted" placeholder without same-burst filing obligation | Drift row authorship | proposed |
 
 ---
 

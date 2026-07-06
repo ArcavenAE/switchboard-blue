@@ -4,7 +4,7 @@ document_type: story
 level: ops
 story_id: S-BL.OA
 title: "outer-assembler — compose ChannelFrame + OuterHeader into wire frames"
-status: backlog
+status: merged
 producer: story-writer
 timestamp: 2026-06-24T00:00:00
 phase: 2
