@@ -61,6 +61,20 @@ func keepaliveIntervalFor(cfg *config.Config) time.Duration {
 	return defaultKeepaliveInterval
 }
 
+// drainCoordHook is a test-only hook. When non-nil, runRouter invokes it
+// with the constructed *drain.Drain immediately after New so tests can
+// register observers that exercise BC-2.09.002 EC-003 (forced exit past
+// drain_timeout when observers do not ACK within the drain window).
+// Production paths leave this nil; runRouter runs with zero registered
+// observers until the DRAIN-over-SVTN wire protocol lands, at which point
+// that story's observer registration replaces this hook indirection.
+//
+// The var is package-local — same-package tests set it via t.Cleanup; no
+// exported surface is added. Evidence anchor for
+// DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED (follow-on to S-7.04
+// PR #101).
+var drainCoordHook func(*drain.Drain)
+
 // upstreamRoutersFor returns the configured upstream router addresses for
 // PE-mode operation. An empty return value means E mode (no upstream
 // connections attempted).

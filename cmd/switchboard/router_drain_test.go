@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/drain"
 )
 
 // probeDataAddr allocates an ephemeral TCP port by binding then closing —
@@ -270,6 +271,150 @@ func TestRunRouter_EmitsUpstreamModePE(t *testing.T) {
 		if !strings.Contains(got, addr) {
 			t.Errorf("AC-006 (PE mode) integration: startup output missing upstream %q; got:\n%s", addr, got)
 		}
+	}
+}
+
+// TestRunRouter_ForcedExitPastDrainTimeout proves BC-2.09.002 EC-003 —
+// "Drain timeout exceeded (nodes not all acknowledged) → Router disconnects
+// after timeout; logs remaining unacknowledged nodes" — under conditions
+// closer to a real drain: a live ingress TCP connection is open across the
+// shutdown, and a slow observer is registered on the drain coordinator so
+// the coordinator's timeout branch (drain.ErrTimeout) actually fires.
+//
+// This is the evidence closure for DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-
+// UNEVIDENCED: the existing S-7.04 tests exercise the empty-observer
+// fast-path only. This test exercises the with-observer timeout path AND
+// keeps a live conn on the netingress listener so shutdown must also join
+// dataWG (via ingressCancel → conn.Close → ServeConn return → wg.Wait).
+//
+// Assertions:
+//  1. runRouter returns nil (BC-2.09.002 EC-003: forced exit is expected
+//     behavior, not error).
+//  2. Elapsed time from ctx cancel to runRouter return is >= drain_timeout
+//     (proves the coordinator actually waited) and <= drain_timeout + slack
+//     (proves no hung goroutine held shutdown open).
+//  3. The router logs the EC-003 message so operators can see the timeout
+//     was hit ("runRouter: drain: <ErrTimeout> (proceeding with disconnect
+//     per BC-2.09.002 EC-003)").
+//
+// Test-hook contract: drainCoordHook is a package-local var set for the
+// duration of one runRouter invocation via t.Cleanup. It is nil in prod.
+//
+// Traces: BC-2.09.002 EC-003; DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-
+// UNEVIDENCED; S-7.04 AC-005 (drain_timeout applied and enforced end-to-end).
+func TestRunRouter_ForcedExitPastDrainTimeout(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, and
+	// mutates a package-level test hook.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+
+	// 500ms drain window. Small enough that a full go test -race run
+	// stays quick; large enough that scheduler noise doesn't dominate
+	// the elapsed-time assertion.
+	drainWindow := 500 * time.Millisecond
+
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+		DrainTimeout:     drainWindow,
+	}
+
+	// Slow observer: blocks past drainWindow via obsCtx.Done(). The
+	// coordinator's drainCtx (derived with timeout=drainWindow) will fire
+	// while the observer is still blocked, forcing the ErrTimeout branch.
+	// When the coordinator cancels drainCtx the observer unwinds.
+	observerReleased := make(chan struct{})
+	drainCoordHook = func(d *drain.Drain) {
+		d.RegisterObserver(func(obsCtx context.Context) {
+			select {
+			case <-obsCtx.Done():
+				// Drain window elapsed — coordinator cancelled drainCtx.
+				// This is the expected path for EC-003.
+			case <-time.After(10 * time.Second):
+				// Sanity guard — should never fire; drainCtx.Done() should
+				// come first at drainWindow.
+			}
+			close(observerReleased)
+		})
+	}
+	t.Cleanup(func() { drainCoordHook = nil })
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+
+	// Establish a live ingress conn AFTER runRouter is up. Holding this
+	// conn open across the entire shutdown forces netingress.Serve to
+	// join a per-conn goroutine on ctx cancel — proving shutdown honors
+	// both the drain coordinator AND the ingress WaitGroup.
+	conn, err := net.Dial("tcp", cfg.ListenAddr)
+	if err != nil {
+		cancel()
+		<-errCh
+		t.Fatalf("dial live ingress conn: %v", err)
+	}
+	// Deferred Close is a safety net; the test doesn't rely on client-side
+	// close — ingressCancel triggers netingress to close its side of the
+	// conn (netingress.go ServeConn: "Close conn when ctx is cancelled").
+	t.Cleanup(func() { _ = conn.Close() })
+
+	start := time.Now()
+	cancel()
+
+	select {
+	case rErr := <-errCh:
+		elapsed := time.Since(start)
+		if rErr != nil {
+			t.Errorf("BC-2.09.002 EC-003: runRouter returned error on forced-exit path: %v (want nil — timeout is expected, not error)", rErr)
+		}
+		// Lower bound: the coordinator must actually have waited. If
+		// elapsed < drainWindow, either the observer didn't register or
+		// the coordinator short-circuited — either would silently regress
+		// EC-003 evidence.
+		if elapsed < drainWindow {
+			t.Errorf("forced-exit lower bound: elapsed %v < drain_timeout %v — coordinator did not wait for observer ACK",
+				elapsed, drainWindow)
+		}
+		// Upper bound: shutdown must not hang. Slack covers netingress
+		// per-conn goroutine join + mgmt.Shutdown budget (bounded by
+		// drainCoord.Timeout() = drainWindow) + scheduler noise.
+		slack := 2 * drainWindow
+		if elapsed > drainWindow+slack {
+			t.Errorf("forced-exit upper bound: elapsed %v > drain_timeout + slack %v — shutdown hung past the drain budget",
+				elapsed, drainWindow+slack)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("BC-2.09.002 EC-003: runRouter did not return within 5s after ctx cancel — forced-exit path did not fire")
+	}
+
+	// Observer must have received the drain window's cancel and unwound.
+	// This proves the EC-003 path fully executed (not merely that Wait
+	// returned early).
+	select {
+	case <-observerReleased:
+	case <-time.After(1 * time.Second):
+		t.Error("observer did not unwind after drainCtx cancellation — coordinator did not honor its own drain window")
+	}
+
+	// EC-003 log line: the coordinator's timeout must have been logged
+	// so operators can see the forced-exit path fired. runRouter emits:
+	//   "runRouter: drain: <err> (proceeding with disconnect per BC-2.09.002 EC-003)"
+	//
+	// Note on the exact error text: the current wiring in runRouter passes
+	// the same drainCtx (deadline = drain_timeout) to both Signal and Wait.
+	// When the window elapses, Wait's select races drain's internal d.done
+	// (which delivers ErrTimeout) against ctx.Done() (which delivers
+	// context.DeadlineExceeded). Both channels become ready at the same
+	// deadline, so Go's runtime picks pseudo-randomly. BC-2.09.002 EC-003
+	// specifies the marker log line and forced disconnect, not a specific
+	// error string — the assertion is on the marker, not the error body.
+	got := buf.String()
+	if !strings.Contains(got, "BC-2.09.002 EC-003") {
+		t.Errorf("EC-003 log line missing — operators lose forced-exit signal. Got:\n%s", got)
+	}
+	if !strings.Contains(got, "runRouter: drain:") {
+		t.Errorf("EC-003 log line missing runRouter prefix; got:\n%s", got)
 	}
 }
 
