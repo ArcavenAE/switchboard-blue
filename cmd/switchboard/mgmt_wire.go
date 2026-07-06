@@ -609,13 +609,34 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	}
 
 	pub := session.NewPublisher(ks)
+
+	// Construct the sessionQualitySource and install the SessionHook callbacks
+	// on the Publisher. From this point every pub.Publish / pub.Unpublish
+	// drives the source's per-session QualityIndicator registry — the
+	// boundary construct that owns the internal/metrics dependency so that
+	// internal/session does not (ARCH-08 §6.6 topological order:
+	// internal/session at DAG 6, internal/metrics at DAG 12). Mirrors
+	// newPathTrackerSourceFromRouter (S-BL.PATH-TRACKER-WIRING).
+	src := newSessionQualitySourceFromPublisher(pub)
+
 	consoleState := session.NewConsoleState()
 	consoleSrv := session.NewConsoleServer(pub, consoleState)
 
-	// Phase (a): construct server with console handlers pre-registered (no goroutine).
-	// newMgmtServer also parses cfg.AuthorizedOperatorKeys for the OperatorKeySet
-	// (Layer 1); ks above handles Layer 2 (Tier-2 admission).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "console", daemonPriv, BuildConsoleHandlers(consoleSrv, ks))
+	// Phase (a): construct server with console + sessions handlers pre-registered
+	// (no goroutine). newMgmtServer also parses cfg.AuthorizedOperatorKeys for the
+	// OperatorKeySet (Layer 1); ks above handles Layer 2 (Tier-2 admission).
+	//
+	// BuildSessionsHandlers registers sessions.status alongside console.attach /
+	// detach / switch — the same daemon, the same Tier-2 admission surface.
+	// Together they satisfy BC-2.06.001 v1.7 PC-5 console-half (quality) and
+	// BC-2.06.002 v1.4 PC-3 (miss_count) via the mgmt-plane (DRIFT-001b +
+	// DRIFT-002 closures; S-BL.CONSOLE-OBS). The handler reads through the
+	// sessionQualitySource, not through Publisher internals.
+	initialHandlers := append(
+		BuildConsoleHandlers(consoleSrv, ks),
+		BuildSessionsHandlers(src, ks)...,
+	)
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "console", daemonPriv, initialHandlers)
 	if mgmtErr != nil {
 		return fmt.Errorf("runConsole: construct management server: %w", mgmtErr)
 	}
