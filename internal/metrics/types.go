@@ -1,5 +1,5 @@
 // Package metrics — response types for daemon-side paths.list, router.metrics,
-// and router.status RPC handlers (BC-2.06.003 v1.14).
+// and router.status RPC handlers (BC-2.06.003 v1.15).
 //
 // All types in this file are pure data + serialization. They perform no I/O.
 // Purity classification (ARCH-09): pure-core.
@@ -82,9 +82,11 @@ type PathEntry struct {
 	RTTP99Ms RTTValue `json:"rtt_p99_ms"`
 	// LossPct is the packet loss rate as a percentage (float64, 0.0–100.0).
 	LossPct float64 `json:"loss_pct"`
-	// Status is one of: "active", "degraded" (BC-2.06.003 v1.14 PC-1).
-	// "failed" is reserved for S-BL.PATH-FAILED-STATUS (Wave-7) and MUST NOT be emitted.
-	// Derived from PathSnapshot.Degraded and PathSnapshot.Active (BC-2.06.001).
+	// Status is one of: "active", "degraded", "failed" (BC-2.06.003 v1.15 PC-1).
+	// Derived from PathSnapshot.{Failed, Degraded, Active} with precedence
+	// Failed > Degraded > Active in PathEntryFromSnapshot. "failed" was admitted
+	// to the status enum by S-BL.PATH-FAILED-STATUS, superseding the Wave-6
+	// Ruling-4 reservation (BC-2.06.001).
 	Status string `json:"status"`
 }
 

@@ -126,30 +126,34 @@ func RouterStatus(ctx context.Context, args json.RawMessage, src PathsListSource
 }
 
 // PathEntryFromSnapshot converts a PathSnapshot to a PathEntry.
-// Derives PathEntry.Status from PathSnapshot.Degraded and PathSnapshot.Active:
-//   - Degraded=true → "degraded" (EWMA RTT > 200ms sustained)
-//   - Active=false → "degraded" (liveness failure maps to "degraded" in Wave 6;
-//     "failed" is reserved for S-BL.PATH-FAILED-STATUS per Ruling-4 and
-//     BC-2.06.003 v1.14 PC-1 — implementations MUST NOT emit "failed" until
-//     that story lands)
+// Derives PathEntry.Status from PathSnapshot.{Failed, Degraded, Active} with
+// precedence Failed > Degraded > Active per BC-2.06.003 v1.15 PC-1:
+//   - Failed=true → "failed" (previously-alive path deactivated by
+//     consecutiveMissThreshold consecutive misses; S-BL.PATH-FAILED-STATUS AC-1)
+//   - Degraded=true → "degraded" (EWMA RTT > 200ms sustained; BC-2.02.003 PC-5)
+//   - Active=false → "degraded" (liveness failure with no Failed signal —
+//     e.g. a never-alive path — falls through to "degraded" per BC-2.06.003
+//     Ruling-9, preserved beneath the new failed branch)
 //   - otherwise → "active"
+//
+// The status enum was widened from Wave-6's {active, degraded} to
+// {active, degraded, failed} when S-BL.PATH-FAILED-STATUS lifted the Ruling-4
+// reservation. "failed" now flows through this handler; the Wave-6 panic
+// guard that trapped "failed" was removed.
 //
 // RouterAddr is read from snap.RouterAddr — the sole source of truth per
 // S-BL.ROUTER-ADDR / RULING-W6TB-B §3 (immutability invariant). Callers MUST
 // populate snap.RouterAddr; a diverging out-of-band parameter would risk
 // PathEntry.RouterAddr disagreeing with the snapshot it was derived from.
 //
-// BC-2.06.003 v1.15 PC-1; BC-2.06.001; AC-002; AC-003.
+// BC-2.06.003 v1.15 PC-1; BC-2.06.001; AC-002; AC-003; S-BL.PATH-FAILED-STATUS.
 func PathEntryFromSnapshot(pathID string, snap paths.PathSnapshot) PathEntry {
 	status := "active"
-	if snap.Degraded || !snap.Active {
+	switch {
+	case snap.Failed:
+		status = "failed"
+	case snap.Degraded || !snap.Active:
 		status = "degraded"
-	}
-	// Defensive invariant: only "active" and "degraded" are valid in this wave.
-	// "failed" is reserved for S-BL.PATH-FAILED-STATUS (Wave-7); any regression
-	// that reintroduces it before that story lands is caught here (F-P10L1-07).
-	if status != "active" && status != "degraded" {
-		panic("BUG: PathEntryFromSnapshot: invalid status " + status + " — only active/degraded are valid until S-BL.PATH-FAILED-STATUS")
 	}
 	// Derive RTTValue Kind from SampleCount per BC-2.06.003 v1.14 PC-1:
 	// FloatKind when SampleCount ≥ 10 (p99 is meaningful), PendingKind otherwise.
