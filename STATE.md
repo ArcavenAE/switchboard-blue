@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
-phase: phase-5-adversarial-refinement
-phase_step: phase-5-CONVERGED-bc-5.39.001-satisfied
+phase: phase-6-formal-hardening
+phase_step: phase-6-dispatched-burst-1
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -27,10 +27,10 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: e81927f
+develop_head: 18fd2fe
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: phase-6-dispatch
+awaiting: none — phase-6 dispatched 2026-07-06 (user unblocked; prior parking was a miscommunication)
 historical_cycles: []
 timestamp: 2026-07-05T19:30:00Z
 last_update: 2026-07-05
@@ -46,6 +46,7 @@ last_update: 2026-07-05
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
+| Phase 6 — Formal Hardening | **IN PROGRESS** — dispatched 2026-07-06 (burst 1: fuzz/harden 5 never-hardened packages + security scan; burst 2: VP-corpus sweep) | formal-verifier lanes running |
 | Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.

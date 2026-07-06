@@ -4,7 +4,7 @@ document_type: story
 level: ops
 story_id: S-BL.CONSOLE-OBS
 title: "Console daemon session-list observability: quality indicator + missCount"
-status: backlog
+status: complete
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
 version: "0.1-backlog-stub"
