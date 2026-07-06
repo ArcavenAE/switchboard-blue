@@ -390,3 +390,27 @@ grep -roh "PR #[0-9]+" .factory/STATE.md .factory/stories/STORY-INDEX.md \
 # 8. Phase 6 VP totals (from gapclose-lane-report.md Corpus census table)
 # PROVEN: 63 | PARTIAL: 6 | BLOCKED: 8 | Total: 77
 ```
+
+
+---
+
+## Coordinator adjudication of SOFT-GAP items (2026-07-06, post-census)
+
+1. **DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR** — RESOLVED: the upstream issue
+   was filed 2026-07-03 as drbothen/vsdd-factory#471 (local tracker Batch 30);
+   the STATE.md row was stale ("pending"). Row corrected to cite #471.
+   Second stale filed-vs-pending row this cycle (WAVE-GATE/#448 was the first)
+   — pattern noted for lessons: drift rows citing "issue pending" must be
+   re-swept against the tracker at filing time.
+2. **process-gap-follow-up (nil-safety lens)** — CLOSED: remediated in-cycle
+   (PR #16) + codified as lessons.md Policy Candidate 1. Disposition
+   (a)-equivalent; no story stub warranted. STATE row updated.
+3. **W3-PG-001 (constructor-default-polarity)** — JUSTIFIED DEFERRAL recorded:
+   go.md rule authoring targets the maintenance sweep (S-M.01/S-M.02 window);
+   LOW severity, no recurrence since Wave 3, closed-drift.md remains the
+   anchor. Deferral reason: not-core to convergence; unmet dependency (no
+   maintenance cycle scheduled yet).
+
+With these three adjudications the census stands at ZERO cycle-blocking and
+ZERO unadjudicated soft-gaps. Checklist step 3 (S-7.02) satisfied for every
+process-gap finding.
