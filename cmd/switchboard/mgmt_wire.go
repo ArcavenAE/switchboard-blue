@@ -488,6 +488,21 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 	// value flowed through.
 	drainCoord := drain.New(drainWindow)
 
+	// Test hook: when non-nil, tests can register a drain observer without
+	// waiting on the DRAIN-over-SVTN wire protocol to land. Production code
+	// leaves drainCoordHook nil — the hook is a no-op then. Kept behind a
+	// package-level var (not exported) so it can only be set from same-package
+	// tests. When a follow-on story wires the wire protocol, that story's
+	// observers register here and the hook is retired.
+	//
+	// Evidence-only seam for DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED
+	// (BC-2.09.002 EC-003: forced exit when observers do not ACK within
+	// drain_timeout). See router_drain_test.go
+	// TestRunRouter_ForcedExitPastDrainTimeout.
+	if drainCoordHook != nil {
+		drainCoordHook(drainCoord)
+	}
+
 	// Log resolved listen address + mgmt socket path.
 	// The writer is os.Stderr in production (main.go); the tutorial doc says
 	// "stdout" — this is a known documentation drift called out in the PR body.
