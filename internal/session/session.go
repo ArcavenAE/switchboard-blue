@@ -53,6 +53,13 @@ type Publisher struct {
 	mu       sync.RWMutex
 	sessions map[string]Info
 	keys     *admission.AdmittedKeySet
+	// qualities holds one per-session QualityIndicator wrapper keyed by
+	// sessionName. Created on Publish, dropped on Unpublish, in lockstep with
+	// the sessions map. Surfaced via SessionSnapshots for `sbctl sessions
+	// status` (BC-2.06.001 v1.7 PC-5; BC-2.06.002 v1.4 PC-3; DRIFT-001b +
+	// DRIFT-002; S-BL.CONSOLE-OBS). Definition + methods live in
+	// session_quality.go.
+	qualities map[string]*sessionQuality
 }
 
 // NewPublisher constructs a Publisher seeded with an admission key set.
@@ -61,8 +68,9 @@ type Publisher struct {
 // keys must not be nil.
 func NewPublisher(keys *admission.AdmittedKeySet) *Publisher {
 	return &Publisher{
-		sessions: make(map[string]Info),
-		keys:     keys,
+		sessions:  make(map[string]Info),
+		keys:      keys,
+		qualities: make(map[string]*sessionQuality),
 	}
 }
 
@@ -82,6 +90,11 @@ func (p *Publisher) Publish(sessionName string) error {
 		Name:        sessionName,
 		PublishedAt: time.Now().UTC(),
 	}
+	// Sessions and qualities maps are maintained in lockstep so that
+	// SessionSnapshots' iteration invariants hold (BC-2.06.001 v1.7 PC-5;
+	// S-BL.CONSOLE-OBS). A fresh indicator starts pending — no observation
+	// has been recorded yet.
+	p.qualities[sessionName] = newSessionQuality()
 
 	return nil
 }
@@ -98,6 +111,9 @@ func (p *Publisher) Unpublish(sessionName string) error {
 	}
 
 	delete(p.sessions, sessionName)
+	// Drop the per-session QualityIndicator in lockstep so a re-publish gets
+	// a fresh (pending, 0-miss) indicator (S-BL.CONSOLE-OBS).
+	delete(p.qualities, sessionName)
 
 	return nil
 }
