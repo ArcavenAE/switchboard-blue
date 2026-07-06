@@ -3107,42 +3107,45 @@ func TestRegister_AfterServeReturnsError(t *testing.T) {
 		_ = srv.Serve(ctx)
 	}()
 
-	// Sync barrier: dial the listener address until the server accepts.
-	// Once a dial succeeds, s.serving.Store(true) has definitely been called
-	// (Serve marks serving before entering the accept loop).
-	// This replaces the racy time.Sleep+Gosched approach (Pass-3 L2 race finding).
+	// Sync barrier: poll Register until it returns an error.
 	//
-	// A connection-refused dial returns in microseconds, so a bare retry loop
-	// can exhaust every attempt before the Serve goroutine is ever scheduled
-	// (observed on shared CI runners under -race). Sleep between failed
-	// attempts to yield to the scheduler, and fail loudly if the barrier never
-	// establishes — asserting the invariant against a server that never
-	// started would report a false F-P2L1-001 violation.
-	addr := ln.Addr().String()
-	const maxAttempts = 100
-	var dialConn net.Conn
-	for i := 0; i < maxAttempts; i++ {
-		c, dialErr := net.DialTimeout("tcp", addr, 50*time.Millisecond)
-		if dialErr == nil {
-			dialConn = c
+	// Root-cause analysis (third instance of the #502 class):
+	// The net.Listener is created before NewServer is called — the OS socket
+	// is already bound and accepting TCP connections at the kernel level.
+	// A dial-loop barrier proves only that the OS kernel has accepted the
+	// connection, which can happen before the Serve goroutine is ever
+	// scheduled. serving.Store(true) is the first line of Serve; it fires
+	// before the accept loop, but NOT before the OS accept of the dial.
+	// Using the dial return as a proxy for serving.Store(true) is therefore
+	// unsound when the listener pre-exists Serve.
+	//
+	// The correct barrier is to poll the invariant under test directly:
+	// call Register and wait for it to return an error. Once Register returns
+	// an error, serving.Store(true) has been observed — no inference required.
+	// This is fail-closed: if serving never flips, the loop expires and
+	// t.Fatal fires, reporting a genuine F-P2L1-001 failure rather than
+	// silently asserting nil-error-means-pass against a server that never
+	// started.
+	const barrierDeadline = 2 * time.Second
+	deadline := time.Now().Add(barrierDeadline)
+	var regErr error
+	for time.Now().Before(deadline) {
+		regErr = srv.Register(mgmt.Handler{
+			Command: "barrier.probe",
+			Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
+				return "ok", nil
+			},
+		})
+		if regErr != nil {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		// Serve goroutine has not set serving yet — yield and retry.
+		time.Sleep(1 * time.Millisecond)
 	}
-	if dialConn == nil {
-		t.Fatalf("sync barrier: could not dial %s within %d attempts — Serve never started; "+
-			"cannot assert the register-after-serve invariant", addr, maxAttempts)
-	}
-	t.Cleanup(func() { _ = dialConn.Close() })
-
-	// Verify that Register returns an error now that Serve has started.
-	regErr := srv.Register(mgmt.Handler{Command: "post.serve", Fn: func(_ context.Context, _ json.RawMessage) (any, error) {
-		return "ok", nil
-	}})
 	if regErr == nil {
-		t.Error("Register after Serve started: expected error; got nil — " +
-			"Register must return an error after Serve starts (F-P2L1-001 register-before-serve invariant)")
-	} else {
-		t.Logf("Register after Serve correctly returned error: %v", regErr)
+		t.Fatalf("sync barrier: Register did not return an error within %s — "+
+			"Serve never set serving=true; cannot assert the register-after-serve "+
+			"invariant (F-P2L1-001)", barrierDeadline)
 	}
+	t.Logf("Register after Serve correctly returned error: %v", regErr)
 }

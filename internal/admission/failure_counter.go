@@ -99,17 +99,18 @@ func NewFailureCounter(threshold int, windowDuration time.Duration, logger Logge
 // Under the mutex it:
 //  1. Trims entries where timestamp < now()-windowDuration (strictly less-than;
 //     boundary entries are kept — BC-2.05.005 EC-008, AC-008).
-//  2. If post-trim count is zero and the key existed, deletes counts[srcAddr] and
-//     firedAt[srcAddr] (dead-key eviction — prevents unbounded map growth from
-//     inactive sources; AC-012).
-//  3. Drain-only re-arm (BC-2.05.005 v1.6): if firedAt is set and len(keep)==0,
-//     clear firedAt[srcAddr]. The "oldest surviving entry is newer than firedAt"
-//     path is removed — it is dead code under append-skip (Step 5).
-//  4. Evicts the LRU source before inserting a new srcAddr key if
+//  2. Dead-key eviction and drain-only re-arm (BC-2.05.005 v1.6): if post-trim
+//     count is zero and the key existed, deletes counts[srcAddr] and
+//     firedAt[srcAddr]. This IS the drain-only re-arm mechanism — when the window
+//     fully empties both maps are cleared, allowing the counter to resume. Under
+//     append-skip (Step 4), no post-fire timestamps are ever recorded, so
+//     firedAt-without-counts is unreachable and dead-key eviction subsumes all
+//     re-arm logic completely (AC-012).
+//  3. Evicts the LRU source before inserting a new srcAddr key if
 //     len(counts) == maxTrackedSources (CWE-770; AC-011).
-//  5. Append-skip: appends now() only when lastFire.IsZero() (not currently fired).
+//  4. Append-skip: appends now() only when lastFire.IsZero() (not currently fired).
 //     The slice is bounded at threshold entries while an alert is active (EC-011).
-//  6. If post-append count >= threshold AND not yet fired since re-arm: captures
+//  5. If post-append count >= threshold AND not yet fired since re-arm: captures
 //     the alert message under the lock, then logs after unlock to avoid holding
 //     the lock during I/O.
 //
@@ -130,48 +131,41 @@ func (c *FailureCounter) RecordHMACFailure(srcAddr string) {
 		}
 	}
 
-	// Step 2: Dead-key eviction — if the window drained fully for this source,
-	// delete it from both maps so len(counts) reflects only live sources and a
-	// future re-arm starts clean (AC-012).
+	// Step 2: Dead-key eviction and drain-only re-arm (BC-2.05.005 v1.6).
+	// When the window fully drains for this source, delete it from both maps.
+	// This is the drain-only re-arm: Step 1 + Step 2 together guarantee that
+	// once all pre-fire entries age out (len(keep)==0), firedAt is also deleted,
+	// allowing the counter to resume normal operation on the next call.
+	// Under append-skip (Step 4), no post-fire timestamps are ever added, so
+	// firedAt-without-counts is unreachable — dead-key eviction subsumes all
+	// re-arm logic completely (AC-012; BC-2.05.005 v1.6 drain-only re-arm).
+	lastFire := c.firedAt[srcAddr]
 	if len(keep) == 0 && existing != nil {
 		delete(c.counts, srcAddr)
 		delete(c.firedAt, srcAddr)
+		lastFire = time.Time{} // re-arm: treat as not-yet-fired
 		keep = nil
 	}
 
-	// Step 3: Drain-only re-arm (BC-2.05.005 v1.6).
-	// Re-arm when the window has drained completely (len(keep)==0 after trim).
-	// Under append-skip (Step 5), no new timestamps are added while firedAt is set,
-	// so the "oldest surviving entry is newer than firedAt" path is dead code and
-	// is removed to match the reconciled spec exactly.
-	lastFire := c.firedAt[srcAddr]
-	if !lastFire.IsZero() {
-		if len(keep) == 0 {
-			// All pre-fire entries have aged out — safe to re-arm.
-			delete(c.firedAt, srcAddr)
-			lastFire = time.Time{} // re-arm: treat as not-yet-fired
-		}
-	}
-
-	// Step 4: LRU source cap — before inserting a brand-new key, evict the
+	// Step 3: LRU source cap — before inserting a brand-new key, evict the
 	// source whose most-recent failure is oldest if we are at capacity (AC-011).
 	_, exists := c.counts[srcAddr]
 	if !exists && len(c.counts) >= maxTrackedSources {
 		c.evictLRU()
 	}
 
-	// Step 5: Append-skip per-source slice bound (BC-2.05.005 EC-011; AC-016).
+	// Step 4: Append-skip per-source slice bound (BC-2.05.005 EC-011; AC-016).
 	// Only append a new timestamp when not currently fired. While firedAt is set,
 	// pre-fire entries cannot age out (append-skip keeps the slice from growing),
 	// so the slice is bounded at threshold entries during an active alert.
-	// Re-arm (Step 3) clears lastFire to zero, so the first call after drain
+	// Re-arm (Step 2) clears lastFire to zero, so the first call after drain
 	// does append (the re-arm and append are both visible in the same call).
 	if lastFire.IsZero() {
 		keep = append(keep, now)
 	}
 	c.counts[srcAddr] = keep
 
-	// Step 6: Emit E-ADM-017 on threshold crossing, exactly once per crossing.
+	// Step 5: Emit E-ADM-017 on threshold crossing, exactly once per crossing.
 	// Capture the message under lock; log after unlock to avoid holding the
 	// mutex during logger I/O.
 	var alertMsg string

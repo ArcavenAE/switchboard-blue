@@ -175,6 +175,44 @@ reads give immutable snapshots, writes go through the API. `go test -race`
 is the backstop; the type signature is the fence. See orc
 finding-032-store-sync-contract-leak.
 
+**13. Security-perimeter constructor defaults must fail closed**
+
+When a constructor parameter guards a security-enforcing boundary (an
+authorization check, a HMAC verifier, a rate-limiter, a sandbox), its
+nil/zero default MUST fail closed (deny-all, panic, or require an explicit
+opt-in value), not fail open (allow-all, no-op). A nil-or-zero default that
+silently disables enforcement compiles without warning and disables security
+invariants with no operator-visible signal.
+
+The canonical failure: `NewAccessNode(pub, nil)` defaulting to `NoOpAuthorizer`
+(allow-all) while the deliberate no-op sink (`noSink`) panics on misuse — the
+same codebase uses opposite polarities with no rationale for the asymmetry
+(W3-PG-001, Wave-3 adversary pass-01 F-6).
+
+Rule: if nil/zero is accepted for a security-perimeter parameter, document
+the explicit rationale in the constructor comment. If no rationale exists,
+require a non-nil value (panic or return error), or provide a test-only
+`WithAllowAll` opt-in that callers must name explicitly. The default remains
+deny-all.
+
+```go
+// WRONG — nil auth silently disables all Tier-2 enforcement
+func NewAccessNode(pub PublicKey, auth Authorizer) *AccessNode {
+    if auth == nil {
+        auth = NoOpAuthorizer{} // latent fail-OPEN: compiles, enforces nothing
+    }
+    ...
+}
+
+// RIGHT — nil auth is a programmer error; require explicit allow-all opt-in
+func NewAccessNode(pub PublicKey, auth Authorizer) *AccessNode {
+    if auth == nil {
+        panic("NewAccessNode: auth must not be nil; use WithAllowAllAuthorizer() for tests")
+    }
+    ...
+}
+```
+
 ## Error handling
 
 - Every exported function that can fail returns `error` last
