@@ -2,7 +2,7 @@
 artifact_id: ARCH-12-daemon-management-plane
 document_type: architecture-section
 level: L3
-version: "1.12"
+version: "1.13"
 status: draft
 producer: architect
 timestamp: 2026-07-01T12:00:00
@@ -32,6 +32,7 @@ modified:
   - 2026-07-01T00:00:00 # v1.10 — F-P2L3-003 (S-W5.04): S-W5.04 row added to Story Summary table — daemon-side paths.list/router.metrics/router.status RPC handlers + PathTracker wiring; BC-2.06.003 (PC-1..PC-4) + BC-2.06.001; VP-047 + VP-062; Wave 6; depends S-5.02 + S-W5.01
   - 2026-07-01T00:00:00 # v1.11 — F-P4L3-002 (doc-polish): deduplicated v1.10 changelog entries (duplicate v1.10 line removed; a stale duplicate entry had both v1.9 and v1.10 mislabeled at the same position); restored correct reverse-chronological order in modified list
   - 2026-07-01T00:00:00 # v1.12 — F-P5L3-followup: S-W5.04 Story Summary row updated to reflect Ruling-6 deferred production wiring
+  - 2026-07-06T00:00:00 # v1.13 — Phase-7 audit F-006: §Package DAG Constraints updated — internal/metrics added to mgmt's allowed-import set (PathsListSource/RouterMetricsSource in register_metrics.go, position 12 < mgmt position 19; observability dependency, not data-plane); internal/config corrected from MAY to MUST NOT (spec-only declaration, never actually imported — go list at 0516f3a confirms import set is {metrics} only); ARCH-08 position cross-reference added.
   - 2026-06-29T00:00:00 # v1.5 — Wave-5 convergence round-4 rulings O–W: (O) stale Unix socket pre-bind unlink; fix-now in listenUnixMgmt; (P) fatal-accept-error drain gap: closeAllConns missing before connWG.Wait on unexpected-close path; fix-now; (Q) AC-001/EC-001 story propagation gap for Ruling K; story-writer fix only; (R) per-handler execution timeout: fix-now with context.WithTimeout wrapper; (S) version sentinel CI gate: follow-up story targeting CI epic; (T) TestServe_ShutdownWindowNoAddAfterWaitPanic non-discriminating: test-writer fix only; (U) dispatch() response type never validated: fix-now, add rejection + test; (V) dispatch() missing read deadline: fix-now, reconcile ARCH-12 residual-concern note, amend BC-2.07.003; (W-test) t.Fatalf from goroutines in client_test.go: test-writer fix only; (X) hardcoded id "1" + no resp.ID echo check: fix-now; (Y) Inv-2 vs Inv-4 spec conflict on auth-handshake-timeout: fix-now, amend BC-2.07.003 Inv-4
 ---
 
@@ -419,16 +420,27 @@ envelope themselves, preserving consistency across all commands.
 `internal/mgmt` MAY import:
 - `crypto/ed25519`, `crypto/rand`, `encoding/json`, `net`, `context`, `io`,
   `sync` (stdlib only — no external mgmt deps)
-- `internal/config` (to read management socket path and operator key material)
+- `internal/metrics` (ARCH-08 position 12; imports `PathsListSource` and
+  `RouterMetricsSource` observability hooks for the `router.metrics` and
+  `paths.list` RPC handlers — `register_metrics.go`). This is an observability
+  dependency, not a data-plane dependency: `internal/metrics` is pure-core
+  (no I/O) and sits below `internal/mgmt` (position 19) in the DAG. The edge
+  is deliberate and permitted. See ARCH-08 §6.5 position 19.
 
 `internal/mgmt` MUST NOT import:
-- `internal/routing`, `internal/multipath`, `internal/arq`, `internal/replay`,
-  `internal/paths`, `internal/halfchannel`, `internal/session`, `internal/tmux`,
-  `internal/discovery` — these are data-plane packages.
+- `internal/routing`, `internal/multipath`, `internal/arq`, `internal/arqsend`,
+  `internal/replay`, `internal/paths`, `internal/halfchannel`, `internal/session`,
+  `internal/tmux`, `internal/netingress`, `internal/discovery` — these are
+  data-plane packages at or above the routing boundary.
 - `cmd/sbctl` — downward import is forbidden.
 - `internal/svtnmgmt` — svtnmgmt is the SVTN lifecycle manager; management RPC
   handlers that need it receive it via dependency injection (the handler `Fn` closes
   over the dependency, not the mgmt package itself).
+- `internal/config` — config is a pure-core parse-and-validate package (ARCH-08
+  position 1); `internal/mgmt` does not need to read config files directly.
+  Management socket path and operator keys are injected at construction time
+  via `NewServer` parameters. Wiring code in `cmd/switchboard/mgmt_wire.go`
+  reads `config.Config` and passes the extracted values to `mgmt.NewServer`.
 
 `internal/mgmt` SHOULD import `internal/admission` ONLY for the nonce-generation
 helper if one is extracted to a shared package. If the nonce generation stays inline
@@ -438,6 +450,15 @@ as a dependency and the DAG stays cleaner.
 **Nothing imports `internal/mgmt` except `cmd/switchboard`** (the daemon entry point).
 `cmd/sbctl` does not import `internal/mgmt` — it speaks the wire protocol over a
 connection, not through the Go API.
+
+> **F-006 remediation note (phase-7 audit, 2026-07-06):** The original Package DAG
+> Constraints stated that `internal/mgmt` MAY import `internal/config`. This was
+> a spec-only declaration — `go list` at develop 0516f3a shows `internal/mgmt`'s
+> actual import set is `{metrics}` (no config). The allowed-import set above now
+> reflects reality: `internal/metrics` replaces `internal/config`. The `metrics`
+> import is deliberate (PathsListSource/RouterMetricsSource in register_metrics.go
+> for the S-W5.04 RPC handlers); it does not violate data-plane separation because
+> `internal/metrics` is pure-core (position 12 < mgmt position 19).
 
 ---
 
