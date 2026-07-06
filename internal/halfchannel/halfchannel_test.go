@@ -263,26 +263,34 @@ func TestHalfChannelSequenceIncrement(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// AC-005 / VP-041 — Benchmark
+// AC-005 / VP-041 — Benchmark (S-BL.BENCH)
 // -----------------------------------------------------------------------------
 
 // BenchmarkHalfChannelTickJitter measures the end-to-end inter-tick interval
 // including the scheduled work (sleep accuracy + tick execution time). It
-// reports p99 jitter in milliseconds. This matches NFR-009 / VP-041 semantics:
-// how often does a frame actually arrive at a downstream consumer, not how
-// accurate the sleep itself is. VP-041 gate (≤ 2ms p99) is enforced in the
-// formal-verification phase; this benchmark records the metric only.
+// reports p99 jitter as the custom metric jitter_p99_ms and enforces the
+// NFR-009 / VP-041 gate (≤ 2ms p99) via b.Errorf.
+//
+// Phase stratification (AC-005 / S-1.02 rev 1.2 / VP-041 v1.2):
+//   - Phase 3: recorded jitter_p99_ms observationally only (no gate).
+//   - Phase 6 (S-BL.BENCH): adds b.Errorf gate. This benchmark is
+//     DIAGNOSTIC, not a required CI check (ADR-007). Run it on stable
+//     hardware to verify the SLO; developer laptops may legitimately
+//     exceed 2ms under load. Reported results constitute proof evidence.
 //
 // The benchmark uses b.N so -benchtime controls the sample count:
 //
 //	-benchtime=1000x  →  ~1000 ticks (~10s wall-clock at 10ms/tick)
 //	-benchtime=2s     →  ~200 ticks (whatever fits in 2s)
 //
-// The benchmark drives its own cadence via time.Sleep — ARCH-09 is not violated
-// because the BENCHMARK (effectful glue) is what schedules ticks, not HalfChannel
-// itself. HalfChannel.Tick() remains pure-core.
+// The benchmark drives its own cadence via time.Sleep — ARCH-09 is not
+// violated because the BENCHMARK (effectful glue) is what schedules ticks,
+// not HalfChannel itself. HalfChannel.Tick() remains pure-core.
 func BenchmarkHalfChannelTickJitter(b *testing.B) {
-	const interval = 10 * time.Millisecond
+	const (
+		interval  = 10 * time.Millisecond
+		maxJitter = 2 * time.Millisecond // NFR-009 / VP-041
+	)
 	hc := halfchannel.New(0, halfchannel.Upstream, interval)
 
 	deviations := make([]time.Duration, b.N)
@@ -315,6 +323,16 @@ func BenchmarkHalfChannelTickJitter(b *testing.B) {
 	sort.Slice(deviations, func(i, j int) bool { return deviations[i] < deviations[j] })
 	p99 := deviations[int(float64(b.N)*0.99)]
 	b.ReportMetric(float64(p99)/float64(time.Millisecond), "jitter_p99_ms")
+
+	// VP-041 gate (S-BL.BENCH AC-001): enforce ≤ 2ms p99 on stable CI hardware.
+	// Gate activates only at ≥ 100 samples (p99 is statistically meaningful).
+	// With b.N < 100 (e.g. the Go framework's initial 1-iteration probe) the
+	// gate is skipped — a single-tick measurement cannot produce a valid p99.
+	// On developer laptops the gate may legitimately fail under load — it is
+	// diagnostic, not a required CI check (ADR-007). Evidence: jitter_p99_ms above.
+	if b.N >= 100 && p99 > maxJitter {
+		b.Errorf("tick p99 jitter %v exceeds NFR-009 limit %v (VP-041)", p99, maxJitter)
+	}
 }
 
 // -----------------------------------------------------------------------------
