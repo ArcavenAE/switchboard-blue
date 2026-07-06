@@ -27,7 +27,7 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: cff4935
+develop_head: 1ef230e
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: phase-6-dispatch
@@ -114,8 +114,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses version suffix; VP-050 omits it. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |
 | DRIFT-HS006-ROUTER-DAEMON-STUB | MEDIUM | CLOSED 2026-07-05 — S-BL.ROUTER-RUNTIME merged PR #92 (14fe0c2): mgmt plane (nil admin handlers per ADR-004) + data-plane TCP bind + startup logging + graceful drain + nil-cfg taxonomy guard. Tier-3 tutorial smoke flipped exit 3 → exit 0 (4/4 pass). Real frame transport stays with S-BL.NI/S-BL.OA; reload/drain-protocol stays with S-7.04. | orchestrator | CLOSED |
 | DRIFT-HS006-DRAIN-CLI-MISSING | LOW | No `sbctl router drain` / `sbctl admin drain` subcommand. Drain only reachable via SIGTERM signal handling. Deferred to future operator-UX story. | orchestrator | open |
-| DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | S-BL.NI landed real connections (PR #94, b8ed015) — ingress conns now exist to hold a drain open, but drain-timeout forced-exit remains unevidenced: needs a test holding a live ingress conn past drain_timeout. Re-anchored: S-7.04 (owns drain_timeout application per BC-2.09.003 PC-7/PC-8). | orchestrator | open — re-anchored S-7.04 |
-| DRIFT-P5P1-B-M002-BC209003-DEFERRED-UNTRACKED | MEDIUM | BC-2.09.003 PC-7/PC-8/PC-9 have DEFERRED-APPLICATION obligation tied to S-7.04 (status: pending). No mechanism ensures these become release-gate blockers if S-7.04 deprioritizes. | product-owner | open |
+| DRIFT-HS006-DRAIN-TIMEOUT-FORCED-EXIT-UNEVIDENCED | LOW | CLOSED 2026-07-06 — S-7.04 merged PR #101 (1ef230e): `drain.New(cfg.DrainTimeout)` single source of truth; EC-003 timeout path (`ErrTimeout` → disconnect anyway) unit-evidenced; integration test drives custom 250ms drain_timeout through runRouter; mgmt.Shutdown budget derived from drainCoord.Timeout() (was hardcoded 5s). Forced-exit with an UNRESPONSIVE registered observer lands with S-7.04-FU-DRAIN-WIRE — no per-node observers exist until per-node identity does. | orchestrator | CLOSED (residual → S-7.04-FU-DRAIN-WIRE) |
+| DRIFT-P5P1-B-M002-BC209003-DEFERRED-UNTRACKED | MEDIUM | CLOSED 2026-07-06 — S-7.04 merged PR #101 (1ef230e): all three BC-2.09.003 DEFERRED-APPLICATION fields closed at application-point seams — PC-7 drain_timeout (drainTimeoutFor + drain.New, 10s ARCH-06 default), PC-8 keepalive_interval (keepaliveIntervalFor + normative fence `TestKeepaliveIntervalNotSweepDeadline`), PC-9 upstream_routers (upstreamRoutersFor fresh-slice + mode=E/PE startup emission). Helper + unit + integration test per field. | product-owner | CLOSED |
 | DRIFT-P5P1-B-M001-POL003-QUANTIFICATION | LOW | CLOSED 2026-07-05 — quantification (1/76 VPs pinned, VP-048 only) delivered upstream as comment on existing drbothen/vsdd-factory#453 (the task-#72 filing); no separate issue warranted per dedup rule. | orchestrator | CLOSED (comment on #453) |
 | DRIFT-P5P2-A003-TEST-HELPER-WIRE-TYPO | LOW | CLOSED 2026-07-05 — verified during PR #95 sweep: already fixed by PR #69 (03ce8e7); e2e_helpers_test.go:191 registers `admin.key.list-keys`. Stale row. | implementer | CLOSED |
 | DRIFT-P5P2-B-O003-ECFG-COLLISION-MAINTENANCE | LOW | E-CFG-002 + E-CFG-006 codespace collisions across two BC-2.09.003 minor bumps acknowledged but no maintenance-pass story scheduled. Refs O-P5P2-B-003. | orchestrator | open, awaiting maintenance-pass story |
