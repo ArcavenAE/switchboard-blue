@@ -590,3 +590,47 @@ jobs:
           git add Formula/switchboard-a.rb Formula/sbctl-a.rb
           git diff --cached --quiet || git commit -m "Update switchboard-a and sbctl-a to $TAG"
           git push
+
+  attest:
+    name: Attest Release Provenance
+    needs: [build-binaries, sign-and-notarize, alpha-release]
+    # Run after alpha-release has published the tag + attached the FINAL
+    # assets (signed darwin binaries, notarized pkg/dmg installers, linux
+    # binaries) so attestations cover the exact bytes users download.
+    # sign-and-notarize is optional (SIGNING_ENABLED gate); its "skipped"
+    # result is still success for attestation purposes — we attest whatever
+    # alpha-release actually shipped.
+    if: |
+      !cancelled() &&
+      needs.build-binaries.result == 'success' &&
+      needs.alpha-release.result == 'success' &&
+      (needs.sign-and-notarize.result == 'success' || needs.sign-and-notarize.result == 'skipped')
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - name: Download final release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.build-binaries.outputs.tag }}"
+          mkdir -p release-assets
+          # Pull everything currently attached to the release; alpha-release
+          # ran to completion by the time this job starts.
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --dir release-assets
+          echo "Assets to be attested:"
+          ls -la release-assets/
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: 'release-assets/*'
