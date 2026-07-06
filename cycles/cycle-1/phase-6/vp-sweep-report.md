@@ -67,5 +67,10 @@ Agent's message-channel final report diverged from its committed artifacts
 (wrong VPs in partial/blocked lists, confabulated spec findings) while the
 commits themselves were precise. Lesson: orchestrator decisions must be built
 from committed artifacts, not agent self-reports — sibling of the
-green-claim evidence-paste class (drbothen/vsdd-factory#513). Candidate
-upstream note pending agent's confirmation reply.
+green-claim evidence-paste class (drbothen/vsdd-factory#513). Resolved
+without agent reply by direct artifact inspection: the claimed VP-058
+"strong-oracle" spec finding was confabulated — VP-058 is code-audit/PROVEN;
+the garbled source is VP-043's Phase-5 changelog (proptest → strong-oracle
+method rename, deliberate and already resolved F-P5P3-B-001/002). Instance
+delivered upstream as comment on #513 (2026-07-06) with the machine-derived-
+census proposal for adjudication-style bursts.
