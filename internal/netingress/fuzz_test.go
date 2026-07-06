@@ -168,7 +168,7 @@ func FuzzServeConnDispatch(f *testing.F) {
 		defer func() { _ = client.Close() }()
 		defer func() { _ = server.Close() }()
 
-		route := func(hdr frame.OuterHeader, payload []byte) error {
+		route := func(hdr frame.OuterHeader, payload []byte) error { //nolint:unparam // matches RouteFn signature; fuzz stub never fails
 			// Assert the self-delimiting invariant inside the dispatch path.
 			// A discrepancy here indicates a bug where LimitReader or
 			// ReadFrame diverged from the wire format contract.

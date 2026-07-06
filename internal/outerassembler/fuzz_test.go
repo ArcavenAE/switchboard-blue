@@ -109,8 +109,8 @@ func FuzzAssembleReadFrameRoundTrip(f *testing.F) {
 	// Seed: payload + flags encoded into one byte slice.
 	f.Add([]byte("hello switchboard"), byte(0), uint32(42), uint32(1), byte(frame.FrameTypeData))
 	f.Add([]byte{}, byte(0), uint32(1), uint32(1), byte(frame.FrameTypeEmptyTick))
-	f.Add([]byte{0xDE, 0xAD, 0xBE, 0xEF}, byte(outerassembler.FlagSACKPresent), uint32(99), uint32(7), byte(frame.FrameTypeData))
-	f.Add([]byte{0x00}, byte(outerassembler.FlagARQReq), uint32(0), uint32(1), byte(frame.FrameTypeArq))
+	f.Add([]byte{0xDE, 0xAD, 0xBE, 0xEF}, outerassembler.FlagSACKPresent, uint32(99), uint32(7), byte(frame.FrameTypeData))
+	f.Add([]byte{0x00}, outerassembler.FlagARQReq, uint32(0), uint32(1), byte(frame.FrameTypeArq))
 
 	// Large payload near uint16 boundary.
 	f.Add(bytes.Repeat([]byte{0xAB}, 60000), byte(0), uint32(1), uint32(100), byte(frame.FrameTypeData))
