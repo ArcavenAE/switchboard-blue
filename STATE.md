@@ -34,8 +34,8 @@ open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: none — steady-state; next work from backlog (11 active) or maintenance sweep
 historical_cycles: []
-timestamp: 2026-07-05T19:30:00Z
-last_update: 2026-07-05
+timestamp: 2026-07-06T20:00:00Z
+last_update: 2026-07-06
 ---
 
 # Switchboard Factory State
@@ -127,8 +127,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR | LOW | [process-gap] No version-floor rule on test taxonomy citations. FILED upstream 2026-07-03 as drbothen/vsdd-factory#471 (Batch 30) — row previously stale ("pending"). Phase-7 census SOFT-GAP-1 resolved. | orchestrator | filed #471 |
 | DRIFT-P5P7-O1-TARGET-EMPTY-TEST | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): Go-level test pins router status `--target=` → exit 2 (router_status_test.go); covered-at-two-levels with SPEC-3 binary assertion. | implementer | CLOSED |
 | DRIFT-P5P7-O4-INTERACTIVE-CONFIRM-PARITY | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): adjudicated usage-class — interactive-confirm mismatch converted to `usageErrf` (exit 2), parity with --confirm sibling call sites (admin.go:400). | implementer | CLOSED |
-| DRIFT-P6-ADM-STEP3-DEADCODE | LOW | Phase-6 mutation sampling (mutation 15, isolated re-verify) proved failure_counter.go Step-3 drain-only re-arm block is dead code — fully subsumed by Step-2 dead-key eviction (verified incl. evictLRU dual-map delete). Cleanup: delete Step 3, document Step 2 as THE re-arm mechanism, align BC-2.05.005 EC-011 wording. Not a security regression; SW305-M4 guard effective via Step 2. | implementer / spec-steward | open — maintenance pass |
-| DRIFT-P6-ROUTING-LOG-DISCRIMINATOR | OBS | Phase-6 mutation sampling: routing PATH-A vs PATH-B HMAC-failure log messages share shape without discriminator (equivalent mutant — log-only). Triage aid only; no behavioral or security impact. | implementer | open — fold into next routing story |
+| DRIFT-P6-ADM-STEP3-DEADCODE | LOW | CLOSED 2026-07-06 — PR #108 (chore/steady-state-maint-sweep): Step-3 IsZero-guarded re-arm block deleted from failure_counter.go; Step-2 dead-key eviction documented as THE drain-only re-arm mechanism; step comments renumbered 1–5; BC-2.05.005 bumped to v1.9 (EC-011 + Window-semantics clause aligned; no behavioral change). | implementer / spec-steward | CLOSED |
+| DRIFT-P6-ROUTING-LOG-DISCRIMINATOR | OBS | CLOSED 2026-07-06 — PR #108 (chore/steady-state-maint-sweep): path=verify-key-missing added to PATH-A log, path=tag-mismatch added to PATH-B log; Test_RouteFrame_LogDiscriminator_PathA_PathB pins both tokens. E-ADM-016 present in both messages unchanged. | implementer | CLOSED |
 | DRIFT-P5P14-B-001-VP-SOURCE-BC-VERSION-PIN | MED | DEFERRED — POL-003 candidate (VP source_bc version-pin) not ratified. Sweep scope: 77 VP frontmatters. Target release: post-POL-003 ratification. See P5-pass-14-Adv-B.md finding F-P5P14-B-001. | spec-steward | DEFERRED |
 | POL-006-DEFERRED-LINT | OBS | CLOSED 2026-07-05 — upstream filing delivered: drbothen/vsdd-factory#512 (traceability-lint proposal: VP-INDEX↔ARCH-11 set-equality check gating adversarial dispatch). Local baseline remains clean (Burst 68b). | orchestrator | CLOSED (filed #512) |
 

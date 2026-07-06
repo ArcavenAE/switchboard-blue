@@ -21,7 +21,7 @@ Pointer in STATE.md: `cycles/cycle-1/closed-drift.md`
 | MISE-DX-001/002 | LOW | brew→mise migration + CLAUDE.md update; story S-M.01. | dx-engineer | open |
 | SIGN-DX-001 | LOW | Apple code-signing: release.yml gated OFF; story S-M.02, milestone-gated. | dx-engineer | open |
 | F-P8-009 | LOW | feasibility-report:61 deployment-ops range off-by-one (CAP-026–028) | architect | open |
-| W3-PG-001 | LOW | Security-perimeter default-polarity inconsistency — candidate go.md rule. | rules/governance | open — cycle-close |
+| W3-PG-001 | LOW | Security-perimeter default-polarity inconsistency — candidate go.md rule. | rules/governance | CLOSED 2026-07-06 — PR #108: rule 13 "Security-perimeter constructor defaults must fail closed" added to .claude/rules/go.md (NewAccessNode example; W3-M-3 reference) |
 | F-P8-004/005 | MED | VP-026 "transitivity" invariant missing from BC-2.02.003; VP-027 title/harness direction mismatch. | architect | open — Phase 3 test-writing |
 
 ## Stable-Deferred Phase-6 Hardening Items (archived from STATE.md 2026-06-27)
