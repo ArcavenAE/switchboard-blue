@@ -423,3 +423,101 @@ func Test_BC_2_05_008_no_log_on_hmac_success(t *testing.T) {
 			capLog.Lines())
 	}
 }
+
+// -- Log discriminator: PATH-A and PATH-B messages are distinguishable ────────
+
+// Test_RouteFrame_LogDiscriminator_PathA_PathB pins that PATH-A ("auth key
+// unavailable") and PATH-B ("tag mismatch") produce log messages containing
+// distinct stable tokens (path=verify-key-missing vs path=tag-mismatch).
+//
+// This guards against the equivalent-mutant finding from Phase-6 mutation
+// sampling (DRIFT-P6-ROUTING-LOG-DISCRIMINATOR): the two paths shared a
+// log-message shape without a discriminator, making them indistinguishable
+// in operator grep output. No behavioral difference — the test is purely a
+// triage-aid discriminator pin.
+//
+// Assertions:
+//   - PATH-A log contains "path=verify-key-missing" but NOT "path=tag-mismatch"
+//   - PATH-B log contains "path=tag-mismatch" but NOT "path=verify-key-missing"
+//
+// Traces to: DRIFT-P6-ROUTING-LOG-DISCRIMINATOR; BC-2.05.008 PC-2, PC-4.
+func Test_RouteFrame_LogDiscriminator_PathA_PathB(t *testing.T) {
+	t.Parallel()
+
+	var svtnID [16]byte
+	copy(svtnID[:], "log-discrim-svtn0")
+
+	// ── PATH-A: no forwarding-table entry (key unavailable) ──────────────────
+	{
+		ks := admission.NewAdmittedKeySet()
+		capLog := &routingFakeLog{}
+		r := routing.NewRouter(ks, routing.WithLogger(capLog))
+
+		var srcAddr [8]byte
+		copy(srcAddr[:], "discrmpa") // 8 bytes
+		hdr := frame.OuterHeader{
+			Version:   frame.VersionByte,
+			FrameType: frame.FrameTypeData,
+			SVTNID:    svtnID,
+			SrcAddr:   srcAddr,
+		}
+
+		err := routing.RouteFrame(hdr, nil, r)
+		if !errors.Is(err, routing.ErrHMACVerificationFailed) {
+			t.Fatalf("discriminator PATH-A: want ErrHMACVerificationFailed, got %v", err)
+		}
+
+		lines := capLog.Lines()
+		if len(lines) != 1 {
+			t.Fatalf("discriminator PATH-A: want 1 log line, got %d: %v", len(lines), lines)
+		}
+		msg := lines[0]
+		if !strings.Contains(msg, "path=verify-key-missing") {
+			t.Errorf("discriminator PATH-A: log missing discriminator token \"path=verify-key-missing\"; got: %q", msg)
+		}
+		if strings.Contains(msg, "path=tag-mismatch") {
+			t.Errorf("discriminator PATH-A: log contains PATH-B token \"path=tag-mismatch\" — tokens must not collide; got: %q", msg)
+		}
+	}
+
+	// ── PATH-B: forwarding-table entry present but HMAC tag is wrong ─────────
+	{
+		capLog := &routingFakeLog{}
+		r, srcAddr, _ := loggedRouterSetup(t, svtnID, 0xD1, 0xD2, capLog)
+
+		var dstAddr [8]byte
+		copy(dstAddr[:], "discrmpb")
+		r.RegisterForwardingEntry(svtnID, dstAddr, [hmac.KeySize]byte{0x77})
+
+		var wrongKey [hmac.KeySize]byte
+		copy(wrongKey[:], "wrong-key-for-discriminator-test")
+		payload := []byte("discrim-path-b-payload")
+		hdr := frame.OuterHeader{
+			Version:   frame.VersionByte,
+			FrameType: frame.FrameTypeData,
+			SVTNID:    svtnID,
+			SrcAddr:   srcAddr,
+			DstAddr:   dstAddr,
+		}
+		hdr.HMACTag = computeValidTag(hdr, payload, wrongKey)
+
+		err := routing.RouteFrame(hdr, payload, r)
+		if !errors.Is(err, routing.ErrHMACVerificationFailed) {
+			t.Fatalf("discriminator PATH-B: want ErrHMACVerificationFailed, got %v", err)
+		}
+
+		lines := capLog.Lines()
+		// loggedRouterSetup registers the srcAddr forwarding entry, so the setup
+		// call itself produces no logs; only RouteFrame's PATH-B log fires here.
+		if len(lines) != 1 {
+			t.Fatalf("discriminator PATH-B: want 1 log line, got %d: %v", len(lines), lines)
+		}
+		msg := lines[0]
+		if !strings.Contains(msg, "path=tag-mismatch") {
+			t.Errorf("discriminator PATH-B: log missing discriminator token \"path=tag-mismatch\"; got: %q", msg)
+		}
+		if strings.Contains(msg, "path=verify-key-missing") {
+			t.Errorf("discriminator PATH-B: log contains PATH-A token \"path=verify-key-missing\" — tokens must not collide; got: %q", msg)
+		}
+	}
+}
