@@ -7,7 +7,7 @@ producer: formal-verifier (phase6-secscan)
 coordinator: team-lead
 timestamp: 2026-07-06T02:45:00Z
 develop_head_at_scan: 18fd2fe
-status: complete-pending-mutation-15-reverify
+status: complete
 ---
 
 # Phase 6 — Security Scan Lane Report (Burst 1)
@@ -50,10 +50,22 @@ security-sensitive seams + bounded manual mutation sampling (5 mutants × 3 pack
 1. MaxFrameBytes wire-bound not asserted (CWE-400 attacker-sized allocation).
 2. MaxConcurrentConnections semaphore-shedding cap not asserted.
 
-**Mutation 15** (E-ADM-017 re-arm block → `_ = lastFire`): SURVIVED verdict
-INVALIDATED by lane collision (see incident below); definitive re-verify running
-in isolated worktree — security-relevant because SW305-M4 fire-once tests
-(PR #93) are supposed to pin exactly this behavior.
+**Mutation 15** (E-ADM-017 re-arm block → `_ = lastFire`): re-verified in an
+isolated worktree (develop @ 18fd2fe) — **SURVIVED, adjudicated PROVEN DEAD
+CODE, not a test gap.** All five SW305-M4 fire-once/re-arm/property tests pass
+with the mutation applied because Step 3's re-arm effect is fully subsumed by
+Step 2's dead-key eviction (failure_counter.go:136-140 deletes firedAt on
+window drain before Step 3 reads it). Coordinator independently verified the
+remaining path: Step-4 evictLRU also deletes from BOTH maps (lines 215-216),
+and Step 6 always pairs firedAt-set with a counts write — so
+firedAt-without-counts is unreachable and no reachable state lets Step 3
+change observable behavior. SW305-M4's guard is real; Step 3 is
+belt-and-suspenders to a belt Step 2 already wears. Final admission table:
+4/5 killed + 1 proven-dead-code. Overall lane: **11/15 killed, 2 real gaps
+(→ PR #105 tests), 1 equivalent mutant, 1 dead code.** Follow-up cleanup
+(delete Step 3 + document Step 2 as THE drain-only re-arm mechanism +
+BC-2.05.005 EC-011 wording alignment) recorded as drift row
+DRIFT-P6-ADM-STEP3-DEADCODE.
 
 **Diagnostic-only observation (LOW):** routing PATH-A vs PATH-B error paths
 share a log-message shape without a discriminator; hinders triage, no
