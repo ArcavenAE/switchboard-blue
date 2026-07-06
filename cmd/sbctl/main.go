@@ -193,10 +193,14 @@ func main() {
 
 // runSessions dispatches `sbctl sessions <sub-verb>` commands.
 //
-// Sub-verb routing per interface-definitions.md v1.18 §71-73 (F-P5P6-A-003):
+// Sub-verb routing per interface-definitions.md v1.18 §71-73 (F-P5P6-A-003)
+// with `status` added by S-BL.CONSOLE-OBS (BC-2.06.001 v1.7 PC-5 console-half;
+// BC-2.06.002 v1.4 PC-3):
 //
 //	list              → sessions.list RPC (may exit 1 on E-NET-001)
-//	attach|detach|status → exit 2, not-implemented (deferred to S-BL.DISCOVERY-WIRE family)
+//	status [name]     → sessions.status RPC (may exit 1 on E-NET-001).
+//	                    A positional argument selects one session; empty selects all.
+//	attach|detach     → exit 2, not-implemented (deferred to S-BL.DISCOVERY-WIRE family)
 //	<anything else>   → exit 2, unknown sub-verb
 func runSessions(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	subVerb := "list" // bare `sbctl sessions` defaults to list
@@ -207,7 +211,18 @@ func runSessions(ctx context.Context, target, keyPath string, useJSON bool, args
 	switch subVerb {
 	case "list":
 		return connectAndRun(ctx, target, keyPath, useJSON, "sessions.list", nil, sio)
-	case "attach", "detach", "status":
+	case "status":
+		// Optional single positional argument selects one session by name;
+		// omitted argument selects all sessions. The daemon-side handler
+		// (session.HandleSessionsStatus) accepts session_name="" as the
+		// "all" query, so a nil args payload is only used when the sub-verb
+		// has no trailing name — otherwise pass an explicit {session_name}.
+		var cmdArgs any
+		if len(args) > 1 {
+			cmdArgs = map[string]string{"session_name": args[1]}
+		}
+		return connectAndRun(ctx, target, keyPath, useJSON, "sessions.status", cmdArgs, sio)
+	case "attach", "detach":
 		return usageErrf("sessions %s: not implemented; deferred to backlog (S-BL.DISCOVERY-WIRE family)", subVerb)
 	default:
 		return usageErrf("sessions: unknown sub-verb %q", subVerb)

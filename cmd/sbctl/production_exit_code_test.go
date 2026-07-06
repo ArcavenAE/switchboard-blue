@@ -486,9 +486,10 @@ func TestProductionMain_NoArgs_ExitTwo(t *testing.T) {
 // dispatches correctly based on the sub-verb:
 //
 //   - `sessions list`   → connects to daemon (may exit 1 on connection refused)
+//   - `sessions status` → connects to daemon (may exit 1 on connection refused)
+//     — added by S-BL.CONSOLE-OBS; sessions.status RPC is now implemented.
 //   - `sessions attach` → exits 2 with a clear not-implemented error naming
 //     the verb and citing backlog deferral
-//   - `sessions status` → exits 2 (same shape as attach)
 //   - `sessions detach` → exits 2 (same shape as attach)
 //   - `sessions bogus`  → exits 2 with unknown-sub-verb error naming "bogus"
 //   - `sessions` alone  → exits 2 (missing sub-verb)
@@ -499,14 +500,16 @@ func TestProductionMain_NoArgs_ExitTwo(t *testing.T) {
 // attempt a daemon connection (and exit 1 on connection refused) instead
 // of exiting 2 with a usage error.
 //
-// Spec authority: interface-definitions.md v1.18 §71-73.
+// Spec authority: interface-definitions.md v1.18 §71-73;
+// S-BL.CONSOLE-OBS story (`status` promotion from stub to real dispatch).
 // Finding: F-P5P6-A-003.
 func TestProductionMain_Sessions_SubVerbValidation(t *testing.T) {
 	t.Parallel()
 
 	keyPath := testdataKeyPath(t)
-	// Nothing listens here — for sessions.list the exit will be 1 (E-NET-001),
-	// for usage-error paths it should be 2 without touching the network.
+	// Nothing listens here — for sessions.list/status the exit will be 1
+	// (E-NET-001), for usage-error paths it should be 2 without touching
+	// the network.
 	target := "127.0.0.1:19983"
 
 	cases := []struct {
@@ -530,11 +533,12 @@ func TestProductionMain_Sessions_SubVerbValidation(t *testing.T) {
 			wantStderrSubstr: "detach",
 		},
 		{
-			// status → not-implemented, exit 2, stderr names the verb
-			name:             "status_not_implemented",
+			// status → dispatches to sessions.status RPC (S-BL.CONSOLE-OBS).
+			// With no daemon listening it exits 1 (E-NET-001), not 2.
+			name:             "status_dispatches_to_daemon",
 			subVerb:          "status",
-			wantExitCode:     2,
-			wantStderrSubstr: "status",
+			wantExitCode:     1,
+			wantStderrSubstr: "E-NET-001",
 		},
 		{
 			// bogus → unknown sub-verb, exit 2, stderr names "bogus"
