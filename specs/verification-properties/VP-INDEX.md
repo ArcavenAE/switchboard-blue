@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.38"
+version: "2.39"
 status: draft
 producer: product-owner
 timestamp: 2026-07-06T00:00:00
@@ -150,6 +150,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.39 | 2026-07-06 | S-BL.TESTENV merged (PR #110, 62e38d3): VP-033/034/036/046 → implemented (locked, e2e via internal/testenv rig). VP-039 coordinator-DOWNGRADED from agent's activated claim to PARTIAL — harness-structural isolation only, real router filter not on tested path (VP-010 remains the BC-2.05.006 real-code coverage); stays draft. VP-037/038/040 harness-ready-partial (locks await S-7.04-FU-DRAIN-WIRE / PE-CONNECTOR+SIGHUP / production multipath). VP-031/032 harness-ready (env-dependent skips). Proven 64 → 68. |
 | 2.38 | 2026-07-06 | VP-041 → implemented (S-BL.BENCH PR #109 cd67394, lock flipped v1.3; M1 evidence 1.080ms mean p99 vs 2ms). VP-042 adopted-partial, stays draft (loopback lower-bound only; testenv-gated). Proven count 63 → 64. |
 | 2.37 | 2026-07-06 | Phase-7 audit F-010: sweep all VP rows whose file carries `verification_lock: true` to `status: implemented`. Machine-derived from grep across 77 VP files; 43 rows updated (VP-001–006, VP-011–030, VP-035, VP-043, VP-047–056, VP-059–062, VP-077). Remaining 14 unlocked VPs (VP-031–034, VP-036–042, VP-044–046) untouched per directive. [coordinator correction: prior wording said VP-031–035; VP-035 is locked and appears in the updated list above] |
 | 2.36 | 2026-07-03 | F-P5P14-B-003 traceability close: VP-077 minted (integration, P0, cmd/switchboard) — admin.key.list-keys admission-gate property (any-role OR operator-set OR bootstrap-key; else E-ADM-009); covers BC-2.05.004 v1.14 EC-008 three failure modes. Complementary to VP-075 (write-authority scope exclusion). Total 76→77. Integration 22→23. P0 54→55. BC-2.05.004 Verification Properties table extended with VP-077 row. |

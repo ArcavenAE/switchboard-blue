@@ -8,15 +8,15 @@ current_cycle: cycle-1
 anchor_strategy: reference-via-frontmatter
 dtu_required: false
 dtu_assessment: 2026-06-23
-internal_packages: 21
+internal_packages: 22
 plugin_version_adopted: "1.0.0-rc.21"
 l2_complete: true
 l3_complete: true
 l3_bc_count: 45
 l4_complete: true
 l4_vp_count: 77
-vp_proven: 64
-vp_justified_deferred: 13
+vp_proven: 68
+vp_justified_deferred: 9
 arch_sections: 13
 arch_adrs: 12
 phase_1_gate: APPROVED
@@ -29,7 +29,7 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: cd67394
+develop_head: 62e38d3
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: none — steady-state; next work from backlog (11 active) or maintenance sweep

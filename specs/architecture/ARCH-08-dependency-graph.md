@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.4"
+version: "2.5"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-06T13:00:00 # v2.5 — S-BL.TESTENV registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: go list -f '{{.Imports}}' ./internal/testenv/ at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files.
   - 2026-06-25T14:00:00 # v1.4 — Added §1 scope callout
   - 2026-06-25T00:00:00 # v1.5 — Add prose note below Mermaid: positions in §6.5/§6.6 are authoritative for import-order layering; Mermaid groupings reflect functional domain (consistency-validator F-W3-M-004)
   - 2026-06-26T00:00:00 # v1.6 — Promote internal/session (pos 6) and internal/tmux (pos 7) from §6.6 PLANNED to §6.5 CURRENT following S-3.01a merge (PR #11, 43208ab)
@@ -319,6 +320,7 @@ strict — position N may import packages at positions 1..N-1 only.
 | 19 | `internal/mgmt` | {metrics} | boundary (effectful — socket I/O, crypto) | Wave 5 (S-W5.01); see ARCH-12 |
 | 20 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
 | 21 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
+| 22 | `internal/testenv` | {admission, drain, frame, session} | test helper (composition root — importable by _test files only) | steady-state (S-BL.TESTENV, PR #110, 62e38d3) |
 
 This table is authoritative for the develop branch. Any `internal/` package not
 listed above does NOT exist in the codebase.
