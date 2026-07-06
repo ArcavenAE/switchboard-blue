@@ -1,7 +1,7 @@
 ---
 pipeline: IN_PROGRESS
 phase: phase-6-formal-hardening
-phase_step: phase-6-burst-2-complete-awaiting-burst-3-gap-close
+phase_step: phase-6-COMPLETE-all-vps-proven-or-justified
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -15,6 +15,8 @@ l3_complete: true
 l3_bc_count: 45
 l4_complete: true
 l4_vp_count: 77
+vp_proven: 63
+vp_justified_deferred: 14
 arch_sections: 13
 arch_adrs: 8
 phase_1_gate: APPROVED
@@ -46,7 +48,7 @@ last_update: 2026-07-05
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
-| Phase 6 — Formal Hardening | **IN PROGRESS** — burst 1 COMPLETE 2026-07-06: fuzz lane (PR #105 f09fe73 — 4 fuzz targets 51M+ execs zero crashes, 12 property tests, 2 mutation-kill tests) + secscan lane (clean CWE-triaged scans, 11/15 mutants killed, mutation-15 proven-dead-code). Burst 2 COMPLETE: VP sweep 55/77 PROVEN (verification_lock flipped, evidence cited vs f09fe73), 14 PARTIAL (burst-3 queue), 8 BLOCKED (testenv infra ×6, S-BL.BENCH ×2), commits e047d21..d43511d. Burst 3 (gap-close: proptest harnesses + VP-062 fuzz + VP-028/029 spec re-anchor) next. | evidence: cycles/cycle-1/phase-6/ |
+| Phase 6 — Formal Hardening | **COMPLETE** 2026-07-06 — gate satisfied: 63/77 VPs PROVEN (locks + cited evidence), 14 justified-deferred (6 infra-partial + 8 blocked: testenv ×6, S-BL.BENCH ×2 — per-VP justifications in changelogs); fuzzers clean (5 targets, 53M+ combined execs, 0 crashes); security scan clean (CWE-triaged); mutation sampling 11/15 + 2 gaps closed + 1 proven-dead-code. Bursts: #105 f09fe73, #106 0516f3a. | evidence: cycles/cycle-1/phase-6/ |
 | Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
