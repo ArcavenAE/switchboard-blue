@@ -15,8 +15,8 @@ l3_complete: true
 l3_bc_count: 45
 l4_complete: true
 l4_vp_count: 77
-vp_proven: 63
-vp_justified_deferred: 14
+vp_proven: 64
+vp_justified_deferred: 13
 arch_sections: 13
 arch_adrs: 12
 phase_1_gate: APPROVED
@@ -29,7 +29,7 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 0516f3a
+develop_head: cd67394
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: none — steady-state; next work from backlog (11 active) or maintenance sweep
@@ -93,7 +93,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame (remains, anchor: caller of TLPKTDROP); S403-H1-DEFER PC-3 retransmit SHIPPED in S-BL.ARQ-TX (PR #98, b75a2f2 — internal/arqsend Retransmitter: gap-walk → PayloadForInFlight → Assemble w/ new ChanSeq per PC-5 → Dispatch; no-orphan-state on dispatch error; composed round-trip routes through netingress+routing); ADR-005 wire-format primitive SHIPPED in S-BL.OA (PR #96, e520e04); ADR-005 RESYNC protocol still anchored S-BL.RESYNC-FRAME. Remaining in this row: DegradationEvent per-frame observation only. | product-owner/architect | anchored (narrowed ×2) |
 | S404-OBS-F / S404-LOW-1 | OBS/LOW | S-4.04 E-FWD-001 rate-limit LATENT; 3 LOW + NITPICK (SEC-001 CRC32 accepted). Adjudicated at S-BL.ARQ-TX (PR #98): NOT triggered — E-FWD-001 is receive-side (split-horizon-blocked log in routing); arqsend is a send-side seam and its integration tests route to valid dst (no path exhaustion exercised). Re-anchored: live daemon egress/send-loop story (sustained-retransmit load is the re-confirmation vehicle). Full analysis: S-BL.ARQ-TX DELIVERY frontmatter `drift_dispositioned`. | architect/implementer | re-anchored: live-egress story |
 | S601-SEC-001..002 | LOW | CLOSED 2026-07-05 — PR #95 (7a974f6): CWE-117 `--config` path stripped of Unicode control chars before E-CFG-004/E-CFG-005 Detail interpolation; CWE-400 Validate() caps per-entry upstream_routers failures at UpstreamRoutersFailureCap=100 with truncation marker (internal/config/security_hardening_test.go). | implementer | CLOSED |
-| OBS-VP-BENCH | OBS | VP-041/VP-042 unverified pending S-BL.BENCH story. | orchestrator | deferred S-BL.BENCH |
+| OBS-VP-BENCH | OBS | NARROWED 2026-07-06 — S-BL.BENCH merged PR #109 (cd67394): VP-041 PROVEN (locked v1.3, M1 evidence 1.080ms mean p99, 46% headroom); VP-042 adopted with lower-bound loopback evidence, lock gated on S-BL.TESTENV integration. Residual: VP-042 testenv-integrated measurement only. | orchestrator | narrowed → S-BL.TESTENV |
 | PROCESS-GAP-W4 | OBS | CLOSED 2026-07-05 — S-BL.NI merged PR #94 (b8ed015) carries `TestIntegration_ConcurrentRegisterAndRouteRaceClean` (4 register writers × 4 ingress dialers under -race, cross-component netingress+routing). | orchestrator/architect | CLOSED |
 | F-009 | LOW | ARCH-INDEX input-hash tooling field-name mismatch. | architect/devops | deferred maintenance |
 | E-CFG-002 / E-CFG-006 | MED | Pre-existing config-key collision (joined tracking). | product-owner | deferred maintenance |

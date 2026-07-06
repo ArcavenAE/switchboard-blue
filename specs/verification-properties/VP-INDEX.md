@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.37"
+version: "2.38"
 status: draft
 producer: product-owner
 timestamp: 2026-07-06T00:00:00
@@ -150,6 +150,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.38 | 2026-07-06 | VP-041 → implemented (S-BL.BENCH PR #109 cd67394, lock flipped v1.3; M1 evidence 1.080ms mean p99 vs 2ms). VP-042 adopted-partial, stays draft (loopback lower-bound only; testenv-gated). Proven count 63 → 64. |
 | 2.37 | 2026-07-06 | Phase-7 audit F-010: sweep all VP rows whose file carries `verification_lock: true` to `status: implemented`. Machine-derived from grep across 77 VP files; 43 rows updated (VP-001–006, VP-011–030, VP-035, VP-043, VP-047–056, VP-059–062, VP-077). Remaining 14 unlocked VPs (VP-031–034, VP-036–042, VP-044–046) untouched per directive. [coordinator correction: prior wording said VP-031–035; VP-035 is locked and appears in the updated list above] |
 | 2.36 | 2026-07-03 | F-P5P14-B-003 traceability close: VP-077 minted (integration, P0, cmd/switchboard) — admin.key.list-keys admission-gate property (any-role OR operator-set OR bootstrap-key; else E-ADM-009); covers BC-2.05.004 v1.14 EC-008 three failure modes. Complementary to VP-075 (write-authority scope exclusion). Total 76→77. Integration 22→23. P0 54→55. BC-2.05.004 Verification Properties table extended with VP-077 row. |
 | 2.35 | 2026-07-02 | F-P5P3-B-001/B-002/B-003 (Phase 5 Pass 3 remediation, Path B): reclassify VP-043 row from Proptest bucket to Unit bucket; BC column pin BC-2.02.007 → BC-2.02.007 v1.3 (POL-003 candidate); VP-062 source_bc pin already correct in catalog row (BC-2.06.003 v1.13) — confirmed aligned with VP-062 v1.7 frontmatter. Arithmetic footer resynced (Proptest 34→33, Unit 2→3; total 76 unchanged). POL-003 conformance 2/76 → 3/76 (VP-043 pin added). |
