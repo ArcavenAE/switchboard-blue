@@ -1,16 +1,5 @@
 // Package main — router_pe_connector_test.go — S-7.04-FU-PE-CONNECTOR integration tests.
 //
-// These tests will all FAIL at the Red Gate.  The failure modes are:
-//   - Tests that drive runRouter with PE config: upstreamRoutersAsSet panics.
-//   - TestRunRouter_PE_RouterHandleModeReflectsLiveState: the stub Mode() reads
-//     r.mode (ModeE at construction), ignoring the wired connector handle.
-//   - TestE2E_EtoPEGraduationByConfigChange: stub Restart() dials nothing; the
-//     upstream fixture listener never receives a connection → second assertion fails.
-//   - TestRunRouter_PE_EFWD001ReconfirmationUnderLoad: runRouter with PE config
-//     emits mode=PE but never establishes a TCP connection to the fixture —
-//     connection-received assertion fails.
-//   - TestE2E_RouterDrain_NodesMigrateWithin2s: skipped with partial-discharge note.
-//
 // Named exactly as specified in the story's Estimated Test Surface table.
 //
 // Traces: AC-001..AC-006, VP-037, VP-038.
@@ -96,8 +85,6 @@ func (f *fakeConnectorHandle) Stop()                       {}
 // TestRunRouter_PE_DialAndConnect_UpstreamReachable verifies AC-001: when
 // runRouter starts with a PE config and the upstream fixture is listening, the
 // Connector establishes a TCP connection and the fixture records it.
-//
-// RED GATE: upstreamRoutersAsSet panics inside runRouter startup.
 func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -135,7 +122,6 @@ func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 	}
 
 	// AC-001 postcondition 1+3: upstream fixture must receive a connection.
-	// RED GATE: runRouter panics at upstreamRoutersAsSet before dialing.
 	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_DialAndConnect_UpstreamReachable: upstream fixture received %d connections after 3s; want ≥1 (AC-001 PC-1/PC-3)", connCount.Load())
 	}
@@ -153,8 +139,6 @@ func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 // TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder verifies AC-001
 // postcondition 5: reloading with the same addresses in reversed order MUST NOT
 // trigger teardown or redial (set-equal semantics per Q1 ruling).
-//
-// RED GATE: upstreamRoutersAsSet panics inside runRouter startup.
 func TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -198,13 +182,11 @@ func TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder(t *testing.T) {
 	})
 
 	// Precondition: mode=PE startup emission.
-	// RED GATE: runRouter panics at upstreamRoutersAsSet before emitting mode=PE.
 	if !scanForLine(buf, "mode=PE", 2*time.Second) {
 		t.Fatalf("AC-001 Q1 precondition: mode=PE not emitted within 2s; got:\n%s", buf.String())
 	}
 
 	// Precondition: both upstreams must have been connected initially.
-	// RED GATE: upstreamRoutersAsSet panics → no connections → both counts remain 0.
 	if !waitForConnections(connCount1) {
 		t.Fatalf("AC-001 Q1 precondition: upstream1 received %d connections; want ≥1", connCount1.Load())
 	}
@@ -241,8 +223,6 @@ func TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder(t *testing.T) {
 // TestRunRouter_PE_UnreachableUpstream_PartialPE verifies AC-002: when one
 // upstream is reachable and another is not, the Connector connects to the
 // reachable one (Mode()==ModePE) and emits EC-001 log for the unreachable one.
-//
-// RED GATE: upstreamRoutersAsSet panics inside runRouter startup.
 func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -289,7 +269,6 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 	}
 
 	// AC-002 postcondition 4: reachable upstream gets a connection (partial-PE).
-	// RED GATE: runRouter panics at upstreamRoutersAsSet.
 	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_UnreachableUpstream_PartialPE: reachable upstream received %d connections; want ≥1 (AC-002 PC-4)", connCount.Load())
 	}
@@ -307,8 +286,6 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 // TestRunRouter_PE_KeepalivePassedToConnector verifies AC-003: the Connector is
 // constructed with the keepaliveIntervalFor(cfg) value and that value drives the
 // keepalive ticker (not a hardcoded constant or sweepDeadline).
-//
-// RED GATE: upstreamRoutersAsSet panics inside runRouter startup.
 func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -347,7 +324,6 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 
 	// AC-003: upstream fixture must receive a connection (proves keepalive ticker
 	// is constructed and drives a connection health check to the fixture).
-	// RED GATE: runRouter panics at upstreamRoutersAsSet before constructing Connector.
 	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_KeepalivePassedToConnector: upstream fixture received %d connections; want ≥1 (AC-003)", connCount.Load())
 	}
@@ -364,13 +340,18 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 // ── AC-004: E-FWD-001 re-confirmation under load ────────────────────────────────
 
 // TestRunRouter_PE_EFWD001ReconfirmationUnderLoad verifies AC-004: the PE dial
-// loop establishes a live upstream connection, and under sustained ARQ retransmit
-// load the E-FWD-001 log fires (split-horizon blocked).
+// loop establishes a live upstream connection, and under normal load E-FWD-001
+// must NOT fire spuriously (split-horizon blocked).
 //
-// RED GATE: upstreamRoutersAsSet panics inside runRouter startup when cfg has
-// UpstreamRouters set — so runRouter never reaches the run loop and never
-// establishes a connection.  The connection-received assertion on the upstream
-// fixture fails with 0 connections received.
+// Partial discharge note (AC-004): the exhaustion case (E-FWD-001 fires under
+// path exhaustion via ARQ retransmit load) requires a receive/forward loop over
+// PE connector connections that routes through FrameArrivalHandler.OnFrameArrival.
+// That plumbing is not in this story's scope — the Connector only dials,
+// bootstraps, and keepalives.  E-FWD-001 is owned by the routing.FrameArrivalHandler
+// which is wired through netingress.Serve → routing.RouteFrame (a different code path).
+// The upstream story that wires PE connection receive/forward through FrameArrivalHandler
+// will own the exhaustion discharge.  This test discharges the "live PE connection
+// established + no spurious E-FWD-001 under normal load" half of AC-004.
 func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 	// NOT t.Parallel(): uses multi-router testenv.
 
@@ -407,8 +388,6 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 	}
 
 	// Precondition (AC-004 PC-1): live PE upstream connection must be established.
-	// RED GATE: upstreamRoutersAsSet panics before the Connector is constructed,
-	// so no connection is ever made.
 	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_EFWD001ReconfirmationUnderLoad: upstream fixture received %d connections; want ≥1 (AC-004 precondition — live PE connection required)", connCount.Load())
 	}
@@ -432,10 +411,6 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 // postcondition 4: RouterHandle.Mode() returns testenv.ModePE when a connector
 // reporting ModePE is wired at construction, and ModeE when no connector or when
 // connector reports ModeE.
-//
-// RED GATE: RouterHandle.Mode() reads r.mode (ModeE at construction), not the
-// connector wired via SetConnector.  The test expects ModePE from the fake
-// connector but gets ModeE from the stub.
 func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 	// NOT t.Parallel(): uses testenv in-process rig.
 
@@ -454,8 +429,6 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 
 	// AC-006 postcondition 4: after wiring a ModePE connector, Mode() must return
 	// testenv.ModePE by delegating to connector.Mode().
-	// STUB: Mode() reads r.mode=ModeE → returns ModeE → TEST FAILS.
-	// IMPL: Mode() delegates to connector.Mode()=ModePE → returns ModePE → PASS.
 	if handle.Mode() != testenv.ModePE {
 		t.Errorf("TestRunRouter_PE_RouterHandleModeReflectsLiveState: handle.Mode() == %v after SetConnector(ModePE); want ModePE (AC-006 PC-4 — Mode() must delegate to connector.Mode(), not read r.mode stub)", handle.Mode())
 	}
@@ -470,8 +443,6 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 	})
 	// After Restart with non-empty upstreams, stub sets r.mode=ModePE.
 	// But connector reports ModeE.
-	// IMPL: Mode() delegates to connector → ModeE.
-	// STUB: Mode() reads r.mode=ModePE → returns ModePE → TEST FAILS below.
 	if handle.Mode() != testenv.ModeE {
 		t.Errorf("TestRunRouter_PE_RouterHandleModeReflectsLiveState: handle.Mode() == %v after SetConnector(ModeE); want ModeE (AC-006 PC-4 — connector.Mode() must override r.mode)", handle.Mode())
 	}
@@ -483,9 +454,6 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 // RouterHandle.Restart() with UpstreamRouters populated, RouterHandle.Mode()
 // reflects actual connection state (testenv.ModePE) and the upstream fixture
 // receives a TCP connection from the Connector.
-//
-// RED GATE: stub Restart() sets r.mode=ModePE but dials nothing.  The upstream
-// fixture receives zero connections — the second assertion fails.
 func TestE2E_EtoPEGraduationByConfigChange(t *testing.T) {
 	// NOT t.Parallel(): uses testenv in-process rig + upstream fixture.
 
@@ -512,16 +480,12 @@ func TestE2E_EtoPEGraduationByConfigChange(t *testing.T) {
 	})
 
 	// VP-038 postcondition 1: Mode() == ModePE.
-	// With stub: passes tautologically (r.mode=ModePE).
-	// With impl: passes because connector.Mode()==ModePE (live dial succeeded).
 	if eRouter.Mode() != testenv.ModePE {
 		t.Errorf("TestE2E_EtoPEGraduationByConfigChange: eRouter.Mode() == %v; want ModePE (VP-038 PC-1)", eRouter.Mode())
 	}
 
 	// VP-038 behavioral assertion: the upstream fixture must have received a
 	// TCP connection from the Connector.
-	// RED GATE: stub Restart() dials nothing → connCount.Load() == 0 → FAIL.
-	// IMPL: Connector dials after ReloadAddrs → fixture accepts → connCount ≥ 1 → PASS.
 	if !waitForConnections(connCount) {
 		t.Errorf("TestE2E_EtoPEGraduationByConfigChange: upstream fixture received %d TCP connections after 3s; want ≥1 — Restart must trigger a real dial (VP-038 behavioral contract)", connCount.Load())
 	}

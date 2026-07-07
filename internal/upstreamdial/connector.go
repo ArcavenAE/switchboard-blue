@@ -183,9 +183,6 @@ func (c *Connector) reconcileLoop(initialAddrs []string) {
 	// Perform initial reconcile.
 	c.reconcile(running, initialAddrs)
 
-	keepaliveTicker := time.NewTicker(c.keepaliveInterval)
-	defer keepaliveTicker.Stop()
-
 	for {
 		select {
 		case <-c.stopCh:
@@ -199,12 +196,6 @@ func (c *Connector) reconcileLoop(initialAddrs []string) {
 
 		case newAddrs := <-c.addrsCh:
 			c.reconcile(running, newAddrs)
-
-		case <-keepaliveTicker.C:
-			// Keepalive tick: drives per-connection health probing.
-			// The actual probing is handled per-address in dialLoop.
-			// The ticker here drives the address goroutines' keepalive channel.
-			// (AC-003 PC-1/PC-2: ticker lives inside Connector.)
 		}
 	}
 }

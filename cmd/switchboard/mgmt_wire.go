@@ -350,22 +350,7 @@ func startMgmtServer(
 	return serveMgmtServer(ctx, wg, srv), nil
 }
 
-// peConnectorHook is the pending wiring seam for S-7.04-FU-PE-CONNECTOR.
-// When non-nil, runRouter will use this as the Connector constructor at
-// startup (construction-time seam).  nil in the current stub phase — the
-// dial loop is not yet called from runRouter so existing tests are unaffected.
-//
-// STUB — S-7.04-FU-PE-CONNECTOR: this var is the wiring anchor.
-// The implementer replaces this hook with a direct upstreamdial.New call
-// in runRouter once the tests are written (Red Gate phase complete).
-//
-// The compile-time check below ensures the package is linked and the
-// Handle interface surface is reachable before any test is written.
-var peConnectorHook func() upstreamdial.Handle //nolint:unused // Red Gate stub — wired once test-writer completes
-
 // Compile-time check: *upstreamdial.Connector satisfies Handle.
-// This forces the import to be resolved and keeps the build honest before
-// the first test for S-7.04-FU-PE-CONNECTOR is written.
 var _ upstreamdial.Handle = (*upstreamdial.Connector)(nil)
 
 // runRouter is the router-mode daemon entry point (S-BL.ROUTER-RUNTIME).
