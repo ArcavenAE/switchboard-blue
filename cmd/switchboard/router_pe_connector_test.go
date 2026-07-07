@@ -438,11 +438,22 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 	handle.SetConnector(fakeConnE)
 
 	// Force the mode field to ModePE to confirm the impl doesn't read it.
+	// Probe-and-close: allocate an ephemeral port then release it so the
+	// address is valid-format but not listening — avoids the port-collision
+	// hazard of hardcoding 127.0.0.1:9999 (F-P1-005).
+	unreachableLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("AC-006: probe unreachable addr: %v", err)
+	}
+	unreachableAddr := unreachableLn.Addr().String()
+	_ = unreachableLn.Close()
+
 	handle.Restart(t, testenv.RouterConfig{
-		UpstreamRouters: []string{"127.0.0.1:9999"},
+		UpstreamRouters: []string{unreachableAddr},
 	})
-	// After Restart with non-empty upstreams, stub sets r.mode=ModePE.
-	// But connector reports ModeE.
+	// After Restart with non-empty upstreams, r.mode=ModePE in the stub field.
+	// But connector reports ModeE via fakeConnE (Restart replaces the connector
+	// with a live-dialing one that cannot connect → ModeE).
 	if handle.Mode() != testenv.ModeE {
 		t.Errorf("TestRunRouter_PE_RouterHandleModeReflectsLiveState: handle.Mode() == %v after SetConnector(ModeE); want ModeE (AC-006 PC-4 — connector.Mode() must override r.mode)", handle.Mode())
 	}
