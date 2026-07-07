@@ -18,6 +18,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -101,6 +102,10 @@ type Connector struct {
 	// doneCh is closed when all internal goroutines have exited (Stop blocks on this).
 	doneCh chan struct{}
 
+	// stopOnce ensures Stop() is idempotent: only the first call closes stopCh.
+	// Subsequent callers still wait on doneCh.
+	stopOnce sync.Once
+
 	// initialAddrs is the address list from New, consumed by Start.
 	initialAddrs []string
 }
@@ -160,9 +165,15 @@ func (c *Connector) Mode() ConnMode {
 	return ModeE
 }
 
-// Stop cancels all dial goroutines and blocks until they exit.
+// Stop is idempotent and safe for concurrent callers.  The first call closes
+// stopCh, which cancels all internal goroutines; every caller (including
+// concurrent ones) then blocks on doneCh until shutdown completes.
+// Subsequent calls after the first are no-ops other than the doneCh wait,
+// which returns immediately once the goroutines have exited.
 func (c *Connector) Stop() {
-	close(c.stopCh)
+	c.stopOnce.Do(func() {
+		close(c.stopCh)
+	})
 	<-c.doneCh
 }
 

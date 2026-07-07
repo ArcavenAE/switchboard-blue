@@ -349,6 +349,47 @@ func TestClose_NoGoroutineLeak(t *testing.T) {
 	}
 }
 
+// TestRouterHandle_Restart_TwicePE verifies F-P2-001: a connector stopped by
+// Restart's oldConn.Stop() and then stopped again by the t.Cleanup registered
+// inside Restart must not panic.
+//
+// Reproduction shape (adversary pass-2, F-P2-001):
+//  1. StartRouter (E mode, no connector)
+//  2. Restart with PE config → conn1 started, t.Cleanup(conn1.Stop) registered
+//  3. Restart again with PE config → conn1.Stop() called (first Stop), conn2
+//     started, t.Cleanup(conn2.Stop) registered
+//  4. t.Cleanup fires: conn1.Stop() called again (second Stop) → panic without fix
+//
+// Failure condition (old code): close of closed channel panic.
+func TestRouterHandle_Restart_TwicePE(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	env := testenv.New(t, ctx)
+
+	peAddr := env.PERouterAddr(t)
+
+	r := env.StartRouter(t, testenv.RouterConfig{})
+	if r.Mode() != testenv.ModeE {
+		t.Fatalf("precondition: expected E mode after StartRouter; got %v", r.Mode())
+	}
+
+	// First Restart into PE mode: creates conn1, registers t.Cleanup(conn1.Stop).
+	r.Restart(t, testenv.RouterConfig{UpstreamRouters: []string{peAddr}})
+	if r.Mode() != testenv.ModePE {
+		t.Errorf("expected PE mode after first Restart; got %v", r.Mode())
+	}
+
+	// Second Restart into PE mode: calls conn1.Stop() (first), creates conn2,
+	// registers t.Cleanup(conn2.Stop).
+	r.Restart(t, testenv.RouterConfig{UpstreamRouters: []string{peAddr}})
+	if r.Mode() != testenv.ModePE {
+		t.Errorf("expected PE mode after second Restart; got %v", r.Mode())
+	}
+
+	// t.Cleanup will fire conn1.Stop() again and conn2.Stop() when this test
+	// returns.  Without the idempotent Stop fix, conn1.Stop() panics here.
+}
+
 // TestNewLoopback_Compiles verifies NewLoopback returns a usable LoopbackEnv.
 func TestNewLoopback_Compiles(t *testing.T) {
 	t.Parallel()

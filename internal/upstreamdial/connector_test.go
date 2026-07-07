@@ -620,6 +620,56 @@ func TestNextBackoff_FloorAtBase(t *testing.T) {
 	}
 }
 
+// ── F-P2-001: idempotent Stop ─────────────────────────────────────────────────
+
+// TestConnector_Stop_Idempotent verifies F-P2-001: Stop() is idempotent.
+// Calling Stop() twice sequentially, and once concurrently with another
+// goroutine, must not panic.  All callers must return (not block indefinitely).
+//
+// Failure condition (old code): the second close(stopCh) panics with
+// "close of closed channel".
+func TestConnector_Stop_Idempotent(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	ln, addr := newLoopbackListener(t)
+	defer func() { _ = ln.Close() }()
+
+	// Accept loop so the Connector can connect (not strictly required for Stop
+	// idempotency, but uses a reachable address to keep the goroutines live
+	// until the first Stop).
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	c := New(nil, zeroEnv(), 100*time.Millisecond, []string{addr})
+	c.Start()
+
+	// First Stop: nominal shutdown — must not panic.
+	c.Stop()
+
+	// Second Stop sequential: must not panic.
+	c.Stop()
+
+	// Third Stop concurrent: must not panic or block.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.Stop()
+	}()
+	select {
+	case <-done:
+		// pass
+	case <-time.After(2 * time.Second):
+		t.Error("TestConnector_Stop_Idempotent: concurrent Stop() blocked for >2s (F-P2-001)")
+	}
+}
+
 // TestNextBackoff_JitterBounds verifies the raw jitter formula: for 10 000 trials
 // at BackoffBase, every result stays within [BackoffBase*0.75, BackoffBase*2*1.25]
 // clamped to [BackoffBase, BackoffCap] (F-P1-004, Q5 ±25%%).
