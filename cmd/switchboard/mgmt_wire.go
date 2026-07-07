@@ -391,12 +391,15 @@ func startMgmtServer(
 //     eligibility (BC-2.09.001 PC-1). Live upstream connection establishment
 //     ships once the outer-header session-bootstrap protocol lands.
 //
-// #DEFERRED — SIGHUP config reload (BC-2.09.001 PC-1 Signal-of-graduation),
-// live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1), and the actual
-// PE-mode upstream connector still ship in a follow-on story once admission
-// plumbing and node-facing SVTN channels are wired. In this story the drain
-// coordinator seam and the three DEFERRED-APPLICATION closures are in place;
-// the wire protocol connects to them without further daemon-level refactor.
+// #SHIPPED — SIGHUP config reload (BC-2.09.001 PC-1 / S-7.04-FU-SIGHUP-RELOAD)
+// is implemented in the select loop below (~line 537).
+//
+// #DEFERRED — live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
+// S-7.04-FU-DRAIN-WIRE) and the actual PE-mode upstream connector
+// (S-7.04-FU-PE-CONNECTOR) still ship in a follow-on story once admission
+// plumbing and node-facing SVTN channels are wired. The drain coordinator
+// seam and the three DEFERRED-APPLICATION closures are in place; the wire
+// protocol connects to them without further daemon-level refactor.
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
