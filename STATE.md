@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-pe-connector-delivery
+phase_step: steady-state-pe-connector-adversarial
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -30,11 +30,12 @@ wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 950285c
+sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: implementer TDD green (14 red → green; VP-037 E2E skip stands per partial-discharge clause) → per-story adversarial convergence (Step 4.5, BC-5.39.001)
+awaiting: per-story adversarial convergence Step 4.5 (BC-5.39.001) — pass 1 dispatch
 historical_cycles: []
-timestamp: 2026-07-07T22:00:00Z
+timestamp: 2026-07-07T23:00:00Z
 last_update: 2026-07-07
 ---
 
@@ -60,11 +61,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-07 | **PE-CONNECTOR TDD GREEN @ cee8e8b — 8 commits, 14 red→green + VP-037 skip; adversarial cycle begins** | completed | Implementation complete d3bac4c → cee8e8b (8 signed commits); go test -race -count=1 ./... full green, 1 sanctioned skip (VP-037 partial-discharge); golangci-lint 0 issues. AC-006 SetSighupCh/SendReloadSignal seam fully retired; keepalive fence test untouched-green. Story synced v1.2 same-burst (paired-edit rule held: TestUpstreamRoutersAsSet FCL row added pre-adversary; AC-006 + testenv rows reconciled to shipped shape — 1 caller migrated off retired seam, 9 already inline; Q6 zero-valued-Envelope shipped-deferral note; VP-038 test emission-scan observable clarified). VP-038 locked TRUE (proof_completed_date 2026-07-07; evidence TestE2E_EtoPEGraduationByConfigChange + TestRunRouter_PE_RouterHandleModeReflectsLiveState live Mode() assertions at cee8e8b). VP-037 lock stays FALSE, PARTIAL DISCHARGE — scaffold TestE2E_RouterDrain_NodesMigrateWithin2s skips on DRAIN-WIRE dependency; full-discharge anchored S-7.04-FU-DRAIN-WIRE. One cross-lane evidence confabulation caught pre-commit (VP-038 criterion-d misattributed Mode() assertion to VP038 sighup test — corrected against code). Awaiting per-story adversarial convergence Step 4.5 (BC-5.39.001) — pass 1 dispatch. |
 | 2026-07-07 | **PE-CONNECTOR v1.1 READY — PO ready-review passed after remediation** | completed | PO returned D-1 (phantom BC-4.03 — same class as SIGHUP-cycle E-CFG-002; propagation: v0.1 stub → placement note → story; both docs errata'd) + D-2 (deferral class not-core unset → added not-core). Remediated; re-review passed. STORY-INDEX v4.06 → v4.07. Red Gate satisfied: stubs 9d184db + red suite d3bac4c (15 tests: 14 fail, 1 VP-037 skip). [process-gap] stub-era phantom BC citations survive elaboration — elaborating agents inherited BC-4.03 from the v0.1 stub without re-verifying against BC-INDEX; PO checklist item 1 is the current backstop. Candidate codification: elaboration dispatches must include "verify every inherited BC/VP ID against the index" instruction. |
 | 2026-07-07 | **PE-CONNECTOR elaborated v0.1→v1.0-draft** | completed | Architect placement note Q1-Q9 (decisions/S-7.04-FU-PE-CONNECTOR-placement-note.md; new pkg internal/upstreamdial ruled; DAG pos 19) + story-writer 6 ACs + 10-row FCL + FO-1..FO-5 consumption table. STORY-INDEX v4.05 → v4.06. Awaiting product-owner ready-review → draft-to-ready flip → per-story delivery begins. |
 | 2026-07-07 | **S-7.04-FU-SIGHUP-RELOAD MERGED PR #113 @ 950285c** | completed | Story complete end-to-end: squash-merged to develop @ 950285c (2026-07-07T15:54:42Z); all CI checks green; story branch + worktree .worktrees/s704-fu-sighup-reload cleaned up. BC-5.39.001 satisfied. STORY-INDEX v4.04 → v4.05. S-7.04-FU-PE-CONNECTOR unblocked. |
 | 2026-07-07 | **S-7.04-FU-SIGHUP-RELOAD DELIVERY v1.0 + demo evidence** | completed | DELIVERY doc v1.0 authored by story-writer (375 lines); demo evidence committed at bacc59b on branch story/s-7.04-fu-sighup-reload; branch pushed to origin; pr-manager dispatched. STORY-INDEX v4.03 → v4.04. Awaiting pr-manager 9-step flow → CI → merge → worktree cleanup. |
-| 2026-07-07 | **BC-5.39.001 SATISFIED** — P12/P13/P14 consecutive clean 3/3; 14 passes, 35 findings all dispositioned; code lane 48e3271 | completed | Pass 14: NO_FINDINGS @ 48e3271 / story v1.7 — CONVERGED. streak 2/3 → 3/3. 12 anti-findings incl. two novel probes both clean (EC-004 newline-injection via control-char-strip chain config.go:305-313/499; testenv lock/cleanup ordering under -race). 5 obs O1-O5 all carried/parked confirmations (inert-reload → DRIFT row; order-sensitive diff + upstreamRouters shared-state → PE-CONNECTOR 6th confirmations; line-number comments cosmetic; Cross-BC note accuracy confirmed). Novelty LOW. STREAK: 2/3 → 3/3. BC-5.39.001 SATISFIED. Adversary streak read (3/3) verified by orchestrator. convergence-summary.md written. STORY-INDEX v4.02 → v4.03. |
 
 ## Wave 6 Story Status
 
