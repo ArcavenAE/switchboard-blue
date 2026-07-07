@@ -98,8 +98,11 @@ func equalStringSlices(a, b []string) bool {
 // The returned map keys are addr strings; values are empty struct sentinels.
 // Pure function — no I/O, no side effects.
 func upstreamRoutersAsSet(addrs []string) map[string]struct{} {
-	// STUB — S-7.04-FU-PE-CONNECTOR
-	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+	out := make(map[string]struct{}, len(addrs))
+	for _, a := range addrs {
+		out[a] = struct{}{}
+	}
+	return out
 }
 
 // upstreamRoutersFor returns the configured upstream router addresses for
