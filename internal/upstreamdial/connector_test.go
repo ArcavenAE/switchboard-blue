@@ -437,3 +437,134 @@ func TestConnector_ReloadAddrs_AddsAndRemoves(t *testing.T) {
 		t.Errorf("TestConnector_ReloadAddrs_AddsAndRemoves: Mode() != ModePE after adding addr2 (AC-001 PC-6)")
 	}
 }
+
+// ── nextBackoff pure-function schedule tests ────────────────────────────────
+
+// TestNextBackoff_DoublingWithinJitterBand verifies that nextBackoff doubles the
+// current value within the ±25% jitter band (F-P1-004, Q5 normative, AC-002).
+// Runs 1000 trials per base value to cover the jitter distribution.
+func TestNextBackoff_DoublingWithinJitterBand(t *testing.T) {
+	t.Parallel()
+
+	bases := []time.Duration{
+		BackoffBase,
+		BackoffBase * 2,
+		BackoffBase * 4,
+		500 * time.Millisecond,
+		1 * time.Second,
+		5 * time.Second,
+	}
+
+	for _, base := range bases {
+		base := base
+		t.Run(base.String(), func(t *testing.T) {
+			t.Parallel()
+			doubled := base * 2
+			if doubled > BackoffCap {
+				doubled = BackoffCap
+			}
+			lo := time.Duration(float64(doubled) * (1 - BackoffJitterFraction))
+			hi := time.Duration(float64(doubled) * (1 + BackoffJitterFraction))
+			// Floor at BackoffBase.
+			if lo < BackoffBase {
+				lo = BackoffBase
+			}
+			// Cap at BackoffCap.
+			if hi > BackoffCap {
+				hi = BackoffCap
+			}
+
+			for i := 0; i < 1000; i++ {
+				got := nextBackoff(base)
+				if got < lo || got > hi {
+					t.Errorf("trial %d: nextBackoff(%v) = %v; want [%v, %v] (doubling ±25%% jitter, Q5)", i, base, got, lo, hi)
+					break
+				}
+			}
+		})
+	}
+}
+
+// TestNextBackoff_CapClamp verifies that nextBackoff clamps at BackoffCap even
+// when the doubled value would exceed it (F-P1-004, Q5 normative, AC-002).
+func TestNextBackoff_CapClamp(t *testing.T) {
+	t.Parallel()
+
+	// Inputs whose double exceeds BackoffCap.
+	overCaps := []time.Duration{
+		BackoffCap,
+		BackoffCap - 1,
+		BackoffCap / 2 * 3, // 1.5×cap → doubled = 3×cap
+		BackoffCap * 10,
+	}
+
+	for _, input := range overCaps {
+		input := input
+		t.Run(input.String(), func(t *testing.T) {
+			t.Parallel()
+			for i := 0; i < 200; i++ {
+				got := nextBackoff(input)
+				if got > BackoffCap {
+					t.Errorf("trial %d: nextBackoff(%v) = %v; exceeds BackoffCap %v (Q5 cap clamp)", i, input, got, BackoffCap)
+					break
+				}
+			}
+		})
+	}
+}
+
+// TestNextBackoff_FloorAtBase verifies that nextBackoff never returns a value
+// below BackoffBase, even when jitter would push a small input below it
+// (F-P1-004, Q5 normative, AC-002).
+func TestNextBackoff_FloorAtBase(t *testing.T) {
+	t.Parallel()
+
+	// The only input where jitter can push below BackoffBase is BackoffBase itself
+	// (doubled = 1s, lo = 0.75s > BackoffBase, so actually fine — the floor guards
+	// against future constant changes).  Test a sub-base input to confirm the floor.
+	subBases := []time.Duration{
+		1 * time.Millisecond,
+		10 * time.Millisecond,
+		100 * time.Millisecond,
+		BackoffBase / 4,
+	}
+
+	for _, input := range subBases {
+		input := input
+		t.Run(input.String(), func(t *testing.T) {
+			t.Parallel()
+			for i := 0; i < 200; i++ {
+				got := nextBackoff(input)
+				if got < BackoffBase {
+					t.Errorf("trial %d: nextBackoff(%v) = %v; below BackoffBase %v (Q5 floor)", i, input, got, BackoffBase)
+					break
+				}
+			}
+		})
+	}
+}
+
+// TestNextBackoff_JitterBounds verifies the raw jitter formula: for 10 000 trials
+// at BackoffBase, every result stays within [BackoffBase*0.75, BackoffBase*2*1.25]
+// clamped to [BackoffBase, BackoffCap] (F-P1-004, Q5 ±25%%).
+func TestNextBackoff_JitterBounds(t *testing.T) {
+	t.Parallel()
+
+	doubled := BackoffBase * 2
+	lo := time.Duration(float64(doubled) * (1 - BackoffJitterFraction))
+	hi := time.Duration(float64(doubled) * (1 + BackoffJitterFraction))
+	if lo < BackoffBase {
+		lo = BackoffBase
+	}
+	if hi > BackoffCap {
+		hi = BackoffCap
+	}
+
+	for i := 0; i < 10_000; i++ {
+		got := nextBackoff(BackoffBase)
+		if got < lo || got > hi {
+			t.Errorf("trial %d: nextBackoff(BackoffBase) = %v; outside [%v, %v] (F-P1-004)", i, got, lo, hi)
+			return
+		}
+	}
+}
