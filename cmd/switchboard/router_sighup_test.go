@@ -344,6 +344,16 @@ func TestRunRouter_SIGHUPReload_BadConfig_FailClosed(t *testing.T) {
 		t.Fatalf("AC-002 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
 	}
 
+	// F-P5-002: AC-002 PC-6 — establish a live TCP connection to the ingress
+	// listener BEFORE the bad reload fires.  After the fail-closed reload, the
+	// connection must still be open (symmetric with AC-003 which probes the
+	// successful reload path).
+	ingressConn, dialErr := net.Dial("tcp", dataAddr)
+	if dialErr != nil {
+		t.Fatalf("AC-002/F-P5-002: dial ingress listener before SIGHUP: %v", dialErr)
+	}
+	t.Cleanup(func() { _ = ingressConn.Close() })
+
 	// F-006: capture cfg.UpstreamRouters (deep copy) before SIGHUP so we can
 	// assert the original cfg pointer is not mutated by a fail-closed reload.
 	origUpstreams := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
@@ -398,6 +408,39 @@ func TestRunRouter_SIGHUPReload_BadConfig_FailClosed(t *testing.T) {
 	if modeLines > 1 {
 		t.Errorf("AC-002: found %d mode= lines after bad-config SIGHUP; expected 1 (no state change); output:\n%s",
 			modeLines, buf.String())
+	}
+
+	// F-P5-002: AC-002 PC-6 — ingress listener and mgmt server remain serving
+	// after a failed reload.  These probes are symmetric with AC-003's
+	// postcondition 1 + F-P4-004 assertions on the successful reload path.
+
+	// PC-6 probe 1: the accepted TCP connection must still be open after the
+	// fail-closed reload.  A read-with-deadline timeout (no data) means the
+	// connection is alive; EOF / connection-reset means the daemon closed it.
+	_ = ingressConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	oneByte := make([]byte, 1)
+	_, readErr := ingressConn.Read(oneByte)
+	if readErr != nil {
+		var netErr net.Error
+		if ok := isNetError(readErr, &netErr); ok && netErr.Timeout() {
+			// Deadline timeout — connection still open; daemon did not close it.
+		} else {
+			// EOF or connection-reset — daemon incorrectly closed the connection
+			// during a fail-closed reload (AC-002 PC-6 violation).
+			t.Errorf("AC-002/F-P5-002: TCP ingress connection closed by daemon during fail-closed reload — read error: %v", readErr)
+		}
+	}
+
+	// PC-6 probe 2: management server must still be reachable after the failed
+	// reload.  Dial the mgmt socket and assert a well-formed challenge arrives.
+	challenge, mgmtErr := dialMgmtAndReadChallenge(t, sockPath)
+	if mgmtErr != nil {
+		t.Errorf("AC-002/F-P5-002: mgmt socket not serving after fail-closed reload — %v", mgmtErr)
+	} else {
+		if challenge["type"] != "challenge" {
+			t.Errorf("AC-002/F-P5-002: post-fail-reload mgmt response type = %v; want %q",
+				challenge["type"], "challenge")
+		}
 	}
 
 	// Postcondition 5: daemon has not returned.
