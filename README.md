@@ -50,14 +50,18 @@ and published to the shared arcaven tap as `switchboard-a`:
 ```bash
 brew tap ArcavenAE/tap
 brew install ArcavenAE/tap/switchboard-a
+brew install ArcavenAE/tap/sbctl-a
 switchboard-a --version
+sbctl-a --version
 ```
 
-The binary is installed as `switchboard-a` so it does not collide with the
-canonical `switchboard` formula on the same tap. Substitute `switchboard-a`
-for `switchboard` in the commands throughout [docs/getting-started.md](docs/getting-started.md)
-and [docs/sbctl.md](docs/sbctl.md) if you install this way. (The `sbctl` operator CLI is not yet
-published — see the source build below.)
+Both binaries are installed under the `-a` suffix (`switchboard-a`, `sbctl-a`) so they do
+not collide with the canonical formula slots on the same tap. Substitute `switchboard-a`
+for `switchboard` and `sbctl-a` for `sbctl` in the commands throughout
+[docs/getting-started.md](docs/getting-started.md) and [docs/sbctl.md](docs/sbctl.md) if
+you install this way. If `brew install ArcavenAE/tap/sbctl-a` reports "No available formula",
+run `brew update` to refresh the tap — `sbctl-a` is published alongside `switchboard-a` on
+every `develop` push.
 
 > `switchboard-blue` is the legion / spike clone of the canonical
 > `ArcavenAE/switchboard` project. The `-a` suffix marks the alpha
