@@ -310,10 +310,17 @@ func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
 // Required by: VP-038, AC-004.
 func (r *RouterHandle) SendReloadSignal(t testing.TB) {
 	t.Helper()
-	if r.sighupCh == nil {
+	// Read sighupCh under the lock to avoid a data race with SetSighupCh
+	// (F-P2-005: sighupCh field is guarded by r.mu like all other fields).
+	// The channel send MUST happen outside the lock to prevent deadlock
+	// if the receiver goroutine is also trying to acquire r.mu.
+	r.mu.RLock()
+	ch := r.sighupCh
+	r.mu.RUnlock()
+	if ch == nil {
 		t.Fatal("RouterHandle.SendReloadSignal: sighupCh is nil — handle was not constructed with the AC-004 reload seam")
 	}
-	r.sighupCh <- syscall.SIGHUP
+	ch <- syscall.SIGHUP
 }
 
 // LoopbackConfig configures a NewLoopback environment (VP-042 / S-BL.BENCH).
