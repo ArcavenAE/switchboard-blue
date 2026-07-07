@@ -21,8 +21,11 @@ graph LR
 
 Unlike examples 01–03 there is no unix-socket volume: console
 management sockets are **loopback TCP only** (`E-CFG-008`), so the
-operator joins the console's namespace — like a second terminal on the
-operator's laptop.
+operator container joins the console's namespace. Read the pair of
+services as **one operator laptop**: in a real deployment the console
+daemon and sbctl run on the same machine — the console is the
+operator's window into remote sessions, sbctl is the operator's
+control of it.
 
 ## Transaction under test
 

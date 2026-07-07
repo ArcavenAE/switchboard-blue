@@ -75,6 +75,15 @@ Two compose services exist only to make the examples self-running:
   keys, exactly as your laptop would. When a README says "the operator
   asserts…", read it as "a person at a terminal runs sbctl and checks…".
 
+  In a real deployment the operator's machine typically runs **both**
+  `sbctl` and the **console daemon** — that's the getting-started
+  layout: the laptop hosts the console, and the human attaches to
+  remote sessions through it. The examples split console and operator
+  into separate compose services so the console gets its own lifecycle
+  and healthcheck; where the two must share loopback (example 04), the
+  operator container joins the console's network namespace — the pair
+  of services together models one operator laptop.
+
 ## The ladder
 
 | Example | Topology | Proves |
