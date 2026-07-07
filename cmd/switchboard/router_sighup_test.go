@@ -16,7 +16,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -90,7 +89,7 @@ func startRunRouterForReload(t *testing.T, cfg *config.Config, cfgPath string) (
 
 // scanForLine polls buf until a line containing substr appears or the deadline
 // elapses.  Returns true if found.
-func scanForLine(buf *syncBuffer, substr string, budget time.Duration) bool {
+func scanForLine(buf *syncBuffer, substr string, budget time.Duration) bool { //nolint:unparam // budget is a caller-controlled knob; all current callers use 2s but the parameter is intentional
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
 		if strings.Contains(buf.String(), substr) {
@@ -417,6 +416,4 @@ func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 	default:
 		// expected — still running
 	}
-
-	_ = fmt.Sprintf("") // keep fmt import used
 }

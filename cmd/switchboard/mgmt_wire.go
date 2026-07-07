@@ -535,8 +535,35 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			// Context cancelled — fall through to graceful shutdown below.
 			goto shutdown
 		case <-sighupCh:
-			// TODO: S-7.04-FU-SIGHUP-RELOAD reload dispatch
-			// Stub: sighupCh case accepted but reload not yet implemented.
+			// Fail-closed reload (BC-2.09.003 EC-004 / BC-2.09.001 PC-1).
+			// Empty configPath means no config file was provided; skip silently.
+			if configPath == "" {
+				continue
+			}
+			loaded, loadErr := config.LoadFile(configPath)
+			if loadErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "config reload failed: %s; continuing with previous config\n", loadErr)
+				}
+				continue
+			}
+			if valErr := loaded.Validate(); valErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "config reload failed: %s; continuing with previous config\n", valErr)
+				}
+				continue
+			}
+			newUpstreams := upstreamRoutersFor(loaded)
+			if !equalStringSlices(upstreamRouters, newUpstreams) {
+				upstreamRouters = newUpstreams
+				if w != nil {
+					if len(upstreamRouters) > 0 {
+						_, _ = fmt.Fprintf(w, "switchboard router: mode=PE upstream_routers=%v\n", upstreamRouters)
+					} else {
+						_, _ = fmt.Fprintf(w, "switchboard router: mode=E (no upstream_routers configured)\n")
+					}
+				}
+			}
 		}
 	}
 shutdown:
