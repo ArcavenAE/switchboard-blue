@@ -105,14 +105,15 @@ func scanForLine(buf *syncBuffer, substr string, budget time.Duration) bool { //
 //
 //	config reload failed: <err>; continuing with previous config
 //
-// where <err> is non-empty and contains "E-CFG-001" (the inner validation
-// error code from config.Validate).  The check is line-scoped so that prefix
-// and suffix must appear on the same output line (AC-002 format contract).
+// where <err> is non-empty and contains innerMarker (the error code that must
+// appear inside the EC-004 wrapper, e.g. "E-CFG-001" for Validate errors,
+// "E-CFG-004" for LoadFile not-found, "E-CFG-005" for parse errors).
+// The check is line-scoped so that prefix and suffix must appear on the same
+// output line (AC-002 format contract).
 // Returns true if such a line is found within budget.
-func scanForReloadFailedLine(buf *syncBuffer, budget time.Duration) bool {
+func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Duration) bool {
 	const prefix = "config reload failed: "
 	const suffix = "; continuing with previous config"
-	const innerMarker = "E-CFG-001"
 	check := func() bool {
 		scanner := bufio.NewScanner(bytes.NewBufferString(buf.String()))
 		for scanner.Scan() {
@@ -187,6 +188,13 @@ func TestRunRouter_SIGHUPReload_EtoPE(t *testing.T) {
 		t.Fatalf("AC-001 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
 	}
 
+	// F-P2-003: deep-copy of cfg.UpstreamRouters before SIGHUP so we can
+	// assert the original cfg pointer is not mutated on a SUCCESSFUL reload
+	// (AC-001 postcondition 6 — cfg is not mutated; only the upstreamRouters
+	// local variable inside runRouter changes).
+	origUpstreams := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreams, startCfg.UpstreamRouters)
+
 	// Send reload signal.
 	sighupCh <- syscall.SIGHUP
 
@@ -196,6 +204,21 @@ func TestRunRouter_SIGHUPReload_EtoPE(t *testing.T) {
 	}
 	if !scanForLine(buf, reloadAddr, 2*time.Second) {
 		t.Errorf("AC-001: after SIGHUP, output missing upstream addr %q; got:\n%s", reloadAddr, buf.String())
+	}
+
+	// F-P2-003: cfg pointer must not be mutated by a successful reload.
+	// The reload path operates on the fresh 'loaded' struct; cfg (the
+	// startup-time parameter) must remain unchanged throughout (AC-001 PC-6).
+	if len(startCfg.UpstreamRouters) != len(origUpstreams) {
+		t.Errorf("AC-001/F-P2-003: cfg.UpstreamRouters length mutated on successful reload: before=%d after=%d",
+			len(origUpstreams), len(startCfg.UpstreamRouters))
+	} else {
+		for i, want := range origUpstreams {
+			if startCfg.UpstreamRouters[i] != want {
+				t.Errorf("AC-001/F-P2-003: cfg.UpstreamRouters[%d] mutated on successful reload: before=%v after=%v",
+					i, want, startCfg.UpstreamRouters[i])
+			}
+		}
 	}
 
 	// Postcondition 7: daemon has not returned.
@@ -262,7 +285,7 @@ func TestRunRouter_SIGHUPReload_BadConfig_FailClosed(t *testing.T) {
 	}
 	// Verify verbatim format: one line contains BOTH the prefix, E-CFG-001,
 	// and the suffix — guaranteeing they are on the same output line.
-	if !scanForReloadFailedLine(buf, 100*time.Millisecond) {
+	if !scanForReloadFailedLine(buf, "E-CFG-001", 100*time.Millisecond) {
 		t.Errorf("AC-002: no single output line matches 'config reload failed: <E-CFG-001 err>; continuing with previous config'; got:\n%s",
 			buf.String())
 	}
@@ -303,6 +326,173 @@ func TestRunRouter_SIGHUPReload_BadConfig_FailClosed(t *testing.T) {
 	select {
 	case rErr := <-errCh:
 		t.Errorf("AC-002: runRouter returned prematurely after bad-config SIGHUP: %v", rErr)
+	default:
+		// expected — still running
+	}
+}
+
+// TestRunRouter_SIGHUPReload_LoadFileNotFound verifies the LoadFile error arm of
+// the fail-closed reload path (F-P2-001 / BC-2.09.003 EC-004): when the config
+// file is deleted between daemon startup and SIGHUP, LoadFile returns E-CFG-004,
+// the daemon emits the EC-004 reload-failed log line with E-CFG-004 inside it,
+// and continues running on the previous config.
+func TestRunRouter_SIGHUPReload_LoadFileNotFound(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+
+	startCfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Write a valid config, start the daemon, then DELETE the file to simulate
+	// the operator removing it between startup and a SIGHUP.
+	cfgPath := writeTempConfig(t, startCfg)
+
+	buf, errCh, cancel, sighupCh := startRunRouterForReload(t, startCfg, cfgPath)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Precondition: startup in E mode.
+	if !scanForLine(buf, "mode=E", 2*time.Second) {
+		t.Fatalf("LoadFileNotFound precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
+	}
+
+	// Delete the config file so LoadFile will return E-CFG-004 on reload.
+	if err := os.Remove(cfgPath); err != nil {
+		t.Fatalf("LoadFileNotFound: remove config file: %v", err)
+	}
+
+	// Deep-copy cfg before SIGHUP to assert it is not mutated on this error path.
+	origUpstreams := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreams, startCfg.UpstreamRouters)
+
+	sighupCh <- syscall.SIGHUP
+
+	// EC-004 log line must appear with E-CFG-004 inside it.
+	if !scanForLine(buf, "config reload failed: ", 2*time.Second) {
+		t.Fatalf("LoadFileNotFound: after SIGHUP, output missing reload-failed prefix within 2s; got:\n%s", buf.String())
+	}
+	if !scanForReloadFailedLine(buf, "E-CFG-004", 100*time.Millisecond) {
+		t.Errorf("LoadFileNotFound: no single output line matches 'config reload failed: <E-CFG-004 err>; continuing with previous config'; got:\n%s",
+			buf.String())
+	}
+
+	// cfg pointer must not be mutated on the LoadFile error path.
+	if len(startCfg.UpstreamRouters) != len(origUpstreams) {
+		t.Errorf("LoadFileNotFound: cfg.UpstreamRouters length mutated: before=%d after=%d",
+			len(origUpstreams), len(startCfg.UpstreamRouters))
+	}
+
+	// No mode change: only the initial mode=E line should be present.
+	scanner := bufio.NewScanner(bytes.NewBufferString(buf.String()))
+	modeLines := 0
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "mode=") {
+			modeLines++
+		}
+	}
+	if modeLines > 1 {
+		t.Errorf("LoadFileNotFound: found %d mode= lines; expected 1 (no state change); output:\n%s",
+			modeLines, buf.String())
+	}
+
+	// Daemon has not returned.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("LoadFileNotFound: runRouter returned prematurely after not-found SIGHUP: %v", rErr)
+	default:
+		// expected — still running
+	}
+}
+
+// TestRunRouter_SIGHUPReload_MalformedYAML verifies the LoadFile parse-error arm
+// of the fail-closed reload path (F-P2-001 / BC-2.09.003 EC-004): when the config
+// file is replaced with malformed YAML, LoadFile returns E-CFG-005, the daemon
+// emits the EC-004 reload-failed log line with E-CFG-005 inside it, and continues
+// running on the previous config.
+func TestRunRouter_SIGHUPReload_MalformedYAML(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+
+	startCfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Write a valid config first so the daemon starts cleanly, then overwrite
+	// it with malformed YAML before the reload fires.
+	cfgPath := writeTempConfig(t, startCfg)
+
+	buf, errCh, cancel, sighupCh := startRunRouterForReload(t, startCfg, cfgPath)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Precondition: startup in E mode.
+	if !scanForLine(buf, "mode=E", 2*time.Second) {
+		t.Fatalf("MalformedYAML precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
+	}
+
+	// Replace the config file with unparseable YAML content.
+	malformed := []byte(":\t:\t:\n  this is: [not valid yaml\n")
+	if err := os.WriteFile(cfgPath, malformed, 0o600); err != nil {
+		t.Fatalf("MalformedYAML: write malformed config: %v", err)
+	}
+
+	// Deep-copy cfg before SIGHUP to assert it is not mutated on this error path.
+	origUpstreams := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreams, startCfg.UpstreamRouters)
+
+	sighupCh <- syscall.SIGHUP
+
+	// EC-004 log line must appear with E-CFG-005 inside it.
+	if !scanForLine(buf, "config reload failed: ", 2*time.Second) {
+		t.Fatalf("MalformedYAML: after SIGHUP, output missing reload-failed prefix within 2s; got:\n%s", buf.String())
+	}
+	if !scanForReloadFailedLine(buf, "E-CFG-005", 100*time.Millisecond) {
+		t.Errorf("MalformedYAML: no single output line matches 'config reload failed: <E-CFG-005 err>; continuing with previous config'; got:\n%s",
+			buf.String())
+	}
+
+	// cfg pointer must not be mutated on the parse-error path.
+	if len(startCfg.UpstreamRouters) != len(origUpstreams) {
+		t.Errorf("MalformedYAML: cfg.UpstreamRouters length mutated: before=%d after=%d",
+			len(origUpstreams), len(startCfg.UpstreamRouters))
+	}
+
+	// No mode change: only the initial mode=E line should be present.
+	scanner := bufio.NewScanner(bytes.NewBufferString(buf.String()))
+	modeLines := 0
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "mode=") {
+			modeLines++
+		}
+	}
+	if modeLines > 1 {
+		t.Errorf("MalformedYAML: found %d mode= lines; expected 1 (no state change); output:\n%s",
+			modeLines, buf.String())
+	}
+
+	// Daemon has not returned.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("MalformedYAML: runRouter returned prematurely after malformed-YAML SIGHUP: %v", rErr)
 	default:
 		// expected — still running
 	}
@@ -370,19 +560,25 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 	}
 
 	// Postcondition 1: the open TCP connection must not have been closed by
-	// the reload path.  Attempt a write; if the daemon closed its side the
-	// write or the subsequent read would fail.
-	_ = conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
-	_, writeErr := conn.Write([]byte{0x00})
-	// A closed connection produces a write error; a live connection either
-	// accepts the byte or returns a timeout (which is also a live signal).
-	if writeErr != nil {
-		// Distinguish timeout (expected-live) from connection-reset (broken).
+	// the reload path.
+	//
+	// F-P2-002 divergence from story outline: the story's AC-003 outline
+	// suggests "write a byte" as the liveness probe, but a write to a FIN'd
+	// socket typically succeeds into the send buffer — the kernel reports the
+	// RST only on the NEXT write or on a read.  A read-with-deadline is
+	// strictly stronger: EOF or connection-reset on a read means the daemon
+	// closed its side (FAIL); a read deadline timeout means the socket is
+	// still open (PASS).  See ## Ruling Divergence in DELIVERY doc.
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	oneByte := make([]byte, 1)
+	_, readErr := conn.Read(oneByte)
+	if readErr != nil {
 		var netErr net.Error
-		if ok := isNetError(writeErr, &netErr); ok && netErr.Timeout() {
-			// Timeout is acceptable — daemon is live but we have no protocol to echo.
+		if ok := isNetError(readErr, &netErr); ok && netErr.Timeout() {
+			// Deadline timeout — connection is still open; daemon did not close it.
 		} else {
-			t.Errorf("AC-003: TCP connection closed by daemon during reload — write error: %v", writeErr)
+			// EOF or connection-reset — daemon closed its side during reload.
+			t.Errorf("AC-003: TCP connection closed by daemon during reload — read error: %v", readErr)
 		}
 	}
 }
