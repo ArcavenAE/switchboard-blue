@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-sighup-reload-elaborated
+phase_step: steady-state-sighup-reload-adversarial-cycle
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -29,12 +29,12 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 62e38d3
+develop_head: c356386
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: S-7.04-FU-SIGHUP-RELOAD per-story TDD delivery dispatch (ready v1.0; 3 pts; steady-state)
+awaiting: adversary pass 4 (target 3/3 clean streak; code lane 8a40a0a; story v1.2)
 historical_cycles: []
-timestamp: 2026-07-06T21:00:00Z
+timestamp: 2026-07-06T23:00:00Z
 last_update: 2026-07-06
 ---
 
@@ -60,9 +60,8 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-06 | steady-state-sighup-reload-adversarial-passes-1-3 | completed | PR #111 merged c356386 (README sbctl-a published fix — investigation: formula live on tap since task #163, stale-tap brew-update failure mode documented). Adversarial passes 1-3 concluded HAS_FINDINGS → remediated: 22 findings total (P1: 12, P2: 5, P3: 5), all dispositioned; code lane @ 8a40a0a (9 commits, not pushed); story v1.2 (AC-004 PC-2 emission-based observable; changelog rows 1.1/1.2 added). Two new drift rows: DRIFT-SIGHUP-MODE-ASYMMETRY (LOW) + DRIFT-SIGHUP-INERT-RELOAD-UX (LOW). STORY-INDEX v3.91 → v3.92. Awaiting pass 4. |
 | 2026-07-06 | steady-state-sighup-reload-elaboration | completed | Burst (PO+architect parallel → story-writer+spec-steward parallel → state-manager): S-7.04-FU-SIGHUP-RELOAD ready v1.0 (4 ACs, 3 pts, steady-state, BC-2.09.001 PC-1 + BC-2.09.003 EC-004 + VP-038); S-6.04 closed-subsumed (decisions/S-6.04-disposition-ruling.md); BC-2.09.003 v1.9 → v2.0 VP-table governance narrowing; STORY-INDEX v3.90 → v3.91 (total 61 → 60; draft-stubs 1 → 0); BC-INDEX v3.1 → v3.2 |
-| 2026-07-04 | burst-88-state-manager | completed | Burst 88 (state-manager) — STORY-INDEX v3.79→v3.80 POL-002 row-sync: S-6.07 row updated to v1.14 / 2026-07-04 (deferred from Burst 87); DRIFT-P5P36-PHANTOM-ERPC-004 (HIGH) CLOSED; DRIFT-P5P36-RULING-11-12-AUTHORSHIP-PREMISE-SIBLINGS (MED) CLOSED; streak 0/3 (Pass 37 dispatches next as restart attempt); aggregate totals unchanged 54/185/45/77 |
-| 2026-07-04 | phase-5-pass-37-concluded-clean-both-lanes | completed | Adv-A NO_FINDINGS + 1 obs (O-P5P37-A-001 combined-footnote structural coupling — upstream-filing candidate); Adv-B NO_FINDINGS + 2 obs (O-P5P37-B-001 convergent with Adv-A; O-P5P37-B-002 self-adjudicated) + 12 anti-findings; streak advances 0/3 → 1/3. |
 | 2026-07-04 | phase-5-pass-38-concluded-clean-both-lanes | completed | Adv-A NO_FINDINGS + 1 obs (O-P5P38-A-001, persistence re-confirmation of P37 combined-footnote); Adv-B NO_FINDINGS + 1 obs (O-P5P38-B-001 state-only-burst witness) + 15 anti-findings; streak advances 1/3 → 2/3. |
 | 2026-07-04 | phase-5-CONVERGED-bc-5.39.001-satisfied | completed | **BC-5.39.001 SATISFIED** — Pass 39 BOTH LANES NO_FINDINGS; streak 2/3 → 3/3. Sidecars: `P5-pass-39-Adv-A.md` (9 AF, 1 obs O-P5P39-A-001) + `P5-pass-39-Adv-B.md` (16 AF, 2 obs O-P5P39-B-001/002). Three consecutive clean passes P37→P38→P39. Twelve-pass Adv-B clean-streak (P28→P39). Phase 5 exits → Phase 6 (formal hardening). |
 
@@ -85,6 +84,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
+| DRIFT-SIGHUP-MODE-ASYMMETRY | LOW | kill -HUP reloads router but terminates access/console/control modes (default Go SIGHUP behavior); only the router case handles SIGHUP explicitly — other daemon modes receive OS default SIGHUP action (process termination). Anchor: S-BL.CLI-SURFACE-COMPLETION. | architect/implementer | open |
+| DRIFT-SIGHUP-INERT-RELOAD-UX | LOW | Valid SIGHUP config reload that changes only non-upstream fields (drain_timeout, keepalive_interval, etc.) is silently inert — operator receives no feedback that reload processed but no mode change occurred. Anchor: S-BL.CLI-SURFACE-COMPLETION. | product-owner | open |
 | W3-R2-M2 | MED | CLOSED 2026-07-05 — BENIGN-ADJUDICATED via PR #93 (a55be96): two-lookup interleaving defensible under ADR-003 LWW; FrameAuthKey value-copied before RUnlock (no torn key); verify-then-lookup preserved per ADR-009 v1.6. Witness tests `lww_concurrent_test.go` (race-provoking + no-forgery) are the durable audit trail; RegisterForwardingEntry doc comment carries the contract. | architect/implementer | CLOSED (adjudicated-accepted) |
 | SW305-M4 | MED | CLOSED 2026-07-05 — PR #93 (a55be96): `routing_hmac_fire_once_test.go` wires real FailureCounter + WithNow through RouteFrame; pins fire-once-at-crossing, no-refire-in-window (EC-011), drain-only re-arm (PC-3). | test-writer | CLOSED |
 | process-gap-follow-up | OBS | Adversary nil-safety lens gap (missed SEC-001). ADJUDICATED at phase-7 census (SOFT-GAP-2): remediated in-cycle (PR #16) + codified as lessons.md Policy Candidate 1 — no story stub needed; disposition (a)-equivalent via lessons codification. | orchestrator | closed — covered by lessons PC-1 |
