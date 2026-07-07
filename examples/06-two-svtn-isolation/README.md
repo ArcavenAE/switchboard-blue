@@ -5,21 +5,61 @@ operator keys**. The claim under test: *team A cannot operate team B's
 infrastructure, and vice versa* — while both share the same transport
 plane.
 
+## Topology
+
+```mermaid
+graph TB
+    R["router — shared transport plane<br/>authorized: team-a AND team-b keys"]
+    subgraph ta["team a (key: team-a only)"]
+        A1["node-a1<br/>tmux: top"]
+        A2["node-a2<br/>tmux: watch date"]
+    end
+    subgraph tb["team b (key: team-b only)"]
+        B1["node-b1<br/>tmux: htop"]
+        B2["node-b2<br/>tmux: vmstat 1"]
+    end
+    D["operator (sbctl)<br/>holds BOTH keys, plays both roles"]
+    D -- "team-a key ✓" --> A1 & A2
+    D -- "team-b key ✓" --> B1 & B2
+    D -- "either key ✓" --> R
+    D -. "team-a key on b* → E-ADM-010<br/>team-b key on a* → E-ADM-010" .-> R
 ```
-            ┌────────┐
-            │ router │   ← both team keys authorized (shared transport)
-            └────────┘
-   team a                 team b
-  ┌───────┐ ┌───────┐   ┌───────┐ ┌───────┐
-  │node-a1│ │node-a2│   │node-b1│ │node-b2│
-  │  top  │ │ watch │   │ htop  │ │vmstat │
-  └───────┘ └───────┘   └───────┘ └───────┘
-   key: team-a only      key: team-b only
+
+## Transaction under test — the isolation matrix
+
+```mermaid
+sequenceDiagram
+    participant D as operator (sbctl)
+    participant R as router
+    participant A as node-a1 / node-a2
+    participant B as node-b1 / node-b2
+
+    Note over D,R: shared transport — both teams authorized on the router
+    D->>R: paths.list (team-a.key)
+    R-->>D: ok (exit 0)
+    D->>R: paths.list (team-b.key)
+    R-->>D: ok (exit 0)
+
+    Note over D,B: own-team operation succeeds
+    D->>A: paths.list (team-a.key)
+    A-->>D: ok (exit 0)
+    D->>B: paths.list (team-b.key)
+    B-->>D: ok (exit 0)
+
+    Note over D,B: cross-team operation is REFUSED — same command, other key
+    D->>B: paths.list (team-a.key)
+    B-->>D: E-ADM-010 authentication failed (exit 1)
+    D->>A: paths.list (team-b.key)
+    A-->>D: E-ADM-010 authentication failed (exit 1)
+
+    Note over D,R: TARGET (gated) — SVTN-level isolation on the shared router
+    D->>R: admin.svtn.create --name=team-a / team-b ⊘ GATE-PENDING
+    D->>R: sessions.list --svtn=team-b (team-a.key) ⊘ GATE-PENDING<br/>target: E-ADM-006 cross-SVTN denial
 ```
 
 ## What it proves today — the isolation matrix
 
-The driver runs the *same command* against all four nodes with both
+The operator runs the *same command* against all four nodes with both
 keys. Own-team calls succeed; cross-team calls are refused with
 `E-ADM-010 authentication failed` — a hard, taxonomy-coded denial at the
 Ed25519 challenge-response layer, not an unadvertised absence. The
@@ -43,13 +83,13 @@ acceptance test for multi-tenancy on a shared router.
 
 ```bash
 cd examples/06-two-svtn-isolation
-docker compose up --build --exit-code-from driver
+docker compose up --build --exit-code-from operator
 docker compose down -v
 ```
 
 ## Things to try
 
-- **Be team A for a while:** `docker compose run --rm driver bash`, then
+- **Be team A for a while:** `docker compose run --rm operator bash`, then
   walk the matrix by hand: `sbctl --target=/run/switchboard/b1.sock
   --key=/keys/team-a.key paths list` — watch the denial; swap the key
   and watch it pass.

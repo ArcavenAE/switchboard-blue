@@ -1,8 +1,8 @@
 # Example 06 — two-svtn-isolation
 # One shared router, two teams (a and b) with two access nodes each and
-# DISJOINT operator keys. The driver proves neither team can operate the
+# DISJOINT operator keys. The operator proves neither team can operate the
 # other's daemons.
-# Run:  docker compose up --build --exit-code-from driver
+# Run:  docker compose up --build --exit-code-from operator
 
 x-node: &node
   build: ../_shared
@@ -70,7 +70,7 @@ services:
       <<: *nodecheck
       test: ["CMD", "bash", "-c", "test -S /run/switchboard/b2.sock && tmux has-session -t b2"]
 
-  driver:
+  operator:
     build: ../_shared
     command: ["bash", "/example/assert.sh"]
     depends_on:

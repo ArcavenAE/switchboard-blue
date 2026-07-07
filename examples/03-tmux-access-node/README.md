@@ -5,6 +5,53 @@ session runs `top` — a live TUI producing continuous output. This is the
 node side of the switchboard story: the daemon that connects to a local
 tmux and (eventually) publishes its sessions to the network.
 
+## Topology
+
+```mermaid
+graph LR
+    subgraph net["compose network"]
+        subgraph nc["node container"]
+            T["tmux server<br/>session 'work' → top"]
+            A["switchboard access<br/>mgmt access.sock"]
+            A -- "control mode (tmux -CC)<br/>or PTY proxy" --> T
+        end
+        subgraph dc["operator container"]
+            D["assert.sh<br/>(sbctl)"]
+        end
+    end
+    subgraph vols["shared volumes"]
+        RUN[("run:<br/>access.sock")]
+        KEYS[("keys:<br/>operator")]
+    end
+    D -- "unix socket (mgmt RPC)" --> RUN --> A
+    KEYS -.read.-> D
+```
+
+## Transaction under test
+
+```mermaid
+sequenceDiagram
+    participant E as node-entry.sh
+    participant T as tmux server
+    participant A as access daemon
+    participant D as operator (sbctl)
+
+    E->>T: tmux new-session -d -s work 'top'
+    T-->>E: session live (TUI redrawing)
+    E->>A: exec switchboard access --config ...
+    A->>T: connect session backend (control mode / PTY proxy)
+    T-->>A: connected — frames relaying
+
+    Note over A,D: the actual assertion: the daemon SURVIVES.<br/>macOS failure mode is bind → PTY error → exit <1s
+    D->>D: sleep 3
+    D->>A: paths.list (challenge-response, operator.key)
+    A-->>D: authenticated RPC answer (exit 0)
+    D->>A: admin.svtn.create
+    A-->>D: unknown command (role exclusion, ADR-004)
+    D->>A: sessions.status --session=work ⊘ GATE-PENDING
+    A-->>D: unknown command (no session observability on access yet)
+```
+
 ## Why this example earns its place
 
 Access mode **cannot be exercised on a stock macOS dev machine**: the
@@ -30,7 +77,7 @@ actual proof.
 
 ```bash
 cd examples/03-tmux-access-node
-docker compose up --build --exit-code-from driver
+docker compose up --build --exit-code-from operator
 docker compose down -v
 ```
 

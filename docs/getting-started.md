@@ -11,6 +11,45 @@ If you're looking for the full CLI surface, jump to
 [docs/sbctl.md](sbctl.md); for the concepts behind the pieces you're
 about to install, see [docs/architecture.md](architecture.md).
 
+## What you're building
+
+```mermaid
+graph LR
+    subgraph work["machine hosting the work"]
+        TM["tmux session 'work'"]
+        AN["access node daemon<br/>(§5)"]
+        AN --- TM
+    end
+    R["router, E-mode<br/>:9090 (§2)<br/>+ SVTN 'hello-svtn' (§3)"]
+    subgraph laptop["operator laptop"]
+        CN["console daemon (§6)"]
+        SB["sbctl<br/>(§3, §4, §7)"]
+    end
+
+    AN == "session frames" ==> R == "session frames" ==> CN
+    SB -- "admin: create SVTN,<br/>register keys" --> R
+    SB -- "attach / detach" --> CN
+```
+
+Three keys, three roles (§3–§4): a **control** key for you the
+operator, an **access** key for the machine publishing the session, a
+**console** key for the laptop attaching to it. All three live in the
+SVTN — the named trust domain everything else refers to.
+
+A note on words: a **daemon** is any long-running `switchboard`
+process, named by its mode — the router daemon, the access daemon, the
+console daemon. Each serves a management socket; `sbctl` (short-lived,
+not a daemon) connects to one of those sockets per command. When this
+tutorial says "start the daemon," it means the `switchboard <mode>`
+process you just configured.
+
+The step order is dependency order:
+
+```mermaid
+graph LR
+    S2["§2 router up"] --> S3["§3 create SVTN<br/>+ control key"] --> S4["§4 register access<br/>+ console keys"] --> S5["§5 publish session<br/>(access node)"] --> S6["§6 attach<br/>(console)"] --> S7["§7 observe paths<br/>+ metrics"]
+```
+
 ---
 
 ## Prerequisites

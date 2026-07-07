@@ -4,7 +4,9 @@
 **Probe:** build `examples/` — docker-compose proofs of functionality
 using the published alpha binaries (`alpha-20260706-203527-62e38d3`,
 installed in Linux containers from GitHub Releases, no source build).
-**Status:** complete — six examples, all drivers exit 0.
+**Status:** complete — six examples, all operator containers exit 0.
+(The verifying compose service was later renamed driver → operator to
+match spec vocabulary.)
 
 ## What was proven (distribution-verified, linux/arm64 containers)
 
@@ -62,7 +64,7 @@ connector + bootstrap milestones.
   derivation (works on OpenSSH 9.2, no PKCS8 export support needed):
   raw 32-byte ed25519 key = last 32 bytes of the OpenSSH pubkey blob;
   SPKI = fixed 12-byte DER prefix `302a300506032b6570032100` + raw key.
-- Console mgmt is loopback-TCP-only → compose drivers use
+- Console mgmt is loopback-TCP-only → compose operator containers use
   `network_mode: "service:console"`; all other modes use unix sockets
   shareable via a volume.
 - Host-side proof of the same commit: all four `test/smoke/` tiers

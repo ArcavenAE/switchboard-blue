@@ -11,7 +11,7 @@ cat > /etc/switchboard/console.yaml <<EOF
 listen_addr: "127.0.0.1:9090"
 
 # Console-mode management sockets are TCP and MUST bind loopback
-# (E-CFG-008) — which is why the driver shares this container's network
+# (E-CFG-008) — which is why the operator shares this container's network
 # namespace instead of using a shared unix-socket volume.
 management_socket: "127.0.0.1:9091"
 tick_interval: 10ms

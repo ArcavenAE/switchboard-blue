@@ -1,8 +1,58 @@
 # 02 — admin-fails-closed
 
 One **control-mode** daemon — the only daemon mode that registers
-`admin.*` handlers (ADR-004 role exclusion) — and a driver proving the
+`admin.*` handlers (ADR-004 role exclusion) — and an operator proving the
 authority model fails closed at both layers.
+
+## Topology
+
+```mermaid
+graph LR
+    subgraph net["compose network"]
+        subgraph cc["control container"]
+            C["switchboard control<br/>admin.* handlers<br/>mgmt control.sock"]
+            BK["bootstrap key<br/>(ephemeral, in-process)"]
+        end
+        subgraph dc["operator container"]
+            D["assert.sh<br/>(sbctl)"]
+        end
+    end
+    subgraph vols["shared volumes"]
+        RUN[("run:<br/>control.sock")]
+        KEYS[("keys:<br/>operator / rogue")]
+    end
+    D -- "unix socket (mgmt RPC)" --> RUN --> C
+    KEYS -.read.-> D
+    BK -. "sole svtn.create authority" .-> C
+```
+
+## Transaction under test
+
+```mermaid
+sequenceDiagram
+    participant D as operator (sbctl)
+    participant T1 as control: Tier 1<br/>(challenge-response)
+    participant T2 as control: Tier 2<br/>(operation authority)
+
+    Note over D,T2: operator key — authenticated but NOT authorized
+    D->>T1: Ed25519 challenge-response (operator.key)
+    T1-->>D: authenticated ✓
+    D->>T2: admin.svtn.create --name=hello
+    T2-->>D: E-ADM-009 insufficient authority<br/>key SHA256:... has role unregistered (exit 1)
+
+    Note over D,T2: rogue key — stopped one layer earlier
+    D->>T1: challenge-response (rogue.key)
+    T1-->>D: E-ADM-010 authentication failed (exit 1)
+
+    Note over D,T2: TARGET (gated) — external bootstrap, S-6.02
+    D->>T2: admin.svtn.create (bootstrap credential)
+    T2-->>D: svtn_id + bootstrap_fingerprint ⊘ GATE-PENDING
+```
+
+The proof hinges on *which* refusal comes back: `E-ADM-010` means the
+caller never got past authentication; `E-ADM-009` means authentication
+succeeded and the **authority check** refused — two different layers,
+two different codes.
 
 ## The two-layer model this example makes visible
 
@@ -28,7 +78,7 @@ useful in CI once the feature ships).
 
 ```bash
 cd examples/02-admin-fails-closed
-docker compose up --build --exit-code-from driver
+docker compose up --build --exit-code-from operator
 docker compose down -v
 ```
 

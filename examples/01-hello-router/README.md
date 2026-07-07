@@ -1,6 +1,6 @@
 # 01 — hello-router
 
-The smallest functional proof: one router daemon in E-mode, one driver
+The smallest functional proof: one router daemon in E-mode, one operator
 container asserting the management plane from a **separate network
 namespace** — the single-host analog of "operator machine reaches the
 router over the LAN".
@@ -8,6 +8,58 @@ router over the LAN".
 Uses the **published alpha binaries** downloaded from GitHub Releases
 (no source build). Pin a different release with
 `SWITCHBOARD_RELEASE=<tag> docker compose build`.
+
+## Topology
+
+```mermaid
+graph LR
+    subgraph net["compose network (bridge)"]
+        subgraph rc["router container"]
+            R["switchboard router<br/>data plane :9090<br/>mgmt router.sock"]
+        end
+        subgraph dc["operator container"]
+            D["assert.sh<br/>(sbctl)"]
+        end
+    end
+    subgraph vols["shared volumes"]
+        RUN[("run:<br/>router.sock")]
+        KEYS[("keys:<br/>operator.key / rogue.key")]
+    end
+    I["init (one-shot)<br/>gen-identity + render config"] -.writes.-> KEYS
+    D -- "TCP :9090 (data plane)" --> R
+    D -- "unix socket (mgmt RPC)" --> RUN --> R
+    KEYS -.read.-> D
+```
+
+The operator container lives in its **own network namespace** — reaching the
+router's TCP listener is the single-host analog of a second machine on
+the LAN. The management plane crosses a shared unix-socket volume.
+
+## Transaction under test
+
+```mermaid
+sequenceDiagram
+    participant D as operator (sbctl)
+    participant R as router daemon
+
+    Note over D,R: data plane
+    D->>R: TCP connect :9090
+    R-->>D: accept (listener live)
+
+    Note over D,R: mgmt plane — operator key (authorized)
+    D->>R: connect router.sock + Ed25519 challenge-response
+    R-->>D: authenticated
+    D->>R: router.status
+    R-->>D: {"paths":[], "message":"no active paths"} (exit 0)
+
+    Note over D,R: mgmt plane — rogue key (not configured)
+    D->>R: connect + challenge-response
+    R-->>D: E-ADM-010 authentication failed (exit 1)
+
+    Note over D,R: role exclusion (ADR-004)
+    D->>R: admin.svtn.create
+    R-->>D: unknown command (no admin handlers on router)
+```
 
 ## What it proves
 
@@ -23,7 +75,7 @@ Uses the **published alpha binaries** downloaded from GitHub Releases
 
 ```bash
 cd examples/01-hello-router
-docker compose up --build --exit-code-from driver
+docker compose up --build --exit-code-from operator
 ```
 
 Exit code 0 = all assertions passed. Tear down with
@@ -37,7 +89,7 @@ volumes so the next run regenerates them).
   and `mode=E` on stderr.
 - **Run sbctl by hand:**
   ```bash
-  docker compose run --rm driver bash
+  docker compose run --rm operator bash
   sbctl --target=/run/switchboard/router.sock --key=/keys/operator.key router status
   sbctl --json --target=/run/switchboard/router.sock --key=/keys/operator.key paths list | jq
   ```

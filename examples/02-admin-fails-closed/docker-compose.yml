@@ -1,7 +1,7 @@
 # Example 02 — admin-fails-closed
 # One control-mode daemon (the only mode that registers admin.* handlers),
-# one driver proving the admin plane's authority model fails closed.
-# Run:  docker compose up --build --exit-code-from driver
+# one operator proving the admin plane's authority model fails closed.
+# Run:  docker compose up --build --exit-code-from operator
 services:
   init:
     build: ../_shared
@@ -26,7 +26,7 @@ services:
       timeout: 2s
       retries: 10
 
-  driver:
+  operator:
     build: ../_shared
     command: ["bash", "/example/assert.sh"]
     depends_on:

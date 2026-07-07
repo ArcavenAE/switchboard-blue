@@ -15,7 +15,7 @@ echo
 wait_for_socket "${SOCK}"
 wait_for_tcp router 9090
 
-# The driver runs in a different network namespace than the router — this
+# The operator runs in a different network namespace than the router — this
 # TCP reachability check is the "second machine" proof a single-host smoke
 # can't give you.
 check DATA-PLANE-TCP 0 "" -- bash -c 'exec 3<>/dev/tcp/router/9090 && exec 3>&- 3<&-'

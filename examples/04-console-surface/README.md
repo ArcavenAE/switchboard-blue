@@ -1,15 +1,68 @@
 # 04 — console-surface
 
 One **console-mode** daemon — the operator-facing side that will attach
-to remote tmux sessions — and a driver exercising its session-plane RPC
+to remote tmux sessions — and an operator exercising its session-plane RPC
 surface (`console attach / detach / switch`, `sessions status`).
+
+## Topology
+
+```mermaid
+graph LR
+    subgraph ns["ONE shared network namespace (network_mode: service:console)"]
+        C["switchboard console<br/>mgmt 127.0.0.1:9091 (loopback TCP)"]
+        D["operator container<br/>assert.sh (sbctl)"]
+        D -- "TCP 127.0.0.1:9091" --> C
+    end
+    subgraph vols["shared volume"]
+        KEYS[("keys:<br/>operator / rogue")]
+    end
+    KEYS -.read.-> D
+```
+
+Unlike examples 01–03 there is no unix-socket volume: console
+management sockets are **loopback TCP only** (`E-CFG-008`), so the
+operator joins the console's namespace — like a second terminal on the
+operator's laptop.
+
+## Transaction under test
+
+```mermaid
+sequenceDiagram
+    participant D as operator (sbctl)
+    participant T1 as console: Tier 1<br/>(challenge-response)
+    participant T2 as console: Tier 2<br/>(console-role admission)
+    participant S as session registry
+
+    Note over D,S: operator key — passes BOTH tiers, then session lookup
+    D->>T1: challenge-response (operator.key)
+    T1-->>T2: authenticated ✓
+    T2-->>S: RoleConsole admitted ✓
+    D->>S: console.attach --session=nope
+    S-->>D: E-SES-001 session not found (exit 1)
+    D->>S: console.detach
+    S-->>D: E-SES-004 no console attached (exit 1)
+
+    Note over D,T1: rogue key — never reaches the session plane
+    D->>T1: challenge-response (rogue.key)
+    T1-->>D: E-ADM-010 authentication failed (exit 1)
+
+    Note over D,D: usage error — caught client-side, no RPC sent
+    D->>D: console attach (no --session) → exit 2
+
+    Note over D,S: TARGET (gated) — published sessions listable
+    D->>S: sessions.list ⊘ GATE-PENDING (RPC not registered yet)
+```
+
+Reaching `E-SES-*` (rather than `E-ADM-010`) is itself the proof that
+both admission tiers passed — the refusal depth tells you how far the
+call traveled.
 
 ## The networking wrinkle this example teaches
 
 Console management sockets are **loopback TCP only** (`E-CFG-008`
 rejects non-loopback binds; unix paths are not accepted in console
-mode — default is `127.0.0.1:9091`). A driver in its own network
-namespace can't reach loopback in another container, so the driver runs
+mode — default is `127.0.0.1:9091`). A operator in its own network
+namespace can't reach loopback in another container, so the operator runs
 with `network_mode: "service:console"` — it shares the console's
 namespace, exactly like a second terminal on the operator's laptop.
 
@@ -28,7 +81,7 @@ namespace, exactly like a second terminal on the operator's laptop.
 
 ```bash
 cd examples/04-console-surface
-docker compose up --build --exit-code-from driver
+docker compose up --build --exit-code-from operator
 docker compose down -v
 ```
 

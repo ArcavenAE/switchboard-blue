@@ -10,7 +10,7 @@ wait_for_socket /run/switchboard/router.sock
 wait_for_tcp router 9090
 
 # Six daemons, one compose network. Compose healthchecks already gate this
-# driver on "4 tmux sessions alive + all sockets present + console TCP up";
+# operator on "4 tmux sessions alive + all sockets present + console TCP up";
 # these checks add the authenticated round-trip to every unix-socket daemon.
 check ROUTER-STATUS 0 "no active paths" -- \
   sbctl --target=/run/switchboard/router.sock --key="${OP}" router status
@@ -19,7 +19,7 @@ for n in 1 2 3 4; do
     sbctl --target="/run/switchboard/node${n}.sock" --key="${OP}" paths list
 done
 
-# Data plane reachable from the driver's namespace.
+# Data plane reachable from the operator's namespace.
 check DATA-PLANE-TCP 0 "" -- bash -c 'exec 3<>/dev/tcp/router/9090 && exec 3>&- 3<&-'
 
 # ── TARGET flow (docs/getting-started.md §3-§6), gated ────────────────
