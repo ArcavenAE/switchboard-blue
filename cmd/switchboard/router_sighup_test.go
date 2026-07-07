@@ -113,7 +113,7 @@ func scanForLine(buf *syncBuffer, substr string, budget time.Duration) bool { //
 // The check is line-scoped so that prefix and suffix must appear on the same
 // output line (AC-002 format contract).
 // Returns true if such a line is found within budget.
-func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Duration) bool {
+func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Duration) bool { //nolint:unparam // budget is a caller-controlled settle window; all current callers use 100ms but the parameter is intentional
 	const prefix = "config reload failed: "
 	const suffix = "; continuing with previous config"
 	check := func() bool {
@@ -142,7 +142,8 @@ func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Du
 }
 
 // modeELine returns the exact mode=E output line emitted by runRouter for
-// zero upstream_routers — derived from mgmt_wire.go:527 format string.
+// zero upstream_routers — derived from mgmt_wire.go:527/566 format strings
+// (527 startup emission, 566 reload emission).
 // Pinning the full string (prefix + token) guards against partial-match
 // false-positives and format drift (F-SIGHUP-P4-001).
 func modeELine() string {
@@ -782,6 +783,12 @@ func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 			wantStartPELine, buf.String())
 	}
 
+	// F-P8-001: deep-copy cfg.UpstreamRouters (contains upstream A) before the
+	// SIGHUP that reloads to empty; assert cfg is not mutated on a successful reload
+	// (AC-001 PC-6 — the cfg parameter is immutable throughout runRouter's lifetime).
+	origUpstreamsPEtoE := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreamsPEtoE, startCfg.UpstreamRouters)
+
 	// Send reload with the E-mode config.
 	sighupCh <- syscall.SIGHUP
 
@@ -790,6 +797,20 @@ func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 	if !scanForExactModeLine(buf, modeELine(), 2*time.Second) {
 		t.Errorf("F-005/PE→E: after SIGHUP with no-upstream config, output missing exact mode=E line %q within 2s; got:\n%s",
 			modeELine(), buf.String())
+	}
+
+	// F-P8-001: cfg pointer must not be mutated by the successful PE→E reload.
+	// cfg.UpstreamRouters must still contain upstream A (not empty).
+	if len(startCfg.UpstreamRouters) != len(origUpstreamsPEtoE) {
+		t.Errorf("F-P8-001/PE→E: cfg.UpstreamRouters length mutated on successful reload: before=%d after=%d",
+			len(origUpstreamsPEtoE), len(startCfg.UpstreamRouters))
+	} else {
+		for i, want := range origUpstreamsPEtoE {
+			if startCfg.UpstreamRouters[i] != want {
+				t.Errorf("F-P8-001/PE→E: cfg.UpstreamRouters[%d] mutated on successful reload: before=%v after=%v",
+					i, want, startCfg.UpstreamRouters[i])
+			}
+		}
 	}
 
 	// Postcondition 2: no spurious "mode=PE upstream_routers=[]" line —
@@ -863,6 +884,13 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 			wantStartPELineA, buf.String())
 	}
 
+	// F-P8-001: deep-copy cfg.UpstreamRouters (contains upstream A) before the
+	// SIGHUP that reloads to B; assert cfg is not mutated on a successful reload
+	// (AC-001 PC-6 — the cfg parameter is immutable; runRouter operates on the
+	// freshly loaded struct, not on the startup-time cfg pointer).
+	origUpstreamsPE := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreamsPE, startCfg.UpstreamRouters)
+
 	// Send reload with the PE-[B] config.
 	sighupCh <- syscall.SIGHUP
 
@@ -872,6 +900,20 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 	if !scanForExactModeLine(buf, wantReloadPELineB, 2*time.Second) {
 		t.Errorf("F-005/PE→PE′: after SIGHUP, output missing exact mode=PE line %q within 2s; got:\n%s",
 			wantReloadPELineB, buf.String())
+	}
+
+	// F-P8-001: cfg pointer must not be mutated by the successful PE→PE′ reload.
+	// cfg.UpstreamRouters must still contain upstream A (not B, not empty).
+	if len(startCfg.UpstreamRouters) != len(origUpstreamsPE) {
+		t.Errorf("F-P8-001/PE→PE′: cfg.UpstreamRouters length mutated on successful reload: before=%d after=%d",
+			len(origUpstreamsPE), len(startCfg.UpstreamRouters))
+	} else {
+		for i, want := range origUpstreamsPE {
+			if startCfg.UpstreamRouters[i] != want {
+				t.Errorf("F-P8-001/PE→PE′: cfg.UpstreamRouters[%d] mutated on successful reload: before=%v after=%v",
+					i, want, startCfg.UpstreamRouters[i])
+			}
+		}
 	}
 
 	// Postcondition 2: daemon still running.
@@ -971,6 +1013,123 @@ func TestRunRouter_SIGHUPReload_IdempotentResend(t *testing.T) {
 }
 
 // ── AC-004 ─────────────────────────────────────────────────────────────────────
+
+// TestRunRouter_SIGHUPReload_InvalidUpstreamAddr_FailClosed verifies the
+// BC-2.09.001 EC-003 input class: a config whose upstream_routers[N].addr is
+// malformed (not a valid host:port) fails Validate with E-CFG-001 (Validate
+// wraps all field failures under E-CFG-001, including upstream addr errors —
+// NOT E-CFG-003, which is the per-field code; see internal/config/config.go).
+// The daemon must emit the EC-004 reload-failed line and continue on the previous
+// config unchanged (fail-closed per BC-2.09.001 PC-1).
+//
+// Cross-BC Note: EC-003 vs E-CFG-001/E-CFG-003 Rendering Nuance
+// E-CFG-003 is the per-field upstream_routers addr error code documented in
+// BC-2.09.003; however, (*Config).Validate collects all field failures into a
+// single *ConfigError{Code: "E-CFG-001", Detail: ...} that concatenates every
+// ValidationError string. The reload-failed log line therefore always carries
+// "E-CFG-001" as the outer code, with the upstream_routers[0].addr detail nested
+// inside. This test pins the CURRENT production rendering; the literal question
+// of whether to surface E-CFG-003 at the outer level is parked at
+// S-7.04-FU-PE-CONNECTOR.
+//
+// F-P8-002: addresses adversary pass-8 finding F-SIGHUP-P8-002 (no reload test
+// driving Validate failure via invalid upstream_routers[N].addr).
+func TestRunRouter_SIGHUPReload_InvalidUpstreamAddr_FailClosed(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+
+	// Start in E mode (no upstream_routers).
+	startCfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Build a config whose upstream_routers[0].addr is malformed — "notaport"
+	// has no colon, so net.SplitHostPort returns an error → Validate returns
+	// E-CFG-001 with a detail containing "upstream_routers[0].addr".
+	invalidUpstreamCfg := &config.Config{
+		ListenAddr:   dataAddr,
+		TickInterval: 10 * time.Millisecond,
+		UpstreamRouters: []config.UpstreamRouter{
+			{Addr: "notaport"},
+		},
+		ManagementSocket: sockPath,
+	}
+	cfgPath := writeTempConfig(t, invalidUpstreamCfg)
+
+	buf, errCh, cancel, sighupCh := startRunRouterForReload(t, startCfg, cfgPath)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Precondition: startup in E mode.
+	if !scanForLine(buf, "mode=E", 2*time.Second) {
+		t.Fatalf("F-P8-002 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
+	}
+
+	// Deep-copy cfg before SIGHUP to assert it is not mutated by the fail-closed
+	// reload (the E-mode startCfg has an empty UpstreamRouters slice — that's fine;
+	// the load-bearing assertion is the fail-closed log line below).
+	origUpstreams := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreams, startCfg.UpstreamRouters)
+
+	// Send reload with the invalid-upstream config.
+	sighupCh <- syscall.SIGHUP
+
+	// EC-004 log line must appear with E-CFG-001 as the outer error code.
+	// The format is one line: "config reload failed: E-CFG-001: <detail>; continuing with previous config".
+	if !scanForLine(buf, "config reload failed: ", 2*time.Second) {
+		t.Fatalf("F-P8-002: after SIGHUP with invalid upstream addr, output missing reload-failed prefix within 2s; got:\n%s",
+			buf.String())
+	}
+	// Verify E-CFG-001 appears on the reload-failed line (outer code from Validate).
+	if !scanForReloadFailedLine(buf, "E-CFG-001", 100*time.Millisecond) {
+		t.Errorf("F-P8-002: no single output line matches 'config reload failed: <E-CFG-001 err>; continuing with previous config'; got:\n%s",
+			buf.String())
+	}
+	// Verify the detail names upstream_routers[0].addr — pins that EC-003 input
+	// class is validated by Validate (not silently swallowed) even though the outer
+	// code is E-CFG-001.
+	if !scanForReloadFailedLine(buf, "upstream_routers[0].addr", 100*time.Millisecond) {
+		t.Errorf("F-P8-002: reload-failed line does not name upstream_routers[0].addr in the E-CFG-001 detail; got:\n%s",
+			buf.String())
+	}
+
+	// cfg pointer must not be mutated on the Validate-error path.
+	if len(startCfg.UpstreamRouters) != len(origUpstreams) {
+		t.Errorf("F-P8-002: cfg.UpstreamRouters length mutated by fail-closed reload: before=%d after=%d",
+			len(origUpstreams), len(startCfg.UpstreamRouters))
+	}
+
+	// No mode change: only the initial mode=E line should be present.
+	snapshot := buf.String()
+	scanner := bufio.NewScanner(bytes.NewBufferString(snapshot))
+	modeLines := 0
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "mode=") {
+			modeLines++
+		}
+	}
+	if modeLines > 1 {
+		t.Errorf("F-P8-002: found %d mode= lines after invalid-upstream-addr SIGHUP; expected 1 (no state change); output:\n%s",
+			modeLines, snapshot)
+	}
+
+	// Daemon must still be running.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("F-P8-002: runRouter returned prematurely after invalid-upstream-addr SIGHUP: %v", rErr)
+	default:
+		// expected — still running
+	}
+}
 
 // TestRunRouter_VP038_EtoPEViaConfigOnly verifies VP-038: the router graduates
 // from E to PE mode via in-process sighupCh injection using a
