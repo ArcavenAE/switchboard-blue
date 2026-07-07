@@ -90,6 +90,18 @@ func equalStringSlices(a, b []string) bool {
 	return true
 }
 
+// upstreamRoutersAsSet converts an address list to a set for set-equal
+// reconciliation (Q1 ruling, AC-001).  Two lists that contain the same
+// addresses in different orders are set-equal and MUST NOT trigger redial
+// or teardown per BC-2.09.001 EC-002.
+//
+// The returned map keys are addr strings; values are empty struct sentinels.
+// Pure function — no I/O, no side effects.
+func upstreamRoutersAsSet(addrs []string) map[string]struct{} {
+	// STUB — S-7.04-FU-PE-CONNECTOR
+	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+}
+
 // upstreamRoutersFor returns the configured upstream router addresses for
 // PE-mode operation. An empty return value means E mode (no upstream
 // connections attempted).

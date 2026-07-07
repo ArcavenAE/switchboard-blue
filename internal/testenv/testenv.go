@@ -39,6 +39,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/drain"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/session"
+	"github.com/arcavenae/switchboard/internal/upstreamdial"
 )
 
 // SessionID is an opaque session identifier within a test environment.
@@ -255,7 +256,22 @@ type RouterHandle struct {
 	// the underlying runRouter call.  Set at construction by the test helper
 	// that starts the real runRouter goroutine (AC-004 / VP-038 seam).
 	// nil when the RouterHandle is a lightweight in-process stub (StartRouter).
+	//
+	// Deprecated-pending-AC-006: this field is the transitional post-hoc seam
+	// introduced by S-7.04-FU-SIGHUP-RELOAD.  SetSighupCh and SendReloadSignal
+	// will be retired when S-7.04-FU-PE-CONNECTOR (AC-006) wires construction-time
+	// ownership via the connector field below.
 	sighupCh chan<- os.Signal
+
+	// connector is the construction-time PE connector handle wired at StartRouter
+	// time (S-7.04-FU-PE-CONNECTOR AC-006).  When non-nil, Mode() MUST delegate
+	// to connector.Mode() (mapped from upstreamdial.ConnMode to RouterMode) rather
+	// than reading the stub r.mode field.
+	//
+	// STUB — S-7.04-FU-PE-CONNECTOR: field present; SetConnector seam present.
+	// The implementer wires this at StartRouter construction time and migrates
+	// Mode() / Restart() to delegate to it as part of AC-006.
+	connector upstreamdial.Handle //nolint:unused // Red Gate stub — wired once implementer completes AC-006
 }
 
 // Mode returns the current operating mode of the router (E or PE).
@@ -303,6 +319,22 @@ func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.sighupCh = ch
+}
+
+// SetConnector wires the construction-time PE connector handle onto the
+// RouterHandle.  Called by the test helper that starts the real runRouter
+// goroutine once S-7.04-FU-PE-CONNECTOR is implemented (AC-006 seam).
+//
+// After SetConnector is called, Mode() will delegate to connector.Mode()
+// (once the implementer updates Mode() in AC-006).  Until then the field
+// is stored but not yet consulted — the stub r.mode field still drives Mode()
+// so that all pre-AC-006 tests remain unaffected.
+//
+// STUB — S-7.04-FU-PE-CONNECTOR: seam present; Mode() delegation lands in AC-006.
+func (r *RouterHandle) SetConnector(h upstreamdial.Handle) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.connector = h
 }
 
 // SendReloadSignal sends syscall.SIGHUP on the router's injected sighupCh,
