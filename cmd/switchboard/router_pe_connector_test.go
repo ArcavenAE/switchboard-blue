@@ -33,9 +33,10 @@ import (
 // ── shared helpers ──────────────────────────────────────────────────────────────
 
 // startPEListenerFixture starts a loopback TCP listener that acts as the
-// upstream router fixture.  Returns the listener, its address, and an atomic
-// counter incremented each time a connection is accepted.
-func startPEListenerFixture(t *testing.T) (net.Listener, string, *atomic.Int32) {
+// upstream router fixture.  Returns its address and an atomic counter
+// incremented each time a connection is accepted.  The listener is closed
+// via t.Cleanup.
+func startPEListenerFixture(t *testing.T) (string, *atomic.Int32) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -58,26 +59,26 @@ func startPEListenerFixture(t *testing.T) (net.Listener, string, *atomic.Int32) 
 					_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
 					_, err := c.Read(buf)
 					if err != nil {
-						c.Close()
+						_ = c.Close()
 						return
 					}
 				}
 			}(conn)
 		}
 	}()
-	return ln, ln.Addr().String(), &connCount
+	return ln.Addr().String(), &connCount
 }
 
-// waitForConnections blocks until connCount >= want or budget elapses.
-func waitForConnections(connCount *atomic.Int32, want int32, budget time.Duration) bool {
-	deadline := time.Now().Add(budget)
+// waitForConnections blocks until connCount >= 1 or 3 seconds elapses.
+func waitForConnections(connCount *atomic.Int32) bool {
+	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if connCount.Load() >= want {
+		if connCount.Load() >= 1 {
 			return true
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return connCount.Load() >= want
+	return connCount.Load() >= 1
 }
 
 // fakeConnectorHandle is a minimal upstreamdial.Handle for testenv seam tests.
@@ -102,7 +103,7 @@ func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 
 	dataAddr := probeDataAddr(t)
 	sockPath := tempSockPath(t)
-	_, upstreamAddr, connCount := startPEListenerFixture(t)
+	upstreamAddr, connCount := startPEListenerFixture(t)
 
 	cfg := &config.Config{
 		ListenAddr:        dataAddr,
@@ -135,7 +136,7 @@ func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 
 	// AC-001 postcondition 1+3: upstream fixture must receive a connection.
 	// RED GATE: runRouter panics at upstreamRoutersAsSet before dialing.
-	if !waitForConnections(connCount, 1, 3*time.Second) {
+	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_DialAndConnect_UpstreamReachable: upstream fixture received %d connections after 3s; want ≥1 (AC-001 PC-1/PC-3)", connCount.Load())
 	}
 
@@ -159,8 +160,8 @@ func TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder(t *testing.T) {
 
 	dataAddr := probeDataAddr(t)
 	sockPath := tempSockPath(t)
-	_, upstreamAddr1, connCount1 := startPEListenerFixture(t)
-	_, upstreamAddr2, connCount2 := startPEListenerFixture(t)
+	upstreamAddr1, connCount1 := startPEListenerFixture(t)
+	upstreamAddr2, connCount2 := startPEListenerFixture(t)
 
 	// Start config: two upstreams in order [A, B].
 	startCfg := &config.Config{
@@ -204,10 +205,10 @@ func TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder(t *testing.T) {
 
 	// Precondition: both upstreams must have been connected initially.
 	// RED GATE: upstreamRoutersAsSet panics → no connections → both counts remain 0.
-	if !waitForConnections(connCount1, 1, 3*time.Second) {
+	if !waitForConnections(connCount1) {
 		t.Fatalf("AC-001 Q1 precondition: upstream1 received %d connections; want ≥1", connCount1.Load())
 	}
-	if !waitForConnections(connCount2, 1, 3*time.Second) {
+	if !waitForConnections(connCount2) {
 		t.Fatalf("AC-001 Q1 precondition: upstream2 received %d connections; want ≥1", connCount2.Load())
 	}
 
@@ -248,7 +249,7 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 	dataAddr := probeDataAddr(t)
 	sockPath := tempSockPath(t)
 
-	_, reachableAddr, connCount := startPEListenerFixture(t)
+	reachableAddr, connCount := startPEListenerFixture(t)
 
 	// Unreachable: allocate a port then close it immediately.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -256,7 +257,7 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 		t.Fatalf("probe unreachable addr: %v", err)
 	}
 	unreachableAddr := ln.Addr().String()
-	ln.Close()
+	_ = ln.Close()
 
 	cfg := &config.Config{
 		ListenAddr:        dataAddr,
@@ -289,7 +290,7 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 
 	// AC-002 postcondition 4: reachable upstream gets a connection (partial-PE).
 	// RED GATE: runRouter panics at upstreamRoutersAsSet.
-	if !waitForConnections(connCount, 1, 3*time.Second) {
+	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_UnreachableUpstream_PartialPE: reachable upstream received %d connections; want ≥1 (AC-002 PC-4)", connCount.Load())
 	}
 
@@ -313,7 +314,7 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 
 	dataAddr := probeDataAddr(t)
 	sockPath := tempSockPath(t)
-	_, upstreamAddr, connCount := startPEListenerFixture(t)
+	upstreamAddr, connCount := startPEListenerFixture(t)
 
 	const testKeepalive = 200 * time.Millisecond
 	cfg := &config.Config{
@@ -347,7 +348,7 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 	// AC-003: upstream fixture must receive a connection (proves keepalive ticker
 	// is constructed and drives a connection health check to the fixture).
 	// RED GATE: runRouter panics at upstreamRoutersAsSet before constructing Connector.
-	if !waitForConnections(connCount, 1, 3*time.Second) {
+	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_KeepalivePassedToConnector: upstream fixture received %d connections; want ≥1 (AC-003)", connCount.Load())
 	}
 
@@ -375,7 +376,7 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 
 	dataAddr := probeDataAddr(t)
 	sockPath := tempSockPath(t)
-	_, upstreamAddr, connCount := startPEListenerFixture(t)
+	upstreamAddr, connCount := startPEListenerFixture(t)
 
 	cfg := &config.Config{
 		ListenAddr:        dataAddr,
@@ -408,7 +409,7 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 	// Precondition (AC-004 PC-1): live PE upstream connection must be established.
 	// RED GATE: upstreamRoutersAsSet panics before the Connector is constructed,
 	// so no connection is ever made.
-	if !waitForConnections(connCount, 1, 3*time.Second) {
+	if !waitForConnections(connCount) {
 		t.Errorf("TestRunRouter_PE_EFWD001ReconfirmationUnderLoad: upstream fixture received %d connections; want ≥1 (AC-004 precondition — live PE connection required)", connCount.Load())
 	}
 
@@ -492,7 +493,7 @@ func TestE2E_EtoPEGraduationByConfigChange(t *testing.T) {
 	env := testenv.New(t, ctx)
 
 	// Start a real upstream fixture that counts accepted connections.
-	_, peAddr, connCount := startPEListenerFixture(t)
+	peAddr, connCount := startPEListenerFixture(t)
 
 	// Start in E mode.
 	eRouter := env.StartRouter(t, testenv.RouterConfig{})
@@ -521,7 +522,7 @@ func TestE2E_EtoPEGraduationByConfigChange(t *testing.T) {
 	// TCP connection from the Connector.
 	// RED GATE: stub Restart() dials nothing → connCount.Load() == 0 → FAIL.
 	// IMPL: Connector dials after ReloadAddrs → fixture accepts → connCount ≥ 1 → PASS.
-	if !waitForConnections(connCount, 1, 3*time.Second) {
+	if !waitForConnections(connCount) {
 		t.Errorf("TestE2E_EtoPEGraduationByConfigChange: upstream fixture received %d TCP connections after 3s; want ≥1 — Restart must trigger a real dial (VP-038 behavioral contract)", connCount.Load())
 	}
 
