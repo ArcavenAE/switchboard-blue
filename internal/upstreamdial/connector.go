@@ -8,7 +8,7 @@
 // arrive via a buffered chan []string (channel-passed snapshot per Q3 ruling).
 //
 // DAG position: 19 (effectful — network I/O).
-// Allowed internal imports: {frame, outerassembler}.
+// Allowed internal imports: {halfchannel, outerassembler}.
 // Forbidden: drain, routing, testenv, and any package at positions 20–23.
 package upstreamdial
 
