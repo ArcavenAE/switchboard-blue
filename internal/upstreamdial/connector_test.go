@@ -1049,6 +1049,90 @@ func TestConnector_Stop_Idempotent(t *testing.T) {
 	}
 }
 
+// ── F-P4-001: no spurious EC-004 on graceful Stop ────────────────────────────
+
+// TestConnector_NoEC004OnGracefulStop verifies F-P4-001: a graceful Stop() of
+// a still-connected PE router MUST NOT emit the EC-004 log line
+// "mode=E (no upstream_routers configured)" to the operator writer.
+//
+// BC-2.09.001 EC-004's trigger is upstream-LOSS, not self-initiated teardown.
+// The EC-001 sibling guard (connector.go:284-287) is the model: when
+// ctx.Err() != nil, the loop returns without logging.  The EC-004 branch at
+// connector.go:346-349 must apply the same guard.
+//
+// Failure condition: if the ctx.Err() guard before the EC-004 branch is
+// absent (the unguarded code), this test fails because Stop() triggers
+// maintainConn to return via ctx cancellation, connectedCount drops to zero,
+// and the spurious EC-004 line is emitted even though the connection was live.
+func TestConnector_NoEC004OnGracefulStop(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 30 * time.Millisecond
+
+	ln, addr := newLoopbackListener(t)
+	defer func() { _ = ln.Close() }()
+
+	// Upstream fixture: accept the connection and hold it open (connection remains
+	// healthy for the entire duration of the test — Stop() is called while live).
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			// Hold the connection open; drain any keepalive bytes.
+			go func(c net.Conn) {
+				buf := make([]byte, 4096)
+				for {
+					_, err := c.Read(buf)
+					if err != nil {
+						return
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	lw := newLogWriter()
+	c := New(lw, zeroEnv(), testKeepalive, []string{addr})
+	c.Start()
+
+	// Precondition: reach ModePE (connection established, listener still healthy).
+	if !pollForMode(c, 2*time.Second) {
+		t.Fatalf("TestConnector_NoEC004OnGracefulStop: precondition: Mode() != ModePE after 2s")
+	}
+
+	// Drain any log lines accumulated during startup so only post-Stop output is examined.
+drainStartup:
+	for {
+		select {
+		case <-lw.ch:
+		default:
+			break drainStartup
+		}
+	}
+
+	// Call Stop() while the upstream connection is still healthy.
+	c.Stop()
+
+	// Assert: no EC-004 line was emitted after Stop() returned.
+	// Allow a brief window (3 keepalive intervals) in case of scheduling lag.
+	const ec004Log = "mode=E (no upstream_routers configured)"
+	deadline := time.After(3 * testKeepalive)
+	for {
+		select {
+		case msg := <-lw.ch:
+			if strings.Contains(msg, ec004Log) {
+				t.Errorf("TestConnector_NoEC004OnGracefulStop: spurious EC-004 emitted on graceful Stop(): %q (F-P4-001; EC-004 trigger is upstream-LOSS, not self-initiated teardown)", msg)
+				return
+			}
+		case <-deadline:
+			// No spurious EC-004 seen — pass.
+			return
+		}
+	}
+}
+
 // TestNextBackoff_JitterBounds verifies the raw jitter formula: for 10 000 trials
 // at BackoffBase, every result stays within [BackoffBase*0.75, BackoffBase*2*1.25]
 // clamped to [BackoffBase, BackoffCap] (F-P1-004, Q5 ±25%%).

@@ -344,7 +344,10 @@ func (c *Connector) dialLoop(addr string, ctx context.Context, done chan<- struc
 		_ = conn.Close()
 
 		// Log EC-004 if all upstreams are now unreachable (count → 0).
-		if c.connectedCount.Load() == 0 {
+		// Guard: skip emission when the drop was caused by context cancellation
+		// (graceful Stop) — EC-004's trigger is upstream-LOSS, not self-initiated
+		// teardown.  Symmetric with the EC-001 guard 60 lines above (F-P4-001).
+		if c.connectedCount.Load() == 0 && ctx.Err() == nil {
 			c.logf("mode=E (no upstream_routers configured)\n")
 		}
 
