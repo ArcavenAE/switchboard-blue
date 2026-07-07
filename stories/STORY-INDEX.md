@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "3.90"
+version: "3.91"
 status: draft
 producer: pr-manager
 timestamp: 2026-07-06T00:00:00
@@ -20,7 +20,7 @@ inputDocuments:
 
 | Metric | Value |
 |--------|-------|
-| Total stories | 61 (43 master-table stories + 1 draft stub S-6.04 + 11 active backlog S-BL.ADMINWIRE-EXTRACTION/S-BL.RESYNC-FRAME/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.DISCOVERY-WIRE/S-BL.ADMIN-RECOVER-WIRE/S-BL.CLI-SURFACE-COMPLETION/S-7.04-FU-SIGHUP-RELOAD/S-7.04-FU-DRAIN-WIRE/S-7.04-FU-PE-CONNECTOR/S-BL.BENCH/S-BL.TESTENV + 2 won't-fix S-BL.SVTN-LIST-WIRE/S-BL.PING-VERSION-WIRE + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) — formula: 43 master + 11 active-backlog + 2 won't-fix + 1 draft-stub + 2 HRD + 2 M = 61. Phase-7 audit F-001: prior 56 was undercounting the 3 S-7.04-FU stubs added at v3.86 + S-BL.BENCH + S-BL.TESTENV (both added earlier) and treating S-BL.CONSOLE-OBS as a backlog item it was already promoted to master table at v3.87. |
+| Total stories | 60 (43 master-table stories + 11 active backlog S-BL.ADMINWIRE-EXTRACTION/S-BL.RESYNC-FRAME/S-BL.POLICY-SCHEMA-VALIDATOR/S-BL.DISCOVERY-WIRE/S-BL.ADMIN-RECOVER-WIRE/S-BL.CLI-SURFACE-COMPLETION/S-7.04-FU-SIGHUP-RELOAD/S-7.04-FU-DRAIN-WIRE/S-7.04-FU-PE-CONNECTOR/S-BL.BENCH/S-BL.TESTENV + 2 won't-fix S-BL.SVTN-LIST-WIRE/S-BL.PING-VERSION-WIRE + 0 draft-stub + 2 hardening S-HRD.01/S-HRD.02 + 2 maintenance S-M.01/S-M.02) — formula: 43 master + 11 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 60. S-6.04 closed-subsumed by S-7.04-FU-SIGHUP-RELOAD (2026-07-06); S-7.04-FU-SIGHUP-RELOAD promoted to ready v1.0 within the existing active-backlog slot. |
 | Complete | 42 (S-0.01, S-1.01, S-1.02, S-2.01, S-2.02, S-1.03, S-3.04, S-3.01a, S-3.01b, S-3.02, S-3.03, S-W3.04, S-W3.05, S-4.01, S-4.02, S-4.03, S-4.04, S-6.01, S-6.06, S-W5.01, S-5.01, S-5.02, S-5.03, S-6.02, S-6.03, S-W5.02, S-BL.LOOKUP, S-W5.04, S-6.07, S-7.01, S-7.02, S-BL.ROUTER-ADDR, S-7.03, S-6.05, S-BL.ROUTER-RUNTIME, S-BL.NI, S-BL.OA, S-BL.ARQ-TX, S-BL.PATH-TRACKER-WIRING, S-BL.PATH-FAILED-STATUS, S-7.04 [partial — 3 FU stubs], S-BL.CONSOLE-OBS) |
 | Pending | 0 (S-7.04 was the last; now merged-partial) |
 | Ready-for-red-gate | 0 |
@@ -34,7 +34,7 @@ inputDocuments:
 | Total points (incl. S-M.01 + S-M.02) | 195 |
 | Waves | 8 (Wave 0–7) + maintenance sweep (unscheduled) |
 | Backlog | 11 active (S-BL.RESYNC-FRAME, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.DISCOVERY-WIRE, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION, S-7.04-FU-SIGHUP-RELOAD, S-7.04-FU-DRAIN-WIRE, S-7.04-FU-PE-CONNECTOR, S-BL.BENCH, S-BL.TESTENV) + 2 won't-fix (S-BL.SVTN-LIST-WIRE, S-BL.PING-VERSION-WIRE) — S-BL.LOOKUP promoted and merged; S-BL.ROUTER-ADDR promoted to Wave-6 Tranche B and merged PR #56; S-BL.NI promoted steady-state and merged PR #94; S-BL.OA promoted steady-state and merged PR #96 (S-BL.RESYNC-FRAME added as its ADR-005-second-half successor); S-BL.ARQ-TX promoted steady-state and merged PR #98; S-BL.PATH-TRACKER-WIRING + S-BL.PATH-FAILED-STATUS promoted steady-state and merged together PR #99; S-BL.CONSOLE-OBS promoted steady-state and merged PR #104; S-BL.BENCH + S-BL.TESTENV added during Phase-6 VP sweep (2026-07-06). Phase-7 audit F-001: backlog corrected 9→11. |
-| Draft stubs | 1 (S-6.04) |
+| Draft stubs | 0 (S-6.04 closed-subsumed 2026-07-06 by S-7.04-FU-SIGHUP-RELOAD) |
 | BC coverage | 45/45 (100%) — BC-2.07.004 added Wave-5 |
 | VP coverage | 77/77 (100%) — VP-068..VP-077 added Wave-5 (VP-074 anchored to BC-2.06.001, VP-075/VP-076/VP-077 anchored to BC-2.05.004) |
 
@@ -136,7 +136,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
 | S-BL.RESYNC-FRAME | RESYNC control-frame protocol — new FrameType, emitter co-located with send-path buffer, receiver co-located with ARQ replay buffer, reconnect state machine surviving connection churn (ADR-005 second half; consumes S-BL.OA Assemble primitive) | backlog | ADR-005 resync wire-mechanics (S403-O4 lineage; narrowed by S-BL.OA PR #96 — primitive shipped, protocol remains); depends_on S-BL.OA, S-BL.ARQ-TX | Wave 8+ |
-| S-7.04-FU-SIGHUP-RELOAD | SIGHUP config-reload path in cmd/switchboard signal loop → runtime E-to-PE graduation without restart (S-7.04 AC-001 residual; relates S-6.04 draft stub) | backlog | S-7.04 partial delivery PR #101; BC-2.09.001 PC-1 runtime-reload half | Wave 8+ |
+| S-7.04-FU-SIGHUP-RELOAD | SIGHUP config-reload path in cmd/switchboard signal loop → runtime E-to-PE graduation without restart (S-7.04 AC-001 residual; S-6.04 closed-subsumed) | ready (v1.0, 2026-07-06) | S-7.04 partial delivery PR #101; BC-2.09.001 PC-1 runtime-reload half; S-6.04 closed-subsumed per decisions/S-6.04-disposition-ruling.md | steady-state |
 | S-7.04-FU-DRAIN-WIRE | DRAIN-over-SVTN wire + per-node connection identity + observer registration into drain coordinator; per-observer panic recovery (named silent-failure risk); forced-exit with unresponsive observer test (S-7.04 AC-003/AC-004 residual) | backlog | S-7.04 partial delivery PR #101; BC-2.09.002 PC-1/EC-003 wire half; plug-point drainCoord.RegisterObserver | Wave 8+ |
 | S-7.04-FU-PE-CONNECTOR | outbound TCP dial loop against upstreamRoutersFor(cfg) on PE graduation — connect-half of upstream_routers application (S-7.04 AC-006 residual; the live-egress anchor story: also carries S404-OBS-F re-confirmation, ARQ-TX send-loop, retransmit-driven Failed trigger, Failed-state event emission) | backlog | S-7.04 partial delivery PR #101; BC-2.09.003 PC-9 connect half; VP-037/VP-038 activation lands here | Wave 8+ |
 | S-BL.POLICY-SCHEMA-VALIDATOR | policies.yaml schema linter — validate that every policy entry conforms to the canonical POL-001 field schema (id, title, severity, scope, rule, rationale, enforcement, examples) | backlog | Ruling-12 §6 (F-P7L3R2-03 POL-002 schema drift); Epic E-6; no BC/VP traces | unscheduled |
@@ -153,7 +153,7 @@ addresses the "deferred to TBD story" anti-pattern.
 
 | Story ID | Title | Status | Drift items consumed | Earliest wave |
 |----------|-------|--------|----------------------|---------------|
-| S-6.04 | SIGHUP config reload with fail-closed safety | draft | S601-DRAFT-STORY (Wave 4 audit) | Wave 6+ |
+| S-6.04 | SIGHUP config reload with fail-closed safety | closed-subsumed (0.2, 2026-07-06; closed_by S-7.04-FU-SIGHUP-RELOAD; see decisions/S-6.04-disposition-ruling.md) | S601-DRAFT-STORY (Wave 4 audit) | N/A — closed-subsumed |
 
 ## Hardening Stories
 
@@ -189,6 +189,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.91 | 2026-07-06 | S-7.04-FU-SIGHUP-RELOAD promoted backlog → ready v1.0 (3 pts, steady-state, 4 ACs, BC-2.09.001 PC-1 + BC-2.09.003 EC-004 + VP-038); S-6.04 closed-subsumed (0.2, 2026-07-06; closed_by S-7.04-FU-SIGHUP-RELOAD; all S-6.04 obligations fully covered by S-7.04-FU-SIGHUP-RELOAD AC-001/AC-002/AC-003; VP-028/VP-029 remain proven at internal/config startup-validation scope — no transfer; see decisions/S-6.04-disposition-ruling.md); BC-2.09.003 v1.9 → v2.0 governance-only VP-table narrowing (BC-INDEX v3.1 → v3.2); draft-stubs 1 → 0; total 61 → 60. |
 | 3.90 | 2026-07-06 | S-BL.TESTENV complete (merged PR #110, 62e38d3; 13 pts): internal/testenv in-process multi-daemon rig (976 lines; ARCH-08 pos 22; goroutine-leak-fenced) + 6 VP e2e files + 2 un-skipped tests. VP outcomes: VP-033/034/036/046 PROVEN/locked; VP-039 coordinator-downgraded to PARTIAL (harness-structural, real-router filter untested — VP-010 carries BC-2.05.006); VP-037/038/040 harness-ready (locks await S-7.04-FU stories / production multipath); VP-031/032 env-dependent. Proven 64→68, justified-deferred 13→9. Backlog 10→9. OBS-VP-BENCH residual (VP-042 testenv-integrated echo) now unblocked — harness exists. |
 | 3.89 | 2026-07-06 | S-BL.BENCH complete (merged PR #109, cd67394; 5 pts): BenchmarkHalfChannelTickJitter b.Errorf gate (phase-stratification per S-1.02 AC-005 — Phase-3 removal always deferred enforcement to Phase-6-class hardening) + BenchmarkKeystrokeEcho_P99 (internal/bench, loopback lower-bound, declared divergence vs testenv.NewLoopback skeleton) + just bench recipe. VP-041 PROVEN/locked v1.3 (M1: 1.112/1.066/1.063 → mean 1.080ms p99 vs 2ms, 46% headroom); VP-042 adopted-partial v1.3, lock deferred to S-BL.TESTENV integration. Proven 63→64, justified-deferred 14→13. OBS-VP-BENCH narrowed to VP-042 residual. Active backlog 11→10. Also: maintenance sweep merged PR #108 (39b221d) — Step-3 dead-code deletion (BC-2.05.005 v1.9), PATH-A/B log discriminators, mgmt sync-barrier fail-closed rebuild (stress 200x clean), go.md rule 13; drift rows DRIFT-P6-ADM-STEP3-DEADCODE + DRIFT-P6-ROUTING-LOG-DISCRIMINATOR + W3-PG-001 CLOSED (factory 7f67b2f). |
 | 3.88 | 2026-07-06 | Phase-7 audit sweep (F-001/F-003): (a) Aggregate corrections — Total stories 56→61; backlog count 9→11; formula row added (43 master + 11 active-backlog + 2 won't-fix + 1 draft-stub + 2 HRD + 2 M = 61). Prior count underflowed by counting S-BL.CONSOLE-OBS as backlog (it promoted to master at v3.87) and omitting S-BL.BENCH + S-BL.TESTENV (added Phase-6 VP sweep) and the 3 S-7.04-FU stubs (added v3.86). Sources: machine-derived section grep at develop 0516f3a + factory HEAD. (b) Story frontmatter normalization (forward-only per human ruling): S-BL.ARQ-TX-arq-retransmit-send-wiring.md backlog→merged; S-BL.OA-outer-assembler.md backlog→merged; S-BL.CONSOLE-OBS.md complete→merged. Older `status: completed` vocabulary preserved as historical era-markers. |

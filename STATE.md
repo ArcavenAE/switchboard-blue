@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: cycle-1-CONVERGED-closed-2026-07-06
+phase_step: steady-state-sighup-reload-elaborated
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 62e38d3
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: none — steady-state; next work from backlog (11 active) or maintenance sweep
+awaiting: S-7.04-FU-SIGHUP-RELOAD per-story TDD delivery dispatch (ready v1.0; 3 pts; steady-state)
 historical_cycles: []
-timestamp: 2026-07-06T20:00:00Z
+timestamp: 2026-07-06T21:00:00Z
 last_update: 2026-07-06
 ---
 
@@ -60,7 +60,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-04 | burst-87-spec-steward | completed | Burst 87 (spec-steward) — F-P5P36-A-001 + F-P5P36-A-002 governance-doc remediation: wave-6-tranche-a-scope-rulings.md v1.13→v1.14 (Ruling-12 §1 E-RPC-004→E-RPC-010 redirect + Ruling-11/12 dated audit-trail footnotes at 4 sites); S-6.07-svtn-admin-create.md v1.13→v1.14 (§Universality text E-RPC-004→E-RPC-010 redirect + amendment footnote); governance-only, no BC/runtime change |
+| 2026-07-06 | steady-state-sighup-reload-elaboration | completed | Burst (PO+architect parallel → story-writer+spec-steward parallel → state-manager): S-7.04-FU-SIGHUP-RELOAD ready v1.0 (4 ACs, 3 pts, steady-state, BC-2.09.001 PC-1 + BC-2.09.003 EC-004 + VP-038); S-6.04 closed-subsumed (decisions/S-6.04-disposition-ruling.md); BC-2.09.003 v1.9 → v2.0 VP-table governance narrowing; STORY-INDEX v3.90 → v3.91 (total 61 → 60; draft-stubs 1 → 0); BC-INDEX v3.1 → v3.2 |
 | 2026-07-04 | burst-88-state-manager | completed | Burst 88 (state-manager) — STORY-INDEX v3.79→v3.80 POL-002 row-sync: S-6.07 row updated to v1.14 / 2026-07-04 (deferred from Burst 87); DRIFT-P5P36-PHANTOM-ERPC-004 (HIGH) CLOSED; DRIFT-P5P36-RULING-11-12-AUTHORSHIP-PREMISE-SIBLINGS (MED) CLOSED; streak 0/3 (Pass 37 dispatches next as restart attempt); aggregate totals unchanged 54/185/45/77 |
 | 2026-07-04 | phase-5-pass-37-concluded-clean-both-lanes | completed | Adv-A NO_FINDINGS + 1 obs (O-P5P37-A-001 combined-footnote structural coupling — upstream-filing candidate); Adv-B NO_FINDINGS + 2 obs (O-P5P37-B-001 convergent with Adv-A; O-P5P37-B-002 self-adjudicated) + 12 anti-findings; streak advances 0/3 → 1/3. |
 | 2026-07-04 | phase-5-pass-38-concluded-clean-both-lanes | completed | Adv-A NO_FINDINGS + 1 obs (O-P5P38-A-001, persistence re-confirmation of P37 combined-footnote); Adv-B NO_FINDINGS + 1 obs (O-P5P38-B-001 state-only-burst witness) + 15 anti-findings; streak advances 1/3 → 2/3. |

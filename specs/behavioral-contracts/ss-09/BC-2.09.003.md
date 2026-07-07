@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "1.9"
+version: "2.0"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -18,6 +18,21 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-06
+    version: "2.0"
+    change: >
+      Governance-only: narrow Verification Properties table to correct pre-existing
+      authoring drift identified in S-6.04 disposition ruling (S-6.04-disposition-ruling.md
+      §"Spec Note: BC-2.09.003 Verification Properties Table Drift"). VP-028 and VP-029 are
+      strictly scoped to Config.Validate startup-validation behavior (out-of-range
+      tick_interval; missing required fields listen_addr/tick_interval). They do NOT cover
+      host:port parsing, drain/keepalive validation, management_socket, authorized_operator_keys,
+      config application to subsystems, or the SIGHUP reload integration path. Table rows
+      corrected: only the two startup-validation properties covered by VP-028/VP-029 retain
+      those citations; all other rows now cite "test-as-evidence" with the appropriate owning
+      story/AC. Reload-integration fail-closed property (Inv-3/EC-004) annotated as covered
+      by S-7.04-FU-SIGHUP-RELOAD AC-002 integration test (no formal VP assigned). No PC/EC/Inv
+      semantic changes; no runtime behavior implied. Governance-leaf change per PO ruling path.
   - date: 2026-07-02
     version: "1.9"
     change: >
@@ -271,17 +286,18 @@ Daemon startup config parsing failure; config reload with invalid config.
 
 ## Verification Properties
 
-| VP-NNN | Property | Proof Method |
-|--------|----------|-------------|
-| VP-028, VP-029 | Startup with any config error always exits non-zero | unit |
-| VP-028, VP-029 | Error message includes field name and fix suggestion | unit |
-| VP-028, VP-029 | listen_addr host:port parse enforced at validation | unit |
-| VP-028, VP-029 | upstream_routers[N].addr host:port parse enforced | unit |
-| VP-028, VP-029 | drain_timeout and keepalive_interval: zero/absent accepted; negative rejected (E-CFG-006/007) | unit |
-| VP-028, VP-029 | Config reload failure leaves daemon on previous config | integration |
-| VP-028, VP-029 | Validated config applied to daemon subsystems (not hardcoded defaults) | integration |
-| VP-028, VP-029 | management_socket present-and-blank rejected with E-CFG-008; absent accepted | unit |
-| VP-028, VP-029 | authorized_operator_keys invalid PEM entry rejected with E-CFG-009 (per-index); empty list accepted | unit |
+| VP-NNN | Property | Proof Method | Notes |
+|--------|----------|-------------|-------|
+| VP-028 | Out-of-range tick_interval (d < 5ms or d > 50ms) causes Config.Validate to return non-nil error with code E-CFG-001 naming field 'tick_interval' | unit (table-driven) | Startup-scope Config.Validate property only. Proven: verification_lock true, 2026-07-06. |
+| VP-029 | Zeroing any required field in {listen_addr, tick_interval} causes Config.Validate to return non-nil E-CFG-001 error naming the absent field | unit (table-driven) | Startup-scope Config.Validate property only. Proven: verification_lock true, 2026-07-06. |
+| test-as-evidence | Startup with any config validation error always exits non-zero with E-CFG-001 message naming the field and providing a fix suggestion | unit (test suite; no formal VP assigned) | General exit-nonzero guarantee derived from VP-028/VP-029 for tick_interval/listen_addr; extended to other fields (E-CFG-002 through E-CFG-009) by analogous unit tests in S-6.01/S-W5.01. |
+| test-as-evidence | listen_addr host:port parse enforced at validation (E-CFG-002) | unit (S-6.01 AC-003; no formal VP assigned) | |
+| test-as-evidence | upstream_routers[N].addr host:port parse enforced (E-CFG-003) | unit (S-6.01 AC-004; no formal VP assigned) | |
+| test-as-evidence | drain_timeout and keepalive_interval: zero/absent accepted; negative rejected (E-CFG-006/E-CFG-007) | unit (S-6.01 AC-007/AC-008; no formal VP assigned) | |
+| test-as-evidence | management_socket present-and-blank rejected with E-CFG-008; absent accepted | unit (S-W5.01 AC-011; no formal VP assigned) | |
+| test-as-evidence | authorized_operator_keys invalid PEM entry rejected with E-CFG-009 (per-index); empty list accepted | unit (S-W5.01 AC-012; no formal VP assigned) | |
+| test-as-evidence | Validated config applied to daemon subsystems (tick_interval → halfchannel.New; not hardcoded default) | unit/integration (S-6.01 AC-009; no formal VP assigned) | |
+| test-as-evidence | Config reload failure leaves daemon on previous config (Inv-3/EC-004: fail-closed reload) | integration (S-7.04-FU-SIGHUP-RELOAD AC-002; no formal VP assigned) | VP-028/VP-029 do NOT cover the SIGHUP reload integration path. This property is a new integration-test obligation for S-7.04-FU-SIGHUP-RELOAD. |
 
 ## Traceability
 
@@ -310,12 +326,15 @@ S-W5.01 — AC-011 (PC-10: management_socket) and AC-012 (PC-11: authorized_oper
 
 ## VP Anchors
 
-VP-028, VP-029 (existing; cover all postconditions including v1.2 additions).
+VP-028 — startup-scope: Config.Validate rejects out-of-range tick_interval (d < 5ms or d > 50ms); proven, verification_lock true.
+VP-029 — startup-scope: Config.Validate rejects missing required fields (listen_addr, tick_interval); proven, verification_lock true.
+Both VPs scope strictly to Config.Validate behavior in internal/config. They do NOT cover the SIGHUP reload integration path, host:port parsing properties, drain/keepalive/management/keys properties, or config application to subsystems. Those properties are covered by test-as-evidence (story ACs) as documented in the Verification Properties table above.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.0 | 2026-07-06 | Governance-only: narrowed Verification Properties table to correct pre-existing authoring drift (PO ruling S-6.04-disposition-ruling.md §"Spec Note: BC-2.09.003 Verification Properties Table Drift"). VP-028 and VP-029 were overstated as covering all 9 VP-table rows including "Config reload failure leaves daemon on previous config" and host:port/drain/keepalive/management/keys properties. Both VPs scope strictly to Config.Validate startup-validation behavior (tick_interval out-of-range; missing required fields). Table rebuilt: two rows retain VP-028/VP-029 citations for the properties they actually prove; all other rows reclassified as test-as-evidence with owning story/AC citations. Reload-integration fail-closed property (Inv-3/EC-004) explicitly annotated as S-7.04-FU-SIGHUP-RELOAD AC-002 obligation with no formal VP. No PC/EC/Inv semantic changes; no runtime behavior implied. Governance-leaf change. |
 | 1.9 | 2026-07-02 | Phase 5 Pass 3 remediation Path B follow-up: error-taxonomy v4.3 reconciled E-CFG-002 (private-key-export → E-CFG-011) and E-CFG-006 (sbctl --yes → E-CFG-012). Collision-flag annotation row removed from Error Codes table — pre-existing inconsistency resolved. Closes DRIFT-P5P3-A007-ECFG-COLLISION (BC-2.09.003 side). Refs F-P5P3-A-007. |
 | 1.8 | 2026-07-02 | Reconcile listen_addr DEFERRED-APPLICATION row — previously said "No current owner story" contradicting STORY-INDEX line 135 which lists S-BL.NI as the owner. Row now correctly names S-BL.NI. Closes Phase 5 Pass 2 F-P5P2-B-002. |
 | 1.7 | 2026-06-28 | Traceability refresh (Wave-5 consistency audit F-002/F-003): Stories field updated — S-W5.01 added for PC-10/PC-11 (AC-011: management_socket, AC-012: authorized_operator_keys); S-6.01 retains AC-001..AC-009. Story Anchor updated to include S-W5.01. E-CFG-002 collision flag added to Error Codes table: error-taxonomy.md E-CFG-002 = "private key export not supported" (BC-2.05.007); BC-2.09.003 v1.2 E-CFG-002 = listen_addr invalid host:port — pre-existing inconsistency, flagged for maintenance-pass resolution. |

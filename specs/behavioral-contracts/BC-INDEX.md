@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "3.1"
+version: "3.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-02T00:00:00
@@ -124,6 +124,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.2 | 2026-07-06 | BC-2.09.003 bumped to v2.0 (governance-only VP-table narrowing: VP-028/VP-029 rows corrected to startup-validation scope only; 8 rows reclassified test-as-evidence with owning story/AC citations; reload fail-closed row annotated → S-7.04-FU-SIGHUP-RELOAD AC-002 obligation; no PC/EC/Inv semantic changes; governance-leaf change per PO ruling). BC count unchanged at 45. |
 | 3.1 | 2026-07-02 | BC-2.08.001 bumped to v1.5 (F1 remediation: retro-annotate v1.3 changelog row as governance_leaf per POL-003 Exception A audit-tool compatibility; no behavioral change) [governance_leaf: true — downstream pins DO NOT need to re-sync per POL-003 Exception A]. BC count unchanged at 45. |
 | 3.0 | 2026-07-02 | S-6.05 P5 + S-7.03 P4 combined fix-burst: BC-2.08.001 v1.3→v1.4 (Inv-3 per-mode transport deference to BC-2.07.004 EC-013; unconditional Unix-socket wording corrected; Stories row S-7.03 v1.3→v1.4). BC-2.07.001 governance_leaf annotation added to v1.13 entry; Stories row S-6.05 v1.7→v1.8 (no version bump). BC count unchanged at 45. |
 | 2.9 | 2026-07-02 | F-P4L3-MED-2 (POL-002): BC-2.07.001 v1.12→v1.13 (Traceability Stories row cite S-6.05 v1.5→v1.7). BC count unchanged at 45. |
