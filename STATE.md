@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 950285c
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: per-story delivery: worktree + stub-architect (internal/upstreamdial + ARCH-08 §6.4 pos-19 registration same-burst) → test-writer red → implementer TDD
+awaiting: stub-architect Red Gate skeleton (internal/upstreamdial stubs + cmd/switchboard wiring stubs) → test-writer red tests → implementer TDD
 historical_cycles: []
-timestamp: 2026-07-07T19:00:00Z
+timestamp: 2026-07-07T20:00:00Z
 last_update: 2026-07-07
 ---
 

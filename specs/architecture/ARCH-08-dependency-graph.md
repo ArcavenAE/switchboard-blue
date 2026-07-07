@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.5"
+version: "2.6"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-07T00:00:00 # v2.6 — internal/upstreamdial registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19-22 renumbered 20-23. Import set PROSPECTIVE pending first merge.
   - 2026-07-06T13:00:00 # v2.5 — S-BL.TESTENV registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: go list -f '{{.Imports}}' ./internal/testenv/ at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files.
   - 2026-06-25T14:00:00 # v1.4 — Added §1 scope callout
   - 2026-06-25T00:00:00 # v1.5 — Add prose note below Mermaid: positions in §6.5/§6.6 are authoritative for import-order layering; Mermaid groupings reflect functional domain (consistency-validator F-W3-M-004)
@@ -246,7 +247,7 @@ New packages must, before their first commit to any branch:
 
 Undeclared packages discovered at the wave gate are an architecture violation.
 
-### §6.5 Current import positions (develop @ `0516f3a`, 21 packages)
+### §6.5 Current import positions (develop @ `0516f3a`, 22 packages — 21 present on develop + 1 prospective pre-code registration)
 
 > **cmd/switchboard position-18 note (S-4.00 daemon assembly):** `cmd/switchboard`
 > occupies position 18 — the top leaf that imports every layer beneath it. As of
@@ -317,33 +318,39 @@ strict — position N may import packages at positions 1..N-1 only.
 | 16 | `internal/drain` | ∅ (stdlib only) | effectful | Wave 7 (S-7.04, PR #101) |
 | 17 | `internal/routing` | {admission, frame, hmac, multipath} | boundary | Wave 2 (S-2.02); routing→multipath edge added Wave 4 (S-4.04) |
 | 18 | `internal/netingress` | {frame} | boundary | Wave 7 (S-BL.NI, PR #94, b8ed015) |
-| 19 | `internal/mgmt` | {metrics} | boundary (effectful — socket I/O, crypto) | Wave 5 (S-W5.01); see ARCH-12 |
-| 20 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
-| 21 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
-| 22 | `internal/testenv` | {admission, drain, frame, session} | test helper (composition root — importable by _test files only) | steady-state (S-BL.TESTENV, PR #110, 62e38d3) |
+| 19 | `internal/upstreamdial` | {frame, outerassembler} (**PROSPECTIVE** — package not yet on develop; registration precedes code per Q4 binding ruling from S-7.04-FU-PE-CONNECTOR placement note; deviation from v2.5 same-burst-as-merge precedent is authorized by placement note Q4) | effectful (network I/O) | Wave 7 (S-7.04-FU-PE-CONNECTOR) |
+| 20 | `internal/mgmt` | {metrics} | boundary (effectful — socket I/O, crypto) | Wave 5 (S-W5.01); see ARCH-12 |
+| 21 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
+| 22 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
+| 23 | `internal/testenv` | {admission, drain, frame, session} | test helper (composition root — importable by _test files only) | steady-state (S-BL.TESTENV, PR #110, 62e38d3) |
 
 This table is authoritative for the develop branch. Any `internal/` package not
 listed above does NOT exist in the codebase.
 
-> **Position numbering note:** Position values 1–21 form a strictly increasing
+> **Position numbering note:** Position values 1–22 form a strictly increasing
 > topological order. Several positions differ from the §6.6.2 prospective table
 > written at Wave-3 close (2026-06-27) because four packages shipped after that
 > table was frozen (outerassembler, arqsend, netingress, mgmt), routing gained a
 > new import (multipath, added by S-4.04), and config was registered at position 1
-> by S-6.01. The §6.6.2 prospective entries that have shipped are pruned in §6.6.2
-> below. Story files that cite earlier position numbers remain correct if the
-> package they reference existed at that story's wave — the positions only shift
-> here to accommodate the full 21-package DAG.
+> by S-6.01. Position 19 was inserted (v2.6) for the prospective `internal/upstreamdial`
+> registration, shifting former positions 19–22 to 20–23. The §6.6.2 prospective
+> entries that have shipped are pruned in §6.6.2 below. Story files that cite
+> earlier position numbers remain correct if the package they reference existed at
+> that story's wave — the positions only shift here to accommodate the full
+> 22-position table (21 on develop + 1 prospective).
 
 > **Enforcement history note (phase-7 audit F-004):** Enforcement actions such as
 > the PR #104 session→metrics import HOLD were evaluated against §6.6.2 prospective
 > positions and dispatch memory while §6.5 was frozen at 7 packages. This refresh
 > closes that gap: §6.5 is now the single authoritative source for all 21 packages
-> at develop 0516f3a.
+> at develop 0516f3a. (v2.6 note: position 19 `internal/upstreamdial` is a prospective
+> pre-code registration per Q4 placement note binding; it was not present at 0516f3a.)
 
 Verified via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...` at develop
-`0516f3a` (HEAD as of phase-7 audit, 2026-07-06). All 21 packages enumerated and
-import sets confirmed. The topological order is machine-derived and acyclic.
+`0516f3a` (HEAD as of phase-7 audit, 2026-07-06). All 21 packages present at that
+commit enumerated and import sets confirmed; the topological order is machine-derived
+and acyclic. Position 19 (`internal/upstreamdial`) is a prospective pre-code
+registration (v2.6) — its import set is PROSPECTIVE (not yet machine-verified).
 
 #### §6.5.2 S-4.00 import set for cmd/switchboard
 
@@ -424,6 +431,13 @@ Currently no prospective-only positions are registered. The next package to ship
 here first.
 
 **Additional forbidden edges (carried forward):**
+- `internal/upstreamdial` MUST NOT import `internal/drain`, `internal/routing`,
+  `internal/testenv`, or any package at positions 20–23. Allowed imports are
+  `{frame, outerassembler}` only (positions 2 and 8). Nothing may import
+  `internal/upstreamdial` except `cmd/switchboard` and `_test` files — it is an
+  effectful leaf in the connectivity layer. Cycle-freeness: all allowed imports
+  (frame pos 2, outerassembler pos 8) are below position 19; no back-edges.
+  (Per placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement.)
 - `internal/session` MUST NOT import `internal/routing`.
   Session-level authorization state is managed within `internal/session` itself;
   routing is a peer layer, not a dependency.
@@ -457,4 +471,6 @@ here first.
 | 2.1 | 2026-06-27 | (MEDIUM) §6.5.2 import set: `internal/frame` added (OuterHeader carrier in `startFramesBridge`; DAG position 2 leaf; no forbidden edge). (HIGH-B) §6.5.1 obligation 4 note: `runAccess` injection seam — split into `runAccess` + `runAccessWithConnector(connectorIface)`; tests inject `fakeConnector` for PC-2/PC-2.6 end-to-end. (EC-005) §6.5.2 note: "CI enforces structurally" wording overstated; accepted Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |
 | 2.2 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication. C-1 TRACKED-DEFER: `routing.WithFailureCounter` wiring deferred to the future network-ingress story; TRACKED-DEFER note added after obligation table mandating that E-ADM-016 and E-ADM-017 MUST be wired together when `RouteFrame` enters the live data path; orchestrator MUST register a follow-up story/STATE drift item. I-1 wg-join: obligations 3 and 6 updated to require `startSweepTicker` and `startFramesDroppedTicker` to accept `*sync.WaitGroup` and track the goroutine with `wg.Add(1)` / `defer wg.Done()` so BC-2.04.007 PC-2 postcon-6 no-goroutine-leak assertion is deterministic. |
 | 2.3 | 2026-06-27 | C-1 RESOLVED: `routing.WithFailureCounter(fc)` (threshold=5, window=60s) wired in `buildRouter` alongside `routing.WithLogger` — PR #20 (commit 418de54). Partial-wiring concern closed; BC-2.05.008 PC-5 and BC-2.05.005 PC-3 both satisfied. OBS-3 resolved. Only remaining deferral is the network-ingress listener (S-BL.NI). |
-| 2.4 | 2026-07-06 | Phase-7 audit remediation F-004/F-005/F-006. §6.5 refreshed from 7 packages (frozen at Wave-3) to all 21 packages present at develop 0516f3a, derived via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...`. Registered 4 previously-unregistered packages: `internal/mgmt` (Wave 5, S-W5.01, pos 19; see ARCH-12), `internal/netingress` (Wave 7, S-BL.NI PR #94, pos 18), `internal/outerassembler` (Wave 7, S-BL.OA PR #96, pos 8), `internal/arqsend` (Wave 7, S-BL.ARQ-TX PR #98, pos 10). Routing position updated to 17 (routing→multipath edge added by S-4.04; multipath must precede routing). §6.6.2 prospective table pruned — all prospective packages have shipped. New enforcement-history note explaining that PR #104 HOLD ran on stale §6.5. Wave annotation: config=S-6.01, drain=S-7.04, svtnmgmttest added. |
+| 2.6 | 2026-07-07 | `internal/upstreamdial` registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19–22 renumbered 20–23. Import set `{frame, outerassembler}` PROSPECTIVE pending first merge. Deviation from v2.5 same-burst-as-merge precedent is explicitly authorized by placement note Q4 binding ruling. |
+| 2.5 | 2026-07-06 | `internal/testenv` registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: `go list -f '{{.Imports}}' ./internal/testenv/` at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files. |
+| 2.4 | 2026-07-06 | Phase-7 audit remediation F-004/F-005/F-006. §6.5 refreshed from 7 packages (frozen at Wave-3) to all 21 packages present at develop 0516f3a, derived via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...`. Registered 4 previously-unregistered packages: `internal/mgmt` (Wave 5, S-W5.01, pos 19 at time of registration — renumbered to 20 in v2.6; see ARCH-12), `internal/netingress` (Wave 7, S-BL.NI PR #94, pos 18), `internal/outerassembler` (Wave 7, S-BL.OA PR #96, pos 8), `internal/arqsend` (Wave 7, S-BL.ARQ-TX PR #98, pos 10). Routing position updated to 17 (routing→multipath edge added by S-4.04; multipath must precede routing). §6.6.2 prospective table pruned — all prospective packages have shipped. New enforcement-history note explaining that PR #104 HOLD ran on stale §6.5. Wave annotation: config=S-6.01, drain=S-7.04, svtnmgmttest added. |
