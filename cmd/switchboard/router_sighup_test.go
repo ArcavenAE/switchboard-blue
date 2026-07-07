@@ -100,6 +100,44 @@ func scanForLine(buf *syncBuffer, substr string, budget time.Duration) bool { //
 	return strings.Contains(buf.String(), substr)
 }
 
+// scanForReloadFailedLine polls buf until a single output line matches the
+// EC-004 verbatim format:
+//
+//	config reload failed: <err>; continuing with previous config
+//
+// where <err> is non-empty and contains "E-CFG-001" (the inner validation
+// error code from config.Validate).  The check is line-scoped so that prefix
+// and suffix must appear on the same output line (AC-002 format contract).
+// Returns true if such a line is found within budget.
+func scanForReloadFailedLine(buf *syncBuffer, budget time.Duration) bool {
+	const prefix = "config reload failed: "
+	const suffix = "; continuing with previous config"
+	const innerMarker = "E-CFG-001"
+	check := func() bool {
+		scanner := bufio.NewScanner(bytes.NewBufferString(buf.String()))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, prefix) &&
+				strings.Contains(line, innerMarker) &&
+				strings.HasSuffix(line, suffix) {
+				return true
+			}
+		}
+		return false
+	}
+	if check() {
+		return true
+	}
+	deadline := time.Now().Add(budget)
+	for time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		if check() {
+			return true
+		}
+	}
+	return check()
+}
+
 // ── AC-001 ─────────────────────────────────────────────────────────────────────
 
 // TestRunRouter_SIGHUPReload_EtoPE verifies AC-001: sending syscall.SIGHUP
@@ -205,24 +243,47 @@ func TestRunRouter_SIGHUPReload_BadConfig_FailClosed(t *testing.T) {
 		t.Fatalf("AC-002 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
 	}
 
+	// F-006: capture cfg.UpstreamRouters (deep copy) before SIGHUP so we can
+	// assert the original cfg pointer is not mutated by a fail-closed reload.
+	origUpstreams := make([]config.UpstreamRouter, len(startCfg.UpstreamRouters))
+	copy(origUpstreams, startCfg.UpstreamRouters)
+
 	// Send reload signal with the bad config path already wired in.
 	sighupCh <- syscall.SIGHUP
 
 	// Postcondition 3: EC-004 log line must appear.
-	const wantPrefix = "config reload failed: "
-	const wantSuffix = "continuing with previous config"
-	if !scanForLine(buf, wantPrefix, 2*time.Second) {
-		t.Errorf("AC-002: after SIGHUP with bad config, output missing %q within 2s; got:\n%s",
-			wantPrefix, buf.String())
+	// AC-002 specifies verbatim format: one output line matching
+	//   "config reload failed: <err>; continuing with previous config"
+	// where <err> is non-empty and contains "E-CFG-001" (the inner validation
+	// error code from config.Validate on the bad config).
+	if !scanForLine(buf, "config reload failed: ", 2*time.Second) {
+		t.Fatalf("AC-002: after SIGHUP with bad config, output missing reload-failed prefix within 2s; got:\n%s",
+			buf.String())
 	}
-	if !scanForLine(buf, wantSuffix, 2*time.Second) {
-		t.Errorf("AC-002: after SIGHUP with bad config, output missing %q within 2s; got:\n%s",
-			wantSuffix, buf.String())
+	// Verify verbatim format: one line contains BOTH the prefix, E-CFG-001,
+	// and the suffix — guaranteeing they are on the same output line.
+	if !scanForReloadFailedLine(buf, 100*time.Millisecond) {
+		t.Errorf("AC-002: no single output line matches 'config reload failed: <E-CFG-001 err>; continuing with previous config'; got:\n%s",
+			buf.String())
+	}
+
+	// F-006: cfg pointer must not be mutated by a fail-closed reload.
+	// On failure paths the daemon must retain the previous config unchanged.
+	if len(startCfg.UpstreamRouters) != len(origUpstreams) {
+		t.Errorf("AC-002/F-006: cfg.UpstreamRouters length mutated: before=%d after=%d",
+			len(origUpstreams), len(startCfg.UpstreamRouters))
+	} else {
+		for i, want := range origUpstreams {
+			if startCfg.UpstreamRouters[i] != want {
+				t.Errorf("AC-002/F-006: cfg.UpstreamRouters[%d] mutated: before=%v after=%v",
+					i, want, startCfg.UpstreamRouters[i])
+			}
+		}
 	}
 
 	// Postcondition: no mode change occurred (AC-002 postcondition 4).
-	// Wait briefly so any spurious mode=PE line has a chance to appear.
-	time.Sleep(100 * time.Millisecond)
+	// We already waited for the reload-failed line to appear above, so we
+	// can proceed immediately — ordering-based rather than time-based.
 	scanner := bufio.NewScanner(bytes.NewBufferString(buf.String()))
 	modeLines := 0
 	for scanner.Scan() {
@@ -336,6 +397,154 @@ func isNetError(err error, dst *net.Error) bool {
 	return false
 }
 
+// ── F-005: PE→E and PE→PE′ transition tests ────────────────────────────────
+
+// TestRunRouter_SIGHUPReload_PEtoE verifies that a router starting in PE mode
+// (upstream_routers=[A]) downgrades to E mode when reloaded with a config
+// that has no upstream_routers.
+//
+// Pins mgmt_wire.go:562-564 behavior (adversary pass-1 F-005).
+func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	upstreamA := probeDataAddr(t)
+
+	// Start in PE mode (upstream_routers=[A]).
+	startCfg := &config.Config{
+		ListenAddr:   dataAddr,
+		TickInterval: 10 * time.Millisecond,
+		UpstreamRouters: []config.UpstreamRouter{
+			{Addr: upstreamA},
+		},
+		ManagementSocket: sockPath,
+	}
+
+	// Reload config: no upstream_routers → should drop to E mode.
+	reloadCfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+	cfgPath := writeTempConfig(t, reloadCfg)
+
+	buf, errCh, cancel, sighupCh := startRunRouterForReload(t, startCfg, cfgPath)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Precondition: startup in PE mode.
+	if !scanForLine(buf, "mode=PE", 2*time.Second) {
+		t.Fatalf("F-005/PE→E precondition: startup did not emit mode=PE within 2s; got:\n%s", buf.String())
+	}
+
+	// Send reload with the E-mode config.
+	sighupCh <- syscall.SIGHUP
+
+	// Postcondition 1: mode=E line must appear after reload.
+	if !scanForLine(buf, "mode=E", 2*time.Second) {
+		t.Errorf("F-005/PE→E: after SIGHUP with no-upstream config, output missing mode=E within 2s; got:\n%s",
+			buf.String())
+	}
+
+	// Postcondition 2: no spurious "mode=PE upstream_routers=[]" line —
+	// the daemon must not emit a PE line with an empty upstream list.
+	snapshot := buf.String()
+	scanner := bufio.NewScanner(bytes.NewBufferString(snapshot))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "mode=PE") && strings.Contains(line, "upstream_routers=[]") {
+			t.Errorf("F-005/PE→E: daemon emitted 'mode=PE upstream_routers=[]' — should have emitted mode=E; line: %q", line)
+		}
+	}
+
+	// Postcondition 3: daemon still running.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("F-005/PE→E: runRouter returned prematurely after reload: %v", rErr)
+	default:
+		// expected — still running
+	}
+}
+
+// TestRunRouter_SIGHUPReload_PEtoPE verifies that a router in PE mode with
+// upstream_routers=[A] transitions to PE mode with [B] when reloaded with a
+// config that replaces [A] with [B].
+//
+// Pins mgmt_wire.go:560-561 behavior (adversary pass-1 F-005).
+func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	upstreamA := probeDataAddr(t)
+	upstreamB := probeDataAddr(t)
+
+	// Start in PE mode with upstream_routers=[A].
+	startCfg := &config.Config{
+		ListenAddr:   dataAddr,
+		TickInterval: 10 * time.Millisecond,
+		UpstreamRouters: []config.UpstreamRouter{
+			{Addr: upstreamA},
+		},
+		ManagementSocket: sockPath,
+	}
+
+	// Reload config: replace [A] with [B].
+	reloadCfg := &config.Config{
+		ListenAddr:   dataAddr,
+		TickInterval: 10 * time.Millisecond,
+		UpstreamRouters: []config.UpstreamRouter{
+			{Addr: upstreamB},
+		},
+		ManagementSocket: sockPath,
+	}
+	cfgPath := writeTempConfig(t, reloadCfg)
+
+	buf, errCh, cancel, sighupCh := startRunRouterForReload(t, startCfg, cfgPath)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Precondition: startup in PE mode with [A].
+	if !scanForLine(buf, "mode=PE", 2*time.Second) {
+		t.Fatalf("F-005/PE→PE′ precondition: startup did not emit mode=PE within 2s; got:\n%s", buf.String())
+	}
+	if !scanForLine(buf, upstreamA, 2*time.Second) {
+		t.Fatalf("F-005/PE→PE′ precondition: startup did not emit upstream addr %q within 2s; got:\n%s",
+			upstreamA, buf.String())
+	}
+
+	// Send reload with the PE-[B] config.
+	sighupCh <- syscall.SIGHUP
+
+	// Postcondition 1: new mode=PE line with [B] must appear.
+	if !scanForLine(buf, "mode=PE", 2*time.Second) {
+		t.Errorf("F-005/PE→PE′: after SIGHUP, output missing mode=PE within 2s; got:\n%s", buf.String())
+	}
+	if !scanForLine(buf, upstreamB, 2*time.Second) {
+		t.Errorf("F-005/PE→PE′: after SIGHUP, output missing new upstream addr %q within 2s; got:\n%s",
+			upstreamB, buf.String())
+	}
+
+	// Postcondition 2: daemon still running.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("F-005/PE→PE′: runRouter returned prematurely after reload: %v", rErr)
+	default:
+		// expected — still running
+	}
+}
+
 // ── AC-004 ─────────────────────────────────────────────────────────────────────
 
 // TestRunRouter_VP038_EtoPEViaConfigOnly verifies VP-038: the router graduates
@@ -393,20 +602,17 @@ func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 	}
 
 	// Drive reload via the testenv seam.
-	handle.SendReloadSignal(t, cfgPath)
+	handle.SendReloadSignal(t)
 
-	// Wait for mode=PE emission (AC-004 postcondition 1).
+	// AC-004 postcondition 1+2: mode=PE emitted without process restart.
+	// scanForLine carries the postcondition — the observed emission on the
+	// real runRouter output buffer IS the authoritative mode assertion.
+	// handle.Mode() is NOT asserted here: Restart() unconditionally sets
+	// r.mode=ModePE regardless of the real runRouter state (the stub handle
+	// is disconnected from the goroutine), making it a tautological check
+	// that cannot fail (adversary pass-1 F-002).
 	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Errorf("VP-038/AC-004: after SendReloadSignal, output missing mode=PE within 2s; got:\n%s", buf.String())
-	}
-
-	// Synchronise the handle's in-memory mode view with the observed emission
-	// (Restart is the handle-level sync operation per story note).
-	handle.Restart(t, testenv.RouterConfig{UpstreamRouters: []string{reloadAddr}})
-
-	// AC-004 postcondition 2: Mode() returns ModePE without process restart.
-	if got := handle.Mode(); got != testenv.ModePE {
-		t.Errorf("VP-038/AC-004: handle.Mode() = %v, want ModePE", got)
+		t.Errorf("VP-038/AC-004: after SendReloadSignal, output missing mode=PE line within 2s; got:\n%s", buf.String())
 	}
 
 	// AC-004 postcondition 3: goroutine has not returned.
