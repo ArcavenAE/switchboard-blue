@@ -456,6 +456,64 @@ func TestConnector_ReloadAddrs_AddsAndRemoves(t *testing.T) {
 	}
 }
 
+// ── AC-002: EC-004 drop-to-zero mode=E emission ───────────────────────────────
+
+// TestConnector_EC004_DropToZero_ModeEEmission verifies that when the last
+// upstream connection drops (connectedCount → 0), the Connector emits the
+// verbatim EC-004 log "mode=E (no upstream_routers configured)" (F-P1-006,
+// connector.go:344-347, AC-002).
+//
+// Failure condition: if the EC-004 log branch (connectedCount==0 check after
+// connectedCount.Add(-1)) is removed, this test fails.
+func TestConnector_EC004_DropToZero_ModeEEmission(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 30 * time.Millisecond
+
+	ln, addr := newLoopbackListener(t)
+
+	// Upstream fixture: accept the connection and keep it open.
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		accepted <- conn
+	}()
+
+	lw := newLogWriter()
+	c := New(lw, zeroEnv(), testKeepalive, []string{addr})
+	t.Cleanup(c.Stop)
+	c.Start()
+
+	// Wait for connection to establish (ModePE).
+	if !pollForMode(c, 2*time.Second) {
+		t.Fatalf("TestConnector_EC004_DropToZero_ModeEEmission: Mode() != ModePE after 2s")
+	}
+
+	// Drain the accepted connection channel so we can close the listener.
+	select {
+	case conn := <-accepted:
+		// Close the server-side connection to trigger a write failure in maintainConn.
+		_ = conn.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_EC004_DropToZero_ModeEEmission: upstream fixture did not accept connection within 2s")
+	}
+
+	// Also close the listener so reconnect attempts fail immediately.
+	_ = ln.Close()
+
+	// EC-004: once connectedCount drops to 0, the Connector must emit the
+	// verbatim log "mode=E (no upstream_routers configured)".
+	// Allow up to 3 keepalive intervals for the write deadline to expire and
+	// the count to decrement.
+	const ec004Log = "mode=E (no upstream_routers configured)"
+	if !waitForLog(lw, ec004Log, 3*time.Second) {
+		t.Errorf("TestConnector_EC004_DropToZero_ModeEEmission: EC-004 log %q not emitted within 3s after connection drop (F-P1-006)", ec004Log)
+	}
+}
+
 // ── nextBackoff pure-function schedule tests ────────────────────────────────
 
 // TestNextBackoff_DoublingWithinJitterBand verifies that nextBackoff doubles the
