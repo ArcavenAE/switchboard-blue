@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-pe-connector-po-review
+phase_step: steady-state-pe-connector-delivery
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: 950285c
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: product-owner ready-review → draft-to-ready flip → per-story delivery begins
+awaiting: per-story delivery: worktree + stub-architect (internal/upstreamdial + ARCH-08 §6.4 pos-19 registration same-burst) → test-writer red → implementer TDD
 historical_cycles: []
-timestamp: 2026-07-07T18:00:00Z
+timestamp: 2026-07-07T19:00:00Z
 last_update: 2026-07-07
 ---
 
@@ -60,12 +60,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-07 | **PE-CONNECTOR v1.1 READY — PO ready-review passed after remediation** | completed | PO returned D-1 (phantom BC-4.03 — same class as SIGHUP-cycle E-CFG-002; propagation: v0.1 stub → placement note → story; both docs errata'd) + D-2 (deferral class not-core unset → added not-core). Remediated; re-review passed. STORY-INDEX v4.06 → v4.07. Awaiting per-story delivery: worktree + stub-architect (internal/upstreamdial + ARCH-08 §6.4 pos-19 registration same-burst) → test-writer red → implementer TDD. [process-gap] stub-era phantom BC citations survive elaboration — elaborating agents inherited BC-4.03 from the v0.1 stub without re-verifying against BC-INDEX; PO checklist item 1 is the current backstop. Candidate codification: elaboration dispatches must include "verify every inherited BC/VP ID against the index" instruction. |
 | 2026-07-07 | **PE-CONNECTOR elaborated v0.1→v1.0-draft** | completed | Architect placement note Q1-Q9 (decisions/S-7.04-FU-PE-CONNECTOR-placement-note.md; new pkg internal/upstreamdial ruled; DAG pos 19) + story-writer 6 ACs + 10-row FCL + FO-1..FO-5 consumption table. STORY-INDEX v4.05 → v4.06. Awaiting product-owner ready-review → draft-to-ready flip → per-story delivery begins. |
 | 2026-07-07 | **S-7.04-FU-SIGHUP-RELOAD MERGED PR #113 @ 950285c** | completed | Story complete end-to-end: squash-merged to develop @ 950285c (2026-07-07T15:54:42Z); all CI checks green; story branch + worktree .worktrees/s704-fu-sighup-reload cleaned up. BC-5.39.001 satisfied. STORY-INDEX v4.04 → v4.05. S-7.04-FU-PE-CONNECTOR unblocked. |
 | 2026-07-07 | **S-7.04-FU-SIGHUP-RELOAD DELIVERY v1.0 + demo evidence** | completed | DELIVERY doc v1.0 authored by story-writer (375 lines); demo evidence committed at bacc59b on branch story/s-7.04-fu-sighup-reload; branch pushed to origin; pr-manager dispatched. STORY-INDEX v4.03 → v4.04. Awaiting pr-manager 9-step flow → CI → merge → worktree cleanup. |
 | 2026-07-07 | **BC-5.39.001 SATISFIED** — P12/P13/P14 consecutive clean 3/3; 14 passes, 35 findings all dispositioned; code lane 48e3271 | completed | Pass 14: NO_FINDINGS @ 48e3271 / story v1.7 — CONVERGED. streak 2/3 → 3/3. 12 anti-findings incl. two novel probes both clean (EC-004 newline-injection via control-char-strip chain config.go:305-313/499; testenv lock/cleanup ordering under -race). 5 obs O1-O5 all carried/parked confirmations (inert-reload → DRIFT row; order-sensitive diff + upstreamRouters shared-state → PE-CONNECTOR 6th confirmations; line-number comments cosmetic; Cross-BC note accuracy confirmed). Novelty LOW. STREAK: 2/3 → 3/3. BC-5.39.001 SATISFIED. Adversary streak read (3/3) verified by orchestrator. convergence-summary.md written. STORY-INDEX v4.02 → v4.03. |
-| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-13-clean-2of3 | completed | Pass 13: NO_FINDINGS @ 48e3271 / story v1.7 — streak 1/3 → 2/3 (11 consecutive zero-code-finding passes). 11 anti-findings: Q1 real-signal guard; fail-closed both arms; non-vacuous cfg immutability incl. value-struct copy() sufficiency; EC-004 verbatim single-line with control-char-strip; three E-CFG fail arms; emission byte-parity; diff-guard all transitions incl. nil==empty; untouched surfaces + both liveness probes both paths; FCL 8-row independent re-sweep all accurate — drift class confirmed closed; go.md hygiene incl. yaml.v3-fixtures-only adjudication; POL-001/002/004. 5 obs: O1 inert-reload parked (DRIFT-SIGHUP-INERT-RELOAD-UX); O2 order-sensitive diff → PE-CONNECTOR (6th confirm); O3 upstreamRouters shared-state → PE-CONNECTOR (6th confirm); O4 dead guard (5th confirm, accepted); O5 hardcoded line-number comments cosmetic. Novel probe angles (YAML round-trip fidelity, cross-test signal interference) both clean. Novelty LOW. STORY-INDEX v4.01 → v4.02. STREAK: 1/3 → 2/3. Awaiting pass 14 (convergence pass). |
-| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-12-clean-1of3 | completed | Pass 12: NO_FINDINGS @ 48e3271 / story v1.7 — streak 0/3 → 1/3 (first clean since pass 6; 10 consecutive zero-code-finding passes; v1.7 FCL sweep held under independent re-verification). 12 anti-findings: fail-closed atomicity all paths incl. non-empty immutability; EC-004 verbatim + control-char-strip robustness; emission byte-parity; Q1 real-signal guard; race-clean; diff-guard all transitions incl. nil==empty; signal directionality; three fail-closed arms; FCL 8-row independent re-sweep all accurate; POL-001/002/004; AC-003 positive liveness both probes; go.md hygiene. 4 obs adjudicated non-defect. Novelty LOW. STORY-INDEX v4.00 → v4.01. |
 
 ## Wave 6 Story Status
 
