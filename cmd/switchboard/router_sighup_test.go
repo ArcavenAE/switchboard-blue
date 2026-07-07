@@ -16,6 +16,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -139,6 +141,79 @@ func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Du
 	return check()
 }
 
+// modeELine returns the exact mode=E output line emitted by runRouter for
+// zero upstream_routers — derived from mgmt_wire.go:527 format string.
+// Pinning the full string (prefix + token) guards against partial-match
+// false-positives and format drift (F-SIGHUP-P4-001).
+func modeELine() string {
+	return "switchboard router: mode=E (no upstream_routers configured)"
+}
+
+// modePELine returns the exact mode=PE output line emitted by runRouter for
+// a given upstreamRouters slice — derived from mgmt_wire.go:529/564 format
+// string ("switchboard router: mode=PE upstream_routers=%v\n" where %v is
+// fmt.Sprintf("%v", addrs)).
+// Pinning the full prefix + upstream_routers= token guards against partial-
+// match false-positives and format drift (F-SIGHUP-P4-001).
+func modePELine(addrs []string) string {
+	return fmt.Sprintf("switchboard router: mode=PE upstream_routers=%v", addrs)
+}
+
+// scanForExactModeLine polls buf until a line that contains the full mode-line
+// string (as returned by modeELine or modePELine) appears, or the budget
+// elapses.  The match is line-scoped via a bufio.Scanner to ensure prefix and
+// suffix appear on the same output line.
+//
+// Using contains-on-a-line (rather than full-line equality) tolerates a
+// trailing newline that the scanner strips, while still requiring the complete
+// prefix "switchboard router: " and the complete token on one line.
+//
+// F-SIGHUP-P4-001: replaces loose "mode=PE" / "mode=E" substring checks in
+// AC-001 so that the full production format is pinned to the test.
+func scanForExactModeLine(buf *syncBuffer, fullLine string, budget time.Duration) bool { //nolint:unparam // budget is a caller-controlled knob; all current callers use 2s but the parameter is intentional
+	check := func() bool {
+		scanner := bufio.NewScanner(bytes.NewBufferString(buf.String()))
+		for scanner.Scan() {
+			if strings.Contains(scanner.Text(), fullLine) {
+				return true
+			}
+		}
+		return false
+	}
+	if check() {
+		return true
+	}
+	deadline := time.Now().Add(budget)
+	for time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		if check() {
+			return true
+		}
+	}
+	return check()
+}
+
+// dialMgmtAndReadChallenge dials the management Unix socket at sockPath and
+// reads the first JSON message from the server.  Returns the decoded map and
+// nil error if a well-formed JSON object is received within the read deadline.
+// Used by F-SIGHUP-P4-004 (AC-003 post-reload mgmt-socket probe).
+func dialMgmtAndReadChallenge(t *testing.T, sockPath string) (map[string]any, error) {
+	t.Helper()
+	conn, err := net.DialTimeout("unix", sockPath, time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("dial mgmt socket %q: %w", sockPath, err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err := conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+		return nil, fmt.Errorf("SetReadDeadline: %w", err)
+	}
+	var msg map[string]any
+	if err := json.NewDecoder(conn).Decode(&msg); err != nil {
+		return nil, fmt.Errorf("decode JSON from mgmt socket: %w", err)
+	}
+	return msg, nil
+}
+
 // ── AC-001 ─────────────────────────────────────────────────────────────────────
 
 // TestRunRouter_SIGHUPReload_EtoPE verifies AC-001: sending syscall.SIGHUP
@@ -184,8 +259,10 @@ func TestRunRouter_SIGHUPReload_EtoPE(t *testing.T) {
 	})
 
 	// Precondition: confirm startup is in E mode.
-	if !scanForLine(buf, "mode=E", 2*time.Second) {
-		t.Fatalf("AC-001 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
+	// F-SIGHUP-P4-001: use full-line format (prefix + token), not loose "mode=E".
+	if !scanForExactModeLine(buf, modeELine(), 2*time.Second) {
+		t.Fatalf("AC-001 precondition: startup did not emit exact mode=E line %q within 2s; got:\n%s",
+			modeELine(), buf.String())
 	}
 
 	// F-P2-003: deep-copy of cfg.UpstreamRouters before SIGHUP so we can
@@ -199,11 +276,12 @@ func TestRunRouter_SIGHUPReload_EtoPE(t *testing.T) {
 	sighupCh <- syscall.SIGHUP
 
 	// Postcondition: mode=PE line must appear (AC-001 postcondition 4).
-	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Errorf("AC-001: after SIGHUP, output missing mode=PE line within 2s; got:\n%s", buf.String())
-	}
-	if !scanForLine(buf, reloadAddr, 2*time.Second) {
-		t.Errorf("AC-001: after SIGHUP, output missing upstream addr %q; got:\n%s", reloadAddr, buf.String())
+	// F-SIGHUP-P4-001: pin the full production format including "switchboard router: "
+	// prefix and "upstream_routers=" token — not a loose "mode=PE" substring.
+	wantPELine := modePELine([]string{reloadAddr})
+	if !scanForExactModeLine(buf, wantPELine, 2*time.Second) {
+		t.Errorf("AC-001: after SIGHUP, output missing exact mode=PE line %q within 2s; got:\n%s",
+			wantPELine, buf.String())
 	}
 
 	// F-P2-003: cfg pointer must not be mutated by a successful reload.
@@ -540,8 +618,10 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 	})
 
 	// Precondition: startup in E mode.
-	if !scanForLine(buf, "mode=E", 2*time.Second) {
-		t.Fatalf("AC-003 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
+	// F-SIGHUP-P4-001: pin exact line format.
+	if !scanForExactModeLine(buf, modeELine(), 2*time.Second) {
+		t.Fatalf("AC-003 precondition: startup did not emit exact mode=E line %q within 2s; got:\n%s",
+			modeELine(), buf.String())
 	}
 
 	// Establish a live TCP connection to the ingress listener before sending SIGHUP.
@@ -555,8 +635,11 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 	sighupCh <- syscall.SIGHUP
 
 	// Wait for PE mode emission — confirms reload completed.
-	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Errorf("AC-003: after SIGHUP, output missing mode=PE line within 2s; got:\n%s", buf.String())
+	// F-SIGHUP-P4-001: pin exact line format including upstream_routers= token.
+	wantPELine := modePELine([]string{reloadAddr})
+	if !scanForExactModeLine(buf, wantPELine, 2*time.Second) {
+		t.Errorf("AC-003: after SIGHUP, output missing exact mode=PE line %q within 2s; got:\n%s",
+			wantPELine, buf.String())
 	}
 
 	// Postcondition 1: the open TCP connection must not have been closed by
@@ -579,6 +662,20 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 		} else {
 			// EOF or connection-reset — daemon closed its side during reload.
 			t.Errorf("AC-003: TCP connection closed by daemon during reload — read error: %v", readErr)
+		}
+	}
+
+	// F-SIGHUP-P4-004: AC-003 PC-2 names "mgmtSrv/mgmtWG — management server
+	// continues serving" among untouched surfaces.  Probe the management socket
+	// post-reload: dial it and assert a well-formed challenge is received,
+	// confirming mgmt.Server is still alive after the reload cycle.
+	challenge, mgmtErr := dialMgmtAndReadChallenge(t, sockPath)
+	if mgmtErr != nil {
+		t.Errorf("AC-003/F-P4-004: mgmt socket not serving after reload — %v", mgmtErr)
+	} else {
+		if challenge["type"] != "challenge" {
+			t.Errorf("AC-003/F-P4-004: post-reload mgmt response type = %v; want %q",
+				challenge["type"], "challenge")
 		}
 	}
 }
@@ -635,17 +732,21 @@ func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 	})
 
 	// Precondition: startup in PE mode.
-	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Fatalf("F-005/PE→E precondition: startup did not emit mode=PE within 2s; got:\n%s", buf.String())
+	// F-SIGHUP-P4-001: pin exact line format.
+	wantStartPELine := modePELine([]string{upstreamA})
+	if !scanForExactModeLine(buf, wantStartPELine, 2*time.Second) {
+		t.Fatalf("F-005/PE→E precondition: startup did not emit exact mode=PE line %q within 2s; got:\n%s",
+			wantStartPELine, buf.String())
 	}
 
 	// Send reload with the E-mode config.
 	sighupCh <- syscall.SIGHUP
 
 	// Postcondition 1: mode=E line must appear after reload.
-	if !scanForLine(buf, "mode=E", 2*time.Second) {
-		t.Errorf("F-005/PE→E: after SIGHUP with no-upstream config, output missing mode=E within 2s; got:\n%s",
-			buf.String())
+	// F-SIGHUP-P4-001: pin exact line format.
+	if !scanForExactModeLine(buf, modeELine(), 2*time.Second) {
+		t.Errorf("F-005/PE→E: after SIGHUP with no-upstream config, output missing exact mode=E line %q within 2s; got:\n%s",
+			modeELine(), buf.String())
 	}
 
 	// Postcondition 2: no spurious "mode=PE upstream_routers=[]" line —
@@ -712,24 +813,22 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 	})
 
 	// Precondition: startup in PE mode with [A].
-	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Fatalf("F-005/PE→PE′ precondition: startup did not emit mode=PE within 2s; got:\n%s", buf.String())
-	}
-	if !scanForLine(buf, upstreamA, 2*time.Second) {
-		t.Fatalf("F-005/PE→PE′ precondition: startup did not emit upstream addr %q within 2s; got:\n%s",
-			upstreamA, buf.String())
+	// F-SIGHUP-P4-001: pin exact line format including upstream_routers= token.
+	wantStartPELineA := modePELine([]string{upstreamA})
+	if !scanForExactModeLine(buf, wantStartPELineA, 2*time.Second) {
+		t.Fatalf("F-005/PE→PE′ precondition: startup did not emit exact mode=PE line %q within 2s; got:\n%s",
+			wantStartPELineA, buf.String())
 	}
 
 	// Send reload with the PE-[B] config.
 	sighupCh <- syscall.SIGHUP
 
 	// Postcondition 1: new mode=PE line with [B] must appear.
-	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Errorf("F-005/PE→PE′: after SIGHUP, output missing mode=PE within 2s; got:\n%s", buf.String())
-	}
-	if !scanForLine(buf, upstreamB, 2*time.Second) {
-		t.Errorf("F-005/PE→PE′: after SIGHUP, output missing new upstream addr %q within 2s; got:\n%s",
-			upstreamB, buf.String())
+	// F-SIGHUP-P4-001: pin exact line format including new upstream_routers= token.
+	wantReloadPELineB := modePELine([]string{upstreamB})
+	if !scanForExactModeLine(buf, wantReloadPELineB, 2*time.Second) {
+		t.Errorf("F-005/PE→PE′: after SIGHUP, output missing exact mode=PE line %q within 2s; got:\n%s",
+			wantReloadPELineB, buf.String())
 	}
 
 	// Postcondition 2: daemon still running.
