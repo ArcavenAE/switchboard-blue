@@ -335,31 +335,46 @@ func TestConnector_AllUpstreamsUnreachable_ModeE(t *testing.T) {
 // keepaliveInterval passed to New, and that ticker fires probe frames on
 // established upstream connections.
 //
-// RED GATE: New panics — test fails immediately.
+// The test isolates the keepalive probe from the bootstrap frame:
+//  1. Drain the bootstrap frame (first write on connect).
+//  2. Require a SUBSEQUENT write within ~3 keepalive intervals.
+//
+// Failure condition: if maintainConn's keepalive tick case is removed, the
+// second write never arrives and the test times out.
 func TestConnector_KeepaliveTickerDrivesHealthProbe(t *testing.T) {
 	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
 
-	// Use a very short keepalive so the probe fires quickly.
+	// Use a short keepalive so the probe fires quickly.
 	const testKeepalive = 50 * time.Millisecond
 
 	ln, addr := newLoopbackListener(t)
 	defer func() { _ = ln.Close() }()
 
-	// Upstream fixture: accept and record whether any bytes were sent.
-	probedCh := make(chan struct{}, 1)
+	// Upstream fixture: accept, drain the bootstrap frame, then wait for a
+	// second write (the keepalive probe) within the deadline.
+	keepaliveProbedCh := make(chan struct{}, 1)
 	go func() {
 		conn, err := ln.Accept()
 		if err != nil {
 			return
 		}
 		defer func() { _ = conn.Close() }()
-		buf := make([]byte, 256)
-		// Any write from the Connector (bootstrap frame or keepalive probe) signals the ticker.
+		buf := make([]byte, 4096)
+
+		// Read 1: bootstrap frame.  Block up to 2s.
 		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		n, _ := conn.Read(buf)
+		n, err := conn.Read(buf)
+		if n == 0 || err != nil {
+			return // bootstrap frame not received — test will timeout below
+		}
+
+		// Read 2: keepalive probe.  Keepalive ticker fires after testKeepalive;
+		// allow 4 intervals for the first tick to fire and the write to complete.
+		_ = conn.SetReadDeadline(time.Now().Add(4 * testKeepalive))
+		n, _ = conn.Read(buf)
 		if n > 0 {
 			select {
-			case probedCh <- struct{}{}:
+			case keepaliveProbedCh <- struct{}{}:
 			default:
 			}
 		}
@@ -370,17 +385,20 @@ func TestConnector_KeepaliveTickerDrivesHealthProbe(t *testing.T) {
 	t.Cleanup(c.Stop)
 	c.Start()
 
-	// Wait for connection to establish.
+	// Wait for connection to establish (bootstrap write succeeds).
 	if !pollForMode(c, 2*time.Second) {
 		t.Fatalf("TestConnector_KeepaliveTickerDrivesHealthProbe: Mode() != ModePE after 2s")
 	}
 
-	// AC-003 postcondition 2: the keepalive ticker must have driven a probe write.
+	// AC-003 postcondition 2: the keepalive ticker must have driven a subsequent
+	// probe write distinct from the bootstrap frame.
+	// Allow 6 keepalive intervals: 1 interval for the ticker to fire +
+	// scheduling slack.
 	select {
-	case <-probedCh:
-		// pass — upstream fixture received bytes within the keepalive window.
-	case <-time.After(3 * testKeepalive):
-		t.Errorf("TestConnector_KeepaliveTickerDrivesHealthProbe: no bytes received at upstream fixture within %v; keepalive ticker not driving health probes (AC-003 PC-2)", 3*testKeepalive)
+	case <-keepaliveProbedCh:
+		// pass — upstream fixture received a second write (keepalive probe).
+	case <-time.After(6 * testKeepalive):
+		t.Errorf("TestConnector_KeepaliveTickerDrivesHealthProbe: no keepalive probe received after bootstrap within %v; maintainConn ticker not driving probes (AC-003 PC-2, F-P1-003)", 6*testKeepalive)
 	}
 }
 
