@@ -562,13 +562,13 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 	// Postcondition 1: the open TCP connection must not have been closed by
 	// the reload path.
 	//
-	// F-P2-002 divergence from story outline: the story's AC-003 outline
-	// suggests "write a byte" as the liveness probe, but a write to a FIN'd
-	// socket typically succeeds into the send buffer — the kernel reports the
-	// RST only on the NEXT write or on a read.  A read-with-deadline is
-	// strictly stronger: EOF or connection-reset on a read means the daemon
-	// closed its side (FAIL); a read deadline timeout means the socket is
-	// still open (PASS).  See ## Ruling Divergence in DELIVERY doc.
+	// Divergence from story AC-003 outline (deliberate: read-probe is strictly
+	// stronger): the story's AC-003 outline suggests "write a byte" as the
+	// liveness probe, but a write to a FIN'd socket typically succeeds into
+	// the send buffer — the kernel reports the RST only on the NEXT write or
+	// on a read.  A read-with-deadline is strictly stronger: EOF or
+	// connection-reset on a read means the daemon closed its side (FAIL); a
+	// read deadline timeout means the socket is still open (PASS).
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	oneByte := make([]byte, 1)
 	_, readErr := conn.Read(oneByte)
@@ -736,6 +736,93 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 	select {
 	case rErr := <-errCh:
 		t.Errorf("F-005/PE→PE′: runRouter returned prematurely after reload: %v", rErr)
+	default:
+		// expected — still running
+	}
+}
+
+// TestRunRouter_SIGHUPReload_IdempotentResend verifies that the reload
+// diff-guard (equalStringSlices in mgmt_wire.go) suppresses duplicate mode=
+// emission when a second SIGHUP is sent with an unchanged config.
+//
+// Pins mgmt_wire.go:560 behavior (adversary pass-3 F-P3-005a).
+func TestRunRouter_SIGHUPReload_IdempotentResend(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	upstreamA := probeDataAddr(t)
+
+	// Start in E mode.
+	startCfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Reload config: PE mode with upstream_routers=[A].
+	reloadCfg := &config.Config{
+		ListenAddr:   dataAddr,
+		TickInterval: 10 * time.Millisecond,
+		UpstreamRouters: []config.UpstreamRouter{
+			{Addr: upstreamA},
+		},
+		ManagementSocket: sockPath,
+	}
+	cfgPath := writeTempConfig(t, reloadCfg)
+
+	buf, errCh, cancel, sighupCh := startRunRouterForReload(t, startCfg, cfgPath)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Precondition: startup in E mode.
+	if !scanForLine(buf, "mode=E", 2*time.Second) {
+		t.Fatalf("IdempotentResend precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
+	}
+
+	// First reload: E→PE; a mode=PE line must appear.
+	sighupCh <- syscall.SIGHUP
+	if !scanForLine(buf, "mode=PE", 2*time.Second) {
+		t.Fatalf("IdempotentResend: first SIGHUP did not produce mode=PE within 2s; got:\n%s", buf.String())
+	}
+
+	// Snapshot the mode= count after the first reload settles.
+	countModeLines := func(s string) int {
+		scanner := bufio.NewScanner(bytes.NewBufferString(s))
+		n := 0
+		for scanner.Scan() {
+			if strings.Contains(scanner.Text(), "mode=") {
+				n++
+			}
+		}
+		return n
+	}
+	countAfterFirst := countModeLines(buf.String())
+
+	// Second reload: same config file on disk — diff-guard must suppress emission.
+	sighupCh <- syscall.SIGHUP
+
+	// The fail-closed path emits nothing on an identical config, so we wait a
+	// short bounded interval for any spurious emission to materialise before
+	// asserting absence.  Mirror the same 200 ms budget used by AC-003's
+	// read-deadline settle.
+	time.Sleep(200 * time.Millisecond)
+
+	countAfterSecond := countModeLines(buf.String())
+	if countAfterSecond != countAfterFirst {
+		t.Errorf("IdempotentResend: second SIGHUP with unchanged config emitted %d additional mode= line(s); expected 0; output:\n%s",
+			countAfterSecond-countAfterFirst, buf.String())
+	}
+
+	// Daemon must still be running.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("IdempotentResend: runRouter returned prematurely after second reload: %v", rErr)
 	default:
 		// expected — still running
 	}
