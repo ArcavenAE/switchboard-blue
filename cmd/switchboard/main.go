@@ -117,7 +117,12 @@ func run(stdout io.Writer, args []string) error {
 
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer cancel()
-		return runRouter(ctx, os.Stderr, cfg)
+		// S-7.04-FU-SIGHUP-RELOAD: dedicated SIGHUP channel, independent of the
+		// SIGTERM/SIGINT NotifyContext so a reload signal does not cancel the daemon.
+		sighupCh := make(chan os.Signal, 1)
+		signal.Notify(sighupCh, syscall.SIGHUP)
+		defer signal.Stop(sighupCh)
+		return runRouter(ctx, os.Stderr, cfg, *configPath, sighupCh)
 
 	case "console":
 		consoleFS := flag.NewFlagSet("console", flag.ContinueOnError)

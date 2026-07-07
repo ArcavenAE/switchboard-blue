@@ -1008,6 +1008,77 @@ func TestDaemonCleanShutdown(t *testing.T) {
 	})
 }
 
+// ── F-SIGHUP-P5-001: TestRunRouterRun_RealSIGHUP_DoesNotExit ─────────────────
+
+// TestRunRouterRun_RealSIGHUP_DoesNotExit verifies F-SIGHUP-P5-001: the SIGHUP
+// registration in run() (main.go:118-125) wires a dedicated sighupCh via
+// signal.Notify that is NOT part of the SIGTERM/SIGINT NotifyContext.  A real
+// OS-level SIGHUP delivered to the process must route through the reload path
+// and must NOT cancel the daemon's root context.
+//
+// All nine other SIGHUP tests inject the channel directly into runRouter,
+// bypassing the run() wiring entirely.  A refactor that accidentally merged
+// SIGHUP into the NotifyContext set would leave every injected-channel test
+// green while the deployed daemon drains and exits on SIGHUP instead of
+// reloading.  This test pins that boundary: it calls run() (not runRouter),
+// delivers a real signal, and asserts non-exit.
+//
+// Load-bearing assertion: run() must NOT return within 500ms of SIGHUP.
+// Cleanup: SIGTERM cancels the NotifyContext inside run(), returning cleanly.
+func TestRunRouterRun_RealSIGHUP_DoesNotExit(t *testing.T) {
+	// NOT t.Parallel(): sends process-wide SIGHUP and SIGTERM.
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+	cfgPath := writeTempConfig(t, cfg)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(os.Stderr, []string{"switchboard", "router", "--config", cfgPath})
+	}()
+	t.Cleanup(func() {
+		// SIGTERM cancels the NotifyContext that run() installs for graceful
+		// shutdown.  The daemon must return within 3s after receiving it.
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+		select {
+		case <-errCh:
+		case <-time.After(3 * time.Second):
+		}
+	})
+
+	// Wait for the management socket to appear — confirms run() has reached
+	// runRouter and the daemon is fully started.  This is the same startup
+	// gate used by startRunRouterForReload.
+	if !waitForSocket(sockPath, 2*time.Second) {
+		t.Fatalf("F-P5-001: management socket %q not created within 2s; daemon failed to start", sockPath)
+	}
+
+	// Deliver a real OS-level SIGHUP through the kernel signal path.
+	// run() registers signal.Notify(sighupCh, syscall.SIGHUP) independently
+	// of the NotifyContext — SIGHUP must be routed to the reload seam, not
+	// to the context-cancellation path.
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGHUP); err != nil {
+		t.Fatalf("Kill(SIGHUP): %v", err)
+	}
+
+	// F-P5-001 assertion: run() must NOT have returned within 500ms of SIGHUP.
+	// A broken implementation that includes SIGHUP in the NotifyContext set
+	// (or that calls cancel() inside the SIGHUP handler) would cause run() to
+	// return here, failing this select.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("F-P5-001: run() returned after SIGHUP — daemon must reload (not exit); error: %v", rErr)
+	case <-time.After(500 * time.Millisecond):
+		// Correct: daemon is still running 500ms after SIGHUP.
+	}
+	// t.Cleanup sends SIGTERM and drains errCh.
+}
+
 // ── Fake helpers for cmd/switchboard tests ────────────────────────────────────
 
 // fakeExecFuncErrMain returns a tmux.Option that makes ControlMode.Connect fail

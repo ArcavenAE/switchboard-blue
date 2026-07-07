@@ -390,7 +390,7 @@ func TestRunRouter_StartsWithMgmt(t *testing.T) {
 
 	// runRouter should return nil (context cancelled cleanly).
 	// We only care that the socket was created — evidence newMgmtServer was called.
-	err := runRouter(ctx, nil, cfg)
+	err := runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1))
 	if err != nil {
 		t.Errorf("runRouter: unexpected error: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestRunRouter_DataListenerBinds(t *testing.T) {
 
 	// Run in a goroutine — runRouter blocks until ctx cancel.
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, nil, cfg) }()
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1)) }()
 
 	// Poll-dial the data-plane listener until the connection succeeds or we
 	// exhaust a 1-second budget. Success = bind happened before ctx cancel.
@@ -516,7 +516,7 @@ func TestRunRouter_NoAdminHandlers(t *testing.T) {
 	t.Cleanup(cancel)
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, nil, cfg) }()
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1)) }()
 
 	// Wait for the socket to appear (up to 1s) — proof mgmt Serve is up.
 	deadline := time.Now().Add(1 * time.Second)
@@ -612,7 +612,7 @@ func TestRunRouter_SIGTERMLifecycle(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, nil, cfg) }()
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1)) }()
 
 	// Wait for the mgmt socket to appear — evidence runRouter reached its
 	// blocking select.
@@ -666,7 +666,7 @@ func TestRunRouter_NilConfigCleanError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancelled — proves guard fires before any I/O
 
-	err := runRouter(ctx, nil, nil)
+	err := runRouter(ctx, nil, nil, "", make(chan os.Signal, 1))
 	if err == nil {
 		t.Fatal("runRouter(nil cfg): expected non-nil error, got nil")
 	}

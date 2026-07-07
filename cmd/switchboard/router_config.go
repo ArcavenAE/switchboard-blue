@@ -75,6 +75,21 @@ func keepaliveIntervalFor(cfg *config.Config) time.Duration {
 // PR #101).
 var drainCoordHook func(*drain.Drain)
 
+// equalStringSlices reports whether a and b contain the same elements in the
+// same order. Used by the SIGHUP reload path to diff the running upstream
+// router list against the freshly-loaded one before re-emitting the mode line.
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // upstreamRoutersFor returns the configured upstream router addresses for
 // PE-mode operation. An empty return value means E mode (no upstream
 // connections attempted).
