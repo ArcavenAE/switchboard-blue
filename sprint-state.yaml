@@ -11,6 +11,7 @@
 # Canonical phase-5 state: .factory/stories/sprint-state.yaml (single source of truth since Burst 40c).
 # Frozen 2026-07-04 (Burst 78) per F-P5P31-B-001 adjudication — freeze-with-banner pattern.
 # =============================================================================
+# v1.71 (2026-07-07): S-7.04-FU-PE-CONNECTOR adversary P2 remediated @ 06e6799 — F-P2-001 MED double-Stop panic fixed (sync.Once + 2 regression tests, both proven failing on old code via stash); F-P2-002 MED Q5/Q7 backoff-base contradiction → architect ruling Q7-prevails (placement note v1.3) + story v1.5/v1.6 sync + operativeBase pure-func extraction + 4-test suite split; F-P2-003 LOW [process-gap] VP-038 pre-merge lock flip → convention accepted; OBS-P2-1/2/3 parked. All P1 fixes mutation-verified. Code b789436 → 06e6799. story v1.6, note v1.3. streak 0/3, pass 3 next.
 # v1.70 (2026-07-07): S-7.04-FU-PE-CONNECTOR TDD green @ cee8e8b — 8 signed commits (d3bac4c → cee8e8b); go test -race -count=1 ./... full green, 1 sanctioned skip (VP-037 partial-discharge); golangci-lint 0 issues; AC-006 seam retired. Story synced v1.2 same-burst (paired-edit rule held). VP-038 PROVEN/locked TRUE. VP-037 PARTIAL DISCHARGE. code lane base 950285c head cee8e8b. adversarial-cycle-active.
 # v1.69 (2026-07-07): S-7.04-FU-PE-CONNECTOR Red Gate satisfied — stubs 9d184db (internal/upstreamdial skeleton: Connector/Handle/New + backoff consts + upstreamRoutersAsSet stub + testenv SetConnector seam) + red suite d3bac4c (15 tests: 14 fail-assert, 1 VP-037 skip per partial-discharge clause; vet clean). implementer TDD green phase dispatched. code lane base 950285c head d3bac4c.
 # v1.68 (2026-07-07): S-7.04-FU-PE-CONNECTOR ready v1.1 — PO returned D-1 (phantom BC-4.03, same class as SIGHUP-cycle E-CFG-002; propagation v0.1 stub → placement note → story; both docs errata'd) + D-2 (deferral class not-core added). Remediated; PO re-review passed. STORY-INDEX v4.06 → v4.07. Status: delivery-active (worktree + stub-architect → test-writer → implementer TDD).
@@ -515,15 +516,22 @@ steady_state_deliveries:
     title: "outbound TCP dial loop against upstreamRoutersFor(cfg) on PE graduation"
     status: implemented
     adversarial_cycle_active: true
-    spec_version: "1.2"
+    spec_version: "1.6"
+    placement_note_version: "1.3"
     code_lane_base: 950285c
-    code_lane_head: cee8e8b
+    code_lane_head: 06e6799
     vp_038_lock: TRUE
     vp_037_lock: PARTIAL
     vp_037_note: "scaffold TestE2E_RouterDrain_NodesMigrateWithin2s skips on DRAIN-WIRE dependency; full-discharge → S-7.04-FU-DRAIN-WIRE"
-    adversarial_pass_counter: 0
+    adversarial_pass_counter: 2
     streak: 0
-    pending_pass: 1
+    pending_pass: 3
+    p2_remediation:
+      f_p2_001: "MED double-Stop panic [empirically proven] → sync.Once fix + TestConnector_Stop_Idempotent + TestRouterHandle_Restart_TwicePE @ a14f849"
+      f_p2_002: "MED Q5/Q7 contradiction → architect ruling Q7-prevails; operativeBase pure-func extraction; 4-test suite split @ 06e6799; placement note v1.3; story v1.5/v1.6"
+      f_p2_003: "LOW [process-gap] VP-038 pre-merge lock flip → convention accepted"
+      obs: "OBS-P2-1/2/3 parked"
+      p1_mutation_verified: true
 
 # Changelog
 # v1.41 (2026-07-02): W-6 combined wave-gate Pass 4 attempt 1 CLEAN. Adv-A CONVERGENT_L1 (0/0/0/0 + 2 obs). Adv-B CONVERGENT_L2L3 (0/0/0/0 + 3 obs; O-1 grandfather-adjudicated: POL-003 going-forward annotation convention, historical BC-2.07.001 v1.8/v1.9/v1.10/v1.12 rows not retro-annotated by design). Streak 0 → 1/3. wavegate_pass_counter 3→4, wavegate_attempts_counter 3→4, wavegate_streak 0→1, wavegate_last_verdict CONVERGENT_PASS_4_2026-07-02, remediation_status remediating_medium_streak_reset → post_remediation_clean.
