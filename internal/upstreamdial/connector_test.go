@@ -532,31 +532,34 @@ func TestConnector_OperativeBackoffBase_TracksKeepalive(t *testing.T) {
 // a retry-succeeds check without measuring whether the reset used the operative
 // base or the grown value.
 //
-// keepalive=600ms (above floor): operative base=600ms.
-// After 3 failures: backoff grows to ~2400ms+ — well above the 850ms hiWindow.
-// After reset: first-retry gap in [400ms, 850ms].
+// keepalive=1s (above floor): operative base=1s.
+// After 3 failures: backoff grows to ~4s (1s→2s→4s) — well above the 1300ms hiWindow.
+// After reset: first-retry gap in [700ms, 1300ms].
 //
 // Measurement: the sequence after a connection drops is:
 //
-//	stamp[0]: maintainConn write-fail log (after next keepalive tick, ~600ms)
+//	stamp[0]: maintainConn write-fail log (after next keepalive tick, ~1s)
 //	stamp[1]: first dial-fail immediately after (no pre-sleep on first attempt)
-//	stamp[2]: second dial-fail after the backoff sleep (= reset operative base ~600ms)
+//	stamp[2]: second dial-fail after the backoff sleep (= reset operative base ~1s)
 //
-// gap = stamps[2].t - stamps[1].t = ~600ms (operative base after reset).
-// If the reset assignment used BackoffBase instead of operativeBase, gap = ~500ms.
-// If the reset were absent and backoff stayed grown (~2400ms), gap >> hiWindow.
+// gap = stamps[2].t - stamps[1].t = ~1s (operative base after reset).
+// If the reset assignment used BackoffBase instead of operativeBase, gap ~500ms.
+// BackoffBase mutant band (±25% jitter): [375ms, 625ms] — entirely below loWindow=700ms.
+// If the reset were absent and backoff stayed grown (~4s), gap >> hiWindow=1300ms.
 //
-// Failure condition: if either `backoff = operativeBase(c.keepaliveInterval)` in
-// dialLoop (connector.go reset-on-success line) were removed or changed to
-// `backoff = BackoffBase`, this test fails.
+// Failure condition: if `backoff = operativeBase(c.keepaliveInterval)` in
+// dialLoop (connector.go reset-on-success line) were changed to
+// `backoff = BackoffBase`, this test fails because the ~500ms mutant gap
+// falls below loWindow=700ms (F-P3-001, AC-002 PC-3).
 func TestConnector_BackoffParameters(t *testing.T) {
 	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
 
-	const testKeepalive = 600 * time.Millisecond
-	// Operative base = 600ms.  Post-reset gap in [400ms, 850ms].
-	// Grown value after 3 failures ~2400ms — well above hiWindow.
-	const loWindow = 400 * time.Millisecond
-	const hiWindow = 850 * time.Millisecond
+	const testKeepalive = 1000 * time.Millisecond
+	// Operative base = 1s.  Post-reset gap in [700ms, 1300ms].
+	// BackoffBase mutant band [375ms,625ms] is entirely below loWindow=700ms → mutant caught.
+	// Grown value after 3 failures ~4s (1s→2s→4s) — well above hiWindow=1300ms.
+	const loWindow = 700 * time.Millisecond
+	const hiWindow = 1300 * time.Millisecond
 
 	stampCh := make(chan stamp, 64)
 	lw := &timestampedLogWriter{ch: stampCh}
@@ -572,8 +575,8 @@ func TestConnector_BackoffParameters(t *testing.T) {
 	wantLog := fmt.Sprintf("upstream router %s unreachable", addr)
 
 	// Collect 3 EC-001 stamps (initial + 2 backoff-grown) to verify backoff grows.
-	// At keepalive=600ms: attempt 1 fires at ~0ms, attempt 2 at ~600ms, attempt 3 at ~1800ms.
-	// After 3 failures, backoff is ~2400ms — distinguishably above the 850ms hiWindow.
+	// At keepalive=1s: attempt 1 fires at ~0ms, attempt 2 at ~1s, attempt 3 at ~3s.
+	// After 3 failures, backoff is ~4s — distinguishably above the 1300ms hiWindow.
 	growBudget := time.After(15 * time.Second)
 	growGot := 0
 	for growGot < 3 {
@@ -613,7 +616,9 @@ func TestConnector_BackoffParameters(t *testing.T) {
 		}
 	}()
 
-	if !pollForMode(c, 5*time.Second) {
+	// After 3 grow-phase failures with testKeepalive=1s, backoff reaches ~4s (max jitter ~5s).
+	// Budget must cover the worst-case grown-backoff wait before the next dial attempt.
+	if !pollForMode(c, 15*time.Second) {
 		t.Fatalf("TestConnector_BackoffParameters: Mode() != ModePE after opening listener")
 	}
 
@@ -639,7 +644,7 @@ drainLoop:
 	// Collect 3 EC-001 stamps from the post-drop retry sequence:
 	//   stamp[0]: maintainConn write-fail (fires when next keepalive tick hits the dead conn)
 	//   stamp[1]: first dial-fail immediately after
-	//   stamp[2]: second dial-fail after the backoff-sleep (= operative base = 600ms)
+	//   stamp[2]: second dial-fail after the backoff-sleep (= operative base = 1s)
 	var postDrop [3]stamp
 	postBudget := time.After(10 * time.Second)
 	postGot := 0
@@ -656,12 +661,13 @@ drainLoop:
 	}
 
 	// gap between stamp[1] and stamp[2] = backoff sleep duration after reset.
-	// Expected: ~600ms (operative base).  If backoff were still grown (~2400ms), gap >> hiWindow.
+	// Expected: ~1s (operative base).  If backoff were still grown (~4s), gap >> hiWindow.
+	// If backoff used BackoffBase mutant (~500ms), gap < loWindow=700ms (F-P3-001 pinned).
 	gap := postDrop[2].t.Sub(postDrop[1].t)
 	if gap < loWindow || gap > hiWindow {
 		t.Errorf(
 			"TestConnector_BackoffParameters: post-reset retry gap = %v; want [%v, %v] "+
-				"(reset must restore operative base %v, not carry grown ~2400ms backoff; F-P2-002, AC-002 PC-3)",
+				"(reset must restore operative base %v, not carry grown ~4s backoff or use BackoffBase ~500ms; F-P3-001, AC-002 PC-3)",
 			gap, loWindow, hiWindow, testKeepalive,
 		)
 	}
