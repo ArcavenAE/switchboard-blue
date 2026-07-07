@@ -44,12 +44,16 @@ brew install ArcavenAE/tap/switchboard-a
 switchboard-a --version
 ```
 
-The binary is installed as `switchboard-a` — not `switchboard` — so it
-can live side-by-side with the canonical `switchboard` formula on the
-same tap. **Substitute `switchboard-a` for `switchboard`** in every
-command in the rest of this tutorial if you install this way. The
-`sbctl` operator CLI is not yet published via Homebrew; use the
-from-source build below to get `sbctl`.
+The binaries are installed as `switchboard-a` and `sbctl-a` — not
+`switchboard`/`sbctl` — so they can live side-by-side with the canonical
+formulas on the same tap. **Substitute `switchboard-a` for `switchboard`
+and `sbctl-a` for `sbctl`** in every command in the rest of this
+tutorial if you install this way. The operator CLI has its own formula:
+
+```bash
+brew install ArcavenAE/tap/sbctl-a
+sbctl-a --version
+```
 
 ### Option B — Build from source
 
@@ -319,6 +323,9 @@ for the full catalog and their handling recommendations.
 
 ## Next steps
 
+- Run the [examples ladder](../examples/README.md) — docker-compose
+  topologies from a single router up to four nodes + console and a
+  two-team isolation matrix, using the published alpha binaries.
 - Skim [docs/architecture.md](architecture.md) to understand SVTNs,
   timeslice framing, half-channels, and multi-path routing.
 - Read the full [docs/sbctl.md](sbctl.md) reference for every verb, flag,

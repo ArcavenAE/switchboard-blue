@@ -1,0 +1,48 @@
+# Example 03 — tmux-access-node
+# One access-mode daemon co-located with a real tmux server whose session
+# runs `top` (a live TUI). The driver asserts the daemon survives startup
+# — the assertion that CANNOT pass on a stock macOS dev machine, where
+# the PTY proxy dies on /dev/ttysNN permissions.
+# Run:  docker compose up --build --exit-code-from driver
+services:
+  init:
+    build: ../_shared
+    command: ["bash", "/example/init.sh"]
+    volumes:
+      - keys:/keys
+      - etc:/etc/switchboard
+      - ./:/example:ro
+
+  node:
+    build: ../_shared
+    command: ["bash", "/example/node-entry.sh"]
+    init: true
+    tty: true
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - etc:/etc/switchboard:ro
+      - run:/run/switchboard
+      - ./:/example:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "test -S /run/switchboard/access.sock && tmux has-session -t work"]
+      interval: 1s
+      timeout: 2s
+      retries: 15
+
+  driver:
+    build: ../_shared
+    command: ["bash", "/example/assert.sh"]
+    depends_on:
+      node:
+        condition: service_healthy
+    volumes:
+      - keys:/keys:ro
+      - run:/run/switchboard
+      - ./:/example:ro
+
+volumes:
+  keys:
+  etc:
+  run:

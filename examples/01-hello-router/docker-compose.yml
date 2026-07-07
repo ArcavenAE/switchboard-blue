@@ -1,0 +1,42 @@
+# Example 01 — hello-router
+# One router in E-mode, one driver asserting the management plane.
+# Run:  docker compose up --build --exit-code-from driver
+services:
+  init:
+    build: ../_shared
+    command: ["bash", "/example/init.sh"]
+    volumes:
+      - keys:/keys
+      - etc:/etc/switchboard
+      - ./:/example:ro
+
+  router:
+    build: ../_shared
+    command: ["switchboard", "router", "--config", "/etc/switchboard/router.yaml"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - etc:/etc/switchboard:ro
+      - run:/run/switchboard
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/switchboard/router.sock"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+
+  driver:
+    build: ../_shared
+    command: ["bash", "/example/assert.sh"]
+    depends_on:
+      router:
+        condition: service_healthy
+    volumes:
+      - keys:/keys:ro
+      - run:/run/switchboard
+      - ./:/example:ro
+
+volumes:
+  keys:
+  etc:
+  run:

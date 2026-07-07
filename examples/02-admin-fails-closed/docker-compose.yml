@@ -1,0 +1,43 @@
+# Example 02 — admin-fails-closed
+# One control-mode daemon (the only mode that registers admin.* handlers),
+# one driver proving the admin plane's authority model fails closed.
+# Run:  docker compose up --build --exit-code-from driver
+services:
+  init:
+    build: ../_shared
+    command: ["bash", "/example/init.sh"]
+    volumes:
+      - keys:/keys
+      - etc:/etc/switchboard
+      - ./:/example:ro
+
+  control:
+    build: ../_shared
+    command: ["switchboard", "control", "--config", "/etc/switchboard/control.yaml"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - etc:/etc/switchboard:ro
+      - run:/run/switchboard
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/switchboard/control.sock"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+
+  driver:
+    build: ../_shared
+    command: ["bash", "/example/assert.sh"]
+    depends_on:
+      control:
+        condition: service_healthy
+    volumes:
+      - keys:/keys:ro
+      - run:/run/switchboard
+      - ./:/example:ro
+
+volumes:
+  keys:
+  etc:
+  run:

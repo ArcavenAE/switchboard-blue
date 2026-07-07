@@ -1,0 +1,95 @@
+# Example 06 — two-svtn-isolation
+# One shared router, two teams (a and b) with two access nodes each and
+# DISJOINT operator keys. The driver proves neither team can operate the
+# other's daemons.
+# Run:  docker compose up --build --exit-code-from driver
+
+x-node: &node
+  build: ../_shared
+  init: true
+  tty: true
+  depends_on:
+    init:
+      condition: service_completed_successfully
+  volumes:
+    - etc:/etc/switchboard:ro
+    - run:/run/switchboard
+    - ./:/example:ro
+
+services:
+  init:
+    build: ../_shared
+    command: ["bash", "/example/init.sh"]
+    volumes:
+      - keys:/keys
+      - etc:/etc/switchboard
+      - ./:/example:ro
+
+  router:
+    build: ../_shared
+    command: ["switchboard", "router", "--config", "/etc/switchboard/router.yaml"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - etc:/etc/switchboard:ro
+      - run:/run/switchboard
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/switchboard/router.sock"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+
+  node-a1:
+    <<: *node
+    command: ["bash", "/example/node-entry.sh", "a1", "top"]
+    healthcheck: &nodecheck
+      test: ["CMD", "bash", "-c", "test -S /run/switchboard/a1.sock && tmux has-session -t a1"]
+      interval: 1s
+      timeout: 2s
+      retries: 15
+
+  node-a2:
+    <<: *node
+    command: ["bash", "/example/node-entry.sh", "a2", "watch -n1 date"]
+    healthcheck:
+      <<: *nodecheck
+      test: ["CMD", "bash", "-c", "test -S /run/switchboard/a2.sock && tmux has-session -t a2"]
+
+  node-b1:
+    <<: *node
+    command: ["bash", "/example/node-entry.sh", "b1", "htop"]
+    healthcheck:
+      <<: *nodecheck
+      test: ["CMD", "bash", "-c", "test -S /run/switchboard/b1.sock && tmux has-session -t b1"]
+
+  node-b2:
+    <<: *node
+    command: ["bash", "/example/node-entry.sh", "b2", "vmstat 1"]
+    healthcheck:
+      <<: *nodecheck
+      test: ["CMD", "bash", "-c", "test -S /run/switchboard/b2.sock && tmux has-session -t b2"]
+
+  driver:
+    build: ../_shared
+    command: ["bash", "/example/assert.sh"]
+    depends_on:
+      router:
+        condition: service_healthy
+      node-a1:
+        condition: service_healthy
+      node-a2:
+        condition: service_healthy
+      node-b1:
+        condition: service_healthy
+      node-b2:
+        condition: service_healthy
+    volumes:
+      - keys:/keys:ro
+      - run:/run/switchboard
+      - ./:/example:ro
+
+volumes:
+  keys:
+  etc:
+  run:

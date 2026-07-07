@@ -1,0 +1,41 @@
+# Example 04 — console-surface
+# One console-mode daemon; the driver shares its network namespace
+# because console management sockets are loopback-TCP-only (E-CFG-008).
+# Run:  docker compose up --build --exit-code-from driver
+services:
+  init:
+    build: ../_shared
+    command: ["bash", "/example/init.sh"]
+    volumes:
+      - keys:/keys
+      - etc:/etc/switchboard
+      - ./:/example:ro
+
+  console:
+    build: ../_shared
+    command: ["switchboard", "console", "--config", "/etc/switchboard/console.yaml"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    volumes:
+      - etc:/etc/switchboard:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9091"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+
+  driver:
+    build: ../_shared
+    command: ["bash", "/example/assert.sh"]
+    network_mode: "service:console"
+    depends_on:
+      console:
+        condition: service_healthy
+    volumes:
+      - keys:/keys:ro
+      - ./:/example:ro
+
+volumes:
+  keys:
+  etc:
