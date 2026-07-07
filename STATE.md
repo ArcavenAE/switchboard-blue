@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-sighup-reload-adversarial-pass-6-clean-1of3
+phase_step: steady-state-sighup-reload-adversarial-pass-7-remediated-streak-reset
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: c356386
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 7 (streak 1/3; code lane 3c3ce0e; story v1.3)
+awaiting: adversary pass 8 (streak 0/3; code lane 3c3ce0e unchanged since pass 5; story v1.4)
 historical_cycles: []
-timestamp: 2026-07-07T01:00:00Z
+timestamp: 2026-07-07T02:00:00Z
 last_update: 2026-07-07
 ---
 
@@ -60,11 +60,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-6-clean-1of3 | completed | Pass 6 NO_FINDINGS @ 3c3ce0e — first clean pass; streak 0/3 → 1/3. 12 anti-findings (dedicated-sighupCh Q1 guard via real-signal test; cfg immutability both paths; empty-configPath guard = accepted F-P5-003; testenv lock discipline; cap-1 channel; E-CFG codes render verified; E-CFG-003-reload structurally covered; File-Change-List call-site-only diffs confirmed; main_test.go within scope envelope; POL-001/002/004 compliant). 3 obs (FCL row implicit, read-probe divergence correct, drift items properly parked). Novelty LOW. ORCHESTRATOR CORRECTION: adversary confabulated "streak 3/3" — adjudicated streak 0/3 → 1/3 ([confabulation-class]). STORY-INDEX v3.94 → v3.95. Awaiting pass 7 (streak 1/3). |
-| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-5-remediated | completed | Pass 5: 3 LOW findings, all remediated same burst (3c3ce0e) — F-P5-001 main.go SIGHUP registration 0%-covered → FIXED (TestRunRouterRun_RealSIGHUP_DoesNotExit: real syscall.Kill SIGHUP through run(), asserts daemon does-not-exit, distinguishes reload from drain-shutdown; end-to-end reload emission declined — os.Stderr not observable without production plumbing, not-exiting is the load-bearing assertion); F-P5-002 AC-002 PC-6 fail-path liveness unpinned → FIXED (BadConfig test extended: held-conn read-deadline probe + dialMgmtAndReadChallenge post-failure, helpers reused); F-P5-003 dead-configPath-guard uncovered → ADJUDICATED-ACCEPTED (third confirmation: F-P1-009, F-P3-005c, F-P5-003 — stays as-is). 12 anti-findings. Novelty MED (seam-vs-OS-signal axis novel, now closed). Decay P1 HIGH(12)→P2 MED(5)→P3 MED(5)→P4 LOW(4)→P5 MED(3). STORY-INDEX v3.93 → v3.94. Streak 0/3. Awaiting pass 6. |
-| 2026-07-06 | steady-state-sighup-reload-adversarial-pass-4-remediated | completed | Pass 4: 4 LOW findings, all remediated same burst — test-writer 8e159f2 (modeELine/modePELine/scanForExactModeLine helpers; AC-001+PEtoE+PEtoPE full-line pinned; dialMgmtAndReadChallenge post-reload probe closing AC-003 mgmt gap) + story v1.3 (phantom E-CFG-002 example → E-CFG-001; four→nine test count). 12 anti-findings. Novelty LOW. Decay P1 HIGH(12)→P2 MED(5)→P3 MED(5)→P4 LOW(4,zero correctness). STORY-INDEX v3.92 → v3.93. Streak 0/3. Awaiting pass 5. |
-| 2026-07-06 | steady-state-sighup-reload-adversarial-passes-1-3 | completed | PR #111 merged c356386 (README sbctl-a published fix — investigation: formula live on tap since task #163, stale-tap brew-update failure mode documented). Adversarial passes 1-3 concluded HAS_FINDINGS → remediated: 22 findings total (P1: 12, P2: 5, P3: 5), all dispositioned; code lane @ 8a40a0a (9 commits, not pushed); story v1.2 (AC-004 PC-2 emission-based observable; changelog rows 1.1/1.2 added). Two new drift rows: DRIFT-SIGHUP-MODE-ASYMMETRY (LOW) + DRIFT-SIGHUP-INERT-RELOAD-UX (LOW). STORY-INDEX v3.91 → v3.92. Awaiting pass 4. |
-| 2026-07-06 | steady-state-sighup-reload-elaboration | completed | Burst (PO+architect parallel → story-writer+spec-steward parallel → state-manager): S-7.04-FU-SIGHUP-RELOAD ready v1.0 (4 ACs, 3 pts, steady-state, BC-2.09.001 PC-1 + BC-2.09.003 EC-004 + VP-038); S-6.04 closed-subsumed (decisions/S-6.04-disposition-ruling.md); BC-2.09.003 v1.9 → v2.0 VP-table governance narrowing; STORY-INDEX v3.90 → v3.91 (total 61 → 60; draft-stubs 1 → 0); BC-INDEX v3.1 → v3.2 |
+| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-7-remediated-streak-reset | completed | Pass 7: 1 LOW [process-gap] F-P7-001 FCL-omits-main_test.go (recurrence of F-P2-004 class; pass-5 code fix 3c3ce0e added TestRunRouterRun_RealSIGHUP_DoesNotExit to main_test.go without FCL row; pass-6 adjudicated informational — pass-7 re-classified per precedent). FIXED story v1.4 (FCL row + changelog + Cross-BC Note for O3). 12 anti-findings (all prior remediations held; POL-001/002/004 compliant). 2 obs (non-actionable). Novelty LOW. STREAK: 1/3 → 0/3 (reset). Code lane unchanged 3c3ce0e since pass 5 — zero code findings since pass 2. STORY-INDEX v3.95 → v3.96. Orchestrator lesson: doc-class remediations must land in same burst as code fix. Awaiting pass 8 (streak 0/3). |
+| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-6-clean-1of3 | completed | Pass 6 NO_FINDINGS @ 3c3ce0e — first clean pass; streak 0/3 → 1/3. 12 anti-findings. Novelty LOW. ORCHESTRATOR CORRECTION: adversary confabulated "streak 3/3" — adjudicated 0/3 → 1/3 ([confabulation-class]). STORY-INDEX v3.94 → v3.95. Awaiting pass 7. |
+| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-5-remediated | completed | Pass 5: 3 LOW findings, all remediated same burst (3c3ce0e) — F-P5-001 main.go SIGHUP 0%-covered → FIXED; F-P5-002 AC-002 PC-6 fail-path liveness → FIXED; F-P5-003 dead-guard → ADJUDICATED-ACCEPTED (triple). Novelty MED. STORY-INDEX v3.93 → v3.94. Streak 0/3. |
+| 2026-07-06 | steady-state-sighup-reload-adversarial-pass-4-remediated | completed | Pass 4: 4 LOW findings, all remediated same burst — 8e159f2 (line-pin helpers; AC-001+PEtoE+PEtoPE pinned; dialMgmtAndReadChallenge) + story v1.3 (phantom E-CFG-002 → E-CFG-001; four→nine test count). Novelty LOW. STORY-INDEX v3.92 → v3.93. Streak 0/3. |
+| 2026-07-06 | steady-state-sighup-reload-adversarial-passes-1-3 | completed | Passes 1-3: 22 findings total (P1:12, P2:5, P3:5), all dispositioned; code lane @ 8a40a0a; story v1.2. Two new drift rows: DRIFT-SIGHUP-MODE-ASYMMETRY + DRIFT-SIGHUP-INERT-RELOAD-UX. STORY-INDEX v3.91 → v3.92. |
 
 ## Wave 6 Story Status
 
