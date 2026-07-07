@@ -397,7 +397,7 @@ func startMgmtServer(
 // plumbing and node-facing SVTN channels are wired. In this story the drain
 // coordinator seam and the three DEFERRED-APPLICATION closures are in place;
 // the wire protocol connects to them without further daemon-level refactor.
-func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
+func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
 	// would then nil-deref on cfg.ListenAddr and panic — a violation of the
@@ -527,8 +527,19 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 		}
 	}
 
-	// Block until context is cancelled (ARCH-01 lifecycle contract).
-	<-ctx.Done()
+	// Block until context is cancelled or a SIGHUP reload event fires.
+	// (ARCH-01 lifecycle contract; S-7.04-FU-SIGHUP-RELOAD two-case select.)
+	for {
+		select {
+		case <-ctx.Done():
+			// Context cancelled — fall through to graceful shutdown below.
+			goto shutdown
+		case <-sighupCh:
+			// TODO: S-7.04-FU-SIGHUP-RELOAD reload dispatch
+			// Stub: sighupCh case accepted but reload not yet implemented.
+		}
+	}
+shutdown:
 
 	// Graceful shutdown (BC-2.09.002):
 	//   1. Signal drain — observers (when the wire protocol lands) broadcast
