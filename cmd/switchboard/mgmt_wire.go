@@ -40,6 +40,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/netingress"
+	"github.com/arcavenae/switchboard/internal/outerassembler"
 	"github.com/arcavenae/switchboard/internal/routing"
 	"github.com/arcavenae/switchboard/internal/session"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
@@ -525,6 +526,17 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		drainCoordHook(drainCoord)
 	}
 
+	// Construct and start the PE outbound dial loop (BC-2.09.001 PC-2/PC-3,
+	// S-7.04-FU-PE-CONNECTOR).  The Connector owns all dial goroutines,
+	// per-address backoff timers, and keepalive ticker (Q2, Q3, Q7).
+	// It is stopped in the shutdown path below.
+	// Envelope carries zero node-identity fields: the full bootstrap (SrcAddr/DstAddr
+	// derived from Ed25519 key material) is deferred to the session-bootstrap story.
+	// The three-step "connection established" definition (Q6) is satisfied by
+	// TCP dial + Assemble (zero env is valid) + Write returning nil.
+	connector := upstreamdial.New(w, outerassembler.Envelope{}, keepaliveInterval, upstreamRouters)
+	connector.Start()
+
 	// Log resolved listen address + mgmt socket path.
 	// The writer is os.Stderr in production (main.go); the tutorial doc says
 	// "stdout" — this is a known documentation drift called out in the PR body.
@@ -576,6 +588,10 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 				continue
 			}
 			newUpstreams := upstreamRoutersFor(loaded)
+			// Pass updated address list to connector using set-equal semantics (Q1, AC-001).
+			// The emission diff stays order-sensitive (equalStringSlices unchanged per Q1 ruling);
+			// the connector reconciliation is set-equal internally (Q1 lawful difference).
+			connector.ReloadAddrs(newUpstreams)
 			if !equalStringSlices(upstreamRouters, newUpstreams) {
 				upstreamRouters = newUpstreams
 				if w != nil {
@@ -600,6 +616,10 @@ shutdown:
 	//   4. Shut down mgmt with a budget derived from the same drain window
 	//      (previously hardcoded 5s — now driven by cfg.DrainTimeout so
 	//      operators have a single lever for shutdown budget tuning).
+	// Stop the PE connector first so dial goroutines exit before we
+	// shut down the ingress listener (AC-001 Q2 lifecycle contract).
+	connector.Stop()
+
 	drainCtx, drainCtxCancel := context.WithTimeout(context.Background(), drainCoord.Timeout())
 	drainCoord.Signal(drainCtx)
 	if derr := drainCoord.Wait(drainCtx); derr != nil {
