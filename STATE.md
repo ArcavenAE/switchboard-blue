@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-sighup-reload-adversarial-pass-9-remediated
+phase_step: steady-state-sighup-reload-adversarial-pass-10-remediated
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: c356386
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 10 (streak 0/3; code lane 48e3271; story v1.5)
+awaiting: adversary pass 11 (streak 0/3; code lane 48e3271; story v1.6)
 historical_cycles: []
-timestamp: 2026-07-07T08:00:00Z
+timestamp: 2026-07-07T09:00:00Z
 last_update: 2026-07-07
 ---
 
@@ -60,11 +60,12 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-10-remediated | completed | Pass 10: 1 LOW [process-gap] F-P10-001 FCL-and-Task-2-undercount-nine-vs-ten (4th FCL-drift recurrence: P2-004 → P4-003 → P7-001 → P10-001; root cause: pass-8 fa97154 added InvalidUpstreamAddr test without paired story edit, violating pass-9 orchestrator lesson) → FIXED story v1.6 (ten tests, six remediation-added, P8 provenance; count machine-verified grep=10 by both story-writer and orchestrator). FCL-drift class closed via paired-edit rule + pre-pass count verification. 16 anti-findings. 4 obs accepted/anchored. Novelty MED. Code lane 48e3271 unchanged (zero code findings 8 consecutive passes). STORY-INDEX v3.98 → v3.99. STREAK: holds 0/3. Awaiting pass 11. |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-9-remediated | completed | Pass 9: 2 LOW [consistency-polish] — F-P9-001 AC-003-only-test-missing-no-return-assert (nine siblings had it; session-non-interruption test relied on indirect conn-alive probes alone) → FIXED 48e3271 (identical select-block no-return assert added, sibling message style); F-P9-002 testenv-seam-divergence (post-hoc SetSighupCh vs AC-004 construction-time wiring description; stale 2-arg SendReloadSignal outline never absorbed pass-1 F-011) → FIXED split: code half 48e3271 (transitional-seam doc comments, PE-CONNECTOR 5th forward obligation cross-ref), story half v1.5 (AC-004 description corrected to shipped shape; outline → 1-arg signature). 14 anti-findings. Novelty MED. Code lane 48e3271. STORY-INDEX v3.97 → v3.98. STREAK: holds 0/3. PE-CONNECTOR forward obligations now 5. Awaiting pass 10. |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-8-remediated | completed | Pass 8: 2 LOW [test-strength] — F-P8-001 cfg-immutability-asserts-vacuous (empty-pole only; contradicted pass-7 anti-finding with evidence) → FIXED fa97154 (PEtoPE + PEtoE non-empty deep-copy asserts); F-P8-002 EC-003-input-class-untested (invalid upstream addr reload path) → FIXED fa97154 (TestRunRouter_SIGHUPReload_InvalidUpstreamAddr_FailClosed; Cross-BC Note cited; literal-code question stays parked at PE-CONNECTOR). Novelty MED. Code lane fa97154. STORY-INDEX v3.96 → v3.97. STREAK: holds 0/3. PE-CONNECTOR forward obligations now 4 (O-P8-001: upstreamRouters race under dial goroutine). Awaiting pass 9. |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-7-remediated-streak-reset | completed | Pass 7: 1 LOW [process-gap] F-P7-001 FCL-omits-main_test.go (recurrence of F-P2-004 class). FIXED story v1.4. 12 anti-findings. Novelty LOW. STREAK: 1/3 → 0/3 (reset). Code lane 3c3ce0e. STORY-INDEX v3.95 → v3.96. |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-6-clean-1of3 | completed | Pass 6 NO_FINDINGS @ 3c3ce0e — first clean pass; streak 0/3 → 1/3. 12 anti-findings. Novelty LOW. ORCHESTRATOR CORRECTION: adversary confabulated "streak 3/3" — adjudicated 0/3 → 1/3 ([confabulation-class]). STORY-INDEX v3.94 → v3.95. |
-| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-5-remediated | completed | Pass 5: 3 LOW findings, all remediated same burst (3c3ce0e) — F-P5-001 main.go SIGHUP 0%-covered → FIXED; F-P5-002 AC-002 PC-6 fail-path liveness → FIXED; F-P5-003 dead-guard → ADJUDICATED-ACCEPTED (triple). Novelty MED. STORY-INDEX v3.93 → v3.94. Streak 0/3. |
+
 
 ## Wave 6 Story Status
 

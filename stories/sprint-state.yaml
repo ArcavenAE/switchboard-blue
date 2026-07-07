@@ -6,8 +6,11 @@
 # total_stories = 54 (per STORY-INDEX v3.79 — see that doc for authoritative enumeration of all active backlog, hardening, maintenance, draft, and won't-fix entries)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.69
+# version: 1.70
 # changelog:
+#   - version: 1.70
+#     date: 2026-07-07
+#     description: "S-7.04-FU-SIGHUP-RELOAD pass 10 remediated — story v1.6 (FCL-drift class closed: count nine→ten, sixth remediation test with P8 provenance). STORY-INDEX v3.98→v3.99. Streak holds 0/3. Pass 11 pending."
 #   - version: 1.69
 #     date: 2026-07-04
 #     description: "Pass 39 concluded — BOTH LANES NO_FINDINGS — streak 2/3 → 3/3 — BC-5.39.001 CONVERGED — Phase 5 exit → Phase 6. pass_39 block added; phase5 stanza updated (status, pass_counter, attempts_counter, consecutive_clean_passes, streak, bc_5_39_001_gate, phase_exit)."
