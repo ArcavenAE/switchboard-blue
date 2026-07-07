@@ -300,16 +300,15 @@ func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
 
 // SendReloadSignal sends syscall.SIGHUP on the router's injected sighupCh,
 // driving the in-process reload seam without issuing a real OS signal.
-// The cfgPath argument is available to the test for context but is not sent
-// on the channel; callers must write the desired config to cfgPath before
-// calling this helper (the channel carries only the signal, not the path).
+// Callers must write the desired config to the appropriate path before calling
+// this helper; the channel carries only the signal, not a path.
 //
 // Precondition: the RouterHandle must have been constructed with a live
 // sighupCh (i.e. via the AC-004 test helper, not StartRouter).  Calling on
 // a nil sighupCh fatals the test.
 //
 // Required by: VP-038, AC-004.
-func (r *RouterHandle) SendReloadSignal(t testing.TB, _ string) {
+func (r *RouterHandle) SendReloadSignal(t testing.TB) {
 	t.Helper()
 	if r.sighupCh == nil {
 		t.Fatal("RouterHandle.SendReloadSignal: sighupCh is nil — handle was not constructed with the AC-004 reload seam")
