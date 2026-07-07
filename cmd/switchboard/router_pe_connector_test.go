@@ -399,10 +399,23 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 		t.Errorf("TestRunRouter_PE_EFWD001ReconfirmationUnderLoad: E-FWD-001 fired spuriously under no-load; got:\n%s", buf.String())
 	}
 
-	// AC-004 postcondition 1 (exhaustion case): would require ARQ retransmit load
-	// from arqsend.Retransmitter to exhaust the routing table path count.
-	// This path is exercised once the Connector is wired; the precondition above
-	// establishes the live egress anchor for S404-OBS-F and S404-LOW-1.
+	// AC-004 postcondition 1 (exhaustion case — F-P1-002 blocked):
+	//
+	// Unmet-deps analysis: the exhaustion discharge requires routing frames through
+	// routing.FrameArrivalHandler.OnFrameArrival with a forwarding table whose only
+	// eligible interface is the arrival interface (BC-2.02.008 PC-3).
+	//
+	// Missing plumbing in this story's scope:
+	//   1. No receive/forward loop over PE connector connections exists —
+	//      the Connector only dials, bootstraps, and keepalives.  It does not
+	//      read incoming frames from the upstream router and route them.
+	//   2. runRouter routes through netingress.Serve → routing.RouteFrame, which
+	//      does NOT call FrameArrivalHandler.OnFrameArrival.  The E-FWD-001 log
+	//      ("all paths split-horizon-blocked") is emitted by OnFrameArrival only.
+	//   3. arqsend.Retransmitter is not wired to runRouter in this story.
+	//
+	// Owning story: whichever story wires a PE-connection receive loop through
+	// FrameArrivalHandler will own the exhaustion discharge for AC-004 PC-1.
 }
 
 // ── AC-006: RouterHandle.Mode() reflects live connector state ──────────────────
