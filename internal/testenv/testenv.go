@@ -291,6 +291,13 @@ func (r *RouterHandle) Restart(t testing.TB, cfg RouterConfig) {
 // underlying runRouter goroutine selects on.  Call this after StartRouter
 // and before SendReloadSignal.
 //
+// Transitional seam: this method retrofits the signal channel post-hoc onto
+// a RouterHandle returned by StartRouter, which is a lightweight stub
+// disconnected from the real runRouter goroutine.  The handle forwards signals
+// to an externally-started runRouter and does NOT track its state.
+// Construction-time wiring and real state tracking land with the
+// PE-CONNECTOR-era testenv integration (S-7.04-FU-PE-CONNECTOR).
+//
 // Required by: AC-004, VP-038.
 func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
 	r.mu.Lock()
@@ -306,6 +313,14 @@ func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
 // Precondition: the RouterHandle must have been constructed with a live
 // sighupCh (i.e. via the AC-004 test helper, not StartRouter).  Calling on
 // a nil sighupCh fatals the test.
+//
+// Transitional seam: this handle forwards signals to an externally-started
+// runRouter goroutine and does NOT track its state.  Construction-time wiring
+// and real state tracking land with the PE-CONNECTOR-era testenv integration
+// (S-7.04-FU-PE-CONNECTOR).
+//
+// The channel send is performed outside r.mu to prevent deadlock if the
+// receiver goroutine is also trying to acquire r.mu.
 //
 // Required by: VP-038, AC-004.
 func (r *RouterHandle) SendReloadSignal(t testing.TB) {

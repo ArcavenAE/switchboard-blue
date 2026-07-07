@@ -722,6 +722,14 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 				challenge["type"], "challenge")
 		}
 	}
+
+	// Postcondition: daemon has not returned.
+	select {
+	case rErr := <-errCh:
+		t.Errorf("AC-003: runRouter returned prematurely after SIGHUP: %v", rErr)
+	default:
+		// expected — still running
+	}
 }
 
 // isNetError attempts a type assertion to net.Error and writes the result into
