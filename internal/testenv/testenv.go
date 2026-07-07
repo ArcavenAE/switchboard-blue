@@ -343,14 +343,11 @@ func (r *RouterHandle) Restart(t testing.TB, cfg RouterConfig) {
 
 // SetConnector wires the construction-time PE connector handle onto the
 // RouterHandle.  Called by the test helper that starts the real runRouter
-// goroutine once S-7.04-FU-PE-CONNECTOR is implemented (AC-006 seam).
+// goroutine (AC-006 seam, S-7.04-FU-PE-CONNECTOR).
 //
-// After SetConnector is called, Mode() will delegate to connector.Mode()
-// (once the implementer updates Mode() in AC-006).  Until then the field
-// is stored but not yet consulted — the stub r.mode field still drives Mode()
-// so that all pre-AC-006 tests remain unaffected.
-//
-// STUB — S-7.04-FU-PE-CONNECTOR: seam present; Mode() delegation lands in AC-006.
+// After SetConnector is called, Mode() delegates to connector.Mode(), mapping
+// upstreamdial.ConnMode to RouterMode (AC-006: Mode() reflects live connection
+// state from the Connector).
 func (r *RouterHandle) SetConnector(h upstreamdial.Handle) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
