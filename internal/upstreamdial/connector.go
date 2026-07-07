@@ -13,11 +13,11 @@
 package upstreamdial
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -145,7 +145,7 @@ func (c *Connector) ReloadAddrs(addrs []string) {
 	select {
 	case c.addrsCh <- snap:
 	default:
-		_ = <-c.addrsCh
+		<-c.addrsCh
 		c.addrsCh <- snap
 	}
 }
@@ -230,62 +230,65 @@ func (c *Connector) reconcile(running map[string]*addrCancel, newAddrs []string)
 	// Add addresses not yet running.
 	for addr := range newSet {
 		if _, ok := running[addr]; !ok {
-			ctx, cancel := makeAddrContext(c.stopCh)
+			dialCtx, cancel := makeAddrContext(c.stopCh)
 			ac := &addrCancel{
 				cancel: cancel,
 				done:   make(chan struct{}),
 			}
 			running[addr] = ac
-			go c.dialLoop(addr, ctx, ac.done)
+			go c.dialLoop(addr, dialCtx, ac.done)
 		}
 	}
 }
 
-// makeAddrContext returns a cancel function that is triggered when either
-// the per-address cancel is called OR the connector-level stopCh is closed.
-// We implement this via a goroutine that watches both.
-func makeAddrContext(stopCh <-chan struct{}) (stopAddr <-chan struct{}, cancel func()) {
-	ch := make(chan struct{})
-	var once sync.Once
-	cancelFn := func() {
-		once.Do(func() { close(ch) })
-	}
-	// Bridge: if the connector stops, also close ch.
+// makeAddrContext returns a context and cancel function for one per-address
+// dial goroutine.  The context is cancelled when either cancel() is called
+// or the connector-level stopCh is closed — ensuring net.DialContext returns
+// promptly when Stop() fires (rather than blocking for the TCP timeout).
+func makeAddrContext(stopCh <-chan struct{}) (ctx context.Context, cancel context.CancelFunc) {
+	ctx, cancel = context.WithCancel(context.Background())
+	// Bridge: if the connector stops, cancel the per-address context.
 	go func() {
 		select {
 		case <-stopCh:
-			cancelFn()
-		case <-ch:
+			cancel()
+		case <-ctx.Done():
 		}
 	}()
-	return ch, cancelFn
+	return ctx, cancel
 }
 
 // dialLoop runs in a per-address goroutine.  It dials, bootstraps, maintains
 // the connection with keepalive probes, and reconnects with exponential backoff
-// on failure.  It exits when stopAddr is closed (Q3).
-func (c *Connector) dialLoop(addr string, stopAddr <-chan struct{}, done chan<- struct{}) {
+// on failure.  It exits when ctx is cancelled (Q3).
+func (c *Connector) dialLoop(addr string, ctx context.Context, done chan<- struct{}) {
 	defer close(done)
 
 	backoff := c.keepaliveInterval // first retry after keepaliveInterval per Q7
 	keepaliveTick := time.NewTicker(c.keepaliveInterval)
 	defer keepaliveTick.Stop()
 
+	dialer := &net.Dialer{}
+
 	for {
 		select {
-		case <-stopAddr:
+		case <-ctx.Done():
 			return
 		default:
 		}
 
-		conn, err := net.Dial("tcp", addr)
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err != nil {
+			// Context cancelled — stop without logging EC-001.
+			if ctx.Err() != nil {
+				return
+			}
 			// EC-001: log "upstream router <addr> unreachable" (verbatim BC contract).
 			c.logf("upstream router %s unreachable\n", addr)
 
 			// Wait for backoff duration or stop signal.
 			select {
-			case <-stopAddr:
+			case <-ctx.Done():
 				return
 			case <-time.After(backoff):
 			}
@@ -304,7 +307,7 @@ func (c *Connector) dialLoop(addr string, stopAddr <-chan struct{}, done chan<- 
 			_ = conn.Close()
 			c.logf("upstream router %s unreachable\n", addr)
 			select {
-			case <-stopAddr:
+			case <-ctx.Done():
 				return
 			case <-time.After(backoff):
 			}
@@ -318,7 +321,7 @@ func (c *Connector) dialLoop(addr string, stopAddr <-chan struct{}, done chan<- 
 			_ = conn.Close()
 			c.logf("upstream router %s unreachable\n", addr)
 			select {
-			case <-stopAddr:
+			case <-ctx.Done():
 				return
 			case <-time.After(backoff):
 			}
@@ -332,7 +335,7 @@ func (c *Connector) dialLoop(addr string, stopAddr <-chan struct{}, done chan<- 
 		backoff = c.keepaliveInterval // reset backoff on success (Q5)
 
 		// Maintain connection: send keepalive probes and detect dead connections.
-		c.maintainConn(addr, conn, stopAddr, keepaliveTick.C)
+		c.maintainConn(addr, conn, ctx.Done(), keepaliveTick.C)
 
 		// Connection dropped — decrement count.
 		c.connectedCount.Add(-1)

@@ -36,17 +36,17 @@ func newLoopbackListener(t *testing.T) (net.Listener, string) {
 	return ln, ln.Addr().String()
 }
 
-// pollForMode blocks until connector.Mode() returns want or timeout elapses.
-// Returns true if the mode was reached.
-func pollForMode(c *Connector, want ConnMode, budget time.Duration) bool {
+// pollForMode blocks until connector.Mode() returns ModePE or timeout elapses.
+// Returns true if ModePE was reached.
+func pollForMode(c *Connector, budget time.Duration) bool {
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
-		if c.Mode() == want {
+		if c.Mode() == ModePE {
 			return true
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return c.Mode() == want
+	return c.Mode() == ModePE
 }
 
 // pollForLog blocks until the recorded output contains substr or budget elapses.
@@ -116,7 +116,7 @@ func TestConnector_DialSuccess_ModePE(t *testing.T) {
 	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
 
 	ln, addr := newLoopbackListener(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	// Accept connections in background — upstream fixture side.
 	go func() {
@@ -125,7 +125,7 @@ func TestConnector_DialSuccess_ModePE(t *testing.T) {
 			if err != nil {
 				return // listener closed
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -135,7 +135,7 @@ func TestConnector_DialSuccess_ModePE(t *testing.T) {
 	c.Start()
 
 	// AC-001 postcondition 4: Mode() == ModePE once ≥1 upstream connected.
-	if !pollForMode(c, ModePE, 2*time.Second) {
+	if !pollForMode(c, 2*time.Second) {
 		t.Errorf("TestConnector_DialSuccess_ModePE: Mode() == %v after 2s; want ModePE (AC-001 PC-4)", c.Mode())
 	}
 }
@@ -153,7 +153,7 @@ func TestConnector_DialFailure_EC001Log(t *testing.T) {
 
 	// Allocate a port then close it so the address is valid-format but not listening.
 	ln, addr := newLoopbackListener(t)
-	ln.Close()
+	_ = ln.Close()
 
 	lw := newLogWriter()
 	c := New(lw, zeroEnv(), 200*time.Millisecond, []string{addr})
@@ -184,8 +184,8 @@ func TestConnector_ReorderReuse_NoTeardown(t *testing.T) {
 
 	ln1, addr1 := newLoopbackListener(t)
 	ln2, addr2 := newLoopbackListener(t)
-	defer ln1.Close()
-	defer ln2.Close()
+	defer func() { _ = ln1.Close() }()
+	defer func() { _ = ln2.Close() }()
 
 	// Accept connections for both upstreams.
 	acceptLoop := func(ln net.Listener) {
@@ -194,7 +194,7 @@ func TestConnector_ReorderReuse_NoTeardown(t *testing.T) {
 			if err != nil {
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}
 	go acceptLoop(ln1)
@@ -258,7 +258,7 @@ func TestConnector_BackoffParameters(t *testing.T) {
 	// Verify the Connector actually retries: start with a closed port.
 	// After we open the listener the Connector must eventually connect (backoff reset).
 	ln, addr := newLoopbackListener(t)
-	ln.Close() // close immediately — unreachable at first
+	_ = ln.Close() // close immediately — unreachable at first
 
 	lw := newLogWriter()
 	// Use a very short keepalive so the backoff base is also short in tests.
@@ -277,19 +277,19 @@ func TestConnector_BackoffParameters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TestConnector_BackoffParameters: re-listen %s: %v", addr, err)
 	}
-	defer ln2.Close()
+	defer func() { _ = ln2.Close() }()
 	go func() {
 		for {
 			conn, err := ln2.Accept()
 			if err != nil {
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
 	// AC-002 postcondition 3: backoff reset on success — Mode() becomes ModePE.
-	if !pollForMode(c, ModePE, 5*time.Second) {
+	if !pollForMode(c, 5*time.Second) {
 		t.Errorf("TestConnector_BackoffParameters: Mode() != ModePE after opening listener — backoff not resetting on success (AC-002 PC-3)")
 	}
 }
@@ -307,8 +307,8 @@ func TestConnector_AllUpstreamsUnreachable_ModeE(t *testing.T) {
 
 	ln1, addr1 := newLoopbackListener(t)
 	ln2, addr2 := newLoopbackListener(t)
-	ln1.Close()
-	ln2.Close()
+	_ = ln1.Close()
+	_ = ln2.Close()
 
 	lw := newLogWriter()
 	c := New(lw, zeroEnv(), 100*time.Millisecond, []string{addr1, addr2})
@@ -343,7 +343,7 @@ func TestConnector_KeepaliveTickerDrivesHealthProbe(t *testing.T) {
 	const testKeepalive = 50 * time.Millisecond
 
 	ln, addr := newLoopbackListener(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	// Upstream fixture: accept and record whether any bytes were sent.
 	probedCh := make(chan struct{}, 1)
@@ -352,7 +352,7 @@ func TestConnector_KeepaliveTickerDrivesHealthProbe(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		buf := make([]byte, 256)
 		// Any write from the Connector (bootstrap frame or keepalive probe) signals the ticker.
 		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -371,7 +371,7 @@ func TestConnector_KeepaliveTickerDrivesHealthProbe(t *testing.T) {
 	c.Start()
 
 	// Wait for connection to establish.
-	if !pollForMode(c, ModePE, 2*time.Second) {
+	if !pollForMode(c, 2*time.Second) {
 		t.Fatalf("TestConnector_KeepaliveTickerDrivesHealthProbe: Mode() != ModePE after 2s")
 	}
 
@@ -395,26 +395,26 @@ func TestConnector_ReloadAddrs_AddsAndRemoves(t *testing.T) {
 	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
 
 	ln1, addr1 := newLoopbackListener(t)
-	defer ln1.Close()
+	defer func() { _ = ln1.Close() }()
 	go func() {
 		for {
 			conn, err := ln1.Accept()
 			if err != nil {
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
 	ln2, addr2 := newLoopbackListener(t)
-	defer ln2.Close()
+	defer func() { _ = ln2.Close() }()
 	go func() {
 		for {
 			conn, err := ln2.Accept()
 			if err != nil {
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -425,7 +425,7 @@ func TestConnector_ReloadAddrs_AddsAndRemoves(t *testing.T) {
 	c.Start()
 
 	// Precondition: addr1 connected → ModePE.
-	if !pollForMode(c, ModePE, 2*time.Second) {
+	if !pollForMode(c, 2*time.Second) {
 		t.Fatalf("TestConnector_ReloadAddrs_AddsAndRemoves: precondition: Mode() != ModePE")
 	}
 
@@ -433,7 +433,7 @@ func TestConnector_ReloadAddrs_AddsAndRemoves(t *testing.T) {
 	c.ReloadAddrs([]string{addr2})
 
 	// AC-001 postcondition 6: Connector dials addr2 (Mode() must remain ModePE).
-	if !pollForMode(c, ModePE, 2*time.Second) {
+	if !pollForMode(c, 2*time.Second) {
 		t.Errorf("TestConnector_ReloadAddrs_AddsAndRemoves: Mode() != ModePE after adding addr2 (AC-001 PC-6)")
 	}
 }
