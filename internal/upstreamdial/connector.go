@@ -266,7 +266,7 @@ func makeAddrContext(stopCh <-chan struct{}) (ctx context.Context, cancel contex
 func (c *Connector) dialLoop(addr string, ctx context.Context, done chan<- struct{}) {
 	defer close(done)
 
-	backoff := c.keepaliveInterval // first retry after keepaliveInterval per Q7
+	backoff := operativeBase(c.keepaliveInterval) // first retry: keepaliveInterval floored at BackoffBase per Q7/F-P2-002
 	keepaliveTick := time.NewTicker(c.keepaliveInterval)
 	defer keepaliveTick.Stop()
 
@@ -334,7 +334,7 @@ func (c *Connector) dialLoop(addr string, ctx context.Context, done chan<- struc
 		// All three steps succeeded: connection established.
 		// Increment connected count — Mode() becomes ModePE when ≥1.
 		c.connectedCount.Add(1)
-		backoff = c.keepaliveInterval // reset backoff on success (Q5)
+		backoff = operativeBase(c.keepaliveInterval) // reset to operative base on success per Q5/Q7/F-P2-002
 
 		// Maintain connection: send keepalive probes and detect dead connections.
 		c.maintainConn(addr, conn, ctx.Done(), keepaliveTick.C)
@@ -385,6 +385,20 @@ func (c *Connector) maintainConn(addr string, conn net.Conn, stopAddr <-chan str
 			_ = conn.SetWriteDeadline(time.Time{})
 		}
 	}
+}
+
+// operativeBase returns the effective first-retry delay and backoff-reset value
+// for a given keepaliveInterval (Q7, AC-003, F-P2-002 architect ruling).
+//
+// Semantics: the operative base IS keepaliveInterval, floored at BackoffBase so
+// that an operator-configured interval below 500 ms still produces a sane
+// reconnect schedule.  BackoffBase is a floor constant only — not the default
+// reconnect delay.
+func operativeBase(keepaliveInterval time.Duration) time.Duration {
+	if keepaliveInterval < BackoffBase {
+		return BackoffBase
+	}
+	return keepaliveInterval
 }
 
 // nextBackoff computes the next exponential backoff value with ±25% jitter,
