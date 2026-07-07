@@ -1,73 +1,100 @@
 # 06 — two-svtn-isolation
 
-One shared router, two teams with two access nodes each, and **disjoint
-operator keys**. The claim under test: *team A cannot operate team B's
-infrastructure, and vice versa* — while both share the same transport
-plane.
+One shared router, two teams with two access nodes each, and **three
+disjoint identities**. The claims under test:
+
+1. *Tenants cannot operate each other's infrastructure* — team A's key
+   opens nothing of team B's, and vice versa.
+2. *Tenant and network-operator authority don't overlap* — the teams
+   cannot manage the router; the network operator cannot manage the
+   teams' nodes. Sharing transport does not mean sharing control.
+
+## The roles in play
+
+Role vocabulary per the domain spec's ubiquitous language (see
+[docs/architecture.md — Who runs what](../../docs/architecture.md#who-runs-what--the-two-sides-of-the-trust-boundary)):
+
+| Identity | Role | Administers |
+|---|---|---|
+| `netop` | **network operator** — provides the router infrastructure | the router |
+| `team-a` | **SVTN operator** for team a | node-a1, node-a2 |
+| `team-b` | **SVTN operator** for team b | node-b1, node-b2 |
+
+This is the spec's trust boundary made runnable — *"the network
+operator provides infrastructure; the customer holds the data keys"*
+(carrier-grade content separation). The router is `netop`'s machine;
+the tenants get its **data plane** (frame transport) but are strangers
+to its **management plane**.
 
 ## Topology
 
 ```mermaid
 graph TB
-    R["router — shared transport plane<br/>authorized: team-a AND team-b keys"]
-    subgraph ta["team a (key: team-a only)"]
+    R["router — netop's infrastructure<br/>mgmt: netop key ONLY<br/>data plane :9090: shared transport"]
+    subgraph ta["team a — SVTN operator 'team-a'"]
         A1["node-a1<br/>tmux: top"]
         A2["node-a2<br/>tmux: watch date"]
     end
-    subgraph tb["team b (key: team-b only)"]
+    subgraph tb["team b — SVTN operator 'team-b'"]
         B1["node-b1<br/>tmux: htop"]
         B2["node-b2<br/>tmux: vmstat 1"]
     end
-    D["operator (sbctl)<br/>holds BOTH keys, plays both roles"]
-    D -- "team-a key ✓" --> A1 & A2
-    D -- "team-b key ✓" --> B1 & B2
-    D -- "either key ✓" --> R
-    D -. "team-a key on b* → E-ADM-010<br/>team-b key on a* → E-ADM-010" .-> R
+    OP["operator container<br/>plays all three roles in turn"]
+    OP -- "netop key → router mgmt ✓" --> R
+    OP -- "team-a key → a-nodes ✓" --> A1 & A2
+    OP -- "team-b key → b-nodes ✓" --> B1 & B2
+    OP -. "team keys → router mgmt: E-ADM-010<br/>netop key → any node: E-ADM-010<br/>cross-team: E-ADM-010" .-> R
 ```
 
-## Transaction under test — the isolation matrix
+## Transaction under test — the authority matrix
 
 ```mermaid
 sequenceDiagram
-    participant D as operator (sbctl)
-    participant R as router
+    participant O as operator container<br/>(three keys, three hats)
+    participant R as router (netop's)
     participant A as node-a1 / node-a2
     participant B as node-b1 / node-b2
 
-    Note over D,R: shared transport — both teams authorized on the router
-    D->>R: paths.list (team-a.key)
-    R-->>D: ok (exit 0)
-    D->>R: paths.list (team-b.key)
-    R-->>D: ok (exit 0)
+    Note over O,R: network operator's plane
+    O->>R: router.status (netop.key)
+    R-->>O: ok (exit 0)
+    O->>R: router.status (team-a.key)
+    R-->>O: E-ADM-010 (tenants don't manage routers)
 
-    Note over D,B: own-team operation succeeds
-    D->>A: paths.list (team-a.key)
-    A-->>D: ok (exit 0)
-    D->>B: paths.list (team-b.key)
-    B-->>D: ok (exit 0)
+    Note over O,B: transport is shared, control is not
+    O->>R: TCP connect :9090 (data plane)
+    R-->>O: accept — any tenant's frames may transit
+    O->>A: paths.list (netop.key)
+    A-->>O: E-ADM-010 (netop doesn't manage tenant nodes)
 
-    Note over D,B: cross-team operation is REFUSED — same command, other key
-    D->>B: paths.list (team-a.key)
-    B-->>D: E-ADM-010 authentication failed (exit 1)
-    D->>A: paths.list (team-b.key)
-    A-->>D: E-ADM-010 authentication failed (exit 1)
+    Note over O,B: tenant vs tenant — the isolation matrix
+    O->>A: paths.list (team-a.key)
+    A-->>O: ok (exit 0)
+    O->>B: paths.list (team-a.key)
+    B-->>O: E-ADM-010 authentication failed (exit 1)
+    O->>A: paths.list (team-b.key)
+    A-->>O: E-ADM-010 authentication failed (exit 1)
 
-    Note over D,R: TARGET (gated) — SVTN-level isolation on the shared router
-    D->>R: admin.svtn.create --name=team-a / team-b ⊘ GATE-PENDING
-    D->>R: sessions.list --svtn=team-b (team-a.key) ⊘ GATE-PENDING<br/>target: E-ADM-006 cross-SVTN denial
+    Note over O,R: TARGET (gated) — SVTN-level isolation on the shared router
+    O->>R: admin.svtn.create --name=team-a / team-b ⊘ GATE-PENDING
+    O->>R: sessions.list --svtn=team-b (team-a.key) ⊘ GATE-PENDING<br/>target: E-ADM-006 cross-SVTN denial
 ```
 
-## What it proves today — the isolation matrix
+## What it proves today — authority by key, per plane
 
-The operator runs the *same command* against all four nodes with both
-keys. Own-team calls succeed; cross-team calls are refused with
-`E-ADM-010 authentication failed` — a hard, taxonomy-coded denial at the
-Ed25519 challenge-response layer, not an unadvertised absence. The
-router accepts both teams, demonstrating that sharing transport does not
-imply sharing operational authority.
+The operator container runs the *same commands* wearing each of the
+three identities. Every off-role call is refused with
+`E-ADM-010 authentication failed` — a hard, taxonomy-coded denial at
+the Ed25519 challenge-response layer. The full matrix:
 
-This is isolation *by key configuration*, per daemon. It is the
-mechanism the alpha actually ships.
+| key \ target | router mgmt | a-nodes | b-nodes | router data plane |
+|---|---|---|---|---|
+| `netop` | ✓ | ✗ | ✗ | ✓ (transport) |
+| `team-a` | ✗ | ✓ | ✗ | ✓ (transport) |
+| `team-b` | ✗ | ✗ | ✓ | ✓ (transport) |
+
+This is isolation *by key configuration*, per daemon — the mechanism
+the alpha actually ships.
 
 ## What's gated — SVTN-level isolation
 
@@ -89,10 +116,11 @@ docker compose down -v
 
 ## Things to try
 
-- **Be team A for a while:** `docker compose run --rm operator bash`, then
-  walk the matrix by hand: `sbctl --target=/run/switchboard/b1.sock
+- **Wear one hat at a time:** `docker compose run --rm operator bash`,
+  then walk the matrix by hand: `sbctl --target=/run/switchboard/b1.sock
   --key=/keys/team-a.key paths list` — watch the denial; swap the key
-  and watch it pass.
+  and watch it pass. Try `netop.key` against the router, then against
+  a node.
 - **Verify the denial is auth-layer, not transport-layer:** the
   connection *opens* (no E-NET-001) and then authentication fails —
   the daemon is reachable but refuses you. Different failure depth than

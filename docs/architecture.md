@@ -25,9 +25,9 @@ admission.
 
 ---
 
-## The pieces
+## Terminology
 
-**Terminology.** Two vocabularies describe the same things at different
+Two vocabularies describe the same things at different
 levels, and the docs use both:
 
 - A **daemon** is one long-running instance of the `switchboard`
@@ -41,6 +41,37 @@ levels, and the docs use both:
   perspective and the operator's shell respectively.
 - **sbctl** is not a daemon — it's a short-lived CLI that connects to
   one daemon's management socket, performs one operation, and exits.
+
+## Who runs what — the two sides of the trust boundary
+
+Switchboard separates the people who provide the network from the
+people who use it. The boundary is the spec's **carrier-grade content
+separation** guarantee: *"the router provides infrastructure, the
+customer holds the data keys"* (domain spec, ubiquitous language). The
+unqualified word "operator" never distinguishes these roles — always
+qualify it.
+
+| Role | Spec anchor | What they hold | What they run |
+|------|-------------|----------------|---------------|
+| **Network operator** | Exact spec term (differentiator D-2; PRD persona Marcus) | Router management keys | E/PE/P routers. Sees outer headers — identity, addressing, traffic patterns — never session content. |
+| **SVTN operator** | The `control` admission role; *"control node — a network participant, not an infrastructure component"* (ubiquitous language) | The SVTN's control key set: the bootstrap trust anchor plus delegated control keys (CAP-019: register / revoke / expire) | The control node; administers the SVTN's membership and lifecycle. |
+| **SVTN member** | The `console` and `access` admission roles | A console key (attach / drive sessions) or an access key (publish sessions) | Consoles and access nodes. PRD personas Devon and Kai live here. |
+
+One person can hold several roles — a solo developer running their own
+E router is network operator, SVTN operator, and SVTN member at once.
+The roles matter when infrastructure is *shared*: two SVTNs can coexist
+on the same routers with no cross-SVTN visibility (multi-tenant by
+design, CAP-017/018), and the network operator who carries both
+tenants' frames can read neither tenant's content.
+
+A finer-grained *observer* distinction (read-only or tandem access to
+specific sessions) is already specified but is not a fourth admission
+role: it's the Tier-2 **session authorization key** with
+`access mode: full | read-only` (PRD persona Priya; `E-ADM-006`
+scoping, `E-ADM-007` read-only enforcement). See "Admission tiers"
+below.
+
+## The pieces
 
 There are two kinds of process, both from the same `switchboard` binary:
 

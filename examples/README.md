@@ -33,6 +33,22 @@ Two words that appear everywhere, defined once:
   examples, also the name of the compose service that stands in for
   the operator's machine (see "Harness roles" below).
 
+"Operator" alone doesn't say *which side of the trust boundary* you're
+on. The spec separates the people who provide the network from the
+people who use it (carrier-grade content separation: *"the router
+provides infrastructure, the customer holds the data keys"*):
+
+| Role | Holds | Runs | In the examples |
+|---|---|---|---|
+| **Network operator** | router management keys | E/PE/P routers; sees traffic patterns, never content | `netop` in 06 |
+| **SVTN operator** | the SVTN's control key set (bootstrap anchor + control keys) | the control node; SVTN membership + lifecycle | `operator` in 02; `team-a`/`team-b` in 06 |
+| **SVTN member** | a console key (attach/drive) or access key (publish) | consoles and access nodes | `operator` in 01, 03, 04, 05 |
+
+In the single-tenant examples (01–05) one identity wears all the hats —
+a solo developer running their own E router is all three roles at once.
+Example 06 pulls the roles apart. Full table with spec anchors:
+[docs/architecture.md — Who runs what](../docs/architecture.md#who-runs-what--the-two-sides-of-the-trust-boundary).
+
 ```mermaid
 graph TB
     OP["operator<br/>(a human or agent running sbctl)"]

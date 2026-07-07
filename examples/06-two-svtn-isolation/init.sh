@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
-# init.sh — one-shot: two disjoint team identities + configs for one
-# shared router and two per-team node sets.
+# init.sh — one-shot: three identities (one network operator, two SVTN
+# operators) + configs for one shared router and two per-team node sets.
+#
+# Role model (spec ubiquitous language, carrier-grade content
+# separation: "the router provides infrastructure, the customer holds
+# the data keys"):
+#   netop   — the network operator: provides + administers the router.
+#   team-a  — an SVTN operator (tenant): administers team a's nodes.
+#   team-b  — an SVTN operator (tenant): administers team b's nodes.
 set -euo pipefail
 
 GEN=/usr/local/lib/switchboard-examples/gen-identity.sh
+"${GEN}" netop /keys
 "${GEN}" team-a /keys
 "${GEN}" team-b /keys
 
+PEM_NETOP="$(sed 's/^/      /' /keys/netop.pem)"
 PEM_A="$(sed 's/^/      /' /keys/team-a.pem)"
 PEM_B="$(sed 's/^/      /' /keys/team-b.pem)"
 
-# The router is the shared transport plane: BOTH team keys are authorized
-# on its management socket. Isolation is a per-daemon property, not a
-# transport property.
+# The router is the network operator's infrastructure: ONLY the netop
+# key is authorized on its management socket. Tenants share the
+# router's data plane (transport), not its management plane.
 cat > /etc/switchboard/router.yaml <<EOF
 listen_addr: "0.0.0.0:9090"
 management_socket: "/run/switchboard/router.sock"
@@ -20,9 +29,7 @@ tick_interval: 10ms
 upstream_routers: []
 authorized_operator_keys:
   - |
-${PEM_A}
-  - |
-${PEM_B}
+${PEM_NETOP}
 EOF
 
 for team in a b; do
@@ -39,4 +46,4 @@ EOF
   done
 done
 
-echo "init: wrote router + 2x2 team node configs"
+echo "init: wrote router (netop-managed) + 2x2 team node configs"
