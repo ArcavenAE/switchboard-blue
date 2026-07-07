@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-sighup-reload-adversarial-cycle
+phase_step: steady-state-sighup-reload-adversarial-pass-4-remediated
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: c356386
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 4 (target 3/3 clean streak; code lane 8a40a0a; story v1.2)
+awaiting: adversary pass 5 (target 3/3 clean streak; code lane 8e159f2; story v1.3)
 historical_cycles: []
-timestamp: 2026-07-06T23:00:00Z
+timestamp: 2026-07-06T23:45:00Z
 last_update: 2026-07-06
 ---
 
@@ -60,6 +60,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-06 | steady-state-sighup-reload-adversarial-pass-4-remediated | completed | Pass 4: 4 LOW findings, all remediated same burst — test-writer 8e159f2 (modeELine/modePELine/scanForExactModeLine helpers; AC-001+PEtoE+PEtoPE full-line pinned; dialMgmtAndReadChallenge post-reload probe closing AC-003 mgmt gap) + story v1.3 (phantom E-CFG-002 example → E-CFG-001; four→nine test count). 12 anti-findings. Novelty LOW. Decay P1 HIGH(12)→P2 MED(5)→P3 MED(5)→P4 LOW(4,zero correctness). STORY-INDEX v3.92 → v3.93. Streak 0/3. Awaiting pass 5. |
 | 2026-07-06 | steady-state-sighup-reload-adversarial-passes-1-3 | completed | PR #111 merged c356386 (README sbctl-a published fix — investigation: formula live on tap since task #163, stale-tap brew-update failure mode documented). Adversarial passes 1-3 concluded HAS_FINDINGS → remediated: 22 findings total (P1: 12, P2: 5, P3: 5), all dispositioned; code lane @ 8a40a0a (9 commits, not pushed); story v1.2 (AC-004 PC-2 emission-based observable; changelog rows 1.1/1.2 added). Two new drift rows: DRIFT-SIGHUP-MODE-ASYMMETRY (LOW) + DRIFT-SIGHUP-INERT-RELOAD-UX (LOW). STORY-INDEX v3.91 → v3.92. Awaiting pass 4. |
 | 2026-07-06 | steady-state-sighup-reload-elaboration | completed | Burst (PO+architect parallel → story-writer+spec-steward parallel → state-manager): S-7.04-FU-SIGHUP-RELOAD ready v1.0 (4 ACs, 3 pts, steady-state, BC-2.09.001 PC-1 + BC-2.09.003 EC-004 + VP-038); S-6.04 closed-subsumed (decisions/S-6.04-disposition-ruling.md); BC-2.09.003 v1.9 → v2.0 VP-table governance narrowing; STORY-INDEX v3.90 → v3.91 (total 61 → 60; draft-stubs 1 → 0); BC-INDEX v3.1 → v3.2 |
 | 2026-07-04 | phase-5-pass-38-concluded-clean-both-lanes | completed | Adv-A NO_FINDINGS + 1 obs (O-P5P38-A-001, persistence re-confirmation of P37 combined-footnote); Adv-B NO_FINDINGS + 1 obs (O-P5P38-B-001 state-only-burst witness) + 15 anti-findings; streak advances 1/3 → 2/3. |
