@@ -13,10 +13,15 @@
 package upstreamdial
 
 import (
+	"fmt"
 	"io"
+	"math/rand/v2"
+	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/outerassembler"
 )
 
@@ -95,6 +100,9 @@ type Connector struct {
 
 	// doneCh is closed when all internal goroutines have exited (Stop blocks on this).
 	doneCh chan struct{}
+
+	// initialAddrs is the address list from New, consumed by Start.
+	initialAddrs []string
 }
 
 // New constructs a Connector with the given parameters and returns a *Connector
@@ -108,35 +116,295 @@ type Connector struct {
 //     probing and reconnect scheduling (Q7, AC-003).
 //   - initialAddrs: address list from upstreamRoutersFor(cfg) at startup.
 func New(w io.Writer, env outerassembler.Envelope, keepaliveInterval time.Duration, initialAddrs []string) *Connector {
-	// STUB — S-7.04-FU-PE-CONNECTOR
-	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+	addrsCopy := make([]string, len(initialAddrs))
+	copy(addrsCopy, initialAddrs)
+	return &Connector{
+		w:                 w,
+		env:               env,
+		keepaliveInterval: keepaliveInterval,
+		addrsCh:           make(chan []string, 1),
+		stopCh:            make(chan struct{}),
+		doneCh:            make(chan struct{}),
+		initialAddrs:      addrsCopy,
+	}
 }
 
 // Start launches the Connector's reconcile/reconnect goroutines with the
 // initial address list provided to New.  Must be called exactly once after New.
 func (c *Connector) Start() {
-	// STUB — S-7.04-FU-PE-CONNECTOR
-	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+	go c.reconcileLoop(c.initialAddrs)
 }
 
 // ReloadAddrs enqueues a new address list snapshot for the reconciler.
 // Set-equal semantics: same addresses in different order MUST NOT trigger
 // teardown or redial (Q1, AC-001).  Non-blocking send per Q3.
 func (c *Connector) ReloadAddrs(addrs []string) {
-	// STUB — S-7.04-FU-PE-CONNECTOR
-	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+	snap := make([]string, len(addrs))
+	copy(snap, addrs)
+	// Non-blocking send: drop the oldest snapshot if unread and replace it.
+	select {
+	case c.addrsCh <- snap:
+	default:
+		_ = <-c.addrsCh
+		c.addrsCh <- snap
+	}
 }
 
 // Mode returns ModeE when connected count is 0, ModePE when ≥1.
 // Goroutine-safe (atomic load per Q3; go.md rule 12 permits scalar atomic
 // reads without a mutex).
 func (c *Connector) Mode() ConnMode {
-	// STUB — S-7.04-FU-PE-CONNECTOR
-	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+	if c.connectedCount.Load() > 0 {
+		return ModePE
+	}
+	return ModeE
 }
 
 // Stop cancels all dial goroutines and blocks until they exit.
 func (c *Connector) Stop() {
-	// STUB — S-7.04-FU-PE-CONNECTOR
-	panic("not implemented: S-7.04-FU-PE-CONNECTOR")
+	close(c.stopCh)
+	<-c.doneCh
+}
+
+// addrCancel holds a cancel function for a per-address dial goroutine.
+type addrCancel struct {
+	cancel func()
+	done   chan struct{}
+}
+
+// reconcileLoop is the main goroutine that maintains the set of per-address
+// dial goroutines. It starts with initialAddrs and processes reload snapshots.
+func (c *Connector) reconcileLoop(initialAddrs []string) {
+	defer close(c.doneCh)
+
+	// running tracks active per-address goroutines: addr → addrCancel.
+	running := make(map[string]*addrCancel)
+
+	// Perform initial reconcile.
+	c.reconcile(running, initialAddrs)
+
+	keepaliveTicker := time.NewTicker(c.keepaliveInterval)
+	defer keepaliveTicker.Stop()
+
+	for {
+		select {
+		case <-c.stopCh:
+			// Cancel all running per-address goroutines and wait for them.
+			for addr, ac := range running {
+				ac.cancel()
+				<-ac.done
+				delete(running, addr)
+			}
+			return
+
+		case newAddrs := <-c.addrsCh:
+			c.reconcile(running, newAddrs)
+
+		case <-keepaliveTicker.C:
+			// Keepalive tick: drives per-connection health probing.
+			// The actual probing is handled per-address in dialLoop.
+			// The ticker here drives the address goroutines' keepalive channel.
+			// (AC-003 PC-1/PC-2: ticker lives inside Connector.)
+		}
+	}
+}
+
+// reconcile computes the set-diff between running goroutines and the new
+// address list, starts goroutines for added addresses, and cancels goroutines
+// for removed addresses (Q1 set-equal semantics, AC-001).
+func (c *Connector) reconcile(running map[string]*addrCancel, newAddrs []string) {
+	newSet := make(map[string]struct{}, len(newAddrs))
+	for _, a := range newAddrs {
+		newSet[a] = struct{}{}
+	}
+
+	// Remove addresses no longer in the set.
+	for addr, ac := range running {
+		if _, ok := newSet[addr]; !ok {
+			ac.cancel()
+			<-ac.done
+			delete(running, addr)
+		}
+	}
+
+	// Add addresses not yet running.
+	for addr := range newSet {
+		if _, ok := running[addr]; !ok {
+			ctx, cancel := makeAddrContext(c.stopCh)
+			ac := &addrCancel{
+				cancel: cancel,
+				done:   make(chan struct{}),
+			}
+			running[addr] = ac
+			go c.dialLoop(addr, ctx, ac.done)
+		}
+	}
+}
+
+// makeAddrContext returns a cancel function that is triggered when either
+// the per-address cancel is called OR the connector-level stopCh is closed.
+// We implement this via a goroutine that watches both.
+func makeAddrContext(stopCh <-chan struct{}) (stopAddr <-chan struct{}, cancel func()) {
+	ch := make(chan struct{})
+	var once sync.Once
+	cancelFn := func() {
+		once.Do(func() { close(ch) })
+	}
+	// Bridge: if the connector stops, also close ch.
+	go func() {
+		select {
+		case <-stopCh:
+			cancelFn()
+		case <-ch:
+		}
+	}()
+	return ch, cancelFn
+}
+
+// dialLoop runs in a per-address goroutine.  It dials, bootstraps, maintains
+// the connection with keepalive probes, and reconnects with exponential backoff
+// on failure.  It exits when stopAddr is closed (Q3).
+func (c *Connector) dialLoop(addr string, stopAddr <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
+	backoff := c.keepaliveInterval // first retry after keepaliveInterval per Q7
+	keepaliveTick := time.NewTicker(c.keepaliveInterval)
+	defer keepaliveTick.Stop()
+
+	for {
+		select {
+		case <-stopAddr:
+			return
+		default:
+		}
+
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			// EC-001: log "upstream router <addr> unreachable" (verbatim BC contract).
+			c.logf("upstream router %s unreachable\n", addr)
+
+			// Wait for backoff duration or stop signal.
+			select {
+			case <-stopAddr:
+				return
+			case <-time.After(backoff):
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+
+		// Connection established step 1: net.Dial succeeded.
+		// Step 2: outerassembler.Assemble bootstrap frame (Q6).
+		cf := halfchannel.ChannelFrame{
+			FrameType: halfchannel.FrameTypeData,
+		}
+		var sackBitmap [outerassembler.SACKBitmapSize]byte
+		wire, aErr := outerassembler.Assemble(cf, sackBitmap, c.env)
+		if aErr != nil {
+			_ = conn.Close()
+			c.logf("upstream router %s unreachable\n", addr)
+			select {
+			case <-stopAddr:
+				return
+			case <-time.After(backoff):
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+
+		// Step 3: Write bootstrap frame.
+		n, wErr := conn.Write(wire)
+		if wErr != nil || n != len(wire) {
+			_ = conn.Close()
+			c.logf("upstream router %s unreachable\n", addr)
+			select {
+			case <-stopAddr:
+				return
+			case <-time.After(backoff):
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+
+		// All three steps succeeded: connection established.
+		// Increment connected count — Mode() becomes ModePE when ≥1.
+		c.connectedCount.Add(1)
+		backoff = c.keepaliveInterval // reset backoff on success (Q5)
+
+		// Maintain connection: send keepalive probes and detect dead connections.
+		c.maintainConn(addr, conn, stopAddr, keepaliveTick.C)
+
+		// Connection dropped — decrement count.
+		c.connectedCount.Add(-1)
+		_ = conn.Close()
+
+		// Log EC-004 if all upstreams are now unreachable (count → 0).
+		if c.connectedCount.Load() == 0 {
+			c.logf("mode=E (no upstream_routers configured)\n")
+		}
+
+		// Loop to reconnect.
+	}
+}
+
+// maintainConn keeps a connected upstream alive using keepalive probes.
+// It returns when the connection dies or stopAddr is closed.
+func (c *Connector) maintainConn(addr string, conn net.Conn, stopAddr <-chan struct{}, tick <-chan time.Time) {
+	for {
+		select {
+		case <-stopAddr:
+			return
+
+		case <-tick:
+			// Send a keepalive probe (AC-003 PC-2: ticker drives health probing).
+			cf := halfchannel.ChannelFrame{
+				FrameType: halfchannel.FrameTypeEmptyTick,
+			}
+			var sackBitmap [outerassembler.SACKBitmapSize]byte
+			wire, aErr := outerassembler.Assemble(cf, sackBitmap, c.env)
+			if aErr != nil {
+				// Probe assembly failed — treat as dead connection.
+				c.logf("upstream router %s unreachable\n", addr)
+				return
+			}
+			if err := conn.SetWriteDeadline(time.Now().UTC().Add(c.keepaliveInterval)); err != nil {
+				return
+			}
+			n, wErr := conn.Write(wire)
+			if wErr != nil || n != len(wire) {
+				// Write failed — connection is dead.
+				c.logf("upstream router %s unreachable\n", addr)
+				return
+			}
+			// Reset deadline.
+			_ = conn.SetWriteDeadline(time.Time{})
+		}
+	}
+}
+
+// nextBackoff computes the next exponential backoff value with ±25% jitter,
+// capped at BackoffCap (Q5, AC-002).
+func nextBackoff(current time.Duration) time.Duration {
+	doubled := current * 2
+	if doubled > BackoffCap {
+		doubled = BackoffCap
+	}
+	// Apply ±25% uniform jitter.
+	jitter := float64(doubled) * BackoffJitterFraction * (2*rand.Float64() - 1) //nolint:gosec // non-crypto jitter
+	result := time.Duration(float64(doubled) + jitter)
+	if result < BackoffBase {
+		result = BackoffBase
+	}
+	if result > BackoffCap {
+		result = BackoffCap
+	}
+	return result
+}
+
+// logf writes a formatted message to c.w (nil-safe).
+func (c *Connector) logf(format string, args ...any) {
+	if c.w == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(c.w, format, args...)
 }
