@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.6"
+version: "2.7"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-07T12:00:00 # v2.7 — F-P1-001 (adversary pass-1): position-19 import set corrected from {frame, outerassembler} to {halfchannel, outerassembler}; halfchannel is at DAG position 5 (pure-core), so the edge is acyclic and lawful. frame is not imported directly — reachable transitively through outerassembler and halfchannel. §6.6.2 forbidden-edges cycle-freeness note updated: allowed imports are at positions 5 and 8 (not 2 and 8). PROSPECTIVE marker retained; verified against cee8e8b (story/s-7.04-fu-pe-connector HEAD at time of adversary pass adjudication); final machine-verification at merge.
   - 2026-07-07T00:00:00 # v2.6 — internal/upstreamdial registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19-22 renumbered 20-23. Import set PROSPECTIVE pending first merge.
   - 2026-07-06T13:00:00 # v2.5 — S-BL.TESTENV registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: go list -f '{{.Imports}}' ./internal/testenv/ at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files.
   - 2026-06-25T14:00:00 # v1.4 — Added §1 scope callout
@@ -318,7 +319,7 @@ strict — position N may import packages at positions 1..N-1 only.
 | 16 | `internal/drain` | ∅ (stdlib only) | effectful | Wave 7 (S-7.04, PR #101) |
 | 17 | `internal/routing` | {admission, frame, hmac, multipath} | boundary | Wave 2 (S-2.02); routing→multipath edge added Wave 4 (S-4.04) |
 | 18 | `internal/netingress` | {frame} | boundary | Wave 7 (S-BL.NI, PR #94, b8ed015) |
-| 19 | `internal/upstreamdial` | {frame, outerassembler} (**PROSPECTIVE** — package not yet on develop; registration precedes code per Q4 binding ruling from S-7.04-FU-PE-CONNECTOR placement note; deviation from v2.5 same-burst-as-merge precedent is authorized by placement note Q4) | effectful (network I/O) | Wave 7 (S-7.04-FU-PE-CONNECTOR) |
+| 19 | `internal/upstreamdial` | {halfchannel, outerassembler} (**PROSPECTIVE** — aligned to implementation at cee8e8b pre-merge; final machine-verification at merge. halfchannel pos 5, outerassembler pos 8 — both below 19, no back-edges. frame is NOT imported directly; reachable transitively through outerassembler and halfchannel. Corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001.) | effectful (network I/O) | Wave 7 (S-7.04-FU-PE-CONNECTOR) |
 | 20 | `internal/mgmt` | {metrics} | boundary (effectful — socket I/O, crypto) | Wave 5 (S-W5.01); see ARCH-12 |
 | 21 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
 | 22 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
@@ -433,11 +434,12 @@ here first.
 **Additional forbidden edges (carried forward):**
 - `internal/upstreamdial` MUST NOT import `internal/drain`, `internal/routing`,
   `internal/testenv`, or any package at positions 20–23. Allowed imports are
-  `{frame, outerassembler}` only (positions 2 and 8). Nothing may import
+  `{halfchannel, outerassembler}` only (positions 5 and 8). Nothing may import
   `internal/upstreamdial` except `cmd/switchboard` and `_test` files — it is an
   effectful leaf in the connectivity layer. Cycle-freeness: all allowed imports
-  (frame pos 2, outerassembler pos 8) are below position 19; no back-edges.
-  (Per placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement.)
+  (halfchannel pos 5, outerassembler pos 8) are below position 19; no back-edges.
+  (Per placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement;
+  import set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001.)
 - `internal/session` MUST NOT import `internal/routing`.
   Session-level authorization state is managed within `internal/session` itself;
   routing is a peer layer, not a dependency.
@@ -471,6 +473,7 @@ here first.
 | 2.1 | 2026-06-27 | (MEDIUM) §6.5.2 import set: `internal/frame` added (OuterHeader carrier in `startFramesBridge`; DAG position 2 leaf; no forbidden edge). (HIGH-B) §6.5.1 obligation 4 note: `runAccess` injection seam — split into `runAccess` + `runAccessWithConnector(connectorIface)`; tests inject `fakeConnector` for PC-2/PC-2.6 end-to-end. (EC-005) §6.5.2 note: "CI enforces structurally" wording overstated; accepted Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |
 | 2.2 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication. C-1 TRACKED-DEFER: `routing.WithFailureCounter` wiring deferred to the future network-ingress story; TRACKED-DEFER note added after obligation table mandating that E-ADM-016 and E-ADM-017 MUST be wired together when `RouteFrame` enters the live data path; orchestrator MUST register a follow-up story/STATE drift item. I-1 wg-join: obligations 3 and 6 updated to require `startSweepTicker` and `startFramesDroppedTicker` to accept `*sync.WaitGroup` and track the goroutine with `wg.Add(1)` / `defer wg.Done()` so BC-2.04.007 PC-2 postcon-6 no-goroutine-leak assertion is deterministic. |
 | 2.3 | 2026-06-27 | C-1 RESOLVED: `routing.WithFailureCounter(fc)` (threshold=5, window=60s) wired in `buildRouter` alongside `routing.WithLogger` — PR #20 (commit 418de54). Partial-wiring concern closed; BC-2.05.008 PC-5 and BC-2.05.005 PC-3 both satisfied. OBS-3 resolved. Only remaining deferral is the network-ingress listener (S-BL.NI). |
+| 2.7 | 2026-07-07 | F-P1-001 (adversary pass-1, HIGH): position-19 import set corrected from `{frame, outerassembler}` to `{halfchannel, outerassembler}`. Implementation at cee8e8b imports `halfchannel` directly (ChannelFrame, FrameTypeData, FrameTypeEmptyTick); `frame` is not imported directly. halfchannel is DAG position 5 (pure-core); edge is acyclic and lawful. §6.6.2 forbidden-edges cycle-freeness note updated to "positions 5 and 8" (was "positions 2 and 8"). PROSPECTIVE marker retained with alignment note. |
 | 2.6 | 2026-07-07 | `internal/upstreamdial` registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19–22 renumbered 20–23. Import set `{frame, outerassembler}` PROSPECTIVE pending first merge. Deviation from v2.5 same-burst-as-merge precedent is explicitly authorized by placement note Q4 binding ruling. |
 | 2.5 | 2026-07-06 | `internal/testenv` registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: `go list -f '{{.Imports}}' ./internal/testenv/` at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files. |
 | 2.4 | 2026-07-06 | Phase-7 audit remediation F-004/F-005/F-006. §6.5 refreshed from 7 packages (frozen at Wave-3) to all 21 packages present at develop 0516f3a, derived via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...`. Registered 4 previously-unregistered packages: `internal/mgmt` (Wave 5, S-W5.01, pos 19 at time of registration — renumbered to 20 in v2.6; see ARCH-12), `internal/netingress` (Wave 7, S-BL.NI PR #94, pos 18), `internal/outerassembler` (Wave 7, S-BL.OA PR #96, pos 8), `internal/arqsend` (Wave 7, S-BL.ARQ-TX PR #98, pos 10). Routing position updated to 17 (routing→multipath edge added by S-4.04; multipath must precede routing). §6.6.2 prospective table pruned — all prospective packages have shipped. New enforcement-history note explaining that PR #104 HOLD ran on stale §6.5. Wave annotation: config=S-6.01, drain=S-7.04, svtnmgmttest added. |
