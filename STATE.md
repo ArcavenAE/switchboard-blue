@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-sighup-reload-adversarial-pass-13-clean-2of3
+phase_step: steady-state-sighup-reload-CONVERGED-bc-5.39.001
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -32,9 +32,9 @@ phase_5_pass_4_gate: BC_5_39_001_SATISFIED
 develop_head: c356386
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 14 (streak 2/3 — convergence pass; code lane 48e3271; story v1.7)
+awaiting: demo evidence + DELIVERY doc + pr-manager dispatch (per-story-delivery steps 5-7)
 historical_cycles: []
-timestamp: 2026-07-07T12:00:00Z
+timestamp: 2026-07-07T14:00:00Z
 last_update: 2026-07-07
 ---
 
@@ -60,11 +60,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-07 | **BC-5.39.001 SATISFIED** — P12/P13/P14 consecutive clean 3/3; 14 passes, 35 findings all dispositioned; code lane 48e3271 | completed | Pass 14: NO_FINDINGS @ 48e3271 / story v1.7 — CONVERGED. streak 2/3 → 3/3. 12 anti-findings incl. two novel probes both clean (EC-004 newline-injection via control-char-strip chain config.go:305-313/499; testenv lock/cleanup ordering under -race). 5 obs O1-O5 all carried/parked confirmations (inert-reload → DRIFT row; order-sensitive diff + upstreamRouters shared-state → PE-CONNECTOR 6th confirmations; line-number comments cosmetic; Cross-BC note accuracy confirmed). Novelty LOW. STREAK: 2/3 → 3/3. BC-5.39.001 SATISFIED. Adversary streak read (3/3) verified by orchestrator. convergence-summary.md written. STORY-INDEX v4.02 → v4.03. Awaiting demo evidence + DELIVERY doc + pr-manager dispatch (per-story-delivery steps 5-7). |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-13-clean-2of3 | completed | Pass 13: NO_FINDINGS @ 48e3271 / story v1.7 — streak 1/3 → 2/3 (11 consecutive zero-code-finding passes). 11 anti-findings: Q1 real-signal guard; fail-closed both arms; non-vacuous cfg immutability incl. value-struct copy() sufficiency; EC-004 verbatim single-line with control-char-strip; three E-CFG fail arms; emission byte-parity; diff-guard all transitions incl. nil==empty; untouched surfaces + both liveness probes both paths; FCL 8-row independent re-sweep all accurate — drift class confirmed closed; go.md hygiene incl. yaml.v3-fixtures-only adjudication; POL-001/002/004. 5 obs: O1 inert-reload parked (DRIFT-SIGHUP-INERT-RELOAD-UX); O2 order-sensitive diff → PE-CONNECTOR (6th confirm); O3 upstreamRouters shared-state → PE-CONNECTOR (6th confirm); O4 dead guard (5th confirm, accepted); O5 hardcoded line-number comments cosmetic. Novel probe angles (YAML round-trip fidelity, cross-test signal interference) both clean. Novelty LOW. STORY-INDEX v4.01 → v4.02. STREAK: 1/3 → 2/3. Awaiting pass 14 (convergence pass). |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-12-clean-1of3 | completed | Pass 12: NO_FINDINGS @ 48e3271 / story v1.7 — streak 0/3 → 1/3 (first clean since pass 6; 10 consecutive zero-code-finding passes; v1.7 FCL sweep held under independent re-verification). 12 anti-findings: fail-closed atomicity all paths incl. non-empty immutability; EC-004 verbatim + control-char-strip robustness; emission byte-parity; Q1 real-signal guard; race-clean; diff-guard all transitions incl. nil==empty; signal directionality; three fail-closed arms; FCL 8-row independent re-sweep all accurate; POL-001/002/004; AC-003 positive liveness both probes; go.md hygiene. 4 obs adjudicated non-defect. Novelty LOW. STORY-INDEX v4.00 → v4.01. |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-11-remediated | completed | Pass 11: 1 LOW [process-gap] F-P11-001 FCL-testenv-row-describes-retired-shape (5th FCL-drift recurrence) → FIXED story v1.7 (testenv row corrected + FULL 8-row FCL-vs-code verification sweep). CLASS-CLOSURE ESCALATION recorded. 5 obs (all accepted/anchored). 15 anti-findings. Novelty MED. Code lane 48e3271 unchanged (9 consecutive zero-code-finding passes). STORY-INDEX v3.99 → v4.00. STREAK: holds 0/3. |
 | 2026-07-07 | steady-state-sighup-reload-adversarial-pass-10-remediated | completed | Pass 10: 1 LOW [process-gap] F-P10-001 FCL-and-Task-2-undercount-nine-vs-ten (4th FCL-drift recurrence) → FIXED story v1.6 (ten tests, six remediation-added, P8 provenance; count machine-verified grep=10). FCL-drift class closed via paired-edit rule + pre-pass count verification. 16 anti-findings. Novelty MED. Code lane 48e3271 unchanged. STORY-INDEX v3.98 → v3.99. STREAK: holds 0/3. |
-| 2026-07-07 | steady-state-sighup-reload-adversarial-pass-9-remediated | completed | Pass 9: 2 LOW [consistency-polish] — F-P9-001 AC-003-only-test-missing-no-return-assert → FIXED 48e3271; F-P9-002 testenv-seam-divergence → FIXED split: code half 48e3271 (transitional-seam doc comments, PE-CONNECTOR 5th obligation), story half v1.5 (AC-004 corrected). 14 anti-findings. Novelty MED. STORY-INDEX v3.97 → v3.98. STREAK: holds 0/3. PE-CONNECTOR forward obligations now 5. |
 
 ## Wave 6 Story Status
 
