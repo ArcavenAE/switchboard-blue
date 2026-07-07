@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/config"
-	"github.com/arcavenae/switchboard/internal/testenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1140,11 +1139,10 @@ func TestRunRouter_SIGHUPReload_InvalidUpstreamAddr_FailClosed(t *testing.T) {
 }
 
 // TestRunRouter_VP038_EtoPEViaConfigOnly verifies VP-038: the router graduates
-// from E to PE mode via in-process sighupCh injection using a
-// testenv.RouterHandle, without process restart.
+// from E to PE mode via in-process sighupCh injection, without process restart.
 //
-// RED GATE: fails because (a) the reload logic is a no-op stub so Mode() never
-// transitions to ModePE, and (b) the mode=PE line is never emitted.
+// AC-006 migration: SetSighupCh/SendReloadSignal seam retired; rawSighupCh is
+// now driven directly (the same pattern used by all other SIGHUP tests).
 func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -1180,31 +1178,21 @@ func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 		}
 	})
 
-	// Construct a RouterHandle wired to the real sighupCh so that
-	// SendReloadSignal drives the same channel runRouter selects on.
-	ctx := context.Background()
-	env := testenv.New(t, ctx)
-	handle := env.StartRouter(t, testenv.RouterConfig{})
-	// Wire the sighupCh onto the handle for the signal-path assertion.
-	handle.SetSighupCh(rawSighupCh)
-
 	// Precondition: E mode startup.
 	if !scanForLine(buf, "mode=E", 2*time.Second) {
 		t.Fatalf("VP-038 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
 	}
 
-	// Drive reload via the testenv seam.
-	handle.SendReloadSignal(t)
+	// Drive reload directly via the injected sighupCh (AC-006 migration:
+	// SetSighupCh/SendReloadSignal seam retired; rawSighupCh used directly).
+	rawSighupCh <- syscall.SIGHUP
 
 	// AC-004 postcondition 1+2: mode=PE emitted without process restart.
-	// scanForLine carries the postcondition — the observed emission on the
-	// real runRouter output buffer IS the authoritative mode assertion.
-	// handle.Mode() is NOT asserted here: Restart() unconditionally sets
-	// r.mode=ModePE regardless of the real runRouter state (the stub handle
-	// is disconnected from the goroutine), making it a tautological check
-	// that cannot fail (adversary pass-1 F-002).
+	// The emission scan is the authoritative observable for this test since
+	// the runRouter goroutine is started externally; RouterHandle.Mode() is
+	// used only for in-process testenv rig scenarios (TestE2E_EtoPEGraduationByConfigChange).
 	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Errorf("VP-038/AC-004: after SendReloadSignal, output missing mode=PE line within 2s; got:\n%s", buf.String())
+		t.Errorf("VP-038/AC-004: after SIGHUP, output missing mode=PE line within 2s; got:\n%s", buf.String())
 	}
 
 	// AC-004 postcondition 3: goroutine has not returned.
