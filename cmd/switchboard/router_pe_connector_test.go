@@ -341,7 +341,7 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 
 // TestRunRouter_PE_EFWD001ReconfirmationUnderLoad verifies AC-004: the PE dial
 // loop establishes a live upstream connection, and under normal load E-FWD-001
-// must NOT fire spuriously (split-horizon blocked).
+// must NOT fire spuriously (split-horizon-blocked).
 //
 // Partial discharge note (AC-004): the exhaustion case (E-FWD-001 fires under
 // path exhaustion via ARQ retransmit load) requires a receive/forward loop over
@@ -394,8 +394,15 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 
 	// AC-004 postcondition 2 (happy path): under single-path load, E-FWD-001 must
 	// NOT appear.  Assert it is absent after one tick interval.
+	// Search key is "E-FWD-001" — the spec-anchored event code from BC-2.02.008,
+	// stable across prose rewording of the emission text.  The production emission
+	// is in internal/routing/on_frame_arrival.go:252 and reads:
+	//   "all paths split-horizon-blocked: frame dropped (checksum=0x%08x iface=%d) (BC-2.02.008 E-FWD-001)"
+	// Using the event code avoids the vacuous-assertion defect F-P11-001 (space vs
+	// hyphen mismatch: "split-horizon blocked" never matches the hyphenated production
+	// string "split-horizon-blocked").
 	time.Sleep(50 * time.Millisecond)
-	if scanForLine(buf, "split-horizon blocked", 0) {
+	if scanForLine(buf, "E-FWD-001", 0) {
 		t.Errorf("TestRunRouter_PE_EFWD001ReconfirmationUnderLoad: E-FWD-001 fired spuriously under no-load; got:\n%s", buf.String())
 	}
 
@@ -416,6 +423,51 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 	//
 	// Owning story: whichever story wires a PE-connection receive loop through
 	// FrameArrivalHandler will own the exhaustion discharge for AC-004 PC-1.
+}
+
+// ── F-P11-001 mutation pin ──────────────────────────────────────────────────────
+
+// TestScanForLine_DetectsEFWD001ProductionEmission pins the F-P11-001 defect:
+// the AC-004 negative assertion must use "E-FWD-001" (the spec-anchored event
+// code), NOT "split-horizon blocked" (space form), which never matches the
+// hyphenated production emission.
+//
+// Production emission (internal/routing/on_frame_arrival.go:252):
+//
+//	"all paths split-horizon-blocked: frame dropped (checksum=0x%08x iface=%d) (BC-2.02.008 E-FWD-001)"
+//
+// Two assertions:
+//
+//	(a) scanForLine with "E-FWD-001" returns true   — proves the fixed key detects the real emission.
+//	(b) scanForLine with "split-horizon blocked"     — returns false, pinning the F-P11-001 defect
+//	    shape so a regression to the space form fails loudly.
+func TestScanForLine_DetectsEFWD001ProductionEmission(t *testing.T) {
+	t.Parallel()
+
+	// Verbatim production emission line, formatted with concrete values.
+	// Anchored to internal/routing/on_frame_arrival.go:252.
+	productionLine := fmt.Sprintf(
+		"all paths split-horizon-blocked: frame dropped (checksum=0x%08x iface=%d) (BC-2.02.008 E-FWD-001)",
+		uint32(0xdeadbeef), 3,
+	)
+	buf := &syncBuffer{}
+	buf.Write([]byte(productionLine + "\n"))
+
+	// (a) Fixed key "E-FWD-001" must detect the production emission.
+	if !scanForLine(buf, "E-FWD-001", 0) {
+		t.Errorf("TestScanForLine_DetectsEFWD001ProductionEmission: "+
+			"scanForLine(buf, %q, 0) = false; want true — fixed key must detect production E-FWD-001 emission",
+			"E-FWD-001")
+	}
+
+	// (b) Original defect key "split-horizon blocked" (space) must NOT match.
+	// This pins F-P11-001: the space form is absent from the production string;
+	// any regression to scanning for the space form produces a vacuous assertion.
+	if scanForLine(buf, "split-horizon blocked", 0) {
+		t.Errorf("TestScanForLine_DetectsEFWD001ProductionEmission: "+
+			"scanForLine(buf, %q, 0) = true; want false — space form must not match hyphenated production string (F-P11-001 regression)",
+			"split-horizon blocked")
+	}
 }
 
 // ── AC-006: RouterHandle.Mode() reflects live connector state ──────────────────
