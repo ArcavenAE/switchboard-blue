@@ -639,6 +639,41 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 12 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 MED [test-hygiene/CI-gate]
+
+**Code HEAD:** 14ae327 (advanced from 6e00332 — two remediation commits required)
+
+### Finding F-P12-001 MED [test-hygiene/CI-gate]
+
+**What:** The P11 pin test (`TestScanForLine_DetectsEFWD001ProductionEmission`) used three unchecked `buf.Write` calls. The golangci-lint errcheck linter (required CI step) flagged all three, making the branch unmergeable.
+
+**Novel failure axis — remediation commit CI-gate regression:** Eleven prior passes had run the full local CI gate (golangci-lint, go vet, race tests, gofumpt) against feature/fix commits, but never against remediation commits specifically. The P11 fix was validated for test correctness and race cleanliness, but errcheck was not run against the new pin test before the state-manager burst closed P11. This is the first instance of a remediation commit itself introducing a CI gate violation in this cycle.
+
+**Remediation:**
+- d882686: errcheck discard (`_` assignment) added to the 3 `buf.Write` calls in `TestScanForLine_DetectsEFWD001ProductionEmission`; 2 stale `connector.go` line-number citations in test comments retired with stable mechanism-description anchors.
+- 14ae327: 5 stale `mgmt_wire.go` line-number citations in `router_sighup_test.go` → stable function/guard anchors.
+- golangci-lint 0 issues, go vet clean, race tests green post both commits.
+
+**Line-number-citation class structurally closed:** Residual = 3× `on_frame_arrival.go:252` pin-test anchors — verified accurate at HEAD 14ae327 (KEEP). No further stale line-number citations remain across the codebase.
+
+**Story sync → v1.12:** story-writer's sweep fixed 2 stale live-prose `mgmt_wire.go` citations in the story body (Concurrency Contract section + AC-003 precondition → stable anchors referencing the `addrsCh` guard and `SetSighupCh` seam).
+
+**P12 verification results:**
+- P11 fix (absence-assertion key `"E-FWD-001"`) holds at root — `TestScanForLine_DetectsEFWD001ProductionEmission` passes.
+- Cycle-wide absence-assertion audit: CLEAN — no second instance of a vacuous absence assertion found.
+- Census re-derivation: SET diff vs toolchain = ∅ (no new unregistered packages).
+- POL-002 sync: PASS — story v1.12 registered in STORY-INDEX v4.18→v4.19.
+- All P1-P11 code-lane fixes verified holding.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Codified lesson:** Remediation commits must re-clear the FULL local CI gate (golangci-lint run ./..., go vet, race tests, gofumpt) before a pass is declared remediated — not just the test that motivated the fix. Stable mechanism anchors preferred over line-number citations in test comments.
+
+**Cycle ledger:** 12 passes, 24 findings (7/3/3/1/1/2/2/1/1/1/1/1), all fixed/adjudicated, zero open. Streak 0/3. Awaiting: adversary pass 13 @ 14ae327.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 11 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — 1 LOW [test-fidelity]
