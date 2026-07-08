@@ -32,13 +32,13 @@ func TestIntegration_KeyLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	// (1) Registered key is admitted.
 	t.Run("registered key admitted", func(t *testing.T) {
 		t.Parallel()
-		env2 := testenv.New(t, ctx)
+		env2 := testenv.New(ctx, t)
 		key := env2.GenerateKey(t)
 		env2.RegisterKey(t, key)
 		if err := env2.ConnectWithKey(t, key); err != nil {
@@ -49,7 +49,7 @@ func TestIntegration_KeyLifecycle(t *testing.T) {
 	// (2) Revoked key is rejected.
 	t.Run("revoked key rejected", func(t *testing.T) {
 		t.Parallel()
-		env2 := testenv.New(t, ctx)
+		env2 := testenv.New(ctx, t)
 		key := env2.GenerateKey(t)
 		env2.RegisterKey(t, key)
 		env2.RevokeKey(t, key)
@@ -61,7 +61,7 @@ func TestIntegration_KeyLifecycle(t *testing.T) {
 	// (3) Expired key is rejected after expiry.
 	t.Run("expired key rejected after expiry", func(t *testing.T) {
 		t.Parallel()
-		env2 := testenv.New(t, ctx)
+		env2 := testenv.New(ctx, t)
 		key := env2.GenerateKeyWithExpiry(t, time.Now().Add(200*time.Millisecond))
 		env2.RegisterKey(t, key)
 

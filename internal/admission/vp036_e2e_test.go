@@ -32,7 +32,7 @@ func TestE2E_Session_ContinuityAcrossIPChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	// Establish initial session from IP A.

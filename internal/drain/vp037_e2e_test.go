@@ -35,7 +35,7 @@ func TestE2E_RouterDrain_NodesMigrateWithin2s(t *testing.T) {
 	t.Cleanup(cancel)
 
 	// Two-router topology.
-	env := testenv.NewWithRouters(t, ctx, 2)
+	env := testenv.NewWithRouters(ctx, t, 2)
 	t.Cleanup(env.Close)
 
 	sessionID := env.CreateSession(t)
