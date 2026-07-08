@@ -902,6 +902,33 @@ All nine standing bars green from fresh context:
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 23 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
+
+**Code HEAD:** c676134 (advanced from 4f2807c — one remediation commit required)
+
+### Finding F-P23-001 LOW [doc-drift]
+
+**What:** A storm test in `connector_test.go` carried a hardcoded "127.0.0.1:1 reserved port" mechanism claim in an address-setup comment while the code uses the F-P1-005 probe-and-close ephemeral pattern. No `:1` literal exists anywhere in the repository; an adjacent comment in the same test was already accurate. This is the ninth family shape — the first address/port-mechanism claim in the cycle, and the first finding in a previously-unswept file (`connector_test.go`). A draft-stage artifact: the "reserved port" comment was written at the red-gate commit before the ephemeral port mechanism was finalized, and was never reconciled after the green-gate implementation pass.
+
+**Sweep-granularity trajectory — line → function → file:** Prior sweeps progressed from line-level (P6, P12) through function-level (P16, P22) to file-level (P23). `connector_test.go` is the first file swept at full-file granularity in this cycle. 16 address/port-mechanism hits adjudicated: 15 accurate, 1 fixed.
+
+**P22 fix verified holding:** Poll-tail comment in `RouterHandle.Restart` accurately reflects unconditional teardown-and-recreate (spot-checked via claim→code mapping); full-function sweep result holds. All nine bars otherwise green: full CI gate, census re-derivation 24/24, absence-assertion keys verbatim, symbol resolution, claim→code clean in blast radius, double-liveness, citation-orthography both forms, classification-consistency 9/9, POL-002 sync.
+
+**Code behavior unchanged since P17.** Remediation is comment-only.
+
+**Remediation (commit c676134):**
+- Address-setup comment rewritten citing F-P1-005 explicitly with 5-row claim→code mapping (no `:1` pattern; `net.Listen("tcp", "127.0.0.1:0")` + `ln.Addr().String()` + `ln.Close()` + caller receives string).
+- FULL-FILE comment sweep of `connector_test.go`: 16 address/port-mechanism hits adjudicated — 15 accurate (ephemeral-port pattern correctly described or historical-record rows), 1 fixed. File now swept at file granularity.
+- Story synced → v1.21 (on disk, verified): "reserved port" 0 hits (never propagated to story); all "127.0.0.1" and "StormNoDeadlock" hits accurate/historical.
+
+**Trajectory shorthand (P1–P23):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1
+
+**Cycle ledger:** 23 passes, 33 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1), zero open. Streak 0/3. Awaiting: adversary pass 24 @ c676134.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)
