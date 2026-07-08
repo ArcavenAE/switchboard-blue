@@ -1133,6 +1133,67 @@ drainStartup:
 	}
 }
 
+// ── F-P5-001: ReloadAddrs storm — no deadlock ─────────────────────────────────
+
+// TestConnector_ReloadAddrs_StormNoDeadlock verifies F-P5-001: ReloadAddrs must
+// be non-blocking under all interleavings, including races between the single
+// production caller (runRouter's SIGHUP select case) and the reconcile goroutine
+// draining the channel.
+//
+// The adversary reproduced the deadlock with a 200k-iteration storm: when
+// addrsCh (cap 1) is full, the old default branch did a BLOCKING <-c.addrsCh.
+// If the reconcile goroutine drains the slot in that window, the channel is
+// empty and the blocking receive waits forever — wedging runRouter's select loop.
+//
+// Failure condition (pre-fix code): the storm goroutine wedges, the watchdog
+// fires after 10s, and the test fails.  Post-fix (non-blocking drain + non-
+// blocking resend): the storm completes in well under 2s.
+func TestConnector_ReloadAddrs_StormNoDeadlock(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0; start the reconcile
+	// goroutine so it races the drain exactly as in production.
+
+	const iterations = 200_000
+	const watchdogTimeout = 10 * time.Second
+	const greenPassTimeout = 2 * time.Second
+
+	// Use an unreachable address so dialLoop doesn't make real TCP connections,
+	// but the reconcile goroutine MUST be running so it races the addrsCh drain.
+	// 127.0.0.1:1 is a reserved port that will be refused instantly on most OSes,
+	// keeping dialLoop in the backoff wait and alive throughout the storm.
+	ln, addr := newLoopbackListener(t)
+	_ = ln.Close() // close immediately: address exists but is not listening
+
+	c := New(nil, zeroEnv(), BackoffBase, []string{addr})
+	t.Cleanup(c.Stop)
+	c.Start() // reconcile goroutine is now running and may drain addrsCh at any time
+
+	// Run the storm in a separate goroutine so the watchdog can interrupt on wedge.
+	stormDone := make(chan struct{})
+	go func() {
+		defer close(stormDone)
+		snap := []string{addr}
+		for i := 0; i < iterations; i++ {
+			c.ReloadAddrs(snap)
+		}
+	}()
+
+	select {
+	case <-stormDone:
+		// Pass: storm completed before watchdog fired.
+	case <-time.After(watchdogTimeout):
+		t.Fatalf(
+			"TestConnector_ReloadAddrs_StormNoDeadlock: %d ReloadAddrs calls did not complete within %v — "+
+				"ReloadAddrs is blocking (F-P5-001 deadlock; pre-fix default-branch blocks on <-c.addrsCh "+
+				"when reconcile drains the slot, leaving the channel empty and the receive wedged forever)",
+			iterations, watchdogTimeout,
+		)
+	}
+
+	// Green-path timing assertion: with non-blocking selects the storm is fast.
+	// This is informational — the liveness property is the watchdog above.
+	_ = greenPassTimeout // referenced for documentation; watchdog is the hard gate
+}
+
 // TestNextBackoff_JitterBounds verifies the raw jitter formula: for 10 000 trials
 // at BackoffBase, every result stays within [BackoffBase*0.75, BackoffBase*2*1.25]
 // clamped to [BackoffBase, BackoffCap] (F-P1-004, Q5 ±25%%).

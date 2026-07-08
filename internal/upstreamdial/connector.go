@@ -142,16 +142,37 @@ func (c *Connector) Start() {
 
 // ReloadAddrs enqueues a new address list snapshot for the reconciler.
 // Set-equal semantics: same addresses in different order MUST NOT trigger
-// teardown or redial (Q1, AC-001).  Non-blocking send per Q3.
+// teardown or redial (Q1, AC-001).  Non-blocking under all interleavings
+// (F-P5-001): both the drain and the resend are non-blocking selects.
+//
+// Race that motivated the fix (F-P5-001): the old default branch did a
+// BLOCKING <-c.addrsCh.  When the reconcile goroutine drained the slot
+// between the failed fast-send and the blocking drain, the channel was
+// empty and the drain blocked forever — wedging runRouter's select loop
+// (ctx.Done() and all future SIGHUPs unreachable).
+//
+// The second select's default (drop our snap if another value snuck in
+// between the drain and the resend) is unreachable with the single
+// production caller (runRouter select loop), but is cheap insurance.
+// State: a subsequent reload always wins eventually because the last
+// successful send is the newest snapshot.
 func (c *Connector) ReloadAddrs(addrs []string) {
 	snap := make([]string, len(addrs))
 	copy(snap, addrs)
-	// Non-blocking send: drop the oldest snapshot if unread and replace it.
+	// Fast path: channel empty — send without contention.
+	select {
+	case c.addrsCh <- snap:
+		return
+	default:
+	}
+	// Slow path: channel full — drain (non-blocking) then resend (non-blocking).
+	select {
+	case <-c.addrsCh:
+	default:
+	}
 	select {
 	case c.addrsCh <- snap:
 	default:
-		<-c.addrsCh
-		c.addrsCh <- snap
 	}
 }
 
