@@ -902,6 +902,47 @@ All nine standing bars green from fresh context:
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 24 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
+
+**Code HEAD:** f2f0ba6 (advanced from c676134 — one remediation commit required)
+
+### Finding F-P24-001 LOW [doc-drift]
+
+**What:** A production comment in `connector.go` EC-004 guard used a stale relative numeric line-locator: "60 lines above" when the actual distance was 65 lines. The relative form is structurally unstable — it is never accurate because any intervening edit shifts the distance without updating the comment. This is the first relative-form locator found anywhere in the core files across 24 passes, and the first finding on a production-file comment surface previously unswept (all prior comment sweeps covered testenv, connector_test, mgmt_wire header, and citations surfaces, but connector.go itself had not been swept at file granularity until P24).
+
+**Novel finding axis — relative numeric line-locator:** All prior doc-drift findings identified prose claims whose described code path was wrong (non-existent symbols, inverted semantics, unreachable paths, stale mechanism descriptions). This is the first instance of a comment whose semantic intent is correct but whose positional claim is structurally unstable by form — "60 lines above" could only be accurate at exactly one moment in time.
+
+**Remediation (commit f2f0ba6):**
+- Relative locator replaced with a prose anchor naming the cited construct directly (stable across line-number shifts).
+- FULL-FILE comment sweep of `connector.go`: 18 comment scopes adjudicated — 17 accurate, 1 fixed. File now swept at file granularity.
+- Story synced → v1.22 (on disk, verified): FCL row already used prose-anchor form per P19; story sweep clean — no propagation of the relative-locator form into story prose.
+- Full CI gate cleared. Code behavior unchanged since P17.
+
+**PERIMETER-COMPLETION milestone:** With P24's full-file sweep of `connector.go`, all comment surfaces in the story perimeter have now been swept at file granularity:
+
+| File | Sweep pass | Scope | Findings |
+|------|-----------|-------|---------|
+| `internal/testenv/testenv.go` | P16 (Restart method) + P22 (Restart + Mode() full-function) | Production tree — method doc + inline | P16: 1 fixed (ReloadAddrs never-invoked); P22: 1 fixed (poll-tail inverted), all others accurate |
+| `internal/upstreamdial/connector_test.go` | P23 | Test file — full file | P23: 1 fixed (reserved-port mechanism), 15 accurate |
+| Citations (`router_sighup_test.go`, `mgmt_wire.go`) | P12 (line-number citation sweep) + P17 (red-gate provenance) + P19 (bare-form orthography) | Test + production header | Multiple passes: line-citation class closed, red-gate class retired, both orthography forms closed |
+| `cmd/switchboard/mgmt_wire.go` (runRouter header) | P14 | Production header | P14: 1 fixed (deferred → shipped), all others accurate |
+| `internal/upstreamdial/connector.go` | P24 | Production file — full file | P24: 1 fixed (relative locator → prose anchor), 17 accurate |
+
+Every file in the core perimeter has been swept at file granularity. The story perimeter comment surface is COMPLETE.
+
+**P24 verification results:**
+- All nine standing bars green: full CI gate, census re-derivation 24/24, absence-assertion keys verbatim, symbol resolution, claim→code blast-radius, double-liveness, citation-orthography both forms, classification-consistency, POL-002 sync.
+- P23 fix verified holding (spot-checked: storm test address-setup comment accurate, ephemeral pattern correctly described).
+- Code behavior unchanged since P17. Code HEAD f2f0ba6. Story HEAD v1.22.
+
+**Trajectory shorthand (P1–P24):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1
+
+**Cycle ledger:** 24 passes, 34 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1), zero open. Streak 0/3. Awaiting: adversary pass 25 @ f2f0ba6.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 23 (2026-07-08)
 
 **Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
