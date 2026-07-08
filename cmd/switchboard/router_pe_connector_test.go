@@ -498,9 +498,18 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 		t.Errorf("TestRunRouter_PE_RouterHandleModeReflectsLiveState: handle.Mode() == %v after SetConnector(ModePE); want ModePE (AC-006 PC-4 — Mode() must delegate to connector.Mode(), not read r.mode stub)", handle.Mode())
 	}
 
-	// Verify the inverse: wire an ModeE connector → handle.Mode() == ModeE.
+	// Verify the inverse: wire a ModeE connector → handle.Mode() == ModeE.
 	fakeConnE := &fakeConnectorHandle{mode: upstreamdial.ModeE}
 	handle.SetConnector(fakeConnE)
+
+	// AC-006 postcondition 4 (inverse): after SetConnector(ModeE fake),
+	// Mode() must delegate to the fake and return ModeE, NOT read r.mode stub.
+	if handle.Mode() != testenv.ModeE {
+		t.Errorf("TestRunRouter_PE_RouterHandleModeReflectsLiveState: "+
+			"handle.Mode() == %v after SetConnector(ModeE fake); want ModeE "+
+			"(AC-006 PC-4 inverse — Mode() must delegate to connector.Mode())",
+			handle.Mode())
+	}
 
 	// Force the mode field to ModePE to confirm the impl doesn't read it.
 	// Probe-and-close: allocate an ephemeral port then release it so the
@@ -517,8 +526,11 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 		UpstreamRouters: []string{unreachableAddr},
 	})
 	// After Restart with non-empty upstreams, r.mode=ModePE in the stub field.
-	// But connector reports ModeE via fakeConnE (Restart replaces the connector
-	// with a live-dialing one that cannot connect → ModeE).
+	// Restart discards the fake (sets r.connector=nil, builds a fresh live-dialing
+	// upstreamdial.Connector against unreachableAddr, polls for ModePE and times
+	// out after 3s).  The live connector cannot dial the closed ephemeral port →
+	// connectedCount stays 0 → connector.Mode()==ModeE → handle.Mode()==ModeE,
+	// overriding the r.mode=ModePE stub.
 	if handle.Mode() != testenv.ModeE {
 		t.Errorf("TestRunRouter_PE_RouterHandleModeReflectsLiveState: handle.Mode() == %v after SetConnector(ModeE); want ModeE (AC-006 PC-4 — connector.Mode() must override r.mode)", handle.Mode())
 	}
