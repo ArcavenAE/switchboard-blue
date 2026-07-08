@@ -1182,3 +1182,50 @@ The overage of ~10 tests above the upper bound was driven by adversarial-remedia
 **Cycle ledger:** 25 passes, 35 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1), zero open. Streak reset 0/3.
 
 **Awaiting:** adversary pass 26 @ f2f0ba6 (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 26 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 MED [doc-drift]
+
+**Code HEAD:** f2f0ba6 (adversary pass @ this SHA; code fix 849e095 comment-only)
+
+### Finding Progression (P26)
+
+| Pass | Code HEAD | Findings | Severity | Streak | Remediation |
+|------|-----------|----------|----------|--------|-------------|
+| 26 | f2f0ba6 | 1 | MED [doc-drift] | reset 0/3 | story v1.24 + code comment 849e095 (comment-only) |
+
+**Trajectory shorthand (P1–P26):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1
+
+### Finding F-P26-001 MED [doc-drift]
+
+**What:** The bootstrap frame type used at `Connector.dialLoop` construction is `halfchannel.FrameTypeData` (a placeholder, per the shipped-deferral note added at v1.2), yet the story's normative specification cited the phantom symbol `FrameTypePEConnect` as the delivered value in two load-bearing locations:
+
+1. **Q6 binding** (Placement Note §Q6) — stated that the bootstrap frame type was `frame.FrameTypePEConnect`, implying the distinct constant was already defined and shipped.
+2. **AC-001 PC-2** — postcondition 2 cited `FrameTypePEConnect` as the concrete delivered postcondition.
+
+`grep -rn FrameTypePEConnect` across the entire repository returns **0 hits** — the symbol does not exist anywhere in the codebase. The shipped-deferral note introduced at story v1.2 covered only the Envelope fields (`upstream_id`, `session_id`); the `ChannelFrame.FrameType` field was not enumerated as deferred, leaving the frame-type citation unreconciled.
+
+**Adjudication rationale:** `internal/frame` is outside the story perimeter (perimeter covers `internal/upstreamdial`, `internal/testenv`, `cmd/switchboard`, and VP e2e test files). Defining a distinct `FrameTypePEConnect` constant in `internal/frame` without the receive loop that consumes it would be dead code. The not-core deferral class applies: the frame type's semantic meaning is only realizable when its consumer (the PE receive/forward loop, `S-BL.PE-RECEIVE-LOOP`) is delivered. Classifying as not-core-deferred is consistent with the Q6 original intent and the AC-001 design.
+
+**Remediation:**
+
+*Story (v1.24):*
+- Shipped-deferral note extended to enumerate `ChannelFrame.FrameType` alongside the Envelope fields: the distinct PE-CONNECT frame type (Q6's `frame.FrameTypePEConnect`) is deferred to S-BL.PE-RECEIVE-LOOP, the consumer whose receive loop must distinguish bootstrap frames from session data.
+- Q6 binding annotated with deferral marker preserving original intent: the distinct type is the goal; `FrameTypeData` is the placeholder pending S-BL.PE-RECEIVE-LOOP.
+- AC-001 PC-2 annotated with deferral marker: delivered postcondition is satisfied with the `FrameTypeData` placeholder; the distinct type lands with S-BL.PE-RECEIVE-LOOP.
+- Forward obligation FO-PE-LOOP-001 added to `S-BL.PE-RECEIVE-LOOP` Forward Obligations section: define the distinct PE-CONNECT bootstrap frame type and update `Connector.dialLoop` bootstrap construction to use it.
+
+*Code (849e095, comment-only):*
+- Comment amended at `dialLoop` bootstrap construction in `internal/upstreamdial/connector.go`: documents that `halfchannel.FrameTypeData` is a placeholder, the distinct type is defined in Q6 as `frame.FrameTypePEConnect`, and delivery is deferred to S-BL.PE-RECEIVE-LOOP. No behavior change.
+
+**P26 verification results:**
+- Story: deferral note covers all three deferred surfaces (Envelope fields from v1.2 + ChannelFrame.FrameType from v1.24); Q6 + AC-001 PC-2 cite placeholder explicitly with deferral markers; original intent preserved per F-P25 lesson (F-P20-001 classification-consistency).
+- Code: comment-only commit; no test changes; no behavioral changes; CI gate green (no new logic).
+- S-BL.PE-RECEIVE-LOOP: FO-PE-LOOP-001 row added to Forward Obligations; no version bump (stub version "0.1-backlog-stub", no changelog table — intentionally left).
+
+**Cycle ledger:** 26 passes, 36 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1), zero open. Streak reset 0/3.
+
+**Awaiting:** adversary pass 27 @ 849e095 (streak 0/3)

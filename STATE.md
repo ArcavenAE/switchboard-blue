@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-pe-connector-adversarial-pass-25-pending
+phase_step: steady-state-pe-connector-adversarial-pass-27-pending
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -33,7 +33,7 @@ develop_head: 950285c
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 26 @ f2f0ba6 (streak 0/3)
+awaiting: adversary pass 27 @ 849e095 (streak 0/3)
 historical_cycles: []
 timestamp: 2026-07-07T00:00:00Z
 last_update: 2026-07-07
@@ -64,6 +64,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 | 2026-07-08 | **PE-CONNECTOR adversary P23 remediated — stale reserved-port comment fixed @ c676134; connector_test.go swept at file granularity; story v1.21; pass 24 next; streak 0/3** | completed | Pass-23: F-P23-001 LOW [doc-drift] — storm test in `connector_test.go` carried a hardcoded "127.0.0.1:1 reserved port" mechanism claim in an address-setup comment while the code uses the F-P1-005 probe-and-close ephemeral pattern; no `:1` literal anywhere in the repo; adjacent comment was already correct. Ninth family shape — first address/port-mechanism claim; first in a previously-unswept file (`connector_test.go`). Fix (commit c676134): comment rewritten citing F-P1-005 explicitly with 5-row claim→code mapping; FULL-FILE comment sweep of `connector_test.go` — 16 address/port-mechanism hits adjudicated: 15 accurate, 1 fixed; file now swept at file granularity. Story synced → v1.21 (on disk, verified): "reserved port" 0 hits — never propagated; all "127.0.0.1"/"StormNoDeadlock" hits accurate/historical. P22 fix verified holding (poll-tail comment + full-function sweep spot-checked accurate). All nine bars otherwise green. Code behavior unchanged since P17. Code HEAD c676134. Cycle ledger: 23 passes, 33 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1), zero open. Streak 0/3. |
 | 2026-07-08 | **PE-CONNECTOR adversary P24 remediated — relative line-locator retired @ f2f0ba6; connector.go swept at file granularity; story v1.22; pass 25 next; streak 0/3** | completed | Pass-24: F-P24-001 LOW [doc-drift] — stale relative numeric line-locator in a production comment (connector.go EC-004 guard: "60 lines above" vs actual 65; never accurate). First relative-form locator; first production-file instance; verified the only such locator in the core files. Fix (commit f2f0ba6): prose anchor replacement + FULL-FILE comment sweep of connector.go (18 scopes: 17 accurate, 1 fixed). PERIMETER-COMPLETION: full-file comment sweeps now cover the entire story perimeter (testenv P16/P22, connector_test P23, citations P12/P17/P19, mgmt_wire header P14, connector.go P24). Story synced → v1.22 (on disk, verified; story sweep clean — FCL already used prose-anchor form per P19). P23 fix verified holding (spot-checked). All nine bars otherwise green. Code behavior unchanged since P17. Code HEAD f2f0ba6. Cycle ledger: 24 passes, 34 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1), zero open. Streak 0/3. |
 | 2026-07-08 | **PE-CONNECTOR adversary P25 remediated — test-count roll-up drift fixed (story v1.23); code HEAD unchanged @ f2f0ba6; pass 26 next; streak 0/3** | completed | Pass-25: F-P25-001 LOW [doc-drift] — "Estimated total test count: 15–25" summary at ~L678 contradicted enumerated tables and code truth (grep -cE "^func Test": connector_test.go=18, router_pe_connector_test.go=9, testenv_test.go +1 = 28 net-new + 1 migrated). Overage of ~10 tests driven by adversarial-remediation hardening (F-P1-004×4, F-P1-006, F-P2-001×2, F-P4-001, F-P5-001, F-P11-001). Story-only fix at f2f0ba6 (code HEAD unchanged): summary rewritten with per-file delivered counts + overage note preserving forecast comparison. Story v1.23. Streak reset 0/3. Cycle ledger: 25 passes, 35 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1), zero open. |
+| 2026-07-08 | **PE-CONNECTOR adversary P26 remediated — bootstrap frame-type deferral reconciled (story v1.24, code comment 849e095); pass 27 next @ 849e095; streak 0/3** | completed | Pass-26: F-P26-001 MED [doc-drift] — normative AC-001 PC-2 + Q6 binding cited phantom `FrameTypePEConnect` (0 grep hits repo-wide) as delivered while code uses `halfchannel.FrameTypeData` placeholder; shipped-deferral note (v1.2) covered only Envelope fields — ChannelFrame.FrameType was unreconciled. Story v1.24: deferral note extended; Q6 + AC-001 PC-2 annotated with deferral markers (original intent preserved); FO-PE-LOOP-001 added to S-BL.PE-RECEIVE-LOOP Forward Obligations. Code 849e095: comment-only at dialLoop bootstrap, no behavior change. Adjudication: not-core deferral class (internal/frame out of perimeter; distinct constant would be dead code without its consumer S-BL.PE-RECEIVE-LOOP). Streak reset 0/3. Awaiting pass 27 @ 849e095. |
 
 
 ## Wave 6 Story Status

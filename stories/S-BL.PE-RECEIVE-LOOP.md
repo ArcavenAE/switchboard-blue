@@ -129,6 +129,12 @@ exhaustion) is the re-confirmation vehicle for both drift anchors.
 After `S-7.04-FU-PE-CONNECTOR` is merged (established TCP connections are the prerequisite).
 `S-7.04-FU-DRAIN-WIRE` is blocked on this story and cannot be scheduled before it.
 
+## Forward Obligations
+
+| FO ID | From Story | Finding | Description |
+|-------|-----------|---------|-------------|
+| FO-PE-LOOP-001 | S-7.04-FU-PE-CONNECTOR | F-P26-001 (v1.24 deferral) | Define the distinct PE-CONNECT bootstrap frame type (Q6's `frame.FrameTypePEConnect`, or adopt `frame.FrameTypeCtl`) and update `Connector.dialLoop` bootstrap construction in `internal/upstreamdial/connector.go` to use it. The receive loop must distinguish bootstrap frames from session data; using `halfchannel.FrameTypeData` as placeholder (current shipped state) makes bootstrap frames indistinguishable from session data at the receiver. Until this is resolved, the bootstrapped connection's frame type carries no semantic distinction from a normal data frame. |
+
 ## Backlog Status
 
 | Field | Value |
