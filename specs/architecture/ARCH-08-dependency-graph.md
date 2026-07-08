@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.9"
+version: "2.10"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-07T15:00:00 # v2.10 — F-P9-001 (adversary pass-9): internal/bench (position 24) registered — omitted from develop census since PR #109 (cd67394). Ruling: Option A — bench appended at position 24 (after testenv at 23); blast radius ARCH-08 only, no code changes. bench has no production imports; xtest: {admission, frame, session} + stdlib. §6.5 header corrected to "24 positions — 23 present on develop + 1 prospective"; position-numbering-note range updated 1–23 → 1–24; "23-position table (22 on develop + 1 prospective)" corrected to "24-position table (23 on develop + 1 prospective)"; enforcement-history note updated to "all 23 packages on develop (at 62e38d3) + 1 prospective"; verification statement updated to "All 23 packages". Qualifying note added: positions 23/24 are both test-only leaves; testenv "composition root" designation refers to import-allowance breadth, not ordinal supremacy. Census command: `go list ./internal/...` at 62e38d3 → 23 packages.
   - 2026-07-07T14:00:00 # v2.9 — F-P8-001 (adversary pass-8): §6.5 cardinality trued (23 positions = 22 develop + 1 prospective), numbering-note range updated to 1–23, SHA anchor in §6.5 header advanced to 62e38d3 (testenv merged at 62e38d3 post-dates 0516f3a); enforcement-history note and verification statement updated to reflect 22 packages at 62e38d3 + 1 prospective. PLUS full-artifact arithmetic/cross-reference self-consistency sweep: §6.5 enforcement-history note "21 packages" at 0516f3a updated to "22 packages on develop (at 62e38d3) + 1 prospective"; verification tail paragraph updated to "22 packages" at 62e38d3. No other arithmetic discrepancies found (Mermaid omission of post-Wave-3 packages is pre-existing documented limitation; §6.6.2 forbidden-edge positions 5, 8, 19, 23 all consistent with v2.9 table; §6.5.1 and §6.6.1 carry no package-count claims).
   - 2026-07-07T13:00:00 # v2.8 — F-P7-002 (adversary pass-7): position-23 (internal/testenv) import set corrected from {admission, drain, frame, session} to {admission, drain, frame, outerassembler, session, upstreamdial}. S-7.04-FU-PE-CONNECTOR added outerassembler (pos 8) + upstreamdial (pos 19) edges; both below 23, no back-edges, edges are lawful. Verified via import block at story branch HEAD 51ecd44. Pending-marker updated to reflect 51ecd44 (pre-merge); previously machine-derived at 62e38d3. §6.6.2 forbidden-edges note for upstreamdial updated: internal/testenv (_test-only composition root) added to the set of permitted importers alongside cmd/switchboard and _test files.
   - 2026-07-07T12:00:00 # v2.7 — F-P1-001 (adversary pass-1): position-19 import set corrected from {frame, outerassembler} to {halfchannel, outerassembler}; halfchannel is at DAG position 5 (pure-core), so the edge is acyclic and lawful. frame is not imported directly — reachable transitively through outerassembler and halfchannel. §6.6.2 forbidden-edges cycle-freeness note updated: allowed imports are at positions 5 and 8 (not 2 and 8). PROSPECTIVE marker retained; verified against cee8e8b (story/s-7.04-fu-pe-connector HEAD at time of adversary pass adjudication); final machine-verification at merge.
@@ -250,7 +251,7 @@ New packages must, before their first commit to any branch:
 
 Undeclared packages discovered at the wave gate are an architecture violation.
 
-### §6.5 Current import positions (develop @ `62e38d3` + 1 prospective pre-code registration (story branch), 23 positions — 22 present on develop + 1 prospective)
+### §6.5 Current import positions (develop @ `62e38d3` + 1 prospective pre-code registration (story branch), 24 positions — 23 present on develop + 1 prospective)
 
 > **cmd/switchboard position-18 note (S-4.00 daemon assembly):** `cmd/switchboard`
 > occupies position 18 — the top leaf that imports every layer beneath it. As of
@@ -326,11 +327,12 @@ strict — position N may import packages at positions 1..N-1 only.
 | 21 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
 | 22 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
 | 23 | `internal/testenv` | {admission, drain, frame, outerassembler, session, upstreamdial} (updated at story branch 51ecd44 pre-merge — S-7.04-FU-PE-CONNECTOR added outerassembler + upstreamdial edges; final machine-verification at merge; previously machine-derived at 62e38d3) | test helper (composition root — importable by _test files only) | steady-state (S-BL.TESTENV, PR #110, 62e38d3) |
+| 24 | `internal/bench` | production imports: ∅; xtest imports: {admission, frame, session} + {sort, testing, time} stdlib (machine-derived via `go list -f '{{.ImportPath}} IMPORTS={{.Imports}} XTESTIMPORTS={{.XTestImports}}' ./internal/bench` at 62e38d3) | test-only benchmark harness (xtest package `bench_test`) — imported by nothing | steady-state (S-BL.BENCH, PR #109, cd67394) |
 
 This table is authoritative for the develop branch. Any `internal/` package not
 listed above does NOT exist in the codebase.
 
-> **Position numbering note:** Position values 1–23 form a strictly increasing
+> **Position numbering note:** Position values 1–24 form a strictly increasing
 > topological order. Several positions differ from the §6.6.2 prospective table
 > written at Wave-3 close (2026-06-27) because four packages shipped after that
 > table was frozen (outerassembler, arqsend, netingress, mgmt), routing gained a
@@ -340,23 +342,37 @@ listed above does NOT exist in the codebase.
 > entries that have shipped are pruned in §6.6.2 below. Story files that cite
 > earlier position numbers remain correct if the package they reference existed at
 > that story's wave — the positions only shift here to accommodate the full
-> 23-position table (22 on develop + 1 prospective).
+> 24-position table (23 on develop + 1 prospective).
+>
+> **Positions 23 and 24 — test-only leaves (Option A ruling, v2.10):** Both
+> `internal/testenv` (pos 23) and `internal/bench` (pos 24) are test-only leaves
+> that import no production-import neighbors; the ordinal ordering between them is
+> arbitrary and not topologically constrained. `internal/testenv` is designated the
+> _test-only composition root_ because it has the broadest import-allowance — it
+> imports 6 internal packages (including the prospective `internal/upstreamdial`).
+> That "composition root" designation refers to import-allowance breadth, not
+> ordinal supremacy. `internal/bench` is a narrow xtest leaf importing only
+> {admission, frame, session}; it was appended at 24 (F-P9-001, pass-9 ruling)
+> rather than inserted at 23 to preserve the 49c9370 code anchor and all story/
+> placement-note references to positions ≤ 23 unchanged.
 
 > **Enforcement history note (phase-7 audit F-004):** Enforcement actions such as
 > the PR #104 session→metrics import HOLD were evaluated against §6.6.2 prospective
 > positions and dispatch memory while §6.5 was frozen at 7 packages. This refresh
-> closes that gap: §6.5 is now the single authoritative source for all 22 packages
+> closes that gap: §6.5 is now the single authoritative source for all 23 packages
 > on develop (at 62e38d3) + 1 prospective. (v2.6 note: position 19 `internal/upstreamdial`
 > is a prospective pre-code registration per Q4 placement note binding; it was not
 > present at 0516f3a. Position 23 `internal/testenv` merged at 62e38d3, registered in
-> v2.5.)
+> v2.5. Position 24 `internal/bench` was on develop since PR #109 (cd67394) but was
+> not registered until F-P9-001 (v2.10).)
 
 Verified via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...` at develop
-`62e38d3` (HEAD as of testenv merge, S-BL.TESTENV). All 22 packages present at that
-commit enumerated and import sets confirmed; the topological order is machine-derived
-and acyclic. Position 19 (`internal/upstreamdial`) is a prospective pre-code
-registration (v2.6) — its import set is PROSPECTIVE (not yet machine-verified, aligned
-to story branch HEAD 51ecd44 per v2.8 F-P7-002 correction).
+`62e38d3` (HEAD as of testenv merge, S-BL.TESTENV). All 23 packages present at that
+commit enumerated and import sets confirmed (`go list ./internal/...` → 23 packages,
+including `internal/bench` registered as position 24 per F-P9-001 v2.10); the
+topological order is machine-derived and acyclic. Position 19 (`internal/upstreamdial`)
+is a prospective pre-code registration (v2.6) — its import set is PROSPECTIVE (not yet
+machine-verified, aligned to story branch HEAD 51ecd44 per v2.8 F-P7-002 correction).
 
 #### §6.5.2 S-4.00 import set for cmd/switchboard
 
@@ -486,4 +502,5 @@ here first.
 | 2.7 | 2026-07-07 | F-P1-001 (adversary pass-1, HIGH): position-19 import set corrected from `{frame, outerassembler}` to `{halfchannel, outerassembler}`. Implementation at cee8e8b imports `halfchannel` directly (ChannelFrame, FrameTypeData, FrameTypeEmptyTick); `frame` is not imported directly. halfchannel is DAG position 5 (pure-core); edge is acyclic and lawful. §6.6.2 forbidden-edges cycle-freeness note updated to "positions 5 and 8" (was "positions 2 and 8"). PROSPECTIVE marker retained with alignment note. |
 | 2.6 | 2026-07-07 | `internal/upstreamdial` registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19–22 renumbered 20–23. Import set `{frame, outerassembler}` PROSPECTIVE pending first merge. Deviation from v2.5 same-burst-as-merge precedent is explicitly authorized by placement note Q4 binding ruling. |
 | 2.5 | 2026-07-06 | `internal/testenv` registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: `go list -f '{{.Imports}}' ./internal/testenv/` at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files. |
+| 2.10 | 2026-07-07 | F-P9-001 (adversary pass-9): `internal/bench` (position 24) registered — omitted from develop census since PR #109 (cd67394, S-BL.BENCH). Ruling: Option A — append at position 24 after testenv (low blast-radius; testenv "composition root" refers to import-allowance breadth, not ordinal supremacy; ordinal between two test-only leaves is arbitrary; renumber-neighbor blast-radius class has already produced 4 straggler findings, so B rejected). bench: production imports ∅; xtest imports {admission(4), frame(2), session(6), sort, testing, time} (machine-derived). §6.5 header: "24 positions — 23 present on develop + 1 prospective". Position-numbering note: range 1–24; "24-position table (23 on develop + 1 prospective)". Enforcement-history note: "all 23 packages on develop (at 62e38d3)". Verification statement: "All 23 packages". Qualifying note added explaining positions 23/24 both as test-only leaves and testenv as composition-root-by-import-allowance-not-ordinal. Census command: `go list ./internal/...` at 62e38d3 → 23 packages (no other unregistered packages surfaced). |
 | 2.4 | 2026-07-06 | Phase-7 audit remediation F-004/F-005/F-006. §6.5 refreshed from 7 packages (frozen at Wave-3) to all 21 packages present at develop 0516f3a, derived via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...`. Registered 4 previously-unregistered packages: `internal/mgmt` (Wave 5, S-W5.01, pos 19 at time of registration — renumbered to 20 in v2.6; see ARCH-12), `internal/netingress` (Wave 7, S-BL.NI PR #94, pos 18), `internal/outerassembler` (Wave 7, S-BL.OA PR #96, pos 8), `internal/arqsend` (Wave 7, S-BL.ARQ-TX PR #98, pos 10). Routing position updated to 17 (routing→multipath edge added by S-4.04; multipath must precede routing). §6.6.2 prospective table pruned — all prospective packages have shipped. New enforcement-history note explaining that PR #104 HOLD ran on stale §6.5. Wave annotation: config=S-6.01, drain=S-7.04, svtnmgmttest added. |

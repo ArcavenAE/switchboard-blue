@@ -70,3 +70,14 @@ traces_to: STATE.md
 **Lesson crystallized:** The sibling-sweep policy introduced from PROCESS-GAP-P21 through P25 is now empirically validated as sufficient. The pattern closed cleanly at Pass-26 and remained stable through P27/P28. The seven-recurrence sequence was the cost of discovering all axes of the gap; the policy cost is now reduced to a mechanical grep sweep per fix-burst.
 
 **Recommendation:** Codify the upstream-rooted sweep rule as a mandatory step in the story-writer and product-owner fix-burst checklist. The adversary now has high confidence this class of gap will not recur.
+
+---
+
+## PE-CONNECTOR Adversarial Cycle (2026-07-07)
+
+7. **Census/ledger sweeps must re-derive SET MEMBERSHIP from the toolchain (`go list`), not just verify arithmetic and per-row content of rows already in the table.** [codified] P8 applied a full-artifact arithmetic sweep that confirmed all row counts, cross-references, and per-row content in ARCH-08 §6.5 — and issued a class-closing claim ("no further discrepancies"). P9 falsified it with a one-liner: `go list ./internal/... @ 62e38d3` returned 23 packages; the census table had 22 rows, omitting `internal/bench` (shipped in PR #109 cd67394). Root cause: the failure axis is orthogonal to arithmetic and content. A table can be internally consistent, arithmetically correct, and cross-reference-accurate while still missing an entry — because the verification never asked "are all packages in the codebase represented?" but only "are the packages in the table correctly described?" Class-closing claims on census/ledger artifacts require the generating command to be re-run at the anchor SHA, not the artifact to be self-consistent. This extends and tags alongside the renumber-neighbor lesson from P7/P8.
+   _Discovered: adversary pass 9, 2026-07-07. Streak reset: P8 class-closing claim falsified; streak reset to 0/3. Codified immediately._
+
+| Lesson | Proposed Policy | Scope | Status |
+|--------|----------------|-------|--------|
+| 7 | Census/ledger class-closing claims require re-running the generating command at anchor SHA, not self-consistency verification | Adversarial review checklist for registry/census artifacts | [codified] |

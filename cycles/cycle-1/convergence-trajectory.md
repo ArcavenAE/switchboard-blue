@@ -612,3 +612,27 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 **Pass 11 notes:** Burst 33 spec-only remediation (interface-definitions v1.23; §131 revoke carve-out from runDestroyConfirmGate family; §137 scoping to svtn destroy + key register + admin recover; §109 --role REQUIRED syntax). Both adversaries disclosed read-cap overages (A: 7/6, B: 8/6). Both findings adjudicated spec-side (taxonomy v4.4 + E-ADM-018 already ruled the bool-confirm shape; §109 syntax row was simply missing the flag). Zero code changes. Streak 0/3; Pass 12 next.
 
 **Pass 12 notes:** Burst 35 spec-only remediation (interface-definitions v1.24; §111 list-keys exit-code column extended with E-SVTN-003 + E-CFG-001; `--svtn <id>` → `--svtn <svtn-name>` placeholder sweep across §108/§109/§110/§130 recover; §108/§120 confirm-family flag consistency touch). Both findings adjudicated spec-side — list-keys was outside the register/revoke/expire audit umbrella; placeholder class error, not a code defect (orchestrator verified name-keying at svtnmgmt.go:254/300/370). Adv-B disclosed files_read 7 vs read_cap 6 (overage self-disclosed). Third consecutive zero-code-defect pass (P10/P11/P12). Streak 0/3 (Adv-A HAS_FINDINGS resets); Pass 13 next.
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
+
+**Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)
+
+**Code HEAD:** 49c9370 (unchanged — zero code changes this pass; five consecutive passes with zero code-correctness defects)
+
+### Finding F-P9-001 LOW [process-gap]
+
+**What:** ARCH-08 §6.5 authoritative census omitted `internal/bench` (PR #109 cd67394, present at anchor 62e38d3). P8 v2.9 stated "full-artifact arithmetic sweep verified no further discrepancies" — this claim was falsified by a one-liner toolchain re-derivation: `go list ./internal/... @ 62e38d3` returned 23 packages, not 22.
+
+**Novel failure axis — set-membership vs arithmetic/per-row-content:** All eight prior passes (P1–P8) verified the census by examining rows already present in the table: checking arithmetic totals, confirming per-row content accuracy, and verifying cross-references. P8 applied a full-artifact sweep that confirmed all of this. But none of the nine passes ever re-ran the generating command to verify that no registered package was absent from the table. The set-membership axis is orthogonal to arithmetic and content correctness — a table can be internally consistent and arithmetically correct while still missing an entry.
+
+**Remediation:** Option A — `internal/bench` appended at position 24, no renumber of existing rows, no code changes. ARCH-08 → v2.10 (on disk, verified). Architect ruling: position 24, no renumber.
+
+**Toolchain re-derived census:** `go list ./internal/... @ 62e38d3` → 23 packages. Verified no other unregistered packages remain.
+
+**Streak reset rationale:** P8 issued an explicit class-closing claim ("sweep verified no further discrepancies"). That claim was falsified by F-P9-001. A class-closing claim that is later falsified requires a streak reset regardless of finding severity; the streak cannot advance on a pass whose closure assertion did not hold.
+
+**Cycle ledger:** 9 passes, 21 findings (7/3/3/1/1/2/2/1/1), all fixed/adjudicated, zero open. Code lane unchanged at 49c9370 (five consecutive passes with zero code-correctness defects).
+
+**Awaiting:** adversary pass 10 @ 49c9370 (streak 0/3)
