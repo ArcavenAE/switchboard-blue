@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.04
+# version: 2.05
 # changelog:
+#   - version: 2.05
+#     date: 2026-07-08
+#     description: "S-BL.PE-RECEIVE-LOOP elaboration COMPLETE — story v1.0 status ready (5 ACs): placement note v1.0 (Q1-Q7 rulings) + disposition ruling v1.0 consumed. Q-A option (a): BC-2.06.003 PC-1 = non-discharging prerequisite trace; binding anchor BC-2.02.008 PC-3/EC-003 only. Q-B: single story 5 pts. ACs: AC-001 (receive goroutine active; frames reach OnFrameArrival), AC-002 (runRouter SetFrameCallback wiring), AC-003 (FO-PE-LOOP-001 discharge: FrameTypePEConnect+Valid()+dialLoop flip+discrimination), AC-004 (E-FWD-001 exhaustion+S404-OBS-F/S404-LOW-1 re-confirmation), AC-005 (receive goroutine lifecycle/doneCh). FCL 8 rows, ~8 net-new tests. S-BL.PE-RECEIVE-LOOP entry: status ready-for-spec-adversarial. STORY-INDEX v4.39→v4.40. Spec adversarial convergence next (streak 0/3)."
 #   - version: 2.04
 #     date: 2026-07-08
 #     description: "S-BL.PE-RECEIVE-LOOP elaboration begun — placement note v1.0 (Q1-Q7 architect rulings: receive goroutine in upstreamdial via SetFrameCallback seam, frame.ReadOuterFrame NEW in internal/frame, FrameTypePEConnect=0x06 NEW with Valid() upper-bound update mandate, arqsend test-internal wiring, E-FWD-001 assertion key, done-channel joint teardown, Q7 BC-2.06.003 PC-1 mechanism ambiguity FLAGGED); 55-symbol sweep appendix zero phantoms; spot-verified by orchestrator. PO disposition on BC-2.06.003 PC-1 in flight; ACs after."
@@ -964,18 +967,26 @@ stories:
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"
     epic: E-7
     wave: backlog
-    status: elaboration-in-progress
+    status: ready-for-spec-adversarial
     priority: P1
     scope_phase: PE
     points: 5
-    bc_traces: []
+    story_version: "1.0"
+    acceptance_criteria_count: 5
+    disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
+    bc_traces: [BC-2.02.008]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
     placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.0"
+    spec_adversarial_streak: "0/3"
+    note: "spec adversarial convergence next (streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
-    # 2026-07-08: elaboration begun — placement note v1.0 Q1-Q7 architect rulings (see placement_note above).
-    # PO disposition on BC-2.06.003 PC-1 mechanism ambiguity in flight; ACs after disposition.
+    # 2026-07-08: elaboration COMPLETE — story v1.0 ready (5 ACs). Placement note v1.0 + disposition ruling v1.0 consumed.
+    # Disposition ruling Q-A option (a): BC-2.06.003 PC-1 = non-discharging prerequisite trace; binding anchor BC-2.02.008 PC-3/EC-003.
+    # Disposition ruling Q-B: single story 5 pts. Premises code-verified at 8eb54a5.
+    # ACs: AC-001 receive goroutine/ReadOuterFrame; AC-002 SetFrameCallback wiring; AC-003 FO-PE-LOOP-001 discharge; AC-004 E-FWD-001/S404 re-confirmation; AC-005 lifecycle/doneCh.
+    # FCL 8 rows, ~8 net-new tests. BC-2.06.003 PC-1 anchors table corrected (non-discharging prerequisite trace).
 
 # Changelog
 # v1.64 — 2026-07-04: Burst 85 — Pass 35 remediation COMPLETE. wave-6-tranche-a-scope-rulings.md v1.12→v1.13: §10 (Ruling-14) Impact Assessment retroactive annotation + changelog row. False "E-RPC-002 already defined" premise corrected — row was minted Burst 82, three days after Ruling-14 authorship. No BC or runtime change. DRIFT-P5P35-RULING-14-GOVERNANCE-PREMISE-STALE CLOSED. Awaiting Pass 36.

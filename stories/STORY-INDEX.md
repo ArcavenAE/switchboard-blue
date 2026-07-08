@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "4.39"
+version: "4.40"
 status: draft
 producer: state-manager
 timestamp: 2026-07-07T10:00:00
-modified: 2026-07-08T21:50:00
+modified: 2026-07-08T23:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
@@ -138,7 +138,7 @@ addresses the "deferred to TBD story" anti-pattern.
 | S-BL.RESYNC-FRAME | RESYNC control-frame protocol — new FrameType, emitter co-located with send-path buffer, receiver co-located with ARQ replay buffer, reconnect state machine surviving connection churn (ADR-005 second half; consumes S-BL.OA Assemble primitive) | backlog | ADR-005 resync wire-mechanics (S403-O4 lineage; narrowed by S-BL.OA PR #96 — primitive shipped, protocol remains); depends_on S-BL.OA, S-BL.ARQ-TX | Wave 8+ |
 | S-7.04-FU-SIGHUP-RELOAD | SIGHUP config-reload path in cmd/switchboard signal loop → runtime E-to-PE graduation without restart (S-7.04 AC-001 residual; S-6.04 closed-subsumed) | **merged (PR #113 @ 950285c, 2026-07-07; v1.7; BC-5.39.001 satisfied; DELIVERY v1.0)** | S-7.04 partial delivery PR #101; BC-2.09.001 PC-1 runtime-reload half; S-6.04 closed-subsumed per decisions/S-6.04-disposition-ruling.md | steady-state |
 | S-7.04-FU-DRAIN-WIRE | DRAIN-over-SVTN wire + per-node connection identity + observer registration into drain coordinator; per-observer panic recovery (named silent-failure risk); forced-exit with unresponsive observer test (S-7.04 AC-003/AC-004 residual) | backlog | S-7.04 partial delivery PR #101; BC-2.09.002 PC-1/EC-003 wire half; plug-point drainCoord.RegisterObserver; depends_on S-BL.PE-RECEIVE-LOOP (added per PO ruling F-P1-002) | Wave 8+ |
-| S-BL.PE-RECEIVE-LOOP | PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge, S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR per PO adjudication F-P1-002 (AC-004 postcondition 2 partial-discharge ruling) | backlog (v0.1-backlog-stub) | Origin: PO adjudication F-P1-002 (AC-004 partial-discharge); carries S404-OBS-F/S404-LOW-1 + E-FWD-001 exhaustion discharge; depends_on S-7.04-FU-PE-CONNECTOR; blocks S-7.04-FU-DRAIN-WIRE | Wave 8+ |
+| S-BL.PE-RECEIVE-LOOP | PE receive/forward loop — frame.ReadOuterFrame goroutine, FrameTypePEConnect constant, E-FWD-001 exhaustion discharge; S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR per PO adjudication F-P1-002 | **ready (v1.0, 5 pts, elaborated 2026-07-08)** | Origin: PO adjudication F-P1-002 (AC-004 partial-discharge); carries S404-OBS-F/S404-LOW-1 + E-FWD-001 exhaustion discharge; depends_on S-7.04-FU-PE-CONNECTOR (MERGED); blocks S-7.04-FU-DRAIN-WIRE | Wave 8+ |
 | S-7.04-FU-PE-CONNECTOR | outbound TCP dial loop against upstreamRoutersFor(cfg) on PE graduation — connect-half of upstream_routers application (S-7.04 AC-006 residual; the live-egress anchor story: also carries S404-OBS-F re-confirmation, ARQ-TX send-loop, retransmit-driven Failed trigger, Failed-state event emission) | **merged (PR #115 @ 8eb54a5, 2026-07-08T21:50:10Z; story v1.27; DELIVERY v1.1; VP true-up PR #116; S-BL.PE-RECEIVE-LOOP unblocked)** | S-7.04 partial delivery PR #101; BC-2.09.003 PC-9 connect half; VP-037/VP-038 activation lands here | Wave 8+ |
 | S-BL.POLICY-SCHEMA-VALIDATOR | policies.yaml schema linter — validate that every policy entry conforms to the canonical POL-001 field schema (id, title, severity, scope, rule, rationale, enforcement, examples) | backlog | Ruling-12 §6 (F-P7L3R2-03 POL-002 schema drift); Epic E-6; no BC/VP traces | unscheduled |
 | S-BL.DISCOVERY-WIRE | Discovery wire boundary: UDP multicast I/O, admitted-node HMAC keys, multicast address allocation | backlog (v1.1) | RULING-W6TB-D: real-socket PC-1/PC-3/PC-4 wire delivery deferred from S-7.02; resolves DRIFT-W6TBD-001 (HMAC key derivation); BC-2.03.001 PC-1/PC-3/PC-4 + BC-2.03.002 PC-3; depends_on S-7.02, S-2.02 | Wave 7+ |
@@ -190,6 +190,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 4.40 | 2026-07-08 | S-BL.PE-RECEIVE-LOOP elaborated stub→ready v1.0 (5 pts): placement note v1.0 + disposition ruling v1.0 consumed; 5 ACs (receive goroutine/ReadOuterFrame, mgmt_wire SetFrameCallback wiring, FO-PE-LOOP-001 discharge, E-FWD-001 exhaustion + S404-OBS-F/S404-LOW-1, lifecycle/doneCh); BC-2.06.003 PC-1 corrected to non-discharging prerequisite trace per ruling Q-A; FCL 8 rows; ~8 net-new tests estimated. Backlog row status: backlog (v0.1-backlog-stub) → ready (v1.0, 5 pts, elaborated). |
 | 4.39 | 2026-07-08 | S-7.04-FU-PE-CONNECTOR MERGED — PR #115 squash @ 8eb54a5 (2026-07-08T21:50:10Z); VP true-up PR #116 (VP-038 anchor:true, VP-037 anchor:false); story v1.27, DELIVERY v1.1; branch deleted; S-BL.PE-RECEIVE-LOOP unblocked (next anchor). Complete 42→43; active backlog 12→11. |
 | 4.38 | 2026-07-08 | S-7.04-FU-PE-CONNECTOR DELIVERY v1.0 authored (S-7.04-FU-PE-CONNECTOR-DELIVERY.md). Backlog row → converged — DELIVERY v1.0 authored (demo 2df6680; code 6b6f0cf; branch push + PR next). Key facts: internal/upstreamdial Connector delivered (29 net-new tests + 1 migrated; VP-038 discharged, VP-037 partial; SetSighupCh/SendReloadSignal retired; 4 declared divergences — AC-004 partial-discharge, Zero-Envelope deferral, FrameTypeData placeholder, VP-037 partial-discharge; FO-PE-LOOP-001 emitted to S-BL.PE-RECEIVE-LOOP; FO-1..FO-5 from SIGHUP-RELOAD consumed; 3 upstream lessons drbothen/vsdd-factory #573/#574/#575). PR-time obligations: develop rebase 950285c→0fcd240 + VP-037/VP-038 merge-SHA anchor true-up. |
 | 4.37 | 2026-07-08 | S-7.04-FU-PE-CONNECTOR adversarially converged — pass 32 CLEAN, 3/3 streak, BC-5.39.001 Step 4.5 SATISFIED. Final: 32 passes, 39 findings (14 doc-drift / 8 test-fidelity / 11 process-gap / 6 impl-defect), code 6b6f0cf, story v1.26. Backlog row status → adversarially converged. |
