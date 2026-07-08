@@ -141,8 +141,9 @@ func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Du
 }
 
 // modeELine returns the exact mode=E output line emitted by runRouter for
-// zero upstream_routers — derived from mgmt_wire.go:527/566 format strings
-// (527 startup emission, 566 reload emission).
+// zero upstream_routers — derived from the startup mode-emission in the
+// startup writer block and the mode=E branch inside the SIGHUP signal-loop
+// re-emission block (both in runRouter/buildAndWireConnector in mgmt_wire.go).
 // Pinning the full string (prefix + token) guards against partial-match
 // false-positives and format drift (F-SIGHUP-P4-001).
 func modeELine() string {
@@ -150,9 +151,11 @@ func modeELine() string {
 }
 
 // modePELine returns the exact mode=PE output line emitted by runRouter for
-// a given upstreamRouters slice — derived from mgmt_wire.go:529/564 format
-// string ("switchboard router: mode=PE upstream_routers=%v\n" where %v is
-// fmt.Sprintf("%v", addrs)).
+// a given upstreamRouters slice — derived from the startup mode-emission in
+// the startup writer block and the mode=PE branch inside the SIGHUP
+// signal-loop re-emission block (both in runRouter/buildAndWireConnector in
+// mgmt_wire.go; format: "switchboard router: mode=PE upstream_routers=%v\n"
+// where %v is fmt.Sprintf("%v", addrs)).
 // Pinning the full prefix + upstream_routers= token guards against partial-
 // match false-positives and format drift (F-SIGHUP-P4-001).
 func modePELine(addrs []string) string {
@@ -747,7 +750,8 @@ func isNetError(err error, dst *net.Error) bool {
 // (upstream_routers=[A]) downgrades to E mode when reloaded with a config
 // that has no upstream_routers.
 //
-// Pins mgmt_wire.go:562-564 behavior (adversary pass-1 F-005).
+// Pins the mode=E branch of the SIGHUP signal-loop re-emission block in
+// runRouter (mgmt_wire.go) behavior (adversary pass-1 F-005).
 func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -844,7 +848,9 @@ func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 // upstream_routers=[A] transitions to PE mode with [B] when reloaded with a
 // config that replaces [A] with [B].
 //
-// Pins mgmt_wire.go:560-561 behavior (adversary pass-1 F-005).
+// Pins the equalStringSlices diff-guard and mode=PE re-emission branch of
+// the SIGHUP signal-loop block in runRouter (mgmt_wire.go) behavior
+// (adversary pass-1 F-005).
 func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -936,7 +942,8 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 // diff-guard (equalStringSlices in mgmt_wire.go) suppresses duplicate mode=
 // emission when a second SIGHUP is sent with an unchanged config.
 //
-// Pins mgmt_wire.go:560 behavior (adversary pass-3 F-P3-005a).
+// Pins the equalStringSlices diff-guard in the SIGHUP signal-loop block
+// in runRouter (mgmt_wire.go) behavior (adversary pass-3 F-P3-005a).
 func TestRunRouter_SIGHUPReload_IdempotentResend(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
