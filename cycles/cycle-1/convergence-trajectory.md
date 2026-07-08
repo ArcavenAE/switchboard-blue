@@ -726,6 +726,46 @@ The symbol-resolution bar passes (grep finds `ReloadAddrs`). Only the claim→co
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 18 (2026-07-08)
+
+**Verdict:** NO_FINDINGS — streak 0/3 → 1/3
+
+**Code HEAD:** 7c6d841 (unchanged — zero code changes this pass)
+
+### Summary
+
+All seven standing bars green from fresh context:
+1. **Full CI gate** — golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs, full-repo test suite pass.
+2. **Census re-derivation** — 24/24 import sets exact-match toolchain; SET diff vs toolchain = ∅.
+3. **Absence-assertion audit** — `TestScanForLine_DetectsEFWD001ProductionEmission` (P11 fix) still passes; key `"E-FWD-001"` confirmed accurate.
+4. **Symbol resolution** — all symbols cited in authored comments and anchors grep-resolved.
+5. **Claim→code clean in blast radius** — sweep of all 14 perimeter files confirmed; no false claim/code gaps introduced since P17.
+6. **Double-liveness bar** — `TestRunRouter_PE_RouterHandleModeReflectsLiveState` mutation-pinned inverse-delegation assertion holds (P15 fix).
+7. **POL-002 sync** — story v1.17 registered in STORY-INDEX v4.24 (no version change this pass; alignment confirmed).
+
+**P17 fix verified holding:** zero `// Stub:` and `// After AC-` hits in all 7 core perimeter files — red-gate-provenance class confined and retired as recorded.
+
+### Notable Adjudicated Anti-Findings
+
+| Finding | Adjudication |
+|---------|-------------|
+| runRouter numbered-list step order in doc comment | Pre-existing develop drift; outside this story's diff; not a defect introduced by this story |
+| FCL historical line citations | History rows accurately recording past state; not live claims about current code |
+| dialLoop no-dial-timeout | Legitimate design within BC-2.09.001 EC-001 spec — ctx-cancellation bounds the loop duration; no missing timeout |
+| upstreamdial pkg-doc forbidden-range "20–23" predates bench@24 | Harmless; internal/bench is a no-edge test leaf that never imports upstreamdial; DAG position 24 does not create a cycle |
+
+### Outcome
+
+- **No code changes** required.
+- **No story changes** required.
+- Code HEAD unchanged at 7c6d841. Story unchanged at v1.17.
+- Cycle ledger: 18 passes, 29 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0), all fixed/adjudicated, zero open.
+- **Streak: 1/3.**
+
+**Awaiting:** adversary pass 19 @ 7c6d841 (streak 1/3)
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 17 (2026-07-08)
 
 **Verdict:** HAS_FINDINGS — 1 LOW [semantic-accuracy]
