@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.01
+# version: 2.02
 # changelog:
+#   - version: 2.02
+#     date: 2026-07-08
+#     description: "PE-CONNECTOR DELIVERY v1.0 authored (S-7.04-FU-PE-CONNECTOR-DELIVERY.md); demo evidence docs/demo-evidence/S-7.04-FU-PE-CONNECTOR/ @ 2df6680 (atop behavior-final 6b6f0cf); STORY-INDEX v4.37→v4.38; delivery tail: push + PR (pr-manager dispatched)."
 #   - version: 2.01
 #     date: 2026-07-08
 #     description: "PE-CONNECTOR adversary P32 CLEAN @ 6b6f0cf — streak 2/3→3/3 — CONVERGED; BC-5.39.001 Step 4.5 per-story adversarial convergence ACHIEVED. Convergence pass: spot-checked F-P24 (comment), F-P13 (citation), F-P15 (test mutation-pin) — all holding; F-P29 fix (EC-004 race) independently re-derived correct; two false-positive candidates investigated and dismissed (out-of-perimeter SIGHUP evidence-doc stale signature; already-adjudicated docstring). Final tally: 32 passes, 39 findings, zero open. Next: demo recording (Step 5, in flight in parallel) → DELIVERY doc → push → pr-manager."
@@ -924,8 +927,11 @@ stories:
     adversary_pass_count: 32
     adversary_streak: "3/3 — CONVERGED"
     story_version: "1.26"
-    last_finding: "P32 CLEAN — CONVERGENCE (3 consecutive: P30/P31/P32); Step 4.5 complete; demo + DELIVERY + PR next"
-    code_head: "6b6f0cf"
+    last_finding: "P32 CLEAN — CONVERGENCE (3 consecutive: P30/P31/P32); Step 4.5 complete; DELIVERY v1.0 authored; PR next"
+    code_head: "2df6680"
+    delivery_doc: "S-7.04-FU-PE-CONNECTOR-DELIVERY.md v1.0"
+    demo_evidence: "docs/demo-evidence/S-7.04-FU-PE-CONNECTOR/ @ 2df6680"
+    phase_note: "delivery tail: push + PR (pr-manager dispatched)"
     pending_pass: none
     # adversary pass 29: 1 finding F-P29-001 LOW [impl-defect] — EC-004 duplicate-emission race; decrement and zero-check were separate atomics; ≥2 upstreams dropping near-simultaneously both read 0; EC-004 emitted twice; fixed via Add(-1) return ownership; regression test RED-caught 40-50% of 180 unfixed cycles; mutation-pinned; deterministic post-fix; go test -race clean. FIRST code-behavior change since P17. Pass 30 pending @ 6b6f0cf. Streak 0/3.
     # adversary pass 30 CLEAN @ 6b6f0cf — P29 surface deep-reviewed: transition ownership holds under interleaved reconnect (distinct goroutines, each emits once); config-removal path (runRouter reload) emits exactly one mode=E via runRouter with connector correctly skipping via ctx.Err(); stress test leak-free across all exit paths; concurrent-transition axis swept — no sibling mutate-then-check patterns (connect-side Add(1) has no spec'd single-event; Mode() pure Load; reconcile single-goroutine); bars 1-11 all green; anti-findings: logWriter blocking-send (pre-existing P1 pattern, not a P29 regression), post-reconnect stale-log race (spec-correct). Streak 0/3→1/3. Pass 31 pending @ 6b6f0cf.
