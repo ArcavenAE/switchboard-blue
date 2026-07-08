@@ -369,15 +369,24 @@ func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struc
 		c.maintainConn(addr, conn, ctx.Done(), keepaliveTick.C)
 
 		// Connection dropped — decrement count.
-		c.connectedCount.Add(-1)
+		// Capture the return value of Add(-1) to implement transition ownership:
+		// exactly the goroutine whose Add(-1) returns 0 is the one that observes
+		// the ≥1→0 transition.  This eliminates the TOCTOU race (F-P29-001) that
+		// existed when the decrement and the load were two separate atomic ops:
+		// with ≥2 upstreams connected and near-simultaneous drops, both goroutines
+		// could decrement before either reached the Load, so both would read 0 and
+		// emit EC-004 twice for a single ≥1→0 transition.  Because Add is atomic,
+		// exactly one goroutine can receive the 0 return value (the one that moved
+		// the counter from 1 to 0); all others receive >0.
+		newCount := c.connectedCount.Add(-1)
 		_ = conn.Close()
 
-		// Log EC-004 if all upstreams are now unreachable (count → 0).
+		// Log EC-004 if this goroutine owns the ≥1→0 transition (newCount == 0).
 		// Guard: skip emission when the drop was caused by context cancellation
 		// (graceful Stop) — EC-004's trigger is upstream-LOSS, not self-initiated
 		// teardown.  Symmetric with the EC-001 ctx.Err() early-return guard in
 		// the dial-failure branch above (F-P4-001).
-		if c.connectedCount.Load() == 0 && ctx.Err() == nil {
+		if newCount == 0 && ctx.Err() == nil {
 			c.logf("mode=E (no upstream_routers configured)\n")
 		}
 

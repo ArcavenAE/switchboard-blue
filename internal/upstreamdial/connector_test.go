@@ -121,6 +121,34 @@ func zeroEnv() outerassembler.Envelope {
 	return outerassembler.Envelope{}
 }
 
+// drainLogCh discards all currently buffered log messages.
+func drainLogCh(lw *logWriter) {
+	for {
+		select {
+		case <-lw.ch:
+		default:
+			return
+		}
+	}
+}
+
+// countLogCh drains all currently buffered log messages and returns the
+// number that contain substr.  Messages are consumed — call drainLogCh
+// afterwards if the log must be clean for the next assertion.
+func countLogCh(lw *logWriter, substr string) int {
+	n := 0
+	for {
+		select {
+		case msg := <-lw.ch:
+			if strings.Contains(msg, substr) {
+				n++
+			}
+		default:
+			return n
+		}
+	}
+}
+
 // ── AC-001: dial success ────────────────────────────────────────────────────────
 
 // TestConnector_DialSuccess_ModePE verifies AC-001 postconditions 1-4:
@@ -890,6 +918,180 @@ func TestConnector_EC004_DropToZero_ModeEEmission(t *testing.T) {
 	const ec004Log = "mode=E (no upstream_routers configured)"
 	if !waitForLog(lw, ec004Log, 3*time.Second) {
 		t.Errorf("TestConnector_EC004_DropToZero_ModeEEmission: EC-004 log %q not emitted within 3s after connection drop (F-P1-006)", ec004Log)
+	}
+}
+
+// ── F-P29-001: concurrent multi-upstream drop-to-zero emits exactly one EC-004 ──
+
+// TestConnector_ConcurrentDropToZero_SingleEC004Emission is a regression test
+// for F-P29-001: when ≥2 upstream connections drop simultaneously (or near-
+// simultaneously), exactly ONE "mode=E (no upstream_routers configured)" line
+// must be emitted per ≥1→0 connectedCount transition.
+//
+// The race: before the fix, dialLoop did
+//
+//	c.connectedCount.Add(-1)      // two separate atomics
+//	if c.connectedCount.Load() == 0 ...
+//
+// With 2 goroutines decrementing from 2 at the same time, both can decrement
+// before either reaches the Load, causing both to observe 0 and emit EC-004.
+// The fix captures the return value of Add(-1):
+//
+//	newCount := c.connectedCount.Add(-1)
+//	if newCount == 0 ...
+//
+// Only one goroutine's Add(-1) can return 0 (the one that decrement from 1→0).
+//
+// Stress strategy: run N cycles.  Each cycle:
+//  1. Bring both upstreams to connected (ModePE, connectedCount==2).
+//  2. Simultaneously close both server-side connections (fire a sync barrier).
+//  3. Wait for the connector to emit at least one EC-004 (connectedCount→0).
+//  4. Assert exactly ONE EC-004 was emitted in this cycle's window.
+//
+// AC-002 PC5 specifies a single fallback event on the ≥1→0 transition.
+//
+// Failure condition (pre-fix): one or more cycles observes two EC-004 lines.
+func TestConnector_ConcurrentDropToZero_SingleEC004Emission(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const (
+		testKeepalive = 20 * time.Millisecond
+		nCycles       = 60
+		ec004Log      = "mode=E (no upstream_routers configured)"
+	)
+
+	for cycle := 0; cycle < nCycles; cycle++ {
+		// Create two fresh listeners each cycle (so accepted connections are
+		// distinct and we can close them independently).
+		ln1, addr1 := newLoopbackListener(t)
+		ln2, addr2 := newLoopbackListener(t)
+
+		// accepted1 / accepted2 receive the server-side conn once accepted.
+		accepted1 := make(chan net.Conn, 1)
+		accepted2 := make(chan net.Conn, 1)
+
+		// Upstream fixtures: accept one connection each and hold it open,
+		// draining any keepalive writes so the connection stays healthy.
+		startAcceptLoop := func(ln net.Listener, ch chan net.Conn) {
+			go func() {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				select {
+				case ch <- conn:
+				default:
+				}
+				buf := make([]byte, 4096)
+				for {
+					_, err := conn.Read(buf)
+					if err != nil {
+						return
+					}
+				}
+			}()
+		}
+		startAcceptLoop(ln1, accepted1)
+		startAcceptLoop(ln2, accepted2)
+
+		lw := newLogWriter()
+		c := New(lw, zeroEnv(), testKeepalive, []string{addr1, addr2})
+		c.Start()
+
+		// Wait until connectedCount == 2 (both goroutines report ModePE and
+		// the count must be exactly 2).  We poll connectedCount directly
+		// since it is an exported atomic.Int32 accessible as a field of Connector.
+		connected2 := func() bool {
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				if c.connectedCount.Load() == 2 {
+					return true
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			return c.connectedCount.Load() == 2
+		}
+		if !connected2() {
+			// Clean up and skip if both connections couldn't be established.
+			c.Stop()
+			_ = ln1.Close()
+			_ = ln2.Close()
+			t.Logf("cycle %d: skipped (could not establish connectedCount==2)", cycle)
+			continue
+		}
+
+		// Retrieve both server-side connections.
+		var sc1, sc2 net.Conn
+		select {
+		case sc1 = <-accepted1:
+		case <-time.After(2 * time.Second):
+			c.Stop()
+			_ = ln1.Close()
+			_ = ln2.Close()
+			t.Fatalf("cycle %d: upstream 1 conn not accepted within 2s", cycle)
+		}
+		select {
+		case sc2 = <-accepted2:
+		case <-time.After(2 * time.Second):
+			c.Stop()
+			_ = ln1.Close()
+			_ = ln2.Close()
+			t.Fatalf("cycle %d: upstream 2 conn not accepted within 2s", cycle)
+		}
+
+		// Drain any log lines accumulated during startup.
+		drainLogCh(lw)
+
+		// Simultaneously close both server-side connections using a sync barrier.
+		// This maximises the chance that both dialLoop goroutines reach the
+		// Add(-1) in rapid succession, exposing the TOCTOU race in the unfixed code.
+		barrier := make(chan struct{})
+		done1 := make(chan struct{})
+		done2 := make(chan struct{})
+		go func() {
+			defer close(done1)
+			<-barrier
+			_ = sc1.Close()
+		}()
+		go func() {
+			defer close(done2)
+			<-barrier
+			_ = sc2.Close()
+		}()
+		// Also close the listeners so reconnect dials fail immediately and
+		// don't reopen connections before we count the EC-004 emissions.
+		close(barrier) // release both closers simultaneously
+		_ = ln1.Close()
+		_ = ln2.Close()
+		<-done1
+		<-done2
+
+		// Wait until at least one EC-004 appears (connectedCount has hit 0).
+		const waitBudget = 3 * time.Second
+		ec004Appeared := waitForLog(lw, ec004Log, waitBudget)
+		if !ec004Appeared {
+			c.Stop()
+			t.Errorf("cycle %d: EC-004 not emitted within %v after concurrent drops (AC-002 PC5, F-P29-001)", cycle, waitBudget)
+			continue
+		}
+
+		// Give a short window (5 keepalive intervals) for any duplicate to arrive.
+		time.Sleep(5 * testKeepalive)
+
+		// Count total EC-004 emissions in this cycle window.
+		// countLogCh consumes messages — the one waitForLog already observed
+		// was put back into the channel by contains().  Drain and count.
+		count := countLogCh(lw, ec004Log)
+		if count != 1 {
+			c.Stop()
+			t.Errorf(
+				"cycle %d: got %d EC-004 emissions for a single ≥1→0 transition; want exactly 1 (AC-002 PC5, F-P29-001 — concurrent multi-upstream simultaneous drop must emit exactly one fallback event)",
+				cycle, count,
+			)
+			continue
+		}
+
+		c.Stop()
 	}
 }
 
