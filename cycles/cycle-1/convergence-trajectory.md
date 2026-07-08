@@ -828,6 +828,48 @@ All seven standing bars green from fresh context:
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 21 (2026-07-08)
+
+**Verdict:** NO_FINDINGS — streak 0/3 → 1/3
+
+**Code HEAD:** 7c6d841 (unchanged — zero code or story changes this pass)
+
+### Summary
+
+All nine standing bars green from fresh context:
+1. **Full CI gate** — golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs, full-repo test suite pass.
+2. **Census re-derivation** — 24/24 import sets identical to toolchain; SET diff vs toolchain = ∅.
+3. **Absence-assertion keys verbatim** — `TestScanForLine_DetectsEFWD001ProductionEmission` key `"E-FWD-001"` confirmed accurate; vacuous-absence class remains closed.
+4. **Symbol resolution** — all symbols cited in authored comments and anchors grep-resolved.
+5. **Claim→code clean in blast radius** — sweep of all 14 perimeter files confirmed; no false claim/code gaps introduced since P20.
+6. **Double-liveness bar** — `TestRunRouter_PE_RouterHandleModeReflectsLiveState` mutation-pinned inverse-delegation assertion holds (P15 fix).
+7. **Citation-orthography both forms** — BOTH-orthography closure (prefixed `file.go:NNN` and bare `:NNN`) holds; only adjudicated SHA-pinned/historical keeps remain live.
+8. **Classification-consistency** — all 9 F-PNN-001 classification strings in story changelog match the trajectory ledger exactly; P20 fix holds (v1.18 row reads LOW [process-gap]; residual MED string is inside the v1.19 remediation record — correct as history, not an error).
+9. **POL-002 sync** — story v1.19 registered in STORY-INDEX v4.27 (no version change this pass; alignment confirmed).
+
+### Notable Anti-Finding Adjudications (record, not defects)
+
+| Finding | Adjudication |
+|---------|-------------|
+| testenv `Mode()` lock-release before external call pattern | Deliberate and correct — lock released before calling `upstreamdial.New` to avoid lock inversion; consistent with `Restart` teardown contract |
+| `NewTicker` zero-interval unreachability | Re-confirmed dead code per prior sweep; not a defect (production callers always pass non-zero intervals) |
+| Retired seam methods (`SetConnector`, `SetSighupCh`) have no dangling refs | Confirmed clean across all 14 perimeter files; retirement was complete |
+| ctx-first parameter swap consistent across 30+ call sites | P14 go.md rule-7 sweep held; no reversion detected |
+| `peRouterAddr` dynamic listener correct | Dynamic binding verifies against live accept loop; no spec contradiction |
+| §6.6.2 forbidden-edges consistent | ARCH-08 §6.6.2 permitted-importers for upstreamdial and testenv both accurate |
+
+### Outcome
+
+- **No code changes** required.
+- **No story changes** required.
+- Code HEAD unchanged at 7c6d841. Story unchanged at v1.19.
+- Cycle ledger: 21 passes, 31 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0), zero open.
+- **Streak: 1/3.**
+
+**Awaiting:** adversary pass 22 @ 7c6d841 (streak 1/3)
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)
