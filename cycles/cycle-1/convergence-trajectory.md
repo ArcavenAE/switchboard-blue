@@ -866,7 +866,39 @@ All nine standing bars green from fresh context:
 - Cycle ledger: 21 passes, 31 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0), zero open.
 - **Streak: 1/3.**
 
-**Awaiting:** adversary pass 22 @ 7c6d841 (streak 1/3)
+**Awaiting:** adversary pass 23 @ 4f2807c (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 22 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
+
+**Code HEAD:** 4f2807c (advanced from 7c6d841 — one remediation commit required)
+
+### Finding F-P22-001 LOW [doc-drift]
+
+**What:** An inline poll-tail comment in `RouterHandle.Restart` (`internal/testenv/testenv.go`) claimed "stub/unreachable addrs will exhaust the timeout and Mode() will fall back to r.mode" — doubly wrong: (1) the `r.mode` fallback is UNREACHABLE while a connector is wired (Restart sets `r.connector=conn` before the poll loop and never nils it on timeout — the poll exits with the connector still live, so Mode() delegates to the connector, never reaching the `r.mode` branch); (2) if the unreachable branch were taken, it would return `ModePE` (r.mode was set to ModePE above for non-empty upstreams), the inverse of the correct `ModeE`-via-connector-delegation result. Third defect inside Restart across the cycle (P16 header / P17 caller comment / P22 inline tail); eighth shape of the comment-vs-code-path family.
+
+**Pattern — partial reconciliation relocates drift:** P16 fixed the Restart doc header; P17 fixed the caller-side red-gate annotation. Each fix reconciled only its flagged fragment, leaving the inline poll-tail comment unexamined. The full function-granularity sweep that should have closed the class was never applied until P22 forced it.
+
+**Novel finding axis — unreachable-AND-inverted double error:** Prior shapes in the family were singly wrong (phantom symbol, orphaned fake, never-taken path). This shape is doubly wrong: the path is both unreachable (structural) and outcome-inverted (semantic) — two independent defects in one comment.
+
+**Remediation (commit 4f2807c):**
+- Comment rewritten with 6-row claim→code mapping.
+- FULL-FUNCTION comment sweep of Restart + Mode(): every comment in both functions adjudicated. All others accurate — class is now closed for the whole function. Only remaining "fall back" occurrence in the file is the new accurate negation.
+- Full CI gate cleared (golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs).
+
+**Story sync → v1.20:** Co-reference sweep adjudicated all hits — "fall back" 0 hits in story (false claim never propagated); 7 "r.mode" hits all accurate behavioral prose or historical records, preserved.
+
+**P22 verification results:**
+- All nine standing bars green: full CI gate, census re-derivation 24/24, absence-assertion keys verbatim, symbol resolution, claim→code blast-radius, double-liveness, citation-orthography both forms, classification-consistency 9/9, POL-002 sync.
+- P19/P20 fixes verified holding.
+- Code HEAD 4f2807c. Story HEAD v1.20.
+
+**Trajectory shorthand (P1–P22):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1
+
+**Cycle ledger:** 22 passes, 32 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1), zero open. Streak 1/3 → 0/3. Awaiting: adversary pass 23 @ 4f2807c.
 
 ---
 
