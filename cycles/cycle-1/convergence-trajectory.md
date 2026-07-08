@@ -799,6 +799,35 @@ All seven standing bars green from fresh context:
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 20 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [process-gap]
+
+**Code HEAD:** 7c6d841 (unchanged — story-only fix)
+
+### Finding F-P20-001 LOW [process-gap]
+
+**What:** Story v1.18's changelog row self-classified F-P19-001 as "MED [doc-drift]" — disagreeing with 15 sibling statements that record "LOW [process-gap]" on both severity and class. This is the seventh shape of the record-consistency family: a remediation artifact misclassifying the finding it remediates. Fifteen sources establish the adjudicated classification: the pass-19 ledger entry, STATE.md frontmatter, STATE.md current-phase-steps row, sprint-state.yaml p19_remediation stanza, STORY-INDEX.md backlog row, and all 9 prior F-PNN-001 rows in the story's own changelog.
+
+**Root cause — remediation dispatches must pin the adjudicated classification:** The P19 remediation dispatch said "close the bare-form citation gap" but did not quote the verbatim classification from the ledger. The author re-derived a plausible classification ("MED [doc-drift]" — citations drifting), but the actual adjudication at P19 was "LOW [process-gap]" (an orthography blind-spot in a class-closure claim). Without the pin, self-assessment diverged from the authoritative record.
+
+**Remediation:** Story v1.19 (story-only fix, code HEAD unchanged 7c6d841):
+- One-token correction in P19 changelog row: "MED [doc-drift]" → "LOW [process-gap]".
+- FULL consistency sweep of all 9 F-PNN-001 classification strings in the story changelog — all 9 now match the trajectory ledger exactly.
+- ORCHESTRATOR ADJUDICATION: F-P16-001 story label "LOW [doc-drift/semantic-accuracy]" vs ledger header "LOW [doc-drift]" — KEEP as-is. Severity matches (both LOW); the `/semantic-accuracy` qualifier is an elaboration the ledger body itself uses, not a contradiction. Future passes must not re-raise this as a discrepancy.
+
+**P20 verification results:**
+- All eight standing bars GREEN (full CI gate, census re-derivation, absence-assertion keys, symbol resolution, claim→code in blast radius, double-liveness, citation orthography, POL-002 sync).
+- P19's fix verified holding: both orthography classes closed; zero live line citations outside SHA-pinned/historical rows.
+- Code surface clean: all prior code-lane fixes holding.
+- Code HEAD unchanged at 7c6d841. Story HEAD now v1.19.
+
+**Cycle ledger:** 20 passes, 31 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1), all fixed/adjudicated, zero open. Streak 0/3.
+
+**Awaiting:** adversary pass 21 @ 7c6d841 (streak 0/3)
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)
