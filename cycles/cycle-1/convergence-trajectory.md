@@ -1327,3 +1327,59 @@ This signature never existed. The story inherited it for both Q6 binding and AC-
 **Cycle ledger:** 28 passes, 38 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1), zero open. Streak 0/3.
 
 **Awaiting:** adversary pass 29 @ 849e095 (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 29 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [impl-defect]
+
+**Code HEAD:** 6b6f0cf (advanced from 849e095 — code fix required for impl-defect)
+
+### Finding Progression (P29)
+
+| Pass | Code HEAD @ review | Findings | Severity | Streak | Remediation |
+|------|--------------------|----------|----------|--------|-------------|
+| 29 | 849e095 | 1 | LOW [impl-defect] | 0/3 | code 6b6f0cf + story v1.26 |
+
+**Trajectory shorthand (P1–P29):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1
+
+### Finding F-P29-001 LOW [impl-defect]
+
+**What:** In `internal/upstreamdial/connector.go` `dialLoop`, the connected-count decrement (`c.connectedCount.Add(-1)`) and the drop-to-zero check (`c.connectedCount.Load() == 0`) were two separate atomic operations. With two or more upstream connections dropping near-simultaneously, both goroutines could decrement before either loaded the result — both would then observe a zero count and emit the EC-004 "mode=E (no upstream_routers configured)" line TWICE for a single logical ≥1→0 transition. This violates AC-002 PC5's single-fallback-event semantics (one emission per transition, not one per goroutine racing through the drop-to-zero moment).
+
+**Structural blindspot:** All prior EC-004 tests were structurally incapable of catching this race:
+- `TestConnector_EC004_DropToZero_ModeEEmission` (F-P1-006) used a single upstream — no concurrent interleaving possible.
+- `TestConnector_NoEC004OnGracefulStop` (F-P4-001) tested graceful-Stop polarity — single live upstream, `Stop()` closes the ctx.
+- `TestConnector_AllUpstreamsUnreachable_ModeE` tested never-connected case — connectedCount never goes ≥1→0.
+None of these exercise ≥2 upstreams dropping simultaneously in a live-PE state.
+
+**Fix (commit 6b6f0cf):** Transition ownership via `Add(-1)` return value: `newCount := c.connectedCount.Add(-1)`. The goroutine whose `Add(-1)` returns exactly 0 owns the ≥1→0 transition and emits EC-004. Guard is `if newCount == 0 && ctx.Err() == nil` — F-P4-001 ctx.Err() polarity rationale preserved unchanged.
+
+**Regression test** `TestConnector_ConcurrentDropToZero_SingleEC004Emission` added to `internal/upstreamdial/connector_test.go`:
+- Stress-loop with 2 upstream fixtures; closes both concurrently; asserts exactly one EC-004 emission per ≥1→0 cycle.
+- RED gate: 40–50% catch rate across 180 unfixed cycles (timing-dependent race).
+- Mutation-pin confirmed via stash/flip: reverting `newCount :=` to separate Load() restores RED behavior.
+- Deterministic pass post-fix across all stress iterations.
+- `go test -race` clean.
+
+**FIRST code-behavior change since P17 (7c6d841).** All 29 prior passes from P18 onward either found no code defects or found doc/process defects with doc-only fixes.
+
+**Non-finding adjudication:** Pass 29 also produced a placement note observation regarding VP-037/VP-038 `t-first` skeleton signature drift. After full perimeter analysis, this was adjudicated out-of-perimeter: the VP harness skeletons were authored at the `t testing.T` signature (pre-go.md rule 7 ctx-first enforcement); the P14 ctx-first sweep updated production call sites but not the VP skeleton comments in the story's AC-005 section. This is a VP anchor true-up item, not an adversarial finding — it touches spec artifacts outside the code perimeter and does not affect the running tests. Folded into the planned VP-037/VP-038 anchor true-up at PR time.
+
+**Story sync → v1.26:**
+- Test-surface table: `TestConnector_ConcurrentDropToZero_SingleEC004Emission` row added (NEW, F-P29-001).
+- Roll-up updated: connector_test.go 18→19 tests; delivered total 28→29 net-new; adversarial-driven additions ~10→~11.
+- Changelog row v1.26 added.
+- Full co-reference sweep performed for consistency.
+
+**P29 verification results:**
+- Full CI gate: golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs.
+- Regression test RED-verified (40–50% catch rate over 180 unfixed cycles) and GREEN-verified post-fix.
+- Mutation-pin confirmed via stash/flip.
+- All prior fixes (P1–P28) verified holding.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Cycle ledger:** 29 passes, 39 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1), zero open. Streak 0/3.
+
+**Awaiting:** adversary pass 30 @ 6b6f0cf (streak 0/3)

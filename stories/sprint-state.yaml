@@ -6,9 +6,12 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 1.71
+# version: 1.98
 # changelog:
-#   - version: 1.71
+#   - version: 1.98
+#     date: 2026-07-08
+#     description: "PE-CONNECTOR adversary P29 remediated @ 6b6f0cf; story v1.26; connector_test.go 18→19; 29 net-new total. EC-004 duplicate-emission race fixed (single-atomic ownership). STORY-INDEX v4.35→v4.36. Streak 0/3; pass 30 pending."
+#   - version: 1.97
 #     date: 2026-07-07
 #     description: "PE-CONNECTOR adversary P1 remediated @ b789436; story v1.4; S-BL.PE-RECEIVE-LOOP minted (v0.1-backlog-stub); ARCH-08 v2.7. STORY-INDEX v4.08→v4.09 (active backlog 11→12). PE-CONNECTOR entry updated to implemented v1.4. New S-BL.PE-RECEIVE-LOOP entry added. S-7.04-FU-DRAIN-WIRE depends_on updated. Awaiting adversary pass 2 @ b789436 (streak 0/3)."
 #   - version: 1.70
@@ -907,11 +910,15 @@ stories:
     bc_traces: [BC-2.09.003]
     vp_traces: [VP-037, VP-038]
     depends_on: [S-7.04]
-    spec_version: "1.4"
-    impl_tip: b789436
-    adversary_pass_count: 1
+    spec_version: "1.26"
+    impl_tip: 6b6f0cf
+    adversary_pass_count: 29
     adversary_streak: 0
-    # adversary pass 1: 7 findings (1H+3M+3L) all remediated @ b789436; AC-004 partial-discharge → S-BL.PE-RECEIVE-LOOP per PO ruling F-P1-002; pass 2 pending
+    story_version: "1.26"
+    last_finding: "F-P29-001 (LOW [impl-defect]) — EC-004 duplicate-emission race on concurrent multi-upstream drop-to-zero; single-atomic ownership fix + regression test"
+    code_head: "6b6f0cf"
+    pending_pass: 30
+    # adversary pass 29: 1 finding F-P29-001 LOW [impl-defect] — EC-004 duplicate-emission race; decrement and zero-check were separate atomics; ≥2 upstreams dropping near-simultaneously both read 0; EC-004 emitted twice; fixed via Add(-1) return ownership; regression test RED-caught 40-50% of 180 unfixed cycles; mutation-pinned; deterministic post-fix; go test -race clean. FIRST code-behavior change since P17. Pass 30 pending @ 6b6f0cf. Streak 0/3.
 
   - story_id: S-7.04-FU-DRAIN-WIRE
     title: "DRAIN-over-SVTN wire + per-node connection identity + observer registration"
