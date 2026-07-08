@@ -11,6 +11,7 @@
 # Canonical phase-5 state: .factory/stories/sprint-state.yaml (single source of truth since Burst 40c).
 # Frozen 2026-07-04 (Burst 78) per F-P5P31-B-001 adjudication — freeze-with-banner pattern.
 # =============================================================================
+# v1.79 (2026-07-07): S-7.04-FU-PE-CONNECTOR adversary P10 remediated — story v1.10 corrects stale upstreamRoutersAsSet co-references; co-reference sweep codified. F-P10-001 LOW [process-gap] three live story references to deleted helper upstreamRoutersAsSet (F-P1-007): AC-001 postcondition 5 cited it as normative mechanism; test-mapping row named it as unit-under-test; FO-1 resolution column cited it in present tense. Story-writer fixed all three → story v1.10; full-file co-reference sweep (upstreamRoutersAsSet/router_config/peConnectorHook/SetSighupCh) with per-hit adjudication — all remaining hits correct historical records or correct live prose. Machine-verification: census/DAG substance fully clean (24/24 import sets exact-match toolchain, SET diff vs toolchain ∅, bench↔testenv independence confirms Option A); all code-lane fixes P1-P9 verified holding; build/vet/tests green. Code lane unchanged 49c9370 (6 consecutive passes zero code-correctness defects). Cycle ledger: 10 passes, 22 findings (7/3/3/1/1/2/2/1/1/1), all fixed/adjudicated, zero open. adversarial_pass_counter 10, pending_pass 11, streak 0/3. STORY-INDEX v4.16→v4.17. Lesson #8 codified: symbol deletion/rename remediations must include mandatory same-artifact co-reference grep with per-hit adjudication.
 # v1.78 (2026-07-07): S-7.04-FU-PE-CONNECTOR adversary P9 remediated — ARCH-08 v2.10 registers internal/bench at position 24; census re-derived from toolchain. F-P9-001 LOW [process-gap] ARCH-08 §6.5 census omitted internal/bench (PR #109 cd67394, present at anchor 62e38d3); P8 v2.9 class-closing claim falsified. Novel axis: set-membership vs arithmetic/per-row-content — all 8 prior passes verified rows-in-table content/arithmetic but never re-ran go list to verify no package was absent. Option A: bench appended position 24, no renumber, no code changes. Toolchain re-derived: 23 packages, no other unregistered packages. Cycle ledger: 9 passes, 21 findings (7/3/3/1/1/2/2/1/1), all fixed/adjudicated, zero open. Code lane unchanged 49c9370 (5 consecutive passes zero code-correctness defects). adversarial_pass_counter 9, pending_pass 10, streak 0/3. ARCH-08 v2.10.
 # v1.77 (2026-07-07): S-7.04-FU-PE-CONNECTOR adversary P8 remediated — ARCH-08 v2.9 cardinality trued + full-artifact sweep. F-P8-001 LOW [process-gap] §6.5 header/note cardinality contradiction (22 claimed vs 23 rows) + stale SHA anchor 0516f3a → 62e38d3. ESCALATION: full-artifact arithmetic sweep (partial-reconciliations-relocate-drift lesson applied) — caught 2 additional stragglers (enforcement-history note, verification tail); sweep verified no further discrepancies; Mermaid limitation pre-existing/documented; §6.6.2 positions consistent. Fourth and final straggler variant from the one DAG mutation (P3 prose → P6 field comment → P7 counts → P8 counts) — closes the renumber-straggler class. Code lane unchanged 49c9370. Zero code-correctness defects for 4th consecutive pass. All P1-P7 fixes verified holding. adversarial_pass_counter 8, pending_pass 9, streak 0/3. ARCH-08 v2.9. STORY-INDEX v4.15→v4.16.
 # v1.76 (2026-07-07): S-7.04-FU-PE-CONNECTOR adversary P7 remediated @ 49c9370 + ARCH-08 v2.8 — F-P7-001 LOW [process-gap] testenv.go self-doc position 22→23 (both lines; 1 signed comment-only commit @ 49c9370; worktree-wide stale-position grep clean — all other position refs correct); F-P7-002 LOW [process-gap] ARCH-08 position-23 import row trued to 6-package set {admission, drain, frame, outerassembler, session, upstreamdial} + §6.6.2 upstreamdial permitted-importers updated to include testenv (ARCH-08 v2.8). New angle: renumber-neighbor blast radius; lowest-impact class; third doc-straggler variant after P3-prose/P6-comment. Zero code-correctness defects. All P1-P6 fixes verified holding. adversarial_pass_counter 7, pending_pass 8, streak 0/3. Code 49c9370. STORY-INDEX v4.14→v4.15.
@@ -523,16 +524,23 @@ steady_state_deliveries:
     title: "outbound TCP dial loop against upstreamRoutersFor(cfg) on PE graduation"
     status: implemented
     adversarial_cycle_active: true
-    spec_version: "1.9"
+    spec_version: "1.10"
     placement_note_version: "1.4"
     code_lane_base: 950285c
     code_lane_head: 51ecd44
     vp_038_lock: TRUE
     vp_037_lock: PARTIAL
     vp_037_note: "scaffold TestE2E_RouterDrain_NodesMigrateWithin2s skips on DRAIN-WIRE dependency; full-discharge → S-7.04-FU-DRAIN-WIRE"
-    adversarial_pass_counter: 9
+    adversarial_pass_counter: 10
     streak: 0
-    pending_pass: 10
+    pending_pass: 11
+    p10_remediation:
+      f_p10_001: "LOW [process-gap] three live story references to deleted helper upstreamRoutersAsSet (F-P1-007): AC-001 postcondition 5 cited it as normative mechanism; test-mapping row named it as unit-under-test; FO-1 resolution column cited it in present tense. Story-writer fixed all three → story v1.10. Full-file co-reference sweep (upstreamRoutersAsSet/router_config/peConnectorHook/SetSighupCh) — all remaining hits adjudicated as correct historical records or correct live prose. Fourth straggler from the single F-P1-007 deletion (same co-reference-staleness class as P7/P8/P9). Codified: remediation dispatches for symbol deletion/rename must include mandatory same-artifact co-reference grep with per-hit adjudication."
+      code_unchanged: true
+      story_version: "v1.10"
+      zero_code_correctness_defects: true
+      consecutive_zero_code_passes: 6
+      machine_verification: "census/DAG: 24/24 import sets exact-match toolchain, SET diff vs toolchain = ∅, bench↔testenv independence confirms Option A; all P1-P9 fixes verified holding; build/vet/tests green"
     p9_remediation:
       f_p9_001: "LOW [process-gap] ARCH-08 §6.5 census omitted internal/bench (PR #109 cd67394, present at anchor 62e38d3); P8 v2.9 class-closing claim falsified. Novel failure axis: set-membership vs arithmetic/per-row-content — prior sweeps verified rows-in-table accuracy but never re-ran go list to verify no package absent. Option A: bench appended position 24, no renumber, no code changes. ARCH-08 → v2.10. Toolchain re-derived: 23 packages, no further unregistered packages."
       code_unchanged: true

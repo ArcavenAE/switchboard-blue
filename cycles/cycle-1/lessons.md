@@ -81,3 +81,11 @@ traces_to: STATE.md
 | Lesson | Proposed Policy | Scope | Status |
 |--------|----------------|-------|--------|
 | 7 | Census/ledger class-closing claims require re-running the generating command at anchor SHA, not self-consistency verification | Adversarial review checklist for registry/census artifacts | [codified] |
+| 8 | Symbol deletion/rename remediations must include a mechanical same-artifact co-reference grep with per-hit adjudication | Remediation dispatch checklist for symbol deletion/rename | [codified] |
+
+---
+
+## PE-CONNECTOR Adversarial Cycle — Lesson #8 (2026-07-07)
+
+8. **Symbol deletion/rename remediations must include a mechanical same-artifact co-reference grep with per-hit adjudication (live prose = fix; struck-through/changelog = preserve) at remediation time.** [codified] One helper deletion (F-P1-007, `upstreamRoutersAsSet`) produced four straggler findings across passes 7-10 because each fix swept only its primary location. Pass-7 swept ARCH-08 §6.5 and testenv self-doc. Pass-8 swept ARCH-08 arithmetic and content. Pass-9 swept ARCH-08 census membership via toolchain re-derivation. Pass-10 found three live story references — AC-001 postcondition 5 citing the helper as normative mechanism, the test-mapping row naming it as unit-under-test, and the FO-1 resolution column citing it in present tense — all in the same story file that was modified in P1 and P3. Root cause: each remediation dispatch named a specific defect location; none included an instruction to grep the entire artifact (or all artifacts mentioning the symbol) for co-references. The sweep is now mandatory: when dispatching a symbol-deletion or rename remediation, include a step: "grep the full artifact (and sibling artifacts) for every variant of the symbol name; adjudicate each hit as live-prose (fix), historical-record/changelog (preserve), or struck-through (preserve). The sweep converts O(passes) straggler discovery into O(1)."
+   _Discovered: adversary pass 10, 2026-07-07. Triggered by F-P1-007 deletion of `upstreamRoutersAsSet` helper; four stragglers across P7/P8/P9/P10. Codified immediately._

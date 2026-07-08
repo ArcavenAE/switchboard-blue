@@ -636,3 +636,25 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 **Cycle ledger:** 9 passes, 21 findings (7/3/3/1/1/2/2/1/1), all fixed/adjudicated, zero open. Code lane unchanged at 49c9370 (five consecutive passes with zero code-correctness defects).
 
 **Awaiting:** adversary pass 10 @ 49c9370 (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 10 (2026-07-07)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [process-gap]
+
+**Code HEAD:** 49c9370 (unchanged — zero code changes this pass; six consecutive passes with zero code-correctness defects)
+
+### Finding F-P10-001 LOW [process-gap]
+
+**What:** Three live story references to the deleted helper `upstreamRoutersAsSet` (originally deleted by F-P1-007). All three cited the function in present tense as if it still existed: (1) AC-001 postcondition 5 cited it as the normative mechanism for `upstreamRoutersFor(cfg)` result; (2) the test-mapping row named it as the unit-under-test for the keepalive isolation test; (3) FO-1 resolution column cited it in present tense. This is the fourth straggler from the single F-P1-007 deletion — the same co-reference-staleness class as P7/P8/P9, now in the story artifact rather than the architecture doc.
+
+**Remediation:** Story-writer fixed all three locations → story v1.10. Full-file co-reference sweep performed on the entire story file covering `upstreamRoutersAsSet`, `router_config`, `peConnectorHook`, and `SetSighupCh`. All remaining hits adjudicated: correct historical records (changelog, erratum notes) or correct live prose. No further stale references remain.
+
+**Machine-verification of v2.10 census:** All 24 import sets in ARCH-08 §6.5 exact-match toolchain output; SET diff vs toolchain = ∅ unregistered packages; position sequence clean; bench↔testenv independence confirmed (Option A holds).
+
+**Codified lesson:** Remediation dispatches for symbol deletion/rename must include a mandatory same-artifact co-reference grep with per-hit adjudication. The dispatch wording for F-P1-007 swept only the primary deletion site; this produced four straggler findings across passes 7-10 as the adversary independently discovered each co-reference surface. The sweep converts O(passes) straggler discovery into O(1). See lessons.md lesson #8 [codified].
+
+**Cycle ledger:** 10 passes, 22 findings (7/3/3/1/1/2/2/1/1/1), all fixed/adjudicated, zero open. Code lane unchanged at 49c9370 (six consecutive passes with zero code-correctness defects).
+
+**Awaiting:** adversary pass 11 @ 49c9370 (streak 0/3)
