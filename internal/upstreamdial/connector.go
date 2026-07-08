@@ -262,7 +262,7 @@ func (c *Connector) reconcile(running map[string]*addrCancel, newAddrs []string)
 				done:   make(chan struct{}),
 			}
 			running[addr] = ac
-			go c.dialLoop(addr, dialCtx, ac.done)
+			go c.dialLoop(dialCtx, addr, ac.done)
 		}
 	}
 }
@@ -287,7 +287,7 @@ func makeAddrContext(stopCh <-chan struct{}) (ctx context.Context, cancel contex
 // dialLoop runs in a per-address goroutine.  It dials, bootstraps, maintains
 // the connection with keepalive probes, and reconnects with exponential backoff
 // on failure.  It exits when ctx is cancelled (Q3).
-func (c *Connector) dialLoop(addr string, ctx context.Context, done chan<- struct{}) {
+func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struct{}) {
 	defer close(done)
 
 	backoff := operativeBase(c.keepaliveInterval) // first retry: keepaliveInterval floored at BackoffBase per Q7/F-P2-002

@@ -18,7 +18,7 @@ func TestNew_EnvIsUsable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	sid := env.CreateSession(t)
@@ -34,7 +34,7 @@ func TestNew_EnvIsUsable(t *testing.T) {
 func TestCreateSession_Unique(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	sid1 := env.CreateSession(t)
 	sid2 := env.CreateSession(t)
@@ -47,7 +47,7 @@ func TestCreateSession_Unique(t *testing.T) {
 func TestCreateSVTN_Unique(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	svtnA := env.CreateSVTN(t)
 	svtnB := env.CreateSVTN(t)
@@ -61,7 +61,7 @@ func TestCreateSVTN_Unique(t *testing.T) {
 func TestCreateSessionInSVTN_AliveAfterCreate(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	svtn := env.CreateSVTN(t)
 	sid := env.CreateSessionInSVTN(t, svtn)
@@ -76,7 +76,7 @@ func TestCreateSessionInSVTN_AliveAfterCreate(t *testing.T) {
 func TestAttachConsole_ReceivesFrames(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	sid := env.CreateSession(t)
 	console := env.AttachConsole(t, sid)
@@ -94,7 +94,7 @@ func TestAttachConsole_ReceivesFrames(t *testing.T) {
 func TestAttachConsole_Detach_StopsDelivery(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	sid := env.CreateSession(t)
 	console := env.AttachConsole(t, sid)
@@ -119,7 +119,7 @@ func TestAttachConsole_Detach_StopsDelivery(t *testing.T) {
 func TestDetach_SessionSurvives(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	sid := env.CreateSession(t)
 	console := env.AttachConsole(t, sid)
@@ -135,7 +135,7 @@ func TestDetach_SessionSurvives(t *testing.T) {
 func TestMultiConsole_FanOut(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	sid := env.CreateSession(t)
 	c1 := env.AttachConsole(t, sid)
@@ -167,7 +167,7 @@ func TestMultiConsole_FanOut(t *testing.T) {
 func TestSVTNIsolation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	svtnA := env.CreateSVTN(t)
 	svtnB := env.CreateSVTN(t)
@@ -200,7 +200,7 @@ func TestSVTNIsolation(t *testing.T) {
 func TestConnectWithKey_RegisteredIsAdmitted(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	key := env.GenerateKey(t)
 	env.RegisterKey(t, key)
@@ -213,7 +213,7 @@ func TestConnectWithKey_RegisteredIsAdmitted(t *testing.T) {
 func TestConnectWithKey_RevokedIsRejected(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	key := env.GenerateKey(t)
 	env.RegisterKey(t, key)
@@ -227,7 +227,7 @@ func TestConnectWithKey_RevokedIsRejected(t *testing.T) {
 func TestConnectWithKey_ExpiredIsRejected(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	key := env.GenerateKeyWithExpiry(t, time.Now().Add(100*time.Millisecond))
 	env.RegisterKey(t, key)
@@ -250,7 +250,7 @@ func TestConnectWithKey_ExpiredIsRejected(t *testing.T) {
 func TestNewWithRouters_CloseRouterConnection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.NewWithRouters(t, ctx, 2)
+	env := testenv.NewWithRouters(ctx, t, 2)
 
 	// Before close: WaitForPaths should succeed immediately (2 routers).
 	if err := env.WaitForPaths(t, testenv.SessionID{}, 2, 1*time.Second); err != nil {
@@ -274,7 +274,7 @@ func TestNewWithRouters_CloseRouterConnection(t *testing.T) {
 func TestConnectWithSourceIP_SessionIDPreserved(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	creds := env.GenerateCredentials(t)
 
@@ -294,7 +294,7 @@ func TestConnectWithSourceIP_SessionIDPreserved(t *testing.T) {
 func TestStartRouter_ModeE(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	r := env.StartRouter(t, testenv.RouterConfig{})
 	if r.Mode() != testenv.ModeE {
@@ -307,7 +307,7 @@ func TestStartRouter_ModeE(t *testing.T) {
 func TestStartRouter_Restart_EntersPEMode(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	peAddr := env.PERouterAddr(t)
 	r := env.StartRouter(t, testenv.RouterConfig{})
@@ -328,7 +328,7 @@ func TestStartRouter_Restart_EntersPEMode(t *testing.T) {
 func TestClose_NoGoroutineLeak(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	sid := env.CreateSession(t)
 	_ = env.AttachConsole(t, sid)
@@ -364,7 +364,7 @@ func TestClose_NoGoroutineLeak(t *testing.T) {
 func TestRouterHandle_Restart_TwicePE(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	peAddr := env.PERouterAddr(t)
 
@@ -394,7 +394,7 @@ func TestRouterHandle_Restart_TwicePE(t *testing.T) {
 func TestNewLoopback_Compiles(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	lb := testenv.NewLoopback(t, ctx, testenv.LoopbackConfig{})
+	lb := testenv.NewLoopback(ctx, t, testenv.LoopbackConfig{})
 	if lb == nil {
 		t.Fatal("NewLoopback returned nil")
 	}

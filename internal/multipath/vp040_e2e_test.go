@@ -33,7 +33,7 @@ func TestE2E_Multipath_FailoverRecovery(t *testing.T) {
 	t.Cleanup(cancel)
 
 	// Two-router topology; session uses both paths.
-	env := testenv.NewWithRouters(t, ctx, 2)
+	env := testenv.NewWithRouters(ctx, t, 2)
 	t.Cleanup(env.Close)
 
 	sessionID := env.CreateSession(t)

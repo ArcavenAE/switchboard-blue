@@ -374,9 +374,9 @@ type LoopbackEnv struct {
 // halfchannel paths.
 //
 // Required by: VP-042 (S-BL.BENCH).
-func NewLoopback(b testing.TB, ctx context.Context, cfg LoopbackConfig) *LoopbackEnv {
+func NewLoopback(ctx context.Context, b testing.TB, cfg LoopbackConfig) *LoopbackEnv {
 	b.Helper()
-	env := newEnv(b, ctx, 1)
+	env := newEnv(ctx, b, 1)
 	return &LoopbackEnv{Env: env}
 }
 
@@ -434,24 +434,24 @@ type Env struct {
 // The environment is torn down when t.Cleanup fires or Close() is called.
 //
 // Required by: VP-033, VP-034, VP-036, VP-038, VP-039, VP-046.
-func New(t testing.TB, ctx context.Context) *Env {
+func New(ctx context.Context, t testing.TB) *Env {
 	t.Helper()
-	return newEnv(t, ctx, 1)
+	return newEnv(ctx, t, 1)
 }
 
 // NewWithRouters creates an in-process switchboard environment with n routers
 // in a multi-hop topology suitable for drain/failover/multipath tests.
 //
 // Required by: VP-037, VP-040.
-func NewWithRouters(t testing.TB, ctx context.Context, n int) *Env {
+func NewWithRouters(ctx context.Context, t testing.TB, n int) *Env {
 	t.Helper()
 	if n < 1 {
 		t.Fatalf("testenv.NewWithRouters: n must be >= 1, got %d", n)
 	}
-	return newEnv(t, ctx, n)
+	return newEnv(ctx, t, n)
 }
 
-func newEnv(t testing.TB, ctx context.Context, nRouters int) *Env {
+func newEnv(ctx context.Context, t testing.TB, nRouters int) *Env {
 	t.Helper()
 
 	routerPub, routerPriv, err := ed25519.GenerateKey(rand.Reader)

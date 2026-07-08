@@ -480,7 +480,7 @@ func TestRunRouter_PE_RouterHandleModeReflectsLiveState(t *testing.T) {
 	// NOT t.Parallel(): uses testenv in-process rig.
 
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	// Start a router in E mode (r.mode=ModeE at construction).
 	handle := env.StartRouter(t, testenv.RouterConfig{})
@@ -534,7 +534,7 @@ func TestE2E_EtoPEGraduationByConfigChange(t *testing.T) {
 	// NOT t.Parallel(): uses testenv in-process rig + upstream fixture.
 
 	ctx := context.Background()
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 
 	// Start a real upstream fixture that counts accepted connections.
 	peAddr, connCount := startPEListenerFixture(t)
@@ -588,7 +588,7 @@ func TestE2E_RouterDrain_NodesMigrateWithin2s(t *testing.T) {
 		"(this story). Partial-discharge per story AC-005 note.")
 
 	ctx := context.Background()
-	env := testenv.NewWithRouters(t, ctx, 2)
+	env := testenv.NewWithRouters(ctx, t, 2)
 	env.SendDrainSignal(t, 0)
 	// Full drain-and-migrate assertion lands when S-7.04-FU-DRAIN-WIRE ships.
 }

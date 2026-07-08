@@ -26,7 +26,7 @@ func TestE2E_Console_AttachDetachLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	sessionID := env.CreateSession(t)
@@ -76,7 +76,7 @@ func TestE2E_MultiConsole_FanOut(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	sessionID := env.CreateSession(t)
