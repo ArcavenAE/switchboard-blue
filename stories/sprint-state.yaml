@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.02
+# version: 2.03
 # changelog:
+#   - version: 2.03
+#     date: 2026-07-08
+#     description: "PE-CONNECTOR MERGED — PR #115 @ 8eb54a5 (2026-07-08T21:50:10Z); VP true-up PR #116; story v1.27; DELIVERY v1.1; branch deleted; S-BL.PE-RECEIVE-LOOP unblocked (owns FO-PE-LOOP-001 + E-FWD-001 exhaustion + S404-OBS-F/S404-LOW-1); S-7.04-FU-DRAIN-WIRE still blocked on PE-RECEIVE-LOOP. Deferred follow-ons: SEC-001 sanitizeAddrForError in dialLoop logs; SEC-002 MaxUpstreamRouters cap in config.Validate; Stop-before-Start latent deadlock nit; NewTicker<=0 panic guard nit. STORY-INDEX v4.38→v4.39."
 #   - version: 2.02
 #     date: 2026-07-08
 #     description: "PE-CONNECTOR DELIVERY v1.0 authored (S-7.04-FU-PE-CONNECTOR-DELIVERY.md); demo evidence docs/demo-evidence/S-7.04-FU-PE-CONNECTOR/ @ 2df6680 (atop behavior-final 6b6f0cf); STORY-INDEX v4.37→v4.38; delivery tail: push + PR (pr-manager dispatched)."
@@ -915,24 +918,28 @@ stories:
     title: "outbound TCP dial loop against upstreamRoutersFor(cfg) on PE graduation"
     epic: E-7
     wave: backlog
-    status: adversarially-converged
+    status: merged
+    merged_pr: 115
+    merge_sha: "8eb54a5"
+    merged_at: "2026-07-08T21:50:10Z"
     priority: P1
     scope_phase: PE
     points: 8
     bc_traces: [BC-2.09.003]
     vp_traces: [VP-037, VP-038]
     depends_on: [S-7.04]
-    spec_version: "1.26"
-    impl_tip: 6b6f0cf
+    spec_version: "1.27"
+    impl_tip: 8eb54a5
     adversary_pass_count: 32
     adversary_streak: "3/3 — CONVERGED"
-    story_version: "1.26"
-    last_finding: "P32 CLEAN — CONVERGENCE (3 consecutive: P30/P31/P32); Step 4.5 complete; DELIVERY v1.0 authored; PR next"
-    code_head: "2df6680"
-    delivery_doc: "S-7.04-FU-PE-CONNECTOR-DELIVERY.md v1.0"
+    story_version: "1.27"
+    last_finding: "P32 CLEAN — CONVERGENCE (3 consecutive: P30/P31/P32); Step 4.5 complete; MERGED PR #115 @ 8eb54a5"
+    code_head: "8eb54a5"
+    delivery_doc: "S-7.04-FU-PE-CONNECTOR-DELIVERY.md v1.1"
     demo_evidence: "docs/demo-evidence/S-7.04-FU-PE-CONNECTOR/ @ 2df6680"
-    phase_note: "delivery tail: push + PR (pr-manager dispatched)"
+    phase_note: "MERGED — S-BL.PE-RECEIVE-LOOP unblocked; S-7.04-FU-DRAIN-WIRE still blocked on PE-RECEIVE-LOOP"
     pending_pass: none
+    # deferred follow-ons (review/security, non-blocking): SEC-001 sanitizeAddrForError in dialLoop logs; SEC-002 MaxUpstreamRouters cap in config.Validate; Stop-before-Start latent deadlock nit; NewTicker<=0 panic guard nit.
     # adversary pass 29: 1 finding F-P29-001 LOW [impl-defect] — EC-004 duplicate-emission race; decrement and zero-check were separate atomics; ≥2 upstreams dropping near-simultaneously both read 0; EC-004 emitted twice; fixed via Add(-1) return ownership; regression test RED-caught 40-50% of 180 unfixed cycles; mutation-pinned; deterministic post-fix; go test -race clean. FIRST code-behavior change since P17. Pass 30 pending @ 6b6f0cf. Streak 0/3.
     # adversary pass 30 CLEAN @ 6b6f0cf — P29 surface deep-reviewed: transition ownership holds under interleaved reconnect (distinct goroutines, each emits once); config-removal path (runRouter reload) emits exactly one mode=E via runRouter with connector correctly skipping via ctx.Err(); stress test leak-free across all exit paths; concurrent-transition axis swept — no sibling mutate-then-check patterns (connect-side Add(1) has no spec'd single-event; Mode() pure Load; reconcile single-goroutine); bars 1-11 all green; anti-findings: logWriter blocking-send (pre-existing P1 pattern, not a P29 regression), post-reconnect stale-log race (spec-correct). Streak 0/3→1/3. Pass 31 pending @ 6b6f0cf.
     # adversary pass 31 CLEAN @ 6b6f0cf — 12 bars green from fresh context; concurrency axis independently re-derived: 2-upstream simultaneous drop (Add(-1) return ownership sound), reconnect-in-window (distinct goroutines no aliasing), Stop-races-genuine-loss (not double-EC-004, spec-correct), exact-tie loss/teardown benign; 7 ctx-first files re-verified genuinely mechanical (no behavioral assertions); VP-038 lock:true / VP-037 lock:false partial-discharge match story; FO-PE-LOOP-001 correctly scoped; test-to-AC discharge mapping complete. Anti-finding adjudicated SYSTEMATIC-LAWFUL: FU story P2/5-BC/4-dep vs sprint-state P1/1-BC/1-dep is authoring-set vs scheduling-set divergence (same pattern class as emission-diff vs connection-diff) — NOT story drift; do-not-re-raise. Streak 1/3→2/3. Pass 32 pending @ 6b6f0cf (convergence pass).

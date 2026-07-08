@@ -1577,3 +1577,9 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | #573 | Normative-AC symbol fidelity — wrong-signature finding (F-P27-001); existing symbol with wrong call signature; symbol-resolution bar necessary but not sufficient | P27 |
 | #574 | Placement-note derivation blocks require independent verification against actual source before story citing | P28 |
 | #575 | Concurrent-transition coverage — multi-upstream concurrent drop-to-zero is a structural blindspot for single-upstream-only EC tests | P29 |
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — DELIVERED (2026-07-08)
+
+**Merged:** PR #115 squash @ 8eb54a5 (2026-07-08T21:50:10Z). VP true-up PR #116 merged (VP-038 anchor:true, VP-037 anchor:false). Branch deleted. Cycle complete: 32 passes, 39 findings, converged P32, delivered same day. S-BL.PE-RECEIVE-LOOP unblocked.
