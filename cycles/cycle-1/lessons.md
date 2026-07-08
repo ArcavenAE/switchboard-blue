@@ -85,6 +85,17 @@ traces_to: STATE.md
 
 ---
 
+## PE-CONNECTOR Adversarial Cycle — Lesson #9 (2026-07-07)
+
+9. **Negative (absence) assertions must key on spec-anchored event codes, not prose fragments of the emission string.** [codified] A space-vs-hyphen typo (`"split-horizon blocked"` vs. production `"split-horizon-blocked"`) made an AC-004 "must NOT fire" assertion vacuously true for the entire eleven-pass cycle. Ten passes (P1–P10) checked positive-emission polarity exclusively — none examined whether the key in an absence assertion could actually match the production string. Root cause: absence assertions are structurally harder to falsify than presence assertions; a presence assertion that miskeys will produce a test failure, but an absence assertion that miskeys will silently pass regardless of runtime behavior. Standing bar: (1) every absence assertion must use a spec-anchored event code (e.g., `"E-FWD-001"`) rather than a prose fragment of the emission string, so that minor wording changes cannot silently break the key; (2) every absence assertion gets a companion pin test that embeds the verbatim production emission string and proves the search key matches it (non-vacuousness proof) AND that the defect shape (incorrect key) does not match it.
+   _Discovered: adversary pass 11, 2026-07-07. AC-004 absence assertion key `"split-horizon blocked"` (space) never matched production `"split-horizon-blocked"` (hyphenated) — vacuous for entire cycle. Codified immediately via companion pin test `TestScanForLine_DetectsEFWD001ProductionEmission` (6e00332)._
+
+| Lesson | Proposed Policy | Scope | Status |
+|--------|----------------|-------|--------|
+| 9 | Absence assertions must key on spec-anchored event codes; companion pin tests prove key matches verbatim production emission | Adversarial review + test-writer checklist for absence assertions | [codified] |
+
+---
+
 ## PE-CONNECTOR Adversarial Cycle — Lesson #8 (2026-07-07)
 
 8. **Symbol deletion/rename remediations must include a mechanical same-artifact co-reference grep with per-hit adjudication (live prose = fix; struck-through/changelog = preserve) at remediation time.** [codified] One helper deletion (F-P1-007, `upstreamRoutersAsSet`) produced four straggler findings across passes 7-10 because each fix swept only its primary location. Pass-7 swept ARCH-08 §6.5 and testenv self-doc. Pass-8 swept ARCH-08 arithmetic and content. Pass-9 swept ARCH-08 census membership via toolchain re-derivation. Pass-10 found three live story references — AC-001 postcondition 5 citing the helper as normative mechanism, the test-mapping row naming it as unit-under-test, and the FO-1 resolution column citing it in present tense — all in the same story file that was modified in P1 and P3. Root cause: each remediation dispatch named a specific defect location; none included an instruction to grep the entire artifact (or all artifacts mentioning the symbol) for co-references. The sweep is now mandatory: when dispatching a symbol-deletion or rename remediation, include a step: "grep the full artifact (and sibling artifacts) for every variant of the symbol name; adjudicate each hit as live-prose (fix), historical-record/changelog (preserve), or struck-through (preserve). The sweep converts O(passes) straggler discovery into O(1)."

@@ -639,6 +639,39 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 11 (2026-07-07)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [test-fidelity]
+
+**Code HEAD:** 6e00332 (advanced from 49c9370 — code fix required for test-fidelity defect)
+
+### Finding F-P11-001 LOW [test-fidelity]
+
+**Novel axis — negative-assertion string fidelity (absence assertions):** AC-004's negative assertion in `router_pe_connector_test.go` searched for `"split-horizon blocked"` (space form) to confirm E-FWD-001 does NOT fire. Production emission at `internal/routing/on_frame_arrival.go:252` uses hyphenated `"split-horizon-blocked: ... (BC-2.02.008 E-FWD-001)"`. The space form can never match the hyphenated production string — the assertion was vacuously true for the entire cycle. Ten prior passes (P1–P10) checked positive-emission polarity exclusively; none examined whether the key in an absence assertion could actually match the production string.
+
+**How defect proven:** `strings.Contains(productionEmission, "split-horizon blocked")` == false; `strings.Contains(productionEmission, "split-horizon-blocked")` == true. The assertion passed unconditionally regardless of runtime behavior.
+
+**Remediation (code commit 6e00332 on story/s-7.04-fu-pe-connector):**
+- Search key corrected from `"split-horizon blocked"` to spec-anchored `"E-FWD-001"` (stable across prose rewording; appears in the production emission alongside the hyphenated form).
+- Prose comment aligned to match the corrected key.
+- Pin test `TestScanForLine_DetectsEFWD001ProductionEmission` added: embeds verbatim production emission from `on_frame_arrival.go:252`; proves (a) fixed key `"E-FWD-001"` detects the real emission (non-vacuousness proof), and (b) space form `"split-horizon blocked"` does NOT match (pins the defect shape).
+- All suites green with `-race`.
+
+**P11 verification results:**
+- P10 fix (upstreamRoutersAsSet co-references → story v1.10) verified holding.
+- Census re-derivation: SET diff vs toolchain = ∅ (no new unregistered packages).
+- POL-002 sync: PASS — story v1.11 registered in STORY-INDEX v4.17→v4.18.
+- All P1-P9 code-lane fixes verified holding.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Story sync:** story-writer synced story → v1.11: pin-test `TestScanForLine_DetectsEFWD001ProductionEmission` registered in test-surface table, changelog row citing 6e00332 added, four-pattern co-reference sweep (`"split-horizon blocked"` / `"split-horizon-blocked"` / `"E-FWD-001"` / `scanForLine`) clean.
+
+**Cycle ledger:** 11 passes, 23 findings (7/3/3/1/1/2/2/1/1/1/1), all fixed/adjudicated, zero open.
+
+**Awaiting:** adversary pass 12 @ 6e00332 (streak 0/3)
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 10 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — 1 LOW [process-gap]
