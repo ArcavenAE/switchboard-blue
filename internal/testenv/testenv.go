@@ -1,5 +1,5 @@
 // Package testenv provides an in-process multi-daemon test rig for
-// switchboard integration tests (ARCH-08 position 22 — top of DAG,
+// switchboard integration tests (ARCH-08 position 23 — top of DAG,
 // test-helper composition root; imported only by _test.go files).
 //
 // Classification: test helper (ARCH-09).  This package may import any
@@ -9,7 +9,7 @@
 //
 //	VP-031, VP-032, VP-040, VP-046.
 //
-// Allowed internal imports: all — position 22 (top composition root).
+// Allowed internal imports: all — position 23 (top composition root).
 //
 // # SVTN isolation design
 //
