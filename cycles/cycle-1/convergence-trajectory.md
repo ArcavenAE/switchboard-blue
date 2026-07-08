@@ -1431,4 +1431,57 @@ Adversary reviewed P29 surface (transition ownership atomic fix + regression tes
 - Cycle ledger: 30 passes, 39 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0), zero open.
 - **Streak: 1/3.**
 
-**Awaiting:** adversary pass 31 @ 6b6f0cf (streak 1/3)
+**Awaiting:** adversary pass 32 @ 6b6f0cf (streak 2/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 31 (2026-07-08)
+
+**Verdict:** NO_FINDINGS — streak 1/3 → 2/3
+
+**Code HEAD:** 6b6f0cf (unchanged — zero code or story changes this pass)
+
+### Finding Progression (P31)
+
+| Pass | Code HEAD | Findings | Severity | Streak | Notes |
+|------|-----------|----------|----------|--------|-------|
+| 31 | 6b6f0cf | 0 | — | 2/3 | 12 bars green; concurrency interleavings independently re-derived; cross-artifact integrity verified |
+
+**Trajectory shorthand (P1–P31):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0/0
+
+### Summary
+
+All 12 standing bars green from fresh context.
+
+**Concurrency axis independently re-derived:**
+
+1. **2-upstream simultaneous drop:** Both goroutines call `Add(-1)`; the one whose return value is exactly 0 owns the ≥1→0 transition and emits EC-004 once. The other goroutine observes a negative return from `Add(-1)` and skips emission. Sound.
+2. **Reconnect-in-window:** Distinct goroutines — one decrementing from a disconnect, another incrementing from a concurrent successful dial. Each goroutine's `Add(-1)` return is unique to that goroutine; no aliasing possible. Sound.
+3. **Stop-races-genuine-loss:** If `Stop()` is called while a goroutine owns the ≥1→0 transition, `ctx.Err() != nil` and EC-004 is suppressed. The upstream count decrements legitimately — this is genuine loss (not a double-EC-004 scenario), spec-correct per BC-2.09.003 graceful-stop semantics.
+4. **Exact-tie loss/teardown race:** If a drop goroutine owns the transition (returns 0) and concurrently `Stop()` fires, `ctx.Err()` is tested after `Add(-1)` returns; the ctx-cancel path correctly suppresses the emission. Benign.
+
+**7 ctx-first perimeter files re-verified genuinely mechanical:** The P14 ctx-first sweep updated production call sites; adversary independently confirmed all 7 VP e2e test files contain only call-site signature updates — no behavioral assertions added or changed. Purely mechanical.
+
+**Cross-artifact integrity:**
+- VP-038 (concurrency convergence property) carries `lock: true` — matches story's claim that Add(-1)-return ownership is the convergence mechanism. Correct.
+- VP-037 (emission correctness) carries `lock: false` (partial-discharge pending S-BL.PE-RECEIVE-LOOP) — matches story's deferral annotation for the receive-loop discharge axis. Correct.
+- FO-PE-LOOP-001 in S-BL.PE-RECEIVE-LOOP Forward Obligations correctly scoped to the receive-loop story; not an open obligation on PE-CONNECTOR.
+
+**Test-to-AC discharge mapping complete at 6b6f0cf:**
+Full mapping of all AC acceptance criteria to test functions verified. No AC has an undischarged behavioral requirement.
+
+### Anti-Finding Adjudicated
+
+| Finding candidate | Adjudication |
+|-------------------|-------------|
+| S-7.04-FU-PE-CONNECTOR story priority P2 / 5 BC traces / 4 depends_on vs sprint-state entry priority P1 / 1 BC trace / 1 depends_on | **SYSTEMATIC-LAWFUL — do not re-raise.** This is authoring-set vs scheduling-set divergence: the story file captures the full implementation scope (all BCs touched, all story-level dependencies); the sprint-state entry records wave-planning priority and wave-scheduling dependencies only. Same pattern class as emission-diff vs connection-diff distinctions across all sibling FU stories. Not story drift. |
+
+### Outcome
+
+- **No code changes** required.
+- **No story changes** required.
+- Code HEAD unchanged at 6b6f0cf. Story unchanged at v1.26.
+- Cycle ledger: 31 passes, 39 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0/0), zero open.
+- **Streak: 2/3.**
+
+**Awaiting:** adversary pass 32 @ 6b6f0cf (streak 2/3 — convergence pass)
