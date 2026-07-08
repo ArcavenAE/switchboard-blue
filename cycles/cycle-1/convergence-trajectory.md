@@ -648,6 +648,46 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 15 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [test-fidelity]
+
+**Code HEAD:** 79c1284 (advanced from 670c64b — one remediation commit required)
+
+### Finding F-P15-001 LOW [test-fidelity]
+
+**What:** `TestRunRouter_PE_RouterHandleModeReflectsLiveState`'s ModeE-fake inverse-delegation setup was orphaned — `fakeConnE` was wired but never observed before `Restart` discarded it; the final assertion was satisfied by the live connector's failed dial; the comment misattributed the mechanism `"via fakeConnE"`. Proven by mutation: flipping the fake's return value still produced a passing test.
+
+**Novel failure axis — orphaned double + misattributed mechanism:** This is the third distinct shape in the "comment claims a code path the test doesn't exercise" family: P11 surfaced a vacuous key (absence assertion never matched production string), P13 surfaced a phantom symbol (anchor text cited a non-existent function), and P15 surfaces an orphaned fake (double wired but not observed before teardown/restart discarded it, with the passing assertion actually satisfied by an independent mechanism). In all three cases the test's comment accurately described the intended verification, but the runtime path diverged — silently in every case.
+
+**Adversary's empirical proof:** Mutation of `fakeConnE`'s return value produced no test failure; the passing assertion was driven by the live connector's failed dial (EC-001 ctx-cancel path), not the fake's inverse-delegation. The comment's claim `"via fakeConnE"` was therefore false.
+
+**Remediation at code commit 79c1284:**
+- New mutation-pinned inverse-delegation assertion: verifies that `fakeConnE` was actually called and that its return value shaped the result.
+- Comment reattributed to the live failed-dial mechanism, no longer claiming `fakeConnE` as the driver.
+- Full CI gate cleared (golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs).
+
+**Story sync → v1.15:** AC-006 test-names bullet updated; test-surface table row updated for the strengthened coverage; changelog row added; co-reference sweep adjudicated 8 hits (all correct historical records or correct live prose).
+
+**P15 verification results:**
+- Full CI gate: golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs.
+- Census re-derivation: SET diff vs toolchain = ∅.
+- Absence-assertion audit: CLEAN — `TestScanForLine_DetectsEFWD001ProductionEmission` (P11 fix) still passes.
+- Symbol-resolution bar: all cited symbols verified.
+- Double-liveness bar: new bar codified — for every test double wired, verify an assertion consumes it before teardown/restart, and prove liveness by mutation (flip the double's value; the test must fail).
+- POL-002 sync: PASS — story v1.15 registered in STORY-INDEX v4.21→v4.22.
+- P3/P4 fixes mutation-probed: both hold.
+- 7 VP e2e perimeter files confirmed purely mechanical (ctx-first call-site updates only; no behavioral assertions added).
+- Core production code confirmed clean under fresh eyes and mutation probing.
+- All P1-P14 fixes verified holding.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Trajectory shorthand (P1–P15):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1
+
+**Cycle ledger:** 15 passes, 27 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1), all fixed/adjudicated, zero open. Streak 0/3. Awaiting: adversary pass 16 @ 79c1284.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)

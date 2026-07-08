@@ -129,5 +129,16 @@ traces_to: STATE.md
 
 ---
 
+## PE-CONNECTOR Adversarial Cycle — Lesson #13 (2026-07-08)
+
+13. **Test setup that wires a double must be observed before anything discards it — an orphaned fake satisfies the reader but not the runtime, and the assertion may pass via an unrelated mechanism.** [codified] `TestRunRouter_PE_RouterHandleModeReflectsLiveState` wired `fakeConnE` as an inverse-delegation double to verify ModeE behavior. However, `Restart` discarded the fake before the assertion ran; the final assertion was satisfied by the live connector's failed dial (EC-001 ctx-cancel path). The comment truthfully described the intended verification but falsely described the actual runtime path. The mutation proof was definitive: flipping `fakeConnE`'s return value produced no test failure because the fake was never consulted. This is the third shape in the "comment claims a code path the test doesn't exercise" family (P11 — vacuous absence key; P13 — phantom symbol in anchor text; P15 — orphaned fake + misattributed mechanism). Standing bar extended: for every test double wired, verify an assertion consumes it before teardown/restart, and prove liveness by mutation — flip the double's value; the test must fail.
+   _Discovered: adversary pass 15, 2026-07-08. fakeConnE wired but discarded by Restart before assertion; final assertion satisfied by live failed-dial. Fixed at 79c1284: mutation-pinned inverse-delegation assertion added. Codified immediately._
+
+| Lesson | Proposed Policy | Scope | Status |
+|--------|----------------|-------|--------|
+| 13 | Every wired test double must be observed before teardown/restart; liveness proven by mutation (flip value → test must fail) | Test-writer checklist + adversarial review bar for test doubles | [codified] |
+
+---
+
 8. **Symbol deletion/rename remediations must include a mechanical same-artifact co-reference grep with per-hit adjudication (live prose = fix; struck-through/changelog = preserve) at remediation time.** [codified] One helper deletion (F-P1-007, `upstreamRoutersAsSet`) produced four straggler findings across passes 7-10 because each fix swept only its primary location. Pass-7 swept ARCH-08 §6.5 and testenv self-doc. Pass-8 swept ARCH-08 arithmetic and content. Pass-9 swept ARCH-08 census membership via toolchain re-derivation. Pass-10 found three live story references — AC-001 postcondition 5 citing the helper as normative mechanism, the test-mapping row naming it as unit-under-test, and the FO-1 resolution column citing it in present tense — all in the same story file that was modified in P1 and P3. Root cause: each remediation dispatch named a specific defect location; none included an instruction to grep the entire artifact (or all artifacts mentioning the symbol) for co-references. The sweep is now mandatory: when dispatching a symbol-deletion or rename remediation, include a step: "grep the full artifact (and sibling artifacts) for every variant of the symbol name; adjudicate each hit as live-prose (fix), historical-record/changelog (preserve), or struck-through (preserve). The sweep converts O(passes) straggler discovery into O(1)."
    _Discovered: adversary pass 10, 2026-07-07. Triggered by F-P1-007 deletion of `upstreamRoutersAsSet` helper; four stragglers across P7/P8/P9/P10. Codified immediately._
