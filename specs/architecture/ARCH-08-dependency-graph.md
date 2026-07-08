@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.8"
+version: "2.9"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-07T14:00:00 # v2.9 — F-P8-001 (adversary pass-8): §6.5 cardinality trued (23 positions = 22 develop + 1 prospective), numbering-note range updated to 1–23, SHA anchor in §6.5 header advanced to 62e38d3 (testenv merged at 62e38d3 post-dates 0516f3a); enforcement-history note and verification statement updated to reflect 22 packages at 62e38d3 + 1 prospective. PLUS full-artifact arithmetic/cross-reference self-consistency sweep: §6.5 enforcement-history note "21 packages" at 0516f3a updated to "22 packages on develop (at 62e38d3) + 1 prospective"; verification tail paragraph updated to "22 packages" at 62e38d3. No other arithmetic discrepancies found (Mermaid omission of post-Wave-3 packages is pre-existing documented limitation; §6.6.2 forbidden-edge positions 5, 8, 19, 23 all consistent with v2.9 table; §6.5.1 and §6.6.1 carry no package-count claims).
   - 2026-07-07T13:00:00 # v2.8 — F-P7-002 (adversary pass-7): position-23 (internal/testenv) import set corrected from {admission, drain, frame, session} to {admission, drain, frame, outerassembler, session, upstreamdial}. S-7.04-FU-PE-CONNECTOR added outerassembler (pos 8) + upstreamdial (pos 19) edges; both below 23, no back-edges, edges are lawful. Verified via import block at story branch HEAD 51ecd44. Pending-marker updated to reflect 51ecd44 (pre-merge); previously machine-derived at 62e38d3. §6.6.2 forbidden-edges note for upstreamdial updated: internal/testenv (_test-only composition root) added to the set of permitted importers alongside cmd/switchboard and _test files.
   - 2026-07-07T12:00:00 # v2.7 — F-P1-001 (adversary pass-1): position-19 import set corrected from {frame, outerassembler} to {halfchannel, outerassembler}; halfchannel is at DAG position 5 (pure-core), so the edge is acyclic and lawful. frame is not imported directly — reachable transitively through outerassembler and halfchannel. §6.6.2 forbidden-edges cycle-freeness note updated: allowed imports are at positions 5 and 8 (not 2 and 8). PROSPECTIVE marker retained; verified against cee8e8b (story/s-7.04-fu-pe-connector HEAD at time of adversary pass adjudication); final machine-verification at merge.
   - 2026-07-07T00:00:00 # v2.6 — internal/upstreamdial registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19-22 renumbered 20-23. Import set PROSPECTIVE pending first merge.
@@ -249,7 +250,7 @@ New packages must, before their first commit to any branch:
 
 Undeclared packages discovered at the wave gate are an architecture violation.
 
-### §6.5 Current import positions (develop @ `0516f3a`, 22 packages — 21 present on develop + 1 prospective pre-code registration)
+### §6.5 Current import positions (develop @ `62e38d3` + 1 prospective pre-code registration (story branch), 23 positions — 22 present on develop + 1 prospective)
 
 > **cmd/switchboard position-18 note (S-4.00 daemon assembly):** `cmd/switchboard`
 > occupies position 18 — the top leaf that imports every layer beneath it. As of
@@ -329,7 +330,7 @@ strict — position N may import packages at positions 1..N-1 only.
 This table is authoritative for the develop branch. Any `internal/` package not
 listed above does NOT exist in the codebase.
 
-> **Position numbering note:** Position values 1–22 form a strictly increasing
+> **Position numbering note:** Position values 1–23 form a strictly increasing
 > topological order. Several positions differ from the §6.6.2 prospective table
 > written at Wave-3 close (2026-06-27) because four packages shipped after that
 > table was frozen (outerassembler, arqsend, netingress, mgmt), routing gained a
@@ -339,20 +340,23 @@ listed above does NOT exist in the codebase.
 > entries that have shipped are pruned in §6.6.2 below. Story files that cite
 > earlier position numbers remain correct if the package they reference existed at
 > that story's wave — the positions only shift here to accommodate the full
-> 22-position table (21 on develop + 1 prospective).
+> 23-position table (22 on develop + 1 prospective).
 
 > **Enforcement history note (phase-7 audit F-004):** Enforcement actions such as
 > the PR #104 session→metrics import HOLD were evaluated against §6.6.2 prospective
 > positions and dispatch memory while §6.5 was frozen at 7 packages. This refresh
-> closes that gap: §6.5 is now the single authoritative source for all 21 packages
-> at develop 0516f3a. (v2.6 note: position 19 `internal/upstreamdial` is a prospective
-> pre-code registration per Q4 placement note binding; it was not present at 0516f3a.)
+> closes that gap: §6.5 is now the single authoritative source for all 22 packages
+> on develop (at 62e38d3) + 1 prospective. (v2.6 note: position 19 `internal/upstreamdial`
+> is a prospective pre-code registration per Q4 placement note binding; it was not
+> present at 0516f3a. Position 23 `internal/testenv` merged at 62e38d3, registered in
+> v2.5.)
 
 Verified via `go list -f '{{.ImportPath}} {{.Imports}}' ./internal/...` at develop
-`0516f3a` (HEAD as of phase-7 audit, 2026-07-06). All 21 packages present at that
+`62e38d3` (HEAD as of testenv merge, S-BL.TESTENV). All 22 packages present at that
 commit enumerated and import sets confirmed; the topological order is machine-derived
 and acyclic. Position 19 (`internal/upstreamdial`) is a prospective pre-code
-registration (v2.6) — its import set is PROSPECTIVE (not yet machine-verified).
+registration (v2.6) — its import set is PROSPECTIVE (not yet machine-verified, aligned
+to story branch HEAD 51ecd44 per v2.8 F-P7-002 correction).
 
 #### §6.5.2 S-4.00 import set for cmd/switchboard
 
@@ -477,6 +481,7 @@ here first.
 | 2.1 | 2026-06-27 | (MEDIUM) §6.5.2 import set: `internal/frame` added (OuterHeader carrier in `startFramesBridge`; DAG position 2 leaf; no forbidden edge). (HIGH-B) §6.5.1 obligation 4 note: `runAccess` injection seam — split into `runAccess` + `runAccessWithConnector(connectorIface)`; tests inject `fakeConnector` for PC-2/PC-2.6 end-to-end. (EC-005) §6.5.2 note: "CI enforces structurally" wording overstated; accepted Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |
 | 2.2 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication. C-1 TRACKED-DEFER: `routing.WithFailureCounter` wiring deferred to the future network-ingress story; TRACKED-DEFER note added after obligation table mandating that E-ADM-016 and E-ADM-017 MUST be wired together when `RouteFrame` enters the live data path; orchestrator MUST register a follow-up story/STATE drift item. I-1 wg-join: obligations 3 and 6 updated to require `startSweepTicker` and `startFramesDroppedTicker` to accept `*sync.WaitGroup` and track the goroutine with `wg.Add(1)` / `defer wg.Done()` so BC-2.04.007 PC-2 postcon-6 no-goroutine-leak assertion is deterministic. |
 | 2.3 | 2026-06-27 | C-1 RESOLVED: `routing.WithFailureCounter(fc)` (threshold=5, window=60s) wired in `buildRouter` alongside `routing.WithLogger` — PR #20 (commit 418de54). Partial-wiring concern closed; BC-2.05.008 PC-5 and BC-2.05.005 PC-3 both satisfied. OBS-3 resolved. Only remaining deferral is the network-ingress listener (S-BL.NI). |
+| 2.9 | 2026-07-07 | F-P8-001 (adversary pass-8, LOW [process-gap]): §6.5 cardinality trued — header updated to "develop @ 62e38d3 + 1 prospective pre-code registration (story branch), 23 positions — 22 present on develop + 1 prospective"; numbering-note range corrected 1–22 → 1–23; "22-position table" corrected to "23-position table (22 on develop + 1 prospective)"; SHA anchor advanced to 62e38d3. PLUS full-artifact arithmetic/cross-reference sweep: enforcement-history note "all 21 packages at develop 0516f3a" updated to "all 22 packages on develop (at 62e38d3)"; verification tail "All 21 packages" at 0516f3a updated to "All 22 packages" at 62e38d3. Sweep found no further discrepancies (Mermaid omission of post-Wave-3 packages is pre-existing documented limitation; §6.6.2 position references 5, 8, 19, 23 all consistent with v2.9 table; §6.5.1 obligation table and §6.6.1 feasibility register carry no independent package counts). |
 | 2.8 | 2026-07-07 | F-P7-002 (adversary pass-7, LOW [process-gap]): position-23 (`internal/testenv`) import set corrected from `{admission, drain, frame, session}` to `{admission, drain, frame, outerassembler, session, upstreamdial}`. S-7.04-FU-PE-CONNECTOR added outerassembler (pos 8) and upstreamdial (pos 19) as testenv imports; both are below position 23 — edges are lawful and acyclic. Pending-marker updated to 51ecd44 (story branch HEAD, pre-merge). §6.6.2 upstreamdial forbidden-edges note updated: `internal/testenv` added to the set of permitted importers alongside `cmd/switchboard` and `_test` files (testenv imports upstreamdial at pos 19 < 23 — lawful). Renumber-neighbor blast-radius class: story updated upstreamdial (pos 19) but not the neighbor row at pos 23 that was mutated by the same story's imports. |
 | 2.7 | 2026-07-07 | F-P1-001 (adversary pass-1, HIGH): position-19 import set corrected from `{frame, outerassembler}` to `{halfchannel, outerassembler}`. Implementation at cee8e8b imports `halfchannel` directly (ChannelFrame, FrameTypeData, FrameTypeEmptyTick); `frame` is not imported directly. halfchannel is DAG position 5 (pure-core); edge is acyclic and lawful. §6.6.2 forbidden-edges cycle-freeness note updated to "positions 5 and 8" (was "positions 2 and 8"). PROSPECTIVE marker retained with alignment note. |
 | 2.6 | 2026-07-07 | `internal/upstreamdial` registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19–22 renumbered 20–23. Import set `{frame, outerassembler}` PROSPECTIVE pending first merge. Deviation from v2.5 same-burst-as-merge precedent is explicitly authorized by placement note Q4 binding ruling. |
