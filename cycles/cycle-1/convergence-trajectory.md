@@ -688,6 +688,44 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 16 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
+
+**Code HEAD:** 7daed41 (advanced from 79c1284 — doc-only remediation commit)
+
+### Finding F-P16-001 LOW [doc-drift]
+
+**What:** `testenv.go` `Restart` method's doc comment described a never-taken control path. The comment claimed "already wired → ReloadAddrs reuse" and stated "in both cases polls" — but the body unconditionally tears down and recreates the connector, with an empty-upstreams early-return that exits before any reuse path could run. The symbol cited (`ReloadAddrs`) is REAL and passes symbol-resolution, but it is never invoked on the path the comment describes.
+
+**Novel failure axis — real-symbol-never-invoked defeats the symbol-resolution bar:** This is the fourth shape in the comment-vs-code-path family across this cycle:
+- P11: vacuous absence key (string typo — key never matched production emission)
+- P13: phantom symbol (cited function does not exist anywhere in the repo)
+- P15: orphaned fake (double wired but discarded before observation; assertion satisfied by independent mechanism)
+- P16: real-symbol-never-invoked (cited symbol exists and resolves grep, but the described control path — "already wired → ReloadAddrs reuse" — is never taken; the body unconditionally tears down regardless)
+
+The symbol-resolution bar passes (grep finds `ReloadAddrs`). Only the claim→code mapping catches it: tracing every behavioral sentence in the doc comment to the specific code lines that implement it, verified at authoring time.
+
+**Remediation at commit 7daed41 (doc-only):**
+- Doc comment rewritten to accurately describe the unconditional teardown-and-recreate path.
+- 7-row claim→code mapping in remediation report (each sentence in the original comment traced to the actual code line, confirming which claims were false).
+- No production code changed. No test changes.
+
+**Story sync → v1.16:** Changelog row added. Co-reference sweep adjudicated ~17 hits — all accurate/preserve (the false claim never propagated into the story prose — NO-EDIT on prose sections). Full CI gate green.
+
+**P16 verification results:**
+- Full CI gate: golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs.
+- P15 fix mutation-proven holding: mutation of `fakeConnE` return value still fails the new inverse-delegation assertion (double-liveness bar holds).
+- All seven standing bars PASS.
+- POL-002 sync: PASS — story v1.16 registered in STORY-INDEX v4.22→v4.23.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Trajectory shorthand (P1–P16):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1
+
+**Cycle ledger:** 16 passes, 28 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1), all fixed/adjudicated, zero open. Streak 0/3. Awaiting: adversary pass 17 @ 7daed41.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)
