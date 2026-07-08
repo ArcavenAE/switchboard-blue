@@ -11,6 +11,7 @@
 # Canonical phase-5 state: .factory/stories/sprint-state.yaml (single source of truth since Burst 40c).
 # Frozen 2026-07-04 (Burst 78) per F-P5P31-B-001 adjudication — freeze-with-banner pattern.
 # =============================================================================
+# v1.75 (2026-07-08): S-7.04-FU-PE-CONNECTOR adversary P6 remediated @ 51ecd44 — F-P6-001 LOW doc (addrsCh field comment still prescribed pre-P5 blocking drain pattern; P5-sweep's one missed location → swept @ 51ecd44 comment-only signed commit; full-worktree straggler grep clean, 2 test-comment hits historical/descriptive not prescriptive); F-P6-002 LOW [process-gap] VP-037/VP-038 evidence anchors stale at cee8e8b → v1.3 rows advance to 689f96b; P5 storm fix mutation-verified holding (watchdog 10.00s on restored blocking drain); all P1-P5 fixes confirmed at HEAD; zero code-correctness defects; novelty LOW/decaying (7→3→3→1→1→2-LOW-doc). adversarial_pass_counter 6, pending_pass 7, streak 0/3. Code 51ecd44. STORY-INDEX v4.13→v4.14.
 # v1.74 (2026-07-08): S-7.04-FU-PE-CONNECTOR adversary P5 remediated @ 689f96b — F-P5-001 MED liveness (permanent ReloadAddrs deadlock under reader-drain race; ROOT CAUSE design-level: Q3 prescribed blocking inner receive inside select; escaped 4 prior passes; stash-verified 10.00s FAIL pre-fix) → ReloadAddrs rewritten fast-path + non-blocking drain/resend @ 689f96b; TestConnector_ReloadAddrs_StormNoDeadlock (200k-call storm, 10s watchdog, 0.10s green); -race -count=3 clean; erratum note v1.4 + story v1.9. P1-P4 fixes re-verified holding. Finding trend 7→3→3→1→1. adversarial_pass_counter 5, pending_pass 6, streak 0/3. Code 689f96b.
 # v1.73 (2026-07-08): S-7.04-FU-PE-CONNECTOR adversary P4 remediated @ 40774cf — F-P4-001 LOW behavioral (spurious mode=E on graceful Stop [ctx guard asymmetry vs EC-001, empirically reproduced]) → EC-004 guarded with && ctx.Err() == nil, symmetric with EC-001; TestConnector_NoEC004OnGracefulStop regression test; -race -count=3 clean. All P1/P2/P3 fixes re-verified holding. Novelty: 7→3→3→1 (noise floor). story v1.8. streak 0/3, pass 5 next. Code 40774cf.
 # v1.72 (2026-07-08): S-7.04-FU-PE-CONNECTOR adversary P3 remediated @ 614d9c2 — F-P3-001 MED mutation-survivor pinned (testKeepalive base 1s, window [700,1300]ms, mutant band [375,625] disjoint, pollForMode 15s; proven: mutant → FAIL @ 501ms); F-P3-002 LOW [process-gap] import-set prose swept 3 locations {frame,outerassembler}→{halfchannel,outerassembler}; F-P3-003 LOW [process-gap] SetConnector doc present-tense. -race -count=3 green. story v1.7. streak 0/3, pass 4 next. Code 614d9c2.
@@ -522,13 +523,19 @@ steady_state_deliveries:
     spec_version: "1.9"
     placement_note_version: "1.4"
     code_lane_base: 950285c
-    code_lane_head: 689f96b
+    code_lane_head: 51ecd44
     vp_038_lock: TRUE
     vp_037_lock: PARTIAL
     vp_037_note: "scaffold TestE2E_RouterDrain_NodesMigrateWithin2s skips on DRAIN-WIRE dependency; full-discharge → S-7.04-FU-DRAIN-WIRE"
-    adversarial_pass_counter: 5
+    adversarial_pass_counter: 6
     streak: 0
-    pending_pass: 6
+    pending_pass: 7
+    p6_remediation:
+      f_p6_001: "LOW doc (re-introduction vector) — addrsCh field comment in internal/upstreamdial still prescribed pre-P5 blocking drain pattern (P5-sweep's one missed location) → swept @ 51ecd44 comment-only signed commit; full-worktree straggler grep clean (2 test-comment hits historical/descriptive, not prescriptive)"
+      f_p6_002: "LOW [process-gap] VP-037/VP-038 evidence anchors stale at cee8e8b → v1.3 rows advance anchor to 689f96b; storm-no-deadlock test added post-P5 but VP frontmatter not advanced"
+      p5_storm_fix_mutation_verified_holding: true
+      p1_p5_fixes_confirmed_at_head: true
+      novelty: "LOW/decaying (trend 7→3→3→1→1→2-LOW-doc)"
     p5_remediation:
       f_p5_001: "MED liveness — permanent ReloadAddrs deadlock (blocking inner receive inside select Q3 prescribed; caller-deadlock under reader-drain race); ROOT CAUSE design-level (Q3 prescribed pattern was defective; escaped 4 prior passes); stash-verified wedging [10.00s FAIL] pre-fix; ReloadAddrs rewritten fast-path + non-blocking drain + non-blocking resend @ 689f96b; TestConnector_ReloadAddrs_StormNoDeadlock (200k-call storm, live reconcile goroutine, 10s watchdog, 0.10s green post-fix); -race -count=3 clean; erratum note v1.4; story v1.9"
       p1_p2_p3_p4_fixes_reverified_holding: true
