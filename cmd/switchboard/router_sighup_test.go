@@ -143,7 +143,7 @@ func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Du
 // modeELine returns the exact mode=E output line emitted by runRouter for
 // zero upstream_routers — derived from the startup mode-emission in the
 // startup writer block and the mode=E branch inside the SIGHUP signal-loop
-// re-emission block (both in runRouter/buildAndWireConnector in mgmt_wire.go).
+// re-emission block (both inline in `runRouter` in mgmt_wire.go).
 // Pinning the full string (prefix + token) guards against partial-match
 // false-positives and format drift (F-SIGHUP-P4-001).
 func modeELine() string {
@@ -153,8 +153,8 @@ func modeELine() string {
 // modePELine returns the exact mode=PE output line emitted by runRouter for
 // a given upstreamRouters slice — derived from the startup mode-emission in
 // the startup writer block and the mode=PE branch inside the SIGHUP
-// signal-loop re-emission block (both in runRouter/buildAndWireConnector in
-// mgmt_wire.go; format: "switchboard router: mode=PE upstream_routers=%v\n"
+// signal-loop re-emission block (both inline in `runRouter` in mgmt_wire.go;
+// format: "switchboard router: mode=PE upstream_routers=%v\n"
 // where %v is fmt.Sprintf("%v", addrs)).
 // Pinning the full prefix + upstream_routers= token guards against partial-
 // match false-positives and format drift (F-SIGHUP-P4-001).
