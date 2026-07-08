@@ -334,7 +334,10 @@ func (r *RouterHandle) Restart(t testing.TB, cfg RouterConfig) {
 
 	// Poll until at least one upstream is connected (VP-038 activation).
 	// Timeout of 3s: real listeners connect quickly; stub/unreachable addrs
-	// will exhaust the timeout and Mode() will fall back to r.mode.
+	// exhaust the timeout, but the connector stays wired (r.connector=conn,
+	// set above).  connectedCount==0 → conn.Mode()==ModeE → Mode() returns
+	// ModeE via connector delegation — it does NOT fall back to r.mode (which
+	// was set to ModePE above and is unreachable while a connector is wired).
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if conn.Mode() == upstreamdial.ModePE {
