@@ -1142,3 +1142,43 @@ Every file in the core perimeter has been swept at file granularity. The story p
 **Cycle ledger:** 19 passes, 30 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1), all fixed/adjudicated, zero open. Streak 1/3 → 0/3 (reset).
 
 **Awaiting:** adversary pass 20 @ 7c6d841 (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 25 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
+
+**Code HEAD:** f2f0ba6 (unchanged — story-only fix)
+
+### Finding Progression (P25)
+
+| Pass | Code HEAD | Findings | Severity | Streak | Remediation |
+|------|-----------|----------|----------|--------|-------------|
+| 25 | f2f0ba6 | 1 | LOW [doc-drift] | reset 0/3 | story v1.23 (doc-only, code HEAD unchanged) |
+
+**Trajectory shorthand (P1–P25):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1
+
+### Finding F-P25-001 LOW [doc-drift]
+
+**What:** The story's "Estimated total test count: 15–25" roll-up summary (~L678) contradicted the enumerated test tables and code-verified counts. The placement note forecast of 15–25 was carried forward unchanged into the summary section while the actual delivered count (28 net-new + 1 migrated) was derivable from the enumerated tables and confirmed by grep:
+- `internal/upstreamdial/connector_test.go`: `grep -cE "^func Test"` = **18**
+- `cmd/switchboard/router_pe_connector_test.go`: `grep -cE "^func Test"` = **9**
+- `internal/testenv/testenv_test.go`: **+1** (`TestRouterHandle_Restart_TwicePE`, F-P2-001 addition)
+- Total: **28 net-new + 1 migrated** (vs forecast 15–25)
+
+The overage of ~10 tests above the upper bound was driven by adversarial-remediation hardening not in the pre-implementation forecast: F-P1-004×4 (`TestNextBackoff_*`), F-P1-006 (`TestConnector_EC004_DropToZero_ModeEEmission`), F-P2-001×2 (`TestConnector_Stop_Idempotent` + `TestRouterHandle_Restart_TwicePE`), F-P4-001 (`TestConnector_NoEC004OnGracefulStop`), F-P5-001 (`TestConnector_ReloadAddrs_StormNoDeadlock`), F-P11-001 (`TestScanForLine_DetectsEFWD001ProductionEmission`).
+
+**Remediation (story-only fix, code HEAD f2f0ba6 unchanged):**
+- Summary rewritten: "Delivered total test count: 28 net-new + 1 migrated" with per-file code-verified breakdown.
+- Explicit overage note added preserving the forecast comparison: placement forecast was accurate for the pre-implementation surface; post-adversarial additions are expected and appropriate.
+- Story → v1.23. Full story sweep confirmed no stale "15–25" or "Estimated total" propagation into other story sections.
+
+**P25 verification results:**
+- All nine standing bars green: full CI gate (no code changes required), census re-derivation 24/24, absence-assertion keys verbatim, symbol resolution, claim→code blast-radius, double-liveness, citation-orthography both forms, classification-consistency, POL-002 sync.
+- P24 fix verified holding (spot-checked: relative locator retired, connector.go perimeter-complete notation intact).
+- Code behavior unchanged since P17. Code HEAD f2f0ba6. Story HEAD v1.23.
+
+**Cycle ledger:** 25 passes, 35 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1), zero open. Streak reset 0/3.
+
+**Awaiting:** adversary pass 26 @ f2f0ba6 (streak 0/3)
