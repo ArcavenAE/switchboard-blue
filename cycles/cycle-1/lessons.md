@@ -107,6 +107,17 @@ traces_to: STATE.md
 
 ---
 
+## PE-CONNECTOR Adversarial Cycle — Lesson #11 (2026-07-08)
+
+11. **Remediation output is itself un-reviewed input: an anchor-stabilization fix confabulated a phantom symbol that existed nowhere in the repo — strictly worse than the stale line number it replaced.** [codified] The P12 citation-stabilization task replaced five stale `mgmt_wire.go` line-number citations in `router_sighup_test.go` with stable mechanism anchors. The replacement text cited `"runRouter/buildAndWireConnector"` — a function that does not exist in the codebase. Connector construction logic is inline in `runRouter` at `mgmt_wire.go:408`; there is no `buildAndWireConnector` anywhere. The stale citation at least pointed to a real line (albeit the wrong one). The phantom citation points to nothing. Root cause: the remediation agent treated "anchor stabilization" as a creative naming task rather than a verification task — it named what the code ought to do rather than what it actually does. Standing bar: every symbol cited in an authored comment or anchor must be grep-resolved against the codebase before the commit is declared remediated. A symbol-resolution table (`symbol → file:line`) must appear in the remediation report. If grep returns zero hits, the symbol is phantom and must not be cited.
+   _Discovered: adversary pass 13, 2026-07-08. P12 commit 14ae327 cited `buildAndWireConnector` which has 0 grep hits in the entire repo. Fixed at 0a350d6. Codified immediately._
+
+| Lesson | Proposed Policy | Scope | Status |
+|--------|----------------|-------|--------|
+| 11 | Every symbol cited in an authored comment or anchor must be grep-resolved before commit; symbol-resolution table required in remediation report | Remediation checklist; adversarial review bar | [codified] |
+
+---
+
 ## PE-CONNECTOR Adversarial Cycle — Lesson #8 (2026-07-07)
 
 8. **Symbol deletion/rename remediations must include a mechanical same-artifact co-reference grep with per-hit adjudication (live prose = fix; struck-through/changelog = preserve) at remediation time.** [codified] One helper deletion (F-P1-007, `upstreamRoutersAsSet`) produced four straggler findings across passes 7-10 because each fix swept only its primary location. Pass-7 swept ARCH-08 §6.5 and testenv self-doc. Pass-8 swept ARCH-08 arithmetic and content. Pass-9 swept ARCH-08 census membership via toolchain re-derivation. Pass-10 found three live story references — AC-001 postcondition 5 citing the helper as normative mechanism, the test-mapping row naming it as unit-under-test, and the FO-1 resolution column citing it in present tense — all in the same story file that was modified in P1 and P3. Root cause: each remediation dispatch named a specific defect location; none included an instruction to grep the entire artifact (or all artifacts mentioning the symbol) for co-references. The sweep is now mandatory: when dispatching a symbol-deletion or rename remediation, include a step: "grep the full artifact (and sibling artifacts) for every variant of the symbol name; adjudicate each hit as live-prose (fix), historical-record/changelog (preserve), or struck-through (preserve). The sweep converts O(passes) straggler discovery into O(1)."

@@ -639,6 +639,36 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 13 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [test-fidelity]
+
+**Code HEAD:** 0a350d6 (advanced from 14ae327 — one remediation commit required)
+
+### Finding F-P13-001 LOW [test-fidelity]
+
+**What:** The P12 citation-stabilization commit 14ae327 introduced a PHANTOM symbol: two comments in `cmd/switchboard/router_sighup_test.go` cited `"runRouter/buildAndWireConnector"`. The function `buildAndWireConnector` does not exist anywhere in the repository — connector construction logic is inline in `runRouter` at `mgmt_wire.go:408`. This is the first finding introduced BY a remediation commit's anchor-stabilization pass rather than pre-existing in the production code.
+
+**Novel failure axis — anchor-stabilization creates phantom references:** All twelve prior passes reviewed code and comments for correctness against the codebase as it stood. P12's remediation task was specifically to replace stale line-number citations with stable anchors — but that stabilization itself was not re-verified for symbol resolution. The replacement text cited a non-existent function by name, producing a phantom reference that is strictly worse than the stale line-number it replaced (a stale line number goes to the wrong line; a phantom symbol points to nothing). Standing bar codified: every symbol cited in an authored comment or anchor must be grep-resolved against the codebase before the commit is declared remediated.
+
+**Remediation:** Code commit 0a350d6 on `story/s-7.04-fu-pe-connector`: both comments corrected to read `"both inline in runRouter in mgmt_wire.go"`. Symbol-resolution table in remediation report: `upstreamRoutersFor` → `router_config.go:77`, `keepaliveIntervalFor` → `router_config.go:57`, `runRouter` → `mgmt_wire.go:408`. `buildAndWireConnector` → 0 hits (confirms phantom). Full CI gate re-cleared (golangci-lint 0 issues, vet clean, race tests green, gofumpt no diffs).
+
+**Story sync → v1.13:** Symbol-resolution verification bar added to changelog; `buildAndWireConnector` reference confirmed absent from story prose (appears only in v1.13 changelog row as historical record).
+
+**P13 verification results:**
+- Full CI gate: golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs.
+- Census re-derivation: SET diff vs toolchain = ∅ (no new unregistered packages).
+- Absence-assertion audit: CLEAN — `TestScanForLine_DetectsEFWD001ProductionEmission` (P11 fix) still passes; pin-test key `"E-FWD-001"` confirmed accurate.
+- POL-002 sync: PASS — story v1.13 registered in STORY-INDEX v4.19→v4.20.
+- All P1-P12 code-lane fixes verified holding.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Trajectory shorthand (P1–P13):** 7/3/3/1/1/2/2/1/1/1/1/1/1
+
+**Cycle ledger:** 13 passes, 25 findings (7/3/3/1/1/2/2/1/1/1/1/1/1), all fixed/adjudicated, zero open. Streak 0/3. Awaiting: adversary pass 14 @ 0a350d6.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 12 (2026-07-08)
 
 **Verdict:** HAS_FINDINGS — 1 MED [test-hygiene/CI-gate]
