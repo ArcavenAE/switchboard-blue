@@ -25,9 +25,82 @@ admission.
 
 ---
 
+## Terminology
+
+Two vocabularies describe the same things at different
+levels, and the docs use both:
+
+- A **daemon** is one long-running instance of the `switchboard`
+  binary, started in one of four modes: `switchboard access`,
+  `switchboard console`, `switchboard control`, or `switchboard
+  router`. "Daemon" is the *process-level* word — the thing you start,
+  stop, send SIGTERM, and point `sbctl --target` at.
+- **Node** and **router** are the *protocol-level* words for the roles
+  those processes play in an SVTN. "The access node" and "the access
+  daemon" are the same running process, viewed from the network's
+  perspective and the operator's shell respectively.
+- **sbctl** is not a daemon — it's a short-lived CLI that connects to
+  one daemon's management socket, performs one operation, and exits.
+
+## Who runs what — the two sides of the trust boundary
+
+Switchboard separates the people who provide the network from the
+people who use it. The boundary is the spec's **carrier-grade content
+separation** guarantee: *"the router provides infrastructure, the
+customer holds the data keys"* (domain spec, ubiquitous language). The
+unqualified word "operator" never distinguishes these roles — always
+qualify it.
+
+| Role | Spec anchor | What they hold | What they run |
+|------|-------------|----------------|---------------|
+| **Network operator** | Exact spec term (differentiator D-2; PRD persona Marcus) | Router management keys | E/PE/P routers. Sees outer headers — identity, addressing, traffic patterns — never session content. |
+| **SVTN operator** | The `control` admission role; *"control node — a network participant, not an infrastructure component"* (ubiquitous language) | The SVTN's control key set: the bootstrap trust anchor plus delegated control keys (CAP-019: register / revoke / expire) | The control node; administers the SVTN's membership and lifecycle. |
+| **SVTN member** | The `console` and `access` admission roles | A console key (attach / drive sessions) or an access key (publish sessions) | Consoles and access nodes. PRD personas Devon and Kai live here. |
+
+One person can hold several roles — a solo developer running their own
+E router is network operator, SVTN operator, and SVTN member at once.
+The roles matter when infrastructure is *shared*: two SVTNs can coexist
+on the same routers with no cross-SVTN visibility (multi-tenant by
+design, CAP-017/018), and the network operator who carries both
+tenants' frames can read neither tenant's content.
+
+A finer-grained *observer* distinction (read-only or tandem access to
+specific sessions) is already specified but is not a fourth admission
+role: it's the Tier-2 **session authorization key** with
+`access mode: full | read-only` (PRD persona Priya; `E-ADM-006`
+scoping, `E-ADM-007` read-only enforcement). See "Admission tiers"
+below.
+
 ## The pieces
 
 There are two kinds of process, both from the same `switchboard` binary:
+
+```mermaid
+graph TB
+    OP["operator<br/>(human or agent, running sbctl)"]
+
+    subgraph deployment["one switchboard deployment"]
+        CT["control node<br/>admission plane:<br/>SVTNs, keys, revocation"]
+        R["router<br/>blind relay —<br/>sees envelopes + HMAC,<br/>never payload"]
+        subgraph m1["machine hosting the work"]
+            AN["access node<br/>owns the PTY"]
+            TM["tmux server<br/>(the actual programs)"]
+            AN --- TM
+        end
+        subgraph m2["operator's machine"]
+            CN["console<br/>screen + keyboard endpoint"]
+        end
+    end
+
+    OP -- "sbctl mgmt RPCs<br/>(Ed25519 challenge-response)" --> CT & R & AN & CN
+    AN == "encrypted session frames" ==> R
+    R == "encrypted session frames" ==> CN
+```
+
+Management (thin arrows) and session traffic (thick arrows) are
+different planes: every daemon serves a management socket that sbctl
+authenticates to, while session frames flow only access → router →
+console. The control node participates in no session traffic at all.
 
 ### Nodes
 
@@ -74,6 +147,23 @@ An **SVTN** is Switchboard's unit of trust and routing scope. It owns:
   admit, drive, or observe traffic in this SVTN.
 - A **namespace** for sessions, node addresses, and paths.
 
+```mermaid
+graph TB
+    subgraph svtn["SVTN 'hello-svtn' — svtn_id a1b2c3d4e5f60102"]
+        BK["bootstrap key<br/>permanent trust anchor<br/>(revoke → E-ADM-020,<br/>expire → E-ADM-021)"]
+        subgraph keys["admitted-key set"]
+            K1["operator key<br/>role: control"]
+            K2["node key<br/>role: access"]
+            K3["laptop key<br/>role: console"]
+        end
+        NS["namespace<br/>sessions · node addrs · paths"]
+    end
+    BK -- "registered the first" --> K1
+    K1 -- "registered" --> K2 & K3
+    K2 -- "may publish into" --> NS
+    K3 -- "may attach within" --> NS
+```
+
 SVTNs are created via `sbctl admin svtn create --name=<...>`. The
 returned `svtn_id` (hex, 8 bytes) is what appears in wire frames; the
 name is what appears on operator commands (see the
@@ -107,6 +197,23 @@ framing** — "the bus leaves on time, full or not."
 - If nothing is ready, an empty frame is sent (heartbeat + timing
   witness).
 
+```mermaid
+sequenceDiagram
+    participant App as bytes arriving<br/>(keystrokes / output)
+    participant HC as half-channel<br/>(tick every 10ms)
+    participant Net as wire
+
+    App->>HC: "l"
+    App->>HC: "s"
+    Note over HC: tick fires
+    HC->>Net: frame ["ls"]
+    Note over HC: tick fires — nothing buffered
+    HC->>Net: empty frame (heartbeat + timing witness)
+    App->>HC: "\n"
+    Note over HC: tick fires
+    HC->>Net: frame ["\n"]
+```
+
 This gives:
 
 - Predictable jitter — the frame cadence is stable regardless of load.
@@ -139,6 +246,15 @@ a **duplicate-and-race** strategy:
 - The receiver deduplicates by frame id.
 - Path quality is tracked (RTT, p99 RTT, loss) and surfaced via `sbctl paths list`.
 
+```mermaid
+graph LR
+    S["sender"] -- "frame #42 (copy 1)" --> PA["path A — active<br/>rtt_p99 12ms"]
+    S -- "frame #42 (copy 2)" --> PB["path B — degraded<br/>rtt_p99 96ms"]
+    PA --> D["receiver<br/>dedup by frame id"]
+    PB --> D
+    D --> OUT["first copy wins;<br/>second is dropped"]
+```
+
 Paths carry a status:
 
 - `active` — currently used for forwarding.
@@ -168,6 +284,30 @@ Read-only console attachment is possible — the upstream can reject
 write operations without dropping the session, surfacing `E-ADM-007`
 (degraded, session continues).
 
+```mermaid
+sequenceDiagram
+    participant C as console (caller)
+    participant D as daemon
+
+    Note over C,D: Tier 1 — challenge/response
+    C->>D: connect
+    D->>C: nonce
+    C->>D: Ed25519 signature over nonce
+    alt key in admitted set
+        D-->>C: authenticated ✓
+    else unknown key
+        D-->>C: E-ADM-010 (stop)
+    end
+
+    Note over C,D: Tier 2 — session authorization
+    C->>D: attach <session-name> @ <node-addr>
+    alt authorized for THIS session
+        D-->>C: attached — stream flows
+    else admitted but not authorized here
+        D-->>C: E-ADM-006 (stop)
+    end
+```
+
 ---
 
 ## Wire security
@@ -182,6 +322,19 @@ denial-of-service vector.
 The SSH end-to-end tunnel is nested inside the Switchboard transport.
 Routers verify the HMAC of the outer frame; they never see, decrypt, or
 touch the SSH payload.
+
+```mermaid
+graph TB
+    subgraph outer["switchboard frame (what the router sees)"]
+        H["envelope: svtn_id, frame id, addressing"]
+        MAC["HMAC tag (keyed to the SVTN)"]
+        subgraph inner["SSH-encrypted payload (opaque to the router)"]
+            P["terminal bytes"]
+        end
+    end
+    R["router"] -- "verifies" --> MAC
+    R -. "cannot decrypt" .- inner
+```
 
 ---
 

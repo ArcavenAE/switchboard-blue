@@ -32,7 +32,16 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const body = context.payload.pull_request.body || '';
+            // Fetch the CURRENT body via the API rather than trusting
+            // context.payload — the payload is frozen at event time, so a
+            // re-run of an old failed run would replay the pre-fix body and
+            // fail forever even after the PR description is corrected.
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const body = pr.body || '';
 
             // Rule 1: the header must be present. Case-insensitive on the
             // words; strict on the "## " prefix so a mention in prose
