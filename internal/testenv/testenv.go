@@ -290,10 +290,13 @@ func (r *RouterHandle) SVTNID() SVTNID {
 // Connector that dials the configured addresses (AC-006: replaces stub r.mode
 // assignment with real connection state tracking for VP-038 behavioral contract).
 //
-// When a live connector is already wired, Restart calls ReloadAddrs to update
-// the address set.  When no connector exists, Restart creates one and starts it.
-// In both cases, Restart polls until connector.Mode() == ModePE (with a 3s
-// timeout) so that the caller sees live connection state.
+// Restart ALWAYS tears down any existing connector (Stop, never ReloadAddrs
+// reuse — address-list reuse via ReloadAddrs belongs to the production SIGHUP
+// seam in runRouter, not to this test-harness full restart).  When the new
+// config has upstreams, a fresh Connector is built via upstreamdial.New,
+// started, and polled up to 3s for connector.Mode()==ModePE so callers see
+// live connection state.  When upstreams is empty, Restart returns immediately
+// after teardown; mode stays E, no poll.
 func (r *RouterHandle) Restart(t testing.TB, cfg RouterConfig) {
 	t.Helper()
 	r.mu.Lock()
