@@ -1229,3 +1229,63 @@ The overage of ~10 tests above the upper bound was driven by adversarial-remedia
 **Cycle ledger:** 26 passes, 36 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1), zero open. Streak reset 0/3.
 
 **Awaiting:** adversary pass 27 @ 849e095 (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 27 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 MED [doc-drift]
+
+**Code HEAD:** 849e095 (unchanged — doc-only remediation)
+
+### Finding Progression (P27)
+
+| Pass | Code HEAD | Findings | Severity | Streak | Remediation |
+|------|-----------|----------|----------|--------|-------------|
+| 27 | 849e095 | 1 | MED [doc-drift] | 0/3 | story v1.25 + placement note v1.5 (doc-only, code HEAD unchanged) |
+
+**Trajectory shorthand (P1–P27):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1
+
+### Finding F-P27-001 MED [doc-drift]
+
+**What:** Normative Q6 binding (Placement Note §Q6) and AC-001 PC-2 both cited `outerassembler.Assemble(env, cf)` as the call made at `Connector.dialLoop` bootstrap construction. The real signature at `internal/outerassembler/assemble.go` is `Assemble(cf halfchannel.ChannelFrame, sackBitmap [SACKBitmapSize]byte, env Envelope) ([]byte, error)` — wrong on three counts:
+
+1. **Reversed operand order** — `env` was cited first; real signature places `cf` first and `env` last.
+2. **Missing required parameter** — `sackBitmap [SACKBitmapSize]byte` is the second argument; absent from both citations.
+3. **Wrong parameter names** — implied by the reversal.
+
+**Novel class:** An existing, resolved symbol (`outerassembler.Assemble`) cited with the WRONG SIGNATURE. This is distinct from prior symbol findings: F-P13-001 and F-P26-001 involved phantom symbols (0 grep hits) — those were phantom-symbol findings. F-P27-001 is the first wrong-signature finding in this cycle: the function exists and is used in code, but the normative citations describe a call form that is not legal Go (wrong arity and order).
+
+**Provenance:** The false derivation originates in the Placement Note's "Derivation from the outerassembler API (assemble.go)" block, which presented:
+
+```
+// Assemble(env Envelope, cf halfchannel.ChannelFrame) ([]byte, error)
+```
+
+This signature never existed. The story inherited it for both Q6 binding and AC-001 PC-2 without independent verification against the actual source.
+
+**Sibling relationship:** This is the same root-cause class as F-P1-001 (import-set drift inherited from placement note). The placement note is the specification authority; when the placement note contains a false derivation, both the note and any story sections citing it must be corrected at the source.
+
+**Adjudication — MED upheld (not down-adjudicated to LOW):** Consumer story S-BL.PE-RECEIVE-LOOP will re-touch this call via forward obligation FO-PE-LOOP-001. The normative contract must accurately describe the code that satisfies it before S-BL.PE-RECEIVE-LOOP is dispatched. Down-adjudication to LOW would leave a wrong call signature in the spec that a future implementer would follow.
+
+**Remediation:**
+
+*Story (v1.25):*
+- Q6 binding corrected: `outerassembler.Assemble(env, cf)` → `Assemble(cf, sackBitmap, env)` with parenthetical noting `sackBitmap` is a zero `[SACKBitmapSize]byte` (bootstrap frame carries no SACK), matching the delivered call in `dialLoop` in `internal/upstreamdial/connector.go`.
+- AC-001 PC-2 corrected: same `Assemble(cf, sackBitmap, env)` form replacing the false two-argument reversal.
+- Changelog row v1.25 added.
+
+*Placement note (v1.5):*
+- "Derivation from the outerassembler API (assemble.go)" block corrected: false signature replaced with the real signature `Assemble(cf halfchannel.ChannelFrame, sackBitmap [SACKBitmapSize]byte, env Envelope) ([]byte, error)`.
+- Inline correction marker added noting the prior false form and this correction.
+- "Connection established" definition list step 2 corrected to `Assemble(cf, sackBitmap, env)`.
+- Changelog row v1.5 added.
+
+**P27 verification results:**
+- Co-reference sweep: two live `Assemble(` occurrences pre-fix (Q6 binding, AC-001 PC-2) both corrected. New changelog rows contain the corrected form as historical record. No other story sections carry the old form.
+- Code unchanged: no code commits. `internal/upstreamdial/connector.go` delivered call is already `Assemble(cf, sackBitmap, env)` — always was.
+- Placement note: false derivation corrected at source; old form preserved only in changelog as `~~...~~` historical record.
+
+**Cycle ledger:** 27 passes, 37 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1), zero open. Streak 0/3.
+
+**Awaiting:** adversary pass 28 @ 849e095 (streak 0/3)
