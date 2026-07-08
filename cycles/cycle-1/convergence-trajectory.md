@@ -1243,8 +1243,9 @@ The overage of ~10 tests above the upper bound was driven by adversarial-remedia
 | Pass | Code HEAD | Findings | Severity | Streak | Remediation |
 |------|-----------|----------|----------|--------|-------------|
 | 27 | 849e095 | 1 | MED [doc-drift] | 0/3 | story v1.25 + placement note v1.5 (doc-only, code HEAD unchanged) |
+| 28 | 849e095 | 1 | LOW [doc-drift] | 0/3 | placement note v1.6 only (story + code unchanged) |
 
-**Trajectory shorthand (P1–P27):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1
+**Trajectory shorthand (P1–P28):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1
 
 ### Finding F-P27-001 MED [doc-drift]
 
@@ -1289,3 +1290,40 @@ This signature never existed. The story inherited it for both Q6 binding and AC-
 **Cycle ledger:** 27 passes, 37 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1), zero open. Streak 0/3.
 
 **Awaiting:** adversary pass 28 @ 849e095 (streak 0/3)
+
+---
+
+## Pass 28 — HAS_FINDINGS @ 849e095 (streak 0/3)
+
+**Date:** 2026-07-08
+
+| Pass | Code HEAD | Findings | Severity | Streak | Remediation |
+|------|-----------|----------|----------|--------|-------------|
+| 28 | 849e095 | 1 | LOW [doc-drift] | 0/3 | placement note v1.6 only (story + code unchanged) |
+
+### Finding F-P28-001 LOW [doc-drift]
+
+**What:** Placement Note §Q6 "What the connect-half sends" narrative cited phantom symbol `` `FrameTypeControl` `` (0 repo hits). The real constant is `frame.FrameTypeCtl` (0x03). The `halfchannel` package aliases only `FrameTypeData` and `FrameTypeEmptyTick` — `FrameTypeControl` was never defined anywhere in the repo.
+
+**Location:** Single occurrence in the Q6 narrative, two subsections below the F-P27-001 fix (within the same "What the connect-half sends" section). The F-P27-001 remediation fixed the Assemble call-signature in the "Derivation" block and the "Connection established" step but did not sweep the Q6 narrative prose, leaving this adjacent phantom.
+
+**Root cause:** Partial-sweep propagation gap. F-P27-001's remediation swept the Assemble-signature occurrences but did not cover the entire Q6 section for all symbol citations. The F-P26-001 deferral framing (`FrameTypePEConnect`) was present and correctly marked deferred. `FrameTypeControl` was a separate phantom immediately adjacent, invisible to a targeted Assemble-signature sweep.
+
+**Consumer context:** Forward obligation FO-PE-LOOP-001 in S-BL.PE-RECEIVE-LOOP references Q6 for the ChannelFrame construction. The cited constant must be correct before S-BL.PE-RECEIVE-LOOP is dispatched.
+
+**Story/code clean:** Story artifact already uses correct `frame.FrameTypeCtl` in relevant sections and carries zero occurrences of `FrameTypeControl`. Code HEAD 849e095 unchanged throughout.
+
+**Remediation (placement note v1.6):**
+- Q6 narrative `FrameTypeControl` corrected to `frame.FrameTypeCtl` with F-P26-001 deferral framing aligned (the correction acknowledges that a distinct PE-specific frame type is deferred per F-P26-001; `frame.FrameTypeCtl` is the _current_ correct constant for the generic control-frame slot, distinct from the placeholder `FrameTypeData`).
+- Inline correction marker added.
+- **FULL backtick-symbol sweep of entire placement note performed** (~45 backtick-delimited symbols dispositioned):
+  - All live: correct and present in repo.
+  - `FrameTypePEConnect`: explicitly-deferred per F-P26-001 — KEEP.
+  - `upstreamRoutersAsSet`: appears only in changelog historical row (F-P1-007 deletion) — KEEP as historical record.
+  - `FrameTypeControl`: phantom — CORRECTED to `frame.FrameTypeCtl`.
+- Changelog row v1.6 added.
+- **Class closed:** This is the third placement-note-seeded defect in the cycle (F-P1-001 import-set, F-P27-001 signature, F-P28-001 phantom). After the full-file symbol sweep, no further phantom or wrong-signature symbols remain in the placement note. File-granularity sweep doctrine applied to this surface.
+
+**Cycle ledger:** 28 passes, 38 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1), zero open. Streak 0/3.
+
+**Awaiting:** adversary pass 29 @ 849e095 (streak 0/3)
