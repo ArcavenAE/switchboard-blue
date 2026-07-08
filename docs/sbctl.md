@@ -8,6 +8,32 @@ This reference describes the CLI as it exists in **v0.1.0-rc.1**.
 Verbs that are spec-defined but not yet wired are called out with a
 `PENDING` marker at the end of their entry.
 
+Every invocation follows the same shape — pick a daemon (`--target`),
+prove who you are (`--key`), issue one verb, read one answer:
+
+```mermaid
+sequenceDiagram
+    participant O as sbctl<br/>(operator)
+    participant D as daemon mgmt socket<br/>(unix path or host:port)
+
+    O->>D: connect (--target)
+    D->>O: nonce
+    O->>D: Ed25519 signature (--key)
+    alt authenticated
+        D-->>O: session open
+        O->>D: one RPC (e.g. router.status)
+        D-->>O: result → stdout (text or --json envelope)
+    else unknown key
+        D-->>O: E-ADM-010 → stderr, exit 1
+    end
+```
+
+Which verbs a daemon answers depends on its mode: `admin.*` lives only
+on control daemons, `console.*`/`sessions.*` on consoles, and the path
+plane (`paths`, `router status/metrics`) everywhere a router or node
+runs (ADR-004 role exclusion). Asking the wrong daemon yields
+`unknown command`, not a denial.
+
 ---
 
 ## Contents
