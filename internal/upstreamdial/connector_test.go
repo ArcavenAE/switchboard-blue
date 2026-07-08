@@ -1159,8 +1159,9 @@ func TestConnector_ReloadAddrs_StormNoDeadlock(t *testing.T) {
 
 	// Use an unreachable address so dialLoop doesn't make real TCP connections,
 	// but the reconcile goroutine MUST be running so it races the addrsCh drain.
-	// 127.0.0.1:1 is a reserved port that will be refused instantly on most OSes,
-	// keeping dialLoop in the backoff wait and alive throughout the storm.
+	// Probe-and-close (F-P1-005): bind an ephemeral loopback port then close it
+	// so the address is valid-format but not listening → dials refused instantly
+	// → dialLoop stays in the backoff wait and alive throughout the storm.
 	ln, addr := newLoopbackListener(t)
 	_ = ln.Close() // close immediately: address exists but is not listening
 
