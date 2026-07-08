@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.7"
+version: "2.8"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-07T13:00:00 # v2.8 — F-P7-002 (adversary pass-7): position-23 (internal/testenv) import set corrected from {admission, drain, frame, session} to {admission, drain, frame, outerassembler, session, upstreamdial}. S-7.04-FU-PE-CONNECTOR added outerassembler (pos 8) + upstreamdial (pos 19) edges; both below 23, no back-edges, edges are lawful. Verified via import block at story branch HEAD 51ecd44. Pending-marker updated to reflect 51ecd44 (pre-merge); previously machine-derived at 62e38d3. §6.6.2 forbidden-edges note for upstreamdial updated: internal/testenv (_test-only composition root) added to the set of permitted importers alongside cmd/switchboard and _test files.
   - 2026-07-07T12:00:00 # v2.7 — F-P1-001 (adversary pass-1): position-19 import set corrected from {frame, outerassembler} to {halfchannel, outerassembler}; halfchannel is at DAG position 5 (pure-core), so the edge is acyclic and lawful. frame is not imported directly — reachable transitively through outerassembler and halfchannel. §6.6.2 forbidden-edges cycle-freeness note updated: allowed imports are at positions 5 and 8 (not 2 and 8). PROSPECTIVE marker retained; verified against cee8e8b (story/s-7.04-fu-pe-connector HEAD at time of adversary pass adjudication); final machine-verification at merge.
   - 2026-07-07T00:00:00 # v2.6 — internal/upstreamdial registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19-22 renumbered 20-23. Import set PROSPECTIVE pending first merge.
   - 2026-07-06T13:00:00 # v2.5 — S-BL.TESTENV registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: go list -f '{{.Imports}}' ./internal/testenv/ at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files.
@@ -323,7 +324,7 @@ strict — position N may import packages at positions 1..N-1 only.
 | 20 | `internal/mgmt` | {metrics} | boundary (effectful — socket I/O, crypto) | Wave 5 (S-W5.01); see ARCH-12 |
 | 21 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
 | 22 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
-| 23 | `internal/testenv` | {admission, drain, frame, session} | test helper (composition root — importable by _test files only) | steady-state (S-BL.TESTENV, PR #110, 62e38d3) |
+| 23 | `internal/testenv` | {admission, drain, frame, outerassembler, session, upstreamdial} (updated at story branch 51ecd44 pre-merge — S-7.04-FU-PE-CONNECTOR added outerassembler + upstreamdial edges; final machine-verification at merge; previously machine-derived at 62e38d3) | test helper (composition root — importable by _test files only) | steady-state (S-BL.TESTENV, PR #110, 62e38d3) |
 
 This table is authoritative for the develop branch. Any `internal/` package not
 listed above does NOT exist in the codebase.
@@ -435,11 +436,14 @@ here first.
 - `internal/upstreamdial` MUST NOT import `internal/drain`, `internal/routing`,
   `internal/testenv`, or any package at positions 20–23. Allowed imports are
   `{halfchannel, outerassembler}` only (positions 5 and 8). Nothing may import
-  `internal/upstreamdial` except `cmd/switchboard` and `_test` files — it is an
-  effectful leaf in the connectivity layer. Cycle-freeness: all allowed imports
-  (halfchannel pos 5, outerassembler pos 8) are below position 19; no back-edges.
-  (Per placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement;
-  import set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001.)
+  `internal/upstreamdial` except `cmd/switchboard`, `internal/testenv` (the _test-only
+  composition root at position 23), and `_test` files — it is an effectful leaf in
+  the connectivity layer. Cycle-freeness: all allowed imports (halfchannel pos 5,
+  outerassembler pos 8) are below position 19; no back-edges. `internal/testenv` at
+  position 23 importing upstreamdial at position 19 is lawful (23 > 19). (Per
+  placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement; import
+  set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001;
+  permitted-importers updated per adversary pass-7 F-P7-002.)
 - `internal/session` MUST NOT import `internal/routing`.
   Session-level authorization state is managed within `internal/session` itself;
   routing is a peer layer, not a dependency.
@@ -473,6 +477,7 @@ here first.
 | 2.1 | 2026-06-27 | (MEDIUM) §6.5.2 import set: `internal/frame` added (OuterHeader carrier in `startFramesBridge`; DAG position 2 leaf; no forbidden edge). (HIGH-B) §6.5.1 obligation 4 note: `runAccess` injection seam — split into `runAccess` + `runAccessWithConnector(connectorIface)`; tests inject `fakeConnector` for PC-2/PC-2.6 end-to-end. (EC-005) §6.5.2 note: "CI enforces structurally" wording overstated; accepted Wave-4 follow-up. Per S-W3.04 adversarial convergence pass-2. |
 | 2.2 | 2026-06-27 | Wave-3 wave-level adversarial pass-1 C-1/I-1 adjudication. C-1 TRACKED-DEFER: `routing.WithFailureCounter` wiring deferred to the future network-ingress story; TRACKED-DEFER note added after obligation table mandating that E-ADM-016 and E-ADM-017 MUST be wired together when `RouteFrame` enters the live data path; orchestrator MUST register a follow-up story/STATE drift item. I-1 wg-join: obligations 3 and 6 updated to require `startSweepTicker` and `startFramesDroppedTicker` to accept `*sync.WaitGroup` and track the goroutine with `wg.Add(1)` / `defer wg.Done()` so BC-2.04.007 PC-2 postcon-6 no-goroutine-leak assertion is deterministic. |
 | 2.3 | 2026-06-27 | C-1 RESOLVED: `routing.WithFailureCounter(fc)` (threshold=5, window=60s) wired in `buildRouter` alongside `routing.WithLogger` — PR #20 (commit 418de54). Partial-wiring concern closed; BC-2.05.008 PC-5 and BC-2.05.005 PC-3 both satisfied. OBS-3 resolved. Only remaining deferral is the network-ingress listener (S-BL.NI). |
+| 2.8 | 2026-07-07 | F-P7-002 (adversary pass-7, LOW [process-gap]): position-23 (`internal/testenv`) import set corrected from `{admission, drain, frame, session}` to `{admission, drain, frame, outerassembler, session, upstreamdial}`. S-7.04-FU-PE-CONNECTOR added outerassembler (pos 8) and upstreamdial (pos 19) as testenv imports; both are below position 23 — edges are lawful and acyclic. Pending-marker updated to 51ecd44 (story branch HEAD, pre-merge). §6.6.2 upstreamdial forbidden-edges note updated: `internal/testenv` added to the set of permitted importers alongside `cmd/switchboard` and `_test` files (testenv imports upstreamdial at pos 19 < 23 — lawful). Renumber-neighbor blast-radius class: story updated upstreamdial (pos 19) but not the neighbor row at pos 23 that was mutated by the same story's imports. |
 | 2.7 | 2026-07-07 | F-P1-001 (adversary pass-1, HIGH): position-19 import set corrected from `{frame, outerassembler}` to `{halfchannel, outerassembler}`. Implementation at cee8e8b imports `halfchannel` directly (ChannelFrame, FrameTypeData, FrameTypeEmptyTick); `frame` is not imported directly. halfchannel is DAG position 5 (pure-core); edge is acyclic and lawful. §6.6.2 forbidden-edges cycle-freeness note updated to "positions 5 and 8" (was "positions 2 and 8"). PROSPECTIVE marker retained with alignment note. |
 | 2.6 | 2026-07-07 | `internal/upstreamdial` registered at position 19 per S-7.04-FU-PE-CONNECTOR placement note Q4 (pre-code registration, binding ruling); positions 19–22 renumbered 20–23. Import set `{frame, outerassembler}` PROSPECTIVE pending first merge. Deviation from v2.5 same-burst-as-merge precedent is explicitly authorized by placement note Q4 binding ruling. |
 | 2.5 | 2026-07-06 | `internal/testenv` registered at position 22 per §6.4 protocol (same-burst-as-merge registration — closes the F-005 gap class at the source). Import set machine-derived: `go list -f '{{.Imports}}' ./internal/testenv/` at 62e38d3 → {admission, drain, frame, session}. Constraint: nothing imports testenv except _test files. |

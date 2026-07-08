@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-pe-connector-adversarial-pass-7-pending
+phase_step: steady-state-pe-connector-adversarial-pass-8-pending
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -33,10 +33,10 @@ develop_head: 950285c
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 7 @ 51ecd44 (streak 0/3)
+awaiting: adversary pass 8 @ 49c9370 (streak 0/3)
 historical_cycles: []
-timestamp: 2026-07-08T12:00:00Z
-last_update: 2026-07-08
+timestamp: 2026-07-07T00:00:00Z
+last_update: 2026-07-07
 ---
 
 # Switchboard Factory State
@@ -61,11 +61,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-07 | **PE-CONNECTOR adversary P7 remediated @ 49c9370 + ARCH-08 v2.8 — 2 LOW [process-gap] renumber-neighbor doc drift swept; zero code defects; P1-P6 holding; pass 8 next** | completed | Pass-7: F-P7-001 LOW [process-gap] — testenv.go self-doc position 22→23 (both lines); DAG renumber blast radius on neighbor package testenv; worktree-wide stale-position grep clean (all other position refs correct); 1 signed comment-only commit @ 49c9370. F-P7-002 LOW [process-gap] — ARCH-08 position-23 import row trued to 6-package set {admission, drain, frame, outerassembler, session, upstreamdial} with pre-merge marker; §6.6.2 upstreamdial permitted-importers updated to include testenv (ARCH-08 v2.8). New angle: renumber-neighbor blast radius — third doc-straggler variant after P3-prose/P6-comment; lowest-impact class. Zero code-correctness defects across P6-P7. All P1-P6 fixes verified holding (ReloadAddrs liveness re-derived by hand; EC-004 polarity, backoff pins, Stop idempotency confirmed). STORY-INDEX v4.14→v4.15. Streak 0/3. Awaiting: adversary pass 8 @ 49c9370. |
 | 2026-07-08 | **PE-CONNECTOR adversary P6 remediated @ 51ecd44 — 2 LOW doc/ledger [P5-sweep residue] fixed; VP-037/038 v1.3 anchors advanced to 689f96b; P1-P5 mutation-verified; pass 7 next** | completed | Pass-6: F-P6-001 LOW doc (re-introduction vector) — addrsCh field comment in internal/upstreamdial still prescribed the pre-P5 blocking drain pattern; the one location the P5 sweep missed; swept @ 51ecd44 (comment-only, signed). F-P6-002 LOW [process-gap] — VP-037/VP-038 evidence anchors stale at cee8e8b (storm-no-deadlock test added post-P5 but VP rows not advanced) → v1.3 rows advance anchor to 689f96b. Full-worktree straggler grep clean — 2 test-comment hits confirmed historical/descriptive (inside regression test), not prescriptive. P5 storm fix mutation-verified holding: watchdog fired at exactly 10.00s on restored blocking drain (pre-fix). All P1-P5 fixes confirmed at HEAD 51ecd44. Novelty LOW/decaying: trend 7→3→3→1→1→2-LOW-doc. Zero code-correctness defects. STORY-INDEX v4.13→v4.14. Streak 0/3. Awaiting: adversary pass 7 @ 51ecd44. |
 | 2026-07-08 | **PE-CONNECTOR adversary P5 remediated @ 689f96b — 1 MED liveness [ReloadAddrs permanent-deadlock under reader-drain race, Q3 prescribed-pattern defect]; all P1-P4 fixes re-verified; story v1.9, note v1.4** | completed | Pass-5: F-P5-001 MED liveness — ReloadAddrs contained a permanent runRouter deadlock (blocking inner receive inside the select Q3 prescribed; under reader-drain race the inner receive stalls the goroutine forever). ROOT CAUSE design-level: Q3 v1.0-v1.3 prescribed the defective drop-oldest pattern; code implemented it faithfully; escaped 4 prior passes because it superficially resembles the textbook non-blocking coalesce. Fix @ 689f96b: ReloadAddrs rewritten fast-path (discard stale pending → non-blocking drain → non-blocking resend); TestConnector_ReloadAddrs_StormNoDeadlock added (200k-call storm, live reconcile goroutine, 10s watchdog; stash-verified wedging pre-fix [10.00s FAIL], 0.10s green post-fix); -race -count=3 clean. Erratum note v1.4 + story v1.9 corrected Concurrency Contract defective-pattern quote to corrected three-select form + StormNoDeadlock test row + FCL row 1 Post-P5 prose. P1-P4 fixes re-verified holding. Finding trend 7→3→3→1→1 but P5's was cycle's only permanent-liveness defect — strict gate vindicated. STORY-INDEX v4.12→v4.13. Streak 0/3. Awaiting: adversary pass 6 @ 689f96b. |
 | 2026-07-08 | **PE-CONNECTOR adversary P4 remediated @ 40774cf — 1 LOW behavioral [EC-004 graceful-Stop polarity]; all P1/P2/P3 fixes re-verified; story v1.8** | completed | Pass-4: F-P4-001 LOW behavioral (spurious mode=E on graceful Stop [ctx guard asymmetry vs EC-001, empirically reproduced]) → EC-004 emission guarded with && ctx.Err() == nil, symmetric with EC-001; regression test TestConnector_NoEC004OnGracefulStop added; -race -count=3 clean. All prior fixes mutation-verified holding. Novelty at noise floor: 7→3→3→1 finding trend. Code 614d9c2 → 40774cf. STORY-INDEX v4.11→v4.12. Streak 0/3. |
 | 2026-07-08 | **PE-CONNECTOR adversary P3 remediated @ 614d9c2 — 1 MED mutation-survivor + 2 LOW [process-gap]; all P1/P2 fixes re-verified mutation-tested; story v1.7** | completed | Pass-3: F-P3-001 MED mutation-survivor pinned (testKeepalive base 1s, window [700,1300]ms); F-P3-002 LOW [process-gap] import-set prose swept 3 locations; F-P3-003 LOW [process-gap] SetConnector doc present-tense. Code 06e6799 → 614d9c2. STORY-INDEX v4.10→v4.11. |
-| 2026-07-07 | **PE-CONNECTOR adversary P2 remediated @ 06e6799 — 2 MED + 1 LOW [process-gap] + 3 OBS; P1 fixes mutation-verified; story v1.6, note v1.3** | completed | Pass-2: F-P2-001 MED double-Stop panic → sync.Once fix + 2 regression tests; F-P2-002 MED Q5/Q7 backoff-base contradiction → Q7-prevails ruling + operativeBase extraction; F-P2-003 LOW VP-038 lock-flip convention accepted. Code b789436 → 06e6799. STORY-INDEX v4.09→v4.10. |
 
 ## Wave 6 Story Status
 
