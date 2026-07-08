@@ -940,3 +940,34 @@ All seven standing bars green from fresh context:
 **Cycle ledger:** 10 passes, 22 findings (7/3/3/1/1/2/2/1/1/1), all fixed/adjudicated, zero open. Code lane unchanged at 49c9370 (six consecutive passes with zero code-correctness defects).
 
 **Awaiting:** adversary pass 11 @ 49c9370 (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 19 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [process-gap]
+
+**Code HEAD:** 7c6d841 (unchanged — story-only fix)
+
+### Finding F-P19-001 LOW [process-gap]
+
+**What:** Four stale BARE-FORM line citations in story FCL row 1 — `:269`, `:337`, `:346-350`, `:284-287` — all shifted by the P14 ctx-first refactor (670c64b moved call sites in `router_config.go`). These survived passes 12 through 18 because P12's "line-citation class closed" sweep keyed on the prefixed orthography (`file.go:NNN`) only; the bare form (`:NNN`, filename implied by table context) was invisible to that sweep.
+
+**Root cause — orthography gap:** P12 issued a class-closing claim ("line-citation class structurally closed") based on sweeping the `file.go:NNN` spelling. The bare `:NNN` form is a second spelling of the same class. A class-closure claim must enumerate BOTH spellings and sweep each. This is the sixth shape in the doc-vs-code defect family; the first found in a spec-artifact FCL row (as opposed to code comments or story prose).
+
+**Remediation:** Story v1.18 (story-only fix, code HEAD unchanged at 7c6d841):
+- Four bare-form citations in FCL row 1 converted to stable mechanism anchors (no fresh line numbers).
+- BOTH-orthography sweep across the entire story: 6 additional live citations converted to symbol/mechanism anchors (`testenv.go:302`/`:326` retired-seam refs ×2 locations, `router_config.go:81`/`:76`).
+- 2 legitimately KEPT: `testenv.go:956` SHA-pinned to 950285c (P12-adjudicated historical pin); `on_frame_arrival.go:252` P12-adjudicated pin anchor.
+- Changelog rows preserved (historical state records).
+
+**Closure verification:** Both orthography classes now closed. Residual verified: zero live line citations outside SHA-pinned/historical rows across the full story.
+
+**P19 verification results:**
+- All seven standing bars green (full CI gate, census re-derivation, absence-assertion keys, symbol resolution, claim→code in blast radius, double-liveness, POL-002 sync).
+- Code surface clean: P19 adversary verified all code-lane fixes holding.
+- Code HEAD unchanged at 7c6d841. Story HEAD now v1.18.
+
+**Cycle ledger:** 19 passes, 30 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1), all fixed/adjudicated, zero open. Streak 1/3 → 0/3 (reset).
+
+**Awaiting:** adversary pass 20 @ 7c6d841 (streak 0/3)
