@@ -615,6 +615,39 @@ Story body cites of upstream-artifact versions are stale after upstream version 
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 14 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [doc-drift]
+
+**Code HEAD:** 670c64b (advanced from 0a350d6 — two remediation commits required)
+
+### Finding F-P14-001 LOW [doc-drift]
+
+**What:** runRouter's doc header in `mgmt_wire.go` still declared the PE connector "deferred to a follow-on story" while this story's body actually wires it. Three false ships-later claims were inherited from the develop base. This is the first finding in the cycle inherited from the base rather than introduced by a story or its remediations. The semantic-accuracy axis is orthogonal to all prior bars: no line citations were wrong, all symbols resolve, but the prose claims were factually false.
+
+**Novel failure axis — semantic accuracy of prose claims:** Passes P1–P13 verified citation correctness (symbols resolve, line numbers accurate, version pins current) and absence-assertion fidelity. None examined whether the prose claims about shipped/deferred state were accurate given what this story actually delivers. A doc header authored correctly at base ("PE connector ships in a follow-on story") became false the moment this story wired the connector.
+
+**Remediation:**
+- 34e51d6: `#DEFERRED` comment block split — PE-CONNECTOR claim changed to `#SHIPPED`, DRAIN-WIRE deferral preserved. Symbol-resolution bar applied.
+- 670c64b (opportunistic): go.md rule-7 violation fixed — `dialLoop` + 4 `testenv` exports reordered `ctx`-first; 33 call sites across 11 files updated. PERIMETER EXPANDS 7 → 14 files (7 VP e2e test files in other packages received mechanical call-site updates). Full repo suite green, full CI gate cleared after both commits.
+
+**Story sync → v1.14:** FCL row 13 added for perimeter expansion; changelog row covering both commits; co-reference sweep fixed 2 live story occurrences of old `NewWithRouters` arg order.
+
+**P14 verification results:**
+- Full CI gate: golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs.
+- Census re-derivation: SET diff vs toolchain = ∅ (no new unregistered packages).
+- Absence-assertion audit: CLEAN — `TestScanForLine_DetectsEFWD001ProductionEmission` (P11 fix) still passes.
+- Symbol-resolution bar: all cited symbols verified.
+- POL-002 sync: PASS — story v1.14 registered in STORY-INDEX v4.20→v4.21.
+- All P1-P13 fixes verified holding.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Trajectory shorthand (P1–P14):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1
+
+**Cycle ledger:** 14 passes, 26 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1), all fixed/adjudicated, zero open. Streak 0/3. Awaiting: adversary pass 15 @ 670c64b.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)

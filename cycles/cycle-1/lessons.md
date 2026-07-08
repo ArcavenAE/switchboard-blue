@@ -120,5 +120,14 @@ traces_to: STATE.md
 
 ## PE-CONNECTOR Adversarial Cycle — Lesson #8 (2026-07-07)
 
+12. **Deferral/shipped claims in code doc headers must be re-adjudicated by the story that changes their truth value.** [codified] A doc header authored accurately at base ("PE connector ships in a follow-on story") became false the moment this story wired the connector. Passes P1–P13 applied citation/symbol/census bars that could not catch it because the claims were semantically false rather than referentially broken — all cited symbols resolved, all line numbers were accurate, the prose was simply wrong. When a story ships something a comment declares deferred, the wiring commit must update the claim in the same change. This is a new bar orthogonal to all prior adversarial bars: "does the prose accurately describe the current state of the codebase after this story lands?"
+   _Discovered: adversary pass 14, 2026-07-08. mgmt_wire.go runRouter doc header inherited from base; corrected at 34e51d6. Codified immediately._
+
+| Lesson | Proposed Policy | Scope | Status |
+|--------|----------------|-------|--------|
+| 12 | Deferral/shipped claims in doc headers must be re-adjudicated when the story changes their truth value; wiring commit must update the claim in the same change | Adversarial review checklist for doc headers; remediation checklist | [codified] |
+
+---
+
 8. **Symbol deletion/rename remediations must include a mechanical same-artifact co-reference grep with per-hit adjudication (live prose = fix; struck-through/changelog = preserve) at remediation time.** [codified] One helper deletion (F-P1-007, `upstreamRoutersAsSet`) produced four straggler findings across passes 7-10 because each fix swept only its primary location. Pass-7 swept ARCH-08 §6.5 and testenv self-doc. Pass-8 swept ARCH-08 arithmetic and content. Pass-9 swept ARCH-08 census membership via toolchain re-derivation. Pass-10 found three live story references — AC-001 postcondition 5 citing the helper as normative mechanism, the test-mapping row naming it as unit-under-test, and the FO-1 resolution column citing it in present tense — all in the same story file that was modified in P1 and P3. Root cause: each remediation dispatch named a specific defect location; none included an instruction to grep the entire artifact (or all artifacts mentioning the symbol) for co-references. The sweep is now mandatory: when dispatching a symbol-deletion or rename remediation, include a step: "grep the full artifact (and sibling artifacts) for every variant of the symbol name; adjudicate each hit as live-prose (fix), historical-record/changelog (preserve), or struck-through (preserve). The sweep converts O(passes) straggler discovery into O(1)."
    _Discovered: adversary pass 10, 2026-07-07. Triggered by F-P1-007 deletion of `upstreamRoutersAsSet` helper; four stragglers across P7/P8/P9/P10. Codified immediately._
