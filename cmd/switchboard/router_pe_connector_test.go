@@ -561,8 +561,10 @@ func TestE2E_EtoPEGraduationByConfigChange(t *testing.T) {
 	svtnBefore := eRouter.SVTNID()
 
 	// Restart into PE mode.
-	// After AC-006: calls connector.ReloadAddrs() + polls connector.Mode() == ModePE.
-	// Stub: sets r.mode=ModePE unconditionally, dials nothing.
+	// Tears down any existing connector and builds a fresh live-dialing
+	// upstreamdial.Connector against peAddr, polling up to 3s for ModePE
+	// (AC-006; teardown-recreate per the testenv Restart contract —
+	// ReloadAddrs reuse belongs to the production SIGHUP seam).
 	eRouter.Restart(t, testenv.RouterConfig{
 		UpstreamRouters: []string{peAddr},
 	})
