@@ -726,6 +726,39 @@ The symbol-resolution bar passes (grep finds `ReloadAddrs`). Only the claim→co
 
 ---
 
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 17 (2026-07-08)
+
+**Verdict:** HAS_FINDINGS — 1 LOW [semantic-accuracy]
+
+**Code HEAD:** 7c6d841 (advanced from 7daed41 — doc-only remediation commit)
+
+### Finding F-P17-001 LOW [semantic-accuracy]
+
+**What:** A stale red-gate-era comment above `eRouter.Restart` in `TestE2E_EtoPEGraduationByConfigChange` contained two false claims: (1) "After AC-006: calls `connector.ReloadAddrs()`" — Restart unconditionally tears down any existing connector (Stop) and recreates via `upstreamdial.New`; it never calls `ReloadAddrs`. The Restart-teardown vs SIGHUP-seam-ReloadAddrs division was ratified in P16's claim→code mapping for `testenv.go Restart`. (2) "Stub: sets `r.mode=ModePE` unconditionally, dials nothing." — the stub was retired in this story's TDD implementation commits. The comment was authored at the red-suite commit d3bac4c (when the stub was live and the dial loop not yet wired) and was never reconciled after the green-gate implementation pass. Fifth instance of the comment-vs-code-path family; first instance in a test-CALLER location (all prior instances were in the method's OWN doc or in seam-wiring comments). Sub-shape: red-gate provenance (the "Stub:" prefix pattern).
+
+**Novel failure axis — red-gate test suites annotate expected post-implementation behavior; green-gate reconciles assertions but not caller-side comments.** When the implementation commits replace stubs and wire live logic, per-method doc comments and test body comments directly on the method under test are swept — but the caller's side of the call site carries its own "after this story lands" annotation that can survive unremediated. The `TestE2E_EtoPEGraduationByConfigChange` comment was a forward-looking "after AC-006" annotation that documented what the test would prove; it was accurate at red-gate and became false at green-gate without producing any test failure.
+
+**Remediation at commit 7c6d841 (doc-only):**
+- Comment rewritten: "Tears down any existing connector and builds a fresh live-dialing `upstreamdial.Connector` against `peAddr`, polling up to 3s for ModePE (AC-006; teardown-recreate per the testenv Restart contract — ReloadAddrs reuse belongs to the production SIGHUP seam)."
+- 4-row claim→code mapping verified against `testenv.go` `Restart` body.
+- Full CI gate cleared.
+
+**CLASS CLOSED — red-gate-provenance sub-shape confined and retired:** Orchestrator swept `// Stub:` and `// After AC-` across all 7 core perimeter files (`connector.go`, `connector_test.go`, `mgmt_wire.go`, `router_config.go`, `testenv.go`, `router_sighup_test.go`, `router_pe_connector_test.go`). These two lines in `TestE2E_EtoPEGraduationByConfigChange` were the only hits. The red-gate-provenance comment class is confined to a single test and is now retired.
+
+**P17 verification results:**
+- P16 fix holds: `Restart` doc comment accurately describes teardown-recreate (claim→code mapping spot-checked at 7c6d841; `ReloadAddrs` call absent from `Restart` body, confirmed).
+- All seven standing bars PASS.
+- Full CI gate green (golangci-lint 0 issues, go vet clean, race tests green, gofumpt no diffs).
+- Story synced → v1.17: changelog row only; co-reference sweep confirmed story prose already clean (no "Stub:" or "After AC-006" residuals in story body).
+- POL-002 sync: PASS — story v1.17 registered in STORY-INDEX v4.23→v4.24.
+- Streak 0/3 (HAS_FINDINGS resets).
+
+**Trajectory shorthand (P1–P17):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1
+
+**Cycle ledger:** 17 passes, 29 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1), all fixed/adjudicated, zero open. Streak 0/3. Awaiting: adversary pass 18 @ 7c6d841.
+
+---
+
 ## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 9 (2026-07-07)
 
 **Verdict:** HAS_FINDINGS — streak RESET (P8 class-closing claim falsified)
