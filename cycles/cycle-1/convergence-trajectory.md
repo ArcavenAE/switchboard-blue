@@ -1485,3 +1485,95 @@ Full mapping of all AC acceptance criteria to test functions verified. No AC has
 - **Streak: 2/3.**
 
 **Awaiting:** adversary pass 32 @ 6b6f0cf (streak 2/3 — convergence pass)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 32 (2026-07-08) — CONVERGENCE PASS
+
+**Verdict:** NO_FINDINGS — streak 2/3 → 3/3 — **BC-5.39.001 Step 4.5 CONVERGED**
+
+**Code HEAD:** 6b6f0cf (unchanged — zero code or story changes this pass)
+
+### Finding Progression (P32)
+
+| Pass | Code HEAD | Findings | Severity | Streak | Notes |
+|------|-----------|----------|----------|--------|-------|
+| 32 | 6b6f0cf | 0 | — | 3/3 CONVERGED | Convergence pass; prior remediations spot-checked; two false positives dismissed |
+
+**Full trajectory shorthand (P1–P32):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0/0/0
+
+### Convergence-Pass Protocol
+
+Prior remediation spot-check (three findings sampled):
+
+| Finding | Sampled at P32 | Verdict |
+|---------|----------------|---------|
+| F-P24-001 (production comment relative locator → prose anchor, `connector.go`) | Prose anchor present; relative locator absent across file | HOLDING |
+| F-P13-001 (phantom `buildAndWireConnector` citation in `router_sighup_test.go`) | Symbol `buildAndWireConnector` = 0 grep hits; replacement stable-anchor forms present | HOLDING |
+| F-P15-001 (mutation-pin inverse-delegation assertion in `TestRunRouter_PE_RouterHandleModeReflectsLiveState`) | Mutation of `fakeConnE` return value still fails the assertion (pin-test still RED on flip); double-liveness bar holds | HOLDING |
+
+**F-P29 fix independently re-derived (fresh context):** Adversary traced `dialLoop`'s `Add(-1)` return-value ownership from first principles. Goroutine whose `Add(-1)` returns exactly 0 uniquely owns the ≥1→0 transition; all other concurrent decrements return negative values; EC-004 emitted exactly once per ≥1→0 event. Verdict: structurally sound; no prior pass rationale needed to reach this conclusion.
+
+**Two false-positive candidates investigated and dismissed:**
+
+1. **Out-of-perimeter SIGHUP evidence-doc stale signature** — An annotation in the SIGHUP-reload evidence document appeared to cite a function signature that does not match the current codebase. Investigated: this annotation belongs to the sibling story S-7.04-FU-SIGHUP-RELOAD (not PE-CONNECTOR); the PE-CONNECTOR perimeter does not include SIGHUP evidence docs. Out-of-perimeter; not a finding for this story.
+
+2. **Already-adjudicated docstring** — A docstring comment in `testenv.go` that describes the `Restart` method path was flagged as a candidate. Investigated: this was the subject of F-P16-001 (Pass 16 finding — doc comment accurately describes teardown-recreate path after P16 fix). The P16 fix is confirmed holding. Previously adjudicated; do-not-re-raise.
+
+### Outcome
+
+- **No code changes** required.
+- **No story changes** required.
+- Code HEAD unchanged at 6b6f0cf. Story unchanged at v1.26.
+- **Streak: 3/3 — BC-5.39.001 Step 4.5 PER-STORY ADVERSARIAL CONVERGENCE ACHIEVED.**
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Convergence Summary
+
+**Cycle closed:** 32 passes total (passes 1–32)
+**Code behavior changes:** concentrated P1–P17 + P29 (13 code-touching passes); stable since 6b6f0cf
+**Doc-fidelity tail:** P19–P28 (10 consecutive doc/process-gap passes, zero code changes)
+**Final finding tally:** 39 findings total, all remediated, zero open
+
+### Finding-Decay Shape
+
+`7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0/0/0`
+
+Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) → liveness defect P5 (1) → doc straggler pair P6 (2) → process-gap stragglers P7–P10 → test-fidelity trio P11–P13/P15 → doc-drift tail P14/P16–P28 → impl-defect P29 (unexpected regression late in cycle) → clean finish P30/P31/P32.
+
+### Findings by Class (39 total)
+
+| Class | Count | Description |
+|-------|-------|-------------|
+| doc-drift | 14 | Comment prose accuracy, symbol citations, placement-note false derivations, semantic-accuracy claims; perimeter-completion achieved P24 |
+| test-fidelity | 8 | Vacuous absence key P11, CI-gate errcheck P12, phantom symbol P13, orphaned fake P15, and pre-convergence test-quality findings P1/P3 |
+| process-gap | 11 | Renumber stragglers (P7/P8/P9), co-reference coverage (P10), orthography gap (P19), classification mismatch (P20), import/import-prose gaps (P3), helper-deletion co-reference (P1/P3) |
+| impl-defect | 6 | EC-004 graceful-stop polarity (P4), ReloadAddrs deadlock (P5), partial-discharge structural gap (P1), backoff contradiction (P2), Stop idempotency (P2), EC-004 concurrent-drop race (P29) |
+
+### Notable Lessons Codified During Cycle
+
+12 standing bars codified (bars 1–9 established by P18; bars 10–12 added by convergence):
+
+| # | Bar | Codified at |
+|---|-----|-------------|
+| 1 | Full CI gate (lint/vet/race/fmt) | P12 |
+| 2 | Census re-derivation (toolchain set-membership) | P9 |
+| 3 | Absence-assertion key fidelity | P11 |
+| 4 | Symbol resolution (every cited symbol grep-resolved) | P13 |
+| 5 | Claim→code mapping in blast radius | P16 |
+| 6 | Double-liveness (every test double wired must be observed, mutation-pinned) | P15 |
+| 7 | Citation-orthography (both prefixed + bare forms) | P19 |
+| 8 | Classification-consistency (all F-PNN-001 labels match ledger) | P20 |
+| 9 | POL-002 sync (story version registered in STORY-INDEX each pass) | P13 |
+| 10 | Convergence spot-check (3 prior findings sampled, re-derived, verified) | P32 |
+| 11 | False-positive adjudication (out-of-perimeter + already-adjudicated dismissal) | P32 |
+| 12 | Fresh-context re-derivation of P29 fix correctness | P32 |
+
+### Lessons Filed Upstream (vsdd-factory issues)
+
+| ID | Lesson | Filed at |
+|----|--------|----------|
+| #573 | Normative-AC symbol fidelity — wrong-signature finding (F-P27-001); existing symbol with wrong call signature; symbol-resolution bar necessary but not sufficient | P27 |
+| #574 | Placement-note derivation blocks require independent verification against actual source before story citing | P28 |
+| #575 | Concurrent-transition coverage — multi-upstream concurrent drop-to-zero is a structural blindspot for single-upstream-only EC tests | P29 |

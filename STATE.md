@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-pe-connector-adversarial-pass-29-pending
+phase_step: steady-state-pe-connector-adversarially-converged-pass-32
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -33,7 +33,7 @@ develop_head: 950285c
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: adversary pass 32 @ 6b6f0cf (streak 2/3 — convergence pass)
+awaiting: "S-7.04-FU-PE-CONNECTOR delivery tail: demo recording (Step 5, in flight) → DELIVERY doc → push → pr-manager"
 historical_cycles: []
 timestamp: 2026-07-07T00:00:00Z
 last_update: 2026-07-07
@@ -51,7 +51,7 @@ last_update: 2026-07-07
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
 | Phase 7 — Convergence | **CONVERGED** 2026-07-06 (human-approved with remediation) — fresh-context audit CONVERGENCE-CLEAN (0 critical, 11 findings ALL remediated: docs PR #107 2e0f926, ARCH b088e54, stubs ef16ed5, sweep 677380f); census zero cycle-blocking, all process-gaps dispositioned; 63/77 VPs proven + 14 justified-deferred with story anchors (S-BL.TESTENV covers 10, S-BL.BENCH 2, S-BL.DISCOVERY-WIRE 2). **CYCLE-1 CLOSED.** | evidence: cycles/cycle-1/phase-7/ |
 | Phase 6 — Formal Hardening | **COMPLETE** 2026-07-06 — gate satisfied: 63/77 VPs PROVEN (locks + cited evidence), 14 justified-deferred (6 infra-partial + 8 blocked: testenv ×6, S-BL.BENCH ×2 — per-VP justifications in changelogs); fuzzers clean (5 targets, 53M+ combined execs, 0 crashes); security scan clean (CWE-triaged); mutation sampling 11/15 + 2 gaps closed + 1 proven-dead-code. Bursts: #105 f09fe73, #106 0516f3a. | evidence: cycles/cycle-1/phase-6/ |
-| Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** — Steady-state PE-CONNECTOR: 31 passes, ...0/1/1/0/1/1/1/1/1/1/1/1/0/0, streak 2/3 |
+| Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** — Steady-state PE-CONNECTOR: **32 passes CONVERGED** (3/3 streak P30/P31/P32); 39 findings all remediated; code 6b6f0cf |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -61,7 +61,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-08 | **PE-CONNECTOR adversary P31 CLEAN @ 6b6f0cf — streak 1/3→2/3; pass 32 next (convergence pass)** | completed | Pass-31: NO_FINDINGS. 12 bars green from fresh context. Concurrency axis independently re-derived: 2-upstream simultaneous drop (Add(-1) return ownership sound), reconnect-in-window (distinct goroutines), Stop-races-genuine-loss (spec-correct), exact-tie benign. 7 ctx-first files confirmed mechanical. VP-038 lock:true / VP-037 lock:false partial-discharge cross-check correct. FO-PE-LOOP-001 correctly scoped. Test-to-AC discharge complete. Anti-finding adjudicated SYSTEMATIC-LAWFUL: story P2/5-BC/4-dep vs sprint P1/1-BC/1-dep = authoring-set vs scheduling-set (same class as sibling FU stories); do-not-re-raise. Cycle ledger: 31 passes, 39 findings, zero open. Streak 2/3. |
+| 2026-07-08 | **PE-CONNECTOR adversary P32 CLEAN @ 6b6f0cf — CONVERGED 3/3 — BC-5.39.001 Step 4.5 SATISFIED** | completed | Pass-32: NO_FINDINGS — convergence pass. Spot-checked F-P24/F-P13/F-P15 all holding. F-P29 fix re-derived from fresh context — sound. Two false positives dismissed (out-of-perimeter SIGHUP doc; already-adjudicated P16 docstring). All 9 bars green. 32 passes, 39 findings (14 doc-drift / 8 test-fidelity / 11 process-gap / 6 impl-defect), zero open. CONVERGENCE ACHIEVED. Next: demo (Step 5, in flight) → DELIVERY → PR. |
 | 2026-07-08 | **PE-CONNECTOR adversary P30 CLEAN @ 6b6f0cf — streak 0/3→1/3; P29 fix deep-reviewed correct; pass 31 next** | completed | Pass-30: NO_FINDINGS. P29 surface reviewed from fresh context: transition ownership holds under interleaved reconnect (Add(-1) return uniquely owned by the goroutine observing 0); config-removal path emits exactly one mode=E via runRouter (connector skips via ctx.Err()); stress test leak-free; concurrent-transition axis swept clean (connect-side Add(1) no single-event spec, Mode() pure Load, reconcile single-goroutine). Anti-findings: logWriter blocking-send (pre-existing P1 pattern), post-reconnect stale-log (spec-correct). Sprint-state fork reconciled (burst rows v1.71–v1.97 appended to frozen root in error; ERRATUM block added; stories/sprint-state.yaml is canonical at v1.99). Cycle ledger: 30 passes, 39 findings, zero open. Streak 1/3. |
 | 2026-07-08 | **PE-CONNECTOR adversary P29 remediated — EC-004 duplicate-emission race fixed (code 6b6f0cf + story v1.26); pass 30 next; streak 0/3** | completed | Pass-29: F-P29-001 LOW [impl-defect] — dialLoop decrement and drop-to-zero check were separate atomics; ≥2 upstreams dropping near-simultaneously → both goroutines observe 0 → EC-004 emitted twice for one ≥1→0 transition (AC-002 PC5 single-event semantics violated). Structurally untestable by all prior EC-004 tests (single-upstream / graceful-stop / never-connected). Fix: transition ownership via Add(-1) return value; guard `if newCount == 0 && ctx.Err() == nil`. Regression test TestConnector_ConcurrentDropToZero_SingleEC004Emission: RED 40–50% catch rate over 180 unfixed cycles, mutation-pinned, deterministic post-fix, race-clean. FIRST code-behavior change since P17. connector_test.go 18→19; 28→29 net-new. Non-finding VP-037/VP-038 t-first skeleton drift adjudicated out-of-perimeter; VP anchor true-up at PR time. Cycle ledger: 29 passes, 39 findings, zero open. Streak 0/3. |
 | 2026-07-08 | **PE-CONNECTOR adversary P28 remediated — phantom FrameTypeControl corrected in placement note v1.6; full symbol sweep (class closed); story v1.25 + code 849e095 unchanged; pass 29 next; streak 0/3** | completed | Pass-28: F-P28-001 LOW [doc-drift] — placement note Q6 "What the connect-half sends" cited phantom `` `FrameTypeControl` `` (0 repo hits; real constant `frame.FrameTypeCtl` (0x03); halfchannel aliases only Data/EmptyTick). Corrected to `frame.FrameTypeCtl` with F-P26-001 deferral framing aligned. Full backtick-symbol sweep of placement note (~45 symbols dispositioned: all live except FrameTypePEConnect=explicitly-deferred, upstreamRoutersAsSet=changelog-historical, FrameTypeControl=corrected). Third placement-note-seeded defect (F-P1-001 imports, F-P27-001 signature, F-P28-001 phantom) — class closed for this surface per file-granularity sweep doctrine. Story v1.25 and code 849e095 unchanged. Cycle ledger: 28 passes, 38 findings, zero open. Streak 0/3. |
