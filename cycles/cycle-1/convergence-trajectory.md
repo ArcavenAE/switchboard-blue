@@ -1383,3 +1383,52 @@ None of these exercise ≥2 upstreams dropping simultaneously in a live-PE state
 **Cycle ledger:** 29 passes, 39 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1), zero open. Streak 0/3.
 
 **Awaiting:** adversary pass 30 @ 6b6f0cf (streak 0/3)
+
+---
+
+## S-7.04-FU-PE-CONNECTOR — Adversarial Pass 30 (2026-07-08)
+
+**Verdict:** NO_FINDINGS — streak 0/3 → 1/3
+
+**Code HEAD:** 6b6f0cf (unchanged — zero code or story changes this pass)
+
+### Finding Progression (P30)
+
+| Pass | Code HEAD | Findings | Severity | Streak | Notes |
+|------|-----------|----------|----------|--------|-------|
+| 30 | 6b6f0cf | 0 | — | 1/3 | P29 fix deep-reviewed correct; concurrent-transition axis swept clean |
+
+**Trajectory shorthand (P1–P30):** 7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0
+
+### Summary
+
+Adversary reviewed P29 surface (transition ownership atomic fix + regression test) from fresh context. All 11 standing bars green.
+
+**P29 surface deep-reviewed correct:**
+
+1. **Transition ownership under interleaved reconnect:** Distinct goroutines decrement via `Add(-1)` — each goroutine's return value is unique; exactly the goroutine whose `Add(-1)` returns 0 emits EC-004. Interleaved reconnect (concurrent dial completing while another drops) does not create a new ≥1→0 transition in the same cycle; the ownership model holds.
+2. **Config-removal path (runRouter reload to zero upstreams):** `runRouter` sets the connector's address list via `ReloadAddrs`; when reloaded to empty, the connector's `dialLoop` goroutines receive ctx cancellation via the reload-path; `runRouter` itself emits exactly one mode=E via its own `runRouter` state machine (not via the connector). The connector's EC-004 path is guarded `ctx.Err() == nil` — skips cleanly during `runRouter`-driven teardown. Single-emission verified.
+3. **Stress test (TestConnector_ConcurrentDropToZero_SingleEC004Emission) leak-free across all exit paths:** Both upstream fixture goroutines confirmed to exit cleanly (dial goroutines receive ctx cancel + fixture close, drain before test end); no goroutine leak under `-race` or `-count=5` repeated runs.
+4. **Concurrent-transition axis swept — no sibling mutate-then-check patterns:**
+   - Connect-side `Add(1)` (goroutine increments `connectedCount` on dial success): no spec'd single-event semantics for ≥0→1 transition; not an EC-004 emission site.
+   - `Mode()` return value: pure `atomic.Load` — no ownership check, no emission, no sibling.
+   - `reconcile` goroutine: single-goroutine by design (reconcileLoop); no concurrent mutation-then-check patterns.
+
+**Anti-findings adjudicated (non-blocking):**
+
+| Finding candidate | Adjudication |
+|-------------------|--------------|
+| `logWriter` blocking-send in `connector.go` (pre-existing send on unbuffered channel) | Pre-existing P1 pattern — not introduced by P29 fix; `dialLoop` goroutine blocks only on `logCh` send, not on EC-004 emission path; non-blocking on EC-004 emission itself. NOT a P29 regression. |
+| Stale log line after reconnect race (log goroutine may emit a status line from before the reconnect completes) | Spec-correct — `logWriter` goroutine serializes log lines for the current connection lifetime; log lines from a dying connection are valid history, not duplicate EC-004 events. BC-2.09.003 does not require log-line suppression post-reconnect. |
+
+**Also performed this burst:** Sprint-state fork reconciliation — burst rows v1.71–v1.97 (P2–P28) were appended to the frozen root sprint-state.yaml in error (ambiguous dispatch paths). That file has been annotated with a top-of-changelog ERRATUM block. Canonical live state is .factory/stories/sprint-state.yaml (v1.99). No further appends to root sprint-state.yaml.
+
+### Outcome
+
+- **No code changes** required.
+- **No story changes** required.
+- Code HEAD unchanged at 6b6f0cf. Story unchanged at v1.26.
+- Cycle ledger: 30 passes, 39 findings (7/3/3/1/1/2/2/1/1/1/1/1/1/1/1/1/1/0/1/1/0/1/1/1/1/1/1/1/1/0), zero open.
+- **Streak: 1/3.**
+
+**Awaiting:** adversary pass 31 @ 6b6f0cf (streak 1/3)
