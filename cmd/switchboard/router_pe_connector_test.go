@@ -451,7 +451,7 @@ func TestScanForLine_DetectsEFWD001ProductionEmission(t *testing.T) {
 		uint32(0xdeadbeef), 3,
 	)
 	buf := &syncBuffer{}
-	buf.Write([]byte(productionLine + "\n"))
+	_, _ = buf.Write([]byte(productionLine + "\n"))
 
 	// (a) Fixed key "E-FWD-001" must detect the production emission.
 	if !scanForLine(buf, "E-FWD-001", 0) {

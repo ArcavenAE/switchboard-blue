@@ -840,7 +840,7 @@ func TestConnector_ReloadAddrs_AddsAndRemoves(t *testing.T) {
 // TestConnector_EC004_DropToZero_ModeEEmission verifies that when the last
 // upstream connection drops (connectedCount → 0), the Connector emits the
 // verbatim EC-004 log "mode=E (no upstream_routers configured)" (F-P1-006,
-// connector.go:344-347, AC-002).
+// the connectedCount==0 && ctx.Err()==nil branch in dialLoop's EC-004 emission path, AC-002).
 //
 // Failure condition: if the EC-004 log branch (connectedCount==0 check after
 // connectedCount.Add(-1)) is removed, this test fails.
@@ -1056,9 +1056,10 @@ func TestConnector_Stop_Idempotent(t *testing.T) {
 // "mode=E (no upstream_routers configured)" to the operator writer.
 //
 // BC-2.09.001 EC-004's trigger is upstream-LOSS, not self-initiated teardown.
-// The EC-001 sibling guard (connector.go:284-287) is the model: when
-// ctx.Err() != nil, the loop returns without logging.  The EC-004 branch at
-// connector.go:346-349 must apply the same guard.
+// The EC-001 sibling guard (ctx.Err()!=nil early-return in dialLoop's EC-001 emission path)
+// is the model: when ctx.Err() != nil, the loop returns without logging.  The EC-004
+// branch (connectedCount==0 && ctx.Err()==nil guard in dialLoop's EC-004 emission path)
+// must apply the same guard.
 //
 // Failure condition: if the ctx.Err() guard before the EC-004 branch is
 // absent (the unguarded code), this test fails because Stop() triggers
