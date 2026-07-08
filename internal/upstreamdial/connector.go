@@ -81,7 +81,10 @@ type Connector struct {
 
 	// addrsCh is a buffered channel (cap 1) over which runRouter sends address
 	// list snapshots.  The reconcile goroutine reads from this channel.
-	// Non-blocking send pattern per Q3: select { case ch <- v; default: _ = <-ch; ch <- v }.
+	// Sends use the fully non-blocking fast-path/drain/resend pattern in
+	// ReloadAddrs (F-P5-001 — see placement note Q3 v1.4 erratum; the old
+	// drop-oldest pattern with a blocking inner receive deadlocks under a
+	// reader-drain race).
 	addrsCh chan []string
 
 	// env carries the per-dial envelope fields (this router's identity).
