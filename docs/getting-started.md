@@ -83,16 +83,18 @@ brew install ArcavenAE/tap/switchboard-a
 switchboard-a --version
 ```
 
-The binaries are installed as `switchboard-a` and `sbctl-a` — not
-`switchboard`/`sbctl` — so they can live side-by-side with the canonical
-formulas on the same tap. **Substitute `switchboard-a` for `switchboard`
-and `sbctl-a` for `sbctl`** in every command in the rest of this
-tutorial if you install this way. The operator CLI has its own formula:
+The binaries are installed as `switchboard-a` and `sbctl-a` — not `switchboard` / `sbctl` —
+so they can live side-by-side with the canonical formula slots on the same tap. Also install
+`sbctl-a`:
 
 ```bash
 brew install ArcavenAE/tap/sbctl-a
 sbctl-a --version
 ```
+
+If `brew install ArcavenAE/tap/sbctl-a` reports "No available formula", run `brew update` to
+refresh the tap. **Substitute `switchboard-a` for `switchboard` and `sbctl-a` for `sbctl`**
+in every command in the rest of this tutorial if you install this way.
 
 ### Option B — Build from source
 

@@ -391,13 +391,16 @@ func startMgmtServer(
 //     eligibility (BC-2.09.001 PC-1). Live upstream connection establishment
 //     ships once the outer-header session-bootstrap protocol lands.
 //
-// #DEFERRED — SIGHUP config reload (BC-2.09.001 PC-1 Signal-of-graduation),
-// live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1), and the actual
-// PE-mode upstream connector still ship in a follow-on story once admission
-// plumbing and node-facing SVTN channels are wired. In this story the drain
-// coordinator seam and the three DEFERRED-APPLICATION closures are in place;
-// the wire protocol connects to them without further daemon-level refactor.
-func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
+// #SHIPPED — SIGHUP config reload (BC-2.09.001 PC-1 / S-7.04-FU-SIGHUP-RELOAD)
+// is implemented in the select loop below (~line 537).
+//
+// #DEFERRED — live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
+// S-7.04-FU-DRAIN-WIRE) and the actual PE-mode upstream connector
+// (S-7.04-FU-PE-CONNECTOR) still ship in a follow-on story once admission
+// plumbing and node-facing SVTN channels are wired. The drain coordinator
+// seam and the three DEFERRED-APPLICATION closures are in place; the wire
+// protocol connects to them without further daemon-level refactor.
+func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
 	// would then nil-deref on cfg.ListenAddr and panic — a violation of the
@@ -527,8 +530,46 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config) error {
 		}
 	}
 
-	// Block until context is cancelled (ARCH-01 lifecycle contract).
-	<-ctx.Done()
+	// Block until context is cancelled or a SIGHUP reload event fires.
+	// (ARCH-01 lifecycle contract; S-7.04-FU-SIGHUP-RELOAD two-case select.)
+	for {
+		select {
+		case <-ctx.Done():
+			// Context cancelled — fall through to graceful shutdown below.
+			goto shutdown
+		case <-sighupCh:
+			// Fail-closed reload (BC-2.09.003 EC-004 / BC-2.09.001 PC-1).
+			// Empty configPath means no config file was provided; skip silently.
+			if configPath == "" {
+				continue
+			}
+			loaded, loadErr := config.LoadFile(configPath)
+			if loadErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "config reload failed: %s; continuing with previous config\n", loadErr)
+				}
+				continue
+			}
+			if valErr := loaded.Validate(); valErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "config reload failed: %s; continuing with previous config\n", valErr)
+				}
+				continue
+			}
+			newUpstreams := upstreamRoutersFor(loaded)
+			if !equalStringSlices(upstreamRouters, newUpstreams) {
+				upstreamRouters = newUpstreams
+				if w != nil {
+					if len(upstreamRouters) > 0 {
+						_, _ = fmt.Fprintf(w, "switchboard router: mode=PE upstream_routers=%v\n", upstreamRouters)
+					} else {
+						_, _ = fmt.Fprintf(w, "switchboard router: mode=E (no upstream_routers configured)\n")
+					}
+				}
+			}
+		}
+	}
+shutdown:
 
 	// Graceful shutdown (BC-2.09.002):
 	//   1. Signal drain — observers (when the wire protocol lands) broadcast

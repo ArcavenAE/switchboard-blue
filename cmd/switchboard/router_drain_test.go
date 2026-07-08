@@ -103,7 +103,7 @@ func startRunRouterWithConfig(t *testing.T, cfg *config.Config, buf *syncBuffer)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, buf, cfg) }()
+	go func() { errCh <- runRouter(ctx, buf, cfg, "", make(chan os.Signal, 1)) }()
 
 	if !waitForSocket(cfg.ManagementSocket, 1*time.Second) {
 		cancel()

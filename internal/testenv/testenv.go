@@ -28,8 +28,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -248,6 +250,12 @@ type RouterHandle struct {
 	cfg    RouterConfig
 	svtnID SVTNID
 	mode   RouterMode
+
+	// sighupCh is the write side of the SIGHUP injection channel passed to
+	// the underlying runRouter call.  Set at construction by the test helper
+	// that starts the real runRouter goroutine (AC-004 / VP-038 seam).
+	// nil when the RouterHandle is a lightweight in-process stub (StartRouter).
+	sighupCh chan<- os.Signal
 }
 
 // Mode returns the current operating mode of the router (E or PE).
@@ -276,6 +284,58 @@ func (r *RouterHandle) Restart(t testing.TB, cfg RouterConfig) {
 	} else {
 		r.mode = ModeE
 	}
+}
+
+// SetSighupCh wires the write end of a SIGHUP injection channel onto the
+// RouterHandle so that SendReloadSignal drives the channel that the
+// underlying runRouter goroutine selects on.  Call this after StartRouter
+// and before SendReloadSignal.
+//
+// Transitional seam: this method retrofits the signal channel post-hoc onto
+// a RouterHandle returned by StartRouter, which is a lightweight stub
+// disconnected from the real runRouter goroutine.  The handle forwards signals
+// to an externally-started runRouter and does NOT track its state.
+// Construction-time wiring and real state tracking land with the
+// PE-CONNECTOR-era testenv integration (S-7.04-FU-PE-CONNECTOR).
+//
+// Required by: AC-004, VP-038.
+func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sighupCh = ch
+}
+
+// SendReloadSignal sends syscall.SIGHUP on the router's injected sighupCh,
+// driving the in-process reload seam without issuing a real OS signal.
+// Callers must write the desired config to the appropriate path before calling
+// this helper; the channel carries only the signal, not a path.
+//
+// Precondition: the RouterHandle must have been constructed with a live
+// sighupCh (i.e. via the AC-004 test helper, not StartRouter).  Calling on
+// a nil sighupCh fatals the test.
+//
+// Transitional seam: this handle forwards signals to an externally-started
+// runRouter goroutine and does NOT track its state.  Construction-time wiring
+// and real state tracking land with the PE-CONNECTOR-era testenv integration
+// (S-7.04-FU-PE-CONNECTOR).
+//
+// The channel send is performed outside r.mu to prevent deadlock if the
+// receiver goroutine is also trying to acquire r.mu.
+//
+// Required by: VP-038, AC-004.
+func (r *RouterHandle) SendReloadSignal(t testing.TB) {
+	t.Helper()
+	// Read sighupCh under the lock to avoid a data race with SetSighupCh
+	// (F-P2-005: sighupCh field is guarded by r.mu like all other fields).
+	// The channel send MUST happen outside the lock to prevent deadlock
+	// if the receiver goroutine is also trying to acquire r.mu.
+	r.mu.RLock()
+	ch := r.sighupCh
+	r.mu.RUnlock()
+	if ch == nil {
+		t.Fatal("RouterHandle.SendReloadSignal: sighupCh is nil — handle was not constructed with the AC-004 reload seam")
+	}
+	ch <- syscall.SIGHUP
 }
 
 // LoopbackConfig configures a NewLoopback environment (VP-042 / S-BL.BENCH).
