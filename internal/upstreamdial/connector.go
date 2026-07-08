@@ -323,7 +323,12 @@ func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struc
 		}
 
 		// Connection established step 1: net.Dial succeeded.
-		// Step 2: outerassembler.Assemble bootstrap frame (Q6).
+		// Step 2: outerassembler.Assemble bootstrap frame (Q6, delivered with
+		// placeholder frame type). FrameTypeData is a placeholder: the distinct
+		// PE-CONNECT bootstrap frame type (Q6's frame.FrameTypePEConnect) is
+		// deferred to S-BL.PE-RECEIVE-LOOP, the consumer that must distinguish
+		// bootstrap frames from session data. Deferral is symmetric with the
+		// zero-valued Envelope deferral documented in mgmt_wire.go.
 		cf := halfchannel.ChannelFrame{
 			FrameType: halfchannel.FrameTypeData,
 		}
