@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.09
+# version: 2.10
 # changelog:
+#   - version: 2.10
+#     date: 2026-07-09
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 5: HAS_FINDINGS — F-SP5-001 (HIGH [spec-gap], READ-error disposition unspecified; v1.4 callback rule created wrong-direction trap at read site), F-SP5-OBS-1 (LOW [spec-divergence], bounded-read divergence — accepted with rationale), F-SP5-OBS-2 (LOW [spec-completeness], connector_test.go fixture pattern — clarified). Remediated: placement note v1.4→v1.5 (architect), story v1.4→v1.5 + STORY-INDEX v4.44→v4.45 (story-writer). New pin test TestConnector_ReceiveLoop_ExitsOnReadError; test forecast ~9→~10. Streak resets 0/3. Decay: 7→4→3→2→3. Next: spec pass 6 vs v1.5 package."
 #   - version: 2.09
 #     date: 2026-07-09
 #     description: "S-BL.PE-RECEIVE-LOOP spec-adversarial pass 4 remediated — 2 findings (both HIGH [spec-gap]), all closed: F-SP4-001 (HIGH [spec-gap]) FrameFn return-value contract — discard-and-continue (`_ = frameFn(hdr, raw)`) mandated; non-nil return MUST NOT terminate the receive loop; exit-on-error form explicitly forbidden (defeats pin test TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader whose ≥2-emission requirement requires the loop to continue after first non-nil return); double-count rationale mirrors netingress.ServeConn; errcheck satisfied via blank-identifier discard; `//nolint:errcheck` MUST NOT be used. F-SP4-002 (HIGH [spec-gap]) SetFrameCallback ordering contract — MUST be called before Start(); frameFn field is set-once pre-launch; goroutine-creation happens-before covers visibility; construct→SetFrameCallback→Start binding in runRouter (inserts between existing `New(...)` and `Start()` lines); receive goroutine MAY assume non-nil; nil-guard defense-in-depth silent discard as optional belt-and-suspenders (no log); post-Start mutation forbidden (panic or ignore, never unsynchronized write). Pass-4 also cleared all 3 v1.3 remediations under direct attack: byte-contract round-trip exact (EncodeOuterHeader/ParseOuterHeader lossless over all 44 bytes); pin test valid (Envelope.SrcAddr flows to outer-header bytes); E-FWD-001 blast-radius 8 complete — no ninth found. Note v1.3→v1.4, story v1.3→v1.4. STORY-INDEX v4.43→v4.44. Streak 0/3; spec pass 5 pending."
@@ -983,16 +986,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.4"
+    story_version: "1.5"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.4"
-    spec_adversarial_pass: 4
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.5"
+    spec_adversarial_pass: 5
     spec_adversarial_streak: "0/3"
-    last_findings: "2 (both HIGH [spec-gap]: FrameFn return-value contract / SetFrameCallback ordering) — remediated (note v1.4, story v1.4); v1.3 remediations cleared under direct attack"
-    note: "awaiting spec adversarial pass 5 (story v1.4 + note v1.4, streak 0/3)"
+    last_findings: "1 HIGH (F-SP5-001 READ-error disposition) + 2 LOW (F-SP5-OBS-1 bounded-read accepted, F-SP5-OBS-2 fixture pattern clarified) — remediated (note v1.5, story v1.5, index v4.45)"
+    note: "awaiting spec adversarial pass 6 (story v1.5 + note v1.5, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

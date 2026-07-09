@@ -1595,10 +1595,14 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 1 (spec) | v1.0 | 7 | 3 | 3 | 1 | 0/3 | note v1.1 (Q8) + story v1.1 — all remediated |
 | 2 (spec) | v1.1 | 4 | 1C | 1 | 2 | 0/3 | note v1.2 (Q9 peWriteFixture) + story v1.2 — all remediated |
 | 3 (spec) | v1.2 | 3 | 2 | 1 | 0 | 0/3 | note v1.3 (byte-contract fix: EncodeOuterHeader+append reconstruction + pin test) + story v1.3 — all remediated |
+| 4 (spec) | v1.3 | 2 | 2 | 0 | 0 | 0/3 | note v1.4 (FrameFn return-value contract + SetFrameCallback ordering) + story v1.4 — all remediated; v1.3 remediations cleared under direct attack |
+| 5 (spec) | v1.4 | 3 | 1 | 0 | 2 | 0/3 | note v1.5 (READ-error disposition) + story v1.5 + index v4.45 — remediated; streak resets 0/3 |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; streak 0/3; pass 5 pending.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; streak 0/3; pass 6 pending vs v1.5 package.
+
+**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3` — new READ-error surface discovered at pass 5; all prior surfaces (production wiring, test injection, byte-content, callback contract) confirmed clear under direct attack at pass 4.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1748,3 +1752,46 @@ Passes 1–3 addressed production wiring, test injection, and byte-content layer
 `7 → 4 → 3 → 2`: finding count decay 7→4 (pass 1), 4→3 (pass 2), 3→2 (pass 3), 2→0 pending remediation (pass 4). New surface (callback contract) discovered at pass 4; previous three surfaces (production wiring, test injection, byte-content) confirmed clear under direct attack. Streak 0/3; pass 5 dispatches against story v1.4 + note v1.4.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-4 when authored).
+
+---
+
+### Pass 5 Details (2026-07-09)
+
+**Story at review:** v1.4 | **Placement note at review:** v1.4
+
+**Verdict:** HAS_FINDINGS — 1 HIGH, 2 LOW (both LOW adjudicated as accepted observations with rationale). Remediated.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP5-001 | HIGH | spec-gap | READ-error disposition unspecified. The v1.4 callback rule (non-nil `frameFn` return MUST NOT terminate the loop) created a wrong-direction trap at the read site: the idiomatic `if _, err := frame.ReadOuterFrame(...); err != nil { return }` exits the receive goroutine on EOF / disconnect — which is correct — but the blanket v1.4 "MUST NOT terminate" language contradicted it without qualification. An implementer applying the v1.4 rule to the read site would either introduce a blind `_ = err` discard (goroutine-leak on disconnect) or add an `//nolint:errcheck` suppression. | Note v1.4→v1.5 adds the READ-error contract: `io.EOF` / `io.ErrUnexpectedEOF` / `net.Error` (including timeout) returned by `frame.ReadOuterFrame` MUST terminate the receive goroutine (upstream disconnected or severed). The v1.4 "non-nil return MUST NOT terminate" rule is re-scoped explicitly to `frameFn` invocations only. Distinction codified: read-error = normal termination path; callback-error = drop-and-continue. New pin test `TestConnector_ReceiveLoop_ExitsOnReadError` specified in connector_test.go: inject a conn that returns `io.EOF` on read; assert goroutine exits within timeout. Story v1.5 propagates re-scoped rule to Design Constraints (FrameFn return-value contract re-scoped); receive goroutine sketch updated; AC-001 PC-3 added (loop exits on ReadOuterFrame error); Estimated Test Surface ~9→~10. |
+| F-SP5-OBS-1 | LOW | spec-divergence | Bounded-read note in placement note Q2 (framing primitive describes a bounded-read precondition on `ReadOuterFrame`) diverges from the story's unbounded receive loop spec. Adversary flagged potential contract mismatch. | Accepted with rationale: the bounded-read precondition governs `ReadOuterFrame`'s internal framing discipline (reads exactly 44 header bytes then exactly `payload_length` bytes), not the receive goroutine's outer loop iteration policy. The receive goroutine exits on any read error (F-SP5-001 contract), which is the loop-exit gate — no separate bounded-read loop policy is needed. Q2 clarification annotation added. |
+| F-SP5-OBS-2 | LOW | spec-completeness | `connector_test.go` fixture pattern for the new `TestConnector_ReceiveLoop_ExitsOnReadError` test not explicitly described in story (which existing fixture type to adapt — `heldConn` pattern or a new `errorConn` mock). | Clarification added to story AC-001 test-names block: `TestConnector_ReceiveLoop_ExitsOnReadError` should use a minimal `errorConn` implementing `net.Conn` with a `Read` method that returns `(0, io.EOF)` immediately, consistent with the `connector_test.go` pattern for injecting controlled errors. |
+
+#### Non-Findings Adjudicated Clean (Pass 5 — v1.4 remediations under direct attack)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| FrameFn return-value rule (F-SP4-001) | Discard-and-continue (`_ = frameFn(hdr, raw)`) still correct after READ-error re-scoping; the two rules are orthogonal (different invocation sites) | CLEARED |
+| SetFrameCallback ordering contract (F-SP4-002) | Unchanged; construct→SetFrameCallback→Start remains binding | CLEARED |
+| Byte-contract reconstruction (F-SP3-001) | EncodeOuterHeader+append path unaffected by READ-error contract | CLEARED |
+| Pin test NoDuplicateSuppression (F-SP3-001) | Pin test spec valid; ≥2-emission requirement unchanged | CLEARED |
+| Blast-radius 8 complete (F-SP3-003) | No new blast-radius sites; item-8 field comment obligation unchanged | CLEARED |
+
+#### Remediation Summary
+
+**Placement note v1.4 → v1.5:** Q2 framing-primitive section: bounded-read precondition clarification annotation added (governs internal `ReadOuterFrame` framing discipline, not outer loop policy). READ-error contract section added adjacent to v1.4 FrameFn return-value contract: `io.EOF`/`io.ErrUnexpectedEOF`/`net.Error` on `ReadOuterFrame` MUST terminate the receive goroutine; v1.4 "MUST NOT terminate" rule re-scoped to `frameFn` invocations only with FORBIDDEN-loop-exit on read-error form added. Pass-5 adjudicated-clean section added.
+
+**Story v1.4 → v1.5:** Design Constraints FrameFn return-value contract re-scoped: "non-nil return MUST NOT terminate the receive loop" now explicitly qualified "applies to `frameFn` invocations only; read-site errors are governed by the READ-error contract below." READ-error contract subsection added (mirrors note v1.5). AC-001 PC-3 added: "receive goroutine exits when `frame.ReadOuterFrame` returns a non-nil error (upstream disconnect / EOF)." New test `TestConnector_ReceiveLoop_ExitsOnReadError` added to AC-001 test-names block with `errorConn` fixture note; Estimated Test Surface table updated ~9→~10. Frontmatter: version 1.4→1.5; `placement_note` v1.4→v1.5. STORY-INDEX v4.44→v4.45.
+
+#### Pattern Note: Callback Contract Surface → READ-error Contract Surface (Pass 4 → Pass 5)
+
+Each pass finds the next layer down on the same callback-seam axis:
+- **Pass 1 (production wiring layer):** Q8 — how `runRouter` wires `SetFrameCallback` → `OnFrameArrival`.
+- **Pass 2 (test-injection socket layer):** F-SP2-001 — test injecting into the wrong socket.
+- **Pass 3 (byte-content layer):** F-SP3-001 — bytes keyed incorrectly in drop-cache.
+- **Pass 4 (callback contract layer):** F-SP4-001/002 — FrameFn return-value semantics + SetFrameCallback ordering.
+- **Pass 5 (read-site contract layer):** F-SP5-001 — the read-site error contract was left ambiguous by the v1.4 blanket rule; the rule that was written to protect the drop-and-continue path inadvertently created a wrong-direction trap at the read site. The spec-adversarial cycle surfaces each layer in sequence; pass 6 dispatches against a spec that is now fully specified at all five layers.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-5 when authored).
