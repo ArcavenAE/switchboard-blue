@@ -17,6 +17,7 @@ examples, `sbctl` is the star here rather than a footnote.
 ```mermaid
 graph LR
     subgraph data["data plane — no part of this example"]
+        direction LR
         CN["console"] -.- R["router"]
         R -.- AN["access node"]
         AN --- TM["tmux"]

@@ -66,7 +66,8 @@ Operating the deployment is the lesson here: the operator container
 wears each identity in turn and walks the full authority matrix.
 
 ```mermaid
-graph TB
+graph LR
+    OP["operator container<br/>plays all three roles in turn"]
     R["router — netop's infrastructure<br/>mgmt: netop key ONLY<br/>data plane :9090: shared transport"]
     subgraph ta["team a — SVTN operator 'team-a'"]
         A1["node-a1<br/>tmux: top"]
@@ -76,7 +77,6 @@ graph TB
         B1["node-b1<br/>tmux: htop"]
         B2["node-b2<br/>tmux: vmstat 1"]
     end
-    OP["operator container<br/>plays all three roles in turn"]
     OP -- "netop key → router mgmt ✓" --> R
     OP -- "team-a key → a-nodes ✓" --> A1 & A2
     OP -- "team-b key → b-nodes ✓" --> B1 & B2
