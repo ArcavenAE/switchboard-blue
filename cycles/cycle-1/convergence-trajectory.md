@@ -1594,10 +1594,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 |------|---------------|-------|------|-----|-----|--------|-------------|
 | 1 (spec) | v1.0 | 7 | 3 | 3 | 1 | 0/3 | note v1.1 (Q8) + story v1.1 — all remediated |
 | 2 (spec) | v1.1 | 4 | 1C | 1 | 2 | 0/3 | note v1.2 (Q9 peWriteFixture) + story v1.2 — all remediated |
+| 3 (spec) | v1.2 | 3 | 2 | 1 | 0 | 0/3 | note v1.3 (byte-contract fix: EncodeOuterHeader+append reconstruction + pin test) + story v1.3 — all remediated |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; streak 0/3; pass 3 pending.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; streak 0/3; pass 4 pending.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1669,3 +1670,44 @@ Pass-1 fixed the production end of the wire (Q8 — `OnFrameArrival` wiring in `
 The first architect dispatch for this remediation stalled at 600s with zero on-disk output (stream watchdog). This is the third stream-stall instance this cycle (evidence class: architect zero-output on non-trivial ruling work). Clean re-dispatch succeeded. No spec content was lost. The stall pattern is logged for upstream vsdd-factory tracking.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-2 when authored).
+
+### Pass 3 Details (2026-07-09)
+
+**Story at review:** v1.2 | **Placement note at review:** v1.2
+
+**Verdict:** HAS_FINDINGS — 3 findings (2 HIGH, 1 MED). All remediated.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP3-001 | HIGH | spec-defect | Byte-contract contradiction: Q2 claimed `ReadOuterFrame` returns "full outer frame bytes" consistent with `netingress.ReadFrame` precedent, but `netingress.ReadFrame` returns PAYLOAD-ONLY per its own contract. Consequence: AC-004's production wiring would key the drop-cache on `crc32(payload-only)`, causing silent false-duplicate suppression on frames differing only in their outer header (e.g., different SrcAddr). AC-004 greens on a single test frame, masking the collision. | Q2 ruling: `frame.ReadOuterFrame` MUST return payload-only (consistent with `netingress.ReadFrame`); false "full-frame" claim retracted. Receive goroutine MUST reconstruct full frame: `ehdr := frame.EncodeOuterHeader(hdr)` (existing function at `8eb54a5`); `raw := append(ehdr[:], payload...)`. `FrameFn raw` is ALWAYS full outer-header+payload. Discrimination contract code block updated with reconstruction step. AC-001 PC-2 + AC-004 PC-1 rewritten. Pin test `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` specified: two frames differing only in `Envelope.SrcAddr` → assert ≥2 `E-FWD-001` emissions; with payload-only crc32 both would have same hash → only 1 emission (false-duplicate suppression). Added to AC-004 test-names block, Estimated Test Surface, FCL row 7, Task 10. `frame.EncodeOuterHeader` verified existing at `8eb54a5` (not new). |
+| F-SP3-002 | HIGH | spec-gap | AC-005 flap-cycle test (`TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop`) attributed to `router_pe_receive_test.go` and `peWriteFixture`, but `peWriteFixture` is a single-shot accept fixture with no disconnect seam — cannot simulate a flap cycle (connect→active→disconnect→reconnect). The test as specified was unimplementable against the attributed fixture and file. | AC-005 harness re-attributed: flap-cycle test re-homed to `connector_test.go` per the existing `heldConn + Close()` pattern already used there for connector lifecycle tests. New test name: `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak`. `peWriteFixture` explicitly de-attributed from AC-005. FCL row 7: "AC-005 is NOT in this file" note added. FCL row 5: flap-cycle test entry added to connector_test.go. AC-005 test-names block, test-level (unit-only), test-files, Estimated Test Surface, Tasks 12 and 14 all updated. |
+| F-SP3-003 | MED | doc-drift | Q3 blast-radius sweep third consecutive incomplete pass: `OuterHeader.FrameType` field comment in `frame.go` enumerates type names as `"(data, ctl, arq, fec, empty-tick)"` — invisible to count/bound grep patterns; enumeration-text sweep was not explicitly specified. This is item-8; Q3 counted 7 locations. | FCL row 1 expanded with item-8: `OuterHeader.FrameType` field comment → append `, pe_connect`. FCL row 3 count "7 blast-radius" → "8 blast-radius". Task 5 updated with item-8 obligation. Task 7 updated with 8-location note. File Structure Requirements frame.go line updated. Extended sweep transcript and enumeration-aware sweep instruction recorded in Q3 to prevent future misses. |
+
+#### Non-Findings Adjudicated Clean (Pass 3)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| `peWriteFixture` drain-vs-WriteFrame concurrency | `peWriteFixture.WriteFrame` writes to `accepted` conn; drain reads are on a separate conn path; no concurrent access to the same socket | CLEAN |
+| `Assemble → ReadOuterFrame` framing round-trip | `outerassembler.Assemble` produces wire bytes at correct offset; `frame.ReadOuterFrame` reads from same offset; end-to-end framing consistent | CLEAN |
+| Zero-Envelope guard traversal | `FrameFn` invoked only after header parsed; nil-Envelope case not reachable before `ReadOuterFrame` returns successfully | CLEAN |
+| Bootstrap discrimination direction | Q3 discrimination contract correctly routes `FrameTypePEConnect` to bootstrap path and `FrameTypeData` to forward path; no inversion | CLEAN |
+| Keepalive interference | Empty-tick frames handled at netingress drain layer; PE receive goroutine never sees empty-tick frames; no interference with drop-cache or E-FWD-001 | CLEAN |
+
+#### Remediation Summary
+
+**Placement note v1.2 → v1.3:** Q2 framing-primitive section title updated and rewritten — `ReadOuterFrame` returns payload-only (consistent with `netingress.ReadFrame`); false v1.2 claim retracted; receive goroutine reconstruction obligation added (`frame.EncodeOuterHeader` + `append` — existing function, not new); `FrameFn raw` binding updated. Discrimination contract code block updated with reconstruction step. AC-005 flap-cycle test re-homed to `connector_test.go`; `peWriteFixture` de-attributed from AC-005 in FCL row 7. `OuterHeader.FrameType` field comment adjudicated item-8; Q3 blast-radius table updated to 8 locations; extended sweep transcript included; enumeration-aware sweep instruction added. Appendix A delta: `frame.EncodeOuterHeader` noted as reuse from v1.0 verification (existing at `8eb54a5`). Pass-3 adjudicated-clean section added.
+
+**Story v1.2 → v1.3:** Q2 byte-contract pipeline propagated throughout (13 `EncodeOuterHeader` references; all byte-contract assertions updated). Pin test `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` added to AC-004 test-names block, Estimated Test Surface, FCL row 7, Task 10. AC-005 fully re-homed: 8 occurrences of new test name `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` added; 3 surviving old-name occurrences are all historical/disambiguation (not replaced). FCL row 7 "AC-005 NOT in this file" note. FCL row 5 flap-cycle entry added. AC-005 test-level/test-files updated to unit-only. Item-8 `OuterHeader.FrameType` field comment in FCL row 1; blast-radius count 7→8 in FCL row 3; Task 5 and Task 7 updated. Test forecast ~8 → ~9 net-new (1 frame_test + 4 connector_test + 4 integration). Frontmatter: version 1.2→1.3; `placement_note` v1.2→v1.3.
+
+#### Pattern Note: Injection Wire Layers (Pass 1→2→3)
+
+Three consecutive passes each went one layer deeper on the same injection wire:
+- **Pass 1 (production wiring layer):** Q8 fixed how `runRouter` wires `SetFrameCallback` → `OnFrameArrival`. The production path was wrong; fixed in the spec.
+- **Pass 2 (test-injection socket layer):** F-SP2-001 caught that the test was injecting into the wrong socket (netingress/data-plane, not the PE conn). Fixed: `peWriteFixture` writes directly to the accepted PE conn.
+- **Pass 3 (byte-content layer):** F-SP3-001 caught that the bytes injected would be keyed incorrectly in the drop-cache (payload-only hash → false-duplicate suppression). Fixed: reconstruction via `EncodeOuterHeader` + append before `FrameFn` invocation.
+
+This is the diagnostic value of the pin-test discipline: F-SP3-001's AC-004 false-green mechanism (drop-cache keys on `crc32(payload-only)` while the spec claims full-frame keying) is precisely the defect class that the `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` pin test was designed to catch at implementation time. The spec now mandates the pin test so the false-green cannot survive the Red Gate.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-3 when authored).
