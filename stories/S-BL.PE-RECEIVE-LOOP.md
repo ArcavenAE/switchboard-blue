@@ -7,7 +7,7 @@ title: "PE-connection receive/forward loop — frame.ReadOuterFrame goroutine, F
 status: ready
 producer: story-writer
 timestamp: 2026-07-08T00:00:00Z
-version: "1.0"
+version: "1.1"
 phase: 2
 epic: E-7
 wave: backlog
@@ -17,12 +17,14 @@ points: 5
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 — E-FWD-001 exhaustion discharge (binding anchor; re-anchored from S-7.04-FU-PE-CONNECTOR AC-004 postcondition 1)
   - BC-2.06.003   # PC-1 — non-discharging prerequisite trace; receive loop makes the full send+forward path live for future path-liveness observability
+  - BC-2.09.001   # AC-001 anchor, PC-2/PC-3 — upstream connections established; router is in PE mode (non-discharging contextual anchor)
 vp_traces: []
 subsystems: [deployment-operations, transport-layer]
 architecture_modules:
   - internal/frame
   - internal/upstreamdial
   - internal/routing
+  - internal/multipath
   - internal/arqsend
   - internal/testenv
   - cmd/switchboard
@@ -35,8 +37,9 @@ blocks:
 inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-02/BC-2.02.008.md'
   - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.003.md'
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'
   - '.factory/stories/S-7.04-FU-PE-CONNECTOR.md'
-  - '.factory/decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md'
+  - '.factory/decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md'   # v1.1 — Q8 wiring spec + F-SP1-001..007
   - '.factory/decisions/S-BL.PE-RECEIVE-LOOP-disposition-ruling.md'
 acceptance_criteria_count: 5
 backlog_origin:
@@ -98,10 +101,11 @@ No story split required.
 
 | Anchor | Verbatim ID | Source | Disposition |
 |--------|-------------|--------|-------------|
-| BC-2.02.008 PC-3/EC-003 — E-FWD-001 fires when only eligible interface is arrival interface | BC-2.02.008 / S404-OBS-F | S-7.04-FU-PE-CONNECTOR AC-004 v1.3 (re-anchored, unmet-deps F-P1-002) | TO DISCHARGE — E-FWD-001 fires under sustained path-exhaustion via live PE connection + arqsend retransmit (AC-004; S404-OBS-F + S404-LOW-1 re-confirmation rides AC-004) |
+| BC-2.02.008 PC-3/EC-003 — E-FWD-001 fires when only eligible interface is arrival interface | BC-2.02.008 / S404-OBS-F | S-7.04-FU-PE-CONNECTOR AC-004 v1.3 (re-anchored, unmet-deps F-P1-002) | TO DISCHARGE — E-FWD-001 fires (deterministically) via single-interface-set split-horizon block in `FrameArrivalHandler.OnFrameArrival` closure per Q8; arqsend is the test-internal frame driver (AC-004; S404-OBS-F + S404-LOW-1 re-confirmation rides AC-004) |
 | BC-2.06.003 PC-1 — `status: "failed"` via path liveness failure | BC-2.06.003 | S-7.04-FU-PE-CONNECTOR AC-004 v1.3 (re-anchored, same partial-discharge) | **Non-discharging prerequisite trace.** This story ships the receive goroutine that makes the full send+forward path live. BC-2.06.003 PC-1 `status: "failed"` (path liveness) is NOT discharged here — it requires the keepalive missed-probe mechanism (`internal/paths`), which is orthogonal to E-FWD-001 (split-horizon, `internal/routing`). Future path-liveness observability testing depends on the infrastructure this story ships. (Disposition per S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0 Q-A option (a).) |
-| FO-PE-LOOP-001 — define `frame.FrameTypePEConnect`; flip `dialLoop` bootstrap | FO-PE-LOOP-001 | S-7.04-FU-PE-CONNECTOR F-P26-001 (v1.24 deferral) | TO DISCHARGE — `FrameTypePEConnect = 0x06` defined; `Valid()` upper bound updated; `dialLoop` bootstrap flipped from `halfchannel.FrameTypeData` placeholder (AC-003) |
-| S404-OBS-F — E-FWD-001 rate-limit re-confirmation | S404-OBS-F | STATE.md row; re-anchored from S-7.04-FU-PE-CONNECTOR AC-004 | DISCHARGED via AC-004 (E-FWD-001 exhaustion integration test) |
+| BC-2.09.001 PC-2/PC-3 — upstream connections established; router is in PE mode | BC-2.09.001 | AC-001 anchor (contextual; router is in PE mode with live upstream connections as the precondition for the receive goroutine to be active) | **Non-discharging contextual anchor.** BC-2.09.001 PC-2/PC-3 (router-mode transition and upstream-connection establishment) were discharged by S-7.04-FU-PE-CONNECTOR. This story takes PE mode + established connections as a given precondition. The anchor is cited in AC-001 to establish the precondition context; no new PC-2 or PC-3 discharge obligation arises here. |
+| FO-PE-LOOP-001 — define `frame.FrameTypePEConnect`; flip `dialLoop` bootstrap | FO-PE-LOOP-001 | S-7.04-FU-PE-CONNECTOR F-P26-001 (v1.24 deferral) | TO DISCHARGE — `FrameTypePEConnect = 0x06` defined; `Valid()` upper bound updated; ARCH-02 `frame_type` row amended; `dialLoop` bootstrap flipped from `halfchannel.FrameTypeData` placeholder (AC-003) |
+| S404-OBS-F — E-FWD-001 rate-limit re-confirmation | S404-OBS-F | STATE.md row; re-anchored from S-7.04-FU-PE-CONNECTOR AC-004 | DISCHARGED via AC-004 (E-FWD-001 split-horizon discharge integration test) |
 | S404-LOW-1 — live-egress re-confirmation (3 LOW + SEC-001) | S404-LOW-1 | STATE.md row; re-anchored from S-7.04-FU-PE-CONNECTOR AC-004 | DISCHARGED via AC-004 (full send+forward path traversal demonstrated end-to-end) |
 
 ---
@@ -127,7 +131,7 @@ type FrameFn func(hdr frame.OuterHeader, raw []byte) error
 SetFrameCallback(fn FrameFn)
 ```
 
-This mirrors the `netingress.RouteFn` pattern (`type RouteFn func(hdr frame.OuterHeader, payload []byte) error`, verified at `8eb54a5` in `internal/netingress/netingress.go`). `runRouter` in `cmd/switchboard/mgmt_wire.go` calls `connector.SetFrameCallback(fn)` after construction, passing a closure that calls `routing.RouteFrame` (verified at `8eb54a5` in `internal/routing/routing.go`).
+This mirrors the `netingress.RouteFn` pattern (`type RouteFn func(hdr frame.OuterHeader, payload []byte) error`, verified at `8eb54a5` in `internal/netingress/netingress.go`). `runRouter` in `cmd/switchboard/mgmt_wire.go` calls `connector.SetFrameCallback(fn)` after construction, passing a closure that calls `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` on a `*routing.FrameArrivalHandler` constructed via `routing.NewFrameArrivalHandler(multipath.NewDropCache(multipath.DefaultDropCacheSize))` with `routing.WithFrameArrivalLogger(routerLogger)` applied (all verified at `8eb54a5`). **Q8 supersedes the original Q1/Q2 `routing.RouteFrame` wiring** — the PE receive path uses `FrameArrivalHandler.OnFrameArrival` rather than `RouteFrame`; the `netingress.Serve` data-plane path retains its existing `RouteFrame` closure unchanged.
 
 ### Framing Primitive: frame.ReadOuterFrame (Q2)
 
@@ -248,12 +252,16 @@ synchronize `dialLoop` teardown with the receive goroutine's exit.
 ### AC-001 — Receive goroutine active per established PE connection; incoming frames reach FrameArrivalHandler
 
 **BC Anchors:** BC-2.09.001 PC-2/PC-3 (upstream connections established; router is in PE
-mode); placement note Q1, Q2.
+mode); placement note Q1, Q2, Q8 (traces to BC-2.09.001 PC-2, PC-3).
 
 **Precondition:** `runRouter` is executing with a PE config. A `Connector` has been
 constructed with a PE upstream address. `connector.SetFrameCallback(fn)` (new — defined by
-this story) has been called with a closure wiring to `routing.RouteFrame` (verified at
-`8eb54a5`). A cooperative upstream fixture (`e.PERouterAddr(t)`) is accepting connections.
+this story) has been called with a closure routing through
+`routing.FrameArrivalHandler.OnFrameArrival` (verified at `8eb54a5` in
+`internal/routing/on_frame_arrival.go`) on an `arrivalHandler` constructed via
+`routing.NewFrameArrivalHandler(multipath.NewDropCache(multipath.DefaultDropCacheSize))`
+(all verified at `8eb54a5`; see Q8 ruling). A cooperative upstream fixture
+(`e.PERouterAddr(t)`) is accepting connections.
 
 **Postconditions:**
 
@@ -261,10 +269,19 @@ this story) has been called with a closure wiring to `routing.RouteFrame` (verif
    `net.Conn`. The goroutine calls `frame.ReadOuterFrame(conn)` (new — defined by this
    story) in a loop.
 2. A non-bootstrap incoming frame (any type other than `frame.FrameTypePEConnect`) received
-   from the upstream fixture is passed to the `FrameFn` callback, which routes it via the
-   `routing.RouteFrame` closure in `runRouter`. The path reaches
-   `routing.FrameArrivalHandler.OnFrameArrival` (verified at `8eb54a5` in
-   `internal/routing/on_frame_arrival.go`).
+   from the upstream fixture is passed to the `FrameFn` callback, which calls
+   `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)`
+   (verified at `8eb54a5` in `internal/routing/on_frame_arrival.go`). The `arrivalHandler`
+   is a `*routing.FrameArrivalHandler` constructed by `runRouter` via
+   `routing.NewFrameArrivalHandler` and configured with `routing.WithFrameArrivalLogger`
+   (both verified at `8eb54a5`). **Note:** the PE receive path bypasses `routing.RouteFrame`'s
+   HMAC admission check — PE upstream connections are established outbound by the connector
+   itself (bootstrap handshake via `dialLoop`), not arbitrary ingress; this is acceptable for
+   this story's scope. Flagged as a security-review item for the PR (SEC follow-on per
+   disposition convention); admission-on-PE-receive is revisited in the DRAIN-WIRE/session-
+   bootstrap era. `cmd/switchboard/mgmt_wire.go` gains an `internal/multipath` import (new
+   at this layer — lawful as `cmd/switchboard` is at the top of the DAG; verified at
+   `8eb54a5` that `multipath` is currently absent from `mgmt_wire.go` imports).
 3. `connector.Mode()` returns `upstreamdial.ModePE` (≥1 upstream connected), confirming the
    connection is established and the receive goroutine is live.
 
@@ -278,26 +295,47 @@ this story) has been called with a closure wiring to `routing.RouteFrame` (verif
 
 ---
 
-### AC-002 — runRouter wires SetFrameCallback closure through routing.FrameArrivalHandler.OnFrameArrival
+### AC-002 — runRouter constructs FrameArrivalHandler and wires SetFrameCallback closure through OnFrameArrival (Q8)
 
-**BC Anchors:** BC-2.02.008 PC-3 (frame routing path is live); placement note Q1, Q2.
+**BC Anchors:** BC-2.02.008 PC-3 (frame routing path is live; traces to BC-2.02.008 PC-3);
+placement note Q8.
 
-**Precondition:** `runRouter` constructs a `Connector` (via `upstreamdial.New`, verified at
-`8eb54a5`) and calls `connector.SetFrameCallback(fn)` (new — defined by this story) with a
-closure that captures the router instance.
+**Precondition:** `runRouter` in `cmd/switchboard/mgmt_wire.go` has executed Phase b (router
+construction via `buildRouter`). The `Connector` has been constructed via `upstreamdial.New`
+(verified at `8eb54a5`).
 
 **Postconditions:**
 
-1. The closure passed to `SetFrameCallback` calls `routing.RouteFrame(hdr, raw, router)`
-   (verified at `8eb54a5` in `internal/routing/routing.go`), which dispatches to
-   `routing.FrameArrivalHandler.OnFrameArrival` (verified at `8eb54a5`).
-2. `cmd/switchboard/mgmt_wire.go` gains the `SetFrameCallback` call. No `routing` import
-   is introduced in `internal/upstreamdial` — the callback seam preserves the
-   ARCH-08 §6.6.2 forbidden-edge constraint.
+1. `runRouter` constructs a `*multipath.DropCache` via
+   `multipath.NewDropCache(multipath.DefaultDropCacheSize)` (verified at `8eb54a5`:
+   `NewDropCache(capacity int) *DropCache`; `DefaultDropCacheSize = 10_000`), then constructs
+   a `*routing.FrameArrivalHandler` via `routing.NewFrameArrivalHandler(dc)` (verified at
+   `8eb54a5`), and applies `routing.WithFrameArrivalLogger(routerLogger)` (verified at
+   `8eb54a5`). These constructions occur after Phase b (router built) and before Phase c
+   (connector started).
+2. `runRouter` calls `connector.SetFrameCallback(fn)` (new — defined by this story) with a
+   `FrameFn` closure that calls:
+   `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)`
+   where `peIfaceID` is a `routing.InterfaceID` (verified at `8eb54a5` — `type InterfaceID uint64`)
+   assigned at construction time, and `fn` is a `routing.ForwardFunc` (verified at `8eb54a5` —
+   `type ForwardFunc func(iface InterfaceID, frameBytes []byte) error`). `OnFrameArrival`
+   signature (verified at `8eb54a5`):
+   `func (h *FrameArrivalHandler) OnFrameArrival(frameBytes []byte, arrivalIface InterfaceID, interfaceSet []InterfaceID, fn ForwardFunc) error`.
+   With `interfaceSet == []routing.InterfaceID{peIfaceID}` (arrival interface is the only
+   candidate), `SplitHorizon.Forward` finds no eligible output interface → E-FWD-001 fires
+   on every non-bootstrap data frame. This makes AC-004's exhaustion test deterministic:
+   E-FWD-001 fires because the split-horizon topology guarantees no forwarding path (single-
+   interface set), not because of load-dependent path-count exhaustion.
+3. No `routing` import is introduced in `internal/upstreamdial` — the callback seam
+   preserves ARCH-08 §6.6.2 forbidden-edge constraint. The `netingress.Serve` data-plane
+   accept loop in `runRouter` retains its existing wiring unchanged (per Q8.4 — the
+   `FrameArrivalHandler` path is strictly the PE upstream receive goroutine).
+4. `cmd/switchboard/mgmt_wire.go` gains an `internal/multipath` import (only new production
+   import at this layer). No ARCH-08 §6.4 registration required for `cmd/switchboard`.
 
 **Test names:**
 
-- `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` (integration, `cmd/switchboard/router_pe_receive_test.go` — sends a frame that reaches OnFrameArrival; asserts the writer output reflects routing activity; confirms no routing import in upstreamdial via `go list -deps`)
+- `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` (integration, `cmd/switchboard/router_pe_receive_test.go` — sends a data frame on the upstream side; asserts `OnFrameArrival` path is reached, e.g. via `"E-FWD-001"` or routing-activity log event; confirms no routing import in `internal/upstreamdial` via `go list -deps`)
 
 **Test level:** integration
 **Test file:** `cmd/switchboard/router_pe_receive_test.go`
@@ -339,14 +377,32 @@ placeholder.
 
 ---
 
-### AC-004 — E-FWD-001 exhaustion integration discharge (BC-2.02.008 PC-3/EC-003); S404-OBS-F and S404-LOW-1 re-confirmation
+### AC-004 — E-FWD-001 split-horizon discharge (BC-2.02.008 PC-3/EC-003); S404-OBS-F and S404-LOW-1 re-confirmation
 
 **BC Anchors:** BC-2.02.008 PC-3/EC-003 (split-horizon drop + E-FWD-001 event logged —
-binding anchor per disposition ruling v1.0); S404-OBS-F; S404-LOW-1; placement note Q5.
+binding anchor per disposition ruling v1.0; traces to BC-2.02.008 PC-3, EC-003); S404-OBS-F;
+S404-LOW-1; placement note Q5, Q8.
 
-**S404-OBS-F and S404-LOW-1 note:** Both drift anchors (re-confirmed at live egress under
-sustained retransmit via the full send+forward path) are discharged by this AC. The
-`"E-FWD-001"` emission in the writer output IS the re-confirmation vehicle for both.
+**S404-OBS-F and S404-LOW-1 note:** Both drift anchors (re-confirmed at live egress via
+the full send+forward path) are discharged by this AC. The `"E-FWD-001"` emission in the
+writer output IS the re-confirmation vehicle for both.
+
+**Exhaustion mechanism (Q8 ruling):** E-FWD-001 fires because the `FrameFn` closure wired in
+`runRouter` passes `interfaceSet == []routing.InterfaceID{peIfaceID}` — the arrival interface
+is the sole candidate. `SplitHorizon.Forward` (verified at `8eb54a5` in
+`internal/routing/split_horizon.go`) finds no eligible output interface and emits
+`ErrAllPathsSplitHorizon` → E-FWD-001 logs. This mechanism is deterministic: the split-horizon
+block fires on every non-bootstrap frame because the single-interface set always exhausts,
+regardless of load. `arqsend` is the test-internal frame driver (Q4 ruling), providing
+well-formed wire frames via `arqsend.Retransmitter.Retransmit`; the exhaustion result is not
+load-dependent.
+
+**HMAC bypass note:** Because the PE receive `FrameFn` routes directly to
+`OnFrameArrival` (bypassing `RouteFrame`'s HMAC admission check), test frames from
+`arqsend` do NOT need a valid HMAC to reach `OnFrameArrival`. This is acceptable — PE
+upstream connections are established outbound by the connector itself, not arbitrary ingress.
+**Flagged as a SEC follow-on for the PR** (admission-on-PE-receive revisited in the
+DRAIN-WIRE/session-bootstrap era per Q8 ruling).
 
 **Precondition:** The test router is started in PE mode via `testenv.New(ctx, t)` with
 `UpstreamRouters: []string{e.PERouterAddr(t)}`. `connector.Mode()` is polled for
@@ -370,23 +426,22 @@ dispatch := func(wire []byte) error {
 
 **Postconditions:**
 
-1. Under sustained ARQ retransmit load via `arqsend.Retransmitter.Retransmit` (verified at
-   `8eb54a5`) with `dispatch` writing well-formed `outerassembler.Assemble` (verified at
-   `8eb54a5`) output to the router's data-plane `ListenAddr`, the router's writer output
-   contains the string `"E-FWD-001"`. This is the spec-anchored event code (F-P11-001
-   lesson from S-7.04-FU-PE-CONNECTOR: do NOT assert `"split-horizon-blocked"` or
-   `"all paths split-horizon"` — the event code tag is stable across prose rewording of
-   the emission text). The production emission string (verified at `8eb54a5` in
-   `internal/routing/on_frame_arrival.go`) is:
+1. When `arqsend.Retransmitter.Retransmit` (verified at `8eb54a5`) dispatches a well-formed
+   `outerassembler.Assemble` (verified at `8eb54a5`) frame to the router's data-plane
+   `ListenAddr`, the frame is received by the PE receive goroutine, passed to the `FrameFn`
+   closure, and routed to `arrivalHandler.OnFrameArrival` with
+   `interfaceSet = []routing.InterfaceID{peIfaceID}`. Because the arrival interface is the
+   only forwarding candidate, `SplitHorizon.Forward` returns `ErrAllPathsSplitHorizon`
+   (verified at `8eb54a5`) and the router's writer output contains the string `"E-FWD-001"`.
+   This is the spec-anchored event code (F-P11-001 lesson from S-7.04-FU-PE-CONNECTOR:
+   do NOT assert `"split-horizon-blocked"` or `"all paths split-horizon"` — the event code
+   tag is stable across prose rewording). The production emission string (verified at
+   `8eb54a5` in `internal/routing/on_frame_arrival.go`) is:
    `"all paths split-horizon-blocked: frame dropped (checksum=0x%08x iface=%d) (BC-2.02.008 E-FWD-001)"`.
    The assertion key `"E-FWD-001"` resolves against this production string.
-2. Path exhaustion condition: in the single-router `testenv` setup, the router's forwarding
-   table has only the connection used to send test frames as the registered interface for
-   the SVTN. Any frame arriving on that interface has no other eligible forwarding target
-   (split-horizon blocks return to arrival interface), so E-FWD-001 fires naturally without
-   special forwarding-table setup. The implementer must verify this assumption at
-   implementation time; if the assumption does not hold, a dedicated loopback fixture
-   pre-registers a forwarding entry pointing back to the arrival interface.
+2. E-FWD-001 fires on the first non-bootstrap frame dispatched — the exhaustion is
+   topologically guaranteed by the single-interface set, not load-dependent. A single
+   `arqsend.Retransmit` call is sufficient to trigger the assertion.
 3. The `TestScanForLine_DetectsEFWD001ProductionEmission` mutation pin (verified at
    `8eb54a5` in `cmd/switchboard/router_pe_connector_test.go`) validates that `"E-FWD-001"`
    detects the production emission string. This test MUST remain unmodified and green.
@@ -401,10 +456,11 @@ dispatch := func(wire []byte) error {
 
 ---
 
-### AC-005 — Receive goroutine lifecycle: joins per-address done channel; Stop() blocks until both maintainConn and receive goroutine return
+### AC-005 — Receive goroutine lifecycle: per-reconnect join, doneCh ordering, Stop() blocks until all receive goroutines return
 
-**BC Anchors:** Q6 ruling (placement note); F-P29-001 concurrent-transition lesson
-(S-7.04-FU-PE-CONNECTOR pass-29).
+**BC Anchors:** Q6 ruling (placement note v1.1, F-SP1-005 per-reconnect join requirement);
+F-P29-001 concurrent-transition lesson (S-7.04-FU-PE-CONNECTOR pass-29; traces to Q6
+concurrency contract).
 
 **Precondition:** A `Connector` is running with ≥1 established PE upstream connection
 (receive goroutine active). `connector.Mode()` returns `upstreamdial.ModePE` (verified at
@@ -417,19 +473,35 @@ dispatch := func(wire []byte) error {
    story) call returns `io.EOF` or a net error, and the goroutine exits. The per-address
    `done chan struct{}` is NOT closed until the receive goroutine has confirmed exit (via
    `sync.WaitGroup` or per-connection done signal).
-2. `Connector.Stop()` (which calls `stopOnce.Do(close(c.stopCh))` and blocks on `c.doneCh`,
+2. **Per-reconnect-iteration join (Q6 binding — F-SP1-005):** Before `dialLoop` begins
+   dialing a new connection for the same address (step 1 of a reconnect iteration), it MUST
+   join — that is, block until completion of — the receive goroutine from the previous
+   iteration. A `sync.WaitGroup` (Add(1) before goroutine start, Done() in the receive
+   goroutine's deferred return) or a per-connection `done chan struct{}` satisfies this
+   requirement. The join MUST occur at the end of each dial iteration, before the reconnect
+   backoff sleep. Failure to join creates a goroutine-leak vector: a "flapping" upstream
+   (rapid connect/disconnect/reconnect) can accumulate O(N) receive goroutines reading from
+   closed or recycled connections.
+3. `Connector.Stop()` (which calls `stopOnce.Do(close(c.stopCh))` and blocks on `c.doneCh`,
    verified at `8eb54a5`) returns only after BOTH `maintainConn` AND the receive goroutine
    have returned for every active address. No goroutine leak survives `Stop()`.
-3. The receive goroutine does NOT access `c.connectedCount` or any shared mutable state
+4. The receive goroutine does NOT access `c.connectedCount` or any shared mutable state
    beyond the `net.Conn` passed to it by `dialLoop`. Concurrent `Stop()` + receive-goroutine
    exit has exactly-once semantics (F-P29-001 lesson applied symmetrically).
 
 **Test names:**
 
 - `TestConnector_ReceiveLoop_ExitsOnConnClose` (unit, `internal/upstreamdial/connector_test.go` — establishes connection with receive goroutine active; closes the upstream server; asserts Stop() returns within deadline without goroutine leak; `go test -race` clean)
+- `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` (integration, `cmd/switchboard/router_pe_receive_test.go` — covers the full flap cycle: connect upstream → disconnect → reconnect → `Stop()` on the final connection; asserts no goroutine leak across the entire cycle; `go test -race` clean; validates per-reconnect-iteration join per Q6 binding)
 
-**Test level:** unit
-**Test file:** `internal/upstreamdial/connector_test.go`
+**Note on `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop`:** this test exercises both
+`Stop()` teardown (covered by `TestConnector_ReceiveLoop_ExitsOnConnClose` at unit level) AND
+the per-reconnect-iteration join path (unique to flap scenarios). The flap cycle is mandatory:
+a test that only exercises `Stop()` after one successful connection does not exercise the
+per-iteration join path and would not detect the goroutine-leak vector described in PC-2.
+
+**Test level:** unit (`connector_test.go`) + integration (`router_pe_receive_test.go`)
+**Test files:** `internal/upstreamdial/connector_test.go`, `cmd/switchboard/router_pe_receive_test.go`
 
 ---
 
@@ -458,14 +530,15 @@ dispatch := func(wire []byte) error {
 
 | # | File | Change | BC / Anchor |
 |---|------|--------|-------------|
-| 1 | `internal/frame/frame.go` (MODIFIED) | Add `FrameTypePEConnect FrameType = 0x06`; update `Valid()` upper bound to `<= FrameTypePEConnect` | AC-003 / FO-PE-LOOP-001 |
+| 1 | `internal/frame/frame.go` (MODIFIED) | Add `FrameTypePEConnect FrameType = 0x06` (with `// (ARCH-02 §3.1)` inline citation, same-commit-as-constant obligation); update `Valid()` upper bound to `<= FrameTypePEConnect`; update `FrameType` type doc comment ("five" → "six canonical values"); update `Valid()` doc comment ("five canonical…0x06..0xFF" → "six canonical…0x07..0xFF"); update `ErrInvalidFrameType` doc comment ("five canonical" → "six canonical" / "not in {0x01..0x06}") | AC-003 / FO-PE-LOOP-001 / F-SP1-002 |
 | 2 | `internal/frame/frame.go` (MODIFIED) | Add `frame.ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error)` (new — defined by this story): read `OuterHeaderSize` bytes via `ParseOuterHeader`, then read `hdr.PayloadLen` bytes of payload | AC-001 / Q2 |
-| 3 | `internal/frame/frame_test.go` (MODIFIED) | Add `TestFrameType_Valid_PEConnect`: asserts `FrameTypePEConnect.Valid() == true` and `FrameType(0x07).Valid() == false` | AC-003 |
-| 4 | `internal/upstreamdial/connector.go` (MODIFIED) | Add `type FrameFn func(hdr frame.OuterHeader, raw []byte) error` (new); add `SetFrameCallback(fn FrameFn)` to `Handle` interface (new); add `frameFn FrameFn` field to `Connector`; add receive goroutine in `dialLoop` after step-3 success: calls `frame.ReadOuterFrame(conn)` in a loop, discriminates `FrameTypePEConnect` (discard) vs all other types (invoke `c.frameFn`); flip bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect` (FO-PE-LOOP-001); add direct `internal/frame` import; add per-connection lifecycle sync (WaitGroup or done chan) so `dialLoop` teardown waits for receive goroutine exit | AC-001, AC-002, AC-003, AC-005 / Q1, Q2, Q3, Q6 |
+| 3 | `internal/frame/frame_test.go` (MODIFIED) | Add `TestFrameType_Valid_PEConnect`: asserts `FrameTypePEConnect.Valid() == true` and `FrameType(0x07).Valid() == false`; change `just_above_max` case from `FrameType(0x06)` to `FrameType(0x07)` (verified at `8eb54a5`: `{"just_above_max", frame.FrameType(0x06), false}` → now invalid since `0x06` becomes `FrameTypePEConnect`); change `invalids` slice `0x06` entry to `0x07` (verified at `8eb54a5`: `invalids := []byte{0x00, 0x06, 0x77, 0xFF}` → `[]byte{0x00, 0x07, 0x77, 0xFF}`); update `"five canonical enum values"` description comment to `"six canonical enum values"` (verified at `8eb54a5`); update `"Bytes not in {0x01..0x05}"` comment to `"Bytes not in {0x01..0x06}"` (verified at `8eb54a5`) | AC-003 / F-SP1-002 |
+| 4 | `internal/upstreamdial/connector.go` (MODIFIED) | Add `type FrameFn func(hdr frame.OuterHeader, raw []byte) error` (new); add `SetFrameCallback(fn FrameFn)` to `Handle` interface (new); add `frameFn FrameFn` field to `Connector`; add receive goroutine in `dialLoop` after step-3 success: calls `frame.ReadOuterFrame(conn)` in a loop, discriminates `FrameTypePEConnect` (discard) vs all other types (invoke `c.frameFn`); flip bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect` (FO-PE-LOOP-001); add direct `internal/frame` import; add per-connection lifecycle sync (WaitGroup or done chan) so `dialLoop` teardown waits for receive goroutine exit before reconnect (per-reconnect-iteration join, F-SP1-005) | AC-001, AC-002, AC-003, AC-005 / Q1, Q2, Q3, Q6 |
 | 5 | `internal/upstreamdial/connector_test.go` (MODIFIED) | Unit tests: `TestConnector_ReceiveLoop_DataFrameForwardedToCallback`, `TestConnector_ReceiveLoop_PEConnectFrameDiscarded`, `TestConnector_ReceiveLoop_ExitsOnConnClose` | AC-001, AC-003, AC-005 |
-| 6 | `cmd/switchboard/mgmt_wire.go` (MODIFIED) | Call `connector.SetFrameCallback(fn)` (new — defined by this story) after constructing the `Connector`, with closure `fn = func(hdr frame.OuterHeader, raw []byte) error { return routing.RouteFrame(hdr, raw, router) }` (routing.RouteFrame verified at `8eb54a5`); add `internal/routing` import if not already present on the `mgmt_wire.go` import path | AC-002 / Q1 |
-| 7 | `cmd/switchboard/router_pe_receive_test.go` (NEW) | Integration tests: `TestRunRouter_PE_ReceiveLoop_ActiveAfterConnect`, `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival`, `TestRunRouter_PE_EFWD001ExhaustionUnderLoad`, `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` | AC-001, AC-002, AC-004, AC-005 |
+| 6 | `cmd/switchboard/mgmt_wire.go` (MODIFIED) | Construct `multipath.NewDropCache(multipath.DefaultDropCacheSize)` and `routing.NewFrameArrivalHandler(dc)` after Phase b; apply `routing.WithFrameArrivalLogger(routerLogger)` (all verified at `8eb54a5`); call `connector.SetFrameCallback(fn)` (new — defined by this story) with `FrameFn` closure routing through `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` per Q8 ruling; add `internal/multipath` import (only new production import at `cmd/switchboard` layer; no ARCH-08 §6.4 registration required) | AC-002 / Q8 / F-SP1-001 |
+| 7 | `cmd/switchboard/router_pe_receive_test.go` (NEW) | Integration tests: `TestRunRouter_PE_ReceiveLoop_ActiveAfterConnect`, `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival`, `TestRunRouter_PE_EFWD001ExhaustionUnderLoad`, `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` (flap-cycle test: connect→disconnect→reconnect→Stop(); validates per-reconnect-iteration join per Q6/F-SP1-005) | AC-001, AC-002, AC-004, AC-005 |
 | 8 | `.factory/specs/architecture/ARCH-08-dependency-graph.md` (MODIFIED) | §6.5 update: `internal/upstreamdial` allowed imports `{halfchannel, outerassembler}` → `{frame, halfchannel, outerassembler}`; must land in the same commit that introduces the `frame.ReadOuterFrame` import in `connector.go` | Q2 / ARCH-08 §6.4 amendment |
+| 9 | `.factory/specs/architecture/ARCH-02-protocol-stack.md` (MODIFIED) | §"Outer Header Format" `frame_type` table row: add `pe_connect=0x06` — amend row to `u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06`; must land in the same commit that defines `FrameTypePEConnect` in `internal/frame/frame.go` (parallel obligation to ARCH-08 §6.5 amendment) | AC-003 / F-SP1-003 / ARCH-02 canonical wire-format source-of-truth |
 
 ---
 
@@ -479,6 +552,14 @@ dispatch := func(wire []byte) error {
   or `frame.FrameTypePEConnect` in `connector.go`. Build-time violation: if `internal/upstreamdial`
   gains a `routing` import, the build MUST fail (enforced by `ARCH-08 §6.6.2` and
   `go list -deps` verification in the integration test).
+- **`cmd/switchboard` multipath import:** `internal/multipath` is added as a new import at
+  the `cmd/switchboard` layer. `cmd/switchboard` is at the top of the DAG; this import is
+  unconditionally lawful and requires no ARCH-08 §6.4 registration.
+- **ARCH-02 §"Outer Header Format" amendment:** `frame.FrameTypePEConnect = 0x06` is a
+  wire-format change. ARCH-02 is the canonical source of truth for the outer-header wire
+  format; the `frame_type` row MUST be amended in the same commit that defines
+  `FrameTypePEConnect` in `internal/frame/frame.go`. Failing to amend ARCH-02 leaves the
+  wire-format spec inconsistent with the implementation.
 - **Pure-core / effectful boundary:** `frame.ReadOuterFrame` (new) is effectful (I/O).
   It belongs in `internal/frame` at position 2 — the position constraint allows effectful
   functions at any layer.
@@ -491,16 +572,17 @@ dispatch := func(wire []byte) error {
 All imports must use existing module versions pinned in `go.mod` at develop `8eb54a5`. No
 new external dependencies are introduced. Internal packages used:
 
-| Package | Import path | Position | Verified at |
-|---------|-------------|----------|-------------|
-| `frame` | `internal/frame` | 2 | `8eb54a5` |
-| `halfchannel` | `internal/halfchannel` | 4 | `8eb54a5` |
-| `outerassembler` | `internal/outerassembler` | 8 | `8eb54a5` |
-| `arq` | `internal/arq` | 14 | `8eb54a5` |
-| `arqsend` | `internal/arqsend` | 15 | `8eb54a5` |
-| `routing` | `internal/routing` | 17 | `8eb54a5` |
-| `upstreamdial` | `internal/upstreamdial` | 19 | `8eb54a5` |
-| `testenv` | `internal/testenv` | 23 | `8eb54a5` |
+| Package | Import path | Position | Verified at | Used by |
+|---------|-------------|----------|-------------|---------|
+| `frame` | `internal/frame` | 2 | `8eb54a5` | `upstreamdial`, `cmd/switchboard` (new `FrameTypePEConnect`, `ReadOuterFrame`) |
+| `halfchannel` | `internal/halfchannel` | 4 | `8eb54a5` | `upstreamdial` (existing) |
+| `outerassembler` | `internal/outerassembler` | 8 | `8eb54a5` | `upstreamdial` (existing), test-internal arqsend dispatch |
+| `multipath` | `internal/multipath` | — (position ≤17) | `8eb54a5` | `cmd/switchboard/mgmt_wire.go` (new — `NewDropCache`, `DefaultDropCacheSize`) |
+| `arq` | `internal/arq` | 14 | `8eb54a5` | test-internal only (AC-004 arqsend construction) |
+| `arqsend` | `internal/arqsend` | 15 | `8eb54a5` | test-internal only (AC-004 retransmit dispatch) |
+| `routing` | `internal/routing` | 17 | `8eb54a5` | `cmd/switchboard/mgmt_wire.go` (existing; gains `NewFrameArrivalHandler`, `WithFrameArrivalLogger`, `OnFrameArrival`, `InterfaceID`, `ForwardFunc`) |
+| `upstreamdial` | `internal/upstreamdial` | 19 | `8eb54a5` | gains `FrameFn` type, `SetFrameCallback`, direct `frame` import (new) |
+| `testenv` | `internal/testenv` | 23 | `8eb54a5` | integration tests |
 
 ## File Structure Requirements
 
@@ -508,12 +590,13 @@ New files created by this story:
 - `cmd/switchboard/router_pe_receive_test.go` — integration tests for receive loop (AC-001, AC-002, AC-004, AC-005)
 
 Modified files:
-- `internal/frame/frame.go` — `FrameTypePEConnect` constant, `Valid()` update, `ReadOuterFrame` function
-- `internal/frame/frame_test.go` — `TestFrameType_Valid_PEConnect`
-- `internal/upstreamdial/connector.go` — `FrameFn` type, `SetFrameCallback`, receive goroutine, bootstrap flip
+- `internal/frame/frame.go` — `FrameTypePEConnect` constant, `Valid()` update, doc-comment updates (five→six), `ReadOuterFrame` function
+- `internal/frame/frame_test.go` — `TestFrameType_Valid_PEConnect`; `just_above_max` 0x06→0x07; `invalids` slice 0x06→0x07; description-comment "five canonical"→"six canonical"; range-comment `{0x01..0x05}`→`{0x01..0x06}`
+- `internal/upstreamdial/connector.go` — `FrameFn` type, `SetFrameCallback`, receive goroutine, bootstrap flip, per-reconnect join
 - `internal/upstreamdial/connector_test.go` — 3 new unit tests
-- `cmd/switchboard/mgmt_wire.go` — `SetFrameCallback` call with routing closure
+- `cmd/switchboard/mgmt_wire.go` — `DropCache`+`FrameArrivalHandler` construction, `SetFrameCallback` call with `OnFrameArrival` closure, `internal/multipath` import
 - `.factory/specs/architecture/ARCH-08-dependency-graph.md` — §6.5 import-set amendment
+- `.factory/specs/architecture/ARCH-02-protocol-stack.md` — §"Outer Header Format" `frame_type` row: add `pe_connect=0x06`
 
 ---
 
@@ -540,9 +623,9 @@ Estimated test counts are forecasts; actual delivered count may differ after adv
 | Function | Proves |
 |----------|--------|
 | `TestRunRouter_PE_ReceiveLoop_ActiveAfterConnect` | Frame from upstream fixture reaches `routing.FrameArrivalHandler.OnFrameArrival` callback chain; `RouterHandle.Mode()` == `testenv.ModePE` |
-| `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` | `SetFrameCallback` closure wires to `routing.RouteFrame`; no routing import in `internal/upstreamdial` (`go list -deps` verified) |
-| `TestRunRouter_PE_EFWD001ExhaustionUnderLoad` | `arqsend.Retransmitter.Retransmit` dispatch to `routerListenAddr` under path exhaustion → `"E-FWD-001"` in writer output; S404-OBS-F + S404-LOW-1 re-confirmation |
-| `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` | Connector with live receive goroutine; `connector.Stop()` returns within deadline; no goroutine leak; `go test -race` clean |
+| `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` | `SetFrameCallback` closure wires to `arrivalHandler.OnFrameArrival` (Q8); no routing import in `internal/upstreamdial` (`go list -deps` verified) |
+| `TestRunRouter_PE_EFWD001ExhaustionUnderLoad` | `arqsend.Retransmitter.Retransmit` dispatch to `routerListenAddr`; single-interface set guarantees split-horizon block → `"E-FWD-001"` in writer output (deterministic, not load-dependent per Q8); S404-OBS-F + S404-LOW-1 re-confirmation |
+| `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` | Full flap cycle: connect upstream → disconnect → reconnect → `Stop()` on the final connection; no goroutine leak across the cycle; validates per-reconnect-iteration join per Q6/F-SP1-005; `go test -race` clean (AC-005) |
 
 **Existing test that must remain unmodified and green:**
 
@@ -551,27 +634,30 @@ Estimated test counts are forecasts; actual delivered count may differ after adv
 | `TestScanForLine_DetectsEFWD001ProductionEmission` | `cmd/switchboard/router_pe_connector_test.go` | F-P11-001 mutation pin from S-7.04-FU-PE-CONNECTOR — documents `"E-FWD-001"` assertion key; MUST NOT be modified |
 
 **Estimated new test count (forecast):** ~8 net-new (1 `frame_test` + 3 `connector_test` + 4
-integration). This is a pre-implementation estimate; adversarial hardening may add additional
-regression tests as observed in S-7.04-FU-PE-CONNECTOR (+11 tests above forecast during its
-29-pass cycle).
+integration). This is a pre-implementation forecast; adversarial hardening typically adds
+additional regression tests (S-7.04-FU-PE-CONNECTOR added +11 tests above forecast during its
+32-pass cycle). Roll-up to be recast in delivered tense after implementation.
 
 ---
 
 ## Tasks
 
-1. [ ] Read placement note `decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md` v1.0 and disposition ruling `decisions/S-BL.PE-RECEIVE-LOOP-disposition-ruling.md` v1.0 before writing any code
+1. [ ] Read placement note `decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md` v1.1 and disposition ruling `decisions/S-BL.PE-RECEIVE-LOOP-disposition-ruling.md` v1.0 before writing any code
 2. [ ] Update ARCH-08 §6.5: `internal/upstreamdial` import set `{halfchannel, outerassembler}` → `{frame, halfchannel, outerassembler}` (required in same commit as first `frame` import in `connector.go`)
-3. [ ] Add `frame.FrameTypePEConnect = 0x06` constant + update `Valid()` upper bound in `internal/frame/frame.go`
-4. [ ] Add `frame.ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error)` to `internal/frame/frame.go`
-5. [ ] Add `TestFrameType_Valid_PEConnect` to `internal/frame/frame_test.go` (RED gate)
-6. [ ] Add `FrameFn` type + `SetFrameCallback(fn FrameFn)` to `Handle` interface in `internal/upstreamdial/connector.go`
-7. [ ] Add receive goroutine in `dialLoop` with `frame.ReadOuterFrame` loop, `FrameTypePEConnect` discrimination, and per-connection lifecycle sync
-8. [ ] Flip `dialLoop` bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect`
-9. [ ] Write unit tests for receive goroutine (AC-001, AC-003, AC-005) — RED gate before step 7
-10. [ ] Wire `SetFrameCallback` in `cmd/switchboard/mgmt_wire.go` with `routing.RouteFrame` closure
-11. [ ] Write integration tests in `cmd/switchboard/router_pe_receive_test.go` — RED gate before step 10/11
-12. [ ] Verify `go test -race -count=1 ./...` full green; `golangci-lint` 0 issues; `gofumpt` no diffs
-13. [ ] Verify `TestScanForLine_DetectsEFWD001ProductionEmission` still passes unmodified
+3. [ ] Amend ARCH-02 §"Outer Header Format" `frame_type` row to add `pe_connect=0x06` in the same commit that defines `FrameTypePEConnect` (parallel obligation to Task 2; F-SP1-003)
+4. [ ] Add `frame.FrameTypePEConnect = 0x06` constant (with `// (ARCH-02 §3.1)` citation) + update `Valid()` upper bound in `internal/frame/frame.go`
+5. [ ] Update `internal/frame/frame.go` doc comments: `FrameType` type ("five" → "six canonical values"), `Valid()` ("0x06..0xFF" → "0x07..0xFF", "five" → "six"), `ErrInvalidFrameType` ("five" → "six" or "not in {0x01..0x06}") (F-SP1-002)
+6. [ ] Add `frame.ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error)` to `internal/frame/frame.go`
+7. [ ] Update `internal/frame/frame_test.go`: change `just_above_max` from `FrameType(0x06)` to `FrameType(0x07)`; change `invalids` slice `0x06` entry to `0x07`; update `"five canonical enum values"` comment; update `"Bytes not in {0x01..0x05}"` comment (F-SP1-002)
+8. [ ] Add `TestFrameType_Valid_PEConnect` to `internal/frame/frame_test.go` (RED gate)
+9. [ ] Add `FrameFn` type + `SetFrameCallback(fn FrameFn)` to `Handle` interface in `internal/upstreamdial/connector.go`
+10. [ ] Add receive goroutine in `dialLoop` with `frame.ReadOuterFrame` loop, `FrameTypePEConnect` discrimination, and per-connection lifecycle sync (WaitGroup or done-chan join before reconnect; F-SP1-005)
+11. [ ] Flip `dialLoop` bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect`
+12. [ ] Write unit tests for receive goroutine (AC-001, AC-003, AC-005) — RED gate before step 10
+13. [ ] In `cmd/switchboard/mgmt_wire.go`: construct `multipath.NewDropCache` + `routing.NewFrameArrivalHandler` after Phase b; apply `routing.WithFrameArrivalLogger`; wire `SetFrameCallback` with `FrameFn` closure routing through `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` per Q8 (not `routing.RouteFrame`); add `internal/multipath` import
+14. [ ] Write integration tests in `cmd/switchboard/router_pe_receive_test.go` including flap-cycle test `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` — RED gate before step 13
+15. [ ] Verify `go test -race -count=1 ./...` full green; `golangci-lint` 0 issues; `gofumpt` no diffs
+16. [ ] Verify `TestScanForLine_DetectsEFWD001ProductionEmission` still passes unmodified
 
 ---
 
@@ -589,3 +675,4 @@ regression tests as observed in S-7.04-FU-PE-CONNECTOR (+11 tests above forecast
 |---------|------|--------|
 | 0.1-backlog-stub | 2026-07-07 | Initial backlog stub. Created by PO adjudication F-P1-002 (AC-004 partial-discharge, class unmet-deps on S-7.04-FU-PE-CONNECTOR). No ACs, no FCL. Status: backlog. |
 | 1.0 | 2026-07-08 | Elaborated stub → sprint-ready. Governing artifacts: placement note v1.0 (Q1–Q7 architect rulings; all symbols grep-verified at `8eb54a5`), disposition ruling v1.0 (Q-A option (a): BC-2.06.003 is non-discharging prerequisite trace; binding anchor is BC-2.02.008 PC-3/EC-003; Q-B: single story, 5 pts). ACs: AC-001 (receive goroutine active; frames reach OnFrameArrival), AC-002 (runRouter SetFrameCallback wiring), AC-003 (FO-PE-LOOP-001 discharge: FrameTypePEConnect + Valid() + dialLoop flip + discrimination), AC-004 (E-FWD-001 exhaustion integration + S404-OBS-F/S404-LOW-1 re-confirmation), AC-005 (receive goroutine lifecycle/doneCh). Anchors Consumed: BC-2.06.003 PC-1 row corrected from "To discharge" to "Non-discharging prerequisite trace" per disposition ruling v1.0 Q-A. FCL: 8 rows. Estimated test surface: ~8 net-new. FO-PE-LOOP-001 consumed. Version: 1.0; status: ready; points: 5; acceptance_criteria_count: 5. |
+| 1.1 | 2026-07-08 | Remediate spec-adversarial pass-1 findings. Governing artifact: placement note v1.1. F-SP1-001 (HIGH [spec-defect]): Q8 ruling supersedes Q1/Q2 RouteFrame wiring — AC-001 PC-2 rewritten to FrameArrivalHandler.OnFrameArrival wiring with full construction spec (NewDropCache/NewFrameArrivalHandler/WithFrameArrivalLogger/OnFrameArrival/InterfaceID/ForwardFunc all verified at 8eb54a5); AC-002 title + all PCs rewritten to Q8 wiring spec (DropCache construction, arrivalHandler.OnFrameArrival, multipath import, deterministic exhaustion via single-interface set); AC-004 title + mechanism reframed (arqsend remains frame driver per Q4, but exhaustion is topologically guaranteed by interfaceSet=={peIfaceID}, not load-dependent; HMAC bypass noted + SEC follow-on flagged); FCL row 6 rewritten (RouteFrame closure → OnFrameArrival closure + multipath import); Design Constraints Q1/Q2 prose updated to cite Q8 supersession; AC-001 BC trace adds Q8 citation. F-SP1-002 (HIGH [spec-gap]): FCL row 3 expanded with frame_test.go blast-radius amendments (just_above_max 0x06→0x07, invalids 0x06→0x07, "five canonical" comments, "{0x01..0x05}" comment); FCL row 1 expanded with frame.go doc-comment updates (FrameType/"five"→"six", Valid() range, ErrInvalidFrameType); Tasks 5/7 added; File Structure Requirements updated. F-SP1-003 (HIGH [spec-gap]): FCL row 9 added (ARCH-02 §"Outer Header Format" frame_type row amendment, pe_connect=0x06, same-commit-as-constant obligation); Architecture Compliance Rules + File Structure Requirements + Task 3 added. F-SP1-004 (MED [doc-drift]): BC-2.09.001 added to frontmatter bc_traces; Anchors Consumed table gains BC-2.09.001 non-discharging contextual anchor row; AC-001 BC Anchors updated. F-SP1-005 (MED [spec-gap]): AC-005 PC-2 added (per-reconnect-iteration join, binding per Q6 v1.1); AC-005 test names updated (TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop recast as flap-cycle test; rationale note added); FCL row 7 flap-cycle description added; Estimated Test Surface table row updated. F-SP1-007 (LOW [doc-drift]): TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop added to AC-005 Test-names block + reconciled across FCL row 7 + Estimated Test Surface. (F-SP1-006 was placement-note-internal — fixed in placement note v1.1; cited as governing-artifact context only.) FCL: 8→9 rows. |

@@ -1583,3 +1583,47 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 ## S-7.04-FU-PE-CONNECTOR — DELIVERED (2026-07-08)
 
 **Merged:** PR #115 squash @ 8eb54a5 (2026-07-08T21:50:10Z). VP true-up PR #116 merged (VP-038 anchor:true, VP-037 anchor:false). Branch deleted. Cycle complete: 32 passes, 39 findings, converged P32, delivered same day. S-BL.PE-RECEIVE-LOOP unblocked.
+
+---
+
+## S-BL.PE-RECEIVE-LOOP — Spec-Adversarial Convergence Cycle
+
+### Finding Progression
+
+| Pass | Story version | Total | HIGH | MED | LOW | Streak | Remediation |
+|------|---------------|-------|------|-----|-----|--------|-------------|
+| 1 (spec) | v1.0 | 7 | 3 | 3 | 1 | 0/3 | note v1.1 (Q8) + story v1.1 — all remediated |
+
+### Trajectory Shorthand
+
+`7 (3H/3M/1L)` — pass 1 HAS_FINDINGS → remediated; streak 0/3; pass 2 pending.
+
+### Pass 1 Details (2026-07-08)
+
+**Story at review:** v1.0 | **Placement note at review:** v1.0
+
+**Verdict:** HAS_FINDINGS — 7 findings (3 HIGH, 3 MED, 1 LOW). All remediated.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP1-001 | HIGH | spec-defect | AC wiring targeted `routing.RouteFrame` but `E-FWD-001` is emitted only from `FrameArrivalHandler.OnFrameArrival` which has zero production callers — the binding anchor was undischargeable as specified. | Q8 ruling: `runRouter` constructs `NewDropCache` + `NewFrameArrivalHandler` + `WithFrameArrivalLogger`; `SetFrameCallback` closure routes through `OnFrameArrival` (not `RouteFrame`). AC-001/002/004 + FCL row 6 rewritten. Note v1.1 §Q8. |
+| F-SP1-002 | HIGH | spec-gap | `Valid()` widening to `0x06` breaks two existing `frame_test.go` pins (`just_above_max` case 0x06→false; `invalids` slice containing 0x06); doc comments in `frame.go` referencing "five values" not enumerated in story. | Q3 blast-radius enumeration added: `just_above_max` 0x06→0x07, `invalids` 0x06→0x07, five doc-comment occurrences named. FCL row 1+3 expanded. |
+| F-SP1-003 | HIGH | spec-gap | ARCH-02 canonical `frame_type` table amendment obligation missing from story FCL/tasks — `FrameTypePEConnect = 0x06` goes on the wire, ARCH-02 is declared canonical source of truth for the outer-header wire format. | Q3 ARCH-02 amendment obligation added; FCL row 9 (`ARCH-02-protocol-stack.md` MODIFIED, `pe_connect=0x06`, same-commit-as-constant obligation); Task 3 added; Architecture Compliance Rules + File Structure Requirements updated. |
+| F-SP1-004 | MED | doc-drift | `BC-2.09.001` cited in `AC-001` as contextual anchor but absent from frontmatter `bc_traces` and Anchors Consumed table. | BC-2.09.001 added to frontmatter `bc_traces`; Anchors Consumed table gains non-discharging contextual anchor row. |
+| F-SP1-005 | MED | spec-gap | Q6 per-reconnect-iteration receive-goroutine join dropped from story — a "flapping" upstream can accumulate O(N) receive goroutines without it (goroutine-leak vector). | AC-005 PC-2 added (per-reconnect-iteration join, binding per Q6 v1.1); `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` recast as flap-cycle test with rationale note; FCL row 7 flap-cycle description added. |
+| F-SP1-006 | MED | doc-drift | Q1 stated "No new import row is needed" and described callback signature as `func([]byte) error`, directly contradicting Q2's ruling that `upstreamdial` gains a direct `frame` import and the signature is `type FrameFn func(hdr frame.OuterHeader, raw []byte) error`. | Q1 supersession annotation added to placement note v1.1; Q2 named as controlling spec for all import/signature details; Q1 routing-free constraint and callback-seam choice preserved. |
+| F-SP1-007 | LOW | doc-drift | Orphaned test name: `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` present in AC-005 test names block but absent from FCL row 7 integration tests list and Estimated Test Surface table. | Test name reconciled across AC-005 test-names block, FCL row 7, and Estimated Test Surface table. |
+
+#### Remediation Summary
+
+**Placement note v1.0 → v1.1:** New Q8 ruling (FrameArrivalHandler wiring — NewDropCache/NewFrameArrivalHandler/WithFrameArrivalLogger construction in runRouter; OnFrameArrival closure with single-interface set making E-FWD-001 deterministic; HMAC-bypass note; zero blast radius on RouteFrame callers); Q3 blast radius enumerated (frame_test pins + doc comments + ARCH-02); Q1 supersession annotation; Q6 flap-join rule strengthened; Appendix A +5 symbols (DropCache, NewDropCache, DefaultDropCacheSize, SVTNRoute, ErrDropCacheHit).
+
+**Story v1.0 → v1.1:** AC-001 PC-2 rewritten to FrameArrivalHandler.OnFrameArrival wiring with full construction spec; AC-002 title + all PCs rewritten to Q8 wiring spec; AC-004 mechanism reframed (deterministic single-interface-set split-horizon block; HMAC bypass adjudicated acceptable + SEC follow-on flagged); FCL row 6 rewritten (RouteFrame closure → OnFrameArrival closure + multipath import); FCL row 9 added (ARCH-02 amendment); FCL row 3+1 expanded (frame_test/frame.go blast radius); BC-2.09.001 added to frontmatter + Anchors Consumed; AC-005 PC-2 + flap-cycle test; test names reconciled. FCL 8→9 rows.
+
+#### Spec-Level Convergence ROI (F-SP1-001)
+
+F-SP1-001 caught pre-code the same defect class that cost PE-CONNECTOR its AC-004 partial-discharge at impl-time (F-P1-002 in the PE-CONNECTOR cycle). The spec-adversarial pass detected that `routing.RouteFrame` cannot reach `E-FWD-001` — a structural wiring defect that would have required a full adversarial remediation cycle (potentially 5+ passes with code changes) to surface after implementation began. Q8's deterministic-exhaustion mechanism (single-interface set in the `FrameFn` closure guarantees split-horizon block on every non-bootstrap frame regardless of load) replaces the prior load-dependent framing entirely. HMAC-bypass adjudicated with SEC follow-on flag for PR — acceptable because PE upstream connections are established outbound by the connector itself, not arbitrary ingress.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-1 when authored).

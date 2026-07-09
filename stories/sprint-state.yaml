@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.05
+# version: 2.06
 # changelog:
+#   - version: 2.06
+#     date: 2026-07-08
+#     description: "S-BL.PE-RECEIVE-LOOP spec-adversarial pass 1 remediated — 7 findings (3H/3M/1L), all closed: F-SP1-001 (HIGH [spec-defect]) RouteFrame wiring defect → Q8 ruling: FrameArrivalHandler.OnFrameArrival wiring with NewDropCache/NewFrameArrivalHandler/WithFrameArrivalLogger construction in runRouter; F-SP1-002 (HIGH [spec-gap]) Valid() 0x06 blast radius → frame_test.go pins + doc comments enumerated; F-SP1-003 (HIGH [spec-gap]) ARCH-02 frame_type table amendment obligation; F-SP1-004 (MED [doc-drift]) BC-2.09.001 added as contextual anchor; F-SP1-005 (MED [spec-gap]) Q6 per-reconnect-iteration join; F-SP1-006 (MED [doc-drift]) Q1↔Q2 supersession annotation; F-SP1-007 (LOW [doc-drift]) test name reconciled. Placement note v1.0→v1.1 (Q8 new, Q3 blast-radius, Q6 strengthened, Q1 supersession, Appendix A +5 symbols). Story v1.0→v1.1 (AC-001/002/004 rewired per Q8 + HMAC adjudication + SEC follow-on; FCL 8→9 rows incl. ARCH-02; BC-2.09.001 added; AC-005 flap-cycle join; test names reconciled). STORY-INDEX v4.40→v4.41. Spec adversarial pass 2 next (streak 0/3)."
 #   - version: 2.05
 #     date: 2026-07-08
 #     description: "S-BL.PE-RECEIVE-LOOP elaboration COMPLETE — story v1.0 status ready (5 ACs): placement note v1.0 (Q1-Q7 rulings) + disposition ruling v1.0 consumed. Q-A option (a): BC-2.06.003 PC-1 = non-discharging prerequisite trace; binding anchor BC-2.02.008 PC-3/EC-003 only. Q-B: single story 5 pts. ACs: AC-001 (receive goroutine active; frames reach OnFrameArrival), AC-002 (runRouter SetFrameCallback wiring), AC-003 (FO-PE-LOOP-001 discharge: FrameTypePEConnect+Valid()+dialLoop flip+discrimination), AC-004 (E-FWD-001 exhaustion+S404-OBS-F/S404-LOW-1 re-confirmation), AC-005 (receive goroutine lifecycle/doneCh). FCL 8 rows, ~8 net-new tests. S-BL.PE-RECEIVE-LOOP entry: status ready-for-spec-adversarial. STORY-INDEX v4.39→v4.40. Spec adversarial convergence next (streak 0/3)."
@@ -971,14 +974,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.0"
+    story_version: "1.1"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
-    bc_traces: [BC-2.02.008]
+    bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.0"
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.1"
+    spec_adversarial_pass: 1
     spec_adversarial_streak: "0/3"
-    note: "spec adversarial convergence next (streak 0/3)"
+    last_findings: "7 (3 HIGH: RouteFrame wiring defect / Valid() blast radius / ARCH-02 amendment) — all remediated (note v1.1 Q8, story v1.1)"
+    note: "awaiting spec adversarial pass 2 (story v1.1 + note v1.1, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
@@ -987,6 +992,7 @@ stories:
     # Disposition ruling Q-B: single story 5 pts. Premises code-verified at 8eb54a5.
     # ACs: AC-001 receive goroutine/ReadOuterFrame; AC-002 SetFrameCallback wiring; AC-003 FO-PE-LOOP-001 discharge; AC-004 E-FWD-001/S404 re-confirmation; AC-005 lifecycle/doneCh.
     # FCL 8 rows, ~8 net-new tests. BC-2.06.003 PC-1 anchors table corrected (non-discharging prerequisite trace).
+    # 2026-07-08: spec-adversarial pass 1 REMEDIATED — 7 findings (3H: RouteFrame wiring / Valid() blast radius / ARCH-02 amendment; 3M: BC-2.09.001 anchor / Q6 flap-join / Q1↔Q2 contradiction; 1L: test name). Note v1.1 (Q8 ruling: FrameArrivalHandler wiring; Q3 blast radius enumerated; Q6 strengthened; Q1 supersession annotation; Appendix A +5 symbols). Story v1.1 (AC-001/002/004 rewired per Q8 with HMAC adjudication + SEC flag; FCL row 9 ARCH-02; BC-2.09.001 contextual anchor; AC-005 flap-cycle; test names). Streak 0/3.
 
 # Changelog
 # v1.64 — 2026-07-04: Burst 85 — Pass 35 remediation COMPLETE. wave-6-tranche-a-scope-rulings.md v1.12→v1.13: §10 (Ruling-14) Impact Assessment retroactive annotation + changelog row. False "E-RPC-002 already defined" premise corrected — row was minted Burst 82, three days after Ruling-14 authorship. No BC or runtime change. DRIFT-P5P35-RULING-14-GOVERNANCE-PREMISE-STALE CLOSED. Awaiting Pass 36.

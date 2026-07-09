@@ -33,7 +33,7 @@ develop_head: 8eb54a5
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.PE-RECEIVE-LOOP spec adversarial pass 1 (story v1.0, streak 0/3)"
+awaiting: "S-BL.PE-RECEIVE-LOOP spec adversarial pass 2 (story v1.1 + note v1.1, streak 0/3)"
 historical_cycles: []
 timestamp: 2026-07-08T22:00:00Z
 last_update: 2026-07-08
@@ -61,7 +61,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-08 | **S-BL.PE-RECEIVE-LOOP elaboration COMPLETE — story v1.0 ready (5 ACs); spec adversarial pass 1 next (streak 0/3)** | completed | Disposition ruling v1.0 consumed: Q-A option (a) BC-2.06.003 PC-1 = non-discharging prerequisite trace; binding anchor BC-2.02.008 PC-3/EC-003 only. Q-B: single story 5 pts (premises code-verified at 8eb54a5). Story v1.0: 5 ACs (AC-001 receive goroutine/ReadOuterFrame; AC-002 SetFrameCallback wiring; AC-003 FO-PE-LOOP-001 discharge; AC-004 E-FWD-001/S404 re-confirmation; AC-005 lifecycle/doneCh). FCL 8 rows, ~8 net-new tests. sprint-state v2.04→v2.05. STORY-INDEX v4.39→v4.40. |
+| 2026-07-08 | **S-BL.PE-RECEIVE-LOOP spec pass 1 REMEDIATED — 7 findings (3H/3M/1L) all closed; note v1.1 (Q8 FrameArrivalHandler wiring); story v1.1; pass 2 next (streak 0/3)** | completed | F-SP1-001 (HIGH): Q8 ruling — OnFrameArrival wiring with NewDropCache/NewFrameArrivalHandler/WithFrameArrivalLogger; HMAC-bypass adjudicated acceptable + SEC follow-on flag. F-SP1-002 (HIGH): Valid() blast radius (frame_test pins + doc comments enumerated). F-SP1-003 (HIGH): ARCH-02 frame_type table amendment obligation; FCL row 9 added. F-SP1-004 (MED): BC-2.09.001 contextual anchor added. F-SP1-005 (MED): AC-005 flap-cycle join added. F-SP1-006 (MED): Q1↔Q2 supersession annotation. F-SP1-007 (LOW): test name reconciled. Note v1.1, story v1.1, FCL 8→9 rows. sprint-state v2.05→v2.06. STORY-INDEX v4.40→v4.41. |
 | 2026-07-08 | **S-BL.PE-RECEIVE-LOOP elaboration begun — architect placement note v1.0 (Q1-Q7); PO disposition on BC-2.06.003 PC-1 in flight** | completed | Placement note v1.0 authored: Q1 receive goroutine in upstreamdial via SetFrameCallback seam; Q2 frame.ReadOuterFrame NEW in internal/frame; Q3 FrameTypePEConnect=0x06 NEW with Valid() upper-bound update mandate; Q4 arqsend test-internal wiring; Q5 E-FWD-001 assertion key; Q6 done-channel joint teardown; Q7 BC-2.06.003 PC-1 mechanism ambiguity FLAGGED for PO. 55-symbol sweep appendix, zero phantoms. |
 | 2026-07-08 | **S-7.04-FU-PE-CONNECTOR MERGED — PR #115 @ 8eb54a5; VP true-up PR #116; S-BL.PE-RECEIVE-LOOP unblocked** | completed | PR #115 squash-merged to develop @ 8eb54a5 (2026-07-08T21:50:10Z). VP true-up PR #116 merged (VP-038 anchor trued; VP-037 partial). Branch deleted. story v1.27, DELIVERY v1.1. Deferred follow-ons: SEC-001 sanitizeAddrForError, SEC-002 MaxUpstreamRouters cap, Stop-before-Start deadlock nit, NewTicker<=0 panic guard nit. S-BL.PE-RECEIVE-LOOP now unblocked (next anchor). S-7.04-FU-DRAIN-WIRE remains blocked on PE-RECEIVE-LOOP. |
 | 2026-07-08 | **PE-CONNECTOR adversary P32 CLEAN @ 6b6f0cf — CONVERGED 3/3 — BC-5.39.001 Step 4.5 SATISFIED** | completed | Pass-32: NO_FINDINGS — convergence pass. Spot-checked F-P24/F-P13/F-P15 all holding. F-P29 fix re-derived from fresh context — sound. Two false positives dismissed (out-of-perimeter SIGHUP doc; already-adjudicated P16 docstring). All 9 bars green. 32 passes, 39 findings, zero open. CONVERGENCE ACHIEVED. |
