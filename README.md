@@ -35,8 +35,10 @@ graph LR
     subgraph carrier["the internet — the network operator's routers"]
         R0["router — blind relay<br/>verifies envelopes + HMAC<br/>cannot decrypt · cannot inject"]
     end
-    subgraph work["machines hosting the work"]
+    subgraph m1["machine hosting work"]
         AN1["access node"] --- TM1["tmux sessions"]
+    end
+    subgraph m2["another machine"]
         AN2["access node"] --- TM2["tmux sessions"]
     end
     CN2 <==>|"end-to-end<br/>encrypted circuit"| R0

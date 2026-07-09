@@ -54,25 +54,32 @@ graph LR
     subgraph plane["switchboard deployment (one SVTN)"]
         CN["console<br/>interactive endpoint:<br/>sends keys, receives stream"]
         R["router<br/>blind relay for encrypted circuits<br/>E-mode: single LAN · PE-mode: upstream"]
-        subgraph host["machines with tmux"]
-            AN["access nodes<br/>publish local tmux sessions"]
-            TM["tmux servers<br/>(the actual programs)"]
+        subgraph host1["machine with tmux"]
+            AN["access node<br/>publishes local tmux sessions"]
+            TM["tmux server<br/>(the actual programs)"]
             AN --- TM
+        end
+        subgraph host2["another machine with tmux"]
+            AN2["access node"] --- TM2["tmux server"]
         end
         CT["control node<br/>admission plane: create SVTNs,<br/>register/revoke keys<br/>(no session traffic)"]
     end
 
     CN -- "keystrokes" --> R -- "keystrokes" --> AN
     AN == "terminal output —<br/>the bulk of every byte" ==> R == "terminal output" ==> CN
+    R --> AN2
+    AN2 ==> R
     OP["operator (sbctl)"] -. "mgmt RPC on each daemon's socket —<br/>how you operate it, not how it operates" .-> plane
 ```
 
 Action reads left to right: the operator's keystroke goes out, the
-terminal output — the bulk of every byte — comes back (thick). The
-SVTN's session namespace works like a routing table, except the
-routes are tmux sessions: every access node publishes into it, and one
-query from the console answers "what can I attach to, across all of
-them?" The thick arrows above are what the deployment is *for*; the
+terminal output — the bulk of every byte — comes back (thick). An
+access node is 1:1 with its machine — every box is a separate
+computer, server, or container running its own access daemon beside
+its own tmux. The SVTN's session namespace works like a routing table,
+except the routes are tmux sessions: every access node publishes into
+it, and one query from the console answers "what can I attach to,
+across all of them?" The thick arrows above are what the deployment is *for*; the
 dotted arrow is the steering wheel. Each example draws the two
 separately:
 

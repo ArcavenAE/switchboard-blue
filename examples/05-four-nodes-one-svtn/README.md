@@ -29,12 +29,21 @@ graph LR
         CN["console — live<br/>one screen + keyboard<br/>for every session in the table"]
         DIR["session directory —<br/>a routing table of tmux sessions:<br/>top@node1 · htop@node2<br/>watch@node3 · vmstat@node4"]
         R["router — blind relay<br/>carries every circuit,<br/>reads none"]
-        subgraph work["four machines hosting the work — all live"]
+        subgraph n1["machine: node1"]
             direction LR
-            A1["access node1 — tmux: top"]
-            A2["access node2 — tmux: htop"]
-            A3["access node3 — tmux: watch date"]
-            A4["access node4 — tmux: vmstat 1"]
+            A1["access node"] --- T1["tmux: top"]
+        end
+        subgraph n2["machine: node2"]
+            direction LR
+            A2["access node"] --- T2["tmux: htop"]
+        end
+        subgraph n3["machine: node3"]
+            direction LR
+            A3["access node"] --- T3["tmux: watch date"]
+        end
+        subgraph n4["machine: node4"]
+            direction LR
+            A4["access node"] --- T4["tmux: vmstat 1"]
         end
         CN -. "sessions list —<br/>reads the table" .-> DIR
         CN -. "attach / switch by name,<br/>keystrokes out" .-> R

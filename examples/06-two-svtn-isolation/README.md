@@ -42,15 +42,27 @@ graph LR
     CB["team b console"]
     R["netop's router — shared transport<br/>carries both teams' circuits,<br/>can read neither"]
     subgraph ta["team a's SVTN"]
-        AA["access nodes a1, a2"] --- TA["tmux: top · watch date"]
+        subgraph na1["machine: node-a1"]
+            AA1["access node"] --- TA1["tmux: top"]
+        end
+        subgraph na2["machine: node-a2"]
+            AA2["access node"] --- TA2["tmux: watch date"]
+        end
     end
     subgraph tb["team b's SVTN"]
-        AB["access nodes b1, b2"] --- TB["tmux: htop · vmstat"]
+        subgraph nb1["machine: node-b1"]
+            AB1["access node"] --- TB1["tmux: htop"]
+        end
+        subgraph nb2["machine: node-b2"]
+            AB2["access node"] --- TB2["tmux: vmstat 1"]
+        end
     end
     CA -. "team a's encrypted circuits" .- R
     CB -. "team b's encrypted circuits" .- R
-    R -. "team a only" .- AA
-    R -. "team b only" .- AB
+    R -. "team a only" .- AA1
+    R -.- AA2
+    R -. "team b only" .- AB1
+    R -.- AB2
 ```
 
 The circuits are dotted because the connector is unshipped: today the

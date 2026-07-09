@@ -41,8 +41,8 @@ graph LR
     subgraph carrier["the internet — the network operator's routers"]
         R0["blind relay:<br/>delivers circuits,<br/>cannot get inside them"]
     end
-    subgraph work0["machines hosting the work — SVTN members"]
-        AN0["access nodes — tmux sessions"]
+    subgraph work0["a machine hosting the work — SVTN member"]
+        AN0["access node"] --- TM0["tmux sessions"]
     end
     CN0 <==>|"end-to-end<br/>encrypted circuit"| R0
     R0 <==> AN0
