@@ -28,6 +28,41 @@ to its **management plane**.
 
 ## Topology
 
+### The network view
+
+The trust split, made runnable: **one carrier, two tenants**. The
+router belongs to the network operator and carries both teams'
+circuits; it can read neither, and neither team can touch it — or each
+other. This is the shared-responsibility model the architecture exists
+for: shared transport, disjoint authority.
+
+```mermaid
+graph LR
+    subgraph ta["team a's SVTN"]
+        TA["tmux: top · watch date"] --- AA["access nodes a1, a2"]
+    end
+    subgraph tb["team b's SVTN"]
+        TB["tmux: htop · vmstat"] --- AB["access nodes b1, b2"]
+    end
+    R["netop's router — shared transport<br/>carries both teams' circuits,<br/>can read neither"]
+    AA -. "team a's encrypted circuits" .-> R
+    AB -. "team b's encrypted circuits" .-> R
+    R -. "team a only" .-> CA["team a console"]
+    R -. "team b only" .-> CB["team b console"]
+```
+
+The circuits are dotted because the connector is unshipped: today the
+isolation is proven where it starts, at the **admission layer** — every
+cross-team key is refused by every wrong daemon. When the connector
+lands, the dotted circuits become the acceptance test for the stronger
+claim: team a's console cannot even *see* team b's sessions on the
+shared router (`E-ADM-006`).
+
+### Ground level — three keys, one matrix
+
+Operating the deployment is the lesson here: the operator container
+wears each identity in turn and walks the full authority matrix.
+
 ```mermaid
 graph TB
     R["router — netop's infrastructure<br/>mgmt: netop key ONLY<br/>data plane :9090: shared transport"]

@@ -50,24 +50,36 @@ Example 06 pulls the roles apart. Full table with spec anchors:
 [docs/architecture.md — Who runs what](../docs/architecture.md#who-runs-what--the-two-sides-of-the-trust-boundary).
 
 ```mermaid
-graph TB
-    OP["operator<br/>(a human or agent running sbctl)"]
-
+graph LR
     subgraph plane["switchboard deployment (one SVTN)"]
-        CT["control node<br/>admission plane: create SVTNs,<br/>register/revoke keys<br/>(no session traffic)"]
-        R["router<br/>blind relay for encrypted frames<br/>E-mode: single LAN · PE-mode: upstream"]
-        subgraph host["machine with tmux"]
-            AN["access node<br/>publishes local tmux sessions"]
-            TM["tmux server<br/>(the actual programs)"]
-            AN --- TM
+        subgraph host["machines with tmux"]
+            TM["tmux servers<br/>(the actual programs)"]
+            AN["access nodes<br/>publish local tmux sessions"]
+            TM --- AN
         end
+        R["router<br/>blind relay for encrypted circuits<br/>E-mode: single LAN · PE-mode: upstream"]
         CN["console<br/>interactive endpoint:<br/>receives stream, sends keys"]
+        CT["control node<br/>admission plane: create SVTNs,<br/>register/revoke keys<br/>(no session traffic)"]
     end
 
-    OP -- "sbctl (mgmt RPC,<br/>Ed25519 challenge-response)" --> CT & R & AN & CN
-    AN == "session frames" ==> R
-    R == "session frames" ==> CN
+    AN == "terminal output —<br/>the bulk of every byte" ==> R == "terminal output" ==> CN
+    CN -- "keystrokes" --> R -- "keystrokes" --> AN
+    OP["operator (sbctl)"] -. "mgmt RPC on each daemon's socket —<br/>how you operate it, not how it operates" .-> plane
 ```
+
+The SVTN's session namespace works like a routing table, except the
+routes are tmux sessions: every access node publishes into it, and one
+query from the console answers "what can I attach to, across all of
+them?" The thick arrows above are what the deployment is *for*; the
+dotted arrow is the steering wheel. Each example draws the two
+separately:
+
+- **The network view** — where the example sits in the topology above
+  and which segment of the data plane it exercises. This is the point
+  of the lab.
+- **Ground level** — the compose plumbing and the `sbctl` connections
+  the assertions actually drive. This is how you operate it (and in
+  the admission-plane examples, operating it *is* the lesson).
 
 | Component | What it is | Where it appears in the examples |
 |---|---|---|

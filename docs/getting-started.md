@@ -13,23 +13,35 @@ about to install, see [docs/architecture.md](architecture.md).
 
 ## What you're building
 
+A tmux session on one machine, your screen and keyboard on another, and
+a router in between that carries the encrypted circuit without being
+able to see inside it. On a single LAN today (the current MVP scope,
+E-mode), across the internet as PE routing matures — the shape is the
+same:
+
 ```mermaid
 graph LR
     subgraph work["machine hosting the work"]
         TM["tmux session 'work'"]
         AN["access node daemon<br/>(§5)"]
-        AN --- TM
+        TM --- AN
     end
-    R["router, E-mode<br/>:9090 (§2)<br/>+ SVTN 'hello-svtn' (§3)"]
+    R["router, E-mode :9090 (§2)<br/>blind relay for the circuit<br/>+ SVTN 'hello-svtn' (§3)"]
     subgraph laptop["operator laptop"]
         CN["console daemon (§6)"]
         SB["sbctl<br/>(§3, §4, §7)"]
     end
 
-    AN == "session frames" ==> R == "session frames" ==> CN
-    SB -- "admin: create SVTN,<br/>register keys" --> R
-    SB -- "attach / detach" --> CN
+    AN == "terminal output" ==> R == "terminal output" ==> CN
+    CN -- "keystrokes" --> R -- "keystrokes" --> AN
+    SB -. "admin: create SVTN,<br/>register keys" .-> R
+    SB -. "attach / detach" .-> CN
 ```
+
+The thick arrows are the deployment's purpose — the session stream.
+The dotted arrows are you operating it with `sbctl`; that's most of
+what a *tutorial* does, but keep the distinction in view: the steps
+below build the thick arrows.
 
 Three keys, three roles (§3–§4): a **control** key for you the
 operator, an **access** key for the machine publishing the session, a

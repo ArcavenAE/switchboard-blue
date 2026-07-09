@@ -7,6 +7,29 @@ tmux and (eventually) publishes its sessions to the network.
 
 ## Topology
 
+### The network view
+
+This is the **far side of the internet** — the machine hosting the
+work. The segment proven live here is the one where the terminal bytes
+are born: a real tmux server with a real TUI redrawing, and the access
+daemon holding a live connection to it. Publishing those sessions
+toward the router (dotted) waits on the network connector.
+
+```mermaid
+graph LR
+    subgraph work["machine hosting the work — LIVE in this example"]
+        TM["tmux server<br/>session 'work' → top<br/>(continuous output)"]
+        AN["access node<br/>session backend connected"]
+        TM == "terminal frames<br/>relaying" ==> AN
+    end
+    AN -. "publish sessions<br/>(connector unshipped)" .-> R["router"]
+    R -.-> CN["console"]
+    classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
+    class R,CN dim
+```
+
+### Ground level — the compose plumbing
+
 ```mermaid
 graph LR
     subgraph net["compose network"]

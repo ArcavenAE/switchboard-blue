@@ -6,6 +6,28 @@ authority model fails closed at both layers.
 
 ## Topology
 
+### The network view
+
+The control node is the **SVTN operator's desk** — the admission plane
+that decides who is in the network at all. It carries no session
+traffic, ever: the data plane (grey) exists entirely apart from it.
+This lab is deliberately about *operating* that desk, so unlike most
+examples, `sbctl` is the star here rather than a footnote.
+
+```mermaid
+graph LR
+    subgraph data["data plane — no part of this example"]
+        TM["tmux"] --- AN["access node"]
+        AN -.-> R["router"] -.-> CN["console"]
+    end
+    CT["control node — LIVE<br/>admission plane:<br/>who may publish, attach, administer"]
+    CT -. "admits / revokes<br/>the keys the data plane trusts" .-> data
+    classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
+    class TM,AN,R,CN dim
+```
+
+### Ground level — the compose plumbing
+
 ```mermaid
 graph LR
     subgraph net["compose network"]

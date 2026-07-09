@@ -6,6 +6,26 @@ surface (`console attach / detach / switch`, `sessions status`).
 
 ## Topology
 
+### The network view
+
+This is **your side of the internet** — the operator's laptop. The
+console daemon is the endpoint where remote sessions become a screen
+and keyboard: terminal output terminates here, keystrokes originate
+here. What's live in this lab is the console's session-plane surface;
+the stream it will render (dotted) waits on the network connector.
+
+```mermaid
+graph LR
+    TM["tmux"] --- AN["access node"]
+    AN -.-> R["router"]
+    R -. "terminal output<br/>(connector unshipped)" .-> CN["console — LIVE<br/>screen + keyboard endpoint<br/>session plane answering"]
+    CN -. "keystrokes" .-> R
+    classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
+    class TM,AN,R dim
+```
+
+### Ground level — the compose plumbing
+
 ```mermaid
 graph LR
     subgraph ns["ONE shared network namespace (network_mode: service:console)"]
