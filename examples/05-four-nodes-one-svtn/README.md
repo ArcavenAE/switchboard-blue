@@ -59,8 +59,9 @@ What the assertions actually drive today: an authenticated management
 round-trip to all five daemons, from one operator container.
 
 ```mermaid
-graph TB
+graph LR
     subgraph net["compose network — one SVTN (target)"]
+        D["operator (sbctl)"]
         R["router<br/>data plane :9090<br/>mgmt router.sock"]
         subgraph n1["node1"]
             A1["access daemon"] --- T1["tmux: top"]
@@ -74,16 +75,21 @@ graph TB
         subgraph n4["node4"]
             A4["access daemon"] --- T4["tmux: vmstat 1"]
         end
-        C["console<br/>mgmt 127.0.0.1:9091"]
-        D["operator (sbctl)"]
+        C["console<br/>mgmt 127.0.0.1:9091<br/>(idle until the connector)"]
     end
-    D -- "router.sock" --> R
-    D -- "node1..4.sock" --> A1 & A2 & A3 & A4
-    D -- "TCP :9090" --> R
+    D -- "mgmt: router.sock" --> R
+    D -- "data plane: TCP :9090" --> R
+    D -- "mgmt: node1.sock" --> A1
+    D -- "mgmt: node2.sock" --> A2
+    D -- "mgmt: node3.sock" --> A3
+    D -- "mgmt: node4.sock" --> A4
 ```
 
+The operator initiates everything from the left: five authenticated
+management round-trips (one per daemon) plus a raw data-plane reach.
 The management sockets (`nodeN.sock`, `router.sock`) share one `run:`
-volume with the operator.
+volume with the operator; the console's mgmt is loopback-TCP-only, so
+it runs unprobed here (that surface is example 04's lab).
 
 ## Transaction under test
 
