@@ -1598,12 +1598,13 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 4 (spec) | v1.3 | 2 | 2 | 0 | 0 | 0/3 | note v1.4 (FrameFn return-value contract + SetFrameCallback ordering) + story v1.4 — all remediated; v1.3 remediations cleared under direct attack |
 | 5 (spec) | v1.4 | 3 | 1 | 0 | 2 | 0/3 | note v1.5 (READ-error disposition) + story v1.5 + index v4.45 — remediated; streak resets 0/3 |
 | 6 (spec) | v1.5 | 4 | 2 | 1 | 1 | 0/3 | note v1.6 + story v1.6 + index v4.46 — remediated; streak stays 0/3 |
+| 7 (spec) | v1.6 | 5 | 1 | 2 | 2 | 0/3 | note v1.7 + story v1.7 + index v4.47 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; streak 0/3; pass 7 pending vs v1.6 package.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L) → 5 (1H/2M/2L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; streak 0/3; pass 8 pending vs v1.7 package.
 
-**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3` — new READ-error surface discovered at pass 5; all prior surfaces (production wiring, test injection, byte-content, callback contract) confirmed clear under direct attack at pass 4.
+**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). 4 API-stall recoveries this window.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1841,3 +1842,42 @@ Pass 6 attacked the layer beneath the v1.5 read-error contract remediation. Desc
 F-SP6-001 is the second consecutive instance of a remediation assuming an unbuilt mechanism (F-SP5-001 assumed `maintainConn` would handle reconnect after read-error; F-SP6-001 shows `maintainConn` never reads `conn`). Each pass finds the mechanism the previous pass relied upon does not exist one layer down.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-6 when authored).
+
+---
+
+### Pass 7 Details (2026-07-09)
+
+**Story at review:** v1.6 | **Placement note at review:** v1.6
+
+**Verdict:** HAS_FINDINGS — 1 HIGH, 2 MED, 2 LOW. All remediated.
+
+**Key meta-finding:** Pass 7 killed the v1.6 remediation's own observability premise — mode=PE was ground-truthed as a config-presence signal (present whenever the config lists any upstream routers) rather than an establishment observable. This is the THIRD consecutive remediation carrying a false ground-truth premise: v1.4 assumed `maintainConn` handled read-error reconnect (it doesn't); v1.5 assumed `maintainConn` closes the conn on read-error (it doesn't); v1.6 assumed `mode=PE` was visible at the moment the receive goroutine's first frame arrives (it isn't — `mode=PE` is set at startup when upstreams are configured, not when the first TCP accept fires). The spec-adversarial cycle is surfacing each false premise in sequence.
+
+**F-SP7-003 additional recurrence note:** The Option-A sweep (F-SP6-002 blast-radius) was incomplete in the note's quick-reference tables and left 2 Q1-body residuals. These residuals were caught on orchestrator disk-audit using expanded grep patterns (the architect's sweep transcript showed only table updates, not Q1-body prose). Sweep-pattern transcript discipline recorded: sweeps must include complete before/after grep evidence for prose sections, not just structured tables.
+
+**4 API-stall recoveries this window:** architect zero-work (first dispatch) + architect partial (second dispatch, recovered); story-writer zero-work (first dispatch) + story-writer partial (second dispatch, recovered); third dispatch for each completed the remediation.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP7-001 | HIGH | spec-defect | v1.6 F-SP6-003 observable substitute for `Mode()` was specified as "check the `mode=PE` log line emitted by `runRouter` on `SetFrameCallback` wiring." Ground-truth audit: `mode=PE` is set when the config has any upstream routers (i.e., when the daemon starts in PE mode) — it is a config-presence signal, not an establishment observable. The log line fires at `runRouter` entry, before any TCP accept; it does not confirm that a PE connection has been established and the receive goroutine has started. The v1.6 observable would pass even if the receive goroutine never started. | Note v1.6→v1.7: three-observable semantics ruled BINDING for AC-001 and AC-004 test verification. Observable-1: `peWriteFixture.accepted` channel receives (proves TCP connection was accepted). Observable-2: frame delivered to `OnFrameArrival` / E-FWD-001 emitted (proves receive goroutine processed a frame). Observable-3: `peWriteFixture.accepted` drain (proves goroutine exited on read-error). `mode=PE` log line retracted as an observable for receive-goroutine establishment. Story v1.7 propagates: AC-001 and AC-004 test patterns updated with three-observable discipline; old `mode=PE` test-pattern annotation removed. |
+| F-SP7-002 | MED | spec-divergence | AC-001 test-pattern section contained a parenthetical noting that `peWriteFixture.startPEWriteFixture` returns its `accepted` channel "before `Add(1)`" — a self-contradiction: `Add(1)` is the goroutine launch step inside the connector; the fixture cannot know goroutine-count state. The parenthetical was a vestigial implementation hint from an earlier spec version; it was never binding, but it created a false impression about the observable ordering. | Story v1.7: parenthetical removed; ordering rationale replaced with the three-observable semantics from F-SP7-001. |
+| F-SP7-003 | MED | spec-divergence | F-SP6-002 Option-A ruling ("SetFrameCallback concrete-only; runRouter type-assertion to *Connector justified; fakeConnectorHandle unaffected") was applied to the story but the placement note quick-reference tables (Q1 summary row + Q8 summary row) still referenced the old Handle-interface shape. Orchestrator disk-audit with expanded grep patterns also caught 2 Q1-body prose residuals that the architect's sweep transcript did not show (transcript showed table updates only). | Note v1.7: Q1 summary row + Q8 summary row updated to reflect Option-A ruling (concrete-only, type-assertion route). Q1-body prose residuals corrected. Sweep-pattern transcript discipline recorded: sweeps must include complete before/after grep evidence for prose sections in addition to structured tables. |
+| F-SP7-004 | LOW | doc-drift | Task 1 in story v1.6 cited placement note "v1.2" — stale by 5 versions. Correct version at pass-7 dispatch is v1.7. | Story v1.7: Task 1 citation corrected v1.2→v1.7. |
+| F-SP7-005 | LOW | spec-completeness | After the receive goroutine calls `conn.Close()` on read-error (F-SP6-001 binding), there is a transient window where `mode=PE` is still set (config-presence signal) but no receive goroutine is active. The window is bounded by `keepaliveInterval` (the reconnect tick in `maintainConn`), which re-establishes the connection and restarts the receive goroutine. The spec was silent on this window. | Note v1.7: transient stale-ModePE window acknowledged and bounded. The window is `≤ keepaliveInterval` (reconnect tick); the window is intentional and spec-correct — the router stays in PE mode (config says so) and the reconnect loop will restart the receive goroutine. No behavioral change. |
+
+#### Non-Findings Adjudicated Clean (Pass 7 — P1 traces)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| Join structure (F-SP3-002 / AC-005) | `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` flap-cycle harness pattern unchanged; connector.go `Stop()` join on receive goroutine via `doneCh` unaffected by observable-semantics change | CLEAN |
+| Keepalive window (F-SP7-005) | Transient stale-ModePE window is bounded by `keepaliveInterval` and intentional; no goroutine leak, no unbounded state | MOSTLY-CLEAN (bounded + acknowledged) |
+
+#### Remediation Summary
+
+**Placement note v1.6 → v1.7:** Three-observable semantics ruling added (F-SP7-001 BINDING): Observable-1 `peWriteFixture.accepted` receive (TCP established), Observable-2 E-FWD-001 / `OnFrameArrival` delivery (receive goroutine active), Observable-3 `peWriteFixture.accepted` drain (goroutine exited). `mode=PE` log-line retracted as establishment observable (config-presence-only signal). Q1 + Q8 summary table rows updated to Option-A ruling (F-SP7-003 — concrete-only type-assertion; sweep-pattern transcript discipline recorded). Transient stale-ModePE window bounded by `keepaliveInterval` (F-SP7-005). Pass-7 adjudicated-clean section added.
+
+**Story v1.6 → v1.7:** AC-001 and AC-004 test patterns updated with three-observable discipline; old `mode=PE` annotation removed. Task 1 citation corrected v1.2→v1.7 (F-SP7-004). AC-001 parenthetical self-contradiction removed (F-SP7-002). Frontmatter: version 1.6→1.7; `placement_note` v1.6→v1.7. STORY-INDEX v4.46→v4.47.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-7 when authored).
