@@ -1597,10 +1597,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 3 (spec) | v1.2 | 3 | 2 | 1 | 0 | 0/3 | note v1.3 (byte-contract fix: EncodeOuterHeader+append reconstruction + pin test) + story v1.3 — all remediated |
 | 4 (spec) | v1.3 | 2 | 2 | 0 | 0 | 0/3 | note v1.4 (FrameFn return-value contract + SetFrameCallback ordering) + story v1.4 — all remediated; v1.3 remediations cleared under direct attack |
 | 5 (spec) | v1.4 | 3 | 1 | 0 | 2 | 0/3 | note v1.5 (READ-error disposition) + story v1.5 + index v4.45 — remediated; streak resets 0/3 |
+| 6 (spec) | v1.5 | 4 | 2 | 1 | 1 | 0/3 | note v1.6 + story v1.6 + index v4.46 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; streak 0/3; pass 6 pending vs v1.5 package.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; streak 0/3; pass 7 pending vs v1.6 package.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3` — new READ-error surface discovered at pass 5; all prior surfaces (production wiring, test injection, byte-content, callback contract) confirmed clear under direct attack at pass 4.
 
@@ -1795,3 +1796,48 @@ Each pass finds the next layer down on the same callback-seam axis:
 - **Pass 5 (read-site contract layer):** F-SP5-001 — the read-site error contract was left ambiguous by the v1.4 blanket rule; the rule that was written to protect the drop-and-continue path inadvertently created a wrong-direction trap at the read site. The spec-adversarial cycle surfaces each layer in sequence; pass 6 dispatches against a spec that is now fully specified at all five layers.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-5 when authored).
+
+---
+
+### Pass 6 Details (2026-07-09)
+
+**Story at review:** v1.5 | **Placement note at review:** v1.5
+
+**Verdict:** HAS_FINDINGS — 2 HIGH, 1 MED, 1 LOW. All remediated.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP6-001 | HIGH | spec-defect | v1.5 read-error contract specifies that `maintainConn` should close and re-establish the connection on read error — but `maintainConn` never reads from `conn`; it is a lifecycle supervisor that only calls `Start()`/`Stop()`. The read-error teardown mechanism assumed by the v1.5 contract did not exist. | Note v1.5→v1.6 adds the binding: on `ReadOuterFrame` error the receive goroutine MUST call `conn.Close()` before returning. `conn` is the `net.Conn` returned from the `upstreamdial` accept seam and is in-scope to the goroutine. `conn.Close()` races with `maintainConn`'s `Stop()`-triggered close — both are idempotent; first-close wins, second is a no-op per `net.Conn` contract. Story v1.6 propagates: AC-001 teardown obligation added; receive goroutine sketch updated. |
+| F-SP6-002 | HIGH | spec-gap | `SetFrameCallback` ordering contract (F-SP4-002) is bound to `Connector` (concrete type), but `runRouter` holds a `Handle` interface value. The blast radius analysis was incomplete: does the interface shape require extending `Handle` with a `SetFrameCallback` method? If yes, `fakeConnectorHandle` (the test double implementing `Handle`) must also gain the method — potentially invalidating existing connector tests. | RULED Option A: `SetFrameCallback` remains concrete-only on `*Connector`. `runRouter` performs a type assertion to `*upstreamdial.Connector` at wiring time — justified because `runRouter` is a private function that constructs its own connector; the assertion is not a public contract obligation. `fakeConnectorHandle` (implements `Handle`) is unaffected; its `SetFrameCallback` method is not required. Story v1.6 adds the type-assertion obligation to AC-002 design constraints; FCL row 4 updated with assertion note. |
+| F-SP6-003 | MED | spec-defect | AC-001 PC-3 (receive goroutine exits on `ReadOuterFrame` error) and AC-004's `Mode()` assertion are unverifiable under the `runRouter` goroutine harness — `runRouter` returns no handle to the receive goroutine, and `Mode()` is not directly observable from the test (it returns internal `r.mode` state). Both acceptance criteria require observable substitutes. | Story v1.6 codifies observable substitutes: for PC-3, close `peWriteFixture`'s connection and await goroutine exit via a channel signal or `peWriteFixture.accepted` drain; for `Mode()`, check the `mode=PE` log line emitted by `runRouter` on `SetFrameCallback` wiring (already in the test harness). AC-001 and AC-004 test patterns updated accordingly. |
+| F-SP6-004 | LOW | doc-drift | Blast-radius count stated as 8 locations but two additional `frame_test.go` locations were identified: line `:501` (comment referencing the old five-value enumeration) and line `:540` (inline comment for the `invalids` table referencing stale frame-type list). Story FCL row 1 and Task 3 carried the old count; blast-radius table was incomplete. | Story v1.6 extends FCL row 1 and Task 3: blast-radius updated from 8 to 10 locations; items 9 (`:501` comment) and 10 (`:540` comment) added. |
+
+#### Non-Findings Adjudicated Clean (Pass 6 — P1–3 transition-ownership trace)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| P1 FrameArrivalHandler wiring (F-SP1-001) | `runRouter` construction binding unchanged; type-assertion route (F-SP6-002 Option A) does not affect OnFrameArrival wiring | CLEAN |
+| P2 Q9 injection topology (F-SP2-001) | `peWriteFixture.WriteFrame` → accepted PE conn; unaffected by conn.Close() teardown binding (goroutine exits after Close; fixture operates on pre-exit window) | CLEAN |
+| P3 byte-contract reconstruction (F-SP3-001) | EncodeOuterHeader+append path is inside the receive goroutine; teardown is after ReadOuterFrame error, which is before the reconstruction step — no conflict | CLEAN |
+
+#### Remediation Summary
+
+**Placement note v1.5 → v1.6:** F-SP6-001 teardown binding added to Q2 receive-goroutine spec: `conn.Close()` obligation on read-error exit; concurrent-close idempotency note (races with `maintainConn` Stop-triggered close — first wins, second no-op). F-SP6-002 Option A ruling added: `SetFrameCallback` concrete-only; `runRouter` type-assertion to `*Connector` justified; `fakeConnectorHandle` unaffected. Pass-6 adjudicated-clean section added.
+
+**Story v1.5 → v1.6:** AC-001 teardown obligation propagated (PC-3 expanded with `conn.Close()` before goroutine return). AC-002 design constraints: type-assertion obligation for `SetFrameCallback` wiring added. FCL row 4 updated (assertion note). AC-001 + AC-004 test patterns updated with observable substitutes (peWriteFixture.accepted drain / mode=PE log line). FCL row 1 + Task 3: blast-radius 8→10 (items 9–10: frame_test.go :501/:540). Frontmatter: version 1.5→1.6; `placement_note` v1.5→v1.6. STORY-INDEX v4.45→v4.46.
+
+#### Pattern Note: Descent — Teardown Wiring Layer (Pass 6)
+
+Pass 6 attacked the layer beneath the v1.5 read-error contract remediation. Descent trajectory:
+- **Pass 1 (routing target layer):** Q8 — which production symbol receives the callback.
+- **Pass 2 (socket layer):** F-SP2-001 — which socket the test injects into.
+- **Pass 3 (byte-content layer):** F-SP3-001 — what bytes the drop-cache keys on.
+- **Pass 4 (callback contract layer):** F-SP4-001/002 — return value semantics + ordering.
+- **Pass 5 (read-site contract layer):** F-SP5-001 — read-error terminates vs drop-and-continue ambiguity.
+- **Pass 6 (teardown wiring layer):** F-SP6-001 — the mechanism v1.5 assumed (`maintainConn` closes) does not exist; the goroutine must close `conn` itself.
+
+F-SP6-001 is the second consecutive instance of a remediation assuming an unbuilt mechanism (F-SP5-001 assumed `maintainConn` would handle reconnect after read-error; F-SP6-001 shows `maintainConn` never reads `conn`). Each pass finds the mechanism the previous pass relied upon does not exist one layer down.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-6 when authored).

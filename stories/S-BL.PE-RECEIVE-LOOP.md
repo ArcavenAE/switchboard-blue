@@ -7,7 +7,7 @@ title: "PE-connection receive/forward loop — frame.ReadOuterFrame goroutine, F
 status: ready
 producer: story-writer
 timestamp: 2026-07-08T00:00:00Z
-version: "1.5"
+version: "1.6"
 phase: 2
 epic: E-7
 wave: backlog
@@ -38,7 +38,7 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.003.md'
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'
   - '.factory/stories/S-7.04-FU-PE-CONNECTOR.md'
-  - '.factory/decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md'   # v1.5 — Q2 FrameFn return-value contract (discard-and-continue), Q1/Q8 SetFrameCallback ordering contract; F-SP5-001 READ-error disposition (binding), F-SP5-OBS-1 bounded-read divergence (accepted), F-SP5-OBS-2 connector_test.go fixture pattern
+  - '.factory/decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md'   # v1.6 — Q2 FrameFn return-value contract (discard-and-continue), Q1/Q8 SetFrameCallback ordering contract; F-SP5-001 READ-error disposition (binding), F-SP5-OBS-1 bounded-read divergence (accepted), F-SP5-OBS-2 connector_test.go fixture pattern; F-SP6-001 conn.Close() read-error teardown wiring (binding), F-SP6-002 Option A SetFrameCallback concrete-only, F-SP6-003 AC observables substitutes, F-SP6-004 blast-radius 8→10
   - '.factory/decisions/S-BL.PE-RECEIVE-LOOP-disposition-ruling.md'
 acceptance_criteria_count: 5
 backlog_origin:
@@ -120,17 +120,20 @@ one goroutine per established connection, started after step-3 success in `dialL
 `upstreamdial` remains routing-free per the forbidden-edge constraint (ARCH-08 §6.6.2:
 `routing` is explicitly listed as a forbidden import for `upstreamdial`).
 
-The seam is a callback added to the `upstreamdial.Handle` interface:
+The seam is a callback on the concrete `*upstreamdial.Connector` type (amended v1.6 — F-SP6-002):
 
 ```go
 // In internal/upstreamdial (new — defined by this story):
 type FrameFn func(hdr frame.OuterHeader, raw []byte) error
 
-// Added to the Handle interface (new — defined by this story):
-SetFrameCallback(fn FrameFn)
+// Method on the concrete *Connector ONLY (new — defined by this story):
+// SetFrameCallback is NOT added to the Handle interface (F-SP6-002, Option A).
+func (c *Connector) SetFrameCallback(fn FrameFn)
 ```
 
-This mirrors the `netingress.RouteFn` pattern (`type RouteFn func(hdr frame.OuterHeader, payload []byte) error`, verified at `8eb54a5` in `internal/netingress/netingress.go`). `runRouter` in `cmd/switchboard/mgmt_wire.go` calls `connector.SetFrameCallback(fn)` after construction, passing a closure that calls `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` on a `*routing.FrameArrivalHandler` constructed via `routing.NewFrameArrivalHandler(multipath.NewDropCache(multipath.DefaultDropCacheSize))` with `routing.WithFrameArrivalLogger(routerLogger)` applied (all verified at `8eb54a5`). **Q8 supersedes the original Q1/Q2 `routing.RouteFrame` wiring** — the PE receive path uses `FrameArrivalHandler.OnFrameArrival` rather than `RouteFrame`; the `netingress.Serve` data-plane path retains its existing `RouteFrame` closure unchanged.
+**`SetFrameCallback` is NOT added to the `upstreamdial.Handle` interface (amended v1.6 — F-SP6-002, Option A).** The `Handle` interface (`ReloadAddrs`/`Mode`/`Stop`) is unchanged. `runRouter` in `cmd/switchboard/mgmt_wire.go` holds the connector as a concrete `*Connector` between `New()` and `Start()` and calls `connector.SetFrameCallback(fn)` there (on the concrete type). `fakeConnectorHandle` in `router_pe_connector_test.go` (implements only `ReloadAddrs`/`Mode`/`Stop`) is NOT affected; `router_pe_connector_test.go` remains existing, unmodified.
+
+The closure passed to `SetFrameCallback` calls `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` on a `*routing.FrameArrivalHandler` constructed via `routing.NewFrameArrivalHandler(multipath.NewDropCache(multipath.DefaultDropCacheSize))` with `routing.WithFrameArrivalLogger(routerLogger)` applied (all verified at `8eb54a5`). **Q8 supersedes the original Q1/Q2 `routing.RouteFrame` wiring** — the PE receive path uses `FrameArrivalHandler.OnFrameArrival` rather than `RouteFrame`; the `netingress.Serve` data-plane path retains its existing `RouteFrame` closure unchanged.
 
 ### Framing Primitive: frame.ReadOuterFrame (Q2) — byte-contract (v1.3, F-SP3-001)
 
@@ -156,6 +159,8 @@ hdr, payload, err := frame.ReadOuterFrame(conn)
 if err != nil {
     // READ error: exit the loop regardless of error type.
     // continue-on-read-error is FORBIDDEN (framing desync / busy-loop). (v1.5 — F-SP5-001)
+    // BINDING (v1.6 — F-SP6-001): close conn to trigger maintainConn write failure → redial.
+    _ = conn.Close()
     return
 }
 ehdr := frame.EncodeOuterHeader(hdr)
@@ -238,6 +243,8 @@ hdr, payload, err := frame.ReadOuterFrame(conn)
 if err != nil {
     // READ error: exit the loop regardless of error type. (v1.5 — F-SP5-001)
     // continue-on-read-error is FORBIDDEN (framing desync / busy-loop).
+    // BINDING (v1.6 — F-SP6-001): close conn → maintainConn write failure → dialLoop redial.
+    _ = conn.Close()
     return
 }
 // Discrimination step runs only on successful reads:
@@ -313,8 +320,12 @@ closed (`conn.Close()` called by `dialLoop` teardown causes `frame.ReadOuterFram
 on conn close.
 
 **Exactly-once semantics (F-P29-001 lesson applied symmetrically):** the receive goroutine
-MUST NOT access `c.connectedCount` or any other shared state. It has exactly one output:
-calling the `FrameFn` callback with received bytes.
+MUST NOT access `c.connectedCount` or any other shared state. It has exactly **two outputs**
+(amended v1.6 — F-SP6-001): (1) calling the `FrameFn` callback with received bytes; (2)
+calling `_ = conn.Close()` on read-error exit to trigger `maintainConn` write failure →
+`dialLoop` teardown → reconnect. `conn.Close()` ownership: `dialLoop` step 8 (normal
+teardown) OR receive goroutine (abnormal read-error exit); double-close is safe/idempotent
+on `net.Conn`.
 
 **Per-address done channel:** The per-address `done chan struct{}` (same pattern as
 `addrCancel.done` in `Connector.reconcile`) MUST NOT be closed until BOTH `maintainConn`
@@ -337,16 +348,16 @@ synchronize `dialLoop` teardown with the receive goroutine's exit.
 9. per-address done signal (only after receive goroutine confirms exit)
 ```
 
-### READ-error disposition contract (v1.5 — F-SP5-001, binding)
+### READ-error disposition contract (v1.5 — F-SP5-001, binding; amended v1.6 — F-SP6-001)
 
-**Binding (per placement note F-SP5-001 v1.5).**
+**Binding (per placement note F-SP5-001 v1.5; conn.Close() wiring per F-SP6-001 v1.6).**
 
-On ANY non-nil return from `frame.ReadOuterFrame`, the receive goroutine MUST exit the loop
-(`return`). `continue`-on-read-error is FORBIDDEN — this is the exact mirror of the v1.4
-callback-error return-FORBIDDEN rule. The per-site disposition follows the
-`netingress.ServeConn` precedent (verified at `8eb54a5`):
+On ANY non-nil return from `frame.ReadOuterFrame`, the receive goroutine MUST (1) call
+`_ = conn.Close()` and (2) exit the loop (`return`). `continue`-on-read-error is FORBIDDEN
+— this is the exact mirror of the v1.4 callback-error return-FORBIDDEN rule. The per-site
+disposition follows the `netingress.ServeConn` precedent (verified at `8eb54a5`):
 
-> read error → **exit** the loop (return)
+> read error → **call `_ = conn.Close()`** then **exit** the loop (return)
 > callback error → **continue** (discard-and-continue)
 
 Rationale: `continue`-on-read-error produces one of two failure modes:
@@ -359,8 +370,11 @@ Rationale: `continue`-on-read-error produces one of two failure modes:
    `maintainConn` keepalive writes still succeed (full-duplex), so the conn is never
    torn down and never reconnected. The connection is permanently desynced.
 
-Exit → `dialLoop`'s existing teardown/reconnect path closes the conn and re-dials, which
-is the ONLY correct resync for a byte-misaligned stream.
+Exit with `_ = conn.Close()` → `maintainConn`'s next write fails → `dialLoop` teardown
+and re-dial, which is the ONLY correct resync for a byte-misaligned stream. (amended v1.6 —
+F-SP6-001: the v1.5 "dialLoop's existing teardown/reconnect path" phrasing is corrected —
+`maintainConn` is write-only and never observes read-goroutine exit; `_ = conn.Close()` is
+the explicit wiring that converts the read-side failure into a write-side event.)
 
 **Logging disposition:** Two cases:
 - **Clean exit** (`io.EOF` at a frame boundary, or any read error when `ctx.Err() != nil`
@@ -375,7 +389,7 @@ is the ONLY correct resync for a byte-misaligned stream.
   redial failure if the connection is truly broken. The implementer MUST NOT log on the
   clean-exit path.
 
-**Receive-goroutine sketch (updated — v1.5, replaces the elided `{ ... }` from v1.4):**
+**Receive-goroutine sketch (updated — v1.6, replaces v1.5 sketch — F-SP6-001):**
 
 ```go
 for {
@@ -383,7 +397,10 @@ for {
     if err != nil {
         // READ error: exit the loop regardless of error type.
         // continue-on-read-error is FORBIDDEN (framing desync / busy-loop).
-        // ctx.Err() != nil → conn-close during Stop()/reconnect: silent exit.
+        // BINDING (v1.6 — F-SP6-001): close the conn to trigger maintainConn
+        // write failure → dialLoop teardown → backoff → redial.
+        // Double-close is safe/idempotent on net.Conn.
+        _ = conn.Close()
         return
     }
     ehdr := frame.EncodeOuterHeader(hdr)
@@ -395,6 +412,19 @@ for {
     _ = frameFn(hdr, raw)  // discard-and-continue; non-nil return MUST NOT terminate loop (F-SP4-001)
 }
 ```
+
+### Reconnect latency bound and AC-005 timeout guidance (v1.6 — F-SP6-001)
+
+After the receive goroutine calls `_ = conn.Close()`, redial is initiated within ≤
+`keepaliveInterval` (next keepalive tick's `SetWriteDeadline` + `conn.Write` fails) plus
+backoff. Backoff resets to `operativeBase(keepaliveInterval)` on each successful connect
+(verified at `8eb54a5` in `dialLoop`), so after a connection that subsequently fails
+(malformed-frame-then-close scenario) the next redial begins at `operativeBase` delay
+(keepaliveInterval, floored at `BackoffBase = 500ms`). **`TestConnector_ReceiveLoop_ExitsOnReadError`
+timeout MUST accommodate `keepaliveInterval` + `operativeBase` backoff**; tests SHOULD use a
+short `keepaliveInterval` (10–20ms, consistent with the existing `connector_test.go` pattern
+at `8eb54a5`). A repeatedly malformed upstream produces at most one reconnect per
+`operativeBase` interval — the malformed-frame reconnect-storm risk is bounded.
 
 ### Bounded-read divergence (v1.5 — F-SP5-OBS-1, accepted with rationale)
 
@@ -547,8 +577,19 @@ through `routing.FrameArrivalHandler.OnFrameArrival` (verified at `8eb54a5` in
    bootstrap era. `cmd/switchboard/mgmt_wire.go` gains an `internal/multipath` import (new
    at this layer — lawful as `cmd/switchboard` is at the top of the DAG; verified at
    `8eb54a5` that `multipath` is currently absent from `mgmt_wire.go` imports).
-3. `connector.Mode()` returns `upstreamdial.ModePE` (≥1 upstream connected), confirming the
-   connection is established and the receive goroutine is live.
+3. PE establishment is confirmed via an observable substitute (amended v1.6 — F-SP6-003):
+   `connector.Mode()` is unassertable from the `runRouter` goroutine harness (connector
+   is an unexported local). Use one of: (a) `peWriteFixture.accepted` channel receipt —
+   when the `accepted` channel receives a value, the connector has completed step 3
+   (atomically incrementing `connectedCount`, the same event that makes `Mode()` return
+   `ModePE`); OR (b) the `"mode=PE"` writer-output line via the existing
+   `waitForConnections`/`scanForLine` pattern in `router_pe_connector_test.go`
+   (verified at `8eb54a5`) — this line is emitted by `runRouter` on PE-mode transition
+   and fires after `connectedCount.Add(1)`, making it the stronger guarantee if a strict
+   ordering is required. Note: `accepted` fires before `connectedCount.Add(1)` per
+   `dialLoop` step ordering; for a strict `ModePE` assertion use the `"mode=PE"` line.
+   `connector.Mode()` direct assertions are valid only in `connector_test.go` unit tests
+   (in-package, concrete `*Connector` type).
 
 **Test names:**
 
@@ -685,8 +726,11 @@ DRAIN-WIRE/session-bootstrap era per Q8 ruling).
 `testenv.New`/`Restart` MUST NOT be used here; `testenv.Restart` never calls
 `SetFrameCallback`). A `peWriteFixture` (new — defined by this story) is started via
 `fixture := startPEWriteFixture(t)`. `cfg.UpstreamRouters` points at `fixture.addr`.
-`runRouter` is launched as a goroutine; the test polls for `upstreamdial.ModePE`
-confirming the connector has dialed the fixture and the receive goroutine is live.
+`runRouter` is launched as a goroutine; PE establishment is confirmed via the `"mode=PE"`
+writer-output line poll (the `waitForConnections`/`scanForLine` pattern, verified at
+`8eb54a5` in `router_pe_connector_test.go`) — this is the observable substitute for
+`upstreamdial.ModePE` under the `runRouter` harness (amended v1.6 — F-SP6-003;
+`connector.Mode()` is unassertable from the harness as the connector is an unexported local).
 
 **Postconditions:**
 
@@ -765,7 +809,7 @@ concurrency contract).
 
 - `TestConnector_ReceiveLoop_ExitsOnConnClose` (unit, `internal/upstreamdial/connector_test.go` — establishes connection with receive goroutine active; closes the upstream server; asserts Stop() returns within deadline without goroutine leak; `go test -race` clean)
 - `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` (unit, `internal/upstreamdial/connector_test.go` — **flap-cycle test, re-homed from router_pe_receive_test.go per F-SP3-002**; hand-rolled `heldConn`+`Close()` harness following `TestConnector_BackoffParameters` pattern (verified at `8eb54a5`); Phase 1: fresh Connector → `SetFrameCallback(countingFrameFn)` **[call precedes `Start()` per F-SP4-002 ordering contract]** → `Start()`; connect, frame delivered; Phase 2: server-side conn.Close() → triggers reconnect; Phase 3: second listener accepts redial, frame delivered again; Phase 4: Stop() completes within timeout; no-goroutine-leak assertion via `goleak.VerifyNone` or equivalent; `go test -race` clean; `peWriteFixture` is NOT used; validates per-reconnect-iteration join per Q6 binding)
-- `TestConnector_ReceiveLoop_ExitsOnReadError` **(v1.5 — F-SP5-001 pin test)** (unit, `internal/upstreamdial/connector_test.go` — inject malformed bytes (e.g. single byte `0xFF` as `FrameType`, causing `ErrInvalidFrameType`) to the upstream fixture connection WITHOUT closing the conn; uses the same in-package accept-and-write fixture pattern as the AC-005 flap harness (`net.Listen` + accept + `conn.Write`); assert: (a) the receive goroutine exits (via per-connection done channel or `goleak.VerifyNone`), AND (b) the connector initiates a reconnect cycle (dials the fixture again within the reconnect timeout); proves exit-on-read-error is wired — a `continue` implementation would busy-loop and the done channel would never close)
+- `TestConnector_ReceiveLoop_ExitsOnReadError` **(v1.5 — F-SP5-001 pin test; amended v1.6 — F-SP6-001)** (unit, `internal/upstreamdial/connector_test.go` — inject malformed bytes (e.g. single byte `0xFF` as `FrameType`, causing `ErrInvalidFrameType`) to the upstream fixture connection WITHOUT closing the conn; uses the same in-package accept-and-write fixture pattern as the AC-005 flap harness (`net.Listen` + accept + `conn.Write`); assert: (a) the receive goroutine exits (via per-connection done channel or `goleak.VerifyNone`), AND (b) the connector initiates a reconnect cycle (dials the fixture again — the reconnect is triggered via `_ = conn.Close()` in the receive goroutine causing `maintainConn` write failure); **timeout MUST accommodate `keepaliveInterval` + `operativeBase` backoff**; use a short `keepaliveInterval` (10–20ms per existing `connector_test.go` pattern); proves exit-on-read-error and conn.Close() wiring — a `continue` implementation would busy-loop and the done channel would never close)
 
 **Note on `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak`:** this test exercises both
 `Stop()` teardown (also covered by `TestConnector_ReceiveLoop_ExitsOnConnClose`) AND the
@@ -807,8 +851,8 @@ ruling: this is a Connector-level unit test, not an integration test).
 |---|------|--------|-------------|
 | 1 | `internal/frame/frame.go` (MODIFIED) | Add `FrameTypePEConnect FrameType = 0x06` (with `// (ARCH-02 §3.1)` inline citation, same-commit-as-constant obligation); update `Valid()` upper bound to `<= FrameTypePEConnect`; update `FrameType` type doc comment ("five" → "six canonical values"); update `Valid()` doc comment ("five canonical…0x06..0xFF" → "six canonical…0x07..0xFF"); update `ErrInvalidFrameType` doc comment ("five canonical" → "six canonical" / "not in {0x01..0x06}"); **[F-SP3-003 item 8]** update `OuterHeader.FrameType` field comment from `"identifies the frame kind (data, ctl, arq, fec, empty-tick)"` → `"identifies the frame kind (data, ctl, arq, fec, empty-tick, pe_connect)"` (verified at `8eb54a5`: exhaustive enumeration claim, not illustrative example; must be updated in same commit as FrameTypePEConnect definition) | AC-003 / FO-PE-LOOP-001 / F-SP1-002 / F-SP3-003 |
 | 2 | `internal/frame/frame.go` (MODIFIED) | Add `frame.ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error)` (new — defined by this story): read `OuterHeaderSize` bytes via `ParseOuterHeader`, then read `hdr.PayloadLen` bytes of payload | AC-001 / Q2 |
-| 3 | `internal/frame/frame_test.go` (MODIFIED) | Add `TestFrameType_Valid_PEConnect`: asserts `FrameTypePEConnect.Valid() == true` and `FrameType(0x07).Valid() == false`; change `just_above_max` case from `FrameType(0x06)` to `FrameType(0x07)` (verified at `8eb54a5`: `{"just_above_max", frame.FrameType(0x06), false}` → now invalid since `0x06` becomes `FrameTypePEConnect`); change `invalids` slice `0x06` entry to `0x07` (verified at `8eb54a5`: `invalids := []byte{0x00, 0x06, 0x77, 0xFF}` → `[]byte{0x00, 0x07, 0x77, 0xFF}`); update `"five canonical enum values"` description comment to `"six canonical enum values"` (verified at `8eb54a5`); update `"Bytes not in {0x01..0x05}"` comment to `"Bytes not in {0x01..0x06}"` (verified at `8eb54a5`); **[F-SP2-004]** update `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment: `"all five canonical FrameType values"` → `"all six canonical FrameType values"` (verified at `8eb54a5`); append `frame.FrameTypePEConnect` as the sixth element to the `valid` slice in `TestParseOuterHeader_AcceptsAllValidFrameTypes` (verified at `8eb54a5`: currently 5-element slice `{FrameTypeData, FrameTypeEmptyTick, FrameTypeCtl, FrameTypeArq, FrameTypeFec}`) | AC-003 / F-SP1-002 / F-SP2-004 — 8 blast-radius locations total (item 8 in `frame.go`, see FCL row 1) |
-| 4 | `internal/upstreamdial/connector.go` (MODIFIED) | Add `type FrameFn func(hdr frame.OuterHeader, raw []byte) error` (new); add `SetFrameCallback(fn FrameFn)` to `Handle` interface (new); add `frameFn FrameFn` field to `Connector` — **set-once pre-Start per the ordering contract (v1.4, F-SP4-002)**; receive goroutine in `dialLoop` MAY assume non-nil; post-Start mutation MUST NOT be permitted (panic or ignore, never unsynchronized write); add receive goroutine in `dialLoop` after step-3 success: calls `frame.ReadOuterFrame(conn)` in a loop, discriminates `FrameTypePEConnect` (discard) vs all other types (invoke `_ = c.frameFn(hdr, raw)` — discard-and-continue; F-SP4-001); flip bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect` (FO-PE-LOOP-001); add direct `internal/frame` import; add per-connection lifecycle sync (WaitGroup or done chan) so `dialLoop` teardown waits for receive goroutine exit before reconnect (per-reconnect-iteration join, F-SP1-005) | AC-001, AC-002, AC-003, AC-005 / Q1, Q2, Q3, Q6 / F-SP4-001 / F-SP4-002 |
+| 3 | `internal/frame/frame_test.go` (MODIFIED) | Add `TestFrameType_Valid_PEConnect`: asserts `FrameTypePEConnect.Valid() == true` and `FrameType(0x07).Valid() == false`; change `just_above_max` case from `FrameType(0x06)` to `FrameType(0x07)` (verified at `8eb54a5`: `{"just_above_max", frame.FrameType(0x06), false}` → now invalid since `0x06` becomes `FrameTypePEConnect`); change `invalids` slice `0x06` entry to `0x07` (verified at `8eb54a5`: `invalids := []byte{0x00, 0x06, 0x77, 0xFF}` → `[]byte{0x00, 0x07, 0x77, 0xFF}`); update `"five canonical enum values"` description comment to `"six canonical enum values"` (verified at `8eb54a5`); update `"Bytes not in {0x01..0x05}"` comment to `"Bytes not in {0x01..0x06}"` (verified at `8eb54a5`); **[F-SP2-004]** update `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment: `"all five canonical FrameType values"` → `"all six canonical FrameType values"` (verified at `8eb54a5`); append `frame.FrameTypePEConnect` as the sixth element to the `valid` slice in `TestParseOuterHeader_AcceptsAllValidFrameTypes` (verified at `8eb54a5`: currently 5-element slice `{FrameTypeData, FrameTypeEmptyTick, FrameTypeCtl, FrameTypeArq, FrameTypeFec}`); **[F-SP6-004 items 9–10]** update `"five canonical enum values"` comment at `frame_test.go` ~:501 → `"six canonical enum values"`; update `frame_test.go` ~:540 — BOTH `"{0x01..0x05}"` → `"{0x01..0x06}"` AND `"canonical five"` → `"canonical six"` in the same edit | AC-003 / F-SP1-002 / F-SP2-004 / F-SP6-004 — **10 blast-radius locations total** (item 8 in `frame.go` see FCL row 1; items 9–10 added v1.6 F-SP6-004 in `frame_test.go` ~:501 and ~:540) |
+| 4 | `internal/upstreamdial/connector.go` (MODIFIED) | Add `type FrameFn func(hdr frame.OuterHeader, raw []byte) error` (new); add `SetFrameCallback(fn FrameFn)` as a method on the concrete `*Connector` ONLY — **NOT added to the `Handle` interface (amended v1.6 — F-SP6-002, Option A)**; `fakeConnectorHandle` in `router_pe_connector_test.go` is NOT affected; add `frameFn FrameFn` field to `Connector` — **set-once pre-Start per the ordering contract (v1.4, F-SP4-002)**; receive goroutine in `dialLoop` MAY assume non-nil; post-Start mutation MUST NOT be permitted (panic or ignore, never unsynchronized write); add receive goroutine in `dialLoop` after step-3 success: calls `frame.ReadOuterFrame(conn)` in a loop, on read error calls `_ = conn.Close()` then `return` **(amended v1.6 — F-SP6-001: close wires read-side failure into write-side teardown; double-close safe/idempotent)**, discriminates `FrameTypePEConnect` (discard) vs all other types (invoke `_ = c.frameFn(hdr, raw)` — discard-and-continue; F-SP4-001); flip bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect` (FO-PE-LOOP-001); add direct `internal/frame` import; add per-connection lifecycle sync (WaitGroup or done chan) so `dialLoop` teardown waits for receive goroutine exit before reconnect (per-reconnect-iteration join, F-SP1-005) | AC-001, AC-002, AC-003, AC-005 / Q1, Q2, Q3, Q6 / F-SP4-001 / F-SP4-002 / F-SP6-001 / F-SP6-002 |
 | 5 | `internal/upstreamdial/connector_test.go` (MODIFIED) | Unit tests: `TestConnector_ReceiveLoop_DataFrameForwardedToCallback`, `TestConnector_ReceiveLoop_PEConnectFrameDiscarded`, `TestConnector_ReceiveLoop_ExitsOnConnClose`; **[F-SP3-002 AC-005 flap-cycle re-homing]** add `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` (hand-rolled heldConn+Close() flap harness per `TestConnector_BackoffParameters` pattern; fresh Connector → `SetFrameCallback` **[before `Start()` per F-SP4-002 ordering contract]** → `Start()` + counting FrameFn; Phase 1 connect+frame; Phase 2 server Close()→reconnect; Phase 3 second listener+frame; Phase 4 Stop()+no-leak; `peWriteFixture` NOT used; follows existing connector_test.go harness pattern, verified at `8eb54a5`); **[v1.5 F-SP5-001 read-error exit pin test]** add `TestConnector_ReceiveLoop_ExitsOnReadError` (inject `0xFF` FrameType byte to upstream fixture WITHOUT closing conn; uses same in-package accept-and-write pattern as flap harness; assert receive goroutine exits AND reconnect initiated within timeout) | AC-001, AC-003, AC-005 / F-SP3-002 / F-SP4-002 / F-SP5-001 |
 | 6 | `cmd/switchboard/mgmt_wire.go` (MODIFIED) | Construct `multipath.NewDropCache(multipath.DefaultDropCacheSize)` and `routing.NewFrameArrivalHandler(dc)` after Phase b; apply `routing.WithFrameArrivalLogger(routerLogger)` (all verified at `8eb54a5`); call `connector.SetFrameCallback(fn)` (new — defined by this story) with `FrameFn` closure routing through `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` per Q8 ruling; **[v1.4 F-SP4-002] insertion point binding**: `SetFrameCallback(fn)` inserted between the existing `upstreamdial.New(...)` and `connector.Start()` lines — construct → SetFrameCallback → Start ordering is mandatory; verified at `8eb54a5` that current `mgmt_wire.go` has `New(...)` immediately followed by `Start()` with no call in between; this story inserts the call; add `internal/multipath` import (only new production import at `cmd/switchboard` layer; no ARCH-08 §6.4 registration required) | AC-002 / Q8 / F-SP1-001 / F-SP4-002 |
 | 7 | `cmd/switchboard/router_pe_receive_test.go` (NEW) | Integration tests: `TestRunRouter_PE_ReceiveLoop_ActiveAfterConnect`, `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival`, `TestRunRouter_PE_EFWD001ExhaustionUnderLoad`; **[F-SP3-001 byte-contract pin test]** `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` (two peWriteFixture.WriteFrame frames identical payload but differing `OuterHeader.SrcAddr`; assert ≥2 `"E-FWD-001"` emissions; proves full-frame reconstruction per Q9 §9.1a); **also defines test-local upstream fixture:** `peWriteFixture` struct (new — `addr string`, `accepted chan net.Conn`, `ln net.Listener`), `startPEWriteFixture(t *testing.T) *peWriteFixture` (new), `(*peWriteFixture).WriteFrame(t *testing.T, wire []byte)` (new) — all three are test-local, not exported (Q9.2 fixture specification; Appendix A Delta v1.2 in placement note). **AC-005 flap-cycle test is NOT in this file** — re-homed to `connector_test.go` per F-SP3-002 ruling; `peWriteFixture` is NOT used by AC-005. | AC-001, AC-002, AC-004 / F-SP2-002 / F-SP3-001 |
@@ -864,7 +908,7 @@ New files created by this story:
 
 Modified files:
 - `internal/frame/frame.go` — `FrameTypePEConnect` constant, `Valid()` update, doc-comment updates (five→six), `ReadOuterFrame` function, `OuterHeader.FrameType` field comment (item 8, F-SP3-003: append "pe_connect" to kind enumeration)
-- `internal/frame/frame_test.go` — `TestFrameType_Valid_PEConnect`; `just_above_max` 0x06→0x07; `invalids` slice 0x06→0x07; description-comment "five canonical"→"six canonical"; range-comment `{0x01..0x05}`→`{0x01..0x06}`; `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment "all five"→"all six" (F-SP2-004); append `frame.FrameTypePEConnect` to `valid` slice (F-SP2-004) — 8 blast-radius locations total (items 1–7 in frame_test.go, item 8 in frame.go)
+- `internal/frame/frame_test.go` — `TestFrameType_Valid_PEConnect`; `just_above_max` 0x06→0x07; `invalids` slice 0x06→0x07; description-comment "five canonical"→"six canonical"; range-comment `{0x01..0x05}`→`{0x01..0x06}`; `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment "all five"→"all six" (F-SP2-004); append `frame.FrameTypePEConnect` to `valid` slice (F-SP2-004); **[F-SP6-004 items 9–10]** `~:501` "five canonical enum values"→"six canonical enum values"; `~:540` both `"{0x01..0x05}"`→`"{0x01..0x06}"` AND `"canonical five"`→`"canonical six"` — **10 blast-radius locations total** (items 1–7 in frame_test.go, item 8 in frame.go, items 9–10 in frame_test.go ~:501 and ~:540)
 - `internal/upstreamdial/connector.go` — `FrameFn` type, `SetFrameCallback`, receive goroutine with `frame.EncodeOuterHeader`+append reconstruction, bootstrap flip, per-reconnect join
 - `internal/upstreamdial/connector_test.go` — 5 new unit tests (3 original + `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` flap-cycle F-SP3-002 + `TestConnector_ReceiveLoop_ExitsOnReadError` read-error exit pin test F-SP5-001)
 - `cmd/switchboard/mgmt_wire.go` — `DropCache`+`FrameArrivalHandler` construction, `SetFrameCallback` call with `OnFrameArrival` closure, `internal/multipath` import
@@ -891,7 +935,7 @@ Estimated test counts are forecasts; actual delivered count may differ after adv
 | `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` | Frame with FrameTypePEConnect (new — defined by this story) is silently discarded; FrameFn NOT called |
 | `TestConnector_ReceiveLoop_ExitsOnConnClose` | Upstream server close → ReadOuterFrame returns EOF → receive goroutine exits → Stop() returns without goroutine leak (`go test -race` clean) |
 | `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` | **[F-SP3-002 AC-005 flap-cycle, re-homed from router_pe_receive_test.go]** Full flap cycle at Connector level: Phase 1 fresh Connector → `SetFrameCallback` **[before `Start()` per F-SP4-002]** → `Start()` + frame delivered; Phase 2 server-side Close() → reconnect triggered; Phase 3 second listener accepts + frame delivered again; Phase 4 Stop() within timeout; no goroutine leak; validates per-reconnect-iteration join per Q6/F-SP1-005; `go test -race` clean; `peWriteFixture` NOT used |
-| `TestConnector_ReceiveLoop_ExitsOnReadError` | **[F-SP5-001 read-error exit pin test — v1.5]** Inject malformed bytes (`0xFF` FrameType → `ErrInvalidFrameType`) to upstream fixture WITHOUT closing conn; assert receive goroutine exits (done channel closes) AND connector re-dials (reconnect within timeout); proves exit-on-read-error; a `continue` implementation would busy-loop and the done channel would never close |
+| `TestConnector_ReceiveLoop_ExitsOnReadError` | **[F-SP5-001 read-error exit pin test — v1.5; amended v1.6 — F-SP6-001]** Inject malformed bytes (`0xFF` FrameType → `ErrInvalidFrameType`) to upstream fixture WITHOUT closing conn; assert receive goroutine exits (done channel closes) AND connector re-dials (reconnect triggered via `_ = conn.Close()` → `maintainConn` write failure); **timeout MUST accommodate `keepaliveInterval` + `operativeBase` backoff**; use short `keepaliveInterval` (10–20ms per existing `connector_test.go` pattern); proves exit-on-read-error and conn.Close() teardown wiring |
 
 **`cmd/switchboard/router_pe_receive_test.go` (NEW — integration):**
 
@@ -931,10 +975,10 @@ regression tests (S-7.04-FU-PE-CONNECTOR added +11 tests above forecast during i
 4. [ ] Add `frame.FrameTypePEConnect = 0x06` constant (with `// (ARCH-02 §3.1)` citation) + update `Valid()` upper bound in `internal/frame/frame.go`
 5. [ ] Update `internal/frame/frame.go` doc comments: `FrameType` type ("five" → "six canonical values"), `Valid()` ("0x06..0xFF" → "0x07..0xFF", "five" → "six"), `ErrInvalidFrameType` ("five" → "six" or "not in {0x01..0x06}") (F-SP1-002); **[F-SP3-003 item 8]** update `OuterHeader.FrameType` field comment: append `, pe_connect` to the enumeration (verified at `8eb54a5`: `"identifies the frame kind (data, ctl, arq, fec, empty-tick)"` → `"identifies the frame kind (data, ctl, arq, fec, empty-tick, pe_connect)"`) — must land in same commit as FrameTypePEConnect definition
 6. [ ] Add `frame.ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error)` to `internal/frame/frame.go`
-7. [ ] Update `internal/frame/frame_test.go`: change `just_above_max` from `FrameType(0x06)` to `FrameType(0x07)`; change `invalids` slice `0x06` entry to `0x07`; update `"five canonical enum values"` comment; update `"Bytes not in {0x01..0x05}"` comment (F-SP1-002); update `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment `"all five canonical"` → `"all six canonical"`; append `frame.FrameTypePEConnect` to the 5-element `valid` slice (F-SP2-004); item 8 (`OuterHeader.FrameType` field comment) is in `frame.go` via Task 5 — 8 blast-radius locations total across both files
+7. [ ] Update `internal/frame/frame_test.go`: change `just_above_max` from `FrameType(0x06)` to `FrameType(0x07)`; change `invalids` slice `0x06` entry to `0x07`; update `"five canonical enum values"` comment; update `"Bytes not in {0x01..0x05}"` comment (F-SP1-002); update `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment `"all five canonical"` → `"all six canonical"`; append `frame.FrameTypePEConnect` to the 5-element `valid` slice (F-SP2-004); **[F-SP6-004 items 9–10]** update `"five canonical enum values"` comment at `~:501` → `"six canonical enum values"`; update `~:540` — BOTH `"{0x01..0x05}"` → `"{0x01..0x06}"` AND `"canonical five"` → `"canonical six"` in the same edit; item 8 (`OuterHeader.FrameType` field comment) is in `frame.go` via Task 5 — **10 blast-radius locations total** across both files (items 1–7 and 9–10 in `frame_test.go`, item 8 in `frame.go`)
 8. [ ] Add `TestFrameType_Valid_PEConnect` to `internal/frame/frame_test.go` (RED gate)
-9. [ ] Add `FrameFn` type + `SetFrameCallback(fn FrameFn)` to `Handle` interface in `internal/upstreamdial/connector.go`
-10. [ ] Add receive goroutine in `dialLoop` with `frame.ReadOuterFrame` loop (returns payload-only), `frame.EncodeOuterHeader`+append reconstruction of full frame before passing to `FrameFn` (F-SP3-001 byte-contract — `raw` MUST be full outer-header+payload), `FrameTypePEConnect` discrimination, and per-connection lifecycle sync (WaitGroup or done-chan join before reconnect; F-SP1-005); **[v1.4 F-SP4-001] discard-and-continue** — non-bootstrap frames invoke `_ = frameFn(hdr, raw)` (blank-identifier discard); non-nil return MUST NOT terminate the loop or trigger logging (OnFrameArrival already logs E-FWD-001/EC-005 internally); the exit-on-error form `if err := frameFn(...); err != nil { return }` is FORBIDDEN (defeats pin test); **[v1.4 F-SP4-002] nil-guard** — optional defense-in-depth nil check on `frameFn` before invocation; silently discard with no log if nil (not a replacement for the ordering obligation)
+9. [ ] Add `FrameFn` type + `SetFrameCallback(fn FrameFn)` as a method on the concrete `*Connector` in `internal/upstreamdial/connector.go` — **NOT on the `Handle` interface (amended v1.6 — F-SP6-002, Option A)**; `Handle` interface (`ReloadAddrs`/`Mode`/`Stop`) is UNCHANGED; `fakeConnectorHandle` in `router_pe_connector_test.go` is NOT affected
+10. [ ] Add receive goroutine in `dialLoop` with `frame.ReadOuterFrame` loop (returns payload-only), `frame.EncodeOuterHeader`+append reconstruction of full frame before passing to `FrameFn` (F-SP3-001 byte-contract — `raw` MUST be full outer-header+payload), `FrameTypePEConnect` discrimination, and per-connection lifecycle sync (WaitGroup or done-chan join before reconnect; F-SP1-005); **[v1.5 F-SP5-001] on read error**: MUST call `_ = conn.Close()` THEN `return` — **[amended v1.6 — F-SP6-001: `conn.Close()` is the wiring that converts read-side failure into write-side teardown; `maintainConn` is write-only and cannot observe receive-goroutine exit; double-close is safe/idempotent]**; **[v1.4 F-SP4-001] discard-and-continue** — non-bootstrap frames invoke `_ = frameFn(hdr, raw)` (blank-identifier discard); non-nil return MUST NOT terminate the loop or trigger logging (OnFrameArrival already logs E-FWD-001/EC-005 internally); the exit-on-error form `if err := frameFn(...); err != nil { return }` is FORBIDDEN (defeats pin test); **[v1.4 F-SP4-002] nil-guard** — optional defense-in-depth nil check on `frameFn` before invocation; silently discard with no log if nil (not a replacement for the ordering obligation)
 11. [ ] Flip `dialLoop` bootstrap `ChannelFrame.FrameType` from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect`
 12. [ ] Write unit tests for receive goroutine (AC-001, AC-003, AC-005) including `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` (AC-005 flap-cycle, F-SP3-002 — hand-rolled heldConn+Close() harness, NOT runRouter or peWriteFixture) — RED gate before step 10
 13. [ ] In `cmd/switchboard/mgmt_wire.go`: construct `multipath.NewDropCache` + `routing.NewFrameArrivalHandler` after Phase b; apply `routing.WithFrameArrivalLogger`; wire `SetFrameCallback` with `FrameFn` closure routing through `arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, fn)` per Q8 (not `routing.RouteFrame`); add `internal/multipath` import
@@ -963,3 +1007,4 @@ regression tests (S-7.04-FU-PE-CONNECTOR added +11 tests above forecast during i
 | 1.4 | 2026-07-09 | Remediate spec-adversarial pass-4 findings. Governing artifact: placement note v1.4 (F-SP4-001/002). F-SP4-001 (HIGH [spec-gap]): FrameFn return-value contract — new Design Constraints subsection added (discard-and-continue semantics; non-nil return MUST NOT terminate loop; `_ = frameFn(hdr, raw)` is the only permitted form; exit-on-error `if err := frameFn(...); err != nil { return }` explicitly forbidden; normative precedent is `netingress.ServeConn` drop-and-continue; double-count rationale cited; errcheck compliance via blank-identifier discard; `//nolint:errcheck` MUST NOT be used); Q2 reconstruction code block bare `frameFn(hdr, raw)` → `_ = frameFn(hdr, raw)` with discard comment; discrimination contract bare `frameFn(hdr, raw)` → `_ = frameFn(hdr, raw)` with discard comment; Task 10 updated with discard-and-continue and no-logging obligations and forbidden exit-on-error form; FCL row 4 updated with `_ = c.frameFn(hdr, raw)` discard-and-continue; pin test `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` annotated in AC-004 test names and Estimated Test Surface table as loop-continuation pin: ≥2-emission observable pins that loop continues after first non-nil `frameFn` return. F-SP4-002 (HIGH [spec-gap]): SetFrameCallback ordering contract — new Design Constraints subsection added (MUST be called before `Start()`; `frameFn` is set-once pre-launch; goroutine-creation happens-before covers visibility; construct → SetFrameCallback → Start wiring order in `runRouter` is binding; receive goroutine MAY assume non-nil; nil-guard defense-in-depth silent discard as optional; post-Start mutation forbidden — panic or ignore, never unsynchronized write); AC-002 PC-2 amended with insertion-point annotation (between `New(...)` and `Start()` in `runRouter`); FCL row 4 updated with set-once pre-Start note and post-Start mutation prohibition; FCL row 5 updated with `SetFrameCallback`-before-`Start()` annotation in flap harness description; FCL row 6 updated with binding insertion-point detail; AC-005 flap-cycle test name and FCL row 5 / Estimated Test Surface table updated with explicit before-`Start()` ordering in Phase 1 sequence. Frontmatter version 1.3→1.4; inputDocuments placement-note reference v1.3→v1.4. Token budget ~10k → ~11k. |
 | 1.3 | 2026-07-09 | Remediate spec-adversarial pass-3 findings. Governing artifact: placement note v1.3 (F-SP3-001/002/003). F-SP3-001 (HIGH [spec-defect]): Q2 framing-primitive section title updated and rewritten — `frame.ReadOuterFrame` returns payload-only (consistent with `netingress.ReadFrame`; retracted v1.2 false claim); receive goroutine reconstruction obligation added (`ehdr := frame.EncodeOuterHeader(hdr)` + `raw := append(ehdr[:], payload...)`); `frame.EncodeOuterHeader` cited as EXISTING function at `8eb54a5` (not new); `FrameFn raw` is ALWAYS full outer-header+payload (binding); discrimination contract code block updated with reconstruction step; AC-001 PC-2 rewritten with reconstruction path; AC-004 PC-1 rewritten with reconstruction step; byte-contract pin test `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` added to AC-004 test-names block, Estimated Test Surface table, and FCL row 7; Task 10 updated with byte-contract obligation; Task 14 updated with pin test note. F-SP3-002 (HIGH [spec-gap]): AC-005 harness adjudication paragraph rewritten — flap-cycle test re-homed from `router_pe_receive_test.go` to `connector_test.go`; new test name `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak`; all occurrences of `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` replaced (AC-005 test-names block, FCL row 7 de-attribution, FCL row 5 addition, Estimated Test Surface table); `peWriteFixture` de-attributed from AC-005 (NOT used); AC-005 test-level/test-files updated to unit-only; Tasks 12 and 14 updated; FCL row 7 explicit "AC-005 is NOT in this file" note. F-SP3-003 (MED [doc-drift]): FCL row 1 expanded with item-8 `OuterHeader.FrameType` field comment update (`"(data, ctl, arq, fec, empty-tick)"` → `"(data, ctl, arq, fec, empty-tick, pe_connect)"`); FCL row 3 blast-radius count "7" → "8"; Task 5 updated with item-8 obligation; Task 7 updated with 8-location note; File Structure Requirements frame.go line updated. Test forecast count updated ~8 → ~9 net-new (1 `frame_test` + 4 `connector_test` + 4 integration). Frontmatter version 1.2→1.3; inputDocuments placement-note reference v1.2→v1.3. Token budget ~9k → ~10k. STORY-INDEX: row v1.2→v1.3, pass-3 remediated. |
 | 1.5 | 2026-07-09 | Remediate spec-adversarial pass-5 findings. Governing artifact: placement note v1.5. F-SP5-001 (HIGH [spec-gap]) — READ-error disposition contract: on any non-nil return from `frame.ReadOuterFrame`, the receive goroutine MUST exit the loop (`return`); `continue`-on-read-error is FORBIDDEN (exact mirror of v1.4 callback-error return-FORBIDDEN rule); per-site disposition follows `netingress.ServeConn` precedent (read error → exit; callback error → continue); rationale: `continue` produces busy-loop on EOF or permanent framing desync on malformed-without-close while keepalive writes keep conn alive; exit → `dialLoop` teardown/reconnect is the only correct resync; logging disposition: clean io.EOF/ctx-cancel exit is silent; abnormal read error permits one log line at implementer's discretion; double-count constraint does NOT apply (OnFrameArrival never saw the frame). New "READ-error disposition contract" subsection added to Design Constraints. Q2 reconstruction sketch updated: `if err != nil { ... }` → explicit `if err != nil { return }` with FORBIDDEN comment (v1.5 marker). Discrimination contract block updated with read-error branch above discrimination step. AC-005 gains pin test `TestConnector_ReceiveLoop_ExitsOnReadError` (inject `0xFF` FrameType → `ErrInvalidFrameType` WITHOUT closing conn; assert goroutine exits AND reconnect initiated; uses same in-package accept-and-write pattern as flap harness). FCL row 5 updated (5th test added). Estimated test forecast: connector_test.go 4→5; total net-new ~9→~10. Token budget ~11k→~12k. F-SP5-OBS-1 (LOW [spec-divergence]) — bounded-read divergence accepted: no `LimitReader`/read-deadline on PE receive path; rationale: `uint16 PayloadLen` ≤64KB allocation bound; configured/semi-trusted dialed upstream vs arbitrary ingress; READ-error exit bounds per-connection exposure; keepalive write failures detect dead conns. New "Bounded-read divergence" subsection added to Design Constraints; no implementation change. F-SP5-OBS-2 (LOW [spec-completeness]) — connector_test.go fixture pattern clarified: AC-001 and AC-003 test descriptions each gain a clarifying sentence noting the in-package accept-and-write pattern (local `net.Listen` + accept + `outerassembler.Assemble` + `conn.Write`); `peWriteFixture` stays test-local to `cmd/switchboard`; no new shared helper. Frontmatter version 1.4→1.5; inputDocuments placement-note reference v1.4→v1.5. STORY-INDEX: row ready (v1.4, pass-4 remediated) → ready (v1.5, pass-5 remediated). |
+| 1.6 | 2026-07-09 | Remediate spec-adversarial pass-6 findings. Governing artifact: placement note v1.6. F-SP6-001 (HIGH [spec-defect]) — read-error teardown wiring: v1.5 "exit → dialLoop's existing teardown/reconnect path" claim corrected; `maintainConn` is write-only and never reads the conn; receive goroutine MUST call `_ = conn.Close()` before returning on read-error exit to trigger `maintainConn` write failure → `dialLoop` teardown → redial; double-close is safe/idempotent; reconnect latency ≤ keepaliveInterval + operativeBase; new "Reconnect latency bound" subsection added; `TestConnector_ReceiveLoop_ExitsOnReadError` timeout guidance added (accommodate keepaliveInterval + operativeBase; use 10–20ms keepaliveInterval); all three receive-goroutine sketches updated (`_ = conn.Close()` added before `return` in error branch); Lifecycle section amended (two outputs; conn.Close() ownership); FCL row 4 updated. F-SP6-002 (HIGH [spec-gap]) — SetFrameCallback concrete-only (Option A): `SetFrameCallback` is NOT added to the `upstreamdial.Handle` interface; method exists only on the concrete `*Connector`; `runRouter` calls it between `New()` and `Start()`; `fakeConnectorHandle` in `router_pe_connector_test.go` NOT affected; Q1/Q2 Design Constraints seam description corrected; FCL row 4 updated; all "Added to the Handle interface" text corrected with "(amended v1.6 — F-SP6-002)" markers. F-SP6-003 (MED [spec-defect]) — AC observable substitutes: AC-001 PC-3 "connector.Mode() returns ModePE" replaced with `peWriteFixture.accepted` channel receipt OR `"mode=PE"` writer-output line; accepted-fires-before-Add(1) nuance documented (use `"mode=PE"` line for strict assertion); AC-004 precondition "polls for upstreamdial.ModePE" replaced with `"mode=PE"` writer-output line poll; `connector.Mode()` direct assertions noted valid only in `connector_test.go`. F-SP6-004 (LOW [doc-drift]) — blast radius 8→10: FCL row 3 and File Structure Requirements updated; items 9 (frame_test.go ~:501 "five canonical enum values"→"six canonical enum values") and 10 (frame_test.go ~:540 — both `{0x01..0x05}`→`{0x01..0x06}` AND "canonical five"→"canonical six") added; Task 7 updated with items 9–10. Frontmatter version 1.5→1.6; inputDocuments placement-note reference v1.5→v1.6. STORY-INDEX: row ready (v1.5, pass-5 remediated) → ready (v1.6, pass-6 remediated 2026-07-09). |

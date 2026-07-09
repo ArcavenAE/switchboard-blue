@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.10
+# version: 2.11
 # changelog:
+#   - version: 2.11
+#     date: 2026-07-09
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 6: HAS_FINDINGS — F-SP6-001 (HIGH [spec-defect], v1.5 read-error resync mechanism nonexistent — maintainConn never reads conn; fixed via binding conn.Close() on read-error exit), F-SP6-002 (HIGH [spec-gap], Handle-interface blast radius — RULED Option A: SetFrameCallback concrete-only, fakeConnectorHandle unaffected), F-SP6-003 (MED [spec-defect], AC-001 PC-3/AC-004 Mode() unassertable under runRouter harness — observable substitutes: peWriteFixture.accepted / mode=PE line), F-SP6-004 (LOW [doc-drift], blast radius 8→10 — frame_test.go :501/:540 stale comments). Remediated: note v1.5→v1.6 (architect), story v1.5→v1.6 + STORY-INDEX v4.45→v4.46 (story-writer). P1-3 transition-ownership trace CLEAN. Streak stays 0/3. Decay: 7→4→3→2→3→4. Next: spec pass 7 vs v1.6 package."
 #   - version: 2.10
 #     date: 2026-07-09
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 5: HAS_FINDINGS — F-SP5-001 (HIGH [spec-gap], READ-error disposition unspecified; v1.4 callback rule created wrong-direction trap at read site), F-SP5-OBS-1 (LOW [spec-divergence], bounded-read divergence — accepted with rationale), F-SP5-OBS-2 (LOW [spec-completeness], connector_test.go fixture pattern — clarified). Remediated: placement note v1.4→v1.5 (architect), story v1.4→v1.5 + STORY-INDEX v4.44→v4.45 (story-writer). New pin test TestConnector_ReceiveLoop_ExitsOnReadError; test forecast ~9→~10. Streak resets 0/3. Decay: 7→4→3→2→3. Next: spec pass 6 vs v1.5 package."
@@ -986,16 +989,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.5"
+    story_version: "1.6"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.5"
-    spec_adversarial_pass: 5
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.6"
+    spec_adversarial_pass: 6
     spec_adversarial_streak: "0/3"
-    last_findings: "1 HIGH (F-SP5-001 READ-error disposition) + 2 LOW (F-SP5-OBS-1 bounded-read accepted, F-SP5-OBS-2 fixture pattern clarified) — remediated (note v1.5, story v1.5, index v4.45)"
-    note: "awaiting spec adversarial pass 6 (story v1.5 + note v1.5, streak 0/3)"
+    last_findings: "2 HIGH (F-SP6-001 read-error teardown wiring nonexistent, F-SP6-002 Handle-interface blast radius RULED Option A) + 1 MED (F-SP6-003 AC-001 PC-3/Mode() observable substitutes) + 1 LOW (F-SP6-004 blast radius 8→10 frame_test.go stale comments) — remediated (note v1.6, story v1.6, index v4.46)"
+    note: "awaiting spec adversarial pass 7 (story v1.6 + note v1.6, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
