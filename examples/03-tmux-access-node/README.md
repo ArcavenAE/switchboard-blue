@@ -17,13 +17,13 @@ toward the router (dotted) waits on the network connector.
 
 ```mermaid
 graph LR
+    CN["console"] -.- R["router"]
+    R -. "publish path<br/>(connector unshipped)" .- AN
     subgraph work["machine hosting the work — LIVE in this example"]
-        TM["tmux server<br/>session 'work' → top<br/>(continuous output)"]
         AN["access node<br/>session backend connected"]
-        TM == "terminal frames<br/>relaying" ==> AN
+        TM["tmux server<br/>session 'work' → top<br/>(continuous output)"]
+        AN == "backend connected —<br/>terminal frames relaying" === TM
     end
-    AN -. "publish sessions<br/>(connector unshipped)" .-> R["router"]
-    R -.-> CN["console"]
     classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
     class R,CN dim
 ```

@@ -103,34 +103,36 @@ There are two kinds of process, both from the same `switchboard` binary:
 ```mermaid
 graph LR
     subgraph deployment["one switchboard deployment — one SVTN"]
-        subgraph m1["machine hosting the work"]
-            TM["tmux server<br/>(the actual programs)"]
-            AN["access node<br/>owns the PTY"]
-            TM --- AN
-        end
-        R["router<br/>blind relay —<br/>sees envelopes + HMAC,<br/>never payload"]
         subgraph m2["operator's machine"]
             CN["console<br/>screen + keyboard endpoint"]
+        end
+        R["router<br/>blind relay —<br/>sees envelopes + HMAC,<br/>never payload"]
+        subgraph m1["machine hosting the work"]
+            AN["access node<br/>owns the PTY"]
+            TM["tmux server<br/>(the actual programs)"]
+            AN --- TM
         end
         CT["control node<br/>admission plane:<br/>SVTNs, keys, revocation<br/>(no session traffic)"]
     end
 
-    AN == "terminal output —<br/>the bulk of every byte" ==> R
-    R == "terminal output" ==> CN
-    CN -- "keystrokes" --> R
+    CN -- "keystrokes —<br/>the command comes first" --> R
     R -- "keystrokes" --> AN
+    AN == "terminal output —<br/>the response, the bulk<br/>of every byte" ==> R
+    R == "terminal output" ==> CN
     SB["sbctl<br/>(operator CLI)"] -. "mgmt socket on every daemon —<br/>the steering wheel, not the road" .-> deployment
 ```
 
-The thick arrows are the point of the architecture: 99.99% of the bytes
-this system exists to move are terminal output flowing access → router →
-console, with keystrokes trickling back the other way (the asymmetry is
-designed in — see "half-channels" below). The control node participates
-in no session traffic at all. The dotted arrow is the management plane:
-every daemon serves a management socket that `sbctl` authenticates to
-with Ed25519 challenge-response. It is how you *operate* the deployment,
-not how the deployment operates — the rest of this document draws it
-only where it is the subject.
+Action starts at the operator and reads left to right: a keystroke
+travels console → router → access node, and the response — terminal
+output, 99.99% of the bytes this system exists to move — returns.
+Thickness is volume; the thin forward path initiates, the thick return
+path is the payoff (the asymmetry is designed in — see "half-channels"
+below). The control node participates in no session traffic at all.
+The dotted arrow is the management plane: every daemon serves a
+management socket that `sbctl` authenticates to with Ed25519
+challenge-response. It is how you *operate* the deployment, not how the
+deployment operates — the rest of this document draws it only where it
+is the subject.
 
 ### Nodes
 

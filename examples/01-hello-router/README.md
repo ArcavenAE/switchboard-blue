@@ -20,9 +20,9 @@ no session traffic flows in this lab.
 
 ```mermaid
 graph LR
-    TM["tmux"] --- AN["access node"]
-    AN -. "circuits<br/>(later examples)" .-> R["router (E-mode) — LIVE<br/>data plane :9090<br/>blind relay: sees envelopes + HMAC,<br/>never content"]
-    R -.-> CN["console"]
+    CN["console"] -. "circuits<br/>(later examples)" .- R["router (E-mode) — LIVE<br/>data plane :9090<br/>blind relay: sees envelopes + HMAC,<br/>never content"]
+    R -.- AN["access node"]
+    AN --- TM["tmux"]
     CT["control node"]
     classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
     class TM,AN,CN,CT dim

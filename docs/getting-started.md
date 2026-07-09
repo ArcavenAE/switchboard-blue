@@ -21,19 +21,19 @@ same:
 
 ```mermaid
 graph LR
-    subgraph work["machine hosting the work"]
-        TM["tmux session 'work'"]
-        AN["access node daemon<br/>(§5)"]
-        TM --- AN
+    subgraph laptop["operator laptop"]
+        SB["sbctl<br/>(§3, §4, §7)"]
+        CN["console daemon (§6)"]
     end
     R["router, E-mode :9090 (§2)<br/>blind relay for the circuit<br/>+ SVTN 'hello-svtn' (§3)"]
-    subgraph laptop["operator laptop"]
-        CN["console daemon (§6)"]
-        SB["sbctl<br/>(§3, §4, §7)"]
+    subgraph work["machine hosting the work"]
+        AN["access node daemon<br/>(§5)"]
+        TM["tmux session 'work'"]
+        AN --- TM
     end
 
-    AN == "terminal output" ==> R == "terminal output" ==> CN
     CN -- "keystrokes" --> R -- "keystrokes" --> AN
+    AN == "terminal output" ==> R == "terminal output" ==> CN
     SB -. "admin: create SVTN,<br/>register keys" .-> R
     SB -. "attach / detach" .-> CN
 ```

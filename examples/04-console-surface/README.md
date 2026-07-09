@@ -16,10 +16,11 @@ the stream it will render (dotted) waits on the network connector.
 
 ```mermaid
 graph LR
-    TM["tmux"] --- AN["access node"]
-    AN -.-> R["router"]
-    R -. "terminal output<br/>(connector unshipped)" .-> CN["console — LIVE<br/>screen + keyboard endpoint<br/>session plane answering"]
-    CN -. "keystrokes" .-> R
+    CN["console — LIVE<br/>screen + keyboard endpoint<br/>session plane answering"]
+    CN -. "keystrokes<br/>(connector unshipped)" .-> R["router"]
+    R -. "terminal output<br/>(connector unshipped)" .-> CN
+    R -.- AN["access node"]
+    AN --- TM["tmux"]
     classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
     class TM,AN,R dim
 ```

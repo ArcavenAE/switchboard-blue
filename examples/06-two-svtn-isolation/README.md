@@ -38,17 +38,19 @@ for: shared transport, disjoint authority.
 
 ```mermaid
 graph LR
+    CA["team a console"]
+    CB["team b console"]
+    R["netop's router — shared transport<br/>carries both teams' circuits,<br/>can read neither"]
     subgraph ta["team a's SVTN"]
-        TA["tmux: top · watch date"] --- AA["access nodes a1, a2"]
+        AA["access nodes a1, a2"] --- TA["tmux: top · watch date"]
     end
     subgraph tb["team b's SVTN"]
-        TB["tmux: htop · vmstat"] --- AB["access nodes b1, b2"]
+        AB["access nodes b1, b2"] --- TB["tmux: htop · vmstat"]
     end
-    R["netop's router — shared transport<br/>carries both teams' circuits,<br/>can read neither"]
-    AA -. "team a's encrypted circuits" .-> R
-    AB -. "team b's encrypted circuits" .-> R
-    R -. "team a only" .-> CA["team a console"]
-    R -. "team b only" .-> CB["team b console"]
+    CA -. "team a's encrypted circuits" .- R
+    CB -. "team b's encrypted circuits" .- R
+    R -. "team a only" .- AA
+    R -. "team b only" .- AB
 ```
 
 The circuits are dotted because the connector is unshipped: today the

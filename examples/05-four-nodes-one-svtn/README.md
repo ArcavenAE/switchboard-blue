@@ -25,23 +25,24 @@ answer spanning every machine in the SVTN.
 ```mermaid
 graph LR
     subgraph svtn["one SVTN — one trust + routing scope"]
+        CN["console — live<br/>one screen + keyboard<br/>for every session in the table"]
+        DIR["session directory —<br/>a routing table of tmux sessions:<br/>top@node1 · htop@node2<br/>watch@node3 · vmstat@node4"]
+        R["router — blind relay<br/>carries every circuit,<br/>reads none"]
         subgraph work["four machines hosting the work — all live"]
             A1["access node1 — tmux: top"]
             A2["access node2 — tmux: htop"]
             A3["access node3 — tmux: watch date"]
             A4["access node4 — tmux: vmstat 1"]
         end
-        R["router — blind relay<br/>carries every circuit,<br/>reads none"]
-        DIR["session directory —<br/>a routing table of tmux sessions:<br/>top@node1 · htop@node2<br/>watch@node3 · vmstat@node4"]
-        CN["console — live<br/>one screen + keyboard<br/>for every session in the table"]
     end
-    A1 -. publish .-> R
-    A2 -. publish .-> R
-    A3 -. publish .-> R
-    A4 -. publish .-> R
-    R -. "maintains" .- DIR
-    R -. "terminal output" .-> CN
-    CN -. "sessions list → the table<br/>attach / switch by name" .-> R
+    CN -. "sessions list —<br/>reads the table" .-> DIR
+    CN -. "attach / switch by name,<br/>keystrokes out" .-> R
+    R -. "terminal output back" .-> CN
+    DIR -. "maintained from<br/>node publications" .- R
+    R -. circuit .- A1
+    R -. circuit .- A2
+    R -. circuit .- A3
+    R -. circuit .- A4
 ```
 
 Every process in this drawing runs today — four access daemons each

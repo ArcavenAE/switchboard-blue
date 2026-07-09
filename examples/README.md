@@ -52,22 +52,24 @@ Example 06 pulls the roles apart. Full table with spec anchors:
 ```mermaid
 graph LR
     subgraph plane["switchboard deployment (one SVTN)"]
-        subgraph host["machines with tmux"]
-            TM["tmux servers<br/>(the actual programs)"]
-            AN["access nodes<br/>publish local tmux sessions"]
-            TM --- AN
-        end
+        CN["console<br/>interactive endpoint:<br/>sends keys, receives stream"]
         R["router<br/>blind relay for encrypted circuits<br/>E-mode: single LAN · PE-mode: upstream"]
-        CN["console<br/>interactive endpoint:<br/>receives stream, sends keys"]
+        subgraph host["machines with tmux"]
+            AN["access nodes<br/>publish local tmux sessions"]
+            TM["tmux servers<br/>(the actual programs)"]
+            AN --- TM
+        end
         CT["control node<br/>admission plane: create SVTNs,<br/>register/revoke keys<br/>(no session traffic)"]
     end
 
-    AN == "terminal output —<br/>the bulk of every byte" ==> R == "terminal output" ==> CN
     CN -- "keystrokes" --> R -- "keystrokes" --> AN
+    AN == "terminal output —<br/>the bulk of every byte" ==> R == "terminal output" ==> CN
     OP["operator (sbctl)"] -. "mgmt RPC on each daemon's socket —<br/>how you operate it, not how it operates" .-> plane
 ```
 
-The SVTN's session namespace works like a routing table, except the
+Action reads left to right: the operator's keystroke goes out, the
+terminal output — the bulk of every byte — comes back (thick). The
+SVTN's session namespace works like a routing table, except the
 routes are tmux sessions: every access node publishes into it, and one
 query from the console answers "what can I attach to, across all of
 them?" The thick arrows above are what the deployment is *for*; the

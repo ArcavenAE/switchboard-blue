@@ -17,8 +17,9 @@ examples, `sbctl` is the star here rather than a footnote.
 ```mermaid
 graph LR
     subgraph data["data plane — no part of this example"]
-        TM["tmux"] --- AN["access node"]
-        AN -.-> R["router"] -.-> CN["console"]
+        CN["console"] -.- R["router"]
+        R -.- AN["access node"]
+        AN --- TM["tmux"]
     end
     CT["control node — LIVE<br/>admission plane:<br/>who may publish, attach, administer"]
     CT -. "admits / revokes<br/>the keys the data plane trusts" .-> data
