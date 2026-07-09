@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.1"
+version: "1.2"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -29,6 +29,7 @@ architecture_modules:
 |---------|--------|
 | 1.0 | Initial release. Full backtick-symbol sweep (Appendix A) performed prior to publication; all symbols verified against tree at `8eb54a5` (S-7.04-FU-PE-CONNECTOR merge SHA). |
 | 1.1 | Remediate five spec-adversarial pass-1 findings: F-SP1-001 (HIGH [spec-defect]) — new Q8 ruling specifies FrameArrivalHandler-based wiring with full dependency construction; F-SP1-002 (HIGH [spec-gap]) — Q3 blast-radius enumeration for Valid() widening (test amendments + doc-comment updates); F-SP1-003 (HIGH [spec-gap]) — Q3 adds ARCH-02 frame_type table amendment obligation; F-SP1-005 (MED [spec-gap]) — Q6 strengthened with explicit per-reconnect-iteration join requirement; F-SP1-006 (MED [doc-drift]) — Q1 contradiction with Q2 annotated with explicit supersession. Appendix A updated with new symbols from Q8. |
+| 1.2 | Remediate four spec-adversarial pass-2 findings: F-SP2-001 (CRITICAL [spec-defect]) — new Q9 ruling supersedes Q4/Q5 injection topology: arqsend `Dispatch` must NOT dial `ListenAddr`; the upstream fixture MUST write directly to the accepted PE connection; option (b) ruled (fixture assembles + writes frame directly; arqsend obligation audited and narrowed); F-SP2-002 (HIGH [spec-gap]) — Q9 specifies write-capable upstream fixture shape, placement (test-local, same file as other runRouter integration tests), and exact API (accepted-conn handle + `WriteFrame(wire []byte) error` method); F-SP2-003 (MED [spec-defect]) — Q9 mandates harness rule: every AC asserting OnFrameArrival must use the real runRouter goroutine pattern (not testenv.Restart which bypasses SetFrameCallback); F-SP2-004 (MED [doc-drift]) — Q3 blast-radius amended with two missed frame_test.go locations (`TestParseOuterHeader_AcceptsAllValidFrameTypes` "all five" comment and 5-element `valid` slice). Adjudicated-clean section added for five pass-2 non-findings (per F-SP2-001 report). Appendix A delta added for new fixture symbols. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -259,11 +260,47 @@ remediate. Grep-verified against `8eb54a5`:
      MUST be updated to "six canonical" or "not in {0x01..0x06}". Verified: `frame.go`
      lines 47–48 contain this text at `8eb54a5`.
 
+**Amended blast-radius (F-SP2-004 — two locations missed in v1.1):**
+
+The v1.1 Q3 sweep was incomplete. Two additional `frame_test.go` locations require amendment
+(grep-verified against `8eb54a5`):
+
+6. `internal/frame/frame_test.go` — `TestParseOuterHeader_AcceptsAllValidFrameTypes` function
+   doc comment (verified at `8eb54a5`, located at the comment block beginning "TestParseOuterHeader_AcceptsAllValidFrameTypes
+   asserts that all five canonical FrameType values pass ParseOuterHeader's enum validation"):
+   - Current: `"all five canonical FrameType values"` — MUST be updated to `"all six canonical
+     FrameType values"`. Verified: this comment exists immediately above the function at `8eb54a5`.
+
+7. `internal/frame/frame_test.go` — `TestParseOuterHeader_AcceptsAllValidFrameTypes` `valid`
+   slice (verified at `8eb54a5`):
+   - Current: 5-element slice `{FrameTypeData, FrameTypeEmptyTick, FrameTypeCtl, FrameTypeArq, FrameTypeFec}` — MUST have `frame.FrameTypePEConnect` appended as the sixth element. This is the regression guard that `Valid()` accepts the new constant; without it, a future narrowing of `Valid()` could silently break PE-CONNECT bootstrap parsing. Verified: the function body contains this exact 5-element slice at `8eb54a5`.
+
+**Extended sweep transcript (F-SP2-004 re-sweep, broader patterns):**
+
+The following grep patterns were run against `*.go` files at `8eb54a5` to satisfy the F-SP2-004
+re-sweep requirement:
+
+- `grep -rn "five" --include="*.go" internal/frame/` → hits at `frame_test.go` lines 501, 560 (both now enumerated above), and no other `frame/` files.
+- `grep -rn "0x05" --include="*.go" internal/frame/` → hits at `frame.go` (FrameTypeFec constant definition) and `frame_test.go` (test data bytes — not FrameType assumptions; these are payload bytes in round-trip tests, not Valid() range bounds). No additional Valid()-range assumptions found.
+- `grep -rn "FrameTypeFec" --include="*.go" .` (excluding `.factory/`) → hits: `internal/frame/frame.go` (constant definition), `internal/frame/frame_test.go` (test data), `internal/outerassembler/fuzz_test.go`. The `fuzz_test.go` hit is at the `ft.Valid()` gate pattern — it does NOT hard-code a range bound; `ft.Valid()` auto-adjusts when `Valid()` is widened. Verified: `fuzz_test.go` line 128 reads `if !ft.Valid() { return }` (adversary pass-2 confirmed self-adjusting; recorded as swept-clean per F-SP2-001 adjudication section below).
+- `grep -rni "five" --include="*.md" .factory/specs/` → hits in ARCH-02 are the `fec=0x05` value in the `frame_type` table row, which is a value description not a count claim, and is already covered by the ARCH-02 amendment obligation in Q3. No additional count-five claims found in spec docs.
+
+**All seven blast-radius locations now enumerated (complete list):**
+
+| # | Location | Required change |
+|---|----------|-----------------|
+| 1 | `frame_test.go` `TestFrameType_Valid` `just_above_max` case | `FrameType(0x06) → FrameType(0x07)` |
+| 2 | `frame_test.go` `TestParseOuterHeader_RejectsInvalidFrameType` `invalids` slice | `0x06 → 0x07` in slice |
+| 3 | `frame.go` `FrameType` type doc comment | `"Only five values"` → `"Only six values"` |
+| 4 | `frame.go` `Valid()` doc comment | `"five canonical…0x06..0xFF"` → `"six canonical…0x07..0xFF"` |
+| 5 | `frame.go` `ErrInvalidFrameType` doc comment | `"five canonical"` → `"six canonical / not in {0x01..0x06}"` |
+| 6 | `frame_test.go` `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment | `"all five canonical"` → `"all six canonical"` (F-SP2-004) |
+| 7 | `frame_test.go` `TestParseOuterHeader_AcceptsAllValidFrameTypes` `valid` slice | Append `frame.FrameTypePEConnect` as sixth element (F-SP2-004) |
+
 No other files in the tree at `8eb54a5` contain "five values" or "five canonical"
-assumptions anchored to the `0x05` upper bound (grep sweep performed; `frame_test.go`
-line 501 contains `"five canonical enum values"` as a test description comment —
-this comment MUST also be updated, and `frame_test.go` line 540 contains
-`"Bytes not in {0x01..0x05}"` which MUST be updated to `{0x01..0x06}`).
+assumptions anchored to the `0x05` upper bound per the extended sweep above. The
+`outerassembler/fuzz_test.go` `ft.Valid()` gate is self-adjusting and requires no
+change (swept-clean; see adjudicated-clean section below).
 
 **ARCH-02 amendment obligation (F-SP1-003):**
 
@@ -799,6 +836,262 @@ is explicitly preserved. `RouteFrame`'s signature and semantics are unchanged.
 
 ---
 
+## Q9 — E-FWD-001 injection topology: upstream fixture write path and harness rule (F-SP2-001, F-SP2-002, F-SP2-003)
+
+**Context:** Pass-2 adversarial review established three interlocking defects in the Q4/Q5
+injection model:
+
+- **F-SP2-001 (CRITICAL [spec-defect]):** Q8 wires production emission onto the PE receive
+  path (`FrameFn → OnFrameArrival` on frames arriving over the DIALED upstream conn). But
+  Q4/Q5's AC-004 test-injection vector has `arqsend.Dispatch` dial `cfg.ListenAddr` (the
+  data-plane TCP listener) and write wire bytes there. Those bytes enter via
+  `netingress.Serve → RouteFrame` — a physically disjoint socket from the dialed PE conn.
+  `RouteFrame` does NOT call `OnFrameArrival` (verified at `8eb54a5`; zero production
+  callers of `OnFrameArrival` from the netingress path). AC-004 as specified in v1.1 is
+  undischargeable: the frame never reaches the FrameFn callback.
+
+- **F-SP2-002 (HIGH [spec-gap]):** No write-capable upstream fixture exists. Both
+  `startPEListenerFixture` (in `cmd/switchboard/router_pe_connector_test.go`, verified at
+  `8eb54a5` — accept loop reads-and-drains, zero `Write` calls) and testenv's `peLn`
+  (in `internal/testenv/testenv.go`, verified at `8eb54a5` — "Drain and close: we just
+  need the connection to be accepted", zero `Write` calls) are read-only drains.
+
+- **F-SP2-003 (MED [spec-defect]):** AC-004's precondition starts the router via
+  `testenv.New`/`Restart`. `testenv.Restart` builds a bare `upstreamdial.New` and
+  NEVER calls `SetFrameCallback` (verified at `8eb54a5` in `testenv.go` `Restart` —
+  it calls `upstreamdial.New(...).Start()` with no callback wiring). `runRouter`
+  (the real production function in `mgmt_wire.go`) is where `SetFrameCallback` will
+  be called per the Q8 ruling; `testenv.Restart` bypasses this entirely. Any AC
+  asserting that `OnFrameArrival` is reached therefore CANNOT use `testenv.Restart`;
+  it must use the real `runRouter` goroutine pattern.
+
+### 9.1 — Injection topology ruling (supersedes Q4 arqsend Dispatch and Q5 test shape)
+
+**Ruling: option (b) — the upstream fixture assembles and writes one assembled outer frame
+directly to the accepted PE connection. `arqsend.Retransmitter` is NOT used as the frame
+producer in the AC-004 exhaustion integration test.**
+
+The correct injection topology for AC-004:
+
+```
+PE upstream fixture (accepted conn)
+    ──WRITES assembled outer frame──►  dialed PE conn in runRouter
+                                           │
+                                       PE receive goroutine in upstreamdial.Connector
+                                           │ (via frame.ReadOuterFrame)
+                                       FrameFn callback in runRouter
+                                           │ (arrivalHandler.OnFrameArrival)
+                                       SplitHorizon.Forward → ErrAllPathsSplitHorizon
+                                           │
+                                       E-FWD-001 logged in writer output  ◄── assert here
+```
+
+The frame the fixture writes is a valid `outerassembler.Assemble` output — the same
+wire format that `frame.ReadOuterFrame` (new, defined by this story) expects. The fixture
+uses `outerassembler.Assemble(cf, sackBitmap, env)` with a non-bootstrap `FrameType`
+(e.g. `frame.FrameTypeData`) so it passes the `FrameTypePEConnect` discard check in the
+receive goroutine and reaches `OnFrameArrival`. A zero `outerassembler.Envelope` is
+sufficient; HMAC is not checked on the PE receive path (Q8 §8.5 ruling confirmed clean
+per adjudicated-clean section below).
+
+### 9.2 — Write-capable upstream fixture specification (F-SP2-002)
+
+**Fixture placement: test-local, same file as other `runRouter` integration tests —
+`cmd/switchboard/router_pe_receive_test.go` (NEW, per FCL row 7).**
+
+A testenv seam is NOT required and would incur ARCH-08 position-23 implications
+(testenv imports `outerassembler` at position 8; that edge is already present per
+ARCH-08 §6.5 v2.8, so adding a `WriteFrame` helper would not add a new import edge —
+but it would couple testenv's API surface to PE-frame-injection concerns that are local
+to this story's test file). The lightest lawful option is a test-local fixture struct,
+consistent with the pattern already used in `router_pe_connector_test.go`
+(`startPEListenerFixture`).
+
+**Fixture shape:**
+
+```go
+// peWriteFixture is a test-local upstream fixture that accepts one connection
+// and exposes WriteFrame so the test can inject assembled outer frames into the
+// PE receive goroutine.
+type peWriteFixture struct {
+    addr     string
+    accepted chan net.Conn // buffered(1); receives the accepted conn
+    ln       net.Listener
+}
+
+func startPEWriteFixture(t *testing.T) *peWriteFixture {
+    t.Helper()
+    ln, err := net.Listen("tcp", "127.0.0.1:0")
+    if err != nil {
+        t.Fatalf("startPEWriteFixture: Listen: %v", err)
+    }
+    t.Cleanup(func() { _ = ln.Close() })
+    f := &peWriteFixture{addr: ln.Addr().String(), accepted: make(chan net.Conn, 1), ln: ln}
+    go func() {
+        conn, err := ln.Accept()
+        if err != nil {
+            return
+        }
+        // Drain incoming bytes (connector writes bootstrap + keepalives).
+        go func(c net.Conn) {
+            buf := make([]byte, 4096)
+            for {
+                if _, err := c.Read(buf); err != nil {
+                    return
+                }
+            }
+        }(conn)
+        f.accepted <- conn
+    }()
+    return f
+}
+
+// WriteFrame writes a pre-assembled wire frame to the accepted conn.
+// Blocks until the connection is accepted (or t fails).
+func (f *peWriteFixture) WriteFrame(t *testing.T, wire []byte) {
+    t.Helper()
+    var conn net.Conn
+    select {
+    case conn = <-f.accepted:
+        f.accepted <- conn // put back for subsequent calls
+    case <-time.After(3 * time.Second):
+        t.Fatal("peWriteFixture.WriteFrame: timed out waiting for accepted conn")
+    }
+    if _, err := conn.Write(wire); err != nil {
+        t.Fatalf("peWriteFixture.WriteFrame: Write: %v", err)
+    }
+}
+```
+
+**Frame assembly in the test:**
+
+```go
+wire, err := outerassembler.Assemble(
+    halfchannel.ChannelFrame{
+        FrameType: frame.FrameTypeData,   // non-bootstrap → reaches OnFrameArrival
+        ChanID:    1,
+        ChanSeq:   1,
+        Payload:   []byte{0x01},
+    },
+    [outerassembler.SACKBitmapSize]byte{},
+    outerassembler.Envelope{},            // zero env — HMAC bypass per Q8 §8.5
+)
+// outerassembler.Assemble, outerassembler.SACKBitmapSize verified at 8eb54a5
+// halfchannel.ChannelFrame, frame.FrameTypeData verified at 8eb54a5
+if err != nil { t.Fatalf("Assemble: %v", err) }
+fixture.WriteFrame(t, wire)
+```
+
+### 9.3 — Harness rule (F-SP2-003): runRouter goroutine pattern is mandatory for OnFrameArrival ACs
+
+**Binding harness rule:** Every AC that asserts `OnFrameArrival` is reached — specifically
+AC-001, AC-002, and AC-004 — MUST use the real `runRouter` goroutine pattern, not
+`testenv.Restart`. The real pattern:
+
+```go
+buf := &syncBuffer{}
+ctx, cancel := context.WithCancel(context.Background())
+errCh := make(chan error, 1)
+go func() {
+    errCh <- runRouter(ctx, buf, cfg, cfgPath, nil)
+}()
+t.Cleanup(func() {
+    cancel()
+    select { case <-errCh: case <-time.After(3 * time.Second): }
+})
+```
+
+`runRouter` is the code path that constructs the `FrameArrivalHandler` and calls
+`connector.SetFrameCallback(frameFn)` per the Q8 ruling. `testenv.Restart` builds a bare
+`upstreamdial.New` without calling `SetFrameCallback` — verified at `8eb54a5` in
+`testenv.go` `Restart` implementation. This means any test using `testenv.Restart` will
+have an unregistered `FrameFn` (nil); `OnFrameArrival` is never called; E-FWD-001 never
+fires. Such a test would pass trivially for the wrong reason.
+
+**Rationale for no testenv seam:** Adding a `SetFrameCallback` seam to `testenv` would
+require testenv to import `routing` (or accept a `routing.FrameArrivalHandler`) — a
+position-23 package importing position-17, which is lawful (23 > 17), but imports
+`routing` into the test composition root unnecessarily. The real `runRouter` goroutine
+pattern is already established in `router_pe_connector_test.go` (AC-001 through AC-004
+in `TestRunRouter_PE_DialAndConnect_UpstreamReachable` et al., all verified at `8eb54a5`);
+the new `router_pe_receive_test.go` file MUST follow the same pattern. No testenv API
+change is required or permitted for this story.
+
+### 9.4 — arqsend obligation audit and disposition (Q4 supersession accounting)
+
+Option (b) rules `arqsend.Retransmitter` out of the E-FWD-001 integration test. The
+Q4 ruling that arqsend is "test-internal only, not wired into production `runRouter`"
+remains correct. What changes is the test's use of arqsend:
+
+- **Q4's arqsend production-wiring ruling** (arqsend NOT in `runRouter`) — **RETAINED.**
+  The production `runRouter` does not need a persistent `Retransmitter` instance; the
+  production ARQ retransmit path is node-side. This ruling is unaffected.
+
+- **Q4's test-internal arqsend construction** (the `Dispatch → net.Dial(ListenAddr)`
+  shape) — **SUPERSEDED by Q9.** The `Dispatch` closure that dials `ListenAddr` is
+  the injection path that F-SP2-001 identifies as physically disjoint from the PE
+  receive goroutine. The entire arqsend frame-production role in AC-004 is replaced
+  by the `peWriteFixture.WriteFrame` path.
+
+- **S404-OBS-F "sustained send+forward" re-confirmation framing** — Q9 rules this
+  is discharged through the `peWriteFixture` injection path. The "send" is
+  `peWriteFixture.WriteFrame`; the "forward" attempt is `OnFrameArrival` routing
+  through the split-horizon path. The S404-OBS-F obligation does NOT require
+  `arqsend.Retransmitter` specifically; it requires a live frame traversing the full
+  send+forward path. The `peWriteFixture` path satisfies this obligation.
+
+- **S404-LOW-1 "live-egress re-confirmation"** — same disposition as S404-OBS-F.
+  Both drift anchors are discharged by AC-004 using the `peWriteFixture` injection
+  path.
+
+**arqsend in the FCL:** `internal/arqsend` is removed from the `architecture_modules`
+list of files touched by this story. The existing `arqsend` integration test
+(`internal/arqsend/integration_test.go`) remains unmodified; it tests arqsend's own
+`RouteFrame`-dispatch path and is unaffected by this story's injection topology change.
+
+### 9.5 — Story propagation obligations (binding for story-writer)
+
+The story-writer MUST propagate the following Q9 changes to `S-BL.PE-RECEIVE-LOOP.md`:
+
+1. **Q4 dispatch closure** — remove the `net.Dial(cfg.ListenAddr)` dispatch shape from
+   AC-004; replace with `peWriteFixture.WriteFrame` injection path.
+2. **Q5 test infrastructure** — replace "dispatch writes to router's data-plane
+   `ListenAddr`" with "upstream fixture writes assembled frame to the accepted PE
+   connection via `peWriteFixture.WriteFrame`".
+3. **AC-004 precondition** — the test uses the `runRouter` goroutine pattern with a
+   `peWriteFixture` as the upstream. The `peWriteFixture` replaces both the precondition
+   note about `arqsend.Retransmitter` construction and the `dispatch` closure body.
+4. **FCL** — add `peWriteFixture` type definition to FCL row 7 (NEW file
+   `cmd/switchboard/router_pe_receive_test.go`); remove `internal/arqsend` from the
+   architecture_modules header.
+5. **Q3 blast-radius** — add items 6 and 7 from the blast-radius table in Q3 above.
+
+**Cite:** Pass-2 adversarial report (F-SP2-001 CRITICAL, F-SP2-002 HIGH, F-SP2-003 MED,
+F-SP2-004 MED); `cmd/switchboard/router_pe_connector_test.go` `startPEListenerFixture`
+(accept-and-drain, zero Write calls, verified at `8eb54a5`); `internal/testenv/testenv.go`
+`peLn` goroutine (accept-and-drain, zero Write calls, verified at `8eb54a5`);
+`internal/testenv/testenv.go` `Restart` (bare `upstreamdial.New` without
+`SetFrameCallback`, verified at `8eb54a5`); `outerassembler.Assemble` (verified at
+`8eb54a5`); `halfchannel.ChannelFrame` (verified at `8eb54a5`).
+
+---
+
+## Pass-2 Adjudicated-Clean (non-findings, per adversarial pass-2 report)
+
+The following five items were raised by the pass-2 adversary but adjudicated clean.
+They are recorded here per the "adjudicated-clean: cite pass-2 report, do not re-derive"
+instruction.
+
+| Item | Adversary concern | Ruling |
+|------|-------------------|--------|
+| `fn ForwardFunc` no-op consistent | `SplitHorizon` may not call `fn` if no eligible path — is this a vacuous test? | Clean. `SplitHorizon.Forward` returns `ErrAllPathsSplitHorizon` BEFORE calling `fn` on the empty-eligible path (verified at `8eb54a5` in `internal/routing/split_horizon.go`). E-FWD-001 fires on the return path regardless; the no-op `fn` is never invoked. The test is not vacuous. |
+| Duplicate-frame drop-cache semantics | `DropCache` may suppress the second frame if two identical frames are injected, preventing E-FWD-001 from firing twice | Clean. `arqsend.Retransmit` creates a fresh `ChanSeq` per `Retransmit` call (verified at `8eb54a5`). With the Q9 ruling replacing arqsend with `peWriteFixture`, a single injected frame is sufficient — the test asserts `"E-FWD-001"` fires once. `DropCache` has no effect on the first unique frame (fresh checksum). |
+| HMAC bypass vs BC-2.02.008 preconditions | PE receive path bypasses `RouteFrame` HMAC check — does BC-2.02.008 assume admission is enforced before `OnFrameArrival`? | Clean. BC-2.02.008 carries no admission assumption (verified at `8eb54a5` in `.factory/specs/`); it postconditions on the split-horizon event itself. `OnFrameArrival` treats `frameBytes` as opaque — no HMAC field in `on_frame_arrival.go`. The bypass is acceptable for this story; a SEC follow-on revisit is noted in Q8 §8.5. |
+| `peIfaceID = InterfaceID(1)` collision | Could `InterfaceID(1)` collide with a data-plane interface ID already registered by `netingress`? | Clean. The data-plane listener in `runRouter` uses `netingress.Serve`, which does NOT register `InterfaceID` values with the router (verified at `8eb54a5`); `routing.InterfaceID` values are assigned by the `FrameFn` closure, not by `netingress`. No pre-existing `InterfaceID(1)` registration exists at construction time. The PE iface ID is assigned exclusively by the wiring in Q8. |
+| `routerLogger` satisfies `routing.Logger` | Does `routerLogger` (constructed in `runRouter`) implement `routing.Logger` without a shim? | Clean. `routerLogger` is constructed via `newStdLogger(w)` (verified at `8eb54a5` in `mgmt_wire.go`); `routing.Logger` is the single-method `Log(string)` interface (verified at `8eb54a5` in `internal/routing/`); `newStdLogger` produces a concrete type that satisfies `Log(string)` (verified at `8eb54a5`). No shim is needed. |
+
+---
+
 ## Scope Boundary vs S-7.04-FU-DRAIN-WIRE
 
 | This story (PE-RECEIVE-LOOP) | S-7.04-FU-DRAIN-WIRE |
@@ -832,18 +1125,19 @@ This story provides the receive loop that makes DRAIN broadcast meaningful — a
 
 ---
 
-## Summary of Rulings (Q1–Q8)
+## Summary of Rulings (Q1–Q9)
 
 | Q | Ruling (one-line) |
 |---|---|
 | Q1 | Receive goroutine lives in `upstreamdial.Connector` (per-connection, spawned after step-3 success); `Handle` gains `SetFrameCallback(fn FrameFn)` seam; `upstreamdial` stays routing-free. (v1.0 import/signature details superseded by Q2 — see v1.1 supersession annotation.) |
 | Q2 | Framing via new `frame.ReadOuterFrame(io.Reader) (OuterHeader, []byte, error)` at position 2; `upstreamdial` gains direct `frame` import (ARCH-08 §6.5 amendment required); callback signature `type FrameFn func(hdr frame.OuterHeader, raw []byte) error`. |
 | Q3 | Define `frame.FrameTypePEConnect = 0x06`; update `Valid()` upper bound to `<= FrameTypePEConnect`; full blast radius: amend `just_above_max` test (0x06→0x07), invalids slice (0x06→0x07), five doc-comment occurrences in `frame.go`/`frame_test.go`, and ARCH-02 §"Outer Header Format" `frame_type` table row. |
-| Q4 | `arqsend.New` is test-internal only; `Retransmitter` is constructed inside the integration test, not wired into production `runRouter`; `Dispatch` callback dials the router's `ListenAddr` and writes wire bytes. |
-| Q5 | E-FWD-001 test uses `testenv.New`/`PERouterAddr`/`RouterHandle.Restart`; asserts key `"E-FWD-001"` in writer output (not `"split-horizon-blocked"` — F-P11-001 lesson); path exhaustion requires only-arrival-interface `interfaceSet` in the `FrameFn` closure (Q8). |
+| Q4 | `arqsend.New` is NOT wired into production `runRouter` (retained). Arqsend's test-internal `Dispatch → net.Dial(ListenAddr)` injection shape is **superseded by Q9** — that shape dispatches to the data-plane socket (netingress path), not the PE receive goroutine. arqsend is NOT the frame producer in AC-004. |
+| Q5 | E-FWD-001 test uses the real `runRouter` goroutine pattern (not `testenv.Restart` — F-SP2-003 harness rule); upstream fixture is `peWriteFixture` which writes assembled outer frames to the accepted PE connection; asserts key `"E-FWD-001"` in writer output (F-P11-001 lesson retained). Injection topology fully specified by Q9. |
 | Q6 | Receive goroutine exits naturally when `conn.Close()` called by `dialLoop` teardown; per-connection `WaitGroup`/`done chan struct{}` MUST be joined at end of each dial iteration before reconnect (F-SP1-005 per-reconnect join requirement); AC-005 race test MUST cover a flap cycle, not only `Stop()`. |
 | Q7 | BC-2.06.003 PC-1 "failed" status is from `metrics.PathEntryFromSnapshot` (path liveness), NOT from E-FWD-001 (split-horizon); BC ambiguity flagged for PO confirmation; operative assertion is `"E-FWD-001"` key (Option A). |
 | Q8 | PE receive `FrameFn` MUST route through `routing.NewFrameArrivalHandler`+`OnFrameArrival` (not `RouteFrame`) to make E-FWD-001 reachable; `runRouter` constructs `multipath.NewDropCache` + `routing.NewFrameArrivalHandler` after Phase b; `netingress.Serve` path unchanged; `cmd/switchboard` gains `internal/multipath` import. |
+| Q9 | **Injection topology ruling** (supersedes Q4 dispatch + Q5 injection shape): option (b) — upstream PE fixture (`peWriteFixture`, test-local in `router_pe_receive_test.go`) writes assembled outer frame directly to the accepted PE connection; `arqsend.Retransmitter` is NOT used as frame producer in AC-004; harness rule: every AC asserting `OnFrameArrival` MUST use the real `runRouter` goroutine pattern (not `testenv.Restart`); S404-OBS-F and S404-LOW-1 discharged via `peWriteFixture` injection path; Q4 production-wiring ruling (arqsend not in `runRouter`) retained. |
 
 ---
 
@@ -932,3 +1226,23 @@ tree at `8eb54a5` using `grep` on the verified file paths.
 | `multipath.DefaultDropCacheSize` | `internal/multipath/multipath.go` | VERIFIED — `const DefaultDropCacheSize = 10_000` |
 | `routing.SVTNRoute` | `internal/routing/routing.go` | VERIFIED — `func SVTNRoute(hdr frame.OuterHeader, payload []byte, r *Router) error` — called by RouteFrame; does NOT call OnFrameArrival |
 | `routing.ErrDropCacheHit` | `internal/routing/on_frame_arrival.go` | VERIFIED — `var ErrDropCacheHit = errors.New("routing: drop cache hit — frame suppressed as loop duplicate (BC-2.02.009)")` |
+
+### Appendix A Delta (v1.2 additions — Q9 fixture symbols)
+
+New symbols introduced by Q9 (test-local; NEW definitions in `cmd/switchboard/router_pe_receive_test.go`):
+
+| Symbol | File | Status |
+|--------|------|--------|
+| `peWriteFixture` | `cmd/switchboard/router_pe_receive_test.go` | NEW TYPE — test-local upstream fixture struct with `addr string`, `accepted chan net.Conn`, `ln net.Listener` |
+| `startPEWriteFixture` | `cmd/switchboard/router_pe_receive_test.go` | NEW FUNCTION — `func startPEWriteFixture(t *testing.T) *peWriteFixture`; starts loopback TCP listener, accepts one conn (draining read loop on connector's bootstrap/keepalive writes), exposes it via `accepted` channel |
+| `peWriteFixture.WriteFrame` | `cmd/switchboard/router_pe_receive_test.go` | NEW METHOD — `func (f *peWriteFixture) WriteFrame(t *testing.T, wire []byte)` — writes pre-assembled outer frame to the accepted PE connection |
+
+Previously verified symbols reused by Q9 (no re-verification required):
+
+| Symbol | Prior verification | Q9 usage |
+|--------|--------------------|----------|
+| `outerassembler.Assemble` | Appendix A v1.0 | Used in test to assemble `FrameTypeData` frame for fixture injection |
+| `outerassembler.SACKBitmapSize` | Appendix A v1.0 | Used in zero-value SACK bitmap for test frame |
+| `outerassembler.Envelope` | Appendix A v1.0 | Zero envelope (HMAC bypass per Q8 §8.5) |
+| `halfchannel.ChannelFrame` | Appendix A v1.0 | Test frame struct with `FrameType: frame.FrameTypeData` |
+| `frame.FrameTypeData` | Appendix A v1.0 | Non-bootstrap type to pass PE-CONNECT discard check |

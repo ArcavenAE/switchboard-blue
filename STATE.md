@@ -33,10 +33,10 @@ develop_head: 8eb54a5
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.PE-RECEIVE-LOOP spec adversarial pass 2 (story v1.1 + note v1.1, streak 0/3)"
+awaiting: "S-BL.PE-RECEIVE-LOOP spec adversarial pass 3 (story v1.2 + note v1.2, streak 0/3)"
 historical_cycles: []
-timestamp: 2026-07-08T22:00:00Z
-last_update: 2026-07-08
+timestamp: 2026-07-09T00:00:00Z
+last_update: 2026-07-09
 ---
 
 # Switchboard Factory State
@@ -61,11 +61,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Sh
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
+| 2026-07-09 | **S-BL.PE-RECEIVE-LOOP spec pass 2 REMEDIATED — 4 findings (1C/1H/2M) all closed; note v1.2 (Q9 injection topology + peWriteFixture); story v1.2; pass 3 next (streak 0/3)** | completed | F-SP2-001 (CRITICAL): Q9 ruling — AC-004 injection topology fixed; arqsend.Dispatch dialed ListenAddr (netingress, wrong socket); Q9 rules peWriteFixture writes directly to accepted PE conn; Q4 production ruling retained; S404-OBS-F/LOW-1 discharged. F-SP2-002 (HIGH): peWriteFixture type + startPEWriteFixture + WriteFrame defined (test-local, FCL row 7). F-SP2-003 (MED): Q9.3 harness rule — every AC asserting OnFrameArrival MUST use real runRouter goroutine pattern (NOT testenv.Restart); AC-001/AC-002 preconditions rewritten. F-SP2-004 (MED): Q3 blast-radius completed to 7 locations (TestParseOuterHeader + valid slice). 5 non-findings adjudicated clean. Note v1.2, story v1.2. sprint-state v2.06→v2.07. STORY-INDEX v4.41→v4.42. First architect attempt stalled zero-output (stream watchdog — 3rd stall instance); clean re-dispatch succeeded. |
 | 2026-07-08 | **S-BL.PE-RECEIVE-LOOP spec pass 1 REMEDIATED — 7 findings (3H/3M/1L) all closed; note v1.1 (Q8 FrameArrivalHandler wiring); story v1.1; pass 2 next (streak 0/3)** | completed | F-SP1-001 (HIGH): Q8 ruling — OnFrameArrival wiring with NewDropCache/NewFrameArrivalHandler/WithFrameArrivalLogger; HMAC-bypass adjudicated acceptable + SEC follow-on flag. F-SP1-002 (HIGH): Valid() blast radius (frame_test pins + doc comments enumerated). F-SP1-003 (HIGH): ARCH-02 frame_type table amendment obligation; FCL row 9 added. F-SP1-004 (MED): BC-2.09.001 contextual anchor added. F-SP1-005 (MED): AC-005 flap-cycle join added. F-SP1-006 (MED): Q1↔Q2 supersession annotation. F-SP1-007 (LOW): test name reconciled. Note v1.1, story v1.1, FCL 8→9 rows. sprint-state v2.05→v2.06. STORY-INDEX v4.40→v4.41. |
 | 2026-07-08 | **S-BL.PE-RECEIVE-LOOP elaboration begun — architect placement note v1.0 (Q1-Q7); PO disposition on BC-2.06.003 PC-1 in flight** | completed | Placement note v1.0 authored: Q1 receive goroutine in upstreamdial via SetFrameCallback seam; Q2 frame.ReadOuterFrame NEW in internal/frame; Q3 FrameTypePEConnect=0x06 NEW with Valid() upper-bound update mandate; Q4 arqsend test-internal wiring; Q5 E-FWD-001 assertion key; Q6 done-channel joint teardown; Q7 BC-2.06.003 PC-1 mechanism ambiguity FLAGGED for PO. 55-symbol sweep appendix, zero phantoms. |
 | 2026-07-08 | **S-7.04-FU-PE-CONNECTOR MERGED — PR #115 @ 8eb54a5; VP true-up PR #116; S-BL.PE-RECEIVE-LOOP unblocked** | completed | PR #115 squash-merged to develop @ 8eb54a5 (2026-07-08T21:50:10Z). VP true-up PR #116 merged (VP-038 anchor trued; VP-037 partial). Branch deleted. story v1.27, DELIVERY v1.1. Deferred follow-ons: SEC-001 sanitizeAddrForError, SEC-002 MaxUpstreamRouters cap, Stop-before-Start deadlock nit, NewTicker<=0 panic guard nit. S-BL.PE-RECEIVE-LOOP now unblocked (next anchor). S-7.04-FU-DRAIN-WIRE remains blocked on PE-RECEIVE-LOOP. |
 | 2026-07-08 | **PE-CONNECTOR adversary P32 CLEAN @ 6b6f0cf — CONVERGED 3/3 — BC-5.39.001 Step 4.5 SATISFIED** | completed | Pass-32: NO_FINDINGS — convergence pass. Spot-checked F-P24/F-P13/F-P15 all holding. F-P29 fix re-derived from fresh context — sound. Two false positives dismissed (out-of-perimeter SIGHUP doc; already-adjudicated P16 docstring). All 9 bars green. 32 passes, 39 findings, zero open. CONVERGENCE ACHIEVED. |
-| 2026-07-08 | **PE-CONNECTOR DELIVERY v1.0 authored + demo evidence 2df6680; pr-manager dispatched** | completed | DELIVERY v1.0 (S-7.04-FU-PE-CONNECTOR-DELIVERY.md): per-AC discharge table, 4 declared divergences, FO ledger, 32-pass cycle summary, PR-time obligations. Demo evidence @ 2df6680. STORY-INDEX v4.37→v4.38; sprint-state v2.01→v2.02. |
 
 
 ## Wave 6 Story Status

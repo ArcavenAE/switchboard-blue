@@ -1593,10 +1593,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | Pass | Story version | Total | HIGH | MED | LOW | Streak | Remediation |
 |------|---------------|-------|------|-----|-----|--------|-------------|
 | 1 (spec) | v1.0 | 7 | 3 | 3 | 1 | 0/3 | note v1.1 (Q8) + story v1.1 — all remediated |
+| 2 (spec) | v1.1 | 4 | 1C | 1 | 2 | 0/3 | note v1.2 (Q9 peWriteFixture) + story v1.2 — all remediated |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L)` — pass 1 HAS_FINDINGS → remediated; streak 0/3; pass 2 pending.
+`7 (3H/3M/1L) → 4 (1C/1H/2M)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; streak 0/3; pass 3 pending.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1627,3 +1628,44 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 F-SP1-001 caught pre-code the same defect class that cost PE-CONNECTOR its AC-004 partial-discharge at impl-time (F-P1-002 in the PE-CONNECTOR cycle). The spec-adversarial pass detected that `routing.RouteFrame` cannot reach `E-FWD-001` — a structural wiring defect that would have required a full adversarial remediation cycle (potentially 5+ passes with code changes) to surface after implementation began. Q8's deterministic-exhaustion mechanism (single-interface set in the `FrameFn` closure guarantees split-horizon block on every non-bootstrap frame regardless of load) replaces the prior load-dependent framing entirely. HMAC-bypass adjudicated with SEC follow-on flag for PR — acceptable because PE upstream connections are established outbound by the connector itself, not arbitrary ingress.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-1 when authored).
+
+### Pass 2 Details (2026-07-09)
+
+**Story at review:** v1.1 | **Placement note at review:** v1.1
+
+**Verdict:** HAS_FINDINGS — 4 findings (1 CRITICAL, 1 HIGH, 2 MED). All remediated.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP2-001 | CRITICAL | spec-defect | AC-004's test injection dispatched frames to the data-plane listener (`cfg.ListenAddr → netingress → RouteFrame`), physically disjoint from the dialed PE conn where Q8's `OnFrameArrival` wiring lives. The binding-anchor discharge was unreachable — arqsend `Dispatch` dials `ListenAddr` (the inbound netingress socket), not the outbound PE connection. | Q9 ruling: option (b) — `peWriteFixture` (test-local in `cmd/switchboard/router_pe_receive_test.go`) writes pre-assembled `FrameTypeData` frame directly to the accepted PE connection. arqsend obligation audited and narrowed (NOT silently retired — Q4 production-wiring ruling retained; arqsend's `Dispatch → net.Dial(ListenAddr)` injection shape superseded by Q9). S404-OBS-F + S404-LOW-1 discharged via `peWriteFixture` injection path. AC-004 precondition + both AC-004 `arqsend` occurrences rewritten. |
+| F-SP2-002 | HIGH | spec-gap | No write-capable upstream fixture existed anywhere — both existing fixtures (`testenv.New` harness + dialer-only shapes) were drain-only. The Q9 injection path had no concrete fixture to anchor against. | Q9.2 specifies `peWriteFixture` struct (fields: `addr string`, `accepted chan net.Conn`, `ln net.Listener`), `startPEWriteFixture(t *testing.T) *peWriteFixture` (listener setup + goroutine to accept one conn), and `(*peWriteFixture).WriteFrame(t *testing.T, wire []byte) error` method (writes to accepted conn with 5s timeout). Placed test-local in `cmd/switchboard/router_pe_receive_test.go`. FCL row 7 expanded; Appendix A delta added. |
+| F-SP2-003 | MED | spec-defect | AC-004 used `testenv.New` harness, which bypasses `runRouter` — `testenv.Restart` never calls `SetFrameCallback`. The entire `FrameArrivalHandler` wiring path (Q8's key fix) was invisible to the harness. Binding discharge for `OnFrameArrival` ACs was structurally impossible via `testenv`. | Q9.3 harness rule added to Design Constraints: every AC asserting `OnFrameArrival` (AC-001, AC-002, AC-004) MUST use the real `runRouter` goroutine pattern (not `testenv.Restart`). AC-001 and AC-002 preconditions rewritten to reference `runRouter` goroutine pattern + `peWriteFixture`. AC-005 harness adjudicated: lifecycle-only assertions; `runRouter` used for fidelity but not a harness-rule obligation; `testenv` may be used if test asserts only goroutine lifecycle. |
+| F-SP2-004 | MED | doc-drift | Q3 blast-radius sweep missed two `frame_test.go` locations: (1) `TestParseOuterHeader_AcceptsAllValidFrameTypes` doc comment referencing "all five canonical" (needs "all six canonical"); (2) the 5-element `valid` slice in the same test (needs `frame.FrameTypePEConnect` as sixth element). | FCL row 3 expanded with items 6 and 7; total blast-radius locations corrected from 5 to 7; Task 7 updated. |
+
+#### Non-Findings Adjudicated Clean (Pass 2)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| `ForwardFunc` no-op consistent | `ForwardFunc` is a no-op at spec time; Q8 already documents that `OnFrameArrival` is the production path; no spec gap | CLEAN |
+| Drop-cache duplicate semantics | `arqsend.Retransmit` creates a fresh `ChanSeq` per call; `DropCache` has no effect on first unique frame; with Q9 a single injected frame is sufficient | CLEAN |
+| HMAC-bypass vs BC preconditions | PE upstream connections are outbound-established by the connector; inbound HMAC enforcement is admission-plane, not receive-loop plane; BC preconditions correctly scoped | CLEAN |
+| `peIfaceID` no collision | `peIfaceID` derives from the listener address; test-local fixture uses ephemeral port; no collision with production routing entries | CLEAN |
+| `routerLogger` satisfies `routing.Logger` | Interface satisfaction is structural; no behavioral gap | CLEAN |
+
+#### Remediation Summary
+
+**Placement note v1.1 → v1.2:** New Q9 ruling (injection topology — option (b) `peWriteFixture` test-local write to accepted PE conn; arqsend `Dispatch → net.Dial(ListenAddr)` injection shape superseded; Q4 production-wiring ruling retained; S404-OBS-F + S404-LOW-1 discharged via `peWriteFixture` path; harness rule: OnFrameArrival ACs use real `runRouter`). Q3 blast-radius completed to 7 locations (items 6–7: `TestParseOuterHeader_AcceptsAllValidFrameTypes` + `valid` slice). Summary of Rulings table updated (Q9 row added). Appendix A delta (3 new test-local symbols: `peWriteFixture`, `startPEWriteFixture`, `(*peWriteFixture).WriteFrame`).
+
+**Story v1.1 → v1.2:** AC-004 injection rewritten (both occurrences — Q4 design constraint block and AC-004 precondition block): `net.Dial(routerListenAddr)` + `arqsend.Dispatch` closure removed; replaced with `peWriteFixture.WriteFrame(t, wire)` path; AC-004 PC-1 rewritten (`outerassembler.Assemble` call form cited); S404-OBS-F + S404-LOW-1 Anchors Consumed wording updated to Q9.4 discharge framing. FCL row 7 expanded (3 new test-local symbols). Q9.3 harness rule section added to Design Constraints. AC-001 + AC-002 preconditions rewritten to reference `runRouter` goroutine pattern. AC-005 harness adjudication documented. FCL row 3 expanded to 7 blast-radius locations. `internal/arqsend` removed from `architecture_modules` frontmatter and Library table. Token budget updated (~9k).
+
+#### Pattern Note: Partial-Reconciliation-Relocates-Drift
+
+Pass-1 fixed the production end of the wire (Q8 — `OnFrameArrival` wiring in `runRouter`). Pass-2 caught the test-injection end still plugged into the old socket (`arqsend.Dispatch → net.Dial(ListenAddr)` routing to netingress, not the PE conn). This is the same shape as PE-CONNECTOR P27→P28: a partial reconciliation that correctly fixes one layer exposes a previously-hidden defect in a sibling layer. The spec-adversarial cycle is working as designed — pass-1's fix revealed the injection topology defect only because it clarified what the production wiring actually was.
+
+#### Process Note: Architect Stream Stall
+
+The first architect dispatch for this remediation stalled at 600s with zero on-disk output (stream watchdog). This is the third stream-stall instance this cycle (evidence class: architect zero-output on non-trivial ruling work). Clean re-dispatch succeeded. No spec content was lost. The stall pattern is logged for upstream vsdd-factory tracking.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-2 when authored).

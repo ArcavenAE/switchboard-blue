@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.06
+# version: 2.07
 # changelog:
+#   - version: 2.07
+#     date: 2026-07-09
+#     description: "S-BL.PE-RECEIVE-LOOP spec-adversarial pass 2 remediated — 4 findings (1C/1H/2M), all closed: F-SP2-001 (CRITICAL [spec-defect]) AC-004 injection topology — arqsend.Dispatch dialed cfg.ListenAddr (data-plane socket/netingress path), physically disjoint from the accepted PE conn where Q8's OnFrameArrival wiring lives; binding-anchor discharge unreachable → Q9 ruling: peWriteFixture (test-local) writes pre-assembled FrameTypeData frame directly to accepted PE conn; arqsend obligation audited and narrowed (Q4 production ruling retained; S404-OBS-F/LOW-1 discharged via peWriteFixture path). F-SP2-002 (HIGH [spec-gap]) no write-capable upstream fixture anywhere — both existing fixtures drain-only → Q9 specifies peWriteFixture type + startPEWriteFixture + WriteFrame method (test-local, cmd/switchboard/router_pe_receive_test.go). F-SP2-003 (MED [spec-defect]) AC-004 testenv.New harness bypasses runRouter where SetFrameCallback wiring lives → Q9 harness rule: every AC asserting OnFrameArrival MUST use real runRouter goroutine pattern (NOT testenv.Restart); AC-001/AC-002 preconditions rewritten. F-SP2-004 (MED [doc-drift]) Q3 blast-radius missed two frame_test.go locations → FCL row 3 expanded to 7 blast-radius locations. 5 non-findings adjudicated clean with code evidence. Placement note v1.1→v1.2 (Q9, Q3 completed to 7 locations, Appendix A delta). Story v1.1→v1.2 (AC-004 injection rewritten both occurrences; peWriteFixture FCL row 7; Q9.3 harness rule Design Constraints; AC-001/AC-002 preconditions; AC-005 harness adjudicated lifecycle-only; arqsend swept 12 rewrites/2 retained; frame_test blast-radius items 6-7). STORY-INDEX v4.41→v4.42. Spec adversarial pass 3 next (streak 0/3). Note: first architect attempt stalled zero-output (stream watchdog 600s — 3rd stall instance this cycle); clean re-dispatch succeeded."
 #   - version: 2.06
 #     date: 2026-07-08
 #     description: "S-BL.PE-RECEIVE-LOOP spec-adversarial pass 1 remediated — 7 findings (3H/3M/1L), all closed: F-SP1-001 (HIGH [spec-defect]) RouteFrame wiring defect → Q8 ruling: FrameArrivalHandler.OnFrameArrival wiring with NewDropCache/NewFrameArrivalHandler/WithFrameArrivalLogger construction in runRouter; F-SP1-002 (HIGH [spec-gap]) Valid() 0x06 blast radius → frame_test.go pins + doc comments enumerated; F-SP1-003 (HIGH [spec-gap]) ARCH-02 frame_type table amendment obligation; F-SP1-004 (MED [doc-drift]) BC-2.09.001 added as contextual anchor; F-SP1-005 (MED [spec-gap]) Q6 per-reconnect-iteration join; F-SP1-006 (MED [doc-drift]) Q1↔Q2 supersession annotation; F-SP1-007 (LOW [doc-drift]) test name reconciled. Placement note v1.0→v1.1 (Q8 new, Q3 blast-radius, Q6 strengthened, Q1 supersession, Appendix A +5 symbols). Story v1.0→v1.1 (AC-001/002/004 rewired per Q8 + HMAC adjudication + SEC follow-on; FCL 8→9 rows incl. ARCH-02; BC-2.09.001 added; AC-005 flap-cycle join; test names reconciled). STORY-INDEX v4.40→v4.41. Spec adversarial pass 2 next (streak 0/3)."
@@ -974,16 +977,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.1"
+    story_version: "1.2"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.1"
-    spec_adversarial_pass: 1
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.2"
+    spec_adversarial_pass: 2
     spec_adversarial_streak: "0/3"
-    last_findings: "7 (3 HIGH: RouteFrame wiring defect / Valid() blast radius / ARCH-02 amendment) — all remediated (note v1.1 Q8, story v1.1)"
-    note: "awaiting spec adversarial pass 2 (story v1.1 + note v1.1, streak 0/3)"
+    last_findings: "4 (1 CRIT injection-topology / 1 HIGH missing fixture / 2 MED harness+sweep) — all remediated (note v1.2 Q9, story v1.2)"
+    note: "awaiting spec adversarial pass 3 (story v1.2 + note v1.2, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
