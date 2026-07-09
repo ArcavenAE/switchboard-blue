@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.3"
+version: "1.4"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -31,6 +31,7 @@ architecture_modules:
 | 1.1 | Remediate five spec-adversarial pass-1 findings: F-SP1-001 (HIGH [spec-defect]) — new Q8 ruling specifies FrameArrivalHandler-based wiring with full dependency construction; F-SP1-002 (HIGH [spec-gap]) — Q3 blast-radius enumeration for Valid() widening (test amendments + doc-comment updates); F-SP1-003 (HIGH [spec-gap]) — Q3 adds ARCH-02 frame_type table amendment obligation; F-SP1-005 (MED [spec-gap]) — Q6 strengthened with explicit per-reconnect-iteration join requirement; F-SP1-006 (MED [doc-drift]) — Q1 contradiction with Q2 annotated with explicit supersession. Appendix A updated with new symbols from Q8. |
 | 1.2 | Remediate four spec-adversarial pass-2 findings: F-SP2-001 (CRITICAL [spec-defect]) — new Q9 ruling supersedes Q4/Q5 injection topology: arqsend `Dispatch` must NOT dial `ListenAddr`; the upstream fixture MUST write directly to the accepted PE connection; option (b) ruled (fixture assembles + writes frame directly; arqsend obligation audited and narrowed); F-SP2-002 (HIGH [spec-gap]) — Q9 specifies write-capable upstream fixture shape, placement (test-local, same file as other runRouter integration tests), and exact API (accepted-conn handle + `WriteFrame(wire []byte) error` method); F-SP2-003 (MED [spec-defect]) — Q9 mandates harness rule: every AC asserting OnFrameArrival must use the real runRouter goroutine pattern (not testenv.Restart which bypasses SetFrameCallback); F-SP2-004 (MED [doc-drift]) — Q3 blast-radius amended with two missed frame_test.go locations (`TestParseOuterHeader_AcceptsAllValidFrameTypes` "all five" comment and 5-element `valid` slice). Adjudicated-clean section added for five pass-2 non-findings (per F-SP2-001 report). Appendix A delta added for new fixture symbols. |
 | 1.3 | Remediate three spec-adversarial pass-3 findings: F-SP3-001 (HIGH [spec-defect]) — Q2 byte-contract contradiction resolved: `frame.ReadOuterFrame` MUST return payload-only (consistent with `netingress.ReadFrame` precedent); receive goroutine reconstructs full frame via `frame.EncodeOuterHeader`+append before invoking `FrameFn`; Q2 false claim about netingress.ReadFrame retracted; FrameFn `raw` parameter pinned as full outer-header+payload; AC-002/AC-004 false-duplicate pinning test shape specified. F-SP3-002 (HIGH [spec-gap]) — AC-005 harness re-attributed to hand-rolled flap harness in `connector_test.go` per existing heldConn+Close() pattern; `peWriteFixture` de-attributed from AC-005 in FCL row 7. F-SP3-003 (MED [doc-drift]) — `OuterHeader.FrameType` field comment ("data, ctl, arq, fec, empty-tick") adjudicated item-8; Q3 blast-radius table updated to 8 locations; extended sweep transcript included. Appendix A delta for `frame.EncodeOuterHeader` (reuse from v1.0 verification). Pass-3 adjudicated-clean section added. |
+| 1.4 | Remediate two spec-adversarial pass-4 findings: F-SP4-001 (HIGH [spec-gap]) — Q2 FrameFn discrimination contract amended with binding return-value rule: non-nil FrameFn return MUST NOT terminate the receive loop; discard-and-continue (`_ = frameFn(hdr, raw)` idiom) mandated, mirroring ServeConn's `continue` pattern; exit-on-error form explicitly forbidden; receive-goroutine sketch updated. F-SP4-002 (HIGH [spec-gap]) — Q1/Q8 amended with SetFrameCallback ordering contract: MUST be called before Start(); `frameFn` field is set-once pre-launch (goroutine-creation happens-before covers visibility; no field synchronization required); production wiring order in runRouter = construct → SetFrameCallback → Start; receive goroutine MAY assume non-nil under this ordering; nil-guard posture: defense-in-depth silent discard added as optional belt-and-suspenders; post-Start callback mutation forbidden. Appendix A delta for v1.4 (no new symbols; prior symbol table remains complete). Pass-4 adjudicated-clean section added. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -103,9 +104,60 @@ story.
 > per factory history-preservation policy; read Q2 as the controlling specification
 > for all type and import details.
 
+**SetFrameCallback ordering contract (v1.4 — F-SP4-002):**
+
+`SetFrameCallback` MUST be called before `Start()`. The `frameFn` field on
+`Connector` is set-once pre-launch. The `happens-before` edge created by
+`sync` at goroutine creation (Go memory model §"Goroutine creation") guarantees
+that any `frameFn` value written before `Start()` is visible to all goroutines
+launched by `Start()`. No additional field synchronization (mutex, atomic) is
+required for this field, because it is written exactly once before any reader
+goroutine is created.
+
+Production wiring order in `runRouter` (binding):
+
+```
+construct → SetFrameCallback → Start
+```
+
+Concretely in `mgmt_wire.go` (verified: current code has `connector := upstreamdial.New(...)`
+immediately followed by `connector.Start()` at `8eb54a5`; this story inserts
+`connector.SetFrameCallback(frameFn)` between those two lines):
+
+```go
+connector := upstreamdial.New(w, outerassembler.Envelope{}, keepaliveInterval, upstreamRouters)
+connector.SetFrameCallback(frameFn)  // MUST precede Start
+connector.Start()
+```
+
+The receive goroutine MAY assume `frameFn` is non-nil under this ordering contract
+(the field is guaranteed visible and non-nil before the goroutine is created).
+
+Nil-guard posture (defense-in-depth): as a belt-and-suspenders guard against
+future callers that construct a `Connector` without calling `SetFrameCallback`
+before `Start`, the receive goroutine SHOULD apply a nil check before invoking
+the callback and silently discard the frame if `frameFn` is nil. This does not
+replace the ordering obligation — a nil `frameFn` at receive time is a
+programming error, not an expected condition — but it prevents a nil-deref panic
+in the face of that error. The discard is silent (no log emission) because a
+nil callback implies the caller did not wire up routing; logging every discarded
+frame would be noise without context. The nil check has no effect on the
+production path, where the ordering contract holds.
+
+Post-Start mutation of the callback is forbidden. Any call to `SetFrameCallback`
+after `Start()` returns is a data race (dial goroutines are already reading
+`frameFn`); the `Connector` implementation MUST NOT permit it. If the
+`SetFrameCallback` setter is called post-Start, it may panic or be silently
+ignored — the implementer's choice — but it MUST NOT proceed with an unsynchronized
+field write.
+
 **Cite:** ARCH-08 §6.6.2 forbidden-edges note at `8eb54a5`;
 `internal/upstreamdial/connector.go` `dialLoop` structure (verified at `8eb54a5`);
-`internal/netingress/netingress.go` `RouteFn` pattern (verified at `8eb54a5`).
+`internal/netingress/netingress.go` `RouteFn` pattern (verified at `8eb54a5`);
+`cmd/switchboard/mgmt_wire.go` lines 525–526 (`connector := upstreamdial.New(...)`
+immediately followed by `connector.Start()` at `8eb54a5` — this story inserts
+`SetFrameCallback` between them); Go memory model goroutine-creation happens-before
+guarantee.
 
 ---
 
@@ -206,7 +258,61 @@ hdr, payload, err := frame.ReadOuterFrame(conn)
 if err != nil { ... }
 ehdr := frame.EncodeOuterHeader(hdr)
 raw := append(ehdr[:], payload...)
-frameFn(hdr, raw)
+_ = frameFn(hdr, raw)  // discard-and-continue; see FrameFn return-value contract below
+```
+
+**FrameFn return-value contract (v1.4 — F-SP4-001, binding):**
+
+A non-nil return value from `frameFn(hdr, raw)` MUST NOT terminate the receive
+loop or close the connection. The receive goroutine MUST discard the error
+and continue reading the next frame (discard-and-continue semantics).
+
+Rationale: `OnFrameArrival` returns non-nil on exactly two normal-operation paths:
+`ErrAllPathsSplitHorizon` (E-FWD-001, when every forwarding candidate is
+split-horizon blocked) and `ErrDropCacheHit` (when the drop cache identifies the
+frame as a loop duplicate). Neither is a fatal condition. If the receive loop
+exits on the first `ErrAllPathsSplitHorizon` return, the pin test
+`TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` fails (frame B is
+never read and the second E-FWD-001 emission never fires), defeating the
+byte-contract validation.
+
+The normative precedent is `netingress.ServeConn` (verified at `8eb54a5` in
+`internal/netingress/netingress.go`):
+
+```go
+if err := route(hdr, payload); err != nil {
+    // Drop-and-continue: routing already logs E-ADM-016/017 per BC-2.05.008.
+    continue
+}
+```
+
+The `RouteFn` doc comment (verified at `8eb54a5`, lines 61–65) states:
+
+> RouteFn returning a non-nil error is NOT a signal to close the connection
+> [...] The error is logged and dropped. [...] would double-count.
+
+`OnFrameArrival` already logs E-FWD-001 and EC-005 internally (verified at
+`8eb54a5` in `internal/routing/on_frame_arrival.go`). The receive goroutine
+MUST NOT log the error again (double-count rationale applies here too). The
+correct idiom is a plain discard:
+
+```go
+_ = frameFn(hdr, raw)
+```
+
+This satisfies `errcheck` (the unchecked-error linter enabled in `.golangci.yml`
+at `8eb54a5`) without the `//nolint` directive: a bare `_ =` assignment is a
+legitimate explicit discard, not an ignored error. The `//nolint:errcheck`
+directive MUST NOT be used; it suppresses errcheck for the whole line and masks
+genuine unhandled-error bugs that may be introduced in future edits.
+
+The exit-on-error form is explicitly forbidden:
+
+```go
+// FORBIDDEN — exits the loop on E-FWD-001, defeating TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader
+if err := frameFn(hdr, raw); err != nil {
+    return
+}
 ```
 
 This places the allocation at the single call site, mirrors the `netingress.ReadFrame`
@@ -235,7 +341,11 @@ that introduces the `frame.ReadOuterFrame` import.
 
 **Cite:** `internal/frame/frame.go` `ParseOuterHeader`, `EncodeOuterHeader` (verified at `8eb54a5`);
 `internal/netingress/netingress.go` `ReadFrame` — payload-only return, `hdrBuf` discarded (verified at `8eb54a5`);
+`internal/netingress/netingress.go` `RouteFn` doc comment — "NOT a signal to close the connection … error is logged and dropped" (verified at `8eb54a5`, lines 61–65);
+`internal/netingress/netingress.go` `ServeConn` — drop-and-continue `continue` with double-count-avoidance rationale (verified at `8eb54a5`, lines 145–147);
 `internal/routing/on_frame_arrival.go` `OnFrameArrival` — `crc32.ChecksumIEEE(frameBytes)` (verified at `8eb54a5`);
+`internal/routing/on_frame_arrival.go` `ErrAllPathsSplitHorizon`, `ErrDropCacheHit` — two non-fatal non-nil return paths (verified at `8eb54a5`);
+`.golangci.yml` — `errcheck` enabled (verified at `8eb54a5`);
 ARCH-08 §6.5 position table.
 
 ---
@@ -1214,6 +1324,8 @@ The story-writer MUST propagate the following changes to `S-BL.PE-RECEIVE-LOOP.m
 6. **Q3 blast-radius** (v1.2 + v1.3) — add items 6 and 7 from v1.2 and item 8 from v1.3 to the story's implementation-obligation list.
 7. **Q2 byte-contract** (v1.3, F-SP3-001) — specify that the receive goroutine reconstructs full frame bytes via `frame.EncodeOuterHeader`+append before invoking `FrameFn`; `FrameFn raw` is full outer-header+payload; amend any story text that implies `raw` is payload-only.
 8. **Remove `internal/arqsend`** (v1.2) from the `architecture_modules` header.
+9. **Q2 FrameFn return-value contract** (v1.4, F-SP4-001) — specify that the receive goroutine MUST use `_ = frameFn(hdr, raw)` (discard-and-continue); the exit-on-error form `if err := frameFn(...); err != nil { return }` is forbidden; amend any sketch code that shows the error being acted upon.
+10. **Q1/Q8 SetFrameCallback ordering contract** (v1.4, F-SP4-002) — specify that `SetFrameCallback` MUST be called before `Start()`; wiring order in `runRouter` is construct → `SetFrameCallback` → `Start`; receive goroutine MAY assume non-nil `frameFn`; include nil-guard silent-discard as optional defense-in-depth; post-Start mutation is forbidden.
 
 **Cite:** Pass-2 adversarial report (F-SP2-001 CRITICAL, F-SP2-002 HIGH, F-SP2-003 MED,
 F-SP2-004 MED); `cmd/switchboard/router_pe_connector_test.go` `startPEListenerFixture`
@@ -1278,8 +1390,8 @@ This story provides the receive loop that makes DRAIN broadcast meaningful — a
 
 | Q | Ruling (one-line) |
 |---|---|
-| Q1 | Receive goroutine lives in `upstreamdial.Connector` (per-connection, spawned after step-3 success); `Handle` gains `SetFrameCallback(fn FrameFn)` seam; `upstreamdial` stays routing-free. (v1.0 import/signature details superseded by Q2 — see v1.1 supersession annotation.) |
-| Q2 | Framing via new `frame.ReadOuterFrame(io.Reader) (OuterHeader, []byte, error)` at position 2 — returns payload-only (consistent with `netingress.ReadFrame` precedent); receive goroutine reconstructs full frame via `frame.EncodeOuterHeader(hdr)`+append before invoking `FrameFn`; `FrameFn raw` parameter is ALWAYS full outer-header+payload; `upstreamdial` gains direct `frame` import (ARCH-08 §6.5 amendment required); callback signature `type FrameFn func(hdr frame.OuterHeader, raw []byte) error`. (v1.2 false claim that `FrameFn raw` is payload-only retracted; see v1.3 retraction annotation.) |
+| Q1 | Receive goroutine lives in `upstreamdial.Connector` (per-connection, spawned after step-3 success); `Handle` gains `SetFrameCallback(fn FrameFn)` seam; `upstreamdial` stays routing-free. (v1.0 import/signature details superseded by Q2 — see v1.1 supersession annotation.) **SetFrameCallback ordering contract (v1.4):** MUST be called before `Start()`; `frameFn` is set-once pre-launch; receive goroutine MAY assume non-nil under this ordering; nil-guard silent-discard added as defense-in-depth; post-Start mutation forbidden. |
+| Q2 | Framing via new `frame.ReadOuterFrame(io.Reader) (OuterHeader, []byte, error)` at position 2 — returns payload-only (consistent with `netingress.ReadFrame` precedent); receive goroutine reconstructs full frame via `frame.EncodeOuterHeader(hdr)`+append before invoking `FrameFn`; `FrameFn raw` parameter is ALWAYS full outer-header+payload; `upstreamdial` gains direct `frame` import (ARCH-08 §6.5 amendment required); callback signature `type FrameFn func(hdr frame.OuterHeader, raw []byte) error`. (v1.2 false claim that `FrameFn raw` is payload-only retracted; see v1.3 retraction annotation.) **FrameFn return-value contract (v1.4):** non-nil return MUST NOT terminate the receive loop; discard-and-continue `_ = frameFn(hdr, raw)` is the only permitted form; exit-on-error form is forbidden. |
 | Q3 | Define `frame.FrameTypePEConnect = 0x06`; update `Valid()` upper bound to `<= FrameTypePEConnect`; full blast radius (8 locations): amend `just_above_max` test (0x06→0x07), invalids slice (0x06→0x07), five doc-comment occurrences in `frame.go`/`frame_test.go`, ARCH-02 §"Outer Header Format" `frame_type` table row, AND `OuterHeader.FrameType` field comment (item 8, F-SP3-003). |
 | Q4 | `arqsend.New` is NOT wired into production `runRouter` (retained). Arqsend's test-internal `Dispatch → net.Dial(ListenAddr)` injection shape is **superseded by Q9** — that shape dispatches to the data-plane socket (netingress path), not the PE receive goroutine. arqsend is NOT the frame producer in AC-004. |
 | Q5 | E-FWD-001 test uses the real `runRouter` goroutine pattern (not `testenv.Restart` — F-SP2-003 harness rule); upstream fixture is `peWriteFixture` which writes assembled outer frames to the accepted PE connection; asserts key `"E-FWD-001"` in writer output (F-P11-001 lesson retained). Injection topology fully specified by Q9. |
@@ -1396,6 +1508,22 @@ Previously verified symbols reused by Q9 (no re-verification required):
 | `halfchannel.ChannelFrame` | Appendix A v1.0 | Test frame struct with `FrameType: frame.FrameTypeData` |
 | `frame.FrameTypeData` | Appendix A v1.0 | Non-bootstrap type to pass PE-CONNECT discard check |
 
+### Appendix A Delta (v1.4 additions — F-SP4-001 + F-SP4-002)
+
+No new symbols are introduced by the v1.4 rulings. All symbols cited in the
+new contracts are already verified in the main table or prior deltas:
+
+| Symbol | Prior verification | v1.4 usage |
+|--------|--------------------|------------|
+| `netingress.RouteFn` | Appendix A v1.0 | F-SP4-001: normative precedent for discard-and-continue semantics ("NOT a signal to close the connection") |
+| `netingress.ServeConn` | Appendix A v1.0 | F-SP4-001: `continue` drop-and-continue pattern; double-count-avoidance rationale |
+| `routing.ErrAllPathsSplitHorizon` | Appendix A v1.0 | F-SP4-001: one of the two non-fatal non-nil `FrameFn` return paths |
+| `routing.ErrDropCacheHit` | Appendix A v1.0 | F-SP4-001: second non-fatal non-nil `FrameFn` return path |
+| `upstreamdial.Connector.Start` | Appendix A v1.0 (via `upstreamdial.New`) | F-SP4-002: ordering constraint — `SetFrameCallback` before `Start()` |
+
+The `.golangci.yml` errcheck configuration is a build-configuration file, not
+a Go symbol; no Appendix A row is required.
+
 ### Appendix A Delta (v1.3 additions — Q2 reconstruction + F-SP3-003)
 
 New or clarified symbols introduced by v1.3 rulings:
@@ -1425,3 +1553,18 @@ Recorded per "adjudicated-clean: cite pass, do not re-derive" instruction.
 | Zero-Envelope passes all guards to split-horizon | Does a zero `outerassembler.Envelope{}` (zero SVTNID, zero SrcAddr, zero FrameAuthKey) reach `OnFrameArrival` without being rejected by any guard in the PE receive path? | Clean. The PE receive `FrameFn` closure (per Q8 ruling) does NOT call `RouteFrame` or any HMAC-check function — it goes directly to `arrivalHandler.OnFrameArrival`. `OnFrameArrival` treats `frameBytes` as opaque (BC-2.01.005 / VP-015) — no field inspection. A zero envelope produces a well-formed assembled frame (non-zero `PayloadLen` from the `Payload: []byte{0x01}` field); `ParseOuterHeader` accepts it (version byte `0x01`, valid `FrameTypeData`, valid `PayloadLen`). No guard rejects it before `OnFrameArrival`. |
 | Bootstrap discrimination direction | The fixture writes `FrameTypeData` (0x01); the connector writes `FrameTypePEConnect` (0x06). Is the discrimination direction correct (fixture-to-connector is DATA, connector-to-upstream is PE-CONNECT)? | Clean. The PE-CONNECT bootstrap frame is sent UPSTREAM by the connector (in `dialLoop`) to announce itself to the upstream router. Frames arriving ON the PE connection from upstream are data/ctl/arq/fec — the test fixture correctly uses `FrameTypeData` (0x01) so the receive goroutine's `FrameTypePEConnect` discard check does NOT fire and the frame reaches `OnFrameArrival`. |
 | Keepalive interference with E-FWD-001 | Could keepalive frames (FrameTypeEmptyTick, sent by `maintainConn`) arrive on the accepted conn and fire E-FWD-001 before the test-injected DATA frame, causing timing sensitivity? | Clean. `maintainConn` sends keepalives on the DIALED conn (connector → upstream); the fixture's accepted conn is the server side of that connection — it receives keepalive bytes in the drain goroutine's Read loop. These bytes are NOT relayed back to the connector's receive goroutine (the drain only reads and discards). The connector's receive goroutine reads from the DIALED conn (data flowing upstream → connector). No keepalive interference. |
+
+---
+
+## Pass-4 Adjudicated-Clean (non-findings, per adversarial pass-4 report)
+
+The following items were raised by the pass-4 adversary but adjudicated clean.
+Recorded per "adjudicated-clean: cite pass-4 report, do not re-derive" instruction.
+
+| Item | Adversary concern | Ruling |
+|------|-------------------|--------|
+| Byte-contract round-trip exact | Is the `EncodeOuterHeader`/`ParseOuterHeader` pair lossless over all 44 bytes, including any fields not represented in `OuterHeader`? | Clean (per pass-4 report). The pair is a total lossless round-trip over all 44 wire bytes: `crc32(EncodeOuterHeader(ParseOuterHeader(b))) == crc32(b)` for all valid 44-byte inputs. No outer-header checksum field; no reserved bits that are masked on parse. Reconstruction path `EncodeOuterHeader(hdr)` + append is exact. |
+| Pin test valid and distinguishing | Does `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` actually distinguish the full-frame vs payload-only wiring? Does `Envelope.SrcAddr` flow to outer-header bytes `[20:28]`? | Clean (per pass-4 report). `Envelope.SrcAddr` feeds outer-header bytes `[20:28]` via `assemble.go` (verified at `8eb54a5`). `SrcAddr` is absent from the channel header. The drop-cache key `crc32.ChecksumIEEE(frameBytes)` is computed over the full frame including outer-header bytes; with identical payloads and differing `SrcAddr`, payload-only wiring produces the same checksum (false dup suppression), while full-frame wiring produces different checksums (both frames reach `OnFrameArrival` independently). The test is valid and strongly distinguishing. |
+| E-FWD-001 emission rate-limiting | Is the E-FWD-001 emission rate-limited in any tier-1 or tier-2 sampler that would prevent the second emission from appearing in the writer output? | Clean (per pass-4 report). The tier-1/tier-2 sampler gates only EC-005 cache-hit log emissions (per `on_frame_arrival.go` at `8eb54a5`). E-FWD-001 is emitted unconditionally on every split-horizon exhaustion event — it is not subject to any rate limiter or sampler. Both frame A and frame B independently fire E-FWD-001 without suppression. |
+| Q3 8-location blast radius completeness | Did the fresh grep find any ninth blast-radius location beyond the eight enumerated in Q3? | Clean (per pass-4 report). Fresh grep found no ninth location. All eight are correctly enumerated. The `session/auth.go` and `session/upstream.go` hits are prose descriptions of frame semantics, not enumeration-completeness claims, and are correctly adjudicated as non-items (consistent with the v1.3 sweep transcript). |
+| `TestConnector_BackoffParameters` heldConn precedent | Is the `heldConn`+`Close()` flap pattern in `TestConnector_BackoffParameters` a real, verified shape at `8eb54a5`? | Clean (per pass-4 report). Confirmed real at `8eb54a5`. `TestConnector_BackoffParameters` uses a `heldConn` that accepts a connection and holds it, then calls `conn.Close()` on the server side to trigger a reconnect. This is the exact template for the AC-005 flap-cycle test (Q6 annotation). |

@@ -1598,7 +1598,7 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; streak 0/3; pass 4 pending.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; streak 0/3; pass 5 pending.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1711,3 +1711,40 @@ Three consecutive passes each went one layer deeper on the same injection wire:
 This is the diagnostic value of the pin-test discipline: F-SP3-001's AC-004 false-green mechanism (drop-cache keys on `crc32(payload-only)` while the spec claims full-frame keying) is precisely the defect class that the `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` pin test was designed to catch at implementation time. The spec now mandates the pin test so the false-green cannot survive the Red Gate.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-3 when authored).
+
+### Pass 4 Details (2026-07-09)
+
+**Story at review:** v1.3 | **Placement note at review:** v1.3
+
+**Verdict:** HAS_FINDINGS — 2 findings (2 HIGH [spec-gap]). All remediated.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP4-001 | HIGH | spec-gap | FrameFn return-value handling unspecified. `errcheck` (mandated lint gate in `.golangci.yml` at `8eb54a5`) forces an explicit error-handling decision. The idiomatic exit-on-error form (`if err := frameFn(hdr, raw); err != nil { return }`) exits the receive loop on `ErrAllPathsSplitHorizon` — the first `frameFn` invocation returns this error and the loop terminates. This deterministically defeats the story's own byte-contract pin test `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader`: frame B is never read, the second E-FWD-001 emission never fires, and the ≥2-emission assertion fails. The normative precedent (`netingress.ServeConn` drop-and-continue with double-count-avoidance rationale) was present in the note but not propagated to the story or made binding for the receive goroutine sketch. | Q2 binding return-value rule: non-nil `frameFn` return MUST NOT terminate the receive loop. Discard-and-continue (`_ = frameFn(hdr, raw)`) mandated, mirroring `netingress.ServeConn`'s `continue` idiom. `OnFrameArrival` already logs E-FWD-001 and EC-005 internally — double-count rationale applies; receive goroutine MUST NOT log the error. The `//nolint:errcheck` directive MUST NOT be used; blank-identifier discard satisfies `errcheck` without suppression. Exit-on-error form explicitly forbidden (FORBIDDEN code block added to Q2 and story Design Constraints). Pin test annotated as doubling as the loop-continuation pin: ≥2-emission requirement proves the loop continued after the first non-nil return. Receive goroutine sketch updated to `_ = frameFn(hdr, raw)`. |
+| F-SP4-002 | HIGH | spec-gap | `SetFrameCallback` ordering relative to `Start()` unpinned. The natural insertion point (after the back-to-back `New`/`Start` in `runRouter` at `8eb54a5`) yields nil-deref panic or `-race` failure if the callback is not set before the dial goroutines are created. The placement note Q1 and Q8 described the production wiring but did not specify the ordering as a binding contract, did not name the goroutine-creation happens-before guarantee, and did not define the nil-guard posture. | Q1/Q8 SetFrameCallback ordering contract: MUST be called before `Start()`. `frameFn` field is set-once pre-launch. Goroutine-creation happens-before (Go memory model §"Goroutine creation") guarantees visibility to all goroutines launched by `Start()`. No additional field synchronization (mutex, atomic) required. Binding production wiring order in `runRouter`: `construct → SetFrameCallback → Start`. Concrete insertion point: between existing `upstreamdial.New(...)` and `connector.Start()` lines (verified at `8eb54a5` — currently adjacent with no call in between). Receive goroutine MAY assume non-nil under this ordering. Nil-guard posture: defense-in-depth silent discard (no log) as optional belt-and-suspenders. Post-Start mutation forbidden — implementer may panic or ignore but MUST NOT proceed with unsynchronized field write. |
+
+#### Non-Findings Adjudicated Clean (Pass 4 — v1.3 remediations under direct attack)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| Byte-contract round-trip exact (F-SP3-001) | `EncodeOuterHeader`/`ParseOuterHeader` lossless over all 44 bytes; reconstruction path produces same wire bytes that were written | CLEARED |
+| Pin test valid (F-SP3-001) | `Envelope.SrcAddr` feeds into serialised outer-header bytes (verified at `8eb54a5` in `internal/outerassembler/assemble.go`); two frames differing in `SrcAddr` produce distinct crc32 checksums over full-frame bytes, yielding two distinct drop-cache misses and two independent E-FWD-001 emissions | CLEARED |
+| E-FWD-001 blast-radius complete at 8 (F-SP3-003) | All 8 blast-radius locations enumerated and remediated; no ninth found; enumeration-aware sweep across `frame.go` + `frame_test.go` pattern `data, ctl` / `empty.tick` / `frame kind` returns only already-listed location | CLEARED |
+
+#### Remediation Summary
+
+**Placement note v1.3 → v1.4:** Q2 binding return-value contract added — discard-and-continue (`_ = frameFn(hdr, raw)`) mandated; non-nil return MUST NOT terminate loop; exit-on-error form FORBIDDEN with pin-test-defeat rationale; receive goroutine sketch updated; `netingress.ServeConn` normative precedent + double-count rationale cited. Q1/Q8 SetFrameCallback ordering contract added — MUST be called before `Start()`; set-once pre-launch; goroutine-creation happens-before covers visibility; construct→SetFrameCallback→Start production order binding; receive goroutine MAY assume non-nil; nil-guard defense-in-depth silent discard optional; post-Start mutation forbidden. Pass-4 adjudicated-clean section added. Appendix A delta: no new symbols (prior symbol table complete).
+
+**Story v1.3 → v1.4:** Both contracts propagated throughout. Receive goroutine sketch in Q2 Design Constraints: bare `frameFn(hdr, raw)` → `_ = frameFn(hdr, raw)` with discard comment. Discrimination contract bare call → `_ = frameFn(hdr, raw)` with discard comment. New Design Constraints subsection: FrameFn return-value contract (F-SP4-001, binding). New Design Constraints subsection: SetFrameCallback Ordering Contract (F-SP4-002, binding). AC-002 PC-2 amended with insertion-point annotation (between `New(...)` and `Start()`). FCL row 4 updated (discard-and-continue + set-once pre-Start + post-Start prohibition). FCL row 5 updated (flap harness Phase 1: `SetFrameCallback` before `Start()` annotated). FCL row 6 updated (binding insertion point). AC-005 flap-cycle test name and Estimated Test Surface table updated with explicit before-`Start()` ordering. Pin test `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` annotated as loop-continuation pin (F-SP4-001) in AC-004 test names and Estimated Test Surface table. Frontmatter: version 1.3→1.4; `placement_note` v1.3→v1.4. Token budget ~10k → ~11k.
+
+#### Pattern Note: Callback Contract Surface (New Surface)
+
+Passes 1–3 addressed production wiring, test injection, and byte-content layers. Pass 4 addresses the callback CONTRACT surface — what happens at the invocation boundary itself (return value semantics, goroutine visibility ordering). This is orthogonal to all three prior layers and was untouched until the adversary specifically examined the `errcheck`-forced decision under the mandated lint gate. The mechanism is subtle: a compliant `errcheck` fix can silently defeat a spec-level pin test. The spec-adversarial cycle surfaced this class before implementation.
+
+#### Decay Trajectory
+
+`7 → 4 → 3 → 2`: finding count decay 7→4 (pass 1), 4→3 (pass 2), 3→2 (pass 3), 2→0 pending remediation (pass 4). New surface (callback contract) discovered at pass 4; previous three surfaces (production wiring, test injection, byte-content) confirmed clear under direct attack. Streak 0/3; pass 5 dispatches against story v1.4 + note v1.4.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-4 when authored).

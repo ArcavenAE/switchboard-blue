@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.08
+# version: 2.09
 # changelog:
+#   - version: 2.09
+#     date: 2026-07-09
+#     description: "S-BL.PE-RECEIVE-LOOP spec-adversarial pass 4 remediated — 2 findings (both HIGH [spec-gap]), all closed: F-SP4-001 (HIGH [spec-gap]) FrameFn return-value contract — discard-and-continue (`_ = frameFn(hdr, raw)`) mandated; non-nil return MUST NOT terminate the receive loop; exit-on-error form explicitly forbidden (defeats pin test TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader whose ≥2-emission requirement requires the loop to continue after first non-nil return); double-count rationale mirrors netingress.ServeConn; errcheck satisfied via blank-identifier discard; `//nolint:errcheck` MUST NOT be used. F-SP4-002 (HIGH [spec-gap]) SetFrameCallback ordering contract — MUST be called before Start(); frameFn field is set-once pre-launch; goroutine-creation happens-before covers visibility; construct→SetFrameCallback→Start binding in runRouter (inserts between existing `New(...)` and `Start()` lines); receive goroutine MAY assume non-nil; nil-guard defense-in-depth silent discard as optional belt-and-suspenders (no log); post-Start mutation forbidden (panic or ignore, never unsynchronized write). Pass-4 also cleared all 3 v1.3 remediations under direct attack: byte-contract round-trip exact (EncodeOuterHeader/ParseOuterHeader lossless over all 44 bytes); pin test valid (Envelope.SrcAddr flows to outer-header bytes); E-FWD-001 blast-radius 8 complete — no ninth found. Note v1.3→v1.4, story v1.3→v1.4. STORY-INDEX v4.43→v4.44. Streak 0/3; spec pass 5 pending."
 #   - version: 2.08
 #     date: 2026-07-09
 #     description: "S-BL.PE-RECEIVE-LOOP spec-adversarial pass 3 remediated — 3 findings (2H/1M), all closed: F-SP3-001 (HIGH [spec-defect]) byte-contract contradiction — frame.ReadOuterFrame returns payload-only (consistent with netingress.ReadFrame precedent); receive goroutine reconstructs full frame via frame.EncodeOuterHeader(hdr)+append(ehdr[:], payload...); FrameFn raw is ALWAYS full outer-header+payload (binding); Q2 false claim retracted; pin test TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader added (two frames differing in SrcAddr → ≥2 E-FWD-001; payload-only crc32 would collide → 1 emission = false-duplicate suppression). F-SP3-002 (HIGH [spec-gap]) AC-005 harness re-attributed: flap-cycle test re-homed from router_pe_receive_test.go to connector_test.go; new test name TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak; hand-rolled heldConn+Close() harness per existing connector_test.go pattern; peWriteFixture NOT used; FCL row 7 de-attributed; FCL row 5 gains flap-cycle test; AC-005 test-names/files/Estimated Test Surface/Tasks updated. F-SP3-003 (MED [doc-drift]) OuterHeader.FrameType field comment item-8: append pe_connect to enumeration; FCL row 1 updated; FCL row 3 blast-radius count 7→8; Task 5 updated. 5 non-findings adjudicated clean. Placement note v1.2→v1.3, story v1.2→v1.3. STORY-INDEX v4.42→v4.43. Streak 0/3; spec pass 4 pending."
@@ -980,16 +983,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.3"
+    story_version: "1.4"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.3"
-    spec_adversarial_pass: 3
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.4"
+    spec_adversarial_pass: 4
     spec_adversarial_streak: "0/3"
-    last_findings: "3 (2 HIGH: byte-contract payload-vs-full-frame / flap-incapable fixture; 1 MED: 8th blast-radius location) — all remediated (note v1.3, story v1.3)"
-    note: "awaiting spec adversarial pass 4 (story v1.3 + note v1.3, streak 0/3)"
+    last_findings: "2 (both HIGH [spec-gap]: FrameFn return-value contract / SetFrameCallback ordering) — remediated (note v1.4, story v1.4); v1.3 remediations cleared under direct attack"
+    note: "awaiting spec adversarial pass 5 (story v1.4 + note v1.4, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
