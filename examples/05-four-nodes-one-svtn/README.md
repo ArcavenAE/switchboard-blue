@@ -13,9 +13,66 @@ tmux, and **one console** — seven containers on one compose network.
 
 ## Topology
 
+### The network view
+
+This is the point of the whole architecture, at full width: **one
+console driving sessions on four machines through one blind carrier.**
+The SVTN's session directory works like a routing table, except the
+routes are tmux sessions — each access node publishes what it hosts,
+and the console asks one place "what can I attach to?" and gets an
+answer spanning every machine in the SVTN.
+
 ```mermaid
-graph TB
+graph LR
+    subgraph svtn["one SVTN — one trust + routing scope"]
+        direction LR
+        CN["console — live<br/>one screen + keyboard<br/>for every session in the table"]
+        DIR["session directory —<br/>a routing table of tmux sessions:<br/>top@node1 · htop@node2<br/>watch@node3 · vmstat@node4"]
+        R["router — blind relay<br/>carries every circuit,<br/>reads none"]
+        subgraph n1["machine: node1"]
+            direction LR
+            A1["access node"] --- T1["tmux: top"]
+        end
+        subgraph n2["machine: node2"]
+            direction LR
+            A2["access node"] --- T2["tmux: htop"]
+        end
+        subgraph n3["machine: node3"]
+            direction LR
+            A3["access node"] --- T3["tmux: watch date"]
+        end
+        subgraph n4["machine: node4"]
+            direction LR
+            A4["access node"] --- T4["tmux: vmstat 1"]
+        end
+        CN -. "sessions list —<br/>reads the table" .-> DIR
+        CN -. "attach / switch by name,<br/>keystrokes out" .-> R
+        R -. "terminal output back" .-> CN
+        DIR -. "maintained from<br/>node publications" .- R
+        R -. circuit .- A1
+        R -. circuit .- A2
+        R -. circuit .- A3
+        R -. circuit .- A4
+    end
+```
+
+Every process in this drawing runs today — four access daemons each
+holding a live tmux backend, the router, the console. The joins are
+dotted because they are the gated milestone: the connector that lets
+daemons dial each other is unshipped, so the frames don't traverse yet.
+This compose file is built to become the connector's acceptance test
+without changing shape — the day the dotted lines go solid, the gated
+checks flip to `GATE-PASS`.
+
+### Ground level — the compose plumbing
+
+What the assertions actually drive today: an authenticated management
+round-trip to all five daemons, from one operator container.
+
+```mermaid
+graph LR
     subgraph net["compose network — one SVTN (target)"]
+        D["operator (sbctl)"]
         R["router<br/>data plane :9090<br/>mgmt router.sock"]
         subgraph n1["node1"]
             A1["access daemon"] --- T1["tmux: top"]
@@ -29,19 +86,21 @@ graph TB
         subgraph n4["node4"]
             A4["access daemon"] --- T4["tmux: vmstat 1"]
         end
-        C["console<br/>mgmt 127.0.0.1:9091"]
-        D["operator (sbctl)"]
+        C["console<br/>mgmt 127.0.0.1:9091<br/>(idle until the connector)"]
     end
-    D -- "router.sock" --> R
-    D -- "node1..4.sock" --> A1 & A2 & A3 & A4
-    D -- "TCP :9090" --> R
-    A1 & A2 & A3 & A4 -. "TARGET: publish sessions<br/>(connector unshipped)" .-> R
-    C -. "TARGET: attach/switch<br/>(connector unshipped)" .-> R
+    D -- "mgmt: router.sock" --> R
+    D -- "data plane: TCP :9090" --> R
+    D -- "mgmt: node1.sock" --> A1
+    D -- "mgmt: node2.sock" --> A2
+    D -- "mgmt: node3.sock" --> A3
+    D -- "mgmt: node4.sock" --> A4
 ```
 
-Solid lines run today; dashed lines are the target data flow the gated
-checks wait for. The management sockets (`nodeN.sock`, `router.sock`)
-share one `run:` volume with the operator.
+The operator initiates everything from the left: five authenticated
+management round-trips (one per daemon) plus a raw data-plane reach.
+The management sockets (`nodeN.sock`, `router.sock`) share one `run:`
+volume with the operator; the console's mgmt is loopback-TCP-only, so
+it runs unprobed here (that surface is example 04's lab).
 
 ## Transaction under test
 

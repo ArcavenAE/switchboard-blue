@@ -23,6 +23,31 @@ Switchboard is the transport plane. tmux is the session substrate; SSH
 is the encryption; Switchboard glues them together with routing and
 admission.
 
+The geography matters: the console is on one side of the internet, the
+tmux sessions on the other, and everything between belongs to somebody
+else. A bridge service that terminates both sides would connect them —
+and hand the bridge operator the ability to watch, replay, or take over
+every session crossing it. Switchboard rejects that shape. The people
+who carry the traffic ensure it is delivered; they cannot intercept,
+see, or substitute the keystrokes sent or the data displayed. It is the
+customer/provider shared-responsibility split, applied to remote
+terminal use, over a trustworthy (but not trusted) substrate:
+
+```mermaid
+graph LR
+    subgraph yours["your machine — SVTN member"]
+        CN0["console"]
+    end
+    subgraph carrier["the internet — the network operator's routers"]
+        R0["blind relay:<br/>delivers circuits,<br/>cannot get inside them"]
+    end
+    subgraph work0["a machine hosting the work — SVTN member"]
+        AN0["access node"] --- TM0["tmux sessions"]
+    end
+    CN0 <==>|"end-to-end<br/>encrypted circuit"| R0
+    R0 <==> AN0
+```
+
 ---
 
 ## Terminology
@@ -76,31 +101,38 @@ below.
 There are two kinds of process, both from the same `switchboard` binary:
 
 ```mermaid
-graph TB
-    OP["operator<br/>(human or agent, running sbctl)"]
-
-    subgraph deployment["one switchboard deployment"]
-        CT["control node<br/>admission plane:<br/>SVTNs, keys, revocation"]
+graph LR
+    subgraph deployment["one switchboard deployment — one SVTN"]
+        subgraph m2["operator's machine"]
+            CN["console<br/>screen + keyboard endpoint"]
+        end
         R["router<br/>blind relay —<br/>sees envelopes + HMAC,<br/>never payload"]
         subgraph m1["machine hosting the work"]
             AN["access node<br/>owns the PTY"]
             TM["tmux server<br/>(the actual programs)"]
             AN --- TM
         end
-        subgraph m2["operator's machine"]
-            CN["console<br/>screen + keyboard endpoint"]
-        end
+        CT["control node<br/>admission plane:<br/>SVTNs, keys, revocation<br/>(no session traffic)"]
     end
 
-    OP -- "sbctl mgmt RPCs<br/>(Ed25519 challenge-response)" --> CT & R & AN & CN
-    AN == "encrypted session frames" ==> R
-    R == "encrypted session frames" ==> CN
+    CN -- "keystrokes —<br/>the command comes first" --> R
+    R -- "keystrokes" --> AN
+    AN == "terminal output —<br/>the response, the bulk<br/>of every byte" ==> R
+    R == "terminal output" ==> CN
+    SB["sbctl<br/>(operator CLI)"] -. "mgmt socket on every daemon —<br/>the steering wheel, not the road" .-> deployment
 ```
 
-Management (thin arrows) and session traffic (thick arrows) are
-different planes: every daemon serves a management socket that sbctl
-authenticates to, while session frames flow only access → router →
-console. The control node participates in no session traffic at all.
+Action starts at the operator and reads left to right: a keystroke
+travels console → router → access node, and the response — terminal
+output, 99.99% of the bytes this system exists to move — returns.
+Thickness is volume; the thin forward path initiates, the thick return
+path is the payoff (the asymmetry is designed in — see "half-channels"
+below). The control node participates in no session traffic at all.
+The dotted arrow is the management plane: every daemon serves a
+management socket that `sbctl` authenticates to with Ed25519
+challenge-response. It is how you *operate* the deployment, not how the
+deployment operates — the rest of this document draws it only where it
+is the subject.
 
 ### Nodes
 

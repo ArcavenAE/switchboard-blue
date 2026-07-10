@@ -1,6 +1,50 @@
 # Switchboard
 
-A low-latency, multi-path, end-to-end encrypted tmux session router. Switchboard establishes virtual switched networks (VSNs) over overlay routers, purpose-built for high-trust remote CLI access.
+A low-latency, multi-path, end-to-end encrypted tmux session router. Switchboard establishes switched virtual networks (SVTNs) over overlay routers, purpose-built for high-trust remote CLI access.
+
+## The problem
+
+Your console is on one side of the internet. The tmux sessions you need
+are on the other. There is no path between them that doesn't cross
+someone else's network.
+
+The obvious fix is a bridge — a relay service that terminates both
+sides. It works, but whoever operates the bridge is *inside* your
+sessions: they can watch keystrokes, read output, or take over the
+connection.
+
+```mermaid
+graph LR
+    CN["your console"] ==> BR["a bridge service<br/>terminates both sides —<br/>its operator can watch,<br/>replay, or take over"] ==> TM["your tmux sessions"]
+    style BR fill:#8b1a1a,stroke:#5c0f0f,color:#fff
+```
+
+Switchboard splits the responsibility instead. Network operators run
+routers that carry your circuits: they ensure the traffic is delivered,
+but they cannot get inside — no intercepting, no reading, no
+substituting the keystrokes you send or the data displayed back. It is
+the customer/cloud-provider shared-responsibility model applied to
+remote terminal use: an internet of terminals, purpose-built for
+terminals, over a trustworthy (but not trusted) network substrate.
+
+```mermaid
+graph LR
+    subgraph yours["your machine"]
+        CN2["console<br/>screen + keyboard"]
+    end
+    subgraph carrier["the internet — the network operator's routers"]
+        R0["router — blind relay<br/>verifies envelopes + HMAC<br/>cannot decrypt · cannot inject"]
+    end
+    subgraph m1["machine hosting work"]
+        AN1["access node"] --- TM1["tmux sessions"]
+    end
+    subgraph m2["another machine"]
+        AN2["access node"] --- TM2["tmux sessions"]
+    end
+    CN2 <==>|"end-to-end<br/>encrypted circuit"| R0
+    R0 <==> AN1
+    R0 <==> AN2
+```
 
 ## Architecture
 
@@ -8,7 +52,14 @@ A low-latency, multi-path, end-to-end encrypted tmux session router. Switchboard
 
 - **Access node** — publishes tmux sessions over the network
 - **Console** — connects to remote tmux sessions
-- **Control** — manages VSN configuration
+- **Control** — manages SVTN membership and configuration
+
+An **SVTN** (switched virtual network) is the unit of trust and routing
+scope: which keys may publish, attach, or administer, and a namespace of
+sessions across all its access nodes. Think of the SVTN's session
+directory as a routing table — but it's a table of available tmux
+sessions: the console asks one place "what can I attach to?" and gets
+sessions spanning every access node in the SVTN.
 
 Routers are blind relays — they forward SSH-encrypted traffic without seeing content. A single router binary supports three deployment modes:
 
@@ -19,6 +70,11 @@ Routers are blind relays — they forward SSH-encrypted traffic without seeing c
 | **P** (Provider Core) | Router-to-router only forwarding (theoretical — not yet built) |
 
 Nodes communicate end-to-end via SSH. Switchboard adds routing and network admission, not encryption.
+
+(`sbctl`, the operator CLI, talks to each daemon's management socket to
+configure and inspect all of the above. It is the steering wheel, not
+the road — it appears in the diagrams only where operating it is the
+point. See the [CLI reference](docs/sbctl.md).)
 
 ## Key Design Principles
 

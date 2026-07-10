@@ -11,6 +11,32 @@ Uses the **published alpha binaries** downloaded from GitHub Releases
 
 ## Topology
 
+### The network view
+
+This example stands up **only the carrier** — the road, before any
+cars. One router in E-mode, alone: the blind relay every later example
+routes circuits through. Everything grey arrives further up the ladder;
+no session traffic flows in this lab.
+
+```mermaid
+graph LR
+    CN["console"] -. "circuits<br/>(later examples)" .- R["router (E-mode) — LIVE<br/>data plane :9090<br/>blind relay: sees envelopes + HMAC,<br/>never content"]
+    R -.- AN["access node"]
+    AN --- TM["tmux"]
+    CT["control node"]
+    classDef dim fill:#f4f4f4,stroke:#c9c9c9,color:#999999
+    class TM,AN,CN,CT dim
+```
+
+Two things are proven at this rung: the **data-plane listener** is
+reachable from another network namespace (the "second machine on the
+LAN" property — the road exists), and the router **refuses to be
+anything but a carrier** — it registers no `admin.*` handlers at all
+(role exclusion). The other half of the lab is proving the management
+plane fails closed, and there, operating `sbctl` *is* the objective.
+
+### Ground level — the compose plumbing
+
 ```mermaid
 graph LR
     subgraph net["compose network (bridge)"]

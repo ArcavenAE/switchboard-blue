@@ -28,8 +28,58 @@ to its **management plane**.
 
 ## Topology
 
+### The network view
+
+The trust split, made runnable: **one carrier, two tenants**. The
+router belongs to the network operator and carries both teams'
+circuits; it can read neither, and neither team can touch it — or each
+other. This is the shared-responsibility model the architecture exists
+for: shared transport, disjoint authority.
+
 ```mermaid
-graph TB
+graph LR
+    CA["team a console"]
+    CB["team b console"]
+    R["netop's router — shared transport<br/>carries both teams' circuits,<br/>can read neither"]
+    subgraph ta["team a's SVTN"]
+        subgraph na1["machine: node-a1"]
+            AA1["access node"] --- TA1["tmux: top"]
+        end
+        subgraph na2["machine: node-a2"]
+            AA2["access node"] --- TA2["tmux: watch date"]
+        end
+    end
+    subgraph tb["team b's SVTN"]
+        subgraph nb1["machine: node-b1"]
+            AB1["access node"] --- TB1["tmux: htop"]
+        end
+        subgraph nb2["machine: node-b2"]
+            AB2["access node"] --- TB2["tmux: vmstat 1"]
+        end
+    end
+    CA -. "team a's encrypted circuits" .- R
+    CB -. "team b's encrypted circuits" .- R
+    R -. "team a only" .- AA1
+    R -.- AA2
+    R -. "team b only" .- AB1
+    R -.- AB2
+```
+
+The circuits are dotted because the connector is unshipped: today the
+isolation is proven where it starts, at the **admission layer** — every
+cross-team key is refused by every wrong daemon. When the connector
+lands, the dotted circuits become the acceptance test for the stronger
+claim: team a's console cannot even *see* team b's sessions on the
+shared router (`E-ADM-006`).
+
+### Ground level — three keys, one matrix
+
+Operating the deployment is the lesson here: the operator container
+wears each identity in turn and walks the full authority matrix.
+
+```mermaid
+graph LR
+    OP["operator container<br/>plays all three roles in turn"]
     R["router — netop's infrastructure<br/>mgmt: netop key ONLY<br/>data plane :9090: shared transport"]
     subgraph ta["team a — SVTN operator 'team-a'"]
         A1["node-a1<br/>tmux: top"]
@@ -39,7 +89,6 @@ graph TB
         B1["node-b1<br/>tmux: htop"]
         B2["node-b2<br/>tmux: vmstat 1"]
     end
-    OP["operator container<br/>plays all three roles in turn"]
     OP -- "netop key → router mgmt ✓" --> R
     OP -- "team-a key → a-nodes ✓" --> A1 & A2
     OP -- "team-b key → b-nodes ✓" --> B1 & B2
