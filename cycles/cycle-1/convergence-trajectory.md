@@ -1599,12 +1599,13 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 5 (spec) | v1.4 | 3 | 1 | 0 | 2 | 0/3 | note v1.5 (READ-error disposition) + story v1.5 + index v4.45 — remediated; streak resets 0/3 |
 | 6 (spec) | v1.5 | 4 | 2 | 1 | 1 | 0/3 | note v1.6 + story v1.6 + index v4.46 — remediated; streak stays 0/3 |
 | 7 (spec) | v1.6 | 5 | 1 | 2 | 2 | 0/3 | note v1.7 + story v1.7 + index v4.47 — remediated; streak stays 0/3 |
+| 8 (spec) | v1.7 | 2 | 0 | 1 | 1 | 0/3 | story v1.8 + index v4.48 (note v1.7 unchanged) — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L) → 5 (1H/2M/2L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; streak 0/3; pass 8 pending vs v1.7 package.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L) → 5 (1H/2M/2L) → 2 (1M/1L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); streak 0/3; pass 9 pending vs v1.8 package.
 
-**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). 4 API-stall recoveries this window.
+**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1881,3 +1882,42 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-6 when 
 **Story v1.6 → v1.7:** AC-001 and AC-004 test patterns updated with three-observable discipline; old `mode=PE` annotation removed. Task 1 citation corrected v1.2→v1.7 (F-SP7-004). AC-001 parenthetical self-contradiction removed (F-SP7-002). Frontmatter: version 1.6→1.7; `placement_note` v1.6→v1.7. STORY-INDEX v4.46→v4.47.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-7 when authored).
+
+---
+
+### Pass 8 Details (2026-07-09)
+
+**Story at review:** v1.7 | **Placement note at review:** v1.7
+
+**Verdict:** HAS_FINDINGS — 1 MED, 1 LOW. Remediated story-side only (note v1.7 unchanged).
+
+**Key meta-finding:** Pass 8 broke the three-consecutive-false-premise streak. All three v1.7 premises were ground-truthed TRUE: (1) mode=PE has exactly two emission sites (config-presence, startup only; no third site found); (2) `peWriteFixture.accepted` receive precedes goroutine launch (TCP accept timing confirmed); (3) E-FWD-001 is assertable via the three-observable chain. Both findings are residual-text incoherence from pass-7's strike-and-annotate surgery, not new ground-truth defects. First pass with zero HIGH findings.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP8-001 | MED | spec-defect | AC-001 PC-3 'Use one of' enumeration opener survived pass-7's strike-and-annotate surgery: the justification text was struck but the enumeration structure was left live, still offering the retracted `mode=PE` log-line path alongside the three-observable discipline. The live text was Frankenstein-text — structurally an enumeration, semantically only one option was viable, yet the form implied choice. The coherence sweep caught this via grep for `mode=PE` in the live AC-001 PC-3 body. | Story v1.7→v1.8: AC-001 PC-3 restructured from enumeration to direct assertion; retracted alternatives removed from live text; accepted observable path stated as THE gate without alternatives enumeration. Note v1.7 unchanged (three-observable ruling itself is correct; only the story's AC propagation was incoherent). |
+| F-SP8-002 | LOW | doc-drift | Stale flap-cycle test name `TestRunRouter_PE_ReceiveLoop_LifecycleClean_OnStop` appeared in the Estimated Test Surface roll-up table — the name used before pass-3 re-homed the test to `connector_test.go` with the new name `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak`. The story body AC-005 sections carried the correct new name; the stale name persisted only in the roll-up table. | Story v1.8: stale test name in roll-up table replaced with `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak`. |
+
+#### Non-Findings Adjudicated Clean (Pass 8 — v1.7 premises under direct attack)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| Three-observable table (F-SP7-001) | All three observables ground-truthed at `8eb54a5`: Observable-1 (`peWriteFixture.accepted` receive) is a channel send from the accept goroutine before goroutine launch; Observable-2 (E-FWD-001) is emitted inside `OnFrameArrival` and assertable via `TestScanForLine`; Observable-3 (drain) follows `conn.Close()` and goroutine exit. Table VERIFIED TRUE. | VERIFIED TRUE |
+| accepted-timing premise (F-SP7-001) | `peWriteFixture.startPEWriteFixture` goroutine sends to `accepted` on `ln.Accept()` return; this is the TCP-accept syscall, which precedes any goroutine launch by the connector. No race. | VERIFIED TRUE |
+| E-FWD-001 assertability (F-SP7-001) | E-FWD-001 is emitted by `FrameArrivalHandler.OnFrameArrival` at `8eb54a5`; assertable via existing `TestScanForLine` + `peWriteFixture.WriteFrame` injection chain per Q9. | VERIFIED TRUE |
+| AC-004 precondition race-safety | AC-004 precondition requires `peWriteFixture.accepted` to be non-nil before `WriteFrame` — this is satisfied by the barrier from `startPEWriteFixture`'s goroutine completing `ln.Accept()` before the channel send; no TOCTOU. | CLEAN |
+| mode=PE emission sites | grep at `8eb54a5` for mode=PE log emission: exactly two sites (runRouter startup log + SetFrameCallback wiring log); both are config-presence signals. No third site found. | VERIFIED TRUE |
+
+#### Remediation Summary
+
+**Placement note v1.7 → unchanged:** No changes to placement note. Three-observable ruling, Q1/Q8 Option-A, transient-window binding all remain as authored.
+
+**Story v1.7 → v1.8:** AC-001 PC-3 restructured (F-SP8-001 — enumeration-form removed; accepted observable path stated as direct gate). Estimated Test Surface roll-up: stale flap-cycle test name replaced with `TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak` (F-SP8-002). STORY-INDEX v4.47→v4.48.
+
+#### Process Notes
+
+**4 story-writer stalls this pass:** 2 zero-work dispatches + 2 productive-partial dispatches. All recovered via disk-audit-first pattern (read story from disk before dispatching; instruct agent to work from on-disk version). Zero lost work after recovery. Disk-audit-first now a standing dispatch protocol for story-writer remediation work after stall.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-8 when authored).
