@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.11"
+version: "1.12"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -40,6 +40,7 @@ architecture_modules:
 | 1.9 | Remediate two spec-adversarial pass-11 findings (2026-07-10). F-SP11-001 (HIGH [spec-defect]) — Q2 AC-005 `TestConnector_ReceiveLoop_ExitsOnReadError` injection recipe replaced: the v1.5-era "single byte 0xFF as FrameType" recipe is physically unrealizable (io.ReadFull blocks on < 44 bytes) and mis-attributes the error (0xFF at byte[0] triggers ErrVersionMismatch, not ErrInvalidFrameType); corrected recipe mandates a complete 44-byte outer header with byte[0]=0x01 (valid version byte, VersionMajor=0, VersionByte=0x01, verified frame.go :21/:23), byte[1]=0x07 (out-of-range frame_type, one above FrameTypePEConnect=0x06 upper bound), PayloadLen=0x0000 at bytes[2:4] big-endian (verified frame.go EncodeOuterHeader :90), remaining bytes zero; conn NOT closed; io.ReadFull completes; ParseOuterHeader returns ErrInvalidFrameType at byte[1]; receive goroutine exits via read-error branch → conn.Close() → maintainConn write failure → reconnect. Optional variant (adjudicated: ADD as separate pin) for ErrVersionMismatch path: byte[0]=0xFF (major nibble 0xF ≠ VersionMajor 0) → ErrVersionMismatch → same exit contract; named `TestConnector_ReceiveLoop_ExitsOnVersionMismatch`. F-SP11-002 (LOW [token-budget]) — story-side, handled by story-writer; not touched in this note. F-SP11-003 (LOW [doc-drift]) — §8.2 dangling "see elaboration note below" clause struck; production interface-set population is out of scope for this story; §8.5 governs the test-scoped set. |
 | 1.10 | Remediate one spec-adversarial pass-12 finding (2026-07-10). F-SP12-001 (MED [spec-completeness]) — Q2 ARCH-08 obligation block extended with a second explicit edit obligation: in the same §6.5 row edit, the ARCH-08 row's parenthetical "frame is NOT imported directly; reachable transitively through outerassembler and halfchannel. Corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001." MUST be reconciled — the F-P1-001 correction was accurate for its time (no direct frame import existed then) and is now partially superseded by this story's legitimate direct edge; replacement wording specified in Q2. Import-set count reclassified: the ARCH-08 parenthetical is a distinct import-edge-prose location; blast-radius count extended from 10 to 11 (unified count). Pass-12 confirmations recorded in new adjudicated-clean section. |
 | 1.11 | Remediate one spec-adversarial pass-13 finding (2026-07-10). F-SP13-001 (MED [spec-completeness]) — §6.6.2 sibling of F-SP12-001: the §6.6.2 upstreamdial forbidden-edges bullet carries the same three stale import-set claims as the §6.5 parenthetical remediated in v1.10. Q2 ARCH-08 obligation extended with a THIRD edit target (§6.6.2 upstreamdial bullet, three sub-edits in the same commit as the §6.5 edits); binding replacement bullet text specified in Q2. Blast-radius count ruling amended: 11 → 12 (10 frame sweep + 2 ARCH-08 locations: §6.5 row parenthetical + §6.6.2 forbidden-edges bullet). Class-closure grep performed (patterns `"halfchannel, outerassembler"` and `"F-P1-001"`): 0 further occurrences beyond §6.5 (line 325) and §6.6.2 (lines 458–465) edit targets plus 2 changelog rows (history-preserved, not edited). Pass-13 confirmations recorded in new adjudicated-clean section; transcript corrected on audit: `"halfchannel, outerassembler"` has 4 hits (line 316 = `internal/arqsend` row, benign substring match on a different package's own import set — initially uncounted). |
+| 1.12 | Remediate one spec-adversarial pass-14 finding (2026-07-10). F-SP14-001 (MED [spec-completeness]) — BC-2.01.004:61 (Postcondition 2 outer-header layout table, frame_type row) is cited zero times in story or note despite carrying the byte-identical enum row as ARCH-02:74; post-ship, BC-2.01.004 would enumerate 5 frame types while ARCH-02 + frame.go Valid() accept 6. Remediation option (a): Q3 ARCH-02 amendment obligation extended with a binding sibling obligation for BC-2.01.004:61 — must be amended to `, pe_connect=0x06` in the SAME commit as ARCH-02:74 and FrameTypePEConnect. Before/after rows quoted verbatim. Rationale cites F-P8-008 co-canonical precedent (BC-2.01.004:57 + ARCH-02:74 named canonical pair in pass-8) and BC-2.01.004 v1.2 sync-practice. Blast-radius arithmetic: BC-2.01.004:61 is a wire-format spec pair partner to ARCH-02:74 (both same-commit parallel obligations, sibling of but not inside the unified-12 count); total stated as "unified 12 (10 frame sweep + 2 ARCH-08 locations) + wire-format spec pair (ARCH-02:74 + BC-2.01.004:61, same-commit parallel obligations)". Class-closure grep performed (patterns `"arq=0x04, fec=0x05"` and `"empty_tick=0x02"`): exactly 2 canonical locations each (BC-2.01.004:61 and ARCH-02:74); transcript recorded with disposition of all hits. Pass-14 adjudicated-clean section added. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -765,7 +766,7 @@ while accurately stating the post-story position. The PROSPECTIVE and
 pre-merge machine-verification qualifiers in the surrounding row text should
 be updated per the normal merge-time procedure.
 
-**Blast-radius count ruling (v1.10 — F-SP12-001; amended v1.11 — F-SP13-001):**
+**Blast-radius count ruling (v1.10 — F-SP12-001; amended v1.11 — F-SP13-001; amended v1.12 — F-SP14-001):**
 The ARCH-08 parenthetical is a DISTINCT import-edge-prose location from the ten
 FrameTypePEConnect/Valid() sweep locations enumerated in Q3. It belongs under the
 §6.5 ARCH-08 obligation (Q2), not the frame.go/frame_test.go sweep (Q3). The
@@ -777,7 +778,16 @@ carrying identical stale claims; the total blast-radius count is therefore **12*
 forbidden-edges bullet). The Q3 table's "10 locations" summary remains accurate
 for the FrameTypePEConnect sweep; the Summary-of-Rulings Q3 row "10 locations"
 count applies to that sweep only. Both ARCH-08 edit targets (§6.5 and §6.6.2)
-MUST be made in the same commit as the frame-sweep edits.*)
+MUST be made in the same commit as the frame-sweep edits.*) *(amended v1.12 — F-SP14-001:*
+`BC-2.01.004:61` is a wire-format spec pair partner to `ARCH-02:74` — both are
+same-commit parallel obligations and both belong under the Q3 ARCH-02 amendment
+obligation (Q3), not inside the unified-12 count. The ONE consistent arithmetic
+sentence the story MUST carry verbatim is: **"The total blast radius is: unified 12
+(10 frame sweep locations + 2 ARCH-08 import-edge-prose locations) + wire-format
+spec pair (ARCH-02:74 + BC-2.01.004:61, same-commit parallel obligations alongside
+the frame-sweep commit)."** The unified-12 count remains the frame sweep + ARCH-08
+obligation count; BC-2.01.004:61 is a sibling parallel obligation paired with
+ARCH-02:74 and not folded into the unified-12 numeral.)
 
 **§6.6.2 upstreamdial forbidden-edges bullet — ARCH-08 edit obligation (v1.11 — F-SP13-001, BINDING):**
 
@@ -1036,6 +1046,50 @@ spec documents require the same commit. Additionally, `internal/frame/frame.go`
 line 31 contains the comment `"Frame type constants (ARCH-02 §3.1)"` — this comment
 remains accurate and does not require amendment, but the new constant MUST appear
 beneath it with an `(ARCH-02 §3.1)` inline citation.
+
+**BC-2.01.004:61 sibling amendment obligation (v1.12 — F-SP14-001, BINDING):**
+
+`BC-2.01.004` (`.factory/specs/behavioral-contracts/ss-01/BC-2.01.004.md`) Postcondition 2
+carries an outer-header layout table. Line 61 contains the `frame_type` row with the
+byte-identical enum text:
+
+```
+| 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05 |
+```
+
+This row MUST be amended to:
+
+```
+| 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06 |
+```
+
+in the **SAME commit** that defines `FrameTypePEConnect` in `internal/frame/frame.go` —
+exactly parallel to the ARCH-02:74 obligation above.
+
+**Rationale for option (a) (add to obligation) over scope-out note:** Pass-8 adversarial
+review (F-P8-008) named `BC-2.01.004:57 + ARCH-02:74` as the co-canonical pair for the
+outer-header layout spec — they are not independent documents but twin faces of the same
+wire-format contract. BC-2.01.004 v1.2 shows active BC↔ARCH sync practice: the two
+documents are expected to move in lockstep on wire-format changes. If `FrameTypePEConnect`
+is added to ARCH-02:74 and `frame.go Valid()` without updating BC-2.01.004:61, the BC would
+enumerate 5 frame types while the code and ARCH-02 accept 6 — an observable post-ship
+discrepancy that cannot be deferred to a maintenance note.
+
+**Class-closure grep transcript (v1.12 — F-SP14-001 sweep; mandatory per 4th incomplete-sweep-class instance):**
+
+This is the 4th instance of the incomplete-sweep-class (F-SP7-003, F-SP10-001, F-SP13-001,
+F-SP14-001). Patterns run against `.factory/specs/` to find all wire-format spec locations
+carrying the frame_type enum that require the same amendment:
+
+| Pattern | Command | Hits | Files:Lines | Disposition |
+|---------|---------|------|-------------|-------------|
+| `arq=0x04, fec=0x05` | `grep -rn "arq=0x04, fec=0x05" .factory/specs/` | **2** | `BC-2.01.004:61` and `ARCH-02-protocol-stack.md:74` | BC-2.01.004:61 = Postcondition 2 outer-header layout table, frame_type row — **this amendment's edit target**. ARCH-02:74 = §"Outer Header Format" frame_type table row — already the Q3 ARCH-02 edit target. No third location. |
+| `empty_tick=0x02` | `grep -rn "empty_tick=0x02" .factory/specs/` | **2** | `BC-2.01.004:61` and `ARCH-02-protocol-stack.md:74` | Same two locations as above pattern — confirms no paraphrased enum copies elsewhere in `.factory/specs/`. Both benign contexts identified; both are the canonical wire-format rows. No third sibling. |
+
+**Conclusion:** Exactly 2 canonical locations for the wire-format frame_type enum row in
+`.factory/specs/`: `BC-2.01.004:61` and `ARCH-02:74`. Both are now explicitly named as
+same-commit parallel amendment obligations. Pass-15 cannot find a third wire-format spec
+sibling.
 
 **`dialLoop` bootstrap flip obligation (FO-PE-LOOP-001):** `internal/upstreamdial/connector.go`
 `dialLoop` (verified at `8eb54a5`) currently sets:
@@ -2324,3 +2378,18 @@ The following pass-13 confirmations are recorded per the pass-13 report.
 | ARCH-02 single-row amendment adequate | Pass-13 confirmation | Confirmed: ARCH-02 §"Outer Header Format" `frame_type` table row is the sole location in ARCH-02 requiring amendment; no other ARCH-02 section enumerates frame type constants by value in a way that would be stale. The single-row amendment obligation specified in Q3 is complete. |
 | §6.4 registration adequacy — no additional registration rows needed | Pass-13 confirmation | Confirmed: the §6.4 prospective-positions table in ARCH-08 registers packages before their first commit. The `internal/upstreamdial` package is already registered at position 19 (Wave 7, S-7.04-FU-PE-CONNECTOR). Adding a direct `frame` import edge to an already-registered package is a §6.5 amendment (allowed-import-set extension), not a new §6.4 registration. No new row in the §6.4 prospective table is required for this story. |
 | PROSPECTIVE and pre-merge machine-verification qualifiers — deferred to merge-time | Pass-13 confirmation | Confirmed per v1.10 ruling: the PROSPECTIVE marker on the §6.5 row and the "final machine-verification at merge" qualifier are updated by the implementer at merge time (when `cee8e8b` reference is replaced by the actual merge SHA). This story's placement note specifies the textual edits; the implementer strips the PROSPECTIVE qualifier after merging. No additional obligation in this note. |
+
+---
+
+## Pass-14 Adjudicated-Clean (non-findings and pass-14 confirmations, per adversarial pass-14 report)
+
+F-SP14-001 is the sole actionable finding from pass-14 and is remediated in Q3 above.
+The following pass-14 confirmations are recorded per the pass-14 report.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP14-001 — BC-2.01.004:61 (Postcondition 2 outer-header layout table, frame_type row) cited zero times despite being the co-canonical wire-format pair to ARCH-02:74 | MED [spec-completeness] — REMEDIATED in Q3 above | BC-2.01.004:61 amendment obligation added to Q3 ARCH-02 region: frame_type row must append `, pe_connect=0x06` in the SAME commit as ARCH-02:74 and FrameTypePEConnect; before/after rows quoted verbatim; rationale cites F-P8-008 co-canonical precedent and BC-2.01.004 v1.2 sync-practice; class-closure grep transcript recorded (2 hits each for `"arq=0x04, fec=0x05"` and `"empty_tick=0x02"` — exactly BC-2.01.004:61 and ARCH-02:74, no third sibling). Blast-radius arithmetic updated: BC-2.01.004:61 is placed as wire-format spec pair partner to ARCH-02:74 (both same-commit parallel obligations, sibling of but not inside the unified-12 count). Arithmetic sentence for story propagation stated verbatim. |
+| All existing recipes realizable — ARCH-08 fence holds | Pass-14 confirmation | Confirmed: ARCH-08 §6.5 and §6.6.2 obligations specified in v1.11 remain unchanged and realizable. The BC-2.01.004 amendment is a spec-document edit only; it does not alter any implementation obligation or test recipe. |
+| FCL↔Task bijection holds | Pass-14 confirmation | Confirmed: the 9-row FCL table (rows 1–9) and the Q3 obligation structure remain internally consistent after the BC-2.01.004 addition. BC-2.01.004 is a spec file and its amendment is captured under the Q3 ARCH-02 obligation (same-commit discipline). No new FCL row is needed: story v1.14 will EXTEND existing FCL row 9 (the ARCH-02 row) and Task 3 to carry BC-2.01.004:61 as the second half of the wire-format spec pair — row count stays 9, and the "same commit" discipline already governs both edits. |
+| POL-001 / POL-002 pass | Pass-14 confirmation | Confirmed: no new POL-001 (canonical-source violation) or POL-002 (sweep-incomplete) defect classes introduced by v1.12. The class-closure grep transcript demonstrates sweep completeness for the frame_type enum row across `.factory/specs/`. |
+| Cosmetic FCL item-numbering double-listing observation | Observation — NOT a finding | Lines ~501/~540 in the FCL table appear under two historical item numbers due to v1.2 + v1.3 multi-pass annotations; total of 10 locations in the Q3 blast-radius table is correct. The double-listing is presentation-cosmetic, within the adjudicated fence, and does NOT affect any implementation obligation. No action. |

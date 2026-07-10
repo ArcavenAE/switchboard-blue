@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.18
+# version: 2.19
 # changelog:
+#   - version: 2.19
+#     date: 2026-07-10
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 14: HAS_FINDINGS — F-SP14-001 (MED [spec-completeness], BC-2.01.004:61 co-canonical wire-format sibling of ARCH-02:74 cited zero times in story or note — frame_type enum widening would leave BC enumerating 5 types while ARCH-02 + frame.go Valid() accept 6; F-P8-008 pass-8 precedent named the pair canonical; remediation option (a) accepted: BC-2.01.004:61 amended in SAME commit as FrameTypePEConnect, wire-format spec pair with ARCH-02:74, sibling of but not inside the unified-12 count; class-closure grep 2 patterns × 2 hits each — no third sibling; 4th incomplete-sweep-class instance after F-SP7-003/F-SP10-001/F-SP13-001). Pass-14 confirmations: all ledger items HOLD, 2 recipes re-executed realizable, FCL↔Task bijection holds, POL-001/002 pass. Two orchestrator audit corrections during remediation: architect's '8-row FCL table' → 9-row (third transcript-count catch of the cycle); story-writer's row-141 Notes chain missing v1.14 entry — appended. Remediated: note v1.11→v1.12 (architect), story v1.13→v1.14 + index v4.53→v4.54 (story-writer). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1. Next: spec pass 15 vs {story v1.14, note v1.12}."
 #   - version: 2.18
 #     date: 2026-07-10
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 13: HAS_FINDINGS — F-SP13-001 (MED [spec-completeness], ARCH-08 §6.6.2 sibling of pass-12's §6.5 finding: same three stale import-set claims outside the edit-obligation set; THIRD edit target added with binding replacement bullet; blast radius 11→12 unified, frame sweep stays 10; class-closure grep run — 4+4 hits, no further ARCH-08 targets, transcript corrected on orchestrator audit after initial 3-hit undercount [line 316 arqsend benign substring match]). Pass-13 confirmations: ALL ~11 test recipes realizable (AC-002 exhaustion deterministic, AC-003 discard direction correct, AC-004 byte-contract pin valid+distinguishing); ARCH-02 single-row adequate; end-state coherence otherwise clean. Remediated: note v1.10→v1.11 (architect, +1 audit correction), story v1.12→v1.13 + index v4.52→v4.53 (story-writer). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1. Next: spec pass 14 vs {story v1.13, note v1.11}."
@@ -1010,16 +1013,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.13"
+    story_version: "1.14"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.11"
-    spec_adversarial_pass: 13
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.12"
+    spec_adversarial_pass: 14
     spec_adversarial_streak: "0/3"
-    last_findings: "1 MED (F-SP13-001 ARCH-08 §6.6.2 sibling — 12th blast-radius location; class-closure grep 4+4 hits, no further ARCH-08 targets); streak stays 0/3; decay 7→4→3→2→3→4→5→2→1→2→3→1→1"
-    note: "awaiting spec adversarial pass 14 (story v1.13 + note v1.11, streak 0/3)"
+    last_findings: "1 MED (F-SP14-001 BC-2.01.004:61 co-canonical wire-format sibling of ARCH-02:74 — frame_type enum widening pair; class-closure grep 2×2 hits, no third sibling; 4th incomplete-sweep-class instance); streak stays 0/3; decay 7→4→3→2→3→4→5→2→1→2→3→1→1→1"
+    note: "awaiting spec adversarial pass 15 (story v1.14 + note v1.12, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

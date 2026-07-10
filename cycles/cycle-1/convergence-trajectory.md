@@ -1601,10 +1601,15 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 7 (spec) | v1.6 | 5 | 1 | 2 | 2 | 0/3 | note v1.7 + story v1.7 + index v4.47 — remediated; streak stays 0/3 |
 | 8 (spec) | v1.7 | 2 | 0 | 1 | 1 | 0/3 | story v1.8 + index v4.48 (note v1.7 unchanged) — remediated; streak stays 0/3 |
 | 9 (spec) | v1.8 | 1 | 0 | 1 | 0 | 0/3 | story v1.9 + index v4.49 (note v1.7 unchanged) — remediated; streak stays 0/3 |
+| 10 (spec) | v1.9 | 2 | 0 | 1 | 1 | 0/3 | note v1.8 + story v1.10 + index v4.50 (both note-side) — remediated; streak stays 0/3 |
+| 11 (spec) | v1.10 | 3 | 1 | 0 | 2 | 0/3 | note v1.9 + story v1.11 + index v4.51 — remediated; streak stays 0/3 |
+| 12 (spec) | v1.11 | 1 | 0 | 1 | 0 | 0/3 | note v1.10 + story v1.12 + index v4.52 — remediated; streak stays 0/3 |
+| 13 (spec) | v1.12 | 1 | 0 | 1 | 0 | 0/3 | note v1.11 + story v1.13 + index v4.53 — remediated; streak stays 0/3 |
+| 14 (spec) | v1.13 | 1 | 0 | 1 | 0 | 0/3 | note v1.12 + story v1.14 + index v4.54 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L) → 5 (1H/2M/2L) → 2 (1M/1L) → 1 (1M)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); streak 0/3; pass 10 pending vs v1.9 package.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; streak 0/3; pass 15 pending vs {v1.14, note v1.12}.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2126,3 +2131,54 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-12 when
 **Streak stays 0/3.** Single MED finding; fifth consecutive pass with single-finding-or-fewer and zero HIGH since pass 11's latent. Sprint-state v2.17→v2.18. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-13 when authored).
+
+---
+
+### Pass 14 Details (2026-07-10)
+
+**Story at review:** v1.13 | **Placement note at review:** v1.11
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated.
+
+**P1a vector (cross-artifact citations outside ARCH-08):** Found BC-2.01.004:61 — the un-enumerated co-canonical sibling of the frame_type enum widening. BC-2.01.004 is the wire-format behavioral contract whose line 61 enumerates frame_type values; the story cited ARCH-02:74 as the sole amendment obligation, but F-P8-008 from the PE-CONNECTOR cycle (pass-8 precedent) had named BC-2.01.004 + ARCH-02 as a canonical pair. The frame_type enum widening (FrameTypePEConnect=0x06) must be reflected in BOTH documents in the SAME commit. This is the 4th incomplete-sweep-class instance (after F-SP7-003, F-SP10-001, F-SP13-001). Class-closure grep: two patterns ("arq=0x04, fec=0x05" and "empty_tick=0x02") × 2 hits each — BC-2.01.004:61 + ARCH-02:74, no third sibling anywhere in the spec tree.
+
+**Blast-radius presentation settled:** "unified 12 + wire-format spec pair" — BC-2.01.004:61 paired with ARCH-02:74 as same-commit parallel obligations, not counted inside the 12. The 12 remains the frame.go + frame_test.go + ARCH-08 blast-radius; the wire-format spec pair is a separate orthogonal obligation.
+
+**Remediation option (a) accepted:** BC-2.01.004:61 amended in SAME commit as FrameTypePEConnect; this is the story's concrete obligation, not an existing-code sweep (BC-2.01.004 governs wire-format semantics; the enum widening from 5 → 6 types must be atomic with the new constant definition).
+
+**All other pass-14 axes HELD:** All 10+ ledger items re-confirmed. ExitsOnReadError + ExitsOnVersionMismatch recipes re-executed REALIZABLE. FCL↔Task bijection complete (9 rows × 9 tasks, no orphans). AC↔BC↔test traceability clean. POL-001 (version pin) and POL-002 (STORY-INDEX sync) both pass.
+
+**Two orchestrator audit corrections during remediation:**
+1. Architect's '8-row FCL table' → 9-row (third transcript-count catch of the spec cycle; prior catches at pass-8 [stall recovery] and pass-13 [3-hit→4-hit arqsend grep correction]).
+2. Story-writer's row-141 Notes chain missing v1.14 entry — appended during story-writer dispatch.
+
+**Sixth consecutive pass at single-finding-or-fewer. Zero HIGH since pass 11.**
+
+#### Finding
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP14-001 | MED | spec-completeness | BC-2.01.004:61 is the co-canonical wire-format sibling of ARCH-02:74 for the frame_type enum (F-P8-008 precedent from PE-CONNECTOR cycle: the pair is canonical for wire-format changes). The frame_type widening (FrameTypePEConnect=0x06) must be reflected in BC-2.01.004:61 in the SAME commit as FrameTypePEConnect and ARCH-02:74. The story cited ARCH-02:74 as the sole wire-format amendment obligation; BC-2.01.004:61 was uncited in story and note. Class-closure grep confirms exactly 2 hits per pattern (BC-2.01.004:61 + ARCH-02:74) — no third sibling. 4th incomplete-sweep-class instance (F-SP7-003, F-SP10-001, F-SP13-001, F-SP14-001). | Note v1.11→v1.12: BC-2.01.004:61 wire-format spec pair obligation added to the amendment block alongside ARCH-02:74; "unified 12 + wire-format spec pair" blast-radius framing documented; class-closure grep transcript included. Story v1.13→v1.14: FCL row 9 (ARCH-02 amendment) expanded to name BC-2.01.004:61 as same-commit co-obligation; Task 3 updated. Two orchestrator audit corrections applied: architect FCL row count 8→9; story Notes chain v1.14 entry appended. STORY-INDEX v4.53→v4.54. |
+
+#### Non-Findings Adjudicated Clean (Pass 14 — all ledger items re-confirmed)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| ExitsOnReadError recipe (F-SP11-001 corrected) | byte[0]=0x01 passes version nibble check; byte[1]=0x07 fails amended Valid() (max 0x06); PayloadLen=0 → goroutine exits ErrInvalidFrameType | REALIZABLE |
+| ExitsOnVersionMismatch recipe | byte[0]=0xFF → ErrVersionMismatch before frame_type | REALIZABLE |
+| FCL↔Task bijection | 9 FCL rows × 9 tasks; no orphan rows or tasks | HOLDS |
+| ARCH-08 class-closure (pass-13 fence) | 4+4 hits already dispositioned; no new ARCH-08 import-set targets | CLOSED |
+| POL-001 (version pins) | All artifact version citations current | PASS |
+| POL-002 (STORY-INDEX sync) | story v1.14 → STORY-INDEX v4.54 | PASS |
+| Blast-radius 12 unified | All 12 locations (10 frame.go/frame_test.go + ARCH-08 §6.5 + ARCH-08 §6.6.2) confirmed; BC-2.01.004:61 is outside the 12 (wire-format spec pair, separate axis) | CONFIRMED |
+| AC↔BC↔test traceability | All AC discharge paths trace to BCs; all test names in FCL | CLEAN |
+
+#### Remediation Summary
+
+**Placement note v1.11 → v1.12:** BC-2.01.004:61 wire-format spec pair obligation added to ARCH-02 amendment block (same-commit obligation, separate from the unified-12 blast-radius). "Unified 12 + wire-format spec pair" framing documented: BC-2.01.004:61 is orthogonal to the frame.go/frame_test.go/ARCH-08 sweep, shares the same commit gate as ARCH-02:74. Class-closure grep transcript included with 2-pattern × 2-hit confirmation. Pass-14 adjudicated-clean section added.
+
+**Story v1.13 → v1.14:** FCL row 9 (ARCH-02 amendment row) expanded with BC-2.01.004:61 as same-commit co-obligation and wire-format spec pair framing. Task 3 updated with BC-2.01.004:61 obligation note. Orchestrator audit corrections applied (FCL row count 8→9 in architect note; Notes chain v1.14 entry appended at row 141). Changelog row added. STORY-INDEX v4.53→v4.54.
+
+**Streak stays 0/3.** Single MED finding; sixth consecutive pass at single-finding-or-fewer, zero HIGH since pass 11. Sprint-state v2.18→v2.19. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-14 when authored).
