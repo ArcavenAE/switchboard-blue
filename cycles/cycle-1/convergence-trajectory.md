@@ -1600,12 +1600,13 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 6 (spec) | v1.5 | 4 | 2 | 1 | 1 | 0/3 | note v1.6 + story v1.6 + index v4.46 — remediated; streak stays 0/3 |
 | 7 (spec) | v1.6 | 5 | 1 | 2 | 2 | 0/3 | note v1.7 + story v1.7 + index v4.47 — remediated; streak stays 0/3 |
 | 8 (spec) | v1.7 | 2 | 0 | 1 | 1 | 0/3 | story v1.8 + index v4.48 (note v1.7 unchanged) — remediated; streak stays 0/3 |
+| 9 (spec) | v1.8 | 1 | 0 | 1 | 0 | 0/3 | story v1.9 + index v4.49 (note v1.7 unchanged) — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L) → 5 (1H/2M/2L) → 2 (1M/1L)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); streak 0/3; pass 9 pending vs v1.8 package.
+`7 (3H/3M/1L) → 4 (1C/1H/2M) → 3 (2H/1M) → 2 (2H) → 3 (1H/2L) → 4 (2H/1M/1L) → 5 (1H/2M/2L) → 2 (1M/1L) → 1 (1M)` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); streak 0/3; pass 10 pending vs v1.9 package.
 
-**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first.
+**Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
 ### Pass 1 Details (2026-07-08)
 
@@ -1921,3 +1922,29 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-7 when 
 **4 story-writer stalls this pass:** 2 zero-work dispatches + 2 productive-partial dispatches. All recovered via disk-audit-first pattern (read story from disk before dispatching; instruct agent to work from on-disk version). Zero lost work after recovery. Disk-audit-first now a standing dispatch protocol for story-writer remediation work after stall.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-8 when authored).
+
+### Pass 9 Details (2026-07-10)
+
+**Story at review:** v1.8 | **Placement note at review:** v1.7
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated story-side only (note v1.7 unchanged).
+
+**Method:** Fresh top-to-bottom implementer-read sweep — every section read as if implementing for the first time, testing whether the described observable is achievable with the specified harness.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP9-001 | MED | doc-drift | AC-001 integration-test descriptors carried pre-contract text in two locations: (1) Test-names block descriptor for `TestRunRouter_PE_ReceiveLoop_ActiveAfterConnect` said "starts testenv PE router" — contradicts F-SP2-003 mandate that OnFrameArrival ACs MUST use real runRouter goroutine pattern (testenv.Restart never calls SetFrameCallback → nil FrameFn → vacuous assertion); (2) Estimated Test Surface row asserted `RouterHandle.Mode() == testenv.ModePE` as the establishment observable — Mode()-based establishment thrice-retracted across passes v1.6/v1.7/v1.8; RouterHandle has no analog under the mandated runRouter harness. Both descriptors are residual pre-v1.2/pre-v1.6 text that survived the option-A sweeps. | Story v1.8→v1.9: Test-names block descriptor replaced with runRouter-pattern description (startPEWriteFixture, peWriteFixture.WriteFrame, E-FWD-001 writer-output assertion); Estimated Test Surface row replaced with peWriteFixture.accepted establishment gate + E-FWD-001 liveness observable per binding three-observable table. STORY-INDEX v4.48→v4.49. |
+
+#### Non-Findings Adjudicated Clean (Pass 9)
+
+All other axes clean on the implementer-read sweep: Q8 OnFrameArrival wiring contracts mutually consistent; Q9 peWriteFixture injection path coherent across AC-001/AC-002/AC-004; READ-error disposition contract (F-SP5-001 binding) consistent across all three sketches and Design Constraints; SetFrameCallback ordering contract (F-SP4-002) unambiguous; FrameFn discard-and-continue contract (F-SP4-001) unambiguous; conn.Close() teardown wiring (F-SP6-001) consistent; three-observable table (F-SP7-001) consistent with finding: VERIFIED TRUE at pass 8; AC-004 precondition race-safety (F-SP7-002) unambiguous; all FCL rows consistent with story body; Estimated Test Surface totals consistent after row correction.
+
+#### Remediation Summary
+
+**Placement note v1.7 → unchanged:** No changes to placement note. Three-observable ruling, Q1/Q8 Option-A, transient-window binding, all Q9 injection topology rulings all remain as authored.
+
+**Story v1.8 → v1.9:** AC-001 Test-names block descriptor updated (F-SP9-001 — pre-contract testenv text replaced with runRouter-pattern + peWriteFixture injection + E-FWD-001 writer-output assertion). AC-001 Estimated Test Surface row updated (F-SP9-001 — Mode()-based establishment gate replaced with peWriteFixture.accepted + E-FWD-001 liveness observable per binding three-observable table). STORY-INDEX v4.48→v4.49.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-9 when authored).
