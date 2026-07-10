@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.8"
+version: "1.9"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -37,6 +37,7 @@ architecture_modules:
 | 1.6 | Remediate four spec-adversarial pass-6 findings: F-SP6-001 (HIGH [spec-defect]) — v1.5 "exit → dialLoop's existing teardown/reconnect path" claim corrected: `maintainConn` returns only on write failure / keepalive-probe-assembly failure / `SetWriteDeadline` failure / `stopAddr` close — it never reads the conn and cannot observe receive-goroutine exit; receive goroutine MUST call `_ = conn.Close()` on read-error exit to convert the failure into a write-side event that causes `maintainConn` to return; lifecycle contract amended to add conn.Close() as second receive-goroutine output (alongside FrameFn callback); double-close is safe/idempotent on net.Conn; reconnect latency bound stated; backoff behaviour after established-then-failed cited; pin-test `TestConnector_ReceiveLoop_ExitsOnReadError` timeout guidance added; malformed-frame reconnect-storm risk assessed as bounded by keepaliveInterval only (backoff resets on success). F-SP6-002 (HIGH [spec-gap]) — Handle-interface blast radius for `SetFrameCallback`: RULED Option A — `SetFrameCallback` stays OFF the `upstreamdial.Handle` interface; `runRouter` calls it on the concrete `*Connector` between `New()` and `Start()` (concrete type available there); `fakeConnectorHandle` (router_pe_connector_test.go:75–81) is NOT affected; router_pe_connector_test.go remains "existing, unmodified"; Q1 Q-block text updated. F-SP6-003 (MED [spec-defect]) — AC-001 PC-3 `connector.Mode()` and AC-004 precondition `ModePE` poll unassertable under real-runRouter harness (runRouter holds connector as unexported local): amended to use observable substitutes — `peWriteFixture.accepted` channel receipt confirms PE establishment; `"mode=PE"` writer-output line (existing `waitForConnections`/`scanForLine` pattern) is the poll substitute; `connector.Mode()` assertions remain valid only in connector_test.go unit tests (in-package, concrete type). F-SP6-004 (LOW [doc-drift]) — blast-radius table undercounts: `frame_test.go:501` and `:540` stale-comment locations added as items 9 and 10; count corrected 8 → 10; `:540` edit specified to cover both the range `{0x01..0x05}`→`{0x01..0x06}` AND the "canonical five"→"canonical six" text. Appendix A delta for v1.6 (no new symbols). Pass-6 adjudicated-clean section added. |
 | 1.7 | Remediate five spec-adversarial pass-7 findings (2026-07-09). F-SP7-001 (HIGH [spec-defect]) — RETRACT v1.6 F-SP6-003 claims that `"mode=PE"` "fires after connectedCount.Add(1)" and is "the stronger guarantee ... for a strict ModePE assertion"; `"mode=PE"` is emitted in `runRouter`'s startup writer block gated on `len(upstreamRouters)>0` (verified `mgmt_wire.go` :548) and on SIGHUP re-emit (:587), synchronously after `connector.Start()` returns (Start only launches goroutines); no dependency on `connectedCount` or any established connection; correct establishment observables specified for AC-001 PC-3 and AC-004 precondition. F-SP7-002 (MED [spec-divergence]) — parenthetical in observable-substitute item 1 (AC-001 PC-3) incorrectly stated `accepted` = "completed step 3 (atomically incrementing connectedCount)"; corrected: `accepted` fires at TCP-accept time, strictly BEFORE `connectedCount.Add(1)` (bootstrap Write at :350 precedes Add(1) at :365); single-correct-semantics statement added, folded into F-SP7-001 corrected-observables block. F-SP7-003 (MED [spec-divergence]) — Candidate-FCL connector.go row (:1677) and Summary-of-Rulings Q1 row (:1692) retained stale "to `Handle` interface" / "`Handle` gains `SetFrameCallback(fn FrameFn)` seam" wording contradicting the binding F-SP6-002 Option A ruling; both swept to Option A language (method on concrete `*Connector` ONLY; Handle interface unchanged; `fakeConnectorHandle` unaffected); full grep sweep performed with patterns `"Handle gains"`, `"to Handle"`, `"Handle.*SetFrame"`, `"Add FrameFn type.*Handle"` — grep patterns and hit counts recorded in body. F-SP7-004 (LOW [doc-drift]) — story Task 1 cites note "v1.2"; story-writer propagation item noted; cross-reference version-pin policy ruled. F-SP7-005 (LOW [spec-completeness]) — transient stale-ModePE window (after receive-goroutine `conn.Close()` exit, before `maintainConn` write failure decrements `connectedCount`) acknowledged; bounded by `keepaliveInterval`; no AC obligation. Pass-7 adjudicated-clean section added. Appendix A delta for v1.7 (no new symbols). F-SP7-003 sweep completed on audit: two additional Q1-body residuals (:76 'gains a method', :90 'gains a setter') struck — initial 4-pattern transcript was insufficient; expanded pattern set and corrected hit counts recorded in the sweep-transcript section. |
 | 1.8 | Remediate two spec-adversarial pass-10 findings (2026-07-10). F-SP10-001 (MED [doc-drift]) — Q4 and Q5 supersession banners added at the top of each section body; both were the only superseded sections lacking in-place annotation; amendment is annotation-only (no ruling content changed; Q9 and the corrected-observables block from F-SP7-001 already governed — this makes the supersession visible at point-of-read). F-SP10-002 (LOW [doc-drift]) — note frontmatter `architecture_modules` corrected: added `internal/frame` and `internal/multipath` (the modules Q2/Q3/Q8 centre on); dropped `internal/arqsend` (removed from the story's touch-list by Q9.4). Story v1.9 untouched. |
+| 1.9 | Remediate two spec-adversarial pass-11 findings (2026-07-10). F-SP11-001 (HIGH [spec-defect]) — Q2 AC-005 `TestConnector_ReceiveLoop_ExitsOnReadError` injection recipe replaced: the v1.5-era "single byte 0xFF as FrameType" recipe is physically unrealizable (io.ReadFull blocks on < 44 bytes) and mis-attributes the error (0xFF at byte[0] triggers ErrVersionMismatch, not ErrInvalidFrameType); corrected recipe mandates a complete 44-byte outer header with byte[0]=0x01 (valid version byte, VersionMajor=0, VersionByte=0x01, verified frame.go :21/:23), byte[1]=0x07 (out-of-range frame_type, one above FrameTypePEConnect=0x06 upper bound), PayloadLen=0x0000 at bytes[2:4] big-endian (verified frame.go EncodeOuterHeader :90), remaining bytes zero; conn NOT closed; io.ReadFull completes; ParseOuterHeader returns ErrInvalidFrameType at byte[1]; receive goroutine exits via read-error branch → conn.Close() → maintainConn write failure → reconnect. Optional variant (adjudicated: ADD as separate pin) for ErrVersionMismatch path: byte[0]=0xFF (major nibble 0xF ≠ VersionMajor 0) → ErrVersionMismatch → same exit contract; named `TestConnector_ReceiveLoop_ExitsOnVersionMismatch`. F-SP11-002 (LOW [token-budget]) — story-side, handled by story-writer; not touched in this note. F-SP11-003 (LOW [doc-drift]) — §8.2 dangling "see elaboration note below" clause struck; production interface-set population is out of scope for this story; §8.5 governs the test-scoped set. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -421,13 +422,63 @@ framing-desync scenario where `continue` would produce a permanently broken conn
 
 **Pin test name:** `TestConnector_ReceiveLoop_ExitsOnReadError`
 
-**Test shape:** Inject garbage / malformed bytes (e.g. write a single byte `0xFF` as
+**Test shape:** ~~Inject garbage / malformed bytes (e.g. write a single byte `0xFF` as
 `FrameType`, which `ParseOuterHeader` rejects as `ErrInvalidFrameType`) to the upstream
-fixture connection WITHOUT closing the conn. Assert that: (a) the receive goroutine exits
-(via the per-connection done channel or `goleak.VerifyNone`), AND (b) the connector
-initiates a reconnect cycle (dials the fixture again within the reconnect timeout). This
-proves exit-on-read-error is wired; a `continue` implementation would busy-loop and the
-done channel would never close.
+fixture connection WITHOUT closing the conn.~~ *(amended v1.9 — F-SP11-001: the v1.5 recipe
+is PHYSICALLY UNREALIZABLE and contains a WRONG ERROR ATTRIBUTION. Two independent defects:
+(1) UNREALIZABLE — `frame.ReadOuterFrame` mirrors `netingress.ReadFrame` → `io.ReadFull` over
+the full 44-byte header (verified `internal/netingress/netingress.go` :79 — `io.ReadFull(r,
+hdrBuf[:])`). One byte written, conn held open → ReadFull blocks awaiting bytes 2–44 → the
+goroutine parks INSIDE the read, never reaches the error branch, never calls conn.Close(),
+never exits; keepalives keep succeeding; the test hangs at RED forever against any
+implementation. (2) WRONG ERROR — even writing 44 bytes of 0xFF would fail at byte[0] as
+`ErrVersionMismatch` (major nibble `(0xFF >> 4) & 0x0F = 0xF`, compared against `VersionMajor
+= 0`, verified `internal/frame/frame.go` :21, :106–108). The frame_type byte[1] is never
+reached. "Single byte 0xFF as FrameType" conflates the version byte at byte[0] with the
+frame_type byte at byte[1].*
+
+**BINDING corrected recipe (v1.9 — F-SP11-001):** Write a COMPLETE 44-byte outer header to
+the upstream fixture connection WITHOUT closing the conn. Concrete values (all verified against
+`internal/frame/frame.go`):
+
+- **byte[0] = 0x01** — valid version byte (VersionByte=0x01, verified frame.go :23; major
+  nibble `(0x01 >> 4) & 0x0F = 0x00 == VersionMajor=0`, verified frame.go :21/:106–108;
+  passes the version check, allowing ParseOuterHeader to reach the frame_type check)
+- **byte[1] = 0x07** — out-of-range frame_type, one above the story's new upper bound
+  `FrameTypePEConnect=0x06`; `FrameType(0x07).Valid()` returns false because `Valid()` checks
+  `f >= FrameTypeData && f <= FrameTypePEConnect` after this story's amendment; ParseOuterHeader
+  returns `ErrInvalidFrameType` at byte[1]
+- **bytes[2:4] = 0x00, 0x00** — `PayloadLen = 0` big-endian (verified EncodeOuterHeader
+  frame.go :90: `binary.BigEndian.PutUint16(b[2:4], h.PayloadLen)`); zero PayloadLen means
+  `frame.ReadOuterFrame` does not attempt any payload read after the 44-byte header completes
+- **bytes[4:44] = 0x00...** — remaining fields zero
+
+With this 44-byte write, `io.ReadFull` completes deterministically (the pending 44-byte read
+is satisfied by a single write — no timing gymnastics required). `ParseOuterHeader` returns
+`ErrInvalidFrameType` at byte[1]. The receive goroutine takes the read-error branch →
+`_ = conn.Close()` → exit → `maintainConn` write failure → reconnect. This IS the
+F-SP5-001 case-2 scenario (malformed-without-close) realized correctly.
+
+**Why the old recipe fails (two counts — for clarity in the codebase):**
+1. Partial-header injection (< 44 bytes, conn held open) tests the BLOCKING path, not the
+   ERROR path. `io.ReadFull` blocks — the goroutine never reaches the error branch.
+2. `0xFF` at byte[0] tests VERSION REJECTION (`ErrVersionMismatch`), not frame-type rejection
+   (`ErrInvalidFrameType`) — the frame_type byte at position 1 is never evaluated.
+
+Assert that: (a) the receive goroutine exits (via the per-connection done channel or
+`goleak.VerifyNone`), AND (b) the connector initiates a reconnect cycle (dials the fixture
+again within the reconnect timeout). This proves exit-on-read-error is wired; a `continue`
+implementation would busy-loop and the done channel would never close.
+
+**OPTIONAL additional variant pin (v1.9 — F-SP11-001 optional ruling: ADJUDICATED — ADD):**
+A second pin `TestConnector_ReceiveLoop_ExitsOnVersionMismatch` is worth adding: write a
+complete 44-byte header with byte[0] = 0xFF (major nibble 0xF ≠ VersionMajor 0 →
+`ErrVersionMismatch`), PayloadLen=0, conn NOT closed. Same exit contract (read-error branch
+→ conn.Close() → reconnect). Rationale: ErrVersionMismatch is the OTHER common malformed-frame
+path via ParseOuterHeader and exercises the same error-branch code; adding it costs one test
+and fully documents the version-rejection path. It does NOT test a new code branch (same
+read-error `if err != nil { _ = conn.Close(); return }` as ErrInvalidFrameType), but pins the
+surface. Story-writer SHOULD add it as a companion to `TestConnector_ReceiveLoop_ExitsOnReadError`.
 
 This test lives in `internal/upstreamdial/connector_test.go` (same file as AC-005).
 The `in-package` fixture pattern for writing bytes to the upstream side is established
@@ -435,8 +486,9 @@ by the AC-005 flap harness (`heldConn`+`conn.Write` — see `TestConnector_Backo
 pattern, verified at `8eb54a5`).
 
 **Estimated connector_test.go test count update:** +1 test (`TestConnector_ReceiveLoop_ExitsOnReadError`)
-above the v1.4 forecast of 4 unit tests in connector_test.go. New total: 5 unit tests in
-`internal/upstreamdial/connector_test.go`.
+above the v1.4 forecast of 4 unit tests in connector_test.go, plus +1 optional variant
+`TestConnector_ReceiveLoop_ExitsOnVersionMismatch` (v1.9). New totals: 5 unit tests minimum
+(+1 optional = 6) in `internal/upstreamdial/connector_test.go`.
 
 **AC-001 PC-3 / AC-004 precondition observable substitutes (v1.6 — F-SP6-003, binding for story-writer):**
 
@@ -1312,8 +1364,9 @@ The `FrameFn` closure must supply:
   test, the interface set MUST be `[]routing.InterfaceID{peIfaceID}` only (the
   arrival interface is the sole candidate), which guarantees `SplitHorizon.Forward`
   returns `ErrAllPathsSplitHorizon`. In production, the interface set is populated
-  from the router's forwarding table or a registry of connected data-plane nodes;
-  see elaboration note below.
+  from the router's forwarding table or a registry of connected data-plane nodes.
+  *(amended v1.9 — F-SP11-003: dangling pointer removed; production interface-set
+  population is out of scope for this story — §8.5 governs the test-scoped set)*
 - `fn ForwardFunc` — the forward function that actually sends bytes to an interface.
   In production this dials the destination. In the integration test a no-op or
   capture function is acceptable (the E-FWD-001 path never calls `fn` because all
@@ -2120,3 +2173,16 @@ an amendment obligation for this note).
 | `"mode=PE"` emission in `connector.go` | Does `connector.go` emit a `"mode=PE"` line that might be confused with `mgmt_wire.go`'s `"mode=PE"` line? | Clean. Verified: `connector.go` emits only `"mode=E (no upstream_routers configured)"` at :390 (via `c.logf`) when `connectedCount.Add(-1)` returns 0. There is no `"mode=PE"` emission from `connector.go`. The sole `"mode=PE"` sources are `mgmt_wire.go` :548 (startup writer block) and :587 (SIGHUP re-emit). This is consistent with F-SP7-001's ruling that `"mode=PE"` is a config-presence signal emitted by `runRouter`, not by `connector`. |
 | F-SP7-004 story propagation — who is responsible for the "v1.2" fix? | Story file `S-BL.PE-RECEIVE-LOOP.md` Task 1 cites "v1.2". This note cannot amend the story (BARS: do NOT touch the story). | Story-writer propagation item only. This note records the obligation at F-SP7-004 above; the story-writer updates "v1.2" → "v1.7" at elaboration time. No action in this note beyond the F-SP7-004 record. |
 | F-SP7-005 transient affects `Mode()` callers in testenv | `testenv.RouterHandle.Mode()` delegates to `connector.Mode()`. During the transient window, does this cause test false-greens? | Non-actionable for this story. No current story AC polls `testenv.RouterHandle.Mode()` after teardown; the transient is bounded by `keepaliveInterval` (typically 10ms in tests). Recorded at F-SP7-005. Future stories with tight Mode()-based teardown assertions must account for the bound. |
+
+---
+
+## Pass-11 Adjudicated-Clean (non-findings and pass-through items, per adversarial pass-11 report)
+
+The following items were raised by the pass-11 adversary; F-SP11-001 and F-SP11-003 are
+remediated above. F-SP11-002 is story-side and is not touched by this note.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP11-001 — ExitsOnReadError injection recipe unrealizable + wrong error attribution | HIGH [spec-defect] — REMEDIATED in Q2 above | Corrected recipe mandates complete 44-byte header: byte[0]=0x01 (VersionByte, verified frame.go :23), byte[1]=0x07 (ErrInvalidFrameType path), PayloadLen=0x0000 at bytes[2:4] big-endian (verified frame.go :90), remaining bytes zero, conn NOT closed. io.ReadFull completes deterministically; ParseOuterHeader returns ErrInvalidFrameType at byte[1]; receive goroutine exits via read-error branch → conn.Close() → reconnect. Both defects in the v1.5 recipe named explicitly: (1) partial-header blocks io.ReadFull, (2) 0xFF at byte[0] triggers ErrVersionMismatch not ErrInvalidFrameType. Optional ErrVersionMismatch variant adjudicated ADD. |
+| F-SP11-002 — story-side token budget line | LOW [token-budget] — STORY-SIDE ONLY | Not touched in this placement note. Story-writer handles this independently. |
+| F-SP11-003 — §8.2 dangling "see elaboration note below" pointer | LOW [doc-drift] — REMEDIATED in §8.2 above | Dangling clause struck and annotated: production interface-set population is out of scope for this story; §8.5 governs the test-scoped set. |

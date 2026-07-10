@@ -1971,8 +1971,9 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-9 when 
 | 8 | 2026-07-09 | HAS_FINDINGS | 0 | 1 | 1 | v1.7→v1.8 | unchanged (v1.7) | v4.47→v4.48 |
 | 9 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 0 | v1.8→v1.9 | unchanged (v1.7) | v4.48→v4.49 |
 | 10 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 1 | v1.9→v1.10 (metadata) | v1.7→v1.8 | v4.49→v4.50 |
+| 11 | 2026-07-10 | HAS_FINDINGS | 1 | 0 | 2 | v1.10→v1.11 | v1.8→v1.9 | v4.50→v4.51 |
 
-**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2`
+**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2→3`
 
 #### Findings
 
@@ -2002,3 +2003,47 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-9 when 
 **Streak stays 0/3.** Both findings are note-side historiography (no story contract changes). Sprint-state v2.14→v2.15.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-10 when authored).
+
+---
+
+### Pass 11 Details (2026-07-10)
+
+**Story at review:** v1.10 | **Placement note at review:** v1.8
+
+**Verdict:** HAS_FINDINGS — 1 HIGH + 2 LOW. Remediated.
+
+**New axis introduced:** Physical-realizability of prescribed test inputs. Discharge-simulation executed all 5 ACs: 4 clean, 1 unrealizable (AC-001 ExitsOnReadError injection recipe). First pass-11 agent was lost to 2 consecutive API stalls before output; fresh retry agent delivered.
+
+**Ledger spot-check:** Zero ledger-vs-artifact drift found. All prior pass findings (F-SP1 through F-SP10) verified holding per artifact state at v1.10/v1.8.
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP11-001 | HIGH | spec-defect | `TestConnector_ReceiveLoop_ExitsOnReadError` injection recipe physically unrealizable: the recipe specified writing a single byte (0xFF) to the connection, then asserting goroutine exit. Discharge-simulation showed this cannot work: `io.ReadFull` blocks until 44 bytes (the full outer-header) are available; a single-byte write leaves `ReadOuterFrame` blocked at the `io.ReadFull` call — the goroutine never reaches the read-error exit path. Additional defect: 0xFF at byte[0] routes to `ErrVersionMismatch` (byte[0] is the version field; only `0x01` is accepted) not `ErrInvalidFrameType` — the finding predated the ExitsOnVersionMismatch test by one full pass. This is a v1.5-era latent defect that survived 6 adversarial passes because prior passes validated contracts, wiring, and observables but never executed the literal injection bytes against `io.ReadFull`/`ParseOuterHeader` semantics. | Corrected recipe: write a complete 44-byte header with byte[0]=0x01 (version OK), byte[1]=0x07 (unknown FrameType, routes to `ErrInvalidFrameType`), PayloadLen=0 (no additional bytes needed). Companion pin `TestConnector_ReceiveLoop_ExitsOnVersionMismatch` adjudicated ADD: write header with byte[0]=0xFF (invalid version → `ErrVersionMismatch`); assert goroutine exits. Note v1.8→v1.9: ExitsOnReadError recipe corrected; ExitsOnVersionMismatch companion added. Story v1.10→v1.11: AC-001 test-names block + Estimated Test Surface updated; connector test count 5→6, total ~10→~11. |
+| F-SP11-002 | LOW | doc-drift | Token budget comment in note was a stale v1.5-era pin (`~8k` from when arqsend was in scope and AC count was lower). Post-arqsend-removal and post-v1.8 annotation work the actual budget is ~11k. | Note v1.8→v1.9: token budget re-measured and updated. |
+| F-SP11-003 | LOW | doc-drift | Note §8.2 contained a dangling pointer to a Q-section that was renumbered/removed in an earlier pass — the cross-reference pointed to a section that no longer exists under that identifier. | Note v1.8→v1.9: dangling pointer struck. |
+
+#### Non-Findings Adjudicated Clean (Pass 11 — discharge-simulation sweep)
+
+| AC | Discharge-simulation result |
+|----|---------------------------|
+| AC-001 (receive goroutine active / frames reach OnFrameArrival) | CLEAN — peWriteFixture write + E-FWD-001 three-observable chain physically realizable at 8eb54a5 |
+| AC-002 (SetFrameCallback wiring) | CLEAN — runRouter construct→SetFrameCallback→Start ordering physically realizable |
+| AC-003 (FO-PE-LOOP-001 discrimination) | CLEAN — FrameTypePEConnect/FrameTypeData discrimination physically realizable |
+| AC-004 (E-FWD-001 exhaustion / S404 re-confirmation) | CLEAN — NoDuplicateSuppression pin test injection recipe physically realizable (EncodeOuterHeader+append produces distinct crc32 values per distinct SrcAddr) |
+| AC-005 (lifecycle / doneCh) | CLEAN — FlapCycleJoin harness in connector_test.go with heldConn+Close() pattern physically realizable |
+
+**ExitsOnReadError** (part of AC-001 test-names): UNREALIZABLE — corrected by F-SP11-001.
+
+#### Remediation Summary
+
+**Placement note v1.8 → v1.9:** ExitsOnReadError injection recipe corrected to complete-44-byte-header form (byte[0]=0x01, byte[1]=0x07, PayloadLen=0). ExitsOnVersionMismatch companion pin added (byte[0]=0xFF → ErrVersionMismatch, goroutine exits). Token budget re-measured (F-SP11-002). Dangling §8.2 pointer struck (F-SP11-003). Pass-11 adjudicated-clean section added.
+
+**Story v1.10 → v1.11:** AC-001 test-names block updated: ExitsOnReadError recipe corrected; ExitsOnVersionMismatch added as companion pin. Estimated Test Surface: connector test row count 5→6; total ~10→~11. Frontmatter: version 1.10→1.11; `placement_note` v1.8→v1.9. STORY-INDEX v4.50→v4.51.
+
+**Streak stays 0/3.** F-SP11-001 is HIGH [spec-defect] — latent-class (v1.5-era recipe defect not a remediation regression), but the decay trajectory moves 2→3 for the pass-11 count. Sprint-state v2.15→v2.16. Decay: 7→4→3→2→3→4→5→2→1→2→3.
+
+**Process note:** First pass-11 agent lost to 2 consecutive API stalls; fresh retry agent delivered the full discharge-simulation and findings with no prior-agent output on disk to recover from.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-11 when authored).

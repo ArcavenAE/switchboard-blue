@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.15
+# version: 2.16
 # changelog:
+#   - version: 2.16
+#     date: 2026-07-10
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 11 (retry agent after 2 API-stall losses of first pass-11 agent): HAS_FINDINGS — F-SP11-001 (HIGH [spec-defect], ExitsOnReadError injection recipe physically unrealizable: single-byte write blocks in io.ReadFull; 0xFF at byte[0] → ErrVersionMismatch not ErrInvalidFrameType — v1.5-era latent that survived 6 passes; corrected to complete-44-byte-header recipe byte[0]=0x01/byte[1]=0x07/PayloadLen=0; companion pin ExitsOnVersionMismatch adjudicated ADD), F-SP11-002 (LOW [doc-drift], token budget stale v1.5 pin — re-measured), F-SP11-003 (LOW [doc-drift], note §8.2 dangling pointer — struck). New axis: physical-realizability of prescribed test inputs (discharge-simulation executed all 5 ACs; 4 clean, 1 unrealizable). Ledger spot-check: zero ledger-vs-artifact drift. Remediated: note v1.8→v1.9 (architect), story v1.10→v1.11 + index v4.50→v4.51 (story-writer). Test counts: connector 5→6, total ~10→~11. Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3. Next: spec pass 12 vs {story v1.11, note v1.9}."
 #   - version: 2.15
 #     date: 2026-07-10
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 10: HAS_FINDINGS — F-SP10-001 (MED [doc-drift], note Q4/Q5 bodies preserved superseded test-injection instructions with NO supersession annotation — v1.8 banners added matching Q1/Q2 pattern), F-SP10-002 (LOW [doc-drift], note frontmatter architecture_modules diverged from own rulings — frame+multipath added, arqsend dropped per Q9.4). STORY CLEAN this pass — both findings note-side; 30+ cold-eyes citations re-verified, zero rot. Remediated: note v1.7→v1.8 (architect, annotation-only); story v1.9→v1.10 + index v4.49→v4.50 (story-writer, metadata-only — note-version citations made structural per F-SP7-004 version-pin policy, class cannot recur). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2 (both pass-10 findings are historiography, zero contract defects). Next: spec pass 11 vs {story v1.10, note v1.8}."
@@ -1001,16 +1004,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.10"
+    story_version: "1.11"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.8"
-    spec_adversarial_pass: 10
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.9"
+    spec_adversarial_pass: 11
     spec_adversarial_streak: "0/3"
-    last_findings: "1 MED (F-SP10-001 note Q4/Q5 superseded-section bodies lacked supersession banners — v1.8 banners added) + 1 LOW (F-SP10-002 note frontmatter architecture_modules diverged from own rulings — frame+multipath added, arqsend dropped); STORY CLEAN this pass (both findings note-side); 30+ citations re-verified zero rot; story v1.9→v1.10 metadata-only (note-version citation made structural per F-SP7-004); streak stays 0/3"
-    note: "awaiting spec adversarial pass 11 (story v1.10 + note v1.8, streak 0/3)"
+    last_findings: "1 HIGH (F-SP11-001 ExitsOnReadError injection recipe physically unrealizable — v1.5-era latent corrected) + 1 LOW (F-SP11-002 token budget stale) + 1 LOW (F-SP11-003 note §8.2 dangling pointer); physical-realizability axis added; discharge-simulation: 4 of 5 ACs clean; streak stays 0/3; connector tests 5→6, total ~10→~11"
+    note: "awaiting spec adversarial pass 12 (story v1.11 + note v1.9, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
