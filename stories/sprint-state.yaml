@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.16
+# version: 2.17
 # changelog:
+#   - version: 2.17
+#     date: 2026-07-10
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 12: HAS_FINDINGS — F-SP12-001 (MED [spec-completeness], ARCH-08 §6.5 amendment obligation omitted the now-false parenthetical 'frame is NOT imported directly...Corrected per F-P1-001' — this story legitimately reverses F-P1-001's correction; second edit obligation added with binding replacement wording; blast radius 10→11 unified, frame sweep stays 10). Pass-12 confirmations: both corrected recipes REALIZABLE (byte[0]=0x01 passes nibble check, 0x07 fails amended Valid(); ExitsOnVersionMismatch errors before frame_type), all four recipe copies byte-identical, 10 frame blast-radius locations byte-exact, ARCH-02 target exact — pass-11 remediation held under direct attack. Remediated: note v1.9→v1.10 (architect), story v1.11→v1.12 + index v4.51→v4.52 (story-writer). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3→1. Next: spec pass 13 vs {story v1.12, note v1.10}."
 #   - version: 2.16
 #     date: 2026-07-10
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 11 (retry agent after 2 API-stall losses of first pass-11 agent): HAS_FINDINGS — F-SP11-001 (HIGH [spec-defect], ExitsOnReadError injection recipe physically unrealizable: single-byte write blocks in io.ReadFull; 0xFF at byte[0] → ErrVersionMismatch not ErrInvalidFrameType — v1.5-era latent that survived 6 passes; corrected to complete-44-byte-header recipe byte[0]=0x01/byte[1]=0x07/PayloadLen=0; companion pin ExitsOnVersionMismatch adjudicated ADD), F-SP11-002 (LOW [doc-drift], token budget stale v1.5 pin — re-measured), F-SP11-003 (LOW [doc-drift], note §8.2 dangling pointer — struck). New axis: physical-realizability of prescribed test inputs (discharge-simulation executed all 5 ACs; 4 clean, 1 unrealizable). Ledger spot-check: zero ledger-vs-artifact drift. Remediated: note v1.8→v1.9 (architect), story v1.10→v1.11 + index v4.50→v4.51 (story-writer). Test counts: connector 5→6, total ~10→~11. Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3. Next: spec pass 12 vs {story v1.11, note v1.9}."
@@ -1004,16 +1007,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.11"
+    story_version: "1.12"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.9"
-    spec_adversarial_pass: 11
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.10"
+    spec_adversarial_pass: 12
     spec_adversarial_streak: "0/3"
-    last_findings: "1 HIGH (F-SP11-001 ExitsOnReadError injection recipe physically unrealizable — v1.5-era latent corrected) + 1 LOW (F-SP11-002 token budget stale) + 1 LOW (F-SP11-003 note §8.2 dangling pointer); physical-realizability axis added; discharge-simulation: 4 of 5 ACs clean; streak stays 0/3; connector tests 5→6, total ~10→~11"
-    note: "awaiting spec adversarial pass 12 (story v1.11 + note v1.9, streak 0/3)"
+    last_findings: "1 MED (F-SP12-001 ARCH-08 §6.5 amendment obligation parenthetical now-false — 11th blast-radius location; pass-11 recipes confirmed realizable); streak stays 0/3; decay 7→4→3→2→3→4→5→2→1→2→3→1"
+    note: "awaiting spec adversarial pass 13 (story v1.12 + note v1.10, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

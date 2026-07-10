@@ -1972,8 +1972,9 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-9 when 
 | 9 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 0 | v1.8→v1.9 | unchanged (v1.7) | v4.48→v4.49 |
 | 10 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 1 | v1.9→v1.10 (metadata) | v1.7→v1.8 | v4.49→v4.50 |
 | 11 | 2026-07-10 | HAS_FINDINGS | 1 | 0 | 2 | v1.10→v1.11 | v1.8→v1.9 | v4.50→v4.51 |
+| 12 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 0 | v1.11→v1.12 | v1.9→v1.10 | v4.51→v4.52 |
 
-**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2→3`
+**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2→3→1`
 
 #### Findings
 
@@ -2047,3 +2048,41 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-10 when
 **Process note:** First pass-11 agent lost to 2 consecutive API stalls; fresh retry agent delivered the full discharge-simulation and findings with no prior-agent output on disk to recover from.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-11 when authored).
+
+---
+
+### Pass 12 Details (2026-07-10)
+
+**Story at review:** v1.11 | **Placement note at review:** v1.9
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated.
+
+**Physical-realizability standing axis:** Both pass-11 corrected recipes verified REALIZABLE under direct attack — byte[0]=0x01 passes the nibble check, byte[1]=0x07 fails the amended `Valid()` upper-bound (0x06 is now the maximum valid value after FrameTypePEConnect addition), yielding `ErrInvalidFrameType` exit; `ExitsOnVersionMismatch` (byte[0]=0xFF) errors at version check before `frame_type` is inspected. All four recipe copies (AC-001 test-names block, AC-001 Estimated Test Surface, note ExitsOnReadError recipe, note ExitsOnVersionMismatch recipe) verified byte-identical. 10 frame blast-radius locations enumerated and verified byte-exact at ARCH-02 target. Pass-11 remediation held under direct attack.
+
+**Single finding:** Defect surface now confined to cross-artifact doc prose.
+
+#### Finding
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP12-001 | MED | spec-completeness | ARCH-08 §6.5 amendment obligation (FCL row 1 / Task 3) specified only one edit to `internal/upstreamdial` import row — but the existing row carried a now-false parenthetical: "frame is NOT imported directly by upstreamdial — Corrected per F-P1-001". This parenthetical was accurate at pass-1 (F-P1-001 established that upstreamdial does NOT import frame directly). However, this story's implementation reverses that: upstreamdial MUST import `internal/frame` to call `frame.EncodeOuterHeader` and define `FrameTypePEConnect`. A spec that instructs "add the import row" while leaving the now-false "NOT imported" parenthetical in place produces a self-contradicting amendment. | Note v1.9→v1.10: second edit obligation added to the ARCH-08 §6.5 amendment block with binding replacement wording — the parenthetical "frame is NOT imported directly...Corrected per F-P1-001" is replaced with "frame IS imported directly by upstreamdial (added by S-BL.PE-RECEIVE-LOOP; reverses the F-P1-001 correction which was correct at PE-CONNECTOR time)". Blast-radius count 10→11 unified (item 11 is the ARCH-08 §6.5 parenthetical). Frame blast-radius stays 10 (the frame.go/frame_test.go sweep is unchanged). Story v1.11→v1.12: FCL row 1 blast-radius 10→11; Task 3 updated with second edit obligation. STORY-INDEX v4.51→v4.52. |
+
+#### Non-Findings Adjudicated Clean (Pass 12 — pass-11 remediations under direct attack)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| ExitsOnReadError recipe (F-SP11-001) | byte[0]=0x01 passes version nibble check; byte[1]=0x07 fails amended Valid() (max is now 0x06 after FrameTypePEConnect=0x06 addition); PayloadLen=0 → no additional read; goroutine exits ErrInvalidFrameType | REALIZABLE |
+| ExitsOnVersionMismatch recipe (companion, F-SP11-001) | byte[0]=0xFF → ErrVersionMismatch returned before frame_type parsed; goroutine exits | REALIZABLE |
+| Four recipe copies byte-identical | AC-001 test-names block + AC-001 Estimated Test Surface + note ExitsOnReadError + note ExitsOnVersionMismatch all carry same byte spec | IDENTICAL |
+| 10 frame blast-radius locations (F-SP11-002 baseline, F-SP3-003 / F-SP1-002 history) | All 10 locations verified byte-exact at ARCH-02 target; no 11th frame.go/frame_test.go location found | EXACT |
+| ARCH-02 amendment target | ARCH-02 amendment entry present and correctly targets FrameTypePEConnect=0x06 | EXACT |
+
+#### Remediation Summary
+
+**Placement note v1.9 → v1.10:** ARCH-08 §6.5 amendment block extended with second edit obligation — parenthetical "frame is NOT imported directly by upstreamdial — Corrected per F-P1-001" replaced with binding positive claim acknowledging the reversal. Blast-radius count 10→11 (item 11: ARCH-08 §6.5 parenthetical); frame blast-radius stays 10 (frame.go/frame_test.go sweep unchanged). Pass-12 adjudicated-clean section added.
+
+**Story v1.11 → v1.12:** FCL row 1 blast-radius updated 10→11 (item 11 added: ARCH-08 §6.5 parenthetical). Task 3 updated with second edit obligation and binding replacement wording. Changelog row added. STORY-INDEX v4.51→v4.52.
+
+**Streak stays 0/3.** Single MED finding; fourth single-finding pass in five (decay tail: 5→2→1→2→3→1). Sprint-state v2.16→v2.17. Decay: 7→4→3→2→3→4→5→2→1→2→3→1.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-12 when authored).
