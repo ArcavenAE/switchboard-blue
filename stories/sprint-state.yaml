@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.14
+# version: 2.15
 # changelog:
+#   - version: 2.15
+#     date: 2026-07-10
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 10: HAS_FINDINGS — F-SP10-001 (MED [doc-drift], note Q4/Q5 bodies preserved superseded test-injection instructions with NO supersession annotation — v1.8 banners added matching Q1/Q2 pattern), F-SP10-002 (LOW [doc-drift], note frontmatter architecture_modules diverged from own rulings — frame+multipath added, arqsend dropped per Q9.4). STORY CLEAN this pass — both findings note-side; 30+ cold-eyes citations re-verified, zero rot. Remediated: note v1.7→v1.8 (architect, annotation-only); story v1.9→v1.10 + index v4.49→v4.50 (story-writer, metadata-only — note-version citations made structural per F-SP7-004 version-pin policy, class cannot recur). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2 (both pass-10 findings are historiography, zero contract defects). Next: spec pass 11 vs {story v1.10, note v1.8}."
 #   - version: 2.14
 #     date: 2026-07-10
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 9: HAS_FINDINGS — F-SP9-001 (MED [doc-drift], AC-001 integration-test descriptors carried pre-contract text: 'starts testenv PE router' at Test-names block + 'RouterHandle.Mode()==testenv.ModePE' at Estimated Test Surface — both swept to runRouter-pattern + three-observable semantics). All other axes CLEAN; only finding of the pass; every finding since pass 7 is residual-drift from earlier remediations, zero new ground-truth defects. Remediated story-side only: story v1.8→v1.9 + STORY-INDEX v4.48→v4.49 (note v1.7 unchanged). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1. Next: spec pass 10 vs {story v1.9, note v1.7}."
@@ -998,16 +1001,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.9"
+    story_version: "1.10"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.7"
-    spec_adversarial_pass: 9
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.8"
+    spec_adversarial_pass: 10
     spec_adversarial_streak: "0/3"
-    last_findings: "1 MED (F-SP9-001 AC-001 integration-test descriptors carried pre-contract text: 'starts testenv PE router' + 'RouterHandle.Mode()==testenv.ModePE' — swept to runRouter-pattern + three-observable semantics) — remediated story-side only (story v1.8→v1.9, index v4.48→v4.49; note v1.7 unchanged); only finding of pass; streak stays 0/3"
-    note: "awaiting spec adversarial pass 10 (story v1.9 + note v1.7, streak 0/3)"
+    last_findings: "1 MED (F-SP10-001 note Q4/Q5 superseded-section bodies lacked supersession banners — v1.8 banners added) + 1 LOW (F-SP10-002 note frontmatter architecture_modules diverged from own rulings — frame+multipath added, arqsend dropped); STORY CLEAN this pass (both findings note-side); 30+ citations re-verified zero rot; story v1.9→v1.10 metadata-only (note-version citation made structural per F-SP7-004); streak stays 0/3"
+    note: "awaiting spec adversarial pass 11 (story v1.10 + note v1.8, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

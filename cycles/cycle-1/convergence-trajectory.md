@@ -1948,3 +1948,57 @@ All other axes clean on the implementer-read sweep: Q8 OnFrameArrival wiring con
 **Story v1.8 → v1.9:** AC-001 Test-names block descriptor updated (F-SP9-001 — pre-contract testenv text replaced with runRouter-pattern + peWriteFixture injection + E-FWD-001 writer-output assertion). AC-001 Estimated Test Surface row updated (F-SP9-001 — Mode()-based establishment gate replaced with peWriteFixture.accepted + E-FWD-001 liveness observable per binding three-observable table). STORY-INDEX v4.48→v4.49.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-9 when authored).
+
+### Pass 10 Details (2026-07-10)
+
+**Story at review:** v1.9 | **Placement note at review:** v1.7
+
+**Verdict:** HAS_FINDINGS — 1 MED + 1 LOW. Both note-side historiography. STORY CLEAN this pass.
+
+**Method:** Reverse-traversal (note Q-sections read bottom-up, Q9→Q1) + note-with-v1.9-eyes strategy (reading note as if implementing story v1.9 from scratch, checking every instruction is still current).
+
+**Spec-Cycle Finding Progression (passes 1–10):**
+
+| Pass | Date | Verdict | HIGH | MED | LOW | Story | Note | Index |
+|------|------|---------|------|-----|-----|-------|------|-------|
+| 1 | 2026-07-08 | HAS_FINDINGS | 3 | 3 | 1 | v1.0→v1.1 | v1.0→v1.1 | v4.40→v4.41 |
+| 2 | 2026-07-08 | HAS_FINDINGS | 1 | 2 | 1 | v1.1→v1.2 | v1.1→v1.2 | v4.41→v4.42 |
+| 3 | 2026-07-09 | HAS_FINDINGS | 2 | 1 | 0 | v1.2→v1.3 | v1.2→v1.3 | v4.42→v4.43 |
+| 4 | 2026-07-09 | HAS_FINDINGS | 2 | 0 | 0 | v1.3→v1.4 | v1.3→v1.4 | v4.43→v4.44 |
+| 5 | 2026-07-09 | HAS_FINDINGS | 1 | 0 | 2 | v1.4→v1.5 | v1.4→v1.5 | v4.44→v4.45 |
+| 6 | 2026-07-09 | HAS_FINDINGS | 2 | 1 | 1 | v1.5→v1.6 | v1.5→v1.6 | v4.45→v4.46 |
+| 7 | 2026-07-09 | HAS_FINDINGS | 1 | 2 | 2 | v1.6→v1.7 | v1.6→v1.7 | v4.46→v4.47 |
+| 8 | 2026-07-09 | HAS_FINDINGS | 0 | 1 | 1 | v1.7→v1.8 | unchanged (v1.7) | v4.47→v4.48 |
+| 9 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 0 | v1.8→v1.9 | unchanged (v1.7) | v4.48→v4.49 |
+| 10 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 1 | v1.9→v1.10 (metadata) | v1.7→v1.8 | v4.49→v4.50 |
+
+**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2`
+
+#### Findings
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP10-001 | MED | doc-drift | Note Q4/Q5 bodies preserved superseded test-injection instructions with NO supersession annotation. Q4 (arqsend injection path) and Q5 (testenv.New harness path) were both superseded at pass 2 by Q9's ruling that AC-004 must use peWriteFixture injection directly to accepted PE conn — but Q4/Q5 carried zero annotation flagging the supersession, unlike Q1/Q2 which received v1.2 `[SUPERSEDED BY Q9]` banners. Cold-eyes reader implementing from Q4/Q5 would follow retracted instructions. | Note v1.7→v1.8: Q4/Q5 bodies each prepended with `> **[SUPERSEDED BY Q9 at pass 2]** …` banner matching Q1/Q2 pattern. Annotation-only; no ruling content changed. |
+| F-SP10-002 | LOW | doc-drift | Note frontmatter `architecture_modules` list diverged from note's own Q-rulings. `internal/arqsend` listed despite Q9.4 explicitly ruling arqsend out of scope (peWriteFixture path bypasses arqsend entirely). `internal/frame` and `internal/multipath` absent despite being in-scope per Q3 (frame.ReadOuterFrame) and implied by E-FWD-001 forward path. | Note v1.7→v1.8: frontmatter `architecture_modules` updated — `internal/arqsend` removed, `internal/frame` and `internal/multipath` added. |
+
+#### Non-Findings Adjudicated Clean (Pass 10)
+
+30+ citations re-verified via cold-eyes read. All story contract text clean — three-observable table, Q8 OnFrameArrival wiring, Q9 peWriteFixture injection topology, READ-error disposition (F-SP5-001 binding), SetFrameCallback ordering (F-SP4-002), FrameFn discard-and-continue (F-SP4-001), conn.Close() teardown (F-SP6-001), AC-004 E-FWD-001 precondition/postcondition, AC-005 lifecycle/doneCh, all FCL rows, Estimated Test Surface totals. Zero story contract defects.
+
+**First story-clean pass of the cycle** (passes 1–9 all had story-side findings; pass 10 both findings are note historiography only).
+
+**Third consecutive zero-HIGH pass** (passes 8/9/10 all zero HIGH).
+
+**Defect surface contraction signal:** passes 1–7 found ground-truth contract defects; passes 8–9 found story residual text incoherence; pass 10 finds only note historiography (sections superseded at passes 2/7 but never annotated). Surface is contracting toward the note's historical record layer.
+
+#### Remediation Summary
+
+**Note v1.7 → v1.8:** Q4/Q5 supersession banners added (F-SP10-001, annotation-only). Frontmatter architecture_modules reconciled (F-SP10-002, metadata-only). No ruling content changed.
+
+**Story v1.9 → v1.10:** Frontmatter `inputDocuments` entry for placement note updated from `v1.7` citation to `v1.8` citation (per F-SP7-004 version-pin policy — note-version citations in story frontmatter must be structural, not drift). Changelog row added. Metadata-only; no AC or contract text changed.
+
+**STORY-INDEX v4.49 → v4.50:** S-BL.PE-RECEIVE-LOOP row updated to story v1.10 + note v1.8.
+
+**Streak stays 0/3.** Both findings are note-side historiography (no story contract changes). Sprint-state v2.14→v2.15.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-10 when authored).
