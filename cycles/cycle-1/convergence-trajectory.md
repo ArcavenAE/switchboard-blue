@@ -1973,8 +1973,9 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-9 when 
 | 10 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 1 | v1.9→v1.10 (metadata) | v1.7→v1.8 | v4.49→v4.50 |
 | 11 | 2026-07-10 | HAS_FINDINGS | 1 | 0 | 2 | v1.10→v1.11 | v1.8→v1.9 | v4.50→v4.51 |
 | 12 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 0 | v1.11→v1.12 | v1.9→v1.10 | v4.51→v4.52 |
+| 13 | 2026-07-10 | HAS_FINDINGS | 0 | 1 | 0 | v1.12→v1.13 | v1.10→v1.11 | v4.52→v4.53 |
 
-**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2→3→1`
+**Trajectory shorthand:** `7→4→3→2→3→4→5→2→1→2→3→1→1`
 
 #### Findings
 
@@ -2086,3 +2087,42 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-11 when
 **Streak stays 0/3.** Single MED finding; fourth single-finding pass in five (decay tail: 5→2→1→2→3→1). Sprint-state v2.16→v2.17. Decay: 7→4→3→2→3→4→5→2→1→2→3→1.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-12 when authored).
+
+---
+
+### Pass 13 Details (2026-07-10)
+
+**Story at review:** v1.12 | **Placement note at review:** v1.10
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated.
+
+**Method:** End-state coherence read — every spec claim traced to either a production code path or a test obligation, verifying the full package reads coherently from the perspective of an implementer arriving for the first time.
+
+**Fix-one-instance-miss-the-siblings recurrence:** Pass 13 found the §6.6.2 sibling of F-SP12-001's §6.5 finding — both sections of ARCH-08 describe import-set constraints for `internal/upstreamdial`, and both carried the same stale "frame is NOT imported" claim. This is the third instance of the incomplete-sweep class in the spec cycle (after F-SP7-003 at pass 7 and F-SP10-001 at pass 10). Class-closure grep run after remediation: 4+4 hits across ARCH-08 §6.5 and §6.6.2 surfaces, all dispositioned; no further stale import-set claims remain. Orchestrator audit of the architect's transcript corrected an initial 3-hit undercount (line 316 `arqsend` was a benign substring match in a different context, not an ARCH-08 import-set claim).
+
+#### Finding
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP13-001 | MED | spec-completeness | ARCH-08 §6.6.2 permitted-importers section for `internal/upstreamdial` carried the same three stale import-set claims as §6.5: (1) parenthetical "frame is NOT imported directly by upstreamdial — Corrected per F-P1-001"; (2) absence of `internal/frame` from the permitted-importers list; (3) absence of the §6.5-style reversal annotation. F-SP12-001 added the second edit obligation to the §6.5 amendment block but did not sweep §6.6.2 — the fix-one-instance-miss-the-siblings pattern recurred. Blast-radius count advances 11→12 (item 12: ARCH-08 §6.6.2 import-set claim). | Note v1.10→v1.11: THIRD edit obligation added to the ARCH-08 amendment block — §6.6.2 permitted-importers section carries the same reversal annotation as §6.5; stale "NOT imported" parenthetical replaced with binding positive claim. Class-closure grep confirms 4+4 hits, all dispositioned; no further stale import-set targets. Orchestrator audit correction noted (+1 hit initially miscounted as 3). Story v1.12→v1.13: FCL row 1 blast-radius updated 11→12 (item 12 added: ARCH-08 §6.6.2 import-set claim). Task 3 updated with third edit obligation. STORY-INDEX v4.52→v4.53. |
+
+#### Non-Findings Adjudicated Clean (Pass 13 — realizability sweep + end-state coherence)
+
+| Item | Evidence | Verdict |
+|------|----------|---------|
+| ALL ~11 test recipes realizable | Full discharge-simulation sweep: ExitsOnReadError (complete-44-byte recipe), ExitsOnVersionMismatch, NoDuplicateSuppression, FlapCycleJoin — all physically realizable at 8eb54a5 | REALIZABLE |
+| AC-002 exhaustion deterministic | SetFrameCallback→Start ordering deterministic under runRouter goroutine model; no race | CLEAN |
+| AC-003 discard direction correct | FrameTypePEConnect discrimination routes to bootstrap path; FrameTypeData routes forward; no inversion | CLEAN |
+| AC-004 byte-contract pin valid+distinguishing | EncodeOuterHeader+append produces distinct crc32 values for frames with distinct SrcAddr; drop-cache miss guaranteed | CLEAN |
+| ARCH-02 single-row adequate | Single ARCH-02 amendment row for FrameTypePEConnect=0x06 covers all blast-radius frame.go+frame_test.go locations; no second row needed | CLEAN |
+| End-state coherence otherwise clean | All spec contracts mutually consistent across Q8/Q9/three-observable/READ-error/SetFrameCallback-ordering/FrameFn-discard axes | CLEAN |
+
+#### Remediation Summary
+
+**Placement note v1.10 → v1.11:** ARCH-08 §6.6.2 amendment block extended with third edit obligation — same binding reversal annotation as §6.5. Class-closure grep transcript included with orchestrator audit correction (+1 hit, line 316 arqsend benign substring dispositioned). Pass-13 adjudicated-clean section added.
+
+**Story v1.12 → v1.13:** FCL row 1 blast-radius updated 11→12 (item 12 added: ARCH-08 §6.6.2 import-set claim). Task 3 updated with third edit obligation. Changelog row added. STORY-INDEX v4.52→v4.53.
+
+**Streak stays 0/3.** Single MED finding; fifth consecutive pass with single-finding-or-fewer and zero HIGH since pass 11's latent. Sprint-state v2.17→v2.18. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-13 when authored).

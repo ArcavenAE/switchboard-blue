@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.10"
+version: "1.11"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -39,6 +39,7 @@ architecture_modules:
 | 1.8 | Remediate two spec-adversarial pass-10 findings (2026-07-10). F-SP10-001 (MED [doc-drift]) — Q4 and Q5 supersession banners added at the top of each section body; both were the only superseded sections lacking in-place annotation; amendment is annotation-only (no ruling content changed; Q9 and the corrected-observables block from F-SP7-001 already governed — this makes the supersession visible at point-of-read). F-SP10-002 (LOW [doc-drift]) — note frontmatter `architecture_modules` corrected: added `internal/frame` and `internal/multipath` (the modules Q2/Q3/Q8 centre on); dropped `internal/arqsend` (removed from the story's touch-list by Q9.4). Story v1.9 untouched. |
 | 1.9 | Remediate two spec-adversarial pass-11 findings (2026-07-10). F-SP11-001 (HIGH [spec-defect]) — Q2 AC-005 `TestConnector_ReceiveLoop_ExitsOnReadError` injection recipe replaced: the v1.5-era "single byte 0xFF as FrameType" recipe is physically unrealizable (io.ReadFull blocks on < 44 bytes) and mis-attributes the error (0xFF at byte[0] triggers ErrVersionMismatch, not ErrInvalidFrameType); corrected recipe mandates a complete 44-byte outer header with byte[0]=0x01 (valid version byte, VersionMajor=0, VersionByte=0x01, verified frame.go :21/:23), byte[1]=0x07 (out-of-range frame_type, one above FrameTypePEConnect=0x06 upper bound), PayloadLen=0x0000 at bytes[2:4] big-endian (verified frame.go EncodeOuterHeader :90), remaining bytes zero; conn NOT closed; io.ReadFull completes; ParseOuterHeader returns ErrInvalidFrameType at byte[1]; receive goroutine exits via read-error branch → conn.Close() → maintainConn write failure → reconnect. Optional variant (adjudicated: ADD as separate pin) for ErrVersionMismatch path: byte[0]=0xFF (major nibble 0xF ≠ VersionMajor 0) → ErrVersionMismatch → same exit contract; named `TestConnector_ReceiveLoop_ExitsOnVersionMismatch`. F-SP11-002 (LOW [token-budget]) — story-side, handled by story-writer; not touched in this note. F-SP11-003 (LOW [doc-drift]) — §8.2 dangling "see elaboration note below" clause struck; production interface-set population is out of scope for this story; §8.5 governs the test-scoped set. |
 | 1.10 | Remediate one spec-adversarial pass-12 finding (2026-07-10). F-SP12-001 (MED [spec-completeness]) — Q2 ARCH-08 obligation block extended with a second explicit edit obligation: in the same §6.5 row edit, the ARCH-08 row's parenthetical "frame is NOT imported directly; reachable transitively through outerassembler and halfchannel. Corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001." MUST be reconciled — the F-P1-001 correction was accurate for its time (no direct frame import existed then) and is now partially superseded by this story's legitimate direct edge; replacement wording specified in Q2. Import-set count reclassified: the ARCH-08 parenthetical is a distinct import-edge-prose location; blast-radius count extended from 10 to 11 (unified count). Pass-12 confirmations recorded in new adjudicated-clean section. |
+| 1.11 | Remediate one spec-adversarial pass-13 finding (2026-07-10). F-SP13-001 (MED [spec-completeness]) — §6.6.2 sibling of F-SP12-001: the §6.6.2 upstreamdial forbidden-edges bullet carries the same three stale import-set claims as the §6.5 parenthetical remediated in v1.10. Q2 ARCH-08 obligation extended with a THIRD edit target (§6.6.2 upstreamdial bullet, three sub-edits in the same commit as the §6.5 edits); binding replacement bullet text specified in Q2. Blast-radius count ruling amended: 11 → 12 (10 frame sweep + 2 ARCH-08 locations: §6.5 row parenthetical + §6.6.2 forbidden-edges bullet). Class-closure grep performed (patterns `"halfchannel, outerassembler"` and `"F-P1-001"`): 0 further occurrences beyond §6.5 (line 325) and §6.6.2 (lines 458–465) edit targets plus 2 changelog rows (history-preserved, not edited). Pass-13 confirmations recorded in new adjudicated-clean section; transcript corrected on audit: `"halfchannel, outerassembler"` has 4 hits (line 316 = `internal/arqsend` row, benign substring match on a different package's own import set — initially uncounted). |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -764,15 +765,82 @@ while accurately stating the post-story position. The PROSPECTIVE and
 pre-merge machine-verification qualifiers in the surrounding row text should
 be updated per the normal merge-time procedure.
 
-**Blast-radius count ruling (v1.10 — F-SP12-001):** The ARCH-08 parenthetical
-is a DISTINCT import-edge-prose location from the ten FrameTypePEConnect/Valid()
-sweep locations enumerated in Q3. It belongs under the §6.5 ARCH-08 obligation
-(Q2), not the frame.go/frame_test.go sweep (Q3). The total blast-radius count is
-therefore **11**: 10 FrameTypePEConnect/Valid() locations (Q3 table, unchanged)
-+ 1 ARCH-08 parenthetical (this Q2 obligation, added v1.10). The Q3 table's
-"10 locations" summary remains accurate for the FrameTypePEConnect sweep; the
-Summary-of-Rulings Q3 row "10 locations" count applies to that sweep only. The
-Q2 Summary-of-Rulings row is amended below to reference this 11th location. *(amended v1.10 — F-SP12-001)*
+**Blast-radius count ruling (v1.10 — F-SP12-001; amended v1.11 — F-SP13-001):**
+The ARCH-08 parenthetical is a DISTINCT import-edge-prose location from the ten
+FrameTypePEConnect/Valid() sweep locations enumerated in Q3. It belongs under the
+§6.5 ARCH-08 obligation (Q2), not the frame.go/frame_test.go sweep (Q3). The
+v1.10 ruling counted **11**: 10 FrameTypePEConnect/Valid() locations (Q3 table,
+unchanged) + 1 ARCH-08 §6.5 parenthetical. *(amended v1.11 — F-SP13-001:* the
+§6.6.2 forbidden-edges bullet is a SECOND ARCH-08 import-edge-prose location
+carrying identical stale claims; the total blast-radius count is therefore **12**:
+10 frame sweep + 2 ARCH-08 locations (§6.5 row parenthetical + §6.6.2
+forbidden-edges bullet). The Q3 table's "10 locations" summary remains accurate
+for the FrameTypePEConnect sweep; the Summary-of-Rulings Q3 row "10 locations"
+count applies to that sweep only. Both ARCH-08 edit targets (§6.5 and §6.6.2)
+MUST be made in the same commit as the frame-sweep edits.*)
+
+**§6.6.2 upstreamdial forbidden-edges bullet — ARCH-08 edit obligation (v1.11 — F-SP13-001, BINDING):**
+
+The §6.6.2 upstreamdial bullet (ARCH-08 lines 456–466 at `8eb54a5`) currently reads:
+
+> `internal/upstreamdial` MUST NOT import `internal/drain`, `internal/routing`,
+> `internal/testenv`, or any package at positions 20–23. Allowed imports are
+> `{halfchannel, outerassembler}` only (positions 5 and 8). Nothing may import
+> `internal/upstreamdial` except `cmd/switchboard`, `internal/testenv` (the _test-only
+> composition root at position 23), and `_test` files — it is an effectful leaf in
+> the connectivity layer. Cycle-freeness: all allowed imports (halfchannel pos 5,
+> outerassembler pos 8) are below position 19; no back-edges. `internal/testenv` at
+> position 23 importing upstreamdial at position 19 is lawful (23 > 19). (Per
+> placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement; import
+> set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001;
+> permitted-importers updated per adversary pass-7 F-P7-002.)
+
+This bullet carries the same three stale claims as the §6.5 parenthetical remediated in v1.10:
+(1) `"Allowed imports are {halfchannel, outerassembler} only (positions 5 and 8)"`;
+(2) cycle-freeness enumeration `"all allowed imports (halfchannel pos 5, outerassembler pos 8)"`;
+(3) F-P1-001 import-correction rationale.
+
+In the same commit that edits the §6.5 row, the implementer MUST also replace the
+§6.6.2 bullet with the following text (the three sub-edits are indicated inline):
+
+**Binding replacement bullet text (v1.11 — implementer edits mechanically from this):**
+
+> `internal/upstreamdial` MUST NOT import `internal/drain`, `internal/routing`,
+> `internal/testenv`, or any package at positions 20–23. Allowed imports are
+> `{frame, halfchannel, outerassembler}` only (positions 2, 5 and 8). Nothing may import
+> `internal/upstreamdial` except `cmd/switchboard`, `internal/testenv` (the _test-only
+> composition root at position 23), and `_test` files — it is an effectful leaf in
+> the connectivity layer. Cycle-freeness: all allowed imports (frame pos 2, halfchannel pos 5,
+> outerassembler pos 8) are below position 19; no back-edges. `internal/testenv` at
+> position 23 importing upstreamdial at position 19 is lawful (23 > 19). (Per
+> placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement; import
+> set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001
+> (no direct frame import existed then); frame direct import re-added by
+> S-BL.PE-RECEIVE-LOOP (frame.ReadOuterFrame + frame.FrameTypePEConnect in
+> connector.go); permitted-importers updated per adversary pass-7 F-P7-002.)
+
+The three sub-edits in detail:
+(a) `"Allowed imports are {halfchannel, outerassembler} only (positions 5 and 8)"` →
+    `"Allowed imports are {frame, halfchannel, outerassembler} only (positions 2, 5 and 8)"`;
+(b) `"all allowed imports (halfchannel pos 5, outerassembler pos 8) are below position 19; no back-edges"` →
+    `"all allowed imports (frame pos 2, halfchannel pos 5, outerassembler pos 8) are below position 19; no back-edges"`;
+(c) `"import set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001;"` →
+    `"import set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001 (no direct frame import existed then); frame direct import re-added by S-BL.PE-RECEIVE-LOOP (frame.ReadOuterFrame + frame.FrameTypePEConnect in connector.go);"` — the F-P7-002 clause (`"permitted-importers updated per adversary pass-7 F-P7-002."`) is PRESERVED UNTOUCHED at end.
+
+**Class-closure grep transcript (v1.11 — sweep-pattern discipline):**
+
+To verify no §6.6.3 sibling exists, the following patterns were grepped against
+`.factory/specs/architecture/ARCH-08-dependency-graph.md`:
+
+| Pattern | Hits | Lines | Disposition |
+|---------|------|-------|-------------|
+| `halfchannel, outerassembler` | 4 | 13, 316, 325, 458 | Line 13: changelog row v2.7 (history-preserved, not an edit target). Line 316: position-10 `internal/arqsend` row (`{arq, frame, halfchannel, outerassembler}`) — benign substring match on a different package's own import set; not an upstreamdial claim; no edit. *(initially uncounted; caught on orchestrator audit — same F-SP7-003 defect class)* Line 325: §6.5 table row (pass-12 edit target). Line 458: §6.6.2 bullet (pass-13 edit target — this amendment). |
+| `F-P1-001` | 4 | 13, 325, 465, 502 | Line 13: changelog row v2.7 (history-preserved). Line 325: §6.5 table row (pass-12 edit target). Line 465: §6.6.2 bullet (pass-13 edit target). Line 502: changelog body row v2.7 (history-preserved, not an edit target). |
+
+**Conclusion:** beyond the two edit targets (§6.5 line 325, §6.6.2 lines 456–466) and
+four changelog rows (lines 13, 502 — history-preserved, immutable), there are NO
+further occurrences of the stale import-set claim or the F-P1-001 rationale in ARCH-08.
+Pass-14 cannot find a §6.6.3 sibling.
 
 **Cite:** `internal/frame/frame.go` `ParseOuterHeader`, `EncodeOuterHeader` (verified at `8eb54a5`);
 `internal/netingress/netingress.go` `ReadFrame` — payload-only return, `hdrBuf` discarded (verified at `8eb54a5`);
@@ -2236,8 +2304,23 @@ The following pass-12 confirmations are recorded per the pass-12 report.
 
 | Item | Classification | Ruling |
 |------|----------------|--------|
-| F-SP12-001 — ARCH-08 §6.5 parenthetical contradiction (11th blast-radius location) | MED [spec-completeness] — REMEDIATED in Q2 above | Q2 ARCH-08 obligation extended with explicit second edit: parenthetical reconciliation wording specified verbatim; blast-radius count ruled 11 (unified: 10 Q3 frame sweep + 1 Q2 ARCH-08 parenthetical, separate enumeration kept under §6.5 obligation). |
+| F-SP12-001 — ARCH-08 §6.5 parenthetical contradiction (11th blast-radius location) | MED [spec-completeness] — REMEDIATED in Q2 above | Q2 ARCH-08 obligation extended with explicit second edit: parenthetical reconciliation wording specified verbatim; blast-radius count ruled 11 (unified: 10 Q3 frame sweep + 1 Q2 ARCH-08 parenthetical, separate enumeration kept under §6.5 obligation). *(count amended v1.11 — F-SP13-001: 11 → 12)* |
 | Both corrected recipes (ErrInvalidFrameType + ErrVersionMismatch) are realizable | Pass-12 confirmation | Confirmed: the 44-byte corrected recipe mandated in v1.9 (byte[0]=0x01, byte[1]=0x07, PayloadLen=0x0000, remaining bytes zero, conn held open) and the optional ErrVersionMismatch variant (byte[0]=0xFF, PayloadLen=0x0000, conn held open) are both physically realizable — io.ReadFull completes on a single 44-byte write, no timing gymnastics required. |
 | All four recipe copies byte-identical | Pass-12 confirmation | Confirmed: the corrected recipe appears in four locations in this note (Q2 pin-test shape, Q2 "BINDING corrected recipe" block, Q2 "Why the old recipe fails" clarification, Pass-11 adjudicated-clean table). All four are byte-identical on the wire-value spec (byte[0]=0x01, byte[1]=0x07, bytes[2:4]=0x00 0x00, bytes[4:44]=0x00). |
-| 10 frame blast-radius locations byte-exact in Q3 table | Pass-12 confirmation | Confirmed: all 10 locations in the Q3 blast-radius table are correctly enumerated and the required changes are precisely specified. The FrameTypePEConnect/Valid() sweep locations remain 10; the ARCH-08 parenthetical is a distinct 11th location under Q2, not a Q3 item. |
+| 10 frame blast-radius locations byte-exact in Q3 table | Pass-12 confirmation | Confirmed: all 10 locations in the Q3 blast-radius table are correctly enumerated and the required changes are precisely specified. The FrameTypePEConnect/Valid() sweep locations remain 10; the ARCH-08 parenthetical is a distinct 11th location under Q2, not a Q3 item. *(11th location count stands; 12th added by v1.11 — F-SP13-001)* |
 | ARCH-02 frame_type table amendment target exact | Pass-12 confirmation | Confirmed: ARCH-02 §"Outer Header Format" `frame_type` row amendment is correctly specified in Q3 ("add `pe_connect=0x06`") and the FCL row for ARCH-02 is accurate. No change to this obligation. |
+
+---
+
+## Pass-13 Adjudicated-Clean (non-findings and pass-13 confirmations, per adversarial pass-13 report)
+
+F-SP13-001 is the sole actionable finding from pass-13 and is remediated in Q2 above.
+The following pass-13 confirmations are recorded per the pass-13 report.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP13-001 — ARCH-08 §6.6.2 forbidden-edges bullet: §6.5 sibling with identical stale import-set claims (12th blast-radius location) | MED [spec-completeness] — REMEDIATED in Q2 above | Q2 ARCH-08 obligation extended with a third edit target: §6.6.2 upstreamdial forbidden-edges bullet, three sub-edits in same commit as §6.5 edits; binding replacement bullet text quoted verbatim (sub-edits (a) allowed-import set, (b) cycle-freeness enumeration, (c) F-P1-001 rationale with frame re-add note); F-P7-002 clause preserved untouched; blast-radius count updated 11 → 12; class-closure grep transcript recorded (0 further hits beyond the two edit targets and changelog rows). |
+| All ~11 test recipes realizable including AC-002 exhaustion, AC-003 discard, AC-004 byte-contract pin | Pass-13 confirmation | Confirmed: all test shapes specified in this note are physically realizable against the verified tree. AC-002 E-FWD-001 exhaustion: `peWriteFixture.WriteFrame` injects assembled `FrameTypeData` frame via accepted PE conn → receive goroutine → `OnFrameArrival` → split-horizon exhaustion with single-interface set → E-FWD-001. AC-003 discard: fixture writes `FrameTypePEConnect` frame → receive goroutine's discard branch fires → `OnFrameArrival` never called → E-FWD-001 never appears. AC-004 byte-contract pin (`TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader`): two frames with differing `Envelope.SrcAddr` both produce independent `crc32` keys → both reach `OnFrameArrival` independently → two E-FWD-001 emissions confirmed. |
+| ARCH-02 single-row amendment adequate | Pass-13 confirmation | Confirmed: ARCH-02 §"Outer Header Format" `frame_type` table row is the sole location in ARCH-02 requiring amendment; no other ARCH-02 section enumerates frame type constants by value in a way that would be stale. The single-row amendment obligation specified in Q3 is complete. |
+| §6.4 registration adequacy — no additional registration rows needed | Pass-13 confirmation | Confirmed: the §6.4 prospective-positions table in ARCH-08 registers packages before their first commit. The `internal/upstreamdial` package is already registered at position 19 (Wave 7, S-7.04-FU-PE-CONNECTOR). Adding a direct `frame` import edge to an already-registered package is a §6.5 amendment (allowed-import-set extension), not a new §6.4 registration. No new row in the §6.4 prospective table is required for this story. |
+| PROSPECTIVE and pre-merge machine-verification qualifiers — deferred to merge-time | Pass-13 confirmation | Confirmed per v1.10 ruling: the PROSPECTIVE marker on the §6.5 row and the "final machine-verification at merge" qualifier are updated by the implementer at merge time (when `cee8e8b` reference is replaced by the actual merge SHA). This story's placement note specifies the textual edits; the implementer strips the PROSPECTIVE qualifier after merging. No additional obligation in this note. |
