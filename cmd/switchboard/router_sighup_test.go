@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/config"
-	"github.com/arcavenae/switchboard/internal/testenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -142,8 +141,9 @@ func scanForReloadFailedLine(buf *syncBuffer, innerMarker string, budget time.Du
 }
 
 // modeELine returns the exact mode=E output line emitted by runRouter for
-// zero upstream_routers — derived from mgmt_wire.go:527/566 format strings
-// (527 startup emission, 566 reload emission).
+// zero upstream_routers — derived from the startup mode-emission in the
+// startup writer block and the mode=E branch inside the SIGHUP signal-loop
+// re-emission block (both inline in `runRouter` in mgmt_wire.go).
 // Pinning the full string (prefix + token) guards against partial-match
 // false-positives and format drift (F-SIGHUP-P4-001).
 func modeELine() string {
@@ -151,9 +151,11 @@ func modeELine() string {
 }
 
 // modePELine returns the exact mode=PE output line emitted by runRouter for
-// a given upstreamRouters slice — derived from mgmt_wire.go:529/564 format
-// string ("switchboard router: mode=PE upstream_routers=%v\n" where %v is
-// fmt.Sprintf("%v", addrs)).
+// a given upstreamRouters slice — derived from the startup mode-emission in
+// the startup writer block and the mode=PE branch inside the SIGHUP
+// signal-loop re-emission block (both inline in `runRouter` in mgmt_wire.go;
+// format: "switchboard router: mode=PE upstream_routers=%v\n"
+// where %v is fmt.Sprintf("%v", addrs)).
 // Pinning the full prefix + upstream_routers= token guards against partial-
 // match false-positives and format drift (F-SIGHUP-P4-001).
 func modePELine(addrs []string) string {
@@ -748,7 +750,8 @@ func isNetError(err error, dst *net.Error) bool {
 // (upstream_routers=[A]) downgrades to E mode when reloaded with a config
 // that has no upstream_routers.
 //
-// Pins mgmt_wire.go:562-564 behavior (adversary pass-1 F-005).
+// Pins the mode=E branch of the SIGHUP signal-loop re-emission block in
+// runRouter (mgmt_wire.go) behavior (adversary pass-1 F-005).
 func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -845,7 +848,9 @@ func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 // upstream_routers=[A] transitions to PE mode with [B] when reloaded with a
 // config that replaces [A] with [B].
 //
-// Pins mgmt_wire.go:560-561 behavior (adversary pass-1 F-005).
+// Pins the equalStringSlices diff-guard and mode=PE re-emission branch of
+// the SIGHUP signal-loop block in runRouter (mgmt_wire.go) behavior
+// (adversary pass-1 F-005).
 func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -937,7 +942,8 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 // diff-guard (equalStringSlices in mgmt_wire.go) suppresses duplicate mode=
 // emission when a second SIGHUP is sent with an unchanged config.
 //
-// Pins mgmt_wire.go:560 behavior (adversary pass-3 F-P3-005a).
+// Pins the equalStringSlices diff-guard in the SIGHUP signal-loop block
+// in runRouter (mgmt_wire.go) behavior (adversary pass-3 F-P3-005a).
 func TestRunRouter_SIGHUPReload_IdempotentResend(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -1140,11 +1146,10 @@ func TestRunRouter_SIGHUPReload_InvalidUpstreamAddr_FailClosed(t *testing.T) {
 }
 
 // TestRunRouter_VP038_EtoPEViaConfigOnly verifies VP-038: the router graduates
-// from E to PE mode via in-process sighupCh injection using a
-// testenv.RouterHandle, without process restart.
+// from E to PE mode via in-process sighupCh injection, without process restart.
 //
-// RED GATE: fails because (a) the reload logic is a no-op stub so Mode() never
-// transitions to ModePE, and (b) the mode=PE line is never emitted.
+// AC-006 migration: SetSighupCh/SendReloadSignal seam retired; rawSighupCh is
+// now driven directly (the same pattern used by all other SIGHUP tests).
 func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -1180,31 +1185,21 @@ func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 		}
 	})
 
-	// Construct a RouterHandle wired to the real sighupCh so that
-	// SendReloadSignal drives the same channel runRouter selects on.
-	ctx := context.Background()
-	env := testenv.New(t, ctx)
-	handle := env.StartRouter(t, testenv.RouterConfig{})
-	// Wire the sighupCh onto the handle for the signal-path assertion.
-	handle.SetSighupCh(rawSighupCh)
-
 	// Precondition: E mode startup.
 	if !scanForLine(buf, "mode=E", 2*time.Second) {
 		t.Fatalf("VP-038 precondition: startup did not emit mode=E within 2s; got:\n%s", buf.String())
 	}
 
-	// Drive reload via the testenv seam.
-	handle.SendReloadSignal(t)
+	// Drive reload directly via the injected sighupCh (AC-006 migration:
+	// SetSighupCh/SendReloadSignal seam retired; rawSighupCh used directly).
+	rawSighupCh <- syscall.SIGHUP
 
 	// AC-004 postcondition 1+2: mode=PE emitted without process restart.
-	// scanForLine carries the postcondition — the observed emission on the
-	// real runRouter output buffer IS the authoritative mode assertion.
-	// handle.Mode() is NOT asserted here: Restart() unconditionally sets
-	// r.mode=ModePE regardless of the real runRouter state (the stub handle
-	// is disconnected from the goroutine), making it a tautological check
-	// that cannot fail (adversary pass-1 F-002).
+	// The emission scan is the authoritative observable for this test since
+	// the runRouter goroutine is started externally; RouterHandle.Mode() is
+	// used only for in-process testenv rig scenarios (TestE2E_EtoPEGraduationByConfigChange).
 	if !scanForLine(buf, "mode=PE", 2*time.Second) {
-		t.Errorf("VP-038/AC-004: after SendReloadSignal, output missing mode=PE line within 2s; got:\n%s", buf.String())
+		t.Errorf("VP-038/AC-004: after SIGHUP, output missing mode=PE line within 2s; got:\n%s", buf.String())
 	}
 
 	// AC-004 postcondition 3: goroutine has not returned.

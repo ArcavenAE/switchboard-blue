@@ -40,9 +40,11 @@ import (
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/mgmt"
 	"github.com/arcavenae/switchboard/internal/netingress"
+	"github.com/arcavenae/switchboard/internal/outerassembler"
 	"github.com/arcavenae/switchboard/internal/routing"
 	"github.com/arcavenae/switchboard/internal/session"
 	"github.com/arcavenae/switchboard/internal/svtnmgmt"
+	"github.com/arcavenae/switchboard/internal/upstreamdial"
 )
 
 // umaskMu serialises the umask-critical bind(2) syscall in listenUnixMgmt.
@@ -348,6 +350,9 @@ func startMgmtServer(
 	return serveMgmtServer(ctx, wg, srv), nil
 }
 
+// Compile-time check: *upstreamdial.Connector satisfies Handle.
+var _ upstreamdial.Handle = (*upstreamdial.Connector)(nil)
+
 // runRouter is the router-mode daemon entry point (S-BL.ROUTER-RUNTIME).
 //
 // It generates an ephemeral Ed25519 keypair, starts the management server
@@ -382,24 +387,27 @@ func startMgmtServer(
 //   - drain_timeout      → drainTimeoutFor(cfg) drives the drain coordinator
 //     (BC-2.09.003 PC-7; drain.New; shutdown-time Signal/Wait)
 //   - keepalive_interval → keepaliveIntervalFor(cfg) resolves and is emitted
-//     at the observability seam; the reconnect-side keepalive ticker itself
-//     ships when node-connection plumbing lands (BC-2.09.003 PC-8; FM-009).
+//     at the observability seam; the reconnect-side keepalive ticker ships in
+//     this story inside upstreamdial.Connector (dialLoop's keepaliveTick /
+//     maintainConn; BC-2.09.003 PC-8; FM-009).
 //     MUST NOT be routed into sweepDeadline (console eviction — different
 //     semantic; BC-2.09.003 PC-8 normative note).
 //   - upstream_routers   → upstreamRoutersFor(cfg) resolves and is emitted
 //     at the observability seam; a non-empty list signals PE-mode graduation
 //     eligibility (BC-2.09.001 PC-1). Live upstream connection establishment
-//     ships once the outer-header session-bootstrap protocol lands.
+//     ships in this story via upstreamdial.New/Start (dial loop +
+//     outerassembler.Envelope session bootstrap).
 //
 // #SHIPPED — SIGHUP config reload (BC-2.09.001 PC-1 / S-7.04-FU-SIGHUP-RELOAD)
-// is implemented in the select loop below (~line 537).
+// is implemented in the select loop below.
+// #SHIPPED — PE-mode upstream connector (S-7.04-FU-PE-CONNECTOR): constructed
+// via upstreamdial.New, started below, address list reloaded on SIGHUP via
+// ReloadAddrs, stopped at graceful shutdown.
 //
 // #DEFERRED — live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
-// S-7.04-FU-DRAIN-WIRE) and the actual PE-mode upstream connector
-// (S-7.04-FU-PE-CONNECTOR) still ship in a follow-on story once admission
-// plumbing and node-facing SVTN channels are wired. The drain coordinator
-// seam and the three DEFERRED-APPLICATION closures are in place; the wire
-// protocol connects to them without further daemon-level refactor.
+// S-7.04-FU-DRAIN-WIRE) still ships in a follow-on story once node-facing
+// SVTN channels are wired. The drain coordinator seam is in place; the wire
+// protocol connects to it without further daemon-level refactor.
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
@@ -506,6 +514,17 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		drainCoordHook(drainCoord)
 	}
 
+	// Construct and start the PE outbound dial loop (BC-2.09.001 PC-2/PC-3,
+	// S-7.04-FU-PE-CONNECTOR).  The Connector owns all dial goroutines,
+	// per-address backoff timers, and keepalive ticker (Q2, Q3, Q7).
+	// It is stopped in the shutdown path below.
+	// Envelope carries zero node-identity fields: the full bootstrap (SrcAddr/DstAddr
+	// derived from Ed25519 key material) is deferred to the session-bootstrap story.
+	// The three-step "connection established" definition (Q6) is satisfied by
+	// TCP dial + Assemble (zero env is valid) + Write returning nil.
+	connector := upstreamdial.New(w, outerassembler.Envelope{}, keepaliveInterval, upstreamRouters)
+	connector.Start()
+
 	// Log resolved listen address + mgmt socket path.
 	// The writer is os.Stderr in production (main.go); the tutorial doc says
 	// "stdout" — this is a known documentation drift called out in the PR body.
@@ -516,9 +535,9 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// operators can confirm the resolved value (config or default).
 		_, _ = fmt.Fprintf(w, "switchboard router: drain_timeout=%s\n", drainCoord.Timeout())
 		// BC-2.09.003 PC-8 application: keepalive_interval emitted at startup.
-		// The reconnect-side keepalive ticker itself ships with the node
-		// protocol; the resolved value is captured here so the config-to-
-		// application flow is auditable.
+		// The reconnect-side keepalive ticker ships in this story inside
+		// upstreamdial.Connector; the resolved value is captured here so the
+		// config-to-application flow is auditable.
 		_, _ = fmt.Fprintf(w, "switchboard router: keepalive_interval=%s\n", keepaliveInterval)
 		// BC-2.09.003 PC-9 / BC-2.09.001 PC-1 application: upstream_routers
 		// emitted at startup. Empty list = E mode; non-empty list = PE-mode
@@ -557,6 +576,10 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 				continue
 			}
 			newUpstreams := upstreamRoutersFor(loaded)
+			// Pass updated address list to connector using set-equal semantics (Q1, AC-001).
+			// The emission diff stays order-sensitive (equalStringSlices unchanged per Q1 ruling);
+			// the connector reconciliation is set-equal internally (Q1 lawful difference).
+			connector.ReloadAddrs(newUpstreams)
 			if !equalStringSlices(upstreamRouters, newUpstreams) {
 				upstreamRouters = newUpstreams
 				if w != nil {
@@ -581,6 +604,10 @@ shutdown:
 	//   4. Shut down mgmt with a budget derived from the same drain window
 	//      (previously hardcoded 5s — now driven by cfg.DrainTimeout so
 	//      operators have a single lever for shutdown budget tuning).
+	// Stop the PE connector first so dial goroutines exit before we
+	// shut down the ingress listener (AC-001 Q2 lifecycle contract).
+	connector.Stop()
+
 	drainCtx, drainCtxCancel := context.WithTimeout(context.Background(), drainCoord.Timeout())
 	drainCoord.Signal(drainCtx)
 	if derr := drainCoord.Wait(drainCtx); derr != nil {

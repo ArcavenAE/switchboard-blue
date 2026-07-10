@@ -34,7 +34,7 @@ func TestE2E_EtoPE_GraduationByConfigChange(t *testing.T) {
 	t.Cleanup(cancel)
 
 	// Start a PE (upstream) router that the E router will connect to.
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	peAddr := env.PERouterAddr(t)

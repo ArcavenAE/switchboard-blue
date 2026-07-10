@@ -36,7 +36,7 @@ func TestE2E_SVTN_Isolation_NoCrossSVTNDelivery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	env := testenv.New(t, ctx)
+	env := testenv.New(ctx, t)
 	t.Cleanup(env.Close)
 
 	svtnA := env.CreateSVTN(t, "svtn-a")

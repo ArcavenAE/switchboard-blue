@@ -1,5 +1,5 @@
 // Package testenv provides an in-process multi-daemon test rig for
-// switchboard integration tests (ARCH-08 position 22 — top of DAG,
+// switchboard integration tests (ARCH-08 position 23 — top of DAG,
 // test-helper composition root; imported only by _test.go files).
 //
 // Classification: test helper (ARCH-09).  This package may import any
@@ -9,7 +9,7 @@
 //
 //	VP-031, VP-032, VP-040, VP-046.
 //
-// Allowed internal imports: all — position 22 (top composition root).
+// Allowed internal imports: all — position 23 (top composition root).
 //
 // # SVTN isolation design
 //
@@ -28,17 +28,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
+	"net"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/drain"
 	"github.com/arcavenae/switchboard/internal/frame"
+	"github.com/arcavenae/switchboard/internal/outerassembler"
 	"github.com/arcavenae/switchboard/internal/session"
+	"github.com/arcavenae/switchboard/internal/upstreamdial"
 )
 
 // SessionID is an opaque session identifier within a test environment.
@@ -251,15 +252,27 @@ type RouterHandle struct {
 	svtnID SVTNID
 	mode   RouterMode
 
-	// sighupCh is the write side of the SIGHUP injection channel passed to
-	// the underlying runRouter call.  Set at construction by the test helper
-	// that starts the real runRouter goroutine (AC-004 / VP-038 seam).
-	// nil when the RouterHandle is a lightweight in-process stub (StartRouter).
-	sighupCh chan<- os.Signal
+	// connector is the construction-time PE connector handle wired at StartRouter
+	// time or via SetConnector (S-7.04-FU-PE-CONNECTOR AC-006).  When non-nil,
+	// Mode() delegates to connector.Mode() (mapped from upstreamdial.ConnMode to
+	// RouterMode) rather than reading the stub r.mode field.
+	connector upstreamdial.Handle
 }
 
 // Mode returns the current operating mode of the router (E or PE).
+// When a connector handle has been wired (via SetConnector or construction-time
+// seam), Mode() delegates to connector.Mode() mapped from upstreamdial.ConnMode
+// to RouterMode (AC-006: Mode() reflects live connection state, not stub r.mode).
 func (r *RouterHandle) Mode() RouterMode {
+	r.mu.RLock()
+	conn := r.connector
+	r.mu.RUnlock()
+	if conn != nil {
+		if conn.Mode() == upstreamdial.ModePE {
+			return ModePE
+		}
+		return ModeE
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.mode
@@ -273,69 +286,78 @@ func (r *RouterHandle) SVTNID() SVTNID {
 }
 
 // Restart reconfigures the router to the new config in place.
-// If cfg.UpstreamRouters is non-empty the router enters PE mode; otherwise E.
+// If cfg.UpstreamRouters is non-empty the router enters PE mode via a live
+// Connector that dials the configured addresses (AC-006: replaces stub r.mode
+// assignment with real connection state tracking for VP-038 behavioral contract).
+//
+// Restart ALWAYS tears down any existing connector (Stop, never ReloadAddrs
+// reuse — address-list reuse via ReloadAddrs belongs to the production SIGHUP
+// seam in runRouter, not to this test-harness full restart).  When the new
+// config has upstreams, a fresh Connector is built via upstreamdial.New,
+// started, and polled up to 3s for connector.Mode()==ModePE so callers see
+// live connection state.  When upstreams is empty, Restart returns immediately
+// after teardown; mode stays E, no poll.
 func (r *RouterHandle) Restart(t testing.TB, cfg RouterConfig) {
 	t.Helper()
 	r.mu.Lock()
-	defer r.mu.Unlock()
+
+	oldConn := r.connector
+	r.connector = nil
 	r.cfg = cfg
+
 	if len(cfg.UpstreamRouters) > 0 {
 		r.mode = ModePE
 	} else {
 		r.mode = ModeE
 	}
+	r.mu.Unlock()
+
+	if oldConn != nil {
+		oldConn.Stop()
+	}
+
+	if len(cfg.UpstreamRouters) == 0 {
+		return
+	}
+
+	// Create a new Connector for the updated address list.
+	// Zero envelope: full bootstrap identity deferred per Q6.
+	conn := upstreamdial.New(nil, outerassembler.Envelope{}, 100*time.Millisecond, cfg.UpstreamRouters)
+	conn.Start()
+
+	r.mu.Lock()
+	r.connector = conn
+	r.mu.Unlock()
+
+	// Register cleanup so the connector stops when the test ends.
+	t.Cleanup(conn.Stop)
+
+	// Poll until at least one upstream is connected (VP-038 activation).
+	// Timeout of 3s: real listeners connect quickly; stub/unreachable addrs
+	// exhaust the timeout, but the connector stays wired (r.connector=conn,
+	// set above).  connectedCount==0 → conn.Mode()==ModeE → Mode() returns
+	// ModeE via connector delegation — it does NOT fall back to r.mode (which
+	// was set to ModePE above and is unreachable while a connector is wired).
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if conn.Mode() == upstreamdial.ModePE {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
-// SetSighupCh wires the write end of a SIGHUP injection channel onto the
-// RouterHandle so that SendReloadSignal drives the channel that the
-// underlying runRouter goroutine selects on.  Call this after StartRouter
-// and before SendReloadSignal.
+// SetConnector wires the construction-time PE connector handle onto the
+// RouterHandle.  Called by the test helper that starts the real runRouter
+// goroutine (AC-006 seam, S-7.04-FU-PE-CONNECTOR).
 //
-// Transitional seam: this method retrofits the signal channel post-hoc onto
-// a RouterHandle returned by StartRouter, which is a lightweight stub
-// disconnected from the real runRouter goroutine.  The handle forwards signals
-// to an externally-started runRouter and does NOT track its state.
-// Construction-time wiring and real state tracking land with the
-// PE-CONNECTOR-era testenv integration (S-7.04-FU-PE-CONNECTOR).
-//
-// Required by: AC-004, VP-038.
-func (r *RouterHandle) SetSighupCh(ch chan<- os.Signal) {
+// After SetConnector is called, Mode() delegates to connector.Mode(), mapping
+// upstreamdial.ConnMode to RouterMode (AC-006: Mode() reflects live connection
+// state from the Connector).
+func (r *RouterHandle) SetConnector(h upstreamdial.Handle) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.sighupCh = ch
-}
-
-// SendReloadSignal sends syscall.SIGHUP on the router's injected sighupCh,
-// driving the in-process reload seam without issuing a real OS signal.
-// Callers must write the desired config to the appropriate path before calling
-// this helper; the channel carries only the signal, not a path.
-//
-// Precondition: the RouterHandle must have been constructed with a live
-// sighupCh (i.e. via the AC-004 test helper, not StartRouter).  Calling on
-// a nil sighupCh fatals the test.
-//
-// Transitional seam: this handle forwards signals to an externally-started
-// runRouter goroutine and does NOT track its state.  Construction-time wiring
-// and real state tracking land with the PE-CONNECTOR-era testenv integration
-// (S-7.04-FU-PE-CONNECTOR).
-//
-// The channel send is performed outside r.mu to prevent deadlock if the
-// receiver goroutine is also trying to acquire r.mu.
-//
-// Required by: VP-038, AC-004.
-func (r *RouterHandle) SendReloadSignal(t testing.TB) {
-	t.Helper()
-	// Read sighupCh under the lock to avoid a data race with SetSighupCh
-	// (F-P2-005: sighupCh field is guarded by r.mu like all other fields).
-	// The channel send MUST happen outside the lock to prevent deadlock
-	// if the receiver goroutine is also trying to acquire r.mu.
-	r.mu.RLock()
-	ch := r.sighupCh
-	r.mu.RUnlock()
-	if ch == nil {
-		t.Fatal("RouterHandle.SendReloadSignal: sighupCh is nil — handle was not constructed with the AC-004 reload seam")
-	}
-	ch <- syscall.SIGHUP
+	r.connector = h
 }
 
 // LoopbackConfig configures a NewLoopback environment (VP-042 / S-BL.BENCH).
@@ -358,9 +380,9 @@ type LoopbackEnv struct {
 // halfchannel paths.
 //
 // Required by: VP-042 (S-BL.BENCH).
-func NewLoopback(b testing.TB, ctx context.Context, cfg LoopbackConfig) *LoopbackEnv {
+func NewLoopback(ctx context.Context, b testing.TB, cfg LoopbackConfig) *LoopbackEnv {
 	b.Helper()
-	env := newEnv(b, ctx, 1)
+	env := newEnv(ctx, b, 1)
 	return &LoopbackEnv{Env: env}
 }
 
@@ -418,30 +440,57 @@ type Env struct {
 // The environment is torn down when t.Cleanup fires or Close() is called.
 //
 // Required by: VP-033, VP-034, VP-036, VP-038, VP-039, VP-046.
-func New(t testing.TB, ctx context.Context) *Env {
+func New(ctx context.Context, t testing.TB) *Env {
 	t.Helper()
-	return newEnv(t, ctx, 1)
+	return newEnv(ctx, t, 1)
 }
 
 // NewWithRouters creates an in-process switchboard environment with n routers
 // in a multi-hop topology suitable for drain/failover/multipath tests.
 //
 // Required by: VP-037, VP-040.
-func NewWithRouters(t testing.TB, ctx context.Context, n int) *Env {
+func NewWithRouters(ctx context.Context, t testing.TB, n int) *Env {
 	t.Helper()
 	if n < 1 {
 		t.Fatalf("testenv.NewWithRouters: n must be >= 1, got %d", n)
 	}
-	return newEnv(t, ctx, n)
+	return newEnv(ctx, t, n)
 }
 
-func newEnv(t testing.TB, ctx context.Context, nRouters int) *Env {
+func newEnv(ctx context.Context, t testing.TB, nRouters int) *Env {
 	t.Helper()
 
 	routerPub, routerPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("testenv: generate router keypair: %v", err)
 	}
+
+	// Start a PE-router fixture listener on a dynamic port so that
+	// PERouterAddr() returns a reachable address for VP-038 / AC-006 tests.
+	// The listener accepts and drains connections; it is closed on test cleanup.
+	peLn, peErr := net.Listen("tcp", "127.0.0.1:0")
+	if peErr != nil {
+		t.Fatalf("testenv: start PE fixture listener: %v", peErr)
+	}
+	t.Cleanup(func() { _ = peLn.Close() })
+	go func() {
+		for {
+			conn, err := peLn.Accept()
+			if err != nil {
+				return
+			}
+			// Drain and close: we just need the connection to be accepted.
+			go func(c net.Conn) {
+				buf := make([]byte, 4096)
+				for {
+					if _, err := c.Read(buf); err != nil {
+						_ = c.Close()
+						return
+					}
+				}
+			}(conn)
+		}
+	}()
 
 	e := &Env{
 		t:            t,
@@ -458,7 +507,7 @@ func newEnv(t testing.TB, ctx context.Context, nRouters int) *Env {
 		keyExpiries:  make(map[string]time.Time),
 		keyPrivates:  make(map[string]ed25519.PrivateKey),
 		closeCh:      make(chan struct{}),
-		peRouterAddr: "127.0.0.1:9999",
+		peRouterAddr: peLn.Addr().String(),
 	}
 
 	// Create default SVTN shard.
