@@ -39,6 +39,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/drain"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/mgmt"
+	"github.com/arcavenae/switchboard/internal/multipath"
 	"github.com/arcavenae/switchboard/internal/netingress"
 	"github.com/arcavenae/switchboard/internal/outerassembler"
 	"github.com/arcavenae/switchboard/internal/routing"
@@ -514,6 +515,24 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		drainCoordHook(drainCoord)
 	}
 
+	// Construct the FrameArrivalHandler for the PE receive path (AC-002 / Q8).
+	// DropCache and FrameArrivalHandler are constructed here, after Phase (b),
+	// so routerLogger is available for WithFrameArrivalLogger. The interfaceSet
+	// for each PE connection is a single-element set containing peIfaceID; this
+	// guarantees split-horizon always exhausts (E-FWD-001 fires deterministically)
+	// because the arrival interface is the only forwarding candidate (Q8 ruling).
+	// SEC follow-on: the PE receive path bypasses RouteFrame's HMAC admission
+	// check — PE upstream connections are established outbound by the connector
+	// itself (bootstrap handshake via dialLoop), not arbitrary ingress; admission
+	// on PE receive is revisited in the DRAIN-WIRE/session-bootstrap era per Q8.
+	dc := multipath.NewDropCache(multipath.DefaultDropCacheSize)
+	arrivalHandler := routing.NewFrameArrivalHandler(dc)
+	routing.WithFrameArrivalLogger(routerLogger)(arrivalHandler)
+	// peIfaceID is the logical interface ID for the PE upstream receive path.
+	// Production population of the full interface set is out of scope for this
+	// story (F-SP11-003); a single-element set is deliberate here.
+	peIfaceID := routing.InterfaceID(1)
+
 	// Construct and start the PE outbound dial loop (BC-2.09.001 PC-2/PC-3,
 	// S-7.04-FU-PE-CONNECTOR).  The Connector owns all dial goroutines,
 	// per-address backoff timers, and keepalive ticker (Q2, Q3, Q7).
@@ -523,6 +542,13 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// The three-step "connection established" definition (Q6) is satisfied by
 	// TCP dial + Assemble (zero env is valid) + Write returning nil.
 	connector := upstreamdial.New(w, outerassembler.Envelope{}, keepaliveInterval, upstreamRouters)
+	// SetFrameCallback MUST be called before Start() — set-once pre-launch
+	// per the ordering contract (F-SP4-002). The FrameFn closure routes received
+	// frames through arrivalHandler.OnFrameArrival with the single-interface set
+	// that guarantees split-horizon exhaustion (Q8 ruling).
+	connector.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error {
+		return arrivalHandler.OnFrameArrival(raw, peIfaceID, []routing.InterfaceID{peIfaceID}, nil)
+	})
 	connector.Start()
 
 	// Log resolved listen address + mgmt socket path.

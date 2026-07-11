@@ -498,7 +498,7 @@ func FuzzEncodeParseRoundTrip(f *testing.F) {
 }
 
 // TestFrameType_Valid asserts FrameType.Valid() returns true exactly for the
-// five canonical enum values (ARCH-02 §3.1) and false otherwise.
+// six canonical enum values (ARCH-02 §3.1) and false otherwise.
 //
 // Red Gate: references frame.FrameType (named type) and (FrameType).Valid()
 // which do not exist until the implementer's commit lands.
@@ -514,8 +514,9 @@ func TestFrameType_Valid(t *testing.T) {
 		{"ctl", frame.FrameTypeCtl, true},
 		{"arq", frame.FrameTypeArq, true},
 		{"fec", frame.FrameTypeFec, true},
+		{"pe_connect", frame.FrameTypePEConnect, true},
 		{"zero", frame.FrameType(0x00), false},
-		{"just_above_max", frame.FrameType(0x06), false},
+		{"just_above_max", frame.FrameType(0x07), false},
 		{"max_byte", frame.FrameType(0xFF), false},
 	}
 	for _, tc := range cases {
@@ -537,8 +538,8 @@ func TestFrameType_Valid(t *testing.T) {
 // the implementer's commit lands.
 func TestParseOuterHeader_RejectsInvalidFrameType(t *testing.T) {
 	t.Parallel()
-	// Bytes not in {0x01..0x05}: the canonical five enum values.
-	invalids := []byte{0x00, 0x06, 0x77, 0xFF}
+	// Bytes not in {0x01..0x06}: the canonical six enum values.
+	invalids := []byte{0x00, 0x07, 0x77, 0xFF}
 	for _, b := range invalids {
 		b := b
 		t.Run(fmt.Sprintf("frame_type=%#x", b), func(t *testing.T) {
@@ -557,7 +558,7 @@ func TestParseOuterHeader_RejectsInvalidFrameType(t *testing.T) {
 	}
 }
 
-// TestParseOuterHeader_AcceptsAllValidFrameTypes asserts that all five
+// TestParseOuterHeader_AcceptsAllValidFrameTypes asserts that all six
 // canonical FrameType values pass ParseOuterHeader's enum validation.
 // This is a regression guard against an over-strict validator.
 //
@@ -571,6 +572,7 @@ func TestParseOuterHeader_AcceptsAllValidFrameTypes(t *testing.T) {
 		frame.FrameTypeCtl,
 		frame.FrameTypeArq,
 		frame.FrameTypeFec,
+		frame.FrameTypePEConnect,
 	}
 	for _, ft := range valid {
 		ft := ft
@@ -587,6 +589,25 @@ func TestParseOuterHeader_AcceptsAllValidFrameTypes(t *testing.T) {
 				t.Errorf("hdr.FrameType = %#x, want %#x", byte(hdr.FrameType), byte(ft))
 			}
 		})
+	}
+}
+
+// TestFrameType_Valid_PEConnect asserts that FrameTypePEConnect.Valid() returns
+// true (0x06 is now a canonical enum value) and that FrameType(0x07).Valid()
+// returns false (the upper bound is not over-widened). (S-BL.PE-RECEIVE-LOOP AC-003)
+//
+// This test will PASS immediately against the stub (FrameTypePEConnect and the
+// widened Valid() are already defined in the stub commit) — that is expected and
+// correct per the RED gate rule: valid-constant tests pass at RED; behavioral
+// tests that require the receive goroutine fail at RED.
+func TestFrameType_Valid_PEConnect(t *testing.T) {
+	t.Parallel()
+
+	if !frame.FrameTypePEConnect.Valid() {
+		t.Errorf("FrameTypePEConnect.Valid() = false, want true (0x06 must be canonical after S-BL.PE-RECEIVE-LOOP)")
+	}
+	if frame.FrameType(0x07).Valid() {
+		t.Errorf("FrameType(0x07).Valid() = true, want false (upper bound must not be over-widened beyond 0x06)")
 	}
 }
 

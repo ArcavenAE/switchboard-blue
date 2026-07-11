@@ -8,7 +8,7 @@
 // arrive via a buffered chan []string (channel-passed snapshot per Q3 ruling).
 //
 // DAG position: 19 (effectful — network I/O).
-// Allowed internal imports: {halfchannel, outerassembler}.
+// Allowed internal imports: {frame, halfchannel, outerassembler}.
 // Forbidden: drain, routing, testenv, and any package at positions 20–23.
 package upstreamdial
 
@@ -22,9 +22,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/outerassembler"
 )
+
+// FrameFn is the callback type for frames received from a PE upstream connection.
+// raw is the full wire frame (outer header + payload). A non-nil error return
+// from FrameFn MUST NOT terminate the receive loop (discard-and-continue
+// semantics — mirrors netingress.RouteFn). (new — S-BL.PE-RECEIVE-LOOP)
+type FrameFn func(hdr frame.OuterHeader, raw []byte) error
 
 // Backoff parameters for per-address reconnect (Q5 ruling, AC-002).
 // Base=500ms, Cap=30s, Jitter ±25% per-attempt.
@@ -111,6 +118,13 @@ type Connector struct {
 
 	// initialAddrs is the address list from New, consumed by Start.
 	initialAddrs []string
+
+	// frameFn is the callback for frames received on PE upstream connections.
+	// Set once before Start() via SetFrameCallback; never mutated after Start().
+	// The goroutine-creation happens-before guarantee makes it visible to all
+	// goroutines launched by Start() without additional synchronization.
+	// (new — S-BL.PE-RECEIVE-LOOP)
+	frameFn FrameFn
 }
 
 // New constructs a Connector with the given parameters and returns a *Connector
@@ -199,6 +213,20 @@ func (c *Connector) Stop() {
 		close(c.stopCh)
 	})
 	<-c.doneCh
+}
+
+// SetFrameCallback registers the callback invoked for each frame received on a
+// PE upstream connection. Must be called before Start(); the field is set-once
+// pre-launch. The Go memory model's goroutine-creation happens-before guarantees
+// visibility to all goroutines launched by Start() — no additional
+// synchronization is required.
+//
+// Post-Start mutation is forbidden: calling SetFrameCallback after Start()
+// returns is a data race (dial goroutines are already reading frameFn).
+// This method is on the concrete *Connector only — NOT on the Handle interface
+// (Option A per placement note F-SP6-002). (new — S-BL.PE-RECEIVE-LOOP)
+func (c *Connector) SetFrameCallback(fn FrameFn) {
+	c.frameFn = fn
 }
 
 // addrCancel holds a cancel function for a per-address dial goroutine.
@@ -323,14 +351,13 @@ func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struc
 		}
 
 		// Connection established step 1: net.Dial succeeded.
-		// Step 2: outerassembler.Assemble bootstrap frame (Q6, delivered with
-		// placeholder frame type). FrameTypeData is a placeholder: the distinct
-		// PE-CONNECT bootstrap frame type (Q6's frame.FrameTypePEConnect) is
-		// deferred to S-BL.PE-RECEIVE-LOOP, the consumer that must distinguish
-		// bootstrap frames from session data. Deferral is symmetric with the
-		// zero-valued Envelope deferral documented in mgmt_wire.go.
+		// Step 2: outerassembler.Assemble bootstrap frame (Q6).
+		// FrameTypePEConnect identifies this as a PE-CONNECT bootstrap frame
+		// (FO-PE-LOOP-001 — defined by S-BL.PE-RECEIVE-LOOP). The receive
+		// goroutine discriminates bootstrap frames (0x06) and discards them,
+		// allowing session-data frames to pass through to the FrameFn callback.
 		cf := halfchannel.ChannelFrame{
-			FrameType: halfchannel.FrameTypeData,
+			FrameType: frame.FrameTypePEConnect,
 		}
 		var sackBitmap [outerassembler.SACKBitmapSize]byte
 		wire, aErr := outerassembler.Assemble(cf, sackBitmap, c.env)
@@ -365,8 +392,49 @@ func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struc
 		c.connectedCount.Add(1)
 		backoff = operativeBase(c.keepaliveInterval) // reset to operative base on success per Q5/Q7/F-P2-002
 
-		// Maintain connection: send keepalive probes and detect dead connections.
+		// Step 4: Start receive goroutine (one per established connection).
+		// Per-reconnect-iteration join via WaitGroup (F-SP1-005, Q6):
+		// dialLoop MUST join the receive goroutine before looping to reconnect.
+		// The goroutine-creation happens-before guarantee makes frameFn visible
+		// to the goroutine without additional synchronization (Go memory model).
+		var recvWg sync.WaitGroup
+		recvWg.Add(1)
+		go func() {
+			defer recvWg.Done()
+			fn := c.frameFn
+			for {
+				hdr, payload, err := frame.ReadOuterFrame(conn)
+				if err != nil {
+					// READ error: exit the loop regardless of error type.
+					// continue-on-read-error is FORBIDDEN (framing desync / busy-loop).
+					// BINDING (F-SP6-001): close conn to trigger maintainConn write
+					// failure → dialLoop teardown → backoff → redial.
+					// Double-close is safe/idempotent on net.Conn.
+					_ = conn.Close()
+					return
+				}
+				ehdr := frame.EncodeOuterHeader(hdr)
+				raw := append(ehdr[:], payload...)
+				if hdr.FrameType == frame.FrameTypePEConnect {
+					// bootstrap acknowledgment: silent discard, continue reading.
+					// MUST NOT close conn or exit (F-SP18-001 discard-and-continue).
+					continue
+				}
+				// any non-pe_connect frame (data / ctl / arq / fec / empty_tick):
+				// pass to FrameFn callback — forward branch is type-agnostic-except-pe_connect (F-SP17-001).
+				if fn != nil {
+					_ = fn(hdr, raw) // discard-and-continue; non-nil return MUST NOT terminate loop (F-SP4-001)
+				}
+			}
+		}()
+
+		// Step 5: Maintain connection — send keepalive probes and detect dead connections.
 		c.maintainConn(addr, conn, ctx.Done(), keepaliveTick.C)
+
+		// Step 6 (Q6): Join the receive goroutine before decrementing count or reconnecting.
+		// conn.Close() ensures ReadOuterFrame unblocks (EOF / net error).
+		_ = conn.Close() // step 8 close — also triggers receive goroutine exit if not already done
+		recvWg.Wait()    // per-reconnect-iteration join (F-SP1-005): must complete before redial
 
 		// Connection dropped — decrement count.
 		// Capture the return value of Add(-1) to implement transition ownership:
@@ -379,7 +447,6 @@ func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struc
 		// exactly one goroutine can receive the 0 return value (the one that moved
 		// the counter from 1 to 0); all others receive >0.
 		newCount := c.connectedCount.Add(-1)
-		_ = conn.Close()
 
 		// Log EC-004 if this goroutine owns the ≥1→0 transition (newCount == 0).
 		// Guard: skip emission when the drop was caused by context cancellation
