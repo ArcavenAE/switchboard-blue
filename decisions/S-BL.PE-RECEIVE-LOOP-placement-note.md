@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.14"
+version: "1.15"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -43,6 +43,7 @@ architecture_modules:
 | 1.12 | Remediate one spec-adversarial pass-14 finding (2026-07-10). F-SP14-001 (MED [spec-completeness]) — BC-2.01.004:61 (Postcondition 2 outer-header layout table, frame_type row) is cited zero times in story or note despite carrying the byte-identical enum row as ARCH-02:74; post-ship, BC-2.01.004 would enumerate 5 frame types while ARCH-02 + frame.go Valid() accept 6. Remediation option (a): Q3 ARCH-02 amendment obligation extended with a binding sibling obligation for BC-2.01.004:61 — must be amended to `, pe_connect=0x06` in the SAME commit as ARCH-02:74 and FrameTypePEConnect. Before/after rows quoted verbatim. Rationale cites F-P8-008 co-canonical precedent (BC-2.01.004:57 + ARCH-02:74 named canonical pair in pass-8) and BC-2.01.004 v1.2 sync-practice. Blast-radius arithmetic: BC-2.01.004:61 is a wire-format spec pair partner to ARCH-02:74 (both same-commit parallel obligations, sibling of but not inside the unified-12 count); total stated as "unified 12 (10 frame sweep + 2 ARCH-08 locations) + wire-format spec pair (ARCH-02:74 + BC-2.01.004:61, same-commit parallel obligations)". Class-closure grep performed (patterns `"arq=0x04, fec=0x05"` and `"empty_tick=0x02"`): exactly 2 canonical locations each (BC-2.01.004:61 and ARCH-02:74); transcript recorded with disposition of all hits. Pass-14 adjudicated-clean section added. |
 | 1.13 | Remediate one spec-adversarial pass-17 finding (2026-07-10). F-SP17-001 (MED [spec-gap / test-set underdetermination]) — AC-003 discrimination contract (discard PEConnect, forward everything else) pinned at only two test points: forward side tested with FrameTypeData only, discard side with FrameTypePEConnect only; a whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl frames required by Non-Goals (S-BL.RESYNC-FRAME consumer). New BINDING unit test added to Q2: `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` in `internal/upstreamdial/connector_test.go` — assembles a complete valid frame with `FrameType: frame.FrameTypeCtl`, uses same in-package accept-and-write fixture family as `PEConnectFrameDiscarded`, asserts FrameFn IS invoked and `hdr.FrameType == frame.FrameTypeCtl`; kills the whitelist-data-only malicious implementation. Companion cosmetic fix recorded: story's discrimination-sketch else-branch comment enumerates `{data, ctl, arq, fec}` but empty_tick also traverses the forward branch — comment must gain empty_tick (story-writer applies). Test counts updated: connector tests 6 → 7 (minimum; with optional ExitsOnVersionMismatch: 7); total net-new ~11 → ~12 (1 frame_test + 7 connector_test + 4 integration). Pass-17 adjudicated section added: F-SP17-001 accepted (one pin test + comment enumeration fix + counts 7/~12); P1b concurrency clean (OnFrameArrival hitCountMu + DropCache mu verified thread-safe, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent), P1c DRAIN-WIRE seam clean (backlog story, illustrative ACs, no concrete API expectation), P1d VP traceability clean (no VP pins a 5-type enum or Valid() bound; vp_traces:[] correct), P2 POL pass, P3 DataFrameForwarded + FlapCycleJoin re-executed realizable. |
 | 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
+| 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -107,8 +108,9 @@ story.
 > `func([]byte) error` is superseded by Q2's ruling. Q2 rules that the connector
 > callback signature is `type FrameFn func(hdr frame.OuterHeader, raw []byte) error`
 > (not `func([]byte) error`) and that `upstreamdial` gains a direct `frame` import
-> (ARCH-08 §6.5 amendment required). Q2 also rules that `upstreamdial.Handle`
-> gains `SetFrameCallback(fn FrameFn)` (not `SetFrameCallback(fn func([]byte) error)`).
+> (ARCH-08 §6.5 amendment required). ~~Q2 also rules that `upstreamdial.Handle`
+> gains `SetFrameCallback(fn FrameFn)` (not `SetFrameCallback(fn func([]byte) error)`).~~
+> *(amended v1.15 — F-SP19-001, completing F-SP7-003: F-SP6-002 Option A is binding — `SetFrameCallback` is a method on the concrete `*upstreamdial.Connector` ONLY; the `Handle` interface is unchanged. This clause's Option-B attribution to Q2 is also retracted — Q2 rules the framing primitive (`ReadOuterFrame`, FrameFn signature, frame import), not Handle placement, which is F-SP6-002's domain.)*
 > Q1's routing-free constraint, goroutine placement decision, and option (a)
 > callback-seam choice remain operative. The specific import and signature details
 > are determined by Q2, which is authoritative. The v1.0 Q1 text is preserved here
@@ -2373,6 +2375,55 @@ annotations explaining the evolution from Option-B intent to Option-A ruling,
 (d) Option-A-consistent text in adjudicated-clean sections and Appendix A.
 No residual Option-B violations remain.
 
+**v1.15 Addendum — F-SP7-003 Sweep Re-Certification (F-SP19-001):**
+
+The original F-SP7-003 sweep was conducted with four single-line grep patterns
+(`"Handle gains"`, `"to Handle"`, `"Handle.*SetFrame"`, `"Add FrameFn type.*Handle"`) and
+the expanded 8-pattern set applied at v1.7 post-publication audit. Both sweep sets share a
+common limitation: they cannot match tokens that span a line break. The F-SP19-001
+residual at lines :110-111 (v1.14 numbering) contains the token pair `"Handle\`" on
+one line and `"gains \`SetFrameCallback"` on the next — no single-line grep pattern
+can match both tokens simultaneously.
+
+**NEW canonical multi-line-tolerant pattern:** `tr '\n' ' ' < FILE | grep -o "Handle. gains .SetFrameCallback"`
+
+This pattern joins all lines into a single stream before matching and reliably catches
+the cross-line token pair regardless of where the line break falls.
+
+**Post-fix execution (run at v1.15):**
+
+```
+tr '\n' ' ' < S-BL.PE-RECEIVE-LOOP-placement-note.md | grep -o "Handle\` gains \`SetFrameCallback"
+```
+
+**Hit count:** 7 hits (post-fix). Note: the v1.15 addendum text itself introduces
+meta-reference occurrences of the pattern (in the canonical-pattern line, the changelog
+row, the Pass-19 adjudicated table, and this addendum). The strikethrough on the
+:110-111 residual preserves the token pair in the file's byte stream (markdown
+strikethrough does not remove text from `tr | grep` matching). All 7 hits are
+enumerated below with dispositions:
+
+| Hit | Location | Disposition |
+|-----|----------|-------------|
+| 1 | v1.1 supersession note (:111-112 in v1.15 numbering) | Struck and annotated v1.15 (F-SP19-001) — the strikethrough markdown `~~Q2 also rules that \`upstreamdial.Handle\` gains \`SetFrameCallback...~~` preserves the token pair in the byte stream; the claim is retracted; not a live assertion |
+| 2 | Summary-of-Rulings Q1 row (~:2096 in v1.15 numbering) | Already struck and annotated v1.7 (F-SP7-003) — `~~\`Handle\` gains \`SetFrameCallback(fn FrameFn)\` seam~~` with `*(amended v1.7 — F-SP7-003: ...)` annotation; not a live claim |
+| 3 | Changelog v1.7 row (~:38) | History-preserved verbatim — quotes the pre-Option-A wording as the subject of the F-SP7-003 remediation description; not a live claim |
+| 4 | Changelog v1.15 row (~:46) | Meta-reference — the v1.15 changelog entry quotes the F-SP19-001 residual text as the defect being remediated; not a live claim |
+| 5 | v1.15 Addendum canonical-pattern line (~:2388) | Meta-reference — the `grep -o` argument string in the documented pattern command; not a binding claim |
+| 6 | Pass-19 Adjudicated table row (~:2588) | Meta-reference — the F-SP19-001 finding description in the adjudicated table quotes the residual as the defect; not a live claim |
+| 7 | This addendum hit-count table (this row) | Meta-reference — the disposition text in the table above; not a live claim |
+
+**Re-certification:** Zero live unannotated Option-B claims remain. All 7 joined-line hits
+are either struck historical text with explicit retraction annotations (hits 1-2) or
+meta-references in changelog/adjudicated-section/addendum documentation (hits 3-7).
+The sweep-incompleteness root cause (single-line patterns cannot match cross-line token
+pairs) is the 6th instance of incomplete-sweep class: F-SP7-003, F-SP10-001, F-SP13-001,
+F-SP14-001, F-SP15-001, F-SP19-001. This is also the 2nd instance of a false
+sweep-completeness certification (the first was the F-SP7-003 initial 4-pattern
+certification that missed two Q1-body residuals; this is the expanded-8-pattern
+certification that missed the cross-line residual). The canonical multi-line-tolerant
+pattern above supersedes single-line pattern sets for any future Handle-placement sweep.
+
 ---
 
 ## F-SP7-004 Cross-Reference Version-Pin Policy (v1.7)
@@ -2536,3 +2587,18 @@ All other pass-18 items are adjudicated below.
 | P1d — Note-ruling/story coherence: extended test shape recorded in ruling block; story-writer obligation scoped to "extend, not add" | Pass-18 P1d confirmation | Confirmed. The v1.14 ruling block in Q2 specifies the two-frame recipe verbatim (recipe text binding for story-writer and implementer). Story propagation obligation: story-writer updates `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` per the binding recipe; no new test name or count change to propagate. |
 | P2 — POL-001 / POL-002 pass | Pass-18 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.14. The extension adds no spec-document amendment obligation; all existing blast-radius counts (frame sweep unified-12, wire-format spec pair) are unaffected. |
 | P3 — ExitsOnReadError re-traced realizable with two-frame extension | Pass-18 P3 confirmation | Confirmed. `TestConnector_ReceiveLoop_ExitsOnReadError` (v1.9 corrected recipe: complete 44-byte header, byte[0]=0x01, byte[1]=0x07, PayloadLen=0x0000, conn NOT closed) remains realizable. The `PEConnectFrameDiscarded` extension does not change the error-exit recipe or its timing contract. The two tests are independent: `ExitsOnReadError` uses a malformed header (triggers read-error branch); the extended `PEConnectFrameDiscarded` uses two well-formed frames (exercises discard-continue-then-forward). No interaction. |
+
+---
+
+## Pass-19 Adjudicated (per adversarial pass-19 report)
+
+F-SP19-001 is the sole actionable finding from pass-19 and is remediated in the v1.1 supersession note above (lines :110-111) and the F-SP7-003 sweep transcript addendum. All other pass-19 items are adjudicated below.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP19-001 — v1.1 supersession note :110-111: live unannotated Option-B claim spanning a line break ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") contradicts F-SP6-002 Option A ruling and falsely attributes Handle placement to Q2 | MED [doc-drift / incompletely-discharged prior remediation] — ACCEPTED; REMEDIATED above | Residual struck and annotated in v1.1 supersession note using the same ~~strikethrough~~ + `*(amended vN — ...)` pattern as all prior Option-B-retraction annotations. Retraction states: (a) F-SP6-002 Option A is binding — `SetFrameCallback` is on concrete `*Connector` ONLY, `Handle` interface unchanged; (b) Q2 rules the framing primitive (`ReadOuterFrame`, FrameFn signature, frame import), not Handle placement — the Option-B attribution to Q2 is retracted. F-SP7-003 sweep transcript extended with a v1.15 addendum recording the root cause (single-line and expanded-8-pattern sets cannot match cross-line token pairs), the NEW canonical multi-line-tolerant pattern (`tr '\n' ' ' < FILE \| grep -o "Handle. gains .SetFrameCallback"`), the post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with all per-hit dispositions. Sweep re-certified: zero live unannotated Option-B claims remain. This is the 6th incomplete-sweep-class instance (F-SP7-003, F-SP10-001, F-SP13-001, F-SP14-001, F-SP15-001, F-SP19-001) and the 2nd false sweep-completeness certification. |
+| P1a — Two-frame extension (F-SP18-001) realizable; P1b round-3 archetypes all killed/non-observable | Pass-19 P1a + P1b confirmation | Clean. P1a: two-frame extension in `PEConnectFrameDiscarded` remains realizable (confirmed pass-18). P1b kill transcript: hdr-mutation archetype killed by call-site assertions (verified pass-17 / pass-18 ledger); double-invoke-masked-idempotent archetype: DropCache `AddIfAbsent` is idempotent under duplicate keys — no AC forbids idempotent double-invocation, and raw aliasing is impossible under the mandated fresh-allocation idiom (`outerassembler.Assemble` + synchronous consumption before next `io.ReadFull`); no new archetype introduced by v1.14. |
+| P1c — Cross-layer triples coherent | Pass-19 P1c confirmation | Clean. The three cross-layer triples (AC-001/AC-002/AC-004: PE connection → receive goroutine → `OnFrameArrival` → E-FWD-001; AC-003: bootstrap frame → discard branch; AC-005: read-error → exit → conn.Close() → reconnect) remain internally coherent. The v1.15 amendment is annotation-only within the v1.1 supersession note; it does not alter any implementation obligation or test recipe. |
+| P2 — POL-001 / POL-002 pass | Pass-19 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.15. The v1.15 change is a note-only doc-drift correction and sweep re-certification; all blast-radius counts (frame sweep unified-12, wire-format spec pair) are unaffected. |
+| P3 — CtlPin + NoDuplicateSuppression re-traced realizable | Pass-19 P3 confirmation | Confirmed. `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` (v1.13 — F-SP17-001): uses same in-package accept-and-write fixture family, `FrameTypeCtl = 0x03` passes `Valid()`, `outerassembler.Assemble` passthrough verified — realizable unchanged. `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` (AC-004 byte-contract pin): two frames with differing `Envelope.SrcAddr` produce independent `crc32` keys → both reach `OnFrameArrival` independently — realizable unchanged. Neither test has any dependency on the Handle-placement question amended in v1.15. |
+| Ledger passes 1–18 — all hold | Pass-19 ledger confirmation | Confirmed. No ruling in passes 1–18 is affected by the v1.15 note-only amendment. The entire pass-1 through pass-18 adjudicated ledger stands as published. |

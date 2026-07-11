@@ -1610,10 +1610,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 16 (spec) | v1.15 | 0 | 0 | 0 | 0 | 1/3 | CLEAN — first clean pass of the cycle; no artifact changes; streak 0/3 → 1/3 |
 | 17 (spec) | v1.15 | 1 | 0 | 1 | 0 | 0/3 | note v1.13 + story v1.16 + index v4.56 — remediated; STREAK RESET 1/3 → 0/3 |
 | 18 (spec) | v1.16 | 1 | 0 | 1 | 0 | 0/3 | note v1.14 + story v1.17 + index v4.57 — remediated; streak stays 0/3 |
+| 19 (spec) | v1.17 | 1 | 0 | 1 | 0 | 0/3 | note v1.15 + story v1.18 (metadata-only) + index v4.58 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 pending vs {v1.17, note v1.14}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: line-break-spanning Option-B residual; F-SP7-003 sweep re-certified multi-line-tolerant; streak stays 0/3); pass 20 pending vs {v1.18, note v1.15}.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2371,4 +2372,65 @@ The continuation axis is now symmetrically closed.
 - **Streak stays 0/3.** F-SP18-001 is MED — hostile-implementer round 2 finding.
 - Sprint-state v2.22→v2.23. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1.
 
-**Awaiting:** spec adversarial pass 19 @ {story v1.17, note v1.14} (streak 0/3)
+**Awaiting:** spec adversarial pass 20 @ {story v1.18, note v1.15} (streak 0/3)
+
+---
+
+### Pass 19 Details (2026-07-10)
+
+**Story at review:** v1.17 | **Placement note at review:** v1.14
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated. Streak stays 0/3.
+
+#### Finding F-SP19-001
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP19-001 | MED | doc-drift/incompletely-discharged prior remediation | Note Q1 v1.1 supersession region carried a live unannotated Option-B claim ('Handle gains SetFrameCallback') SPANNING A LINE BREAK. The claim survived the F-SP7-003 sweep because all F-SP7-003 grep patterns were single-line; the two tokens 'Handle' and 'SetFrameCallback' appear on consecutive lines in the Q1 body, making them invisible to any grep that matches only within a single line. The claim directly contradicts the binding F-SP6-002 Option A ruling (SetFrameCallback is concrete-only on the Connector struct, NOT on the Handle interface) and falsely attributed the Handle placement decision to Q2. This is the 6th incomplete-sweep-class instance in the cycle (F-SP7-003, F-SP10-001, F-SP13-001, F-SP14-001, F-SP15-001, F-SP19-001) and the 2nd false sweep-completeness certification (the first being the F-SP7-003 original sweep in pass 7 which issued a class-closing claim that was later falsified at pass 10). The adversary found it by attacking the sweep methodology itself — using a joined-line (tr newline-to-space + grep) technique to expose tokens that straddle line boundaries. Orchestrator reproduced 2 hits independently using the same technique. | Note v1.14→v1.15 (architect): Option-B residual struck with strikethrough and annotated per the v1.7 sibling pattern ('~~Option B (discarded at F-SP6-002): Handle gains SetFrameCallback~~'); F-SP7-003 sweep re-certified using the canonical NEW multi-line-tolerant pattern (tr '\\n' ' ' | grep -o 'SetFrameCallback[^.]*'); post-fix transcript honestly recorded 7 hits (2 struck historical + 5 meta-references) all dispositioned; architect transcript matched orchestrator's independent grep exactly (3rd consecutive zero-correction delivery). Story v1.17→v1.18 (story-writer, metadata-only): note-version citation in inputDocuments updated v1.14→v1.15; story body was always Option-A-consistent (no story body change required). STORY-INDEX v4.57→v4.58: S-BL.PE-RECEIVE-LOOP row updated. |
+
+#### Pass 19 Confirmations
+
+**Realizability re-check:** Two-frame PEConnectFrameDiscarded extension (F-SP18-001 remediation) re-executed REALIZABLE — FrameTypePEConnect value 0x06 correctly handled; byte-consistency traced across all 4 story locations that reference the value (AC-003 test-names, Estimated Test Surface, FCL row sketch, task description).
+
+**Hostile-implementer round 3 (3 archetypes exhausted):**
+1. **Header mutation** (corrupt hdr.FrameType before discrimination): killed by call-site assertions — the outer frame is reconstructed via EncodeOuterHeader+append, producing a deterministic header; any corruption would require modifying the fixed-format header bytes which would invalidate the byte-contract pin.
+2. **Double-invoke** (call frameFn for PEConnect frames before discarding): killed by PEConnectFrameDiscarded extended assertion — test asserts frameFn IS NOT invoked for the bootstrap frame; a double-invoke implementation would fire the callback for PEConnect and fail the assertion.
+3. **Aliasing** (share a single FrameFn invocation across multiple frame types): non-observable under the current test surface — the pin tests exercise specific single-type paths; aliasing would not produce a different observable outcome without an additional test specifically targeting the aliasing scenario. Adjudicated: non-observable under current test surface; not a gap because the discrimination contract is type-keyed, not count-keyed.
+
+**Cross-layer coherence:** All 17 remediation layers (passes 1-18) spot-checked clean. No incoherence introduced by the pass-19 note-side correction.
+
+**POL pass:** POL-001 (version pins) and POL-002 (STORY-INDEX sync) both confirmed for note v1.15 and story v1.18.
+
+**Ledger 1-18 hold:** No ledger item was affected by the metadata-only story update or the note annotation-only change.
+
+#### Sweep Methodology Observation
+
+The F-SP7-003 sweep (pass 7, first certification) used single-line grep patterns. The re-certification at pass 10 also used single-line patterns. The re-certification at pass 19 introduced the multi-line-tolerant technique and found the residual. This establishes a new canonical sweep pattern for any future SetFrameCallback / Handle interface scope sweeps:
+
+```sh
+tr '\n' ' ' < placement-note.md | grep -o 'SetFrameCallback[^.]*'
+```
+
+This pattern surfaces all SetFrameCallback occurrences regardless of whether the surrounding context spans a line boundary. The F-SP19-001 residual was invisible to 12 prior passes and 3 sweep certifications — the line-break was the hiding mechanism, not any doc structure or section boundary.
+
+#### Process Observation: Sweep-Transcript Discipline Arc Complete
+
+The sweep-transcript discipline arc for F-SP7-003 covers three phases:
+1. **Passes 7/13/14:** Three correction rounds — architect transcript undercounted, orchestrator caught and corrected each time.
+2. **Passes 17/18:** Two clean deliveries — architect transcript matched orchestrator's independent verification with zero corrections (2nd consecutive at pass 18).
+3. **Pass 19:** Proactive honest over-counting — architect's transcript documented 7 hits with per-hit dispositions, making the count verifiable rather than self-certifying. Orchestrator's independent grep matched exactly. The discipline has matured from correction-dependent to proactively transparent.
+
+#### Remediation Summary
+
+**Placement note v1.14 → v1.15 (architect):** Option-B residual struck and annotated. F-SP7-003 sweep re-certified with multi-line-tolerant canonical pattern. 7-hit post-fix transcript with dispositions. 3rd consecutive zero-correction delivery.
+
+**Story v1.17 → v1.18 (story-writer, metadata-only):** Note-version citation in `inputDocuments` frontmatter updated v1.14→v1.15. Story body unchanged (was always Option-A-consistent).
+
+**STORY-INDEX v4.57 → v4.58:** S-BL.PE-RECEIVE-LOOP row updated to story v1.18 + note v1.15.
+
+#### Outcome
+
+- **Streak stays 0/3.** F-SP19-001 is MED — doc-drift/incompletely-discharged prior remediation. The residual was unannotated live text contradicting a binding ruling.
+- Sprint-state v2.23→v2.24. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1.
+
+**Awaiting:** spec adversarial pass 20 @ {story v1.18, note v1.15} (streak 0/3)
