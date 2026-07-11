@@ -1606,10 +1606,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 12 (spec) | v1.11 | 1 | 0 | 1 | 0 | 0/3 | note v1.10 + story v1.12 + index v4.52 — remediated; streak stays 0/3 |
 | 13 (spec) | v1.12 | 1 | 0 | 1 | 0 | 0/3 | note v1.11 + story v1.13 + index v4.53 — remediated; streak stays 0/3 |
 | 14 (spec) | v1.13 | 1 | 0 | 1 | 0 | 0/3 | note v1.12 + story v1.14 + index v4.54 — remediated; streak stays 0/3 |
+| 15 (spec) | v1.14 | 1 | 0 | 0 | 1 | 0/3 | story v1.15 + index v4.55 (note v1.12 unchanged) — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; streak 0/3; pass 15 pending vs {v1.14, note v1.12}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); streak 0/3; pass 16 pending vs {v1.15, note v1.12}.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2182,3 +2183,40 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-13 when
 **Streak stays 0/3.** Single MED finding; sixth consecutive pass at single-finding-or-fewer, zero HIGH since pass 11. Sprint-state v2.18→v2.19. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-14 when authored).
+
+---
+
+### Pass 15 Details (2026-07-10)
+
+**Story at review:** v1.14 | **Placement note at review:** v1.12
+
+**Verdict:** HAS_FINDINGS — 1 LOW. Remediated.
+
+**P1a attack-the-remediation vector:** The pass-14 remediation added BC-2.01.004.md as a co-obligation in FCL row 9, Task 3, and the story changelog — but omitted it from the File Structure Requirements Modified-files enumeration. This is the 5th incomplete-sweep-class instance in the spec cycle: F-SP7-003, F-SP10-001, F-SP13-001, F-SP14-001, F-SP15-001. The incoherence was introduced by the pass-14 remediation burst itself and was caught by the P1a attack-the-remediation-commit verification axis.
+
+**Severity floor reached:** F-SP15-001 is the first finding in the spec cycle classified LOW. All prior single-finding passes (8, 9, 10, 12, 13, 14) were MED. Seventh consecutive single-finding-or-fewer pass; zero HIGH since pass 11's latent.
+
+**ALL 14 ledger items re-verified and HOLD:**
+- ExitsOnReadError + ExitsOnVersionMismatch recipes re-executed REALIZABLE (byte-contract pin traced through frame.go:92 SrcAddr bytes + on_frame_arrival.go:197 crc32-over-full-frame)
+- Flap-cycle join recipe re-executed REALIZABLE (traced against connector_test.go harness template: heldConn + Close() pattern)
+- Index row-141 Notes chain: CLEAN (v1.14 entry present; no gap)
+- AC-001..005 cold-read: CLEAN (all contracts mutually consistent)
+- Note Q3 region coherence: CLEAN (blast-radius enumeration consistent with story FCL)
+- POL-001 (version pins): PASS
+- POL-002 (STORY-INDEX sync): story v1.15 → STORY-INDEX v4.55
+
+#### Finding
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP15-001 | LOW | doc-drift | v1.14 added BC-2.01.004.md to FCL row 9 ("Modified files" column) and Task 3 ("co-obligation" note) and the story changelog — but the File Structure Requirements section's Modified-files enumeration was not updated to include `specs/behavioral-contracts/ss-02/BC-2.01.004.md`. The story specifies what files to modify; the File Structure Requirements table must enumerate every file the story will touch. Omitting BC-2.01.004.md from that enumeration makes the story incoherent: FCL says touch it, File Structure Requirements doesn't list it. 5th incomplete-sweep-class instance. | Story v1.14→v1.15: File Structure Requirements Modified-files list updated to include `specs/behavioral-contracts/ss-02/BC-2.01.004.md`. Changelog row added. STORY-INDEX v4.54→v4.55. Note v1.12 unchanged (finding is story-side only). |
+
+#### Remediation Summary
+
+**Story v1.14 → v1.15:** File Structure Requirements Modified-files enumeration updated with `specs/behavioral-contracts/ss-02/BC-2.01.004.md`. Changelog row added. STORY-INDEX v4.54→v4.55.
+
+**Note v1.12 unchanged:** Finding is story-side only; placement note was not involved.
+
+**Streak stays 0/3.** First LOW-only finding in the cycle. Seventh consecutive single-finding-or-fewer pass. Zero HIGH since pass 11. Sprint-state v2.19→v2.20. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1.
+
+Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-15 when authored).

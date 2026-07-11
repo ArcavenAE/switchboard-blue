@@ -7,7 +7,7 @@ title: "PE-connection receive/forward loop — frame.ReadOuterFrame goroutine, F
 status: ready
 producer: story-writer
 timestamp: 2026-07-08T00:00:00Z
-version: "1.14"
+version: "1.15"
 phase: 2
 epic: E-7
 wave: backlog
@@ -947,6 +947,7 @@ Modified files:
 - `cmd/switchboard/mgmt_wire.go` — `DropCache`+`FrameArrivalHandler` construction, `SetFrameCallback` call with `OnFrameArrival` closure, `internal/multipath` import
 - `.factory/specs/architecture/ARCH-08-dependency-graph.md` — §6.5 import-set amendment
 - `.factory/specs/architecture/ARCH-02-protocol-stack.md` — §"Outer Header Format" `frame_type` row: add `pe_connect=0x06`
+- `.factory/specs/behavioral-contracts/ss-01/BC-2.01.004.md` — Postcondition 2 outer-header layout table `frame_type` row: add `pe_connect=0x06` (wire-format spec pair with ARCH-02:74; same commit as `FrameTypePEConnect`; F-SP14-001)
 
 ---
 
@@ -1034,6 +1035,7 @@ regression tests (S-7.04-FU-PE-CONNECTOR added +11 tests above forecast during i
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.15 | 2026-07-10 | Pass-15 remediation (F-SP15-001 LOW [doc-drift], 5th incomplete-sweep-class instance): BC-2.01.004.md bullet added to File Structure Requirements Modified-files list — v1.14 had added the file to FCL row 9 + Task 3 + changelog but omitted this enumeration. Story-side only; note v1.12 unchanged. |
 | 1.14 | 2026-07-10 | Propagate placement-note v1.12 F-SP14-001 amendment (pass-14 remediation, POL-001). F-SP14-001 (MED [spec-completeness]) — BC-2.01.004:61 added as wire-format spec-pair partner to ARCH-02:74: FCL row 9 File cell extended to cover both ARCH-02-protocol-stack.md (MODIFIED) and BC-2.01.004.md (MODIFIED), Change cell extended with BC-2.01.004:61 Postcondition 2 outer-header layout table `frame_type` row amendment (`u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05` → `u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06`; same-commit parallel obligations; F-P8-008 co-canonical precedent), Anchor cell appended F-SP14-001; row count stays 9 (no new row, per pass-14 ruling). Task 3 extended with BC-2.01.004:61 sub-item — verbatim before/after enum rows, same-commit discipline. FCL row 3 arithmetic sentence adopted verbatim: "The total blast radius is: unified 12 (10 frame sweep locations + 2 ARCH-08 import-edge-prose locations) + wire-format spec pair (ARCH-02:74 + BC-2.01.004:61, same-commit parallel obligations alongside the frame-sweep commit)." Frontmatter version 1.13 → 1.14; inputDocuments placement-note version pin v1.11 → v1.12 with v1.12 descriptor appended. |
 | 0.1-backlog-stub | 2026-07-07 | Initial backlog stub. Created by PO adjudication F-P1-002 (AC-004 partial-discharge, class unmet-deps on S-7.04-FU-PE-CONNECTOR). No ACs, no FCL. Status: backlog. |
 | 1.0 | 2026-07-08 | Elaborated stub → sprint-ready. Governing artifacts: placement note v1.0 (Q1–Q7 architect rulings; all symbols grep-verified at `8eb54a5`), disposition ruling v1.0 (Q-A option (a): BC-2.06.003 is non-discharging prerequisite trace; binding anchor is BC-2.02.008 PC-3/EC-003; Q-B: single story, 5 pts). ACs: AC-001 (receive goroutine active; frames reach OnFrameArrival), AC-002 (runRouter SetFrameCallback wiring), AC-003 (FO-PE-LOOP-001 discharge: FrameTypePEConnect + Valid() + dialLoop flip + discrimination), AC-004 (E-FWD-001 exhaustion integration + S404-OBS-F/S404-LOW-1 re-confirmation), AC-005 (receive goroutine lifecycle/doneCh). Anchors Consumed: BC-2.06.003 PC-1 row corrected from "To discharge" to "Non-discharging prerequisite trace" per disposition ruling v1.0 Q-A. FCL: 8 rows. Estimated test surface: ~8 net-new. FO-PE-LOOP-001 consumed. Version: 1.0; status: ready; points: 5; acceptance_criteria_count: 5. |
