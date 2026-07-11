@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.38
+# version: 2.39
 # changelog:
+#   - version: 2.39
+#     date: 2026-07-11
+#     description: "S-BL.PE-RECEIVE-LOOP demo evidence + DELIVERY v1.0 draft complete. Demo-recorder delivered 5 per-AC tapes + evidence-report.md (code commit 7b84c2b, POL-004 compliant — zero rendered binaries, orchestrator-verified). Story-writer authored DELIVERY v1.0 draft (S-BL.PE-RECEIVE-LOOP-DELIVERY.md, base 42baa8c, head 7b84c2b, 13 commits, 12 sections incl. PR-Time Obligations: netingress-0x06 behavioral-delta note + SEC follow-on items). STORY-INDEX bumped v4.65→v4.66 (delivery doc row). head_sha 7cedc34→7b84c2b, head_commits 12→13. Next: branch push + pr-manager 9-step."
 #   - version: 2.38
 #     date: 2026-07-11
 #     description: "S-BL.PE-RECEIVE-LOOP per-story adversarial CONVERGED — 7 passes, 6 findings remediated, 3/3 consecutive clean (passes 5, 6, 7). Pass-7 certification audit: 5 load-bearing claims independently re-derived, all VERIFIED (receive goroutine leak-free; unconditional close→reconnect signal path; byte-contract bit-exact for all 6 frame types; bootstrap pin false-pass-proof; import-perimeter false-pass-proof). Diff hygiene clean. DRAIN-WIRE successor seam in expected state. POL-001/002/004 pass. LOW non-blocking observation for PR description: netingress 0x06 delta — Valid() widening means pe_connect on ingress now parses-and-drops fail-closed via E-ADM-016 (consistent with sibling types, no spec text mandates teardown). Next: Step 5 demo (POL-004 .tape + evidence-report.md only). story v1.25 + note v1.22 + index v4.65 @ impl 7cedc34."
@@ -1082,9 +1085,11 @@ stories:
     green_complete_at: "2026-07-11"
     green_complete_sha: "a23deae"
     green_commits: "c316aed..a23deae (9 commits)"
-    head_sha: "7cedc34"
-    head_commits: "c316aed..7cedc34 (12 commits)"
+    head_sha: "7b84c2b"
+    head_commits: "c316aed..7b84c2b (13 commits)"
     tests_added: 14
+    demo_evidence: "7b84c2b (5 tapes + evidence-report.md, POL-004)"
+    delivery_doc: "S-BL.PE-RECEIVE-LOOP-DELIVERY.md v1.0 draft"
     adversarial_streak: "3/3 — PER-STORY CONVERGED"
     converged_at: "2026-07-11"
     adversarial_pass_1: "1 finding (F-IP1-001 MED — undelivered go list -deps guard + false build-enforcement claim; remediated: e397157 TestUpstreamdialImportPerimeter, story v1.22, note v1.19)"
