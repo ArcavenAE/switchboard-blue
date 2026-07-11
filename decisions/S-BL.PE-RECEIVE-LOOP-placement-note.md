@@ -5,8 +5,8 @@ story_id: S-BL.PE-RECEIVE-LOOP
 title: "PE-connection receive/forward loop placement, frame-type design, arqsend wiring, and E-FWD-001 discharge for S-BL.PE-RECEIVE-LOOP"
 status: final
 producer: architect
-timestamp: 2026-07-08T00:00:00Z
-version: "1.15"
+timestamp: 2026-07-10T00:00:00Z
+version: "1.16"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -44,6 +44,7 @@ architecture_modules:
 | 1.13 | Remediate one spec-adversarial pass-17 finding (2026-07-10). F-SP17-001 (MED [spec-gap / test-set underdetermination]) — AC-003 discrimination contract (discard PEConnect, forward everything else) pinned at only two test points: forward side tested with FrameTypeData only, discard side with FrameTypePEConnect only; a whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl frames required by Non-Goals (S-BL.RESYNC-FRAME consumer). New BINDING unit test added to Q2: `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` in `internal/upstreamdial/connector_test.go` — assembles a complete valid frame with `FrameType: frame.FrameTypeCtl`, uses same in-package accept-and-write fixture family as `PEConnectFrameDiscarded`, asserts FrameFn IS invoked and `hdr.FrameType == frame.FrameTypeCtl`; kills the whitelist-data-only malicious implementation. Companion cosmetic fix recorded: story's discrimination-sketch else-branch comment enumerates `{data, ctl, arq, fec}` but empty_tick also traverses the forward branch — comment must gain empty_tick (story-writer applies). Test counts updated: connector tests 6 → 7 (minimum; with optional ExitsOnVersionMismatch: 7); total net-new ~11 → ~12 (1 frame_test + 7 connector_test + 4 integration). Pass-17 adjudicated section added: F-SP17-001 accepted (one pin test + comment enumeration fix + counts 7/~12); P1b concurrency clean (OnFrameArrival hitCountMu + DropCache mu verified thread-safe, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent), P1c DRAIN-WIRE seam clean (backlog story, illustrative ACs, no concrete API expectation), P1d VP traceability clean (no VP pins a 5-type enum or Valid() bound; vp_traces:[] correct), P2 POL pass, P3 DataFrameForwarded + FlapCycleJoin re-executed realizable. |
 | 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
 | 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
+| 1.16 | Remediate one spec-adversarial pass-20 finding (2026-07-10). F-SP20-001 (MED [doc-drift / incompletely-discharged prior remediation]) — READ-error disposition contract block (:365-421): three-part defect: (1) header :365 lacked the "amended v1.6" supersession marker present on the STORY's equivalent header; (2) prose :386-387 stated the retracted mechanism verbatim ("Exit → dialLoop's existing teardown/reconnect path closes the conn and re-dials, which is the ONLY correct resync") — false per ground truth (maintainConn at connector.go:399 is write-only, never observes receive-goroutine exit); (3) v1.5 sketch :404-421 had a bare `return` with no `_ = conn.Close()` and no in-place warning. Three-part annotation applied: (1) header extended with supersession marker pointing to F-SP6-001 section; (2) prose struck with ~~strikethrough~~ + `*(amended v1.16 — F-SP20-001: RETRACTED ...)*` annotation; (3) banner blockquote inserted above sketch fence directing implementers to the v1.6 binding sketch. Sketch body preserved unmodified (history preservation). Class-closure sweep performed: 17 versioned binding blocks enumerated; 2 newly remediated (rows 4-5), 2 previously annotated (rows 6, 10), 13 fully current; zero unannotated stale binding blocks remain. This is the 7th incomplete-sweep-class instance. Pass-20 Adjudicated section added. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -362,7 +363,7 @@ precedent (payload-only return), and keeps `frame.ReadOuterFrame`'s signature
 consistent with `netingress.ReadFrame` so delegation is possible without
 changing the return contract.
 
-**READ-error disposition contract (v1.5 — F-SP5-001, binding):**
+**READ-error disposition contract (v1.5 — F-SP5-001, binding); superseded in part by v1.6 — F-SP6-001 (conn.Close() teardown wiring): see the 'Read-error conn.Close() teardown wiring' section below:**
 
 On ANY non-nil return from `frame.ReadOuterFrame`, the receive goroutine MUST exit the loop
 (`return`). `continue`-on-read-error is FORBIDDEN — this is the exact mirror of the v1.4
@@ -383,8 +384,8 @@ Rationale: `continue`-on-read-error produces one of two failure modes:
    `maintainConn` keepalive writes still succeed (full-duplex), so the conn is never
    torn down and never reconnected. The connection is permanently desynced.
 
-Exit → `dialLoop`'s existing teardown/reconnect path closes the conn and re-dials, which
-is the ONLY correct resync for a byte-misaligned stream.
+~~Exit → `dialLoop`'s existing teardown/reconnect path closes the conn and re-dials, which
+is the ONLY correct resync for a byte-misaligned stream.~~ *(amended v1.16 — F-SP20-001: RETRACTED. `maintainConn` is write-only (connector.go:399) and never observes receive-goroutine exit — dialLoop's teardown path does NOT fire on read-goroutine exit alone. The receive goroutine MUST itself call `_ = conn.Close()` before returning, converting the read-side failure into a write-side teardown. See the F-SP6-001 wiring section (binding).)*
 
 **Logging disposition:** Two cases:
 - **Clean exit** (io.EOF at a frame boundary, or any read error when `ctx.Err() != nil`
@@ -400,6 +401,8 @@ is the ONLY correct resync for a byte-misaligned stream.
   if the connection is truly broken. The implementer MUST NOT log on the clean-exit path.
 
 **Receive-goroutine sketch (updated — replaces the elided `{ ... }` from v1.4):**
+
+> **SUPERSEDED (v1.16 — F-SP20-001):** this v1.5 sketch omits the binding `_ = conn.Close()` before `return` in the read-error branch (F-SP6-001). Do NOT implement from this sketch — the v1.6 'Updated receive-goroutine sketch' below (with `_ = conn.Close()`) is the binding version.
 
 ```go
 for {
@@ -2602,3 +2605,59 @@ F-SP19-001 is the sole actionable finding from pass-19 and is remediated in the 
 | P2 — POL-001 / POL-002 pass | Pass-19 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.15. The v1.15 change is a note-only doc-drift correction and sweep re-certification; all blast-radius counts (frame sweep unified-12, wire-format spec pair) are unaffected. |
 | P3 — CtlPin + NoDuplicateSuppression re-traced realizable | Pass-19 P3 confirmation | Confirmed. `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` (v1.13 — F-SP17-001): uses same in-package accept-and-write fixture family, `FrameTypeCtl = 0x03` passes `Valid()`, `outerassembler.Assemble` passthrough verified — realizable unchanged. `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` (AC-004 byte-contract pin): two frames with differing `Envelope.SrcAddr` produce independent `crc32` keys → both reach `OnFrameArrival` independently — realizable unchanged. Neither test has any dependency on the Handle-placement question amended in v1.15. |
 | Ledger passes 1–18 — all hold | Pass-19 ledger confirmation | Confirmed. No ruling in passes 1–18 is affected by the v1.15 note-only amendment. The entire pass-1 through pass-18 adjudicated ledger stands as published. |
+
+---
+
+## Pass-20 Adjudicated (per adversarial pass-20 report)
+
+F-SP20-001 is the sole actionable finding from pass-20 and is remediated in the three-part annotation at the READ-error disposition contract block (:365), the prose retraction (:386-387), and the v1.5 sketch banner (:402 region). All other pass-20 items are adjudicated below.
+
+### v1.16 Class-Closure Sweep: versioned binding blocks and sketches
+
+This is the 7th instance of the incomplete-sweep class ("later version supersedes earlier binding block without in-place annotation"). F-SP20-001 triggered a full enumeration of every versioned binding block and sketch header in the note to verify each carries either (a) confirmed current status or (b) an in-place supersession marker pointing to its successor.
+
+**Grep commands used:**
+
+```
+grep -n 'binding.:' note.md          (binding headers)
+grep -n 'BINDING' note.md            (BINDING headers)
+grep -n '[Ss]ketch' note.md          (sketch headers)
+grep -n 'SUPERSEDED\|superseded\|amended v1\.' note.md   (existing annotations)
+```
+
+Multi-line-tolerant patterns applied where token pairs could span newlines (per F-SP19-001 lesson).
+
+**Enumeration (17 blocks, complete):**
+
+| # | Line | Block / Header | Version | Status | Disposition |
+|---|------|---------------|---------|--------|-------------|
+| 1 | 120 | `SetFrameCallback interface placement (v1.6 — F-SP6-002, BINDING)` | v1.6 | Current | No supersession — Option A ruling (concrete `*Connector` only; Handle unchanged) remains binding. |
+| 2 | 159 | `Production wiring order in runRouter (binding)` | v1.4 | Current | No supersession — construct → SetFrameCallback → Start ordering contract is the live requirement. |
+| 3 | 306 | `FrameFn return-value contract (v1.4 — F-SP4-001, binding)` | v1.4 | Current | No supersession — discard-and-continue (`_ = frameFn(...)`) mandate is still binding. |
+| 4 | 365 | `READ-error disposition contract (v1.5 — F-SP5-001, binding)` | v1.5 | **Superseded in part** | **REMEDIATED v1.16 — F-SP20-001**: header now carries "; superseded in part by v1.6 — F-SP6-001 (conn.Close() teardown wiring): see the 'Read-error conn.Close() teardown wiring' section below". Prose :386-387 struck and annotated. v1.5 sketch banner inserted. |
+| 5 | 402 | `Receive-goroutine sketch (updated — replaces the elided { ... } from v1.4)` | v1.5 | **Superseded** | **REMEDIATED v1.16 — F-SP20-001**: banner blockquote inserted immediately above sketch fence: "SUPERSEDED (v1.16 — F-SP20-001): this v1.5 sketch omits the binding `_ = conn.Close()` before `return`…". Sketch body preserved unmodified (history). |
+| 6 | 423 | `AC-005 read-error-exit pin test (v1.5 — binding for story-writer)` | v1.5 | Current (amended) | Test name still binding; the v1.5 single-byte injection recipe was already struck and annotated at :434 by v1.9 (F-SP11-001). In-place annotation present; compliant. |
+| 7 | 447 | `BINDING corrected recipe (v1.9 — F-SP11-001)` | v1.9 | Current | No supersession — 44-byte complete header recipe is the live binding recipe. |
+| 8 | 495 | `AC-003 forwarding-completeness pin test (v1.13 — F-SP17-001, BINDING)` | v1.13 | Current | No supersession — CtlFrameForwardedToCallback test requirement is the live binding. |
+| 9 | 543 | `AC-003 discard-continuation pin (v1.14 — F-SP18-001, BINDING)` | v1.14 | Current | No supersession — two-frame PEConnectFrameDiscarded extension is the live binding. |
+| 10 | 606 | `AC-001 PC-3 / AC-004 precondition observable substitutes (v1.6 — F-SP6-003, binding for story-writer)` | v1.6 | Superseded in part (annotated) | v1.7 F-SP7-001/F-SP7-002 retraction annotations already present at :620 and :628 ("amended v1.7 — F-SP7-001/F-SP7-002: … RETRACTED"). In-place annotations present; compliant. |
+| 11 | 638 | `Corrected observable semantics for AC-001 PC-3 and AC-004 precondition (v1.7 — F-SP7-001 + F-SP7-002, BINDING)` | v1.7 | Current | No supersession — three-observable semantics (peWriteFixture.accepted, "mode=PE", connectedCount observation constraints) are the live binding. |
+| 12 | 706 | `Read-error conn.Close() teardown wiring (v1.6 — F-SP6-001, BINDING)` | v1.6 | Current | No supersession — this section IS the superseding binding wiring that F-SP20-001 remediation points to. |
+| 13 | 738 | `Updated receive-goroutine sketch (v1.6 — replaces v1.5 sketch)` | v1.6 | Current | No supersession — this is the binding v1.6 sketch (with `_ = conn.Close()`). The v1.5 sketch at :402 now carries an in-place banner pointing here. |
+| 14 | 850 | `ARCH-08 parenthetical reconciliation obligation (v1.10 — F-SP12-001, BINDING)` | v1.10 | Current | No supersession — §6.5 parenthetical reconciliation wording remains the live obligation. |
+| 15 | 902 | `§6.6.2 upstreamdial forbidden-edges bullet — ARCH-08 edit obligation (v1.11 — F-SP13-001, BINDING)` | v1.11 | Current | No supersession — §6.6.2 forbidden-edges replacement bullet remains the live obligation. |
+| 16 | 1160 | `BC-2.01.004:61 sibling amendment obligation (v1.12 — F-SP14-001, BINDING)` | v1.12 | Current | No supersession — BC-2.01.004:61 same-commit amendment obligation remains the live binding. |
+| 17 | 1446 | `Q6 per-reconnect join (binding)` | v1.4+ | Current | No supersession — per-reconnect-iteration join requirement remains the live binding. |
+
+**Sweep result:** 17 blocks enumerated. 2 defective (rows 4–5, both remediated in v1.16). 1 previously remediated (row 6, v1.9 annotation present). 1 previously remediated in part (row 10, v1.7 annotations present). 13 fully current with no supersession needed. Zero unannotated stale binding blocks remain after v1.16.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP20-001 — READ-error block :365-421: three-part defect: (1) header :365 lacks "amended v1.6" marker; (2) prose :386-387 states retracted mechanism verbatim ("Exit → dialLoop's existing teardown/reconnect path closes the conn and re-dials, which is the ONLY correct resync"); (3) v1.5 sketch :404-421 has bare `return` with no `_ = conn.Close()` and no banner | MED [doc-drift / incompletely-discharged prior remediation] — ACCEPTED; REMEDIATED above | Three-part annotation applied: (1) header :365 extended with "; superseded in part by v1.6 — F-SP6-001 (conn.Close() teardown wiring): see the 'Read-error conn.Close() teardown wiring' section below"; (2) prose :386-387 struck with ~~strikethrough~~ and annotated "*(amended v1.16 — F-SP20-001: RETRACTED. `maintainConn` is write-only (connector.go:399) and never observes receive-goroutine exit — dialLoop's teardown path does NOT fire on read-goroutine exit alone. The receive goroutine MUST itself call `_ = conn.Close()` before returning, converting the read-side failure into a write-side teardown. See the F-SP6-001 wiring section (binding).)*"; (3) banner blockquote inserted immediately above v1.5 sketch fence: "SUPERSEDED (v1.16 — F-SP20-001): this v1.5 sketch omits the binding `_ = conn.Close()` before `return` in the read-error branch (F-SP6-001). Do NOT implement from this sketch — the v1.6 'Updated receive-goroutine sketch' below (with `_ = conn.Close()`) is the binding version." Sketch body preserved unmodified (history preservation policy). Class-closure sweep performed (17 blocks): zero unannotated stale binding blocks remain. This is the 7th incomplete-sweep-class instance (F-SP7-003, F-SP10-001, F-SP13-001, F-SP14-001, F-SP15-001, F-SP19-001, F-SP20-001). |
+| P1a — v1.15 strikethrough well-formed + canonical pattern reconciled 7/7 + story v1.18 metadata-only verified at diff level | Pass-20 P1a confirmation | Clean. All v1.15 changes hold: the v1.15 Option-B retraction in the v1.1 supersession note is well-formed and annotation-complete. The F-SP7-003 canonical multi-line pattern (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`) 7-hit reconciliation is verified. Story v1.18 is metadata-only (no implementation obligation changed). |
+| P1b — Other retracted mechanisms confirmed properly bannered: mode=PE (F-SP7-001), arqsend Q4/Q5 (F-SP10-001), single-byte recipe (F-SP11-001) | Pass-20 P1b confirmation | Clean. mode=PE: struck+annotated at v1.7 F-SP7-001/F-SP7-002, compliant (class-closure sweep rows 10-11). arqsend Q4: v1.8 supersession banner present ("Q4's test-role content below is SUPERSEDED"). arqsend Q5: v1.8 supersession banner present ("Q5's test shape below is SUPERSEDED"). Single-byte recipe: struck+annotated at v1.9 F-SP11-001 (:434). All four retracted mechanism blocks carry in-place annotation; none defective. |
+| P1c — All five ACs testable/constructible/observable/single-reading | Pass-20 P1c confirmation | Clean. AC-001 (DataFrameForwardedToCallback): observable via FrameFn call-count assertion, constructible with outerassembler.Assemble + in-package fixture. AC-002 (byte-contract NoDuplicateSuppression): observable via crc32 key discrimination, constructible with two differing Envelope.SrcAddr frames. AC-003 (PEConnectFrameDiscarded + CtlFrameForwardedToCallback + discard-continuation): observable via FrameFn call presence/absence + two-frame sequence, constructible with real runRouter. AC-004 (ModePE precondition + ForwardedToCallback): observable via peWriteFixture.accepted gate + FrameFn assertion, constructible with real runRouter. AC-005 (ExitsOnReadError + ExitsOnVersionMismatch): observable via connector redial within timeout + goroutine exit, constructible with 44-byte malformed header injection. All five ACs have single unambiguous readings. |
+| P1d — 10 note→story claims verified zero divergence | Pass-20 P1d confirmation | Confirmed. The v1.16 changes are note-side annotation only; no implementation obligation, test recipe, test name, or test count is altered. The story body carries the binding obligations unchanged. Zero divergence introduced by v1.16. |
+| P2 — POL-001 / POL-002 pass | Pass-20 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.16. The three-part annotation is additive-plus-strikethrough (history preservation); all blast-radius counts (frame sweep unified-12, wire-format spec pair) are unaffected. Class-closure sweep (17 blocks) discharges POL-002 for the versioned-binding-block scope. |
+| P3 — CtlPin + ExitsOnVersionMismatch re-traced realizable | Pass-20 P3 confirmation | Confirmed. `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` (v1.13 — F-SP17-001): `FrameTypeCtl = 0x03` passes `Valid()`, `outerassembler.Assemble` passthrough verified — realizable unchanged. `TestConnector_ReceiveLoop_ExitsOnVersionMismatch` (v1.9 optional — F-SP11-001): byte[0]=0xFF triggers ErrVersionMismatch → same read-error exit contract → conn.Close() → maintainConn write failure → reconnect — realizable unchanged. Neither test has any dependency on the v1.16 annotation changes. |
+| Ledger passes 1–19 — all hold | Pass-20 ledger confirmation | Confirmed. No ruling in passes 1–19 is affected by the v1.16 note-only annotation amendments. The entire pass-1 through pass-19 adjudicated ledger stands as published. |

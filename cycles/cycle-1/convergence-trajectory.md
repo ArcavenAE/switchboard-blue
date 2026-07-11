@@ -1611,10 +1611,13 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 17 (spec) | v1.15 | 1 | 0 | 1 | 0 | 0/3 | note v1.13 + story v1.16 + index v4.56 — remediated; STREAK RESET 1/3 → 0/3 |
 | 18 (spec) | v1.16 | 1 | 0 | 1 | 0 | 0/3 | note v1.14 + story v1.17 + index v4.57 — remediated; streak stays 0/3 |
 | 19 (spec) | v1.17 | 1 | 0 | 1 | 0 | 0/3 | note v1.15 + story v1.18 (metadata-only) + index v4.58 — remediated; streak stays 0/3 |
+| 20 (spec) | v1.18 | 1 | 0 | 1 | 0 | 0/3 | note v1.16 + story v1.19 (metadata-only) + index v4.59 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: line-break-spanning Option-B residual; F-SP7-003 sweep re-certified multi-line-tolerant; streak stays 0/3); pass 20 pending vs {v1.18, note v1.15}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: line-break-spanning Option-B residual; F-SP7-003 sweep re-certified multi-line-tolerant; streak stays 0/3); pass 20 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: v1.5 READ-error block unannotated after v1.6 superseded it; 17-block class-closure sweep; streak stays 0/3); pass 21 pending vs {v1.19, note v1.16}.
+
+**Pass 20 detail section:** pass-19's multi-line retracted-mechanism sweep generalised into a full versioned-block-supersession sweep found the stale v1.5 READ-error block — three linked defects (unmarked header, false teardown prose, bare-return sketch); remediation includes the cycle's first WHOLE-CLASS closure — all 17 versioned binding blocks enumerated with dispositions, fencing the 'superseded-without-in-place-annotation' class wholesale; everything else clean (canonical pattern 7/7, metadata-only verified at diff level, first-principles AC audit all five testable, 10/10 temporal-coherence claims, hostile-implementer pool exhausted since round 3); observation: three consecutive passes (18/19/20) have found exactly one MED each in note historiography while story substance has been finding-free since pass 17 — the note's 2,600 lines of layered history are now the dominant defect surface, and the 17-block sweep just fenced its largest remaining class.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2433,4 +2436,44 @@ The sweep-transcript discipline arc for F-SP7-003 covers three phases:
 - **Streak stays 0/3.** F-SP19-001 is MED — doc-drift/incompletely-discharged prior remediation. The residual was unannotated live text contradicting a binding ruling.
 - Sprint-state v2.23→v2.24. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1.
 
-**Awaiting:** spec adversarial pass 20 @ {story v1.18, note v1.15} (streak 0/3)
+**Awaiting:** spec adversarial pass 21 @ {story v1.19, note v1.16} (streak 0/3)
+
+---
+
+### Pass 20 Details (2026-07-10)
+
+**Story at review:** v1.18 | **Placement note at review:** v1.15
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated. Streak stays 0/3.
+
+**Method:** Applied pass-19's multi-line retracted-mechanism sweep to older note sections; swept all versioned binding blocks for unannotated supersessions.
+
+**7th incomplete-sweep-class instance — generalizing F-SP19-001's shape:** F-SP19-001 established the pattern for line-break-spanning residuals. Pass 20 generalises it: any versioned binding block superseded by a later-version ruling without in-place annotation is a member of the same class. The v1.5 READ-error block is the instance — superseded at v1.6 by F-SP6-001 binding (conn.Close() obligation) without the three-part annotation the story's twin v1.5 header carries.
+
+#### Finding F-SP20-001
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP20-001 | MED | doc-drift/incompletely-discharged prior remediation | Note's v1.5 READ-error block (lines :365–421) was never annotated when v1.6 F-SP6-001 superseded it. Three linked defects: (1) header lacked 'amended v1.6' marker — the story's twin header carries 'amended v1.6' per the F-SP6-001 remediation convention; (2) live prose asserted the retracted 'dialLoop teardown closes the conn' mechanism — false, `maintainConn` is write-only at connector.go:399; (3) v1.5 sketch showed bare `return` without `_ = conn.Close()` — copy-pasteable wrong code 336 lines from the correct v1.6 sketch. | Note v1.15→v1.16 (architect): three-part annotation applied — (1) header marker 'amended v1.6 — see F-SP6-001 binding below' added; (2) retracted 'dialLoop teardown' prose struck with strikethrough and F-SP6-001 annotation; (3) v1.5 sketch banner added with pointer to correct v1.6 sketch (sketch body preserved as historical reference). CLASS-CLOSURE SWEEP of all 17 versioned binding blocks: 2 remediated, 2 previously annotated, 13 current — zero unannotated stale blocks remain. Orchestrator reconciled 17-block enumeration against independent 19-hit binding-marker grep: delta = nested sub-blocks + sweep-table meta-hits, all dispositioned. Story v1.18→v1.19 metadata-only: note pin v1.15→v1.16 in frontmatter (story:351 already carried 'amended v1.6'). STORY-INDEX v4.58→v4.59. |
+
+#### Pass 20 Confirmations
+
+- **v1.15 strikethrough (pass-19 remediation under direct attack):** Option-B residual struck and annotated correctly; multi-line-tolerant sweep returns zero live 'Handle gains SetFrameCallback' tokens. HOLDING.
+- **Canonical pattern reconciled 7/7:** All 7 incomplete-sweep-class instances (F-SP7-003/F-SP10-001/F-SP13-001/F-SP14-001/F-SP15-001/F-SP19-001/F-SP20-001) share the fix-instance-miss-class root cause. The 17-block class-closure sweep fences the versioned-block-supersession class wholesale.
+- **Story v1.18 metadata-only verified at diff level:** diff confirmed no AC or contract text changed from v1.17→v1.18; twin header in story already carried 'amended v1.6' correctly.
+- **First-principles testability all five ACs:** AC-001 read-error exit (conn.Close() before return) TESTABLE; AC-002 SetFrameCallback ordering TESTABLE; AC-003 discrimination TESTABLE; AC-004 E-FWD-001 exhaustion TESTABLE; AC-005 lifecycle/doneCh TESTABLE.
+- **10/10 note→story claims match:** Note v1.16 corrected READ-error binding obligations cross-checked against story v1.18 AC-001 PC-3 and Design Constraints READ-error contract — zero mismatches.
+- **2 recipes re-traced realizable:** ExitsOnReadError complete-44-byte recipe and SetFrameCallback ordering both realizable at 8eb54a5.
+- **Ledger 1-19 hold:** All prior pass findings verified holding at note v1.16 + story v1.18 state.
+- **POL pass:** POL-001 version pins and POL-002 STORY-INDEX sync confirmed for note v1.16 and story v1.19.
+
+#### Observation: Note Historiography Layer Now Primary Defect Surface
+
+Three consecutive passes (18/19/20) have each found exactly one MED in note historiography while story substance has been finding-free since pass 17. The note's 2,600 lines of layered history are now the dominant defect surface. The 17-block class-closure sweep at pass 20 fences the largest remaining class (versioned-block-supersession-without-annotation) wholesale; the remaining historiography risk is isolated to within-block prose claims that predate a ruling but survived outside a versioned-block structure.
+
+#### Outcome
+
+- **Streak stays 0/3.** F-SP20-001 is MED — note historiography layer.
+- Sprint-state v2.24→v2.25. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1.
+
+**Awaiting:** spec adversarial pass 21 @ {story v1.19, note v1.16} (streak 0/3)
