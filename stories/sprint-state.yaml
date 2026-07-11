@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.40
+# version: 2.41
 # changelog:
+#   - version: 2.41
+#     date: 2026-07-11
+#     description: "S-7.04-FU-DRAIN-WIRE elaborated — placement note v1.0 (Q1-Q7: ctl-0x03 reuse + 4-byte control_type payload + 0x02 RESYNC reservation; per-node sync.Map send channels; nil ForwardFunc replacement mandated; VP-037 via new untagged TestE2E_RouterDrain_WireRoundTrip; EC-003 via RegisterObserver path + drain.Signal recover() gap; 9-file FCL; ~6 net-new tests; 2 PROVISIONAL — ACK mechanism Q3.P1, test-file consolidation Q6; emits FO-DRAIN-WIRE-001/002) + story v1.0 (5 ACs, 9 FCL rows, 13 tasks, PROVISIONALs marked not hardened) + STORY-INDEX v4.68 (row 140 backlog→ready v1.0, Notes chain, changelog 4.68); sprint-state entry: status ready-for-spec-adversarial, points 5, story_version 1.0, placement_note v1.0, streak 0/3, deps_satisfied true, fo_consumed FO-RECV-FWD-001."
 #   - version: 2.40
 #     date: 2026-07-11
 #     description: "S-BL.PE-RECEIVE-LOOP DELIVERED — PR #118 squash merged @ e940fc2 (2026-07-11T12:42:38Z); CI green after 1 fix cycle (gofumpt e4f2e05 + PR-body blast-radius description format); pr-review APPROVE 1 cycle 0 blocking; SEC-001 MEDIUM accepted (gates on F-SP11-003); remote + local branch deleted; worktree removed; develop fast-forwarded 42baa8c → e940fc2; DELIVERY doc v1.0 final; STORY-INDEX v4.67 merge true-up; FO-RECV-FWD-001 emitted (ForwardFunc wiring obligation on interface-set-widening story); S-7.04-FU-DRAIN-WIRE unblocked-backlog (cites PR #118); OBS-2 [process-gap] carried to cycle close per S-7.02."
@@ -1060,14 +1063,23 @@ stories:
     title: "DRAIN-over-SVTN wire + per-node connection identity + observer registration"
     epic: E-7
     wave: backlog
-    status: backlog
+    status: ready-for-spec-adversarial
     priority: P1
     scope_phase: PE
-    points: 0
+    points: 5
+    story_version: "1.0"
+    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.0"
     bc_traces: [BC-2.09.002]
+    vp_traces: [VP-037]
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
+    deps_satisfied: true
+    fo_consumed: "FO-RECV-FWD-001"
+    spec_adversarial_streak: "0/3"
+    provisional_rulings: ["Q3.P1 ACK mechanism", "Q6 test-file consolidation"]
+    code_base: "develop e940fc2"
     # depends_on S-BL.PE-RECEIVE-LOOP added per PO adjudication F-P1-002 (2026-07-07)
-    # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — this story is now UNBLOCKED-BACKLOG; awaiting wave planning
+    # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — deps satisfied
+    # 2026-07-11: elaborated — placement note v1.0 (Q1-Q7) + story v1.0 (5 ACs, 9 FCL, 13 tasks); 2 PROVISIONAL rulings; spec-adversarial pass 1 next
 
   - story_id: S-BL.PE-RECEIVE-LOOP
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"
