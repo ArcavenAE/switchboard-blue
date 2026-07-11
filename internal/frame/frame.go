@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 )
 
 // OuterHeaderSize is the fixed wire size of the outer header in bytes.
@@ -35,12 +36,13 @@ const (
 	FrameTypeCtl       FrameType = 0x03
 	FrameTypeArq       FrameType = 0x04
 	FrameTypeFec       FrameType = 0x05
+	FrameTypePEConnect FrameType = 0x06 // (ARCH-02 §3.1)
 )
 
 // Valid reports whether the FrameType byte is one of the five canonical enum
 // values defined in ARCH-02 §3.1. Returns false for 0x00 and 0x06..0xFF.
 func (f FrameType) Valid() bool {
-	return f >= FrameTypeData && f <= FrameTypeFec
+	return f >= FrameTypeData && f <= FrameTypePEConnect
 }
 
 // ErrInvalidFrameType is returned by ParseOuterHeader when the parsed
@@ -79,6 +81,14 @@ type OuterHeader struct {
 	DstAddr [8]byte
 	// HMACTag is the 8-byte HMAC authentication tag.
 	HMACTag [8]byte
+}
+
+// ReadOuterFrame reads exactly one framed message from r: OuterHeaderSize bytes
+// followed by hdr.PayloadLen bytes of payload. Returns the parsed header and
+// payload slice. The []byte return is payload-only; it does NOT include the outer
+// header bytes. (new — S-BL.PE-RECEIVE-LOOP)
+func ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error) {
+	panic("not implemented — S-BL.PE-RECEIVE-LOOP")
 }
 
 // EncodeOuterHeader serialises h into exactly OuterHeaderSize (44) bytes

@@ -8,7 +8,7 @@
 // arrive via a buffered chan []string (channel-passed snapshot per Q3 ruling).
 //
 // DAG position: 19 (effectful — network I/O).
-// Allowed internal imports: {halfchannel, outerassembler}.
+// Allowed internal imports: {frame, halfchannel, outerassembler}.
 // Forbidden: drain, routing, testenv, and any package at positions 20–23.
 package upstreamdial
 
@@ -22,9 +22,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/outerassembler"
 )
+
+// FrameFn is the callback type for frames received from a PE upstream connection.
+// raw is the full wire frame (outer header + payload). A non-nil error return
+// from FrameFn MUST NOT terminate the receive loop (discard-and-continue
+// semantics — mirrors netingress.RouteFn). (new — S-BL.PE-RECEIVE-LOOP)
+type FrameFn func(hdr frame.OuterHeader, raw []byte) error
 
 // Backoff parameters for per-address reconnect (Q5 ruling, AC-002).
 // Base=500ms, Cap=30s, Jitter ±25% per-attempt.
@@ -111,6 +118,13 @@ type Connector struct {
 
 	// initialAddrs is the address list from New, consumed by Start.
 	initialAddrs []string
+
+	// frameFn is the callback for frames received on PE upstream connections.
+	// Set once before Start() via SetFrameCallback; never mutated after Start().
+	// The goroutine-creation happens-before guarantee makes it visible to all
+	// goroutines launched by Start() without additional synchronization.
+	// (new — S-BL.PE-RECEIVE-LOOP)
+	frameFn FrameFn
 }
 
 // New constructs a Connector with the given parameters and returns a *Connector
@@ -199,6 +213,20 @@ func (c *Connector) Stop() {
 		close(c.stopCh)
 	})
 	<-c.doneCh
+}
+
+// SetFrameCallback registers the callback invoked for each frame received on a
+// PE upstream connection. Must be called before Start(); the field is set-once
+// pre-launch. The Go memory model's goroutine-creation happens-before guarantees
+// visibility to all goroutines launched by Start() — no additional
+// synchronization is required.
+//
+// Post-Start mutation is forbidden: calling SetFrameCallback after Start()
+// returns is a data race (dial goroutines are already reading frameFn).
+// This method is on the concrete *Connector only — NOT on the Handle interface
+// (Option A per placement note F-SP6-002). (new — S-BL.PE-RECEIVE-LOOP)
+func (c *Connector) SetFrameCallback(fn FrameFn) {
+	c.frameFn = fn
 }
 
 // addrCancel holds a cancel function for a per-address dial goroutine.
