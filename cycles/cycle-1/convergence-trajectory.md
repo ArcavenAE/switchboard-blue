@@ -1612,10 +1612,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 18 (spec) | v1.16 | 1 | 0 | 1 | 0 | 0/3 | note v1.14 + story v1.17 + index v4.57 — remediated; streak stays 0/3 |
 | 19 (spec) | v1.17 | 1 | 0 | 1 | 0 | 0/3 | note v1.15 + story v1.18 (metadata-only) + index v4.58 — remediated; streak stays 0/3 |
 | 20 (spec) | v1.18 | 1 | 0 | 1 | 0 | 0/3 | note v1.16 + story v1.19 (metadata-only) + index v4.59 — remediated; streak stays 0/3 |
+| 21 (spec) | v1.19 | 1 | 0 | 1 | 0 | 0/3 | note v1.17 + story v1.20 (metadata-only) + index v4.60 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: line-break-spanning Option-B residual; F-SP7-003 sweep re-certified multi-line-tolerant; streak stays 0/3); pass 20 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: v1.5 READ-error block unannotated after v1.6 superseded it; 17-block class-closure sweep; streak stays 0/3); pass 21 pending vs {v1.19, note v1.16}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: line-break-spanning Option-B residual; F-SP7-003 sweep re-certified multi-line-tolerant; streak stays 0/3); pass 20 HAS_FINDINGS → remediated (doc-drift/incompletely-discharged prior remediation: v1.5 READ-error block unannotated after v1.6 superseded it; 17-block class-closure sweep; streak stays 0/3); pass 21 HAS_FINDINGS → remediated (doc-drift/incomplete sweep-completeness certification: v1.16 table missed four binding headers; table extended rows 18-21 + canonical grep pattern + meta-hit note; all four blocks current; streak stays 0/3); pass 22 next vs {v1.20, note v1.17}.
 
 **Pass 20 detail section:** pass-19's multi-line retracted-mechanism sweep generalised into a full versioned-block-supersession sweep found the stale v1.5 READ-error block — three linked defects (unmarked header, false teardown prose, bare-return sketch); remediation includes the cycle's first WHOLE-CLASS closure — all 17 versioned binding blocks enumerated with dispositions, fencing the 'superseded-without-in-place-annotation' class wholesale; everything else clean (canonical pattern 7/7, metadata-only verified at diff level, first-principles AC audit all five testable, 10/10 temporal-coherence claims, hostile-implementer pool exhausted since round 3); observation: three consecutive passes (18/19/20) have found exactly one MED each in note historiography while story substance has been finding-free since pass 17 — the note's 2,600 lines of layered history are now the dominant defect surface, and the 17-block sweep just fenced its largest remaining class.
 
@@ -2477,3 +2478,45 @@ Three consecutive passes (18/19/20) have each found exactly one MED in note hist
 - Sprint-state v2.24→v2.25. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1.
 
 **Awaiting:** spec adversarial pass 21 @ {story v1.19, note v1.16} (streak 0/3)
+
+---
+
+### Pass 21 Details (2026-07-10)
+
+**Story at review:** v1.19 | **Placement note at review:** v1.16
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated. Streak stays 0/3.
+
+**Method:** Sweep-of-the-sweep — pass-20's class-closure table itself certified falsely. Four binding headers unreachable by its grep patterns.
+
+**8th incomplete-sweep-class instance — sweep certification defect:** The v1.16 class-closure sweep table declared "17 blocks, complete" but four binding-block headers could not be matched by the recorded grep patterns (`grep -nE "\*\*.*binding\b"` style). The four missed headers: `:262` FrameFn byte-contract (v1.3/F-SP3-001, structural peer of enumerated rows 3/4), `:511` Test shape, `:1812` Pin test shape, `:1928` Binding harness rule. All four verified CURRENT — no stale content was hiding behind the certification gap. The defect is purely in the sweep table's completeness claim. This is the 3rd false sweep-completeness certification in the cycle (prior: F-SP7-003 single-line-only certification, F-SP19-001 joined-line certification gap).
+
+**Found via ledger-19 sanctioned shape:** Pass-19 established that "a block NOT in the table = valid finding even if that block's content is current." Pass-21 applied this directly: the adversary enumerated all binding blocks in the note and compared against the table, finding four absent entries.
+
+#### Finding F-SP21-001
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP21-001 | MED | doc-drift/incomplete sweep-completeness certification | Note v1.16 class-closure sweep table certified "17 blocks, complete" but missed four binding-block headers whose text doesn't match the recorded grep patterns: :262 FrameFn byte-contract (v1.3/F-SP3-001, structural peer of enumerated rows 3/4), :511 Test shape, :1812 Pin test shape, :1928 Binding harness rule. All four verified CURRENT — no stale content was hidden. Defect is purely in the certification. 8th incomplete-sweep-class instance, 3rd false completeness certification. | Note v1.16→v1.17 (architect): table extended with rows 18-21 covering the four missed blocks with disposition CURRENT for each; canonical grep pattern `grep -nE '\*\*[^*]*[Bb]inding'` recorded (produced 21 pre-edit hits); v1.17 addendum added preserving full v1.16 text; POST-EDIT META-HIT NOTE added per orchestrator audit: live post-edit count is 68 including documentation echoes (architect independently caught its own newly-added paragraph adding hit #68 — count discipline fully internalized); re-certified over 21 binding blocks, all current. Story v1.19→v1.20 metadata-only: note pin v1.16→v1.17 in frontmatter. STORY-INDEX v4.59→v4.60. |
+
+#### Pass 21 Confirmations
+
+- **v1.16 three-part annotation well-formed:** Pass-20's F-SP20-001 remediation (header marker + retracted-prose strike + sketch banner) verified intact and syntactically correct. HOLDING.
+- **9 sweep-table dispositions audited TRUE:** All 9 non-extended rows in the v1.16 table independently verified — block exists at the stated line, disposition label correct (CURRENT/REMEDIATED/PREVIOUSLY-ANNOTATED as recorded). No false entries in the original 17-row set.
+- **Story historiography CLEAN under class lens:** All story changelog entries checked for sweep-certification claims — none present (sweep table lives in note only). CLEAN.
+- **Task 1-16 implementer dry-run — NO BLOCKING CONTRADICTIONS:** First full Task 1-16 implementer dry-run of this cycle. All 16 tasks traced realizable at 8eb54a5. Task-8 RED-gate-ordering observation (adversary noted that Task-8 mentions RED-gate before some preceding tasks are complete) adjudicated NOT a finding — task ordering is advisory sequencing for the implementer, not a spec contract; RED-gate discipline applies at PR submission, not task-by-task.
+- **Notes-chain last-five audit:** Last 5 entries in STORY-INDEX Notes column for S-BL.PE-RECEIVE-LOOP verified accurate and sequentially coherent. CLEAN.
+- **POL pass:** POL-001 version pins current; POL-002 STORY-INDEX sync confirmed for note v1.17 and story v1.20.
+- **NoDuplicateSuppression + AC-005 lifecycle re-traced realizable:** Two binding contracts traced to 8eb54a5 — both realizable. No new unrealizability gaps.
+- **Ledger 1-20 hold:** All 20 prior pass findings verified holding at note v1.17 + story v1.20 state.
+
+#### Observation: Self-Referential Tail — Note Meta-Documentation is the Last Defect Surface
+
+Four consecutive passes (18/19/20/21) have each found exactly one MED, all in note historiography — specifically in the sweep-certification and annotation metadata layers. Story substance has been finding-free since pass 17. The note's sweep table (the artifact that certified the note's correctness) is now the only surface still yielding findings, producing a self-referential tail: the adversary is auditing the certifications of the certifications. Pass-21's extension of the table to 21 blocks + canonical pattern + post-edit meta-hit note represents the most robust certification produced in this cycle.
+
+#### Outcome
+
+- **Streak stays 0/3.** F-SP21-001 is MED — certification-only defect in note historiography.
+- Sprint-state v2.25→v2.26. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1→1.
+
+**Awaiting:** spec adversarial pass 22 @ {story v1.20, note v1.17} (streak 0/3)

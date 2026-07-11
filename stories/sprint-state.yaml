@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.25
+# version: 2.26
 # changelog:
+#   - version: 2.26
+#     date: 2026-07-10
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 21: HAS_FINDINGS — F-SP21-001 (MED [doc-drift/incomplete sweep-completeness certification], the v1.16 17-block class-closure sweep table itself was incomplete: four binding-block headers missed because their text doesn't match the recorded grep patterns — :262 FrameFn byte-contract (v1.3/F-SP3-001, structural peer of enumerated rows 3/4), :511 Test shape, :1812 Pin test shape, :1928 Binding harness rule; ALL FOUR verified CURRENT so no stale content hid behind the gap — defect is purely in the certification; 8th incomplete-sweep-class instance, 3rd false completeness certification; found via the ledger-19 sanctioned shape 'a block NOT in the table = valid finding'). Remediation note-side: table extended rows 18-21, canonical pattern grep -nE '\\*\\*[^*]*[Bb]inding' recorded (21 pre-edit binding blocks), v1.17 addendum preserving v1.16 text, POST-EDIT META-HIT NOTE added on orchestrator audit (live post-edit count 68 including documentation echoes — architect independently caught its own paragraph adding hit #68, count discipline fully internalized), re-certified over 21 blocks. Story-side metadata-only: note pin v1.16→v1.17. Pass-21 confirmations: v1.16 three-part annotation well-formed; 9 sweep-table dispositions audited TRUE; story historiography CLEAN under class lens; Task 1-16 implementer dry-run NO BLOCKING CONTRADICTIONS (first full dry-run of cycle — Task-8 RED-gate-ordering observation adjudicated NOT a finding); Notes-chain last-five audit clean; POL pass; NoDuplicateSuppression + AC-005 lifecycle re-traced realizable; ledger 1-20 hold. Remediated: note v1.16→v1.17 (architect + audit addition), story v1.19→v1.20 + index v4.59→v4.60 (story-writer, metadata-only). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1→1. Next: spec pass 22 vs {story v1.20, note v1.17}."
 #   - version: 2.25
 #     date: 2026-07-10
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 20: HAS_FINDINGS — F-SP20-001 (MED [doc-drift/incompletely-discharged prior remediation], note's v1.5 READ-error block :365-421 never annotated when v1.6 F-SP6-001 superseded it: (1) header lacked 'amended v1.6' marker the story's twin header carries; (2) live prose asserted the retracted 'dialLoop teardown closes the conn' mechanism — false, maintainConn write-only at connector.go:399; (3) v1.5 sketch showed bare `return` without `_ = conn.Close()` — copy-pasteable wrong code 336 lines from the correct v1.6 sketch; 7th incomplete-sweep-class instance, generalizing F-SP19-001's shape: later-version-supersedes-earlier-binding-block-without-in-place-annotation; found by applying pass-19's multi-line retracted-mechanism sweep). Remediation note-side: three-part annotation (header marker + prose strike + sketch banner, sketch body preserved) + CLASS-CLOSURE SWEEP of all 17 versioned binding blocks (2 remediated, 2 previously annotated, 13 current — zero unannotated stale blocks remain; orchestrator reconciled the 17-block enumeration against an independent 19-hit binding-marker grep: delta = nested sub-blocks + sweep-table meta-hits, all dispositioned). Story-side metadata-only: note pin v1.15→v1.16 (story:351 already carried 'amended v1.6'). Pass-20 confirmations: v1.15 strikethrough well-formed, canonical pattern reconciled 7/7, story v1.18 metadata-only verified at diff level, all five ACs pass first-principles testability, 10/10 note→story claims match, POL pass, 2 recipes re-traced realizable, ledger 1-19 hold. Remediated: note v1.15→v1.16 (architect), story v1.18→v1.19 + index v4.58→v4.59 (story-writer, metadata-only). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1. Next: spec pass 21 vs {story v1.19, note v1.16}."
@@ -1031,16 +1034,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.19"
+    story_version: "1.20"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.16"
-    spec_adversarial_pass: 20
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.17"
+    spec_adversarial_pass: 21
     spec_adversarial_streak: "0/3"
-    last_findings: "pass 20 HAS_FINDINGS remediated — F-SP20-001 MED note v1.5 READ-error block unannotated when v1.6 superseded it (header marker missing + retracted dialLoop-teardown prose live + bare-return sketch 336 lines from correct sketch); 7th incomplete-sweep-class instance; 17-block class-closure sweep; note v1.15→v1.16; story v1.18→v1.19 (metadata-only); index v4.58→v4.59; streak stays 0/3"
-    note: "awaiting spec adversarial pass 21 (story v1.19 + note v1.16, streak 0/3)"
+    last_findings: "pass 21 HAS_FINDINGS remediated — F-SP21-001 MED v1.16 sweep table incomplete (four binding headers missed by recorded grep patterns — :262 FrameFn byte-contract, :511 Test shape, :1812 Pin test shape, :1928 Binding harness rule; all four CURRENT); table extended rows 18-21 in note v1.17 + canonical pattern + meta-hit note; 8th incomplete-sweep-class instance, 3rd false completeness certification; note v1.16→v1.17; story v1.19→v1.20 (metadata-only); index v4.59→v4.60; streak stays 0/3"
+    note: "awaiting spec adversarial pass 22 (story v1.20 + note v1.17, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
