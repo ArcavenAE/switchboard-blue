@@ -16,10 +16,15 @@ package upstreamdial
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/arcavenae/switchboard/internal/frame"
+	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/outerassembler"
 )
 
@@ -1420,5 +1425,634 @@ func TestNextBackoff_JitterBounds(t *testing.T) {
 			t.Errorf("trial %d: nextBackoff(BackoffBase) = %v; outside [%v, %v] (F-P1-004)", i, got, lo, hi)
 			return
 		}
+	}
+}
+
+// ── S-BL.PE-RECEIVE-LOOP: receive goroutine unit tests ─────────────────────────
+//
+// These tests cover the receive goroutine functionality introduced by
+// S-BL.PE-RECEIVE-LOOP. All use the in-package accept-and-write fixture pattern
+// (net.Listen + accept + outerassembler.Assemble + conn.Write).
+//
+// The receive goroutine is NOT implemented in the stub — all tests that depend
+// on frame forwarding or goroutine-exit behavior FAIL at RED.
+
+// assembleFrame is a test helper that assembles a wire frame using
+// outerassembler.Assemble with the given FrameType and a zero Envelope.
+// Fails the test if assembly fails.
+func assembleFrame(t *testing.T, ft frame.FrameType) []byte {
+	t.Helper()
+	cf := halfchannel.ChannelFrame{
+		FrameType: ft, // halfchannel.ChannelFrame.FrameType is frame.FrameType
+		ChanID:    1,
+		ChanSeq:   1,
+		Payload:   []byte{0x01},
+	}
+	wire, err := outerassembler.Assemble(cf, [outerassembler.SACKBitmapSize]byte{}, outerassembler.Envelope{})
+	if err != nil {
+		t.Fatalf("assembleFrame: Assemble(FrameType=%#x): %v", byte(ft), err)
+	}
+	return wire
+}
+
+// startAcceptFixture starts a loopback listener, accepts the first connection in
+// a background goroutine, and returns the listener address and a channel that
+// receives the accepted net.Conn. The listener is closed via t.Cleanup.
+func startAcceptFixture(t *testing.T) (addr string, accepted <-chan net.Conn) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("startAcceptFixture: Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	ch := make(chan net.Conn, 1)
+	go func() {
+		conn, aErr := ln.Accept()
+		if aErr != nil {
+			return
+		}
+		ch <- conn
+		// Keep reading so the conn stays alive; discard all data.
+		buf := make([]byte, 4096)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	return ln.Addr().String(), ch
+}
+
+// TestConnector_ReceiveLoop_DataFrameForwardedToCallback verifies AC-001 unit:
+// a Data frame written to the upstream fixture side is received by the receive
+// goroutine and forwarded to the FrameFn callback with the correct header.
+//
+// RED GATE: The receive goroutine is not implemented in the stub. SetFrameCallback
+// exists but the goroutine that reads frames and calls the callback does not run.
+// The callback will never be invoked → test FAILS at RED via timeout.
+func TestConnector_ReceiveLoop_DataFrameForwardedToCallback(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+	addr, accepted := startAcceptFixture(t)
+
+	var invoked atomic.Int32
+	var gotFt frame.FrameType
+	var mu sync.Mutex
+
+	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error {
+		mu.Lock()
+		gotFt = hdr.FrameType
+		mu.Unlock()
+		invoked.Add(1)
+		return nil
+	})
+	c.Start()
+	t.Cleanup(c.Stop)
+
+	// Wait for the connector to dial and be accepted.
+	var serverConn net.Conn
+	select {
+	case serverConn = <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_ReceiveLoop_DataFrameForwardedToCallback: upstream fixture not accepted within 2s")
+	}
+
+	// Write a Data frame from the upstream (server) side.
+	wire := assembleFrame(t, frame.FrameTypeData)
+	if _, err := serverConn.Write(wire); err != nil {
+		t.Fatalf("TestConnector_ReceiveLoop_DataFrameForwardedToCallback: Write: %v", err)
+	}
+
+	// The FrameFn callback must be invoked within the test budget.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if invoked.Load() >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if invoked.Load() < 1 {
+		t.Fatalf("TestConnector_ReceiveLoop_DataFrameForwardedToCallback: FrameFn not invoked within 2s (receive goroutine not implemented?)")
+	}
+	mu.Lock()
+	ft := gotFt
+	mu.Unlock()
+	if ft != frame.FrameTypeData {
+		t.Errorf("TestConnector_ReceiveLoop_DataFrameForwardedToCallback: hdr.FrameType = %#x, want FrameTypeData (%#x)",
+			byte(ft), byte(frame.FrameTypeData))
+	}
+}
+
+// TestConnector_ReceiveLoop_PEConnectFrameDiscarded verifies AC-003 unit:
+// a FrameTypePEConnect bootstrap frame is silently discarded (FrameFn NOT invoked),
+// AND the connection stays open for the subsequent Data frame (FrameFn IS invoked).
+//
+// Extended per F-SP18-001 (v1.17): the fixture writes PEConnect THEN Data on the
+// same connection, asserting (a) FrameFn not invoked for bootstrap, (b) FrameFn
+// IS invoked for the data frame — pins discard-and-continue semantics and kills
+// discard-as-close implementations.
+//
+// RED GATE: The receive goroutine is not implemented. The callback will never be
+// invoked for the Data frame → test FAILS at RED via timeout on assertion (b).
+func TestConnector_ReceiveLoop_PEConnectFrameDiscarded(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+	addr, accepted := startAcceptFixture(t)
+
+	var invocations []frame.FrameType
+	var mu sync.Mutex
+
+	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error {
+		mu.Lock()
+		invocations = append(invocations, hdr.FrameType)
+		mu.Unlock()
+		return nil
+	})
+	c.Start()
+	t.Cleanup(c.Stop)
+
+	// Wait for the connector to dial and be accepted.
+	var serverConn net.Conn
+	select {
+	case serverConn = <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_ReceiveLoop_PEConnectFrameDiscarded: upstream fixture not accepted within 2s")
+	}
+
+	// Write a PEConnect bootstrap frame (must be discarded).
+	peWire := assembleFrame(t, frame.FrameTypePEConnect)
+	if _, err := serverConn.Write(peWire); err != nil {
+		t.Fatalf("TestConnector_ReceiveLoop_PEConnectFrameDiscarded: Write PEConnect: %v", err)
+	}
+
+	// Write a Data frame immediately after on the SAME connection.
+	dataWire := assembleFrame(t, frame.FrameTypeData)
+	if _, err := serverConn.Write(dataWire); err != nil {
+		t.Fatalf("TestConnector_ReceiveLoop_PEConnectFrameDiscarded: Write Data: %v", err)
+	}
+
+	// Wait for the Data frame to be forwarded to the callback.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(invocations)
+		mu.Unlock()
+		if n >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	snap := make([]frame.FrameType, len(invocations))
+	copy(snap, invocations)
+	mu.Unlock()
+
+	// (a) FrameFn must NOT have been invoked with FrameTypePEConnect.
+	for _, ft := range snap {
+		if ft == frame.FrameTypePEConnect {
+			t.Errorf("TestConnector_ReceiveLoop_PEConnectFrameDiscarded: FrameFn invoked with FrameTypePEConnect — bootstrap frame must be silently discarded")
+		}
+	}
+
+	// (b) FrameFn must have been invoked for the Data frame.
+	found := false
+	for _, ft := range snap {
+		if ft == frame.FrameTypeData {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("TestConnector_ReceiveLoop_PEConnectFrameDiscarded: FrameFn not invoked for FrameTypeData after PEConnect discard — discard-and-continue semantics violated (receive goroutine not implemented?)")
+	}
+}
+
+// TestConnector_ReceiveLoop_CtlFrameForwardedToCallback verifies F-SP17-001:
+// a FrameTypeCtl frame is forwarded to the FrameFn callback.
+// Kills whitelist-data-only implementations.
+//
+// RED GATE: The receive goroutine is not implemented → FrameFn never invoked →
+// test FAILS at RED via timeout.
+func TestConnector_ReceiveLoop_CtlFrameForwardedToCallback(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+	addr, accepted := startAcceptFixture(t)
+
+	var invoked atomic.Int32
+	var gotFt frame.FrameType
+	var mu sync.Mutex
+
+	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error {
+		mu.Lock()
+		gotFt = hdr.FrameType
+		mu.Unlock()
+		invoked.Add(1)
+		return nil
+	})
+	c.Start()
+	t.Cleanup(c.Stop)
+
+	var serverConn net.Conn
+	select {
+	case serverConn = <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_ReceiveLoop_CtlFrameForwardedToCallback: upstream fixture not accepted within 2s")
+	}
+
+	wire := assembleFrame(t, frame.FrameTypeCtl)
+	if _, err := serverConn.Write(wire); err != nil {
+		t.Fatalf("TestConnector_ReceiveLoop_CtlFrameForwardedToCallback: Write: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if invoked.Load() >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if invoked.Load() < 1 {
+		t.Fatalf("TestConnector_ReceiveLoop_CtlFrameForwardedToCallback: FrameFn not invoked within 2s (whitelist-data-only or receive goroutine not implemented?)")
+	}
+	mu.Lock()
+	ft := gotFt
+	mu.Unlock()
+	if ft != frame.FrameTypeCtl {
+		t.Errorf("TestConnector_ReceiveLoop_CtlFrameForwardedToCallback: hdr.FrameType = %#x, want FrameTypeCtl (%#x)",
+			byte(ft), byte(frame.FrameTypeCtl))
+	}
+}
+
+// TestConnector_ReceiveLoop_ExitsOnConnClose verifies AC-005 PC-1:
+// when the upstream server closes the connection, the receive goroutine exits
+// (returns io.EOF), and Stop() returns within the test deadline without leak.
+//
+// RED GATE: The receive goroutine is not implemented. Stop() will return (there
+// is no goroutine to join), so this test may PASS trivially for the wrong reason.
+// After implementation it validates the EOF-exit and join semantics.
+func TestConnector_ReceiveLoop_ExitsOnConnClose(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+	ln, addr := newLoopbackListener(t)
+
+	heldServerConn := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		heldServerConn <- conn
+		// Hold the connection until the test closes it.
+		buf := make([]byte, 4096)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	lw := newLogWriter()
+	c := New(lw, zeroEnv(), testKeepalive, []string{addr})
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error { return nil })
+	c.Start()
+	t.Cleanup(c.Stop)
+
+	var serverConn net.Conn
+	select {
+	case serverConn = <-heldServerConn:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_ReceiveLoop_ExitsOnConnClose: upstream fixture not accepted within 2s")
+	}
+
+	// Close the server side — receive goroutine must exit on io.EOF.
+	_ = serverConn.Close()
+	_ = ln.Close()
+
+	// Stop() must return within the test deadline — verifies goroutine exit.
+	done := make(chan struct{})
+	go func() {
+		c.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("TestConnector_ReceiveLoop_ExitsOnConnClose: Stop() did not return within 3s (receive goroutine leak?)")
+	}
+}
+
+// TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak verifies AC-005 PC-2:
+// the per-reconnect-iteration join prevents goroutine accumulation over a flap
+// cycle (F-SP1-005, F-SP3-002).
+//
+// Phase 1: SetFrameCallback BEFORE Start (F-SP4-002 ordering contract) →
+//          connect + Data frame delivered.
+// Phase 2: server-side conn.Close() → triggers reconnect.
+// Phase 3: second listener accepts redial + Data frame delivered again.
+// Phase 4: Stop() completes within timeout; goroutine count does not grow.
+//
+// RED GATE: The receive goroutine is not implemented. Phase 1 will not deliver
+// a frame (callback never invoked) → test FAILS at RED via timeout.
+func TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+
+	// Phase 1: first listener — connect and deliver a frame.
+	ln1, addr := newLoopbackListener(t)
+
+	accepted1 := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln1.Accept()
+		if err != nil {
+			return
+		}
+		accepted1 <- conn
+		buf := make([]byte, 4096)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	var frameCh = make(chan frame.FrameType, 8)
+	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
+	// SetFrameCallback MUST be called before Start per F-SP4-002.
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error {
+		frameCh <- hdr.FrameType
+		return nil
+	})
+	c.Start()
+
+	var conn1 net.Conn
+	select {
+	case conn1 = <-accepted1:
+	case <-time.After(2 * time.Second):
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 1: connect not accepted within 2s")
+	}
+
+	// Deliver a Data frame on Phase 1 connection.
+	wire := assembleFrame(t, frame.FrameTypeData)
+	if _, err := conn1.Write(wire); err != nil {
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 1: Write: %v", err)
+	}
+	select {
+	case ft := <-frameCh:
+		if ft != frame.FrameTypeData {
+			t.Errorf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 1: got FrameType %#x, want FrameTypeData", byte(ft))
+		}
+	case <-time.After(2 * time.Second):
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 1: FrameFn not invoked within 2s (receive goroutine not implemented?)")
+	}
+
+	goroutinesBefore := runtime.NumGoroutine()
+
+	// Phase 2: close the server-side connection to trigger reconnect.
+	_ = conn1.Close()
+	_ = ln1.Close()
+
+	// Phase 3: start second listener on the same addr and accept redial.
+	ln2, err := net.Listen("tcp", addr)
+	if err != nil {
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 3: re-Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln2.Close() })
+
+	accepted2 := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln2.Accept()
+		if err != nil {
+			return
+		}
+		accepted2 <- conn
+		buf := make([]byte, 4096)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	var conn2 net.Conn
+	select {
+	case conn2 = <-accepted2:
+	case <-time.After(3 * time.Second):
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 3: redial not accepted within 3s")
+	}
+
+	// Deliver a Data frame on Phase 3 connection.
+	if _, err := conn2.Write(wire); err != nil {
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 3: Write: %v", err)
+	}
+	select {
+	case ft := <-frameCh:
+		if ft != frame.FrameTypeData {
+			t.Errorf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 3: got FrameType %#x, want FrameTypeData", byte(ft))
+		}
+	case <-time.After(2 * time.Second):
+		c.Stop()
+		t.Fatalf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 3: FrameFn not invoked on second connection within 2s")
+	}
+
+	// Phase 4: Stop() must complete without goroutine leak.
+	done := make(chan struct{})
+	go func() {
+		c.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 4: Stop() did not return within 3s (goroutine leak?)")
+	}
+
+	// Allow goroutines to settle before checking for leaks.
+	time.Sleep(50 * time.Millisecond)
+	goroutinesAfter := runtime.NumGoroutine()
+	// Goroutine count must not grow by more than a small slack (fixture goroutines).
+	// The per-reconnect-iteration join prevents accumulation.
+	const leakSlack = 5
+	if goroutinesAfter > goroutinesBefore+leakSlack {
+		t.Errorf("TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak Phase 4: goroutine count grew from %d to %d (possible leak; per-reconnect join not implemented?)",
+			goroutinesBefore, goroutinesAfter)
+	}
+}
+
+// TestConnector_ReceiveLoop_ExitsOnReadError verifies F-SP5-001 and F-SP6-001
+// (corrected recipe per F-SP11-001 v1.9):
+// A complete 44-byte outer header with a valid version byte (0x01) but an
+// out-of-range frame_type byte (0x07, one above FrameTypePEConnect=0x06),
+// PayloadLen=0x0000, written WITHOUT closing the conn, causes ParseOuterHeader
+// to return ErrInvalidFrameType. The receive goroutine must:
+//   (a) exit the loop (per-connection done signal or goroutine count drops), and
+//   (b) call conn.Close() to trigger maintainConn write failure → reconnect
+//       (the connector re-dials the fixture within the test budget).
+//
+// RED GATE: The receive goroutine is not implemented. The connector will NOT
+// reconnect in response to the malformed frame → assertion (b) FAILS at RED.
+func TestConnector_ReceiveLoop_ExitsOnReadError(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+	// Budget must accommodate keepaliveInterval + operativeBase backoff.
+	const reconnectBudget = 2 * time.Second
+
+	ln, addr := newLoopbackListener(t)
+
+	var dialCount atomic.Int32
+	accepted := make(chan net.Conn, 4)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			dialCount.Add(1)
+			accepted <- conn
+			// Keep reading so the conn is alive after the bad header write.
+			buf := make([]byte, 4096)
+			for {
+				if _, err := conn.Read(buf); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error { return nil })
+	c.Start()
+	t.Cleanup(c.Stop)
+
+	// Wait for first connection.
+	var conn1 net.Conn
+	select {
+	case conn1 = <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_ReceiveLoop_ExitsOnReadError: first connection not accepted within 2s")
+	}
+
+	// Build a complete 44-byte outer header with invalid frame_type (0x07).
+	// byte[0]=0x01: VersionByte (major nibble 0x0 == VersionMajor=0; passes version check).
+	// byte[1]=0x07: out-of-range frame_type (one above FrameTypePEConnect=0x06).
+	// bytes[2:4]=0x00,0x00: PayloadLen=0 BE (no payload read attempted).
+	// bytes[4:44]=0x00: remaining fields zero.
+	var badHeader [44]byte
+	badHeader[0] = 0x01 // valid version byte
+	badHeader[1] = 0x07 // ErrInvalidFrameType: one above FrameTypePEConnect upper bound
+	// bytes[2:4] are zero = PayloadLen 0
+	// bytes[4:44] are zero
+
+	if _, err := conn1.Write(badHeader[:]); err != nil {
+		t.Fatalf("TestConnector_ReceiveLoop_ExitsOnReadError: Write bad header: %v", err)
+	}
+	// Do NOT close conn1 — the test asserts the receive goroutine exits on
+	// ParseOuterHeader error even without an explicit conn close.
+
+	// Assertion (b): the connector must re-dial (dialCount >= 2) within the budget.
+	// This requires: receive goroutine exits → conn.Close() called → maintainConn write fails
+	// → dialLoop teardown → reconnect.
+	deadline := time.Now().Add(reconnectBudget)
+	for time.Now().Before(deadline) {
+		if dialCount.Load() >= 2 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if dialCount.Load() < 2 {
+		t.Errorf("TestConnector_ReceiveLoop_ExitsOnReadError: connector did not re-dial within %v after malformed header (dial count = %d, want >= 2; receive goroutine exit + conn.Close() wiring not implemented?)",
+			reconnectBudget, dialCount.Load())
+	}
+}
+
+// TestConnector_ReceiveLoop_ExitsOnVersionMismatch verifies F-SP11-001 (companion pin):
+// A complete 44-byte outer header with byte[0]=0xFF (major nibble 0xF ≠ VersionMajor=0
+// → ErrVersionMismatch), PayloadLen=0, conn NOT closed, causes the receive goroutine
+// to exit via the same read-error branch as ExitsOnReadError — pins the version-
+// rejection path against silent removal.
+//
+// Same exit contract as TestConnector_ReceiveLoop_ExitsOnReadError.
+//
+// RED GATE: The receive goroutine is not implemented → reconnect not triggered →
+// assertion FAILS at RED.
+func TestConnector_ReceiveLoop_ExitsOnVersionMismatch(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 20 * time.Millisecond
+	const reconnectBudget = 2 * time.Second
+
+	ln, addr := newLoopbackListener(t)
+
+	var dialCount atomic.Int32
+	accepted := make(chan net.Conn, 4)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			dialCount.Add(1)
+			accepted <- conn
+			// Keep reading so the conn stays alive after the bad header write.
+			buf := make([]byte, 4096)
+			for {
+				if _, err := conn.Read(buf); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
+	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error { return nil })
+	c.Start()
+	t.Cleanup(c.Stop)
+
+	// Wait for first connection.
+	var conn1 net.Conn
+	select {
+	case conn1 = <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("TestConnector_ReceiveLoop_ExitsOnVersionMismatch: first connection not accepted within 2s")
+	}
+
+	// Build a complete 44-byte outer header with byte[0]=0xFF → ErrVersionMismatch.
+	// bytes[2:4]=0x00,0x00: PayloadLen=0 (no payload read attempted).
+	var badHeader [44]byte
+	badHeader[0] = 0xFF // major nibble (0xFF>>4)&0x0F = 0xF ≠ VersionMajor=0 → ErrVersionMismatch
+	// bytes[1:44] zero
+
+	if _, err := conn1.Write(badHeader[:]); err != nil {
+		t.Fatalf("TestConnector_ReceiveLoop_ExitsOnVersionMismatch: Write bad header: %v", err)
+	}
+	// Do NOT close conn1.
+
+	// Assertion: the connector must re-dial (dialCount >= 2) within the budget.
+	reconnDeadline := time.Now().Add(reconnectBudget)
+	for time.Now().Before(reconnDeadline) {
+		if dialCount.Load() >= 2 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if dialCount.Load() < 2 {
+		t.Errorf("TestConnector_ReceiveLoop_ExitsOnVersionMismatch: connector did not re-dial within %v after ErrVersionMismatch header (dial count = %d, want >= 2; receive goroutine exit + conn.Close() wiring not implemented?)",
+			reconnectBudget, dialCount.Load())
 	}
 }
