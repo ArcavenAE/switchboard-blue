@@ -2788,3 +2788,25 @@ Tasks 1-16 were recorded as `[ ]` in story v1.24 despite verified delivery. Adju
 **Streak:** 0/3 (pass 4 HAS_FINDINGS; streak stays at zero)
 
 **Pass 5 next:** fresh-context adversary vs implementation @ 7cedc34 on `story/s-bl-pe-receive-loop`, story v1.25 + note v1.22 + index v4.65, streak 0/3. F-IP4-001 in ledger (remediated).
+
+**Awaiting:** per-story adversarial pass 6 @ {story v1.25, note v1.22, impl 7cedc34} (streak 1/3)
+
+### Per-story adversarial pass 5 (2026-07-11) — CLEAN, streak 1/3
+
+**Dispatch tuple:** story v1.25 + placement note v1.22 + implementation 7cedc34 on branch `story/s-bl-pe-receive-loop`
+
+**Lenses covered:**
+- F-IP4-001 pin-integrity attack — pin sound against false-pass vectors: TCP ordering guarantees first-44-bytes = bootstrap header; mutation kill re-confirmed analytically; no select race
+- Whole-story coherence read
+- Last unexamined seams: ReloadAddrs-during-receive safe via reconcile→done→recvWg.Wait chain; SIGHUP reload lifecycle sound; nil ForwardFunc never invoked — split-horizon exhausts before fn
+- Ledger spot-checks ×3: F-GP1-001, F-IP2-001, F-IP3-001 — all intact
+- Flake analysis — no realizable CI-flake mechanism
+- POL sweep — POL-001/002/004 all satisfied
+
+**Verdict:** CLEAN — 0 findings; all 14 bars PASS; counts verified 9 connector + 4 integration + 1 frame = 14
+
+**Cosmetic nit (below proportionality bar — not a finding):** frame.go:28 "six canonical values are canonical" doubled word. Orchestrator concurs no wrong-code consequence; noted here for trajectory completeness only.
+
+**Streak:** 0/3 → 1/3
+
+**Awaiting:** per-story adversarial pass 6 @ {story v1.25, note v1.22, impl 7cedc34} (streak 1/3)
