@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-10T00:00:00Z
-version: "1.21"
+version: "1.22"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -46,6 +46,7 @@ architecture_modules:
 | 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
 | 1.19 | Implementation-phase adversarial adjudication (2026-07-11): F-IP1-001 (MED [missing regression guard + false enforcement claim]) — AC-002 `go list -deps` assertion promised but undelivered; Architecture Compliance Rules "build MUST fail" sentence is factually wrong (upstreamdial→routing is acyclic; Go build does NOT fail). Ruling: standalone perimeter test `TestUpstreamdialImportPerimeter` in `internal/upstreamdial/connector_test.go` with positive-coverage guard (exec `go list -deps`, assert non-empty AND contains `internal/frame`, then assert `internal/routing` absent). Corrected Architecture Compliance wording specified. Forward obligation recorded for mgmt_wire.go:549–551 nil ForwardFunc. |
 | 1.21 | Per-story adversarial adjudication round 3 (2026-07-11): F-IP3-001 (MED) — note-side F-IP2-001 Option-b propagation performed: :194-199 implementation-obligation block struck with ~~strikethrough~~ and annotated with caller-obligation wording per :3108; class-closure sweep (4 patterns, multi-line-tolerant) found 0 additional live unannotated occurrences; this is the 9th incomplete-sweep-class instance. OBS-1 (LOW [test-coverage]) — FlapCycleJoin_NoLeak recvWg.Wait() pin gap: ACCEPTED as documented pin-limitation; deterministic recipe impractical without deadlock/flake risk. OBS-2 (LOW [process-gap]) — remediation workflow missing mandatory in-place annotation step: recorded as [process-gap]; countermeasure now binding for remaining passes. |
+| 1.22 | Per-story adversarial adjudication round 4 (2026-07-11): F-IP4-001 (MED) — outgoing bootstrap frame_type pin test: RULING (a) REMEDIATE NOW. New test `TestConnector_BootstrapFrameTypePEConnect` added to `internal/upstreamdial/connector_test.go`; recipe: accept one connection on in-package fixture, `io.ReadFull` the 44-byte outer header, `frame.ParseOuterHeader`, assert `hdr.FrameType == frame.FrameTypePEConnect`; positive guard that ReadFull returned nil error; precedent F-SP17-001/F-SP18-001 (same-session remediation of MED receive-side holes); remediation cost minimal; deferral would leave a named deliverable (FO-PE-LOOP-001) revertible for the entire DRAIN-WIRE gap. Connector tests 8→9, total ~13→~14. Checkbox observation: Tasks 1–16 (`:1018–:1033`) marked `[ ]` despite all deliverables verifiably complete at `c3fca02` (commits `c316aed`, `a3d5117`, `e85c9df`, `8e8296c`, `5274cf1`, spec-side `9792605`) — RULING: mark `[x]` in story bump v1.25 citing delivering commits; deliberate convention not identified; simple correct fix. |
 | 1.20 | Per-story adversarial adjudication round 2 (2026-07-11): F-IP2-001 (MED) — SetFrameCallback post-Start mutation guard: OPTION (b) RULED — caller-ordering contract alone sufficient; guard not implemented; note records rejected-option rationale (panic vs ignore hides vs surfaces; one production caller with correct ordering; goroutine-happens-before already covers the set-once field; implementing a guard adds complexity without eliminating the data race on concurrent callers). F-IP2-002 (MED) — residual false attribution in `router_pe_receive_test.go:212–217` doc comment: mechanical replacement text specified. F-IP2-003 (LOW) — ARCH-08 v2.11 Changelog table missing 2.11 row: fixed in-place in ARCH-08 (row added below 2.10, no version bump). |
 | 1.18 | GREEN-phase adjudication (2026-07-11): F-GP1-001 (HIGH [green-phase contract conflict]) — `TestConnector_BackoffParameters` breaks 3/3 deterministically under the binding F-SP5-001/F-SP6-001 unconditional-close contract. Root cause: silent `SetWriteDeadline` failure path in `maintainConn` emits no EC-001 stamp; test's stamp[0] assumption is violated; measured gap captures doubled backoff (~2 s) not operative base (~1 s). Decision: OPTION (b) — keep unconditional close (production code unchanged), fix test stamp-collection to be robust to both teardown paths via Mode-drop poll before stamp collection. Options (a) (re-opens half-close hole, REJECTED) and (c) (misleading EC-001 log in production, REJECTED) evaluated and rejected. Story propagation: story-writer adds task to apply `TestConnector_BackoffParameters` fix. |
 | 1.17 | Remediate one spec-adversarial pass-21 finding (2026-07-10). F-SP21-001 (MED [doc-drift / incomplete sweep-completeness certification]) — v1.16 class-closure sweep table certified "17 blocks … complete" but missed four versioned binding-block headers whose bold text does not match the recorded grep patterns (`binding.:`, `BINDING`, `[Ss]ketch`): :262 `**\`FrameFn\` byte-contract (binding — F-SP3-001 correction):**` (v1.3/F-SP3-001); :511 `**Test shape (binding for story-writer and implementer):**` (v1.13/F-SP17-001 sub-block); :1812 `**Pin test shape (binding for story-writer):**` (Q9/F-SP3-001 byte-contract pinning obligation); :1928 `**Binding harness rule:**` (Q9.3/F-SP2-003 runRouter mandate). All four verified CURRENT (no supersession needed). Sweep table extended to rows 18–21; grep transcript replaced with canonical pattern `grep -nE '\*\*[^*]*[Bb]inding'` (21 hits); v1.17 addendum block added to sweep section re-certifying over all 21 blocks. This is the 8th incomplete-sweep-class instance and the 3rd false completeness certification. Pass-21 Adjudicated section added. |
@@ -3222,3 +3223,62 @@ The following patterns were applied to the ENTIRE note body using multi-line-tol
 **Countermeasure now binding for remaining passes of S-BL.PE-RECEIVE-LOOP:**
 
 Any future finding by any adversarial pass that cites a note line-range as stale or as carrying superseded binding text **REQUIRES** the in-place annotation of that exact line-range in the same remediation burst as the ruling, before the adjudication section is appended. The annotation follows the established class-closure pattern: ~~strikethrough~~ the stale text + `*(amended vN.NN — FXXX: <brief rationale>)*` inline marker. The ruling section MUST then record the verbatim new annotation text (as done for F-IP3-001 above) so the adversary can verify in the next pass. A ruling that says "note-side propagation required" without performing the annotation in the same burst is procedurally incomplete and MUST be treated as an open finding by the next adversarial pass.
+
+---
+
+## Per-story adversarial adjudication round 4 (v1.22 — F-IP4-001 + checkbox observation, BINDING)
+
+**Source:** Implementation-phase adversarial pass-4 against S-BL.PE-RECEIVE-LOOP at commit c3fca02. Disk-verified by orchestrator prior to dispatch.
+
+---
+
+### F-IP4-001 (MED) — outgoing bootstrap FrameTypePEConnect unpinned
+
+**Finding restated:** AC-003 PC-3 / Task 11 / FO-PE-LOOP-001 mandate the dialLoop bootstrap `ChannelFrame.FrameType` flip from `halfchannel.FrameTypeData` to `frame.FrameTypePEConnect`. The worktree delivers this correctly at `connector.go:359–361` (verified at pass-4): `cf := halfchannel.ChannelFrame{ FrameType: frame.FrameTypePEConnect }`. However, no test parses the connector's OUTGOING bootstrap frame and asserts `frame_type == 0x06`. Every existing fixture drains the first write unparsed: `TestConnector_KeepaliveTickerDrivesHealthProbe` reads it at `connector_test.go:811–815` but checks only `n > 0`. Reverting `:360` to `halfchannel.FrameTypeData` leaves the full suite green. This is the same test-set-underdetermination class as F-SP17-001 and F-SP18-001, both of which were remediated on the receive side in-story. The property is behaviorally inert within this story (all in-story consumers drain the bootstrap frame without inspecting its `frame_type`), but it is a named deliverable of FO-PE-LOOP-001, consumed by the S-7.04-FU-DRAIN-WIRE / session-bootstrap era — a silent revert would surface far downstream from its origin.
+
+**RULING: OPTION (a) — REMEDIATE NOW with a pin test.**
+
+**Rejected option — (b) defer to consuming story with recorded forward obligation:**
+
+Deferral is structurally available (note already carries the FO-PE-LOOP-001 forward-obligation pattern, see the nil-ForwardFunc obligation at round-3 boundary). However, the forward obligation here differs materially from the nil-ForwardFunc case. The nil-ForwardFunc obligation defers a NEW capability (a real forwarding implementation) to a story that expands the interface set — deferral is appropriate because the capability does not yet exist and cannot be tested in isolation. The bootstrap frame_type flip is different: the capability EXISTS in the current commit, is testable now with a trivial in-package fixture, and represents a named invariant of the current story's own acceptance criteria (AC-003 PC-3 "bootstrap frame discriminated from data frames by type"). Deferring a test for an AC of the current story to a future story leaves the AC's implementation revert-able for the entire gap between merge and DRAIN-WIRE delivery — a gap that could span multiple sprints. The F-SP17-001 and F-SP18-001 precedent establishes that MED underdetermination findings of this class are remediated in-story; there is no basis for treating the outgoing-direction hole differently from the receive-side holes that were remediated immediately. Remediation cost is minimal (one test, one accept-and-read fixture). The reject-and-defer cost is high: an undetectable revert of a named deliverable.
+
+**Test recipe (binding):**
+
+**Test name:** `TestConnector_BootstrapFrameTypePEConnect`
+
+**Rationale for new test vs extending existing:** `TestConnector_KeepaliveTickerDrivesHealthProbe` already accepts one connection and reads the bootstrap frame, but its fixture-goroutine reads via `conn.Read(buf)` and checks only `n > 0`; the fixture contract is "drain and proceed." Reusing it would require restructuring that fixture's error path and adding a blocking assertion on a parsed field — two incompatible concerns in one test body. A dedicated test is cleaner, follows the single-concern test design rationale established by F-IP1-001 (separate functional-wiring from perimeter-checking), and is the pattern used for every other pin test in this story (`ExitsOnReadError`, `ExitsOnVersionMismatch`, `CtlFrameForwardedToCallback`). A NEW dedicated test is ruled; do NOT extend `TestConnector_KeepaliveTickerDrivesHealthProbe`.
+
+**Fixture pattern:** in-package accept-and-read, per `connector_test.go` conventions. Use `newLoopbackListener(t)` to obtain a loopback listener. Accept one connection in a goroutine (or use a buffered channel for the accepted conn). The test starts the connector with `New(lw, zeroEnv(), testKeepalive, []string{addr})` + `c.Start()` + `t.Cleanup(c.Stop)`. The fixture accepts the dialed connection.
+
+**Exact assertions (in order):**
+
+1. `io.ReadFull(conn, buf[:frame.OuterHeaderSize])` — read exactly `frame.OuterHeaderSize` (44) bytes from the accepted connection into a local `[frame.OuterHeaderSize]byte` buffer (or equivalent `[]byte`).
+2. **Positive guard:** assert that `io.ReadFull` returned `nil` error and `n == frame.OuterHeaderSize`. The assertion `n == frame.OuterHeaderSize` is the positive guard that the read actually completed (guards against a broken fixture that returns 0 bytes and a nil error — impossible with `io.ReadFull` semantics, but documents intent).
+3. `hdr, err := frame.ParseOuterHeader(buf[:frame.OuterHeaderSize])` — parse the 44-byte header.
+4. Assert `err == nil` (the bootstrap frame MUST be a valid outer header; a parse error here indicates a wire-format regression, not just a frame_type regression).
+5. Assert `hdr.FrameType == frame.FrameTypePEConnect` — the primary pin assertion.
+
+**Timeout / establishment wait:** Use `pollForMode(c, 2*time.Second)` before reading the bootstrap frame to ensure the connector has dialed. Alternatively, wait on the fixture's accepted-conn channel with a 2s deadline. Either pattern is consistent with existing `connector_test.go` conventions.
+
+**Test-surface table impact:**
+
+- `internal/upstreamdial/connector_test.go` connector tests: **8 → 9** (adding `TestConnector_BootstrapFrameTypePEConnect`)
+- Total net-new estimated: **~13 → ~14** (1 `frame_test` + 9 `connector_test` + 4 integration)
+
+**Story-writer propagation items (for story bump v1.25):**
+
+1. FCL row 5 (`connector_test.go`): append `TestConnector_BootstrapFrameTypePEConnect` to the Change cell (F-IP4-001 bootstrap frame_type pin); append `F-IP4-001` to the Anchor cell. Update the test count 8 → 9.
+2. Estimated Test Surface connector table: add row for `TestConnector_BootstrapFrameTypePEConnect` (unit, `connector_test.go` — accepts dialed conn; `io.ReadFull` 44 bytes; `frame.ParseOuterHeader`; asserts `hdr.FrameType == frame.FrameTypePEConnect`; kills `halfchannel.FrameTypeData` regression; F-IP4-001).
+3. File Structure Requirements `connector_test.go` count: 8 → 9 (this test added).
+4. Estimated new test count: `~13 → ~14` net-new.
+5. Task 11 (`[ ] Flip dialLoop bootstrap FrameType…`): append `; **[v1.22 F-IP4-001]** pin test `TestConnector_BootstrapFrameTypePEConnect` added to verify the flip is observable on the wire`.
+6. Add Task 21 for this pin test (marked `[x]` if delivered with this bump, `[ ]` if test-writer task).
+7. Checkbox hygiene (see observation below): mark Tasks 1–16 `[x]`.
+
+---
+
+### Checkbox observation (disk-verified)
+
+**Observation restated:** Story Tasks 1–16 (`:1018–:1033`) are marked `[ ]` while Tasks 17–20 are `[x]`, yet all Tasks 1–16 deliverables are verifiably complete at `c3fca02` (pass-4 audited each; delivering commits: `c316aed` stubs, `a3d5117` RED, `e85c9df` / `8e8296c` / `5274cf1` GREEN, spec-side `9792605`).
+
+**RULING: Mark Tasks 1–16 `[x]` in story bump v1.25** citing the delivering commits listed above. No deliberate convention for leaving complete tasks unchecked has been identified in this story's history; the earlier `[x]` tasks (17–20) demonstrate the convention IS to mark complete tasks checked. The simple correct fix is to apply consistent `[x]` marking. The story-writer owns this in the v1.25 bump alongside the F-IP4-001 propagation items above.

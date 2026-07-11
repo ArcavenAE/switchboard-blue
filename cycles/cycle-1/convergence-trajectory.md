@@ -2745,3 +2745,46 @@ The remediation workflow for passes 1–2 lacked mandatory in-place annotation o
 **Streak:** 0/3 (pass 3 HAS_FINDINGS; streak stays at zero)
 
 **Pass 4 next:** fresh-context adversary vs implementation @ c3fca02 on `story/s-bl-pe-receive-loop`, story v1.24 + note v1.21 + index v4.64, streak 0/3. F-IP3-001/OBS-1/OBS-2 in ledger.
+
+---
+
+### Per-story adversarial pass 4 (2026-07-11) — 1 finding + 1 observation, remediated
+
+**Dispatch tuple:** story v1.24 + placement note v1.21 + implementation c3fca02 on branch `story/s-bl-pe-receive-loop`
+
+**Rotated lenses:** note v1.21-annotation integrity, frame.go/frame_test.go + router_pe_receive_test.go hostile reads, Task 1-20 delivery audit, spec-pair coherence (ARCH-02/BC-2.01.004/ARCH-08), AC-by-AC discharge, POL sweep
+
+**Verdict:** HAS_FINDINGS — 1 finding F-IP4-001 MED + 1 observation (checkbox)
+
+#### Finding F-IP4-001 MED [spec-gap / test-set underdetermination — outgoing bootstrap frame_type unpinned]
+
+| ID | Severity | Class | Description |
+|----|----------|-------|-------------|
+| F-IP4-001 | MED | test-set underdetermination | AC-003 PC-3 (FO-PE-LOOP-001) mandates the outgoing bootstrap frame writes FrameTypePEConnect (0x06). The production line connector.go:360 was revertible to FrameTypeData (0x01) without triggering any test failure — the entire GREEN suite passed with the mutant. Same class as F-SP17-001/F-SP18-001 on the receive-side; named as a forward-obligation deliverable (FO-PE-LOOP-001). Adversary noted transparency caveat: property behaviorally inert within-story scope (no peer parses the bootstrap field yet), but named as a forward-obligation deliverable and deferral was rejected per architect ruling — FO-PE-LOOP-001 would remain revertible through the DRAIN-WIRE gap. |
+
+**Adjudication:** REMEDIATE NOW. Deferral rejected: FO-PE-LOOP-001 is a forward-obligation deliverable; leaving the pin absent means the obligation stays revertible until DRAIN-WIRE.
+
+**Remediation:** Test-writer delivered `TestConnector_BootstrapFrameTypePEConnect` in commit 7cedc34 (+87 lines, test-only). Mutation verification: flipping connector.go:360 to `FrameTypeData` causes the test to fail with "hdr.FrameType = 0x01, want FrameTypePEConnect (0x06)". Mutant killed, flip reverted, production code untouched. Full suite + race + vet + gofmt clean (orchestrator-verified independent run).
+
+#### Observation — checkbox (Tasks 1-16 were `[ ]`)
+
+Tasks 1-16 were recorded as `[ ]` in story v1.24 despite verified delivery. Adjudication: mark `[x]`; story v1.25 applied it — all 21 tasks now `[x]`, provenance line added after Task 16.
+
+#### Clean surfaces confirmed
+
+- Note v1.21 annotation integrity: sound — strikethrough + amended-v1.21 marker at :194-199 correctly recorded, class-closure sweep clean
+- Spec-pair coherence: ARCH-02/BC-2.01.004/ARCH-08 exact — no new gaps
+- Aliasing-safety of append reconstruction: byte-contract pin (NoDuplicateSuppression full-frame crc32) holds
+
+**Remediation artifacts:**
+
+| Artifact | Change |
+|----------|--------|
+| `decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md` | v1.21 → v1.22 (round-4 ruling :3229; changelog row :49) |
+| `stories/S-BL.PE-RECEIVE-LOOP.md` | v1.24 → v1.25 (Tasks 1-16 marked [x], all 21 tasks [x], adversarial_pass_4 field, provenance line) |
+| `stories/STORY-INDEX.md` | v4.64 → v4.65 |
+| Implementation | c3fca02 → 7cedc34 (test-only: TestConnector_BootstrapFrameTypePEConnect +87 lines) |
+
+**Streak:** 0/3 (pass 4 HAS_FINDINGS; streak stays at zero)
+
+**Pass 5 next:** fresh-context adversary vs implementation @ 7cedc34 on `story/s-bl-pe-receive-loop`, story v1.25 + note v1.22 + index v4.65, streak 0/3. F-IP4-001 in ledger (remediated).
