@@ -2829,4 +2829,64 @@ Tasks 1-16 were recorded as `[ ]` in story v1.24 despite verified delivery. Adju
 
 **Pass 7 next:** fresh-context adversary vs implementation @ 7cedc34 on `story/s-bl-pe-receive-loop`, story v1.25 + note v1.22 + index v4.65, streak 2/3. Third consecutive CLEAN converges.
 
+### Per-story adversarial pass 7 (2026-07-11) — CLEAN, streak 3/3 — PER-STORY CONVERGED
+
+**Dispatch tuple:** story v1.25 + placement note v1.22 + implementation 7cedc34 on branch `story/s-bl-pe-receive-loop`
+
+**Certification audit — 5 load-bearing claims independently re-derived:**
+
+| Claim | Verification method | Result |
+|-------|---------------------|--------|
+| (a) Receive goroutine leak-free across Stop() | Full exit-path trace — all paths reach recvWg.Done() before Stop() returns | VERIFIED |
+| (b) Unconditional close→reconnect signal path | recv error → conn.Close → maintainConn SetWriteDeadline error → dialLoop redial; bound ≤ keepalive + backoff; pinned by ExitsOnReadError dialCount≥2 | VERIFIED |
+| (c) Byte-contract bit-exact for all 6 frame types | FuzzEncodeParseRoundTrip coverage + fresh-alloc append reconstruction path | VERIFIED |
+| (d) Bootstrap pin false-pass-proof | TestConnector_BootstrapFrameTypePEConnect mutation kill at connector.go:360 independently re-confirmed | VERIFIED |
+| (e) Import-perimeter false-pass-proof | TestUpstreamdialImportPerimeter independently re-derived as non-bypassable | VERIFIED |
+
+**Diff hygiene:** No TODO, no debug output, no scope creep from the story boundary. All 12 commits within scope.
+
+**DRAIN-WIRE successor seam:** In expected state — SetFrameCallback seam present; DRAIN-WIRE consumer not yet present; no premature coupling.
+
+**LOW non-blocking observation (for PR description — no code change required):**
+
+netingress 0x06 delta — Valid() widening to include `FrameTypePEConnect` (0x06) means a `pe_connect` frame arriving on network ingress now parses-and-drops fail-closed via E-ADM-016 (conn stays open) instead of producing a teardown-on-parse-error. This is consistent with all sibling types (Data, Ctl, etc.) which also parse-and-drop on admission failure. No BC or VP asserts teardown-on-parse-error for pe_connect ingress. No spec text mandates teardown. No change required. MUST be mentioned in PR description as the relevant behavioral delta visible to a reviewer.
+
+**POL sweep:** POL-001 PASS (all findings documented), POL-002 PASS (sibling artifacts consistent), POL-004 PASS (demo obligation pending — Step 5 next).
+
+**Verdict:** CLEAN — 0 findings; novelty ZERO
+
+**Streak:** 2/3 → 3/3 — **PER-STORY ADVERSARIAL CYCLE CONVERGED**
+
+**BC-5.39.001 / per-story-delivery.md Step 4.5: SATISFIED**
+
+---
+
+#### PER-STORY CYCLE CLOSING SUMMARY — S-BL.PE-RECEIVE-LOOP
+
+**Total passes:** 7
+
+**Finding decay:** 1 → 3 → 1(+2 obs) → 1(+1 obs) → 0 → 0 → 0
+
+**All findings remediated:**
+
+| ID | Severity | Class | Disposition |
+|----|----------|-------|-------------|
+| F-IP1-001 | MED | spec-gap / false build-claim | Undelivered `go list -deps` perimeter guard + false "build MUST fail" claim; remediated e397157 (TestUpstreamdialImportPerimeter, test-only) |
+| F-IP2-001 | MED | spec-gap / unimplemented clause | Post-Start guard clause not race-safe — Option b: caller-responsibility downgrade; spec-only fix (story v1.23 Design Constraints) |
+| F-IP2-002 | MED | doc-drift / partial-fix propagation | Residual false doc-comment attribution in test file; fix commit c3fca02 (comment-only) |
+| F-IP2-003 | LOW | doc-drift / parity | ARCH-08 v2.11 dual-changelog parity — architect in-place fix (row :509) |
+| F-IP3-001 | MED | doc-drift / incomplete-sweep | Note Q1 block :194-199 stale Option-b propagation; annotated in-place (strikethrough + amended-v1.21 marker); 9th incomplete-sweep-class instance |
+| F-IP4-001 | MED | test-set underdetermination | AC-003 PC-3 bootstrap frame_type unpinned — TestConnector_BootstrapFrameTypePEConnect added 7cedc34, mutation-verified |
+
+**Accepted observations:**
+
+| ID | Class | Disposition |
+|----|-------|-------------|
+| OBS-1 (pass 3) | join-pin limitation | FlapCycleJoin_NoLeak doesn't independently pin recvWg.Wait(); NumGoroutine provides net-level gate — ACCEPTED |
+| OBS-2 (pass 3) | [process-gap] | In-place annotation of cited stale line-ranges now BINDING for remaining passes; 9th incomplete-sweep-class instance — codification follow-up at cycle close per S-7.02 |
+
+**Binding package at convergence:** story v1.25 + placement note v1.22 + STORY-INDEX v4.65 @ implementation 7cedc34 (12 commits, c316aed..7cedc34, not yet pushed)
+
+**Next steps:** Step 5 demo-recorder (POL-004: .tape + evidence-report.md ONLY, no rendered binaries) → DELIVERY doc → push → pr-manager 9-step → merge on green
+
 **Awaiting:** per-story adversarial pass 6 @ {story v1.25, note v1.22, impl 7cedc34} (streak 1/3)
