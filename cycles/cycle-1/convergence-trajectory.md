@@ -1608,10 +1608,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 14 (spec) | v1.13 | 1 | 0 | 1 | 0 | 0/3 | note v1.12 + story v1.14 + index v4.54 — remediated; streak stays 0/3 |
 | 15 (spec) | v1.14 | 1 | 0 | 0 | 1 | 0/3 | story v1.15 + index v4.55 (note v1.12 unchanged) — remediated; streak stays 0/3 |
 | 16 (spec) | v1.15 | 0 | 0 | 0 | 0 | 1/3 | CLEAN — first clean pass of the cycle; no artifact changes; streak 0/3 → 1/3 |
+| 17 (spec) | v1.15 | 1 | 0 | 1 | 0 | 0/3 | note v1.13 + story v1.16 + index v4.56 — remediated; STREAK RESET 1/3 → 0/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 pending vs {v1.15, note v1.12}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 pending vs {v1.16, note v1.13}.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2273,3 +2274,51 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-15 when
 - Sprint-state v2.20→v2.21. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0.
 
 **Awaiting:** spec adversarial pass 17 @ {story v1.15, note v1.12} (streak 1/3)
+
+---
+
+### Pass 17 Details (2026-07-10)
+
+**Story at review:** v1.15 | **Placement note at review:** v1.12
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated. STREAK RESET 1/3 → 0/3.
+
+#### Finding F-SP17-001
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP17-001 | MED | spec-gap/test-set underdetermination | Hostile-implementer lens: AC-003 discrimination contract's forward side was pinned only at FrameTypeData. A whitelist-data-only implementation (`if hdr.FrameType == FrameTypeData { forwardFrame(...) }`) passed ALL ~11 named tests while silently dropping FrameTypeCtl frames that the story's Non-Goals section explicitly promises to the S-BL.RESYNC-FRAME consumer. Under strict TDD the RED test set IS the contract; the prose sketch "forward all non-PEConnect frames" does not gate because no test exercises FrameTypeCtl forwarding. | BINDING pin test `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` added: constructs a FrameTypeCtl frame via `outerassembler.Assemble`, writes it to the PE fixture, asserts callback IS invoked (inverted assertion of `PEConnectFrameDiscarded` — the PEConnect discard path); else-branch comment updated to enumerate `empty_tick` + `type-agnostic-except-pe_connect`; connector test count 6→7; total ~11→~12. |
+
+#### Pass 17 Confirmations
+
+**P1b — Concurrency sweep (fresh-context):**
+- `hitCountMu` and `DropCache` internal mutex: separate locks, no lock ordering hazard; receive goroutine holds `hitCountMu` during count-check only, releases before calling `frameFn`.
+- `ReloadAddrs` set-diff isolation: new address set computed from config without holding any receive-path lock; stop/start cycle is the only mutation path.
+- `Stop()` `stopOnce` idempotency: `sync.Once` guarantees single close of `stopCh`; concurrent callers block on the Once, only one proceeds.
+
+**P1c — DRAIN-WIRE seam:** Non-Goals section's explicit DRAIN-WIRE forwarding promise was the source of the underdetermination gap; confirmed the seam exists and is exercised by the new pin test.
+
+**P1d — VP traceability:** `vp_traces: []` correct — no VP pins a 5-type enum; this story's forward obligation extends Valid() to 6 types; enum independence verified.
+
+**POL pass:** POL-001/002 confirmed for story v1.16 and index v4.56.
+
+**2 recipes re-executed realizable:** AC-004 exhaustion determinism (NoDuplicateSuppression) and PEConnectFrameDiscarded — both hold against the updated spec.
+
+**Architect count transcript:** Survived orchestrator audit with ZERO corrections. This is the first pass in the spec cycle where the architect's transcript count needed no correction (prior catches: pass-8 stall recovery, pass-13 3-hit→4-hit arqsend grep, pass-14 8-row→9-row FCL).
+
+#### Remediation Summary
+
+**Placement note v1.12 → v1.13 (architect):** Binding annotation added to the discrimination-contract section: the else-branch is type-agnostic-except-pe_connect, not data-only; pin test obligation documented; class closure noted (hostile-implementer test-set underdetermination, first instance in this spec cycle).
+
+**Story v1.15 → v1.16 (story-writer):** `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` added to AC-003 test-names block; else-branch comment obligation in the receive-loop sketch updated; Estimated Test Surface connector count 6→7, total ~11→~12; changelog row added. **STORY-INDEX v4.55 → v4.56:** S-BL.PE-RECEIVE-LOOP row updated to story v1.16 + note v1.13.
+
+#### Lesson: Fresh-Lens Rotation Is What Caught This
+
+Pass 16 used the NEGATIVE-SPACE lens — walking surfaces the spec does NOT cover to verify the gap is intentional or already adjudicated. Pass 17 used the HOSTILE-IMPLEMENTER lens — constructing a malicious-but-compliant implementation to probe whether the test set is sufficient to reject it. These two lenses are complementary: CLEAN under NEGATIVE-SPACE does not certify HOSTILE-IMPLEMENTER. The underdetermination gap was invisible to negative-space reasoning (the prose said "forward all non-PEConnect frames" — no missing surface) but immediately visible to hostile-implementer reasoning (a whitelist-only impl satisfies all named tests). Fresh-lens rotation in each pass is the mechanism that found the cycle's most substantive finding since pass 11.
+
+#### Outcome
+
+- **Streak: 1/3 → 0/3 (RESET).** Pass-16 CLEAN does not carry; HAS_FINDINGS resets the counter.
+- Sprint-state v2.21→v2.22. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1.
+
+**Awaiting:** spec adversarial pass 18 @ {story v1.16, note v1.13} (streak 0/3)

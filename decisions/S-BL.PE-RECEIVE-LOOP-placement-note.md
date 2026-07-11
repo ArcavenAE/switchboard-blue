@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.12"
+version: "1.13"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -41,6 +41,7 @@ architecture_modules:
 | 1.10 | Remediate one spec-adversarial pass-12 finding (2026-07-10). F-SP12-001 (MED [spec-completeness]) — Q2 ARCH-08 obligation block extended with a second explicit edit obligation: in the same §6.5 row edit, the ARCH-08 row's parenthetical "frame is NOT imported directly; reachable transitively through outerassembler and halfchannel. Corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001." MUST be reconciled — the F-P1-001 correction was accurate for its time (no direct frame import existed then) and is now partially superseded by this story's legitimate direct edge; replacement wording specified in Q2. Import-set count reclassified: the ARCH-08 parenthetical is a distinct import-edge-prose location; blast-radius count extended from 10 to 11 (unified count). Pass-12 confirmations recorded in new adjudicated-clean section. |
 | 1.11 | Remediate one spec-adversarial pass-13 finding (2026-07-10). F-SP13-001 (MED [spec-completeness]) — §6.6.2 sibling of F-SP12-001: the §6.6.2 upstreamdial forbidden-edges bullet carries the same three stale import-set claims as the §6.5 parenthetical remediated in v1.10. Q2 ARCH-08 obligation extended with a THIRD edit target (§6.6.2 upstreamdial bullet, three sub-edits in the same commit as the §6.5 edits); binding replacement bullet text specified in Q2. Blast-radius count ruling amended: 11 → 12 (10 frame sweep + 2 ARCH-08 locations: §6.5 row parenthetical + §6.6.2 forbidden-edges bullet). Class-closure grep performed (patterns `"halfchannel, outerassembler"` and `"F-P1-001"`): 0 further occurrences beyond §6.5 (line 325) and §6.6.2 (lines 458–465) edit targets plus 2 changelog rows (history-preserved, not edited). Pass-13 confirmations recorded in new adjudicated-clean section; transcript corrected on audit: `"halfchannel, outerassembler"` has 4 hits (line 316 = `internal/arqsend` row, benign substring match on a different package's own import set — initially uncounted). |
 | 1.12 | Remediate one spec-adversarial pass-14 finding (2026-07-10). F-SP14-001 (MED [spec-completeness]) — BC-2.01.004:61 (Postcondition 2 outer-header layout table, frame_type row) is cited zero times in story or note despite carrying the byte-identical enum row as ARCH-02:74; post-ship, BC-2.01.004 would enumerate 5 frame types while ARCH-02 + frame.go Valid() accept 6. Remediation option (a): Q3 ARCH-02 amendment obligation extended with a binding sibling obligation for BC-2.01.004:61 — must be amended to `, pe_connect=0x06` in the SAME commit as ARCH-02:74 and FrameTypePEConnect. Before/after rows quoted verbatim. Rationale cites F-P8-008 co-canonical precedent (BC-2.01.004:57 + ARCH-02:74 named canonical pair in pass-8) and BC-2.01.004 v1.2 sync-practice. Blast-radius arithmetic: BC-2.01.004:61 is a wire-format spec pair partner to ARCH-02:74 (both same-commit parallel obligations, sibling of but not inside the unified-12 count); total stated as "unified 12 (10 frame sweep + 2 ARCH-08 locations) + wire-format spec pair (ARCH-02:74 + BC-2.01.004:61, same-commit parallel obligations)". Class-closure grep performed (patterns `"arq=0x04, fec=0x05"` and `"empty_tick=0x02"`): exactly 2 canonical locations each (BC-2.01.004:61 and ARCH-02:74); transcript recorded with disposition of all hits. Pass-14 adjudicated-clean section added. |
+| 1.13 | Remediate one spec-adversarial pass-17 finding (2026-07-10). F-SP17-001 (MED [spec-gap / test-set underdetermination]) — AC-003 discrimination contract (discard PEConnect, forward everything else) pinned at only two test points: forward side tested with FrameTypeData only, discard side with FrameTypePEConnect only; a whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl frames required by Non-Goals (S-BL.RESYNC-FRAME consumer). New BINDING unit test added to Q2: `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` in `internal/upstreamdial/connector_test.go` — assembles a complete valid frame with `FrameType: frame.FrameTypeCtl`, uses same in-package accept-and-write fixture family as `PEConnectFrameDiscarded`, asserts FrameFn IS invoked and `hdr.FrameType == frame.FrameTypeCtl`; kills the whitelist-data-only malicious implementation. Companion cosmetic fix recorded: story's discrimination-sketch else-branch comment enumerates `{data, ctl, arq, fec}` but empty_tick also traverses the forward branch — comment must gain empty_tick (story-writer applies). Test counts updated: connector tests 6 → 7 (minimum; with optional ExitsOnVersionMismatch: 7); total net-new ~11 → ~12 (1 frame_test + 7 connector_test + 4 integration). Pass-17 adjudicated section added: F-SP17-001 accepted (one pin test + comment enumeration fix + counts 7/~12); P1b concurrency clean (OnFrameArrival hitCountMu + DropCache mu verified thread-safe, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent), P1c DRAIN-WIRE seam clean (backlog story, illustrative ACs, no concrete API expectation), P1d VP traceability clean (no VP pins a 5-type enum or Valid() bound; vp_traces:[] correct), P2 POL pass, P3 DataFrameForwarded + FlapCycleJoin re-executed realizable. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -488,10 +489,53 @@ The `in-package` fixture pattern for writing bytes to the upstream side is estab
 by the AC-005 flap harness (`heldConn`+`conn.Write` — see `TestConnector_BackoffParameters`
 pattern, verified at `8eb54a5`).
 
-**Estimated connector_test.go test count update:** +1 test (`TestConnector_ReceiveLoop_ExitsOnReadError`)
-above the v1.4 forecast of 4 unit tests in connector_test.go, plus +1 optional variant
-`TestConnector_ReceiveLoop_ExitsOnVersionMismatch` (v1.9). New totals: 5 unit tests minimum
-(+1 optional = 6) in `internal/upstreamdial/connector_test.go`.
+**AC-003 forwarding-completeness pin test (v1.13 — F-SP17-001, BINDING):**
+
+The discrimination contract (discard `FrameTypePEConnect`, forward everything else) is
+pinned by tests at only two points: the forward side with `FrameTypeData` only
+(`TestConnector_ReceiveLoop_DataFrameForwardedToCallback`) and the discard side with
+`FrameTypePEConnect` only (`TestConnector_ReceiveLoop_PEConnectFrameDiscarded`). A
+whitelist implementation `if hdr.FrameType == frame.FrameTypeData { _ = frameFn(hdr, raw) }`
+passes all named tests while silently dropping `FrameTypeCtl` frames — which the story's
+Non-Goals require to reach the callback for the S-BL.RESYNC-FRAME consumer. Under strict
+TDD the RED test set IS the contract; the prose sketch does not gate.
+
+**Pin test name:** `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback`
+
+**Test shape (binding for story-writer and implementer):** Assemble a complete valid frame
+with `FrameType: frame.FrameTypeCtl` via `outerassembler.Assemble`. Use the in-package
+accept-and-write fixture — same harness family as
+`TestConnector_ReceiveLoop_PEConnectFrameDiscarded`: local `net.Listen`, accept the
+connector's dialed connection, assemble + `conn.Write` from the server side. Assert that
+`FrameFn` IS invoked (inverted assertion of `PEConnectFrameDiscarded` — the callback MUST
+be called); assert `hdr.FrameType == frame.FrameTypeCtl` at the `FrameFn` call site.
+
+**Rationale:** `FrameTypeCtl` chosen because the story's Non-Goals explicitly name the
+RESYNC-over-PE path (the S-BL.RESYNC-FRAME consumer); RESYNC frames traverse the else-branch
+as `FrameTypeCtl`. This test kills the whitelist-data-only malicious implementation:
+`if hdr.FrameType == frame.FrameTypeData` passes `DataFrameForwardedToCallback` but fails
+`CtlFrameForwardedToCallback`, closing the test-set underdetermination gap named by
+F-SP17-001.
+
+**Companion cosmetic fix (story-writer will apply; ruling recorded here):** The story's
+receive-goroutine discrimination-sketch else-branch comment currently enumerates
+`{data, ctl, arq, fec}` as the frame types that traverse the forward path. `empty_tick`
+frames also traverse the else-branch and are forwarded to the callback. The comment
+enumeration MUST gain `empty_tick`. The correct characterisation of the forward branch is
+type-agnostic-except-pe_connect: EVERY valid frame type other than `pe_connect` is
+forwarded, including `empty_tick`. Story-writer applies this comment amendment in the same
+commit that implements the story.
+
+**Test file:** `internal/upstreamdial/connector_test.go`.
+
+**Estimated connector_test.go test count update (amended v1.13 — F-SP17-001):** +1 test
+(`TestConnector_ReceiveLoop_ExitsOnReadError`) above the v1.4 forecast of 4 unit tests in
+connector_test.go, plus +1 optional variant `TestConnector_ReceiveLoop_ExitsOnVersionMismatch`
+(v1.9), plus +1 new forwarding-completeness pin `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback`
+(v1.13, F-SP17-001). New totals: **6 unit tests minimum** (+1 optional = **7**) in
+`internal/upstreamdial/connector_test.go`. The total net-new test count for the story rises
+from ~11 to **~12**: 1 `frame_test` amendment + 7 `connector_test` unit tests +
+4 integration tests (`router_pe_receive_test.go`).
 
 **AC-001 PC-3 / AC-004 precondition observable substitutes (v1.6 — F-SP6-003, binding for story-writer):**
 
@@ -2393,3 +2437,21 @@ The following pass-14 confirmations are recorded per the pass-14 report.
 | FCL↔Task bijection holds | Pass-14 confirmation | Confirmed: the 9-row FCL table (rows 1–9) and the Q3 obligation structure remain internally consistent after the BC-2.01.004 addition. BC-2.01.004 is a spec file and its amendment is captured under the Q3 ARCH-02 obligation (same-commit discipline). No new FCL row is needed: story v1.14 will EXTEND existing FCL row 9 (the ARCH-02 row) and Task 3 to carry BC-2.01.004:61 as the second half of the wire-format spec pair — row count stays 9, and the "same commit" discipline already governs both edits. |
 | POL-001 / POL-002 pass | Pass-14 confirmation | Confirmed: no new POL-001 (canonical-source violation) or POL-002 (sweep-incomplete) defect classes introduced by v1.12. The class-closure grep transcript demonstrates sweep completeness for the frame_type enum row across `.factory/specs/`. |
 | Cosmetic FCL item-numbering double-listing observation | Observation — NOT a finding | Lines ~501/~540 in the FCL table appear under two historical item numbers due to v1.2 + v1.3 multi-pass annotations; total of 10 locations in the Q3 blast-radius table is correct. The double-listing is presentation-cosmetic, within the adjudicated fence, and does NOT affect any implementation obligation. No action. |
+
+---
+
+## Pass-17 Adjudicated (per adversarial pass-17 report)
+
+F-SP17-001 is the sole actionable finding from pass-17 and is remediated in Q2 above.
+All other pass-17 items are adjudicated below.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP17-001 — AC-003 discrimination contract test-set underdetermination: whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl | MED [spec-gap / test-set underdetermination] — ACCEPTED; REMEDIATED in Q2 above | New BINDING unit test `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` added in Q2; test descriptor, harness family, and inverted-assertion shape specified verbatim. Companion cosmetic fix (else-branch comment gains empty_tick) recorded as story-writer obligation. Test counts updated: connector minimum 6 → 7; total net-new ~11 → ~12. |
+| P1b — OnFrameArrival concurrency: hitCountMu, DropCache mu | Pass-17 P1b confirmation | Clean. `OnFrameArrival`'s internal hit-count state is protected by `hitCountMu` (verified at `8eb54a5` in `internal/routing/on_frame_arrival.go`); `DropCache.AddIfAbsent` is protected by its own internal mu (verified at `8eb54a5` in `internal/multipath/multipath.go`). Concurrent calls from the single receive goroutine per connection and any other callers are safe. No implementation change required. |
+| P1b — ReloadAddrs set-diff isolation | Pass-17 P1b confirmation | Clean. `Connector.ReloadAddrs` computes a set-diff of added/removed addresses and fires `addrCancel` entries and new-dial goroutines without sharing mutable state with the receive goroutine. The receive goroutine holds only the `net.Conn` passed to it at dial time; it does not read `c.addrs` or any `addrCancel` map. No race. |
+| P1b — Stop() stopOnce idempotent | Pass-17 P1b confirmation | Clean. `Connector.Stop()` is guarded by `c.stopOnce.Do(...)` (verified at `8eb54a5`). Concurrent or repeated calls are safe; only the first call closes `c.stopCh` and blocks on `<-c.doneCh`. No implementation change required. |
+| P1c — DRAIN-WIRE seam: no concrete API expectation | Pass-17 P1c confirmation | Clean. The S-7.04-FU-DRAIN-WIRE scope boundary (§"Scope Boundary vs S-7.04-FU-DRAIN-WIRE") describes the dependency at the level of "receive loop provides the path DRAIN broadcast traverses." No concrete API (method signature, channel type, or interface addition) is committed to in this note for the DRAIN-WIRE story. The boundary table is illustrative; the DRAIN-WIRE story is a backlog story. No obligation locked. |
+| P1d — VP traceability: no VP pins a 5-type enum or Valid() bound | Pass-17 P1d confirmation | Clean. The `vp_traces: []` frontmatter is correct: no VP in the VP index pins a 5-type FrameType enum or a specific `Valid()` upper bound. The Valid() widening to 6 types does not violate any VP. VP-037 (DRAIN-WIRE unblock path) is traced through S-7.04-FU-DRAIN-WIRE per this note's frontmatter — correct and unchanged. |
+| P2 — POL-001 / POL-002 pass | Pass-17 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.13. The new test adds no spec-document amendment obligation; the companion comment fix is scoped to the story's discrimination sketch (story-writer propagation item only). |
+| P3 — DataFrameForwarded + FlapCycleJoin re-executed realizable | Pass-17 P3 confirmation | Confirmed: `TestConnector_ReceiveLoop_DataFrameForwardedToCallback` (AC-001 unit) and the AC-005 FlapCycleJoin test remain physically realizable against the verified tree at `8eb54a5`. The new `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` test uses the same harness family and is realizable by the same argument (in-package accept-and-write fixture, `outerassembler.Assemble` with `FrameTypeCtl`, server-side `conn.Write`). No new import edge or API required beyond what v1.12 already mandates. |
