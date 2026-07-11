@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-10T00:00:00Z
-version: "1.17"
+version: "1.18"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -44,6 +44,7 @@ architecture_modules:
 | 1.13 | Remediate one spec-adversarial pass-17 finding (2026-07-10). F-SP17-001 (MED [spec-gap / test-set underdetermination]) — AC-003 discrimination contract (discard PEConnect, forward everything else) pinned at only two test points: forward side tested with FrameTypeData only, discard side with FrameTypePEConnect only; a whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl frames required by Non-Goals (S-BL.RESYNC-FRAME consumer). New BINDING unit test added to Q2: `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` in `internal/upstreamdial/connector_test.go` — assembles a complete valid frame with `FrameType: frame.FrameTypeCtl`, uses same in-package accept-and-write fixture family as `PEConnectFrameDiscarded`, asserts FrameFn IS invoked and `hdr.FrameType == frame.FrameTypeCtl`; kills the whitelist-data-only malicious implementation. Companion cosmetic fix recorded: story's discrimination-sketch else-branch comment enumerates `{data, ctl, arq, fec}` but empty_tick also traverses the forward branch — comment must gain empty_tick (story-writer applies). Test counts updated: connector tests 6 → 7 (minimum; with optional ExitsOnVersionMismatch: 7); total net-new ~11 → ~12 (1 frame_test + 7 connector_test + 4 integration). Pass-17 adjudicated section added: F-SP17-001 accepted (one pin test + comment enumeration fix + counts 7/~12); P1b concurrency clean (OnFrameArrival hitCountMu + DropCache mu verified thread-safe, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent), P1c DRAIN-WIRE seam clean (backlog story, illustrative ACs, no concrete API expectation), P1d VP traceability clean (no VP pins a 5-type enum or Valid() bound; vp_traces:[] correct), P2 POL pass, P3 DataFrameForwarded + FlapCycleJoin re-executed realizable. |
 | 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
 | 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
+| 1.18 | GREEN-phase adjudication (2026-07-11): F-GP1-001 (HIGH [green-phase contract conflict]) — `TestConnector_BackoffParameters` breaks 3/3 deterministically under the binding F-SP5-001/F-SP6-001 unconditional-close contract. Root cause: silent `SetWriteDeadline` failure path in `maintainConn` emits no EC-001 stamp; test's stamp[0] assumption is violated; measured gap captures doubled backoff (~2 s) not operative base (~1 s). Decision: OPTION (b) — keep unconditional close (production code unchanged), fix test stamp-collection to be robust to both teardown paths via Mode-drop poll before stamp collection. Options (a) (re-opens half-close hole, REJECTED) and (c) (misleading EC-001 log in production, REJECTED) evaluated and rejected. Story propagation: story-writer adds task to apply `TestConnector_BackoffParameters` fix. |
 | 1.17 | Remediate one spec-adversarial pass-21 finding (2026-07-10). F-SP21-001 (MED [doc-drift / incomplete sweep-completeness certification]) — v1.16 class-closure sweep table certified "17 blocks … complete" but missed four versioned binding-block headers whose bold text does not match the recorded grep patterns (`binding.:`, `BINDING`, `[Ss]ketch`): :262 `**\`FrameFn\` byte-contract (binding — F-SP3-001 correction):**` (v1.3/F-SP3-001); :511 `**Test shape (binding for story-writer and implementer):**` (v1.13/F-SP17-001 sub-block); :1812 `**Pin test shape (binding for story-writer):**` (Q9/F-SP3-001 byte-contract pinning obligation); :1928 `**Binding harness rule:**` (Q9.3/F-SP2-003 runRouter mandate). All four verified CURRENT (no supersession needed). Sweep table extended to rows 18–21; grep transcript replaced with canonical pattern `grep -nE '\*\*[^*]*[Bb]inding'` (21 hits); v1.17 addendum block added to sweep section re-certifying over all 21 blocks. This is the 8th incomplete-sweep-class instance and the 3rd false completeness certification. Pass-21 Adjudicated section added. |
 | 1.16 | Remediate one spec-adversarial pass-20 finding (2026-07-10). F-SP20-001 (MED [doc-drift / incompletely-discharged prior remediation]) — READ-error disposition contract block (:365-421): three-part defect: (1) header :365 lacked the "amended v1.6" supersession marker present on the STORY's equivalent header; (2) prose :386-387 stated the retracted mechanism verbatim ("Exit → dialLoop's existing teardown/reconnect path closes the conn and re-dials, which is the ONLY correct resync") — false per ground truth (maintainConn at connector.go:399 is write-only, never observes receive-goroutine exit); (3) v1.5 sketch :404-421 had a bare `return` with no `_ = conn.Close()` and no in-place warning. Three-part annotation applied: (1) header extended with supersession marker pointing to F-SP6-001 section; (2) prose struck with ~~strikethrough~~ + `*(amended v1.16 — F-SP20-001: RETRACTED ...)*` annotation; (3) banner blockquote inserted above sketch fence directing implementers to the v1.6 binding sketch. Sketch body preserved unmodified (history preservation). Class-closure sweep performed: 17 versioned binding blocks enumerated; 2 newly remediated (rows 4-5), 2 previously annotated (rows 6, 10), 13 fully current; zero unannotated stale binding blocks remain. This is the 7th incomplete-sweep-class instance. Pass-20 Adjudicated section added. |
 
@@ -2749,3 +2750,156 @@ F-SP21-001 is the sole actionable finding from pass-21 and is remediated in the 
 | P2 — POL-001 / POL-002 pass | Pass-21 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) introduced by v1.17. POL-002 (incomplete-sweep): F-SP21-001 accepted and discharged — sweep extended to 21 blocks with canonical grep pattern and per-hit reconciliation; POL-002 is re-satisfied for the versioned-binding-block scope. |
 | P3 — NoDuplicateSuppression + AC-005 lifecycle re-traced realizable | Pass-21 P3 confirmation | Confirmed. `TestPEReceiveLoop_NoDuplicateSuppression_DifferentOuterHeader` (row 20 / Q9 §9.1a): two frames with differing `Envelope.SrcAddr` → independent crc32 keys → both reach `OnFrameArrival` independently → two E-FWD-001 emissions — realizable unchanged. AC-005 lifecycle: 44-byte malformed header → ErrInvalidFrameType → receive goroutine exits → `conn.Close()` → `maintainConn` write failure → reconnect — realizable unchanged. Neither test has any dependency on the v1.17 sweep extension. |
 | Ledger passes 1–20 — all hold | Pass-21 ledger confirmation | Confirmed. No ruling in passes 1–20 is affected by the v1.17 note-only sweep-extension amendments. The entire pass-1 through pass-20 adjudicated ledger stands as published. |
+
+---
+
+## GREEN-phase adjudication (v1.18 — F-GP1-001, BINDING)
+
+**Context:** During GREEN-phase TDD implementation of S-BL.PE-RECEIVE-LOOP, the implementer discovered that
+the F-SP5-001/F-SP6-001 binding — `_ = conn.Close()` on ANY non-nil `frame.ReadOuterFrame` return — breaks
+the pre-existing predecessor test `TestConnector_BackoffParameters` (S-7.04-FU-PE-CONNECTOR, merged) in a
+deterministic, mechanism-traceable manner. This is a VSDD feedback-loop event: GREEN-phase implementation
+discovery → architect adjudication. The adjudication below is binding.
+
+### Empirical evidence
+
+**Failure:** 3/3 deterministic. With the binding unconditional close implemented, `TestConnector_BackoffParameters`
+reports post-reset retry gap 2.0–2.5 s; want [700 ms, 1300 ms].
+
+**Mechanism (verified against ground truth at working tree HEAD):**
+
+1. Server-side `conn.Close()` in the test's Phase 3 causes the PE upstream connection to receive EOF at the
+   next `frame.ReadOuterFrame` call. The binding implementation calls `_ = conn.Close()` on this EOF return.
+
+2. `maintainConn` (verified `connector.go` lines 484–486) on the next keepalive tick calls
+   `conn.SetWriteDeadline(...)`. Because the conn is now closed (by the receive goroutine in step 1),
+   `SetWriteDeadline` returns a non-nil error. The code at lines 484–486 reads:
+   ```go
+   if err := conn.SetWriteDeadline(time.Now().UTC().Add(c.keepaliveInterval)); err != nil {
+       return   // SILENT return — no log, no "unreachable" emission
+   }
+   ```
+   **This is a silent return** — no `logf("upstream router %s unreachable\n", addr)` is emitted.
+
+3. The test's stamp-collection mechanism (lines 677–693) collects stamps matching
+   `"upstream router %s unreachable"`. The `SetWriteDeadline`-failure exit emits no such stamp.
+   Therefore the test's implicit assumption that stamp[0] is the write-failure log from
+   `maintainConn` is violated: the connection teardown path that fires after unconditional close
+   produces a silent `maintainConn` return, not a write-failure log.
+
+4. Stamp[0] is consequently the first REDIAL failure (dial on the now-closed listener) rather than
+   the write failure. All subsequent stamps are shifted: stamp[1] is the second dial failure, stamp[2]
+   is the third. The measured gap `stamps[2].t - stamps[1].t` captures the DOUBLED backoff (~2 s,
+   after the first retry's `nextBackoff` grows the base) rather than the operative-base backoff (~1 s).
+   The test fails because the gap exceeds `hiWindow = 1300 ms`.
+
+5. **Counter-check:** the implementer's carve-out (skip `conn.Close()` on clean `io.EOF` /
+   `io.ErrUnexpectedEOF`) makes the test pass — but opens the TCP half-close hole: if the PE peer calls
+   `CloseWrite()` (FIN in one direction only), the receive goroutine exits on `io.EOF` WITHOUT closing
+   the conn, keepalive writes continue succeeding (peer ACKs the write channel), `maintainConn` never
+   returns, the connection is permanently read-dead, and no reconnect occurs. This is the exact failure
+   class F-SP6-001 was enacted to close.
+
+### Options considered
+
+**(a) AMEND the contract** — permit skip-close on clean `io.EOF`/`io.ErrUnexpectedEOF`.
+Consequence: the TCP half-close hole is re-opened with no adequate substitute. The half-close
+scenario is NOT out of contract: it occurs under real network conditions and with buggy or
+asymmetrically-failing PE peers. F-SP6-001 explicitly addresses it. **REJECTED.**
+
+**(b) ADJUST the predecessor test** — keep unconditional close; fix `TestConnector_BackoffParameters`
+so its stamp-collection is robust to both the write-failure path and the silent-SetWriteDeadline-failure
+path. The test's intent — "backoff resets to operative base after a successful connection" — is
+unchanged; only the observability mechanism is made robust to teardown-path differences.
+
+**(c) ALIGN maintainConn observability** — add the "unreachable" log line to the `SetWriteDeadline`
+failure return path. Concern: logging "upstream router X unreachable" when `SetWriteDeadline` fails
+on a conn we ourselves just closed is semantically misleading — the peer is not unreachable; we
+initiated the close. This corrupts operator-visible EC-001 semantics and would embed a misleading
+log in production code to satisfy a test's stamp-matching assumption. **REJECTED.**
+
+### Decision: Option (b) — adjust the predecessor test
+
+**Rationale:**
+
+1. Option (b) is the only option that preserves BOTH the F-SP6-001 safety property (no permanently
+   read-dead connections under any TCP teardown scenario including half-close) AND the predecessor
+   test's behavioural intent (backoff resets to operative base after connection loss).
+
+2. The test's intent is robust and correct. Its stamp-collection implementation is brittle — it
+   depends on a specific `maintainConn` exit path (write failure) producing an EC-001 log, but the
+   unconditional-close contract changes which exit path fires in the normal teardown-from-EOF case.
+   Making the test robust to this is a legitimate test fix, not a semantic change.
+
+3. Option (a) re-opens a documented, load-bearing safety property (F-SP6-001) with no adequate
+   compensating mechanism. The half-close scenario is real and within the adversary model for a
+   semi-trusted configured upstream. This note already records the risk at lines 719–784; the
+   binding was enacted precisely to close it.
+
+4. Option (c) introduces a semantically misleading production log line ("unreachable" on a
+   locally-closed conn) that would corrupt EC-001 signal quality for operators. A test whose
+   correctness depends on a misleading log would itself be a spec defect. Rejected on first
+   principles.
+
+### Half-close analysis (surviving the adversarial pass)
+
+With unconditional `_ = conn.Close()` on any `frame.ReadOuterFrame` non-nil error:
+
+- **Normal server-close EOF** (peer calls `Close()`): receive goroutine gets `io.EOF` → calls
+  `_ = conn.Close()` (idempotent, the peer's FIN already closed the remote end) → `maintainConn`'s
+  next `SetWriteDeadline` fails silently → `maintainConn` returns → dialLoop tears down → reconnect.
+  SAFE: full teardown, reconnect within keepaliveInterval.
+
+- **TCP half-close** (peer calls `CloseWrite()`, sends FIN in receive direction only): receive
+  goroutine gets `io.EOF` → calls `_ = conn.Close()` → write channel is now closed from our side →
+  `maintainConn`'s next keepalive `SetWriteDeadline` fails silently OR `conn.Write` fails → `maintainConn`
+  returns → dialLoop tears down → reconnect. SAFE: half-close is converted to full teardown. Without
+  `_ = conn.Close()`, keepalive writes would keep succeeding indefinitely (peer is still ACKing the
+  write channel) and the connection would be permanently read-dead with no reconnect trigger.
+
+- **Malformed frame without server-close** (ErrInvalidFrameType, ErrVersionMismatch): receive
+  goroutine returns a parse error → calls `_ = conn.Close()` → `maintainConn` tears down → reconnect.
+  SAFE: permanent framing-desync prevented.
+
+The unconditional-close contract eliminates all three failure scenarios. There is no adversarially
+survivable scenario where an exemption for `io.EOF` is safe.
+
+### Implementation / test-writer directive (BINDING)
+
+**Production code:** NO CHANGE to `connector.go`. The binding `_ = conn.Close()` on ANY non-nil
+`frame.ReadOuterFrame` return (as already implemented in the working tree) MUST be preserved exactly.
+
+**Test change — `internal/upstreamdial/connector_test.go`, `TestConnector_BackoffParameters`:**
+
+The stamp-collection in Phase 3 (lines 668–706 at working tree HEAD) MUST be made robust to the
+silent-SetWriteDeadline-failure teardown path. The fix is:
+
+After the server-side `conn.Close()` at line 675 (and `ln2.Close()` at line 675), wait for the
+connector to drop out of `ModePE` — meaning the unconditional-close-triggered teardown has
+completed and the connector is now in the redial loop. Only then begin collecting stamps. Concretely:
+
+1. After `_ = conn.Close()` and `_ = ln2.Close()` (the server-side drop), insert a `pollForNoModePE`
+   call (or equivalent: poll `c.Mode() != ModePE` with a tight timeout, e.g. `2 * testKeepalive`).
+   This synchronises the test to the teardown completion — regardless of whether the teardown was
+   triggered by a write failure (old path) or a silent SetWriteDeadline failure (new path with
+   unconditional close), Mode drops when `connectedCount.Add(-1)` returns 0.
+
+2. After the Mode-drop poll succeeds, drain the stamp channel (as the existing `drainLoop` does
+   after Phase 2). This discards any stamps from the teardown phase itself.
+
+3. Collect 2 stamps from the redial phase (not 3). The gap between stamp[0] (first dial failure)
+   and stamp[1] (second dial failure after operative-base backoff sleep) measures exactly the
+   post-reset backoff delay. Assert `gap = stamp[1].t - stamp[0].t` in `[loWindow, hiWindow]`.
+
+This change makes the test's observability mechanism invariant to teardown-path differences:
+whether `maintainConn` exits via write failure (old path, with EC-001 stamp) or via silent
+SetWriteDeadline failure (new path, no stamp), the Mode-drop poll correctly identifies
+teardown completion before stamp collection begins. The measured gap is always the clean
+operative-base backoff between redial attempt 1 and redial attempt 2.
+
+**Story propagation requirements:** The story-writer MUST add a task (or extend Task 14 / Task 15)
+to apply the above `TestConnector_BackoffParameters` fix as part of the GREEN-phase implementation
+of S-BL.PE-RECEIVE-LOOP. This fix may be applied in the same commit as the receive-goroutine
+implementation (since that implementation is what exposes the brittleness), or in a standalone
+fixup commit before the story's PR is raised. The story's acceptance criteria, test count, and
+all other implementation obligations are unchanged — this is a GREEN-phase pre-condition fix only.

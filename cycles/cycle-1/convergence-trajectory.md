@@ -2564,3 +2564,45 @@ Four consecutive passes (18/19/20/21) have each found exactly one MED, all in no
 - Sprint-state v2.25→v2.26. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1→1.
 
 **Awaiting:** spec adversarial pass 22 @ {story v1.20, note v1.17} (streak 0/3)
+
+---
+
+## S-BL.PE-RECEIVE-LOOP — GREEN phase (2026-07-11)
+
+### Red Gate Execution Narrative
+
+Red Gate executed per per-story-delivery.md. Delivery worktree `.worktrees/s-bl-pe-receive-loop` off `develop@42baa8c`, branch `story/s-bl-pe-receive-loop`. 9 commits total, none pushed yet at burst time.
+
+**Commit arc:** stub c316aed → RED a3d5117 (12 tests + frame_test blast-radius sweep) → GREEN implementation e85c9df/8e8296c/5274cf1 → F-GP1-001 adjudication 9c1b21d/75c5904 → gofmt a23deae.
+
+### GREEN-Phase Discoveries
+
+#### Discovery (a): RED-harness return-vs-break observability bug
+
+**Nature:** Test-writer defect, not spec defect. In the RED suite (commit a3d5117), the server goroutine's inner read loop used `return` rather than `break`-with-dialCount-increment, causing `dialCount` to be capped at 1 regardless of actual reconnection cycles. This made tests that assert on reconnect counts (e.g., TestConnector_BackoffParameters multi-dial assertions) unreachable in the harness.
+
+**Resolution:** Test-writer self-corrected at commit ae2ea7d. The fix replaced the inner-loop `return` with an outer-loop `break` ensuring each reconnection cycle increments `dialCount` correctly. RED suite thereafter red on the implementation stubs as expected.
+
+**Sweep-8 note:** This pattern (server goroutine returning early from inner loop, silently capping an observable counter) is a candidate sweep-8 upstream finding.
+
+#### Discovery (b): F-GP1-001 — implementer EOF carve-out deviation
+
+**Nature:** Implementer introduced an EOF carve-out in `ReadOuterFrame`'s error handling: `if err == io.EOF { return }` (no close), intending to allow clean half-close semantics. This deviated from the spec's binding `conn.Close()` on any non-nil ReadOuterFrame return.
+
+**Orchestrator adjudication — Option (b): binding contract upheld.**
+
+TCP half-close hole analysis: when a peer calls `CloseWrite` (sends FIN), the read side sees `io.EOF` on that connection. If the receiver silently returns without closing, ACKed keepalives continue flowing, making the connection appear alive to the keepalive ticker. The conn is permanently read-dead with no reconnect trigger — the next ReadOuterFrame call blocks forever. Empirical test: TestConnector_BackoffParameters failed 3/3 deterministically when the EOF carve-out was present, because the predecessor test's teardown relied on the unconditional close to trigger the reconnect path.
+
+**Architect ruling:** Production code keeps `_ = conn.Close()` unconditionally on ANY non-nil ReadOuterFrame return (commit 9c1b21d). The EOF carve-out is rejected. BC-5.39.001 note v1.17→v1.18 carries the binding ruling.
+
+**Predecessor test fix (commit 75c5904):** TestConnector_BackoffParameters Phase-3 stamp logic was made teardown-path-robust. Changes: Mode-drop poll (replaces timer-based approach), 2-stamp redial gap. Test-writer's drain-step removal after 3/3 empirical failure was justified and documented inline. The fix separates the concern of "stamp counting" from "connection lifecycle assumptions," making the test resilient to both EOF and non-EOF teardown paths.
+
+**Propagation:** note v1.17→v1.18 (binding ruling text + changelog row 1.18), story v1.20→v1.21 (metadata: note pin v1.17→v1.18), index v4.60→v4.61.
+
+### Verification
+
+Full suite + `-race` + `go vet` + `gofmt` all clean at a23deae. 12 net-new tests. No pushes yet at burst time.
+
+### Next
+
+Per-story adversarial cycle (Step 4.5, BC-5.39.001): fresh-context adversary vs implementation at a23deae on branch `story/s-bl-pe-receive-loop`, 3 clean passes minimum → demo (POL-004) → DELIVERY doc → push → pr-manager 9-step → merge on green.
