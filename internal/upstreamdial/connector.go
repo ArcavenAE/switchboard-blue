@@ -14,7 +14,6 @@ package upstreamdial
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -411,16 +410,7 @@ func (c *Connector) dialLoop(ctx context.Context, addr string, done chan<- struc
 					// BINDING (F-SP6-001): close conn to trigger maintainConn write
 					// failure → dialLoop teardown → backoff → redial.
 					// Double-close is safe/idempotent on net.Conn.
-					//
-					// Exception: for clean remote-close (io.EOF / io.ErrUnexpectedEOF),
-					// skip proactive conn.Close(). The remote has sent FIN; maintainConn's
-					// next keepalive write will fail with RST and trigger teardown on its own.
-					// Calling conn.Close() here would make SetWriteDeadline return an error
-					// silently, changing the observable stamp sequence for backoff tests.
-					isEOF := errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
-					if !isEOF {
-						_ = conn.Close()
-					}
+					_ = conn.Close()
 					return
 				}
 				ehdr := frame.EncodeOuterHeader(hdr)
