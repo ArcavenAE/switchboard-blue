@@ -1530,3 +1530,24 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 **Streak:** 0/3 — 3 remaining PROVISIONALs to converge before spec-adversarial pass 2: drain-window injection seam (Q-AC005), an ARCH-08 §6.6.2 grep-verify, and an FCL 10-vs-11 discrepancy on node_conn_registry.go.
 
 ---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-2 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 2), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.1→v1.2), VP-037.md (v1.4→v1.5), S-7.04-FU-DRAIN-WIRE.md (v1.1→v1.2), STORY-INDEX.md (v4.69→v4.70), sprint-state.yaml (v2.42→v2.43)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 2 on S-7.04-FU-DRAIN-WIRE returned 10 findings (F-DW-SP2-001..010, 2 HIGH). Both HIGH findings were caught before landing in code: an unrealizable AC-004 testenv recipe reintroduction (Q4-AMENDED's Stage-1 discharge trace assumed `testenv.NewWithRouters` runs a real `runRouter`, but it never does — superseded to the `startRunRouterWithConfig` + new `nodeConnHook` accept/register barrier pattern already ruled in Q3-AMENDED) and a close(send)-vs-observer race (the `OnAccept` cleanup's `close(send)` raced the Q-SINGLE-OBS drain observer's concurrent `Range`, panicking mid-iteration and silently truncating DRAIN delivery — eliminated by redesigning `send` to NEVER be closed, with a private `done` channel taking over as the cleanup-only wake signal). Architect landed placement note v1.2 (Q-CTL-GUARD firmed to the netingress `route` closure + a second pin test; new §Q-AC002 for `nodeConnHook`; Q-AC005's flaky `ErrTimeout` assertion struck in favor of the EC-003 log marker + PROVISIONAL resolved CONFIRMED via `cfg.DrainTimeout`; F-007 disambiguates the duplicate VP-037 test with `cmd/switchboard` as the sole stage-2 target; F-008 ARCH-08 v2.12 same-commit bump obligation, FCL 10→11 rows; netingress package-doc rewrite added to doc-sweep; line-cite fixes :534/:490; ARCH-02 "Outer Header Format" cite fix; full supersession sweep across Q2/Q5/Q3-AMENDED/Q-SEAM/frontmatter/Timeout-source) and VP-037 v1.5 (stage-1 recipe corrected, stage-2 target disambiguated, TD-031 anchor delint). Story-writer landed story v1.2 (all 5 ACs updated per rulings, AC-001-vs-AC-004 kept as separate BC-vs-VP obligations sharing a harness helper, FCL 11 rows, test surface ~8 recomposed, changelog reordered newest-first per validate-changelog-monotonicity) and STORY-INDEX v4.70 (row 140 ready v1.2 + POL-002 Notes chain). All 3 pass-1 PROVISIONALs are now RESOLVED: drain-window seam CONFIRMED via `cfg.DrainTimeout`; ARCH-08 §6.6.2 lawful but requires the v2.12 same-commit bump; FCL settled at 11 rows. Code base unchanged: develop stays @ ef1ee1e.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 2) | fresh-context spec-adversarial pass | 10 findings F-DW-SP2-001..010 (2 HIGH: unrealizable AC-004 testenv recipe, close(send)-vs-observer race) |
+| architect | placement-note + VP remediation | placement-note v1.2 (Q4-AMENDED superseded to startRunRouterWithConfig + nodeConnHook barrier; send-NEVER-closed/done-channel redesign; Q-CTL-GUARD firmed to netingress route closure + second pin test; new §Q-AC002 nodeConnHook; Q-AC005 EC-003-marker-only + PROVISIONAL resolved CONFIRMED; F-007 test disambiguation; F-008 ARCH-08 v2.12 same-commit obligation, FCL 10→11 rows; netingress doc-sweep; line-cite + ARCH-02 fixes; full supersession sweep); VP-037 v1.5 (stage-1 recipe corrected, stage-2 target disambiguated, TD-031 delint) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.2 (all 5 ACs updated; AC-001-vs-AC-004 kept separate; FCL 11 rows; test surface ~8; changelog reordered newest-first); STORY-INDEX v4.70 (row 140 ready v1.2 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.43 (story_version 1.2, placement_note v1.2, provisional_rulings [], spec_adversarial_pass_2 line); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** 0/3 — all 3 pass-1 PROVISIONALs resolved this burst. Pass 3 next.
+
+**Tooling-friction note (layer-1 capture):** rc.22 factory-dispatcher STATE.md validator demands schema elements (SIZE-BUDGET banner, trajectory-tail, Convergence Status/Concurrent Cycles sections, Last Updated field) absent from this file's entire history; STATE.md frontmatter pins plugin_version_adopted rc.21; hook is advisory (PostToolUse, no git gate); edits persist; rc.22 schema migration deferred to a dedicated follow-up.
+
+---

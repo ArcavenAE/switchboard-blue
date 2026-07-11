@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.42
+# version: 2.43
 # changelog:
+#   - version: 2.43
+#     date: 2026-07-11
+#     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 2 remediation complete — 10 findings (F-DW-SP2-001..010, 2 HIGH) remediated across 2 agents: architect (placement note v1.2: Q4-AMENDED Stage-1 testenv recipe superseded to startRunRouterWithConfig + nodeConnHook barrier — unrealizable stub recipe caught and fixed; send-NEVER-closed/done-channel redesign eliminates close(send)-vs-observer race; Q-CTL-GUARD firmed to netingress route closure + second pin test; new §Q-AC002 nodeConnHook; Q-AC005 ErrTimeout assertion struck in favor of EC-003 marker only + PROVISIONAL resolved CONFIRMED; F-007 disambiguates duplicate VP-037 test — stage-2 sole target is the cmd/switchboard copy; F-008 ARCH-08 v2.12 same-commit bump obligation, FCL 10→11 rows incl. ARCH-08; netingress package-doc rewrite added to doc-sweep; line-cite fixes :534/:490; ARCH-02 'Outer Header Format' cite fix; full supersession sweep — Q2 registration path, Q5 whole-section, Q3-AMENDED AC-001 rewrite, Q-SEAM Option-(a) narrative, frontmatter, Timeout-source paragraph; VP-037 v1.5 stage-1 recipe corrected, stage-2 target disambiguated, TD-031 anchor delint); story-writer (story v1.2: all 5 ACs updated per rulings — AC-001-vs-AC-004 kept separate as distinct BC-vs-VP obligations sharing a harness helper; FCL 11 rows; test surface ~8 recomposed; changelog reordered newest-first per validate-changelog-monotonicity); STORY-INDEX v4.70 (row 140 ready v1.2 + POL-002 Notes chain). All 3 pass-1 PROVISIONALs now RESOLVED: drain-window seam CONFIRMED cfg.DrainTimeout; ARCH-08 §6.6.2 lawful but v2.12 bump required; FCL settled at 11. Code base unchanged: develop @ ef1ee1e. Streak 0/3; pass 3 next."
 #   - version: 2.42
 #     date: 2026-07-11
 #     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 1 complete — 14 findings (F-DW-SP1-001..014, 6 HIGH) remediated across 3 agents: product-owner (BC-2.09.002 v1.2 best-effort delivery BINDING + BC-2.01.004 v1.4 terminal-consumer ctl carve-out + BC-2.01.005 v1.2 + BC-2.01.008 v1.0 new control_type schema home + BC-INDEX v3.3 46 BCs); architect (placement note v1.1: Q-SEAM/Q2-AMENDED/Q3-AMENDED/Q4-AMENDED/Q-SINGLE-OBS/Q-CTL-GUARD/Q-AC003/Q-AC005 sections; FO-RECV-FWD-001 consumed→DEFERRED; FCL 9→10 incl. netingress.go; supersession banners on Q2/Q4/FCL/FO-table; VP-037 v1.4 two-stage discharge + lock stays false); story-writer (story v1.1: AC-002 Q-SEAM seam contract; AC-003 PROVISIONAL removed Q3.P1 BINDING option 2; AC-005 drainCoordHook + cfg.DrainTimeout shape; Q-CTL-GUARD pin test; FCL 10 rows; test surface ~8; STORY-INDEX v4.69 row 140 ready v1.1 + POL-002 Notes chain). Develop base moved e940fc2→ef1ee1e via PR #119 (cmd/sbctl/client.go + client_test.go — no DRAIN-WIRE surface overlap). streak 0/3; 3 PROVISIONALs remaining (drain-window injection seam Q-AC005, ARCH-08 §6.6.2 grep-verify, FCL 10-vs-11 node_conn_registry.go); pass 2 next."
@@ -1070,21 +1073,23 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.1"
-    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.1"
+    story_version: "1.2"
+    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.2"
     bc_traces: [BC-2.09.002]
     vp_traces: [VP-037]
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
     deps_satisfied: true
     fo_consumed: "FO-RECV-FWD-001"
     spec_adversarial_streak: "0/3"
-    provisional_rulings: ["drain-window injection seam Q-AC005", "ARCH-08 §6.6.2 grep-verify", "FCL 10-vs-11 node_conn_registry.go"]
+    provisional_rulings: []  # all resolved — drain-window seam CONFIRMED (cfg.DrainTimeout), ARCH-08 §6.6.2 lawful (v2.12 bump obligation), FCL settled at 11
     code_base: "develop ef1ee1e"
     spec_adversarial_pass_1: "14 findings F-DW-SP1-001..014 (6 HIGH) remediated — placement note v1.1 consumed; streak 0/3; pass 2 next"
+    spec_adversarial_pass_2: "10 findings F-DW-SP2-001..010 (2 HIGH) remediated — note v1.2 + story v1.2 + VP-037 v1.5; streak 0/3; pass 3 next"
     # depends_on S-BL.PE-RECEIVE-LOOP added per PO adjudication F-P1-002 (2026-07-07)
     # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — deps satisfied
     # 2026-07-11: elaborated — placement note v1.0 (Q1-Q7) + story v1.0 (5 ACs, 9 FCL, 13 tasks); 2 PROVISIONAL rulings; spec-adversarial pass 1 next
     # 2026-07-11: spec-adversarial pass 1 remediation complete — placement note v1.1 + story v1.1 + BC-2.01.008 v1.0 + VP-037 v1.4; develop ef1ee1e (PR #119, no DRAIN-WIRE overlap)
+    # 2026-07-11: spec-adversarial pass 2 remediation complete — placement note v1.2 + story v1.2 + VP-037 v1.5; all 3 pass-1 PROVISIONALs resolved; develop unchanged ef1ee1e
 
   - story_id: S-BL.PE-RECEIVE-LOOP
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"
