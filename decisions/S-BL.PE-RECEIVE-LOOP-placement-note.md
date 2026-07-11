@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-08T00:00:00Z
-version: "1.13"
+version: "1.14"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -42,6 +42,7 @@ architecture_modules:
 | 1.11 | Remediate one spec-adversarial pass-13 finding (2026-07-10). F-SP13-001 (MED [spec-completeness]) — §6.6.2 sibling of F-SP12-001: the §6.6.2 upstreamdial forbidden-edges bullet carries the same three stale import-set claims as the §6.5 parenthetical remediated in v1.10. Q2 ARCH-08 obligation extended with a THIRD edit target (§6.6.2 upstreamdial bullet, three sub-edits in the same commit as the §6.5 edits); binding replacement bullet text specified in Q2. Blast-radius count ruling amended: 11 → 12 (10 frame sweep + 2 ARCH-08 locations: §6.5 row parenthetical + §6.6.2 forbidden-edges bullet). Class-closure grep performed (patterns `"halfchannel, outerassembler"` and `"F-P1-001"`): 0 further occurrences beyond §6.5 (line 325) and §6.6.2 (lines 458–465) edit targets plus 2 changelog rows (history-preserved, not edited). Pass-13 confirmations recorded in new adjudicated-clean section; transcript corrected on audit: `"halfchannel, outerassembler"` has 4 hits (line 316 = `internal/arqsend` row, benign substring match on a different package's own import set — initially uncounted). |
 | 1.12 | Remediate one spec-adversarial pass-14 finding (2026-07-10). F-SP14-001 (MED [spec-completeness]) — BC-2.01.004:61 (Postcondition 2 outer-header layout table, frame_type row) is cited zero times in story or note despite carrying the byte-identical enum row as ARCH-02:74; post-ship, BC-2.01.004 would enumerate 5 frame types while ARCH-02 + frame.go Valid() accept 6. Remediation option (a): Q3 ARCH-02 amendment obligation extended with a binding sibling obligation for BC-2.01.004:61 — must be amended to `, pe_connect=0x06` in the SAME commit as ARCH-02:74 and FrameTypePEConnect. Before/after rows quoted verbatim. Rationale cites F-P8-008 co-canonical precedent (BC-2.01.004:57 + ARCH-02:74 named canonical pair in pass-8) and BC-2.01.004 v1.2 sync-practice. Blast-radius arithmetic: BC-2.01.004:61 is a wire-format spec pair partner to ARCH-02:74 (both same-commit parallel obligations, sibling of but not inside the unified-12 count); total stated as "unified 12 (10 frame sweep + 2 ARCH-08 locations) + wire-format spec pair (ARCH-02:74 + BC-2.01.004:61, same-commit parallel obligations)". Class-closure grep performed (patterns `"arq=0x04, fec=0x05"` and `"empty_tick=0x02"`): exactly 2 canonical locations each (BC-2.01.004:61 and ARCH-02:74); transcript recorded with disposition of all hits. Pass-14 adjudicated-clean section added. |
 | 1.13 | Remediate one spec-adversarial pass-17 finding (2026-07-10). F-SP17-001 (MED [spec-gap / test-set underdetermination]) — AC-003 discrimination contract (discard PEConnect, forward everything else) pinned at only two test points: forward side tested with FrameTypeData only, discard side with FrameTypePEConnect only; a whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl frames required by Non-Goals (S-BL.RESYNC-FRAME consumer). New BINDING unit test added to Q2: `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` in `internal/upstreamdial/connector_test.go` — assembles a complete valid frame with `FrameType: frame.FrameTypeCtl`, uses same in-package accept-and-write fixture family as `PEConnectFrameDiscarded`, asserts FrameFn IS invoked and `hdr.FrameType == frame.FrameTypeCtl`; kills the whitelist-data-only malicious implementation. Companion cosmetic fix recorded: story's discrimination-sketch else-branch comment enumerates `{data, ctl, arq, fec}` but empty_tick also traverses the forward branch — comment must gain empty_tick (story-writer applies). Test counts updated: connector tests 6 → 7 (minimum; with optional ExitsOnVersionMismatch: 7); total net-new ~11 → ~12 (1 frame_test + 7 connector_test + 4 integration). Pass-17 adjudicated section added: F-SP17-001 accepted (one pin test + comment enumeration fix + counts 7/~12); P1b concurrency clean (OnFrameArrival hitCountMu + DropCache mu verified thread-safe, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent), P1c DRAIN-WIRE seam clean (backlog story, illustrative ACs, no concrete API expectation), P1d VP traceability clean (no VP pins a 5-type enum or Valid() bound; vp_traces:[] correct), P2 POL pass, P3 DataFrameForwarded + FlapCycleJoin re-executed realizable. |
+| 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
 
 # Architect Placement Note: PE-Connection Receive/Forward Loop
 ## Story: S-BL.PE-RECEIVE-LOOP
@@ -536,6 +537,69 @@ connector_test.go, plus +1 optional variant `TestConnector_ReceiveLoop_ExitsOnVe
 `internal/upstreamdial/connector_test.go`. The total net-new test count for the story rises
 from ~11 to **~12**: 1 `frame_test` amendment + 7 `connector_test` unit tests +
 4 integration tests (`router_pe_receive_test.go`).
+
+**AC-003 discard-continuation pin (v1.14 — F-SP18-001, BINDING):**
+
+Pass-18 adversarial review identified that `TestConnector_ReceiveLoop_PEConnectFrameDiscarded`
+asserts only "FrameFn NOT invoked" — it does not assert that the connection stays open and
+reading continues after the discard. A malicious implementation:
+
+```go
+if hdr.FrameType == frame.FrameTypePEConnect {
+    _ = conn.Close()
+    return
+}
+```
+
+passes every named test (silently discards and closes the conn; no other test sends a
+`FrameTypePEConnect` frame and then checks for continued reading), while converting every
+bootstrap frame into teardown+reconnect — producing a reconnect storm and dropping all frames
+queued behind the bootstrap. This is the symmetric sibling of the F-SP17-001 forward-side
+gap: the forward-side continuation is pinned by `NoDuplicateSuppression` (≥2 frames,
+F-SP4-001 axis); the discard-side has no analogue.
+
+**Binding remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (do NOT
+add a new test; counts are UNCHANGED at 7 connector / ~12 total).**
+
+**Extended two-frame recipe (binding for story-writer and implementer):** On the SAME
+connection that the test has already established, the fixture writes a `FrameTypePEConnect`
+frame FOLLOWED by a `FrameTypeData` frame (both via `outerassembler.Assemble` + server-side
+`conn.Write`, same in-package accept-and-write fixture pattern). Assert:
+
+- **(a)** `FrameFn` is NOT invoked for the `FrameTypePEConnect` frame (the existing discard
+  assertion — preserved verbatim).
+- **(b)** `FrameFn` IS invoked for the subsequent `FrameTypeData` frame; `hdr.FrameType ==
+  frame.FrameTypeData` at the call site.
+
+**What (b) kills:** The discard-as-close implementation calls `_ = conn.Close()` and returns
+on the `FrameTypePEConnect` frame. The conn is then closed before the `FrameTypeData` frame
+is read. `frame.ReadOuterFrame` returns an error on the closed conn; the receive goroutine
+exits. `FrameFn` is never invoked for the data frame. Assertion (b) fails. The test now kills
+both the discard-and-exit form and the discard-as-close form.
+
+**Rationale:** Extending (rather than adding) preserves the discard test's identity as THE
+discrimination pin for the discard branch and avoids another count sweep. The two-frame
+sequence on one conn is the minimum recipe that distinguishes discard-and-continue from
+discard-and-exit. This is symmetric to the forward-side ≥2 continuation pin
+(`NoDuplicateSuppression`, F-SP4-001 axis): that test sends two frames to verify the forward
+branch continues; this extension sends one `FrameTypePEConnect` + one `FrameTypeData` to
+verify the discard branch continues.
+
+**Realizability note:** Two frames written back-to-back on one conn arrive as one or two TCP
+segments — the framing is length-delimited and segment-boundary-independent. `frame.ReadOuterFrame`
+mirrors `netingress.ReadFrame`: it loops on `io.ReadFull(44)` to read the outer header (44 bytes
+exactly), then reads `hdr.PayloadLen` bytes of payload (verified `internal/frame/frame.go`
+`ReadOuterFrame` semantics, same as `netingress.ReadFrame` at `8eb54a5`). Whether the two
+frames arrive as one TCP segment or two, `ReadOuterFrame` completes each frame read atomically
+by `io.ReadFull` contract. No timing gymnastics required; the recipe is deterministically
+realizable.
+
+**Test file:** `internal/upstreamdial/connector_test.go` (same file as the existing
+`TestConnector_ReceiveLoop_PEConnectFrameDiscarded`).
+
+**Counts unchanged:** This is an extension of an existing test, NOT a new test. The connector
+test count remains **7 minimum** (+ optional `ExitsOnVersionMismatch` = 7). The total
+net-new story test count remains **~12**. No count-sweep of the note is required.
 
 **AC-001 PC-3 / AC-004 precondition observable substitutes (v1.6 — F-SP6-003, binding for story-writer):**
 
@@ -2455,3 +2519,20 @@ All other pass-17 items are adjudicated below.
 | P1d — VP traceability: no VP pins a 5-type enum or Valid() bound | Pass-17 P1d confirmation | Clean. The `vp_traces: []` frontmatter is correct: no VP in the VP index pins a 5-type FrameType enum or a specific `Valid()` upper bound. The Valid() widening to 6 types does not violate any VP. VP-037 (DRAIN-WIRE unblock path) is traced through S-7.04-FU-DRAIN-WIRE per this note's frontmatter — correct and unchanged. |
 | P2 — POL-001 / POL-002 pass | Pass-17 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.13. The new test adds no spec-document amendment obligation; the companion comment fix is scoped to the story's discrimination sketch (story-writer propagation item only). |
 | P3 — DataFrameForwarded + FlapCycleJoin re-executed realizable | Pass-17 P3 confirmation | Confirmed: `TestConnector_ReceiveLoop_DataFrameForwardedToCallback` (AC-001 unit) and the AC-005 FlapCycleJoin test remain physically realizable against the verified tree at `8eb54a5`. The new `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` test uses the same harness family and is realizable by the same argument (in-package accept-and-write fixture, `outerassembler.Assemble` with `FrameTypeCtl`, server-side `conn.Write`). No new import edge or API required beyond what v1.12 already mandates. |
+
+---
+
+## Pass-18 Adjudicated (per adversarial pass-18 report)
+
+F-SP18-001 is the sole actionable finding from pass-18 and is remediated in Q2 above.
+All other pass-18 items are adjudicated below.
+
+| Item | Classification | Ruling |
+|------|----------------|--------|
+| F-SP18-001 — AC-003 discard-side loop-continuation unpinned: `PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; discard-as-close passes every named test while producing reconnect storm | MED [spec-gap / test-set underdetermination] — ACCEPTED; REMEDIATED in Q2 above | Binding remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts UNCHANGED at 7 connector / ~12 total). Two-frame recipe on same conn: `FrameTypePEConnect` frame THEN `FrameTypeData` frame; assert (a) FrameFn NOT invoked for bootstrap frame, (b) FrameFn IS invoked for subsequent data frame (`hdr.FrameType == frame.FrameTypeData`). Kills discard-as-close: close tears down conn before data frame read, failing (b). Symmetric to forward-side NoDuplicateSuppression continuation pin (F-SP4-001 axis). Realizability confirmed: `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads; length-delimited; segment-boundary-independent. |
+| P1a — Ctl-pin realizability: CtlFrameForwardedToCallback remains realizable with the extended PEConnectFrameDiscarded | Pass-18 P1a confirmation | Clean. `FrameTypeCtl = 0x03` passes `Valid()` (verified `internal/frame/frame.go`: `Valid()` checks `f >= FrameTypeData && f <= FrameTypePEConnect`; 0x03 is in range). `outerassembler.Assemble` passes `FrameType` field through to the outer header byte[1] unchanged (verified `internal/outerassembler/assemble.go` :102 — `ChannelFrame.FrameType` written directly to the wire header). No special-case for `FrameTypeCtl` in the receive goroutine before `frameFn` call. The `CtlFrameForwardedToCallback` test is unaffected by the `PEConnectFrameDiscarded` extension. |
+| P1b — Kill transcript: does the two-frame extension also kill other previously-identified malicious implementations? | Pass-18 P1b confirmation | Confirmed cumulative kill coverage: payload-only reconstruction killed by `NoDuplicateSuppression` full-frame crc32 (F-SP4-001 axis); header-only reconstruction judged within ledger item 1 byte-contract coverage (44-byte io.ReadFull reads full header; no partial-header path reachable); callback-before-check killed by `PEConnectFrameDiscarded` assertion (a) (FrameFn not called for bootstrap); reconnect-skip killed by `ExitsOnReadError` PC (b) (connector re-dials after error exit). The new extension adds: discard-as-close killed by assertion (b) (data frame not received after close). |
+| P1c — AC-002/AC-004 count-tolerance: ~12 count is presence-assertion + ≥2 precise; extension does not alter this | Pass-18 P1c confirmation | Clean. The ~12 total is a presence-assertion count (approximately 12 net-new tests minimum); the precise counts are: 1 `frame_test` amendment + 7 `connector_test` unit tests + 4 integration tests. The `PEConnectFrameDiscarded` extension is a within-test edit, not an additional test. The 7 connector count and ~12 total count are accurate and unchanged. |
+| P1d — Note-ruling/story coherence: extended test shape recorded in ruling block; story-writer obligation scoped to "extend, not add" | Pass-18 P1d confirmation | Confirmed. The v1.14 ruling block in Q2 specifies the two-frame recipe verbatim (recipe text binding for story-writer and implementer). Story propagation obligation: story-writer updates `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` per the binding recipe; no new test name or count change to propagate. |
+| P2 — POL-001 / POL-002 pass | Pass-18 P2 confirmation | Confirmed: no new canonical-source violation (POL-001) or incomplete-sweep (POL-002) defect class introduced by v1.14. The extension adds no spec-document amendment obligation; all existing blast-radius counts (frame sweep unified-12, wire-format spec pair) are unaffected. |
+| P3 — ExitsOnReadError re-traced realizable with two-frame extension | Pass-18 P3 confirmation | Confirmed. `TestConnector_ReceiveLoop_ExitsOnReadError` (v1.9 corrected recipe: complete 44-byte header, byte[0]=0x01, byte[1]=0x07, PayloadLen=0x0000, conn NOT closed) remains realizable. The `PEConnectFrameDiscarded` extension does not change the error-exit recipe or its timing contract. The two tests are independent: `ExitsOnReadError` uses a malformed header (triggers read-error branch); the extended `PEConnectFrameDiscarded` uses two well-formed frames (exercises discard-continue-then-forward). No interaction. |

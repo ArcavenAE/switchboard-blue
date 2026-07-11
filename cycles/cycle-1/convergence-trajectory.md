@@ -1609,10 +1609,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 15 (spec) | v1.14 | 1 | 0 | 0 | 1 | 0/3 | story v1.15 + index v4.55 (note v1.12 unchanged) — remediated; streak stays 0/3 |
 | 16 (spec) | v1.15 | 0 | 0 | 0 | 0 | 1/3 | CLEAN — first clean pass of the cycle; no artifact changes; streak 0/3 → 1/3 |
 | 17 (spec) | v1.15 | 1 | 0 | 1 | 0 | 0/3 | note v1.13 + story v1.16 + index v4.56 — remediated; STREAK RESET 1/3 → 0/3 |
+| 18 (spec) | v1.16 | 1 | 0 | 1 | 0 | 0/3 | note v1.14 + story v1.17 + index v4.57 — remediated; streak stays 0/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 pending vs {v1.16, note v1.13}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 HAS_FINDINGS → remediated (hostile-implementer lens; streak reset 0/3); pass 18 HAS_FINDINGS → remediated (hostile-implementer round 2: discard-continuation; streak stays 0/3); pass 19 pending vs {v1.17, note v1.14}.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2321,4 +2322,53 @@ Pass 16 used the NEGATIVE-SPACE lens — walking surfaces the spec does NOT cove
 - **Streak: 1/3 → 0/3 (RESET).** Pass-16 CLEAN does not carry; HAS_FINDINGS resets the counter.
 - Sprint-state v2.21→v2.22. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1.
 
-**Awaiting:** spec adversarial pass 18 @ {story v1.16, note v1.13} (streak 0/3)
+---
+
+### Pass 18 Details (2026-07-10)
+
+**Story at review:** v1.16 | **Placement note at review:** v1.13
+
+**Verdict:** HAS_FINDINGS — 1 MED. Remediated. Streak stays 0/3.
+
+#### Finding F-SP18-001
+
+| ID | Severity | Class | Description | Remediation |
+|----|----------|-------|-------------|-------------|
+| F-SP18-001 | MED | spec-gap/test-set underdetermination | Hostile-implementer round 2: discard-side loop-continuation was unpinned. PEConnectFrameDiscarded asserted only 'FrameFn NOT invoked' — a discard-as-close implementation `{ conn.Close(); return }` passed every named test while converting each bootstrap frame into teardown+reconnect storm. This is the exact symmetric sibling of F-SP17-001: the forward-side continuation was pinned by NoDuplicateSuppression ≥2 (which requires loop continuation after a non-nil frameFn return), but the discard side had no analogue pin establishing that the loop must continue after discarding. Adversary disclosed fence-adjacency with the ledger-16 fence honestly; orchestrator verified the fence (ledger-16 fences discrimination and per-type pins, not action-continuation semantics) and confirmed F-SP18-001 is genuinely outside it. | Orchestrator-adjudicated shape: EXTEND PEConnectFrameDiscarded, not add a new test. Same conn writes PEConnect frame THEN a Data frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the data frame. This two-frame single-connection assertion pins both discard-without-close and loop-continuation simultaneously. Counts UNCHANGED: 7 connector tests / ~12 total. AC-003 PC-4 gains explicit sentence: 'discard MUST NOT close the connection.' |
+
+#### Pass 18 Kill Transcript
+
+Four malicious archetypes raised and killed:
+1. **Payload-only reconstruction** (strip 44-byte outer header, pass payload to frameFn): killed by NoDuplicateSuppression — DropCache keyed on full-frame crc32, payload-only reconstructed frames would not match original outer-header+payload checksums.
+2. **Callback-before-check** (invoke frameFn before type discrimination): killed by PEConnectFrameDiscarded — if frameFn were invoked for PEConnect frames, the extended test would detect the bootstrap callback that should not fire.
+3. **Reconnect-skip** (ignore conn.Close return, skip dial retry): killed by ExitsOnReadError PC(b) — the exit-on-error test directly pins that the goroutine exits on read error, implying prior conn.Close discipline.
+4. **Ctl-pin circumvention** (make Assemble skip FrameTypeCtl or make Valid(0x03) false): killed by tracing the Ctl pin end-to-end — Assemble passthrough at :102 confirmed, Valid(0x03) evaluates to true (0x03 < 0x07 upper bound from v1.14's FrameTypePEConnect addition).
+
+AC-002 and AC-004 count-tolerance both clean under extension (no test count change). POL-001/002 pass for story v1.17 and index v4.57.
+
+#### Fence-Adjacency Adjudication
+
+Adversary disclosed honestly that F-SP18-001 is adjacent to the Pass-17 Adjudicated section's forward-completeness ruling and the ledger-16 fences. Orchestrator audit confirmed:
+- Ledger-16 fences: discrimination (AC-003 PC-1/2/3, FrameTypePEConnect discarded) and per-type pins (F-SP17-001 forward-continuation for FrameTypeCtl).
+- F-SP18-001 scope: discard-action-continuation semantics (loop must not close conn on discard) — outside the ledger-16 fence scope. Genuinely novel gap, not a re-raise.
+
+#### Remediation Summary
+
+**Placement note v1.13 → v1.14 (architect, zero audit corrections — 2nd consecutive):** Discard-action-continuation class added to discrimination contract section; AC-003 PC-4 explicit connection-close prohibition documented; extend-not-add shape rationale noted; fence-adjacency adjudication recorded.
+
+**Story v1.16 → v1.17 (story-writer, zero corrections):** PEConnectFrameDiscarded extended to two-frame assertion (PEConnect then Data, same conn); AC-003 PC-4 prohibition sentence added; Estimated Test Surface counts unchanged (7 connector / ~12 total); changelog row added. **STORY-INDEX v4.56 → v4.57:** S-BL.PE-RECEIVE-LOOP row updated to story v1.17 + note v1.14.
+
+#### Observation: Discrimination Contract Now Symmetrically Complete
+
+With F-SP18-001 remediated, the discrimination contract has BOTH action semantics pinned:
+- Forward-and-continue (F-SP4-001 / F-SP17-001 pins): non-PEConnect frames reach frameFn AND the loop continues after non-nil return.
+- Discard-and-continue (F-SP18-001 pin): PEConnect frames are discarded AND the loop continues without closing the connection.
+
+The continuation axis is now symmetrically closed.
+
+#### Outcome
+
+- **Streak stays 0/3.** F-SP18-001 is MED — hostile-implementer round 2 finding.
+- Sprint-state v2.22→v2.23. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1.
+
+**Awaiting:** spec adversarial pass 19 @ {story v1.17, note v1.14} (streak 0/3)

@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.22
+# version: 2.23
 # changelog:
+#   - version: 2.23
+#     date: 2026-07-10
+#     description: "S-BL.PE-RECEIVE-LOOP spec pass 18: HAS_FINDINGS — F-SP18-001 (MED [spec-gap/test-set underdetermination], hostile-implementer round 2: discard-side loop-continuation unpinned — PEConnectFrameDiscarded asserted only 'FrameFn NOT invoked'; discard-as-close implementation `{ conn.Close(); return }` passed every named test while converting each bootstrap frame into teardown+reconnect storm; symmetric sibling of F-SP17-001 — forward-side continuation was pinned by NoDuplicateSuppression ≥2, discard side had no analogue; adversary disclosed fence-adjacency honestly, orchestrator verified genuinely outside ledger-16 fence). Remediation (orchestrator-adjudicated shape): EXTEND PEConnectFrameDiscarded, not add — same conn writes PEConnect frame THEN Data frame; assert (a) FrameFn NOT invoked for bootstrap, (b) IS invoked for data; counts UNCHANGED 7 connector / ~12 total. AC-003 PC-4 gains explicit 'discard MUST NOT close the connection' sentence. Pass-18 kill transcript: payload-only reconstruction killed by NoDuplicateSuppression full-frame crc32; callback-before-check killed by PEConnectFrameDiscarded; reconnect-skip killed by ExitsOnReadError PC(b); Ctl-pin traced realizable end-to-end (Assemble :102 passthrough, Valid(0x03) true); AC-002/004 count-tolerance clean; POL pass. Remediated: note v1.13→v1.14 (architect, zero audit corrections — 2nd consecutive), story v1.16→v1.17 + index v4.56→v4.57 (story-writer, zero corrections). Streak stays 0/3. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1. Next: spec pass 19 vs {story v1.17, note v1.14}."
 #   - version: 2.22
 #     date: 2026-07-10
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 17: HAS_FINDINGS — F-SP17-001 (MED [spec-gap/test-set underdetermination], hostile-implementer lens: AC-003 discrimination contract's forward side pinned only at FrameTypeData; whitelist-data-only implementation `if hdr.FrameType == FrameTypeData` passed ALL ~11 named tests while silently dropping FrameTypeCtl frames that Non-Goals promises to the S-BL.RESYNC-FRAME consumer — under strict TDD the RED test set IS the contract; prose sketch doesn't gate). Remediation: BINDING pin test TestConnector_ReceiveLoop_CtlFrameForwardedToCallback (FrameTypeCtl via outerassembler.Assemble, inverted assertion of PEConnectFrameDiscarded); else-branch comment gains empty_tick + type-agnostic-except-pe_connect; counts 6→7 connector / ~11→~12 total. STREAK RESETS 1/3 → 0/3 (pass-16 CLEAN does not carry). Pass-17 confirmations: P1b concurrency clean (hitCountMu + DropCache mu verified, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent); P1c DRAIN-WIRE seam clean; P1d VP traceability clean (no VP pins 5-type enum; vp_traces:[] correct); POL pass; 2 recipes re-executed realizable. Architect count transcript survived orchestrator audit with ZERO corrections (first of cycle — after 3 prior correction rounds). Remediated: note v1.12→v1.13 (architect), story v1.15→v1.16 + index v4.55→v4.56 (story-writer). Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1. Next: spec pass 18 vs {story v1.16, note v1.13} at streak 0/3."
@@ -1022,16 +1025,16 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.16"
+    story_version: "1.17"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.13"
-    spec_adversarial_pass: 17
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.14"
+    spec_adversarial_pass: 18
     spec_adversarial_streak: "0/3"
-    last_findings: "pass 17 HAS_FINDINGS remediated — F-SP17-001 MED hostile-implementer test-set underdetermination; pin test added; streak reset 1/3→0/3"
-    note: "awaiting spec adversarial pass 18 (story v1.16 + note v1.13, streak 0/3)"
+    last_findings: "pass 18 HAS_FINDINGS remediated — F-SP18-001 MED hostile-implementer discard-continuation unpinned; extend PEConnectFrameDiscarded (two-frame assertion), AC-003 PC-4 explicit connection-close prohibition; counts unchanged 7 connector / ~12 total; streak stays 0/3"
+    note: "awaiting spec adversarial pass 19 (story v1.17 + note v1.14, streak 0/3)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.
