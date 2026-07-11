@@ -166,12 +166,17 @@ func loadEd25519Key(path string, homeDir func() (string, error)) (ed25519.Privat
 		return nil, fmt.Errorf("key load failed: %s: %w", path, err)
 	}
 
-	// ssh.ParseRawPrivateKey returns *ed25519.PrivateKey for Ed25519 keys.
-	edPrivPtr, ok := rawKey.(*ed25519.PrivateKey)
-	if !ok {
+	// ssh.ParseRawPrivateKey returns *ed25519.PrivateKey (pointer) for OpenSSH
+	// "OPENSSH PRIVATE KEY" blocks and ed25519.PrivateKey (value) for PKCS#8
+	// "PRIVATE KEY" blocks. Accept both forms (fixes #112).
+	switch k := rawKey.(type) {
+	case *ed25519.PrivateKey:
+		return *k, nil
+	case ed25519.PrivateKey:
+		return k, nil
+	default:
 		return nil, fmt.Errorf("key load failed: %s: not an Ed25519 private key (got %T)", path, rawKey)
 	}
-	return *edPrivPtr, nil
 }
 
 // Authenticate performs the ADR-012 client-side challenge-response handshake on conn.
