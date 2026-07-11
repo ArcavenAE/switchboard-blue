@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-10T00:00:00Z
-version: "1.20"
+version: "1.21"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -45,6 +45,7 @@ architecture_modules:
 | 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
 | 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
 | 1.19 | Implementation-phase adversarial adjudication (2026-07-11): F-IP1-001 (MED [missing regression guard + false enforcement claim]) — AC-002 `go list -deps` assertion promised but undelivered; Architecture Compliance Rules "build MUST fail" sentence is factually wrong (upstreamdial→routing is acyclic; Go build does NOT fail). Ruling: standalone perimeter test `TestUpstreamdialImportPerimeter` in `internal/upstreamdial/connector_test.go` with positive-coverage guard (exec `go list -deps`, assert non-empty AND contains `internal/frame`, then assert `internal/routing` absent). Corrected Architecture Compliance wording specified. Forward obligation recorded for mgmt_wire.go:549–551 nil ForwardFunc. |
+| 1.21 | Per-story adversarial adjudication round 3 (2026-07-11): F-IP3-001 (MED) — note-side F-IP2-001 Option-b propagation performed: :194-199 implementation-obligation block struck with ~~strikethrough~~ and annotated with caller-obligation wording per :3108; class-closure sweep (4 patterns, multi-line-tolerant) found 0 additional live unannotated occurrences; this is the 9th incomplete-sweep-class instance. OBS-1 (LOW [test-coverage]) — FlapCycleJoin_NoLeak recvWg.Wait() pin gap: ACCEPTED as documented pin-limitation; deterministic recipe impractical without deadlock/flake risk. OBS-2 (LOW [process-gap]) — remediation workflow missing mandatory in-place annotation step: recorded as [process-gap]; countermeasure now binding for remaining passes. |
 | 1.20 | Per-story adversarial adjudication round 2 (2026-07-11): F-IP2-001 (MED) — SetFrameCallback post-Start mutation guard: OPTION (b) RULED — caller-ordering contract alone sufficient; guard not implemented; note records rejected-option rationale (panic vs ignore hides vs surfaces; one production caller with correct ordering; goroutine-happens-before already covers the set-once field; implementing a guard adds complexity without eliminating the data race on concurrent callers). F-IP2-002 (MED) — residual false attribution in `router_pe_receive_test.go:212–217` doc comment: mechanical replacement text specified. F-IP2-003 (LOW) — ARCH-08 v2.11 Changelog table missing 2.11 row: fixed in-place in ARCH-08 (row added below 2.10, no version bump). |
 | 1.18 | GREEN-phase adjudication (2026-07-11): F-GP1-001 (HIGH [green-phase contract conflict]) — `TestConnector_BackoffParameters` breaks 3/3 deterministically under the binding F-SP5-001/F-SP6-001 unconditional-close contract. Root cause: silent `SetWriteDeadline` failure path in `maintainConn` emits no EC-001 stamp; test's stamp[0] assumption is violated; measured gap captures doubled backoff (~2 s) not operative base (~1 s). Decision: OPTION (b) — keep unconditional close (production code unchanged), fix test stamp-collection to be robust to both teardown paths via Mode-drop poll before stamp collection. Options (a) (re-opens half-close hole, REJECTED) and (c) (misleading EC-001 log in production, REJECTED) evaluated and rejected. Story propagation: story-writer adds task to apply `TestConnector_BackoffParameters` fix. |
 | 1.17 | Remediate one spec-adversarial pass-21 finding (2026-07-10). F-SP21-001 (MED [doc-drift / incomplete sweep-completeness certification]) — v1.16 class-closure sweep table certified "17 blocks … complete" but missed four versioned binding-block headers whose bold text does not match the recorded grep patterns (`binding.:`, `BINDING`, `[Ss]ketch`): :262 `**\`FrameFn\` byte-contract (binding — F-SP3-001 correction):**` (v1.3/F-SP3-001); :511 `**Test shape (binding for story-writer and implementer):**` (v1.13/F-SP17-001 sub-block); :1812 `**Pin test shape (binding for story-writer):**` (Q9/F-SP3-001 byte-contract pinning obligation); :1928 `**Binding harness rule:**` (Q9.3/F-SP2-003 runRouter mandate). All four verified CURRENT (no supersession needed). Sweep table extended to rows 18–21; grep transcript replaced with canonical pattern `grep -nE '\*\*[^*]*[Bb]inding'` (21 hits); v1.17 addendum block added to sweep section re-certifying over all 21 blocks. This is the 8th incomplete-sweep-class instance and the 3rd false completeness certification. Pass-21 Adjudicated section added. |
@@ -191,12 +192,12 @@ nil callback implies the caller did not wire up routing; logging every discarded
 frame would be noise without context. The nil check has no effect on the
 production path, where the ordering contract holds.
 
-Post-Start mutation of the callback is forbidden. Any call to `SetFrameCallback`
+~~Post-Start mutation of the callback is forbidden. Any call to `SetFrameCallback`
 after `Start()` returns is a data race (dial goroutines are already reading
 `frameFn`); the `Connector` implementation MUST NOT permit it. If the
 `SetFrameCallback` setter is called post-Start, it may panic or be silently
 ignored — the implementer's choice — but it MUST NOT proceed with an unsynchronized
-field write.
+field write.~~ *(amended v1.21 — F-IP3-001: note-side F-IP2-001 Option-b propagation, mandated at :3106 but not performed in v1.20. The implementation obligation is replaced by a caller obligation only:* `SetFrameCallback` *MUST be called before* `Start()`*. Calling it after* `Start()` *returns is a **data race** (dial goroutines are already reading* `frameFn`*); the caller is solely responsible for the ordering. The implementation does not detect or guard against post-Start mutation — the field is set-once and the goroutine-creation happens-before already covers visibility to all goroutines launched by* `Start()`*. See the F-IP2-001 ruling at :3104 for full rationale.)*
 
 **Cite:** ARCH-08 §6.6.2 forbidden-edges note at `8eb54a5`;
 `internal/upstreamdial/connector.go` `dialLoop` structure (verified at `8eb54a5`);
@@ -3158,3 +3159,66 @@ The `| 2.11 | ... |` row has been added to the ARCH-08 Changelog table immediate
 > `| 2.11 | 2026-07-11 | S-BL.PE-RECEIVE-LOOP: §6.5 pos-19 import set updated `{halfchannel, outerassembler}` → `{frame, halfchannel, outerassembler}` (direct frame edge re-added per F-SP12-001); §6.5 parenthetical reconciled (historical F-P1-001 "frame not imported directly" note superseded with preservation of context); §6.6.2 upstreamdial forbidden-edges bullet updated at positions 2, 5, 8 per F-SP13-001 (cycle-freeness gains frame pos 2; F-P1-001 clause updated; F-P7-002 clause preserved). Refs: S-BL.PE-RECEIVE-LOOP + F-SP12-001/F-SP13-001 + code commit c316aed. |`
 
 ARCH-08 frontmatter (`version: "2.11"`, `modified:` line 10) is **untouched** — this is completion of the v2.11 edit, not a new version.
+
+---
+
+## Per-story adversarial adjudication round 3 (v1.21 — F-IP3-001 + observations, BINDING)
+
+**Source:** Implementation-phase adversarial pass-3 against S-BL.PE-RECEIVE-LOOP. Disk-verified by orchestrator prior to dispatch.
+
+---
+
+### F-IP3-001 (MED) — note-side F-IP2-001 Option-b propagation not performed in v1.20
+
+**Finding restated:** The v1.20 ruling (F-IP2-001, :3104–3124) mandated: "The note and story MUST be updated … to replace the implementation obligation with a caller obligation only." The story was updated to v1.23 (:491–498). The note's Q1 "SetFrameCallback Ordering Contract" block at :194–199 was NOT updated — it still carried verbatim: "the `Connector` implementation MUST NOT permit it. If the `SetFrameCallback` setter is called post-Start, it may panic or be silently ignored — the implementer's choice — but it MUST NOT proceed with an unsynchronized field write." No supersession marker was present. A top-to-bottom reader hitting this block ~2900 lines before the F-IP2-001 ruling would wrongly conclude the delivered unguarded setter violates the spec.
+
+**Annotation applied (v1.21):** The block at :194–199 has been struck with `~~strikethrough~~` and annotated inline with the Option-b caller-obligation wording from :3108:
+
+> ~~Post-Start mutation of the callback is forbidden. Any call to `SetFrameCallback` after `Start()` returns is a data race (dial goroutines are already reading `frameFn`); the `Connector` implementation MUST NOT permit it. If the `SetFrameCallback` setter is called post-Start, it may panic or be silently ignored — the implementer's choice — but it MUST NOT proceed with an unsynchronized field write.~~ *(amended v1.21 — F-IP3-001: note-side F-IP2-001 Option-b propagation, mandated at :3106 but not performed in v1.20. The implementation obligation is replaced by a caller obligation only:* `SetFrameCallback` *MUST be called before* `Start()`*. Calling it after* `Start()` *returns is a **data race** (dial goroutines are already reading* `frameFn`*); the caller is solely responsible for the ordering. The implementation does not detect or guard against post-Start mutation — the field is set-once and the goroutine-creation happens-before already covers visibility to all goroutines launched by* `Start()`*. See the F-IP2-001 ruling at :3104 for full rationale.)*
+
+**Class-closure sweep (mandatory — 9th incomplete-sweep-class instance):**
+
+The following patterns were applied to the ENTIRE note body using multi-line-tolerant technique (`cat <file> | tr '\n' ' ' | grep -o "<pattern>"`) to find any OTHER location asserting the pre-Option-b implementation obligation outside changelog rows and the F-IP2-001/F-IP3-001 adjudication sections:
+
+| # | Pattern | Hits | Disposition |
+|---|---------|------|-------------|
+| 1 | `MUST NOT permit` | 2 | :196 — TARGET, struck above. :3102 — F-IP2-001 finding-restated historical text, acceptable. |
+| 2 | `panic or be silently ignored` (multi-line: `panic or` across line break at :197–198) | 2 | :197–198 — TARGET, struck above (same block as hit 1). :3102 — F-IP2-001 finding-restated historical text, acceptable. |
+| 3 | `unsynchronized field write` | 2 | :198–199 — TARGET, struck above (same block). :3102 — F-IP2-001 finding-restated historical text, acceptable. |
+| 4 | `implementer's choice` | 2 | :198 — TARGET, struck above (same block). :842 — unrelated ruling ("netingress.ReadFrame may delegate to it … the implementer's choice"), not the post-Start obligation. |
+
+**Sweep result: zero additional live unannotated occurrences of the pre-Option-b implementation obligation outside the already-annotated :194–199 block and acceptable historical/adjudication restatements.** Sweep certified over the full note body with multi-line-tolerant patterns.
+
+**This is the 9th incomplete-sweep-class instance** (F-SP19/20/21 were 6th/7th/8th). Root cause: the F-IP2-001 ruling at :3106 said "note and story MUST be updated" but did not name a specific line range; the story-writer update path was executed; the note-side path was not. The OBS-2 countermeasure below addresses the process gap.
+
+---
+
+### OBS-1 (LOW [test-coverage]) — FlapCycleJoin_NoLeak does not pin recvWg.Wait() against deletion
+
+**Observation restated:** Every lifecycle test in `connector_test.go` closes the connection before asserting goroutine cleanup. When the conn is closed, the receive goroutine self-exits via EOF (the `io.ReadFull` call inside `frame.ReadOuterFrame` returns `io.EOF`). Because the goroutine exits on its own, `recvWg.Wait()` in `dialLoop` returns promptly regardless of whether the WaitGroup increment/Done pair are present or not — a malicious implementation that omits `recvWg.Add(1)` / `recvWg.Done()` entirely still passes all existing tests, because the conn-close guarantees the goroutine exits before `Stop()` completes the join. The join is required for correctness on the reconnect path (Q6 per-reconnect join, :1453–1462), but no test forces the code path where `recvWg.Wait()` is load-bearing.
+
+**RULING: (i) ACCEPT as documented pin-limitation.**
+
+**Rationale:**
+
+1. **The join is present and required-for-correctness.** The Q6 per-reconnect-iteration join contract (:1453–1462) is binding and verified in implementation review. The per-connection WaitGroup (or equivalent `done chan struct{}`) is specified in the note; its presence is not in dispute.
+
+2. **A deterministic pin would require holding the conn open through the WaitGroup wait.** The test harness would need to: (a) accept a connection on the server side, (b) NOT close it, (c) let the receive goroutine block inside `io.ReadFull` on the open conn, (d) trigger a reconnect from the `dialLoop` side (e.g., via `Stop()` or `ReloadAddrs([])`), (e) assert `Stop()` blocks until the receive goroutine exits, (f) then allow the conn to close. The specific concern is step (d)/(e): `Stop()` closes `stopCh`, which causes `reconcileLoop` to cancel the dial contexts. The per-address `addrCancel.done` channel is closed only after both `maintainConn` AND the receive goroutine have returned (:1484–1492). If the receive goroutine is blocked in `io.ReadFull` on an open conn, and the dial context is cancelled, the goroutine may not exit until the conn is closed externally — which means the test must close the conn from the server side to unblock the goroutine, immediately creating the same "conn-close causes self-exit" situation the pin was meant to avoid.
+
+3. **The resulting test cannot distinguish "goroutine exited because WaitGroup.Wait() blocked Stop()" from "goroutine exited because conn-close unblocked io.ReadFull".** Any observable pin (timeout on `Stop()`, goroutine count assertion) would also pass if the WaitGroup were absent, because the conn-close always unblocks the goroutine before the timeout. A done-channel observable (`make(chan struct{})`, closed by the receive goroutine) could track goroutine exit independently, but cannot force the goroutine to stay alive long enough to require the WaitGroup wait — the only thing keeping the goroutine alive is an open conn with data to read, and closing that conn is the only way to let `Stop()` proceed.
+
+4. **Risk assessment: LOW.** The WaitGroup is present in the implemented code (verified in adversarial pass-3); a future refactor that deletes it would require explicitly removing `recvWg.Add(1)` / `recvWg.Done()` calls — this is not an accidental omission. The flap-cycle test does validate the reconnect path and goroutine-leak assertion via the `runtime.NumGoroutine()` before/after comparison (connector_test.go:1858/:1924 — the "or equivalent" arm of the Q6 recipe; goleak is not imported). The specific WaitGroup-dependency path is not independently pinned, but the goroutine-leak gate provides a net that catches the failure mode the WaitGroup prevents (accumulated goroutines from rapid flap cycles).
+
+**No test-writer or implementer action required from this ruling.**
+
+---
+
+### OBS-2 (LOW [process-gap]) — remediation workflow missing mandatory in-place annotation step
+
+**Observation restated:** The F-IP2-001 ruling mandated a note-side propagation but did not include a step requiring the architect to annotate the cited stale line-range in-place in the same remediation burst. The propagation was deferred to story-writer scope, and the note-side annotation was never performed. This is the 9th instance of the incomplete-sweep class across this story's adversarial history (F-SP19/F-SP20/F-SP21 were 6th/7th/8th; F-IP3-001 is the 9th).
+
+**[process-gap]** Recorded per the cycle-closing checklist (S-7.02). The orchestrator will route the codification follow-up at cycle close.
+
+**Countermeasure now binding for remaining passes of S-BL.PE-RECEIVE-LOOP:**
+
+Any future finding by any adversarial pass that cites a note line-range as stale or as carrying superseded binding text **REQUIRES** the in-place annotation of that exact line-range in the same remediation burst as the ruling, before the adjudication section is appended. The annotation follows the established class-closure pattern: ~~strikethrough~~ the stale text + `*(amended vN.NN — FXXX: <brief rationale>)*` inline marker. The ruling section MUST then record the verbatim new annotation text (as done for F-IP3-001 above) so the adversary can verify in the next pass. A ruling that says "note-side propagation required" without performing the annotation in the same burst is procedurally incomplete and MUST be treated as an open finding by the next adversarial pass.

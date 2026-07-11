@@ -2700,3 +2700,48 @@ Per-story adversarial cycle (Step 4.5, BC-5.39.001): fresh-context adversary vs 
 **Streak:** 0/3 (pass 2 HAS_FINDINGS; streak was never advanced from 0)
 
 **Pass 3 next:** fresh-context adversary vs implementation @ c3fca02 on `story/s-bl-pe-receive-loop`, story v1.23 + note v1.20 + index v4.63, streak 0/3. F-IP2-001/002/003 in ledger.
+
+---
+
+### Per-story adversarial pass 3 (2026-07-11) — 1 finding + 2 observations, remediated
+
+**Dispatch tuple:** story v1.23 + placement note v1.20 + implementation c3fca02 on branch `story/s-bl-pe-receive-loop`
+
+**Rotated lenses:** remediation-of-remediation integrity, version-pin coherence, v1.21→v1.23 semantic diff, checklist-free hostile read, mutation resistance, POL sweep
+
+**Verdict:** HAS_FINDINGS — 1 finding F-IP3-001 MED + 2 observations
+
+#### Finding F-IP3-001 MED [note-side propagation gap / 9th incomplete-sweep instance]
+
+| ID | Severity | Class | Description |
+|----|----------|-------|-------------|
+| F-IP3-001 | MED | incomplete-sweep / note-side propagation gap | The F-IP2-001 ruling mandated note-side Option-b propagation but v1.20 only fixed the story — the note's Q1 block at lines :194-199 still carried the stale implementation obligation unannotated. False-verdict-against-correct-code hazard: any adversary reading the note's Q1 block in isolation would correctly flag the guard as unimplemented. 9th instance of the incomplete-sweep class. |
+
+**Remediation:** Architect annotated lines :194-199 in-place with strikethrough + Option-b caller-responsibility wording + `amended-v1.21` marker. Ran 4-pattern multi-line-tolerant class-closure grep — 0 additional live occurrences found outside documentation regions.
+
+#### OBS-1 (LOW, test-coverage) — accepted, documented pin-limitation
+
+`FlapCycleJoin_NoLeak` does not independently pin `recvWg.Wait()` against deletion — every lifecycle test closes the conn, which causes EOF self-exit, masking a missing join. A deterministic pin recipe (write-then-expect-no-exit) collapses into conn-close-self-exit indistinguishability in this harness. The Q6 "or equivalent" arm (`runtime.NumGoroutine` before/after) provides the net-level goroutine-leak gate. **ACCEPTED** as documented pin-limitation: no code action taken.
+
+**Note:** The orchestrator caught a goleak→runtime.NumGoroutine misattribution in the OBS-1 ruling at line :3210 — architect corrected the attribution in the same remediation burst (factual fix; no artifact version bump required beyond note v1.21 changelog).
+
+#### OBS-2 (LOW, [process-gap]) — countermeasure now BINDING
+
+The remediation workflow for passes 1–2 lacked mandatory in-place annotation of cited stale line-ranges in the placement note. **Countermeasure now BINDING for remaining passes:** any finding citing a note line-range as stale requires in-place annotation of that exact range in the same remediation burst, verified by class-closure grep before committing. Tagged `[process-gap]` per S-7.02 — codification follow-up routes at cycle close.
+
+**All 13 bars PASS** — confirmed by pass-3 adversary in a checklist-free hostile read. No code defects found.
+
+**Mutation analysis:** byte-contract pin (NoDuplicateSuppression full-frame crc32) and discard-continuation pin (PEConnectFrameDiscarded extended with data-frame sibling assertion) remain robust. Join-pin gap documented per OBS-1 accepted pin-limitation.
+
+**Remediation artifacts:**
+
+| Artifact | Change |
+|----------|--------|
+| `decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md` | v1.20 → v1.21 (Q1 block :194-199 annotated in-place; class-closure sweep recorded; goleak misattribution corrected at :3210; changelog row) |
+| `stories/S-BL.PE-RECEIVE-LOOP.md` | v1.23 → v1.24 (metadata-only: placement_note pin v1.20→v1.21, adversarial_pass_3 field added) |
+| `stories/STORY-INDEX.md` | v4.63 → v4.64 |
+| Implementation | unchanged at c3fca02 |
+
+**Streak:** 0/3 (pass 3 HAS_FINDINGS; streak stays at zero)
+
+**Pass 4 next:** fresh-context adversary vs implementation @ c3fca02 on `story/s-bl-pe-receive-loop`, story v1.24 + note v1.21 + index v4.64, streak 0/3. F-IP3-001/OBS-1/OBS-2 in ledger.
