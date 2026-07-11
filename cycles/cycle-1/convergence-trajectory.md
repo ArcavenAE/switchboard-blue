@@ -1607,10 +1607,11 @@ Initial burst P1 (7 findings, highest severity) → rapid decay P2–P4 (3/3/1) 
 | 13 (spec) | v1.12 | 1 | 0 | 1 | 0 | 0/3 | note v1.11 + story v1.13 + index v4.53 — remediated; streak stays 0/3 |
 | 14 (spec) | v1.13 | 1 | 0 | 1 | 0 | 0/3 | note v1.12 + story v1.14 + index v4.54 — remediated; streak stays 0/3 |
 | 15 (spec) | v1.14 | 1 | 0 | 0 | 1 | 0/3 | story v1.15 + index v4.55 (note v1.12 unchanged) — remediated; streak stays 0/3 |
+| 16 (spec) | v1.15 | 0 | 0 | 0 | 0 | 1/3 | CLEAN — first clean pass of the cycle; no artifact changes; streak 0/3 → 1/3 |
 
 ### Trajectory Shorthand
 
-`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); streak 0/3; pass 16 pending vs {v1.15, note v1.12}.
+`7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0` — pass 1 HAS_FINDINGS → remediated; pass 2 HAS_FINDINGS → remediated; pass 3 HAS_FINDINGS → remediated; pass 4 HAS_FINDINGS → remediated; pass 5 HAS_FINDINGS → remediated; pass 6 HAS_FINDINGS → remediated; pass 7 HAS_FINDINGS → remediated; pass 8 HAS_FINDINGS → remediated (story-side only); pass 9 HAS_FINDINGS → remediated (story-side only); pass 10 HAS_FINDINGS → remediated (both note-side); pass 11 HAS_FINDINGS → remediated; pass 12 HAS_FINDINGS → remediated; pass 13 HAS_FINDINGS → remediated; pass 14 HAS_FINDINGS → remediated; pass 15 HAS_FINDINGS → remediated (story-side only); pass 16 CLEAN — first clean pass of the cycle; streak 1/3; pass 17 pending vs {v1.15, note v1.12}.
 
 **Decay trajectory (finding counts per pass):** `7 → 4 → 3 → 2 → 3 → 4 → 5 → 2 → 1` — new READ-error surface discovered at pass 5; teardown wiring layer at pass 6; observable semantics layer (mode=PE ground-truthed as config-presence-only) at pass 7; THIRD consecutive remediation carrying a false ground-truth premise (v1.4 trap → v1.5 phantom mechanism → v1.6 false observable). F-SP7-003 incomplete sweep additionally recurred inside its own remediation (2 Q1-body residuals caught on orchestrator disk-audit with expanded grep patterns). Pass 8: THREE-PREMISE-STREAK BROKEN — all three v1.7 premises ground-truthed TRUE; both findings are pass-7 residual-text incoherence (Frankenstein enumeration + stale test name), not new ground-truth defects; first pass with zero HIGH. Remediated story-side only (note v1.7 unchanged). 4 API-stall recoveries at pass 8 (2 zero-work + 2 productive-partial), all recovered via disk-audit-first. Pass 9: single finding — pre-contract descriptor text in AC-001 integration-test entries (Test-names block + Estimated Test Surface row); ran a fresh top-to-bottom implementer-read sweep; all contracts mutually consistent elsewhere; second consecutive zero-HIGH pass. Decay 2→1.
 
@@ -2220,3 +2221,55 @@ Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-14 when
 **Streak stays 0/3.** First LOW-only finding in the cycle. Seventh consecutive single-finding-or-fewer pass. Zero HIGH since pass 11. Sprint-state v2.19→v2.20. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1.
 
 Full findings: `.factory/cycles/cycle-1/adversarial-reviews/` (spec-pass-15 when authored).
+
+---
+
+### Pass 16 Details (2026-07-10)
+
+**Story at review:** v1.15 | **Placement note at review:** v1.12
+
+**Verdict:** CLEAN — zero findings. Streak 0/3 → 1/3. First clean pass of the spec-adversarial cycle.
+
+#### Summary
+
+**Dispatch integrity:** Code baseline re-verified docs-only 8eb54a5..42baa8c (no behavioral changes in scope). All surfaces exercised from fresh context.
+
+**P1a — v1.15 fix under direct attack:** File Structure Requirements Modified-files bullet for `specs/behavioral-contracts/ss-02/BC-2.01.004.md` (F-SP15-001 remediation) verified semantically consistent with FCL row 9 obligation and Task 3 co-obligation annotation. No incoherence introduced by the pass-15 burst itself.
+
+**P1b — Negative-space audit (7 surfaces walked):**
+
+| Surface | Resolution |
+|---------|-----------|
+| Goroutine spawn/join placement | Specified — Q6 / AC-005 binding; per-iteration join via doneCh |
+| Stop() during in-flight ReadOuterFrame | Implementer's-choice — unblock chain is conn.Close() at :382; observable result (goroutine exits) identical under all orderings; AC-observables unaffected |
+| frameFn lock discipline | Previously adjudicated — FrameFn is invoked on the receive goroutine only; no concurrent writers to the field; not a new gap |
+| Reconnect/backoff timing | Implementer's-choice — keepaliveInterval governs; transient stale-ModePE window acknowledged and bounded per F-SP7-005 |
+| testenv.Restart nil-frameFn path | Accept-and-drain fixture cannot deliver a frame to the receive loop; the nil-frameFn branch is structurally unreachable in the delivered test suite |
+| Error-taxonomy funneling | ANY non-nil error from ReadOuterFrame takes the one exit branch; no discriminating AC assertion on error subtype — implementer's-choice on error wrapping |
+| Logging discretion | No AC asserts on log content beyond E-FWD-001 via writer-output chain; logging detail is implementer's-choice |
+
+**P1c — Token/estimate coherence:** 11 tests = 1 (router_pe_receive_test.go) + 6 (connector_test.go) + 4 (frame_test.go); blast-radius count 12 unified + wire-format spec pair (BC-2.01.004.md + ARCH-02:74); 3 spec-doc amendments (ARCH-02, ARCH-08 ×2 sections). All consistent with story Estimated Test Surface table and FCL.
+
+**P1d — Four-way version consistency:** story v1.15 ↔ sprint-state v2.20 ↔ STATE awaiting "pass 16 (story v1.15 + note v1.12, streak 0/3)" ↔ STORY-INDEX v4.55. All four consistent at dispatch time.
+
+**P2 — POL-001/002:** All artifact version citations current (POL-001 PASS). STORY-INDEX v4.55 row reflects story v1.15 (POL-002 PASS).
+
+**P3 — Realizability spot-checks (2 additional recipes re-executed):**
+- AC-004 exhaustion determinism: NoDuplicateSuppression pin — two frames with distinct SrcAddr produce distinct crc32 values over full outer-header+payload reconstruction path; drop-cache miss guaranteed for both → ≥2 E-FWD-001 emissions deterministic. REALIZABLE.
+- PEConnectFrameDiscarded: FrameTypePEConnect discrimination routes to bootstrap path; FrameTypeData routes forward; AC-003 REALIZABLE.
+
+**Ledger re-verification:** All 14 ledger items re-verified HOLD. Zero ledger-vs-artifact drift.
+
+**Orchestrator spot-audit (3 claims confirmed on disk):**
+1. Docs-only diff 8eb54a5..42baa8c — confirmed no behavioral source changes in story perimeter.
+2. Parse-order :106-114 — frame.go ParseOuterHeader reads version byte at :106, frame_type nibble check at :114; byte[1]=0x07 fails Valid() upper-bound; confirmed at those lines.
+3. Join-after-Close placement :365-383 — connector.go Stop() calls conn.Close() at :382 then waits on doneCh at :365 block; unblock chain confirmed structurally sound.
+
+#### Outcome
+
+- **No code changes** required.
+- **No story changes** required. Story remains v1.15, note remains v1.12, index remains v4.55.
+- **Streak: 0/3 → 1/3.**
+- Sprint-state v2.20→v2.21. Decay: 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0.
+
+**Awaiting:** spec adversarial pass 17 @ {story v1.15, note v1.12} (streak 1/3)
