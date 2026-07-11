@@ -1509,3 +1509,24 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 5 Pass 12 REMEDIATION COMPLETE | Burst 35: interface-definitions v1.24 spec-only — §111 exit-code column extended (E-SVTN-003 + E-CFG-001), --svtn <svtn-name> placeholder sweep (§108/§109/§110/§130), §108/§120 confirm-family flag consistency touch; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 13 next |
 | Phase 5 Pass 13 HAS_FINDINGS | Adv-A 1H/1M/2obs (list-keys admission gate removed with authority gate — CWE-862; E-CFG-001 token absent from list-keys usageErrf); Adv-B 0H/0M/1L/2obs (e2e stub name admin.key.list vs admin.key.list-keys); streak 0/3; Bursts 37+38 remediation |
 | Phase 5 Pass 13 REMEDIATION COMPLETE | Burst 37: PR #69 03ce8e7 (admission gate restored; E-CFG-001 token; stub name fix). Burst 38: spec-only — interface-definitions v1.25 (§111 auth sharpened; BC-2.05.004 v1.13 PC-1 F-L2-003 + EC-008; VP-075 v1.7 scope exclusion + CWE-862); streak 0/3; Pass 14 next | 2026-07-03 |
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-1 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** product-owner, architect, story-writer, state-manager
+**Files touched:** BC-2.09.002.md (v1.1→v1.2), BC-2.01.004.md (v1.3→v1.4), BC-2.01.005.md (v1.1→v1.2), BC-2.01.008.md (NEW v1.0), BC-INDEX.md (v3.2→v3.3), S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.0→v1.1), VP-037.md (v1.3→v1.4), S-7.04-FU-DRAIN-WIRE.md (v1.0→v1.1), STORY-INDEX.md (v4.68→v4.69), sprint-state.yaml (v2.41→v2.42)
+**Dispatch tuple:** develop tip ef1ee1e (moved e940fc2→ef1ee1e via PR #119, cmd/sbctl/client.go + client_test.go only — no DRAIN-WIRE surface overlap)
+
+**Summary:** Spec-adversarial pass 1 on S-7.04-FU-DRAIN-WIRE returned 14 findings (F-DW-SP1-001..014, 6 HIGH). Remediation landed across three agents in one burst. Headline: FO-RECV-FWD-001 consumed→DEFERRED per Q2-AMENDED (the receive-forward obligation carried over from S-BL.PE-RECEIVE-LOOP is formally discharged into this story's scope, then deferred); the architect designed the Q-SEAM OnAccept seam contract that AC-002 now cites; VP-037 moves to a two-stage discharge lifecycle (Stage 1 — new no-build-tag test `TestE2E_RouterDrain_WireRoundTrip` asserting the DRAIN ctl frame reaches the far side within 2s and `drainCoord.Wait` returns nil; Stage 2 — node-side migration logic, a named follow-on story — `verification_lock` stays `false` after this story). Product-owner ruled BC-2.09.002 v1.2 best-effort delivery BINDING (no wire ACK, resolving the Q3.P1 PROVISIONAL from elaboration), added a terminal-consumer ctl carve-out to BC-2.01.004 v1.4, bumped BC-2.01.005 to v1.2, and minted new BC-2.01.008 v1.0 as the `control_type` schema home; BC-INDEX moved to v3.3 (46 BCs). Architect authored placement-note v1.1 with new sections (Q-SEAM, Q2-AMENDED, Q3-AMENDED, Q4-AMENDED, Q-SINGLE-OBS, Q-CTL-GUARD, Q-AC003, Q-AC005), expanded the FCL from 9 to 10 rows (adds netingress.go), and added supersession banners on Q2/Q4/FCL/FO-table. Story-writer respecified AC-002 to the Q-SEAM seam contract, removed the AC-003 PROVISIONAL marker (Q3.P1 now BINDING option 2), reshaped AC-005 around a new `drainCoordHook` + `cfg.DrainTimeout`, added a Q-CTL-GUARD pin test, and grew the FCL to 10 rows (test surface ~8); STORY-INDEX row 140 moved to ready (v1.1) with a POL-002 Notes chain. Three PROVISIONALs remain open for pass 2.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| product-owner | BC remediation (6 HIGH findings) | BC-2.09.002 v1.2 (best-effort delivery BINDING); BC-2.01.004 v1.4 (terminal-consumer ctl carve-out); BC-2.01.005 v1.2; BC-2.01.008 v1.0 (new, control_type schema home); BC-INDEX v3.3 (46 BCs) |
+| architect | placement-note + VP remediation | placement-note v1.1 (Q-SEAM/Q2-AMENDED/Q3-AMENDED/Q4-AMENDED/Q-SINGLE-OBS/Q-CTL-GUARD/Q-AC003/Q-AC005; FO-RECV-FWD-001 consumed→DEFERRED; FCL 9→10 incl. netingress.go; supersession banners on Q2/Q4/FCL/FO-table); VP-037 v1.4 (two-stage discharge lifecycle, lock stays false; Proof Harness Skeleton arg-order fix F-DW-SP1-012) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.1 (AC-002 → Q-SEAM seam contract; AC-003 PROVISIONAL removed, Q3.P1 BINDING option 2; AC-005 → drainCoordHook + cfg.DrainTimeout; Q-CTL-GUARD pin test; FCL 10 rows; test surface ~8); STORY-INDEX v4.69 (row 140 backlog→ready v1.1 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.42 verified intact (applied by a prior killed run, confirmed correct on disk); STATE.md awaiting line + develop_head updated (ef1ee1e); this burst-log entry |
+
+**Streak:** 0/3 — 3 remaining PROVISIONALs to converge before spec-adversarial pass 2: drain-window injection seam (Q-AC005), an ARCH-08 §6.6.2 grep-verify, and an FCL 10-vs-11 discrepancy on node_conn_registry.go.
+
+---

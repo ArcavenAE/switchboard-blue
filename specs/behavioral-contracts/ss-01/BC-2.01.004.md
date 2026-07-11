@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.004
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: architect
 timestamp: 2026-06-24T00:00:00
@@ -22,6 +22,10 @@ modified:
     date: 2026-07-11
     author: architect
     change: "Postcondition 2 outer-header layout table frame_type row amended: fec=0x05 → fec=0x05, pe_connect=0x06. Wire-format spec pair with ARCH-02:74; same-commit parallel obligation with FrameTypePEConnect definition. Refs: S-BL.PE-RECEIVE-LOOP + F-SP14-001 + c316aed."
+  - version: "1.4"
+    date: 2026-07-11
+    author: product-owner
+    change: "Invariant 2 (DI-001) amended with router-terminated-ctl carve-out: frames whose outer-header frame_type is ctl (0x03) and whose terminal consumer is the receiving router MAY have their control payload parsed by that router. All transit frames (data, arq, fec, pe_connect, empty_tick) and ctl frames in transit remain unconditionally opaque. Control payload schema (control_type discriminator) lives in BC-2.01.008. Refs: F-DW-SP1-005 adjudication."
   - version: "1.2"
     date: 2026-06-24
     author: architect
@@ -75,7 +79,7 @@ Every Switchboard frame carries a 44-byte outer header in a fixed binary layout.
 ## Invariants
 
 1. **DI-007**: The 44-byte outer header layout is fixed within major protocol version. Field positions and sizes are immutable within v1.x.
-2. **DI-001**: The outer header contains no session content. All bytes beyond offset 43 are opaque to routers.
+2. **DI-001**: The outer header contains no session content. All bytes beyond offset 43 are opaque to routers — EXCEPT for frames whose `frame_type` is `ctl (0x03)` and whose terminal consumer is the receiving router. A router that IS the addressed recipient of a `ctl` frame (i.e., the frame is not in transit) MAY parse that frame's control payload to identify the control opcode. The control payload schema (the `control_type` discriminator and opcode enumeration) is defined in BC-2.01.008. All transit frames of any type, and any `ctl` frame being forwarded rather than consumed, remain unconditionally opaque beyond offset 43.
 3. Length field reflects the number of bytes after the outer header (channel header + application payload), not counting the 44-byte outer header itself.
 
 ## Trigger
@@ -121,4 +125,5 @@ Frame assembly at the sending node before transmission.
 ## Related BCs
 
 - BC-2.01.005 — composes with: channel header follows outer header in frame layout
+- BC-2.01.008 — schema home for: ctl (0x03) control payload `control_type` discriminator and opcode enumeration (router-terminated control frames)
 - BC-2.05.005 — depends on: HMAC in outer header is what BC-2.05.005 verifies

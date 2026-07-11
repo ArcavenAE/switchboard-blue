@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.005
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,11 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-07-11
+    author: product-owner
+    change: "Postcondition 2 amended with router-terminated-ctl carve-out note, matching BC-2.01.004 v1.4 Inv-2 amendment. Invariant 1 (DI-001) note added. BC-2.01.008 cited as control payload schema home. Refs: F-DW-SP1-005 adjudication."
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -48,7 +52,7 @@ The channel header immediately follows the 44-byte outer header in every frame. 
 ## Postconditions
 
 1. The router forwards the frame based solely on outer header fields (SVTN ID, destination address, frame type).
-2. The router does not read, log, modify, or cache any bytes at or after offset 44.
+2. The router does not read, log, modify, or cache any bytes at or after offset 44. **Carve-out (added v1.2, per BC-2.01.004 v1.4 Inv-2 and F-DW-SP1-005):** this postcondition applies to frames in transit. A router that is the terminal consumer of a `ctl (0x03)` frame (not forwarding it) MAY parse that frame's control payload to determine the control opcode. The control payload schema lives in BC-2.01.008. This carve-out does not affect VP-015: VP-015's SVTNRoute property governs the routing decision path in `internal/routing`, which remains payload-independent. Control payload parsing occurs in `cmd/switchboard` post-routing, outside the `SVTNRoute` call graph.
 3. The receiving endpoint parses the channel header using the canonical layout (fields extracted: chan_id, chan_seq, flags, sack_bitmap when present):
 
    Channel header layout (12 bytes fixed + 8 conditional):
@@ -114,4 +118,5 @@ Frame arrival at a router; frame arrival at an endpoint.
 ## Related BCs
 
 - BC-2.01.004 — depends on: outer header must be valid before channel header is reached
+- BC-2.01.008 — router-terminated-ctl carve-out: ctl (0x03) control payload schema and opcode enumeration (defines which frames are "router-terminated" vs. transit)
 - BC-2.05.005 — related to: HMAC in outer header authenticates the entire frame including the opaque channel header

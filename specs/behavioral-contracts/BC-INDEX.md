@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "3.2"
+version: "3.3"
 status: draft
 producer: product-owner
-timestamp: 2026-07-02T00:00:00
+timestamp: 2026-07-11T00:00:00
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -31,6 +31,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.01.005 | Channel header is opaque to routers — parseable only by endpoints | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.005.md |
 | BC-2.01.006 | Session identity is cryptographic: node address derived from hash(SVTN-ID, public-key) | session-networking | CAP-004 | P0 | E | active | ss-01/BC-2.01.006.md |
 | BC-2.01.007 | Session continuity survives IP address change via cryptographic re-authentication | session-networking | CAP-004 | P0 | E | implemented (S-1.03 / PR #7) | ss-01/BC-2.01.007.md |
+| BC-2.01.008 | Router-terminated control frame payload schema (control_type discriminator) | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.008.md |
 | BC-2.02.001 | Duplicate-and-race: same frame sent on two fastest paths simultaneously | multipath-forwarding | CAP-005 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.001.md |
 | BC-2.02.002 | Receiver delivers first-arriving copy and silently discards subsequent duplicates | multipath-forwarding | CAP-005 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.002.md |
 | BC-2.02.003 | Per-path RTT and loss tracked via keep-alive probes; paths ranked by quality | multipath-forwarding | CAP-006 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.003.md |
@@ -74,7 +75,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Subsystem | CAPs Covered | BC Count | Scope E | Scope PE | Scope P |
 |-----------|-------------|----------|---------|---------|---------|
-| session-networking | CAP-001–004 | 7 | 7 | 0 | 0 |
+| session-networking | CAP-001–004 | 8 | 8 | 0 | 0 |
 | multipath-forwarding | CAP-005–010 | 9 | 8 | 1 | 0 |
 | session-discovery | CAP-011–012 | 3 | 0 | 3 | 0 |
 | session-access | CAP-013–016 | 7 | 7 | 0 | 0 |
@@ -83,7 +84,7 @@ traces_to: '.factory/specs/prd.md'
 | network-management | CAP-023–024 | 4 | 4 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
 | deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **45** | **38** | **7** | **0** |
+| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **46** | **39** | **7** | **0** |
 
 ## CAP Coverage Verification
 
@@ -91,7 +92,7 @@ traces_to: '.factory/specs/prd.md'
 |-----|--------------|--------|
 | CAP-001 | BC-2.01.001, BC-2.01.002 | covered |
 | CAP-002 | BC-2.01.003 | covered |
-| CAP-003 | BC-2.01.004, BC-2.01.005 | covered |
+| CAP-003 | BC-2.01.004, BC-2.01.005, BC-2.01.008 | covered |
 | CAP-004 | BC-2.01.006, BC-2.01.007 | covered |
 | CAP-005 | BC-2.02.001, BC-2.02.002 | covered |
 | CAP-006 | BC-2.02.003 | covered |

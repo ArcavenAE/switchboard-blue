@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.41
+# version: 2.42
 # changelog:
+#   - version: 2.42
+#     date: 2026-07-11
+#     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 1 complete — 14 findings (F-DW-SP1-001..014, 6 HIGH) remediated across 3 agents: product-owner (BC-2.09.002 v1.2 best-effort delivery BINDING + BC-2.01.004 v1.4 terminal-consumer ctl carve-out + BC-2.01.005 v1.2 + BC-2.01.008 v1.0 new control_type schema home + BC-INDEX v3.3 46 BCs); architect (placement note v1.1: Q-SEAM/Q2-AMENDED/Q3-AMENDED/Q4-AMENDED/Q-SINGLE-OBS/Q-CTL-GUARD/Q-AC003/Q-AC005 sections; FO-RECV-FWD-001 consumed→DEFERRED; FCL 9→10 incl. netingress.go; supersession banners on Q2/Q4/FCL/FO-table; VP-037 v1.4 two-stage discharge + lock stays false); story-writer (story v1.1: AC-002 Q-SEAM seam contract; AC-003 PROVISIONAL removed Q3.P1 BINDING option 2; AC-005 drainCoordHook + cfg.DrainTimeout shape; Q-CTL-GUARD pin test; FCL 10 rows; test surface ~8; STORY-INDEX v4.69 row 140 ready v1.1 + POL-002 Notes chain). Develop base moved e940fc2→ef1ee1e via PR #119 (cmd/sbctl/client.go + client_test.go — no DRAIN-WIRE surface overlap). streak 0/3; 3 PROVISIONALs remaining (drain-window injection seam Q-AC005, ARCH-08 §6.6.2 grep-verify, FCL 10-vs-11 node_conn_registry.go); pass 2 next."
 #   - version: 2.41
 #     date: 2026-07-11
 #     description: "S-7.04-FU-DRAIN-WIRE elaborated — placement note v1.0 (Q1-Q7: ctl-0x03 reuse + 4-byte control_type payload + 0x02 RESYNC reservation; per-node sync.Map send channels; nil ForwardFunc replacement mandated; VP-037 via new untagged TestE2E_RouterDrain_WireRoundTrip; EC-003 via RegisterObserver path + drain.Signal recover() gap; 9-file FCL; ~6 net-new tests; 2 PROVISIONAL — ACK mechanism Q3.P1, test-file consolidation Q6; emits FO-DRAIN-WIRE-001/002) + story v1.0 (5 ACs, 9 FCL rows, 13 tasks, PROVISIONALs marked not hardened) + STORY-INDEX v4.68 (row 140 backlog→ready v1.0, Notes chain, changelog 4.68); sprint-state entry: status ready-for-spec-adversarial, points 5, story_version 1.0, placement_note v1.0, streak 0/3, deps_satisfied true, fo_consumed FO-RECV-FWD-001."
@@ -1067,19 +1070,21 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.0"
-    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.0"
+    story_version: "1.1"
+    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.1"
     bc_traces: [BC-2.09.002]
     vp_traces: [VP-037]
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
     deps_satisfied: true
     fo_consumed: "FO-RECV-FWD-001"
     spec_adversarial_streak: "0/3"
-    provisional_rulings: ["Q3.P1 ACK mechanism", "Q6 test-file consolidation"]
-    code_base: "develop e940fc2"
+    provisional_rulings: ["drain-window injection seam Q-AC005", "ARCH-08 §6.6.2 grep-verify", "FCL 10-vs-11 node_conn_registry.go"]
+    code_base: "develop ef1ee1e"
+    spec_adversarial_pass_1: "14 findings F-DW-SP1-001..014 (6 HIGH) remediated — placement note v1.1 consumed; streak 0/3; pass 2 next"
     # depends_on S-BL.PE-RECEIVE-LOOP added per PO adjudication F-P1-002 (2026-07-07)
     # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — deps satisfied
     # 2026-07-11: elaborated — placement note v1.0 (Q1-Q7) + story v1.0 (5 ACs, 9 FCL, 13 tasks); 2 PROVISIONAL rulings; spec-adversarial pass 1 next
+    # 2026-07-11: spec-adversarial pass 1 remediation complete — placement note v1.1 + story v1.1 + BC-2.01.008 v1.0 + VP-037 v1.4; develop ef1ee1e (PR #119, no DRAIN-WIRE overlap)
 
   - story_id: S-BL.PE-RECEIVE-LOOP
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"

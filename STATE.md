@@ -29,14 +29,14 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: PASS_AT_THRESHOLD
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 8eb54a5
+develop_head: ef1ee1e
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 1 (story v1.0 + placement note v1.0 @ develop e940fc2, streak 0/3; 2 PROVISIONAL rulings to converge — ACK mechanism Q3.P1, test-file consolidation Q6)"
+awaiting: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 2 (story v1.1 + placement note v1.1 + BC-2.01.008 v1.0 @ develop ef1ee1e; pass-1 14 findings F-DW-SP1-001..014 remediated; streak 0/3; 3 remaining PROVISIONALs to converge: drain-window injection seam Q-AC005, ARCH-08 §6.6.2 grep-verify, FCL 10-vs-11 node_conn_registry.go)"
 historical_cycles: []
-timestamp: 2026-07-09T00:00:00Z
-last_update: 2026-07-09
+timestamp: 2026-07-11T00:00:00Z
+last_update: 2026-07-11
 ---
 
 # Switchboard Factory State

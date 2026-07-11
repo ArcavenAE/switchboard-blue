@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.002
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,11 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - version: "1.2"
+    date: 2026-07-11
+    author: product-owner
+    change: "PC-3 and PC-4 amended: acknowledgment is best-effort delivery (observer returns after dispatching DRAIN frame to node write path within drain window). No wire-level DRAIN-ACK opcode. Drain correctness proven by VP-037 observed-behavior property, not by protocol ACK. Refs: F-DW-SP1-006 adjudication."
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -38,7 +42,7 @@ kos_anchors:
 
 ## Description
 
-When a router is about to shut down gracefully (SIGTERM received, `sbctl router drain` command), it sends a drain signal to all connected nodes before disconnecting. Nodes receive the drain signal, select alternate routers from their path set, migrate their sessions to the alternate paths, and then acknowledge the drain. The router waits for acknowledgements (up to a timeout) before disconnecting. This enables rolling updates without dropping active sessions.
+When a router is about to shut down gracefully (SIGTERM received, `sbctl router drain` command), it sends a DRAIN frame to all connected nodes before disconnecting. Nodes receive the DRAIN frame, select alternate routers from their path set, and migrate their active sessions to the alternate paths. The drain coordinator waits (up to the drain window) for every observer to finish dispatching the DRAIN frame before the router disconnects; if the window expires, the router disconnects anyway (EC-003). Session migration correctness is verified by VP-037 observed-behavior, not by a wire-level ACK. This enables rolling updates without dropping active sessions.
 
 ## Preconditions
 
@@ -50,8 +54,8 @@ When a router is about to shut down gracefully (SIGTERM received, `sbctl router 
 
 1. Router sends DRAIN signal to all connected nodes.
 2. Nodes receive DRAIN; select next-best router from their path ranking; migrate active sessions to the new path.
-3. Nodes acknowledge DRAIN signal to the router.
-4. After all acknowledgements (or timeout): router disconnects cleanly; exits with code 0.
+3. The router's drain coordinator dispatches the DRAIN frame to every connected node's write path (best-effort delivery). No wire-level acknowledgment opcode is required; acknowledgment is defined as the drain observer function returning after the DRAIN frame has been queued to the node's send channel, bounded by the drain window context. Session migration is verified by VP-037 observed-behavior (nodes reconnect to alternate router within 2 s) rather than by a protocol ACK byte.
+4. After all observer functions have returned or the drain window has elapsed (EC-003): the drain coordinator signals completion; the router disconnects cleanly and exits with code 0.
 5. Active sessions are maintained on the alternate paths; no session content is lost.
 
 ## Invariants
