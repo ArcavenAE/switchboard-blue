@@ -674,14 +674,48 @@ drainLoop:
 	}
 	_ = ln2.Close() // also close the listener so reconnect dials fail
 
-	// Collect 3 EC-001 stamps from the post-drop retry sequence:
-	//   stamp[0]: maintainConn write-fail (fires when next keepalive tick hits the dead conn)
-	//   stamp[1]: first dial-fail immediately after
-	//   stamp[2]: second dial-fail after the backoff-sleep (= operative base = 1s)
-	var postDrop [3]stamp
+	// Teardown-completion sync (F-GP1-001 — robust to both teardown paths):
+	//
+	// With the binding unconditional conn.Close() on any frame.ReadOuterFrame error
+	// (F-SP6-001), the teardown path after server-side conn.Close() is:
+	//   receive goroutine → io.EOF → _ = conn.Close() → maintainConn SetWriteDeadline
+	//   fails SILENTLY (no EC-001 log) → maintainConn returns → connectedCount.Add(-1).
+	//
+	// The pre-existing stamp-collection assumed stamp[0] was the write-failure EC-001
+	// log, but the unconditional-close path produces a silent SetWriteDeadline failure
+	// instead. Polling for Mode() != ModePE (connectedCount back to 0) synchronises
+	// teardown completion regardless of which maintainConn exit path fired.
+	modePollDeadline := time.Now().Add(2 * testKeepalive)
+	for time.Now().Before(modePollDeadline) {
+		if c.Mode() != ModePE {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	// (If ModePE persists past the poll window the subsequent gap assertion will still
+	// catch the regression; the poll is a best-effort sync, not a fatal gate.)
+
+	// Do NOT drain stampCh here. With the unconditional-close teardown path (F-SP6-001):
+	//   - maintainConn exits SILENTLY (SetWriteDeadline fails, no EC-001 log)
+	//   - Mode drops, then the connector immediately dials → first dial-fail EC-001 fires
+	// Mode drop and first dial-fail are nearly simultaneous (same goroutine, consecutive
+	// instructions). A drain loop would race ahead of the stamp arrival and consume it,
+	// leaving us measuring the grown backoff (dial-2 → dial-3 ≈ 2s) instead of the
+	// operative-base gap (dial-1 → dial-2 ≈ 1s). No drain needed: the Mode-drop poll
+	// above already synchronises teardown completion; the first stamp in the channel IS
+	// the first redial attempt.
+
+	// Collect 2 EC-001 stamps from the redial phase:
+	//   stamp[0]: first dial-fail (arrives immediately after teardown)
+	//   stamp[1]: second dial-fail after operative-base backoff sleep (~1s)
+	//
+	// The gap stamp[1].t − stamp[0].t measures exactly the post-reset backoff delay.
+	// Both stamps are clean redial-phase stamps — no teardown stamps exist on the
+	// silent-exit path (F-GP1-001 analysis).
+	var postDrop [2]stamp
 	postBudget := time.After(10 * time.Second)
 	postGot := 0
-	for postGot < 3 {
+	for postGot < 2 {
 		select {
 		case s := <-stampCh:
 			if strings.Contains(s.msg, wantLog) {
@@ -693,10 +727,10 @@ drainLoop:
 		}
 	}
 
-	// gap between stamp[1] and stamp[2] = backoff sleep duration after reset.
-	// Expected: ~1s (operative base).  If backoff were still grown (~4s), gap >> hiWindow.
-	// If backoff used BackoffBase mutant (~500ms), gap < loWindow=700ms (F-P3-001 pinned).
-	gap := postDrop[2].t.Sub(postDrop[1].t)
+	// gap between stamp[0] and stamp[1] = operative-base backoff between first and second
+	// dial-failure. Expected: ~1s (operative base after reset). If backoff were still grown
+	// (~4s), gap >> hiWindow. If BackoffBase mutant (~500ms), gap < loWindow=700ms (F-P3-001).
+	gap := postDrop[1].t.Sub(postDrop[0].t)
 	if gap < loWindow || gap > hiWindow {
 		t.Errorf(
 			"TestConnector_BackoffParameters: post-reset retry gap = %v; want [%v, %v] "+
