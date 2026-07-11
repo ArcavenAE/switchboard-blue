@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.36
+# version: 2.37
 # changelog:
+#   - version: 2.37
+#     date: 2026-07-11
+#     description: "S-BL.PE-RECEIVE-LOOP per-story adversarial pass 6: CLEAN — 0 findings; all 14 bars PASS; consumer-side OnFrameArrival marshalling correct; ARCH-02 byte-for-byte wire-format re-derivation exact; PayloadLen attacker-bound analysis — 64KB holds, withheld-payload stall within accepted F-SP5-OBS-1 envelope (trajectory note: OBS-1 rationale point 3 mildly overbroad — stall not parse error); hostile reads of 4 newest tests sound; convergence-readiness — spec leaves no divergence latitude; novelty NONE; streak 1/3 → 2/3; pass 7 next (third CLEAN converges). story v1.25 + note v1.22 + index v4.65."
 #   - version: 2.36
 #     date: 2026-07-11
 #     description: "S-BL.PE-RECEIVE-LOOP per-story adversarial pass 5: CLEAN — 0 findings; all 14 bars PASS; F-IP4-001 pin-integrity attack sound (TCP ordering + mutation kill re-confirmed analytically); whole-story coherence clean; ReloadAddrs/SIGHUP seams safe; ledger spot-checks x3 intact; flake analysis none realizable; POL-001/002/004 clean; counts verified 9+4+1=14; 1 cosmetic doc nit frame.go:28 doubled-word below proportionality bar (not a finding); streak 0/3 → 1/3; pass 6 next. story v1.25 + note v1.22 + index v4.65."
@@ -1079,12 +1082,13 @@ stories:
     head_sha: "7cedc34"
     head_commits: "c316aed..7cedc34 (12 commits)"
     tests_added: 14
-    adversarial_streak: "1/3"
+    adversarial_streak: "2/3"
     adversarial_pass_1: "1 finding (F-IP1-001 MED — undelivered go list -deps guard + false build-enforcement claim; remediated: e397157 TestUpstreamdialImportPerimeter, story v1.22, note v1.19)"
     adversarial_pass_2: "3 findings (F-IP2-001 MED post-Start guard clause — Option b spec downgrade; F-IP2-002 MED residual false doc-comment attribution — c3fca02; F-IP2-003 LOW ARCH-08 dual-changelog parity — fixed in-place); streak 0/3"
     adversarial_pass_3: "1 finding + 2 obs (F-IP3-001 MED note-side Option-b propagation gap — annotated :194-199, 9th incomplete-sweep instance; OBS-1 join-pin limitation accepted; OBS-2 [process-gap] in-place-annotation countermeasure binding); streak 0/3"
     adversarial_pass_4: "1 finding + 1 obs (F-IP4-001 MED outgoing bootstrap frame_type unpinned — FO-PE-LOOP-001/AC-003 PC-3 revertible; TestConnector_BootstrapFrameTypePEConnect added 7cedc34, mutation-verified; checkbox obs — Tasks 1-16 marked [x]); streak 0/3"
     adversarial_pass_5: "CLEAN (0 findings; all 14 bars PASS; pin-integrity + seams + ledger spot-checks + flake analysis all clean; 1 cosmetic doc nit below proportionality bar)"
+    adversarial_pass_6: "CLEAN (0 findings; all 14 bars PASS; consumer-side marshalling + wire-format byte re-derivation + PayloadLen bound + hostile test reads + convergence-readiness all clean; novelty NONE)"
     note: "GREEN complete 2026-07-11 @ a23deae; 9 commits c316aed..a23deae; 12 new tests; full suite + race + vet + fmt clean; F-GP1-001 adjudicated (note v1.18); pass-1 adv remediated e397157 (note v1.19, story v1.22, index v4.62); pass-2 adv: 3 findings F-IP2-001/002/003 remediated (note v1.20, story v1.23, index v4.63, ARCH-08 v2.11 parity, impl c3fca02); pass-3 adv: F-IP3-001 MED note-side Option-b propagation gap annotated :194-199 (note v1.21, story v1.24 metadata-only, index v4.64, code unchanged c3fca02); pass-4 adv: F-IP4-001 MED bootstrap frame_type pin — TestConnector_BootstrapFrameTypePEConnect added 7cedc34 (mutation-verified); story v1.25 + note v1.22 + index v4.65"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.

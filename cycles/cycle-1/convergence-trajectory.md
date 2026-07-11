@@ -2809,4 +2809,24 @@ Tasks 1-16 were recorded as `[ ]` in story v1.24 despite verified delivery. Adju
 
 **Streak:** 0/3 → 1/3
 
+### Per-story adversarial pass 6 (2026-07-11) — CLEAN, streak 2/3
+
+**Dispatch tuple:** story v1.25 + placement note v1.22 + implementation 7cedc34 on branch `story/s-bl-pe-receive-loop`
+
+**Lenses covered:**
+
+- Consumer-side contract verification — OnFrameArrival argument marshalling correct; nil ForwardFunc matches ledger (split-horizon exhausts before fn, consistent with F-SP5-OBS-1 ruling)
+- ARCH-02 byte-by-byte wire-format re-derivation — EncodeOuterHeader/ParseOuterHeader offsets match byte-for-byte (:75 citation exact)
+- Attacker-controlled PayloadLen analysis — 64KB uint16 bound holds; withheld-payload stall resolves into accepted F-SP5-OBS-1 envelope (trajectory note: OBS-1 rationale point 3 is mildly overbroad — withheld payload produces a stall, not a parse error; bounded to one connection; resolves on Stop(); recorded as candidate consideration for a future hardening story, NOT a finding)
+- Hostile reads of 4 newest tests — all sound; no test-correctness bugs
+- Convergence-readiness — spec pinning leaves no latitude permitting divergent implementations; "spec has converged" per adversary
+
+**Cross-artifact checks:** ARCH-02 :75 exact, BC-2.01.004 :65 v1.3 exact, ARCH-08 :326/:457-466 v2.11 exact
+
+**Verdict:** CLEAN — 0 findings; all 14 bars PASS; novelty NONE — every candidate resolved to ledger or passing bar
+
+**Streak:** 1/3 → 2/3
+
+**Pass 7 next:** fresh-context adversary vs implementation @ 7cedc34 on `story/s-bl-pe-receive-loop`, story v1.25 + note v1.22 + index v4.65, streak 2/3. Third consecutive CLEAN converges.
+
 **Awaiting:** per-story adversarial pass 6 @ {story v1.25, note v1.22, impl 7cedc34} (streak 1/3)
