@@ -15,8 +15,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -1398,6 +1400,74 @@ type recordingConn struct {
 func (r *recordingConn) SetReadDeadline(t time.Time) error {
 	r.deadlines = append(r.deadlines, t)
 	return r.Conn.SetReadDeadline(t)
+}
+
+// TestLoadKey_PKCS8Ed25519ValueForm is the failing repro for GitHub issue #112:
+// loadEd25519Key must accept PKCS#8 PEM blocks ("PRIVATE KEY" header) in addition
+// to OpenSSH PEM blocks ("OPENSSH PRIVATE KEY" header).
+//
+// The root cause: ssh.ParseRawPrivateKey returns ed25519.PrivateKey (value type)
+// for PKCS#8 blocks but *ed25519.PrivateKey (pointer type) for OPENSSH blocks.
+// The original type assertion accepted only the pointer form, so a valid
+// unencrypted PKCS#8 ed25519 key fails with:
+//
+//	"E-CFG-010 ... not an Ed25519 private key (got ed25519.PrivateKey)"
+//
+// This test generates an ed25519 key, marshals it as PKCS#8 PEM using
+// x509.MarshalPKCS8PrivateKey (no openssl dependency), writes it to t.TempDir(),
+// and asserts loadEd25519Key accepts it.
+//
+// RED: before the fix this test fails with a "not an Ed25519 private key" error.
+// GREEN: after the fix both value-form and pointer-form ed25519 keys load.
+//
+// BC: BC-2.07.002 PC-2 (key loading); fixes #112 (E-CFG-010 rejects PKCS#8 ed25519).
+func TestLoadKey_PKCS8Ed25519ValueForm(t *testing.T) {
+	t.Parallel()
+
+	// Generate an ed25519 key pair entirely in-process (no openssl dependency).
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ed25519 key: %v", err)
+	}
+
+	// Marshal to PKCS#8 DER. The Go stdlib x509.MarshalPKCS8PrivateKey produces
+	// the "PRIVATE KEY" PEM block type (PKCS#8 / RFC 5958), NOT the OpenSSH format.
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatalf("MarshalPKCS8PrivateKey: %v", err)
+	}
+
+	// Encode to PEM with "PRIVATE KEY" header — this is what ssh.ParseRawPrivateKey
+	// returns as ed25519.PrivateKey (value, NOT pointer).
+	pemBlock := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: der,
+	})
+
+	// Write to a temp file.
+	tmp := t.TempDir()
+	keyPath := filepath.Join(tmp, "pkcs8_ed25519.pem")
+	if err := os.WriteFile(keyPath, pemBlock, 0o600); err != nil {
+		t.Fatalf("write PKCS#8 key file: %v", err)
+	}
+
+	// loadEd25519Key MUST accept this key (fixes #112).
+	// RED: returns "key load failed: ... not an Ed25519 private key (got ed25519.PrivateKey)".
+	loaded, err := loadEd25519Key(keyPath, os.UserHomeDir)
+	if err != nil {
+		t.Fatalf("loadEd25519Key rejected a valid PKCS#8 ed25519 key (fixes #112): %v", err)
+	}
+
+	// The loaded key must have the correct length (64 bytes for ed25519.PrivateKey).
+	if len(loaded) != ed25519.PrivateKeySize {
+		t.Errorf("PKCS#8 ed25519 key: expected private key length %d, got %d",
+			ed25519.PrivateKeySize, len(loaded))
+	}
+
+	// The loaded key must match the original (same seed / same bytes).
+	if !bytes.Equal([]byte(loaded), []byte(priv)) {
+		t.Error("PKCS#8 ed25519 key: loaded key bytes do not match the original key")
+	}
 }
 
 // TestDispatch_IDEchoEnforced verifies AC-010 (BC-2.07.002 PC-3, Ruling X /
