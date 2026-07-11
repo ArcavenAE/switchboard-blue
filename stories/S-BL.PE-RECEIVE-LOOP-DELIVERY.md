@@ -5,12 +5,12 @@ level: ops
 story_id: S-BL.PE-RECEIVE-LOOP
 version: "1.0"
 title: "PE-connection receive/forward loop — DELIVERY"
-status: draft
+status: final
 producer: story-writer
 timestamp: 2026-07-11T00:00:00Z
-merged_at: null    # post-merge field — update at merge time
-merge_pr: null     # post-merge field — update at merge time
-merge_sha: null    # post-merge field — update at merge time
+merged_at: "2026-07-11T12:42:38Z"
+merge_pr: 118
+merge_sha: e940fc20028ce8548381b52a98caeb48c20a53dc
 branch: story/s-bl-pe-receive-loop
 base_sha: 42baa8c    # develop binding base at spec-cycle start
 head_sha: 7b84c2b    # demo evidence commit (13th on branch)

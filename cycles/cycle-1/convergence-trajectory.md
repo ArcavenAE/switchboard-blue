@@ -2890,3 +2890,18 @@ netingress 0x06 delta — Valid() widening to include `FrameTypePEConnect` (0x06
 **Next steps:** Step 5 demo-recorder (POL-004: .tape + evidence-report.md ONLY, no rendered binaries) → DELIVERY doc → push → pr-manager 9-step → merge on green
 
 **Awaiting:** per-story adversarial pass 6 @ {story v1.25, note v1.22, impl 7cedc34} (streak 1/3)
+
+---
+
+#### DELIVERY CLOSED — S-BL.PE-RECEIVE-LOOP (2026-07-11)
+
+- **PR #118** squash merged @ e940fc2 (2026-07-11T12:42:38Z)
+- **CI:** 1 fix cycle (gofumpt e4f2e05 + PR-body blast-radius description format); green on merge
+- **pr-review:** APPROVE — 1 cycle, 0 blocking findings
+- **SEC-001 MEDIUM accepted:** sanitizeAddrForError in dialLoop logs; gates on F-SP11-003 (per DELIVERY PR-Time Obligations)
+- **Branch + worktree cleaned:** remote branch deleted, local branch deleted, worktree `.worktrees/s-bl-pe-receive-loop` removed
+- **develop fast-forwarded:** 42baa8c → e940fc2
+- **DELIVERY doc:** S-BL.PE-RECEIVE-LOOP-DELIVERY.md v1.0 final (13 commits, base 42baa8c, head e940fc2)
+- **FO-RECV-FWD-001 emitted:** ForwardFunc wiring obligation on the next interface-set-widening story
+- **S-7.04-FU-DRAIN-WIRE:** unblocked-backlog; awaiting wave planning (cites PR #118)
+- **OBS-2 [process-gap]:** In-place annotation countermeasure binding — codification follow-up carried to cycle close per S-7.02; 9th incomplete-sweep-class instance; NOT yet discharged
