@@ -16,6 +16,7 @@ package upstreamdial
 import (
 	"fmt"
 	"net"
+	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -2017,6 +2018,50 @@ func TestConnector_ReceiveLoop_ExitsOnReadError(t *testing.T) {
 	if dialCount.Load() < 2 {
 		t.Errorf("TestConnector_ReceiveLoop_ExitsOnReadError: connector did not re-dial within %v after malformed header (dial count = %d, want >= 2; receive goroutine exit + conn.Close() wiring not implemented?)",
 			reconnectBudget, dialCount.Load())
+	}
+}
+
+// ── F-IP1-001 / ARCH-08 §6.6.2: import-perimeter regression guard ────────────
+//
+// TestUpstreamdialImportPerimeter verifies the ARCH-08 §6.6.2 forbidden-edge
+// constraint: internal/upstreamdial MUST NOT import internal/routing.
+//
+// Note v1.19 (per-story adversarial adjudication, BINDING): the upstreamdial →
+// routing edge is acyclic (position 19 > 17); Go's toolchain does NOT reject it
+// at build time. This test is the sole test-time enforcement mechanism. It uses
+// go list -deps to obtain the transitive dependency set and asserts routing is
+// absent. A positive-coverage guard (internal/frame must be present) prevents a
+// broken exec or wrong cwd from silently passing the absence check.
+func TestUpstreamdialImportPerimeter(t *testing.T) {
+	// Exec go list -deps to obtain the transitive dependency set of
+	// internal/upstreamdial and verify the routing-import forbidden edge
+	// is absent. This is the test-time enforcement of ARCH-08 §6.6.2.
+	cmd := exec.Command("go", "list", "-deps",
+		"github.com/arcavenae/switchboard/internal/upstreamdial")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("TestUpstreamdialImportPerimeter: go list -deps failed: %v", err)
+	}
+	deps := string(out)
+
+	// Positive-coverage guard: the output MUST be non-empty AND contain a
+	// known-present dependency (internal/frame) before we trust the absence
+	// assertion. A broken exec or empty output would otherwise silently pass
+	// the absence check.
+	if len(deps) == 0 {
+		t.Fatal("TestUpstreamdialImportPerimeter: go list -deps returned empty output")
+	}
+	if !strings.Contains(deps, "github.com/arcavenae/switchboard/internal/frame") {
+		t.Fatalf("TestUpstreamdialImportPerimeter: positive-coverage guard failed — "+
+			"internal/frame not found in deps (exec may be broken or working directory wrong);\n"+
+			"got:\n%s", deps)
+	}
+
+	// Perimeter assertion: internal/routing MUST NOT appear.
+	if strings.Contains(deps, "github.com/arcavenae/switchboard/internal/routing") {
+		t.Errorf("TestUpstreamdialImportPerimeter: ARCH-08 §6.6.2 violation — "+
+			"internal/routing is in the transitive deps of internal/upstreamdial;\n"+
+			"full deps:\n%s", deps)
 	}
 }
 
