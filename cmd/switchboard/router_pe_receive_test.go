@@ -213,7 +213,7 @@ func TestRunRouter_PE_ReceiveLoop_ActiveAfterConnect(t *testing.T) {
 // runRouter constructs a FrameArrivalHandler and wires SetFrameCallback with a
 // closure that calls arrivalHandler.OnFrameArrival. Confirmed by:
 //   - A Data frame from the fixture reaching OnFrameArrival → "E-FWD-001" emitted.
-//   - No routing import in internal/upstreamdial (ARCH-08 §6.6.2 preserved).
+//   - Import perimeter enforced separately by TestUpstreamdialImportPerimeter (internal/upstreamdial/connector_test.go, F-IP1-001).
 //
 // RED GATE: Same as AC-001 — receive goroutine not running → no "E-FWD-001".
 func TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival(t *testing.T) {
