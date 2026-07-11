@@ -1921,15 +1921,17 @@ func TestConnector_ReceiveLoop_ExitsOnReadError(t *testing.T) {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				return
+				return // listener closed — test over
 			}
 			dialCount.Add(1)
 			accepted <- conn
 			// Keep reading so the conn is alive after the bad header write.
+			// Use break (not return) so the outer loop can call Accept() again
+			// when the connector re-dials after the receive goroutine exits.
 			buf := make([]byte, 4096)
 			for {
 				if _, err := conn.Read(buf); err != nil {
-					return
+					break
 				}
 			}
 		}
@@ -2005,15 +2007,17 @@ func TestConnector_ReceiveLoop_ExitsOnVersionMismatch(t *testing.T) {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				return
+				return // listener closed — test over
 			}
 			dialCount.Add(1)
 			accepted <- conn
 			// Keep reading so the conn stays alive after the bad header write.
+			// Use break (not return) so the outer loop can call Accept() again
+			// when the connector re-dials after the receive goroutine exits.
 			buf := make([]byte, 4096)
 			for {
 				if _, err := conn.Read(buf); err != nil {
-					return
+					break
 				}
 			}
 		}
