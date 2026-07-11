@@ -1823,7 +1823,7 @@ func TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak(t *testing.T) {
 		}
 	}()
 
-	var frameCh = make(chan frame.FrameType, 8)
+	frameCh := make(chan frame.FrameType, 8)
 	c := New(newLogWriter(), zeroEnv(), testKeepalive, []string{addr})
 	// SetFrameCallback MUST be called before Start per F-SP4-002.
 	c.SetFrameCallback(func(hdr frame.OuterHeader, raw []byte) error {
