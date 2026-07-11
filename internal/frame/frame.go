@@ -25,7 +25,7 @@ const (
 )
 
 // FrameType is the wire-format enum byte for the frame_type field in the outer
-// header (ARCH-02 §3.1). Only five values are canonical; all others are
+// header (ARCH-02 §3.1). Only six canonical values are canonical; all others are
 // reserved. ParseOuterHeader rejects reserved values with ErrInvalidFrameType.
 type FrameType byte
 
@@ -39,15 +39,15 @@ const (
 	FrameTypePEConnect FrameType = 0x06 // (ARCH-02 §3.1)
 )
 
-// Valid reports whether the FrameType byte is one of the five canonical enum
-// values defined in ARCH-02 §3.1. Returns false for 0x00 and 0x06..0xFF.
+// Valid reports whether the FrameType byte is one of the six canonical enum
+// values defined in ARCH-02 §3.1. Returns false for 0x00 and 0x07..0xFF.
 func (f FrameType) Valid() bool {
 	return f >= FrameTypeData && f <= FrameTypePEConnect
 }
 
 // ErrInvalidFrameType is returned by ParseOuterHeader when the parsed
-// frame_type byte is not one of the five canonical FrameType values
-// (per ARCH-02 §3.1).
+// frame_type byte is not one of the six canonical FrameType values
+// (not in {0x01..0x06} per ARCH-02 §3.1).
 var ErrInvalidFrameType = errors.New("frame: invalid frame_type")
 
 // ErrFrameTooShort is returned by ParseOuterHeader when the input slice
@@ -67,7 +67,7 @@ type OuterHeader struct {
 	// Version encodes major version in bits[7:4] and minor in bits[3:0].
 	// v0.1 = 0x01.
 	Version byte
-	// FrameType identifies the frame kind (data, ctl, arq, fec, empty-tick).
+	// FrameType identifies the frame kind (data, ctl, arq, fec, empty-tick, pe_connect).
 	FrameType FrameType
 	// PayloadLen is the byte count of everything following the outer header
 	// (channel header + application payload). Stored big-endian on the wire
@@ -88,7 +88,21 @@ type OuterHeader struct {
 // payload slice. The []byte return is payload-only; it does NOT include the outer
 // header bytes. (new — S-BL.PE-RECEIVE-LOOP)
 func ReadOuterFrame(r io.Reader) (OuterHeader, []byte, error) {
-	panic("not implemented — S-BL.PE-RECEIVE-LOOP")
+	var hdrBuf [OuterHeaderSize]byte
+	if _, err := io.ReadFull(r, hdrBuf[:]); err != nil {
+		return OuterHeader{}, nil, fmt.Errorf("frame.ReadOuterFrame: reading header: %w", err)
+	}
+	hdr, err := ParseOuterHeader(hdrBuf[:])
+	if err != nil {
+		return OuterHeader{}, nil, fmt.Errorf("frame.ReadOuterFrame: parsing header: %w", err)
+	}
+	payload := make([]byte, int(hdr.PayloadLen))
+	if hdr.PayloadLen > 0 {
+		if _, err := io.ReadFull(r, payload); err != nil {
+			return OuterHeader{}, nil, fmt.Errorf("frame.ReadOuterFrame: reading payload: %w", err)
+		}
+	}
+	return hdr, payload, nil
 }
 
 // EncodeOuterHeader serialises h into exactly OuterHeaderSize (44) bytes
