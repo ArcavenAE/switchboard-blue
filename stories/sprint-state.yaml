@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.31
+# version: 2.32
 # changelog:
+#   - version: 2.32
+#     date: 2026-07-11
+#     description: "S-BL.PE-RECEIVE-LOOP per-story adversarial pass 1: 1 finding F-IP1-001 MED (all 12 bars CONFIRMED; AC-002 promised go list -deps assertion absent; 'build MUST fail' claim false — upstreamdial→routing edge acyclic; hostile-impl consequence: routing-import bypass would pass entire suite; functional-duplicate integration tests); 1 forward observation (nil ForwardFunc — obligation on interface-set-widening story); adjudication note v1.19 Option a2 standalone test (a1 single-concern rejection, a3 no-depguard-in-golangci rejection); remediation e397157 (TestUpstreamdialImportPerimeter) + story v1.22 + index v4.62; full suite + race + vet + fmt clean; streak 0/3; pass 2 next."
 #   - version: 2.31
 #     date: 2026-07-11
 #     description: "S-BL.PE-RECEIVE-LOOP GREEN complete: stub c316aed, RED a3d5117+ae2ea7d (harness return→break fix), GREEN e85c9df/8e8296c/5274cf1, F-GP1-001 adjudication 9c1b21d/75c5904 (EOF carve-out rejected — half-close hole; predecessor BackoffParameters Phase-3 stamp fix), gofmt a23deae; full suite + race + vet + fmt clean; 12 new tests; note v1.18 + story v1.21 + index v4.61; next: per-story adversarial cycle (Step 4.5, BC-5.39.001, 3 clean passes) before demo."
@@ -1049,21 +1052,24 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.21"
+    story_version: "1.22"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.18"
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.19"
     spec_adversarial_pass: 24
     spec_adversarial_streak: "3/3 — SPEC CONVERGED"
     last_findings: "pass 24 CLEAN — SPEC CONVERGED (3/3: passes 22/23/24)"
     green_complete_at: "2026-07-11"
     green_complete_sha: "a23deae"
     green_commits: "c316aed..a23deae (9 commits)"
+    head_sha: "e397157"
+    head_commits: "c316aed..e397157 (10 commits)"
     tests_added: 12
     adversarial_streak: "0/3"
-    note: "GREEN complete 2026-07-11 @ a23deae; 9 commits c316aed..a23deae; 12 new tests; full suite + race + vet + fmt clean; F-GP1-001 adjudicated (note v1.18)"
+    adversarial_pass_1: "1 finding (F-IP1-001 MED — undelivered go list -deps guard + false build-enforcement claim; remediated: e397157 TestUpstreamdialImportPerimeter, story v1.22, note v1.19)"
+    note: "GREEN complete 2026-07-11 @ a23deae; 9 commits c316aed..a23deae; 12 new tests; full suite + race + vet + fmt clean; F-GP1-001 adjudicated (note v1.18); pass-1 adv remediated e397157 (note v1.19, story v1.22, index v4.62)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

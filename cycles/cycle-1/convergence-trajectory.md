@@ -2606,3 +2606,43 @@ Full suite + `-race` + `go vet` + `gofmt` all clean at a23deae. 12 net-new tests
 ### Next
 
 Per-story adversarial cycle (Step 4.5, BC-5.39.001): fresh-context adversary vs implementation at a23deae on branch `story/s-bl-pe-receive-loop`, 3 clean passes minimum → demo (POL-004) → DELIVERY doc → push → pr-manager 9-step → merge on green.
+
+---
+
+### Per-story adversarial pass 1 (2026-07-11) — 1 finding, remediated
+
+**Dispatch tuple:** story v1.21 + placement note v1.18 + implementation a23deae on branch `story/s-bl-pe-receive-loop`
+
+**Verdict:** HAS_FINDINGS — 1 finding F-IP1-001 MED
+
+#### Finding F-IP1-001 MED [spec-gap/undelivered-assertion + false-enforcement-claim]
+
+| ID | Severity | Class | Description |
+|----|----------|-------|-------------|
+| F-IP1-001 | MED | spec-gap / false-enforcement-claim | (1) AC-002 promised a `go list -deps` no-routing-import assertion in `connector_test.go` — the test was never written; the assertion is completely absent from the implementation. Hostile-implementer consequence: a routing-import bypass would pass the entire suite because no test enforces the import perimeter. (2) "Build MUST fail" enforcement claim in the story is factually wrong — the upstreamdial→routing import edge is acyclic; the package compiles cleanly with the import present, so the "build breaks" gate is not a real gate. |
+
+**What was confirmed:** All 12 implementation binding bars CONFIRMED in code — ReadOuterFrame, receive goroutine, bootstrap flip, DropCache/FrameArrivalHandler/SetFrameCallback wiring, frameFn invocation discipline, conn.Close() on error, E-FWD-001 exhaustion, lifecycle/doneCh. Zero behavioral-correctness findings.
+
+**Forward observation (non-blocking):** `mgmt_wire.go` `ForwardFunc` field is nil — correct for the current single-interface set where the connector is the only consumer; the forward obligation falls on the interface-set-widening story. Not a current defect.
+
+**Architect adjudication (note v1.19, section at :2910):**
+
+- Option a2 selected: standalone `TestUpstreamdialImportPerimeter` in `connector_test.go`, using `go list -deps` to assert routing is absent from the upstreamdial transitive dependency closure.
+- Option a1 (inline in existing test) rejected: single-concern discipline.
+- Option a3 (depguard in golangci.yml) rejected: no depguard in the project's golangci config; introducing it for one story is disproportionate.
+- Architecture compliance wording corrected in note v1.19.
+- Forward obligation for nil ForwardFunc recorded in note v1.19.
+
+**Remediation:**
+
+| Artifact | Change |
+|----------|--------|
+| `connector_test.go` commit e397157 | `TestUpstreamdialImportPerimeter` added — `go list -deps ./internal/upstreamdial/...` assertion confirms `internal/routing` absent from transitive closure |
+| Verification | Full suite 27 packages + `-race` + `go vet` + `gofmt` all clean at e397157 |
+| Placement note | v1.18 → v1.19 (adjudication + changelog row) |
+| Story | v1.21 → v1.22 (AC-002 corrected, index v4.62) |
+| STORY-INDEX | v4.61 → v4.62 |
+
+**Streak:** 0/3 (pass 1 HAS_FINDINGS; streak stays at zero — was never advanced)
+
+**Pass 2 next:** fresh-context adversary vs implementation @ e397157 on `story/s-bl-pe-receive-loop`, story v1.22 + note v1.19 + index v4.62, streak 0/3. F-IP1-001 in ledger.

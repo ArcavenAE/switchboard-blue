@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-10T00:00:00Z
-version: "1.18"
+version: "1.19"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -44,6 +44,7 @@ architecture_modules:
 | 1.13 | Remediate one spec-adversarial pass-17 finding (2026-07-10). F-SP17-001 (MED [spec-gap / test-set underdetermination]) — AC-003 discrimination contract (discard PEConnect, forward everything else) pinned at only two test points: forward side tested with FrameTypeData only, discard side with FrameTypePEConnect only; a whitelist-data-only implementation passes all ~11 named tests while silently dropping FrameTypeCtl frames required by Non-Goals (S-BL.RESYNC-FRAME consumer). New BINDING unit test added to Q2: `TestConnector_ReceiveLoop_CtlFrameForwardedToCallback` in `internal/upstreamdial/connector_test.go` — assembles a complete valid frame with `FrameType: frame.FrameTypeCtl`, uses same in-package accept-and-write fixture family as `PEConnectFrameDiscarded`, asserts FrameFn IS invoked and `hdr.FrameType == frame.FrameTypeCtl`; kills the whitelist-data-only malicious implementation. Companion cosmetic fix recorded: story's discrimination-sketch else-branch comment enumerates `{data, ctl, arq, fec}` but empty_tick also traverses the forward branch — comment must gain empty_tick (story-writer applies). Test counts updated: connector tests 6 → 7 (minimum; with optional ExitsOnVersionMismatch: 7); total net-new ~11 → ~12 (1 frame_test + 7 connector_test + 4 integration). Pass-17 adjudicated section added: F-SP17-001 accepted (one pin test + comment enumeration fix + counts 7/~12); P1b concurrency clean (OnFrameArrival hitCountMu + DropCache mu verified thread-safe, ReloadAddrs set-diff isolation, Stop() stopOnce idempotent), P1c DRAIN-WIRE seam clean (backlog story, illustrative ACs, no concrete API expectation), P1d VP traceability clean (no VP pins a 5-type enum or Valid() bound; vp_traces:[] correct), P2 POL pass, P3 DataFrameForwarded + FlapCycleJoin re-executed realizable. |
 | 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
 | 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
+| 1.19 | Implementation-phase adversarial adjudication (2026-07-11): F-IP1-001 (MED [missing regression guard + false enforcement claim]) — AC-002 `go list -deps` assertion promised but undelivered; Architecture Compliance Rules "build MUST fail" sentence is factually wrong (upstreamdial→routing is acyclic; Go build does NOT fail). Ruling: standalone perimeter test `TestUpstreamdialImportPerimeter` in `internal/upstreamdial/connector_test.go` with positive-coverage guard (exec `go list -deps`, assert non-empty AND contains `internal/frame`, then assert `internal/routing` absent). Corrected Architecture Compliance wording specified. Forward obligation recorded for mgmt_wire.go:549–551 nil ForwardFunc. |
 | 1.18 | GREEN-phase adjudication (2026-07-11): F-GP1-001 (HIGH [green-phase contract conflict]) — `TestConnector_BackoffParameters` breaks 3/3 deterministically under the binding F-SP5-001/F-SP6-001 unconditional-close contract. Root cause: silent `SetWriteDeadline` failure path in `maintainConn` emits no EC-001 stamp; test's stamp[0] assumption is violated; measured gap captures doubled backoff (~2 s) not operative base (~1 s). Decision: OPTION (b) — keep unconditional close (production code unchanged), fix test stamp-collection to be robust to both teardown paths via Mode-drop poll before stamp collection. Options (a) (re-opens half-close hole, REJECTED) and (c) (misleading EC-001 log in production, REJECTED) evaluated and rejected. Story propagation: story-writer adds task to apply `TestConnector_BackoffParameters` fix. |
 | 1.17 | Remediate one spec-adversarial pass-21 finding (2026-07-10). F-SP21-001 (MED [doc-drift / incomplete sweep-completeness certification]) — v1.16 class-closure sweep table certified "17 blocks … complete" but missed four versioned binding-block headers whose bold text does not match the recorded grep patterns (`binding.:`, `BINDING`, `[Ss]ketch`): :262 `**\`FrameFn\` byte-contract (binding — F-SP3-001 correction):**` (v1.3/F-SP3-001); :511 `**Test shape (binding for story-writer and implementer):**` (v1.13/F-SP17-001 sub-block); :1812 `**Pin test shape (binding for story-writer):**` (Q9/F-SP3-001 byte-contract pinning obligation); :1928 `**Binding harness rule:**` (Q9.3/F-SP2-003 runRouter mandate). All four verified CURRENT (no supersession needed). Sweep table extended to rows 18–21; grep transcript replaced with canonical pattern `grep -nE '\*\*[^*]*[Bb]inding'` (21 hits); v1.17 addendum block added to sweep section re-certifying over all 21 blocks. This is the 8th incomplete-sweep-class instance and the 3rd false completeness certification. Pass-21 Adjudicated section added. |
 | 1.16 | Remediate one spec-adversarial pass-20 finding (2026-07-10). F-SP20-001 (MED [doc-drift / incompletely-discharged prior remediation]) — READ-error disposition contract block (:365-421): three-part defect: (1) header :365 lacked the "amended v1.6" supersession marker present on the STORY's equivalent header; (2) prose :386-387 stated the retracted mechanism verbatim ("Exit → dialLoop's existing teardown/reconnect path closes the conn and re-dials, which is the ONLY correct resync") — false per ground truth (maintainConn at connector.go:399 is write-only, never observes receive-goroutine exit); (3) v1.5 sketch :404-421 had a bare `return` with no `_ = conn.Close()` and no in-place warning. Three-part annotation applied: (1) header extended with supersession marker pointing to F-SP6-001 section; (2) prose struck with ~~strikethrough~~ + `*(amended v1.16 — F-SP20-001: RETRACTED ...)*` annotation; (3) banner blockquote inserted above sketch fence directing implementers to the v1.6 binding sketch. Sketch body preserved unmodified (history preservation). Class-closure sweep performed: 17 versioned binding blocks enumerated; 2 newly remediated (rows 4-5), 2 previously annotated (rows 6, 10), 13 fully current; zero unannotated stale binding blocks remain. This is the 7th incomplete-sweep-class instance. Pass-20 Adjudicated section added. |
@@ -2903,3 +2904,186 @@ of S-BL.PE-RECEIVE-LOOP. This fix may be applied in the same commit as the recei
 implementation (since that implementation is what exposes the brittleness), or in a standalone
 fixup commit before the story's PR is raised. The story's acceptance criteria, test count, and
 all other implementation obligations are unchanged — this is a GREEN-phase pre-condition fix only.
+
+---
+
+## Per-story adversarial adjudication (v1.19 — F-IP1-001, BINDING)
+
+**Finding:** F-IP1-001 (MED [missing regression guard + false enforcement claim]) — adversary implementation-phase pass-1.
+
+### Four disk-verified legs
+
+1. **Story :680 (AC-002 test descriptor) — promised, not delivered.** The test name block reads:
+   `"...confirms no routing import in \`internal/upstreamdial\` via \`go list -deps\`"`.
+   The delivered test `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` (worktree
+   `cmd/switchboard/router_pe_receive_test.go` :219–258) asserts ONLY `scanForLine("E-FWD-001")`.
+   Zero `go list` / `go/packages` / depguard invocations exist anywhere in the test file or
+   the worktree test corpus.
+
+2. **Story :984 (Estimated Test Surface row) — claims verification that does not exist.**
+   The row for `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` reads:
+   `"no routing import in \`internal/upstreamdial\` (\`go list -deps\` verified)"`.
+   This is a false claim: no such verification is present in the delivered code.
+
+3. **Story :907–909 (Architecture Compliance Rules) — factually wrong enforcement claim.**
+   The sentence reads:
+   > "Build-time violation: if `internal/upstreamdial` gains a `routing` import, the build
+   > MUST fail (enforced by `ARCH-08 §6.6.2` and `go list -deps` verification in the
+   > integration test)."
+   This is wrong on two independent counts:
+   - The edge `upstreamdial` (position 19) → `routing` (position 17) is **acyclic** (19 > 17).
+     Go's toolchain rejects only cyclic imports. Adding `internal/routing` to `internal/upstreamdial`
+     compiles cleanly; the build does NOT fail.
+   - ARCH-08 §6.6.2 is a **documented perimeter constraint**, not a build-time enforcement
+     mechanism. It establishes the forbidden-edge rule; it does not cause the compiler to reject
+     the import.
+
+4. **Current code is compliant — this is a missing regression guard, not a live violation.**
+   `internal/upstreamdial/connector.go` imports `{frame, halfchannel, outerassembler}` only
+   (verified at working-tree HEAD). The adversary's point stands: a hostile implementation
+   that imports `routing` directly and bypasses the `FrameFn` callback seam would pass the
+   entire delivered suite. The gap is the absence of a perimeter test, not a production defect.
+
+### PART A ruling — enforcement mechanism
+
+**Rejected options:**
+
+**(a1 — inline in `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival`):** The story
+promised this shape and the adversary proposed it. It is rejected on **single-concern test
+design** grounds. `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` already asserts
+the functional wiring contract (SetFrameCallback → OnFrameArrival → E-FWD-001). Embedding
+a structural import-perimeter check inside a functional wiring test conflates two independent
+concerns: "does the callback seam work?" (behavioural) vs "does upstreamdial respect its
+import perimeter?" (structural/architectural). These concerns have different failure modes,
+different maintainers (functional tests break when behaviour changes; perimeter tests break
+when the dependency graph changes), and different debugging contexts. Overloading one test
+with both responsibilities produces a test that fails for two unrelated reasons and whose
+failure message is ambiguous.
+
+**Accepted option (a2 — standalone dependency test):** A dedicated test
+`TestUpstreamdialImportPerimeter` in `internal/upstreamdial/connector_test.go` (the
+package's own test file, in-package scope) using `os/exec` to invoke `go list -deps`.
+This is the correct home: it is a structural property of the `upstreamdial` package, it
+belongs alongside the package's own unit tests, and it runs under the same `go test ./internal/upstreamdial/...`
+invocation that exercises the package's other obligations.
+
+**Rejected option (a3 — depguard lint rule):** `.golangci.yml` in the worktree does not
+enable `depguard` (verified — enabled linters: errcheck, govet, ineffassign, staticcheck,
+unused, misspell, unconvert, unparam; depguard is absent). A lint-layer enforcement rule
+that no CI gate executes is not enforcement. Adding depguard would require a non-trivial
+`.golangci.yml` change with its own import-path rule syntax, and it would shift the
+enforcement from test-time (visible in `go test` output) to lint-time (a separate CI step
+that may not run in all contexts). The test-time path is more reliable and already
+consistent with how the rest of the codebase pins invariants.
+
+**Combination:** The ruling is **a2 only**. The AC-002 test descriptor in the story MUST
+also be corrected (story-writer propagation) to remove the false `go list -deps` attribution
+from `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` and to point to the standalone
+`TestUpstreamdialImportPerimeter` test as the perimeter's enforcement locus.
+
+### PART B — corrected Architecture Compliance Rules wording
+
+The sentence at story :907–909 MUST be replaced verbatim with:
+
+> **ARCH-08 §6.6.2 import perimeter for `internal/upstreamdial`:** `drain`, `routing`,
+> `testenv`, and packages at positions 20–23 MUST NOT be imported. The callback seam
+> preserves this: `upstreamdial` imports `frame` (position 2) but not `routing` (position 17).
+> Note: the `upstreamdial` → `routing` edge is acyclic (position 19 > 17); Go's toolchain
+> does NOT reject it at build time. The perimeter is enforced by the architectural constraint
+> in ARCH-08 §6.6.2 (documented forbidden-edge rule) and by the test-time regression guard
+> `TestUpstreamdialImportPerimeter` in `internal/upstreamdial/connector_test.go`, which uses
+> `go list -deps` to assert `internal/routing` is absent from the transitive dependency set.
+
+The existing sentence "Build-time violation: if `internal/upstreamdial` gains a `routing`
+import, the build MUST fail (enforced by `ARCH-08 §6.6.2` and `go list -deps` verification
+in the integration test)" is RETRACTED IN FULL — it contains two false claims (acyclic build
+does not fail; `go list` was in the integration test, not in a dedicated perimeter test) and
+MUST NOT appear in the story's Architecture Compliance Rules section.
+
+### Test recipe — `TestUpstreamdialImportPerimeter` (binding for test-writer)
+
+**File:** `internal/upstreamdial/connector_test.go` (same file as `TestConnector_BackoffParameters`
+et al. — in-package, no new file required).
+
+**Test name:** `TestUpstreamdialImportPerimeter`
+
+**Full recipe (binding):**
+
+```go
+func TestUpstreamdialImportPerimeter(t *testing.T) {
+    // Exec go list -deps to obtain the transitive dependency set of
+    // internal/upstreamdial and verify the routing-import forbidden edge
+    // is absent. This is the test-time enforcement of ARCH-08 §6.6.2.
+    cmd := exec.Command("go", "list", "-deps",
+        "github.com/arcavenae/switchboard/internal/upstreamdial")
+    out, err := cmd.Output()
+    if err != nil {
+        t.Fatalf("TestUpstreamdialImportPerimeter: go list -deps failed: %v", err)
+    }
+    deps := string(out)
+
+    // Positive-coverage guard: the output MUST be non-empty AND contain a
+    // known-present dependency (internal/frame) before we trust the absence
+    // assertion. A broken exec or empty output would otherwise silently pass
+    // the absence check.
+    if len(deps) == 0 {
+        t.Fatal("TestUpstreamdialImportPerimeter: go list -deps returned empty output")
+    }
+    if !strings.Contains(deps, "github.com/arcavenae/switchboard/internal/frame") {
+        t.Fatalf("TestUpstreamdialImportPerimeter: positive-coverage guard failed — "+
+            "internal/frame not found in deps (exec may be broken or working directory wrong);\n"+
+            "got:\n%s", deps)
+    }
+
+    // Perimeter assertion: internal/routing MUST NOT appear.
+    if strings.Contains(deps, "github.com/arcavenae/switchboard/internal/routing") {
+        t.Errorf("TestUpstreamdialImportPerimeter: ARCH-08 §6.6.2 violation — "+
+            "internal/routing is in the transitive deps of internal/upstreamdial;\n"+
+            "full deps:\n%s", deps)
+    }
+}
+```
+
+**Notes for test-writer:**
+
+- `exec.Command("go", "list", "-deps", ...)` uses the `go` binary already on PATH in every
+  `go test` invocation — no additional tooling is required. The working directory is the
+  module root (`go test` sets cwd to the package under test; `internal/upstreamdial` is within
+  the module, so the module root is resolvable via the `go` tool automatically).
+- The positive-coverage guard (`internal/frame` present) is MANDATORY — it prevents a broken
+  exec from producing a false-green on the absence assertion. `internal/frame` is a direct
+  import of `internal/upstreamdial` as of this story (verified: `connector.go` imports
+  `github.com/arcavenae/switchboard/internal/frame` at HEAD).
+- This test requires `"os/exec"` and `"strings"` imports in `connector_test.go`. Both are
+  stdlib; no new external dependency is introduced.
+- Test count impact: +1 unit test to `internal/upstreamdial/connector_test.go`. The story's
+  connector test count (7 minimum + 1 optional = 7 or 8) rises by 1: **8 minimum** (+ optional
+  `ExitsOnVersionMismatch` = 8). The total net-new story test count rises from ~12 to **~13**.
+  Story-writer MUST update the Estimated Test Surface table and the test-count summaries.
+
+### Disposition of adversary's forward-looking observation
+
+The adversary identified `mgmt_wire.go` lines 549–551 (the `FrameFn` closure in `runRouter`)
+as passing a nil `ForwardFunc` to `arrivalHandler.OnFrameArrival`. Ground truth: at working-tree
+HEAD, `runRouter` wires a single-interface set containing only `peIfaceID` (the PE arrival
+interface). `OnFrameArrival` calls `SplitHorizon.Forward`, which discovers all paths are
+split-horizon blocked before it ever attempts to invoke `fn`. The nil `ForwardFunc` is therefore
+never called on the single-interface set; no nil-deref occurs; this is **correct for the
+single-interface set that this story constructs**.
+
+**This is NOT a defect in the current story.** Q8 §8.2 explicitly notes: "In production, the
+interface set is populated from the router's forwarding table or a registry of connected
+data-plane nodes." The nil `ForwardFunc` is a known placeholder appropriate for the
+single-interface exhaustion case this story exercises (guaranteed split-horizon block →
+`fn` never called).
+
+**Forward obligation recorded (not a current defect):** When a future story (in the
+S-7.04-FU-DRAIN-WIRE / session-bootstrap era) grows the PE interface set beyond one entry —
+i.e., adds a second `InterfaceID` to the `interfaceSet` slice so that `SplitHorizon.Forward`
+has a non-blocked candidate path and actually invokes `fn` — the nil `ForwardFunc` MUST be
+replaced with a real forwarding implementation before that story ships. A nil `fn` call on a
+non-blocked path produces a nil-pointer dereference in production. The story that widens the
+interface set owns this obligation. Story-writer of that future story: check this note.
+
+This observation does not create any obligation for the current story's implementer, test-writer,
+or story-writer beyond the forward-obligation documentation above.
