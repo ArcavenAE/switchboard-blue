@@ -15,6 +15,7 @@ package upstreamdial
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os/exec"
 	"runtime"
@@ -2062,6 +2063,92 @@ func TestUpstreamdialImportPerimeter(t *testing.T) {
 		t.Errorf("TestUpstreamdialImportPerimeter: ARCH-08 §6.6.2 violation — "+
 			"internal/routing is in the transitive deps of internal/upstreamdial;\n"+
 			"full deps:\n%s", deps)
+	}
+}
+
+// TestConnector_BootstrapFrameTypePEConnect pins that the connector's outgoing
+// bootstrap frame carries FrameType == frame.FrameTypePEConnect (0x06).
+//
+// Traces:
+//   - F-IP4-001 (note v1.22): outgoing bootstrap FrameType must be 0x06.
+//   - AC-003 PC-3 / BC-2.09.003: bootstrap frame discriminated from data frames
+//     by type field.
+//   - FO-PE-LOOP-001: FrameTypePEConnect required for PE-CONNECT bootstrap.
+//
+// Mutation kill: reverting connector.go:360 from frame.FrameTypePEConnect to
+// halfchannel.FrameTypeData leaves the full suite green but this test fails
+// with hdr.FrameType mismatch (0x01 != 0x06).
+func TestConnector_BootstrapFrameTypePEConnect(t *testing.T) {
+	// NOT t.Parallel(): uses net.Listen on 127.0.0.1:0.
+
+	const testKeepalive = 50 * time.Millisecond
+
+	ln, addr := newLoopbackListener(t)
+	defer func() { _ = ln.Close() }()
+
+	// headerCh receives the parsed OuterHeader from the first frame the connector
+	// sends after dialing.  readErrCh receives any error from the fixture goroutine.
+	headerCh := make(chan frame.OuterHeader, 1)
+	readErrCh := make(chan error, 1)
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			readErrCh <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		// Read exactly OuterHeaderSize bytes — this is the bootstrap frame header.
+		var buf [frame.OuterHeaderSize]byte
+		n, rErr := io.ReadFull(conn, buf[:])
+		if rErr != nil {
+			readErrCh <- rErr
+			return
+		}
+		// Positive guard: io.ReadFull guarantees n == len(buf) on nil error,
+		// but document intent explicitly.
+		if n != frame.OuterHeaderSize {
+			readErrCh <- fmt.Errorf("io.ReadFull: got %d bytes, want %d", n, frame.OuterHeaderSize)
+			return
+		}
+
+		hdr, pErr := frame.ParseOuterHeader(buf[:])
+		if pErr != nil {
+			readErrCh <- fmt.Errorf("ParseOuterHeader: %w", pErr)
+			return
+		}
+		headerCh <- hdr
+	}()
+
+	lw := newLogWriter()
+	c := New(lw, zeroEnv(), testKeepalive, []string{addr})
+	t.Cleanup(c.Stop)
+	c.Start()
+
+	// Wait for the connector to establish the connection (ModePE) before
+	// reading the bootstrap frame — ensures the dial and bootstrap write
+	// have completed on the connector side.
+	if !pollForMode(c, 2*time.Second) {
+		t.Fatalf("TestConnector_BootstrapFrameTypePEConnect: Mode() != ModePE after 2s")
+	}
+
+	// Collect the bootstrap frame header or any fixture error.
+	select {
+	case hdr := <-headerCh:
+		// Positive guard: ParseOuterHeader returned nil error (wire format intact).
+		if hdr.FrameType != frame.FrameTypePEConnect {
+			t.Errorf(
+				"TestConnector_BootstrapFrameTypePEConnect: hdr.FrameType = 0x%02x, want FrameTypePEConnect (0x%02x); "+
+					"reverting connector.go FrameTypePEConnect → FrameTypeData produces this failure "+
+					"(AC-003 PC-3 / FO-PE-LOOP-001 / F-IP4-001 note v1.22)",
+				byte(hdr.FrameType), byte(frame.FrameTypePEConnect),
+			)
+		}
+	case err := <-readErrCh:
+		t.Fatalf("TestConnector_BootstrapFrameTypePEConnect: fixture error reading bootstrap frame: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("TestConnector_BootstrapFrameTypePEConnect: timed out waiting for bootstrap frame header")
 	}
 }
 
