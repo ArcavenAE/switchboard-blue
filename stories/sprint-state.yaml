@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.32
+# version: 2.33
 # changelog:
+#   - version: 2.33
+#     date: 2026-07-11
+#     description: "S-BL.PE-RECEIVE-LOOP per-story adversarial pass 2: 3 findings (F-IP2-001 MED post-Start guard clause — Option b spec downgrade, guard not race-safe, panic/ignore both rejected; F-IP2-002 MED residual false doc-comment attribution — c3fca02; F-IP2-003 LOW ARCH-08 dual-changelog parity — fixed in-place); all 13 bars CONFIRMED; streak 0/3; pass 3 next. Story v1.23 + note v1.20 + index v4.63, impl c3fca02."
 #   - version: 2.32
 #     date: 2026-07-11
 #     description: "S-BL.PE-RECEIVE-LOOP per-story adversarial pass 1: 1 finding F-IP1-001 MED (all 12 bars CONFIRMED; AC-002 promised go list -deps assertion absent; 'build MUST fail' claim false — upstreamdial→routing edge acyclic; hostile-impl consequence: routing-import bypass would pass entire suite; functional-duplicate integration tests); 1 forward observation (nil ForwardFunc — obligation on interface-set-widening story); adjudication note v1.19 Option a2 standalone test (a1 single-concern rejection, a3 no-depguard-in-golangci rejection); remediation e397157 (TestUpstreamdialImportPerimeter) + story v1.22 + index v4.62; full suite + race + vet + fmt clean; streak 0/3; pass 2 next."
@@ -1052,24 +1055,25 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.22"
+    story_version: "1.23"
     acceptance_criteria_count: 5
     disposition_ruling: "S-BL.PE-RECEIVE-LOOP-disposition-ruling.md v1.0"
     bc_traces: [BC-2.02.008, BC-2.06.003, BC-2.09.001]
     depends_on: [S-7.04-FU-PE-CONNECTOR]
-    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.19"
+    placement_note: "S-BL.PE-RECEIVE-LOOP-placement-note.md v1.20"
     spec_adversarial_pass: 24
     spec_adversarial_streak: "3/3 — SPEC CONVERGED"
     last_findings: "pass 24 CLEAN — SPEC CONVERGED (3/3: passes 22/23/24)"
     green_complete_at: "2026-07-11"
     green_complete_sha: "a23deae"
     green_commits: "c316aed..a23deae (9 commits)"
-    head_sha: "e397157"
-    head_commits: "c316aed..e397157 (10 commits)"
+    head_sha: "c3fca02"
+    head_commits: "c316aed..c3fca02 (11 commits)"
     tests_added: 12
     adversarial_streak: "0/3"
     adversarial_pass_1: "1 finding (F-IP1-001 MED — undelivered go list -deps guard + false build-enforcement claim; remediated: e397157 TestUpstreamdialImportPerimeter, story v1.22, note v1.19)"
-    note: "GREEN complete 2026-07-11 @ a23deae; 9 commits c316aed..a23deae; 12 new tests; full suite + race + vet + fmt clean; F-GP1-001 adjudicated (note v1.18); pass-1 adv remediated e397157 (note v1.19, story v1.22, index v4.62)"
+    adversarial_pass_2: "3 findings (F-IP2-001 MED post-Start guard clause — Option b spec downgrade; F-IP2-002 MED residual false doc-comment attribution — c3fca02; F-IP2-003 LOW ARCH-08 dual-changelog parity — fixed in-place); streak 0/3"
+    note: "GREEN complete 2026-07-11 @ a23deae; 9 commits c316aed..a23deae; 12 new tests; full suite + race + vet + fmt clean; F-GP1-001 adjudicated (note v1.18); pass-1 adv remediated e397157 (note v1.19, story v1.22, index v4.62); pass-2 adv: 3 findings F-IP2-001/002/003 remediated (note v1.20, story v1.23, index v4.63, ARCH-08 v2.11 parity, impl c3fca02)"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

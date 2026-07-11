@@ -6,7 +6,7 @@ title: "PE-connection receive/forward loop placement, frame-type design, arqsend
 status: final
 producer: architect
 timestamp: 2026-07-10T00:00:00Z
-version: "1.19"
+version: "1.20"
 bc_traces:
   - BC-2.02.008   # PC-3/EC-003 E-FWD-001 exhaustion (postcondition 1 re-anchored from S-7.04-FU-PE-CONNECTOR AC-004)
   - BC-2.06.003   # PC-1 Failed-state observable via retransmit-driven path exhaustion
@@ -45,6 +45,7 @@ architecture_modules:
 | 1.14 | Remediate one spec-adversarial pass-18 finding (2026-07-10). F-SP18-001 (MED [spec-gap / test-set underdetermination]) — discard-side loop-continuation unpinned: `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` asserts only "FrameFn NOT invoked"; nothing asserts the connection stays open and reading continues after the discard. Malicious implementation `if hdr.FrameType == FrameTypePEConnect { _ = conn.Close(); return }` passes every named test while converting every bootstrap frame into teardown+reconnect. Remediation: EXTEND `TestConnector_ReceiveLoop_PEConnectFrameDiscarded` (extend-not-add; counts unchanged at 7 connector / ~12 total) — on the SAME connection, fixture writes a `FrameTypePEConnect` frame FOLLOWED by a `FrameTypeData` frame; assert (a) FrameFn NOT invoked for the bootstrap frame, (b) FrameFn IS invoked for the subsequent data frame (`hdr.FrameType == frame.FrameTypeData` at the call site). Kills discard-as-close: the close tears down the conn before the data frame is read, failing (b). New BINDING ruling block `AC-003 discard-continuation pin (v1.14 — F-SP18-001)` added in Q2 immediately after the F-SP17-001 block; realizability note included (two frames back-to-back on one conn, `frame.ReadOuterFrame` loops on `io.ReadFull(44)` + PayloadLen reads, length-delimited, segment-boundary-independent). Pass-18 Adjudicated section added: F-SP18-001 accepted (extend-not-add, counts unchanged); P1a Ctl-pin realizability clean (Assemble :102 FrameType passthrough, Valid() 0x03 true, no Ctl special-case before frameFn); P1b kill transcript updated; P1c AC-002/004 count-tolerance clean; P1d note-ruling/story coherence confirmed; P2 POL pass; P3 ExitsOnReadError re-traced realizable. |
 | 1.15 | Remediate one spec-adversarial pass-19 finding (2026-07-10). F-SP19-001 (MED [doc-drift / incompletely-discharged prior remediation]) — v1.1 supersession note :110-111: live unannotated Option-B claim ("Q2 also rules that `upstreamdial.Handle` gains `SetFrameCallback(fn FrameFn)`") spans a line break; survived F-SP7-003 sweep because single-line grep patterns cannot match cross-line token pairs; contradicts F-SP6-002 Option A binding ruling and falsely attributes Handle placement to Q2. Residual struck and annotated in the v1.1 supersession note using the standard ~~strikethrough~~ + `*(amended v1.15 — ...)*` pattern. F-SP7-003 sweep transcript extended with v1.15 addendum: root cause recorded (cross-line token pair unreachable by single-line grep), NEW canonical multi-line-tolerant pattern documented (`tr '\n' ' ' \| grep -o "Handle. gains .SetFrameCallback"`), post-fix hit count (7 hits; 2 struck historical, 5 meta-references in documentation) with per-hit dispositions recorded, sweep re-certified zero live unannotated Option-B claims. Pass-19 Adjudicated section added. This is the 6th incomplete-sweep-class instance and the 2nd false sweep-completeness certification. |
 | 1.19 | Implementation-phase adversarial adjudication (2026-07-11): F-IP1-001 (MED [missing regression guard + false enforcement claim]) — AC-002 `go list -deps` assertion promised but undelivered; Architecture Compliance Rules "build MUST fail" sentence is factually wrong (upstreamdial→routing is acyclic; Go build does NOT fail). Ruling: standalone perimeter test `TestUpstreamdialImportPerimeter` in `internal/upstreamdial/connector_test.go` with positive-coverage guard (exec `go list -deps`, assert non-empty AND contains `internal/frame`, then assert `internal/routing` absent). Corrected Architecture Compliance wording specified. Forward obligation recorded for mgmt_wire.go:549–551 nil ForwardFunc. |
+| 1.20 | Per-story adversarial adjudication round 2 (2026-07-11): F-IP2-001 (MED) — SetFrameCallback post-Start mutation guard: OPTION (b) RULED — caller-ordering contract alone sufficient; guard not implemented; note records rejected-option rationale (panic vs ignore hides vs surfaces; one production caller with correct ordering; goroutine-happens-before already covers the set-once field; implementing a guard adds complexity without eliminating the data race on concurrent callers). F-IP2-002 (MED) — residual false attribution in `router_pe_receive_test.go:212–217` doc comment: mechanical replacement text specified. F-IP2-003 (LOW) — ARCH-08 v2.11 Changelog table missing 2.11 row: fixed in-place in ARCH-08 (row added below 2.10, no version bump). |
 | 1.18 | GREEN-phase adjudication (2026-07-11): F-GP1-001 (HIGH [green-phase contract conflict]) — `TestConnector_BackoffParameters` breaks 3/3 deterministically under the binding F-SP5-001/F-SP6-001 unconditional-close contract. Root cause: silent `SetWriteDeadline` failure path in `maintainConn` emits no EC-001 stamp; test's stamp[0] assumption is violated; measured gap captures doubled backoff (~2 s) not operative base (~1 s). Decision: OPTION (b) — keep unconditional close (production code unchanged), fix test stamp-collection to be robust to both teardown paths via Mode-drop poll before stamp collection. Options (a) (re-opens half-close hole, REJECTED) and (c) (misleading EC-001 log in production, REJECTED) evaluated and rejected. Story propagation: story-writer adds task to apply `TestConnector_BackoffParameters` fix. |
 | 1.17 | Remediate one spec-adversarial pass-21 finding (2026-07-10). F-SP21-001 (MED [doc-drift / incomplete sweep-completeness certification]) — v1.16 class-closure sweep table certified "17 blocks … complete" but missed four versioned binding-block headers whose bold text does not match the recorded grep patterns (`binding.:`, `BINDING`, `[Ss]ketch`): :262 `**\`FrameFn\` byte-contract (binding — F-SP3-001 correction):**` (v1.3/F-SP3-001); :511 `**Test shape (binding for story-writer and implementer):**` (v1.13/F-SP17-001 sub-block); :1812 `**Pin test shape (binding for story-writer):**` (Q9/F-SP3-001 byte-contract pinning obligation); :1928 `**Binding harness rule:**` (Q9.3/F-SP2-003 runRouter mandate). All four verified CURRENT (no supersession needed). Sweep table extended to rows 18–21; grep transcript replaced with canonical pattern `grep -nE '\*\*[^*]*[Bb]inding'` (21 hits); v1.17 addendum block added to sweep section re-certifying over all 21 blocks. This is the 8th incomplete-sweep-class instance and the 3rd false completeness certification. Pass-21 Adjudicated section added. |
 | 1.16 | Remediate one spec-adversarial pass-20 finding (2026-07-10). F-SP20-001 (MED [doc-drift / incompletely-discharged prior remediation]) — READ-error disposition contract block (:365-421): three-part defect: (1) header :365 lacked the "amended v1.6" supersession marker present on the STORY's equivalent header; (2) prose :386-387 stated the retracted mechanism verbatim ("Exit → dialLoop's existing teardown/reconnect path closes the conn and re-dials, which is the ONLY correct resync") — false per ground truth (maintainConn at connector.go:399 is write-only, never observes receive-goroutine exit); (3) v1.5 sketch :404-421 had a bare `return` with no `_ = conn.Close()` and no in-place warning. Three-part annotation applied: (1) header extended with supersession marker pointing to F-SP6-001 section; (2) prose struck with ~~strikethrough~~ + `*(amended v1.16 — F-SP20-001: RETRACTED ...)*` annotation; (3) banner blockquote inserted above sketch fence directing implementers to the v1.6 binding sketch. Sketch body preserved unmodified (history preservation). Class-closure sweep performed: 17 versioned binding blocks enumerated; 2 newly remediated (rows 4-5), 2 previously annotated (rows 6, 10), 13 fully current; zero unannotated stale binding blocks remain. This is the 7th incomplete-sweep-class instance. Pass-20 Adjudicated section added. |
@@ -3087,3 +3088,73 @@ interface set owns this obligation. Story-writer of that future story: check thi
 
 This observation does not create any obligation for the current story's implementer, test-writer,
 or story-writer beyond the forward-obligation documentation above.
+
+---
+
+## Per-story adversarial adjudication round 2 (v1.20 — F-IP2-001/002/003, BINDING)
+
+**Source:** Implementation-phase adversarial pass-2 against S-BL.PE-RECEIVE-LOOP at commit e397157 (story v1.22, note v1.19). Disk-verified by orchestrator prior to dispatch.
+
+---
+
+### F-IP2-001 (MED) — SetFrameCallback post-Start mutation guard unimplemented
+
+**Finding restated:** The story (:491–494) and note (:195–198) both carry the binding clause: "The Connector implementation MUST NOT permit [post-Start mutation via SetFrameCallback] — it may panic or silently ignore the call, but MUST NOT proceed with an unsynchronized field write." The delivered `SetFrameCallback` (worktree `connector.go:228–230`) is an unconditional unguarded write: `c.frameFn = fn`. No `started`/`startOnce` atomic field exists in the struct. All current callers obey the pre-Start ordering, so the race detector never fires and no test exercises the forbidden path.
+
+**RULING: OPTION (b) — caller-ordering contract alone sufficient; downgrade the spec clause.**
+
+The note and story MUST be updated (story-writer propagation) to replace the implementation obligation with a caller obligation only:
+
+> `SetFrameCallback` MUST be called before `Start()`. Calling it after `Start()` returns is a **data race** (dial goroutines are already reading `frameFn`); the caller is solely responsible for the ordering. The implementation does not detect or guard against post-Start mutation — the field is set-once and the goroutine-creation happens-before already covers visibility to all goroutines launched by `Start()`.
+
+**Rejected option — (a) implement the guard:**
+
+(a1) **Panic on post-Start call.** An atomic `started int32` flag (or reuse of `startOnce`) set at the top of `Start()` before goroutine launch; `SetFrameCallback` reads it and panics if set. Advantages: the programming error surfaces loudly and immediately; consistent with Go's nil-pointer-panic philosophy for misuse of concrete types. Disadvantages: the guard is itself a concurrent read of `started` against a write in `Start()` — the two operations are not synchronised by the same mechanism. Setting `started=1` in `Start()` before goroutine launch does NOT give `SetFrameCallback` a happens-before guarantee on `started`; a concurrent `SetFrameCallback` call could race the `started` store and miss it, defeating the guard. The only race-safe implementation would use `sync/atomic`, which costs a new field and an acquire/release load-store pair. A panic in a production goroutine (if `SetFrameCallback` were ever called from one) would crash the process; for a guard on programmer misuse the cost/benefit is poor.
+
+(a2) **Silent ignore on post-Start call.** Same field, same race risk on the guard itself, but instead of panicking the call is a no-op. This matches the nil-guard silent-discard philosophy cited in the finding but has a worse diagnostic profile: a misuse that silently does nothing produces exactly the symptom described in the spec — "an unsynchronized field write" — without the programmer ever knowing. The nil-guard precedent (`:485–489`) applies to a nil *callback*, not to a race on the *callback field itself*. The analogy does not hold.
+
+**Why (b) is correct here:**
+
+1. **One production caller, correct ordering.** `runRouter` in `mgmt_wire.go` is the sole production caller (verified grep). It calls `New()` → `SetFrameCallback()` → `Start()` in strict sequence. The goroutine-creation happens-before guarantee in Go's memory model makes `frameFn` visible to all goroutines launched by `Start()` without any additional synchronization. This is already documented in the `frameFn` field comment and in v1.4's Q2/Q8 amendment. The guard protects against a caller pattern that does not exist and cannot occur via the concrete-type-only API.
+
+2. **The guard is not race-safe without a new synchronisation primitive.** Any `started` flag readable by `SetFrameCallback` and writable by `Start()` is itself a potential data race unless sequenced by a mutex or an atomic with the appropriate memory ordering. Adding this complexity to protect against a call that cannot legally occur through the `*Connector` public surface is cost without benefit.
+
+3. **The spec clause survived 24 passes because it was aspirationally correct, not because it adds observable safety.** The spec was written before the single-production-caller constraint was fully elaborated. Re-reading it now: the binding obligation was to not proceed with an unsynchronized write. The existing implementation is not unsafe because the race never occurs; the caller contract is the correct layer at which to enforce it.
+
+4. **No TDD obligation flows from this ruling.** There is no failing test to write, because (b) removes the implementation obligation. Story-writer MUST update the clause wording in the story; no test-writer or implementer action required for this finding.
+
+---
+
+### F-IP2-002 (MED) — Residual false attribution in `router_pe_receive_test.go:212–217` doc comment
+
+**Finding restated:** The doc comment for `TestRunRouter_PE_FrameCallback_WiredToOnFrameArrival` (worktree `cmd/switchboard/router_pe_receive_test.go:212–217`) includes the bullet:
+
+```
+//   - No routing import in internal/upstreamdial (ARCH-08 §6.6.2 preserved).
+```
+
+The F-IP1-001 remediation (v1.19) corrected the story prose but missed this sibling comment in the test file. The test asserts only `E-FWD-001`; the import perimeter is enforced by `TestUpstreamdialImportPerimeter` (ruled in v1.19) in a separate file. The attribution is false.
+
+**RULING: mechanical replacement; test-writer applies.**
+
+The bullet at `router_pe_receive_test.go:215–216` (the line reading `//   - No routing import in internal/upstreamdial (ARCH-08 §6.6.2 preserved).`) MUST be replaced verbatim with:
+
+```
+//   - Import perimeter enforced separately by TestUpstreamdialImportPerimeter (internal/upstreamdial/connector_test.go, F-IP1-001).
+```
+
+The replacement is a single-line, single-bullet substitution. No other changes to the doc comment or the test body are required. Story-writer notes this as a propagation item; test-writer applies it in the same commit as `TestUpstreamdialImportPerimeter`.
+
+---
+
+### F-IP2-003 (LOW) — ARCH-08 dual-changelog drift
+
+**Finding restated:** `ARCH-08-dependency-graph.md` carries `version: "2.11"` in its frontmatter and a `modified:` entry for v2.11 (line 10), but the `## Changelog` table's newest row was `2.10`. Every prior version 2.4–2.10 appeared in both frontmatter history and Changelog table. The v2.11 row was missing from the table (POL-001 parity violation).
+
+**Ruling: fixed in-place in ARCH-08 (no version bump — this completes the v2.11 edit).**
+
+The `| 2.11 | ... |` row has been added to the ARCH-08 Changelog table immediately after the `2.10` row. Content derived from the `modified:` frontmatter entry at line 10:
+
+> `| 2.11 | 2026-07-11 | S-BL.PE-RECEIVE-LOOP: §6.5 pos-19 import set updated `{halfchannel, outerassembler}` → `{frame, halfchannel, outerassembler}` (direct frame edge re-added per F-SP12-001); §6.5 parenthetical reconciled (historical F-P1-001 "frame not imported directly" note superseded with preservation of context); §6.6.2 upstreamdial forbidden-edges bullet updated at positions 2, 5, 8 per F-SP13-001 (cycle-freeness gains frame pos 2; F-P1-001 clause updated; F-P7-002 clause preserved). Refs: S-BL.PE-RECEIVE-LOOP + F-SP12-001/F-SP13-001 + code commit c316aed. |`
+
+ARCH-08 frontmatter (`version: "2.11"`, `modified:` line 10) is **untouched** — this is completion of the v2.11 edit, not a new version.

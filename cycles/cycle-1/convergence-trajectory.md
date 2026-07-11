@@ -2646,3 +2646,57 @@ Per-story adversarial cycle (Step 4.5, BC-5.39.001): fresh-context adversary vs 
 **Streak:** 0/3 (pass 1 HAS_FINDINGS; streak stays at zero — was never advanced)
 
 **Pass 2 next:** fresh-context adversary vs implementation @ e397157 on `story/s-bl-pe-receive-loop`, story v1.22 + note v1.19 + index v4.62, streak 0/3. F-IP1-001 in ledger.
+
+---
+
+### Per-story adversarial pass 2 (2026-07-11) — 3 findings, remediated
+
+**Dispatch tuple:** story v1.22 + placement note v1.19 + implementation e397157 on branch `story/s-bl-pe-receive-loop`
+
+**Rotated lenses:** remediation-integrity, story-code drift, concurrency deep-dive, error-path exhaustiveness, integration-test honesty, policy sweep
+
+**Verdict:** HAS_FINDINGS — 3 findings
+
+#### Finding F-IP2-001 MED [spec-gap/unimplemented-clause]
+
+| ID | Severity | Class | Description |
+|----|----------|-------|-------------|
+| F-IP2-001 | MED | spec-gap / unimplemented clause | Design Constraints binding "implementation MUST NOT permit post-Start SetFrameCallback mutation" — the guard clause was listed in the story but never implemented. A post-Start mutation call would silently succeed. |
+
+**Architect adjudication (Option b — caller-responsibility):** The guard itself cannot be made race-safe without introducing a new sync primitive (a boolean flag would require a mutex, which is not present in the story's delivery scope). Both candidate enforcement shapes were rejected: panic (too loud for a caller-discipline invariant held by the sole production caller) and silent-ignore (misleads callers into believing the post-Start call succeeded). The sole production caller (`runRouter` in `mgmt_wire.go`) is provably correct — it calls `SetFrameCallback` before `Start()` in every code path. Clause downgraded from implementation obligation to caller-responsibility in the Design Constraints prose and FCL row 4.
+
+**Remediation:** Spec-only — story v1.22→v1.23 Design Constraints rewording + FCL row 4 annotation. No code change.
+
+#### Finding F-IP2-002 MED [partial-fix propagation gap]
+
+| ID | Severity | Class | Description |
+|----|----------|-------|-------------|
+| F-IP2-002 | MED | partial-fix propagation gap | F-IP1-001 remediation corrected the story prose (AC-002 "No routing import" attribution) but left the false attribution in the sibling test file's doc comment in `connector_test.go` (the file added by the remediation commit e397157). The doc comment still attributed the test to a "routing import" assertion mechanism that had already been corrected in the story. |
+
+**Remediation:** Test-writer fix commit c3fca02 on branch `story/s-bl-pe-receive-loop` — comment-only change to the `TestUpstreamdialImportPerimeter` doc comment; `gofmt`, `go vet`, and full test suite verified clean.
+
+#### Finding F-IP2-003 LOW [ARCH-08 dual-changelog parity]
+
+| ID | Severity | Class | Description |
+|----|----------|-------|-------------|
+| F-IP2-003 | LOW | doc-drift / dual-changelog parity | ARCH-08 v2.11 carried a `modified:` frontmatter entry (bumped from v2.10) but no corresponding Changelog-table row was added. POL-001 requires both axes to be in sync. The frontmatter version increment existed; the prose changelog row was missing. |
+
+**Remediation:** Architect fixed in-place — Changelog-table row added at line :509 of ARCH-08. Frontmatter version `modified: v2.11` left untouched (it was already correct). Completes v2.11 and restores POL-001 parity.
+
+**Confirmed-clean surfaces (no findings):** error paths (all non-nil ReadOuterFrame returns unconditionally close conn), concurrency (frameFn set-before-Start happens-before covers goroutine visibility, DropCache mu discipline clean), integration-test honesty (peWriteFixture mechanics verified, test assertions match story ACs), perimeter-test self-integrity (TestUpstreamdialImportPerimeter structure and `go list -deps` invocation verified correct).
+
+**All 13 bars CONFIRMED by pass-2 adversary** (including bar 13, the F-IP1-001 TestUpstreamdialImportPerimeter remediation).
+
+**Remediation artifacts:**
+
+| Artifact | Change |
+|----------|--------|
+| `stories/S-BL.PE-RECEIVE-LOOP.md` | v1.22 → v1.23 (Design Constraints caller-responsibility rewording, FCL row 4 annotation) |
+| `stories/STORY-INDEX.md` | v4.62 → v4.63 |
+| `decisions/S-BL.PE-RECEIVE-LOOP-placement-note.md` | v1.19 → v1.20 (round-2 ruling at :3094, changelog row :48) |
+| `specs/architecture/ARCH-08-dependency-graph.md` | v2.11 changelog row added at :509 (no version change) |
+| `connector_test.go` commit c3fca02 | Doc comment false attribution corrected (comment-only; gofmt/vet/test verified) |
+
+**Streak:** 0/3 (pass 2 HAS_FINDINGS; streak was never advanced from 0)
+
+**Pass 3 next:** fresh-context adversary vs implementation @ c3fca02 on `story/s-bl-pe-receive-loop`, story v1.23 + note v1.20 + index v4.63, streak 0/3. F-IP2-001/002/003 in ledger.
