@@ -1551,3 +1551,23 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 **Tooling-friction note (layer-1 capture):** rc.22 factory-dispatcher STATE.md validator demands schema elements (SIZE-BUDGET banner, trajectory-tail, Convergence Status/Concurrent Cycles sections, Last Updated field) absent from this file's entire history; STATE.md frontmatter pins plugin_version_adopted rc.21; hook is advisory (PostToolUse, no git gate); edits persist; rc.22 schema migration deferred to a dedicated follow-up.
 
 ---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-3 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 3), product-owner, architect, story-writer, state-manager
+**Files touched:** BC-2.01.008.md (v1.0→v1.1), S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.2→v1.3), S-7.04-FU-DRAIN-WIRE.md (v1.2→v1.3), STORY-INDEX.md (v4.70→v4.71), sprint-state.yaml (v2.43→v2.44)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 3 on S-7.04-FU-DRAIN-WIRE returned 8 findings (F-DW-SP3-001..008, 2 HIGH), both confirmed and remediated. Headline: a NodeHandle data-ownership contradiction — the placement note and the story disagreed about who populates and owns `NodeHandle` — was ruled via an explicit DATA/BEHAVIOR ownership split (netingress owns DATA: `ServeConfig.IfaceIDSeed`-seeded counter creates the `send`/`done` channels and populates `NodeHandle`; `runRouter`'s `OnAccept` owns BEHAVIOR). The send-map value type changed to `*nodeConn{send, done, doneOnce}`. The second HIGH — BC-PC-4's strict no-logging clause contradicting the story's logged-and-pinned guard — was resolved in favor of PC-4: strict no-logging upheld, with the rationale made explicitly asymmetric against EC-002, and the EC-001/canonical vector amended to "no log." Product-owner landed BC-2.01.008 v1.1 (PC-4 strengthened; NEW Inv-2 — netingress-arriving ctl frames are terminal-consumer by construction, with a revisit trigger; invariants renumbered). Architect landed placement note v1.3 with the Q-SEAM ownership-split ruling, a NEW Shutdown ordering guarantee (Signal → Wait → router-wide `doneOnce` flush pass → `writerWG.Wait` bounded by `drainFlushTimeout` [PROVISIONAL ~200ms, mechanism BINDING] → `ingressCancel` — closes the egress flush race), Q-CTL-GUARD's log struck from the unknown-opcode arm plus a `conn.RemoteAddr` compile-error removal, the Inv-2 unconditional-guard basis, a rewritten Q-AC003 on a new `drainObserverFiredHook`, FCL row 5 downgraded to no-change-expected, an F-008 phase-order correction, and an in-edit OBS-2 completion sweep; VP-037 was checked and deliberately left unchanged at v1.5. Story-writer landed story v1.3 (all rulings propagated, AC count still 5, FCL 11 rows, `drainFlushTimeout` marked PROVISIONAL) and STORY-INDEX v4.71 (row 140 ready v1.3 + POL-002 Notes chain). Finding decay across the three passes: 14 → 10 → 8.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 3) | fresh-context spec-adversarial pass | 8 findings F-DW-SP3-001..008 (2 HIGH: NodeHandle data-ownership contradiction, BC-PC-4 no-logging vs story's logged-and-pinned guard) |
+| product-owner | BC remediation | BC-2.01.008 v1.1 (PC-4 strengthened strict no-logging + rationale asymmetric with EC-002; EC-001/canonical vector amended to "no log"; NEW Inv-2 netingress-arriving ctl frames terminal-consumer by construction + revisit trigger; invariants renumbered) |
+| architect | placement-note remediation | placement-note v1.3 (Q-SEAM ownership split: netingress owns DATA via `ServeConfig.IfaceIDSeed`-seeded counter + creates send/done + populates NodeHandle, runRouter OnAccept owns BEHAVIOR; send-map value type `*nodeConn{send, done, doneOnce}`; NEW Shutdown ordering guarantee closing the egress flush race; Q-CTL-GUARD log struck + RemoteAddr compile-error removed + Inv-2 unconditional-guard basis; Q-AC003 rewritten on new drainObserverFiredHook; FCL row 5 → no-change-expected; F-008 phase-order correction; OBS-2 completion sweep in-edit; VP-037 checked, deliberately unchanged v1.5) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.3 (all rulings propagated; AC count 5; FCL 11 rows; drainFlushTimeout marked PROVISIONAL); STORY-INDEX v4.71 (row 140 ready v1.3 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.44 (story_version 1.3, placement_note v1.3, provisional_rulings [drainFlushTimeout], spec_adversarial_pass_3 line); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** 0/3 — pass 4 next. 1 PROVISIONAL remains: `drainFlushTimeout` constant value (~200ms, mechanism BINDING, value PROVISIONAL).
+
+---

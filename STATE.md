@@ -33,9 +33,9 @@ develop_head: ef1ee1e
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 3 (story v1.2 + placement note v1.2 + VP-037 v1.5 @ develop ef1ee1e; pass-2 10 findings F-DW-SP2-001..010 remediated; streak 0/3; all PROVISIONALs resolved)"
+awaiting: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 4 (story v1.3 + note v1.3 + BC-2.01.008 v1.1 + VP-037 v1.5 @ develop ef1ee1e; pass-3 8 findings F-DW-SP3-001..008 remediated; streak 0/3; decay 14→10→8; 1 PROVISIONAL: drainFlushTimeout value)"
 historical_cycles: []
-timestamp: 2026-07-11T22:33:15Z
+timestamp: 2026-07-11T23:53:49Z
 last_update: 2026-07-11
 ---
 
