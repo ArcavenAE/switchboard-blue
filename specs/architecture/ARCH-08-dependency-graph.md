@@ -2,11 +2,12 @@
 artifact_id: ARCH-08-dependency-graph
 document_type: architecture-section
 level: L3
-version: "2.10"
+version: "2.11"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
 modified:
+  - 2026-07-11T00:00:00 # v2.11 — S-BL.PE-RECEIVE-LOOP: §6.5 pos-19 import-set {halfchannel, outerassembler} → {frame, halfchannel, outerassembler}; parenthetical reconciled per F-SP12-001 (frame direct import re-added, historical F-P1-001 context preserved); §6.6.2 upstreamdial forbidden-edges bullet updated per F-SP13-001 (positions 2,5,8; cycle-freeness gains frame pos 2; F-P1-001 clause updated; F-P7-002 clause preserved). Refs: S-BL.PE-RECEIVE-LOOP + F-SP12-001/F-SP13-001 + code commit c316aed.
   - 2026-07-07T15:00:00 # v2.10 — F-P9-001 (adversary pass-9): internal/bench (position 24) registered — omitted from develop census since PR #109 (cd67394). Ruling: Option A — bench appended at position 24 (after testenv at 23); blast radius ARCH-08 only, no code changes. bench has no production imports; xtest: {admission, frame, session} + stdlib. §6.5 header corrected to "24 positions — 23 present on develop + 1 prospective"; position-numbering-note range updated 1–23 → 1–24; "23-position table (22 on develop + 1 prospective)" corrected to "24-position table (23 on develop + 1 prospective)"; enforcement-history note updated to "all 23 packages on develop (at 62e38d3) + 1 prospective"; verification statement updated to "All 23 packages". Qualifying note added: positions 23/24 are both test-only leaves; testenv "composition root" designation refers to import-allowance breadth, not ordinal supremacy. Census command: `go list ./internal/...` at 62e38d3 → 23 packages.
   - 2026-07-07T14:00:00 # v2.9 — F-P8-001 (adversary pass-8): §6.5 cardinality trued (23 positions = 22 develop + 1 prospective), numbering-note range updated to 1–23, SHA anchor in §6.5 header advanced to 62e38d3 (testenv merged at 62e38d3 post-dates 0516f3a); enforcement-history note and verification statement updated to reflect 22 packages at 62e38d3 + 1 prospective. PLUS full-artifact arithmetic/cross-reference self-consistency sweep: §6.5 enforcement-history note "21 packages" at 0516f3a updated to "22 packages on develop (at 62e38d3) + 1 prospective"; verification tail paragraph updated to "22 packages" at 62e38d3. No other arithmetic discrepancies found (Mermaid omission of post-Wave-3 packages is pre-existing documented limitation; §6.6.2 forbidden-edge positions 5, 8, 19, 23 all consistent with v2.9 table; §6.5.1 and §6.6.1 carry no package-count claims).
   - 2026-07-07T13:00:00 # v2.8 — F-P7-002 (adversary pass-7): position-23 (internal/testenv) import set corrected from {admission, drain, frame, session} to {admission, drain, frame, outerassembler, session, upstreamdial}. S-7.04-FU-PE-CONNECTOR added outerassembler (pos 8) + upstreamdial (pos 19) edges; both below 23, no back-edges, edges are lawful. Verified via import block at story branch HEAD 51ecd44. Pending-marker updated to reflect 51ecd44 (pre-merge); previously machine-derived at 62e38d3. §6.6.2 forbidden-edges note for upstreamdial updated: internal/testenv (_test-only composition root) added to the set of permitted importers alongside cmd/switchboard and _test files.
@@ -322,7 +323,7 @@ strict — position N may import packages at positions 1..N-1 only.
 | 16 | `internal/drain` | ∅ (stdlib only) | effectful | Wave 7 (S-7.04, PR #101) |
 | 17 | `internal/routing` | {admission, frame, hmac, multipath} | boundary | Wave 2 (S-2.02); routing→multipath edge added Wave 4 (S-4.04) |
 | 18 | `internal/netingress` | {frame} | boundary | Wave 7 (S-BL.NI, PR #94, b8ed015) |
-| 19 | `internal/upstreamdial` | {halfchannel, outerassembler} (**PROSPECTIVE** — aligned to implementation at cee8e8b pre-merge; final machine-verification at merge. halfchannel pos 5, outerassembler pos 8 — both below 19, no back-edges. frame is NOT imported directly; reachable transitively through outerassembler and halfchannel. Corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001.) | effectful (network I/O) | Wave 7 (S-7.04-FU-PE-CONNECTOR) |
+| 19 | `internal/upstreamdial` | {frame, halfchannel, outerassembler} (**PROSPECTIVE** — aligned to implementation at cee8e8b pre-merge; final machine-verification at merge. halfchannel pos 5, outerassembler pos 8 — both below 19, no back-edges. frame direct import added by S-BL.PE-RECEIVE-LOOP (pos 2 → pos 19, forward edge, no cycle; frame.ReadOuterFrame + frame.FrameTypePEConnect in connector.go). Historical note: v2.6 had listed {frame, outerassembler} prematurely; adversary pass-1 F-P1-001 corrected that (no direct import existed at that time); the direct frame edge is now real as of this story.) | effectful (network I/O) | Wave 7 (S-7.04-FU-PE-CONNECTOR) |
 | 20 | `internal/mgmt` | {metrics} | boundary (effectful — socket I/O, crypto) | Wave 5 (S-W5.01); see ARCH-12 |
 | 21 | `internal/discovery` | {routing} | boundary | Wave 5+ (S-5.02) |
 | 22 | `internal/svtnmgmttest` | {svtnmgmt} | test helper | Wave 5 (S-6.02) |
@@ -455,15 +456,17 @@ here first.
 **Additional forbidden edges (carried forward):**
 - `internal/upstreamdial` MUST NOT import `internal/drain`, `internal/routing`,
   `internal/testenv`, or any package at positions 20–23. Allowed imports are
-  `{halfchannel, outerassembler}` only (positions 5 and 8). Nothing may import
+  `{frame, halfchannel, outerassembler}` only (positions 2, 5 and 8). Nothing may import
   `internal/upstreamdial` except `cmd/switchboard`, `internal/testenv` (the _test-only
   composition root at position 23), and `_test` files — it is an effectful leaf in
-  the connectivity layer. Cycle-freeness: all allowed imports (halfchannel pos 5,
+  the connectivity layer. Cycle-freeness: all allowed imports (frame pos 2, halfchannel pos 5,
   outerassembler pos 8) are below position 19; no back-edges. `internal/testenv` at
   position 23 importing upstreamdial at position 19 is lawful (23 > 19). (Per
   placement note Q4 forbidden edges and ARCH-08 §6.4 constraint requirement; import
-  set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001;
-  permitted-importers updated per adversary pass-7 F-P7-002.)
+  set corrected from v2.6 {frame, outerassembler} per adversary pass-1 F-P1-001
+  (no direct frame import existed then); frame direct import re-added by
+  S-BL.PE-RECEIVE-LOOP (frame.ReadOuterFrame + frame.FrameTypePEConnect in
+  connector.go); permitted-importers updated per adversary pass-7 F-P7-002.)
 - `internal/session` MUST NOT import `internal/routing`.
   Session-level authorization state is managed within `internal/session` itself;
   routing is a peer layer, not a dependency.

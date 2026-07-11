@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.29
+# version: 2.30
 # changelog:
+#   - version: 2.30
+#     date: 2026-07-11
+#     description: "S-BL.PE-RECEIVE-LOOP Red Gate executing: (1) delivery worktree .worktrees/s-bl-pe-receive-loop @ story/s-bl-pe-receive-loop off develop@42baa8c, pre-story baseline GREEN (13 frame + 21 upstreamdial tests); (2) stub commit c316aed — FrameTypePEConnect=0x06 (ARCH-02 §3.1 citation), Valid() widened to <=FrameTypePEConnect (same-commit discipline; avoids incoherent intermediate state), ReadOuterFrame panic-stub, FrameFn type + frameFn field + SetFrameCallback assignment-stub on concrete *Connector ONLY (Option A), direct frame import + package-comment update; upstreamdial suite still green, 2 expected frame_test stale failures (FCL row 3 test-writer work); (3) THIS commit carries the same-commit spec-doc side: ARCH-08 v2.11 (§6.5 token {frame, halfchannel, outerassembler} + parenthetical F-SP12-001 + §6.6.2 bullet F-SP13-001, verbatim binding texts), ARCH-02 v1.1 (:75 + pe_connect=0x06), BC-2.01.004 v1.3 (:65 + pe_connect=0x06, F-SP14-001 pair) — all citing c316aed; orchestrator verified 5 greps clean. IN FLIGHT: test-writer RED suite (~12 tests + frame_test blast-radius sweep). Next: RED verification → implementer GREEN."
 #   - version: 2.29
 #     date: 2026-07-11
 #     description: "S-BL.PE-RECEIVE-LOOP spec pass 24 (CONVERGENCE PASS): CLEAN — 3/3 consecutive clean passes achieved (22, 23, 24). SPEC CONVERGED. 24 passes total, ~28 findings, decay 7→4→3→2→3→4→5→2→1→2→3→1→1→1→1→0→1→1→1→1→1→0→0→0. Pass-24 verdicts: P1a handed-down race timeline BENIGN (accepted fires at TCP-accept step-4, receive goroutine spawns step-5, WriteFrame's bytes TCP-buffer until the unconditional read; scanForLine polls 2s/20ms — orchestrator re-confirmed poll loop on disk; false-pass impossible: E-FWD-001 only reachable via receive goroutine → frameFn → OnFrameArrival); P1b full cold read clean (production single-interface E-FWD-001 drop is deliberate + F-SP11-003-scoped; per-reconnect join implementable within dialLoop); P1c convergence certification all six items PASS with fresh greps ((a) every AC ≥1 realizable named test; (b) FCL→task bijection complete; (c) every binding contract reflected; (d) all four spec-doc before-texts grep-matched verbatim on disk — orchestrator re-confirmed ARCH-02:74 + BC-2.01.004:61; (e) counts consistent 7/~12/12+pair; (f) zero live retracted text); POL pass; P3 keystone recipes (NoDuplicateSuppression byte-contract discriminator, ExitsOnReadError teardown pin) traced realizable; all 23 ledger items hold. FINAL PACKAGE: story v1.20 + note v1.17 + ruling v1.0 + index v4.60 @ develop 42baa8c. NEXT: Red Gate — TDD delivery flow per per-story-delivery.md (fresh worktree off develop@42baa8c → stub-architect → test-writer RED → implementer GREEN → per-story adversarial cycle → demo POL-004 → DELIVERY doc → pr-manager 9-step → merge on green)."
@@ -1052,7 +1055,7 @@ stories:
     spec_adversarial_pass: 24
     spec_adversarial_streak: "3/3 — SPEC CONVERGED"
     last_findings: "pass 24 CLEAN — SPEC CONVERGED (3/3: passes 22/23/24)"
-    note: "spec converged 2026-07-11; awaiting Red Gate TDD delivery kickoff (worktree + stub-architect)"
+    note: "Red Gate executing: stubs c316aed; spec docs amended this commit; RED suite in flight"
     # Minted 2026-07-07 per PO adjudication F-P1-002 (AC-004 partial-discharge ruling).
     # Owns E-FWD-001 exhaustion discharge + S404-OBS-F/S404-LOW-1 re-anchored from S-7.04-FU-PE-CONNECTOR.
     # Blocks S-7.04-FU-DRAIN-WIRE.

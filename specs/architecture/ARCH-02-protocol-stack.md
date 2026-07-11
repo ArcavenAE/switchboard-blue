@@ -2,7 +2,7 @@
 artifact_id: ARCH-02-protocol-stack
 document_type: architecture-section
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -24,6 +24,7 @@ kos_anchors:
   - elem-asymmetric-half-channels
   - elem-ssh-end-to-end-encryption
 modified:
+  - 2026-07-11T00:00:00 # v1.1 — S-BL.PE-RECEIVE-LOOP: §"Outer Header Format" frame_type row amended to add pe_connect=0x06 (same-commit parallel obligation with FrameTypePEConnect definition in frame.go). Refs: S-BL.PE-RECEIVE-LOOP + c316aed.
   - 2026-06-23T00:00:00
 ---
 
@@ -71,7 +72,7 @@ Any field position or size change requires a major version bump (DI-007).
 | Offset | Size | Field | Notes |
 |--------|------|-------|-------|
 | 0 | 1 | version | bits[7:4]=major (0–15), bits[3:0]=minor (0–15). For v0.1: 0x01. |
-| 1 | 1 | frame_type | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05 |
+| 1 | 1 | frame_type | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06 |
 | 2 | 2 | payload_len | u16 big-endian; byte count of everything after the outer header (channel header + payload) |
 | 4 | 16 | svtn_id | 128-bit SVTN identifier |
 | 20 | 8 | src_node_addr | 64-bit source node address |

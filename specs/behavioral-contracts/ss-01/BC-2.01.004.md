@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.004
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: architect
 timestamp: 2026-06-24T00:00:00
@@ -18,6 +18,10 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.3"
+    date: 2026-07-11
+    author: architect
+    change: "Postcondition 2 outer-header layout table frame_type row amended: fec=0x05 → fec=0x05, pe_connect=0x06. Wire-format spec pair with ARCH-02:74; same-commit parallel obligation with FrameTypePEConnect definition. Refs: S-BL.PE-RECEIVE-LOOP + F-SP14-001 + c316aed."
   - version: "1.2"
     date: 2026-06-24
     author: architect
@@ -58,7 +62,7 @@ Every Switchboard frame carries a 44-byte outer header in a fixed binary layout.
    | Offset | Size | Field          | Notes                                                       |
    |--------|------|----------------|-------------------------------------------------------------|
    | 0      | 1    | version        | bits[7:4]=major, bits[3:0]=minor; v0.1 = 0x01               |
-   | 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05 |
+   | 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06 |
    | 2      | 2    | payload_len    | u16 big-endian                                              |
    | 4      | 16   | svtn_id        | 128-bit SVTN identifier                                     |
    | 20     | 8    | src_node_addr  | 64-bit                                                      |
