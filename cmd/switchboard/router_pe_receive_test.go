@@ -8,7 +8,8 @@
 // + WriteFrame — used by these tests to inject frames from the upstream fixture side.
 //
 // Traces: AC-001 (BC-2.09.001 PC-2/PC-3), AC-002 (BC-2.02.008 PC-3), AC-004
-//         (BC-2.02.008 PC-3/EC-003, S404-OBS-F, S404-LOW-1).
+//
+//	(BC-2.02.008 PC-3/EC-003, S404-OBS-F, S404-LOW-1).
 //
 // NOTE: AC-005 (flap-cycle join, goroutine lifecycle) lives in
 // internal/upstreamdial/connector_test.go per F-SP3-002 ruling.
@@ -324,13 +325,14 @@ func TestRunRouter_PE_EFWD001ExhaustionUnderLoad(t *testing.T) {
 //
 // Two frames with IDENTICAL payload but DIFFERING OuterHeader.SrcAddr ([8]byte
 // 0x01... vs 0x02...) both produce "E-FWD-001" (≥2 emissions). This proves:
-//   (a) Full-frame reconstruction is wired correctly: crc32.ChecksumIEEE is computed
-//       over the full frame (outer header + payload), not payload-only. Payload-only
-//       would collide on identical payloads → false-duplicate suppression → only 1
-//       emission.
-//   (b) The receive loop CONTINUES after the first non-nil frameFn return
-//       (ErrAllPathsSplitHorizon): the ≥2-emission requirement pins that loop does
-//       not exit on non-nil frameFn return (F-SP4-001).
+//
+//	(a) Full-frame reconstruction is wired correctly: crc32.ChecksumIEEE is computed
+//	    over the full frame (outer header + payload), not payload-only. Payload-only
+//	    would collide on identical payloads → false-duplicate suppression → only 1
+//	    emission.
+//	(b) The receive loop CONTINUES after the first non-nil frameFn return
+//	    (ErrAllPathsSplitHorizon): the ≥2-emission requirement pins that loop does
+//	    not exit on non-nil frameFn return (F-SP4-001).
 //
 // RED GATE: ReadOuterFrame panics → FAILS at RED. After implementation, a
 // payload-only reconstruction bug would produce only 1 emission (false-dup

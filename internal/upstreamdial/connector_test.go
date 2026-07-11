@@ -1789,7 +1789,9 @@ func TestConnector_ReceiveLoop_ExitsOnConnClose(t *testing.T) {
 // cycle (F-SP1-005, F-SP3-002).
 //
 // Phase 1: SetFrameCallback BEFORE Start (F-SP4-002 ordering contract) →
-//          connect + Data frame delivered.
+//
+//	connect + Data frame delivered.
+//
 // Phase 2: server-side conn.Close() → triggers reconnect.
 // Phase 3: second listener accepts redial + Data frame delivered again.
 // Phase 4: Stop() completes within timeout; goroutine count does not grow.
@@ -1934,9 +1936,10 @@ func TestConnector_ReceiveLoop_FlapCycleJoin_NoLeak(t *testing.T) {
 // out-of-range frame_type byte (0x07, one above FrameTypePEConnect=0x06),
 // PayloadLen=0x0000, written WITHOUT closing the conn, causes ParseOuterHeader
 // to return ErrInvalidFrameType. The receive goroutine must:
-//   (a) exit the loop (per-connection done signal or goroutine count drops), and
-//   (b) call conn.Close() to trigger maintainConn write failure → reconnect
-//       (the connector re-dials the fixture within the test budget).
+//
+//	(a) exit the loop (per-connection done signal or goroutine count drops), and
+//	(b) call conn.Close() to trigger maintainConn write failure → reconnect
+//	    (the connector re-dials the fixture within the test budget).
 //
 // RED GATE: The receive goroutine is not implemented. The connector will NOT
 // reconnect in response to the malformed frame → assertion (b) FAILS at RED.
