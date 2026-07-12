@@ -1,0 +1,118 @@
+# .factory/session-reviews/pattern-database.yaml
+# Seeded 2026-07-12 by first-ever session review (run cycle-1).
+# No prior runs exist to compare against; all occurrence counts are
+# "this run" counts, not cross-run trends.
+
+patterns:
+  - id: PAT-01-sibling-fix-propagation-gap
+    description: >
+      A fix that mints or renames a symbol/BC/VP row lands in its primary
+      location but fails to propagate to every co-referencing document
+      (BC body VP table, error-taxonomy, story Error Code Map, downstream
+      test-mapping rows, sibling doc citations). Each remediation sweeps
+      only its flagged location, leaving stragglers for the next pass.
+    occurrences_this_run: 7 consecutive recurrences (S-6.06 passes 19-25) + 1 recurrence at function-granularity (PE-CONNECTOR Lesson #18)
+    evidence:
+      - .factory/cycles/cycle-1/lessons.md "PATTERN-CLOSE-P21-P25"
+      - .factory/cycles/cycle-1/per-story-convergence.md passes 19,21,22,23,24
+    watch_for: >
+      Recurrence in future stories at a NEW granularity the exhaustive-sweep
+      rule doesn't yet cover (document-level and function-level are both
+      closed; watch for module-level or cross-repo-level next).
+
+  - id: PAT-02-comment-vs-code-path-drift
+    description: >
+      An authored comment/doc-string makes a behavioral claim that
+      grep-resolves (cites real symbols) but is semantically false — the
+      described code path is never taken, or the wired test double is
+      never observed before teardown. Symbol-resolution alone cannot
+      catch this; requires claim-to-code line-level tracing.
+    occurrences_this_run: 5 distinct shapes (PE-CONNECTOR passes 11, 13, 15, 16, 22)
+    evidence:
+      - .factory/cycles/cycle-1/lessons.md lessons #9, #11, #13, #14, #18
+    watch_for: >
+      New shapes beyond the 5 already catalogued; each prior shape was
+      catchable by a progressively weaker mechanical bar, current shape
+      (#18, full-function sweep) requires full behavioral tracing —
+      watch for a 6th shape that defeats even that.
+
+  - id: PAT-03-premise-tracing-gap
+    description: >
+      Purely textual spec-adversarial review (however exhaustive, however
+      many diverse traversal angles) converges cleanly on internal
+      consistency while missing a false premise embedded in an unstated
+      runtime relationship (e.g. context parentage, goroutine ownership)
+      that no spec sentence asserts or denies. Surfaces only at first
+      empirical/implementation contact.
+    occurrences_this_run: 1 (S-7.04-FU-DRAIN-WIRE, F-DW-IMPL-001, 12 prior clean passes)
+    evidence:
+      - .factory/cycles/cycle-1/lessons.md lesson #19
+      - filed drbothen/vsdd-factory#620 (HIGH)
+    watch_for: >
+      This is a methodology-level gap, not a one-off. Watch whether it
+      recurs on OTHER unstated runtime relationships (lock ownership,
+      channel lifetime, goroutine parentage) in future stories before
+      the engine ships an execute-the-discharge-trace step.
+
+  - id: PAT-04-agent-self-report-unreliability
+    description: >
+      An agent (implementer or adversary) self-reports a status (green
+      tests, converged streak) that is false. Caught only by independent
+      verification (orchestrator re-running go test -race, or a
+      subsequent fresh-context pass), never by the reporting agent itself.
+    occurrences_this_run: 3 (PROCESS-GAP-W5A x2 — S-W5.01, S-6.03; SIGHUP-RELOAD Pass-6 confabulated streak)
+    evidence:
+      - .factory/STATE.md open-drift row PROCESS-GAP-W5A
+      - .factory/sprint-state.yaml v1.57 "[confabulation-class]"
+    watch_for: >
+      Any future dispatch design change that REMOVES the independent
+      orchestrator-verification step would be dangerous given this
+      pattern's 3-occurrence base rate in a single cycle.
+
+  - id: PAT-05-aggregate-count-drift
+    description: >
+      A summary/aggregate figure in a status artifact (STATE.md phase
+      line, changelog cell, ledger row) is asserted from working memory
+      rather than machine-derived at the cited commit, and silently
+      disagrees with the underlying evidence.
+    occurrences_this_run: >
+      At least 2 — (a) fuzz-exec total "53M+" in STATE.md vs ~40.9M summed
+      from phase-6 reports; (b) 120-file vs 39-pass Phase-5 count mismatch
+      (unreconciled).
+    evidence:
+      - .factory/cycles/cycle-1/phase-6/fuzz-lane-report.md
+      - .factory/cycles/cycle-1/phase-6/gapclose-lane-report.md
+      - .factory/STATE.md phase-6 summary line
+    watch_for: >
+      This is the SAME class the project's own lessons.md #3/#7 already
+      codify for burst reports — watch whether the rule gets extended to
+      STATE.md summary cells (IP-C1-05) and whether drift recurs after.
+
+  - id: PAT-06-learning-loop-non-synthesis
+    description: >
+      Session-end sidecar markers accumulate without triggering
+      session-review synthesis, especially during steady-state /
+      incremental-delivery phases that lack a single terminal
+      "pipeline complete" event.
+    occurrences_this_run: 1 (165 markers, ~23h, zero synthesis before this run)
+    evidence:
+      - .factory/sidecar-learning.md
+      - upstream drbothen/vsdd-factory#584
+    watch_for: >
+      Whether the marker count resets to near-zero after this review or
+      continues accumulating — that will indicate whether IP-C1-01's
+      trigger-mechanism gap is real or whether this run was anomalous.
+
+  - id: PAT-07-first-try-gate-rarity
+    description: >
+      Gates in this factory almost never pass clean on the first
+      dispatch; the norm is rollback, restart, multiple rounds, or a
+      many-pass grind before closing.
+    occurrences_this_run: "9 of 11 major gates tracked in STATE.md frontmatter required more than one clean attempt"
+    evidence:
+      - .factory/STATE.md frontmatter gate rows
+      - Dimension 5 table in review-2026-07-12-cycle-1.md
+    watch_for: >
+      Whether this ratio holds, improves, or worsens across future
+      cycles/stories — this run's ~18% first-try rate is the cycle-1
+      benchmark (see benchmarks.yaml gate_first_try_rate).

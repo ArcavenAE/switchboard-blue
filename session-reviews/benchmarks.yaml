@@ -1,0 +1,86 @@
+# .factory/session-reviews/benchmarks.yaml
+# Seeded 2026-07-12 by first-ever session review (run cycle-1).
+# These are cycle-1's raw values — the FIRST data point for each metric,
+# not yet a running average. Future runs should compute deltas against
+# these.
+
+benchmarks:
+  - metric: holdout_satisfaction_score
+    cycle_1_value: 0.85
+    unit: "score (0.0-1.0)"
+    notes: "HS-006, evaluated 2026-07-02 at develop tip 7fe3e29. Exactly at the >=0.85 global mean-gate threshold. STALE relative to current develop — router daemon runtime shipped 3 days after evaluation (see IP-C1-04)."
+
+  - metric: mutation_kill_rate_sampled
+    cycle_1_value: "11/15 (73%)"
+    unit: "ratio"
+    notes: "Manual sampling, 5 mutants x 3 packages. 2 genuine gaps closed same-burst, 1 equivalent mutant, 1 proven-dead-code. Effective undiscovered-gap rate 2/15 (13%)."
+
+  - metric: fuzz_combined_execs
+    cycle_1_value: "~40.9M (evidence-summed) vs 53M+ (STATE.md cited)"
+    unit: "executions"
+    notes: "5 targets, 0 crashes either way. Discrepancy itself flagged as PAT-05 (IP-C1-05)."
+
+  - metric: fuzz_crash_count
+    cycle_1_value: 0
+    unit: "count"
+    notes: "Across all 5 fuzz targets, phase-6 + gapclose burst 3."
+
+  - metric: vp_proven_ratio_at_phase6_close
+    cycle_1_value: "63 proven / 6 partial-deferred / 8 blocked-justified / 77 total"
+    unit: "count"
+    notes: "Phase 6 close, 2026-07-06."
+
+  - metric: vp_proven_ratio_current
+    cycle_1_value: "68 proven / 9 justified-deferred / 77 total"
+    unit: "count"
+    notes: "Steady-state, post S-BL.TESTENV (PR #110, 2026-07-06) which unblocked 10 previously-deferred VPs."
+
+  - metric: phase5_adversarial_pass_count
+    cycle_1_value: 39
+    unit: "passes"
+    notes: "Cycle-wide Phase 5 adversarial refinement, 2026-07-02 to 2026-07-04. Single most pass-expensive gate in the project. NOTE: adversarial-reviews/ dir has 120 files for this phase — unreconciled against this count (see PAT-05 / IP-C1-12)."
+
+  - metric: single_story_max_adversarial_passes
+    cycle_1_value: 32
+    unit: "passes"
+    notes: "S-7.04-FU-PE-CONNECTOR, steady-state, 2026-07-07 to 2026-07-08 (~1.5 days). Runner-up: S-6.06 at 28 passes, 2026-06-30 (single day)."
+
+  - metric: gate_first_try_clean_rate
+    cycle_1_value: "2/11 (18%)"
+    unit: "ratio"
+    notes: "Of 11 major gates in STATE.md frontmatter, only phase_1 and phase_2 were clean on first dispatch (both still 'with-drift'). See Dimension 5 table."
+
+  - metric: cycle1_wall_clock_days
+    cycle_1_value: 12
+    unit: "calendar days"
+    notes: "Phase 1 start (2026-06-24) to Phase 7 CONVERGED (2026-07-06)."
+
+  - metric: steady_state_wall_clock_days_to_date
+    cycle_1_value: 6
+    unit: "calendar days"
+    notes: "2026-07-06 to 2026-07-12, 4 stories delivered (SIGHUP-RELOAD, PE-CONNECTOR, PE-RECEIVE-LOOP, DRAIN-WIRE) + 1 sbctl fix + 1 docs PR."
+
+  - metric: upstream_engine_defect_interactions
+    cycle_1_value: "56 filed + 16 commented = 72"
+    unit: "count"
+    notes: "Against drbothen/vsdd-factory. Batches 1-34 + 7 dated steady-state sweeps. Rate has NOT decayed with project maturity."
+
+  - metric: human_override_events
+    cycle_1_value: 2
+    unit: "count"
+    notes: "Phase 7 sign-off (accepted CONVERGED-with-remediation), DRAIN-WIRE PR #120 merge past a harness classifier block."
+
+  - metric: process_gap_self_report_failures
+    cycle_1_value: 3
+    unit: "count"
+    notes: "PROCESS-GAP-W5A x2 (implementer false-green) + SIGHUP-RELOAD Pass-6 confabulated streak (adversary false-report)."
+
+  - metric: sidecar_markers_unsynthesized_at_review_time
+    cycle_1_value: 165
+    unit: "count"
+    notes: "Spanning ~23h (2026-07-11T21:08 to 2026-07-12T20:33). This review is the first synthesis event. Track whether this resets near-zero going forward."
+
+  - metric: cost_data_availability
+    cycle_1_value: "NONE"
+    unit: "boolean/status"
+    notes: "No cost-summary.md exists. Dimension 1 fully skipped this run."
