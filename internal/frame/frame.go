@@ -33,7 +33,7 @@ type FrameType byte
 const (
 	FrameTypeData      FrameType = 0x01
 	FrameTypeEmptyTick FrameType = 0x02
-	FrameTypeCtl       FrameType = 0x03
+	FrameTypeCtl       FrameType = 0x03 // payload carries a control_type discriminator byte (BC-2.01.008 schema home; ARCH-02 § "Outer Header Format")
 	FrameTypeArq       FrameType = 0x04
 	FrameTypeFec       FrameType = 0x05
 	FrameTypePEConnect FrameType = 0x06 // (ARCH-02 §3.1)

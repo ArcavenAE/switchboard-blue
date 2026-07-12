@@ -354,6 +354,52 @@ func startMgmtServer(
 // Compile-time check: *upstreamdial.Connector satisfies Handle.
 var _ upstreamdial.Handle = (*upstreamdial.Connector)(nil)
 
+// nodeConn wraps the netingress-created Send/Done channels for one
+// connected node in the per-node send map. Send is NEVER closed, by any
+// goroutine, for the lifetime of the process (single-closer/
+// no-send-after-close invariant — closing it would race the drain
+// observer's concurrent sendMap.Range send). Done IS closed exactly once,
+// but has two independent trigger call sites (this connection's own
+// teardown, and the router-wide drain-shutdown flush pass) — both MUST
+// close it via doneOnce, never via a direct close(nc.done).
+type nodeConn struct {
+	send         chan []byte
+	done         chan struct{}
+	doneOnce     *sync.Once
+	writerExited chan struct{} // closed by the writer goroutine's own defer, on exit — single closer by construction, no sync.Once companion needed.
+}
+
+// nodeConnEvent identifies why nodeConnHook fired.
+type nodeConnEvent int
+
+const (
+	nodeConnRegistered nodeConnEvent = iota // OnAccept stored the send channel
+	nodeConnRemoved                         // cleanup deleted the map entry
+)
+
+// nodeConnHook, when non-nil, is called synchronously from the OnAccept
+// registration closure and from the per-connection cleanup closure. Same
+// shape and rationale as drainCoordHook: gives same-package tests an
+// observable for per-node send-map lifecycle without exporting the map.
+// nil in production (no-op). Any test that sets this MUST NOT call
+// t.Parallel() — it is package-level mutable state.
+var nodeConnHook func(event nodeConnEvent, ifaceID routing.InterfaceID)
+
+// drainObserverFiredHook, when non-nil, is called synchronously at the top
+// of the production drain observer's body — the single observer runRouter
+// registers with drainCoord at drainCoord-construction time — before the
+// send-map Range call, unconditionally on every invocation (whether or not
+// any node is connected). nil in production (no-op). Any test that sets
+// this MUST NOT call t.Parallel() — it is package-level mutable state.
+var drainObserverFiredHook func()
+
+// drainFlushTimeout bounds the router-wide shutdown-flush phase between
+// drainCoord.Wait and ingressCancel(): a hard ceiling on ADDED shutdown
+// latency, independent of and not deducted from cfg.DrainTimeout, since
+// writers flush in parallel and the drain observer queues exactly one
+// frame per node.
+const drainFlushTimeout = 200 * time.Millisecond
+
 // runRouter is the router-mode daemon entry point (S-BL.ROUTER-RUNTIME).
 //
 // It generates an ephemeral Ed25519 keypair, starts the management server
@@ -405,10 +451,11 @@ var _ upstreamdial.Handle = (*upstreamdial.Connector)(nil)
 // via upstreamdial.New, started below, address list reloaded on SIGHUP via
 // ReloadAddrs, stopped at graceful shutdown.
 //
-// #DEFERRED — live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
-// S-7.04-FU-DRAIN-WIRE) still ships in a follow-on story once node-facing
-// SVTN channels are wired. The drain coordinator seam is in place; the wire
-// protocol connects to it without further daemon-level refactor.
+// #SHIPPED — DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
+// S-7.04-FU-DRAIN-WIRE): the single startup drain observer broadcasts a
+// FrameTypeCtl DRAIN frame to every connected node's per-node send channel
+// at drainCoord.Signal time; the netingress OnAccept seam registers and
+// deregisters nodes in the per-node send map (Q-SEAM, Q-SINGLE-OBS).
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
@@ -468,11 +515,131 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// fail-closed drop when no forwarding entry exists (auth key unavailable)
 	// or when HMAC verification fails — both paths already log E-ADM-016 and
 	// record E-ADM-017 counter increments per BC-2.05.008 PC-4 / PC-5.
-	ingressCtx, ingressCancel := context.WithCancel(ctx)
+	// ingressCtx is deliberately DETACHED from ctx's cancellation via
+	// WithoutCancel — the explicit ingressCancel() call in the shutdown
+	// block (and the defer safety net below) must remain the SOLE
+	// teardown trigger, or the drain flush pass runs against already-dead
+	// conns; F-DW-IMPL-001, placement note v1.10. Do NOT reparent to ctx.
+	ingressCtx, ingressCancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer ingressCancel()
+
+	// Per-node send map (Q-SEAM): value type *nodeConn, populated by the
+	// onAccept closure below (netingress owns DATA creation; this closure
+	// owns BEHAVIOR only — see nodeConn's doc comment). writerWG tracks the
+	// writer goroutines onAccept starts; joined in the shutdown block below
+	// (Shutdown ordering guarantee).
+	var sendMap sync.Map // routing.InterfaceID -> *nodeConn
+	var writerWG sync.WaitGroup
+
 	route := func(hdr frame.OuterHeader, payload []byte) error {
+		// Q-CTL-GUARD: ctl frame receive path — exclusively in this
+		// closure, NOT the frozen PE FrameFn closure (Q2-AMENDED). Every
+		// ctl frame arriving here is terminal-consumer by construction
+		// under the current architecture (BC-2.01.008 v1.1 Invariant 2 —
+		// no inter-router relay path exists anywhere in this codebase);
+		// REVISIT this unconditional posture if a future story introduces
+		// router-to-router forwarding.
+		if hdr.FrameType == frame.FrameTypeCtl {
+			if len(payload) < 4 {
+				// E-PRT-002: control frame truncated. No conn is in scope
+				// here — this closure's signature is func(hdr, payload)
+				// error; there is no per-connection dispatch seam with
+				// conn access (F-DW-SP3-003) — do not add one for this log
+				// line.
+				routerLogger.Log(fmt.Sprintf(
+					"netingress: E-PRT-002: ctl frame payload_len=%d < 4; discarding",
+					len(payload)))
+				// silent-ignore: no connection close per BC-2.01.008 EC-002
+				return nil
+			}
+			controlType := payload[0]
+			switch controlType {
+			case 0x01: // DRAIN — router-originated broadcast (Q2-AMENDED);
+				// a router does not act on an inbound DRAIN byte from a node.
+			default:
+				// Unknown/forward-compat control_type (includes the
+				// reserved-but-undispatched 0x02 RESYNC opcode until
+				// S-BL.RESYNC-FRAME lands). BC-2.01.008 PC-4 (v1.1): silent-
+				// ignore means NO logging of any kind on this path — not
+				// even a diagnostic/informational line — and no connection
+				// close. Do NOT add a log call to this arm: a well-formed-
+				// but-unrecognized opcode is ordinary forward-compatible
+				// protocol evolution, not an anomaly (asymmetric with the
+				// E-PRT-002 branch above, which DOES log — truncation is
+				// corruption, diagnostic-worthy).
+			}
+			return nil
+		}
 		return routing.RouteFrame(hdr, payload, router)
 	}
+
+	// onAccept is the BEHAVIOR half of the Q-SEAM ownership split:
+	// netingress.Serve has already allocated h.IfaceID/h.Send/h.Done (DATA
+	// half) before calling this closure. onAccept wraps them in a
+	// *nodeConn, stores it in the per-node send map, starts the sole
+	// writer goroutine for this connection, and returns a behavior-cleanup
+	// func() that deregisters the node when its connection closes.
+	onAccept := func(conn net.Conn, h netingress.NodeHandle) func() {
+		nc := &nodeConn{
+			send:         h.Send,
+			done:         h.Done,
+			doneOnce:     new(sync.Once),
+			writerExited: make(chan struct{}),
+		}
+		sendMap.Store(h.IfaceID, nc)
+
+		writerWG.Add(1)
+		go func() {
+			defer writerWG.Done()
+			// Registered SECOND — after writerWG.Done() above — so Go's
+			// LIFO defer order runs THIS one FIRST, i.e. close(writerExited)
+			// happens-before writerWG.Done(). Load-bearing as of v1.7
+			// (F-DW-SP7-001): the shutdown block's trailing
+			// snapshotWG.Wait() join depends on every writerExited already
+			// being closed by the time the final writerWG.Wait() returns.
+			// Do NOT reorder these two defers.
+			defer close(nc.writerExited)
+			for {
+				select {
+				case msg := <-nc.send:
+					if _, err := conn.Write(msg); err != nil {
+						return // conn closed or write error; exit loop
+					}
+				case <-nc.done:
+					// Flush any frame(s) already queued (e.g. a DRAIN frame
+					// enqueued by the single observer's Range call) before
+					// exiting — do NOT drop them silently (F-DW-SP3-005).
+					for {
+						select {
+						case msg := <-nc.send:
+							if _, err := conn.Write(msg); err != nil {
+								return
+							}
+						default:
+							return
+						}
+					}
+				}
+			}
+		}()
+
+		if nodeConnHook != nil {
+			nodeConnHook(nodeConnRegistered, h.IfaceID)
+		}
+
+		return func() {
+			sendMap.Delete(h.IfaceID)
+			if nodeConnHook != nil {
+				nodeConnHook(nodeConnRemoved, h.IfaceID)
+			}
+			// One of two possible done-close triggers (the other being the
+			// router-wide shutdown-flush pass) — doneOnce makes the second
+			// trigger a harmless no-op. send is NEVER closed (single-
+			// closer/no-send-after-close invariant).
+			nc.doneOnce.Do(func() { close(nc.done) })
+		}
+	}
+
 	var dataWG sync.WaitGroup
 	dataWG.Add(1)
 	go func() {
@@ -480,7 +647,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// Serve returns nil on ctx cancel or a wrapped Accept error on
 		// terminal listener failure; we log and drop either way — the ctx
 		// cancel path is the graceful shutdown.
-		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger); serr != nil && ingressCtx.Err() == nil {
+		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger, netingress.ServeConfig{OnAccept: onAccept, IfaceIDSeed: 2}); serr != nil && ingressCtx.Err() == nil {
 			routerLogger.Log(fmt.Sprintf("runRouter: netingress.Serve exited: %v", serr))
 		}
 	}()
@@ -499,6 +666,37 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// at the observability seam below so operators can confirm the config
 	// value flowed through.
 	drainCoord := drain.New(drainWindow)
+
+	// Single startup drain observer (Q-SINGLE-OBS): registered once here,
+	// at drainCoord-construction time — guaranteed to precede
+	// drainCoord.Signal (RegisterObserver no-ops after Signal), the only
+	// ordering that matters. Captures a reference to the live per-node send
+	// map; at Signal time it fires drainObserverFiredHook (test-only, nil
+	// in production) as its FIRST statement, then iterates the map and
+	// best-effort non-blocking sends a DRAIN frame to every registered node
+	// (Q3.P1 — no wire ACK; the send cannot panic, since nc.send is never
+	// closed). OnAccept does NOT register a per-connection observer — only
+	// this single startup observer is ever registered.
+	drainCoord.RegisterObserver(func(_ context.Context) {
+		if drainObserverFiredHook != nil {
+			drainObserverFiredHook()
+		}
+		payload := []byte{0x01, 0x01, 0x00, 0x00} // control_type=DRAIN, version=1, reserved
+		ehdr := frame.EncodeOuterHeader(frame.OuterHeader{
+			Version:    frame.VersionByte,
+			FrameType:  frame.FrameTypeCtl,
+			PayloadLen: uint16(len(payload)),
+		})
+		drainFrame := append(append([]byte{}, ehdr[:]...), payload...)
+		sendMap.Range(func(_, value any) bool {
+			nc := value.(*nodeConn)
+			select {
+			case nc.send <- drainFrame:
+			default: // channel full — best-effort; nc.send is never closed.
+			}
+			return true
+		})
+	})
 
 	// Test hook: when non-nil, tests can register a drain observer without
 	// waiting on the DRAIN-over-SVTN wire protocol to land. Production code
@@ -621,13 +819,19 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 shutdown:
 
 	// Graceful shutdown (BC-2.09.002):
-	//   1. Signal drain — observers (when the wire protocol lands) broadcast
-	//      DRAIN to their connected nodes and wait for ACKs.
+	//   1. Signal drain — the single startup observer broadcasts DRAIN to
+	//      every connected node's per-node send channel and returns after
+	//      queuing (Q3.P1 best-effort — no wire ACK).
 	//   2. Wait, bounded by drain_timeout. On timeout we proceed with
 	//      disconnect anyway (BC-2.09.002 EC-003).
-	//   3. Cancel ingress ctx so netingress.Serve closes the listener and
+	//   3. Shutdown ordering guarantee (Q-SEAM): a bounded, snapshot-scoped
+	//      flush phase forces every still-live writer goroutine to drain
+	//      its queued frame(s) to the wire BEFORE connections are torn
+	//      down — otherwise Wait returning nil only proves queuing, not
+	//      writing, and a node could read EOF instead of DRAIN.
+	//   4. Cancel ingress ctx so netingress.Serve closes the listener and
 	//      joins its per-conn goroutines.
-	//   4. Shut down mgmt with a budget derived from the same drain window
+	//   5. Shut down mgmt with a budget derived from the same drain window
 	//      (previously hardcoded 5s — now driven by cfg.DrainTimeout so
 	//      operators have a single lever for shutdown budget tuning).
 	// Stop the PE connector first so dial goroutines exit before we
@@ -641,8 +845,92 @@ shutdown:
 	}
 	drainCtxCancel()
 
-	ingressCancel()
+	// Router-wide flush pass (Shutdown ordering guarantee, Q-SEAM): tell
+	// every still-live writer goroutine to drain its queued frame(s) and
+	// exit, BEFORE the connections are torn down. In the SAME Range call,
+	// snapshot the live nodeConn set — the bounded wait below joins
+	// EXACTLY this snapshot, never the shared writerWG (a late admission
+	// concurrently calling writerWG.Add(1) must never race a writerWG
+	// Wait — see the Shutdown concurrency ledger cited in Design
+	// Constraints, F-DW-SP6-001).
+	var snapshot []*nodeConn
+	sendMap.Range(func(_, value any) bool {
+		nc := value.(*nodeConn)
+		nc.doneOnce.Do(func() { close(nc.done) })
+		snapshot = append(snapshot, nc)
+		return true
+	})
+
+	// Bounded wait for ONLY the snapshotted writers to flush and exit.
+	// snapshotWG is LOCAL to this phase — no other goroutine, including
+	// any OnAccept invocation, ever touches it, so Add-concurrent-with-
+	// Wait cannot occur on it structurally. Every Add below runs
+	// synchronously before any of the per-entry goroutines — or the
+	// Wait-calling goroutine — is spawned.
+	var snapshotWG sync.WaitGroup
+	snapshotWG.Add(len(snapshot))
+	for _, nc := range snapshot {
+		nc := nc
+		go func() {
+			defer snapshotWG.Done()
+			<-nc.writerExited
+		}()
+	}
+	// closerWG (F-DW-SP7-001) tracks the flushDone-closer goroutine itself,
+	// joined explicitly below regardless of which select branch fires.
+	var closerWG sync.WaitGroup
+	closerWG.Add(1)
+	flushDone := make(chan struct{})
+	go func() {
+		defer closerWG.Done()
+		snapshotWG.Wait()
+		close(flushDone)
+	}()
+	select {
+	case <-flushDone:
+	case <-time.After(drainFlushTimeout):
+		routerLogger.Log("runRouter: drain flush deadline exceeded; proceeding with shutdown")
+	}
+
+	ingressCancel() // SIGNALS shutdown only — netingress.Serve's own watcher
+	// goroutine closes the listener ASYNCHRONOUSLY off this same
+	// cancellation; a connection already racing ln.Accept() can still be
+	// admitted after this line returns. A late admission here is
+	// unconditionally BENIGN — nothing is parked on writerWG or
+	// snapshotWG at this point in the sequence.
+
+	// dataWG joins the netingress.Serve goroutine. Serve's own doc contract
+	// ("All outstanding per-connection goroutines are joined before Serve
+	// returns") plus its internal per-conn-goroutine join together
+	// guarantee that by the time this call returns: (a) the accept loop
+	// has permanently exited — no further OnAccept call and therefore no
+	// further writerWG.Add(1) is possible (Goroutine pin); AND (b) every
+	// per-conn goroutine's deferred behavior-cleanup has already run — so
+	// every nc.done this router ever created is closed by the time this
+	// line returns (doneOnce makes a second close from the flush pass
+	// above, if it already fired, a harmless no-op).
 	dataWG.Wait()
+
+	// Final UNBOUNDED join — the SOLE writerWG.Wait() call in the entire
+	// sequence. Safe on the grounds that no writerWG.Add(1) can occur
+	// after this point (grounded on dataWG.Wait having joined Serve's
+	// accept loop) and every writer still blocked in its send/done select
+	// has already observed nc.done closed (grounded on dataWG.Wait having
+	// joined every per-conn cleanup). Restores the ARCH-01 goroutine-join
+	// contract for writerWG in full — the ONLY writerWG.Wait() anywhere in
+	// the sequence, at the ONLY point where no concurrent Add is possible.
+	writerWG.Wait()
+
+	// Join the bounded phase's own goroutines (F-DW-SP7-001) before this
+	// shutdown block returns — closes an ARCH-01 goroutine-join-contract
+	// gap on the drainFlushTimeout-exceeded path. Both calls are PROVEN
+	// PROMPT: within each writer goroutine, close(nc.writerExited) is
+	// deferred AFTER writerWG.Done() in source order, so Go's LIFO defer
+	// order runs the writerExited close BEFORE writerWG.Done() — meaning
+	// every writer's writerExited has ALREADY closed by the time the
+	// writerWG.Wait() above returns.
+	snapshotWG.Wait()
+	closerWG.Wait()
 
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), drainCoord.Timeout())
 	defer shutCancel()

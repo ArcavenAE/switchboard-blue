@@ -12,9 +12,13 @@
 // bounded-reader state (CWE-400), and a concurrency semaphore (CWE-770).
 // No routing decisions are made here; those live in internal/routing.
 //
-// Import constraints (ARCH-08 §6): this package MAY import internal/frame
-// only. It receives a RouteFn from callers to avoid importing internal/routing
-// (which would invert the ARCH-08 layering; ingress is upstream of routing).
+// Import constraints (ARCH-08 §6.5): this package MAY import internal/frame
+// and internal/routing. internal/routing is imported for the InterfaceID
+// type only (NodeHandle.IfaceID / ServeConfig.IfaceIDSeed) — no routing
+// decisions are made here; RouteFn dispatch stays the caller's concern. The
+// netingress→routing edge is a forward edge in ARCH-08's topological
+// ordering (netingress at §6.5 pos 18, routing at pos 17; 18 > 17), and
+// routing does not import netingress, so no cycle is introduced.
 package netingress
 
 import (
@@ -24,8 +28,10 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/arcavenae/switchboard/internal/frame"
+	"github.com/arcavenae/switchboard/internal/routing"
 )
 
 // MaxFrameBytes is the largest single framed message the ingress will read
@@ -149,6 +155,52 @@ func ServeConn(ctx context.Context, conn net.Conn, route RouteFn, logger Logger)
 	}
 }
 
+// NodeHandle is the write handle for an accepted node connection, fully
+// populated by netingress BEFORE OnAccept is called (netingress owns DATA
+// creation — see ServeConfig.OnAccept's Ownership split note). OnAccept
+// receives it as a finished value; it does not construct any of its fields.
+type NodeHandle struct {
+	IfaceID routing.InterfaceID
+	// Send is netingress-created. The caller stores it and selects/sends on
+	// it; it is NEVER closed, by any goroutine, for the lifetime of the
+	// process — enforced by convention (every call site honors this), not
+	// by the type system.
+	Send chan []byte
+	// Done is netingress-created. It is closed EXACTLY ONCE by the caller,
+	// through a caller-owned sync.Once — this package never calls
+	// close(h.Done) directly.
+	Done chan struct{}
+}
+
+// ServeConfig carries optional hooks and allocation parameters for Serve.
+type ServeConfig struct {
+	// OnAccept is called for each ADMITTED connection — i.e. one that has
+	// cleared the CWE-770 concurrency-cap semaphore — NEVER for a
+	// connection this Serve loop sheds. It fires as the FIRST ACT of the
+	// newly spawned per-conn goroutine — NOT from the Serve accept loop
+	// itself (Goroutine pin) — after netingress has allocated the
+	// connection's InterfaceID and created its Send/Done channels in that
+	// same goroutine (NodeHandle is fully populated before the call), and
+	// strictly before ServeConn starts reading. The returned func()
+	// (behavior cleanup) is deferred in that SAME per-conn goroutine,
+	// registered AFTER the goroutine's defer wg.Done() so Go's LIFO defer
+	// ordering guarantees cleanup completes before wg.Done() fires. Every
+	// OnAccept call is paired 1:1, same-goroutine, with exactly one
+	// guaranteed cleanup invocation. If nil, no hook fires and netingress
+	// allocates nothing for that connection (zero-cost when unused); a
+	// shed connection likewise allocates nothing and calls neither
+	// OnAccept nor cleanup, regardless of whether OnAccept is nil.
+	OnAccept func(conn net.Conn, h NodeHandle) func()
+
+	// IfaceIDSeed is the first InterfaceID netingress allocates for an
+	// admitted connection when OnAccept is non-nil; subsequent admitted
+	// connections get IfaceIDSeed+1, IfaceIDSeed+2, ... via an internal
+	// atomic counter. Shed connections do not consume a value from this
+	// counter. Callers reserve low IDs (e.g. a PE-upstream interface ID)
+	// by setting IfaceIDSeed above them. Zero defaults to 2.
+	IfaceIDSeed routing.InterfaceID
+}
+
 // Serve accepts connections on ln and spawns a per-connection goroutine
 // running ServeConn against route. Returns when ln.Accept fails permanently
 // or ctx is cancelled. All outstanding per-connection goroutines are joined
@@ -158,7 +210,11 @@ func ServeConn(ctx context.Context, conn net.Conn, route RouteFn, logger Logger)
 // run at once. Excess connections are accepted (so the client sees a connect
 // success rather than a refused connect at kernel level) then immediately closed
 // to shed load.
-func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger) error {
+//
+// Runtime compat: callers passing ServeConfig{} (OnAccept == nil) see
+// unchanged runtime behavior — Serve allocates no IfaceID/Send/Done and
+// calls no hook.
+func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger, cfg ServeConfig) error {
 	if logger == nil {
 		logger = nopLogger{}
 	}
@@ -176,6 +232,16 @@ func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger) e
 	sem := make(chan struct{}, MaxConcurrentConnections)
 	var wg sync.WaitGroup
 
+	// ifaceCounter allocates NodeHandle.IfaceID for admitted connections,
+	// seeded by cfg.IfaceIDSeed (default 2). Started at seed-1 so the first
+	// ifaceCounter.Add(1) below yields the seed itself.
+	seed := cfg.IfaceIDSeed
+	if seed == 0 {
+		seed = 2
+	}
+	var ifaceCounter atomic.Uint64
+	ifaceCounter.Store(uint64(seed) - 1)
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -187,7 +253,8 @@ func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger) e
 			return fmt.Errorf("netingress: accept: %w", err)
 		}
 		// Try to reserve a slot; if full, shed this connection to keep goroutine
-		// count bounded (CWE-770).
+		// count bounded (CWE-770). A shed connection never reaches cfg.OnAccept
+		// (admission-gating) — it allocates no InterfaceID/Send/Done.
 		select {
 		case sem <- struct{}{}:
 		default:
@@ -200,6 +267,25 @@ func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger) e
 			defer wg.Done()
 			defer func() { <-sem }()
 			defer func() { _ = c.Close() }()
+
+			// OnAccept fires as the FIRST ACT of this goroutine (Goroutine
+			// pin), never from the accept loop, once this connection has
+			// cleared admission (Ownership split: netingress owns DATA
+			// creation; the caller's closure owns BEHAVIOR only).
+			var cleanup func()
+			if cfg.OnAccept != nil {
+				h := NodeHandle{
+					IfaceID: routing.InterfaceID(ifaceCounter.Add(1)),
+					Send:    make(chan []byte, 32),
+					Done:    make(chan struct{}),
+				}
+				cleanup = cfg.OnAccept(c, h)
+			}
+			// Registered AFTER defer wg.Done() above so LIFO defer ordering
+			// runs cleanup before wg.Done() fires.
+			if cleanup != nil {
+				defer cleanup()
+			}
 			_ = ServeConn(ctx, c, route, logger)
 		}(conn)
 	}

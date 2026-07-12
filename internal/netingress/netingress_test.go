@@ -426,7 +426,7 @@ func TestServe_AcceptsMultipleConnectionsAndJoinsOnCtxCancel(t *testing.T) {
 
 	serveDone := make(chan error, 1)
 	go func() {
-		serveDone <- Serve(ctx, ln, route, nil)
+		serveDone <- Serve(ctx, ln, route, nil, ServeConfig{})
 	}()
 
 	// Open two connections, send one frame each.
@@ -579,7 +579,7 @@ func TestServe_MaxConcurrentConnections_SheddingCap(t *testing.T) {
 
 	serveDone := make(chan error, 1)
 	go func() {
-		serveDone <- Serve(ctx, ln, route, logger)
+		serveDone <- Serve(ctx, ln, route, logger, ServeConfig{})
 	}()
 
 	// Phase 1: fill the semaphore. Dial MaxConcurrentConnections conns and
@@ -672,7 +672,7 @@ func TestServe_ClosesListenerOnCtxCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- Serve(ctx, ln, func(frame.OuterHeader, []byte) error { return nil }, nil)
+		done <- Serve(ctx, ln, func(frame.OuterHeader, []byte) error { return nil }, nil, ServeConfig{})
 	}()
 
 	cancel()

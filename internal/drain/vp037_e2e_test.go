@@ -8,10 +8,20 @@
 // Note on proof status: the testenv drain simulation signals the drain.Drain
 // controller and observes that subsequent SendKeystroke + CollectFrames
 // calls continue to succeed on the same session (traffic on a surviving
-// router).  Full multi-router migration at the network layer requires the
-// production drain wire (S-7.04-FU-DRAIN-WIRE); this test provides the
-// harness infrastructure and verifies the drain signal fires without error.
-// VP-037 lock depends on S-7.04-FU-DRAIN-WIRE also landing.
+// router). It is built on the same testenv.NewWithRouters stub pattern that
+// never runs a real runRouter, so it is structurally incapable of proving
+// real router-to-router migration — it stays go:build integration-gated
+// permanently, as harness infrastructure only, and is NOT either stage of
+// VP-037's discharge (Q4-AMENDED).
+//
+// VP-037 stage-1 (wire round-trip: a connected node receives the DRAIN
+// frame; drainCoord.Wait returns nil within the window) is discharged by
+// TestE2E_RouterDrain_WireRoundTrip in
+// cmd/switchboard/router_drain_wire_test.go (S-7.04-FU-DRAIN-WIRE),
+// against a real runRouter. VP-037 stage-2 (node-side migration logic;
+// verification_lock flips to true) is a named follow-on that un-gates the
+// t.Skip-gated TestE2E_RouterDrain_NodesMigrateWithin2s copy in
+// cmd/switchboard/router_pe_connector_test.go — NOT this file's copy.
 //
 // Traces to: VP-037, BC-2.09.002
 package drain_test
