@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "feacfe6"
+input-hash: "455be0a"
 traces_to: STATE.md
 ---
 
@@ -1817,5 +1817,43 @@ Two items were consciously adjudicated below the proportionality bar and deliber
 | state-manager | verify + persist | adversary-convergence-state.json (converged: true, converged_at_pass: 3, final_head: e7614d7); sprint-state.yaml v2.55 (step_4_5_adversarial_convergence, fcl_spec_docs_synced, current_step 5 demo recording); STATE.md awaiting line + timestamp; this burst-log entry |
 
 **Streak:** 3/3 — CONVERGED at `e7614d7`. FCL spec-docs synced (ARCH-02 v1.2, BC-2.01.004 v1.5, VP-037 v1.6, ARCH-08 v2.12). Next: per-story delivery step 5 — demo recording.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE DELIVERED — PR #120 Merged f73676d (2026-07-12)
+
+**Agents dispatched:** pr-manager, security-reviewer, pr-reviewer, devops-engineer, state-manager
+**Files touched:** stories/STORY-INDEX.md (v4.80 — already landed by pr-manager, staged not re-edited this burst), STATE.md, stories/sprint-state.yaml (v2.55→v2.56), cycles/cycle-1/burst-log.md, cycles/cycle-1/lessons.md, code-delivery/S-7.04-FU-DRAIN-WIRE/pr-description.md
+**Dispatch tuple:** feature/S-7.04-FU-DRAIN-WIRE @ e7614d7 → merged to develop as `f73676d`
+
+**Summary:** Following step 4.5 CONVERGENCE (3/3 at `e7614d7`) and step 5 demo recording, PR #120 was opened, reviewed, and squash-merged to develop at `f73676d` (2026-07-12T15:39:47Z). The merge required user authorization after a harness classifier block — noted here for the record, not further adjudicated in this burst. The 9-step PR log ran clean: the security review disclosed one MEDIUM finding, CWE-306 (Missing Authentication for Critical Function), which was adjudicated as the intended terminal-consumer ctl carve-out already specified by BC-2.01.004 Inv-2 — not a defect, but the disclosure correctly surfaced a forward obligation, recorded against the S-BL.RESYNC-FRAME story index row: auth threading or a trust-boundary re-adjudication is required before the reserved `0x02` RESYNC opcode ships, since RESYNC will not have the same terminal-consumer property DRAIN does. pr-reviewer returned APPROVE in a single cycle with zero blocking findings, and CI ran fully green. devops-engineer deleted the remote and local feature branch and removed the worktree; both the porcelain-clean guard and the diff-vs-develop-empty guard passed before removal, confirming no uncommitted or unmerged work was discarded. STORY-INDEX was already at v4.80 (row 140 marked delivered, RESYNC forward obligation recorded) from the pr-manager's own workflow — this burst stages it but does not re-edit it.
+
+**Sweep 9 (upstream filings):** the two [process-gap] findings from this story's arc (F-DW-IMPL-001 from the post-convergence reopen, F-DW-DV-001 from the delta-verification pass) were formalized as upstream drbothen/vsdd-factory issues, plus two adjacent methodology gaps surfaced during the write-up and one confirmation:
+
+- **#620** (HIGH) — execute-against-baseline premise-tracing gap: the engine-methodology root cause of F-DW-IMPL-001. Text-based adversarial passes can converge on internal consistency while never tracing a load-bearing runtime object (like `ingressCtx`'s parent) against ground truth.
+- **#621** (MED) — concurrency-remediation same-pass join-obligation enumeration gap: a sibling gap surfaced while writing up the drain-wire arc's history of races relocating rather than closing (F-DW-SP3-005 → SP4-001/004 → SP5-001 → SP6-001 → SP7-001) — concurrency-ordering remediations need a mandatory join-obligation enumeration in the same pass that closes a race, not just an interleaving check.
+- **#622** (LOW) — citation coordinate-baseline convention gap: the engine-methodology root cause of F-DW-DV-001. Spec templates carry line-number citations with no stated coordinate convention (baseline-relative vs landed-tree-relative), producing false-drift signals across the reopen-then-verify cycle.
+- **Comment on #616** — validator noise + a positive datapoint: this story's STATE.md edits repeatedly tripped the same 7 pre-adjudicated advisory `validate-state-structure` warnings, and separately, the `verify-state-timestamp-refresh` hard PreToolUse block worked exactly as designed, catching every STATE.md write that didn't advance the timestamp — cited as a working example of the hard-gate pattern.
+- **#501** — confirmed already-open (demo knob); no new filing, cross-referenced for completeness.
+
+**S-7.02 process-gap dispositions (three, all recorded on STATE.md's Open Drift Items table):**
+
+1. **F-DW-IMPL-001** [process-gap] (HIGH) — deferred upstream, no product-repo story warranted (this is an engine methodology gap, not a switchboard defect); authoritative record is drbothen/vsdd-factory#620; revisit on plugin version adoption.
+2. **F-DW-DV-001** [process-gap] (LOW) — deferred upstream for the engine-level fix (drbothen/vsdd-factory#622), but already locally remediated via the v1.11 citation-convention blockquote in the placement note and story; revisit on plugin template update.
+3. **OBS-I3-PG01** [process-gap] (MED) — already resolved same-burst at commit `8c14c43` via the FCL spec-doc sync (ARCH-02 v1.2, BC-2.01.004 v1.5, VP-037 v1.6, ARCH-08 v2.12); no further disposition needed, noted here only for the S-7.02 checklist's completeness.
+
+**Delivery steps (a) stubs through (g) merge + worktree cleanup are ALL COMPLETE.** Story points: 5 credited. Sprint-state advanced to v2.56.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| pr-manager | PR lifecycle | PR #120 opened, reviewed, squash-merged to develop @ `f73676d` (2026-07-12T15:39:47Z); STORY-INDEX v4.80 (row 140 delivered + RESYNC forward obligation) |
+| security-reviewer | security review | 1 MEDIUM disclosed — CWE-306, adjudicated as the intended terminal-consumer ctl carve-out (BC-2.01.004 Inv-2); forward obligation recorded on S-BL.RESYNC-FRAME |
+| pr-reviewer | fresh-eyes PR review | APPROVE, 1 cycle, 0 blocking findings; CI all green |
+| — | merge authorization | user-authorized merge after a harness classifier block (noted for the record) |
+| devops-engineer | worktree + branch cleanup | remote + local feature branch deleted; worktree removed cleanly (porcelain-clean + diff-vs-develop-empty guards passed) |
+| orchestrator | sweep 9 upstream filings | drbothen/vsdd-factory#620 (HIGH), #621 (MED), #622 (LOW), comment on #616, #501 confirmed already-open |
+| state-manager | S-7.02 dispositions + persist | STATE.md (timestamp, awaiting → next story selection, develop_head → f73676d, 2 new Open Drift Items rows for F-DW-IMPL-001/F-DW-DV-001); sprint-state.yaml v2.56 (status DELIVERED, delivery steps a-g complete, points credited, sweep-9 filings); cycles/cycle-1/lessons.md (3 codified entries); this burst-log entry |
+
+**Outcome:** S-7.04-FU-DRAIN-WIRE DELIVERED. develop @ `f73676d`. Next: next story selection from backlog (S-BL.RESYNC-FRAME carries the forward obligation; also VP-042 testenv residual, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION).
 
 ---
