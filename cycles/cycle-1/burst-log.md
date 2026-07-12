@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "8d048cd"
+input-hash: "9ecfa79"
 traces_to: STATE.md
 ---
 
@@ -1670,5 +1670,26 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | state-manager | verify + persist | sprint-state.yaml v2.49 (story_version 1.8, placement_note v1.8, spec_adversarial_pass_8 line); STATE.md awaiting line; this burst-log entry |
 
 **Streak:** 0/3 — pass 9 next. 0 PROVISIONALs remain.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-9 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 9), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.8→v1.9), S-7.04-FU-DRAIN-WIRE.md (v1.8→v1.9), STORY-INDEX.md (v4.76→v4.77), sprint-state.yaml (v2.49→v2.50)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 9 on S-7.04-FU-DRAIN-WIRE returned 1 finding (F-DW-SP9-001, MED), confirmed and remediated; everything else was clean. The adversary found the concurrency ledger's row 13 classified S8a×S8b (observer `Range` vs flush-pass `Range`) as unconditionally "IMPOSSIBLE / program order" — unsound on the drain-timeout path, since `drain.go` closes `d.done` on window-elapse WITHOUT joining `obsWG`, so observers keep running but `Wait` unblocks with `ErrTimeout`. The safety verdict itself is unaffected — the concurrent case remains benign — this is proof-prose precision, not a mechanism defect, and the third consecutive pass with zero mechanism defects. Architect landed placement note v1.9: row 13 split-path reclassification (IMPOSSIBLE on the clean path via the `obsWG`-join edge; BENIGN-if-concurrent on `ErrTimeout`); rows 3 and 14 qualified to match; rows 17-18 re-verified independent; the heading parenthetical backfilled with F-DW-SP8-002 + F-DW-SP9-001. Story-writer landed story v1.9 (mirror + Task-5 consequence-(ii) live-claim qualification + Task-1 pin repointed to v1.9) and STORY-INDEX v4.77 (row 140 ready v1.9 + POL-002 Notes chain). No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Finding decay across the nine passes: 14 → 10 → 8 → 5 → 2 → 1 → 1 → 2 → 1. Cumulative adjudicated ledger: 44 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1, SP8×2, SP9×1).
+
+**Methodology note:** Third consecutive pass with zero mechanism defects. Finding class narrowed again: from citation hygiene (pass 8) to happens-before proof-justification precision (pass 9) — a false unqualified IMPOSSIBLE whose underlying verdict was already safe. The ledger keeps functioning as designed: adversaries audit checkable rows instead of out-thinking prose, and each audit tightens the proof rather than relocating a defect.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 9) | fresh-context spec-adversarial pass | 1 finding F-DW-SP9-001 (MED: ledger row 13 unconditional IMPOSSIBLE unsound on drain-timeout path — `obsWG` not joined when `d.done` closes on window-elapse; safety verdict unaffected) |
+| architect | placement-note remediation | placement-note v1.9 (row 13 split-path reclassification — IMPOSSIBLE clean-path / BENIGN-if-concurrent on `ErrTimeout`; rows 3+14 qualified; rows 17-18 re-verified independent; heading parenthetical backfilled) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.9 (mirror + Task-5 consequence-(ii) qualification + Task-1 pin repointed to v1.9); STORY-INDEX v4.77 (row 140 ready v1.9 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.50 (story_version 1.9, placement_note v1.9, spec_adversarial_pass_9 line); STATE.md awaiting line; this burst-log entry |
+
+**Streak:** 0/3 — pass 10 next. 0 PROVISIONALs remain.
 
 ---
