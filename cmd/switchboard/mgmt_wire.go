@@ -515,7 +515,12 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// fail-closed drop when no forwarding entry exists (auth key unavailable)
 	// or when HMAC verification fails — both paths already log E-ADM-016 and
 	// record E-ADM-017 counter increments per BC-2.05.008 PC-4 / PC-5.
-	ingressCtx, ingressCancel := context.WithCancel(ctx)
+	// ingressCtx is deliberately DETACHED from ctx's cancellation via
+	// WithoutCancel — the explicit ingressCancel() call in the shutdown
+	// block (and the defer safety net below) must remain the SOLE
+	// teardown trigger, or the drain flush pass runs against already-dead
+	// conns; F-DW-IMPL-001, placement note v1.10. Do NOT reparent to ctx.
+	ingressCtx, ingressCancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer ingressCancel()
 
 	// Per-node send map (Q-SEAM): value type *nodeConn, populated by the
