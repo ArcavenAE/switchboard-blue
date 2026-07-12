@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "958801c"
+input-hash: "feacfe6"
 traces_to: STATE.md
 ---
 
@@ -1789,5 +1789,33 @@ Two items were consciously adjudicated below the proportionality bar and deliber
 | state-manager | verify + persist | sprint-state.yaml v2.54 (story_version 1.11, index_version 4.79, delivery steps a-c complete, current_step 4.5 adversarial convergence, feature_branch_head bb46b5a, reopen_arc, process_gap_findings, adjudicated_ledger_tally); STATE.md awaiting line + timestamp; this burst-log entry |
 
 **Streak:** spec re-CONVERGED at v1.11 (reopen resolved). 0 open PROVISIONALs. Next: per-story delivery step 4.5 — adversarial convergence on the implementation diff (BC-5.39.001).
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Step 4.5 Per-Story Adversarial Convergence — CONVERGED 3/3 at e7614d7 (2026-07-12)
+
+**Agents dispatched:** adversary (adv-dw-impl-p1, adv-dw-impl-p2, adv-dw-impl-p3), implementer (impl-dw-shadow-fix), architect (arch-drain-wire-v1-11), product-owner (po-dw-fcl-row8), state-manager
+**Files touched:** cycles/cycle-1/S-7.04-FU-DRAIN-WIRE/adversary-convergence-state.json (created, 3 passes), specs/architecture/ARCH-02-protocol-stack.md (v1.2), specs/architecture/ARCH-08-dependency-graph.md (v2.12), specs/behavioral-contracts/ss-01/BC-2.01.004.md (v1.5), specs/verification-properties/VP-037.md (v1.6), STATE.md, sprint-state.yaml (v2.54→v2.55)
+**Dispatch tuple:** feature/S-7.04-FU-DRAIN-WIRE — pass 1 @ bb46b5a, passes 2-3 @ e7614d7 (post-remediation tip)
+
+**Summary:** Step 4.5 of per-story delivery — adversarial convergence on the implementation diff, BC-5.39.001 — ran three passes to CONVERGED. **Pass 1** (adv-dw-impl-p1, AC-first traversal, reviewing `bb46b5a`) returned NITPICK_ONLY: F-DW-I1-N01 (cosmetic) — the writer goroutine's local variable named `frame` shadows the imported `frame` package at two sites in `mgmt_wire.go` (~:604/:614); non-forcing, adjudicated fix-pre-PR rather than a blocking finding. The RED test file was verified byte-identical across `1a4dfdb..HEAD`; `go vet` and the full `go test -race` suite were green; all 5 ACs were verified real against the implementation; all 19 shutdown-concurrency ledger rows were verified code-matching (LIFO defer order, the sole `writerWG.Wait()` after `dataWG.Wait()`, the phase-local `snapshotWG`, `doneOnce`, the `WithoutCancel` detach). Implementer (impl-dw-shadow-fix) landed the rename, producing tip `e7614d7`. **Pass 2** (adv-dw-impl-p2, test-first traversal, reviewing `e7614d7`) returned CLEAN, confirming F-DW-I1-N01 remediated; two below-bar observations were recorded without forcing a finding — OBS-I2-01 (the `E-PRT-002` ctl-guard boundary is exercised only at `payload_len=1`, the exact `<4` threshold unpinned, though AC-001/AC-004 catch `<=4` regressions indirectly) and OBS-I2-02 (the unknown-`control_type` test uses only `0xFF`, not `0x02` RESYNC, though both hit the identical default-arm path). All 8 story tests were `-race` green across 3 repeated runs with zero flakes; the full package suite ran 16.6s green; `go vet` was clean; the wire schema matched the Q1 binding exactly. **Pass 3** (adv-dw-impl-p3, concurrency-ledger-first traversal, reviewing `e7614d7`) returned CLEAN and completed the 3/3 streak, but surfaced one [process-gap] finding: OBS-I3-PG01 (MED) — the story-bound `.factory` spec-doc FCL rows (7, 8, 9, 11) were unmet at review time, a gap structurally outside the code diff itself and therefore invisible to the first two passes' code-focused traversals. Resolved in the same burst: architect (arch-drain-wire-v1-11) bumped ARCH-02 to v1.2 and ARCH-08 to v2.12; product-owner (po-dw-fcl-row8) bumped BC-2.01.004 to v1.5 and VP-037 to v1.6 — closing FCL rows 7/8/9/11 against the landed implementation. All 19 ledger rows were re-verified as falsifiable claims against code (not merely internally consistent prose); every goroutine join was traced and verified; channel discipline was verified (send channel never closed, `doneOnce` guard, single-closer `writerExited`); the 6 new tests from the reopen arc ran 10x under `-race` with zero flakes; full suites green. Convergence persisted to `cycles/cycle-1/S-7.04-FU-DRAIN-WIRE/adversary-convergence-state.json` (`converged: true`, `converged_at_pass: 3`, `final_head: e7614d7`). Per-story delivery step 4.5 is now COMPLETE; next is step 5 — demo recording.
+
+**Trajectory:** NITPICK_ONLY (pass 1, F-DW-I1-N01 frame-shadow) → CLEAN (pass 2, test-first, 2 below-bar observations) → CLEAN (pass 3, concurrency-ledger-first, 1 process-gap resolved same-burst). Three distinct traversal angles (AC-first, test-first, concurrency-ledger-first) across the streak, consistent with the spec-convergence cycle's angle-diversity discipline (ledger-first/code-first/obligations-first at passes 10-12).
+
+**[process-gap] finding:**
+
+- **OBS-I3-PG01** [process-gap] (MED): story-bound `.factory` spec-doc FCL rows (7/8/9/11) were unmet at review time — the obligation to keep spec docs in sync with a landed implementation diff sits outside the code-diff surface that passes 1-2's traversals covered, and only pass 3's ledger-first angle (which cross-checks FCL rows explicitly) caught it. Resolved same-burst, not carried forward.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (adv-dw-impl-p1) | step-4.5 pass 1, AC-first traversal, review `bb46b5a` | NITPICK_ONLY — F-DW-I1-N01 (cosmetic: `frame` local shadows `frame` package, 2 sites); all 5 ACs + 19 ledger rows verified code-matching; streak 1/3 |
+| implementer (impl-dw-shadow-fix) | remediate F-DW-I1-N01 | rename commit, tip `e7614d7` |
+| adversary (adv-dw-impl-p2) | step-4.5 pass 2, test-first traversal, review `e7614d7` | CLEAN — F-DW-I1-N01 confirmed remediated; 2 below-bar observations (OBS-I2-01, OBS-I2-02); streak 2/3 |
+| adversary (adv-dw-impl-p3) | step-4.5 pass 3, concurrency-ledger-first traversal, review `e7614d7` | CLEAN — CONVERGED 3/3; 1 process-gap OBS-I3-PG01 (FCL rows 7/8/9/11 unmet, structurally outside code diff) |
+| architect (arch-drain-wire-v1-11) | FCL sync | ARCH-02 v1.2, ARCH-08 v2.12 |
+| product-owner (po-dw-fcl-row8) | FCL sync | BC-2.01.004 v1.5, VP-037 v1.6 |
+| state-manager | verify + persist | adversary-convergence-state.json (converged: true, converged_at_pass: 3, final_head: e7614d7); sprint-state.yaml v2.55 (step_4_5_adversarial_convergence, fcl_spec_docs_synced, current_step 5 demo recording); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** 3/3 — CONVERGED at `e7614d7`. FCL spec-docs synced (ARCH-02 v1.2, BC-2.01.004 v1.5, VP-037 v1.6, ARCH-08 v2.12). Next: per-story delivery step 5 — demo recording.
 
 ---

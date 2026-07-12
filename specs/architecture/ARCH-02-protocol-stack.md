@@ -2,7 +2,7 @@
 artifact_id: ARCH-02-protocol-stack
 document_type: architecture-section
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -24,6 +24,7 @@ kos_anchors:
   - elem-asymmetric-half-channels
   - elem-ssh-end-to-end-encryption
 modified:
+  - 2026-07-11T00:00:00 # v1.2 — S-7.04-FU-DRAIN-WIRE: §"Outer Header Format" frame_type table gains a note that ctl (0x03) payloads carry a control_type byte discriminator (opcodes 0x01=DRAIN, 0x02=RESYNC reserved); BC-2.01.008 is the schema home. Refs: S-7.04-FU-DRAIN-WIRE + code branch feature/S-7.04-FU-DRAIN-WIRE@e7614d7 — the code lands on the feature branch, structurally a different branch from this spec-doc commit, so the wire-format spec-pair obligation is satisfied as same-delivery-burst rather than same-commit.
   - 2026-07-11T00:00:00 # v1.1 — S-BL.PE-RECEIVE-LOOP: §"Outer Header Format" frame_type row amended to add pe_connect=0x06 (same-commit parallel obligation with FrameTypePEConnect definition in frame.go). Refs: S-BL.PE-RECEIVE-LOOP + c316aed.
   - 2026-06-23T00:00:00
 ---
@@ -81,6 +82,11 @@ Any field position or size change requires a major version bump (DI-007).
 | **Total** | **44** | | |
 
 **Field arithmetic:** 1 + 1 + 2 + 16 + 8 + 8 + 8 = **44 bytes.** DI-007 satisfied.
+
+**`ctl` payload discriminator (BC-2.01.008):** `ctl` (0x03) payloads carry a
+`control_type` byte as the first byte of the payload — a discriminator
+distinguishing control-message sub-types. Opcodes: `0x01 = DRAIN`, `0x02 =
+RESYNC` (reserved). BC-2.01.008 is the schema home for `control_type`.
 
 **No outer-header sequence field.** Per-half-channel sequence (`chan_seq`) lives
 exclusively in the channel header (see below). There is no sequence field in the

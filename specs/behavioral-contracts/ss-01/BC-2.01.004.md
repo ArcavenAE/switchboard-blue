@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.004
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-06-24T00:00:00
@@ -18,6 +18,10 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.5"
+    date: 2026-07-12
+    author: architect
+    change: "Postcondition 2 outer-header layout table frame_type row amended: ctl (0x03) payload note added — carries a leading control_type discriminator byte (0x01=DRAIN, 0x02=RESYNC reserved); schema home is BC-2.01.008 (opcode table). Wire-format spec pair with ARCH-02; paired code changes land in the same delivery burst (feature/S-7.04-FU-DRAIN-WIRE@e7614d7). Refs: S-7.04-FU-DRAIN-WIRE + F-P8-008 precedent."
   - version: "1.3"
     date: 2026-07-11
     author: architect
@@ -66,7 +70,7 @@ Every Switchboard frame carries a 44-byte outer header in a fixed binary layout.
    | Offset | Size | Field          | Notes                                                       |
    |--------|------|----------------|-------------------------------------------------------------|
    | 0      | 1    | version        | bits[7:4]=major, bits[3:0]=minor; v0.1 = 0x01               |
-   | 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06 |
+   | 1      | 1    | frame_type     | u8 enum: data=0x01, empty_tick=0x02, ctl=0x03, arq=0x04, fec=0x05, pe_connect=0x06; ctl (0x03) payload carries a leading `control_type` discriminator byte (0x01=DRAIN, 0x02=RESYNC reserved) — opcode schema home: BC-2.01.008 |
    | 2      | 2    | payload_len    | u16 big-endian                                              |
    | 4      | 16   | svtn_id        | 128-bit SVTN identifier                                     |
    | 20     | 8    | src_node_addr  | 64-bit                                                      |

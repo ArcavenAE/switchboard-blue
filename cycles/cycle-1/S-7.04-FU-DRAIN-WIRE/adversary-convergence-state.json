@@ -43,6 +43,26 @@
         }
       ],
       "notes": "F-DW-I1-N01 confirmed remediated at e7614d7; all 8 story tests -race green 3x no flake, full package 16.6s green, go vet clean; wire schema matches Q1 binding exactly; ledger claims verified code-matching; AC-005 recover defer-order sound (obsWG.Done still fires on panic)"
+    },
+    {
+      "pass": 3,
+      "agent": "adv-dw-impl-p3",
+      "head_reviewed": "e7614d7",
+      "traversal_angle": "concurrency-ledger-first",
+      "verdict": "CLEAN",
+      "streak": "3/3",
+      "findings": [],
+      "process_gap": [
+        {
+          "id": "OBS-I3-PG01",
+          "severity": "MED",
+          "summary": "story-bound .factory spec-doc FCL rows (7/8/9/11) unmet at review time — structurally outside the code diff; resolved in this same burst (ARCH-02 v1.2, BC-2.01.004 v1.5, VP-037 v1.6, ARCH-08 v2.12)"
+        }
+      ],
+      "notes": "all 19 ledger rows verified as falsifiable claims vs code; every goroutine join verified; channel discipline verified (send never closed, doneOnce, single-closer writerExited); 6 new tests 10x -race 0 flakes; full suites green"
     }
-  ]
+  ],
+  "converged": true,
+  "converged_at_pass": 3,
+  "final_head": "e7614d7"
 }
