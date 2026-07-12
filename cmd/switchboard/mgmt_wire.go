@@ -623,6 +623,37 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// value flowed through.
 	drainCoord := drain.New(drainWindow)
 
+	// Single startup drain observer (Q-SINGLE-OBS): registered once here,
+	// at drainCoord-construction time — guaranteed to precede
+	// drainCoord.Signal (RegisterObserver no-ops after Signal), the only
+	// ordering that matters. Captures a reference to the live per-node send
+	// map; at Signal time it fires drainObserverFiredHook (test-only, nil
+	// in production) as its FIRST statement, then iterates the map and
+	// best-effort non-blocking sends a DRAIN frame to every registered node
+	// (Q3.P1 — no wire ACK; the send cannot panic, since nc.send is never
+	// closed). OnAccept does NOT register a per-connection observer — only
+	// this single startup observer is ever registered.
+	drainCoord.RegisterObserver(func(_ context.Context) {
+		if drainObserverFiredHook != nil {
+			drainObserverFiredHook()
+		}
+		payload := []byte{0x01, 0x01, 0x00, 0x00} // control_type=DRAIN, version=1, reserved
+		ehdr := frame.EncodeOuterHeader(frame.OuterHeader{
+			Version:    frame.VersionByte,
+			FrameType:  frame.FrameTypeCtl,
+			PayloadLen: uint16(len(payload)),
+		})
+		drainFrame := append(append([]byte{}, ehdr[:]...), payload...)
+		sendMap.Range(func(_, value any) bool {
+			nc := value.(*nodeConn)
+			select {
+			case nc.send <- drainFrame:
+			default: // channel full — best-effort; nc.send is never closed.
+			}
+			return true
+		})
+	})
+
 	// Test hook: when non-nil, tests can register a drain observer without
 	// waiting on the DRAIN-over-SVTN wire protocol to land. Production code
 	// leaves drainCoordHook nil — the hook is a no-op then. Kept behind a
