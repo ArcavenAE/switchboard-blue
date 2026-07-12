@@ -9,15 +9,20 @@
 //	(session.AccessNode + echo sink). Reports p99_rtt_ms; enforces VP-042
 //	gate (≤ 100ms p99) via b.Errorf.
 //
-// Ruling Divergence (S-BL.BENCH):
+// Testenv migration status (S-BL.TESTENV shipped, PR #110):
 //
-//	VP-042.md proof harness skeleton calls testenv.NewLoopback, which
-//	requires S-BL.TESTENV (backlog, not yet delivered). This benchmark
-//	delivers equivalent measurement semantics using session.AccessNode +
-//	an inline echo sink. When S-BL.TESTENV ships, the harness may be
-//	migrated to the canonical testenv.NewLoopback API; the VP-042 lock can
-//	be evaluated at that point. The loopback here is fully in-process with
-//	the same statistical interpretation: 500 samples, p99 gate ≤ 100ms.
+//	The VP-042.md proof-harness skeleton calls testenv.NewLoopback, which
+//	S-BL.TESTENV has since delivered. The testenv-integrated migration lives
+//	in keystroke_echo_testenv_bench_test.go (BenchmarkKeystrokeToEcho_P99,
+//	`integration`-tagged). That migration revealed that testenv.NewLoopback
+//	does NOT drive the full stack: it discards its LoopbackConfig tick
+//	intervals and delivers frames synchronously via AccessNode.DeliverFrame,
+//	so it exercises neither halfchannel tick scheduling nor ARQ nor multipath.
+//	The testenv path is therefore a lower bound too, statistically equivalent
+//	to this benchmark. The VP-042 lock remains DEFERRED: locking it on a
+//	testenv-integrated measurement first requires testenv's loopback path to
+//	route keystrokes through halfchannel.Tick() at the configured cadence +
+//	internal/arq + internal/multipath (making LoopbackConfig live).
 //
 // Architecture note:
 //
@@ -30,7 +35,7 @@
 //	lower bound on latency. On the real stack the 100ms budget accommodates
 //	10ms upstream tick cadence + 50ms downstream tick cadence + ARQ overhead.
 //	The loopback demonstrates the pure in-process overhead; VP-042 on
-//	the full stack is gated on S-BL.TESTENV.
+//	the full stack is not yet measurable via testenv (see above).
 package bench_test
 
 import (
@@ -79,7 +84,10 @@ func (s *echoSink) SendInput(payload []byte) error {
 //
 // Hardware note: this is a lower-bound measurement (no network, no arq, no
 // tick scheduling). The gate is expected to pass trivially on any hardware.
-// VP-042 on the full stack (with tick intervals) requires S-BL.TESTENV.
+// VP-042 on the full stack remains unverified: S-BL.TESTENV shipped but does
+// not close the gap by itself (see the package-level doc above for why —
+// halfchannel.Tick()+arq+multipath wiring is still required, tracked as
+// S-BL.LOOPBACK-FULLSTACK).
 //
 // Run with: go test -bench=BenchmarkKeystrokeEcho_P99 -benchtime=500x ./internal/bench/
 // or via:   just bench
@@ -155,8 +163,10 @@ func BenchmarkKeystrokeEcho_P99(b *testing.B) {
 
 	b.ReportMetric(float64(p99)/float64(time.Millisecond), "p99_rtt_ms")
 
-	// VP-042 gate (S-BL.BENCH AC-002): enforce ≤ 100ms p99 (NFR-001).
-	// This loopback is lower-bound only; the full-stack gate requires S-BL.TESTENV.
+	// NFR-001 ceiling guard (not the VP-042 lock — see package doc above):
+	// enforce ≤ 100ms p99. This loopback is lower-bound only; the full-stack
+	// measurement still requires halfchannel.Tick()+arq+multipath wiring
+	// (S-BL.LOOPBACK-FULLSTACK), not just S-BL.TESTENV.
 	if p99 > maxP99 {
 		b.Errorf("keystroke-to-echo p99 %v exceeds NFR-001 limit %v (VP-042)", p99, maxP99)
 	}
