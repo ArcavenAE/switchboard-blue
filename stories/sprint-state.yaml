@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.45
+# version: 2.46
 # changelog:
+#   - version: 2.46
+#     date: 2026-07-11
+#     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 5 remediation complete — 2 findings (F-DW-SP5-001..002, 1 HIGH) remediated across two agents: architect (placement note v1.4→v1.5: shutdown tail reordered to ingressCancel() → dataWG.Wait() → writerWG.Wait() UNBOUNDED — v1.4's final-join order was backwards: ingressCancel() only signals shutdown, the listener closes asynchronously, so a late-accepted connection could still Add against the parked unbounded writerWG.Wait, reopening the Add-concurrent-with-Wait defect class at a new pair of call sites; justification rewritten on dataWG.Wait()-completes-Serve; OnAccept's invocation goroutine PINNED to the freshly spawned per-conn goroutine, never the Serve accept loop, with LIFO-defer cleanup pairing — the returned cleanup func is deferred after wg.Done() in source order so cleanup runs first); story-writer (story v1.4→v1.5: AC-005's heading and PC1 trailing label reconciled to the v1.3 F-DW-SP3-007 NO-CHANGE-EXPECTED ruling — story-only correction, the note was already consistent; all rulings propagated). STORY-INDEX v4.72→v4.73. No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Streak 0/3; pass 6 next. Finding decay 14→10→8→5→2. 0 open PROVISIONALs."
 #   - version: 2.45
 #     date: 2026-07-11
 #     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 4 remediation complete — 5 findings (F-DW-SP4-001..005, 1 HIGH) remediated across two agents: architect (placement note v1.3→v1.4: OnAccept reordered Add→launch→hook — closes the barrier-before-writerWG.Add window that reopened the AC-004 EOF flake [HIGH]; final unbounded writerWG.Wait() restored after ingressCancel() — ARCH-01 join restored; Serve keeps plain 5-arg signature, FCL 11→13 rows [two netingress test files, mechanical ServeConfig{} appends]; OnAccept admission-gated — CWE-770 shed path allocates nothing; test-isolation rule added for the three package-level hooks — no t.Parallel; PROVISIONAL drainFlushTimeout RESOLVED → CONFIRMED at 200ms fixed, mechanism binding); story-writer (story v1.3→v1.4: all rulings propagated; provisional_rulings cleared). STORY-INDEX v4.71→v4.72. No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Streak 0/3; pass 5 next. Finding decay 14→10→8→5. 0 open PROVISIONALs — first time in the arc."
@@ -1079,8 +1082,8 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.4"
-    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.4"
+    story_version: "1.5"
+    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.5"
     bc_traces: [BC-2.09.002]
     vp_traces: [VP-037]
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
@@ -1093,6 +1096,7 @@ stories:
     spec_adversarial_pass_2: "10 findings F-DW-SP2-001..010 (2 HIGH) remediated — note v1.2 + story v1.2 + VP-037 v1.5; streak 0/3; pass 3 next"
     spec_adversarial_pass_3: "8 findings F-DW-SP3-001..008 (2 HIGH) remediated — BC-2.01.008 v1.1 + note v1.3 + story v1.3; streak 0/3; pass 4 next"
     spec_adversarial_pass_4: "5 findings F-DW-SP4-001..005 (1 HIGH) remediated — note v1.4 + story v1.4; FCL 11→13; 0 PROVISIONALs; streak 0/3; pass 5 next"
+    spec_adversarial_pass_5: "2 findings F-DW-SP5-001..002 (1 HIGH) remediated — note v1.5 (shutdown-join reorder + OnAccept goroutine pin) + story v1.5 (AC-005 label reconciled to NO-CHANGE-EXPECTED); streak 0/3; decay 14→10→8→5→2; pass 6 next"
     # depends_on S-BL.PE-RECEIVE-LOOP added per PO adjudication F-P1-002 (2026-07-07)
     # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — deps satisfied
     # 2026-07-11: elaborated — placement note v1.0 (Q1-Q7) + story v1.0 (5 ACs, 9 FCL, 13 tasks); 2 PROVISIONAL rulings; spec-adversarial pass 1 next
@@ -1100,6 +1104,7 @@ stories:
     # 2026-07-11: spec-adversarial pass 2 remediation complete — placement note v1.2 + story v1.2 + VP-037 v1.5; all 3 pass-1 PROVISIONALs resolved; develop unchanged ef1ee1e
     # 2026-07-11: spec-adversarial pass 3 remediation complete — BC-2.01.008 v1.1 + placement note v1.3 + story v1.3; VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 1 PROVISIONAL remains (drainFlushTimeout value)
     # 2026-07-11: spec-adversarial pass 4 remediation complete — placement note v1.4 + story v1.4; drainFlushTimeout PROVISIONAL resolved CONFIRMED 200ms fixed, mechanism binding; VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 0 PROVISIONALs remain
+    # 2026-07-11: spec-adversarial pass 5 remediation complete — placement note v1.5 (shutdown tail reordered ingressCancel()→dataWG.Wait()→writerWG.Wait() unbounded, closing a late-accept Add-concurrent-with-Wait window reopened by v1.4's order; OnAccept goroutine pinned to the per-conn goroutine with LIFO-defer cleanup pairing) + story v1.5 (AC-005 heading/PC1 label reconciled to v1.3 F-DW-SP3-007 NO-CHANGE-EXPECTED ruling); VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 0 PROVISIONALs remain
 
   - story_id: S-BL.PE-RECEIVE-LOOP
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"

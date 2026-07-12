@@ -1590,3 +1590,22 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 **Streak:** 0/3 — pass 5 next. 0 PROVISIONALs remain — first time in the arc.
 
 ---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-5 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 5), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.4→v1.5), S-7.04-FU-DRAIN-WIRE.md (v1.4→v1.5), STORY-INDEX.md (v4.72→v4.73), sprint-state.yaml (v2.45→v2.46)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 5 on S-7.04-FU-DRAIN-WIRE returned 2 findings (F-DW-SP5-001..002, 1 HIGH), both confirmed and remediated. Headline: F-DW-SP5-001 (HIGH) found that v1.4's final-join order was backwards — `ingressCancel()` only *signals* shutdown, the listener closes asynchronously, so a late-accepted connection could still `Add` against the parked unbounded `writerWG.Wait()`, reopening the Add-concurrent-with-Wait defect class at a new pair of call sites. This is the third consecutive pass to find a defect in the prior pass's shutdown-ordering fix (pass 3 established the guarantee, pass 4 revised it, pass 5 revised it again) — noted here as a possible methodology observation rather than adjudicated as a finding in its own right. Remediated by reordering the shutdown tail to `ingressCancel() → dataWG.Wait() → writerWG.Wait()` UNBOUNDED, with the justification rewritten around `dataWG.Wait()` completing only after `Serve` itself has returned — closing the late-accept window structurally. The same remediation pinned `OnAccept`'s invocation goroutine to the freshly spawned per-connection goroutine (never the `Serve` accept loop), with the returned cleanup func deferred after `wg.Done()` in source order so LIFO defer ordering runs cleanup first — giving `OnAccept` and its cleanup a same-goroutine 1:1 pairing the new `dataWG`-completes-`Serve` reasoning depends on. F-DW-SP5-002 (MED) found AC-005's heading and PC1 trailing label out of sync with the v1.3 F-DW-SP3-007 NO-CHANGE-EXPECTED ruling; reconciled as a story-only correction (the note was already consistent). Architect landed placement note v1.5 (shutdown-tail reorder + justification rewrite; `OnAccept` goroutine pin + LIFO-defer cleanup pairing). Story-writer landed story v1.5 (AC-005 label reconciled to NO-CHANGE-EXPECTED; all rulings propagated) and STORY-INDEX v4.73 (row 140 ready v1.5 + POL-002 Notes chain). No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Finding decay across the five passes: 14 → 10 → 8 → 5 → 2.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 5) | fresh-context spec-adversarial pass | 2 findings F-DW-SP5-001..002 (1 HIGH: final-join order backwards — late-accepted conn could still `Add` against the parked unbounded `writerWG.Wait()`) |
+| architect | placement-note remediation | placement-note v1.5 (shutdown tail reordered `ingressCancel() → dataWG.Wait() → writerWG.Wait()` UNBOUNDED, justification rewritten on `dataWG.Wait()`-completes-`Serve`; `OnAccept` invocation goroutine PINNED to the per-conn goroutine with LIFO-defer cleanup pairing) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.5 (AC-005 heading/PC1 label reconciled to v1.3 F-DW-SP3-007 NO-CHANGE-EXPECTED ruling; all rulings propagated); STORY-INDEX v4.73 (row 140 ready v1.5 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.46 (story_version 1.5, placement_note v1.5, spec_adversarial_pass_5 line); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** 0/3 — pass 6 next. 0 PROVISIONALs remain.
+
+---
