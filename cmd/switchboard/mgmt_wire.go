@@ -362,8 +362,6 @@ var _ upstreamdial.Handle = (*upstreamdial.Connector)(nil)
 // but has two independent trigger call sites (this connection's own
 // teardown, and the router-wide drain-shutdown flush pass) — both MUST
 // close it via doneOnce, never via a direct close(nc.done).
-//
-//nolint:unused // scaffolding — wired by runRouter's OnAccept closure in S-7.04-FU-DRAIN-WIRE step (c) (Tasks 4-5).
 type nodeConn struct {
 	send         chan []byte
 	done         chan struct{}
@@ -385,15 +383,6 @@ const (
 // observable for per-node send-map lifecycle without exporting the map.
 // nil in production (no-op). Any test that sets this MUST NOT call
 // t.Parallel() — it is package-level mutable state.
-//
-// Set by tests today (router_drain_wire_test.go); fired by production code
-// once runRouter's OnAccept/cleanup closures are wired in
-// S-7.04-FU-DRAIN-WIRE step (c) (Q-AC002).
-//
-// step (c) wires the OnAccept/cleanup closures; a write-only var still
-// reads as unused to staticcheck.
-//
-//nolint:unused // scaffolding — tests assign it, but nothing calls it until
 var nodeConnHook func(event nodeConnEvent, ifaceID routing.InterfaceID)
 
 // drainObserverFiredHook, when non-nil, is called synchronously at the top
@@ -402,14 +391,6 @@ var nodeConnHook func(event nodeConnEvent, ifaceID routing.InterfaceID)
 // send-map Range call, unconditionally on every invocation (whether or not
 // any node is connected). nil in production (no-op). Any test that sets
 // this MUST NOT call t.Parallel() — it is package-level mutable state.
-//
-// Set by tests today (router_drain_wire_test.go); fired by production code
-// once the single startup drain observer is wired in S-7.04-FU-DRAIN-WIRE
-// step (c) (Q-AC003).
-//
-// nodeConnHook above.
-//
-//nolint:unused // scaffolding — same write-only-until-step-(c) shape as
 var drainObserverFiredHook func()
 
 // drainFlushTimeout bounds the router-wide shutdown-flush phase between
@@ -417,8 +398,6 @@ var drainObserverFiredHook func()
 // latency, independent of and not deducted from cfg.DrainTimeout, since
 // writers flush in parallel and the drain observer queues exactly one
 // frame per node.
-//
-//nolint:unused // scaffolding — consumed by the shutdown-flush phase in S-7.04-FU-DRAIN-WIRE step (c) (Task 5).
 const drainFlushTimeout = 200 * time.Millisecond
 
 // runRouter is the router-mode daemon entry point (S-BL.ROUTER-RUNTIME).
@@ -537,9 +516,86 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// record E-ADM-017 counter increments per BC-2.05.008 PC-4 / PC-5.
 	ingressCtx, ingressCancel := context.WithCancel(ctx)
 	defer ingressCancel()
+
+	// Per-node send map (Q-SEAM): value type *nodeConn, populated by the
+	// onAccept closure below (netingress owns DATA creation; this closure
+	// owns BEHAVIOR only — see nodeConn's doc comment). writerWG tracks the
+	// writer goroutines onAccept starts; joined in the shutdown block below
+	// (Shutdown ordering guarantee).
+	var sendMap sync.Map // routing.InterfaceID -> *nodeConn
+	var writerWG sync.WaitGroup
+
 	route := func(hdr frame.OuterHeader, payload []byte) error {
 		return routing.RouteFrame(hdr, payload, router)
 	}
+
+	// onAccept is the BEHAVIOR half of the Q-SEAM ownership split:
+	// netingress.Serve has already allocated h.IfaceID/h.Send/h.Done (DATA
+	// half) before calling this closure. onAccept wraps them in a
+	// *nodeConn, stores it in the per-node send map, starts the sole
+	// writer goroutine for this connection, and returns a behavior-cleanup
+	// func() that deregisters the node when its connection closes.
+	onAccept := func(conn net.Conn, h netingress.NodeHandle) func() {
+		nc := &nodeConn{
+			send:         h.Send,
+			done:         h.Done,
+			doneOnce:     new(sync.Once),
+			writerExited: make(chan struct{}),
+		}
+		sendMap.Store(h.IfaceID, nc)
+
+		writerWG.Add(1)
+		go func() {
+			defer writerWG.Done()
+			// Registered SECOND — after writerWG.Done() above — so Go's
+			// LIFO defer order runs THIS one FIRST, i.e. close(writerExited)
+			// happens-before writerWG.Done(). Load-bearing as of v1.7
+			// (F-DW-SP7-001): the shutdown block's trailing
+			// snapshotWG.Wait() join depends on every writerExited already
+			// being closed by the time the final writerWG.Wait() returns.
+			// Do NOT reorder these two defers.
+			defer close(nc.writerExited)
+			for {
+				select {
+				case frame := <-nc.send:
+					if _, err := conn.Write(frame); err != nil {
+						return // conn closed or write error; exit loop
+					}
+				case <-nc.done:
+					// Flush any frame(s) already queued (e.g. a DRAIN frame
+					// enqueued by the single observer's Range call) before
+					// exiting — do NOT drop them silently (F-DW-SP3-005).
+					for {
+						select {
+						case frame := <-nc.send:
+							if _, err := conn.Write(frame); err != nil {
+								return
+							}
+						default:
+							return
+						}
+					}
+				}
+			}
+		}()
+
+		if nodeConnHook != nil {
+			nodeConnHook(nodeConnRegistered, h.IfaceID)
+		}
+
+		return func() {
+			sendMap.Delete(h.IfaceID)
+			if nodeConnHook != nil {
+				nodeConnHook(nodeConnRemoved, h.IfaceID)
+			}
+			// One of two possible done-close triggers (the other being the
+			// router-wide shutdown-flush pass) — doneOnce makes the second
+			// trigger a harmless no-op. send is NEVER closed (single-
+			// closer/no-send-after-close invariant).
+			nc.doneOnce.Do(func() { close(nc.done) })
+		}
+	}
+
 	var dataWG sync.WaitGroup
 	dataWG.Add(1)
 	go func() {
@@ -547,7 +603,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// Serve returns nil on ctx cancel or a wrapped Accept error on
 		// terminal listener failure; we log and drop either way — the ctx
 		// cancel path is the graceful shutdown.
-		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger, netingress.ServeConfig{}); serr != nil && ingressCtx.Err() == nil {
+		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger, netingress.ServeConfig{OnAccept: onAccept, IfaceIDSeed: 2}); serr != nil && ingressCtx.Err() == nil {
 			routerLogger.Log(fmt.Sprintf("runRouter: netingress.Serve exited: %v", serr))
 		}
 	}()
