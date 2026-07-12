@@ -6,10 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.53
+# version: 2.54
 # changelog:
-#   - version: 2.53
+#   - version: 2.54
 #     date: 2026-07-12
+#     description: "S-7.04-FU-DRAIN-WIRE post-convergence reopen: implementer's first empirical contact with the landed spec surfaced F-DW-IMPL-001 (HIGH) — ingressCtx was context.WithCancel(ctx), a cancel-linked child of the caller's ctx, so caller cancel() closed every conn ~140µs before the shutdown flush ran, falsifying the Shutdown Ordering Guarantee premise (v1.3–v1.9). Architect ruled fix context.WithCancel(context.WithoutCancel(ctx)) + do-not-reparent comment; placement note v1.10 (ledger row 19 NEW/E6, rows 9-11+S10/E5 amended, AC-005/Q5 fence corrected to unconditional `_ = recover()` discard with Disposition ruling); story v1.10 mirror; implementer landed the fix (bb46b5a, 8 commits total on feature/S-7.04-FU-DRAIN-WIRE), all 8 story tests green, full 24-package go test -race green, blast-radius tests (ForcedExitPastDrainTimeout + all SIGHUP/SIGTERM) unmodified-green. Fresh-context delta-verification adversary pass then confirmed the v1.10 delta SOUND on all six checks against the LANDED tree plus a passing -race run, with exactly one LOW finding F-DW-DV-001 (line-number citations baseline-relative to develop@ef1ee1e, convention unstated — landed fix at mgmt_wire.go:523 vs cited baseline :471); adjudicated minimal-fix option (b): citation-convention blockquote. Placement note v1.11 + story v1.11 + STORY-INDEX v4.79 landed; spec re-closed at v1.11. TWO [process-gap] findings: F-DW-IMPL-001 — twelve text-based adversarial passes converged on internal consistency without tracing ingressCtx's parent, a baseline premise no pass executed against ground truth; F-DW-DV-001 (LOW, second instance of the line-number-citation lesson) — spec documents carried line-number citations with no stated coordinate convention. Per-story delivery steps (a) stubs, (b) failing tests, (c) TDD implementation COMPLETE; next is step 4.5 per-story adversarial convergence on the implementation diff (BC-5.39.001). Adjudicated-ledger tally: 45 findings + 2 below-bar items."
 #     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 12: CLEAN — third consecutive clean pass; streak 2/3 → 3/3. SPEC CONVERGED. Fresh-context adversary took a third distinct traversal angle (obligations-first, after pass 10's ledger-first and pass 11's code-first): every BC-2.09.002/BC-2.01.008/BC-2.01.004/VP-037/ARCH-01/ARCH-08 obligation traced forward to a landing site (AC/Task/FCL/test surface) — none orphaned, no over-asserting AC, no test-surface gap; ground truth independently re-verified; both below-bar items (pass-10's ErrTimeout label shorthand, pass-11's ServeConfig{} qualification token) re-confirmed and not re-raised. Zero findings. Convergence summary: 12 passes total, 44 adjudicated findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1, SP8×2, SP9×1, SP10×0, SP11×0, SP12×0), decay 14→10→8→5→2→1→1→2→1→0→0→0; 9 remediation bursts (placement note v1.0→v1.9, story v1.0→v1.9) followed by 3 consecutive CLEANs from 3 distinct traversal angles (ledger-first pass 10, code-first pass 11, obligations-first pass 12); 2 adjudicated below-bar deferrals (ErrTimeout label shorthand; ServeConfig qualification token — rides the Red-Gate dispatch as a known note); 0 [process-gap] findings this cycle. No artifact changes this pass: note stays v1.9, story stays v1.9, STORY-INDEX stays v4.77. Code base unchanged: develop @ ef1ee1e. Next step: per-story delivery step (a) — test-writer stubs (Red Gate)."
 #   - version: 2.52
 #     date: 2026-07-12
@@ -1099,21 +1100,29 @@ stories:
     title: "DRAIN-over-SVTN wire + per-node connection identity + observer registration"
     epic: E-7
     wave: backlog
-    status: ready-for-red-gate
+    status: "step-4.5-per-story-adversarial-convergence-implementation-diff"
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.9"
-    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.9"
+    story_version: "1.11"
+    index_version: "4.79"
+    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.11"
     bc_traces: [BC-2.09.002]
     vp_traces: [VP-037]
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
     deps_satisfied: true
     fo_consumed: "FO-RECV-FWD-001"
-    spec_adversarial_streak: "3/3 — SPEC CONVERGED"
-    last_findings: "pass 12 CLEAN — SPEC CONVERGED (3/3: passes 10/11/12)"
+    spec_adversarial_streak: "3/3 — SPEC CONVERGED (pass 12) — REOPENED post-convergence by F-DW-IMPL-001, remediated v1.10, delta-verified + F-DW-DV-001 remediated v1.11 — spec re-closed"
+    last_findings: "delta-verification pass CLEAN except F-DW-DV-001 (LOW, remediated v1.11) — v1.10 ingressCtx fix + AC-005/Q5 discard correction both SOUND on all six checks against the landed feature-branch tree + a passing -race run"
     provisional_rulings: []
     code_base: "develop ef1ee1e"
+    delivery_steps_complete: [a-stubs, b-failing-tests, c-tdd-implementation]
+    current_step: "4.5 per-story adversarial convergence (implementation diff) — BC-5.39.001"
+    feature_branch: "feature/S-7.04-FU-DRAIN-WIRE"
+    feature_branch_head: "bb46b5a (8 commits, all tests green — full 24-package go test -race clean)"
+    reopen_arc: "spec CONVERGED pass 12 (3/3 clean) → implementer's first empirical contact surfaced F-DW-IMPL-001 (HIGH, ingressCtx cancel-linked-child-of-caller-ctx falsified Shutdown Ordering Guarantee premise v1.3-v1.9) → note v1.10 + story v1.10 (fix: context.WithCancel(context.WithoutCancel(ctx)); ledger row 19 NEW/E6; AC-005/Q5 fence corrected to unconditional _ = recover() discard) → implementer landed fix bb46b5a → fresh-context delta-verification pass SOUND on all 6 checks + 1 LOW (F-DW-DV-001, line-citation baseline-relative-to-develop convention unstated) → note v1.11 + story v1.11 + STORY-INDEX v4.79 (citation-convention blockquote, option b) → spec re-closed"
+    process_gap_findings: ["F-DW-IMPL-001: twelve text-based adversarial passes converged on internal consistency without tracing ingressCtx's parent — a baseline premise no pass executed against ground truth", "F-DW-DV-001 (LOW, same family, second instance of the line-number-citation lesson): spec documents carried line-number citations with no stated coordinate convention"]
+    adjudicated_ledger_tally: "45 findings + 2 below-bar items (ErrTimeout label shorthand; ServeConfig qualification token)"
     spec_adversarial_pass_1: "14 findings F-DW-SP1-001..014 (6 HIGH) remediated — placement note v1.1 consumed; streak 0/3; pass 2 next"
     spec_adversarial_pass_2: "10 findings F-DW-SP2-001..010 (2 HIGH) remediated — note v1.2 + story v1.2 + VP-037 v1.5; streak 0/3; pass 3 next"
     spec_adversarial_pass_3: "8 findings F-DW-SP3-001..008 (2 HIGH) remediated — BC-2.01.008 v1.1 + note v1.3 + story v1.3; streak 0/3; pass 4 next"

@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "05d17f5"
+input-hash: "958801c"
 traces_to: STATE.md
 ---
 
@@ -1757,5 +1757,37 @@ Two items were consciously adjudicated below the proportionality bar and deliber
 | state-manager | verify + persist | sprint-state.yaml v2.53 (spec_adversarial_streak "3/3 — SPEC CONVERGED", status ready-for-spec-adversarial→ready-for-red-gate, spec_adversarial_pass_12 line, last_findings field); STATE.md awaiting line + timestamp (Red Gate step (a)); this burst-log entry |
 
 **Streak:** 3/3 — SPEC CONVERGED. 0 PROVISIONALs remain. Next: Red Gate — per-story delivery step (a) test-writer stubs.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Post-Convergence Reopen — F-DW-IMPL-001 Remediated v1.10, Delta-Verified + F-DW-DV-001 Remediated v1.11 (2026-07-12)
+
+**Agents dispatched:** implementer, architect, story-writer, adversary (delta-verification pass), state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.9→v1.11), S-7.04-FU-DRAIN-WIRE.md (v1.9→v1.11), STORY-INDEX.md (v4.77→v4.79), sprint-state.yaml (v2.53→v2.54), internal/mgmt (feature branch)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged); feature/S-7.04-FU-DRAIN-WIRE @ bb46b5a (8 commits)
+
+**Summary:** Spec convergence at pass 12 (3/3 CLEAN, 44 adjudicated findings) was REOPENED by the implementer's first empirical contact with the landed spec, per-story delivery steps (a) stubs, (b) failing tests, and (c) TDD implementation. F-DW-IMPL-001 (HIGH) surfaced: `ingressCtx` was constructed as `context.WithCancel(ctx)` — a cancel-linked child of the caller's own `ctx` — so the caller's `cancel()` closed every conn ~140µs before the shutdown flush pass ever ran, falsifying the entire Shutdown Ordering Guarantee premise that every ruling from v1.3 through v1.9 rested on. The architect ruled the fix `context.WithCancel(context.WithoutCancel(ctx))` plus a do-not-reparent comment, and landed placement note v1.10: ledger row 19 (NEW, E6 detached-by-construction), rows 9-11 plus S10/E5 amended, and the AC-005/Q5 panic-recovery fence corrected from a conditional/logged shape that was never built to the actual landed unconditional `_ = recover()` discard, with a Disposition ruling (internal/drain is pure-core, no logger seam — recovery not logging is the contract). Story-writer mirrored to story v1.10. The implementer landed the fix at `bb46b5a` (8 commits total on `feature/S-7.04-FU-DRAIN-WIRE`), with all 8 story tests green, the full 24-package `go test -race` clean, and the blast-radius tests (`TestRunRouter_ForcedExitPastDrainTimeout` plus all SIGHUP/SIGTERM tests) unmodified-green. A fresh-context delta-verification adversary pass then confirmed the v1.10 delta SOUND on all six checks against the LANDED tree plus a passing `-race` run, with exactly one LOW finding: F-DW-DV-001 — the spec documents carry line-number citations with no stated coordinate convention (the landed fix sits at `mgmt_wire.go:523`, not the `:471` cited against the pre-fix baseline). Adjudicated minimal-fix option (b): a citation-convention blockquote stating line-number citations are baseline-relative to `develop@ef1ee1e`, not the landed feature branch, placed immediately after the story title. Placement note v1.11 + story v1.11 + STORY-INDEX v4.79 landed; spec re-closed. Per-story delivery steps (a)-(c) are COMPLETE; next is step 4.5 per-story adversarial convergence on the implementation diff (BC-5.39.001).
+
+**[process-gap] findings (both apply per S-7.02):**
+
+1. **F-DW-IMPL-001** [process-gap]: twelve text-based adversarial passes converged on internal consistency without tracing `ingressCtx`'s PARENT — a baseline premise no pass executed against ground truth. The engine lacks an execute-the-discharge-trace-against-baseline obligation during spec convergence; text-based passes can verify internal consistency exhaustively while never touching the runtime object graph a load-bearing guarantee actually depends on.
+2. **F-DW-DV-001** [process-gap] (LOW, same family — second instance of the line-number-citation lesson): spec documents carried line-number citations with no stated coordinate convention, remediated by a document-governing baseline-relative convention statement (option b) rather than per-commit re-pinning.
+
+**Adjudicated-ledger tally:** 45 findings (44 from the spec-adversarial cycle + F-DW-IMPL-001) + 2 below-bar items (`ErrTimeout` label shorthand, `ServeConfig{}` qualification token) — F-DW-DV-001 remediated in-place at v1.11, not carried as a ledger row.
+
+**Implementation state:** 8 commits on `feature/S-7.04-FU-DRAIN-WIRE`, tip `bb46b5a`. All 8 story tests green. Full 24-package `go test -race` green. Blast-radius tests (`ForcedExitPastDrainTimeout` + all SIGHUP/SIGTERM) unmodified-green.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| implementer | first empirical contact — RED tests unpassable | F-DW-IMPL-001 (HIGH): `ingressCtx` cancel-linked to caller `ctx` closed every conn before the shutdown flush pass ran |
+| architect | placement-note remediation | placement-note v1.10 (`context.WithCancel(context.WithoutCancel(ctx))` fix + do-not-reparent comment; ledger row 19 NEW/E6; rows 9-11+S10/E5 amended; AC-005/Q5 fence corrected to unconditional `_ = recover()` discard + Disposition ruling) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.10 (mirror) |
+| implementer | TDD — land the fix | commit `bb46b5a` (feature/S-7.04-FU-DRAIN-WIRE, 8 commits total); all 8 story tests green; full 24-package `go test -race` clean; blast-radius tests unmodified-green |
+| adversary (delta-verification) | fresh-context delta pass vs landed tree | SOUND on all 6 checks + passing `-race` run; 1 finding F-DW-DV-001 (LOW: line-number citations baseline-relative to develop@ef1ee1e, convention unstated) |
+| architect | citation-convention remediation | placement-note v1.11 (citation-convention blockquote, option b) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.11 (mirror); STORY-INDEX v4.79 (row 140 ready v1.11 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.54 (story_version 1.11, index_version 4.79, delivery steps a-c complete, current_step 4.5 adversarial convergence, feature_branch_head bb46b5a, reopen_arc, process_gap_findings, adjudicated_ledger_tally); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** spec re-CONVERGED at v1.11 (reopen resolved). 0 open PROVISIONALs. Next: per-story delivery step 4.5 — adversarial convergence on the implementation diff (BC-5.39.001).
 
 ---
