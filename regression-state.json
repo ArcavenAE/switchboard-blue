@@ -1,0 +1,1 @@
+{"status":"pass","timestamp":"2026-07-12T08:24:41Z","command":"go test -race -count=1 ./... 2>&1 | tail -60"}
