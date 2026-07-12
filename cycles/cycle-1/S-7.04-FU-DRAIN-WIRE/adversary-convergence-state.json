@@ -23,6 +23,26 @@
         }
       ],
       "notes": "RED test file byte-identical 1a4dfdb..HEAD; go vet + full go test -race green; all 5 ACs verified real; 19-row ledger rulings verified code-matching (LIFO defer order, sole writerWG.Wait after dataWG.Wait, phase-local snapshotWG, doneOnce, WithoutCancel detach)"
+    },
+    {
+      "pass": 2,
+      "agent": "adv-dw-impl-p2",
+      "head_reviewed": "e7614d7",
+      "traversal_angle": "test-first",
+      "verdict": "CLEAN",
+      "streak": "2/3",
+      "findings": [],
+      "below_bar_observations": [
+        {
+          "id": "OBS-I2-01",
+          "summary": "ctl-guard E-PRT-002 boundary: only payload_len=1 exercised; exact <4 threshold unpinned (AC-001/004 catch <=4 regressions indirectly)"
+        },
+        {
+          "id": "OBS-I2-02",
+          "summary": "unknown-control_type test uses 0xFF only, not 0x02 RESYNC; identical default-arm path, coverage implied"
+        }
+      ],
+      "notes": "F-DW-I1-N01 confirmed remediated at e7614d7; all 8 story tests -race green 3x no flake, full package 16.6s green, go vet clean; wire schema matches Q1 binding exactly; ledger claims verified code-matching; AC-005 recover defer-order sound (obsWG.Done still fires on panic)"
     }
   ]
 }
