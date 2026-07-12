@@ -84,7 +84,10 @@ func (s *echoSink) SendInput(payload []byte) error {
 //
 // Hardware note: this is a lower-bound measurement (no network, no arq, no
 // tick scheduling). The gate is expected to pass trivially on any hardware.
-// VP-042 on the full stack (with tick intervals) requires S-BL.TESTENV.
+// VP-042 on the full stack remains unverified: S-BL.TESTENV shipped but does
+// not close the gap by itself (see the package-level doc above for why —
+// halfchannel.Tick()+arq+multipath wiring is still required, tracked as
+// S-BL.LOOPBACK-FULLSTACK).
 //
 // Run with: go test -bench=BenchmarkKeystrokeEcho_P99 -benchtime=500x ./internal/bench/
 // or via:   just bench
@@ -160,8 +163,10 @@ func BenchmarkKeystrokeEcho_P99(b *testing.B) {
 
 	b.ReportMetric(float64(p99)/float64(time.Millisecond), "p99_rtt_ms")
 
-	// VP-042 gate (S-BL.BENCH AC-002): enforce ≤ 100ms p99 (NFR-001).
-	// This loopback is lower-bound only; the full-stack gate requires S-BL.TESTENV.
+	// NFR-001 floor guard (not the VP-042 lock — see package doc above):
+	// enforce ≤ 100ms p99. This loopback is lower-bound only; the full-stack
+	// measurement still requires halfchannel.Tick()+arq+multipath wiring
+	// (S-BL.LOOPBACK-FULLSTACK), not just S-BL.TESTENV.
 	if p99 > maxP99 {
 		b.Errorf("keystroke-to-echo p99 %v exceeds NFR-001 limit %v (VP-042)", p99, maxP99)
 	}

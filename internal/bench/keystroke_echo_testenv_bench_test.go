@@ -67,7 +67,7 @@ func BenchmarkKeystrokeToEcho_P99(b *testing.B) {
 		upstreamInterval   = 10 * time.Millisecond
 		downstreamInterval = 50 * time.Millisecond
 		samples            = 500
-		maxP99             = 100 * time.Millisecond // NFR-001 / VP-042 floor guard
+		maxP99             = 100 * time.Millisecond // NFR-001 / VP-042 ceiling guard
 		echoTimeout        = 500 * time.Millisecond
 	)
 
@@ -104,11 +104,11 @@ func BenchmarkKeystrokeToEcho_P99(b *testing.B) {
 
 	b.ReportMetric(float64(p99)/float64(time.Millisecond), "p99_rtt_ms")
 
-	// Floor guard only. Exceeding 100ms here would indicate a pathological
+	// Ceiling guard only. Exceeding 100ms here would indicate a pathological
 	// regression in the synchronous fan-out path; it is NOT the VP-042 lock gate
 	// (see package comment — this path does not exercise tick scheduling / ARQ /
 	// multipath, so passing this guard does not prove the VP-042 property).
 	if p99 > maxP99 {
-		b.Errorf("keystroke-to-echo p99 %v exceeds NFR-001 floor %v (lower-bound path)", p99, maxP99)
+		b.Errorf("keystroke-to-echo p99 %v exceeds NFR-001 limit %v (lower-bound path)", p99, maxP99)
 	}
 }
