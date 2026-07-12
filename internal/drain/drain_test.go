@@ -3,6 +3,8 @@ package drain
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -183,5 +185,55 @@ func TestDrain_NilObserver_Ignored(t *testing.T) {
 	defer cancel()
 	if err := d.Wait(ctx); err != nil {
 		t.Fatalf("Wait: %v", err)
+	}
+}
+
+// TestDrain_ObserverPanicRecovery proves BC-2.09.002 EC-003 belt-and-
+// suspenders coverage (AC-005 / Q5): a panicking observer must not crash
+// the drain coordinator or the host process — Signal's fan-out goroutine
+// gains a defer recover() wrapper (production change, not this test's
+// concern) so the coordinator logs the panic and Wait still returns.
+//
+// Subprocess isolation (standard TestHelperProcess pattern — see
+// os/exec_test.go and similar stdlib usage): Signal's fan-out spawns one
+// goroutine per observer (go func() { defer obsWG.Done(); fn(drainCtx) }())
+// — a panic inside fn there is on THAT goroutine's stack, not this test's.
+// Go's testing package only catches panics on a test's own goroutine;
+// panics on a goroutine spawned by production code, if unrecovered,
+// terminate the WHOLE process immediately (fatal, not a catchable test
+// failure) — the "not a process crash" postcondition in AC-005 can only be
+// verified by observing a CHILD process, not by running the scenario
+// in-process where a pre-fix crash would take down every other test in
+// this package's binary along with it.
+//
+// RED GATE: pre-fix, the panic propagates unrecovered out of the
+// per-observer goroutine in the subprocess, crashing it — the parent
+// observes a non-nil error from CombinedOutput and fails cleanly.
+func TestDrain_ObserverPanicRecovery(t *testing.T) {
+	t.Parallel()
+
+	if os.Getenv("GO_WANT_DRAIN_PANIC_HELPER") == "1" {
+		// Subprocess mode: drive the actual panicking-observer scenario.
+		d := New(200 * time.Millisecond)
+		d.RegisterObserver(func(ctx context.Context) {
+			panic("boom: TestDrain_ObserverPanicRecovery probe")
+		})
+		d.Signal(context.Background())
+
+		waitCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := d.Wait(waitCtx); err != nil && !errors.Is(err, ErrTimeout) {
+			t.Fatalf("Wait returned unexpected error: %v (want nil or ErrTimeout, never a hang)", err)
+		}
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDrain_ObserverPanicRecovery$")
+	cmd.Env = append(os.Environ(), "GO_WANT_DRAIN_PANIC_HELPER=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AC-005/Q5: panicking observer crashed the process instead of being "+
+			"recovered by drain.Signal's fan-out goroutine (needs a defer recover() "+
+			"wrapper); subprocess error: %v; output:\n%s", err, out)
 	}
 }

@@ -372,15 +372,11 @@ type nodeConn struct {
 }
 
 // nodeConnEvent identifies why nodeConnHook fired.
-//
-//nolint:unused // scaffolding — wired by nodeConnHook call sites in S-7.04-FU-DRAIN-WIRE step (c) (Task 4 / Q-AC002).
 type nodeConnEvent int
 
 const (
-	//nolint:unused // scaffolding: see nodeConnEvent — wired step (c).
 	nodeConnRegistered nodeConnEvent = iota // OnAccept stored the send channel
-	//nolint:unused // scaffolding: see nodeConnEvent — wired step (c).
-	nodeConnRemoved // cleanup deleted the map entry
+	nodeConnRemoved                         // cleanup deleted the map entry
 )
 
 // nodeConnHook, when non-nil, is called synchronously from the OnAccept
@@ -390,7 +386,14 @@ const (
 // nil in production (no-op). Any test that sets this MUST NOT call
 // t.Parallel() — it is package-level mutable state.
 //
-//nolint:unused // scaffolding — wired by runRouter's OnAccept/cleanup closures in S-7.04-FU-DRAIN-WIRE step (c) (Q-AC002).
+// Set by tests today (router_drain_wire_test.go); fired by production code
+// once runRouter's OnAccept/cleanup closures are wired in
+// S-7.04-FU-DRAIN-WIRE step (c) (Q-AC002).
+//
+// step (c) wires the OnAccept/cleanup closures; a write-only var still
+// reads as unused to staticcheck.
+//
+//nolint:unused // scaffolding — tests assign it, but nothing calls it until
 var nodeConnHook func(event nodeConnEvent, ifaceID routing.InterfaceID)
 
 // drainObserverFiredHook, when non-nil, is called synchronously at the top
@@ -400,7 +403,13 @@ var nodeConnHook func(event nodeConnEvent, ifaceID routing.InterfaceID)
 // any node is connected). nil in production (no-op). Any test that sets
 // this MUST NOT call t.Parallel() — it is package-level mutable state.
 //
-//nolint:unused // scaffolding — wired by the single startup drain observer in S-7.04-FU-DRAIN-WIRE step (c) (Q-AC003).
+// Set by tests today (router_drain_wire_test.go); fired by production code
+// once the single startup drain observer is wired in S-7.04-FU-DRAIN-WIRE
+// step (c) (Q-AC003).
+//
+// nodeConnHook above.
+//
+//nolint:unused // scaffolding — same write-only-until-step-(c) shape as
 var drainObserverFiredHook func()
 
 // drainFlushTimeout bounds the router-wide shutdown-flush phase between
