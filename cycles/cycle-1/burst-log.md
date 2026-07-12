@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "caf8147"
+input-hash: "05d17f5"
 traces_to: STATE.md
 ---
 
@@ -1729,5 +1729,33 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | state-manager | verify + persist | sprint-state.yaml v2.52 (spec_adversarial_streak 2/3, spec_adversarial_pass_11 line — no story_version/placement_note bump); STATE.md awaiting line + timestamp; this burst-log entry |
 
 **Streak:** 2/3 — pass 12 next (POTENTIAL CONVERGENCE — a third consecutive CLEAN completes spec convergence). 0 PROVISIONALs remain.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-12 — CLEAN, SPEC CONVERGED (2026-07-12)
+
+**Agents dispatched:** adversary (pass 12), state-manager
+**Files touched:** sprint-state.yaml (v2.52→v2.53), STATE.md (awaiting line + timestamp)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 12 on S-7.04-FU-DRAIN-WIRE returned ZERO findings — the third consecutive clean pass. Streak advances 2/3 → 3/3. **SPEC CONVERGED.** No remediation route this burst: placement note stays v1.9, story stays v1.9, STORY-INDEX stays v4.77. The adversary took a third distinct traversal angle — obligations-first, following pass 10's ledger-first and pass 11's code-first — tracing every BC-2.09.002, BC-2.01.008, BC-2.01.004, VP-037, ARCH-01, and ARCH-08 obligation forward to a landing site (AC, Task, FCL row, or test-surface entry): none orphaned, no over-asserting AC, no test-surface gap. Ground truth was independently re-verified. Both standing below-bar items — pass-10's `ErrTimeout`-label shorthand and pass-11's `ServeConfig{}` qualification token — were re-confirmed and correctly not re-raised. Cumulative adjudicated ledger stays 44 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1, SP8×2, SP9×1, SP10×0, SP11×0, SP12×0). Finding decay across the twelve passes: 14 → 10 → 8 → 5 → 2 → 1 → 1 → 2 → 1 → 0 → 0 → 0.
+
+**Convergence summary (passes 1–12):**
+
+| Phase | Passes | Outcome |
+|-------|--------|---------|
+| Finding passes | 1–9 | 9 remediation bursts; placement note v1.0→v1.9, story v1.0→v1.9; 44 findings adjudicated (14/10/8/5/2/1/1/2/1) |
+| Clean passes | 10–12 | 3 consecutive CLEANs, 3 distinct traversal angles: pass 10 ledger-first, pass 11 code-first, pass 12 obligations-first |
+
+Two items were consciously adjudicated below the proportionality bar and deliberately deferred rather than burst, preserving the streak: the `ErrTimeout`-path label shorthand (pass 10, verdicts unaffected) and the `ServeConfig{}` package-qualification token (pass 11, self-correcting under the compile gate) — the latter rides the Red-Gate dispatch as a known note for the test-writer/implementer. Zero [process-gap] findings surfaced across the cycle; the S-7.02 cycle-closing checklist is satisfied vacuously for this story's adversarial arc. Code base unchanged throughout: develop @ ef1ee1e. **Next step: per-story delivery step (a) — test-writer stubs (Red Gate).**
+
+**Methodology note:** Converged on the twelfth pass: 9 finding passes then 3 CLEANs from 3 distinct traversal angles (ledger-first, code-first, obligations-first). The checkable-ledger design carried the tail — passes 10-12 each independently re-derived rather than trusted the proofs. Two below-bar items adjudicated and deferred without breaking the streak; the ServeConfig token note transfers to the Red-Gate dispatch.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 12) | fresh-context spec-adversarial pass (obligations-first traversal) | 0 findings — CLEAN; every BC/VP/ARCH obligation traced forward to a landing site, none orphaned; both below-bar items re-confirmed and not re-raised — SPEC CONVERGED |
+| state-manager | verify + persist | sprint-state.yaml v2.53 (spec_adversarial_streak "3/3 — SPEC CONVERGED", status ready-for-spec-adversarial→ready-for-red-gate, spec_adversarial_pass_12 line, last_findings field); STATE.md awaiting line + timestamp (Red Gate step (a)); this burst-log entry |
+
+**Streak:** 3/3 — SPEC CONVERGED. 0 PROVISIONALs remain. Next: Red Gate — per-story delivery step (a) test-writer stubs.
 
 ---

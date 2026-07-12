@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.52
+# version: 2.53
 # changelog:
+#   - version: 2.53
+#     date: 2026-07-12
+#     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 12: CLEAN — third consecutive clean pass; streak 2/3 → 3/3. SPEC CONVERGED. Fresh-context adversary took a third distinct traversal angle (obligations-first, after pass 10's ledger-first and pass 11's code-first): every BC-2.09.002/BC-2.01.008/BC-2.01.004/VP-037/ARCH-01/ARCH-08 obligation traced forward to a landing site (AC/Task/FCL/test surface) — none orphaned, no over-asserting AC, no test-surface gap; ground truth independently re-verified; both below-bar items (pass-10's ErrTimeout label shorthand, pass-11's ServeConfig{} qualification token) re-confirmed and not re-raised. Zero findings. Convergence summary: 12 passes total, 44 adjudicated findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1, SP8×2, SP9×1, SP10×0, SP11×0, SP12×0), decay 14→10→8→5→2→1→1→2→1→0→0→0; 9 remediation bursts (placement note v1.0→v1.9, story v1.0→v1.9) followed by 3 consecutive CLEANs from 3 distinct traversal angles (ledger-first pass 10, code-first pass 11, obligations-first pass 12); 2 adjudicated below-bar deferrals (ErrTimeout label shorthand; ServeConfig qualification token — rides the Red-Gate dispatch as a known note); 0 [process-gap] findings this cycle. No artifact changes this pass: note stays v1.9, story stays v1.9, STORY-INDEX stays v4.77. Code base unchanged: develop @ ef1ee1e. Next step: per-story delivery step (a) — test-writer stubs (Red Gate)."
 #   - version: 2.52
 #     date: 2026-07-12
 #     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 11: CLEAN — second consecutive clean pass; streak advances 1/3 → 2/3. Fresh-context adversary took a deliberately different traversal from pass 10 — code-first rather than ledger-first — verifying every spec claim directly against ground truth at develop ef1ee1e: drain.go's race-goroutine and no-recover shape, netingress.go's Serve/shed/watcher/package-doc, frame.go's constants, mgmt_wire.go's shutdown block read line-by-line, the testenv stub, router_drain_test.go, all five Serve call sites, ARCH-01, BC-2.01.008 v1.1, and VP-037 v1.5. Zero findings. One new item was consciously held below the proportionality bar and adjudicated by the orchestrator: FCL row 13 / Task 3's \"append `, netingress.ServeConfig{}`\" token is package-qualified, but netingress_test.go's three white-box call sites (package netingress) need the unqualified `ServeConfig{}` — self-correcting under the mandatory compile gate, intent unambiguous, deliberately NOT fixed to avoid resetting the streak for zero risk; it will be handed to the test-writer/implementer as a known token-qualification note at Red-Gate dispatch. This joins pass-10's ErrTimeout-label item as the second adjudicated below-bar item. No artifact changes this pass: note stays v1.9, story stays v1.9, STORY-INDEX stays v4.77. Ledger stays 44 findings; decay 14→10→8→5→2→1→1→2→1→0→0. Code base unchanged: develop @ ef1ee1e. Streak 2/3; pass 12 next — POTENTIAL CONVERGENCE (a third consecutive CLEAN completes spec convergence)."
@@ -1096,7 +1099,7 @@ stories:
     title: "DRAIN-over-SVTN wire + per-node connection identity + observer registration"
     epic: E-7
     wave: backlog
-    status: ready-for-spec-adversarial
+    status: ready-for-red-gate
     priority: P1
     scope_phase: PE
     points: 5
@@ -1107,7 +1110,8 @@ stories:
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
     deps_satisfied: true
     fo_consumed: "FO-RECV-FWD-001"
-    spec_adversarial_streak: "2/3"
+    spec_adversarial_streak: "3/3 — SPEC CONVERGED"
+    last_findings: "pass 12 CLEAN — SPEC CONVERGED (3/3: passes 10/11/12)"
     provisional_rulings: []
     code_base: "develop ef1ee1e"
     spec_adversarial_pass_1: "14 findings F-DW-SP1-001..014 (6 HIGH) remediated — placement note v1.1 consumed; streak 0/3; pass 2 next"
@@ -1121,6 +1125,7 @@ stories:
     spec_adversarial_pass_9: "1 finding F-DW-SP9-001 (MED) remediated — concurrency ledger row 13 (S8a×S8b) was unconditionally classified IMPOSSIBLE, unsound on the drain-timeout path (drain.go closes d.done on window-elapse WITHOUT joining obsWG); safety verdict unaffected, third consecutive zero-mechanism-defect pass; note v1.9 (row 13 split-path reclassification — IMPOSSIBLE clean-path / BENIGN-if-concurrent on ErrTimeout; rows 3+14 qualified; rows 17-18 re-verified independent) + story v1.9 (mirror + Task-5 consequence-(ii) qualification + Task-1 pin); streak 0/3; decay 14→10→8→5→2→1→1→2→1; pass 10 next"
     spec_adversarial_pass_10: "CLEAN — 0 findings; first clean pass of the cycle; streak 0/3 → 1/3; v1.9 delta verified against ground-truth drain.go (timeout branch closes d.done without obsWG join, row 13 split-path sound); nil-return happens-before chain independently re-derived; ledger rows 3/13/14/17/18 accurate; story mirror + Task-1/Task-5 verified; 1 item held below proportionality bar (ErrTimeout shorthand also covers context.DeadlineExceeded, verdicts unaffected); no artifact changes — note stays v1.9, story stays v1.9, index stays v4.77; decay 14→10→8→5→2→1→1→2→1→0; pass 11 next"
     spec_adversarial_pass_11: "CLEAN — 0 findings; second consecutive clean pass, streak 1/3 → 2/3; code-first traversal (vs pass-10's ledger-first) verified every spec claim against ground truth at develop ef1ee1e (drain.go, netingress.go, frame.go, mgmt_wire.go shutdown block, testenv stub, router_drain_test.go, all 5 Serve call sites, ARCH-01, BC-2.01.008 v1.1, VP-037 v1.5); 1 item held below proportionality bar (FCL row 13 / Task 3 ServeConfig{} qualification token — package-qualified in the note, netingress_test.go white-box sites need unqualified form, self-correcting under compile gate, deferred to Red-Gate dispatch note); no artifact changes — note stays v1.9, story stays v1.9, index stays v4.77; decay 14→10→8→5→2→1→1→2→1→0→0; pass 12 next — POTENTIAL CONVERGENCE"
+    spec_adversarial_pass_12: "CLEAN — 0 findings; third consecutive clean pass, streak 2/3 → 3/3 — SPEC CONVERGED; obligations-first traversal (third distinct angle after ledger-first and code-first) traced every BC-2.09.002/BC-2.01.008/BC-2.01.004/VP-037/ARCH-01/ARCH-08 obligation forward to a landing site — none orphaned, no over-asserting AC, no test-surface gap; both below-bar items (ErrTimeout label, ServeConfig token) re-confirmed and not re-raised; no artifact changes — note stays v1.9, story stays v1.9, index stays v4.77; decay 14→10→8→5→2→1→1→2→1→0→0→0; CONVERGENCE SUMMARY: 12 passes, 44 adjudicated findings, 9 remediation bursts (note v1.0→v1.9, story v1.0→v1.9), 3 consecutive CLEANs from 3 distinct angles, 2 below-bar deferrals, 0 process-gap findings; next: per-story delivery step (a) test-writer stubs (Red Gate)"
     # depends_on S-BL.PE-RECEIVE-LOOP added per PO adjudication F-P1-002 (2026-07-07)
     # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — deps satisfied
     # 2026-07-11: elaborated — placement note v1.0 (Q1-Q7) + story v1.0 (5 ACs, 9 FCL, 13 tasks); 2 PROVISIONAL rulings; spec-adversarial pass 1 next
@@ -1135,6 +1140,7 @@ stories:
     # 2026-07-11: spec-adversarial pass 9 remediation complete — ledger row 13 unsound unconditional IMPOSSIBLE on the drain-timeout path (obsWG not joined on d.done close); safety verdict unaffected; placement note v1.9 (row 13 split-path reclassification, rows 3+14 qualified, rows 17-18 re-verified) + story v1.9 (mirror + Task-5 qualification + Task-1 pin); third consecutive zero-mechanism-defect pass — proof-prose precision only; VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 0 PROVISIONALs remain
     # 2026-07-11: spec-adversarial pass 10 CLEAN — first clean pass of the cycle, streak 0/3→1/3; v1.9 delta + ledger rows 3/13/14/17/18 independently re-verified against ground-truth drain.go; 1 item held below proportionality bar, not manufactured into a finding; no artifact changes (note v1.9, story v1.9, index v4.77 unchanged); develop unchanged ef1ee1e; 0 PROVISIONALs remain
     # 2026-07-12: spec-adversarial pass 11 CLEAN — second consecutive clean pass, streak 1/3→2/3; code-first traversal (deliberately different from pass-10's ledger-first) verified every spec claim against ground truth; 2nd below-bar item adjudicated (ServeConfig{} qualification token, deferred to Red-Gate note); no artifact changes (note v1.9, story v1.9, index v4.77 unchanged); develop unchanged ef1ee1e; 0 PROVISIONALs remain; pass 12 next is a potential convergence pass
+    # 2026-07-12: spec-adversarial pass 12 CLEAN — third consecutive clean pass, streak 2/3→3/3, SPEC CONVERGED; obligations-first traversal (third distinct angle) confirmed no orphaned obligations, no over-asserting ACs, no test-surface gaps; both below-bar items re-confirmed; status ready-for-spec-adversarial→ready-for-red-gate; no artifact changes (note v1.9, story v1.9, index v4.77 unchanged); develop unchanged ef1ee1e; 0 PROVISIONALs remain; next: Red Gate — per-story delivery step (a) test-writer stubs
 
   - story_id: S-BL.PE-RECEIVE-LOOP
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"
