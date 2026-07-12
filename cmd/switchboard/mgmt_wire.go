@@ -601,8 +601,8 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			defer close(nc.writerExited)
 			for {
 				select {
-				case frame := <-nc.send:
-					if _, err := conn.Write(frame); err != nil {
+				case msg := <-nc.send:
+					if _, err := conn.Write(msg); err != nil {
 						return // conn closed or write error; exit loop
 					}
 				case <-nc.done:
@@ -611,8 +611,8 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 					// exiting — do NOT drop them silently (F-DW-SP3-005).
 					for {
 						select {
-						case frame := <-nc.send:
-							if _, err := conn.Write(frame); err != nil {
+						case msg := <-nc.send:
+							if _, err := conn.Write(msg); err != nil {
 								return
 							}
 						default:
