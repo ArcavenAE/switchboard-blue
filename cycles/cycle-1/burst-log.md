@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "d3000da"
+input-hash: "8d048cd"
 traces_to: STATE.md
 ---
 
@@ -1649,5 +1649,26 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | state-manager | verify + persist | sprint-state.yaml v2.48 (story_version 1.7, placement_note v1.7, spec_adversarial_pass_7 line); STATE.md awaiting line; this burst-log entry |
 
 **Streak:** 0/3 — pass 8 next. 0 PROVISIONALs remain.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-8 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 8), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.7→v1.8), S-7.04-FU-DRAIN-WIRE.md (v1.7→v1.8), STORY-INDEX.md (v4.75→v4.76), sprint-state.yaml (v2.48→v2.49)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 8 on S-7.04-FU-DRAIN-WIRE returned 2 findings (F-DW-SP8-001 MED, F-DW-SP8-002 LOW), both confirmed and remediated. The adversary first VERIFIED the v1.7 trailing-join mechanism sound across all five Go-semantics scrutiny axes (S5-before-S2 LIFO defer order, single `flushDone` closer, concurrent Wait-Wait, no new deadlock, N=0 edge case) — neither finding this pass was a design defect. F-DW-SP8-001 (MED) found story Task-1 had pinned the placement note at v1.4, four versions stale and contradicting the story's own frontmatter. F-DW-SP8-002 (LOW) found note ledger row 2 ("touched only by S13") stale since v1.7 added S14; the same micro-sweep also caught row 8's same-class "no other goroutine ever touches snapshotWG" tail. Architect landed placement note v1.8 (rows 2 and 8 enumeration amendments only — mechanism, fence, and sequence text untouched). Story-writer landed story v1.8 (Task-1 repinned to v1.8, ledger-citation refresh) and STORY-INDEX v4.76 (row 140 ready v1.8 + POL-002 Notes chain). No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Finding decay across the eight passes: 14 → 10 → 8 → 5 → 2 → 1 → 1 → 2. Cumulative adjudicated ledger: 43 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1, SP8×2).
+
+**Methodology note:** Pass 8 is the second consecutive pass with zero mechanism defects — both findings were citation/enumeration hygiene introduced by prior fix-bursts' sweeps missing a twin site. The OBS-2 same-burst-sweep obligation is catching most instances; the residue class is "sweep fixed one of two twin sites." Churn is now documentation-sync, not design.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 8) | fresh-context spec-adversarial pass | 2 findings F-DW-SP8-001 (MED: story Task-1 pinned note at v1.4, four versions stale) + F-DW-SP8-002 (LOW: ledger row 2 stale S13-only citation missed v1.7's S14; row 8 same-class tail) — v1.7 mechanism VERIFIED sound across 5 Go-semantics axes |
+| architect | placement-note remediation | placement-note v1.8 (ledger rows 2 + 8 enumeration amendments only; mechanism/fence/sequence untouched) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.8 (Task-1 pin repointed v1.4→v1.8, ledger-citation refresh); STORY-INDEX v4.76 (row 140 ready v1.8 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.49 (story_version 1.8, placement_note v1.8, spec_adversarial_pass_8 line); STATE.md awaiting line; this burst-log entry |
+
+**Streak:** 0/3 — pass 9 next. 0 PROVISIONALs remain.
 
 ---
