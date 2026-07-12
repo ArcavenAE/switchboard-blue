@@ -526,6 +526,44 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	var writerWG sync.WaitGroup
 
 	route := func(hdr frame.OuterHeader, payload []byte) error {
+		// Q-CTL-GUARD: ctl frame receive path — exclusively in this
+		// closure, NOT the frozen PE FrameFn closure (Q2-AMENDED). Every
+		// ctl frame arriving here is terminal-consumer by construction
+		// under the current architecture (BC-2.01.008 v1.1 Invariant 2 —
+		// no inter-router relay path exists anywhere in this codebase);
+		// REVISIT this unconditional posture if a future story introduces
+		// router-to-router forwarding.
+		if hdr.FrameType == frame.FrameTypeCtl {
+			if len(payload) < 4 {
+				// E-PRT-002: control frame truncated. No conn is in scope
+				// here — this closure's signature is func(hdr, payload)
+				// error; there is no per-connection dispatch seam with
+				// conn access (F-DW-SP3-003) — do not add one for this log
+				// line.
+				routerLogger.Log(fmt.Sprintf(
+					"netingress: E-PRT-002: ctl frame payload_len=%d < 4; discarding",
+					len(payload)))
+				// silent-ignore: no connection close per BC-2.01.008 EC-002
+				return nil
+			}
+			controlType := payload[0]
+			switch controlType {
+			case 0x01: // DRAIN — router-originated broadcast (Q2-AMENDED);
+				// a router does not act on an inbound DRAIN byte from a node.
+			default:
+				// Unknown/forward-compat control_type (includes the
+				// reserved-but-undispatched 0x02 RESYNC opcode until
+				// S-BL.RESYNC-FRAME lands). BC-2.01.008 PC-4 (v1.1): silent-
+				// ignore means NO logging of any kind on this path — not
+				// even a diagnostic/informational line — and no connection
+				// close. Do NOT add a log call to this arm: a well-formed-
+				// but-unrecognized opcode is ordinary forward-compatible
+				// protocol evolution, not an anomaly (asymmetric with the
+				// E-PRT-002 branch above, which DOES log — truncation is
+				// corruption, diagnostic-worthy).
+			}
+			return nil
+		}
 		return routing.RouteFrame(hdr, payload, router)
 	}
 
