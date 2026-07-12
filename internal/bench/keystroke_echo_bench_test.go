@@ -9,15 +9,20 @@
 //	(session.AccessNode + echo sink). Reports p99_rtt_ms; enforces VP-042
 //	gate (≤ 100ms p99) via b.Errorf.
 //
-// Ruling Divergence (S-BL.BENCH):
+// Testenv migration status (S-BL.TESTENV shipped, PR #110):
 //
-//	VP-042.md proof harness skeleton calls testenv.NewLoopback, which
-//	requires S-BL.TESTENV (backlog, not yet delivered). This benchmark
-//	delivers equivalent measurement semantics using session.AccessNode +
-//	an inline echo sink. When S-BL.TESTENV ships, the harness may be
-//	migrated to the canonical testenv.NewLoopback API; the VP-042 lock can
-//	be evaluated at that point. The loopback here is fully in-process with
-//	the same statistical interpretation: 500 samples, p99 gate ≤ 100ms.
+//	The VP-042.md proof-harness skeleton calls testenv.NewLoopback, which
+//	S-BL.TESTENV has since delivered. The testenv-integrated migration lives
+//	in keystroke_echo_testenv_bench_test.go (BenchmarkKeystrokeToEcho_P99,
+//	`integration`-tagged). That migration revealed that testenv.NewLoopback
+//	does NOT drive the full stack: it discards its LoopbackConfig tick
+//	intervals and delivers frames synchronously via AccessNode.DeliverFrame,
+//	so it exercises neither halfchannel tick scheduling nor ARQ nor multipath.
+//	The testenv path is therefore a lower bound too, statistically equivalent
+//	to this benchmark. The VP-042 lock remains DEFERRED: locking it on a
+//	testenv-integrated measurement first requires testenv's loopback path to
+//	route keystrokes through halfchannel.Tick() at the configured cadence +
+//	internal/arq + internal/multipath (making LoopbackConfig live).
 //
 // Architecture note:
 //
@@ -30,7 +35,7 @@
 //	lower bound on latency. On the real stack the 100ms budget accommodates
 //	10ms upstream tick cadence + 50ms downstream tick cadence + ARQ overhead.
 //	The loopback demonstrates the pure in-process overhead; VP-042 on
-//	the full stack is gated on S-BL.TESTENV.
+//	the full stack is not yet measurable via testenv (see above).
 package bench_test
 
 import (
