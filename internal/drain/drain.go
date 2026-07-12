@@ -32,8 +32,8 @@ const DefaultTimeout = 10 * time.Second
 var ErrTimeout = errors.New("drain: timeout waiting for observers to acknowledge")
 
 // Observer is a callback invoked once per Drain.Signal for each registered
-// observer. Observers perform migration work (in Wave 7: broadcast DRAIN to
-// their connected nodes over the SVTN channel). Returning from the callback
+// observer. Observers perform migration work (broadcast DRAIN to their
+// connected nodes over the SVTN channel). Returning from the callback
 // counts as acknowledgment.
 //
 // Observers MUST honor ctx cancellation — when ctx is done, the drain window
@@ -125,6 +125,15 @@ func (d *Drain) Signal(ctx context.Context) {
 		fn := fn
 		go func() {
 			defer obsWG.Done()
+			defer func() {
+				// AC-005/Q5: a panicking observer must not crash the drain
+				// coordinator or the host process — recover here so the
+				// remaining observers and Wait proceed. This package is
+				// pure-core (no I/O, no injected logger seam), so the
+				// recovered value is deliberately discarded rather than
+				// logged.
+				_ = recover()
+			}()
 			fn(drainCtx)
 		}()
 	}
