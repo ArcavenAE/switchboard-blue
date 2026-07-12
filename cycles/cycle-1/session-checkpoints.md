@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: ""
+input-hash: "455be0a"
 traces_to: STATE.md
 ---
 
@@ -743,3 +743,32 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 **Pass 34 deltas (Adv-A):** HAS_FINDINGS — 2 HIGH. F-P5P34-A-001 HIGH: E-RPC-002 emitted from 3 production sites (cmd/sbctl/client.go:215, :306, internal/metrics/handlers.go:26 sentinel) with NO error-taxonomy.md v4.6 catalog row. E-RPC-010 "undefined and forbidden" clause directly contradicts the emission. Ruling-14 §10 (2026-07-01) authorized emission on the false premise "E-RPC-002 is already defined." F-P5P34-A-002 HIGH: E-RPC-003 emitted from internal/metrics/handlers.go:33 (ErrInvalidParams sentinel) with ZERO references in taxonomy v4.6. Novelty HIGH — genuinely novel taxonomy-orphan class; governance-premise-verification gap identified. **Pass 34 deltas (Adv-B):** NO_FINDINGS — 8 anti-findings. NIL novelty. Overall streak RESETS 2/3 → 0/3.
 
 **Next action (superseded by Burst 82+83):** Burst 82 spec-steward taxonomy remediation; then Pass 35 fresh-context split-adversary.
+
+---
+
+## Checkpoint: Post-Burst 91 (archived from STATE.md at session-close, S-7.04-FU-DRAIN-WIRE delivery session)
+
+**Timestamp:** 2026-07-04T22:00:00Z
+**Post-burst:** Burst 91 (state-manager — Phase 5 terminal close-out; BC-5.39.001 CONVERGED)
+**factory_head_pre_burst_91:** e51d4aa
+**factory_head_post_burst_91:** 0779c43
+**phase_step_pre:** phase-5-pass-38-concluded-clean-both-lanes
+**phase_step_post:** phase-5-CONVERGED-bc-5.39.001-satisfied
+**awaiting:** phase-6-dispatch
+**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — no code changes this burst)
+**streak:** **3/3 — BC-5.39.001 CONVERGED**
+
+**Burst 91 summary:**
+- Pass 39 Adv-A: NO_FINDINGS + 1 obs (O-P5P39-A-001, third-pass persistence re-confirmation of combined-footnote coupling at Ruling-12 §1 L1120 — non-defective, non-novel, deferred per standing directive). Anti-findings: 9. Novelty: LOW.
+- Pass 39 Adv-B: NO_FINDINGS + 2 obs (O-P5P39-B-001 metadata_notes schema element disposition informational; O-P5P39-B-002 Current Phase Steps "5 rows" vs 4-row display — benign rolling-window). Anti-findings: 16. Novelty: LOW. **Twelfth consecutive Adv-B NO_FINDINGS pass (P28 → P39).**
+- **BC-5.39.001 SATISFIED: 3 consecutive clean passes achieved (P37 clean 0→1/3; P38 clean 1→2/3; P39 clean 2→3/3).** Phase 5 exits to Phase 6.
+- Three-pass Adv-A clean-streak: P37 → P38 → P39.
+- O-P5P38-META-001 remediation confirmed effective: preflight verified via git-ref cat, reconciled on first attempt.
+- Observations O-P5P39-A-001, O-P5P39-B-001, O-P5P39-B-002: all LOW severity, non-blocking, no remediation required.
+- Persisted: P5-pass-39-Adv-A.md + P5-pass-39-Adv-B.md sidecars; STATE.md; sprint-state.yaml v1.68→v1.69; session-checkpoints.md (Burst 91 entry).
+
+**Sidecar paths:** `P5-pass-39-Adv-A.md` (Burst 91) / `P5-pass-39-Adv-B.md` (Burst 91)
+
+**Phase 5 trajectory:** P1→P31 (see session-checkpoints.md) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 REMEDIATED → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → P37 BOTH LANES CLEAN → streak 0/3→1/3 → P38 BOTH LANES CLEAN → streak 1/3→2/3 → **P39 BOTH LANES CLEAN → streak 2/3→3/3 → BC-5.39.001 CONVERGED**
+
+**Next action (superseded — Phase 6 through Phase 7 convergence through steady-state all completed in subsequent sessions; this checkpoint carried STATE.md's Session Resume Checkpoint slot unchanged from 2026-07-04 through the S-7.04-FU-DRAIN-WIRE delivery on 2026-07-12, when it was archived here and replaced with the current checkpoint):** Phase 6 (formal hardening) dispatch — formal-verifier for VP proofs, fuzzing, mutation testing, security scanning.

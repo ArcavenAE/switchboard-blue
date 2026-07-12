@@ -35,7 +35,7 @@ open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: "next story selection (S-7.04-FU-DRAIN-WIRE DELIVERED via PR #120 f73676d; backlog: S-BL.RESYNC-FRAME carries a forward obligation — auth threading or trust-boundary re-adjudication required before 0x02 ships; also VP-042 testenv residual, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION)"
 historical_cycles: []
-timestamp: 2026-07-12T16:01:11Z
+timestamp: 2026-07-12T17:37:52Z
 last_update: 2026-07-12
 ---
 
@@ -155,27 +155,23 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Timestamp:** 2026-07-04T22:00:00Z
-**Post-burst:** Burst 91 (state-manager — Phase 5 terminal close-out; BC-5.39.001 CONVERGED)
-**factory_head_pre_burst_91:** e51d4aa
-**factory_head_post_burst_91:** 0779c43
-**phase_step_pre:** phase-5-pass-38-concluded-clean-both-lanes
-**phase_step_post:** phase-5-CONVERGED-bc-5.39.001-satisfied
-**awaiting:** phase-6-dispatch
-**Develop HEAD:** 6deda15def9326f28e96f133e237aff5ecb74d7b (unchanged — no code changes this burst)
-**streak:** **3/3 — BC-5.39.001 CONVERGED**
+**Position:** S-7.04-FU-DRAIN-WIRE DELIVERED 2026-07-12 — PR #120 squash-merged to develop `f73676d`; per-story delivery steps (a) through (g) ALL complete; step-4.5 implementation-diff adversarial convergence 3/3 at `e7614d7`. Artifact versions: story v1.11, placement note v1.11, STORY-INDEX v4.80, sprint-state v2.56. FCL spec-docs synced: ARCH-02 v1.2, BC-2.01.004 v1.5, VP-037 v1.6 (lock still false), ARCH-08 v2.12. Feature worktree and branches (remote + local) removed.
 
-**Burst 91 summary:**
-- Pass 39 Adv-A: NO_FINDINGS + 1 obs (O-P5P39-A-001, third-pass persistence re-confirmation of combined-footnote coupling at Ruling-12 §1 L1120 — non-defective, non-novel, deferred per standing directive). Anti-findings: 9. Novelty: LOW.
-- Pass 39 Adv-B: NO_FINDINGS + 2 obs (O-P5P39-B-001 metadata_notes schema element disposition informational; O-P5P39-B-002 Current Phase Steps "5 rows" vs 4-row display — benign rolling-window). Anti-findings: 16. Novelty: LOW. **Twelfth consecutive Adv-B NO_FINDINGS pass (P28 → P39).**
-- **BC-5.39.001 SATISFIED: 3 consecutive clean passes achieved (P37 clean 0→1/3; P38 clean 1→2/3; P39 clean 2→3/3).** Phase 5 exits to Phase 6.
-- Three-pass Adv-A clean-streak: P37 → P38 → P39.
-- O-P5P38-META-001 remediation confirmed effective: preflight verified via git-ref cat, reconciled on first attempt.
-- Observations O-P5P39-A-001, O-P5P39-B-001, O-P5P39-B-002: all LOW severity, non-blocking, no remediation required.
-- Persisted: P5-pass-39-Adv-A.md + P5-pass-39-Adv-B.md sidecars; STATE.md; sprint-state.yaml v1.68→v1.69; session-checkpoints.md (Burst 91 entry).
+**Upstream sweep (this session):** drbothen/vsdd-factory #620 (HIGH — execute-against-baseline premise-tracing gap), #621 (MED — remediation join-obligation enumeration gap), #622 (LOW — citation coordinate-baseline gap), #623 (compute-input-hash `--update` silent no-op when the target field is absent or empty), 2 comments on #616 (validator noise + the timestamp-hook per-write granularity behavior), #501 confirmed already-open (demo knob). Full route table lives with the upstream-filing tracker.
 
-**Sidecar paths:** `P5-pass-39-Adv-A.md` (Burst 91) / `P5-pass-39-Adv-B.md` (Burst 91)
+**S-7.02 process-gap dispositions:** recorded in this file's Open Drift Items table (F-DW-IMPL-001 → #620, F-DW-DV-001 → #622) and in `cycles/cycle-1/lessons.md` entries 19-21, all [codified].
 
-**Phase 5 trajectory:** P1→P31 (see session-checkpoints.md) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 REMEDIATED → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → P37 BOTH LANES CLEAN → streak 0/3→1/3 → P38 BOTH LANES CLEAN → streak 1/3→2/3 → **P39 BOTH LANES CLEAN → streak 2/3→3/3 → BC-5.39.001 CONVERGED**
+**Next-story options (backlog, unordered):**
+- S-BL.RESYNC-FRAME — **BLOCKED-BY-DECISION**: carries the forward obligation from the PR #120 CWE-306 security disclosure. Auth threading into the ctl dispatch path, or a re-adjudication of the BC-2.01.004 Inv-2 / BC-2.01.008 trust boundary, is required BEFORE implementation — this is spec-phase work first, not a Red Gate dispatch.
+- VP-042 testenv residual
+- S-BL.POLICY-SCHEMA-VALIDATOR
+- S-BL.ADMIN-RECOVER-WIRE
+- S-BL.ADMINWIRE-EXTRACTION
+- S-BL.CLI-SURFACE-COMPLETION
 
-**Next action:** Phase 6 (formal hardening) dispatch — formal-verifier for VP proofs, fuzzing, mutation testing, security scanning. Previous checkpoints: `cycles/cycle-1/session-checkpoints.md`.
+**Held/triage items (not blocking, needs next-session attention):**
+- GitHub issue switchboard-blue#57 (merge-serialization hazard) — deferred while delivery stays serial (single story in flight at a time).
+- TWO pre-existing stashes in the product checkout — **do NOT drop, inspect next session**: `stash@{0}` (11 days old, WIP on `lookup_convention_test.go`, branch `feat/S-BL.LOOKUP-admitted-keyset-lookup-convention`); `stash@{1}` (13 days old, `develop` WIP touching `.gitignore` + `CLAUDE.md` + 4 other files).
+- Hygiene backlog: STORY-INDEX malformed row ~:286 (pre-existing, table-cell-count noise); rc.22 STATE.md schema migration (closes the 7 recurring advisory warnings); repo-wide template-compliance drift; ARCH-08 legacy oldest-first changelog table.
+
+**Resume protocol for next session:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) select next story from the options above (S-BL.RESYNC-FRAME needs a spec-phase decision before it can be dispatched — do not Red-Gate it directly).
