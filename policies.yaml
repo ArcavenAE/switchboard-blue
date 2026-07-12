@@ -1,7 +1,7 @@
 ---
 artifact_id: factory-policies
 document_type: policy-registry
-version: "1.3"
+version: "1.4"
 status: active
 producer: spec-steward
 timestamp: 2026-07-04T00:00:00
@@ -10,6 +10,7 @@ modified:
   - 2026-07-01T00:00:00 # v1.1 — add POL-002 story-index-row-sync (Ruling-11): STORY-INDEX status-cell drift discovered in S-W5.04 Pass-7 Lens-3 (F-P6L3-IMPORTANT-01); policy formalizes obligation to sync STORY-INDEX row in same fix-burst as story frontmatter bump.
   - 2026-07-01T00:00:00 # v1.2 — restructure POL-002 to canonical field schema (Ruling-12 §4, F-P7L3R2-03): align POL-002 fields to POL-001 schema (id, title, severity, scope, rule, rationale, enforcement, examples); remove non-standard `name:` and `description:` fields.
   - 2026-07-04T00:00:00 # v1.3 — add POL-004 no-binary-demo-artifacts (advisory): vsdd-factory:demo-recorder hardcodes VHS→GIF/WebM output with no built-in disable knob; 62 tracked binaries (~12.3 MB) accumulated under docs/demo-evidence/ across Wave-6 and Phase-3 backfill. Project convention: .tape scripts + evidence-report.md only; rendered binaries gitignored. See docs/DEMO-EVIDENCE-POLICY.md. Upstream defect (drbothen/vsdd-factory) requesting a `demo_artifact_format` project-manifest knob pending. POL-003 slot reserved for the candidate BC/VP-story-row-version-sync policy (not yet ratified).
+  - 2026-07-12T00:00:00 # v1.4 — add POL-005 adversary-dispatch-integrity (HIGH): Perimeter-2 (wave-gate) adversary dispatch lacked a structural HEAD-SHA verification tuple; a SHA mismatch between dispatch-time state and the adversary's actual checkout was caught opportunistically by one thorough pass, silent-false-green risk on a less-thorough pass. Filed upstream as drbothen/vsdd-factory#448 (Batch 28); closes local exposure tracked at STATE.md Open Drift Items row WAVE-GATE-DISPATCH-INTEGRITY. Local pipeline-hardening cycle disposition IP-C1-03, 2026-07-12.
 
 # Factory Policies
 # Governance rules enforced by spec-steward across all .factory/ artifacts.
@@ -85,6 +86,40 @@ policies:
     examples:
       violation: "docs/demo-evidence/S-5.02/AC-001-*.gif committed alongside .tape script"
       compliant: "docs/demo-evidence/S-5.02/AC-001-*.tape + evidence-report.md committed; rendered .gif/.webm ignored by git"
+
+  - id: POL-005
+    title: adversary-dispatch-integrity
+    severity: HIGH
+    scope: all adversarial/evaluation dispatches (per-story BC-5.39.001 passes, wave-gate Perimeter-2, phase-level P-passes, holdout evaluation)
+    rule: >
+      Every adversary dispatch MUST embed a verification tuple in the dispatch
+      prompt: {repo path, branch, expected HEAD SHA at dispatch time, artifact
+      IDs + versions under review}. The dispatched agent MUST, as its first
+      action, verify its observed `git rev-parse HEAD` and artifact versions
+      against the tuple. On mismatch: ABORT the pass and report the mismatch
+      as the pass result (severity: dispatch-integrity); never proceed on
+      divergent state.
+    rationale: >
+      Perimeter-2 (wave-gate) adversary dispatch lacked a structural HEAD-SHA
+      verification tuple. A SHA mismatch between dispatch-time state and the
+      adversary's actual checkout was caught opportunistically by one
+      thorough pass; a less-thorough pass would have silently reviewed stale
+      state (silent-false-green risk). Filed upstream as
+      drbothen/vsdd-factory#448 (Batch 28). STATE.md Open Drift Items row
+      WAVE-GATE-DISPATCH-INTEGRITY tracks local mitigation via the
+      pipeline-hardening cycle (IP-C1-03, 2026-07-12).
+    enforcement: >
+      Orchestrator MUST include the verification tuple in every
+      adversarial/evaluation dispatch prompt (per-story passes, wave-gate
+      Perimeter-2, phase-level P-passes, holdout evaluation). The dispatched
+      agent's first action is `git rev-parse HEAD` plus an artifact-version
+      check against the tuple; a mismatch aborts the pass and is reported as
+      a dispatch-integrity finding rather than a normal pass result.
+      Spec-steward / session-review flags any pass report lacking tuple
+      verification confirmation as a HIGH finding.
+    examples:
+      violation: "Adversary dispatched for wave-gate Perimeter-2 with no HEAD SHA in the prompt; adversary silently reviews whatever happens to be checked out, diverging from dispatch-time intent with no signal"
+      compliant: "Dispatch prompt includes {repo: switchboard-blue, branch: develop, expected_head: <sha>, artifacts: [VP-042 v3, BC-5.39.001 v2]}; adversary's first action confirms `git rev-parse HEAD` matches before proceeding; on mismatch, the pass aborts and reports the SHA divergence as its result"
 
 # --- Candidate policies (awaiting user ratification) ---
 # POL-003 (BC/VP-story-row-version-sync): When a story frontmatter version:

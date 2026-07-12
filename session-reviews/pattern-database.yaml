@@ -44,7 +44,14 @@ patterns:
       runtime relationship (e.g. context parentage, goroutine ownership)
       that no spec sentence asserts or denies. Surfaces only at first
       empirical/implementation contact.
-    occurrences_this_run: 1 (S-7.04-FU-DRAIN-WIRE, F-DW-IMPL-001, 12 prior clean passes)
+    occurrences_this_run: >
+      2 — (1) S-7.04-FU-DRAIN-WIRE, F-DW-IMPL-001, 12 prior clean passes;
+      (2) VP-042 residual premise "testenv-integrated measurement only"
+      (OBS-VP-BENCH row + S-BL.TESTENV delivery doc's "compile prerequisite"
+      claim) falsified at first empirical contact 2026-07-12 —
+      testenv.NewLoopback discards LoopbackConfig, drives no ticks, imports
+      no halfchannel/arq/multipath; formal-verifier STOPPED rather than
+      force-fit. Second instance within 24h of PAT-03's seeding.
     evidence:
       - .factory/cycles/cycle-1/lessons.md lesson #19
       - filed drbothen/vsdd-factory#620 (HIGH)

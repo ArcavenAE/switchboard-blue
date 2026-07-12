@@ -8,7 +8,7 @@ benchmarks:
   - metric: holdout_satisfaction_score
     cycle_1_value: 0.85
     unit: "score (0.0-1.0)"
-    notes: "HS-006, evaluated 2026-07-02 at develop tip 7fe3e29. Exactly at the >=0.85 global mean-gate threshold. STALE relative to current develop — router daemon runtime shipped 3 days after evaluation (see IP-C1-04)."
+    notes: "HS-006, evaluated 2026-07-02 at develop tip 7fe3e29. Exactly at the >=0.85 global mean-gate threshold. STALE relative to current develop — router daemon runtime shipped 3 days after evaluation (see IP-C1-04). RE-EVAL 2026-07-12 @ f73676d: 0.895 PASS (delta +0.045; IP-C1-04 executed; see HS-006-evaluation-2026-07-12.md). Remaining blocker to >0.90: external SVTN bootstrap (S-6.02 rc.1 gate)."
 
   - metric: mutation_kill_rate_sampled
     cycle_1_value: "11/15 (73%)"
