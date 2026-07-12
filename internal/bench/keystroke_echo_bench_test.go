@@ -163,7 +163,7 @@ func BenchmarkKeystrokeEcho_P99(b *testing.B) {
 
 	b.ReportMetric(float64(p99)/float64(time.Millisecond), "p99_rtt_ms")
 
-	// NFR-001 floor guard (not the VP-042 lock — see package doc above):
+	// NFR-001 ceiling guard (not the VP-042 lock — see package doc above):
 	// enforce ≤ 100ms p99. This loopback is lower-bound only; the full-stack
 	// measurement still requires halfchannel.Tick()+arq+multipath wiring
 	// (S-BL.LOOPBACK-FULLSTACK), not just S-BL.TESTENV.
