@@ -1571,3 +1571,22 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 **Streak:** 0/3 — pass 4 next. 1 PROVISIONAL remains: `drainFlushTimeout` constant value (~200ms, mechanism BINDING, value PROVISIONAL).
 
 ---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-4 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 4), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.3→v1.4), S-7.04-FU-DRAIN-WIRE.md (v1.3→v1.4), STORY-INDEX.md (v4.71→v4.72), sprint-state.yaml (v2.44→v2.45)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 4 on S-7.04-FU-DRAIN-WIRE returned 5 findings (F-DW-SP4-001..005, 1 HIGH), all confirmed and remediated. Headline: the HIGH finding reopened the AC-004 EOF flake — pass 3's Shutdown ordering guarantee had `writerWG.Add(1)` land after a synchronization barrier in `OnAccept`, leaving a residual window where the barrier could fire before the send-goroutine registered with the WaitGroup, reintroducing the exact race the pass-3 guarantee was meant to close. Remediated by reordering `OnAccept` to Add→launch→hook (the WaitGroup entry is registered before the goroutine launches; the hook fires last) and by restoring an unbounded final `writerWG.Wait()` call after `ingressCancel()` — completing the ARCH-01 join guarantee. Architect landed placement note v1.4: the `OnAccept` reorder; the restored final unbounded `writerWG.Wait()` after `ingressCancel()` (ARCH-01 join restored); `Serve` keeps its plain 5-arg signature, with the FCL growing 11→13 rows (two netingress test files gain mechanical `ServeConfig{}` appends — an honestly-declared source-compat break); `OnAccept` is admission-gated so the CWE-770 shed path allocates nothing; a test-isolation rule was added for the three package-level hooks (no `t.Parallel`); and the `drainFlushTimeout` PROVISIONAL is RESOLVED → CONFIRMED at a fixed 200ms, mechanism binding. Story-writer landed story v1.4 (all rulings propagated; `provisional_rulings` cleared) and STORY-INDEX v4.72 (row 140 ready v1.4 + POL-002 Notes chain). No BC or VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Finding decay across the four passes: 14 → 10 → 8 → 5.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 4) | fresh-context spec-adversarial pass | 5 findings F-DW-SP4-001..005 (1 HIGH: barrier-before-`writerWG.Add` reopened the AC-004 EOF flake) |
+| architect | placement-note remediation | placement-note v1.4 (`OnAccept` reordered Add→launch→hook; final unbounded `writerWG.Wait()` after `ingressCancel()` restored — ARCH-01 join restored; `Serve` keeps plain 5-arg signature, FCL 11→13 rows; `OnAccept` admission-gated — CWE-770 shed path allocates nothing; test-isolation rule for the three package-level hooks — no `t.Parallel`; `drainFlushTimeout` PROVISIONAL RESOLVED → CONFIRMED 200ms fixed, mechanism binding) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.4 (all rulings propagated; `provisional_rulings` cleared); STORY-INDEX v4.72 (row 140 ready v1.4 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.45 (story_version 1.4, placement_note v1.4, provisional_rulings [], spec_adversarial_pass_4 line); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** 0/3 — pass 5 next. 0 PROVISIONALs remain — first time in the arc.
+
+---
