@@ -108,7 +108,7 @@ func TestIntegration_EADM017_FiresThroughLiveIngress(t *testing.T) {
 
 	serveDone := make(chan error, 1)
 	go func() {
-		serveDone <- netingress.Serve(ctx, ln, route, logger)
+		serveDone <- netingress.Serve(ctx, ln, route, logger, netingress.ServeConfig{})
 	}()
 
 	// Same source across all frames — the counter is keyed on src.
@@ -211,7 +211,7 @@ func TestIntegration_ConcurrentRegisterAndRouteRaceClean(t *testing.T) {
 
 	serveDone := make(chan error, 1)
 	go func() {
-		serveDone <- netingress.Serve(ctx, ln, route, logger)
+		serveDone <- netingress.Serve(ctx, ln, route, logger, netingress.ServeConfig{})
 	}()
 
 	svtn := [16]byte{0xaa}

@@ -354,6 +354,64 @@ func startMgmtServer(
 // Compile-time check: *upstreamdial.Connector satisfies Handle.
 var _ upstreamdial.Handle = (*upstreamdial.Connector)(nil)
 
+// nodeConn wraps the netingress-created Send/Done channels for one
+// connected node in the per-node send map. Send is NEVER closed, by any
+// goroutine, for the lifetime of the process (single-closer/
+// no-send-after-close invariant — closing it would race the drain
+// observer's concurrent sendMap.Range send). Done IS closed exactly once,
+// but has two independent trigger call sites (this connection's own
+// teardown, and the router-wide drain-shutdown flush pass) — both MUST
+// close it via doneOnce, never via a direct close(nc.done).
+//
+//nolint:unused // scaffolding — wired by runRouter's OnAccept closure in S-7.04-FU-DRAIN-WIRE step (c) (Tasks 4-5).
+type nodeConn struct {
+	send         chan []byte
+	done         chan struct{}
+	doneOnce     *sync.Once
+	writerExited chan struct{} // closed by the writer goroutine's own defer, on exit — single closer by construction, no sync.Once companion needed.
+}
+
+// nodeConnEvent identifies why nodeConnHook fired.
+//
+//nolint:unused // scaffolding — wired by nodeConnHook call sites in S-7.04-FU-DRAIN-WIRE step (c) (Task 4 / Q-AC002).
+type nodeConnEvent int
+
+const (
+	//nolint:unused // scaffolding: see nodeConnEvent — wired step (c).
+	nodeConnRegistered nodeConnEvent = iota // OnAccept stored the send channel
+	//nolint:unused // scaffolding: see nodeConnEvent — wired step (c).
+	nodeConnRemoved // cleanup deleted the map entry
+)
+
+// nodeConnHook, when non-nil, is called synchronously from the OnAccept
+// registration closure and from the per-connection cleanup closure. Same
+// shape and rationale as drainCoordHook: gives same-package tests an
+// observable for per-node send-map lifecycle without exporting the map.
+// nil in production (no-op). Any test that sets this MUST NOT call
+// t.Parallel() — it is package-level mutable state.
+//
+//nolint:unused // scaffolding — wired by runRouter's OnAccept/cleanup closures in S-7.04-FU-DRAIN-WIRE step (c) (Q-AC002).
+var nodeConnHook func(event nodeConnEvent, ifaceID routing.InterfaceID)
+
+// drainObserverFiredHook, when non-nil, is called synchronously at the top
+// of the production drain observer's body — the single observer runRouter
+// registers with drainCoord at drainCoord-construction time — before the
+// send-map Range call, unconditionally on every invocation (whether or not
+// any node is connected). nil in production (no-op). Any test that sets
+// this MUST NOT call t.Parallel() — it is package-level mutable state.
+//
+//nolint:unused // scaffolding — wired by the single startup drain observer in S-7.04-FU-DRAIN-WIRE step (c) (Q-AC003).
+var drainObserverFiredHook func()
+
+// drainFlushTimeout bounds the router-wide shutdown-flush phase between
+// drainCoord.Wait and ingressCancel(): a hard ceiling on ADDED shutdown
+// latency, independent of and not deducted from cfg.DrainTimeout, since
+// writers flush in parallel and the drain observer queues exactly one
+// frame per node.
+//
+//nolint:unused // scaffolding — consumed by the shutdown-flush phase in S-7.04-FU-DRAIN-WIRE step (c) (Task 5).
+const drainFlushTimeout = 200 * time.Millisecond
+
 // runRouter is the router-mode daemon entry point (S-BL.ROUTER-RUNTIME).
 //
 // It generates an ephemeral Ed25519 keypair, starts the management server
@@ -480,7 +538,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// Serve returns nil on ctx cancel or a wrapped Accept error on
 		// terminal listener failure; we log and drop either way — the ctx
 		// cancel path is the graceful shutdown.
-		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger); serr != nil && ingressCtx.Err() == nil {
+		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger, netingress.ServeConfig{}); serr != nil && ingressCtx.Err() == nil {
 			routerLogger.Log(fmt.Sprintf("runRouter: netingress.Serve exited: %v", serr))
 		}
 	}()
