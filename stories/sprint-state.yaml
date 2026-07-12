@@ -6,8 +6,11 @@
 # total_stories = 61 (per STORY-INDEX v4.09 — 43 master + 12 active-backlog + 2 won't-fix + 0 draft-stub + 2 HRD + 2 M = 61)
 # total_points  = 185 (waves 0–6; excludes S-M.01 + S-M.02 maintenance 10 pts; S-W5.03 2pts unscheduled; S-HRD.01/02 TBD pts)
 # Do not edit manually — managed by state-manager
-# version: 2.46
+# version: 2.47
 # changelog:
+#   - version: 2.47
+#     date: 2026-07-11
+#     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 6 remediation complete — 1 finding (F-DW-SP6-001, HIGH, confirmed) remediated across two agents: architect (placement note v1.5→v1.6: v1.5's bounded flush phase had a shared writerWG.Wait() [bounded by drainFlushTimeout 200ms] run BEFORE ingressCancel() — a connection admitted during that window fired OnAccept → writerWG.Add(1) concurrent with the parked bounded Wait, a Go runtime panic sync: WaitGroup misuse on the graceful-shutdown path; this is the 4th consecutive pass to find a race in the same shutdown-ordering sequence [F-DW-SP3-005 → F-DW-SP4-001/004 → F-DW-SP5-001 → F-DW-SP6-001], each opened or left open by the prior point-fix; remediated via structural elimination rather than reordering — snapshot-scoped flush wait: sendMap.Range close-done-and-snapshot; nodeConn gains writerExited chan struct{} closed by the writer's own defer; a phase-local snapshotWG bounded by drainFlushTimeout [200ms unchanged] waits only on the snapshotted set, so no concurrent Add can reach it; NEW Shutdown concurrency ledger subsection — 16 rows, 13 sync sites × 5 event sources, every row adjudicated IMPOSSIBLE/BENIGN/OUT-OF-SCOPE; architect completion sweep of 3 stale flush-pass×writerWG couplings, stayed v1.6); story-writer (story v1.5→v1.6: delta mirrored + completion sweep — step-3 tail + changelog-row claim). STORY-INDEX v4.73→v4.74. No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Streak 0/3; pass 7 next. Finding decay 14→10→8→5→2→1. 0 open PROVISIONALs. Cumulative adjudicated ledger: 40 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1)."
 #   - version: 2.46
 #     date: 2026-07-11
 #     description: "S-7.04-FU-DRAIN-WIRE spec-adversarial pass 5 remediation complete — 2 findings (F-DW-SP5-001..002, 1 HIGH) remediated across two agents: architect (placement note v1.4→v1.5: shutdown tail reordered to ingressCancel() → dataWG.Wait() → writerWG.Wait() UNBOUNDED — v1.4's final-join order was backwards: ingressCancel() only signals shutdown, the listener closes asynchronously, so a late-accepted connection could still Add against the parked unbounded writerWG.Wait, reopening the Add-concurrent-with-Wait defect class at a new pair of call sites; justification rewritten on dataWG.Wait()-completes-Serve; OnAccept's invocation goroutine PINNED to the freshly spawned per-conn goroutine, never the Serve accept loop, with LIFO-defer cleanup pairing — the returned cleanup func is deferred after wg.Done() in source order so cleanup runs first); story-writer (story v1.4→v1.5: AC-005's heading and PC1 trailing label reconciled to the v1.3 F-DW-SP3-007 NO-CHANGE-EXPECTED ruling — story-only correction, the note was already consistent; all rulings propagated). STORY-INDEX v4.72→v4.73. No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Streak 0/3; pass 6 next. Finding decay 14→10→8→5→2. 0 open PROVISIONALs."
@@ -1082,8 +1085,8 @@ stories:
     priority: P1
     scope_phase: PE
     points: 5
-    story_version: "1.5"
-    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.5"
+    story_version: "1.6"
+    placement_note: "S-7.04-FU-DRAIN-WIRE-placement-note.md v1.6"
     bc_traces: [BC-2.09.002]
     vp_traces: [VP-037]
     depends_on: [S-7.04, S-BL.PE-RECEIVE-LOOP]
@@ -1097,6 +1100,7 @@ stories:
     spec_adversarial_pass_3: "8 findings F-DW-SP3-001..008 (2 HIGH) remediated — BC-2.01.008 v1.1 + note v1.3 + story v1.3; streak 0/3; pass 4 next"
     spec_adversarial_pass_4: "5 findings F-DW-SP4-001..005 (1 HIGH) remediated — note v1.4 + story v1.4; FCL 11→13; 0 PROVISIONALs; streak 0/3; pass 5 next"
     spec_adversarial_pass_5: "2 findings F-DW-SP5-001..002 (1 HIGH) remediated — note v1.5 (shutdown-join reorder + OnAccept goroutine pin) + story v1.5 (AC-005 label reconciled to NO-CHANGE-EXPECTED); streak 0/3; decay 14→10→8→5→2; pass 6 next"
+    spec_adversarial_pass_6: "1 finding F-DW-SP6-001 (HIGH) remediated — note v1.6 (snapshot-scoped flush wait: sendMap.Range close-done-and-snapshot + writerExited chan + phase-local snapshotWG bounded by drainFlushTimeout; NEW Shutdown concurrency ledger, 16 rows; completion sweep ×3) + story v1.6 (delta mirror + completion sweep); 4th consecutive pass finding a race in the same shutdown-ordering domain; streak 0/3; decay 14→10→8→5→2→1; pass 7 next"
     # depends_on S-BL.PE-RECEIVE-LOOP added per PO adjudication F-P1-002 (2026-07-07)
     # S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2 (2026-07-11) — deps satisfied
     # 2026-07-11: elaborated — placement note v1.0 (Q1-Q7) + story v1.0 (5 ACs, 9 FCL, 13 tasks); 2 PROVISIONAL rulings; spec-adversarial pass 1 next
@@ -1105,6 +1109,7 @@ stories:
     # 2026-07-11: spec-adversarial pass 3 remediation complete — BC-2.01.008 v1.1 + placement note v1.3 + story v1.3; VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 1 PROVISIONAL remains (drainFlushTimeout value)
     # 2026-07-11: spec-adversarial pass 4 remediation complete — placement note v1.4 + story v1.4; drainFlushTimeout PROVISIONAL resolved CONFIRMED 200ms fixed, mechanism binding; VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 0 PROVISIONALs remain
     # 2026-07-11: spec-adversarial pass 5 remediation complete — placement note v1.5 (shutdown tail reordered ingressCancel()→dataWG.Wait()→writerWG.Wait() unbounded, closing a late-accept Add-concurrent-with-Wait window reopened by v1.4's order; OnAccept goroutine pinned to the per-conn goroutine with LIFO-defer cleanup pairing) + story v1.5 (AC-005 heading/PC1 label reconciled to v1.3 F-DW-SP3-007 NO-CHANGE-EXPECTED ruling); VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 0 PROVISIONALs remain
+    # 2026-07-11: spec-adversarial pass 6 remediation complete — placement note v1.6 (snapshot-scoped flush wait replaces the bounded shared writerWG.Wait() that raced OnAccept's writerWG.Add(1) before ingressCancel(); NEW Shutdown concurrency ledger, 13 sync sites × 5 event sources, 16 rows all IMPOSSIBLE/BENIGN/OUT-OF-SCOPE; completion sweep of 3 stale flush-pass×writerWG couplings) + story v1.6 (delta mirror + completion sweep); VP-037 deliberately unchanged v1.5; develop unchanged ef1ee1e; 0 PROVISIONALs remain; 4th consecutive pass finding a race in the same shutdown-ordering domain (F-DW-SP3-005 → F-DW-SP4-001/004 → F-DW-SP5-001 → F-DW-SP6-001)
 
   - story_id: S-BL.PE-RECEIVE-LOOP
     title: "PE receive/forward loop — live egress receive path, E-FWD-001 exhaustion discharge"

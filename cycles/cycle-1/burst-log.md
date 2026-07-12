@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: ""
+input-hash: "a1610dd"
 traces_to: STATE.md
 ---
 
@@ -1607,5 +1607,26 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | state-manager | verify + persist | sprint-state.yaml v2.46 (story_version 1.5, placement_note v1.5, spec_adversarial_pass_5 line); STATE.md awaiting line + timestamp; this burst-log entry |
 
 **Streak:** 0/3 — pass 6 next. 0 PROVISIONALs remain.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-6 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 6), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.5→v1.6), S-7.04-FU-DRAIN-WIRE.md (v1.5→v1.6), STORY-INDEX.md (v4.73→v4.74), sprint-state.yaml (v2.46→v2.47)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 6 on S-7.04-FU-DRAIN-WIRE returned 1 finding (F-DW-SP6-001, HIGH), confirmed and remediated. Headline: the v1.5 bounded flush phase's shared `writerWG.Wait()` (bounded by `drainFlushTimeout` 200ms) ran BEFORE `ingressCancel()`, so a connection admitted during that window fired `OnAccept` → `writerWG.Add(1)` concurrent with the parked bounded `Wait` — a Go runtime panic (`sync: WaitGroup misuse`) on the graceful-shutdown path. This is the 4th consecutive pass to find a race in the same shutdown-ordering sequence (F-DW-SP3-005 → F-DW-SP4-001/004 → F-DW-SP5-001 → F-DW-SP6-001), each opened or left open by the prior point-fix. Remediated by switching from point-fix to structural elimination: a snapshot-scoped flush wait — `sendMap.Range` close-done-and-snapshot; `nodeConn` gains a `writerExited chan struct{}` closed by the writer's own defer; a phase-local `snapshotWG` bounded by `drainFlushTimeout` (200ms unchanged) waits only on the snapshotted set, so no concurrent `Add` can reach it — plus a mandatory pairwise concurrency-ledger enumeration. Architect landed placement note v1.6: the snapshot-scoped flush redesign; a NEW Shutdown concurrency ledger subsection (16 rows, 13 sync sites × 5 event sources, every row adjudicated IMPOSSIBLE/BENIGN/OUT-OF-SCOPE); and a completion sweep of 3 stale flush-pass×writerWG couplings left over from the v1.5 remediation (note stayed v1.6). Story-writer landed story v1.6 (delta mirrored + completion sweep — step-3 tail + changelog-row claim) and STORY-INDEX v4.74 (row 140 ready v1.6 + POL-002 Notes chain). No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Finding decay across the six passes: 14 → 10 → 8 → 5 → 2 → 1. Cumulative adjudicated ledger: 40 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1).
+
+**Methodology note:** 4th consecutive instance of remediation-relocating-a-race within the same shutdown-ordering domain (F-DW-SP3-005 → F-DW-SP4-001/004 → F-DW-SP5-001 → F-DW-SP6-001), each opened or left open by the prior point-fix. Pass-6 remediation switched from point-fix to structural elimination (bounded wait on a phase-local snapshot object no concurrent `Add` can reach) plus a mandatory pairwise concurrency-ledger enumeration. Held as Sweep 9 anchor candidate: remediation of concurrency-ordering contracts relocates races instead of closing the class; engine needs an interleaving-enumeration obligation for concurrency findings.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 6) | fresh-context spec-adversarial pass | 1 finding F-DW-SP6-001 (HIGH: bounded shared `writerWG.Wait()` ran before `ingressCancel()`, racing a late-admitted connection's `writerWG.Add(1)` — WaitGroup-misuse panic) |
+| architect | placement-note remediation | placement-note v1.6 (snapshot-scoped flush wait — `sendMap.Range` close-done-and-snapshot; `writerExited` chan; phase-local `snapshotWG` bounded by `drainFlushTimeout`; NEW Shutdown concurrency ledger, 16 rows; completion sweep ×3) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.6 (delta mirror + completion sweep — step-3 tail + changelog-row claim); STORY-INDEX v4.74 (row 140 ready v1.6 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.47 (story_version 1.6, placement_note v1.6, spec_adversarial_pass_6 line); STATE.md awaiting line; this burst-log entry |
+
+**Streak:** 0/3 — pass 7 next. 0 PROVISIONALs remain.
 
 ---
