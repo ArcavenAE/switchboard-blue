@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "a1610dd"
+input-hash: "d3000da"
 traces_to: STATE.md
 ---
 
@@ -1628,5 +1628,26 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | state-manager | verify + persist | sprint-state.yaml v2.47 (story_version 1.6, placement_note v1.6, spec_adversarial_pass_6 line); STATE.md awaiting line; this burst-log entry |
 
 **Streak:** 0/3 — pass 7 next. 0 PROVISIONALs remain.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-7 Remediation Burst (2026-07-11)
+
+**Agents dispatched:** adversary (pass 7), architect, story-writer, state-manager
+**Files touched:** S-7.04-FU-DRAIN-WIRE-placement-note.md (v1.6→v1.7), S-7.04-FU-DRAIN-WIRE.md (v1.6→v1.7), STORY-INDEX.md (v4.74→v4.75), sprint-state.yaml (v2.47→v2.48)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 7 on S-7.04-FU-DRAIN-WIRE returned 1 finding (F-DW-SP7-001, MED), confirmed and remediated. Pass 7 first CONFIRMED that the v1.6 snapshot-scoped mechanism closes F-DW-SP6-001 — no fifth race-relocation — and verified the concurrency ledger's rows. It then found that the v1.6 bounded flush phase's own N+1 goroutines (N per-entry `writerExited` helpers + the `flushDone`-closer) were never joined before `runRouter` returns — an ARCH-01 §Goroutine WaitGroup Contract lifetime gap on the `drainFlushTimeout`-exceeded path — plus a ledger completeness overstatement (the S13 rows proved disjointness and Add-before-Wait, never lifetime). Architect landed placement note v1.7: ruled option 1 for F-DW-SP4-004 precedent consistency — a trailing `snapshotWG.Wait()` plus a NEW `closerWG.Wait()` after the final `writerWG.Wait()`, both PROVEN PROMPT via the S5-before-S2 LIFO defer order, now load-bearing; the ledger grew 16→18 rows (rows 17-18 NEW, row 7 amended); a carve-out option was considered and REJECTED. Story-writer landed story v1.7 (delta mirror) and STORY-INDEX v4.75 (row 140 ready v1.7 + POL-002 Notes chain). No BC/VP changes this pass — VP-037 stays deliberately unchanged at v1.5. Code base unchanged: develop @ ef1ee1e. Finding decay across the seven passes: 14 → 10 → 8 → 5 → 2 → 1 → 1. Cumulative adjudicated ledger: 41 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1).
+
+**Methodology note:** Pass 7 partially validates the pass-6 structural-elimination ruling: the Add-concurrent-with-Wait panic class did NOT relocate a fifth time; the new finding is a different class (ARCH-01 goroutine-lifetime-join on the fix's own helpers), surfaced in part BECAUSE the ledger obligation existed — the adversary audited ledger completeness and found the missing lifetime rows. Sweep 9 anchor candidate stands, refined: interleaving-enumeration obligations catch relocations; lifetime/join obligations need to be part of the same enumeration.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 7) | fresh-context spec-adversarial pass | 1 finding F-DW-SP7-001 (MED: v1.6's flush-phase helper goroutines [N `writerExited` helpers + `flushDone`-closer] never joined before `runRouter` returns — ARCH-01 lifetime gap; ledger completeness overstatement) |
+| architect | placement-note remediation | placement-note v1.7 (trailing `snapshotWG.Wait()` + NEW `closerWG.Wait()` after the final `writerWG.Wait()`, PROVEN PROMPT via S5-before-S2 LIFO defer order; ledger 16→18 rows, row 7 amended, rows 17-18 NEW; carve-out REJECTED) |
+| story-writer | story respecification | S-7.04-FU-DRAIN-WIRE.md v1.7 (delta mirror); STORY-INDEX v4.75 (row 140 ready v1.7 + POL-002 Notes chain) |
+| state-manager | verify + persist | sprint-state.yaml v2.48 (story_version 1.7, placement_note v1.7, spec_adversarial_pass_7 line); STATE.md awaiting line; this burst-log entry |
+
+**Streak:** 0/3 — pass 8 next. 0 PROVISIONALs remain.
 
 ---
