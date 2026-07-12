@@ -451,10 +451,11 @@ const drainFlushTimeout = 200 * time.Millisecond
 // via upstreamdial.New, started below, address list reloaded on SIGHUP via
 // ReloadAddrs, stopped at graceful shutdown.
 //
-// #DEFERRED — live DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
-// S-7.04-FU-DRAIN-WIRE) still ships in a follow-on story once node-facing
-// SVTN channels are wired. The drain coordinator seam is in place; the wire
-// protocol connects to it without further daemon-level refactor.
+// #SHIPPED — DRAIN-over-SVTN wire protocol (BC-2.09.002 Inv-1;
+// S-7.04-FU-DRAIN-WIRE): the single startup drain observer broadcasts a
+// FrameTypeCtl DRAIN frame to every connected node's per-node send channel
+// at drainCoord.Signal time; the netingress OnAccept seam registers and
+// deregisters nodes in the per-node send map (Q-SEAM, Q-SINGLE-OBS).
 func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
@@ -813,13 +814,19 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 shutdown:
 
 	// Graceful shutdown (BC-2.09.002):
-	//   1. Signal drain — observers (when the wire protocol lands) broadcast
-	//      DRAIN to their connected nodes and wait for ACKs.
+	//   1. Signal drain — the single startup observer broadcasts DRAIN to
+	//      every connected node's per-node send channel and returns after
+	//      queuing (Q3.P1 best-effort — no wire ACK).
 	//   2. Wait, bounded by drain_timeout. On timeout we proceed with
 	//      disconnect anyway (BC-2.09.002 EC-003).
-	//   3. Cancel ingress ctx so netingress.Serve closes the listener and
+	//   3. Shutdown ordering guarantee (Q-SEAM): a bounded, snapshot-scoped
+	//      flush phase forces every still-live writer goroutine to drain
+	//      its queued frame(s) to the wire BEFORE connections are torn
+	//      down — otherwise Wait returning nil only proves queuing, not
+	//      writing, and a node could read EOF instead of DRAIN.
+	//   4. Cancel ingress ctx so netingress.Serve closes the listener and
 	//      joins its per-conn goroutines.
-	//   4. Shut down mgmt with a budget derived from the same drain window
+	//   5. Shut down mgmt with a budget derived from the same drain window
 	//      (previously hardcoded 5s — now driven by cfg.DrainTimeout so
 	//      operators have a single lever for shutdown budget tuning).
 	// Stop the PE connector first so dial goroutines exit before we
@@ -833,8 +840,92 @@ shutdown:
 	}
 	drainCtxCancel()
 
-	ingressCancel()
+	// Router-wide flush pass (Shutdown ordering guarantee, Q-SEAM): tell
+	// every still-live writer goroutine to drain its queued frame(s) and
+	// exit, BEFORE the connections are torn down. In the SAME Range call,
+	// snapshot the live nodeConn set — the bounded wait below joins
+	// EXACTLY this snapshot, never the shared writerWG (a late admission
+	// concurrently calling writerWG.Add(1) must never race a writerWG
+	// Wait — see the Shutdown concurrency ledger cited in Design
+	// Constraints, F-DW-SP6-001).
+	var snapshot []*nodeConn
+	sendMap.Range(func(_, value any) bool {
+		nc := value.(*nodeConn)
+		nc.doneOnce.Do(func() { close(nc.done) })
+		snapshot = append(snapshot, nc)
+		return true
+	})
+
+	// Bounded wait for ONLY the snapshotted writers to flush and exit.
+	// snapshotWG is LOCAL to this phase — no other goroutine, including
+	// any OnAccept invocation, ever touches it, so Add-concurrent-with-
+	// Wait cannot occur on it structurally. Every Add below runs
+	// synchronously before any of the per-entry goroutines — or the
+	// Wait-calling goroutine — is spawned.
+	var snapshotWG sync.WaitGroup
+	snapshotWG.Add(len(snapshot))
+	for _, nc := range snapshot {
+		nc := nc
+		go func() {
+			defer snapshotWG.Done()
+			<-nc.writerExited
+		}()
+	}
+	// closerWG (F-DW-SP7-001) tracks the flushDone-closer goroutine itself,
+	// joined explicitly below regardless of which select branch fires.
+	var closerWG sync.WaitGroup
+	closerWG.Add(1)
+	flushDone := make(chan struct{})
+	go func() {
+		defer closerWG.Done()
+		snapshotWG.Wait()
+		close(flushDone)
+	}()
+	select {
+	case <-flushDone:
+	case <-time.After(drainFlushTimeout):
+		routerLogger.Log("runRouter: drain flush deadline exceeded; proceeding with shutdown")
+	}
+
+	ingressCancel() // SIGNALS shutdown only — netingress.Serve's own watcher
+	// goroutine closes the listener ASYNCHRONOUSLY off this same
+	// cancellation; a connection already racing ln.Accept() can still be
+	// admitted after this line returns. A late admission here is
+	// unconditionally BENIGN — nothing is parked on writerWG or
+	// snapshotWG at this point in the sequence.
+
+	// dataWG joins the netingress.Serve goroutine. Serve's own doc contract
+	// ("All outstanding per-connection goroutines are joined before Serve
+	// returns") plus its internal per-conn-goroutine join together
+	// guarantee that by the time this call returns: (a) the accept loop
+	// has permanently exited — no further OnAccept call and therefore no
+	// further writerWG.Add(1) is possible (Goroutine pin); AND (b) every
+	// per-conn goroutine's deferred behavior-cleanup has already run — so
+	// every nc.done this router ever created is closed by the time this
+	// line returns (doneOnce makes a second close from the flush pass
+	// above, if it already fired, a harmless no-op).
 	dataWG.Wait()
+
+	// Final UNBOUNDED join — the SOLE writerWG.Wait() call in the entire
+	// sequence. Safe on the grounds that no writerWG.Add(1) can occur
+	// after this point (grounded on dataWG.Wait having joined Serve's
+	// accept loop) and every writer still blocked in its send/done select
+	// has already observed nc.done closed (grounded on dataWG.Wait having
+	// joined every per-conn cleanup). Restores the ARCH-01 goroutine-join
+	// contract for writerWG in full — the ONLY writerWG.Wait() anywhere in
+	// the sequence, at the ONLY point where no concurrent Add is possible.
+	writerWG.Wait()
+
+	// Join the bounded phase's own goroutines (F-DW-SP7-001) before this
+	// shutdown block returns — closes an ARCH-01 goroutine-join-contract
+	// gap on the drainFlushTimeout-exceeded path. Both calls are PROVEN
+	// PROMPT: within each writer goroutine, close(nc.writerExited) is
+	// deferred AFTER writerWG.Done() in source order, so Go's LIFO defer
+	// order runs the writerExited close BEFORE writerWG.Done() — meaning
+	// every writer's writerExited has ALREADY closed by the time the
+	// writerWG.Wait() above returns.
+	snapshotWG.Wait()
+	closerWG.Wait()
 
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), drainCoord.Timeout())
 	defer shutCancel()
