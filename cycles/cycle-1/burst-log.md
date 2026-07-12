@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "9ecfa79"
+input-hash: "9b5ee60"
 traces_to: STATE.md
 ---
 
@@ -1691,5 +1691,24 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | state-manager | verify + persist | sprint-state.yaml v2.50 (story_version 1.9, placement_note v1.9, spec_adversarial_pass_9 line); STATE.md awaiting line; this burst-log entry |
 
 **Streak:** 0/3 — pass 10 next. 0 PROVISIONALs remain.
+
+---
+
+## S-7.04-FU-DRAIN-WIRE Spec-Adversarial Pass-10 — CLEAN (2026-07-11)
+
+**Agents dispatched:** adversary (pass 10), state-manager
+**Files touched:** sprint-state.yaml (v2.50→v2.51), STATE.md (awaiting line + timestamp)
+**Dispatch tuple:** develop tip ef1ee1e (unchanged — no code changes this burst)
+
+**Summary:** Spec-adversarial pass 10 on S-7.04-FU-DRAIN-WIRE returned ZERO findings — the first clean pass of the cycle. Streak advances 0/3 → 1/3. No remediation route this burst: placement note stays v1.9, story stays v1.9, STORY-INDEX stays v4.77. Attestation highlights: the v1.9 delta was verified against ground-truth `drain.go` (the timeout branch closes `d.done` without an `obsWG` join, confirming row 13's split-path classification is sound); the nil-return happens-before chain was independently re-derived; ledger rows 3, 13, 14, 17, and 18 were checked accurate; the story mirror was confirmed correct (Task-1 pin at v1.9, Task-5 split-path qualification); the pass-9 micro-sweep was re-verified complete (no residual unqualified S8a-completion claim); whole-artifact consistency, POL-001/002/004, and VP-037 v1.5 non-interaction all passed; every ground-truth line citation was checked. One item was consciously ruled below the proportionality bar rather than manufactured into a finding — row 13's "ErrTimeout path" shorthand also covers `context.DeadlineExceeded`, and the verdicts are unaffected either way — recorded as calibration evidence. Finding decay across the ten passes: 14 → 10 → 8 → 5 → 2 → 1 → 1 → 2 → 1 → 0. Cumulative adjudicated ledger stays 44 findings (SP1×14, SP2×10, SP3×8, SP4×5, SP5×2, SP6×1, SP7×1, SP8×2, SP9×1, SP10×0).
+
+**Methodology note:** First CLEAN pass of the cycle, on the tenth attempt. The adversary independently re-derived the ledger's nil-return happens-before chain and explicitly held one below-proportionality-bar item rather than manufacturing a finding — the anti-manufacturing instruction and the checkable-ledger design are both functioning. Streak 1/3.
+
+| Agent | Task | Output |
+|-------|------|--------|
+| adversary (pass 10) | fresh-context spec-adversarial pass | 0 findings — CLEAN; v1.9 delta + ledger rows 3/13/14/17/18 independently re-verified against ground-truth drain.go; 1 item held below proportionality bar (ErrTimeout shorthand also covers context.DeadlineExceeded) |
+| state-manager | verify + persist | sprint-state.yaml v2.51 (spec_adversarial_streak 1/3, spec_adversarial_pass_10 line — no story_version/placement_note bump); STATE.md awaiting line + timestamp; this burst-log entry |
+
+**Streak:** 1/3 — pass 11 next. 0 PROVISIONALs remain.
 
 ---
