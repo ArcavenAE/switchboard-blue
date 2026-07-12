@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-12T08:24:41Z","command":"go test -race -count=1 ./... 2>&1 | tail -60"}
+{"status":"pass","timestamp":"2026-07-12T20:54:16Z","command":"cd /Users/skippy/work/aae-orc/run/switchboard-blue/.worktrees/vp042-bench\necho \"=== vet with integration tag ===\"\ngo vet -tags integration ./internal/bench/ 2>&1 | head -20\necho \"exit: $?\"\necho \"\"\necho \"=== run the testenv-integrated benchmark (500 samples) ===\"\ngo test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/ 2>&1 | tail -25"}

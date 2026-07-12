@@ -38,7 +38,7 @@ benchmarks:
   - metric: phase5_adversarial_pass_count
     cycle_1_value: 39
     unit: "passes"
-    notes: "Cycle-wide Phase 5 adversarial refinement, 2026-07-02 to 2026-07-04. Single most pass-expensive gate in the project. NOTE: adversarial-reviews/ dir has 120 files for this phase — unreconciled against this count (see PAT-05 / IP-C1-12)."
+    notes: "Cycle-wide Phase 5 adversarial refinement, 2026-07-02 to 2026-07-04. Single most pass-expensive gate in the project. Reconciled 2026-07-12: 77 P5-pass files = 39 passes × 2 lenses (pass-14 single-lens); 39-pass headline machine-confirmed."
 
   - metric: single_story_max_adversarial_passes
     cycle_1_value: 32

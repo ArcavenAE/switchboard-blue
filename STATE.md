@@ -9,7 +9,7 @@ anchor_strategy: reference-via-frontmatter
 dtu_required: false
 dtu_assessment: 2026-06-23
 internal_packages: 23
-plugin_version_adopted: "1.0.0-rc.21"
+plugin_version_adopted: "1.0.0-rc.22"
 l2_complete: true
 l3_complete: true
 l3_bc_count: 45
@@ -33,9 +33,9 @@ develop_head: f73676d
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "next story selection (S-7.04-FU-DRAIN-WIRE DELIVERED via PR #120 f73676d; backlog: S-BL.RESYNC-FRAME carries a forward obligation — auth threading or trust-boundary re-adjudication required before 0x02 ships; also VP-042 testenv residual, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION); session-review cycle-1 COMPLETE — 12 proposals (IP-C1-01..12) awaiting human disposition, auto-defer 2026-07-15"
+awaiting: "next story selection (S-7.04-FU-DRAIN-WIRE DELIVERED via PR #120 f73676d; backlog: S-BL.RESYNC-FRAME carries a forward obligation — auth threading or trust-boundary re-adjudication required before 0x02 ships; also VP-042 testenv residual, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION); session-review cycle-1 DISPOSED (11 approved / 1 deferred); queued after VP-042: HS-006 holdout re-eval (IP-C1-04), pipeline-hardening cycle (IP-C1-03)"
 historical_cycles: []
-timestamp: 2026-07-12T20:52:00Z
+timestamp: 2026-07-12T21:41:20Z
 last_update: 2026-07-12
 ---
 
@@ -50,7 +50,7 @@ last_update: 2026-07-12
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
 | Phase 4 — Holdout Evaluation | COMPLETE | PASS_AT_THRESHOLD 0.85 (2026-07-02) |
 | Phase 7 — Convergence | **CONVERGED** 2026-07-06 (human-approved with remediation) — fresh-context audit CONVERGENCE-CLEAN (0 critical, 11 findings ALL remediated: docs PR #107 2e0f926, ARCH b088e54, stubs ef16ed5, sweep 677380f); census zero cycle-blocking, all process-gaps dispositioned; 63/77 VPs proven + 14 justified-deferred with story anchors (S-BL.TESTENV covers 10, S-BL.BENCH 2, S-BL.DISCOVERY-WIRE 2). **CYCLE-1 CLOSED.** | evidence: cycles/cycle-1/phase-7/ |
-| Phase 6 — Formal Hardening | **COMPLETE** 2026-07-06 — gate satisfied: 63/77 VPs PROVEN (locks + cited evidence), 14 justified-deferred (6 infra-partial + 8 blocked: testenv ×6, S-BL.BENCH ×2 — per-VP justifications in changelogs); fuzzers clean (5 targets, 53M+ combined execs, 0 crashes); security scan clean (CWE-triaged); mutation sampling 11/15 + 2 gaps closed + 1 proven-dead-code. Bursts: #105 f09fe73, #106 0516f3a. | evidence: cycles/cycle-1/phase-6/ |
+| Phase 6 — Formal Hardening | **COMPLETE** 2026-07-06 — gate satisfied: 63/77 VPs PROVEN (locks + cited evidence), 14 justified-deferred (6 infra-partial + 8 blocked: testenv ×6, S-BL.BENCH ×2 — per-VP justifications in changelogs); fuzzers clean (5 targets, ~40.9M combined execs (machine-summed 2026-07-12, IP-C1-05; prior 53M+ unsourced), 0 crashes); security scan clean (CWE-triaged); mutation sampling 11/15 + 2 gaps closed + 1 proven-dead-code. Bursts: #105 f09fe73, #106 0516f3a. | evidence: cycles/cycle-1/phase-6/ |
 | Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** — Steady-state PE-CONNECTOR: **32 passes CONVERGED** (3/3 streak P30/P31/P32); 39 findings all remediated; **MERGED PR #115 @ 8eb54a5** |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
@@ -105,7 +105,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | PROCESS-GAP-POL-001-INDEX | OBS | [process-gap] POL-001 scope unclear for INDEX artifacts. vsdd-factory#407 filed. | orchestrator | codify |
 | PROCESS-GAP-FORCE-PUSH | HIGH | [process-gap] pr-manager reached for rebase+force-push over gh pr update-branch. vsdd-factory#408 + switchboard-blue#57 filed. | orchestrator/pr-manager | playbook fix upstream |
 | PROCESS-GAP-DEMO-TAPE-PATHS | OBS | [process-gap] demo-recorder emits `.tape` files with hardcoded absolute worktree paths; local fix applied (25 files, PR #59/cdb2b66); upstream drbothen/vsdd-factory#418 filed for template fix. | orchestrator/demo-recorder | upstream fix pending |
-| WAVE-GATE-DISPATCH-INTEGRITY | HIGH | [process-gap] Perimeter-2 (wave-gate) adversary dispatch lacks HEAD-SHA verification tuple; adversary caught mismatch opportunistically; silent-false-green risk if less-thorough pass proceeds. FILED upstream 2026-07-02 as drbothen/vsdd-factory#448 (Batch 28) — row previously stale ("drafted"). Local mitigation remains target: pipeline-hardening cycle. | orchestrator | filed #448; local target: pipeline-hardening cycle |
+| WAVE-GATE-DISPATCH-INTEGRITY | HIGH | [process-gap] Perimeter-2 (wave-gate) adversary dispatch lacks HEAD-SHA verification tuple; adversary caught mismatch opportunistically; silent-false-green risk if less-thorough pass proceeds. FILED upstream 2026-07-02 as drbothen/vsdd-factory#448 (Batch 28) — row previously stale ("drafted"). Local mitigation remains target: pipeline-hardening cycle — QUEUED after VP-042 delivery (IP-C1-03, 2026-07-12). | orchestrator | filed #448; local target: pipeline-hardening cycle |
 | DRIFT-POL003-NAMING | LOW | POL-003 Exception A annotation reference wording drift: BC-2.07.001 v1.13 cites `drbothen/vsdd-factory#429 draft policy`; BC-2.08.001 v1.3/v1.5 cite `POL-003 Exception A`. Converge on `POL-003 Exception A` for future rows. Deferred — not blocking wave-gate. | spec-steward | open |
 | DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH | LOW | BC-2.07.001 v1.13 changelog description states `Stories row cite S-6.05 v1.5 → v1.7` but body Traceability Stories row (line 206) reads `S-6.05 v1.8`. Body updated to v1.8 without accompanying changelog row. Deferred — not blocking. | spec-steward | open |
 | DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses version suffix; VP-050 omits it. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |

@@ -77,8 +77,11 @@ patterns:
       disagrees with the underlying evidence.
     occurrences_this_run: >
       At least 2 — (a) fuzz-exec total "53M+" in STATE.md vs ~40.9M summed
-      from phase-6 reports; (b) 120-file vs 39-pass Phase-5 count mismatch
-      (unreconciled).
+      from phase-6 reports; (b) RESOLVED 2026-07-12 — the 120-file count was
+      the directory total, not P5 files; 77 P5 files reconcile exactly with
+      39 passes × 2 lenses (one single-lens pass-14). Notably this
+      occurrence was the REVIEWER's own aggregate-count drift,
+      demonstrating the pattern applies to review artifacts too.
     evidence:
       - .factory/cycles/cycle-1/phase-6/fuzz-lane-report.md
       - .factory/cycles/cycle-1/phase-6/gapclose-lane-report.md
