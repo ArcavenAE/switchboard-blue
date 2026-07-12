@@ -67,3 +67,52 @@ The sort → `p99idx` → clamp → `ReportMetric` → threshold sequence is byt
 ### Note on verifiability (acceptable for this PR)
 
 The central finding about `internal/testenv` internals (LoopbackConfig discarded, synchronous `DeliverFrame`, no halfchannel/arq/multipath imports) is **not** in this diff, so it can't be confirmed from diff-only context. Acceptable here: independently checkable with a checkout, the benchmark's runtime behavior doesn't depend on it, and the error direction is conservative. Flagged only so the record shows it rests on the author's inspection + test evidence.
+
+---
+
+## Re-review (2026-07-12T22:31Z) — APPROVE
+
+## PR Review — #121 `fix(VP-042): testenv-integrated keystroke-echo p99 benchmark`
+
+**Verdict: APPROVE** (re-review after fix commit `9c86583`)
+
+> **Posting note:** GitHub blocks any approve/request-changes verdict from the PR author's own
+> account (`arcavenai` authored #121, and it is the only configured `gh` identity). This APPROVE is
+> therefore recorded as a `gh pr review --comment` carrying the verdict, plus a plain-text
+> confirmation to the pr-manager (`prm-vp042-bench`) who is closing out triage. A distinct reviewer
+> identity is needed to stamp the formal APPROVED state.
+
+### Re-review outcome
+
+The first-pass review (verdict REQUEST CHANGES) raised two MEDIUM items + three nits. Verified against the cumulative diff (`gh pr diff 121`) and live CI:
+
+| Finding | Status after `9c86583` |
+|---------|------------------------|
+| **F1 (MEDIUM, doc)** — sibling file's function doc + inline comment still said "the VP-042 gate" / "requires S-BL.TESTENV," contradicting the updated package doc | **RESOLVED** — both now say the full-stack gate remains unverified and point at S-BL.LOOPBACK-FULLSTACK + halfchannel.Tick()/arq/multipath. No text implies S-BL.TESTENV alone closes the gap. |
+| **F2 (MEDIUM, ci)** — required check `Declaration present` = FAIL; PR body claimed all checks pass | **RESOLVED** — root cause was a missing `## Blast Radius` section (CONTRIBUTING.md, enforced by blast-radius-check.yml). Section added with honest answers. `gh pr checks` now exits 0; all real checks green, release jobs correctly skip on a non-release PR. |
+| **F3 (LOW nit)** — "floor" wording for the 100 ms ceiling | **Mostly resolved** — new `testenv` file now "ceiling guard"; both error messages now "exceeds NFR-001 limit." One residual: the F1 rewrite of the sibling's inline comment introduced "NFR-001 **floor** guard." Trivial, non-blocking. |
+| **F4 (optional)** — dedup the duplicated p99 block | Left as-is (correctly — `go.md` discourages a helper at 2 sites). |
+| **F5 (nit)** — commit type vs title | N/A now; the fix commit is `fix(VP-042): …`. |
+
+### Residual (non-blocking, does not gate APPROVE)
+
+- The sibling file's inline comment header reads "NFR-001 floor guard"; 100 ms is a ceiling/upper limit, so "floor" reads backwards here (same class as F3). Cosmetic — the comment correctly disclaims "not the VP-042 lock" and points at S-BL.LOOPBACK-FULLSTACK, so there is no overclaim risk. Sweep it to "ceiling"/"limit" if convenient.
+
+### Checklist (updated PR)
+
+| # | Item | Result |
+|---|------|--------|
+| 1 | Diff coherence | PASS |
+| 2 | Description accuracy | PASS — Blast Radius added; CI claim now matches reality (all green) |
+| 3 | Test coverage | PASS — diagnostic bench (ADR-007), tag-free suite unaffected |
+| 4 | Demo evidence | PASS — N/A, correctly declared |
+| 5 | Commit quality | PASS — both commits conventional, detailed, `Refs: VP-042` |
+| 6 | Diff size | PASS — +136 / −12, 2 files |
+| 7 | Missing changes | PASS — F1 fully addressed |
+| 8 | Dependency status | PASS — S-BL.TESTENV DELIVERED; S-BL.LOOPBACK-FULLSTACK correctly scoped out |
+
+### Verified-good (carried from first pass, unchanged by the fix)
+
+Build-tag gating correct; timer discipline correct; p99 index/clamp correct for n=500; imports minimal and all used; both files' comments now internally consistent and carefully non-overclaiming; error direction fails safe (a wrong testenv-internals finding would only under-claim, never falsely flip the lock). The testenv-internals claim remains unverifiable from diff-only context but is independently checkable and fails safe — acceptable for this fix PR.
+
+**No correctness bugs. No blocking findings. Verdict: APPROVE.**
