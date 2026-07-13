@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-13T17:09:54Z","command":"git log --format='%h %G? %s' -2 && git diff HEAD~1 --stat | tail -3 && git diff HEAD~1 | grep -E '^[+-][^+-]' | grep -vcE '^[+-]\\s*//' ; go test ./cmd/switchboard/ -count=1 2>&1 | tail -1"}
+{"status":"pass","timestamp":"2026-07-13T19:07:51Z","command":"go test ./... -count=1 2>&1 | grep -c '^ok' && go test ./... -count=1 2>&1 | grep FAIL | head -3 ; git push origin feature/S-BL.CLI-SURFACE-COMPLETION 2>&1 | tail -2 && git rev-parse origin/feature/S-BL.CLI-SURFACE-COMPLETION"}

@@ -488,8 +488,6 @@ independent fresh-context reviewers was escalated to MED by a fourth
 pass locating the governing spec clause outside the ACs the first
 three had checked — multi-pass discipline validation.
 
-## Status
-
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
 HAS_FINDINGS, remediated @ `1b0e010`. Step-4.5 pass 2 HAS_FINDINGS —
 spec-governance only, zero code defects, remediated factory-side (all
@@ -499,8 +497,76 @@ story File-Change List completeness only, zero code defects, remediated
 `--json` contract) + F-CS-I4-002 (LOW, `usageErrf` shape), remediated
 TDD-shaped @ `100d288`; code freeze lifted. Step-4.5 pass 5
 NITPICK_ONLY — first clean verdict, streak 1/3. Step-4.5 pass 6
-NITPICK_ONLY — second consecutive clean verdict, streak 2/3. **Step-4.5
+NITPICK_ONLY — second consecutive clean verdict, streak 2/3. Step-4.5
 pass 7 NITPICK_ONLY — third consecutive clean verdict, streak 3/3.
-CONVERGED @ `ef3e5c5`.** Next per per-story-delivery.md: Step 5 demo
-recording (IN PROGRESS, dispatched in parallel with this record) →
-push → pr-manager → cleanup.
+CONVERGED @ `ef3e5c5`.
+
+## Steps 5-8: Demos, PR #122, Merge
+
+**Step 5 — demo recording:** evidence `dc8c88c` — 16 `.tape` files plus
+`evidence-report.md`, POL-004 compliant.
+
+**Step 6 — PR #122 opened** against `develop` from
+`feature/S-BL.CLI-SURFACE-COMPLETION`.
+[https://github.com/ArcavenAE/switchboard-blue/pull/122](https://github.com/ArcavenAE/switchboard-blue/pull/122)
+
+**Step 7 — pr-manager review cycle, 2 rounds:**
+
+*Round 1* found two blockers and one security finding:
+- **B1** — the PR description was missing the required `## Blast
+  Radius` section. Fixed directly by pr-manager.
+- **B2** — a CI-only `-race` flake in
+  `TestRunRouter_NodeConnClose_CleansUpSendMap`: a pre-existing
+  single un-retried dial, widened into an intermittent failure by
+  AC-013's register-before-serve additions (two new `srv.Register`
+  calls ahead of the data-plane bind widen the readiness window).
+  Fixed by test-writer at `d2a6208`, hardening the dial to the
+  suite's established poll-retry pattern (mirrors
+  `TestRunRouter_DataListenerBinds`); 20/20 `-race` runs verified
+  clean, the failure path is preserved (an exhausted retry budget
+  still fails the test).
+- **Security LOW (CWE-20/150)** — `makeAdminSVTNStatusHandler` never
+  called `validateSVTNName`, unlike its create/destroy siblings.
+  Fixed TDD-shaped: RED test at `d2a6208` pins a control-character
+  name asserting E-CFG-001 with no byte-echo; GREEN at `95a9d6a` adds
+  `validateSVTNName(a.Name)` after the admission gate — placement
+  deliberately more careful than "mirror the siblings," since
+  validating before admission would leak an existence oracle.
+  AC-006's byte-identical denied-path oracle is unaffected.
+
+*Round 2* (scoped to the `dc8c88c..95a9d6a` delta) confirmed all
+three genuinely resolved — not masked — and issued **DISPOSITION:
+APPROVE** at `2026-07-13T19:15:37Z`. Security review: CLEAN, no
+CRIT/HIGH, the one LOW fixed, one INFO noted (no confirm gate on
+`reload`/`drain` — spec-documented Decision 4, not a gap). 5
+cosmetic/documented nitpicks (N1-N5) sanctioned, no action. Full
+review record: `.factory/code-delivery/S-BL.CLI-SURFACE-COMPLETION/pr-review.md`
+(relocated this burst — see note below).
+
+**Merge gate:** COMMENTED-review disposition APPROVE plus CI green,
+per `drbothen/vsdd-factory#626`'s single-identity convention
+(`arcavenai` authors and reviews PRs in this project, so GitHub
+withholds formal `reviewDecision` verdicts; the disposition comment
+plus green CI is the convergence record).
+
+**Step 8 — MERGED.** PR #122 squash-merged to `develop` at
+`1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a`
+(`2026-07-13T19:23:54Z`, `mergedBy` arcavenai). CI: 6/6 SUCCESS at
+head `95a9d6ae554008e8cdb5ba809ce9f56615a7ba56`; post-merge `develop`
+CI running normally. Remote feature branch deleted; worktree cleanup
+pending (orchestrator).
+
+**Housekeeping note:** pr-reviewer originally wrote `pr-review.md` to
+the wrong path — a stray untracked directory inside the feature
+worktree
+(`.worktrees/S-BL.CLI-SURFACE-COMPLETION/.factory/code-delivery/S-BL.CLI-SURFACE-COMPLETION/pr-review.md`,
+relative-path drift). Copied byte-identical this burst to the
+canonical `.factory/code-delivery/S-BL.CLI-SURFACE-COMPLETION/pr-review.md`,
+matching the layout of sibling story directories. The stray original
+was left in place — the worktree is removed wholesale later.
+
+## Status
+
+**DELIVERED.** Red Gate, Green, Step-4.5 spec-adversarial (3/3 @
+pass 9), and Step-4.5 implementation-diff (3/3 @ pass 7) all
+converged. PR #122 merged to `develop` @ `1f25677`. Story closed.

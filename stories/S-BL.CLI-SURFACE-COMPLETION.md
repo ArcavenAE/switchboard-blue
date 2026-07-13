@@ -10,6 +10,40 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-13
+    version: "2.9"
+    change: >
+      PR #122 review round produced two fix commits on the feature branch — propagated to keep
+      the File-Change List provably complete (the F-CS-I3-001 lesson applied proactively this
+      time, not remediated after the fact). Commit `d2a6208` (test-writer): (1) B2, a CI-only
+      flake in `cmd/switchboard/router_drain_wire_test.go` —
+      `TestRunRouter_NodeConnClose_CleansUpSendMap` dialed the daemon with a single un-retried
+      `net.Dial` immediately after startup; this story's AC-013 register-before-serve additions
+      (`wireRouterControlHandlers`'s two `srv.Register` calls ahead of the data-plane bind)
+      widened the pre-existing race window between mgmt-socket-ready and data-plane-listener-bind
+      enough for CI to hit it. Hardened to the suite's existing poll-retry pattern (matching
+      `TestRunRouter_DataListenerBinds`'s 1s budget / 50ms per-attempt `net.DialTimeout` / 20ms
+      retry); 20/20 `-race` verified. (2) A RED test,
+      `TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho`, added ahead
+      of the fix to pin the security-reviewer LOW finding (CWE-20/150, sibling-parity gap):
+      `makeAdminSVTNStatusHandler` checked only `a.Name == ""` and never called
+      `validateSVTNName`, unlike its `admin.svtn.create`/`admin.svtn.destroy` siblings — a
+      control-character name reached `SVTNByName`'s not-found path and got echoed verbatim into
+      the E-SVTN-003 message. Commit `95a9d6a` (implementer) made the test green: added the same
+      `validateSVTNName(a.Name)` call the sibling handlers already use, placed after the
+      `resolveCallerAdmissionAnyRole` admission gate so AC-006's byte-identical denied-path oracle
+      (`TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak`) is unaffected — an
+      unauthorized caller still sees E-ADM-009 regardless of name shape; only an authorized caller
+      now hits validation before the lookup. Both fixes verified: `gofumpt` clean, `golangci-lint`
+      0 issues, no other tests regressed. File-Change List gained one new row
+      (`cmd/switchboard/router_drain_wire_test.go`, modify) and two existing rows annotated
+      (`cmd/switchboard/admin_handlers.go`, `cmd/switchboard/admin_handlers_test.go`) with the
+      PR-stage delta rather than duplicated, per the list's existing style. No AC, PC, Decision,
+      Forward Obligation, or point content touched — both fixes land inside already-scoped
+      handlers/tests, not new surface; `acceptance_criteria_count` (16) and `estimated_points` (5)
+      unchanged. `input-hash` unchanged — no declared `inputs:` file changed, story-body-only
+      edit; `--check` confirms no drift. Frontmatter `version` 2.8 → 2.9; new `modified:` entry
+      appended (newest-first).
+  - date: 2026-07-13
     version: "2.8"
     change: >
       Remediated step-4.5 impl pass 3 (fresh adversary) finding F-CS-I3-001 (LOW,
@@ -269,7 +303,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.8"
+version: "2.9"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -1041,13 +1075,14 @@ doesn't silently drift from the `admin.*` handler exclusion it parallels.
 | `internal/mgmt/register_metrics_test.go` (extended) or `register_ping_test.go` (new) | AC-004 handler-level tests |
 | `cmd/switchboard/metrics_wire.go` | `wireMetricsHandlers` calls `mgmt.RegisterPingHandler` |
 | `cmd/switchboard/metrics_wire_test.go` (extended) | AC-004 per-mode registration tests |
-| `cmd/switchboard/admin_handlers.go` | New `admin.svtn.status` handler; `BuildAdminHandlers` registration |
-| `cmd/switchboard/admin_handlers_test.go` (extended) | AC-005, AC-006, AC-007 tests |
+| `cmd/switchboard/admin_handlers.go` | New `admin.svtn.status` handler; `BuildAdminHandlers` registration; PR #122 SEC-LOW (CWE-20/150, commit `95a9d6a`) — `makeAdminSVTNStatusHandler` gains a `validateSVTNName(a.Name)` call, sibling-parity with `makeAdminSVTNCreateHandler`/`makeAdminSVTNDestroyHandler`, placed after the `resolveCallerAdmissionAnyRole` admission gate so AC-006's denied-path oracle is unaffected |
+| `cmd/switchboard/admin_handlers_test.go` (extended) | AC-005, AC-006, AC-007 tests; PR #122 SEC-LOW (commit `d2a6208`) — new `TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho`, asserting E-CFG-001 present / E-SVTN-003 absent / no raw byte echo of the invalid name |
 | `cmd/switchboard/router_control_wire.go` (new) | `wireRouterControlHandlers` |
 | `cmd/switchboard/router_control_wire_test.go` (new) | AC-011, AC-012, AC-013 (registration half), AC-014 (PC-1, PC-2 only — PC-3 re-homed to `cmd/sbctl/router_control_test.go`, F-CS-SP6-001) tests |
 | `cmd/switchboard/mgmt_wire.go` | `runRouter` signature widening; third select-loop arm; `wireRouterControlHandlers` call site |
 | `cmd/switchboard/mgmt_wire_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — five call sites (mirrors the five-call-site `S-7.04-FU-SIGHUP-RELOAD` update pattern); AC-013 shutdown-parity test |
 | `cmd/switchboard/router_drain_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — one call site |
+| `cmd/switchboard/router_drain_wire_test.go` (modify) | PR #122 B2 (CI blocker, pre-existing flake, commit `d2a6208`) — `TestRunRouter_NodeConnClose_CleansUpSendMap`'s single un-retried dial hardened to the suite's poll-retry pattern (matching `TestRunRouter_DataListenerBinds`'s 1s budget / 50ms per-attempt `net.DialTimeout` / 20ms retry); AC-013's register-before-serve additions widened the pre-existing race window between mgmt-socket-ready and the data-plane listener's bind |
 | `cmd/switchboard/router_sighup_test.go` (extended) | Call-site update for the new `drainRequestCh` parameter — one call site |
 | `cmd/switchboard/router_pe_receive_test.go` (extended) | Call-site update for the new `drainRequestCh` parameter — one call site |
 | `cmd/switchboard/router_pe_connector_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — four call sites |
@@ -1219,6 +1254,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.9 | 2026-07-13 | PR #122 review round produced two fix commits on the feature branch — propagated to keep the File-Change List provably complete. Commit `d2a6208` (test-writer): B2, a CI-only flake in `cmd/switchboard/router_drain_wire_test.go` — `TestRunRouter_NodeConnClose_CleansUpSendMap`'s single un-retried `net.Dial` widened by AC-013's register-before-serve additions into an intermittent CI race; hardened to the suite's existing poll-retry pattern (1s budget / 50ms per-attempt `net.DialTimeout` / 20ms retry, matching `TestRunRouter_DataListenerBinds`), 20/20 `-race` verified. Also added RED test `TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho` pinning security-reviewer finding LOW (CWE-20/150): `makeAdminSVTNStatusHandler` never called `validateSVTNName`, unlike its `admin.svtn.create`/`admin.svtn.destroy` siblings, so a control-character name got echoed verbatim into the E-SVTN-003 message. Commit `95a9d6a` (implementer) made it green: added the same `validateSVTNName(a.Name)` call the siblings use, placed after the `resolveCallerAdmissionAnyRole` admission gate so AC-006's denied-path oracle is unaffected. `gofumpt` clean, `golangci-lint` 0 issues. File-Change List gained one new row (`cmd/switchboard/router_drain_wire_test.go`, modify) and two existing rows annotated (`admin_handlers.go`, `admin_handlers_test.go`) rather than duplicated. No AC/PC/Decision/FO/point content touched; `acceptance_criteria_count` (16) and `estimated_points` (5) unchanged. `input-hash` unchanged (story-body-only edit; `--check` confirms no drift). Frontmatter `version` 2.8 → 2.9; new `modified:` entry appended (newest-first). |
 | 2.8 | 2026-07-13 | Remediated step-4.5 impl pass 3 (fresh adversary) finding F-CS-I3-001 (LOW, File-Change-List completeness gap, orchestrator-verified). The File-Change List omitted two files present in the feature diff against `develop` (`git diff --stat`: `cmd/sbctl/main_test.go` +42/-10, `cmd/sbctl/phase5_pass8_test.go` +9/-3) — both correct, necessary existing-test accommodations forced by this story's own scope, not scope creep: `main_test.go`'s `TestSbctl_OrphanSubcommands` asserted `svtn` was an orphan subcommand — AC-010's new `case "svtn":` dispatch re-points those sub-cases to AC-010 PC-3 behavior (exit 2 naming `svtn`, `wantNoPanic` guard); `phase5_pass8_test.go`'s `TestPathsUnknownVerb` used `ping` as its unknown-`paths`-verb example — AC-001 makes `ping` a real verb, so the exemplar swaps to `trace`. Fixed: two new rows added to the File-Change List in the existing table's style, grouped with the other `cmd/sbctl` rows. No AC/PC/Decision/FO/point content touched — a documentation-completeness fix for accommodations the implementation already had to make; `acceptance_criteria_count` (16) and `estimated_points` (5) unchanged. `input-hash` unchanged — no declared `inputs:` file changed, story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.7 → 2.8; new `modified:` entry appended (newest-first). |
 | 2.7 | 2026-07-13 | Propagated the step-4.5 impl pass 2 remediation burst (finding F-CS-I2-001, nitpick N-CS-I2-01) plus a version-pin refresh. **VP propagation (F-CS-I2-001, FO(d)):** every live `VP-TBD-PING-A`/`VP-TBD-PING-B` reference replaced with `VP-078`/`VP-079` — frontmatter `verification_properties:`/`vp_traces:` lists, AC-004 PC-3's parenthetical; the two v2.0-era historical references and the unrelated BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` precedent citation left untouched per the layered-decision-record convention. **Forward Obligations table:** row (b) → DISCHARGED (`ARCH-INDEX.md` v1.10, F-CS-I2-001 — SS-06 gains `internal/mgmt`); row (d) → DISCHARGED (`VP-TBD-PING-A`→`VP-078`, `VP-TBD-PING-B`→`VP-079` minted BC-2.06.004 v1.4, `VP-INDEX.md` v2.40 synced); row (a) → DISCHARGED (`CAP-029` minted `capabilities.md` v1.1, BC-2.06.004 v1.5 re-anchored `CAP-022`→`CAP-029`, `BC-INDEX.md` v3.5 synced, per architect recommendation + PO concurrence) — all four FOs now DISCHARGED, rows (a)/(b)/(d) rewritten to match row (c)'s existing wording style; Obligation-column description text left unchanged. File-Change List's `ARCH-INDEX.md` row updated to the same discharged form already used on the `error-taxonomy.md` row. **N-CS-I2-01** (adversary nitpick, pass 2, taken): AC-015 PC-1 and AC-016 PC-1 wrongly showed `sbctl router reload --router=<addr>` / `sbctl router drain --router=<addr>` — neither verb takes a `--router` sub-flag; the daemon address comes from the global `--target` flag (`interface-definitions.md` v1.31 §82/§83), matching the frozen implementation + tests (feature/S-BL.CLI-SURFACE-COMPLETION @ 1b0e010). Fixed both PC-1 exemplars to the bare form and both ACs' Precondition lines (`--router=<addr>` → `--target=<addr>`); swept both AC blocks, the Task Breakdown, and the File-Change List for other `--router=` occurrences attached to reload/drain — none found (the four remaining `--router=` hits are all `paths ping`'s own correct, distinct flag — untouched). **Version-pin refresh:** BC-2.06.004's `inputDocuments` comment v1.1 → v1.5; `ARCH-INDEX.md` v1.10, `capabilities.md` v1.1, `BC-INDEX.md` v3.5 newly cited at the FO table's row (a)/(b) Status cells. `acceptance_criteria_count` (16), `estimated_points` (5), and all AC/PC semantics unchanged — N-CS-I2-01 corrects exemplars to match already-authoritative spec/implementation, not a behavior change. `input-hash` recomputed via `compute-input-hash --update` (BC-2.06.004 input content changed, v1.1 → v1.5). Frontmatter `version` 2.6 → 2.7; new `modified:` entry appended (newest-first). |
 | 2.6 | 2026-07-13 | Delivery-phase governance addition (NON-BEHAVIORAL): added the missing "Token Budget Estimate (MANDATORY)" section, one of the template sections `validate-template-compliance` has flagged since Round 1 — the per-story-delivery playbook's Token Budget Check reads this section before every test-writer/implementer spawn and mandates story-writer add it if absent. No AC, PC, Decision, or Forward Obligation content touched; the spec-adversarial convergence (3/3 clean passes as of pass 9, achieved on v2.5) covers behavioral content and STANDS unaffected. Section broken into the three per-story-delivery dispatch passes (stub-architect, test-writer, implementer), each a fresh-context dispatch: Pass 1 (stub) ~55k tokens (~28% of a 200K window), Pass 2 (failing-test) ~75k (~38%), Pass 3 (TDD implementation, the heaviest) ~98k (~49%) — none breaches the 60% split-discussion threshold. Methodology: `wc -c`/4 chars-per-token on files as they exist at develop@4c276d9 for everything already on disk (story spec, precedent production files, `interface-definitions.md`, `error-taxonomy.md`, the four BC anchor files, the six production files being extended, `mgmt_wire_test.go`); line-count-based estimates, called out explicitly, for not-yet-written content (6 new-file stub bodies, ~37 test functions across 5 new + 2 extended test files implied by the story's cited test names). Noted honestly that Passes 2 and 3 exceed the template's nominal 20-30% target band — driven by this story's real scope (16 ACs, 4 BC anchors, all 3 `error-taxonomy.md` E-CFG-004 variants, 13 `runRouter` call sites across 6 files) rather than padding — but the heaviest pass stays under half the window; no story split warranted at 5 points. Section inserted between File-Change List and Task Breakdown, matching the template's ordering. `input-hash` unchanged — story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.5 → 2.6; new `modified:` entry appended (newest-first). |

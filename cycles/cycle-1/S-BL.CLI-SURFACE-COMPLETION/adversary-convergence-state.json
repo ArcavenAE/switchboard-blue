@@ -750,5 +750,35 @@
         }
       }
     ]
+  },
+  "delivery": {
+    "pr": 122,
+    "pr_url": "https://github.com/ArcavenAE/switchboard-blue/pull/122",
+    "merge_sha": "1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a",
+    "merged_at": "2026-07-13T19:23:54Z",
+    "merge_method": "squash",
+    "branch_head_at_merge": "95a9d6ae554008e8cdb5ba809ce9f56615a7ba56",
+    "demo_evidence": "dc8c88c — 16 .tape + evidence-report.md, POL-004 compliant",
+    "review_rounds": 2,
+    "review_findings": [
+      {
+        "id": "B1",
+        "type": "pr-description Blast Radius section",
+        "fixed_by": "pr-manager directly"
+      },
+      {
+        "id": "B2",
+        "type": "CI flake — NodeConnClose un-retried dial (pre-existing, widened by AC-013 register-before-serve)",
+        "fixed_by": "test-writer d2a6208, 20/20 -race"
+      },
+      {
+        "id": "SEC-LOW CWE-20/150",
+        "type": "missing validateSVTNName in status handler (sibling-parity)",
+        "fixed_by": "TDD-shaped: red d2a6208 -> green implementer 95a9d6a; AC-006 oracle unaffected"
+      }
+    ],
+    "nits_sanctioned": "N1-N5 cosmetic/documented, no action",
+    "security_review": "CLEAN no CRIT/HIGH + 1 LOW fixed + 1 INFO (no confirm gate on reload/drain = spec-documented Decision 4)",
+    "merge_gate": "COMMENTED review DISPOSITION: APPROVE @ 2026-07-13T19:15:37Z + CI green, per #626 single-identity convention"
   }
 }
