@@ -31,12 +31,14 @@ func RegisterPingHandler(s *Server) error {
 
 // pingHandler returns a mgmt.Handler.Fn for the "paths.ping" command.
 //
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 1 (Green step) implements the
-// empty-args-in / {"pong": true}-out logic with zero PathTracker interaction
-// (AC-004 postcondition 3). Red Gate: body panics unconditionally so no test
-// can accidentally pass before the Green step.
+// Empty request args in, {"pong": true} response data out — zero PathTracker
+// interaction (AC-004 postcondition 3). paths.ping is a one-shot reachability
+// probe; the daemon dialed via --router=<addr> IS the probe target by
+// construction, so the handler has nothing to look up.
 func pingHandler() func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		panic("not implemented: S-BL.CLI-SURFACE-COMPLETION pingHandler")
+		return struct {
+			Pong bool `json:"pong"`
+		}{Pong: true}, nil
 	}
 }

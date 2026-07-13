@@ -14,20 +14,93 @@
 // router.metrics/router.status; no additional Tier-2 role gate.
 //
 // Purity classification (ARCH-09): effectful-boundary — network I/O to daemon socket.
-//
-// STUB — S-BL.CLI-SURFACE-COMPLETION (Red Gate, BC-5.38.001). Not yet
-// implemented; body panics unconditionally so no test can accidentally pass
-// before Task 1's Green step.
 package main
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"strings"
+	"time"
+)
 
 // runPathsPing implements `sbctl paths ping --router=<addr>`.
 //
 // AC-001..AC-004 / BC-2.06.004 PC-1..PC-4, EC-001..EC-003, Invariant 1, Invariant 2.
 //
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 1 (Green step) implements the
-// dial/measure/report logic. Red Gate: body panics unconditionally.
+// Output is always the JSON envelope ({"ok":true,"data":{"router":...,
+// "rtt_ms":...}}) — paths ping is a single-shot structured probe with no
+// human-readable table representation, so it does not vary its output shape
+// on the --json flag the way paths list/router metrics do.
+//
+//nolint:unparam // useJSON is part of the run* dispatch signature contract (main.go); paths ping always emits the JSON envelope (see above)
 func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
-	panic("not implemented: S-BL.CLI-SURFACE-COMPLETION runPathsPing")
+	// --router=<addr> overrides --target (BC-2.06.004 PC-1) — the daemon
+	// dialed via --router IS the probe target by construction.
+	for i, arg := range args {
+		if arg == "--router" {
+			if i+1 >= len(args) {
+				_ = writeError(true, "E-CFG-010", "paths ping: --router requires a value", sio)
+				return reported(usageErrf("E-CFG-010: paths ping: --router requires a value"))
+			}
+			target = args[i+1]
+		} else if strings.HasPrefix(arg, "--router=") {
+			target = strings.TrimPrefix(arg, "--router=")
+		}
+	}
+
+	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
+	if err != nil {
+		_ = writeError(true, "E-CFG-010", err.Error(), sio)
+		return reported(err)
+	}
+
+	// rtt_ms spans dial-start to response-decode-complete, measured
+	// client-side (BC-2.06.004 PC-1).
+	start := time.Now()
+
+	var conn net.Conn
+	if len(target) > 0 && target[0] == '/' {
+		conn, err = (&net.Dialer{}).DialContext(ctx, "unix", target)
+	} else {
+		conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", target)
+	}
+	if err != nil {
+		msg := fmt.Sprintf("daemon unreachable: %s: %s", target, err)
+		return writeError(true, "E-NET-001", msg, sio)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if err = Authenticate(ctx, conn, privKey); err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			msg := fmt.Sprintf("daemon unreachable: %s: connection timed out", target)
+			return writeError(true, "E-NET-001", msg, sio)
+		}
+		_ = writeError(true, "E-ADM-010", "authentication failed", sio)
+		return reported(err)
+	}
+
+	// paths.ping performs zero PathTracker interaction (AC-004 postcondition
+	// 3): empty request args, {"pong": true} response (BC-2.06.004 PC-1).
+	if _, err = dispatch(ctx, conn, "paths.ping", map[string]string{}); err != nil {
+		_ = writeError(true, "E-RPC-001", err.Error(), sio)
+		return reported(err)
+	}
+
+	rttMs := float64(time.Since(start).Microseconds()) / 1000.0
+
+	data, err := json.Marshal(struct {
+		Router string  `json:"router"`
+		RTTMs  float64 `json:"rtt_ms"`
+	}{Router: target, RTTMs: rttMs})
+	if err != nil {
+		_, _ = fmt.Fprintf(sio.err, "marshal error: %s\n", err)
+		return internal(fmt.Errorf("marshal ping result: %w", err))
+	}
+
+	return writeSuccess(true, data, sio)
 }
