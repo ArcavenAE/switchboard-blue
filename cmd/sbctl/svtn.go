@@ -18,23 +18,27 @@
 //
 // Purity classification (ARCH-09): effectful-boundary (status) / pure CLI
 // dispatch (destroy shim — no RPC, no I/O).
-//
-// STUB — S-BL.CLI-SURFACE-COMPLETION (Red Gate, BC-5.38.001). Not yet
-// implemented; all three function bodies panic unconditionally so no test can
-// accidentally pass before Task 2's Green step.
 package main
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // runSvtn dispatches `sbctl svtn <sub-verb>` commands: status (AC-005..AC-008),
 // destroy (AC-009), and unknown sub-verb (AC-010).
-//
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 2 (Green step) implements sub-verb
-// routing (status → runSvtnStatus, destroy → runSvtnDestroyShim, unknown →
-// usage error exit 2, same shape as the existing paths/router case arms'
-// default arms). Red Gate: body panics unconditionally.
 func runSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
-	panic("not implemented: S-BL.CLI-SURFACE-COMPLETION runSvtn")
+	if len(args) == 0 {
+		return usageErrf("svtn: unknown sub-verb; expected 'status' or 'destroy'")
+	}
+	switch args[0] {
+	case "status":
+		return runSvtnStatus(ctx, target, keyPath, useJSON, args[1:], sio)
+	case "destroy":
+		return runSvtnDestroyShim(sio)
+	default:
+		return usageErrf("svtn: unknown sub-verb %q; expected 'status' or 'destroy'", args[0])
+	}
 }
 
 // runSvtnStatus implements `sbctl svtn status --name=<svtn-name>`.
@@ -43,12 +47,26 @@ func runSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []s
 // the existing connectAndRun pattern. Missing --name is a client-side E-CFG-001
 // usage error (exit 2) via usageErrf, per AC-008 PC-3.
 //
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 2 (Green step) implements flag
-// parsing + dispatch. Red Gate: body panics unconditionally.
+// Output is always the JSON envelope, matching paths ping's design — svtn
+// status is a single structured query result with no table representation.
 //
-//nolint:unused // Red Gate stub — wired from runSvtn once Task 2's Green step lands.
+//nolint:unparam // useJSON is part of the run* dispatch signature contract (main.go); svtn status always emits the JSON envelope (see above)
 func runSvtnStatus(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
-	panic("not implemented: S-BL.CLI-SURFACE-COMPLETION runSvtnStatus")
+	var name string
+	for i, arg := range args {
+		if arg == "--name" {
+			if i+1 < len(args) {
+				name = args[i+1]
+			}
+		} else if strings.HasPrefix(arg, "--name=") {
+			name = strings.TrimPrefix(arg, "--name=")
+		}
+	}
+	if name == "" {
+		_ = writeError(true, "E-CFG-001", "svtn status: --name is required", sio)
+		return reported(usageErrf("E-CFG-001: svtn status: --name is required"))
+	}
+	return connectAndRun(ctx, target, keyPath, true, "admin.svtn.status", map[string]string{"name": name}, sio)
 }
 
 // runSvtnDestroyShim implements the top-level `sbctl svtn destroy` migration
@@ -57,10 +75,7 @@ func runSvtnStatus(ctx context.Context, target, keyPath string, useJSON bool, ar
 // No --id/--name flag parsing, no RPC dispatch, no confirm-gate invocation —
 // the shim never touches args or sio beyond the returned error.
 //
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 2 (Green step) implements the
-// literal redirect usageErrf return. Red Gate: body panics unconditionally.
-//
-//nolint:unused // Red Gate stub — wired from runSvtn once Task 2's Green step lands.
+//nolint:unparam // sio is part of the run* dispatch signature contract; the shim deliberately never writes to it (Decision 3 PC-2/PC-3/PC-4)
 func runSvtnDestroyShim(sio sbctlIO) error {
-	panic("not implemented: S-BL.CLI-SURFACE-COMPLETION runSvtnDestroyShim")
+	return usageErrf("svtn destroy: use 'sbctl admin svtn destroy --name=<svtn-name> [--confirm=<svtn-short-id>|--yes]'")
 }

@@ -911,6 +911,31 @@ func validateSVTNName(name string) error {
 	return nil
 }
 
+// adminSVTNStatusArgs is the wire-format JSON args for admin.svtn.status.
+//
+// AC-005 / BC-2.07.001 v1.14 PC-4 — wire format: {"name": "<svtn-name>"}.
+type adminSVTNStatusArgs struct {
+	Name string `json:"name"`
+}
+
+// adminSVTNKeyCounts is the role-grouped key count breakdown returned by
+// admin.svtn.status (AC-005 postcondition 2).
+type adminSVTNKeyCounts struct {
+	Control int `json:"control"`
+	Console int `json:"console"`
+	Access  int `json:"access"`
+}
+
+// adminSVTNStatusResult is the success response body for admin.svtn.status.
+// Deliberately excludes session/health-indicator fields — internal/session
+// remains a forbidden import for this file (AC-007 purity boundary).
+type adminSVTNStatusResult struct {
+	SVTNID    string             `json:"svtn_id"`
+	Name      string             `json:"name"`
+	CreatedAt string             `json:"created_at"`
+	KeyCounts adminSVTNKeyCounts `json:"key_counts"`
+}
+
 // makeAdminSVTNStatusHandler returns the admin.svtn.status handler function.
 //
 // Wire contract (Decision 2): request args {"name": "<svtn-name>"}; response
@@ -924,7 +949,9 @@ func validateSVTNName(name string) error {
 // operator-set member, OR bootstrap key. The admission gate still applies
 // (CWE-862 defense against cross-SVTN roster/existence enumeration, mirrors
 // BC-2.05.004 EC-008); only the control-only authority gate is skipped —
-// same shape as makeListKeysHandler.
+// same shape as makeListKeysHandler. The gate fires BEFORE SVTNByName/ListKeys
+// so a caller cannot use this op to distinguish "SVTN exists" from "SVTN
+// doesn't exist" via the error text (AC-006 postcondition 2/3 no-leak proof).
 //
 // On success: response fields sourced from m.SVTNByName (svtn_id, name,
 // created_at) and role-grouped counts derived from m.ListKeys (AC-005
@@ -934,15 +961,47 @@ func validateSVTNName(name string) error {
 // (AC-006 postcondition 1).
 //
 // Traces to BC-2.07.001 v1.14 PC-4; AC-005; AC-006; AC-007.
-//
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 2 (Green step) implements the
-// SVTNByName + ListKeys lookup and response assembly. Red Gate: the returned
-// closure panics unconditionally so no test can accidentally pass before the
-// Green step; the outer function itself does not panic so BuildAdminHandlers
-// (called by every existing control-mode test) keeps constructing without
-// disruption.
-func makeAdminSVTNStatusHandler(_ *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
-	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		panic("not implemented: S-BL.CLI-SURFACE-COMPLETION makeAdminSVTNStatusHandler")
+func makeAdminSVTNStatusHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		var a adminSVTNStatusArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, fmt.Errorf("E-CFG-001: invalid request args: %w", err)
+		}
+		if a.Name == "" {
+			return nil, fmt.Errorf("E-CFG-001: missing required field: name")
+		}
+
+		if err := resolveCallerAdmissionAnyRole(ctx, m, ops, a.Name, "admin.svtn.status"); err != nil {
+			return nil, err
+		}
+
+		svtn, found := m.SVTNByName(a.Name)
+		if !found {
+			return nil, mapAdminError(svtnmgmt.ErrSVTNNotFound, a.Name, nil, "")
+		}
+
+		summaries, err := m.ListKeys(a.Name)
+		if err != nil {
+			return nil, mapAdminError(err, a.Name, nil, "")
+		}
+
+		var counts adminSVTNKeyCounts
+		for _, s := range summaries {
+			switch s.Role {
+			case admission.RoleControl:
+				counts.Control++
+			case admission.RoleConsole:
+				counts.Console++
+			case admission.RoleAccess:
+				counts.Access++
+			}
+		}
+
+		return adminSVTNStatusResult{
+			SVTNID:    hex.EncodeToString(svtn.ID[:]),
+			Name:      svtn.Name,
+			CreatedAt: svtn.CreatedAt.Format(time.RFC3339),
+			KeyCounts: counts,
+		}, nil
 	}
 }
