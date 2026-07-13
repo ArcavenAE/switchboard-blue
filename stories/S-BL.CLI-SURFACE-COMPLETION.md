@@ -10,6 +10,29 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-12
+    version: "2.1"
+    change: >
+      Propagated architect Ruling 4 Addendum (v1.1, F-CS-SP1-001, spec-adversarial pass 1) into
+      AC-011 and its dependents. AC-011 PC-3 reframed as an explicit defense-in-depth guard
+      (unreachable via any real daemon startup path — `runRouter`'s entry guard plus `main.go`'s
+      `"router"` case together guarantee `configPath != ""` for every router instance reaching
+      `wireRouterControlHandlers` registration; mirrors the `E-CFG-011` defensive-annotation
+      shape). PC-3's test level downgraded integration → unit (test name unchanged); invocation
+      pattern note added (calls `wireRouterControlHandlers` directly with `configPath = ""`, no
+      live daemon). Mechanism correction: `wireRouterControlHandlers` gains a `configPath string`
+      second parameter — updated at both literal-signature occurrences (Decision 4 registration
+      point, AC-013 postcondition 1) plus the Architecture Mapping table row. Forward Obligation
+      (c) disposition downgraded `OPEN — hard gate on AC-011` → `OPEN — non-blocking (does not
+      gate Task 4 implementation)`; the "only hard implementation gate" paragraph and Task 4's
+      gate-check note rewritten to match. Rulings-doc citation pinned to v1.1 at the two locations
+      asserting it as binding source. `interface-definitions.md` pin bumped v1.30 → v1.31
+      (F-CS-SP1-002 §60 `usage:` prefix fix; AC-009 text itself needed no change) at all
+      live-reference citations. BC-2.09.001 (v1.2) / BC-2.09.002 (v1.3) pins reviewed and
+      retained per the governance-leaf convention (N-CS-SP1-01) — both files' subsequent bumps
+      (v1.2→v1.3, v1.3→v1.4) are traceability-only Stories-cell fills, no PC/AC behavior change,
+      so the existing pins are not factually wrong. `input-hash` recomputed via
+      `compute-input-hash --update` (the rulings doc input changed).
+  - date: 2026-07-12
     version: "2.0"
     change: >
       Elaborated from backlog stub (v1.0, draft, 0 ACs) to sprint-ready. Status: draft → ready;
@@ -37,7 +60,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.0"
+version: "2.1"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -51,7 +74,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'
   - '.factory/specs/prd-supplements/interface-definitions.md'
-input-hash: "2af06c0"
+input-hash: "88c13c8"
 traces_to: .factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md
 behavioral_contracts:
   - BC-2.06.004
@@ -89,12 +112,12 @@ estimated_days: null
 assumption_validations: []
 risk_mitigations: []   # the ruling's four follow-ups are captured as explicit story obligations below (Forward Obligations), not ASM/R-registry IDs
 inputDocuments:
-  - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'   # BINDING — 4 rulings, wire contracts, error codes, authority tiers, implementation constraints
+  - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'   # BINDING — v1.1 (Ruling 4 Addendum, F-CS-SP1-001) — 4 rulings + AC-011 PC-3 defense-in-depth reframe, wire contracts, error codes, authority tiers, implementation constraints
   - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.004.md'    # v1.1 — new BC, paths.ping
   - '.factory/specs/behavioral-contracts/ss-07/BC-2.07.001.md'    # v1.14 — PC-4 admin.svtn.status
-  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'    # v1.2 — governance addendum, router.reload
-  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'    # v1.3 — governance addendum, router.drain
-  - '.factory/specs/prd-supplements/interface-definitions.md'     # v1.30 — Registered Verbs rows + CLI listing corrections already executed by PO
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'    # v1.2 — governance addendum, router.reload (pin retained per governance-leaf convention; file now at v1.3, traceability-only)
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'    # v1.3 — governance addendum, router.drain (pin retained per governance-leaf convention; file now at v1.4, traceability-only)
+  - '.factory/specs/prd-supplements/interface-definitions.md'     # v1.31 — Registered Verbs rows + CLI listing corrections already executed by PO (bumped from v1.30, F-CS-SP1-002 §60 usage: prefix fix; no AC text change)
   - '.factory/stories/S-7.04-FU-SIGHUP-RELOAD.md'                 # v1.7 — lifecycle/status/versioning convention precedent; shipped sighupCh shape this story bridges into
   - '.factory/stories/S-7.04-FU-DRAIN-WIRE.md'                    # v1.11 — shipped drainCoord/shutdown-sequence shape this story bridges into
   - '.factory/stories/S-BL.LOOPBACK-FULLSTACK.md'                 # v1.1 — template-mandated superset-keys precedent, no-line-number-citation convention
@@ -150,7 +173,7 @@ underlying mechanisms for `router reload`/`router drain` are **already shipped**
 `S-7.04-FU-SIGHUP-RELOAD` (PR #113) built the SIGHUP-triggered reload path; `S-7.04-FU-DRAIN-WIRE`
 (PR #120) built the DRAIN-broadcast + SIGTERM shutdown sequence. Both placement notes explicitly
 named the RPC-trigger gap as deferred, out-of-scope work for a "follow-on ops-UX story" — this is
-that story. `interface-definitions.md` v1.30 already carries the adjudicated CLI listing and the
+that story. `interface-definitions.md` v1.31 already carries the adjudicated CLI listing and the
 four new Registered Verbs rows (`admin.svtn.status`, `paths.ping`, `router.reload`, `router.drain`)
 — that spec-side edit is done; this story is the implementation-side closure.
 
@@ -175,10 +198,11 @@ four new Registered Verbs rows (`admin.svtn.status`, `paths.ping`, `router.reloa
 
 ## Adjudicated Design Decisions
 
-Transcribed from `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` (binding). Where this
-story and the rulings doc appear to diverge, the rulings doc governs. Each entry below carries the
-load-bearing constraints inline — the implementer should not need to re-open the rulings doc for
-the common path.
+Transcribed from `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1 (binding — v1.1
+adds the Ruling 4 Addendum, F-CS-SP1-001, reframing AC-011 PC-3 as a defense-in-depth guard). Where
+this story and the rulings doc appear to diverge, the rulings doc governs. Each entry below carries
+the load-bearing constraints inline — the implementer should not need to re-open the rulings doc
+for the common path.
 
 ### Decision 1 (Ruling 1) — `paths ping`: new RPC `paths.ping`, new BC-2.06.004
 
@@ -273,11 +297,14 @@ placement notes (`S-7.04-FU-DRAIN-WIRE-placement-note.md`, `S-7.04-FU-SIGHUP-REL
 - **Wire verb names:** `router.reload`, `router.drain` — match the CLI sub-verb names already
   dispatched from the `router` case arm (alongside `metrics`/`status`).
 - **Registration point:** new **router-mode-exclusive** function
-  `wireRouterControlHandlers(srv *mgmt.Server, sighupCh chan os.Signal, drainRequestCh chan struct{}) error`,
+  `wireRouterControlHandlers(srv *mgmt.Server, configPath string, sighupCh chan os.Signal, drainRequestCh chan struct{}) error`,
   called from `runRouter` at the same phase as `wireMetricsHandlers`, **before** `serveMgmtServer`
   (register-before-serve invariant, F-P2L1-001). `runAccess`/`runConsole`/`runControl` never call
-  it — meaningless on those modes (no `sighupCh`/drain-coordinator concept). See the dedicated
-  Design Constraint section below for the exact signature change.
+  it — meaningless on those modes (no `sighupCh`/drain-coordinator concept). The `configPath`
+  parameter lets `router.reload`'s handler check `configPath == ""` synchronously for AC-011
+  PC-3's defense-in-depth guard, without touching `sighupCh` or the select loop (mechanism
+  correction, Ruling 4 Addendum v1.1). See the dedicated Design Constraint section below for the
+  exact `runRouter` signature change.
 - **Reload bridging (no new channel):** `router.reload`'s handler synthesizes the exact signal the
   SIGHUP path already consumes: `select { case sighupCh <- syscall.SIGHUP: default: }` (matches
   `signal.Notify`'s own coalescing semantics — a reload already pending silently drops the second
@@ -557,16 +584,27 @@ Tier-1-authenticates.
 2. From that synthesis point forward, the RPC-triggered and SIGHUP-OS-signal-triggered reload
    paths are code-path-identical (same `sighupCh` consumer, same fail-closed reload-dispatch
    logic shipped by `S-7.04-FU-SIGHUP-RELOAD`).
-3. When the daemon was started without `--config` (`configPath == ""`), `router.reload` returns
-   **E-CFG-004: reload not applicable: daemon started without --config** synchronously via the
-   RPC response, rather than silently no-op'ing the way a bare SIGHUP does today. **Gated by
-   Forward Obligation (c)** — error-taxonomy.md must document this E-CFG-004 message variant
-   (mirroring the E-NET-001/E-CFG-008 multi-variant precedent) before this postcondition is
-   implemented.
+3. **Defense-in-depth guard (unreachable via any real daemon startup path — presence at runtime
+   would indicate a code defect, not an operator condition).** `runRouter`'s entry guard in
+   `cmd/switchboard/mgmt_wire.go` (`cfg == nil` → `E-CFG-004: --config is required for router
+   mode`) and the `"router"` case in `cmd/switchboard/main.go` (`cfg` set iff
+   `*configPath != ""`) together guarantee `configPath != ""` for every router instance that
+   reaches `wireRouterControlHandlers` registration. `router.reload`'s handler nonetheless
+   checks `configPath == ""` before synthesizing onto `sighupCh`, returning **E-CFG-004: reload
+   not applicable: daemon started without --config** synchronously if that invariant is ever
+   violated (e.g. by a future refactor decoupling `cfg` construction from `configPath`). Mirrors
+   the `E-CFG-011` defensive-annotation shape (the E-CFG-011 row of error-taxonomy.md). Forward
+   Obligation (c) — the error-taxonomy.md E-CFG-004 message-variant documentation — is
+   **non-blocking** as of Ruling 4 Addendum v1.1 (see Forward Obligations table below); it should
+   still land at or before delivery but does not gate this postcondition's implementation.
 
-**Test names:** `TestRouterReload_BridgesToSighupCh_CodePathIdentical`,
-`TestRouterReload_NoConfigLoaded_ECFG004`
-**Test level:** integration
+**Invocation pattern (PC-3):** `TestRouterReload_NoConfigLoaded_ECFG004` calls
+`wireRouterControlHandlers` (or its registered `router.reload` handler) directly with
+`configPath = ""` — no live `runRouter`/daemon required.
+
+**Test names:** `TestRouterReload_BridgesToSighupCh_CodePathIdentical` (PC-1, PC-2),
+`TestRouterReload_NoConfigLoaded_ECFG004` (PC-3)
+**Test level:** integration (PC-1, PC-2) + unit (PC-3)
 **Test file:** `cmd/switchboard/router_control_wire_test.go` (new)
 
 ---
@@ -600,9 +638,11 @@ Tier-1-authenticates.
 
 **Postconditions:**
 
-1. A new `wireRouterControlHandlers(srv *mgmt.Server, sighupCh chan os.Signal, drainRequestCh chan struct{}) error`
+1. A new `wireRouterControlHandlers(srv *mgmt.Server, configPath string, sighupCh chan os.Signal, drainRequestCh chan struct{}) error`
    is called from `runRouter` at the same phase as `wireMetricsHandlers`, **before**
-   `serveMgmtServer` starts the `Serve` goroutine (register-before-serve invariant).
+   `serveMgmtServer` starts the `Serve` goroutine (register-before-serve invariant). `runRouter`
+   passes its own (already-guard-verified-non-empty) `configPath` argument through unchanged —
+   this is not a further widening of `runRouter`'s own signature beyond item 3 below.
 2. `runAccess`, `runConsole`, `runControl` never call `wireRouterControlHandlers`. Both
    `router.reload` and `router.drain` return E-RPC-010 (unknown command) when dispatched against
    those modes.
@@ -647,12 +687,17 @@ downstream artifact's correctness, and each is a distinct owner/timing combinati
 |---|-----------|-------|------|--------|
 | (a) | BC-2.06.004's `CAP-022` capability anchor is provisional — Ruling 1 did not mint a dedicated capability. Architect/PO must confirm CAP-022 as the correct anchor or mint `CAP-029`. | architect / PO | Before or at delivery | OPEN |
 | (b) | `ARCH-INDEX.md`'s SS-06 (quality-observability) subsystem row lists Implementing Modules as `internal/metrics, internal/paths` — does not yet include `internal/mgmt`, which BC-2.06.004 names as its `architecture_module`. | architect | At delivery | OPEN |
-| (c) | `error-taxonomy.md`'s E-CFG-004 row currently reads `"config file not found: <path>"` (BC-2.09.003 scope). Ruling 4's reload variant needs a documented second message variant — `"reload not applicable: daemon started without --config"` — mirroring the existing E-NET-001/E-CFG-008 multi-variant catalog pattern. | PO | **Before implementation of AC-011's E-CFG-004 postcondition** | OPEN — hard gate on AC-011 |
+| (c) | `error-taxonomy.md`'s E-CFG-004 row currently reads `"config file not found: <path>"` (BC-2.09.003 scope). Ruling 4's reload variant needs a documented second message variant — `"reload not applicable: daemon started without --config"` — mirroring the existing E-NET-001/E-CFG-008 multi-variant catalog pattern. | PO | **Before implementation of AC-011's E-CFG-004 postcondition** | OPEN — non-blocking (does not gate Task 4 implementation) |
 | (d) | BC-2.06.004's `VP-TBD-PING-A`/`VP-TBD-PING-B` are placeholder IDs — Ruling 1 did not mint real VP numbers. Architect mints real numbers following the BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` → `VP-061`/`VP-062` precedent (v1.3, "not blocking implementation"). | architect | Non-blocking; before this story's Verification Properties table is cited elsewhere as final | OPEN — non-blocking |
 
-Obligation (c) is the only hard implementation gate — Task 4 below (`router.reload`/`router.drain`)
-must not land the E-CFG-004 postcondition until error-taxonomy.md carries the variant. The other
-three do not block TDD implementation of the remaining ACs.
+**Downgraded by Ruling 4 Addendum v1.1 (F-CS-SP1-001):** Obligation (c) no longer hard-gates TDD
+implementation. AC-011 PC-3 was reframed as a defense-in-depth guard — `configPath == ""` is
+confirmed unreachable via any real daemon startup path, so the E-CFG-004 message it returns is
+operator-unreachable, unit-tested directly against `wireRouterControlHandlers` with
+`configPath = ""` rather than gated on a live-daemon integration path. The error-taxonomy.md
+message-variant documentation is still wanted and should land at or before delivery, but Task 4
+may implement and test PC-3 regardless of its status. None of the four Forward Obligations block
+TDD implementation of the remaining ACs.
 
 **Non-binding architect recommendation, also from Ruling 4 (not tracked as a Forward Obligation —
 informational only):** wherever ADR-004's disambiguation table enumerates per-mode handler sets,
@@ -684,7 +729,7 @@ doesn't silently drift from the `admin.*` handler exclusion it parallels.
 | `wireMetricsHandlers` | `cmd/switchboard/metrics_wire.go` | Modified | Calls `mgmt.RegisterPingHandler(srv)` alongside `mgmt.RegisterMetricsHandlers` |
 | `makeAdminSVTNStatusHandler` (new) | `cmd/switchboard/admin_handlers.go` | New | Uses `resolveCallerAdmissionAnyRole` + `SVTNByName` + role-grouped `ListKeys` counts |
 | `BuildAdminHandlers` | `cmd/switchboard/admin_handlers.go` | Modified | Registers `admin.svtn.status` alongside create/destroy |
-| `wireRouterControlHandlers` (new) | `cmd/switchboard` (new file, e.g. `router_control_wire.go`) | New | Registers `router.reload`/`router.drain`; router-mode-exclusive |
+| `wireRouterControlHandlers` (new) | `cmd/switchboard` (new file, e.g. `router_control_wire.go`) | New | Registers `router.reload`/`router.drain`; router-mode-exclusive; takes `configPath` for AC-011 PC-3's defense-in-depth guard |
 | `runRouter` | `cmd/switchboard/mgmt_wire.go` | Modified | Signature widening (Design Constraint above); third select-loop arm |
 | `"router"` case body | `cmd/switchboard/main.go` | Modified | Constructs `drainRequestCh`; passes to `runRouter` |
 | `svtnmgmt.SVTNManager` (`SVTNByName`, `ListKeys`) | `internal/svtnmgmt` | Read-only consumer | No source changes |
@@ -745,9 +790,11 @@ argument. Gate: all **existing** tests remain green (no new test files yet); `ju
 
 ### Task 4 — `router.reload`/`router.drain` handlers (AC-011, AC-012, AC-013 remainder, AC-014)
 
-**Gate check before this task:** Forward Obligation (c) — confirm error-taxonomy.md carries the
-E-CFG-004 "reload not applicable" variant before writing AC-011's E-CFG-004 postcondition test as
-a real (non-skipped) assertion.
+**Note (non-blocking, per Ruling 4 Addendum v1.1):** Forward Obligation (c) — error-taxonomy.md
+should carry the E-CFG-004 "reload not applicable" variant at or before delivery, but no longer
+gates this task. AC-011 PC-3 is a unit-tested defense-in-depth guard
+(`TestRouterReload_NoConfigLoaded_ECFG004` calls `wireRouterControlHandlers` directly with
+`configPath = ""`); it may be implemented and tested regardless of the taxonomy doc's status.
 
 Red: write AC-011, AC-012, AC-013, AC-014 tests against the Task 3 stub (they fail — the select-arm
 is a no-op). Green: implement `wireRouterControlHandlers`, replace the select-loop stub arm with
@@ -789,16 +836,19 @@ pass result rather than reviewing stale state.
 
 - **Finding:** F-P5P6-A-005 (Phase 5 Pass 6 Adv-A, 2026-07-03) — seven `sbctl` verbs specified
   without PENDING annotations; five collective-annotated here.
-- **Spec annotation:** `interface-definitions.md` v1.30 — CLI listing and Registered Verbs rows
+- **Spec annotation:** `interface-definitions.md` v1.31 — CLI listing and Registered Verbs rows
   already adjudicated and updated by PO/architect per the rulings doc (this story does not edit
   that file).
-- **Adjudication:** `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` (2026-07-12) —
-  all four Open Design Obligations resolved. This elaboration (v2.0) is the story-writer
-  transcription of that ruling into sprint-ready ACs.
+- **Adjudication:** `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1 (2026-07-12,
+  addendum updated 2026-07-12T06:00Z) — all four Open Design Obligations resolved, plus the
+  Ruling 4 Addendum (F-CS-SP1-001, spec-adversarial pass 1) reframing AC-011 PC-3 as a
+  defense-in-depth guard. This elaboration (v2.1) is the story-writer transcription of that
+  ruling into sprint-ready ACs.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.1 | 2026-07-12 | Propagated architect Ruling 4 Addendum (`S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1, F-CS-SP1-001, spec-adversarial pass 1) into AC-011 and its dependents. **AC-011 PC-3 reframed** from an operator-reachable-but-untested guard to an explicit **defense-in-depth guard** (unreachable via any real daemon startup path — `runRouter`'s entry guard in `cmd/switchboard/mgmt_wire.go` plus the `"router"` case in `cmd/switchboard/main.go` together guarantee `configPath != ""` for every router instance reaching `wireRouterControlHandlers` registration; presence at runtime would indicate a code defect, mirrors the `E-CFG-011` defensive-annotation shape). PC-3's test level downgraded `integration` → `unit` (test name unchanged: `TestRouterReload_BridgesToSighupCh_CodePathIdentical` stays integration for PC-1/PC-2; `TestRouterReload_NoConfigLoaded_ECFG004` for PC-3 is now unit); invocation-pattern note added — calls `wireRouterControlHandlers`/its registered handler directly with `configPath = ""`, no live daemon. **Mechanism correction:** `wireRouterControlHandlers` gains a `configPath string` second parameter (was missing entirely in the original signature — PC-3 as drafted had no way to observe `configPath`); updated at both literal-signature occurrences (Decision 4 registration-point bullet, AC-013 postcondition 1) plus the Architecture Mapping table row's Notes cell, each with a one-line rationale pointer back to AC-011 PC-3. **Forward Obligation (c) downgraded** from `OPEN — hard gate on AC-011` to `OPEN — non-blocking (does not gate Task 4 implementation)`; the "Obligation (c) is the only hard implementation gate" paragraph and Task 4's "Gate check before this task" note both rewritten to match — none of the four Forward Obligations now hard-gate TDD implementation. Rulings-doc citation pinned to v1.1 at the two locations asserting it as binding source (Adjudicated Design Decisions section intro, Provenance section) — previously cited by filename+date only. `interface-definitions.md` pin bumped v1.30 → v1.31 (PO fixed §60's `usage:` prefix under F-CS-SP1-002; AC-009's own text was already correct, no AC change) at all live-reference citations (frontmatter `inputDocuments` comment, Context section prose, Provenance section) — the v2.0 historical `modified:` narrative entry left untouched as an accurate record of what was true at that time. BC-2.09.001 (v1.2) / BC-2.09.002 (v1.3) pins reviewed and **retained** per the governance-leaf convention (N-CS-SP1-01) — both files' subsequent bumps (v1.2→v1.3, v1.3→v1.4) are traceability-only Stories-cell fills, `governance_leaf: true`, no PC/AC behavior change, so the story's existing pins are not factually wrong. `input-hash` recomputed via `compute-input-hash --update` (`88c13c8`, was `2af06c0` — the rulings doc input changed). Frontmatter `version` 2.0 → 2.1; new `modified:` entry appended (newest-first). |
 | 2.0 | 2026-07-12 | Elaborated from backlog stub (v1.0, draft, 0 ACs) to sprint-ready (`ready`, 14 ACs, 5 points) per architect ruling `S-BL.CLI-SURFACE-COMPLETION-rulings.md`. Replaced "Open Design Obligations" with "Adjudicated Design Decisions" (four decisions, one per ruling, load-bearing constraints transcribed inline). Added Design Constraint section for the `runRouter` signature widening. 14 ACs traced to BC-2.06.004 PC-1..4, BC-2.07.001 PC-4, BC-2.09.001 v1.2 PC-1 RPC-trigger note, BC-2.09.002 v1.3 Trigger/PC-1 RPC-trigger note, plus CLI dispatch/flag-parse ACs per `interface-definitions.md` §§60/62/77/82-83. Four Forward Obligations encoded as explicit story-tracked tasks (CAP-022/CAP-029 confirmation, ARCH-INDEX SS-06 `internal/mgmt` row, error-taxonomy.md E-CFG-004 variant [hard gate on AC-011], VP-TBD-PING-A/B real VP-number minting). `bc_traces` gained BC-2.06.004. `estimated_points` TBD → 5 (Ruling 4 is the largest plumbing — signature widening + new channel + registration function + router-mode-exclusive wiring, comparable alone to `S-7.04-FU-SIGHUP-RELOAD`'s full 3-point scope; Rulings 1-2 each add a full handler+CLI wire pair; Ruling 3 is a near-zero usage-error shim). Frontmatter conformed to `S-BL.LOOPBACK-FULLSTACK` template-mandated superset keys. Full File-Change List, Architecture Mapping, Task Breakdown, and POL-005 Delivery Plan Note added. `input-hash` to be computed via `compute-input-hash --update` in the same burst as commit. |
 | 1.0 | 2026-07-03 | Draft backlog stub created per F-P5P6-A-005 adjudication (annotate-and-defer). `interface-definitions.md` v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION annotation is the spec-side closure; this stub is the backlog-side closure. BC anchors: BC-2.09.001 (router reload), BC-2.09.002 (router drain), BC-2.07.001 (svtn destroy). Two verbs (paths ping, svtn status) had no governing BC — open design obligations noted. Four open design obligations logged. |

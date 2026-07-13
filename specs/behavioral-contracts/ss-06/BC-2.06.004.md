@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.004
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-07-12T00:00:00
@@ -23,7 +23,30 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-07-12
+    version: "1.3"
+    actor: spec-steward
+    change: >
+      Frontmatter reconciliation (F-CS-SP1-003, spec-adversarial pass 1): backfilled
+      missing `modified:` entries for v1.1 (initial commission) and v1.2 (Stories
+      cell fill) — previously `modified: []` despite two prior changelog rows.
+      No behavioral changes.
+  - date: 2026-07-12
+    version: "1.2"
+    actor: story-writer
+    change: >
+      Traceability Stories cell filled: `S-BL.CLI-SURFACE-COMPLETION` (PC-1..PC-4,
+      all) — the distinct story-writer pass PO deferred at v1.1 commission.
+      Governance-only; no PC/AC behavior change.
+  - date: 2026-07-12
+    version: "1.1"
+    actor: product-owner
+    change: >
+      Initial commission per `S-BL.CLI-SURFACE-COMPLETION-rulings.md` Ruling 1: new
+      BC for the `paths.ping` wire verb (bodyless RTT probe, client-measured
+      round-trip time, no per-path metrics computation, no quality classification).
+      Registered in BC-INDEX under quality-observability / CAP-022.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -111,5 +134,6 @@ Note: VP IDs are placeholders pending architect assignment — Ruling 1 did not 
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.3 | 2026-07-12 | spec-steward | Frontmatter reconciliation (F-CS-SP1-003, spec-adversarial pass 1): backfilled missing `modified:` entries for v1.1 (initial commission) and v1.2 (Stories cell fill) — previously `modified: []` despite two prior changelog rows. No behavioral changes. [governance_leaf: true — pure frontmatter reconciliation, no PC/AC/Trigger/Invariant content changed, no downstream re-sync required] |
 | 1.2 | 2026-07-12 | story-writer | Traceability Stories cell filled: `S-BL.CLI-SURFACE-COMPLETION` (PC-1..PC-4, all) — the distinct story-writer pass PO deferred at v1.1 commission. Governance-only; no PC/AC behavior change. |
 | 1.1 | 2026-07-12 | product-owner | Initial commission per `S-BL.CLI-SURFACE-COMPLETION-rulings.md` Ruling 1: new BC for the `paths.ping` wire verb (bodyless RTT probe, client-measured round-trip time, no per-path metrics computation, no quality classification). Registered in BC-INDEX under quality-observability / CAP-022. |

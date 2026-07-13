@@ -2,11 +2,11 @@
 artifact_id: S-BL.CLI-SURFACE-COMPLETION-rulings
 document_type: decision
 level: ops
-version: "1.0"
+version: "1.1"
 status: final
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-updated: 2026-07-12T00:00:00Z
+updated: 2026-07-12T06:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.CLI-SURFACE-COMPLETION]
 bc_traces:
@@ -573,6 +573,108 @@ closure.
    real RPC round-trip required for unit-level coverage; reserve one
    integration test per verb for the actual RPC → channel → shutdown path.
 
+### Ruling 4 Addendum (v1.1) — F-CS-SP1-001: AC-011 PC-3 reframed as defense-in-depth
+
+**Finding acknowledged and verified independently.** Spec-adversarial pass 1 on
+`S-BL.CLI-SURFACE-COMPLETION` (v2.0) correctly identifies that `configPath == ""` cannot occur for
+any `runRouter` instance that reaches the select loop — contradicting the framing this ruling
+originally borrowed from the SIGHUP path's existing no-op branch, which is itself dead code for
+the same reason. Re-verified against develop @ `4c276d935b089026fac4fa796612352374bb880f`:
+
+- `cmd/switchboard/main.go:106-116` — the `"router"` case sets `cfg` **only** when
+  `*configPath != ""`; otherwise `cfg` stays `nil`. `cfg` and `configPath` are coupled 1:1 at the
+  one call site that constructs them: `cfg == nil ⟺ configPath == ""`.
+- `cmd/switchboard/mgmt_wire.go:465-467` — `runRouter` returns
+  `E-CFG-004: --config is required for router mode` immediately when `cfg == nil`, before doing
+  any other work, including entering the select loop at `:778`.
+- Consequently `cmd/switchboard/mgmt_wire.go:786-788`'s `if configPath == "" { continue }` arm
+  inside the SIGHUP case — the precedent this ruling cited when originally specifying AC-011 PC-3
+  — is itself unreachable for any process started via `switchboard router [--config=<path>]`.
+  Confirmed no existing test exercises that branch either. Both branches guard the same
+  unreachable state; the finding's premise-class classification is correct.
+
+**Decision: retain AC-011 PC-3 as an explicit defense-in-depth guard — the adversary's shape (a),
+not shape (b) deletion.** Rationale, in order of weight:
+
+1. **Direct in-repo precedent for exactly this shape.** `error-taxonomy.md` already documents
+   `E-CFG-011` with the identical framing this finding calls for: *"defensive: emitted if any
+   attempted private-key extraction path is invoked; BC-2.05.007 requires this path to be
+   unreachable. Presence of this code at runtime would indicate a code defect."*
+   (`error-taxonomy.md:113`). `E-NET-006` carries a parallel "PENDING-S-7.04" provisional
+   annotation without blocking unrelated work (`error-taxonomy.md:126`). `VP-048`'s "Ruling-7
+   defense-in-depth" clause is the same pattern at the verification-property level: an explicit
+   invariant check retained *because* a future refactor could violate it, not because the current
+   call graph can reach it — discharged by a targeted mutation-test
+   (`TestAdminSVTNCreate_NonBootstrapControlKey_RejectsWithEADM009`, `VP-048.md:29`), not gated on
+   an integration daemon spin-up. AC-011 PC-3 is a third instance of an established, accepted
+   pattern in this codebase, not a novel one this ruling is inventing.
+2. **The coupling is two independently-typed function parameters, not one derived value.**
+   `cfg *config.Config` and `configPath string` are separate arguments to `runRouter`; nothing in
+   the type system enforces their relationship — it holds today only because exactly one call site
+   (`main.go`'s `"router"` case) constructs both together. A future refactor that splits config
+   loading from CLI-flag parsing, or adds a second construction path, could violate the coupling
+   silently. A cheap, explicit guard at the RPC boundary is proportionate insurance against that
+   refactor class — consistent with this project's general fail-closed-at-boundaries posture
+   (`go.md` rule 13).
+3. **The original operational rationale for PC-3 — a synchronous, informative error beats a silent
+   no-op — never depended on reachability.** Only the "integration-tested, operator-reachable"
+   framing was wrong; the design intent underneath it was sound.
+
+**Mechanism correction surfaced while adjudicating this finding:** the story draft's
+`wireRouterControlHandlers(srv *mgmt.Server, sighupCh chan os.Signal, drainRequestCh chan
+struct{}) error` signature has no way to observe `configPath` at all — PC-3 as drafted could not
+have been implemented against that signature. **Fix: `wireRouterControlHandlers` gains a
+`configPath string` parameter:**
+
+```go
+func wireRouterControlHandlers(srv *mgmt.Server, configPath string, sighupCh chan os.Signal, drainRequestCh chan struct{}) error
+```
+
+`runRouter`'s call site passes its own (already-guard-verified-non-empty) `configPath` argument
+through unchanged — no further widening of `runRouter`'s own signature beyond what Ruling 4 already
+specifies. The `router.reload` handler checks `configPath == ""` **synchronously, before ever
+touching `sighupCh`** — it does not route through the select loop's own `:786-788` branch at all.
+This makes the guard fully self-contained and unit-testable without constructing a live
+`runRouter`/daemon: call `wireRouterControlHandlers` (or the handler it registers) directly with
+`configPath = ""`, invoke the registered `router.reload` handler, and assert (a) the RPC response
+carries `E-CFG-004: reload not applicable: daemon started without --config`, (b) nothing was sent
+on `sighupCh`.
+
+**AC-011 PC-3 — new text (replaces the current PC-3 in the story):**
+
+> 3. **Defense-in-depth guard (unreachable via any real daemon startup path — presence at runtime
+>    would indicate a code defect, not an operator condition).** `runRouter`'s entry guard
+>    (`cfg == nil` → `E-CFG-004: --config is required for router mode`, `mgmt_wire.go:465-467`)
+>    and `main.go`'s `"router"` case (`cfg` set iff `*configPath != ""`, `main.go:106-116`)
+>    together guarantee `configPath != ""` for every router instance that reaches
+>    `wireRouterControlHandlers` registration. `router.reload`'s handler nonetheless checks
+>    `configPath == ""` before synthesizing onto `sighupCh`, returning **E-CFG-004: reload not
+>    applicable: daemon started without --config** synchronously if that invariant is ever
+>    violated (e.g. by a future refactor decoupling `cfg` construction from `configPath`). Mirrors
+>    the `E-CFG-011` defensive-annotation shape (`error-taxonomy.md:113`).
+
+**Test level: `unit` (was `integration`).** Test name unchanged —
+`TestRouterReload_NoConfigLoaded_ECFG004` already accurately names what is tested. Only the
+invocation pattern changes: construct `wireRouterControlHandlers` (or its registered handler)
+directly with `configPath = ""`, no live `runRouter`/daemon required.
+`cmd/switchboard/router_control_wire_test.go` remains the correct test file — this is a same-file
+test-level reclassification, not a file move.
+
+**Forward Obligation (c) — DOWNGRADED, not DROPPED, not left standing as a hard gate.** The
+error-taxonomy.md documentation of the `E-CFG-004` "reload not applicable" message variant should
+still land — a defensive code path that can emit a taxonomy-coded message still belongs in the
+catalog, exactly as `E-CFG-011` and `E-NET-006` are catalogued despite being (at the time each was
+added) unreachable or not-yet-wired. But gating AC-011's *implementation* on that doc edit landing
+first is disproportionate now that the state is confirmed operator-unreachable: no real daemon can
+ever emit this message, so there is no operator-facing risk from implementing the guard before the
+taxonomy prose is updated. **New disposition: non-blocking.** PO documents the `E-CFG-004` variant
+using the `E-CFG-011` defensive-annotation shape at any point before or shortly after AC-011 lands;
+it no longer blocks Task 4.
+
+**Precedent citations verified:** `error-taxonomy.md:113` (E-CFG-011), `error-taxonomy.md:126`
+(E-NET-006 "PENDING-S-7.04" provisional-annotation shape), `VP-048.md:29,53-59,81` + `VP-INDEX.md:74`
+(Ruling-7 defense-in-depth, mutation-test-discharged, not an implementation gate).
+
 ---
 
 ## Summary Table
@@ -595,4 +697,5 @@ what the story was scheduled to close.
 
 | Date | Actor | Entry |
 |------|-------|-------|
+| 2026-07-12 | architect | **v1.1 — Ruling 4 Addendum, F-CS-SP1-001 (spec-adversarial pass 1).** Adjudicated the adversary's premise-class finding that `configPath == ""` is unreachable for any `runRouter` instance reaching the select loop (`main.go:106-116` cfg/configPath coupling + `mgmt_wire.go:465-467` entry guard confirmed independently; the SIGHUP path's `:786-788` no-op branch this ruling originally cited as precedent is itself dead code for the same reason). Chose shape (a): retained AC-011 PC-3 as an explicit defense-in-depth guard rather than deleting it, per direct in-repo precedent (`E-CFG-011`'s defensive-annotation shape, `VP-048` Ruling-7's defense-in-depth pattern). Test level downgraded integration → unit (test name unchanged). Surfaced and fixed a mechanism gap found while adjudicating: `wireRouterControlHandlers` gains a `configPath string` parameter so the guard can check synchronously without touching `sighupCh` or the select loop. Forward Obligation (c) DOWNGRADED from hard implementation gate to non-blocking PO follow-up — the taxonomy doc edit should still land (matching the `E-CFG-011`/`E-NET-006` precedent of cataloguing defensive/provisional codes) but no longer blocks Task 4, since the message is confirmed operator-unreachable. |
 | 2026-07-12 | architect | Initial ruling on all four Open Design Obligations for `S-BL.CLI-SURFACE-COMPLETION`. `paths ping` → new BC-2.06.004 + new `paths.ping` RPC (category mismatch with `paths.list`'s historical-metrics contract). `svtn status` → extend BC-2.07.001 PC-4, wire `admin.svtn.status`, any-admitted-role authority (list-keys precedent), no session/health fields (ARCH-09 purity boundary). `svtn destroy` top-level → migration shim per the `svtn create` removal precedent; `--id` flag not implementable against a name-keyed `SVTNManager`. `router reload`/`router drain` → in scope, new router-mode-exclusive RPCs `router.reload`/`router.drain` bridging into the already-shipped SIGHUP-reload and SIGTERM-drain code paths via `sighupCh` reuse + new `drainRequestCh`; resolves the explicitly-deferred `DRIFT-HS006-DRAIN-CLI-MISSING` gap named in the `S-7.04-FU-SIGHUP-RELOAD` and `S-7.04-FU-DRAIN-WIRE` placement notes. |

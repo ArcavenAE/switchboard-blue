@@ -33,9 +33,9 @@ develop_head: 4c276d9
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial convergence (story v2.0 ready, elaborated per rulings doc; 3 clean passes required per phase-1d discipline; POL-005 tuples mandatory); then Red Gate. Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
+awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial pass 2 (streak 0/3; pass-1 HAS_FINDINGS remediated: F-CS-SP1-001..003 → story v2.1 / rulings v1.1 / interface-defs v1.31 / BC-2.06.004 v1.3 / STORY-INDEX v4.86). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
 historical_cycles: []
-timestamp: 2026-07-13T02:25:57Z
+timestamp: 2026-07-13T02:41:30Z
 last_update: 2026-07-12
 ---
 
@@ -109,15 +109,11 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-POL003-NAMING | LOW | POL-003 Exception A annotation reference wording drift: BC-2.07.001 v1.13 cites `drbothen/vsdd-factory#429 draft policy`; BC-2.08.001 v1.3/v1.5 cite `POL-003 Exception A`. Converge on `POL-003 Exception A` for future rows. Deferred — not blocking wave-gate. | spec-steward | open |
 | DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH | LOW | BC-2.07.001 v1.13 changelog description states `Stories row cite S-6.05 v1.5 → v1.7` but body Traceability Stories row (line 206) reads `S-6.05 v1.8`. Body updated to v1.8 without accompanying changelog row. Deferred — not blocking. | spec-steward | open |
 | DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses version suffix; VP-050 omits it. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |
-| DRIFT-HS006-DRAIN-CLI-MISSING | LOW | Adjudicated at S-7.04-FU-1 (PR #103): DEFERRED with justification — not trivially reachable via existing mgmt-RPC patterns (needs new mgmt-RPC verb + admin-boundary changes in adminboundary_control.go + cmd/sbctl). SIGTERM initiates the identical drain sequence per BC-2.09.002 signal-driven drain, so the ops path is intact. Re-anchor: ops-UX story if targeted-drain proves needed post S-7.04-FU-DRAIN-WIRE. | orchestrator | deferred (adjudicated PR #103) |
-| DRIFT-P5P2-B-O003-ECFG-COLLISION-MAINTENANCE | LOW | E-CFG-002 + E-CFG-006 codespace collisions across two BC-2.09.003 minor bumps acknowledged but no maintenance-pass story scheduled. Refs O-P5P2-B-003. | orchestrator | open, awaiting maintenance-pass story |
-| DRIFT-P5P4-ADMINWIRE-EXTRACTION | LOW | Inline wire arg structs; future maintenance cycle or Wave-7+. | architect | DEFERRED |
-| DRIFT-P5P5-TEST-CITATION-VERSION-FLOOR | LOW | [process-gap] No version-floor rule on test taxonomy citations. FILED upstream 2026-07-03 as drbothen/vsdd-factory#471 (Batch 30) — row previously stale ("pending"). Phase-7 census SOFT-GAP-1 resolved. | orchestrator | filed #471 |
-| DRIFT-P5P14-B-001-VP-SOURCE-BC-VERSION-PIN | MED | DEFERRED — POL-003 candidate (VP source_bc version-pin) not ratified. Sweep scope: 77 VP frontmatters. Target release: post-POL-003 ratification. See P5-pass-14-Adv-B.md finding F-P5P14-B-001. | spec-steward | DEFERRED |
 | F-DW-IMPL-001 | HIGH | [process-gap] execute-against-baseline premise-tracing gap — twelve text-based spec-adversarial passes converged on internal consistency without tracing `ingressCtx`'s parent against ground truth, an engine methodology gap rather than a switchboard defect (S-7.04-FU-DRAIN-WIRE reopen). Deferred upstream; authoritative record drbothen/vsdd-factory#620. No product-repo story warranted — revisit on plugin version adoption. | orchestrator | S-7.02 justified deferral — filed #620 |
 | F-DW-DV-001 | LOW | [process-gap] citation coordinate-baseline convention gap — spec documents carried line-number citations with no stated coordinate convention (S-7.04-FU-DRAIN-WIRE delta-verification pass). Locally remediated by a convention blockquote (placement note/story v1.11). Deferred upstream for the engine-level fix; authoritative record drbothen/vsdd-factory#622. Revisit on plugin template update. | orchestrator | S-7.02 justified deferral — filed #622, locally remediated |
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* reference log_level/--log-level but config.Config rejects the field (E-CFG-005) — found by HS-006 re-eval gap 4. Candidate small docs PR. | technical-writer | open |
 | DRIFT-ECFG-TAXONOMY-006-001 | LOW | negative drain_timeout emits E-CFG-001 at HEAD vs E-CFG-006 recorded in HS-006 2026-07-02 eval — verify legit consolidation vs implementation-spec drift against error-taxonomy. | spec-steward | open |
+| DRIFT-CS-TEMPLATE-COMPLIANCE | LOW | S-BL.CLI-SURFACE-COMPLETION.md validate-template-compliance drift (missing `points` key vs `estimated_points`, six missing template sections) — pre-existing, fires on every edit; candidate for `/vsdd-factory:conform-to-template` pass. | story-writer | open |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36 + compact-state extraction 2026-07-08): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
