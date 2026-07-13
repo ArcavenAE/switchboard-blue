@@ -43,8 +43,8 @@ func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, arg
 	for i, arg := range args {
 		if arg == "--router" {
 			if i+1 >= len(args) {
-				_ = writeError(true, "E-CFG-010", "paths ping: --router requires a value", sio)
-				return reported(usageErrf("E-CFG-010: paths ping: --router requires a value"))
+				_ = writeError(true, "E-CFG-001", "paths ping: --router requires a value", sio)
+				return reported(usageErrf("E-CFG-001: paths ping: --router requires a value"))
 			}
 			target = args[i+1]
 		} else if strings.HasPrefix(arg, "--router=") {
