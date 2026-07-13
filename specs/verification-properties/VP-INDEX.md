@@ -2,10 +2,10 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.39"
+version: "2.40"
 status: draft
 producer: product-owner
-timestamp: 2026-07-06T00:00:00
+timestamp: 2026-07-13T00:00:00
 phase: 1b
 inputDocuments:
   - '.factory/specs/behavioral-contracts/BC-INDEX.md'
@@ -101,6 +101,8 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 | VP-075 | admin.key.* handlers reject non-control callers with E-ADM-009; connection kept open; no key store mutation | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-075.md |
 | VP-076 | Bootstrap key non-revocable AND non-expirable invariant: both revoke and expire return their respective forbidden sentinel (E-ADM-020 / E-ADM-021) for any well-formed request; symmetric management-lockout prevention | BC-2.05.004 | cmd/switchboard | integration | P0 | implemented | VP-076.md |
 | VP-077 | Admin list-keys admission-gate — any-role OR operator-set OR bootstrap-key; else E-ADM-009 (EC-008 three admission-failure modes; implementing_story: S-6.06) | BC-2.05.004 v1.14 | cmd/switchboard | integration | P0 | implemented | VP-077.md |
+| VP-078 | sbctl paths ping reports rtt_ms as float64 and never emits a quality/status classification field, for both fast and slow round trips (implementing_story: S-BL.CLI-SURFACE-COMPLETION) | BC-2.06.004 | cmd/sbctl | integration | P2 | active | VP-078.md |
+| VP-079 | paths.ping RPC handler performs zero per-path metrics reads/writes (no PathTracker interaction) — {} in, {"pong": true} out, no other side effect (implementing_story: S-BL.CLI-SURFACE-COMPLETION) | BC-2.06.004 | internal/mgmt | code-audit | P2 | active | VP-079.md |
 | VP-TBD-ACC | p99 accumulator approximation accuracy bound: `rtt_p99_ms ≤ true_p99 + max_bucket_width` | BC-2.06.003 | internal/metrics | benchmark | deferred | deferred | (pending) [implementing story: S-BL.BENCH — unscheduled] |
 | VP-VW6.NN | per-daemon binary wiring: goroutine lifecycle, config parsing, signal handling for runRouter/runConsole/runAccess/runControl — unblocked once runRouter and runConsole exit stub state | BC-2.07.002 | cmd/switchboard | integration | deferred | deferred | (pending) [implementing story: S-W6.NN — unscheduled] |
 
@@ -112,9 +114,10 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Total VPs | Proptest | Fuzz | Integration | E2E | Benchmark | Code-Audit | Unit |
 |-----------|---------|------|-------------|-----|-----------|------------|------|
-| 77 | 33 | 4 | 23 | 10 | 2 | 2 | 3 |
+| 79 | 33 | 4 | 24 | 10 | 2 | 3 | 3 |
 
-> Arithmetic check: 33 + 4 + 23 + 10 + 2 + 2 + 3 = 77. Consistent.
+> Arithmetic check: 33 + 4 + 24 + 10 + 2 + 3 + 3 = 79. Consistent.
+> VP-078 (integration, P2, cmd/sbctl) and VP-079 (code-audit, P2, internal/mgmt) added 2026-07-13 for BC-2.06.004 (VP-TBD-PING-A/B → VP-078/VP-079 assignment; architect ID-mint per step-4.5 impl pass 2 remediation, FO(d) discharge). Integration count increased from 23 to 24; Code-Audit count increased from 2 to 3. Total 77→79. P2 count 4→6.
 > VP-077 (integration, P0, cmd/switchboard) added 2026-07-03 for BC-2.05.004 EC-008 (list-keys admission-gate — any-role OR operator-set OR bootstrap-key; F-P5P14-B-003 traceability gap close). Integration count increased from 22 to 23. Total 76→77. P0 count 54→55.
 > VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001 lens-1 pass-18). Integration count increased from 21 to 22. Total 75→76. P0 count 53→54.
 > VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 (admin.key.* handler-layer caller-role enforcement; S-6.06 lens-3 F-005 close). Integration count increased from 20 to 21. F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard — BuildAdminHandlers and its handler closures reside in cmd/switchboard/admin_handlers.go.
@@ -136,20 +139,22 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 |-------|-------|
 | P0 | 55 |
 | P1 | 18 |
-| P2 | 4 |
-| **Total** | **77** |
+| P2 | 6 |
+| **Total** | **79** |
 
+> Phase recounted 2026-07-13: VP-078 + VP-079 (P2) added for BC-2.06.004 (paths.ping VP-TBD-PING-A/B assignment; FO(d) discharge). P2 = 6. Total = 79.
 > Phase recounted 2026-07-03: VP-077 (P0, integration) added for BC-2.05.004 EC-008 (list-keys admission-gate; F-P5P14-B-003). P0 = 55. P1 = 18. P2 = 4. Total = 77.
 > Phase recounted 2026-06-30: VP-076 (P0, integration) added for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant). P0 = 54. P1 = 18. P2 = 4. Total = 76.
 
 ## BC Coverage Check
 
-45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-077 added 2026-07-03 for BC-2.05.004 EC-008 (list-keys admission-gate; F-P5P14-B-003 close). VP-076 added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001). VP-075 added 2026-06-30 for BC-2.05.004 (handler-layer caller-role enforcement; S-6.06 lens-3 F-005). VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation). Zero coverage gaps.
+45 BCs total (44 prior + BC-2.07.004 added Wave-5). All 45 have at least one VP. VP-078 and VP-079 added 2026-07-13 for BC-2.06.004 (`paths.ping` VP-TBD-PING-A/B assignment; FO(d) discharge, step-4.5 impl pass 2 remediation) — BC-2.06.004 gains its first VP-INDEX representation (its own placeholder rows were never propagated to this index; BC-INDEX.md separately tracks 47 BCs total as of v3.4, a pre-existing count this section has not yet reconciled). VP-077 added 2026-07-03 for BC-2.05.004 EC-008 (list-keys admission-gate; F-P5P14-B-003 close). VP-076 added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; refs F-P18L1-001). VP-075 added 2026-06-30 for BC-2.05.004 (handler-layer caller-role enforcement; S-6.06 lens-3 F-005). VP-061 and VP-062 added for BC-2.06.003 (Phase 6 hardening). VP-063 added for BC-2.02.003 PC-5 (proptest). VP-064, VP-065, VP-066 added for BC-2.07.004 (Wave-5 management server). VP-067 added for BC-2.07.002 (Authenticate() fail-closed; Wave-5). VP-068–VP-073 added 2026-06-29 for BC-2.07.004 v1.3 Wave-5 Convergence Rulings A–E (Invariant 8, PC-10, PC-11, PC-12, PC-1 write deadline, EC-013 loopback). VP-074 added 2026-06-29 for BC-2.06.001 threshold classification (unit; L-001 disambiguation). Zero coverage gaps.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.40 | 2026-07-13 | FO(d) discharge (S-BL.CLI-SURFACE-COMPLETION step-4.5 impl pass 2 remediation burst): VP-TBD-PING-A → VP-078 (integration, P2, cmd/sbctl — sbctl paths ping reports rtt_ms as float64, never emits quality/status field, fast+slow round trips); VP-TBD-PING-B → VP-079 (code-audit, P2, internal/mgmt — paths.ping RPC handler zero PathTracker interaction, `{}` in / `{"pong":true}` out). Follows the BC-2.06.003 VP-TBD-A/VP-TBD-B → VP-061/VP-062 precedent exactly. BC-2.06.004 v1.3→v1.4 VP table updated; placeholder-pending-assignment note retired. Total 77→79; Integration 23→24; Code-Audit 2→3; P2 4→6. |
 | 2.39 | 2026-07-06 | S-BL.TESTENV merged (PR #110, 62e38d3): VP-033/034/036/046 → implemented (locked, e2e via internal/testenv rig). VP-039 coordinator-DOWNGRADED from agent's activated claim to PARTIAL — harness-structural isolation only, real router filter not on tested path (VP-010 remains the BC-2.05.006 real-code coverage); stays draft. VP-037/038/040 harness-ready-partial (locks await S-7.04-FU-DRAIN-WIRE / PE-CONNECTOR+SIGHUP / production multipath). VP-031/032 harness-ready (env-dependent skips). Proven 64 → 68. |
 | 2.38 | 2026-07-06 | VP-041 → implemented (S-BL.BENCH PR #109 cd67394, lock flipped v1.3; M1 evidence 1.080ms mean p99 vs 2ms). VP-042 adopted-partial, stays draft (loopback lower-bound only; testenv-gated). Proven count 63 → 64. |
 | 2.37 | 2026-07-06 | Phase-7 audit F-010: sweep all VP rows whose file carries `verification_lock: true` to `status: implemented`. Machine-derived from grep across 77 VP files; 43 rows updated (VP-001–006, VP-011–030, VP-035, VP-043, VP-047–056, VP-059–062, VP-077). Remaining 14 unlocked VPs (VP-031–034, VP-036–042, VP-044–046) untouched per directive. [coordinator correction: prior wording said VP-031–035; VP-035 is locked and appears in the updated list above] |

@@ -422,6 +422,63 @@
           "lint": "0 issues",
           "gofumpt": "clean"
         }
+      },
+      {
+        "pass": 2,
+        "adversary": "adv-cs-i2",
+        "date": "2026-07-13",
+        "verdict": "HAS_FINDINGS",
+        "streak_after": "0/3",
+        "diff_range_reviewed": "4c276d9..1b0e010",
+        "dispatch_tuple": {
+          "develop": "4c276d935b089026fac4fa796612352374bb880f",
+          "feature": "1b0e01048486cf07eed3fe728a4bfc1af1112a8a",
+          "factory": "c37f5e17b3a852d133ecc20e1fbdc443927cdb24"
+        },
+        "pol_005_verified": "PASS",
+        "findings": [
+          {
+            "id": "F-CS-I2-001",
+            "severity": "LOW",
+            "class": "spec-governance",
+            "owner": "architect",
+            "summary": "ZERO implementation-code defects this pass. FO(b) unfulfilled at delivery — the ARCH-INDEX SS-06 row lacked internal/mgmt despite BC-2.06.004's architecture_module citing it.",
+            "remediation": "architect, ARCH-INDEX v1.9 -> v1.10 (SS-06 gains internal/mgmt (Wave 7), SS-07-style annotation)."
+          }
+        ],
+        "nitpick_dispositions": [
+          {
+            "id": "N-CS-I2-01",
+            "disposition": "TAKEN",
+            "summary": "story AC-015/016 --router exemplars wrong vs interface-definitions §82/83 — fixed in story v2.7"
+          },
+          {
+            "id": "N-CS-I2-02",
+            "disposition": "SANCTIONED",
+            "summary": "paths ping / svtn status hardcode the JSON envelope — deliberate design, no AC/spec mandates --json handling"
+          },
+          {
+            "id": "N-CS-I2-03",
+            "disposition": "SANCTIONED",
+            "summary": "delivered test files retain Red-Gate-era header comments — documentation-only; branch-freeze policy (no code churn between impl passes); cleanup candidate at PR stage"
+          }
+        ],
+        "clean_lenses": [
+          "16/16 AC compliance (wire contracts byte-exact vs interface-definitions §420-423; E-CFG-004 Variant 3 byte-exact 3-way match; 14 runRouter call sites verified)",
+          "test honesty STRONG (subprocess isolation, AST four-call-site proof, tripwire spy, no vacuous tests)",
+          "taxonomy conformance PASS",
+          "security PASS (svtn existence oracle CLOSED — byte-identical E-ADM-009 test)",
+          "concurrency PASS (coalescing correct)",
+          "all 3 adjudications honored",
+          "POL-001/004/005 clean"
+        ],
+        "remediation_burst": {
+          "scope": "ALL factory-side; feature branch FROZEN at 1b0e010 — pass 3 reviews identical code",
+          "architect": "ARCH-INDEX v1.10 + BC-2.06.004 v1.3->v1.4 (VP-TBD-PING-A/B -> VP-078/VP-079 minted per VP-061/062 precedent; NEW files specs/verification-properties/VP-078.md + VP-079.md; VP-INDEX v2.39->v2.40) = FO(d) DISCHARGED",
+          "product_owner": "capabilities.md v1.0->v1.1 (CAP-029 minted \"On-demand reachability and round-trip-latency probe via sbctl\", quality-observability, no PRD FR anchor — introduced by Ruling 1) + BC-2.06.004 v1.4->v1.5 (capability re-anchor CAP-022->CAP-029, input-hash 9d4a662) + BC-INDEX v3.4->v3.5 = FO(a) DISCHARGED (architect recommendation + PO concurrence)",
+          "story_writer": "story v2.6->v2.7 (VP propagation, FO table all four rows DISCHARGED, N-CS-I2-01 exemplar fix, input-hash cbf07f7->d95ecfe) + STORY-INDEX v4.92->v4.93 (row 147 v2.7 + FO bracket)",
+          "outcome": "ALL FOUR Forward Obligations now DISCHARGED"
+        }
       }
     ]
   }

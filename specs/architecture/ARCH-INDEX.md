@@ -2,7 +2,7 @@
 artifact_id: ARCH-INDEX
 document_type: architecture-index
 level: L3
-version: "1.9"
+version: "1.10"
 status: draft
 producer: architect
 timestamp: 2026-07-03T00:00:00
@@ -31,6 +31,7 @@ traces_to: '.factory/specs/prd.md'
 deployment_topology: single-service
 input-hash: "TODO: compute-input-hash requires inputs: field; ARCH-INDEX uses inputDocuments: — reconcile field name or compute manually from inputDocuments list before freeze"
 modified:
+  - 2026-07-13T00:00:00 # v1.10 — FO(b) discharge (step-4.5 impl pass 2 remediation, finding F-CS-I2-001 LOW): SS-06 Implementing Modules gains internal/mgmt (Wave 7); Phase Introduced column annotated to match SS-07's existing internal/mgmt (Wave 5) precedent style
   - 2026-06-23T00:00:00
   - 2026-06-28T00:00:00 # v1.1 — ARCH-12 daemon management plane + ADR-012 added
   - 2026-07-01T00:00:00 # v1.4 — Wave-6 Tranche A Ruling-4 sibling-propagation sweep: ARCH-12 v1.9→v1.10 (S-W5.04 row added to Story Summary table); interface-definitions v1.8→v1.9 (admin.key.* BC re-anchored to BC-2.05.004, BC-2.06.003 pins swept to v1.10)
@@ -92,7 +93,7 @@ Modules tagged `(shared with SS-NN)` indicate a Go package that serves multiple 
 | SS-03 | session-discovery | ARCH-03-routing-engine.md | internal/discovery | Phase 2 (PE) |
 | SS-04 | session-access | ARCH-01-core-services.md | internal/tmux, internal/session | Phase 1 (E) |
 | SS-05 | admission-security | ARCH-04-admission-security.md | internal/hmac, internal/admission, internal/session | Phase 1 (E) |
-| SS-06 | quality-observability | ARCH-03-routing-engine.md | internal/metrics, internal/paths | Phase 1 (E) |
+| SS-06 | quality-observability | ARCH-03-routing-engine.md | internal/metrics, internal/paths, internal/mgmt (Wave 7) | Phase 1 (E); internal/mgmt Wave 7 |
 | SS-07 | network-management | ARCH-05-cli-and-api.md, ARCH-12-daemon-management-plane.md | internal/svtnmgmt, internal/mgmt (Wave 5), cmd/sbctl | Phase 1 (E); internal/mgmt Wave 5 |
 | SS-08 | console-operations | ARCH-01-core-services.md | internal/session, cmd/sbctl | Phase 2 (PE) |
 | SS-09 | deployment-operations | ARCH-06-deployment-and-ops.md | internal/config, internal/drain | Phase 1 (E) |
@@ -126,6 +127,7 @@ mechanism; Phase 3 benchmarks validate the defaults:
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-07-13 | architect | FO(b) discharge (step-4.5 impl pass 2 remediation burst, finding F-CS-I2-001 LOW): SS-06 quality-observability row's Implementing Modules extended with `internal/mgmt (Wave 7)` — BC-2.06.004 v1.3 names `architecture_module: internal/mgmt` for the `paths.ping` handler (`internal/mgmt/register_ping.go`, feature/S-BL.CLI-SURFACE-COMPLETION). Phase Introduced column annotated to match SS-07's existing `internal/mgmt (Wave 5)` precedent style. ARCH-INDEX bumped to v1.10. |
 | 2026-06-23 | architect | Round-1 architectural refinement (pass-01 adversarial review): wire format canonicalized to bit-precise 44-byte outer header (F-001, F-002, F-004, F-011); HMAC keying updated to per-node HKDF-SHA256 (F-003); drop cache key extended to (checksum, arrival_interface_id) (F-006); quality thresholds aligned to NFR-001/BC-2.06.001 (F-008); hysteresis canonical value set to 3 measurements (F-021); read-only console ACK resolved via degenerate upstream half-channel (F-023); permission hierarchy (control > console > readonly) and cross-role revocation rules documented in ADR-004 (F-010); SHA-256 adopted for address derivation replacing Blake3 (F-007); VP-051 and VP-052 added; VP total now 52; VP-040 module corrected to internal/multipath (F-014). |
 | 2026-06-23 | architect | Phase 1c-refinement: VP-053 through VP-057 added for BC coverage closure (BC-2.01.002, BC-2.02.002, BC-2.03.003, BC-2.04.004, BC-2.05.007). VP total now 57. |
 | 2026-06-25 | architect | Wave 3 planning refresh: ADR-009 (HMAC enforcement at RouteFrame boundary, S-3.04) and ADR-010 (tmux control mode + PTY fallback, S-3.01) added to ADR Registry. ARCH-04 bumped to v1.4 (ADR-009 section). ARCH-08 bumped to v1.2 (§6.5: full Wave 1–3 package table declaring `internal/session` at position 6, `internal/tmux` at position 13). No new packages — Wave 3 reuses existing DAG positions from the full topological order already documented in §§1–4. |

@@ -3,11 +3,13 @@ artifact_id: L2-capabilities
 document_type: domain-spec-section
 level: L2
 section: capabilities
-version: "1.0"
+version: "1.1"
 status: draft
 producer: business-analyst
 timestamp: 2026-06-23T00:00:00
-modified: ["2026-06-23"]
+modified:
+  - 2026-07-13T00:00:00 # v1.1 — FO(a) discharge (step-4.5 impl pass 2 remediation burst): minted CAP-029 "On-demand reachability and round-trip-latency probe via sbctl" (quality-observability) per architect recommendation; BC-2.06.004's provisional CAP-022 anchor is not confirmed. No PRD FR anchor exists — introduced by story ruling (S-BL.CLI-SURFACE-COMPLETION Ruling 1); PRD FR backfill flagged as an open drift item. No other CAP content changed.
+  - 2026-06-23
 phase: 1a
 inputDocuments:
   - '_bmad-output/planning-artifacts/product-brief-switchboard-2026-03-31.md'
@@ -198,6 +200,27 @@ Operators query per-path RTT and loss metrics via `sbctl`. Both node-side
 (router connection quality) and network-operator-side (forwarding metrics)
 views are available.
 _Anchor: PRD FR43; User Journey §Marcus, §Troubleshooter. CAP-022 covers diagnostic metrics because operators must distinguish network problems from application problems._
+
+**CAP-029** — On-demand reachability and round-trip-latency probe via sbctl (P2)
+Operators issue a one-shot reachability and round-trip-latency probe against
+an arbitrarily-dialed daemon via `sbctl paths ping --router=<addr>`. The probe
+dials directly, Tier-1-authenticates, and reports client-measured RTT with no
+per-path metrics accumulation, no `PathTracker` interaction, and no quality
+classification — deliberately distinct from CAP-022's accumulated per-path
+metrics.
+_Anchor: No PRD FR covers this capability — FR41–FR53 (the quality-observability
+and network-management FR range) were surveyed and none fits an ad-hoc one-shot
+probe with no metrics accumulation; PRD FR backfill is flagged as an open drift
+item. CAP-029 was introduced by story ruling (S-BL.CLI-SURFACE-COMPLETION Ruling 1)
+and minted directly against BC-2.06.004 per architect recommendation
+(step-4.5 impl pass 2 remediation burst, FO(a) discharge), since capabilities.md
+was outside Ruling 1's authorized artifact set at commission time. CAP-029 is
+kept separate from CAP-022, rather than confirmed as its anchor, because
+Ruling 1 deliberately split `paths.ping`'s RPC mechanism and target scope from
+BC-2.06.003's accumulated-metrics contract to preserve an unambiguous
+RPC-name-based audit trail between "accumulated metrics reporting" and
+"one-shot stopwatch"; anchoring both BCs to CAP-022 would re-couple exactly
+what that BC split protects. Realized by: BC-2.06.004._
 
 ---
 

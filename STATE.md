@@ -33,9 +33,9 @@ develop_head: 4c276d9
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.CLI-SURFACE-COMPLETION step-4.5 implementation adversarial pass 2 (pass 1 HAS_FINDINGS remediated @ 1b0e010; streak 0/3). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
+awaiting: "S-BL.CLI-SURFACE-COMPLETION step-4.5 implementation adversarial pass 3 (pass 2 HAS_FINDINGS — spec-governance only, zero code defects, remediated factory-side; feature frozen @ 1b0e010; all 4 FOs DISCHARGED; streak 0/3). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
 historical_cycles: []
-timestamp: 2026-07-13T06:05:00Z
+timestamp: 2026-07-13T06:20:00Z
 last_update: 2026-07-13
 ---
 
@@ -113,6 +113,9 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | F-DW-DV-001 | LOW | [process-gap] citation coordinate-baseline convention gap — spec documents carried line-number citations with no stated coordinate convention (S-7.04-FU-DRAIN-WIRE delta-verification pass). Locally remediated by a convention blockquote (placement note/story v1.11). Deferred upstream for the engine-level fix; authoritative record drbothen/vsdd-factory#622. Revisit on plugin template update. | orchestrator | S-7.02 justified deferral — filed #622, locally remediated |
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* reference log_level/--log-level but config.Config rejects the field (E-CFG-005) — found by HS-006 re-eval gap 4. Candidate small docs PR. | technical-writer | open |
 | DRIFT-CS-TEMPLATE-COMPLIANCE | LOW | S-BL.CLI-SURFACE-COMPLETION.md validate-template-compliance drift (missing `points` key vs `estimated_points`, six missing template sections) — pre-existing, fires on every edit; candidate for `/vsdd-factory:conform-to-template` pass. | story-writer | open |
+| DRIFT-CAP029-PRD-FR-BACKFILL | LOW | CAP-029 ("On-demand reachability and round-trip-latency probe via sbctl") was minted in capabilities.md v1.1 anchored directly to BC-2.06.004 with no PRD FR grounding — FR41–FR53 surveyed (quality-observability + network-management range), none fits an ad-hoc one-shot probe with no metrics accumulation. Needs a PRD FR authored (and `_bmad-output/planning-artifacts/prd.md` upstream backfill) to restore normal CAP-anchor-to-FR traceability. Anchor: S-BL.CLI-SURFACE-COMPLETION FO(a). | product-owner | open |
+| DRIFT-L2-DOMAIN-SPEC-INPUTS-KEY | LOW | All 11 files under `.factory/specs/domain-spec/` are missing the `inputs:` frontmatter key required by `L2-domain-spec-section-template.md` (carry only `inputDocuments:`); pre-existing since 2026-06-23 creation, fires `validate-template-compliance` on every edit (non-blocking). Surfaced editing capabilities.md for CAP-029 (S-BL.CLI-SURFACE-COMPLETION FO(a)). Candidate for a `/vsdd-factory:conform-to-template` sweep across the directory. | spec-steward | open |
+| DRIFT-VP-INDEX-BC-COUNT | LOW | VP-INDEX.md BC Coverage Check section states "45 BCs total" while BC-INDEX.md (v3.4+) counts 47; pre-existing staleness surfaced during VP-078/VP-079 registration (S-BL.CLI-SURFACE-COMPLETION FO(d)). | spec-steward | open |
 
 Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36 + compact-state extraction 2026-07-08 + DRIFT-ECFG-TAXONOMY-006-001 2026-07-12): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 

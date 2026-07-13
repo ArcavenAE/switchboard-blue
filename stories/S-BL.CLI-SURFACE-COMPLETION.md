@@ -10,6 +10,48 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-13
+    version: "2.7"
+    change: >
+      Propagated the step-4.5 impl pass 2 remediation burst (finding F-CS-I2-001, nitpick
+      N-CS-I2-01) plus a version-pin refresh. **VP propagation (F-CS-I2-001, FO(d)):** every live
+      `VP-TBD-PING-A`/`VP-TBD-PING-B` reference replaced with `VP-078`/`VP-079` — frontmatter
+      `verification_properties:` and `vp_traces:` lists, AC-004 PC-3's parenthetical. The two
+      v2.0-era historical references (frontmatter `modified:` entry, Changelog table row) and the
+      unrelated BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` precedent citation (Previous Story Intelligence
+      table) are left untouched per the layered-decision-record convention — accurate records of
+      what was true at authorship time / a different BC's own already-resolved placeholders, not
+      this story's. **Forward Obligations table:** row (b) → DISCHARGED (`ARCH-INDEX.md` v1.10,
+      F-CS-I2-001 — SS-06 gains `internal/mgmt`); row (d) → DISCHARGED (`VP-TBD-PING-A`→`VP-078`,
+      `VP-TBD-PING-B`→`VP-079` minted in BC-2.06.004 v1.4, `VP-INDEX.md` v2.40 synced); row (a) →
+      DISCHARGED (`CAP-029` minted in `capabilities.md` v1.1, BC-2.06.004 v1.5 re-anchored
+      `CAP-022`→`CAP-029`, `BC-INDEX.md` v3.5 synced, per architect recommendation + PO
+      concurrence) — all four Forward Obligations are now DISCHARGED, rows (a)/(b)/(d) rewritten
+      to match row (c)'s existing wording style (Gate: "None — discharged"; Status: "DISCHARGED —
+      landed in \<artifact\> v\<N\> (\<date\>, \<burst\>)"); Obligation-column description text left
+      unchanged, same treatment as row (c) received at its own discharge. File-Change List's
+      `ARCH-INDEX.md` row updated to the same discharged form already used on the
+      `error-taxonomy.md` row. **N-CS-I2-01 (adversary nitpick, pass 2, taken):** AC-015 PC-1 and
+      AC-016 PC-1 wrongly showed `sbctl router reload --router=<addr>` / `sbctl router drain
+      --router=<addr>` — neither verb takes a `--router` sub-flag; the daemon address comes from
+      the global `--target` flag (`interface-definitions.md` v1.31 §82/§83), and the frozen
+      implementation + tests (feature/S-BL.CLI-SURFACE-COMPLETION @ 1b0e010) already dispatch via
+      the bare command. Fixed both PC-1 exemplars to the bare form and both ACs' Precondition
+      lines (`--router=<addr>` → `--target=<addr>`, correctly describing daemon reachability);
+      swept the rest of both AC blocks, the Task Breakdown, and the File-Change List for any other
+      `--router=` occurrence attached to reload/drain — none found. The four remaining `--router=`
+      hits in the story are all `paths ping`'s own correct flag (Decision 1, AC-001, Architecture
+      Mapping) — `--router` is a real, distinct flag there, overriding `--target`; untouched.
+      **Version-pin refresh:** BC-2.06.004's `inputDocuments` comment v1.1 → v1.5 (reflects the
+      FO(a)/(d) discharge content now live in that file). `ARCH-INDEX.md` v1.10, `capabilities.md`
+      v1.1, and `BC-INDEX.md` v3.5 are newly cited (first version-pinned citations of these files
+      in this story) at the Forward Obligations table's row (a)/(b) Status cells introduced by
+      this same edit. `acceptance_criteria_count` (16), `estimated_points` (5), and all AC/PC
+      semantics are unchanged — the N-CS-I2-01 fix corrects two exemplars to match the
+      already-authoritative `interface-definitions.md`/frozen implementation, not a behavior
+      change. `input-hash` recomputed via `compute-input-hash --update` (BC-2.06.004 input
+      content changed, v1.1 → v1.5). Frontmatter `version` 2.6 → 2.7; new `modified:` entry
+      appended (newest-first).
+  - date: 2026-07-13
     version: "2.6"
     change: >
       Delivery-phase governance addition (NON-BEHAVIORAL): added the missing "Token Budget
@@ -208,7 +250,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.6"
+version: "2.7"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -222,7 +264,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'
   - '.factory/specs/prd-supplements/interface-definitions.md'
-input-hash: "cbf07f7"
+input-hash: "d95ecfe"
 traces_to: .factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md
 behavioral_contracts:
   - BC-2.06.004
@@ -230,8 +272,8 @@ behavioral_contracts:
   - BC-2.09.001
   - BC-2.09.002
 verification_properties:
-  - VP-TBD-PING-A   # provisional placeholder — Forward Obligation (d)
-  - VP-TBD-PING-B   # provisional placeholder — Forward Obligation (d)
+  - VP-078          # BC-2.06.004 — minted v1.4 (integration); was VP-TBD-PING-A, Forward Obligation (d), DISCHARGED
+  - VP-079          # BC-2.06.004 — minted v1.4 (code-audit); was VP-TBD-PING-B, Forward Obligation (d), DISCHARGED
   - VP-048          # BC-2.07.001 PC-4 — two new sibling rows added by Ruling 2
   - VP-038          # BC-2.09.001 — unaffected by the governance-only PC-1 addendum
   - VP-037          # BC-2.09.002 — unaffected by the governance-only Trigger addendum
@@ -241,8 +283,8 @@ bc_traces:
   - BC-2.07.001
   - BC-2.06.004
 vp_traces:
-  - VP-TBD-PING-A
-  - VP-TBD-PING-B
+  - VP-078
+  - VP-079
   - VP-048
   - VP-038
   - VP-037
@@ -261,7 +303,7 @@ assumption_validations: []
 risk_mitigations: []   # the ruling's four follow-ups are captured as explicit story obligations below (Forward Obligations), not ASM/R-registry IDs
 inputDocuments:
   - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'   # BINDING — v1.2 (v1.1 Ruling 4 Addendum, F-CS-SP1-001, AC-011 PC-3 defense-in-depth reframe; v1.2 Ruling 2 Addendum, F-CS-SP3-003, AC-008 PC-3 confirmed unchanged) — 4 rulings, wire contracts, error codes, authority tiers, implementation constraints
-  - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.004.md'    # v1.1 — new BC, paths.ping
+  - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.004.md'    # v1.5 — new BC, paths.ping (was v1.1; FO(a)/(d) discharge — CAP-029 re-anchor v1.5, VP-078/VP-079 mint v1.4 — step-4.5 impl pass 2 remediation burst)
   - '.factory/specs/behavioral-contracts/ss-07/BC-2.07.001.md'    # v1.14 — PC-4 admin.svtn.status
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'    # v1.2 — governance addendum, router.reload (pin retained per governance-leaf convention; file now at v1.3, traceability-only)
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'    # v1.3 — governance addendum, router.drain (pin retained per governance-leaf convention; file now at v1.4, traceability-only)
@@ -602,7 +644,7 @@ Tier-1-authenticates.
 2. `paths.ping` requires no additional Tier-2 authority beyond standard Tier-1 operator-key
    authentication — the same bar as `paths.list`/`router.metrics`/`router.status`.
 3. The handler performs zero per-path metrics reads/writes — no `PathTracker` interaction; request
-   `{}` in, response `{"pong": true}` out, no other side effect (VP-TBD-PING-B).
+   `{}` in, response `{"pong": true}` out, no other side effect (VP-079).
 
 **Test names:** `TestWireMetricsHandlers_RegistersPingOnEveryMode`,
 `TestPingHandler_EmptyArgsIn_PongOut_ZeroPathTrackerInteraction`
@@ -851,12 +893,12 @@ client-side emissions)
 
 **BC Anchor:** BC-2.09.001 v1.2 PC-1 (RPC-trigger note) — same anchor as AC-011
 
-**Precondition:** A router-mode daemon is running and reachable at `--router=<addr>`; the
+**Precondition:** A router-mode daemon is running and reachable at `--target=<addr>`; the
 operator's key Tier-1-authenticates.
 
 **Postconditions:**
 
-1. `sbctl router reload --router=<addr>` dispatches `router.reload` via the existing
+1. `sbctl router reload` dispatches `router.reload` via the existing
    `connectAndRun` pattern (same dial+auth+dispatch shape `router metrics` and `paths list`
    already use).
 2. sbctl prints the `{"accepted": true}` response; exit code 0.
@@ -879,12 +921,12 @@ operator's key Tier-1-authenticates.
 
 **BC Anchor:** BC-2.09.002 v1.3 Trigger/PC-1 (RPC-trigger note) — same anchor as AC-012
 
-**Precondition:** A router-mode daemon is running and reachable at `--router=<addr>`; the
+**Precondition:** A router-mode daemon is running and reachable at `--target=<addr>`; the
 operator's key Tier-1-authenticates.
 
 **Postconditions:**
 
-1. `sbctl router drain --router=<addr>` dispatches `router.drain` via the existing
+1. `sbctl router drain` dispatches `router.drain` via the existing
    `connectAndRun` pattern (same dial+auth+dispatch shape `router metrics` and `paths list`
    already use).
 2. sbctl prints the `{"accepted": true}` response; exit code 0. Per AC-012 PC-3 and BC-2.09.002
@@ -911,10 +953,10 @@ downstream artifact's correctness, and each is a distinct owner/timing combinati
 
 | # | Obligation | Owner | Gate | Status |
 |---|-----------|-------|------|--------|
-| (a) | BC-2.06.004's `CAP-022` capability anchor is provisional — Ruling 1 did not mint a dedicated capability. Architect/PO must confirm CAP-022 as the correct anchor or mint `CAP-029`. | architect / PO | Before or at delivery | OPEN |
-| (b) | `ARCH-INDEX.md`'s SS-06 (quality-observability) subsystem row lists Implementing Modules as `internal/metrics, internal/paths` — does not yet include `internal/mgmt`, which BC-2.06.004 names as its `architecture_module`. | architect | At delivery | OPEN |
+| (a) | BC-2.06.004's `CAP-022` capability anchor is provisional — Ruling 1 did not mint a dedicated capability. Architect/PO must confirm CAP-022 as the correct anchor or mint `CAP-029`. | architect / PO | None — discharged | DISCHARGED — `CAP-029` minted in `capabilities.md` v1.1; BC-2.06.004 v1.5 re-anchored `CAP-022`→`CAP-029`; `BC-INDEX.md` v3.5 synced (2026-07-13, step-4.5 impl pass 2 remediation burst, per architect recommendation + PO concurrence) |
+| (b) | `ARCH-INDEX.md`'s SS-06 (quality-observability) subsystem row lists Implementing Modules as `internal/metrics, internal/paths` — does not yet include `internal/mgmt`, which BC-2.06.004 names as its `architecture_module`. | architect | None — discharged | DISCHARGED — landed in `ARCH-INDEX.md` v1.10 (2026-07-13, step-4.5 impl pass 2 remediation burst, finding F-CS-I2-001) |
 | (c) | `error-taxonomy.md`'s E-CFG-004 row currently reads `"config file not found: <path>"` (BC-2.09.003 scope). Ruling 4's reload variant needs a documented second message variant — `"reload not applicable: daemon started without --config"` — mirroring the existing E-NET-001/E-CFG-008 multi-variant catalog pattern. | PO | None — discharged (was non-blocking per Ruling 4 Addendum v1.1) | DISCHARGED — landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation burst) |
-| (d) | BC-2.06.004's `VP-TBD-PING-A`/`VP-TBD-PING-B` are placeholder IDs — Ruling 1 did not mint real VP numbers. Architect mints real numbers following the BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` → `VP-061`/`VP-062` precedent (v1.3, "not blocking implementation"). | architect | Non-blocking; before this story's Verification Properties table is cited elsewhere as final | OPEN — non-blocking |
+| (d) | BC-2.06.004's `VP-TBD-PING-A`/`VP-TBD-PING-B` are placeholder IDs — Ruling 1 did not mint real VP numbers. Architect mints real numbers following the BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` → `VP-061`/`VP-062` precedent (v1.3, "not blocking implementation"). | architect | None — discharged | DISCHARGED — `VP-TBD-PING-A`→`VP-078` (integration), `VP-TBD-PING-B`→`VP-079` (code-audit) minted in BC-2.06.004 v1.4; `VP-INDEX.md` v2.40 synced (2026-07-13, step-4.5 impl pass 2 remediation burst) |
 
 **Downgraded by Ruling 4 Addendum v1.1 (F-CS-SP1-001), then DISCHARGED (pass-3 remediation
 burst, 2026-07-12):** Obligation (c) no longer hard-gates TDD implementation. AC-011 PC-3 was
@@ -990,7 +1032,7 @@ doesn't silently drift from the `admin.*` handler exclusion it parallels.
 | `cmd/switchboard/router_pe_connector_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — four call sites |
 | `cmd/switchboard/main.go` | `"router"` case body constructs `drainRequestCh`; passes to `runRouter` — one call site |
 | `.factory/specs/prd-supplements/error-taxonomy.md` | **Forward Obligation (c)** — E-CFG-004 message-variant addition — **DISCHARGED**, landed in v4.8 (PO edit, 2026-07-12 pass-3 remediation burst; not a story-writer edit) |
-| `.factory/specs/architecture/ARCH-INDEX.md` | **Forward Obligation (b)** — SS-06 Implementing Modules row gains `internal/mgmt` (architect edit, at delivery; not a story-writer edit) |
+| `.factory/specs/architecture/ARCH-INDEX.md` | **Forward Obligation (b)** — SS-06 Implementing Modules row gains `internal/mgmt` — **DISCHARGED**, landed in v1.10 (architect edit, 2026-07-13 step-4.5 impl pass 2 remediation burst, finding F-CS-I2-001; not a story-writer edit) |
 
 **No ARCH-08 §6.4 registration obligation** — no new `internal/` package is introduced (`internal/mgmt`
 already exists at position 20; only its exported surface grows).
@@ -1156,6 +1198,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.7 | 2026-07-13 | Propagated the step-4.5 impl pass 2 remediation burst (finding F-CS-I2-001, nitpick N-CS-I2-01) plus a version-pin refresh. **VP propagation (F-CS-I2-001, FO(d)):** every live `VP-TBD-PING-A`/`VP-TBD-PING-B` reference replaced with `VP-078`/`VP-079` — frontmatter `verification_properties:`/`vp_traces:` lists, AC-004 PC-3's parenthetical; the two v2.0-era historical references and the unrelated BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` precedent citation left untouched per the layered-decision-record convention. **Forward Obligations table:** row (b) → DISCHARGED (`ARCH-INDEX.md` v1.10, F-CS-I2-001 — SS-06 gains `internal/mgmt`); row (d) → DISCHARGED (`VP-TBD-PING-A`→`VP-078`, `VP-TBD-PING-B`→`VP-079` minted BC-2.06.004 v1.4, `VP-INDEX.md` v2.40 synced); row (a) → DISCHARGED (`CAP-029` minted `capabilities.md` v1.1, BC-2.06.004 v1.5 re-anchored `CAP-022`→`CAP-029`, `BC-INDEX.md` v3.5 synced, per architect recommendation + PO concurrence) — all four FOs now DISCHARGED, rows (a)/(b)/(d) rewritten to match row (c)'s existing wording style; Obligation-column description text left unchanged. File-Change List's `ARCH-INDEX.md` row updated to the same discharged form already used on the `error-taxonomy.md` row. **N-CS-I2-01** (adversary nitpick, pass 2, taken): AC-015 PC-1 and AC-016 PC-1 wrongly showed `sbctl router reload --router=<addr>` / `sbctl router drain --router=<addr>` — neither verb takes a `--router` sub-flag; the daemon address comes from the global `--target` flag (`interface-definitions.md` v1.31 §82/§83), matching the frozen implementation + tests (feature/S-BL.CLI-SURFACE-COMPLETION @ 1b0e010). Fixed both PC-1 exemplars to the bare form and both ACs' Precondition lines (`--router=<addr>` → `--target=<addr>`); swept both AC blocks, the Task Breakdown, and the File-Change List for other `--router=` occurrences attached to reload/drain — none found (the four remaining `--router=` hits are all `paths ping`'s own correct, distinct flag — untouched). **Version-pin refresh:** BC-2.06.004's `inputDocuments` comment v1.1 → v1.5; `ARCH-INDEX.md` v1.10, `capabilities.md` v1.1, `BC-INDEX.md` v3.5 newly cited at the FO table's row (a)/(b) Status cells. `acceptance_criteria_count` (16), `estimated_points` (5), and all AC/PC semantics unchanged — N-CS-I2-01 corrects exemplars to match already-authoritative spec/implementation, not a behavior change. `input-hash` recomputed via `compute-input-hash --update` (BC-2.06.004 input content changed, v1.1 → v1.5). Frontmatter `version` 2.6 → 2.7; new `modified:` entry appended (newest-first). |
 | 2.6 | 2026-07-13 | Delivery-phase governance addition (NON-BEHAVIORAL): added the missing "Token Budget Estimate (MANDATORY)" section, one of the template sections `validate-template-compliance` has flagged since Round 1 — the per-story-delivery playbook's Token Budget Check reads this section before every test-writer/implementer spawn and mandates story-writer add it if absent. No AC, PC, Decision, or Forward Obligation content touched; the spec-adversarial convergence (3/3 clean passes as of pass 9, achieved on v2.5) covers behavioral content and STANDS unaffected. Section broken into the three per-story-delivery dispatch passes (stub-architect, test-writer, implementer), each a fresh-context dispatch: Pass 1 (stub) ~55k tokens (~28% of a 200K window), Pass 2 (failing-test) ~75k (~38%), Pass 3 (TDD implementation, the heaviest) ~98k (~49%) — none breaches the 60% split-discussion threshold. Methodology: `wc -c`/4 chars-per-token on files as they exist at develop@4c276d9 for everything already on disk (story spec, precedent production files, `interface-definitions.md`, `error-taxonomy.md`, the four BC anchor files, the six production files being extended, `mgmt_wire_test.go`); line-count-based estimates, called out explicitly, for not-yet-written content (6 new-file stub bodies, ~37 test functions across 5 new + 2 extended test files implied by the story's cited test names). Noted honestly that Passes 2 and 3 exceed the template's nominal 20-30% target band — driven by this story's real scope (16 ACs, 4 BC anchors, all 3 `error-taxonomy.md` E-CFG-004 variants, 13 `runRouter` call sites across 6 files) rather than padding — but the heaviest pass stays under half the window; no story split warranted at 5 points. Section inserted between File-Change List and Task Breakdown, matching the template's ordering. `input-hash` unchanged — story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.5 → 2.6; new `modified:` entry appended (newest-first). |
 | 2.5 | 2026-07-13 | Remediated pass-8 spec-adversarial nitpick N-CS-SP8-01 (orchestrator-adopted as fix; pass 8 verdict was NITPICK_ONLY, zero findings — 3-clean-pass streak sits at 2/3, unaffected by this fix). AC-015 PC-1 and AC-016 PC-1 both cited "`router status`/`router metrics`" as the `connectAndRun` exemplars for the reload/drain dispatch shape. Verified against develop@4c276d9 (`grep connectAndRun cmd/sbctl/*.go`): `runRouterMetrics` (router_metrics.go) and `runPathsList` (paths_list.go) both call `connectAndRun` directly; `runRouterStatus` (router_status.go) does **not** — it hand-rolls its own `net.Dialer` + `Authenticate` + dispatch of `paths.list`, and its own source comment says it "mirrors connectAndRun's discrimination" rather than using it. Citing `router status` as a `connectAndRun` user was factually wrong. Fixed both parentheticals to "(same dial+auth+dispatch shape `router metrics` and `paths list` already use)". Swept the rest of the story (Decisions, Task 4, File-Change List, all `dial+auth+dispatch`/`net.Dialer`/`hand-roll` hits) for the same mispairing — none found; the other `paths list`/`router status` co-mentions (Decision 1's RPC-semantics contrast, the drain UX-parity note, Decision 3's bare-top-level-read CLI-shape note) are unrelated to `connectAndRun` and needed no change. Also applied N-CS-SP8-02 (STORY-INDEX.md frontmatter `modified` scalar trailed at 2026-07-12; refreshed to 2026-07-13). `input-hash` unchanged — story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.4 → 2.5; new `modified:` entry appended (newest-first). |
 | 2.4 | 2026-07-13 | Remediated pass-6 spec-adversarial finding F-CS-SP6-001 (MED, AC-coverage/test-file-assignment gap, orchestrator-verified) plus nitpick N-CS-SP6-01. `router reload`/`router drain` were the only verbs with no client-side CLI dispatch acceptance criterion and no `cmd/sbctl` test file, despite the File-Change List already creating `cmd/sbctl/router_reload.go`/`router_drain.go` and adding `reload`/`drain` sub-verb arms to `main.go`'s `router` case — a real behavior change (that arm dispatches only `metrics`/`status` today; other sub-verbs exit 2 via `usageErrf`). AC-014 PC-3's client-observed E-NET-001/E-ADM-010 codes were also mis-assigned to a server-side test file that structurally cannot exercise `cmd/sbctl`. **Fixed:** two new client happy-path ACs added — **AC-015** (`sbctl router reload`, BC-2.09.001 v1.2 PC-1, same anchor as AC-011) and **AC-016** (`sbctl router drain`, BC-2.09.002 v1.3 Trigger/PC-1, same anchor as AC-012) — each with a sub-verb-transition-pin postcondition proving the known sub-verb now dispatches while an adjacent still-unknown sub-verb (`router bogus`) continues to exit 2; AC-014 PC-3 re-homed to new `cmd/sbctl/router_control_test.go`, its Test names/level/file block split per-postcondition (PC-1/PC-2 stay server-side, PC-3 moves); `acceptance_criteria_count` 14 → 16; File-Change List gained the new test-file row plus a narrowed AC-014 scope note on the `router_control_wire_test.go` row; Task 4 retitled and its Red step rewritten to cover all six ACs and both failure modes; Anchors Consumed's reload/drain rows gained AC-015/AC-016; Architecture Mapping needed no change (never named test files); points kept at 5 (the gap was AC/test documentation of already-scoped work, not new implementation scope). **N-CS-SP6-01** (nitpick, taken): AC-011 PC-3's abbreviated quote of the `runRouter` entry-guard message marked as abbreviated with the full wrapped literal inlined, per error-taxonomy.md v4.9's own changelog (F-CS-SP4-001) confirming the story's Variant 3 literal needed no change. `input-hash` unchanged — story-body-only edit, `--check` confirms no drift. Frontmatter `version` 2.3 → 2.4; new `modified:` entry appended (newest-first). |

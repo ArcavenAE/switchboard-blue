@@ -190,9 +190,62 @@ verified exactly as narrow as described.
 at `-count=1`, race-clean (`cmd/switchboard`, `internal/mgmt`), lint 0
 issues, gofumpt clean.
 
+## Step-4.5 pass 2
+
+**Adversary:** adv-cs-i2, 2026-07-13. **Verdict:** HAS_FINDINGS, streak
+0/3. **Diff reviewed:** `4c276d9..1b0e010`. Dispatch tuple — develop
+`4c276d935b089026fac4fa796612352374bb880f`, feature
+`1b0e01048486cf07eed3fe728a4bfc1af1112a8a`, factory
+`c37f5e17b3a852d133ecc20e1fbdc443927cdb24` — POL-005 verified PASS by the
+adversary.
+
+**F-CS-I2-001 (LOW, spec-governance, architect-owned — zero
+implementation-code defects this pass):** Forward Obligation (b) was
+unfulfilled at delivery. The ARCH-INDEX SS-06 row lacked `internal/mgmt`
+despite BC-2.06.004's `architecture_module` citing it.
+Remediated by the architect: ARCH-INDEX v1.9 → v1.10 (SS-06 gains
+`internal/mgmt` (Wave 7), SS-07-style annotation).
+
+**Nitpick dispositions:** N-CS-I2-01 TAKEN (story AC-015/016 `--router`
+exemplars were wrong vs interface-definitions §82/83 — fixed in story
+v2.7); N-CS-I2-02 SANCTIONED (`paths ping`/`svtn status` hardcode the
+JSON envelope — deliberate design, no AC/spec mandates `--json` handling);
+N-CS-I2-03 SANCTIONED (delivered test files retain Red-Gate-era header
+comments — documentation-only; branch-freeze policy means no code churn
+between impl passes; cleanup candidate at PR stage).
+
+**Clean lenses:** 16/16 AC compliance (wire contracts byte-exact vs
+interface-definitions §420-423; E-CFG-004 Variant 3 byte-exact 3-way
+match; 14 `runRouter` call sites verified); test honesty STRONG
+(subprocess isolation, AST four-call-site proof, tripwire spy, no
+vacuous tests); taxonomy conformance PASS; security PASS (svtn existence
+oracle CLOSED — byte-identical E-ADM-009 test); concurrency PASS
+(coalescing correct); all 3 adjudications honored; POL-001/004/005
+clean.
+
+**Remediation burst (all factory-side; feature branch FROZEN at
+`1b0e010` — pass 3 reviews identical code):**
+- Architect: ARCH-INDEX v1.10 + BC-2.06.004 v1.3 → v1.4 (`VP-TBD-PING-A`/
+  `VP-TBD-PING-B` → `VP-078`/`VP-079` minted per the VP-061/062
+  precedent; new files `specs/verification-properties/VP-078.md` +
+  `VP-079.md`; VP-INDEX v2.39 → v2.40) → **FO(d) DISCHARGED**.
+- Product owner: `capabilities.md` v1.0 → v1.1 (CAP-029 minted — "On-demand
+  reachability and round-trip-latency probe via sbctl", quality-observability,
+  no PRD FR anchor, introduced by Ruling 1) + BC-2.06.004 v1.4 → v1.5
+  (capability re-anchor CAP-022 → CAP-029, input-hash `9d4a662`) +
+  BC-INDEX v3.4 → v3.5 → **FO(a) DISCHARGED** (architect recommendation
+  + PO concurrence).
+- Story-writer: story v2.6 → v2.7 (VP propagation, Forward Obligations
+  table all four rows DISCHARGED, N-CS-I2-01 exemplar fix, input-hash
+  `cbf07f7` → `d95ecfe`) + STORY-INDEX v4.92 → v4.93 (row 147 v2.7 + FO
+  bracket).
+- **Outcome: all four Forward Obligations now DISCHARGED.**
+
 ## Status
 
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
-HAS_FINDINGS, both findings remediated same burst @ `1b0e010`; streak
-0/3. Next: step-4.5 pass 2 (BC-5.39.001/BC-5.39.002, diff range
-`4c276d9..1b0e010`).
+HAS_FINDINGS, remediated @ `1b0e010`. Step-4.5 pass 2 HAS_FINDINGS —
+spec-governance only, zero code defects, remediated factory-side (all
+four Forward Obligations DISCHARGED); feature branch frozen at
+`1b0e010`; streak 0/3. Next: step-4.5 pass 3 (BC-5.39.001/BC-5.39.002,
+diff range `4c276d9..1b0e010`, identical code to pass 2).
