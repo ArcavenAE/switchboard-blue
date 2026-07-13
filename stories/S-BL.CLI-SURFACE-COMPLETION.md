@@ -10,6 +10,32 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-12
+    version: "2.2"
+    change: >
+      Remediated two MED spec-adversarial pass 2 findings (F-CS-SP2-001, F-CS-SP2-002).
+      F-CS-SP2-001 (premise/doc-drift): the `runRouter` call-site enumeration was incomplete —
+      the Design Constraint parenthetical, File-Change List, and Task 3 named only `main.go`,
+      `mgmt_wire_test.go`, `router_drain_test.go`, but a `runRouter(` grep against
+      `cmd/switchboard` at develop @ `4c276d9` found thirteen call sites across six files
+      (`router_sighup_test.go`, `router_pe_receive_test.go`, `router_pe_connector_test.go` were
+      omitted; all package `main`, all would fail to compile once the `drainRequestCh` trailing
+      parameter lands). Fixed at all three loci: Design Constraint parenthetical now enumerates
+      all six files with per-file call counts (five/one/one/one/one/four); File-Change List
+      gained three new rows for the omitted files, each with a call count, and the two existing
+      test-file rows gained counts too; Task 3's call-site sentence rewritten to the open,
+      drift-durable form — enumerates today's six files but instructs the implementer to
+      re-grep `runRouter(` under `cmd/switchboard` at implementation time, since new call sites
+      may land before delivery. F-CS-SP2-002 (contradiction): the File-Change List's
+      `error-taxonomy.md` row still read "(PO edit, gates AC-011; not a story-writer edit)" —
+      the one locus the v2.1 FO(c) downgrade missed. Fixed to "(PO edit, non-blocking per
+      Ruling 4 Addendum v1.1; not a story-writer edit)". Grepped the whole story for residual
+      "gate"/"gates"/"hard gate" phrasing tied to FO(c); found no other contradictions — the
+      Forward Obligations table intro's "each gates a specific AC or a downstream artifact's
+      correctness" is a general statement about all four FOs (not specific to (c)'s blocking
+      status) and remains accurate; Task 4's "no longer gates this task" note already correctly
+      states the downgrade. `input-hash` unchanged — no input file (rulings doc, BC files,
+      interface-definitions.md) was touched by this remediation; `--check` confirms no drift.
+  - date: 2026-07-12
     version: "2.1"
     change: >
       Propagated architect Ruling 4 Addendum (v1.1, F-CS-SP1-001, spec-adversarial pass 1) into
@@ -60,7 +86,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.1"
+version: "2.2"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -354,12 +380,17 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config,
 
 Two changes: (1) `sighupCh` widens from receive-only (`<-chan os.Signal`) to bidirectional
 (`chan os.Signal`) — every existing call site (production `main.go` and every test) already
-constructs a bidirectional `make(chan os.Signal, 1)`, so **only the parameter type itself needs to
-change; no call site needs to change** for `sighupCh`. (2) `drainRequestCh chan struct{}` is a new
-trailing parameter — **every** call site (production and test) DOES need to add this argument,
-mirroring the exact call-site-update pattern `S-7.04-FU-SIGHUP-RELOAD` used when it added
-`configPath`/`sighupCh` (five call sites updated in `mgmt_wire_test.go`, plus `router_drain_test.go`,
-plus `main.go`).
+constructs a bidirectional `make(chan os.Signal, 1)` or passes `nil`, either of which is valid for
+both the old and new parameter type, so **only the parameter type itself needs to change; no call
+site needs to change** for `sighupCh`. (2) `drainRequestCh chan struct{}` is a new trailing
+parameter — **every** call site (production and test) DOES need to add this argument, mirroring
+the exact call-site-update pattern `S-7.04-FU-SIGHUP-RELOAD` used when it added
+`configPath`/`sighupCh`. Full enumeration as of a `runRouter(` grep against `cmd/switchboard` at
+develop @ `4c276d9` — thirteen call sites across six files: `mgmt_wire_test.go` (five), `main.go`
+(one), `router_drain_test.go` (one), `router_sighup_test.go` (one), `router_pe_receive_test.go`
+(one), `router_pe_connector_test.go` (four). Every one of these files is package `main` and will
+fail to compile once the trailing parameter lands, so all six are load-bearing for Task 3's "all
+existing tests remain green" gate, not just the three cited in earlier drafts of this story.
 
 `main.go`'s `"router"` case body constructs `drainRequestCh := make(chan struct{}, 1)` alongside
 the existing `sighupCh` construction, and passes both into `runRouter`. The select loop
@@ -754,10 +785,13 @@ doesn't silently drift from the `admin.*` handler exclusion it parallels.
 | `cmd/switchboard/router_control_wire.go` (new) | `wireRouterControlHandlers` |
 | `cmd/switchboard/router_control_wire_test.go` (new) | AC-011, AC-012, AC-013 (registration half), AC-014 tests |
 | `cmd/switchboard/mgmt_wire.go` | `runRouter` signature widening; third select-loop arm; `wireRouterControlHandlers` call site |
-| `cmd/switchboard/mgmt_wire_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter (mirrors the five-call-site `S-7.04-FU-SIGHUP-RELOAD` update pattern); AC-013 shutdown-parity test |
-| `cmd/switchboard/router_drain_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter |
-| `cmd/switchboard/main.go` | `"router"` case body constructs `drainRequestCh`; passes to `runRouter` |
-| `.factory/specs/prd-supplements/error-taxonomy.md` | **Forward Obligation (c)** — E-CFG-004 message-variant addition (PO edit, gates AC-011; not a story-writer edit) |
+| `cmd/switchboard/mgmt_wire_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — five call sites (mirrors the five-call-site `S-7.04-FU-SIGHUP-RELOAD` update pattern); AC-013 shutdown-parity test |
+| `cmd/switchboard/router_drain_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — one call site |
+| `cmd/switchboard/router_sighup_test.go` (extended) | Call-site update for the new `drainRequestCh` parameter — one call site |
+| `cmd/switchboard/router_pe_receive_test.go` (extended) | Call-site update for the new `drainRequestCh` parameter — one call site |
+| `cmd/switchboard/router_pe_connector_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — four call sites |
+| `cmd/switchboard/main.go` | `"router"` case body constructs `drainRequestCh`; passes to `runRouter` — one call site |
+| `.factory/specs/prd-supplements/error-taxonomy.md` | **Forward Obligation (c)** — E-CFG-004 message-variant addition (PO edit, non-blocking per Ruling 4 Addendum v1.1; not a story-writer edit) |
 | `.factory/specs/architecture/ARCH-INDEX.md` | **Forward Obligation (b)** — SS-06 Implementing Modules row gains `internal/mgmt` (architect edit, at delivery; not a story-writer edit) |
 
 **No ARCH-08 §6.4 registration obligation** — no new `internal/` package is introduced (`internal/mgmt`
@@ -785,8 +819,12 @@ implement `runSvtn`/`runSvtnStatus`/`runSvtnDestroyShim`, wire the new `svtn` ca
 
 Stub-first (mirrors `S-7.04-FU-SIGHUP-RELOAD` Task 1 pattern): widen `runRouter`'s `sighupCh`
 parameter, add `drainRequestCh` parameter, add the third select-loop arm as a no-op stub, update
-every existing call site (`main.go`, `mgmt_wire_test.go`, `router_drain_test.go`) to pass the new
-argument. Gate: all **existing** tests remain green (no new test files yet); `just lint` clean.
+every `runRouter` call site in `cmd/switchboard` (enumerated as of develop @ `4c276d9`:
+`main.go`, `mgmt_wire_test.go`, `router_drain_test.go`, `router_sighup_test.go`,
+`router_pe_receive_test.go`, `router_pe_connector_test.go` — implementer MUST re-grep
+`runRouter(` under `cmd/switchboard` at implementation time, since new call sites may land
+before delivery) to pass the new argument. Gate: all **existing** tests remain green (no new
+test files yet); `just lint` clean.
 
 ### Task 4 — `router.reload`/`router.drain` handlers (AC-011, AC-012, AC-013 remainder, AC-014)
 
@@ -849,6 +887,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.2 | 2026-07-12 | Remediated two MED spec-adversarial pass 2 findings, both story-side. **F-CS-SP2-001** (premise/doc-drift): the `runRouter` call-site enumeration was incomplete — Design Constraint parenthetical, File-Change List, and Task 3 named only `main.go`, `mgmt_wire_test.go`, `router_drain_test.go`, but a `runRouter(` grep against `cmd/switchboard` at develop @ `4c276d9` found thirteen call sites across six files (`router_sighup_test.go` one call, `router_pe_receive_test.go` one call, `router_pe_connector_test.go` four calls, all previously omitted; all six files are package `main` and would fail to compile once the `drainRequestCh` trailing parameter lands, making Task 3's "all existing tests remain green" gate unmeetable against the old closed list). Fixed at all three loci: Design Constraint parenthetical now enumerates all six files with per-file call counts; File-Change List gained three new rows for the omitted files (each with its call count) and the two pre-existing test-file rows gained counts too; Task 3's call-site sentence rewritten to the open, drift-durable form — enumerates today's six files but requires the implementer to re-grep `runRouter(` under `cmd/switchboard` at implementation time, since new call sites may land before delivery. **F-CS-SP2-002** (contradiction): the File-Change List's `error-taxonomy.md` row still read `(PO edit, gates AC-011; not a story-writer edit)` — the one locus the v2.1 FO(c) downgrade missed, letting an implementer re-derive the blocking dependency v2.1 removed. Fixed to `(PO edit, non-blocking per Ruling 4 Addendum v1.1; not a story-writer edit)`. Grepped the whole story for residual "gate"/"gates"/"hard gate" phrasing tied to FO(c); found no other contradictions (the Forward Obligations table's intro sentence and Task 4's existing non-blocking note both already read correctly; changelog rows describing history are exempt as accurate records). `input-hash` unchanged — this was a story-body-only fix; no input file (rulings doc, BC files, `interface-definitions.md`) was touched; `--check` confirms no drift. Frontmatter `version` 2.1 → 2.2; new `modified:` entry appended (newest-first). |
 | 2.1 | 2026-07-12 | Propagated architect Ruling 4 Addendum (`S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1, F-CS-SP1-001, spec-adversarial pass 1) into AC-011 and its dependents. **AC-011 PC-3 reframed** from an operator-reachable-but-untested guard to an explicit **defense-in-depth guard** (unreachable via any real daemon startup path — `runRouter`'s entry guard in `cmd/switchboard/mgmt_wire.go` plus the `"router"` case in `cmd/switchboard/main.go` together guarantee `configPath != ""` for every router instance reaching `wireRouterControlHandlers` registration; presence at runtime would indicate a code defect, mirrors the `E-CFG-011` defensive-annotation shape). PC-3's test level downgraded `integration` → `unit` (test name unchanged: `TestRouterReload_BridgesToSighupCh_CodePathIdentical` stays integration for PC-1/PC-2; `TestRouterReload_NoConfigLoaded_ECFG004` for PC-3 is now unit); invocation-pattern note added — calls `wireRouterControlHandlers`/its registered handler directly with `configPath = ""`, no live daemon. **Mechanism correction:** `wireRouterControlHandlers` gains a `configPath string` second parameter (was missing entirely in the original signature — PC-3 as drafted had no way to observe `configPath`); updated at both literal-signature occurrences (Decision 4 registration-point bullet, AC-013 postcondition 1) plus the Architecture Mapping table row's Notes cell, each with a one-line rationale pointer back to AC-011 PC-3. **Forward Obligation (c) downgraded** from `OPEN — hard gate on AC-011` to `OPEN — non-blocking (does not gate Task 4 implementation)`; the "Obligation (c) is the only hard implementation gate" paragraph and Task 4's "Gate check before this task" note both rewritten to match — none of the four Forward Obligations now hard-gate TDD implementation. Rulings-doc citation pinned to v1.1 at the two locations asserting it as binding source (Adjudicated Design Decisions section intro, Provenance section) — previously cited by filename+date only. `interface-definitions.md` pin bumped v1.30 → v1.31 (PO fixed §60's `usage:` prefix under F-CS-SP1-002; AC-009's own text was already correct, no AC change) at all live-reference citations (frontmatter `inputDocuments` comment, Context section prose, Provenance section) — the v2.0 historical `modified:` narrative entry left untouched as an accurate record of what was true at that time. BC-2.09.001 (v1.2) / BC-2.09.002 (v1.3) pins reviewed and **retained** per the governance-leaf convention (N-CS-SP1-01) — both files' subsequent bumps (v1.2→v1.3, v1.3→v1.4) are traceability-only Stories-cell fills, `governance_leaf: true`, no PC/AC behavior change, so the story's existing pins are not factually wrong. `input-hash` recomputed via `compute-input-hash --update` (`88c13c8`, was `2af06c0` — the rulings doc input changed). Frontmatter `version` 2.0 → 2.1; new `modified:` entry appended (newest-first). |
 | 2.0 | 2026-07-12 | Elaborated from backlog stub (v1.0, draft, 0 ACs) to sprint-ready (`ready`, 14 ACs, 5 points) per architect ruling `S-BL.CLI-SURFACE-COMPLETION-rulings.md`. Replaced "Open Design Obligations" with "Adjudicated Design Decisions" (four decisions, one per ruling, load-bearing constraints transcribed inline). Added Design Constraint section for the `runRouter` signature widening. 14 ACs traced to BC-2.06.004 PC-1..4, BC-2.07.001 PC-4, BC-2.09.001 v1.2 PC-1 RPC-trigger note, BC-2.09.002 v1.3 Trigger/PC-1 RPC-trigger note, plus CLI dispatch/flag-parse ACs per `interface-definitions.md` §§60/62/77/82-83. Four Forward Obligations encoded as explicit story-tracked tasks (CAP-022/CAP-029 confirmation, ARCH-INDEX SS-06 `internal/mgmt` row, error-taxonomy.md E-CFG-004 variant [hard gate on AC-011], VP-TBD-PING-A/B real VP-number minting). `bc_traces` gained BC-2.06.004. `estimated_points` TBD → 5 (Ruling 4 is the largest plumbing — signature widening + new channel + registration function + router-mode-exclusive wiring, comparable alone to `S-7.04-FU-SIGHUP-RELOAD`'s full 3-point scope; Rulings 1-2 each add a full handler+CLI wire pair; Ruling 3 is a near-zero usage-error shim). Frontmatter conformed to `S-BL.LOOPBACK-FULLSTACK` template-mandated superset keys. Full File-Change List, Architecture Mapping, Task Breakdown, and POL-005 Delivery Plan Note added. `input-hash` to be computed via `compute-input-hash --update` in the same burst as commit. |
 | 1.0 | 2026-07-03 | Draft backlog stub created per F-P5P6-A-005 adjudication (annotate-and-defer). `interface-definitions.md` v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION annotation is the spec-side closure; this stub is the backlog-side closure. BC anchors: BC-2.09.001 (router reload), BC-2.09.002 (router drain), BC-2.07.001 (svtn destroy). Two verbs (paths ping, svtn status) had no governing BC — open design obligations noted. Four open design obligations logged. |
