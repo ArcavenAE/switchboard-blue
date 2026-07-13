@@ -307,9 +307,48 @@
         }
       ],
       "notes": "Governance-leaf pin discipline audited bump-by-bump and clean; coverage audit both directions clean; all 16 ACs verified; pass-6 fix confirmed closing exactly the gap that would otherwise be a pass-8 finding; entry-guard literal now byte-exact story↔taxonomy↔code. story v2.4 → v2.5 (input-hash unchanged cbf07f7), STORY-INDEX v4.89 → v4.90."
+    },
+    {
+      "pass": 9,
+      "date": "2026-07-13",
+      "agent": "adv-cs-sp9",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 4c276d9, factory-artifacts @ 5f4a283)",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "3/3",
+      "findings": [],
+      "nitpicks_no_action": [
+        {
+          "id": "N-CS-SP9-01",
+          "summary": "IMPLEMENTER NOTE — joins N-CS-SP7-01: three enumerated-verb help strings in cmd/sbctl/main.go go stale when svtn/ping/reload/drain wire in; no AC/test governs the enumerations, verified; refresh at implementation time as delivery courtesy"
+        }
+      ],
+      "notes": "v2.5 exemplar fix verified correct (connectAndRun callers confirmed); input-hash cbf07f7 confirmed NOT stale (reviewer traced the timeline — error-taxonomy is citation not input); two subtle correctness points affirmatively verified (paths.ping deliberately not connectAndRun; AC-016 conn-reset tolerance per BC-2.09.002 PC-3). BC-5.39.001 CONVERGENCE: 3/3 consecutive NITPICK_ONLY passes (7, 8, 9). Records-only close — no artifact changes; spec_versions unchanged from pass 8."
     }
   ],
-  "converged": false,
-  "converged_at_pass": null,
-  "final_head": null
+  "converged": true,
+  "converged_date": "2026-07-13",
+  "converged_at_pass": 9,
+  "final_streak": "3/3 (passes 7, 8, 9)",
+  "total_passes": 9,
+  "total_findings": 10,
+  "findings_by_pass": [3, 2, 3, 1, 0, 1, 0, 0, 0],
+  "final_head": "5f4a283",
+  "final_spec_versions": {
+    "story": "2.5",
+    "story_input_hash": "cbf07f7",
+    "story_ac_count": 16,
+    "index": "4.90",
+    "rulings": "1.2",
+    "interface_definitions": "1.31",
+    "error_taxonomy": "4.9",
+    "BC-2.06.004": "1.3",
+    "BC-2.07.001": "1.15",
+    "BC-2.09.001": "1.3",
+    "BC-2.09.002": "1.4"
+  },
+  "implementer_notes": [
+    "N-CS-SP7-01 — refresh the default-arm usage hint (\"expected 'metrics' or 'status'\") when reload/drain wire into the router case arm; delivery courtesy, no AC pins usage-hint text",
+    "N-CS-SP9-01 — three enumerated-verb help strings in cmd/sbctl/main.go go stale when svtn/ping/reload/drain wire in; no AC/test governs the enumerations; refresh at implementation time as delivery courtesy"
+  ]
 }
