@@ -968,6 +968,80 @@ func TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak(t *testin
 	}
 }
 
+// TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho
+// is the RED sibling-parity test for the CWE-20/150 finding from PR #122
+// review round 1: makeAdminSVTNStatusHandler checks only a.Name == "" and
+// never calls validateSVTNName, unlike makeAdminSVTNCreateHandler (~L731)
+// and makeAdminSVTNDestroyHandler (~L844). A control-character name
+// currently sails past the empty-string check, past the admission gate
+// (the bootstrap-key caller below bypasses resolveCallerAdmissionAnyRole
+// unconditionally — same caller TestAdminSVTNStatus_HappyPath_KeyCounts/
+// NotFound_ESVTN003 use), and reaches m.SVTNByName's not-found path, which
+// echoes the raw (control-character-laden) name verbatim into the
+// E-SVTN-003 message via mapAdminError (see
+// TestAdminSVTNStatus_NotFound_ESVTN003's own "doesnotexist" substring
+// assertion — proof the not-found path echoes the name argument).
+//
+// Once fixed, admin.svtn.status must reject the same names the create/
+// destroy siblings reject, with the SAME error the siblings produce —
+// E-CFG-001 from validateSVTNName (mirrors
+// TestAdminSVTNCreate_ArgsValidation_E_CFG_001_Exhaustive's
+// "control_char_null_byte"/"control_char_stx" cases; see also
+// TestValidateSVTNName) — never the raw control bytes.
+//
+// AUTHORIZED CALLER: ctx carries bootstrapPub, the same caller the AC-005/
+// AC-006 tests above use. This test exercises the missing VALIDATION gate
+// specifically — the AC-006 denied-path oracle tests (above) are untouched;
+// validation is asserted to fire AFTER admission (bootstrap key always
+// clears admission, per resolveCallerAdmissionAnyRole), matching where
+// validateSVTNName runs relative to the admission gate in create/destroy.
+//
+// CWE-20 (Improper Input Validation) / CWE-150 (Improper Neutralization of
+// Escape, Meta, or Control Sequences); PR #122 review round 1, security LOW.
+func TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho(t *testing.T) {
+	t.Parallel()
+	m, bootstrapPub := newSVTNManagerForStatusTest(t)
+	handlers := BuildAdminHandlers(m, nil)
+	statusFn := findAdminSVTNStatusHandler(t, handlers)
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	tests := []struct {
+		name    string
+		svtnArg string
+	}{
+		{name: "control_char_null_byte", svtnArg: "foo\x00bar"},
+		{name: "control_char_stx", svtnArg: "foo\x02bar"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args, err := json.Marshal(map[string]string{"name": tc.svtnArg})
+			if err != nil {
+				t.Fatalf("marshal args: %v", err)
+			}
+			_, handlerErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(args))
+			if handlerErr == nil {
+				t.Fatalf("expected E-CFG-001 for %s, got nil (admin.svtn.status must validate names "+
+					"like admin.svtn.create/destroy — CWE-20/150 sibling-parity)", tc.name)
+			}
+			if !strings.Contains(handlerErr.Error(), "E-CFG-001") {
+				t.Errorf("expected E-CFG-001 in error for %s; got: %v", tc.name, handlerErr)
+			}
+			if strings.Contains(handlerErr.Error(), "E-SVTN-003") {
+				t.Errorf("%s: got E-SVTN-003 (not-found) instead of E-CFG-001 (validation) — proves "+
+					"the control-character name reached SVTNByName's not-found path instead of being "+
+					"rejected by validateSVTNName; got: %v", tc.name, handlerErr)
+			}
+			if strings.Contains(handlerErr.Error(), tc.svtnArg) {
+				t.Errorf("%s: error echoes the raw control-character name verbatim (CWE-20/150 byte "+
+					"echo); got: %v", tc.name, handlerErr)
+			}
+		})
+	}
+}
+
 // TestAdminSVTNStatus_ResponseExcludesSessionHealthFields asserts the AC-007
 // purity boundary: the wire response contains exactly svtn_id/name/created_at/
 // key_counts and no session or health-indicator fields.
