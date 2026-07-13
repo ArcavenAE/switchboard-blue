@@ -33,9 +33,9 @@ develop_head: 4c276d9
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.CLI-SURFACE-COMPLETION Red Gate (worktree ready @ feature branch from 4c276d9; story v2.6 final pre-implementation; stubs → failing tests → implementer). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
+awaiting: "S-BL.CLI-SURFACE-COMPLETION Green phase (Red Gate COMPLETE @ 5bdad28: 25 failing/42 subtests, unrelated green, race-clean; implementer dispatched; step-4.5 adversarial next after green). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
 historical_cycles: []
-timestamp: 2026-07-13T05:20:00Z
+timestamp: 2026-07-13T05:35:00Z
 last_update: 2026-07-13
 ---
 

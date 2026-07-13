@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-13T03:31:15Z","command":"grep -n \"gate\\|gates\\|Gate\" stories/S-BL.CLI-SURFACE-COMPLETION.md | grep -iv \"quality gate\\|Gate:\\|register-before-serve\\|F-P2L1-001\\|gate check\\|Gate check\\|confirm-gate\\|Task.*Gate\\|just test-race\\|just lint\\|red gate\\|Red Gate\\|wave.gate\\|gating\\b\" "}
+{"status":"pass","timestamp":"2026-07-13T07:51:43Z","command":"go test ./... 2>&1 | grep -E \"^--- FAIL|^FAIL|^ok\" "}
