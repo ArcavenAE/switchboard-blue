@@ -207,6 +207,16 @@ func TestSvtnStatus_CLIDispatch_BareTopLevel_NameFlag(t *testing.T) {
 		if !strings.Contains(strings.ToLower(stderr), "required") {
 			t.Errorf("AC-008 PC-3: expected stderr to say --name is required; got: %q", stderr)
 		}
+		// AC-008 PC-3 / Ruling 2 Addendum: "Missing --name → E-CFG-001
+		// (client-side), exit 2" — the token itself is spec'd, not just the
+		// prose, per the sibling precedents the addendum cites
+		// (usageErrf("E-CFG-001: admin list-keys: --svtn is required")).
+		// Without this check, a bare code-less error message (the
+		// runAdminSvtnDestroy anti-pattern the addendum explicitly flags)
+		// would pass.
+		if !strings.Contains(stderr, "E-CFG-001") {
+			t.Errorf("AC-008 PC-3 / Ruling 2 Addendum: expected stderr to contain the \"E-CFG-001\" token (error-taxonomy.md v4.9 client-side variant); got: %q", stderr)
+		}
 		// Flag validation must fire before any dial attempt (client-side
 		// E-CFG-001 pattern, error-taxonomy.md).
 		if strings.Contains(stderr, "E-NET-001") {
