@@ -134,33 +134,50 @@ func main() {
 		err = runSessions(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "paths":
 		// `sbctl paths list` — canonical per-path metrics command (BC-2.06.003 PC-1).
+		// `sbctl paths ping` — one-shot reachability probe (S-BL.CLI-SURFACE-COMPLETION
+		// Decision 1 / AC-001..AC-004).
 		// F-P5P8-A-006: distinguish no sub-verb (generic usage hint) from an unknown
 		// sub-verb (router-style error naming the typed verb, exit 2).
 		if len(args) < 2 {
-			err = usageErrf("usage: sbctl paths list")
-		} else if args[1] != "list" {
-			err = usageErrf("paths: unknown sub-verb %q; expected 'list'", args[1])
+			err = usageErrf("usage: sbctl paths <list|ping>")
 		} else {
-			err = runPathsList(ctx, *target, *key, *jsonOut, sio)
+			switch args[1] {
+			case "list":
+				err = runPathsList(ctx, *target, *key, *jsonOut, sio)
+			case "ping":
+				err = runPathsPing(ctx, *target, *key, *jsonOut, args[2:], sio)
+			default:
+				err = usageErrf("paths: unknown sub-verb %q; expected 'list' or 'ping'", args[1])
+			}
 		}
 	case "router":
-		// `sbctl router metrics --svtn=<id>` or `sbctl router status --target <router>`.
+		// `sbctl router metrics --svtn=<id>`, `sbctl router status --target <router>`,
+		// `sbctl router reload`, or `sbctl router drain`
+		// (S-BL.CLI-SURFACE-COMPLETION Decision 4 / AC-011..AC-016).
 		if len(args) < 2 {
-			err = usageErrf("usage: sbctl router <metrics|status> [flags]")
+			err = usageErrf("usage: sbctl router <metrics|status|reload|drain> [flags]")
 		} else {
 			switch args[1] {
 			case "metrics":
 				err = runRouterMetrics(ctx, *target, *key, *jsonOut, args[2:], sio)
 			case "status":
 				err = runRouterStatus(ctx, *target, *key, *jsonOut, args[2:], sio)
+			case "reload":
+				err = runRouterReload(ctx, *target, *key, *jsonOut, args[2:], sio)
+			case "drain":
+				err = runRouterDrain(ctx, *target, *key, *jsonOut, args[2:], sio)
 			default:
-				err = usageErrf("router: unknown subcommand %q; expected 'metrics' or 'status'", args[1])
+				err = usageErrf("router: unknown subcommand %q; expected 'metrics', 'status', 'reload', or 'drain'", args[1])
 			}
 		}
 	case "console":
 		err = runConsole(ctx, *target, *key, *jsonOut, args[1:], sio)
 	case "admin":
 		err = runAdmin(ctx, *target, *key, *jsonOut, args[1:], sio)
+	case "svtn":
+		// Top-level `sbctl svtn status|destroy` (S-BL.CLI-SURFACE-COMPLETION
+		// Decision 2 / Decision 3 / AC-005..AC-010).
+		err = runSvtn(ctx, *target, *key, *jsonOut, args[1:], sio)
 	default:
 		err = usageErrf("unknown subcommand: %s\nrun 'sbctl' with no args for usage", subcommand)
 	}

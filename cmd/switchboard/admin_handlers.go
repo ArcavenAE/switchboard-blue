@@ -131,6 +131,7 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgm
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m, ops)},
 		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
 		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops)},
+		{Command: "admin.svtn.status", Fn: makeAdminSVTNStatusHandler(m, ops)},
 	}
 }
 
@@ -908,4 +909,40 @@ func validateSVTNName(name string) error {
 		}
 	}
 	return nil
+}
+
+// makeAdminSVTNStatusHandler returns the admin.svtn.status handler function.
+//
+// Wire contract (Decision 2): request args {"name": "<svtn-name>"}; response
+// {"svtn_id": "<hex>", "name": "<svtn-name>", "created_at": "<RFC3339>",
+// "key_counts": {"control": <n>, "console": <n>, "access": <n>}}. Deliberately
+// excludes session/health-indicator fields — internal/session remains a
+// forbidden import for this file (AC-007 purity boundary).
+//
+// Authority check (Decision 2 / F-L2-003 precedent): resolveCallerAdmissionAnyRole
+// — any admitted role (control, console, access) in the target SVTN, OR
+// operator-set member, OR bootstrap key. The admission gate still applies
+// (CWE-862 defense against cross-SVTN roster/existence enumeration, mirrors
+// BC-2.05.004 EC-008); only the control-only authority gate is skipped —
+// same shape as makeListKeysHandler.
+//
+// On success: response fields sourced from m.SVTNByName (svtn_id, name,
+// created_at) and role-grouped counts derived from m.ListKeys (AC-005
+// postcondition 1/2).
+//
+// On not-found: mapAdminError maps svtnmgmt.ErrSVTNNotFound to E-SVTN-003
+// (AC-006 postcondition 1).
+//
+// Traces to BC-2.07.001 v1.14 PC-4; AC-005; AC-006; AC-007.
+//
+// STUB — S-BL.CLI-SURFACE-COMPLETION Task 2 (Green step) implements the
+// SVTNByName + ListKeys lookup and response assembly. Red Gate: the returned
+// closure panics unconditionally so no test can accidentally pass before the
+// Green step; the outer function itself does not panic so BuildAdminHandlers
+// (called by every existing control-mode test) keeps constructing without
+// disruption.
+func makeAdminSVTNStatusHandler(_ *svtnmgmt.SVTNManager, _ *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+	return func(_ context.Context, _ json.RawMessage) (any, error) {
+		panic("not implemented: S-BL.CLI-SURFACE-COMPLETION makeAdminSVTNStatusHandler")
+	}
 }

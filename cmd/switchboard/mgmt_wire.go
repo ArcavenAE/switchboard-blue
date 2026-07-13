@@ -456,7 +456,7 @@ const drainFlushTimeout = 200 * time.Millisecond
 // FrameTypeCtl DRAIN frame to every connected node's per-node send channel
 // at drainCoord.Signal time; the netingress OnAccept seam registers and
 // deregisters nodes in the per-node send map (Q-SEAM, Q-SINGLE-OBS).
-func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error {
+func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh chan os.Signal, drainRequestCh chan struct{}) error {
 	// Router mode requires a loaded config to bind the data-plane listener.
 	// main.go leaves cfg nil when --config is omitted; bare `switchboard router`
 	// would then nil-deref on cfg.ListenAddr and panic — a violation of the
@@ -495,6 +495,13 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// source on RegisterForwardingEntry (S-BL.PATH-TRACKER-WIRING).
 	if err := wireMetricsHandlers(mgmtSrv, router); err != nil {
 		return fmt.Errorf("runRouter: wire metrics handlers: %w", err)
+	}
+
+	// Phase (c2): register router-mode-exclusive control handlers (router.reload,
+	// router.drain) before Serve starts — same register-before-serve ordering as
+	// wireMetricsHandlers (S-BL.CLI-SURFACE-COMPLETION Decision 4 / AC-013).
+	if err := wireRouterControlHandlers(mgmtSrv, configPath, sighupCh, drainRequestCh); err != nil {
+		return fmt.Errorf("runRouter: wire router control handlers: %w", err)
 	}
 
 	// Phase (d): bind the data-plane TCP listener on cfg.ListenAddr
@@ -773,13 +780,20 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		}
 	}
 
-	// Block until context is cancelled or a SIGHUP reload event fires.
-	// (ARCH-01 lifecycle contract; S-7.04-FU-SIGHUP-RELOAD two-case select.)
+	// Block until context is cancelled, a SIGHUP reload event fires, or an
+	// RPC-triggered drain request arrives.
+	// (ARCH-01 lifecycle contract; S-7.04-FU-SIGHUP-RELOAD two-case select,
+	// widened to three cases by S-BL.CLI-SURFACE-COMPLETION Decision 4.)
 	for {
 		select {
 		case <-ctx.Done():
 			// Context cancelled — fall through to graceful shutdown below.
 			goto shutdown
+		case <-drainRequestCh:
+			// STUB — S-BL.CLI-SURFACE-COMPLETION Task 4 (Green step) replaces this
+			// no-op with `goto shutdown` (Decision 4 / AC-012 PC-2). Left inert here
+			// (Task 3 stub-first gate: no existing test sends on drainRequestCh, so
+			// this arm is never reached today) so existing tests remain green.
 		case <-sighupCh:
 			// Fail-closed reload (BC-2.09.003 EC-004 / BC-2.09.001 PC-1).
 			// Empty configPath means no config file was provided; skip silently.

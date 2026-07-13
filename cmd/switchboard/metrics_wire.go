@@ -195,7 +195,8 @@ func (e *metricsNotFoundError) Is(target error) bool {
 	return target == ErrRouterSVTNNotFound
 }
 
-// wireMetricsHandlers registers the three metrics RPC handlers on srv.
+// wireMetricsHandlers registers the metrics RPC handlers (paths.list,
+// router.metrics, router.status) plus paths.ping on srv.
 // MUST be called before serveMgmtServer starts the Serve goroutine —
 // Register returns an error if called after Serve has started (F-P2L1-001).
 // Returns an error on registration failure so the main-package caller can
@@ -207,8 +208,14 @@ func (e *metricsNotFoundError) Is(target error) bool {
 // in scope), the source is an empty registry and paths.list returns
 // EC-001 "no active paths".
 //
+// paths.ping (S-BL.CLI-SURFACE-COMPLETION Decision 1 / AC-004) is registered
+// here — not inside mgmt.RegisterMetricsHandlers — because it targets an
+// arbitrary daemon and is not scoped to the metrics-handler trio; it is
+// available on every daemon mode that calls this function (runRouter,
+// runAccess, runConsole, runControl), matching the metrics handlers' reach.
+//
 // BC-2.06.003 v1.15; S-W5.04 AC-001, AC-004, AC-005; F-P1L1-002; F-P2L1-001;
-// S-BL.PATH-TRACKER-WIRING.
+// S-BL.PATH-TRACKER-WIRING; BC-2.06.004 (S-BL.CLI-SURFACE-COMPLETION).
 func wireMetricsHandlers(srv *mgmt.Server, router *routing.Router) error {
 	var pathsSrc *pathTrackerSource
 	if router != nil {
@@ -217,6 +224,9 @@ func wireMetricsHandlers(srv *mgmt.Server, router *routing.Router) error {
 		pathsSrc = newPathTrackerSource()
 	}
 	if err := mgmt.RegisterMetricsHandlers(srv, pathsSrc, emptyRouterMetricsSource{}); err != nil {
+		return fmt.Errorf("wireMetricsHandlers: register-before-serve invariant violated: %w", err)
+	}
+	if err := mgmt.RegisterPingHandler(srv); err != nil {
 		return fmt.Errorf("wireMetricsHandlers: register-before-serve invariant violated: %w", err)
 	}
 	return nil
