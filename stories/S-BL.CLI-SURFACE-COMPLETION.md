@@ -10,6 +10,27 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-13
+    version: "2.5"
+    change: >
+      Remediated pass-8 spec-adversarial nitpick N-CS-SP8-01 (orchestrator-adopted as fix; pass 8
+      verdict was NITPICK_ONLY, zero findings — 3-clean-pass streak sits at 2/3, unaffected by this
+      fix). N-CS-SP8-01: AC-015 PC-1 and AC-016 PC-1 both cited "`router status`/`router metrics`"
+      as the connectAndRun exemplars for the reload/drain dispatch shape. Verified against develop@
+      4c276d9 (`grep connectAndRun cmd/sbctl/*.go`): `runRouterMetrics` (router_metrics.go) and
+      `runPathsList` (paths_list.go) both call `connectAndRun` directly; `runRouterStatus`
+      (router_status.go) does NOT — it hand-rolls its own `net.Dialer` + `Authenticate` + dispatch
+      of `paths.list`, and its own source comment says it "mirrors connectAndRun's discrimination"
+      rather than using it. Citing `router status` as a connectAndRun user was factually wrong.
+      Fixed both parentheticals to "(same dial+auth+dispatch shape `router metrics` and `paths
+      list` already use)". Swept the rest of the story (Decisions, Task 4, File-Change List, all
+      `dial+auth+dispatch` and `net.Dialer`/`hand-roll` hits) for the same mispairing — none found;
+      the other `paths list`/`router status` co-mentions (Decision 1's RPC-semantics contrast,
+      the drain UX-parity note, Decision 3's bare-top-level-read CLI-shape note) are unrelated to
+      connectAndRun and needed no change. Also applied N-CS-SP8-02 (STORY-INDEX.md frontmatter
+      `modified` scalar trailed at 2026-07-12; refreshed to 2026-07-13). `input-hash` unchanged —
+      story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.4 → 2.5; new
+      `modified:` entry appended (newest-first).
+  - date: 2026-07-13
     version: "2.4"
     change: >
       Remediated pass-6 spec-adversarial finding F-CS-SP6-001 (MED, AC-coverage/test-file-
@@ -161,7 +182,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.4"
+version: "2.5"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -810,7 +831,7 @@ operator's key Tier-1-authenticates.
 **Postconditions:**
 
 1. `sbctl router reload --router=<addr>` dispatches `router.reload` via the existing
-   `connectAndRun` pattern (same dial+auth+dispatch shape `router status`/`router metrics`
+   `connectAndRun` pattern (same dial+auth+dispatch shape `router metrics` and `paths list`
    already use).
 2. sbctl prints the `{"accepted": true}` response; exit code 0.
 3. **Sub-verb transition pin.** Before this story, the `router` case arm's sub-verb switch
@@ -838,7 +859,7 @@ operator's key Tier-1-authenticates.
 **Postconditions:**
 
 1. `sbctl router drain --router=<addr>` dispatches `router.drain` via the existing
-   `connectAndRun` pattern (same dial+auth+dispatch shape `router status`/`router metrics`
+   `connectAndRun` pattern (same dial+auth+dispatch shape `router metrics` and `paths list`
    already use).
 2. sbctl prints the `{"accepted": true}` response; exit code 0. Per AC-012 PC-3 and BC-2.09.002
    PC-3's best-effort-delivery framing, a "connection reset" observed instead of (or after) the
@@ -1052,6 +1073,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.5 | 2026-07-13 | Remediated pass-8 spec-adversarial nitpick N-CS-SP8-01 (orchestrator-adopted as fix; pass 8 verdict was NITPICK_ONLY, zero findings — 3-clean-pass streak sits at 2/3, unaffected by this fix). AC-015 PC-1 and AC-016 PC-1 both cited "`router status`/`router metrics`" as the `connectAndRun` exemplars for the reload/drain dispatch shape. Verified against develop@4c276d9 (`grep connectAndRun cmd/sbctl/*.go`): `runRouterMetrics` (router_metrics.go) and `runPathsList` (paths_list.go) both call `connectAndRun` directly; `runRouterStatus` (router_status.go) does **not** — it hand-rolls its own `net.Dialer` + `Authenticate` + dispatch of `paths.list`, and its own source comment says it "mirrors connectAndRun's discrimination" rather than using it. Citing `router status` as a `connectAndRun` user was factually wrong. Fixed both parentheticals to "(same dial+auth+dispatch shape `router metrics` and `paths list` already use)". Swept the rest of the story (Decisions, Task 4, File-Change List, all `dial+auth+dispatch`/`net.Dialer`/`hand-roll` hits) for the same mispairing — none found; the other `paths list`/`router status` co-mentions (Decision 1's RPC-semantics contrast, the drain UX-parity note, Decision 3's bare-top-level-read CLI-shape note) are unrelated to `connectAndRun` and needed no change. Also applied N-CS-SP8-02 (STORY-INDEX.md frontmatter `modified` scalar trailed at 2026-07-12; refreshed to 2026-07-13). `input-hash` unchanged — story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.4 → 2.5; new `modified:` entry appended (newest-first). |
 | 2.4 | 2026-07-13 | Remediated pass-6 spec-adversarial finding F-CS-SP6-001 (MED, AC-coverage/test-file-assignment gap, orchestrator-verified) plus nitpick N-CS-SP6-01. `router reload`/`router drain` were the only verbs with no client-side CLI dispatch acceptance criterion and no `cmd/sbctl` test file, despite the File-Change List already creating `cmd/sbctl/router_reload.go`/`router_drain.go` and adding `reload`/`drain` sub-verb arms to `main.go`'s `router` case — a real behavior change (that arm dispatches only `metrics`/`status` today; other sub-verbs exit 2 via `usageErrf`). AC-014 PC-3's client-observed E-NET-001/E-ADM-010 codes were also mis-assigned to a server-side test file that structurally cannot exercise `cmd/sbctl`. **Fixed:** two new client happy-path ACs added — **AC-015** (`sbctl router reload`, BC-2.09.001 v1.2 PC-1, same anchor as AC-011) and **AC-016** (`sbctl router drain`, BC-2.09.002 v1.3 Trigger/PC-1, same anchor as AC-012) — each with a sub-verb-transition-pin postcondition proving the known sub-verb now dispatches while an adjacent still-unknown sub-verb (`router bogus`) continues to exit 2; AC-014 PC-3 re-homed to new `cmd/sbctl/router_control_test.go`, its Test names/level/file block split per-postcondition (PC-1/PC-2 stay server-side, PC-3 moves); `acceptance_criteria_count` 14 → 16; File-Change List gained the new test-file row plus a narrowed AC-014 scope note on the `router_control_wire_test.go` row; Task 4 retitled and its Red step rewritten to cover all six ACs and both failure modes; Anchors Consumed's reload/drain rows gained AC-015/AC-016; Architecture Mapping needed no change (never named test files); points kept at 5 (the gap was AC/test documentation of already-scoped work, not new implementation scope). **N-CS-SP6-01** (nitpick, taken): AC-011 PC-3's abbreviated quote of the `runRouter` entry-guard message marked as abbreviated with the full wrapped literal inlined, per error-taxonomy.md v4.9's own changelog (F-CS-SP4-001) confirming the story's Variant 3 literal needed no change. `input-hash` unchanged — story-body-only edit, `--check` confirms no drift. Frontmatter `version` 2.3 → 2.4; new `modified:` entry appended (newest-first). |
 | 2.3 | 2026-07-12 | Remediated pass-3 spec-adversarial findings (F-CS-SP3-001, F-CS-SP3-002, F-CS-SP3-003) and discharged Forward Obligation (c). Architect filed the Ruling 2 Addendum (rulings doc v1.1 → v1.2, F-CS-SP3-003 — AC-008 PC-3 VINDICATED, stands unchanged); PO landed `error-taxonomy.md` v4.8 with both the E-CFG-001 client-side variant note and the E-CFG-004 `router.reload` defense-in-depth variant in the same burst, which discharges FO(c). **F-CS-SP3-001** (FO table row (c)): Gate cell `Before implementation of AC-011's E-CFG-004 postcondition` → `None — discharged (was non-blocking per Ruling 4 Addendum v1.1)`; Status cell → `DISCHARGED — landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation burst)`; the "Downgraded by Ruling 4 Addendum v1.1" paragraph rewritten to record the discharge. **F-CS-SP3-002** (Decision 4 reload-bridging bullet): "must land before this AC ships" → discharged form citing the v4.8 landing. **F-CS-SP3-003** (AC-008 PC-3): text stands unchanged per the addendum; appended the architect's optional traceability parenthetical (`usageErrf`, §110/§111 siblings, error-taxonomy.md E-CFG-001 client-side variant note). **Semantic reference-site sweep** (searched "Obligation (c)"/"FO(c)"/"E-CFG-004"/"error-taxonomy"/"taxonomy" and read every hit's sentence — the token-grep approach missed this class twice already, F-CS-SP2-002 then this pass): AC-011 PC-3's trailing sentence, the File-Change List's error-taxonomy.md row, and Task 4's note all updated from non-blocking/pending phrasing to discharged/landed phrasing; the v2.0/v2.2-era historical `modified:`/Changelog rows describing the old language left untouched as accurate period records; the Delivery Plan Note (POL-005) doesn't mention FO(c), no change needed; the FO table's general intro sentence remains accurate (describes all four FOs, not (c) specifically). Live rulings-doc pin refreshed v1.1 → v1.2 at all three live binding-source citations (frontmatter `inputDocuments` comment, Adjudicated Design Decisions intro, Provenance section). `error-taxonomy.md` gained its first version-pinned citations in this story (v4.8), at the discharge sites — it was previously cited by filename only. `input-hash` recomputed via `compute-input-hash --update` (the rulings doc input changed content, v1.1 → v1.2). Frontmatter `version` 2.2 → 2.3; new `modified:` entry appended (newest-first). |
 | 2.2 | 2026-07-12 | Remediated two MED spec-adversarial pass 2 findings, both story-side. **F-CS-SP2-001** (premise/doc-drift): the `runRouter` call-site enumeration was incomplete — Design Constraint parenthetical, File-Change List, and Task 3 named only `main.go`, `mgmt_wire_test.go`, `router_drain_test.go`, but a `runRouter(` grep against `cmd/switchboard` at develop @ `4c276d9` found thirteen call sites across six files (`router_sighup_test.go` one call, `router_pe_receive_test.go` one call, `router_pe_connector_test.go` four calls, all previously omitted; all six files are package `main` and would fail to compile once the `drainRequestCh` trailing parameter lands, making Task 3's "all existing tests remain green" gate unmeetable against the old closed list). Fixed at all three loci: Design Constraint parenthetical now enumerates all six files with per-file call counts; File-Change List gained three new rows for the omitted files (each with its call count) and the two pre-existing test-file rows gained counts too; Task 3's call-site sentence rewritten to the open, drift-durable form — enumerates today's six files but requires the implementer to re-grep `runRouter(` under `cmd/switchboard` at implementation time, since new call sites may land before delivery. **F-CS-SP2-002** (contradiction): the File-Change List's `error-taxonomy.md` row still read `(PO edit, gates AC-011; not a story-writer edit)` — the one locus the v2.1 FO(c) downgrade missed, letting an implementer re-derive the blocking dependency v2.1 removed. Fixed to `(PO edit, non-blocking per Ruling 4 Addendum v1.1; not a story-writer edit)`. Grepped the whole story for residual "gate"/"gates"/"hard gate" phrasing tied to FO(c); found no other contradictions (the Forward Obligations table's intro sentence and Task 4's existing non-blocking note both already read correctly; changelog rows describing history are exempt as accurate records). `input-hash` unchanged — this was a story-body-only fix; no input file (rulings doc, BC files, `interface-definitions.md`) was touched; `--check` confirms no drift. Frontmatter `version` 2.1 → 2.2; new `modified:` entry appended (newest-first). |
