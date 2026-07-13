@@ -10,6 +10,42 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-12
+    version: "2.3"
+    change: >
+      Remediated pass-3 spec-adversarial findings (F-CS-SP3-001..003) and discharged Forward
+      Obligation (c). Context: architect filed Ruling 2 Addendum (rulings doc v1.1 → v1.2 —
+      AC-008 PC-3 VINDICATED, stands unchanged, optional traceability citation offered); PO
+      landed error-taxonomy.md v4.8 with both the E-CFG-001 client-side variant note
+      (F-CS-SP3-003) and the E-CFG-004 `router.reload` defense-in-depth variant (FO(c) discharge,
+      F-CS-SP1-001) in the same remediation burst. F-CS-SP3-001 (FO table row (c)): Gate cell
+      `Before implementation of AC-011's E-CFG-004 postcondition` → `None — discharged (was
+      non-blocking per Ruling 4 Addendum v1.1)`; Status cell `OPEN — non-blocking` →
+      `DISCHARGED — landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation burst)`; the
+      "Downgraded by Ruling 4 Addendum v1.1" paragraph rewritten to record the discharge.
+      F-CS-SP3-002 (Decision 4 reload-bridging bullet): reworded from "must land before this AC
+      ships" to the discharged form citing the v4.8 landing. F-CS-SP3-003 (AC-008 PC-3): text
+      stands unchanged per the addendum; appended the architect's optional traceability
+      parenthetical citing `usageErrf`, the §110/§111 siblings, and the error-taxonomy.md
+      E-CFG-001 client-side variant note. Semantic reference-site sweep (searched "Obligation
+      (c)", "FO(c)", "E-CFG-004", "error-taxonomy", "taxonomy" and read every hit's sentence,
+      not just its tokens — the token-grep approach missed this class twice, F-CS-SP2-002 then
+      this pass): AC-011 PC-3's trailing sentence updated from "non-blocking... should still
+      land" to "DISCHARGED... landed in v4.8"; the File-Change List's error-taxonomy.md row
+      updated to "DISCHARGED, landed in v4.8"; Task 4's note rewritten from a non-blocking
+      caveat to a discharged confirmation; the two v2.0/v2.2-era historical `modified:`/Changelog
+      references to the old "hard gate"/"non-blocking" language left untouched as accurate
+      records of what was true at each prior version; the Delivery Plan Note (POL-005) does not
+      mention FO(c) and needed no change; the FO table's general intro sentence ("each gates a
+      specific AC...") remains accurate as a statement about all four FOs, not (c) specifically.
+      Live rulings-doc pin refreshed v1.1 → v1.2 at all three live binding-source citations
+      (frontmatter `inputDocuments` comment, Adjudicated Design Decisions section intro,
+      Provenance section) — each now also notes the Ruling 2 Addendum's scope. error-taxonomy.md
+      was not previously cited with a version anywhere live in the story (filename-only
+      references); the new discharge language introduces its first version-pinned citations,
+      all at v4.8. `input-hash` recomputed via `compute-input-hash --update` — the rulings doc
+      input changed content (v1.1 → v1.2). Frontmatter `version` 2.2 → 2.3; new `modified:`
+      entry appended (newest-first).
+  - date: 2026-07-12
     version: "2.2"
     change: >
       Remediated two MED spec-adversarial pass 2 findings (F-CS-SP2-001, F-CS-SP2-002).
@@ -86,7 +122,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.2"
+version: "2.3"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -100,7 +136,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'
   - '.factory/specs/prd-supplements/interface-definitions.md'
-input-hash: "88c13c8"
+input-hash: "cbf07f7"
 traces_to: .factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md
 behavioral_contracts:
   - BC-2.06.004
@@ -138,7 +174,7 @@ estimated_days: null
 assumption_validations: []
 risk_mitigations: []   # the ruling's four follow-ups are captured as explicit story obligations below (Forward Obligations), not ASM/R-registry IDs
 inputDocuments:
-  - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'   # BINDING — v1.1 (Ruling 4 Addendum, F-CS-SP1-001) — 4 rulings + AC-011 PC-3 defense-in-depth reframe, wire contracts, error codes, authority tiers, implementation constraints
+  - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'   # BINDING — v1.2 (v1.1 Ruling 4 Addendum, F-CS-SP1-001, AC-011 PC-3 defense-in-depth reframe; v1.2 Ruling 2 Addendum, F-CS-SP3-003, AC-008 PC-3 confirmed unchanged) — 4 rulings, wire contracts, error codes, authority tiers, implementation constraints
   - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.004.md'    # v1.1 — new BC, paths.ping
   - '.factory/specs/behavioral-contracts/ss-07/BC-2.07.001.md'    # v1.14 — PC-4 admin.svtn.status
   - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'    # v1.2 — governance addendum, router.reload (pin retained per governance-leaf convention; file now at v1.3, traceability-only)
@@ -224,9 +260,10 @@ four new Registered Verbs rows (`admin.svtn.status`, `paths.ping`, `router.reloa
 
 ## Adjudicated Design Decisions
 
-Transcribed from `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1 (binding — v1.1
-adds the Ruling 4 Addendum, F-CS-SP1-001, reframing AC-011 PC-3 as a defense-in-depth guard). Where
-this story and the rulings doc appear to diverge, the rulings doc governs. Each entry below carries
+Transcribed from `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.2 (binding — v1.1
+added the Ruling 4 Addendum, F-CS-SP1-001, reframing AC-011 PC-3 as a defense-in-depth guard; v1.2
+adds the Ruling 2 Addendum, F-CS-SP3-003, confirming AC-008 PC-3 stands unchanged). Where this
+story and the rulings doc appear to diverge, the rulings doc governs. Each entry below carries
 the load-bearing constraints inline — the implementer should not need to re-open the rulings doc
 for the common path.
 
@@ -337,7 +374,8 @@ placement notes (`S-7.04-FU-DRAIN-WIRE-placement-note.md`, `S-7.04-FU-SIGHUP-REL
   request). Unlike a bare SIGHUP (which silently no-ops when `configPath == ""`), the RPC handler
   has a response channel and surfaces that case synchronously as **E-CFG-004: reload not
   applicable: daemon started without --config** rather than a silent `{"accepted": true}` no-op
-  (see Forward Obligation (c) — the error-taxonomy.md variant must land before this AC ships).
+  (Forward Obligation (c) — the error-taxonomy.md reload variant landed in v4.8, DISCHARGED;
+  F-CS-SP1-001 / Ruling 4 Addendum v1.1).
 - **Drain bridging (genuinely new channel):** `drainRequestCh chan struct{}` (buffered 1), threaded
   into `runRouter` the same way `sighupCh` was threaded by `S-7.04-FU-SIGHUP-RELOAD`. A third
   select-loop arm: `case <-drainRequestCh: goto shutdown`. Handler:
@@ -557,7 +595,10 @@ Tier-1-authenticates.
    routed through `sbctl admin` framing (matches the `paths list`/`router status` bare top-level
    read shape).
 2. The flag is `--name`, not `--id` (`SVTNManager` is exclusively name-keyed).
-3. Missing `--name` → E-CFG-001 (client-side), exit 2.
+3. Missing `--name` → **E-CFG-001** (client-side flag validation via `usageErrf`, exit 2 — same
+   pattern as `sbctl admin list-keys --svtn` (interface-definitions.md §111) and
+   `sbctl admin key expire --after` (§110); see error-taxonomy.md E-CFG-001 client-side variant
+   note, F-CS-SP3-003).
 
 **Test name:** `TestSvtnStatus_CLIDispatch_BareTopLevel_NameFlag`
 **Test level:** integration
@@ -626,8 +667,8 @@ Tier-1-authenticates.
    violated (e.g. by a future refactor decoupling `cfg` construction from `configPath`). Mirrors
    the `E-CFG-011` defensive-annotation shape (the E-CFG-011 row of error-taxonomy.md). Forward
    Obligation (c) — the error-taxonomy.md E-CFG-004 message-variant documentation — is
-   **non-blocking** as of Ruling 4 Addendum v1.1 (see Forward Obligations table below); it should
-   still land at or before delivery but does not gate this postcondition's implementation.
+   **DISCHARGED**: the variant landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation
+   burst; see Forward Obligations table below). Nothing gates this postcondition's implementation.
 
 **Invocation pattern (PC-3):** `TestRouterReload_NoConfigLoaded_ECFG004` calls
 `wireRouterControlHandlers` (or its registered `router.reload` handler) directly with
@@ -718,17 +759,19 @@ downstream artifact's correctness, and each is a distinct owner/timing combinati
 |---|-----------|-------|------|--------|
 | (a) | BC-2.06.004's `CAP-022` capability anchor is provisional — Ruling 1 did not mint a dedicated capability. Architect/PO must confirm CAP-022 as the correct anchor or mint `CAP-029`. | architect / PO | Before or at delivery | OPEN |
 | (b) | `ARCH-INDEX.md`'s SS-06 (quality-observability) subsystem row lists Implementing Modules as `internal/metrics, internal/paths` — does not yet include `internal/mgmt`, which BC-2.06.004 names as its `architecture_module`. | architect | At delivery | OPEN |
-| (c) | `error-taxonomy.md`'s E-CFG-004 row currently reads `"config file not found: <path>"` (BC-2.09.003 scope). Ruling 4's reload variant needs a documented second message variant — `"reload not applicable: daemon started without --config"` — mirroring the existing E-NET-001/E-CFG-008 multi-variant catalog pattern. | PO | **Before implementation of AC-011's E-CFG-004 postcondition** | OPEN — non-blocking (does not gate Task 4 implementation) |
+| (c) | `error-taxonomy.md`'s E-CFG-004 row currently reads `"config file not found: <path>"` (BC-2.09.003 scope). Ruling 4's reload variant needs a documented second message variant — `"reload not applicable: daemon started without --config"` — mirroring the existing E-NET-001/E-CFG-008 multi-variant catalog pattern. | PO | None — discharged (was non-blocking per Ruling 4 Addendum v1.1) | DISCHARGED — landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation burst) |
 | (d) | BC-2.06.004's `VP-TBD-PING-A`/`VP-TBD-PING-B` are placeholder IDs — Ruling 1 did not mint real VP numbers. Architect mints real numbers following the BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` → `VP-061`/`VP-062` precedent (v1.3, "not blocking implementation"). | architect | Non-blocking; before this story's Verification Properties table is cited elsewhere as final | OPEN — non-blocking |
 
-**Downgraded by Ruling 4 Addendum v1.1 (F-CS-SP1-001):** Obligation (c) no longer hard-gates TDD
-implementation. AC-011 PC-3 was reframed as a defense-in-depth guard — `configPath == ""` is
-confirmed unreachable via any real daemon startup path, so the E-CFG-004 message it returns is
-operator-unreachable, unit-tested directly against `wireRouterControlHandlers` with
-`configPath = ""` rather than gated on a live-daemon integration path. The error-taxonomy.md
-message-variant documentation is still wanted and should land at or before delivery, but Task 4
-may implement and test PC-3 regardless of its status. None of the four Forward Obligations block
-TDD implementation of the remaining ACs.
+**Downgraded by Ruling 4 Addendum v1.1 (F-CS-SP1-001), then DISCHARGED (pass-3 remediation
+burst, 2026-07-12):** Obligation (c) no longer hard-gates TDD implementation. AC-011 PC-3 was
+reframed as a defense-in-depth guard — `configPath == ""` is confirmed unreachable via any real
+daemon startup path, so the E-CFG-004 message it returns is operator-unreachable, unit-tested
+directly against `wireRouterControlHandlers` with `configPath = ""` rather than gated on a
+live-daemon integration path. The error-taxonomy.md message-variant documentation has now
+**landed** — PO shipped error-taxonomy.md v4.8 with the `router.reload` defense-in-depth message
+variant (Variant 3 of the E-CFG-004 row), discharging Obligation (c) in full; nothing remains to
+land at or before delivery for this obligation. None of the four Forward Obligations block TDD
+implementation of the remaining ACs.
 
 **Non-binding architect recommendation, also from Ruling 4 (not tracked as a Forward Obligation —
 informational only):** wherever ADR-004's disambiguation table enumerates per-mode handler sets,
@@ -791,7 +834,7 @@ doesn't silently drift from the `admin.*` handler exclusion it parallels.
 | `cmd/switchboard/router_pe_receive_test.go` (extended) | Call-site update for the new `drainRequestCh` parameter — one call site |
 | `cmd/switchboard/router_pe_connector_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter — four call sites |
 | `cmd/switchboard/main.go` | `"router"` case body constructs `drainRequestCh`; passes to `runRouter` — one call site |
-| `.factory/specs/prd-supplements/error-taxonomy.md` | **Forward Obligation (c)** — E-CFG-004 message-variant addition (PO edit, non-blocking per Ruling 4 Addendum v1.1; not a story-writer edit) |
+| `.factory/specs/prd-supplements/error-taxonomy.md` | **Forward Obligation (c)** — E-CFG-004 message-variant addition — **DISCHARGED**, landed in v4.8 (PO edit, 2026-07-12 pass-3 remediation burst; not a story-writer edit) |
 | `.factory/specs/architecture/ARCH-INDEX.md` | **Forward Obligation (b)** — SS-06 Implementing Modules row gains `internal/mgmt` (architect edit, at delivery; not a story-writer edit) |
 
 **No ARCH-08 §6.4 registration obligation** — no new `internal/` package is introduced (`internal/mgmt`
@@ -828,11 +871,11 @@ test files yet); `just lint` clean.
 
 ### Task 4 — `router.reload`/`router.drain` handlers (AC-011, AC-012, AC-013 remainder, AC-014)
 
-**Note (non-blocking, per Ruling 4 Addendum v1.1):** Forward Obligation (c) — error-taxonomy.md
-should carry the E-CFG-004 "reload not applicable" variant at or before delivery, but no longer
-gates this task. AC-011 PC-3 is a unit-tested defense-in-depth guard
+**Note (DISCHARGED, pass-3 remediation burst):** Forward Obligation (c) — error-taxonomy.md's
+E-CFG-004 "reload not applicable" variant has landed (v4.8, 2026-07-12); nothing remains to gate
+this task. AC-011 PC-3 is a unit-tested defense-in-depth guard
 (`TestRouterReload_NoConfigLoaded_ECFG004` calls `wireRouterControlHandlers` directly with
-`configPath = ""`); it may be implemented and tested regardless of the taxonomy doc's status.
+`configPath = ""`).
 
 Red: write AC-011, AC-012, AC-013, AC-014 tests against the Task 3 stub (they fail — the select-arm
 is a no-op). Green: implement `wireRouterControlHandlers`, replace the select-loop stub arm with
@@ -877,16 +920,17 @@ pass result rather than reviewing stale state.
 - **Spec annotation:** `interface-definitions.md` v1.31 — CLI listing and Registered Verbs rows
   already adjudicated and updated by PO/architect per the rulings doc (this story does not edit
   that file).
-- **Adjudication:** `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1 (2026-07-12,
-  addendum updated 2026-07-12T06:00Z) — all four Open Design Obligations resolved, plus the
-  Ruling 4 Addendum (F-CS-SP1-001, spec-adversarial pass 1) reframing AC-011 PC-3 as a
-  defense-in-depth guard. This elaboration (v2.1) is the story-writer transcription of that
-  ruling into sprint-ready ACs.
+- **Adjudication:** `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.2 (2026-07-12)
+  — all four Open Design Obligations resolved, plus the Ruling 4 Addendum (F-CS-SP1-001,
+  spec-adversarial pass 1) reframing AC-011 PC-3 as a defense-in-depth guard, plus the Ruling 2
+  Addendum (F-CS-SP3-003, spec-adversarial pass 3) confirming AC-008 PC-3 stands unchanged. This
+  elaboration (v2.3) is the story-writer transcription of that ruling into sprint-ready ACs.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.3 | 2026-07-12 | Remediated pass-3 spec-adversarial findings (F-CS-SP3-001, F-CS-SP3-002, F-CS-SP3-003) and discharged Forward Obligation (c). Architect filed the Ruling 2 Addendum (rulings doc v1.1 → v1.2, F-CS-SP3-003 — AC-008 PC-3 VINDICATED, stands unchanged); PO landed `error-taxonomy.md` v4.8 with both the E-CFG-001 client-side variant note and the E-CFG-004 `router.reload` defense-in-depth variant in the same burst, which discharges FO(c). **F-CS-SP3-001** (FO table row (c)): Gate cell `Before implementation of AC-011's E-CFG-004 postcondition` → `None — discharged (was non-blocking per Ruling 4 Addendum v1.1)`; Status cell → `DISCHARGED — landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation burst)`; the "Downgraded by Ruling 4 Addendum v1.1" paragraph rewritten to record the discharge. **F-CS-SP3-002** (Decision 4 reload-bridging bullet): "must land before this AC ships" → discharged form citing the v4.8 landing. **F-CS-SP3-003** (AC-008 PC-3): text stands unchanged per the addendum; appended the architect's optional traceability parenthetical (`usageErrf`, §110/§111 siblings, error-taxonomy.md E-CFG-001 client-side variant note). **Semantic reference-site sweep** (searched "Obligation (c)"/"FO(c)"/"E-CFG-004"/"error-taxonomy"/"taxonomy" and read every hit's sentence — the token-grep approach missed this class twice already, F-CS-SP2-002 then this pass): AC-011 PC-3's trailing sentence, the File-Change List's error-taxonomy.md row, and Task 4's note all updated from non-blocking/pending phrasing to discharged/landed phrasing; the v2.0/v2.2-era historical `modified:`/Changelog rows describing the old language left untouched as accurate period records; the Delivery Plan Note (POL-005) doesn't mention FO(c), no change needed; the FO table's general intro sentence remains accurate (describes all four FOs, not (c) specifically). Live rulings-doc pin refreshed v1.1 → v1.2 at all three live binding-source citations (frontmatter `inputDocuments` comment, Adjudicated Design Decisions intro, Provenance section). `error-taxonomy.md` gained its first version-pinned citations in this story (v4.8), at the discharge sites — it was previously cited by filename only. `input-hash` recomputed via `compute-input-hash --update` (the rulings doc input changed content, v1.1 → v1.2). Frontmatter `version` 2.2 → 2.3; new `modified:` entry appended (newest-first). |
 | 2.2 | 2026-07-12 | Remediated two MED spec-adversarial pass 2 findings, both story-side. **F-CS-SP2-001** (premise/doc-drift): the `runRouter` call-site enumeration was incomplete — Design Constraint parenthetical, File-Change List, and Task 3 named only `main.go`, `mgmt_wire_test.go`, `router_drain_test.go`, but a `runRouter(` grep against `cmd/switchboard` at develop @ `4c276d9` found thirteen call sites across six files (`router_sighup_test.go` one call, `router_pe_receive_test.go` one call, `router_pe_connector_test.go` four calls, all previously omitted; all six files are package `main` and would fail to compile once the `drainRequestCh` trailing parameter lands, making Task 3's "all existing tests remain green" gate unmeetable against the old closed list). Fixed at all three loci: Design Constraint parenthetical now enumerates all six files with per-file call counts; File-Change List gained three new rows for the omitted files (each with its call count) and the two pre-existing test-file rows gained counts too; Task 3's call-site sentence rewritten to the open, drift-durable form — enumerates today's six files but requires the implementer to re-grep `runRouter(` under `cmd/switchboard` at implementation time, since new call sites may land before delivery. **F-CS-SP2-002** (contradiction): the File-Change List's `error-taxonomy.md` row still read `(PO edit, gates AC-011; not a story-writer edit)` — the one locus the v2.1 FO(c) downgrade missed, letting an implementer re-derive the blocking dependency v2.1 removed. Fixed to `(PO edit, non-blocking per Ruling 4 Addendum v1.1; not a story-writer edit)`. Grepped the whole story for residual "gate"/"gates"/"hard gate" phrasing tied to FO(c); found no other contradictions (the Forward Obligations table's intro sentence and Task 4's existing non-blocking note both already read correctly; changelog rows describing history are exempt as accurate records). `input-hash` unchanged — this was a story-body-only fix; no input file (rulings doc, BC files, `interface-definitions.md`) was touched; `--check` confirms no drift. Frontmatter `version` 2.1 → 2.2; new `modified:` entry appended (newest-first). |
 | 2.1 | 2026-07-12 | Propagated architect Ruling 4 Addendum (`S-BL.CLI-SURFACE-COMPLETION-rulings.md` v1.1, F-CS-SP1-001, spec-adversarial pass 1) into AC-011 and its dependents. **AC-011 PC-3 reframed** from an operator-reachable-but-untested guard to an explicit **defense-in-depth guard** (unreachable via any real daemon startup path — `runRouter`'s entry guard in `cmd/switchboard/mgmt_wire.go` plus the `"router"` case in `cmd/switchboard/main.go` together guarantee `configPath != ""` for every router instance reaching `wireRouterControlHandlers` registration; presence at runtime would indicate a code defect, mirrors the `E-CFG-011` defensive-annotation shape). PC-3's test level downgraded `integration` → `unit` (test name unchanged: `TestRouterReload_BridgesToSighupCh_CodePathIdentical` stays integration for PC-1/PC-2; `TestRouterReload_NoConfigLoaded_ECFG004` for PC-3 is now unit); invocation-pattern note added — calls `wireRouterControlHandlers`/its registered handler directly with `configPath = ""`, no live daemon. **Mechanism correction:** `wireRouterControlHandlers` gains a `configPath string` second parameter (was missing entirely in the original signature — PC-3 as drafted had no way to observe `configPath`); updated at both literal-signature occurrences (Decision 4 registration-point bullet, AC-013 postcondition 1) plus the Architecture Mapping table row's Notes cell, each with a one-line rationale pointer back to AC-011 PC-3. **Forward Obligation (c) downgraded** from `OPEN — hard gate on AC-011` to `OPEN — non-blocking (does not gate Task 4 implementation)`; the "Obligation (c) is the only hard implementation gate" paragraph and Task 4's "Gate check before this task" note both rewritten to match — none of the four Forward Obligations now hard-gate TDD implementation. Rulings-doc citation pinned to v1.1 at the two locations asserting it as binding source (Adjudicated Design Decisions section intro, Provenance section) — previously cited by filename+date only. `interface-definitions.md` pin bumped v1.30 → v1.31 (PO fixed §60's `usage:` prefix under F-CS-SP1-002; AC-009's own text was already correct, no AC change) at all live-reference citations (frontmatter `inputDocuments` comment, Context section prose, Provenance section) — the v2.0 historical `modified:` narrative entry left untouched as an accurate record of what was true at that time. BC-2.09.001 (v1.2) / BC-2.09.002 (v1.3) pins reviewed and **retained** per the governance-leaf convention (N-CS-SP1-01) — both files' subsequent bumps (v1.2→v1.3, v1.3→v1.4) are traceability-only Stories-cell fills, `governance_leaf: true`, no PC/AC behavior change, so the story's existing pins are not factually wrong. `input-hash` recomputed via `compute-input-hash --update` (`88c13c8`, was `2af06c0` — the rulings doc input changed). Frontmatter `version` 2.0 → 2.1; new `modified:` entry appended (newest-first). |
 | 2.0 | 2026-07-12 | Elaborated from backlog stub (v1.0, draft, 0 ACs) to sprint-ready (`ready`, 14 ACs, 5 points) per architect ruling `S-BL.CLI-SURFACE-COMPLETION-rulings.md`. Replaced "Open Design Obligations" with "Adjudicated Design Decisions" (four decisions, one per ruling, load-bearing constraints transcribed inline). Added Design Constraint section for the `runRouter` signature widening. 14 ACs traced to BC-2.06.004 PC-1..4, BC-2.07.001 PC-4, BC-2.09.001 v1.2 PC-1 RPC-trigger note, BC-2.09.002 v1.3 Trigger/PC-1 RPC-trigger note, plus CLI dispatch/flag-parse ACs per `interface-definitions.md` §§60/62/77/82-83. Four Forward Obligations encoded as explicit story-tracked tasks (CAP-022/CAP-029 confirmation, ARCH-INDEX SS-06 `internal/mgmt` row, error-taxonomy.md E-CFG-004 variant [hard gate on AC-011], VP-TBD-PING-A/B real VP-number minting). `bc_traces` gained BC-2.06.004. `estimated_points` TBD → 5 (Ruling 4 is the largest plumbing — signature widening + new channel + registration function + router-mode-exclusive wiring, comparable alone to `S-7.04-FU-SIGHUP-RELOAD`'s full 3-point scope; Rulings 1-2 each add a full handler+CLI wire pair; Ruling 3 is a near-zero usage-error shim). Frontmatter conformed to `S-BL.LOOPBACK-FULLSTACK` template-mandated superset keys. Full File-Change List, Architecture Mapping, Task Breakdown, and POL-005 Delivery Plan Note added. `input-hash` to be computed via `compute-input-hash --update` in the same burst as commit. |

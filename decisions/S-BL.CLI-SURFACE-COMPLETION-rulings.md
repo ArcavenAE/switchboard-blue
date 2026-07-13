@@ -2,11 +2,11 @@
 artifact_id: S-BL.CLI-SURFACE-COMPLETION-rulings
 document_type: decision
 level: ops
-version: "1.1"
+version: "1.2"
 status: final
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-updated: 2026-07-12T06:00:00Z
+updated: 2026-07-12T09:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.CLI-SURFACE-COMPLETION]
 bc_traces:
@@ -254,6 +254,88 @@ status fields), not-found (`E-SVTN-003`), admission-denied
 under VP-048) for "status returns accurate key counts / correct
 admission-gate enforcement." Update the Registered Verbs table with the
 `admin.svtn.status` row.
+
+### Ruling 2 Addendum (v1.2) — F-CS-SP3-003: E-CFG-001 client-side exit-2 variant is pre-existing, spec-anchored practice; taxonomy documents it, AC-008 PC-3 stands
+
+**Finding acknowledged.** Spec-adversarial pass 3 flags AC-008 PC-3 ("Missing `--name` → E-CFG-001
+(client-side), exit 2") as conflicting with `error-taxonomy.md`'s E-CFG-001 row, which lists a
+single Exit Code value of `1`. Verified independently against develop @
+`4c276d935b089026fac4fa796612352374bb880f`.
+
+**The exit-2 usage is not a new pattern being invented for this story — it is extensively shipped,
+spec-anchored, and test-protected already.** This changes the shape of the fix.
+
+- `cmd/sbctl/main.go:31` — the CLI's own documented contract: *"main() maps usageError →
+  os.Exit(2); all other errors → os.Exit(1)."* `usageErrf` (`main.go:41`) is the constructor for
+  every client-side exit-2 error in `cmd/sbctl`.
+- `cmd/sbctl/admin.go:168` — `usageErrf("E-CFG-001: admin list-keys: --svtn is required")`,
+  exit 2. Already shipped, already spec-anchored: `interface-definitions.md` §111 documents
+  *"E-CFG-001 (missing `--svtn`, client-side, exit 2 — `cmd/sbctl/admin.go` rejects empty flag via
+  `usageErrf`)"*, reaffirmed across four separate remediation bursts (v1.18 F-P5P5-A-003, v1.20
+  F-P5P8-A-002, v1.24 F-P5P12-A-001, v1.25) and protected by a dedicated regression test
+  (`cmd/sbctl/phase5_pass13_test.go`, `F-P5P13-A-002`).
+- `cmd/sbctl/admin.go:560` — `usageErrf(...)` for zero/negative `--after` duration on
+  `admin key expire`, exit 2, also E-CFG-001-tagged. Spec-anchored at `interface-definitions.md`
+  §110 (v1.22 changelog, F-P5P10-A-002) with its own regression test
+  (`cmd/sbctl/phase5_pass10_test.go`).
+- `interface-definitions.md`'s own exit-code summary table (§209, the row for exit code 2) already
+  lists **E-CFG-001** explicitly as a usage-error code, alongside E-CFG-012/E-CFG-013: *"missing
+  required flags; ... E-CFG-001 (client-side flag-value validation: zero or negative `--after`
+  duration on `admin key expire`, `cmd/sbctl/admin.go`); E-CFG-012; E-CFG-013."*
+- Separately, `E-CFG-001` is also the **server-side RPC in-band error code** for request-args
+  validation failures across `cmd/switchboard/admin_handlers.go`, `console_handlers.go`,
+  `sessions_handlers.go` (dozens of emission sites) — a wire-response classification with no Unix
+  exit code at all, a third distinct channel the taxonomy row also doesn't capture.
+
+**Conclusion: `error-taxonomy.md`'s E-CFG-001 row is the stale document here, not
+`interface-definitions.md` or the shipped code.** The row's single "Exit Code: 1" value has always
+only accurately described one of E-CFG-001's three shipped emission contexts (the
+`internal/config.Validate()` daemon-startup path, `internal/config/config.go:43`,
+`ErrValidation = &ConfigError{Code: "E-CFG-001"}`). The client-side `usageErrf` exit-2 variant and
+the server-side wire-response variant have both been shipped and spec-anchored in
+`interface-definitions.md` for multiple burst passes without a corresponding taxonomy update. This
+is the same drift class already tracked (lower priority, different specific code) as
+`DRIFT-ECFG-TAXONOMY-006-001` in STATE.md — recommend PO/spec-steward batch both E-CFG-family
+taxonomy corrections in one pass since they touch the same table.
+
+**Decision: shape (a).** `error-taxonomy.md`'s E-CFG-001 row gains a documented client-side
+(exit 2) and server-side (wire, no exit code) variant note, matching the message-variant shape
+`E-CFG-008` already uses (`error-taxonomy.md:110`) — extended to also call out the exit-code
+difference, since E-CFG-008's variants don't differ in exit code and E-CFG-001's do. This
+legitimizes AC-008 PC-3 as drafted (no change required) and simultaneously catches the taxonomy up
+to what `interface-definitions.md` and the shipped code have already established. **Not shape
+(b):** dropping the E-CFG-001 tag from AC-008 would create a *fresh* CLI-surface inconsistency —
+`svtn status --name` would become the only client-side missing-required-flag error in the entire
+`cmd/sbctl` surface without the E-CFG-001 token, breaking the pattern a script grepping stderr for
+"E-CFG-001" to detect "required flag missing" would reasonably expect, and diverging from the
+`list-keys`/`key expire` precedent for no functional reason — merely to avoid a taxonomy-doc edit
+that needs to happen regardless (E-CFG-001's client-side and server-side variants are already
+undocumented drift independent of this story).
+
+**PO action (this remediation burst, no new forward obligation):** amend `error-taxonomy.md`'s
+E-CFG-001 row (`:104`). Recommended text (PO/spec-steward may adapt formatting to house style):
+
+> | E-CFG-001 | CFG | broken | 1 (daemon-startup; see variants) | "config error: \<field\>: \<problem\>. Fix: \<suggestion\>" | FM-010, BC-2.09.003. **Client-side variant (`cmd/sbctl` usage error):** when emitted via `usageErrf` for missing/invalid required-flag values — e.g. `admin list-keys --svtn` (interface-definitions.md §111), `admin key expire --after` (§110), `svtn status --name` (S-BL.CLI-SURFACE-COMPLETION AC-008) — exit code is **2**, matching the exit-2 usage-error classification already in interface-definitions.md's exit-code table (§209) and consistent with E-CFG-012/E-CFG-013. **Server-side variant (`internal/mgmt` RPC handlers):** returned as an in-band wire-response error code (no Unix exit code) by `admin.*`/`console.*`/`sessions.*` handlers (`cmd/switchboard/admin_handlers.go`, `console_handlers.go`, `sessions_handlers.go`) for request-args validation failures. **Daemon-startup variant (original row scope, exit 1):** `internal/config.Validate()` returns `*ConfigError{Code: "E-CFG-001"}` (`internal/config/config.go:43`) on YAML config field-validation failure at startup (BC-2.09.003). |
+
+**Story-writer action:** none required — AC-008 PC-3 stands as drafted. Optional traceability
+strengthening (not a substantive change): append a citation to the new taxonomy variant note and
+the `§111`/`§110` precedent, e.g.:
+
+> 3. Missing `--name` → **E-CFG-001** (client-side flag validation via `usageErrf`, exit 2 — same
+>    pattern as `sbctl admin list-keys --svtn` (interface-definitions.md §111) and
+>    `sbctl admin key expire --after` (§110); see error-taxonomy.md E-CFG-001 client-side variant
+>    note, F-CS-SP3-003).
+
+**Precedent for future client-side missing/invalid-required-flag ACs:** tag **E-CFG-001**, exit 2,
+via `usageErrf` — this is now the documented majority pattern (list-keys, expire, svtn create/
+destroy name validation, svtn status). Reserve a more specific code only for an already-established
+distinct error *class* (e.g. E-CFG-012/E-CFG-013 for the `--yes`/`--confirm` mutual-exclusion and
+non-interactive-confirmation family). **Related, non-blocking observation (not part of this
+ruling's scope):** `runAdminSvtnDestroy`'s top-level `--name is required` check
+(`cmd/sbctl/admin.go:302`) is a bare, code-less usage error — the one sibling that does *not*
+follow the E-CFG-001 pattern its neighbors (`list-keys`, `expire`) use for the identical class of
+check ("is this required flag present"). Flagging as a candidate low-priority cleanup item for a
+future pass; not gating this ruling or AC-008.
 
 ---
 
@@ -697,5 +779,6 @@ what the story was scheduled to close.
 
 | Date | Actor | Entry |
 |------|-------|-------|
+| 2026-07-12 | architect | **v1.2 — Ruling 2 Addendum, F-CS-SP3-003 (spec-adversarial pass 3).** Adjudicated the adversary's wire-contract finding that AC-008 PC-3's "E-CFG-001, exit 2" conflicts with error-taxonomy.md's E-CFG-001 row (documented Exit Code: 1). Verified independently that the exit-2 client-side usage is not novel: `cmd/sbctl/admin.go:168` (list-keys) and `:560` (key expire) already ship E-CFG-001 at exit 2 via `usageErrf`, spec-anchored in interface-definitions.md §110/§111 and its exit-code-2 summary table (§209) across four remediation bursts, and protected by dedicated regression tests (phase5_pass10/13). Concluded error-taxonomy.md's single-exit-code row is the stale artifact, not AC-008 or the shipped code — E-CFG-001 has three shipped variants (daemon-startup exit-1, client-side usage-error exit-2, server-side RPC wire-response with no exit code) and the taxonomy only ever documented the first. Chose shape (a): PO adds a client/server variant note to the E-CFG-001 row (recommended text supplied, modeled on E-CFG-008's existing variant shape) in this remediation burst — no new forward obligation. AC-008 PC-3 stands as drafted; no story-writer change required (optional traceability citation offered). Set the precedent that future client-side missing/invalid-required-flag ACs tag E-CFG-001/exit-2 via `usageErrf` unless a more specific established code applies. Noted (non-blocking, out of scope) that `runAdminSvtnDestroy`'s bare code-less `--name is required` check is the one sibling that doesn't follow this pattern — candidate future cleanup. |
 | 2026-07-12 | architect | **v1.1 — Ruling 4 Addendum, F-CS-SP1-001 (spec-adversarial pass 1).** Adjudicated the adversary's premise-class finding that `configPath == ""` is unreachable for any `runRouter` instance reaching the select loop (`main.go:106-116` cfg/configPath coupling + `mgmt_wire.go:465-467` entry guard confirmed independently; the SIGHUP path's `:786-788` no-op branch this ruling originally cited as precedent is itself dead code for the same reason). Chose shape (a): retained AC-011 PC-3 as an explicit defense-in-depth guard rather than deleting it, per direct in-repo precedent (`E-CFG-011`'s defensive-annotation shape, `VP-048` Ruling-7's defense-in-depth pattern). Test level downgraded integration → unit (test name unchanged). Surfaced and fixed a mechanism gap found while adjudicating: `wireRouterControlHandlers` gains a `configPath string` parameter so the guard can check synchronously without touching `sighupCh` or the select loop. Forward Obligation (c) DOWNGRADED from hard implementation gate to non-blocking PO follow-up — the taxonomy doc edit should still land (matching the `E-CFG-011`/`E-NET-006` precedent of cataloguing defensive/provisional codes) but no longer blocks Task 4, since the message is confirmed operator-unreachable. |
 | 2026-07-12 | architect | Initial ruling on all four Open Design Obligations for `S-BL.CLI-SURFACE-COMPLETION`. `paths ping` → new BC-2.06.004 + new `paths.ping` RPC (category mismatch with `paths.list`'s historical-metrics contract). `svtn status` → extend BC-2.07.001 PC-4, wire `admin.svtn.status`, any-admitted-role authority (list-keys precedent), no session/health fields (ARCH-09 purity boundary). `svtn destroy` top-level → migration shim per the `svtn create` removal precedent; `--id` flag not implementable against a name-keyed `SVTNManager`. `router reload`/`router drain` → in scope, new router-mode-exclusive RPCs `router.reload`/`router.drain` bridging into the already-shipped SIGHUP-reload and SIGTERM-drain code paths via `sighupCh` reuse + new `drainRequestCh`; resolves the explicitly-deferred `DRIFT-HS006-DRAIN-CLI-MISSING` gap named in the `S-7.04-FU-SIGHUP-RELOAD` and `S-7.04-FU-DRAIN-WIRE` placement notes. |

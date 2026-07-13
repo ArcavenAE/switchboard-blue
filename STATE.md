@@ -33,9 +33,9 @@ develop_head: 4c276d9
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial pass 3 (streak 0/3; pass-2 HAS_FINDINGS remediated: F-CS-SP2-001..002 → story v2.2, STORY-INDEX v4.87; passes 1-2 both remediated same-day). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
+awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial pass 4 (streak 0/3; pass-3 remediated: F-CS-SP3-001..003 → story v2.3, rulings v1.2, error-taxonomy v4.8, STORY-INDEX v4.88; FO(c) discharged). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
 historical_cycles: []
-timestamp: 2026-07-13T02:55:00Z
+timestamp: 2026-07-13T03:05:00Z
 last_update: 2026-07-12
 ---
 
@@ -112,10 +112,9 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | F-DW-IMPL-001 | HIGH | [process-gap] execute-against-baseline premise-tracing gap — twelve text-based spec-adversarial passes converged on internal consistency without tracing `ingressCtx`'s parent against ground truth, an engine methodology gap rather than a switchboard defect (S-7.04-FU-DRAIN-WIRE reopen). Deferred upstream; authoritative record drbothen/vsdd-factory#620. No product-repo story warranted — revisit on plugin version adoption. | orchestrator | S-7.02 justified deferral — filed #620 |
 | F-DW-DV-001 | LOW | [process-gap] citation coordinate-baseline convention gap — spec documents carried line-number citations with no stated coordinate convention (S-7.04-FU-DRAIN-WIRE delta-verification pass). Locally remediated by a convention blockquote (placement note/story v1.11). Deferred upstream for the engine-level fix; authoritative record drbothen/vsdd-factory#622. Revisit on plugin template update. | orchestrator | S-7.02 justified deferral — filed #622, locally remediated |
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* reference log_level/--log-level but config.Config rejects the field (E-CFG-005) — found by HS-006 re-eval gap 4. Candidate small docs PR. | technical-writer | open |
-| DRIFT-ECFG-TAXONOMY-006-001 | LOW | negative drain_timeout emits E-CFG-001 at HEAD vs E-CFG-006 recorded in HS-006 2026-07-02 eval — verify legit consolidation vs implementation-spec drift against error-taxonomy. | spec-steward | open |
 | DRIFT-CS-TEMPLATE-COMPLIANCE | LOW | S-BL.CLI-SURFACE-COMPLETION.md validate-template-compliance drift (missing `points` key vs `estimated_points`, six missing template sections) — pre-existing, fires on every edit; candidate for `/vsdd-factory:conform-to-template` pass. | story-writer | open |
 
-Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36 + compact-state extraction 2026-07-08): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
+Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36 + compact-state extraction 2026-07-08 + DRIFT-ECFG-TAXONOMY-006-001 2026-07-12): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
 
 ## Decisions Log
 
@@ -174,6 +173,6 @@ have been extracted to cycle files:
 - TWO pre-existing stashes in the product checkout — **do NOT drop, inspect next session**: `stash@{0}` (11 days old, WIP on `lookup_convention_test.go`, branch `feat/S-BL.LOOKUP-admitted-keyset-lookup-convention`); `stash@{1}` (13 days old, `develop` WIP touching `.gitignore` + `CLAUDE.md` + 4 other files).
 - Hygiene backlog: STORY-INDEX malformed row ~:286 (pre-existing, table-cell-count noise); repo-wide template-compliance drift; ARCH-08 legacy oldest-first changelog table; **rc.22 STATE.md structural schema migration DEFERRED 2026-07-12** (SIZE BUDGET banner, dual-margin form, trajectory-tail `→N→N→N→N`, Phase Progress adversary-pass/fix-burst rows, `## Convergence Status` + `## Concurrent Cycles` sections, `Last Updated` field — assessed and explicitly not attempted this burst per commit `43b7e1f3`'s residual note; honest conformance needs a dedicated audit of `cycles/cycle-1/burst-log.md` to source real pass/fix-burst data rather than inventing placeholder content; conforming fixture shapes located at `tests/fixtures/validate-state-structure/{pass-all-valid,pass-phase-progress-complete}/factory/STATE.md` in the vsdd-factory plugin cache).
 - Wire drain-and-migrate (BC-2.09.002 node-migration clause) remains unverifiable black-box until external SVTN bootstrap ships (S-6.02, rc.1 gate) — this is now the load-bearing blocker keeping HS-006 below 0.90; `sbctl router drain`/`sbctl router reload` remain unimplemented (signal-only drain).
-- DRIFT-DOCS-LOG-LEVEL / DRIFT-ECFG-TAXONOMY-006-001 (both LOW, added this burst from HS-006 re-eval gaps) — candidate small docs/spec-taxonomy fixes, not blocking.
+- DRIFT-DOCS-LOG-LEVEL (LOW, added board-close burst from HS-006 re-eval gaps) — candidate small docs fix, not blocking. DRIFT-ECFG-TAXONOMY-006-001 RESOLVED 2026-07-12 (error-taxonomy.md v4.8 backfill, spec-adversarial pass 3).
 
 **Resume protocol for next session:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) select next story from the options above (S-BL.RESYNC-FRAME needs a spec-phase decision before it can be dispatched — do not Red-Gate it directly; S-BL.LOOPBACK-FULLSTACK needs the architect AC-001 sign-off before Red-Gate).
