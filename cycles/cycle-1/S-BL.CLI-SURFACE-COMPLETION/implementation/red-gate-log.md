@@ -241,11 +241,61 @@ clean.
   bracket).
 - **Outcome: all four Forward Obligations now DISCHARGED.**
 
+## Step-4.5 pass 3
+
+**Adversary:** adv-cs-i3, 2026-07-13. **Verdict:** HAS_FINDINGS, streak
+0/3. **Diff reviewed:** `4c276d9..1b0e010` — feature branch FROZEN,
+identical code to pass 2. Dispatch tuple — develop
+`4c276d935b089026fac4fa796612352374bb880f`, feature
+`1b0e01048486cf07eed3fe728a4bfc1af1112a8a`, factory
+`f573a6e7a459d80710d5f256cc71a89959b47374` — POL-005 verified PASS by
+the adversary across 9 artifacts (story v2.7, rulings v1.2, taxonomy
+v4.9, interface-definitions v1.31, BC-2.06.004 v1.5, ARCH-INDEX v1.10,
+capabilities v1.1, BC-INDEX v3.5, VP-INDEX v2.40 — all matched).
+
+**F-CS-I3-001 (LOW, story-artifact completeness, story-writer-owned —
+zero implementation-code defects this pass):** the File-Change List
+omitted two touched files present in `git diff --stat` against
+`develop`: `cmd/sbctl/main_test.go` (+42/-10, `TestSbctl_OrphanSubcommands`
+re-pointed — `svtn` became a real subcommand per AC-010) and
+`cmd/sbctl/phase5_pass8_test.go` (+9/-3, `TestPathsUnknownVerb`
+exemplar swapped `ping` → `trace` per AC-001). Both are correct,
+necessary existing-test accommodations forced by this story's own
+scope — implementation was more complete than the list, not scope
+creep.
+Remediated by the story-writer: story v2.7 → v2.8 (two File-Change List
+rows added); STORY-INDEX v4.93 → v4.94 (POL-002); input-hash verified
+UNCHANGED `d95ecfe` (`compute-input-hash --check` exit 0 — no declared
+input file changed).
+
+**Nitpick dispositions:** N-CS-I3-01 SANCTIONED (always-JSON for
+`paths ping`/`svtn status` — third independent fresh-context
+derivation, ≈N-CS-I1-01/N-CS-I2-02, documented design, no AC mandate);
+N-CS-I3-02 SANCTIONED (JSON error envelope vs plain usage-line on the
+missing-flag path for the two always-JSON verbs — single-print
+contract, token, exit 2 all correct, cross-command cosmetic only);
+N-CS-I3-03 SANCTIONED for the freeze window (stale Red-Gate header
+comments in 4 test files — second consecutive pass raising it, queued
+as comment-hygiene cleanup at PR stage once convergence lifts the
+freeze).
+
+**Clean lenses:** 16/16 AC compliance (E-CFG-004 v2/v3 byte-exact,
+§60/§82/§83 literals, exit-code mapping, Ruling 2 pattern); test
+honesty CLEAN (RTT-reflects-injected-delay, byte-identical oracle
+assert, tripwire spy + AST proof, drain third-arm nil-return parity,
+anti-panic guards); taxonomy CLEAN; security CLEAN
+(admission-before-lookup, no existence leak, destroy shim never
+dials); concurrency CLEAN (buffered-1 drop-coalescing, two-writers-one-
+reader safe, never-closed channel); spec-code drift CLEAN including
+VP-078/VP-079 consistency; policies clean.
+
 ## Status
 
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
 HAS_FINDINGS, remediated @ `1b0e010`. Step-4.5 pass 2 HAS_FINDINGS —
 spec-governance only, zero code defects, remediated factory-side (all
-four Forward Obligations DISCHARGED); feature branch frozen at
-`1b0e010`; streak 0/3. Next: step-4.5 pass 3 (BC-5.39.001/BC-5.39.002,
-diff range `4c276d9..1b0e010`, identical code to pass 2).
+four Forward Obligations DISCHARGED). Step-4.5 pass 3 HAS_FINDINGS —
+story File-Change List completeness only, zero code defects, remediated
+@ story v2.8; feature branch frozen at `1b0e010`; streak 0/3. Next:
+step-4.5 pass 4 (BC-5.39.001/BC-5.39.002, diff range `4c276d9..1b0e010`,
+identical code to pass 3).
