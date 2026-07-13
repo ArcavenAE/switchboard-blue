@@ -358,7 +358,11 @@
     "phase": "step-4.5 story-diff adversarial (BC-5.39.001/BC-5.39.002)",
     "requirement": "3 consecutive CLEAN or NITPICK_ONLY passes",
     "diff_range": "4c276d9..ef3e5c5 on feature/S-BL.CLI-SURFACE-COMPLETION",
-    "streak": "2/3",
+    "streak": "3/3",
+    "converged": true,
+    "converged_at_pass": 7,
+    "converged_date": "2026-07-13",
+    "final_feature_head": "ef3e5c58411902d0117e9948815895490b8fd9dd",
     "passes": [
       {
         "pass": 1,
@@ -688,6 +692,61 @@
           "feature_head_after_hygiene": "ef3e5c5 (100d288 + comment-only ef3e5c5)",
           "streak_note": "verdicts drive the clock — comment-only hygiene between clean passes does not reset (spec-phase N-CS-SP8-01 precedent)",
           "next": "pass 7 = convergence pass"
+        }
+      },
+      {
+        "pass": 7,
+        "adversary": "adv-cs-i7",
+        "date": "2026-07-13",
+        "verdict": "NITPICK_ONLY",
+        "findings": [],
+        "streak_after": "3/3 — CONVERGED",
+        "diff_range_reviewed": "4c276d9..ef3e5c5",
+        "dispatch_tuple": {
+          "develop": "4c276d935b089026fac4fa796612352374bb880f",
+          "feature": "ef3e5c58411902d0117e9948815895490b8fd9dd",
+          "factory": "a94100106def39bc6309d85de4f2e23dcc2e0066"
+        },
+        "pol_005_verified": "PASS",
+        "pol_005_artifacts_checked": "10 artifacts, all matched",
+        "nitpick_dispositions": [
+          {
+            "id": "N-CS-I7-01",
+            "disposition": "SANCTIONED",
+            "summary": "reload/drain happy-path tests exercise --json mode only; AC-015/016 PC-2 carry no bare-object literal requirement, and the shared connectAndRun default path is already covered by the paths-list tests. An optional symmetry subtest was declined post-convergence."
+          },
+          {
+            "id": "N-CS-I7-02",
+            "disposition": "SANCTIONED",
+            "summary": "AC-002 PC-2 no-dispatch positive assertion — same structural-proof family as N-CS-I6-03, already adjudication #6"
+          }
+        ],
+        "clean_lenses": [
+          "16/16 ACs",
+          "test honesty (byte-identical oracle, AST four-mode proof, two-proof zero-interaction, subprocess panic guards, --json both directions, drain third-arm nil-parity)",
+          "taxonomy (all rows incl. E-CFG-004 Variant-3 exact, E-RPC-011 double-wrap house convention)",
+          "security (admission-before-lookup byte-identical, no injection)",
+          "concurrency (coalescing, single-consumer never-closed sighupCh)",
+          "drift none (§60/§82/§83/§422/§423 exact, VP-078/079 consistent)",
+          "policy clean"
+        ],
+        "adjudications_and_fos_reverified": "All 6 adjudications honored",
+        "bonus_verification": "created_at stored time.Now().UTC(), RFC3339 Z-suffixed",
+        "convergence_summary": {
+          "passes_total": 7,
+          "findings_total": 6,
+          "findings_list": [
+            "F-CS-I1-001 MED coverage",
+            "F-CS-I1-002 LOW code",
+            "F-CS-I2-001 LOW governance",
+            "F-CS-I3-001 LOW enumeration",
+            "F-CS-I4-001 MED code via §214 escalation",
+            "F-CS-I4-002 LOW code"
+          ],
+          "all_remediated_same_pass": true,
+          "clean_streak": "passes 5, 6, 7",
+          "findings_by_pass": [2, 1, 1, 2, 0, 0, 0],
+          "headline_evidence": "3x sanctioned nitpick escalated to MED by pass-4 fresh context locating §214 outside the ACs — multi-pass discipline validation"
         }
       }
     ]

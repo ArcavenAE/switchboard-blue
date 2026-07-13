@@ -446,6 +446,48 @@ comment-only `ef3e5c5`). Streak note: verdicts drive the clock —
 comment-only hygiene between clean passes does not reset (spec-phase
 N-CS-SP8-01 precedent).
 
+## Step-4.5 pass 7 — CONVERGENCE
+
+**Adversary:** adv-cs-i7, 2026-07-13. **Verdict:** NITPICK_ONLY, zero
+findings — **third consecutive clean verdict, streak 3/3. BC-5.39.001
+SATISFIED for the implementation-diff arc.** **Diff reviewed:**
+`4c276d9..ef3e5c5`. Dispatch tuple — develop
+`4c276d935b089026fac4fa796612352374bb880f`, feature
+`ef3e5c58411902d0117e9948815895490b8fd9dd`, factory
+`a94100106def39bc6309d85de4f2e23dcc2e0066` — POL-005 verified PASS
+across 10 artifacts, all matched.
+
+**N-CS-I7-01, SANCTIONED:** reload/drain happy-path tests exercise
+`--json` mode only; AC-015/016 PC-2 carry no bare-object literal
+requirement, and the shared `connectAndRun` default path is already
+covered by the paths-list tests. An optional symmetry subtest was
+declined post-convergence.
+
+**N-CS-I7-02, SANCTIONED:** AC-002 PC-2's no-dispatch positive
+assertion — same structural-proof family as N-CS-I6-03, already
+adjudication #6.
+
+**Clean lenses:** 16/16 ACs; test honesty (byte-identical oracle, AST
+four-mode proof, two-proof zero-interaction, subprocess panic guards,
+`--json` both directions, drain third-arm nil-parity); taxonomy (all
+rows including E-CFG-004 Variant-3 exact, E-RPC-011 double-wrap house
+convention); security (admission-before-lookup byte-identical, no
+injection); concurrency (coalescing, single-consumer never-closed
+`sighupCh`); drift none (§60/§82/§83/§422/§423 exact, VP-078/079
+consistent); policy clean. All 6 adjudications honored. Bonus
+verification: `created_at` stored `time.Now().UTC()`, RFC3339
+Z-suffixed.
+
+**Convergence summary:** 7 passes total, 6 findings total (F-CS-I1-001
+MED coverage, F-CS-I1-002 LOW code, F-CS-I2-001 LOW governance,
+F-CS-I3-001 LOW enumeration, F-CS-I4-001 MED code via §214 escalation,
+F-CS-I4-002 LOW code) — every one remediated the same pass it was
+found. Clean streak: passes 5, 6, 7. Findings-by-pass decay curve:
+2, 1, 1, 2, 0, 0, 0. Headline evidence: a nitpick sanctioned by three
+independent fresh-context reviewers was escalated to MED by a fourth
+pass locating the governing spec clause outside the ACs the first
+three had checked — multi-pass discipline validation.
+
 ## Status
 
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
@@ -457,7 +499,8 @@ story File-Change List completeness only, zero code defects, remediated
 `--json` contract) + F-CS-I4-002 (LOW, `usageErrf` shape), remediated
 TDD-shaped @ `100d288`; code freeze lifted. Step-4.5 pass 5
 NITPICK_ONLY — first clean verdict, streak 1/3. Step-4.5 pass 6
-NITPICK_ONLY — second consecutive clean verdict, streak 2/3;
-comment-only hygiene at `ef3e5c5` did not reset the streak. Next:
-step-4.5 pass 7 — **CONVERGENCE PASS** (BC-5.39.001/BC-5.39.002, diff
-range `4c276d9..ef3e5c5`).
+NITPICK_ONLY — second consecutive clean verdict, streak 2/3. **Step-4.5
+pass 7 NITPICK_ONLY — third consecutive clean verdict, streak 3/3.
+CONVERGED @ `ef3e5c5`.** Next per per-story-delivery.md: Step 5 demo
+recording (IN PROGRESS, dispatched in parallel with this record) →
+push → pr-manager → cleanup.
