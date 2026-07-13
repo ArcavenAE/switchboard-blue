@@ -33,9 +33,9 @@ develop_head: 4c276d9
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial pass 4 (streak 0/3; pass-3 remediated: F-CS-SP3-001..003 → story v2.3, rulings v1.2, error-taxonomy v4.8, STORY-INDEX v4.88; FO(c) discharged). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
+awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial pass 5 (streak 0/3; pass-4 single finding F-CS-SP4-001 remediated → error-taxonomy v4.9; story stable at v2.3, zero story findings in pass 4). Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
 historical_cycles: []
-timestamp: 2026-07-13T03:05:00Z
+timestamp: 2026-07-13T03:15:00Z
 last_update: 2026-07-12
 ---
 

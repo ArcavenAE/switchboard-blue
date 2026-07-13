@@ -8,7 +8,7 @@
     "index": "4.88",
     "rulings": "1.2",
     "interface_definitions": "1.31",
-    "error_taxonomy": "4.8",
+    "error_taxonomy": "4.9",
     "BC-2.06.004": "1.3",
     "BC-2.07.001": "1.15",
     "BC-2.09.001": "1.3",
@@ -174,6 +174,44 @@
         }
       ],
       "notes": "N-CS-SP3-04 folded into the DRIFT-ECFG-TAXONOMY-006-001 bonus discharge above (E-CFG-004 startup variant backfill). All three findings remediated same burst: rulings v1.1 → v1.2 (Ruling 2 Addendum), error-taxonomy.md v4.7 → v4.8, story v2.2 → v2.3 (input-hash cbf07f7), STORY-INDEX v4.87 → v4.88. FO(c) fully discharged; DRIFT-ECFG-TAXONOMY-006-001 resolved."
+    },
+    {
+      "pass": 4,
+      "date": "2026-07-12",
+      "agent": "adv-cs-sp4",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 4c276d9, factory-artifacts @ 97a8774)",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "pass1_2_3_remediations_confirmed": "adv-cs-sp4 confirmed all pass-1/2/3 remediations correct: 13/6 call-site enumeration exact, E-CFG-001 three variants all real, §110/§111 siblings verified, AC-009 byte-identical three-way, FO(c) discharge consistent at all sites.",
+      "findings": [
+        {
+          "id": "F-CS-SP4-001",
+          "severity": "MED",
+          "class": "premise/doc-drift",
+          "summary": "error-taxonomy v4.8's Variant 2 backfill documented an inaccurate literal — omitted the `runRouter: ` prefix and ` (no config loaded)` suffix the shipped entry guard actually emits. The drift backfill itself introduced doc-drift.",
+          "remediation": "error-taxonomy v4.9 — literal corrected to shipped string + shape note (Variant 2's wrapping is call-site convention, NOT the general E-CFG-004 shape; Variant 3 deliberately bare per AC-011 PC-3; tests substring-match the token)"
+        }
+      ],
+      "nitpicks_no_action": [
+        {
+          "id": "N-CS-SP4-01",
+          "summary": "layered-decision-record, 3-param in original Ruling 4 body"
+        },
+        {
+          "id": "N-CS-SP4-02",
+          "summary": "governance-leaf pins"
+        },
+        {
+          "id": "N-CS-SP4-03",
+          "summary": "E-NET-001 prefix citation matches anchor BC, pre-existing"
+        },
+        {
+          "id": "N-CS-SP4-04",
+          "summary": "destroy's bare code-less usage error — Ruling 2 Addendum already flags as future cleanup"
+        }
+      ],
+      "notes": "Story took ZERO findings for the first time — pass-4's sole finding was in material added during the pass-3 burst (error-taxonomy v4.8 backfill), not the story. Story stable at v2.3 (input-hash unchanged cbf07f7), STORY-INDEX unchanged v4.88. error-taxonomy.md v4.8 → v4.9."
     }
   ],
   "converged": false,
