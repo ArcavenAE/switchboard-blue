@@ -300,7 +300,26 @@ func TestRunRouter_NodeConnClose_CleansUpSendMap(t *testing.T) {
 		}
 	})
 
-	conn, err := net.Dial("tcp", cfg.ListenAddr)
+	// Poll-dial the data-plane listener (same pattern as
+	// TestRunRouter_DataListenerBinds, mgmt_wire_test.go): this story's
+	// wireRouterControlHandlers adds two srv.Register calls before the
+	// data-plane bind (AC-013 register-before-serve), widening the startup
+	// window between startRunRouterWithConfig's mgmt-socket-ready return and
+	// cfg.ListenAddr's bind. A single un-retried net.Dial here raced that
+	// window under CI load (PR #122 review round 1, B2). Unlike
+	// TestRunRouter_DataListenerBinds, the successful connection is KEPT
+	// (not closed) — this test needs conn open for the registered/removed
+	// event assertions below.
+	var conn net.Conn
+	var err error
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err = net.DialTimeout("tcp", cfg.ListenAddr, 50*time.Millisecond)
+		if err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatalf("dial %s: %v", cfg.ListenAddr, err)
 	}

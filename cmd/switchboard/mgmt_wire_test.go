@@ -390,7 +390,7 @@ func TestRunRouter_StartsWithMgmt(t *testing.T) {
 
 	// runRouter should return nil (context cancelled cleanly).
 	// We only care that the socket was created — evidence newMgmtServer was called.
-	err := runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1))
+	err := runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1))
 	if err != nil {
 		t.Errorf("runRouter: unexpected error: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestRunRouter_DataListenerBinds(t *testing.T) {
 
 	// Run in a goroutine — runRouter blocks until ctx cancel.
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1)) }()
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1)) }()
 
 	// Poll-dial the data-plane listener until the connection succeeds or we
 	// exhaust a 1-second budget. Success = bind happened before ctx cancel.
@@ -516,7 +516,7 @@ func TestRunRouter_NoAdminHandlers(t *testing.T) {
 	t.Cleanup(cancel)
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1)) }()
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1)) }()
 
 	// Wait for the socket to appear (up to 1s) — proof mgmt Serve is up.
 	deadline := time.Now().Add(1 * time.Second)
@@ -612,7 +612,7 @@ func TestRunRouter_SIGTERMLifecycle(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1)) }()
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1)) }()
 
 	// Wait for the mgmt socket to appear — evidence runRouter reached its
 	// blocking select.
@@ -643,6 +643,72 @@ func TestRunRouter_SIGTERMLifecycle(t *testing.T) {
 	}
 }
 
+// TestRunRouter_DrainRequestChThirdSelectArm_ReachesShutdown_SameExitParityAsSIGTERM
+// asserts AC-013: a signal on drainRequestCh (the select loop's third arm,
+// bridged from router.drain's RPC handler) reaches the same shutdown sequence
+// as SIGTERM / ctx cancellation, with the same nil-error exit parity — WITHOUT
+// cancelling ctx. This proves the third arm is wired into the shutdown path
+// rather than being a dead channel parameter.
+//
+// Mirrors TestRunRouter_SIGTERMLifecycle's pattern exactly, substituting a
+// send on a test-owned drainRequestCh for cancel().
+//
+// Traces to AC-013; BC-2.09.002 Trigger/PC-1 (router.drain governance addendum).
+func TestRunRouter_DrainRequestChThirdSelectArm_ReachesShutdown_SameExitParityAsSIGTERM(t *testing.T) {
+	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
+
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("probe listen: %v", err)
+	}
+	dataAddr := probe.Addr().String()
+	_ = probe.Close()
+
+	sockPath := tempSockPath(t)
+
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	drainRequestCh := make(chan struct{}, 1)
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), drainRequestCh) }()
+
+	// Wait for the mgmt socket to appear — evidence runRouter reached its
+	// blocking select.
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, statErr := os.Stat(sockPath); statErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
+		cancel()
+		<-errCh
+		t.Fatalf("TestRunRouter_DrainRequestChThirdSelectArm: mgmt socket %q not created within 1s", sockPath)
+	}
+
+	// Signal the third select arm directly — no ctx cancellation, no OS signal.
+	drainRequestCh <- struct{}{}
+
+	select {
+	case rErr := <-errCh:
+		if rErr != nil {
+			t.Errorf("runRouter returned error on drainRequestCh shutdown: %v", rErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("runRouter did not return within 2s after drainRequestCh signal — " +
+			"AC-013's third select arm is not wired into the shutdown sequence")
+	}
+}
+
 // TestRunRouter_NilConfigCleanError verifies that invoking runRouter with a
 // nil *config.Config returns a clean taxonomy-shaped error rather than
 // panicking on a cfg.ListenAddr nil-dereference.
@@ -666,7 +732,7 @@ func TestRunRouter_NilConfigCleanError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancelled — proves guard fires before any I/O
 
-	err := runRouter(ctx, nil, nil, "", make(chan os.Signal, 1))
+	err := runRouter(ctx, nil, nil, "", make(chan os.Signal, 1), make(chan struct{}, 1))
 	if err == nil {
 		t.Fatal("runRouter(nil cfg): expected non-nil error, got nil")
 	}

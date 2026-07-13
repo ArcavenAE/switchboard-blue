@@ -107,7 +107,7 @@ func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil)
+		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil, nil)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -255,7 +255,7 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil)
+		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil, nil)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -309,7 +309,7 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil)
+		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil, nil)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -374,7 +374,7 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil)
+		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil, nil)
 	}()
 	t.Cleanup(func() {
 		cancel()

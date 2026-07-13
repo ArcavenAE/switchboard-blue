@@ -153,10 +153,13 @@ func TestPathsUnknownVerb_ErrorNamesTypedVerb(t *testing.T) {
 		wantStderrSubstr string // typed verb must appear in stderr
 	}{
 		{
-			name:             "paths_unknown_verb_ping",
-			verb:             "ping",
+			// S-BL.CLI-SURFACE-COMPLETION AC-001 makes "ping" a real `paths`
+			// sub-verb (BC-2.06.004) — it is no longer unknown, so this case
+			// uses "trace", a verb that remains genuinely unrecognized.
+			name:             "paths_unknown_verb_trace",
+			verb:             "trace",
 			wantExitCode:     2,
-			wantStderrSubstr: "ping",
+			wantStderrSubstr: "trace",
 		},
 		{
 			name:             "paths_unknown_verb_status",

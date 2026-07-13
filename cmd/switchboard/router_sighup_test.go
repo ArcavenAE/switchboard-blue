@@ -77,7 +77,7 @@ func startRunRouterForReload(t *testing.T, cfg *config.Config, cfgPath string) (
 	ctx, cancelFn := context.WithCancel(context.Background())
 	errCh = make(chan error, 1)
 	go func() {
-		errCh <- runRouter(ctx, buf, cfg, cfgPath, sighupCh)
+		errCh <- runRouter(ctx, buf, cfg, cfgPath, sighupCh, make(chan struct{}, 1))
 	}()
 	if !waitForSocket(cfg.ManagementSocket, 2*time.Second) {
 		cancelFn()

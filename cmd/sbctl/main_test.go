@@ -564,16 +564,21 @@ func TestSubprocessMain_UnknownSubcommand(t *testing.T) {
 }
 
 // TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand verifies that the
-// orphan case arms ("svtn", "version", "ping") that Path B deletes fall through
-// to the default: arm and exit 2 with "unknown subcommand".  Also verifies that
-// an arbitrary unknown subcommand exits 2 with a discovery hint.
+// orphan case arms ("version", "ping") that Path B deletes fall through to the
+// default: arm and exit 2 with "unknown subcommand". Also verifies that an
+// arbitrary unknown subcommand exits 2 with a discovery hint.
 //
-// RED: current main.go has explicit case arms for "svtn", "version", and "ping"
-// so those invocations exit 0 (or fail with a connection error), NOT with
-// "unknown subcommand".  Tests must fail before the orphan arms are deleted.
+// "svtn" is no longer an orphan (AC-010 PC-1: main.go gains a real top-level
+// `case "svtn":` dispatching to runSvtn). The svtn_alone/svtn_list subcases
+// now assert AC-010 PC-3's behavior instead: an unknown sub-verb under svtn
+// (including the bare `sbctl svtn` invocation) still exits 2, but via
+// runSvtn's own usage error — which names the "svtn" case arm (same
+// case-arm-naming convention as "paths: unknown sub-verb..." and "router:
+// unknown subcommand...") rather than the top-level default arm's generic
+// "unknown subcommand" text.
 //
-// F-P5P3-A-001 (svtn orphan), F-P5P3-A-002 (version/ping orphans),
-// F-P5P3-A-009 (discovery hint for arbitrary unknown).
+// F-P5P3-A-002 (version/ping orphans), F-P5P3-A-009 (discovery hint for
+// arbitrary unknown).
 func TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand(t *testing.T) {
 	t.Parallel()
 
@@ -584,20 +589,34 @@ func TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand(t *testing.T) {
 		wantExitCode     int
 		wantStderrSubstr string // must appear in stderr
 		wantHint         bool   // if true, stderr must contain a discovery hint
+		wantNoPanic      bool   // if true, stderr must not read as a crash trace
 	}{
 		{
+			// AC-010 PC-3: bare "svtn" (no sub-verb) now dispatches into
+			// runSvtn's own default arm, not the top-level default arm.
+			// wantNoPanic: runSvtn's Red Gate stub panics unconditionally,
+			// and its trace text happens to contain the substring "svtn" via
+			// the function name and file path — exit code 2 and a bare
+			// "svtn" substring match both coincide with a crash, so this
+			// explicit check is what makes the case fail against the stub
+			// and pass only once runSvtn returns a real usageError.
 			name:             "svtn_alone_exits_two",
 			subcmd:           "svtn",
 			trailing:         "",
 			wantExitCode:     2,
-			wantStderrSubstr: "unknown subcommand",
+			wantStderrSubstr: "svtn",
+			wantNoPanic:      true,
 		},
 		{
+			// AC-010 PC-3: "svtn list" — "list" is not a recognized svtn
+			// sub-verb (only "status" and "destroy" are) — same usage-error
+			// shape as the bare-svtn case above.
 			name:             "svtn_list_exits_two",
 			subcmd:           "svtn",
 			trailing:         "list",
 			wantExitCode:     2,
-			wantStderrSubstr: "unknown subcommand",
+			wantStderrSubstr: "svtn",
+			wantNoPanic:      true,
 		},
 		{
 			name:             "version_exits_two",
@@ -657,6 +676,9 @@ func TestSbctl_OrphanSubcommands_ExitTwoWithUnknownSubcommand(t *testing.T) {
 			if tc.wantStderrSubstr != "" && !strings.Contains(stderr, tc.wantStderrSubstr) {
 				t.Errorf("F-P5P3-A-001/002/009: expected stderr to contain %q; got: %q",
 					tc.wantStderrSubstr, stderr)
+			}
+			if tc.wantNoPanic && strings.Contains(stderr, "panic:") {
+				t.Errorf("AC-010 PC-3: expected a clean usage error, not a panic trace; got: %q", stderr)
 			}
 			if tc.wantHint {
 				// Discovery hint must reference the binary name and include "help" or "usage".

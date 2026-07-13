@@ -138,7 +138,7 @@ func startRunRouterPE(t *testing.T, cfg *config.Config) *syncBuffer {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil)
+		errCh <- runRouter(ctx, buf, cfg, cfgPath, nil, nil)
 	}()
 	t.Cleanup(func() {
 		cancel()

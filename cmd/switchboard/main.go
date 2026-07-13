@@ -122,7 +122,11 @@ func run(stdout io.Writer, args []string) error {
 		sighupCh := make(chan os.Signal, 1)
 		signal.Notify(sighupCh, syscall.SIGHUP)
 		defer signal.Stop(sighupCh)
-		return runRouter(ctx, os.Stderr, cfg, *configPath, sighupCh)
+		// S-BL.CLI-SURFACE-COMPLETION Decision 4: dedicated drain-request channel,
+		// signaled by the router.drain RPC handler (bridges into the same
+		// shutdown sequence ctx.Done()/SIGTERM already trigger).
+		drainRequestCh := make(chan struct{}, 1)
+		return runRouter(ctx, os.Stderr, cfg, *configPath, sighupCh, drainRequestCh)
 
 	case "console":
 		consoleFS := flag.NewFlagSet("console", flag.ContinueOnError)

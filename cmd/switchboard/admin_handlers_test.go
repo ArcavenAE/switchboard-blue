@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -669,17 +670,18 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 	}
 }
 
-// TestBuildAdminHandlers_SixHandlers asserts that BuildAdminHandlers returns
-// exactly six handlers with the correct command names:
+// TestBuildAdminHandlers_SevenHandlers asserts that BuildAdminHandlers returns
+// exactly seven handlers with the correct command names:
 //   - admin.key.register
 //   - admin.key.revoke
 //   - admin.key.expire
 //   - admin.key.list-keys
 //   - admin.svtn.create  (S-6.07, AC-001)
 //   - admin.svtn.destroy (S-6.05, AC-001; BC-2.07.001 PC-3)
+//   - admin.svtn.status  (S-BL.CLI-SURFACE-COMPLETION, AC-005; BC-2.07.001 PC-4)
 //
-// Traces to AC-001; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1 + PC-3.
-func TestBuildAdminHandlers_SixHandlers(t *testing.T) {
+// Traces to AC-001; AC-005; BC-2.05.004 PC-1..PC-3; BC-2.07.001 PC-1, PC-3, PC-4.
+func TestBuildAdminHandlers_SevenHandlers(t *testing.T) {
 	t.Parallel()
 	m := newTestSVTNManager(t)
 	handlers := BuildAdminHandlers(m, nil)
@@ -691,6 +693,7 @@ func TestBuildAdminHandlers_SixHandlers(t *testing.T) {
 		"admin.key.list-keys": false,
 		"admin.svtn.create":   false,
 		"admin.svtn.destroy":  false,
+		"admin.svtn.status":   false,
 	}
 	for _, h := range handlers {
 		want[h.Command] = true
@@ -707,8 +710,8 @@ func TestBuildAdminHandlers_SixHandlers(t *testing.T) {
 			t.Errorf("unexpected handler command %q registered in BuildAdminHandlers result", h.Command)
 		}
 	}
-	if len(handlers) != 6 {
-		t.Errorf("expected 6 handlers, got %d", len(handlers))
+	if len(handlers) != 7 {
+		t.Errorf("expected 7 handlers, got %d", len(handlers))
 	}
 }
 
@@ -757,6 +760,348 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	// So at minimum 1 key is present; the EC-003 invariant is that Keys != nil.
 	if len(listResult.Keys) == 0 {
 		t.Error("EC-003: expected at least 1 key (bootstrap) in empty-svtn after Create; got 0")
+	}
+}
+
+// newSVTNManagerForStatusTest returns a SVTNManager with a single SVTN
+// "mynet" whose key roster matches BC-2.07.001's canonical PC-4 vector:
+// 1 control key (the bootstrap key registered by m.Create), 0 console
+// keys, and 2 access keys. Required by AC-005's key_counts assertion.
+func newSVTNManagerForStatusTest(t *testing.T) (m *svtnmgmt.SVTNManager, bootstrapPub ed25519.PublicKey) {
+	t.Helper()
+
+	bootstrapPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("newSVTNManagerForStatusTest: generate bootstrap key: %v", err)
+	}
+
+	ks := admission.NewAdmittedKeySet()
+	m = svtnmgmt.NewSVTNManager(ks, bootstrapPub)
+	if _, err := m.Create("mynet"); err != nil {
+		t.Fatalf("newSVTNManagerForStatusTest: create mynet: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		accessPub, _, genErr := ed25519.GenerateKey(rand.Reader)
+		if genErr != nil {
+			t.Fatalf("newSVTNManagerForStatusTest: generate access key %d: %v", i, genErr)
+		}
+		if _, err := m.RegisterKey("mynet", accessPub, admission.RoleAccess); err != nil {
+			t.Fatalf("newSVTNManagerForStatusTest: register access key %d: %v", i, err)
+		}
+	}
+
+	return m, bootstrapPub
+}
+
+// findAdminSVTNStatusHandler locates the admin.svtn.status handler closure
+// within a BuildAdminHandlers result, failing the test if absent.
+func findAdminSVTNStatusHandler(t *testing.T, handlers []mgmt.Handler) func(ctx context.Context, args json.RawMessage) (any, error) {
+	t.Helper()
+	for _, h := range handlers {
+		if h.Command == "admin.svtn.status" {
+			return h.Fn
+		}
+	}
+	t.Fatal("admin.svtn.status handler not found in BuildAdminHandlers result")
+	return nil
+}
+
+// callAdminSVTNStatusSafely invokes fn(ctx, args) with a same-goroutine
+// recover() wrapper. makeAdminSVTNStatusHandler's returned closure is
+// implemented (no longer a Red Gate stub, admin_handlers.go) — the wrapper
+// is retained as a regression defense. This call happens directly on the
+// calling test's own goroutine (no server, no background dispatch) — unlike
+// the real-RPC-dispatch tests in router_control_wire_test.go, where a
+// handler panic would occur on a mgmt.Server-owned goroutine that recover()
+// cannot reach, recovering here is safe. If the handler were to panic, the
+// returned error carries the panic value so callers' spec assertions still
+// fail honestly (wrong error text/nil check) instead of crashing the whole
+// cmd/switchboard test binary.
+func callAdminSVTNStatusSafely(t *testing.T, fn func(ctx context.Context, args json.RawMessage) (any, error), ctx context.Context, args json.RawMessage) (result any, err error) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("admin.svtn.status handler panicked instead of returning a result: %v", r)
+		}
+	}()
+	return fn(ctx, args)
+}
+
+// TestAdminSVTNStatus_HappyPath_KeyCounts asserts the AC-005 wire contract:
+// admin.svtn.status returns svtn_id/name/created_at plus role-grouped
+// key_counts matching BC-2.07.001 PC-4's canonical vector.
+// Traces to AC-005 PC-1/PC-2; BC-2.07.001 v1.14 PC-4.
+func TestAdminSVTNStatus_HappyPath_KeyCounts(t *testing.T) {
+	t.Parallel()
+	m, bootstrapPub := newSVTNManagerForStatusTest(t)
+	handlers := BuildAdminHandlers(m, nil)
+	statusFn := findAdminSVTNStatusHandler(t, handlers)
+
+	args, err := json.Marshal(map[string]string{"name": "mynet"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	result, handlerErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(args))
+	if handlerErr != nil {
+		t.Fatalf("AC-005: unexpected error from admin.svtn.status handler: %v", handlerErr)
+	}
+
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("AC-005: marshal handler result: %v", err)
+	}
+	var resp struct {
+		SVTNID    string `json:"svtn_id"`
+		Name      string `json:"name"`
+		CreatedAt string `json:"created_at"`
+		KeyCounts struct {
+			Control int `json:"control"`
+			Console int `json:"console"`
+			Access  int `json:"access"`
+		} `json:"key_counts"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("AC-005: unmarshal handler result: %v (raw: %s)", err, raw)
+	}
+
+	if resp.SVTNID == "" {
+		t.Error("AC-005 / BC-2.07.001 PC-4: svtn_id must be non-empty")
+	}
+	if resp.Name != "mynet" {
+		t.Errorf("AC-005: name = %q; want %q", resp.Name, "mynet")
+	}
+	if _, err := time.Parse(time.RFC3339, resp.CreatedAt); err != nil {
+		t.Errorf("AC-005: created_at %q is not RFC3339: %v", resp.CreatedAt, err)
+	}
+	if resp.KeyCounts.Control != 1 || resp.KeyCounts.Console != 0 || resp.KeyCounts.Access != 2 {
+		t.Errorf("AC-005 / BC-2.07.001 PC-4: key_counts = %+v; want {control:1 console:0 access:2}", resp.KeyCounts)
+	}
+}
+
+// TestAdminSVTNStatus_NotFound_ESVTN003 asserts that admin.svtn.status on a
+// nonexistent SVTN name maps to E-SVTN-003 (AC-006 PC-1).
+// Traces to AC-006; BC-2.07.001 v1.14 PC-4 EC arm.
+func TestAdminSVTNStatus_NotFound_ESVTN003(t *testing.T) {
+	t.Parallel()
+	m, bootstrapPub := newSVTNManagerForStatusTest(t)
+	handlers := BuildAdminHandlers(m, nil)
+	statusFn := findAdminSVTNStatusHandler(t, handlers)
+
+	args, err := json.Marshal(map[string]string{"name": "doesnotexist"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	_, handlerErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(args))
+	if handlerErr == nil {
+		t.Fatal("AC-006: admin.svtn.status for a nonexistent SVTN must return a non-nil error")
+	}
+	if !strings.Contains(handlerErr.Error(), "E-SVTN-003") {
+		t.Errorf("AC-006: error must contain \"E-SVTN-003\"; got: %v", handlerErr)
+	}
+	if !strings.Contains(handlerErr.Error(), "doesnotexist") {
+		t.Errorf("AC-006: error must name the SVTN \"doesnotexist\"; got: %v", handlerErr)
+	}
+}
+
+// TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak asserts
+// that a caller admitted to a DIFFERENT SVTN is denied with E-ADM-009 for
+// admin.svtn.status, and that the denial is IDENTICAL whether the target
+// SVTN exists ("mynet") or not ("doesnotexist") — proving the admission
+// gate (resolveCallerAdmissionAnyRole) fires before existence is checked,
+// so an unadmitted caller cannot use this op to enumerate SVTN existence
+// (CWE-862 defense, mirrors BC-2.05.004 EC-008).
+// Traces to AC-006 PC-2/PC-3.
+func TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak(t *testing.T) {
+	t.Parallel()
+	m, _ := newSVTNManagerForStatusTest(t)
+	handlers := BuildAdminHandlers(m, nil)
+	statusFn := findAdminSVTNStatusHandler(t, handlers)
+
+	// A caller with a valid, active operator key admitted only to a
+	// DIFFERENT SVTN — not mynet, not operator-set, not bootstrap.
+	if _, err := m.Create("othernet"); err != nil {
+		t.Fatalf("create othernet: %v", err)
+	}
+	otherPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate other key: %v", err)
+	}
+	if _, err := m.RegisterKey("othernet", otherPub, admission.RoleControl); err != nil {
+		t.Fatalf("register other key: %v", err)
+	}
+
+	ctx := mgmt.WithCallerPubkey(context.Background(), otherPub)
+
+	existingArgs, err := json.Marshal(map[string]string{"name": "mynet"})
+	if err != nil {
+		t.Fatalf("marshal existing args: %v", err)
+	}
+	_, existingErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(existingArgs))
+	if existingErr == nil {
+		t.Fatal("AC-006: cross-SVTN caller must be denied for an existing target SVTN")
+	}
+	if !strings.Contains(existingErr.Error(), "E-ADM-009") {
+		t.Errorf("AC-006 / CWE-862: error must contain \"E-ADM-009\"; got: %v", existingErr)
+	}
+
+	missingArgs, err := json.Marshal(map[string]string{"name": "doesnotexist"})
+	if err != nil {
+		t.Fatalf("marshal missing args: %v", err)
+	}
+	_, missingErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(missingArgs))
+	if missingErr == nil {
+		t.Fatal("AC-006: cross-SVTN caller must be denied for a nonexistent target SVTN too")
+	}
+	if !strings.Contains(missingErr.Error(), "E-ADM-009") {
+		t.Errorf("AC-006 / CWE-862: error for nonexistent SVTN must ALSO be E-ADM-009, not E-SVTN-003 — the admission gate must fire before existence is checked; got: %v", missingErr)
+	}
+
+	// The core no-leak proof: resolveCallerAdmissionAnyRole's denial message
+	// depends only on the caller's fingerprint and the op name, never on
+	// whether the target SVTN exists — so the two denials must be byte-identical.
+	if existingErr.Error() != missingErr.Error() {
+		t.Errorf("AC-006 / CWE-862 existence-oracle leak: denial for existing SVTN (%q) differs from denial for nonexistent SVTN (%q) — an unadmitted caller could distinguish SVTN existence from the error text", existingErr.Error(), missingErr.Error())
+	}
+}
+
+// TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho
+// is the RED sibling-parity test for the CWE-20/150 finding from PR #122
+// review round 1: makeAdminSVTNStatusHandler checks only a.Name == "" and
+// never calls validateSVTNName, unlike makeAdminSVTNCreateHandler (~L731)
+// and makeAdminSVTNDestroyHandler (~L844). A control-character name
+// currently sails past the empty-string check, past the admission gate
+// (the bootstrap-key caller below bypasses resolveCallerAdmissionAnyRole
+// unconditionally — same caller TestAdminSVTNStatus_HappyPath_KeyCounts/
+// NotFound_ESVTN003 use), and reaches m.SVTNByName's not-found path, which
+// echoes the raw (control-character-laden) name verbatim into the
+// E-SVTN-003 message via mapAdminError (see
+// TestAdminSVTNStatus_NotFound_ESVTN003's own "doesnotexist" substring
+// assertion — proof the not-found path echoes the name argument).
+//
+// Once fixed, admin.svtn.status must reject the same names the create/
+// destroy siblings reject, with the SAME error the siblings produce —
+// E-CFG-001 from validateSVTNName (mirrors
+// TestAdminSVTNCreate_ArgsValidation_E_CFG_001_Exhaustive's
+// "control_char_null_byte"/"control_char_stx" cases; see also
+// TestValidateSVTNName) — never the raw control bytes.
+//
+// AUTHORIZED CALLER: ctx carries bootstrapPub, the same caller the AC-005/
+// AC-006 tests above use. This test exercises the missing VALIDATION gate
+// specifically — the AC-006 denied-path oracle tests (above) are untouched;
+// validation is asserted to fire AFTER admission (bootstrap key always
+// clears admission, per resolveCallerAdmissionAnyRole), matching where
+// validateSVTNName runs relative to the admission gate in create/destroy.
+//
+// CWE-20 (Improper Input Validation) / CWE-150 (Improper Neutralization of
+// Escape, Meta, or Control Sequences); PR #122 review round 1, security LOW.
+func TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho(t *testing.T) {
+	t.Parallel()
+	m, bootstrapPub := newSVTNManagerForStatusTest(t)
+	handlers := BuildAdminHandlers(m, nil)
+	statusFn := findAdminSVTNStatusHandler(t, handlers)
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+
+	tests := []struct {
+		name    string
+		svtnArg string
+	}{
+		{name: "control_char_null_byte", svtnArg: "foo\x00bar"},
+		{name: "control_char_stx", svtnArg: "foo\x02bar"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args, err := json.Marshal(map[string]string{"name": tc.svtnArg})
+			if err != nil {
+				t.Fatalf("marshal args: %v", err)
+			}
+			_, handlerErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(args))
+			if handlerErr == nil {
+				t.Fatalf("expected E-CFG-001 for %s, got nil (admin.svtn.status must validate names "+
+					"like admin.svtn.create/destroy — CWE-20/150 sibling-parity)", tc.name)
+			}
+			if !strings.Contains(handlerErr.Error(), "E-CFG-001") {
+				t.Errorf("expected E-CFG-001 in error for %s; got: %v", tc.name, handlerErr)
+			}
+			if strings.Contains(handlerErr.Error(), "E-SVTN-003") {
+				t.Errorf("%s: got E-SVTN-003 (not-found) instead of E-CFG-001 (validation) — proves "+
+					"the control-character name reached SVTNByName's not-found path instead of being "+
+					"rejected by validateSVTNName; got: %v", tc.name, handlerErr)
+			}
+			if strings.Contains(handlerErr.Error(), tc.svtnArg) {
+				t.Errorf("%s: error echoes the raw control-character name verbatim (CWE-20/150 byte "+
+					"echo); got: %v", tc.name, handlerErr)
+			}
+		})
+	}
+}
+
+// TestAdminSVTNStatus_ResponseExcludesSessionHealthFields asserts the AC-007
+// purity boundary: the wire response contains exactly svtn_id/name/created_at/
+// key_counts and no session or health-indicator fields.
+// Traces to AC-007 PC-1 (unit level).
+func TestAdminSVTNStatus_ResponseExcludesSessionHealthFields(t *testing.T) {
+	t.Parallel()
+	m, bootstrapPub := newSVTNManagerForStatusTest(t)
+	handlers := BuildAdminHandlers(m, nil)
+	statusFn := findAdminSVTNStatusHandler(t, handlers)
+
+	args, err := json.Marshal(map[string]string{"name": "mynet"})
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
+	result, handlerErr := callAdminSVTNStatusSafely(t, statusFn, ctx, json.RawMessage(args))
+	if handlerErr != nil {
+		t.Fatalf("AC-007: unexpected error: %v", handlerErr)
+	}
+
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("AC-007: marshal handler result: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("AC-007: unmarshal handler result: %v (raw: %s)", err, raw)
+	}
+
+	wantFields := map[string]bool{"svtn_id": true, "name": true, "created_at": true, "key_counts": true}
+	for k := range fields {
+		if !wantFields[k] {
+			t.Errorf("AC-007: unexpected field %q in admin.svtn.status response — schema must be exactly svtn_id/name/created_at/key_counts", k)
+		}
+	}
+	for _, forbidden := range []string{"session", "sessions", "health", "active_sessions"} {
+		if _, present := fields[forbidden]; present {
+			t.Errorf("AC-007: response must not carry a %q field (internal/session is a forbidden import for this handler)", forbidden)
+		}
+	}
+}
+
+// TestAdminSVTNStatus_NonControlMode_NilAdminHandlers_ERPC010 asserts that on
+// a daemon mode where admin handlers are not wired (router/access/console —
+// simulated here via nil admin handlers, mirroring startE2EServer(t, nil)),
+// dispatching admin.svtn.status yields E-RPC-010 (unknown command), not a
+// panic or a bypassed authority check.
+// Traces to AC-007 PC-2 (integration level).
+func TestAdminSVTNStatus_NonControlMode_NilAdminHandlers_ERPC010(t *testing.T) {
+	t.Parallel()
+	es := startE2EServer(t, nil)
+
+	resp := sendAdminRPC(t, es.socketPath, es.daemonPriv, "admin.svtn.status", map[string]any{"name": "mynet"})
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil {
+		t.Fatalf("AC-007: admin.svtn.status on a non-control-mode daemon must return an error; got success: %+v", resp)
+	}
+	code, _ := errObj["code"].(string)
+	if code != "E-RPC-010" {
+		t.Errorf("AC-007: error code = %q; want \"E-RPC-010\" (unknown command)", code)
 	}
 }
 
