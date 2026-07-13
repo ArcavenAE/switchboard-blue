@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.001
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,7 +17,19 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-07-13
+    version: "1.5"
+    change: >
+      S-BL.DISCOVERY-WIRE-rulings.md v1.2 amendments executed: Precondition 3
+      gains the concrete multicast-address derivation rule; Postcondition 1
+      gains the router-mediated relay delivery-mechanism note; Postcondition 2
+      gains a new monotonic `sequence` replay-resistance field + router-side
+      discard rule (SEC-DW-07, cites VP-080); Postcondition 5's
+      DRIFT-W6TBD-001 key-placeholder note is replaced with the concrete
+      domain-separated `DiscoveryAuthKey` derivation rule (Ruling 1 v1.1) —
+      resolves DRIFT-W6TBD-001's BC-side obligation. Invariant 1 (DI-004)
+      reviewed, confirmed already-correct, no change.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -48,13 +60,66 @@ An access node broadcasts its presence and the state of its published sessions t
 2. The access node has at least one published session.
 3. A SVTN-scoped multicast address is allocated for the SVTN's discovery channel.
 
+   > **Derivation rule (Ruling S-BL.DISCOVERY-WIRE-2):** the multicast address
+   > is `239.h0.h1.h2` where `h0..h2` are the first three bytes of
+   > SHA-256(svtnID) — deterministic, static, requiring no allocation
+   > bookkeeping. Only the router-mode daemon joins this multicast group.
+
 ## Postconditions
 
 1. The advertisement is multicast to all admitted nodes on the SVTN.
-2. Each advertisement includes: access node address, list of session names, per-session attachment status, per-session quality indicator.
+
+   > **Delivery mechanism note (Ruling S-BL.DISCOVERY-WIRE-2):** "multicast"
+   > here denotes SVTN-wide fan-out semantics, not direct peer-to-peer IP
+   > multicast. Delivery is router-mediated: the access node sends one UDP
+   > datagram to the SVTN-scoped multicast address (received only by the
+   > router); the router authenticates it and relays it to each admitted node
+   > over that node's own connection. This satisfies DI-004 (no direct
+   > node-to-node communication) and DI-006 (HMAC verified at first router).
+   > The `239.0.0.0/8` range is addressing hygiene, not a security boundary —
+   > HMAC authentication remains the sole security boundary regardless of the
+   > actual multicast-routing scope realized in a given deployment
+   > (SEC-DW-08).
+2. Each advertisement includes: access node address, a monotonic sequence value, list of session names, per-session attachment status, per-session quality indicator.
+
+   > **Replay-resistance field (SEC-DW-07, Ruling S-BL.DISCOVERY-WIRE-1):**
+   > each advertisement additionally includes a monotonic `sequence` value,
+   > unique-and-increasing per (access node, SVTN), incremented on every
+   > outbound advertisement (state-change or heartbeat-triggered). The router
+   > discards any HMAC-verified advertisement whose `sequence` is not strictly
+   > greater than the last-accepted value for that (SVTN, node) pair, even
+   > though HMAC passed — closing the replay window that would otherwise let
+   > a captured, still-valid frame be re-injected indefinitely and defeat
+   > BC-2.03.002 Postcondition 5's staleness-expiry guarantee. Cold-start
+   > (router restart, or first frame from a newly-admitted node) accepts
+   > unconditionally, bounding the residual replay window to at most one
+   > heartbeat interval — the same bounded-not-perfect posture this project
+   > already accepts for admission-layer nonce replay (`nonceTTL=60s`).
+   > Verified by VP-080.
 3. On state change (session added/removed/attached/detached): advertisement sent within 1 tick interval.
 4. On periodic heartbeat: advertisement sent every 30 seconds regardless of state change. **Observability gate (Ruling W6TB-D):** in the registry model (S-7.02), the periodic heartbeat timer fires an observable side effect verifiable by injecting a tick and asserting a heartbeat counter increments. Network dispatch to wire is deferred to S-BL.DISCOVERY-WIRE.
-5. Advertisement is authenticated (HMAC in outer header) so receivers can verify it is from an admitted node. **Key placeholder (Ruling W6TB-D / DRIFT-W6TBD-001):** in S-7.02, the HMAC key is `svtnID` (the SVTN identifier itself). This is a scoping placeholder — the SVTN ID is not admitted-node-scoped secret material. S-BL.DISCOVERY-WIRE must specify admitted-node HMAC key derivation before multicast deployment. The fail-closed rejection behavior (ErrInvalidHMACTag on wrong tag) is fully verified in S-7.02.
+5. Advertisement is authenticated (HMAC in outer header) so receivers can verify it is from an admitted node.
+
+   > **Key derivation (Ruling S-BL.DISCOVERY-WIRE-1, v1.1):** The HMAC key
+   > authenticating an advertisement frame is `DiscoveryAuthKey :=
+   > hmac.DeriveDiscoveryKey(nodeAdmissionPubkey, svtnID)` — HKDF-SHA256 over
+   > the same `(nodeAdmissionPubkey, svtnID)` inputs `internal/admission`
+   > already uses for the session-data `frame_auth_key` (ADR-001), but with a
+   > distinct info label (`HKDFInfoDiscovery = "switchboard-discovery-auth"`,
+   > vs. the existing `HKDFInfo = "switchboard-frame-auth"`) so the two keys
+   > are cryptographically independent — a compromise of one does not imply
+   > the other. No new KDF primitive is introduced; `hkdfSHA256` (the
+   > underlying HKDF implementation) is unchanged and shared by both call
+   > sites. The key is verified exclusively by the router that receives the
+   > advertisement off the discovery multicast socket (the "first router" per
+   > DI-006), using fixed-offset extraction of only the key-selector fields
+   > (`SVTNID`, `NodeAddr`) before any variable-length body content is parsed
+   > (SEC-DW-01) — access and console nodes never independently look up or
+   > re-verify another node's `DiscoveryAuthKey`; they receive
+   > already-authenticated advertisements via the router's relay over their
+   > own admitted connection. The router additionally enforces a
+   > per-(SVTN,NodeAddr) monotonic sequence check to reject replayed frames
+   > (SEC-DW-07 — see Postcondition 2's replay-resistance field note above).
 
 ## Invariants
 
@@ -91,6 +156,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 | VP-044 | Advertisement sent within 1 tick of state change | integration |
 | VP-044 | Advertisement contains no session content — metadata only | code-audit |
 | VP-044 | Advertisement is SVTN-scoped: received only by admitted nodes | integration |
+| VP-080 | Router-side discovery ingest discards an HMAC-valid advertisement whose sequence is not strictly increasing (replay rejection) | integration |
 
 ## Traceability
 
@@ -111,6 +177,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-07-13 | `S-BL.DISCOVERY-WIRE-rulings.md` v1.2 amendments executed (Ruling 1 + Ruling 2, resolves DRIFT-W6TBD-001's BC-side obligation): Precondition 3 gains the concrete multicast-address derivation rule (`239.h0.h1.h2` = first 3 bytes of SHA-256(svtnID); router-only group membership). Postcondition 1 gains the router-mediated relay delivery-mechanism note (multicast denotes SVTN-wide fan-out, not direct peer-to-peer IP multicast; HMAC is the sole security boundary per SEC-DW-08). Postcondition 2 gains a NEW monotonic `sequence` replay-resistance field in the field list plus the router-side non-increasing discard rule (SEC-DW-07); cites VP-080 (minted this session, `status: draft`). Postcondition 5's DRIFT-W6TBD-001 `svtnID`-as-key placeholder note is replaced with the concrete domain-separated `DiscoveryAuthKey := hmac.DeriveDiscoveryKey(nodeAdmissionPubkey, svtnID)` derivation rule (Ruling 1 v1.1, SEC-DW-06). Invariant 1 (DI-004) reviewed against Ruling 2's finding and confirmed already-correct — no change. Verification Properties table gains a VP-080 row (replay-rejection, integration) alongside the existing VP-044 rows. |
 | v1.4 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): Stories row updated to add S-BL.DISCOVERY-WIRE with deferred PC-1/PC-3/PC-4 wire delivery annotation. |
 | v1.3 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
 | v1.2 | 2026-07-01 | Ruling W6TB-D: scope split annotation added. PC-1 wire transport, PC-4 network dispatch, and admitted-node HMAC key vocabulary (DRIFT-W6TBD-001) deferred to S-BL.DISCOVERY-WIRE. Observability gate added to PC-4: heartbeat timer observable via injected counter. PC-5 key placeholder note added. |

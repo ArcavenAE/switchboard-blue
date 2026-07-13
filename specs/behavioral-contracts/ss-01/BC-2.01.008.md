@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.008
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-11T00:00:00
@@ -18,6 +18,10 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.2"
+    date: 2026-07-13
+    author: product-owner
+    change: "S-BL.DISCOVERY-WIRE-rulings.md v1.3 Ruling 3(g) executed: control_type registry row added for DISCOVERY_RELAY=0x03 (Postcondition 2); unassigned range narrowed 0x03-0xFF to 0x04-0xFF. Postcondition 3's fixed-4-byte claim rescoped to the DRAIN/RESYNC opcodes specifically (it was scoped to \"all currently-defined opcodes\", which DISCOVERY_RELAY would falsify) with a citation-level note pointing to BC-2.03.001 v1.5 / Ruling 3(c) for DISCOVERY_RELAY's extended payload layout, per Invariant 5 (DI-007)'s pre-existing extend-beyond-byte-3 allowance — no schema duplicated, no invariant changed."
   - version: "1.1"
     date: 2026-07-11
     author: product-owner
@@ -59,15 +63,23 @@ When a router receives a `ctl (frame_type = 0x03)` frame for which it is the ter
    |-------------|-------|------------|-------------|
    | DRAIN       | 0x01  | S-7.04-FU-DRAIN-WIRE | Router is draining; connected node should migrate to alternate router |
    | RESYNC      | 0x02  | S-BL.RESYNC-FRAME (reserved, not yet dispatched) | Session resynchronization signal |
-   | (unassigned) | 0x03–0xFF | future stories | MUST be silently ignored by all current receivers |
+   | DISCOVERY_RELAY | 0x03 | S-BL.DISCOVERY-WIRE | Router relays a validated, sequence-fresh advertisement to admitted SVTN peers |
+   | (unassigned) | 0x04–0xFF | future stories | MUST be silently ignored by all current receivers |
 
-3. The full control message layout for all currently-defined opcodes is a fixed 4 bytes:
+3. The control message header at offsets 0–3 (control_type, version, reserved) is fixed at 4 bytes for every opcode (Invariant 5, DI-007). For the DRAIN and RESYNC opcodes specifically, this 4-byte header is the entire control message layout:
 
    | Offset | Size | Field         | Notes                                             |
    |--------|------|---------------|---------------------------------------------------|
    | 0      | 1    | control_type  | Opcode; see table above                           |
    | 1      | 1    | version       | Control message protocol version; `0x01` for v1  |
    | 2      | 2    | reserved      | Zero-filled; receiver MUST ignore                 |
+
+   > **DISCOVERY_RELAY extension (Ruling S-BL.DISCOVERY-WIRE-3(c)):**
+   > `control_type = 0x03` (DISCOVERY_RELAY) uses this same 4-byte header at
+   > offsets 0–3, then extends beyond byte 3 per Invariant 5's pre-existing
+   > allowance — its full payload (originating NodeAddr, Sequence, session
+   > count, session list) is defined in `BC-2.03.001` v1.5 and
+   > `S-BL.DISCOVERY-WIRE-rulings.md` Ruling 3(c); not reproduced here.
 
 4. A `control_type` value not listed in the defined table above MUST be silently ignored by the receiver — no error, no logging (including no diagnostic or informational log line referencing the frame or its `control_type` value), no connection close (forward-compatibility rule FO-DRAIN-WIRE-001). This is intentionally asymmetric with EC-002 (truncated/malformed control frame, which MUST log E-PRT-002): a well-formed-but-unrecognized `control_type` signals ordinary forward-compatible protocol evolution, not an anomaly — logging it would produce unbounded log growth on every router not yet upgraded to recognize a newly assigned opcode, for the duration of any rolling upgrade. A truncated payload signals frame corruption or malformed input and remains diagnostic-worthy. (Ruling: F-DW-SP3-002, spec-adversarial pass 3.)
 
@@ -114,7 +126,7 @@ Receipt of a `ctl (0x03)` frame by its terminal router consumer.
 | L2 Capability | CAP-003 ("Frame envelope encoding and decoding") per capabilities.md §CAP-003 |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — terminal-consumer carve-out), DI-007 (layout stability within major version) |
 | Architecture Module | internal/frame (schema definition); cmd/switchboard (dispatch site) |
-| Stories | S-7.04-FU-DRAIN-WIRE (first control_type opcode: DRAIN=0x01) |
+| Stories | S-7.04-FU-DRAIN-WIRE (first control_type opcode: DRAIN=0x01), S-BL.DISCOVERY-WIRE (DISCOVERY_RELAY=0x03) |
 | Capability Anchor Justification | CAP-003 ("Frame envelope encoding and decoding") per capabilities.md §CAP-003 — this BC defines the router-addressed control payload schema that is part of the wire format CAP-003 specifies; the control_type discriminator is a sub-field of the ctl frame's payload within the CAP-003 frame envelope |
 
 ## Related BCs
@@ -122,10 +134,12 @@ Receipt of a `ctl (0x03)` frame by its terminal router consumer.
 - BC-2.01.004 — authority for: outer header frame_type field; Inv-2 router-terminated-ctl carve-out references this BC as schema home
 - BC-2.01.005 — carve-out context: PC-2 router-opacity rule; carve-out note references this BC
 - BC-2.09.002 — first consumer: DRAIN opcode (control_type=0x01) defined and used by the drain signal mechanism
+- BC-2.03.001 — consumer: DISCOVERY_RELAY opcode (control_type=0x03) carries hop-2 of the presence-advertisement relay whose connection-trust model BC-2.03.001 PC-5 (v1.5) describes and `S-BL.DISCOVERY-WIRE-rulings.md` Ruling 3 formalizes; payload layout defined there, not here
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-13 | `S-BL.DISCOVERY-WIRE-rulings.md` v1.3 Ruling 3(g) executed: Postcondition 2's `control_type` registry gains a `DISCOVERY_RELAY = 0x03` row (`S-BL.DISCOVERY-WIRE`, "Router relays a validated, sequence-fresh advertisement to admitted SVTN peers"), per Invariant 3's append-only sequential-assignment rule — next free value after DRAIN=0x01/RESYNC=0x02. Unassigned range narrowed `0x03–0xFF` → `0x04–0xFF`. **Judgment check resolved:** Postcondition 3's layout doctrine does not mandate fixed length for all opcodes — its lead sentence was scoped to "all currently-defined opcodes" (a set that changes as the registry grows) and Invariant 5 (DI-007) already states future control messages MAY extend beyond byte 3. Rescoped PC-3's lead sentence to name DRAIN/RESYNC specifically (keeping it accurate now that DISCOVERY_RELAY, a longer-than-4-byte opcode, is in the registry) and added one citation-level note pointing to `BC-2.03.001` v1.5 / Ruling 3(c) for DISCOVERY_RELAY's concrete payload layout — schema not duplicated, Invariant 5 not altered. Traceability Stories row and Related BCs gained DISCOVERY_RELAY/BC-2.03.001 entries, matching the existing DRAIN/BC-2.09.002 precedent. No VP added — Ruling 3 deliberately left the hop-2 relay-fan-out VP unminted pending its own Forward Obligation (f). |
 | 1.1 | 2026-07-11 | Spec-adversarial pass-3 rulings (POL-001). **F-DW-SP3-002 (HIGH):** Postcondition 4 strengthened — the unrecognized-control_type silent-ignore rule explicitly forbids diagnostic/informational logging (not just error/close), with rationale distinguishing it from EC-002's mandatory E-PRT-002 log (malformed/truncated frame = corruption, diagnostic-worthy; well-formed-but-unrecognized opcode = ordinary forward-compatible protocol evolution, would flood logs across a rolling upgrade if logged). EC-001 and the corresponding canonical test vector updated to state "no log" explicitly. Ruling: keep PC-4 strict no-logging; downstream guard code and pin test must not log or assert a log line on this path. **F-DW-SP3-004 (MED):** New Invariant 2 added — netingress-arriving ctl frames are terminal-consumer by construction under the current architecture (no router-identity/addressing field in `internal/frame.OuterHeader`; `internal/routing.SVTNRoute` performs forwarding-table validation only, with no inter-router relay/store-and-forward path implemented; `internal/netingress` is exclusively the node-facing accept loop per ARCH-08 §6 import constraints). This legitimizes an unconditional (no explicit runtime "addressed to me" check) ctl-frame guard on the netingress `route` closure. Scoped to today's architecture; flagged for revisit if a future story introduces inter-router forwarding. Existing Invariants 2–4 renumbered to 3–5. |
 | 1.0 | 2026-07-11 | Created. Schema home for ctl (0x03) control payload control_type discriminator. Consequence of F-DW-SP1-005 adjudication (router-terminated-ctl carve-out to DI-001 opacity invariant). Defines control_type=0x01 (DRAIN), reserves 0x02 (RESYNC). Forward-compat silent-ignore rule FO-DRAIN-WIRE-001 encoded as Postcondition 4 and Invariant 1. |

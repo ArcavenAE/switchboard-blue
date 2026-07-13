@@ -2,7 +2,7 @@
 artifact_id: ARCH-03-routing-engine
 document_type: architecture-section
 level: L3
-version: "1.6"
+version: "1.8"
 status: draft
 producer: architect
 timestamp: 2026-06-23T00:00:00
@@ -20,6 +20,8 @@ inputDocuments:
   - '.factory/specs/behavioral-contracts/ss-02/BC-2.02.008.md'
   - '.factory/specs/behavioral-contracts/ss-02/BC-2.02.009.md'
   - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.003.md'
+  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'
+  - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'
   - '.factory/specs/domain-spec/invariants.md'
 kos_anchors:
   - elem-dual-fastest-path-forwarding
@@ -30,38 +32,53 @@ modified:
   - 2026-06-28T00:00:00
   - 2026-06-28T12:00:00
   - 2026-06-28T14:00:00
+  - 2026-07-13T18:00:00
+  - 2026-07-13T22:00:00
 changelog:
+  - version: "1.8"
+    date: 2026-07-13T22:00:00
+    adjudication: S-BL.DISCOVERY-WIRE-rulings v1.3, Ruling 3
+    changes:
+      - "Addition (§Session Discovery): hop-2 relay-transport paragraph — router relays validated advertisements via the existing FrameTypeCtl (0x03) outer frame with a new control_type=0x03 (DISCOVERY_RELAY) discriminator (BC-2.01.008 is the schema home, gains a new registry row), not a new outer FrameType (the 6-slot canonical enum is exhausted at FrameTypePEConnect=0x06). Relay frame HMACTag is zero, matching the S-7.04-FU-DRAIN-WIRE DRAIN-broadcast precedent — hop 2's trust boundary is the already-admitted connection itself, not a per-frame HMAC (hop 1's HMAC-over-DiscoveryAuthKey boundary is unaffected/undiluted). Payload is re-serialized (NodeAddr + Sequence + session list), not a raw relay of hop-1's UDP bytes. Fan-out is SVTN-scoped, excludes the originating node, best-effort/non-blocking (DRAIN's sendMap.Range pattern — NOT routing.SplitHorizon.Forward/FrameArrivalHandler.OnFrameArrival, evaluated and rejected: inter-router loop-prevention machinery that doesn't fit this single-router star topology, and no natural arrivalIface value exists for a UDP-sourced frame). A ~1/sec per-(SVTNID,NodeAddr) rate cap at the relay-dispatch point silently suppresses excess fan-out, independent of HMAC validity (SEC-DW-09), without affecting local registry/replay-discard state. Named an explicit open dependency: fan-out target resolution requires node-identity-to-connection binding not yet present in production code — full detail in the rulings doc Ruling 3(f)."
+      - "inputDocuments: added BC-2.01.008.md (new control_type schema-home citation, since the hop-2 relay-transport addition allocates a control_type value from that BC's registry)."
+  - version: "1.7"
+    date: 2026-07-13T18:00:00
+    adjudication: S-BL.DISCOVERY-WIRE-rulings v1.1, Ruling 2 (+ SEC-DW-08)
+    changes:
+      - "Rewrite (§Session Discovery): replaced the unreconciled 'consoles subscribe to multicast' sketch — which conflicted with the already-ratified DI-004 domain invariant and BC-2.03.001's own Invariant 1 ('no direct node-to-node multicast') — with the reconciled router-relay design: only the router-mode daemon joins the multicast group (net.ListenMulticastUDP); access nodes/consoles never join it and never receive from one another directly; the router authenticates each datagram (HMAC-first, fail-closed, domain-separated DiscoveryAuthKey) and relays validated advertisements over each node's own authenticated connection."
+      - "Addition (§Session Discovery): sender-side multicast TTL=1 (SEC-DW-08); scope-note sentence clarifying the 239.0.0.0/8 administratively-scoped address range is addressing hygiene, not a security boundary — HMAC authentication is the sole security boundary; concrete address-derivation formula (239.h0.h1.h2, first three bytes of SHA-256(svtn_id)), static allocation, fixed port (exact value deferred to architect/PO sign-off); explicit IPv6-out-of-scope note."
+      - "Housekeeping: this changelog array reordered to newest-first (previously oldest-first ascending from v1.1) to satisfy changelog-monotonicity convention, matching the ARCH-08 v2.13 precedent (dependency-graph.md's own self-correction of the identical staleness). No content changed in pre-existing v1.1–v1.6 entries below."
+  - version: "1.6"
+    date: 2026-06-28T14:00:00
+    adjudication: Wave 5 design notes — S-5.02 p99 RTT accumulator
+    changes:
+      - "Addition (§p99 RTT Accumulator Design, S-5.02): fixed-bucket latency histogram owned by PathTracker in internal/paths; 16 buckets covering 0–2000ms; O(1) update on each RTT probe; P99() query method on PathTracker; PathSnapshot carries P99RTTMs float64; internal/metrics reads via PathSnapshot. Traces to BC-2.06.003 rtt_p99_ms. VP for accumulator accuracy deferred to S-BL.BENCH."
+  - version: "1.5"
+    date: 2026-06-28T14:00:00
+    adjudication: Wave 5 design notes — S-5.03 degraded-path flag
+    changes:
+      - "Addition (§Degraded-Path Flag Design, S-5.03): IsDegraded() accessor on PathTracker; degraded bool field set atomically under existing mu on each RTT update; threshold constant DegradedRTTThresholdMS=200; PathSnapshot value type for lock-compliant reads; internal/metrics consumes via PathSnapshot.Degraded. Traces to BC-2.02.003 PC-5."
+  - version: "1.4"
+    date: 2026-06-28T12:00:00
+    adjudication: Wave 4 fresh-context consistency audit — DRIFT-S4.03-001 owner correction
+    changes:
+      - "Addition (§ADR-005, implementation ownership note): DRIFT-S4.03-001 resolution — ADR-005 resync-on-reconnect wire-mechanics are owned by S-BL.NI (network-ingress), not S-5.01. S-5.01 is scoped only to internal/metrics quality indicator (BC-2.06.001/002). Drift entry owner field corrected to S-BL.NI."
+  - version: "1.3"
+    date: 2026-06-28T00:00:00
+    adjudication: S-4.03 RULING-003 ackseq-dos-ruling
+    changes:
+      - "Addition (§Downstream ARQ, input validation): OnAck validates ackSeq is within sackWindowSize (64) of nextExpected before iterating. Out-of-window ackSeq returns ErrAckOutOfWindow without state mutation. Unsigned subtraction handles stale-ACK case. Traces to BC-2.02.005 EC-005."
+  - version: "1.2"
+    date: 2026-06-28T00:00:00
+    adjudication: S-4.03 pass2-adjudication
+    changes:
+      - "Correction (§Downstream ARQ, delivery contract): OnAck returns deliverable frames synchronously as [][]byte. The caller's tick loop forwards them to the terminal. There is no internal DeliveredFrames channel or goroutine for frame delivery (pure-core constraint; S-4.03 pass-2 adjudication ruling 1)."
   - version: "1.1"
     date: 2026-06-27T00:00:00
     adjudication: S-4.01 pass1-spec-rulings
     changes:
       - "Correction 1 (§Duplicate-and-Race, F-006 block): fixed endpoint dedup key description. The destination endpoint deduplicates by checksum alone (BC-2.02.002); the compound (checksum, arrival_interface_id) key applies only to the router-level drop cache (BC-2.02.009). Also corrected the OnFrameArrival pseudo-code comment citation from BC-2.02.002 to BC-2.02.009."
       - "Correction 2 (§Path Selection, degenerate single-path case): replaced 'both copies go to the same path (degenerate case)' with single-path no-duplication language per BC-2.02.001 postcondition 3 and EC-001."
-  - version: "1.2"
-    date: 2026-06-28T00:00:00
-    adjudication: S-4.03 pass2-adjudication
-    changes:
-      - "Correction (§Downstream ARQ, delivery contract): OnAck returns deliverable frames synchronously as [][]byte. The caller's tick loop forwards them to the terminal. There is no internal DeliveredFrames channel or goroutine for frame delivery (pure-core constraint; S-4.03 pass-2 adjudication ruling 1)."
-  - version: "1.3"
-    date: 2026-06-28T00:00:00
-    adjudication: S-4.03 RULING-003 ackseq-dos-ruling
-    changes:
-      - "Addition (§Downstream ARQ, input validation): OnAck validates ackSeq is within sackWindowSize (64) of nextExpected before iterating. Out-of-window ackSeq returns ErrAckOutOfWindow without state mutation. Unsigned subtraction handles stale-ACK case. Traces to BC-2.02.005 EC-005."
-  - version: "1.4"
-    date: 2026-06-28T12:00:00
-    adjudication: Wave 4 fresh-context consistency audit — DRIFT-S4.03-001 owner correction
-    changes:
-      - "Addition (§ADR-005, implementation ownership note): DRIFT-S4.03-001 resolution — ADR-005 resync-on-reconnect wire-mechanics are owned by S-BL.NI (network-ingress), not S-5.01. S-5.01 is scoped only to internal/metrics quality indicator (BC-2.06.001/002). Drift entry owner field corrected to S-BL.NI."
-  - version: "1.5"
-    date: 2026-06-28T14:00:00
-    adjudication: Wave 5 design notes — S-5.03 degraded-path flag
-    changes:
-      - "Addition (§Degraded-Path Flag Design, S-5.03): IsDegraded() accessor on PathTracker; degraded bool field set atomically under existing mu on each RTT update; threshold constant DegradedRTTThresholdMS=200; PathSnapshot value type for lock-compliant reads; internal/metrics consumes via PathSnapshot.Degraded. Traces to BC-2.02.003 PC-5."
-  - version: "1.6"
-    date: 2026-06-28T14:00:00
-    adjudication: Wave 5 design notes — S-5.02 p99 RTT accumulator
-    changes:
-      - "Addition (§p99 RTT Accumulator Design, S-5.02): fixed-bucket latency histogram owned by PathTracker in internal/paths; 16 buckets covering 0–2000ms; O(1) update on each RTT probe; P99() query method on PathTracker; PathSnapshot carries P99RTTMs float64; internal/metrics reads via PathSnapshot. Traces to BC-2.06.003 rtt_p99_ms. VP for accumulator accuracy deferred to S-BL.BENCH."
 ---
 
 # ARCH-03: Routing Engine
@@ -298,14 +315,91 @@ change.
 
 ## Session Discovery (internal/discovery, BC-2.03.001–003, Phase PE)
 
-Presence advertisement is out of E router MVP scope. Architecture sketch for PE:
-- Access nodes send `PRESENCE_ADV` frames to a well-known SVTN multicast address.
-- Consoles subscribe to multicast and maintain a local session list.
+Presence advertisement is out of E router MVP scope. PE-phase wire design
+(Ruling S-BL.DISCOVERY-WIRE-2, v1.1 — resolves a DI-004 conflict present in
+the prior draft of this section; see "Superseded language" below):
+
+- Access nodes send `PRESENCE_ADV` datagrams via UDP to a well-known,
+  SVTN-derived multicast address. Sending requires no group membership.
+  Senders set the outbound multicast TTL to 1 (defense-in-depth against a
+  misconfigured LAN switch/router forwarding the datagram beyond the local
+  link).
+- Only the router-mode daemon joins the multicast group
+  (`net.ListenMulticastUDP`) and is the sole receiver off the wire. Access
+  nodes and consoles never join the group and never receive advertisements
+  directly from one another — satisfying **DI-004** ("no direct
+  node-to-node communication").
+- The router authenticates each datagram — HMAC-first, fail-closed,
+  against the sender's admitted-node `DiscoveryAuthKey` (a domain-separated
+  HKDF-SHA256 derivation, distinct from the session-data `frame_auth_key`
+  — see BC-2.03.001 PC-5) — the **DI-006** "first router" gate — and
+  relays validated advertisements to every other admitted node on that
+  SVTN over each node's own already-authenticated connection.
+- **Scope note:** the multicast address range below is addressing hygiene
+  (routing efficiency, collision avoidance) — it is not a security
+  boundary. HMAC authentication of each datagram, not multicast-address
+  uniqueness or scope, is the sole security boundary; even a colliding or
+  mis-scoped address only misroutes traffic, it cannot bypass
+  authentication — and that holds regardless of the actual
+  multicast-routing scope realized in a given deployment (a LAN segment
+  where TTL=1 confines the datagram as intended, or a misconfigured
+  network where it reaches further than intended); HMAC authentication is
+  the boundary in either case, never the address range or hop count.
+- Multicast address: `239.h0.h1.h2`, where `h0..h2` are the first three
+  bytes of SHA-256(svtn_id), in the RFC 2365 administratively-scoped range
+  `239.0.0.0/8` (enforces DI-005 SVTN isolation together with, not instead
+  of, HMAC authentication — see Scope note above). Deterministic and
+  static — no allocation bookkeeping, no release step on
+  `admin.svtn.destroy`. Fixed port (exact value: architect/PO sign-off at
+  story decomposition).
 - Heartbeat interval: 30s default (tuning parameter; see ARCH-INDEX).
 - State-change advertisements are immediate (attach/detach events).
 
-The multicast address is scoped to the SVTN (uses `svtn_id` as part of the multicast
-group derivation) to enforce DI-005 (SVTN isolation).
+**Hop-2 relay transport (Ruling S-BL.DISCOVERY-WIRE-3):** the router
+relays a validated advertisement to each other admitted node on the SVTN
+by riding the existing `FrameTypeCtl` (`0x03`) outer frame with a new
+`control_type = 0x03` (`DISCOVERY_RELAY`) discriminator — not a new outer
+`FrameType` (the 6-slot canonical enum is exhausted;
+`FrameTypePEConnect = 0x06` took the last slot). This is the same pattern
+S-7.04-FU-DRAIN-WIRE's DRAIN broadcast already uses (`control_type =
+0x01`); `BC-2.01.008` is the schema home and gains a new registry row.
+The relay frame's `HMACTag` is zero, matching the DRAIN precedent exactly
+— hop 2 travels over a connection already mutually authenticated at Tier-1
+admission, so the *connection itself* is the trust boundary, not a
+per-frame HMAC (HMAC-over-`DiscoveryAuthKey` remains the sole boundary at
+hop 1, per the Scope note above — stating both boundaries explicitly keeps
+SEC-DW-08 undiluted). The relay payload is re-serialized (originating
+`NodeAddr` + `Sequence` + session list), not a raw retransmission of hop-1's
+UDP bytes — hop-1's HMAC tag has no meaning to a receiving node and is
+never forwarded. Fan-out is SVTN-scoped and excludes the originating node,
+best-effort and non-blocking (mirrors DRAIN's `sendMap.Range` dispatch,
+not `SplitHorizon.Forward` — the latter's inter-router loop-prevention
+machinery and `arrivalIface`-based exclusion do not fit a UDP-sourced
+frame in this single-router star topology). A per-`(SVTNID, NodeAddr)`
+rate cap (~1/sec) at the relay-dispatch point silently suppresses excess
+relay fan-out — independent of HMAC validity — without affecting the
+router's own registry/replay-discard state (SEC-DW-09). **Open
+dependency:** resolving which live connections currently serve a given
+SVTN's admitted nodes requires node-identity-to-connection binding that
+does not yet exist in production code (`admission.AdmitNode` has no
+production call sites today) — a Forward Obligation for story-writer, full
+detail in `S-BL.DISCOVERY-WIRE-rulings.md` Ruling 3(f).
+
+**IPv6 is explicitly out of scope for this design.** No IPv6 data-plane
+precedent exists anywhere in this codebase; the only IPv6 references are
+mgmt-plane loopback authorization (ARCH-05, ARCH-12).
+
+**Superseded language:** the prior draft of this section read "Access
+nodes send `PRESENCE_ADV` frames to a well-known SVTN multicast address.
+Consoles subscribe to multicast and maintain a local session list." — read
+literally, direct peer-to-peer IP multicast, with access nodes and
+consoles as co-members of the same OS-level multicast group. That reading
+directly conflicts with DI-004 and with BC-2.03.001's own Invariant 1
+("Advertisements flow node-to-router-to-node via the SVTN; no direct
+node-to-node multicast"). It was an unreconciled sketch, never a ratified
+design; the router-only-membership model above is the reconciled,
+DI-004-compliant replacement. Full rationale:
+`.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` Ruling 2.
 
 ## Degraded-Path Flag Design (internal/paths, S-5.03)
 
