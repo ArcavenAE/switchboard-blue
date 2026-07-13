@@ -3,163 +3,802 @@ artifact_id: S-BL.CLI-SURFACE-COMPLETION
 document_type: story
 level: ops
 story_id: S-BL.CLI-SURFACE-COMPLETION
-version: "1.0"
-title: "CLI surface completion: dispatch wire for paths ping, router reload, router drain, svtn destroy, svtn status"
-status: draft
-producer: product-owner
-timestamp: 2026-07-03T00:00:00
-modified: 2026-07-03T00:00:00
+epic_id: E-7
+title: "CLI surface completion: dispatch + wire for paths ping, admin.svtn.status, router reload/drain, svtn destroy shim"
+status: ready
+producer: story-writer
+timestamp: 2026-07-12T00:00:00Z
+modified:
+  - date: 2026-07-12
+    version: "2.0"
+    change: >
+      Elaborated from backlog stub (v1.0, draft, 0 ACs) to sprint-ready. Status: draft → ready;
+      wave: backlog → steady-state (S-7.04-FU-SIGHUP-RELOAD lifecycle precedent). All four Open
+      Design Obligations resolved by architect ruling
+      `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` (2026-07-12) and transcribed
+      here verbatim — story-writer's job was transcription, not re-derivation. 14 ACs firmed
+      across five verbs: `paths.ping` (new BC-2.06.004), `admin.svtn.status` (BC-2.07.001 v1.14
+      PC-4), `router.reload`/`router.drain` (BC-2.09.001 v1.2 / BC-2.09.002 v1.3 governance
+      addenda, resolves `DRIFT-HS006-DRAIN-CLI-MISSING`), `svtn destroy` top-level migration shim
+      (no BC change). `bc_traces` += BC-2.06.004. `estimated_points` TBD → 5 (sizing rationale
+      below). Four Forward Obligations from the ruling encoded as explicit story tasks the
+      adversary MUST police: (a) CAP-022 anchor on BC-2.06.004 provisional pending
+      architect/PO confirm-or-mint-CAP-029; (b) ARCH-INDEX SS-06 needs an `internal/mgmt` module
+      row; (c) error-taxonomy.md needs the E-CFG-004 "reload not applicable" message variant
+      before the reload AC is implemented; (d) VP-TBD-PING-A/B placeholders need real VP numbers
+      minted by architect (BC-2.06.003 VP-061/062 precedent). Frontmatter conformed to
+      template-mandated superset keys per S-BL.LOOPBACK-FULLSTACK precedent (`epic_id`,
+      `inputs`, `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
+      `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
+      Traceability Stories cells filled in BC-2.06.004, BC-2.07.001 (PC-4), BC-2.09.001,
+      BC-2.09.002 with this story id (separate BC edits, each version-bumped + changelogged per
+      POL-001). `interface-definitions.md` v1.30 already carries the adjudicated CLI listing and
+      Registered Verbs rows (PO/architect edit, not touched by this elaboration). No
+      line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
+      convention) — mechanism-anchor descriptions only; symbols grep-resolved against
+      develop@4c276d9.
+version: "2.0"
 phase: 2
 epic: E-7
-wave: backlog
+wave: steady-state
 priority: P2
 scope_phase: E
-estimated_points: TBD
+estimated_points: 5
+inputs:
+  - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'
+  - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.004.md'
+  - '.factory/specs/behavioral-contracts/ss-07/BC-2.07.001.md'
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'
+  - '.factory/specs/prd-supplements/interface-definitions.md'
+input-hash: "2af06c0"
+traces_to: .factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md
+behavioral_contracts:
+  - BC-2.06.004
+  - BC-2.07.001
+  - BC-2.09.001
+  - BC-2.09.002
+verification_properties:
+  - VP-TBD-PING-A   # provisional placeholder — Forward Obligation (d)
+  - VP-TBD-PING-B   # provisional placeholder — Forward Obligation (d)
+  - VP-048          # BC-2.07.001 PC-4 — two new sibling rows added by Ruling 2
+  - VP-038          # BC-2.09.001 — unaffected by the governance-only PC-1 addendum
+  - VP-037          # BC-2.09.002 — unaffected by the governance-only Trigger addendum
 bc_traces:
   - BC-2.09.001
   - BC-2.09.002
   - BC-2.07.001
+  - BC-2.06.004
+vp_traces:
+  - VP-TBD-PING-A
+  - VP-TBD-PING-B
+  - VP-048
+  - VP-038
+  - VP-037
+subsystems: [quality-observability, network-management, deployment-operations]
+target_module: "cmd/sbctl, cmd/switchboard, internal/mgmt"
+architecture_modules:
+  - cmd/sbctl
+  - cmd/switchboard
+  - internal/mgmt
+tdd_mode: strict
+cycle: v1.0.0-greenfield
 depends_on: []
 blocks: []
-acceptance_criteria_count: 0
-provenance:
-  finding: F-P5P6-A-005
-  spec_annotation: interface-definitions.md v1.20 PENDING-S-BL.CLI-SURFACE-COMPLETION
-  adjudication: annotate-and-defer
+estimated_days: null
+assumption_validations: []
+risk_mitigations: []   # the ruling's four follow-ups are captured as explicit story obligations below (Forward Obligations), not ASM/R-registry IDs
+inputDocuments:
+  - '.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md'   # BINDING — 4 rulings, wire contracts, error codes, authority tiers, implementation constraints
+  - '.factory/specs/behavioral-contracts/ss-06/BC-2.06.004.md'    # v1.1 — new BC, paths.ping
+  - '.factory/specs/behavioral-contracts/ss-07/BC-2.07.001.md'    # v1.14 — PC-4 admin.svtn.status
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.001.md'    # v1.2 — governance addendum, router.reload
+  - '.factory/specs/behavioral-contracts/ss-09/BC-2.09.002.md'    # v1.3 — governance addendum, router.drain
+  - '.factory/specs/prd-supplements/interface-definitions.md'     # v1.30 — Registered Verbs rows + CLI listing corrections already executed by PO
+  - '.factory/stories/S-7.04-FU-SIGHUP-RELOAD.md'                 # v1.7 — lifecycle/status/versioning convention precedent; shipped sighupCh shape this story bridges into
+  - '.factory/stories/S-7.04-FU-DRAIN-WIRE.md'                    # v1.11 — shipped drainCoord/shutdown-sequence shape this story bridges into
+  - '.factory/stories/S-BL.LOOPBACK-FULLSTACK.md'                 # v1.1 — template-mandated superset-keys precedent, no-line-number-citation convention
+acceptance_criteria_count: 14
+backlog_origin:
+  source: "F-P5P6-A-005 (Phase 5 Pass 6 Adv-A, 2026-07-03)"
+  deferred_from: null
+  drift_items_consumed:
+    - DRIFT-HS006-DRAIN-CLI-MISSING
+  notes: >
+    Backlog stub v1.0 collectively annotated five unimplemented sbctl verbs (paths ping, router
+    reload, router drain, svtn destroy, svtn status) per F-P5P6-A-005 adjudication
+    (annotate-and-defer). Two of five (paths ping, svtn status) carried no governing BC; four
+    open design obligations blocked scheduling. All four resolved by architect ruling
+    S-BL.CLI-SURFACE-COMPLETION-rulings.md (2026-07-12) — this elaboration transcribes the
+    rulings into sprint-ready ACs; story-writer's job here is transcription, not re-derivation,
+    per the ruling's own framing ("It does not edit the story... those edits belong to the
+    product-owner / story-writer").
 ---
 
-# S-BL.CLI-SURFACE-COMPLETION: CLI Surface Completion — Dispatch + Wire for Five Unimplemented Verbs
+# S-BL.CLI-SURFACE-COMPLETION: CLI Surface Completion — Dispatch + Wire for Five Verbs
 
-> **STATUS: DRAFT BACKLOG STUB.** Acceptance criteria, file structure, task list, and
-> architecture mapping will be fleshed out when this story is scheduled.
+> **Status note:** All four Open Design Obligations from the v1.0 stub are ADJUDICATED
+> (`.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md`, 2026-07-12) and the BC surface is
+> settled (BC-2.06.004 commissioned; BC-2.07.001 v1.14 PC-4; BC-2.09.001 v1.2 / BC-2.09.002 v1.3
+> governance addenda). This story is elaborated to sprint-ready and awaits its spec-adversarial
+> convergence cycle (not yet dispatched) before TDD implementation begins — mirroring
+> `S-7.04-FU-SIGHUP-RELOAD`'s lifecycle (backlog stub → `ready` v1.0 → adversarial version climb
+> to v1.7 → merged). Do not implement from the v1.0 stub's "Open Design Obligations" section — it
+> is superseded below by "Adjudicated Design Decisions."
+
+## Narrative
+
+- **As an** operator managing a running switchboard fleet via `sbctl`
+- **I want** `paths ping`, `svtn status`, `router reload`, `router drain` to actually dispatch
+  (not return usage errors), and `svtn destroy`'s top-level form to redirect clearly to its
+  canonical form
+- **So that** I get a one-shot reachability probe, an SVTN status query, and RPC-triggered
+  config-reload/drain — without needing raw OS-signal access to the daemon host — while the
+  destructive `svtn destroy` surface stays single-path (no duplicated confirm-gate)
 
 ## Context
 
-Five `sbctl` verbs are specified in `interface-definitions.md` v1.20 but have no CLI
-dispatch case arm — they return unknown-subcommand usage errors (exit 2) on current builds
-(verified post-PR #65):
+Five `sbctl` verbs were specified in `interface-definitions.md` but had no CLI dispatch case arm
+— they returned unknown-subcommand usage errors (exit 2) as of PR #65. The v1.0 backlog stub
+(F-P5P6-A-005, 2026-07-03) annotated all five collectively as `PENDING-S-BL.CLI-SURFACE-COMPLETION`
+and logged four open design obligations blocking scheduling: no governing BC for `paths ping` or
+`svtn status`; unresolved `--id`-vs-`--name`/confirm-gate ambiguity for `svtn destroy`; unconfirmed
+wire verb names for `router reload`/`router drain`.
 
-| Verb | Spec §§ | Current behavior (post-#65) |
-|------|---------|-----------------------------|
-| `sbctl paths ping --router=<addr>` | §77 | `paths` case dispatches `list` only; `ping` returns usage error, exit 2 |
-| `sbctl router reload` | §82 | `router` case handles `metrics`/`status` only; `reload` returns unknown-subcommand usage error, exit 2 |
-| `sbctl router drain` | §83 | `router` case handles `metrics`/`status` only; `drain` returns unknown-subcommand usage error, exit 2 |
-| `sbctl svtn destroy --id=<svtn_id>` | §60 | No `svtn` top-level case arm in `main.go`; every `sbctl svtn ...` hits the default arm, exit 2 |
-| `sbctl svtn status --id=<svtn_id>` | §62 | Same — no `svtn` top-level case arm, exit 2 |
+The architect ruling (2026-07-12, grep-verified against `develop@4c276d9`) resolved all four. The
+underlying mechanisms for `router reload`/`router drain` are **already shipped** —
+`S-7.04-FU-SIGHUP-RELOAD` (PR #113) built the SIGHUP-triggered reload path; `S-7.04-FU-DRAIN-WIRE`
+(PR #120) built the DRAIN-broadcast + SIGTERM shutdown sequence. Both placement notes explicitly
+named the RPC-trigger gap as deferred, out-of-scope work for a "follow-on ops-UX story" — this is
+that story. `interface-definitions.md` v1.30 already carries the adjudicated CLI listing and the
+four new Registered Verbs rows (`admin.svtn.status`, `paths.ping`, `router.reload`, `router.drain`)
+— that spec-side edit is done; this story is the implementation-side closure.
 
-These verbs were annotated collectively as `PENDING-S-BL.CLI-SURFACE-COMPLETION` in the
-v1.19 spec-side remediation during Burst 23, per F-P5P6-A-005. The annotation carries
-forward in v1.20 (Burst 27 spec track).
+**Explicitly out of scope (unchanged from v1.0 stub):**
 
-**Explicitly out of scope for this story:**
+- `sbctl svtn list` — won't-fix (`S-BL.SVTN-LIST-WIRE`); surface removed.
+- `sbctl sessions attach/detach/status` — covered by `S-BL.DISCOVERY-WIRE`.
+- `sbctl admin recover` — covered by `S-BL.ADMIN-RECOVER-WIRE`.
+- `sbctl version` / `sbctl ping` — covered by `S-BL.PING-VERSION-WIRE`.
 
-- `sbctl svtn list` — won't-fix (S-BL.SVTN-LIST-WIRE); surface removed from the canonical
-  CLI, returns unknown-subcommand exit 2.
-- `sbctl sessions attach/detach/status` — covered by S-BL.DISCOVERY-WIRE.
-- `sbctl admin recover` — covered by S-BL.ADMIN-RECOVER-WIRE.
+## Previous Story Intelligence (MANDATORY)
 
-## BC Anchors
+| Predecessor | Lesson carried forward |
+|-------------|--------------------------|
+| `S-7.04-FU-SIGHUP-RELOAD` (merged PR #113 @ 950285c) | Ships the `sighupCh` reload path this story's `router.reload` bridges into. `runRouter`'s current signature is `func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh <-chan os.Signal) error`; every existing call site (production and test) already constructs a **bidirectional** `make(chan os.Signal, 1)` — only `runRouter`'s own parameter type needs to widen to `chan os.Signal`, no call site needs to change. Lifecycle/status/versioning convention (backlog stub → `ready` v1.0 → adversarial version climb) followed here. |
+| `S-7.04-FU-DRAIN-WIRE` (merged PR #120 @ f73676d) | Ships the `drainCoord`/shutdown-sequence this story's `router.drain` bridges into. The `shutdown:` label sequence (drain broadcast → per-node flush → `ingressCancel()` → `mgmtSrv.Shutdown`) is reached today only via `ctx.Done()`. |
+| `S-BL.LOOPBACK-FULLSTACK` (v1.1, draft/unscheduled) | Template-mandated frontmatter superset-keys precedent (`epic_id`, `inputs`, `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`, `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`) adopted here. Also: "story-writer's job here is transcription, not re-derivation" framing when a binding architect ruling exists — applied identically to this story's relationship with its rulings doc. |
+| `S-BL.PE-RECEIVE-LOOP` (merged PR #118) | House convention: every new symbol claim must be grep-resolved or marked "(new — defined by this story)"; **line-number citations are forbidden in story prose** — use mechanism-anchor descriptions. Followed throughout this story. |
+| BC-2.05.004 / `admin.key.list-keys` (S-6.06) | Direct precedent for Ruling 2's authority carve-out: a read-only accessor living inside a destructive-lifecycle BC as an added precondition/authority carve-out (F-L2-003), reusing `resolveCallerAdmissionAnyRole` rather than the control-only gate. |
+| BC-2.06.003 VP-TBD-A/VP-TBD-B → VP-061/VP-062 (architect, v1.3) | Direct precedent for Forward Obligation (d): placeholder VP IDs are legitimate at story-authorship time and do not block implementation; the architect mints real VP numbers in a later BC version, "not blocking implementation." |
+| `interface-definitions.md` §59 `svtn create` REMOVED (PR #62) | Direct precedent for Ruling 3 / AC-009: a destructive top-level alias that duplicates `sbctl admin svtn <verb>` is retired to a redirect/removal, not maintained as a parallel code path. |
 
-| BC | Verb(s) governed | Why anchored |
-|----|-----------------|-------------|
-| BC-2.09.001 | `router reload` | `sbctl router reload` (equivalently SIGHUP) is the operator trigger for the E-to-PE config reload described in BC-2.09.001. PC-1 specifies that the router reloads its config on receiving this signal; PC-2 requires session state is not lost during reload; PC-3 specifies the active-session-continuity guarantee. The CLI dispatch arm is the operator-facing surface for the BC's precondition. |
-| BC-2.09.002 | `router drain` | `sbctl router drain` (equivalently SIGTERM) is the operator trigger for the graceful drain sequence described in BC-2.09.002. The BC's happy-path scenario explicitly names `sbctl router drain` as the operator trigger; the CLI dispatch arm is the surface through which operators invoke the drain protocol. |
-| BC-2.07.001 | `svtn destroy` | BC-2.07.001 PC-3 (and the Destroy authority ruling RULING-W6TB-A) governs SVTN lifecycle destruction. `sbctl svtn destroy` is the non-admin form of this verb; the canonical form `sbctl admin svtn destroy` is already wired. The `svtn` top-level dispatch case arm is needed to route either `sbctl svtn destroy` (top-level form, §60) or return a clear "use sbctl admin svtn destroy" message. The confirm-gate contract from BC-2.05.004 may also apply depending on architect ruling during scheduling (open obligation below). |
+## Adjudicated Design Decisions
 
-### Verbs without a governing BC
+Transcribed from `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` (binding). Where this
+story and the rulings doc appear to diverge, the rulings doc governs. Each entry below carries the
+load-bearing constraints inline — the implementer should not need to re-open the rulings doc for
+the common path.
 
-**`sbctl paths ping --router=<addr>` (§77):** No BC currently governs a one-shot on-demand
-RTT probe via CLI. BC-2.06.003 covers the per-path metrics surface (the continuous
-keep-alive-derived RTT/loss system) but not a discrete operator-triggered latency probe.
-BC-2.07.002 covers the unified CLI operator interface at a general level. No BC
-postcondition specifies what `paths ping` must produce, what wire verb it calls, or what
-error codes apply. This is an open design obligation — see below.
+### Decision 1 (Ruling 1) — `paths ping`: new RPC `paths.ping`, new BC-2.06.004
 
-**`sbctl svtn status --id=<svtn_id>` (§62):** No BC governs a read-only SVTN status query.
-BC-2.07.001 covers SVTN lifecycle create/destroy; BC-2.07.002 covers the unified sbctl
-CLI interface generally. No BC specifies what status fields `svtn status` returns, what
-wire verb it calls, or what the response schema is. This is an open design obligation —
-see below.
+**Not** a reuse of `paths.list`. `paths ping` is a one-shot, on-demand reachability + latency probe
+of an arbitrarily-dialed target; `paths list`/`router status` report historical, EWMA-smoothed
+per-path metrics accumulated by a `PathTracker` over time. Reusing `paths.list` and discarding its
+body to derive a timing figure would be a category mismatch in the RPC-name-based audit trail.
 
-## Scope (at scheduling time)
+- **Wire verb:** `paths.ping`. Request args `{}` (empty — the daemon dialed via `--router=<addr>`
+  IS the probe target by construction). Response `{"pong": true}`.
+- **CLI-synthesized output** (not on the wire, computed by `cmd/sbctl` around the dial+auth+dispatch
+  sequence): `{"router": "<addr>", "rtt_ms": <float64>}` — measured client-side, dial-start to
+  response-decode-complete.
+- **Authority:** Tier-1 operator-key auth only — same bar as `paths.list`/`router.metrics`/
+  `router.status`; no additional Tier-2 role gate.
+- **Registration:** new handler (e.g. `mgmt.RegisterPingHandler`) called from `wireMetricsHandlers`
+  — available on every daemon mode that already wires metrics handlers (`runRouter`, `runAccess`,
+  `runConsole`, `runControl`), since `paths ping` targets an arbitrary daemon and is not
+  router-mode-exclusive (contrast Decision 4).
+- **CLI:** new `runPathsPing(ctx, target, keyPath, useJSON, args, sio)` wired into the existing
+  `paths` case arm in `cmd/sbctl/main.go` alongside `list`.
+- **Reachability vs. slow semantics:** unreachable-before-connection → E-NET-001, exit 1. Auth
+  failure after connection → E-ADM-010, exit 1. A connection that succeeds but is slow is **not an
+  error** — `rtt_ms` simply reports a larger number, exactly like `ping(8)`. `paths ping` performs
+  **no** quality classification (no green/yellow/red field) — that remains `router.status`'s job.
 
-1. Add a `svtn` top-level case arm to `cmd/sbctl/main.go` dispatching sub-verbs:
-   - `destroy` → `runSvtnDestroy(ctx, args)`
-   - `status` → `runSvtnStatus(ctx, args)` (pending BC design obligation below)
-   - unknown sub-verb → usage error, exit 2
-2. Wire `paths ping` dispatch in `cmd/sbctl/main.go` `paths` case arm.
-3. Add `router reload` and `router drain` case arms to the `router` switch
-   in `cmd/sbctl/main.go`.
-4. Register wire handlers for each new verb in the daemon (exact handler registration
-   points TBD at scheduling; `BuildAdminHandlers` or new routing table entries
-   depending on architect ruling).
-5. Flag parsing and wire request construction per spec §60, §77, §82-83.
-6. Unit and integration tests traced to the anchored BCs and any new BCs commissioned
-   for the two ungoverned verbs.
+### Decision 2 (Ruling 2) — `svtn status`: extend BC-2.07.001 with PC-4, wire `admin.svtn.status`
 
-## Open Design Obligations (must be resolved before scheduling)
+Extend, don't commission — direct precedent is `admin.key.list-keys` living inside BC-2.05.004
+alongside destructive key-lifecycle ops as an added authority carve-out (F-L2-003). `svtn status`
+is the symmetric case: same manager (`SVTNManager`), same boundary package
+(`cmd/switchboard/admin_handlers.go`), a new read accessor over existing state.
 
-### 1. `paths ping` — no governing BC
+- **Wire verb:** `admin.svtn.status`, registered in `BuildAdminHandlers` alongside create/destroy —
+  needs `*svtnmgmt.SVTNManager`, which exists only on the control-mode daemon (`runControl`).
+  Router/access/console pass nil admin handlers (ADR-004) and correctly return E-RPC-010.
+- **Request args:** `{"name": "<svtn-name>"}`. **Response data:**
+  `{"svtn_id": "<hex>", "name": "<svtn-name>", "created_at": "<RFC3339>", "key_counts": {"control": <n>, "console": <n>, "access": <n>}}`.
+- **Authority:** any admitted role (control, console, or access) in the target SVTN, OR
+  operator-set member, OR bootstrap key — reuse `resolveCallerAdmissionAnyRole` verbatim (the same
+  function `admin.key.list-keys` already uses). The admission gate still applies (CWE-862 defense
+  against cross-SVTN roster/existence enumeration — mirrors BC-2.05.004 EC-008); only the
+  control-only **authority** gate is skipped.
+- **Error codes:** E-SVTN-003 (not found — reuse the existing `mapAdminError` `ErrSVTNNotFound` arm),
+  E-CFG-001 (missing `--name`), E-ADM-009 (admission failure).
+- **Why NOT session/health data:** `admin_handlers.go`'s own package header states the purity
+  boundary explicitly — `internal/session` is a forbidden import. The response schema uses only
+  fields `SVTNManager` already exposes (`SVTN{ID, Name, CreatedAt}` via `SVTNByName`, plus
+  role-grouped counts derived from `ListKeys`, already used by `admin.key.list-keys`). No health
+  indicator is proposed — there is no accessible signal to compute one from at this boundary.
+- **`--id` vs `--name`:** `SVTNManager` is exclusively name-keyed (`m.svtns map[string]SVTN`, looked
+  up via `SVTNByName`) — no hex-ID reverse index exists anywhere in the package. CLI flag is
+  `--name=<svtn-name>`, matching every other `admin svtn`/`admin key` command family.
+- **CLI dispatch:** read-only and non-destructive, so none of Decision 3's confirm-gate duplication
+  risk applies. `sbctl svtn status --name=<svtn-name>` (top-level `svtn` case arm) is a genuine
+  standalone dispatch directly to `admin.svtn.status` — **not** routed through `sbctl admin`
+  framing, exactly as `paths list`/`router status` are already bare top-level reads.
 
-§77 specifies the CLI surface (`sbctl paths ping --router=<addr>`) and describes it as a
-"one-shot RTT probe," but no BC defines:
-- What wire verb the CLI calls (a new `paths.ping` RPC, or reuse of `paths.list`?).
-- What the response schema is (a single RTT measurement? a series?).
-- What happens if the router is unreachable vs. responds but latency is high.
-- Which error codes apply.
-- Whether BC-2.06.003 should be extended or a new BC-2.06.004 commissioned.
+### Decision 3 (Ruling 3) — `svtn destroy` top-level form: migration shim, not a parallel alias
 
-An architect ruling or new BC is required before implementation.
+`sbctl svtn destroy` (top-level) is a migration shim. It does **not** implement `--id`, does
+**not** dispatch `admin.svtn.destroy`, and does **not** duplicate the confirm-gate. It always
+returns a usage error (exit 2) redirecting to the canonical form.
 
-### 2. `svtn status` — no governing BC
+- **Direct precedent:** `sbctl svtn create` was **removed entirely**, not aliased, for the same
+  reason (`interface-definitions.md` §59, PR #62).
+- **`--id=<svtn_id>` cannot be honored literally:** same name-keyed-only constraint as Decision 2.
+  Silently reinterpreting `--id` to mean "name" would be a footgun on a **destructive** command.
+- **Duplicating `runDestroyConfirmGate` doubles a security-sensitive surface for no operator
+  benefit** — `sbctl admin svtn destroy` already implements it correctly and is the documented
+  canonical form.
+- **Implementation:** in the new `runSvtn` dispatch function's `destroy` sub-verb:
+  ```go
+  case "destroy":
+      return usageErrf("svtn destroy: use 'sbctl admin svtn destroy --name=<svtn-name> [--confirm=<svtn-short-id>|--yes]'")
+  ```
+  No RPC dispatch, no `--id`/`--name` flag parsing at all — the shim never parses either flag, so
+  the `--id`-vs-`--name` discrepancy is moot in the implementation.
+- **No BC change** — BC-2.07.001 PC-3 already fully governs `admin.svtn.destroy`; this ruling only
+  concerns the top-level CLI alias surface, never itself a BC anchor point.
 
-§62 specifies the CLI surface (`sbctl svtn status --id=<svtn_id>`) but no BC defines:
-- What fields the response includes (admitted key count? active session count? health
-  indicators? creation timestamp?).
-- What wire verb the CLI calls (a new `admin.svtn.status` RPC? or `svtn.query`?).
-- Authority requirements (any admitted role, or control only?).
-- The response schema.
-- Which error codes apply (is `E-SVTN-003` reused for not-found?).
+### Decision 4 (Ruling 4) — `router reload` / `router drain`: new router-mode RPCs, in scope
 
-An architect ruling or new BC (extending BC-2.07.001 with PC-4, or commissioning
-BC-2.07.005) is required before implementation.
+New wire verbs `router.reload` / `router.drain`, registered on the router daemon only, via a new
+`wireRouterControlHandlers` function called from `runRouter` alongside `wireMetricsHandlers`. Both
+handlers bridge into the **already-shipped** SIGHUP-reload and SIGTERM-drain code paths via new
+channels threaded the same way `sighupCh` already is — **no reload/drain logic is duplicated**.
+This closes `DRIFT-HS006-DRAIN-CLI-MISSING`. Descoping was considered and rejected: the missing
+piece is bounded, low-risk, and directly named as this story's job by two prior architect
+placement notes (`S-7.04-FU-DRAIN-WIRE-placement-note.md`, `S-7.04-FU-SIGHUP-RELOAD-placement-note.md`).
 
-### 3. `svtn destroy` — confirm-gate applicability
+- **Wire verb names:** `router.reload`, `router.drain` — match the CLI sub-verb names already
+  dispatched from the `router` case arm (alongside `metrics`/`status`).
+- **Registration point:** new **router-mode-exclusive** function
+  `wireRouterControlHandlers(srv *mgmt.Server, sighupCh chan os.Signal, drainRequestCh chan struct{}) error`,
+  called from `runRouter` at the same phase as `wireMetricsHandlers`, **before** `serveMgmtServer`
+  (register-before-serve invariant, F-P2L1-001). `runAccess`/`runConsole`/`runControl` never call
+  it — meaningless on those modes (no `sighupCh`/drain-coordinator concept). See the dedicated
+  Design Constraint section below for the exact signature change.
+- **Reload bridging (no new channel):** `router.reload`'s handler synthesizes the exact signal the
+  SIGHUP path already consumes: `select { case sighupCh <- syscall.SIGHUP: default: }` (matches
+  `signal.Notify`'s own coalescing semantics — a reload already pending silently drops the second
+  request). Unlike a bare SIGHUP (which silently no-ops when `configPath == ""`), the RPC handler
+  has a response channel and surfaces that case synchronously as **E-CFG-004: reload not
+  applicable: daemon started without --config** rather than a silent `{"accepted": true}` no-op
+  (see Forward Obligation (c) — the error-taxonomy.md variant must land before this AC ships).
+- **Drain bridging (genuinely new channel):** `drainRequestCh chan struct{}` (buffered 1), threaded
+  into `runRouter` the same way `sighupCh` was threaded by `S-7.04-FU-SIGHUP-RELOAD`. A third
+  select-loop arm: `case <-drainRequestCh: goto shutdown`. Handler:
+  `select { case drainRequestCh <- struct{}{}: default: }` (already-in-flight drain → no-op).
+  Rejected alternative: threading `cancel func()` directly into the RPC layer — considered and
+  rejected, would hand `main.go`'s exclusive cancel ownership to an RPC handler closure with no
+  testing benefit over the channel approach.
+- **Wire contract (both):** request `{}`, response `{"accepted": true}` — fire-and-forget, matching
+  UX parity with sending a raw OS signal (a `kill -HUP`/`kill -TERM` sender gets no synchronous
+  completion confirmation either; operator confirms via logs / `router status` afterward). A
+  synchronous wait-for-completion variant is a future enhancement, out of proportion to this
+  story's P2 priority.
+- **`router.drain` connection-teardown note (binding on the implementer/test-writer):** because
+  drain triggers the full shutdown sequence, the RPC connection itself will likely be severed as
+  the daemon exits shortly after — treat "connection reset" following (or even without) a
+  `{"accepted": true}` as an **expected outcome, not a protocol error**. Mirrors BC-2.09.002 PC-3's
+  existing best-effort-delivery framing extended to the triggering RPC itself.
+- **Authority:** Tier-1 operator-key auth only — the same (and only) gate `paths.list`/
+  `router.metrics`/`router.status` already use on this daemon. Router mode has no
+  `SVTNManager`/`RoleControl` concept at all; introducing a new "router-operator" role would be
+  disproportionate to this story and neither BC's Trigger requests it.
+- **Error codes:** E-NET-001 (unreachable), E-ADM-010 (auth failure) — shared connection-error
+  codes. Reload adds E-CFG-004 for the no-config-loaded case. No new error codes for drain.
 
-§60 uses `--id=<svtn_id>` while the canonical `sbctl admin svtn destroy` uses
-`--name=<svtn-name>`. It is unclear whether the `svtn` top-level form should:
-- Accept the same `--confirm` gate as the `admin svtn destroy` path (BC-2.05.004 confirm
-  semantics), or
-- Simply redirect to `sbctl admin svtn destroy` with a clear usage message, treating
-  the top-level form as a migration shim.
+## Design Constraint: `runRouter` Signature Widening (Ruling 4)
 
-An architect ruling is required to resolve this before the dispatch arm and tests are
-written.
+**Binding.** Current signature (shipped by `S-7.04-FU-SIGHUP-RELOAD`):
 
-### 4. `router reload` / `router drain` — daemon-side handler wire verb names
+```go
+func runRouter(ctx context.Context, w io.Writer, cfg *config.Config,
+               configPath string, sighupCh <-chan os.Signal) error
+```
 
-Interface-definitions.md does not specify the wire verb names for `router.reload` and
-`router.drain` in the Registered Verbs table (§379-395). The handler registration names
-must be confirmed (candidates: `router.reload`, `router.drain`) against the daemon's
-`cmd/switchboard/` routing layer before the CLI is wired.
+After this story:
+
+```go
+func runRouter(ctx context.Context, w io.Writer, cfg *config.Config,
+               configPath string, sighupCh chan os.Signal, drainRequestCh chan struct{}) error
+```
+
+Two changes: (1) `sighupCh` widens from receive-only (`<-chan os.Signal`) to bidirectional
+(`chan os.Signal`) — every existing call site (production `main.go` and every test) already
+constructs a bidirectional `make(chan os.Signal, 1)`, so **only the parameter type itself needs to
+change; no call site needs to change** for `sighupCh`. (2) `drainRequestCh chan struct{}` is a new
+trailing parameter — **every** call site (production and test) DOES need to add this argument,
+mirroring the exact call-site-update pattern `S-7.04-FU-SIGHUP-RELOAD` used when it added
+`configPath`/`sighupCh` (five call sites updated in `mgmt_wire_test.go`, plus `router_drain_test.go`,
+plus `main.go`).
+
+`main.go`'s `"router"` case body constructs `drainRequestCh := make(chan struct{}, 1)` alongside
+the existing `sighupCh` construction, and passes both into `runRouter`. The select loop
+(currently two cases: `ctx.Done()`, `sighupCh`) gains a third arm:
+
+```go
+for {
+    select {
+    case <-ctx.Done():
+        goto shutdown
+    case <-sighupCh:
+        // existing reload logic, unchanged
+    case <-drainRequestCh:
+        goto shutdown
+    }
+}
+```
+
+## Acceptance Criteria
+
+### AC-001 — `paths ping` happy path: dial, authenticate, measure RTT
+
+**BC Anchor:** BC-2.06.004 PC-1, Invariant 1
+
+**Precondition:** A daemon is running and reachable at `--router=<addr>`; the operator's key
+Tier-1-authenticates.
+
+**Postconditions:**
+
+1. `sbctl paths ping --router=<addr>` dials `<addr>` directly, overriding `--target`.
+2. The daemon Tier-1-authenticates the caller (no additional Tier-2 gate).
+3. `paths.ping` is issued with empty request args (`{}`); the daemon returns `{"pong": true}`.
+4. sbctl reports `{"router": "<addr>", "rtt_ms": <float64>}`, `rtt_ms` measured client-side from
+   dial-start to response-decode-complete; exit code 0.
+
+**Test name:** `TestPathsPing_HappyPath_ReportsRTT`
+**Test level:** integration
+**Test file:** `cmd/sbctl/paths_ping_test.go` (new)
+
+---
+
+### AC-002 — `paths ping` error paths: unreachable and auth failure
+
+**BC Anchor:** BC-2.06.004 PC-2, PC-3, EC-001, EC-002
+
+**Postconditions:**
+
+1. Target daemon unreachable before connection → E-NET-001 "daemon unreachable: <address>"; exit 1.
+2. Connection succeeds but Tier-1 authentication fails → E-ADM-010; exit 1. No `paths.ping` RPC is
+   dispatched (auth failure occurs before command dispatch).
+
+**Test names:** `TestPathsPing_Unreachable_ENET001`, `TestPathsPing_AuthFailure_EADM010`
+**Test level:** integration
+**Test file:** `cmd/sbctl/paths_ping_test.go`
+
+---
+
+### AC-003 — `paths ping` slow round trip is not an error; no quality classification
+
+**BC Anchor:** BC-2.06.004 PC-4, EC-003, Invariant 2
+
+**Postconditions:**
+
+1. A connection that succeeds but measures high latency is **not** an error — `rtt_ms` reports the
+   measured (larger) value; exit 0.
+2. `paths.ping`'s response and sbctl's synthesized output never carry a quality/status field
+   (no green/yellow/red) — `router.status` (BC-2.06.003 PC-3) remains the exclusive owner of
+   quality classification.
+
+**Test name:** `TestPathsPing_SlowRoundTrip_NotAnError_NoQualityField`
+**Test level:** integration
+**Test file:** `cmd/sbctl/paths_ping_test.go`
+
+---
+
+### AC-004 — `paths.ping` RPC handler registration and authority
+
+**BC Anchor:** BC-2.06.004 Invariant 1, Trigger
+
+**Postconditions:**
+
+1. A new handler (e.g. `mgmt.RegisterPingHandler`) is called from `wireMetricsHandlers`, making
+   `paths.ping` available on **every** daemon mode that already wires metrics handlers: `runRouter`,
+   `runAccess`, `runConsole`, `runControl`.
+2. `paths.ping` requires no additional Tier-2 authority beyond standard Tier-1 operator-key
+   authentication — the same bar as `paths.list`/`router.metrics`/`router.status`.
+3. The handler performs zero per-path metrics reads/writes — no `PathTracker` interaction; request
+   `{}` in, response `{"pong": true}` out, no other side effect (VP-TBD-PING-B).
+
+**Test names:** `TestWireMetricsHandlers_RegistersPingOnEveryMode`,
+`TestPingHandler_EmptyArgsIn_PongOut_ZeroPathTrackerInteraction`
+**Test level:** unit (handler) + integration (per-mode registration)
+**Test file:** `internal/mgmt/register_metrics_test.go` (extended) or `register_ping_test.go` (new);
+`cmd/switchboard/metrics_wire_test.go` (extended)
+
+---
+
+### AC-005 — `admin.svtn.status` happy path
+
+**BC Anchor:** BC-2.07.001 PC-4 (happy-path Canonical Test Vector)
+
+**Precondition:** SVTN `mynet` exists; caller is admitted to `mynet` in any role.
+
+**Postconditions:**
+
+1. `sbctl svtn status --name=mynet` returns
+   `{"svtn_id":"<hex>","name":"mynet","created_at":"<RFC3339>","key_counts":{"control":1,"console":0,"access":2}}`;
+   exit 0.
+2. `key_counts` are grouped by role, scoped exclusively to the target SVTN (VP-048 sibling row 1).
+
+**Test name:** `TestAdminSVTNStatus_HappyPath_KeyCounts`
+**Test level:** integration
+**Test file:** `cmd/switchboard/admin_handlers_test.go` (extended)
+
+---
+
+### AC-006 — `admin.svtn.status` error paths: not-found and admission-denied
+
+**BC Anchor:** BC-2.07.001 PC-4 (not-found and admission-denied Canonical Test Vectors)
+
+**Postconditions:**
+
+1. `sbctl svtn status --name=doesnotexist` → E-SVTN-003 "SVTN not found: doesnotexist"; exit 1.
+2. A caller with a valid operator key admitted only to a **different** SVTN (not `mynet`, not
+   operator-set, not bootstrap) → E-ADM-009 "insufficient authority for operation
+   admin.svtn.status: key <fp> has role <role>"; exit 1. SVTN roster/existence is **not**
+   disclosed — the admission gate fires before status is computed (CWE-862 defense, mirrors
+   BC-2.05.004 EC-008; VP-048 sibling row 2).
+
+**Test names:** `TestAdminSVTNStatus_NotFound_ESVTN003`,
+`TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak`
+**Test level:** integration
+**Test file:** `cmd/switchboard/admin_handlers_test.go`
+
+---
+
+### AC-007 — `admin.svtn.status` purity boundary and mode exclusion
+
+**BC Anchor:** BC-2.07.001 PC-4 (ARCH-09 purity note); ADR-004
+
+**Postconditions:**
+
+1. The response schema (`svtn_id`, `name`, `created_at`, `key_counts`) never carries session or
+   health-indicator fields — `internal/session` remains a forbidden import for
+   `cmd/switchboard/admin_handlers.go`.
+2. `admin.svtn.status` is registered in `BuildAdminHandlers`, control-mode-daemon-only (needs
+   `*svtnmgmt.SVTNManager`). Router, access, and console modes pass nil admin handlers and
+   correctly return E-RPC-010 (unknown command) for `admin.svtn.status`.
+
+**Test names:** `TestAdminSVTNStatus_ResponseExcludesSessionHealthFields`,
+`TestAdminSVTNStatus_NonControlMode_NilAdminHandlers_ERPC010`
+**Test level:** unit (schema) + integration (mode exclusion)
+**Test file:** `cmd/switchboard/admin_handlers_test.go`
+
+---
+
+### AC-008 — `sbctl svtn status` CLI dispatch: bare top-level, `--name` flag
+
+**BC Anchor:** BC-2.07.001 PC-4 (CLI dispatch note)
+
+**Postconditions:**
+
+1. `sbctl svtn status --name=<svtn-name>` dispatches directly to `admin.svtn.status` — **not**
+   routed through `sbctl admin` framing (matches the `paths list`/`router status` bare top-level
+   read shape).
+2. The flag is `--name`, not `--id` (`SVTNManager` is exclusively name-keyed).
+3. Missing `--name` → E-CFG-001 (client-side), exit 2.
+
+**Test name:** `TestSvtnStatus_CLIDispatch_BareTopLevel_NameFlag`
+**Test level:** integration
+**Test file:** `cmd/sbctl/svtn_test.go` (new)
+
+---
+
+### AC-009 — `sbctl svtn destroy` top-level migration shim
+
+**BC Anchor:** none (Decision 3 — CLI-surface documentation only, not a BC anchor point)
+
+**Postconditions:**
+
+1. `sbctl svtn destroy` (any arguments) recognizes the `destroy` sub-verb and returns a usage error
+   (exit 2) with the exact redirect text: `svtn destroy: use 'sbctl admin svtn destroy --name=<svtn-name> [--confirm=<svtn-short-id>|--yes]'`.
+2. No `--id`/`--name` flag parsing occurs — the shim never inspects either flag.
+3. No RPC is dispatched; `admin.svtn.destroy` is never called from this code path.
+4. `runDestroyConfirmGate` is never invoked from the top-level `svtn destroy` shim — the confirm
+   gate remains exclusively owned by `sbctl admin svtn destroy`.
+
+**Test names:** `TestSvtnDestroy_TopLevelShim_UsageErrorRedirect_Exit2`,
+`TestSvtnDestroy_TopLevelShim_NoRPCDispatch`
+**Test level:** unit
+**Test file:** `cmd/sbctl/svtn_test.go`
+
+---
+
+### AC-010 — `sbctl svtn` top-level case arm dispatch
+
+**BC Anchor:** none (Scope item 1 — CLI dispatch structure)
+
+**Postconditions:**
+
+1. `cmd/sbctl/main.go` gains a new top-level `case "svtn":` (alongside `sessions`, `paths`,
+   `router`, `console`, `admin`) dispatching to a new `runSvtn` function.
+2. `runSvtn` routes `status` → AC-005..AC-008 dispatch, `destroy` → AC-009 shim.
+3. An unknown sub-verb under `svtn` returns a usage error, exit 2 (same shape as the existing
+   `paths`/`router` case arms' default arms).
+
+**Test name:** `TestSvtn_UnknownSubVerb_UsageErrorExit2`
+**Test level:** unit
+**Test file:** `cmd/sbctl/svtn_test.go`
+
+---
+
+### AC-011 — `router.reload` bridges into the shipped SIGHUP-reload path
+
+**BC Anchor:** BC-2.09.001 v1.2 PC-1 (RPC-trigger note)
+
+**Postconditions:**
+
+1. The `router.reload` handler synthesizes a signal onto the (now-bidirectional) `sighupCh` —
+   `select { case sighupCh <- syscall.SIGHUP: default: }` — coalescing exactly like
+   `signal.Notify`'s own semantics when a reload is already pending.
+2. From that synthesis point forward, the RPC-triggered and SIGHUP-OS-signal-triggered reload
+   paths are code-path-identical (same `sighupCh` consumer, same fail-closed reload-dispatch
+   logic shipped by `S-7.04-FU-SIGHUP-RELOAD`).
+3. When the daemon was started without `--config` (`configPath == ""`), `router.reload` returns
+   **E-CFG-004: reload not applicable: daemon started without --config** synchronously via the
+   RPC response, rather than silently no-op'ing the way a bare SIGHUP does today. **Gated by
+   Forward Obligation (c)** — error-taxonomy.md must document this E-CFG-004 message variant
+   (mirroring the E-NET-001/E-CFG-008 multi-variant precedent) before this postcondition is
+   implemented.
+
+**Test names:** `TestRouterReload_BridgesToSighupCh_CodePathIdentical`,
+`TestRouterReload_NoConfigLoaded_ECFG004`
+**Test level:** integration
+**Test file:** `cmd/switchboard/router_control_wire_test.go` (new)
+
+---
+
+### AC-012 — `router.drain` bridges into the shipped shutdown sequence
+
+**BC Anchor:** BC-2.09.002 v1.3 Trigger/PC-1 (RPC-trigger note)
+
+**Postconditions:**
+
+1. The `router.drain` handler sends on the new `drainRequestCh` —
+   `select { case drainRequestCh <- struct{}{}: default: }` (already-in-flight drain → no-op).
+2. The select loop's third arm (`case <-drainRequestCh: goto shutdown`) reaches the same
+   `shutdown:` label as `ctx.Done()`/SIGTERM — same drain-broadcast, per-node-flush, exit sequence;
+   same exit parity as the OS-signal path.
+3. The RPC connection is expected to be severed as the daemon exits shortly after — a
+   "connection reset" observed by the client following (or even without) a `{"accepted": true}`
+   response is treated as an **expected outcome, not a protocol error** (extends BC-2.09.002 PC-3's
+   best-effort-delivery framing to the triggering RPC itself).
+
+**Test names:** `TestRouterDrain_BridgesToShutdownSequence_ViaDrainRequestCh`,
+`TestRouterDrain_ConnectionSeveredAfterAccepted_NotAnError`
+**Test level:** integration
+**Test file:** `cmd/switchboard/router_control_wire_test.go`
+
+---
+
+### AC-013 — `router.reload`/`router.drain` registration: router-mode-exclusive, register-before-serve
+
+**BC Anchor:** Decision 4 (registration point); F-P2L1-001
+
+**Postconditions:**
+
+1. A new `wireRouterControlHandlers(srv *mgmt.Server, sighupCh chan os.Signal, drainRequestCh chan struct{}) error`
+   is called from `runRouter` at the same phase as `wireMetricsHandlers`, **before**
+   `serveMgmtServer` starts the `Serve` goroutine (register-before-serve invariant).
+2. `runAccess`, `runConsole`, `runControl` never call `wireRouterControlHandlers`. Both
+   `router.reload` and `router.drain` return E-RPC-010 (unknown command) when dispatched against
+   those modes.
+3. `runRouter`'s `sighupCh` parameter widens from `<-chan os.Signal` to `chan os.Signal`; a new
+   trailing `drainRequestCh chan struct{}` parameter is added. `main.go`'s `"router"` case body
+   constructs `drainRequestCh := make(chan struct{}, 1)` alongside the existing `sighupCh`
+   construction and passes both into `runRouter`. Every existing test call site is updated with
+   the new trailing argument (mirroring the `S-7.04-FU-SIGHUP-RELOAD` call-site-update pattern).
+
+**Test names:** `TestWireRouterControlHandlers_RegisterBeforeServe`,
+`TestWireRouterControlHandlers_RouterModeExclusive_OtherModesERPC010`,
+`TestRunRouter_DrainRequestChThirdSelectArm_ReachesShutdown_SameExitParityAsSIGTERM`
+**Test level:** integration
+**Test file:** `cmd/switchboard/router_control_wire_test.go`; `cmd/switchboard/mgmt_wire_test.go` (extended)
+
+---
+
+### AC-014 — `router.reload`/`router.drain` wire contract
+
+**BC Anchor:** Decision 4 (wire contract); BC-2.09.001 v1.2, BC-2.09.002 v1.3
+
+**Postconditions:**
+
+1. Both verbs require Tier-1 operator-key authentication only — no stricter Tier-2 gate is
+   available or introduced (router mode has no `SVTNManager`/`RoleControl` concept).
+2. Request args for both: `{}`. Response data for both: `{"accepted": true}` — fire-and-forget,
+   no synchronous completion confirmation.
+3. Standard shared connection-error codes apply: E-NET-001 (unreachable), E-ADM-010 (auth
+   failure).
+
+**Test name:** `TestRouterReloadDrain_TierOneAuthOnly_FireAndForgetAcceptedTrue`
+**Test level:** integration
+**Test file:** `cmd/switchboard/router_control_wire_test.go`
+
+## Forward Obligations (tracked as story tasks — the adversary MUST police these)
+
+These four follow-ups originate directly from the rulings doc's per-ruling "BC action for PO" /
+"Implementation constraints" notes. They are not optional cleanup — each gates a specific AC or a
+downstream artifact's correctness, and each is a distinct owner/timing combination.
+
+| # | Obligation | Owner | Gate | Status |
+|---|-----------|-------|------|--------|
+| (a) | BC-2.06.004's `CAP-022` capability anchor is provisional — Ruling 1 did not mint a dedicated capability. Architect/PO must confirm CAP-022 as the correct anchor or mint `CAP-029`. | architect / PO | Before or at delivery | OPEN |
+| (b) | `ARCH-INDEX.md`'s SS-06 (quality-observability) subsystem row lists Implementing Modules as `internal/metrics, internal/paths` — does not yet include `internal/mgmt`, which BC-2.06.004 names as its `architecture_module`. | architect | At delivery | OPEN |
+| (c) | `error-taxonomy.md`'s E-CFG-004 row currently reads `"config file not found: <path>"` (BC-2.09.003 scope). Ruling 4's reload variant needs a documented second message variant — `"reload not applicable: daemon started without --config"` — mirroring the existing E-NET-001/E-CFG-008 multi-variant catalog pattern. | PO | **Before implementation of AC-011's E-CFG-004 postcondition** | OPEN — hard gate on AC-011 |
+| (d) | BC-2.06.004's `VP-TBD-PING-A`/`VP-TBD-PING-B` are placeholder IDs — Ruling 1 did not mint real VP numbers. Architect mints real numbers following the BC-2.06.003 `VP-TBD-A`/`VP-TBD-B` → `VP-061`/`VP-062` precedent (v1.3, "not blocking implementation"). | architect | Non-blocking; before this story's Verification Properties table is cited elsewhere as final | OPEN — non-blocking |
+
+Obligation (c) is the only hard implementation gate — Task 4 below (`router.reload`/`router.drain`)
+must not land the E-CFG-004 postcondition until error-taxonomy.md carries the variant. The other
+three do not block TDD implementation of the remaining ACs.
+
+**Non-binding architect recommendation, also from Ruling 4 (not tracked as a Forward Obligation —
+informational only):** wherever ADR-004's disambiguation table enumerates per-mode handler sets,
+add a row for the new router-mode-exclusion pattern `wireRouterControlHandlers` introduces, so it
+doesn't silently drift from the `admin.*` handler exclusion it parallels.
+
+## Non-Goals
+
+- **Literal `--id=<svtn_id>` implementation** for `svtn destroy` or `svtn status` — `SVTNManager`
+  is exclusively name-keyed; adding a hex-ID reverse index is a real data-structure change,
+  disproportionate to this story (Decisions 2, 3).
+- **A synchronous wait-for-reload/drain-completion RPC variant.** `router.reload`/`router.drain`
+  are fire-and-forget (`{"accepted": true}`), matching raw-signal UX parity. A response-channel
+  variant with real completion confirmation is a future enhancement (Decision 4).
+- **A new "router-operator" Tier-2 role/gate.** Router mode has no `SVTNManager`/`RoleControl`
+  concept; neither governing BC's Trigger text requests a role qualifier (Decision 4).
+- **Duplicating `runDestroyConfirmGate`** in the top-level `svtn destroy` shim (Decision 3).
+- **`sbctl svtn list`, `sessions attach/detach/status`, `admin recover`, `version`/`ping`** — each
+  covered by a separate backlog story (see Context).
+
+## Architecture Mapping
+
+| Component | Package | New / Modified | Notes |
+|-----------|---------|-----------------|-------|
+| `runSvtn`, `runSvtnStatus`, `runSvtnDestroyShim` (new) | `cmd/sbctl` (new file, e.g. `svtn.go`) | New | Top-level `svtn` case arm dispatch + status query + destroy redirect shim |
+| `runPathsPing` (new) | `cmd/sbctl` (new file, e.g. `paths_ping.go`) | New | Dials `--router=<addr>`, measures client-side RTT, synthesizes CLI output |
+| `runRouterReload`, `runRouterDrain` (new) | `cmd/sbctl` (new file(s), e.g. `router_reload.go`/`router_drain.go`) | New | Dispatch `router.reload`/`router.drain` via the existing `connectAndRun` pattern |
+| `mgmt.RegisterPingHandler` (new) | `internal/mgmt` (`register_metrics.go` or sibling) | New | `paths.ping` handler — empty request, `{"pong": true}` response |
+| `wireMetricsHandlers` | `cmd/switchboard/metrics_wire.go` | Modified | Calls `mgmt.RegisterPingHandler(srv)` alongside `mgmt.RegisterMetricsHandlers` |
+| `makeAdminSVTNStatusHandler` (new) | `cmd/switchboard/admin_handlers.go` | New | Uses `resolveCallerAdmissionAnyRole` + `SVTNByName` + role-grouped `ListKeys` counts |
+| `BuildAdminHandlers` | `cmd/switchboard/admin_handlers.go` | Modified | Registers `admin.svtn.status` alongside create/destroy |
+| `wireRouterControlHandlers` (new) | `cmd/switchboard` (new file, e.g. `router_control_wire.go`) | New | Registers `router.reload`/`router.drain`; router-mode-exclusive |
+| `runRouter` | `cmd/switchboard/mgmt_wire.go` | Modified | Signature widening (Design Constraint above); third select-loop arm |
+| `"router"` case body | `cmd/switchboard/main.go` | Modified | Constructs `drainRequestCh`; passes to `runRouter` |
+| `svtnmgmt.SVTNManager` (`SVTNByName`, `ListKeys`) | `internal/svtnmgmt` | Read-only consumer | No source changes |
+| `mgmt.Server`, `mgmt.Handler` | `internal/mgmt` | Read-only consumer (`Register`) beyond the new ping handler | No structural changes |
+
+## File-Change List
+
+| File | Change |
+|------|--------|
+| `cmd/sbctl/main.go` | New top-level `case "svtn":` dispatching to `runSvtn`; `ping` sub-verb added to the existing `paths` case arm; `reload`/`drain` sub-verbs added to the existing `router` case arm |
+| `cmd/sbctl/svtn.go` (new) | `runSvtn` dispatch (status/destroy/unknown sub-verb); `runSvtnStatus`; `runSvtnDestroyShim` |
+| `cmd/sbctl/paths_ping.go` (new) | `runPathsPing` |
+| `cmd/sbctl/router_reload.go` / `router_drain.go` (new) | `runRouterReload`, `runRouterDrain` |
+| `cmd/sbctl/svtn_test.go` (new) | AC-008, AC-009, AC-010 tests |
+| `cmd/sbctl/paths_ping_test.go` (new) | AC-001, AC-002, AC-003 tests |
+| `internal/mgmt/register_metrics.go` (or new `register_ping.go`) | `RegisterPingHandler` |
+| `internal/mgmt/register_metrics_test.go` (extended) or `register_ping_test.go` (new) | AC-004 handler-level tests |
+| `cmd/switchboard/metrics_wire.go` | `wireMetricsHandlers` calls `mgmt.RegisterPingHandler` |
+| `cmd/switchboard/metrics_wire_test.go` (extended) | AC-004 per-mode registration tests |
+| `cmd/switchboard/admin_handlers.go` | New `admin.svtn.status` handler; `BuildAdminHandlers` registration |
+| `cmd/switchboard/admin_handlers_test.go` (extended) | AC-005, AC-006, AC-007 tests |
+| `cmd/switchboard/router_control_wire.go` (new) | `wireRouterControlHandlers` |
+| `cmd/switchboard/router_control_wire_test.go` (new) | AC-011, AC-012, AC-013 (registration half), AC-014 tests |
+| `cmd/switchboard/mgmt_wire.go` | `runRouter` signature widening; third select-loop arm; `wireRouterControlHandlers` call site |
+| `cmd/switchboard/mgmt_wire_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter (mirrors the five-call-site `S-7.04-FU-SIGHUP-RELOAD` update pattern); AC-013 shutdown-parity test |
+| `cmd/switchboard/router_drain_test.go` (extended) | Call-site updates for the new `drainRequestCh` parameter |
+| `cmd/switchboard/main.go` | `"router"` case body constructs `drainRequestCh`; passes to `runRouter` |
+| `.factory/specs/prd-supplements/error-taxonomy.md` | **Forward Obligation (c)** — E-CFG-004 message-variant addition (PO edit, gates AC-011; not a story-writer edit) |
+| `.factory/specs/architecture/ARCH-INDEX.md` | **Forward Obligation (b)** — SS-06 Implementing Modules row gains `internal/mgmt` (architect edit, at delivery; not a story-writer edit) |
+
+**No ARCH-08 §6.4 registration obligation** — no new `internal/` package is introduced (`internal/mgmt`
+already exists at position 20; only its exported surface grows).
+
+## Task Breakdown (Strict TDD — Stubs → Red → Green → Gate)
+
+All tasks execute in a single worktree on a feature branch cut from `develop@HEAD`. Each task gate
+is `just test-race` green + `just lint` clean before proceeding to the next.
+
+### Task 1 — `paths.ping`: handler + registration + CLI (AC-001..AC-004)
+
+Red: write the four AC-001..AC-004 tests against stub/no-op implementations. Green: implement
+`mgmt.RegisterPingHandler`, wire into `wireMetricsHandlers`, implement `runPathsPing`, wire into
+`cmd/sbctl/main.go`'s `paths` case arm. Gate: `just test-race`, `just lint`.
+
+### Task 2 — `admin.svtn.status` + `svtn` top-level dispatch (AC-005..AC-010)
+
+Red: write AC-005..AC-010 tests. Green: implement the `admin.svtn.status` handler (reusing
+`resolveCallerAdmissionAnyRole`/`SVTNByName`/`ListKeys`), register in `BuildAdminHandlers`,
+implement `runSvtn`/`runSvtnStatus`/`runSvtnDestroyShim`, wire the new `svtn` case arm into
+`cmd/sbctl/main.go`. Gate: `just test-race`, `just lint`.
+
+### Task 3 — `runRouter` signature widening + `wireRouterControlHandlers` scaffolding (AC-013 registration half)
+
+Stub-first (mirrors `S-7.04-FU-SIGHUP-RELOAD` Task 1 pattern): widen `runRouter`'s `sighupCh`
+parameter, add `drainRequestCh` parameter, add the third select-loop arm as a no-op stub, update
+every existing call site (`main.go`, `mgmt_wire_test.go`, `router_drain_test.go`) to pass the new
+argument. Gate: all **existing** tests remain green (no new test files yet); `just lint` clean.
+
+### Task 4 — `router.reload`/`router.drain` handlers (AC-011, AC-012, AC-013 remainder, AC-014)
+
+**Gate check before this task:** Forward Obligation (c) — confirm error-taxonomy.md carries the
+E-CFG-004 "reload not applicable" variant before writing AC-011's E-CFG-004 postcondition test as
+a real (non-skipped) assertion.
+
+Red: write AC-011, AC-012, AC-013, AC-014 tests against the Task 3 stub (they fail — the select-arm
+is a no-op). Green: implement `wireRouterControlHandlers`, replace the select-loop stub arm with
+real `goto shutdown` dispatch, implement `runRouterReload`/`runRouterDrain` CLI, wire the `router`
+case arm's `reload`/`drain` sub-verbs. Gate: `just test-race`, `just lint`.
+
+### Task 5 — Quality gate
+
+```sh
+just fmt
+just lint
+just test-race
+```
+
+All packages pass. Zero lint warnings. Then open PR targeting `develop`.
+
+## Delivery Plan Note — POL-005
+
+Any adversarial or evaluation dispatch for this story (per-story pass, wave-gate Perimeter-2, or
+any other evaluation dispatch) **MUST embed the POL-005 (`adversary-dispatch-integrity`, HIGH)
+verification tuple** in the dispatch prompt — `{repo path, branch, expected HEAD SHA at dispatch
+time, artifact IDs + versions under review}` — per `.factory/policies.yaml` POL-005. The dispatched
+agent's first action must verify its observed `git rev-parse HEAD` and artifact versions against
+the tuple before proceeding; on mismatch, it must ABORT the pass and report the divergence as the
+pass result rather than reviewing stale state.
+
+## Anchors Consumed
+
+| Anchor | Verbatim ID | Source | Disposition |
+|--------|-------------|--------|-------------|
+| One-shot reachability + RTT probe | BC-2.06.004 PC-1..PC-4, Invariant 1, Invariant 2 | Ruling 1 | TO DISCHARGE — AC-001..AC-004 |
+| SVTN status query with role-grouped key counts | BC-2.07.001 v1.14 PC-4 | Ruling 2 | TO DISCHARGE — AC-005..AC-008 |
+| SVTN destroy top-level migration shim | (no BC — CLI-surface documentation) | Ruling 3 | TO DISCHARGE — AC-009, AC-010 |
+| RPC-triggered reload, code-path-identical to SIGHUP | BC-2.09.001 v1.2 PC-1 | Ruling 4 | TO DISCHARGE — AC-011, AC-013, AC-014 |
+| RPC-triggered drain, same shutdown sequence as SIGTERM | BC-2.09.002 v1.3 Trigger/PC-1 | Ruling 4 | TO DISCHARGE — AC-012, AC-013, AC-014 |
+| `DRIFT-HS006-DRAIN-CLI-MISSING` | drift item | `S-7.04-FU-DRAIN-WIRE-placement-note.md`, `S-7.04-FU-SIGHUP-RELOAD-placement-note.md` | RESOLVED by AC-011/AC-012 — tag PR with `Resolves: DRIFT-HS006-DRAIN-CLI-MISSING` per this repo's non-`closes`/`fixes` convention for prior-architect-note-reported items |
 
 ## Provenance
 
-- **Finding:** F-P5P6-A-005 (Phase 5 Pass 6 Adv-A, 2026-07-03) — seven `sbctl` verbs
-  specified without PENDING annotations; five collective-annotated here (paths ping,
-  router reload, router drain, svtn destroy, svtn status); two others resolved separately
-  (svtn list → won't-fix S-BL.SVTN-LIST-WIRE; sessions attach/detach/status →
-  S-BL.DISCOVERY-WIRE).
-- **Spec annotation:** interface-definitions.md v1.20 §60, §62, §77, §82, §83
-  PENDING-S-BL.CLI-SURFACE-COMPLETION annotation carries forward from Burst 23 (v1.19)
-  through Burst 27 (v1.20 — §108/§109 error-surface corrections, openssh-pubkey
-  placeholders, --role default documented, §395 authority note swept).
-- **Adjudication:** annotate-and-defer — consistent with S-BL.ADMIN-RECOVER-WIRE
-  and prior wire-gap deferrals. Two of the five verbs (paths ping, svtn status) have
-  no governing BC and require design work before implementation can begin.
+- **Finding:** F-P5P6-A-005 (Phase 5 Pass 6 Adv-A, 2026-07-03) — seven `sbctl` verbs specified
+  without PENDING annotations; five collective-annotated here.
+- **Spec annotation:** `interface-definitions.md` v1.30 — CLI listing and Registered Verbs rows
+  already adjudicated and updated by PO/architect per the rulings doc (this story does not edit
+  that file).
+- **Adjudication:** `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` (2026-07-12) —
+  all four Open Design Obligations resolved. This elaboration (v2.0) is the story-writer
+  transcription of that ruling into sprint-ready ACs.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
-| 1.0 | 2026-07-03 | Draft backlog stub created per F-P5P6-A-005 adjudication (annotate-and-defer). Interface-definitions.md v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION annotation is the spec-side closure; this stub is the backlog-side closure. BC anchors: BC-2.09.001 (router reload), BC-2.09.002 (router drain), BC-2.07.001 (svtn destroy). Two verbs (paths ping, svtn status) have no governing BC — open design obligations noted. Four open design obligations logged (paths ping BC, svtn status BC, svtn destroy confirm-gate, reload/drain wire verb names). |
+| 2.0 | 2026-07-12 | Elaborated from backlog stub (v1.0, draft, 0 ACs) to sprint-ready (`ready`, 14 ACs, 5 points) per architect ruling `S-BL.CLI-SURFACE-COMPLETION-rulings.md`. Replaced "Open Design Obligations" with "Adjudicated Design Decisions" (four decisions, one per ruling, load-bearing constraints transcribed inline). Added Design Constraint section for the `runRouter` signature widening. 14 ACs traced to BC-2.06.004 PC-1..4, BC-2.07.001 PC-4, BC-2.09.001 v1.2 PC-1 RPC-trigger note, BC-2.09.002 v1.3 Trigger/PC-1 RPC-trigger note, plus CLI dispatch/flag-parse ACs per `interface-definitions.md` §§60/62/77/82-83. Four Forward Obligations encoded as explicit story-tracked tasks (CAP-022/CAP-029 confirmation, ARCH-INDEX SS-06 `internal/mgmt` row, error-taxonomy.md E-CFG-004 variant [hard gate on AC-011], VP-TBD-PING-A/B real VP-number minting). `bc_traces` gained BC-2.06.004. `estimated_points` TBD → 5 (Ruling 4 is the largest plumbing — signature widening + new channel + registration function + router-mode-exclusive wiring, comparable alone to `S-7.04-FU-SIGHUP-RELOAD`'s full 3-point scope; Rulings 1-2 each add a full handler+CLI wire pair; Ruling 3 is a near-zero usage-error shim). Frontmatter conformed to `S-BL.LOOPBACK-FULLSTACK` template-mandated superset keys. Full File-Change List, Architecture Mapping, Task Breakdown, and POL-005 Delivery Plan Note added. `input-hash` to be computed via `compute-input-hash --update` in the same burst as commit. |
+| 1.0 | 2026-07-03 | Draft backlog stub created per F-P5P6-A-005 adjudication (annotate-and-defer). `interface-definitions.md` v1.19 PENDING-S-BL.CLI-SURFACE-COMPLETION annotation is the spec-side closure; this stub is the backlog-side closure. BC anchors: BC-2.09.001 (router reload), BC-2.09.002 (router drain), BC-2.07.001 (svtn destroy). Two verbs (paths ping, svtn status) had no governing BC — open design obligations noted. Four open design obligations logged. |

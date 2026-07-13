@@ -33,9 +33,9 @@ develop_head: 4c276d9
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "next story selection (candidates: S-BL.DISCOVERY-WIRE P1; S-BL.LOOPBACK-FULLSTACK P2 draft w/ AC-001 architect-sign-off gate; S-BL.CLI-SURFACE-COMPLETION / S-BL.ADMIN-RECOVER-WIRE P2 drafts; S-BL.RESYNC-FRAME carries auth-threading/trust-boundary re-adjudication obligation before 0x02). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
+awaiting: "S-BL.CLI-SURFACE-COMPLETION spec-adversarial convergence (story v2.0 ready, elaborated per rulings doc; 3 clean passes required per phase-1d discipline; POL-005 tuples mandatory); then Red Gate. Parked sprint-ready: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later disposition). Next majors queued: S-BL.DISCOVERY-WIRE (P1). 2026-07-12 board CLOSED: session-review cycle-1 disposed 11/1, VP-042 STOP→PR #121 merged 4c276d9, HS-006 re-eval 0.895 PASS, POL-005 registered, S-BL.LOOPBACK-FULLSTACK authored."
 historical_cycles: []
-timestamp: 2026-07-12T22:56:05Z
+timestamp: 2026-07-13T02:25:57Z
 last_update: 2026-07-12
 ---
 

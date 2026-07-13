@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.002
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -25,6 +25,14 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.4"
+    date: 2026-07-12
+    author: story-writer
+    change: >
+      Traceability Stories cell filled: S-7.04-FU-DRAIN-WIRE (PC-1..PC-4 SIGTERM/drain-broadcast
+      path, historical backfill) + S-BL.CLI-SURFACE-COMPLETION (Trigger/PC-1 RPC-trigger
+      governance addendum) — the distinct story-writer pass PO deferred. Governance-only; no
+      PC/AC behavior change.
   - version: "1.3"
     date: 2026-07-12
     author: product-owner
@@ -118,7 +126,7 @@ Router receives SIGTERM or operator runs `sbctl router drain`. **RPC-trigger not
 | L2 Capability | CAP-027 ("Graceful router drain and session migration") per capabilities.md §CAP-027 |
 | L2 Domain Invariants | DI-004 (all traffic through routers — migration routes through alternate routers) |
 | Architecture Module | internal/drain |
-| Stories | [filled by story-writer] |
+| Stories | PC-1..PC-4 (SIGTERM/drain-broadcast path): S-7.04-FU-DRAIN-WIRE; Trigger/PC-1 (RPC-triggered drain via `router.drain`, governance addendum only): S-BL.CLI-SURFACE-COMPLETION |
 | Capability Anchor Justification | CAP-027 ("Graceful router drain and session migration") per capabilities.md §CAP-027 — this BC is the direct behavioral specification of the "router signals impending shutdown; nodes migrate to alternate routers" mechanism CAP-027 defines |
 
 ## Related BCs
@@ -130,6 +138,7 @@ Router receives SIGTERM or operator runs `sbctl router drain`. **RPC-trigger not
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.4 | 2026-07-12 | story-writer | Traceability Stories cell filled: `S-7.04-FU-DRAIN-WIRE` (PC-1..PC-4 SIGTERM/drain-broadcast path, historical backfill) + `S-BL.CLI-SURFACE-COMPLETION` (Trigger/PC-1 RPC-trigger governance addendum) — the distinct story-writer pass PO deferred. Governance-only; no PC/AC behavior change. |
 | 1.3 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 4 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): governance-only addendum — Trigger gains a clarifying sentence that RPC-triggered drain via the `router.drain` wire verb causes the same shutdown sequence as SIGTERM (both reach the `shutdown:` label); the RPC connection is expected to be severed as the daemon exits, consistent with PC-3's best-effort-delivery framing. No PC/AC behavior change. Resolves the drain half of `DRIFT-HS006-DRAIN-CLI-MISSING`. [governance_leaf: true — mirrors the POL-005/governance-leaf pattern, e.g. BC-2.07.001.md v1.13] |
 | 1.2 | 2026-07-11 | product-owner | PC-3 and PC-4 amended: acknowledgment is best-effort delivery (observer returns after dispatching DRAIN frame to node write path within drain window). No wire-level DRAIN-ACK opcode. Drain correctness proven by VP-037 observed-behavior property, not by protocol ACK. Refs: F-DW-SP1-006 adjudication. |
 | 1.1 | 2026-06-23 | product-owner | Initial draft — router sends drain signal before shutdown; nodes migrate to alternate routers. |

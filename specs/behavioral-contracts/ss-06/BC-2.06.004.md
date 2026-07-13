@@ -2,7 +2,7 @@
 artifact_id: BC-2.06.004
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-12T00:00:00
@@ -98,7 +98,7 @@ Note: VP IDs are placeholders pending architect assignment — Ruling 1 did not 
 | L2 Capability | CAP-022 ("Per-path latency and loss metrics via CLI") per capabilities.md §CAP-022. **Anchor note:** Ruling 1 deliberately separates `paths.ping`'s RPC mechanism and target scope from BC-2.06.003's accumulated-metrics contract (see Description); this BC nonetheless anchors to the same L2 capability as the closest-fit "operator diagnostic query via sbctl" capability in the domain spec. Flagged for architect/product-owner confirmation — no dedicated CAP was minted by the ruling, and capabilities.md was outside this burst's authorized artifact set. |
 | L2 Domain Invariants | DI-001 (carrier-grade content separation — the `{"pong": true}` response carries no session content or keystroke data) |
 | Architecture Module | internal/mgmt (new handler, e.g. `mgmt.RegisterPingHandler`, registered from `wireMetricsHandlers`; interpretation — the ruling's Implementation Constraints name `internal/mgmt` as the registration home, not `internal/metrics`/`internal/paths` per the SS-06 ARCH-INDEX registry, since `paths.ping` deliberately does no metrics-package work) |
-| Stories | [filled by story-writer] |
+| Stories | PC-1..PC-4 (all): S-BL.CLI-SURFACE-COMPLETION |
 | Capability Anchor Justification | See L2 Capability row above. |
 
 ## Related BCs
@@ -111,4 +111,5 @@ Note: VP IDs are placeholders pending architect assignment — Ruling 1 did not 
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.2 | 2026-07-12 | story-writer | Traceability Stories cell filled: `S-BL.CLI-SURFACE-COMPLETION` (PC-1..PC-4, all) — the distinct story-writer pass PO deferred at v1.1 commission. Governance-only; no PC/AC behavior change. |
 | 1.1 | 2026-07-12 | product-owner | Initial commission per `S-BL.CLI-SURFACE-COMPLETION-rulings.md` Ruling 1: new BC for the `paths.ping` wire verb (bodyless RTT probe, client-measured round-trip time, no per-path metrics computation, no quality classification). Registered in BC-INDEX under quality-observability / CAP-022. |

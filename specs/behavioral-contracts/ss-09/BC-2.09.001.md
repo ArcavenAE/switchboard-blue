@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.001
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -25,6 +25,13 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-12
+    version: "1.3"
+    actor: story-writer
+    change: >
+      Traceability Stories cell filled: S-7.04-FU-SIGHUP-RELOAD (PC-1 SIGHUP half, historical
+      backfill) + S-BL.CLI-SURFACE-COMPLETION (PC-1 RPC-trigger governance addendum) — the
+      distinct story-writer pass PO deferred. Governance-only; no PC/AC behavior change.
   - date: 2026-07-12
     version: "1.2"
     actor: product-owner
@@ -114,7 +121,7 @@ Operator adds upstream router entries to config and reloads: `sbctl router reloa
 | L2 Capability | CAP-026 ("E-to-PE router graduation") per capabilities.md §CAP-026 |
 | L2 Domain Invariants | DI-004 (all traffic through routers — graduation adds more routers to the graph) |
 | Architecture Module | internal/config |
-| Stories | [filled by story-writer] |
+| Stories | PC-1 (SIGHUP reload path): S-7.04-FU-SIGHUP-RELOAD; PC-1 (RPC-triggered reload via `router.reload`, governance addendum only): S-BL.CLI-SURFACE-COMPLETION |
 | Capability Anchor Justification | CAP-026 ("E-to-PE router graduation") per capabilities.md §CAP-026 — this BC specifies the "same binary, no reinstall" graduation behavior that CAP-026 defines as the progressive-deployment promise |
 
 ## Related BCs
@@ -125,5 +132,6 @@ Operator adds upstream router entries to config and reloads: `sbctl router reloa
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.3 | 2026-07-12 | story-writer | Traceability Stories cell filled: `S-7.04-FU-SIGHUP-RELOAD` (PC-1 SIGHUP half, historical backfill) + `S-BL.CLI-SURFACE-COMPLETION` (PC-1 RPC-trigger governance addendum) — the distinct story-writer pass PO deferred. Governance-only; no PC/AC behavior change. |
 | 1.2 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 4 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): governance-only addendum — PC-1 gains a clarifying sentence that RPC-triggered reload via the `router.reload` wire verb is dispatched through the same `sighupCh` channel the SIGHUP OS-signal path already consumes; the two triggers are code-path-identical from that point forward. No PC/AC behavior change. Resolves the reload half of `DRIFT-HS006-DRAIN-CLI-MISSING`. [governance_leaf: true — mirrors the POL-005/governance-leaf pattern, e.g. BC-2.07.001.md v1.13] |
 | 1.1 | 2026-06-23 | product-owner | Initial draft — E router graduates to PE mode by adding upstream router connections in config. |

@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.14"
+version: "1.15"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -24,6 +24,13 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-12
+    version: "1.15"
+    actor: story-writer
+    change: >
+      Traceability Stories cell PC-4 (Status) filled: S-BL.CLI-SURFACE-COMPLETION — the distinct
+      story-writer pass PO deferred at v1.14 PC-4 extension. Governance-only; no PC/AC behavior
+      change.
   - date: 2026-07-12
     version: "1.14"
     actor: product-owner
@@ -226,7 +233,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 | L2 Capability | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 |
 | L2 Domain Invariants | DI-012 (control node is a network participant, not a router manager), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/svtnmgmt |
-| Stories | PC-1 (Create): S-6.02 (SVTNManager Go method), S-6.07 (CLI + handler, RPC reachability); PC-2 (Bootstrap): S-6.02 (local side-effect of Create); PC-3 (Destroy): S-6.05 v1.8 (CLI + handler — Wave 6, depends_on [S-6.02, S-6.07]; CR-009 ruling 2026-06-29; W6TB-A destroy authority model) |
+| Stories | PC-1 (Create): S-6.02 (SVTNManager Go method), S-6.07 (CLI + handler, RPC reachability); PC-2 (Bootstrap): S-6.02 (local side-effect of Create); PC-3 (Destroy): S-6.05 v1.8 (CLI + handler — Wave 6, depends_on [S-6.02, S-6.07]; CR-009 ruling 2026-06-29; W6TB-A destroy authority model); PC-4 (Status): S-BL.CLI-SURFACE-COMPLETION |
 | Capability Anchor Justification | CAP-023 ("SVTN lifecycle management (create, destroy)") per capabilities.md §CAP-023 — this BC specifies the create/destroy lifecycle that CAP-023 defines as the prerequisite for all other operations |
 
 ## Related BCs
@@ -238,6 +245,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.15 | 2026-07-12 | story-writer | Traceability Stories cell PC-4 (Status) filled: `S-BL.CLI-SURFACE-COMPLETION` — the distinct story-writer pass PO deferred at v1.14 PC-4 extension. Governance-only; no PC/AC behavior change. |
 | 1.14 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 2 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): extend BC with new Postcondition PC-4 (Status) — wires `admin.svtn.status`, registered in `BuildAdminHandlers` (control-mode-only). Authority: any admitted role in the target SVTN, OR operator-set member, OR bootstrap key (`resolveCallerAdmissionAnyRole`, list-keys precedent, BC-2.05.004 F-L2-003) — authority gate bypassed, admission gate retained. Response schema (`svtn_id`, `name`, `created_at`, `key_counts`) deliberately excludes session/health data — ARCH-09 purity boundary, `internal/session` is a forbidden import for `cmd/switchboard/admin_handlers.go`. Not-found reuses E-SVTN-003. CLI dispatch is `sbctl svtn status --name=<svtn-name>` (bare top-level, not `sbctl admin`-prefixed — read-only, no confirm-gate duplication risk). Three new Canonical Test Vectors added (happy-path, not-found, admission-denied). Two new VP-048 sibling rows added. No change to PC-1/PC-2/PC-3 or Invariants. |
 | 1.13 | 2026-07-02 | spec-steward | F-P4L3-MED-2 (POL-002): Traceability Stories row cite S-6.05 v1.5 → v1.7 (this fix-burst bumps story to v1.7). Governance-only. [governance_leaf: true — downstream story/VP pins DO NOT need to re-sync per drbothen/vsdd-factory#429 draft policy] |
 | 1.12 | 2026-07-02 | spec-steward | F-P3L3-M-05: Sync Stories-row narrative — S-6.05 anchor updated v1.3 → v1.5 (v1.4 was reverted spec regression against RULING-W6TB-A; v1.5 restores Destroy(caller admission.AdmittedKey, svtnName string) signature and Go-API defense-in-depth check). No behavioral changes. |
