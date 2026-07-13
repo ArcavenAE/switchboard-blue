@@ -975,6 +975,16 @@ func makeAdminSVTNStatusHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySe
 			return nil, err
 		}
 
+		// Args validation: name must be non-empty, non-whitespace-only, within
+		// 255 bytes, and free of ASCII control characters (F-P2L2 exhaustive
+		// validation), mirroring makeAdminSVTNCreateHandler/
+		// makeAdminSVTNDestroyHandler. Runs after the admission gate so the
+		// AC-006 byte-identical denied-path oracle is unaffected — an
+		// unauthorized caller still sees E-ADM-009 regardless of name shape.
+		if err := validateSVTNName(a.Name); err != nil {
+			return nil, err
+		}
+
 		svtn, found := m.SVTNByName(a.Name)
 		if !found {
 			return nil, mapAdminError(svtnmgmt.ErrSVTNNotFound, a.Name, nil, "")
