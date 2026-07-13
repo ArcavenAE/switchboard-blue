@@ -144,9 +144,55 @@ refresh, N-CS-SP9-01 help-string refresh) confirmed done in this pass.
 `ok` (orchestrator-verified), race-clean, `go vet` / `gofumpt` / lint all
 clean.
 
+## Step-4.5 pass 1
+
+**Adversary:** adv-cs-i1, 2026-07-13. **Verdict:** HAS_FINDINGS, streak
+0/3. **Diff reviewed:** `4c276d9..409457d`. Dispatch tuple — develop
+`4c276d9`, feature `409457db843b824a88236978b8f3592b687f34a6`, factory
+`aab243c` — POL-005 verified PASS by the adversary.
+
+**F-CS-I1-001 (MED, coverage):** AC-004 had zero tests. The story-named
+`TestWireMetricsHandlers_RegistersPingOnEveryMode` and
+`TestPingHandler_EmptyArgsIn_PongOut_ZeroPathTrackerInteraction` were
+never written in the Red suite — the Red inventory was complete against
+itself but incomplete against the 16 ACs. Implementation was correct by
+inspection; the gap was test coverage, not behavior.
+Remediated at `1b0e010` (test-writer): `metrics_wire_test.go` +271,
+`internal/mgmt/register_ping_test.go` +135 (new), 4 subtests including a
+`go/ast` four-call-site static check and an `SVTNMetrics` tripwire spy.
+Non-vacuity mutation-verified for every assertion (each mutation reverted
+after confirming it failed as expected). Orchestrator-verified both tests
+pass by name at `-count=1`.
+
+**F-CS-I1-002 (LOW, convention):** `cmd/sbctl/paths_ping.go`'s
+`--router`-requires-value branch stamped `E-CFG-010` (key-load code,
+exit-1 taxonomy row) instead of `E-CFG-001` (client-side usage error,
+exit 2) — wrong code, wrong exit-class pairing, inconsistent with the
+sibling flag-validation branch in the same file.
+Remediated at `4dad99e` (implementer): both occurrences corrected to
+`E-CFG-001` (`"E-CFG-001: paths ping: --router requires a value"`); the
+genuine key-load `E-CFG-010` use (`loadEd25519Key`) left untouched — that
+one really is a key-load failure. Matches the Ruling 2 Addendum
+client-side precedent. Orchestrator-verified.
+
+**Sanctioned, no action:** N-CS-I1-01 (JSON-envelope divergence, same
+item as the Green-phase design note), N-CS-I1-02 (AC prose
+`--router`/`--target` asymmetry, cosmetic, already adjudicated
+intentional), N-CS-I1-03 (no-dispatch assertion immaterial), N-CS-I1-04
+(`os.Exit(0)` defer-skip harmless).
+
+**Clean lenses:** existence-oracle byte-identical + no timing leak;
+signal-coalescing semantics correct + race-clean; SIGTERM parity; test
+honesty; all 3 Green-phase adjudications honored; the `409457d` test fix
+verified exactly as narrow as described.
+
+**Post-remediation:** feature head `1b0e010`, full suite 25 packages `ok`
+at `-count=1`, race-clean (`cmd/switchboard`, `internal/mgmt`), lint 0
+issues, gofumpt clean.
+
 ## Status
 
-Red Gate COMPLETE. Green COMPLETE @ `409457d` (25/25 target tests, full
-suite green, race-clean, vet/fmt/lint clean). Next: step-4.5
-implementation-diff spec-adversarial convergence (BC-5.39.001/BC-5.39.002,
-diff range `4c276d9..409457d`).
+Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
+HAS_FINDINGS, both findings remediated same burst @ `1b0e010`; streak
+0/3. Next: step-4.5 pass 2 (BC-5.39.001/BC-5.39.002, diff range
+`4c276d9..1b0e010`).

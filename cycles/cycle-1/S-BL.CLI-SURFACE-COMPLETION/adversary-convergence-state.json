@@ -357,8 +357,72 @@
   "implementation_phase": {
     "phase": "step-4.5 story-diff adversarial (BC-5.39.001/BC-5.39.002)",
     "requirement": "3 consecutive CLEAN or NITPICK_ONLY passes",
-    "diff_range": "4c276d9..409457d on feature/S-BL.CLI-SURFACE-COMPLETION",
+    "diff_range": "4c276d9..1b0e010 on feature/S-BL.CLI-SURFACE-COMPLETION",
     "streak": "0/3",
-    "passes": []
+    "passes": [
+      {
+        "pass": 1,
+        "adversary": "adv-cs-i1",
+        "date": "2026-07-13",
+        "verdict": "HAS_FINDINGS",
+        "streak_after": "0/3",
+        "diff_range_reviewed": "4c276d9..409457d",
+        "dispatch_tuple": {
+          "develop": "4c276d9",
+          "feature": "409457db843b824a88236978b8f3592b687f34a6",
+          "factory": "aab243c"
+        },
+        "pol_005_verified": "PASS",
+        "findings": [
+          {
+            "id": "F-CS-I1-001",
+            "severity": "MED",
+            "class": "coverage",
+            "summary": "AC-004 had ZERO tests — story-named TestWireMetricsHandlers_RegistersPingOnEveryMode and TestPingHandler_EmptyArgsIn_PongOut_ZeroPathTrackerInteraction were never written in the Red suite; the Red inventory was complete against itself but incomplete against the 16 ACs. Implementation was correct by inspection.",
+            "remediation": "tw-cs-red commit 1b0e010 — metrics_wire_test.go +271, internal/mgmt/register_ping_test.go +135 (new); 4 subtests including a go/ast four-call-site static check and an SVTNMetrics tripwire spy; non-vacuity mutation-verified for every assertion (mutations reverted after confirming each failed as expected). Orchestrator-verified: both tests pass by name at -count=1."
+          },
+          {
+            "id": "F-CS-I1-002",
+            "severity": "LOW",
+            "class": "convention",
+            "summary": "cmd/sbctl/paths_ping.go's --router-requires-value branch stamped E-CFG-010 (key-load code, exit-1 taxonomy row) instead of E-CFG-001 (client-side usage error, exit 2) — wrong code, wrong exit-class pairing, inconsistent with the sibling flag-validation branch in the same file.",
+            "remediation": "impl-cs commit 4dad99e — both occurrences corrected to E-CFG-001, string \"E-CFG-001: paths ping: --router requires a value\"; the genuine key-load E-CFG-010 use (loadEd25519Key) left untouched. Matches the Ruling 2 Addendum client-side precedent. Orchestrator-verified."
+          }
+        ],
+        "nitpicks_sanctioned": [
+          {
+            "id": "N-CS-I1-01",
+            "summary": "JSON-envelope divergence — same item as the Green-phase design note, sanctioned not actioned this pass"
+          },
+          {
+            "id": "N-CS-I1-02",
+            "summary": "AC prose --router/--target asymmetry — cosmetic, already adjudicated intentional"
+          },
+          {
+            "id": "N-CS-I1-03",
+            "summary": "no-dispatch assertion immaterial"
+          },
+          {
+            "id": "N-CS-I1-04",
+            "summary": "os.Exit(0) defer-skip harmless"
+          }
+        ],
+        "clean_lenses": [
+          "existence-oracle byte-identical + no timing leak",
+          "signal-coalescing semantics correct + race-clean",
+          "SIGTERM parity",
+          "test honesty",
+          "all 3 Green-phase adjudications honored",
+          "409457d test fix verified exactly-as-narrow-as-described"
+        ],
+        "post_remediation": {
+          "feature_head": "1b0e010",
+          "full_suite": "25 pkgs ok -count=1",
+          "race": "clean (cmd/switchboard, internal/mgmt)",
+          "lint": "0 issues",
+          "gofumpt": "clean"
+        }
+      }
+    ]
   }
 }
