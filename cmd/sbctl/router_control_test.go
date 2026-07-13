@@ -13,13 +13,14 @@
 //	TestRouterDrain_SubVerbTransition_KnownDispatchesUnknownStillExit2  → AC-016 PC-3
 //
 // Package main (internal test file) for access to runProductionMain and the
-// canned-daemon helpers. runRouterReload/runRouterDrain's Red Gate stub
-// bodies both panic unconditionally (router_reload.go, router_drain.go) —
-// calling either directly in-process would crash the whole cmd/sbctl test
-// binary. Every test here therefore drives the real production main() via
-// the runProductionMain subprocess helper (production_exit_code_test.go),
-// same mechanism used elsewhere in this package (see paths_ping_test.go,
-// svtn_test.go) for exercising panic-risk dispatch paths.
+// canned-daemon helpers. runRouterReload/runRouterDrain are implemented
+// (router_reload.go, router_drain.go; no longer Red Gate stubs). Every test
+// here still drives the real production main() via the runProductionMain
+// subprocess helper (production_exit_code_test.go) — retained as a
+// regression defense against an unrecovered handler panic taking down the
+// whole cmd/sbctl test binary, same mechanism used elsewhere in this
+// package (see paths_ping_test.go, svtn_test.go) for exercising panic-risk
+// dispatch paths.
 package main
 
 import (

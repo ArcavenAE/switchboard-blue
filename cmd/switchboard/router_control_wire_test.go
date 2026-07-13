@@ -13,21 +13,23 @@
 //	TestWireRouterControlHandlers_RouterModeExclusive_OtherModesERPC010 → AC-013 PC-2
 //	TestRouterReloadDrain_TierOneAuthOnly_FireAndForgetAcceptedTrue   → AC-014 PC-1, PC-2
 //
-// Panic-isolation note: routerReloadRPCHandler/routerDrainRPCHandler's Red
-// Gate stub bodies panic unconditionally. mgmt.Server.Serve dispatches each
-// RPC on its own connection-handling goroutine (internal/mgmt/mgmt.go) with
-// no per-connection recover() — an unrecovered handler panic terminates the
-// WHOLE process, not just the calling test, because recover() only catches
-// panics on the same goroutine that panicked, and the panicking goroutine
-// here belongs to mgmt.Server, not to any *testing.T's tRunner. Any test that
-// performs a REAL RPC round trip against one of these handlers is therefore
-// run inside a subprocess (TestSubprocessRouterControlScenario, invoked via
-// runRouterControlScenario) so a stub panic is contained to the child
-// process's own exit code — the same isolation runProductionMain already
-// provides for cmd/sbctl (production_exit_code_test.go). Tests that don't
-// need to actually invoke a handler body (registration-ordering checks,
-// mode-exclusivity against a server that never registers these handlers at
-// all) stay in-process — no panic risk exists there.
+// Subprocess-isolation note: routerReloadRPCHandler/routerDrainRPCHandler
+// are implemented (no longer Red Gate stubs). mgmt.Server.Serve dispatches
+// each RPC on its own connection-handling goroutine (internal/mgmt/mgmt.go)
+// with no per-connection recover() — an unrecovered handler panic would
+// terminate the WHOLE process, not just the calling test, because
+// recover() only catches panics on the same goroutine that panicked, and
+// the panicking goroutine would belong to mgmt.Server, not to any
+// *testing.T's tRunner. Any test that performs a REAL RPC round trip
+// against one of these handlers therefore still runs inside a subprocess
+// (TestSubprocessRouterControlScenario, invoked via
+// runRouterControlScenario) — retained as a regression defense so a future
+// handler panic is contained to the child process's own exit code, the
+// same isolation runProductionMain already provides for cmd/sbctl
+// (production_exit_code_test.go). Tests that don't need to actually invoke
+// a handler body (registration-ordering checks, mode-exclusivity against a
+// server that never registers these handlers at all) stay in-process — no
+// panic risk exists there.
 package main
 
 import (

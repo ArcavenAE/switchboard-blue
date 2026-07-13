@@ -10,16 +10,17 @@
 //	TestSvtnDestroy_TopLevelShim_NoRPCDispatch        → AC-009 PC-2, PC-3, PC-4
 //	TestSvtn_UnknownSubVerb_UsageErrorExit2           → AC-010 PC-3
 //
-// runSvtn/runSvtnStatus/runSvtnDestroyShim's Red Gate stub bodies all panic
-// unconditionally (svtn.go), regardless of arguments — calling any of them
-// directly in-process would crash the whole cmd/sbctl test binary (an
-// unrecovered panic terminates the process; testing's per-test recover only
-// guards the goroutine running t.Run, not sibling tests) and take every
-// unrelated test in this package down with it. Every test here therefore
-// dispatches through the real compiled main() via the runProductionMain
-// subprocess helper (production_exit_code_test.go), matching this repo's
-// established pattern for exercising panic-risk dispatch paths
-// (main_test.go's TestSubprocessMain_* hooks; see also paths_ping_test.go).
+// runSvtn/runSvtnStatus/runSvtnDestroyShim are implemented (svtn.go, no
+// longer Red Gate stubs). Every test here still dispatches through the real
+// compiled main() via the runProductionMain subprocess helper
+// (production_exit_code_test.go) — retained as a regression defense: an
+// unrecovered handler panic terminates the whole process (testing's
+// per-test recover only guards the goroutine running t.Run, not sibling
+// tests), so subprocess isolation contains any future regression to the
+// child process's own exit code rather than taking every unrelated test in
+// this package down with it. Matches this repo's established pattern for
+// exercising panic-risk dispatch paths (main_test.go's TestSubprocessMain_*
+// hooks; see also paths_ping_test.go).
 package main
 
 import (
@@ -37,7 +38,7 @@ import (
 // Mirrors startCannedDaemonAssertCmd (router_status_test.go) but additionally
 // exposes the request args — needed to verify AC-008 PC-1's exact wire
 // contract ({"name": "<svtn-name>"}), which command-only assertion cannot see.
-func startSvtnStatusCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessage, gotCmdCh chan<- string, gotArgsCh chan<- json.RawMessage) net.Listener {
+func startSvtnStatusCannedDaemon(t *testing.T, sockPath string, responseData json.RawMessage, gotCmdCh chan<- string, gotArgsCh chan<- json.RawMessage) net.Listener { //nolint:unparam // return value unused at call sites; kept for potential future use in concurrent test scenarios (matches startCannedDaemon's established pattern, router_status_test.go)
 	t.Helper()
 
 	ln, err := net.Listen("unix", sockPath)
@@ -115,6 +116,49 @@ func startSvtnStatusCannedDaemon(t *testing.T, sockPath string, responseData jso
 	return ln
 }
 
+// assertSvtnStatusRPCDispatched asserts the canned daemon observed an
+// "admin.svtn.status" RPC command with wire args exactly {"name": "mynet"}
+// (interface-definitions.md §420: no other keys). Shared by the AC-008
+// happy-path default/--json subtests — the RPC dispatch shape is identical
+// regardless of output mode; only the CLI's rendering of the response
+// differs (F-CS-I4-001).
+func assertSvtnStatusRPCDispatched(t *testing.T, gotCmdCh <-chan string, gotArgsCh <-chan json.RawMessage) {
+	t.Helper()
+
+	select {
+	case gotCmd := <-gotCmdCh:
+		if gotCmd != "admin.svtn.status" {
+			t.Errorf("AC-008: sbctl sent RPC command %q; want %q", gotCmd, "admin.svtn.status")
+		}
+	default:
+		t.Error("AC-008: no RPC command received by canned daemon — channel empty")
+	}
+
+	select {
+	case gotArgs := <-gotArgsCh:
+		var argsMap map[string]json.RawMessage
+		if parseErr := json.Unmarshal(gotArgs, &argsMap); parseErr != nil {
+			t.Fatalf("AC-008: request args are not a JSON object: %v (raw: %s)", parseErr, gotArgs)
+		}
+		var name string
+		if nameRaw, ok := argsMap["name"]; ok {
+			_ = json.Unmarshal(nameRaw, &name)
+		} else {
+			t.Fatal("AC-008 / BC-2.07.001 PC-4: request args missing \"name\" field")
+		}
+		if name != "mynet" {
+			t.Errorf("AC-008: request args name = %q; want %q", name, "mynet")
+		}
+		// Wire contract per interface-definitions.md §420: args is exactly
+		// {"name": "<svtn-name>"} — no other keys.
+		if len(argsMap) != 1 {
+			t.Errorf("AC-008: request args has %d keys; want exactly 1 (\"name\"); got: %v", len(argsMap), mapKeys(argsMap))
+		}
+	default:
+		t.Error("AC-008: no request args received by canned daemon — channel empty")
+	}
+}
+
 // ─── AC-008: sbctl svtn status CLI dispatch ──────────────────────────────────
 
 // TestSvtnStatus_CLIDispatch_BareTopLevel_NameFlag verifies that `sbctl svtn
@@ -127,64 +171,87 @@ func startSvtnStatusCannedDaemon(t *testing.T, sockPath string, responseData jso
 // AC-008 / BC-2.07.001 PC-4 (CLI dispatch note).
 func TestSvtnStatus_CLIDispatch_BareTopLevel_NameFlag(t *testing.T) {
 	t.Run("happy_path_dispatches_admin_svtn_status_with_name_arg", func(t *testing.T) {
-		sockPath, cleanup := stubDaemonSocket(t)
-		defer cleanup()
-
 		cannedStatus := json.RawMessage(`{"svtn_id":"deadbeef","name":"mynet","created_at":"2026-07-12T00:00:00Z","key_counts":{"control":1,"console":0,"access":2}}`)
-		gotCmdCh := make(chan string, 1)
-		gotArgsCh := make(chan json.RawMessage, 1)
-		_ = startSvtnStatusCannedDaemon(t, sockPath, cannedStatus, gotCmdCh, gotArgsCh)
 
-		exitCode, stdout, stderr := runProductionMain(t,
-			"--target", sockPath, "--key", testdataKeyPath(t),
-			"svtn", "status", "--name=mynet",
-		)
-		if exitCode != 0 {
-			t.Fatalf("AC-008: expected exit code 0, got %d\nstdout: %q\nstderr: %q", exitCode, stdout, stderr)
-		}
+		// F-CS-I4-001: runSvtnStatus previously hardcoded useJSON=true,
+		// always emitting the {"ok":...,"data":...} envelope regardless of
+		// --json. Two subtests cover both output modes: default mode must
+		// print the bare AC-005 PC-1 data shape at top level (no "ok"/"data"
+		// wrapper); --json must produce the envelope, and only then.
+		t.Run("default_bare_data", func(t *testing.T) {
+			sockPath, cleanup := stubDaemonSocket(t)
+			defer cleanup()
 
-		select {
-		case gotCmd := <-gotCmdCh:
-			if gotCmd != "admin.svtn.status" {
-				t.Errorf("AC-008: sbctl sent RPC command %q; want %q", gotCmd, "admin.svtn.status")
-			}
-		default:
-			t.Error("AC-008: no RPC command received by canned daemon — channel empty")
-		}
+			gotCmdCh := make(chan string, 1)
+			gotArgsCh := make(chan json.RawMessage, 1)
+			_ = startSvtnStatusCannedDaemon(t, sockPath, cannedStatus, gotCmdCh, gotArgsCh)
 
-		select {
-		case gotArgs := <-gotArgsCh:
-			var argsMap map[string]json.RawMessage
-			if parseErr := json.Unmarshal(gotArgs, &argsMap); parseErr != nil {
-				t.Fatalf("AC-008: request args are not a JSON object: %v (raw: %s)", parseErr, gotArgs)
+			exitCode, stdout, stderr := runProductionMain(t,
+				"--target", sockPath, "--key", testdataKeyPath(t),
+				"svtn", "status", "--name=mynet",
+			)
+			if exitCode != 0 {
+				t.Fatalf("AC-008: expected exit code 0, got %d\nstdout: %q\nstderr: %q", exitCode, stdout, stderr)
 			}
-			var name string
-			if nameRaw, ok := argsMap["name"]; ok {
-				_ = json.Unmarshal(nameRaw, &name)
-			} else {
-				t.Fatal("AC-008 / BC-2.07.001 PC-4: request args missing \"name\" field")
-			}
-			if name != "mynet" {
-				t.Errorf("AC-008: request args name = %q; want %q", name, "mynet")
-			}
-			// Wire contract per interface-definitions.md §420: args is exactly
-			// {"name": "<svtn-name>"} — no other keys.
-			if len(argsMap) != 1 {
-				t.Errorf("AC-008: request args has %d keys; want exactly 1 (\"name\"); got: %v", len(argsMap), mapKeys(argsMap))
-			}
-		default:
-			t.Error("AC-008: no request args received by canned daemon — channel empty")
-		}
 
-		var env struct {
-			OK bool `json:"ok"`
-		}
-		if parseErr := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &env); parseErr != nil {
-			t.Fatalf("AC-008: stdout is not a valid JSON envelope: %v\nraw: %q", parseErr, stdout)
-		}
-		if !env.OK {
-			t.Fatal("AC-008: envelope ok must be true")
-		}
+			assertSvtnStatusRPCDispatched(t, gotCmdCh, gotArgsCh)
+
+			var data map[string]json.RawMessage
+			if parseErr := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &data); parseErr != nil {
+				t.Fatalf("F-CS-I4-001: default-mode stdout is not a JSON object: %v\nraw: %q", parseErr, stdout)
+			}
+			// Default mode (no --json) must print the bare AC-005 PC-1 shape
+			// at top level — no "ok"/"data" envelope wrapper keys.
+			for _, envelopeKey := range []string{"ok", "data"} {
+				if _, present := data[envelopeKey]; present {
+					t.Errorf("F-CS-I4-001: default-mode stdout must not carry envelope key %q; got: %s", envelopeKey, stdout)
+				}
+			}
+			assertJSONString(t, data, "name", "mynet")
+			if _, ok := data["svtn_id"]; !ok {
+				t.Error("AC-005: response missing svtn_id field")
+			}
+			if _, ok := data["key_counts"]; !ok {
+				t.Error("AC-005: response missing key_counts field")
+			}
+		})
+
+		t.Run("json_flag_envelope", func(t *testing.T) {
+			sockPath, cleanup := stubDaemonSocket(t)
+			defer cleanup()
+
+			gotCmdCh := make(chan string, 1)
+			gotArgsCh := make(chan json.RawMessage, 1)
+			_ = startSvtnStatusCannedDaemon(t, sockPath, cannedStatus, gotCmdCh, gotArgsCh)
+
+			exitCode, stdout, stderr := runProductionMain(t,
+				"--target", sockPath, "--key", testdataKeyPath(t), "--json",
+				"svtn", "status", "--name=mynet",
+			)
+			if exitCode != 0 {
+				t.Fatalf("AC-008: expected exit code 0, got %d\nstdout: %q\nstderr: %q", exitCode, stdout, stderr)
+			}
+
+			assertSvtnStatusRPCDispatched(t, gotCmdCh, gotArgsCh)
+
+			var env struct {
+				OK   bool                       `json:"ok"`
+				Data map[string]json.RawMessage `json:"data"`
+			}
+			if parseErr := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &env); parseErr != nil {
+				t.Fatalf("AC-008: stdout is not a valid JSON envelope: %v\nraw: %q", parseErr, stdout)
+			}
+			if !env.OK {
+				t.Fatal("AC-008: envelope ok must be true")
+			}
+			assertJSONString(t, env.Data, "name", "mynet")
+			if _, ok := env.Data["svtn_id"]; !ok {
+				t.Error("AC-005: envelope data missing svtn_id field")
+			}
+			if _, ok := env.Data["key_counts"]; !ok {
+				t.Error("AC-005: envelope data missing key_counts field")
+			}
+		})
 	})
 
 	t.Run("missing_name_flag_usage_error_exit2", func(t *testing.T) {
