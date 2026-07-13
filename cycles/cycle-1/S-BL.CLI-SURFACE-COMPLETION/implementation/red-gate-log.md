@@ -359,6 +359,44 @@ full suite 25 packages `ok` at `-count=1` (orchestrator-run); race-clean
 `--json` = envelope; missing-flag = single plain `usageErrf` line, exit
 2.
 
+## Step-4.5 pass 5
+
+**Adversary:** adv-cs-i5, 2026-07-13. **Verdict:** NITPICK_ONLY, zero
+findings — **first clean verdict, streak starts at 1/3.** **Diff
+reviewed:** `4c276d9..100d288`. Dispatch tuple — develop
+`4c276d935b089026fac4fa796612352374bb880f`, feature
+`100d28890eb7a07541aa9aa93be8339faa8b5e4d`, factory
+`85eb5156600efe9b4e0a4c3e1f30017a9f60c550` — POL-005 verified PASS
+across 10 artifacts, all matched.
+
+**Infrastructure note:** the pass was interrupted mid-response by an
+API connection failure (`idle_notification` reason "Connection closed
+mid-response"); it resumed via a mailbox nudge with context intact and
+delivered a complete report. No review-integrity impact — the
+fresh-context wall was unaffected.
+
+**N-CS-I5-01, SANCTIONED per the adversary's own recommendation:**
+`runPathsPing` discards the `paths.ping` response body and never checks
+`pong == true`. Defensible: BC-2.06.004 frames ping as a
+`ping(8)`-style reachability-plus-latency probe, the handler always
+returns `{"pong":true}`, and dispatch already rejects `ok:false`. The
+adversary's own recommendation was to leave it as-is.
+
+**Clean lenses (all 7 PASS):** 16/16 AC compliance including §214's
+dual-mode output contract; test honesty (dual default/`--json`
+subtests, `wantNoPanic` guards, field-count==1 guard, byte-identical
+no-leak assert, tripwire spy, AST four-call-site proof); taxonomy
+conformance (E-CFG-004 v3 exact, E-CFG-001 bare `usageErrf` per Ruling
+2 Addendum); security (oracle closed, no secret leakage, no injection);
+concurrency (buffered-1 drop-coalescing, nil-channel PE call sites
+safe, no shared mutable state); spec-code drift none (13+1 call sites,
+accommodations faithful, VP-078/079 consistent); policy clean. All 4
+orchestrator adjudications reverified honored; all 4 Forward
+Obligations reconfirmed DISCHARGED.
+
+**Post-pass:** feature head `100d288`, unchanged — no remediation
+needed.
+
 ## Status
 
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
@@ -368,5 +406,7 @@ four Forward Obligations DISCHARGED). Step-4.5 pass 3 HAS_FINDINGS —
 story File-Change List completeness only, zero code defects, remediated
 @ story v2.8. Step-4.5 pass 4 HAS_FINDINGS — F-CS-I4-001 (MED, §214
 `--json` contract) + F-CS-I4-002 (LOW, `usageErrf` shape), remediated
-TDD-shaped @ `100d288`; code freeze lifted; streak 0/3. Next: step-4.5
-pass 5 (BC-5.39.001/BC-5.39.002, diff range `4c276d9..100d288`).
+TDD-shaped @ `100d288`; code freeze lifted. Step-4.5 pass 5
+NITPICK_ONLY — first clean verdict, streak 1/3, need 2 more consecutive
+clean; feature @ `100d288` unchanged. Next: step-4.5 pass 6
+(BC-5.39.001/BC-5.39.002, diff range `4c276d9..100d288`).
