@@ -357,7 +357,7 @@
   "implementation_phase": {
     "phase": "step-4.5 story-diff adversarial (BC-5.39.001/BC-5.39.002)",
     "requirement": "3 consecutive CLEAN or NITPICK_ONLY passes",
-    "diff_range": "4c276d9..1b0e010 on feature/S-BL.CLI-SURFACE-COMPLETION",
+    "diff_range": "4c276d9..100d288 on feature/S-BL.CLI-SURFACE-COMPLETION",
     "streak": "0/3",
     "passes": [
       {
@@ -534,6 +534,69 @@
           "spec-code drift CLEAN incl. VP-078/VP-079 consistency",
           "policies clean"
         ]
+      },
+      {
+        "pass": 4,
+        "adversary": "adv-cs-i4",
+        "date": "2026-07-13",
+        "verdict": "HAS_FINDINGS",
+        "streak_after": "0/3",
+        "diff_range_reviewed": "4c276d9..1b0e010",
+        "dispatch_tuple": {
+          "develop": "4c276d935b089026fac4fa796612352374bb880f",
+          "feature": "1b0e01048486cf07eed3fe728a4bfc1af1112a8a",
+          "factory": "be00331ad419a0d3ed536d4baa53457000d334e2"
+        },
+        "pol_005_verified": "PASS",
+        "pol_005_artifacts_checked": "10 artifacts incl. story v2.8, STORY-INDEX v4.94 — all matched",
+        "findings": [
+          {
+            "id": "F-CS-I4-001",
+            "severity": "MED",
+            "class": "code",
+            "owner": "implementer",
+            "summary": "runPathsPing/runSvtnStatus hardcoded useJSON=true — always emitted the {\"ok\":true,\"data\":...} envelope, --json a silent no-op; violates interface-definitions v1.31 §214, diverges from house pattern (paths list/router status/list-keys/this story's own reload+drain), AC-001 PC-4 + AC-005 PC-1 bare literals never produced top-level.",
+            "escalation_record": "The same observation was classified NITPICK by three consecutive fresh passes (N-CS-I1-01, N-CS-I2-02, N-CS-I3-01) and orchestrator-sanctioned each time on their shared \"no AC mandates --json\" reasoning. Pass 4 located the governing §214 clause OUTSIDE the ACs — the prior sanctions are superseded, the finding is accepted, and the code freeze is LIFTED. Recorded as multi-pass-discipline evidence for BC-5.39.001.",
+            "remediation": "TDD-shaped. RED dfd51bc (test-writer): 3 happy-path tests split into default_bare_data/json_flag_envelope subtests, shared helpers, verified FAILING against the always-envelope implementation; confirmed no AC mandates the envelope in default mode; AC-005 PC-1 also specifies a bare literal. GREEN 100d28890eb7a07541aa9aa93be8339faa8b5e4d (implementer): useJSON threaded through every writeError/writeSuccess/connectAndRun call in both functions; both //nolint:unparam annotations dropped; no new lint issues."
+          },
+          {
+            "id": "F-CS-I4-002",
+            "severity": "LOW",
+            "class": "code",
+            "owner": "implementer",
+            "summary": "client-side missing-flag paths double-emitted writeError(true,\"E-CFG-001\",...) + reported(usageErrf(...)) — the canonical pattern per Ruling 2 Addendum + the §110/§111 siblings is a bare usageErrf.",
+            "remediation": "Fixed in 100d288: bare usageErrf, message text byte-identical, shape-agnostic missing-flag tests stayed green."
+          }
+        ],
+        "nitpick_dispositions": [
+          {
+            "id": "N-CS-I4-01",
+            "disposition": "FIXED",
+            "summary": "wireRouterControlHandlers doc comment — stale \"stub bodies do not yet consume\" future-tense language reworded to present tense in 100d288"
+          },
+          {
+            "id": "N-CS-I4-02",
+            "disposition": "FIXED",
+            "summary": "4 test-file Red-Gate-era headers refreshed in dfd51bc — the stale-comment family (raised passes 2, 3, 4) is now CLOSED, no longer deferred to PR stage"
+          }
+        ],
+        "clean_lenses": [
+          "security CLEAN (admission-before-lookup, byte-identical E-ADM-009 re-verified, destroy shim never dials, fail-closed guards)",
+          "concurrency CLEAN (SIGHUP-synthesis coalescing parity, three-arm select shared shutdown label)",
+          "taxonomy CLEAN otherwise",
+          "test honesty CLEAN incl. pass-3 accommodations verified honest and tightening",
+          "File-Change List 25/25 complete vs diff",
+          "POL-001/002/004 clean, POL-005 executed"
+        ],
+        "post_remediation": {
+          "feature_head": "100d28890eb7a07541aa9aa93be8339faa8b5e4d (1b0e010 -> dfd51bc red -> 100d288 green)",
+          "freeze": "LIFTED at pass 4",
+          "full_suite": "25 pkgs ok -count=1 (orchestrator-run)",
+          "race": "clean cmd/sbctl",
+          "lint": "0 issues",
+          "gofumpt": "clean",
+          "output_contract": "default = bare data object (AC-001 PC-4 / AC-005 PC-1 literals top-level); --json = envelope; missing-flag = single plain usageErrf line, exit 2"
+        }
       }
     ]
   }

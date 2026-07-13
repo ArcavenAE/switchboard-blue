@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-13T08:56:35Z","command":"go test ./... -count=1 2>&1 | grep -v '^ok\\|no test files' ; echo \"EXIT=$?\" ; go test ./... -count=1 2>&1 | grep -c '^ok'"}
+{"status":"pass","timestamp":"2026-07-13T11:05:12Z","command":"go test ./... -count=1 2>&1 | grep -cv 'no test files' ; go test ./... -count=1 2>&1 | grep -E 'FAIL' | head -3 ; echo \"FAILCOUNT_ABOVE\" && gofumpt -l . | head -3 ; echo OK"}

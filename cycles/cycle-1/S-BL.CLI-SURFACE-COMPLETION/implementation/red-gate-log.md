@@ -289,6 +289,76 @@ dials); concurrency CLEAN (buffered-1 drop-coalescing, two-writers-one-
 reader safe, never-closed channel); spec-code drift CLEAN including
 VP-078/VP-079 consistency; policies clean.
 
+## Step-4.5 pass 4
+
+**Adversary:** adv-cs-i4, 2026-07-13. **Verdict:** HAS_FINDINGS, streak
+0/3. **Diff reviewed:** `4c276d9..1b0e010`. Dispatch tuple — develop
+`4c276d935b089026fac4fa796612352374bb880f`, feature
+`1b0e01048486cf07eed3fe728a4bfc1af1112a8a`, factory
+`be00331ad419a0d3ed536d4baa53457000d334e2` — POL-005 verified PASS
+across 10 artifacts (incl. story v2.8, STORY-INDEX v4.94 — all matched).
+
+**F-CS-I4-001 (MED, code, implementer-owned):** `runPathsPing` and
+`runSvtnStatus` hardcoded `useJSON = true` — they always emitted the
+`{"ok":true,"data":...}` envelope, making `--json` a silent no-op. This
+violated interface-definitions v1.31 §214, diverged from the house
+pattern (`paths list`, `router status`, `list-keys`, and this very
+story's own `reload`/`drain`), and meant AC-001 PC-4 and AC-005 PC-1's
+bare literals were never produced at the top level.
+
+**Escalation record — the strongest BC-5.39.001 evidence this story has
+produced:** the same observation was raised as a NITPICK by three
+consecutive fresh-context passes (N-CS-I1-01, N-CS-I2-02, N-CS-I3-01)
+and orchestrator-sanctioned each time on the shared reasoning "no AC
+mandates `--json`." Pass 4 located the governing §214 clause *outside*
+the ACs — the prior three sanctions were superseded, the finding was
+accepted, and the code freeze that had held since pass 1 was **LIFTED**.
+This is the multi-pass fresh-context discipline working exactly as
+designed: a systemic blind spot shared by three independent reviewers
+was still caught, because the fourth reviewer looked somewhere the
+first three hadn't.
+
+Remediated TDD-shaped:
+- **RED** `dfd51bc` (test-writer): 3 happy-path tests split into
+  `default_bare_data`/`json_flag_envelope` subtests with shared
+  helpers, verified FAILING against the always-envelope implementation;
+  confirmed no AC mandates the envelope in default mode; AC-005 PC-1
+  also specifies a bare literal.
+- **GREEN** `100d28890eb7a07541aa9aa93be8339faa8b5e4d` (implementer):
+  `useJSON` threaded through every `writeError`/`writeSuccess`/
+  `connectAndRun` call in both functions; both `//nolint:unparam`
+  annotations dropped; no new lint issues.
+
+**F-CS-I4-002 (LOW, code, implementer-owned):** client-side missing-flag
+paths double-emitted `writeError(true, "E-CFG-001", ...)` followed by
+`reported(usageErrf(...))` — the canonical pattern per Ruling 2 Addendum
+and the §110/§111 siblings is a bare `usageErrf`.
+Fixed in `100d288`: bare `usageErrf`, message text byte-identical,
+shape-agnostic missing-flag tests stayed green.
+
+**Nitpick dispositions:** N-CS-I4-01 FIXED in `100d288`
+(`wireRouterControlHandlers`' doc comment reworded out of stale future
+tense — the handler bodies are fully implemented). N-CS-I4-02 FIXED in
+`dfd51bc` (4 test-file Red-Gate-era headers refreshed). The stale-comment
+family raised across passes 2, 3, and 4 is now **CLOSED** — no longer
+deferred to PR stage.
+
+**Clean lenses:** security CLEAN (admission-before-lookup, byte-identical
+E-ADM-009 re-verified, destroy shim never dials, fail-closed guards);
+concurrency CLEAN (SIGHUP-synthesis coalescing parity, three-arm select
+shared shutdown label); taxonomy CLEAN otherwise; test honesty CLEAN
+including confirmation that the pass-3 accommodations were honest and
+tightening; File-Change List 25/25 complete vs diff; POL-001/002/004
+clean, POL-005 executed.
+
+**Post-remediation:** feature head `100d28890eb7a07541aa9aa93be8339faa8b5e4d`
+(`1b0e010` → `dfd51bc` red → `100d288` green); freeze LIFTED at pass 4;
+full suite 25 packages `ok` at `-count=1` (orchestrator-run); race-clean
+`cmd/sbctl`; lint 0 issues; gofumpt clean. Output contract now: default
+= bare data object (AC-001 PC-4 / AC-005 PC-1 literals top-level);
+`--json` = envelope; missing-flag = single plain `usageErrf` line, exit
+2.
+
 ## Status
 
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
@@ -296,6 +366,7 @@ HAS_FINDINGS, remediated @ `1b0e010`. Step-4.5 pass 2 HAS_FINDINGS —
 spec-governance only, zero code defects, remediated factory-side (all
 four Forward Obligations DISCHARGED). Step-4.5 pass 3 HAS_FINDINGS —
 story File-Change List completeness only, zero code defects, remediated
-@ story v2.8; feature branch frozen at `1b0e010`; streak 0/3. Next:
-step-4.5 pass 4 (BC-5.39.001/BC-5.39.002, diff range `4c276d9..1b0e010`,
-identical code to pass 3).
+@ story v2.8. Step-4.5 pass 4 HAS_FINDINGS — F-CS-I4-001 (MED, §214
+`--json` contract) + F-CS-I4-002 (LOW, `usageErrf` shape), remediated
+TDD-shaped @ `100d288`; code freeze lifted; streak 0/3. Next: step-4.5
+pass 5 (BC-5.39.001/BC-5.39.002, diff range `4c276d9..100d288`).
