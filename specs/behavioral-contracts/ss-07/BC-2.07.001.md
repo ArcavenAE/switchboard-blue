@@ -2,11 +2,17 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.13"
+version: "1.14"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
 phase: 1a
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "e6efb60"
+extracted_from: null
 bc_id: BC-2.07.001
 subsystem: network-management
 architecture_module: internal/svtnmgmt
@@ -18,6 +24,17 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-12
+    version: "1.14"
+    actor: product-owner
+    change: >
+      S-BL.CLI-SURFACE-COMPLETION Ruling 2 (S-BL.CLI-SURFACE-COMPLETION-rulings.md):
+      extend BC with new Postcondition PC-4 (Status) — wires `admin.svtn.status`,
+      authority `resolveCallerAdmissionAnyRole` (any admitted role, mirroring
+      BC-2.05.004 F-L2-003 list-keys precedent), response excludes session/health
+      data (ARCH-09 purity boundary). Three new Canonical Test Vectors
+      (happy-path, not-found E-SVTN-003, admission-denied E-ADM-009). Two new
+      VP-048 sibling rows. No change to existing PC-1/PC-2/PC-3 or Invariants.
   - date: 2026-06-28
     version: "1.1"
     actor: product-owner
@@ -154,6 +171,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 1. **Create**: New SVTN ID registered on the router; control node's key added as the first admitted control-role key; SVTN is ready for additional key registrations and node admissions.
 2. **Bootstrap**: The first control key is added to the router's admitted set via a local operation (no network admission required — this is the trust anchor). **Trust anchor semantics (F-CS-004 addendum):** the key is initially registered with `admitted=false`; the control node completes the standard challenge-response admission protocol to flip its own key to `admitted=true`. This means the bootstrap path is not a privilege bypass — it merely seeds the admitted-key set so that the challenge-response can proceed. The mechanism must be documented and auditable.
 3. **Destroy**: All admitted keys for the SVTN are removed from the router; all active sessions on that SVTN are terminated; SVTN ID is freed.
+4. **Status (Ruling 2, S-BL.CLI-SURFACE-COMPLETION-rulings.md, 2026-07-12):** Returns the SVTN's `svtn_id` (hex), `name`, `created_at`, and admitted-key counts grouped by role. Wired as `admin.svtn.status`, registered in `BuildAdminHandlers` (control-mode-daemon-only, same as create/destroy — router/access/console pass nil admin handlers per ADR-004 and correctly return E-RPC-010). Authority: any admitted role in the target SVTN, OR operator-set member, OR bootstrap key (`resolveCallerAdmissionAnyRole`, mirroring BC-2.05.004 F-L2-003 list-keys precedent) — the CONTROL-only AUTHORITY gate is skipped but the ADMISSION gate still applies (CWE-862 defense against cross-SVTN roster/existence enumeration; same reasoning as BC-2.05.004 EC-008). Does **not** include active-session or health data — out of the control-mode daemon's accessible state (ARCH-09 purity boundary; `internal/session` is a forbidden import for `cmd/switchboard/admin_handlers.go`; no health indicator is proposed for the same reason — there is no accessible signal at this boundary to compute one from). Not-found is E-SVTN-003 (reuse the existing `mapAdminError` `ErrSVTNNotFound` arm). CLI: `sbctl svtn status --name=<svtn-name>` — a genuine standalone top-level dispatch (not routed through `sbctl admin` framing), since status is read-only/non-destructive and carries none of the confirm-gate duplication risk that motivates the `svtn destroy` migration-shim disposition (see interface-definitions.md §60/§62).
 
 ## Invariants
 
@@ -187,6 +205,9 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 | Genesis SVTN create: `HasAnySVTN()==false`, caller==bootstrap key | Create succeeds; SVTN ID returned; control-role bootstrap key registered atomically in admitted set (`admitted=false`, flipped to `admitted=true` via challenge-response); Inv-3 genesis carve-out applies — `role == RoleControl` keySet lookup correctly skipped on genesis path (Ruling-8). Reference: decisions/wave-6-tranche-a-scope-rulings.md Ruling-8. | happy-path |
 | Non-bootstrap control-role key invokes `sbctl admin svtn destroy --name=mynet` | SVTN destroyed; all admitted keys removed; all active sessions terminated; confirmation returned — handler uses `resolveAndVerifyCallerRole` gate (not bootstrap-only check) (W6TB-A) | happy-path |
 | Non-control (console/readonly) key invokes `admin.svtn.destroy` via mgmt RPC | E-RPC-011 wrapping E-ADM-009 "insufficient authority for operation admin.svtn.destroy: key <fp> has role <role>"; SVTN unchanged — `resolveAndVerifyCallerRole` fires at handler layer before `SVTNManager.Destroy` is reached (W6TB-A) | error |
+| `sbctl svtn status --name=mynet` (caller admitted to `mynet` in any role) | `{"svtn_id":"<hex>","name":"mynet","created_at":"<RFC3339>","key_counts":{"control":1,"console":0,"access":2}}`; exit code 0 (Ruling 2, PC-4) | happy-path |
+| `sbctl svtn status --name=doesnotexist` | E-SVTN-003 "SVTN not found: doesnotexist"; exit code 1 (Ruling 2, PC-4) | error |
+| `sbctl svtn status --name=mynet` (caller has a valid operator key admitted only to a DIFFERENT SVTN, not `mynet`, not operator-set, not bootstrap) | E-ADM-009 "insufficient authority for operation admin.svtn.status: key <fp> has role <role>"; SVTN roster/existence not disclosed — admission gate fires before status is computed (Ruling 2, PC-4; CWE-862 defense, mirrors BC-2.05.004 EC-008) | error |
 
 ## Verification Properties
 
@@ -195,6 +216,8 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 | VP-048 | SVTN create is idempotent for the first invocation; error on duplicate | unit |
 | VP-048 | SVTN destroy removes all admitted keys | integration |
 | VP-048 | Only control-role keys can create/destroy SVTNs | integration |
+| VP-048 | `admin.svtn.status` returns accurate admitted-key counts grouped by role, scoped to the target SVTN only, with no session/health fields present in the response | integration |
+| VP-048 | `admin.svtn.status` admission-gate enforcement: any admitted role (control/console/access) in the target SVTN, OR operator-set member, OR bootstrap key succeeds; a caller with no admission relationship to the target SVTN is denied E-ADM-009 | integration |
 
 ## Traceability
 
@@ -215,6 +238,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.14 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 2 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): extend BC with new Postcondition PC-4 (Status) — wires `admin.svtn.status`, registered in `BuildAdminHandlers` (control-mode-only). Authority: any admitted role in the target SVTN, OR operator-set member, OR bootstrap key (`resolveCallerAdmissionAnyRole`, list-keys precedent, BC-2.05.004 F-L2-003) — authority gate bypassed, admission gate retained. Response schema (`svtn_id`, `name`, `created_at`, `key_counts`) deliberately excludes session/health data — ARCH-09 purity boundary, `internal/session` is a forbidden import for `cmd/switchboard/admin_handlers.go`. Not-found reuses E-SVTN-003. CLI dispatch is `sbctl svtn status --name=<svtn-name>` (bare top-level, not `sbctl admin`-prefixed — read-only, no confirm-gate duplication risk). Three new Canonical Test Vectors added (happy-path, not-found, admission-denied). Two new VP-048 sibling rows added. No change to PC-1/PC-2/PC-3 or Invariants. |
 | 1.13 | 2026-07-02 | spec-steward | F-P4L3-MED-2 (POL-002): Traceability Stories row cite S-6.05 v1.5 → v1.7 (this fix-burst bumps story to v1.7). Governance-only. [governance_leaf: true — downstream story/VP pins DO NOT need to re-sync per drbothen/vsdd-factory#429 draft policy] |
 | 1.12 | 2026-07-02 | spec-steward | F-P3L3-M-05: Sync Stories-row narrative — S-6.05 anchor updated v1.3 → v1.5 (v1.4 was reverted spec regression against RULING-W6TB-A; v1.5 restores Destroy(caller admission.AdmittedKey, svtnName string) signature and Go-API defense-in-depth check). No behavioral changes. |
 | 1.11 | 2026-07-01 | spec-steward | RULING-W6TB-A (decisions/RULING-W6TB-A-svtn-destroy-authority.md): add destroy authority clarification to Inv-3 — admin.svtn.destroy uses resolveAndVerifyCallerRole general control-role gate (not bootstrap-only); E-ADM-009 at RPC handler layer wrapped in E-RPC-011; ErrDestroyUnauthorized / E-ADM-011 Variant 2 is Go-API-layer defense-in-depth only. Genesis re-open after last-SVTN destroy is permitted recovery semantics. Add two canonical test vectors for destroy authority (non-bootstrap control-role happy-path; non-control error path). Update Traceability Stories row to cite S-6.05 v1.3 anchoring. No behavioral changes — clarification and explicit scoping only. |

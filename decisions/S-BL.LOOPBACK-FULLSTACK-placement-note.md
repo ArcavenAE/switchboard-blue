@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.0"
+version: "1.1"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -26,6 +26,13 @@ related_documents:
   - .factory/specs/architecture/ARCH-08-dependency-graph.md
   - .factory/specs/architecture/ARCH-03-routing-engine.md
 ---
+
+## Changelog
+
+| Version | Change |
+|---------|--------|
+| 1.1 | AC-001 sign-off (S-BL.LOOPBACK-FULLSTACK Risk 1 / Q4): reviewed the proposed `arq.OnAck` call-contract against `internal/arq/arq.go`, its full test suite, `internal/arqsend`, and ARCH-03 §Downstream ARQ. Verdict: REVISED. The `ackSeq`/SACK value convention is CONFIRMED correct; the `driver.arqServer`/`driver.arqClient` two-instance shape is a structural defect — `OnAck`'s payload recovery reads only from the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by prior `EnqueueSend` calls on that SAME instance, so a never-`EnqueueSend`'d `arqClient` can never return a delivered payload and `WaitForEcho` would time out on every call. Required fix: collapse into one shared `*arq.ARQ` instance. See "Q4 Addendum — AC-001 Sign-off (2026-07-12)" below. Supersession banner added at the top of Q4. |
+| 1.0 | Initial release. Full design note (Q1–Q8) for the tick-driven loopback stack, VP-042 benchmark shape, Non-Goals, package impact summary, story-sizing estimate, and Risks/Open Questions requiring story-writer ACs. |
 
 # Architect Design Note: Full-Stack Loopback for VP-042
 ## Story: S-BL.LOOPBACK-FULLSTACK
@@ -197,6 +204,22 @@ not model.
 ---
 
 ## Q4 — Downstream flow: echo generation → client delivery → round-trip completion
+
+> **[AC-001 sign-off annotation — 2026-07-12]** The `driver.arqServer` /
+> `driver.arqClient` two-instance shape shown below is SUPERSEDED. Architect
+> sign-off (Risk 1) found that `arq.OnAck`'s payload recovery (`payloadFor`,
+> `arq.go:291`) reads only from the SAME instance's `inFlight`/`reorderBuf`
+> maps, which are populated exclusively by prior `EnqueueSend` calls on that
+> instance (`arq.go:339`). A separate `arqClient` that never receives
+> `EnqueueSend` calls can never return a delivered payload from `OnAck` —
+> `WaitForEcho` would time out on every call, not just in a subtle edge
+> case. Collapse `arqServer`/`arqClient` into ONE shared `*arq.ARQ` instance.
+> The `ackSeq`/SACK value convention chosen below (this frame's own ChanSeq,
+> zero SACK) is CONFIRMED correct and unaffected by this fix. See
+> "Q4 Addendum — AC-001 Sign-off (2026-07-12)" at the end of this note for
+> the full ruling and reasoning trail. Do not implement the two-instance
+> shape from the code blocks below — implement the shared-instance shape
+> per the Addendum.
 
 `loopbackSink.SendInput` (the `KeystrokeSink` injected into the loopback
 driver's dedicated `AccessNode`, per Q2) is the echo generator:
@@ -585,3 +608,209 @@ Rationale:
    PO/architect act per existing VP lifecycle convention (compare how VP-042's
    own history table already distinguishes "audited"/"partial evidence" from
    a lock flip).
+
+---
+
+## Q4 Addendum — AC-001 Sign-off (2026-07-12)
+
+**Scope:** discharges AC-001 (S-BL.LOOPBACK-FULLSTACK Risk 1) — the
+pre-implementation review of the `arq.OnAck` call-contract proposed in Q4,
+required before `dev-story` may treat that contract as settled (Risk 1,
+option (a): "an architect placement-note addendum confirming this contract
+before `dev-story` begins").
+
+### Verdict: REVISED
+
+The `ackSeq`/SACK **value convention** the note proposes — `ackSeq` = the
+just-arrived frame's own `ChanSeq`, SACK bitmap all-zero in the no-loss
+happy path — is **CONFIRMED correct**. But the **instance topology** the
+note's Q4 code blocks assume (`driver.arqServer` for `EnqueueSend`,
+`driver.arqClient` for `OnAck`, as two separate `*arq.ARQ` values) is a
+structural defect that would make the harness non-functional: `OnAck`
+would return zero delivered payloads on every call, `driver.pending`
+entries would never resolve, and `WaitForEcho` would time out on every
+round trip — not a subtle correctness gap, a hard benchmark failure. This
+contradicts the note's own Risk 1 framing ("getting this wrong doesn't
+break VP-042's measured number") for this specific failure mode; it does
+break the measured number, because no measurement would ever complete.
+
+**Required revision:** collapse `driver.arqServer` and `driver.arqClient`
+into a single shared `*arq.ARQ` field (e.g. `driver.downstreamARQ`). The
+downstream ticker's existing call sequence is otherwise unchanged: on each
+tick that produces a data frame, call `EnqueueSend(f.ChanSeq, f.Payload,
+now)` on that instance, then — after `Send` → `deliverDownstream` →
+`Receive` complete synchronously within the same tick and goroutine (Q3's
+own established rationale for not spawning per-path goroutines already
+guarantees this ordering) — call `OnAck(mpFrame.ChanSeq(), zeroSACK)` on
+the SAME instance. With that fix, the proposed `ackSeq`/SACK convention is
+binding as originally written.
+
+### Reasoning trail
+
+**1. `OnAck`'s payload-delivery mechanism is instance-local and
+EnqueueSend-dependent, not a generic "process an incoming frame" call.**
+
+`OnAck` (`internal/arq/arq.go:201`) delivers payloads via two paths, both
+scoped to the receiver's own instance state:
+
+- Step 1 (`arq.go:235-244`) walks `nextExpected+1..ackSeq` and calls
+  `a.payloadFor(seq)` (`arq.go:291-301`) for each. `payloadFor` checks
+  `a.reorderBuf` then `a.inFlight` — **and nothing else**. There is no
+  third source.
+- Step 2 (`arq.go:250-265`) buffers SACK-flagged out-of-order sequences
+  into `a.reorderBuf`, but only by cloning from `a.inFlight[seq]`
+  (`arq.go:255-261`) — if `inFlight` doesn't have the entry, nothing is
+  buffered, silently.
+
+`a.inFlight` is populated in exactly one place in the entire package:
+`EnqueueSend` (`arq.go:339-348`, `a.inFlight[seq] = &inFlightFrame{...}`).
+`a.reorderBuf` is populated in exactly one place: `OnAck`'s own Step 2,
+itself sourced from `inFlight`. There is no method that lets a caller
+inject a payload for `OnAck` to return other than a prior `EnqueueSend` on
+that same `*ARQ` value. A fresh instance that has never seen `EnqueueSend`
+has both maps permanently empty; `OnAck` on it will return `(nil, nil)`
+for every call, forever, regardless of what `ackSeq` value is supplied —
+`nextExpected` still advances (masking the problem: no error is returned),
+but `toDeliver` never gets anything appended.
+
+Traced through the design's own pseudocode (Q4): `driver.arqClient` is
+never the target of any `EnqueueSend` call anywhere in Q3 or Q4 — only
+`driver.arqServer` receives `EnqueueSend`. Under the two-instance shape as
+written, `driver.arqClient.OnAck(...)` returns an empty slice on every
+downstream tick; the `for each payload in delivered` loop
+(placement note, downstream-flow pseudocode) never executes;
+`driver.pending[id]` is never resolved; every `WaitForEcho` call times out.
+
+**2. All existing evidence in this codebase uses ONE shared instance for
+both "record what I sent" and "process what came back," never two.**
+
+- Every test in `internal/arq/arq_test.go` that exercises `OnAck` calls
+  `EnqueueSend` on the identical `*ARQ` receiver variable first — e.g.
+  `TestARQ_OnAck_NoDuplicateDelivery` (`arq_test.go:114-141`:
+  `a.EnqueueSend(1, ...)` then `a.OnAck(1, ...)` on the same `a`), the
+  SACK-buffering test (`arq_test.go:186-228`: three `EnqueueSend` calls
+  then three `OnAck` calls, same `a`), the failover-resync test
+  (`arq_test.go:835-868`), the property-based fuzz test
+  (`arq_test.go:900-914`: `EnqueueSend` then `OnAck` inside the same loop
+  iteration, same `a`). No test anywhere constructs two `*ARQ` values
+  where one receives `EnqueueSend` and a different one receives `OnAck`
+  for the same sequence space.
+- `internal/arqsend` — the only current production consumer of `*arq.ARQ`,
+  and the closest thing to an existing calling convention — is explicit
+  that a `Retransmitter` "holds an `*arq.ARQ` handle" (singular,
+  `arqsend.go:9`, `:66`, `:100`) and that "Two Retransmitters over
+  independent ARQ handles are independent and may run in parallel"
+  (`arqsend.go:26-29`) — i.e. the unit of sharing is one handle per flow,
+  not one handle per role. `arqsend` only exercises the
+  `EnqueueSend`/`PayloadForInFlight`/`RemoveInFlight` subset of that SAME
+  handle; the natural (and only structurally workable) place for a future
+  production `OnAck` call, once a real console's piggybacked ACK/SACK
+  arrives over the wire (F-023), is on that SAME handle — not a second one.
+- The `ARQ` struct itself (`arq.go:118-146`) carries both `inFlight`
+  (sender bookkeeping) and `nextExpected`/`reorderBuf` (delivery-pointer
+  bookkeeping) as fields of ONE struct. This is a unified per-flow state
+  machine, not two role-scoped state machines that happen to share a Go
+  type.
+
+The package doc's "Receiver role (console): OnAck..." / "Sender role
+(access node): TLPKTDROP..." framing (`arq.go:111-115`) describes what
+each *method* accomplishes conceptually within the protocol (advancing the
+receiver's confirmed-delivery state vs. terminating an overdue send) — it
+is not evidence that two separate instances are intended. Given (1) above,
+it cannot be: `OnAck` structurally cannot do its job without the same
+instance's `EnqueueSend` history.
+
+**3. ARCH-03 is consistent with this reading once "the caller's tick loop
+forwards them to the terminal" is read as this harness's stand-in, not a
+literal physical-terminal requirement.**
+
+ARCH-03 §Downstream ARQ (`ARCH-03-routing-engine.md:163-176`) describes
+the *protocol* in terms of two conceptual roles (access-node SendBuffer,
+console RecvBuffer) but cites a single package, `internal/arq`, for the
+whole section — consistent with one Go state machine modeling the
+access-node's local view of both roles (what it sent, what's now
+confirmed via the console's real piggybacked ACK/SACK). The "delivery
+contract" note (`ARCH-03-routing-engine.md:195-201`, "OnAck returns
+deliverable frames synchronously... the caller's tick loop forwards them
+to the terminal") is written from production's perspective, where the
+real console is a separate physical endpoint that does its own
+(un-modeled-here) receive-side buffering; in THIS harness, `driver.pending`
++ `WaitForEcho` is the stand-in for "the terminal," and it is fed
+correctly once `OnAck` is called on the same instance that sent the frame.
+
+### Answers to the three specific checks requested
+
+**(a) Is `ackSeq` cumulative-highest-in-order vs per-frame semantically
+distinguishable in `arq.go`, and does the proposed convention match?**
+
+Distinguishable, and the implementation is unambiguously cumulative:
+`OnAck`'s Step 1 loop is `for seq := a.nextExpected + 1; seq <= ackSeq;
+seq++` (`arq.go:235`) — `ackSeq` is a watermark, not a bare per-frame
+tag, and the loop explicitly handles multi-frame gaps in one call
+(BC-2.02.005 invariant 4, `arq.go:224-229`). The design's "this frame's
+own `ChanSeq`" framing is a *value choice* that is mathematically
+equivalent to "advance the cumulative watermark by exactly one" — but only
+under this harness's own guarantees (single downstream producer, strictly
+increasing `ChanSeq`, one frame per tick, no simulated loss/reordering —
+Non-Goals). That equivalence claim in the note is correct. It requires the
+single-shared-instance fix above to matter at all — with two instances,
+`nextExpected` on `arqClient` advances in a vacuum with no payload ever
+recoverable.
+
+**(b) Does zero-SACK ever mis-train the window state?**
+
+No, given the fix. Because `ackSeq == nextExpected+1` on every call in
+this topology, Step 3's reorder-buffer flush (`arq.go:271-283`) is always
+a no-op — nothing was ever buffered by Step 2, since there is never a
+genuine out-of-order arrival to represent with SACK bits — and Step 2
+itself is a correct no-op against an all-zero bitmap. This matches ground
+truth for a genuinely loss-free, strictly in-order stream. Caveat already
+correctly named in the note's Risk 1: this zero-SACK convention is valid
+*because* Non-Goals excludes loss/reordering, not because it is a
+general-purpose convention — a future loss-injection VP reusing this call
+site must replace it with a bitmap reflecting true reorder state.
+
+**(c) Any interaction with RULING-003 window validation at the boundary
+(first frame, wraparound)?**
+
+None. `ErrAckOutOfWindow`'s guard (`ackSeq - a.nextExpected >
+sackWindowSize`, `arq.go:220`; RULING-003, `ARCH-03-routing-engine.md:
+203-209`) is never at risk here: the first downstream `ChanSeq` is 1 per
+RULING-001 §R1 (cited in `arq.go:231-234` and the note's own Q7), so the
+first call is `1 - 0 = 1 <= 64` — comfortably inside the window. 32-bit
+`ChanSeq` wraparound is explicitly out of MVP scope (`arq.go:231-234`,
+RULING-001 §R2, ~49–497-day wrap interval) and structurally unreachable
+within a 500-sample benchmark at millisecond-scale tick intervals.
+
+### Constraints the implementer must observe
+
+1. **One shared `*arq.ARQ` instance for the downstream direction.**
+   Rename `driver.arqServer`/`driver.arqClient` to a single field (e.g.
+   `driver.downstreamARQ`). `EnqueueSend` and `OnAck` for a given `ChanSeq`
+   MUST be called on that same instance, in that order, within the same
+   downstream-ticker goroutine tick.
+2. **Do not reuse the always-zero-SACK convention outside this harness's
+   Non-Goals envelope.** It is correct here because loss/reordering are
+   out of scope; a future loss-injection story reusing `OnAck` must
+   compute a real bitmap.
+3. **Add a regression guard against reintroducing the two-instance
+   shape.** A short test asserting the downstream driver has exactly one
+   `*arq.ARQ` field (or that `EnqueueSend`/`OnAck` observably operate on
+   shared state — e.g. a round trip actually completing at all) is
+   sufficient; this is cheap insurance given the failure mode is silent
+   (no error, just permanently empty delivery).
+4. **Story-writer scope:** amend Risk 1 / AC-001 wording to record this
+   addendum's verdict (REVISED, not simple CONFIRMED) and to bind the
+   implementer to the shared-instance shape — the current story-writer
+   input (Q4 as originally written) still shows the two-instance code and
+   would mislead an implementer working from the code blocks alone without
+   this addendum in hand.
+
+**Files consulted for this sign-off:** `internal/arq/arq.go` (full file),
+`internal/arq/arq_test.go` (OnAck/EnqueueSend call sites),
+`internal/arqsend/arqsend.go` (package doc + `Retransmitter` composition),
+`.factory/specs/architecture/ARCH-03-routing-engine.md:155-220`
+(§Upstream Idempotent Replay tail, §Downstream ARQ, ADR-005 lead-in). No
+production or test code anywhere in the repo constructs two `*arq.ARQ`
+instances in a sender/receiver split — confirmed via
+`grep -rn "arqServer\|arqClient\|arq\.New("` across the tree.

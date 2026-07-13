@@ -55,6 +55,16 @@ patterns:
     evidence:
       - .factory/cycles/cycle-1/lessons.md lesson #19
       - filed drbothen/vsdd-factory#620 (HIGH)
+    prevented: >
+      PREVENTED instance 2026-07-12/13: S-BL.LOOPBACK-FULLSTACK placement-note
+      Q4 proposed a two-instance arqServer/arqClient topology whose false
+      premise (OnAck payload recovery working cross-instance) would have made
+      the harness silently non-functional — caught at design-review time by
+      the story's AC-001 pre-implementation sign-off gate (architect verdict
+      REVISED, placement note v1.1), i.e., BEFORE implementation, unlike
+      instances 1-2 which surfaced at empirical contact. The AC-001 gate
+      exists because of this pattern's instance 1 (#620 arc) — first
+      evidence the countermeasure works.
     watch_for: >
       This is a methodology-level gap, not a one-off. Watch whether it
       recurs on OTHER unstated runtime relationships (lock ownership,

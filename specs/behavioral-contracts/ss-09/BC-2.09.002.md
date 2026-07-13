@@ -2,11 +2,18 @@
 artifact_id: BC-2.09.002
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/failure-modes.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "7aaa67b"
+extracted_from: null
 bc_id: BC-2.09.002
 subsystem: deployment-operations
 architecture_module: internal/drain
@@ -18,6 +25,17 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.3"
+    date: 2026-07-12
+    author: product-owner
+    change: >
+      S-BL.CLI-SURFACE-COMPLETION Ruling 4 (governance-only addendum, no PC/AC
+      behavior change): Trigger gains a clarifying sentence — RPC-triggered
+      drain via the `router.drain` wire verb causes the same shutdown sequence
+      as SIGTERM (both reach the `shutdown:` label); the RPC connection is
+      expected to be severed as the daemon exits, consistent with PC-3's
+      best-effort-delivery framing. Resolves DRIFT-HS006-DRAIN-CLI-MISSING
+      (drain half). [governance_leaf: true]
   - version: "1.2"
     date: 2026-07-11
     author: product-owner
@@ -66,7 +84,7 @@ When a router is about to shut down gracefully (SIGTERM received, `sbctl router 
 
 ## Trigger
 
-Router receives SIGTERM or operator runs `sbctl router drain`.
+Router receives SIGTERM or operator runs `sbctl router drain`. **RPC-trigger note (Ruling 4, S-BL.CLI-SURFACE-COMPLETION-rulings.md, 2026-07-12, governance-only):** RPC-triggered drain via the `router.drain` wire verb causes the same shutdown sequence as SIGTERM (both reach the `shutdown:` label); the RPC connection is expected to be severed as the daemon exits, consistent with PC-3's best-effort-delivery framing. See `S-BL.CLI-SURFACE-COMPLETION-rulings.md` Ruling 4.
 
 ## Edge Cases
 
@@ -107,3 +125,11 @@ Router receives SIGTERM or operator runs `sbctl router drain`.
 
 - BC-2.02.003 — depends on: alternate path must be ranked and available
 - BC-2.09.001 — related to: PE graduation is required before drain migration makes sense (multi-path required)
+
+## Changelog
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.3 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 4 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): governance-only addendum — Trigger gains a clarifying sentence that RPC-triggered drain via the `router.drain` wire verb causes the same shutdown sequence as SIGTERM (both reach the `shutdown:` label); the RPC connection is expected to be severed as the daemon exits, consistent with PC-3's best-effort-delivery framing. No PC/AC behavior change. Resolves the drain half of `DRIFT-HS006-DRAIN-CLI-MISSING`. [governance_leaf: true — mirrors the POL-005/governance-leaf pattern, e.g. BC-2.07.001.md v1.13] |
+| 1.2 | 2026-07-11 | product-owner | PC-3 and PC-4 amended: acknowledgment is best-effort delivery (observer returns after dispatching DRAIN frame to node write path within drain window). No wire-level DRAIN-ACK opcode. Drain correctness proven by VP-037 observed-behavior property, not by protocol ACK. Refs: F-DW-SP1-006 adjudication. |
+| 1.1 | 2026-06-23 | product-owner | Initial draft — router sends drain signal before shutdown; nodes migrate to alternate routers. |

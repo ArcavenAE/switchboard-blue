@@ -2,10 +2,10 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "3.3"
+version: "3.4"
 status: draft
 producer: product-owner
-timestamp: 2026-07-11T00:00:00
+timestamp: 2026-07-12T00:00:00
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
@@ -62,6 +62,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.06.001 | Quality indicator (green/yellow/red) derived from measured path latency and loss | quality-observability | CAP-021 | P1 | E | active | ss-06/BC-2.06.001.md |
 | BC-2.06.002 | Missing expected frame is a degradation signal triggering indicator downgrade | quality-observability | CAP-021 | P1 | E | active | ss-06/BC-2.06.002.md |
 | BC-2.06.003 | Per-path RTT and loss metrics queryable via sbctl | quality-observability | CAP-022 | P1 | E | active | ss-06/BC-2.06.003.md |
+| BC-2.06.004 | On-demand single-target reachability probe via sbctl paths ping | quality-observability | CAP-022 | P2 | E | active | ss-06/BC-2.06.004.md |
 | BC-2.07.001 | Control node creates and destroys SVTNs; first control key bootstrapped locally | network-management | CAP-023 | P2 | E | active | ss-07/BC-2.07.001.md |
 | BC-2.07.002 | sbctl unified CLI for all four daemon types with OpenSSH key authentication | network-management | CAP-024 | P2 | E | active | ss-07/BC-2.07.002.md |
 | BC-2.07.003 | sbctl reports clear connection error when target daemon is unreachable | network-management | CAP-024 | P0 | E | active | ss-07/BC-2.07.003.md |
@@ -80,11 +81,11 @@ traces_to: '.factory/specs/prd.md'
 | session-discovery | CAP-011–012 | 3 | 0 | 3 | 0 |
 | session-access | CAP-013–016 | 7 | 7 | 0 | 0 |
 | admission-security | CAP-017–020, CAP-020a, CAP-020b | 8 | 8 | 0 | 0 |
-| quality-observability | CAP-021–022 | 3 | 3 | 0 | 0 |
+| quality-observability | CAP-021–022 | 4 | 4 | 0 | 0 |
 | network-management | CAP-023–024 | 4 | 4 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
 | deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **46** | **39** | **7** | **0** |
+| **Total** | **CAP-001–028 + CAP-020a, CAP-020b** | **47** | **40** | **7** | **0** |
 
 ## CAP Coverage Verification
 
@@ -113,7 +114,7 @@ traces_to: '.factory/specs/prd.md'
 | CAP-020a | BC-2.05.007 | covered |
 | CAP-020b | BC-2.05.006 | covered |
 | CAP-021 | BC-2.06.001, BC-2.06.002 | covered |
-| CAP-022 | BC-2.06.003 | covered |
+| CAP-022 | BC-2.06.003, BC-2.06.004 | covered |
 | CAP-023 | BC-2.07.001 | covered |
 | CAP-024 | BC-2.07.002, BC-2.07.003, BC-2.07.004 | covered |
 | CAP-025 | BC-2.08.001 | covered |
@@ -125,6 +126,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.4 | 2026-07-12 | S-BL.CLI-SURFACE-COMPLETION architect rulings (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`) executed: BC-2.06.004 commissioned (Ruling 1 — new BC, `paths.ping` one-shot RTT probe, quality-observability / CAP-022, not an extension of BC-2.06.003); BC-2.07.001 bumped v1.13→v1.14 (Ruling 2 — new Postcondition PC-4 `admin.svtn.status`, any-admitted-role authority via `resolveCallerAdmissionAnyRole`, 3 new test vectors, 2 new VP-048 rows); BC-2.09.001 bumped v1.1→v1.2 and BC-2.09.002 bumped v1.2→v1.3 (Ruling 4 — governance-only addenda naming the `router.reload`/`router.drain` wire verbs, both `[governance_leaf: true]`, no PC/AC change; resolves `DRIFT-HS006-DRAIN-CLI-MISSING`). Ruling 3 (`svtn destroy` top-level migration shim) required no BC change. BC count 46→47; quality-observability subsystem count 3→4, Scope-E count 39→40. |
 | 3.2 | 2026-07-06 | BC-2.09.003 bumped to v2.0 (governance-only VP-table narrowing: VP-028/VP-029 rows corrected to startup-validation scope only; 8 rows reclassified test-as-evidence with owning story/AC citations; reload fail-closed row annotated → S-7.04-FU-SIGHUP-RELOAD AC-002 obligation; no PC/EC/Inv semantic changes; governance-leaf change per PO ruling). BC count unchanged at 45. |
 | 3.1 | 2026-07-02 | BC-2.08.001 bumped to v1.5 (F1 remediation: retro-annotate v1.3 changelog row as governance_leaf per POL-003 Exception A audit-tool compatibility; no behavioral change) [governance_leaf: true — downstream pins DO NOT need to re-sync per POL-003 Exception A]. BC count unchanged at 45. |
 | 3.0 | 2026-07-02 | S-6.05 P5 + S-7.03 P4 combined fix-burst: BC-2.08.001 v1.3→v1.4 (Inv-3 per-mode transport deference to BC-2.07.004 EC-013; unconditional Unix-socket wording corrected; Stories row S-7.03 v1.3→v1.4). BC-2.07.001 governance_leaf annotation added to v1.13 entry; Stories row S-6.05 v1.7→v1.8 (no version bump). BC count unchanged at 45. |

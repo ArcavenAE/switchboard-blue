@@ -2,11 +2,18 @@
 artifact_id: BC-2.09.001
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/assumptions.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "f13bf15"
+extracted_from: null
 bc_id: BC-2.09.001
 subsystem: deployment-operations
 architecture_module: internal/config
@@ -17,7 +24,17 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-07-12
+    version: "1.2"
+    actor: product-owner
+    change: >
+      S-BL.CLI-SURFACE-COMPLETION Ruling 4 (governance-only addendum, no PC/AC
+      behavior change): PC-1 gains a clarifying sentence — RPC-triggered reload
+      via the `router.reload` wire verb is dispatched through the same `sighupCh`
+      channel the SIGHUP OS-signal path consumes; the two triggers are
+      code-path-identical from that point forward. Resolves
+      DRIFT-HS006-DRAIN-CLI-MISSING (reload half). [governance_leaf: true]
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -49,7 +66,7 @@ An E router (no upstream connections) graduates to PE mode by adding upstream ro
 
 ## Postconditions
 
-1. The router reloads its config (SIGHUP or `sbctl router reload`).
+1. The router reloads its config (SIGHUP or `sbctl router reload`). **RPC-trigger note (Ruling 4, S-BL.CLI-SURFACE-COMPLETION-rulings.md, 2026-07-12, governance-only):** RPC-triggered reload via the `router.reload` wire verb is dispatched through the same `sighupCh` channel the SIGHUP OS-signal path consumes; the two triggers are code-path-identical from that point forward. See `S-BL.CLI-SURFACE-COMPLETION-rulings.md` Ruling 4.
 2. The router establishes connections to the configured upstream routers.
 3. The router is now a PE router: it has both node-facing and router-facing interfaces active.
 4. Active sessions are not interrupted during the config reload.
@@ -103,3 +120,10 @@ Operator adds upstream router entries to config and reloads: `sbctl router reloa
 ## Related BCs
 
 - BC-2.09.003 — related to: config errors discovered on reload use the same error mechanism
+
+## Changelog
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.2 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 4 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): governance-only addendum — PC-1 gains a clarifying sentence that RPC-triggered reload via the `router.reload` wire verb is dispatched through the same `sighupCh` channel the SIGHUP OS-signal path already consumes; the two triggers are code-path-identical from that point forward. No PC/AC behavior change. Resolves the reload half of `DRIFT-HS006-DRAIN-CLI-MISSING`. [governance_leaf: true — mirrors the POL-005/governance-leaf pattern, e.g. BC-2.07.001.md v1.13] |
+| 1.1 | 2026-06-23 | product-owner | Initial draft — E router graduates to PE mode by adding upstream router connections in config. |

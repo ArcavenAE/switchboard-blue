@@ -8,7 +8,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
-version: "1.0"
+version: "1.1"
 phase: 2
 epic: E-1
 wave: backlog
@@ -19,7 +19,7 @@ inputs:
   - .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
   - .factory/specs/verification-properties/VP-042.md
   - .factory/specs/architecture/ARCH-08-dependency-graph.md
-input-hash: "efb29b5"
+input-hash: "d621ea4"
 traces_to: .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
 behavioral_contracts:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
@@ -53,13 +53,13 @@ cycle: v1.0.0-greenfield
 depends_on: []   # S-BL.TESTENV already MERGED (PR #110, 62e38d3) — this story extends its NewLoopback/LoopbackEnv API; it is not blocked on that story, it builds on shipped code
 blocks: []
 inputDocuments:
-  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.0 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks. Where this story and the note diverge, the note governs.
+  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.1 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS the Q4 Addendum — AC-001 Sign-off (2026-07-12): verdict REVISED — ackSeq/SACK value convention CONFIRMED, but the two-instance arqServer/arqClient topology is a structural defect (OnAck's payload recovery is instance-local and EnqueueSend-dependent); collapse into one shared *arq.ARQ (e.g. driver.downstreamARQ). Where this story and the note diverge, the note governs.
   - '.factory/specs/verification-properties/VP-042.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'   # v2.13 — this story's merge finalizes the PROSPECTIVE pos-23 import-set amendment
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
   - '.factory/stories/S-BL.TESTENV.md'
   - '.factory/stories/S-BL.PE-RECEIVE-LOOP.md'   # precedent for the Env.wg/closeCh ticker-goroutine idiom (Q6) and story-writer conventions (grep-resolved symbols, no line-number citations)
-acceptance_criteria_count: 13
+acceptance_criteria_count: 14
 backlog_origin:
   source: architect design note
   adjudication: "Human disposition, 2026-07-12: author now, deliver later — status draft, unscheduled. Not an adversarial-pass or PO-adjudication origin; commissioned directly to answer the open design questions VP-042.md v1.3's own history flagged (\"lock deferred to a testenv-integrated measurement post S-BL.TESTENV\") and to finalize ARCH-08 v2.13's PROSPECTIVE registration."
@@ -68,7 +68,7 @@ backlog_origin:
 
 # S-BL.LOOPBACK-FULLSTACK: Full-Stack Loopback Testenv Extension for VP-042
 
-> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." It has not been through story-writer's normal wave-planning promotion or an adversarial spec-review cycle. Treat AC-001 (the `arq.OnAck` sign-off gate) as blocking regardless of when this story is picked up — do not let "the story file already exists" substitute for that gate having actually been cleared.
+> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." It has not been through story-writer's normal wave-planning promotion or an adversarial spec-review cycle. AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, but implementation is bound to the single-shared-instance topology from the placement note's Q4 Addendum, not the two-instance shape Q4's original code blocks show. Do not implement from the Q4 code blocks alone — read the Addendum first.
 
 ## Narrative
 
@@ -96,12 +96,24 @@ v1.3's own changelog states the lock is "deferred to a testenv-integrated measur
 
 This story is that testenv-integrated measurement. It is scoped and designed entirely by the architect
 design note listed as this story's binding input
-(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.0) — **story-writer's job here is
+(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.1) — **story-writer's job here is
 transcription, not re-derivation.** Where this story and the placement note appear to diverge, the note
 governs; where this story and VP-042.md's older proof-harness skeleton diverge (the skeleton's two-call
 `env.SendKeystroke`/`env.WaitForEcho` shape vs. this story's token-based `RoundTrip` API), the placement
 note's shape is binding — the skeleton predates the discovery (Q5) that a token is required to fix a
 distinct accumulation bug in `Env.CollectFrames`.
+
+**AC-001 sign-off (2026-07-12, verdict REVISED):** the note's Q4 was reviewed against `arq.go`'s full
+test suite, `internal/arqsend`, and ARCH-03 §Downstream ARQ before this story could be scheduled. The
+`ackSeq`/SACK value convention is CONFIRMED correct as originally written. The `driver.arqServer`/
+`driver.arqClient` two-instance topology Q4's code blocks show is a structural defect — `OnAck`'s
+payload recovery (`payloadFor`) reads only the calling instance's own `inFlight`/`reorderBuf`, populated
+exclusively by that SAME instance's prior `EnqueueSend` calls; a `arqClient` that never receives
+`EnqueueSend` returns `(nil, nil)` from `OnAck` on every call, forever, so every `WaitForEcho` would time
+out — not a subtle correctness gap, a hard benchmark failure. The required fix, binding on this story per
+AC-001 below, is a single shared `*arq.ARQ` instance for the downstream direction (e.g.
+`driver.downstreamARQ`). See the placement note's "Q4 Addendum — AC-001 Sign-off (2026-07-12)" for the
+full reasoning trail.
 
 **Also discharged by this story:** ARCH-08 v2.13's PROSPECTIVE amendment to `internal/testenv`'s §6.5
 pos-23 import set — `{admission, drain, frame, outerassembler, session, upstreamdial}` →
@@ -129,6 +141,13 @@ implementation tasks; (3) the WIP bench cross-reference (Package Impact, `intern
 fan-out into a file on a different branch (`fix/vp-042-testenv-integrated-bench`), which is coordination
 overhead the tick/multipath/token estimate doesn't include.
 
+**AC-001 gate resolved pre-scheduling (2026-07-12):** the gate priced into reason (1) has now been
+discharged — verdict REVISED (single shared `*arq.ARQ` instance required; see AC-001) — before this
+story left draft/unscheduled status. Resolution surfaced a structural topology defect, not a value-
+convention question, but the fix is scoped entirely inside Task 6's existing wiring work; it does not
+add a new task, package, or test file beyond the new regression-guard AC (AC-014). No scope growth —
+the estimate stays 8 points.
+
 ## Anchors Consumed
 
 | Anchor | Verbatim ID | Source | Disposition |
@@ -136,8 +155,8 @@ overhead the tick/multipath/token estimate doesn't include.
 | Timeslice clock fires on every tick regardless of data availability | BC-2.01.001 | VP-042 Source Contract; placement note Q3, Q6 | TO DISCHARGE (harness-scope) — upstream/downstream ticker goroutines call `HalfChannel.Tick()` on a fixed schedule per `cfg.TickIntervalUpstream`/`TickIntervalDownstream`, independent of `Enqueue` timing; `NewLoopback` validates both intervals against `halfchannel.MinTickInterval`/`MaxTickInterval` |
 | Empty-tick frame semantics | BC-2.01.002 | placement note Q1, Non-Goals | TO DISCHARGE (partial, harness-scope) — `Tick()` produces an empty-tick frame on schedule when nothing is enqueued; this story does NOT wire-dispatch empty ticks over multipath (Non-Goals) — a harness-scope boundary, not a production behavior change |
 | Duplicate-and-race: same frame sent on two fastest paths simultaneously | BC-2.02.001 | VP-042 Source Contract; placement note Q3, Q7 | TO DISCHARGE — `multipath.Send` dispatches every payload over both synthetic `paths.RankedPath`s per direction; `deliverUpstream`/`deliverDownstream` is called once per selected path |
-| Endpoint checksum-only dedup | BC-2.02.002 | placement note frontmatter; Q3 | TO DISCHARGE — `multipath.Receive` returns `ErrDuplicate` on the second-arriving copy of a duplicate-and-raced frame; discarded before reaching `accessNode`/`arqClient` |
-| Downstream ARQ (piggybacked ACK/SACK, TLPKTDROP) | BC-2.02.005 | placement note Q1, Q4 | TO DISCHARGE (downstream leg only — upstream ARQ is explicitly out of scope per Q1/ARCH-03) — every downstream tick's data frame passes through `arqServer.EnqueueSend`; every post-dedup downstream arrival calls `arqClient.OnAck` per the Q4 call-contract, **gated on AC-001 sign-off** |
+| Endpoint checksum-only dedup | BC-2.02.002 | placement note frontmatter; Q3 | TO DISCHARGE — `multipath.Receive` returns `ErrDuplicate` on the second-arriving copy of a duplicate-and-raced frame; discarded before reaching `accessNode`/`downstreamARQ` |
+| Downstream ARQ (piggybacked ACK/SACK, TLPKTDROP) | BC-2.02.005 | placement note Q1, Q4 + Q4 Addendum | TO DISCHARGE (downstream leg only — upstream ARQ is explicitly out of scope per Q1/ARCH-03) — every downstream tick's data frame passes through `driver.downstreamARQ.EnqueueSend`; every post-dedup downstream arrival calls the SAME `driver.downstreamARQ.OnAck` per the Q4 call-contract (single shared instance — AC-001 **DISCHARGED**, verdict REVISED) |
 | Keystroke-to-echo p99 ≤ 100ms | VP-042 | VP-042.md | HARNESS DELIVERED, NOT LOCKED — this story ships the measurement harness and runs it once for evidence; the `verification_lock` flip is a separate subsequent act (see Forward Obligation) |
 
 ---
@@ -215,9 +234,14 @@ spawning, and running both calls sequentially avoids a class of out-of-order ded
 that a fully-faithful network simulation would have to reckon with but this design deliberately does not
 model.
 
-### Downstream Flow: Echo Generation → Round-Trip Completion (Q4) — GATED, see AC-001
+### Downstream Flow: Echo Generation → Round-Trip Completion (Q4, as REVISED by the Q4 Addendum) — AC-001 DISCHARGED
 
-**Binding, subject to AC-001 sign-off (per placement note Q4).**
+**Binding, per placement note Q4 AS AMENDED by the Q4 Addendum — AC-001 Sign-off (2026-07-12,
+verdict REVISED).** The `driver.arqServer`/`driver.arqClient` two-instance shape Q4's original code
+blocks show below is SUPERSEDED — do not implement it. `EnqueueSend` and `OnAck` for a given `ChanSeq`
+MUST be called on ONE shared `*arq.ARQ` instance (`driver.downstreamARQ`), in that order, within the
+same downstream-ticker tick. The `ackSeq`/SACK value convention is unaffected and remains binding as
+written.
 
 `loopbackSink.SendInput` — the `KeystrokeSink` injected into the driver's dedicated `AccessNode` — is
 the echo generator:
@@ -242,7 +266,7 @@ is queued, not delivered synchronously; the downstream ticker decides when it ac
 [async] downstream ticker, every cfg.TickIntervalDownstream:
     f := driver.downstreamHC.Tick()
     if f.FrameType == frame.FrameTypeData {
-        driver.arqServer.EnqueueSend(f.ChanSeq, f.Payload, time.Now())
+        driver.downstreamARQ.EnqueueSend(f.ChanSeq, f.Payload, time.Now())
         driver.downstreamMP.Send(toMPFrame(f), driver.deliverDownstream)
     }
     ↓
@@ -250,9 +274,11 @@ driver.deliverDownstream(pathID, mpFrame) error
     ↓
 driver.downstreamMP.Receive(mpFrame)   // endpoint dedup; first arrival only
     ↓
-delivered, err := driver.arqClient.OnAck(mpFrame.ChanSeq(), zeroSACK)
-    // ackSeq = this frame's own ChanSeq (locally-derived from arrival, not
-    // peer-supplied); SACK bitmap all-zero (no loss simulated)
+delivered, err := driver.downstreamARQ.OnAck(mpFrame.ChanSeq(), zeroSACK)
+    // SAME instance that received EnqueueSend above, called within the same
+    // tick/goroutine — required per the Q4 Addendum (AC-001). ackSeq = this
+    // frame's own ChanSeq (locally-derived from arrival, not peer-supplied);
+    // SACK bitmap all-zero (no loss simulated)
     ↓
 for each payload in delivered:
     id := decodeRTID(payload)
@@ -260,20 +286,24 @@ for each payload in delivered:
     if ch != nil { ch <- frameFor(payload) }   // unblocks WaitForEcho
 ```
 
-**`arq.OnAck` call-contract — no existing production precedent.** No production code calls `OnAck`
-today; `internal/arqsend` (the only production consumer of `*arq.ARQ`) only exercises the sender-side
-subset (`PayloadForInFlight`/`EnqueueSend`/`RemoveInFlight`). This design is the **first proposed call
-site for `OnAck`** in the codebase. The convention proposed — `ackSeq` = the highest downstream `ChanSeq`
-this receiver has now observed in order (locally-derived from arrival, not a peer-supplied value), called
-once per received (post-dedup) downstream frame with that frame's own `ChanSeq` — is internally
-consistent given a single downstream producer emitting strictly increasing `ChanSeq` values with no
-synthetic loss/reordering, and exercises `OnAck`'s real window-validation (`RULING-003`/
-`ErrAckOutOfWindow`) and delivery-pointer bookkeeping on every sample, but it is a **proposal**, not a
-verified contract — see AC-001.
+**`arq.OnAck` call-contract — sign-off DISCHARGED (AC-001, 2026-07-12, verdict REVISED).** No production
+code calls `OnAck` today; `internal/arqsend` (the only production consumer of `*arq.ARQ`) only exercises
+the sender-side subset (`PayloadForInFlight`/`EnqueueSend`/`RemoveInFlight`). This design is the **first
+proposed call site for `OnAck`** in the codebase. The `ackSeq` convention — the highest downstream
+`ChanSeq` this receiver has now observed in order (locally-derived from arrival, not a peer-supplied
+value), called once per received (post-dedup) downstream frame with that frame's own `ChanSeq` — is
+CONFIRMED correct given a single downstream producer emitting strictly increasing `ChanSeq` values with
+no synthetic loss/reordering, and exercises `OnAck`'s real window-validation (`RULING-003`/
+`ErrAckOutOfWindow`) and delivery-pointer bookkeeping on every sample. **The instance topology is NOT
+optional:** `OnAck`'s payload recovery (`payloadFor`) reads only its own instance's `inFlight`/
+`reorderBuf`, populated exclusively by that SAME instance's prior `EnqueueSend` calls — a second,
+never-`EnqueueSend`'d instance returns `(nil, nil)` from every `OnAck` call, silently (no error), and
+every `WaitForEcho` in the harness would time out. `EnqueueSend` and `OnAck` MUST run on one shared
+`driver.downstreamARQ` instance, in that order, within the same tick.
 
 `GapsToRetransmit`/`TLPKTDROP` are deliberately **not** called — there is no simulated loss, so
-`arqServer.inFlight` never accumulates a real gap; wiring an active poll for a condition that structurally
-cannot occur in this harness would be dead code (Non-Goals).
+`downstreamARQ.inFlight` never accumulates a real gap; wiring an active poll for a condition that
+structurally cannot occur in this harness would be dead code (Non-Goals).
 
 ### RoundTrip Token API — Fixing the CollectFrames Accumulation Short-Circuit (Q5)
 
@@ -398,22 +428,43 @@ expansion of an existing package, the same class of change as v2.6/v2.8/v2.11.
 
 ## Acceptance Criteria
 
-**AC-001 is a gate. It must be resolved before implementation begins on any other AC in this list.**
+**AC-001 was a pre-implementation gate. It is DISCHARGED — see below — but its binding constraints
+carry forward into AC-006 and the Design Constraints Q4 section; do not implement from Q4's original
+code blocks without applying the Addendum.**
 
-### AC-001 (GATE — pre-implementation sign-off; traces to Q4 / Risk 1)
+### AC-001 (DISCHARGED 2026-07-12, verdict REVISED; traces to Q4 / Risk 1)
 
 The `arq.OnAck` call-contract proposed in Q4 (`ackSeq` = the locally-observed frame's own `ChanSeq`,
-zero SACK in the no-loss happy path) has no existing production call site to copy — this design is the
-first proposed caller of `OnAck` in the codebase. Before `dev-story` begins implementing the downstream
-flow (Q4), **one of the following must be produced and attached to this story**:
+zero SACK in the no-loss happy path) had no existing production call site to copy — this design is the
+first proposed caller of `OnAck` in the codebase. Per Risk 1 option (a), an architect placement-note
+addendum reviewed the contract before this story could be scheduled: **"Q4 Addendum — AC-001 Sign-off
+(2026-07-12)"** in `S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.1, discharging this gate.
 
-(a) an architect placement-note addendum explicitly confirming the `OnAck` call contract, or
-(b) a fast adversarial pass on the placement note specifically targeting Q4.
+**Verdict: REVISED.** The `ackSeq`/SACK value convention is CONFIRMED correct as proposed. The
+`driver.arqServer`/`driver.arqClient` **two-instance topology** Q4's original code blocks show is a
+structural defect: `OnAck`'s payload recovery (`payloadFor`, `arq.go:291`) reads only the calling
+instance's own `inFlight`/`reorderBuf` maps, populated exclusively by that SAME instance's prior
+`EnqueueSend` calls (`arq.go:339`). A separate `arqClient` that never receives `EnqueueSend` returns
+`(nil, nil)` from `OnAck` on every call, silently — no error, `nextExpected` still advances — so every
+`WaitForEcho` in the harness would time out on every round trip. This is not a subtle edge case; it is
+a hard, silent benchmark failure the note's original Risk 1 framing ("getting this wrong doesn't break
+VP-042's measured number") did not anticipate for this specific failure mode.
 
-**Test:** none — this is a process gate, not a code test. `dev-story` MUST refuse to start Q4-dependent
-implementation work (downstream ticker's `EnqueueSend`/`OnAck` wiring) without evidence of (a) or (b)
-attached. Getting this wrong does not break VP-042's measured number (the happy path is forgiving) but
-would misinform whatever future story reuses `OnAck` for a real loss-injection path.
+**Binding on the implementer, carried forward from the Q4 Addendum:**
+
+1. Use **one shared `*arq.ARQ` instance** for the downstream direction — a single field on the driver
+   (e.g. `driver.downstreamARQ`), not a `arqServer`/`arqClient` pair.
+2. `EnqueueSend` and `OnAck` for a given `ChanSeq` MUST be called on that **same instance**, **in that
+   order**, **within the same downstream-ticker goroutine tick**.
+3. Do not reuse the always-zero-SACK convention outside this harness's Non-Goals envelope (no
+   loss/reordering) — a future loss-injection story reusing `OnAck` must compute a real bitmap.
+4. A regression guard against reintroducing the two-instance shape is required — see **AC-014**.
+
+**Test:** none for the gate itself — this was a process gate, not a code test, and it is now discharged.
+The behavioral consequence of getting the topology wrong is covered by AC-006 (per-call wiring) and
+AC-014 (end-to-end round-trip-completes regression guard). `dev-story` MUST implement Q4's downstream
+flow per the single-shared-instance shape (Design Constraints, Q4 section, as amended) — not from the
+original two-instance code blocks in isolation.
 
 ### AC-002 (traces to BC-2.01.001; Q6)
 
@@ -453,24 +504,28 @@ per synthetic path).
 ### AC-005 (traces to BC-2.02.002; Q3, Q4)
 
 The second-arriving copy of a duplicate-and-raced frame is discarded by `multipath.Receive`'s endpoint
-checksum dedup (`ErrDuplicate`) before reaching `driver.accessNode`/`driver.arqClient` — i.e., exactly
+checksum dedup (`ErrDuplicate`) before reaching `driver.accessNode`/`driver.downstreamARQ` — i.e., exactly
 one of the two `deliverUpstream`/`deliverDownstream` calls per AC-004 results in forward progress
-(`accessNode.SendKeystroke` call or `arqClient.OnAck` call), not two.
+(`accessNode.SendKeystroke` call or `downstreamARQ.OnAck` call), not two.
 
 **Test:** `TestLoopbackDriver_EndpointDedupDiscardsSecondArrival` — assert `accessNode.SendKeystroke`
-(upstream) and `arqClient.OnAck` (downstream) are each called exactly once per ticked data frame despite
-two `deliverUpstream`/`deliverDownstream` invocations.
+(upstream) and `downstreamARQ.OnAck` (downstream) are each called exactly once per ticked data frame
+despite two `deliverUpstream`/`deliverDownstream` invocations.
 
-### AC-006 (traces to BC-2.02.005; Q4 — gated by AC-001)
+### AC-006 (traces to BC-2.02.005; Q4 as REVISED by the Q4 Addendum — AC-001 DISCHARGED)
 
-Every downstream tick's data frame is passed to `driver.arqServer.EnqueueSend(f.ChanSeq, f.Payload,
-time.Now())` before dispatch. Every post-dedup downstream arrival calls `driver.arqClient.OnAck` with
-that frame's own `ChanSeq` and an all-zero SACK bitmap, per the AC-001-signed-off call contract.
+Every downstream tick's data frame is passed to `driver.downstreamARQ.EnqueueSend(f.ChanSeq, f.Payload,
+time.Now())` before dispatch. Every post-dedup downstream arrival calls the SAME `driver.downstreamARQ`
+instance's `OnAck` with that frame's own `ChanSeq` and an all-zero SACK bitmap, per the AC-001-discharged
+call contract — `EnqueueSend` and `OnAck` MUST be the same `*arq.ARQ` value (a separate `arqServer`/
+`arqClient` split is a structural defect per the Q4 Addendum: `OnAck` would return zero delivered
+payloads on every call, and every `WaitForEcho` would silently time out).
 `GapsToRetransmit`/`TLPKTDROP` are not called on any schedule (Non-Goals).
 
 **Test:** `TestLoopbackDriver_DownstreamARQWiring` — assert `EnqueueSend` is called once per downstream
-data tick and `OnAck` is called once per post-dedup downstream arrival with the frame's own `ChanSeq`;
-assert `GapsToRetransmit`/`TLPKTDROP` are never invoked in this harness.
+data tick and `OnAck` is called once per post-dedup downstream arrival with the frame's own `ChanSeq`,
+on the same `*arq.ARQ` instance; assert `GapsToRetransmit`/`TLPKTDROP` are never invoked in this harness.
+See AC-014 for the mandatory end-to-end regression guard against reintroducing the two-instance shape.
 
 ### AC-007 (traces to Q2 — dedicated shard)
 
@@ -561,6 +616,34 @@ since the divergence it disclosed (bypassing arq/multipath/tick-scheduling) no l
 `go build ./internal/bench/...` succeeds against the new `LoopbackEnv` API and `just bench` runs the
 updated benchmark to completion, producing a `p99_rtt_ms` metric.
 
+### AC-014 (regression guard, added 2026-07-12; traces to AC-001 Q4 Addendum)
+
+A mandatory regression guard against reintroducing the `arqServer`/`arqClient` two-instance shape the
+Q4 Addendum ruled out (AC-001, constraint 4). The failure mode is silent — no error, no panic, `OnAck`
+just returns `(nil, nil)` forever — so a structural assertion alone is not sufficient; the guard MUST
+include a behavioral assertion that a full round trip actually completes.
+
+**Mandatory:** a test drives a complete `SendKeystroke` → `WaitForEcho` round trip through a real
+`LoopbackEnv` (not a mock/stub of `downstreamARQ`) and asserts the round trip **completes** — i.e., the
+delivered frame/payload is non-empty and `WaitForEcho` returns before its timeout, not merely that it
+returns. A test that only checks `WaitForEcho` returns (without inspecting what it returned) would not
+catch the two-instance failure mode, since a hang manifests as a *timeout* while a subtler variant could
+return a zero-value frame without an explicit assertion catching it — the non-empty-delivery assertion
+is the load-bearing part of this AC.
+
+**Acceptable supplementary coverage:** the placement note's Addendum also proposes a structural
+assertion — that the downstream driver has exactly one `*arq.ARQ`-typed field (e.g. via reflection over
+`loopbackDriver`'s field set, or a compile-time check that only one field of that type exists). This is
+acceptable as ADDITIONAL coverage but does not substitute for the behavioral round-trip-completes
+assertion above, which is mandatory.
+
+**Test:** `TestLoopbackEnv_RoundTripCompletes_SingleSharedARQInstance` — construct a `LoopbackEnv`,
+`SendKeystroke`, `WaitForEcho` with a generous timeout, assert (a) no timeout occurred, (b) the returned
+frame's payload decodes to the sent `RoundTrip` id, i.e. delivery actually happened, not merely that the
+call returned. Optionally paired with `TestLoopbackDriver_SingleARQInstanceField` (structural — reflects
+over the driver's fields, asserts exactly one `*arq.ARQ`-typed field) as supplementary, non-substituting
+coverage.
+
 ---
 
 ## Non-Goals
@@ -594,7 +677,7 @@ Transcribed from the placement note. This story does NOT implement:
 
 | Component | Package | New / Modified | Notes |
 |-----------|---------|-----------------|-------|
-| `loopbackDriver` (type) | `internal/testenv` | New | Owns dedicated `Publisher`/`SessionAuth`/`AccessNode`, both `Multipath` instances, both `HalfChannel`s, the `arq.ARQ` client/server pair, `pending` map |
+| `loopbackDriver` (type) | `internal/testenv` | New | Owns dedicated `Publisher`/`SessionAuth`/`AccessNode`, both `Multipath` instances, both `HalfChannel`s, ONE shared `*arq.ARQ` instance for the downstream direction (`downstreamARQ` — AC-001 Addendum), `pending` map |
 | `RoundTrip` (type) | `internal/testenv` | New | Opaque outside the package; carries `id` + buffered-1 `done` channel |
 | `loopbackSink` (type) | `internal/testenv` | New | Implements `session.KeystrokeSink`; echoes payload verbatim into `downstreamHC.Enqueue` |
 | `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` | `internal/testenv` | New (methods on `*LoopbackEnv`) | Do not collide with `*Env`'s method set (named field, not embedding) |
@@ -602,7 +685,7 @@ Transcribed from the placement note. This story does NOT implement:
 | `newLoopbackPaths` (helper) | `internal/testenv` | New | Two `paths.RankedPath`s per direction |
 | `NewLoopback` | `internal/testenv` | Modified | Wires halfchannel/arq/multipath/paths instead of discarding `LoopbackConfig`; adds Min/MaxTickInterval validation |
 | `halfchannel.HalfChannel` | `internal/halfchannel` | Read-only consumer | `New`, `Tick`, `Enqueue` |
-| `arq.ARQ` | `internal/arq` | Read-only consumer | `New`, `EnqueueSend`, `OnAck` — first production-adjacent `OnAck` call site (AC-001 gate) |
+| `arq.ARQ` | `internal/arq` | Read-only consumer | `New`, `EnqueueSend`, `OnAck` — first production-adjacent `OnAck` call site; call contract DISCHARGED 2026-07-12, verdict REVISED (AC-001) |
 | `multipath.Multipath` | `internal/multipath` | Read-only consumer | `NewMultipath`, `Send`, `Receive` |
 | `paths.PathTracker`/`RankedPath` | `internal/paths` | Read-only consumer | `NewPathTracker`, `RankedPath` |
 | `keystroke_echo_testenv_bench_test.go` | `internal/bench` | Modified | Token-based two-call shape (AC-013) |
@@ -613,11 +696,12 @@ Transcribed from the placement note. This story does NOT implement:
 |-----------|----------|
 | `WaitForEcho` times out, echo arrives later | `RoundTrip.done` buffered 1; downstream ticker's send never blocks even if nobody reads it; `driver.pending` entry is still deleted (AC-009) |
 | `WaitForEcho` never called for a `RoundTrip` (test bug) | `driver.pending` would otherwise accumulate until `Env.Close()`; `t.Cleanup` asserts the map is empty at teardown (AC-011) |
-| Duplicate frame arrival (same payload, two synthetic paths) | `multipath.Receive` returns `ErrDuplicate` on the second arrival — discarded before `accessNode`/`arqClient` (AC-005) |
+| Duplicate frame arrival (same payload, two synthetic paths) | `multipath.Receive` returns `ErrDuplicate` on the second arrival — discarded before `accessNode`/`downstreamARQ` (AC-005) |
 | Tick interval exactly at `MaxTickInterval` (50ms) | Legal — VP-042's own `downstreamInterval` sits exactly here; validation site carries a boundary comment (AC-002) |
 | Fresh `paths.RankedPath` with no probe history | `NewPathTracker` defaults `active: true`; `Rank()` considers it eligible with zero `OnProbe` calls (AC-010) |
 | `OnAck` window-validation / `ErrAckOutOfWindow` path | Not exercised by this harness's no-loss happy path (single producer, strictly increasing `ChanSeq`); a future loss-injection story would exercise it (Non-Goals) |
 | Two concurrent `SendKeystroke`/`WaitForEcho` round trips | Each has its own `RoundTrip.id` and `done` channel; AC-008 guarantees no cross-talk |
+| `EnqueueSend`/`OnAck` called on separate `*arq.ARQ` instances (`arqServer`/`arqClient` split) | RULED OUT by AC-001 (Q4 Addendum, 2026-07-12) — `OnAck` on a never-`EnqueueSend`'d instance returns `(nil, nil)` on every call, silently; every round trip would time out. One shared `downstreamARQ` instance is required; AC-014 is the regression guard |
 
 ## Purity Classification
 
@@ -657,9 +741,10 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 
 ## Tasks (MANDATORY)
 
-1. [ ] **GATE:** Confirm AC-001 is resolved — architect placement-note addendum OR a fast adversarial
-   pass on Q4 signs off the `arq.OnAck` call-contract. Do not proceed past this task until evidence of
-   sign-off is attached to this story.
+1. [x] **GATE (DISCHARGED 2026-07-12):** AC-001 resolved via architect placement-note addendum ("Q4
+   Addendum — AC-001 Sign-off," v1.1) — verdict REVISED. Read the Addendum before Task 6: it supersedes
+   Q4's original `arqServer`/`arqClient` code blocks with a single shared `*arq.ARQ` instance
+   (`driver.downstreamARQ`).
 2. [ ] Implement `loopbackDriver` inside `internal/testenv` with its own `Publisher`/`SessionAuth`/
    `AccessNode` triple constructed via `session.WithKeystrokeSink(loopbackSink)` (Q2, AC-007).
 3. [ ] Implement `RoundTrip` + `driver.pending map[uint64]chan frame.OuterHeader` (buffered-1 channels)
@@ -669,9 +754,10 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
    `deliverUpstream` → `upstreamMP.Receive` dedup → `accessNode.SendKeystroke` → `loopbackSink.SendInput`
    (Q3, AC-004, AC-005).
 6. [ ] Implement downstream flow: `loopbackSink.SendInput` → `downstreamHC.Enqueue` → downstream ticker
-   `Tick()` → `arqServer.EnqueueSend` + `downstreamMP.Send` → `deliverDownstream` →
-   `downstreamMP.Receive` dedup → `arqClient.OnAck` → `driver.pending` lookup → completion send (Q4,
-   AC-006 — depends on Task 1 gate).
+   `Tick()` → `driver.downstreamARQ.EnqueueSend` + `downstreamMP.Send` → `deliverDownstream` →
+   `downstreamMP.Receive` dedup → the SAME `driver.downstreamARQ.OnAck` → `driver.pending` lookup →
+   completion send (Q4 as amended by the Q4 Addendum, AC-006) — **one shared `*arq.ARQ` field only; do
+   not split into `arqServer`/`arqClient`** (AC-001).
 7. [ ] Implement `NewLoopback` config validation against `halfchannel.MinTickInterval`/
    `MaxTickInterval`, `b.Fatalf` on violation, with the 50ms-boundary comment (Q6, AC-002).
 8. [ ] Register both ticker goroutines on the existing `Env.wg`/`Env.closeCh` via `startLoopbackTicker`
@@ -682,7 +768,12 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 10. [ ] Wire the `driver.pending`-empty `t.Cleanup` safeguard (AC-011); update
     `keystroke_echo_testenv_bench_test.go` on `fix/vp-042-testenv-integrated-bench` to the token-based
     shape (AC-013).
-11. [ ] Run the harness once manually to produce VP-042 evidence; hand off to PO/architect for the
+11. [ ] Implement the regression guard against reintroducing the two-instance `arqServer`/`arqClient`
+    shape (AC-014): a behavioral test that a full `SendKeystroke`/`WaitForEcho` round trip actually
+    completes with non-empty delivery, not merely that `WaitForEcho` returns. A structural
+    exactly-one-`*arq.ARQ`-field assertion may be added as supplementary coverage but does not
+    substitute for the behavioral assertion.
+12. [ ] Run the harness once manually to produce VP-042 evidence; hand off to PO/architect for the
     `verification_lock` decision — **this is explicitly NOT this story's Definition of Done; see Forward
     Obligation.**
 
@@ -733,9 +824,18 @@ result rather than reviewing stale state.
 
 ## Forward Obligation — VP-042 `verification_lock` (explicitly NOT part of this story)
 
-This story delivers the harness and, per AC-013/Task 11, is run once manually to produce evidence for
+This story delivers the harness and, per AC-013/Task 12, is run once manually to produce evidence for
 VP-042.md's changelog. **Flipping `verification_lock: false → true` in VP-042.md's frontmatter is a
 separate, subsequent PO/architect act** — it requires explicit sign-off distinct from "the harness
 compiles and its own tests pass." Do not treat this story's merge, by itself, as a VP-042 lock event.
 This mirrors how VP-042's own history table already distinguishes "audited"/"partial evidence" entries
 from a lock flip.
+
+---
+
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.1 | 2026-07-12 | AC-001 amendment consuming the placement note's Q4 Addendum — AC-001 Sign-off (v1.0 → v1.1), the architect review required by Risk 1 option (a) before this story could leave draft/unscheduled status. **Verdict: REVISED, not simple CONFIRMED.** The `ackSeq`/SACK value convention is CONFIRMED correct as originally proposed. The `driver.arqServer`/`driver.arqClient` two-instance topology Q4's original code blocks showed is a structural defect: `OnAck`'s payload recovery (`payloadFor`) reads only the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by that SAME instance's prior `EnqueueSend` calls — a never-`EnqueueSend`'d `arqClient` returns `(nil, nil)` from `OnAck` on every call, silently, so every `WaitForEcho` would time out on every round trip (a hard, silent benchmark failure, not the forgiving happy-path miss Risk 1's original framing assumed for this failure mode). **AC-001 status: DISCHARGED 2026-07-12** — reworded from a pre-implementation gate to a discharged record of the verdict, binding the implementer to one shared `*arq.ARQ` instance (`driver.downstreamARQ`); `EnqueueSend` and `OnAck` for a given `ChanSeq` MUST run on that same instance, in that order, within the same downstream-ticker tick. **New AC-014 added** (regression guard, not present in v1.0): a mandatory behavioral test that a full `SendKeystroke`→`WaitForEcho` round trip actually completes with non-empty delivery — guards specifically against the silent `(nil, nil)`-forever failure mode a bare "did it return" assertion would miss. The architect's alternative structural phrasing (assert the driver has exactly one `*arq.ARQ`-typed field) is accepted as supplementary coverage only; the behavioral round-trip-completes assertion is mandatory. **Mirrored throughout:** the Q4 Design Constraints subsection (heading, binding statement, downstream-ticker code block, and call-contract prose rewritten to the single-instance shape and cross-referenced to the Addendum); AC-005/AC-006 test bodies (`arqClient`/`arqServer` naming replaced with `driver.downstreamARQ`, AC-006 now cites AC-014); the Anchors Consumed table (BC-2.02.002/BC-2.02.005 rows); the Architecture Mapping and Edge Cases tables (new edge-case row for the ruled-out two-instance shape); Tasks (Task 1 marked discharged with a pointer to the Addendum, Task 6 rewritten to the single-instance wiring, new Task 11 for the AC-014 regression guard, former Task 11 renumbered to Task 12, Forward Obligation's cross-reference updated to match); Story-Sizing Rationale (new paragraph confirming the gate resolved pre-scheduling inside Task 6's existing scope — no scope growth, estimate stays 8 points); Context section (new paragraph summarizing the sign-off); the status-note blockquote (gate status updated from blocking-pending to discharged, with an explicit warning not to implement from Q4's original code blocks alone); frontmatter (`inputDocuments` placement-note pin `v1.0` → `v1.1` with the Addendum summarized inline, `acceptance_criteria_count` 13 → 14, `input-hash` recomputed to `d621ea4` per `compute-input-hash --update` — the placement note's content changed independent of this story's own edits). Package Impact Summary's "(Transcribed from the placement note)" table is left as-is by design — it mirrors the note's own Package Impact table, which the Addendum does not itself amend. |
+| 1.0 | 2026-07-12 | Initial story authored to full spec, draft/unscheduled per human disposition ("author now, deliver later"). Transcribes architect placement note v1.0 (Q1–Q8 binding design decisions, 5 Risks) faithfully — no design re-derivation. 8 points (architect range 5–8; upper bound selected for AC-001's pre-implementation sign-off gate plus three additional risk-derived ACs/decisions — AC-009/AC-010/AC-011). 13 ACs, AC-001 a hard pre-implementation gate on the `arq.OnAck` call-contract (no existing production precedent). 1 Forward Obligation (VP-042 `verification_lock` flip explicitly out of scope). `depends_on: []` — S-BL.TESTENV already merged (PR #110, `62e38d3`); this story extends its `NewLoopback`/`LoopbackEnv` surface rather than blocking on it. |
