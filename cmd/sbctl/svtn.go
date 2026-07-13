@@ -47,10 +47,10 @@ func runSvtn(ctx context.Context, target, keyPath string, useJSON bool, args []s
 // the existing connectAndRun pattern. Missing --name is a client-side E-CFG-001
 // usage error (exit 2) via usageErrf, per AC-008 PC-3.
 //
-// Output is always the JSON envelope, matching paths ping's design — svtn
-// status is a single structured query result with no table representation.
-//
-//nolint:unparam // useJSON is part of the run* dispatch signature contract (main.go); svtn status always emits the JSON envelope (see above)
+// Output shape follows the house useJSON convention (interface-definitions.md
+// §214; same as paths list/router status/router reload): default mode prints
+// the bare admin.svtn.status response object; --json wraps it in the
+// {"ok":true,"data":{...}} envelope.
 func runSvtnStatus(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	var name string
 	for i, arg := range args {
@@ -63,10 +63,9 @@ func runSvtnStatus(ctx context.Context, target, keyPath string, useJSON bool, ar
 		}
 	}
 	if name == "" {
-		_ = writeError(true, "E-CFG-001", "svtn status: --name is required", sio)
-		return reported(usageErrf("E-CFG-001: svtn status: --name is required"))
+		return usageErrf("E-CFG-001: svtn status: --name is required")
 	}
-	return connectAndRun(ctx, target, keyPath, true, "admin.svtn.status", map[string]string{"name": name}, sio)
+	return connectAndRun(ctx, target, keyPath, useJSON, "admin.svtn.status", map[string]string{"name": name}, sio)
 }
 
 // runSvtnDestroyShim implements the top-level `sbctl svtn destroy` migration

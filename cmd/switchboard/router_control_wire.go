@@ -29,12 +29,11 @@ import (
 // same phase as wireMetricsHandlers, before serveMgmtServer starts the Serve
 // goroutine (register-before-serve invariant, F-P2L1-001).
 //
-// configPath, sighupCh, and drainRequestCh are threaded through for the
-// eventual handler bodies — configPath lets router.reload's handler check
+// configPath, sighupCh, and drainRequestCh are threaded through to the
+// handler bodies — configPath lets router.reload's handler check
 // configPath == "" synchronously for AC-011 PC-3's defense-in-depth guard;
 // sighupCh is the channel router.reload synthesizes a signal onto;
-// drainRequestCh is the channel router.drain sends on. This stub's handler
-// bodies do not yet consume them (Task 4 Green step).
+// drainRequestCh is the channel router.drain sends on.
 //
 // AC-013 / Decision 4 (registration point).
 func wireRouterControlHandlers(srv *mgmt.Server, configPath string, sighupCh chan os.Signal, drainRequestCh chan struct{}) error {

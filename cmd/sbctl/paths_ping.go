@@ -31,20 +31,17 @@ import (
 //
 // AC-001..AC-004 / BC-2.06.004 PC-1..PC-4, EC-001..EC-003, Invariant 1, Invariant 2.
 //
-// Output is always the JSON envelope ({"ok":true,"data":{"router":...,
-// "rtt_ms":...}}) — paths ping is a single-shot structured probe with no
-// human-readable table representation, so it does not vary its output shape
-// on the --json flag the way paths list/router metrics do.
-//
-//nolint:unparam // useJSON is part of the run* dispatch signature contract (main.go); paths ping always emits the JSON envelope (see above)
+// Output shape follows the house useJSON convention (interface-definitions.md
+// §214; same as paths list/router status/router reload): default mode prints
+// the bare {"router":...,"rtt_ms":...} object; --json wraps it in the
+// {"ok":true,"data":{...}} envelope.
 func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
 	// --router=<addr> overrides --target (BC-2.06.004 PC-1) — the daemon
 	// dialed via --router IS the probe target by construction.
 	for i, arg := range args {
 		if arg == "--router" {
 			if i+1 >= len(args) {
-				_ = writeError(true, "E-CFG-001", "paths ping: --router requires a value", sio)
-				return reported(usageErrf("E-CFG-001: paths ping: --router requires a value"))
+				return usageErrf("E-CFG-001: paths ping: --router requires a value")
 			}
 			target = args[i+1]
 		} else if strings.HasPrefix(arg, "--router=") {
@@ -54,7 +51,7 @@ func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, arg
 
 	privKey, err := loadEd25519Key(keyPath, os.UserHomeDir)
 	if err != nil {
-		_ = writeError(true, "E-CFG-010", err.Error(), sio)
+		_ = writeError(useJSON, "E-CFG-010", err.Error(), sio)
 		return reported(err)
 	}
 
@@ -70,7 +67,7 @@ func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, arg
 	}
 	if err != nil {
 		msg := fmt.Sprintf("daemon unreachable: %s: %s", target, err)
-		return writeError(true, "E-NET-001", msg, sio)
+		return writeError(useJSON, "E-NET-001", msg, sio)
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -78,16 +75,16 @@ func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, arg
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
 			msg := fmt.Sprintf("daemon unreachable: %s: connection timed out", target)
-			return writeError(true, "E-NET-001", msg, sio)
+			return writeError(useJSON, "E-NET-001", msg, sio)
 		}
-		_ = writeError(true, "E-ADM-010", "authentication failed", sio)
+		_ = writeError(useJSON, "E-ADM-010", "authentication failed", sio)
 		return reported(err)
 	}
 
 	// paths.ping performs zero PathTracker interaction (AC-004 postcondition
 	// 3): empty request args, {"pong": true} response (BC-2.06.004 PC-1).
 	if _, err = dispatch(ctx, conn, "paths.ping", map[string]string{}); err != nil {
-		_ = writeError(true, "E-RPC-001", err.Error(), sio)
+		_ = writeError(useJSON, "E-RPC-001", err.Error(), sio)
 		return reported(err)
 	}
 
@@ -102,5 +99,5 @@ func runPathsPing(ctx context.Context, target, keyPath string, useJSON bool, arg
 		return internal(fmt.Errorf("marshal ping result: %w", err))
 	}
 
-	return writeSuccess(true, data, sio)
+	return writeSuccess(useJSON, data, sio)
 }
