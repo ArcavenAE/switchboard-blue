@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-13T07:51:43Z","command":"go test ./... 2>&1 | grep -E \"^--- FAIL|^FAIL|^ok\" "}
+{"status":"pass","timestamp":"2026-07-13T08:15:55Z","command":"cd /Users/skippy/work/aae-orc/run/switchboard-blue/.worktrees/S-BL.CLI-SURFACE-COMPLETION && git log --oneline -6 && go test -count=1 ./... 2>&1 | tee /tmp/cs-green-verify.txt | grep -cE '^ok' && grep -E '^(FAIL|--- FAIL)' /tmp/cs-green-verify.txt | head -5; go vet ./... && echo VET_OK && gofumpt -l . | wc -l"}

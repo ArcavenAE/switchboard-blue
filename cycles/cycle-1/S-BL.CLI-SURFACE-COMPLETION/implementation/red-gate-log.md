@@ -103,8 +103,50 @@ left unasserted.
    the one test in this suite standing in for behavior it cannot fully
    exercise yet.
 
+## Green Phase
+
+**Implementation commits (implementer):**
+- `99012b7` — AC-001..004 `paths.ping` (client + server)
+- `84e0561` — AC-005..010 `admin.svtn.status` + `svtn` dispatch
+- `70ea1f1` — AC-011..016 `router reload`/`router drain`
+
+**Test-conflict fix (test-writer):** `409457d`.
+
+**Test-suite conflict adjudicated mid-green:** `runTierOneAuthScenario`
+passed `configPath=""` and collided with AC-011 PC-3's guard test on the
+same handler. The implementer STOPPED per TDD discipline rather than
+weaken the test. Orchestrator adjudicated fix-the-test: AC-014's own
+premise is a production-reachable router, and the story's defense-in-depth
+chain (`runRouter`'s `cfg==nil` guard + `main.go`'s `"router"` case)
+guarantees `configPath != ""` for every production-reachable router — the
+zero-value `configPath` in `runTierOneAuthScenario` was the test's premise
+error, not a spec gap. Test-writer fixed at `409457d`, mirroring the
+`reload_bridges_sighup` scenario's existing non-empty-`configPath`
+pattern. Recorded here as a TDD-walls-working instance: the wall held,
+the fix landed on the correct side of it.
+
+**Latent bug found and fixed in scope:** `cmd/sbctl`'s `main()` never
+called `os.Exit(0)` on success — invisible until this story's first
+happy-path subprocess tests exercised it. One-line fix folded into
+`99012b7`.
+
+**Design note flagged for the step-4.5 adversary:** `paths ping` and
+`admin.svtn.status` emit the JSON envelope unconditionally — AC-001 PC-4
+specifies the JSON report with no `--json` gating, and the tests enforce
+that. Whether this envelope-vs-bare-object convention is consistent with
+sibling commands (which may gate JSON output behind a flag) is a step-4.5
+check item, not resolved here.
+
+Implementer notes from the spec-adversarial arc (N-CS-SP7-01 usage-hint
+refresh, N-CS-SP9-01 help-string refresh) confirmed done in this pass.
+
+**Final green evidence:** `go test -count=1 ./...` — all 25 packages
+`ok` (orchestrator-verified), race-clean, `go vet` / `gofumpt` / lint all
+clean.
+
 ## Status
 
-Red Gate COMPLETE. Next: Green phase (implementer dispatched against the
-25 failing tests / 42 subtests above), then step-4.5 implementation-diff
-spec-adversarial convergence once green.
+Red Gate COMPLETE. Green COMPLETE @ `409457d` (25/25 target tests, full
+suite green, race-clean, vet/fmt/lint clean). Next: step-4.5
+implementation-diff spec-adversarial convergence (BC-5.39.001/BC-5.39.002,
+diff range `4c276d9..409457d`).
