@@ -808,15 +808,16 @@ func findAdminSVTNStatusHandler(t *testing.T, handlers []mgmt.Handler) func(ctx 
 }
 
 // callAdminSVTNStatusSafely invokes fn(ctx, args) with a same-goroutine
-// recover() wrapper. makeAdminSVTNStatusHandler's returned closure currently
-// panics unconditionally (Red Gate stub, admin_handlers.go). This call
-// happens directly on the calling test's own goroutine (no server, no
-// background dispatch) — unlike the real-RPC-dispatch tests in
-// router_control_wire_test.go, where the panic occurs on a
-// mgmt.Server-owned goroutine that recover() cannot reach, recovering here is
-// safe. If the handler panics, the returned error carries the panic value so
-// callers' spec assertions still fail honestly (wrong error text/nil check)
-// instead of crashing the whole cmd/switchboard test binary.
+// recover() wrapper. makeAdminSVTNStatusHandler's returned closure is
+// implemented (no longer a Red Gate stub, admin_handlers.go) — the wrapper
+// is retained as a regression defense. This call happens directly on the
+// calling test's own goroutine (no server, no background dispatch) — unlike
+// the real-RPC-dispatch tests in router_control_wire_test.go, where a
+// handler panic would occur on a mgmt.Server-owned goroutine that recover()
+// cannot reach, recovering here is safe. If the handler were to panic, the
+// returned error carries the panic value so callers' spec assertions still
+// fail honestly (wrong error text/nil check) instead of crashing the whole
+// cmd/switchboard test binary.
 func callAdminSVTNStatusSafely(t *testing.T, fn func(ctx context.Context, args json.RawMessage) (any, error), ctx context.Context, args json.RawMessage) (result any, err error) {
 	t.Helper()
 	defer func() {

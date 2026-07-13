@@ -123,10 +123,10 @@ func startRouterControlWireServer(t *testing.T, configPath string, sighupCh chan
 
 // TestSubprocessRouterControlScenario is the re-exec landing point for every
 // integration-level test in this file that dispatches a real RPC against a
-// live, in-process mgmt.Server whose router.reload/router.drain handler
-// bodies currently panic unconditionally. See the file header for why this
-// isolation is required. In the parent test process (env var absent), the
-// hook skips immediately.
+// live, in-process mgmt.Server. router.reload/router.drain handlers are
+// implemented (no longer Red Gate stubs) — subprocess isolation is retained
+// as a regression defense; see the file header for why. In the parent test
+// process (env var absent), the hook skips immediately.
 func TestSubprocessRouterControlScenario(t *testing.T) {
 	scenario := os.Getenv("SW_TEST_ROUTER_CONTROL_SCENARIO")
 	if scenario == "" {
@@ -316,12 +316,11 @@ func TestRouterReload_BridgesToSighupCh_CodePathIdentical(t *testing.T) {
 // guard fires.
 //
 // The handler call happens on this test's own goroutine (no server, no
-// background dispatch), so a stub panic here — unlike the RPC-dispatch tests
-// above — CAN be safely recovered without any cross-goroutine risk. The
-// recover is a safety net only: if the handler panics, err is set to a
-// message that does not match wantText below, so the test still fails
-// exactly as an honest "not yet implemented" signal should — this is not
-// "asserting panics as success," it keeps the failure as an assertion
+// background dispatch), so a handler panic here — unlike the RPC-dispatch
+// tests above — CAN be safely recovered without any cross-goroutine risk.
+// The recover is a safety net only, retained as a regression defense: if
+// the handler were to panic, err is set to a message that does not match
+// wantText below, so the test still fails as an honest assertion failure
 // instead of a process crash.
 //
 // Test level: unit.
