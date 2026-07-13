@@ -232,7 +232,15 @@ func runTierOneAuthScenario(t *testing.T, cmd string) {
 
 	sighupCh := make(chan os.Signal, 1)
 	drainRequestCh := make(chan struct{}, 1)
-	socketPath, daemonPriv := startRouterControlWireServer(t, "", sighupCh, drainRequestCh)
+	// AC-014's premise is a production-reachable router: the AC-011 PC-3
+	// defense-in-depth chain (runRouter's cfg==nil guard + main.go's
+	// "router" case) guarantees configPath != "" for every router instance
+	// that reaches wireRouterControlHandlers registration — configPath=="",
+	// used elsewhere in this file only to drive TestRouterReload_
+	// NoConfigLoaded_ECFG004's own guard test, would collide with that
+	// test's E-CFG-004 assertion on the same handler for the reload
+	// subcase. Mirrors the reload_bridges_sighup scenario's non-empty path.
+	socketPath, daemonPriv := startRouterControlWireServer(t, "/tmp/does-not-need-to-exist.yaml", sighupCh, drainRequestCh)
 
 	resp := sendAdminRPC(t, socketPath, daemonPriv, cmd, nil)
 	if errObj, _ := resp["error"].(map[string]any); errObj != nil {
