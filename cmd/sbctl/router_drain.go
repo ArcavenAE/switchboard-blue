@@ -15,10 +15,6 @@
 // Authority: Tier-1 operator-key auth only.
 //
 // Purity classification (ARCH-09): effectful-boundary — network I/O to daemon socket.
-//
-// STUB — S-BL.CLI-SURFACE-COMPLETION (Red Gate, BC-5.38.001). Not yet
-// implemented; body panics unconditionally so no test can accidentally pass
-// before Task 4's Green step.
 package main
 
 import "context"
@@ -26,10 +22,12 @@ import "context"
 // runRouterDrain implements `sbctl router drain --router=<addr>`.
 //
 // AC-016 / BC-2.09.002 v1.3 Trigger/PC-1 (RPC-trigger note) — same anchor as AC-012.
-//
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 4 (Green step) implements the
-// connectAndRun dispatch to router.drain, tolerating connection-reset as a
-// non-error outcome. Red Gate: body panics unconditionally.
-func runRouterDrain(ctx context.Context, target, keyPath string, useJSON bool, args []string, sio sbctlIO) error {
-	panic("not implemented: S-BL.CLI-SURFACE-COMPLETION runRouterDrain")
+// A connection reset following (or without) the {"accepted": true} response
+// surfaces through connectAndRun as an ordinary E-RPC-001 dispatch error
+// (never E-ADM-010/E-CFG-*) — the expected shape of a severed connection
+// after the daemon begins its shutdown sequence (AC-012 PC-3).
+// router.drain takes no flags of its own (wire args are always {}); args is
+// part of the run* dispatch signature contract (main.go) but unused here.
+func runRouterDrain(ctx context.Context, target, keyPath string, useJSON bool, _ []string, sio sbctlIO) error {
+	return connectAndRun(ctx, target, keyPath, useJSON, "router.drain", map[string]string{}, sio)
 }

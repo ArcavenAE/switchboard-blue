@@ -790,10 +790,11 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			// Context cancelled — fall through to graceful shutdown below.
 			goto shutdown
 		case <-drainRequestCh:
-			// STUB — S-BL.CLI-SURFACE-COMPLETION Task 4 (Green step) replaces this
-			// no-op with `goto shutdown` (Decision 4 / AC-012 PC-2). Left inert here
-			// (Task 3 stub-first gate: no existing test sends on drainRequestCh, so
-			// this arm is never reached today) so existing tests remain green.
+			// RPC-triggered drain (router.drain, bridged via routerDrainRPCHandler)
+			// reaches the same shutdown sequence as ctx.Done()/SIGTERM — same
+			// drain-broadcast, per-node-flush, exit sequence (Decision 4 / AC-012
+			// PC-2, AC-013).
+			goto shutdown
 		case <-sighupCh:
 			// Fail-closed reload (BC-2.09.003 EC-004 / BC-2.09.001 PC-1).
 			// Empty configPath means no config file was provided; skip silently.

@@ -116,7 +116,7 @@ func main() {
 		// No subcommand supplied — usage error per interface-definitions.md v1.18 §174.
 		// Print enumerated subcommand list to stderr so the operator knows what to type.
 		fmt.Fprintf(os.Stderr, "usage: sbctl [--target=<addr>] [--key=<path>] [--json] [--timeout=<dur>] <subcommand> [args...]\n")
-		fmt.Fprintf(os.Stderr, "available subcommands: sessions, paths, router, console, admin\n")
+		fmt.Fprintf(os.Stderr, "available subcommands: sessions, paths, router, console, admin, svtn\n")
 		os.Exit(2)
 	}
 

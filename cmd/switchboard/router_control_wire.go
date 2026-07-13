@@ -17,7 +17,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/arcavenae/switchboard/internal/mgmt"
 )
@@ -44,29 +46,51 @@ func wireRouterControlHandlers(srv *mgmt.Server, configPath string, sighupCh cha
 
 // routerReloadRPCHandler returns the router.reload RPC handler.
 //
-// AC-011 / BC-2.09.001 v1.2 PC-1 (RPC-trigger note).
+// AC-011 PC-3 defense-in-depth guard: configPath == "" is unreachable via any
+// real daemon startup path (runRouter's entry guard plus main.go's "router"
+// case together guarantee configPath != "" for every router instance that
+// reaches registration) — nonetheless checked synchronously, before any
+// signal synthesis, returning the bare E-CFG-004 literal per error-taxonomy.md
+// v4.9 Variant 3 if that invariant is ever violated.
 //
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 4 (Green step) implements the
-// sighupCh synthesis + AC-011 PC-3 defense-in-depth guard. Red Gate: the
-// returned closure panics unconditionally so no test can accidentally pass
-// before the Green step.
+// PC-1/PC-2: otherwise synthesizes syscall.SIGHUP onto sighupCh — the same
+// coalescing semantics signal.Notify itself uses (a reload already pending
+// silently drops the second request) — and responds fire-and-forget
+// {"accepted": true}, matching the shared AC-014 wire contract.
+//
+// AC-011 / BC-2.09.001 v1.2 PC-1 (RPC-trigger note).
 func routerReloadRPCHandler(configPath string, sighupCh chan os.Signal) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		_, _ = configPath, sighupCh
-		panic("not implemented: S-BL.CLI-SURFACE-COMPLETION routerReloadRPCHandler")
+		if configPath == "" {
+			return nil, fmt.Errorf("E-CFG-004: reload not applicable: daemon started without --config")
+		}
+		select {
+		case sighupCh <- syscall.SIGHUP:
+		default:
+		}
+		return struct {
+			Accepted bool `json:"accepted"`
+		}{Accepted: true}, nil
 	}
 }
 
 // routerDrainRPCHandler returns the router.drain RPC handler.
 //
-// AC-012 / BC-2.09.002 v1.3 Trigger/PC-1 (RPC-trigger note).
+// Sends on drainRequestCh — select{...default:} coalescing so an
+// already-in-flight drain request is a no-op — and responds fire-and-forget
+// {"accepted": true}. The RPC connection is expected to be severed shortly
+// after as the daemon proceeds through the shutdown sequence (AC-012 PC-3);
+// that is handled entirely at the transport/select-loop level, not here.
 //
-// STUB — S-BL.CLI-SURFACE-COMPLETION Task 4 (Green step) implements the
-// drainRequestCh send. Red Gate: the returned closure panics unconditionally
-// so no test can accidentally pass before the Green step.
+// AC-012 / BC-2.09.002 v1.3 Trigger/PC-1 (RPC-trigger note).
 func routerDrainRPCHandler(drainRequestCh chan struct{}) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		_ = drainRequestCh
-		panic("not implemented: S-BL.CLI-SURFACE-COMPLETION routerDrainRPCHandler")
+		select {
+		case drainRequestCh <- struct{}{}:
+		default:
+		}
+		return struct {
+			Accepted bool `json:"accepted"`
+		}{Accepted: true}, nil
 	}
 }
