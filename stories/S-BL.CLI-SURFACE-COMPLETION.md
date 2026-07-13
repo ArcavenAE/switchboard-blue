@@ -10,6 +10,32 @@ producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
 modified:
   - date: 2026-07-13
+    version: "2.6"
+    change: >
+      Delivery-phase governance addition (NON-BEHAVIORAL): added the missing "Token Budget
+      Estimate (MANDATORY)" section, one of the template sections `validate-template-compliance`
+      has flagged since Round 1 — the per-story-delivery playbook's Token Budget Check reads this
+      section before every test-writer/implementer spawn and mandates story-writer add it if
+      absent. No AC, PC, Decision, or Forward Obligation content touched; the spec-adversarial
+      convergence (3/3 clean passes as of pass 9, achieved on v2.5) covers behavioral content and
+      STANDS unaffected. Section broken into the three per-story-delivery dispatch passes (stub-
+      architect, test-writer, implementer), each a fresh-context dispatch: Pass 1 (stub) ~55k
+      tokens (~28% of a 200K window), Pass 2 (failing-test) ~75k (~38%), Pass 3 (TDD
+      implementation, the heaviest) ~98k (~49%) — none breaches the 60% split-discussion
+      threshold. Methodology: `wc -c`/4 chars-per-token on files as they exist at develop@4c276d9
+      for everything already on disk (story spec, precedent production files, `interface-
+      definitions.md`, `error-taxonomy.md`, the four BC anchor files, the six production files
+      being extended, `mgmt_wire_test.go`); line-count-based estimates, called out explicitly, for
+      not-yet-written content (6 new-file stub bodies, ~37 test functions across 5 new + 2
+      extended test files implied by the story's cited test names). Noted honestly that Passes 2
+      and 3 exceed the template's nominal 20-30% target band — driven by this story's real scope
+      (16 ACs, 4 BC anchors, all 3 `error-taxonomy.md` E-CFG-004 variants, 13 `runRouter` call
+      sites across 6 files) rather than padding — but the heaviest pass stays under half the
+      window; no story split warranted at 5 points. Section inserted between File-Change List and
+      Task Breakdown, matching the template's ordering. `input-hash` unchanged — story-body-only
+      edit; `--check` confirms no drift. Frontmatter `version` 2.5 → 2.6; new `modified:` entry
+      appended (newest-first).
+  - date: 2026-07-13
     version: "2.5"
     change: >
       Remediated pass-8 spec-adversarial nitpick N-CS-SP8-01 (orchestrator-adopted as fix; pass 8
@@ -182,7 +208,7 @@ modified:
       line-number citations in story prose (S-BL.PE-RECEIVE-LOOP / S-BL.LOOPBACK-FULLSTACK
       convention) — mechanism-anchor descriptions only; symbols grep-resolved against
       develop@4c276d9.
-version: "2.5"
+version: "2.6"
 phase: 2
 epic: E-7
 wave: steady-state
@@ -969,6 +995,63 @@ doesn't silently drift from the `admin.*` handler exclusion it parallels.
 **No ARCH-08 §6.4 registration obligation** — no new `internal/` package is introduced (`internal/mgmt`
 already exists at position 20; only its exported surface grows).
 
+## Token Budget Estimate (MANDATORY)
+
+**Methodology:** token counts below are `wc -c` byte counts of the files as they exist at
+`develop@4c276d9`, divided by 4 chars/token, for every file that currently exists. Content that
+does not yet exist (new-file stub bodies, the 16 ACs' worth of new/extended test code) is a
+line-count-based estimate, called out explicitly below. Broken out per dispatch pass per the
+per-story-delivery TDD sequence (stub-architect → test-writer → implementer); each pass runs in
+its own fresh-context dispatch.
+
+### Pass 1 — Stub pass (stub-architect)
+
+| Context Source | Estimated Tokens |
+|---|---|
+| This story spec (full — File-Change List, Architecture Mapping, all 16 ACs' signatures) | ~21k |
+| Precedent production files (`client.go` [`connectAndRun`], `router_status.go`, `router_metrics.go`, `paths_list.go`, `admin.go` — signature/style conventions for the 6 new production files) | ~14k |
+| `interface-definitions.md` (full — CLI verb/flag signatures for the new dispatch surface) | ~15k |
+| Tool-call overhead (Read/Glob/Grep envelopes, ~10%) | ~5k |
+| **Total** | **~55k** |
+| Agent context window | 200K (Sonnet-class) |
+| **Budget usage** | **~28%** |
+
+### Pass 2 — Failing-test pass (test-writer)
+
+| Context Source | Estimated Tokens |
+|---|---|
+| This story spec (full — all 16 ACs' postcondition/test-name blocks, BC anchors) | ~21k |
+| BC-2.09.001, BC-2.09.002, BC-2.07.001, BC-2.06.004 (full — exact PC/EC wording to test against) | ~13k |
+| `error-taxonomy.md` (full — exact error-string literals for assertions, incl. all 3 E-CFG-004 variants) | ~17k |
+| `interface-definitions.md` (full — exact usage/flag strings for CLI-dispatch tests) | ~15k |
+| Stub code from Pass 1 (6 new-file skeletons/signatures) | ~3k |
+| Tool-call overhead | ~6k |
+| **Total** | **~75k** |
+| Agent context window | 200K (Sonnet-class) |
+| **Budget usage** | **~38%** |
+
+### Pass 3 — TDD implementation pass (implementer)
+
+| Context Source | Estimated Tokens |
+|---|---|
+| This story spec (full) | ~21k |
+| Stub code + failing-test content from Pass 1/2 (6 stub files + ~37 test functions across 5 new + 2 extended test files — estimated from the story's cited test names, not yet written) | ~12k |
+| Production files being extended, before-state (`cmd/sbctl/main.go`, `cmd/switchboard/mgmt_wire.go`, `cmd/switchboard/admin_handlers.go`, `cmd/switchboard/metrics_wire.go`, `cmd/switchboard/main.go`, `internal/mgmt/register_metrics.go` — 6 files, full) | ~30k |
+| `cmd/switchboard/mgmt_wire_test.go` (full — hosts 5 of the 13 `runRouter` call sites plus the new AC-013 shutdown-parity test) | ~15k |
+| Remaining 7 `runRouter` call sites across 4 files (`router_drain_test.go`, `router_sighup_test.go`, `router_pe_receive_test.go`, `router_pe_connector_test.go`) — targeted grep + ~15-line context per site, not full-file reads | ~2k |
+| BC/error-taxonomy spot-checks during implementation (exact literals already encoded in the Pass-2 failing tests; lighter touch than Pass 2) | ~8k |
+| Tool-call overhead (heaviest pass — most edits + `just test-race` cycles) | ~10k |
+| **Total** | **~98k** |
+| Agent context window | 200K (Sonnet-class) |
+| **Budget usage** | **~49%** |
+
+**Overall:** no pass breaches the 60% split-discussion threshold. Passes 2 (~38%) and 3 (~49%)
+exceed the template's nominal 20-30% target band — driven honestly by this story's real scope
+(16 ACs, 4 BC anchors, all 3 `error-taxonomy.md` E-CFG-004 variants, and 13 `runRouter` call
+sites across 6 files from the signature-widening constraint) rather than padding. The heaviest
+pass (implementation, ~49%) stays under half the window with room to spare. No story split
+required at 5 points.
+
 ## Task Breakdown (Strict TDD — Stubs → Red → Green → Gate)
 
 All tasks execute in a single worktree on a feature branch cut from `develop@HEAD`. Each task gate
@@ -1073,6 +1156,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.6 | 2026-07-13 | Delivery-phase governance addition (NON-BEHAVIORAL): added the missing "Token Budget Estimate (MANDATORY)" section, one of the template sections `validate-template-compliance` has flagged since Round 1 — the per-story-delivery playbook's Token Budget Check reads this section before every test-writer/implementer spawn and mandates story-writer add it if absent. No AC, PC, Decision, or Forward Obligation content touched; the spec-adversarial convergence (3/3 clean passes as of pass 9, achieved on v2.5) covers behavioral content and STANDS unaffected. Section broken into the three per-story-delivery dispatch passes (stub-architect, test-writer, implementer), each a fresh-context dispatch: Pass 1 (stub) ~55k tokens (~28% of a 200K window), Pass 2 (failing-test) ~75k (~38%), Pass 3 (TDD implementation, the heaviest) ~98k (~49%) — none breaches the 60% split-discussion threshold. Methodology: `wc -c`/4 chars-per-token on files as they exist at develop@4c276d9 for everything already on disk (story spec, precedent production files, `interface-definitions.md`, `error-taxonomy.md`, the four BC anchor files, the six production files being extended, `mgmt_wire_test.go`); line-count-based estimates, called out explicitly, for not-yet-written content (6 new-file stub bodies, ~37 test functions across 5 new + 2 extended test files implied by the story's cited test names). Noted honestly that Passes 2 and 3 exceed the template's nominal 20-30% target band — driven by this story's real scope (16 ACs, 4 BC anchors, all 3 `error-taxonomy.md` E-CFG-004 variants, 13 `runRouter` call sites across 6 files) rather than padding — but the heaviest pass stays under half the window; no story split warranted at 5 points. Section inserted between File-Change List and Task Breakdown, matching the template's ordering. `input-hash` unchanged — story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.5 → 2.6; new `modified:` entry appended (newest-first). |
 | 2.5 | 2026-07-13 | Remediated pass-8 spec-adversarial nitpick N-CS-SP8-01 (orchestrator-adopted as fix; pass 8 verdict was NITPICK_ONLY, zero findings — 3-clean-pass streak sits at 2/3, unaffected by this fix). AC-015 PC-1 and AC-016 PC-1 both cited "`router status`/`router metrics`" as the `connectAndRun` exemplars for the reload/drain dispatch shape. Verified against develop@4c276d9 (`grep connectAndRun cmd/sbctl/*.go`): `runRouterMetrics` (router_metrics.go) and `runPathsList` (paths_list.go) both call `connectAndRun` directly; `runRouterStatus` (router_status.go) does **not** — it hand-rolls its own `net.Dialer` + `Authenticate` + dispatch of `paths.list`, and its own source comment says it "mirrors connectAndRun's discrimination" rather than using it. Citing `router status` as a `connectAndRun` user was factually wrong. Fixed both parentheticals to "(same dial+auth+dispatch shape `router metrics` and `paths list` already use)". Swept the rest of the story (Decisions, Task 4, File-Change List, all `dial+auth+dispatch`/`net.Dialer`/`hand-roll` hits) for the same mispairing — none found; the other `paths list`/`router status` co-mentions (Decision 1's RPC-semantics contrast, the drain UX-parity note, Decision 3's bare-top-level-read CLI-shape note) are unrelated to `connectAndRun` and needed no change. Also applied N-CS-SP8-02 (STORY-INDEX.md frontmatter `modified` scalar trailed at 2026-07-12; refreshed to 2026-07-13). `input-hash` unchanged — story-body-only edit; `--check` confirms no drift. Frontmatter `version` 2.4 → 2.5; new `modified:` entry appended (newest-first). |
 | 2.4 | 2026-07-13 | Remediated pass-6 spec-adversarial finding F-CS-SP6-001 (MED, AC-coverage/test-file-assignment gap, orchestrator-verified) plus nitpick N-CS-SP6-01. `router reload`/`router drain` were the only verbs with no client-side CLI dispatch acceptance criterion and no `cmd/sbctl` test file, despite the File-Change List already creating `cmd/sbctl/router_reload.go`/`router_drain.go` and adding `reload`/`drain` sub-verb arms to `main.go`'s `router` case — a real behavior change (that arm dispatches only `metrics`/`status` today; other sub-verbs exit 2 via `usageErrf`). AC-014 PC-3's client-observed E-NET-001/E-ADM-010 codes were also mis-assigned to a server-side test file that structurally cannot exercise `cmd/sbctl`. **Fixed:** two new client happy-path ACs added — **AC-015** (`sbctl router reload`, BC-2.09.001 v1.2 PC-1, same anchor as AC-011) and **AC-016** (`sbctl router drain`, BC-2.09.002 v1.3 Trigger/PC-1, same anchor as AC-012) — each with a sub-verb-transition-pin postcondition proving the known sub-verb now dispatches while an adjacent still-unknown sub-verb (`router bogus`) continues to exit 2; AC-014 PC-3 re-homed to new `cmd/sbctl/router_control_test.go`, its Test names/level/file block split per-postcondition (PC-1/PC-2 stay server-side, PC-3 moves); `acceptance_criteria_count` 14 → 16; File-Change List gained the new test-file row plus a narrowed AC-014 scope note on the `router_control_wire_test.go` row; Task 4 retitled and its Red step rewritten to cover all six ACs and both failure modes; Anchors Consumed's reload/drain rows gained AC-015/AC-016; Architecture Mapping needed no change (never named test files); points kept at 5 (the gap was AC/test documentation of already-scoped work, not new implementation scope). **N-CS-SP6-01** (nitpick, taken): AC-011 PC-3's abbreviated quote of the `runRouter` entry-guard message marked as abbreviated with the full wrapped literal inlined, per error-taxonomy.md v4.9's own changelog (F-CS-SP4-001) confirming the story's Variant 3 literal needed no change. `input-hash` unchanged — story-body-only edit, `--check` confirms no drift. Frontmatter `version` 2.3 → 2.4; new `modified:` entry appended (newest-first). |
 | 2.3 | 2026-07-12 | Remediated pass-3 spec-adversarial findings (F-CS-SP3-001, F-CS-SP3-002, F-CS-SP3-003) and discharged Forward Obligation (c). Architect filed the Ruling 2 Addendum (rulings doc v1.1 → v1.2, F-CS-SP3-003 — AC-008 PC-3 VINDICATED, stands unchanged); PO landed `error-taxonomy.md` v4.8 with both the E-CFG-001 client-side variant note and the E-CFG-004 `router.reload` defense-in-depth variant in the same burst, which discharges FO(c). **F-CS-SP3-001** (FO table row (c)): Gate cell `Before implementation of AC-011's E-CFG-004 postcondition` → `None — discharged (was non-blocking per Ruling 4 Addendum v1.1)`; Status cell → `DISCHARGED — landed in error-taxonomy.md v4.8 (2026-07-12, pass-3 remediation burst)`; the "Downgraded by Ruling 4 Addendum v1.1" paragraph rewritten to record the discharge. **F-CS-SP3-002** (Decision 4 reload-bridging bullet): "must land before this AC ships" → discharged form citing the v4.8 landing. **F-CS-SP3-003** (AC-008 PC-3): text stands unchanged per the addendum; appended the architect's optional traceability parenthetical (`usageErrf`, §110/§111 siblings, error-taxonomy.md E-CFG-001 client-side variant note). **Semantic reference-site sweep** (searched "Obligation (c)"/"FO(c)"/"E-CFG-004"/"error-taxonomy"/"taxonomy" and read every hit's sentence — the token-grep approach missed this class twice already, F-CS-SP2-002 then this pass): AC-011 PC-3's trailing sentence, the File-Change List's error-taxonomy.md row, and Task 4's note all updated from non-blocking/pending phrasing to discharged/landed phrasing; the v2.0/v2.2-era historical `modified:`/Changelog rows describing the old language left untouched as accurate period records; the Delivery Plan Note (POL-005) doesn't mention FO(c), no change needed; the FO table's general intro sentence remains accurate (describes all four FOs, not (c) specifically). Live rulings-doc pin refreshed v1.1 → v1.2 at all three live binding-source citations (frontmatter `inputDocuments` comment, Adjudicated Design Decisions intro, Provenance section). `error-taxonomy.md` gained its first version-pinned citations in this story (v4.8), at the discharge sites — it was previously cited by filename only. `input-hash` recomputed via `compute-input-hash --update` (the rulings doc input changed content, v1.1 → v1.2). Frontmatter `version` 2.2 → 2.3; new `modified:` entry appended (newest-first). |

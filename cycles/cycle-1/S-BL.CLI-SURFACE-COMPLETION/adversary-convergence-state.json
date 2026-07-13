@@ -350,5 +350,8 @@
   "implementer_notes": [
     "N-CS-SP7-01 — refresh the default-arm usage hint (\"expected 'metrics' or 'status'\") when reload/drain wire into the router case arm; delivery courtesy, no AC pins usage-hint text",
     "N-CS-SP9-01 — three enumerated-verb help strings in cmd/sbctl/main.go go stale when svtn/ping/reload/drain wire in; no AC/test governs the enumerations; refresh at implementation time as delivery courtesy"
+  ],
+  "post_convergence_notes": [
+    "2026-07-13: story v2.6 — Token Budget Estimate section added per per-story-delivery Token Budget Check (non-behavioral, convergence on v2.5 behavioral content stands). Budgets: stub ~28%, failing-test ~38%, implementation ~49% of 200K — no pass breaches the 60% split threshold. STORY-INDEX v4.92. Delivery worktree created: .worktrees/S-BL.CLI-SURFACE-COMPLETION @ feature/S-BL.CLI-SURFACE-COMPLETION from develop 4c276d9, baseline green (build/vet/lint)."
   ]
 }
