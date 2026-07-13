@@ -397,6 +397,55 @@ Obligations reconfirmed DISCHARGED.
 **Post-pass:** feature head `100d288`, unchanged — no remediation
 needed.
 
+## Step-4.5 pass 6
+
+**Adversary:** adv-cs-i6, 2026-07-13. **Verdict:** NITPICK_ONLY, zero
+findings — **second consecutive clean verdict, streak 2/3.** **Diff
+reviewed:** `4c276d9..100d288`. Dispatch tuple — develop
+`4c276d935b089026fac4fa796612352374bb880f`, feature
+`100d28890eb7a07541aa9aa93be8339faa8b5e4d`, factory
+`50d09a08e2b559d97df9d8281a20ae7617600c4e` — POL-005 verified PASS
+across 10 artifacts, all matched. The adversary ran gates read-only in
+addition to inspection: build/vet clean, targeted test packages ok,
+race clean on reload/drain/router/ping/svtn-status tests, golangci-lint
+0 issues.
+
+**N-CS-I6-01, FIXED post-pass in hygiene commit
+`ef3e5c58411902d0117e9948815895490b8fd9dd`** (test-writer): two inner
+doc comments still claimed "currently panics unconditionally,"
+contradicting the pass-4-corrected file headers; one same-class
+comment turned up in the sweep. Orchestrator-verified comment-only:
+19+/19-, zero non-comment content lines, mechanical grep both sides.
+
+**N-CS-I6-02, SANCTIONED:** the unused `sio` param on
+`runSvtnDestroyShim` — nolint-annotated with rationale; dropping it
+would touch production and test call sites, a larger change surface
+than the nitpick warrants at streak 2/3.
+
+**N-CS-I6-03, SANCTIONED:** AC-002's no-dispatch-on-auth-fail is proven
+structurally — dispatch is unreachable before `Authenticate`; a
+symmetry tripwire is optional.
+
+**N-CS-I6-04, SANCTIONED, not touched:** two `t.Errorf` format strings
+with "does not yet bridge/send" phrasing, found in the same hygiene
+sweep — failure-message text (displays only on regression, where the
+phrasing is semantically accurate), not documentation claims. Left
+untouched to honor zero-assertion-change discipline.
+
+**Clean lenses:** 16/16 ACs including §214 dual-mode; test honesty (AST
+four-mode proof plus live dispatch, byte-identical oracle assert);
+taxonomy (no E-RPC-001 leak into `internal/mgmt`); security
+(E-SVTN-003 reachable only by entitled callers); concurrency
+(race-detector clean); drift none (VP-078/079 consistent); POL-001/002
+satisfied, POL-004 n/a, POL-005 executed. All 5 adjudications honored;
+completeness grep 25/25.
+
+**Post-pass:** feature head after hygiene is
+`ef3e5c58411902d0117e9948815895490b8fd9dd` (`100d288` +
+comment-only `ef3e5c5`). Streak note: verdicts drive the clock —
+comment-only hygiene between clean passes does not reset (spec-phase
+N-CS-SP8-01 precedent).
+
 ## Status
 
 Red Gate COMPLETE. Green COMPLETE @ `409457d`. Step-4.5 pass 1
@@ -407,6 +456,8 @@ story File-Change List completeness only, zero code defects, remediated
 @ story v2.8. Step-4.5 pass 4 HAS_FINDINGS — F-CS-I4-001 (MED, §214
 `--json` contract) + F-CS-I4-002 (LOW, `usageErrf` shape), remediated
 TDD-shaped @ `100d288`; code freeze lifted. Step-4.5 pass 5
-NITPICK_ONLY — first clean verdict, streak 1/3, need 2 more consecutive
-clean; feature @ `100d288` unchanged. Next: step-4.5 pass 6
-(BC-5.39.001/BC-5.39.002, diff range `4c276d9..100d288`).
+NITPICK_ONLY — first clean verdict, streak 1/3. Step-4.5 pass 6
+NITPICK_ONLY — second consecutive clean verdict, streak 2/3;
+comment-only hygiene at `ef3e5c5` did not reset the streak. Next:
+step-4.5 pass 7 — **CONVERGENCE PASS** (BC-5.39.001/BC-5.39.002, diff
+range `4c276d9..ef3e5c5`).

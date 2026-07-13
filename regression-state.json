@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-13T11:05:12Z","command":"go test ./... -count=1 2>&1 | grep -cv 'no test files' ; go test ./... -count=1 2>&1 | grep -E 'FAIL' | head -3 ; echo \"FAILCOUNT_ABOVE\" && gofumpt -l . | head -3 ; echo OK"}
+{"status":"pass","timestamp":"2026-07-13T17:09:54Z","command":"git log --format='%h %G? %s' -2 && git diff HEAD~1 --stat | tail -3 && git diff HEAD~1 | grep -E '^[+-][^+-]' | grep -vcE '^[+-]\\s*//' ; go test ./cmd/switchboard/ -count=1 2>&1 | tail -1"}

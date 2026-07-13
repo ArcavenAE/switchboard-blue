@@ -357,8 +357,8 @@
   "implementation_phase": {
     "phase": "step-4.5 story-diff adversarial (BC-5.39.001/BC-5.39.002)",
     "requirement": "3 consecutive CLEAN or NITPICK_ONLY passes",
-    "diff_range": "4c276d9..100d288 on feature/S-BL.CLI-SURFACE-COMPLETION",
-    "streak": "1/3",
+    "diff_range": "4c276d9..ef3e5c5 on feature/S-BL.CLI-SURFACE-COMPLETION",
+    "streak": "2/3",
     "passes": [
       {
         "pass": 1,
@@ -634,6 +634,60 @@
         "post_pass": {
           "feature_head": "100d288 (UNCHANGED — no remediation needed)",
           "next": "pass 6"
+        }
+      },
+      {
+        "pass": 6,
+        "adversary": "adv-cs-i6",
+        "date": "2026-07-13",
+        "verdict": "NITPICK_ONLY",
+        "findings": [],
+        "streak_after": "2/3",
+        "diff_range_reviewed": "4c276d9..100d288",
+        "dispatch_tuple": {
+          "develop": "4c276d935b089026fac4fa796612352374bb880f",
+          "feature": "100d28890eb7a07541aa9aa93be8339faa8b5e4d",
+          "factory": "50d09a08e2b559d97df9d8281a20ae7617600c4e"
+        },
+        "pol_005_verified": "PASS",
+        "pol_005_artifacts_checked": "10 artifacts, all matched",
+        "adversary_gates_run": "build/vet clean, targeted test packages ok, race clean on reload/drain/router/ping/svtn-status tests, golangci-lint 0 issues (adversary ran gates read-only in addition to inspection)",
+        "nitpick_dispositions": [
+          {
+            "id": "N-CS-I6-01",
+            "disposition": "FIXED post-pass",
+            "summary": "hygiene commit ef3e5c5 (test-writer): two inner doc comments still claimed \"currently panics unconditionally\", contradicting the pass-4-corrected file headers; one same-class comment found in the sweep. Orchestrator-verified comment-only: 19+/19-, zero non-comment content lines, mechanical grep both sides."
+          },
+          {
+            "id": "N-CS-I6-02",
+            "disposition": "SANCTIONED",
+            "summary": "unused sio param on runSvtnDestroyShim — nolint-annotated with rationale; dropping it would touch production+test call sites, change surface larger than the nitpick warrants at streak 2/3"
+          },
+          {
+            "id": "N-CS-I6-03",
+            "disposition": "SANCTIONED",
+            "summary": "AC-002 no-dispatch-on-auth-fail proven structurally — dispatch unreachable before Authenticate; a symmetry tripwire is optional"
+          },
+          {
+            "id": "N-CS-I6-04",
+            "disposition": "SANCTIONED, not touched",
+            "summary": "two t.Errorf format strings with \"does not yet bridge/send\" phrasing, found in the same hygiene sweep — failure-message text (displays only on regression, where the phrasing is semantically accurate), not documentation claims; left untouched to honor zero-assertion-change discipline"
+          }
+        ],
+        "clean_lenses": [
+          "16/16 ACs incl. §214 dual-mode",
+          "test honesty (AST four-mode proof + live dispatch, byte-identical oracle assert)",
+          "taxonomy (no E-RPC-001 leak into internal/mgmt)",
+          "security (E-SVTN-003 reachable only by entitled callers)",
+          "concurrency (race-detector clean)",
+          "drift none (VP-078/079 consistent)",
+          "POL-001/002 satisfied, POL-004 n/a, POL-005 executed"
+        ],
+        "adjudications_and_fos_reverified": "All 5 adjudications honored; completeness grep 25/25",
+        "post_pass": {
+          "feature_head_after_hygiene": "ef3e5c5 (100d288 + comment-only ef3e5c5)",
+          "streak_note": "verdicts drive the clock — comment-only hygiene between clean passes does not reset (spec-phase N-CS-SP8-01 precedent)",
+          "next": "pass 7 = convergence pass"
         }
       }
     ]
