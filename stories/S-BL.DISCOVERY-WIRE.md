@@ -10,6 +10,53 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-14
+    version: "2.11"
+    change: >
+      Remediated spec-adversarial pass 13 finding F-DWSP13-001 (LOW): two live-prose spots
+      attributed the F-DWSP4-001 restart-liveness amendment (`Sequence` `uint32`→`uint64`
+      epoch-qualified widening + offset consequences) to "rulings v1.6". The canonical adoption
+      version is rulings v1.5 (rulings.md's "Replay / freshness — restart-liveness amendment
+      (F-DWSP4-001 ... — v1.5 adjudication)" section); v1.6 was ONLY the residual-bounds
+      precision correction and changed no widths or offsets. Corroborated by BC-2.03.001 PC-2's
+      blockquote ("F-DWSP4-001, v1.5"), VP-080's history, and this story's own line 1270
+      ("v1.5 update (F-DWSP4-001), residual bounds corrected v1.6"), which directly contradicted
+      line 1257 within the same Human Gate item 1. Fixed: AC-005's note (line 909) — "widths
+      updated per F-DWSP4-001/rulings v1.6" → "...v1.5"; Human Gate item 1's opening sentence
+      (line 1257) — "epoch-qualified per the v1.6 restart-liveness amendment" →
+      "...v1.5 restart-liveness amendment". Line 1270's correct dual-version phrasing left
+      unchanged. **Exception-set retirement:** prior sweeps (v2.7-v2.10 rows) classified these
+      two spots as "sanctioned point-in-time historical `rulings v1.6` citations" and verified
+      them unchanged burst after burst — that classification protected the version-at-fix-time
+      reading without checking the text's actual semantic claim, which falsely attributed the
+      AMENDMENT itself to v1.6. This fix retires that exception class; the historical
+      classification in the v2.7 through v2.10 rows themselves is left unedited
+      (historical-preservation precedent) — this entry layers the correction forward.
+      **Convention going forward:** amendment attributions cite the ADOPTING version (v1.5);
+      "residual bounds corrected v1.6" is the correct dual-version formula where the v1.6
+      precision correction is also relevant (as line 1270 already does). Mandatory
+      multiline-tolerant re-certification sweep (Perl `-0777`, the ratified v2.9/v2.10 pattern
+      set: `VP-080\s+v1\.[0-9]+`, `` rulings(\.md)?[`']?\s+v1\.[0-9]+ ``,
+      `rulings\s*\(v1\.[0-9]+\)`, `VP-080\s*\(v1\.[0-9]+\)`) found a THIRD spot making the
+      identical false attribution: "The architect's fix (rulings v1.6): widen `Sequence` to
+      `uint64`, epoch-qualified..." (Human Gate item 1, four lines below the correctly-phrased
+      v1.5/v1.6 dual-version paragraph opener) — the widening fix itself credited to v1.6 rather
+      than v1.5. Initially flagged out of scope pending disposition; **the orchestrator extended
+      this same burst to cover it** (class-sweep principle — fix every instance of a finding's
+      class in one burst rather than leaving a guaranteed pass-14 finding). Fixed in place,
+      same v2.11 (uncommitted, amended not re-versioned): "The architect's fix (rulings v1.6):"
+      → "The architect's fix (rulings v1.5; residual bounds corrected v1.6):" — the same
+      dual-version formula line 1270 already uses; nothing else in the sentence changed. **All
+      THREE same-class spots (AC-005's note at line 909, Human Gate item 1's opening sentence at
+      line 1257, and Human Gate item 1's fix-origin sentence at line 1274) are now fixed in
+      v2.11.** Re-ran the full re-certification sweep after this third fix: every live-prose
+      `VP-080` hit reads `v1.7` (5 spots); every live-prose `rulings` hit reads `v1.8` (6 spots,
+      plus the paren-form at line 1241) or the exempt Provenance "Adjudication:" bullet (`v1.3`,
+      line 1643) — **zero live-prose `rulings v1.6` pins remain anywhere in the file, in any
+      form.** The exception-set retirement now FULLY holds. `acceptance_criteria_count` stays
+      18; points stay 8. None of this story's five declared `inputs:` (rulings, BC-2.03.001,
+      BC-2.03.002, BC-2.01.008, ARCH-03) changed this burst: `compute-input-hash --check`
+      confirms `a39b7ad` holds unchanged.
+  - date: 2026-07-14
     version: "2.10"
     change: >
       Cascade-only pin sweep for F-DWSP12-001 (LOW, spec-adversarial pass 12): the architect
@@ -408,7 +455,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.10"
+version: "2.11"
 phase: 2
 epic: E-7
 wave: backlog
@@ -906,7 +953,7 @@ post-deletion; no postcondition text change needed, scope clarification only.
    selector) — equivalently, whose post-tag body is shorter than 24 bytes — is rejected before
    any key lookup is attempted.
 
-**Note (F-DWSP1-001 fix context, widths updated per F-DWSP4-001/rulings v1.6):** the wire layout is
+**Note (F-DWSP1-001 fix context, widths updated per F-DWSP4-001/rulings v1.5):** the wire layout is
 `[8]HMACTag | [16]SVTNID | [8]NodeAddr | [8]Sequence | [2]count | sessions...` (raw offsets),
 matching the shipped `internal/discovery/discovery.go` layout and its own guard comment. `body`
 throughout this AC (and Decision 1 Implementation Constraint 2's `body[0:16]`/`body[16:24]`
@@ -1254,7 +1301,7 @@ item 3, the scheduling of Task 6/AC-017/AC-018 specifically.
 ### 1. SEC-DW-07 monotonic-`Sequence`-field adjudication
 
 The architect already ruled on this (Ruling 1, "Replay / freshness" subsection): a new
-`Sequence uint64` (epoch-qualified per the v1.6 restart-liveness amendment — see below; originally
+`Sequence uint64` (epoch-qualified per the v1.5 restart-liveness amendment — see below; originally
 specified as `uint32`) wire field is added to `AdvertisementPayload`, with a router-held
 per-`(SVTNID,NodeAddr)` last-accepted map, discarding non-increasing sequences even after HMAC
 passes. This is a **new wire-format field and new router-held state** that did not exist before
@@ -1271,8 +1318,8 @@ scope for this story (vs. splitting it into a separate wire-format-versioning st
 and story-ready, spec-adversarial pass 4 found the `Sequence` field as originally specified
 (in-memory counter, resets on node restart) paired against the router's restart-STABLE `lastSeen`
 watermark, producing up to ~8.3h of silent discovery absence on every ordinary node
-restart/redeploy/crash-recover — not just a rare edge case. The architect's fix (rulings v1.6):
-widen `Sequence` to `uint64`, epoch-qualified (high 32 bits = wall-clock seconds sampled at process
+restart/redeploy/crash-recover — not just a rare edge case. The architect's fix (rulings v1.5;
+residual bounds corrected v1.6): widen `Sequence` to `uint64`, epoch-qualified (high 32 bits = wall-clock seconds sampled at process
 start, low 32 bits = the original counter) — self-contained at the sender, no router-side logic
 change, no new state, no dependency on the still-missing node-identity-to-connection binding
 (Forward Obligation (a)). Two residuals remain, with DIFFERENT bounds — read both before signing: a
@@ -1653,6 +1700,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.11 | 2026-07-14 | Remediated spec-adversarial pass 13 finding F-DWSP13-001 (LOW): two live-prose spots attributed the F-DWSP4-001 restart-liveness amendment (`Sequence` `uint32`→`uint64` epoch-qualified widening + offset consequences) to "rulings v1.6" — the canonical adoption version is rulings v1.5 (rulings.md's restart-liveness amendment section is a v1.5 adjudication; v1.6 was only the residual-bounds precision correction, changing no widths or offsets), corroborated by BC-2.03.001 PC-2's blockquote ("F-DWSP4-001, v1.5"), VP-080's history, and this story's own line 1270 ("v1.5 update (F-DWSP4-001), residual bounds corrected v1.6"), which directly contradicted line 1257 within the same Human Gate item 1. Fixed: AC-005's note (line 909) "widths updated per F-DWSP4-001/rulings v1.6" → "...v1.5"; Human Gate item 1's opening sentence (line 1257) "epoch-qualified per the v1.6 restart-liveness amendment" → "...v1.5 restart-liveness amendment". Line 1270's correct dual-version phrasing left unchanged. **Exception-set retirement:** prior sweeps (v2.7-v2.10 rows) classified these two spots as "sanctioned point-in-time historical `rulings v1.6` citations" and verified them unchanged burst after burst — that classification protected the version-at-fix-time reading without checking the text's actual semantic claim, which falsely attributed the AMENDMENT itself to v1.6; this fix retires that exception class. The v2.7-v2.10 rows' own historical classification text is left unedited (historical-preservation precedent) — this entry layers the correction forward. **Convention going forward:** amendment attributions cite the ADOPTING version (v1.5); "residual bounds corrected v1.6" is the correct dual-version formula where the v1.6 precision correction is also relevant (as line 1270 already does). Mandatory multiline-tolerant re-certification sweep (Perl `-0777`, the ratified v2.9/v2.10 pattern set plus the paren-form `VP-080` check) found a THIRD spot making the identical false attribution: "The architect's fix (rulings v1.6): widen `Sequence` to `uint64`, epoch-qualified..." (Human Gate item 1, four lines below the correctly-phrased v1.5/v1.6 dual-version paragraph opener) — the widening fix itself credited to v1.6 rather than v1.5. Initially flagged out of scope pending disposition; **the orchestrator extended this same burst to cover it** (class-sweep principle — fix every instance of a finding's class in one burst rather than leaving a guaranteed pass-14 finding). Fixed in place, same v2.11 (uncommitted, amended not re-versioned): "The architect's fix (rulings v1.6):" → "The architect's fix (rulings v1.5; residual bounds corrected v1.6):" — the same dual-version formula line 1270 already uses; nothing else in the sentence changed. **All THREE same-class spots (AC-005's note at line 909, Human Gate item 1's opening sentence at line 1257, and Human Gate item 1's fix-origin sentence at line 1274) are now fixed in v2.11.** Re-ran the full re-certification sweep after this third fix: every live-prose `VP-080` hit reads `v1.7` (5 spots); every live-prose `rulings` hit reads `v1.8` (6 spots, plus the paren-form at line 1241) or the exempt Provenance "Adjudication:" bullet (`v1.3`, line 1643) — **zero live-prose `rulings v1.6` pins remain anywhere in the file, in any form.** The exception-set retirement now FULLY holds. `acceptance_criteria_count` stays 18; points stay 8. None of this story's five declared `inputs:` (rulings, BC-2.03.001, BC-2.03.002, BC-2.01.008, ARCH-03) changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |
 | 2.10 | 2026-07-14 | Cascade-only pin sweep for F-DWSP12-001 (LOW, spec-adversarial pass 12): VP-080's Source Contract process-status paragraph corrected by the architect (it had read "drafted, not yet executed" since the v1.0 mint even though the BC-2.03.001 PC-2 amendment landed at v1.5 and was superseded in place at v1.6) — citation-only, no property-substance change, input-hash unchanged (`5d904d5`) — and bumped to v1.7; VP-INDEX bumped to v2.47. Story-side pin sweep updated all six live-prose `VP-080 v1.6` pins → `v1.7`: the `inputDocuments:` comment, AC-009's note, AC-010 postconditions 5/6, the Non-Goals `uint64`-composite-wraparound bullet, and the File-Change List's `discovery_wire_test.go` row (swept forward — the v1.7 fix touched only the Source Contract paragraph, leaving the surviving-lineage citation this row references unchanged and current). Mandatory multiline-tolerant re-certification sweep (Perl `-0777`, the ratified v2.9 pattern set plus a paren-form `VP-080` check): every live-prose `VP-080` hit now reads `v1.7`; every live-prose `rulings` hit already reads `v1.8` with the two sanctioned historical exceptions (AC-005, Human Gate item 1) and the Provenance bullet (`v1.3`) verified unchanged; zero paren-form `VP-080` hits found. `acceptance_criteria_count` stays 18; points stay 8. None of this story's five declared `inputs:` changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |
 | 2.9 | 2026-07-14 | Remediated spec-adversarial pass 11 finding F-DWSP11-001 (LOW): the Forward Obligations table row (d) at line 1175 read "**None of the three rulings (v1.3) adjudicate this**" — a straggler from the v2.0 elaboration (rulings was v1.3 at that time; it is v1.8 now). The paren-separated form `rulings (v1.3)` is structurally invisible to every prior sweep's pattern (`` rulings(\.md)?[`']?\s+v1\.[0-9]+ `` requires the version token immediately after the name, not parenthesized) — the third sweep-blind-spot sub-class surfaced on this story, after F-DWSP6-001's line-wrap survivor (v2.5) and F-DWSP10-001's retired-test exemplar cascade (v2.8). The claim's truth is unaffected — no ruling after v1.3 adjudicates the `sessions.list` RPC question; Rulings 1/2/3's scope remains exclusively the UDP-multicast advertisement transport — hence LOW, not MED/HIGH. Fixed: `v1.3` → `v1.8` at line 1175, cell text otherwise unchanged. **Correction to the v2.8 row's completeness claim:** that entry asserted "every live-prose `rulings` hit already reads `v1.8` except the two intentional point-in-time historical `rulings v1.6` citations" — true under the sweep pattern in force at the time, but that pattern was blind to the paren form, so the claim did not in fact cover every live-prose hit. The v2.8 row itself is left unedited per this story's historical-preservation precedent; this row layers the correction alongside it. **New sweep standard for this story (F-DWSP6-001/F-DWSP10-001/F-DWSP11-001 countermeasure lineage):** the mandatory multiline-tolerant Perl `-0777` re-certification sweep now also runs a paren-tolerant pattern, `rulings\s*\(v1\.[0-9]+\)`, alongside the existing `` rulings(\.md)?[`']?\s+v1\.[0-9]+ `` and `VP-080\s+v1\.[0-9]+` patterns. This burst's extended sweep (both rulings patterns plus the VP-080 pattern, whole file as one buffer) found exactly one paren-form hit — the line-1175 fix above — and reconfirmed every other live-prose `rulings` hit already reads `v1.8` and every live-prose `VP-080` hit already reads `v1.6`, with the same two sanctioned point-in-time historical `rulings v1.6` citations (AC-005's F-DWSP1-001 fix-context note; Human Gate item 1's SEC-DW-07-fix-origin note) and the Provenance "Adjudication:" bullet (`rulings.md` v1.3, correctly documenting the v2.0 elaboration's authority set at the time) verified unchanged. A broader case-insensitive paren check for both `rulings` and `VP-080` near any parenthesized version number confirmed no further paren-form hits of either kind exist anywhere in the file. `acceptance_criteria_count` stays 18; points stay 8. None of this story's five declared `inputs:` (rulings, BC-2.03.001, BC-2.03.002, BC-2.01.008, ARCH-03) changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |
 | 2.8 | 2026-07-14 | Remediated spec-adversarial pass 10 finding F-DWSP10-001 (MED): three live spots cited the retired `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` as an EXTANT exemplar to extend — a propagation gap the F-DWSP8-001 retirement (v2.6) never fully cascaded. Architect fixed VP-080's two spots (v1.6: the Proof Method table's Tool cell and the Feasibility Assessment's Proof-complexity Notes cell, both re-cited to the surviving router-side `DiscoveryAuthKeyFor`-admitted lineage) — citation-only, no property-substance change, input-hash unchanged (`5d904d5`, none of VP-080's three declared inputs changed) — and bumped VP-INDEX to v2.46. The third spot was this story's own File-Change List line 1353 (`discovery_wire_test.go` row), which contradicted the adjacent line-1354 row's "retired outright, not extended" framing by still describing the row as extending the retired test's family. Fixed: line 1353's cell text replaced verbatim with the architect's supplied blockquote — now frames AC-005/AC-006 as establishing the admitted-node/SVTN `DiscoveryAuthKeyFor`-admitted test-setup pattern that VP-080 v1.6 cites as the surviving lineage after the retired test's outright retirement, resolving the 1353/1354 contradiction. Story-side pin sweep updated all five live-prose `VP-080 v1.5` pins → `v1.6`: the `inputDocuments:` comment (gained a new v1.6 historical clause; the prior "v1.5 is a citation re-pin..." clause tense-shifted to "v1.5 was..." per this entry's own established pattern), AC-009's note ("VP-080 v1.5 Test Scenario 5"), AC-010 postcondition 5 ("VP-080 v1.5 property 4"), AC-010 postcondition 6 ("VP-080 v1.5 Property 5"), and the Non-Goals `uint64`-composite-wraparound bullet. Mandatory multiline-tolerant re-certification sweep (Perl `-0777` over the whole file as one buffer, patterns `VP-080\s+v1\.[0-9]+`, `` rulings(\.md)?[`']?\s+v1\.[0-9]+ ``, `TestDiscovery_VP045_SVTNIsolation_MultipleScopes`): every live-prose `VP-080` hit now reads `v1.6`; every live-prose `rulings` hit already reads `v1.8` except the two intentional point-in-time historical `rulings v1.6` citations (AC-005's F-DWSP1-001 fix-context note; Human Gate item 1's SEC-DW-07-fix-origin note) — verified correctly unchanged, consistent with every prior sweep this session; every remaining retired-test mention (the `inputDocuments:` rulings/VP-045 comments, AC-004 postcondition 5's qualifying note, AC-007's test names, Task 4) already correctly frames the test as retired/historical — verified, zero further drift found beyond the one line-1353 fix. `acceptance_criteria_count` stays 18; points stay 8. VP-080 is NOT one of this story's five declared `inputs:` (rulings, BC-2.03.001, BC-2.03.002, BC-2.01.008, ARCH-03), and none of those five changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |

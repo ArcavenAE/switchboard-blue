@@ -3,9 +3,9 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.10",
+    "story": "2.11",
     "story_input_hash": "a39b7ad",
-    "index": "4.107",
+    "index": "4.108",
     "rulings": "1.8",
     "VP-080": "1.7",
     "VP-080_input_hash": "5d904d5",
@@ -424,8 +424,44 @@
       ],
       "infrastructure_note": "Drop #10 this cycle, zero data loss: sw-dw-f12 dropped mid-response with zero story writes; resumed from scratch cleanly. During recovery the orchestrator's Bash permission classifier was briefly unavailable (harness-side model outage — plausibly the same event as the agent drop); orchestrator fell back to classifier-free Read until it recovered. One expected validate-changelog-monotonicity transient on the story (version bumped after the modified:/changelog rows this time — hook fired on the intermediate state in the reverse order; resolved by the immediate version-bump follow-up edit; no bypass). Architect hit the same hook twice in the forward order during VP-080's bump — same class, self-resolved.",
       "notes": "Finding remediated in fix-burst 10. Seventh version-pin-hygiene/incomplete-cascade-class instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, F-DWSP9-001, F-DWSP10-001, F-DWSP11-001, now F-DWSP12-001) — this instance's cause is a stale process-status claim (executed-vs-pending) rather than a stale version pin, but sits in the same recurring cross-artifact-currency family. Fix sequencing: architect first (VP-080, VP-INDEX), then story-writer last so the story's pin sweep and input-hash check captured the fully-updated upstream set. Both fixers complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
+    },
+    {
+      "pass": 13,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp13",
+      "context": "fresh context",
+      "tuple_verification": "PASS (factory-artifacts @ 34c04d7a891e8b20e55ef74c3682f2d94d8794c2, develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a) — all 13 artifacts at expected versions",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP13-001",
+          "severity": "LOW",
+          "class": "version-attribution hygiene",
+          "summary": "Seventh instance of the family this cycle. Live prose attributed the F-DWSP4-001 restart-liveness amendment (`Sequence` `uint32`→`uint64` epoch-qualified widening + offset consequences) to \"rulings v1.6\", when the canonical adoption version is v1.5 — rulings.md's restart-liveness amendment section header reads \"v1.5 adjudication\"; v1.6 is only the residual-precision correction (zero width/offset changes). Adversary's anchors: AC-005's note, and Human Gate item 1's opening sentence — the latter directly contradicted line 1270's correct dual-version phrasing WITHIN the same Human Gate item, the text a human signs off on for SEC-DW-07. Adversary offered a downgrade-to-NITPICK path (streak would have advanced this pass); orchestrator DECLINED per grading precedent (F-DWSP11-001/F-DWSP12-001 both graded LOW for false-but-harmless claims, not downgraded) — expedience-over-integrity rejected.",
+          "remediation": "Fix-burst 11, story-writer only (orchestrator extended scope mid-burst) — story v2.10→v2.11. AC-005's note: \"widths updated per F-DWSP4-001/rulings v1.6\" → \"...v1.5\". Human Gate item 1's opening sentence: \"epoch-qualified per the v1.6 restart-liveness amendment\" → \"...v1.5 restart-liveness amendment\". A mandatory re-certification sweep after those two fixes surfaced a THIRD live spot making the identical false attribution — Human Gate item 1's fix-origin sentence, \"The architect's fix (rulings v1.6): widen `Sequence` to `uint64`, epoch-qualified...\" — the exact string prior sweeps' regex matched and MIS-SANCTIONED as a \"point-in-time fix-origin citation\" (passes 5-12 verified it unchanged without checking the semantic claim). Orchestrator extended the same burst to fix it rather than leave a guaranteed pass-14 finding (class-sweep principle). Fixed in place, same v2.11 (uncommitted, amended not re-versioned): → \"The architect's fix (rulings v1.5; residual bounds corrected v1.6):\" — the dual-version formula line 1270 already uses. All three same-class spots now fixed. Changelog records the exception-set retirement plus the going-forward convention (amendment attributions cite the ADOPTING version; dual formula where the correction also matters). Final sweep: zero live-prose rulings-v1.6 pins remain in any form; only remaining live sub-v1.8 rulings reference is the exempt Provenance bullet (v1.3); VP-080 uniformly v1.7. `input-hash` `a39b7ad` HOLDS (`--check` exit 0, multiple runs). STORY-INDEX v4.107→v4.108 (row 144 → draft (v2.11, 18 ACs, 8 pts); sub-narrative amended in place for the third spot; aggregates untouched)."
+        }
+      ],
+      "process_gap": [
+        {
+          "id": "PG-DWSP6-01",
+          "summary": "Fourth sub-instance this cycle. The fixer's sweep exposed a THIRD same-class instance — Human Gate item 1's \"The architect's fix (rulings v1.6): widen…\" — which prior sweeps' regex matched and MIS-SANCTIONED as a \"point-in-time fix-origin citation,\" verified unchanged burst after burst (passes 5-12) without checking the semantic claim. The erroneous sanctioned-exception classification is RETIRED: sanctioned-exception lists can entrench a false claim; classification now requires semantic verification, not just pattern presence. Strengthens (does not reopen) the recorded PG-DWSP6-01 process-gap — same S-7.02 cycle-close disposition item, no new entry created."
+        }
+      ],
+      "positive_corroborations": [
+        "byte arithmetic verified clean (hop-1/hop-2, all live spots incl. pre-lookup guard)",
+        "18-AC traceability verified (incl. the corrected AC-002→Precondition-3 mapping)",
+        "VP-080 property/scenario numbering verified",
+        "retirement-model consistency verified (#28)",
+        "split residual bounds verified everywhere (no #19 violation — the finding was attribution, not bounds)",
+        "sanctioned items #3/#4/#2/#16/#12/#21 reconfirmed",
+        "TD-031 citation convention verified",
+        "POL-001/POL-002 verified in force, no violations"
+      ],
+      "infrastructure_note": "One transient validate-changelog-monotonicity block on batched edits (intermediate state; both edits landed; end state consistent — hook noise, no workaround). Earlier in the burst window: fix-burst-10's commit needed 4 attempts across two sm agents due to API instability (drops #11-13: one connection-close + two watchdog stalls + one fresh-sm stall); a brief orchestrator-side permission-classifier outage also observed; zero data loss throughout.",
+      "notes": "Finding remediated in fix-burst 11. Seventh version-pin-hygiene/incomplete-cascade-family instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, F-DWSP9-001, F-DWSP10-001, F-DWSP11-001, F-DWSP12-001, now F-DWSP13-001) and the first false-ATTRIBUTION sub-species within the family (prior instances were stale pins or a stale status claim, not misattributed origin). Strengthens PG-DWSP6-01 (fourth sub-instance of the sweep-methodology gap) — same S-7.02 cycle-close disposition item, no new process-gap entry created. Fix sequencing: story-writer only (no upstream architect change required — rulings/VP-080 on-disk versions unchanged since pass 12). Fixer complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
     }
   ],
   "converged": false,
-  "next": "pass 13, fresh context"
+  "next": "pass 14, fresh context"
 }
