@@ -510,8 +510,30 @@
         "history layers verified frozen"
       ],
       "notes": "First fully clean pass this cycle — zero findings, zero nitpicks. No fix-burst dispatched. Pass 14's deferred N-DWSP14-01 (VP-045 stray closing tag) remains adjudicated-deferred to the spec-steward batch reconciliation; not re-raised. Convergence streak advances 1/3 → 2/3."
+    },
+    {
+      "pass": 16,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp16",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 09238359f3a806a58716b49c272d6ffa05152fa3) — all 13 artifacts at expected versions",
+      "verdict": "CLEAN",
+      "streak_after": "3/3 — CONVERGED",
+      "findings": [],
+      "nitpicks": [],
+      "positive_corroborations": [
+        "byte arithmetic independently recomputed both hops across five carrying artifacts",
+        "zero live rulings-v1.6 pins (F-DWSP13-001 remediation re-verified by the adversary's own multiline+paren sweep)",
+        "split residual bounds consistent across all six describing artifacts",
+        "all 18 ACs traced",
+        "TD-031/POL-001/002/004 clean",
+        "all 37 adjudications spot-checked with zero internal inconsistency",
+        "ARCH-08 v2.13 position-14 boundary confirmed"
+      ],
+      "notes": "Second consecutive fully clean pass — zero findings, zero nitpicks. No fix-burst dispatched. Convergence streak advances 2/3 → 3/3 — CONVERGED. Spec-adversarial convergence sequence for S-BL.DISCOVERY-WIRE is COMPLETE (BC-5.39.001 satisfied for this story). Pass 14's deferred N-DWSP14-01 (VP-045 stray closing tag), the STORY-INDEX aggregate-counts item, and the BC-INDEX narrative-bump question remain routed to the spec-steward batch reconciliation. PG-DWSP6-01 (sweep-methodology process-gap, 4 sub-instances) remains queued for S-7.02 cycle-close disposition. Sequence now proceeds to the story-ready human gate."
     }
   ],
-  "converged": false,
-  "next": "pass 16, fresh context — convergence-completing candidate"
+  "converged": true,
+  "convergence_summary": "16 passes (2026-07-13..2026-07-14), 8 findings remediated across 11 fix-bursts — F-DWSP1-001 HIGH byte-threshold, F-DWSP3-001 MED selector-arithmetic sibling, F-DWSP4-001 HIGH restart-lockout (epoch-qualified uint64 redesign), F-DWSP5-001/002 MED propagation gaps, F-DWSP6-001 MED line-wrap pin, F-DWSP8-001 HIGH structural AC contradiction (ReceiveAdvertisement retirement + relay-ingest model), F-DWSP9-001 MED VP-080 cascade omission, F-DWSP10-001 MED retired-test exemplar stragglers, F-DWSP11-001 LOW paren-form pin, F-DWSP12-001 LOW stale Source Contract status, F-DWSP13-001 LOW v1.5/v1.6 mis-attribution; final three passes 14 NITPICK_ONLY / 15 CLEAN / 16 CLEAN. Deferred to spec-steward batch: N-DWSP14-01 stray tag, STORY-INDEX aggregates (#20), BC-INDEX narrative-bump question. Process-gap PG-DWSP6-01 (4 sub-instances, sweep methodology) queued for S-7.02 cycle-close disposition.",
+  "next": "story-ready human gate — 5 items queued (SEC-DW-07 sign-off, port 49201, fan-out FO option, sessions.list FO-(d), PG-DWSP6-01 disposition)"
 }
