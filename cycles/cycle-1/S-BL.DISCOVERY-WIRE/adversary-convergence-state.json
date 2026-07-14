@@ -3,16 +3,19 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.3",
-    "story_input_hash": "cd82f7b",
-    "index": "4.100",
-    "rulings": "1.6",
-    "VP-080": "1.3",
-    "VP-080_input_hash": "5e22481",
+    "story": "2.4",
+    "story_input_hash": "eccbdc4",
+    "index": "4.101",
+    "rulings": "1.7",
+    "VP-080": "1.4",
+    "VP-080_input_hash": "ae287f1",
     "VP-INDEX": "2.43",
     "BC-2.03.001": "1.6",
     "BC-2.03.002": "1.4",
     "BC-2.01.008": "1.2",
+    "ARCH-07": "1.11",
+    "ARCH-11": "1.24",
+    "ARCH-INDEX": "1.13",
     "develop_head": "1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a"
   },
   "passes": [
@@ -162,8 +165,48 @@
       ],
       "infrastructure_note": "Both fixers (architect, story-writer) complete and orchestrator-disk-verified before this record was written.",
       "notes": "First HIGH-severity finding of a genuinely novel class this cycle (design/liveness, not byte-arithmetic or doc-drift). Fix sequencing: architect first (rulings + VP-080 + VP-INDEX), then BC-2.03.001, then story-writer last so the story's input-hash recompute captured every upstream change in one pass. Convergence streak reset to 0/3."
+    },
+    {
+      "pass": 5,
+      "date": "2026-07-13",
+      "agent": "adv-dw-sp5",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ ad4fd5a1dd6cb8b0fd87f4a79845d926f74fd604) — all 10 artifacts at expected versions",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP5-001",
+          "severity": "MED",
+          "class": "propagation",
+          "summary": "Ruling 3(c)'s trailing live-prose sentence retained the pre-widening `byte[18:]` sessions offset after the v1.5 F-DWSP4-001 sweep updated the code block immediately above it — the code block itself was already correct (`byte[22:]`), but this one trailing sentence survived unswept, a propagation gap in the same offset-shift class F-DWSP4-001 introduced.",
+          "remediation": "architect — rulings v1.6→v1.7: one-token propagation fix (`byte[18:]`→`byte[22:]`) to Ruling 3(c)'s closing sentence, plus the full live-prose sweep instructed for every related offset token (`byte[12:16]`, `byte[16:18]`, \"18-byte [fixed] header\", \"38 byte\"/\"38-byte\", `body[24:28]`, `body[28:30]`) across the entire document. Sweep confirmed clean — every other hit is correctly historical/superseded-qualified (explicit before/after framing or a marked superseded parenthetical); this was the sole unmarked live-prose survivor."
+        },
+        {
+          "id": "F-DWSP5-002",
+          "severity": "MED",
+          "class": "coverage-tracking propagation",
+          "summary": "VP-078, VP-079, and VP-080 were all present in VP-INDEX (since v2.40/v2.41/v2.36 respectively) but absent from ARCH-07's Test-Sufficient-Properties catalog and ARCH-11's BC→VP coverage matrix, both still pinned at VP-INDEX v2.36 / total-77. Untracked was unacceptable at spec-converged: both documents are formal-verifier Phase-6 inputs, and VP-080 is this story's central security property (SEC-DW-07 replay-rejection). Orchestrator dispositioned FIX-NOW — unlike the STORY-INDEX aggregate-count staleness (OBS-DWSP4-01), which remains a deliberately deferred spec-steward batch item, this gap sits directly in a Phase-6 consumption path for the story now under active elaboration.",
+          "remediation": "architect — ARCH-07 v1.10→v1.11: added VP-078 (integration, cmd/sbctl) and VP-080 (integration, internal/discovery) as new Test-Sufficient-Properties table rows; VP-079 (code-audit, internal/mgmt) left footnote-only per this document's established proof-method-bucket convention (code-audit is not one of the five bucketed methods — VP-058/VP-061 precedent); footnote block extended for all three; VP catalog total 77→80 per VP-INDEX v2.43. ARCH-11 v1.23→v1.24: new BC-2.06.004 row added (VP-078, VP-079; internal/mgmt, cmd/sbctl; integration + code-audit; P2) — a pre-existing coverage gap unrelated to this story, closed as a bonus fix in the same sweep; BC-2.03.001 row's VP-list extended VP-044 → VP-044, VP-080 (Phase P1/PE unchanged). Coverage Summary: Total unique VPs 77→80, P1 VPs 18→19, P2+ VPs 4→6, P0 unchanged at 55. Per-Module VP Count: internal/discovery 3→4, internal/mgmt 8→9, cmd/sbctl 5→6; total 77→80, per-module sum reconciles. ARCH-INDEX v1.12→v1.13: citation rows for both ARCH-07 and ARCH-11 version bumps."
+        }
+      ],
+      "nitpicks_no_action": [
+        {
+          "id": "N-DWSP5-01",
+          "summary": "BC-2.01.008 line-137 \"PC-5 (v1.5)\" stale version pin",
+          "orchestrator_disposition": "NO-ACTION — consistent with the sanctioned non-rebump posture already established for this class; becomes standing adjudication."
+        }
+      ],
+      "observations_carried_forward": [
+        {
+          "id": "OBS-DWSP5-01",
+          "summary": "Adversary could not locate TD-031's reference text within its assigned review perimeter and correctly declined to fabricate an assessment rather than guess.",
+          "orchestrator_disposition": "NO ACTION — TD-031 is defined inline in dispatch prompts, not via a volatile `.go:NNN` source anchor in live spec text outside changelogs. Not an artifact defect; nothing to fix."
+        }
+      ],
+      "notes": "Both findings remediated same fix-burst (fix-burst 4). Cascades: VP-080 v1.3→v1.4 (input-hash 5e22481→ae287f1) — BOTH rulings v1.7 and ARCH-07 v1.11 are declared VP-080 inputs; the architect self-caught and captured the second cascade rather than leaving it for a later drift-detection finding. Story v2.3→v2.4 (input-hash cd82f7b→eccbdc4) — five rulings-version-pin and four VP-080-version-pin live-prose refreshes; no story content change. STORY-INDEX v4.100→v4.101 (Backlog row + changelog row). Fix sequencing: architect handled rulings, VP-080, ARCH-07, ARCH-11, and ARCH-INDEX; story-writer's input-hash recompute ran last to capture the full upstream set in one pass. Both fixers complete and orchestrator-disk-verified before this record was written."
     }
   ],
   "converged": false,
-  "next": "pass 5, fresh context"
+  "next": "pass 6, fresh context"
 }

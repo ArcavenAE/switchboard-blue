@@ -2,7 +2,7 @@
 artifact_id: ARCH-11-verification-coverage-matrix
 document_type: architecture-section
 level: L3
-version: "1.23"
+version: "1.24"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -13,6 +13,7 @@ inputDocuments:
   - '.factory/specs/architecture/ARCH-07-verification-architecture.md'
 kos_anchors: []
 modified:
+  - 2026-07-14T00:00:00 # v1.24 — F-DWSP5-002 (MED, spec-adversarial pass 5): total VP count refreshed 77→80 (VP-INDEX v2.43). New BC-2.06.004 row added (VP-078, VP-079; internal/mgmt, cmd/sbctl; integration + code-audit; P2) — this BC had zero VP-INDEX-tracked coverage in this matrix before this pass. BC-2.03.001 row VP-list extended VP-044 → VP-044, VP-080 (Phase P1/PE unchanged — VP-080 is P1, already covered by the existing cell). Coverage Summary: Total unique VPs 77→80, P1 VPs 18→19, P2+ VPs 4→6, P0 unchanged at 55. Per-Module VP Count: internal/discovery 3→4 (integration 1→2), internal/mgmt 8→9 (+code-audit 1), cmd/sbctl 5→6 (integration 2→3); Total 77→80; per-module sum 77→80. Footnote block extended for VP-078/079/080. Sibling propagation partner of ARCH-07 v1.11 and ARCH-INDEX v1.13 (same burst).
   - 2026-07-04T00:00:00 # v1.23 (governance-only): correct stale v1.22 modified-log Method-column follow-up claim; sweep closed Pass 29 Adv-B (see STATE.md L146 POL-006-SWEEP-EXPAND CLOSED). No content changes to BC rows, VP catalog references, or Coverage Summary — modified-log entry text correction only (POL-003 Exception A).
   - 2026-07-03T00:00:00 # v1.22 — F-P5P28-B-001 + F-P5P28-B-002 module-column POL-006 remediations + proactive full-file dual-anchor-VP module-column sweep. Sixth-consecutive Lane-B POL-006 propagation-gap recurrence — this iteration is first MODULE-column subclass after five VP-list-and-Phase-column instances (F-P5P24-B-001/002/003 VP-list, F-P5P25-B-001 VP-list, F-P5P26-B-001/002 VP-list, F-P5P27-B-001 Phase-column). F-P5P28-B-001 [MED POL-006 module-column]: L83 BC-2.05.008 module cell internal/routing → internal/routing, internal/admission (VP-059 lives in internal/admission per VP-INDEX v2.36 L85 dual-anchor to BC-2.05.005 which correctly shows both). F-P5P28-B-002 [MED POL-006 module-column]: L57 BC-2.02.001 module cell internal/multipath → internal/multipath, internal/halfchannel (VP-042 lives in internal/halfchannel per VP-INDEX v2.36 L68 dual-anchor to BC-2.01.001 which correctly shows internal/halfchannel). Proactive full-file dual-anchor-VP module-column sweep executed — 12 dual-anchor VPs swept (VP-007, VP-008, VP-012, VP-013, VP-016, VP-018, VP-024, VP-027, VP-033, VP-042, VP-044, VP-059); confirmed no additional module-cell gaps beyond the 2 known (F-P5P28-B-001 + F-P5P28-B-002). No BC or VP count changes — module cell propagation only; Coverage Summary counts unchanged; Per-Module counts unchanged (module cells describe module SURFACE per BC, per-module counts describe VP-HOME-module which is already source-of-truth from VP-INDEX). POL-006 SWEEP CADENCE NOW COVERS ALL 4 DUAL-ANCHOR-DERIVED COLUMNS: (1) VP-list column [Burst 68b full-file 77-VP sweep v1.20]; (2) Phase column [Burst 71b full-file 45-BC sweep v1.21]; (3) Method column [SWEPT CLEAN Pass 29 Adv-B — all 45 BCs confirmed; closes POL-006-SWEEP-EXPAND drift item; see STATE.md L146]; (4) Module column [Burst 73b full-file sweep v1.22]. Recommend future POL-006 sweeps run all-four-columns-per-pass to break the single-column-per-pass recurrence pattern.
   - 2026-07-03T00:00:00 # v1.21 — F-P5P27-B-001 + F-P5P27-B-002 remediations + proactive Phase-column full-file sweep. F-P5P27-B-001 [HIGH POL-008 phase-column drift class, sibling propagation gap from P26 F-P5P26-B-001]: 4 session-access rows corrected Phase column per VP-phase-union convention — L68 BC-2.04.001 P0→P1 (VP-031 P1 sole anchor per VP-INDEX v2.36 L57); L70 BC-2.04.003 P0→P0/P1 (VP-012 P0 + VP-033 P1); L71 BC-2.04.004 P0→P1 (VP-033 P1 + VP-056 P1); L72 BC-2.04.005 P0→P0/P1 (VP-013 P0 + VP-035 P1). F-P5P27-B-002 [LOW POL-008 stale method annotation]: L81 BC-2.05.007 method column proptest + audit → proptest (no VP anchors an audit method for this BC; unlike BC-2.01.005 fuzz + audit which is justified in Infeasible Properties L169-174 as CI grep gate). Proactive full-file Phase-column sweep found 2 additional drift gaps beyond the 4 known rows — L78 BC-2.05.004 P0→P0/P1 (VP-046 P1 + VP-075/VP-076/VP-077 P0; union is P0/P1); L89 BC-2.07.004 P0→P0/P1 (VP-065 P1 + VP-064/VP-066/VP-068–VP-073 P0; union is P0/P1). Total: 6 Phase-column fixes, 1 method-column fix. No BC or VP count changes — column-correction only; Coverage Summary counts unchanged; Per-Module counts unchanged.
@@ -43,7 +44,7 @@ modified:
 
 > Every BC must have at least one VP. This matrix is the coverage guarantee.
 > VP-INDEX.md is the authoritative VP catalog; this section cross-references it.
-> Total VP count: 77 (VP-001 through VP-077, per VP-INDEX v2.36).
+> Total VP count: 80 (VP-001 through VP-080, per VP-INDEX v2.43).
 
 ## BC → VP Coverage Table
 
@@ -65,7 +66,7 @@ modified:
 | BC-2.02.007 | XOR parity FEC, single loss recoverable | internal/arq | VP-043 | strong-oracle | P1/PE |
 | BC-2.02.008 | Split-horizon: no forward back toward arrival | internal/routing | VP-011 | proptest | P0 |
 | BC-2.02.009 | Bounded drop cache suppresses looping duplicates | internal/multipath | VP-025 | proptest | P0 |
-| BC-2.03.001 | Access node presence advertisement | internal/discovery | VP-044 | integration | P1/PE |
+| BC-2.03.001 | Access node presence advertisement | internal/discovery | VP-044, VP-080 | integration | P1/PE |
 | BC-2.03.002 | Console session enumeration without hostnames | internal/discovery | VP-045 | e2e | P1/PE |
 | BC-2.03.003 | Presence includes name, status, quality | internal/discovery | VP-044, VP-055 | integration + proptest | P1/PE |
 | BC-2.04.001 | Access node connects to tmux control mode | internal/tmux | VP-031 | integration | P1 |
@@ -86,6 +87,7 @@ modified:
 | BC-2.06.001 | Quality indicator derived from latency/loss | internal/metrics | VP-027, VP-074 | proptest + unit | P1 |
 | BC-2.06.002 | Missing frame triggers indicator downgrade | internal/metrics | VP-027, VP-052 | proptest + integration | P1 |
 | BC-2.06.003 | Per-path RTT/loss queryable via sbctl | internal/metrics, cmd/sbctl | VP-047, VP-061, VP-062 | integration + code-audit + fuzz | P1 |
+| BC-2.06.004 | On-demand single-target reachability probe (`sbctl paths ping`) | internal/mgmt, cmd/sbctl | VP-078, VP-079 | integration + code-audit | P2 |
 | BC-2.07.001 | Control node creates/destroys SVTNs | internal/svtnmgmt | VP-048 | integration | P2 |
 | BC-2.07.002 | sbctl unified CLI with OpenSSH auth | cmd/sbctl | VP-049, VP-067 | e2e + integration | P0/P2 |
 | BC-2.07.003 | sbctl reports clear error when daemon unreachable | cmd/sbctl | VP-030 | integration | P0 |
@@ -102,14 +104,14 @@ modified:
 | Total BCs | 45 |
 | BCs with ≥1 VP | 45 |
 | BCs with 0 VPs | 0 |
-| Total unique VPs | 77 |
+| Total unique VPs | 80 |
 | P0 VPs | 55 |
-| P1 VPs | 18 |
-| P2+ VPs | 4 |
+| P1 VPs | 19 |
+| P2+ VPs | 6 |
 
 ## Per-Module VP Count
 
-VP counts recounted from VP-INDEX (canonical source of truth, 77 VPs total).
+VP counts recounted from VP-INDEX (canonical source of truth, 80 VPs total).
 
 | Module | VP Count | Methods |
 |--------|---------|---------|
@@ -126,15 +128,15 @@ VP counts recounted from VP-INDEX (canonical source of truth, 77 VPs total).
 | internal/session | 6 | proptest (2), e2e (2), integration (2) |
 | internal/tmux | 2 | integration (2) |
 | internal/config | 3 | proptest (2), e2e (1) |
-| internal/discovery | 3 | integration (1), e2e (1), proptest (1) |
+| internal/discovery | 4 | integration (2), e2e (1), proptest (1) |
 | internal/svtnmgmt | 2 | integration (2) |
 | internal/drain | 1 | e2e (1) |
-| internal/mgmt | 8 | unit (1), fuzz (1), integration (6) |
-| cmd/sbctl | 5 | integration (2), e2e (2), fuzz (1) |
+| internal/mgmt | 9 | unit (1), fuzz (1), integration (6), code-audit (1) |
+| cmd/sbctl | 6 | integration (3), e2e (2), fuzz (1) |
 | cmd/switchboard | 5 | integration (5) |
-| **Total** | **77** | |
+| **Total** | **80** | |
 
-Per-module sum = 77 (no off-table VPs).
+Per-module sum = 80 (no off-table VPs).
 VP-059 (proptest, internal/admission) added 2026-06-27. VP-060 (integration, cmd/switchboard) added 2026-06-27.
 VP-061 (code-audit, internal/metrics) and VP-062 (fuzz, cmd/sbctl) added 2026-06-28 for BC-2.06.003.
 VP-062 bumped to v1.3 2026-06-30 (S502-DEFER-3 closure, commit 7ee5b82): Property 5a added (failed+pending precedence: Degraded=true AND rttP99Valid=false → quality="pending"; BC-2.06.003 v1.13 EC-007). No count change.
@@ -149,6 +151,8 @@ VP-074 (unit, internal/metrics) added 2026-06-29 for BC-2.06.001 threshold class
 VP-075 (integration, cmd/switchboard) added 2026-06-30 for BC-2.05.004 handler-layer caller-role enforcement (Pass-2 lens-3 F-T3-003). VP-046 anchored internal/svtnmgmt (key store propagation); VP-075 anchored cmd/switchboard (BuildAdminHandlers authority gate). F-P7L3-001 (2026-06-30): module corrected from internal/mgmt to cmd/switchboard; internal/mgmt 9→8 (integration 7→6), cmd/switchboard 2→3 (integration 2→3).
 VP-076 (integration, P0, cmd/switchboard) added 2026-06-30 for BC-2.05.004 EC-007 v1.12 (bootstrap-key non-revocable AND non-expirable invariant; symmetric management-lockout prevention; E-ADM-020 / E-ADM-021 sentinels for any well-formed request). Propagated from VP-INDEX v2.18 per F-W5P1-003; cmd/switchboard 3→4 (integration 3→4); P0 53→54; total 75→76.
 VP-077 (integration, P0, cmd/switchboard) added 2026-07-03 for BC-2.05.004 EC-008 v1.14 (list-keys admission-gate: any-role OR operator-set OR bootstrap-key; else E-ADM-009). Propagated from VP-INDEX v2.36 per F-P5P19-B-001; cmd/switchboard 4→5 (integration 4→5); P0 54→55; total 76→77. Closes BC↔VP↔AC triangle for BC-2.05.004 EC-008.
+VP-078 (integration, P2, cmd/sbctl) added 2026-07-13 for BC-2.06.004: `sbctl paths ping` reports `rtt_ms` as `float64`, never emits a quality/status classification field, fast+slow round trips. VP-079 (code-audit, P2, internal/mgmt) added 2026-07-13 for BC-2.06.004: `paths.ping` RPC handler performs zero per-path metrics reads/writes (no `PathTracker` interaction). Both from VP-INDEX v2.40/v2.41; BC-2.06.004 had no row in this matrix before this pass (S-BL.CLI-SURFACE-COMPLETION). cmd/sbctl 5→6 (integration 2→3); internal/mgmt 8→9 (+code-audit 1); P2+ 4→6; total 77→78.
+VP-080 (integration, P1, internal/discovery, status: draft) added 2026-07-13 for BC-2.03.001 (SEC-DW-07 replay-rejection property, S-BL.DISCOVERY-WIRE): router-side discovery ingest discards non-increasing `Sequence` (`uint64`, epoch-qualified per F-DWSP4-001 v1.5) per `(SVTNID,NodeAddr)` even after HMAC passes; closes the node-restart liveness gap with two independently-bounded residuals (same-epoch-second crash-loop ≤1s; backward-clock-adjustment bounded by the adjustment magnitude N — precision-corrected, F-DWSP5-002 sibling fix). BC-2.03.001 row VP-list extended VP-044 → VP-044, VP-080; internal/discovery 3→4 (integration 1→2); P1 18→19; total 78→80 (F-DWSP5-002, spec-adversarial pass 5 — VP-078/079/080 were all present in VP-INDEX but untracked in this matrix and ARCH-07 until this pass).
 
 ## Zero-VP BCs Check
 

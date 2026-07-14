@@ -2,7 +2,7 @@
 artifact_id: ARCH-07-verification-architecture
 document_type: architecture-section
 level: L3
-version: "1.10"
+version: "1.11"
 status: draft
 producer: architect
 timestamp: 2026-06-29T00:00:00
@@ -18,6 +18,7 @@ kos_anchors:
   - elem-ssh-end-to-end-encryption
   - elem-asymmetric-half-channels
 modified:
+  - 2026-07-14T00:00:00 # v1.11 — F-DWSP5-002 (MED, spec-adversarial pass 5): VP catalog total refreshed 77→80 (VP-INDEX v2.43). Added VP-078 (integration, cmd/sbctl) and VP-080 (integration, internal/discovery) rows to the Test-Sufficient Properties table; VP-079 (code-audit, internal/mgmt) footnote-only per this document's proof-method-bucket convention (code-audit is not one of the five bucketed methods — VP-058/VP-061 precedent). Footnote block extended for all three. Sibling propagation partner of ARCH-11 v1.24 and ARCH-INDEX v1.13 (same burst).
   - 2026-07-03T00:00:00 # v1.10 — F-P5P20-B-001: VP-043 method column sibling-propagation from VP-INDEX v2.35 (F-P5P3-B-001 close 2026-07-02). Phase-1c-refinement Test-Sufficient table VP-043 row (~L183) Method: proptest → strong-oracle.
   - 2026-07-03T00:00:00 # v1.9 — F-P5P19-B-002: VP catalog total refreshed 76→77 (VP-INDEX v2.36); added footnote block covering VP-075/VP-076/VP-077 (Wave-5 admin-authority triplet for BC-2.05.004); sibling propagation partner of ARCH-11 v1.16 (F-P5P19-B-001).
   - 2026-06-30T00:00:00 # v1.8 — S502-DEFER-3 handoff (commit 7ee5b82): VP-062 bumped v1.2→v1.3 (Property 5a: failed+pending precedence ruling per BC-2.06.003 v1.8 EC-007); VP catalog total corrected 75→76; footnote updated.
@@ -98,7 +99,7 @@ See ARCH-09 for the complete per-package classification.
 | VP-041 | Tick regularity: p99 jitter ≤ 2ms over 1,000 ticks (NFR-009) | internal/halfchannel | benchmark |
 | VP-042 | Keystroke-to-echo: p99 ≤ 100ms over LAN at tuned tick interval (NFR-001) | internal/halfchannel | benchmark |
 
-> VP catalog total = 77; full BC→VP coverage in ARCH-11. VP-043 through VP-057
+> VP catalog total = 80; full BC→VP coverage in ARCH-11. VP-043 through VP-057
 > were added in Phase 1c-refinement to close coverage gaps. VP-059 added 2026-06-27
 > for BC-2.05.005 PC-3 (Wave 3 gate F-2 remediation — FailureCounter threshold proptest).
 > VP-058 added at Wave 3 for BC-2.05.008 (RouteFrame HMAC code-audit).
@@ -130,6 +131,23 @@ See ARCH-09 for the complete per-package classification.
 > disjunction — any-role OR operator-set OR bootstrap-key; else E-ADM-009. Covers BC-2.05.004
 > EC-008 (three admission failure modes for admin.key.list-keys). Closes BC↔VP↔AC triangle for
 > BC-2.05.004 EC-008. Orthogonal to VP-075 (write-authority gate on mutating operations).
+> VP-078 (integration, cmd/sbctl, P2) added 2026-07-13 for BC-2.06.004: `sbctl paths ping`
+> reports `rtt_ms` as `float64`, never emits a quality/status classification field, fast+slow
+> round trips (implementing_story: S-BL.CLI-SURFACE-COMPLETION).
+> VP-079 (code-audit, internal/mgmt, P2) added 2026-07-13 for BC-2.06.004: `paths.ping` RPC
+> handler performs zero per-path metrics reads/writes (no `PathTracker` interaction) — `{}`
+> in, `{"pong": true}` out, no other side effect (implementing_story: S-BL.CLI-SURFACE-COMPLETION).
+> Code-audit method — no table row per this document's proof-method-bucket convention
+> (VP-058/VP-061 precedent: code-audit is not one of the five bucketed methods this catalog
+> organizes by); footnote-only, matching those two properties' treatment.
+> VP-080 (integration, internal/discovery, P1, status: draft) added 2026-07-13 for BC-2.03.001:
+> router-side discovery ingest discards non-increasing `Sequence` (`uint64`, epoch-qualified
+> per F-DWSP4-001) per `(SVTNID,NodeAddr)` even after HMAC passes; cold-start accepts
+> unconditionally; forward-increasing `Sequence` accepted and advances state; residual replay
+> window bounded to ≤1 heartbeat interval. Node-restart liveness gap (F-DWSP4-001) closed with
+> two independently-bounded residuals: same-epoch-second crash-loop ≤1s; backward-clock-adjustment
+> bounded by the adjustment magnitude N, not ≤1s (F-DWSP5-precision-corrected — see rulings v1.6/
+> VP-080.md v1.3). Implementing_story: S-BL.DISCOVERY-WIRE.
 
 ### Phase 1c-refinement: Pure-Core Additions
 
@@ -194,6 +212,8 @@ VP-027 (proptest) covers transition ordering under sustained degradation. VP-074
 | VP-050 | Console remotely controllable via sbctl | cmd/sbctl | e2e |
 | VP-052 | `OnMissingFrame` call accumulates missed-frame count; N consecutive calls → quality indicator downgrade (one level) per BC-2.06.002 count-based API | internal/metrics | integration |
 | VP-056 | Console detach releases session without closing it; observers unaffected | internal/session | integration |
+| VP-078 | `sbctl paths ping` reports `rtt_ms` as `float64` and never emits a quality/status classification field, for both fast and slow round trips | cmd/sbctl | integration |
+| VP-080 | Router-side discovery ingest discards non-increasing `Sequence` (`uint64`, epoch-qualified) per `(SVTNID,NodeAddr)` even after HMAC passes; cold-start accepts the first frame unconditionally; forward-increasing `Sequence` accepted and advances state; residual replay window bounded to ≤1 heartbeat interval; restarted node's epoch-qualified `Sequence` forward-progresses past its own prior watermark, closing the node-restart liveness gap — same-epoch-second crash-loop residual bounded to ≤1s, backward-clock-adjustment residual bounded by the adjustment magnitude N instead (not ≤1s) | internal/discovery | integration |
 
 ## Fuzz Targets (P0 Security Boundaries)
 
