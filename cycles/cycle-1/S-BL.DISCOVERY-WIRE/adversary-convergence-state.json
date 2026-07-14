@@ -47,8 +47,53 @@
       ],
       "infrastructure_note": "story-writer agent dropped mid-report after completing the fix (API connection closed) — work disk-verified complete by orchestrator, report reconstructed from disk; fifth mid-stream drop this cycle.",
       "notes": "Both findings remediated same fix-burst (fix-burst 1). Fix-burst 1 close performed by state-manager, itself resumed once mid-task after its own stream drop (API connection closed) immediately following disk-state confirmation and before this JSON was written — no partial writes, resumed cleanly per orchestrator nudge."
+    },
+    {
+      "pass": 2,
+      "date": "2026-07-13",
+      "agent": "adv-dw-sp2",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 3641440ad9996511f58cf345b8e40c2eefc851ef) — all 10 artifacts at expected versions",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "1/3",
+      "regression_verification": [
+        {
+          "id": "F-DWSP1-001",
+          "status": "VERIFIED REMEDIATED and propagated — no re-report"
+        },
+        {
+          "id": "F-DWSP1-002",
+          "status": "VERIFIED REMEDIATED and propagated — no re-report"
+        }
+      ],
+      "nitpicks": [
+        {
+          "id": "N-DWSP2-01",
+          "summary": "VP-080 proof-method cites discovery_test.go while story places AC-008/009/010 tests in new discovery_wire_test.go; substance aligned",
+          "orchestrator_disposition": "DEFERRED — to FO-(c) draft→active transition, per adversary's own recommendation"
+        },
+        {
+          "id": "N-DWSP2-02",
+          "summary": "\"only caller is testenv.go\" phrasing flagged for imprecision; zero-production-callers claim itself is correct",
+          "orchestrator_disposition": "NO-ACTION"
+        },
+        {
+          "id": "N-DWSP2-03",
+          "summary": "VP-080 v1.1 changelog entry dated 2026-07-14 vs siblings' 2026-07-13",
+          "orchestrator_disposition": "NO-ACTION — stamp is wall-clock-correct post-midnight"
+        }
+      ],
+      "observations_carried_forward": [
+        {
+          "id": "OBS-DWSP2-01",
+          "summary": "BC-2.03.002 v1.4 PC-1 states sessions.list exposure \"expected to land via S-BL.DISCOVERY-WIRE\", but the story scopes sessions.list OUT (Non-Goals + FO-(d)); bidirectional-trace tension correctly routed by the story, not a defect in either artifact",
+          "carried_to": "story-ready human-gate checklist — PO/architect must either keep sessions.list in scope or re-point BC-2.03.002 PC-1's annotation to the actual successor before story completion"
+        }
+      ],
+      "infrastructure_note": "adv-dw-sp2 stalled twice mid-review (stream watchdog), resumed both times via orchestrator nudge; fresh-context wall intact (resume continues the agent's own transcript); ninth/tenth mid-stream-drop-class instances this cycle by running tally.",
+      "notes": "No new findings. Both fix-burst-1 findings (F-DWSP1-001, F-DWSP1-002) verified remediated and propagated on disk. Three nitpicks dispositioned by orchestrator (one deferred to FO-(c) transition, two no-action). One observation carried forward to the story-ready human-gate checklist rather than dispositioned in-pass, since it names a PO/architect-level scoping decision outside adversary or orchestrator authority."
     }
   ],
   "converged": false,
-  "next": "pass 2, fresh context"
+  "next": "pass 3, fresh context"
 }
