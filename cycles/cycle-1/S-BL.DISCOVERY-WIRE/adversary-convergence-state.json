@@ -3,14 +3,14 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.6",
+    "story": "2.7",
     "story_input_hash": "a39b7ad",
-    "index": "4.103",
+    "index": "4.104",
     "rulings": "1.8",
-    "VP-080": "1.4",
-    "VP-080_input_hash": "ae287f1",
+    "VP-080": "1.5",
+    "VP-080_input_hash": "5d904d5",
     "VP-045": "1.4",
-    "VP-INDEX": "2.44",
+    "VP-INDEX": "2.45",
     "BC-2.03.001": "1.6",
     "BC-2.03.002": "1.4",
     "BC-2.01.008": "1.2",
@@ -304,8 +304,36 @@
       ],
       "infrastructure_note": "validate-stable-anchors hard-blocked the VP-045 edit over a pre-existing historical Lifecycle-row line-number anchor (Lifecycle tables lack the Changelog-table history exemption other tables carry). architect applied a disclosed, zero-content-change anchor reformat (file:line → symbol-name citations, consistent with TD-031) to unblock the edit. Logged to the orchestrator's upstream tracker.",
       "notes": "Finding remediated in fix-burst 6. First finding this cycle sourced from a code-grounded call-graph re-derivation rather than a text/version-pin sweep — a novel finding class relative to passes 1-7's byte-arithmetic, doc-drift, design/liveness, and stale-pin-propagation classes. Fix sequencing: architect first (rulings, VP-045, VP-INDEX), then story-writer last so the story's input-hash recompute captured the full upstream set in one pass. Both fixers complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
+    },
+    {
+      "pass": 9,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp9",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 2381e26dba54a112cc761f975b561b668b80d7c7) — all 13 artifacts at expected versions (VP-045 v1.4 newly in perimeter this pass)",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP9-001",
+          "severity": "MED",
+          "class": "version-pin hygiene / declared-input hash currency (POL-001)",
+          "summary": "Fix-burst 6 bumped rulings v1.7→v1.8 (F-DWSP8-001, Node-local ingest correction) but did not cascade VP-080, which declares rulings as input #2 and has an established re-pin-on-every-rulings-bump convention (its own v1.1-v1.4 changelog rows). Two stale live currency pins survived — the Property Statement paragraph (~l.124) and the Source Contract Ruling bullet (~l.181), both still reading \"v1.7\" — plus input-hash drift: the stored `ae287f1` was computed against v1.7 content, not the v1.8 content actually in force. Same class as F-DWSP1-002 (pass-1, same VP, same rulings-cascade omission). Adversary's calibration note: rated MED rather than LOW like the pass-1 sibling because this drift escaped a full version (v1.8 shipped and was live for an entire pass-8 fix-burst plus pass-8's own convergence-streak reset) rather than being caught same-pass.",
+          "remediation": "architect cascaded VP-080 v1.4→v1.5: both live rulings-citation pins (Property Statement paragraph, `**Ruling:**` bullet) re-pinned v1.7→v1.8; the line-107 \"see rulings v1.6 for the full analysis\" cross-reference left untouched as an attribution-of-origin pointer (established convention, not a currency pin). input-hash recomputed via `compute-input-hash --update`: `ae287f1`→`5d904d5`. New v1.5 CASCADE changelog row added; no property-statement, proof-method, Test Scenario, or threshold content changed (Properties 1-5 verified unchanged). VP-INDEX v2.44→v2.45 (changelog row only, per the no-per-VP-version-cells convention — catalog row text itself unchanged since no BC/module/method/priority/status changed). Story-writer cascaded story v2.6→v2.7: all five live-prose `VP-080 v1.4` pins updated → `v1.5` (the `inputDocuments:` comment, AC-009's Test-Scenario-5 note, AC-010 postcondition 5's property-4 note, AC-010 postcondition 6's Property-5 note, and the line-wrapped Non-Goals `uint64`-composite-wraparound bullet — the F-DWSP6-001 line-wrap-survivor spot, edited whitespace-tolerantly to guard against a repeat of that exact failure mode). Mandatory multiline-tolerant re-certification sweep (Perl `-0777`, whole-file-as-one-buffer, newline-spanning patterns) classified every `VP-080`/`rulings`/`VP-INDEX` hit in the story as live vs. history-layer — all live pins now current, all history-layer hits (the v2.3-v2.6 changelog rows' own point-in-time citations, the two `rulings v1.6` fix-context notes, the `VP-INDEX v2.43` attribution inside the `inputDocuments:` comment) correctly left verbatim. `input-hash` a39b7ad HOLDS unchanged — VP-080 is not one of the story's five declared `inputs:` (rulings, BC-2.03.001, BC-2.03.002, BC-2.01.008, ARCH-03); both `compute-input-hash --check` and a direct recompute confirmed. STORY-INDEX v4.103→v4.104: Backlog/Deferred Stories row 144 status cell → `draft (v2.7, 18 ACs, 8 pts) — elaborated, NOT ready`, v2.7 fix-burst sub-narrative appended to the Drift-items-consumed cell, changelog row added; aggregate Summary-table counts left untouched (pre-existing, deliberately deferred lag per OBS-DWSP4-01, not reopened this burst)."
+        }
+      ],
+      "positive_corroborations": [
+        "byte-boundary arithmetic verified clean across hop-1/hop-2 wire layouts",
+        "all 18 ACs trace cleanly to their BC clauses and SEC-DW constraints",
+        "AC-007's retirement-model rewrite verified internally consistent against rulings v1.8/BC-2.03.001 PC-5",
+        "edge-case coverage confirmed complete: cold start, replay, restart residuals, malformed frames, multi-SVTN isolation, echo, forged NodeAddr",
+        "TD-031 symbol-only-citation convention verified applied consistently",
+        "POL-001/POL-002/POL-004/POL-005 all verified in force, no violations"
+      ],
+      "infrastructure_note": "adv-dw-sp9 and arch-dw-f9 both went idle without delivering a final report; zero data loss — the adversary's report was recovered via re-request (its own transcript, resumed), the architect's report was substituted by orchestrator disk verification (PAT-04) against the fixer's actual file writes. Story-writer hit one validate-changelog-monotonicity block on an intermediate state (version bumped before the changelog row landed on disk), self-resolved on retry — hook behaving as designed (blocking a real transient ordering gap), not a defect.",
+      "notes": "Finding remediated in fix-burst 7. Fourth stale-pin-propagation-class instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, now F-DWSP9-001) — the recurring failure mode is the same rulings-bump-not-cascaded-to-VP-080 omission first seen at pass 1, now recurring one VP-hop downstream of a HIGH-severity structural fix (F-DWSP8-001) rather than a routine ruling. Fix sequencing: architect first (rulings-citation cascade in VP-080, plus VP-INDEX), then story-writer last so the story's input-hash recompute/no-op check ran against the fully-updated upstream set. All fixers complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
     }
   ],
   "converged": false,
-  "next": "pass 9, fresh context"
+  "next": "pass 10, fresh context"
 }

@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.44"
+version: "2.45"
 status: draft
 producer: product-owner
 timestamp: 2026-07-13T00:00:00
@@ -157,6 +157,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.45 | 2026-07-14 | VP-080 cascaded to v1.5 (F-DWSP9-001, spec-adversarial pass 9): fix-burst 6's `S-BL.DISCOVERY-WIRE-rulings.md` v1.7→v1.8 bump (F-DWSP8-001 remediation, Node-local ingest correction) was not cascaded to VP-080 at the time, leaving two stale rulings-version pins and input-hash drift. Rulings citations re-pinned v1.7→v1.8 in `VP-080.md`'s Property Statement paragraph and `**Ruling:**` bullet; input-hash refreshed (`ae287f1`→`5d904d5`). Confirmed the v1.8 change (a node-side ingest-function correction under IC-3) does not touch Ruling 1, the ruling VP-080's router-side property is grounded in — no property-substance change. No VP added or removed, no bucket/phase/status change; catalog row text (line 106) unchanged since none of BC/module/method/priority/status changed. |
 | 2.44 | 2026-07-14 | VP-045 amended to v1.4 (F-DWSP8-001, spec-adversarial pass 8, tuple @ `e2ff77b`): the v1.3 Lifecycle row's "supporting evidence" citation to `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` corrected — `S-BL.DISCOVERY-WIRE-rulings.md` v1.8 retires that test (its node-local-HMAC-verification premise no longer exists once Ruling 1 moves all discovery-frame authentication to the router). `status: PARTIAL` and the real-socket PC-3 gap VP-045 names are UNCHANGED — only the stale evidence citation is corrected; equivalent coverage now required at `internal/discovery/discovery_wire_test.go` (AC-005/AC-006). No VP added or removed — same ID, same BC/module/method/phase/status (`BC-2.03.002` / `internal/discovery` / `e2e` / `P1` / `draft`); catalog row text (line 71) unchanged since none of BC/module/method/priority/status changed. Counts, Phase Distribution, and BC Coverage Check unaffected. Total remains 80. |
 | 2.43 | 2026-07-14 | Precision correction to VP-080's row text (caught in orchestrator review, not a spec-adversarial-pass finding): the row implied one `≤1s` bound covered the whole node-restart-liveness residual. Split into its two actual cases — same-epoch-second crash-loop (≤1s, unchanged) and backward-clock-adjustment (bounded by the adjustment magnitude N, not ≤1s) — matching `VP-080.md` v1.3's corrected Property 5. No VP added or removed, no bucket/phase/status change. |
 | 2.42 | 2026-07-14 | F-DWSP4-001 (HIGH, spec-adversarial pass 4) restart-liveness fix folded into VP-080's row text: `Sequence` widened `uint32`→`uint64`, epoch-qualified, per `S-BL.DISCOVERY-WIRE-rulings.md` v1.5's restart-liveness amendment — a restarted access node's fresh epoch forward-progresses past its own prior watermark rather than being locked out for hours as a false replay. `VP-080.md` amended to v1.2 in the same burst (new Property 5, Property 4 rewritten for `uint64` scope). No VP added or removed — same ID, same BC/module/method/phase/status (`BC-2.03.001` / `internal/discovery` / `integration` / `P1` / `draft`); Counts, Phase Distribution, and BC Coverage Check are unaffected (no bucket, phase, or coverage change). Total remains 80. |
