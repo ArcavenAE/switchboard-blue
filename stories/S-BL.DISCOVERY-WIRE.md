@@ -10,6 +10,66 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-13
+    version: "2.3"
+    change: >
+      Remediated spec-adversarial pass 4 finding F-DWSP4-001 (HIGH): SEC-DW-07's original
+      in-memory-counter `Sequence` field, paired against the router's restart-STABLE `lastSeen`
+      watermark, produced up to ~8.3h of silent discovery lockout on every ordinary access-node
+      restart/redeploy/crash-recover — not a rare edge case, a routine-operations liveness gap.
+      Architect fix (rulings v1.6): `Sequence` widened `uint32`→`uint64`, epoch-qualified (high
+      32 bits = `uint32(time.Now().UTC().Unix())` sampled at `Discovery`-instance start, low 32
+      bits = the original counter) — self-contained at the sender, no router-side logic change,
+      no dependency on the still-open fan-out target-resolution Forward Obligation. Authority: 
+      rulings v1.6 (Ruling 1 "restart-liveness amendment" subsection + v1.6 precision-correction
+      Decision Log entry), BC-2.03.001 v1.6, VP-080 v1.3, VP-INDEX v2.43. Five architect
+      blockquotes applied verbatim: (1) AC-008 gained a scope-clarification note distinguishing
+      fresh-cold-start from a stable-identity restart; (2) AC-009 gained a note characterizing
+      its discard rule as correct for THREE triggers — genuine replay, the ≤1s
+      same-epoch-second crash-loop residual (EC-010 case 1), and the N-bounded
+      backward-clock-adjustment residual (EC-010 case 2); (3) AC-010 postcondition 5 REPLACED
+      (`uint32` wraparound-out-of-scope → `uint64` composite wraparound-out-of-scope with
+      per-component wrap bounds) and postcondition 6 ADDED (restart forward-acceptance path) +
+      new test name `TestVP080_DiscoveryIngest_RestartForwardProgress`; (4) new EC-010 Edge
+      Cases row characterizing the restart-liveness fix and both residual cases with their
+      different bounds; (5) Human Gate item 1 gained an appended v1.5/v1.6 update paragraph
+      naming both residuals for explicit human sign-off. Deviation flagged per instruction: the
+      supplied AC-010 blockquotes cited "VP-080 v1.2" — corrected to "VP-080 v1.3" (the current
+      version) in both postcondition 5 and postcondition 6 as applied. Mechanical sweeps
+      (rulings v1.6-authoritative): hop-1 wire layout `[4]Sequence`→`[8]Sequence` and 38→42-byte
+      full-valid-frame minimum in AC-005's note (raw-min-32/body-min-24 pre-lookup guard left
+      UNCHANGED, upstream of `Sequence`, per explicit instruction); hop-2 `DISCOVERY_RELAY`
+      payload in Decision 3(c)'s diagram and AC-014 postcondition 2 — `Sequence`
+      byte[12:16]→byte[12:20], count byte[16:18]→byte[20:22], sessions byte[18:]→byte[22:],
+      fixed pre-session header 18→22 bytes. Additional live-prose sweep instances corrected:
+      Human Gate item 1's original "`Sequence uint32`" claim → "`Sequence uint64`
+      (epoch-qualified...)"; Non-Goals' "`uint32` `Sequence` wraparound" bullet →
+      "`uint64` composite `Sequence` wraparound"; File-Change List's `discovery.go` row
+      "`Sequence uint32` field" → "`Sequence uint64` field" with the epoch-qualification detail
+      inline. Version-pin sweep: every live-prose citation of the rulings doc and VP-080 with an
+      explicit version number updated to v1.6/v1.3 respectively (frontmatter `inputDocuments:`
+      comments; the "Status note" blockquote; the "Adjudicated Design Decisions" intro sentence;
+      two Architecture Compliance Rules table rows) — extended one step beyond the literal
+      instruction (which named only "VP-080"/"rulings") to also update the `inputDocuments:`
+      comment for `BC-2.03.001.md` (`v1.5`→`v1.6`), since that comment is input-version metadata,
+      not prose. **Amended in place, same v2.3 (post-pass-4, pre-commit):** the orchestrator
+      identified this elaboration's own initially-flagged "candidate for a future sweep" as the
+      same stale-version-pin class pass 1 flagged on VP-080 (F-DWSP1-002) — pass 5 would have
+      re-flagged it. Fixed now, in place: all live-prose `BC-2.03.001 v1.5` citations updated to
+      `v1.6` — the Anchors Consumed table's 7 rows, and two Decision 3 prose sentences (3(c)'s
+      "BC-2.03.001 PC-5 (v1.5, already landed)" and 3(h)'s "v1.5's PC-5 sentence"). Left
+      deliberately UNCHANGED, per the historical-preservation precedent established at v2.1/v2.2:
+      the v1.1/v2.0/v2.1/v2.2 `modified:`/Changelog entries' own rulings/VP-080/BC-2.03.001
+      version citations (they describe what was true at each entry's own time — the v2.0
+      Changelog row's "BC-2.03.001 v1.5" citation was transiently corrupted by an overbroad
+      `replace_all` during this same amendment and restored to `v1.5`); the Provenance section's
+      "Adjudication:" bullet (explicitly anchored to "This elaboration (v2.0)"). No further
+      BC-2.03.001 version-pin instances remain outside historical entries.
+      `acceptance_criteria_count` stays 18 (no AC added or removed — two new
+      postconditions/notes, not new ACs); `points`/`estimated_points` stay 8.
+      `compute-input-hash --update` re-run: rulings AND BC-2.03.001 both changed on disk — see
+      hash delta in Changelog row below; this same-v2.3 amendment is prose-only (no `inputs:`
+      file touched) and re-verified via `compute-input-hash --check` (unaffected, still clean).
+  - date: 2026-07-13
     version: "2.2"
     change: >
       Remediated spec-adversarial pass 3 finding F-DWSP3-001 (MED, sibling of F-DWSP1-001's
@@ -109,7 +169,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.2"
+version: "2.3"
 phase: 2
 epic: E-7
 wave: backlog
@@ -123,7 +183,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'
   - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
-input-hash: "c321c05"
+input-hash: "cd82f7b"
 traces_to: '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.03.001
@@ -158,12 +218,12 @@ risk_mitigations: []
 changed_by_rulings: [RULING-W6TB-D, RULING-W6TB-H, S-BL.DISCOVERY-WIRE-rulings]
 acceptance_criteria_count: 18
 inputDocuments:
-  - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'   # v1.3 — BINDING. All three rulings + Security Consult Addendum (SEC-DW-01..09) + Replay/freshness subsection + Decision Log. Where this story and the ruling appear to diverge, the ruling governs.
-  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'   # v1.5 — Preconditions 1-3, Postconditions 1-5, Invariants 1-3. Ruling 1/2 amendments already executed by product-owner (Precondition 3 address-derivation note, PC-1 relay-delivery note, PC-2 Sequence field, PC-5 DiscoveryAuthKey derivation).
+  - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'   # v1.6 — BINDING. All three rulings + Security Consult Addendum (SEC-DW-01..09) + Replay/freshness subsection (now incl. the F-DWSP4-001 restart-liveness amendment) + Decision Log (incl. the v1.6 precision-correction entry). Where this story and the ruling appear to diverge, the ruling governs.
+  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'   # v1.6 — Preconditions 1-3, Postconditions 1-5, Invariants 1-3. Ruling 1/2 amendments already executed by product-owner (Precondition 3 address-derivation note, PC-1 relay-delivery note, PC-2 Sequence field, PC-5 DiscoveryAuthKey derivation); v1.6 carries the F-DWSP4-001 restart-liveness amendment to PC-2's Sequence-field description.
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'   # v1.4 — PC-5 is the postcondition SEC-DW-07/VP-080 protects (staleness-expiry guarantee). PC-1's PENDING-S-BL.DISCOVERY-WIRE `sessions.list` RPC-exposure annotation is NOT adjudicated by any of the three rulings — flagged, not solved, in Non-Goals.
   - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'   # v1.2 — DISCOVERY_RELAY=0x03 registry row (Ruling 3(g), already executed by product-owner); PC-3 4-byte control header + DISCOVERY_RELAY extension note; Invariant 3 (append-only) and Invariant 5/DI-007 (extend-beyond-byte-3 allowance) govern the hop-2 payload layout.
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'   # v1.8 — §Session Discovery. Router-relay model, address derivation, hop-2 relay-transport paragraph, and the superseded-language callout are all already executed (Ruling 2/3), not proposed.
-  - '.factory/specs/verification-properties/VP-080.md'   # v1.0 — SEC-DW-07 replay-rejection property, draft lifecycle_status pending this story's wave scoping (draft→active transition is this elaboration's job per the VP's own Lifecycle section).
+  - '.factory/specs/verification-properties/VP-080.md'   # v1.3 — SEC-DW-07 replay-rejection property, draft lifecycle_status pending this story's wave scoping (draft→active transition is this elaboration's job per the VP's own Lifecycle section); v1.3 carries the restart-liveness Property 5 (forward-acceptance-on-restart) added alongside the F-DWSP4-001 fix, per VP-INDEX v2.43.
   - '.factory/specs/verification-properties/VP-044.md'   # v1.2 — PARTIAL (RULING-W6TB-D doctrine); multicast wire delivery (PC-1/PC-3/PC-4) is the gap this story closes.
   - '.factory/specs/verification-properties/VP-045.md'   # v1.3 — PARTIAL; real-socket PC-3 aggregation over UDP multicast is the gap this story closes.
   - '.factory/stories/S-7.02-session-discovery.md'   # MERGED PR #55. In-process registry model this story replaces at the wire boundary only — trigger model and payload semantics (BC-2.03.001's non-deferred clauses) are unchanged.
@@ -192,7 +252,7 @@ backlog_origin:
 # S-BL.DISCOVERY-WIRE: Discovery Wire Boundary — UDP Multicast I/O, Admitted-Node HMAC Keys, Multicast Address Allocation, Hop-2 Relay Dispatch
 
 > **Status note:** All three Open Design Obligations (two from the v1.1 stub, one surfaced
-> mid-ruling) are ADJUDICATED (`.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.3,
+> mid-ruling) are ADJUDICATED (`.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.6,
 > 2026-07-13). This elaboration is sprint-ready in content but stays `status: draft` — it has
 > NOT been promoted to `ready` — because three items require explicit human/PO sign-off before
 > wave scheduling (see **Human Gate — Story-Ready Sign-off Required** below). Do not implement
@@ -258,7 +318,7 @@ decomposition would mean scheduling this story against an undecided delivery mec
 
 ## Adjudicated Design Decisions
 
-Transcribed from `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.3 (binding — all factual
+Transcribed from `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.6 (binding — all factual
 claims in that ruling are grep/read-verified against `develop@1f25677`). Where this story and the
 rulings doc appear to diverge, the rulings doc governs. Each entry below carries the load-bearing
 constraints inline — the implementer should not need to re-open the rulings doc for the common
@@ -407,7 +467,7 @@ undiluted.
 
 **(c) Payload — re-serialized, not a raw relay of hop-1's UDP bytes.** Hop-1's HMAC is scoped to
 the wire path/key that produced it and has no meaning to a receiving node — forwarding it verbatim
-would misleadingly imply the receiving node could re-verify it, which BC-2.03.001 PC-5 (v1.5,
+would misleadingly imply the receiving node could re-verify it, which BC-2.03.001 PC-5 (v1.6,
 already landed) explicitly forecloses. Layout, respecting `BC-2.01.008` PC-3's fixed 4-byte
 control header and its extend-beyond-byte-3 allowance (Invariant 5/DI-007):
 
@@ -416,9 +476,9 @@ byte[0]     control_type = 0x03 (DISCOVERY_RELAY)
 byte[1]     version = 0x01
 byte[2:4]   reserved = 0x0000
 byte[4:12]  NodeAddr    — the ORIGINATING access node's 8-byte address
-byte[12:16] Sequence    — uint32 BE, the same value hop-1 accepted (SEC-DW-07)
-byte[16:18] session count — uint16 BE
-byte[18:]   sessions...   — internal/discovery's existing per-session encoding
+byte[12:20] Sequence    — uint64 BE (epoch-qualified, F-DWSP4-001), the same value hop-1 accepted (SEC-DW-07)
+byte[20:22] session count — uint16 BE
+byte[22:]   sessions...   — internal/discovery's existing per-session encoding
 ```
 
 `SVTNID` is deliberately NOT repeated inside this payload — the relay frame's own
@@ -471,7 +531,7 @@ elaboration does not pick one unilaterally.
 **(g) `BC-2.01.008` registry row — already landed.** v1.2, executed by product-owner between
 ruling v1.2 and v1.3. No story-writer or implementer action.
 
-**(h) `BC-2.03.001` needs no further amendment for hop-2 — confirmed, not assumed.** v1.5's PC-5
+**(h) `BC-2.03.001` needs no further amendment for hop-2 — confirmed, not assumed.** v1.6's PC-5
 sentence ("access and console nodes never independently look up or re-verify another node's
 `DiscoveryAuthKey`; they receive already-authenticated advertisements via the router's relay over
 their own admitted connection") already describes the trust model this ruling formalizes.
@@ -599,14 +659,16 @@ trigger model (state change / heartbeat / on-demand, all unchanged from S-7.02).
    selector) — equivalently, whose post-tag body is shorter than 24 bytes — is rejected before
    any key lookup is attempted.
 
-**Note (F-DWSP1-001 fix context):** the wire layout is `[8]HMACTag | [16]SVTNID | [8]NodeAddr |
-[4]Sequence | [2]count | sessions...` (raw offsets), matching the shipped
-`internal/discovery/discovery.go` layout and its own guard comment. `body` throughout this AC
-(and Decision 1 Implementation Constraint 2's `body[0:16]`/`body[16:24]` notation) means the
-bytes *after* the 8-byte HMAC tag — so `SVTNID`/`NodeAddr` sit at raw bytes 8-24/24-32, not 0-24.
-With SEC-DW-07's `Sequence` field, the full valid-frame minimum is 38 bytes
-(8 tag + 16 SVTNID + 8 NodeAddr + 4 Sequence + 2 count) — but the pre-lookup key-selector guard
-in postcondition 4 only needs to enforce raw ≥ 32 / body ≥ 24, since `Sequence` and `count` are
+**Note (F-DWSP1-001 fix context, widths updated per F-DWSP4-001/rulings v1.6):** the wire layout is
+`[8]HMACTag | [16]SVTNID | [8]NodeAddr | [8]Sequence | [2]count | sessions...` (raw offsets),
+matching the shipped `internal/discovery/discovery.go` layout and its own guard comment. `body`
+throughout this AC (and Decision 1 Implementation Constraint 2's `body[0:16]`/`body[16:24]`
+notation) means the bytes *after* the 8-byte HMAC tag — so `SVTNID`/`NodeAddr` sit at raw bytes
+8-24/24-32, not 0-24. With SEC-DW-07's `Sequence` field now widened to `uint64` (epoch-qualified,
+F-DWSP4-001 — see AC-010 postcondition 6 and EC-010), the full valid-frame minimum is 42 bytes
+(8 tag + 16 SVTNID + 8 NodeAddr + 8 Sequence + 2 count) — but the pre-lookup key-selector guard
+in postcondition 4 only needs to enforce raw ≥ 32 / body ≥ 24 (UNCHANGED — this guard sits upstream
+of the `Sequence` field and is unaffected by its widening), since `Sequence` and `count` are
 parsed by `decodeBody()` *after* HMAC verification succeeds (postcondition 2), not before.
 
 **Test names:** `TestRouterIngest_KeySelectorExtraction_FixedOffset_NoFullDecodeBeforeAuth`,
@@ -671,6 +733,13 @@ or the first frame from a newly-admitted node).
 2. The discovery registry is updated per the accepted content; the accept+relay decision is
    emitted; `lastSeen[svtnID, nodeAddr]` is set to the accepted `Sequence`.
 
+**Note (F-DWSP4-001 scope clarification, v1.5):** this AC's precondition ("no prior `lastSeen`
+entry") covers ONLY fresh-router-start and first-ever-admission cold-start — it does NOT rescue a
+previously-admitted node that restarts while the router keeps running and still holds a `lastSeen`
+watermark for that `(SVTNID,NodeAddr)` pair. That restart case is now closed by the epoch-qualified
+`Sequence` construction (AC-010's forward-acceptance path) and characterized separately as EC-010;
+do not conflate the two cold-start-shaped preconditions.
+
 **Test name:** `TestVP080_DiscoveryIngest_ColdStartAcceptance`
 **Test level:** integration
 **Test file:** `internal/discovery/discovery_wire_test.go`
@@ -694,6 +763,17 @@ or a prior AC-010 forward acceptance).
 3. The discarded datagram is NOT relayed to other admitted nodes on the SVTN.
 4. `lastSeen[svtnID, nodeAddr]` is unchanged by the discard.
 
+**Note (F-DWSP4-001 scope clarification, v1.5; residual bounds corrected v1.6):** this AC's discard
+rule remains the correct, intended behavior for THREE distinct triggers — (1) genuine replay (an
+attacker-captured frame, or a legitimate but out-of-order/stale duplicate); (2) the
+same-wall-clock-second crash-loop restart (EC-010 case 1) — bounded to ≤1 second, one or more
+discards cleared unconditionally at the next epoch tick; (3) the backward-host-clock-adjustment
+restart (EC-010 case 2) — every advertisement from the restarted instance is discarded for a window
+of duration ≈N (the clock-adjustment magnitude, NOT ≤1 second) until wall-clock time naturally
+re-passes the pre-adjustment epoch. Cases (2) and (3) are accepted, intentional edges of the
+F-DWSP4-001 fix — not regressions. VP-080 v1.3 Test Scenario 5 exercises case (2); case (3) is not
+yet test-scripted.
+
 **Test names:** `TestVP080_DiscoveryIngest_ReplayDiscard_ExactSequence`,
 `TestVP080_DiscoveryIngest_ReplayDiscard_LowerSequence`,
 `TestVP080_DiscoveryIngest_ReplayDiscard_NoRelaySideEffect`
@@ -714,10 +794,18 @@ or a prior AC-010 forward acceptance).
 2. The discovery registry is updated to the new content.
 3. The accept+relay decision is emitted for the hop-2 dispatch caller.
 4. `lastSeen[svtnID, nodeAddr]` advances to the new `Sequence` value.
-5. `uint32` wraparound behavior is explicitly OUT OF SCOPE — only relative ordering (`>`) is
-   asserted; no wraparound case is tested (VP-080 property 4, Non-Goals).
+5. `uint64` composite wraparound behavior is explicitly OUT OF SCOPE — only relative ordering (`>`)
+   is asserted; no wraparound case is tested (VP-080 v1.3 property 4, Non-Goals). The composite's
+   `epoch` component wraps only after ~136 years from a 1970 origin; its `counter` component wraps
+   only after ~4.29 billion advertisements from a single process instance without restart.
+6. **(F-DWSP4-001, v1.5, new)** A restarted access node's first post-restart datagram — declaring a
+   freshly-sampled `epoch` and a low `counter` — is accepted via THIS postcondition (forward
+   acceptance), not AC-008's cold-start path, because its composite `Sequence` exceeds the router's
+   prior `lastSeen` watermark with overwhelming likelihood (VP-080 v1.3 Property 5). See EC-010 for
+   the full restart-liveness characterization, including the bounded same-epoch-second residual.
 
-**Test name:** `TestVP080_DiscoveryIngest_ForwardAcceptance_AdvancesState`
+**Test names:** `TestVP080_DiscoveryIngest_ForwardAcceptance_AdvancesState`,
+`TestVP080_DiscoveryIngest_RestartForwardProgress`
 **Test level:** integration
 **Test file:** `internal/discovery/discovery_wire_test.go`
 
@@ -794,9 +882,10 @@ relay/connection-trust note
 
 1. The relay frame is a `FrameTypeCtl` (`0x03`) outer frame whose payload begins with
    `control_type = 0x03`, `version = 0x01`, `reserved = 0x0000` at bytes 0-3.
-2. Bytes 4-11 carry the originating access node's 8-byte `NodeAddr`; bytes 12-15 carry the
-   `Sequence` value (uint32 BE) hop-1 accepted; bytes 16-17 carry the session count (uint16 BE);
-   bytes 18+ carry the per-session list using `internal/discovery`'s existing per-session encoding.
+2. Bytes 4-11 carry the originating access node's 8-byte `NodeAddr`; bytes 12-19 carry the
+   `Sequence` value (uint64 BE, epoch-qualified per F-DWSP4-001) hop-1 accepted; bytes 20-21 carry
+   the session count (uint16 BE); bytes 22+ carry the per-session list using
+   `internal/discovery`'s existing per-session encoding.
 3. `SVTNID` is not repeated in the payload — the relay frame's own `OuterHeader.SVTNID` carries
    SVTN scope.
 4. Frame assembly is a pure function testable independent of any live connection or dispatch
@@ -911,7 +1000,8 @@ item 3, the scheduling of Task 6/AC-017/AC-018 specifically.
 ### 1. SEC-DW-07 monotonic-`Sequence`-field adjudication
 
 The architect already ruled on this (Ruling 1, "Replay / freshness" subsection): a new
-`Sequence uint32` wire field is added to `AdvertisementPayload`, with a router-held
+`Sequence uint64` (epoch-qualified per the v1.6 restart-liveness amendment — see below; originally
+specified as `uint32`) wire field is added to `AdvertisementPayload`, with a router-held
 per-`(SVTNID,NodeAddr)` last-accepted map, discarding non-increasing sequences even after HMAC
 passes. This is a **new wire-format field and new router-held state** that did not exist before
 this story — the architect's own ruling flags it "prominently for the human gate at story-ready...
@@ -922,6 +1012,27 @@ unusually easy to execute specifically because Ruling 2 makes the channel multic
 capture, no compromise required); the harm directly contradicts BC-2.03.002 Postcondition 5's
 stated staleness-expiry guarantee. **Ask for sign-off:** confirm the field addition is acceptable
 scope for this story (vs. splitting it into a separate wire-format-versioning story).
+
+**v1.5 update (F-DWSP4-001), residual bounds corrected v1.6:** between this item's original framing
+and story-ready, spec-adversarial pass 4 found the `Sequence` field as originally specified
+(in-memory counter, resets on node restart) paired against the router's restart-STABLE `lastSeen`
+watermark, producing up to ~8.3h of silent discovery absence on every ordinary node
+restart/redeploy/crash-recover — not just a rare edge case. The architect's fix (rulings v1.6):
+widen `Sequence` to `uint64`, epoch-qualified (high 32 bits = wall-clock seconds sampled at process
+start, low 32 bits = the original counter) — self-contained at the sender, no router-side logic
+change, no new state, no dependency on the still-missing node-identity-to-connection binding
+(Forward Obligation (a)). Two residuals remain, with DIFFERENT bounds — read both before signing: a
+same-wall-clock-second crash-loop is bounded to ≤1 second (self-clearing at the next epoch tick); a
+backward host-clock adjustment of magnitude N produces a discard window of duration ≈N —
+deterministic and finite, but not bounded by a small constant, and could in principle exceed the
+original ~8.3h exposure for a large-enough backward step. The second case is accepted not because
+it's short, but because its trigger (a restart coinciding with an operator clock misconfiguration)
+is rare and absent from the original defect, which fired on every ordinary restart with certainty.
+**Ask for sign-off:** confirm the widened field remains acceptable scope, and that BOTH residual
+shapes — the ≤1s self-clearing case and the N-bounded clock-misconfiguration case — are acceptable
+to ship without further hardening (e.g., a monotonic-clock cross-check, or clamping N at some
+maximum) — this ruling explicitly declined that additional hardening as diminishing-returns
+complexity, but a human sign-off should see the specific trade-off before it's locked in.
 
 ### 2. Discovery UDP port number
 
@@ -966,8 +1077,9 @@ rulings rather than resolving an item the ruling itself left open for a differen
 - **Literal IPv6 discovery transport** — no IPv6 data-plane precedent exists anywhere in this
   codebase; scoping it now would require inventing both an IPv6 story and an IPv6-specific
   administratively-scoped derivation (RFC 3306) with zero grounding (Decision 2(d)).
-- **`uint32` `Sequence` wraparound handling** — out of scope for this story and VP-080 property 4;
-  not a practical concern at realistic heartbeat rates within any reasonable node uptime.
+- **`uint64` composite `Sequence` wraparound handling** — out of scope for this story and VP-080
+  v1.3 property 4 (see AC-010 postcondition 5 for the composite's per-component wrap bounds); not a
+  practical concern at realistic heartbeat rates within any reasonable node uptime.
 - **`sbctl sessions list` / `sessions.list` RPC wire exposure** — BC-2.03.002 Postcondition 1's
   `PENDING-S-BL.DISCOVERY-WIRE` annotation anticipates a console-facing enumeration RPC, but none
   of the three rulings adjudicate one. This story's scope is exclusively the advertisement
@@ -1006,6 +1118,7 @@ by this story:
 | EC-007 | Oversized or malformed UDP datagram arrives at the router's discovery listener | Rejected without partial-parse, without reallocation-to-fit, before any key lookup (AC-011). |
 | EC-008 | An admitted, HMAC-valid, sequence-increasing sender relays advertisements faster than ~1/sec | Registry/discard-map state still updates correctly (AC-010 unaffected); relay dispatch for the excess arrivals is silently suppressed (AC-018, GATED per Human Gate item 3). |
 | EC-009 | An attacker with no valid `DiscoveryAuthKey` sends datagrams naming a known, admitted `NodeAddr` | Rejected identically to a datagram naming an unknown `NodeAddr` — `ErrInvalidHMACTag`, no distinguishing signal (AC-006). |
+| EC-010 | Access node restarts with a stable admitted identity while the router keeps running (no router restart, no `lastSeen` entry evicted) | The restarted node's `Discovery` instance re-samples `epoch = uint32(time.Now().UTC().Unix())` at instance start; because real wall-clock time has advanced since the prior process's epoch capture, the new composite `Sequence` is with overwhelming likelihood strictly greater than the router's stored `lastSeen` value, so post-restart advertisements are accepted via forward acceptance (AC-010) rather than being locked out — closing F-DWSP4-001's ~8.3h liveness gap. Two distinct residuals remain, with different bounds (do not conflate): **Case 1 — same-wall-clock-second crash-loop:** two-or-more restarts within the same `epoch` tick produce a same-epoch, low-counter `Sequence` that IS correctly discarded once (or a handful of times) by AC-009's existing rule — bounded to at most 1 second (until the epoch advances), a strict improvement over the pre-fix outage and consistent with this project's existing bounded-not-perfect replay posture (`admission.nonceTTL=60s`, EC-006). **Case 2 — backward host-clock adjustment of magnitude N:** every advertisement from the restarted instance is discarded (not just one) for a window of duration ≈N until wall-clock time naturally re-passes the pre-adjustment epoch — deterministic and finite, but NOT bounded by a small constant; N could in principle exceed the pre-fix ~8.3h bound for a sufficiently large backward step. Case 2 is accepted because its trigger (a restart coinciding with an operator clock misconfiguration) is a rare precondition absent from the original defect, which fired unconditionally on every ordinary restart — not because its duration is small. |
 
 ## Architecture Mapping
 
@@ -1040,10 +1153,10 @@ by this story:
 |------|--------|--------------|
 | `internal/discovery` MUST import ONLY `internal/routing` among `internal/` packages — `internal/admission` and `internal/hmac` are forbidden imports. | ARCH-08 §6.5 position-14 (`ARCH-08-dependency-graph.md` v2.13, line 159/173) | `go list -deps ./internal/discovery/...` boundary check; existing package doc comment in `discovery.go` states the rule explicitly. |
 | `internal/hmac` MUST NOT import any other `internal/` package or any external dependency — stdlib `crypto/hmac`+`crypto/sha256` only. | `internal/hmac/hmac.go` package doc comment (existing invariant, unchanged by this story) | Same `go list -deps` check; `DeriveDiscoveryKey`'s addition must not introduce a new import. |
-| Router-side ingest MUST perform fixed-offset key-selector extraction before any call to `decodeBody()` (SEC-DW-01, MANDATORY, not optional hardening). | `S-BL.DISCOVERY-WIRE-rulings.md` v1.3, Ruling 1 Implementation Constraint 2 | AC-005 tests; code review. |
+| Router-side ingest MUST perform fixed-offset key-selector extraction before any call to `decodeBody()` (SEC-DW-01, MANDATORY, not optional hardening). | `S-BL.DISCOVERY-WIRE-rulings.md` v1.6, Ruling 1 Implementation Constraint 2 | AC-005 tests; code review. |
 | HMAC verification MUST cover the complete raw body bytes, not merely the key-selector prefix. | Same | AC-005 tamper-detection test. |
 | New `control_type` opcode allocation MUST be sequential and append-only (`0x03` after `0x01`/`0x02`); existing opcode values are never reassigned. | BC-2.01.008 Invariant 3 | Already satisfied — `DISCOVERY_RELAY=0x03` row landed v1.2; no story-writer/implementer action needed to satisfy this rule, only to not violate it. |
-| The `DISCOVERY_RELAY` relay frame's `HMACTag` MUST be zero — hop-2's trust boundary is the admitted connection, never a per-frame HMAC. | `S-BL.DISCOVERY-WIRE-rulings.md` v1.3, Ruling 3(b) | AC-015 test. |
+| The `DISCOVERY_RELAY` relay frame's `HMACTag` MUST be zero — hop-2's trust boundary is the admitted connection, never a per-frame HMAC. | `S-BL.DISCOVERY-WIRE-rulings.md` v1.6, Ruling 3(b) | AC-015 test. |
 | Relay dispatch MUST be best-effort, non-blocking (`select`/`default`), never a blocking send that could stall the router on a slow/stuck node. | Ruling 3(d), DRAIN precedent | AC-017 test (GATED — see Human Gate). |
 
 ## Forbidden Dependencies
@@ -1083,7 +1196,7 @@ SOUL.md §7 (build the simplest thing that works)._
 | `internal/hmac/hmac_test.go` | extend | AC-004 domain-separation tests. |
 | `internal/routing/advertisement_hmac.go` | modify | Add `DiscoveryAuthKeyFor` and `DeriveDiscoveryKey` thin wrappers per Ruling 1 Implementation Constraints 1 and 4. |
 | `internal/routing/advertisement_hmac_test.go` | extend | AC-004 lookup-success/lookup-miss/sender-router-agreement tests. |
-| `internal/discovery/discovery.go` | modify | Delete `advertisementKey`; add `Sequence uint32` field to `AdvertisementPayload` + `encodeBody`/`decodeBody` extension (SEC-DW-07); add `MulticastAddrFor(svtnID) net.IP`; update `Encode`/`Decode`/sender-side call sites to the new lookup-based key scheme; extend `Run()`/`Advertise` to dispatch over real UDP `WriteTo` with TTL=1 (AC-003). |
+| `internal/discovery/discovery.go` | modify | Delete `advertisementKey`; add `Sequence uint64` field to `AdvertisementPayload`, epoch-qualified per F-DWSP4-001 (high 32 bits = `uint32(time.Now().UTC().Unix())` sampled at `Discovery`-instance start, low 32 bits = the original counter) + `encodeBody`/`decodeBody` extension (SEC-DW-07); add `MulticastAddrFor(svtnID) net.IP`; update `Encode`/`Decode`/sender-side call sites to the new lookup-based key scheme; extend `Run()`/`Advertise` to dispatch over real UDP `WriteTo` with TTL=1 (AC-003). |
 | `internal/discovery/discovery_wire.go` | create | Router-side ingest path (new file, per rulings-doc touch-list naming): fixed-offset key-selector extraction (SEC-DW-01), bounded read buffer (SEC-DW-02), aggregate rate limiter + `FailureCounter` visibility reuse (SEC-DW-03), rate-limited failure logging (SEC-DW-04), `lastSeen` replay-discard map (SEC-DW-07). Returns an accept/relay decision to its caller; performs no relay I/O itself. |
 | `internal/discovery/discovery_wire_test.go` | create | AC-005, AC-006, AC-008, AC-009, AC-010, AC-011, AC-012, AC-013 tests — extends the `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` family's admitted-node/SVTN test-setup pattern per VP-080's own test-file citation. |
 | `internal/discovery/discovery_test.go` | extend | AC-002 (`MulticastAddrFor` determinism), AC-003 (sender-side TTL=1 dispatch), AC-007 (regression pin, unmodified test body). |
@@ -1250,14 +1363,14 @@ pass result rather than reviewing stale state.
 
 | Anchor | Verbatim ID | Source | Disposition |
 |--------|-------------|--------|--------------|
-| Admitted-node HMAC key derivation (DRIFT-W6TBD-001) | BC-2.03.001 v1.5 Postcondition 5 | Ruling 1 | TO DISCHARGE — AC-004, AC-005, AC-006 |
-| SVTN-scoped multicast address derivation | BC-2.03.001 v1.5 Precondition 3 | Ruling 2 | TO DISCHARGE — AC-002 |
-| Router-relay delivery model (DI-004 compliance) | BC-2.03.001 v1.5 Postcondition 1, Invariant 1 | Ruling 2 | TO DISCHARGE — AC-001, AC-003 |
-| Replay/freshness (SEC-DW-07) | BC-2.03.001 v1.5 Postcondition 2; VP-080 | Ruling 1 | TO DISCHARGE — AC-008, AC-009, AC-010 |
-| Ingest resource/rate hardening (SEC-DW-01..05) | BC-2.03.001 v1.5 Postcondition 5 | Ruling 1 (Security Consult Addendum) | TO DISCHARGE — AC-005, AC-006, AC-011, AC-012, AC-013 |
+| Admitted-node HMAC key derivation (DRIFT-W6TBD-001) | BC-2.03.001 v1.6 Postcondition 5 | Ruling 1 | TO DISCHARGE — AC-004, AC-005, AC-006 |
+| SVTN-scoped multicast address derivation | BC-2.03.001 v1.6 Precondition 3 | Ruling 2 | TO DISCHARGE — AC-002 |
+| Router-relay delivery model (DI-004 compliance) | BC-2.03.001 v1.6 Postcondition 1, Invariant 1 | Ruling 2 | TO DISCHARGE — AC-001, AC-003 |
+| Replay/freshness (SEC-DW-07) | BC-2.03.001 v1.6 Postcondition 2; VP-080 | Ruling 1 | TO DISCHARGE — AC-008, AC-009, AC-010 |
+| Ingest resource/rate hardening (SEC-DW-01..05) | BC-2.03.001 v1.6 Postcondition 5 | Ruling 1 (Security Consult Addendum) | TO DISCHARGE — AC-005, AC-006, AC-011, AC-012, AC-013 |
 | Hop-2 relay transport, frame layout | BC-2.01.008 v1.2 Postcondition 2, Postcondition 3, Invariant 5 | Ruling 3(a)(c) | TO DISCHARGE — AC-014 |
-| Hop-2 connection-trust boundary | BC-2.03.001 v1.5 Postcondition 1 delivery-mechanism note | Ruling 3(b) | TO DISCHARGE — AC-015 |
-| Hop-2 fan-out semantics + rate cap | BC-2.03.001 v1.5 Postcondition 1 delivery-mechanism note; SEC-DW-09 | Ruling 3(d)(e) | GATED — AC-017, AC-018 (Human Gate item 3) |
+| Hop-2 connection-trust boundary | BC-2.03.001 v1.6 Postcondition 1 delivery-mechanism note | Ruling 3(b) | TO DISCHARGE — AC-015 |
+| Hop-2 fan-out semantics + rate cap | BC-2.03.001 v1.6 Postcondition 1 delivery-mechanism note; SEC-DW-09 | Ruling 3(d)(e) | GATED — AC-017, AC-018 (Human Gate item 3) |
 | Fan-out target resolution | Ruling 3(f) | Ruling 3 | NOT DISCHARGEABLE by this story alone — Forward Obligation (a) |
 | DRIFT-W6TBD-001 | drift item | `RULING-W6TB-D-discovery-scope.md` | RESOLVED by AC-004/AC-005/AC-006 — tag PR with `Resolves: DRIFT-W6TBD-001` per this repo's non-`closes`/`fixes` convention for prior-architect-note-reported items |
 
@@ -1280,6 +1393,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.3 | 2026-07-13 | Remediated spec-adversarial pass 4 finding F-DWSP4-001 (HIGH): SEC-DW-07's original in-memory-counter `Sequence` field, paired against the router's restart-STABLE `lastSeen` watermark, produced up to ~8.3h of silent discovery lockout on every ordinary access-node restart/redeploy/crash-recover. Architect fix (rulings v1.6): `Sequence` widened `uint32`→`uint64`, epoch-qualified (high 32 bits = wall-clock seconds sampled at `Discovery`-instance start, low 32 bits = the original counter). Five architect blockquotes applied verbatim: AC-008 gained a scope-clarification note (cold-start vs. stable-identity restart); AC-009 gained a note characterizing its discard rule as correct for genuine replay plus two bounded restart residuals (EC-010 cases 1/2); AC-010 postcondition 5 replaced (`uint32`→`uint64` composite wraparound-out-of-scope) and postcondition 6 added (restart forward-acceptance path) with new test `TestVP080_DiscoveryIngest_RestartForwardProgress`; new EC-010 Edge Cases row; Human Gate item 1 gained an appended v1.6 sign-off paragraph. Deviation flagged: supplied blockquotes cited "VP-080 v1.2" — corrected to "VP-080 v1.3" in both AC-010 postconditions as applied. Mechanical sweeps (rulings v1.6-authoritative): hop-1 `[4]Sequence`→`[8]Sequence`, 38→42-byte full-valid-frame minimum in AC-005's note (raw-min-32/body-min-24 pre-lookup guard left UNCHANGED per explicit instruction); hop-2 `DISCOVERY_RELAY` payload in Decision 3(c) diagram + AC-014 postcondition 2 — `Sequence` byte[12:16]→byte[12:20], count byte[16:18]→byte[20:22], sessions byte[18:]→byte[22:], fixed pre-session header 18→22 bytes. Additional live-prose corrections: Human Gate item 1's original `Sequence uint32` claim, Non-Goals' `uint32` wraparound bullet, File-Change List's `discovery.go` row — all → `uint64`/epoch-qualified. Version-pin sweep: every live-prose citation of rulings and VP-080 with an explicit version number → v1.6/v1.3 (frontmatter `inputDocuments:` comments, Status-note blockquote, Decision-section intro, two Architecture Compliance Rules rows); extended one step beyond the literal instruction to also bump `BC-2.03.001.md`'s `inputDocuments:` comment (v1.5→v1.6, input-version metadata, not prose). **Amended in place, same v2.3 (post-pass-4, pre-commit):** the orchestrator identified this row's own initially-flagged "candidate for a future sweep" as the same stale-version-pin class pass 1 flagged on VP-080 (F-DWSP1-002) — pass 5 would have re-flagged it. Fixed now, in place: all live-prose `BC-2.03.001 v1.5` citations → `v1.6` (Anchors Consumed table's 7 rows; Decision 3(c)'s "BC-2.03.001 PC-5 (v1.5, already landed)"; Decision 3(h)'s "v1.5's PC-5 sentence"). Left UNCHANGED, matching the v2.1/v2.2 historical-preservation precedent: all `modified:`/Changelog entries' own historical version citations (the v2.0 row's "BC-2.03.001 v1.5" citation was transiently corrupted by an overbroad `replace_all` during this same amendment and restored to `v1.5`), and the Provenance "Adjudication:" bullet (anchored to "This elaboration (v2.0)"). No further BC-2.03.001 version-pin instances remain outside historical entries. `acceptance_criteria_count` stays 18 (no AC added/removed); points stay 8. `compute-input-hash --update` re-run (rulings AND BC-2.03.001 both changed on disk): `c321c05` → `cd82f7b`; this same-v2.3 amendment is prose-only and re-verified via `compute-input-hash --check` (unaffected, still clean). |
 | 2.2 | 2026-07-13 | Remediated spec-adversarial pass 3 finding F-DWSP3-001 (MED, sibling of F-DWSP1-001's off-by-N-bytes threshold-miscount class). AC-005 Postcondition 3 stated the HMAC computation covers "the complete raw body bytes, not merely the 16-byte key-selector prefix" — the key-selector region per SEC-DW-01 is `SVTNID` `body[0:16]` (16 bytes) + `NodeAddr` `body[16:24]` (8 bytes) = 24 bytes, so naming both fields and then citing "16-byte" undercounted the region by the `NodeAddr` contribution, contradicting this same AC's own Postcondition 1 and Postcondition 4 (both correctly state the 24-byte selector arithmetic). Fixed to: "not merely the 24-byte key-selector prefix (SVTNID 16 + NodeAddr 8)". Class sweep performed across the full story for every remaining "16-byte"/"24-byte"/"8-byte"/"32-byte"/"38-byte" occurrence and the hop-2 `DISCOVERY_RELAY` payload arithmetic (4-byte control header + 8-byte `NodeAddr` + 4-byte `Sequence` + 2-byte count = 18 bytes before the variable session list): no other miscounted field-group arithmetic found — the sole "16-byte" occurrence in the entire story was this AC-005 PC-3 sentence, now fixed; Architecture Compliance Rules row (line ~1018) already uses count-free phrasing and was left unchanged per the orchestrator's explicit scoping; the F-DWSP1-001 changelog/modified-entry history quotes of the old wrong wording were left unchanged as they document a prior finding's text, not a live claim. Sibling fix on the architecture side: `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` (declared input #1) was independently corrected by the architect to v1.4 for the same error class; `compute-input-hash --update` re-run to pick up that change: `b4e0a5f` → `c321c05`. No AC added or removed (still 18); points unchanged (8). |
 | 2.1 | 2026-07-13 | Remediated spec-adversarial pass 1 finding F-DWSP1-001 (HIGH, off-by-8-bytes threshold bug, CWE-770/400 class). AC-005 Postcondition 4 stated the router-side ingest guard rejects a raw datagram "shorter than 24 bytes (insufficient for the fixed key-selector fields)" — that threshold omits the 8-byte HMAC tag prefix and contradicts this story's own Decision 1/SEC-DW-01 wire layout (`SVTNID` at raw bytes 8-24, `NodeAddr` at raw bytes 24-32), the rulings doc's Implementation Constraint 2, and the shipped `internal/discovery/discovery.go` layout (`[8]HMACTag \| [16]SVTNID \| [8]NodeAddr \| ...`). A literal implementation would leave a 24-31-byte raw-datagram window that passes the length guard and then indexes out of bounds pre-authentication — exactly the resource-exhaustion/pre-auth-crash class SEC-DW-01 exists to close. Fixed to: "A raw datagram shorter than 32 bytes (8-byte HMAC tag + the 24-byte SVTNID/NodeAddr key selector) — equivalently, whose post-tag body is shorter than 24 bytes — is rejected before any key lookup is attempted." Added an explanatory note directly under AC-005 clarifying the `body` = post-tag-bytes convention this AC and Decision 1 Implementation Constraint 2 both use, and noting the full valid-frame minimum with the SEC-DW-07 `Sequence` field is 38 bytes (8 tag + 16 + 8 + 4 + 2 count) — but the pre-lookup guard only needs raw ≥ 32 / body ≥ 24, since `Sequence`/count are parsed by `decodeBody()` only after HMAC verification succeeds. Swept the full story for any other occurrence of the wrong 24-byte-raw threshold (test names, Task Breakdown, Edge Cases, File-Change List) — none found; AC-005 Postcondition 4 was the sole occurrence. No AC added or removed; `acceptance_criteria_count` (18) and `points`/`estimated_points` (8) unchanged. `input-hash` unchanged (`b4e0a5f`) — none of the five declared `inputs:` files were touched; `compute-input-hash --check` confirms no drift. |
 | 2.0 | 2026-07-13 | Elaborated from backlog stub (v1.1, draft, 0 ACs) to sprint-ready draft (v2.0, 18 ACs, 8 points) per architect ruling `S-BL.DISCOVERY-WIRE-rulings.md` v1.3 (all three rulings). Replaced "Open Design Obligations"/"Scope"/"Scope Constraints" with "Adjudicated Design Decisions" (three decisions, one per ruling, load-bearing constraints transcribed inline) plus a new "Design Constraint: Router-Mode Discovery Wiring" section. 18 ACs traced to BC-2.03.001 v1.5 (Preconditions 1-3, Postconditions 1-5, Invariants 1-3), BC-2.03.002 v1.4 Postcondition 5, BC-2.01.008 v1.2 (Postconditions 2-3, Invariants 3/5), and VP-080 v1.0's four property clauses — covering hop-1 ingest (router multicast join, sender TTL=1 dispatch, HMAC verify with SEC-DW-01 fixed-offset extraction, SEC-DW-07 sequence gate incl. cold-start-accepts-first, registry update, SEC-DW-02/03/04 resource/rate hardening) and hop-2 relay (DISCOVERY_RELAY frame assembly, zero-HMACTag connection-trust boundary, fan-out semantics, SEC-DW-09 rate cap). AC-017/AC-018 (hop-2 fan-out dispatch + rate cap) explicitly marked GATED on Ruling 3(f)'s verified fan-out target-resolution Forward Obligation; Task Breakdown structured so Tasks 1-5 (hop-1 + hop-2 frame construction) are independently deliverable and Task 6 (fan-out dispatch) is explicitly gated, deferrable to a follow-on burst. Corrected the v1.1 stub's mislabeled citation: the multicast-address-allocation requirement is BC-2.03.001 **Precondition 3**, not Postcondition 1 as the stub's Open Design Obligation #2 stated — fixed throughout this elaboration's prose. Added dedicated "Human Gate — Story-Ready Sign-off Required" section carrying forward three items flagged by the architect for explicit human/PO disposition before `ready` promotion: (1) the SEC-DW-07 monotonic-`Sequence`-field design (architect already ruled it in, flagged prominently per the ruling's own text), (2) the discovery UDP port number (`49201` recommended, explicit bikeshed), (3) the fan-out target-resolution Forward Obligation's two resolution paths (option (i) sequencing dependency on a future node-identity-to-connection-binding story — architect's recommended default — vs. option (ii) a narrow story-local `Router.BindInterface` seam, with the architect's own caveat that (ii) still requires some connection-time identity signal and only relocates the gap rather than eliminating it). Status stays `draft` — NOT promoted to `ready` — pending these three sign-offs; `wave` stays `backlog`. `bc_traces`/`behavioral_contracts` gained `BC-2.01.008` (hop-2 registry consumer, already landed v1.2); `vp_traces`/`verification_properties` gained `VP-080` (SEC-DW-07 replay-rejection, minted v1.0 ahead of this elaboration). Frontmatter conformed to the `S-BL.CLI-SURFACE-COMPLETION`/`S-BL.LOOPBACK-FULLSTACK` template-mandated superset keys (`epic_id`, `inputs`, `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`, `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`); both `points`/`estimated_points` set to 8 (this fleet carries both field-name conventions across existing stories; both populated for compatibility). Full File-Change List (14 rows), Architecture Mapping, Purity Classification, Architecture Compliance Rules, Forbidden Dependencies, Library & Framework Requirements (zero new third-party dependencies), Token Budget Estimate (3-pass, none over 41%), Task Breakdown (7 tasks, Task 6 GATED), Forward Obligations table, Anchors Consumed, and POL-005 Delivery Plan Note added. `input-hash` computed via `compute-input-hash --update`. |

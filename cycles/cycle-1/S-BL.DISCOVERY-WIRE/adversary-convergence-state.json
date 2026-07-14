@@ -3,12 +3,14 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.2",
-    "story_input_hash": "c321c05",
-    "index": "4.99",
-    "rulings": "1.4",
-    "VP-080": "1.1",
-    "BC-2.03.001": "1.5",
+    "story": "2.3",
+    "story_input_hash": "cd82f7b",
+    "index": "4.100",
+    "rulings": "1.6",
+    "VP-080": "1.3",
+    "VP-080_input_hash": "5e22481",
+    "VP-INDEX": "2.43",
+    "BC-2.03.001": "1.6",
     "BC-2.03.002": "1.4",
     "BC-2.01.008": "1.2",
     "develop_head": "1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a"
@@ -119,8 +121,49 @@
         "no adjudication-in-force violated"
       ],
       "notes": "Fix sequencing was architect-first then story-writer, deliberately, so the story's input-hash recompute captured rulings v1.4. Both fixers complete and orchestrator-disk-verified before this record was written."
+    },
+    {
+      "pass": 4,
+      "date": "2026-07-13",
+      "agent": "adv-dw-sp4",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 379e6be669e53f17426f4d69b775668a4b576ab7) — all 10 artifacts at expected versions",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP4-001",
+          "severity": "HIGH",
+          "class": "design/liveness",
+          "summary": "SEC-DW-07 state-lifetime asymmetry: the sender's in-memory Sequence counter resets to zero on node restart while the router's lastSeen watermark (keyed on the restart-stable admitted NodeAddr) persists across the restart. A legitimate re-admitted node's post-restart Sequence values fall behind the router's already-observed high-water mark and are silently discarded as apparent replay — locking the node out of discovery for up to ~8.3h (the existing wraparound bound), with no self-rescue since the cold-start admission path does not apply once a lastSeen entry already exists for the NodeAddr. Novel failure class relative to passes 1 and 3's byte-arithmetic findings: a design-level liveness gap in the anti-replay mechanism itself — the mirror-image failure to the replay threat SEC-DW-07/VP-080 already covered.",
+          "remediation": "architect — option (c) APPROVED: Sequence widened uint32→uint64, epoch-qualified (high 32 bits = uint32(time.Now().UTC().Unix()) sampled once at Discovery-instance start; low 32 bits = the existing in-memory counter). Router-side comparison logic unchanged — no new state, no new coupling to FO-(a). Two alternatives considered and rejected: (a) router-side lastSeen reset on reconnect — depends on a node-identity↔connection binding that does not exist in this design; (b) sender-side Sequence persistence across restart — introduces a new persistence class, weakest on the ephemeral compute this story targets. Wire consequences: hop-1 Sequence body[24:32] (was body[24:28]), count shifts to body[32:34], full-valid-frame minimum 38→42 bytes; hop-2 Sequence byte[12:20] (was byte[12:16]), count byte[20:22], fixed pre-session header 18→22 bytes. Artifact chain: rulings v1.4→v1.5→v1.6 (two-step — v1.5 landed the design amendment, v1.6 corrected a residual-bound imprecision the orchestrator caught before propagation, see below); VP-080 v1.1→v1.2→v1.3 (Property 4 rewritten for uint64 composite wraparound scoping, new Property 5 asserts restart forward-progress, input-hash c3d2fc5→fac2515→5e22481); VP-INDEX v2.41→v2.42→v2.43; BC-2.03.001 v1.5→v1.6 (PC-2 blockquote superseded to match the epoch-qualified field); story v2.2→v2.3 (five architect blockquotes applied — AC-008 scope-clarification note, AC-009 discard-rule characterization covering genuine replay plus two bounded restart residuals (EC-010), AC-010 PC-5 replaced + PC-6 added with new test TestVP080_DiscoveryIngest_RestartForwardProgress, new EC-010 edge-case row, Human Gate item 1 v1.6 sign-off paragraph appended; mechanical 38→42-byte sweep plus hop-2 re-transcription; uint32→uint64 sweep across Human Gate item 1, Non-Goals, and the File-Change List; full stale-BC-citation version-pin sweep amended in place to rulings v1.6/VP-080 v1.3; story input-hash c321c05→cd82f7b); STORY-INDEX v4.99→v4.100."
+        }
+      ],
+      "orchestrator_corrections": [
+        {
+          "id": "OC-DWSP4-01",
+          "summary": "Precision correction caught by the orchestrator BEFORE propagation, not itself a spec-adversarial-pass finding. VP-080 v1.2's Property 5 residual sentence (and the reproduced BC-2.03.001 PC-2 blockquote's trailing clause) conflated two distinct residual cases under a single \"≤1 second\" bound. They do not share a bound: the same-wall-clock-second crash-loop case IS correctly bounded to ≤1s, self-clearing at the next epoch tick; the backward-host-clock-adjustment case is instead bounded by the adjustment magnitude N — every advertisement is discarded (not just one) for a window of duration ≈N. Both remain accepted residuals — the crash-loop case because its bound is tight, the clock-adjustment case because its trigger (a restart coinciding with an operator clock misconfiguration) is rare, not because its duration is small.",
+          "disposition": "FIXED — VP-080 v1.3 and rulings v1.6 split the two cases with independently stated bounds; the story's Human Gate item 1 ask now presents both bounds explicitly rather than one collapsed figure."
+        }
+      ],
+      "nitpicks": [
+        {
+          "id": "N-DWSP4-01",
+          "summary": "Rulings Implementation Constraint 2's cross-reference to the wire-layout section read awkwardly after the v1.5 epoch-qualification amendment landed",
+          "orchestrator_disposition": "FIXED — corrected within rulings v1.5, same burst, no separate version bump required"
+        }
+      ],
+      "observations_carried_forward": [
+        {
+          "id": "OBS-DWSP4-01",
+          "summary": "STORY-INDEX's aggregate summary counts (77/77 VPs, 45/45 BCs) are stale against actual current totals (80 VPs, 47 BCs) — a pre-existing, endemic index-summary lag not introduced by this fix-burst. Per-row entries for this story in STORY-INDEX are correct; only the top-of-file aggregate counts lag.",
+          "orchestrator_disposition": "DEFERRED to spec-steward batch reconciliation at session close — deliberately out of story fix-burst scope."
+        }
+      ],
+      "infrastructure_note": "Both fixers (architect, story-writer) complete and orchestrator-disk-verified before this record was written.",
+      "notes": "First HIGH-severity finding of a genuinely novel class this cycle (design/liveness, not byte-arithmetic or doc-drift). Fix sequencing: architect first (rulings + VP-080 + VP-INDEX), then BC-2.03.001, then story-writer last so the story's input-hash recompute captured every upstream change in one pass. Convergence streak reset to 0/3."
     }
   ],
   "converged": false,
-  "next": "pass 4, fresh context"
+  "next": "pass 5, fresh context"
 }

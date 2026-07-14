@@ -2,7 +2,7 @@
 artifact_id: BC-2.03.001
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -18,18 +18,22 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
-  - date: 2026-07-13
-    version: "1.5"
+  - date: 2026-07-14
+    version: "1.6"
     change: >
-      S-BL.DISCOVERY-WIRE-rulings.md v1.2 amendments executed: Precondition 3
-      gains the concrete multicast-address derivation rule; Postcondition 1
-      gains the router-mediated relay delivery-mechanism note; Postcondition 2
-      gains a new monotonic `sequence` replay-resistance field + router-side
-      discard rule (SEC-DW-07, cites VP-080); Postcondition 5's
-      DRIFT-W6TBD-001 key-placeholder note is replaced with the concrete
-      domain-separated `DiscoveryAuthKey` derivation rule (Ruling 1 v1.1) —
-      resolves DRIFT-W6TBD-001's BC-side obligation. Invariant 1 (DI-004)
-      reviewed, confirmed already-correct, no change.
+      S-BL.DISCOVERY-WIRE-rulings.md v1.6 F-DWSP4-001 restart-liveness
+      amendment propagated: Postcondition 2's replay-resistance blockquote
+      superseded in place — `sequence` widened `uint32`→`uint64`
+      (epoch-qualified: high 32 bits = wall-clock epoch sampled once at
+      Discovery-instance start, low 32 bits = the existing in-memory
+      counter), closing the ~8.3h node-restart discovery lockout the v1.5
+      design introduced. Bounded residual reframed as two distinct,
+      independently-bounded cases (crash-loop ≤1s; backward clock
+      adjustment ≈N, accepted because rare rather than because small) per
+      the ruling doc's own v1.6 precision correction. The "BC-2.03.002
+      Postcondition 5" citation qualification from v1.5 is preserved.
+      Width/offset sweep: no `uint32` or byte-offset language exists
+      elsewhere in this BC — no other change required.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -82,19 +86,38 @@ An access node broadcasts its presence and the state of its published sessions t
    > (SEC-DW-08).
 2. Each advertisement includes: access node address, a monotonic sequence value, list of session names, per-session attachment status, per-session quality indicator.
 
-   > **Replay-resistance field (SEC-DW-07, Ruling S-BL.DISCOVERY-WIRE-1):**
-   > each advertisement additionally includes a monotonic `sequence` value,
-   > unique-and-increasing per (access node, SVTN), incremented on every
-   > outbound advertisement (state-change or heartbeat-triggered). The router
-   > discards any HMAC-verified advertisement whose `sequence` is not strictly
-   > greater than the last-accepted value for that (SVTN, node) pair, even
-   > though HMAC passed — closing the replay window that would otherwise let
-   > a captured, still-valid frame be re-injected indefinitely and defeat
+   > **Replay-resistance field (SEC-DW-07, Ruling S-BL.DISCOVERY-WIRE-1;
+   > restart-liveness amendment F-DWSP4-001, v1.5):** each advertisement
+   > additionally includes a monotonic `sequence` value (`uint64`,
+   > epoch-qualified — high 32 bits are `uint32(time.Now().UTC().Unix())`
+   > sampled once at `Discovery`-instance start, low 32 bits are an
+   > in-memory counter incremented on every outbound advertisement,
+   > state-change or heartbeat-triggered), unique-and-increasing per
+   > (access node, SVTN). The router discards any HMAC-verified
+   > advertisement whose `sequence` is not strictly greater than the
+   > last-accepted value for that (SVTN, node) pair, even though HMAC
+   > passed — closing the replay window that would otherwise let a
+   > captured, still-valid frame be re-injected indefinitely and defeat
    > BC-2.03.002 Postcondition 5's staleness-expiry guarantee. Cold-start
    > (router restart, or first frame from a newly-admitted node) accepts
    > unconditionally, bounding the residual replay window to at most one
-   > heartbeat interval — the same bounded-not-perfect posture this project
-   > already accepts for admission-layer nonce replay (`nonceTTL=60s`).
+   > heartbeat interval — the same bounded-not-perfect posture this
+   > project already accepts for admission-layer nonce replay
+   > (`nonceTTL=60s`). Because `sequence`'s high bits carry real
+   > wall-clock time, an access node that restarts with a stable admitted
+   > identity (router unrestarted, prior `lastSeen` watermark still held)
+   > is accepted on its very next frame rather than locked out until its
+   > local counter climbs back past the router's watermark — closing
+   > F-DWSP4-001's node-restart liveness gap. Two residuals remain, with
+   > different bounds: a same-wall-clock-second crash-loop restart is
+   > discarded for a window of at most 1 second (the next epoch tick
+   > clears it unconditionally); a backward host-clock adjustment of
+   > magnitude N produces a discard window of duration ≈N (every
+   > advertisement is discarded, not just one), recovering once real
+   > wall-clock time naturally re-passes the pre-adjustment epoch — this
+   > second case is accepted because its trigger (a restart coinciding
+   > with an operator-introduced clock misconfiguration) is rare, not
+   > because its bound is small.
    > Verified by VP-080.
 3. On state change (session added/removed/attached/detached): advertisement sent within 1 tick interval.
 4. On periodic heartbeat: advertisement sent every 30 seconds regardless of state change. **Observability gate (Ruling W6TB-D):** in the registry model (S-7.02), the periodic heartbeat timer fires an observable side effect verifiable by injecting a tick and asserting a heartbeat counter increments. Network dispatch to wire is deferred to S-BL.DISCOVERY-WIRE.
@@ -177,6 +200,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.6 | 2026-07-14 | `S-BL.DISCOVERY-WIRE-rulings.md` v1.6 (F-DWSP4-001 restart-liveness amendment, spec-adversarial pass 4) executed: Postcondition 2's replay-resistance blockquote superseded in place (layered-decision-record convention — v1.5's blockquote is replaced, not appended). `sequence` widens `uint32`→`uint64`, epoch-qualified (high 32 bits = `uint32(time.Now().UTC().Unix())` sampled once at `Discovery`-instance start, low 32 bits = the existing in-memory counter) — a legitimate access node restarting with a stable admitted identity is accepted on its next frame instead of being locked out for up to ~8.3h (the F-DWSP4-001 defect: an in-memory sender counter reset on restart vs. a restart-stable router-side `lastSeen` watermark). Bounded residual reframed per the ruling's own v1.6 precision correction into two distinct, independently-bounded cases: a same-wall-clock-second crash-loop restart (≤1s, self-healing at the next epoch tick) and a backward host-clock adjustment of magnitude N (discard window ≈N, not ≤1s — accepted because the triggering operator-introduced clock misconfiguration is rare, not because the bound is small). Field-list sentence (PC-2's lead line, "a monotonic sequence value") required no change — it never stated a width. Width/offset sweep of the rest of the BC found no other `uint32`/byte-offset language to correct (ruled hop-1 layout `Sequence body[24:32]`, `count body[32:34]`, 42-byte frame minimum — this BC states none of these numerically, so nothing else needed updating). The "BC-2.03.002 Postcondition 5" citation qualification introduced at v1.5 (the architect's draft used the unqualified "Postcondition 5", ambiguous inside this BC's own PC-5) is preserved unchanged in the replacement text, per the architect's explicit confirmation that the v1.5 correction stands. `Verified by VP-080.` trailing citation retained (VP-080 itself amended to v1.3 by the rulings-doc update; not this BC's concern to re-cite by version). No other Postcondition, Precondition, or Invariant touched. |
 | 1.5 | 2026-07-13 | `S-BL.DISCOVERY-WIRE-rulings.md` v1.2 amendments executed (Ruling 1 + Ruling 2, resolves DRIFT-W6TBD-001's BC-side obligation): Precondition 3 gains the concrete multicast-address derivation rule (`239.h0.h1.h2` = first 3 bytes of SHA-256(svtnID); router-only group membership). Postcondition 1 gains the router-mediated relay delivery-mechanism note (multicast denotes SVTN-wide fan-out, not direct peer-to-peer IP multicast; HMAC is the sole security boundary per SEC-DW-08). Postcondition 2 gains a NEW monotonic `sequence` replay-resistance field in the field list plus the router-side non-increasing discard rule (SEC-DW-07); cites VP-080 (minted this session, `status: draft`). Postcondition 5's DRIFT-W6TBD-001 `svtnID`-as-key placeholder note is replaced with the concrete domain-separated `DiscoveryAuthKey := hmac.DeriveDiscoveryKey(nodeAdmissionPubkey, svtnID)` derivation rule (Ruling 1 v1.1, SEC-DW-06). Invariant 1 (DI-004) reviewed against Ruling 2's finding and confirmed already-correct — no change. Verification Properties table gains a VP-080 row (replay-rejection, integration) alongside the existing VP-044 rows. |
 | v1.4 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): Stories row updated to add S-BL.DISCOVERY-WIRE with deferred PC-1/PC-3/PC-4 wire delivery annotation. |
 | v1.3 | 2026-07-01 | S-7.02 LENS-3 traceability backfill (RULING-W6TB-D): Traceability.Stories row filled with S-7.02. |
