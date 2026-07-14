@@ -247,8 +247,37 @@
       ],
       "infrastructure_note": "Fixer (story-writer) complete and orchestrator-disk-verified, including an independent orchestrator-run perl multiline re-sweep, before this record was written.",
       "notes": "Finding remediated in fix-burst 5. Convergence streak reset to 0/3 — third stale-pin-propagation instance this cycle, now with a cross-story process gap recorded for cycle-close disposition (see process_gap). Fix sequencing: story-writer only (no upstream architect change required — rulings/VP-080/BC on-disk versions unchanged since pass 5)."
+    },
+    {
+      "pass": 7,
+      "date": "2026-07-13",
+      "agent": "adv-dw-sp7",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 5447c706000863e5b8c1577b0edcad769d036c54) — all 12 artifacts at expected versions",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "1/3",
+      "nitpicks_no_action": [
+        {
+          "id": "N-DWSP7-01",
+          "summary": "Rulings doc Ruling 3(c)/(h) body and touch-list pin \"BC-2.03.001 v1.5\" — a point-in-time attribution inside a decision record, not a live citation.",
+          "orchestrator_disposition": "NO-ACTION — Ruling 3 was adjudicated when BC-2.03.001 was v1.5, and the PC-5 sentence it references is unchanged v1.5→v1.6, so the pinned claim remains factually correct. Consistent with the #21 (BC-2.01.008 non-rebump) and #25 (attribution-of-origin) classes already sanctioned this cycle: living-spec artifacts (the story) sweep forward on every version bump; decision-record bodies (rulings) freeze their citations at adjudication time. Also avoids a pure-churn cascade (rulings bump → story input-hash recompute → story bump → STORY-INDEX bump) to relabel a claim that is already accurate. Becomes standing adjudication for this class."
+        }
+      ],
+      "observations_carried_forward": [
+        {
+          "id": "OBS-DWSP7-01",
+          "summary": "BC-2.01.008 PC-3, line 81, carries a sibling stale-version-pin instance in the same non-rebump class already sanctioned as #21.",
+          "orchestrator_disposition": "NO-ACTION — within the #21 (BC-2.01.008 non-rebump) sanction already in force; no new adjudication required."
+        },
+        {
+          "id": "OBS-DWSP7-02",
+          "summary": "Post-auth truncated-body edge case verified fail-closed against the shipped decodeBody guard pattern — the len<26 guard in force today naturally raises to len<34 under the widened (epoch-qualified uint64 Sequence) layout; caught by the existing TDD suite, not a spec gap.",
+          "orchestrator_disposition": "NO-ACTION — positive corroboration; guard behavior already correct under the widened layout, nothing to remediate."
+        }
+      ],
+      "notes": "No findings this pass. No fix burst dispatched. One nitpick (N-DWSP7-01) dispositioned NO-ACTION as a new standing adjudication for the decision-record-freeze class (rulings bodies pin the BC version in force at adjudication time; living-spec artifacts sweep forward instead). Two observations recorded and dispositioned in-pass: OBS-DWSP7-01 (sibling stale-pin already covered by the #21 sanction) and OBS-DWSP7-02 (positive corroboration of fail-closed truncated-body guard behavior under the widened layout). Adversary's own novelty assessment: the package is effectively converged — the sole remaining item (N-DWSP7-01) was a wording/label refinement, not a substantive gap. Convergence streak advances to 1/3."
     }
   ],
   "converged": false,
-  "next": "pass 7, fresh context"
+  "next": "pass 8, fresh context"
 }
