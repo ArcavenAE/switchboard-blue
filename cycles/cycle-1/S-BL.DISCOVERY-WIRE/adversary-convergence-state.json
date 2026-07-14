@@ -460,8 +460,35 @@
       ],
       "infrastructure_note": "One transient validate-changelog-monotonicity block on batched edits (intermediate state; both edits landed; end state consistent — hook noise, no workaround). Earlier in the burst window: fix-burst-10's commit needed 4 attempts across two sm agents due to API instability (drops #11-13: one connection-close + two watchdog stalls + one fresh-sm stall); a brief orchestrator-side permission-classifier outage also observed; zero data loss throughout.",
       "notes": "Finding remediated in fix-burst 11. Seventh version-pin-hygiene/incomplete-cascade-family instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, F-DWSP9-001, F-DWSP10-001, F-DWSP11-001, F-DWSP12-001, now F-DWSP13-001) and the first false-ATTRIBUTION sub-species within the family (prior instances were stale pins or a stale status claim, not misattributed origin). Strengthens PG-DWSP6-01 (fourth sub-instance of the sweep-methodology gap) — same S-7.02 cycle-close disposition item, no new process-gap entry created. Fix sequencing: story-writer only (no upstream architect change required — rulings/VP-080 on-disk versions unchanged since pass 12). Fixer complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
+    },
+    {
+      "pass": 14,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp14",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 8744b4b70f352fc8110a067d055e1bded43f83c3) — all 13 artifacts at expected versions",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "1/3",
+      "nitpicks": [
+        {
+          "id": "N-DWSP14-01",
+          "summary": "Stray `</content>` XML-style closing tag at VP-045.md line 156 (final line, after the v1.4 Lifecycle row) — a tooling write-artifact present since commit 2381e26 (the pass-8 VP-045 v1.4 edit); zero semantic/traceability impact.",
+          "orchestrator_disposition": "DEFERRED to the queued spec-steward batch reconciliation (alongside the STORY-INDEX aggregate-counts item #20 and the BC-INDEX narrative-bump question) — rationale: a VP-045 version bump would cascade through the story's one live VP-045 pin (story bump + STORY-INDEX sync), and this convergence sequence has had four cascade-omission findings born from fix-burst churn; minimal-churn discipline while the streak runs. Recorded as adjudicated-deferred, will appear in pass-15/16 dispatches as an adjudication."
+        }
+      ],
+      "positive_corroborations": [
+        "byte arithmetic both hops cross-checked to zero off-by-N survivors",
+        "all edge cases present: cold-start, exact-replay, wraparound out-of-scope, restart forward-progress, split residual bounds non-conflated everywhere, malformed/oversized, multi-SVTN, originator-echo",
+        "SEC-DW-01..09 transcribed at matching severity with no dilution",
+        "TD-031 clean",
+        "AC-017/AC-018 gating uniform",
+        "full traceability verified",
+        "POL-001/POL-002 satisfied",
+        "no inconsistency found with any of the 36 adjudications in force"
+      ],
+      "notes": "No findings this pass — first convergence streak advance since pass 7. Clean-class pass, zero fix-burst dispatched; N-DWSP14-01 adjudicated DEFERRED in-pass by the orchestrator rather than remediated, per the minimal-churn-while-streak-runs rationale. Convergence streak advances 0/3 → 1/3."
     }
   ],
   "converged": false,
-  "next": "pass 14, fresh context"
+  "next": "pass 15, fresh context"
 }
