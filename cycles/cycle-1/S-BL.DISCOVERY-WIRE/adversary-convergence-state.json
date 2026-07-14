@@ -3,14 +3,14 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.7",
+    "story": "2.8",
     "story_input_hash": "a39b7ad",
-    "index": "4.104",
+    "index": "4.105",
     "rulings": "1.8",
-    "VP-080": "1.5",
+    "VP-080": "1.6",
     "VP-080_input_hash": "5d904d5",
     "VP-045": "1.4",
-    "VP-INDEX": "2.45",
+    "VP-INDEX": "2.46",
     "BC-2.03.001": "1.6",
     "BC-2.03.002": "1.4",
     "BC-2.01.008": "1.2",
@@ -332,8 +332,38 @@
       ],
       "infrastructure_note": "adv-dw-sp9 and arch-dw-f9 both went idle without delivering a final report; zero data loss — the adversary's report was recovered via re-request (its own transcript, resumed), the architect's report was substituted by orchestrator disk verification (PAT-04) against the fixer's actual file writes. Story-writer hit one validate-changelog-monotonicity block on an intermediate state (version bumped before the changelog row landed on disk), self-resolved on retry — hook behaving as designed (blocking a real transient ordering gap), not a defect.",
       "notes": "Finding remediated in fix-burst 7. Fourth stale-pin-propagation-class instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, now F-DWSP9-001) — the recurring failure mode is the same rulings-bump-not-cascaded-to-VP-080 omission first seen at pass 1, now recurring one VP-hop downstream of a HIGH-severity structural fix (F-DWSP8-001) rather than a routine ruling. Fix sequencing: architect first (rulings-citation cascade in VP-080, plus VP-INDEX), then story-writer last so the story's input-hash recompute/no-op check ran against the fully-updated upstream set. All fixers complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
+    },
+    {
+      "pass": 10,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp10",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 2f31ade150f1f0f4eccdcc09a25df05ddf31b119) — all 13 artifacts at expected versions",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP10-001",
+          "severity": "MED",
+          "class": "incomplete-cascade / stale-reference-to-retired-artifact",
+          "summary": "Same family as F-DWSP9-001. The F-DWSP8-001 retirement of TestDiscovery_VP045_SVTNIsolation_MultipleScopes propagated to VP-045 v1.4, but three live spots still cited the retired test as an EXTANT exemplar: story File-Change List l.1353 (discovery_wire_test.go row — \"extends the ...family's... pattern\", directly contradicting the adjacent l.1354 row's \"retired outright, not extended\"), VP-080 l.204 (Proof Method table), and VP-080 l.307 (Feasibility Assessment). Not foreclosed by adjudication #13 (which deferred only the file-path question) nor #31 (whose no-substance-change scope didn't cover these exemplar citations). VP-080's own v1.5 changelog acknowledged the retirement while its body still cited the test as extant — an internal inconsistency within one artifact.",
+          "remediation": "architect — VP-080 v1.5→v1.6: both exemplar citations replaced with the surviving lineage (router-side DiscoveryAuthKeyFor-admitted AC-005/AC-006 ingest tests, internal/discovery/discovery_wire_test.go); retired test now mentioned only as historical attribution. Side effect: resolves nitpick N-DWSP2-01's discovery_test.go-vs-discovery_wire_test.go file-path mismatch, while FO-(c) itself (the draft→active lifecycle transition) explicitly REMAINS OPEN. input-hash 5d904d5 HELD (--check clean before and after; declared inputs unchanged). VP-INDEX v2.45→v2.46, changelog-row-only. story-writer — story v2.7→v2.8: l.1353 cell replaced with the architect's blockquote verbatim (path/action cells untouched); all 5 live VP-080 pins updated → v1.6 (incl. the line-wrapped Non-Goals bullet); the inputDocuments comment was tense-shifted and appended rather than blind-swapped, avoiding a false claim that v1.6 was the F-DWSP9-001 re-pin. Multiline-tolerant re-certification sweep clean: all live rulings pins v1.8; the two rulings-v1.6 point-in-time citations verified correct again; every remaining retired-test mention frames it as retired. input-hash a39b7ad HOLDS (--check exit 0 before and after). STORY-INDEX v4.104→v4.105: row 144 → draft (v2.8, 18 ACs, 8 pts); v2.8 sub-narrative appended; aggregates untouched."
+        }
+      ],
+      "positive_corroborations": [
+        "byte-boundary arithmetic verified clean across hop-1/hop-2 wire layouts",
+        "18-AC traceability verified",
+        "gating consistency verified (AC-017/AC-018/Task-6)",
+        "F-DWSP8-001 ingest-model consistency verified",
+        "edge-case coverage confirmed complete",
+        "SEC-DW dilution check clean",
+        "TD-031 citation convention verified",
+        "POL-001/POL-002/POL-004/POL-005 all verified in force, no violations"
+      ],
+      "infrastructure_note": "Drops #8 and #9 this cycle, zero data loss. arch-dw-f10 dropped mid-response with zero writes; after ~50-min post-resume silence the orchestrator nudged then respawned a replacement (arch-dw-f10b); the ORIGINAL then recovered and completed the full fix; the replacement arrived to find the fix on disk, made ZERO edits, delivered an independent verification report (input-hash recompute, POL-001 shape, TD-031 grep — all confirmed), and stood down on orchestrator instruction — dual-writer risk managed by stand-down protocol. sw-dw-f10 dropped mid-response after content edits; resumed with disk-verified delta instructions; finished frontmatter + STORY-INDEX. One expected validate-changelog-monotonicity intermediate-state block per writer, both self-resolved (hook working as designed).",
+      "notes": "Finding remediated in fix-burst 8. Fifth stale-pin/incomplete-cascade-class instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, F-DWSP9-001, now F-DWSP10-001) — recurring failure mode of incomplete cascades following an upstream change, this time a retirement (F-DWSP8-001) rather than a version bump. Fix sequencing: architect first (VP-080, VP-INDEX), then story-writer last so the story's edit and input-hash check captured the fully-updated upstream set. Both fixers complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
     }
   ],
   "converged": false,
-  "next": "pass 10, fresh context"
+  "next": "pass 11, fresh context"
 }
