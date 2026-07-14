@@ -487,8 +487,31 @@
         "no inconsistency found with any of the 36 adjudications in force"
       ],
       "notes": "No findings this pass — first convergence streak advance since pass 7. Clean-class pass, zero fix-burst dispatched; N-DWSP14-01 adjudicated DEFERRED in-pass by the orchestrator rather than remediated, per the minimal-churn-while-streak-runs rationale. Convergence streak advances 0/3 → 1/3."
+    },
+    {
+      "pass": 15,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp15",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 32e7d5e9a5d58601cddae8b936f64904f6323c65) — all 13 artifacts at expected versions",
+      "verdict": "CLEAN",
+      "streak_after": "2/3",
+      "findings": [],
+      "nitpicks": [],
+      "positive_corroborations": [
+        "wire-format arithmetic identical across all five carrying artifacts (hop-1 and hop-2, adjudication #18 offsets)",
+        "all 18 ACs trace with no dangling anchor",
+        "edge-case coverage complete: cold start, exact-replay, wraparound out-of-scope, restart two-case split, malformed, multi-SVTN, originator echo",
+        "VP-080 Test Scenario 5 exercises the crash-loop residual, backward-clock case correctly noted not-yet-scripted",
+        "F-DWSP13-001 remediation independently confirmed by whole-file grep — three v1.5 attributions, zero live rulings-v1.6 pins",
+        "TD-031 clean",
+        "POL-001/POL-002/POL-004/POL-005 satisfied",
+        "zero internal inconsistency across all 37 adjudications",
+        "history layers verified frozen"
+      ],
+      "notes": "First fully clean pass this cycle — zero findings, zero nitpicks. No fix-burst dispatched. Pass 14's deferred N-DWSP14-01 (VP-045 stray closing tag) remains adjudicated-deferred to the spec-steward batch reconciliation; not re-raised. Convergence streak advances 1/3 → 2/3."
     }
   ],
   "converged": false,
-  "next": "pass 15, fresh context"
+  "next": "pass 16, fresh context — convergence-completing candidate"
 }
