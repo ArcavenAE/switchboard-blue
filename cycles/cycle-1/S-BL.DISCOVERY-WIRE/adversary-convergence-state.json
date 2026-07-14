@@ -3,10 +3,10 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.1",
-    "story_input_hash": "b4e0a5f",
-    "index": "4.98",
-    "rulings": "1.3",
+    "story": "2.2",
+    "story_input_hash": "c321c05",
+    "index": "4.99",
+    "rulings": "1.4",
     "VP-080": "1.1",
     "BC-2.03.001": "1.5",
     "BC-2.03.002": "1.4",
@@ -92,8 +92,35 @@
       ],
       "infrastructure_note": "adv-dw-sp2 stalled twice mid-review (stream watchdog), resumed both times via orchestrator nudge; fresh-context wall intact (resume continues the agent's own transcript); ninth/tenth mid-stream-drop-class instances this cycle by running tally.",
       "notes": "No new findings. Both fix-burst-1 findings (F-DWSP1-001, F-DWSP1-002) verified remediated and propagated on disk. Three nitpicks dispositioned by orchestrator (one deferred to FO-(c) transition, two no-action). One observation carried forward to the story-ready human-gate checklist rather than dispositioned in-pass, since it names a PO/architect-level scoping decision outside adversary or orchestrator authority."
+    },
+    {
+      "pass": 3,
+      "date": "2026-07-13",
+      "agent": "adv-dw-sp3",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ e1949d4fcadb0f1b6c883bf45c9cff7ad4aa820a) — all 10 artifacts at expected versions",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP3-001",
+          "severity": "MED",
+          "class": "byte-arithmetic",
+          "summary": "Story AC-005 Postcondition 3 and rulings Ruling 1 Implementation Constraint 2 both called the 24-byte SVTNID+NodeAddr key-selector region \"16-byte\" — the region is SVTNID (16) + NodeAddr (8) = 24 bytes, not 16. Same error class as pass-1's F-DWSP1-001, but in the sibling postcondition (PC-3, not PC-4); adversary confirmed the pass-1 sweep structurally could not have caught it — different number, different clause.",
+          "remediation": "Two-fixer burst, architect first then story-writer, deliberately sequenced. architect — rulings v1.3→v1.4: Implementation Constraint 2 \"16-byte key-selector prefix\" → \"24-byte key-selector prefix (SVTNID 16 + NodeAddr 8)\"; class sweep clean (sole occurrence; all other field-group byte arithmetic in the document verified self-consistent). story-writer — story v2.1→v2.2: AC-005 PC-3 corrected identically; class sweep clean (sole occurrence; Architecture Compliance Rules line ~1018's count-free phrasing and the F-DWSP1-001 history-quote lines correctly left untouched per explicit orchestrator scoping). Story input-hash recomputed b4e0a5f→c321c05 since rulings is the story's declared input #1. STORY-INDEX v4.98→v4.99 (Backlog row + changelog row)."
+        }
+      ],
+      "positive_corroborations": [
+        "F-DWSP1-001 fix verified present and consistent on disk",
+        "hop-1/hop-2 byte-layout cross-consistency verified",
+        "VP-INDEX arithmetic 80=80=80 verified",
+        "edge-case coverage confirmed complete",
+        "semantic anchoring clean",
+        "no adjudication-in-force violated"
+      ],
+      "notes": "Fix sequencing was architect-first then story-writer, deliberately, so the story's input-hash recompute captured rulings v1.4. Both fixers complete and orchestrator-disk-verified before this record was written."
     }
   ],
   "converged": false,
-  "next": "pass 3, fresh context"
+  "next": "pass 4, fresh context"
 }

@@ -10,6 +10,32 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-13
+    version: "2.2"
+    change: >
+      Remediated spec-adversarial pass 3 finding F-DWSP3-001 (MED, sibling of F-DWSP1-001's
+      off-by-N-bytes threshold-miscount class). AC-005 Postcondition 3 stated the HMAC
+      computation covers "the complete raw body bytes, not merely the 16-byte key-selector
+      prefix" — the key-selector region per SEC-DW-01 is `SVTNID` `body[0:16]` (16 bytes) +
+      `NodeAddr` `body[16:24]` (8 bytes) = 24 bytes, so naming both fields and then citing
+      "16-byte" undercounted the region by the `NodeAddr` contribution, contradicting this
+      same AC's own Postcondition 1 and Postcondition 4 (both correctly state the 24-byte
+      selector arithmetic). Fixed to: "not merely the 24-byte key-selector prefix (SVTNID 16 +
+      NodeAddr 8)". Class sweep performed across the full story for every remaining
+      "16-byte"/"24-byte"/"8-byte"/"32-byte"/"38-byte" occurrence and the hop-2
+      `DISCOVERY_RELAY` payload arithmetic (4-byte control header + 8-byte `NodeAddr` +
+      4-byte `Sequence` + 2-byte count = 18 bytes before the variable session list, at
+      lines ~389-395 and ~769-773): no other miscounted field-group arithmetic found — the
+      sole "16-byte" occurrence in the entire story was this AC-005 PC-3 sentence, now fixed;
+      all other 8-byte mentions correctly refer to `NodeAddr` alone; Architecture Compliance
+      Rules line ~1018 already uses count-free phrasing ("not merely the key-selector prefix")
+      and was left unchanged per the orchestrator's explicit scoping; the F-DWSP1-001
+      changelog/modified-entry history quotes of the old "24 bytes" wording were left
+      unchanged as they document a prior finding's text, not a live claim. Sibling fix on the
+      architecture side: `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` (declared input
+      #1) was independently corrected by the architect to v1.4 for the same error class —
+      `compute-input-hash --update` re-run to pick up that change: `b4e0a5f` → `c321c05`. No
+      AC added or removed (still 18); points unchanged (8).
+  - date: 2026-07-13
     version: "2.1"
     change: >
       Remediated spec-adversarial pass 1 finding F-DWSP1-001 (HIGH, off-by-8-bytes threshold
@@ -83,7 +109,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.1"
+version: "2.2"
 phase: 2
 epic: E-7
 wave: backlog
@@ -97,7 +123,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'
   - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
-input-hash: "b4e0a5f"
+input-hash: "c321c05"
 traces_to: '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.03.001
@@ -566,9 +592,9 @@ trigger model (state change / heartbeat / on-demand, all unchanged from S-7.02).
    select the verification key.
 2. `decodeBody()` (which walks the variable-length, attacker-controlled session-entry list) is
    never invoked before HMAC verification succeeds.
-3. The HMAC computation itself covers the **complete raw body bytes**, not merely the 16-byte
-   key-selector prefix — a forger cannot leave `SVTNID`/`NodeAddr` untouched while corrupting the
-   session list beneath an otherwise-valid tag.
+3. The HMAC computation itself covers the **complete raw body bytes**, not merely the 24-byte
+   key-selector prefix (SVTNID 16 + NodeAddr 8) — a forger cannot leave `SVTNID`/`NodeAddr`
+   untouched while corrupting the session list beneath an otherwise-valid tag.
 4. A raw datagram shorter than 32 bytes (8-byte HMAC tag + the 24-byte SVTNID/NodeAddr key
    selector) — equivalently, whose post-tag body is shorter than 24 bytes — is rejected before
    any key lookup is attempted.
@@ -1254,6 +1280,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.2 | 2026-07-13 | Remediated spec-adversarial pass 3 finding F-DWSP3-001 (MED, sibling of F-DWSP1-001's off-by-N-bytes threshold-miscount class). AC-005 Postcondition 3 stated the HMAC computation covers "the complete raw body bytes, not merely the 16-byte key-selector prefix" — the key-selector region per SEC-DW-01 is `SVTNID` `body[0:16]` (16 bytes) + `NodeAddr` `body[16:24]` (8 bytes) = 24 bytes, so naming both fields and then citing "16-byte" undercounted the region by the `NodeAddr` contribution, contradicting this same AC's own Postcondition 1 and Postcondition 4 (both correctly state the 24-byte selector arithmetic). Fixed to: "not merely the 24-byte key-selector prefix (SVTNID 16 + NodeAddr 8)". Class sweep performed across the full story for every remaining "16-byte"/"24-byte"/"8-byte"/"32-byte"/"38-byte" occurrence and the hop-2 `DISCOVERY_RELAY` payload arithmetic (4-byte control header + 8-byte `NodeAddr` + 4-byte `Sequence` + 2-byte count = 18 bytes before the variable session list): no other miscounted field-group arithmetic found — the sole "16-byte" occurrence in the entire story was this AC-005 PC-3 sentence, now fixed; Architecture Compliance Rules row (line ~1018) already uses count-free phrasing and was left unchanged per the orchestrator's explicit scoping; the F-DWSP1-001 changelog/modified-entry history quotes of the old wrong wording were left unchanged as they document a prior finding's text, not a live claim. Sibling fix on the architecture side: `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` (declared input #1) was independently corrected by the architect to v1.4 for the same error class; `compute-input-hash --update` re-run to pick up that change: `b4e0a5f` → `c321c05`. No AC added or removed (still 18); points unchanged (8). |
 | 2.1 | 2026-07-13 | Remediated spec-adversarial pass 1 finding F-DWSP1-001 (HIGH, off-by-8-bytes threshold bug, CWE-770/400 class). AC-005 Postcondition 4 stated the router-side ingest guard rejects a raw datagram "shorter than 24 bytes (insufficient for the fixed key-selector fields)" — that threshold omits the 8-byte HMAC tag prefix and contradicts this story's own Decision 1/SEC-DW-01 wire layout (`SVTNID` at raw bytes 8-24, `NodeAddr` at raw bytes 24-32), the rulings doc's Implementation Constraint 2, and the shipped `internal/discovery/discovery.go` layout (`[8]HMACTag \| [16]SVTNID \| [8]NodeAddr \| ...`). A literal implementation would leave a 24-31-byte raw-datagram window that passes the length guard and then indexes out of bounds pre-authentication — exactly the resource-exhaustion/pre-auth-crash class SEC-DW-01 exists to close. Fixed to: "A raw datagram shorter than 32 bytes (8-byte HMAC tag + the 24-byte SVTNID/NodeAddr key selector) — equivalently, whose post-tag body is shorter than 24 bytes — is rejected before any key lookup is attempted." Added an explanatory note directly under AC-005 clarifying the `body` = post-tag-bytes convention this AC and Decision 1 Implementation Constraint 2 both use, and noting the full valid-frame minimum with the SEC-DW-07 `Sequence` field is 38 bytes (8 tag + 16 + 8 + 4 + 2 count) — but the pre-lookup guard only needs raw ≥ 32 / body ≥ 24, since `Sequence`/count are parsed by `decodeBody()` only after HMAC verification succeeds. Swept the full story for any other occurrence of the wrong 24-byte-raw threshold (test names, Task Breakdown, Edge Cases, File-Change List) — none found; AC-005 Postcondition 4 was the sole occurrence. No AC added or removed; `acceptance_criteria_count` (18) and `points`/`estimated_points` (8) unchanged. `input-hash` unchanged (`b4e0a5f`) — none of the five declared `inputs:` files were touched; `compute-input-hash --check` confirms no drift. |
 | 2.0 | 2026-07-13 | Elaborated from backlog stub (v1.1, draft, 0 ACs) to sprint-ready draft (v2.0, 18 ACs, 8 points) per architect ruling `S-BL.DISCOVERY-WIRE-rulings.md` v1.3 (all three rulings). Replaced "Open Design Obligations"/"Scope"/"Scope Constraints" with "Adjudicated Design Decisions" (three decisions, one per ruling, load-bearing constraints transcribed inline) plus a new "Design Constraint: Router-Mode Discovery Wiring" section. 18 ACs traced to BC-2.03.001 v1.5 (Preconditions 1-3, Postconditions 1-5, Invariants 1-3), BC-2.03.002 v1.4 Postcondition 5, BC-2.01.008 v1.2 (Postconditions 2-3, Invariants 3/5), and VP-080 v1.0's four property clauses — covering hop-1 ingest (router multicast join, sender TTL=1 dispatch, HMAC verify with SEC-DW-01 fixed-offset extraction, SEC-DW-07 sequence gate incl. cold-start-accepts-first, registry update, SEC-DW-02/03/04 resource/rate hardening) and hop-2 relay (DISCOVERY_RELAY frame assembly, zero-HMACTag connection-trust boundary, fan-out semantics, SEC-DW-09 rate cap). AC-017/AC-018 (hop-2 fan-out dispatch + rate cap) explicitly marked GATED on Ruling 3(f)'s verified fan-out target-resolution Forward Obligation; Task Breakdown structured so Tasks 1-5 (hop-1 + hop-2 frame construction) are independently deliverable and Task 6 (fan-out dispatch) is explicitly gated, deferrable to a follow-on burst. Corrected the v1.1 stub's mislabeled citation: the multicast-address-allocation requirement is BC-2.03.001 **Precondition 3**, not Postcondition 1 as the stub's Open Design Obligation #2 stated — fixed throughout this elaboration's prose. Added dedicated "Human Gate — Story-Ready Sign-off Required" section carrying forward three items flagged by the architect for explicit human/PO disposition before `ready` promotion: (1) the SEC-DW-07 monotonic-`Sequence`-field design (architect already ruled it in, flagged prominently per the ruling's own text), (2) the discovery UDP port number (`49201` recommended, explicit bikeshed), (3) the fan-out target-resolution Forward Obligation's two resolution paths (option (i) sequencing dependency on a future node-identity-to-connection-binding story — architect's recommended default — vs. option (ii) a narrow story-local `Router.BindInterface` seam, with the architect's own caveat that (ii) still requires some connection-time identity signal and only relocates the gap rather than eliminating it). Status stays `draft` — NOT promoted to `ready` — pending these three sign-offs; `wave` stays `backlog`. `bc_traces`/`behavioral_contracts` gained `BC-2.01.008` (hop-2 registry consumer, already landed v1.2); `vp_traces`/`verification_properties` gained `VP-080` (SEC-DW-07 replay-rejection, minted v1.0 ahead of this elaboration). Frontmatter conformed to the `S-BL.CLI-SURFACE-COMPLETION`/`S-BL.LOOPBACK-FULLSTACK` template-mandated superset keys (`epic_id`, `inputs`, `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`, `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`); both `points`/`estimated_points` set to 8 (this fleet carries both field-name conventions across existing stories; both populated for compatibility). Full File-Change List (14 rows), Architecture Mapping, Purity Classification, Architecture Compliance Rules, Forbidden Dependencies, Library & Framework Requirements (zero new third-party dependencies), Token Budget Estimate (3-pass, none over 41%), Task Breakdown (7 tasks, Task 6 GATED), Forward Obligations table, Anchors Consumed, and POL-005 Delivery Plan Note added. `input-hash` computed via `compute-input-hash --update`. |
 | v1.1 | 2026-07-01 | F-P4L3-03: add RULING-W6TB-H to changed_by_rulings; add Scope Constraints section specifying HMAC-first ordering preservation, `payload.SVTNID`-based key derivation, and sentinel ordering requirements when replacing in-process paths with UDP dispatch. |
