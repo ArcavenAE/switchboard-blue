@@ -3,14 +3,14 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.9",
+    "story": "2.10",
     "story_input_hash": "a39b7ad",
-    "index": "4.106",
+    "index": "4.107",
     "rulings": "1.8",
-    "VP-080": "1.6",
+    "VP-080": "1.7",
     "VP-080_input_hash": "5d904d5",
     "VP-045": "1.4",
-    "VP-INDEX": "2.46",
+    "VP-INDEX": "2.47",
     "BC-2.03.001": "1.6",
     "BC-2.03.002": "1.4",
     "BC-2.01.008": "1.2",
@@ -394,8 +394,38 @@
       ],
       "infrastructure_note": "One expected validate-changelog-monotonicity intermediate-state block (story version bumped before the changelog row landed on disk; PostToolUse reports post-hoc without rollback) — resolved by adding the row immediately. Hook working as designed, not a defect.",
       "notes": "Finding remediated in fix-burst 9. Sixth version-pin-hygiene/incomplete-cascade-class instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, F-DWSP9-001, F-DWSP10-001, now F-DWSP11-001) and the THIRD distinct sweep-blind-spot sub-class after single-line matching (pre-F-DWSP6-001 baseline) and line-wrap (F-DWSP6-001) — this instance's cause is the paren form. Strengthens (does not reopen) the recorded PG-DWSP6-01 process-gap (sweep-completeness methodology) for S-7.02 cycle-close disposition — same item, additional instance; no new process-gap entry created. Fix sequencing: story-writer only (no upstream architect change required — rulings/VP-080/VP-045 on-disk versions unchanged since pass 10). Fixer complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
+    },
+    {
+      "pass": 12,
+      "date": "2026-07-14",
+      "agent": "adv-dw-sp12",
+      "context": "fresh context",
+      "tuple_verification": "PASS (factory-artifacts @ 525de1850571dbcc611b04b919d16c710e81ae58, develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a) — all 13 artifacts at expected versions",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP12-001",
+          "severity": "LOW",
+          "class": "stale process-status claim / cross-artifact traceability",
+          "summary": "VP-080 §Source Contract's lead paragraph still claimed the BC-2.03.001 PC-2 amendment was \"drafted, not yet executed ... authoritative until the BC amendment lands\" — FALSE since BC-2.03.001 v1.5 landed (2026-07-13, PO-executed; blockquote superseded in place at v1.6 per F-DWSP4-001). The paragraph survived VP-080 v1.2→v1.6 because every intervening bump was citation-only. Adversary independently performed the \"pending\" textual-alignment check the stale paragraph had deferred: reproduced blockquote vs. landed BC text materially identical (sole intended differences: BC's \"BC-2.03.002 Postcondition 5\" qualification; BC's trailing \"Verified by VP-080.\" self-citation with no reflexive analog). LOW per the truth-preserved severity precedent — status claim false but property anchoring correct.",
+          "remediation": "Fix-burst 10. architect — VP-080 v1.6→v1.7: Source Contract paragraph rewritten to state \"executed; textual alignment confirmed (F-DWSP12-001)\", with the two structural blockquote differences explicitly named as intended so no future pass mistakes them for drift. Reproduced blockquote itself verified current against the landed BC v1.6 text and NOT touched — architect independently re-diffed the blockquote against BC-2.03.001 (stripped `>` markers) confirming the adversary's alignment result. `input-hash` `5d904d5` HELD (`--check` clean before and after; `BC-2.03.001.md` is a declared input but did not change this burst). v1.0 `modified:` entry's historical \"not yet executed\" text left verbatim (historical-preservation precedent). VP-INDEX v2.46→v2.47, changelog-row-only. story-writer — story v2.9→v2.10: six live `VP-080 v1.6` pins updated → `v1.7` (`inputDocuments:` comment — new v1.7 clause appended, prior clause tense-shifted per convention; AC-009 note; AC-010 postconditions 5/6; the line-wrapped Non-Goals `uint64`-composite-wraparound bullet; the File-Change List `discovery_wire_test.go` row — \"VP-080 v1.7 cites as the surviving lineage\", disposed as a currency pin swept forward since v1.7 didn't touch the Proof Method table's surviving-lineage citation that row references, so the row's claim stays true). Extended re-certification sweep (ratified v2.9 pattern set plus both paren-form checks) clean: zero VP-080 paren-form hits anywhere, all live rulings pins v1.8, sanctioned exceptions unchanged. `input-hash` `a39b7ad` HOLDS. STORY-INDEX v4.106→v4.107 (row 144 → `draft (v2.10, 18 ACs, 8 pts)`; v2.10 sub-narrative appended; aggregates untouched)."
+        }
+      ],
+      "positive_corroborations": [
+        "byte arithmetic verified clean across hop-1/hop-2 (all live spots)",
+        "18-AC traceability verified",
+        "cross-artifact clause existence verified (BC-2.03.001 PC-2/PC-5, BC-2.03.002 PC-5, BC-2.01.008 registry row/PC-3/Inv-5, ARCH-03 §Session Discovery)",
+        "split restart residuals never conflated (story EC-010/AC-009/Human Gate/BC PC-2/VP-080 Property 5)",
+        "F-DWSP8-001 retirement consistency verified",
+        "adjudication #33 exemplar model verified",
+        "POL-001/POL-002 verified in force, no violations",
+        "TD-031 verified — rulings Verified-Premises `.go:NNN` anchors correctly classed as commit-pinned decision-record evidence"
+      ],
+      "infrastructure_note": "Drop #10 this cycle, zero data loss: sw-dw-f12 dropped mid-response with zero story writes; resumed from scratch cleanly. During recovery the orchestrator's Bash permission classifier was briefly unavailable (harness-side model outage — plausibly the same event as the agent drop); orchestrator fell back to classifier-free Read until it recovered. One expected validate-changelog-monotonicity transient on the story (version bumped after the modified:/changelog rows this time — hook fired on the intermediate state in the reverse order; resolved by the immediate version-bump follow-up edit; no bypass). Architect hit the same hook twice in the forward order during VP-080's bump — same class, self-resolved.",
+      "notes": "Finding remediated in fix-burst 10. Seventh version-pin-hygiene/incomplete-cascade-class instance this cycle (F-DWSP1-002, F-DWSP5-001, F-DWSP6-001, F-DWSP9-001, F-DWSP10-001, F-DWSP11-001, now F-DWSP12-001) — this instance's cause is a stale process-status claim (executed-vs-pending) rather than a stale version pin, but sits in the same recurring cross-artifact-currency family. Fix sequencing: architect first (VP-080, VP-INDEX), then story-writer last so the story's pin sweep and input-hash check captured the fully-updated upstream set. Both fixers complete and orchestrator-disk-verified before this record was written. Convergence streak reset to 0/3."
     }
   ],
   "converged": false,
-  "next": "pass 12, fresh context"
+  "next": "pass 13, fresh context"
 }
