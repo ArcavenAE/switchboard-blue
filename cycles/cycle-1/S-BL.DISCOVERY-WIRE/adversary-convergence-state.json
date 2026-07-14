@@ -3,9 +3,9 @@
   "phase": "spec-adversarial-convergence",
   "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
   "spec_versions": {
-    "story": "2.4",
+    "story": "2.5",
     "story_input_hash": "eccbdc4",
-    "index": "4.101",
+    "index": "4.102",
     "rulings": "1.7",
     "VP-080": "1.4",
     "VP-080_input_hash": "ae287f1",
@@ -205,8 +205,50 @@
         }
       ],
       "notes": "Both findings remediated same fix-burst (fix-burst 4). Cascades: VP-080 v1.3→v1.4 (input-hash 5e22481→ae287f1) — BOTH rulings v1.7 and ARCH-07 v1.11 are declared VP-080 inputs; the architect self-caught and captured the second cascade rather than leaving it for a later drift-detection finding. Story v2.3→v2.4 (input-hash cd82f7b→eccbdc4) — five rulings-version-pin and four VP-080-version-pin live-prose refreshes; no story content change. STORY-INDEX v4.100→v4.101 (Backlog row + changelog row). Fix sequencing: architect handled rulings, VP-080, ARCH-07, ARCH-11, and ARCH-INDEX; story-writer's input-hash recompute ran last to capture the full upstream set in one pass. Both fixers complete and orchestrator-disk-verified before this record was written."
+    },
+    {
+      "pass": 6,
+      "date": "2026-07-13",
+      "agent": "adv-dw-sp6",
+      "context": "fresh context",
+      "tuple_verification": "PASS (develop @ 1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a, factory-artifacts @ 9c65e53ce1eda3502d2b73435341b16b01267444) — all 12 artifacts at expected versions (perimeter grew to include ARCH-07/ARCH-11)",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWSP6-001",
+          "severity": "MED",
+          "class": "stale-pin propagation",
+          "summary": "The story's own v2.4 changelog row claimed completeness (\"all live-prose `VP-080 v1.3` pins updated to `v1.4`\"), but the Non-Goals section's `uint64`-composite-wraparound bullet retained a stale `VP-080\\nv1.3` citation — the ID/version pair line-wrapped across the ID/version boundary (`VP-080` at the end of one line, `v1.3` at the start of the next), which the v2.4 sweep's single-line-based grep could not see across, falsifying its completeness claim.",
+          "remediation": "story-writer — story v2.4→v2.5: one-token fix (`v1.3`→`v1.4`) to the Non-Goals bullet, applied as a layered `modified:`/Changelog entry that states the v2.4 burst was incomplete and why, rather than editing the v2.4 historical entry itself (historical-preservation precedent). Mandatory re-certification sweep performed with multiline/whitespace-tolerant patterns (perl -0777, `\\s+` spans newlines) across the full story for `VP-080`, `rulings.md`, `BC-2.03.001`, `VP-INDEX`, `ARCH-03`, `BC-2.03.002`, `BC-2.01.008` version pins, plus a markdown-formatting-tolerant second pass — zero further stale live pins found; full hit table with per-hit dispositions (live vs. history-layer) recorded in the story's v2.5 changelog row. STORY-INDEX v4.101→v4.102 (Backlog row status cell + changelog row, both carrying the same hit-table summary). Orchestrator independently re-ran the multiline sweep and confirmed zero further stale live pins. `acceptance_criteria_count` stays 18; points stay 8. `input-hash` unchanged (`eccbdc4` — no declared `inputs:` file touched this burst)."
+        }
+      ],
+      "process_gap": [
+        {
+          "id": "PG-DWSP6-01",
+          "summary": "Third instance this cycle of a claimed-complete version-pin sweep missing a line-wrap/section-tail instance: F-DWSP5-001 (Ruling 3(c)'s trailing prose survived the v1.5 offset-shift sweep), the DRAIN story's F-SP19-001 (which already ratified a multiline-tolerant countermeasure for this exact class), and now F-DWSP6-001. The DRAIN lesson did not propagate cross-story — this story's sweeps through pass 5 remained single-line-based despite the countermeasure already existing elsewhere in the cycle.",
+          "countermeasure_applied_this_story": "Multiline-tolerant sweep (perl -0777, whitespace/newline-spanning patterns) now mandated in this story's fix-burst dispatches from pass 6 onward.",
+          "cycle_close_disposition_required": "Follow-up story targeting the self-improvement epic (sweep-procedure codification — e.g. a shared sweep script or spec-steward procedure rule requiring multiline-tolerant matching by default) OR a justified deferral recorded in STATE.md's drift table."
+        }
+      ],
+      "observations_carried_forward": [
+        {
+          "id": "OBS-DWSP6-01",
+          "summary": "ARCH-07's footnote citing \"rulings v1.6/VP-080 v1.3\" checked and dispositioned by the adversary itself as an attribution-of-origin tag (documenting which authority versions were in force when the footnote was written), not a live version pin requiring re-sync.",
+          "orchestrator_disposition": "NO-ACTION — becomes standing adjudication for this footnote class."
+        }
+      ],
+      "positive_corroborations": [
+        "SEC-DW transcription verified clean across all 12 artifacts",
+        "epoch-qualified uint64 Sequence field verified consistent",
+        "DI-004 relay model verified consistent",
+        "byte arithmetic verified clean across hop-1/hop-2 layouts",
+        "adversary confirmed substantive design fully converged"
+      ],
+      "infrastructure_note": "Fixer (story-writer) complete and orchestrator-disk-verified, including an independent orchestrator-run perl multiline re-sweep, before this record was written.",
+      "notes": "Finding remediated in fix-burst 5. Convergence streak reset to 0/3 — third stale-pin-propagation instance this cycle, now with a cross-story process gap recorded for cycle-close disposition (see process_gap). Fix sequencing: story-writer only (no upstream architect change required — rulings/VP-080/BC on-disk versions unchanged since pass 5)."
     }
   ],
   "converged": false,
-  "next": "pass 6, fresh context"
+  "next": "pass 7, fresh context"
 }

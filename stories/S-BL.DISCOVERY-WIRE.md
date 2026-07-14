@@ -10,6 +10,41 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-13
+    version: "2.5"
+    change: >
+      Remediated spec-adversarial pass 6 finding F-DWSP6-001 (MED): the v2.4 sweep's completeness
+      claim ("all live-prose `VP-080 v1.3` pins updated to `v1.4`") was FALSE — one instance
+      survived because it line-wrapped across the ID/version boundary (`VP-080` at end of one
+      line, `v1.3` at the start of the next), and the v2.4 sweep used single-line-based matching
+      that cannot see across a wrap. Location: the Non-Goals section's `uint64`-composite-
+      wraparound bullet — "out of scope for this story and VP-080\n  v1.3 property 4". Fixed:
+      `v1.3` → `v1.4`. This layers a correction onto the v2.4 row's claim rather than editing it
+      — the v2.4 historical entry is left untouched (it accurately reports what that burst
+      believed it had done; this entry states the burst was incomplete and why, per the
+      historical-preservation precedent). **Mandatory re-certification sweep, whitespace/
+      multiline-tolerant (the DRAIN story's F-SP19-001 countermeasure, applied here):** ran
+      Perl regex over the whole file as one buffer (`\s+` matches newlines, so ID/version pairs
+      split across a wrap are caught) for five patterns — `VP-080\s+v1\.[0-9]+`,
+      `rulings\.md['\`]?\s+v1\.[0-9]+`, `BC-2\.03\.001\s+v1\.[0-9]+`, `VP-INDEX\s+v2\.[0-9]+`,
+      `ARCH-03\s+v1\.[0-9]+` (plus `BC-2\.03\.002\s+v1\.[0-9]+`/`BC-2\.01\.008\s+v1\.[0-9]+` for
+      completeness) — then classified every hit by line number as live-prose or history-layer
+      (frontmatter `modified:` entries, the Provenance "Adjudication:" bullet, and body
+      Changelog rows are exempt, per the established precedent). A second pass allowing markdown
+      formatting characters between ID and version (`` VP-080[`*_\s]{1,20}v1\.[0-9]+ ``) found no
+      additional hits beyond the whitespace-only pattern. Full result: every live-prose hit
+      already reads the current version — `VP-080` → `v1.4` at the inputDocuments comment, AC-009's
+      note, AC-010 postconditions 5/6, and this Non-Goals bullet (5 live spots, all v1.4 after
+      this fix); `rulings.md` → `v1.7` at the inputDocuments comment, the Status-note blockquote,
+      the Decision-section intro sentence, and both Architecture Compliance Rules rows (5 live
+      spots, all v1.7); `BC-2.03.001` → `v1.6` at the inputDocuments comment and all 7 Anchors
+      Consumed table rows (unchanged this burst — BC-2.03.001 did not bump; still v1.6, correct);
+      `VP-INDEX`/`ARCH-03`/`BC-2.03.002`/`BC-2.01.008` citations are all static inputDocuments-
+      comment references with no additional live occurrences and no reported version bump this
+      burst. Zero further stale live pins found. `acceptance_criteria_count` stays 18; points
+      stay 8. `compute-input-hash --check`: no declared `inputs:` file changed this burst
+      (rulings/BC-2.03.001/VP-080 on-disk versions unchanged since v2.4) — hash `eccbdc4` holds,
+      confirmed clean.
+  - date: 2026-07-13
     version: "2.4"
     change: >
       Pass-5 fix-burst cascade: the rulings doc bumped v1.6→v1.7 (F-DWSP5-001, a one-token
@@ -191,7 +226,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.4"
+version: "2.5"
 phase: 2
 epic: E-7
 wave: backlog
@@ -1100,7 +1135,7 @@ rulings rather than resolving an item the ruling itself left open for a differen
   codebase; scoping it now would require inventing both an IPv6 story and an IPv6-specific
   administratively-scoped derivation (RFC 3306) with zero grounding (Decision 2(d)).
 - **`uint64` composite `Sequence` wraparound handling** — out of scope for this story and VP-080
-  v1.3 property 4 (see AC-010 postcondition 5 for the composite's per-component wrap bounds); not a
+  v1.4 property 4 (see AC-010 postcondition 5 for the composite's per-component wrap bounds); not a
   practical concern at realistic heartbeat rates within any reasonable node uptime.
 - **`sbctl sessions list` / `sessions.list` RPC wire exposure** — BC-2.03.002 Postcondition 1's
   `PENDING-S-BL.DISCOVERY-WIRE` annotation anticipates a console-facing enumeration RPC, but none
@@ -1415,6 +1450,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.5 | 2026-07-13 | Remediated spec-adversarial pass 6 finding F-DWSP6-001 (MED): the v2.4 sweep's completeness claim ("all live-prose `VP-080 v1.3` pins updated to `v1.4`") was FALSE — one instance survived because it line-wrapped across the ID/version boundary (`VP-080` at end of one line, `v1.3` at the start of the next), and the v2.4 sweep used single-line-based matching that cannot see across a wrap. Location: the Non-Goals section's `uint64`-composite-wraparound bullet. Fixed: `v1.3` → `v1.4`. Layers a correction onto the v2.4 row's claim rather than editing it — the v2.4 historical entry is left untouched. **Mandatory re-certification sweep, whitespace/multiline-tolerant (DRAIN story's F-SP19-001 countermeasure):** Perl regex over the whole file as one buffer for `VP-080\s+v1\.[0-9]+`, `` rulings\.md['`]?\s+v1\.[0-9]+ ``, `BC-2\.03\.001\s+v1\.[0-9]+`, `VP-INDEX\s+v2\.[0-9]+`, `ARCH-03\s+v1\.[0-9]+`, `BC-2\.03\.002\s+v1\.[0-9]+`, `BC-2\.01\.008\s+v1\.[0-9]+`; classified every hit by line as live-prose or history-layer (frontmatter `modified:`, Provenance "Adjudication:" bullet, body Changelog rows exempt); a second markdown-tolerant pass found no additional hits. Result: every live-prose hit already reads the current version — `VP-080`→`v1.4` at 5 spots (inputDocuments comment, AC-009 note, AC-010 postconditions 5/6, this Non-Goals bullet); `rulings.md`→`v1.7` at 5 spots (inputDocuments comment, Status-note blockquote, Decision-section intro, two Architecture Compliance Rules rows); `BC-2.03.001`→`v1.6` at inputDocuments comment + 7 Anchors Consumed rows (unchanged this burst, no bump reported); `VP-INDEX`/`ARCH-03`/`BC-2.03.002`/`BC-2.01.008` are static inputDocuments-only references, no bump reported. Zero further stale live pins found. `acceptance_criteria_count` stays 18; points stay 8. `compute-input-hash --check`: no declared `inputs:` file changed this burst — `eccbdc4` holds, confirmed clean. |
 | 2.4 | 2026-07-13 | Pass-5 fix-burst cascade: the rulings doc bumped v1.6→v1.7 (F-DWSP5-001, a one-token propagation fix to Ruling 3(c)'s trailing prose — `byte[18:]`→`byte[22:]` — no ruling content change) and VP-080 bumped v1.3→v1.4 (housekeeping, alongside ARCH-07/ARCH-11 gaining the VP-078/079/080 rows). No story content changed — citation/hash refresh only. Updated the same five live-prose rulings-version-pin spots fixed at v2.3 (Status-note blockquote, Decision-section intro sentence, two Architecture Compliance Rules rows, `inputDocuments:` comment) v1.6→v1.7. Updated all live-prose `VP-080 v1.3` pins → `v1.4`: `inputDocuments:` comment, AC-009's note, AC-010 postconditions 5/6. Verified (not assumed) this story's own Decision 3(c) diagram and AC-014 postcondition 2 do NOT carry the stale `byte[18:]` sessions offset the rulings v1.7 fix corrected upstream — both already read `byte[22:]`/`bytes 22+` from the v2.3 mechanical sweep. Left UNCHANGED per the historical-preservation precedent: all `modified:`/Changelog entries' own historical version citations (including the v2.3 entry's own "rulings v1.6"/"VP-080 v1.3" narrative, which correctly describes that burst's authority set at the time) and the Provenance "Adjudication:" bullet. `acceptance_criteria_count` stays 18; points stay 8. `compute-input-hash --update` re-run (rulings v1.7 changed on disk): `cd82f7b` → `eccbdc4`. |
 | 2.3 | 2026-07-13 | Remediated spec-adversarial pass 4 finding F-DWSP4-001 (HIGH): SEC-DW-07's original in-memory-counter `Sequence` field, paired against the router's restart-STABLE `lastSeen` watermark, produced up to ~8.3h of silent discovery lockout on every ordinary access-node restart/redeploy/crash-recover. Architect fix (rulings v1.6): `Sequence` widened `uint32`→`uint64`, epoch-qualified (high 32 bits = wall-clock seconds sampled at `Discovery`-instance start, low 32 bits = the original counter). Five architect blockquotes applied verbatim: AC-008 gained a scope-clarification note (cold-start vs. stable-identity restart); AC-009 gained a note characterizing its discard rule as correct for genuine replay plus two bounded restart residuals (EC-010 cases 1/2); AC-010 postcondition 5 replaced (`uint32`→`uint64` composite wraparound-out-of-scope) and postcondition 6 added (restart forward-acceptance path) with new test `TestVP080_DiscoveryIngest_RestartForwardProgress`; new EC-010 Edge Cases row; Human Gate item 1 gained an appended v1.6 sign-off paragraph. Deviation flagged: supplied blockquotes cited "VP-080 v1.2" — corrected to "VP-080 v1.3" in both AC-010 postconditions as applied. Mechanical sweeps (rulings v1.6-authoritative): hop-1 `[4]Sequence`→`[8]Sequence`, 38→42-byte full-valid-frame minimum in AC-005's note (raw-min-32/body-min-24 pre-lookup guard left UNCHANGED per explicit instruction); hop-2 `DISCOVERY_RELAY` payload in Decision 3(c) diagram + AC-014 postcondition 2 — `Sequence` byte[12:16]→byte[12:20], count byte[16:18]→byte[20:22], sessions byte[18:]→byte[22:], fixed pre-session header 18→22 bytes. Additional live-prose corrections: Human Gate item 1's original `Sequence uint32` claim, Non-Goals' `uint32` wraparound bullet, File-Change List's `discovery.go` row — all → `uint64`/epoch-qualified. Version-pin sweep: every live-prose citation of rulings and VP-080 with an explicit version number → v1.6/v1.3 (frontmatter `inputDocuments:` comments, Status-note blockquote, Decision-section intro, two Architecture Compliance Rules rows); extended one step beyond the literal instruction to also bump `BC-2.03.001.md`'s `inputDocuments:` comment (v1.5→v1.6, input-version metadata, not prose). **Amended in place, same v2.3 (post-pass-4, pre-commit):** the orchestrator identified this row's own initially-flagged "candidate for a future sweep" as the same stale-version-pin class pass 1 flagged on VP-080 (F-DWSP1-002) — pass 5 would have re-flagged it. Fixed now, in place: all live-prose `BC-2.03.001 v1.5` citations → `v1.6` (Anchors Consumed table's 7 rows; Decision 3(c)'s "BC-2.03.001 PC-5 (v1.5, already landed)"; Decision 3(h)'s "v1.5's PC-5 sentence"). Left UNCHANGED, matching the v2.1/v2.2 historical-preservation precedent: all `modified:`/Changelog entries' own historical version citations (the v2.0 row's "BC-2.03.001 v1.5" citation was transiently corrupted by an overbroad `replace_all` during this same amendment and restored to `v1.5`), and the Provenance "Adjudication:" bullet (anchored to "This elaboration (v2.0)"). No further BC-2.03.001 version-pin instances remain outside historical entries. `acceptance_criteria_count` stays 18 (no AC added/removed); points stay 8. `compute-input-hash --update` re-run (rulings AND BC-2.03.001 both changed on disk): `c321c05` → `cd82f7b`; this same-v2.3 amendment is prose-only and re-verified via `compute-input-hash --check` (unaffected, still clean). |
 | 2.2 | 2026-07-13 | Remediated spec-adversarial pass 3 finding F-DWSP3-001 (MED, sibling of F-DWSP1-001's off-by-N-bytes threshold-miscount class). AC-005 Postcondition 3 stated the HMAC computation covers "the complete raw body bytes, not merely the 16-byte key-selector prefix" — the key-selector region per SEC-DW-01 is `SVTNID` `body[0:16]` (16 bytes) + `NodeAddr` `body[16:24]` (8 bytes) = 24 bytes, so naming both fields and then citing "16-byte" undercounted the region by the `NodeAddr` contribution, contradicting this same AC's own Postcondition 1 and Postcondition 4 (both correctly state the 24-byte selector arithmetic). Fixed to: "not merely the 24-byte key-selector prefix (SVTNID 16 + NodeAddr 8)". Class sweep performed across the full story for every remaining "16-byte"/"24-byte"/"8-byte"/"32-byte"/"38-byte" occurrence and the hop-2 `DISCOVERY_RELAY` payload arithmetic (4-byte control header + 8-byte `NodeAddr` + 4-byte `Sequence` + 2-byte count = 18 bytes before the variable session list): no other miscounted field-group arithmetic found — the sole "16-byte" occurrence in the entire story was this AC-005 PC-3 sentence, now fixed; Architecture Compliance Rules row (line ~1018) already uses count-free phrasing and was left unchanged per the orchestrator's explicit scoping; the F-DWSP1-001 changelog/modified-entry history quotes of the old wrong wording were left unchanged as they document a prior finding's text, not a live claim. Sibling fix on the architecture side: `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` (declared input #1) was independently corrected by the architect to v1.4 for the same error class; `compute-input-hash --update` re-run to pick up that change: `b4e0a5f` → `c321c05`. No AC added or removed (still 18); points unchanged (8). |
