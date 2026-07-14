@@ -2,7 +2,7 @@
 artifact_id: VP-INDEX
 document_type: verification-property-index
 level: L4
-version: "2.43"
+version: "2.44"
 status: draft
 producer: product-owner
 timestamp: 2026-07-13T00:00:00
@@ -157,6 +157,7 @@ traces_to: '.factory/specs/architecture/ARCH-INDEX.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.44 | 2026-07-14 | VP-045 amended to v1.4 (F-DWSP8-001, spec-adversarial pass 8, tuple @ `e2ff77b`): the v1.3 Lifecycle row's "supporting evidence" citation to `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` corrected — `S-BL.DISCOVERY-WIRE-rulings.md` v1.8 retires that test (its node-local-HMAC-verification premise no longer exists once Ruling 1 moves all discovery-frame authentication to the router). `status: PARTIAL` and the real-socket PC-3 gap VP-045 names are UNCHANGED — only the stale evidence citation is corrected; equivalent coverage now required at `internal/discovery/discovery_wire_test.go` (AC-005/AC-006). No VP added or removed — same ID, same BC/module/method/phase/status (`BC-2.03.002` / `internal/discovery` / `e2e` / `P1` / `draft`); catalog row text (line 71) unchanged since none of BC/module/method/priority/status changed. Counts, Phase Distribution, and BC Coverage Check unaffected. Total remains 80. |
 | 2.43 | 2026-07-14 | Precision correction to VP-080's row text (caught in orchestrator review, not a spec-adversarial-pass finding): the row implied one `≤1s` bound covered the whole node-restart-liveness residual. Split into its two actual cases — same-epoch-second crash-loop (≤1s, unchanged) and backward-clock-adjustment (bounded by the adjustment magnitude N, not ≤1s) — matching `VP-080.md` v1.3's corrected Property 5. No VP added or removed, no bucket/phase/status change. |
 | 2.42 | 2026-07-14 | F-DWSP4-001 (HIGH, spec-adversarial pass 4) restart-liveness fix folded into VP-080's row text: `Sequence` widened `uint32`→`uint64`, epoch-qualified, per `S-BL.DISCOVERY-WIRE-rulings.md` v1.5's restart-liveness amendment — a restarted access node's fresh epoch forward-progresses past its own prior watermark rather than being locked out for hours as a false replay. `VP-080.md` amended to v1.2 in the same burst (new Property 5, Property 4 rewritten for `uint64` scope). No VP added or removed — same ID, same BC/module/method/phase/status (`BC-2.03.001` / `internal/discovery` / `integration` / `P1` / `draft`); Counts, Phase Distribution, and BC Coverage Check are unaffected (no bucket, phase, or coverage change). Total remains 80. |
 | 2.41 | 2026-07-13 | SEC-DW-07 ID-mint (S-BL.DISCOVERY-WIRE-rulings.md v1.1 Ruling 1 adjudication, ahead of the BC-2.03.001 PC-2 amendment product-owner is about to execute): VP-080 minted (integration, P1, internal/discovery, `status=draft`) — router-side discovery ingest discards non-increasing `Sequence` per `(SVTNID,NodeAddr)` even after HMAC passes; cold-start accepts the first frame unconditionally; forward-increasing `Sequence` accepted and advances state; residual replay window bounded to ≤1 heartbeat interval. Avoids a `VP-TBD` placeholder in the BC amendment (the exact pattern that cost the CLI-SURFACE-COMPLETION story a Forward Obligation and a remediation burst — see the VP-078/VP-079 entry below). BC-2.03.001 gains a second VP (VP-044 already covered it; not a first-coverage close). Total 79→80; Integration 24→25; P1 18→19. |

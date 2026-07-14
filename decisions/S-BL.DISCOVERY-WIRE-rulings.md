@@ -2,11 +2,11 @@
 artifact_id: S-BL.DISCOVERY-WIRE-rulings
 document_type: decision
 level: ops
-version: "1.7"
+version: "1.8"
 status: final
 producer: architect
 timestamp: 2026-07-13T00:00:00Z
-updated: 2026-07-14T05:00:00Z
+updated: 2026-07-14T06:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.DISCOVERY-WIRE]
 bc_traces:
@@ -14,7 +14,7 @@ bc_traces:
   - BC-2.03.002
   - BC-2.05.005
   - BC-2.01.008
-closes_findings: [F-DWSP3-001, F-DWSP4-001]
+closes_findings: [F-DWSP3-001, F-DWSP4-001, F-DWSP8-001]
 resolves: [DRIFT-W6TBD-001]
 ---
 
@@ -296,11 +296,17 @@ distribution step.
    keyed by the exact declared `(SVTNID, NodeAddr)` pair against real
    admission state, not a pure function of `SVTNID` alone).
 
-3. **`Discovery.ReceiveAdvertisement` (node-local, single-SVTN-scoped,
-   `d.cfg.LocalSVTNID`-based) is preserved unchanged in shape** — including
-   RULING-W6TB-H's HMAC-first ordering and the `ErrSVTNMismatch` sentinel —
-   but its role changes to **defense-in-depth**, exactly the pattern the
-   architect ruled for AC-011 PC-3 in
+3. **`Discovery.ReceiveAdvertisement` is RETIRED (deleted), not preserved —
+   this point is corrected in place by the F-DWSP8-001 amendment below
+   (spec-adversarial pass 8, tuple @ `e2ff77b`); see that Decision Log
+   entry for the full adjudication.** The text immediately below this
+   sentence is the **superseded v1.1 claim**, kept for audit traceability
+   per the layered-decision-record convention, not for implementation:
+   ~~`Discovery.ReceiveAdvertisement` (node-local, single-SVTN-scoped,
+   `d.cfg.LocalSVTNID`-based) is preserved unchanged in shape — including
+   RULING-W6TB-H's HMAC-first ordering and the `ErrSVTNMismatch`
+   sentinel — but its role changes to defense-in-depth, exactly the
+   pattern the architect ruled for AC-011 PC-3 in
    `S-BL.CLI-SURFACE-COMPLETION-rulings.md` (v1.1 addendum, `E-CFG-011`
    shape): under a correctly-functioning router relay, a node only ever
    receives advertisements for SVTNs it is legitimately admitted to, so
@@ -309,11 +315,17 @@ distribution step.
    mis-routes across SVTN boundaries, and the existing test
    `TestDiscovery_VP045_SVTNIsolation_MultipleScopes`
    (`internal/discovery/discovery_test.go:1121`) continues to pass
-   unchanged — **no test regression, no story-writer action needed on that
-   test.** Whether hop-2 delivery re-invokes `ReceiveAdvertisement` verbatim
-   (feeding it router-relayed bytes still carrying the original sender's
-   tag) or a lighter trusted-ingest path is used is a decomposition-time
-   implementation choice — see Forward Obligation (b).
+   unchanged — no test regression, no story-writer action needed on that
+   test.~~ **This is false, confirmed by direct code read
+   (`internal/discovery/discovery.go:280-429`,
+   `internal/discovery/discovery_test.go`), not assumed — see the
+   F-DWSP8-001 entry for why and for the adjudicated replacement.** Whether
+   hop-2 delivery re-invokes `ReceiveAdvertisement` verbatim (feeding it
+   router-relayed bytes still carrying the original sender's tag) or a
+   lighter trusted-ingest path is used is a decomposition-time
+   implementation choice — see Forward Obligation (b). **RESOLVED by
+   F-DWSP8-001: the lighter trusted-ingest path, not verbatim reuse — see
+   below.**
 
 4. **`Encode`/package-level `Decode`** (used for round-trip tests, AC-004)
    need their own `advertisementKey` call sites updated to the new
@@ -395,6 +407,119 @@ distribution step.
    verification against a fixed placeholder key before returning, so
    per-packet processing time does not vary detectably between the two
    rejection paths.
+
+### Node-local ingest correction (F-DWSP8-001, HIGH, spec-adversarial pass 8, tuple @ `e2ff77b` — v1.8 amendment, supersedes Implementation Constraint 3's v1.1 claim above)
+
+**The finding, confirmed by direct code read, not assumed.** Implementation
+Constraint 3 (v1.1, struck through above) claimed
+`Discovery.ReceiveAdvertisement` is "preserved unchanged in shape" and that
+`TestDiscovery_VP045_SVTNIsolation_MultipleScopes` "continues to pass
+unchanged." Both claims are false. Re-reading the shipped
+`internal/discovery/discovery.go` (lines 280-429) directly:
+
+- `ReceiveAdvertisement` (`discovery.go:319`), the package-level `Encode`
+  (`discovery.go:369`), and the package-level `Decode` (`discovery.go:399`)
+  are **all three** call sites of `advertisementKey` — not the one call
+  site (`ReceiveAdvertisement`) this constraint's v1.1 prose implicitly
+  treated as safe to leave alone. Implementation Constraint 4 above already
+  required updating `Encode`/`Decode`'s call sites; this constraint (3)
+  incorrectly carved out `ReceiveAdvertisement` as needing no change. It
+  cannot compile once `advertisementKey` is deleted (constraint 2), full
+  stop — this is true independent of any semantic argument about wire
+  formats or trust models.
+- The deeper problem survives even a hypothetical patch that swaps in a
+  different key-derivation call at that site: **a receiving node has no key
+  to derive.** `DiscoveryAuthKey := hmac.DeriveDiscoveryKey
+  (nodeAdmissionPubkey, svtnID)` (Ruling 1) takes the SENDER's admission
+  pubkey as keying material. A node holds only its OWN pubkey, never an
+  arbitrary sender's — only the router holds every admitted node's pubkey
+  (`admittedKeySet`, reachable via `DiscoveryAuthKeyFor`). This is not an
+  implementation gap to work around; it is Decision 1's own rule, already
+  landed and unchanged at **BC-2.03.001 v1.6 PC-5**: "access and console
+  nodes never independently look up or re-verify another node's
+  `DiscoveryAuthKey`" (lines 140-141). `ReceiveAdvertisement`'s HMAC-first
+  shape needed to do exactly the thing PC-5 says nodes never do. The v1.1
+  text asserting it survives unchanged directly contradicted the BC text
+  this same ruling document already cites as settled.
+- Independently of the above, hop-2's wire format (Ruling 3(c)) is not
+  hop-1's wire format. The `DISCOVERY_RELAY` relay-frame payload omits
+  `SVTNID` from the body (it travels in the frame's `OuterHeader` instead,
+  per Ruling 3(c)'s payload layout). So even a no-HMAC patch to
+  `ReceiveAdvertisement` that somehow skipped the key-derivation problem
+  would still be decoding the wrong bytes for relayed content. Two
+  independent defects converge on the same conclusion: this is not a
+  patch, it is a retirement.
+
+**Adjudicated replacement.** `Discovery.ReceiveAdvertisement`, as shaped
+today (HMAC-verify-then-SVTN-compare over hop-1-shaped bytes), is deleted.
+It is not called by the router-side ingest path (Ruling 1's
+`DiscoveryAuthKeyFor`-based `discovery_wire.go`, which is new code, never
+this method) and, under Ruling 2, only the router ever receives hop-1 UDP
+traffic — no node calls it either. It has no caller in the shipped
+topology once this story lands; keeping a function that HMAC-verifies
+against a key nothing can supply it is not "preserved," it is dead code.
+
+A new node-side relay-ingest function takes over `ReceiveAdvertisement`'s
+former slot on the hop-2 delivery path (exact name/file left to
+decomposition, e.g. `Discovery.ReceiveRelayedAdvertisement`, alongside the
+router-side `discovery_wire.go` ingest path):
+
+- Decodes hop-2's `DISCOVERY_RELAY` payload shape (Ruling 3(c):
+  `NodeAddr | Sequence | count | sessions`, no `SVTNID` in the body).
+- Performs **no per-frame HMAC verification.** There is no key to verify
+  against, and none is needed: trust derives from the frame having arrived
+  over the node's own already-admitted connection — AC-015's
+  connection-trust boundary, and exactly the "hop 2 = already-admitted-
+  connection boundary" language Ruling 3's v1.3 Decision Log entry already
+  states as a boundary *distinct* from hop 1's HMAC boundary (SEC-DW-08).
+  This is not a new trust decision; it is applying a boundary this ruling
+  document already drew.
+- **`ErrSVTNMismatch` survives, relocated, not deleted.** The check moves
+  from "derive a key from the declared SVTNID, HMAC-verify, then compare
+  SVTNID" (impossible post-retirement — there is no key to derive at a
+  node) to a direct equality check: the relay frame's own
+  `OuterHeader.SVTNID` — frame-routing metadata the node's connection-level
+  dispatch already trusts as part of ordinary frame handling, not
+  attacker-supplied payload content — against `d.cfg.LocalSVTNID`. This is
+  cheaper than the retired crypto-then-compare check and preserves the
+  *purpose* AC-007 names — a defense-in-depth guard against a relay/routing
+  bug that delivers a frame from the wrong SVTN's admitted-connection set
+  onto this node's connection — without depending on machinery (per-node
+  HMAC verification) that no longer exists anywhere in the topology.
+- On success, performs the same registry replace-on-write update
+  `ReceiveAdvertisement` already does (`discovery.go:332-348`) — unchanged
+  by this correction.
+
+**This closes F-DWSP8-001.** The defense-in-depth guard AC-007 names is
+real and survives; its *mechanism* changes from "re-run a lighter-weight
+version of the crypto check" to "a frame-metadata equality check with no
+crypto left to run at a node," because Ruling 1 moved 100% of
+discovery-frame authentication to the router — there is no fractional HMAC
+check left for a node to perform even in principle. This does **not**
+reopen Ruling 1, Ruling 2, Ruling 3, DI-004, or SEC-DW-08 — it corrects a
+single downstream implication (IC-3) that mis-scoped which existing code a
+key-derivation change touches.
+
+**Test blast radius — broader than the adversary's named scope, verified
+directly (`internal/discovery/discovery_test.go`), not just the one
+VP-045-named test.** Ten test functions call `ReceiveAdvertisement` and
+are structurally broken by its retirement, not one:
+`TestDiscovery_Enumerate_NoHostnameRequired` (433),
+`TestDiscovery_Enumerate_SameSessionNameTwoNodes` (494),
+`TestDiscovery_Advertise_HMACAuthenticated` (763),
+`TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload` (807),
+`TestDiscovery_Advertise_HMACAuthenticated_TagCorruption` (823),
+`TestDiscovery_Enumerate_SVTNIsolation` (881),
+`TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN` (950),
+`TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel` (1013),
+`TestDiscovery_VP045_SVTNIsolation_MultipleScopes` (1121, the adversary's
+named test), and `TestDiscovery_Decode_RejectsZeroLengthName` (1886, uses
+both `Decode` and `ReceiveAdvertisement`). All ten need rewriting against
+the new router-side (`DiscoveryAuthKeyFor`-admitted) ingest model and/or
+the new node-side relay-ingest model, not just the one test AC-007 named —
+flagged for story-writer's File-Change List `discovery_test.go` row and
+Task Breakdown, since the existing row scoped this as a single
+"regression pin, unmodified test body" edit.
 
 ### Replay / freshness (SEC-DW-07, MED, CWE-294 — my adjudication, flagged for the human gate)
 
@@ -1106,9 +1231,25 @@ directly, not assumed:
     `NodeAddr` is recorded anywhere in the `onAccept` closure.
   - `admission.AdmitNode` (the Tier-1 signed-challenge handshake that
     would reveal a connecting node's identity) has **zero production call
-    sites** — grepped directly: the only caller anywhere in `cmd/` or
-    `internal/` is `internal/testenv/testenv.go:942` (test harness). It is
-    not wired into `runRouter`'s connection-accept path at all yet.
+    sites** — grepped directly (`grep -rn 'admission\.AdmitNode' cmd/
+    internal/`, excluding the `admission` package's own definition file).
+    **Correction (F-DWSP8-001 N1, spec-adversarial pass 8): the v1.3 text
+    here undercounted the callers** — it named only
+    `internal/testenv/testenv.go:942` as "the only caller," which was
+    itself incomplete, not merely singular. A full sweep finds 13 call
+    sites, all `_test.go` files, none in production code — the "zero
+    production call sites" conclusion is unchanged and remains
+    load-bearing for this Forward Obligation, only the specific
+    enumeration was wrong: `cmd/switchboard/main_test.go:138`,
+    `internal/testenv/testenv.go:942`,
+    `internal/outerassembler/integration_test.go:76`,
+    `internal/arqsend/integration_test.go:88`,
+    `internal/routing/example_test.go:55`,
+    `internal/routing/routing_internal_test.go:145,201`,
+    `internal/routing/routing_hmac_counter_test.go:203`,
+    `internal/routing/routing_log_test.go:191`,
+    `internal/routing/routing_test.go:439,634,827,927`. It is not wired
+    into `runRouter`'s connection-accept path at all yet.
   - This is the same gap this project has already named once, generically:
     `FO-DRAIN-WIRE-002` (`S-7.04-FU-DRAIN-WIRE.md`): "The drain observer
     assembles DRAIN frames using a per-node `Envelope` with zero
@@ -1162,7 +1303,18 @@ Ruling 2.**
 
 ---
 
-## Estimated Points: 8 (top of the stub's 5–8 range; unchanged by v1.1 and v1.3)
+## Estimated Points: 8 (top of the stub's 5–8 range; unchanged by v1.1, v1.3, and v1.8)
+
+**v1.8 (F-DWSP8-001) check.** The Node-local ingest correction converts
+Task 4 from a zero-cost verification checkpoint (no Red/Green cycle, per
+the now-corrected v1.1 claim) into a real, small implementation task: a
+node-side relay-ingest function (decode hop-2 payload, no HMAC, one
+`OuterHeader.SVTNID` equality check) plus one new focused unit test. This
+does not raise the estimate — it is a redistribution within scope Ruling 3
+already counted (hop-2 receive-side handling was always implied by hop-2
+delivery; it was mistakenly assumed free by the now-corrected IC-3, not
+newly discovered), and it is narrower than any single SEC-DW-0x item
+already weighed above. Holds at 8.
 
 Ruling 3 fully specifies hop-2's wire mechanics (frame type, `control_type`
 allocation, payload layout, connection-trust boundary, fan-out principle,
@@ -1215,10 +1367,12 @@ not 5.
 | `.factory/specs/architecture/ARCH-INDEX.md` | Version/changelog sync for ARCH-03 v1.8 — **checked this pass; see below** | architect (done/checked) |
 | `internal/routing/advertisement_hmac.go` | Add `DiscoveryAuthKeyFor` and `DeriveDiscoveryKey` per Ruling 1 Implementation Constraints 1 and 4 (v1.1 names — renamed from the v1.0 draft's `FrameAuthKeyFor`/`DeriveFrameAuthKey` per SEC-DW-06) | implementer |
 | `internal/hmac/hmac.go` | Add `HKDFInfoDiscovery` constant + `DeriveDiscoveryKey` function (SEC-DW-06); `DeriveKey`/`HKDFInfo`/`RegisterKey` untouched | implementer |
-| `internal/discovery/discovery.go` | Delete `advertisementKey`; update `Encode`/`Decode`/sender-side call sites to the domain-separated key; add the new `Sequence uint64` field (epoch-qualified per F-DWSP4-001, v1.5 — high 32 bits = `uint32(time.Now().UTC().Unix())` sampled once at instance start, low 32 bits = the in-memory counter) to `AdvertisementPayload` + `encodeBody`/`decodeBody` (SEC-DW-07); add router-side ingest path (new file, e.g. `discovery_wire.go`) with fixed-offset key-selector extraction (SEC-DW-01), bounded read buffer (SEC-DW-02), rate limiting (SEC-DW-03), rate-limited logging (SEC-DW-04), and the `lastSeen` replay-discard map (SEC-DW-07) — the map's comparison logic is unchanged by the widening, still an opaque `uint64` strict-greater-than check; returns an accept/relay decision (incl. the SEC-DW-09 rate-cap verdict, Ruling 3(e)) to its caller rather than performing I/O itself; `ReceiveAdvertisement` shape unchanged (defense-in-depth reframe, doc comment update only) | implementer |
+| `internal/discovery/discovery.go` | Delete `advertisementKey`; update `Encode`/`Decode`/sender-side call sites to the domain-separated key; add the new `Sequence uint64` field (epoch-qualified per F-DWSP4-001, v1.5 — high 32 bits = `uint32(time.Now().UTC().Unix())` sampled once at instance start, low 32 bits = the in-memory counter) to `AdvertisementPayload` + `encodeBody`/`decodeBody` (SEC-DW-07); add router-side ingest path (new file, e.g. `discovery_wire.go`) with fixed-offset key-selector extraction (SEC-DW-01), bounded read buffer (SEC-DW-02), rate limiting (SEC-DW-03), rate-limited logging (SEC-DW-04), and the `lastSeen` replay-discard map (SEC-DW-07) — the map's comparison logic is unchanged by the widening, still an opaque `uint64` strict-greater-than check; returns an accept/relay decision (incl. the SEC-DW-09 rate-cap verdict, Ruling 3(e)) to its caller rather than performing I/O itself; **`ReceiveAdvertisement` DELETED (F-DWSP8-001 correction — not "shape unchanged"), replaced by a new node-side relay-ingest function per the Node-local ingest correction subsection above** | implementer |
 | `cmd/switchboard/mgmt_wire.go` (`runRouter`) | New Phase wiring: (1) the discovery multicast listener calling into `internal/discovery`'s router-side ingest; (2) on an accept+relay verdict, a hop-2 relay-dispatch closure modeled directly on the DRAIN observer (`control_type=0x03` `DISCOVERY_RELAY` frame, zero `HMACTag`, `sendMap`-based best-effort non-blocking send, SVTN-scoped exclude-originator fan-out per Ruling 3(d)) — mirrors the `wireMetricsHandlers`/`wireRouterControlHandlers`/DRAIN-observer register-before-serve precedents. Fan-out TARGET RESOLUTION depends on Ruling 3(f)'s Forward Obligation (node-identity-to-connection binding) — see story row above. | implementer |
 | `internal/testenv/testenv.go` | New multicast-loopback test helper (not an extension of `NewLoopback`) | test-writer |
-| `VP-044.md`, `VP-045.md` | Update from `partial` (RULING-W6TB-D doctrine) toward full coverage once the wire integration tests land; supersede the "Blocker: multicast wire transport implementation" notes | formal-verifier |
+| `VP-044.md` | Update from `partial` (RULING-W6TB-D doctrine) toward full coverage once the wire integration tests land; supersede the "Blocker: multicast wire transport implementation" note | formal-verifier |
+| `VP-045.md` | **DONE (v1.4, F-DWSP8-001, this pass)** — v1.3's Lifecycle-table supporting-evidence citation to `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` corrected: that test is retired (see Node-local ingest correction subsection); PARTIAL status and the real-e2e-coverage gap it names are both unchanged, only the stale citation is fixed. Property Statement, Source Contract, Proof Method, Proof Harness Skeleton, Feasibility Assessment, Story Trace untouched — none of those referenced the retiring test. `VP-INDEX.md` changelog row added (no catalog-row text change; BC/module/method/status/priority all unchanged). | architect (done, this ruling) |
+| `.factory/stories/S-BL.DISCOVERY-WIRE.md` — AC-007, Task 4, Decision 1, File-Change List `discovery_test.go` row (new item, F-DWSP8-001) | AC-007 needs new postconditions reflecting the retired-and-replaced ingest model (no longer "unchanged in shape," no longer "passes unmodified"); Task 4 is no longer a no-Red-Green verification checkpoint since the test it pins is retired; Decision 1's `ReceiveAdvertisement`/`ErrSVTNMismatch` paragraph needs the same correction as this ruling's IC-3; the File-Change List's `discovery_test.go` row understates scope (ten test functions affected, not one). Ready-to-apply blockquotes delivered in the architect's report to team-lead for this pass, not applied here (out of this pass's authorized touch-list: rulings + VP-045 + VP-INDEX only). | story-writer |
 | `VP-080.md` (minted this session, `status: draft`; **amended to v1.2 by this ruling, F-DWSP4-001**) | Replay-rejection verification property covering SEC-DW-07's `Sequence`/`lastSeen` discard rule, anchored to BC-2.03.001. Already cited in BC-2.03.001 v1.5 (PO-executed). `VP-INDEX.md` v2.42 (this ruling) carries the amended index row/counts. Transition `draft → active` belongs to story-writer once this VP is scoped into a wave. | architect (v1.2 done, this ruling) / story-writer (scope) |
 | New VP recommended (not filed by this ruling) — hop-2 relay fan-out | A verification property covering Ruling 3(d)/(e): SVTN-scoped fan-out excludes the originator; the SEC-DW-09 rate cap suppresses relay (not registry-update) on excess-rate arrivals from the same `(SVTNID,NodeAddr)`. Left unminted deliberately — depends on Ruling 3(f)'s fan-out-target-resolution mechanism landing first, unlike VP-080 which had no such dependency. | architect / formal-verifier, once (f) resolves |
 | No new `E-*` taxonomy codes are anticipated | `DiscoveryAuthKeyFor` lookup-miss reuses the existing `ErrInvalidHMACTag`/`ErrSVTNMismatch` sentinels (E-ADM-family already covers HMAC failures via `routing`'s existing codes); the hop-2 `control_type=0x03` unrecognized-opcode path reuses BC-2.01.008 PC-4's existing silent-ignore rule — no new code needed there either | — |
@@ -1248,6 +1402,7 @@ recommended-resolution Forward Obligation, not an unscoped unknown.
 
 | Date | Actor | Entry |
 |------|-------|-------|
+| 2026-07-14 (v1.8) | architect | **F-DWSP8-001 (HIGH, spec-adversarial pass 8, tuple @ `e2ff77b`) fix — structural contradiction in Implementation Constraint 3, a real design gap, not a propagation/nitpick class.** Adversary correctly identified that IC-3's claim ("`Discovery.ReceiveAdvertisement` preserved unchanged in shape," "`TestDiscovery_VP045_SVTNIsolation_MultipleScopes` continues to pass unchanged") is false: `ReceiveAdvertisement` (`discovery.go:319`), `Encode` (`discovery.go:369`), and `Decode` (`discovery.go:399`) are all three call sites of `advertisementKey` (IC-3 implicitly scoped only `Encode`/`Decode` for update, per IC-4); the function cannot compile once `advertisementKey` is deleted. Deeper than a compile error: a receiving node structurally cannot derive `DiscoveryAuthKey` for an arbitrary sender — that derivation needs the sender's admission pubkey, which only the router holds (`admittedKeySet`) — this is BC-2.03.001 v1.6 PC-5's own rule ("nodes never independently look up or re-verify another node's `DiscoveryAuthKey`"), already landed and directly contradicted by IC-3's claim. Independently, hop-2's wire format (Ruling 3(c)) omits `SVTNID` from the body (carried in the frame's `OuterHeader` instead), so even a no-HMAC patch would decode the wrong bytes for relayed content. **Adjudication:** `ReceiveAdvertisement` is RETIRED (deleted, not patched) — struck through in place at IC-3 above, full replacement rationale in the new "Node-local ingest correction" subsection (inserted after Implementation Constraint 8). A new node-side relay-ingest function replaces it on the hop-2 delivery path: decodes hop-2's payload shape, performs no per-frame HMAC (trusts the admitted connection per AC-015/SEC-DW-08's already-drawn connection-trust boundary), and relocates `ErrSVTNMismatch` from a crypto-then-compare check (impossible post-retirement) to a direct `OuterHeader.SVTNID` vs. `d.cfg.LocalSVTNID` equality check — preserving AC-007's defense-in-depth *purpose* (guard against a relay/routing bug) with a mechanism that doesn't depend on machinery Ruling 1 already removed from the node side. **VP-045 disposition:** `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` is retired along with `ReceiveAdvertisement` — its premise (feeding raw HMAC-tagged hop-1-shaped bytes into a node-local ingest function) has no surviving subject; the SVTN-isolation/HMAC-precedence properties it exercised are already required coverage under AC-005/AC-006 (`discovery_wire_test.go`, testing the router's `DiscoveryAuthKeyFor` path — the crypto boundary's correct location); the new node-side `ErrSVTNMismatch` equality check needs its own new unit test (implementer-named, cheap — no crypto to forge against). `VP-045.md` amended to v1.4: its v1.3 Lifecycle-table citation to this retiring test as "supporting evidence" is corrected to note the retirement and point at the new coverage; `status: PARTIAL` is unchanged (the real gap VP-045 names — real-socket PC-3 aggregation over UDP multicast — is unaffected by this correction, and is now schedulable given this story's real wire transport); Property Statement/Source Contract/Proof Method/Harness Skeleton/Feasibility/Story Trace untouched (none referenced the retiring test). `VP-INDEX.md` v2.43→v2.44: changelog row added per this project's own precedent for every VP-045 version bump (rows 2.26/2.27); catalog row text unchanged (BC/module/method/status/priority all unchanged). **BC-2.03.001 PC-5: confirmed NO amendment needed** — its existing "never independently look up or re-verify" language is exactly correct; it is the rule IC-3's now-corrected claim contradicted, not a rule that needs to change. **N1 fold-in (LOW):** Ruling 3(f)'s "only caller... `testenv.go:942`" claim was itself incomplete, not merely singular — full sweep (`grep -rn 'admission\.AdmitNode' cmd/ internal/`, excluding the admission package's own definition) finds 13 call sites, all `_test.go`, zero production callers; "zero production call sites" conclusion unchanged and remains load-bearing for Ruling 3(f)'s Forward Obligation, only the specific enumeration was corrected in place (13 sites listed). Story-writer blockquotes (AC-007 rewrite, Task 4 rewrite, Decision 1 correction mirroring IC-3, File-Change List `discovery_test.go` row widened from one test to ten) drafted and delivered in the report to team-lead, not applied here — out of this pass's authorized touch-list (rulings + VP-045 + VP-INDEX only). Downstream Artifact Touch-List rows corrected: `internal/discovery/discovery.go` (implementer row — "shape unchanged" → "DELETED, replaced"), `VP-044.md`/`VP-045.md` row split (VP-045 now DONE this pass), new story-side row added naming the four story sections needing story-writer action. Does NOT reopen Ruling 1, Ruling 2, Ruling 3, DI-004, SEC-DW-08, or the epoch-qualified `uint64` `Sequence` design (#18/#19, F-DWSP4-001) — all 27 prior adjudications stand; this corrects one downstream implication (IC-3) that mis-scoped which existing code a key-derivation change touches. |
 | 2026-07-14 (v1.7) | architect | **F-DWSP5-001 (MED, spec-adversarial pass 5, tuple @ `ad4fd5a`) fix — propagation-gap correction, no ruling re-litigated.** Ruling 3(c)'s closing prose sentence ("Reusing `internal/discovery`'s existing per-session serialization for `byte[18:]` avoids inventing a second session-list wire format") retained the pre-widening session-list offset after the v1.5 F-DWSP4-001 sweep updated the code block above it (and its `Sequence`/`count` callouts) but missed this trailing sentence — a live-prose survivor of the offset shift, not a new decision. Fixed: `byte[18:]` → `byte[22:]`, matching the code block's `byte[22:] sessions...` line and the +4-byte shift rule stated immediately above it. **Full live-prose sweep performed, as instructed**, for `byte[12:16]`, `byte[16:18]`, "18-byte [fixed] header", "38 byte"/"38-byte", `body[24:28]`, `body[28:30]` across the entire document: all other hits are correctly historical/superseded-qualified — the IC-2 cross-reference nitpick's "`body[28:30]` in v1.1–v1.4 and to `body[32:34]` from v1.5 onward" (explicitly time-qualified), the restart-liveness amendment's "count shifts from `body[28:30]` (v1.1–v1.4) to..." and "shifts from 8+16+8+4+2=**38 bytes** to 8+16+8+8+2=**42 bytes**" and "`Sequence` was `byte[12:16]`, `count` was `byte[16:18]`; both shift by..." (all explicit before/after framings, not standalone claims), Ruling 3(c)'s own "(v1.3 original, superseded: `byte[12:16]` Sequence uint32 BE, `byte[16:18]` count, 18-byte fixed header — kept here for audit traceability, not for implementation.)" parenthetical (explicitly marked superseded), and the v1.4/v1.5 Decision Log entries (frozen historical record, exempt). Line 1030 (now line 1030, text unchanged in position) was the only unmarked live-prose survivor. No other artifact touched by this entry. |
 | 2026-07-14 (v1.6) | architect | **Precision correction to the v1.5 F-DWSP4-001 residual analysis — caught in orchestrator review before PO/story-writer propagation, not a spec-adversarial-pass finding. No ruling re-litigated; option (c), the `uint64` widening, all offsets (Sequence `body[24:32]`, count `body[32:34]`, 42-byte hop-1 minimum, 22-byte hop-2 header), and the DI-004/SEC-DW-08 confirmations are UNCHANGED.** The v1.5 "Bounded residual" paragraph stated that both residual cases — same-wall-clock-second crash-loop restart, and backward host-clock adjustment — share one `≤1 second` bound. They do not. **Case 1 (crash-loop) bound ≤1s is correct and unchanged:** epoch is identical across same-second restarts, so at most a handful of discards occur before the next epoch tick unconditionally clears the condition. **Case 2 (backward clock adjustment of magnitude N) does NOT share this bound:** the restarted instance's `epoch = epoch_old − N` is strictly less than the router's watermark for every frame it sends (not just the first), so EVERY advertisement is discarded — a discard *window* of duration ≈N, not a single bounded discard. Recovery is deterministic (guaranteed once N seconds of real wall-clock time elapse) but N itself is not bounded by this design; for a sufficiently large backward step, N could in principle exceed the pre-fix ~8.3h bound. Reframed the "strict improvement" claim correctly: not because N is always small, but because Case 2's trigger condition (a restart coinciding with an operator-introduced clock misconfiguration) is a rare, distinct precondition absent from the original defect, which triggered on every ordinary restart unconditionally — for any restart on a well-behaved clock, Case 2 doesn't occur at all. Added, per instruction, a non-load-bearing note that standard NTP/chrony practice tends to slew rather than step large backward corrections, explicitly marked as NOT the formal bound. Rewrote the "Bounded residual" paragraph in Ruling 1's restart-liveness amendment subsection with the two cases separated and independently bounded. Propagated the same separation to `VP-080.md` (v1.2→v1.3: Property 5's residual sentence, the reproduced BC-2.03.001 PC-2 blockquote's trailing clause, Changelog row; `input-hash` recomputed since this document is a declared VP-080 input) and `VP-INDEX.md` (v2.42→v2.43: VP-080 row text). Corrected ready-to-apply blockquotes re-issued in full to team-lead for PO (BC-2.03.001 PC-2) and story-writer (AC-009 note, EC-010 row, Human Gate item 1 ask) — none of these land in this document; out of this pass's authorized scope. |
 | 2026-07-14 (v1.5) | architect | **F-DWSP4-001 (HIGH, spec-adversarial pass 4, tuple @ `379e6be`) fix — design amendment, new content, not a factual correction.** SEC-DW-07 (v1.1–v1.4) paired an in-memory sender-side counter (resets on access-node restart) with a persistent router-side `lastSeen[SVTNID,NodeAddr]` watermark (stable across node restarts, since `NodeAddr` derives from the persistent admission pubkey) — a legitimate node's own restart (the most common operational event this system sees) locked it out of discovery for up to ~8.3h (or until router restart), defeating BC-2.03.001's zero-config guarantee in the common case. Adjudicated among three options: **(a) router-side reset on (re-)admission/reconnect — REJECTED**, coupled to Ruling 3(f)'s already-verified missing node-identity-to-connection binding (`admission.AdmitNode` has zero production call sites), which would make it undeliverable in this story's ungated scope without gating it alongside AC-017/018; **(b) sender-side counter persistence — REJECTED**, contradicts the established in-memory-state precedent, introduces a persistence capability class + first-boot semantics absent elsewhere in the subsystem, weakest exactly where restart is most common (ephemeral compute); **(c) epoch-qualified `Sequence`, widened `uint32`→`uint64` (high 32 bits = `uint32(time.Now().UTC().Unix())` sampled once at `Discovery`-instance start, low 32 bits = the existing in-memory counter) — ADOPTED**. Self-contained at the sender; the router-side `lastSeen` comparison is completely unchanged (still an opaque `uint64` strict-greater-than check) — a restarted node's fresh `epoch` (real wall-clock time, monotonic under a correctly-functioning clock) exceeds any prior watermark with overwhelming likelihood, so its first post-restart frame is a forward acceptance, not a discard requiring new router logic. Wire consequences: hop-1 body `Sequence` widens `body[24:28]`→`body[24:32]`, `count` shifts `body[28:30]`→`body[32:34]`; full valid-frame minimum shifts 38→42 bytes (raw-min-32, the SEC-DW-01 selector-prefix boundary, is unchanged — entirely upstream of `Sequence`); hop-2 relay payload (Ruling 3(c)) `Sequence` widens `byte[12:16]`→`byte[12:20]`, count shifts `byte[16:18]`→`byte[20:22]`, fixed header 18→22 bytes. Bounded residual documented explicitly: a same-wall-clock-second crash-loop, or backward host-clock adjustment exceeding elapsed epoch time, can still trigger one false-replay discard — bounded to ≤1s, a two-order-of-magnitude improvement over the defect, same bounded-not-perfect posture as `admission.nonceTTL=60s` and EC-006's own router-restart residual; no millisecond-epoch or randomized-counter hardening adopted (diminishing returns). New edge case EC-010 named for story-writer (restart-with-stable-identity-while-router-runs). DI-004/SEC-DW-08 unaffected — sender-side field-construction + width change only, no new communication path, no multicast/HMAC-boundary framing touched. `VP-080.md` amended to v1.2 (Property 4 rewritten for `uint64` scope, new Property 5 asserting restart forward-progress, Source Contract citations + reproduced blockquote refreshed to v1.5, `input-hash` recomputed); `VP-INDEX.md` amended to v2.42 (VP-080 row text + one changelog row, no count/bucket change — same VP, same BC/module/phase/status). Ready-to-apply blockquotes drafted for product-owner (BC-2.03.001 PC-2 replay-resistance note refresh) and story-writer (AC-008/AC-009 clarifying notes, AC-010 PC-5 rewrite, EC-010, Human Gate item 1 update) — delivered in the report to team-lead, not applied here (out of this pass's authorized scope: rulings doc + VP-080 + VP-INDEX only). `ARCH-03-routing-engine.md` checked and confirmed clean: its §Session Discovery prose names `Sequence` generically ("NodeAddr + Sequence + session list") with no literal bit-width claim — no touch needed, no stale citation to flag. Implementation Constraint 2's pre-`Sequence` body-layout sentence gained a one-clause cross-reference to the authoritative current layout (pass-4 nitpick, folded into this same version bump). Points estimate unaffected — this is a field-width/construction change to already-counted scope, not new architectural surface. |
