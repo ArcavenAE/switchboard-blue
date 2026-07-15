@@ -3,8 +3,10 @@ package discovery_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -19,7 +21,22 @@ import (
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/routing"
+	"github.com/arcavenae/switchboard/internal/testenv"
 )
+
+// redGateGuard recovers from a not-yet-implemented stub's panic and fails the
+// test cleanly (Red Gate discipline, BC-5.38.001) instead of crashing the
+// whole test binary. Once the relevant Task's Green step lands, the panic
+// disappears and this guard becomes a silent no-op — the assertions after
+// `defer redGateGuard(t)` then run for real, with no test-file change
+// required. Shared by discovery_test.go and discovery_wire_test.go (same
+// package).
+func redGateGuard(t *testing.T) {
+	t.Helper()
+	if r := recover(); r != nil {
+		t.Fatalf("red gate: stub not yet implemented: %v", r)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -1987,5 +2004,122 @@ func TestDiscovery_Encode_Accepts65535Sessions(t *testing.T) {
 	gotCount := binary.BigEndian.Uint16(encoded[countOffset : countOffset+2])
 	if gotCount != maxCount {
 		t.Errorf("wire count field = %d, want %d (guard must not fire at exactly the uint16 max)", gotCount, maxCount)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// S-BL.DISCOVERY-WIRE AC-002 — MulticastAddrFor determinism
+// ---------------------------------------------------------------------------
+
+// TestMulticastAddrFor_Deterministic_SHA256Derived verifies AC-002: the
+// SVTN-scoped multicast address is 239.h0.h1.h2, where h0..h2 are the first
+// three bytes of SHA-256(svtnID) — deterministic, computable independently,
+// static (no allocation/release step), and stable across repeated calls
+// (Decision 2(b)).
+func TestMulticastAddrFor_Deterministic_SHA256Derived(t *testing.T) {
+	t.Parallel()
+	defer redGateGuard(t)
+
+	svtnID := [16]byte{0xAA, 0xBB, 0xCC, 0xDD, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C}
+	h := sha256.Sum256(svtnID[:])
+	want := net.IPv4(239, h[0], h[1], h[2])
+
+	got1 := discovery.MulticastAddrFor(svtnID)
+	if !got1.Equal(want) {
+		t.Errorf("MulticastAddrFor(%x) = %v, want %v (239.h0.h1.h2 from SHA-256(svtnID))", svtnID, got1, want)
+	}
+
+	// Postcondition 3: the same SVTN ID always produces the same address
+	// across repeated calls.
+	got2 := discovery.MulticastAddrFor(svtnID)
+	if !got1.Equal(got2) {
+		t.Errorf("MulticastAddrFor: non-deterministic — first call %v, second call %v", got1, got2)
+	}
+
+	// Distinct SVTN IDs should (in the overwhelmingly common case) derive
+	// distinct addresses — a constant-return implementation would still
+	// pass the two assertions above, so this guards against that class of
+	// trivial-but-wrong implementation, same rationale as
+	// TestDeriveKey_DistinctSVTNsProduceDistinctKeys in internal/hmac.
+	otherSVTN := [16]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}
+	gotOther := discovery.MulticastAddrFor(otherSVTN)
+	if gotOther.Equal(got1) {
+		t.Errorf("MulticastAddrFor: distinct SVTN IDs %x and %x produced the same address %v (constant-return regression)", svtnID, otherSVTN, gotOther)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// S-BL.DISCOVERY-WIRE AC-003 — sender-side dispatch: real UDP, TTL=1, no join
+// ---------------------------------------------------------------------------
+
+// TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin verifies AC-003
+// postcondition 1: the access-node dispatch path performs a plain UDP send
+// to the SVTN-derived multicast address — no net.ListenMulticastUDP, no
+// group join on the sender side (Decision 2(a); SEC-DW-08). A real loopback
+// multicast listener is the test's receive-side oracle: if Advertise still
+// only mutates the in-process registry (S-7.02 behavior) rather than
+// sending real UDP, the listener goroutine below times out with nothing
+// received.
+//
+// Postcondition 2 (multicast TTL explicitly set to 1) is NOT independently
+// wire-verified here: reading a received datagram's IP TTL from the
+// receive side requires control-message support (golang.org/x/net/ipv4's
+// PacketConn, or raw syscall-level CMSG parsing) that this story's Library &
+// Framework Requirements section commits to NOT introducing (zero new
+// third-party dependencies). How the sender sets TTL=1 (syscall-level
+// setsockopt vs. some other stdlib-only mechanism) is itself Task 3
+// Green-step design, not fixed by this story's rulings. Deferred to code
+// review at Green rather than fabricating a weak assertion.
+func TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin(t *testing.T) {
+	// NOT t.Parallel(): binds a real loopback multicast UDP socket.
+	defer redGateGuard(t)
+
+	iface := testenv.MulticastLoopbackInterface(t)
+	svtnID := [16]byte{0xDE, 0xAD, 0xBE, 0xEF}
+	groupAddr := discovery.MulticastAddrFor(svtnID)
+
+	listenAddr := &net.UDPAddr{IP: groupAddr, Port: discovery.DiscoveryPort}
+	conn, err := net.ListenMulticastUDP("udp4", iface, listenAddr)
+	if err != nil {
+		t.Fatalf("ListenMulticastUDP (test-side receive oracle): %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	cfg := discovery.Config{
+		LocalNodeAddr: [8]byte{0x01},
+		LocalSVTNID:   svtnID,
+		Router:        newTestRouter(t),
+	}
+	d := discovery.New(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	recvCh := make(chan int, 1)
+	go func() {
+		buf := make([]byte, 2048)
+		_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
+		n, _, readErr := conn.ReadFromUDP(buf)
+		if readErr != nil {
+			recvCh <- 0
+			return
+		}
+		recvCh <- n
+	}()
+
+	sessions := []discovery.SessionPresence{
+		{SessionName: "agent-01", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	}
+	if err := d.Advertise(ctx, sessions); err != nil {
+		t.Fatalf("Advertise: unexpected error: %v", err)
+	}
+
+	select {
+	case n := <-recvCh:
+		if n == 0 {
+			t.Fatal("AC-003 postcondition 1: no UDP datagram received on the SVTN-derived multicast group — Advertise did not send real UDP")
+		}
+	case <-time.After(4500 * time.Millisecond):
+		t.Fatal("AC-003 postcondition 1: timed out waiting for a multicast datagram from Advertise")
 	}
 }

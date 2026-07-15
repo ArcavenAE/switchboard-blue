@@ -38,12 +38,10 @@ import (
 //
 // STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
 // body panics unconditionally so no test can accidentally pass before
-// Task 5's Green step. No call site yet: this pure function is exercised
-// directly by AC-014/AC-015/AC-016 unit tests (Task 5), not via any
+// Task 5's Green step. This pure function is exercised directly by
+// discovery_relay_wire_test.go's AC-014/AC-015/AC-016 tests, not via any
 // production call site — the relay-dispatch closure that would call it
 // live is Task 6, GATED — depends_on S-BL.NODE-IDENTIFY-WIRE.
-//
-//nolint:unused // see doc comment above: exercised directly by tests, not wired yet
 func assembleDiscoveryRelayFrame(svtnID [16]byte, nodeAddr [8]byte, sequence uint64, sessions []discovery.SessionPresence) []byte {
 	panic("not implemented: S-BL.DISCOVERY-WIRE assembleDiscoveryRelayFrame")
 }

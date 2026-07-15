@@ -31,6 +31,15 @@ type RouterIngestConfig struct {
 	// any HMAC-failure recording are invoked through this Router, never
 	// through a direct internal/admission import.
 	Router *routing.Router
+	// Logger receives rate-limited, threshold-crossing HMAC-failure log
+	// lines (SEC-DW-04, AC-013) — never per-packet (that's BC-2.05.008's
+	// TCP policy, explicitly not adopted here). Added during Red Gate step
+	// 2 (test-writing): routing.Router.logger is unexported, so Ingest has
+	// no other seam to log through without either a new Router accessor
+	// method or a direct internal/admission import (forbidden by ARCH-08
+	// §6.5 position 14). Optional; nil means log emissions are silently
+	// discarded, matching routing.Router's own nopLogger default.
+	Logger routing.Logger
 }
 
 // RouterIngestDecision is the accept/relay decision RouterIngest.Ingest

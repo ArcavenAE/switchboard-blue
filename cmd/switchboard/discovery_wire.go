@@ -39,11 +39,10 @@ import (
 //
 // STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
 // body panics unconditionally so no test can accidentally pass before
-// Task 3's Green step. No call site yet: wiring into runRouter is Task 3's
-// Green-step action (mgmt_wire.go) — calling this stub eagerly at router
-// startup during Red Gate would panic on every existing router-mode test.
-//
-//nolint:unused // see doc comment above: wiring deferred to Task 3 Green step
+// Task 3's Green step. Wiring into runRouter itself is Task 3's Green-step
+// action (mgmt_wire.go) — calling this stub eagerly at router startup
+// during Red Gate would panic on every existing router-mode test; it is
+// instead exercised directly by discovery_wire_test.go's AC-001 test.
 func wireDiscoveryListener(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer) error {
 	panic("not implemented: S-BL.DISCOVERY-WIRE wireDiscoveryListener")
 }
