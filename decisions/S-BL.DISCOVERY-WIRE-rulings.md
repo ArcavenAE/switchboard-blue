@@ -2,11 +2,11 @@
 artifact_id: S-BL.DISCOVERY-WIRE-rulings
 document_type: decision
 level: ops
-version: "1.9"
+version: "1.10"
 status: final
 producer: architect
 timestamp: 2026-07-13T00:00:00Z
-updated: 2026-07-14T20:00:00Z
+updated: 2026-07-15T04:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.DISCOVERY-WIRE]
 bc_traces:
@@ -1066,6 +1066,45 @@ flag an undecided delivery transport). The SEC-DW-09 rate-cap constraint
 this subsection introduced is restated and concretized inside Ruling 3; it
 is not duplicated here. Kept as a historical pointer only — see Ruling 3.
 
+### Ruling 2 — sender-side multicast egress elaboration (v1.10, 2026-07-15)
+
+**Implementation-time elaboration, sanctioned, not a divergence.** Pre-adjudicated ahead of the
+Step-4.5 adversarial loop, same pattern as this project's #32/#37 precedent. Decision 2(a)/(c)
+established TTL=1 sender-side dispatch and a single fixed port; it did not specify how a sender
+picks an outbound interface on a multi-homed host. Empirically forced during Task 3's Green step:
+this project's dev hosts route `239.0.0.0/8` to the default egress interface unconditionally, never
+to loopback, even once a loopback-bound listener has joined the group — a single plain
+`net.WriteTo`/`net.DialUDP` (AC-003 postcondition 1's literal text) would be silently unreachable to
+a loopback test listener and, on a genuinely multi-homed production host, may never reach the
+interface an admitted peer is actually listening on.
+
+**Adopted (already shipped — `internal/discovery/discovery.go` `sendMulticastAdvertisement`/
+`sendOnInterface`, `internal/discovery/multicast_ttl.go`), verified directly, not taken on the
+implementer's word: fan out once per UP+multicast-capable local interface, each send pinned to its
+interface via `setsockopt(IPPROTO_IP, IP_MULTICAST_IF, ...)`, TTL still forced to 1 per-socket via
+`setsockopt(IPPROTO_IP, IP_MULTICAST_TTL, 1)`.** Both reached via `net.UDPConn.SyscallConn().Control`
+— stdlib-only, no `golang.org/x/net/ipv4`, honoring this story's zero-new-third-party-dependency
+Library & Framework Requirements commitment. `multicast_ttl.go`'s own doc comments confirm
+`IP_MULTICAST_TTL`/`IP_MULTICAST_IF`/`IPPROTO_IP` resolve correctly on both darwin and linux
+(different numeric values, same semantic option, both in the stdlib `syscall` package's per-platform
+constant tables) — this project's two release targets (`justfile build-all`). This is the same
+fan-out-on-every-interface pattern common LAN discovery protocols (mDNS, SSDP) use on multi-homed
+hosts, not a novel design.
+
+**Sanctioned as within Ruling 2's scope — does not warrant its own numbered ruling.** DI-004/
+BC-2.03.001 Invariant 1 (senders never join the multicast group) is unaffected: every per-interface
+send still uses a plain unconnected send socket (`net.ListenUDP` + `WriteToUDP`), never
+`net.ListenMulticastUDP`. TTL=1 (SEC-DW-08) is preserved per-send, per-interface. No BC change, no
+points change, no `BC-2.03.001` amendment required — this is send-mechanism detail at the same level
+ARCH-03/Decision 2 already operates at, not a new trust or delivery-scope decision.
+
+**Story-cascade note (see report to team-lead for the verbatim blockquote):** AC-003 postcondition
+1's text ("performs a plain `net.WriteTo` (or `net.DialUDP`)... no group join") should gain a
+clarifying amendment naming the per-interface fan-out — its current singular framing ("a plain
+`net.WriteTo`") undersells what shipped (multiple sends, one per qualifying interface) without
+contradicting the postcondition's actual invariant (no group join, ever, regardless of interface
+count).
+
 ---
 
 ## Ruling 3 — Hop-2 relay transport: `FrameTypeCtl` `control_type` discriminator, connection-trust boundary, SVTN-scoped exclude-originator fan-out, ~1/sec rate cap
@@ -1431,7 +1470,7 @@ not 5.
 | `internal/routing/advertisement_hmac.go` | Add `DiscoveryAuthKeyFor` and `DeriveDiscoveryKey` per Ruling 1 Implementation Constraints 1 and 4 (v1.1 names — renamed from the v1.0 draft's `FrameAuthKeyFor`/`DeriveFrameAuthKey` per SEC-DW-06) | implementer |
 | `internal/hmac/hmac.go` | Add `HKDFInfoDiscovery` constant + `DeriveDiscoveryKey` function (SEC-DW-06); `DeriveKey`/`HKDFInfo`/`RegisterKey` untouched | implementer |
 | `internal/discovery/discovery.go` | Delete `advertisementKey`; update `Encode`/`Decode`/sender-side call sites to the domain-separated key; add the new `Sequence uint64` field (epoch-qualified per F-DWSP4-001, v1.5 — high 32 bits = `uint32(time.Now().UTC().Unix())` sampled once at instance start, low 32 bits = the in-memory counter) to `AdvertisementPayload` + `encodeBody`/`decodeBody` (SEC-DW-07); add router-side ingest path (new file, e.g. `discovery_wire.go`) with fixed-offset key-selector extraction (SEC-DW-01), bounded read buffer (SEC-DW-02), rate limiting (SEC-DW-03), rate-limited logging (SEC-DW-04), and the `lastSeen` replay-discard map (SEC-DW-07) — the map's comparison logic is unchanged by the widening, still an opaque `uint64` strict-greater-than check; returns an accept/relay decision (incl. the SEC-DW-09 rate-cap verdict, Ruling 3(e)) to its caller rather than performing I/O itself; **`ReceiveAdvertisement` DELETED (F-DWSP8-001 correction — not "shape unchanged"), replaced by a new node-side relay-ingest function per the Node-local ingest correction subsection above** | implementer |
-| `cmd/switchboard/mgmt_wire.go` (`runRouter`) | New Phase wiring: (1) the discovery multicast listener calling into `internal/discovery`'s router-side ingest; (2) on an accept+relay verdict, a hop-2 relay-dispatch closure modeled directly on the DRAIN observer (`control_type=0x03` `DISCOVERY_RELAY` frame, zero `HMACTag`, `sendMap`-based best-effort non-blocking send, SVTN-scoped exclude-originator fan-out per Ruling 3(d)) — mirrors the `wireMetricsHandlers`/`wireRouterControlHandlers`/DRAIN-observer register-before-serve precedents. Fan-out TARGET RESOLUTION depends on Ruling 3(f)'s Forward Obligation (node-identity-to-connection binding) — see story row above. | implementer |
+| `cmd/switchboard/mgmt_wire.go` (`runRouter`) | New Phase wiring: (1) the discovery multicast listener calling into `internal/discovery`'s router-side ingest; (2) on an accept+relay verdict, a hop-2 relay-dispatch closure modeled directly on the DRAIN observer (`control_type=0x03` `DISCOVERY_RELAY` frame, zero `HMACTag`, `sendMap`-based best-effort non-blocking send, SVTN-scoped exclude-originator fan-out per Ruling 3(d)) — mirrors the `wireMetricsHandlers`/`wireRouterControlHandlers`/DRAIN-observer register-before-serve precedents. Fan-out TARGET RESOLUTION depends on Ruling 3(f)'s Forward Obligation (node-identity-to-connection binding) — see story row above. **v1.10 correction (Ruling 4):** item (1) — the discovery multicast listener's registration into `runRouter` — did NOT land as part of this story; `wireDiscoveryListener` is implemented and independently tested at function level only, per Ruling 4's verified finding (no SVTN-enumeration source exists at `runRouter`'s call site). This row's "New Phase wiring: (1)..." language is stale for that half; the listener-registration call now depends on the new follow-on story (`S-BL.ADMISSION-SYNC-WIRE`, working name) per Ruling 4(d). Item (2), the relay-dispatch closure, is unaffected by this correction (still gated on Ruling 3(f)/`S-BL.NODE-IDENTIFY-WIRE` as already stated). | implementer |
 | `internal/testenv/testenv.go` | New multicast-loopback test helper (not an extension of `NewLoopback`) | test-writer |
 | `VP-044.md` | Update from `partial` (RULING-W6TB-D doctrine) toward full coverage once the wire integration tests land; supersede the "Blocker: multicast wire transport implementation" note | formal-verifier |
 | `VP-045.md` | **DONE (v1.4, F-DWSP8-001, this pass)** — v1.3's Lifecycle-table supporting-evidence citation to `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` corrected: that test is retired (see Node-local ingest correction subsection); PARTIAL status and the real-e2e-coverage gap it names are both unchanged, only the stale citation is fixed. Property Statement, Source Contract, Proof Method, Proof Harness Skeleton, Feasibility Assessment, Story Trace untouched — none of those referenced the retiring test. `VP-INDEX.md` changelog row added (no catalog-row text change; BC/module/method/status/priority all unchanged). | architect (done, this ruling) |
@@ -1450,6 +1489,7 @@ not 5.
 | 1 | Admitted-node HMAC key derivation | Reuse the shipped `hmac.DeriveKey` shape with a domain-separated info label (`DiscoveryAuthKey`, ADR-001 + SEC-DW-06); verified router-only, fixed-offset key-selector extraction (SEC-DW-01), replay-checked (SEC-DW-07); `Sequence` epoch-qualified, `uint64` (SEC-DW-07 v1.5 amendment, F-DWSP4-001 — closes the node-restart liveness gap) | New `Router.DiscoveryAuthKeyFor`/`DeriveDiscoveryKey` thin wrappers | BC-2.03.001 PC-2 (new `Sequence` field, cites VP-080) + PC-5 — **done, v1.5**; PC-2's replay-resistance blockquote needs a v1.5 wording refresh (uint32→uint64) — see ready-to-apply blockquote below |
 | 2 | SVTN-scoped multicast address derivation | Router-relay model (DI-004-mandated, not new); IPv4 `239.0.0.0/8`, `SHA-256(svtnID)`-derived, static, fixed port, sender TTL=1 (SEC-DW-08) | Router-only `net.ListenMulticastUDP`; sender-only `WriteTo`, no group join | BC-2.03.001 Precondition 3 + PC-1 — **done, v1.5**; ARCH-03 §Session Discovery — **done, v1.7** |
 | 3 | Hop-2 relay transport (decomposition-blocking Forward Obligation from Ruling 2) | `FrameTypeCtl` + new `control_type=0x03` (`DISCOVERY_RELAY`); zero `HMACTag` (connection-trust boundary, DRAIN precedent); SVTN-scoped exclude-originator best-effort fan-out (NOT `SplitHorizon`/`OnFrameArrival` — evaluated, rejected); `~1/sec` per-`(SVTNID,NodeAddr)` rate cap, silent-drop-first (SEC-DW-09) | New relay-dispatch closure in `runRouter`, modeled on the DRAIN observer; fan-out **target resolution** left as a verified Forward Obligation (node-identity-to-connection binding does not exist in production code today) | **No BC-2.03.001 change needed — confirmed.** `BC-2.01.008` needs one new registry row (`control_type=0x03`) — flagged, not executed. ARCH-03 §Session Discovery — **done, v1.8** |
+| 4 | Task 3 daemon-lifecycle wiring gap (implementation-time finding, Ruling 4, v1.10) | AC-001 accepted at function level (`wireDiscoveryListener` fully implemented + independently tested); NOT called from `runRouter` — router process has no SVTN-enumeration source. New, distinct Forward Obligation named, upstream of (blocks) `S-BL.NODE-IDENTIFY-WIRE`, not owned by "S-6.02, rc.1 gate" | New follow-on story recommended: `S-BL.ADMISSION-SYNC-WIRE` (working name, not yet created) | No BC change. AC-001 postcondition 1 needs a qualifying amendment (not silently passing); new Forward Obligations table row — flagged, not executed |
 
 **Nothing in this ruling descopes the story.** Ruling 2's DI-004 finding
 adds scope the stub did not anticipate (a real relay hop) rather than
@@ -1458,6 +1498,151 @@ stub's stated range, not below it. Ruling 3 fully specifies that hop's
 wire mechanics and does not add scope beyond what Ruling 2 already
 counted; its one open item (fan-out target resolution) is a named,
 recommended-resolution Forward Obligation, not an unscoped unknown.
+Ruling 4 (v1.10) is a retrospective implementation-time finding, not a
+forward gate on any of this story's own tasks — see Ruling 4 below;
+`S-BL.DISCOVERY-WIRE`'s own 8 points are unaffected.
+
+---
+
+## Ruling 4 — Task 3 daemon-lifecycle wiring: AC-001 accepted at function level; SVTN-presence-in-router-daemon is a new, distinct Forward Obligation, upstream of `S-BL.NODE-IDENTIFY-WIRE`
+
+**Pre-adjudication, Green-step implementation-time finding, 2026-07-15.** Not a spec-adversarial-pass
+finding — dispatched by team-lead ahead of the Step-4.5 adversarial loop per this project's
+established pattern (#32/#37: pre-adjudicate a discovered gap rather than let it surface as a
+guaranteed adversarial finding + fix-burst). Verified independently against
+`feature/S-BL.DISCOVERY-WIRE` @ `692ff05` (12 commits since `develop`, verified signed, 28/28
+Red-Gate tests green, 1152/1152
+suite, lint clean) — not taken on the implementer's word.
+
+**(a) The claim, verified.** `wireDiscoveryListener` (`cmd/switchboard/discovery_wire.go`) is fully
+implemented and independently tested
+(`TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly`, function-level: binds a real loopback
+multicast socket, probes it with a UDP sender, confirms receipt). It is **not called from
+`runRouter`** (`cmd/switchboard/mgmt_wire.go`) — grep-confirmed: `runRouter` calls
+`wireMetricsHandlers` and `wireRouterControlHandlers` only. Task 3's own text commits to this wiring
+explicitly ("implement `cmd/switchboard/discovery_wire.go`'s router-mode-exclusive listener wiring
+(register-before-serve, mirroring `wireMetricsHandlers`/`wireRouterControlHandlers`)"), and the
+File-Change List's `mgmt_wire.go` row says the same — so this is a genuine, literal deviation from
+the story's own written scope, not a matter of interpretation.
+
+**(b) The reason, verified independently, not assumed from the implementer's in-code comment.**
+`wireDiscoveryListener` needs a `svtnID` to derive the multicast group address to join
+(`discovery.MulticastAddrFor(svtnID)`). `runRouter`, at the point it would need to call this, has no
+source of that value:
+
+- `admission.AdmittedKeySet` (`internal/admission/admission.go`, read directly) exposes
+  `RegisterKey`, `RevokeKey`, `RevokeKeyIfRoleMatches`, `Lookup`, `LookupByPubkey`, `IsAdmitted`,
+  `RemoveSVTN`, `ListBySVTN(svtnID)` (takes an SVTN ID it must already know), `recordNonceUnlocked`.
+  **No SVTN-enumeration method exists** — nothing returns "the set of SVTN IDs this key set
+  currently holds admitted keys for."
+- `admin.key.register` (`makeRegisterHandler`, `cmd/switchboard/admin_handlers.go`) — the only
+  production call site of `AdmittedKeySet.RegisterKey` — is wired exclusively into
+  `BuildAdminHandlers`, which is wired exclusively into `runControl`
+  (`cmd/switchboard/mgmt_wire.go`). Router mode never calls it, and structurally cannot: `main.go`'s
+  mode switch (`case "router": ...; case "control": ...`, mutually exclusive `return`s) makes
+  `router` and `control` **separate OS processes** — one binary invocation runs exactly one mode,
+  never both.
+- `runRouter` constructs `buildRouter(admission.NewAdmittedKeySet(), routerLogger)` — a
+  **brand-new, empty** `AdmittedKeySet`, structurally disconnected from whatever
+  `SVTNManager`/`AdmittedKeySet` a separately-running control-mode process holds. `runConsole` and
+  `runControl` each construct their own separate, empty `AdmittedKeySet` too — **every daemon mode
+  is independently, permanently disconnected from every other daemon mode's admission state.** This
+  is not new to this story or specific to discovery — it is a pre-existing, whole-architecture
+  property this story's Task 3 is simply the first to need SVTN-presence data across.
+- `wireRouterControlHandlers` (`cmd/switchboard/router_control_wire.go`, registers
+  `router.reload`/`router.drain`) — checked directly — touches no `AdmittedKeySet`/`admission.*`
+  symbol at all. SIGHUP reload does not sync admission state either.
+- No RPC, shared file, shared store, or other cross-process synchronization mechanism was found
+  anywhere in `cmd/` or `internal/` (grepped for admission-sync/cross-daemon/cross-process terms;
+  no hits).
+
+**This is a real, verified, pre-existing architectural gap — not an invented excuse.** "Wiring
+today" would require either hardcoding a fake SVTN ID (violates DI-004's admission-gating intent and
+this story's own security posture) or inventing new cross-daemon admission-sync production API
+surface — the latter explicitly out of this story's authorized File-Change List (which names only
+`cmd/switchboard/mgmt_wire.go` for this concern, not `internal/admission` or a new sync mechanism).
+
+**(c) Adjudication: AC-001/Task 3 ACCEPTED at function level — but AC-001's postcondition 1 prose
+currently overclaims, and needs a qualifying amendment, not a silent pass.** The precedent for
+accepting "fully implemented and independently tested at function level, integration deferred for a
+verified external reason" as a legitimate interim state is not new — this ruling document already
+used it for the `ReceiveAdvertisement`/`ErrSVTNMismatch` defense-in-depth reframe (Ruling 1, citing
+the `S-BL.CLI-SURFACE-COMPLETION` Ruling 4 addendum, `E-CFG-011` shape) and for AC-017/AC-018's
+GATED treatment (Ruling 3(f)). This is the same shape, applied to Task 3. However: AC-001
+postcondition 1's literal text — "Only the router-mode daemon calls `net.ListenMulticastUDP` and
+joins the SVTN-scoped multicast group on its LAN-facing interface(s)" — describes daemon-runtime
+behavior that **does not happen today**, since `runRouter` never calls `wireDiscoveryListener`.
+Unlike AC-017/AC-018 (explicitly marked `[GATED]` in their own heading), AC-001 carries no such
+marker, and its test (function-level only) does not probe daemon-lifecycle behavior — a reader of
+AC-001's postcondition alone, without also reading the test file's own doc comment, would reasonably
+believe the router daemon joins the multicast group today. **This must not ship into the Step-4.5
+adversarial loop unqualified.** See the story-cascade blockquotes in the report to team-lead for the
+exact amendment (a clarifying note on AC-001, and a new Forward Obligations table row).
+
+**(d) Where the obligation lands: NEITHER "S-6.02, rc.1 gate" NOR `S-BL.NODE-IDENTIFY-WIRE` — a new,
+distinct, named follow-on is required, and it is a PREREQUISITE of `S-BL.NODE-IDENTIFY-WIRE`, not a
+sibling or successor to it.**
+
+- **Not "S-6.02, rc.1 gate."** `STATE.md` and the HS-006 2026-07-12 re-evaluation both use "S-6.02"
+  as shorthand for a *different*, narrower gap: **external SVTN bootstrap authority** —
+  `admin svtn create`/`admin key register` currently require the control daemon's own ephemeral,
+  in-process bootstrap key (per `examples/README.md`), so no *external* caller can drive bootstrap
+  at all. The literal story `S-6.02` ("SVTN lifecycle and key management via sbctl admin") is
+  already MERGED (PR #34, Wave 5) — "S-6.02, rc.1 gate" in `STATE.md`/HS-006 names a scoping gap
+  *within* that shipped capability (external reachability of the bootstrap operation), not an open
+  story. Even if that gap ships in full, it only fixes **who can call `admin.key.register` against
+  the control daemon** — it does nothing to get the resulting `RegisterKey` write out of
+  control-mode's private `AdmittedKeySet` and into router-mode's separate, empty one. Confirmed by
+  direct reading of the HS-006 evaluation's own root-cause chain (drain-and-migrate blocked on "no
+  admitted SVTN" → admission requires `admin.key.register` → gated on external bootstrap) — that
+  chain never reaches, because it never needs to reach, the cross-process distribution question this
+  story's Task 3 ran into. **Different gap, same neighborhood, not the same obligation.**
+
+- **Not `S-BL.NODE-IDENTIFY-WIRE`'s own scope — worse, `S-BL.NODE-IDENTIFY-WIRE` is itself blocked
+  by this gap, not a home for it.** `admission.AdmitNode` (`internal/admission/admission.go`) — the
+  primitive Ruling 3(f)'s v1.9 disposition names as the mechanism `S-BL.NODE-IDENTIFY-WIRE` wires
+  over the wire — is **verification-only**: its first step is `svtnMap, hasSVTN :=
+  ks.keys[svtnID]`; if the connecting node's `(svtnID, nodeAddr)` was never `RegisterKey`'d into
+  *that specific* `ks` instance, it returns `ErrNotAdmitted` unconditionally. `AdmitNode` does not
+  itself originate admission material — it only confirms a claimed identity against material already
+  present. Called against a router process's `ks` (per (b) above, always freshly empty, never
+  populated by any production path), `AdmitNode` will return `ErrNotAdmitted` for every real
+  connection, always, regardless of whether `S-BL.NODE-IDENTIFY-WIRE` ships exactly as ruled in
+  v1.9. **This does not reopen or reverse the human's Option 1 selection** (the `NODE_IDENTIFY`
+  control_type/handshake mechanism and the decision to deliver it as a named companion story both
+  stand) — it adds a newly-discovered prerequisite v1.9's disposition did not anticipate:
+  `S-BL.NODE-IDENTIFY-WIRE` needs router-process admission state to exist before its own
+  `AdmitNode` call can ever succeed in production.
+
+- **New follow-on required: recommend `S-BL.ADMISSION-SYNC-WIRE`** (working name — unlike
+  `S-BL.NODE-IDENTIFY-WIRE`, this name has NOT been through a multi-option architect comparison;
+  PO/architect should confirm or rename at scoping time). Scope, provisionally: distribute
+  admitted-key/SVTN-membership state from control-mode's `SVTNManager`/`AdmittedKeySet` to
+  router-mode's (and, by the same architecture, console-mode's) independent `AdmittedKeySet`
+  instances. Mechanism intentionally left open at this pre-adjudication depth — candidates include a
+  control→router push RPC on `admin.key.register`/`admin.svtn.create`, a router-polls-control pull
+  model, or an external persistent store both daemons read — each has a materially different
+  security/complexity profile and deserves the same kind of option analysis
+  `S-BL.DISCOVERY-WIRE-fanout-options.md` gave the NODE_IDENTIFY-WIRE decision, not a
+  single-architect pre-adjudication call. **`S-BL.NODE-IDENTIFY-WIRE`'s `depends_on` must include
+  this new story** once both are named/created — story-writer/PO action, not executed here.
+
+- **Task 3's specific need is narrower than full admission-material sync.** `wireDiscoveryListener`
+  only needs to learn "which SVTN ID(s) does this router serve" (a presence/membership signal) to
+  pick multicast groups to join — it does not itself need admitted-key material (that is
+  `RouterIngest`'s concern, per-datagram, downstream). Whether `S-BL.ADMISSION-SYNC-WIRE` delivers
+  full key-material sync (satisfying both Task 3's presence need and `S-BL.NODE-IDENTIFY-WIRE`'s
+  verification need in one story) or is split into a narrower "SVTN-presence-only" story plus a
+  separate full-sync story is a scoping call for PO/architect, not decided here — flagged, not
+  resolved, consistent with this document's own convention of naming obligations without inventing
+  their eventual shape.
+
+**(e) `S-BL.DISCOVERY-WIRE`'s own scope and points (8) are unaffected.** Tasks 1, 2, 4, 5 are
+complete and untouched by this finding. Task 3's AC-002/AC-003 (address derivation, sender-side
+dispatch) are complete and untouched — only AC-001's daemon-lifecycle half is affected. No task in
+this story is newly GATED by this finding (Task 3 already landed its Green commits; this is a
+retrospective scope clarification, not a forward gate) — the new obligation is entirely external,
+owned by the new follow-on story.
 
 ---
 
@@ -1465,6 +1650,7 @@ recommended-resolution Forward Obligation, not an unscoped unknown.
 
 | Date | Actor | Entry |
 |------|-------|-------|
+| 2026-07-15 (v1.10) | architect | **Pre-adjudication of two Green-step implementation-time findings, dispatched by team-lead ahead of the Step-4.5 adversarial loop (#32/#37 pattern), verified independently against `feature/S-BL.DISCOVERY-WIRE` @ `692ff05`, not taken on the implementer's word. Does not reopen Ruling 1, Ruling 2(a)-(i)'s existing content, Ruling 3, or v1.9's human-gate disposition (including the human's Option 1 selection for `S-BL.NODE-IDENTIFY-WIRE`).** **Item 1 (substantive, new Ruling 4):** `wireDiscoveryListener` is fully implemented and independently tested but NOT called from `runRouter` — Task 3's own text commits to that wiring explicitly (mirroring `wireMetricsHandlers`/`wireRouterControlHandlers`), so this is a genuine deviation, not an interpretation question. Reason verified independently: `admission.AdmittedKeySet` has no SVTN-enumeration method; `admin.key.register` (the only production `RegisterKey` caller) is wired exclusively into `runControl`; `runRouter`/`runConsole`/`runControl` each construct their OWN separate, permanently disconnected, empty `AdmittedKeySet` (`main.go`'s mode switch makes router/control mutually exclusive OS processes); no cross-process admission-sync mechanism exists anywhere in the codebase. **Adjudicated: AC-001/Task 3 ACCEPTED at function level** (same "implemented + tested, integration deferred for a verified reason" shape already used for `ReceiveAdvertisement`'s defense-in-depth reframe and AC-017/AC-018's GATED treatment) — **but AC-001 postcondition 1's literal text overclaims daemon-runtime behavior that does not exist today and needs a qualifying amendment, not a silent pass** (unlike AC-017/AC-018, AC-001 carries no `[GATED]` marker). **The obligation lands on neither existing candidate:** "S-6.02, rc.1 gate" (external SVTN bootstrap authority, per `STATE.md`/HS-006) is a different, narrower gap — even fully shipped, it only fixes who can call `admin.key.register` against the control daemon, not how that write reaches router-mode's separate `AdmittedKeySet`. `S-BL.NODE-IDENTIFY-WIRE` is not a home either — worse, it is ITSELF blocked by this same gap: `admission.AdmitNode` is verification-only (`ks.keys[svtnID]` lookup, `ErrNotAdmitted` if absent), so called against a router process's always-empty `ks` it will fail unconditionally, regardless of the NODE_IDENTIFY handshake shipping exactly as v1.9 ruled. **New follow-on named: `S-BL.ADMISSION-SYNC-WIRE`** (working name, not multi-option-vetted like NODE-IDENTIFY-WIRE was — flagged for PO/architect confirmation), which `S-BL.NODE-IDENTIFY-WIRE` must add as a `depends_on` PREREQUISITE (not a sibling) once both stories are created. Full adjudication, evidence, and the distinction from both rejected candidates: new "## Ruling 4" section (added after the Summary Table, before this Decision Log). Summary Table gained row 4; the `cmd/switchboard/mgmt_wire.go` Downstream Artifact Touch-List row gained a v1.10 correction note (item (1)'s "New Phase wiring" language is now stale — depends on the new story). **Item 2 (elaboration, addendum under Ruling 2):** `Advertise`'s multicast egress now fans out once per UP+multicast-capable local interface (each pinned via `setsockopt IP_MULTICAST_IF`, TTL still forced to 1 via `setsockopt IP_MULTICAST_TTL`, both stdlib-only via `SyscallConn().Control` — no `golang.org/x/net/ipv4`), empirically forced because `239.0.0.0/8` never routes to loopback on this project's dev hosts by default. Verified directly against `internal/discovery/discovery.go`/`multicast_ttl.go`, matches the mDNS/SSDP multi-homed-host pattern. **Sanctioned as within Ruling 2's existing scope** — DI-004/Invariant 1 (no group join) and TTL=1 (SEC-DW-08) both preserved per-send-per-interface; no BC change, no points change, no new numbered ruling needed. New "### Ruling 2 — sender-side multicast egress elaboration (v1.10, 2026-07-15)" subsection added at the end of Ruling 2. Both findings' story-cascade blockquotes (AC-001 amendment + new Forward Obligations row for Item 1; AC-003 postcondition 1 clarifying amendment for Item 2) delivered in the report to team-lead, not applied here — out of this pass's authorized touch-list (this file only). `S-BL.DISCOVERY-WIRE`'s own 8 points and `S-BL.DISCOVERY-WIRE-fanout-options.md` (v1.1, unchanged) are both unaffected. |
 | 2026-07-14 (v1.9) | architect | **Human gate disposition — story-ready gate for `S-BL.DISCOVERY-WIRE`, all three carried-forward Human Gate items closed, 2026-07-14. Resolution record, not a new adjudication of substance; does not reopen Ruling 1, Ruling 2, Ruling 3(a)-(e)/(g)-(i), DI-004, SEC-DW-08, or any prior adjudication.** **(1)** Ruling 3(f)'s fan-out target-resolution Forward Obligation: the human rejected both originally-offered resolution paths (an unnamed sequencing dependency; a narrow story-local `Router.BindInterface` seam) and asked for better options. `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.0 (six genuinely distinct options, grounded directly in the shipped code) was produced in response — **that document is the analysis record for this disposition**. The human selected its Option 1 ("name + schedule the companion story now"): a new, immediately-named companion story, **`S-BL.NODE-IDENTIFY-WIRE`**, delivers a `control_type=0x04` `NODE_IDENTIFY` handshake wiring the already-shipped `admission.AdmitNode`/`admission.GenerateChallenge` primitives over the live connection (`GenerateChallenge` → `Challenge` → `ChallengeResponse` → `AdmitNode`), recording the `(SVTNID, NodeAddr) → IfaceID` binding fan-out target resolution needs via a `Router.BindInterface`-shaped method. `S-BL.DISCOVERY-WIRE` gains a `depends_on` edge to it; AC-017/AC-018/Task 6 gate on it by name, not on a generic Forward Obligation. Full mechanism and rationale in the new "Ruling 3(f) Forward Obligation, SEC-DW-07, and the discovery port — human gate disposition" subsection inserted after Ruling 3(i), item (j). **(2)** The same gate APPROVED Human Gate item 1 — SEC-DW-07's epoch-qualified `Sequence uint64` design, **both** residual bounds per adjudication #19's Case 1 (≤1s)/Case 2 (≈N) framing (rulings v1.5, precision-corrected v1.6) — as-is, no further hardening requested; and closed Human Gate item 2 — **discovery UDP port `49201`** is now the adjudicated value, not a bikeshed placeholder; Decision 2(c)'s "placeholder for architect/PO sign-off" qualifier is discharged, its text otherwise unchanged. See item (k) in the new subsection. **(3)** The story's Forward Obligations table row (d) — the `sessions.list` RPC, `BC-2.03.002` PC-1's `PENDING-S-BL.DISCOVERY-WIRE` annotation — is resolved to a new named follow-on story, **`S-BL.SESSIONS-LIST-WIRE`** (already created: `stories/S-BL.SESSIONS-LIST-WIRE.md` v1.0, `STORY-INDEX.md` row + changelog 4.109; `BC-2.03.002.md` v1.5 already re-points PC-1's annotation, product-owner). See item (l). `S-BL.DISCOVERY-WIRE-fanout-options.md` bumped to v1.1 in the same pass (disposition section + changelog row; `status: options-for-human-review` → `decided`; options 2-6 formally closed, not selected). Story-writer/PO blockquotes for `S-BL.DISCOVERY-WIRE`'s Human Gate section, Forward Obligations table row (a), AC-017/AC-018 gate text, port-49201 language, and `depends_on` frontmatter delivered in the report to team-lead — not applied here, out of this pass's authorized touch-list (the two `decisions/` files only). |
 | 2026-07-14 (v1.8) | architect | **F-DWSP8-001 (HIGH, spec-adversarial pass 8, tuple @ `e2ff77b`) fix — structural contradiction in Implementation Constraint 3, a real design gap, not a propagation/nitpick class.** Adversary correctly identified that IC-3's claim ("`Discovery.ReceiveAdvertisement` preserved unchanged in shape," "`TestDiscovery_VP045_SVTNIsolation_MultipleScopes` continues to pass unchanged") is false: `ReceiveAdvertisement` (`discovery.go:319`), `Encode` (`discovery.go:369`), and `Decode` (`discovery.go:399`) are all three call sites of `advertisementKey` (IC-3 implicitly scoped only `Encode`/`Decode` for update, per IC-4); the function cannot compile once `advertisementKey` is deleted. Deeper than a compile error: a receiving node structurally cannot derive `DiscoveryAuthKey` for an arbitrary sender — that derivation needs the sender's admission pubkey, which only the router holds (`admittedKeySet`) — this is BC-2.03.001 v1.6 PC-5's own rule ("nodes never independently look up or re-verify another node's `DiscoveryAuthKey`"), already landed and directly contradicted by IC-3's claim. Independently, hop-2's wire format (Ruling 3(c)) omits `SVTNID` from the body (carried in the frame's `OuterHeader` instead), so even a no-HMAC patch would decode the wrong bytes for relayed content. **Adjudication:** `ReceiveAdvertisement` is RETIRED (deleted, not patched) — struck through in place at IC-3 above, full replacement rationale in the new "Node-local ingest correction" subsection (inserted after Implementation Constraint 8). A new node-side relay-ingest function replaces it on the hop-2 delivery path: decodes hop-2's payload shape, performs no per-frame HMAC (trusts the admitted connection per AC-015/SEC-DW-08's already-drawn connection-trust boundary), and relocates `ErrSVTNMismatch` from a crypto-then-compare check (impossible post-retirement) to a direct `OuterHeader.SVTNID` vs. `d.cfg.LocalSVTNID` equality check — preserving AC-007's defense-in-depth *purpose* (guard against a relay/routing bug) with a mechanism that doesn't depend on machinery Ruling 1 already removed from the node side. **VP-045 disposition:** `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` is retired along with `ReceiveAdvertisement` — its premise (feeding raw HMAC-tagged hop-1-shaped bytes into a node-local ingest function) has no surviving subject; the SVTN-isolation/HMAC-precedence properties it exercised are already required coverage under AC-005/AC-006 (`discovery_wire_test.go`, testing the router's `DiscoveryAuthKeyFor` path — the crypto boundary's correct location); the new node-side `ErrSVTNMismatch` equality check needs its own new unit test (implementer-named, cheap — no crypto to forge against). `VP-045.md` amended to v1.4: its v1.3 Lifecycle-table citation to this retiring test as "supporting evidence" is corrected to note the retirement and point at the new coverage; `status: PARTIAL` is unchanged (the real gap VP-045 names — real-socket PC-3 aggregation over UDP multicast — is unaffected by this correction, and is now schedulable given this story's real wire transport); Property Statement/Source Contract/Proof Method/Harness Skeleton/Feasibility/Story Trace untouched (none referenced the retiring test). `VP-INDEX.md` v2.43→v2.44: changelog row added per this project's own precedent for every VP-045 version bump (rows 2.26/2.27); catalog row text unchanged (BC/module/method/status/priority all unchanged). **BC-2.03.001 PC-5: confirmed NO amendment needed** — its existing "never independently look up or re-verify" language is exactly correct; it is the rule IC-3's now-corrected claim contradicted, not a rule that needs to change. **N1 fold-in (LOW):** Ruling 3(f)'s "only caller... `testenv.go:942`" claim was itself incomplete, not merely singular — full sweep (`grep -rn 'admission\.AdmitNode' cmd/ internal/`, excluding the admission package's own definition) finds 13 call sites, all `_test.go`, zero production callers; "zero production call sites" conclusion unchanged and remains load-bearing for Ruling 3(f)'s Forward Obligation, only the specific enumeration was corrected in place (13 sites listed). Story-writer blockquotes (AC-007 rewrite, Task 4 rewrite, Decision 1 correction mirroring IC-3, File-Change List `discovery_test.go` row widened from one test to ten) drafted and delivered in the report to team-lead, not applied here — out of this pass's authorized touch-list (rulings + VP-045 + VP-INDEX only). Downstream Artifact Touch-List rows corrected: `internal/discovery/discovery.go` (implementer row — "shape unchanged" → "DELETED, replaced"), `VP-044.md`/`VP-045.md` row split (VP-045 now DONE this pass), new story-side row added naming the four story sections needing story-writer action. Does NOT reopen Ruling 1, Ruling 2, Ruling 3, DI-004, SEC-DW-08, or the epoch-qualified `uint64` `Sequence` design (#18/#19, F-DWSP4-001) — all 27 prior adjudications stand; this corrects one downstream implication (IC-3) that mis-scoped which existing code a key-derivation change touches. |
 | 2026-07-14 (v1.7) | architect | **F-DWSP5-001 (MED, spec-adversarial pass 5, tuple @ `ad4fd5a`) fix — propagation-gap correction, no ruling re-litigated.** Ruling 3(c)'s closing prose sentence ("Reusing `internal/discovery`'s existing per-session serialization for `byte[18:]` avoids inventing a second session-list wire format") retained the pre-widening session-list offset after the v1.5 F-DWSP4-001 sweep updated the code block above it (and its `Sequence`/`count` callouts) but missed this trailing sentence — a live-prose survivor of the offset shift, not a new decision. Fixed: `byte[18:]` → `byte[22:]`, matching the code block's `byte[22:] sessions...` line and the +4-byte shift rule stated immediately above it. **Full live-prose sweep performed, as instructed**, for `byte[12:16]`, `byte[16:18]`, "18-byte [fixed] header", "38 byte"/"38-byte", `body[24:28]`, `body[28:30]` across the entire document: all other hits are correctly historical/superseded-qualified — the IC-2 cross-reference nitpick's "`body[28:30]` in v1.1–v1.4 and to `body[32:34]` from v1.5 onward" (explicitly time-qualified), the restart-liveness amendment's "count shifts from `body[28:30]` (v1.1–v1.4) to..." and "shifts from 8+16+8+4+2=**38 bytes** to 8+16+8+8+2=**42 bytes**" and "`Sequence` was `byte[12:16]`, `count` was `byte[16:18]`; both shift by..." (all explicit before/after framings, not standalone claims), Ruling 3(c)'s own "(v1.3 original, superseded: `byte[12:16]` Sequence uint32 BE, `byte[16:18]` count, 18-byte fixed header — kept here for audit traceability, not for implementation.)" parenthetical (explicitly marked superseded), and the v1.4/v1.5 Decision Log entries (frozen historical record, exempt). Line 1030 (now line 1030, text unchanged in position) was the only unmarked live-prose survivor. No other artifact touched by this entry. |

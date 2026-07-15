@@ -3,12 +3,12 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.0"
+version: "1.1"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: draft
 producer: story-writer
 timestamp: 2026-07-14T00:00:00Z
-modified: 2026-07-14T00:00:00Z
+modified: 2026-07-15T00:00:00Z
 phase: 2
 epic: E-7
 wave: backlog
@@ -134,6 +134,36 @@ document's Option 1 "Failure modes" note. The exact observable behavior (does th
 connection stay open unbound indefinitely? is there a handshake timeout?) needs
 elaboration at scheduling time.
 
+### 5. BLOCKER — `admission.AdmitNode` is verification-only against an always-empty router-mode keyset (`S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4, 2026-07-15)
+
+This story's handshake **cannot succeed today, regardless of how faithfully it wires the
+existing primitives.** `admission.AdmitNode` is verification-only — it looks up the
+connecting node's key in the local `AdmittedKeySet` (`ks.keys[svtnID]`, returning
+`ErrNotAdmitted` if absent) rather than admitting a new key. The router-mode process's
+own `AdmittedKeySet` is always empty in production: admission writes
+(`admin.key.register`, the only production `RegisterKey` caller) happen exclusively in
+the separate, disconnected control-mode OS process (`main.go`'s mode switch makes
+router/control/console mutually exclusive processes, each constructing its own,
+never-synced `AdmittedKeySet`); no cross-process admission-sync mechanism exists
+anywhere in the codebase today. Calling `admission.AdmitNode` against a router
+process's keyset will therefore fail unconditionally — `ErrNotAdmitted` — no matter how
+correctly this story implements the `NODE_IDENTIFY` opcode, the challenge/response wire
+codec, or `Router.BindInterface`.
+
+**Prerequisite:** a new follow-on story, **`S-BL.ADMISSION-SYNC-WIRE`** (working name —
+not yet created, not multi-option-vetted the way `S-BL.NODE-IDENTIFY-WIRE` itself was;
+PO/architect to confirm name + scope), must land admission state reaching the router
+process before this story's handshake can be scheduled for implementation. Add
+`S-BL.ADMISSION-SYNC-WIRE` to this story's `depends_on` once that story exists — not yet
+added here, since it has no ID to add yet (frontmatter `depends_on: []` stays empty this
+edit). This obligation is upstream of — and gates — obligations 1-4 above: none of the
+opcode/wire-format/rebind/failure-path questions matter until admission state can reach
+the router in the first place.
+
+Full adjudication: `S-BL.DISCOVERY-WIRE-rulings.md` v1.10, new "## Ruling 4 — Task 3
+daemon-lifecycle wiring" section (also names this same gap as `S-BL.DISCOVERY-WIRE`'s new
+Forward Obligation (e)).
+
 ## Non-Goals (per the fanout-options document's Option 1 scoping)
 
 - **Key rotation UX** — out of scope; this story wires the existing static-admitted-key
@@ -163,4 +193,5 @@ elaboration at scheduling time.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-07-15 | Added Open Design Obligation 5 — a BLOCKER, not a scoping question like obligations 1-4: `S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4 (dispatched by team-lead as a Green-step implementation-time finding, verified independently) found that `admission.AdmitNode` is verification-only against the local `AdmittedKeySet`, and the router-mode process's own keyset is always empty in production — admission writes happen exclusively in the separate, disconnected control-mode OS process, with no cross-process sync mechanism anywhere in the codebase. This story's handshake cannot succeed until admission state reaches the router process, regardless of how correctly the `NODE_IDENTIFY` opcode/codec/`BindInterface` are implemented. Prerequisite named: a new follow-on story, `S-BL.ADMISSION-SYNC-WIRE` (working name, not yet created); `depends_on` stays `[]` until that story exists to be added. Obligation 5 gates obligations 1-4 (upstream of all of them). No ACs/tasks exist yet to amend; this is a scoping-stage addition. Frontmatter version 1.0 → 1.1. |
 | 1.0 | 2026-07-14 | Backlog stub created per `S-BL.DISCOVERY-WIRE`'s Ruling 3(f) Forward Obligation and its story-ready human gate disposition (`S-BL.DISCOVERY-WIRE-rulings.md` v1.9 item (j); `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1 Option 1 selected). Delivers the `control_type=0x04` `NODE_IDENTIFY` handshake wiring the existing `admission.AdmitNode`/`admission.GenerateChallenge` primitives over the live connection and a new `Router.BindInterface`-shaped method recording `(SVTNID, NodeAddr) → IfaceID`. Unblocks `S-BL.DISCOVERY-WIRE`'s AC-017/AC-018/Task 6. No architect ruling adjudicates the opcode registry amendment, challenge-transcript wire format, or re-identify/rebind semantics yet; full decomposition deferred to scheduling time. |
