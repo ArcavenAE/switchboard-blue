@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -49,12 +50,9 @@ const DiscoveryPort = 49201
 // scoped") is the addressing hygiene/routing-efficiency range; HMAC
 // authentication, not address uniqueness, is the actual security boundary
 // (SEC-DW-08).
-//
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 3's Green step.
 func MulticastAddrFor(svtnID [16]byte) net.IP {
-	panic("not implemented: S-BL.DISCOVERY-WIRE MulticastAddrFor")
+	h := sha256.Sum256(svtnID[:])
+	return net.IPv4(239, h[0], h[1], h[2])
 }
 
 // AttachmentStatus represents whether a console is currently attached to
@@ -103,6 +101,13 @@ type AdvertisementPayload struct {
 	NodeAddr [8]byte
 	// SVTNID is the SVTN the advertisement is scoped to (BC-2.03.003 Inv-1).
 	SVTNID [16]byte
+	// Sequence is the epoch-qualified monotonic sequence number (SEC-DW-07;
+	// F-DWSP4-001 restart-liveness amendment). High 32 bits are the wall-clock
+	// UTC epoch seconds sampled at the advertising Discovery instance's start;
+	// low 32 bits are a per-instance counter. Widened uint32→uint64 so a
+	// node restart with a stable admitted identity is not silently locked out
+	// by the router's restart-STABLE lastSeen watermark (EC-010).
+	Sequence uint64
 	// Sessions is the list of sessions the access node is currently publishing.
 	Sessions []SessionPresence
 }
@@ -319,8 +324,9 @@ func (d *Discovery) Enumerate(ctx context.Context) ([]SessionEntry, error) {
 // unauthenticated attacker who forges SVTN bytes receives ErrInvalidHMACTag —
 // the distinguishing oracle is closed (BC-2.03.001 PC-5 fail-closed posture).
 func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error {
-	// Minimum: 8-byte HMAC tag + 26-byte body minimum = 34 bytes.
-	if len(raw) < routing.AdvertisementHMACTagSize+26 {
+	// Minimum: 8-byte HMAC tag + 34-byte body minimum (16 SVTNID + 8 NodeAddr
+	// + 8 Sequence + 2 count) = 42 bytes (SEC-DW-07 widened Sequence uint64).
+	if len(raw) < routing.AdvertisementHMACTagSize+34 {
 		return ErrInvalidHMACTag
 	}
 
@@ -414,9 +420,9 @@ func (d *Discovery) IngestRelayAdvertisement(outerSVTNID [16]byte, payload []byt
 
 // Encode serialises payload to its wire representation.
 //
-// Wire format:
+// Wire format (SEC-DW-07; F-DWSP4-001 widened Sequence uint32→uint64):
 //
-//	[8]byte HMAC tag | [16]byte SVTNID | [8]byte NodeAddr | uint16 count | sessions...
+//	[8]byte HMAC tag | [16]byte SVTNID | [8]byte NodeAddr | [8]byte Sequence (BE) | uint16 count | sessions...
 //
 // Per session:
 //
@@ -444,8 +450,9 @@ func Encode(payload AdvertisementPayload) ([]byte, error) {
 // cannot be verified with the SVTN key embedded in the body, or a wrapped
 // decode error otherwise.
 func Decode(raw []byte) (AdvertisementPayload, error) {
-	// Minimum: 8-byte HMAC tag + 26-byte body minimum = 34 bytes.
-	if len(raw) < routing.AdvertisementHMACTagSize+26 {
+	// Minimum: 8-byte HMAC tag + 34-byte body minimum (16 SVTNID + 8 NodeAddr
+	// + 8 Sequence + 2 count) = 42 bytes (SEC-DW-07 widened Sequence uint64).
+	if len(raw) < routing.AdvertisementHMACTagSize+34 {
 		return AdvertisementPayload{}, ErrInvalidHMACTag
 	}
 
@@ -475,7 +482,7 @@ var ErrTooManySessions = errors.New("discovery: session count exceeds encoding m
 
 // encodeBody serialises the payload fields (without the HMAC tag prefix).
 //
-// Format: [16]SVTNID | [8]NodeAddr | uint16 count | sessions...
+// Format: [16]SVTNID | [8]NodeAddr | [8]Sequence (BE uint64) | uint16 count | sessions...
 // Per session: uint16 name_len | name_bytes | uint8 status | uint8 quality
 //
 // Session names longer than 255 bytes are truncated to at most 252 UTF-8-safe
@@ -505,7 +512,7 @@ func encodeBody(payload AdvertisementPayload) ([]byte, error) {
 	}
 
 	// Calculate size up front for a single allocation.
-	size := 16 + 8 + 2
+	size := 16 + 8 + 8 + 2
 	for _, name := range encodedNames {
 		size += 2 + len(name) + 1 + 1
 	}
@@ -513,6 +520,7 @@ func encodeBody(payload AdvertisementPayload) ([]byte, error) {
 
 	buf = append(buf, payload.SVTNID[:]...)
 	buf = append(buf, payload.NodeAddr[:]...)
+	buf = binary.BigEndian.AppendUint64(buf, payload.Sequence)
 
 	count := uint16(len(payload.Sessions))
 	buf = binary.BigEndian.AppendUint16(buf, count)
@@ -564,15 +572,16 @@ func encodedSessionName(name string) ([]byte, error) {
 
 // decodeBody deserialises a body slice (without the HMAC tag prefix).
 func decodeBody(body []byte) (AdvertisementPayload, error) {
-	// Minimum: 16 + 8 + 2 = 26 bytes.
-	if len(body) < 26 {
+	// Minimum: 16 + 8 + 8 + 2 = 34 bytes (SEC-DW-07 widened Sequence uint64).
+	if len(body) < 34 {
 		return AdvertisementPayload{}, errors.New("discovery: body too short")
 	}
 	var payload AdvertisementPayload
 	copy(payload.SVTNID[:], body[:16])
 	copy(payload.NodeAddr[:], body[16:24])
+	payload.Sequence = binary.BigEndian.Uint64(body[24:32])
 
-	count := binary.BigEndian.Uint16(body[24:26])
+	count := binary.BigEndian.Uint16(body[32:34])
 	// Guard against malformed or adversarial large-count payloads.
 	// A single advertisement from one node should not carry more than 1024
 	// sessions; reject anything above this to bound pre-HMAC parse work.
@@ -580,7 +589,7 @@ func decodeBody(body []byte) (AdvertisementPayload, error) {
 	if count > maxSessionsPerAdvertisement {
 		return AdvertisementPayload{}, errors.New("discovery: session count exceeds maximum")
 	}
-	offset := 26
+	offset := 34
 
 	for i := uint16(0); i < count; i++ {
 		if offset+2 > len(body) {

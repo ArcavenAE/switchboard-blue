@@ -1996,8 +1996,9 @@ func TestDiscovery_Encode_Accepts65535Sessions(t *testing.T) {
 		t.Fatalf("Encode(%d sessions): got %v, want nil (65535 is the max, not overflow)", maxCount, err)
 	}
 	// Wire layout: 8-byte HMAC tag | 16-byte SVTNID | 8-byte NodeAddr |
-	// uint16 count. The count lives at offset 32.
-	const countOffset = routing.AdvertisementHMACTagSize + 16 + 8
+	// 8-byte Sequence | uint16 count. The count lives at offset 40
+	// (SEC-DW-07 widened Sequence uint32→uint64, F-DWSP4-001).
+	const countOffset = routing.AdvertisementHMACTagSize + 16 + 8 + 8
 	if len(encoded) < countOffset+2 {
 		t.Fatalf("Encode returned %d bytes, too short to inspect count field", len(encoded))
 	}
