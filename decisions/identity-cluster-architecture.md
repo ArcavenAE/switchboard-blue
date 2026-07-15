@@ -1,13 +1,14 @@
 ---
 artifact_id: IDENTITY-CLUSTER-ARCH
 document_type: architecture-design
-version: "1.1"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
 cycle: cycle-1
 modified:
   - 2026-07-15T00:00:00Z # v1.1 — Disposition: both mechanism decisions ratified (NODE-ADMISSION-PROVISIONING → Option E; ADMISSION-SYNC-WIRE → Option A near-term stepping stone). Near-term ADMISSION-SYNC-WIRE scope updated: Option A push RPC + router-side VLR-local admitted-state snapshot (write on receive, load on startup); ruling that router-side persistence is IN SCOPE based on constraint (b) HARD REQUIREMENT. Three binding forward constraints recorded. Section 7 Disposition and Section 8 Forward Architecture (HLR/VLR) added. Section 5 plan updated; Summary updated.
+  - 2026-07-15T00:00:00Z # v1.2 — ODO-5 resolved: Section 9 added (multi-router connection model ruling). Dial direction: control dials routers (TCP). Endpoint addressing: static list in config.Config (RouterManagementEndpoints []RouterManagementEndpoint, same structural shape as existing UpstreamRouters). Reconnect/detachment tolerance: retry-with-backoff on control side; router is unaffected by control absence. HLR/VLR compat: static-list near-term is forward-compatible with registration-protocol future — the config field provides a bootstrap list that a future router-registration protocol can augment or replace. No new human flag needed. Summary row added.
 related_stories:
   - S-BL.ADMISSION-SYNC-WIRE
   - S-BL.NODE-ADMISSION-PROVISIONING
@@ -593,16 +594,12 @@ document's Option 1 selection:
 **Ready to elaborate (both mechanism gates cleared — 2026-07-15):**
 
 3. **Elaborate ADMISSION-SYNC-WIRE** — mechanism ratified as Option A + router-side
-   VLR-local admitted-state snapshot (see Section 7 ruling). Elaboration must address
-   **Open Design Obligation 5: multi-router connection model** — how control discovers
-   and addresses multiple router management sockets. The current co-location assumption
-   (Unix-domain socket at `/run/switchboard-router.sock`) does not generalize to many
-   routers or to control being a client that attaches and detaches. Options for
-   elaboration: (a) enumerate router endpoints in `config.Config` (static list), (b)
-   define a router-registration protocol (routers announce their management endpoint to
-   control on attach), or (c) an alternative. This is an **architect ruling at
-   elaboration time** — it does not block starting the elaboration but must be resolved
-   before acceptance criteria can be written.
+   VLR-local admitted-state snapshot (see Section 7 ruling). **Open Design Obligation 5
+   is resolved** (Section 9): control dials routers via TCP; endpoint addressing uses a
+   new `RouterManagementEndpoints []RouterManagementEndpoint` field in control-mode
+   `config.Config` (same structural shape as `UpstreamRouters`); reconnection is
+   retry-with-backoff on the control side with the router stateless w.r.t. control
+   presence. All pre-conditions for writing acceptance criteria are now satisfied.
 
 4. **Elaborate NODE-ADMISSION-PROVISIONING** — mechanism ratified as Option E (local
    self-generation + operator registers pubkey out-of-band). No forward constraints on
@@ -849,6 +846,277 @@ replication patterns matter in practice.
 
 ---
 
+## 9. ODO-5 Resolution: Multi-Router Connection Model
+
+### Code topology baseline (verified at develop@d249f88)
+
+Before reasoning about the ODO-5 options, three facts about the current code
+must be established, because they constrain which connection shapes are
+structurally available:
+
+**Fact 1 — Every daemon is a server only, never a client, on the management plane.**
+`runRouter`, `runControl`, `runConsole`, and `runAccess` each call
+`newMgmtServer`/`serveMgmtServer` to LISTEN on their respective sockets.
+Zero daemon-to-daemon management-plane client code exists anywhere in
+`cmd/switchboard/`. There is no `mgmt.NewClient`, no `net.Dial` to a peer's
+management socket, no cross-mode RPC. The management plane today is a
+one-layer fan-out: external callers (sbctl) → daemon management socket.
+
+**Fact 2 — Router management sockets are Unix-domain only in the current code.**
+`mgmtNetwork("router")` returns `"unix"` (`mgmt_wire.go:159`). The default
+path is `/run/switchboard-router.sock` (`mgmt_wire.go:146`). Unix-domain
+sockets are local to a single machine — no remote-machine router can be
+reached over a Unix socket. Any control→router push RPC in a multi-machine
+topology requires TCP (or an equivalent network transport), meaning the router
+management endpoint for Option A must be a network address, not just a socket
+path, in the many-routers case.
+
+**Fact 3 — `config.Config` has a structural twin: `UpstreamRouters`.**
+The existing `UpstreamRouters []UpstreamRouter` field (`config.go:130–132`)
+enumerates a static list of TCP address strings that a router dials for PE
+mode. The structural pattern for "control needs to know the addresses of
+multiple routers" is exactly this pattern inverted: a `RouterManagementEndpoints
+[]RouterManagementEndpoint` list in the control-mode config enumerating the
+management addresses of the routers it should push to. The parsing, validation
+(`validateHostPort`), and SIGHUP-reload infrastructure for such a list is
+already present in `config.go`; no new parsing primitive is required.
+
+### Dial direction ruling
+
+**RULING: Control dials routers. Control is the client on the management push path.**
+
+Reasoning:
+
+The three binding constraints from Section 8 must be taken together:
+
+- Constraint (b) says control is "a CLIENT that attaches to the network." Read
+  literally, this describes control's relationship to the data plane — control
+  attaches and detaches; the network must survive without it. This language
+  does NOT settle the dial direction on the management push path independently.
+  Both shapes are compatible with "control is a client on the data plane" while
+  taking opposite dial directions on the management plane. The constraint is not
+  self-settling on dial direction; it requires explicit reasoning.
+
+- For the **router-registration shape (routers dial control):** routers would
+  need to know control's management address at startup and maintain a persistent
+  outbound connection to it for the duration that control is attached. When
+  control detaches, the router's outbound connection closes; when control
+  reattaches, the router must re-register. This creates a persistent
+  router→control connection lifecycle that outlasts individual push events. Two
+  structural problems arise:
+  
+  1. **Startup ordering dependency reintroduced.** A router that must dial
+     control on startup and cannot proceed until the connection is established
+     reintroduces the startup ordering problem that Section 2's Option B analysis
+     ruled out (paragraph: "blocks router startup on control availability — an
+     operational dependency that does not exist today"). The registration shape
+     can be made non-blocking (router starts without connecting to control, and
+     registers when convenient), but then the first control-attach after a fresh
+     router startup requires the router to initiate the connection — which is
+     fine, but means the router must also hold the control endpoint address in
+     its config. That is equivalent in static-config terms to control holding
+     the router endpoint address.
+  
+  2. **Persistent connection to a detachable client.** Control can detach at
+     any time. A router holding a persistent connection to control must detect
+     disconnection and tear it down, then detect reconnection and re-establish
+     it. This is a reconnect/reattach loop owned by the router — non-trivial
+     state that currently does not exist anywhere in `runRouter` (which has no
+     outbound client connections except `upstreamdial.Connector` for the PE
+     data plane).
+
+- For the **control-dials-routers shape (control is the management-plane client):**
+  Control holds a list of router management endpoints. When control starts (or
+  reattaches), it dials each router in its list, establishes an authenticated
+  connection, and pushes the current admission state. When a push completes,
+  control may either hold the connection idle (for future push events) or close
+  it and re-dial on the next push event. Control's detachment (process exit or
+  network departure) means the connection closes from the control side;
+  routers are completely unaffected — their management socket server continues
+  running, waiting for the next connection. Crucially:
+  
+  - **Routers have no reconnect logic to write.** The router's management
+    socket is already a passive listener (from `runRouter`'s call to
+    `newMgmtServer`). No new router-side client state is needed.
+  - **Detachment tolerance is free.** When control detaches, connections close.
+    When control reattaches (new process, same config), it re-dials and re-pushes.
+    The router's VLR-local snapshot (Section 7) handles the interval between
+    control's last push and re-attachment — exactly as intended.
+  - **Startup independence preserved.** A router can start with no control
+    present. Its management socket server is ready. When control arrives, it
+    dials in and pushes. The router does not need control to be up first.
+
+**Conclusion:** Control dials routers. The control-dials-routers shape satisfies
+all three binding constraints cleanly and requires no new state machine in
+`runRouter`. The registration shape introduces reconnect complexity at the router,
+creates latent startup-ordering risk, and offers no advantage for the near-term
+scope. Ruled out for the near-term story.
+
+### Endpoint addressing mechanism ruling
+
+**RULING: Static list in `config.Config` on the control-mode config — a new
+`RouterManagementEndpoints []RouterManagementEndpoint` field, same structural
+shape as `UpstreamRouters`.**
+
+Options and reasoning:
+
+**(a) Static list in `config.Config`.**
+`UpstreamRouters []UpstreamRouter` already establishes this pattern in the
+same file (`config.go:130–132`). Adding `RouterManagementEndpoints
+[]RouterManagementEndpoint` is a direct structural parallel: each entry carries
+an `Addr string` validated as a TCP `host:port`. Validation (`validateHostPort`),
+SIGHUP-reload (`config.LoadFile` + `config.Validate`), and zero-value semantics
+(empty list = no routers to push to) are all already handled by the existing
+infrastructure. From the operator's perspective, this is the same config
+discipline as `upstream_routers` — explicit, auditable, no dynamic discovery.
+
+**(b) Router-registration protocol.**
+As analyzed above (dial direction), this moves the endpoint-discovery problem
+into a registration handshake that requires a persistent connection and
+reconnect logic. For the near-term story, where control has a small, known
+set of routers, a registration protocol is operationally equivalent to a static
+list but structurally more complex. The registration protocol is the correct
+direction for large, dynamic fleets — but that is the HLR/VLR end-state work,
+not the near-term story.
+
+**(c) Zero-configuration local-only path (Unix socket).**
+The existing co-location assumption (`/run/switchboard-router.sock` on the same
+machine) works for single-router deployments where control and router share a
+host, but structurally cannot scale to many routers on different machines.
+Retaining Unix socket support as a zero-config option for single-machine
+deployments alongside the TCP list is reasonable — when `RouterManagementEndpoints`
+is empty and control and router are co-located, control can fall back to the
+local Unix socket path. This zero-config path should be explicitly documented
+but is not load-bearing for multi-router support.
+
+**Near-term: static TCP list, with optional Unix socket fallback for
+co-located single-router deployments.**
+
+The config field name and wire contract:
+
+```yaml
+# In the control-mode config (or a shared config when all modes share one file):
+router_management_endpoints:
+  - addr: "10.0.0.2:9090-mgmt"  # or the configured management socket TCP address
+  - addr: "10.0.0.3:9090-mgmt"
+```
+
+Note: "TCP address for the router's management endpoint" means the control-mode
+static list enumerates TCP `host:port` strings, NOT Unix paths. For co-located
+routers, the operator points the router's management socket at a loopback TCP
+address (`management_socket: 127.0.0.1:9093`) and control's list references
+that address. This preserves the ability to co-locate control and router on
+the same machine without requiring them to always share a process or filesystem.
+
+### Reconnection and detachment-tolerance ruling
+
+**RULING: Retry-with-backoff on the control side; router is stateless with
+respect to control presence.**
+
+Behavior specification:
+
+1. **Control startup / reattach.** `runControl` iterates `RouterManagementEndpoints`,
+   dials each router's management TCP address, and pushes the current admission
+   state snapshot. Dial failures are retried with bounded exponential backoff.
+   After N consecutive failures to a given endpoint, control logs a warning and
+   stops retrying until the next push event or a SIGHUP reload. Control does NOT
+   fail to start if routers are unreachable — it is the authoritative registry
+   regardless of whether any router is currently reachable.
+
+2. **Per-write push.** On each `admin.key.register` / `admin.key.revoke` /
+   `admin.key.expire` / `admin.svtn.destroy` write, control pushes the delta
+   (or the full snapshot, whichever is simpler — TBD at story decomposition)
+   to each configured router endpoint. Temporary push failures on individual
+   writes are logged and retried; they do NOT roll back the write to control's
+   own `AdmittedKeySet`. The admitted-key write and the push are independent
+   actions: control is the authority, routers are consumers. A failed push means
+   the router is temporarily stale; the router's VLR-local snapshot (Section 7)
+   bridges the gap.
+
+3. **Control detachment (process exit or network departure).** Connections to
+   routers close from the control side. Routers receive EOF, discard the
+   connection, and continue serving from their VLR-local snapshot. No router
+   state machine change is needed — the router's management socket server
+   passively waits for the next connection.
+
+4. **Router restart during control detachment.** The router loads its VLR-local
+   snapshot on startup (Section 7 ruling). It does not need control to be present
+   to start. Control's next push will bring the snapshot up to date.
+
+5. **Control reconnect.** When a new control process starts (or the operator
+   runs `sbctl admin.key.register` against a restarted control), control
+   re-dials all configured router endpoints and pushes the current state. The
+   router applies the push, overwrites its VLR-local snapshot, and is current.
+
+**What does NOT need to be implemented in the near-term story:**
+
+- A persistent idle connection from control to each router between push events
+  (dial-on-demand per push event is simpler and sufficient for the near-term
+  throughput; idle connection with heartbeat is a follow-on if operational
+  evidence shows reconnect latency is a problem).
+- An explicit "control is attached" / "control is detached" protocol message
+  on the router side (the router's behavior is identical in both states).
+- A full-sync-on-connect handshake (near-term: push the full current snapshot
+  on every control startup; incremental delta sync is a future optimization).
+
+### HLR/VLR forward-compatibility
+
+The static-list near-term mechanism is explicitly designed as a stepping stone
+to the router-registration protocol that the HLR/VLR end-state will use:
+
+- **Data model stability.** The `AdmittedKeySet` abstraction is unchanged. The
+  VLR-local snapshot format (introduced in this story) is the carrier format
+  that the replication protocol will also use. Nothing the near-term story
+  touches must be un-done.
+- **Config field additive.** `RouterManagementEndpoints` in the control config
+  serves as the bootstrap list. A future registration protocol augments or
+  replaces this list dynamically at runtime — the config list is never wrong
+  to have, it just becomes a seed rather than the sole source of truth.
+- **Dial direction preserved.** The HLR/VLR model has control as the
+  authoritative registry (HLR) pushing to distributed router caches (VLR). The
+  dial direction ruling above (control dials routers) is consistent with
+  HLR→VLR replication where the HLR pushes to VLRs. A future protocol where
+  VLRs subscribe and pull from the HLR would reverse the dial direction — but
+  the current ruling is compatible with either, because the near-term story
+  establishes the data model and the snapshot format, not the replication
+  protocol shape.
+- **No dead-end decisions.** Every near-term choice (static TCP list, dial-on-
+  demand per push, full-snapshot push) is the simplest form of its corresponding
+  HLR/VLR feature. The upgrade path is: static list → registration protocol,
+  dial-on-demand → persistent replication connection, full-snapshot → incremental
+  delta. None of these upgrades requires changing the router-side handler or the
+  VLR-local snapshot format.
+
+### Human flags
+
+None. The dial-direction choice (control dials routers) and the endpoint-addressing
+mechanism (static TCP list in control config) are architect-resolvable questions
+fully grounded in the code topology and the binding constraints. No product or
+deployment implication requires human input to settle: the static-list approach
+is the conservative, operationally obvious near-term choice, forward-compatible
+with the dynamic registration protocol the HLR/VLR end-state demands.
+
+### Acceptance criteria prerequisites now satisfied
+
+ODO-5 is resolved. ADMISSION-SYNC-WIRE's acceptance criteria can now be
+finalized. The story-writer has all inputs:
+
+1. **Mechanism:** Option A push RPC + VLR-local snapshot (Section 7 ruling).
+2. **Dial direction:** Control dials routers.
+3. **Endpoint addressing:** `RouterManagementEndpoints []RouterManagementEndpoint`
+   in `config.Config`; each entry is a TCP `host:port`; validated by `validateHostPort`;
+   config field is CONTROL-MODE ONLY (routers do not read this field).
+4. **Reconnection behavior:** retry-with-backoff on the control side; dial-on-demand
+   per push event (near-term); router stateless with respect to control presence.
+5. **Serialization format:** TBD at story decomposition (JSON, CBOR, or binary;
+   must be deterministic and forward-compatible with HLR/VLR replication model).
+6. **Unix socket fallback:** control may treat an empty `RouterManagementEndpoints`
+   list as a signal to fall back to the local Unix socket path
+   (`/run/switchboard-router.sock`) for co-located single-router deployments
+   (zero-config convenience path, not load-bearing for multi-router support).
+
+---
+
 ## Summary
 
 | Item | Value |
@@ -860,10 +1128,10 @@ replication patterns matter in practice.
 | NODE-ADMISSION-PROVISIONING mechanism | **Option E approved** — local self-generation + operator registers pubkey out-of-band. |
 | Near-term constraint (b) addressed by | Router-side VLR-local admitted-state snapshot. IN SCOPE for near-term ADMISSION-SYNC-WIRE story (Section 7 ruling). |
 | Forward architecture target | HLR/VLR admission-state distribution — control = HLR (authoritative registry), router = VLR (local cache). Three binding constraints documented in Section 8. |
-| Open Design Obligation 5 | Multi-router connection model — how control addresses multiple router management sockets. Architect ruling required at ADMISSION-SYNC-WIRE elaboration time. Does not block starting elaboration. |
+| Open Design Obligation 5 | **RESOLVED** — Section 9. Dial direction: control dials routers (TCP). Endpoint addressing: static `RouterManagementEndpoints []RouterManagementEndpoint` list in control-mode `config.Config` (same structural shape as `UpstreamRouters`). Reconnection: retry-with-backoff on control side; router stateless w.r.t. control presence. Unix-socket fallback for empty list (co-located single-router, zero-config). HLR/VLR compatible: static list is a stepping stone; upgrade path is static list → registration protocol without changing router-side handler or snapshot format. No human flag needed. |
 | NODE-IDENTIFY-WIRE can spec wire format now | Yes — challenge-transcript byte layout + BC-2.01.008 opcode row independent of mechanism decisions |
 | NODE-IDENTIFY-WIRE delivery gates on | Both predecessors delivered |
 | Can ADMISSION-SYNC and NODE-ADMISSION-PROVISIONING parallelize? | Yes — structurally independent, no shared code surfaces; both mechanism gates now cleared |
 | Immediate no-gate items (confirmed standing) | (1) PO adds `NODE_IDENTIFY = 0x04` to BC-2.01.008 PC-2; (2) architect elaborates NODE-IDENTIFY-WIRE challenge-transcript wire format (Open Design Obligation 2) |
-| Recommended first elaboration step | Either ADMISSION-SYNC-WIRE or NODE-ADMISSION-PROVISIONING — both gates cleared. ADMISSION-SYNC-WIRE elaboration must include ODO-5 (multi-router connection model) ruling. |
+| Recommended first elaboration step | Either ADMISSION-SYNC-WIRE or NODE-ADMISSION-PROVISIONING — both gates cleared. All ADMISSION-SYNC-WIRE pre-conditions including ODO-5 are now resolved; acceptance criteria can be finalized. |
 | Story names confirmed? | Yes (both working names recommended; NODE-ADMISSION-PROVISIONING -WIRE suffix left to PO/architect preference) |
