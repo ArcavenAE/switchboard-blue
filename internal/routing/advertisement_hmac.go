@@ -37,12 +37,12 @@ func VerifyAdvertisementHMAC(key []byte, msg []byte, tag [hmac.TagSize]byte) boo
 // Returns (key, true) when the (svtnID, nodeAddr) pair is admitted; (zero,
 // false) otherwise — a thin, read-only wrapper adding no new mutable state
 // to Router (AC-004 postcondition 3).
-//
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 1's Green step.
 func (r *Router) DiscoveryAuthKeyFor(svtnID [16]byte, nodeAddr [8]byte) ([hmac.KeySize]byte, bool) {
-	panic("not implemented: S-BL.DISCOVERY-WIRE DiscoveryAuthKeyFor")
+	ak, ok := r.admittedKeySet.Lookup(svtnID, nodeAddr)
+	if !ok {
+		return [hmac.KeySize]byte{}, false
+	}
+	return hmac.DeriveDiscoveryKey([]byte(ak.PublicKey), svtnID), true
 }
 
 // DeriveDiscoveryKey is the sender-side symmetric wrapper over
@@ -52,10 +52,6 @@ func (r *Router) DiscoveryAuthKeyFor(svtnID [16]byte, nodeAddr [8]byte) ([hmac.K
 // internal/discovery importing internal/hmac directly (AC-004
 // postcondition 4; ARCH-08 §6.5 position 14: discovery→routing is legal,
 // discovery→hmac is forbidden).
-//
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 1's Green step.
 func DeriveDiscoveryKey(pubkey []byte, svtnID [16]byte) [hmac.KeySize]byte {
-	panic("not implemented: S-BL.DISCOVERY-WIRE DeriveDiscoveryKey")
+	return hmac.DeriveDiscoveryKey(pubkey, svtnID)
 }

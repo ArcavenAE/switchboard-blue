@@ -340,7 +340,13 @@ func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error 
 	// decision. Key is derived from the declared payload.SVTNID so that
 	// admitted nodes on other SVTNs can authenticate with their own key and
 	// are then correctly rejected by the SVTN check below.
-	hmacKey := advertisementKey(payload.SVTNID)
+	//
+	// ReceiveAdvertisement's own retirement is Task 4's Green-step action
+	// (S-BL.DISCOVERY-WIRE Ruling 1, F-DWSP8-001) — this call site is kept
+	// compiling in the interim using the same SVTN-scoped key-derivation
+	// shape advertisementKey provided (AC-004 postcondition 5: zero
+	// remaining call sites of the retired advertisementKey).
+	hmacKey := routing.DeriveDiscoveryKey(payload.SVTNID[:], payload.SVTNID)
 	if !routing.VerifyAdvertisementHMAC(hmacKey[:], body, wireTag) {
 		return ErrInvalidHMACTag
 	}
@@ -423,7 +429,7 @@ func Encode(payload AdvertisementPayload) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	hmacKey := advertisementKey(payload.SVTNID)
+	hmacKey := routing.DeriveDiscoveryKey(payload.SVTNID[:], payload.SVTNID)
 	tag := routing.ComputeAdvertisementHMAC(hmacKey[:], body)
 
 	out := make([]byte, routing.AdvertisementHMACTagSize+len(body))
@@ -453,24 +459,12 @@ func Decode(raw []byte) (AdvertisementPayload, error) {
 		return AdvertisementPayload{}, ErrInvalidHMACTag
 	}
 
-	hmacKey := advertisementKey(payload.SVTNID)
+	hmacKey := routing.DeriveDiscoveryKey(payload.SVTNID[:], payload.SVTNID)
 	if !routing.VerifyAdvertisementHMAC(hmacKey[:], body, wireTag) {
 		return AdvertisementPayload{}, ErrInvalidHMACTag
 	}
 
 	return payload, nil
-}
-
-// advertisementKey derives the HMAC key for SVTN-scoped advertisement
-// authentication. All nodes on the same SVTN share the same key because
-// they share the same SVTN ID. This is a deterministic mapping: same
-// SVTN ID → same key.
-//
-// We use the SVTN ID directly as the 16-byte key material. HMAC-SHA256
-// accepts keys of any length (short keys are zero-padded to the block
-// size internally in crypto/hmac — this is safe and standard).
-func advertisementKey(svtnID [16]byte) [16]byte {
-	return svtnID
 }
 
 // ErrTooManySessions is returned by Encode when the payload carries more
