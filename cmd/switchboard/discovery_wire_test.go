@@ -90,6 +90,11 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 		panicked any
 	}
 	resultCh := make(chan result, 1)
+	// wg.Add(1) MUST happen here, synchronously before `go`, per ARCH-01
+	// §Goroutine WaitGroup Contract (F-DWIP3-001) — wireDiscoveryListener
+	// itself only calls wg.Done(), matching every other wg-tracked call
+	// site in this package.
+	wg.Add(1)
 	go func() {
 		p, err := callWireDiscoveryListenerRecovered(ctx, &wg, svtnID, ri, io.Discard)
 		resultCh <- result{err: err, panicked: p}

@@ -63,13 +63,17 @@ const discoveryReadBufSize = 65536
 //
 // This function itself BLOCKS until ctx is cancelled (or a fatal socket
 // error occurs) — it does not spawn an internal goroutine for the read loop
-// and return early. The caller is expected to invoke it via `go
+// and return early. The caller MUST call wg.Add(1) BEFORE dispatching `go
 // wireDiscoveryListener(ctx, wg, ...)` (exactly as
-// TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly does), so that
-// this call's own goroutine IS the WaitGroup-tracked unit of work (ARCH-01
-// §Goroutine WaitGroup Contract) — wg.Add(1)/defer wg.Done() bracket the
-// entire function, covering both the early bind/join-error return path and
-// the long-lived read loop. A second, short-lived goroutine closes the
+// TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly does) — the
+// canonical ARCH-01 §Goroutine WaitGroup Contract pattern used at every
+// other wg-tracked call site in this package (access.go, mgmt_wire.go):
+// Add happens synchronously in the parent before `go`, never inside the
+// spawned goroutine itself, to avoid the race where a concurrent wg.Wait()
+// could observe a zero WaitGroup counter and return before this goroutine
+// has registered (F-DWIP3-001). wireDiscoveryListener itself only calls
+// `defer wg.Done()`, covering both the early bind/join-error return path
+// and the long-lived read loop. A second, short-lived goroutine closes the
 // socket when ctx.Done() fires, to unblock the blocking ReadFromUDP call —
 // the standard cancel-via-close idiom for net.Conn, which has no
 // context-aware read variant.
@@ -81,7 +85,6 @@ const discoveryReadBufSize = 65536
 // and does not exit on an Ingest error; it only exits on a real socket
 // error or ctx cancellation.
 func wireDiscoveryListener(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer) error {
-	wg.Add(1)
 	defer wg.Done()
 
 	groupAddr := discovery.MulticastAddrFor(svtnID)
