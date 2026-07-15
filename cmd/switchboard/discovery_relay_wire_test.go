@@ -159,8 +159,8 @@ func TestAssembleDiscoveryRelayFrame_NotRawHop1Bytes(t *testing.T) {
 	hop1Body = binary.BigEndian.AppendUint64(hop1Body, sequence)
 	hop1Body = binary.BigEndian.AppendUint16(hop1Body, uint16(len(sessions)))
 	hop1Raw := make([]byte, 0, len(hop1Tag)+len(hop1Body))
-	hop1Raw = append(hop1Raw, hop1Tag[:]...) //nolint:staticcheck // Red Gate: assembleDiscoveryRelayFrame's stub body is an unconditional panic, which staticcheck treats as a NoReturn call — everything reachable only after it (including this build-up) is misclassified as dead code. Resolves itself once Task 5's Green step lands.
-	hop1Raw = append(hop1Raw, hop1Body...)   //nolint:staticcheck // same Red Gate false positive as above
+	hop1Raw = append(hop1Raw, hop1Tag[:]...)
+	hop1Raw = append(hop1Raw, hop1Body...)
 
 	relayRaw := assembleDiscoveryRelayFrame(svtnID, nodeAddr, sequence, sessions)
 
