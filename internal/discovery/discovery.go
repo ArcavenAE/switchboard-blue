@@ -460,80 +460,6 @@ func (d *Discovery) Enumerate(ctx context.Context) ([]SessionEntry, error) {
 	return out, nil
 }
 
-// ReceiveAdvertisement processes a raw advertisement payload received from
-// the multicast channel.
-//
-// It authenticates the HMAC tag via the Router's HMAC surface (AC-005) and
-// rejects payloads from a foreign SVTN (AC-006). Valid payloads are merged
-// into the local session registry.
-//
-// Ordering (RULING-W6TB-H): HMAC verification runs before the SVTN cross-scope
-// check. The body is decoded first only to extract the declared SVTN ID for key
-// derivation; the decoded content is not trusted until HMAC passes. An
-// unauthenticated attacker who forges SVTN bytes receives ErrInvalidHMACTag —
-// the distinguishing oracle is closed (BC-2.03.001 PC-5 fail-closed posture).
-func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error {
-	// Minimum: 8-byte HMAC tag + 34-byte body minimum (16 SVTNID + 8 NodeAddr
-	// + 8 Sequence + 2 count) = 42 bytes (SEC-DW-07 widened Sequence uint64).
-	if len(raw) < routing.AdvertisementHMACTagSize+34 {
-		return ErrInvalidHMACTag
-	}
-
-	// Extract the wire tag from the first 8 bytes.
-	var wireTag [routing.AdvertisementHMACTagSize]byte
-	copy(wireTag[:], raw[:routing.AdvertisementHMACTagSize])
-	body := raw[routing.AdvertisementHMACTagSize:]
-
-	// Decode body to read the declared SVTN ID for HMAC key derivation.
-	// The decoded content is untrusted until HMAC verification passes below.
-	payload, err := decodeBody(body)
-	if err != nil {
-		return ErrInvalidHMACTag
-	}
-
-	// HMAC-first (RULING-W6TB-H): verify authentication before any security
-	// decision. Key is derived from the declared payload.SVTNID so that
-	// admitted nodes on other SVTNs can authenticate with their own key and
-	// are then correctly rejected by the SVTN check below.
-	//
-	// ReceiveAdvertisement's own retirement is Task 4's Green-step action
-	// (S-BL.DISCOVERY-WIRE Ruling 1, F-DWSP8-001) — this call site is kept
-	// compiling in the interim using the same SVTN-scoped key-derivation
-	// shape advertisementKey provided (AC-004 postcondition 5: zero
-	// remaining call sites of the retired advertisementKey).
-	hmacKey := routing.DeriveDiscoveryKey(payload.SVTNID[:], payload.SVTNID)
-	if !routing.VerifyAdvertisementHMAC(hmacKey[:], body, wireTag) {
-		return ErrInvalidHMACTag
-	}
-
-	// SVTN cross-scope check (RULING-W6TB-H): payload is authenticated; verify
-	// it belongs to our SVTN. Admitted nodes on other SVTNs pass HMAC (their own
-	// key) but fail here — ErrSVTNMismatch is returned for legitimate cross-scope
-	// rejection, not as a pre-authentication oracle.
-	if payload.SVTNID != d.cfg.LocalSVTNID {
-		return ErrSVTNMismatch
-	}
-
-	// Store sessions in the registry, keyed by (nodeAddr, sessionName).
-	// Replace all entries from this advertiser before inserting new ones.
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	for k := range d.registry {
-		if k.nodeAddr == payload.NodeAddr {
-			delete(d.registry, k)
-		}
-	}
-	for _, s := range payload.Sessions {
-		key := registryKey{nodeAddr: payload.NodeAddr, sessionName: s.SessionName}
-		d.registry[key] = SessionEntry{
-			AdvertiserAddr: payload.NodeAddr,
-			Presence:       s,
-		}
-	}
-	return nil
-}
-
 // IngestRelayAdvertisement decodes a hop-2 DISCOVERY_RELAY payload (AC-014
 // PC-2 shape: NodeAddr | Sequence | count | sessions, no SVTNID) and merges
 // it into the local session registry (AC-007; S-BL.DISCOVERY-WIRE Ruling 1
@@ -543,7 +469,10 @@ func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error 
 // stripped the 4-byte control header (control_type | version | reserved) —
 // i.e. starting at byte 4 of Decision 3(c)'s layout: NodeAddr at
 // payload[0:8], Sequence at payload[8:16], count at payload[16:18],
-// sessions at payload[18:].
+// sessions at payload[18:]. The Sequence value is not independently
+// re-validated here — it already passed hop-1's SEC-DW-07 replay/freshness
+// gate (RouterIngest.Ingest) before the router relayed this frame; hop-2
+// carries it through informationally only.
 //
 // No per-frame HMAC is verified — trust derives from the already-admitted
 // TCP connection the relay frame arrived on (AC-015). outerSVTNID is the
@@ -556,15 +485,48 @@ func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error 
 // discovery-frame authentication happens exclusively at the router-side
 // ingest path (AC-005/AC-006), unchanged from the original PC-3.
 //
-// ReceiveAdvertisement (above) is the function this replaces on the
-// hop-2 path; its retirement is Task 4's Green-step action, not performed
-// by this stub.
-//
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 4's Green step.
+// This is the function that replaced ReceiveAdvertisement (retired per
+// AC-007 postcondition 1 — no caller exists in the shipped topology: the
+// router uses DiscoveryAuthKeyFor/RouterIngest.Ingest, AC-005/AC-006; no
+// node receives hop-1 UDP directly, Ruling 2).
 func (d *Discovery) IngestRelayAdvertisement(outerSVTNID [16]byte, payload []byte) error {
-	panic("not implemented: S-BL.DISCOVERY-WIRE IngestRelayAdvertisement")
+	if outerSVTNID != d.cfg.LocalSVTNID {
+		return ErrSVTNMismatch
+	}
+
+	const hop2HeaderLen = 8 + 8 + 2 // NodeAddr + Sequence + count
+	if len(payload) < hop2HeaderLen {
+		return errors.New("discovery: hop-2 relay payload too short")
+	}
+
+	var nodeAddr [8]byte
+	copy(nodeAddr[:], payload[0:8])
+	// payload[8:16] is Sequence — informational only at this layer (see
+	// doc comment above); hop-1 already gated freshness before relaying.
+
+	sessions, err := DecodeSessionList(payload[16:])
+	if err != nil {
+		return fmt.Errorf("discovery: decode hop-2 session list: %w", err)
+	}
+
+	// Same registry replace-on-write update ReceiveAdvertisement previously
+	// performed (AC-007 postcondition 4).
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for k := range d.registry {
+		if k.nodeAddr == nodeAddr {
+			delete(d.registry, k)
+		}
+	}
+	for _, s := range sessions {
+		key := registryKey{nodeAddr: nodeAddr, sessionName: s.SessionName}
+		d.registry[key] = SessionEntry{
+			AdvertiserAddr: nodeAddr,
+			Presence:       s,
+		}
+	}
+	return nil
 }
 
 // Encode serialises payload to its wire representation.
