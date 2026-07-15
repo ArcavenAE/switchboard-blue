@@ -281,11 +281,22 @@ func (ri *RouterIngest) Ingest(raw []byte) (RouterIngestDecision, error) {
 	copy(svtnID[:], body[0:16])
 	copy(nodeAddr[:], body[16:24])
 
-	// AC-006: a lookup-miss and an HMAC-tag mismatch resolve to the
-	// identical rejection outcome — key lookup failure short-circuits
-	// VerifyAdvertisementHMAC via the `ok` guard rather than skipping it,
-	// so processing time does not depend on which failure occurred
-	// (SEC-DW-05).
+	// AC-006 / SEC-DW-05 (MUST clause): a lookup-miss and an HMAC-tag
+	// mismatch resolve to the identical rejection outcome
+	// (RouterIngestDecision{}, ErrInvalidHMACTag) with no distinguishing
+	// return value, log line, or other externally observable signal —
+	// there is no wire-visible accept/reject differential, satisfying
+	// SEC-DW-05's MUST clause (advertisements are one-way fire-and-forget
+	// UDP with no ack, so no response-content oracle exists by
+	// construction either).
+	//
+	// `ok &&` short-circuits: on a lookup-miss (ok == false) Go does NOT
+	// evaluate VerifyAdvertisementHMAC, so processing time is NOT
+	// symmetric between a lookup-miss and a tag-mismatch — a lookup-miss
+	// returns measurably faster. This is an accepted SEC-DW-05 residual:
+	// the story adopts the outcome-unification MUST clause but explicitly
+	// leaves processing-time symmetry as optional hardening
+	// (dummy-HMAC-on-lookup-miss), not required and not implemented here.
 	key, ok := ri.cfg.Router.DiscoveryAuthKeyFor(svtnID, nodeAddr)
 	verified := ok && routing.VerifyAdvertisementHMAC(key[:], body, wireTag)
 	if !verified {
