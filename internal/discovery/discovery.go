@@ -137,6 +137,15 @@ var ErrInvalidSessionName = errors.New("discovery: session name is empty or cont
 // BC-2.03.002 Inv-1 cross-scope isolation).
 var ErrSVTNMismatch = errors.New("discovery: advertisement rejected: SVTN mismatch")
 
+// ErrMissingNodeAdmissionPubkey is returned by transmitAdvertisement when
+// Config.LocalNodeAdmissionPubkey is empty (go.md rule 13: a
+// security-perimeter dependency fails closed, not open, on a missing
+// value). Signing with an empty/absent pubkey would derive a discovery HMAC
+// key that cannot verify against any real admitted node and — if derived
+// from wire-visible data instead, the defect this guards against — is
+// trivially recomputable by any LAN observer (F-DWIP1-001).
+var ErrMissingNodeAdmissionPubkey = errors.New("discovery: LocalNodeAdmissionPubkey is required to sign outbound advertisements")
+
 // Config holds the parameters used to construct a Discovery instance.
 type Config struct {
 	// LocalNodeAddr is the 8-byte address of this access node.
@@ -159,6 +168,23 @@ type Config struct {
 	// Production callers MUST leave this nil.
 	// (RULING-W6TB-G)
 	TickSource <-chan time.Time
+	// LocalNodeAdmissionPubkey is this node's own admitted Ed25519 public key
+	// — the IKM Encode/Decode use to derive the discovery HMAC key, matching
+	// what the router computes via DiscoveryAuthKeyFor for the same admitted
+	// node (AC-004 PC-1/PC-4; F-DWIP1-001). Required: transmitAdvertisement
+	// fails if this is empty, since a key derived from anything else (e.g.
+	// the on-wire SVTNID alone, the prior defect) cannot verify against a
+	// real router and is trivially recomputable by any LAN observer.
+	//
+	// As of this field's introduction, no production code path in this
+	// repository supplies a running access-node process with its own
+	// admission keypair at runtime — admin.key.register (cmd/switchboard's
+	// admin RPC) only registers a pubkey supplied externally by an operator
+	// call; nothing wires that pubkey (or a corresponding private key) back
+	// into a live runAccess process. Populating this field from a real
+	// identity/config source is out of this story's scope until that
+	// mechanism exists elsewhere in the codebase.
+	LocalNodeAdmissionPubkey []byte
 }
 
 // registryKey is the composite key for the session registry.
@@ -323,17 +349,21 @@ func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) e
 
 // transmitAdvertisement builds and sends the wire-format advertisement for
 // sessions over the SVTN-scoped multicast channel (AC-003 postconditions
-// 1-3). It signs via Encode (the same sender-side key derivation Encode/
-// Decode already use — SVTNID-scoped, requiring no separate pubkey field on
-// Config) and sends with a plain net.WriteTo/DialUDP, no group join, and
-// outbound multicast TTL explicitly set to 1.
+// 1-3). It signs via Encode using this node's admitted pubkey
+// (Config.LocalNodeAdmissionPubkey, AC-004 PC-1/PC-4) — the same IKM the
+// router derives its verification key from via DiscoveryAuthKeyFor — and
+// sends with a plain net.WriteTo/DialUDP, no group join, and outbound
+// multicast TTL explicitly set to 1.
 func (d *Discovery) transmitAdvertisement(sessions []SessionPresence) error {
+	if len(d.cfg.LocalNodeAdmissionPubkey) == 0 {
+		return ErrMissingNodeAdmissionPubkey
+	}
 	raw, err := Encode(AdvertisementPayload{
 		NodeAddr: d.cfg.LocalNodeAddr,
 		SVTNID:   d.cfg.LocalSVTNID,
 		Sequence: d.nextSequence(),
 		Sessions: sessions,
-	})
+	}, d.cfg.LocalNodeAdmissionPubkey)
 	if err != nil {
 		return fmt.Errorf("discovery: encode outbound advertisement: %w", err)
 	}
@@ -541,12 +571,20 @@ func (d *Discovery) IngestRelayAdvertisement(outerSVTNID [16]byte, payload []byt
 //
 // The encoding is stable: Encode(Decode(b)) == b for any valid advertisement
 // byte slice b (AC-004; BC-2.03.003 Inv-1 round-trip).
-func Encode(payload AdvertisementPayload) ([]byte, error) {
+//
+// nodeAdmissionPubkey is the sending node's own admitted Ed25519 public
+// key — the HMAC key is derived as routing.DeriveDiscoveryKey(
+// nodeAdmissionPubkey, payload.SVTNID), the identical derivation the router
+// performs via DiscoveryAuthKeyFor for the same admitted node (AC-004
+// PC-1/PC-4). It MUST NOT be derived from payload fields (F-DWIP1-001):
+// a key that is a pure function of on-wire cleartext is trivially
+// recomputable by any observer and defeats authentication entirely.
+func Encode(payload AdvertisementPayload, nodeAdmissionPubkey []byte) ([]byte, error) {
 	body, err := encodeBody(payload)
 	if err != nil {
 		return nil, err
 	}
-	hmacKey := routing.DeriveDiscoveryKey(payload.SVTNID[:], payload.SVTNID)
+	hmacKey := routing.DeriveDiscoveryKey(nodeAdmissionPubkey, payload.SVTNID)
 	tag := routing.ComputeAdvertisementHMAC(hmacKey[:], body)
 
 	out := make([]byte, routing.AdvertisementHMACTagSize+len(body))
@@ -557,10 +595,18 @@ func Encode(payload AdvertisementPayload) ([]byte, error) {
 
 // Decode deserialises raw into an AdvertisementPayload.
 //
+// nodeAdmissionPubkey is the pubkey the caller expects raw to be signed
+// with — the counterpart to Encode's parameter of the same name (AC-004
+// PC-1/PC-4; F-DWIP1-001). Decode has no production caller as of this
+// writing (RouterIngest.Ingest authenticates hop-1 datagrams directly via
+// DiscoveryAuthKeyFor, and IngestRelayAdvertisement's hop-2 path carries no
+// per-frame HMAC at all) — it remains exported and tested as the symmetric
+// counterpart to Encode.
+//
 // Returns ErrInvalidHMACTag if the payload is too short or the HMAC tag
-// cannot be verified with the SVTN key embedded in the body, or a wrapped
-// decode error otherwise.
-func Decode(raw []byte) (AdvertisementPayload, error) {
+// cannot be verified against nodeAdmissionPubkey, or a wrapped decode error
+// otherwise.
+func Decode(raw []byte, nodeAdmissionPubkey []byte) (AdvertisementPayload, error) {
 	// Minimum: 8-byte HMAC tag + 34-byte body minimum (16 SVTNID + 8 NodeAddr
 	// + 8 Sequence + 2 count) = 42 bytes (SEC-DW-07 widened Sequence uint64).
 	if len(raw) < routing.AdvertisementHMACTagSize+34 {
@@ -571,13 +617,12 @@ func Decode(raw []byte) (AdvertisementPayload, error) {
 	copy(wireTag[:], raw[:routing.AdvertisementHMACTagSize])
 	body := raw[routing.AdvertisementHMACTagSize:]
 
-	// Decode body first to extract the SVTN ID needed for key derivation.
 	payload, err := decodeBody(body)
 	if err != nil {
 		return AdvertisementPayload{}, ErrInvalidHMACTag
 	}
 
-	hmacKey := routing.DeriveDiscoveryKey(payload.SVTNID[:], payload.SVTNID)
+	hmacKey := routing.DeriveDiscoveryKey(nodeAdmissionPubkey, payload.SVTNID)
 	if !routing.VerifyAdvertisementHMAC(hmacKey[:], body, wireTag) {
 		return AdvertisementPayload{}, ErrInvalidHMACTag
 	}
@@ -693,10 +738,10 @@ func decodeBody(body []byte) (AdvertisementPayload, error) {
 	payload.Sequence = binary.BigEndian.Uint64(body[24:32])
 
 	count := binary.BigEndian.Uint16(body[32:34])
-	// Guard against malformed or adversarial large-count payloads.
-	// A single advertisement from one node should not carry more than 1024
-	// sessions; reject anything above this to bound pre-HMAC parse work.
-	const maxSessionsPerAdvertisement = 1024
+	// Guard against malformed or adversarial large-count payloads, bounded
+	// by the shared maxSessionsPerAdvertisement constant (discovery_wire.go;
+	// SEC-DW-02) rather than a local shadow, so decodeBody and
+	// DecodeSessionList enforce the identical cap (F-DWIP1-002).
 	if count > maxSessionsPerAdvertisement {
 		return AdvertisementPayload{}, errors.New("discovery: session count exceeds maximum")
 	}

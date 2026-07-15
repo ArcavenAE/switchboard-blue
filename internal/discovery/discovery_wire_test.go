@@ -757,7 +757,7 @@ func TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode(t *testing.T) 
 	t.Parallel()
 	defer redGateGuard(t)
 
-	router, _, nodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	router, pub, nodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
 	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
 
 	raw, err := discovery.Encode(discovery.AdvertisementPayload{
@@ -765,7 +765,7 @@ func TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode(t *testing.T) 
 		SVTNID:   svtnA,
 		Sequence: 0,
 		Sessions: oneSession,
-	})
+	}, []byte(pub))
 	if err != nil {
 		t.Fatalf("Encode: unexpected error: %v", err)
 	}

@@ -51,10 +51,11 @@ func newTestRouter(t *testing.T) *routing.Router {
 func newTestConfig(t *testing.T, svtnID [16]byte, nodeAddr [8]byte) discovery.Config {
 	t.Helper()
 	return discovery.Config{
-		LocalNodeAddr:     nodeAddr,
-		LocalSVTNID:       svtnID,
-		Router:            newTestRouter(t),
-		HeartbeatInterval: discovery.HeartbeatInterval,
+		LocalNodeAddr:            nodeAddr,
+		LocalSVTNID:              svtnID,
+		Router:                   newTestRouter(t),
+		HeartbeatInterval:        discovery.HeartbeatInterval,
+		LocalNodeAdmissionPubkey: testNodeAdmissionPubkey,
 	}
 }
 
@@ -64,6 +65,18 @@ var (
 
 	nodeA1 = [8]byte{0x01}
 	nodeA2 = [8]byte{0x02}
+
+	// testNodeAdmissionPubkey is a fixed placeholder pubkey for tests that
+	// exercise Encode/Decode/Advertise wire-format behavior and do not care
+	// about cryptographic correctness against a real admitted router (that
+	// coverage lives in discovery_wire_test.go's
+	// TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode, which
+	// uses a real generated Ed25519 pubkey admitted via
+	// newAdmittedRouterForDiscoveryWire). Any non-empty value satisfies
+	// Config.LocalNodeAdmissionPubkey and Encode/Decode's parameter of the
+	// same name — HKDF has no notion of a "valid-shaped" key, only IKM
+	// bytes (F-DWIP1-001).
+	testNodeAdmissionPubkey = []byte("test-node-admission-pubkey-placeholder")
 )
 
 // distinctNodeAddrs returns the set of unique advertiser addresses in entries.
@@ -590,11 +603,11 @@ func TestDiscovery_Advertisement_RequiredFields(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			encoded, err := discovery.Encode(tc.payload)
+			encoded, err := discovery.Encode(tc.payload, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Encode: %v", err)
 			}
-			decoded, err := discovery.Decode(encoded)
+			decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
@@ -635,11 +648,11 @@ func TestDiscovery_Advertisement_QualityUnknownOnStartup(t *testing.T) {
 		},
 	}
 
-	encoded, err := discovery.Encode(payload)
+	encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	decoded, err := discovery.Decode(encoded)
+	decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -710,15 +723,15 @@ func TestDiscovery_AdvertisementRoundTrip(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			encoded, err := discovery.Encode(tc.payload)
+			encoded, err := discovery.Encode(tc.payload, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Encode: %v", err)
 			}
-			decoded, err := discovery.Decode(encoded)
+			decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
-			reencoded, err := discovery.Encode(decoded)
+			reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("re-Encode: %v", err)
 			}
@@ -1109,15 +1122,15 @@ func TestPropPresenceAdvertisement_RoundTrip(t *testing.T) {
 	// F-M-002 — byte equality alone does not catch silent coercions).
 	roundTrip := func(t *testing.T, payload discovery.AdvertisementPayload) {
 		t.Helper()
-		encoded, err := discovery.Encode(payload)
+		encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 		if err != nil {
 			t.Fatalf("Encode: %v", err)
 		}
-		decoded, err := discovery.Decode(encoded)
+		decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 		if err != nil {
 			t.Fatalf("Decode: %v", err)
 		}
-		reencoded, err := discovery.Encode(decoded)
+		reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 		if err != nil {
 			t.Fatalf("re-Encode: %v", err)
 		}
@@ -1243,15 +1256,15 @@ func TestPropPresenceAdvertisement_RoundTrip(t *testing.T) {
 						{SessionName: name, Status: status, Quality: quality},
 					},
 				}
-				encoded, err := discovery.Encode(payload)
+				encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 				if err != nil {
 					return false
 				}
-				decoded, err := discovery.Decode(encoded)
+				decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 				if err != nil {
 					return false
 				}
-				reencoded, err := discovery.Encode(decoded)
+				reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 				if err != nil {
 					return false
 				}
@@ -1299,7 +1312,7 @@ func TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8(t *testing.T) {
 					{SessionName: tc.input, Status: discovery.Attached, Quality: discovery.QualityGreen},
 				},
 			}
-			encoded, err := discovery.Encode(payload)
+			encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 			if err == nil {
 				t.Errorf("Encode(%q): got nil error, want ErrInvalidSessionName (VP-055 v1.2)", tc.input)
 			}
@@ -1336,7 +1349,7 @@ func TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8(t *testing.T) {
 						{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 					},
 				}
-				encoded, err := discovery.Encode(payload)
+				encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 				if err == nil {
 					return false // must return an error
 				}
@@ -1405,11 +1418,11 @@ func TestPropPresenceAdvertisement_TruncatesOversize(t *testing.T) {
 						{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 					},
 				}
-				encoded, err := discovery.Encode(payload)
+				encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 				if err != nil {
 					return false // truncation must not error
 				}
-				decoded, decErr := discovery.Decode(encoded)
+				decoded, decErr := discovery.Decode(encoded, testNodeAdmissionPubkey)
 				if decErr != nil {
 					return false
 				}
@@ -1459,7 +1472,7 @@ func TestPropPresenceAdvertisement_TruncatesOversize(t *testing.T) {
 				}
 				// Round-trip stability: re-encoding the decoded payload must
 				// produce the same bytes (truncated form is idempotent).
-				reencoded, reErr := discovery.Encode(decoded)
+				reencoded, reErr := discovery.Encode(decoded, testNodeAdmissionPubkey)
 				if reErr != nil {
 					return false
 				}
@@ -1502,11 +1515,11 @@ func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
 				{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 			},
 		}
-		encoded, err := discovery.Encode(payload)
+		encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 		if err != nil {
 			return "", err
 		}
-		decoded, err := discovery.Decode(encoded)
+		decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 		if err != nil {
 			return "", err
 		}
@@ -1514,7 +1527,7 @@ func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
 			t.Fatalf("decoded session count = %d, want 1", len(decoded.Sessions))
 		}
 		// Verify round-trip stability of the encoded form.
-		reencoded, err := discovery.Encode(decoded)
+		reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 		if err != nil {
 			return "", err
 		}
@@ -1763,7 +1776,7 @@ func TestDiscovery_Decode_RejectsZeroLengthName(t *testing.T) {
 	// failures as ErrInvalidHMACTag (parser detail is not leaked to
 	// unauthenticated peers). The strong oracle is that the frame is not
 	// accepted; the sentinel identity confirms the wrapping contract.
-	if _, err := discovery.Decode(raw); !errors.Is(err, discovery.ErrInvalidHMACTag) {
+	if _, err := discovery.Decode(raw, testNodeAdmissionPubkey); !errors.Is(err, discovery.ErrInvalidHMACTag) {
 		t.Fatalf("Decode(zero-length name frame): got %v, want ErrInvalidHMACTag (issue #50; pre-HMAC decode failures are wrapped)", err)
 	}
 
@@ -1812,7 +1825,7 @@ func TestDiscovery_Encode_RejectsMoreThan65535Sessions(t *testing.T) {
 		NodeAddr: nodeA1,
 		SVTNID:   svtnA,
 		Sessions: sessions,
-	})
+	}, testNodeAdmissionPubkey)
 	if !errors.Is(err, discovery.ErrTooManySessions) {
 		t.Fatalf("Encode(%d sessions): got %v, want ErrTooManySessions (issue #51)", overflowCount, err)
 	}
@@ -1844,7 +1857,7 @@ func TestDiscovery_Encode_Accepts65535Sessions(t *testing.T) {
 		NodeAddr: nodeA1,
 		SVTNID:   svtnA,
 		Sessions: sessions,
-	})
+	}, testNodeAdmissionPubkey)
 	if err != nil {
 		t.Fatalf("Encode(%d sessions): got %v, want nil (65535 is the max, not overflow)", maxCount, err)
 	}
@@ -1940,9 +1953,10 @@ func TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	cfg := discovery.Config{
-		LocalNodeAddr: [8]byte{0x01},
-		LocalSVTNID:   svtnID,
-		Router:        newTestRouter(t),
+		LocalNodeAddr:            [8]byte{0x01},
+		LocalSVTNID:              svtnID,
+		Router:                   newTestRouter(t),
+		LocalNodeAdmissionPubkey: testNodeAdmissionPubkey,
 	}
 	d := discovery.New(cfg)
 
