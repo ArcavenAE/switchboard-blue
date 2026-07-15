@@ -68,6 +68,8 @@ under `go test -race`.
 | AC-017 | — | — | **GATED** | `depends_on S-BL.NODE-IDENTIFY-WIRE` (fan-out target-resolution companion story, not yet landed). Not implemented, not tested, not demoed — see gap note below. |
 | AC-018 | — | — | **GATED** | Same gate as AC-017 (rate-cap decision is meaningless without a live dispatch mechanism to suppress). Not implemented, not tested, not demoed — see gap note below. |
 
+**CI portability note:** `TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly` (AC-001) and `TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin` (AC-003) perform real multicast socket I/O and `t.Skip` via `testenv.RequireMulticastLoopback` on environments lacking a UP+LOOPBACK+MULTICAST interface (e.g. stock GitHub Actions Linux runners, where `lo` lacks the MULTICAST flag) — covered on developer workstations and a future network-integration CI tier instead.
+
 ---
 
 ## AC-001 — Router-mode-exclusive multicast group membership
