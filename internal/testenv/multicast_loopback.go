@@ -8,6 +8,7 @@ package testenv
 
 import (
 	"net"
+	"runtime"
 	"testing"
 )
 
@@ -22,11 +23,39 @@ import (
 // This is explicitly NOT an extension of NewLoopback (S-BL.DISCOVERY-WIRE
 // Decision 2(e)): NewLoopback is a VP-042-scoped compile-shim and is not a
 // fit for multicast interface resolution.
-//
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 3's Green step.
 func MulticastLoopbackInterface(t testing.TB) *net.Interface {
 	t.Helper()
-	panic("not implemented: S-BL.DISCOVERY-WIRE MulticastLoopbackInterface")
+
+	name := loopbackInterfaceName()
+	iface, err := net.InterfaceByName(name)
+	if err == nil {
+		return iface
+	}
+
+	// Named lookup failed (unexpected platform, or a name this project
+	// hasn't hardcoded) — fall back to scanning every interface for the
+	// loopback+multicast flag combination the test needs, rather than
+	// failing outright on a name mismatch alone.
+	ifaces, listErr := net.Interfaces()
+	if listErr != nil {
+		t.Fatalf("MulticastLoopbackInterface: net.InterfaceByName(%q): %v; net.Interfaces() fallback: %v", name, err, listErr)
+	}
+	for i := range ifaces {
+		f := ifaces[i].Flags
+		if f&net.FlagLoopback != 0 && f&net.FlagMulticast != 0 {
+			return &ifaces[i]
+		}
+	}
+	t.Fatalf("MulticastLoopbackInterface: no loopback+multicast interface found (tried named lookup %q: %v)", name, err)
+	return nil // unreachable — t.Fatalf stops the goroutine
+}
+
+// loopbackInterfaceName returns the platform-conventional loopback
+// interface name — "lo0" on macOS, "lo" on Linux (this project's own B13
+// lesson: platform-specific behavior requires platform-specific testing).
+func loopbackInterfaceName() string {
+	if runtime.GOOS == "darwin" {
+		return "lo0"
+	}
+	return "lo"
 }
