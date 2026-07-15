@@ -41,13 +41,17 @@ import (
 	"github.com/arcavenae/switchboard/internal/discovery"
 )
 
-// discoveryReadBufSize bounds the per-datagram read buffer. Sized to the
-// maximum possible IPv4 UDP payload (65536 bytes, rounded up from the
-// 65507-byte theoretical max) rather than internal/discovery's own
-// maxDiscoveryDatagramSize (unexported) — RouterIngest.Ingest independently
-// re-enforces the tighter SEC-DW-02 bound on whatever is read here, so an
-// oversized local buffer is harmless.
-const discoveryReadBufSize = 65536
+// discoveryReadBufSize bounds the per-datagram read buffer. AC-011 PC-1
+// explicitly forbids sizing this to the 65,507-byte UDP/IP theoretical
+// maximum — it MUST be sized to a realistic worst-case legitimate
+// advertisement instead. discovery.MaxDiscoveryDatagramSize is exactly that
+// bound (F-DWIP3-002): it is exported specifically so this read buffer can
+// share it rather than independently re-deriving a looser one.
+// RouterIngest.Ingest still independently re-enforces the identical
+// SEC-DW-02 bound (AC-011 PC-2) on whatever is read here — belt-and-braces,
+// not redundant, since Ingest must reject an oversized datagram regardless
+// of what any particular caller's read buffer happens to be sized to.
+const discoveryReadBufSize = discovery.MaxDiscoveryDatagramSize
 
 // wireDiscoveryListener starts the router-mode-exclusive discovery
 // multicast listener for one SVTN's group address (discovery.MulticastAddrFor),

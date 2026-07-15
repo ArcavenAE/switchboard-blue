@@ -110,12 +110,14 @@ const keySelectorMinRaw = routing.AdvertisementHMACTagSize + 16 + 8
 // full valid-frame minimum is 42 raw bytes = 8 tag + 34 body).
 const hop1BodyMinLen = 16 + 8 + 8 + 2
 
-// maxDiscoveryDatagramSize bounds the router's ingest path against an
-// oversized raw datagram (SEC-DW-02, AC-011) — sized to a realistic
+// MaxDiscoveryDatagramSize bounds the router's ingest path against an
+// oversized raw datagram (SEC-DW-02, AC-011 PC-1) — sized to a realistic
 // worst-case legitimate advertisement (comfortably above
 // maxSessionsPerAdvertisement sessions with reasonable name lengths), not
-// the 65,507-byte UDP/IP theoretical maximum.
-const maxDiscoveryDatagramSize = 32768
+// the 65,507-byte UDP/IP theoretical maximum. Exported so cmd/switchboard's
+// discovery multicast read-buffer sizing (discoveryReadBufSize) shares this
+// same bound instead of independently re-deriving a looser one (F-DWIP3-002).
+const MaxDiscoveryDatagramSize = 32768
 
 // maxSessionsPerAdvertisement bounds the declared per-advertisement session
 // count (SEC-DW-02, AC-011 postcondition 3). Re-derived from realistic
@@ -262,9 +264,9 @@ func (ri *RouterIngest) Ingest(raw []byte) (RouterIngestDecision, error) {
 		return RouterIngestDecision{}, ErrInvalidHMACTag
 	}
 
-	// SEC-DW-02 / AC-011: bounded read buffer — an oversized datagram is
-	// rejected without partial-parse, before any further processing.
-	if len(raw) > maxDiscoveryDatagramSize {
+	// SEC-DW-02 / AC-011 PC-2: bounded read buffer — an oversized datagram
+	// is rejected without partial-parse, before any further processing.
+	if len(raw) > MaxDiscoveryDatagramSize {
 		return RouterIngestDecision{}, ErrInvalidHMACTag
 	}
 
