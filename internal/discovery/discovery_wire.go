@@ -19,6 +19,11 @@
 package discovery
 
 import (
+	"encoding/binary"
+	"fmt"
+	"sync"
+	"time"
+
 	"github.com/arcavenae/switchboard/internal/routing"
 )
 
@@ -71,53 +76,258 @@ type RouterIngestDecision struct {
 	Sessions []SessionPresence
 }
 
+// discoveryFailureRecorder mirrors *admission.FailureCounter's
+// RecordHMACFailure method surface without internal/discovery importing
+// internal/admission directly (ARCH-08 §6.5 position 14). Satisfied
+// structurally by the value routing.NewDiscoveryFailureCounter returns.
+type discoveryFailureRecorder interface {
+	RecordHMACFailure(srcAddr string)
+}
+
+// nopDiscoveryLogger discards every log line. Used when RouterIngestConfig.Logger
+// is nil, mirroring routing.Router's own nopLogger default.
+type nopDiscoveryLogger struct{}
+
+func (nopDiscoveryLogger) Log(string) {}
+
+// discoveryFailureThreshold and discoveryFailureWindow are the FailureCounter
+// constants reused for discovery's ingest path (BC-2.05.005 PC-3; AC-012/
+// AC-013), matching the existing TCP-path threshold/window exactly
+// (cmd/switchboard's hmacFailureThreshold/hmacFailureWindow).
+const (
+	discoveryFailureThreshold = 5
+	discoveryFailureWindow    = 60 * time.Second
+)
+
+// keySelectorMinRaw is the minimum raw datagram length before any key
+// lookup is attempted: 8-byte HMAC tag + 16-byte SVTNID + 8-byte NodeAddr
+// (SEC-DW-01, AC-005 postcondition 4).
+const keySelectorMinRaw = routing.AdvertisementHMACTagSize + 16 + 8
+
+// hop1BodyMinLen is the minimum post-tag body length for a syntactically
+// complete hop-1 frame once HMAC has passed: 16-byte SVTNID + 8-byte
+// NodeAddr + 8-byte Sequence + 2-byte session count (AC-005's note: the
+// full valid-frame minimum is 42 raw bytes = 8 tag + 34 body).
+const hop1BodyMinLen = 16 + 8 + 8 + 2
+
+// maxDiscoveryDatagramSize bounds the router's ingest path against an
+// oversized raw datagram (SEC-DW-02, AC-011) — sized to a realistic
+// worst-case legitimate advertisement (comfortably above
+// maxSessionsPerAdvertisement sessions with reasonable name lengths), not
+// the 65,507-byte UDP/IP theoretical maximum.
+const maxDiscoveryDatagramSize = 32768
+
+// maxSessionsPerAdvertisement bounds the declared per-advertisement session
+// count (SEC-DW-02, AC-011 postcondition 3). Re-derived from realistic
+// tmux-sessions-per-access-node scale — low hundreds, not the prior
+// TCP/length-prefixed-framing-era 1024.
+const maxSessionsPerAdvertisement = 256
+
+// aggregateRateBurst and aggregateRateFillPerSec size the router's
+// aggregate (not per-source) ingest token bucket (SEC-DW-03(a), AC-012
+// postconditions 1 and 3) — generous headroom for a legitimate SVTN's
+// initial admission burst, while still bounding sustained flood volume
+// regardless of how many distinct declared NodeAddr values an attacker
+// rotates through.
+const (
+	aggregateRateBurst      = 500
+	aggregateRateFillPerSec = 100.0
+)
+
+// lastSeenKey is the composite map key for RouterIngest's per-(SVTN,
+// NodeAddr) replay-discard watermark (SEC-DW-07).
+type lastSeenKey struct {
+	svtnID   [16]byte
+	nodeAddr [8]byte
+}
+
+// tokenBucket is a minimal thread-safe token bucket used for the ingest
+// path's aggregate rate cap (SEC-DW-03(a)).
+type tokenBucket struct {
+	mu         sync.Mutex
+	tokens     float64
+	capacity   float64
+	fillPerSec float64
+	last       time.Time
+	now        func() time.Time
+}
+
+func newTokenBucket(capacity, fillPerSec float64) *tokenBucket {
+	return &tokenBucket{
+		tokens:     capacity,
+		capacity:   capacity,
+		fillPerSec: fillPerSec,
+		last:       time.Now(),
+		now:        time.Now,
+	}
+}
+
+// allow reports whether one token is available, consuming it if so.
+func (b *tokenBucket) allow() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	now := b.now()
+	elapsed := now.Sub(b.last).Seconds()
+	b.last = now
+	if elapsed > 0 {
+		b.tokens += elapsed * b.fillPerSec
+		if b.tokens > b.capacity {
+			b.tokens = b.capacity
+		}
+	}
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
 // RouterIngest is the router-mode-exclusive hop-1 ingest path
-// (SEC-DW-01..07). Once implemented (Task 2 Green step) it is stateful
-// across calls to Ingest: it holds the lastSeen replay-discard map
-// (AC-008/AC-009/AC-010) that must persist between datagrams for the same
-// (SVTNID, NodeAddr) pair, guarded by a mutex for concurrent socket-read-loop
-// callers — neither is declared on this stub, since a Red Gate skeleton
-// carries no behavioral state (BC-5.38.001).
+// (SEC-DW-01..07). It is stateful across calls to Ingest: it holds the
+// lastSeen replay-discard map (AC-008/AC-009/AC-010) that persists between
+// datagrams for the same (SVTNID, NodeAddr) pair, guarded by a mutex for
+// concurrent socket-read-loop callers, plus an aggregate rate-limiter
+// (SEC-DW-03(a)) and a reused FailureCounter for HMAC-rejection visibility
+// (SEC-DW-03(b)/SEC-DW-04).
 //
 // All exported methods are safe for concurrent use.
 type RouterIngest struct {
 	cfg RouterIngestConfig
+
+	mu       sync.Mutex
+	lastSeen map[lastSeenKey]uint64
+
+	rateLimiter    *tokenBucket
+	failureCounter discoveryFailureRecorder
 }
 
 // NewRouterIngest constructs a RouterIngest from cfg. cfg.Router must not be
-// nil.
+// nil — the router is the sole source of admitted-node key material this
+// ingest path authenticates against (go.md rule 13: a security-perimeter
+// constructor fails closed, not open, on a missing dependency).
 func NewRouterIngest(cfg RouterIngestConfig) *RouterIngest {
-	return &RouterIngest{cfg: cfg}
+	if cfg.Router == nil {
+		panic("discovery: NewRouterIngest: cfg.Router must not be nil")
+	}
+	logger := cfg.Logger
+	if logger == nil {
+		logger = nopDiscoveryLogger{}
+	}
+	return &RouterIngest{
+		cfg:            cfg,
+		lastSeen:       make(map[lastSeenKey]uint64),
+		rateLimiter:    newTokenBucket(aggregateRateBurst, aggregateRateFillPerSec),
+		failureCounter: routing.NewDiscoveryFailureCounter(discoveryFailureThreshold, discoveryFailureWindow, logger),
+	}
 }
 
 // Ingest authenticates and processes one raw inbound multicast datagram.
 //
 // Fixed-offset key-selector extraction (SEC-DW-01, AC-005): SVTNID and
 // NodeAddr are read via direct byte-slice indexing to select the
-// verification key — decodeBody's variable-length, attacker-controlled
-// session-entry walk is never invoked before HMAC verification succeeds.
-// The HMAC computation itself covers the complete raw body bytes.
+// verification key — DecodeSessionList's variable-length,
+// attacker-controlled session-entry walk is never invoked before HMAC
+// verification succeeds. The HMAC computation itself covers the complete
+// raw body bytes.
 //
 // HMAC-first fail-closed verification (AC-006): a lookup-miss and an
 // HMAC-tag mismatch both resolve to the identical rejection outcome
-// (RouterIngestDecision{Accept: false}), with no distinguishing return
-// value, log line, or other externally observable signal.
+// (RouterIngestDecision{Accept: false}, ErrInvalidHMACTag), with no
+// distinguishing return value, log line, or other externally observable
+// signal.
 //
 // Replay/forward-acceptance gate (AC-008/AC-009/AC-010, SEC-DW-07): a
 // cold-start datagram (no prior lastSeen entry) is always accepted; a
 // non-increasing Sequence for an existing entry is discarded
-// (Accept: true, Relay: false, no registry/lastSeen mutation); a
-// strictly-increasing Sequence advances lastSeen and is accepted+relayed.
+// (Accept: true, Relay: false, no lastSeen mutation); a strictly-increasing
+// Sequence advances lastSeen and is accepted+relayed.
 //
 // Bounded read buffer (SEC-DW-02, AC-011), aggregate rate cap + visibility
 // counter (SEC-DW-03, AC-012), and rate-limited failure logging (SEC-DW-04,
-// AC-013) are enforced within Ingest's Green-step implementation; their
-// exact composition with the caller's socket-read loop is Task 2's Green
-// step, not fixed by this stub.
-//
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 2's Green step.
+// AC-013) are enforced here; the socket-read loop that owns the actual
+// network I/O is the caller's responsibility (Task 3).
 func (ri *RouterIngest) Ingest(raw []byte) (RouterIngestDecision, error) {
-	panic("not implemented: S-BL.DISCOVERY-WIRE RouterIngest.Ingest")
+	// SEC-DW-03(a): aggregate (not per-source) rate cap — the cheapest,
+	// earliest defense, evaluated before any parsing so a flood cannot be
+	// used to drive unbounded HMAC-computation cost either.
+	if !ri.rateLimiter.allow() {
+		return RouterIngestDecision{}, ErrInvalidHMACTag
+	}
+
+	// SEC-DW-01 / AC-005 postcondition 4: a raw datagram shorter than the
+	// 8-byte tag + 24-byte SVTNID/NodeAddr key selector is rejected before
+	// any key lookup is attempted.
+	if len(raw) < keySelectorMinRaw {
+		return RouterIngestDecision{}, ErrInvalidHMACTag
+	}
+
+	// SEC-DW-02 / AC-011: bounded read buffer — an oversized datagram is
+	// rejected without partial-parse, before any further processing.
+	if len(raw) > maxDiscoveryDatagramSize {
+		return RouterIngestDecision{}, ErrInvalidHMACTag
+	}
+
+	body := raw[routing.AdvertisementHMACTagSize:]
+	var wireTag [routing.AdvertisementHMACTagSize]byte
+	copy(wireTag[:], raw[:routing.AdvertisementHMACTagSize])
+
+	// SEC-DW-01 postconditions 1/2: fixed-offset extraction of the
+	// key-selector fields via direct byte-slice indexing — never a call to
+	// DecodeSessionList (which walks the variable-length,
+	// attacker-controlled session-entry list) before HMAC succeeds.
+	var svtnID [16]byte
+	var nodeAddr [8]byte
+	copy(svtnID[:], body[0:16])
+	copy(nodeAddr[:], body[16:24])
+
+	// AC-006: a lookup-miss and an HMAC-tag mismatch resolve to the
+	// identical rejection outcome — key lookup failure short-circuits
+	// VerifyAdvertisementHMAC via the `ok` guard rather than skipping it,
+	// so processing time does not depend on which failure occurred
+	// (SEC-DW-05).
+	key, ok := ri.cfg.Router.DiscoveryAuthKeyFor(svtnID, nodeAddr)
+	verified := ok && routing.VerifyAdvertisementHMAC(key[:], body, wireTag)
+	if !verified {
+		// AC-012 postcondition 2 / AC-013: FailureCounter is invoked for
+		// operator visibility only — its own threshold-crossing emission is
+		// the sole logging trigger (never per-packet); it never gates this
+		// or any future Ingest call on the declared, attacker-controlled
+		// NodeAddr.
+		ri.failureCounter.RecordHMACFailure(fmt.Sprintf("%x", nodeAddr))
+		return RouterIngestDecision{}, ErrInvalidHMACTag
+	}
+
+	// HMAC verified — safe to parse the remainder of the body now
+	// (SEC-DW-01 postcondition 2). A syntactically-too-short-but-somehow-
+	// authenticated body (unreachable from any real sender, but not
+	// provably impossible) fails closed here rather than slicing out of
+	// bounds below.
+	if len(body) < hop1BodyMinLen {
+		return RouterIngestDecision{}, ErrInvalidHMACTag
+	}
+	sequence := binary.BigEndian.Uint64(body[24:32])
+	sessions, err := DecodeSessionList(body[32:])
+	if err != nil {
+		return RouterIngestDecision{}, ErrInvalidHMACTag
+	}
+
+	decision := RouterIngestDecision{
+		Accept:   true,
+		SVTNID:   svtnID,
+		NodeAddr: nodeAddr,
+		Sequence: sequence,
+		Sessions: sessions,
+	}
+
+	// SEC-DW-07 / AC-008/AC-009/AC-010: replay/forward-acceptance gate.
+	ri.mu.Lock()
+	defer ri.mu.Unlock()
+	k := lastSeenKey{svtnID: svtnID, nodeAddr: nodeAddr}
+	last, seen := ri.lastSeen[k]
+	if !seen || sequence > last {
+		ri.lastSeen[k] = sequence
+		decision.Relay = true
+	}
+	return decision, nil
 }

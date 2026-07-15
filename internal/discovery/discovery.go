@@ -617,3 +617,88 @@ func decodeBody(body []byte) (AdvertisementPayload, error) {
 	}
 	return payload, nil
 }
+
+// EncodeSessionList serialises sessions using this package's per-session
+// wire encoding (uint16 name_len | name | uint8 status | uint8 quality),
+// prefixed with a BE uint16 session count. Exported so that
+// cmd/switchboard's DISCOVERY_RELAY frame assembly (AC-014 postcondition 2)
+// reuses the identical per-session codec instead of re-implementing it.
+// Session-name validation and truncation rules are identical to Encode's
+// (BC-2.03.003 PC-2).
+func EncodeSessionList(sessions []SessionPresence) ([]byte, error) {
+	const maxSessions = 65535
+	if len(sessions) > maxSessions {
+		return nil, fmt.Errorf("%w: got %d", ErrTooManySessions, len(sessions))
+	}
+
+	encodedNames := make([][]byte, len(sessions))
+	for i, s := range sessions {
+		name, err := encodedSessionName(s.SessionName)
+		if err != nil {
+			return nil, err
+		}
+		encodedNames[i] = name
+	}
+
+	size := 2
+	for _, name := range encodedNames {
+		size += 2 + len(name) + 1 + 1
+	}
+	buf := make([]byte, 0, size)
+	buf = binary.BigEndian.AppendUint16(buf, uint16(len(sessions)))
+	for i, s := range sessions {
+		name := encodedNames[i]
+		buf = binary.BigEndian.AppendUint16(buf, uint16(len(name)))
+		buf = append(buf, name...)
+		buf = append(buf, byte(s.Status))
+		buf = append(buf, byte(s.Quality))
+	}
+	return buf, nil
+}
+
+// DecodeSessionList parses a BE uint16 session count followed by that many
+// per-session entries (uint16 name_len | name | uint8 status | uint8
+// quality) from the start of body — the counterpart to EncodeSessionList,
+// reused by RouterIngest.Ingest (AC-005/AC-011) and
+// Discovery.IngestRelayAdvertisement (AC-007) so both hop-1 and hop-2
+// ingest share one session-list codec. The declared count is bounded by
+// maxSessionsPerAdvertisement (SEC-DW-02, AC-011 postcondition 3).
+func DecodeSessionList(body []byte) ([]SessionPresence, error) {
+	if len(body) < 2 {
+		return nil, errors.New("discovery: session list truncated: missing count field")
+	}
+	count := binary.BigEndian.Uint16(body[:2])
+	if count > maxSessionsPerAdvertisement {
+		return nil, errors.New("discovery: session count exceeds maximum")
+	}
+	offset := 2
+
+	var sessions []SessionPresence
+	for i := uint16(0); i < count; i++ {
+		if offset+2 > len(body) {
+			return nil, errors.New("discovery: truncated session name length")
+		}
+		nameLen := int(binary.BigEndian.Uint16(body[offset : offset+2]))
+		offset += 2
+
+		if nameLen == 0 {
+			return nil, errors.New("discovery: session name is empty")
+		}
+		if offset+nameLen+2 > len(body) {
+			return nil, errors.New("discovery: truncated session entry")
+		}
+		name := string(body[offset : offset+nameLen])
+		offset += nameLen
+
+		status := AttachmentStatus(body[offset])
+		quality := QualityIndicator(body[offset+1])
+		offset += 2
+
+		sessions = append(sessions, SessionPresence{
+			SessionName: name,
+			Status:      status,
+			Quality:     quality,
+		})
+	}
+	return sessions, nil
+}
