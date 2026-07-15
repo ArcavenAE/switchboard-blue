@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,29 @@ import (
 // HeartbeatInterval is the default period between periodic presence
 // advertisements (BC-2.03.001 PC-4; ARCH-INDEX tuning parameter).
 const HeartbeatInterval = 30 * time.Second
+
+// DiscoveryPort is the fixed UDP port for the SVTN-scoped multicast
+// discovery channel (S-BL.DISCOVERY-WIRE Decision 2(c)). Adjudicated as
+// 49201 by human gate disposition 2026-07-14 (no longer a bikeshed
+// placeholder). One port suffices for all SVTNs because the group
+// *address*, not the port, provides SVTN scoping (see MulticastAddrFor).
+const DiscoveryPort = 49201
+
+// MulticastAddrFor returns the SVTN-scoped multicast group address for
+// svtnID: 239.h0.h1.h2, where h0..h2 are the first three bytes of
+// SHA-256(svtnID) (S-BL.DISCOVERY-WIRE Decision 2(b); AC-002). Deterministic
+// and static for the SVTN's lifetime — no allocation bookkeeping, no release
+// step on admin.svtn.destroy. IPv4 239.0.0.0/8 (RFC 2365 "administratively
+// scoped") is the addressing hygiene/routing-efficiency range; HMAC
+// authentication, not address uniqueness, is the actual security boundary
+// (SEC-DW-08).
+//
+// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
+// body panics unconditionally so no test can accidentally pass before
+// Task 3's Green step.
+func MulticastAddrFor(svtnID [16]byte) net.IP {
+	panic("not implemented: S-BL.DISCOVERY-WIRE MulticastAddrFor")
+}
 
 // AttachmentStatus represents whether a console is currently attached to
 // a session (BC-2.03.003 PC-1).
@@ -347,6 +371,39 @@ func (d *Discovery) ReceiveAdvertisement(ctx context.Context, raw []byte) error 
 		}
 	}
 	return nil
+}
+
+// IngestRelayAdvertisement decodes a hop-2 DISCOVERY_RELAY payload (AC-014
+// PC-2 shape: NodeAddr | Sequence | count | sessions, no SVTNID) and merges
+// it into the local session registry (AC-007; S-BL.DISCOVERY-WIRE Ruling 1
+// point 3, corrected by F-DWSP8-001).
+//
+// payload is the DISCOVERY_RELAY frame's payload bytes AFTER the caller has
+// stripped the 4-byte control header (control_type | version | reserved) —
+// i.e. starting at byte 4 of Decision 3(c)'s layout: NodeAddr at
+// payload[0:8], Sequence at payload[8:16], count at payload[16:18],
+// sessions at payload[18:].
+//
+// No per-frame HMAC is verified — trust derives from the already-admitted
+// TCP connection the relay frame arrived on (AC-015). outerSVTNID is the
+// relay frame's own OuterHeader.SVTNID, supplied by the caller: this
+// function does not import internal/frame directly (ARCH-08 §6.5 position
+// 14 restricts internal/discovery to internal/routing among internal/
+// imports). outerSVTNID is compared against d.cfg.LocalSVTNID and
+// ErrSVTNMismatch is returned on mismatch (AC-007 postcondition 3) —
+// defense-in-depth against a relay/routing bug, not a crypto check; primary
+// discovery-frame authentication happens exclusively at the router-side
+// ingest path (AC-005/AC-006), unchanged from the original PC-3.
+//
+// ReceiveAdvertisement (above) is the function this replaces on the
+// hop-2 path; its retirement is Task 4's Green-step action, not performed
+// by this stub.
+//
+// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
+// body panics unconditionally so no test can accidentally pass before
+// Task 4's Green step.
+func (d *Discovery) IngestRelayAdvertisement(outerSVTNID [16]byte, payload []byte) error {
+	panic("not implemented: S-BL.DISCOVERY-WIRE IngestRelayAdvertisement")
 }
 
 // Encode serialises payload to its wire representation.

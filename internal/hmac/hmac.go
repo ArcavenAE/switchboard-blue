@@ -26,6 +26,15 @@ const KeySize = 32
 // per ADR-001 (amended 2026-06-23).
 const HKDFInfo = "switchboard-frame-auth"
 
+// HKDFInfoDiscovery is the fixed info string used in HKDF-SHA256 key
+// derivation for admitted-node discovery-advertisement authentication
+// (SEC-DW-06; S-BL.DISCOVERY-WIRE Decision 1). Distinct from HKDFInfo so
+// DeriveDiscoveryKey's output is cryptographically independent of
+// DeriveKey's frame_auth_key for the same (nodeAdmissionPubkey, svtnID)
+// pair — domain-separates the more-exposed UDP discovery ingest surface
+// from the existing TCP-handshake-gated one.
+const HKDFInfoDiscovery = "switchboard-discovery-auth"
+
 // ComputeHMAC computes the 8-byte truncated HMAC-SHA256 tag for a frame.
 //
 // Per BC-2.05.005 postcondition 1 and ADR-001: the tag is the first TagSize
@@ -123,4 +132,21 @@ func DeriveKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
 	var out [KeySize]byte
 	copy(out[:], okm)
 	return out
+}
+
+// DeriveDiscoveryKey derives a per-(node, SVTN) discovery_auth_key via
+// HKDF-SHA256, domain-separated from DeriveKey's frame_auth_key by
+// HKDFInfoDiscovery (SEC-DW-06; AC-004 postconditions 1 and 2).
+//
+// Identical (nodeAdmissionPubkey, svtnID) inputs to DeriveKey —
+// nodeAdmissionPubkey as IKM, svtnID as the 16-byte salt — but the distinct
+// HKDFInfoDiscovery info label, so the two derived keys are cryptographically
+// independent even for the identical (nodeAdmissionPubkey, svtnID) pair
+// (S-BL.DISCOVERY-WIRE Decision 1).
+//
+// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
+// body panics unconditionally so no test can accidentally pass before
+// Task 1's Green step.
+func DeriveDiscoveryKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
+	panic("not implemented: S-BL.DISCOVERY-WIRE DeriveDiscoveryKey")
 }
