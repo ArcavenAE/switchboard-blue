@@ -137,14 +137,39 @@ var oneSession = []discovery.SessionPresence{
 // ---------------------------------------------------------------------------
 
 // TestRouterIngest_KeySelectorExtraction_FixedOffset_NoFullDecodeBeforeAuth
-// verifies AC-005 postconditions 1 and 2: SVTNID/NodeAddr are read via
-// fixed-offset indexing to select the verification key, and decodeBody's
-// variable-length, attacker-controlled session-entry walk never runs before
-// HMAC succeeds. Oracle: a datagram with a well-formed 32-byte key-selector
-// prefix, a deliberately wrong HMAC tag, and a session-list tail malformed
-// in a way that would raise a DIFFERENT error if decoded before auth (a
-// declared count the remaining bytes cannot satisfy) must still resolve to
-// ErrInvalidHMACTag — no decode-error ever leaks pre-auth.
+// verifies AC-005 postcondition 1 (SVTNID/NodeAddr are read via fixed-offset
+// indexing to select the verification key) structurally: a datagram with a
+// well-formed 32-byte key-selector prefix, a deliberately wrong HMAC tag,
+// and a session-list tail malformed in a way that DecodeSessionList would
+// reject (a declared count exceeding maxSessionsPerAdvertisement, with no
+// session bytes following) is rejected with ErrInvalidHMACTag rather than
+// crashing or returning some other error at the key-selector-read step
+// itself.
+//
+// N-2 (S-BL.DISCOVERY-WIRE fix-burst 4) — test-honesty correction: this is
+// NOT a behavioral discriminator between "decoded before auth" and "auth
+// before decode." Ingest's !verified branch (AC-006) maps every rejection
+// — lookup-miss, tag-mismatch, AND a hypothetical post-auth
+// DecodeSessionList failure on body[32:] (see the real post-auth call
+// further down in Ingest, which also collapses its error to
+// ErrInvalidHMACTag) — to the identical sentinel with no other observable
+// signal. DecodeSessionList/decodeBody are pure (no side effects, no
+// panics, no state mutation), so there is no black-box oracle available
+// here to distinguish "the malformed tail was never touched because HMAC
+// failed first" from "the malformed tail was decoded first and its error
+// got remapped to ErrInvalidHMACTag, matching Ingest's own established
+// error-normalization style." The only ways to make this test discriminate
+// would be a processing-time side channel (flaky — see F-DWIP2-001's
+// documented SEC-DW-05 residual on exactly this kind of timing signal) or
+// adding test-only instrumentation to production code purely for
+// testability (invasive internal-ordering exposure) — neither was judged
+// worth it here. The actual AC-005 postcondition 2 ordering guarantee
+// (decodeBody's variable-length walk never runs before HMAC succeeds) is
+// established by inspection of Ingest's control flow — the fixed-offset
+// SVTNID/NodeAddr reads at body[0:16]/body[16:24] happen unconditionally,
+// then key lookup + HMAC verification gate the `if len(body) <
+// hop1BodyMinLen` / DecodeSessionList calls that follow — not proven by
+// this test's return-value assertion alone.
 func TestRouterIngest_KeySelectorExtraction_FixedOffset_NoFullDecodeBeforeAuth(t *testing.T) {
 	t.Parallel()
 	defer redGateGuard(t)
