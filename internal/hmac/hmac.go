@@ -143,7 +143,6 @@ func DeriveKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
 // HKDFInfoDiscovery info label, so the two derived keys are cryptographically
 // independent even for the identical (nodeAdmissionPubkey, svtnID) pair
 // (S-BL.DISCOVERY-WIRE Decision 1).
-//
 func DeriveDiscoveryKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
 	okm := hkdfSHA256(nodeAdmissionPubkey, svtnID[:], []byte(HKDFInfoDiscovery), KeySize)
 	var out [KeySize]byte
