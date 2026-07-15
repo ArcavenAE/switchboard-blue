@@ -2,11 +2,11 @@
 artifact_id: S-BL.DISCOVERY-WIRE-rulings
 document_type: decision
 level: ops
-version: "1.10"
+version: "1.11"
 status: final
 producer: architect
 timestamp: 2026-07-13T00:00:00Z
-updated: 2026-07-15T04:00:00Z
+updated: 2026-07-15T09:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.DISCOVERY-WIRE]
 bc_traces:
@@ -1646,10 +1646,132 @@ owned by the new follow-on story.
 
 ---
 
+## Ruling 5 — Sender-side key-derivation fix (F-DWIP1-001) sanctioned as Ruling-1-faithful; node-side admission-identity provisioning named as a THIRD, distinct leg of the identity-distribution cluster
+
+**Pre-adjudication, Step-4.5 pass-1 fix-burst finding, 2026-07-15.** Verified independently against
+`feature/S-BL.DISCOVERY-WIRE` @ `20b5493` (3 commits since `692ff05`: `592327d` RED test, `c53d975`
+GREEN fix, `20b5493` AC-001 oracle strengthening) — not taken on the implementer's report.
+
+**(a) Fix shape SANCTIONED — confirmed faithful to Ruling 1, by direct code read, not by trusting
+the report.** `Encode(payload AdvertisementPayload, nodeAdmissionPubkey []byte)` and
+`Decode(raw []byte, nodeAdmissionPubkey []byte)` (`internal/discovery/discovery.go`) both call
+`routing.DeriveDiscoveryKey(nodeAdmissionPubkey, payload.SVTNID)` — the exact ARCH-08-boundary
+thin-wrapper Ruling 1 Implementation Constraint 4 specified for this exact purpose ("add a
+`routing.DeriveDiscoveryKey(pubkey []byte, svtnID [16]byte) [hmac.KeySize]byte` thin wrapper... so
+`internal/discovery` never imports `internal/hmac` directly"), not a direct `internal/hmac` import
+or a re-invented derivation. `Config.LocalNodeAdmissionPubkey` + `ErrMissingNodeAdmissionPubkey`
+(fail-closed in `transmitAdvertisement` when empty) is the correct shape for "IKM the node must
+supply itself" per Ruling 1's own sender-side text ("the node computes its own `DiscoveryAuthKey`
+the same way the router's lookup does... which it can do without querying the router — both inputs
+are locally known to the node: its own public key and its own SVTN ID"). **This is not a new
+decision — it is Ruling 1 IC-4 finally implemented as originally specified**, closing a defect
+(deriving the key from cleartext `SVTNID` alone — the exact anti-pattern DRIFT-W6TBD-001 and Ruling
+1 already named and rejected, now confirmed to have regressed into the shipped `Encode`/`Decode`
+call sites via the S-7.02-inherited placeholder) rather than opening new design ground. Sanctioned
+without reservation.
+
+**(b) The node-side identity-provisioning gap, independently verified — and found to be WORSE than
+reported, in a way that matters for scoping.** The implementer's claim (`admin.key.register`
+receives the pubkey as an operator-supplied argument into the control daemon's keyset; nothing wires
+that pubkey, or the private key, back into a live `runAccess` process) is accurate — confirmed by
+the same reasoning already independently established in Ruling 4(b): `internal/config.Config`
+(`internal/config/config.go`) has no admission-keypair field of any kind, not even a placeholder
+(`AuthorizedOperatorKeys` is a materially different concern — mgmt-plane RPC authorization, not
+discovery/admission identity); `runAccess` (`cmd/switchboard/access.go`) generates only an
+**ephemeral** Ed25519 keypair for its own mgmt identity (`daemonPriv`, explicitly documented
+"identity changes across restarts... persistent key_file wiring is deferred to S-6.02" — a promise
+`internal/config.Config`'s field list confirms was never delivered) and constructs its own
+independent, empty `admission.NewAdmittedKeySet()` — a third instance of the same disconnected-keyset
+pattern Ruling 4(b) already found in `runRouter`/`runConsole`/`runControl`.
+
+**Additional finding, beyond what was reported, verified independently:** `internal/discovery.New`
+and `Discovery.Run` — the entire sender/heartbeat loop that would call `Advertise`/
+`transmitAdvertisement` on a schedule — have **zero production callers anywhere in this repository**.
+Exhaustive check: every non-test file importing `internal/discovery` (`cmd/switchboard/
+discovery_wire.go`, `cmd/switchboard/discovery_relay_wire.go`, `cmd/switchboard/admin_handlers.go`
+[doc-comment reference only], `internal/routing/discovery_failure_counter.go`,
+`internal/routing/advertisement_hmac.go`, `internal/outerassembler/channelheader.go`) is
+router-side or unrelated plumbing; none constructs a `discovery.Config`/calls `discovery.New`/calls
+`.Run()`. `grep -rn` for `.Advertise(`, `discovery.New`, `discovery.Config{` across the whole
+repository returns matches only in `_test.go` files. **This means the team-lead's dispatch framing
+— "production `Advertise` now fails closed with `ErrMissingNodeAdmissionPubkey`" — is imprecise in
+one respect: nothing in production calls `Advertise` at all today, for an even more basic reason
+than identity, so the fail-closed sentinel is not currently reachable in production either way.**
+This does not weaken the severity assessment — it sharpens it: the hop-1 sender path is structurally
+unusable in production for TWO independently-necessary, compounding reasons (no daemon-lifecycle
+caller AND no identity to derive a key from, once a caller exists), not one. Both must be solved,
+not just the one named in the dispatch. Flagging this precisely, rather than letting an imprecise
+"fails closed in production" framing propagate, follows the same self-correction discipline applied
+to the commit-count claim in Ruling 4's Decision Log entry.
+
+**(c) Relationship to the two existing named gaps — a THIRD, DISTINCT leg, not a subset of either.**
+
+- **Not `S-BL.ADMISSION-SYNC-WIRE`** (Ruling 4(d)). That story's scope, as named, is
+  control-mode→{router,console} propagation of **other nodes'** admitted identities — the direction
+  a router/console needs to verify or relay traffic *from* admitted nodes it does not itself control.
+  This gap is the opposite direction: an access-node learning **its own** identity. Distribution
+  *outward from* control is a different mechanism and a different trust boundary than an access-node
+  either generating its own keypair locally and having only the pubkey registered (no distribution
+  needed for the node's own copy) or receiving a provisioned keypair from an external source
+  (operator file, secrets store, etc. — mechanism undecided). Folding this into
+  `S-BL.ADMISSION-SYNC-WIRE`'s scope would conflate two structurally different problems under one
+  name.
+- **Not `S-BL.NODE-IDENTIFY-WIRE`.** That story's job (per Ruling 3(f)'s v1.9 disposition) is the
+  connect-time WIRE HANDSHAKE — `NODE_IDENTIFY`/`Challenge`/`ChallengeResponse`/`AdmitNode` — which
+  *presumes* the connecting node already holds its own admission private key to sign the
+  `ChallengeResponse`. It does not provision that key; it consumes it. Per (b) above, no production
+  path provisions it, so `S-BL.NODE-IDENTIFY-WIRE` inherits this as a SECOND blocking prerequisite,
+  distinct from the one Ruling 4 already named (Ruling 4 named the ROUTER-side gap —
+  `S-BL.ADMISSION-SYNC-WIRE`, "does the router's `ks` have the key to verify against"; this is the
+  NODE-side gap — "does the connecting node itself have the key to sign with").
+- **New follow-on named: `S-BL.NODE-ADMISSION-PROVISIONING`** (working name — same disclosed
+  confidence caveat as `S-BL.ADMISSION-SYNC-WIRE`: not multi-option-vetted, a single-architect
+  pre-adjudication naming a gap, not a mechanism; PO/architect to confirm name + scope). Provisional
+  scope, two coupled facets discovered together and not separable without leaving the sender
+  non-functional either way: (i) how a running access-node process obtains and holds its own
+  admission Ed25519 keypair — pubkey for `Config.LocalNodeAdmissionPubkey` (this story's fix,
+  landed) and, later, private key for `S-BL.NODE-IDENTIFY-WIRE`'s `ChallengeResponse` signing;
+  mechanism undecided (local self-generation + external pubkey registration; operator-provisioned
+  `key_file`, echoing the same deferred-to-"S-6.02" promise already broken once in `access.go`'s own
+  comment; or something else) — and (ii) the daemon-lifecycle wiring of `internal/discovery.New`/
+  `.Run()` into `runAccess`, which per the additional finding above has never existed, independent
+  of identity. Recommend the same option-analysis treatment `S-BL.DISCOVERY-WIRE-fanout-options.md`
+  gave the fan-out decision before committing to a mechanism.
+
+**Three-story cluster, one root cause, three directions — stated together for PO/architect scoping
+convenience, not decided here:**
+
+| Story | Direction | Presumes | Delivers |
+|---|---|---|---|
+| `S-BL.ADMISSION-SYNC-WIRE` (Ruling 4) | control-mode → router/console | Nothing new | Non-control daemons learn OTHER nodes' admitted identities |
+| `S-BL.NODE-IDENTIFY-WIRE` (Ruling 3(f)/v1.9) | node → router, at connect time | Both (b)-facets below already solved | The wire handshake that VERIFIES a claimed identity |
+| `S-BL.NODE-ADMISSION-PROVISIONING` (this ruling) | (external) → node, at node startup | Nothing new | A node obtains and holds ITS OWN identity, and the sender daemon-lifecycle exists to use it |
+
+All three trace to the same root: this codebase has no operational admission-key distribution or
+provisioning system beyond the single control-mode process that received one manual
+`admin.key.register` call — everything downstream of that call was built (challenge-response
+verification, discovery-key derivation) assuming the material would already be present where needed,
+and nothing yet makes it present anywhere except inside the one process that first received it.
+
+**(d) `S-BL.NODE-IDENTIFY-WIRE`'s blocker note NEEDS EXTENDING — confirmed, not merely "worth
+checking."** Its stub already carries one blocking prerequisite from Ruling 4 (obligation 5:
+`S-BL.ADMISSION-SYNC-WIRE`, the router-side "does `ks` have the key to verify against" gap). Per (c)
+above, it needs a SECOND, distinct blocking prerequisite naming `S-BL.NODE-ADMISSION-PROVISIONING`
+(the node-side "does the connecting node hold its own private key to sign with" gap) — story-writer
+action, not executed here; see the blockquote in the report to team-lead.
+
+**(e) `S-BL.DISCOVERY-WIRE`'s own scope and points (8) are unaffected.** The F-DWIP1-001/002/003 fix
+burst is itself complete and correctly shaped (per (a)); this ruling adjudicates only the residual
+production-usability gap it surfaced, exactly as Ruling 4 did for Task 3 — a retrospective scope
+clarification naming an external obligation, not a new gate on this story's own tasks.
+
+---
+
 ## Decision Log
 
 | Date | Actor | Entry |
 |------|-------|-------|
+| 2026-07-15 (v1.11) | architect | **Pre-adjudication of a Step-4.5 pass-1 fix-burst finding (F-DWIP1-001/002/003), dispatched by team-lead ahead of pass 2, verified independently against `feature/S-BL.DISCOVERY-WIRE` @ `20b5493` (3 new commits since `692ff05`). Does not reopen Ruling 1, Ruling 4, or v1.10's content.** **(a) Fix SANCTIONED.** `Encode`/`Decode` now take an explicit `nodeAdmissionPubkey []byte` and route through `routing.DeriveDiscoveryKey` — confirmed, by direct code read, to be exactly the thin wrapper Ruling 1 Implementation Constraint 4 specified, not a new decision; `Config.LocalNodeAdmissionPubkey` + fail-closed `ErrMissingNodeAdmissionPubkey` is the correct shape. Closes a regression of the exact cleartext-`SVTNID`-derivation anti-pattern DRIFT-W6TBD-001/Ruling 1 already named and rejected. **(b) The node-side identity-provisioning gap confirmed, and found WORSE than reported.** `internal/config.Config` has no admission-keypair field at all; `runAccess` generates only an ephemeral mgmt keypair and its own separate, empty `AdmittedKeySet` (third instance of the Ruling-4(b) disconnected-keyset pattern). **Additional independent finding, beyond the dispatch's framing:** `internal/discovery.New`/`Discovery.Run` have ZERO production callers anywhere in the repository — `grep` for `.Advertise(`/`discovery.New`/`discovery.Config{` outside `_test.go` files returns nothing. The dispatch's "production `Advertise` now fails closed" framing is imprecise: nothing calls `Advertise` in production today, for an even more basic reason than identity — the sender path is unusable for two independently-necessary reasons, not one. **(c) Relationship to the two existing named gaps: a THIRD, distinct leg, not a subset of either.** `S-BL.ADMISSION-SYNC-WIRE` (Ruling 4) is control→router/console propagation of OTHER nodes' identities — opposite direction from a node learning its OWN identity. `S-BL.NODE-IDENTIFY-WIRE` consumes identity (the wire handshake), it does not provision it. **New follow-on named: `S-BL.NODE-ADMISSION-PROVISIONING`** (working name, not multi-option-vetted, same disclosed-confidence caveat as `S-BL.ADMISSION-SYNC-WIRE`) — covers both the keypair-provisioning question and the newly-found `runAccess` daemon-lifecycle-wiring absence for `Discovery.Run()`, since neither alone makes the sender live. Three-story cluster (`S-BL.ADMISSION-SYNC-WIRE` / `S-BL.NODE-IDENTIFY-WIRE` / `S-BL.NODE-ADMISSION-PROVISIONING`) traced to one root cause (no operational admission-key distribution/provisioning system beyond the single control-mode process that first received a manual `admin.key.register` call), tabulated for PO/architect scoping convenience. **(d) `S-BL.NODE-IDENTIFY-WIRE`'s blocker note CONFIRMED needing extension** — a second, distinct blocking prerequisite (`S-BL.NODE-ADMISSION-PROVISIONING`, the node-side "does the connecting node hold its own private key to sign with" gap) alongside the one Ruling 4 already named (`S-BL.ADMISSION-SYNC-WIRE`, the router-side verification gap); not applied to the stub here, out of this pass's authorized touch-list. New "## Ruling 5" section added after Ruling 4, before this Decision Log. `S-BL.DISCOVERY-WIRE`'s own 8 points are unaffected; story-cascade blockquotes (AC-003/AC-004 scope note, new Forward Obligations row, `S-BL.NODE-IDENTIFY-WIRE` stub extension) delivered in the report to team-lead, not applied here. |
 | 2026-07-15 (v1.10) | architect | **Pre-adjudication of two Green-step implementation-time findings, dispatched by team-lead ahead of the Step-4.5 adversarial loop (#32/#37 pattern), verified independently against `feature/S-BL.DISCOVERY-WIRE` @ `692ff05`, not taken on the implementer's word. Does not reopen Ruling 1, Ruling 2(a)-(i)'s existing content, Ruling 3, or v1.9's human-gate disposition (including the human's Option 1 selection for `S-BL.NODE-IDENTIFY-WIRE`).** **Item 1 (substantive, new Ruling 4):** `wireDiscoveryListener` is fully implemented and independently tested but NOT called from `runRouter` — Task 3's own text commits to that wiring explicitly (mirroring `wireMetricsHandlers`/`wireRouterControlHandlers`), so this is a genuine deviation, not an interpretation question. Reason verified independently: `admission.AdmittedKeySet` has no SVTN-enumeration method; `admin.key.register` (the only production `RegisterKey` caller) is wired exclusively into `runControl`; `runRouter`/`runConsole`/`runControl` each construct their OWN separate, permanently disconnected, empty `AdmittedKeySet` (`main.go`'s mode switch makes router/control mutually exclusive OS processes); no cross-process admission-sync mechanism exists anywhere in the codebase. **Adjudicated: AC-001/Task 3 ACCEPTED at function level** (same "implemented + tested, integration deferred for a verified reason" shape already used for `ReceiveAdvertisement`'s defense-in-depth reframe and AC-017/AC-018's GATED treatment) — **but AC-001 postcondition 1's literal text overclaims daemon-runtime behavior that does not exist today and needs a qualifying amendment, not a silent pass** (unlike AC-017/AC-018, AC-001 carries no `[GATED]` marker). **The obligation lands on neither existing candidate:** "S-6.02, rc.1 gate" (external SVTN bootstrap authority, per `STATE.md`/HS-006) is a different, narrower gap — even fully shipped, it only fixes who can call `admin.key.register` against the control daemon, not how that write reaches router-mode's separate `AdmittedKeySet`. `S-BL.NODE-IDENTIFY-WIRE` is not a home either — worse, it is ITSELF blocked by this same gap: `admission.AdmitNode` is verification-only (`ks.keys[svtnID]` lookup, `ErrNotAdmitted` if absent), so called against a router process's always-empty `ks` it will fail unconditionally, regardless of the NODE_IDENTIFY handshake shipping exactly as v1.9 ruled. **New follow-on named: `S-BL.ADMISSION-SYNC-WIRE`** (working name, not multi-option-vetted like NODE-IDENTIFY-WIRE was — flagged for PO/architect confirmation), which `S-BL.NODE-IDENTIFY-WIRE` must add as a `depends_on` PREREQUISITE (not a sibling) once both stories are created. Full adjudication, evidence, and the distinction from both rejected candidates: new "## Ruling 4" section (added after the Summary Table, before this Decision Log). Summary Table gained row 4; the `cmd/switchboard/mgmt_wire.go` Downstream Artifact Touch-List row gained a v1.10 correction note (item (1)'s "New Phase wiring" language is now stale — depends on the new story). **Item 2 (elaboration, addendum under Ruling 2):** `Advertise`'s multicast egress now fans out once per UP+multicast-capable local interface (each pinned via `setsockopt IP_MULTICAST_IF`, TTL still forced to 1 via `setsockopt IP_MULTICAST_TTL`, both stdlib-only via `SyscallConn().Control` — no `golang.org/x/net/ipv4`), empirically forced because `239.0.0.0/8` never routes to loopback on this project's dev hosts by default. Verified directly against `internal/discovery/discovery.go`/`multicast_ttl.go`, matches the mDNS/SSDP multi-homed-host pattern. **Sanctioned as within Ruling 2's existing scope** — DI-004/Invariant 1 (no group join) and TTL=1 (SEC-DW-08) both preserved per-send-per-interface; no BC change, no points change, no new numbered ruling needed. New "### Ruling 2 — sender-side multicast egress elaboration (v1.10, 2026-07-15)" subsection added at the end of Ruling 2. Both findings' story-cascade blockquotes (AC-001 amendment + new Forward Obligations row for Item 1; AC-003 postcondition 1 clarifying amendment for Item 2) delivered in the report to team-lead, not applied here — out of this pass's authorized touch-list (this file only). `S-BL.DISCOVERY-WIRE`'s own 8 points and `S-BL.DISCOVERY-WIRE-fanout-options.md` (v1.1, unchanged) are both unaffected. |
 | 2026-07-14 (v1.9) | architect | **Human gate disposition — story-ready gate for `S-BL.DISCOVERY-WIRE`, all three carried-forward Human Gate items closed, 2026-07-14. Resolution record, not a new adjudication of substance; does not reopen Ruling 1, Ruling 2, Ruling 3(a)-(e)/(g)-(i), DI-004, SEC-DW-08, or any prior adjudication.** **(1)** Ruling 3(f)'s fan-out target-resolution Forward Obligation: the human rejected both originally-offered resolution paths (an unnamed sequencing dependency; a narrow story-local `Router.BindInterface` seam) and asked for better options. `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.0 (six genuinely distinct options, grounded directly in the shipped code) was produced in response — **that document is the analysis record for this disposition**. The human selected its Option 1 ("name + schedule the companion story now"): a new, immediately-named companion story, **`S-BL.NODE-IDENTIFY-WIRE`**, delivers a `control_type=0x04` `NODE_IDENTIFY` handshake wiring the already-shipped `admission.AdmitNode`/`admission.GenerateChallenge` primitives over the live connection (`GenerateChallenge` → `Challenge` → `ChallengeResponse` → `AdmitNode`), recording the `(SVTNID, NodeAddr) → IfaceID` binding fan-out target resolution needs via a `Router.BindInterface`-shaped method. `S-BL.DISCOVERY-WIRE` gains a `depends_on` edge to it; AC-017/AC-018/Task 6 gate on it by name, not on a generic Forward Obligation. Full mechanism and rationale in the new "Ruling 3(f) Forward Obligation, SEC-DW-07, and the discovery port — human gate disposition" subsection inserted after Ruling 3(i), item (j). **(2)** The same gate APPROVED Human Gate item 1 — SEC-DW-07's epoch-qualified `Sequence uint64` design, **both** residual bounds per adjudication #19's Case 1 (≤1s)/Case 2 (≈N) framing (rulings v1.5, precision-corrected v1.6) — as-is, no further hardening requested; and closed Human Gate item 2 — **discovery UDP port `49201`** is now the adjudicated value, not a bikeshed placeholder; Decision 2(c)'s "placeholder for architect/PO sign-off" qualifier is discharged, its text otherwise unchanged. See item (k) in the new subsection. **(3)** The story's Forward Obligations table row (d) — the `sessions.list` RPC, `BC-2.03.002` PC-1's `PENDING-S-BL.DISCOVERY-WIRE` annotation — is resolved to a new named follow-on story, **`S-BL.SESSIONS-LIST-WIRE`** (already created: `stories/S-BL.SESSIONS-LIST-WIRE.md` v1.0, `STORY-INDEX.md` row + changelog 4.109; `BC-2.03.002.md` v1.5 already re-points PC-1's annotation, product-owner). See item (l). `S-BL.DISCOVERY-WIRE-fanout-options.md` bumped to v1.1 in the same pass (disposition section + changelog row; `status: options-for-human-review` → `decided`; options 2-6 formally closed, not selected). Story-writer/PO blockquotes for `S-BL.DISCOVERY-WIRE`'s Human Gate section, Forward Obligations table row (a), AC-017/AC-018 gate text, port-49201 language, and `depends_on` frontmatter delivered in the report to team-lead — not applied here, out of this pass's authorized touch-list (the two `decisions/` files only). |
 | 2026-07-14 (v1.8) | architect | **F-DWSP8-001 (HIGH, spec-adversarial pass 8, tuple @ `e2ff77b`) fix — structural contradiction in Implementation Constraint 3, a real design gap, not a propagation/nitpick class.** Adversary correctly identified that IC-3's claim ("`Discovery.ReceiveAdvertisement` preserved unchanged in shape," "`TestDiscovery_VP045_SVTNIsolation_MultipleScopes` continues to pass unchanged") is false: `ReceiveAdvertisement` (`discovery.go:319`), `Encode` (`discovery.go:369`), and `Decode` (`discovery.go:399`) are all three call sites of `advertisementKey` (IC-3 implicitly scoped only `Encode`/`Decode` for update, per IC-4); the function cannot compile once `advertisementKey` is deleted. Deeper than a compile error: a receiving node structurally cannot derive `DiscoveryAuthKey` for an arbitrary sender — that derivation needs the sender's admission pubkey, which only the router holds (`admittedKeySet`) — this is BC-2.03.001 v1.6 PC-5's own rule ("nodes never independently look up or re-verify another node's `DiscoveryAuthKey`"), already landed and directly contradicted by IC-3's claim. Independently, hop-2's wire format (Ruling 3(c)) omits `SVTNID` from the body (carried in the frame's `OuterHeader` instead), so even a no-HMAC patch would decode the wrong bytes for relayed content. **Adjudication:** `ReceiveAdvertisement` is RETIRED (deleted, not patched) — struck through in place at IC-3 above, full replacement rationale in the new "Node-local ingest correction" subsection (inserted after Implementation Constraint 8). A new node-side relay-ingest function replaces it on the hop-2 delivery path: decodes hop-2's payload shape, performs no per-frame HMAC (trusts the admitted connection per AC-015/SEC-DW-08's already-drawn connection-trust boundary), and relocates `ErrSVTNMismatch` from a crypto-then-compare check (impossible post-retirement) to a direct `OuterHeader.SVTNID` vs. `d.cfg.LocalSVTNID` equality check — preserving AC-007's defense-in-depth *purpose* (guard against a relay/routing bug) with a mechanism that doesn't depend on machinery Ruling 1 already removed from the node side. **VP-045 disposition:** `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` is retired along with `ReceiveAdvertisement` — its premise (feeding raw HMAC-tagged hop-1-shaped bytes into a node-local ingest function) has no surviving subject; the SVTN-isolation/HMAC-precedence properties it exercised are already required coverage under AC-005/AC-006 (`discovery_wire_test.go`, testing the router's `DiscoveryAuthKeyFor` path — the crypto boundary's correct location); the new node-side `ErrSVTNMismatch` equality check needs its own new unit test (implementer-named, cheap — no crypto to forge against). `VP-045.md` amended to v1.4: its v1.3 Lifecycle-table citation to this retiring test as "supporting evidence" is corrected to note the retirement and point at the new coverage; `status: PARTIAL` is unchanged (the real gap VP-045 names — real-socket PC-3 aggregation over UDP multicast — is unaffected by this correction, and is now schedulable given this story's real wire transport); Property Statement/Source Contract/Proof Method/Harness Skeleton/Feasibility/Story Trace untouched (none referenced the retiring test). `VP-INDEX.md` v2.43→v2.44: changelog row added per this project's own precedent for every VP-045 version bump (rows 2.26/2.27); catalog row text unchanged (BC/module/method/status/priority all unchanged). **BC-2.03.001 PC-5: confirmed NO amendment needed** — its existing "never independently look up or re-verify" language is exactly correct; it is the rule IC-3's now-corrected claim contradicted, not a rule that needs to change. **N1 fold-in (LOW):** Ruling 3(f)'s "only caller... `testenv.go:942`" claim was itself incomplete, not merely singular — full sweep (`grep -rn 'admission\.AdmitNode' cmd/ internal/`, excluding the admission package's own definition) finds 13 call sites, all `_test.go`, zero production callers; "zero production call sites" conclusion unchanged and remains load-bearing for Ruling 3(f)'s Forward Obligation, only the specific enumeration was corrected in place (13 sites listed). Story-writer blockquotes (AC-007 rewrite, Task 4 rewrite, Decision 1 correction mirroring IC-3, File-Change List `discovery_test.go` row widened from one test to ten) drafted and delivered in the report to team-lead, not applied here — out of this pass's authorized touch-list (rulings + VP-045 + VP-INDEX only). Downstream Artifact Touch-List rows corrected: `internal/discovery/discovery.go` (implementer row — "shape unchanged" → "DELETED, replaced"), `VP-044.md`/`VP-045.md` row split (VP-045 now DONE this pass), new story-side row added naming the four story sections needing story-writer action. Does NOT reopen Ruling 1, Ruling 2, Ruling 3, DI-004, SEC-DW-08, or the epoch-qualified `uint64` `Sequence` design (#18/#19, F-DWSP4-001) — all 27 prior adjudications stand; this corrects one downstream implication (IC-3) that mis-scoped which existing code a key-derivation change touches. |

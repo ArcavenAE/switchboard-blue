@@ -3,7 +3,7 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.1"
+version: "1.2"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: draft
 producer: story-writer
@@ -164,6 +164,34 @@ Full adjudication: `S-BL.DISCOVERY-WIRE-rulings.md` v1.10, new "## Ruling 4 — 
 daemon-lifecycle wiring" section (also names this same gap as `S-BL.DISCOVERY-WIRE`'s new
 Forward Obligation (e)).
 
+### 6. BLOCKER — no production path provisions a node's own admission keypair (`S-BL.DISCOVERY-WIRE-rulings.md` v1.11 Ruling 5, 2026-07-15)
+
+A second, distinct blocker alongside obligation 5 — solving obligation 5 alone does not
+unblock this story. This handshake's `ChallengeResponse` step requires the connecting
+node to sign a nonce with its own admission Ed25519 **private key** (`Sign(node_priv,
+nonce)`). No production code path supplies a running node process (access-mode today)
+with that private key, or even its public half: `internal/config.Config` has no
+admission-keypair field; `runAccess` generates only an ephemeral, restart-unstable
+keypair for its own mgmt identity, unrelated to admission. Independently confirmed
+during the same pass: `internal/discovery.New`/`Discovery.Run` — the sender
+daemon-lifecycle loop — have zero production callers anywhere in the repository, a
+second, compounding absence.
+
+**Prerequisite:** a second new follow-on story, **`S-BL.NODE-ADMISSION-PROVISIONING`**
+(working name — not yet created, not multi-option-vetted; PO/architect to confirm name
++ scope), must land before this story's `ChallengeResponse` step can be implemented
+against a real node identity. Distinct from obligation 5's `S-BL.ADMISSION-SYNC-WIRE`
+— opposite direction (this story's own signing key vs. the router's verification-side
+keyset). Add `S-BL.NODE-ADMISSION-PROVISIONING` to this story's `depends_on` alongside
+`S-BL.ADMISSION-SYNC-WIRE` once both exist — not yet added here (frontmatter
+`depends_on: []` stays empty this edit). Obligations 5 and 6 are BOTH upstream of — and
+gate — obligations 1-4.
+
+Full adjudication: `S-BL.DISCOVERY-WIRE-rulings.md` v1.11, new "## Ruling 5 — Sender-side
+key-derivation fix (F-DWIP1-001) sanctioned as Ruling-1-faithful; node-side
+admission-identity provisioning named as a THIRD, distinct leg of the
+identity-distribution cluster" section.
+
 ## Non-Goals (per the fanout-options document's Option 1 scoping)
 
 - **Key rotation UX** — out of scope; this story wires the existing static-admitted-key
@@ -193,5 +221,6 @@ Forward Obligation (e)).
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-15 | Added Open Design Obligation 6 — a SECOND BLOCKER, distinct from obligation 5: `S-BL.DISCOVERY-WIRE-rulings.md` v1.11 Ruling 5 (dispatched by team-lead as a Step-4.5 pass-1 fix-burst finding, verified independently) found no production code path supplies a running node process with its own admission keypair — needed for this story's `ChallengeResponse` signing step — and independently found `internal/discovery.New`/`Discovery.Run` have zero production callers anywhere, a compounding absence. Prerequisite named: a second new follow-on story, `S-BL.NODE-ADMISSION-PROVISIONING` (working name, not yet created), distinct in direction from obligation 5's `S-BL.ADMISSION-SYNC-WIRE`. `depends_on` stays `[]` until both prerequisite stories exist. Obligations 5 and 6 both gate obligations 1-4. Frontmatter version 1.1 → 1.2. |
 | 1.1 | 2026-07-15 | Added Open Design Obligation 5 — a BLOCKER, not a scoping question like obligations 1-4: `S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4 (dispatched by team-lead as a Green-step implementation-time finding, verified independently) found that `admission.AdmitNode` is verification-only against the local `AdmittedKeySet`, and the router-mode process's own keyset is always empty in production — admission writes happen exclusively in the separate, disconnected control-mode OS process, with no cross-process sync mechanism anywhere in the codebase. This story's handshake cannot succeed until admission state reaches the router process, regardless of how correctly the `NODE_IDENTIFY` opcode/codec/`BindInterface` are implemented. Prerequisite named: a new follow-on story, `S-BL.ADMISSION-SYNC-WIRE` (working name, not yet created); `depends_on` stays `[]` until that story exists to be added. Obligation 5 gates obligations 1-4 (upstream of all of them). No ACs/tasks exist yet to amend; this is a scoping-stage addition. Frontmatter version 1.0 → 1.1. |
 | 1.0 | 2026-07-14 | Backlog stub created per `S-BL.DISCOVERY-WIRE`'s Ruling 3(f) Forward Obligation and its story-ready human gate disposition (`S-BL.DISCOVERY-WIRE-rulings.md` v1.9 item (j); `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1 Option 1 selected). Delivers the `control_type=0x04` `NODE_IDENTIFY` handshake wiring the existing `admission.AdmitNode`/`admission.GenerateChallenge` primitives over the live connection and a new `Router.BindInterface`-shaped method recording `(SVTNID, NodeAddr) → IfaceID`. Unblocks `S-BL.DISCOVERY-WIRE`'s AC-017/AC-018/Task 6. No architect ruling adjudicates the opcode registry amendment, challenge-transcript wire format, or re-identify/rebind semantics yet; full decomposition deferred to scheduling time. |
