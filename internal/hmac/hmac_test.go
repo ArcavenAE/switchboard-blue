@@ -219,3 +219,48 @@ func TestDeriveKey_DistinctSVTNsProduceDistinctKeys(t *testing.T) {
 		t.Error("DeriveKey produced identical output for distinct SVTNs (salt mixing violated)")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// S-BL.DISCOVERY-WIRE AC-004 — DeriveDiscoveryKey domain separation
+// ---------------------------------------------------------------------------
+
+// redGateGuard recovers from a not-yet-implemented stub's panic and fails the
+// test cleanly (Red Gate discipline, BC-5.38.001) instead of crashing the
+// whole test binary. Once the relevant Task's Green step lands, the panic
+// disappears and this guard becomes a silent no-op — the assertions after
+// `defer redGateGuard(t)` then run for real, with no test-file change
+// required.
+func redGateGuard(t *testing.T) {
+	t.Helper()
+	if r := recover(); r != nil {
+		t.Fatalf("red gate: stub not yet implemented: %v", r)
+	}
+}
+
+// TestDeriveDiscoveryKey_DomainSeparatedFromFrameAuthKey verifies AC-004
+// postconditions 1 and 2: for the same (nodeAdmissionPubkey, svtnID) pair,
+// DeriveDiscoveryKey's output differs from DeriveKey's output — the two
+// derived keys are cryptographically independent (SEC-DW-06).
+func TestDeriveDiscoveryKey_DomainSeparatedFromFrameAuthKey(t *testing.T) {
+	t.Parallel()
+	defer redGateGuard(t)
+
+	pubkey := bytes.Repeat([]byte{0x42}, 32)
+	var svtnID [16]byte
+	copy(svtnID[:], "discovery-svtn-1")
+
+	frameKey := hmac.DeriveKey(pubkey, svtnID)
+	discoveryKey := hmac.DeriveDiscoveryKey(pubkey, svtnID)
+
+	if frameKey == discoveryKey {
+		t.Error("DeriveDiscoveryKey produced the same output as DeriveKey for the same (pubkey, svtnID) — domain separation (SEC-DW-06) violated")
+	}
+
+	// Determinism: DeriveDiscoveryKey must be a pure function of its inputs,
+	// same as DeriveKey (AC-004 postcondition 1 implies determinism —
+	// mirrors TestDeriveKey_Deterministic's oracle for the new function).
+	again := hmac.DeriveDiscoveryKey(pubkey, svtnID)
+	if discoveryKey != again {
+		t.Error("DeriveDiscoveryKey: expected deterministic output, got different keys across calls")
+	}
+}

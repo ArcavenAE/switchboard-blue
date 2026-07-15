@@ -3,8 +3,10 @@ package discovery_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -19,7 +21,22 @@ import (
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/routing"
+	"github.com/arcavenae/switchboard/internal/testenv"
 )
+
+// redGateGuard recovers from a not-yet-implemented stub's panic and fails the
+// test cleanly (Red Gate discipline, BC-5.38.001) instead of crashing the
+// whole test binary. Once the relevant Task's Green step lands, the panic
+// disappears and this guard becomes a silent no-op — the assertions after
+// `defer redGateGuard(t)` then run for real, with no test-file change
+// required. Shared by discovery_test.go and discovery_wire_test.go (same
+// package).
+func redGateGuard(t *testing.T) {
+	t.Helper()
+	if r := recover(); r != nil {
+		t.Fatalf("red gate: stub not yet implemented: %v", r)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -34,10 +51,11 @@ func newTestRouter(t *testing.T) *routing.Router {
 func newTestConfig(t *testing.T, svtnID [16]byte, nodeAddr [8]byte) discovery.Config {
 	t.Helper()
 	return discovery.Config{
-		LocalNodeAddr:     nodeAddr,
-		LocalSVTNID:       svtnID,
-		Router:            newTestRouter(t),
-		HeartbeatInterval: discovery.HeartbeatInterval,
+		LocalNodeAddr:            nodeAddr,
+		LocalSVTNID:              svtnID,
+		Router:                   newTestRouter(t),
+		HeartbeatInterval:        discovery.HeartbeatInterval,
+		LocalNodeAdmissionPubkey: testNodeAdmissionPubkey,
 	}
 }
 
@@ -47,6 +65,18 @@ var (
 
 	nodeA1 = [8]byte{0x01}
 	nodeA2 = [8]byte{0x02}
+
+	// testNodeAdmissionPubkey is a fixed placeholder pubkey for tests that
+	// exercise Encode/Decode/Advertise wire-format behavior and do not care
+	// about cryptographic correctness against a real admitted router (that
+	// coverage lives in discovery_wire_test.go's
+	// TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode, which
+	// uses a real generated Ed25519 pubkey admitted via
+	// newAdmittedRouterForDiscoveryWire). Any non-empty value satisfies
+	// Config.LocalNodeAdmissionPubkey and Encode/Decode's parameter of the
+	// same name — HKDF has no notion of a "valid-shaped" key, only IKM
+	// bytes (F-DWIP1-001).
+	testNodeAdmissionPubkey = []byte("test-node-admission-pubkey-placeholder")
 )
 
 // distinctNodeAddrs returns the set of unique advertiser addresses in entries.
@@ -71,16 +101,6 @@ func sessionsFromNodes(entries []discovery.SessionEntry, addrs ...[8]byte) []dis
 		}
 	}
 	return out
-}
-
-// encodeOrFail encodes payload and fatals t on error.
-func encodeOrFail(t *testing.T, payload discovery.AdvertisementPayload) []byte {
-	t.Helper()
-	raw, err := discovery.Encode(payload)
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
-	}
-	return raw
 }
 
 // ---------------------------------------------------------------------------
@@ -437,26 +457,23 @@ func TestDiscovery_Enumerate_NoHostnameRequired(t *testing.T) {
 	d := discovery.New(cfg)
 	ctx := context.Background()
 
-	adv1 := encodeOrFail(t, discovery.AdvertisementPayload{
-		NodeAddr: nodeA1,
-		SVTNID:   svtnA,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "sess-A", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
+	adv1 := buildHop2Payload(nodeA1, 1, []discovery.SessionPresence{
+		{SessionName: "sess-A", Status: discovery.Detached, Quality: discovery.QualityGreen},
 	})
-	adv2 := encodeOrFail(t, discovery.AdvertisementPayload{
-		NodeAddr: nodeA2,
-		SVTNID:   svtnA,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "sess-B", Status: discovery.Attached, Quality: discovery.QualityYellow},
-		},
+	adv2 := buildHop2Payload(nodeA2, 1, []discovery.SessionPresence{
+		{SessionName: "sess-B", Status: discovery.Attached, Quality: discovery.QualityYellow},
 	})
 
-	if err := d.ReceiveAdvertisement(ctx, adv1); err != nil {
-		t.Fatalf("ReceiveAdvertisement adv1: %v", err)
+	// AC-007: registry population now flows through the node-side
+	// relay-ingest path (hop-2 DISCOVERY_RELAY payload, no per-frame HMAC —
+	// trust derives from the admitted TCP connection), not the retired
+	// ReceiveAdvertisement (which received hop-1 UDP directly — Ruling 2:
+	// no node receives hop-1 UDP directly in the shipped topology).
+	if err := d.IngestRelayAdvertisement(svtnA, adv1); err != nil {
+		t.Fatalf("IngestRelayAdvertisement adv1: %v", err)
 	}
-	if err := d.ReceiveAdvertisement(ctx, adv2); err != nil {
-		t.Fatalf("ReceiveAdvertisement adv2: %v", err)
+	if err := d.IngestRelayAdvertisement(svtnA, adv2); err != nil {
+		t.Fatalf("IngestRelayAdvertisement adv2: %v", err)
 	}
 
 	result, err := d.Enumerate(ctx)
@@ -498,17 +515,15 @@ func TestDiscovery_Enumerate_SameSessionNameTwoNodes(t *testing.T) {
 	d := discovery.New(cfg)
 	ctx := context.Background()
 
-	// Both nodes advertise "agent-01".
+	// Both nodes advertise "agent-01" via the hop-2 relay-ingest path
+	// (AC-007 — ReceiveAdvertisement is retired; no node receives hop-1 UDP
+	// directly, Ruling 2).
 	for _, node := range [][8]byte{nodeA1, nodeA2} {
-		raw := encodeOrFail(t, discovery.AdvertisementPayload{
-			NodeAddr: node,
-			SVTNID:   svtnA,
-			Sessions: []discovery.SessionPresence{
-				{SessionName: "agent-01", Status: discovery.Detached, Quality: discovery.QualityGreen},
-			},
+		raw := buildHop2Payload(node, 1, []discovery.SessionPresence{
+			{SessionName: "agent-01", Status: discovery.Detached, Quality: discovery.QualityGreen},
 		})
-		if err := d.ReceiveAdvertisement(ctx, raw); err != nil {
-			t.Fatalf("ReceiveAdvertisement node %v: %v", node, err)
+		if err := d.IngestRelayAdvertisement(svtnA, raw); err != nil {
+			t.Fatalf("IngestRelayAdvertisement node %v: %v", node, err)
 		}
 	}
 
@@ -588,11 +603,11 @@ func TestDiscovery_Advertisement_RequiredFields(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			encoded, err := discovery.Encode(tc.payload)
+			encoded, err := discovery.Encode(tc.payload, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Encode: %v", err)
 			}
-			decoded, err := discovery.Decode(encoded)
+			decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
@@ -633,11 +648,11 @@ func TestDiscovery_Advertisement_QualityUnknownOnStartup(t *testing.T) {
 		},
 	}
 
-	encoded, err := discovery.Encode(payload)
+	encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	decoded, err := discovery.Decode(encoded)
+	decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -708,15 +723,15 @@ func TestDiscovery_AdvertisementRoundTrip(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			encoded, err := discovery.Encode(tc.payload)
+			encoded, err := discovery.Encode(tc.payload, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Encode: %v", err)
 			}
-			decoded, err := discovery.Decode(encoded)
+			decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("Decode: %v", err)
 			}
-			reencoded, err := discovery.Encode(decoded)
+			reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 			if err != nil {
 				t.Fatalf("re-Encode: %v", err)
 			}
@@ -752,67 +767,89 @@ func TestDiscovery_AdvertisementRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDiscovery_Advertise_MissingNodeAdmissionPubkey_FailsClosed verifies
+// AC-004 PC-1/PC-4's fail-closed guard (F-DWIP1-001, go.md rule 13): a
+// Discovery instance constructed with an empty Config.LocalNodeAdmissionPubkey
+// must reject Advertise with ErrMissingNodeAdmissionPubkey rather than
+// silently signing with degraded/absent key material. Regression coverage
+// for the guard added by transmitAdvertisement (F-DWIP2-002) — prior to
+// this test, a regression inverting the guard's condition or deleting it
+// entirely would have passed the full suite undetected.
+func TestDiscovery_Advertise_MissingNodeAdmissionPubkey_FailsClosed(t *testing.T) {
+	t.Parallel()
+
+	cfg := discovery.Config{
+		LocalNodeAddr: nodeA1,
+		LocalSVTNID:   svtnA,
+		Router:        newTestRouter(t),
+		// LocalNodeAdmissionPubkey deliberately left empty (zero value).
+	}
+	d := discovery.New(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	sessions := []discovery.SessionPresence{
+		{SessionName: "agent-01", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	}
+	err := d.Advertise(ctx, sessions)
+	if !errors.Is(err, discovery.ErrMissingNodeAdmissionPubkey) {
+		t.Fatalf("Advertise with empty LocalNodeAdmissionPubkey: err = %v, want errors.Is(err, ErrMissingNodeAdmissionPubkey)", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // AC-005 — BC-2.03.001 PC-5: HMAC authentication on advertisement
 // ---------------------------------------------------------------------------
 
 // TestDiscovery_Advertise_HMACAuthenticated verifies BC-2.03.001 PC-5:
 // an advertisement with a missing or wrong HMAC tag is rejected fail-closed.
-// The receiver must return a non-nil error, and the rejected session must NOT
-// appear in Enumerate.
+//
+// AC-007 rewrite: HMAC authentication now lives exclusively at the
+// router-side hop-1 ingest path (RouterIngest.Ingest, AC-005/AC-006) — no
+// node receives hop-1 UDP directly (Ruling 2), so the retired
+// ReceiveAdvertisement's authentication property is re-verified here
+// against RouterIngest.Ingest using the DiscoveryAuthKeyFor-admitted
+// test-setup pattern (newAdmittedRouterForDiscoveryWire, shared from
+// discovery_wire_test.go).
 func TestDiscovery_Advertise_HMACAuthenticated(t *testing.T) {
 	t.Parallel()
 
-	cfg := newTestConfig(t, svtnA, nodeA1)
-	d := discovery.New(cfg)
-	ctx := context.Background()
+	router, pub, nodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	key := testDeriveDiscoveryKey([]byte(pub), svtnA)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
 
-	// Build a valid payload, then corrupt the first byte to simulate a bad
-	// HMAC tag. The implementation is expected to reject this.
-	validPayload := discovery.AdvertisementPayload{
-		NodeAddr: nodeA2,
-		SVTNID:   svtnA,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "tampered-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
-	}
-	raw := encodeOrFail(t, validPayload)
-	if len(raw) == 0 {
-		t.Fatal("Encode returned empty bytes")
-	}
-	// Corrupt a byte in the middle of the payload (not byte 0) so that
+	// Build a valid datagram, then corrupt a byte in the middle so that
 	// length-parsing is unaffected and actual HMAC tag verification is
 	// exercised rather than the short-payload path (F-M-003).
+	raw := buildHop1Datagram(key, svtnA, nodeAddr, 1, []discovery.SessionPresence{
+		{SessionName: "tampered-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
+	})
 	raw[len(raw)/2] ^= 0xFF
 
-	err := d.ReceiveAdvertisement(ctx, raw)
+	decision, err := ri.Ingest(raw)
 	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
-		t.Fatalf("ReceiveAdvertisement: expected ErrInvalidHMACTag for tampered payload, got %v (AC-005 fail-closed)", err)
+		t.Fatalf("Ingest: expected ErrInvalidHMACTag for tampered payload, got %v (AC-005 fail-closed)", err)
 	}
-
-	// Strong oracle: the tampered session must NOT appear in the session list.
-	entries, err := d.Enumerate(ctx)
-	if err != nil {
-		t.Fatalf("Enumerate after rejection: %v", err)
-	}
-	for _, e := range entries {
-		if e.Presence.SessionName == "tampered-sess" {
-			t.Error("tampered advertisement must not update the session list (BC-2.03.001 PC-5 fail-closed)")
-		}
+	if decision.Accept || decision.Relay {
+		t.Errorf("Ingest: tampered datagram must not be accepted or relayed, got Accept=%v Relay=%v (BC-2.03.001 PC-5 fail-closed)", decision.Accept, decision.Relay)
 	}
 }
 
 // TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload verifies that an
 // empty raw byte slice is also rejected (degenerate tampered case).
+//
+// AC-007 rewrite: see TestDiscovery_Advertise_HMACAuthenticated's doc
+// comment — this property now belongs to RouterIngest.Ingest.
 func TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload(t *testing.T) {
 	t.Parallel()
 
-	cfg := newTestConfig(t, svtnA, nodeA1)
-	d := discovery.New(cfg)
+	router, _, _ := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
 
-	err := d.ReceiveAdvertisement(context.Background(), []byte{})
+	_, err := ri.Ingest([]byte{})
 	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
-		t.Fatalf("ReceiveAdvertisement with empty payload: expected ErrInvalidHMACTag, got %v", err)
+		t.Fatalf("Ingest with empty payload: expected ErrInvalidHMACTag, got %v", err)
 	}
 }
 
@@ -820,21 +857,19 @@ func TestDiscovery_Advertise_HMACAuthenticated_EmptyPayload(t *testing.T) {
 // corrupting the HMAC tag bytes at the end of the encoded payload is
 // rejected with ErrInvalidHMACTag. This explicitly exercises the
 // tag-comparison path (not the short-payload path) per F-M-003.
+//
+// AC-007 rewrite: see TestDiscovery_Advertise_HMACAuthenticated's doc
+// comment — this property now belongs to RouterIngest.Ingest.
 func TestDiscovery_Advertise_HMACAuthenticated_TagCorruption(t *testing.T) {
 	t.Parallel()
 
-	cfg := newTestConfig(t, svtnA, nodeA1)
-	d := discovery.New(cfg)
-	ctx := context.Background()
+	router, pub, nodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	key := testDeriveDiscoveryKey([]byte(pub), svtnA)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
 
-	validPayload := discovery.AdvertisementPayload{
-		NodeAddr: nodeA2,
-		SVTNID:   svtnA,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "tag-corrupt-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
-	}
-	raw := encodeOrFail(t, validPayload)
+	raw := buildHop1Datagram(key, svtnA, nodeAddr, 1, []discovery.SessionPresence{
+		{SessionName: "tag-corrupt-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
+	})
 	if len(raw) < 4 {
 		t.Fatalf("encoded payload too short (%d bytes) for tag corruption test", len(raw))
 	}
@@ -847,20 +882,12 @@ func TestDiscovery_Advertise_HMACAuthenticated_TagCorruption(t *testing.T) {
 		raw[i] ^= 0xFF
 	}
 
-	err := d.ReceiveAdvertisement(ctx, raw)
+	decision, err := ri.Ingest(raw)
 	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
-		t.Fatalf("ReceiveAdvertisement with tag-corrupted payload: expected ErrInvalidHMACTag, got %v (AC-005 tag-compare path)", err)
+		t.Fatalf("Ingest with tag-corrupted payload: expected ErrInvalidHMACTag, got %v (AC-005 tag-compare path)", err)
 	}
-
-	// Strong oracle: session must not appear in Enumerate.
-	entries, enumErr := d.Enumerate(ctx)
-	if enumErr != nil {
-		t.Fatalf("Enumerate after tag-corrupt rejection: %v", enumErr)
-	}
-	for _, e := range entries {
-		if e.Presence.SessionName == "tag-corrupt-sess" {
-			t.Error("tag-corrupted advertisement must not update the session list (BC-2.03.001 PC-5 fail-closed)")
-		}
+	if decision.Accept || decision.Relay {
+		t.Errorf("Ingest: tag-corrupted datagram must not be accepted or relayed, got Accept=%v Relay=%v (BC-2.03.001 PC-5 fail-closed)", decision.Accept, decision.Relay)
 	}
 }
 
@@ -869,15 +896,19 @@ func TestDiscovery_Advertise_HMACAuthenticated_TagCorruption(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestDiscovery_Enumerate_SVTNIsolation verifies BC-2.03.002 Inv-1:
-// sessions advertised by a node on SVTN-B must not appear in the Enumerate
-// result for a Discovery instance on SVTN-A.
+// sessions relayed for SVTN-B must not appear in the Enumerate result for a
+// Discovery instance on SVTN-A.
 //
 // Oracle: len(sessionsFromNodes(svtnAResult, svtnBNode)) == 0
 //
-// RULING-W6TB-H: With HMAC-first ordering, a legitimate foreign-SVTN
-// advertisement (signed with the foreign SVTN's key) passes HMAC verification
-// but is rejected by the SVTN cross-scope check — returning ErrSVTNMismatch.
-// This is the expected sentinel for admitted nodes on other SVTNs.
+// AC-007 rewrite: the node-side relay-ingest path (IngestRelayAdvertisement)
+// has no per-frame HMAC (trust derives from the admitted TCP connection,
+// AC-015) — SVTN isolation at this layer is enforced by comparing the relay
+// frame's own OuterHeader.SVTNID against d.cfg.LocalSVTNID
+// (AC-007 postcondition 3), not by the HMAC-first-then-SVTN-check ordering
+// that governed the retired ReceiveAdvertisement (that property now lives
+// at the router-side hop-1 ingest path — see TestRouterIngest_* in
+// discovery_wire_test.go and this file's rewritten *_ForgedSVTN test).
 func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 	t.Parallel()
 
@@ -885,36 +916,25 @@ func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 	d := discovery.New(cfg)
 	ctx := context.Background()
 
-	// Inject a valid SVTN-A advertisement so the registry is non-empty.
-	advA := encodeOrFail(t, discovery.AdvertisementPayload{
-		NodeAddr: nodeA1,
-		SVTNID:   svtnA,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "svtn-a-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
+	// Inject a valid SVTN-A relay advertisement so the registry is non-empty.
+	advA := buildHop2Payload(nodeA1, 1, []discovery.SessionPresence{
+		{SessionName: "svtn-a-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
 	})
-	if err := d.ReceiveAdvertisement(ctx, advA); err != nil {
-		t.Fatalf("ReceiveAdvertisement SVTN-A: %v", err)
+	if err := d.IngestRelayAdvertisement(svtnA, advA); err != nil {
+		t.Fatalf("IngestRelayAdvertisement SVTN-A: %v", err)
 	}
 
-	// Inject a legitimate foreign-SVTN advertisement: node on SVTN-B encoded
-	// with SVTN-B's HMAC key (encodeOrFail uses payload.SVTNID as the key).
-	// RULING-W6TB-H: HMAC passes (foreign key matches foreign SVTN), then the
-	// SVTN cross-scope check fires → ErrSVTNMismatch.
+	// A relay frame whose own OuterHeader.SVTNID names a different SVTN must
+	// be rejected with ErrSVTNMismatch (AC-007 postcondition 3) —
+	// defense-in-depth against a relay/routing bug delivering the wrong
+	// SVTN's frame to this node. Silent drop (err==nil) is not acceptable.
 	nodeB := [8]byte{0xBB}
-	advB := encodeOrFail(t, discovery.AdvertisementPayload{
-		NodeAddr: nodeB,
-		SVTNID:   svtnB,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "svtn-b-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
+	advB := buildHop2Payload(nodeB, 1, []discovery.SessionPresence{
+		{SessionName: "svtn-b-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
 	})
-	// ReceiveAdvertisement must return ErrSVTNMismatch for a cross-scope
-	// advertisement. AC-006: silent drop is not acceptable — the sentinel
-	// contract must be enforced so callers can observe the rejection.
-	svtnBErr := d.ReceiveAdvertisement(ctx, advB)
+	svtnBErr := d.IngestRelayAdvertisement(svtnB, advB)
 	if svtnBErr == nil || !errors.Is(svtnBErr, discovery.ErrSVTNMismatch) {
-		t.Fatalf("ReceiveAdvertisement SVTN-B (legitimate foreign): got %v, want ErrSVTNMismatch (AC-006 sentinel required, RULING-W6TB-H)", svtnBErr)
+		t.Fatalf("IngestRelayAdvertisement SVTN-B: got %v, want ErrSVTNMismatch (AC-006/AC-007 sentinel required)", svtnBErr)
 	}
 
 	result, err := d.Enumerate(ctx)
@@ -940,76 +960,68 @@ func TestDiscovery_Enumerate_SVTNIsolation(t *testing.T) {
 
 // TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN verifies RULING-W6TB-H:
 // an attacker who forges the SVTN field (sets foreign SVTN bytes) but cannot
-// produce a valid HMAC must receive ErrInvalidHMACTag — NOT ErrSVTNMismatch.
+// produce a valid HMAC must receive ErrInvalidHMACTag — NOT a distinguishing
+// SVTN-specific error.
 //
-// With HMAC-first ordering, the SVTN field is authenticated before the
-// cross-scope check, so the attacker's distinguishing oracle is closed.
-// The forged advertisement here uses a raw payload with foreign SVTN bytes
-// whose HMAC was computed under the local SVTN key (i.e., the "wrong key"
-// from the forger's perspective), causing HMAC verification to fail.
+// AC-007 rewrite: RULING-W6TB-H's HMAC-first-vs-SVTN-check ordering property
+// now lives exclusively at the router-side hop-1 ingest path
+// (RouterIngest.Ingest, AC-005/AC-006) — no node receives hop-1 UDP directly
+// (Ruling 2). Router-side key derivation is a (svtnID, nodeAddr) admitted-key
+// LOOKUP (DiscoveryAuthKeyFor), not the old SVTNID-only key scheme, so a
+// forged/unadmitted SVTN simply produces a lookup miss — indistinguishable
+// from an HMAC tag mismatch (F-P7L2-MED-01, already covered structurally by
+// TestRouterIngest_LookupMissAndTagMismatch_IndistinguishableRejection in
+// discovery_wire_test.go). This test re-verifies the same forged-SVTN shape
+// against that entry point.
 func TestDiscovery_Enumerate_SVTNIsolation_ForgedSVTN(t *testing.T) {
 	t.Parallel()
 
-	cfg := newTestConfig(t, svtnA, nodeA1)
-	d := discovery.New(cfg)
-	ctx := context.Background()
+	router, pub, nodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	key := testDeriveDiscoveryKey([]byte(pub), svtnA)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
 
-	// Build an advertisement carrying svtnB bytes but signed with svtnA's
-	// key — this simulates an attacker who writes a foreign SVTN ID but
-	// does not know the foreign SVTN's key (so they sign with the local
-	// key or a random key instead).
-	//
-	// We construct this by encoding with svtnA (so the HMAC is valid for
-	// svtnA's key) and then flipping the SVTN ID bytes in the body to svtnB.
-	// The HMAC now covers the wrong SVTN bytes, so verification fails.
-	validLocalAdv, err := discovery.Encode(discovery.AdvertisementPayload{
-		NodeAddr: nodeA2,
-		SVTNID:   svtnA, // encode with local SVTN → correct HMAC for svtnA key
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "forged-svtn-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
+	// Build a datagram signed under svtnA's admitted key, then flip the
+	// declared SVTNID bytes in the body to svtnB — svtnB has no admitted key
+	// for this nodeAddr, so the router's key lookup misses. This simulates
+	// an attacker who writes a foreign SVTN ID but does not know (and
+	// cannot derive) that foreign SVTN's admitted key.
+	validLocal := buildHop1Datagram(key, svtnA, nodeAddr, 1, []discovery.SessionPresence{
+		{SessionName: "forged-svtn-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
 	})
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
-	}
 
-	// Flip the SVTN ID bytes in the body (bytes [8:24] after the 8-byte HMAC
-	// tag prefix) to svtnB — the HMAC tag now covers body bytes that claim
-	// svtnB but were signed as svtnA, so the HMAC is invalid.
 	const hmacTagSize = 8 // routing.AdvertisementHMACTagSize
-	if len(validLocalAdv) < hmacTagSize+16 {
+	if len(validLocal) < hmacTagSize+16 {
 		t.Fatalf("encoded advertisement too short to flip SVTN bytes")
 	}
-	forged := make([]byte, len(validLocalAdv))
-	copy(forged, validLocalAdv)
+	forged := make([]byte, len(validLocal))
+	copy(forged, validLocal)
 	copy(forged[hmacTagSize:hmacTagSize+16], svtnB[:])
 
-	// RULING-W6TB-H: HMAC-first ordering means the receiver derives the key
-	// from the (now-forged) declared SVTN ID (svtnB). Since the body was
-	// signed with svtnA's key but the declared SVTN is svtnB, HMAC
-	// verification fails → ErrInvalidHMACTag before the SVTN check fires.
-	forgedErr := d.ReceiveAdvertisement(ctx, forged)
+	decision, forgedErr := ri.Ingest(forged)
 	if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
-		t.Fatalf("ReceiveAdvertisement forged-SVTN: got %v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not get ErrSVTNMismatch before HMAC)", forgedErr)
+		t.Fatalf("Ingest forged-SVTN: got %v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not get a distinguishing SVTN-specific error)", forgedErr)
 	}
 	// F-P7L2-MED-01: HMAC-first exclusivity — strict identity check catches
-	// regressions where impl wraps ErrSVTNMismatch into the returned error
-	// (leaking SVTN validity to attacker). errors.Is on two distinct sentinels
-	// is tautologically false and adds no discrimination power.
+	// regressions where impl wraps a distinguishing error into the returned
+	// value (leaking SVTN validity to attacker).
 	if forgedErr != discovery.ErrInvalidHMACTag {
-		t.Fatalf("HMAC-first exclusivity: expected err == ErrInvalidHMACTag (identity), got %v (wrapping ErrSVTNMismatch would leak SVTN validity)", forgedErr)
+		t.Fatalf("HMAC-first exclusivity: expected err == ErrInvalidHMACTag (identity), got %v", forgedErr)
+	}
+	if decision.Accept || decision.Relay {
+		t.Errorf("Ingest: forged-SVTN datagram must not be accepted or relayed, got Accept=%v Relay=%v", decision.Accept, decision.Relay)
 	}
 }
 
 // TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel verifies that when
-// ReceiveAdvertisement receives a legitimate cross-scope advertisement
-// (HMAC signed with the foreign SVTN's own key), it returns ErrSVTNMismatch —
-// not nil and not ErrInvalidHMACTag (BC-2.03.002 Inv-1 sentinel).
+// IngestRelayAdvertisement receives a cross-scope relay frame (its own
+// OuterHeader.SVTNID differs from d.cfg.LocalSVTNID), it returns
+// ErrSVTNMismatch — not nil and not ErrInvalidHMACTag (BC-2.03.002 Inv-1
+// sentinel).
 //
-// RULING-W6TB-H: encodeOrFail signs with payload.SVTNID (the foreign key),
-// so HMAC verification passes under HMAC-first ordering; the SVTN cross-scope
-// check then fires and returns ErrSVTNMismatch. This is the correct sentinel
-// for legitimate admitted nodes on other SVTNs.
+// AC-007 rewrite: see TestDiscovery_Enumerate_SVTNIsolation's doc comment —
+// this property now belongs to IngestRelayAdvertisement's postcondition 3
+// direct SVTNID equality check, not HMAC-first ordering (hop-2 carries no
+// per-frame HMAC at all).
 func TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel(t *testing.T) {
 	t.Parallel()
 
@@ -1017,22 +1029,16 @@ func TestDiscovery_Enumerate_SVTNIsolation_ErrSentinel(t *testing.T) {
 	d := discovery.New(cfg)
 
 	nodeB := [8]byte{0xCC}
-	// encodeOrFail uses payload.SVTNID as the HMAC key — legitimate foreign
-	// node signs with its own SVTN's key.
-	advB := encodeOrFail(t, discovery.AdvertisementPayload{
-		NodeAddr: nodeB,
-		SVTNID:   svtnB,
-		Sessions: []discovery.SessionPresence{
-			{SessionName: "cross-svtn", Status: discovery.Detached, Quality: discovery.QualityGreen},
-		},
+	advB := buildHop2Payload(nodeB, 1, []discovery.SessionPresence{
+		{SessionName: "cross-svtn", Status: discovery.Detached, Quality: discovery.QualityGreen},
 	})
 
-	err := d.ReceiveAdvertisement(context.Background(), advB)
+	err := d.IngestRelayAdvertisement(svtnB, advB)
 	if err == nil {
-		t.Fatal("ReceiveAdvertisement cross-SVTN: expected ErrSVTNMismatch (or wrapping it), got nil")
+		t.Fatal("IngestRelayAdvertisement cross-SVTN: expected ErrSVTNMismatch (or wrapping it), got nil")
 	}
 	if !errors.Is(err, discovery.ErrSVTNMismatch) {
-		t.Errorf("ReceiveAdvertisement cross-SVTN (legitimate foreign): err = %v, want errors.Is(err, ErrSVTNMismatch) == true (RULING-W6TB-H)", err)
+		t.Errorf("IngestRelayAdvertisement cross-SVTN: err = %v, want errors.Is(err, ErrSVTNMismatch) == true (AC-007 postcondition 3)", err)
 	}
 }
 
@@ -1112,127 +1118,22 @@ func TestDiscovery_VP044_AdvertiseWithinOneTick(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// VP-045 — property: SVTN-isolation invariant across randomized SVTN IDs
+// VP-045 — RETIRED (AC-007, F-DWSP8-001)
 // ---------------------------------------------------------------------------
-
-// TestDiscovery_VP045_SVTNIsolation_MultipleScopes verifies BC-2.03.002
-// Inv-1 across multiple distinct SVTN ID pairs. For every (local SVTN,
-// foreign SVTN) pair, foreign sessions must not appear in local Enumerate.
-func TestDiscovery_VP045_SVTNIsolation_MultipleScopes(t *testing.T) {
-	t.Parallel()
-
-	type svtnPair struct {
-		local   [16]byte
-		foreign [16]byte
-	}
-
-	// Cover a range of SVTN ID patterns, not just the default test vars.
-	pairs := []svtnPair{
-		{local: [16]byte{0x01}, foreign: [16]byte{0x02}},
-		{local: [16]byte{0xAA}, foreign: [16]byte{0xBB}},
-		{local: [16]byte{0xFF, 0xFF}, foreign: [16]byte{0x00, 0x01}},
-		{local: [16]byte{0x10, 0x20, 0x30}, foreign: [16]byte{0x40, 0x50, 0x60}},
-		// Differ only in last byte.
-		{
-			local:   [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0},
-			foreign: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1},
-		},
-	}
-
-	localNode := [8]byte{0x11}
-	foreignNode := [8]byte{0x22}
-
-	for _, pair := range pairs {
-		pair := pair
-		t.Run("", func(t *testing.T) {
-			t.Parallel()
-			cfg := discovery.Config{
-				LocalNodeAddr:     localNode,
-				LocalSVTNID:       pair.local,
-				Router:            newTestRouter(t),
-				HeartbeatInterval: discovery.HeartbeatInterval,
-			}
-			d := discovery.New(cfg)
-			ctx := context.Background()
-
-			// Inject a local SVTN advertisement.
-			localAdv := encodeOrFail(t, discovery.AdvertisementPayload{
-				NodeAddr: localNode,
-				SVTNID:   pair.local,
-				Sessions: []discovery.SessionPresence{
-					{SessionName: "local-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-				},
-			})
-			if err := d.ReceiveAdvertisement(ctx, localAdv); err != nil {
-				t.Fatalf("ReceiveAdvertisement local SVTN: %v", err)
-			}
-
-			// Legitimate foreign-SVTN case (RULING-W6TB-H): advertisement
-			// encoded with the foreign SVTN's own key (encodeOrFail uses
-			// payload.SVTNID). HMAC-first: authentication passes (foreign
-			// key is used to verify), then SVTN cross-scope check fires →
-			// ErrSVTNMismatch. Silent drop (err==nil) is not acceptable.
-			foreignAdv := encodeOrFail(t, discovery.AdvertisementPayload{
-				NodeAddr: foreignNode,
-				SVTNID:   pair.foreign,
-				Sessions: []discovery.SessionPresence{
-					{SessionName: "foreign-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-				},
-			})
-			if foreignErr := d.ReceiveAdvertisement(ctx, foreignAdv); foreignErr == nil || !errors.Is(foreignErr, discovery.ErrSVTNMismatch) {
-				t.Fatalf("VP-045 foreign SVTN (legitimate): err=%v, expected ErrSVTNMismatch (RULING-W6TB-H)", foreignErr)
-			}
-
-			// Forged-SVTN case (RULING-W6TB-H): attacker writes foreign SVTN
-			// bytes but cannot produce a valid HMAC for that foreign SVTN's
-			// key. Simulate by encoding with the local key then flipping
-			// the SVTN bytes in the wire body — HMAC now covers wrong bytes.
-			// HMAC-first: receiver derives key from declared (forged) SVTN →
-			// verification fails → must return ErrInvalidHMACTag.
-			forgedAdv, encErr := discovery.Encode(discovery.AdvertisementPayload{
-				NodeAddr: foreignNode,
-				SVTNID:   pair.local, // sign with local key
-				Sessions: []discovery.SessionPresence{
-					{SessionName: "forged-svtn-sess", Status: discovery.Detached, Quality: discovery.QualityGreen},
-				},
-			})
-			if encErr != nil {
-				t.Fatalf("Encode forged adv: %v", encErr)
-			}
-			// Flip the SVTN ID bytes in the body to pair.foreign so that the
-			// HMAC tag no longer matches the body content.
-			const hmacTagSize = 8 // routing.AdvertisementHMACTagSize
-			if len(forgedAdv) >= hmacTagSize+16 {
-				copy(forgedAdv[hmacTagSize:hmacTagSize+16], pair.foreign[:])
-			}
-			forgedErr := d.ReceiveAdvertisement(ctx, forgedAdv)
-			if !errors.Is(forgedErr, discovery.ErrInvalidHMACTag) {
-				t.Fatalf("VP-045 forged SVTN: err=%v, want ErrInvalidHMACTag (RULING-W6TB-H: attacker must not receive ErrSVTNMismatch before HMAC fails)", forgedErr)
-			}
-			// F-P7L2-MED-01: HMAC-first exclusivity — strict identity check
-			// catches regressions where impl wraps ErrSVTNMismatch into the
-			// returned error (leaking SVTN validity to attacker).
-			if forgedErr != discovery.ErrInvalidHMACTag {
-				t.Fatalf("HMAC-first exclusivity: expected err == ErrInvalidHMACTag (identity), got %v (wrapping ErrSVTNMismatch would leak SVTN validity)", forgedErr)
-			}
-
-			result, err := d.Enumerate(ctx)
-			if err != nil {
-				t.Fatalf("Enumerate: %v", err)
-			}
-
-			// Oracle: no foreign-node sessions present.
-			foreign := sessionsFromNodes(result, foreignNode)
-			if len(foreign) != 0 {
-				t.Errorf(
-					"SVTN isolation violated: local=%v foreign=%v got %d foreign session(s) in Enumerate (VP-045)",
-					pair.local, pair.foreign, len(foreign),
-				)
-			}
-		})
-	}
-}
-
+//
+// TestDiscovery_VP045_SVTNIsolation_MultipleScopes exercised
+// ReceiveAdvertisement's HMAC-first-then-SVTN-check property across multiple
+// randomized SVTN ID pairs. ReceiveAdvertisement is retired (AC-007
+// postcondition 1 — no caller exists in the shipped topology; no node
+// receives hop-1 UDP directly, Ruling 2). Per the story's explicit
+// disposition this test is retired outright, not extended: the property it
+// covered now splits across two entry points with different trust models
+// (router-side hop-1 HMAC-first ordering — TestRouterIngest_* in
+// discovery_wire_test.go and this file's rewritten *_ForgedSVTN test; and
+// node-side hop-2 direct-SVTNID-equality — this file's rewritten
+// SVTNIsolation/_ErrSentinel tests), neither of which is "the same function
+// under randomized SVTN pairs" any more.
+//
 // ---------------------------------------------------------------------------
 // VP-055 — property: round-trip stability across many payloads
 // ---------------------------------------------------------------------------
@@ -1252,15 +1153,15 @@ func TestPropPresenceAdvertisement_RoundTrip(t *testing.T) {
 	// F-M-002 — byte equality alone does not catch silent coercions).
 	roundTrip := func(t *testing.T, payload discovery.AdvertisementPayload) {
 		t.Helper()
-		encoded, err := discovery.Encode(payload)
+		encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 		if err != nil {
 			t.Fatalf("Encode: %v", err)
 		}
-		decoded, err := discovery.Decode(encoded)
+		decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 		if err != nil {
 			t.Fatalf("Decode: %v", err)
 		}
-		reencoded, err := discovery.Encode(decoded)
+		reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 		if err != nil {
 			t.Fatalf("re-Encode: %v", err)
 		}
@@ -1386,15 +1287,15 @@ func TestPropPresenceAdvertisement_RoundTrip(t *testing.T) {
 						{SessionName: name, Status: status, Quality: quality},
 					},
 				}
-				encoded, err := discovery.Encode(payload)
+				encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 				if err != nil {
 					return false
 				}
-				decoded, err := discovery.Decode(encoded)
+				decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 				if err != nil {
 					return false
 				}
-				reencoded, err := discovery.Encode(decoded)
+				reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 				if err != nil {
 					return false
 				}
@@ -1442,7 +1343,7 @@ func TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8(t *testing.T) {
 					{SessionName: tc.input, Status: discovery.Attached, Quality: discovery.QualityGreen},
 				},
 			}
-			encoded, err := discovery.Encode(payload)
+			encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 			if err == nil {
 				t.Errorf("Encode(%q): got nil error, want ErrInvalidSessionName (VP-055 v1.2)", tc.input)
 			}
@@ -1479,7 +1380,7 @@ func TestPropPresenceAdvertisement_RejectsEmptyOrInvalidUTF8(t *testing.T) {
 						{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 					},
 				}
-				encoded, err := discovery.Encode(payload)
+				encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 				if err == nil {
 					return false // must return an error
 				}
@@ -1548,11 +1449,11 @@ func TestPropPresenceAdvertisement_TruncatesOversize(t *testing.T) {
 						{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 					},
 				}
-				encoded, err := discovery.Encode(payload)
+				encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 				if err != nil {
 					return false // truncation must not error
 				}
-				decoded, decErr := discovery.Decode(encoded)
+				decoded, decErr := discovery.Decode(encoded, testNodeAdmissionPubkey)
 				if decErr != nil {
 					return false
 				}
@@ -1602,7 +1503,7 @@ func TestPropPresenceAdvertisement_TruncatesOversize(t *testing.T) {
 				}
 				// Round-trip stability: re-encoding the decoded payload must
 				// produce the same bytes (truncated form is idempotent).
-				reencoded, reErr := discovery.Encode(decoded)
+				reencoded, reErr := discovery.Encode(decoded, testNodeAdmissionPubkey)
 				if reErr != nil {
 					return false
 				}
@@ -1645,11 +1546,11 @@ func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
 				{SessionName: name, Status: discovery.Attached, Quality: discovery.QualityGreen},
 			},
 		}
-		encoded, err := discovery.Encode(payload)
+		encoded, err := discovery.Encode(payload, testNodeAdmissionPubkey)
 		if err != nil {
 			return "", err
 		}
-		decoded, err := discovery.Decode(encoded)
+		decoded, err := discovery.Decode(encoded, testNodeAdmissionPubkey)
 		if err != nil {
 			return "", err
 		}
@@ -1657,7 +1558,7 @@ func TestDiscovery_Encode_SessionName255ByteCap(t *testing.T) {
 			t.Fatalf("decoded session count = %d, want 1", len(decoded.Sessions))
 		}
 		// Verify round-trip stability of the encoded form.
-		reencoded, err := discovery.Encode(decoded)
+		reencoded, err := discovery.Encode(decoded, testNodeAdmissionPubkey)
 		if err != nil {
 			return "", err
 		}
@@ -1853,15 +1754,18 @@ func TestDiscovery_Advertise_RejectsInvalidSessionName_DoesNotPurgePriorEntries(
 // carrying a single session whose name-length field is zero. The frame is
 // signed with the correct SVTN key so HMAC verification passes and the
 // zero-length check in decodeBody is exercised (rather than short-circuited
-// by the HMAC path). Used by TestDiscovery_Decode_RejectsZeroLengthName.
+// by the HMAC path). Used by TestDiscovery_Decode_RejectsZeroLengthName's
+// Decode() half.
 func buildAdvertisementWithZeroLengthName(t *testing.T, svtnID [16]byte, nodeAddr [8]byte) []byte {
 	t.Helper()
 
-	// Body layout: [16]SVTNID | [8]NodeAddr | uint16 count | per-session:
-	// uint16 name_len | name_bytes | uint8 status | uint8 quality.
-	body := make([]byte, 0, 16+8+2+2+0+1+1)
+	// Body layout: [16]SVTNID | [8]NodeAddr | [8]Sequence | uint16 count |
+	// per-session: uint16 name_len | name_bytes | uint8 status | uint8
+	// quality (SEC-DW-07 widened Sequence field).
+	body := make([]byte, 0, 16+8+8+2+2+0+1+1)
 	body = append(body, svtnID[:]...)
 	body = append(body, nodeAddr[:]...)
+	body = binary.BigEndian.AppendUint64(body, 1) // Sequence = 1 (value irrelevant to this test)
 	body = binary.BigEndian.AppendUint16(body, 1) // count = 1
 	body = binary.BigEndian.AppendUint16(body, 0) // name_len = 0 (asymmetric)
 	body = append(body, byte(discovery.Detached), byte(discovery.QualityGreen))
@@ -1869,7 +1773,9 @@ func buildAdvertisementWithZeroLengthName(t *testing.T, svtnID [16]byte, nodeAdd
 	// The HMAC key derivation mirrors discovery.advertisementKey (SVTN ID
 	// used verbatim as the key material). Signing with the same key the
 	// receiver will derive means HMAC verifies and the decoder proceeds to
-	// the nameLen==0 branch.
+	// the nameLen==0 branch. Irrelevant in practice: decodeBody rejects
+	// nameLen==0 before Decode ever reaches HMAC verification, so this key
+	// choice does not affect the test's oracle either way.
 	tag := routing.ComputeAdvertisementHMAC(svtnID[:], body)
 
 	raw := make([]byte, 0, len(tag)+len(body))
@@ -1883,6 +1789,15 @@ func buildAdvertisementWithZeroLengthName(t *testing.T, svtnID [16]byte, nodeAdd
 // produces such frames (encodedSessionName rejects empty input), so any peer
 // emitting one is malformed or adversarial. Rejecting closes the round-trip
 // asymmetry (decoded struct with SessionName="" cannot be re-Encoded).
+//
+// AC-007 rewrite: the original second half of this test exercised
+// ReceiveAdvertisement (retired). RouterIngest.Ingest is the receiver that
+// AC-007 pointed callers at — hop-1 is router-terminated only (Ruling 2) —
+// and its zero-length-name rejection runs through a materially different
+// pipeline (DecodeSessionList, invoked only AFTER HMAC verification
+// succeeds, not decodeBody's pre-HMAC parse), so it is re-verified here
+// against a genuinely admitted key rather than assumed to behave
+// identically to the retired function.
 func TestDiscovery_Decode_RejectsZeroLengthName(t *testing.T) {
 	t.Parallel()
 
@@ -1892,28 +1807,27 @@ func TestDiscovery_Decode_RejectsZeroLengthName(t *testing.T) {
 	// failures as ErrInvalidHMACTag (parser detail is not leaked to
 	// unauthenticated peers). The strong oracle is that the frame is not
 	// accepted; the sentinel identity confirms the wrapping contract.
-	if _, err := discovery.Decode(raw); !errors.Is(err, discovery.ErrInvalidHMACTag) {
+	if _, err := discovery.Decode(raw, testNodeAdmissionPubkey); !errors.Is(err, discovery.ErrInvalidHMACTag) {
 		t.Fatalf("Decode(zero-length name frame): got %v, want ErrInvalidHMACTag (issue #50; pre-HMAC decode failures are wrapped)", err)
 	}
 
-	// ReceiveAdvertisement path — decodeBody runs before HMAC verification
-	// (the body is decoded to extract the SVTN ID for key derivation). A
-	// zero-length name must cause the frame to be rejected here too; the
-	// receiver returns ErrInvalidHMACTag because the pre-HMAC decode error is
-	// deliberately not distinguished from a bad tag.
-	cfg := newTestConfig(t, svtnA, nodeA1)
-	d := discovery.New(cfg)
-	err := d.ReceiveAdvertisement(context.Background(), raw)
-	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
-		t.Fatalf("ReceiveAdvertisement(zero-length name frame): got %v, want ErrInvalidHMACTag (pre-HMAC decode failures are wrapped)", err)
-	}
+	// RouterIngest.Ingest path — sessions are decoded via DecodeSessionList
+	// only after HMAC verification succeeds, so this half signs with a
+	// genuinely admitted key and verifies the post-HMAC zero-length-name
+	// rejection fires.
+	router, pub, admittedNodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	key := testDeriveDiscoveryKey([]byte(pub), svtnA)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
 
-	entries, enumErr := d.Enumerate(context.Background())
-	if enumErr != nil {
-		t.Fatalf("Enumerate: %v", enumErr)
+	admittedRaw := buildHop1Datagram(key, svtnA, admittedNodeAddr, 1, []discovery.SessionPresence{
+		{SessionName: "", Status: discovery.Detached, Quality: discovery.QualityGreen},
+	})
+	decision, err := ri.Ingest(admittedRaw)
+	if !errors.Is(err, discovery.ErrInvalidHMACTag) {
+		t.Fatalf("Ingest(zero-length name frame): got %v, want ErrInvalidHMACTag (post-HMAC decode failures are wrapped)", err)
 	}
-	if len(entries) != 0 {
-		t.Errorf("registry contains %d entries after rejecting zero-length-name frame, want 0", len(entries))
+	if decision.Accept || decision.Relay {
+		t.Errorf("Ingest: zero-length-name frame must not be accepted or relayed, got Accept=%v Relay=%v", decision.Accept, decision.Relay)
 	}
 }
 
@@ -1942,7 +1856,7 @@ func TestDiscovery_Encode_RejectsMoreThan65535Sessions(t *testing.T) {
 		NodeAddr: nodeA1,
 		SVTNID:   svtnA,
 		Sessions: sessions,
-	})
+	}, testNodeAdmissionPubkey)
 	if !errors.Is(err, discovery.ErrTooManySessions) {
 		t.Fatalf("Encode(%d sessions): got %v, want ErrTooManySessions (issue #51)", overflowCount, err)
 	}
@@ -1974,18 +1888,138 @@ func TestDiscovery_Encode_Accepts65535Sessions(t *testing.T) {
 		NodeAddr: nodeA1,
 		SVTNID:   svtnA,
 		Sessions: sessions,
-	})
+	}, testNodeAdmissionPubkey)
 	if err != nil {
 		t.Fatalf("Encode(%d sessions): got %v, want nil (65535 is the max, not overflow)", maxCount, err)
 	}
 	// Wire layout: 8-byte HMAC tag | 16-byte SVTNID | 8-byte NodeAddr |
-	// uint16 count. The count lives at offset 32.
-	const countOffset = routing.AdvertisementHMACTagSize + 16 + 8
+	// 8-byte Sequence | uint16 count. The count lives at offset 40
+	// (SEC-DW-07 widened Sequence uint32→uint64, F-DWSP4-001).
+	const countOffset = routing.AdvertisementHMACTagSize + 16 + 8 + 8
 	if len(encoded) < countOffset+2 {
 		t.Fatalf("Encode returned %d bytes, too short to inspect count field", len(encoded))
 	}
 	gotCount := binary.BigEndian.Uint16(encoded[countOffset : countOffset+2])
 	if gotCount != maxCount {
 		t.Errorf("wire count field = %d, want %d (guard must not fire at exactly the uint16 max)", gotCount, maxCount)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// S-BL.DISCOVERY-WIRE AC-002 — MulticastAddrFor determinism
+// ---------------------------------------------------------------------------
+
+// TestMulticastAddrFor_Deterministic_SHA256Derived verifies AC-002: the
+// SVTN-scoped multicast address is 239.h0.h1.h2, where h0..h2 are the first
+// three bytes of SHA-256(svtnID) — deterministic, computable independently,
+// static (no allocation/release step), and stable across repeated calls
+// (Decision 2(b)).
+func TestMulticastAddrFor_Deterministic_SHA256Derived(t *testing.T) {
+	t.Parallel()
+	defer redGateGuard(t)
+
+	svtnID := [16]byte{0xAA, 0xBB, 0xCC, 0xDD, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C}
+	h := sha256.Sum256(svtnID[:])
+	want := net.IPv4(239, h[0], h[1], h[2])
+
+	got1 := discovery.MulticastAddrFor(svtnID)
+	if !got1.Equal(want) {
+		t.Errorf("MulticastAddrFor(%x) = %v, want %v (239.h0.h1.h2 from SHA-256(svtnID))", svtnID, got1, want)
+	}
+
+	// Postcondition 3: the same SVTN ID always produces the same address
+	// across repeated calls.
+	got2 := discovery.MulticastAddrFor(svtnID)
+	if !got1.Equal(got2) {
+		t.Errorf("MulticastAddrFor: non-deterministic — first call %v, second call %v", got1, got2)
+	}
+
+	// Distinct SVTN IDs should (in the overwhelmingly common case) derive
+	// distinct addresses — a constant-return implementation would still
+	// pass the two assertions above, so this guards against that class of
+	// trivial-but-wrong implementation, same rationale as
+	// TestDeriveKey_DistinctSVTNsProduceDistinctKeys in internal/hmac.
+	otherSVTN := [16]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}
+	gotOther := discovery.MulticastAddrFor(otherSVTN)
+	if gotOther.Equal(got1) {
+		t.Errorf("MulticastAddrFor: distinct SVTN IDs %x and %x produced the same address %v (constant-return regression)", svtnID, otherSVTN, gotOther)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// S-BL.DISCOVERY-WIRE AC-003 — sender-side dispatch: real UDP, TTL=1, no join
+// ---------------------------------------------------------------------------
+
+// TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin verifies AC-003
+// postcondition 1: the access-node dispatch path performs a plain UDP send
+// to the SVTN-derived multicast address — no net.ListenMulticastUDP, no
+// group join on the sender side (Decision 2(a); SEC-DW-08). A real loopback
+// multicast listener is the test's receive-side oracle: if Advertise still
+// only mutates the in-process registry (S-7.02 behavior) rather than
+// sending real UDP, the listener goroutine below times out with nothing
+// received.
+//
+// Postcondition 2 (multicast TTL explicitly set to 1) is NOT independently
+// wire-verified here: reading a received datagram's IP TTL from the
+// receive side requires control-message support (golang.org/x/net/ipv4's
+// PacketConn, or raw syscall-level CMSG parsing) that this story's Library &
+// Framework Requirements section commits to NOT introducing (zero new
+// third-party dependencies). How the sender sets TTL=1 (syscall-level
+// setsockopt vs. some other stdlib-only mechanism) is itself Task 3
+// Green-step design, not fixed by this story's rulings. Deferred to code
+// review at Green rather than fabricating a weak assertion.
+func TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin(t *testing.T) {
+	// NOT t.Parallel(): binds a real loopback multicast UDP socket.
+	defer redGateGuard(t)
+	testenv.RequireMulticastLoopback(t)
+
+	iface := testenv.MulticastLoopbackInterface(t)
+	svtnID := [16]byte{0xDE, 0xAD, 0xBE, 0xEF}
+	groupAddr := discovery.MulticastAddrFor(svtnID)
+
+	listenAddr := &net.UDPAddr{IP: groupAddr, Port: discovery.DiscoveryPort}
+	conn, err := net.ListenMulticastUDP("udp4", iface, listenAddr)
+	if err != nil {
+		t.Fatalf("ListenMulticastUDP (test-side receive oracle): %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	cfg := discovery.Config{
+		LocalNodeAddr:            [8]byte{0x01},
+		LocalSVTNID:              svtnID,
+		Router:                   newTestRouter(t),
+		LocalNodeAdmissionPubkey: testNodeAdmissionPubkey,
+	}
+	d := discovery.New(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	recvCh := make(chan int, 1)
+	go func() {
+		buf := make([]byte, 2048)
+		_ = conn.SetReadDeadline(time.Now().Add(4 * time.Second))
+		n, _, readErr := conn.ReadFromUDP(buf)
+		if readErr != nil {
+			recvCh <- 0
+			return
+		}
+		recvCh <- n
+	}()
+
+	sessions := []discovery.SessionPresence{
+		{SessionName: "agent-01", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	}
+	if err := d.Advertise(ctx, sessions); err != nil {
+		t.Fatalf("Advertise: unexpected error: %v", err)
+	}
+
+	select {
+	case n := <-recvCh:
+		if n == 0 {
+			t.Fatal("AC-003 postcondition 1: no UDP datagram received on the SVTN-derived multicast group — Advertise did not send real UDP")
+		}
+	case <-time.After(4500 * time.Millisecond):
+		t.Fatal("AC-003 postcondition 1: timed out waiting for a multicast datagram from Advertise")
 	}
 }
