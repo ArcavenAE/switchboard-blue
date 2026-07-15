@@ -78,7 +78,8 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 	svtnID := [16]byte{0x51, 0x51, 0x51, 0x51}
 	ks := admission.NewAdmittedKeySet()
 	router := routing.NewRouter(ks)
-	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
+	logger := &captureLogger{} // shared test double, main_test.go
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router, Logger: logger})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -116,8 +117,38 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 		t.Fatalf("DialUDP probe sender: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	if _, err := conn.Write([]byte("probe")); err != nil {
-		t.Fatalf("probe Write: %v", err)
+
+	// Receive-side oracle (F-DWIP1-003): a bare conn.Write returning nil only
+	// proves the client-side syscall succeeded, not that wireDiscoveryListener
+	// ever read the datagram off the multicast socket. No key is admitted on
+	// ks, so every probe here is a guaranteed HMAC lookup-miss; sending more
+	// than FailureCounter's threshold (5/60s, SEC-DW-04/AC-013) of
+	// >=32-byte (keySelectorMinRaw) datagrams and observing a captured log
+	// line is proof the listener actually joined the group, read the bytes,
+	// and fed them into RouterIngest.Ingest — genuine reception, not merely
+	// an unerrored send.
+	probe := make([]byte, 40)
+	for i := range probe {
+		probe[i] = 0xAB
+	}
+	const probeCount = 10
+	for i := 0; i < probeCount; i++ {
+		if _, err := conn.Write(probe); err != nil {
+			t.Fatalf("probe Write %d/%d: %v", i+1, probeCount, err)
+		}
+	}
+
+	received := false
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(logger.Lines()) > 0 {
+			received = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !received {
+		t.Errorf("wireDiscoveryListener: no threshold-crossing HMAC-failure log line observed after %d probe datagrams — listener did not appear to receive/ingest them (AC-001 receive-side oracle)", probeCount)
 	}
 
 	cancel()
