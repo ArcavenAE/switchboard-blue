@@ -28,6 +28,7 @@ func redGateGuard(t *testing.T) {
 // resolved interface actually supports both loopback and multicast.
 func TestMulticastLoopbackInterface_ResolvesLoopback(t *testing.T) {
 	defer redGateGuard(t)
+	testenv.RequireMulticastLoopback(t)
 
 	iface := testenv.MulticastLoopbackInterface(t)
 	if iface == nil {

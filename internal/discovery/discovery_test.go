@@ -1971,6 +1971,7 @@ func TestMulticastAddrFor_Deterministic_SHA256Derived(t *testing.T) {
 func TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin(t *testing.T) {
 	// NOT t.Parallel(): binds a real loopback multicast UDP socket.
 	defer redGateGuard(t)
+	testenv.RequireMulticastLoopback(t)
 
 	iface := testenv.MulticastLoopbackInterface(t)
 	svtnID := [16]byte{0xDE, 0xAD, 0xBE, 0xEF}

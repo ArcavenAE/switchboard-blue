@@ -13,6 +13,7 @@ import (
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/routing"
+	"github.com/arcavenae/switchboard/internal/testenv"
 )
 
 // redGateGuard recovers from a not-yet-implemented stub's panic and fails
@@ -74,6 +75,7 @@ func callWireDiscoveryListenerRecovered(ctx context.Context, wg *sync.WaitGroup,
 func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 	// NOT t.Parallel(): binds a real loopback multicast UDP socket on a
 	// fixed port (discovery.DiscoveryPort).
+	testenv.RequireMulticastLoopback(t)
 
 	svtnID := [16]byte{0x51, 0x51, 0x51, 0x51}
 	ks := admission.NewAdmittedKeySet()
