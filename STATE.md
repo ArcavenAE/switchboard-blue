@@ -33,9 +33,9 @@ develop_head: 1f25677
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.DISCOVERY-WIRE story-ready human gate (spec-adversarial convergence COMPLETE @ pass 16, 2026-07-14; story v2.11 draft, 18 ACs, 8 pts; 5 gate items queued). Parked: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later)."
+awaiting: "S-BL.DISCOVERY-WIRE Phase-3 per-story delivery IN PROGRESS (story v2.12 READY, gate dispositioned 2026-07-14; Tasks 1-5 / AC-001..AC-016 deliverable now; Task 6 + AC-017/AC-018 gated on S-BL.NODE-IDENTIFY-WIRE by name). Parked: S-BL.LOOPBACK-FULLSTACK v1.1 (deliver-later)."
 historical_cycles: []
-timestamp: 2026-07-14T00:00:00Z
+timestamp: 2026-07-15T01:05:31Z
 last_update: 2026-07-14
 ---
 

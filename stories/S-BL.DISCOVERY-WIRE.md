@@ -5,10 +5,55 @@ level: ops
 story_id: S-BL.DISCOVERY-WIRE
 epic_id: E-7
 title: "Discovery wire boundary: UDP multicast I/O, admitted-node HMAC keys, multicast address allocation, hop-2 relay dispatch"
-status: draft
+status: ready
 producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
+  - date: 2026-07-14
+    version: "2.12"
+    change: >
+      Story-ready human gate disposition burst, transcribed from
+      `S-BL.DISCOVERY-WIRE-rulings.md` v1.9's "Ruling 3(f) Forward Obligation, SEC-DW-07,
+      and the discovery port — human gate disposition" subsection (items (j)/(k)/(l)) and
+      `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1's Disposition section. Human Gate
+      section gained a top-of-section DISPOSITIONED blockquote plus per-item disposition
+      blockquotes appended to items 1 (SEC-DW-07 both residual bounds APPROVED), 2
+      (discovery UDP port `49201` ADOPTED, no longer a placeholder), and 3 (fan-out
+      target-resolution resolved to named companion story `S-BL.NODE-IDENTIFY-WIRE` —
+      `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.0 Option 1, the human rejected both
+      originally-offered options and selected this new option after review). Forward
+      Obligations table row (a) replaced with a RESOLVED disposition citing
+      `S-BL.NODE-IDENTIFY-WIRE`; row (d) also updated to RESOLVED (`S-BL.SESSIONS-LIST-WIRE`,
+      already created, `BC-2.03.002.md` v1.5 already re-points PC-1's annotation); the
+      table's summary sentence rewritten to reflect both resolutions. AC-017/AC-018 gate
+      tags changed from `[GATED — see Forward Obligation (a) / Human Gate item 3]` to
+      `[GATED — depends_on S-BL.NODE-IDENTIFY-WIRE]`; AC-017's Gate paragraph rewritten to
+      name the story by ID; AC-018's Gate paragraph left as-is (references AC-017's).
+      Decision 2(c)'s port sentence changed from "Recommended... bikeshed-level
+      placeholder... Flagged for human sign-off" to "Adjudicated: `49201`... adopted by
+      human gate disposition 2026-07-14 (no longer a placeholder)". Frontmatter:
+      `depends_on` gained `S-BL.NODE-IDENTIFY-WIRE`; `status: draft` → `ready` (all three
+      Human Gate items now dispositioned); `version` 2.11 → 2.12. Mechanical sweep: every
+      live-prose `rulings v1.8` pin → `v1.9` (7 spots: `inputDocuments:` comment,
+      Status-note blockquote, Decision-section intro, Decision 1's Node-local-ingest-
+      correction citation, AC-007's qualifying note, both Architecture Compliance Rules
+      rows) plus the one paren-form pin inside Forward Obligations row (d); every live-prose
+      `BC-2.03.002 v1.4` pin → `v1.5` (the `inputDocuments:` comment, its description text
+      updated to note the PC-1 re-point already executed on disk). Task 6 gating text
+      re-anchored by name in the three explicitly-authorized sections: Token Budget's
+      "Overall" paragraph, the Task Breakdown section intro, Task 6's heading + body
+      (option (i)/(ii) branching removed — collapsed to the single adopted mechanism), the
+      Architecture Compliance Rules relay-dispatch row's Enforcement cell, and Task 7's PR
+      note — all now read "`S-BL.NODE-IDENTIFY-WIRE`" by name instead of "Human Gate item
+      3"/"Forward Obligation (a)". Four residual `Forward Obligation (a)`/`Human Gate item
+      3` references found OUTSIDE the authorized touch-list (Non-Goals bullet, EC-008,
+      File-Change List's `discovery_relay_wire_test.go` row, Anchors Consumed's two hop-2
+      rows) are deliberately left unedited this burst — flagged for a follow-on sweep, not
+      silently expanded into. `input-hash` recomputed: two of five declared `inputs:`
+      changed on disk (rulings v1.8→v1.9, BC-2.03.002 v1.4→v1.5) — `a39b7ad` → `f5135e6`.
+      `acceptance_criteria_count` stays 18; points stay 8. New backlog stub created as part
+      of this same disposition: `S-BL.NODE-IDENTIFY-WIRE.md` v1.0 (draft, wave backlog, 0
+      ACs).
   - date: 2026-07-14
     version: "2.11"
     change: >
@@ -455,7 +500,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.11"
+version: "2.12"
 phase: 2
 epic: E-7
 wave: backlog
@@ -469,7 +514,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'
   - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
-input-hash: "a39b7ad"
+input-hash: "f5135e6"
 traces_to: '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.03.001
@@ -496,7 +541,7 @@ architecture_modules:
   - cmd/switchboard
 tdd_mode: strict
 cycle: v1.0.0-greenfield
-depends_on: [S-7.02, S-2.02]
+depends_on: [S-7.02, S-2.02, S-BL.NODE-IDENTIFY-WIRE]
 blocks: []
 estimated_days: null
 assumption_validations: []
@@ -504,9 +549,9 @@ risk_mitigations: []
 changed_by_rulings: [RULING-W6TB-D, RULING-W6TB-H, S-BL.DISCOVERY-WIRE-rulings]
 acceptance_criteria_count: 18
 inputDocuments:
-  - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'   # v1.8 — BINDING. All three rulings + Security Consult Addendum (SEC-DW-01..09) + Replay/freshness subsection (now incl. the F-DWSP4-001 restart-liveness amendment) + Decision Log (incl. the v1.6 precision-correction entry, the v1.7 one-token propagation fix to Ruling 3(c)'s trailing prose, and the v1.8 Node-local ingest correction retiring `ReceiveAdvertisement`/`TestDiscovery_VP045_SVTNIsolation_MultipleScopes`, no other ruling content change). Where this story and the ruling appear to diverge, the ruling governs.
+  - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'   # v1.9 — BINDING. All three rulings + Security Consult Addendum (SEC-DW-01..09) + Replay/freshness subsection (now incl. the F-DWSP4-001 restart-liveness amendment) + Decision Log (incl. the v1.6 precision-correction entry, the v1.7 one-token propagation fix to Ruling 3(c)'s trailing prose, the v1.8 Node-local ingest correction retiring `ReceiveAdvertisement`/`TestDiscovery_VP045_SVTNIsolation_MultipleScopes`, and the v1.9 story-ready human gate disposition — Ruling 3(f)'s fan-out target resolution resolved to named companion story `S-BL.NODE-IDENTIFY-WIRE`, SEC-DW-07/discovery-port sign-off recorded, `sessions.list` Forward Obligation (d) resolved to `S-BL.SESSIONS-LIST-WIRE`). Where this story and the ruling appear to diverge, the ruling governs.
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'   # v1.6 — Preconditions 1-3, Postconditions 1-5, Invariants 1-3. Ruling 1/2 amendments already executed by product-owner (Precondition 3 address-derivation note, PC-1 relay-delivery note, PC-2 Sequence field, PC-5 DiscoveryAuthKey derivation); v1.6 carries the F-DWSP4-001 restart-liveness amendment to PC-2's Sequence-field description.
-  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'   # v1.4 — PC-5 is the postcondition SEC-DW-07/VP-080 protects (staleness-expiry guarantee). PC-1's PENDING-S-BL.DISCOVERY-WIRE `sessions.list` RPC-exposure annotation is NOT adjudicated by any of the three rulings — flagged, not solved, in Non-Goals.
+  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'   # v1.5 — PC-5 is the postcondition SEC-DW-07/VP-080 protects (staleness-expiry guarantee). PC-1's `sessions.list` RPC-exposure annotation is NOT adjudicated by any of the three rulings — flagged, not solved, in Non-Goals; v1.5 re-points the annotation from PENDING-S-BL.DISCOVERY-WIRE to PENDING-S-BL.SESSIONS-LIST-WIRE per Forward Obligation (d)'s resolution.
   - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'   # v1.2 — DISCOVERY_RELAY=0x03 registry row (Ruling 3(g), already executed by product-owner); PC-3 4-byte control header + DISCOVERY_RELAY extension note; Invariant 3 (append-only) and Invariant 5/DI-007 (extend-beyond-byte-3 allowance) govern the hop-2 payload layout.
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'   # v1.8 — §Session Discovery. Router-relay model, address derivation, hop-2 relay-transport paragraph, and the superseded-language callout are all already executed (Ruling 2/3), not proposed.
   - '.factory/specs/verification-properties/VP-080.md'   # v1.7 — SEC-DW-07 replay-rejection property, draft lifecycle_status pending this story's wave scoping (draft→active transition is this elaboration's job per the VP's own Lifecycle section); v1.3 carried the restart-liveness Property 5 (forward-acceptance-on-restart) added alongside the F-DWSP4-001 fix, per VP-INDEX v2.43; v1.4 was a housekeeping bump alongside ARCH-07/ARCH-11 gaining the VP-078/079/080 rows; v1.5 was a citation re-pin + input-hash refresh alongside rulings v1.8 (F-DWSP9-001) — no property-substance change (Properties 1-5, Test Scenarios, thresholds all unchanged); v1.6 replaced two stale `TestDiscovery_VP045_SVTNIsolation_MultipleScopes`-as-extant-exemplar citations (Proof Method table, Feasibility Assessment) with the surviving router-side `DiscoveryAuthKeyFor`-admitted test lineage (F-DWSP10-001) — no property-substance change; v1.7 corrected the Source Contract's stale process-status paragraph (it had read "drafted, not yet executed" since the v1.0 mint even though the BC-2.03.001 PC-2 amendment landed at v1.5 and was superseded in place at v1.6) and confirmed textual alignment between the reproduced blockquote and the landed BC text (F-DWSP12-001) — no property-substance change, input-hash unchanged (`5d904d5`).
@@ -538,7 +583,7 @@ backlog_origin:
 # S-BL.DISCOVERY-WIRE: Discovery Wire Boundary — UDP Multicast I/O, Admitted-Node HMAC Keys, Multicast Address Allocation, Hop-2 Relay Dispatch
 
 > **Status note:** All three Open Design Obligations (two from the v1.1 stub, one surfaced
-> mid-ruling) are ADJUDICATED (`.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.8,
+> mid-ruling) are ADJUDICATED (`.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.9,
 > 2026-07-13). This elaboration is sprint-ready in content but stays `status: draft` — it has
 > NOT been promoted to `ready` — because three items require explicit human/PO sign-off before
 > wave scheduling (see **Human Gate — Story-Ready Sign-off Required** below). Do not implement
@@ -604,7 +649,7 @@ decomposition would mean scheduling this story against an undecided delivery mec
 
 ## Adjudicated Design Decisions
 
-Transcribed from `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.8 (binding — all factual
+Transcribed from `.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md` v1.9 (binding — all factual
 claims in that ruling are grep/read-verified against `develop@1f25677`). Where this story and the
 rulings doc appear to diverge, the rulings doc governs. Each entry below carries the load-bearing
 constraints inline — the implementer should not need to re-open the rulings doc for the common
@@ -652,7 +697,7 @@ dependency) is unchanged and shared by both call sites.
   relocated to a direct `OuterHeader.SVTNID` vs. `d.cfg.LocalSVTNID` equality check.
   `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` is retired, not preserved — see AC-007 and the
   File-Change List for the full ten-test disposition. Full rationale:
-  `S-BL.DISCOVERY-WIRE-rulings.md` v1.8, "Node-local ingest correction."
+  `S-BL.DISCOVERY-WIRE-rulings.md` v1.9, "Node-local ingest correction."
 
 **Security-hardening constraints (Security Consult Addendum, SEC-DW-01/02/03/04/05, all ADOPTED as
 MANDATORY except SEC-DW-05's optional dummy-HMAC hardening):**
@@ -718,9 +763,9 @@ in cleartext in every outer header, so this is not a secrecy requirement.
 
 **(c) Port.** A single fixed named constant in `internal/discovery` (parallel to the existing
 `HeartbeatInterval` constant) in the IANA dynamic/private range (49152–65535).
-**Recommended: `49201`** — arbitrary, unregistered, explicitly a bikeshed-level placeholder, NOT
-gated on this ruling. One port suffices for all SVTNs because the group *address*, not the port,
-provides SVTN scoping. **Flagged for human sign-off — see Human Gate below.**
+**Adjudicated: `49201`** — arbitrary, unregistered, adopted by human gate disposition 2026-07-14 (no
+longer a placeholder; see Human Gate item 2). One port suffices for all SVTNs because the group
+*address*, not the port, provides SVTN scoping.
 
 **(d) IPv6 explicitly out of scope.** No IPv6 data-plane precedent exists anywhere in this
 codebase (only mgmt-plane loopback authorization references exist). Flagged as a named forward
@@ -925,7 +970,7 @@ trigger model (state change / heartbeat / on-demand, all unchanged from S-7.02).
 **Qualifying note (F-DWSP8-001):** `advertisementKey` had three call sites pre-deletion — `Encode`,
 `Decode`, and `Discovery.ReceiveAdvertisement` — not only the two sites this AC's Test file list
 implies. `ReceiveAdvertisement` is retired (deleted), not merely updated to a new key-derivation
-call, per rulings v1.8's Node-local ingest correction. "No call site references it" remains true
+call, per rulings v1.9's Node-local ingest correction. "No call site references it" remains true
 post-deletion; no postcondition text change needed, scope clarification only.
 
 **Test names:** `TestDeriveDiscoveryKey_DomainSeparatedFromFrameAuthKey`,
@@ -1232,14 +1277,15 @@ relay/connection-trust note
 
 ---
 
-### AC-017 — [GATED — see Forward Obligation (a) / Human Gate item 3] SVTN-scoped, exclude-originator, best-effort fan-out dispatch (traces to BC-2.03.001 Postcondition 1 delivery-mechanism note)
+### AC-017 — [GATED — depends_on S-BL.NODE-IDENTIFY-WIRE] SVTN-scoped, exclude-originator, best-effort fan-out dispatch (traces to BC-2.03.001 Postcondition 1 delivery-mechanism note)
 
 **BC Anchor:** BC-2.03.001 Postcondition 1 (delivery-mechanism note)
 
-**Gate:** This AC's Green step cannot be scheduled until the fan-out **target-resolution** Forward
-Obligation (Ruling 3(f)) is resolved by PO/architect disposition — see **Human Gate** below. AC
-text is fully specified below and does not change once the gate clears; only the target-resolution
-mechanism it dispatches through does.
+**Gate:** This AC's Green step is gated on **`S-BL.NODE-IDENTIFY-WIRE`** (the fan-out target-resolution
+companion story named by the 2026-07-14 human gate disposition, resolving Ruling 3(f)'s Forward
+Obligation — see rulings v1.9 item (j), `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1). AC text is
+fully specified below and does not change once `S-BL.NODE-IDENTIFY-WIRE` lands; only the
+target-resolution mechanism it dispatches through does.
 
 **Postconditions:**
 
@@ -1257,7 +1303,7 @@ mechanism it dispatches through does.
 
 ---
 
-### AC-018 — [GATED — see Forward Obligation (a) / Human Gate item 3] Relay-dispatch rate cap (traces to BC-2.03.001 Postcondition 5; SEC-DW-09)
+### AC-018 — [GATED — depends_on S-BL.NODE-IDENTIFY-WIRE] Relay-dispatch rate cap (traces to BC-2.03.001 Postcondition 5; SEC-DW-09)
 
 **BC Anchor:** BC-2.03.001 Postcondition 5; SEC-DW-09
 
@@ -1282,14 +1328,15 @@ mechanism to suppress.
 
 | # | Obligation | Owner | Gate | Status |
 |---|-----------|-------|------|--------|
-| (a) | Fan-out **target resolution** (Ruling 3(f)): binding node identity (`NodeAddr`) to a live connection's `InterfaceID`/`nodeConn` does not exist in production code today — `admission.AdmitNode` has zero production call sites; `sendMap` carries no `NodeAddr`. Gates AC-017/AC-018 and Task 6. | architect / PO (disposition), then implementer | **OPEN — hard gate on AC-017/AC-018/Task 6.** Requires human disposition between two options (see Human Gate item 3) before Task 6 can be scheduled. | OPEN |
+| (a) | Fan-out **target resolution** (Ruling 3(f)): binding node identity (`NodeAddr`) to a live connection's `InterfaceID`/`nodeConn` does not exist in production code today — `admission.AdmitNode` has zero production call sites; `sendMap` carries no `NodeAddr`. Gates AC-017/AC-018 and Task 6. | architect / PO (disposition), then implementer | **RESOLVED — 2026-07-14.** Human gate selected `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.0 Option 1: named companion story **`S-BL.NODE-IDENTIFY-WIRE`** (added to `depends_on`) delivers the `NODE_IDENTIFY` handshake. AC-017/AC-018/Task 6 now gate on that story by name, not on this table row. See rulings v1.9 item (j). | RESOLVED |
 | (b) | `VP-044`/`VP-045` are `PARTIAL` per the Phase-6 VP sweep (RULING-W6TB-D doctrine) — full coverage requires this story's real UDP-multicast integration tests to land, superseding the "Blocker: multicast wire transport implementation" notes on both VPs. | formal-verifier | None — discharged once AC-001/AC-003 tests land and pass. | OPEN — non-blocking (post-Task-4 cleanup, not a scheduling gate on any AC) |
 | (c) | `VP-080` is `lifecycle_status: draft` (minted ahead of this elaboration per its own Lifecycle section) — the `draft → active` transition is this story's job once it is scoped into a wave. | architect / spec-steward | None — mechanical once this story reaches `ready`/wave-scheduled. | OPEN — non-blocking |
-| (d) | `BC-2.03.002` Postcondition 1's `PENDING-S-BL.DISCOVERY-WIRE` annotation anticipates this story also wiring a `sessions.list` RPC handler exposing `discovery.Enumerate()` over the mgmt wire. **None of the three rulings (v1.8) adjudicate this** — Ruling 1/2/3 scope is exclusively the UDP-multicast advertisement transport (hop-1 ingest + hop-2 relay), not a console-facing enumeration RPC. This is a discovered scope question, not resolved here. | PO / architect | None — flagged, not gating any AC in this story. | OPEN — flagged in Non-Goals; needs a PO/architect scoping decision (possibly a distinct follow-on story) before BC-2.03.002 PC-1's annotation can be closed. |
+| (d) | `BC-2.03.002` Postcondition 1's `PENDING-S-BL.DISCOVERY-WIRE` annotation anticipates this story also wiring a `sessions.list` RPC handler exposing `discovery.Enumerate()` over the mgmt wire. **None of the three rulings (v1.9) adjudicate this** — Ruling 1/2/3 scope is exclusively the UDP-multicast advertisement transport (hop-1 ingest + hop-2 relay), not a console-facing enumeration RPC. This is a discovered scope question, not resolved here. | PO / architect | **RESOLVED — 2026-07-14.** Human gate resolved this to a new backlog story, **`S-BL.SESSIONS-LIST-WIRE`** (`stories/S-BL.SESSIONS-LIST-WIRE.md` v1.0, draft, wave backlog). `BC-2.03.002` PC-1's annotation is already re-pointed to that story's ID on disk (`BC-2.03.002.md` v1.5). See rulings v1.9 item (l). | RESOLVED |
 
-**None of (b)/(c)/(d) block TDD implementation of AC-001..AC-016.** Obligation (a) is the sole hard
-gate, and it gates only AC-017/AC-018/Task 6 — Tasks 1-5 (hop-1 ingest, sender-side dispatch, hop-2
-frame construction) proceed independent of its resolution.
+**Obligations (a) and (d) are resolved as of 2026-07-14** (see rows above); (b)/(c) remain open and
+non-blocking. None of (b)/(c)/(d) ever blocked TDD implementation of AC-001..AC-016. AC-017/AC-018/
+Task 6 now gate on **`S-BL.NODE-IDENTIFY-WIRE`** by name (not on an open disposition) — Tasks 1-5
+remain independently deliverable regardless of that story's schedule.
 
 ## Human Gate — Story-Ready Sign-off Required
 
@@ -1297,6 +1344,12 @@ Three items are carried forward from the architect ruling for explicit human/PO 
 this story is promoted from `draft` to `ready` and scheduled into a wave. None of them block
 writing or landing the code for AC-001 through AC-016; they gate the `ready` transition and, for
 item 3, the scheduling of Task 6/AC-017/AC-018 specifically.
+
+> **DISPOSITIONED — 2026-07-14.** All three items below received human sign-off/selection at the
+> story-ready gate. See `S-BL.DISCOVERY-WIRE-rulings.md` v1.9, Ruling 3 subsection "Ruling 3(f)
+> Forward Obligation, SEC-DW-07, and the discovery port — human gate disposition," items (j)/(k)/(l),
+> and `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1 for the full record. This story may now be
+> promoted to `ready` on this axis.
 
 ### 1. SEC-DW-07 monotonic-`Sequence`-field adjudication
 
@@ -1335,12 +1388,20 @@ to ship without further hardening (e.g., a monotonic-clock cross-check, or clamp
 maximum) — this ruling explicitly declined that additional hardening as diminishing-returns
 complexity, but a human sign-off should see the specific trade-off before it's locked in.
 
+> **Disposition (2026-07-14): APPROVED as documented.** Both residual bounds — Case 1 (≤1s,
+> same-wall-clock-second crash-loop) and Case 2 (≈N, backward host-clock adjustment) per rulings
+> v1.6's precision-corrected framing — are accepted with no further hardening requested. See
+> rulings v1.9 item (k).
+
 ### 2. Discovery UDP port number
 
 `49201` is recommended (IANA dynamic/private range 49152–65535, arbitrary, unregistered) but is
 explicitly a bikeshed-level placeholder per Decision 2(c) — not gated on any ruling's substance.
 **Ask for sign-off:** confirm `49201` or supply an alternative before the constant is committed to
 `internal/discovery`.
+
+> **Disposition (2026-07-14): `49201` ADOPTED — no longer a placeholder.** The bikeshed is closed;
+> `49201` is the adjudicated discovery UDP port. See rulings v1.9 item (k).
 
 ### 3. Fan-out target-resolution — two resolution paths, architect's analysis
 
@@ -1372,6 +1433,17 @@ scheduled session-bootstrap story I don't have." **Ask for sign-off:** PO/archit
 (ii). This elaboration deliberately does not choose — per the orchestrator's instruction not to
 invent this binding, and per the general principle that a story-writer transcribes architect
 rulings rather than resolving an item the ruling itself left open for a different role.
+
+> **Disposition (2026-07-14): NEITHER option (i) nor option (ii) selected — both rejected.** The
+> human asked for better options; `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.0 (six additional
+> options, grounded in the shipped code) was produced and reviewed. **Selected: that document's
+> Option 1** — a new, immediately-named, immediately-scheduled companion story,
+> **`S-BL.NODE-IDENTIFY-WIRE`**, delivers the `control_type=0x04` `NODE_IDENTIFY` handshake (wiring
+> `admission.AdmitNode`/`admission.GenerateChallenge` over the live connection, recording
+> `(SVTNID, NodeAddr) → IfaceID` via a `Router.BindInterface`-shaped method). Add
+> `S-BL.NODE-IDENTIFY-WIRE` to this story's `depends_on`; Task 6/AC-017/AC-018 gate on it by name.
+> See rulings v1.9 item (j) for full mechanism and rationale, and
+> `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1 for the evaluation + disposition record.
 
 ## Non-Goals
 
@@ -1454,11 +1526,11 @@ by this story:
 |------|--------|--------------|
 | `internal/discovery` MUST import ONLY `internal/routing` among `internal/` packages — `internal/admission` and `internal/hmac` are forbidden imports. | ARCH-08 §6.5 position-14 (`ARCH-08-dependency-graph.md` v2.13, line 159/173) | `go list -deps ./internal/discovery/...` boundary check; existing package doc comment in `discovery.go` states the rule explicitly. |
 | `internal/hmac` MUST NOT import any other `internal/` package or any external dependency — stdlib `crypto/hmac`+`crypto/sha256` only. | `internal/hmac/hmac.go` package doc comment (existing invariant, unchanged by this story) | Same `go list -deps` check; `DeriveDiscoveryKey`'s addition must not introduce a new import. |
-| Router-side ingest MUST perform fixed-offset key-selector extraction before any call to `decodeBody()` (SEC-DW-01, MANDATORY, not optional hardening). | `S-BL.DISCOVERY-WIRE-rulings.md` v1.8, Ruling 1 Implementation Constraint 2 | AC-005 tests; code review. |
+| Router-side ingest MUST perform fixed-offset key-selector extraction before any call to `decodeBody()` (SEC-DW-01, MANDATORY, not optional hardening). | `S-BL.DISCOVERY-WIRE-rulings.md` v1.9, Ruling 1 Implementation Constraint 2 | AC-005 tests; code review. |
 | HMAC verification MUST cover the complete raw body bytes, not merely the key-selector prefix. | Same | AC-005 tamper-detection test. |
 | New `control_type` opcode allocation MUST be sequential and append-only (`0x03` after `0x01`/`0x02`); existing opcode values are never reassigned. | BC-2.01.008 Invariant 3 | Already satisfied — `DISCOVERY_RELAY=0x03` row landed v1.2; no story-writer/implementer action needed to satisfy this rule, only to not violate it. |
-| The `DISCOVERY_RELAY` relay frame's `HMACTag` MUST be zero — hop-2's trust boundary is the admitted connection, never a per-frame HMAC. | `S-BL.DISCOVERY-WIRE-rulings.md` v1.8, Ruling 3(b) | AC-015 test. |
-| Relay dispatch MUST be best-effort, non-blocking (`select`/`default`), never a blocking send that could stall the router on a slow/stuck node. | Ruling 3(d), DRAIN precedent | AC-017 test (GATED — see Human Gate). |
+| The `DISCOVERY_RELAY` relay frame's `HMACTag` MUST be zero — hop-2's trust boundary is the admitted connection, never a per-frame HMAC. | `S-BL.DISCOVERY-WIRE-rulings.md` v1.9, Ruling 3(b) | AC-015 test. |
+| Relay dispatch MUST be best-effort, non-blocking (`select`/`default`), never a blocking send that could stall the router on a slow/stuck node. | Ruling 3(d), DRAIN precedent | AC-017 test (GATED — depends_on S-BL.NODE-IDENTIFY-WIRE). |
 
 ## Forbidden Dependencies
 
@@ -1567,16 +1639,17 @@ called out explicitly. Broken out per dispatch pass per the per-story-delivery T
 driven by the rulings doc's own size (87KB, three full rulings plus the Security Consult Addendum
 and Decision Log) being unavoidable binding-source context for the stub pass. All three passes stay
 comfortably under half the window. No story split required at 8 points; Task 6's GATED status
-further reduces effective Pass-3 load if it is deferred to a follow-on burst once Human Gate item 3
-resolves (Tasks 1-5 alone would be materially lighter than the full 8-point estimate above).
+further reduces effective Pass-3 load if it is deferred to a follow-on burst once
+`S-BL.NODE-IDENTIFY-WIRE` lands (Tasks 1-5 alone would be materially lighter than the full 8-point
+estimate above).
 
 ## Task Breakdown (Strict TDD — Stubs → Red → Green → Gate)
 
 All tasks execute in a single worktree on a feature branch cut from `develop@HEAD`. Each task gate
 is `just test-race` green + `just lint` clean before proceeding to the next. **Tasks 1-5 (hop-1
-ingest, sender dispatch, hop-2 frame construction) are independently deliverable and do not require
-Human Gate item 3 to resolve. Task 6 (hop-2 fan-out dispatch) is explicitly GATED — see its own
-section below.**
+ingest, sender dispatch, hop-2 frame construction) are independently deliverable and do not depend
+on `S-BL.NODE-IDENTIFY-WIRE` landing. Task 6 (hop-2 fan-out dispatch) is explicitly GATED — see its
+own section below.**
 
 ### Task 1 — Key-derivation plumbing (AC-004)
 
@@ -1625,21 +1698,17 @@ frame assembly is a pure function taking decoded fields and producing bytes; it 
 connection or fan-out mechanism to test. Depends on Task 2 (consumes the ingest decision's decoded
 fields). Gate: `just test-race`, `just lint`.
 
-### Task 6 — [GATED — Forward Obligation (a) / Human Gate item 3] Hop-2 fan-out dispatch (AC-017, AC-018)
+### Task 6 — [GATED — depends_on S-BL.NODE-IDENTIFY-WIRE] Hop-2 fan-out dispatch (AC-017, AC-018)
 
-**This task's Green step MUST NOT be scheduled until PO/architect selects Human Gate item 3's
-option (i) or (ii).** Red-step tests (AC-017/AC-018) MAY be written now against an injected
-connection-set stub (e.g. a `func(svtnID [16]byte, excludeNodeAddr [8]byte) []nodeConn` seam) so
-the fan-out **semantics** (SVTN-scoped, exclude-originator, best-effort non-blocking, ~1/sec rate
-cap) are pinned by tests independent of the resolution mechanism — but the Green step that wires a
-*real* connection-set lookup into that seam depends on the chosen option:
-
-- If option (i): depends on the successor story's node-identity-to-connection binding landing
-  first; this task's Green step is a follow-on burst against that story's shipped API, not part of
-  this story's own delivery.
-- If option (ii): depends on this story additionally implementing the narrow
-  `Router.BindInterface(svtnID, nodeAddr, ifaceID)` seam — new scope not counted in this story's
-  8-point estimate; revisit sizing if chosen.
+**This task's Green step MUST NOT be scheduled until `S-BL.NODE-IDENTIFY-WIRE` lands** (the fan-out
+target-resolution companion story named by the 2026-07-14 human gate disposition — see rulings v1.9
+item (j)). Red-step tests (AC-017/AC-018) MAY be written now against an injected connection-set stub
+(e.g. a `func(svtnID [16]byte, excludeNodeAddr [8]byte) []nodeConn` seam) so the fan-out
+**semantics** (SVTN-scoped, exclude-originator, best-effort non-blocking, ~1/sec rate cap) are
+pinned by tests independent of the resolution mechanism — but the Green step that wires a *real*
+connection-set lookup into that seam depends on `S-BL.NODE-IDENTIFY-WIRE`'s
+`Router.BindInterface`-shaped method landing first; this task's Green step is a follow-on burst
+against that story's shipped API, not part of this story's own delivery.
 
 Gate: `just test-race`, `just lint` — deferred until the gate clears.
 
@@ -1652,9 +1721,9 @@ just test-race
 ```
 
 All packages pass. Zero lint warnings. Then open PR targeting `develop` — Task 6's inclusion in
-that PR depends on whether Human Gate item 3 has resolved by delivery time; if not, Tasks 1-5 alone
-constitute a complete, mergeable PR delivering hop-1 ingest end-to-end, with Task 6 tracked as a
-follow-on.
+that PR depends on whether `S-BL.NODE-IDENTIFY-WIRE` has landed by delivery time; if not, Tasks 1-5
+alone constitute a complete, mergeable PR delivering hop-1 ingest end-to-end, with Task 6 tracked as
+a follow-on.
 
 ## Delivery Plan Note — POL-005
 
@@ -1700,6 +1769,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.12 | 2026-07-14 | **Story-ready human gate disposition burst — status promoted `draft` → `ready`.** All three items carried by the Human Gate section received human sign-off/selection on 2026-07-14, transcribed verbatim from `S-BL.DISCOVERY-WIRE-rulings.md` v1.9's new "Ruling 3(f) Forward Obligation, SEC-DW-07, and the discovery port — human gate disposition" subsection (items (j)/(k)/(l)) and `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1's Disposition section. **Item 1 (SEC-DW-07):** APPROVED as documented — both residual bounds (Case 1 ≤1s same-wall-clock-second crash-loop; Case 2 ≈N backward host-clock adjustment) accepted with no further hardening requested. **Item 2 (discovery UDP port):** `49201` ADOPTED — no longer a placeholder; Decision 2(c)'s port sentence rewritten from "Recommended... bikeshed-level placeholder... Flagged for human sign-off" to "Adjudicated: `49201`... adopted by human gate disposition 2026-07-14". **Item 3 (fan-out target resolution):** NEITHER originally-offered option (i) (unnamed sequencing dependency) nor option (ii) (narrow story-local seam with no identity signal) selected — both rejected; the human asked for better options, `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.0 (six additional options) was produced and reviewed, and the human selected its **Option 1**: a new, immediately-named, immediately-scheduled companion story, **`S-BL.NODE-IDENTIFY-WIRE`** (created this burst, `stories/S-BL.NODE-IDENTIFY-WIRE.md` v1.0, draft, wave backlog, 0 ACs — models the `S-BL.SESSIONS-LIST-WIRE` backlog-stub shape), delivers the `control_type=0x04` `NODE_IDENTIFY` handshake wiring `admission.AdmitNode`/`admission.GenerateChallenge` over the live connection and records `(SVTNID, NodeAddr) → IfaceID` via a new `Router.BindInterface`-shaped method. Frontmatter `depends_on` gained `S-BL.NODE-IDENTIFY-WIRE`; AC-017/AC-018/Task 6 now gate on it by name. Human Gate section gained a top-of-section DISPOSITIONED blockquote plus per-item disposition blockquotes appended to items 1/2/3 (verbatim architect-supplied text). Forward Obligations table: row (a) replaced with a RESOLVED disposition citing `S-BL.NODE-IDENTIFY-WIRE`; row (d) (the `sessions.list` obligation, already resolved to `S-BL.SESSIONS-LIST-WIRE` — see v4.109 STORY-INDEX entry — and `BC-2.03.002.md` already re-pointed to v1.5) also updated to RESOLVED status for consistency; the table's summary sentence rewritten to state both (a) and (d) are resolved, (b)/(c) remain open non-blocking. AC-017's heading tag changed `[GATED — see Forward Obligation (a) / Human Gate item 3]` → `[GATED — depends_on S-BL.NODE-IDENTIFY-WIRE]`, Gate paragraph rewritten to name the story by ID; AC-018's heading tag changed identically, its Gate paragraph left as-is (references AC-017's). Task 6 gating text re-anchored by name across the three explicitly-authorized sections: Token Budget's "Overall" paragraph, the Task Breakdown section intro, Task 6's own heading + body (the option (i)/(ii) branching collapsed to the single adopted mechanism, since the choice is no longer open), the Architecture Compliance Rules relay-dispatch row's Enforcement cell, and Task 7's PR-inclusion note — all now read `S-BL.NODE-IDENTIFY-WIRE` by name instead of "Human Gate item 3"/"Forward Obligation (a)". **Four residual `Forward Obligation (a)`/`Human Gate item 3` references found OUTSIDE this burst's authorized touch-list** (the Non-Goals fan-out-binding bullet, EC-008's edge-case description, the File-Change List's `discovery_relay_wire_test.go` row, and Anchors Consumed's two hop-2 rows) are deliberately left unedited — flagged for a follow-on sweep, not silently expanded into. Mechanical version-pin sweep: every live-prose `rulings v1.8` pin → `v1.9` at 7 spots (`inputDocuments:` comment, Status-note blockquote, Decision-section intro, Decision 1's Node-local-ingest-correction citation, AC-007's qualifying note, both Architecture Compliance Rules rows) plus the one paren-form pin inside Forward Obligations row (d); every live-prose `BC-2.03.002 v1.4` pin → `v1.5` at its one live spot (the `inputDocuments:` comment, description text updated to note the PC-1 re-point to `S-BL.SESSIONS-LIST-WIRE` already executed on disk). `input-hash` recomputed via `compute-input-hash --update`: two of this story's five declared `inputs:` changed on disk since the last computation (rulings v1.8→v1.9, BC-2.03.002 v1.4→v1.5) — `a39b7ad` → `f5135e6`. `acceptance_criteria_count` stays 18; points stay 8. Frontmatter `version` 2.11 → 2.12, new `modified:` entry added. **`status: draft` → `ready`** — the Human Gate section's intro conditioned promotion on exactly these three sign-offs; all three landed. `wave` stays `backlog` (unscheduled — promotion is a readiness signal, not a wave assignment). |
 | 2.11 | 2026-07-14 | Remediated spec-adversarial pass 13 finding F-DWSP13-001 (LOW): two live-prose spots attributed the F-DWSP4-001 restart-liveness amendment (`Sequence` `uint32`→`uint64` epoch-qualified widening + offset consequences) to "rulings v1.6" — the canonical adoption version is rulings v1.5 (rulings.md's restart-liveness amendment section is a v1.5 adjudication; v1.6 was only the residual-bounds precision correction, changing no widths or offsets), corroborated by BC-2.03.001 PC-2's blockquote ("F-DWSP4-001, v1.5"), VP-080's history, and this story's own line 1270 ("v1.5 update (F-DWSP4-001), residual bounds corrected v1.6"), which directly contradicted line 1257 within the same Human Gate item 1. Fixed: AC-005's note (line 909) "widths updated per F-DWSP4-001/rulings v1.6" → "...v1.5"; Human Gate item 1's opening sentence (line 1257) "epoch-qualified per the v1.6 restart-liveness amendment" → "...v1.5 restart-liveness amendment". Line 1270's correct dual-version phrasing left unchanged. **Exception-set retirement:** prior sweeps (v2.7-v2.10 rows) classified these two spots as "sanctioned point-in-time historical `rulings v1.6` citations" and verified them unchanged burst after burst — that classification protected the version-at-fix-time reading without checking the text's actual semantic claim, which falsely attributed the AMENDMENT itself to v1.6; this fix retires that exception class. The v2.7-v2.10 rows' own historical classification text is left unedited (historical-preservation precedent) — this entry layers the correction forward. **Convention going forward:** amendment attributions cite the ADOPTING version (v1.5); "residual bounds corrected v1.6" is the correct dual-version formula where the v1.6 precision correction is also relevant (as line 1270 already does). Mandatory multiline-tolerant re-certification sweep (Perl `-0777`, the ratified v2.9/v2.10 pattern set plus the paren-form `VP-080` check) found a THIRD spot making the identical false attribution: "The architect's fix (rulings v1.6): widen `Sequence` to `uint64`, epoch-qualified..." (Human Gate item 1, four lines below the correctly-phrased v1.5/v1.6 dual-version paragraph opener) — the widening fix itself credited to v1.6 rather than v1.5. Initially flagged out of scope pending disposition; **the orchestrator extended this same burst to cover it** (class-sweep principle — fix every instance of a finding's class in one burst rather than leaving a guaranteed pass-14 finding). Fixed in place, same v2.11 (uncommitted, amended not re-versioned): "The architect's fix (rulings v1.6):" → "The architect's fix (rulings v1.5; residual bounds corrected v1.6):" — the same dual-version formula line 1270 already uses; nothing else in the sentence changed. **All THREE same-class spots (AC-005's note at line 909, Human Gate item 1's opening sentence at line 1257, and Human Gate item 1's fix-origin sentence at line 1274) are now fixed in v2.11.** Re-ran the full re-certification sweep after this third fix: every live-prose `VP-080` hit reads `v1.7` (5 spots); every live-prose `rulings` hit reads `v1.8` (6 spots, plus the paren-form at line 1241) or the exempt Provenance "Adjudication:" bullet (`v1.3`, line 1643) — **zero live-prose `rulings v1.6` pins remain anywhere in the file, in any form.** The exception-set retirement now FULLY holds. `acceptance_criteria_count` stays 18; points stay 8. None of this story's five declared `inputs:` (rulings, BC-2.03.001, BC-2.03.002, BC-2.01.008, ARCH-03) changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |
 | 2.10 | 2026-07-14 | Cascade-only pin sweep for F-DWSP12-001 (LOW, spec-adversarial pass 12): VP-080's Source Contract process-status paragraph corrected by the architect (it had read "drafted, not yet executed" since the v1.0 mint even though the BC-2.03.001 PC-2 amendment landed at v1.5 and was superseded in place at v1.6) — citation-only, no property-substance change, input-hash unchanged (`5d904d5`) — and bumped to v1.7; VP-INDEX bumped to v2.47. Story-side pin sweep updated all six live-prose `VP-080 v1.6` pins → `v1.7`: the `inputDocuments:` comment, AC-009's note, AC-010 postconditions 5/6, the Non-Goals `uint64`-composite-wraparound bullet, and the File-Change List's `discovery_wire_test.go` row (swept forward — the v1.7 fix touched only the Source Contract paragraph, leaving the surviving-lineage citation this row references unchanged and current). Mandatory multiline-tolerant re-certification sweep (Perl `-0777`, the ratified v2.9 pattern set plus a paren-form `VP-080` check): every live-prose `VP-080` hit now reads `v1.7`; every live-prose `rulings` hit already reads `v1.8` with the two sanctioned historical exceptions (AC-005, Human Gate item 1) and the Provenance bullet (`v1.3`) verified unchanged; zero paren-form `VP-080` hits found. `acceptance_criteria_count` stays 18; points stay 8. None of this story's five declared `inputs:` changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |
 | 2.9 | 2026-07-14 | Remediated spec-adversarial pass 11 finding F-DWSP11-001 (LOW): the Forward Obligations table row (d) at line 1175 read "**None of the three rulings (v1.3) adjudicate this**" — a straggler from the v2.0 elaboration (rulings was v1.3 at that time; it is v1.8 now). The paren-separated form `rulings (v1.3)` is structurally invisible to every prior sweep's pattern (`` rulings(\.md)?[`']?\s+v1\.[0-9]+ `` requires the version token immediately after the name, not parenthesized) — the third sweep-blind-spot sub-class surfaced on this story, after F-DWSP6-001's line-wrap survivor (v2.5) and F-DWSP10-001's retired-test exemplar cascade (v2.8). The claim's truth is unaffected — no ruling after v1.3 adjudicates the `sessions.list` RPC question; Rulings 1/2/3's scope remains exclusively the UDP-multicast advertisement transport — hence LOW, not MED/HIGH. Fixed: `v1.3` → `v1.8` at line 1175, cell text otherwise unchanged. **Correction to the v2.8 row's completeness claim:** that entry asserted "every live-prose `rulings` hit already reads `v1.8` except the two intentional point-in-time historical `rulings v1.6` citations" — true under the sweep pattern in force at the time, but that pattern was blind to the paren form, so the claim did not in fact cover every live-prose hit. The v2.8 row itself is left unedited per this story's historical-preservation precedent; this row layers the correction alongside it. **New sweep standard for this story (F-DWSP6-001/F-DWSP10-001/F-DWSP11-001 countermeasure lineage):** the mandatory multiline-tolerant Perl `-0777` re-certification sweep now also runs a paren-tolerant pattern, `rulings\s*\(v1\.[0-9]+\)`, alongside the existing `` rulings(\.md)?[`']?\s+v1\.[0-9]+ `` and `VP-080\s+v1\.[0-9]+` patterns. This burst's extended sweep (both rulings patterns plus the VP-080 pattern, whole file as one buffer) found exactly one paren-form hit — the line-1175 fix above — and reconfirmed every other live-prose `rulings` hit already reads `v1.8` and every live-prose `VP-080` hit already reads `v1.6`, with the same two sanctioned point-in-time historical `rulings v1.6` citations (AC-005's F-DWSP1-001 fix-context note; Human Gate item 1's SEC-DW-07-fix-origin note) and the Provenance "Adjudication:" bullet (`rulings.md` v1.3, correctly documenting the v2.0 elaboration's authority set at the time) verified unchanged. A broader case-insensitive paren check for both `rulings` and `VP-080` near any parenthesized version number confirmed no further paren-form hits of either kind exist anywhere in the file. `acceptance_criteria_count` stays 18; points stay 8. None of this story's five declared `inputs:` (rulings, BC-2.03.001, BC-2.03.002, BC-2.01.008, ARCH-03) changed this burst: `compute-input-hash --check` confirms `a39b7ad` holds unchanged. |
