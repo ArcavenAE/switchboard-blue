@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"testing"
 
@@ -169,5 +170,91 @@ func TestAssembleDiscoveryRelayFrame_NotRawHop1Bytes(t *testing.T) {
 	}
 	if bytes.Contains(relayRaw, hop1Tag[:]) {
 		t.Errorf("hop-1 HMAC tag %x appears inside the relay frame — hop-1's original HMAC tag must never appear anywhere in the relay frame (AC-016 postcondition 2)", hop1Tag)
+	}
+}
+
+// TestAssembleDiscoveryRelayFrame_IngestRelayAdvertisement_RoundTrip is a
+// cross-function bridging test: assembleDiscoveryRelayFrame (this package,
+// AC-014) and discovery.IngestRelayAdvertisement (internal/discovery,
+// AC-007) are complementary halves of the hop-2 relay path with no prior
+// test exercising both together — every existing test on each side builds
+// its own hand-rolled bytes instead of feeding one function's real output
+// into the other. That is the same shape of gap that hid the F-DWIP1-001
+// HIGH finding on the hop-1 side (Encode/RouterIngest.Ingest), so this is
+// regression-guard coverage for a class of defect already proven to occur
+// here, not a report of a currently-known bug — assemble and ingest were
+// manually verified consistent (assemble's payload[4:] == ingest's
+// expected input) before writing this test.
+//
+// Builds a real DISCOVERY_RELAY frame via assembleDiscoveryRelayFrame,
+// strips the frame's 44-byte outer header and then the payload's 4-byte
+// control header exactly as the router's hop-2 relay-dispatch path would
+// (see IngestRelayAdvertisement's doc comment: it expects payload bytes
+// starting after that 4-byte header), and feeds the result into a real
+// discovery.Discovery's IngestRelayAdvertisement with the matching SVTNID.
+// Asserts acceptance and that every session field round-trips into
+// Enumerate's result.
+//
+// Placement: cmd/switchboard, not internal/discovery — this is the only
+// package that can see both assembleDiscoveryRelayFrame (unexported, package
+// main) and discovery.IngestRelayAdvertisement (exported, importable).
+func TestAssembleDiscoveryRelayFrame_IngestRelayAdvertisement_RoundTrip(t *testing.T) {
+	t.Parallel()
+	defer redGateGuard(t)
+
+	svtnID := [16]byte{0x60, 0x61, 0x62, 0x63}
+	nodeAddr := [8]byte{0x70, 0x71, 0x72, 0x73}
+	sequence := uint64(42)
+	sessions := []discovery.SessionPresence{
+		{SessionName: "agent-04", Status: discovery.Attached, Quality: discovery.QualityGreen},
+		{SessionName: "agent-05", Status: discovery.Detached, Quality: discovery.QualityRed},
+	}
+
+	raw := assembleDiscoveryRelayFrame(svtnID, nodeAddr, sequence, sessions)
+
+	hdr, err := frame.ParseOuterHeader(raw[:frame.OuterHeaderSize])
+	if err != nil {
+		t.Fatalf("ParseOuterHeader: %v", err)
+	}
+	fullPayload := raw[frame.OuterHeaderSize:]
+	if len(fullPayload) < 4 {
+		t.Fatalf("relay frame payload = %d bytes, too short to contain the 4-byte control header", len(fullPayload))
+	}
+	// Strip the 4-byte control header (control_type | version | reserved |
+	// reserved) — the same offset IngestRelayAdvertisement's doc comment
+	// specifies the caller must strip before calling it.
+	ingestPayload := fullPayload[4:]
+
+	d := discovery.New(discovery.Config{LocalSVTNID: svtnID})
+	if err := d.IngestRelayAdvertisement(hdr.SVTNID, ingestPayload); err != nil {
+		t.Fatalf("IngestRelayAdvertisement: unexpected error: %v (assembleDiscoveryRelayFrame's output was not accepted by its own complementary ingest function)", err)
+	}
+
+	entries, err := d.Enumerate(context.Background())
+	if err != nil {
+		t.Fatalf("Enumerate: unexpected error: %v", err)
+	}
+	got := make(map[string]discovery.SessionEntry, len(entries))
+	for _, e := range entries {
+		got[e.Presence.SessionName] = e
+	}
+	if len(got) != len(sessions) {
+		t.Fatalf("Enumerate: got %d sessions, want %d", len(got), len(sessions))
+	}
+	for _, want := range sessions {
+		entry, ok := got[want.SessionName]
+		if !ok {
+			t.Errorf("Enumerate: missing session %q", want.SessionName)
+			continue
+		}
+		if entry.AdvertiserAddr != nodeAddr {
+			t.Errorf("session %q: AdvertiserAddr = %x, want %x", want.SessionName, entry.AdvertiserAddr, nodeAddr)
+		}
+		if entry.Presence.Status != want.Status {
+			t.Errorf("session %q: Status = %v, want %v", want.SessionName, entry.Presence.Status, want.Status)
+		}
+		if entry.Presence.Quality != want.Quality {
+			t.Errorf("session %q: Quality = %v, want %v", want.SessionName, entry.Presence.Quality, want.Quality)
+		}
 	}
 }
