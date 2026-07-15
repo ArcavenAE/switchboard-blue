@@ -144,9 +144,9 @@ func DeriveKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
 // independent even for the identical (nodeAdmissionPubkey, svtnID) pair
 // (S-BL.DISCOVERY-WIRE Decision 1).
 //
-// STUB — S-BL.DISCOVERY-WIRE (Red Gate, BC-5.38.001). Not yet implemented;
-// body panics unconditionally so no test can accidentally pass before
-// Task 1's Green step.
 func DeriveDiscoveryKey(nodeAdmissionPubkey []byte, svtnID [16]byte) [KeySize]byte {
-	panic("not implemented: S-BL.DISCOVERY-WIRE DeriveDiscoveryKey")
+	okm := hkdfSHA256(nodeAdmissionPubkey, svtnID[:], []byte(HKDFInfoDiscovery), KeySize)
+	var out [KeySize]byte
+	copy(out[:], okm)
+	return out
 }
