@@ -767,6 +767,37 @@ func TestDiscovery_AdvertisementRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDiscovery_Advertise_MissingNodeAdmissionPubkey_FailsClosed verifies
+// AC-004 PC-1/PC-4's fail-closed guard (F-DWIP1-001, go.md rule 13): a
+// Discovery instance constructed with an empty Config.LocalNodeAdmissionPubkey
+// must reject Advertise with ErrMissingNodeAdmissionPubkey rather than
+// silently signing with degraded/absent key material. Regression coverage
+// for the guard added by transmitAdvertisement (F-DWIP2-002) — prior to
+// this test, a regression inverting the guard's condition or deleting it
+// entirely would have passed the full suite undetected.
+func TestDiscovery_Advertise_MissingNodeAdmissionPubkey_FailsClosed(t *testing.T) {
+	t.Parallel()
+
+	cfg := discovery.Config{
+		LocalNodeAddr: nodeA1,
+		LocalSVTNID:   svtnA,
+		Router:        newTestRouter(t),
+		// LocalNodeAdmissionPubkey deliberately left empty (zero value).
+	}
+	d := discovery.New(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	sessions := []discovery.SessionPresence{
+		{SessionName: "agent-01", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	}
+	err := d.Advertise(ctx, sessions)
+	if !errors.Is(err, discovery.ErrMissingNodeAdmissionPubkey) {
+		t.Fatalf("Advertise with empty LocalNodeAdmissionPubkey: err = %v, want errors.Is(err, ErrMissingNodeAdmissionPubkey)", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // AC-005 — BC-2.03.001 PC-5: HMAC authentication on advertisement
 // ---------------------------------------------------------------------------
