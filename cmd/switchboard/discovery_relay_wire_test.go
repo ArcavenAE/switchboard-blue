@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"strings"
 	"testing"
 
 	"github.com/arcavenae/switchboard/internal/discovery"
@@ -257,4 +258,53 @@ func TestAssembleDiscoveryRelayFrame_IngestRelayAdvertisement_RoundTrip(t *testi
 			t.Errorf("session %q: Quality = %v, want %v", want.SessionName, entry.Presence.Quality, want.Quality)
 		}
 	}
+}
+
+// TestAssembleDiscoveryRelayFrame_PayloadOversize_Panics verifies the
+// F-DWIP4-N1 guard: an assembled payload whose total byte size exceeds
+// math.MaxUint16 (65535) — the wire size of OuterHeader.PayloadLen — panics
+// rather than silently truncating PayloadLen via the uint16(len(payload))
+// conversion. Currently unreachable via any real caller (sessions only ever
+// arrive already bounded by discovery.MaxDiscoveryDatagramSize=32768, and
+// re-encoding here never expands that; Task 6's relay-dispatch closure is
+// GATED), but is the same class of silent wire-field-truncation defect
+// F-DWIP1-001 found on the hop-1 side, so it is guarded and tested
+// explicitly rather than left implicit.
+//
+// Does not use redGateGuard: that helper recovers ANY panic and fails the
+// test via t.Fatalf, which would defeat this test's own deliberate panic
+// assertion.
+func TestAssembleDiscoveryRelayFrame_PayloadOversize_Panics(t *testing.T) {
+	t.Parallel()
+
+	svtnID := [16]byte{0x80}
+	nodeAddr := [8]byte{0x90}
+
+	// 300 sessions of 255-byte names comfortably exceeds the 65535-byte
+	// PayloadLen limit (300 * (2+255+1+1) + 4 control + 8 NodeAddr +
+	// 8 Sequence + 2 count ~= 77722 bytes) — well clear of the boundary so
+	// this isn't a fragile off-by-one.
+	longName := strings.Repeat("a", 255)
+	sessions := make([]discovery.SessionPresence, 300)
+	for i := range sessions {
+		sessions[i] = discovery.SessionPresence{
+			SessionName: longName,
+			Status:      discovery.Attached,
+			Quality:     discovery.QualityGreen,
+		}
+	}
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("assembleDiscoveryRelayFrame: did not panic for an oversized payload, want a panic guarding against silent PayloadLen truncation")
+			return
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "exceeds") || !strings.Contains(msg, "PayloadLen") {
+			t.Errorf("assembleDiscoveryRelayFrame: panic value = %v, want a string message mentioning the PayloadLen bound being exceeded", r)
+		}
+	}()
+
+	_ = assembleDiscoveryRelayFrame(svtnID, nodeAddr, 1, sessions)
 }

@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/frame"
@@ -55,6 +56,16 @@ const discoveryRelayControlType = 0x03
 // already-accepted sessions), so a violation panics rather than silently
 // producing a malformed frame.
 //
+// The assembled payload's TOTAL serialized byte size (4-byte control header
+// + 8-byte NodeAddr + 8-byte Sequence + session bytes) must also not exceed
+// math.MaxUint16 (65535) — the wire size of OuterHeader.PayloadLen. This is
+// currently unreachable in practice (sessions only ever arrive from a
+// hop-1 datagram already bounded by discovery.MaxDiscoveryDatagramSize=
+// 32768, and re-encoding here never expands that), but is checked
+// explicitly rather than left as a silent uint16 truncation of PayloadLen —
+// the same "shipped undetected" class of wire-field-truncation defect
+// F-DWIP1-001 found on the hop-1 side.
+//
 // No production call site is wired to this function yet — it is exercised
 // directly by discovery_relay_wire_test.go's AC-014/AC-015/AC-016 tests.
 // The relay-dispatch closure that would call it live is Task 6, GATED —
@@ -70,6 +81,15 @@ func assembleDiscoveryRelayFrame(svtnID [16]byte, nodeAddr [8]byte, sequence uin
 	payload = append(payload, nodeAddr[:]...)
 	payload = binary.BigEndian.AppendUint64(payload, sequence)
 	payload = append(payload, sessionBytes...) // EncodeSessionList already prefixes the BE uint16 count (payload[20:22])
+
+	// Guard against silent PayloadLen truncation (F-DWIP4-N1): PayloadLen is
+	// a uint16 wire field; without this check an oversized payload would
+	// wrap silently in the uint16(len(payload)) conversion below rather than
+	// failing loudly. See the doc comment above for why this is currently
+	// unreachable but checked anyway.
+	if len(payload) > math.MaxUint16 {
+		panic(fmt.Sprintf("assembleDiscoveryRelayFrame: payload is %d bytes, exceeds the %d-byte maximum the uint16 PayloadLen wire field can represent (caller precondition violated: sessions must already be bounded by discovery.MaxDiscoveryDatagramSize by the time they reach relay assembly)", len(payload), math.MaxUint16))
+	}
 
 	// HMACTag is deliberately left as the zero value (AC-015): hop-2's trust
 	// boundary is the admitted TCP connection this frame is sent over, not
