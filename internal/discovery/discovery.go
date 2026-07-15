@@ -179,6 +179,18 @@ type Discovery struct {
 	mu             sync.RWMutex
 	registry       map[registryKey]SessionEntry
 	heartbeatCount atomic.Uint64
+
+	// epoch is the wall-clock UTC epoch-seconds sampled once at instance
+	// construction — the high 32 bits of every outbound Sequence value
+	// (SEC-DW-07; F-DWSP4-001 restart-liveness amendment). A fresh epoch on
+	// every restart of a stable admitted identity, combined with real
+	// wall-clock advancement between restarts, is what lets the router's
+	// restart-STABLE lastSeen watermark accept post-restart advertisements
+	// via forward acceptance (AC-010) rather than locking the node out.
+	epoch uint32
+	// seqCounter is the low 32 bits of every outbound Sequence value: a
+	// monotonic per-instance counter, incremented on every Advertise call.
+	seqCounter atomic.Uint32
 }
 
 // New constructs a Discovery instance from cfg.
@@ -189,7 +201,17 @@ func New(cfg Config) *Discovery {
 	return &Discovery{
 		cfg:      cfg,
 		registry: make(map[registryKey]SessionEntry),
+		epoch:    uint32(time.Now().UTC().Unix()),
 	}
+}
+
+// nextSequence returns the next epoch-qualified monotonic Sequence value
+// for an outbound advertisement (SEC-DW-07): high 32 bits are the epoch
+// sampled at instance construction, low 32 bits are a per-instance counter
+// that increments on every call.
+func (d *Discovery) nextSequence() uint64 {
+	counter := d.seqCounter.Add(1)
+	return uint64(d.epoch)<<32 | uint64(counter)
 }
 
 // heartbeatInterval returns the configured interval or the default.
@@ -243,7 +265,8 @@ func (d *Discovery) HeartbeatCount() uint64 {
 }
 
 // Advertise stores the supplied session presence list under the local node
-// address so that subsequent Enumerate calls return them.
+// address so that subsequent Enumerate calls return them, then transmits the
+// advertisement over the SVTN-scoped multicast channel (AC-003).
 //
 // It MUST fire within 1 tick interval of a state change (AC-001a;
 // BC-2.03.001 PC-3). The periodic heartbeat is handled internally by Run and
@@ -253,9 +276,10 @@ func (d *Discovery) HeartbeatCount() uint64 {
 // non-UTF-8 names return ErrInvalidSessionName. Names longer than 255 bytes
 // are truncated to 252 bytes + U+2026 at a rune boundary (BC-2.03.003 PC-2).
 //
-// NOTE(S-BL.DISCOVERY-WIRE): HMAC signing and multicast transmission are
-// deferred to S-BL.DISCOVERY-WIRE. This method stores sessions in the
-// in-process registry only; no wire frames are produced here.
+// The registry mutation and the wire transmission are sequenced but not
+// atomic with respect to each other: the mutex is released before the UDP
+// send so that network I/O (which can block on a slow/misconfigured
+// interface) never holds up concurrent Enumerate/Advertise callers.
 func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) error {
 	// Validate and normalise session names up-front so that the registry
 	// never holds invalid entries (BC-2.03.003 PC-2; AC-004b).
@@ -274,7 +298,6 @@ func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) e
 	}
 
 	d.mu.Lock()
-	defer d.mu.Unlock()
 
 	// Remove existing entries from the local node before replacing them
 	// so that removed sessions are no longer visible (EC-001).
@@ -284,12 +307,138 @@ func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) e
 		}
 	}
 
+	wireSessions := make([]SessionPresence, 0, len(validated))
 	for _, v := range validated {
 		key := registryKey{nodeAddr: d.cfg.LocalNodeAddr, sessionName: v.name}
 		d.registry[key] = SessionEntry{
 			AdvertiserAddr: d.cfg.LocalNodeAddr,
 			Presence:       v.s,
 		}
+		wireSessions = append(wireSessions, v.s)
+	}
+	d.mu.Unlock()
+
+	return d.transmitAdvertisement(wireSessions)
+}
+
+// transmitAdvertisement builds and sends the wire-format advertisement for
+// sessions over the SVTN-scoped multicast channel (AC-003 postconditions
+// 1-3). It signs via Encode (the same sender-side key derivation Encode/
+// Decode already use — SVTNID-scoped, requiring no separate pubkey field on
+// Config) and sends with a plain net.WriteTo/DialUDP, no group join, and
+// outbound multicast TTL explicitly set to 1.
+func (d *Discovery) transmitAdvertisement(sessions []SessionPresence) error {
+	raw, err := Encode(AdvertisementPayload{
+		NodeAddr: d.cfg.LocalNodeAddr,
+		SVTNID:   d.cfg.LocalSVTNID,
+		Sequence: d.nextSequence(),
+		Sessions: sessions,
+	})
+	if err != nil {
+		return fmt.Errorf("discovery: encode outbound advertisement: %w", err)
+	}
+	if err := sendMulticastAdvertisement(d.cfg.LocalSVTNID, raw); err != nil {
+		return fmt.Errorf("discovery: send outbound advertisement: %w", err)
+	}
+	return nil
+}
+
+// sendMulticastAdvertisement sends raw to the SVTN-derived multicast group
+// on DiscoveryPort (AC-003).
+//
+// Postcondition 1: uses a plain net.ListenUDP/WriteToUDP send — no
+// net.ListenMulticastUDP, no group join (only the router joins the group;
+// DI-004 forbids direct node-to-node communication).
+//
+// Postcondition 2: each outbound socket's multicast TTL is explicitly set
+// to 1 before the send, via raw syscall (setMulticastTTL1) rather than
+// golang.org/x/net/ipv4, per this story's zero-new-third-party-dependency
+// constraint.
+//
+// Sends once per UP+multicast-capable local interface (setMulticastOutgoingInterface
+// pins each send to that interface via IP_MULTICAST_IF), rather than relying
+// on the kernel's default unicast-route-based interface selection for the
+// multicast destination — on a multi-homed host the default route to an
+// administratively-scoped multicast address is not necessarily the
+// interface carrying the SVTN's LAN segment (or, in the loopback integration
+// test, is never loopback by default). Best-effort per interface: a single
+// interface failing to send (e.g. transient EADDRNOTAVAIL) does not abort
+// the others; the call only fails if every interface failed.
+func sendMulticastAdvertisement(svtnID [16]byte, raw []byte) error {
+	dst := &net.UDPAddr{IP: MulticastAddrFor(svtnID), Port: DiscoveryPort}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("enumerate local interfaces: %w", err)
+	}
+
+	var sent int
+	var lastErr error
+	for _, ifi := range ifaces {
+		addr, ok := firstMulticastCapableIPv4(ifi)
+		if !ok {
+			continue
+		}
+		if err := sendOnInterface(addr, dst, raw); err != nil {
+			lastErr = err
+			continue
+		}
+		sent++
+	}
+	if sent == 0 {
+		if lastErr != nil {
+			return fmt.Errorf("no viable multicast-capable interface accepted the send: %w", lastErr)
+		}
+		return errors.New("no UP+multicast-capable local interface found")
+	}
+	return nil
+}
+
+// firstMulticastCapableIPv4 returns ifi's first IPv4 address if ifi is UP
+// and multicast-capable; ok is false otherwise (down interfaces, interfaces
+// without multicast support, or interfaces with no IPv4 address at all —
+// e.g. IPv6-only).
+func firstMulticastCapableIPv4(ifi net.Interface) (addr net.IP, ok bool) {
+	if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 {
+		return nil, false
+	}
+	addrs, err := ifi.Addrs()
+	if err != nil {
+		return nil, false
+	}
+	for _, a := range addrs {
+		ipNet, isIPNet := a.(*net.IPNet)
+		if !isIPNet {
+			continue
+		}
+		if v4 := ipNet.IP.To4(); v4 != nil {
+			return v4, true
+		}
+	}
+	return nil, false
+}
+
+// sendOnInterface opens a fresh unbound UDP socket, pins its outgoing
+// multicast interface to localAddr, sets TTL=1, sends raw to dst, and
+// closes the socket. A fresh socket per interface per call rather than
+// long-lived sockets held on Discovery — simplest correct choice for the
+// Task 3 Green step; socket lifecycle is unconstrained implementation
+// detail left to code review, not something this story's rulings fix.
+func sendOnInterface(localAddr net.IP, dst *net.UDPAddr, raw []byte) error {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	if err != nil {
+		return fmt.Errorf("open outbound UDP socket: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if err := setMulticastOutgoingInterface(conn, localAddr); err != nil {
+		return fmt.Errorf("set multicast outgoing interface %v: %w", localAddr, err)
+	}
+	if err := setMulticastTTL1(conn); err != nil {
+		return fmt.Errorf("set multicast TTL: %w", err)
+	}
+	if _, err := conn.WriteToUDP(raw, dst); err != nil {
+		return fmt.Errorf("write multicast datagram via %v: %w", localAddr, err)
 	}
 	return nil
 }
