@@ -1,0 +1,167 @@
+{
+  "story": "S-BL.DISCOVERY-WIRE",
+  "phase": "implementation",
+  "phase_detail": "Step 4.5, BC-5.39.001",
+  "cycle": "cycle-1",
+  "code_branch": "feature/S-BL.DISCOVERY-WIRE",
+  "converged_code_head": "501db03a99db7a06586988e133279cb43a11e021",
+  "factory_head_at_dispatch": "f1d23dc",
+  "factory_head_at_dispatch_detail": "story v2.14, rulings v1.11",
+  "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001), last pass NITPICK_ONLY-or-cleaner",
+  "converged": true,
+  "passes_clean_consecutive": 3,
+  "convergence_criterion": "3 consecutive clean/nitpick-only, last NITPICK_ONLY-or-cleaner",
+  "passes": [
+    {
+      "pass": 1,
+      "date": "2026-07-14",
+      "agent": "unspecified — not carried in orchestrator dispatch summary",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWIP1-001",
+          "severity": "HIGH",
+          "class": "security/interop",
+          "summary": "Encode/RouterIngest HMAC key-derivation mismatch — key derived from SVTNID instead of the admitted pubkey, breaking wire interop with the admission-verified peer."
+        },
+        {
+          "id": "F-DWIP1-002",
+          "severity": "LOW",
+          "class": "unspecified — dispatch summary carried severity only, no descriptive phrase",
+          "summary": "LOW-severity finding from pass 1; remediated in fix-burst 1 (fb1) alongside F-DWIP1-001/003."
+        },
+        {
+          "id": "F-DWIP1-003",
+          "severity": "NITPICK",
+          "class": "test-strength",
+          "summary": "AC-001 probe test relied on a weak assertion rather than a real reception oracle."
+        }
+      ]
+    },
+    {
+      "pass": 2,
+      "date": "2026-07-14",
+      "agent": "unspecified — not carried in orchestrator dispatch summary",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWIP2-001",
+          "severity": "LOW",
+          "class": "false-timing-comment",
+          "summary": "Ingest's AC-006 doc comment made a false processing-time-symmetry claim."
+        },
+        {
+          "id": "F-DWIP2-002",
+          "severity": "LOW",
+          "class": "process-gap",
+          "summary": "ErrMissingNodeAdmissionPubkey fail-closed guard was untested."
+        }
+      ]
+    },
+    {
+      "pass": 3,
+      "date": "2026-07-14",
+      "agent": "unspecified — not carried in orchestrator dispatch summary",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-DWIP3-001",
+          "severity": "LOW",
+          "class": "concurrency/WaitGroup-race",
+          "summary": "wg.Add(1) was called inside wireDiscoveryListener's goroutine body instead of by the caller before the go statement, opening a WaitGroup race."
+        },
+        {
+          "id": "F-DWIP3-002",
+          "severity": "LOW",
+          "class": "buffer-drift",
+          "summary": "Discovery read buffer was sized to the theoretical UDP maximum rather than the realistic bound, drifting from the wire contract."
+        }
+      ]
+    },
+    {
+      "pass": 4,
+      "date": "2026-07-14",
+      "agent": "unspecified — not carried in orchestrator dispatch summary",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "1/3",
+      "findings": [
+        {
+          "id": "N-1",
+          "severity": "NITPICK",
+          "class": "truncation",
+          "summary": "assembleDiscoveryRelayFrame was unguarded against silent PayloadLen truncation."
+        },
+        {
+          "id": "N-2",
+          "severity": "NITPICK",
+          "class": "test-honesty",
+          "summary": "AC-005 key-selector test's doc comment did not honestly describe what the test covered."
+        }
+      ]
+    },
+    {
+      "pass": 5,
+      "date": "2026-07-15",
+      "agent": "unspecified — not carried in orchestrator dispatch summary",
+      "verdict": "CLEAN",
+      "streak_after": "2/3",
+      "findings": []
+    },
+    {
+      "pass": 6,
+      "date": "2026-07-15",
+      "agent": "unspecified — not carried in orchestrator dispatch summary",
+      "verdict": "CLEAN",
+      "streak_after": "3/3 — CONVERGED",
+      "findings": []
+    }
+  ],
+  "fix_bursts": [
+    {
+      "burst": "fb1",
+      "commits": ["592327d", "c53d975", "20b5493"],
+      "addresses": ["F-DWIP1-001", "F-DWIP1-002", "F-DWIP1-003"],
+      "summary": "592327d test-first exposes the Encode/RouterIngest key-derivation mismatch; c53d975 fixes it (derive HMAC key from admitted pubkey, not SVTNID); 20b5493 strengthens the AC-001 probe test with a real reception oracle."
+    },
+    {
+      "burst": "fb2",
+      "commits": ["e658f2e", "0e9ba27"],
+      "addresses": ["F-DWIP2-001", "F-DWIP2-002"],
+      "summary": "e658f2e corrects the false processing-time-symmetry claim in Ingest's AC-006 doc comment; 0e9ba27 adds coverage for the ErrMissingNodeAdmissionPubkey fail-closed guard."
+    },
+    {
+      "burst": "fb3",
+      "commits": ["1ad6ba3", "713c7c0", "3d45ba3"],
+      "addresses": ["F-DWIP3-001", "F-DWIP3-002"],
+      "summary": "1ad6ba3 moves wg.Add(1) to the caller before the go wireDiscoveryListener statement, closing the WaitGroup race; 713c7c0 sizes the discovery read buffer to the realistic bound instead of the UDP theoretical max; 3d45ba3 adds a hop-2 round-trip test bridging assembleDiscoveryRelayFrame and IngestRelayAdvertisement."
+    },
+    {
+      "burst": "fb4",
+      "commits": ["be843a6", "501db03"],
+      "addresses": ["N-1", "N-2"],
+      "summary": "be843a6 guards assembleDiscoveryRelayFrame against silent PayloadLen truncation (with test); 501db03 corrects the test-honesty gap in AC-005 key-selector test's doc comment."
+    }
+  ],
+  "adjudications_generated": [
+    {
+      "rulings_transition": "v1.9 -> v1.10",
+      "id": "Ruling 4",
+      "obligation": "FO(e)",
+      "target": "S-BL.ADMISSION-SYNC-WIRE",
+      "summary": "Identity-cluster follow-on obligation named during the fix cycle."
+    },
+    {
+      "rulings_transition": "v1.10 -> v1.11",
+      "id": "Ruling 5",
+      "obligation": "FO(f)",
+      "target": "S-BL.NODE-ADMISSION-PROVISIONING",
+      "summary": "Identity-cluster follow-on obligation named during the fix cycle."
+    }
+  ],
+  "scope": "Tasks 1-5 / AC-001..AC-016 delivered; Task 6 / AC-017 / AC-018 GATED on S-BL.NODE-IDENTIFY-WIRE.",
+  "convergence_summary": "6 passes (2026-07-14..2026-07-15), 8 findings (6 substantive + 2 nitpick) remediated across 4 fix-bursts on code @ 501db03. Pass 1 HAS_FINDINGS (F-DWIP1-001 HIGH key-derivation/interop, F-DWIP1-002 LOW, F-DWIP1-003 NITPICK); pass 2 HAS_FINDINGS (F-DWIP2-001 LOW false-timing-comment, F-DWIP2-002 LOW untested guard); pass 3 HAS_FINDINGS (F-DWIP3-001 LOW WaitGroup-race, F-DWIP3-002 LOW buffer-drift); pass 4 NITPICK_ONLY (N-1 truncation, N-2 test-honesty); passes 5-6 CLEAN. Two identity-cluster follow-on obligations named during the fix cycle and adjudicated into rulings v1.10 (Ruling 4, FO(e), S-BL.ADMISSION-SYNC-WIRE) and v1.11 (Ruling 5, FO(f), S-BL.NODE-ADMISSION-PROVISIONING).",
+  "next": "Step 5 demo evidence, then push + pr-manager 9-step + worktree cleanup"
+}
