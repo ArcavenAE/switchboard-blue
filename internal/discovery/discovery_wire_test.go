@@ -732,3 +732,49 @@ func TestRouterIngest_FailureLogging_ThresholdCrossingOnly_NotPerPacket(t *testi
 		t.Errorf("after %d total HMAC failures: logger recorded %d lines — not threshold-crossing, looks like per-packet logging (BC-2.05.008 policy, not adopted here)", totalSent, got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// AC-004 PC-4 — real sender path (discovery.Encode) interoperates with the
+// real router verification path (RouterIngest.Ingest / DiscoveryAuthKeyFor)
+// ---------------------------------------------------------------------------
+
+// TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode is the missing
+// end-to-end oracle: every other hop-1 test in this file builds its datagram
+// directly via buildHop1Datagram + testDeriveDiscoveryKey, which independently
+// re-implements HKDF and never exercises production Encode at all. This test
+// closes that gap by calling discovery.Encode itself — the same function
+// transmitAdvertisement calls — for a node admitted onto the router with a
+// real Ed25519 pubkey via the established newAdmittedRouterForDiscoveryWire
+// pattern, then feeds the result straight into RouterIngest.Ingest.
+//
+// AC-004 postcondition 4 requires that a sending access node's locally
+// derived key agree with DiscoveryAuthKeyFor's router-side derivation for
+// the same admitted node — this test's oracle is exactly that agreement,
+// observed at the wire level rather than at the key-value level (which
+// TestDeriveDiscoveryKey_SenderRouterAgree in internal/routing already
+// covers). A real advertisement from a real admitted node MUST be accepted.
+func TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode(t *testing.T) {
+	t.Parallel()
+	defer redGateGuard(t)
+
+	router, _, nodeAddr := newAdmittedRouterForDiscoveryWire(t, svtnA)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
+
+	raw, err := discovery.Encode(discovery.AdvertisementPayload{
+		NodeAddr: nodeAddr,
+		SVTNID:   svtnA,
+		Sequence: 0,
+		Sessions: oneSession,
+	})
+	if err != nil {
+		t.Fatalf("Encode: unexpected error: %v", err)
+	}
+
+	decision, err := ri.Ingest(raw)
+	if err != nil {
+		t.Fatalf("Ingest: unexpected error: %v", err)
+	}
+	if !decision.Accept {
+		t.Error("Ingest: Accept = false, want true — an advertisement produced by discovery.Encode for a real admitted node must verify against RouterIngest's DiscoveryAuthKeyFor-derived key (AC-004 PC-4); Encode and DiscoveryAuthKeyFor must derive the identical key for the same admitted node")
+	}
+}
