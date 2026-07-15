@@ -342,9 +342,13 @@ func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) e
 		}
 		wireSessions = append(wireSessions, v.s)
 	}
+	// Sampled under the same lock that orders the registry mutation above,
+	// so concurrent Advertise calls can't have their transmitted Sequence
+	// order disagree with their registry-mutation order.
+	sequence := d.nextSequence()
 	d.mu.Unlock()
 
-	return d.transmitAdvertisement(wireSessions)
+	return d.transmitAdvertisement(sequence, wireSessions)
 }
 
 // transmitAdvertisement builds and sends the wire-format advertisement for
@@ -354,14 +358,14 @@ func (d *Discovery) Advertise(ctx context.Context, sessions []SessionPresence) e
 // router derives its verification key from via DiscoveryAuthKeyFor — and
 // sends with a plain net.WriteTo/DialUDP, no group join, and outbound
 // multicast TTL explicitly set to 1.
-func (d *Discovery) transmitAdvertisement(sessions []SessionPresence) error {
+func (d *Discovery) transmitAdvertisement(sequence uint64, sessions []SessionPresence) error {
 	if len(d.cfg.LocalNodeAdmissionPubkey) == 0 {
 		return ErrMissingNodeAdmissionPubkey
 	}
 	raw, err := Encode(AdvertisementPayload{
 		NodeAddr: d.cfg.LocalNodeAddr,
 		SVTNID:   d.cfg.LocalSVTNID,
-		Sequence: d.nextSequence(),
+		Sequence: sequence,
 		Sessions: sessions,
 	}, d.cfg.LocalNodeAdmissionPubkey)
 	if err != nil {
