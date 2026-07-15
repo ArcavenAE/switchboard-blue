@@ -3,7 +3,7 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.2"
+version: "1.3"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: draft
 producer: story-writer
@@ -20,6 +20,7 @@ bc_traces:
 depends_on: []
 blocks: []
 acceptance_criteria_count: 0
+rulings_doc: "decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md"
 provenance:
   origin: "S-BL.DISCOVERY-WIRE Ruling 3(f) Forward Obligation — story-ready human gate disposition, 2026-07-14"
   spec_annotation: "S-BL.DISCOVERY-WIRE-rulings.md v1.9, Ruling 3(f) subsection item (j) — the human gate disposition naming and scoping this story"
@@ -102,20 +103,21 @@ method records `(SVTNID, NodeAddr) → IfaceID` in a small map alongside `nodeCo
 
 ## Open Design Obligations (must be resolved before scheduling)
 
-### 1. `BC-2.01.008` opcode registry amendment
+### 1. `BC-2.01.008` opcode registry amendment — RESOLVED
 
-`NODE_IDENTIFY = 0x04` is the next free value after `DISCOVERY_RELAY = 0x03` per
-Invariant 3's append-only, sequential-assignment rule — but the registry-table row
-itself has not been added. Needs a product-owner/architect amendment to `BC-2.01.008`
-before implementation, mirroring Ruling 3(g)'s `DISCOVERY_RELAY` precedent.
+`NODE_IDENTIFY = 0x04` has been added to the `BC-2.01.008` v1.3 registry table
+(PO/architect amendment executed, mirroring Ruling 3(g)'s `DISCOVERY_RELAY`
+precedent). The append-only, sequential-assignment rule (Invariant 3) is satisfied.
 
-### 2. Challenge-transcript wire format
+### 2. Challenge-transcript wire format — RESOLVED (see rulings doc v1.0)
 
-`admission.GenerateChallenge`/`Challenge`/`ChallengeResponse` are implemented as
-in-process Go types today; no wire serialization exists for carrying them inside a
-`control_type = 0x04` frame. The exact byte layout (challenge nonce encoding, response
-signature encoding, frame boundaries) needs architect elaboration — not adjudicated
-here.
+Elaborated in `decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` v1.0. The ruling
+specifies: `control_type=0x04` frame with a `msg_kind` sub-byte discriminator
+(NodeIdentify / Challenge / ChallengeResponse variants); byte layouts for each
+frame type; and `BindInterface`, `LookupInterface`, and `UnbindInterface` as the
+three `*Router` methods that record and query the `(SVTNID, NodeAddr) → IfaceID`
+binding. See the rulings doc for the full byte-level specification. Obligations
+3–6 remain open/gated as described below.
 
 ### 3. Re-identify / rebind semantics
 
@@ -211,16 +213,27 @@ identity-distribution cluster" section.
   response, and the human selected its Option 1 (`S-BL.DISCOVERY-WIRE-fanout-options.md`
   v1.1 Disposition section). `S-BL.DISCOVERY-WIRE-rulings.md` v1.9, Ruling 3(f)
   subsection item (j), is the authoritative disposition record.
+- **Wire-format ruling:** `decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` v1.0 — resolves
+  Open Design Obligation 2 (challenge-transcript wire format: control_type=0x04 with
+  msg_kind sub-byte; NodeIdentify/Challenge/ChallengeResponse frame layouts;
+  BindInterface/LookupInterface/UnbindInterface on `*Router`).
+- **Cluster design:** `decisions/identity-cluster-architecture.md` v1.1 — the three-leg
+  identity-distribution cluster design (`S-BL.NODE-IDENTIFY-WIRE`,
+  `S-BL.ADMISSION-SYNC-WIRE`, `S-BL.NODE-ADMISSION-PROVISIONING`); Option E disposition
+  for node-admission provisioning and Option A near-term stepping stone for admission
+  sync; HLR/VLR forward architecture (Section 8).
 - **Unblocks:** `S-BL.DISCOVERY-WIRE`'s AC-017, AC-018, and Task 6 gate on this story by
   name.
-- **Status:** stays `draft` — no architect ruling exists yet on this handshake's wire
-  mechanics; architect elaboration is required before ACs/tasks/files can be decomposed
-  (see Open Design Obligations).
+- **Status:** stays `draft` — Obligation 2 wire format is now specified (rulings doc v1.0);
+  Obligations 3/4 remain open (re-identify semantics, handshake timeout); Obligations 5/6
+  remain blockers (admission-sync and node-keypair provisioning prerequisite stories not
+  yet elaborated). Full decomposition deferred to scheduling time.
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-15 | Added `rulings_doc: decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` frontmatter field (v1.0 on disk). Marked Obligation 1 RESOLVED — `NODE_IDENTIFY=0x04` is now in `BC-2.01.008` v1.3 registry (PO/architect amendment executed). Marked Obligation 2 RESOLVED — challenge-transcript wire format elaborated in `decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` v1.0 (control_type=0x04 with msg_kind sub-byte; NodeIdentify/Challenge/ChallengeResponse frame layouts; BindInterface/LookupInterface/UnbindInterface on `*Router`). Added cross-reference to `decisions/identity-cluster-architecture.md` v1.1 in Provenance section. Obligations 3/4/5/6 unchanged (3/4 still open/gated; 5/6 still blockers). `depends_on` stays `[]` — prerequisite stories `S-BL.ADMISSION-SYNC-WIRE` and `S-BL.NODE-ADMISSION-PROVISIONING` not yet elaborated. |
 | 1.2 | 2026-07-15 | Added Open Design Obligation 6 — a SECOND BLOCKER, distinct from obligation 5: `S-BL.DISCOVERY-WIRE-rulings.md` v1.11 Ruling 5 (dispatched by team-lead as a Step-4.5 pass-1 fix-burst finding, verified independently) found no production code path supplies a running node process with its own admission keypair — needed for this story's `ChallengeResponse` signing step — and independently found `internal/discovery.New`/`Discovery.Run` have zero production callers anywhere, a compounding absence. Prerequisite named: a second new follow-on story, `S-BL.NODE-ADMISSION-PROVISIONING` (working name, not yet created), distinct in direction from obligation 5's `S-BL.ADMISSION-SYNC-WIRE`. `depends_on` stays `[]` until both prerequisite stories exist. Obligations 5 and 6 both gate obligations 1-4. Frontmatter version 1.1 → 1.2. |
 | 1.1 | 2026-07-15 | Added Open Design Obligation 5 — a BLOCKER, not a scoping question like obligations 1-4: `S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4 (dispatched by team-lead as a Green-step implementation-time finding, verified independently) found that `admission.AdmitNode` is verification-only against the local `AdmittedKeySet`, and the router-mode process's own keyset is always empty in production — admission writes happen exclusively in the separate, disconnected control-mode OS process, with no cross-process sync mechanism anywhere in the codebase. This story's handshake cannot succeed until admission state reaches the router process, regardless of how correctly the `NODE_IDENTIFY` opcode/codec/`BindInterface` are implemented. Prerequisite named: a new follow-on story, `S-BL.ADMISSION-SYNC-WIRE` (working name, not yet created); `depends_on` stays `[]` until that story exists to be added. Obligation 5 gates obligations 1-4 (upstream of all of them). No ACs/tasks exist yet to amend; this is a scoping-stage addition. Frontmatter version 1.0 → 1.1. |
 | 1.0 | 2026-07-14 | Backlog stub created per `S-BL.DISCOVERY-WIRE`'s Ruling 3(f) Forward Obligation and its story-ready human gate disposition (`S-BL.DISCOVERY-WIRE-rulings.md` v1.9 item (j); `S-BL.DISCOVERY-WIRE-fanout-options.md` v1.1 Option 1 selected). Delivers the `control_type=0x04` `NODE_IDENTIFY` handshake wiring the existing `admission.AdmitNode`/`admission.GenerateChallenge` primitives over the live connection and a new `Router.BindInterface`-shaped method recording `(SVTNID, NodeAddr) → IfaceID`. Unblocks `S-BL.DISCOVERY-WIRE`'s AC-017/AC-018/Task 6. No architect ruling adjudicates the opcode registry amendment, challenge-transcript wire format, or re-identify/rebind semantics yet; full decomposition deferred to scheduling time. |
