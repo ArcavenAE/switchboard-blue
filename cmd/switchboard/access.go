@@ -29,10 +29,16 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -595,31 +601,107 @@ func startFramesDroppedTicker(
 // Ed25519 admission keypair from keyPath (PKCS#8 PEM format, "PRIVATE KEY" block).
 //
 // First run (file absent): generates a new keypair and writes it atomically to
-// keyPath with mode 0600. Logs INFO to stderr on success.
+// keyPath with mode 0600. Parent directory is created (0700) if absent.
+// Logs INFO to stderr: "admission identity: generated new keypair at <path>".
 //
 // Subsequent start (file present): parses the PKCS#8 PEM and returns the key.
-// Any parse failure is fail-closed — daemon refuses to start.
+// Any parse failure is fail-closed — returns a non-nil error wrapping
+// "access: load admission keypair: <path>: <reason>".
 //
-// File permissions broader than 0600 are advisory-logged (WARNING), not fatal.
+// File permissions broader than 0600: advisory WARNING logged, not fatal.
 //
-// TODO(S-BL.NODE-ADMISSION-PROVISIONING): STUB — panics with "not implemented".
-// AC-002 through AC-006 tests (Red Gate) MUST FAIL on this stub.
-// The implementer must replace the panic with the real logic per rulings §1.3,
-// Decision 3, and BC-2.09.004 PC-3 through PC-6.
+// On every successful return (first-run or subsequent load), emits an INFO log
+// with the admission public key as base64url (no padding) of the raw 32-byte key.
 //
-// stderr is used for the startup INFO log (Decision 4) and the permissions
-// WARNING (Decision 3 §File Permissions). It must not be nil.
-func loadOrGenerateAdmissionKeypair(_ io.Writer, _ string) (ed25519.PrivateKey, error) {
-	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): implement per rulings §1.3.
-	// Stub: generates a fresh ephemeral key on every call (no file I/O, no logging)
-	// so existing runAccess tests continue to pass. ALL AC tests FAIL because:
-	//   AC-002: no file written, no atomic write, no mode 0600
-	//   AC-003: key is NOT stable across calls (new key each time → pubkey changes)
-	//   AC-004: no fail-closed on corrupt PEM files
-	//   AC-005: no permissions warning logged
-	//   AC-006: no INFO log with base64url pubkey
-	// The implementer must replace this stub with the real first-run/load logic per
-	// rulings §1.3, Decision 3, and BC-2.09.004 PC-3 through PC-6.
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	return priv, err
+// stderr is used for all log output. It must not be nil.
+// Implements BC-2.09.004 PC-3 through PC-7; rulings §1.3; Decisions 3, 4.
+func loadOrGenerateAdmissionKeypair(stderr io.Writer, keyPath string) (ed25519.PrivateKey, error) {
+	lg := log.New(stderr, "", 0)
+
+	f, openErr := os.Open(keyPath)
+	if openErr != nil {
+		if !errors.Is(openErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, openErr)
+		}
+
+		// First run: file absent — generate a new keypair.
+		_, priv, genErr := ed25519.GenerateKey(rand.Reader)
+		if genErr != nil {
+			return nil, fmt.Errorf("access: generate admission keypair: %w", genErr)
+		}
+
+		// Marshal to PKCS#8 DER, then PEM-encode.
+		der, marshalErr := x509.MarshalPKCS8PrivateKey(priv)
+		if marshalErr != nil {
+			return nil, fmt.Errorf("access: marshal admission keypair: %w", marshalErr)
+		}
+		pemData := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+
+		// Create parent directory if absent (MkdirAll is a no-op if it exists).
+		if mkErr := os.MkdirAll(filepath.Dir(keyPath), 0o700); mkErr != nil {
+			return nil, fmt.Errorf("access: create admission keypair dir: %w", mkErr)
+		}
+
+		// Atomic write: write to <path>.tmp, chmod 0600, then rename.
+		tmpPath := keyPath + ".tmp"
+		if writeErr := os.WriteFile(tmpPath, pemData, 0o600); writeErr != nil {
+			return nil, fmt.Errorf("access: write admission keypair tmp: %w", writeErr)
+		}
+		if chmodErr := os.Chmod(tmpPath, 0o600); chmodErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: chmod admission keypair tmp: %w", chmodErr)
+		}
+		if renameErr := os.Rename(tmpPath, keyPath); renameErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: rename admission keypair: %w", renameErr)
+		}
+
+		lg.Printf("admission identity: generated new keypair at %s", keyPath)
+
+		logAdmissionPubkey(lg, priv)
+		return priv, nil
+	}
+	defer func() { _ = f.Close() }()
+
+	// Subsequent start: file present — check permissions, then load.
+	fi, statErr := f.Stat()
+	if statErr != nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, statErr)
+	}
+	if perm := fi.Mode().Perm(); perm > 0o600 {
+		lg.Printf("admission identity key file %s has permissions %04o: expected 0600; private key may be exposed",
+			keyPath, perm)
+	}
+
+	// Read and parse.
+	data, readErr := io.ReadAll(f)
+	if readErr != nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, readErr)
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: PEM decode failed", keyPath)
+	}
+
+	key, parseErr := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if parseErr != nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, parseErr)
+	}
+
+	priv, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("access: load admission keypair: %s: not an Ed25519 key", keyPath)
+	}
+
+	logAdmissionPubkey(lg, priv)
+	return priv, nil
+}
+
+// logAdmissionPubkey emits the INFO log with the base64url (no padding) encoding
+// of the raw 32-byte Ed25519 admission public key (BC-2.09.004 PC-7; Decision 4).
+func logAdmissionPubkey(lg *log.Logger, priv ed25519.PrivateKey) {
+	pub := priv.Public().(ed25519.PublicKey)
+	b64 := base64.RawURLEncoding.EncodeToString([]byte(pub))
+	lg.Printf("access: admission identity pubkey (register with admin.key.register): %s", b64)
 }
