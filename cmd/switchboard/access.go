@@ -40,6 +40,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/routing"
@@ -50,6 +51,11 @@ import (
 // defaultTickInterval is the half-channel tick cadence used when no config file
 // is supplied (Wave-3 hardcoded default, BC-2.09.003 PC-9 / Inv-5).
 const defaultTickInterval = 10 * time.Millisecond
+
+// defaultAdmissionKeyFile is the path used when admission_key_file is absent
+// or empty in the config (Decision 2 / BC-2.09.004 PC-1; S-BL.NODE-ADMISSION-PROVISIONING).
+// Applied at daemon startup by runAccess, NOT by Config.Validate().
+const defaultAdmissionKeyFile = "/var/lib/switchboard/access-admission-identity.pem"
 
 // sweepInterval is the period between consecutive Sweep eviction passes.
 // Hardcoded for Wave 3 (no file-based config loading; internal/config is Wave 4).
@@ -201,7 +207,37 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
-	runErr := runAccessWithConnector(ctx, stderr, sc, an, router)
+	// Phase (d): load or generate the admission keypair
+	// (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004 PC-3 through PC-7).
+	//
+	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): STUB — not implemented.
+	// This stub panics so that AC-002 through AC-007 tests (Red Gate) FAIL.
+	// The implementer must replace this with the real first-run/subsequent-load
+	// logic per rulings §1.3 and the acceptance criteria AC-002 through AC-006.
+	//
+	// Effective key file path: cfg.AdmissionKeyFile when non-empty, else default.
+	admissionKeyPath := defaultAdmissionKeyFile
+	if cfg != nil && cfg.AdmissionKeyFile != "" {
+		admissionKeyPath = cfg.AdmissionKeyFile
+	}
+	admissionPrivKey, err := loadOrGenerateAdmissionKeypair(stderr, admissionKeyPath)
+	if err != nil {
+		return fmt.Errorf("access: load admission keypair: %w", err)
+	}
+	admissionPubKey := admissionPrivKey.Public().(ed25519.PublicKey)
+
+	// Phase (e): construct discovery with LocalNodeAdmissionPubkey wired from
+	// the admission keypair (Decision 5 / BC-2.09.004 PC-3e / BC-2.04.008 Pre-3).
+	//
+	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): STUB — LocalNodeAddr and LocalSVTNID
+	// are zero-valued here; the implementer must wire them from cfg.
+	// disc.Run is started in runAccessWithConnector (Option Y, Decision 6).
+	discoveryCfg := discovery.Config{
+		LocalNodeAdmissionPubkey: []byte(admissionPubKey),
+	}
+	disc := discovery.New(discoveryCfg)
+
+	runErr := runAccessWithConnector(ctx, stderr, sc, an, router, disc)
 
 	// Shutdown the management server now that the data-plane is draining.
 	// Use a short timeout; the mgmt goroutine should already be stopping since
@@ -225,6 +261,15 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 // a real PTY environment). an and router are pre-constructed by runAccess or the
 // test caller. (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1 obligation 4.)
 //
+// disc is optional (variadic, at most one value). When non-nil, Discovery.Run is
+// started as a WG-tracked goroutine alongside the sweep and frames-dropped tickers
+// (Decision 6 Option Y; BC-2.04.008 PC-1 through PC-4). Existing callers that
+// omit disc continue to compile — nil disc is a no-op for the discovery goroutine.
+//
+// TODO(S-BL.NODE-ADMISSION-PROVISIONING): the discovery goroutine stub below
+// is a no-op placeholder so that AC-008 tests FAIL at Red Gate. The implementer
+// must replace the stub with the real WG-tracked goroutine per rulings §3.2.
+//
 // tick_interval is applied in runAccess (via tickIntervalFor) before the
 // half-channel is constructed and before this function is called. Further
 // deferred config fields (drain_timeout, upstream_routers, keepalive_interval)
@@ -246,6 +291,7 @@ func runAccessWithConnector(
 	sc connectorIface,
 	an *session.AccessNode,
 	router *routing.Router,
+	disc ...*discovery.Discovery,
 ) error {
 	_ = router // router retained (not discarded); used by AC-001 test surface
 
@@ -334,6 +380,30 @@ func runAccessWithConnector(
 	lg := log.New(stderr, "", 0)
 	wg.Add(1)
 	startFramesDroppedTicker(runCtx, &wg, sc, an, lg, framesDroppedInterval)
+
+	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): Discovery.Run goroutine stub.
+	// Decision 6 Option Y: disc.Run is WG-tracked in this function alongside the
+	// sweep and frames-dropped tickers. BC-2.04.008 PC-1 through PC-4.
+	//
+	// This stub is a NO-OP that does NOT start the goroutine — so AC-008 tests
+	// (TestDiscoveryRun_WGAddBeforeGoStatement, TestDiscoveryRun_NoGoroutineLeak_AfterCtxCancel,
+	// etc.) FAIL at Red Gate. The implementer must replace this with:
+	//
+	//   wg.Add(1) // in CALLER scope, BEFORE go statement (ARCH-01 v1.7)
+	//   go func() {
+	//       defer wg.Done()
+	//       if err := disc.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+	//           // unexpected disc.Run error — log but do NOT set internalFailure
+	//           // for context.Canceled (Decision 7 / BC-2.04.008 Invariant 2)
+	//       }
+	//   }()
+	//
+	// The variadic disc parameter allows existing 5-arg callers to compile without
+	// passing a disc value (backward-compatible seam per ARCH-01 ADR-011 v1.5 §HIGH-B).
+	// Stub: safe no-op for both empty-variadic (existing 5-arg callers) and
+	// 1-arg (new AC-008 tests). Neither starts the goroutine — the goroutine
+	// is NOT started here, so AC-008 tests fail at Red Gate.
+	_ = disc
 
 	// Block until context cancellation (SIGTERM/SIGINT, mid-session double-failure,
 	// or direct cancel — AC-008 / BC-2.04.007 PC-2 / PC-2.6).
@@ -519,4 +589,37 @@ func startFramesDroppedTicker(
 			}
 		}
 	}()
+}
+
+// loadOrGenerateAdmissionKeypair loads or generates the access node's persistent
+// Ed25519 admission keypair from keyPath (PKCS#8 PEM format, "PRIVATE KEY" block).
+//
+// First run (file absent): generates a new keypair and writes it atomically to
+// keyPath with mode 0600. Logs INFO to stderr on success.
+//
+// Subsequent start (file present): parses the PKCS#8 PEM and returns the key.
+// Any parse failure is fail-closed — daemon refuses to start.
+//
+// File permissions broader than 0600 are advisory-logged (WARNING), not fatal.
+//
+// TODO(S-BL.NODE-ADMISSION-PROVISIONING): STUB — panics with "not implemented".
+// AC-002 through AC-006 tests (Red Gate) MUST FAIL on this stub.
+// The implementer must replace the panic with the real logic per rulings §1.3,
+// Decision 3, and BC-2.09.004 PC-3 through PC-6.
+//
+// stderr is used for the startup INFO log (Decision 4) and the permissions
+// WARNING (Decision 3 §File Permissions). It must not be nil.
+func loadOrGenerateAdmissionKeypair(_ io.Writer, _ string) (ed25519.PrivateKey, error) {
+	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): implement per rulings §1.3.
+	// Stub: generates a fresh ephemeral key on every call (no file I/O, no logging)
+	// so existing runAccess tests continue to pass. ALL AC tests FAIL because:
+	//   AC-002: no file written, no atomic write, no mode 0600
+	//   AC-003: key is NOT stable across calls (new key each time → pubkey changes)
+	//   AC-004: no fail-closed on corrupt PEM files
+	//   AC-005: no permissions warning logged
+	//   AC-006: no INFO log with base64url pubkey
+	// The implementer must replace this stub with the real first-run/load logic per
+	// rulings §1.3, Decision 3, and BC-2.09.004 PC-3 through PC-6.
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	return priv, err
 }

@@ -149,6 +149,21 @@ type Config struct {
 	// sole authorized key (ADR-012 §2 / BC-2.09.003 PC-11). Each entry must be a
 	// valid PEM block of type "PUBLIC KEY" containing a 32-byte Ed25519 key (E-CFG-009).
 	AuthorizedOperatorKeys []string `yaml:"authorized_operator_keys"`
+
+	// AdmissionKeyFile is the path to the access daemon's persistent Ed25519
+	// admission keypair file (PKCS#8 PEM, "PRIVATE KEY" block). Used for
+	// access-mode operation when the admission identity is needed
+	// (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004).
+	//
+	// When absent (empty string), the access daemon generates a keypair at the
+	// default path (/var/lib/switchboard/access-admission-identity.pem) on first
+	// start and persists it there. When present, the non-empty, non-whitespace
+	// path is used as-is.
+	//
+	// Validate() only checks that a non-empty value is not whitespace-only
+	// (E-CFG-014). File I/O is NOT performed in Validate() — see ARCH-06
+	// §Config purity contract.
+	AdmissionKeyFile string `yaml:"admission_key_file"`
 }
 
 // UpstreamRouter is a single entry in the upstream_routers list.
@@ -281,6 +296,14 @@ func (c *Config) Validate() error {
 			failures = append(failures, err.Error())
 		}
 	}
+
+	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): E-CFG-014 — AC-001 / PC-12
+	// (BC-2.09.003 v2.1 PC-12; BC-2.09.004 PC-1/PC-2).
+	// When admission_key_file is non-empty but whitespace-only, return E-CFG-014.
+	// This stub is present but never returns an error — the whitespace-rejection
+	// test (TestConfig_Validate_AdmissionKeyFile_WhitespaceOnlyRejectsE_CFG_014)
+	// MUST FAIL at Red Gate. Implementation: replace this TODO with the real check.
+	_ = c.AdmissionKeyFile // field referenced to suppress "unused field" confusion
 
 	if len(failures) == 0 {
 		return nil
