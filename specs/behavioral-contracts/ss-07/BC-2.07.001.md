@@ -2,7 +2,7 @@
 artifact_id: BC-2.07.001
 document_type: behavioral-contract
 level: L3
-version: "1.15"
+version: "1.16"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:00
@@ -11,7 +11,7 @@ inputs:
   - '.factory/specs/domain-spec/capabilities.md'
   - '.factory/specs/domain-spec/invariants.md'
   - '_bmad-output/planning-artifacts/prd.md'
-input-hash: "e6efb60"
+input-hash: "9d4a662"
 extracted_from: null
 bc_id: BC-2.07.001
 subsystem: network-management
@@ -24,6 +24,15 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-15
+    version: "1.16"
+    actor: product-owner
+    change: >
+      S-BL.ADMISSION-SYNC-WIRE BC groundwork item A6: amended PC-3 (Destroy) to add
+      push postcondition — after RemoveSVTN succeeds on control, internal.admission.remove-svtn
+      is pushed to all configured router endpoints (BC-2.05.009). Push failure is logged
+      at WARN; control write is not rolled back. Added inputs/input-hash/extracted_from
+      frontmatter fields (template conformance); input-hash updated to 9d4a662.
   - date: 2026-07-12
     version: "1.15"
     actor: story-writer
@@ -177,7 +186,7 @@ A control node creates a new SVTN by generating a SVTN ID, establishing the init
 
 1. **Create**: New SVTN ID registered on the router; control node's key added as the first admitted control-role key; SVTN is ready for additional key registrations and node admissions.
 2. **Bootstrap**: The first control key is added to the router's admitted set via a local operation (no network admission required — this is the trust anchor). **Trust anchor semantics (F-CS-004 addendum):** the key is initially registered with `admitted=false`; the control node completes the standard challenge-response admission protocol to flip its own key to `admitted=true`. This means the bootstrap path is not a privilege bypass — it merely seeds the admitted-key set so that the challenge-response can proceed. The mechanism must be documented and auditable.
-3. **Destroy**: All admitted keys for the SVTN are removed from the router; all active sessions on that SVTN are terminated; SVTN ID is freed.
+3. **Destroy**: All admitted keys for the SVTN are removed from the router; all active sessions on that SVTN are terminated; SVTN ID is freed. After `RemoveSVTN` succeeds on control's `AdmittedKeySet`, `internal.admission.remove-svtn` is pushed to all configured router endpoints via `admissionSyncer.PushRemoveSVTN` (BC-2.05.009). **Push-failure postcondition (A6, S-BL.ADMISSION-SYNC-WIRE groundwork):** If the push to a router endpoint fails, the control-side `RemoveSVTN` write is NOT rolled back; the failure is logged at WARN. The router is temporarily stale (it retains the SVTN's admitted-key entries) until the next control restart triggers a full-snapshot push that reflects the deletion.
 4. **Status (Ruling 2, S-BL.CLI-SURFACE-COMPLETION-rulings.md, 2026-07-12):** Returns the SVTN's `svtn_id` (hex), `name`, `created_at`, and admitted-key counts grouped by role. Wired as `admin.svtn.status`, registered in `BuildAdminHandlers` (control-mode-daemon-only, same as create/destroy — router/access/console pass nil admin handlers per ADR-004 and correctly return E-RPC-010). Authority: any admitted role in the target SVTN, OR operator-set member, OR bootstrap key (`resolveCallerAdmissionAnyRole`, mirroring BC-2.05.004 F-L2-003 list-keys precedent) — the CONTROL-only AUTHORITY gate is skipped but the ADMISSION gate still applies (CWE-862 defense against cross-SVTN roster/existence enumeration; same reasoning as BC-2.05.004 EC-008). Does **not** include active-session or health data — out of the control-mode daemon's accessible state (ARCH-09 purity boundary; `internal/session` is a forbidden import for `cmd/switchboard/admin_handlers.go`; no health indicator is proposed for the same reason — there is no accessible signal at this boundary to compute one from). Not-found is E-SVTN-003 (reuse the existing `mapAdminError` `ErrSVTNNotFound` arm). CLI: `sbctl svtn status --name=<svtn-name>` — a genuine standalone top-level dispatch (not routed through `sbctl admin` framing), since status is read-only/non-destructive and carries none of the confirm-gate duplication risk that motivates the `svtn destroy` migration-shim disposition (see interface-definitions.md §60/§62).
 
 ## Invariants
@@ -245,6 +254,7 @@ Operator runs `sbctl admin svtn create` or `sbctl admin svtn destroy` or equival
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 1.16 | 2026-07-15 | product-owner | S-BL.ADMISSION-SYNC-WIRE BC groundwork item A6: amended PC-3 (Destroy) to add push postcondition — after `RemoveSVTN` succeeds on control, `internal.admission.remove-svtn` is pushed to all configured router endpoints (BC-2.05.009). Push failure is logged at WARN; control write is not rolled back. Added `inputs`/`input-hash`/`extracted_from` frontmatter fields (template conformance); `input-hash` updated to `9d4a662`. |
 | 1.15 | 2026-07-12 | story-writer | Traceability Stories cell PC-4 (Status) filled: `S-BL.CLI-SURFACE-COMPLETION` — the distinct story-writer pass PO deferred at v1.14 PC-4 extension. Governance-only; no PC/AC behavior change. |
 | 1.14 | 2026-07-12 | product-owner | S-BL.CLI-SURFACE-COMPLETION Ruling 2 (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`): extend BC with new Postcondition PC-4 (Status) — wires `admin.svtn.status`, registered in `BuildAdminHandlers` (control-mode-only). Authority: any admitted role in the target SVTN, OR operator-set member, OR bootstrap key (`resolveCallerAdmissionAnyRole`, list-keys precedent, BC-2.05.004 F-L2-003) — authority gate bypassed, admission gate retained. Response schema (`svtn_id`, `name`, `created_at`, `key_counts`) deliberately excludes session/health data — ARCH-09 purity boundary, `internal/session` is a forbidden import for `cmd/switchboard/admin_handlers.go`. Not-found reuses E-SVTN-003. CLI dispatch is `sbctl svtn status --name=<svtn-name>` (bare top-level, not `sbctl admin`-prefixed — read-only, no confirm-gate duplication risk). Three new Canonical Test Vectors added (happy-path, not-found, admission-denied). Two new VP-048 sibling rows added. No change to PC-1/PC-2/PC-3 or Invariants. |
 | 1.13 | 2026-07-02 | spec-steward | F-P4L3-MED-2 (POL-002): Traceability Stories row cite S-6.05 v1.5 → v1.7 (this fix-burst bumps story to v1.7). Governance-only. [governance_leaf: true — downstream story/VP pins DO NOT need to re-sync per drbothen/vsdd-factory#429 draft policy] |

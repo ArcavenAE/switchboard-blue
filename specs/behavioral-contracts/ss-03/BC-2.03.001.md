@@ -2,11 +2,18 @@
 artifact_id: BC-2.03.001
 document_type: behavioral-contract
 level: L3
-version: "1.6"
+version: "1.7"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
 phase: 1a
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/failure-modes.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "5da12a8"
+extracted_from: null
 bc_id: BC-2.03.001
 subsystem: session-discovery
 architecture_module: internal/discovery
@@ -18,6 +25,17 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-15
+    version: "1.7"
+    change: >
+      N4 audit (S-BL.NODE-ADMISSION-PROVISIONING BC groundwork item N4):
+      discovery.Config.LocalNodeAdmissionPubkey is NOT covered under BC-2.03.001
+      or BC-2.03.002 as a config-validation rule — it is a runtime wiring
+      precondition, not a user-supplied config field. Added Precondition 4
+      annotation naming BC-2.09.004 as the source that populates this field
+      via S-BL.NODE-ADMISSION-PROVISIONING. No behavioral change; traceability
+      clarification only. Added inputs/input-hash/extracted_from frontmatter
+      fields (template conformance).
   - date: 2026-07-14
     version: "1.6"
     change: >
@@ -63,6 +81,17 @@ An access node broadcasts its presence and the state of its published sessions t
 1. The access node is admitted to an SVTN (Tier 1 admission complete).
 2. The access node has at least one published session.
 3. A SVTN-scoped multicast address is allocated for the SVTN's discovery channel.
+4. `discovery.Config.LocalNodeAdmissionPubkey` is populated with the 32-byte raw Ed25519
+   public key of this access node's admission keypair before `discovery.New` is called.
+
+   > **Source (N4 audit, BC groundwork S-BL.NODE-ADMISSION-PROVISIONING):** This field is
+   > NOT a user-supplied config field validated by `Config.Validate()` — it is a runtime
+   > wiring value derived from the admission keypair provisioned by BC-2.09.004
+   > (`admission_key_file` load/generation in `runAccess`). Its contract is:
+   > `[]byte(admissionPrivKey.Public().(ed25519.PublicKey))` — the 32-byte raw Ed25519
+   > public key. When absent (nil or zero-length), `transmitAdvertisement` fails with
+   > `ErrMissingNodeAdmissionPubkey` and no advertisement is sent. This BC is NOT the
+   > owner of that precondition; BC-2.09.004 and S-BL.NODE-ADMISSION-PROVISIONING are.
 
    > **Derivation rule (Ruling S-BL.DISCOVERY-WIRE-2):** the multicast address
    > is `239.h0.h1.h2` where `h0..h2` are the first three bytes of
@@ -188,7 +217,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 | L2 Capability | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 |
 | L2 Domain Invariants | DI-004 (no direct node-to-node), DI-005 (SVTN cryptographic isolation) |
 | Architecture Module | internal/discovery |
-| Stories | S-7.02, S-BL.DISCOVERY-WIRE (deferred: PC-1/PC-3/PC-4 wire delivery) |
+| Stories | S-7.02, S-BL.DISCOVERY-WIRE (deferred: PC-1/PC-3/PC-4 wire delivery), S-BL.NODE-ADMISSION-PROVISIONING (deferred: PC-4 supply of `LocalNodeAdmissionPubkey` — N4 audit finding) |
 | Capability Anchor Justification | CAP-011 ("Multicast presence advertisement") per capabilities.md §CAP-011 — this BC specifies the advertisement trigger conditions and payload that CAP-011 defines as "state change, periodic heartbeat, and on-demand request" |
 
 ## Related BCs
@@ -200,6 +229,7 @@ Session state change; periodic heartbeat timer fires; console sends on-demand pr
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.7 | 2026-07-15 | N4 audit (S-BL.NODE-ADMISSION-PROVISIONING BC groundwork item N4): `discovery.Config.LocalNodeAdmissionPubkey` is NOT covered as a config-validation rule under this BC or BC-2.03.002 — it is a runtime wiring precondition populated by `runAccess` from the keypair provisioned by BC-2.09.004 / S-BL.NODE-ADMISSION-PROVISIONING. Added Precondition 4 annotation to make this dependency explicit. Traceability Stories row updated to add S-BL.NODE-ADMISSION-PROVISIONING (deferred: PC supply of `LocalNodeAdmissionPubkey`). Added `inputs`/`input-hash`/`extracted_from` frontmatter fields (template conformance). No behavioral change — traceability and precondition annotation only. |
 | 1.6 | 2026-07-14 | `S-BL.DISCOVERY-WIRE-rulings.md` v1.6 (F-DWSP4-001 restart-liveness amendment, spec-adversarial pass 4) executed: Postcondition 2's replay-resistance blockquote superseded in place (layered-decision-record convention — v1.5's blockquote is replaced, not appended). `sequence` widens `uint32`→`uint64`, epoch-qualified (high 32 bits = `uint32(time.Now().UTC().Unix())` sampled once at `Discovery`-instance start, low 32 bits = the existing in-memory counter) — a legitimate access node restarting with a stable admitted identity is accepted on its next frame instead of being locked out for up to ~8.3h (the F-DWSP4-001 defect: an in-memory sender counter reset on restart vs. a restart-stable router-side `lastSeen` watermark). Bounded residual reframed per the ruling's own v1.6 precision correction into two distinct, independently-bounded cases: a same-wall-clock-second crash-loop restart (≤1s, self-healing at the next epoch tick) and a backward host-clock adjustment of magnitude N (discard window ≈N, not ≤1s — accepted because the triggering operator-introduced clock misconfiguration is rare, not because the bound is small). Field-list sentence (PC-2's lead line, "a monotonic sequence value") required no change — it never stated a width. Width/offset sweep of the rest of the BC found no other `uint32`/byte-offset language to correct (ruled hop-1 layout `Sequence body[24:32]`, `count body[32:34]`, 42-byte frame minimum — this BC states none of these numerically, so nothing else needed updating). The "BC-2.03.002 Postcondition 5" citation qualification introduced at v1.5 (the architect's draft used the unqualified "Postcondition 5", ambiguous inside this BC's own PC-5) is preserved unchanged in the replacement text, per the architect's explicit confirmation that the v1.5 correction stands. `Verified by VP-080.` trailing citation retained (VP-080 itself amended to v1.3 by the rulings-doc update; not this BC's concern to re-cite by version). No other Postcondition, Precondition, or Invariant touched. |
 | 1.5 | 2026-07-13 | `S-BL.DISCOVERY-WIRE-rulings.md` v1.2 amendments executed (Ruling 1 + Ruling 2, resolves DRIFT-W6TBD-001's BC-side obligation): Precondition 3 gains the concrete multicast-address derivation rule (`239.h0.h1.h2` = first 3 bytes of SHA-256(svtnID); router-only group membership). Postcondition 1 gains the router-mediated relay delivery-mechanism note (multicast denotes SVTN-wide fan-out, not direct peer-to-peer IP multicast; HMAC is the sole security boundary per SEC-DW-08). Postcondition 2 gains a NEW monotonic `sequence` replay-resistance field in the field list plus the router-side non-increasing discard rule (SEC-DW-07); cites VP-080 (minted this session, `status: draft`). Postcondition 5's DRIFT-W6TBD-001 `svtnID`-as-key placeholder note is replaced with the concrete domain-separated `DiscoveryAuthKey := hmac.DeriveDiscoveryKey(nodeAdmissionPubkey, svtnID)` derivation rule (Ruling 1 v1.1, SEC-DW-06). Invariant 1 (DI-004) reviewed against Ruling 2's finding and confirmed already-correct — no change. Verification Properties table gains a VP-080 row (replay-rejection, integration) alongside the existing VP-044 rows. |
 | v1.4 | 2026-07-01 | Pass-2 L3 fix-burst (RULING-W6TB-D bidirectional-trace closure): Stories row updated to add S-BL.DISCOVERY-WIRE with deferred PC-1/PC-3/PC-4 wire delivery annotation. |

@@ -3,7 +3,7 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.3"
+version: "1.4"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: draft
 producer: story-writer
@@ -15,9 +15,25 @@ wave: backlog
 priority: P2
 scope_phase: E
 estimated_points: TBD
+points: TBD
+inputs:
+  - '.factory/decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'
+input-hash: "e4ebb26"
+traces_to: "decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md"
+epic_id: E-7
+behavioral_contracts:
+  - BC-2.01.008
 bc_traces:
   - BC-2.01.008
-depends_on: []
+verification_properties: []
+subsystems: [session-networking]
+target_module: "cmd/switchboard"
+tdd_mode: strict
+cycle: v1.0.0-greenfield
+estimated_days: null
+assumption_validations: []
+risk_mitigations: []
+depends_on: [S-BL.ADMISSION-SYNC-WIRE, S-BL.NODE-ADMISSION-PROVISIONING]
 blocks: []
 acceptance_criteria_count: 0
 rulings_doc: "decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md"
@@ -202,6 +218,98 @@ identity-distribution cluster" section.
 - **Revocation-at-handshake handling** — out of scope beyond whatever `AdmitNode`
   already does for a revoked key (fail-closed, unmodified).
 
+## Narrative
+
+- **As a** router-mode daemon serving an SVTN
+- **I want to** verify the identity of a connecting node via a `NODE_IDENTIFY` challenge-response handshake
+- **So that** hop-2 fan-out target resolution (`S-BL.DISCOVERY-WIRE` AC-017/AC-018/Task 6) can be unblocked and the router can bind `(SVTNID, NodeAddr) → IfaceID` for admitted nodes
+
+> **STATUS: DRAFT BACKLOG STUB.** Full Narrative, ACs, and Tasks will be populated when this story is scheduled. Obligations 3/4 remain open; Obligations 5/6 are blockers gated on `S-BL.ADMISSION-SYNC-WIRE` and `S-BL.NODE-ADMISSION-PROVISIONING`.
+
+## Acceptance Criteria
+
+> **[TODO: populate at scheduling time — blocked on Obligations 3–6]**
+
+No ACs yet. This stub has `acceptance_criteria_count: 0`. Full decomposition is deferred to scheduling time when all Open Design Obligations (§3–6) are resolved.
+
+## Architecture Mapping
+
+| Component | Module | Pure/Effectful |
+|-----------|--------|---------------|
+| NODE_IDENTIFY handshake | cmd/switchboard | effectful-shell |
+| Router.BindInterface | internal/routing or cmd/switchboard | [TODO at scheduling time] |
+| admission.AdmitNode | internal/admission | pure-core |
+
+## Edge Cases
+
+| ID | Scenario | Expected Behavior |
+|----|----------|-------------------|
+| EC-001 | [TODO: populate at scheduling time] | [TODO] |
+
+## Purity Classification
+
+| Module | Classification | Justification |
+|--------|---------------|---------------|
+| internal/admission | pure-core | No I/O — existing classification from S-2.02 |
+| cmd/switchboard (handshake) | effectful-shell | TCP I/O, challenge-response over live connection |
+
+## Token Budget Estimate (MANDATORY)
+
+> **[TODO: populate at scheduling time]**
+
+| Context Source | Estimated Tokens |
+|---------------|-----------------|
+| This story spec | [TBD] |
+| Referenced code files | [TBD] |
+| Test files | [TBD] |
+| Tool outputs overhead | [TBD] |
+| **Total** | **[TBD]** |
+
+## Tasks (MANDATORY)
+
+> **[TODO: populate at scheduling time — blocked on Obligations 3–6]**
+
+1. [ ] Resolve Open Design Obligations 3 and 4 (re-identify/rebind semantics; handshake timeout) via architect ruling
+2. [ ] Write failing tests (test-writer)
+3. [ ] Implement to pass tests (implementer)
+4. [ ] Verify purity boundaries
+5. [ ] Update STATE.md
+
+## Previous Story Intelligence (MANDATORY)
+
+| Story | Key Decisions | Patterns Established | Gotchas Discovered |
+|-------|--------------|---------------------|-------------------|
+| `S-BL.DISCOVERY-WIRE` (PR #123 @ d249f88) | `control_type=0x03` DISCOVERY_RELAY precedent; register-before-serve invariant (F-P2L1-001) | `wireXHandlers` pattern; zero-HMACTag connection-trust boundary | AC-017/AC-018/Task 6 gated on this story |
+| `S-BL.ADMISSION-SYNC-WIRE` (prerequisite) | Router keyset population via push RPC | [populated at scheduling time] | [populated at scheduling time] |
+| `S-BL.NODE-ADMISSION-PROVISIONING` (prerequisite) | Node admission keypair + Discovery.Run lifecycle | [populated at scheduling time] | [populated at scheduling time] |
+
+## Architecture Compliance Rules (MANDATORY)
+
+| Rule | Source | Enforcement |
+|------|--------|-------------|
+| ARCH-08 §Import DAG — cmd/switchboard at position 18 | ARCH-08-dependency-graph.md | All new code in cmd/switchboard; no new internal/ package |
+| ADR-012 challenge-response handshake | ADR-012 | NODE_IDENTIFY uses same Ed25519 challenge-response protocol as mgmt plane auth |
+| Invariant 3 append-only sequential control_type allocation | BC-2.01.008 Inv-3 | NODE_IDENTIFY=0x04 already registered (Obligation 1 RESOLVED) |
+
+## Library & Framework Requirements (MANDATORY)
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Go stdlib crypto/ed25519 | stdlib | Challenge-response signing/verification |
+| internal/admission | current | GenerateChallenge, AdmitNode, ChallengeResponse — reused verbatim |
+| internal/mgmt | current | Existing mgmt wire protocol for control_type dispatch |
+
+## File Structure Requirements (MANDATORY)
+
+> **[TODO: finalize at scheduling time]**
+
+| File | Action | Purpose |
+|------|--------|---------|
+| cmd/switchboard/mgmt_wire.go | modify | Add `case 0x04` (NODE_IDENTIFY) to route() switch |
+| cmd/switchboard/node_identify_wire.go | create | NODE_IDENTIFY frame codec + handshake handler + BindInterface wiring |
+| cmd/switchboard/node_identify_wire_test.go | create | Handshake unit + integration tests |
+| specs/behavioral-contracts/ss-01/BC-2.01.008.md | modify | Add NODE_IDENTIFY=0x04 row to PC-2 registry table (Obligation 1 RESOLVED) |
+
 ## Provenance
 
 - **Origin:** `S-BL.DISCOVERY-WIRE.md` Forward Obligations table, row (a) — Ruling 3(f)
@@ -233,6 +341,7 @@ identity-distribution cluster" section.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-15 | `depends_on` updated from `[]` to `[S-BL.ADMISSION-SYNC-WIRE, S-BL.NODE-ADMISSION-PROVISIONING]` — both prerequisite stories now exist and have been assigned IDs. Obligations 5 and 6 (the two blockers) are therefore reflected in the dependency graph. Obligations 3/4 remain open/gated; full decomposition still deferred to scheduling time. Frontmatter version 1.3 → 1.4. |
 | 1.3 | 2026-07-15 | Added `rulings_doc: decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` frontmatter field (v1.0 on disk). Marked Obligation 1 RESOLVED — `NODE_IDENTIFY=0x04` is now in `BC-2.01.008` v1.3 registry (PO/architect amendment executed). Marked Obligation 2 RESOLVED — challenge-transcript wire format elaborated in `decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` v1.0 (control_type=0x04 with msg_kind sub-byte; NodeIdentify/Challenge/ChallengeResponse frame layouts; BindInterface/LookupInterface/UnbindInterface on `*Router`). Added cross-reference to `decisions/identity-cluster-architecture.md` v1.1 in Provenance section. Obligations 3/4/5/6 unchanged (3/4 still open/gated; 5/6 still blockers). `depends_on` stays `[]` — prerequisite stories `S-BL.ADMISSION-SYNC-WIRE` and `S-BL.NODE-ADMISSION-PROVISIONING` not yet elaborated. |
 | 1.2 | 2026-07-15 | Added Open Design Obligation 6 — a SECOND BLOCKER, distinct from obligation 5: `S-BL.DISCOVERY-WIRE-rulings.md` v1.11 Ruling 5 (dispatched by team-lead as a Step-4.5 pass-1 fix-burst finding, verified independently) found no production code path supplies a running node process with its own admission keypair — needed for this story's `ChallengeResponse` signing step — and independently found `internal/discovery.New`/`Discovery.Run` have zero production callers anywhere, a compounding absence. Prerequisite named: a second new follow-on story, `S-BL.NODE-ADMISSION-PROVISIONING` (working name, not yet created), distinct in direction from obligation 5's `S-BL.ADMISSION-SYNC-WIRE`. `depends_on` stays `[]` until both prerequisite stories exist. Obligations 5 and 6 both gate obligations 1-4. Frontmatter version 1.1 → 1.2. |
 | 1.1 | 2026-07-15 | Added Open Design Obligation 5 — a BLOCKER, not a scoping question like obligations 1-4: `S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4 (dispatched by team-lead as a Green-step implementation-time finding, verified independently) found that `admission.AdmitNode` is verification-only against the local `AdmittedKeySet`, and the router-mode process's own keyset is always empty in production — admission writes happen exclusively in the separate, disconnected control-mode OS process, with no cross-process sync mechanism anywhere in the codebase. This story's handshake cannot succeed until admission state reaches the router process, regardless of how correctly the `NODE_IDENTIFY` opcode/codec/`BindInterface` are implemented. Prerequisite named: a new follow-on story, `S-BL.ADMISSION-SYNC-WIRE` (working name, not yet created); `depends_on` stays `[]` until that story exists to be added. Obligation 5 gates obligations 1-4 (upstream of all of them). No ACs/tasks exist yet to amend; this is a scoping-stage addition. Frontmatter version 1.0 → 1.1. |

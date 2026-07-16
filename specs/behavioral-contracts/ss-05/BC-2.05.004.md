@@ -2,12 +2,20 @@
 artifact_id: BC-2.05.004
 document_type: behavioral-contract
 level: L3
-version: "1.14"
+version: "1.15"
 status: draft
 producer: product-owner
 timestamp: 2026-06-30T00:00:01
-last_modified: 2026-07-03
+last_modified: 2026-07-15
 phase: 1a
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/edge-cases.md'
+  - '.factory/specs/domain-spec/failure-modes.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "b9ec04e"
+extracted_from: null
 bc_id: BC-2.05.004
 subsystem: admission-security
 architecture_module: internal/svtnmgmt
@@ -151,6 +159,17 @@ modified:
       insufficient, active admission required). Refs: F-P5P13-A-001 [HIGH],
       interface-definitions v1.25. Errata pointer: interface-definitions.md v1.25
       changelog is the authoritative reconciliation record.
+  - date: 2026-07-15
+    version: "1.15"
+    actor: product-owner
+    change: >
+      S-BL.ADMISSION-SYNC-WIRE BC groundwork item A5: added push-failure postcondition
+      to PC-1 (register), PC-2 (revoke), and PC-3 (expire). Each write path now includes:
+      "If RouterManagementEndpoints is non-empty and the push to a router endpoint fails,
+      the write is not rolled back; WARN is logged." This makes push-failure behavior a
+      first-class postcondition, not an implementation detail. Cross-reference: BC-2.05.009
+      (admission-state-sync push RPC contract). No change to authority, admission, or
+      key-store semantics.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -188,9 +207,9 @@ Control nodes can manage the public key registry for an SVTN: registering new ke
 
 ## Postconditions
 
-1. **Register**: The public key is added to the admitted key set with the specified role (control, console, access). The key becomes active for admission challenges. Propagation: key is pushed to all routers serving the SVTN.
-2. **Revoke**: The public key is removed from the admitted key set. Existing sessions using this key continue until the next re-authentication challenge (propagation delay acknowledged, FM-007). Propagation: revocation is pushed to all routers.
-3. **Expire**: An expiry timestamp is associated with the key. At expiry, the key is automatically revoked by routers that honor the expiry timestamp. **Wire field (F-L2-007):** the `admin.key.expire` RPC args field is `after` (a Go duration string, e.g., `"720h"`, `"30m"`). The CLI `--at <RFC3339-timestamp>` flag is translated client-side to a duration (`timestamp - time.Now()`) before sending on the wire. The daemon handler validates `after` as a positive Go duration string; zero, negative, and >100-year values are rejected with E-CFG-001.
+1. **Register**: The public key is added to the admitted key set with the specified role (control, console, access). The key becomes active for admission challenges. Propagation: key is pushed to all routers serving the SVTN via `internal.admission.register` RPC (BC-2.05.009). **Push-failure postcondition (A5, S-BL.ADMISSION-SYNC-WIRE groundwork):** If `RouterManagementEndpoints` is non-empty and the push to a router endpoint fails, the control-side `RegisterKey` write is NOT rolled back; the failure is logged at WARN level. The `sbctl` response to the operator reflects the control-side write success. The router is temporarily stale until the next push event or control restart.
+2. **Revoke**: The public key is removed from the admitted key set. Existing sessions using this key continue until the next re-authentication challenge (propagation delay acknowledged, FM-007). Propagation: revocation is pushed to all routers via `internal.admission.revoke` RPC (BC-2.05.009). **Push-failure postcondition (A5):** Same as PC-1 — push failure is logged at WARN; control write is not rolled back.
+3. **Expire**: An expiry timestamp is associated with the key. At expiry, the key is automatically revoked by routers that honor the expiry timestamp. **Wire field (F-L2-007):** the `admin.key.expire` RPC args field is `after` (a Go duration string, e.g., `"720h"`, `"30m"`). The CLI `--at <RFC3339-timestamp>` flag is translated client-side to a duration (`timestamp - time.Now()`) before sending on the wire. The daemon handler validates `after` as a positive Go duration string; zero, negative, and >100-year values are rejected with E-CFG-001. Propagation: expiry is pushed to all routers via `internal.admission.expire` RPC (BC-2.05.009). **Push-failure postcondition (A5):** Same as PC-1 — push failure is logged at WARN; control write is not rolled back.
 4. Key changes are confirmed with a success response including the key fingerprint and operation timestamp.
 
 ## Invariants
@@ -255,3 +274,12 @@ Operator runs `sbctl admin key {register,revoke,expire}` or `sbctl admin list-ke
 
 - BC-2.05.001 — depends on: registered keys are what the admission challenge verifies
 - BC-2.05.002 — related to: revocation eventually removes key from admitted set
+- BC-2.05.009 — extends: push-failure postconditions in PC-1/PC-2/PC-3 trace to the admission-state-sync push RPC contract
+
+## Changelog
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.15 | 2026-07-15 | product-owner | S-BL.ADMISSION-SYNC-WIRE BC groundwork item A5: added push-failure postcondition to PC-1 (register), PC-2 (revoke), and PC-3 (expire). Each write path now includes: if `RouterManagementEndpoints` is non-empty and the push to a router endpoint fails, the write is NOT rolled back; WARN is logged. `sbctl` response reflects control-side write success. Push RPC command references (BC-2.05.009) added to each propagation note. Added `inputs`, `input-hash`, `extracted_from` frontmatter fields (template conformance). |
+| 1.14 | 2026-07-03 | spec-steward | F-P5P14-B-003 traceability fix: EC-008 (three admission-failure modes for admin.key.list-keys) now references owning VP-077. Property text: list-keys admits iff IsAdmittedAnyRole OR OperatorKeySet OR BootstrapKey; else E-ADM-009. Complements VP-075 which scope-excludes list-keys. Verification Properties table extended with VP-077 row. No behavioral change. |
+| 1.13 | 2026-07-03 | product-owner | Phase 5 Pass 13 spec-track sharpening (Burst 38). F-P5P13-A-001 [HIGH]: Precondition 1 list-keys authority sentence sharpened — ADMISSION gate still applies; cross-SVTN callers denied E-ADM-009 (CWE-862). EC-006 updated; EC-008 added (three list-keys admission failure modes). |

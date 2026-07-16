@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "3.5"
+version: "3.6"
 status: draft
 producer: product-owner
 timestamp: 2026-07-12T00:00:00
@@ -51,11 +51,14 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.04.005 | Read-only console receives downstream stream; upstream keystrokes are rejected by access node | session-access | CAP-015 | P0 | E | implemented (S-3.03 / PR #14) | ss-04/BC-2.04.005.md |
 | BC-2.04.006 | Two or more consoles may subscribe to the same session output simultaneously | session-access | CAP-016 | P0 | E | implemented (S-3.02 / PR #13) | ss-04/BC-2.04.006.md |
 | BC-2.04.007 | Access node daemon startup succeeds or exits non-zero; SIGTERM/SIGINT triggers clean shutdown | session-access | CAP-013 | P0 | E | implemented (S-W3.04 / PR #17) | ss-04/BC-2.04.007.md |
+| BC-2.04.008 | Discovery sender goroutine (`Discovery.Run`) wired into access daemon lifecycle — WG-tracked, ctx-driven shutdown | session-access | CAP-013 | P0 | PE | active | ss-04/BC-2.04.008.md |
 | BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.001.md |
 | BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.002.md |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | admission-security | CAP-018 | P0 | E | implemented (S-3.03 / PR #14) | ss-05/BC-2.05.003.md |
 | BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.004.md |
 | BC-2.05.005 | HMAC frame authentication at first router boundary | admission-security | CAP-020 | P0 | E | implemented (S-W3.05 / PR #16) | ss-05/BC-2.05.005.md |
+| BC-2.05.009 | Admission-state sync — control pushes key mutations to router management endpoints via internal RPC | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.009.md |
+| BC-2.05.010 | Admission-state snapshot — router VLR-local persistence (write-on-receive, load-on-startup, fail-closed-on-corrupt) | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.010.md |
 | BC-2.05.006 | SVTN cryptographic isolation: admitted node on SVTN-A cannot see SVTN-B traffic | admission-security | CAP-020b | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.006.md |
 | BC-2.05.007 | Node private keys never transit the network under any condition | admission-security | CAP-020a | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.007.md |
 | BC-2.05.008 | RouteFrame wire-layer HMAC enforcement (Fail-Closed for Writes) | admission-security | CAP-020 | P0 | E | implemented (S-3.04 / PR #9) | ss-05/BC-2.05.008.md |
@@ -71,6 +74,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.09.001 | E router graduates to PE mode by adding upstream router connections in config | deployment-operations | CAP-026 | P2 | PE | active | ss-09/BC-2.09.001.md |
 | BC-2.09.002 | Router sends drain signal before shutdown; nodes migrate to alternate routers | deployment-operations | CAP-027 | P2 | PE | active | ss-09/BC-2.09.002.md |
 | BC-2.09.003 | Router Startup Fails Cleanly on Malformed Config with Actionable Error Message; Validated Config Is Applied to the Daemon | deployment-operations | CAP-028 | P0 | E | implemented (S-6.01 / PR #28) | ss-09/BC-2.09.003.md |
+| BC-2.09.004 | Access daemon admission keypair — provisioning, loading, and config validation for `admission_key_file` | deployment-operations | CAP-028 | P0 | E | active | ss-09/BC-2.09.004.md |
 
 ## Coverage Summary
 
@@ -79,13 +83,13 @@ traces_to: '.factory/specs/prd.md'
 | session-networking | CAP-001–004 | 8 | 8 | 0 | 0 |
 | multipath-forwarding | CAP-005–010 | 9 | 8 | 1 | 0 |
 | session-discovery | CAP-011–012 | 3 | 0 | 3 | 0 |
-| session-access | CAP-013–016 | 7 | 7 | 0 | 0 |
-| admission-security | CAP-017–020, CAP-020a, CAP-020b | 8 | 8 | 0 | 0 |
+| session-access | CAP-013–016 | 8 | 7 | 1 | 0 |
+| admission-security | CAP-017–020, CAP-020a, CAP-020b | 10 | 10 | 0 | 0 |
 | quality-observability | CAP-021–022, CAP-029 | 4 | 4 | 0 | 0 |
 | network-management | CAP-023–024 | 4 | 4 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
-| deployment-operations | CAP-026–028 | 3 | 1 | 2 | 0 |
-| **Total** | **CAP-001–029 + CAP-020a, CAP-020b** | **47** | **40** | **7** | **0** |
+| deployment-operations | CAP-026–028 | 4 | 2 | 2 | 0 |
+| **Total** | **CAP-001–029 + CAP-020a, CAP-020b** | **51** | **43** | **8** | **0** |
 
 ## CAP Coverage Verification
 
@@ -127,6 +131,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.6 | 2026-07-15 | Identity-cluster BC groundwork batch: **4 new BCs** — BC-2.03.001 v1.6→v1.7 (N4 audit: PC-4 `LocalNodeAdmissionPubkey` precondition annotation, traceability update, template conformance); BC-2.04.008 v1.0 commissioned (`Discovery.Run()` daemon-lifecycle wiring, session-access / CAP-013); BC-2.05.004 v1.14→v1.15 (A5: push-failure postcondition added to PC-1/PC-2/PC-3, template conformance); BC-2.05.009 v1.0 commissioned (admission-state-sync push RPC, admission-security / CAP-019); BC-2.05.010 v1.0 commissioned (admission-state-snapshot VLR-local, admission-security / CAP-019); BC-2.07.001 v1.15→v1.16 (A6: PC-3 Destroy push postcondition added, template conformance); BC-2.09.003 v2.0→v2.1 (N3+A3+A4 consolidated: PC-12 `admission_key_file` E-CFG-014, PC-13 `admission_state_file` E-CFG-015, PC-14 `router_management_endpoints` E-CFG-016, template conformance); BC-2.09.004 v1.0 commissioned (`admission_key_file` provisioning, deployment-operations / CAP-028). BC count 47→51; session-access count 7→8, admission-security count 8→10, deployment-operations count 3→4. |
 | 3.5 | 2026-07-13 | FO(a) discharge (step-4.5 impl pass 2 remediation burst): BC-2.06.004 CAP column re-anchored CAP-022 → CAP-029 (BC-2.06.004.md v1.4→v1.5; capabilities.md v1.0→v1.1 mints CAP-029 "On-demand reachability and round-trip-latency probe via sbctl", quality-observability). CAP-022 coverage row now BC-2.06.003 only; new CAP-029 coverage row added (BC-2.06.004). Coverage Summary quality-observability CAPs-covered cell and Total CAP range updated to include CAP-029. BC count unchanged at 47; quality-observability BC count unchanged at 4. |
 | 3.4 | 2026-07-12 | S-BL.CLI-SURFACE-COMPLETION architect rulings (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`) executed: BC-2.06.004 commissioned (Ruling 1 — new BC, `paths.ping` one-shot RTT probe, quality-observability / CAP-022, not an extension of BC-2.06.003); BC-2.07.001 bumped v1.13→v1.14 (Ruling 2 — new Postcondition PC-4 `admin.svtn.status`, any-admitted-role authority via `resolveCallerAdmissionAnyRole`, 3 new test vectors, 2 new VP-048 rows); BC-2.09.001 bumped v1.1→v1.2 and BC-2.09.002 bumped v1.2→v1.3 (Ruling 4 — governance-only addenda naming the `router.reload`/`router.drain` wire verbs, both `[governance_leaf: true]`, no PC/AC change; resolves `DRIFT-HS006-DRAIN-CLI-MISSING`). Ruling 3 (`svtn destroy` top-level migration shim) required no BC change. BC count 46→47; quality-observability subsystem count 3→4, Scope-E count 39→40. |
 | 3.2 | 2026-07-06 | BC-2.09.003 bumped to v2.0 (governance-only VP-table narrowing: VP-028/VP-029 rows corrected to startup-validation scope only; 8 rows reclassified test-as-evidence with owning story/AC citations; reload fail-closed row annotated → S-7.04-FU-SIGHUP-RELOAD AC-002 obligation; no PC/EC/Inv semantic changes; governance-leaf change per PO ruling). BC count unchanged at 45. |

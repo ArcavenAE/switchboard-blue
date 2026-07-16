@@ -2,11 +2,18 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "2.0"
+version: "2.1"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
 phase: 1a
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/failure-modes.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "5da12a8"
+extracted_from: null
 bc_id: BC-2.09.003
 subsystem: SS-09
 architecture_module: internal/config
@@ -18,6 +25,17 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-15
+    version: "2.1"
+    change: >
+      Identity-cluster BC groundwork consolidated amendment (items N3+A3+A4):
+      PC-12 added (admission_key_file: non-empty when present, no I/O in Validate, E-CFG-014);
+      PC-13 added (admission_state_file: non-empty when present, parent-dir stat when set, E-CFG-015);
+      PC-14 added (router_management_endpoints: each addr validated as host:port per E-CFG-003
+      pattern, E-CFG-016, NO loopback restriction per Ruling 9, control-mode-only field);
+      E-CFG-014/015/016 added to Error Codes table; EC-015 through EC-020 added;
+      new Canonical Test Vectors for all three fields; test-as-evidence VP rows added.
+      Added inputs/input-hash/extracted_from frontmatter fields (template conformance).
   - date: 2026-07-06
     version: "2.0"
     change: >
@@ -201,6 +219,58 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
     updated to document these fields. This is flagged as a story-writer / implementer
     responsibility for S-W5.01.
 
+### Identity-cluster config field validation postconditions (v2.1 additions)
+
+12. `admission_key_file` is an **optional** config field (access-mode daemon applies the
+    default path `/var/lib/switchboard/access-admission-identity.pem` when absent; see
+    BC-2.09.004 §Keypair provisioning). When **present**, it must be a non-empty string
+    that is not entirely whitespace. If present and blank or whitespace-only, Validate()
+    exits with E-CFG-014:
+    `"config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default"`.
+    A non-whitespace string is accepted at validation time regardless of whether the path
+    exists on disk — file accessibility is a daemon-startup concern, not a
+    config-validation concern (ARCH-06 §Config purity). PC-12 is **access-mode only**;
+    other modes do not use this field. Validate() does not enforce mode restrictions at
+    parse time.
+
+    **Config-schema impact note:** A new field is added to `internal/config.Config`:
+    - `admission_key_file string` (yaml: `admission_key_file`) — optional, validated by PC-12.
+    This is a S-BL.NODE-ADMISSION-PROVISIONING implementer responsibility.
+
+13. `admission_state_file` is an **optional** config field (router-mode daemon starts with
+    empty keyset when absent; see BC-2.05.010 §Load-on-startup). When **present**, it must
+    be a non-empty string that is not entirely whitespace. If present and blank or
+    whitespace-only, Validate() exits with E-CFG-015:
+    `"config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset"`.
+    A non-whitespace string is accepted at validation time; the parent directory
+    accessibility check is a daemon-startup concern, not a config-validation concern.
+    PC-13 is **router-mode only**; other modes do not use this field.
+
+    **Config-schema impact note:** A new field is added to `internal/config.Config`:
+    - `admission_state_file string` (yaml: `admission_state_file`) — optional, validated by PC-13.
+    This is a S-BL.ADMISSION-SYNC-WIRE implementer responsibility.
+
+14. `router_management_endpoints` is an **optional** config field (empty list means no
+    admission-state push replication; see BC-2.05.009). When **present and non-empty**,
+    each entry's `addr` field must be a valid `host:port` string. For each entry whose
+    `addr` fails `validateHostPort`, Validate() records an error in E-CFG-016 format
+    (exhaustive reporting — all errors collected before exit):
+    `"config error: router_management_endpoints[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'"`.
+    **NO loopback restriction:** any valid `host:port` is accepted, including
+    `0.0.0.0:PORT` and non-loopback addresses. The ADR-012 challenge-response handshake
+    is the authentication boundary; network-level access restriction is the operator's
+    firewall-policy responsibility (Ruling 9, S-BL.ADMISSION-SYNC-WIRE-rulings.md).
+    An empty list (`router_management_endpoints: []` or field absent) is accepted.
+    PC-14 is **control-mode only**; router/console/access modes do not read this field.
+
+    **Config-schema impact note:** A new field is added to `internal/config.Config`:
+    ```go
+    RouterManagementEndpoints []RouterManagementEndpoint `yaml:"router_management_endpoints"`
+    type RouterManagementEndpoint struct { Addr string `yaml:"addr"` }
+    ```
+    This is structurally identical to the existing `UpstreamRouters []UpstreamRouter` pattern.
+    This is a S-BL.ADMISSION-SYNC-WIRE implementer responsibility.
+
 ### Config application postcondition (v1.3 right-sized)
 
 9. When `--config` is supplied and validation passes, the daemon initializes all subsystems using the validated config struct for fields whose target subsystems exist today. Specifically, the following field IS applied immediately:
@@ -245,6 +315,9 @@ Daemon startup config parsing failure; config reload with invalid config.
 | E-CFG-007 | `keepalive_interval` is present and negative | broken | 1 | `"config error: keepalive_interval: must not be negative; got '<value>'. Fix: remove the field to use the daemon default (1s), or set to a positive duration, e.g. '1s'"` |
 | E-CFG-008 | `management_socket` is present but empty or whitespace-only | broken | 1 | `"config error: management_socket: must not be empty. Fix: set to a valid Unix socket path, e.g. '/run/switchboard-router.sock', or remove the field to use the daemon default"` |
 | E-CFG-009 | `authorized_operator_keys[N]` is not a valid PEM PUBLIC KEY block containing an Ed25519 key | broken | 1 | `"config error: authorized_operator_keys[<N>]: entry is not a valid Ed25519 PEM PUBLIC KEY block. Fix: provide a PEM-encoded Ed25519 public key (type 'PUBLIC KEY', 32-byte key length)"` |
+| E-CFG-014 | `admission_key_file` is present but empty or whitespace-only | broken | 1 | `"config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default"` |
+| E-CFG-015 | `admission_state_file` is present but empty or whitespace-only | broken | 1 | `"config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset"` |
+| E-CFG-016 | `router_management_endpoints[N].addr` is not a valid `host:port` | broken | 1 | `"config error: router_management_endpoints[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'"` |
 
 ## Edge Cases
 
@@ -264,6 +337,12 @@ Daemon startup config parsing failure; config reload with invalid config.
 | EC-012 | `authorized_operator_keys: ["not-pem-data", "-----BEGIN PUBLIC KEY-----\nAAA\n-----END PUBLIC KEY-----\n"]` (first entry invalid, second invalid key type/length) | E-CFG-009 reported for each invalid entry with its index (0-based). All errors collected before exit 1. |
 | EC-013 | `authorized_operator_keys: []` (empty list) | Validate() accepts; daemon starts in bootstrap mode (daemon's own key is the authorized operator key). No error. |
 | EC-014 | `management_socket` field absent entirely | Validate() accepts; daemon startup code applies mode-specific default path (e.g., `/run/switchboard-router.sock` for router). No validation error. |
+| EC-015 | `admission_key_file: "   "` (whitespace-only value) | E-CFG-014 "config error: admission_key_file: must not be empty..."; exit 1. Exhaustive error collection with other errors. |
+| EC-016 | `admission_key_file` absent entirely | Validate() accepts; access-mode daemon startup applies default path `/var/lib/switchboard/access-admission-identity.pem`. No validation error. |
+| EC-017 | `admission_key_file` set to a valid non-whitespace path string | Validate() accepts regardless of whether the file exists (no I/O). |
+| EC-018 | `admission_state_file: "   "` (whitespace-only value) | E-CFG-015 "config error: admission_state_file: must not be empty..."; exit 1. |
+| EC-019 | `router_management_endpoints` has two entries; first valid, second `addr: "notvalid"` | E-CFG-016 naming index 1 (0-based); all errors collected before exit 1 (exhaustive reporting). |
+| EC-020 | `router_management_endpoints: []` or field absent | Validate() accepts; no push replication; control writes succeed locally only. |
 
 ## Canonical Test Vectors
 
@@ -283,6 +362,15 @@ Daemon startup config parsing failure; config reload with invalid config.
 | `management_socket` field absent | Validate() accepts; daemon default applied at startup; exit 0 | happy-path (PC-10, optional field) |
 | `authorized_operator_keys: ["not-pem"]` | E-CFG-009 "config error: authorized_operator_keys[0]: entry is not a valid Ed25519 PEM PUBLIC KEY block..."; exit 1 | error (PC-11, v1.6) |
 | `authorized_operator_keys: []` or field absent | Validate() accepts; bootstrap mode; exit 0 | happy-path (PC-11, bootstrap) |
+| `admission_key_file: "   "` (whitespace) | E-CFG-014 "config error: admission_key_file: must not be empty..."; exit 1 | error (PC-12, v2.1) |
+| `admission_key_file` absent | Validate() accepts; access daemon uses default path at startup; exit 0 | happy-path (PC-12, optional field) |
+| `admission_key_file: "/var/lib/switchboard/foo.pem"` (non-whitespace, file may not exist) | Validate() accepts (no I/O); exit 0 | happy-path (PC-12, no-I/O rule) |
+| `admission_state_file: "   "` (whitespace) | E-CFG-015 "config error: admission_state_file: must not be empty..."; exit 1 | error (PC-13, v2.1) |
+| `admission_state_file` absent | Validate() accepts; router starts with empty keyset; exit 0 | happy-path (PC-13, optional field) |
+| `router_management_endpoints: [{addr: "notvalid"}]` | E-CFG-016 "config error: router_management_endpoints[0].addr: 'notvalid' is not a valid host:port..."; exit 1 | error (PC-14, v2.1) |
+| `router_management_endpoints: [{addr: "10.0.0.2:9093"}]` | Validate() accepts; exit 0 | happy-path (PC-14, v2.1) |
+| `router_management_endpoints: [{addr: "0.0.0.0:9093"}]` | Validate() accepts (no loopback restriction); exit 0 | happy-path (PC-14, Ruling 9) |
+| `router_management_endpoints: []` or field absent | Validate() accepts; no push replication; exit 0 | happy-path (PC-14, empty list) |
 
 ## Verification Properties
 
@@ -298,6 +386,9 @@ Daemon startup config parsing failure; config reload with invalid config.
 | test-as-evidence | authorized_operator_keys invalid PEM entry rejected with E-CFG-009 (per-index); empty list accepted | unit (S-W5.01 AC-012; no formal VP assigned) | |
 | test-as-evidence | Validated config applied to daemon subsystems (tick_interval → halfchannel.New; not hardcoded default) | unit/integration (S-6.01 AC-009; no formal VP assigned) | |
 | test-as-evidence | Config reload failure leaves daemon on previous config (Inv-3/EC-004: fail-closed reload) | integration (S-7.04-FU-SIGHUP-RELOAD AC-002; no formal VP assigned) | VP-028/VP-029 do NOT cover the SIGHUP reload integration path. This property is a new integration-test obligation for S-7.04-FU-SIGHUP-RELOAD. |
+| test-as-evidence | `admission_key_file` present-and-blank rejected with E-CFG-014; absent accepted (no I/O in Validate) | unit (S-BL.NODE-ADMISSION-PROVISIONING AC; no formal VP assigned) | |
+| test-as-evidence | `admission_state_file` present-and-blank rejected with E-CFG-015; absent accepted | unit (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | |
+| test-as-evidence | `router_management_endpoints[N].addr` invalid host:port rejected with E-CFG-016 (exhaustive); empty list and valid host:port accepted; no loopback restriction (any bind accepted) | unit (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | |
 
 ## Traceability
 
@@ -306,7 +397,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
 | L2 Domain Invariants | (none directly; anchored to FM-010 via capability CAP-028) |
 | Architecture Module | internal/config |
-| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation) |
+| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation); S-BL.NODE-ADMISSION-PROVISIONING (PC-12: admission_key_file validation); S-BL.ADMISSION-SYNC-WIRE (PC-13: admission_state_file validation; PC-14: router_management_endpoints validation) |
 | Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. The config-application postcondition (PC-9) is a necessary corollary: validation is meaningless if the validated config is then discarded. Anchored to FM-010 (deployment misconfig). |
 
 ## Related BCs
@@ -323,6 +414,8 @@ Daemon startup config parsing failure; config reload with invalid config.
 
 S-6.01 — AC-001 through AC-009 trace to postconditions in this BC.
 S-W5.01 — AC-011 (PC-10: management_socket) and AC-012 (PC-11: authorized_operator_keys) trace to v1.6 postconditions in this BC.
+S-BL.NODE-ADMISSION-PROVISIONING — ACs for PC-12 (admission_key_file validation, E-CFG-014) trace to v2.1 postconditions in this BC.
+S-BL.ADMISSION-SYNC-WIRE — ACs for PC-13 (admission_state_file validation, E-CFG-015) and PC-14 (router_management_endpoints validation, E-CFG-016) trace to v2.1 postconditions in this BC.
 
 ## VP Anchors
 
@@ -334,6 +427,7 @@ Both VPs scope strictly to Config.Validate behavior in internal/config. They do 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.1 | 2026-07-15 | Identity-cluster BC groundwork consolidated amendment (items N3+A3+A4): PC-12 added (`admission_key_file`: non-empty when present, no file I/O in Validate, E-CFG-014); PC-13 added (`admission_state_file`: non-empty when present, E-CFG-015); PC-14 added (`router_management_endpoints`: each `addr` validated as `host:port` per E-CFG-016, NO loopback restriction per Ruling 9 — ADR-012 is the auth boundary, control-mode-only field); E-CFG-014/015/016 added to Error Codes table; EC-015 through EC-020 added; Canonical Test Vectors for all three fields added; test-as-evidence VP rows added. Added `inputs`/`input-hash`/`extracted_from` frontmatter fields (template conformance). |
 | 2.0 | 2026-07-06 | Governance-only: narrowed Verification Properties table to correct pre-existing authoring drift (PO ruling S-6.04-disposition-ruling.md §"Spec Note: BC-2.09.003 Verification Properties Table Drift"). VP-028 and VP-029 were overstated as covering all 9 VP-table rows including "Config reload failure leaves daemon on previous config" and host:port/drain/keepalive/management/keys properties. Both VPs scope strictly to Config.Validate startup-validation behavior (tick_interval out-of-range; missing required fields). Table rebuilt: two rows retain VP-028/VP-029 citations for the properties they actually prove; all other rows reclassified as test-as-evidence with owning story/AC citations. Reload-integration fail-closed property (Inv-3/EC-004) explicitly annotated as S-7.04-FU-SIGHUP-RELOAD AC-002 obligation with no formal VP. No PC/EC/Inv semantic changes; no runtime behavior implied. Governance-leaf change. |
 | 1.9 | 2026-07-02 | Phase 5 Pass 3 remediation Path B follow-up: error-taxonomy v4.3 reconciled E-CFG-002 (private-key-export → E-CFG-011) and E-CFG-006 (sbctl --yes → E-CFG-012). Collision-flag annotation row removed from Error Codes table — pre-existing inconsistency resolved. Closes DRIFT-P5P3-A007-ECFG-COLLISION (BC-2.09.003 side). Refs F-P5P3-A-007. |
 | 1.8 | 2026-07-02 | Reconcile listen_addr DEFERRED-APPLICATION row — previously said "No current owner story" contradicting STORY-INDEX line 135 which lists S-BL.NI as the owner. Row now correctly names S-BL.NI. Closes Phase 5 Pass 2 F-P5P2-B-002. |
