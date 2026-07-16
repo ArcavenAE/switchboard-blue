@@ -50,6 +50,29 @@ import (
 
 // ---- helpers ----------------------------------------------------------------
 
+// admissionTempDir creates a temporary directory and returns its path. It
+// applies the same execute-bit-restore guard as tempSockPath in mgmt_wire_test.go:
+// listenUnixMgmt sets the process-global umask to 0177 inside umaskMu during
+// bind(2). If a concurrent goroutine calls os.MkdirTemp (which t.TempDir uses
+// internally) while the umask is at 0177, the resulting directory has mode 0600
+// (no execute bit). Any subsequent os.MkdirAll / os.WriteFile / os.Chmod call
+// inside the directory then fails with EPERM. The Chmod here restores the execute
+// bits; the key-file mode assertions remain valid because they assert on the FILE,
+// not the enclosing temp directory.
+func admissionTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "sb-adm-")
+	if err != nil {
+		t.Fatalf("admissionTempDir: MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	// Restore execute + write bits stripped by a concurrent umask=0177 window.
+	if fi, statErr := os.Lstat(dir); statErr == nil && fi.Mode().Perm()&0o100 == 0 {
+		_ = os.Chmod(dir, fi.Mode().Perm()|0o300) // restore exec + write
+	}
+	return dir
+}
+
 // requireAdmissionNoError fails the test if err is non-nil.
 func requireAdmissionNoError(t *testing.T, err error) {
 	t.Helper()
@@ -132,7 +155,7 @@ func parsePKCS8Ed25519FromFile(t *testing.T, path string) ed25519.PrivateKey {
 func TestAdmissionKeypair_FirstRun_FileAbsent_KeypairGeneratedAtomically(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// File must not exist before the call.
@@ -168,7 +191,7 @@ func TestAdmissionKeypair_FirstRun_FileAbsent_KeypairGeneratedAtomically(t *test
 func TestAdmissionKeypair_FirstRun_ParentDirAbsent_MkdirAll(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	// Nested subdir that does not yet exist.
 	keyPath := filepath.Join(dir, "nested", "subdir", "admission.pem")
 
@@ -200,7 +223,7 @@ func TestAdmissionKeypair_FirstRun_ParentDirAbsent_MkdirAll(t *testing.T) {
 func TestAdmissionKeypair_FirstRun_GeneratedPKCS8PEMParseable(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	var stderr bytes.Buffer
@@ -226,7 +249,7 @@ func TestAdmissionKeypair_FirstRun_GeneratedPKCS8PEMParseable(t *testing.T) {
 func TestAdmissionKeypair_FirstRun_Mode0600(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	var stderr bytes.Buffer
@@ -251,7 +274,7 @@ func TestAdmissionKeypair_FirstRun_Mode0600(t *testing.T) {
 func TestAdmissionKeypair_SubsequentStart_LoadedKeyMatchesGenerated(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// First run: generate and write the key.
@@ -282,7 +305,7 @@ func TestAdmissionKeypair_SubsequentStart_LoadedKeyMatchesGenerated(t *testing.T
 func TestAdmissionKeypair_SubsequentStart_PublicKeyStableAcrossRestarts(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// First run.
@@ -314,7 +337,7 @@ func TestAdmissionKeypair_SubsequentStart_PublicKeyStableAcrossRestarts(t *testi
 func TestAdmissionKeypair_FailClosed_CorruptPEM(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// Write corrupt / truncated data (not a valid PEM block).
@@ -340,7 +363,7 @@ func TestAdmissionKeypair_FailClosed_CorruptPEM(t *testing.T) {
 func TestAdmissionKeypair_FailClosed_NonEd25519Key(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// Generate an RSA key and write it as PKCS#8 PEM.
@@ -376,7 +399,7 @@ func TestAdmissionKeypair_FailClosed_NonEd25519Key(t *testing.T) {
 func TestAdmissionKeypair_PermissionsWarning_BroaderThan0600(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// Generate and write a valid key at 0644 (broader than 0600).
@@ -407,7 +430,7 @@ func TestAdmissionKeypair_PermissionsWarning_BroaderThan0600(t *testing.T) {
 func TestAdmissionKeypair_NoPermissionsWarning_Exactly0600(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	_, privKey, err := ed25519.GenerateKey(rand.Reader)
@@ -436,7 +459,7 @@ func TestAdmissionKeypair_NoPermissionsWarning_Exactly0600(t *testing.T) {
 func TestAdmissionKeypair_StartupInfoLog_FirstRun_ContainsBase64UrlPubkey(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	var stderr bytes.Buffer
@@ -467,7 +490,7 @@ func TestAdmissionKeypair_StartupInfoLog_FirstRun_ContainsBase64UrlPubkey(t *tes
 func TestAdmissionKeypair_StartupInfoLog_SubsequentStart_ContainsBase64UrlPubkey(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	// First run: generate the key.
@@ -515,7 +538,7 @@ func TestAdmissionKeypair_StartupInfoLog_SubsequentStart_ContainsBase64UrlPubkey
 func TestAccessDaemon_LocalNodeAdmissionPubkey_PopulatedFrom_LoadedKeypair(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	var stderr bytes.Buffer
@@ -557,7 +580,7 @@ func TestAccessDaemon_LocalNodeAdmissionPubkey_PopulatedFrom_LoadedKeypair(t *te
 func TestAccessDaemon_LocalNodeAdmissionPubkey_NonNilLength32(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
 	var stderr bytes.Buffer
