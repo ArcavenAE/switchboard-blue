@@ -1,11 +1,11 @@
 ---
 artifact_id: S-BL.ADMISSION-SYNC-WIRE-rulings
 document_type: rulings
-version: "1.1"
+version: "1.2"
 status: draft
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
-modified: 2026-07-15T00:00:00Z
+modified: 2026-07-16T00:00:00Z
 related_stories:
   - S-BL.ADMISSION-SYNC-WIRE
 related_architecture:
@@ -21,12 +21,13 @@ related_code:
   - internal/mgmt/mgmt.go
 ---
 
-# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.1
+# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.2
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-16 | Contradiction fix: Ruling 1 / Decision 2 wire encoding of `svtn_id` corrected from "SVTN name string" to "32 lowercase hex characters encoding the 16-byte `[16]byte` UUID". Code-verified facts: (1) `SVTN.ID` is `crypto/rand`-generated at `svtnmgmt.go:197–199`, not name-derived; (2) `hmac.DeriveKey` (`hmac.go:130`) and `frame.DeriveNodeAddress` (`address.go:11`) both consume the exact `[16]byte` as salt/input — any mismatch produces wrong FrameAuthKey/NodeAddr, defeating `AdmitNode`; (3) `runRouter` (`mgmt_wire.go:491`) constructs no `SVTNManager`, so the router has no name→ID map; (4) `makeRegisterHandler` (`admin_handlers.go:185`) holds `m *svtnmgmt.SVTNManager` with `SVTNByName(name) (SVTN, bool)` at `svtnmgmt.go:608` — control resolves name→ID before putting anything on the wire. `admissionSyncer` interface updated to take `svtnID [16]byte` instead of `svtnName string` (Decision 5 / Ruling 2); admin handlers resolve name→ID at the call site via `m.SVTNByName`. Summary table `svtn_id` row updated. All other rulings unchanged. |
 | 1.1 | 2026-07-15 | Ruling 9 added: router TCP mgmt listener security posture resolved by human ratification; summary table updated; story confirmed decomposition-ready (POL-001). |
 | 1.0 | 2026-07-15 | Initial elaboration rulings — Rulings 1–8. |
 
@@ -98,15 +99,24 @@ role-exclusion remain fully intact — the push handlers are control→router
 internal replication, not operator-facing RPCs).
 
 **Ruling on args encoding.** Use the same encoding conventions as existing
-admin handlers:
-- `svtn_id` — string SVTN name (the human-readable name that SVTNManager
-  resolves to a `[16]byte` internally; control already has the name in the
-  admin handler args; passing it through avoids a name↔ID translation step
-  on the router side; the router's `SVTNManager` handles the same name-to-ID
-  resolution). If the router has no SVTN by that name registered yet (a
-  legitimately possible race on fresh install), the handler creates the entry
-  rather than failing — `RegisterKey` must be idempotent from the router's
-  perspective.
+admin handlers, with the following correction to wire `svtn_id`:
+- `svtn_id` — **32 lowercase hex characters encoding the 16-byte `[16]byte`
+  SVTN UUID** (e.g. `"a3f2b1c9..."`). This is the VERIFIED-CORRECT encoding.
+  Rationale: (a) `SVTN.ID` is `crypto/rand`-generated (`svtnmgmt.go:197–199`),
+  not name-derived; (b) `hmac.DeriveKey` (`hmac.go:130`) and
+  `frame.DeriveNodeAddress` (`address.go:11`) both consume the exact `[16]byte`
+  value — a name-based encoding would produce a different HKDF salt and SHA-256
+  input, causing FrameAuthKey and NodeAddr to diverge between control and router,
+  defeating `AdmitNode`; (c) the router (`runRouter`, `mgmt_wire.go:491`) has no
+  `SVTNManager` and therefore has no name→ID resolution path; (d) the admin
+  handler on control (`makeRegisterHandler`, `admin_handlers.go:185`) already
+  holds `m *svtnmgmt.SVTNManager`, which exposes `SVTNByName(name) (SVTN, bool)`
+  (`svtnmgmt.go:608`), allowing name→`[16]byte` resolution at the call site
+  before anything goes on the wire. The admin handlers resolve name→`[16]byte`
+  BEFORE calling `admissionSyncer.Push*`, and the syncer methods accept `[16]byte`
+  directly (see corrected interface, Ruling 2). If the router has no SVTN record
+  for the given `svtnID` yet (legitimately possible on fresh install),
+  `RegisterKey` creates the entry idempotently.
 - `pubkey_openssh` — base64-encoded Ed25519 public key in OpenSSH wire format,
   identical to the existing `admin.key.register` / `admin.key.revoke` encoding.
 - `role` — canonical role string ("control", "console", "access") identical to
@@ -251,7 +261,7 @@ signature extension — a new parameter `syncClient admissionSyncer` (interface,
 see below) alongside the existing `m *svtnmgmt.SVTNManager` and
 `ops *mgmt.OperatorKeySet` parameters.
 
-**Interface shape (for testability and nil-safety):**
+**Interface shape (for testability and nil-safety) — CORRECTED in v1.2:**
 
 ```go
 // admissionSyncer is the interface the four admin write handlers use to push
@@ -259,13 +269,30 @@ see below) alongside the existing `m *svtnmgmt.SVTNManager` and
 // A nil value is explicitly permitted — nil means "no routers configured"
 // (single-router co-located deployment); methods are no-ops.
 // Production: *admissionSyncClient. Tests: a mock/stub.
+//
+// svtnID is the resolved [16]byte UUID — NOT the human-readable SVTN name.
+// The admin handler (which holds *svtnmgmt.SVTNManager) resolves name→[16]byte
+// via m.SVTNByName before calling Push*. The router has no SVTNManager and
+// therefore no name→ID map; it must receive the [16]byte directly.
 type admissionSyncer interface {
-    PushRegisterKey(ctx context.Context, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) error
-    PushRevokeKey(ctx context.Context, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole, confirm bool) error
-    PushSetKeyExpiry(ctx context.Context, svtnName string, pubkey ed25519.PublicKey, ttl time.Duration) error
-    PushRemoveSVTN(ctx context.Context, svtnName string) error
+    PushRegisterKey(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, role admission.KeyRole) error
+    PushRevokeKey(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, role admission.KeyRole, confirm bool) error
+    PushSetKeyExpiry(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, ttl time.Duration) error
+    PushRemoveSVTN(ctx context.Context, svtnID [16]byte) error
 }
 ```
+
+**Call-site pattern in admin handlers** (e.g., `makeRegisterHandler`):
+```go
+// After m.RegisterKey(a.SVTNName, pubkey, role) succeeds:
+svtn, ok := m.SVTNByName(a.SVTNName)
+if ok && syncClient != nil {
+    _ = syncClient.PushRegisterKey(ctx, svtn.ID, pubkey, role) // failure advisory
+}
+```
+This keeps the admin handler's existing `a.SVTNName` arg structure intact and
+resolves name→ID via the SVTNManager that is already present in the handler closure.
+The resolved `[16]byte` is then passed through the wire as a 32-char hex string.
 
 Nil check: if `syncClient == nil`, the push is skipped. This preserves the
 existing behavior for the router and console modes (which call `BuildAdminHandlers`
@@ -614,6 +641,7 @@ interaction is needed.
 | Item | Ruling |
 |---|---|
 | Push RPC protocol | Existing `internal/mgmt` JSON-over-TCP protocol; new `internal.admission.*` command names; same encoding as `admin.*` handlers |
+| `svtn_id` wire encoding | **32 lowercase hex chars = `[16]byte` UUID** (NOT the human-readable SVTN name). Control resolves name→`[16]byte` via `m.SVTNByName` before calling `admissionSyncer.Push*`. Router has no `SVTNManager`; receives hex directly and calls `ks.RegisterKey(svtnID [16]byte, ...)`. |
 | Push commands | `internal.admission.register`, `internal.admission.revoke`, `internal.admission.expire`, `internal.admission.remove-svtn` |
 | Push-vs-snapshot | Per-write delta push + full-snapshot push on control startup |
 | Control config field | `RouterManagementEndpoints []RouterManagementEndpoint` in `config.Config`, twin of `UpstreamRouters` |
@@ -621,7 +649,7 @@ interaction is needed.
 | Push-failure behavior | Log WARN; never roll back control write; next startup push will resync |
 | Router TCP mgmt listener | Router needs a TCP mgmt endpoint; configured by pointing `management_socket` at a TCP `host:port` in the router's config; control's `RouterManagementEndpoints` references this address |
 | Router config field | `AdmissionStateFile string` in `config.Config` |
-| Snapshot format | JSON; `schema_version: 1`; fields: svtn_id (hex), pubkey (base64url), role, revoked, expiry; no admitted, no FrameAuthKey, no NodeAddr (all derived) |
+| Snapshot format | JSON; `schema_version: 1`; fields: svtn_id (32 lowercase hex chars = 16-byte UUID `[16]byte`), pubkey (base64url), role, revoked, expiry; no admitted, no FrameAuthKey, no NodeAddr (all derived) |
 | Snapshot write | Atomic: write temp + rename; on each successful push-handler invocation |
 | Snapshot load | At startup if file present and valid; fail-closed on corrupt; missing file → empty keyset |
 | Full-vs-split scoping | FULL material sync; no SVTN-presence-only slice |
