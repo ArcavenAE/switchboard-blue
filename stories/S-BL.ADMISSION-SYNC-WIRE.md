@@ -29,7 +29,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'
-input-hash: "71274fe"
+input-hash: "0f14e05"
 traces_to: 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.05.009
