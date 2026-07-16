@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -255,6 +256,21 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	admissionKeyPath := defaultAdmissionKeyFile
 	if cfg != nil && cfg.AdmissionKeyFile != "" {
 		admissionKeyPath = cfg.AdmissionKeyFile
+	}
+
+	// Tilde expansion — mirrors loadEd25519Key (cmd/sbctl/client.go, BC-2.07.003 EC-007):
+	// "~" exactly → home dir; "~/" prefix → home dir + remainder; "~username" → literal.
+	if admissionKeyPath == "~" || strings.HasPrefix(admissionKeyPath, "~/") {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return fmt.Errorf("access: resolve admission key path %s: home directory unavailable: %w",
+				admissionKeyPath, homeErr)
+		}
+		if admissionKeyPath == "~" {
+			admissionKeyPath = home
+		} else {
+			admissionKeyPath = home + admissionKeyPath[1:]
+		}
 	}
 
 	var disc *discovery.Discovery
