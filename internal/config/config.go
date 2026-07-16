@@ -297,13 +297,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): E-CFG-014 — AC-001 / PC-12
-	// (BC-2.09.003 v2.1 PC-12; BC-2.09.004 PC-1/PC-2).
-	// When admission_key_file is non-empty but whitespace-only, return E-CFG-014.
-	// This stub is present but never returns an error — the whitespace-rejection
-	// test (TestConfig_Validate_AdmissionKeyFile_WhitespaceOnlyRejectsE_CFG_014)
-	// MUST FAIL at Red Gate. Implementation: replace this TODO with the real check.
-	_ = c.AdmissionKeyFile // field referenced to suppress "unused field" confusion
+	// AC-001 / PC-12 / E-CFG-014 (BC-2.09.003 v2.1 PC-12; BC-2.09.004 PC-1/PC-2):
+	// When admission_key_file is non-empty but whitespace-only, reject it.
+	// Absent (empty string) is accepted — daemon startup applies the default path.
+	// No file I/O is performed here (ARCH-06 §Config purity contract).
+	if c.AdmissionKeyFile != "" && strings.TrimSpace(c.AdmissionKeyFile) == "" {
+		failures = append(failures, "config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default")
+	}
 
 	if len(failures) == 0 {
 		return nil
