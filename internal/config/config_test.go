@@ -2507,8 +2507,8 @@ func TestConfig_Validate_AdmissionKeyFile_ValidPathAccepted(t *testing.T) {
 // an error containing E-CFG-014 with the canonical error message
 // (BC-2.09.003 v2.1 PC-12; BC-2.09.004 PC-1; E-CFG-014).
 //
-// This test MUST FAIL at Red Gate because the current stub in config.go does not
-// implement the whitespace-rejection check (see the TODO comment).
+// This test passes against the delivered E-CFG-014 implementation in config.go,
+// which rejects whitespace-only admission_key_file values with the canonical message.
 func TestConfig_Validate_AdmissionKeyFile_WhitespaceOnlyRejectsE_CFG_014(t *testing.T) {
 	t.Parallel()
 
@@ -2599,8 +2599,8 @@ func TestConfig_Validate_AdmissionKeyFile_NoIOPerformed(t *testing.T) {
 // both errors are returned together — exhaustive collection is preserved
 // (BC-2.09.003 Invariant 4; AC-001 PC-5).
 //
-// This test MUST FAIL at Red Gate (admission_key_file whitespace check not yet
-// implemented, so only the tick_interval error would appear, not E-CFG-014).
+// This test passes against the delivered E-CFG-014 implementation: both the
+// tick_interval error and the E-CFG-014 admission_key_file error are collected.
 func TestConfig_Validate_AdmissionKeyFile_ExhaustiveErrorCollection(t *testing.T) {
 	t.Parallel()
 

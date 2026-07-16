@@ -34,6 +34,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -682,7 +683,7 @@ func TestAccessDaemon_LocalNodeAdmissionPubkey_PopulatedFrom_LoadedKeypair(t *te
 	runErr := disc.Run(ctx)
 	if runErr == nil {
 		t.Error("disc.Run must return non-nil error (context.Canceled) when ctx is pre-cancelled")
-	} else if runErr != context.Canceled {
+	} else if !errors.Is(runErr, context.Canceled) {
 		// Any error other than context.Canceled means something went wrong —
 		// e.g., ErrMissingNodeAdmissionPubkey if LocalNodeAdmissionPubkey were empty.
 		t.Errorf("disc.Run returned unexpected error: %v (expected context.Canceled; "+
