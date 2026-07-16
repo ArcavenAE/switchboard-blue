@@ -16,7 +16,14 @@ modified:
       VLR-local admitted-state snapshot (BC-2.05.010) per architect rulings
       decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.1 (all 9 rulings, zero open
       human flags). Leaf prerequisite for S-BL.NODE-IDENTIFY-WIRE. 10 ACs, 8 points.
-version: "1.0"
+  - date: 2026-07-16
+    version: "1.1"
+    change: >
+      Propagate rulings v1.2 svtn_id hex-[16]byte wire encoding fix (admissionSyncer
+      interface svtnName→svtnID [16]byte; Decisions 2/5, AC-003/004/005);
+      BC-2.05.009 ref 1.0→1.1; removed stale free-text input-hash citation from
+      POL-005 note.
+version: "1.1"
 phase: 2
 epic: E-7
 wave: backlog
@@ -29,7 +36,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'
-input-hash: "0f14e05"
+input-hash: "dc9752c"
 traces_to: 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.05.009
@@ -59,7 +66,7 @@ risk_mitigations: []
 acceptance_criteria_count: 10
 inputDocuments:
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'   # v1.1 — BINDING. All 9 rulings: push RPC via internal/mgmt JSON-over-TCP; four internal.admission.* commands; control dials routers (TCP, dial-on-demand); retry-with-backoff (100ms/2x/10s/5); push failure advisory WARN no-rollback; RouterManagementEndpoints config field; admission_state_file config field; JSON snapshot schema_version:1; router TCP listener no loopback restriction (Ruling 9, ADR-012 is auth boundary); nil-syncer no-op; full-snapshot push on control startup.
-  - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.0 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op.
+  - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.1 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op. Invariant 4 exempts svtn_id from admin-args encoding parity (it is the hex UUID, not the name).
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'  # v1.0 — VLR-local admitted-state snapshot: JSON schema_version:1 format, atomic write-on-receive, load-on-startup, fail-closed-on-corrupt (E-KEY-002), missing-file→empty-keyset, admitted=false invariant, no FrameAuthKey/NodeAddr/nonces stored.
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'  # v2.1 — PC-13 (admission_state_file: non-empty when present, E-CFG-015); PC-14 (router_management_endpoints: each addr host:port, E-CFG-016, NO loopback restriction per Ruling 9).
 ---
@@ -132,6 +139,12 @@ registers these four; control/console/access never register them (ADR-004/AC-004
 Args encoding matches existing `admin.*` handler conventions (same `pubkey_openssh`,
 `role`, `after`, `confirm` conventions).
 
+> **Wire encoding note (rulings v1.2):** The wire `svtn_id` in all four commands is the
+> **32-lowercase-hex-char encoding of the `[16]byte` SVTN UUID** (matching the snapshot
+> schema's `svtns[].svtn_id` field), not the human-readable SVTN name. Control-side admin
+> handlers resolve name→`[16]byte` via `m.SVTNByName(name).ID` before constructing the push
+> call. BC-2.05.009 Invariant 4 exempts `svtn_id` from admin-args encoding parity.
+
 ### Decision 3 — Push failure is advisory; no rollback (Ruling 2)
 
 Push failure (connection refused, timeout, auth failure, retry exhaustion) is logged at `WARN`
@@ -148,16 +161,17 @@ from scratch.
 
 ```go
 type admissionSyncer interface {
-    PushRegisterKey(ctx context.Context, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole) error
-    PushRevokeKey(ctx context.Context, svtnName string, pubkey ed25519.PublicKey, role admission.KeyRole, confirm bool) error
-    PushSetKeyExpiry(ctx context.Context, svtnName string, pubkey ed25519.PublicKey, ttl time.Duration) error
-    PushRemoveSVTN(ctx context.Context, svtnName string) error
+    PushRegisterKey(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, role admission.KeyRole) error
+    PushRevokeKey(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, role admission.KeyRole, confirm bool) error
+    PushSetKeyExpiry(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, ttl time.Duration) error
+    PushRemoveSVTN(ctx context.Context, svtnID [16]byte) error
 }
 ```
 
 A nil `admissionSyncer` passed to `BuildAdminHandlers` skips the push silently (no error, no
 panic). Only control mode passes a non-nil `*admissionSyncClient`. Router/console/access modes
-pass nil — unchanged from today.
+pass nil — unchanged from today. Control-side admin handlers resolve name→`[16]byte` via
+`m.SVTNByName(name).ID` at the call site before calling `Push*`.
 
 ### Decision 6 — Snapshot format: JSON, schema_version:1 (Ruling 3)
 
@@ -284,7 +298,8 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 **Postconditions:**
 1. After a successful `admin.key.register` call on the control-mode daemon (which writes to
    `SVTNManager`/`AdmittedKeySet`), the `admissionSyncClient.PushRegisterKey` is called with
-   the same `(svtnName, pubkey, role)` before the handler returns its response to the caller.
+   `(svtnID, pubkey, role)` — where `svtnID` is the `[16]byte` UUID resolved from the name via
+   `m.SVTNByName(name).ID` — before the handler returns its response to the caller.
 2. If the push to a configured router endpoint fails (connection refused, retry exhaustion),
    the control-side write remains committed (not rolled back). A WARN log is emitted with
    endpoint address and error. The handler response to `sbctl` reflects success.
@@ -303,9 +318,9 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 **BC Anchor:** BC-2.05.009 Postconditions 1 and 2.
 
 **Postconditions:**
-1. `admin.key.revoke` → `admissionSyncer.PushRevokeKey` called after successful control write.
-2. `admin.key.expire` → `admissionSyncer.PushSetKeyExpiry` called after successful control write.
-3. `admin.svtn.destroy` → `admissionSyncer.PushRemoveSVTN` called after successful control write.
+1. `admin.key.revoke` → `admissionSyncer.PushRevokeKey(ctx, svtnID, pubkey, role, confirm)` called after successful control write; `svtnID` is `[16]byte` resolved via `m.SVTNByName(name).ID`.
+2. `admin.key.expire` → `admissionSyncer.PushSetKeyExpiry(ctx, svtnID, pubkey, ttl)` called after successful control write; `svtnID` resolved same way.
+3. `admin.svtn.destroy` → `admissionSyncer.PushRemoveSVTN(ctx, svtnID)` called after successful control write; `svtnID` resolved same way.
 4. For each: push failure is advisory (WARN log, no rollback, handler returns success to caller).
 5. For each: nil `admissionSyncer` is a no-op with no error.
 
@@ -323,7 +338,8 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 **Postconditions:**
 1. When the router receives `internal.admission.register` with `{svtn_id, pubkey_openssh, role}`,
-   it calls `ks.RegisterKey(svtnID, pubkey, role)`. The resulting keyset entry has `admitted=false`.
+   it hex-decodes the 32-lowercase-hex-char `svtn_id` to `[16]byte` and calls
+   `ks.RegisterKey(svtnID, pubkey, role)`. The resulting keyset entry has `admitted=false`.
 2. After the successful `RegisterKey` call, the VLR-local snapshot is written atomically to the
    configured `admission_state_file` path: write serialised JSON to `<path>.tmp`, then `os.Rename`.
 3. If the write fails (disk full, permission denied), a WARN is logged. The push handler returns
@@ -450,6 +466,18 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 ---
 
+## Architecture Mapping
+
+| Component | Module | Pure/Effectful |
+|-----------|--------|---------------|
+| admissionSyncer interface | cmd/switchboard/admission_sync_client.go | pure-core |
+| admissionSyncClient | cmd/switchboard/admission_sync_client.go | effectful-shell |
+| wireAdmissionSyncHandlers | cmd/switchboard/admission_sync_wire.go | effectful-shell |
+| Snapshot serialization | cmd/switchboard/admission_sync_snapshot.go | pure-core |
+| Config validation (E-CFG-015/016) | internal/config/config.go | pure-core |
+| runRouter startup load | cmd/switchboard/router.go | effectful-shell |
+| runControl PushFullSnapshot | cmd/switchboard/control.go | effectful-shell |
+
 ## Non-Goals
 
 - **NODE_IDENTIFY wire opcode / Router.BindInterface** — that is `S-BL.NODE-IDENTIFY-WIRE`.
@@ -485,6 +513,18 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 | EC-010 | `router_management_endpoints: [{addr: "0.0.0.0:9093"}]` | Validate() accepts; non-loopback bind used; startup INFO log of bound address. |
 | EC-011 | Snapshot `schema_version: 999` on router startup | E-KEY-002; `runRouter` returns error; daemon exits 1. |
 
+## Purity Classification
+
+| Module | Classification | Justification |
+|--------|---------------|---------------|
+| `admissionSyncer` interface | pure-core | Defines behaviour only; no I/O |
+| `admissionSyncClient` | effectful-shell | Dials TCP, sends JSON RPCs, retries |
+| `wireAdmissionSyncHandlers` | effectful-shell | Registers handlers that mutate keyset and write snapshot to disk |
+| Snapshot marshal/unmarshal | pure-core | JSON encode/decode with no I/O side-effects |
+| `Config.Validate()` extensions | pure-core | String validation; no file I/O |
+| `runRouter` snapshot load | effectful-shell | Reads file from disk on startup |
+| `runControl` PushFullSnapshot | effectful-shell | Iterates keyset, dials routers, sends RPCs |
+
 ## File-Change List
 
 | File | Change | Justification |
@@ -512,6 +552,28 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 | Tests (10 ACs, ~25 test functions, including two-mgmt-server integration tests) | ~700 tokens |
 | **Overall** | ~1,560 tokens — this story is 8-point scope; the token budget is consistent with that |
 
+## Tasks (MANDATORY)
+
+1. [ ] Write failing tests for AC-001 (config validation E-CFG-015 / E-CFG-016) — test-writer
+2. [ ] Write failing tests for AC-002 (handler registration on router, not on control) — test-writer
+3. [ ] Write failing tests for AC-003/AC-004 (push called after control write; nil no-op) — test-writer
+4. [ ] Write failing tests for AC-005 (router handler populates keyset + snapshot write) — test-writer
+5. [ ] Write failing tests for AC-006 (snapshot JSON round-trip) — test-writer
+6. [ ] Write failing tests for AC-007 (startup load semantics: absent / valid / corrupt) — test-writer
+7. [ ] Write failing tests for AC-008 (non-loopback bind; startup INFO log) — test-writer
+8. [ ] Write failing tests for AC-009 (PushFullSnapshot on control startup) — test-writer
+9. [ ] Write failing tests for AC-010 (SIGHUP endpoint-list update) — test-writer
+10. [ ] Verify Red Gate: `go test ./...` fails with compile or test failures for all ACs
+11. [ ] Implement `internal/config` fields + `Config.Validate()` extensions — implementer
+12. [ ] Implement `admission_sync_client.go` (interface + retry client + PushFullSnapshot) — implementer
+13. [ ] Implement `admission_sync_wire.go` (four handler registrations) — implementer
+14. [ ] Implement snapshot serialization/deserialization — implementer
+15. [ ] Wire push calls into `admin_handlers.go` — implementer
+16. [ ] Wire `runRouter` startup load + non-loopback bind log — implementer
+17. [ ] Wire `runControl` client construction + PushFullSnapshot + SIGHUP reload — implementer
+18. [ ] Run `go test ./... -race`; confirm all AC tests pass
+19. [ ] Update STATE.md
+
 ## Architecture Compliance Rules
 
 | Rule | Requirement | Enforcement |
@@ -525,6 +587,34 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 | Ruling 9 | No `isMgmtLoopbackHost` guard on router-mode TCP management endpoints | Verified by AC-008 test `TestRouterMgmtListener_NonLoopbackBindAccepted` |
 | BC-2.05.010 Invariant 2 | Loaded entries have `admitted=false` | Verified by AC-007 test `TestRouterStartup_LoadedEntries_AdmittedFalse` |
 
+## Library & Framework Requirements (MANDATORY)
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Go | 1.25.4 (per `go.mod`) | Language runtime — all new files are Go |
+| `crypto/ed25519` | stdlib | Ed25519 key types used in `admissionSyncer` interface |
+| `encoding/json` | stdlib | Snapshot serialization/deserialization |
+| `time` | stdlib | Retry backoff delays; RFC3339 timestamp encoding |
+| `os` | stdlib | Atomic snapshot write (`os.Rename`) and file I/O on startup |
+| `net` | stdlib | TCP dial-on-demand to router management endpoints |
+| `internal/admission` | project-local | `AdmittedKeySet`, `KeyRole`, `AdmitNode` |
+| `internal/mgmt` | project-local | `mgmt.Server`, `mgmt.Handler`, JSON-over-TCP protocol |
+| `internal/config` | project-local | `Config`, `validateHostPort` |
+
+## File Structure Requirements (MANDATORY)
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `internal/config/config.go` | modify | Add `RouterManagementEndpoints`, `RouterManagementEndpoint`, `AdmissionStateFile`; extend `Validate()` with E-CFG-015 / E-CFG-016 |
+| `internal/config/config_test.go` | modify | Table-driven tests for AC-001 |
+| `cmd/switchboard/admission_sync_client.go` | create | `admissionSyncer` interface; `admissionSyncClient` with retry-with-backoff; `PushFullSnapshot`; SIGHUP endpoint-list update |
+| `cmd/switchboard/admission_sync_wire.go` | create | `wireAdmissionSyncHandlers`; four `internal.admission.*` handler registrations; per-handler snapshot write |
+| `cmd/switchboard/admission_sync_snapshot.go` | create | Snapshot JSON marshal/unmarshal; atomic write; load-on-startup logic |
+| `cmd/switchboard/admin_handlers.go` | modify | Extend `BuildAdminHandlers` with `syncClient admissionSyncer`; add push calls in four write handlers |
+| `cmd/switchboard/router.go` | modify | Call `wireAdmissionSyncHandlers`; snapshot load on startup; non-loopback bind INFO log |
+| `cmd/switchboard/control.go` | modify | Construct `admissionSyncClient`; pass to `BuildAdminHandlers`; call `PushFullSnapshot`; SIGHUP reload |
+| `cmd/switchboard/admission_sync_test.go` | create | Integration tests for AC-002 through AC-010 |
+
 ## POL-005 Delivery Plan Note
 
 This story is a leaf prerequisite in the identity-cluster (`depends_on: []`). It does not
@@ -537,8 +627,8 @@ code is written. Two-mgmt-server integration tests (AC-003, AC-005, AC-009) requ
 in-process `mgmt.Server` instances using the existing `startMgmtServer` helper + `net.Pipe()`
 or a loopback TCP listener — the same infrastructure `mgmt_wire_test.go` establishes.
 
-The `compute-input-hash --check` command should be run before beginning implementation to
-verify input files have not changed since `input-hash: "3f63125"` was recorded.
+Run `compute-input-hash <artifact> --check` before beginning implementation to verify inputs
+have not changed.
 
 ## Provenance
 
@@ -553,4 +643,5 @@ verify input files have not changed since `input-hash: "3f63125"` was recorded.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-07-16 | Propagate rulings v1.2 svtn_id hex-[16]byte wire encoding fix (admissionSyncer interface svtnName→svtnID [16]byte; Decisions 2/5, AC-003/004/005); BC-2.05.009 ref 1.0→1.1; removed stale free-text input-hash citation from POL-005 note. |
 | 1.0 | 2026-07-15 | Initial full decomposition — 10 ACs, 8 points, leaf prerequisite with `depends_on: []`. Admission-state sync push RPC (BC-2.05.009) + VLR-local JSON snapshot (BC-2.05.010). Per rulings v1.1 (Option A + Ruling 9 router TCP listener). |
