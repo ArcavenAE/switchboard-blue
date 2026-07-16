@@ -187,9 +187,18 @@ func TestAdmissionKeypair_FirstRun_FileAbsent_KeypairGeneratedAtomically(t *test
 // parent directory of the key file does not exist, it is created with os.MkdirAll
 // before writing the key file.
 //
+// NOT t.Parallel(): the keyPath uses a nested subdirectory that production
+// MkdirAll creates. MkdirAll's mode argument (0o700) is masked by the ambient
+// process umask. A concurrent t.Parallel test running listenUnixMgmt can
+// transiently set syscall.Umask(0o177) inside umaskMu, causing MkdirAll to
+// produce 0600 dirs (no execute bit) → the subsequent .tmp write into the subdir
+// fails with EPERM. Running this test sequentially (after TestMain resets the
+// umask to 0022) eliminates the race. Tests whose keyPath is flat (key file
+// directly inside admissionTempDir) are unaffected and remain parallel.
+//
 // Traces: BC-2.09.004 PC-3c; rulings §1.3 first-run — parent dir creation.
 func TestAdmissionKeypair_FirstRun_ParentDirAbsent_MkdirAll(t *testing.T) {
-	t.Parallel()
+	// NOT t.Parallel() — see comment above: umask race on MkdirAll-created dirs.
 
 	dir := admissionTempDir(t)
 	// Nested subdir that does not yet exist.
