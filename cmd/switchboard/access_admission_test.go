@@ -1127,3 +1127,115 @@ func TestDiscoveryRun_StartupOrdering_AfterKeypairAndMgmtServer(t *testing.T) {
 			"(BC-2.04.008 PC-5; disc must start after keypair load)", runErr)
 	}
 }
+
+// ---- F-6 (adversary pass-1): through-runAccess LocalNodeAdmissionPubkey wiring --
+
+// TestRunAccess_WiresLocalNodeAdmissionPubkey_FromLoadedKeypair verifies that
+// runAccess constructs discovery.Config with LocalNodeAdmissionPubkey byte-equal
+// to the raw Ed25519 public key derived from the admission keypair on disk.
+//
+// Strategy: override the newDiscovery seam with a capturing closure that records
+// the discovery.Config argument then delegates to the real discovery.New. A
+// context that cancels right after the keypair load + discovery construction
+// prevents runAccess from blocking on sc.Connect / the full daemon loop.
+//
+// DISCRIMINATOR PROOF: the production call site
+//
+//	disc = newDiscovery(discoveryCfg)
+//
+// with discoveryCfg.LocalNodeAdmissionPubkey = []byte(admissionPubKey) is what
+// this test asserts. Nulling that assignment (LocalNodeAdmissionPubkey: nil)
+// causes the captured config to have a nil/zero-length pubkey and the assertion
+// fails. The test is thus a real discriminator for the wiring regression, replacing
+// the vacuous AC-007 Postcondition 4 (disc.Run never returns ErrMissingNodeAdmissionPubkey
+// because Run returns ctx.Err() before any advertisement is sent — see spec defect note).
+//
+// NOT t.Parallel(): modifies package-level newDiscovery, defaultAdmissionKeyFile,
+// and cfg.AdmissionKeyFile is set to avoid ManagementSocket bind. Global-var
+// override races parallel tests.
+//
+// Traces: BC-2.09.004 PC-3e; adversary F-6; AC-007 through-runAccess coverage.
+func TestRunAccess_WiresLocalNodeAdmissionPubkey_FromLoadedKeypair(t *testing.T) {
+	// NOT t.Parallel() — overrides package-level newDiscovery seam.
+
+	// Pre-generate a known Ed25519 keypair and write PKCS#8 PEM to a temp file.
+	_, knownPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("setup: generate ed25519 keypair: %v", err)
+	}
+	knownPub := knownPriv.Public().(ed25519.PublicKey)
+
+	dir := admissionTempDir(t)
+	keyPath := filepath.Join(dir, "admission.pem")
+	writePKCS8Ed25519PEM(t, keyPath, knownPriv, 0o600)
+
+	// Capture channel: closed with the discovery.Config once newDiscovery is called.
+	type captureResult struct {
+		cfg discovery.Config
+	}
+	captureCh := make(chan captureResult, 1)
+
+	// Override newDiscovery seam. Save/restore via t.Cleanup.
+	origNewDiscovery := newDiscovery
+	t.Cleanup(func() { newDiscovery = origNewDiscovery })
+	newDiscovery = func(cfg discovery.Config) *discovery.Discovery {
+		// Record the config, then delegate to the real constructor so downstream
+		// discovery subsystem is fully initialized (runAccess may use the returned disc).
+		select {
+		case captureCh <- captureResult{cfg: cfg}:
+		default:
+			// Already captured — subsequent calls (none expected) are ignored.
+		}
+		return origNewDiscovery(cfg)
+	}
+
+	// Redirect defaultAdmissionKeyFile to our pre-seeded key file.
+	origDefault := defaultAdmissionKeyFile
+	defaultAdmissionKeyFile = keyPath
+	t.Cleanup(func() { defaultAdmissionKeyFile = origDefault })
+
+	// Use a config that sets AdmissionKeyFile="" so runAccess uses defaultAdmissionKeyFile,
+	// with a valid ManagementSocket so Phase (c) can proceed.
+	// TickInterval small to avoid long blocking on the half-channel ticker.
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19296",
+		TickInterval:      1 * time.Millisecond,
+		DrainTimeout:      100 * time.Millisecond,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+		// AdmissionKeyFile left empty: runAccess uses defaultAdmissionKeyFile.
+	}
+
+	// Cancel the context quickly after the goroutine starts to limit blocking.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	var stderr bytes.Buffer
+	// runAccess will return an error (ctx timeout / connect failure) — that's fine.
+	// We only need it to reach the discovery.New call site.
+	_ = runAccess(ctx, &stderr, cfg)
+
+	// Check if newDiscovery was called.
+	select {
+	case result := <-captureCh:
+		// ASSERTION: LocalNodeAdmissionPubkey must be non-nil, length 32,
+		// and byte-equal to the known public key.
+		captured := result.cfg.LocalNodeAdmissionPubkey
+		if len(captured) == 0 {
+			t.Fatalf("LocalNodeAdmissionPubkey in discovery.Config is nil/empty — " +
+				"runAccess did not wire the admission pubkey (adversary F-6; AC-007 through-runAccess)")
+		}
+		if len(captured) != ed25519.PublicKeySize {
+			t.Fatalf("LocalNodeAdmissionPubkey length = %d, want %d (ed25519.PublicKeySize)",
+				len(captured), ed25519.PublicKeySize)
+		}
+		if !bytes.Equal(captured, []byte(knownPub)) {
+			t.Errorf("LocalNodeAdmissionPubkey mismatch:\n  got  %x\n  want %x\n"+
+				"(adversary F-6; AC-007 through-runAccess — pubkey must come from loaded keypair)",
+				captured, []byte(knownPub))
+		}
+	default:
+		t.Fatal("newDiscovery seam was never called — runAccess did not reach discovery.New " +
+			"(adversary F-6; the seam must be called for AC-007 through-runAccess coverage to be non-vacuous)")
+	}
+}

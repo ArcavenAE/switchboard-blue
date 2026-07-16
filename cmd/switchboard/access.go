@@ -94,6 +94,13 @@ var framesDroppedInterval = 30 * time.Second
 // (BC-2.09.003 PC-9 / Inv-5 / AC-009; mirrors the framesDroppedInterval pattern).
 var newHalfChannel = halfchannel.New
 
+// newDiscovery is the discovery constructor seam.
+// Declared as var so tests can inject a capturing closure to verify that
+// runAccess wires discoveryCfg.LocalNodeAdmissionPubkey from the loaded
+// admission keypair (adversary F-6 / AC-007 through-runAccess coverage;
+// mirrors the newHalfChannel pattern exactly).
+var newDiscovery = discovery.New
+
 // connectorIface is the minimal subset of *tmux.SessionConnector used by
 // runAccessWithConnector. *tmux.SessionConnector satisfies this interface by
 // construction — no changes to internal/tmux are required for the interface
@@ -269,7 +276,7 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		discoveryCfg := discovery.Config{
 			LocalNodeAdmissionPubkey: []byte(admissionPubKey),
 		}
-		disc = discovery.New(discoveryCfg)
+		disc = newDiscovery(discoveryCfg)
 	}
 
 	runErr := runAccessWithConnector(ctx, stderr, sc, an, router, disc)
