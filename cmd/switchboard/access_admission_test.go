@@ -4,13 +4,13 @@
 //
 // Covers AC-002 through AC-008 of story S-BL.NODE-ADMISSION-PROVISIONING:
 //
-//   AC-002: first-run keypair generation — atomic write, mode 0600, PKCS#8 PEM, parent dir
-//   AC-003: subsequent start — loaded key matches generated key; pubkey stable across restarts
-//   AC-004: fail-closed — corrupt PEM or non-Ed25519 key type → daemon refuses to start
-//   AC-005: permissions warning — broader than 0600 → WARNING logged; daemon starts
-//   AC-006: startup INFO log — base64url pubkey logged on every start
-//   AC-007: discovery.Config.LocalNodeAdmissionPubkey wired from loaded/generated keypair
-//   AC-008: Discovery.Run goroutine WG-tracked; ctx.Canceled is clean shutdown; no goroutine leak
+//	AC-002: first-run keypair generation — atomic write, mode 0600, PKCS#8 PEM, parent dir
+//	AC-003: subsequent start — loaded key matches generated key; pubkey stable across restarts
+//	AC-004: fail-closed — corrupt PEM or non-Ed25519 key type → daemon refuses to start
+//	AC-005: permissions warning — broader than 0600 → WARNING logged; daemon starts
+//	AC-006: startup INFO log — base64url pubkey logged on every start
+//	AC-007: discovery.Config.LocalNodeAdmissionPubkey wired from loaded/generated keypair
+//	AC-008: Discovery.Run goroutine WG-tracked; ctx.Canceled is clean shutdown; no goroutine leak
 //
 // ALL tests in this file MUST FAIL at Red Gate:
 //   - loadOrGenerateAdmissionKeypair is a stub that returns a fresh ephemeral key on every
@@ -20,9 +20,10 @@
 // Tests compile cleanly against the stub surface.
 //
 // Traceability:
-//   BC-2.09.004 — Admission keypair provisioning (first-run, load, fail-closed, permissions, log)
-//   BC-2.04.008 — Discovery.Run daemon-lifecycle wiring (WG-tracked, ctx.Canceled clean, no leak)
-//   BC-2.09.003 v2.1 PC-12 — admission_key_file validation (covered in config_test.go AC-001)
+//
+//	BC-2.09.004 — Admission keypair provisioning (first-run, load, fail-closed, permissions, log)
+//	BC-2.04.008 — Discovery.Run daemon-lifecycle wiring (WG-tracked, ctx.Canceled clean, no leak)
+//	BC-2.09.003 v2.1 PC-12 — admission_key_file validation (covered in config_test.go AC-001)
 //
 // Test placement discipline (TD-031): no line-number citations; cite symbols/AC-IDs.
 package main
@@ -808,8 +809,8 @@ func TestDiscoveryRun_CtxCanceled_NotInternalFailure(t *testing.T) {
 // Discriminating strategy — channel handshake using a blocking HeartbeatObserver:
 //
 //  1. disc is constructed with a HeartbeatObserver that:
-//       a. closes `entered` on first call (disc.Run goroutine is now parked inside it)
-//       b. blocks on `release` until the test releases it
+//     a. closes `entered` on first call (disc.Run goroutine is now parked inside it)
+//     b. blocks on `release` until the test releases it
 //  2. A tick is sent to park disc.Run in the observer.
 //  3. ctx is cancelled. runAccessWithConnector calls sc.Close() + wg.Wait().
 //  4. On FIXED code: wg.Wait() blocks because disc.Run goroutine is parked →

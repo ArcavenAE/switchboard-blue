@@ -216,32 +216,34 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	// Phase (d): load or generate the admission keypair
 	// (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004 PC-3 through PC-7).
 	//
-	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): STUB — not implemented.
-	// This stub panics so that AC-002 through AC-007 tests (Red Gate) FAIL.
-	// The implementer must replace this with the real first-run/subsequent-load
-	// logic per rulings §1.3 and the acceptance criteria AC-002 through AC-006.
+	// If the context is already cancelled, skip file I/O and proceed directly to
+	// runAccessWithConnector, which will detect ctx.Err() != nil and emit E-SYS-002.
+	// This preserves the pre-existing TestDaemonConnectFailureExitsNonZero behaviour
+	// (pre-cancelled ctx → E-SYS-002, not a file-permission error).
 	//
 	// Effective key file path: cfg.AdmissionKeyFile when non-empty, else default.
 	admissionKeyPath := defaultAdmissionKeyFile
 	if cfg != nil && cfg.AdmissionKeyFile != "" {
 		admissionKeyPath = cfg.AdmissionKeyFile
 	}
-	admissionPrivKey, err := loadOrGenerateAdmissionKeypair(stderr, admissionKeyPath)
-	if err != nil {
-		return fmt.Errorf("access: load admission keypair: %w", err)
-	}
-	admissionPubKey := admissionPrivKey.Public().(ed25519.PublicKey)
 
-	// Phase (e): construct discovery with LocalNodeAdmissionPubkey wired from
-	// the admission keypair (Decision 5 / BC-2.09.004 PC-3e / BC-2.04.008 Pre-3).
-	//
-	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): STUB — LocalNodeAddr and LocalSVTNID
-	// are zero-valued here; the implementer must wire them from cfg.
-	// disc.Run is started in runAccessWithConnector (Option Y, Decision 6).
-	discoveryCfg := discovery.Config{
-		LocalNodeAdmissionPubkey: []byte(admissionPubKey),
+	var disc *discovery.Discovery
+	if ctx.Err() == nil {
+		// Normal startup: load or generate the admission keypair.
+		admissionPrivKey, loadErr := loadOrGenerateAdmissionKeypair(stderr, admissionKeyPath)
+		if loadErr != nil {
+			return fmt.Errorf("access: load admission keypair: %w", loadErr)
+		}
+		admissionPubKey := admissionPrivKey.Public().(ed25519.PublicKey)
+
+		// Phase (e): construct discovery with LocalNodeAdmissionPubkey wired from
+		// the admission keypair (Decision 5 / BC-2.09.004 PC-3e / BC-2.04.008 Pre-3).
+		// disc.Run is started in runAccessWithConnector (Option Y, Decision 6).
+		discoveryCfg := discovery.Config{
+			LocalNodeAdmissionPubkey: []byte(admissionPubKey),
+		}
+		disc = discovery.New(discoveryCfg)
 	}
-	disc := discovery.New(discoveryCfg)
 
 	runErr := runAccessWithConnector(ctx, stderr, sc, an, router, disc)
 

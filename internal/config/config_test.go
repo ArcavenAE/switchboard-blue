@@ -2453,8 +2453,8 @@ func TestConfig_Validate_AdmissionKeyFile_AbsentAccepted(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		ListenAddr:      "0.0.0.0:9090",
-		TickInterval:    10 * time.Millisecond,
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
 		AdmissionKeyFile: "", // absent / empty string
 	}
 	err := cfg.Validate()
@@ -2492,8 +2492,8 @@ func TestConfig_Validate_AdmissionKeyFile_ValidPathAccepted(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{
-				ListenAddr:      "0.0.0.0:9090",
-				TickInterval:    10 * time.Millisecond,
+				ListenAddr:       "0.0.0.0:9090",
+				TickInterval:     10 * time.Millisecond,
 				AdmissionKeyFile: tc.path,
 			}
 			err := cfg.Validate()
@@ -2530,8 +2530,8 @@ func TestConfig_Validate_AdmissionKeyFile_WhitespaceOnlyRejectsE_CFG_014(t *test
 			t.Parallel()
 
 			cfg := &config.Config{
-				ListenAddr:      "0.0.0.0:9090",
-				TickInterval:    10 * time.Millisecond,
+				ListenAddr:       "0.0.0.0:9090",
+				TickInterval:     10 * time.Millisecond,
 				AdmissionKeyFile: tc.value,
 			}
 			err := cfg.Validate()
@@ -2574,8 +2574,8 @@ func TestConfig_Validate_AdmissionKeyFile_NoIOPerformed(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		ListenAddr:      "0.0.0.0:9090",
-		TickInterval:    10 * time.Millisecond,
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
 		AdmissionKeyFile: dirPath, // exists and is a dir — any I/O would reveal this
 	}
 	// Validate() MUST accept this value — it's non-empty, non-whitespace.
@@ -2586,8 +2586,8 @@ func TestConfig_Validate_AdmissionKeyFile_NoIOPerformed(t *testing.T) {
 
 	// Also verify a path that does not exist at all is accepted.
 	cfg2 := &config.Config{
-		ListenAddr:      "0.0.0.0:9090",
-		TickInterval:    10 * time.Millisecond,
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
 		AdmissionKeyFile: filepath.Join(dir, "does_not_exist.pem"),
 	}
 	err2 := cfg2.Validate()
@@ -2605,8 +2605,8 @@ func TestConfig_Validate_AdmissionKeyFile_ExhaustiveErrorCollection(t *testing.T
 	t.Parallel()
 
 	cfg := &config.Config{
-		ListenAddr:      "0.0.0.0:9090",
-		TickInterval:    0, // invalid — triggers tick_interval error
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     0,     // invalid — triggers tick_interval error
 		AdmissionKeyFile: "   ", // whitespace-only — triggers E-CFG-014
 	}
 	err := cfg.Validate()
