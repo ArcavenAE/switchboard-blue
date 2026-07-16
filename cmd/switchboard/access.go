@@ -61,7 +61,10 @@ const defaultTickInterval = 10 * time.Millisecond
 // defaultAdmissionKeyFile is the path used when admission_key_file is absent
 // or empty in the config (Decision 2 / BC-2.09.004 PC-1; S-BL.NODE-ADMISSION-PROVISIONING).
 // Applied at daemon startup by runAccess, NOT by Config.Validate().
-const defaultAdmissionKeyFile = "/var/lib/switchboard/access-admission-identity.pem"
+// Declared as var (not const) so tests can redirect it to a tempdir via
+// package-level assignment (mirrors framesDroppedInterval / newHalfChannel pattern;
+// F-3 hermeticity fix — testability seam for S-BL.NODE-ADMISSION-PROVISIONING).
+var defaultAdmissionKeyFile = "/var/lib/switchboard/access-admission-identity.pem"
 
 // sweepInterval is the period between consecutive Sweep eviction passes.
 // Hardcoded for Wave 3 (no file-based config loading; internal/config is Wave 4).
@@ -213,6 +216,26 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
+	// F-2 fix: install a deferred shutdown for mgmtSrv + mgmtWG so that ANY early
+	// return after Phase (c) — including keypair-load failures (EC-006/EC-007) —
+	// shuts down the mgmt goroutine and waits for it to exit. The explicit shutdown
+	// block below (after runAccessWithConnector) also runs, but it is protected by
+	// a once-Do guard so the two paths do not double-Shutdown or double-Wait.
+	// AC-004 PC-3 ("no partial startup"): a keypair failure must not leave a running
+	// mgmt goroutine (BC-2.09.004 S-BL.NODE-ADMISSION-PROVISIONING adversary F-2).
+	var mgmtShutOnce sync.Once
+	shutdownMgmt := func() {
+		mgmtShutOnce.Do(func() {
+			if mgmtSrv != nil {
+				shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				_ = mgmtSrv.Shutdown(shutCtx)
+				shutCancel()
+			}
+			mgmtWG.Wait()
+		})
+	}
+	defer shutdownMgmt()
+
 	// Phase (d): load or generate the admission keypair
 	// (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004 PC-3 through PC-7).
 	//
@@ -232,7 +255,11 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		// Normal startup: load or generate the admission keypair.
 		admissionPrivKey, loadErr := loadOrGenerateAdmissionKeypair(stderr, admissionKeyPath)
 		if loadErr != nil {
-			return fmt.Errorf("access: load admission keypair: %w", loadErr)
+			// F-4 fix: loadOrGenerateAdmissionKeypair already namespaces its errors
+			// ("access: load admission keypair: <path>: <reason>", etc.) per E-KEY-001.
+			// Re-wrapping with the same prefix produces a doubled/misleading message at
+			// the daemon surface. Return loadErr directly.
+			return loadErr
 		}
 		admissionPubKey := admissionPrivKey.Public().(ed25519.PublicKey)
 
@@ -247,15 +274,10 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 
 	runErr := runAccessWithConnector(ctx, stderr, sc, an, router, disc)
 
-	// Shutdown the management server now that the data-plane is draining.
-	// Use a short timeout; the mgmt goroutine should already be stopping since
-	// ctx is cancelled. Wait for the WaitGroup to confirm goroutine exit.
-	if mgmtSrv != nil {
-		shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = mgmtSrv.Shutdown(shutCtx)
-		shutCancel()
-	}
-	mgmtWG.Wait()
+	// Explicit shutdown of the management server now that the data-plane is draining.
+	// shutdownMgmt is guarded by once-Do so calling it here and via defer is safe —
+	// only one of the two actually executes the shutdown + Wait.
+	shutdownMgmt()
 
 	return runErr
 }
@@ -637,14 +659,27 @@ func loadOrGenerateAdmissionKeypair(stderr io.Writer, keyPath string) (ed25519.P
 			return nil, fmt.Errorf("access: create admission keypair dir: %w", mkErr)
 		}
 
-		// Atomic write: write to <path>.tmp, chmod 0600, then rename.
+		// Atomic write: write to <path>.tmp, then rename.
+		// F-7 fix: use O_CREATE|O_EXCL|O_WRONLY so the open fails if .tmp already
+		// exists (e.g. from a previous interrupted run or attacker pre-creation).
+		// This eliminates the TOCTOU window where WriteFile would inherit the
+		// pre-existing mode until the subsequent Chmod ran. The mode 0o600 is applied
+		// atomically at create time; no separate Chmod is needed.
+		// (Security: mitigates stale-0644-.tmp-reuse; adversary pass-1 F-7.)
 		tmpPath := keyPath + ".tmp"
-		if writeErr := os.WriteFile(tmpPath, pemData, 0o600); writeErr != nil {
+		f, createErr := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if createErr != nil {
+			return nil, fmt.Errorf("access: write admission keypair tmp: %w", createErr)
+		}
+		_, writeErr := f.Write(pemData)
+		closeErr := f.Close()
+		if writeErr != nil {
+			_ = os.Remove(tmpPath)
 			return nil, fmt.Errorf("access: write admission keypair tmp: %w", writeErr)
 		}
-		if chmodErr := os.Chmod(tmpPath, 0o600); chmodErr != nil {
+		if closeErr != nil {
 			_ = os.Remove(tmpPath)
-			return nil, fmt.Errorf("access: chmod admission keypair tmp: %w", chmodErr)
+			return nil, fmt.Errorf("access: write admission keypair tmp: %w", closeErr)
 		}
 		if renameErr := os.Rename(tmpPath, keyPath); renameErr != nil {
 			_ = os.Remove(tmpPath)
@@ -663,7 +698,12 @@ func loadOrGenerateAdmissionKeypair(stderr io.Writer, keyPath string) (ed25519.P
 	if statErr != nil {
 		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, statErr)
 	}
-	if perm := fi.Mode().Perm(); perm > 0o600 {
+	// F-1 fix: use OpenSSH semantics — warn if any group or other bit is set.
+	// The naive numeric `perm > 0o600` predicate misses modes like 0o444 (292),
+	// which is less than 0o600 (384) yet is world-readable. Testing for any group
+	// or other permission bit (`perm&0o077 != 0`) catches all such cases correctly.
+	// (BC-2.09.004 PC-4; rulings §1.4; adversary pass-1 F-1.)
+	if perm := fi.Mode().Perm(); perm&0o077 != 0 {
 		lg.Printf("admission identity key file %s has permissions %04o: expected 0600; private key may be exposed",
 			keyPath, perm)
 	}

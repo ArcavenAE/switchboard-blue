@@ -37,13 +37,16 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 )
@@ -401,34 +404,76 @@ func TestAdmissionKeypair_FailClosed_NonEd25519Key(t *testing.T) {
 // ---- AC-005: permissions warning when broader than 0600 ---------------------
 
 // TestAdmissionKeypair_PermissionsWarning_BroaderThan0600 verifies that when the
-// key file exists, is parseable, and has permissions broader than 0600 (e.g., 0644),
+// key file exists, is parseable, and has permissions that expose group or other bits,
 // a WARNING is logged to stderr and the daemon continues to start (advisory, not fatal).
 //
-// Traces: BC-2.09.004 PC-4; rulings §1.4 OpenSSH advisory-not-fatal posture.
+// Cases:
+//   - 0o644: owner read-write, group read, other read — group+other bits set → WARN
+//   - 0o444: all read only — group+other bits set; numerically < 0o600 (the old predicate
+//     bug: 444 < 600 would NOT warn with `perm > 0o600`); OpenSSH semantics → MUST WARN
+//   - 0o440: owner+group read only — group bit set; also < 0o600 → MUST WARN
+//   - 0o600: owner read-write only — no group/other bits → MUST NOT WARN
+//
+// F-1 fix (adversary pass-1): the predicate `perm > 0o600` was wrong.
+// 0o444 (292 decimal) < 0o600 (384 decimal) so a WORLD-READABLE private key loaded
+// without any warning. Correct predicate: `perm&0o077 != 0` (any group or other bit).
+//
+// Traces: BC-2.09.004 PC-4; rulings §1.4 OpenSSH advisory-not-fatal posture;
+// adversary pass-1 F-1.
 func TestAdmissionKeypair_PermissionsWarning_BroaderThan0600(t *testing.T) {
-	t.Parallel()
+	// Table-driven: covers original 0644 case + new 0444/0440 cases (F-1 fix).
+	// NOT t.Parallel() at the table level — sub-tests each run in parallel.
 
-	dir := admissionTempDir(t)
-	keyPath := filepath.Join(dir, "admission.pem")
-
-	// Generate and write a valid key at 0644 (broader than 0600).
-	_, privKey, err := ed25519.GenerateKey(rand.Reader)
-	requireAdmissionNoError(t, err)
-	writePKCS8Ed25519PEM(t, keyPath, privKey, 0o644)
-
-	var stderr bytes.Buffer
-	loadedPriv, loadErr := loadOrGenerateAdmissionKeypair(&stderr, keyPath)
-	requireAdmissionNoError(t, loadErr)
-
-	if loadedPriv == nil {
-		t.Fatal("expected non-nil private key when permissions are broader than 0600 (advisory, not fatal)")
+	tests := []struct {
+		name string
+		mode os.FileMode
+	}{
+		{
+			name: "0644_owner_rw_group_r_other_r_warns",
+			mode: 0o644,
+		},
+		{
+			// F-1 fix: 0444 < 0600 numerically so the old `perm > 0o600` predicate
+			// silently skipped this case. Any group or other bit → must WARN.
+			name: "0444_world_readable_warns",
+			mode: 0o444,
+		},
+		{
+			// F-1 fix: 0440 also < 0600 numerically; group-readable → must WARN.
+			name: "0440_group_readable_warns",
+			mode: 0o440,
+		},
 	}
 
-	// WARNING must be logged to stderr.
-	stderrStr := stderr.String()
-	if !strings.Contains(stderrStr, "0644") && !strings.Contains(stderrStr, "permissions") {
-		t.Errorf("expected permissions WARNING in stderr for 0644 key file; stderr=%q\n"+
-			"(BC-2.09.004 PC-4; rulings §1.4 — log WARNING with mode and expected 0600)", stderrStr)
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := admissionTempDir(t)
+			keyPath := filepath.Join(dir, "admission.pem")
+
+			_, privKey, err := ed25519.GenerateKey(rand.Reader)
+			requireAdmissionNoError(t, err)
+			writePKCS8Ed25519PEM(t, keyPath, privKey, tc.mode)
+
+			var stderr bytes.Buffer
+			loadedPriv, loadErr := loadOrGenerateAdmissionKeypair(&stderr, keyPath)
+			requireAdmissionNoError(t, loadErr)
+
+			if loadedPriv == nil {
+				t.Fatal("expected non-nil private key when permissions are broader than 0600 (advisory, not fatal)")
+			}
+
+			// WARNING must be logged to stderr.
+			stderrStr := stderr.String()
+			modeStr := fmt.Sprintf("%04o", tc.mode)
+			if !strings.Contains(stderrStr, modeStr) && !strings.Contains(stderrStr, "permissions") {
+				t.Errorf("expected permissions WARNING in stderr for %s key file; stderr=%q\n"+
+					"(BC-2.09.004 PC-4; rulings §1.4; F-1 — OpenSSH semantics: any group/other bit → warn)",
+					modeStr, stderrStr)
+			}
+		})
 	}
 }
 
@@ -937,6 +982,87 @@ func TestDiscoveryRun_NoGoroutineLeak_AfterCtxCancel(t *testing.T) {
 		// success: function returned only after disc goroutine was joined
 	case <-time.After(2 * time.Second):
 		t.Fatal("runAccessWithConnector did not return within 2s after releasing disc goroutine")
+	}
+}
+
+// ---- F-2 (adversary pass-1): mgmt goroutine not leaked on keypair-load failure --
+
+// TestRunAccess_KeypairLoadFailure_MgmtGoroutineNotLeaked verifies that when Phase (d)
+// (loadOrGenerateAdmissionKeypair) fails — e.g. corrupt PEM or RSA key (EC-006/EC-007)
+// — the mgmt Serve goroutine started in Phase (c) is shut down and its WaitGroup is
+// joined before runAccess returns. The goroutine must NOT be orphaned.
+//
+// Strategy: redirect the defaultAdmissionKeyFile seam (F-3) to a corrupt file,
+// provide a valid config with a bindable ManagementSocket, call runAccess, and assert
+// (a) it returns a non-nil error and (b) goroutine count returns to pre-call baseline
+// within a bounded window.
+//
+// AC-004 PC-3 ("no partial startup"): keypair failure must not leave a running mgmt
+// goroutine. (BC-2.09.004 S-BL.NODE-ADMISSION-PROVISIONING adversary pass-1 F-2.)
+//
+// Traces: BC-2.09.004 PC-6 (fail-closed); adversary pass-1 F-2; ARCH-01 v1.7
+// §Goroutine WaitGroup Contract.
+func TestRunAccess_KeypairLoadFailure_MgmtGoroutineNotLeaked(t *testing.T) {
+	// NOT t.Parallel(): modifies package-level defaultAdmissionKeyFile seam
+	// and measures goroutine counts.
+
+	dir := admissionTempDir(t)
+	corruptPath := filepath.Join(dir, "corrupt.pem")
+	if err := os.WriteFile(corruptPath, []byte("not a pem file\n"), 0o600); err != nil {
+		t.Fatalf("setup: write corrupt pem: %v", err)
+	}
+
+	// Redirect the package-level seam so runAccess (which uses defaultAdmissionKeyFile
+	// when cfg.AdmissionKeyFile is empty) finds the corrupt file.
+	orig := defaultAdmissionKeyFile
+	defaultAdmissionKeyFile = corruptPath
+	t.Cleanup(func() { defaultAdmissionKeyFile = orig })
+
+	// Provide a config with a bindable ManagementSocket so Phase (c) succeeds
+	// and the mgmt goroutine actually starts (Ruling J / BC-2.07.004 EC-013).
+	// Use AdmissionKeyFile="" so runAccess uses defaultAdmissionKeyFile (now the corrupt path).
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19295",
+		TickInterval:      10 * time.Millisecond,
+		DrainTimeout:      10 * time.Second,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+	}
+
+	gorsBefore := runtime.NumGoroutine()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var stderr bytes.Buffer
+	err := runAccess(ctx, &stderr, cfg)
+
+	// Assertion 1: runAccess must return a non-nil error (keypair load failed).
+	if err == nil {
+		t.Fatal("runAccess(corrupt keypair): expected non-nil error; got nil")
+	}
+	// The error must mention the corrupt path.
+	requireAdmissionContains(t, err.Error(), corruptPath)
+
+	// Assertion 2: goroutine count must return to pre-call baseline.
+	// This confirms the mgmt goroutine was joined and not orphaned (F-2 fix).
+	// Allow 300ms for goroutines to drain after runAccess returns.
+	deadline := time.After(300 * time.Millisecond)
+	for {
+		after := runtime.NumGoroutine()
+		if after <= gorsBefore+1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Errorf("goroutine leak after keypair-load failure: before=%d after=%d; "+
+				"mgmt goroutine must be joined on any early return from runAccess "+
+				"(adversary pass-1 F-2; BC-2.09.004 AC-004 PC-3 no-partial-startup)",
+				gorsBefore, runtime.NumGoroutine())
+			return
+		default:
+			runtime.Gosched()
+		}
 	}
 }
 
