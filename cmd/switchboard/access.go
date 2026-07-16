@@ -666,18 +666,19 @@ func loadOrGenerateAdmissionKeypair(stderr io.Writer, keyPath string) (ed25519.P
 			return nil, fmt.Errorf("access: create admission keypair dir: %w", mkErr)
 		}
 
-		// Atomic write: write to <path>.tmp, then rename.
-		// F-7 fix: use O_CREATE|O_EXCL|O_WRONLY so the open fails if .tmp already
-		// exists (e.g. from a previous interrupted run or attacker pre-creation).
-		// This eliminates the TOCTOU window where WriteFile would inherit the
-		// pre-existing mode until the subsequent Chmod ran. The mode 0o600 is applied
-		// atomically at create time; no separate Chmod is needed.
-		// (Security: mitigates stale-0644-.tmp-reuse; adversary pass-1 F-7.)
-		tmpPath := keyPath + ".tmp"
-		f, createErr := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		// Atomic write with a unique temp name so an orphaned temp from a prior
+		// interrupted run can never collide and wedge startup (EC-011 /
+		// BC-2.09.004 Invariant 3; B-1 fix). os.CreateTemp uses O_EXCL internally
+		// with a random suffix, preserving the TOCTOU protection from adversary
+		// pass-1 F-7 (an attacker cannot pre-create the fixed-name .tmp to
+		// intercept the write). Explicit os.Chmod(0o600) is applied BEFORE the
+		// rename so the mode is umask-independent (rulings §1.3; B-2 fix —
+		// OpenFile's mode arg is masked by the ambient process umask, Chmod is not).
+		f, createErr := os.CreateTemp(filepath.Dir(keyPath), "admission-*.pem.tmp")
 		if createErr != nil {
 			return nil, fmt.Errorf("access: write admission keypair tmp: %w", createErr)
 		}
+		tmpPath := f.Name()
 		_, writeErr := f.Write(pemData)
 		closeErr := f.Close()
 		if writeErr != nil {
@@ -687,6 +688,10 @@ func loadOrGenerateAdmissionKeypair(stderr io.Writer, keyPath string) (ed25519.P
 		if closeErr != nil {
 			_ = os.Remove(tmpPath)
 			return nil, fmt.Errorf("access: write admission keypair tmp: %w", closeErr)
+		}
+		if chmodErr := os.Chmod(tmpPath, 0o600); chmodErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: chmod admission keypair tmp: %w", chmodErr)
 		}
 		if renameErr := os.Rename(tmpPath, keyPath); renameErr != nil {
 			_ = os.Remove(tmpPath)

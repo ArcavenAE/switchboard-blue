@@ -276,6 +276,69 @@ func TestAdmissionKeypair_FirstRun_Mode0600(t *testing.T) {
 	}
 }
 
+// TestAdmissionKeypair_FirstRun_OrphanTmpDoesNotWedgeStartup verifies EC-011
+// (BC-2.09.004 Invariant 3 / B-1 fix): when an orphaned temp file matching the
+// CreateTemp glob ("admission-*.pem.tmp") already exists in the key directory
+// from a prior interrupted run, the next startup generates a fresh keypair
+// successfully — it must NOT fail with EEXIST or any other error.
+//
+// Discriminator proof: the old fixed-name ".tmp" code would attempt
+//
+//	os.OpenFile(keyPath+".tmp", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+//
+// If an orphan at exactly that path existed, O_EXCL would return EEXIST and
+// the daemon would refuse to start permanently until an operator manually
+// removed the file. The new CreateTemp call uses a random suffix, so any
+// pre-existing file at a fixed name is irrelevant — the call always succeeds.
+//
+// NOT t.Parallel(): the test MkdirAll-creates a nested key dir (to hold the
+// orphan) under admissionTempDir; a concurrent umask=0177 window from
+// listenUnixMgmt can produce a 0600 dir (no execute bit) causing EPERM on
+// subsequent writes. Running sequentially after TestMain resets the umask
+// to 0022 avoids the race.
+//
+// Traces: BC-2.09.004 Invariant 3; EC-011 recoverability; adversary pass-2 B-1.
+func TestAdmissionKeypair_FirstRun_OrphanTmpDoesNotWedgeStartup(t *testing.T) {
+	// NOT t.Parallel() — see comment above: umask race on MkdirAll-created dirs.
+
+	dir := admissionTempDir(t)
+	keyPath := filepath.Join(dir, "admission.pem")
+
+	// Pre-create an orphan file whose name matches the CreateTemp glob.
+	// With the old fixed-name O_EXCL code, a file at keyPath+".tmp" would
+	// wedge startup permanently. With the new CreateTemp code, the orphan
+	// has a random suffix and the next call generates a different random
+	// suffix — no collision is possible.
+	orphanPath := filepath.Join(dir, "admission-orphan-from-prior-run.pem.tmp")
+	if err := os.WriteFile(orphanPath, []byte("orphan junk data"), 0o600); err != nil {
+		t.Fatalf("setup: write orphan tmp: %v", err)
+	}
+
+	// The canonical key file must not exist yet.
+	if _, err := os.Stat(keyPath); !os.IsNotExist(err) {
+		t.Fatalf("precondition: key file must not exist; got: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	priv, err := loadOrGenerateAdmissionKeypair(&stderr, keyPath)
+	// EC-011: must succeed — orphan must not prevent fresh keypair generation.
+	requireAdmissionNoError(t, err)
+
+	if priv == nil {
+		t.Fatal("returned private key must not be nil on orphan-present first run")
+	}
+
+	// The canonical key file must exist and be loadable after generation.
+	if _, statErr := os.Stat(keyPath); statErr != nil {
+		t.Fatalf("key file must exist after generation with orphan present: %v", statErr)
+	}
+
+	// The orphan must still exist (we must not have deleted someone else's temp).
+	if _, statErr := os.Stat(orphanPath); statErr != nil {
+		t.Logf("orphan temp removed (acceptable; only canonical path matters): %v", statErr)
+	}
+}
+
 // ---- AC-003: subsequent start — key stable across restarts ------------------
 
 // TestAdmissionKeypair_SubsequentStart_LoadedKeyMatchesGenerated verifies that
