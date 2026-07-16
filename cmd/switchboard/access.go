@@ -387,29 +387,22 @@ func runAccessWithConnector(
 	wg.Add(1)
 	startFramesDroppedTicker(runCtx, &wg, sc, an, lg, framesDroppedInterval)
 
-	// TODO(S-BL.NODE-ADMISSION-PROVISIONING): Discovery.Run goroutine stub.
 	// Decision 6 Option Y: disc.Run is WG-tracked in this function alongside the
-	// sweep and frames-dropped tickers. BC-2.04.008 PC-1 through PC-4.
-	//
-	// This stub is a NO-OP that does NOT start the goroutine — so AC-008 tests
-	// (TestDiscoveryRun_WGAddBeforeGoStatement, TestDiscoveryRun_NoGoroutineLeak_AfterCtxCancel,
-	// etc.) FAIL at Red Gate. The implementer must replace this with:
-	//
-	//   wg.Add(1) // in CALLER scope, BEFORE go statement (ARCH-01 v1.7)
-	//   go func() {
-	//       defer wg.Done()
-	//       if err := disc.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
-	//           // unexpected disc.Run error — log but do NOT set internalFailure
-	//           // for context.Canceled (Decision 7 / BC-2.04.008 Invariant 2)
-	//       }
-	//   }()
-	//
-	// The variadic disc parameter allows existing 5-arg callers to compile without
-	// passing a disc value (backward-compatible seam per ARCH-01 ADR-011 v1.5 §HIGH-B).
-	// Stub: safe no-op for both empty-variadic (existing 5-arg callers) and
-	// 1-arg (new AC-008 tests). Neither starts the goroutine — the goroutine
-	// is NOT started here, so AC-008 tests fail at Red Gate.
-	_ = disc
+	// sweep and frames-dropped tickers (BC-2.04.008 PC-1 through PC-4).
+	// ARCH-01 v1.7 §Goroutine WaitGroup Contract: wg.Add(1) in caller BEFORE go.
+	// Decision 7: ctx.Canceled from disc.Run is clean shutdown — NOT internalFailure.
+	if len(disc) > 0 && disc[0] != nil {
+		d := disc[0]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := d.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				// Unexpected disc.Run error — log but do NOT set internalFailure;
+				// that is reserved for the sc.Err() mid-session double-failure path.
+				lg.Printf("discovery: run error: %v", err)
+			}
+		}()
+	}
 
 	// Block until context cancellation (SIGTERM/SIGINT, mid-session double-failure,
 	// or direct cancel — AC-008 / BC-2.04.007 PC-2 / PC-2.6).
