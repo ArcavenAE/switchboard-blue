@@ -939,7 +939,8 @@ func (m *singleBytePipeMaster) Close() error {
 // Red Gate: runAccess panics("not implemented") in the stub.
 func TestDaemonCleanShutdown(t *testing.T) {
 	// AC-008 — BC-2.04.007 PC-2.
-	// NOT t.Parallel(): sends SIGTERM to the test process.
+	// NOT t.Parallel(): sends SIGTERM to the test process; mutates package-level
+	// defaultAdmissionKeyFile seam.
 	//
 	// Pre-check: runAccess creates its own SessionConnector with defaultPTYAlloc.
 	// If PTY allocation fails (e.g. macOS sandbox / permission environment), skip
@@ -950,6 +951,17 @@ func TestDaemonCleanShutdown(t *testing.T) {
 		t.Skip("PTY device unavailable in this environment; skipping clean-shutdown test " +
 			"(requires working /dev/ptmx + slave open; covered by CI with full PTY access)")
 	}
+
+	// B-3 fix: redirect defaultAdmissionKeyFile to a t.TempDir()-based path so
+	// Phase (d) does not attempt to write to /var/lib/switchboard (which fails with
+	// EACCES on non-root and leaves an uncleaned real key in root+PTY CI).
+	// runAccess uses defaultAdmissionKeyFile when cfg is nil (nil passed below).
+	// Mirror the pattern used by TestRunAccess_KeypairLoadFailure_MgmtGoroutineNotLeaked
+	// and TestRunAccess_WiresLocalNodeAdmissionPubkey_FromLoadedKeypair.
+	admDir := t.TempDir()
+	origAdmKeyFile := defaultAdmissionKeyFile
+	defaultAdmissionKeyFile = filepath.Join(admDir, "admission.pem")
+	t.Cleanup(func() { defaultAdmissionKeyFile = origAdmKeyFile })
 
 	goroutinesBefore := runtime.NumGoroutine()
 

@@ -29,10 +29,17 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -40,6 +47,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/routing"
@@ -50,6 +58,14 @@ import (
 // defaultTickInterval is the half-channel tick cadence used when no config file
 // is supplied (Wave-3 hardcoded default, BC-2.09.003 PC-9 / Inv-5).
 const defaultTickInterval = 10 * time.Millisecond
+
+// defaultAdmissionKeyFile is the path used when admission_key_file is absent
+// or empty in the config (Decision 2 / BC-2.09.004 PC-1; S-BL.NODE-ADMISSION-PROVISIONING).
+// Applied at daemon startup by runAccess, NOT by Config.Validate().
+// Declared as var (not const) so tests can redirect it to a tempdir via
+// package-level assignment (mirrors framesDroppedInterval / newHalfChannel pattern;
+// F-3 hermeticity fix — testability seam for S-BL.NODE-ADMISSION-PROVISIONING).
+var defaultAdmissionKeyFile = "/var/lib/switchboard/access-admission-identity.pem"
 
 // sweepInterval is the period between consecutive Sweep eviction passes.
 // Hardcoded for Wave 3 (no file-based config loading; internal/config is Wave 4).
@@ -78,6 +94,13 @@ var framesDroppedInterval = 30 * time.Second
 // to verify that tickIntervalFor(cfg) reaches halfchannel.New end-to-end
 // (BC-2.09.003 PC-9 / Inv-5 / AC-009; mirrors the framesDroppedInterval pattern).
 var newHalfChannel = halfchannel.New
+
+// newDiscovery is the discovery constructor seam.
+// Declared as var so tests can inject a capturing closure to verify that
+// runAccess wires discoveryCfg.LocalNodeAdmissionPubkey from the loaded
+// admission keypair (adversary F-6 / AC-007 through-runAccess coverage;
+// mirrors the newHalfChannel pattern exactly).
+var newDiscovery = discovery.New
 
 // connectorIface is the minimal subset of *tmux.SessionConnector used by
 // runAccessWithConnector. *tmux.SessionConnector satisfies this interface by
@@ -201,17 +224,83 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
-	runErr := runAccessWithConnector(ctx, stderr, sc, an, router)
-
-	// Shutdown the management server now that the data-plane is draining.
-	// Use a short timeout; the mgmt goroutine should already be stopping since
-	// ctx is cancelled. Wait for the WaitGroup to confirm goroutine exit.
-	if mgmtSrv != nil {
-		shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = mgmtSrv.Shutdown(shutCtx)
-		shutCancel()
+	// F-2 fix: install a deferred shutdown for mgmtSrv + mgmtWG so that ANY early
+	// return after Phase (c) — including keypair-load failures (EC-006/EC-007) —
+	// shuts down the mgmt goroutine and waits for it to exit. The explicit shutdown
+	// block below (after runAccessWithConnector) also runs, but it is protected by
+	// a once-Do guard so the two paths do not double-Shutdown or double-Wait.
+	// AC-004 PC-3 ("no partial startup"): a keypair failure must not leave a running
+	// mgmt goroutine (BC-2.09.004 S-BL.NODE-ADMISSION-PROVISIONING adversary F-2).
+	var mgmtShutOnce sync.Once
+	shutdownMgmt := func() {
+		mgmtShutOnce.Do(func() {
+			if mgmtSrv != nil {
+				shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				_ = mgmtSrv.Shutdown(shutCtx)
+				shutCancel()
+			}
+			mgmtWG.Wait()
+		})
 	}
-	mgmtWG.Wait()
+	defer shutdownMgmt()
+
+	// Phase (d): load or generate the admission keypair
+	// (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004 PC-3 through PC-7).
+	//
+	// If the context is already cancelled, skip file I/O and proceed directly to
+	// runAccessWithConnector, which will detect ctx.Err() != nil and emit E-SYS-002.
+	// This preserves the pre-existing TestDaemonConnectFailureExitsNonZero behaviour
+	// (pre-cancelled ctx → E-SYS-002, not a file-permission error).
+	//
+	// Effective key file path: cfg.AdmissionKeyFile when non-empty, else default.
+	admissionKeyPath := defaultAdmissionKeyFile
+	if cfg != nil && cfg.AdmissionKeyFile != "" {
+		admissionKeyPath = cfg.AdmissionKeyFile
+	}
+
+	// Tilde expansion — mirrors loadEd25519Key (cmd/sbctl/client.go, BC-2.07.003 EC-007):
+	// "~" exactly → home dir; "~/" prefix → home dir + remainder; "~username" → literal.
+	if admissionKeyPath == "~" || strings.HasPrefix(admissionKeyPath, "~/") {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return fmt.Errorf("access: resolve admission key path %s: home directory unavailable: %w",
+				admissionKeyPath, homeErr)
+		}
+		if admissionKeyPath == "~" {
+			admissionKeyPath = home
+		} else {
+			admissionKeyPath = home + admissionKeyPath[1:]
+		}
+	}
+
+	var disc *discovery.Discovery
+	if ctx.Err() == nil {
+		// Normal startup: load or generate the admission keypair.
+		admissionPrivKey, loadErr := loadOrGenerateAdmissionKeypair(stderr, admissionKeyPath)
+		if loadErr != nil {
+			// F-4 fix: loadOrGenerateAdmissionKeypair already namespaces its errors
+			// ("access: load admission keypair: <path>: <reason>", etc.) per E-KEY-001.
+			// Re-wrapping with the same prefix produces a doubled/misleading message at
+			// the daemon surface. Return loadErr directly.
+			return loadErr
+		}
+		admissionPubKey := admissionPrivKey.Public().(ed25519.PublicKey)
+
+		// Phase (e): construct discovery with LocalNodeAdmissionPubkey wired from
+		// the admission keypair (Decision 5 / BC-2.09.004 PC-3e / BC-2.04.008 Pre-3).
+		// disc.Run is started in runAccessWithConnector (Option Y, Decision 6).
+		discoveryCfg := discovery.Config{
+			LocalNodeAdmissionPubkey: []byte(admissionPubKey),
+		}
+		disc = newDiscovery(discoveryCfg)
+	}
+
+	runErr := runAccessWithConnector(ctx, stderr, sc, an, router, disc)
+
+	// Explicit shutdown of the management server now that the data-plane is draining.
+	// shutdownMgmt is guarded by once-Do so calling it here and via defer is safe —
+	// only one of the two actually executes the shutdown + Wait.
+	shutdownMgmt()
 
 	return runErr
 }
@@ -224,6 +313,11 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 // fakeConnector in tests (enabling PC-2 and PC-2.6 end-to-end coverage without
 // a real PTY environment). an and router are pre-constructed by runAccess or the
 // test caller. (ARCH-01 ADR-011 v1.5 §HIGH-B; ARCH-08 v2.1 §6.5.1 obligation 4.)
+//
+// disc is optional (variadic, at most one value). When non-nil, Discovery.Run is
+// started as a WG-tracked goroutine alongside the sweep and frames-dropped tickers
+// (Decision 6 Option Y; BC-2.04.008 PC-1 through PC-4). Existing callers that
+// omit disc continue to compile — nil disc is a no-op for the discovery goroutine.
 //
 // tick_interval is applied in runAccess (via tickIntervalFor) before the
 // half-channel is constructed and before this function is called. Further
@@ -246,6 +340,7 @@ func runAccessWithConnector(
 	sc connectorIface,
 	an *session.AccessNode,
 	router *routing.Router,
+	disc ...*discovery.Discovery,
 ) error {
 	_ = router // router retained (not discarded); used by AC-001 test surface
 
@@ -334,6 +429,23 @@ func runAccessWithConnector(
 	lg := log.New(stderr, "", 0)
 	wg.Add(1)
 	startFramesDroppedTicker(runCtx, &wg, sc, an, lg, framesDroppedInterval)
+
+	// Decision 6 Option Y: disc.Run is WG-tracked in this function alongside the
+	// sweep and frames-dropped tickers (BC-2.04.008 PC-1 through PC-4).
+	// ARCH-01 v1.7 §Goroutine WaitGroup Contract: wg.Add(1) in caller BEFORE go.
+	// Decision 7: ctx.Canceled from disc.Run is clean shutdown — NOT internalFailure.
+	if len(disc) > 0 && disc[0] != nil {
+		d := disc[0]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := d.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				// Unexpected disc.Run error — log but do NOT set internalFailure;
+				// that is reserved for the sc.Err() mid-session double-failure path.
+				lg.Printf("discovery: run error: %v", err)
+			}
+		}()
+	}
 
 	// Block until context cancellation (SIGTERM/SIGINT, mid-session double-failure,
 	// or direct cancel — AC-008 / BC-2.04.007 PC-2 / PC-2.6).
@@ -519,4 +631,136 @@ func startFramesDroppedTicker(
 			}
 		}
 	}()
+}
+
+// loadOrGenerateAdmissionKeypair loads or generates the access node's persistent
+// Ed25519 admission keypair from keyPath (PKCS#8 PEM format, "PRIVATE KEY" block).
+//
+// First run (file absent): generates a new keypair and writes it atomically to
+// keyPath with mode 0600. Parent directory is created (0700) if absent.
+// Logs INFO to stderr: "admission identity: generated new keypair at <path>".
+//
+// Subsequent start (file present): parses the PKCS#8 PEM and returns the key.
+// Any parse failure is fail-closed — returns a non-nil error wrapping
+// "access: load admission keypair: <path>: <reason>".
+//
+// File permissions broader than 0600: advisory WARNING logged, not fatal.
+//
+// On every successful return (first-run or subsequent load), emits an INFO log
+// with the admission public key as base64url (no padding) of the raw 32-byte key.
+//
+// stderr is used for all log output. It must not be nil.
+// Implements BC-2.09.004 PC-3 through PC-7; rulings §1.3; Decisions 3, 4.
+func loadOrGenerateAdmissionKeypair(stderr io.Writer, keyPath string) (ed25519.PrivateKey, error) {
+	lg := log.New(stderr, "", 0)
+
+	f, openErr := os.Open(keyPath)
+	if openErr != nil {
+		if !errors.Is(openErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, openErr)
+		}
+
+		// First run: file absent — generate a new keypair.
+		_, priv, genErr := ed25519.GenerateKey(rand.Reader)
+		if genErr != nil {
+			return nil, fmt.Errorf("access: generate admission keypair: %w", genErr)
+		}
+
+		// Marshal to PKCS#8 DER, then PEM-encode.
+		der, marshalErr := x509.MarshalPKCS8PrivateKey(priv)
+		if marshalErr != nil {
+			return nil, fmt.Errorf("access: marshal admission keypair: %w", marshalErr)
+		}
+		pemData := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+
+		// Create parent directory if absent (MkdirAll is a no-op if it exists).
+		if mkErr := os.MkdirAll(filepath.Dir(keyPath), 0o700); mkErr != nil {
+			return nil, fmt.Errorf("access: create admission keypair dir: %w", mkErr)
+		}
+
+		// Atomic write with a unique temp name so an orphaned temp from a prior
+		// interrupted run can never collide and wedge startup (EC-011 /
+		// BC-2.09.004 Invariant 3; B-1 fix). os.CreateTemp uses O_EXCL internally
+		// with a random suffix, preserving the TOCTOU protection from adversary
+		// pass-1 F-7 (an attacker cannot pre-create the fixed-name .tmp to
+		// intercept the write). Explicit os.Chmod(0o600) is applied BEFORE the
+		// rename so the mode is umask-independent (rulings §1.3; B-2 fix —
+		// OpenFile's mode arg is masked by the ambient process umask, Chmod is not).
+		f, createErr := os.CreateTemp(filepath.Dir(keyPath), "admission-*.pem.tmp")
+		if createErr != nil {
+			return nil, fmt.Errorf("access: write admission keypair tmp: %w", createErr)
+		}
+		tmpPath := f.Name()
+		_, writeErr := f.Write(pemData)
+		closeErr := f.Close()
+		if writeErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: write admission keypair tmp: %w", writeErr)
+		}
+		if closeErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: write admission keypair tmp: %w", closeErr)
+		}
+		if chmodErr := os.Chmod(tmpPath, 0o600); chmodErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: chmod admission keypair tmp: %w", chmodErr)
+		}
+		if renameErr := os.Rename(tmpPath, keyPath); renameErr != nil {
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("access: rename admission keypair: %w", renameErr)
+		}
+
+		lg.Printf("admission identity: generated new keypair at %s", keyPath)
+
+		logAdmissionPubkey(lg, priv)
+		return priv, nil
+	}
+	defer func() { _ = f.Close() }()
+
+	// Subsequent start: file present — check permissions, then load.
+	fi, statErr := f.Stat()
+	if statErr != nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, statErr)
+	}
+	// F-1 fix: use OpenSSH semantics — warn if any group or other bit is set.
+	// The naive numeric `perm > 0o600` predicate misses modes like 0o444 (292),
+	// which is less than 0o600 (384) yet is world-readable. Testing for any group
+	// or other permission bit (`perm&0o077 != 0`) catches all such cases correctly.
+	// (BC-2.09.004 PC-4; rulings §1.4; adversary pass-1 F-1.)
+	if perm := fi.Mode().Perm(); perm&0o077 != 0 {
+		lg.Printf("admission identity key file %s has permissions %04o: expected 0600; private key may be exposed",
+			keyPath, perm)
+	}
+
+	// Read and parse.
+	data, readErr := io.ReadAll(f)
+	if readErr != nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, readErr)
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: PEM decode failed", keyPath)
+	}
+
+	key, parseErr := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if parseErr != nil {
+		return nil, fmt.Errorf("access: load admission keypair: %s: %w", keyPath, parseErr)
+	}
+
+	priv, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("access: load admission keypair: %s: not an Ed25519 key", keyPath)
+	}
+
+	logAdmissionPubkey(lg, priv)
+	return priv, nil
+}
+
+// logAdmissionPubkey emits the INFO log with the base64url (no padding) encoding
+// of the raw 32-byte Ed25519 admission public key (BC-2.09.004 PC-7; Decision 4).
+func logAdmissionPubkey(lg *log.Logger, priv ed25519.PrivateKey) {
+	pub := priv.Public().(ed25519.PublicKey)
+	b64 := base64.RawURLEncoding.EncodeToString([]byte(pub))
+	lg.Printf("access: admission identity pubkey (register with admin.key.register): %s", b64)
 }

@@ -2435,3 +2435,186 @@ func TestConfigValidate_StripsC1ControlChars(t *testing.T) {
 		}
 	})
 }
+
+// ---- AC-001 (S-BL.NODE-ADMISSION-PROVISIONING): admission_key_file validation ----
+//
+// Traces:
+//   BC-2.09.003 v2.1 Postcondition 12
+//   BC-2.09.004 Postconditions 1–2
+//   E-CFG-014
+//   ARCH-06 §Config purity contract (no file I/O in Validate)
+//
+// All four named tests must be present per the story AC-001 spec.
+
+// TestConfig_Validate_AdmissionKeyFile_AbsentAccepted verifies that when
+// admission_key_file is absent (empty string), Validate() accepts the config
+// and returns no error for this field (BC-2.09.004 PC-1; EC-001).
+func TestConfig_Validate_AdmissionKeyFile_AbsentAccepted(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		AdmissionKeyFile: "", // absent / empty string
+	}
+	err := cfg.Validate()
+	requireNoError(t, err)
+}
+
+// TestConfig_Validate_AdmissionKeyFile_ValidPathAccepted verifies that when
+// admission_key_file is a non-whitespace string, Validate() accepts it regardless
+// of whether the file exists on disk (BC-2.09.004 PC-2; ARCH-06 §Config purity —
+// Validate performs no file I/O).
+func TestConfig_Validate_AdmissionKeyFile_ValidPathAccepted(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		path string
+	}{
+		{
+			name: "absolute_path_no_file_exists",
+			// A path that does not exist — Validate() must not stat/open it.
+			path: "/nonexistent/path/that/will/never/exist/admission.pem",
+		},
+		{
+			name: "default_path_value",
+			path: "/var/lib/switchboard/access-admission-identity.pem",
+		},
+		{
+			name: "relative_path_accepted",
+			path: "some/relative/path.pem",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:       "0.0.0.0:9090",
+				TickInterval:     10 * time.Millisecond,
+				AdmissionKeyFile: tc.path,
+			}
+			err := cfg.Validate()
+			requireNoError(t, err)
+		})
+	}
+}
+
+// TestConfig_Validate_AdmissionKeyFile_WhitespaceOnlyRejectsE_CFG_014 verifies
+// that when admission_key_file is present but whitespace-only, Validate() returns
+// an error containing E-CFG-014 with the canonical error message
+// (BC-2.09.003 v2.1 PC-12; BC-2.09.004 PC-1; E-CFG-014).
+//
+// This test passes against the delivered E-CFG-014 implementation in config.go,
+// which rejects whitespace-only admission_key_file values with the canonical message.
+func TestConfig_Validate_AdmissionKeyFile_WhitespaceOnlyRejectsE_CFG_014(t *testing.T) {
+	t.Parallel()
+
+	// Canonical E-CFG-014 message per rulings v1.0 §1.2 and story AC-001 PC-3.
+	const wantMsg = "config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default"
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "single_space", value: " "},
+		{name: "multiple_spaces", value: "   "},
+		{name: "tab_only", value: "\t"},
+		{name: "mixed_whitespace", value: " \t\n  "},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:       "0.0.0.0:9090",
+				TickInterval:     10 * time.Millisecond,
+				AdmissionKeyFile: tc.value,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+
+			// Must carry E-CFG-001 outer code (all validation failures wrapped).
+			requireECFG001(t, err)
+
+			// Must contain the canonical E-CFG-014 message verbatim.
+			msg := err.Error()
+			requireContains(t, msg, wantMsg)
+		})
+	}
+}
+
+// TestConfig_Validate_AdmissionKeyFile_NoIOPerformed verifies that Validate()
+// performs NO file I/O for admission_key_file — it must not stat, open, or read
+// the path (ARCH-06 §Config purity contract; BC-2.09.004 PC-2).
+//
+// Method: supply a non-whitespace path pointing to a directory entry that, if
+// stat'd or opened, would cause an OS error. Validate() must return nil (path
+// is non-whitespace and valid from Validate's perspective). If Validate() were
+// to open the path it would get an error and either panic or fail — this test
+// would then fail with an unexpected error, catching the I/O violation.
+//
+// Also verifies that a valid path to a file that does not exist is accepted
+// (Validate must not check existence).
+func TestConfig_Validate_AdmissionKeyFile_NoIOPerformed(t *testing.T) {
+	t.Parallel()
+
+	// Create a tempdir for a path that exists as a directory — any attempt to
+	// open it as a key file would produce an OS error (IsDir). We use t.TempDir
+	// so the directory is real; if Validate() opens or stats it, it would see
+	// a directory, not a PEM file, and could only succeed by ignoring the result.
+	// The actual invariant is that Validate() does NO I/O whatsoever.
+	dir := t.TempDir()
+	dirPath := filepath.Join(dir, "a_directory_not_a_pem_file")
+	if mkErr := os.Mkdir(dirPath, 0o755); mkErr != nil {
+		t.Fatalf("setup: mkdir %s: %v", dirPath, mkErr)
+	}
+
+	cfg := &config.Config{
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		AdmissionKeyFile: dirPath, // exists and is a dir — any I/O would reveal this
+	}
+	// Validate() MUST accept this value — it's non-empty, non-whitespace.
+	// If it opens the path and checks its type, it would behave differently from
+	// the spec. The spec says: only reject whitespace-only values.
+	err := cfg.Validate()
+	requireNoError(t, err)
+
+	// Also verify a path that does not exist at all is accepted.
+	cfg2 := &config.Config{
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     10 * time.Millisecond,
+		AdmissionKeyFile: filepath.Join(dir, "does_not_exist.pem"),
+	}
+	err2 := cfg2.Validate()
+	requireNoError(t, err2)
+}
+
+// TestConfig_Validate_AdmissionKeyFile_ExhaustiveErrorCollection verifies that
+// when admission_key_file is whitespace-only AND another field is also invalid,
+// both errors are returned together — exhaustive collection is preserved
+// (BC-2.09.003 Invariant 4; AC-001 PC-5).
+//
+// This test passes against the delivered E-CFG-014 implementation: both the
+// tick_interval error and the E-CFG-014 admission_key_file error are collected.
+func TestConfig_Validate_AdmissionKeyFile_ExhaustiveErrorCollection(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		ListenAddr:       "0.0.0.0:9090",
+		TickInterval:     0,     // invalid — triggers tick_interval error
+		AdmissionKeyFile: "   ", // whitespace-only — triggers E-CFG-014
+	}
+	err := cfg.Validate()
+	requireError(t, err)
+	requireECFG001(t, err)
+
+	msg := err.Error()
+	// Both errors must appear.
+	requireContains(t, msg, "tick_interval")
+	requireContains(t, msg, "admission_key_file")
+}

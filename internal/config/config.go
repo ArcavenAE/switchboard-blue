@@ -149,6 +149,21 @@ type Config struct {
 	// sole authorized key (ADR-012 §2 / BC-2.09.003 PC-11). Each entry must be a
 	// valid PEM block of type "PUBLIC KEY" containing a 32-byte Ed25519 key (E-CFG-009).
 	AuthorizedOperatorKeys []string `yaml:"authorized_operator_keys"`
+
+	// AdmissionKeyFile is the path to the access daemon's persistent Ed25519
+	// admission keypair file (PKCS#8 PEM, "PRIVATE KEY" block). Used for
+	// access-mode operation when the admission identity is needed
+	// (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004).
+	//
+	// When absent (empty string), the access daemon generates a keypair at the
+	// default path (/var/lib/switchboard/access-admission-identity.pem) on first
+	// start and persists it there. When present, the non-empty, non-whitespace
+	// path is used as-is.
+	//
+	// Validate() only checks that a non-empty value is not whitespace-only
+	// (E-CFG-014). File I/O is NOT performed in Validate() — see ARCH-06
+	// §Config purity contract.
+	AdmissionKeyFile string `yaml:"admission_key_file"`
 }
 
 // UpstreamRouter is a single entry in the upstream_routers list.
@@ -280,6 +295,14 @@ func (c *Config) Validate() error {
 		if err := validateOperatorKey(i, entry); err != nil {
 			failures = append(failures, err.Error())
 		}
+	}
+
+	// AC-001 / PC-12 / E-CFG-014 (BC-2.09.003 v2.1 PC-12; BC-2.09.004 PC-1/PC-2):
+	// When admission_key_file is non-empty but whitespace-only, reject it.
+	// Absent (empty string) is accepted — daemon startup applies the default path.
+	// No file I/O is performed here (ARCH-06 §Config purity contract).
+	if c.AdmissionKeyFile != "" && strings.TrimSpace(c.AdmissionKeyFile) == "" {
+		failures = append(failures, "config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default")
 	}
 
 	if len(failures) == 0 {
