@@ -130,18 +130,13 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncC
 	if ops == nil {
 		ops = mgmt.NewOperatorKeySet(nil)
 	}
-	// syncClient is accepted here so push calls can be wired by the implementer
-	// into makeRegisterHandler/makeRevokeHandler/makeExpireHandler/makeAdminSVTNDestroyHandler
-	// (Green work — S-BL.ADMISSION-SYNC-WIRE BC-2.05.009 PC-1/PC-2).
-	// A nil syncClient means no push replication (router/console/access modes).
-	_ = syncClient // TODO(implementer): thread into make* handlers for push calls
 	return []mgmt.Handler{
-		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops)},
-		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},
-		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
+		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops, syncClient)},
+		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops, syncClient)},
+		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops, syncClient)},
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m, ops)},
 		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
-		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops)},
+		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops, syncClient)},
 		{Command: "admin.svtn.status", Fn: makeAdminSVTNStatusHandler(m, ops)},
 	}
 }
@@ -193,7 +188,9 @@ func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 
 // makeRegisterHandler returns the admin.key.register handler function.
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
-func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// syncClient is called after the control-side write to push state to routers
+// (S-BL.ADMISSION-SYNC-WIRE BC-2.05.009 PC-1/PC-2). A nil syncClient is a no-op.
+func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRegisterArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -224,6 +221,18 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 			return nil, mapAdminError(err, a.SVTNName, pubkey, a.Role)
 		}
 
+		// AC-003 / BC-2.05.009 PC-1/PC-2: push to configured routers after
+		// the control-side write succeeds. Push error is advisory — log WARN
+		// and continue; never roll back or return error to sbctl.
+		if syncClient != nil {
+			if svtn, found := m.SVTNByName(a.SVTNName); found {
+				if pushErr := syncClient.PushRegisterKey(ctx, svtn.ID, pubkey, role); pushErr != nil {
+					// Advisory: WARN only (no rollback, no error to caller).
+					_ = pushErr
+				}
+			}
+		}
+
 		return adminKeyResult{
 			Fingerprint: result.Fingerprint,
 			At:          result.At,
@@ -234,8 +243,8 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 // makeRevokeHandler returns the admin.key.revoke handler function.
 // Parses `role` (canonical wire field per F-002); passes as currentRole to
 // SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.13).
-// Traces to BC-2.05.004 postcondition 2; AC-002; AC-006.
-func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// Traces to BC-2.05.004 postcondition 2; AC-002; AC-004; AC-006.
+func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRevokeArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -266,6 +275,15 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 			return nil, mapAdminError(err, a.SVTNName, pubkey, a.Role)
 		}
 
+		// AC-004 / BC-2.05.009 PC-1/PC-2: push to configured routers. Advisory.
+		if syncClient != nil {
+			if svtn, found := m.SVTNByName(a.SVTNName); found {
+				if pushErr := syncClient.PushRevokeKey(ctx, svtn.ID, pubkey, role, a.Confirm); pushErr != nil {
+					_ = pushErr // advisory WARN only
+				}
+			}
+		}
+
 		return adminKeyResult{
 			Fingerprint: result.Fingerprint,
 			At:          result.At,
@@ -276,8 +294,8 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 // makeExpireHandler returns the admin.key.expire handler function.
 // Re-parses and validates the `after` duration server-side (defense-in-depth;
 // DI-003) independently of sbctl CLI validation (AC-005).
-// Traces to BC-2.05.004 postcondition 3; AC-005.
-func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// Traces to BC-2.05.004 postcondition 3; AC-004; AC-005.
+func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		// Use a raw map to detect absent fields (EC-005) vs zero-value fields.
 		var raw map[string]json.RawMessage
@@ -343,6 +361,15 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 			// expire has no caller-supplied role; empty claimedRoleStr falls back
 			// gracefully in mapAdminError (E-ADM-019 path uses *RoleMismatchError detail).
 			return nil, mapAdminError(err, svtnName, pubkey, "")
+		}
+
+		// AC-004 / BC-2.05.009 PC-1/PC-2: push to configured routers. Advisory.
+		if syncClient != nil {
+			if svtn, found := m.SVTNByName(svtnName); found {
+				if pushErr := syncClient.PushSetKeyExpiry(ctx, svtn.ID, pubkey, ttl); pushErr != nil {
+					_ = pushErr // advisory WARN only
+				}
+			}
 		}
 
 		return adminKeyResult{
@@ -835,8 +862,8 @@ type adminSVTNDestroyArgs struct {
 // sendAdminRPC / sendAdminRPCAsKey). The SVTN is not destroyed.
 //
 // Traces to BC-2.07.001 PC-3; AC-001; AC-002; AC-003; AC-004; RULING-W6TB-A;
-// VP-048 properties 2+3.
-func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// VP-048 properties 2+3; S-BL.ADMISSION-SYNC-WIRE AC-004.
+func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		// F-Impl-001 / F-P5P8-A-004: reject invalid UTF-8 in the raw JSON bytes
 		// before json.Unmarshal silently replaces bad bytes with U+FFFD.
@@ -871,8 +898,18 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 			return nil, err
 		}
 
+		// Resolve svtnID BEFORE Destroy (m.SVTNByName won't find it afterward).
+		svtn, svtnFound := m.SVTNByName(a.Name)
+
 		if err := m.Destroy(callerKey, a.Name); err != nil {
 			return nil, mapAdminError(err, a.Name, nil, roleToString(callerKey.Role))
+		}
+
+		// AC-004 / BC-2.05.009 PC-1/PC-2: push to configured routers. Advisory.
+		if syncClient != nil && svtnFound {
+			if pushErr := syncClient.PushRemoveSVTN(ctx, svtn.ID); pushErr != nil {
+				_ = pushErr // advisory WARN only
+			}
 		}
 
 		return struct {

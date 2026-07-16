@@ -289,8 +289,23 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		// Phase (e): construct discovery with LocalNodeAdmissionPubkey wired from
 		// the admission keypair (Decision 5 / BC-2.09.004 PC-3e / BC-2.04.008 Pre-3).
 		// disc.Run is started in runAccessWithConnector (Option Y, Decision 6).
+		//
+		// FORWARD OBLIGATION (from S-BL.NODE-ADMISSION-PROVISIONING): LocalSVTNID and
+		// LocalNodeAddr are intentionally zero-valued here. Populating them requires:
+		//   - LocalSVTNID: the SVTN this access node is assigned to, which is determined
+		//     during the node's provisioning / config-time SVTN assignment — that wiring
+		//     belongs to S-BL.NODE-IDENTIFY-WIRE (provisioning reads the SVTN ID from
+		//     config or the admission certificate).
+		//   - LocalNodeAddr: derived from frame.DeriveNodeAddress(svtnID, admissionPubKey);
+		//     cannot be computed until LocalSVTNID is known.
+		//
+		// This story (S-BL.ADMISSION-SYNC-WIRE) handles the control→router admission
+		// state push only and does not have access to the SVTN assignment for the access
+		// node. Populating these fields is explicitly scoped to S-BL.NODE-IDENTIFY-WIRE.
 		discoveryCfg := discovery.Config{
 			LocalNodeAdmissionPubkey: []byte(admissionPubKey),
+			// LocalSVTNID: populated by S-BL.NODE-IDENTIFY-WIRE
+			// LocalNodeAddr: populated by S-BL.NODE-IDENTIFY-WIRE (derived from svtnID + pubkey)
 		}
 		disc = newDiscovery(discoveryCfg)
 	}

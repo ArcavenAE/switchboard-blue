@@ -328,6 +328,28 @@ func (c *Config) Validate() error {
 		failures = append(failures, "config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default")
 	}
 
+	// E-CFG-015 (BC-2.09.003 v2.1 PC-13; S-BL.ADMISSION-SYNC-WIRE AC-001):
+	// admission_state_file must not be whitespace-only when present.
+	// Absent (empty string) is accepted — router starts with an empty keyset.
+	// No file I/O is performed here (ARCH-06 §Config purity contract).
+	if c.AdmissionStateFile != "" && strings.TrimSpace(c.AdmissionStateFile) == "" {
+		failures = append(failures, "config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset")
+	}
+
+	// E-CFG-016 (BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-001):
+	// Each router_management_endpoints[N].addr must be a valid host:port.
+	// Empty list is accepted — no push replication configured.
+	// No loopback restriction (Ruling 9 of S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.2).
+	// Exhaustive error collection mirrors the upstream_routers pattern (BC-2.09.003 Inv-4).
+	for i, ep := range c.RouterManagementEndpoints {
+		if err := validateHostPort(ep.Addr); err != nil {
+			failures = append(failures, fmt.Sprintf(
+				"config error: router_management_endpoints[%d].addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'",
+				i, sanitizeAddrForError(ep.Addr),
+			))
+		}
+	}
+
 	if len(failures) == 0 {
 		return nil
 	}

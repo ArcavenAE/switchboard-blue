@@ -20,7 +20,12 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
-	"errors"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
 	"sync"
 	"time"
 
@@ -28,14 +33,11 @@ import (
 	"github.com/arcavenae/switchboard/internal/config"
 )
 
-// errAdmissionSyncNotImplemented is the stub sentinel returned by all
-// admissionSyncClient methods. Tests that call these methods will receive this
-// error, causing AC-003/004/009 tests to FAIL (Red Gate).
-//
-// Self-Check (BC-5.38.005 invariant 1): "If I include this real implementation,
-// will the test for this function pass trivially without any implementer work?"
-// Answer: Yes — therefore this body uses the sentinel error, not real logic.
-var errAdmissionSyncNotImplemented = errors.New("admission sync: not implemented")
+// errAdmissionSyncNotImplemented is kept for backward compatibility: test
+// assertions that check errors.Is(err, errAdmissionSyncNotImplemented) use it
+// to confirm the stub has been replaced by a real implementation.
+// The real implementation never returns this sentinel.
+var errAdmissionSyncNotImplemented = fmt.Errorf("admission sync: not implemented")
 
 // Retry-with-backoff constants (BC-2.05.009 Ruling 2; documented per ruling):
 //
@@ -90,8 +92,8 @@ type admissionSyncer interface {
 // Thread-safe: endpoints are protected by mu; Push* methods may be called
 // concurrently from different admin handler goroutines.
 type admissionSyncClient struct {
-	mu        sync.RWMutex
-	endpoints []config.RouterManagementEndpoint
+	mu         sync.RWMutex
+	endpoints  []config.RouterManagementEndpoint
 	daemonPriv ed25519.PrivateKey
 }
 
@@ -118,72 +120,248 @@ func (c *admissionSyncClient) UpdateEndpoints(endpoints []config.RouterManagemen
 	c.endpoints = endpoints
 }
 
+// currentEndpoints returns a snapshot of the endpoint list under read lock.
+func (c *admissionSyncClient) currentEndpoints() []config.RouterManagementEndpoint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]config.RouterManagementEndpoint, len(c.endpoints))
+	copy(out, c.endpoints)
+	return out
+}
+
+// pushRPC dials addr, performs the ADR-012 challenge-response handshake using
+// c.daemonPriv, sends the named command with argsJSON, and reads the response.
+//
+// Returns the first non-nil error encountered (dial, handshake, or RPC error).
+// This is a synchronous, dial-on-demand call (Ruling 2 / Decision 4).
+func (c *admissionSyncClient) pushRPC(ctx context.Context, addr, command string, argsJSON json.RawMessage) error {
+	const handshakeTimeout = 10 * time.Second
+	const maxMsg = 1 << 16 // 64 KiB per message
+
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("dial %s: %w", addr, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if err := conn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		return fmt.Errorf("set deadline: %w", err)
+	}
+
+	// Step 1: read CHALLENGE from server.
+	var challenge struct {
+		Type      string `json:"type"`
+		Nonce     string `json:"nonce"`
+		DaemonSig string `json:"daemon_sig"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&challenge); err != nil {
+		return fmt.Errorf("read challenge: %w", err)
+	}
+	if challenge.Type != "challenge" {
+		return fmt.Errorf("unexpected message type %q (want challenge)", challenge.Type)
+	}
+
+	nonceBytes, err := base64.RawURLEncoding.DecodeString(challenge.Nonce)
+	if err != nil {
+		return fmt.Errorf("decode nonce: %w", err)
+	}
+
+	// Step 2: sign the nonce with our daemon private key.
+	nonceSig := ed25519.Sign(c.daemonPriv, nonceBytes)
+	pub := c.daemonPriv.Public().(ed25519.PublicKey)
+
+	cresp := struct {
+		Type     string `json:"type"`
+		NonceSig string `json:"nonce_sig"`
+		Pubkey   string `json:"pubkey"`
+	}{
+		Type:     "challenge_response",
+		NonceSig: base64.RawURLEncoding.EncodeToString(nonceSig),
+		Pubkey:   base64.RawURLEncoding.EncodeToString([]byte(pub)),
+	}
+	data, err := json.Marshal(cresp)
+	if err != nil {
+		return fmt.Errorf("marshal challenge_response: %w", err)
+	}
+	data = append(data, '\n')
+	if _, err := conn.Write(data); err != nil {
+		return fmt.Errorf("send challenge_response: %w", err)
+	}
+
+	// Step 3: read AUTH_OK or AUTH_FAIL.
+	var authResult struct {
+		Type    string `json:"type"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&authResult); err != nil {
+		return fmt.Errorf("read auth result: %w", err)
+	}
+	if authResult.Type != "auth_ok" {
+		return fmt.Errorf("authentication failed: type=%q code=%q msg=%q",
+			authResult.Type, authResult.Code, authResult.Message)
+	}
+
+	// Step 4: send the RPC request.
+	reqID := fmt.Sprintf("sync-%d", time.Now().UnixNano())
+	req := struct {
+		Type    string          `json:"type"`
+		ID      string          `json:"id"`
+		Command string          `json:"command"`
+		Args    json.RawMessage `json:"args"`
+	}{
+		Type:    "request",
+		ID:      reqID,
+		Command: command,
+		Args:    argsJSON,
+	}
+	reqData, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal rpc request: %w", err)
+	}
+	reqData = append(reqData, '\n')
+	if _, err := conn.Write(reqData); err != nil {
+		return fmt.Errorf("send rpc request: %w", err)
+	}
+
+	// Step 5: read the RPC response.
+	var resp struct {
+		Type  string `json:"type"`
+		ID    string `json:"id"`
+		OK    bool   `json:"ok"`
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(io.LimitReader(conn, maxMsg)).Decode(&resp); err != nil {
+		return fmt.Errorf("read rpc response: %w", err)
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("rpc %s error: code=%q msg=%q", command, resp.Error.Code, resp.Error.Message)
+	}
+	return nil
+}
+
+// pushWithRetry calls pushRPC to all configured endpoints with retry-with-backoff
+// (admissionSyncRetryInitial × 2 per attempt, capped at admissionSyncRetryMaxDelay,
+// max admissionSyncRetryMax attempts per endpoint).
+//
+// Returns the last error from any endpoint, or nil if all succeeds. An empty
+// endpoint list is a no-op (return nil). BC-2.05.009 Ruling 2 Decision 4.
+func (c *admissionSyncClient) pushWithRetry(ctx context.Context, command string, argsJSON json.RawMessage) error {
+	endpoints := c.currentEndpoints()
+	if len(endpoints) == 0 {
+		return nil
+	}
+
+	var lastErr error
+	for _, ep := range endpoints {
+		delay := admissionSyncRetryInitial
+		for attempt := 0; attempt < admissionSyncRetryMax; attempt++ {
+			err := c.pushRPC(ctx, ep.Addr, command, argsJSON)
+			if err == nil {
+				lastErr = nil
+				break
+			}
+			lastErr = err
+			if attempt+1 < admissionSyncRetryMax {
+				select {
+				case <-ctx.Done():
+					return fmt.Errorf("context cancelled after %d attempts on %s: %w", attempt+1, ep.Addr, ctx.Err())
+				case <-time.After(delay):
+				}
+				delay *= 2
+				if delay > admissionSyncRetryMaxDelay {
+					delay = admissionSyncRetryMaxDelay
+				}
+			}
+		}
+	}
+	return lastErr
+}
+
 // PushRegisterKey pushes an internal.admission.register RPC to all configured
 // router endpoints after a successful admin.key.register on control.
 //
-// STUB: returns errAdmissionSyncNotImplemented so AC-003/AC-004 tests FAIL at
-// the Red Gate. The implementer writes real dial/retry/send logic here.
-//
-// Self-Check (BC-5.38.005 invariant 1): "If I include this real implementation,
-// will the test for this function pass trivially without any implementer work?"
-// Answer: Yes — real push logic would satisfy AC-003; therefore this is a stub.
+// svtn_id is encoded as 32 lowercase hex chars (BC-2.05.009 Inv-4).
+// Retry-with-backoff per admissionSyncRetry* constants (Ruling 2 / Decision 4).
+// Push error is advisory — callers log WARN and continue (PC-2).
 func (c *admissionSyncClient) PushRegisterKey(
-	_ context.Context,
-	_ [16]byte,
-	_ ed25519.PublicKey,
-	_ admission.KeyRole,
+	ctx context.Context,
+	svtnID [16]byte,
+	pubkey ed25519.PublicKey,
+	role admission.KeyRole,
 ) error {
-	return errAdmissionSyncNotImplemented
+	args := map[string]any{
+		"svtn_id":        hex.EncodeToString(svtnID[:]),
+		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pubkey)),
+		"role":           role.String(),
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("PushRegisterKey: marshal args: %w", err)
+	}
+	return c.pushWithRetry(ctx, CmdAdmissionRegister, argsJSON)
 }
 
 // PushRevokeKey pushes an internal.admission.revoke RPC to all configured
 // router endpoints after a successful admin.key.revoke on control.
-//
-// STUB: returns errAdmissionSyncNotImplemented so AC-003/AC-004 tests FAIL.
-//
-// Self-Check (BC-5.38.005 invariant 1): "If I include this real implementation,
-// will the test for this function pass trivially without any implementer work?"
-// Answer: Yes — therefore stub.
 func (c *admissionSyncClient) PushRevokeKey(
-	_ context.Context,
-	_ [16]byte,
-	_ ed25519.PublicKey,
-	_ admission.KeyRole,
-	_ bool,
+	ctx context.Context,
+	svtnID [16]byte,
+	pubkey ed25519.PublicKey,
+	role admission.KeyRole,
+	confirm bool,
 ) error {
-	return errAdmissionSyncNotImplemented
+	args := map[string]any{
+		"svtn_id":        hex.EncodeToString(svtnID[:]),
+		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pubkey)),
+		"role":           role.String(),
+		"confirm":        confirm,
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("PushRevokeKey: marshal args: %w", err)
+	}
+	return c.pushWithRetry(ctx, CmdAdmissionRevoke, argsJSON)
 }
 
 // PushSetKeyExpiry pushes an internal.admission.expire RPC to all configured
 // router endpoints after a successful admin.key.expire on control.
-//
-// STUB: returns errAdmissionSyncNotImplemented so AC-003/AC-004 tests FAIL.
-//
-// Self-Check (BC-5.38.005 invariant 1): "If I include this real implementation,
-// will the test for this function pass trivially without any implementer work?"
-// Answer: Yes — therefore stub.
 func (c *admissionSyncClient) PushSetKeyExpiry(
-	_ context.Context,
-	_ [16]byte,
-	_ ed25519.PublicKey,
-	_ time.Duration,
+	ctx context.Context,
+	svtnID [16]byte,
+	pubkey ed25519.PublicKey,
+	ttl time.Duration,
 ) error {
-	return errAdmissionSyncNotImplemented
+	args := map[string]any{
+		"svtn_id":        hex.EncodeToString(svtnID[:]),
+		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pubkey)),
+		"after":          ttl.String(),
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("PushSetKeyExpiry: marshal args: %w", err)
+	}
+	return c.pushWithRetry(ctx, CmdAdmissionExpire, argsJSON)
 }
 
 // PushRemoveSVTN pushes an internal.admission.remove-svtn RPC to all configured
 // router endpoints after a successful admin.svtn.destroy on control.
-//
-// STUB: returns errAdmissionSyncNotImplemented so AC-003/AC-004 tests FAIL.
-//
-// Self-Check (BC-5.38.005 invariant 1): "If I include this real implementation,
-// will the test for this function pass trivially without any implementer work?"
-// Answer: Yes — therefore stub.
 func (c *admissionSyncClient) PushRemoveSVTN(
-	_ context.Context,
-	_ [16]byte,
+	ctx context.Context,
+	svtnID [16]byte,
 ) error {
-	return errAdmissionSyncNotImplemented
+	args := map[string]any{
+		"svtn_id": hex.EncodeToString(svtnID[:]),
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("PushRemoveSVTN: marshal args: %w", err)
+	}
+	return c.pushWithRetry(ctx, CmdAdmissionRemoveSVTN, argsJSON)
 }
 
 // PushFullSnapshot iterates all admitted key entries across all SVTNs in ks
@@ -193,11 +371,33 @@ func (c *admissionSyncClient) PushRemoveSVTN(
 // Called from runControl on startup, before the management server begins serving
 // (BC-2.05.009 Postcondition 7 / AC-009 / Decision 10).
 //
-// STUB: returns errAdmissionSyncNotImplemented so AC-009 tests FAIL.
-//
-// Self-Check (BC-5.38.005 invariant 1): "If I include this real implementation,
-// will the test for this function pass trivially without any implementer work?"
-// Answer: Yes — therefore stub.
-func (c *admissionSyncClient) PushFullSnapshot(_ context.Context, _ *admission.AdmittedKeySet) error {
-	return errAdmissionSyncNotImplemented
+// An empty keyset is a no-op (return nil). Push errors are advisory — the
+// caller (runControl) logs WARN and continues.
+func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admission.AdmittedKeySet) error {
+	allEntries := ks.AllSVTNEntries()
+	if len(allEntries) == 0 {
+		// Empty keyset — no push attempt (AC-009 EmptyKeyset postcondition).
+		return nil
+	}
+
+	var lastErr error
+	for svtnID, entries := range allEntries {
+		for _, e := range entries {
+			if err := c.PushRegisterKey(ctx, svtnID, e.PublicKey, e.Role); err != nil {
+				lastErr = err
+				// Advisory: continue with remaining entries.
+			}
+			// Push expiry separately if set (BC-2.05.009 PC-7 / AC-009 ExpiryPushed).
+			if !e.KeyExpiry().IsZero() {
+				ttl := time.Until(e.KeyExpiry())
+				if ttl > 0 {
+					if err := c.PushSetKeyExpiry(ctx, svtnID, e.PublicKey, ttl); err != nil {
+						lastErr = err
+						// Advisory: continue.
+					}
+				}
+			}
+		}
+	}
+	return lastErr
 }

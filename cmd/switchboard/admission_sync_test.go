@@ -52,6 +52,8 @@ import (
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 // mustGenKeySyncTest generates an Ed25519 keypair or fatals.
+//
+//nolint:unused // test writer helper; retained for future test expansion
 func mustGenKeySyncTest(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -63,6 +65,8 @@ func mustGenKeySyncTest(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 
 // newSVTNManagerWithSVTN creates an SVTNManager with a single SVTN registered,
 // and returns the manager plus the [16]byte ID of the created SVTN.
+//
+//nolint:unused // test writer helper; retained for future test expansion
 func newSVTNManagerWithSVTN(t *testing.T, svtnName string) (*svtnmgmt.SVTNManager, [16]byte) {
 	t.Helper()
 	ctrlPub, _, err := ed25519.GenerateKey(rand.Reader)
@@ -120,6 +124,8 @@ func (m *mockSyncer) PushRemoveSVTN(_ context.Context, svtnID [16]byte) error {
 //
 // Uses listenUnixMgmt per F-P2L1-001 register-before-serve pattern.
 // NOT t.Parallel compatible — creates filesystem sockets, interacts with umask.
+//
+//nolint:unparam // srv return is retained for future test expansion; callers currently ignore it
 func startAdmissionSyncWireServer(t *testing.T, ks *admission.AdmittedKeySet, snapshotPath string) (socketPath string, daemonPriv ed25519.PrivateKey, srv *mgmt.Server) {
 	t.Helper()
 
@@ -368,9 +374,9 @@ func TestAdmissionSync_RegisterKey_PushCalledAfterControlWrite(t *testing.T) {
 	// We need the openssh-format key. Use the helper that existing tests use.
 	// The wire format is base64url(raw 32 bytes) per the args encoding.
 	resp := sendAdminRPC(t, es.socketPath, ctrlPriv, "admin.key.register", map[string]any{
-		"svtn_id":      "test-svtn-register",
+		"svtn_id":        "test-svtn-register",
 		"pubkey_openssh": pubkeyB64,
-		"role":         "access",
+		"role":           "access",
 	})
 
 	// If the handler returned an error, the RPC failed — check for it.
@@ -452,6 +458,10 @@ func TestAdmissionSync_RegisterKey_PushFailureDoesNotRollbackControlWrite(t *tes
 		t.Errorf("AC-003 PC-2: admin.key.register must return success even when push fails; "+
 			"got error code=%q msg=%v. Push failure must be advisory (WARN log only, no rollback).",
 			code, errObj)
+	}
+	// STRENGTHENED: push MUST have been attempted even though it failed.
+	if len(sync.calls) == 0 {
+		t.Error("AC-003 PC-2: push must be attempted even though it fails — syncer.calls is empty")
 	}
 	// Additionally: the key must still be in the control-side AdmittedKeySet.
 	svtnRec, found := m.SVTNByName("push-fail-svtn")
@@ -713,6 +723,10 @@ func TestAdmissionSync_PushFailure_AllWritePaths_Advisory(t *testing.T) {
 					"push failure must be advisory (WARN log only, no error to sbctl). err=%v",
 					cmd, code, errObj)
 			}
+			// STRENGTHENED: push MUST have been attempted even though it failed.
+			if len(sync.calls) == 0 {
+				t.Error("push must be attempted even though it fails — syncer.calls is empty")
+			}
 		})
 	}
 }
@@ -924,7 +938,7 @@ func TestRouterAdmissionHandler_Register_SnapshotWriteFailure_Advisory(t *testin
 	if errObj, ok := resp["error"].(map[string]any); ok {
 		code, _ := errObj["code"].(string)
 		if code == "E-RPC-010" {
-			t.Errorf("AC-005 SnapshotWriteFailure_Advisory: E-RPC-010 — handler not registered (Red Gate stub). "+
+			t.Errorf("AC-005 SnapshotWriteFailure_Advisory: E-RPC-010 — handler not registered (Red Gate stub). " +
 				"Once implemented, snapshot write failure must be advisory (not propagated to caller).")
 			return
 		}
@@ -959,8 +973,10 @@ func TestSnapshot_JSON_FieldEncoding_CorrectSchema(t *testing.T) {
 
 	ks := admission.NewAdmittedKeySet()
 	var svtnID [16]byte
-	copy(svtnID[:], []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10})
+	copy(svtnID[:], []byte{
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+	})
 
 	pub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -1712,7 +1728,7 @@ func TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter(t *testing.T) {
 	sync := &mockSyncer{}
 	client := newAdmissionSyncClient(
 		[]config.RouterManagementEndpoint{{Addr: "127.0.0.1:0"}}, // placeholder — won't actually dial
-		make(ed25519.PrivateKey, ed25519.PrivateKeySize),          // placeholder key
+		make(ed25519.PrivateKey, ed25519.PrivateKeySize),         // placeholder key
 	)
 	_ = client // client stub returns errAdmissionSyncNotImplemented
 
@@ -1913,4 +1929,3 @@ func TestAdmissionSync_SIGHUPReload_NewListUsedOnNextPush(t *testing.T) {
 		}
 	}
 }
-

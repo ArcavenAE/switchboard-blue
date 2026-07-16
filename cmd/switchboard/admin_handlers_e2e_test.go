@@ -40,6 +40,8 @@ var (
 // startE2EServer starts a real mgmt.Server on a temp Unix socket.
 // Handlers are registered via the provided slice.
 // t.Cleanup registers shutdown. Returns the *e2eServer.
+//
+//nolint:unparam // handlers always nil at call sites; retained for future test expansion
 func startE2EServer(t *testing.T, handlers []mgmt.Handler) *e2eServer {
 	t.Helper()
 

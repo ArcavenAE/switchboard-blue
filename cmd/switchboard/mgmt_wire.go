@@ -488,7 +488,24 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// metrics wiring (S-BL.PATH-TRACKER-WIRING) as the source-of-PathTracker
 	// registrations for paths.list.
 	routerLogger := newStdLogger(w)
-	router := buildRouter(admission.NewAdmittedKeySet(), routerLogger)
+	routerKS := admission.NewAdmittedKeySet()
+
+	// Phase (b1): load snapshot from admission_state_file before serving
+	// (S-BL.ADMISSION-SYNC-WIRE AC-007; BC-2.05.010 PC-6/7). Fail-closed on
+	// corrupt/unknown-schema file (Decision 7c / EC-011 / E-KEY-002).
+	// Absent path → no-op; absent file → empty keyset + INFO log (Decision 7b).
+	if err := loadSnapshotFromFile(cfg.AdmissionStateFile, routerKS); err != nil {
+		return fmt.Errorf("runRouter: load admission snapshot: %w", err)
+	}
+	if cfg.AdmissionStateFile != "" {
+		if _, statErr := os.Stat(cfg.AdmissionStateFile); os.IsNotExist(statErr) {
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "switchboard router: admission_state_file not found — starting with empty keyset\n")
+			}
+		}
+	}
+
+	router := buildRouter(routerKS, routerLogger)
 
 	// Phase (c): register metrics handlers before Serve starts. Passing the
 	// live router installs a forwarding-entry hook that populates the paths.list
@@ -502,6 +519,13 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// wireMetricsHandlers (S-BL.CLI-SURFACE-COMPLETION Decision 4 / AC-013).
 	if err := wireRouterControlHandlers(mgmtSrv, configPath, sighupCh, drainRequestCh); err != nil {
 		return fmt.Errorf("runRouter: wire router control handlers: %w", err)
+	}
+
+	// Phase (c3): register internal.admission.* push handlers (router-only;
+	// ADR-004 role-exclusion / AC-004). Register before Serve (F-P2L1-001).
+	// S-BL.ADMISSION-SYNC-WIRE AC-002/005/008.
+	if err := wireAdmissionSyncHandlers(mgmtSrv, routerKS, cfg.AdmissionStateFile); err != nil {
+		return fmt.Errorf("runRouter: wire admission sync handlers: %w", err)
 	}
 
 	// Phase (d): bind the data-plane TCP listener on cfg.ListenAddr
@@ -762,6 +786,17 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	if w != nil {
 		_, _ = fmt.Fprintf(w, "switchboard router: data plane listening on %s\n", dataLn.Addr().String())
 		_, _ = fmt.Fprintf(w, "switchboard router: management socket at %s\n", resolveManagementSocket(cfg, "router"))
+		// AC-008 / BC-2.09.003 v2.1 PC-14 / Ruling 9: emit INFO log for the
+		// router management listener bind address so operators can verify the
+		// address and apply appropriate firewall policy. No loopback restriction
+		// (Ruling 9 of S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.2).
+		if len(cfg.RouterManagementEndpoints) > 0 {
+			for _, ep := range cfg.RouterManagementEndpoints {
+				_, _ = fmt.Fprintf(w, "switchboard router: router management listener bound to %s (ensure firewall policy restricts access as appropriate)\n", ep.Addr)
+			}
+		} else {
+			_, _ = fmt.Fprintf(w, "switchboard router: router management listener bound to %s (ensure firewall policy restricts access as appropriate)\n", resolveManagementSocket(cfg, "router"))
+		}
 		// BC-2.09.003 PC-7 application: drain_timeout emitted at startup so
 		// operators can confirm the resolved value (config or default).
 		_, _ = fmt.Fprintf(w, "switchboard router: drain_timeout=%s\n", drainCoord.Timeout())
@@ -1073,6 +1108,8 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 //  2. BuildAdminHandlers passed via NewServer initial handlers (already registered)
 //  3. wireMetricsHandlers — register metrics RPC handlers before Serve
 //  4. serveMgmtServer — start Serve goroutine
+//  5. PushFullSnapshot — push all keyset entries to configured routers before serving
+//     (S-BL.ADMISSION-SYNC-WIRE AC-009 / BC-2.05.009 Postcondition 7 / Decision 10)
 func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
@@ -1089,10 +1126,19 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
 	ops := mgmt.NewOperatorKeySet(nil)
 
+	// Construct the admission sync client with the configured router management
+	// endpoints (S-BL.ADMISSION-SYNC-WIRE AC-009/010 / BC-2.05.009 Ruling 2).
+	// An empty endpoint list → push methods are no-ops (single-router deployment).
+	var endpoints []config.RouterManagementEndpoint
+	if cfg != nil {
+		endpoints = cfg.RouterManagementEndpoints
+	}
+	syncClient := newAdmissionSyncClient(endpoints, daemonPriv)
+
 	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	// Pass nil syncClient — the real admissionSyncClient is wired by the implementer
-	// after newAdmissionSyncClient is constructed (S-BL.ADMISSION-SYNC-WIRE Green work).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, nil))
+	// Pass the real syncClient so push calls are wired into make*Handler
+	// (S-BL.ADMISSION-SYNC-WIRE AC-003/004).
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, syncClient))
 	if mgmtErr != nil {
 		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}
@@ -1108,6 +1154,14 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// Phase (c): start the Serve goroutine.
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
+
+	// Phase (d): push full snapshot to all configured routers BEFORE serving
+	// (BC-2.05.009 Postcondition 7 / AC-009 / Decision 10). Push error is
+	// advisory — log and continue.
+	if pushErr := syncClient.PushFullSnapshot(ctx, ks); pushErr != nil {
+		// Advisory: WARN only; do not fail startup (BC-2.05.009 PC-2).
+		_ = pushErr
+	}
 
 	// Block until context is cancelled (ARCH-01 lifecycle contract).
 	<-ctx.Done()
