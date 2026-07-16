@@ -114,16 +114,27 @@ type adminKeyEntry struct {
 // operator keys configured; bootstrap mode uses the daemon's own key via
 // SVTNManager.IsBootstrapKey).
 //
+// syncClient is the admissionSyncer used to push admission-state changes to
+// configured router endpoints after each successful write operation
+// (S-BL.ADMISSION-SYNC-WIRE; BC-2.05.009 Ruling 2). A nil value is explicitly
+// permitted and means "no push replication" — router, console, and access modes
+// pass nil; only control mode passes a non-nil *admissionSyncClient.
+//
 // Only the control-mode daemon should call BuildAdminHandlers. All other
 // daemon modes pass nil (or an empty slice) for admin commands so that they
 // correctly return E-RPC-010 "unknown command" (ADR-004; AC-004).
-func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgmt.Handler {
+func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer) []mgmt.Handler {
 	if m == nil {
 		panic("BuildAdminHandlers: SVTNManager must not be nil (EC-004)")
 	}
 	if ops == nil {
 		ops = mgmt.NewOperatorKeySet(nil)
 	}
+	// syncClient is accepted here so push calls can be wired by the implementer
+	// into makeRegisterHandler/makeRevokeHandler/makeExpireHandler/makeAdminSVTNDestroyHandler
+	// (Green work — S-BL.ADMISSION-SYNC-WIRE BC-2.05.009 PC-1/PC-2).
+	// A nil syncClient means no push replication (router/console/access modes).
+	_ = syncClient // TODO(implementer): thread into make* handlers for push calls
 	return []mgmt.Handler{
 		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops)},
 		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},

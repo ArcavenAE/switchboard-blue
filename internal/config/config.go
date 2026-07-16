@@ -164,6 +164,29 @@ type Config struct {
 	// (E-CFG-014). File I/O is NOT performed in Validate() — see ARCH-06
 	// §Config purity contract.
 	AdmissionKeyFile string `yaml:"admission_key_file"`
+
+	// RouterManagementEndpoints lists the management endpoints of router daemons
+	// that control-mode should push admission-state updates to (S-BL.ADMISSION-SYNC-WIRE).
+	// Each entry carries a TCP host:port address of the router's management server.
+	// An empty slice means no push replication.
+	// Each entry's Addr is validated as host:port (E-CFG-016 / validateHostPort).
+	// Control-mode only — ignored by router/console/access modes.
+	RouterManagementEndpoints []RouterManagementEndpoint `yaml:"router_management_endpoints"`
+
+	// AdmissionStateFile is the path where the router-mode daemon writes and reads
+	// its VLR-local admitted-state snapshot (S-BL.ADMISSION-SYNC-WIRE).
+	// Optional — when absent or empty, the router starts with an empty keyset and
+	// does not persist admission state across restarts.
+	// When present, must be a non-empty, non-whitespace path (E-CFG-015).
+	// File I/O is NOT performed in Validate() — see ARCH-06 §Config purity contract.
+	AdmissionStateFile string `yaml:"admission_state_file"`
+}
+
+// RouterManagementEndpoint is a single entry in the router_management_endpoints list.
+// Addr is the TCP host:port of the router's management server (E-CFG-016).
+type RouterManagementEndpoint struct {
+	// Addr is the TCP address of the router management endpoint, e.g. "10.0.0.2:9093".
+	Addr string `yaml:"addr"`
 }
 
 // UpstreamRouter is a single entry in the upstream_routers list.

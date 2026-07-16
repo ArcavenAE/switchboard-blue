@@ -1090,7 +1090,9 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	ops := mgmt.NewOperatorKeySet(nil)
 
 	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops))
+	// Pass nil syncClient — the real admissionSyncClient is wired by the implementer
+	// after newAdmissionSyncClient is constructed (S-BL.ADMISSION-SYNC-WIRE Green work).
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, nil))
 	if mgmtErr != nil {
 		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}
