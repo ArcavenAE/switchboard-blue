@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.009
 document_type: behavioral-contract
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
 timestamp: 2026-07-15T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "27b8999"
+input-hash: "3e7d080"
 extracted_from: null
 bc_id: BC-2.05.009
 subsystem: admission-security
@@ -27,6 +27,13 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-16
+    version: "1.1"
+    change: >
+      Amend Invariant 4: exempt svtn_id from encoding-parity rule — on the
+      internal.admission.* wire it is the 32-lowercase-hex-char encoding of
+      the [16]byte SVTN UUID (not the human-readable name). Rulings v1.2
+      (commit 3d64ac2) / svtn_id hex-encoding fix.
   - date: 2026-07-15
     version: "1.0"
     change: >
@@ -142,10 +149,21 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 3. **`internal.admission.*` commands are internal-RPC only.** They are registered on the
    router-mode management server (not on control/console/access-mode servers), and they are
    NEVER operator-facing `admin.*` verbs. ADR-004 / AC-004 role-exclusion remains intact.
-4. **Encoding parity with `admin.*` handlers:** Args structs for `internal.admission.*`
-   commands reuse or lightly adapt the same encoding as the corresponding `admin.key.*`
-   args — `pubkey_openssh` (base64-encoded OpenSSH wire format), `role` (canonical string),
-   `after` (Go duration string), `confirm` (bool).
+4. **Encoding parity with `admin.*` handlers, with `svtn_id` exemption:** Args structs
+   for `internal.admission.*` commands reuse or lightly adapt the same encoding as the
+   corresponding `admin.key.*` args for all fields EXCEPT `svtn_id`:
+   - `pubkey_openssh` (base64-encoded OpenSSH wire format) — same as `admin.key.*`
+   - `role` (canonical string) — same as `admin.key.*`
+   - `after` (Go duration string) — same as `admin.key.*`
+   - `confirm` (bool) — same as `admin.key.*`
+   - `svtn_id` — **EXEMPTED from encoding parity.** On the `internal.admission.*` wire,
+     `svtn_id` is the **32-lowercase-hex-char encoding of the `[16]byte` SVTN UUID**
+     (matching the VLR-local snapshot schema in BC-2.05.010), NOT the human-readable
+     SVTN name used by the `admin.key.*` / `admin.svtn.*` args. The control-side admin
+     handler resolves the human-readable name to `[16]byte` via `SVTNManager.SVTNByName`
+     before constructing the push args. This distinction exists because the router has no
+     `SVTNManager` to resolve names and derives `FrameAuthKey`/`NodeAddr` from the raw
+     `[16]byte` UUID (rulings v1.2, commit 3d64ac2).
 5. **SIGHUP reload integration:** When control receives SIGHUP and reloads config, the
    `admissionSyncClient` endpoint list is updated from the new config. In-flight pushes
    are not interrupted; the new list is used for the next push event.
@@ -229,4 +247,5 @@ S-BL.ADMISSION-SYNC-WIRE — all postconditions in this BC trace to acceptance c
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-07-16 | Amend Invariant 4: exempt `svtn_id` from encoding-parity rule — on the `internal.admission.*` wire it is the 32-lowercase-hex-char encoding of the `[16]byte` SVTN UUID (not the human-readable name). Rulings v1.2 (commit 3d64ac2) / svtn_id hex-encoding fix. |
 | 1.0 | 2026-07-15 | Initial draft — admission-state-sync push RPC: four write paths, `internal.admission.*` commands, push failure advisory (WARN, no rollback), `admitted=false` on load, full-snapshot on control startup, nil-syncer no-op. Authored per S-BL.ADMISSION-SYNC-WIRE BC groundwork item A1. |
