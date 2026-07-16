@@ -107,7 +107,10 @@ func requireAdmissionNotContains(t *testing.T, s, substr string) {
 }
 
 // writePKCS8Ed25519PEM writes a PKCS#8 PEM file for a given Ed25519 private key
-// at path with the given file mode. Used by multiple tests.
+// at path with the given file mode. An explicit os.Chmod follows the WriteFile to
+// make the on-disk mode umask-independent — the same mitigation applied to the
+// MkdirAll/orphan tests for the listenUnixMgmt umask=0177 race (AC-005 flake fix).
+// os.WriteFile's perm arg is masked by the ambient process umask; os.Chmod is not.
 func writePKCS8Ed25519PEM(t *testing.T, path string, priv ed25519.PrivateKey, mode os.FileMode) {
 	t.Helper()
 	der, err := x509.MarshalPKCS8PrivateKey(priv)
@@ -117,6 +120,11 @@ func writePKCS8Ed25519PEM(t *testing.T, path string, priv ed25519.PrivateKey, mo
 	pemData := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 	if err := os.WriteFile(path, pemData, mode); err != nil {
 		t.Fatalf("write pem file %s: %v", path, err)
+	}
+	// Explicit Chmod: ensures on-disk mode matches tc.mode regardless of concurrent
+	// umask changes from listenUnixMgmt (AC-005 umask-race mitigation).
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatalf("chmod pem file %s to %04o: %v", path, mode, err)
 	}
 }
 
@@ -181,6 +189,19 @@ func TestAdmissionKeypair_FirstRun_FileAbsent_KeypairGeneratedAtomically(t *test
 	// AC-002 PC-2: final file must have mode 0600.
 	if mode := fi.Mode().Perm(); mode != 0o600 {
 		t.Errorf("expected mode 0600, got %04o (AC-002 PC-2; rulings §1.3 atomic write)", mode)
+	}
+
+	// AC-002 PC-4: INFO log "admission identity: generated new keypair at <path>" must be
+	// emitted on first run (BC-2.09.004 PC-4; Rulings §1.3; M1 discriminator —
+	// removing or rewording the log line must fail this assertion).
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "admission identity: generated new keypair at ") {
+		t.Errorf("expected INFO log containing \"admission identity: generated new keypair at \" in stderr; got %q\n"+
+			"(AC-002 PC-4; BC-2.09.004 PC-4 — log must be emitted on first-run keypair generation)", stderrStr)
+	}
+	if !strings.Contains(stderrStr, keyPath) {
+		t.Errorf("expected key path %q in INFO log; got %q\n"+
+			"(AC-002 PC-4 — log must include the generated key path)", keyPath, stderrStr)
 	}
 }
 
@@ -531,13 +552,16 @@ func TestAdmissionKeypair_PermissionsWarning_BroaderThan0600(t *testing.T) {
 				t.Fatal("expected non-nil private key when permissions are broader than 0600 (advisory, not fatal)")
 			}
 
-			// WARNING must be logged to stderr.
+			// WARNING must be logged to stderr and must contain BOTH the octal mode AND
+			// "permissions" — so a malformed warning message (e.g. missing one token)
+			// is caught here. (NIT-B: tighten from OR to AND to eliminate false passes.)
 			stderrStr := stderr.String()
 			modeStr := fmt.Sprintf("%04o", tc.mode)
-			if !strings.Contains(stderrStr, modeStr) && !strings.Contains(stderrStr, "permissions") {
-				t.Errorf("expected permissions WARNING in stderr for %s key file; stderr=%q\n"+
+			if !strings.Contains(stderrStr, modeStr) || !strings.Contains(stderrStr, "permissions") {
+				t.Errorf("expected permissions WARNING in stderr containing BOTH %q AND \"permissions\" for %s key file;\n"+
+					"stderr=%q\n"+
 					"(BC-2.09.004 PC-4; rulings §1.4; F-1 — OpenSSH semantics: any group/other bit → warn)",
-					modeStr, stderrStr)
+					modeStr, modeStr, stderrStr)
 			}
 		})
 	}
@@ -754,8 +778,15 @@ func makeDiscForAC008(t *testing.T, heartbeatObserver func()) (*discovery.Discov
 }
 
 // TestDiscoveryRun_WGAddBeforeGoStatement verifies BC-2.04.008 PC-1 and ARCH-01
-// v1.7 §Goroutine WaitGroup Contract: wg.Add(1) is called before the go statement
-// that starts disc.Run, and disc.Run is actually invoked.
+// v1.7 §Goroutine WaitGroup Contract: disc.Run is actually invoked by
+// runAccessWithConnector and runs to completion (joined via wg.Wait).
+//
+// Name note: the "WGAddBeforeGoStatement" suffix refers to the structural
+// WaitGroup contract (Add before go). The Add-before-go ordering itself is
+// validated by the Go race detector under -race — this body tests that disc.Run
+// is started and the result can be joined. See also
+// TestDiscoveryRun_NoGoroutineLeak_AfterCtxCancel which uses a blocking
+// HeartbeatObserver to confirm wg.Wait() actually waits for the disc goroutine.
 //
 // Discriminating strategy: disc is constructed with a HeartbeatObserver that
 // closes a `started` channel on first call, and a TickSource for deterministic
@@ -1308,5 +1339,190 @@ func TestRunAccess_WiresLocalNodeAdmissionPubkey_FromLoadedKeypair(t *testing.T)
 	default:
 		t.Fatal("newDiscovery seam was never called — runAccess did not reach discovery.New " +
 			"(adversary F-6; the seam must be called for AC-007 through-runAccess coverage to be non-vacuous)")
+	}
+}
+
+// ---- M3: tilde expansion in admission key path (BC-2.07.003 EC-007 convention) ---
+
+// TestRunAccess_TildeExpansion_TildeSlashPrefix verifies M3 (BC-2.07.003 EC-007):
+// when admission_key_file begins with "~/", runAccess expands it to
+// $HOME/<remainder> — NOT the literal path "~/..." under the cwd.
+//
+// Strategy: set HOME to a temp dir via t.Setenv (NOT t.Parallel — t.Setenv forbids it),
+// configure AdmissionKeyFile to "~/subdir/adm.pem", override defaultAdmissionKeyFile
+// so the seam is unused, call runAccess with a 200ms timeout, and verify the key file
+// lands under $HOME/subdir/adm.pem — not a literal "~" directory.
+//
+// Discriminating proof: reverting the tilde-expansion block in runAccess causes
+// MkdirAll to create a literal "~/" directory under cwd; the assertion
+// "key file does not land under a literal '~' dir" then fails.
+//
+// NOT t.Parallel(): uses t.Setenv("HOME", …) which mutates process env.
+//
+// Traces: M3 / BC-2.07.003 EC-007; rulings §1.2 + BC-2.09.004 PC-2; Decision 2.
+func TestRunAccess_TildeExpansion_TildeSlashPrefix(t *testing.T) {
+	// NOT t.Parallel() — t.Setenv forbids parallel.
+
+	homeDir := admissionTempDir(t)
+	t.Setenv("HOME", homeDir)
+
+	keyPath := "~/subdir/adm.pem"
+	expectedPath := filepath.Join(homeDir, "subdir", "adm.pem")
+
+	// Provide a config with AdmissionKeyFile containing the tilde path and a
+	// ManagementSocket so Phase (c) can proceed.
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19297",
+		TickInterval:      1 * time.Millisecond,
+		DrainTimeout:      100 * time.Millisecond,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+		AdmissionKeyFile:  keyPath,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	var stderr bytes.Buffer
+	// runAccess returns an error (ctx timeout / connect failure) — that's expected.
+	_ = runAccess(ctx, &stderr, cfg)
+
+	// ASSERTION 1: key must land under the expanded home path.
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Errorf("expected key file at expanded path %q (HOME=%q, AdmissionKeyFile=%q); "+
+			"stat error: %v\n"+
+			"(M3 / BC-2.07.003 EC-007 — '~/' prefix must be expanded to $HOME/)",
+			expectedPath, homeDir, keyPath, err)
+	}
+
+	// ASSERTION 2: no literal "~" directory must exist — discriminates tilde-expansion.
+	literalTildeDir := filepath.Join("~")
+	if _, err := os.Stat(literalTildeDir); err == nil {
+		t.Errorf("found a literal %q directory — tilde expansion was NOT applied; "+
+			"AdmissionKeyFile=%q should expand to %q, not create a literal '~' dir\n"+
+			"(M3 / BC-2.07.003 EC-007)", literalTildeDir, keyPath, expectedPath)
+		_ = os.RemoveAll(literalTildeDir) // cleanup any stray dir
+	}
+}
+
+// TestRunAccess_TildeExpansion_TildeOnly verifies M3: when admission_key_file is
+// exactly "~", runAccess expands it to $HOME — not a literal "~" directory.
+//
+// NOT t.Parallel(): uses t.Setenv("HOME", …).
+//
+// Traces: M3 / BC-2.07.003 EC-007; mirrors sbctl's exact "~" case.
+func TestRunAccess_TildeExpansion_TildeOnly(t *testing.T) {
+	// NOT t.Parallel() — t.Setenv forbids parallel.
+
+	homeDir := admissionTempDir(t)
+	t.Setenv("HOME", homeDir)
+
+	// "~" expands to $HOME itself — the key is written directly to $HOME.
+	expectedPath := homeDir
+
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19298",
+		TickInterval:      1 * time.Millisecond,
+		DrainTimeout:      100 * time.Millisecond,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+		AdmissionKeyFile:  "~",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	var stderr bytes.Buffer
+	_ = runAccess(ctx, &stderr, cfg)
+
+	// The expanded path IS the home dir (a directory); a key file landing in it means
+	// MkdirAll(filepath.Dir(homeDir)) ran and the dir already exists (no error).
+	// Assert the dir exists and is the real home dir — no literal "~".
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Errorf("expected home dir %q to exist after '~' expansion; stat: %v\n"+
+			"(M3 / BC-2.07.003 EC-007 — '~' exactly must expand to $HOME)", expectedPath, err)
+	}
+
+	// Confirm no literal "~" path was created.
+	if _, err := os.Stat("~"); err == nil {
+		t.Errorf("literal '~' directory exists — tilde was NOT expanded (M3 / BC-2.07.003 EC-007)")
+		_ = os.RemoveAll("~")
+	}
+}
+
+// TestRunAccess_TildeExpansion_AbsolutePathUnchanged verifies M3: when
+// admission_key_file is an absolute path (no "~"), it is used as-is.
+//
+// NOT t.Parallel(): uses t.Setenv to be consistent with sibling tilde tests.
+//
+// Traces: M3 / BC-2.07.003 EC-007 — non-tilde absolute paths are not modified.
+func TestRunAccess_TildeExpansion_AbsolutePathUnchanged(t *testing.T) {
+	// NOT t.Parallel() — serial for consistency with sibling tilde tests.
+
+	dir := admissionTempDir(t)
+	keyPath := filepath.Join(dir, "adm.pem")
+
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19299",
+		TickInterval:      1 * time.Millisecond,
+		DrainTimeout:      100 * time.Millisecond,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+		AdmissionKeyFile:  keyPath,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	var stderr bytes.Buffer
+	_ = runAccess(ctx, &stderr, cfg)
+
+	// Absolute path: key must land exactly at keyPath (no expansion applied).
+	if _, err := os.Stat(keyPath); err != nil {
+		t.Errorf("key file must exist at absolute path %q (no tilde expansion); stat: %v\n"+
+			"(M3 — absolute path must be used as-is / BC-2.07.003 EC-007)", keyPath, err)
+	}
+}
+
+// TestRunAccess_TildeExpansion_TildeUsername_Literal verifies M3: "~username"
+// paths are treated as literal (not expanded) — matches sbctl's exact semantics
+// (BC-2.07.003 EC-007: "~username" is out of scope; treated as literal path).
+//
+// Strategy: test the tilde-expansion block in runAccess directly using a
+// pre-cancelled context so loadOrGenerateAdmissionKeypair is never called
+// (ctx.Err() != nil short-circuits file I/O). We assert the error from runAccess
+// does NOT contain "home directory unavailable" — which would indicate the code
+// wrongly attempted tilde expansion on a "~username" path.
+//
+// NOT t.Parallel(): serial for consistency with sibling tilde tests.
+//
+// Traces: M3 / BC-2.07.003 EC-007 — "~username" is out of scope, treated literally.
+func TestRunAccess_TildeExpansion_TildeUsername_Literal(t *testing.T) {
+	// NOT t.Parallel() — serial for consistency.
+
+	// Pre-cancel ctx so runAccess reaches the expansion block but loadOrGenerateAdmissionKeypair
+	// is skipped (ctx.Err() != nil path; no file I/O, no stray directories created).
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel
+
+	cfg := &config.Config{
+		ListenAddr:        "127.0.0.1:19300",
+		TickInterval:      1 * time.Millisecond,
+		DrainTimeout:      100 * time.Millisecond,
+		KeepaliveInterval: 1 * time.Second,
+		ManagementSocket:  tempSockPath(t),
+		AdmissionKeyFile:  "~someuser/adm.pem",
+	}
+
+	var stderr bytes.Buffer
+	_ = runAccess(ctx, &stderr, cfg)
+
+	// Key assertion: "~someuser/..." must NOT trigger homeDir expansion.
+	// If it did, the code would call os.UserHomeDir() and might return
+	// "home directory unavailable" on failure — that substring must be absent.
+	stderrStr := stderr.String()
+	if strings.Contains(stderrStr, "home directory unavailable") {
+		t.Errorf("'~username' path must NOT trigger tilde expansion; got 'home directory unavailable' in stderr=%q\n"+
+			"(M3 / BC-2.07.003 EC-007 — '~username' is out of scope, treated as literal)", stderrStr)
 	}
 }
