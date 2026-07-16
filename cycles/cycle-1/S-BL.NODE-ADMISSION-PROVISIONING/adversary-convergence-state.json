@@ -1,0 +1,285 @@
+{
+  "story": "S-BL.NODE-ADMISSION-PROVISIONING",
+  "phase": "implementation-adversarial-convergence",
+  "convergence_requirement": "3 consecutive CLEAN or NITPICK_ONLY passes (BC-5.39.001)",
+  "code_branch": {
+    "branch": "feature/S-BL.NODE-ADMISSION-PROVISIONING",
+    "converged_head": "7e130129972ed792f30d76c7ac50adcfcacb9fdb",
+    "base": "d249f88"
+  },
+  "criterion": "BC-5.39.001 Perimeter-1: 3 consecutive NITPICK_ONLY passes",
+  "passes_clean": 3,
+  "converged": true,
+  "passes": [
+    {
+      "pass": 1,
+      "agent": "adv-nap-p1",
+      "context": "fresh context",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "F-1",
+          "severity": "MED",
+          "class": "security / file-permissions",
+          "summary": "World-readable key predicate perm>0o600 is too permissive — correct threshold is perm&0o077 (deny group+other bits), rejecting keys with mode 0644, 0655, etc. that the >0o600 check would incorrectly accept."
+        },
+        {
+          "id": "F-2",
+          "severity": "MED",
+          "class": "goroutine-leak",
+          "summary": "Management goroutine leak on keypair-load early return — goroutine launched before key load completes; on early error return the goroutine is orphaned with no shutdown signal."
+        },
+        {
+          "id": "F-3",
+          "severity": "MED",
+          "class": "testability / hardcoded-path",
+          "summary": "Hardcoded /var/lib path with no test seam — prevents unit-testing of path-dependent logic without real filesystem side effects."
+        },
+        {
+          "id": "F-4",
+          "severity": "LOW",
+          "class": "code-quality",
+          "summary": "Doubled error prefix — error message wrapped with context string that duplicates the caller's wrapping, producing redundant text in logs."
+        },
+        {
+          "id": "F-5",
+          "severity": "NIT",
+          "class": "style",
+          "summary": "Variadic parameter style inconsistency."
+        },
+        {
+          "id": "F-6",
+          "severity": "LOW",
+          "class": "test-coverage",
+          "summary": "AC-007 tested below runAccess boundary — test exercises the wrapper but not the access-decision logic it gates, leaving the guard untested at the relevant abstraction level."
+        },
+        {
+          "id": "F-7",
+          "severity": "NIT",
+          "class": "atomicity / TOCTOU",
+          "summary": ".tmp file TOCTOU — temporary file creation pattern creates a window between temp-file existence check and use."
+        }
+      ]
+    },
+    {
+      "pass": 2,
+      "agent": "adv-nap-p2",
+      "context": "fresh context",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "B-1",
+          "severity": "HIGH",
+          "class": "fix-induced regression / liveness",
+          "summary": "O_EXCL fixed-name .tmp wedges startup after crash, violating EC-011 — the F-7 fix introduced O_EXCL on a fixed-name temp file; if the process crashes while the file exists, the next startup fails to create it, leaving the daemon permanently wedged. Fix-induced by F-7."
+        },
+        {
+          "id": "B-2",
+          "severity": "MED",
+          "class": "fix-incompleteness",
+          "summary": "F-7 dropped rulings §1.3 explicit Chmod → umask-dependent mode — the F-7 fix removed the explicit Chmod call that rulings §1.3 requires, leaving key-file permissions dependent on the process umask rather than the mandated explicit setting."
+        },
+        {
+          "id": "B-3",
+          "severity": "MED",
+          "class": "test-isolation",
+          "summary": "TestDaemonCleanShutdown performs real I/O to /var/lib — test writes to the real system path, making it environment-dependent and potentially destructive in CI."
+        },
+        {
+          "id": "B-4",
+          "severity": "LOW",
+          "class": "code-quality",
+          "summary": "Low-severity code quality issue identified in pass 2."
+        },
+        {
+          "id": "B-5",
+          "severity": "NIT",
+          "class": "style",
+          "summary": "Nit-level style issue identified in pass 2."
+        }
+      ]
+    },
+    {
+      "pass": 3,
+      "agent": "adv-nap-p3",
+      "context": "fresh context",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "findings": [
+        {
+          "id": "P3-F-1",
+          "severity": "MED",
+          "class": "doc-drift / stale-stub",
+          "summary": "Stale Red-Gate stub/MUST-FAIL doc-drift in access.go and test header — stub comment and MUST-FAIL annotation reference pre-implementation state that no longer matches the shipped code, creating misleading documentation for future readers."
+        },
+        {
+          "id": "P3-F-2",
+          "severity": "LOW",
+          "class": "resource-accumulation",
+          "summary": "CreateTemp orphan accumulation (bounded) — temporary files created by CreateTemp are not cleaned up on all error paths; accumulation is bounded by normal process lifecycle but leaves residue on repeated failures."
+        }
+      ],
+      "nitpicks_no_action": [
+        {
+          "id": "N-P3-01",
+          "summary": "Nit-level style issues identified in pass 3.",
+          "orchestrator_disposition": "NO-ACTION"
+        }
+      ]
+    },
+    {
+      "pass": 4,
+      "agent": "adv-nap-p4",
+      "context": "fresh context",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "1/3",
+      "nitpicks_no_action": [
+        {
+          "id": "N-P4-01",
+          "summary": "config_test.go doc-drift missed by P3 sweep — doc comment in config_test.go references pre-fix behavior not updated when access.go was fixed.",
+          "orchestrator_disposition": "FIXED in P4 nits burst — minor doc comment updated."
+        },
+        {
+          "id": "N-P4-02",
+          "summary": "errors.Is nit — error comparison uses == where errors.Is is the idiomatic form.",
+          "orchestrator_disposition": "FIXED in P4 nits burst."
+        }
+      ]
+    },
+    {
+      "pass": 5,
+      "agent": "adv-nap-p5",
+      "context": "fresh context",
+      "verdict": "HAS_FINDINGS",
+      "streak_after": "0/3",
+      "notes": "RESET — streak reset to 0/3. Fresh reviewer probing spec-completeness surfaced 3 real MEDs missed by 4 prior passes (including 1 NITPICK_ONLY pass). Demonstrates the Pass-5-caught latent-gap pattern: adequate surface coverage without depth-of-spec verification.",
+      "findings": [
+        {
+          "id": "M1",
+          "severity": "MED",
+          "class": "test-coverage / observability",
+          "summary": "Generation INFO log unasserted — the key-generation INFO log line is emitted but never asserted in tests, leaving the log contract untested and vulnerable to silent regression."
+        },
+        {
+          "id": "M2",
+          "severity": "MED",
+          "class": "doc-drift / BC-2.09.004 PC-2",
+          "summary": "interface-definitions.md §Config Schema never updated — BC-2.09.004 PC-2 places an implementer obligation to update the interface definitions doc when Config fields change; the schema section still reflects pre-implementation structure, violating the behavioral contract's propagation requirement."
+        },
+        {
+          "id": "M3",
+          "severity": "MED",
+          "class": "spec-implementation gap",
+          "summary": "Tilde expansion promised by rulings §1.2 and code comment but not implemented — the sibling loadEd25519Key function implements tilde expansion; the admission provisioning path has both a comment and a rulings obligation promising the same expansion but the implementation is missing."
+        },
+        {
+          "id": "M4",
+          "severity": "LOW",
+          "class": "test-flakiness",
+          "summary": "AC-005 umask-flake — test asserting key-file permissions is sensitive to the test process's umask, producing intermittent failures in environments with non-standard umask settings."
+        }
+      ],
+      "nitpicks_no_action": [
+        {
+          "id": "N-P5-01",
+          "summary": "Nit-level issues identified in pass 5.",
+          "orchestrator_disposition": "FIXED in M-series fix burst alongside M1-M3."
+        }
+      ]
+    },
+    {
+      "pass": 6,
+      "agent": "adv-nap-p6",
+      "context": "fresh context",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "1/3",
+      "regression_verification": [
+        { "id": "M1", "status": "VERIFIED REMEDIATED" },
+        { "id": "M2", "status": "VERIFIED REMEDIATED" },
+        { "id": "M3", "status": "VERIFIED REMEDIATED" },
+        { "id": "M4", "status": "VERIFIED REMEDIATED" }
+      ]
+    },
+    {
+      "pass": 7,
+      "agent": "adv-nap-p7",
+      "context": "fresh context",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "2/3"
+    },
+    {
+      "pass": 8,
+      "agent": "adv-nap-p8",
+      "context": "fresh context",
+      "verdict": "NITPICK_ONLY",
+      "streak_after": "3/3 — CONVERGED"
+    }
+  ],
+  "fix_commits": {
+    "F-1_F-2_F-3_F-4_F-7": "f89ab2c",
+    "F-6": "3e9b38d",
+    "B-1_B-2": "ff218c7",
+    "B-3": "21cb7a1",
+    "B-1_guard": "8b13114",
+    "P3_docdrift": "9faf40a",
+    "P4_nits": "5eb3d7e",
+    "M3_tilde": "f4a06ff",
+    "M1_flake_nits": "7e13012",
+    "M2_interface_definitions_md": "on factory-artifacts branch (NOT the code branch)"
+  },
+  "dispositioned_not_fixed": [
+    {
+      "item": "tilde-before-ctx.Err ordering",
+      "rationale": "Cosmetic — ordering difference carries no behavioral consequence."
+    },
+    {
+      "item": "AC-007 PC-4 vacuous unit test",
+      "rationale": "Accepted: compensated by the F-6 capture test which provides the substantive coverage at the correct abstraction level."
+    },
+    {
+      "item": "NoIOPerformed test-name-overpromise",
+      "rationale": "Test name is aspirational documentation; behavior under test is correct."
+    },
+    {
+      "item": "f-shadow (safe)",
+      "rationale": "Variable shadowing is safe in this context — no mutation path to the outer binding."
+    },
+    {
+      "item": "variadic disc[1+] ignored",
+      "rationale": "Inv-5 sanctioned — invariant explicitly permits ignoring additional disc elements beyond index 0."
+    }
+  ],
+  "process_gap_findings_for_session_review": [
+    {
+      "id": "PG-NAP-001",
+      "summary": "Fix-induced regression pattern: F-7 (.tmp TOCTOU) → B-1 (O_EXCL fixed-name wedge). The fix for a NIT introduced a HIGH-severity liveness issue. Instance filed as vsdd-factory#661 (non-compiling middle commit).",
+      "upstream_issue": "drbothen/vsdd-factory#661"
+    },
+    {
+      "id": "PG-NAP-002",
+      "summary": "Stub-panic shared-path: stub panic behaviour propagated into a shared code path, affecting unrelated tests. Instance filed as vsdd-factory#662.",
+      "upstream_issue": "drbothen/vsdd-factory#662"
+    },
+    {
+      "id": "PG-NAP-003",
+      "summary": "Pass-5-caught latent-gap pattern: 4 clean-ish passes (including 1 NITPICK_ONLY) missed 3 real MEDs until a fresh reviewer explicitly probed spec-completeness (interface-definitions.md obligation, tilde expansion promise). Surface coverage is insufficient when the reviewer does not systematically check declared spec obligations (BC-2.09.004 PC-2 class)."
+    }
+  ],
+  "out_of_scope_items_surfaced": [
+    {
+      "id": "OOS-NAP-001",
+      "summary": "internal/admission/TestLookup_ConcurrentRegisterRace flake — pre-existing intermittent test failure in the concurrent register race test, unrelated to this story's changes.",
+      "tracking": "switchboard-blue#124"
+    },
+    {
+      "id": "OOS-NAP-002",
+      "summary": "discovery.go BC-version-pin doc drift — pre-existing version pin in discovery.go references a stale BC version. Maintenance-sweep candidate.",
+      "tracking": "maintenance-sweep candidate, no active ticket"
+    }
+  ],
+  "forward_guidance_for_S-BL.ADMISSION-SYNC-WIRE": {
+    "note": "discovery.Config LocalSVTNID/LocalNodeAddr/Router fields are zero-valued in this story (Decision 5 scope: pubkey wiring only; §3.4 defers Advertise). The next leg MUST populate these fields before the advertisement path emits. Zero-valued LocalSVTNID/LocalNodeAddr will produce incorrect SVTN-isolation behaviour; zero-valued Router will panic or silently no-op on advertisement dispatch depending on nil-check posture."
+  }
+}

@@ -2,7 +2,7 @@
 artifact_id: interface-definitions
 document_type: prd-supplement-interface-definitions
 level: L3
-version: "1.31"
+version: "1.32"
 status: draft
 producer: product-owner
 timestamp: 2026-07-12T00:00:00
@@ -11,7 +11,7 @@ inputs:
   - '.factory/specs/prd.md'
   - '.factory/specs/domain-spec/capabilities.md'
   - '_bmad-output/planning-artifacts/prd.md'
-input-hash: "226ea28"
+input-hash: "bf87d3a"
 traces_to: '.factory/specs/prd.md'
 ---
 
@@ -139,6 +139,8 @@ Nested form — all destructive key operations use `sbctl admin key <verb>`:
 
 Confirmation flow summary (applies to the `runDestroyConfirmGate` family: svtn destroy, key register, recover pending): interactive commands prompt for `Type SVTN-<short-id> to confirm:` when `--confirm` is not supplied on the command line. Providing `--confirm=<svtn-short-id>` satisfies the check non-interactively. `--yes` bypasses the check entirely with a stderr warning. Combining `--yes` with `--confirm` is a usage error (E-CFG-012, exit 2). In a non-interactive session (no TTY) where neither `--confirm` nor `--yes` is supplied, the command exits with E-CFG-013 (exit 2) — use `--confirm=<svtn-short-id>` or `--yes` for scripted invocations. **`sbctl admin key revoke` is not part of this family** — see `key revoke` carve-out note under §131.
 > **Interim rendering (DRIFT-P5P4-PROMPT-SHORTID):** Until the CLI can resolve the actual SVTN short-id from the daemon response, the prompt MAY render as a static-example form (e.g. `"Type the SVTN short-ID (e.g. SVTN-abcd1234) to confirm: "`). Both forms satisfy the confirmation gate; the substitution form is the canonical long-term target.
+
+> **v1.32 changelog note (2026-07-16):** M2 remediation (S-BL.NODE-ADMISSION-PROVISIONING, BC-2.09.004 PC-2). Added `admission_key_file` to the Access node config YAML block (§Access node config). Field is optional (string); default path `/var/lib/switchboard/access-admission-identity.pem` applied at daemon startup by `runAccess`, not by `Config.Validate`. Semantics: path to the node's persistent Ed25519 admission keypair (PKCS#8 PEM); tilde expanded per `loadEd25519Key` conventions (BC-2.07.003 EC-007); first-run generates atomically at mode 0600; subsequent runs load the existing key; fail-closed on corrupt/non-Ed25519 file. Validation: E-CFG-014 — non-whitespace when present; no file I/O in `Validate` (ARCH-06 §Config purity contract). Access-mode only. Cross-ref: BC-2.09.004 PC-1/PC-2, BC-2.09.003 PC-12. Input-hash updated (bf87d3a; was 226ea28 — pre-existing drift from inputs unchanged since v1.31).
 
 > **v1.31 changelog note (2026-07-12):** F-CS-SP1-002 (MED, spec-adversarial pass 1) remediation. §60 `svtn destroy` redirect literal corrected — removed a spurious `usage: ` prefix from the quoted error text. The authoritative sources agree without the prefix: story AC-009 PC-1 mandates the exact text `svtn destroy: use 'sbctl admin svtn destroy --name=<svtn-name> [--confirm=<svtn-short-id>|--yes]'`; the Ruling 3 code snippet in `.factory/decisions/S-BL.CLI-SURFACE-COMPLETION-rulings.md` agrees; `cmd/sbctl/main.go` prints the error verbatim with no framework `usage:` prefix. No change to the command's exit code (2) or any other CLI listing row. Refs: F-CS-SP1-002.
 
@@ -355,6 +357,20 @@ key_file: "~/.ssh/switchboard_access"
 svtn_id: "..."
 
 # Optional
+admission_key_file: ""             # Path to the node's persistent Ed25519 admission keypair
+                                   # (PKCS#8 PEM, "PRIVATE KEY" block type). When absent or
+                                   # empty string, the daemon uses the default path:
+                                   #   /var/lib/switchboard/access-admission-identity.pem
+                                   # (applied at daemon startup by runAccess, not by Config.Validate).
+                                   # When present, must be a non-whitespace path; tilde (~) is
+                                   # expanded per loadEd25519Key conventions (BC-2.07.003 EC-007).
+                                   # On first run the keypair is generated atomically (mode 0600);
+                                   # on subsequent runs the existing key is loaded. Daemon fails
+                                   # closed if the file is corrupt or not an Ed25519 key.
+                                   # Validation: E-CFG-014 — non-whitespace when present; no file
+                                   # I/O in Validate (ARCH-06 §Config purity contract).
+                                   # Access-mode only — ignored in router/console/control modes.
+                                   # Cross-ref: BC-2.09.004 PC-1/PC-2, BC-2.09.003 PC-12.
 tmux_socket: ""                    # Empty = default tmux socket
 pty_fallback: true                 # Allow PTY fallback if tmux unavailable
 tick_interval_upstream: "10ms"

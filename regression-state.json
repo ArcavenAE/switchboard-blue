@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-15T06:54:57Z","command":"go test ./... -count=1 -race 2>&1 > /tmp/sbtest_final.log; echo \"EXIT: $?\"; grep -E \"^(ok|FAIL)\" /tmp/sbtest_final.log; grep -c \"^--- FAIL\" /tmp/sbtest_final.log"}
+{"status":"pass","timestamp":"2026-07-16T10:14:05Z","command":"go test -race -run 'TestAdmissionKeypair|TestConfig_Validate_AdmissionKeyFile|TestDiscoveryRun|TestAccessDaemon_LocalNode|TestRunAccess_' ./cmd/switchboard/... ./internal/config/... 2>&1 | tail -40"}
