@@ -277,39 +277,44 @@ func TestAdmissionKeypair_FirstRun_Mode0600(t *testing.T) {
 }
 
 // TestAdmissionKeypair_FirstRun_OrphanTmpDoesNotWedgeStartup verifies EC-011
-// (BC-2.09.004 Invariant 3 / B-1 fix): when an orphaned temp file matching the
-// CreateTemp glob ("admission-*.pem.tmp") already exists in the key directory
-// from a prior interrupted run, the next startup generates a fresh keypair
-// successfully — it must NOT fail with EEXIST or any other error.
+// (BC-2.09.004 Invariant 3 / B-1 fix): when an orphaned temp file at the
+// EXACT fixed name the old code used (keyPath+".tmp" = "admission.pem.tmp")
+// already exists in the key directory from a prior interrupted run, the next
+// startup generates a fresh keypair successfully — it must NOT fail with
+// EEXIST or any other error.
 //
-// Discriminator proof: the old fixed-name ".tmp" code would attempt
+// Discriminator: the orphan is deliberately named keyPath+".tmp" — the exact
+// path the old code attempted to open with O_EXCL. Old code:
 //
 //	os.OpenFile(keyPath+".tmp", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 //
-// If an orphan at exactly that path existed, O_EXCL would return EEXIST and
-// the daemon would refuse to start permanently until an operator manually
-// removed the file. The new CreateTemp call uses a random suffix, so any
-// pre-existing file at a fixed name is irrelevant — the call always succeeds.
+// That call returns EEXIST on the orphan → permanent wedge (EC-011 violation).
+// The new CreateTemp code uses a random suffix; "admission.pem.tmp" is never
+// its target → the orphan is irrelevant → the call always succeeds.
 //
-// NOT t.Parallel(): the test MkdirAll-creates a nested key dir (to hold the
-// orphan) under admissionTempDir; a concurrent umask=0177 window from
-// listenUnixMgmt can produce a 0600 dir (no execute bit) causing EPERM on
-// subsequent writes. Running sequentially after TestMain resets the umask
-// to 0022 avoids the race.
+// The discriminator is real: reverting the production write block to the old
+// fixed-name O_EXCL form and running this test produces:
+//
+//	FAIL: unexpected error: access: write admission keypair tmp: <path>: file exists
+//
+// Confirming fail-on-old-code → pass-on-new-code.
+//
+// NOT t.Parallel(): uses admissionTempDir (flat keyPath, no nested subdir),
+// but kept sequential for consistency with other first-run tests that are
+// sensitive to the umask=0177 window. The Mode0600 test (also t.Parallel)
+// validates mode independently.
 //
 // Traces: BC-2.09.004 Invariant 3; EC-011 recoverability; adversary pass-2 B-1.
 func TestAdmissionKeypair_FirstRun_OrphanTmpDoesNotWedgeStartup(t *testing.T) {
-	// NOT t.Parallel() — see comment above: umask race on MkdirAll-created dirs.
+	// NOT t.Parallel() — see comment above.
 
 	dir := admissionTempDir(t)
 	keyPath := filepath.Join(dir, "admission.pem")
 
-	// Pre-create an orphan file whose name matches the CreateTemp glob.
-	// With the old fixed-name O_EXCL code, a file at keyPath+".tmp" would
-	// wedge startup permanently. With the new CreateTemp code, the orphan
-	// has a random suffix and the next call generates a different random
-	// suffix — no collision is possible.
-	orphanPath := filepath.Join(dir, "admission-orphan-from-prior-run.pem.tmp")
+	// Pre-create an orphan at the EXACT fixed name the old code used:
+	// keyPath+".tmp" = "admission.pem.tmp". This is the discriminating name —
+	// old O_EXCL code collides here; new CreateTemp code never targets it.
+	orphanPath := keyPath + ".tmp" // = filepath.Join(dir, "admission.pem.tmp")
 	if err := os.WriteFile(orphanPath, []byte("orphan junk data"), 0o600); err != nil {
 		t.Fatalf("setup: write orphan tmp: %v", err)
 	}
