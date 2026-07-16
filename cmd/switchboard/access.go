@@ -303,10 +303,6 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 // (Decision 6 Option Y; BC-2.04.008 PC-1 through PC-4). Existing callers that
 // omit disc continue to compile — nil disc is a no-op for the discovery goroutine.
 //
-// TODO(S-BL.NODE-ADMISSION-PROVISIONING): the discovery goroutine stub below
-// is a no-op placeholder so that AC-008 tests FAIL at Red Gate. The implementer
-// must replace the stub with the real WG-tracked goroutine per rulings §3.2.
-//
 // tick_interval is applied in runAccess (via tickIntervalFor) before the
 // half-channel is constructed and before this function is called. Further
 // deferred config fields (drain_timeout, upstream_routers, keepalive_interval)

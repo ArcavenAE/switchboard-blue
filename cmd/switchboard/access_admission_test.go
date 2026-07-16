@@ -12,12 +12,9 @@
 //	AC-007: discovery.Config.LocalNodeAdmissionPubkey wired from loaded/generated keypair
 //	AC-008: Discovery.Run goroutine WG-tracked; ctx.Canceled is clean shutdown; no goroutine leak
 //
-// ALL tests in this file MUST FAIL at Red Gate:
-//   - loadOrGenerateAdmissionKeypair is a stub that returns a fresh ephemeral key on every
-//     call with no file I/O and no logging.
-//   - runAccessWithConnector's discovery goroutine stub is a no-op (_ = disc).
-//
-// Tests compile cleanly against the stub surface.
+// All tests in this file are DELIVERED (green) AC tests: they pass against the
+// completed implementation of loadOrGenerateAdmissionKeypair (file I/O, logging,
+// fail-closed) and runAccessWithConnector (disc.Run started in a WG-tracked goroutine).
 //
 // Traceability:
 //
@@ -764,8 +761,8 @@ func makeDiscForAC008(t *testing.T, heartbeatObserver func()) (*discovery.Discov
 // delivery. After runAccessWithConnector starts, the test sends a tick. If
 // disc.Run was started by runAccessWithConnector, the tick fires the observer,
 // closing `started` within a short window. If disc goroutine is never launched
-// (stub: _ = disc), the tick has no effect, `started` never closes, and the test
-// fails by timeout.
+// (if disc.Run is not started in a wg-tracked goroutine), the tick has no effect,
+// `started` never closes, and the test fails by timeout.
 //
 // Traces: BC-2.04.008 PC-1; ARCH-01 v1.7 §Goroutine WaitGroup Contract; rulings §3.2.
 func TestDiscoveryRun_WGAddBeforeGoStatement(t *testing.T) {
@@ -798,7 +795,7 @@ func TestDiscoveryRun_WGAddBeforeGoStatement(t *testing.T) {
 	tickCh <- time.Now()
 
 	// If disc.Run was started (fixed code), `started` closes promptly.
-	// If disc.Run was never started (stub: _ = disc), `started` never closes → FAIL.
+	// If disc.Run is not started in a wg-tracked goroutine, `started` never closes → FAIL.
 	select {
 	case <-started:
 		// disc.Run was started and processed the tick — WG contract can be satisfied.
@@ -806,7 +803,8 @@ func TestDiscoveryRun_WGAddBeforeGoStatement(t *testing.T) {
 		cancel() // prevent test-process leak
 		<-done
 		t.Fatal("disc.Run was never started by runAccessWithConnector: HeartbeatObserver " +
-			"never fired after sending a tick (stub: _ = disc). " +
+			"never fired after sending a tick " +
+			"(regression guard: disc.Run must be started in a wg-tracked goroutine). " +
 			"Fix: wg.Add(1) before go disc.Run(runCtx) in runAccessWithConnector. " +
 			"(BC-2.04.008 PC-1; ARCH-01 v1.7 §Goroutine WaitGroup Contract; rulings §3.2)")
 	}
@@ -866,7 +864,8 @@ func TestDiscoveryRun_SameWaitGroupAsSweepTickers(t *testing.T) {
 		cancel()
 		<-done
 		t.Fatal("disc.Run was never started: same-WG test cannot observe correct tracking " +
-			"(stub: _ = disc). Fix: start disc.Run in the same wg as sweep/frames-dropped tickers. " +
+			"(regression guard: disc.Run must share the wg with sweep/frames-dropped tickers). " +
+			"Fix: start disc.Run in the same wg as sweep/frames-dropped tickers. " +
 			"(BC-2.04.008 PC-2; rulings §3.1 Option Y)")
 	}
 
@@ -921,7 +920,8 @@ func TestDiscoveryRun_CtxCanceled_NotInternalFailure(t *testing.T) {
 		cancel()
 		<-done
 		t.Fatal("disc.Run was never started: cannot verify internalFailure=false for ctx.Canceled " +
-			"(stub: _ = disc). Fix: start disc.Run goroutine in runAccessWithConnector. " +
+			"(regression guard: disc.Run must be started as a goroutine in runAccessWithConnector). " +
+			"Fix: start disc.Run goroutine in runAccessWithConnector. " +
 			"(BC-2.04.008 PC-3 / Invariant 2; Decision 7)")
 	}
 
@@ -1013,7 +1013,8 @@ func TestDiscoveryRun_NoGoroutineLeak_AfterCtxCancel(t *testing.T) {
 		case <-time.After(2 * time.Second):
 		}
 		t.Fatal("disc.Run HeartbeatObserver never entered: disc goroutine was not started " +
-			"(stub: _ = disc). Fix: start disc.Run in a wg-tracked goroutine. " +
+			"(regression guard: if disc.Run is not started in a wg-tracked goroutine, wg.Wait will not join it). " +
+			"Fix: start disc.Run in a wg-tracked goroutine. " +
 			"(BC-2.04.008 PC-4; rulings §3.2)")
 	}
 
@@ -1178,7 +1179,8 @@ func TestDiscoveryRun_StartupOrdering_AfterKeypairAndMgmtServer(t *testing.T) {
 		cancel()
 		<-done
 		t.Fatal("disc.Run was never started: startup-ordering cannot be verified " +
-			"(stub: _ = disc). Fix: start disc.Run after keypair load + mgmt server start. " +
+			"(regression guard: disc.Run must start after keypair load + mgmt server start). " +
+			"Fix: start disc.Run after keypair load + mgmt server start. " +
 			"(BC-2.04.008 PC-5; rulings §3.1 phases (d)–(f))")
 	}
 
