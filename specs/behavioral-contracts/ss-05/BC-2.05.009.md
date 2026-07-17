@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.009
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-15T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "3e7d080"
+input-hash: "b951227"
 extracted_from: null
 bc_id: BC-2.05.009
 subsystem: admission-security
@@ -134,6 +134,26 @@ on the router side (challenge-response handshake is required to flip `admitted=t
    `internal.admission.register` (plus `internal.admission.expire` for entries with a
    non-zero expiry) to each configured router endpoint.
 
+   **EC-007 resync guarantee — conditional on `control_admission_state_file` (Ruling 11):**
+   The EC-007 resync guarantee holds ONLY when `control_admission_state_file` is configured
+   in the control daemon's config (BC-2.09.003 PC-15) AND the snapshot was successfully
+   written on each prior mutation (write-on-mutation path, Ruling 11). The mechanism is:
+   on startup, control loads its persisted keyset from `control_admission_state_file` via
+   `loadSnapshotFromFile` BEFORE constructing the sync client and calling
+   `PushFullSnapshot` — so the full-snapshot push carries the recovered keys.
+   When `control_admission_state_file` is absent or empty, control constructs a fresh
+   empty `AdmittedKeySet` and `PushFullSnapshot` immediately hits the empty-keyset
+   early-return — no keys are pushed and EC-007 is inert for that startup. Operators
+   who require EC-007 MUST configure `control_admission_state_file`.
+
+   **Control-side persist-write (synchronous, before push dispatch):** Each committed
+   `admin.key.*` / `admin.svtn.*` mutation also triggers `writeSnapshotAtomic(path, ks)`
+   synchronously on the handler goroutine, BEFORE `dispatchPush`. Write failure is
+   advisory (WARN log); it does NOT roll back the `m.*` write and does NOT fail the RPC
+   response. This is the same advisory policy as the router-side snapshot write
+   (BC-2.05.010 PC-2 / Ruling 3). The atomic snapshot write reuses the existing
+   `writeSnapshotAtomic` implementation in `admission_sync_snapshot.go`.
+
 8. **admitted=false on load:** Entries pushed to a router and loaded from the router's
    VLR-local snapshot (BC-2.05.010) are always `admitted=false`. The challenge-response
    handshake (`S-BL.NODE-IDENTIFY-WIRE`) is required to flip `admitted=true`. The push
@@ -247,5 +267,6 @@ S-BL.ADMISSION-SYNC-WIRE — all postconditions in this BC trace to acceptance c
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-17 | Amend PC-7 (startup full-snapshot): add qualifier that EC-007 resync guarantee holds ONLY when `control_admission_state_file` is configured (BC-2.09.003 PC-15); without it, `PushFullSnapshot` pushes an empty keyset and EC-007 is inert. Document control-side persist-write: synchronous `writeSnapshotAtomic` call on each committed `admin.key.*`/`admin.svtn.*` mutation, BEFORE `dispatchPush`, advisory on failure. Per Ruling 11 (F-P3-01). |
 | 1.1 | 2026-07-16 | Amend Invariant 4: exempt `svtn_id` from encoding-parity rule — on the `internal.admission.*` wire it is the 32-lowercase-hex-char encoding of the `[16]byte` SVTN UUID (not the human-readable name). Rulings v1.2 (commit 3d64ac2) / svtn_id hex-encoding fix. |
 | 1.0 | 2026-07-15 | Initial draft — admission-state-sync push RPC: four write paths, `internal.admission.*` commands, push failure advisory (WARN, no rollback), `admitted=false` on load, full-snapshot on control startup, nil-syncer no-op. Authored per S-BL.ADMISSION-SYNC-WIRE BC groundwork item A1. |

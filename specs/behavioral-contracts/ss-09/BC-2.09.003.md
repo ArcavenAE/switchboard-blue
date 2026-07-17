@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "2.1"
+version: "2.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -219,7 +219,27 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
     updated to document these fields. This is flagged as a story-writer / implementer
     responsibility for S-W5.01.
 
-### Identity-cluster config field validation postconditions (v2.1 additions)
+11b. **Mgmt listener TCP loopback restriction (Ruling 12, v2.2):** When `management_socket`
+    resolves to a TCP `host:port` (i.e., `net.SplitHostPort` succeeds), the daemon's
+    `buildMgmtListener` MUST enforce a loopback-only restriction for **console, control, and
+    access** modes: a non-loopback host (anything other than `127.0.0.1`, `[::1]`, or
+    `localhost`) causes daemon startup to fail with **E-CFG-008**:
+    `"config error: management_socket: <mode> mode requires a loopback address (127.0.0.1, [::1], or localhost); got: <value>"`.
+    A loopback TCP address (e.g., `127.0.0.1:9091`) is accepted. On successful TCP bind,
+    the daemon MUST emit an INFO log: `"<mode> management listener bound to <address>"`.
+    **Router mode is the sole exemption** (Ruling 9, unchanged): control→router push is
+    inherently cross-host; ADR-012 challenge-response authentication is the security
+    boundary; the loopback restriction does NOT apply to router-mode TCP management
+    listeners. This postcondition replaces the prior console-only loopback guard scope —
+    previously `buildMgmtListener` checked `if mode == "console"`; the correct check is
+    `if mode != "router"`.
+
+    **Scope note:** The loopback restriction is enforced at listener bind time (daemon startup),
+    not at `Config.Validate()` time — binding behavior cannot be validated without actually
+    attempting to parse and bind the address. This postcondition is a daemon-startup concern
+    orthogonal to the blank-string validation in PC-10.
+
+### Identity-cluster config field validation postconditions (v2.1 additions; extended in v2.2)
 
 12. `admission_key_file` is an **optional** config field (access-mode daemon applies the
     default path `/var/lib/switchboard/access-admission-identity.pem` when absent; see
@@ -248,6 +268,25 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
 
     **Config-schema impact note:** A new field is added to `internal/config.Config`:
     - `admission_state_file string` (yaml: `admission_state_file`) — optional, validated by PC-13.
+    This is a S-BL.ADMISSION-SYNC-WIRE implementer responsibility.
+
+15. `control_admission_state_file` is an **optional** config field, **control-mode only**.
+    When **present**, it must be a non-empty string that is not entirely whitespace. If present
+    and blank or whitespace-only, Validate() exits with E-CFG-017:
+    `"config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence"`.
+    A non-whitespace string is accepted at validation time; path accessibility and parent-directory
+    existence are daemon-startup concerns, not config-validation concerns (ARCH-06 §Config purity).
+    PC-15 is **control-mode only**; router/console/access modes do not read this field.
+    When absent or empty, control does not persist admission state and `PushFullSnapshot` on
+    startup pushes an empty keyset — the EC-007 resync guarantee (BC-2.05.009) does NOT apply.
+    Operators who require EC-007 MUST configure this field. No file I/O in `Validate()`.
+
+    **Config-schema impact note:** A new field is added to `internal/config.Config`:
+    ```go
+    // ControlAdmissionStateFile is the path where the control-mode daemon persists its
+    // authoritative AdmittedKeySet (S-BL.ADMISSION-SYNC-WIRE Ruling 11).
+    ControlAdmissionStateFile string `yaml:"control_admission_state_file"`
+    ```
     This is a S-BL.ADMISSION-SYNC-WIRE implementer responsibility.
 
 14. `router_management_endpoints` is an **optional** config field (empty list means no
@@ -318,6 +357,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | E-CFG-014 | `admission_key_file` is present but empty or whitespace-only | broken | 1 | `"config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default"` |
 | E-CFG-015 | `admission_state_file` is present but empty or whitespace-only | broken | 1 | `"config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset"` |
 | E-CFG-016 | `router_management_endpoints[N].addr` is not a valid `host:port` | broken | 1 | `"config error: router_management_endpoints[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'"` |
+| E-CFG-017 | `control_admission_state_file` is present but empty or whitespace-only | broken | 1 | `"config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence"` |
 
 ## Edge Cases
 
@@ -343,6 +383,11 @@ Daemon startup config parsing failure; config reload with invalid config.
 | EC-018 | `admission_state_file: "   "` (whitespace-only value) | E-CFG-015 "config error: admission_state_file: must not be empty..."; exit 1. |
 | EC-019 | `router_management_endpoints` has two entries; first valid, second `addr: "notvalid"` | E-CFG-016 naming index 1 (0-based); all errors collected before exit 1 (exhaustive reporting). |
 | EC-020 | `router_management_endpoints: []` or field absent | Validate() accepts; no push replication; control writes succeed locally only. |
+| EC-021 | `control_admission_state_file: "   "` (whitespace-only value) | E-CFG-017 "config error: control_admission_state_file: must not be empty..."; exit 1. Exhaustive error collection with other errors. |
+| EC-022 | `control_admission_state_file` absent entirely | Validate() accepts; control starts without persistence; EC-007 resync guarantee does not apply; PushFullSnapshot on startup pushes an empty keyset. No validation error. |
+| EC-023 | `control_admission_state_file: "/var/lib/switchboard/control-state.json"` (non-whitespace, file may not exist) | Validate() accepts (no I/O). At daemon startup, loadSnapshotFromFile handles missing→empty, corrupt→E-KEY-002+exit-1. |
+| EC-024 | `management_socket: "0.0.0.0:9091"` in control or access mode config | `buildMgmtListener` returns E-CFG-008 at bind time: "management_socket: control mode requires a loopback address..."; daemon exits 1. |
+| EC-025 | `management_socket: "127.0.0.1:9091"` in control or access mode config | `buildMgmtListener` accepts; daemon binds TCP loopback listener; INFO log "control management listener bound to 127.0.0.1:9091"; starts normally. |
 
 ## Canonical Test Vectors
 
@@ -371,6 +416,13 @@ Daemon startup config parsing failure; config reload with invalid config.
 | `router_management_endpoints: [{addr: "10.0.0.2:9093"}]` | Validate() accepts; exit 0 | happy-path (PC-14, v2.1) |
 | `router_management_endpoints: [{addr: "0.0.0.0:9093"}]` | Validate() accepts (no loopback restriction); exit 0 | happy-path (PC-14, Ruling 9) |
 | `router_management_endpoints: []` or field absent | Validate() accepts; no push replication; exit 0 | happy-path (PC-14, empty list) |
+| `control_admission_state_file: "   "` (whitespace) | E-CFG-017 "config error: control_admission_state_file: must not be empty..."; exit 1 | error (PC-15, v2.2) |
+| `control_admission_state_file` absent | Validate() accepts; control starts without persistence; EC-007 resync does not apply; exit 0 | happy-path (PC-15, optional field) |
+| `control_admission_state_file: "/var/lib/switchboard/control-state.json"` (non-whitespace) | Validate() accepts (no I/O); exit 0 | happy-path (PC-15, no-I/O rule) |
+| `management_socket: "0.0.0.0:9091"` in control-mode config | `buildMgmtListener` fails at bind time with E-CFG-008 "management_socket: control mode requires a loopback address..."; exit 1 | error (PC-11b, Ruling 12, v2.2) |
+| `management_socket: "0.0.0.0:9091"` in access-mode config | `buildMgmtListener` fails at bind time with E-CFG-008 "management_socket: access mode requires a loopback address..."; exit 1 | error (PC-11b, Ruling 12, v2.2) |
+| `management_socket: "127.0.0.1:9091"` in control-mode config | `buildMgmtListener` accepts; TCP loopback bind succeeds; INFO log emitted; daemon starts normally | happy-path (PC-11b, Ruling 12, v2.2) |
+| `management_socket: "0.0.0.0:9093"` in router-mode config | `buildMgmtListener` accepts (no loopback restriction for router per Ruling 9); daemon starts normally | happy-path (Ruling 9 router-mode exemption, unchanged) |
 
 ## Verification Properties
 
@@ -389,6 +441,9 @@ Daemon startup config parsing failure; config reload with invalid config.
 | test-as-evidence | `admission_key_file` present-and-blank rejected with E-CFG-014; absent accepted (no I/O in Validate) | unit (S-BL.NODE-ADMISSION-PROVISIONING AC; no formal VP assigned) | |
 | test-as-evidence | `admission_state_file` present-and-blank rejected with E-CFG-015; absent accepted | unit (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | |
 | test-as-evidence | `router_management_endpoints[N].addr` invalid host:port rejected with E-CFG-016 (exhaustive); empty list and valid host:port accepted; no loopback restriction (any bind accepted) | unit (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | |
+| test-as-evidence | `control_admission_state_file` present-and-blank rejected with E-CFG-017; absent accepted (no I/O in Validate) | unit (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | PC-15, v2.2 |
+| test-as-evidence | Control and access modes with non-loopback TCP `management_socket` rejected with E-CFG-008 at bind time; loopback TCP accepted; INFO log emitted on successful bind | integration (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | PC-11b, Ruling 12, v2.2 |
+| test-as-evidence | Router mode with non-loopback TCP `management_socket` accepted (no loopback guard; Ruling 9 exemption unchanged) | integration (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | PC-11b, Ruling 9 router-mode exemption |
 
 ## Traceability
 
@@ -397,7 +452,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
 | L2 Domain Invariants | (none directly; anchored to FM-010 via capability CAP-028) |
 | Architecture Module | internal/config |
-| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation); S-BL.NODE-ADMISSION-PROVISIONING (PC-12: admission_key_file validation); S-BL.ADMISSION-SYNC-WIRE (PC-13: admission_state_file validation; PC-14: router_management_endpoints validation) |
+| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation); S-BL.NODE-ADMISSION-PROVISIONING (PC-12: admission_key_file validation); S-BL.ADMISSION-SYNC-WIRE (PC-13: admission_state_file validation; PC-14: router_management_endpoints validation; PC-15: control_admission_state_file validation; PC-11b: loopback guard scope correction for control+access modes) |
 | Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. The config-application postcondition (PC-9) is a necessary corollary: validation is meaningless if the validated config is then discarded. Anchored to FM-010 (deployment misconfig). |
 
 ## Related BCs
@@ -415,7 +470,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 S-6.01 — AC-001 through AC-009 trace to postconditions in this BC.
 S-W5.01 — AC-011 (PC-10: management_socket) and AC-012 (PC-11: authorized_operator_keys) trace to v1.6 postconditions in this BC.
 S-BL.NODE-ADMISSION-PROVISIONING — ACs for PC-12 (admission_key_file validation, E-CFG-014) trace to v2.1 postconditions in this BC.
-S-BL.ADMISSION-SYNC-WIRE — ACs for PC-13 (admission_state_file validation, E-CFG-015) and PC-14 (router_management_endpoints validation, E-CFG-016) trace to v2.1 postconditions in this BC.
+S-BL.ADMISSION-SYNC-WIRE — ACs for PC-13 (admission_state_file validation, E-CFG-015), PC-14 (router_management_endpoints validation, E-CFG-016), PC-15 (control_admission_state_file validation, E-CFG-017), and PC-11b (loopback guard scope for control+access modes, Ruling 12) trace to postconditions in this BC.
 
 ## VP Anchors
 
@@ -427,6 +482,7 @@ Both VPs scope strictly to Config.Validate behavior in internal/config. They do 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.2 | 2026-07-17 | add PC-15 `control_admission_state_file` / E-CFG-017 per Ruling 11 (F-P3-01); extend mgmt-listener loopback restriction to control+access modes (router-only exemption) per Ruling 12 (F-P3-02) — PC-11b added; EC-021..EC-025 added; test-vector rows + VP rows added for both rulings. |
 | 2.1 | 2026-07-15 | Identity-cluster BC groundwork consolidated amendment (items N3+A3+A4): PC-12 added (`admission_key_file`: non-empty when present, no file I/O in Validate, E-CFG-014); PC-13 added (`admission_state_file`: non-empty when present, E-CFG-015); PC-14 added (`router_management_endpoints`: each `addr` validated as `host:port` per E-CFG-016, NO loopback restriction per Ruling 9 — ADR-012 is the auth boundary, control-mode-only field); E-CFG-014/015/016 added to Error Codes table; EC-015 through EC-020 added; Canonical Test Vectors for all three fields added; test-as-evidence VP rows added. Added `inputs`/`input-hash`/`extracted_from` frontmatter fields (template conformance). |
 | 2.0 | 2026-07-06 | Governance-only: narrowed Verification Properties table to correct pre-existing authoring drift (PO ruling S-6.04-disposition-ruling.md §"Spec Note: BC-2.09.003 Verification Properties Table Drift"). VP-028 and VP-029 were overstated as covering all 9 VP-table rows including "Config reload failure leaves daemon on previous config" and host:port/drain/keepalive/management/keys properties. Both VPs scope strictly to Config.Validate startup-validation behavior (tick_interval out-of-range; missing required fields). Table rebuilt: two rows retain VP-028/VP-029 citations for the properties they actually prove; all other rows reclassified as test-as-evidence with owning story/AC citations. Reload-integration fail-closed property (Inv-3/EC-004) explicitly annotated as S-7.04-FU-SIGHUP-RELOAD AC-002 obligation with no formal VP. No PC/EC/Inv semantic changes; no runtime behavior implied. Governance-leaf change. |
 | 1.9 | 2026-07-02 | Phase 5 Pass 3 remediation Path B follow-up: error-taxonomy v4.3 reconciled E-CFG-002 (private-key-export → E-CFG-011) and E-CFG-006 (sbctl --yes → E-CFG-012). Collision-flag annotation row removed from Error Codes table — pre-existing inconsistency resolved. Closes DRIFT-P5P3-A007-ECFG-COLLISION (BC-2.09.003 side). Refs F-P5P3-A-007. |
