@@ -1,7 +1,7 @@
 ---
 artifact_id: S-BL.ADMISSION-SYNC-WIRE-rulings
 document_type: rulings
-version: "1.3"
+version: "1.4"
 status: draft
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
@@ -21,12 +21,13 @@ related_code:
   - internal/mgmt/mgmt.go
 ---
 
-# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.3
+# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.4
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-17 | F-P3-01 + F-P3-02 adversary pass-3 findings adjudicated (human decision: both in-scope). Code-verified: (1) `runControl` (`mgmt_wire.go:1176`) constructs `ks := admission.NewAdmittedKeySet()` fresh; no load path; `PushFullSnapshot` at line 1222 hits the empty-keyset early return at `admission_sync_client.go:378–381` — EC-007 resync guarantee is inert today; (2) no persist-write hook in any of the four admin handlers (`admin_handlers.go`); (3) `writeSnapshotAtomic` / `loadSnapshotFromFile` / `marshalSnapshot` / `unmarshalSnapshot` in `admission_sync_snapshot.go` are fully implemented and reusable as-is; (4) `mgmtListenAddr` (`mgmt_wire.go:187–199`) auto-detect fires for ALL non-console modes — control and access modes with a `host:port` `management_socket` silently bind TCP on all interfaces; (5) `buildMgmtListener` loopback guard at line 221 checks `if mode == "console"` — control/access TCP has no guard and no bind log. Ruling 11 added: control-side admission keyset persistence via new `control_admission_state_file` config field (control-mode-only, PC-15 in BC-2.09.003; write on each committed admin.key.*/admin.svtn.* mutation, before dispatchPush, advisory; load before PushFullSnapshot on startup, fail-closed on corrupt, missing→empty). Ruling 12 added: scope-correct the TCP auto-detect + loopback guard — router mode keeps no loopback guard (Ruling 9 unchanged); control/access modes with a host:port management_socket apply the loopback guard and MUST emit a bind-address INFO log; only router mode may bind non-loopback TCP. Summary table rows added for Rulings 11 and 12. BC/story propagation list specified. |
 | 1.3 | 2026-07-17 | F-2 adversary defect (HIGH, feature-blocking): router TCP mgmt listener wiring gap. Code-verified facts: (1) `mgmtNetwork(mode)` (`mgmt_wire.go:159–164`) returns `"tcp"` ONLY for `"console"`; router/control/access all return `"unix"` — no existing TCP-bind path for router mode; (2) `admission_sync_client.go:142` always dials `"tcp"` — confirmed; (3) `buildMgmtListener` TCP branch (`mgmt_wire.go:194–208`) enforces `isMgmtLoopbackHost` and is only reached for console because `mgmtNetwork("router")=="unix"`; (4) `validateHostPort` (`internal/config/config.go:401`) uses `net.SplitHostPort` + numeric range check — reusable for auto-detect; (5) blast-radius: all existing router tests supply `tempSockPath(t)` → filesystem paths (e.g. `/tmp/sb-XXXXX/m.sock`); `net.SplitHostPort` fails on those paths (no colon), so auto-detect TCP-vs-unix on `management_socket` has zero impact on existing tests. Ruling 10 added: auto-detect mechanism — if `management_socket` parses as a valid `host:port` via `validateHostPort`, `mgmtNetwork` returns `"tcp"` for router mode and `buildMgmtListener` binds a TCP listener WITHOUT the `isMgmtLoopbackHost` guard (Ruling 9 already ratified: no loopback restriction for router); otherwise unix default preserved. Default when `management_socket` absent or a filesystem path: unix (existing behavior unchanged). AC-008 correction: current postconditions only assert config acceptance + INFO log; must also assert a real TCP bind and a real TCP connection succeed. Corrected postconditions and new test names specified. Summary table `Router TCP mgmt listener` row updated. F-1/F-2 interaction note added (async push: Decision 4 permit applies; the dial-on-demand connect in `pushRPC` is unaffected by the network-selection change — both changes are independent and compose cleanly). |
 | 1.2 | 2026-07-16 | Contradiction fix: Ruling 1 / Decision 2 wire encoding of `svtn_id` corrected from "SVTN name string" to "32 lowercase hex characters encoding the 16-byte `[16]byte` UUID". Code-verified facts: (1) `SVTN.ID` is `crypto/rand`-generated at `svtnmgmt.go:197–199`, not name-derived; (2) `hmac.DeriveKey` (`hmac.go:130`) and `frame.DeriveNodeAddress` (`address.go:11`) both consume the exact `[16]byte` as salt/input — any mismatch produces wrong FrameAuthKey/NodeAddr, defeating `AdmitNode`; (3) `runRouter` (`mgmt_wire.go:491`) constructs no `SVTNManager`, so the router has no name→ID map; (4) `makeRegisterHandler` (`admin_handlers.go:185`) holds `m *svtnmgmt.SVTNManager` with `SVTNByName(name) (SVTN, bool)` at `svtnmgmt.go:608` — control resolves name→ID before putting anything on the wire. `admissionSyncer` interface updated to take `svtnID [16]byte` instead of `svtnName string` (Decision 5 / Ruling 2); admin handlers resolve name→ID at the call site via `m.SVTNByName`. Summary table `svtn_id` row updated. All other rulings unchanged. |
 | 1.1 | 2026-07-15 | Ruling 9 added: router TCP mgmt listener security posture resolved by human ratification; summary table updated; story confirmed decomposition-ready (POL-001). |
@@ -637,7 +638,7 @@ interaction is needed.
 
 ---
 
-## Summary table
+## Summary table (updated through Ruling 12)
 
 | Item | Ruling |
 |---|---|
@@ -645,22 +646,29 @@ interaction is needed.
 | `svtn_id` wire encoding | **32 lowercase hex chars = `[16]byte` UUID** (NOT the human-readable SVTN name). Control resolves name→`[16]byte` via `m.SVTNByName` before calling `admissionSyncer.Push*`. Router has no `SVTNManager`; receives hex directly and calls `ks.RegisterKey(svtnID [16]byte, ...)`. |
 | Push commands | `internal.admission.register`, `internal.admission.revoke`, `internal.admission.expire`, `internal.admission.remove-svtn` |
 | Push-vs-snapshot | Per-write delta push + full-snapshot push on control startup |
-| Control config field | `RouterManagementEndpoints []RouterManagementEndpoint` in `config.Config`, twin of `UpstreamRouters` |
+| Control config field (push endpoints) | `RouterManagementEndpoints []RouterManagementEndpoint` in `config.Config`, twin of `UpstreamRouters` |
+| Control config field (persistence) | **NEW:** `ControlAdmissionStateFile string` (`control_admission_state_file`); control-mode only; BC-2.09.003 PC-15 (to be added). See Ruling 11. |
 | Control dial direction | Control dials routers (TCP); dial-on-demand per push event; retry-with-backoff; no persistent idle connection |
-| Push-failure behavior | Log WARN; never roll back control write; next startup push will resync |
-| Router TCP mgmt listener | Auto-detect on `management_socket`: if value parses as a valid `host:port` (validateHostPort passes), bind TCP without loopback restriction; otherwise bind unix (default preserved). Default absent/filesystem-path → unix (existing behavior). See Ruling 10. |
-| Router config field | `AdmissionStateFile string` in `config.Config` |
-| Snapshot format | JSON; `schema_version: 1`; fields: svtn_id (32 lowercase hex chars = 16-byte UUID `[16]byte`), pubkey (base64url), role, revoked, expiry; no admitted, no FrameAuthKey, no NodeAddr (all derived) |
-| Snapshot write | Atomic: write temp + rename; on each successful push-handler invocation |
-| Snapshot load | At startup if file present and valid; fail-closed on corrupt; missing file → empty keyset |
+| Push-failure behavior | Log WARN; never roll back control write; next startup push will resync (EC-007 guarantee requires `control_admission_state_file` to be configured) |
+| Control persistence write path | After each successful `m.*` mutation: `writeSnapshotAtomic(controlSnapshotPath, ks)` synchronously before `dispatchPush`. Advisory (WARN on failure). No-op when field absent. |
+| Control persistence load path | `loadSnapshotFromFile(controlSnapshotPath, ks, w)` in `runControl` BEFORE `syncClient` construction and `PushFullSnapshot`. Fail-closed on corrupt; missing→empty keyset. |
+| EC-007 resync guarantee | Requires `control_admission_state_file` configured. Without it, `PushFullSnapshot` pushes an empty keyset — EC-007 is inert. |
+| Router TCP mgmt listener | Auto-detect on `management_socket`: `net.SplitHostPort` passes → TCP; otherwise → unix. Router: NO loopback guard (Ruling 9). Default absent/filesystem-path → unix. See Rulings 9 + 10. |
+| Router TCP mgmt listener security posture | No loopback restriction (Ruling 9, human ratified 2026-07-15): control→router push is inherently cross-host; ADR-012 challenge-response is auth boundary. INFO log of bound address required. |
+| Control/access TCP mgmt listener security posture | **LOOPBACK-ONLY** (Ruling 12): admin planes are operator-local; E-CFG-008 on non-loopback. Loopback TCP accepted. INFO log emitted on successful bind. |
+| Mgmt TCP guard (`buildMgmtListener`) | `if mode != "router"` applies loopback guard (replaces `if mode == "console"`). Router exempt (Ruling 9). Console/control/access: loopback-only TCP. |
+| Bind-address INFO log | Emitted after `net.Listen` succeeds for ALL TCP binds. Router: includes firewall advisory. Console/control/access: mode name + address, no advisory. |
+| Router config field (snapshot) | `AdmissionStateFile string` (`admission_state_file`); router-mode only (BC-2.09.003 PC-13) |
+| Snapshot format | JSON; `schema_version: 1`; svtn_id (32 hex chars), pubkey (base64url), role, revoked, expiry; no admitted/FrameAuthKey/NodeAddr (derived). Shared by router (BC-2.05.010) and control (Ruling 11). |
+| Router snapshot write | Atomic temp+rename; on each successful push-handler invocation |
+| Router snapshot load | At startup if present and valid; fail-closed on corrupt; missing → empty keyset |
 | Full-vs-split scoping | FULL material sync; no SVTN-presence-only slice |
 | Auth: control→router | Control's daemon pubkey in router's `authorized_operator_keys` (operator config requirement) |
 | ARCH-08 impact | None; all new code in cmd/switchboard (position 18) |
 | ARCH-01 WaitGroup | Standard F-DWIP3-001 pattern if background goroutine used; otherwise no WaitGroup needed |
-| Router TCP mgmt listener security posture | RESOLVED (human ratified 2026-07-15): permit any bind address; challenge-response is the auth boundary; no loopback restriction; startup log of bind address required (advisory); see Ruling 9 |
-| Router TCP mgmt listener bind mechanism | Auto-detect: `validateHostPort(management_socket)` passes → TCP (no loopback guard); fails → unix. Default absent/filesystem-path → unix. `mgmtNetwork` / `buildMgmtListener` are config-driven for router mode. See Ruling 10. |
-| AC-008 correction | Must add TCP bind assertion + TCP dial success to postconditions; two new test names specified. See Ruling 10 §AC-008 Correction. |
-| Open human flags | None — story is decomposition-ready |
+| AC-008 correction | Real TCP bind + push handshake assertions; two new test names. See Ruling 10 §AC-008 Correction. |
+| Story points estimate | Revised to 10–11 pts (was 8): +2–3 pts for Ruling 11 control persistence. |
+| Open human flags | None — all findings adjudicated. |
 
 ---
 
@@ -919,7 +927,7 @@ but uses a manually constructed mgmt.Server — it does not exercise the
 `mgmtListenAddr` auto-detect path. The new `TCPBind_PushHandshakeSucceeds` test
 closes this by going through `runRouter` directly.
 
-### Downstream propagation list
+### Downstream propagation list (Ruling 10)
 
 The story-writer and PO need the following edits (architect does NOT touch these;
 routing is the orchestrator's responsibility):
@@ -928,3 +936,321 @@ routing is the orchestrator's responsibility):
 |----------|-------------|
 | `.factory/stories/S-BL.ADMISSION-SYNC-WIRE.md` | (a) Update `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` binding comment in frontmatter to `v1.3`; (b) replace AC-008 postconditions 1–3 with the corrected five postconditions above; (c) add test names `TestRouterMgmtListener_TCPBind_ConnectionSucceeds` and `TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds` to AC-008; (d) add implementation task: update `mgmtListenAddr` (or `mgmtNetwork`) to auto-detect TCP vs unix on `management_socket`; update `buildMgmtListener` to skip loopback guard for non-console TCP. |
 | `BC-2.09.003` (or story Decision 8 section) | Confirm PC-14 postcondition language covers the TCP-bind behavior (not just config acceptance). Story decision section may need a note that "router binds TCP when management_socket is a host:port" is now explicit, not merely implied. |
+
+---
+
+## Ruling 11 — Control-side admission keyset persistence (F-P3-01, now in-scope by human decision)
+
+### Defect confirmed (code-verified)
+
+Adversary pass 3 filed F-P3-01 (MEDIUM, correctness gap). The following facts were
+independently verified before issuing this ruling:
+
+| Fact | Location | Verified |
+|------|----------|---------|
+| `runControl` constructs `ks := admission.NewAdmittedKeySet()` fresh on every startup — no load path | `mgmt_wire.go:1176` | Confirmed |
+| `PushFullSnapshot(ctx, ks)` at control startup iterates `ks.AllSVTNEntries()` and immediately hits the empty-keyset early-return | `mgmt_wire.go:1222`; `admission_sync_client.go:376–381` | Confirmed |
+| None of the four admin mutation handlers (`makeRegisterHandler`, `makeRevokeHandler`, `makeExpireHandler`, `makeAdminSVTNDestroyHandler`) contains any persist-write call after `m.RegisterKey` / `m.RevokeKey` / `m.ExpireKey` / `m.Destroy` | `admin_handlers.go:277–293`, `:332–343`, `:427–436`, `:973–984` | Confirmed |
+| `writeSnapshotAtomic(path string, ks *admission.AdmittedKeySet) error` is implemented, takes path + keyset, atomic write, advisory return — fully reusable | `admission_sync_snapshot.go:214–262` | Confirmed |
+| `loadSnapshotFromFile(path string, ks *admission.AdmittedKeySet, w io.Writer) error` is implemented, handles missing→nil, corrupt→E-KEY-002, present+valid→populate | `admission_sync_snapshot.go:276–334` | Confirmed |
+| `marshalSnapshot` / `unmarshalSnapshot` use `schema_version:1`, `snapshotFile` struct, base64url pubkeys, RFC3339 expiry — format is self-contained and shareable | `admission_sync_snapshot.go:95–198` | Confirmed |
+| BC-2.09.003 PC-13 is explicitly scoped "router-mode only" | `BC-2.09.003.md:247` | Confirmed |
+
+**Net effect of gap:** Every control restart discards all registered keys. `PushFullSnapshot`
+on startup pushes nothing. BC-2.05.009 EC-007 ("Control restarts → full-snapshot push corrects
+router staleness") cannot hold. Ruling 4 scenario "Control reconnect after detachment" is
+inoperable: control forgets its authoritative state on every process exit.
+
+### Config field decision: NEW field, not reuse of `admission_state_file`
+
+**RULING: A new `ControlAdmissionStateFile string` field in `internal/config.Config` with yaml
+key `control_admission_state_file`.**
+
+Rationale for NOT reusing `admission_state_file`:
+- The two files serve opposite roles: `admission_state_file` is the router's VLR-local **cache**
+  of pushed state (written by the router's push handlers on receive, read by the router on
+  startup). `control_admission_state_file` is the control daemon's **authoritative source**
+  (written by control after each successful mutation, read by control on startup). Merging them
+  under one field name would imply they are the same thing to operators.
+- BC-2.09.003 PC-13 explicitly scopes `admission_state_file` as "router-mode only." Reusing
+  it for control would require amending PC-13's mode scope AND would create an operational
+  confusion risk: an operator who misreads config YAML and points control and router at the
+  same path would cause the router to corrupt control's authoritative state on the next push.
+  Two fields with distinct names make this mistake impossible.
+- The mode-separation principle established by PC-13/PC-14 (router-only vs control-only fields)
+  is clean and should be preserved. Control-side persistence is a new behavioral surface.
+
+```go
+// ControlAdmissionStateFile is the path where the control-mode daemon persists its
+// authoritative AdmittedKeySet (S-BL.ADMISSION-SYNC-WIRE Ruling 11).
+// Optional — when absent or empty, control does not persist admission state and
+// PushFullSnapshot on startup will push an empty keyset (no EC-007 resync guarantee).
+// When present, must be a non-empty, non-whitespace path (E-CFG-017).
+// Control-mode only — ignored by router/console/access modes.
+ControlAdmissionStateFile string `yaml:"control_admission_state_file"`
+```
+
+Config validation: if present, the value must be non-empty and not whitespace-only (E-CFG-017),
+using the same pattern as E-CFG-015 for `admission_state_file`. No file I/O in `Validate()`
+(ARCH-06 §Config purity contract). This is PC-15 in BC-2.09.003.
+
+### Write path (persist-on-mutation)
+
+**RULING: After each successful `SVTNManager.*` mutation, call `writeSnapshotAtomic` with
+`cfg.ControlAdmissionStateFile` and control's `AdmittedKeySet`, BEFORE `dispatchPush`.**
+
+Placement in each handler:
+1. `m.RegisterKey(...)` / `m.RevokeKey(...)` / `m.ExpireKey(...)` / `m.Destroy(...)` succeeds.
+2. **`writeSnapshotAtomic(controlSnapshotPath, ks)` — persist first.**
+3. Then `dispatchPush(ctx, wg, func(...) { syncClient.Push*(...)})` — push second (async).
+
+The persist-write is synchronous on the handler goroutine (same as the `m.*` write). It does
+NOT move into the `dispatchPush` goroutine — the goal is durability of the authoritative state
+independent of whether the push succeeds or the goroutine runs. If `controlSnapshotPath == ""`
+(not configured), `writeSnapshotAtomic` is a no-op (it already checks for empty path at
+`admission_sync_snapshot.go:216–218`).
+
+**Write failure behavior:** Advisory — log WARN, do not return error to the RPC caller, do not
+roll back the `m.*` write. Same policy as the router push-handler snapshot write (BC-2.05.010
+PC-2 / Ruling 3). The control-side write has already committed; the snapshot write is a
+durability aid, not a transaction participant.
+
+The `ks *admission.AdmittedKeySet` reference is currently threaded into the admin handlers via
+`SVTNManager`. To call `writeSnapshotAtomic(path, ks)` in the handlers, the path and the
+AdmittedKeySet accessor must be accessible. Two clean approaches:
+
+**Option A (preferred):** inject `controlSnapshotPath string` as a new parameter into
+`BuildAdminHandlers`, alongside the existing `syncClient` and `pushWG`. The handlers close
+over it. The path is empty string when control is not configured for persistence (no-op path).
+
+**Option B:** inject a `persistFn func()` callback into `BuildAdminHandlers`. The callback
+captures path + ks in the closure at the `runControl` call site.
+
+**Recommendation: Option A.** It is simpler, avoids an extra closure layer, and keeps the
+handler signature directly readable. The path is just a string.
+
+`BuildAdminHandlers` new signature (conceptual):
+```go
+func BuildAdminHandlers(
+    m *svtnmgmt.SVTNManager,
+    ops *mgmt.OperatorKeySet,
+    syncClient admissionSyncer,
+    controlSnapshotPath string,   // NEW — empty string = no persistence
+    pushWG ...*sync.WaitGroup,
+) []mgmt.Handler
+```
+
+The four write-handler makers (`makeRegisterHandler`, `makeRevokeHandler`, `makeExpireHandler`,
+`makeAdminSVTNDestroyHandler`) each gain `controlSnapshotPath string` as a parameter and call
+`writeSnapshotAtomic(controlSnapshotPath, m.AdmittedKeySet())` after the successful `m.*` write
+and before `dispatchPush`.
+
+`m.AdmittedKeySet()` must expose the underlying `*admission.AdmittedKeySet`. Verify that
+`SVTNManager` already has an accessor; if not, one must be added. Note: the snapshot already
+calls `ks.AllSVTNEntries()` via `marshalSnapshot` — the accessor need only return the pointer,
+no new AdmittedKeySet methods are required.
+
+### Load path (startup before PushFullSnapshot)
+
+**RULING: In `runControl`, after `ks := admission.NewAdmittedKeySet()` and BEFORE constructing
+`syncClient` or calling `PushFullSnapshot`, load the control snapshot.**
+
+```go
+ks := admission.NewAdmittedKeySet()
+
+// Ruling 11: load persisted control-side admission state before constructing the sync
+// client and before PushFullSnapshot. This ensures EC-007 resync is real.
+var controlSnapshotPath string
+if cfg != nil {
+    controlSnapshotPath = cfg.ControlAdmissionStateFile
+}
+if loadErr := loadSnapshotFromFile(controlSnapshotPath, ks, w); loadErr != nil {
+    // Fail-closed on corrupt snapshot (E-KEY-002). Missing file → nil return → continue.
+    return fmt.Errorf("runControl: load control admission snapshot: %w", loadErr)
+}
+// ... then: m := svtnmgmt.NewSVTNManager(ks, daemonPub)
+// ... then: syncClient := newAdmissionSyncClient(...)
+// ... then: syncClient.PushFullSnapshot(ctx, ks)
+```
+
+**Semantics on load:**
+- `controlSnapshotPath == ""` (not configured): `loadSnapshotFromFile` is a no-op (returns nil),
+  `ks` remains empty, EC-007 guarantee does NOT apply (operator must configure the field to get
+  the resync guarantee). This should be documented in the operator guide.
+- File missing: `loadSnapshotFromFile` returns nil → empty keyset → fresh install semantics.
+  `PushFullSnapshot` is a no-op (correct for fresh install).
+- File present + valid: `unmarshalSnapshot` populates `ks` via `RegisterKey` calls. All entries
+  are `admitted=false` — this is correct for control (control is the write authority, not the
+  challenge-response validator; it never calls `AdmitNode`). The `admitted` field is irrelevant
+  on control's keyset. The loaded entries are the registered-key registry only.
+- File present + corrupt / unknown schema_version: `loadSnapshotFromFile` returns `E-KEY-002`
+  error → `runControl` returns error → daemon exits 1 (fail-closed). This is the correct behavior:
+  a corrupt authoritative state file must not be silently ignored; operator must investigate.
+
+The log writer (`w`) is already available in `runControl` — pass it to `loadSnapshotFromFile`
+for the INFO log on successful load. The INFO log emitted by `loadSnapshotFromFile` uses the
+router-targeted message "switchboard router: admission snapshot loaded: svtn_id=... entries=...".
+The implementer SHOULD either reuse this log (acceptable for initial implementation) or update
+the log prefix to "switchboard control:" for clarity.
+
+### `admitted` flag on loaded entries
+
+Control is the key-registration authority. It never performs the challenge-response handshake
+for peer connections (that is the router's role). `admitted=false` for all loaded entries is
+therefore not just acceptable but correct: control's keyset tracks which keys ARE registered
+(eligibility), not which connections ARE live (admission state). No special handling needed.
+
+### Serialization format shared with BC-2.05.010
+
+The `snapshotFile` struct (`schema_version:1`, `snapshotSVTN`, `snapshotKey`) is used
+unchanged for both the router-side VLR-local snapshot and the control-side authoritative
+snapshot. The format is already implemented and tested. No format changes are needed.
+
+The two files have different operational semantics (router's is a cache; control's is
+authoritative), but the on-disk representation is identical. This simplifies the implementation
+and means a corrupt control snapshot file can be diagnosed with the same tooling as a corrupt
+router snapshot file.
+
+### New BC work required
+
+| BC action | Description |
+|-----------|-------------|
+| Amend BC-2.09.003 | Add PC-15: `control_admission_state_file` optional config field; non-empty when present (E-CFG-017); control-mode only. Same pattern as PC-13. |
+| Amend BC-2.05.009 PC-7 | Add qualifier: "The EC-007 resync guarantee holds only when `control_admission_state_file` is configured and the snapshot was successfully written on each prior mutation. When the field is absent, `PushFullSnapshot` pushes an empty keyset (no resync). Operators who require EC-007 MUST configure `control_admission_state_file`." |
+| No change to BC-2.05.010 | Remains router-VLR-local snapshot only. The control-side persistence is a new behavior under the new config field and does not alter the router-side BC. |
+
+### Story points impact
+
+Adding control-side persistence adds approximately 2–3 story-points of scope:
+- New config field + validation test: ~0.5 pt
+- `BuildAdminHandlers` signature extension + per-handler persist call: ~0.5 pt
+- Load path in `runControl`: ~0.5 pt
+- New AC (control persistence) + test: ~1 pt
+- BC amendments (BC-2.09.003 PC-15, BC-2.05.009 PC-7 qualifier): ~0.5 pt
+
+**Recommended revised estimate: 10–11 story points** (was 8). The PO/story-writer should
+confirm this estimate when amending the story.
+
+---
+
+## Ruling 12 — Mgmt listener TCP/loopback scope correction (F-P3-02)
+
+### Defect confirmed (code-verified)
+
+Adversary pass 3 filed F-P3-02 (MEDIUM, security scope overreach). The following facts were
+independently verified before issuing this ruling:
+
+| Fact | Location | Verified |
+|------|----------|---------|
+| `mgmtListenAddr` (`mgmt_wire.go:187–199`): after the `if mode == "console"` TCP fast-path, the `net.SplitHostPort` auto-detect fires for ALL remaining modes — `"router"`, `"control"`, `"access"`, and any unknown mode | `mgmt_wire.go:188–198` | Confirmed |
+| `buildMgmtListener` loopback guard check: `if mode == "console"` at line 221 — control and access modes with a host:port management_socket reach TCP `net.Listen` with NO loopback guard | `mgmt_wire.go:218–229` | Confirmed |
+| `buildMgmtListener` bind-address INFO log: the comment in Ruling 9 requires an INFO log for router-mode TCP binds; no log is emitted for control/access TCP binds in the current implementation | `mgmt_wire.go:201–235` | Confirmed — no INFO log for non-router non-console TCP |
+| `mgmtDefaultSocket("control")` returns `"/run/switchboard-control.sock"` — a filesystem path that fails `net.SplitHostPort` — so the default case is safe today | `mgmt_wire.go:154` | Confirmed |
+| `mgmtDefaultSocket("access")` returns `"/run/switchboard-access.sock"` — same, safe default | `mgmt_wire.go:147` | Confirmed |
+
+**Attack surface created by over-generalization:** An operator setting
+`management_socket: "0.0.0.0:9091"` in a control-mode config silently binds the
+`admin.key.*` / `admin.svtn.*` management plane (key registration, revocation, expiry, SVTN
+destroy) on all network interfaces. There is no loopback guard, no bind log, and no
+documentation of the behavior. `sbctl` has no legitimate need to connect to a control daemon
+from a remote host — it is a local administrative tool. The control admin plane MUST fail
+closed (loopback-only) unless the operator makes an explicit, documented opt-in.
+
+### Decision: option (b) — keep auto-detect for all modes, apply loopback guard to control/access
+
+**RULING: The TCP auto-detect (`net.SplitHostPort` check in `mgmtListenAddr`) remains
+applicable to ALL non-console modes. But `buildMgmtListener` is amended to apply the loopback
+guard to control and access modes (in addition to console). Only router-mode TCP listeners
+skip the loopback guard (Ruling 9 unchanged). All modes that bind non-loopback TCP MUST emit
+the bind-address INFO log.**
+
+Rationale for option (b) over option (a):
+
+- **Option (a) (restrict auto-detect to router only)** would force control and access operators
+  who want a loopback TCP management socket (legitimate for container environments where Unix
+  sockets are awkward) to set a `host:port` address, which currently gets rejected. Restricting
+  auto-detect entirely from control/access forecloses this legitimate use case.
+- **Option (b) (keep auto-detect, add loopback guard)** allows control and access to use TCP
+  management sockets (e.g., `management_socket: "127.0.0.1:9091"`) while enforcing that the
+  address is loopback-only. This matches the console-mode policy (which is also local-only)
+  and is the security-correct default: control's admin plane is operator-local.
+
+**Non-loopback TCP for control/access:** Any future need to expose control's admin plane
+non-locally must be an explicit architectural decision with its own ruling — not a silent
+consequence of setting `management_socket: "0.0.0.0:9091"`. Until such a ruling exists,
+non-loopback TCP for control/access is rejected with the same `E-CFG-008` error as console.
+
+### Precise implementation specification
+
+```go
+func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
+    network, address := mgmtListenAddr(cfg, mode)
+    if network == "unix" {
+        ln, err := listenUnixMgmt(address)
+        if err != nil {
+            return nil, fmt.Errorf("buildMgmtListener: %w", err)
+        }
+        return ln, nil
+    }
+    // TCP path.
+    // Loopback guard: applies to console (VP-073 / BC-2.07.004 EC-013 / Ruling D),
+    // control (Ruling 12: admin plane is operator-local; sbctl connects locally),
+    // and access (Ruling 12: same rationale).
+    // Router-mode TCP management listeners are NOT loopback-restricted (Ruling 9:
+    // control→router push is inherently cross-host; ADR-012 challenge-response is
+    // the auth boundary).
+    if mode != "router" {
+        host, _, splitErr := net.SplitHostPort(address)
+        if splitErr != nil {
+            return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
+        }
+        if !isMgmtLoopbackHost(host) {
+            return nil, fmt.Errorf(
+                "E-CFG-008: management_socket: %s mode requires a loopback address "+
+                    "(127.0.0.1, [::1], or localhost); got: %s",
+                mode, address,
+            )
+        }
+    }
+    ln, err := net.Listen(network, address)
+    if err != nil {
+        return nil, fmt.Errorf("buildMgmtListener: %w", err)
+    }
+    // INFO log for any TCP bind — operator visibility into bound address.
+    // For router: log matches Ruling 9 advisory; for console/control/access: loopback
+    // is guaranteed above, so the log is informational only.
+    return ln, nil
+}
+```
+
+The `if mode != "router"` check cleanly separates router (no guard) from all other modes
+(loopback guard). Future modes default to the stricter policy unless explicitly opted out with
+a new ruling — the same fail-closed default the go.md rule 13 requires for security-perimeter
+constructors.
+
+**Bind-address INFO log:** `buildMgmtListener` should emit an INFO log after a successful
+`net.Listen`, for ALL modes that bind TCP (router, console, control, access). The log string
+SHOULD include the mode name and resolved address so operators can confirm what is bound:
+```
+"<mode> management listener bound to <address>"
+```
+For router mode this matches Ruling 9's existing advisory ("ensure firewall policy restricts
+access as appropriate"). For console/control/access (loopback-only) the advisory suffix is
+omitted. The INFO log is written to the daemon's log writer `w`, which is already available
+in `runControl`/`runRouter`/`runConsole` — thread it through `buildMgmtListener` as an
+`io.Writer` parameter (or use `slog`/`log` if a standard logger is already wired).
+
+**Blast-radius:** Zero impact on existing tests. All existing tests for control, access, and
+console modes use filesystem paths (default sockets). Filesystem paths fail `net.SplitHostPort`
+→ `mgmtListenAddr` returns `"unix"` → `buildMgmtListener` takes the unix branch — the TCP
+loopback guard is never reached. No test behavior changes.
+
+### BC/story propagation from Ruling 12
+
+| Artifact | Edit needed |
+|----------|-------------|
+| Story `S-BL.ADMISSION-SYNC-WIRE.md` — Non-Goals | Remove or update any Non-Goal bullet that deferred control-side loopback enforcement. The `buildMgmtListener` scope correction is now in-scope per human decision. |
+| BC-2.09.003 | Add or amend a postcondition noting that TCP management listeners on control and access modes MUST be loopback-only (E-CFG-008 for non-loopback). Scoped note: router mode is exempt (Ruling 9). |
+| Story ACs | Add a new AC (e.g., AC-011) or extend an existing AC: "control-mode or access-mode daemon with `management_socket: "0.0.0.0:<port>"` returns E-CFG-008 at listener bind time; a loopback address (e.g., `127.0.0.1:<port>`) succeeds." This is a new testable postcondition not covered by the existing AC-008 (which tests router mode). |
+| Implementation task | Amend `buildMgmtListener`: replace `if mode == "console"` guard with `if mode != "router"`. Add INFO log for all TCP bind paths. |
+
