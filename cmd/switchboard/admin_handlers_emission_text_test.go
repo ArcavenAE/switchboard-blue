@@ -98,7 +98,7 @@ func TestNewInBurst19_EADM018_NoParenthetical_ThroughHandler(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {

@@ -475,7 +475,7 @@ func TestE2E_AdminRevoke_RoleMismatch(t *testing.T) {
 		t.Fatalf("generate target key: %v", err)
 	}
 	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
@@ -512,7 +512,7 @@ func TestE2E_AdminRevoke_ControlWithoutConfirm(t *testing.T) {
 		t.Fatalf("generate target key: %v", err)
 	}
 	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
@@ -548,7 +548,7 @@ func TestE2E_AdminRevoke_ControlWithConfirm(t *testing.T) {
 		t.Fatalf("generate target key: %v", err)
 	}
 	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleControl)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
@@ -583,7 +583,7 @@ func TestE2E_AdminRegister_HappyPath(t *testing.T) {
 	if _, err := m.Create("test-svtn"); err != nil {
 		t.Fatalf("create SVTN: %v", err)
 	}
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
@@ -620,7 +620,7 @@ func TestE2E_AdminExpire_HappyPath(t *testing.T) {
 		t.Fatalf("generate target key: %v", err)
 	}
 	m, encodedPubkey, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
@@ -662,7 +662,7 @@ func TestE2E_AdminListKeys_HappyPath(t *testing.T) {
 	if _, err := m.RegisterKey("test-svtn", pub2, admission.RoleConsole); err != nil {
 		t.Fatalf("register key 2: %v", err)
 	}
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, err2 := ed25519.GenerateKey(rand.Reader)
@@ -731,7 +731,7 @@ func TestControlMode_AdminHandlersRegistered(t *testing.T) {
 	}
 
 	// Control mode: admin handlers registered.
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	_, callerPriv, _ := ed25519.GenerateKey(rand.Reader)
@@ -814,7 +814,7 @@ func TestAC004_NonControlRoleRejected(t *testing.T) {
 			// Add the caller to the OperatorKeySet so the mgmt handshake admits
 			// it (the server will set the caller pubkey in the handler context).
 			ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
-			handlers := BuildAdminHandlers(m, nil, nil)
+			handlers := BuildAdminHandlers(m, nil, nil, nil)
 			es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 			// Generate a valid target pubkey for the register args.
@@ -853,7 +853,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLNegative(t *testing.T) {
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
 	m, _, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	// Use startE2EServerWithOps with ctrlPriv so the daemon authenticates as the
 	// SVTNManager bootstrap key. startE2EServer generates a separate key that is
 	// not registered in the SVTNManager, causing E-ADM-009 before TTL validation
@@ -885,7 +885,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLZero(t *testing.T) {
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
 	m, _, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	// Use startE2EServerWithOps with ctrlPriv so the daemon authenticates as the
 	// SVTNManager bootstrap key. startE2EServer generates a separate key that is
 	// not registered in the SVTNManager, causing E-ADM-009 before TTL validation
@@ -917,7 +917,7 @@ func TestE2E_AdminExpire_ServerRejectsTTLTooLong(t *testing.T) {
 
 	targetPub, _, _ := ed25519.GenerateKey(rand.Reader)
 	m, _, ctrlPriv := newE2ESVTNManager(t, "test-svtn", targetPub, admission.RoleAccess)
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	// Use startE2EServerWithOps with ctrlPriv so the daemon authenticates as the
 	// SVTNManager bootstrap key. startE2EServer generates a separate key that is
 	// not registered in the SVTNManager, causing E-ADM-009 before TTL validation
@@ -964,7 +964,7 @@ func TestE2E_AdminKeyRegister_RoleInsufficient(t *testing.T) {
 
 	// Start server with the console-role caller in the OperatorKeySet.
 	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	// Generate a valid target pubkey.
@@ -1015,7 +1015,7 @@ func TestE2E_AdminKeyRevoke_RoleInsufficient(t *testing.T) {
 	}
 
 	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.revoke", map[string]any{
@@ -1055,7 +1055,7 @@ func TestE2E_AdminListKeys_AnyRole(t *testing.T) {
 	}
 
 	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{callerPub})
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	resp := sendAdminRPCAsKey(t, es.socketPath, callerPub, callerPriv, "admin.key.list-keys", map[string]any{
@@ -1112,7 +1112,7 @@ func TestAdminSVTNDestroy_E2E_VP048Property2(t *testing.T) {
 		t.Fatalf("RegisterKey extra: %v", err)
 	}
 
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, mgmt.NewOperatorKeySet(nil))
 
 	// sendAdminRPC will authenticate as the daemon key (ctrlPriv), which is the
@@ -1191,7 +1191,7 @@ func TestAdminSVTNDestroy_E2E_VP048Property3(t *testing.T) {
 	}
 
 	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{consolePub})
-	handlers := BuildAdminHandlers(m, nil, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	// Authenticate as the console-role caller via sendAdminRPCAsKey.

@@ -48,6 +48,21 @@ const (
 	admissionSyncRetryMax      = 5
 )
 
+// admissionSyncDialTimeout is the per-dial TCP connect timeout for pushRPC
+// (F-P3-03 / S-BL.ADMISSION-SYNC-WIRE). Without a bounded timeout, a black-holed
+// endpoint (SYN dropped, no RST) causes the dial to block for the OS TCP connect
+// timeout (~127s on macOS/Linux), which stalls pushWG.Wait() at daemon shutdown for
+// up to admissionSyncRetryMax * OS_timeout ≈ 10+ minutes.
+//
+// A 5s per-dial timeout gives: worst-case per-endpoint latency =
+// 5 attempts × (5s dial + max_retry_sleep=10s) = 5 × 15s = 75s.
+// This is a large reduction from ~127s×5=635s and is bounded, predictable,
+// and well within operator-tolerable shutdown latency for a control daemon.
+//
+// The value is tunable via constant — it is NOT user-configurable because
+// the retry policy (Ruling 2) already exposes the relevant knobs (attempts, delays).
+const admissionSyncDialTimeout = 5 * time.Second
+
 // Push command name constants used by both the control-side client and the
 // router-side handler registration. Defined here so both files can reference
 // them without duplication (AC-002 tests also reference these constants).
@@ -138,7 +153,11 @@ func (c *admissionSyncClient) pushRPC(ctx context.Context, addr, command string,
 	const handshakeTimeout = 10 * time.Second
 	const maxMsg = 1 << 16 // 64 KiB per message
 
-	dialer := &net.Dialer{}
+	// F-P3-03: use a bounded per-dial timeout so that a black-holed endpoint
+	// (SYN dropped, no RST) fails in ≤ admissionSyncDialTimeout rather than
+	// blocking for the OS TCP connect timeout (~127s). This makes pushWG.Wait()
+	// bounded at daemon shutdown even against adversarial network conditions.
+	dialer := &net.Dialer{Timeout: admissionSyncDialTimeout}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", addr, err)

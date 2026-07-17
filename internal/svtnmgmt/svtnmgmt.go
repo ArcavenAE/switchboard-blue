@@ -794,3 +794,14 @@ func (m *SVTNManager) Destroy(caller admission.AdmittedKey, svtnName string) err
 	m.mu.Unlock()
 	return nil
 }
+
+// AdmittedKeySet returns the underlying *admission.AdmittedKeySet shared by this
+// SVTNManager. It is used by the control-mode admin handlers to persist the keyset
+// snapshot synchronously after each mutation (AC-011 / Ruling 11 /
+// S-BL.ADMISSION-SYNC-WIRE BC-2.09.003 v2.2 PC-15).
+//
+// The returned pointer is the live object — callers must not mutate the keyset
+// directly; use SVTNManager methods instead. Safe for concurrent read access.
+func (m *SVTNManager) AdmittedKeySet() *admission.AdmittedKeySet {
+	return m.keySet
+}

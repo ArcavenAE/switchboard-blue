@@ -215,16 +215,19 @@ func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 		}
 		return ln, nil
 	}
-	// TCP path. Apply loopback restriction ONLY for console mode (VP-073 /
-	// BC-2.07.004 EC-013 / Ruling D). Router-mode TCP listeners are NOT
-	// loopback-restricted (Ruling 9 / S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.3).
-	if mode == "console" {
+	// TCP path. Apply loopback restriction for all NON-router modes (Ruling 12 /
+	// BC-2.09.003 PC-11b v2.2 / S-BL.ADMISSION-SYNC-WIRE AC-012).
+	// console, control, and access modes all require a loopback address for TCP
+	// management listeners (VP-073 / BC-2.07.004 EC-013 / Ruling D).
+	// Router-mode TCP listeners are NOT loopback-restricted (Ruling 9 /
+	// S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.3).
+	if mode != "router" {
 		host, _, splitErr := net.SplitHostPort(address)
 		if splitErr != nil {
 			return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
 		}
 		if !isMgmtLoopbackHost(host) {
-			return nil, fmt.Errorf("E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+			return nil, fmt.Errorf("E-CFG-008: management_socket: %s mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", mode, address)
 		}
 	}
 	ln, err := net.Listen(network, address)
@@ -1180,6 +1183,21 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
 	ops := mgmt.NewOperatorKeySet(nil)
 
+	// AC-011 / Ruling 11: load control-side keyset snapshot BEFORE constructing
+	// the sync client and calling PushFullSnapshot (BC-2.05.009 PC-7 v1.2 /
+	// BC-2.09.003 PC-15 v2.2). This makes EC-007 resync real: the recovered keyset
+	// is pushed to routers on startup. Corrupt file → fail-closed (E-KEY-002).
+	// Missing file → empty keyset (fresh install, no error).
+	var controlSnapshotPath string
+	if cfg != nil {
+		controlSnapshotPath = cfg.ControlAdmissionStateFile
+	}
+	if controlSnapshotPath != "" {
+		if loadErr := loadSnapshotFromFile(controlSnapshotPath, ks, w); loadErr != nil {
+			return fmt.Errorf("runControl: load control admission snapshot: %w", loadErr)
+		}
+	}
+
 	// Construct the admission sync client with the configured router management
 	// endpoints (S-BL.ADMISSION-SYNC-WIRE AC-009/010 / BC-2.05.009 Ruling 2).
 	// An empty endpoint list → push methods are no-ops (single-router deployment).
@@ -1195,9 +1213,10 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 	var pushWG sync.WaitGroup
 
 	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	// Pass the real syncClient AND pushWG so push calls are wired into make*Handler
-	// and dispatched asynchronously (S-BL.ADMISSION-SYNC-WIRE AC-003/004 / F-1 fix).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, syncClient, &pushWG))
+	// Pass the real syncClient AND pushWG AND controlSnapshotPath so push calls are
+	// wired into make*Handler and dispatched asynchronously (S-BL.ADMISSION-SYNC-WIRE
+	// AC-003/004 / F-1 fix / AC-011 / Ruling 11).
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, syncClient, &pushWG, controlSnapshotPath))
 	if mgmtErr != nil {
 		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}

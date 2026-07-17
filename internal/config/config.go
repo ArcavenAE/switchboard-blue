@@ -180,6 +180,16 @@ type Config struct {
 	// When present, must be a non-empty, non-whitespace path (E-CFG-015).
 	// File I/O is NOT performed in Validate() — see ARCH-06 §Config purity contract.
 	AdmissionStateFile string `yaml:"admission_state_file"`
+
+	// ControlAdmissionStateFile is the path where the control-mode daemon persists
+	// and loads its authoritative AdmittedKeySet snapshot (S-BL.ADMISSION-SYNC-WIRE
+	// Ruling 11 / BC-2.09.003 v2.2 PC-15 / AC-011).
+	// Control-mode only — ignored by router/console/access modes.
+	// Optional — when absent or empty, control does not persist the keyset locally
+	// and EC-007 resync on startup pushes only the current in-memory (empty) keyset.
+	// When present, must be a non-empty, non-whitespace path (E-CFG-017).
+	// File I/O is NOT performed in Validate() — see ARCH-06 §Config purity contract.
+	ControlAdmissionStateFile string `yaml:"control_admission_state_file"`
 }
 
 // RouterManagementEndpoint is a single entry in the router_management_endpoints list.
@@ -348,6 +358,15 @@ func (c *Config) Validate() error {
 				i, sanitizeAddrForError(ep.Addr),
 			))
 		}
+	}
+
+	// E-CFG-017 (BC-2.09.003 v2.2 PC-15; S-BL.ADMISSION-SYNC-WIRE AC-011):
+	// control_admission_state_file must not be whitespace-only when present.
+	// Absent (empty string) is accepted — control starts with an empty keyset (no persistence).
+	// Control-mode only; other modes ignore this field.
+	// No file I/O is performed here (ARCH-06 §Config purity contract).
+	if c.ControlAdmissionStateFile != "" && strings.TrimSpace(c.ControlAdmissionStateFile) == "" {
+		failures = append(failures, "config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence")
 	}
 
 	if len(failures) == 0 {

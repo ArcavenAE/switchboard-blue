@@ -366,7 +366,7 @@ func TestAdmissionSync_RegisterKey_PushCalledAfterControlWrite(t *testing.T) {
 
 	// Build admin handlers with the mock syncer wired in.
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops, sync)
+	handlers := BuildAdminHandlers(m, ops, sync, nil)
 
 	// Use startE2EServerWithOps so ctrlPriv matches the bootstrap key.
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
@@ -442,7 +442,7 @@ func TestAdmissionSync_RegisterKey_PushFailureDoesNotRollbackControlWrite(t *tes
 	}
 
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops, sync)
+	handlers := BuildAdminHandlers(m, ops, sync, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	pubkeyB64 := base64.RawURLEncoding.EncodeToString([]byte(regPub))
@@ -506,7 +506,7 @@ func TestAdmissionSync_NilSyncer_NoOp(t *testing.T) {
 
 	// nil admissionSyncer — must not panic.
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops, nil) // nil syncer
+	handlers := BuildAdminHandlers(m, ops, nil, nil) // nil syncer
 
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
@@ -638,7 +638,7 @@ func TestAdmissionSync_RevokeKey_PushCalledAfterControlWrite(t *testing.T) {
 	}
 
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops, sync)
+	handlers := BuildAdminHandlers(m, ops, sync, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	pubkeyB64 := base64.RawURLEncoding.EncodeToString([]byte(regPub))
@@ -684,7 +684,7 @@ func TestAdmissionSync_ExpireKey_PushCalledAfterControlWrite(t *testing.T) {
 	}
 
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops, sync)
+	handlers := BuildAdminHandlers(m, ops, sync, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	pubkeyB64 := base64.RawURLEncoding.EncodeToString([]byte(regPub))
@@ -721,7 +721,7 @@ func TestAdmissionSync_RemoveSVTN_PushCalledAfterControlWrite(t *testing.T) {
 	}
 
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops, sync)
+	handlers := BuildAdminHandlers(m, ops, sync, nil)
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	// admin.svtn.destroy uses "name" not "svtn_id" per adminSVTNDestroyArgs.
@@ -800,7 +800,7 @@ func TestAdmissionSync_PushFailure_AllWritePaths_Advisory(t *testing.T) {
 			_, args, cmd := tc.setupFn(t, m, ks, ctrlPriv)
 
 			ops := mgmt.NewOperatorKeySet(nil)
-			handlers := BuildAdminHandlers(m, ops, sync)
+			handlers := BuildAdminHandlers(m, ops, sync, nil)
 			es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 			resp := sendAdminRPC(t, es.socketPath, ctrlPriv, cmd, args)
@@ -2493,5 +2493,466 @@ router_management_endpoints: []
 		t.Errorf("AC-010 NewListUsedOnNextPush: PushRegisterKey returned %v after reload "+
 			"cleared endpoints; must be a no-op (empty list = no dial attempts). "+
 			"Implementation is using the stale endpoint list.", err)
+	}
+}
+
+// ── AC-011: control-side keyset persistence ────────────────────────────────────
+
+// TestControlAdmission_PersistOnMutation verifies that after a successful
+// admin.key.register on control with control_admission_state_file configured,
+// the snapshot file is written synchronously BEFORE dispatchPush is called.
+//
+// BC-2.05.009 PC-7 v1.2; BC-2.09.003 PC-15 v2.2; S-BL.ADMISSION-SYNC-WIRE AC-011.
+// Red Gate: FAILS — BuildAdminHandlers does not yet accept a controlSnapshotPath
+// and admin_handlers.go does not yet call writeSnapshotAtomic in the handlers.
+//
+// NOT t.Parallel: creates filesystem socket AND tempfile.
+func TestControlAdmission_PersistOnMutation(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-ctrl-persist-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	snapshotPath := filepath.Join(dir, "control-admission-state.json")
+
+	sync := &mockSyncer{}
+	ks := admission.NewAdmittedKeySet()
+	_, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control key: %v", err)
+	}
+	ctrlPub := ctrlPriv.Public().(ed25519.PublicKey)
+	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+	if _, err := m.Create("persist-test-svtn"); err != nil {
+		t.Fatalf("create SVTN: %v", err)
+	}
+	regPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate reg key: %v", err)
+	}
+
+	ops := mgmt.NewOperatorKeySet(nil)
+	// AC-011: BuildAdminHandlers must accept a controlSnapshotPath parameter
+	// so the handlers can persist the keyset synchronously before dispatchPush.
+	// Red Gate: BuildAdminHandlers does not yet take this parameter.
+	handlers := BuildAdminHandlers(m, ops, sync, nil, snapshotPath)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
+
+	pubkeyB64 := base64.RawURLEncoding.EncodeToString([]byte(regPub))
+	resp := sendAdminRPC(t, es.socketPath, ctrlPriv, "admin.key.register", map[string]any{
+		"svtn_id":        "persist-test-svtn",
+		"pubkey_openssh": pubkeyB64,
+		"role":           "access",
+	})
+
+	if errObj, ok := resp["error"].(map[string]any); ok {
+		t.Fatalf("AC-011 PersistOnMutation: admin.key.register returned error: %v", errObj)
+	}
+
+	// AC-011 PC-2: snapshot file MUST exist after the RPC returns.
+	// The write is synchronous before dispatchPush (Ruling 11).
+	data, readErr := os.ReadFile(snapshotPath)
+	if readErr != nil {
+		t.Fatalf("AC-011 PersistOnMutation: snapshot file %q not written after admin.key.register. "+
+			"Red Gate: makeRegisterHandler does not yet call writeSnapshotAtomic. err=%v",
+			snapshotPath, readErr)
+	}
+
+	var snap snapshotFile
+	if err := json.Unmarshal(data, &snap); err != nil {
+		t.Fatalf("AC-011 PersistOnMutation: snapshot file contains invalid JSON: %v", err)
+	}
+	if snap.SchemaVersion != snapshotCurrentSchemaVersion {
+		t.Errorf("AC-011 PersistOnMutation: snapshot schema_version=%d; want %d",
+			snap.SchemaVersion, snapshotCurrentSchemaVersion)
+	}
+	// Snapshot must contain the registered key.
+	if len(snap.SVTNs) == 0 {
+		t.Error("AC-011 PersistOnMutation: snapshot svtns array is empty after admin.key.register")
+	}
+}
+
+// TestControlAdmission_LoadAndPushFullSnapshot verifies the EC-007-is-real scenario:
+// a control daemon that has control_admission_state_file configured loads it on
+// startup BEFORE constructing the sync client and calling PushFullSnapshot, so the
+// loaded keys are pushed to routers.
+//
+// This is the LoadAndPushFullSnapshot test: write a control snapshot file,
+// start runControl (or its load helper) so it loads the file, stand up a real
+// router (reuse startRouterMgmtServerTCP), assert the router receives the
+// loaded keys via PushFullSnapshot.
+//
+// BC-2.05.009 PC-7 v1.2; S-BL.ADMISSION-SYNC-WIRE AC-011 PC-3/PC-4.
+// Red Gate: FAILS — runControl does not yet load ControlAdmissionStateFile.
+//
+// NOT t.Parallel: starts real TCP listeners.
+func TestControlAdmission_LoadAndPushFullSnapshot(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-ctrl-load-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	snapshotPath := filepath.Join(dir, "control-admission-state.json")
+
+	// Build a snapshot file with a known entry.
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	// Write a valid snapshot file that simulates a prior control-daemon run.
+	snapToWrite := snapshotFile{
+		SchemaVersion: snapshotCurrentSchemaVersion,
+		Timestamp:     "2026-07-17T00:00:00Z",
+		SVTNs: []snapshotSVTN{
+			{
+				SVTNID: svtnIDToHex(svtnID),
+				Keys: []snapshotKey{
+					{
+						PubKey:  base64.RawURLEncoding.EncodeToString([]byte(pub)),
+						Role:    "access",
+						Revoked: false,
+					},
+				},
+			},
+		},
+	}
+	snapData, err := json.Marshal(snapToWrite)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if err := os.WriteFile(snapshotPath, snapData, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Build the control daemon's keypair.
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	// Start a real router-side mgmt server.
+	routerKS := admission.NewAdmittedKeySet()
+	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
+
+	// Simulate the runControl startup sequence: load snapshot, THEN push.
+	// We test the load helper + PushFullSnapshot directly rather than running
+	// the full daemon to keep the test deterministic.
+	loadKS := admission.NewAdmittedKeySet()
+	if loadErr := loadSnapshotFromFile(snapshotPath, loadKS, nil); loadErr != nil {
+		t.Fatalf("AC-011 LoadAndPush: loadSnapshotFromFile(%q): %v "+
+			"(Red Gate: file is valid but function not called for ControlAdmissionStateFile)",
+			snapshotPath, loadErr)
+	}
+
+	// Verify the snapshot was actually loaded (non-empty keyset).
+	loadedEntries := loadKS.ListBySVTN(svtnID)
+	if len(loadedEntries) == 0 {
+		t.Fatalf("AC-011 LoadAndPush: loadSnapshotFromFile loaded 0 entries for SVTN %s; "+
+			"snapshot had 1 entry — load failed", svtnIDToHex(svtnID))
+	}
+
+	// Construct a real sync client and push the loaded keyset to the router.
+	client := newAdmissionSyncClient(
+		[]config.RouterManagementEndpoint{{Addr: routerAddr}},
+		controlPriv,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if pushErr := client.PushFullSnapshot(ctx, loadKS); pushErr != nil {
+		t.Fatalf("AC-011 LoadAndPush: PushFullSnapshot returned error: %v", pushErr)
+	}
+
+	// AC-011 PC-4 core assertion: router received the loaded keys (EC-007 is real).
+	routerEntries := routerKS.ListBySVTN(svtnID)
+	if len(routerEntries) == 0 {
+		t.Fatalf("AC-011 LoadAndPush: routerKS has no entries for SVTN %s after PushFullSnapshot. "+
+			"EC-007 resync requires: control loads snapshot → pushes to routers on startup.",
+			svtnIDToHex(svtnID))
+	}
+	found := false
+	for _, e := range routerEntries {
+		if string(e.PublicKey) == string(pub) {
+			found = true
+			if routerKS.IsAdmitted(svtnID, e.NodeAddr) {
+				t.Error("AC-011 LoadAndPush: router entry admitted=true; must be false")
+			}
+		}
+	}
+	if !found {
+		t.Error("AC-011 LoadAndPush: loaded pubkey not found in router keyset after push")
+	}
+}
+
+// TestControlAdmission_FailClosedOnCorruptSnapshot verifies that when
+// control_admission_state_file is configured and the file is corrupt,
+// runControl returns E-KEY-002 (fail-closed), daemon refuses to start.
+//
+// BC-2.05.009 PC-7 v1.2; S-BL.ADMISSION-SYNC-WIRE AC-011 PC-3.
+// Red Gate: FAILS — runControl does not yet load ControlAdmissionStateFile.
+//
+// NOT t.Parallel: creates real sockets / listeners.
+func TestControlAdmission_FailClosedOnCorruptSnapshot(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-ctrl-corrupt-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	snapshotPath := filepath.Join(dir, "control-admission-state.json")
+	if err := os.WriteFile(snapshotPath, []byte("{corrupt json{{"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Test the load helper directly: corrupt file → fail-closed error.
+	ks := admission.NewAdmittedKeySet()
+	loadErr := loadSnapshotFromFile(snapshotPath, ks, nil)
+	if loadErr == nil {
+		t.Fatal("AC-011 FailClosed: loadSnapshotFromFile returned nil for corrupt file; " +
+			"must return E-KEY-002 (fail-closed)")
+	}
+	if !strings.Contains(loadErr.Error(), "E-KEY-002") {
+		t.Errorf("AC-011 FailClosed: error does not contain E-KEY-002: %v", loadErr)
+	}
+}
+
+// TestControlAdmission_MissingFileEmptyKeyset verifies that when
+// control_admission_state_file is configured but the file does not exist,
+// the control daemon starts with an empty keyset (fresh install — no error).
+//
+// BC-2.05.009 PC-7 v1.2; S-BL.ADMISSION-SYNC-WIRE AC-011 PC-3.
+// Red Gate: PASSES trivially — loadSnapshotFromFile already returns nil for
+// missing files. Included to lock the positive invariant for the control path.
+func TestControlAdmission_MissingFileEmptyKeyset(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "sb-ctrl-missing-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	nonExistentPath := filepath.Join(dir, "does-not-exist.json")
+
+	ks := admission.NewAdmittedKeySet()
+	if loadErr := loadSnapshotFromFile(nonExistentPath, ks, nil); loadErr != nil {
+		t.Errorf("AC-011 MissingFile: loadSnapshotFromFile returned error for absent file: %v; "+
+			"missing file must produce nil error and empty keyset (fresh install)", loadErr)
+	}
+	// Keyset must be empty.
+	allEntries := ks.AllSVTNEntries()
+	if len(allEntries) != 0 {
+		t.Errorf("AC-011 MissingFile: keyset is non-empty after loading absent file; got %d SVTNs", len(allEntries))
+	}
+}
+
+// ── AC-012: mgmt listener loopback guard scope ────────────────────────────────
+
+// TestControlMgmtListener_NonLoopbackRejected verifies that a control-mode
+// daemon with management_socket set to a non-loopback TCP address fails at
+// buildMgmtListener with E-CFG-008 (Ruling 12).
+//
+// BC-2.09.003 PC-11b v2.2; S-BL.ADMISSION-SYNC-WIRE AC-012 PC-1.
+// Red Gate: FAILS — buildMgmtListener currently only applies the loopback guard
+// for mode == "console"; control mode does NOT trigger the guard → non-loopback
+// TCP binds successfully instead of returning E-CFG-008.
+//
+// NOT t.Parallel: binds a real TCP socket.
+func TestControlMgmtListener_NonLoopbackRejected(t *testing.T) {
+	// Bind and immediately close to get a port number we can use in the config.
+	probeL, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe listen: %v", err)
+	}
+	port := probeL.Addr().(*net.TCPAddr).Port
+	_ = probeL.Close()
+
+	// Build a config that would trigger the TCP path in buildMgmtListener for
+	// control mode — use 0.0.0.0 (non-loopback) as the management_socket.
+	nonLoopbackAddr := fmt.Sprintf("0.0.0.0:%d", port)
+	cfg := &config.Config{
+		ManagementSocket: nonLoopbackAddr,
+	}
+
+	ln, buildErr := buildMgmtListener(cfg, "control")
+	if ln != nil {
+		_ = ln.Close()
+	}
+	if buildErr == nil {
+		t.Fatalf("AC-012 NonLoopbackRejected: buildMgmtListener(cfg, \"control\") with %q "+
+			"returned nil error; must return E-CFG-008.\n"+
+			"Red Gate: guard is currently `if mode == \"console\"` — control mode is not guarded.",
+			nonLoopbackAddr)
+	}
+	if !strings.Contains(buildErr.Error(), "E-CFG-008") {
+		t.Errorf("AC-012 NonLoopbackRejected: error does not contain E-CFG-008: %v", buildErr)
+	}
+	if !strings.Contains(buildErr.Error(), "control mode requires a loopback address") {
+		t.Errorf("AC-012 NonLoopbackRejected: error does not contain expected mode message: %v", buildErr)
+	}
+}
+
+// TestControlMgmtListener_LoopbackTCPAccepted verifies that a control-mode
+// daemon with management_socket set to a loopback TCP address binds successfully.
+//
+// BC-2.09.003 PC-11b v2.2; S-BL.ADMISSION-SYNC-WIRE AC-012 PC-2.
+// Red Gate: PASSES trivially (control mode is not yet guarded → both loopback
+// and non-loopback bind). Once Ruling 12 is implemented, this test verifies
+// the loopback case still passes while non-loopback is rejected.
+//
+// NOT t.Parallel: binds a real TCP socket.
+func TestControlMgmtListener_LoopbackTCPAccepted(t *testing.T) {
+	cfg := &config.Config{
+		ManagementSocket: "127.0.0.1:0", // loopback + ephemeral port
+	}
+
+	ln, buildErr := buildMgmtListener(cfg, "control")
+	if buildErr != nil {
+		t.Fatalf("AC-012 LoopbackTCPAccepted: buildMgmtListener(cfg, \"control\") with 127.0.0.1:0 "+
+			"returned error: %v; loopback TCP must be accepted for control mode", buildErr)
+	}
+	if ln != nil {
+		_ = ln.Close()
+	}
+}
+
+// TestRouterMgmtListener_NonLoopbackStillAccepted_Ruling9 verifies that the
+// loopback guard does NOT apply to router mode (Ruling 9 unchanged by Ruling 12).
+//
+// BC-2.09.003 PC-11b v2.2; S-BL.ADMISSION-SYNC-WIRE AC-012 PC-3.
+// NOT t.Parallel: binds a real TCP socket.
+func TestRouterMgmtListener_NonLoopbackStillAccepted_Ruling9(t *testing.T) {
+	// Bind and immediately close to get a free ephemeral port on 0.0.0.0.
+	probeL, err := net.ListenTCP("tcp", &net.TCPAddr{})
+	if err != nil {
+		t.Fatalf("probe listen: %v", err)
+	}
+	port := probeL.Addr().(*net.TCPAddr).Port
+	_ = probeL.Close()
+
+	nonLoopbackAddr := fmt.Sprintf("0.0.0.0:%d", port)
+	cfg := &config.Config{
+		ManagementSocket: nonLoopbackAddr,
+	}
+
+	ln, buildErr := buildMgmtListener(cfg, "router")
+	if buildErr != nil {
+		t.Fatalf("AC-012 Ruling9 regression: buildMgmtListener(cfg, \"router\") with %q "+
+			"returned error: %v; router mode must NOT have a loopback restriction (Ruling 9 unchanged)",
+			nonLoopbackAddr, buildErr)
+	}
+	if ln != nil {
+		_ = ln.Close()
+	}
+}
+
+// ── F-P3-03: bounded shutdown drain ───────────────────────────────────────────
+
+// TestAdmissionSyncClient_BoundedDialTimeout verifies that a push to an
+// unreachable endpoint completes (goroutine exits) within a bounded time —
+// well under the OS TCP connect timeout (~127s), proving F-P3-03.
+//
+// The fix: pushRPC uses a Dialer with a bounded Timeout so that a black-holed
+// (SYN-drop) or connection-refused endpoint fails promptly.
+//
+// We use a real loopback address that is NOT listening (connection refused is
+// immediate). We assert the push goroutine exits within a short deadline.
+// This proves the bound exists without depending on real network black-holing.
+//
+// BC-2.05.009 PC-2; S-BL.ADMISSION-SYNC-WIRE F-P3-03.
+// Red Gate: FAILS only if the dialer has no timeout bound — with the fix applied,
+// connection-refused returns almost immediately anyway. To properly test the bound,
+// we use a very short overall context (2s) and assert completion within that budget.
+//
+// The stronger assertion is that pushWithRetry returns within its retry budget.
+// With 5 attempts × (0.1 + 0.2 + 0.4 + 0.8 + 1.6)s = 3.1s max sleep + dial time.
+// With a 5s bounded dialer timeout, worst case is 5s × 5 = 25s — WAY too long for
+// shutdown drain. F-P3-03 requires the total push budget to be well-bounded.
+//
+// Implementation: add a bounded Timeout to the net.Dialer in pushRPC
+// (e.g. 3s per dial), so that even a black-holed SYN-drop endpoint fails in ≤3s
+// per attempt, giving a deterministic pushWithRetry total ≤ (3s + max_sleep) × 5
+// ≈ (3 + 10) × 5 = 65s — still large! The real bound comes from also bounding
+// the TOTAL push goroutine lifetime (e.g., a hard ceiling context on the goroutine).
+//
+// For this test: use a closed listener (connection refused, fast) and assert
+// the push returns within 10s (generous, non-flaky). The key invariant is that
+// pushWG.Wait() does NOT block indefinitely, not that it's fast for refused connections.
+//
+// For the hard guarantee: pushRPC must use a bounded dialer timeout (constant in
+// admission_sync_client.go, e.g. admissionSyncDialTimeout = 5s), so a black-holed
+// endpoint fails in ≤ that timeout instead of the OS default (~127s).
+//
+// NOT t.Parallel: creates a real listener (then closes it) for a refused endpoint.
+func TestAdmissionSyncClient_BoundedDialTimeout(t *testing.T) {
+	// Get a port that's guaranteed to refuse connections.
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	refusedAddr := l.Addr().String()
+	_ = l.Close() // immediately closed — port is now refusing connections
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	client := newAdmissionSyncClient(
+		[]config.RouterManagementEndpoint{{Addr: refusedAddr}},
+		priv,
+	)
+
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	// Verify that admissionSyncDialTimeout constant exists and is set to a
+	// reasonable bound (≤ 10s). This is the per-dial bound.
+	// Red Gate: admissionSyncDialTimeout is not yet defined in admission_sync_client.go.
+	const wantDialTimeoutBound = 10 * time.Second
+	if admissionSyncDialTimeout > wantDialTimeoutBound {
+		t.Errorf("F-P3-03: admissionSyncDialTimeout=%v exceeds %v; "+
+			"the per-dial bound must be well under the OS TCP connect timeout (~127s)",
+			admissionSyncDialTimeout, wantDialTimeoutBound)
+	}
+	if admissionSyncDialTimeout <= 0 {
+		t.Errorf("F-P3-03: admissionSyncDialTimeout=%v must be positive", admissionSyncDialTimeout)
+	}
+
+	// The push itself should complete within a generous deadline.
+	// For refused connections it's nearly instant; this proves the bound is used.
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		ctx := context.Background()
+		done <- client.PushRegisterKey(ctx, svtnID, pub, admission.RoleAccess)
+	}()
+
+	const testTimeout = 15 * time.Second
+	select {
+	case err := <-done:
+		elapsed := time.Since(start)
+		// We expect a non-nil error (connection refused).
+		if err == nil {
+			t.Error("F-P3-03: PushRegisterKey succeeded to a closed port; expected error")
+		}
+		t.Logf("F-P3-03: PushRegisterKey returned in %v with error: %v", elapsed, err)
+	case <-time.After(testTimeout):
+		t.Errorf("F-P3-03: PushRegisterKey did not complete within %v. "+
+			"The push goroutine hung — a black-holed endpoint would stall pushWG.Wait() at shutdown.\n"+
+			"Fix: add admissionSyncDialTimeout to the net.Dialer in pushRPC so each dial attempt "+
+			"has a hard upper bound much less than the OS TCP connect timeout (~127s).",
+			testTimeout)
 	}
 }

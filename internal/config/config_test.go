@@ -2829,3 +2829,74 @@ func TestConfig_Validate_RouterManagementEndpoints_MultipleInvalidExhaustiveErro
 	requireContains(t, msg, "router_management_endpoints[0].addr")
 	requireContains(t, msg, "router_management_endpoints[1].addr")
 }
+
+// ── AC-011 (BC-2.09.003 v2.2 PC-15) ──────────────────────────────────────────
+//
+// AC-011 postconditions for S-BL.ADMISSION-SYNC-WIRE:
+//   - PC-15: control_admission_state_file absent/empty accepted (no error)
+//   - PC-15: control_admission_state_file whitespace-only → E-CFG-017
+//   - No file I/O in Validate()
+
+// TestConfig_Validate_ControlAdmissionStateFile_AbsentAccepted verifies that
+// when control_admission_state_file is absent (empty string), Config.Validate()
+// accepts it without error.
+//
+// BC-2.09.003 v2.2 PC-15; S-BL.ADMISSION-SYNC-WIRE AC-011.
+// Red Gate: PASSES trivially (field not yet added to Config, zero value = empty → accepted).
+// Included to lock the positive case and to fail when ControlAdmissionStateFile is
+// added but the whitespace guard is accidentally applied to the absent case.
+func TestConfig_Validate_ControlAdmissionStateFile_AbsentAccepted(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		ListenAddr:   "0.0.0.0:9090",
+		TickInterval: 10 * time.Millisecond,
+		// ControlAdmissionStateFile intentionally absent (zero value)
+	}
+	err := cfg.Validate()
+	requireNoError(t, err)
+}
+
+// TestConfig_Validate_ControlAdmissionStateFile_WhitespaceRejectsE_CFG_017 verifies
+// that when control_admission_state_file is a whitespace-only string,
+// Config.Validate() returns an error containing the EXACT E-CFG-017 message from
+// BC-2.09.003 v2.2 PC-15 Error Codes table.
+//
+// BC-2.09.003 v2.2 PC-15; S-BL.ADMISSION-SYNC-WIRE AC-011.
+// Red Gate: FAILS — ControlAdmissionStateFile field does not yet exist in Config,
+// so it cannot be set and the E-CFG-017 validation cannot fire.
+func TestConfig_Validate_ControlAdmissionStateFile_WhitespaceRejectsE_CFG_017(t *testing.T) {
+	t.Parallel()
+
+	// Exact E-CFG-017 message from BC-2.09.003 v2.2 PC-15 Error Codes table
+	// (verbatim — quoted in story AC-011 PC-1).
+	const wantMsg = "config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence"
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "single space", value: " "},
+		{name: "tab", value: "\t"},
+		{name: "newline", value: "\n"},
+		{name: "multi-space", value: "   "},
+		{name: "mixed whitespace", value: " \t\n "},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:                "0.0.0.0:9090",
+				TickInterval:              10 * time.Millisecond,
+				ControlAdmissionStateFile: tc.value,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+			requireContains(t, err.Error(), wantMsg)
+		})
+	}
+}
