@@ -1107,9 +1107,9 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 //  1. newMgmtServer — construct server (no goroutine)
 //  2. BuildAdminHandlers passed via NewServer initial handlers (already registered)
 //  3. wireMetricsHandlers — register metrics RPC handlers before Serve
-//  4. serveMgmtServer — start Serve goroutine
-//  5. PushFullSnapshot — push all keyset entries to configured routers before serving
+//  4. PushFullSnapshot — push all keyset entries to configured routers BEFORE serving
 //     (S-BL.ADMISSION-SYNC-WIRE AC-009 / BC-2.05.009 Postcondition 7 / Decision 10)
+//  5. serveMgmtServer — start Serve goroutine
 func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
@@ -1151,17 +1151,23 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 		return fmt.Errorf("runControl: wire metrics handlers: %w", err)
 	}
 
-	// Phase (c): start the Serve goroutine.
-	var mgmtWG sync.WaitGroup
-	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
-
-	// Phase (d): push full snapshot to all configured routers BEFORE serving
-	// (BC-2.05.009 Postcondition 7 / AC-009 / Decision 10). Push error is
-	// advisory — log and continue.
+	// Phase (c): push full snapshot to all configured routers BEFORE serving
+	// (BC-2.05.009 Postcondition 7 / AC-009 / Decision 10 / O-1 fix). Push error
+	// is advisory — log and continue.
+	//
+	// MUST come before serveMgmtServer so the router is pre-populated with all
+	// current keyset entries before the control daemon begins accepting new
+	// admin.key.* RPCs that would issue incremental pushes. Decision 10 is
+	// explicit: "PushFullSnapshot is called before the management server begins
+	// serving" — i.e. before serveMgmtServer, not after.
 	if pushErr := syncClient.PushFullSnapshot(ctx, ks); pushErr != nil {
 		// Advisory: WARN only; do not fail startup (BC-2.05.009 PC-2).
 		_ = pushErr
 	}
+
+	// Phase (d): start the Serve goroutine.
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
 	// Block until context is cancelled (ARCH-01 lifecycle contract).
 	<-ctx.Done()
