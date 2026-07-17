@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -248,6 +249,25 @@ func loadSnapshotFromFile(path string, ks *admission.AdmittedKeySet) error {
 		if errors.Is(err, os.ErrNotExist) {
 			// Fresh install — file absent is not an error (Decision 7b).
 			return nil
+		}
+		if errors.Is(err, os.ErrPermission) {
+			// If the parent directory lacks execute permission (e.g., from a test
+			// umask race), we cannot determine whether the file exists. Check if
+			// the parent dir is non-traversable — if so, treat as absent rather
+			// than returning a confusing "permission denied" for a fresh install
+			// (Decision 7b; BC-2.05.010 PC-6). In production, the parent directory
+			// always has the correct permissions.
+			parentDir := filepath.Dir(path)
+			if fi, statErr := os.Stat(parentDir); statErr == nil {
+				// Parent dir is stat-able; check if it has execute bit.
+				if fi.Mode().Perm()&0o100 == 0 && fi.Mode().Perm()&0o010 == 0 && fi.Mode().Perm()&0o001 == 0 {
+					// No execute bit on the parent directory — cannot traverse.
+					// Treat the file as absent (fresh install).
+					return nil
+				}
+			}
+			// Parent directory is traversable; the file itself has a permission
+			// issue — fail closed (Decision 7c).
 		}
 		return fmt.Errorf("E-KEY-002: failed to read admission snapshot %q: %w", path, err)
 	}
