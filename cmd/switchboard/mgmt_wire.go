@@ -155,7 +155,9 @@ func mgmtDefaultSocket(mode string) string {
 }
 
 // mgmtNetwork returns the network type for net.Listen for the given daemon mode.
-// console uses TCP (bound to 127.0.0.1 only); all others use Unix sockets (ARCH-05).
+// console always uses TCP (bound to 127.0.0.1 only); all others default to Unix
+// sockets (ARCH-05). For router (and other non-console) modes, use mgmtListenAddr
+// instead, which auto-detects TCP vs unix from the resolved management_socket value.
 func mgmtNetwork(mode string) string {
 	if mode == "console" {
 		return "tcp"
@@ -173,14 +175,36 @@ func resolveManagementSocket(cfg *config.Config, mode string) string {
 }
 
 // mgmtListenAddr returns the net.Listen network and address for the given mode.
+//
+// For console mode: always TCP (loopback-only; VP-073).
+// For router (and other non-console) modes: auto-detect TCP vs unix from the
+// resolved management_socket value using net.SplitHostPort. If the address is a
+// valid host:port (non-empty port field), bind TCP — this enables router-mode TCP
+// management listeners for cross-host control→router pushes (S-BL.ADMISSION-SYNC-WIRE
+// Ruling 10 / F-2 fix). Otherwise bind a unix socket (default for filesystem paths).
+// This preserves existing behavior for all existing router tests that use tempSockPath(t)
+// filesystem paths — those fail SplitHostPort → unix → unchanged behavior.
 func mgmtListenAddr(cfg *config.Config, mode string) (network, address string) {
-	return mgmtNetwork(mode), resolveManagementSocket(cfg, mode)
+	address = resolveManagementSocket(cfg, mode)
+	if mode == "console" {
+		return "tcp", address
+	}
+	// Ruling 10 auto-detect: if the resolved address is a valid host:port,
+	// bind TCP; otherwise bind unix (filesystem socket path).
+	_, portStr, err := net.SplitHostPort(address)
+	if err == nil && portStr != "" {
+		return "tcp", address
+	}
+	return "unix", address
 }
 
 // buildMgmtListener opens the management listener for the given mode and config.
 // For Unix socket modes it uses listenUnixMgmt to ensure 0600 permissions atomically
-// (AC-014 / CWE-276). For TCP (console mode) it validates the host is loopback
-// before calling net.Listen (BC-2.07.004 EC-013 / Ruling D / VP-073 / AC-014).
+// (AC-014 / CWE-276). For TCP it calls net.Listen; the loopback restriction
+// (BC-2.07.004 EC-013 / Ruling D / VP-073) is applied ONLY for console mode —
+// router-mode TCP management listeners are explicitly not loopback-restricted
+// (Ruling 9 / S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.3: control→router push is
+// inherently cross-host; challenge-response is the auth boundary).
 // Returns a net.Listener that the caller passes to mgmt.NewServer.
 func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 	network, address := mgmtListenAddr(cfg, mode)
@@ -191,15 +215,17 @@ func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 		}
 		return ln, nil
 	}
-	// TCP (console mode). Enforce loopback-only binding before calling net.Listen
-	// (BC-2.07.004 EC-013 / AC-014 Ruling D / VP-073). Validation must happen here
-	// because config.Validate has no mode parameter.
-	host, _, splitErr := net.SplitHostPort(address)
-	if splitErr != nil {
-		return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
-	}
-	if !isMgmtLoopbackHost(host) {
-		return nil, fmt.Errorf("E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+	// TCP path. Apply loopback restriction ONLY for console mode (VP-073 /
+	// BC-2.07.004 EC-013 / Ruling D). Router-mode TCP listeners are NOT
+	// loopback-restricted (Ruling 9 / S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.3).
+	if mode == "console" {
+		host, _, splitErr := net.SplitHostPort(address)
+		if splitErr != nil {
+			return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
+		}
+		if !isMgmtLoopbackHost(host) {
+			return nil, fmt.Errorf("E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+		}
 	}
 	ln, err := net.Listen(network, address)
 	if err != nil {

@@ -31,9 +31,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -1832,6 +1834,189 @@ func TestRouterMgmtListener_StartupInfoLog_BindAddress(t *testing.T) {
 	if !strings.Contains(logStr, wantFirewall) {
 		t.Errorf("AC-008: startup INFO log does not contain %q (firewall advisory). output=%q",
 			wantFirewall, logStr)
+	}
+}
+
+// TestRouterMgmtListener_TCPBind_ConnectionSucceeds verifies AC-008 postcondition 2
+// (Ruling 10): when management_socket is set to a host:port value, runRouter binds a
+// real TCP management listener — verified by net.Dial("tcp", addr) succeeding after
+// startup. This catches the F-2 gap where the router bound unix instead of TCP.
+//
+// BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-008 / Ruling 10.
+// NOT t.Parallel: starts runRouter (binds TCP and unix listeners).
+func TestRouterMgmtListener_TCPBind_ConnectionSucceeds(t *testing.T) {
+	// Bind an ephemeral TCP address for the data-plane listener.
+	probeData, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe data listen: %v", err)
+	}
+	dataAddr := probeData.Addr().String()
+	_ = probeData.Close()
+
+	// Bind an ephemeral TCP address for the management listener.
+	// Use 127.0.0.1:0 and resolve to a concrete port before starting runRouter
+	// to avoid port conflicts in CI.
+	probeMgmt, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe mgmt listen: %v", err)
+	}
+	mgmtAddr := probeMgmt.Addr().String()
+	_ = probeMgmt.Close()
+
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: mgmtAddr, // host:port → auto-detect TCP (Ruling 10)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1))
+	}()
+
+	// Wait for the TCP management listener to be ready.
+	deadline := time.Now().Add(3 * time.Second)
+	var dialErr error
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", mgmtAddr, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			dialErr = nil
+			break
+		}
+		dialErr = err
+		time.Sleep(20 * time.Millisecond)
+	}
+	if dialErr != nil {
+		cancel()
+		<-errCh
+		t.Fatalf("AC-008 TCPBind: net.Dial(%q) failed within 3s: %v\n"+
+			"Ruling 10: runRouter with host:port management_socket must bind a TCP listener, not unix.\n"+
+			"F-2 fix: mgmtListenAddr auto-detects TCP when management_socket is a valid host:port.",
+			mgmtAddr, dialErr)
+	}
+
+	// TCP connection succeeded — listener is genuinely TCP.
+	cancel()
+	select {
+	case rErr := <-errCh:
+		if rErr != nil {
+			t.Logf("AC-008 TCPBind: runRouter returned: %v (may be benign)", rErr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("AC-008 TCPBind: runRouter did not return within 3s after ctx cancel")
+	}
+}
+
+// TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds verifies AC-008 postcondition 3
+// (Ruling 10): a real admissionSyncClient (control daemonPriv authorized on the router)
+// can push an internal.admission.register RPC to a runRouter instance started with a
+// TCP management_socket, and routerKS receives the entry end-to-end.
+//
+// BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-008 / Ruling 10.
+// NOT t.Parallel: starts runRouter (binds TCP and unix listeners).
+func TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds(t *testing.T) {
+	// Bind ephemeral ports to avoid conflicts.
+	probeData, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe data listen: %v", err)
+	}
+	dataAddr := probeData.Addr().String()
+	_ = probeData.Close()
+
+	probeMgmt, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe mgmt listen: %v", err)
+	}
+	mgmtAddr := probeMgmt.Addr().String()
+	_ = probeMgmt.Close()
+
+	// Generate a control daemon keypair. The control pubkey will be added to the
+	// router's authorized_operator_keys so the challenge-response handshake succeeds.
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	// Encode controlPub as a PEM "PUBLIC KEY" authorized_operator_key for the router
+	// config — same format that parsePEMOperatorKeys expects (x509 PKIX / ARCH-12).
+	pkixDER, err := x509.MarshalPKIXPublicKey(controlPub)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey: %v", err)
+	}
+	pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pkixDER}))
+
+	cfg := &config.Config{
+		ListenAddr:             dataAddr,
+		TickInterval:           10 * time.Millisecond,
+		ManagementSocket:       mgmtAddr, // host:port → TCP (Ruling 10)
+		AuthorizedOperatorKeys: []string{pemKey},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runRouter(ctx, nil, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1))
+	}()
+
+	// Wait for the TCP management listener to accept connections.
+	deadline := time.Now().Add(3 * time.Second)
+	ready := false
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", mgmtAddr, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			ready = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !ready {
+		cancel()
+		<-errCh
+		t.Fatalf("AC-008 PushHandshake: TCP management listener at %q not ready within 3s — runRouter did not bind TCP", mgmtAddr)
+	}
+
+	// Build a control-side admissionSyncClient pointing at the router's TCP addr.
+	syncClient := newAdmissionSyncClient(
+		[]config.RouterManagementEndpoint{{Addr: mgmtAddr}},
+		controlPriv,
+	)
+
+	// Push an internal.admission.register RPC to the router.
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read svtnID: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate node keypair: %v", err)
+	}
+
+	pushCtx, pushCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer pushCancel()
+	if pushErr := syncClient.PushRegisterKey(pushCtx, svtnID, pub, admission.RoleAccess); pushErr != nil {
+		cancel()
+		<-errCh
+		t.Fatalf("AC-008 PushHandshake: PushRegisterKey to TCP router addr %q failed: %v\n"+
+			"Ruling 10: admissionSyncClient must be able to push to runRouter with TCP management_socket.",
+			mgmtAddr, pushErr)
+	}
+
+	// Push succeeded. Cancel router.
+	cancel()
+	select {
+	case rErr := <-errCh:
+		if rErr != nil {
+			t.Logf("AC-008 PushHandshake: runRouter returned: %v (may be benign)", rErr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("AC-008 PushHandshake: runRouter did not return within 3s after ctx cancel")
 	}
 }
 
