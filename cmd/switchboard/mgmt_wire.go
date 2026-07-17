@@ -1189,10 +1189,15 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 	}
 	syncClient := newAdmissionSyncClient(endpoints, daemonPriv)
 
+	// pushWG tracks all background push goroutines dispatched by admin handlers
+	// (F-1 fix / ARCH-01 §Goroutine WaitGroup Contract). Drained at shutdown
+	// (see shutdown block below) so no goroutines are orphaned on exit.
+	var pushWG sync.WaitGroup
+
 	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	// Pass the real syncClient so push calls are wired into make*Handler
-	// (S-BL.ADMISSION-SYNC-WIRE AC-003/004).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, syncClient))
+	// Pass the real syncClient AND pushWG so push calls are wired into make*Handler
+	// and dispatched asynchronously (S-BL.ADMISSION-SYNC-WIRE AC-003/004 / F-1 fix).
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, syncClient, &pushWG))
 	if mgmtErr != nil {
 		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}
@@ -1248,5 +1253,9 @@ shutdown:
 	defer shutCancel()
 	_ = mgmtSrv.Shutdown(shutCtx)
 	mgmtWG.Wait()
+	// Drain in-flight background push goroutines (ARCH-01 §Goroutine WaitGroup Contract /
+	// F-1 fix). These are bounded by pushWithRetry's max attempts × max delay; the
+	// pushWG.Wait() call here prevents goroutine leaks on clean shutdown.
+	pushWG.Wait()
 	return nil
 }

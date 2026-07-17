@@ -523,6 +523,90 @@ func TestAdmissionSync_NilSyncer_NoOp(t *testing.T) {
 	}
 }
 
+// TestAdmissionSync_RegisterKey_AdminRPCReturnsPromptlyWithUnreachablePush verifies
+// that when the push target (a router management endpoint) is unreachable, the
+// admin.key.register RPC returns to the caller (sbctl) promptly — well before the
+// pushWithRetry backoff would complete — so sbctl never times out spuriously
+// (BC-2.05.009 PC-2 / Decision 4; F-1 fix; ARCH-01 §Goroutine WaitGroup Contract).
+//
+// This test uses a real (non-mock) admissionSyncClient pointing at a TCP address
+// with no listener, and a real WaitGroup so the background goroutine is tracked.
+// It asserts the admin RPC handler returns in under 500ms even though pushWithRetry
+// would take >1.4s (100ms + 200ms + 400ms + 800ms for 4 failed attempts).
+//
+// BC-2.05.009 PC-2; S-BL.ADMISSION-SYNC-WIRE F-1 fix.
+// NOT t.Parallel: creates a real mgmt server.
+func TestAdmissionSync_RegisterKey_AdminRPCReturnsPromptlyWithUnreachablePush(t *testing.T) {
+	// Use a TCP address with no listener (connection refused immediately).
+	// Bind and immediately close to get an address that is guaranteed unoccupied.
+	probeDeadEnd, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe dead-end listen: %v", err)
+	}
+	deadEndAddr := probeDeadEnd.Addr().String()
+	_ = probeDeadEnd.Close() // close immediately — this address is now unreachable
+
+	_, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control key: %v", err)
+	}
+	ctrlPub := ctrlPriv.Public().(ed25519.PublicKey)
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+	if _, err := m.Create("prompt-return-svtn"); err != nil {
+		t.Fatalf("create SVTN: %v", err)
+	}
+
+	// Real admissionSyncClient pointing at the dead-end address.
+	syncClient := newAdmissionSyncClient(
+		[]config.RouterManagementEndpoint{{Addr: deadEndAddr}},
+		ctrlPriv,
+	)
+
+	// Real WaitGroup — tracks the background push goroutine.
+	var pushWG sync.WaitGroup
+
+	ops := mgmt.NewOperatorKeySet(nil)
+	// Pass the real pushWG → async push.
+	handlers := BuildAdminHandlers(m, ops, syncClient, &pushWG)
+	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
+
+	regPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate reg key: %v", err)
+	}
+	pubkeyB64 := base64.RawURLEncoding.EncodeToString([]byte(regPub))
+
+	// Time the RPC — it must return fast even though the push will fail slowly.
+	start := time.Now()
+	resp := sendAdminRPC(t, es.socketPath, ctrlPriv, "admin.key.register", map[string]any{
+		"svtn_id":        "prompt-return-svtn",
+		"pubkey_openssh": pubkeyB64,
+		"role":           "access",
+	})
+	elapsed := time.Since(start)
+
+	// RPC must succeed (advisory push failure does not affect the result).
+	if errObj, ok := resp["error"].(map[string]any); ok {
+		t.Errorf("F-1: admin.key.register must return success even with unreachable push endpoint; "+
+			"got error: %v", errObj)
+	}
+
+	// CORE ASSERTION: handler must return promptly — well under the first retry delay
+	// (pushWithRetry sleeps 100ms between attempts; 500ms threshold leaves 5× headroom
+	// without being flaky). A synchronous push to a dead endpoint would block for
+	// much longer (5 attempts × TCP connect timeout or 100+200+400+800ms backoff).
+	const promptThreshold = 500 * time.Millisecond
+	if elapsed > promptThreshold {
+		t.Errorf("F-1: admin RPC took %v (want < %v); push is still synchronous — "+
+			"F-1 fix requires async dispatch via dispatchPush + WaitGroup", elapsed, promptThreshold)
+	}
+
+	// Wait for the background goroutine to drain (so the test exits cleanly).
+	// This is NOT part of the sbctl timing path — sbctl already got its response.
+	pushWG.Wait()
+}
+
 // ── AC-004: revoke/expire/remove-svtn push ────────────────────────────────────
 
 // TestAdmissionSync_RevokeKey_PushCalledAfterControlWrite verifies that
