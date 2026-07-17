@@ -23,7 +23,15 @@ modified:
       interface svtnName→svtnID [16]byte; Decisions 2/5, AC-003/004/005);
       BC-2.05.009 ref 1.0→1.1; removed stale free-text input-hash citation from
       POL-005 note.
-version: "1.1"
+  - date: 2026-07-17
+    version: "1.2"
+    change: >
+      Propagate rulings v1.3 Ruling 10 (F-2 fix): router mgmt listener auto-detects
+      TCP-vs-unix on management_socket; AC-008 postconditions rewritten (5 PCs incl.
+      real TCP-bind + push-handshake assertions) + 2 new test names
+      (TCPBind_ConnectionSucceeds, TCPBind_PushHandshakeSucceeds); implementer task
+      for mgmtNetwork/buildMgmtListener auto-detect. rulings ref v1.2→v1.3.
+version: "1.2"
 phase: 2
 epic: E-7
 wave: backlog
@@ -36,7 +44,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'
-input-hash: "dc9752c"
+input-hash: "87573e1"
 traces_to: 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.05.009
@@ -65,7 +73,7 @@ assumption_validations: []
 risk_mitigations: []
 acceptance_criteria_count: 10
 inputDocuments:
-  - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'   # v1.1 — BINDING. All 9 rulings: push RPC via internal/mgmt JSON-over-TCP; four internal.admission.* commands; control dials routers (TCP, dial-on-demand); retry-with-backoff (100ms/2x/10s/5); push failure advisory WARN no-rollback; RouterManagementEndpoints config field; admission_state_file config field; JSON snapshot schema_version:1; router TCP listener no loopback restriction (Ruling 9, ADR-012 is auth boundary); nil-syncer no-op; full-snapshot push on control startup.
+  - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'   # v1.3 — BINDING. All 10 rulings: push RPC via internal/mgmt JSON-over-TCP; four internal.admission.* commands; control dials routers (TCP, dial-on-demand); retry-with-backoff (100ms/2x/10s/5); push failure advisory WARN no-rollback; RouterManagementEndpoints config field; admission_state_file config field; JSON snapshot schema_version:1; router TCP listener no loopback restriction (Ruling 9, ADR-012 is auth boundary); mgmt listener auto-detects TCP-vs-unix on management_socket via validateHostPort (Ruling 10, F-2 fix); nil-syncer no-op; full-snapshot push on control startup.
   - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.1 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op. Invariant 4 exempts svtn_id from admin-args encoding parity (it is the hex UUID, not the name).
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'  # v1.0 — VLR-local admitted-state snapshot: JSON schema_version:1 format, atomic write-on-receive, load-on-startup, fail-closed-on-corrupt (E-KEY-002), missing-file→empty-keyset, admitted=false invariant, no FrameAuthKey/NodeAddr/nonces stored.
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'  # v2.1 — PC-13 (admission_state_file: non-empty when present, E-CFG-015); PC-14 (router_management_endpoints: each addr host:port, E-CFG-016, NO loopback restriction per Ruling 9).
@@ -114,7 +122,7 @@ key-material sync (pubkey + role + revoked + expiry), not a SVTN-presence-only s
 
 ## Adjudicated Design Decisions
 
-Transcribed from `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.1 (binding — all 9 rulings).
+Transcribed from `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.3 (binding — all 10 rulings).
 
 ### Decision 1 — Push protocol: reuse internal/mgmt JSON-over-TCP (Ruling 1)
 
@@ -207,14 +215,24 @@ write to `<admission_state_file>.tmp`, then `os.Rename`. Forward-compat gate: un
 - File present and valid (`schema_version: 1`) → call `ks.RegisterKey` / `ks.RevokeKey` / `ks.SetKeyExpiry` for each entry; loaded entries have `admitted=false`. INFO log with count per SVTN.
 - File present but corrupt or unknown `schema_version` → fail-closed: `runRouter` returns non-nil error, daemon refuses to start (E-KEY-002).
 
-### Decision 8 — Router TCP management listener: no loopback restriction (Ruling 9)
+### Decision 8 — Router mgmt listener auto-detects TCP-vs-unix on management_socket (Rulings 9 + 10)
 
-The router may bind its management listener to any `host:port` (including `0.0.0.0:PORT` and
-non-loopback addresses). The ADR-012 challenge-response handshake is the authentication
-boundary; network-level access restriction is the operator's firewall-policy responsibility.
-The `isMgmtLoopbackHost` guard from `buildMgmtListener` is NOT applied to router-mode TCP
-management endpoints. On startup, an INFO log is emitted naming the bound address:
-`"router management listener bound to %s (ensure firewall policy restricts access as appropriate)"`.
+The router's `mgmtNetwork`/`buildMgmtListener` logic must auto-detect transport from the
+`management_socket` config value:
+
+- If `validateHostPort(management_socket)` returns nil (value parses as `host:port` via
+  `net.SplitHostPort` + numeric port check) → bind TCP on that address, WITHOUT applying the
+  `isMgmtLoopbackHost` guard (Ruling 9: no loopback restriction for router).
+- Otherwise (absent, empty, or a filesystem path) → bind unix socket (default preserved; zero
+  regression to existing router deployments).
+
+This resolves adversary finding F-2 (rulings v1.3): `mgmtNetwork` previously hardcoded
+router→unix while the push client (`admissionSyncClient`) always dials TCP, causing every push
+to fail with connection-refused. The auto-detect makes TCP management endpoints functional in
+production. The ADR-012 challenge-response handshake remains the authentication boundary;
+network-level restriction is the operator's firewall responsibility. On startup, when TCP is
+selected, an INFO log is emitted: `"router management listener bound to <addr> (ensure firewall
+policy restricts access as appropriate)"`.
 
 ### Decision 9 — Config fields (Rulings 2 and 3)
 
@@ -409,21 +427,28 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 ---
 
-### AC-008 — Router TCP management listener accepts non-loopback bind; startup INFO log of bind address (BC-2.09.003 v2.1 PC-14 / Ruling 9)
+### AC-008 — Router mgmt listener auto-detects TCP-vs-unix on management_socket; non-loopback bind accepted; real TCP client can connect and push (BC-2.09.003 v2.1 PC-14 / Rulings 9 + 10)
 
-**BC Anchor:** BC-2.09.003 v2.1 Postcondition 14; rulings v1.1 Ruling 9.
+**BC Anchor:** BC-2.09.003 v2.1 Postcondition 14; rulings v1.3 Ruling 9 + Ruling 10.
 
 **Postconditions:**
-1. A `router_management_endpoints` entry with `addr: "0.0.0.0:9093"` (non-loopback) is accepted
-   by `Config.Validate()` without error (Ruling 9 — no `isMgmtLoopbackHost` guard applied).
-2. When the router's management listener binds to a non-loopback address, a startup INFO log is
-   emitted: `"router management listener bound to <addr> (ensure firewall policy restricts access as appropriate)"`.
-3. The INFO log is inspectable in integration tests (the bound address is visible in log output
-   before the management server begins accepting connections).
+1. `Config.Validate()` accepts a non-loopback `router_management_endpoints` addr without error
+   (Ruling 9 — no `isMgmtLoopbackHost` guard). [existing PC-1, keep]
+2. When a router's `management_socket` is set to a `host:port`, `runRouter` opens a TCP
+   listener on that address — verified by `net.DialTimeout("tcp", addr, ...)` succeeding after
+   startup.
+3. A real `admissionSyncClient` pointing at the router's TCP management address completes the
+   ADR-012 handshake and pushes an `internal.admission.register` RPC that the router's
+   `AdmittedKeySet` receives.
+4. Startup INFO log `"router management listener bound to <addr> (ensure firewall policy restricts access as appropriate)"` is emitted (the bound address is inspectable before the mgmt server accepts connections). [existing, keep]
+5. When `management_socket` is absent or a filesystem path, the router binds a unix socket
+   (default preserved — auto-detect returns unix on non-host:port values).
 
 **Test names:**
-- `TestRouterMgmtListener_NonLoopbackBindAccepted`
-- `TestRouterMgmtListener_StartupInfoLog_BindAddress`
+- `TestRouterMgmtListener_NonLoopbackBindAccepted` (PC-1, existing)
+- `TestRouterMgmtListener_StartupInfoLog_BindAddress` (PC-4, existing)
+- `TestRouterMgmtListener_TCPBind_ConnectionSucceeds` (PC-2, NEW — runRouter with a TCP management_socket, net.Dial("tcp", addr) succeeds after start; use a loopback host:port with ephemeral port to avoid CI flakiness)
+- `TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds` (PC-3, NEW — real admissionSyncClient pushes internal.admission.register to a runRouter with TCP management_socket; routerKS receives the entry)
 
 ---
 
@@ -570,6 +595,7 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 14. [ ] Implement snapshot serialization/deserialization — implementer
 15. [ ] Wire push calls into `admin_handlers.go` — implementer
 16. [ ] Wire `runRouter` startup load + non-loopback bind log — implementer
+16a. [ ] Implement `mgmtNetwork`/`buildMgmtListener` auto-detect: if `validateHostPort(management_socket)` passes → bind TCP (no `isMgmtLoopbackHost` guard); else → bind unix (Ruling 10 / F-2 fix) — implementer
 17. [ ] Wire `runControl` client construction + PushFullSnapshot + SIGHUP reload — implementer
 18. [ ] Run `go test ./... -race`; confirm all AC tests pass
 19. [ ] Update STATE.md
@@ -585,6 +611,7 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 | DI-002 | Push RPCs carry public keys only (`pubkey_openssh`); private keys never transmitted | BC-2.05.009 Invariant 2; verified by code review |
 | BC-2.05.010 Invariant 1 | Snapshot write is atomic (temp-file + rename idiom) | Verified by AC-005 test |
 | Ruling 9 | No `isMgmtLoopbackHost` guard on router-mode TCP management endpoints | Verified by AC-008 test `TestRouterMgmtListener_NonLoopbackBindAccepted` |
+| Ruling 10 | `mgmtNetwork`/`buildMgmtListener` auto-detects TCP-vs-unix via `validateHostPort(management_socket)` — TCP when host:port, unix otherwise | Verified by AC-008 tests `TestRouterMgmtListener_TCPBind_ConnectionSucceeds` and `TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds` |
 | BC-2.05.010 Invariant 2 | Loaded entries have `admitted=false` | Verified by AC-007 test `TestRouterStartup_LoadedEntries_AdmittedFalse` |
 
 ## Library & Framework Requirements (MANDATORY)
@@ -634,8 +661,9 @@ have not changed.
 
 - **Origin:** `S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4 (Forward Obligation (e)) and
   `decisions/identity-cluster-architecture.md` v1.2 (three-leg cluster design, §3 and §9).
-- **Rulings:** `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.1 (all 9 rulings, zero open
-  human flags — fully decomposition-ready as of 2026-07-15).
+- **Rulings:** `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.3 (all 10 rulings, zero open
+  human flags — fully decomposition-ready as of 2026-07-15; Ruling 10 added 2026-07-17 to fix
+  F-2: router mgmt listener TCP-vs-unix auto-detect).
 - **Unblocks:** `S-BL.NODE-IDENTIFY-WIRE`'s Open Design Obligation 5 (admission.AdmitNode
   is verification-only against the router's always-empty keyset — this story populates that keyset).
 
@@ -643,5 +671,6 @@ have not changed.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-17 | Propagate rulings v1.3 Ruling 10 (F-2 fix): router mgmt listener auto-detects TCP-vs-unix on management_socket; AC-008 postconditions rewritten (5 PCs incl. real TCP-bind + push-handshake assertions) + 2 new test names (TCPBind_ConnectionSucceeds, TCPBind_PushHandshakeSucceeds); implementer task for mgmtNetwork/buildMgmtListener auto-detect. rulings ref v1.2→v1.3. |
 | 1.1 | 2026-07-16 | Propagate rulings v1.2 svtn_id hex-[16]byte wire encoding fix (admissionSyncer interface svtnName→svtnID [16]byte; Decisions 2/5, AC-003/004/005); BC-2.05.009 ref 1.0→1.1; removed stale free-text input-hash citation from POL-005 note. |
 | 1.0 | 2026-07-15 | Initial full decomposition — 10 ACs, 8 points, leaf prerequisite with `depends_on: []`. Admission-state sync push RPC (BC-2.05.009) + VLR-local JSON snapshot (BC-2.05.010). Per rulings v1.1 (Option A + Ruling 9 router TCP listener). |
