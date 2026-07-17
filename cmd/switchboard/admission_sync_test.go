@@ -40,6 +40,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -956,6 +957,91 @@ func TestRouterAdmissionHandler_Register_SnapshotWriteFailure_Advisory(t *testin
 	if len(entries) == 0 {
 		t.Error("AC-005 SnapshotWriteFailure_Advisory: in-memory AdmittedKeySet has no entry — " +
 			"snapshot write failure must not roll back the in-memory keyset write")
+	}
+}
+
+// ── F-2: concurrent snapshot writes must not produce invalid JSON ─────────────
+
+// TestSnapshotWriteAtomic_ConcurrentWrites_AlwaysValidJSON verifies that N
+// concurrent calls to writeSnapshotAtomic on the same path never produce an
+// invalid or empty snapshot file on disk.
+//
+// The old implementation used a fixed "<path>.tmp" name shared by all concurrent
+// writers, so two writers could interleave writes into the same temp file and
+// then rename it over the live snapshot — producing corrupt JSON. The fix uses
+// os.CreateTemp for a unique per-write temp name: concurrent writers no longer
+// share a temp file. The final rename is still atomic (last-writer-wins with a
+// VALID file).
+//
+// F-2 / BC-2.05.010 Invariant 1; S-BL.ADMISSION-SYNC-WIRE AC-005.
+//
+// NOT t.Parallel: creates temp files in a tempdir; avoids umask race.
+func TestSnapshotWriteAtomic_ConcurrentWrites_AlwaysValidJSON(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-snap-concurrent-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() {
+		// Restore write bit in case a test left it read-only.
+		_ = os.Chmod(dir, 0o700)
+		_ = os.RemoveAll(dir)
+	})
+	snapshotPath := filepath.Join(dir, "admission-state.json")
+
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	ks := admission.NewAdmittedKeySet()
+	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	const N = 20
+	errs := make(chan error, N)
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func() {
+			defer wg.Done()
+			errs <- writeSnapshotAtomic(snapshotPath, ks)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	// All advisory write errors (e.g. chmod race) are OK — the test asserts that
+	// the ON-DISK file (if it exists) is ALWAYS valid JSON with schema_version=1.
+	// At least one write must have succeeded (all N had the same ks, same content).
+	for e := range errs {
+		if e != nil {
+			t.Logf("writeSnapshotAtomic returned advisory error: %v", e)
+		}
+	}
+
+	// The file must exist and contain valid JSON.
+	data, err := os.ReadFile(snapshotPath)
+	if err != nil {
+		t.Fatalf("F-2 ConcurrentWrites: snapshot file %q not readable after %d concurrent writes: %v",
+			snapshotPath, N, err)
+	}
+	if len(data) == 0 {
+		t.Fatalf("F-2 ConcurrentWrites: snapshot file %q is empty after %d concurrent writes "+
+			"(old fixed-name temp sharing could produce a truncated file)", snapshotPath, N)
+	}
+	var snap snapshotFile
+	if err := json.Unmarshal(data, &snap); err != nil {
+		t.Fatalf("F-2 ConcurrentWrites: snapshot file %q contains invalid JSON after %d concurrent writes "+
+			"(old fixed-name temp sharing produced corrupt JSON; unique-temp fix should prevent this). "+
+			"json err: %v\nfile contents: %s", snapshotPath, N, err, data)
+	}
+	if snap.SchemaVersion != snapshotCurrentSchemaVersion {
+		t.Errorf("F-2 ConcurrentWrites: snapshot schema_version=%d; want %d",
+			snap.SchemaVersion, snapshotCurrentSchemaVersion)
 	}
 }
 

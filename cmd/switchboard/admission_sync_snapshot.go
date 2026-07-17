@@ -198,7 +198,16 @@ func unmarshalSnapshot(snap *snapshotFile, ks *admission.AdmittedKeySet) error {
 }
 
 // writeSnapshotAtomic serialises ks and writes the JSON to path atomically:
-// write to <path>.tmp, then os.Rename (BC-2.05.010 Invariant 1 / Decision 6).
+// create a unique temp file via os.CreateTemp, write, close, then os.Rename
+// (BC-2.05.010 Invariant 1 / Decision 6 / F-2 fix).
+//
+// Using os.CreateTemp with a per-write unique name eliminates the concurrent-write
+// corruption that occurred with a fixed "<path>.tmp" name. Two concurrent writers
+// can no longer share a temp path, so they never interleave partial writes into the
+// same file. Both CreateTemp defaults and explicit 0600 mode ensure restrictive
+// permissions. Two unique-temp writers still race on the final os.Rename target,
+// but rename(2) is atomic — last-writer-wins with a VALID file (F-2: the corruption
+// came from the shared temp, not the atomic rename).
 //
 // Write failure is advisory — callers log WARN but must not propagate the error
 // to the RPC caller (BC-2.05.010 PC-2 / S-BL.ADMISSION-SYNC-WIRE AC-005).
@@ -218,12 +227,34 @@ func writeSnapshotAtomic(path string, ks *admission.AdmittedKeySet) error {
 		return fmt.Errorf("writeSnapshotAtomic: json.Marshal: %w", err)
 	}
 
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
+	// Create a unique temp file in the same directory as the target so that
+	// rename(2) is guaranteed to be on the same filesystem (atomic cross-device
+	// rename is not guaranteed). Pattern "admission-state-*.tmp" is recognisable
+	// in directory listings. 0600 permissions match the target file.
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "admission-state-*.tmp")
+	if err != nil {
+		return fmt.Errorf("writeSnapshotAtomic: create temp: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("writeSnapshotAtomic: write %q: %w", tmpPath, err)
 	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("writeSnapshotAtomic: close %q: %w", tmpPath, err)
+	}
+	// os.CreateTemp creates files with 0600 on most platforms, but we enforce it
+	// explicitly for clarity and correctness on platforms that inherit umask.
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("writeSnapshotAtomic: chmod %q: %w", tmpPath, err)
+	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		// Best-effort cleanup of the temp file; ignore error.
+		// Best-effort cleanup of the unique temp file on rename failure.
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("writeSnapshotAtomic: rename %q → %q: %w", tmpPath, path, err)
 	}
