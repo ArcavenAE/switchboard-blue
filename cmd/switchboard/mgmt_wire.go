@@ -494,7 +494,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// (S-BL.ADMISSION-SYNC-WIRE AC-007; BC-2.05.010 PC-6/7). Fail-closed on
 	// corrupt/unknown-schema file (Decision 7c / EC-011 / E-KEY-002).
 	// Absent path → no-op; absent file → empty keyset + INFO log (Decision 7b).
-	if err := loadSnapshotFromFile(cfg.AdmissionStateFile, routerKS); err != nil {
+	if err := loadSnapshotFromFile(cfg.AdmissionStateFile, routerKS, w); err != nil {
 		return fmt.Errorf("runRouter: load admission snapshot: %w", err)
 	}
 	if cfg.AdmissionStateFile != "" {

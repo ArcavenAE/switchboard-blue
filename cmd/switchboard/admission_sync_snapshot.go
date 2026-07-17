@@ -39,6 +39,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -235,10 +236,13 @@ func writeSnapshotAtomic(path string, ks *admission.AdmittedKeySet) error {
 //   - file absent: return nil with empty keyset + caller logs INFO (Decision 7b).
 //   - file present but invalid JSON or unknown schema_version: return non-nil
 //     error wrapping E-KEY-002 so runRouter fails closed (Decision 7c / EC-011).
-//   - file present and valid: populate ks and return nil (Decision 7d).
+//   - file present and valid: populate ks, emit INFO log with loaded entry count
+//     per SVTN (Decision 7d / BC-2.05.010 PC-7 / AC-007 PC-3), and return nil.
+//
+// w is the log writer (nil-safe — no-op when nil).
 //
 // BC-2.05.010 PC-6/7/8/9; S-BL.ADMISSION-SYNC-WIRE AC-007.
-func loadSnapshotFromFile(path string, ks *admission.AdmittedKeySet) error {
+func loadSnapshotFromFile(path string, ks *admission.AdmittedKeySet, w io.Writer) error {
 	if path == "" {
 		// No persistence configured — no-op (Decision 7a).
 		return nil
@@ -285,6 +289,15 @@ func loadSnapshotFromFile(path string, ks *admission.AdmittedKeySet) error {
 
 	if err := unmarshalSnapshot(&snap, ks); err != nil {
 		return fmt.Errorf("E-KEY-002: admission snapshot %q: %w", path, err)
+	}
+
+	// BC-2.05.010 PC-7 / AC-007 PC-3: emit INFO log with loaded entry count per
+	// SVTN on successful load (Decision 7d). Nil writer → no-op.
+	if w != nil {
+		for _, svtn := range snap.SVTNs {
+			_, _ = fmt.Fprintf(w, "switchboard router: admission snapshot loaded: svtn_id=%s entries=%d\n",
+				svtn.SVTNID, len(svtn.Keys))
+		}
 	}
 	return nil
 }

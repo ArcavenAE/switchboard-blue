@@ -1323,7 +1323,7 @@ func TestRouterStartup_AdmissionStateFile_NotConfigured_EmptyKeyset(t *testing.T
 
 	ks := admission.NewAdmittedKeySet()
 	// Empty path means "no persistence" — must return nil with no I/O.
-	err := loadSnapshotFromFile("", ks)
+	err := loadSnapshotFromFile("", ks, nil)
 	if err != nil {
 		t.Errorf("AC-007 NotConfigured: loadSnapshotFromFile(\"\", ks) returned error %v; "+
 			"must return nil (empty path is no-op, no snapshot file, no I/O). "+
@@ -1351,7 +1351,7 @@ func TestRouterStartup_AdmissionStateFile_ConfiguredFileAbsent_EmptyKeyset_InfoL
 	nonExistentPath := filepath.Join(dir, "does-not-exist.json")
 
 	ks := admission.NewAdmittedKeySet()
-	err = loadSnapshotFromFile(nonExistentPath, ks)
+	err = loadSnapshotFromFile(nonExistentPath, ks, nil)
 	if err != nil {
 		t.Errorf("AC-007 FileAbsent: loadSnapshotFromFile(%q, ks) returned error %v; "+
 			"a missing file must produce nil error and empty keyset (fresh install). "+
@@ -1412,7 +1412,8 @@ func TestRouterStartup_AdmissionStateFile_ValidFile_EntriesLoaded(t *testing.T) 
 	}
 
 	ks := admission.NewAdmittedKeySet()
-	if err := loadSnapshotFromFile(snapshotPath, ks); err != nil {
+	var logBuf strings.Builder
+	if err := loadSnapshotFromFile(snapshotPath, ks, &logBuf); err != nil {
 		t.Fatalf("AC-007 ValidFile: loadSnapshotFromFile returned error: %v "+
 			"(Red Gate: stub returns not-implemented)", err)
 	}
@@ -1429,6 +1430,21 @@ func TestRouterStartup_AdmissionStateFile_ValidFile_EntriesLoaded(t *testing.T) 
 	}
 	if !found {
 		t.Error("AC-007 ValidFile: pubkey not found in loaded entries")
+	}
+
+	// AC-007 PC-3 / BC-2.05.010 PC-7 / F-3: INFO log with count per SVTN must be emitted.
+	logStr := logBuf.String()
+	if !strings.Contains(logStr, "admission snapshot loaded") {
+		t.Errorf("AC-007 ValidFile F-3: INFO log with loaded entry count not emitted; "+
+			"loadSnapshotFromFile must log count per SVTN on successful load (BC-2.05.010 PC-7). "+
+			"got log output: %q", logStr)
+	}
+	if !strings.Contains(logStr, "entries=1") {
+		t.Errorf("AC-007 ValidFile F-3: INFO log must include entry count; got: %q", logStr)
+	}
+	svtnIDHex := svtnIDToHex(svtnID)
+	if !strings.Contains(logStr, svtnIDHex) {
+		t.Errorf("AC-007 ValidFile F-3: INFO log must include svtn_id %s; got: %q", svtnIDHex, logStr)
 	}
 }
 
@@ -1460,7 +1476,7 @@ func TestRouterStartup_AdmissionStateFile_CorruptJSON_FailClosed_EKEY002(t *test
 	}
 
 	ks := admission.NewAdmittedKeySet()
-	err = loadSnapshotFromFile(snapshotPath, ks)
+	err = loadSnapshotFromFile(snapshotPath, ks, nil)
 	if err == nil {
 		t.Fatal("AC-007 CorruptJSON: loadSnapshotFromFile returned nil error for corrupt JSON file; " +
 			"must fail-closed (E-KEY-002)")
@@ -1500,7 +1516,7 @@ func TestRouterStartup_AdmissionStateFile_UnknownSchemaVersion_FailClosed(t *tes
 	}
 
 	ks := admission.NewAdmittedKeySet()
-	err = loadSnapshotFromFile(snapshotPath, ks)
+	err = loadSnapshotFromFile(snapshotPath, ks, nil)
 	if err == nil {
 		t.Fatal("AC-007 UnknownSchemaVersion: loadSnapshotFromFile returned nil for schema_version:999; " +
 			"must fail-closed (E-KEY-002 — forward-compat gate)")
@@ -1557,7 +1573,7 @@ func TestRouterStartup_LoadedEntries_AdmittedFalse(t *testing.T) {
 	}
 
 	ks := admission.NewAdmittedKeySet()
-	if err := loadSnapshotFromFile(snapshotPath, ks); err != nil {
+	if err := loadSnapshotFromFile(snapshotPath, ks, nil); err != nil {
 		t.Fatalf("AC-007 LoadedAdmittedFalse: loadSnapshotFromFile: %v (Red Gate: not implemented)", err)
 	}
 
