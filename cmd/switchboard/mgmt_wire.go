@@ -500,7 +500,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	if cfg.AdmissionStateFile != "" {
 		if _, statErr := os.Stat(cfg.AdmissionStateFile); os.IsNotExist(statErr) {
 			if w != nil {
-				_, _ = fmt.Fprintf(w, "switchboard router: admission_state_file not found — starting with empty keyset\n")
+				_, _ = fmt.Fprintf(w, "switchboard router: admission_state_file not found; starting with empty keyset — awaiting push from control\n")
 			}
 		}
 	}

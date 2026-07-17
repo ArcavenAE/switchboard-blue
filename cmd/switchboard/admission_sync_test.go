@@ -1421,13 +1421,16 @@ func TestRouterStartup_AdmissionStateFile_NotConfigured_EmptyKeyset(t *testing.T
 }
 
 // TestRouterStartup_AdmissionStateFile_ConfiguredFileAbsent_EmptyKeyset_InfoLog
-// verifies that when admission_state_file is configured but the file does not
-// exist, loadSnapshotFromFile returns nil (empty keyset, fresh install).
+// verifies two things:
+//  1. loadSnapshotFromFile returns nil (no error, empty keyset) when the path
+//     is configured but the file does not exist — fresh install semantics.
+//  2. runRouter emits the AC-007 PC-2 mandated INFO log:
+//     "admission_state_file not found; starting with empty keyset — awaiting push from control"
+//     when the configured path does not exist.
 //
 // BC-2.05.010 PC-6 / EC-002; S-BL.ADMISSION-SYNC-WIRE AC-007.
-// Red Gate: FAILS — loadSnapshotFromFile returns errSnapshotNotImplemented.
 func TestRouterStartup_AdmissionStateFile_ConfiguredFileAbsent_EmptyKeyset_InfoLog(t *testing.T) {
-	t.Parallel()
+	// NOT t.Parallel: starts runRouter (binds listener).
 
 	dir, err := os.MkdirTemp("", "sb-snap-absent-*")
 	if err != nil {
@@ -1436,15 +1439,72 @@ func TestRouterStartup_AdmissionStateFile_ConfiguredFileAbsent_EmptyKeyset_InfoL
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	nonExistentPath := filepath.Join(dir, "does-not-exist.json")
 
+	// Part 1: loadSnapshotFromFile directly — absent path → nil error, empty keyset.
 	ks := admission.NewAdmittedKeySet()
-	err = loadSnapshotFromFile(nonExistentPath, ks, nil)
-	if err != nil {
+	if err := loadSnapshotFromFile(nonExistentPath, ks, nil); err != nil {
 		t.Errorf("AC-007 FileAbsent: loadSnapshotFromFile(%q, ks) returned error %v; "+
-			"a missing file must produce nil error and empty keyset (fresh install). "+
-			"Red Gate: stub returns errSnapshotNotImplemented.", nonExistentPath, err)
+			"a missing file must produce nil error and empty keyset (fresh install).", nonExistentPath, err)
 	}
-	// Keyset must remain empty.
-	// We check a random SVTN ID — if the keyset is truly empty there should be nothing.
+
+	// Part 2: runRouter emits the mandated INFO log string (AC-007 PC-2).
+	// Use an ephemeral data-plane listener + unix mgmt socket so runRouter starts cleanly.
+	probe, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe listen: %v", err)
+	}
+	dataAddr := probe.Addr().String()
+	_ = probe.Close()
+
+	sockPath := tempSockPath(t)
+
+	cfg := &config.Config{
+		ListenAddr:         dataAddr,
+		TickInterval:       10 * time.Millisecond,
+		ManagementSocket:   sockPath,
+		AdmissionStateFile: nonExistentPath,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	var logBuf strings.Builder
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runRouter(ctx, &logBuf, cfg, "", make(chan os.Signal, 1), make(chan struct{}, 1))
+	}()
+
+	// Wait for router to bind mgmt socket (startup complete).
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, statErr := os.Stat(sockPath); statErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
+		cancel()
+		<-errCh
+		t.Fatalf("AC-007 InfoLog: mgmt socket %q not created within 2s — runRouter did not start", sockPath)
+	}
+
+	cancel()
+	select {
+	case rErr := <-errCh:
+		if rErr != nil {
+			t.Logf("AC-007 InfoLog: runRouter returned: %v (may be benign)", rErr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("AC-007 InfoLog: runRouter did not return within 3s after ctx cancel")
+	}
+
+	// AC-007 PC-2: mandated INFO log string must appear verbatim.
+	logStr := logBuf.String()
+	const mandatedMsg = "admission_state_file not found; starting with empty keyset — awaiting push from control"
+	if !strings.Contains(logStr, mandatedMsg) {
+		t.Errorf("AC-007 PC-2: mandated INFO log %q not found in runRouter output.\n"+
+			"Fix: change mgmt_wire.go log string to match AC-007 PC-2 exactly.\n"+
+			"output=%q", mandatedMsg, logStr)
+	}
 }
 
 // TestRouterStartup_AdmissionStateFile_ValidFile_EntriesLoaded verifies that
