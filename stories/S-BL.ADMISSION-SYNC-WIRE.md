@@ -31,20 +31,29 @@ modified:
       real TCP-bind + push-handshake assertions) + 2 new test names
       (TCPBind_ConnectionSucceeds, TCPBind_PushHandshakeSucceeds); implementer task
       for mgmtNetwork/buildMgmtListener auto-detect. rulings ref v1.2→v1.3.
-version: "1.2"
+  - date: 2026-07-17
+    version: "1.3"
+    change: >
+      Propagate rulings v1.4 (Rulings 11+12) + BC-2.09.003 v2.2 + BC-2.05.009 v1.2:
+      add AC-011 (control-side keyset persistence via control_admission_state_file —
+      F-P3-01, now in-scope) + AC-012 (mgmt loopback guard scope: control/access
+      loopback-only TCP, router-only exemption — F-P3-02); amend AC-009 (load-then-push);
+      remove control-persistence deferral from Non-Goals; points 8→11; AC count 10→12;
+      note F-P3-03 shutdown-drain bound as impl task.
+version: "1.3"
 phase: 2
 epic: E-7
 wave: backlog
 priority: P1
 scope_phase: PE
-points: 8
-estimated_points: 8
+points: 11
+estimated_points: 11
 inputs:
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'
-input-hash: "87573e1"
+input-hash: "2db3e98"
 traces_to: 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.05.009
@@ -71,12 +80,12 @@ rulings_doc: "decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md"
 estimated_days: null
 assumption_validations: []
 risk_mitigations: []
-acceptance_criteria_count: 10
+acceptance_criteria_count: 12
 inputDocuments:
-  - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'   # v1.3 — BINDING. All 10 rulings: push RPC via internal/mgmt JSON-over-TCP; four internal.admission.* commands; control dials routers (TCP, dial-on-demand); retry-with-backoff (100ms/2x/10s/5); push failure advisory WARN no-rollback; RouterManagementEndpoints config field; admission_state_file config field; JSON snapshot schema_version:1; router TCP listener no loopback restriction (Ruling 9, ADR-012 is auth boundary); mgmt listener auto-detects TCP-vs-unix on management_socket via validateHostPort (Ruling 10, F-2 fix); nil-syncer no-op; full-snapshot push on control startup.
-  - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.1 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op. Invariant 4 exempts svtn_id from admin-args encoding parity (it is the hex UUID, not the name).
+  - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'   # v1.4 — BINDING. All 12 rulings: push RPC via internal/mgmt JSON-over-TCP; four internal.admission.* commands; control dials routers (TCP, dial-on-demand); retry-with-backoff (100ms/2x/10s/5); push failure advisory WARN no-rollback; RouterManagementEndpoints config field; admission_state_file config field; JSON snapshot schema_version:1; router TCP listener no loopback restriction (Ruling 9, ADR-012 is auth boundary); mgmt listener auto-detects TCP-vs-unix on management_socket via validateHostPort (Ruling 10, F-2 fix); nil-syncer no-op; full-snapshot push on control startup; control_admission_state_file persistence field + synchronous write-on-mutation + load-on-startup BEFORE push (Ruling 11, F-P3-01, now IN-SCOPE); buildMgmtListener loopback guard extends to console/control/access modes, router-only exemption (Ruling 12, F-P3-02).
+  - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.2 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op. Invariant 4 exempts svtn_id from admin-args encoding parity (it is the hex UUID, not the name). PC-7 (v1.2): EC-007 resync guarantee requires control_admission_state_file; control-side persist-write synchronous before push dispatch; writeSnapshotAtomic reused.
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'  # v1.0 — VLR-local admitted-state snapshot: JSON schema_version:1 format, atomic write-on-receive, load-on-startup, fail-closed-on-corrupt (E-KEY-002), missing-file→empty-keyset, admitted=false invariant, no FrameAuthKey/NodeAddr/nonces stored.
-  - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'  # v2.1 — PC-13 (admission_state_file: non-empty when present, E-CFG-015); PC-14 (router_management_endpoints: each addr host:port, E-CFG-016, NO loopback restriction per Ruling 9).
+  - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'  # v2.2 — PC-13 (admission_state_file: non-empty when present, E-CFG-015); PC-14 (router_management_endpoints: each addr host:port, E-CFG-016, NO loopback restriction per Ruling 9); PC-15 (control_admission_state_file: non-empty when present, E-CFG-017, control-mode only); PC-11b (mgmt loopback guard: console/control/access must bind loopback TCP, router exempt).
 ---
 
 # S-BL.ADMISSION-SYNC-WIRE: Admission-State Sync Wire — Control Pushes Key Mutations to Routers via Internal RPC + VLR-Local JSON Snapshot
@@ -122,7 +131,7 @@ key-material sync (pubkey + role + revoked + expiry), not a SVTN-presence-only s
 
 ## Adjudicated Design Decisions
 
-Transcribed from `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.3 (binding — all 10 rulings).
+Transcribed from `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.4 (binding — all 12 rulings).
 
 ### Decision 1 — Push protocol: reuse internal/mgmt JSON-over-TCP (Ruling 1)
 
@@ -452,24 +461,31 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 ---
 
-### AC-009 — Full-snapshot push on control startup: PushFullSnapshot pushes all AdmittedKeySet entries to configured routers (BC-2.05.009 PC-7)
+### AC-009 — Full-snapshot push on control startup: control loads persisted keyset THEN pushes all entries to configured routers (BC-2.05.009 PC-7 v1.2)
 
-**BC Anchor:** BC-2.05.009 Postcondition 7.
+**BC Anchor:** BC-2.05.009 Postcondition 7 (v1.2 — EC-007 resync conditional on control_admission_state_file).
 
 **Postconditions:**
 1. When `runControl` starts and `SVTNManager` is initialised, `admissionSyncClient.PushFullSnapshot(ctx)`
    is called before the management server begins serving.
-2. `PushFullSnapshot` iterates all `(svtn, pubkey, role)` triples in the current `AdmittedKeySet`
+2. When `control_admission_state_file` is configured in the control daemon's config, `runControl`
+   loads the keyset from that file via `loadSnapshotFromFile` BEFORE constructing the sync client
+   and calling `PushFullSnapshot`. The test setup MUST configure `control_admission_state_file`
+   and pre-populate it with a known non-empty keyset to exercise this path. A push of a
+   manually-populated in-memory keyset (without load-from-file) does not satisfy this postcondition.
+3. `PushFullSnapshot` iterates all `(svtn, pubkey, role)` triples in the loaded `AdmittedKeySet`
    (via `ListBySVTN` across all SVTNs) and issues `internal.admission.register` to each configured
    router endpoint for each entry.
-3. For entries with non-zero expiry, `internal.admission.expire` is also issued.
-4. After `PushFullSnapshot`, the router's keyset matches the control daemon's current `AdmittedKeySet`
+4. For entries with non-zero expiry, `internal.admission.expire` is also issued.
+5. After `PushFullSnapshot`, the router's keyset matches the control daemon's loaded `AdmittedKeySet`
    state (modulo push failures, which are logged at WARN and do not block startup).
+6. When `control_admission_state_file` is absent/empty, `PushFullSnapshot` on startup pushes an
+   empty keyset (EC-007 resync is inert — this is expected and tested by the EmptyKeyset test below).
 
 **Test names:**
-- `TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter` (integration: two in-process mgmt.Server instances)
+- `TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter` (integration: `control_admission_state_file` configured + pre-populated; two in-process mgmt.Server instances; router keyset receives loaded keys)
 - `TestAdmissionSync_PushFullSnapshot_ExpiryPushed`
-- `TestAdmissionSync_PushFullSnapshot_EmptyKeysetNoPushAttempt`
+- `TestAdmissionSync_PushFullSnapshot_EmptyKeysetNoPushAttempt` (no `control_admission_state_file` → empty keyset → no push attempt)
 
 ---
 
@@ -491,6 +507,61 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 ---
 
+### AC-011 — Control-side keyset persistence via control_admission_state_file: validate, persist-on-mutation, load-on-startup (BC-2.05.009 PC-7 v1.2 / BC-2.09.003 PC-15 v2.2 / Ruling 11)
+
+**BC Anchor:** BC-2.05.009 Postcondition 7 (v1.2); BC-2.09.003 Postcondition 15 (v2.2).
+
+**Postconditions:**
+1. `Config.Validate()` accepts `control_admission_state_file` absent or empty string without error.
+   When `control_admission_state_file` is present with a whitespace-only value, `Config.Validate()`
+   returns an error containing E-CFG-017:
+   `"config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence"`.
+   No file I/O in `Validate()`.
+2. After a successful `admin.key.register` (and `admin.key.revoke`, `admin.key.expire`,
+   `admin.svtn.destroy`) on control with `control_admission_state_file` configured, the file
+   contains the current `AdmittedKeySet` in schema_version:1 JSON (reusing `writeSnapshotAtomic`).
+   The persist-write is **synchronous** on the handler goroutine path, BEFORE `dispatchPush`.
+   Write failure is advisory (WARN log; no rollback of the `m.*` write; handler returns success).
+3. On control startup with `control_admission_state_file` set and the file present and valid,
+   control loads the keyset via `loadSnapshotFromFile` BEFORE constructing the sync client and
+   calling `PushFullSnapshot`. A corrupt file causes `runControl` to return E-KEY-002 (fail-closed).
+   A missing file results in an empty keyset (fresh install — no error).
+4. With `control_admission_state_file` configured and populated, `PushFullSnapshot` on startup
+   pushes the recovered keys to routers (EC-007 resync is real). Without the field,
+   `PushFullSnapshot` pushes an empty keyset (EC-007 inert).
+
+**Test names:**
+- `TestControlAdmission_PersistOnMutation`
+- `TestControlAdmission_LoadAndPushFullSnapshot`
+- `TestControlAdmission_FailClosedOnCorruptSnapshot`
+- `TestControlAdmission_MissingFileEmptyKeyset`
+- `TestConfig_Validate_ControlAdmissionStateFile_WhitespaceRejectsE_CFG_017`
+- `TestConfig_Validate_ControlAdmissionStateFile_AbsentAccepted`
+
+---
+
+### AC-012 — Mgmt listener loopback guard scope: console/control/access reject non-loopback TCP; router remains exempt (BC-2.09.003 PC-11b v2.2 / Ruling 12)
+
+**BC Anchor:** BC-2.09.003 Postcondition 11b (v2.2).
+
+**Postconditions:**
+1. A control-mode daemon with `management_socket: "0.0.0.0:<port>"` (non-loopback TCP) fails at
+   `buildMgmtListener` with E-CFG-008:
+   `"config error: management_socket: control mode requires a loopback address (127.0.0.1, [::1], or localhost); got: 0.0.0.0:<port>"`.
+   The daemon exits 1 before accepting any connections.
+2. A control-mode daemon with `management_socket: "127.0.0.1:<port>"` (loopback TCP) binds
+   successfully. The loopback guard passes.
+3. Router mode remains exempt from the loopback guard: a non-loopback `management_socket` TCP
+   address is accepted (Ruling 9 unchanged — that is AC-008, not changed by this AC).
+4. On a successful TCP bind in any mode, the daemon emits an INFO log:
+   `"<mode> management listener bound to <address>"`.
+
+**Test names:**
+- `TestControlMgmtListener_NonLoopbackRejected`
+- `TestControlMgmtListener_LoopbackTCPAccepted`
+
+---
+
 ## Architecture Mapping
 
 | Component | Module | Pure/Effectful |
@@ -507,9 +578,12 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 - **NODE_IDENTIFY wire opcode / Router.BindInterface** — that is `S-BL.NODE-IDENTIFY-WIRE`.
 - **Node-side admission keypair provisioning** — that is `S-BL.NODE-ADMISSION-PROVISIONING`.
-- **HLR-side admission state** — the HLR/VLR architecture described in `identity-cluster-architecture.md`
-  §8 is a forward architecture. This story delivers only the near-term VLR-local snapshot; the
-  HLR replication protocol is a future follow-on.
+- **Full HLR/VLR replication protocol** — the HLR/VLR architecture described in
+  `identity-cluster-architecture.md` §8 is a forward architecture. This story delivers both
+  the VLR-local router snapshot (BC-2.05.010) and the control-side keyset persistence
+  (`control_admission_state_file`, Ruling 11 — now IN-SCOPE per human decision). What remains
+  deferred is the full HLR replication protocol (cross-cluster multi-HLR state replication),
+  which requires infrastructure not yet defined.
 - **Bulk `router.admission.full-snapshot` RPC** — the near-term startup snapshot is implemented
   as a loop of individual `internal.admission.register` calls (Ruling 1). A bulk endpoint is a
   follow-on optimization.
@@ -554,13 +628,14 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 | File | Change | Justification |
 |------|--------|---------------|
-| `internal/config/config.go` | Add `RouterManagementEndpoints []RouterManagementEndpoint` + `RouterManagementEndpoint` type + YAML tags; add `AdmissionStateFile string` + YAML tag; extend `Config.Validate()` with E-CFG-015 (admission_state_file whitespace) and E-CFG-016 (router_management_endpoints addr host:port, exhaustive, no loopback restriction) | BC-2.09.003 v2.1 PC-13 and PC-14 |
+| `internal/config/config.go` | Add `RouterManagementEndpoints []RouterManagementEndpoint` + `RouterManagementEndpoint` type + YAML tags; add `AdmissionStateFile string` + YAML tag; add `ControlAdmissionStateFile string` + YAML tag; extend `Config.Validate()` with E-CFG-015 (admission_state_file whitespace), E-CFG-016 (router_management_endpoints addr host:port, exhaustive, no loopback restriction), E-CFG-017 (control_admission_state_file whitespace) | BC-2.09.003 v2.2 PC-13, PC-14, PC-15 |
 | `cmd/switchboard/admission_sync_client.go` (new) | `admissionSyncer` interface; `admissionSyncClient` type holding endpoints + daemonPriv; `PushRegisterKey`, `PushRevokeKey`, `PushSetKeyExpiry`, `PushRemoveSVTN` methods (dial-on-demand, retry-with-backoff); `PushFullSnapshot`; SIGHUP endpoint-list update | BC-2.05.009 Rulings 1–2 |
 | `cmd/switchboard/admission_sync_wire.go` (new) | `wireAdmissionSyncHandlers(srv *mgmt.Server, ks *admission.AdmittedKeySet, snapshotPath string)` + four `mgmt.Handler` registrations for `internal.admission.*`; per-handler snapshot write after successful keyset update | BC-2.05.009 Ruling 3; BC-2.05.010 |
 | `cmd/switchboard/admission_sync_snapshot.go` (new, or inline in wire.go) | Snapshot serialization/deserialization (JSON marshal/unmarshal to/from `admission.AdmittedKeySet` state); atomic write; load-on-startup logic | BC-2.05.010 |
 | `cmd/switchboard/admin_handlers.go` | Extend `BuildAdminHandlers` signature with `syncClient admissionSyncer` parameter; add push call after each successful `SVTNManager.*` write in `makeRegisterHandler`, `makeRevokeHandler`, `makeExpireHandler`, `makeAdminSVTNDestroyHandler` | BC-2.05.009 PC-1/PC-2 |
 | `cmd/switchboard/router.go` (or equivalent `runRouter`) | Add `wireAdmissionSyncHandlers(...)` call (after `newMgmtServer`, before `serveMgmtServer`); add snapshot load-on-startup from `cfg.AdmissionStateFile`; emit non-loopback bind INFO log | BC-2.05.010 PC-6/7/8/9; Ruling 9 |
-| `cmd/switchboard/control.go` (or equivalent `runControl`) | Construct `admissionSyncClient`; pass to `BuildAdminHandlers`; call `PushFullSnapshot(ctx)` on startup; update client endpoints on SIGHUP | BC-2.05.009 PC-7; Invariant 5 |
+| `cmd/switchboard/control.go` (or equivalent `runControl`) | Construct `admissionSyncClient`; pass to `BuildAdminHandlers`; load `ControlAdmissionStateFile` snapshot BEFORE constructing sync client and calling `PushFullSnapshot`; call `PushFullSnapshot(ctx)` on startup; update client endpoints on SIGHUP; add synchronous `writeSnapshotAtomic` call in four admin write handlers BEFORE `dispatchPush` | BC-2.05.009 PC-7 v1.2; Invariant 5; Ruling 11 |
+| `cmd/switchboard/mgmt_wire.go` (or `buildMgmtListener`) | Extend `buildMgmtListener` loopback guard from `if mode == "console"` to `if mode != "router"` — applies guard to console, control, and access modes; router-only exemption (Ruling 12) | BC-2.09.003 PC-11b v2.2 |
 | `internal/config/config_test.go` | Extended table-driven tests for E-CFG-015 and E-CFG-016 (AC-001) | AC-001 |
 | `cmd/switchboard/admission_sync_test.go` (new) | Integration tests for push RPCs, snapshot round-trips, fail-closed load, startup snapshot push (AC-002 through AC-010) | All ACs |
 
@@ -588,15 +663,20 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 7. [ ] Write failing tests for AC-008 (non-loopback bind; startup INFO log) — test-writer
 8. [ ] Write failing tests for AC-009 (PushFullSnapshot on control startup) — test-writer
 9. [ ] Write failing tests for AC-010 (SIGHUP endpoint-list update) — test-writer
+9a. [ ] Write failing tests for AC-011 (control-side persistence: validate E-CFG-017; persist-on-mutation; load-on-startup; fail-closed on corrupt) — test-writer
+9b. [ ] Write failing tests for AC-012 (mgmt loopback guard scope: control/access non-loopback rejected; loopback accepted) — test-writer
 10. [ ] Verify Red Gate: `go test ./...` fails with compile or test failures for all ACs
-11. [ ] Implement `internal/config` fields + `Config.Validate()` extensions — implementer
+11. [ ] Implement `internal/config` fields + `Config.Validate()` extensions (add `ControlAdmissionStateFile` + E-CFG-017) — implementer
 12. [ ] Implement `admission_sync_client.go` (interface + retry client + PushFullSnapshot) — implementer
 13. [ ] Implement `admission_sync_wire.go` (four handler registrations) — implementer
 14. [ ] Implement snapshot serialization/deserialization — implementer
 15. [ ] Wire push calls into `admin_handlers.go` — implementer
+15a. [ ] Wire synchronous `writeSnapshotAtomic` into the four admin write handlers (`makeRegisterHandler`, `makeRevokeHandler`, `makeExpireHandler`, `makeAdminSVTNDestroyHandler`) BEFORE `dispatchPush`; write failure is advisory (WARN, no rollback) — implementer [Ruling 11]
 16. [ ] Wire `runRouter` startup load + non-loopback bind log — implementer
-16a. [ ] Implement `mgmtNetwork`/`buildMgmtListener` auto-detect: if `validateHostPort(management_socket)` passes → bind TCP (no `isMgmtLoopbackHost` guard); else → bind unix (Ruling 10 / F-2 fix) — implementer
-17. [ ] Wire `runControl` client construction + PushFullSnapshot + SIGHUP reload — implementer
+16a. [ ] Implement `mgmtNetwork`/`buildMgmtListener` auto-detect: if `validateHostPort(management_socket)` passes → bind TCP (no `isMgmtLoopbackHost` guard for router); else → bind unix (Ruling 10 / F-2 fix) — implementer
+16b. [ ] Extend `buildMgmtListener` loopback guard from `if mode == "console"` to `if mode != "router"` — control/access/console all require loopback TCP; router remains exempt (Ruling 12) — implementer
+17. [ ] Wire `runControl`: (a) load `ControlAdmissionStateFile` snapshot via `loadSnapshotFromFile` BEFORE constructing sync client + calling `PushFullSnapshot`; (b) client construction + PushFullSnapshot + SIGHUP reload — implementer [Ruling 11]
+17a. [ ] F-P3-03 (impl obligation, no new AC): bound the push dialer timeout and bound `pushWG.Wait()` shutdown drain so a black-holed router endpoint cannot stall daemon shutdown indefinitely — implementer
 18. [ ] Run `go test ./... -race`; confirm all AC tests pass
 19. [ ] Update STATE.md
 
@@ -613,6 +693,9 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 | Ruling 9 | No `isMgmtLoopbackHost` guard on router-mode TCP management endpoints | Verified by AC-008 test `TestRouterMgmtListener_NonLoopbackBindAccepted` |
 | Ruling 10 | `mgmtNetwork`/`buildMgmtListener` auto-detects TCP-vs-unix via `validateHostPort(management_socket)` — TCP when host:port, unix otherwise | Verified by AC-008 tests `TestRouterMgmtListener_TCPBind_ConnectionSucceeds` and `TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds` |
 | BC-2.05.010 Invariant 2 | Loaded entries have `admitted=false` | Verified by AC-007 test `TestRouterStartup_LoadedEntries_AdmittedFalse` |
+| Ruling 11 (F-P3-01) | Control-side persist-write is synchronous BEFORE push dispatch; failure is advisory (WARN, no rollback); load-on-startup BEFORE PushFullSnapshot | Verified by AC-011 tests |
+| Ruling 12 (F-P3-02) | `buildMgmtListener` guard is `if mode != "router"` — console/control/access require loopback TCP; router-only exemption | Verified by AC-012 tests `TestControlMgmtListener_NonLoopbackRejected` and `TestControlMgmtListener_LoopbackTCPAccepted` |
+| BC-2.09.003 PC-15 v2.2 | `control_admission_state_file` whitespace-only → E-CFG-017; absent accepted; no file I/O in Validate() | Verified by AC-011 tests `TestConfig_Validate_ControlAdmissionStateFile_*` |
 
 ## Library & Framework Requirements (MANDATORY)
 
@@ -632,14 +715,15 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `internal/config/config.go` | modify | Add `RouterManagementEndpoints`, `RouterManagementEndpoint`, `AdmissionStateFile`; extend `Validate()` with E-CFG-015 / E-CFG-016 |
+| `internal/config/config.go` | modify | Add `RouterManagementEndpoints`, `RouterManagementEndpoint`, `AdmissionStateFile`, `ControlAdmissionStateFile`; extend `Validate()` with E-CFG-015 / E-CFG-016 / E-CFG-017 |
 | `internal/config/config_test.go` | modify | Table-driven tests for AC-001 |
 | `cmd/switchboard/admission_sync_client.go` | create | `admissionSyncer` interface; `admissionSyncClient` with retry-with-backoff; `PushFullSnapshot`; SIGHUP endpoint-list update |
 | `cmd/switchboard/admission_sync_wire.go` | create | `wireAdmissionSyncHandlers`; four `internal.admission.*` handler registrations; per-handler snapshot write |
 | `cmd/switchboard/admission_sync_snapshot.go` | create | Snapshot JSON marshal/unmarshal; atomic write; load-on-startup logic |
 | `cmd/switchboard/admin_handlers.go` | modify | Extend `BuildAdminHandlers` with `syncClient admissionSyncer`; add push calls in four write handlers |
 | `cmd/switchboard/router.go` | modify | Call `wireAdmissionSyncHandlers`; snapshot load on startup; non-loopback bind INFO log |
-| `cmd/switchboard/control.go` | modify | Construct `admissionSyncClient`; pass to `BuildAdminHandlers`; call `PushFullSnapshot`; SIGHUP reload |
+| `cmd/switchboard/control.go` | modify | Construct `admissionSyncClient`; pass to `BuildAdminHandlers`; load `ControlAdmissionStateFile` snapshot BEFORE sync-client construction; call `PushFullSnapshot`; SIGHUP reload; synchronous `writeSnapshotAtomic` in four admin write handlers BEFORE `dispatchPush` |
+| `cmd/switchboard/mgmt_wire.go` (or file containing `buildMgmtListener`) | modify | Extend loopback guard from `if mode == "console"` to `if mode != "router"` — Ruling 12 |
 | `cmd/switchboard/admission_sync_test.go` | create | Integration tests for AC-002 through AC-010 |
 
 ## POL-005 Delivery Plan Note
@@ -661,9 +745,11 @@ have not changed.
 
 - **Origin:** `S-BL.DISCOVERY-WIRE-rulings.md` v1.10 Ruling 4 (Forward Obligation (e)) and
   `decisions/identity-cluster-architecture.md` v1.2 (three-leg cluster design, §3 and §9).
-- **Rulings:** `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.3 (all 10 rulings, zero open
-  human flags — fully decomposition-ready as of 2026-07-15; Ruling 10 added 2026-07-17 to fix
-  F-2: router mgmt listener TCP-vs-unix auto-detect).
+- **Rulings:** `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` v1.4 (all 12 rulings, zero open
+  human flags — Ruling 10 added 2026-07-17 (F-2 fix: router mgmt listener TCP-vs-unix auto-detect);
+  Ruling 11 added 2026-07-17 (F-P3-01: control-side keyset persistence via control_admission_state_file,
+  now IN-SCOPE); Ruling 12 added 2026-07-17 (F-P3-02: buildMgmtListener loopback guard extended to
+  console/control/access, router-only exemption)).
 - **Unblocks:** `S-BL.NODE-IDENTIFY-WIRE`'s Open Design Obligation 5 (admission.AdmitNode
   is verification-only against the router's always-empty keyset — this story populates that keyset).
 
@@ -671,6 +757,7 @@ have not changed.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-17 | Propagate rulings v1.4 (Rulings 11+12) + BC-2.09.003 v2.2 + BC-2.05.009 v1.2: add AC-011 (control-side keyset persistence via control_admission_state_file — F-P3-01, now in-scope) + AC-012 (mgmt loopback guard scope: control/access loopback-only TCP, router-only exemption — F-P3-02); amend AC-009 (load-then-push); remove control-persistence deferral from Non-Goals; points 8→11; AC count 10→12; note F-P3-03 shutdown-drain bound as impl task. |
 | 1.2 | 2026-07-17 | Propagate rulings v1.3 Ruling 10 (F-2 fix): router mgmt listener auto-detects TCP-vs-unix on management_socket; AC-008 postconditions rewritten (5 PCs incl. real TCP-bind + push-handshake assertions) + 2 new test names (TCPBind_ConnectionSucceeds, TCPBind_PushHandshakeSucceeds); implementer task for mgmtNetwork/buildMgmtListener auto-detect. rulings ref v1.2→v1.3. |
 | 1.1 | 2026-07-16 | Propagate rulings v1.2 svtn_id hex-[16]byte wire encoding fix (admissionSyncer interface svtnName→svtnID [16]byte; Decisions 2/5, AC-003/004/005); BC-2.05.009 ref 1.0→1.1; removed stale free-text input-hash citation from POL-005 note. |
 | 1.0 | 2026-07-15 | Initial full decomposition — 10 ACs, 8 points, leaf prerequisite with `depends_on: []`. Admission-state sync push RPC (BC-2.05.009) + VLR-local JSON snapshot (BC-2.05.010). Per rulings v1.1 (Option A + Ruling 9 router TCP listener). |
