@@ -180,7 +180,13 @@ func run(stdout io.Writer, args []string) error {
 
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer cancel()
-		return runControl(ctx, os.Stderr, cfg)
+		// S-BL.ADMISSION-SYNC-WIRE AC-010 / BC-2.05.009 Inv-5: dedicated SIGHUP
+		// channel, independent of the SIGTERM/SIGINT NotifyContext so a reload
+		// signal does NOT cancel the daemon (mirrors router-mode SIGHUP pattern).
+		sighupCh := make(chan os.Signal, 1)
+		signal.Notify(sighupCh, syscall.SIGHUP)
+		defer signal.Stop(sighupCh)
+		return runControl(ctx, os.Stderr, cfg, *configPath, sighupCh)
 
 	default:
 		return fmt.Errorf("unknown subcommand %q; try: access, router, console, control, version", subcommand)

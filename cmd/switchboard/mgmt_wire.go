@@ -1095,6 +1095,31 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	return nil
 }
 
+// reloadControlEndpoints reloads the config from configPath, validates it, and
+// calls syncClient.UpdateEndpoints with the new router management endpoints.
+//
+// This is the testable helper called by runControl's SIGHUP select branch.
+// Fail-closed: if the config cannot be loaded or validated, endpoints are NOT
+// updated (the old list is kept). Returns a non-nil error on reload failure
+// (the caller logs WARN and continues — BC-2.05.009 Invariant 5 / AC-010 PC-1/2/3).
+//
+// BC-2.05.009 Invariant 5; S-BL.ADMISSION-SYNC-WIRE AC-010.
+func reloadControlEndpoints(configPath string, syncClient *admissionSyncClient) error {
+	if configPath == "" {
+		// No config file — nothing to reload.
+		return nil
+	}
+	loaded, err := config.LoadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("reload config %q: %w", configPath, err)
+	}
+	if err := loaded.Validate(); err != nil {
+		return fmt.Errorf("reload config %q: validate: %w", configPath, err)
+	}
+	syncClient.UpdateEndpoints(loaded.RouterManagementEndpoints)
+	return nil
+}
+
 // runControl is the control-mode daemon entry point (F-002 / S-6.06 AC-004).
 // It generates an ephemeral Ed25519 keypair, constructs a SVTNManager with an
 // empty AdmittedKeySet, starts the management server with BuildAdminHandlers,
@@ -1103,6 +1128,11 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 // Only the control-mode daemon registers admin handlers (ADR-004 role-exclusion;
 // ARCH-04 disambiguation table; AC-004). Access, console, and router daemons pass nil.
 //
+// configPath is the path to the YAML config file (empty string if none was provided).
+// sighupCh is a channel on which SIGHUP signals are delivered, independent of the
+// SIGTERM/SIGINT NotifyContext — a SIGHUP must NOT cancel/terminate the daemon
+// (mirrors the existing router-mode SIGHUP pattern in runRouter).
+//
 // Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
 //  1. newMgmtServer — construct server (no goroutine)
 //  2. BuildAdminHandlers passed via NewServer initial handlers (already registered)
@@ -1110,7 +1140,8 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 //  4. PushFullSnapshot — push all keyset entries to configured routers BEFORE serving
 //     (S-BL.ADMISSION-SYNC-WIRE AC-009 / BC-2.05.009 Postcondition 7 / Decision 10)
 //  5. serveMgmtServer — start Serve goroutine
-func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
+//  6. select loop: SIGHUP → reloadControlEndpoints; ctx.Done → shutdown
+func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh chan os.Signal) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
 	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
@@ -1169,8 +1200,26 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
-	// Block until context is cancelled (ARCH-01 lifecycle contract).
-	<-ctx.Done()
+	// Block until context is cancelled (SIGTERM/SIGINT) or a SIGHUP arrives.
+	// SIGHUP triggers a fail-closed endpoint reload; the daemon is NOT cancelled.
+	// Mirrors the router-mode SIGHUP select loop (S-7.04-FU-SIGHUP-RELOAD).
+	// BC-2.05.009 Invariant 5 / AC-010.
+	for {
+		select {
+		case <-ctx.Done():
+			// SIGTERM/SIGINT — proceed to graceful shutdown.
+			goto shutdown
+		case <-sighupCh:
+			// Fail-closed reload: load config, validate, update endpoints.
+			// If reload/validate fails, log WARN and keep the old endpoint list.
+			if reloadErr := reloadControlEndpoints(configPath, syncClient); reloadErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "control: SIGHUP reload failed: %s; continuing with previous endpoints\n", reloadErr)
+				}
+			}
+		}
+	}
+shutdown:
 
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
