@@ -238,4 +238,3 @@ func makeAdmissionRemoveSVTNHandler(ks *admission.AdmittedKeySet, snapshotPath s
 		return map[string]any{"status": "ok"}, nil
 	}
 }
-
