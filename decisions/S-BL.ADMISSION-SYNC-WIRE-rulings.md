@@ -1,11 +1,11 @@
 ---
 artifact_id: S-BL.ADMISSION-SYNC-WIRE-rulings
 document_type: rulings
-version: "1.2"
+version: "1.3"
 status: draft
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
-modified: 2026-07-16T00:00:00Z
+modified: 2026-07-17T00:00:00Z
 related_stories:
   - S-BL.ADMISSION-SYNC-WIRE
 related_architecture:
@@ -21,12 +21,13 @@ related_code:
   - internal/mgmt/mgmt.go
 ---
 
-# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.2
+# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.3
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-17 | F-2 adversary defect (HIGH, feature-blocking): router TCP mgmt listener wiring gap. Code-verified facts: (1) `mgmtNetwork(mode)` (`mgmt_wire.go:159–164`) returns `"tcp"` ONLY for `"console"`; router/control/access all return `"unix"` — no existing TCP-bind path for router mode; (2) `admission_sync_client.go:142` always dials `"tcp"` — confirmed; (3) `buildMgmtListener` TCP branch (`mgmt_wire.go:194–208`) enforces `isMgmtLoopbackHost` and is only reached for console because `mgmtNetwork("router")=="unix"`; (4) `validateHostPort` (`internal/config/config.go:401`) uses `net.SplitHostPort` + numeric range check — reusable for auto-detect; (5) blast-radius: all existing router tests supply `tempSockPath(t)` → filesystem paths (e.g. `/tmp/sb-XXXXX/m.sock`); `net.SplitHostPort` fails on those paths (no colon), so auto-detect TCP-vs-unix on `management_socket` has zero impact on existing tests. Ruling 10 added: auto-detect mechanism — if `management_socket` parses as a valid `host:port` via `validateHostPort`, `mgmtNetwork` returns `"tcp"` for router mode and `buildMgmtListener` binds a TCP listener WITHOUT the `isMgmtLoopbackHost` guard (Ruling 9 already ratified: no loopback restriction for router); otherwise unix default preserved. Default when `management_socket` absent or a filesystem path: unix (existing behavior unchanged). AC-008 correction: current postconditions only assert config acceptance + INFO log; must also assert a real TCP bind and a real TCP connection succeed. Corrected postconditions and new test names specified. Summary table `Router TCP mgmt listener` row updated. F-1/F-2 interaction note added (async push: Decision 4 permit applies; the dial-on-demand connect in `pushRPC` is unaffected by the network-selection change — both changes are independent and compose cleanly). |
 | 1.2 | 2026-07-16 | Contradiction fix: Ruling 1 / Decision 2 wire encoding of `svtn_id` corrected from "SVTN name string" to "32 lowercase hex characters encoding the 16-byte `[16]byte` UUID". Code-verified facts: (1) `SVTN.ID` is `crypto/rand`-generated at `svtnmgmt.go:197–199`, not name-derived; (2) `hmac.DeriveKey` (`hmac.go:130`) and `frame.DeriveNodeAddress` (`address.go:11`) both consume the exact `[16]byte` as salt/input — any mismatch produces wrong FrameAuthKey/NodeAddr, defeating `AdmitNode`; (3) `runRouter` (`mgmt_wire.go:491`) constructs no `SVTNManager`, so the router has no name→ID map; (4) `makeRegisterHandler` (`admin_handlers.go:185`) holds `m *svtnmgmt.SVTNManager` with `SVTNByName(name) (SVTN, bool)` at `svtnmgmt.go:608` — control resolves name→ID before putting anything on the wire. `admissionSyncer` interface updated to take `svtnID [16]byte` instead of `svtnName string` (Decision 5 / Ruling 2); admin handlers resolve name→ID at the call site via `m.SVTNByName`. Summary table `svtn_id` row updated. All other rulings unchanged. |
 | 1.1 | 2026-07-15 | Ruling 9 added: router TCP mgmt listener security posture resolved by human ratification; summary table updated; story confirmed decomposition-ready (POL-001). |
 | 1.0 | 2026-07-15 | Initial elaboration rulings — Rulings 1–8. |
@@ -647,7 +648,7 @@ interaction is needed.
 | Control config field | `RouterManagementEndpoints []RouterManagementEndpoint` in `config.Config`, twin of `UpstreamRouters` |
 | Control dial direction | Control dials routers (TCP); dial-on-demand per push event; retry-with-backoff; no persistent idle connection |
 | Push-failure behavior | Log WARN; never roll back control write; next startup push will resync |
-| Router TCP mgmt listener | Router needs a TCP mgmt endpoint; configured by pointing `management_socket` at a TCP `host:port` in the router's config; control's `RouterManagementEndpoints` references this address |
+| Router TCP mgmt listener | Auto-detect on `management_socket`: if value parses as a valid `host:port` (validateHostPort passes), bind TCP without loopback restriction; otherwise bind unix (default preserved). Default absent/filesystem-path → unix (existing behavior). See Ruling 10. |
 | Router config field | `AdmissionStateFile string` in `config.Config` |
 | Snapshot format | JSON; `schema_version: 1`; fields: svtn_id (32 lowercase hex chars = 16-byte UUID `[16]byte`), pubkey (base64url), role, revoked, expiry; no admitted, no FrameAuthKey, no NodeAddr (all derived) |
 | Snapshot write | Atomic: write temp + rename; on each successful push-handler invocation |
@@ -657,6 +658,8 @@ interaction is needed.
 | ARCH-08 impact | None; all new code in cmd/switchboard (position 18) |
 | ARCH-01 WaitGroup | Standard F-DWIP3-001 pattern if background goroutine used; otherwise no WaitGroup needed |
 | Router TCP mgmt listener security posture | RESOLVED (human ratified 2026-07-15): permit any bind address; challenge-response is the auth boundary; no loopback restriction; startup log of bind address required (advisory); see Ruling 9 |
+| Router TCP mgmt listener bind mechanism | Auto-detect: `validateHostPort(management_socket)` passes → TCP (no loopback guard); fails → unix. Default absent/filesystem-path → unix. `mgmtNetwork` / `buildMgmtListener` are config-driven for router mode. See Ruling 10. |
+| AC-008 correction | Must add TCP bind assertion + TCP dial success to postconditions; two new test names specified. See Ruling 10 §AC-008 Correction. |
 | Open human flags | None — story is decomposition-ready |
 
 ---
@@ -701,3 +704,227 @@ The story's acceptance criteria must include:
 This was the last open human-decision flag in this rulings document.
 **All AC-prerequisites are now satisfied. The story S-BL.ADMISSION-SYNC-WIRE
 is decomposition-ready — zero open flags remain.**
+
+---
+
+## Ruling 10 — Router TCP management listener: `mgmtNetwork` / `buildMgmtListener` binding mechanism (F-2 fix)
+
+### Defect confirmed (code-verified)
+
+Fresh-context adversary pass (2026-07-17) filed F-2 (HIGH, feature-blocking). The
+following code facts were independently verified by the architect before issuing
+this ruling:
+
+| Fact | Location | Verified |
+|------|----------|---------|
+| `mgmtNetwork(mode)` returns `"tcp"` only for `"console"`; all other modes (including `"router"`) return `"unix"` | `mgmt_wire.go:159–164` | Confirmed |
+| `buildMgmtListener` TCP branch (loopback guard) is only reachable when `mgmtNetwork` returns `"tcp"` — never for router mode | `mgmt_wire.go:185–209` | Confirmed |
+| `admission_sync_client.go` always dials `"tcp"` (`dialer.DialContext(ctx, "tcp", addr)`) | `admission_sync_client.go:142` | Confirmed |
+| `validateHostPort` uses `net.SplitHostPort` + numeric port in [0,65535]; available in `internal/config` | `config.go:401–418` | Confirmed |
+| All existing router tests supply filesystem socket paths via `tempSockPath(t)` (e.g. `/tmp/sb-XXXXX/m.sock`); `net.SplitHostPort` fails on filesystem paths → auto-detect does not change existing test behavior | `router_sighup_test.go`, `router_control_wire_test.go`, `router_drain_test.go`, `admission_sync_test.go` | Confirmed — zero blast radius |
+
+**Net effect of gap:** operator sets router `management_socket: "0.0.0.0:9093"` →
+`resolveManagementSocket` returns `"0.0.0.0:9093"` → `mgmtNetwork("router")` returns
+`"unix"` → `listenUnixMgmt("0.0.0.0:9093")` tries to bind a unix socket at a
+nonsense path → bind fails or creates a garbage inode. Control dials TCP port 9093
+→ connection refused. Routers never receive pushes. `admission.AdmitNode` returns
+`ErrNotAdmitted` for all nodes. The story's entire purpose is defeated.
+
+### Chosen mechanism: auto-detect via `validateHostPort` (Candidate A, extended)
+
+**RULING: `mgmtNetwork` and `buildMgmtListener` are made config-driven for router
+mode by testing whether the effective `management_socket` value is a valid
+`host:port`.**
+
+**Mechanism (precise):**
+
+1. `mgmtListenAddr(cfg, mode)` already calls `resolveManagementSocket` then
+   `mgmtNetwork`. Change `mgmtNetwork` to accept the resolved address as an
+   additional input, OR (preferred, avoids signature churn) inline the detection
+   in `mgmtListenAddr`:
+
+   ```go
+   func mgmtListenAddr(cfg *config.Config, mode string) (network, address string) {
+       address = resolveManagementSocket(cfg, mode)
+       if mode == "console" {
+           return "tcp", address
+       }
+       // Router (and other unix-default modes): if the resolved address is a
+       // valid host:port, bind TCP. Otherwise bind unix.
+       // This is the Ruling 10 auto-detect for router-mode TCP management
+       // (S-BL.ADMISSION-SYNC-WIRE F-2 fix). Uses the existing validateHostPort
+       // helper from internal/config — no new parsing logic.
+       if validateHostPort(address) == nil {
+           return "tcp", address
+       }
+       return "unix", address
+   }
+   ```
+
+   `validateHostPort` is already imported via `internal/config` from this package
+   (`cmd/switchboard` imports `internal/config`). The function is package-private
+   in `internal/config`; it must be promoted to exported, or the detection must
+   be inlined using `net.SplitHostPort` + numeric-port check directly in
+   `mgmt_wire.go`. Either is acceptable; the implementer chooses the cleaner path.
+   **Preference: inline the equivalent check in `mgmt_wire.go` to avoid exporting
+   an internal-config helper solely for this call site.** Inline form:
+   ```go
+   _, portStr, err := net.SplitHostPort(address)
+   isTCP := err == nil && portStr != "" // non-empty port = valid host:port
+   ```
+
+2. `buildMgmtListener` already branches on `network == "unix"` vs TCP. The TCP
+   branch currently enforces `isMgmtLoopbackHost` — **this guard MUST NOT be
+   applied to router mode** (Ruling 9). Add a `mode` parameter to
+   `buildMgmtListener`, or thread the information through `mgmtListenAddr`. The
+   simplest implementation: check `mode != "console"` in the TCP branch to skip
+   the loopback guard for router-mode TCP listeners:
+
+   ```go
+   func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
+       network, address := mgmtListenAddr(cfg, mode)
+       if network == "unix" {
+           ln, err := listenUnixMgmt(address)
+           if err != nil {
+               return nil, fmt.Errorf("buildMgmtListener: %w", err)
+           }
+           return ln, nil
+       }
+       // TCP. Loopback restriction applies ONLY to console mode (VP-073 /
+       // BC-2.07.004 EC-013 / Ruling D). Router-mode TCP listeners are
+       // explicitly NOT loopback-restricted (Ruling 9 / S-BL.ADMISSION-SYNC-WIRE).
+       if mode == "console" {
+           host, _, splitErr := net.SplitHostPort(address)
+           if splitErr != nil {
+               return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
+           }
+           if !isMgmtLoopbackHost(host) {
+               return nil, fmt.Errorf("E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+           }
+       }
+       ln, err := net.Listen(network, address)
+       if err != nil {
+           return nil, fmt.Errorf("buildMgmtListener: %w", err)
+       }
+       return ln, nil
+   }
+   ```
+
+3. **Default when `management_socket` is absent or is a filesystem path:**
+   `resolveManagementSocket` returns the mode-specific default
+   (`mgmtDefaultSocket("router")` = `"/run/switchboard-router.sock"`). A
+   filesystem path fails `net.SplitHostPort` (missing colon or non-numeric port)
+   → `isTCP = false` → `mgmtListenAddr` returns `"unix"`. **Existing unix-socket
+   behavior is fully preserved.** All existing tests pass unchanged.
+
+4. **`mgmtNetwork(mode string) string` is currently exported by name to tests.**
+   The `TestMgmtDefaultSocket_PerMode` test in `mgmt_wire_test.go` does NOT call
+   `mgmtNetwork` directly (it only calls `mgmtDefaultSocket`). A grep confirms
+   no test calls `mgmtNetwork` by name. Safe to refactor its signature or collapse
+   it into `mgmtListenAddr` without breaking existing tests.
+
+### Blast-radius mitigation
+
+- All existing router-mode tests use `tempSockPath(t)` filesystem paths.
+  `net.SplitHostPort("/tmp/sb-*/m.sock")` fails → auto-detect returns `"unix"`.
+  No existing test behavior changes.
+- Console mode is unaffected: the `mode == "console"` branch in `mgmtNetwork` and
+  in `buildMgmtListener` is preserved exactly as today.
+- Control/access modes: default to unix (no change). Neither dials their own
+  mgmt socket; they use it only as a listener.
+
+### Loopback-guard applicability
+
+Router-mode TCP management listeners: **NO loopback guard** (Ruling 9, already
+ratified 2026-07-15). The `isMgmtLoopbackHost` check is console-only.
+
+### F-1 / F-2 interaction note
+
+F-1 (push is synchronous in admin handler goroutine, can block past sbctl 5s
+deadline when a router is unreachable): Ruling 2 / Decision 4 already permit
+async background push via the ARCH-01 WaitGroup contract. The implementer will
+move `pushWithRetry` calls to a WaitGroup-tracked background goroutine.
+
+F-2 (router binds unix instead of TCP): the fix changes which network
+`buildMgmtListener` uses to open the router's management listener. This is
+entirely server-side (router). The client (`pushRPC`) always dials TCP; this
+does not change.
+
+**The two fixes compose cleanly and are independent.** F-2 must be merged first
+(or together with F-1) because without a TCP listener the async push goroutines
+would connect-refuse on every attempt. With F-2 in place the listener is TCP; the
+F-1 async goroutine dials it successfully. No ordering constraint beyond: "F-2
+unblocks F-1's retry path."
+
+### AC-008 correction
+
+The current AC-008 postconditions are:
+
+1. A `router_management_endpoints` entry with `addr: "0.0.0.0:9093"` is accepted
+   by `Config.Validate()` without error.
+2. Startup INFO log emitted: `"router management listener bound to <addr> ..."`.
+3. The INFO log is inspectable in integration tests.
+
+**These postconditions are INSUFFICIENT.** They do not assert that the router
+actually binds a TCP listener or that a TCP connection to it succeeds. A router
+can emit the INFO log string unconditionally (and currently does, at
+`mgmt_wire.go:789–799`) while the listener is still a unix socket. Both existing
+AC-008 tests (`TestRouterMgmtListener_NonLoopbackBindAccepted` and
+`TestRouterMgmtListener_StartupInfoLog_BindAddress`) can pass while the feature
+remains non-functional.
+
+**Corrected AC-008 postconditions (replace the existing three):**
+
+1. **Config acceptance (unchanged):** A `router_management_endpoints` entry with
+   `addr: "0.0.0.0:9093"` (non-loopback) is accepted by `Config.Validate()`
+   without error (no `isMgmtLoopbackHost` guard — Ruling 9).
+
+2. **TCP bind assertion:** When `management_socket` is set to a `host:port` value
+   (e.g. `"127.0.0.1:<ephemeral>"`), `runRouter` opens a TCP management listener
+   on that address. Verified by: after `runRouter` starts, `net.DialTimeout("tcp",
+   addr, ...)` succeeds (connection accepted or immediately closed — a TCP
+   connection is established, not "connection refused").
+
+3. **TCP dial end-to-end (mgmt handshake):** A real `admissionSyncClient` pointing
+   at the router's TCP management address can complete the ADR-012
+   challenge-response handshake and send an `internal.admission.register` RPC
+   that the router's `AdmittedKeySet` receives. This is the functional test that
+   the push path works end-to-end.
+
+4. **Startup INFO log (unchanged):** The startup INFO log
+   `"router management listener bound to <addr> (ensure firewall policy restricts
+   access as appropriate)"` is emitted with the resolved bind address.
+
+5. **Unix default preserved:** When `management_socket` is absent or set to a
+   filesystem path, `runRouter` binds a unix socket (existing behavior
+   unaffected).
+
+**Corrected test names (replace existing two; add two new):**
+
+| Test name | What it asserts |
+|-----------|----------------|
+| `TestRouterMgmtListener_NonLoopbackBindAccepted` | Postcondition 1 — config accepts non-loopback addr (unchanged) |
+| `TestRouterMgmtListener_StartupInfoLog_BindAddress` | Postcondition 4 — INFO log emitted (unchanged) |
+| `TestRouterMgmtListener_TCPBind_ConnectionSucceeds` | Postcondition 2 — `net.Dial("tcp", addr)` succeeds after runRouter starts with a TCP management_socket; verifies listener is genuinely TCP, not unix |
+| `TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds` | Postcondition 3 — real admissionSyncClient pushes an internal.admission.register RPC to a runRouter instance started with a TCP management_socket; routerKS receives the entry |
+
+The two new tests (`TCPBind_ConnectionSucceeds`, `TCPBind_PushHandshakeSucceeds`)
+are the minimal assertions that close the functional gap. Both use a loopback
+`host:port` (e.g. `"127.0.0.1:0"` with `net.Listen("tcp", "127.0.0.1:0")` to
+obtain an ephemeral port) to avoid port-conflict flakiness in CI.
+
+`TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter` (AC-009) already
+exercises the push handshake against a TCP listener (`startRouterMgmtServerTCP`)
+but uses a manually constructed mgmt.Server — it does not exercise the
+`mgmtListenAddr` auto-detect path. The new `TCPBind_PushHandshakeSucceeds` test
+closes this by going through `runRouter` directly.
+
+### Downstream propagation list
+
+The story-writer and PO need the following edits (architect does NOT touch these;
+routing is the orchestrator's responsibility):
+
+| Artifact | Edit needed |
+|----------|-------------|
+| `.factory/stories/S-BL.ADMISSION-SYNC-WIRE.md` | (a) Update `decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md` binding comment in frontmatter to `v1.3`; (b) replace AC-008 postconditions 1–3 with the corrected five postconditions above; (c) add test names `TestRouterMgmtListener_TCPBind_ConnectionSucceeds` and `TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds` to AC-008; (d) add implementation task: update `mgmtListenAddr` (or `mgmtNetwork`) to auto-detect TCP vs unix on `management_socket`; update `buildMgmtListener` to skip loopback guard for non-console TCP. |
+| `BC-2.09.003` (or story Decision 8 section) | Confirm PC-14 postcondition language covers the TCP-bind behavior (not just config acceptance). Story decision section may need a note that "router binds TCP when management_socket is a host:port" is now explicit, not merely implied. |
