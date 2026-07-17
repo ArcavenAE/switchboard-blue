@@ -19,7 +19,6 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -240,11 +239,3 @@ func makeAdmissionRemoveSVTNHandler(ks *admission.AdmittedKeySet, snapshotPath s
 	}
 }
 
-// decodePublicKeyForSync decodes an Ed25519 public key from base64url no-padding
-// (the format used in internal.admission.* wire encoding, BC-2.05.009 Inv-4).
-// Falls back to decodePublicKey (which handles OpenSSH format too) for parity.
-//
-// This is an alias for the existing decodePublicKey function in admin_handlers.go,
-// included here for documentation clarity about the wire encoding used by
-// internal.admission.* commands. Both formats are accepted.
-var _ = ed25519.PublicKey(nil) // ensure ed25519 import is used
