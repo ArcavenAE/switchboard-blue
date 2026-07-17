@@ -1777,17 +1777,75 @@ func TestRouterMgmtListener_StartupInfoLog_BindAddress(t *testing.T) {
 
 // ── AC-009: PushFullSnapshot on control startup ───────────────────────────────
 
+// startRouterMgmtServerTCP starts an in-process router-side mgmt.Server on a
+// real TCP loopback listener with wireAdmissionSyncHandlers registered. The
+// control daemon's public key is in the OperatorKeySet so that the
+// admissionSyncClient (which authenticates using the control's private key) can
+// pass the challenge-response handshake.
+//
+// Returns the TCP address (127.0.0.1:<port>), the router's AdmittedKeySet, and
+// a cleanup function. NOT t.Parallel safe: creates real sockets.
+func startRouterMgmtServerTCP(t *testing.T, controlPub ed25519.PublicKey, routerKS *admission.AdmittedKeySet) string {
+	t.Helper()
+
+	// Bind on an ephemeral port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("startRouterMgmtServerTCP: listen: %v", err)
+	}
+
+	_, routerPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		_ = ln.Close()
+		t.Fatalf("startRouterMgmtServerTCP: generate router keypair: %v", err)
+	}
+
+	// Authorize the control daemon's public key so pushRPC handshake succeeds.
+	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{controlPub})
+
+	srv := mgmt.NewServer(ln, routerPriv, ops, nil, "dev",
+		mgmt.WithHandshakeTimeout(3*time.Second),
+		mgmt.WithRPCIdleTimeout(5*time.Second),
+	)
+
+	if err := wireAdmissionSyncHandlers(srv, routerKS, ""); err != nil {
+		_ = ln.Close()
+		t.Fatalf("startRouterMgmtServerTCP: wireAdmissionSyncHandlers: %v", err)
+	}
+
+	addr := ln.Addr().String()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = srv.Serve(ctx)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = srv.Shutdown(shutCtx)
+		shutCancel()
+		<-done
+	})
+	return addr
+}
+
 // TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter verifies that
 // admissionSyncClient.PushFullSnapshot(ctx) pushes all keyset entries to the
-// configured router via internal.admission.register RPCs.
+// configured router via internal.admission.register RPCs, and that the router's
+// AdmittedKeySet receives the pushed entries.
 //
-// BC-2.05.009 PC-7; S-BL.ADMISSION-SYNC-WIRE AC-009.
-// Red Gate: FAILS — PushFullSnapshot returns errAdmissionSyncNotImplemented.
+// BC-2.05.009 PC-7; S-BL.ADMISSION-SYNC-WIRE AC-009 / F-4 fix.
 //
-// Integration test: two in-process mgmt.Server instances (control + router).
+// Integration test: a real in-process router mgmt.Server is started on a loopback
+// TCP listener. A real admissionSyncClient dials that listener, completes the
+// ADR-012 challenge-response handshake, and pushes the control-side keyset.
+// The test asserts that routerKS.ListBySVTN contains the pushed entry.
+// This test FAILS if pushRPC's handshake or envelope is broken.
+//
+// NOT t.Parallel: creates real TCP listeners and sockets.
 func TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter(t *testing.T) {
-	// NOT t.Parallel: uses two in-process mgmt.Server instances with real sockets.
-
 	// Build a control-side AdmittedKeySet with a known entry.
 	controlKS := admission.NewAdmittedKeySet()
 	var svtnID [16]byte
@@ -1800,81 +1858,68 @@ func TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter(t *testing.T) {
 	}
 	controlKS.RegisterKey(svtnID, pub, admission.RoleAccess)
 
+	// Generate the control daemon's keypair — this is what the admissionSyncClient
+	// uses to authenticate against the router's OperatorKeySet.
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
 	// Build router-side AdmittedKeySet (starts empty).
 	routerKS := admission.NewAdmittedKeySet()
 
-	// Start a router-side mgmt.Server with wireAdmissionSyncHandlers registered.
-	routerSocketPath, _, _ := startAdmissionSyncWireServer(t, routerKS, "")
+	// Start a REAL router mgmt.Server on a TCP loopback listener.
+	// controlPub is in the router's OperatorKeySet so the handshake succeeds.
+	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
 
-	// Wait for router server to be ready.
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(routerSocketPath); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if _, err := os.Stat(routerSocketPath); os.IsNotExist(err) {
-		t.Fatal("AC-009: router server socket not created within 1s")
-	}
-
-	// Build an admissionSyncClient pointing at the router's Unix socket.
-	// The router management endpoint uses TCP in production; for this test
-	// we use the TCP-based mgmt.Server helper to avoid Unix socket address
-	// restrictions. But since startAdmissionSyncWireServer uses Unix sockets
-	// and admissionSyncClient dials TCP (production path), we need a different
-	// approach: use a mock syncer here and verify the call count.
-	//
-	// We verify that PushFullSnapshot calls PushRegisterKey for each entry
-	// by using a mock syncer and asserting call count == keyset entry count.
-	sync := &mockSyncer{}
+	// Build a REAL admissionSyncClient pointing at the router's TCP address.
 	client := newAdmissionSyncClient(
-		[]config.RouterManagementEndpoint{{Addr: "127.0.0.1:0"}}, // placeholder — won't actually dial
-		make(ed25519.PrivateKey, ed25519.PrivateKeySize),         // placeholder key
+		[]config.RouterManagementEndpoint{{Addr: routerAddr}},
+		controlPriv, // authenticates as the control daemon
 	)
-	_ = client // client stub returns errAdmissionSyncNotImplemented
 
-	// Direct test: PushFullSnapshot on admissionSyncClient calls Push* for each entry.
-	// Since the real client dials TCP (stub returns not-implemented), we test
-	// via the mock path: verify PushFullSnapshot on a mock syncer calls PushRegisterKey.
-	// However, PushFullSnapshot is only on *admissionSyncClient, not on admissionSyncer.
-	// We test the method directly.
-	ctx := context.Background()
-	err = client.PushFullSnapshot(ctx, controlKS)
-	// Red Gate: err must be errAdmissionSyncNotImplemented.
-	if err == nil {
-		t.Fatal("AC-009: PushFullSnapshot returned nil error (stub should return not-implemented). " +
-			"Once implemented: PushFullSnapshot must push all keyset entries.")
-		return
-	}
-	if !errors.Is(err, errAdmissionSyncNotImplemented) {
-		// PushFullSnapshot has been partially implemented but is producing a different error.
-		t.Logf("AC-009: PushFullSnapshot returned unexpected error: %v (expected errAdmissionSyncNotImplemented)", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// PushFullSnapshot must push all keyset entries to the router.
+	// This exercises the ACTUAL pushRPC handshake path.
+	if err := client.PushFullSnapshot(ctx, controlKS); err != nil {
+		t.Fatalf("AC-009 AllEntriesPushedToRouter: PushFullSnapshot returned error: %v "+
+			"(expected nil — real router server is up, handshake should succeed)", err)
 	}
 
-	// The stub returns errAdmissionSyncNotImplemented — assert it's the stub sentinel
-	// rather than a real implementation error. We explicitly FAIL here to lock the
-	// Red Gate: PushFullSnapshot must return nil (no error) once implemented with
-	// a populated keyset that has all entries pushed.
-	//
-	// Red Gate assertion: if PushFullSnapshot returns errAdmissionSyncNotImplemented,
-	// the implementation has not been written yet. FAIL to ensure Red Gate.
-	if errors.Is(err, errAdmissionSyncNotImplemented) {
-		t.Errorf("AC-009 AllEntriesPushedToRouter: PushFullSnapshot returned errAdmissionSyncNotImplemented. "+
-			"Red Gate: PushFullSnapshot is a stub. Once implemented, it must push all "+
-			"keyset entries (via PushRegisterKey) and return nil on success. err=%v", err)
+	// AC-009 core assertion: the router's AdmittedKeySet must contain the pushed entry.
+	entries := routerKS.ListBySVTN(svtnID)
+	if len(entries) == 0 {
+		t.Fatalf("AC-009 AllEntriesPushedToRouter: routerKS has no entries for SVTN %s "+
+			"after PushFullSnapshot — the internal.admission.register RPC must have been "+
+			"received and processed by the router server",
+			svtnIDToHex(svtnID))
 	}
-	_ = sync // lint: mock available for future use
+	found := false
+	for _, e := range entries {
+		if string(e.PublicKey) == string(pub) {
+			found = true
+			// admitted must be false (challenge-response not done)
+			if routerKS.IsAdmitted(svtnID, e.NodeAddr) {
+				t.Error("AC-009: router entry admitted=true after PushFullSnapshot; must be false (no challenge-response)")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("AC-009 AllEntriesPushedToRouter: pubkey not found in router keyset after PushFullSnapshot "+
+			"(pushed SVTN=%s)", svtnIDToHex(svtnID))
+	}
 }
 
 // TestAdmissionSync_PushFullSnapshot_ExpiryPushed verifies that PushFullSnapshot
-// also issues internal.admission.expire for entries with non-zero expiry.
+// also issues internal.admission.expire for entries with non-zero expiry, and that
+// the router's AdmittedKeySet records the correct expiry.
 //
-// BC-2.05.009 PC-7; S-BL.ADMISSION-SYNC-WIRE AC-009.
-// Red Gate: FAILS — PushFullSnapshot not implemented.
+// BC-2.05.009 PC-7; S-BL.ADMISSION-SYNC-WIRE AC-009 / F-4 fix.
+//
+// NOT t.Parallel: creates real TCP listeners.
 func TestAdmissionSync_PushFullSnapshot_ExpiryPushed(t *testing.T) {
-	t.Parallel()
-
 	controlKS := admission.NewAdmittedKeySet()
 	var svtnID [16]byte
 	if _, err := rand.Read(svtnID[:]); err != nil {
@@ -1886,36 +1931,61 @@ func TestAdmissionSync_PushFullSnapshot_ExpiryPushed(t *testing.T) {
 	}
 	controlKS.RegisterKey(svtnID, pub, admission.RoleAccess)
 
-	// Set an expiry on the key using SetKeyExpiry directly.
+	// Set an expiry on the key.
 	entries := controlKS.ListBySVTN(svtnID)
 	if len(entries) == 0 {
 		t.Fatal("no entries after RegisterKey")
 	}
-	expiry := time.Now().UTC().Add(24 * time.Hour)
-	if err := controlKS.SetKeyExpiry(svtnID, entries[0].NodeAddr, expiry); err != nil {
+	wantExpiry := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
+	if err := controlKS.SetKeyExpiry(svtnID, entries[0].NodeAddr, wantExpiry); err != nil {
 		t.Fatalf("SetKeyExpiry: %v", err)
 	}
 
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	routerKS := admission.NewAdmittedKeySet()
+	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
+
 	client := newAdmissionSyncClient(
-		[]config.RouterManagementEndpoint{{Addr: "127.0.0.1:0"}},
-		make(ed25519.PrivateKey, ed25519.PrivateKeySize),
+		[]config.RouterManagementEndpoint{{Addr: routerAddr}},
+		controlPriv,
 	)
 
-	ctx := context.Background()
-	err = client.PushFullSnapshot(ctx, controlKS)
-	if err == nil {
-		// PushFullSnapshot succeeded but expiry push behavior not yet verified.
-		// Once implemented, must also call PushSetKeyExpiry — assert below.
-		// For now, this is a PASS that should fail once implementation is written
-		// because we haven't verified expiry was pushed.
-		t.Logf("AC-009 ExpiryPushed: PushFullSnapshot returned nil — if implemented, verify expiry was also pushed")
-		return
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := client.PushFullSnapshot(ctx, controlKS); err != nil {
+		t.Fatalf("AC-009 ExpiryPushed: PushFullSnapshot returned error: %v", err)
 	}
-	// Red Gate: stub returns errAdmissionSyncNotImplemented.
-	if errors.Is(err, errAdmissionSyncNotImplemented) {
-		t.Errorf("AC-009 ExpiryPushed: PushFullSnapshot returned errAdmissionSyncNotImplemented. "+
-			"Red Gate: stub. Once implemented, must push internal.admission.expire for entries "+
-			"with non-zero expiry in addition to internal.admission.register. err=%v", err)
+
+	// Assert: the router's keyset has the entry with expiry propagated.
+	routerEntries := routerKS.ListBySVTN(svtnID)
+	if len(routerEntries) == 0 {
+		t.Fatal("AC-009 ExpiryPushed: routerKS has no entries after PushFullSnapshot")
+	}
+	found := false
+	for _, e := range routerEntries {
+		if string(e.PublicKey) == string(pub) {
+			found = true
+			gotExpiry := e.KeyExpiry()
+			if gotExpiry.IsZero() {
+				t.Error("AC-009 ExpiryPushed: router entry has zero expiry after PushFullSnapshot — " +
+					"PushFullSnapshot must also push internal.admission.expire for entries with non-zero expiry")
+			} else {
+				// Allow up to 2s drift (TTL computation in PushSetKeyExpiry uses time.Until).
+				diff := gotExpiry.Sub(wantExpiry)
+				if diff < -2*time.Second || diff > 2*time.Second {
+					t.Errorf("AC-009 ExpiryPushed: router entry expiry=%v; want ~%v (diff %v too large)",
+						gotExpiry, wantExpiry, diff)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("AC-009 ExpiryPushed: pubkey not found in router entries after PushFullSnapshot")
 	}
 }
 
