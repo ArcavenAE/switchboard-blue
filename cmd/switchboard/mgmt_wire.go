@@ -790,13 +790,10 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// router management listener bind address so operators can verify the
 		// address and apply appropriate firewall policy. No loopback restriction
 		// (Ruling 9 of S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.2).
-		if len(cfg.RouterManagementEndpoints) > 0 {
-			for _, ep := range cfg.RouterManagementEndpoints {
-				_, _ = fmt.Fprintf(w, "switchboard router: router management listener bound to %s (ensure firewall policy restricts access as appropriate)\n", ep.Addr)
-			}
-		} else {
-			_, _ = fmt.Fprintf(w, "switchboard router: router management listener bound to %s (ensure firewall policy restricts access as appropriate)\n", resolveManagementSocket(cfg, "router"))
-		}
+		// F-3 fix: always log the router's ACTUAL bound management_socket, never
+		// the control-side RouterManagementEndpoints field (which lists OTHER
+		// routers, not this router's own listener address — AC-008 PC-2/PC-4).
+		_, _ = fmt.Fprintf(w, "switchboard router: router management listener bound to %s (ensure firewall policy restricts access as appropriate)\n", resolveManagementSocket(cfg, "router"))
 		// BC-2.09.003 PC-7 application: drain_timeout emitted at startup so
 		// operators can confirm the resolved value (config or default).
 		_, _ = fmt.Fprintf(w, "switchboard router: drain_timeout=%s\n", drainCoord.Timeout())
