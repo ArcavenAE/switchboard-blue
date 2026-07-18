@@ -182,6 +182,14 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		return fmt.Errorf("access: construct management server: %w", mgmtErr)
 	}
 
+	// F-4 / AC-012 PC-4 / BC-2.09.003 v2.2 PC-11b / Ruling 12: emit INFO log for the
+	// access management listener bind address. Mirrors the router bind log at runRouter:825
+	// and the control bind log at runControl:1229.
+	if stderr != nil {
+		_, _ = fmt.Fprintf(stderr, "switchboard access: access management listener bound to %s\n",
+			resolveManagementSocket(cfg, "access"))
+	}
+
 	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
 	// Moved above Phase (b) so the Router is available to wireMetricsHandlers as
 	// the source-of-PathTracker registrations (S-BL.PATH-TRACKER-WIRING).
