@@ -29,7 +29,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -114,23 +117,77 @@ type adminKeyEntry struct {
 // operator keys configured; bootstrap mode uses the daemon's own key via
 // SVTNManager.IsBootstrapKey).
 //
+// syncClient is the admissionSyncer used to push admission-state changes to
+// configured router endpoints after each successful write operation
+// (S-BL.ADMISSION-SYNC-WIRE; BC-2.05.009 Ruling 2). A nil value is explicitly
+// permitted and means "no push replication" — router, console, and access modes
+// pass nil; only control mode passes a non-nil *admissionSyncClient.
+//
+// pushWG, when non-nil, causes each push to be dispatched to a background
+// goroutine tracked by the WaitGroup (ARCH-01 §Goroutine WaitGroup Contract /
+// F-1 fix: admin RPC returns immediately without waiting for the push to
+// complete, so sbctl never times out due to an unreachable router). The caller
+// (runControl) owns the WaitGroup and drains it at shutdown.
+//
+// When pushWG is nil, pushes are called synchronously in the handler — this is
+// used by tests that inspect mockSyncer.calls immediately after the RPC returns.
+//
+// controlSnapshotPath is the path to the control-mode keyset snapshot file
+// (S-BL.ADMISSION-SYNC-WIRE AC-011 / Ruling 11 / BC-2.09.003 v2.2 PC-15).
+// When non-empty, the handlers persist the keyset SYNCHRONOUSLY (under a shared
+// mutex — F-4A fix / BC-2.05.010 Invariant 1) before dispatching the push.
+// Write failure is advisory (no rollback; handler returns success).
+// Router/console/access modes pass "" (empty).
+//
 // Only the control-mode daemon should call BuildAdminHandlers. All other
 // daemon modes pass nil (or an empty slice) for admin commands so that they
 // correctly return E-RPC-010 "unknown command" (ADR-004; AC-004).
-func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) []mgmt.Handler {
+func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer, pushWG *sync.WaitGroup, controlSnapshotPath ...string) []mgmt.Handler {
+	// Extract optional controlSnapshotPath (variadic to avoid breaking callers
+	// that do not supply the path — router/console/access pass no path).
+	var snapshotPath string
+	if len(controlSnapshotPath) > 0 {
+		snapshotPath = controlSnapshotPath[0]
+	}
+	// Pass nil writer: production code without an injected writer falls back to
+	// os.Stderr inside buildAdminHandlersCore (LOW-1 / backward-compat).
+	// runControl passes its own writer via buildAdminHandlersCore directly.
+	return buildAdminHandlersCore(m, ops, syncClient, pushWG, snapshotPath, nil)
+}
+
+// buildAdminHandlersCore is the unexported implementation shared by
+// BuildAdminHandlers and runControl.
+//
+// w is the io.Writer for advisory push-failure WARNs and controlPersister
+// snapshot-write WARNs (LOW-1 / F-3 fix). When nil, sinks fall back to
+// os.Stderr (backward-compat for callers that do not inject a writer).
+// runControl passes its w so WARNs appear in the same log stream as other
+// control-daemon output; tests pass a *strings.Builder to capture WARNs.
+//
+// F-4A fix: shared controlPersister mutex serialises all four write handlers.
+func buildAdminHandlersCore(
+	m *svtnmgmt.SVTNManager,
+	ops *mgmt.OperatorKeySet,
+	syncClient admissionSyncer,
+	pushWG *sync.WaitGroup,
+	snapshotPath string,
+	w io.Writer,
+) []mgmt.Handler {
 	if m == nil {
 		panic("BuildAdminHandlers: SVTNManager must not be nil (EC-004)")
 	}
 	if ops == nil {
 		ops = mgmt.NewOperatorKeySet(nil)
 	}
+	// F-4A fix: shared persist mutex; LOW-1: writer injected here.
+	p := newControlPersister(snapshotPath, w)
 	return []mgmt.Handler{
-		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops)},
-		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops)},
-		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops)},
+		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops, syncClient, pushWG, p, w)},
+		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops, syncClient, pushWG, p, w)},
+		{Command: "admin.key.expire", Fn: makeExpireHandler(m, ops, syncClient, pushWG, p, w)},
 		{Command: "admin.key.list-keys", Fn: makeListKeysHandler(m, ops)},
 		{Command: "admin.svtn.create", Fn: makeAdminSVTNCreateHandler(m, ops)},
-		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops)},
+		{Command: "admin.svtn.destroy", Fn: makeAdminSVTNDestroyHandler(m, ops, syncClient, pushWG, p, w)},
 		{Command: "admin.svtn.status", Fn: makeAdminSVTNStatusHandler(m, ops)},
 	}
 }
@@ -180,9 +237,58 @@ func decodePublicKey(encoded string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(raw), nil
 }
 
+// warnWriter returns the writer to use for advisory WARN logs.
+// When w is non-nil it is used directly (injected writer — LOW-1 fix).
+// When w is nil the fallback is os.Stderr (backward-compat for callers that
+// do not inject a writer, e.g. BuildAdminHandlers with no writer supplied).
+// DI-002: callers must never include private key material in these logs.
+func warnWriter(w io.Writer) io.Writer {
+	if w != nil {
+		return w
+	}
+	return os.Stderr
+}
+
+// dispatchPush executes fn, either synchronously (when wg is nil) or in a
+// background goroutine tracked by wg (ARCH-01 §Goroutine WaitGroup Contract).
+// When async: wg.Add(1) is called before launching the goroutine; the goroutine
+// calls defer wg.Done() as its first action so the WaitGroup is correct even if
+// the goroutine panics. The goroutine uses context.WithoutCancel(ctx) so an
+// immediately-cancelled ctx (e.g. from a handler's context being released before
+// the goroutine executes) does not short-circuit the push. The caller (runControl)
+// drains the WaitGroup at shutdown to avoid goroutine leaks.
+//
+// This is the F-1 fix: admin RPCs return to sbctl before the push completes,
+// preventing spurious timeouts when a router is temporarily unreachable
+// (BC-2.05.009 PC-2 / Decision 4 / Ruling 2).
+func dispatchPush(ctx context.Context, wg *sync.WaitGroup, fn func(context.Context)) {
+	if wg == nil {
+		// Synchronous path — used by tests that inspect mockSyncer.calls immediately.
+		fn(ctx)
+		return
+	}
+	// Async path — ARCH-01 §Goroutine WaitGroup Contract.
+	// wg.Add(1) MUST happen synchronously before launching the goroutine so
+	// that a caller who calls wg.Wait() immediately after this function returns
+	// will always see the goroutine as in-flight.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Use WithoutCancel so the push completes even if the handler's request
+		// context is already cancelled (the RPC already returned to the caller).
+		fn(context.WithoutCancel(ctx))
+	}()
+}
+
 // makeRegisterHandler returns the admin.key.register handler function.
 // Traces to BC-2.05.004 postcondition 1; AC-001; AC-003; AC-006.
-func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// syncClient is called after the control-side write to push state to routers
+// (S-BL.ADMISSION-SYNC-WIRE BC-2.05.009 PC-1/PC-2). A nil syncClient is a no-op.
+// wg, when non-nil, causes the push to be dispatched asynchronously (F-1 fix).
+// p (controlPersister), when non-nil, serialises the persist under a shared mutex
+// SYNCHRONOUSLY before dispatchPush (AC-011 / Ruling 11 / F-4A fix).
+// w is the advisory WARN writer (LOW-1 fix); nil falls back to os.Stderr.
+func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer, wg *sync.WaitGroup, p *controlPersister, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRegisterArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -213,6 +319,29 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 			return nil, mapAdminError(err, a.SVTNName, pubkey, a.Role)
 		}
 
+		// AC-011 / Ruling 11 / F-4A fix: persist control-side keyset SYNCHRONOUSLY
+		// before push, under the shared persist mutex (BC-2.05.010 Invariant 1).
+		// Write failure is advisory (no rollback; handler returns success).
+		p.persist(m.AdmittedKeySet())
+
+		// AC-003 / BC-2.05.009 PC-1/PC-2: push to configured routers after
+		// the control-side write succeeds. Push error is advisory — log WARN
+		// and continue; never roll back or return error to sbctl.
+		// F-1 fix: dispatch asynchronously via dispatchPush so the handler returns
+		// to sbctl immediately (no spurious timeout on unreachable router).
+		if syncClient != nil {
+			if svtn, found := m.SVTNByName(a.SVTNName); found {
+				svtnID, pub, r := svtn.ID, pubkey, role
+				dispatchPush(ctx, wg, func(pushCtx context.Context) {
+					if pushErr := syncClient.PushRegisterKey(pushCtx, svtnID, pub, r); pushErr != nil {
+						// Advisory: WARN only (no rollback, no error to caller).
+						// BC-2.05.009 PC-2/PC-4 / F-3 fix. LOW-1: use injected writer.
+						_, _ = fmt.Fprintf(warnWriter(w), "switchboard control: WARN: admission-sync push failed (register): %v\n", pushErr)
+					}
+				})
+			}
+		}
+
 		return adminKeyResult{
 			Fingerprint: result.Fingerprint,
 			At:          result.At,
@@ -223,8 +352,11 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func
 // makeRevokeHandler returns the admin.key.revoke handler function.
 // Parses `role` (canonical wire field per F-002); passes as currentRole to
 // SVTNManager.RevokeKey (HOLD-001 hybrid; ADR-004; ARCH-04 v1.13).
-// Traces to BC-2.05.004 postcondition 2; AC-002; AC-006.
-func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// Traces to BC-2.05.004 postcondition 2; AC-002; AC-004; AC-006.
+// wg, when non-nil, causes the push to be dispatched asynchronously (F-1 fix).
+// p (controlPersister): see makeRegisterHandler (AC-011 / Ruling 11 / F-4A fix).
+// w is the advisory WARN writer (LOW-1 fix); nil falls back to os.Stderr.
+func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer, wg *sync.WaitGroup, p *controlPersister, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		var a adminKeyRevokeArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -255,6 +387,23 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 			return nil, mapAdminError(err, a.SVTNName, pubkey, a.Role)
 		}
 
+		// AC-011 / Ruling 11 / F-4A fix: persist under shared mutex.
+		p.persist(m.AdmittedKeySet())
+
+		// AC-004 / BC-2.05.009 PC-1/PC-2: push to configured routers. Advisory.
+		// F-1 fix: dispatched asynchronously via dispatchPush.
+		if syncClient != nil {
+			if svtn, found := m.SVTNByName(a.SVTNName); found {
+				svtnID, pub, r, confirm := svtn.ID, pubkey, role, a.Confirm
+				dispatchPush(ctx, wg, func(pushCtx context.Context) {
+					if pushErr := syncClient.PushRevokeKey(pushCtx, svtnID, pub, r, confirm); pushErr != nil {
+						// Advisory: WARN only (BC-2.05.009 PC-2/PC-4 / F-3 fix). LOW-1.
+						_, _ = fmt.Fprintf(warnWriter(w), "switchboard control: WARN: admission-sync push failed (revoke): %v\n", pushErr)
+					}
+				})
+			}
+		}
+
 		return adminKeyResult{
 			Fingerprint: result.Fingerprint,
 			At:          result.At,
@@ -265,8 +414,11 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 // makeExpireHandler returns the admin.key.expire handler function.
 // Re-parses and validates the `after` duration server-side (defense-in-depth;
 // DI-003) independently of sbctl CLI validation (AC-005).
-// Traces to BC-2.05.004 postcondition 3; AC-005.
-func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// Traces to BC-2.05.004 postcondition 3; AC-004; AC-005.
+// wg, when non-nil, causes the push to be dispatched asynchronously (F-1 fix).
+// p (controlPersister): see makeRegisterHandler (AC-011 / Ruling 11 / F-4A fix).
+// w is the advisory WARN writer (LOW-1 fix); nil falls back to os.Stderr.
+func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer, wg *sync.WaitGroup, p *controlPersister, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		// Use a raw map to detect absent fields (EC-005) vs zero-value fields.
 		var raw map[string]json.RawMessage
@@ -332,6 +484,23 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(c
 			// expire has no caller-supplied role; empty claimedRoleStr falls back
 			// gracefully in mapAdminError (E-ADM-019 path uses *RoleMismatchError detail).
 			return nil, mapAdminError(err, svtnName, pubkey, "")
+		}
+
+		// AC-011 / Ruling 11 / F-4A fix: persist under shared mutex.
+		p.persist(m.AdmittedKeySet())
+
+		// AC-004 / BC-2.05.009 PC-1/PC-2: push to configured routers. Advisory.
+		// F-1 fix: dispatched asynchronously via dispatchPush.
+		if syncClient != nil {
+			if svtn, found := m.SVTNByName(svtnName); found {
+				svtnID, pub, d := svtn.ID, pubkey, ttl
+				dispatchPush(ctx, wg, func(pushCtx context.Context) {
+					if pushErr := syncClient.PushSetKeyExpiry(pushCtx, svtnID, pub, d); pushErr != nil {
+						// Advisory: WARN only (BC-2.05.009 PC-2/PC-4 / F-3 fix). LOW-1.
+						_, _ = fmt.Fprintf(warnWriter(w), "switchboard control: WARN: admission-sync push failed (expire): %v\n", pushErr)
+					}
+				})
+			}
 		}
 
 		return adminKeyResult{
@@ -824,8 +993,11 @@ type adminSVTNDestroyArgs struct {
 // sendAdminRPC / sendAdminRPCAsKey). The SVTN is not destroyed.
 //
 // Traces to BC-2.07.001 PC-3; AC-001; AC-002; AC-003; AC-004; RULING-W6TB-A;
-// VP-048 properties 2+3.
-func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
+// VP-048 properties 2+3; S-BL.ADMISSION-SYNC-WIRE AC-004.
+// wg, when non-nil, causes the push to be dispatched asynchronously (F-1 fix).
+// p (controlPersister): see makeRegisterHandler (AC-011 / Ruling 11 / F-4A fix).
+// w is the advisory WARN writer (LOW-1 fix); nil falls back to os.Stderr.
+func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncClient admissionSyncer, wg *sync.WaitGroup, p *controlPersister, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(ctx context.Context, args json.RawMessage) (any, error) {
 		// F-Impl-001 / F-P5P8-A-004: reject invalid UTF-8 in the raw JSON bytes
 		// before json.Unmarshal silently replaces bad bytes with U+FFFD.
@@ -860,8 +1032,26 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 			return nil, err
 		}
 
+		// Resolve svtnID BEFORE Destroy (m.SVTNByName won't find it afterward).
+		svtn, svtnFound := m.SVTNByName(a.Name)
+
 		if err := m.Destroy(callerKey, a.Name); err != nil {
 			return nil, mapAdminError(err, a.Name, nil, roleToString(callerKey.Role))
+		}
+
+		// AC-011 / Ruling 11 / F-4A fix: persist under shared mutex.
+		p.persist(m.AdmittedKeySet())
+
+		// AC-004 / BC-2.05.009 PC-1/PC-2: push to configured routers. Advisory.
+		// F-1 fix: dispatched asynchronously via dispatchPush.
+		if syncClient != nil && svtnFound {
+			svtnID := svtn.ID
+			dispatchPush(ctx, wg, func(pushCtx context.Context) {
+				if pushErr := syncClient.PushRemoveSVTN(pushCtx, svtnID); pushErr != nil {
+					// Advisory: WARN only (BC-2.05.009 PC-2/PC-4 / F-3 fix). LOW-1.
+					_, _ = fmt.Fprintf(warnWriter(w), "switchboard control: WARN: admission-sync push failed (remove-svtn): %v\n", pushErr)
+				}
+			})
 		}
 
 		return struct {

@@ -74,7 +74,7 @@ func newListKeysAdmissionManager(t *testing.T) (m *svtnmgmt.SVTNManager, bootstr
 // the admin.key.list-keys handler function, or fails the test if absent.
 func extractListKeysFn(t *testing.T, m *svtnmgmt.SVTNManager) func(ctx context.Context, args json.RawMessage) (any, error) {
 	t.Helper()
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	for _, h := range handlers {
 		if h.Command == "admin.key.list-keys" {
 			return h.Fn
@@ -287,7 +287,7 @@ func TestListKeys_OperatorSetMember_AllowedUnconditionally(t *testing.T) {
 		t.Fatalf("generate operator key: %v", err)
 	}
 	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
-	handlers := BuildAdminHandlers(m, ops)
+	handlers := BuildAdminHandlers(m, ops, nil, nil)
 	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.key.list-keys" {
@@ -333,7 +333,7 @@ func TestListKeys_OperatorSetMember_MissingSVTN_ReturnsESVTN003(t *testing.T) {
 		t.Fatalf("generate operator key: %v", err)
 	}
 	ops := mgmt.NewOperatorKeySet([]ed25519.PublicKey{operatorPub})
-	handlers := BuildAdminHandlers(m, ops)
+	handlers := BuildAdminHandlers(m, ops, nil, nil)
 	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.key.list-keys" {

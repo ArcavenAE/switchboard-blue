@@ -187,7 +187,7 @@ func TestBuildAdminHandlers_KeyRegister_HappyPath(t *testing.T) {
 	// Inject bootstrap key: CallerRole in args is empty; resolveAndVerifyCallerRole
 	// must take the server-resolved IsBootstrapKey path (BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var registerFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -225,7 +225,7 @@ func TestBuildAdminHandlers_KeyRevoke_HappyPath(t *testing.T) {
 	// Inject bootstrap key: CallerRole in args is empty; resolveAndVerifyCallerRole
 	// must take the server-resolved IsBootstrapKey path (BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -266,7 +266,7 @@ func TestBuildAdminHandlers_KeyExpire_HappyPath(t *testing.T) {
 	// resolveAndVerifyCallerRole takes the IsBootstrapKey fast-path (allowed
 	// unconditionally per BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -305,7 +305,7 @@ func TestBuildAdminHandlers_ListKeys_HappyPath(t *testing.T) {
 	// string). Inject the bootstrap key into the context so resolveAndVerifyCallerRole
 	// takes the server-resolved IsBootstrapKey fast-path (BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -372,7 +372,7 @@ func TestBuildAdminHandlers_KeyRegister_ErrorMapping(t *testing.T) {
 	// Inject bootstrap key: CallerRole in args is empty; auth must pass before
 	// reaching the SVTN-not-found domain error under test.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var registerFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -458,7 +458,7 @@ func TestBuildAdminHandlers_KeyRevoke_ErrorMapping(t *testing.T) {
 			// no authenticated key is present in ctx (BC-2.05.004 Precondition 1 / DI-001); inject
 			// the bootstrap key so the handler proceeds to the domain-level check.
 			m, bootstrapPub := newTestSVTNManagerDetailed(t)
-			handlers := BuildAdminHandlers(m, nil)
+			handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 			var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
 			for _, h := range handlers {
@@ -500,7 +500,7 @@ func TestBuildAdminHandlers_NilManager(t *testing.T) {
 			t.Error("expected panic for nil SVTNManager, got none")
 		}
 	}()
-	BuildAdminHandlers(nil, nil)
+	BuildAdminHandlers(nil, nil, nil, nil)
 }
 
 // TestBuildAdminHandlers_KeyRegister_MalformedJSON asserts that
@@ -509,7 +509,7 @@ func TestBuildAdminHandlers_NilManager(t *testing.T) {
 func TestBuildAdminHandlers_KeyRegister_MalformedJSON(t *testing.T) {
 	t.Parallel()
 	m := newTestSVTNManager(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var registerFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -540,7 +540,7 @@ func TestBuildAdminHandlers_KeyRevoke_UnknownRole(t *testing.T) {
 	// Inject bootstrap key so auth passes and the handler reaches the role
 	// validation logic that returns E-CFG-001 for the unknown target role.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -582,7 +582,7 @@ func TestBuildAdminHandlers_KeyExpire_MissingAfterField(t *testing.T) {
 	// Auth fires before TTL validation (BC-2.05.004 Precondition 1). Inject the
 	// bootstrap key so auth passes and the E-CFG-001 path is exercised.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -623,7 +623,7 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 	// Auth fires before TTL validation (BC-2.05.004 Precondition 1). Inject the
 	// bootstrap key so auth passes and the E-CFG-001 bounds check is exercised.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -684,7 +684,7 @@ func TestBuildAdminHandlers_KeyExpire_NegativeTTL(t *testing.T) {
 func TestBuildAdminHandlers_SevenHandlers(t *testing.T) {
 	t.Parallel()
 	m := newTestSVTNManager(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	want := map[string]bool{
 		"admin.key.register":  false,
@@ -725,7 +725,7 @@ func TestBuildAdminHandlers_ListKeys_EmptySliceNotNil(t *testing.T) {
 	// Inject bootstrap key so resolveAndVerifyCallerRole takes the server-resolved
 	// IsBootstrapKey fast-path (no callerRoleStr in list-keys args; BC-2.05.004 Precondition 1 / DI-001).
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var listFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -835,7 +835,7 @@ func callAdminSVTNStatusSafely(t *testing.T, fn func(ctx context.Context, args j
 func TestAdminSVTNStatus_HappyPath_KeyCounts(t *testing.T) {
 	t.Parallel()
 	m, bootstrapPub := newSVTNManagerForStatusTest(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	statusFn := findAdminSVTNStatusHandler(t, handlers)
 
 	args, err := json.Marshal(map[string]string{"name": "mynet"})
@@ -887,7 +887,7 @@ func TestAdminSVTNStatus_HappyPath_KeyCounts(t *testing.T) {
 func TestAdminSVTNStatus_NotFound_ESVTN003(t *testing.T) {
 	t.Parallel()
 	m, bootstrapPub := newSVTNManagerForStatusTest(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	statusFn := findAdminSVTNStatusHandler(t, handlers)
 
 	args, err := json.Marshal(map[string]string{"name": "doesnotexist"})
@@ -918,7 +918,7 @@ func TestAdminSVTNStatus_NotFound_ESVTN003(t *testing.T) {
 func TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak(t *testing.T) {
 	t.Parallel()
 	m, _ := newSVTNManagerForStatusTest(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	statusFn := findAdminSVTNStatusHandler(t, handlers)
 
 	// A caller with a valid, active operator key admitted only to a
@@ -1001,7 +1001,7 @@ func TestAdminSVTNStatus_AdmissionDenied_EADM009_NoExistenceOracleLeak(t *testin
 func TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEcho(t *testing.T) {
 	t.Parallel()
 	m, bootstrapPub := newSVTNManagerForStatusTest(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	statusFn := findAdminSVTNStatusHandler(t, handlers)
 	ctx := mgmt.WithCallerPubkey(context.Background(), bootstrapPub)
 
@@ -1049,7 +1049,7 @@ func TestAdminSVTNStatus_ArgsValidation_ControlCharacterName_E_CFG_001_NoByteEch
 func TestAdminSVTNStatus_ResponseExcludesSessionHealthFields(t *testing.T) {
 	t.Parallel()
 	m, bootstrapPub := newSVTNManagerForStatusTest(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	statusFn := findAdminSVTNStatusHandler(t, handlers)
 
 	args, err := json.Marshal(map[string]string{"name": "mynet"})
@@ -1279,7 +1279,7 @@ func TestBuildAdminHandlers_KeyRevoke_BootstrapKeyForbidden(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	// Create() already registered the bootstrap key. Try to revoke it with confirm=true.
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.key.revoke" {
@@ -1334,7 +1334,7 @@ func TestBuildAdminHandlers_KeyExpire_BootstrapKeyForbidden(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	var expireFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.key.expire" {
@@ -1420,7 +1420,7 @@ func TestBuildAdminHandlers_KeyRevoke_ControlRequiresConfirm(t *testing.T) {
 	// ErrControlRevocationRequiresConfirm; without the bootstrap key in ctx,
 	// resolveAndVerifyCallerRole fails-closed before reaching the confirm check.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var revokeFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -1888,7 +1888,7 @@ func TestBuildAdminHandlers_SVTNCreate_Registered(t *testing.T) {
 	// slice returned by BuildAdminHandlers (control-mode daemon only).
 	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m := newTestSVTNManager(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var found bool
 	for _, h := range handlers {
@@ -1916,7 +1916,7 @@ func TestAdminSVTNCreate_ControlCallerSucceeds(t *testing.T) {
 	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops)
+	handlers := BuildAdminHandlers(m, ops, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -1987,7 +1987,7 @@ func TestAdminSVTNCreate_NonControlCallerDenied(t *testing.T) {
 	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m, _ := newTestSVTNManagerDetailed(t)
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops)
+	handlers := BuildAdminHandlers(m, ops, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2039,7 +2039,7 @@ func TestAdminSVTNCreate_CallerRoleResolution_FromContext(t *testing.T) {
 	// Was RED during initial TDD (makeAdminSVTNCreateHandler not implemented); now covers positive path.
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
 	ops := mgmt.NewOperatorKeySet(nil)
-	handlers := BuildAdminHandlers(m, ops)
+	handlers := BuildAdminHandlers(m, ops, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2096,7 +2096,7 @@ func TestAdminSVTNCreate_ArgsValidation_E_CFG_001(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2149,7 +2149,7 @@ func TestAdminSVTNCreate_DuplicateName_E_SVTN_001(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2196,7 +2196,7 @@ func TestAdminSVTNCreate_NoStutterInDuplicateMessage(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2242,7 +2242,7 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2337,7 +2337,7 @@ func TestAdminSVTNCreate_NonBootstrapControlKey_RejectsWithEADM009(t *testing.T)
 	t.Parallel()
 
 	m, _ := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2413,7 +2413,7 @@ func TestAdminSVTNCreate_MutationTest_RoleControlCheckMustFireIndependently(t *t
 	// SeedSVTNWithoutBootstrapKey already asserts HasAnySVTN==true and
 	// BootstrapKeyHasControlRole==false via t.Fatalf — no duplicate checks needed.
 
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.svtn.create" {
@@ -2543,7 +2543,7 @@ func TestAdminSVTNCreate_CryptoRandFailure_E_INT_001(t *testing.T) {
 	// non-nil error, so the full error chain reaches the handler.
 	m := svtnmgmt.NewSVTNManagerWithRandSource(ks, bootstrapPub, failingReader{err: errFailingReader})
 
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.svtn.create" {
@@ -2585,7 +2585,7 @@ func TestAdminSVTNCreate_ArgsValidation_E_CFG_001_Exhaustive(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2770,7 +2770,7 @@ func TestAdminSVTNCreate_DuplicateName_E_SVTN_001_VacuityControl(t *testing.T) {
 	t.Parallel()
 
 	m, bootstrapPub := newTestSVTNManagerDetailed(t)
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
@@ -2834,7 +2834,7 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 		t.Fatalf("register cross-SVTN control key: %v", err)
 	}
 
-	handlers := BuildAdminHandlers(m, nil)
+	handlers := BuildAdminHandlers(m, nil, nil, nil)
 	var svtnCreateFn func(ctx context.Context, args json.RawMessage) (any, error)
 	for _, h := range handlers {
 		if h.Command == "admin.svtn.create" {
@@ -2923,7 +2923,7 @@ func TestAdminSVTNCreate_BootstrapOnly_CrossSVTNKeyDenied_CreateNotCalled(t *tes
 // Fails the test if the handler is not registered.
 func destroyHandlerFn(t *testing.T, m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet) func(ctx context.Context, args json.RawMessage) (any, error) {
 	t.Helper()
-	handlers := BuildAdminHandlers(m, ops)
+	handlers := BuildAdminHandlers(m, ops, nil, nil)
 	for _, h := range handlers {
 		if h.Command == "admin.svtn.destroy" {
 			return h.Fn

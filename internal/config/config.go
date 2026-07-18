@@ -164,6 +164,39 @@ type Config struct {
 	// (E-CFG-014). File I/O is NOT performed in Validate() — see ARCH-06
 	// §Config purity contract.
 	AdmissionKeyFile string `yaml:"admission_key_file"`
+
+	// RouterManagementEndpoints lists the management endpoints of router daemons
+	// that control-mode should push admission-state updates to (S-BL.ADMISSION-SYNC-WIRE).
+	// Each entry carries a TCP host:port address of the router's management server.
+	// An empty slice means no push replication.
+	// Each entry's Addr is validated as host:port (E-CFG-016 / validateHostPort).
+	// Control-mode only — ignored by router/console/access modes.
+	RouterManagementEndpoints []RouterManagementEndpoint `yaml:"router_management_endpoints"`
+
+	// AdmissionStateFile is the path where the router-mode daemon writes and reads
+	// its VLR-local admitted-state snapshot (S-BL.ADMISSION-SYNC-WIRE).
+	// Optional — when absent or empty, the router starts with an empty keyset and
+	// does not persist admission state across restarts.
+	// When present, must be a non-empty, non-whitespace path (E-CFG-015).
+	// File I/O is NOT performed in Validate() — see ARCH-06 §Config purity contract.
+	AdmissionStateFile string `yaml:"admission_state_file"`
+
+	// ControlAdmissionStateFile is the path where the control-mode daemon persists
+	// and loads its authoritative AdmittedKeySet snapshot (S-BL.ADMISSION-SYNC-WIRE
+	// Ruling 11 / BC-2.09.003 v2.2 PC-15 / AC-011).
+	// Control-mode only — ignored by router/console/access modes.
+	// Optional — when absent or empty, control does not persist the keyset locally
+	// and EC-007 resync on startup pushes only the current in-memory (empty) keyset.
+	// When present, must be a non-empty, non-whitespace path (E-CFG-017).
+	// File I/O is NOT performed in Validate() — see ARCH-06 §Config purity contract.
+	ControlAdmissionStateFile string `yaml:"control_admission_state_file"`
+}
+
+// RouterManagementEndpoint is a single entry in the router_management_endpoints list.
+// Addr is the TCP host:port of the router's management server (E-CFG-016).
+type RouterManagementEndpoint struct {
+	// Addr is the TCP address of the router management endpoint, e.g. "10.0.0.2:9093".
+	Addr string `yaml:"addr"`
 }
 
 // UpstreamRouter is a single entry in the upstream_routers list.
@@ -303,6 +336,37 @@ func (c *Config) Validate() error {
 	// No file I/O is performed here (ARCH-06 §Config purity contract).
 	if c.AdmissionKeyFile != "" && strings.TrimSpace(c.AdmissionKeyFile) == "" {
 		failures = append(failures, "config error: admission_key_file: must not be empty. Fix: set to a valid file path, e.g. '/var/lib/switchboard/access-admission-identity.pem', or remove the field to use the daemon default")
+	}
+
+	// E-CFG-015 (BC-2.09.003 v2.1 PC-13; S-BL.ADMISSION-SYNC-WIRE AC-001):
+	// admission_state_file must not be whitespace-only when present.
+	// Absent (empty string) is accepted — router starts with an empty keyset.
+	// No file I/O is performed here (ARCH-06 §Config purity contract).
+	if c.AdmissionStateFile != "" && strings.TrimSpace(c.AdmissionStateFile) == "" {
+		failures = append(failures, "config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset")
+	}
+
+	// E-CFG-016 (BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-001):
+	// Each router_management_endpoints[N].addr must be a valid host:port.
+	// Empty list is accepted — no push replication configured.
+	// No loopback restriction (Ruling 9 of S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.2).
+	// Exhaustive error collection mirrors the upstream_routers pattern (BC-2.09.003 Inv-4).
+	for i, ep := range c.RouterManagementEndpoints {
+		if err := validateHostPort(ep.Addr); err != nil {
+			failures = append(failures, fmt.Sprintf(
+				"config error: router_management_endpoints[%d].addr: '%s' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'",
+				i, sanitizeAddrForError(ep.Addr),
+			))
+		}
+	}
+
+	// E-CFG-017 (BC-2.09.003 v2.2 PC-15; S-BL.ADMISSION-SYNC-WIRE AC-011):
+	// control_admission_state_file must not be whitespace-only when present.
+	// Absent (empty string) is accepted — control starts with an empty keyset (no persistence).
+	// Control-mode only; other modes ignore this field.
+	// No file I/O is performed here (ARCH-06 §Config purity contract).
+	if c.ControlAdmissionStateFile != "" && strings.TrimSpace(c.ControlAdmissionStateFile) == "" {
+		failures = append(failures, "config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence")
 	}
 
 	if len(failures) == 0 {

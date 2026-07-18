@@ -155,7 +155,9 @@ func mgmtDefaultSocket(mode string) string {
 }
 
 // mgmtNetwork returns the network type for net.Listen for the given daemon mode.
-// console uses TCP (bound to 127.0.0.1 only); all others use Unix sockets (ARCH-05).
+// console always uses TCP (bound to 127.0.0.1 only); all others default to Unix
+// sockets (ARCH-05). For router (and other non-console) modes, use mgmtListenAddr
+// instead, which auto-detects TCP vs unix from the resolved management_socket value.
 func mgmtNetwork(mode string) string {
 	if mode == "console" {
 		return "tcp"
@@ -173,14 +175,36 @@ func resolveManagementSocket(cfg *config.Config, mode string) string {
 }
 
 // mgmtListenAddr returns the net.Listen network and address for the given mode.
+//
+// For console mode: always TCP (loopback-only; VP-073).
+// For router (and other non-console) modes: auto-detect TCP vs unix from the
+// resolved management_socket value using net.SplitHostPort. If the address is a
+// valid host:port (non-empty port field), bind TCP — this enables router-mode TCP
+// management listeners for cross-host control→router pushes (S-BL.ADMISSION-SYNC-WIRE
+// Ruling 10 / F-2 fix). Otherwise bind a unix socket (default for filesystem paths).
+// This preserves existing behavior for all existing router tests that use tempSockPath(t)
+// filesystem paths — those fail SplitHostPort → unix → unchanged behavior.
 func mgmtListenAddr(cfg *config.Config, mode string) (network, address string) {
-	return mgmtNetwork(mode), resolveManagementSocket(cfg, mode)
+	address = resolveManagementSocket(cfg, mode)
+	if mode == "console" {
+		return "tcp", address
+	}
+	// Ruling 10 auto-detect: if the resolved address is a valid host:port,
+	// bind TCP; otherwise bind unix (filesystem socket path).
+	_, portStr, err := net.SplitHostPort(address)
+	if err == nil && portStr != "" {
+		return "tcp", address
+	}
+	return "unix", address
 }
 
 // buildMgmtListener opens the management listener for the given mode and config.
 // For Unix socket modes it uses listenUnixMgmt to ensure 0600 permissions atomically
-// (AC-014 / CWE-276). For TCP (console mode) it validates the host is loopback
-// before calling net.Listen (BC-2.07.004 EC-013 / Ruling D / VP-073 / AC-014).
+// (AC-014 / CWE-276). For TCP it calls net.Listen; the loopback restriction
+// (BC-2.07.004 EC-013 / Ruling D / VP-073) is applied ONLY for console mode —
+// router-mode TCP management listeners are explicitly not loopback-restricted
+// (Ruling 9 / S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.3: control→router push is
+// inherently cross-host; challenge-response is the auth boundary).
 // Returns a net.Listener that the caller passes to mgmt.NewServer.
 func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 	network, address := mgmtListenAddr(cfg, mode)
@@ -191,15 +215,20 @@ func buildMgmtListener(cfg *config.Config, mode string) (net.Listener, error) {
 		}
 		return ln, nil
 	}
-	// TCP (console mode). Enforce loopback-only binding before calling net.Listen
-	// (BC-2.07.004 EC-013 / AC-014 Ruling D / VP-073). Validation must happen here
-	// because config.Validate has no mode parameter.
-	host, _, splitErr := net.SplitHostPort(address)
-	if splitErr != nil {
-		return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
-	}
-	if !isMgmtLoopbackHost(host) {
-		return nil, fmt.Errorf("E-CFG-008: management_socket: console mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", address)
+	// TCP path. Apply loopback restriction for all NON-router modes (Ruling 12 /
+	// BC-2.09.003 PC-11b v2.2 / S-BL.ADMISSION-SYNC-WIRE AC-012).
+	// console, control, and access modes all require a loopback address for TCP
+	// management listeners (VP-073 / BC-2.07.004 EC-013 / Ruling D).
+	// Router-mode TCP listeners are NOT loopback-restricted (Ruling 9 /
+	// S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.3).
+	if mode != "router" {
+		host, _, splitErr := net.SplitHostPort(address)
+		if splitErr != nil {
+			return nil, fmt.Errorf("E-CFG-008: management_socket: cannot parse address %q: %w", address, splitErr)
+		}
+		if !isMgmtLoopbackHost(host) {
+			return nil, fmt.Errorf("E-CFG-008: management_socket: %s mode requires a loopback address (127.0.0.1, [::1], or localhost); got: %s", mode, address)
+		}
 	}
 	ln, err := net.Listen(network, address)
 	if err != nil {
@@ -488,7 +517,24 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// metrics wiring (S-BL.PATH-TRACKER-WIRING) as the source-of-PathTracker
 	// registrations for paths.list.
 	routerLogger := newStdLogger(w)
-	router := buildRouter(admission.NewAdmittedKeySet(), routerLogger)
+	routerKS := admission.NewAdmittedKeySet()
+
+	// Phase (b1): load snapshot from admission_state_file before serving
+	// (S-BL.ADMISSION-SYNC-WIRE AC-007; BC-2.05.010 PC-6/7). Fail-closed on
+	// corrupt/unknown-schema file (Decision 7c / EC-011 / E-KEY-002).
+	// Absent path → no-op; absent file → empty keyset + INFO log (Decision 7b).
+	if err := loadSnapshotFromFile(cfg.AdmissionStateFile, routerKS, w); err != nil {
+		return fmt.Errorf("runRouter: load admission snapshot: %w", err)
+	}
+	if cfg.AdmissionStateFile != "" {
+		if _, statErr := os.Stat(cfg.AdmissionStateFile); os.IsNotExist(statErr) {
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "switchboard router: admission_state_file not found; starting with empty keyset — awaiting push from control\n")
+			}
+		}
+	}
+
+	router := buildRouter(routerKS, routerLogger)
 
 	// Phase (c): register metrics handlers before Serve starts. Passing the
 	// live router installs a forwarding-entry hook that populates the paths.list
@@ -502,6 +548,13 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// wireMetricsHandlers (S-BL.CLI-SURFACE-COMPLETION Decision 4 / AC-013).
 	if err := wireRouterControlHandlers(mgmtSrv, configPath, sighupCh, drainRequestCh); err != nil {
 		return fmt.Errorf("runRouter: wire router control handlers: %w", err)
+	}
+
+	// Phase (c3): register internal.admission.* push handlers (router-only;
+	// ADR-004 role-exclusion / AC-004). Register before Serve (F-P2L1-001).
+	// S-BL.ADMISSION-SYNC-WIRE AC-002/005/008.
+	if err := wireAdmissionSyncHandlers(mgmtSrv, routerKS, cfg.AdmissionStateFile, w); err != nil {
+		return fmt.Errorf("runRouter: wire admission sync handlers: %w", err)
 	}
 
 	// Phase (d): bind the data-plane TCP listener on cfg.ListenAddr
@@ -762,6 +815,14 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	if w != nil {
 		_, _ = fmt.Fprintf(w, "switchboard router: data plane listening on %s\n", dataLn.Addr().String())
 		_, _ = fmt.Fprintf(w, "switchboard router: management socket at %s\n", resolveManagementSocket(cfg, "router"))
+		// AC-008 / BC-2.09.003 v2.1 PC-14 / Ruling 9: emit INFO log for the
+		// router management listener bind address so operators can verify the
+		// address and apply appropriate firewall policy. No loopback restriction
+		// (Ruling 9 of S-BL.ADMISSION-SYNC-WIRE-rulings.md v1.2).
+		// F-3 fix: always log the router's ACTUAL bound management_socket, never
+		// the control-side RouterManagementEndpoints field (which lists OTHER
+		// routers, not this router's own listener address — AC-008 PC-2/PC-4).
+		_, _ = fmt.Fprintf(w, "switchboard router: router management listener bound to %s (ensure firewall policy restricts access as appropriate)\n", resolveManagementSocket(cfg, "router"))
 		// BC-2.09.003 PC-7 application: drain_timeout emitted at startup so
 		// operators can confirm the resolved value (config or default).
 		_, _ = fmt.Fprintf(w, "switchboard router: drain_timeout=%s\n", drainCoord.Timeout())
@@ -970,7 +1031,7 @@ shutdown:
 //  2. BuildConsoleHandlers passed via NewServer initial handlers (already registered)
 //  3. wireMetricsHandlers — register metrics RPC handlers before Serve
 //  4. serveMgmtServer — start Serve goroutine
-func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
+func runConsole(ctx context.Context, w io.Writer, cfg *config.Config) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -1038,6 +1099,14 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 		return fmt.Errorf("runConsole: construct management server: %w", mgmtErr)
 	}
 
+	// F-4 / AC-012 PC-4 / BC-2.09.003 v2.2 PC-11b / Ruling 12: emit INFO log for the
+	// console management listener bind address. Mirrors the router bind log at runRouter:825
+	// and the control bind log at runControl:1229.
+	if w != nil {
+		_, _ = fmt.Fprintf(w, "switchboard console: console management listener bound to %s\n",
+			resolveManagementSocket(cfg, "console"))
+	}
+
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
 	// Console mode has no routing subsystem — pass nil router; the paths.list
 	// source is an empty registry, and BC-2.06.003 EC-001 "no active paths"
@@ -1060,27 +1129,43 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	return nil
 }
 
-// runControl is the control-mode daemon entry point (F-002 / S-6.06 AC-004).
-// It generates an ephemeral Ed25519 keypair, constructs a SVTNManager with an
-// empty AdmittedKeySet, starts the management server with BuildAdminHandlers,
-// and blocks until ctx is cancelled (ARCH-01 §Goroutine WaitGroup Contract).
+// reloadControlEndpoints reloads the config from configPath, validates it, and
+// calls syncClient.UpdateEndpoints with the new router management endpoints.
 //
-// Only the control-mode daemon registers admin handlers (ADR-004 role-exclusion;
-// ARCH-04 disambiguation table; AC-004). Access, console, and router daemons pass nil.
+// This is the testable helper called by runControl's SIGHUP select branch.
+// Fail-closed: if the config cannot be loaded or validated, endpoints are NOT
+// updated (the old list is kept). Returns a non-nil error on reload failure
+// (the caller logs WARN and continues — BC-2.05.009 Invariant 5 / AC-010 PC-1/2/3).
 //
-// Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
-//  1. newMgmtServer — construct server (no goroutine)
-//  2. BuildAdminHandlers passed via NewServer initial handlers (already registered)
-//  3. wireMetricsHandlers — register metrics RPC handlers before Serve
-//  4. serveMgmtServer — start Serve goroutine
-func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
-	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
-	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
-	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return fmt.Errorf("runControl: generate daemon keypair: %w", err)
+// BC-2.05.009 Invariant 5; S-BL.ADMISSION-SYNC-WIRE AC-010.
+func reloadControlEndpoints(configPath string, syncClient *admissionSyncClient) error {
+	if configPath == "" {
+		// No config file — nothing to reload.
+		return nil
 	}
+	loaded, err := config.LoadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("reload config %q: %w", configPath, err)
+	}
+	if err := loaded.Validate(); err != nil {
+		return fmt.Errorf("reload config %q: validate: %w", configPath, err)
+	}
+	syncClient.UpdateEndpoints(loaded.RouterManagementEndpoints)
+	return nil
+}
 
+// runControlWithKey is the testable core of runControl. It accepts an injected
+// daemonPriv key instead of generating an ephemeral one, enabling tests to
+// pre-register the key in a router's OperatorKeySet so that PushFullSnapshot
+// can authenticate successfully and the router's state can be asserted directly
+// (F-P8-02 / S-BL.ADMISSION-SYNC-WIRE Ruling 15 / AC-013 LOW-2).
+//
+// runControl is a thin wrapper that generates a fresh ephemeral keypair and
+// delegates to runControlWithKey.
+//
+// Production behaviour is UNCHANGED: runControl still generates its own key.
+// runControlWithKey is unexported — test-internal seam only.
+func runControlWithKey(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh chan os.Signal, daemonPriv ed25519.PrivateKey) error {
 	daemonPub := daemonPriv.Public().(ed25519.PublicKey)
 	ks := admission.NewAdmittedKeySet()
 	m := svtnmgmt.NewSVTNManager(ks, daemonPub)
@@ -1089,30 +1174,104 @@ func runControl(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
 	ops := mgmt.NewOperatorKeySet(nil)
 
-	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops))
+	// AC-011 / Ruling 11: load control-side keyset snapshot BEFORE constructing
+	// the sync client and calling PushFullSnapshot (BC-2.05.009 PC-7 v1.2).
+	var controlSnapshotPath string
+	if cfg != nil {
+		controlSnapshotPath = cfg.ControlAdmissionStateFile
+	}
+	if controlSnapshotPath != "" {
+		if loadErr := loadSnapshotFromFile(controlSnapshotPath, ks, w); loadErr != nil {
+			return fmt.Errorf("runControlWithKey: load control admission snapshot: %w", loadErr)
+		}
+	}
+
+	// Construct admission sync client using the INJECTED daemonPriv (not ephemeral).
+	var endpoints []config.RouterManagementEndpoint
+	if cfg != nil {
+		endpoints = cfg.RouterManagementEndpoints
+	}
+	syncClient := newAdmissionSyncClient(endpoints, daemonPriv)
+
+	var pushWG sync.WaitGroup
+
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, buildAdminHandlersCore(m, ops, syncClient, &pushWG, controlSnapshotPath, w))
 	if mgmtErr != nil {
-		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
+		return fmt.Errorf("runControlWithKey: construct management server: %w", mgmtErr)
 	}
 
-	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
-	// Control mode has no routing subsystem — pass nil router; the paths.list
-	// source is an empty registry, and BC-2.06.003 EC-001 "no active paths"
-	// applies (S-BL.PATH-TRACKER-WIRING).
+	if w != nil {
+		_, _ = fmt.Fprintf(w, "switchboard control: control management listener bound to %s\n",
+			resolveManagementSocket(cfg, "control"))
+	}
+
 	if err := wireMetricsHandlers(mgmtSrv, nil); err != nil {
-		return fmt.Errorf("runControl: wire metrics handlers: %w", err)
+		return fmt.Errorf("runControlWithKey: wire metrics handlers: %w", err)
 	}
 
-	// Phase (c): start the Serve goroutine.
+	// Phase (c): push full snapshot BEFORE serving (BC-2.05.009 Postcondition 7 / Decision 10).
+	if pushErr := syncClient.PushFullSnapshot(ctx, ks); pushErr != nil {
+		if w != nil {
+			_, _ = fmt.Fprintf(w, "switchboard control: WARN: PushFullSnapshot failed: %v\n", pushErr)
+		}
+	}
+
 	var mgmtWG sync.WaitGroup
 	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
 
-	// Block until context is cancelled (ARCH-01 lifecycle contract).
-	<-ctx.Done()
-
+	for {
+		select {
+		case <-ctx.Done():
+			goto shutdownWithKey
+		case <-sighupCh:
+			if reloadErr := reloadControlEndpoints(configPath, syncClient); reloadErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "control: SIGHUP reload failed: %s; continuing with previous endpoints\n", reloadErr)
+				}
+			}
+		}
+	}
+shutdownWithKey:
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
 	_ = mgmtSrv.Shutdown(shutCtx)
 	mgmtWG.Wait()
+	pushWG.Wait()
 	return nil
+}
+
+// runControl is the control-mode daemon entry point (F-002 / S-6.06 AC-004).
+// It generates an ephemeral Ed25519 keypair, constructs a SVTNManager with an
+// empty AdmittedKeySet, starts the management server with BuildAdminHandlers,
+// and blocks until ctx is cancelled (ARCH-01 §Goroutine WaitGroup Contract).
+//
+// Only the control-mode daemon registers admin handlers (ADR-004 role-exclusion;
+// ARCH-04 disambiguation table; AC-004). Access, console, and router daemons pass nil.
+//
+// configPath is the path to the YAML config file (empty string if none was provided).
+// sighupCh is a channel on which SIGHUP signals are delivered, independent of the
+// SIGTERM/SIGINT NotifyContext — a SIGHUP must NOT cancel/terminate the daemon
+// (mirrors the existing router-mode SIGHUP pattern in runRouter).
+//
+// Register-before-serve ordering (F-P2L1-001 / F-P2L1-002):
+//  1. newMgmtServer — construct server (no goroutine)
+//  2. BuildAdminHandlers passed via NewServer initial handlers (already registered)
+//  3. wireMetricsHandlers — register metrics RPC handlers before Serve
+//  4. PushFullSnapshot — push all keyset entries to configured routers BEFORE serving
+//     (S-BL.ADMISSION-SYNC-WIRE AC-009 / BC-2.05.009 Postcondition 7 / Decision 10)
+//  5. serveMgmtServer — start Serve goroutine
+//  6. select loop: SIGHUP → reloadControlEndpoints; ctx.Done → shutdown
+func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh chan os.Signal) error {
+	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
+	// The daemon key is used by mgmt.Server for the Ed25519 challenge-response.
+	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("runControl: generate daemon keypair: %w", err)
+	}
+	// Delegate to the testable core (runControlWithKey) with the ephemeral key.
+	// runControlWithKey is the unexported seam that allows tests to inject a
+	// pre-registered key so that PushFullSnapshot can authenticate against the
+	// router's OperatorKeySet and the router state can be directly asserted
+	// (F-P8-02 / Ruling 15 / AC-013 LOW-2).
+	return runControlWithKey(ctx, w, cfg, configPath, sighupCh, daemonPriv)
 }

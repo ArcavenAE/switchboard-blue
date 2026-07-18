@@ -182,6 +182,14 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		return fmt.Errorf("access: construct management server: %w", mgmtErr)
 	}
 
+	// F-4 / AC-012 PC-4 / BC-2.09.003 v2.2 PC-11b / Ruling 12: emit INFO log for the
+	// access management listener bind address. Mirrors the router bind log at runRouter:825
+	// and the control bind log at runControl:1229.
+	if stderr != nil {
+		_, _ = fmt.Fprintf(stderr, "switchboard access: access management listener bound to %s\n",
+			resolveManagementSocket(cfg, "access"))
+	}
+
 	// Construct the downstream half-channel (pure in-memory struct, no goroutines).
 	// Moved above Phase (b) so the Router is available to wireMetricsHandlers as
 	// the source-of-PathTracker registrations (S-BL.PATH-TRACKER-WIRING).
@@ -289,8 +297,23 @@ func runAccess(ctx context.Context, stderr io.Writer, cfg *config.Config) error 
 		// Phase (e): construct discovery with LocalNodeAdmissionPubkey wired from
 		// the admission keypair (Decision 5 / BC-2.09.004 PC-3e / BC-2.04.008 Pre-3).
 		// disc.Run is started in runAccessWithConnector (Option Y, Decision 6).
+		//
+		// FORWARD OBLIGATION (from S-BL.NODE-ADMISSION-PROVISIONING): LocalSVTNID and
+		// LocalNodeAddr are intentionally zero-valued here. Populating them requires:
+		//   - LocalSVTNID: the SVTN this access node is assigned to, which is determined
+		//     during the node's provisioning / config-time SVTN assignment — that wiring
+		//     belongs to S-BL.NODE-IDENTIFY-WIRE (provisioning reads the SVTN ID from
+		//     config or the admission certificate).
+		//   - LocalNodeAddr: derived from frame.DeriveNodeAddress(svtnID, admissionPubKey);
+		//     cannot be computed until LocalSVTNID is known.
+		//
+		// This story (S-BL.ADMISSION-SYNC-WIRE) handles the control→router admission
+		// state push only and does not have access to the SVTN assignment for the access
+		// node. Populating these fields is explicitly scoped to S-BL.NODE-IDENTIFY-WIRE.
 		discoveryCfg := discovery.Config{
 			LocalNodeAdmissionPubkey: []byte(admissionPubKey),
+			// LocalSVTNID: populated by S-BL.NODE-IDENTIFY-WIRE
+			// LocalNodeAddr: populated by S-BL.NODE-IDENTIFY-WIRE (derived from svtnID + pubkey)
 		}
 		disc = newDiscovery(discoveryCfg)
 	}

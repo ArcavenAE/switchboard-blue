@@ -295,7 +295,8 @@ func sendMgmtRPC(t *testing.T, conn net.Conn, id, command string) (ok bool, errC
 // TestWireMetricsHandlers_RegistersPingOnEveryMode verifies AC-004 PC-1: a new
 // handler (mgmt.RegisterPingHandler) is called from wireMetricsHandlers,
 // making paths.ping available on every daemon mode that already wires metrics
-// handlers: runRouter, runAccess, runConsole, runControl.
+// handlers: runRouter, runAccess, runConsole, runControlWithKey (the testable
+// core of runControl; runControl is a thin wrapper around it — F-P8-02 / Ruling 15).
 //
 // wireMetricsHandlers is architecturally the single choke point where
 // paths.ping registration happens — its own doc comment states
@@ -394,11 +395,16 @@ func TestWireMetricsHandlers_RegistersPingOnEveryMode(t *testing.T) {
 	})
 
 	t.Run("exactly_four_call_sites_named_by_PC1", func(t *testing.T) {
+		// runControl is a thin wrapper that delegates to runControlWithKey
+		// (the testable core introduced by F-P8-02 / Ruling 15). The actual
+		// wireMetricsHandlers call lives in runControlWithKey. The AC-004 PC-1
+		// invariant ("every daemon mode wires metrics") continues to hold —
+		// runControlWithKey IS the control mode's daemon core.
 		wantCallers := map[string]bool{
-			"runRouter":  false,
-			"runAccess":  false,
-			"runConsole": false,
-			"runControl": false,
+			"runRouter":         false,
+			"runAccess":         false,
+			"runConsole":        false,
+			"runControlWithKey": false,
 		}
 
 		_, thisFile, _, ok := runtime.Caller(0)

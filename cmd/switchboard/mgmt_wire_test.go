@@ -796,7 +796,9 @@ func TestRunControl_StartsWithMgmt(t *testing.T) {
 
 	// runControl should return nil (context cancelled cleanly).
 	// We only care that the socket was created — evidence startMgmtServer was called.
-	err := runControl(ctx, nil, cfg)
+	// Pass empty configPath and a non-notified sighupCh (AC-010 / F-1: new signature).
+	sighupCh := make(chan os.Signal, 1)
+	err := runControl(ctx, nil, cfg, "", sighupCh)
 	if err != nil {
 		t.Errorf("runControl: unexpected error: %v", err)
 	}

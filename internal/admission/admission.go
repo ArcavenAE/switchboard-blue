@@ -559,6 +559,28 @@ func (s *AdmittedKeySet) ListBySVTN(svtnID [16]byte) []AdmittedKey {
 	return out
 }
 
+// AllSVTNEntries returns a snapshot of all admitted key entries grouped by SVTN ID.
+// The map and all slice values are deep copies — independent of internal state.
+// Used by marshalSnapshot to serialise the full keyset (S-BL.ADMISSION-SYNC-WIRE;
+// BC-2.05.010 PC-4; cmd/switchboard admission_sync_snapshot.go).
+func (s *AdmittedKeySet) AllSVTNEntries() map[[16]byte][]AdmittedKey {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make(map[[16]byte][]AdmittedKey, len(s.keys))
+	for svtnID, svtnMap := range s.keys {
+		entries := make([]AdmittedKey, 0, len(svtnMap))
+		for _, entry := range svtnMap {
+			cp := *entry
+			// Deep-clone PublicKey: []byte shallow copy shares backing array (M-3).
+			cp.PublicKey = append(ed25519.PublicKey(nil), entry.PublicKey...)
+			entries = append(entries, cp)
+		}
+		out[svtnID] = entries
+	}
+	return out
+}
+
 // recordNonceUnlocked records the nonce with timestamp and returns ErrNonceReplay
 // if already consumed within the TTL window. Performs a lazy O(N) purge sweep
 // gated by elapsed time or map size (M-2).

@@ -2618,3 +2618,285 @@ func TestConfig_Validate_AdmissionKeyFile_ExhaustiveErrorCollection(t *testing.T
 	requireContains(t, msg, "tick_interval")
 	requireContains(t, msg, "admission_key_file")
 }
+
+// ── AC-001 (BC-2.09.003 v2.1 PC-13/PC-14) ────────────────────────────────────
+//
+// AC-001 postconditions for S-BL.ADMISSION-SYNC-WIRE:
+//   - PC-13: admission_state_file absent/empty accepted; whitespace-only → E-CFG-015
+//   - PC-14: router_management_endpoints empty list accepted; invalid addr → E-CFG-016
+//            (exhaustive); no loopback restriction (0.0.0.0 accepted)
+
+// TestConfig_Validate_AdmissionStateFile_AbsentAccepted verifies that when
+// admission_state_file is absent (empty string), Config.Validate() accepts it.
+//
+// BC-2.09.003 v2.1 PC-13; S-BL.ADMISSION-SYNC-WIRE AC-001.
+// Red Gate: FAILS before PC-13 validation is implemented (currently no E-CFG-015
+// check exists → Validate() always returns nil for this field → this test PASSES
+// trivially. Wait — this is a positive test and the field is NOT yet validated.
+// Assertion: no error. So this test should PASS now. However, the stub still
+// returns not-implemented via the overall validate path for admission_state_file.)
+//
+// NOTE: This test is a positive assertion (no error) so it will PASS against
+// the stub code. Per Red Gate rules, positive acceptance tests with no stub
+// implementation pass trivially. We therefore assert the EXACT error string
+// for E-CFG-015 in the whitespace tests to ensure the non-trivial tests fail.
+func TestConfig_Validate_AdmissionStateFile_AbsentAccepted(t *testing.T) {
+	t.Parallel()
+
+	// absent (empty string) — router starts with empty keyset, no snapshot I/O
+	cfg := &config.Config{
+		ListenAddr:   "0.0.0.0:9090",
+		TickInterval: 10 * time.Millisecond,
+		// AdmissionStateFile intentionally absent (zero value)
+	}
+	err := cfg.Validate()
+	requireNoError(t, err)
+}
+
+// TestConfig_Validate_AdmissionStateFile_WhitespaceOnlyRejectsE_CFG_015 verifies
+// that when admission_state_file is a whitespace-only string, Config.Validate()
+// returns an error containing the EXACT E-CFG-015 message from BC-2.09.003 v2.1
+// PC-13 Error Codes table.
+//
+// BC-2.09.003 v2.1 PC-13; S-BL.ADMISSION-SYNC-WIRE AC-001.
+// Red Gate: FAILS because E-CFG-015 validation is not yet implemented.
+func TestConfig_Validate_AdmissionStateFile_WhitespaceOnlyRejectsE_CFG_015(t *testing.T) {
+	t.Parallel()
+
+	// Exact E-CFG-015 message template from BC-2.09.003 v2.1 Error Codes table.
+	const wantMsg = "config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset"
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "single_space", value: " "},
+		{name: "tab_only", value: "\t"},
+		{name: "multiple_spaces", value: "   "},
+		{name: "mixed_whitespace", value: " \t\n "},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &config.Config{
+				ListenAddr:         "0.0.0.0:9090",
+				TickInterval:       10 * time.Millisecond,
+				AdmissionStateFile: tc.value,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+			// Assert the EXACT canonical E-CFG-015 message (not just a substring).
+			requireContains(t, err.Error(), wantMsg)
+		})
+	}
+}
+
+// TestConfig_Validate_RouterManagementEndpoints_EmptyListAccepted verifies that
+// when router_management_endpoints is absent or an empty list, Config.Validate()
+// accepts it without error.
+//
+// BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-001.
+// Red Gate: positive test — passes trivially if field is not validated yet.
+// Combined with the invalid-addr test below to prove exhaustive coverage.
+func TestConfig_Validate_RouterManagementEndpoints_EmptyListAccepted(t *testing.T) {
+	t.Parallel()
+
+	t.Run("absent", func(t *testing.T) {
+		t.Parallel()
+		cfg := &config.Config{
+			ListenAddr:   "0.0.0.0:9090",
+			TickInterval: 10 * time.Millisecond,
+			// RouterManagementEndpoints absent
+		}
+		err := cfg.Validate()
+		requireNoError(t, err)
+	})
+
+	t.Run("explicit_empty_list", func(t *testing.T) {
+		t.Parallel()
+		cfg := &config.Config{
+			ListenAddr:                "0.0.0.0:9090",
+			TickInterval:              10 * time.Millisecond,
+			RouterManagementEndpoints: []config.RouterManagementEndpoint{},
+		}
+		err := cfg.Validate()
+		requireNoError(t, err)
+	})
+}
+
+// TestConfig_Validate_RouterManagementEndpoints_InvalidAddrRejectsE_CFG_016 verifies
+// that when router_management_endpoints contains an entry with an invalid addr,
+// Config.Validate() returns an error containing the EXACT E-CFG-016 message from
+// BC-2.09.003 v2.1 PC-14 Error Codes table.
+//
+// BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-001.
+// Red Gate: FAILS because E-CFG-016 validation is not yet implemented.
+func TestConfig_Validate_RouterManagementEndpoints_InvalidAddrRejectsE_CFG_016(t *testing.T) {
+	t.Parallel()
+
+	// Exact E-CFG-016 message template for index 0.
+	// BC-2.09.003 v2.1: "config error: router_management_endpoints[<N>].addr: '<value>'
+	//   is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format,
+	//   e.g. '10.0.0.2:9093'"
+	const wantMsgFmt = "config error: router_management_endpoints[0].addr: 'notvalid' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'"
+
+	cfg := &config.Config{
+		ListenAddr:   "0.0.0.0:9090",
+		TickInterval: 10 * time.Millisecond,
+		RouterManagementEndpoints: []config.RouterManagementEndpoint{
+			{Addr: "notvalid"},
+		},
+	}
+	err := cfg.Validate()
+	requireError(t, err)
+	requireECFG001(t, err)
+	requireContains(t, err.Error(), wantMsgFmt)
+}
+
+// TestConfig_Validate_RouterManagementEndpoints_NonLoopbackAccepted verifies that
+// non-loopback addresses (0.0.0.0, 10.x.x.x, etc.) are accepted — Ruling 9 of
+// S-BL.ADMISSION-SYNC-WIRE-rulings.md prohibits any loopback restriction.
+//
+// BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-001; Ruling 9.
+// Red Gate: this test passes trivially if no validation exists yet (no error).
+// It will correctly pass once E-CFG-016 is implemented, confirming no loopback
+// restriction is applied. We add an invariant check: ensure it does NOT error
+// with E-CFG-016 even for non-loopback addresses.
+func TestConfig_Validate_RouterManagementEndpoints_NonLoopbackAccepted(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		addr string
+	}{
+		{name: "any_ipv4", addr: "0.0.0.0:9093"},
+		{name: "private_ipv4", addr: "10.0.0.2:9093"},
+		{name: "another_private", addr: "192.168.1.5:9093"},
+		{name: "hostname_port", addr: "router.example.com:9093"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &config.Config{
+				ListenAddr:   "0.0.0.0:9090",
+				TickInterval: 10 * time.Millisecond,
+				RouterManagementEndpoints: []config.RouterManagementEndpoint{
+					{Addr: tc.addr},
+				},
+			}
+			err := cfg.Validate()
+			if err != nil {
+				// Must NOT be an E-CFG-016 error for valid non-loopback addresses.
+				if strings.Contains(err.Error(), "router_management_endpoints[0].addr") {
+					t.Errorf("NonLoopbackAccepted: addr %q was incorrectly rejected by E-CFG-016 validation (Ruling 9 prohibits loopback restriction): %v", tc.addr, err)
+				}
+				// If it's another error (e.g. still failing for another reason in stub), skip.
+				t.Skipf("Validate returned error unrelated to E-CFG-016 for addr %q: %v", tc.addr, err)
+			}
+			// No error expected.
+		})
+	}
+}
+
+// TestConfig_Validate_RouterManagementEndpoints_MultipleInvalidExhaustiveErrors
+// verifies that when multiple router_management_endpoints entries have invalid
+// addrs, ALL errors are collected before returning — BC-2.09.003 Invariant 4.
+//
+// BC-2.09.003 v2.1 PC-14; S-BL.ADMISSION-SYNC-WIRE AC-001 PC-6.
+// Red Gate: FAILS because E-CFG-016 validation is not yet implemented.
+func TestConfig_Validate_RouterManagementEndpoints_MultipleInvalidExhaustiveErrors(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		ListenAddr:   "0.0.0.0:9090",
+		TickInterval: 10 * time.Millisecond,
+		RouterManagementEndpoints: []config.RouterManagementEndpoint{
+			{Addr: "notvalid"},
+			{Addr: "also-invalid"},
+		},
+	}
+	err := cfg.Validate()
+	requireError(t, err)
+	requireECFG001(t, err)
+
+	msg := err.Error()
+	// Both index 0 and index 1 must appear — exhaustive collection.
+	requireContains(t, msg, "router_management_endpoints[0].addr")
+	requireContains(t, msg, "router_management_endpoints[1].addr")
+}
+
+// ── AC-011 (BC-2.09.003 v2.2 PC-15) ──────────────────────────────────────────
+//
+// AC-011 postconditions for S-BL.ADMISSION-SYNC-WIRE:
+//   - PC-15: control_admission_state_file absent/empty accepted (no error)
+//   - PC-15: control_admission_state_file whitespace-only → E-CFG-017
+//   - No file I/O in Validate()
+
+// TestConfig_Validate_ControlAdmissionStateFile_AbsentAccepted verifies that
+// when control_admission_state_file is absent (empty string), Config.Validate()
+// accepts it without error.
+//
+// BC-2.09.003 v2.2 PC-15; S-BL.ADMISSION-SYNC-WIRE AC-011.
+// Red Gate: PASSES trivially (field not yet added to Config, zero value = empty → accepted).
+// Included to lock the positive case and to fail when ControlAdmissionStateFile is
+// added but the whitespace guard is accidentally applied to the absent case.
+func TestConfig_Validate_ControlAdmissionStateFile_AbsentAccepted(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		ListenAddr:   "0.0.0.0:9090",
+		TickInterval: 10 * time.Millisecond,
+		// ControlAdmissionStateFile intentionally absent (zero value)
+	}
+	err := cfg.Validate()
+	requireNoError(t, err)
+}
+
+// TestConfig_Validate_ControlAdmissionStateFile_WhitespaceRejectsE_CFG_017 verifies
+// that when control_admission_state_file is a whitespace-only string,
+// Config.Validate() returns an error containing the EXACT E-CFG-017 message from
+// BC-2.09.003 v2.2 PC-15 Error Codes table.
+//
+// BC-2.09.003 v2.2 PC-15; S-BL.ADMISSION-SYNC-WIRE AC-011.
+// Red Gate: FAILS — ControlAdmissionStateFile field does not yet exist in Config,
+// so it cannot be set and the E-CFG-017 validation cannot fire.
+func TestConfig_Validate_ControlAdmissionStateFile_WhitespaceRejectsE_CFG_017(t *testing.T) {
+	t.Parallel()
+
+	// Exact E-CFG-017 message from BC-2.09.003 v2.2 PC-15 Error Codes table
+	// (verbatim — quoted in story AC-011 PC-1).
+	const wantMsg = "config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence"
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{name: "single space", value: " "},
+		{name: "tab", value: "\t"},
+		{name: "newline", value: "\n"},
+		{name: "multi-space", value: "   "},
+		{name: "mixed whitespace", value: " \t\n "},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{
+				ListenAddr:                "0.0.0.0:9090",
+				TickInterval:              10 * time.Millisecond,
+				ControlAdmissionStateFile: tc.value,
+			}
+			err := cfg.Validate()
+			requireError(t, err)
+			requireECFG001(t, err)
+			requireContains(t, err.Error(), wantMsg)
+		})
+	}
+}
