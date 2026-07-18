@@ -553,7 +553,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// Phase (c3): register internal.admission.* push handlers (router-only;
 	// ADR-004 role-exclusion / AC-004). Register before Serve (F-P2L1-001).
 	// S-BL.ADMISSION-SYNC-WIRE AC-002/005/008.
-	if err := wireAdmissionSyncHandlers(mgmtSrv, routerKS, cfg.AdmissionStateFile); err != nil {
+	if err := wireAdmissionSyncHandlers(mgmtSrv, routerKS, cfg.AdmissionStateFile, w); err != nil {
 		return fmt.Errorf("runRouter: wire admission sync handlers: %w", err)
 	}
 
@@ -1031,7 +1031,7 @@ shutdown:
 //  2. BuildConsoleHandlers passed via NewServer initial handlers (already registered)
 //  3. wireMetricsHandlers — register metrics RPC handlers before Serve
 //  4. serveMgmtServer — start Serve goroutine
-func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
+func runConsole(ctx context.Context, w io.Writer, cfg *config.Config) error {
 	// Generate ephemeral daemon keypair (BC-2.07.004 Precondition 3 / AC-015).
 	_, daemonPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -1097,6 +1097,14 @@ func runConsole(ctx context.Context, _ io.Writer, cfg *config.Config) error {
 	mgmtSrv, mgmtErr := newMgmtServer(cfg, "console", daemonPriv, initialHandlers)
 	if mgmtErr != nil {
 		return fmt.Errorf("runConsole: construct management server: %w", mgmtErr)
+	}
+
+	// F-4 / AC-012 PC-4 / BC-2.09.003 v2.2 PC-11b / Ruling 12: emit INFO log for the
+	// console management listener bind address. Mirrors the router bind log at runRouter:825
+	// and the control bind log at runControl:1229.
+	if w != nil {
+		_, _ = fmt.Fprintf(w, "switchboard console: console management listener bound to %s\n",
+			resolveManagementSocket(cfg, "console"))
 	}
 
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
@@ -1248,8 +1256,10 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 	// explicit: "PushFullSnapshot is called before the management server begins
 	// serving" — i.e. before serveMgmtServer, not after.
 	if pushErr := syncClient.PushFullSnapshot(ctx, ks); pushErr != nil {
-		// Advisory: WARN only; do not fail startup (BC-2.05.009 PC-2).
-		_ = pushErr
+		// Advisory: WARN only; do not fail startup (BC-2.05.009 PC-2 / F-3 fix).
+		if w != nil {
+			_, _ = fmt.Fprintf(w, "switchboard control: WARN: PushFullSnapshot failed: %v\n", pushErr)
+		}
 	}
 
 	// Phase (d): start the Serve goroutine.

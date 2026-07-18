@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -299,7 +300,8 @@ func makeRegisterHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, sync
 				dispatchPush(ctx, wg, func(pushCtx context.Context) {
 					if pushErr := syncClient.PushRegisterKey(pushCtx, svtnID, pub, r); pushErr != nil {
 						// Advisory: WARN only (no rollback, no error to caller).
-						_ = pushErr
+						// BC-2.05.009 PC-2/PC-4 / F-3 fix.
+						_, _ = fmt.Fprintf(os.Stderr, "switchboard control: WARN: admission-sync push failed (register): %v\n", pushErr)
 					}
 				})
 			}
@@ -359,7 +361,8 @@ func makeRevokeHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncCl
 				svtnID, pub, r, confirm := svtn.ID, pubkey, role, a.Confirm
 				dispatchPush(ctx, wg, func(pushCtx context.Context) {
 					if pushErr := syncClient.PushRevokeKey(pushCtx, svtnID, pub, r, confirm); pushErr != nil {
-						_ = pushErr // advisory WARN only
+						// Advisory: WARN only (BC-2.05.009 PC-2/PC-4 / F-3 fix).
+						_, _ = fmt.Fprintf(os.Stderr, "switchboard control: WARN: admission-sync push failed (revoke): %v\n", pushErr)
 					}
 				})
 			}
@@ -456,7 +459,8 @@ func makeExpireHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncCl
 				svtnID, pub, d := svtn.ID, pubkey, ttl
 				dispatchPush(ctx, wg, func(pushCtx context.Context) {
 					if pushErr := syncClient.PushSetKeyExpiry(pushCtx, svtnID, pub, d); pushErr != nil {
-						_ = pushErr // advisory WARN only
+						// Advisory: WARN only (BC-2.05.009 PC-2/PC-4 / F-3 fix).
+						_, _ = fmt.Fprintf(os.Stderr, "switchboard control: WARN: admission-sync push failed (expire): %v\n", pushErr)
 					}
 				})
 			}
@@ -1006,7 +1010,8 @@ func makeAdminSVTNDestroyHandler(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeyS
 			svtnID := svtn.ID
 			dispatchPush(ctx, wg, func(pushCtx context.Context) {
 				if pushErr := syncClient.PushRemoveSVTN(pushCtx, svtnID); pushErr != nil {
-					_ = pushErr // advisory WARN only
+					// Advisory: WARN only (BC-2.05.009 PC-2/PC-4 / F-3 fix).
+					_, _ = fmt.Fprintf(os.Stderr, "switchboard control: WARN: admission-sync push failed (remove-svtn): %v\n", pushErr)
 				}
 			})
 		}

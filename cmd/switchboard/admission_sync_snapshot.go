@@ -97,7 +97,9 @@ func (p *controlPersister) persist(ks *admission.AdmittedKeySet) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := writeSnapshotAtomic(p.path, ks); err != nil {
-		_ = err // advisory: do not propagate write failure to RPC caller
+		// Advisory: WARN only (BC-2.05.010 PC-2/EC-008 / F-3 fix).
+		// Do not propagate write failure to RPC caller.
+		_, _ = fmt.Fprintf(os.Stderr, "switchboard control: WARN: control admission snapshot write failed: path=%s err=%v\n", p.path, err)
 	}
 }
 
