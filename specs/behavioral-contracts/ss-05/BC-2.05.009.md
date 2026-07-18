@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.009
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-07-15T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "0b71f0c"
+input-hash: "e16e6ce"
 extracted_from: null
 bc_id: BC-2.05.009
 subsystem: admission-security
@@ -27,6 +27,18 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-18
+    version: "1.5"
+    change: >
+      Ruling 14 propagation (F-P7-01): PC-7b amended — add compensating best-effort
+      internal.admission.revoke when expire fails AND expiry is already in the past, so
+      router ends non-admissible (revoked, satisfying Invariant 6). Future-expiry expire-fail
+      is PC-5 stale/missing (permitted) — no compensating action. Invariant 6 amended with
+      explicit future-vs-past-expiry carve-out and AdmitNode no-expiry-check evidence
+      (AdmitNode checks only revoked; only ReAuthenticate checks expiry). EC-010 updated:
+      compensating revoke fires on past-expiry expire-fail; router ends non-admissible, never
+      active-non-expiring. No wire format change; expire-handler key-not-found stays
+      E-ADM-013; PC-5, PC-7c, Inv-4 svtn_id exemption unchanged.
   - date: 2026-07-17
     version: "1.4"
     change: >
@@ -147,12 +159,18 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 
    a. Issue `internal.admission.register` with `{svtn_id, pubkey_openssh, role}`.
    b. If the entry has a non-zero expiry timestamp, issue `internal.admission.expire` with
-      the **original expiry timestamp** (whether in the past or future). The router's
-      resulting state will reflect the original expiry; entries whose expiry is already in
-      the past will end up expired/inactive on the router — they are NOT re-registered as
-      active-and-non-expiring. The register+expire pair must be issued regardless of
-      whether the expiry timestamp is past or future, so the router's state precisely
-      mirrors control's.
+      the **original expiry timestamp** (whether in the past or future). The register+expire
+      pair MUST be issued regardless of whether the expiry timestamp is past or future. If
+      `internal.admission.expire` fails (after retry exhaustion) AND the expiry timestamp is
+      already in the past at the time of failure, issue a best-effort
+      `internal.admission.revoke` as a compensating action to leave the router in a
+      non-admissible state. The compensating revoke is advisory-continue on failure (WARN
+      log). If expire fails for a FUTURE-expiry entry, no compensating action is required —
+      the router holds the key active, which correctly represents control's current state
+      (the key is active now; the staleness manifests only after the expiry timestamp elapses,
+      which is PC-5 permitted stale/missing, not an Invariant 6 violation). If register (step
+      a) fails, skip expire entirely (the router has no entry for this key; the expire RPC
+      would return E-ADM-013).
    c. **For REVOKED entries (Ruling 13 / F-P6-02):** do NOT issue
       `internal.admission.register`. A fresh router has no entry for the revoked key,
       which is the correct non-admissible terminal state. If the router already holds an
@@ -254,6 +272,19 @@ on the router side (challenge-response handshake is required to flip `admitted=t
    — skip register for revoked entries — satisfies both: a partial failure on the revoke-only
    RPC cannot leave a revoked key active, because the register was never issued.
 
+   **Future-vs-past-expiry carve-out (Ruling 14):** The past-vs-future-expiry distinction
+   matters for the Invariant 6 boundary. A key whose expiry is in the PAST is expired/inactive
+   in control at push time — leaving it registered-active on the router is immediately less
+   restrictive (Invariant 6 violation). A key whose expiry is in the FUTURE is currently active
+   in control at push time — the router's active-no-expiry state correctly represents the
+   current admission status; the staleness only materializes after the expiry elapses (PC-5
+   stale/missing, not Invariant 6). AdmitNode does NOT enforce expiry (it only checks
+   `revoked`; `IsAdmitted` checks `admitted && !revoked`); only `ReAuthenticate` checks
+   expiry. This confirms that a past-expiry key left active-and-non-expiring on the router is
+   IMMEDIATELY exploitable at the initial admission handshake — sharpening the Invariant 6
+   obligation for past-expiry partial failure. The compensating revoke in PC-7b enforces this
+   obligation when expire fails for a past-expiry entry.
+
 ## Trigger
 
 - `admin.key.register`, `admin.key.revoke`, `admin.key.expire`, or `admin.svtn.destroy`
@@ -279,7 +310,7 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 | EC-007 | Control restarts after prior push failures | `PushFullSnapshot(ctx)` on startup pushes the COMPLETE authoritative `AdmittedKeySet` state — including revoked status and expiry timestamps — to all configured routers, converging router state to semantic equivalence with control. "Correcting any staleness" means full state convergence, not merely re-adding active keys. |
 | EC-008 | Router is temporarily restarting when push arrives | Push fails (connection refused); WARN logged. Router loads from its VLR-local snapshot (BC-2.05.010) on restart and receives a fresh full-snapshot push when control next starts or the next per-write push arrives. |
 | EC-009 | Control restarts; keyset contains a REVOKED key | `PushFullSnapshot` MUST NOT issue `internal.admission.register` for the revoked entry. If the router already holds an entry for the key (partial prior push or pre-revocation registration), issue `internal.admission.revoke` to mark it revoked. If the router has no entry for the key (fresh router), issue nothing — absent = non-admissible = correct terminal state. The router's resulting state is either "absent" or "revoked," both non-admissible, satisfying Invariant 6. The register+revoke two-RPC pattern is PROHIBITED for revoked entries (Ruling 13 / F-P6-02). |
-| EC-010 | Control restarts; keyset contains a key with a past-expiry timestamp | `PushFullSnapshot` issues `internal.admission.register` + `internal.admission.expire(originalExpiry)` regardless of whether the expiry is past or future. The router handles the past timestamp by marking the entry expired/inactive. The key is NOT re-registered as active-and-non-expiring. |
+| EC-010 | Control restarts; keyset contains a key with a past-expiry timestamp | `PushFullSnapshot` issues `internal.admission.register` + `internal.admission.expire(originalExpiry)` regardless of whether the expiry is past or future. If `expire` fails after retry exhaustion AND the original expiry timestamp is in the past at the time of failure, `PushFullSnapshot` issues a best-effort `internal.admission.revoke` as a compensating action (router ends non-admissible: revoked or absent). If expire succeeds, the router marks the entry expired/inactive. The router MUST NOT be left with a past-expiry key registered-active-and-non-expiring (Invariant 6). If expire fails for a FUTURE-expiry entry, no compensating action is needed — the router's active-no-expiry state correctly represents control's current state (PC-5 stale/missing). |
 
 ## Canonical Test Vectors
 
@@ -340,6 +371,7 @@ S-BL.ADMISSION-SYNC-WIRE — all postconditions in this BC trace to acceptance c
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-07-18 | Ruling 14 propagation (F-P7-01): PC-7b amended — add compensating best-effort `internal.admission.revoke` when `expire` fails AND expiry is already in the past, so router ends non-admissible (revoked, satisfying Invariant 6). Future-expiry expire-fail is PC-5 stale/missing (permitted) — no compensating action. Invariant 6 amended with explicit future-vs-past-expiry carve-out and AdmitNode no-expiry-check evidence (AdmitNode checks only `revoked`; only ReAuthenticate checks expiry). EC-010 updated: compensating revoke fires on past-expiry expire-fail; router ends non-admissible, never active-non-expiring. No wire format change; expire-handler key-not-found stays E-ADM-013; PC-5, PC-7c, Inv-4 svtn_id exemption unchanged. |
 | 1.4 | 2026-07-17 | Ruling 13 propagation (F-P6-02): PC-7c amended — MUST NOT issue `internal.admission.register` for revoked entries; issue `internal.admission.revoke` only (router treats "key not found" as success — absent = non-admissible = correct terminal state). The register+revoke two-RPC pattern is PROHIBITED for revoked entries. Invariant 6 amended — explicit PC-5 vs Invariant 6 distinction: "stale/missing" (router did not receive update, permitted by PC-5) vs "actively less-restrictive" (router was made more permissive by a partial push, forbidden absolutely by Invariant 6). EC-009 updated to skip-register semantics: fresh router ends with no entry for the revoked key (absent), not registered-then-revoked; existing-entry router ends revoked. No wire format change; PC-5, EC-008, EC-010, Inv-4 svtn_id exemption unchanged. |
 | 1.3 | 2026-07-17 | PC-7: full-snapshot push must propagate COMPLETE authoritative state including revoked status and expiry timestamps (not register-only). Router must converge to semantic equivalence with control (same keys, same roles, same revoked status, same expiries). Add Invariant 6 (security-correctness: PushFullSnapshot MUST NOT leave a router in a less-restrictive state than control holds — no un-revoking, no un-expiring). Add EC-009 (revoked key on restart: register then revoke, not register-as-active). Add EC-010 (past-expiry key on restart: register + expire(originalExpiry), not active-and-non-expiring). Update EC-007 wording: "correcting any staleness" means full state convergence including revocations. Add test vectors and VPs for revoked-key and past-expiry scenarios. Fixes F-1 (adversary pass 5): revoked key was silently resurrected as active on every control restart. |
 | 1.2 | 2026-07-17 | Amend PC-7 (startup full-snapshot): add qualifier that EC-007 resync guarantee holds ONLY when `control_admission_state_file` is configured (BC-2.09.003 PC-15); without it, `PushFullSnapshot` pushes an empty keyset and EC-007 is inert. Document control-side persist-write: synchronous `writeSnapshotAtomic` call on each committed `admin.key.*`/`admin.svtn.*` mutation, BEFORE `dispatchPush`, advisory on failure. Per Ruling 11 (F-P3-01). |
