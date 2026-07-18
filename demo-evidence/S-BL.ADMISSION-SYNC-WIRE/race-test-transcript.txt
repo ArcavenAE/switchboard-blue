@@ -1,0 +1,1 @@
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	56.577s
